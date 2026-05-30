@@ -52,18 +52,20 @@ class PrecisionConfig:
             return cls(**filtered_data)
 
         precision = getattr(config, "precision", None)
-        if precision is not None:
+        if isinstance(precision, str):
             device_attr = getattr(config, "device", None)
             device_value = device_attr if device_attr is not None else default_device
             return cls(
-                mode=str(precision).lower(),
+                mode=precision.lower(),
                 strictness=getattr(config, "precision_strict", "warn"),
                 fp8_recipe=getattr(config, "fp8_recipe", "auto"),
                 report=getattr(config, "fp8_report", True),
                 device=str(device_value) if device_value is not None else None,
             )
 
-        if hasattr(config, "disable_amp") or hasattr(config, "device"):
+        has_amp = hasattr(config, "disable_amp")
+        has_dev = hasattr(config, "device")
+        if has_amp and has_dev:
             device_attr = getattr(config, "device", None)
             device_value = device_attr if device_attr is not None else default_device
             if getattr(config, "disable_amp", False):

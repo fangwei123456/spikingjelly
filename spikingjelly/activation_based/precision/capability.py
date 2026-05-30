@@ -1,59 +1,116 @@
 from __future__ import annotations
 
 import importlib.util
-from typing import Any
+from typing import Any, NamedTuple
 
 import torch
+
+
+class _Fp8Capability(NamedTuple):
+    can_convert: bool
+    can_execute: bool
+    runtime_validation_required: bool
+    execution_note: str | None
+
+
+def _detect_cpu_bf16() -> bool:
+    """Check whether the CPU backend actually supports bfloat16 tensors."""
+    try:
+        _ = torch.tensor(1.0, dtype=torch.bfloat16)
+        return True
+    except Exception:
+        return False
+
+
+def _detect_mps_bf16(mps_backend) -> bool:
+    """Check whether the MPS backend reports bfloat16 support."""
+    fn = getattr(mps_backend, "is_bf16_supported", None)
+    if fn is not None:
+        return bool(fn())
+    try:
+        _ = torch.tensor(1.0, dtype=torch.bfloat16, device="mps")
+        return True
+    except Exception:
+        return False
+
+
+def _resolve_device_type(device: torch.device | str) -> str:
+    """Normalise a device to one of ``"cuda"``, ``"mps"`` or ``"cpu"``."""
+    s = str(device)
+    if s.startswith("cuda"):
+        return "cuda"
+    if s.startswith("mps"):
+        return "mps"
+    return "cpu"
+
+
+def _assess_fp8_mode(
+    torchao_installed: bool,
+    is_cuda: bool,
+    capability: tuple | None,
+) -> _Fp8Capability:
+    """Determine fp8-torchao viability from environment probes."""
+    can_convert = torchao_installed
+    can_execute = (
+        is_cuda
+        and torch.cuda.is_available()
+        and capability is not None
+        and capability >= (8, 9)
+        and torchao_installed
+    )
+    runtime_validation_required = can_execute
+
+    if not torchao_installed:
+        execution_note = "torchao is not installed"
+    elif not is_cuda:
+        execution_note = "fp8-torchao requires a CUDA device"
+    elif capability is None or capability < (8, 9):
+        execution_note = "torch._scaled_mm requires compute capability >= 8.9"
+    else:
+        execution_note = (
+            "runtime execution still requires validation because cuBLASLt / torch._scaled_mm "
+            "support may fail on some environments"
+        )
+    return _Fp8Capability(can_convert, can_execute, runtime_validation_required, execution_note)
 
 
 def build_capability_report(model, device, mode: str) -> dict[str, Any]:
     device = torch.device(device)
     device_str = str(device)
-    if device_str.startswith("cuda"):
-        device_type = "cuda"
-    elif device_str.startswith("mps"):
-        device_type = "mps"
-    else:
-        device_type = "cpu"
+    device_type = _resolve_device_type(device)
     is_cuda = device_type == "cuda"
     capability = None
     if is_cuda and torch.cuda.is_available():
         capability = torch.cuda.get_device_capability(device)
     torchao_installed = importlib.util.find_spec("torchao") is not None
-    cpu_bf16_autocast = hasattr(getattr(torch, "amp", None), "autocast")
+
+    # bf16 support
     mps_backend = getattr(torch.backends, "mps", None)
     mps_available = bool(mps_backend is not None and mps_backend.is_available())
-    mps_bf16_supported = bool(
-        mps_backend is not None
-        and mps_available
-        and getattr(mps_backend, "is_bf16_supported", lambda: False)()
+    mps_bf16_supported = (
+        _detect_mps_bf16(mps_backend)
+        if mps_backend is not None and mps_available
+        else False
     )
+    cpu_bf16 = _detect_cpu_bf16()
+    if is_cuda:
+        bf16_supported = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+    elif device_type == "mps":
+        bf16_supported = mps_bf16_supported
+    else:
+        bf16_supported = cpu_bf16
+
     can_convert = True
     can_execute = True
     runtime_validation_required = False
     execution_note = None
 
     if mode == "fp8-torchao":
-        can_convert = torchao_installed
-        can_execute = (
-            is_cuda
-            and torch.cuda.is_available()
-            and capability is not None
-            and capability >= (8, 9)
-            and torchao_installed
-        )
-        runtime_validation_required = can_execute
-        if not torchao_installed:
-            execution_note = "torchao is not installed"
-        elif not is_cuda:
-            execution_note = "fp8-torchao requires a CUDA device"
-        elif capability is None or capability < (8, 9):
-            execution_note = "torch._scaled_mm requires compute capability >= 8.9"
-        else:
-            execution_note = (
-                "runtime execution still requires validation because cuBLASLt / torch._scaled_mm "
-                "support may fail on some environments"
-            )
+        fp8 = _assess_fp8_mode(torchao_installed, is_cuda, capability)
+        can_convert = fp8.can_convert
+        can_execute = fp8.can_execute
+        runtime_validation_required = fp8.runtime_validation_required
+        execution_note = fp8.execution_note
 
     return {
         "requested_mode": mode,
@@ -65,12 +122,8 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
         else 0,
         "cuda_device_capability": capability,
         "torchao_installed": torchao_installed,
-        "bf16_supported": (
-            torch.cuda.is_available() and torch.cuda.is_bf16_supported()
-            if is_cuda
-            else (mps_bf16_supported if device_type == "mps" else cpu_bf16_autocast)
-        ),
-        "cpu_bf16_autocast": cpu_bf16_autocast if device_type == "cpu" else False,
+        "bf16_supported": bf16_supported,
+        "cpu_bf16_autocast": cpu_bf16 if device_type == "cpu" else False,
         "mps_available": mps_available,
         "model_class": type(model).__name__,
         "can_convert": can_convert,

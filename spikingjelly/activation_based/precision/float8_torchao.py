@@ -4,8 +4,53 @@ import importlib.util
 import warnings
 
 import torch
+import torch.nn as nn
 
+from .. import layer
+from .convert import _replace_child
+from .float8_base import wrap_float8_linear_module
 from .policy import PrecisionPolicy
+
+
+def _fp8_recursive_convert(
+    root: nn.Module,
+    fp8_config: object,
+    Float8Linear: type,
+    report,
+) -> None:
+    """Walk *root* and replace every ``nn.Linear`` / ``layer.Linear`` with
+    a ``Float8Linear``-wrapped equivalent.
+
+    Parameters are passed explicitly so the function can be tested in
+    isolation without depending on closure state.
+    """
+    memo: dict[nn.Module, nn.Module] = {}
+    visited: set[int] = set()
+
+    def _walk(module: nn.Module, prefix: str = "") -> None:
+        for child_name, child in list(module._modules.items()):
+            if child is None:
+                continue
+            child_fqn = f"{prefix}.{child_name}" if prefix else child_name
+            if isinstance(child, (nn.Linear, layer.Linear)):
+                if child in memo:
+                    _replace_child(module, child_name, memo[child])
+                    report.converted_modules.append(child_fqn)
+                    continue
+                converted = Float8Linear.from_float(child, config=fp8_config)
+                wrapped = wrap_float8_linear_module(child, converted)
+                memo[child] = wrapped
+                _replace_child(module, child_name, wrapped)
+                report.converted_modules.append(child_fqn)
+            else:
+                report.skipped_modules.append(child_fqn)
+                child_id = id(child)
+                if child_id in visited:
+                    continue
+                visited.add(child_id)
+                _walk(child, child_fqn)
+
+    _walk(root)
 
 
 class Float8TorchAOPolicy(PrecisionPolicy):
@@ -72,3 +117,22 @@ class Float8TorchAOPolicy(PrecisionPolicy):
                 f"(e.g. model.to('{target_device}')) before calling "
                 "prepare_model_for_precision() for 'fp8-torchao'."
             )
+
+    def _convert_modules(self, model, report):
+        from torchao.float8.float8_linear import Float8Linear
+
+        fp8_config = self.float8_linear_config
+        if fp8_config is None:
+            raise RuntimeError(
+                "Float8TorchAOPolicy.check_capability() must be called "
+                "before convert_model_for_precision()."
+            )
+
+        # Root module is itself a Linear → replace in-place.
+        if isinstance(model, (nn.Linear, layer.Linear)):
+            converted = Float8Linear.from_float(model, config=fp8_config)
+            report.converted_modules.append("<root>")
+            return wrap_float8_linear_module(model, converted)
+
+        _fp8_recursive_convert(model, fp8_config, Float8Linear, report)
+        return model

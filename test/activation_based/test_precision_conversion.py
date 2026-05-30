@@ -170,16 +170,14 @@ def test_convert_model_for_precision_preserves_shared_linear_module_identity_fp8
             self.first = shared
             self.second = shared
 
+    from spikingjelly.activation_based.precision.float8_torchao import (
+        Float8TorchAOPolicy,
+    )
+
     shared = torch.nn.Linear(8, 8)
     model = SharedLinearModule(shared)
-    policy = type(
-        "DummyPolicy",
-        (),
-        {
-            "name": "fp8-torchao",
-            "float8_linear_config": object(),
-        },
-    )()
+    policy = Float8TorchAOPolicy()
+    policy.float8_linear_config = object()
     converted, report = convert_model_for_precision(model, policy)
     assert converted.first is converted.second
     assert len(report.converted_modules) == 2
@@ -220,15 +218,13 @@ def test_convert_model_for_precision_skips_revisiting_shared_non_linear_modules(
             self.first = block
             self.second = block
 
+    from spikingjelly.activation_based.precision.float8_torchao import (
+        Float8TorchAOPolicy,
+    )
+
     model = Parent(shared)
-    policy = type(
-        "DummyPolicy",
-        (),
-        {
-            "name": "fp8-torchao",
-            "float8_linear_config": object(),
-        },
-    )()
+    policy = Float8TorchAOPolicy()
+    policy.float8_linear_config = object()
     converted, report = convert_model_for_precision(model, policy)
     assert converted.first is converted.second
     assert converted.first.linear is converted.second.linear

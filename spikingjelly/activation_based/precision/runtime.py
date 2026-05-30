@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import torch
-
+from .capability import _resolve_device_type
 from .config import PrecisionConfig
 from .policy import BF16Policy, FP16Policy, FP32Policy
 
@@ -14,12 +13,7 @@ def resolve_precision_policy(config: PrecisionConfig | str | dict | object):
     cfg = PrecisionConfig.from_any(config)
     mode = cfg.mode.lower()
     device = cfg.device or "cuda"
-    if str(device).startswith("cuda"):
-        device_type = "cuda"
-    elif str(device).startswith("mps"):
-        device_type = "mps"
-    else:
-        device_type = "cpu"
+    device_type = _resolve_device_type(device)
 
     if mode == "fp32":
         return FP32Policy()

@@ -4,21 +4,24 @@ import json
 import os
 from contextlib import AbstractContextManager
 from dataclasses import asdict, dataclass
-from typing import Any, Iterable
+from typing import TYPE_CHECKING, Iterable
 
 import torch
 
 from .config import PrecisionConfig
 from .runtime import resolve_precision_policy
 
+if TYPE_CHECKING:
+    from .policy import PrecisionPolicy
+
 
 @dataclass
 class PrecisionArtifacts:
     requested_config: PrecisionConfig
     effective_config: PrecisionConfig
-    policy: Any
+    policy: PrecisionPolicy
     model: torch.nn.Module
-    scaler: Any
+    scaler: torch.amp.GradScaler | None = None
     fallback_reason: str | None = None
 
     def autocast_context(self) -> AbstractContextManager:
@@ -34,30 +37,31 @@ class PrecisionArtifacts:
     ) -> float | None:
         if clip_grad_norm is not None and parameters is None:
             parameters = self.model.parameters()
+
+        grad_norm = None
         if self.scaler is None:
             loss.backward()
-            grad_norm = None
             if clip_grad_norm is not None:
                 grad_norm = torch.nn.utils.clip_grad_norm_(parameters, clip_grad_norm)
             if step_optimizer:
                 optimizer.step()
-            return None if grad_norm is None else float(grad_norm)
+        else:
+            self.scaler.scale(loss).backward()
+            if clip_grad_norm is not None:
+                if not step_optimizer:
+                    raise ValueError(
+                        "clip_grad_norm with step_optimizer=False is not supported "
+                        "when a grad scaler is active."
+                    )
+                self.scaler.unscale_(optimizer)
+                grad_norm = torch.nn.utils.clip_grad_norm_(parameters, clip_grad_norm)
+            if step_optimizer:
+                self.scaler.step(optimizer)
+                self.scaler.update()
 
-        self.scaler.scale(loss).backward()
-        grad_norm = None
-        if clip_grad_norm is not None:
-            if not step_optimizer:
-                raise ValueError(
-                    "clip_grad_norm with step_optimizer=False is not supported when a grad scaler is active."
-                )
-            self.scaler.unscale_(optimizer)
-            grad_norm = torch.nn.utils.clip_grad_norm_(parameters, clip_grad_norm)
-        if step_optimizer:
-            self.scaler.step(optimizer)
-            self.scaler.update()
-        return None if grad_norm is None else float(grad_norm)
+        return float(grad_norm) if grad_norm is not None else None
 
-    def describe(self) -> dict[str, Any]:
+    def describe(self) -> dict:
         return {
             "requested_config": asdict(self.requested_config),
             "effective_config": asdict(self.effective_config),
@@ -71,7 +75,7 @@ class PrecisionArtifacts:
 def prepare_model_for_precision(
     model: torch.nn.Module,
     device: torch.device | str,
-    config: PrecisionConfig | str | dict | Any,
+    config: PrecisionConfig | str | dict,
 ) -> PrecisionArtifacts:
     """Prepare a model for the requested precision mode.
 

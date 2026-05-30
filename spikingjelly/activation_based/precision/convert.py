@@ -6,7 +6,6 @@ import torch.nn as nn
 
 from .. import layer
 from ..neuron.base_node import BaseNode, SimpleBaseNode
-from .float8_base import wrap_float8_linear_module
 
 
 @dataclass
@@ -31,6 +30,26 @@ class ConversionReport:
             "high_precision_modules": self.high_precision_modules,
             "unsupported_modules": self.unsupported_modules,
         }
+
+
+def _replace_child(
+    module: nn.Module, child_name: str, wrapped: nn.Module
+) -> None:
+    """Safely replace a child module in *module*.
+
+    Handles the three container shapes (ModuleList / Sequential /
+    ModuleDict) and plain attribute assignment, falling back to
+    ``setattr`` when a ``Sequential`` key cannot be parsed as an integer.
+    """
+    if isinstance(module, nn.ModuleDict):
+        module[child_name] = wrapped
+    elif isinstance(module, (nn.ModuleList, nn.Sequential)):
+        try:
+            module[int(child_name)] = wrapped
+        except ValueError:
+            setattr(module, child_name, wrapped)
+    else:
+        setattr(module, child_name, wrapped)
 
 
 def analyze_convertible_modules(model: nn.Module) -> ConversionReport:
@@ -62,60 +81,12 @@ def analyze_convertible_modules(model: nn.Module) -> ConversionReport:
 def convert_model_for_precision(
     model: nn.Module, policy
 ) -> tuple[nn.Module, ConversionReport]:
+    """Analyse then delegate module-level conversion to *policy*.
+
+    The default policy returns the model unchanged; policies that require
+    structural changes (e.g. float8 kernel substitution) override
+    ``_convert_modules`` to perform the actual transformation.
+    """
     report = analyze_convertible_modules(model)
-    if getattr(policy, "name", "") == "fp8-torchao":
-        from torchao.float8.float8_linear import Float8Linear
-
-        fp8_config = getattr(policy, "float8_linear_config", None)
-        if fp8_config is None:
-            raise RuntimeError(
-                "Float8TorchAOPolicy.check_capability() must be called before convert_model_for_precision()."
-            )
-
-        if isinstance(model, (nn.Linear, layer.Linear)):
-            converted = Float8Linear.from_float(model, config=fp8_config)
-            report.converted_modules.append("<root>")
-            return wrap_float8_linear_module(model, converted), report
-
-        def recursive_convert(
-            module: nn.Module, prefix: str = "", memo=None, visited=None
-        ):
-            if memo is None:
-                memo = {}
-            if visited is None:
-                visited = set()
-            for child_name, child in list(module._modules.items()):
-                if child is None:
-                    continue
-                child_fqn = f"{prefix}.{child_name}" if prefix else child_name
-                if isinstance(child, (nn.Linear, layer.Linear)):
-                    if child in memo:
-                        wrapped = memo[child]
-                        if isinstance(module, (nn.ModuleList, nn.Sequential)):
-                            module[int(child_name)] = wrapped
-                        elif isinstance(module, nn.ModuleDict):
-                            module[child_name] = wrapped
-                        else:
-                            setattr(module, child_name, wrapped)
-                        report.converted_modules.append(child_fqn)
-                        continue
-                    converted = Float8Linear.from_float(child, config=fp8_config)
-                    wrapped = wrap_float8_linear_module(child, converted)
-                    memo[child] = wrapped
-                    if isinstance(module, (nn.ModuleList, nn.Sequential)):
-                        module[int(child_name)] = wrapped
-                    elif isinstance(module, nn.ModuleDict):
-                        module[child_name] = wrapped
-                    else:
-                        setattr(module, child_name, wrapped)
-                    report.converted_modules.append(child_fqn)
-                else:
-                    report.skipped_modules.append(child_fqn)
-                    child_id = id(child)
-                    if child_id in visited:
-                        continue
-                    visited.add(child_id)
-                    recursive_convert(child, child_fqn, memo, visited)
-
-        recursive_convert(model)
+    model = policy._convert_modules(model, report)
     return model, report
