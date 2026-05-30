@@ -16,6 +16,8 @@ class PrecisionConfig:
     def __post_init__(self):
         if self.mode is not None:
             object.__setattr__(self, "mode", str(self.mode).lower())
+        else:
+            object.__setattr__(self, "mode", "fp32")
         if self.device is not None and not isinstance(self.device, str):
             object.__setattr__(self, "device", str(self.device))
 

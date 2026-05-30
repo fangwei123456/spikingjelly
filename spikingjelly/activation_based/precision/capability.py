@@ -7,6 +7,7 @@ import torch
 
 
 def build_capability_report(model, device, mode: str) -> dict[str, Any]:
+    device = torch.device(device)
     device_str = str(device)
     if device_str.startswith("cuda"):
         device_type = "cuda"

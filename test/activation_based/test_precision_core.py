@@ -23,6 +23,11 @@ def test_precision_config_from_none_uses_defaults():
     assert cfg.device == "cpu"
 
 
+def test_precision_config_with_none_mode_falls_back_to_fp32():
+    cfg = PrecisionConfig(mode=None)
+    assert cfg.mode == "fp32"
+
+
 def test_precision_config_instance_with_none_device_uses_default_device():
     cfg = PrecisionConfig.from_any(
         PrecisionConfig(mode="bf16", device=None),
@@ -83,6 +88,12 @@ def test_build_capability_report_cpu_fp32():
     assert report["device_type"] == "cpu"
     assert report["can_convert"] is True
     assert report["can_execute"] is True
+
+
+def test_build_capability_report_accepts_string_device():
+    report = build_capability_report(torch.nn.Linear(4, 4), "cpu", "fp32")
+    assert report["device"] == "cpu"
+    assert report["device_type"] == "cpu"
 
 
 def test_build_capability_report_mps_classification():
