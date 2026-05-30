@@ -192,6 +192,11 @@ def test_topology_rejects_non_integer_dim_sizes():
         SNNDistributedTopology.from_mapping({"dp": 1.5, "tp": 2}, world_size=3)
 
 
+def test_topology_rejects_non_integer_world_size():
+    with pytest.raises(TypeError, match="world_size must be an integer"):
+        SNNDistributedTopology.from_mapping({"dp": 2}, world_size=1.5)
+
+
 def test_adapter_registry_lists_known_families():
     names = list_adapters()
     assert "cifar10dvs_vgg" in names
@@ -213,6 +218,13 @@ def test_infer_model_family_unwraps_module_attribute():
     from spikingjelly.activation_based.distributed.adapters.base import infer_model_family
 
     assert infer_model_family(wrapped) == "cifar10dvs_vgg"
+
+
+def test_infer_model_family_ignores_non_module_module_attribute():
+    wrapped = SimpleNamespace(module="not-a-module")
+    from spikingjelly.activation_based.distributed.adapters.base import infer_model_family
+
+    assert infer_model_family(wrapped) is None
 
 
 def test_prepare_metrics_classification_output_reduces_time_major_logits():
@@ -284,6 +296,21 @@ def test_plan_accepts_missing_model_family():
     assert distributed_plan.model_family == "generic"
 
 
+def test_plan_respects_allow_zero_optimizer_flag():
+    model = ToyDistributedSNN()
+    analysis = analyze(model, roots=["features"])
+    distributed_plan = plan(
+        analysis=analysis,
+        objective="speed",
+        topology={"dp": 2},
+        backend="inductor",
+        batch_size=8,
+        features=DistributedFeatureSet(allow_zero_optimizer=False),
+    )
+    assert distributed_plan.mode == "dp"
+    assert distributed_plan.optimizer_strategy == "none"
+
+
 def test_plan_allows_explicit_mode_override_for_advanced_users():
     model = ToyDistributedSNN()
     analysis = analyze(model, roots=["features"])
@@ -303,16 +330,16 @@ def test_plan_allows_explicit_mode_override_for_advanced_users():
 def test_plan_rejects_pipeline_when_feature_flag_disables_it():
     model = ToyDistributedSNN()
     analysis = analyze(model, roots=["features"])
-    distributed_plan = plan(
-        analysis=analysis,
-        objective="capacity",
-        topology={"pp": 2},
-        backend="inductor",
-        batch_size=8,
-        mode="pp",
-        features=DistributedFeatureSet(allow_pipeline=False),
-    )
-    assert distributed_plan.mode != "pp"
+    with pytest.raises(NotImplementedError, match="Pipeline parallelism"):
+        plan(
+            analysis=analysis,
+            objective="capacity",
+            topology={"pp": 2},
+            backend="inductor",
+            batch_size=8,
+            mode="pp",
+            features=DistributedFeatureSet(allow_pipeline=False),
+        )
 
 
 @pytest.mark.skipif(
@@ -378,16 +405,15 @@ def test_apply_rejects_device_mesh_world_size_mismatch():
 def test_apply_rejects_pipeline_mode_without_example_input():
     model = ToyDistributedSNN()
     analysis = analyze(model, roots=["features"])
-    distributed_plan = plan(
-        analysis=analysis,
-        objective="capacity",
-        topology={"pp": 2},
-        backend="inductor",
-        batch_size=8,
-        mode="pp",
-    )
     with pytest.raises(NotImplementedError, match="Pipeline parallelism"):
-        apply(model=model, plan=distributed_plan, device_type="cpu")
+        plan(
+            analysis=analysis,
+            objective="capacity",
+            topology={"pp": 2},
+            backend="inductor",
+            batch_size=8,
+            mode="pp",
+        )
 
 
 def test_analyze_stays_generic_without_model_family_specific_adapter():
@@ -426,6 +452,19 @@ def test_runtime_from_legacy_supports_eager_primitives():
     assert outputs.shape == (2, 4)
     assert labels.shape == (2,)
     assert torch.is_tensor(loss)
+
+
+def test_runtime_from_legacy_preserves_mesh_shape_metadata():
+    fake_mesh = SimpleNamespace(shape=(2, 2))
+    runtime = SNNDistributedRuntime.from_legacy(
+        kind="eager",
+        model=ToyDistributedSNN(),
+        mesh=fake_mesh,
+        analysis=None,
+        mode="fsdp2_tp",
+    )
+    assert runtime.plan is not None
+    assert runtime.plan.topology.mesh_shape == (2, 2)
 
 
 def test_runtime_reset_state_uses_pipeline_stage_when_available():

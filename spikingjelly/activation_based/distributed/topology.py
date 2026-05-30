@@ -10,6 +10,10 @@ class SNNDistributedTopology:
     dims: Mapping[str, int]
 
     def __post_init__(self):
+        if not isinstance(self.world_size, int) or isinstance(self.world_size, bool):
+            raise TypeError(
+                f"world_size must be an integer, but got {type(self.world_size).__name__}."
+            )
         if self.world_size <= 0:
             raise ValueError(f"world_size must be positive, but got {self.world_size}.")
         if not self.dims:
@@ -67,4 +71,9 @@ class SNNDistributedTopology:
             for size in normalized_dims.values():
                 volume *= size
             world_size = volume
+        else:
+            if isinstance(world_size, bool):
+                raise TypeError("world_size must be an integer, but got bool.")
+            if isinstance(world_size, float) and not world_size.is_integer():
+                raise TypeError("world_size must be an integer, but got float.")
         return cls(world_size=int(world_size), dims=normalized_dims)

@@ -79,6 +79,7 @@ def plan(
         prefer=objective,
         batch_size=batch_size,
         backend=backend,
+        pipelining_available=False,
     )
     if mode is not None:
         mode = mode.lower()
@@ -87,28 +88,20 @@ def plan(
             raise ValueError(
                 f"Unsupported mode='{mode}'. Expected one of {valid_modes}."
             )
+        if mode == "pp":
+            raise NotImplementedError(
+                "Pipeline parallelism ('pp') is not supported by the unified analyze/plan/apply API. "
+                "Please use the dedicated pipeline configuration path directly."
+            )
     notes = list(analysis.notes)
-    if not features.allow_pipeline and recommendation.mode == "pp":
-        recommendation = recommend_snn_distributed_strategy(
-            model=resolved_model_family,
-            world_size=resolved_topology.world_size,
-            prefer="memory",
-            batch_size=batch_size,
-            backend=backend,
-            pipelining_available=False,
-        )
-        notes.append(
-            "Pipeline was disabled by DistributedFeatureSet; planner fell back to memory-oriented strategy."
-        )
     selected_mode = mode or recommendation.mode
-    if selected_mode == "pp" and not features.allow_pipeline:
-        selected_mode = recommendation.mode
-        notes.append(
-            "Explicit mode='pp' was overridden because DistributedFeatureSet disabled pipeline."
-        )
     optimizer_strategy = recommendation.optimizer_sharding
-    if selected_mode != "dp":
+    if selected_mode != "dp" or not features.allow_zero_optimizer:
         optimizer_strategy = "none"
+        if selected_mode == "dp" and not features.allow_zero_optimizer:
+            notes.append(
+                "Zero optimizer was disabled by DistributedFeatureSet; planner fell back to optimizer_strategy='none'."
+            )
     mesh_shape = recommendation.mesh_shape or resolved_topology.mesh_shape
     pp_microbatches = recommendation.pp_microbatches
     pp_schedule = recommendation.pp_schedule
@@ -121,9 +114,6 @@ def plan(
         mesh_shape = resolved_topology.mesh_shape
     elif selected_mode == "fsdp2_tp":
         mesh_shape = resolved_topology.mesh_shape
-    elif selected_mode == "pp":
-        if pp_microbatches is None:
-            pp_microbatches = recommendation.pp_microbatches
     elif selected_mode == "none":
         mesh_shape = resolved_topology.mesh_shape
     return SNNDistributedPlan(

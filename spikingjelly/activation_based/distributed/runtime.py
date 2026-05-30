@@ -43,10 +43,25 @@ class SNNDistributedRuntime:
         mode: str,
         pipeline_runtime: Optional[SNNPipelineRuntime] = None,
     ) -> "SNNDistributedRuntime":
+        topology = SNNDistributedTopology.from_mapping({"dp": 1})
+        if mesh is not None:
+            mesh_shape = getattr(mesh, "shape", None)
+            if mesh_shape is None:
+                mesh_tensor = getattr(mesh, "mesh", None)
+                mesh_shape = getattr(mesh_tensor, "shape", None)
+            if mesh_shape is not None:
+                dims = tuple(int(size) for size in mesh_shape)
+                if dims:
+                    dim_names = ("dp", "tp", "pp", "vpp")
+                    mapping = {
+                        dim_names[idx] if idx < len(dim_names) else f"dim{idx}": size
+                        for idx, size in enumerate(dims)
+                    }
+                    topology = SNNDistributedTopology.from_mapping(mapping)
         plan = SNNDistributedPlan(
             mode=mode,
             objective="legacy",
-            topology=SNNDistributedTopology.from_mapping({"dp": 1}),
+            topology=topology,
             model_family="legacy",
             backend="legacy",
             batch_size=0,

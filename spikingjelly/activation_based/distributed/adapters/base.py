@@ -28,8 +28,9 @@ class SNNDistributedAdapter(Protocol):
 
 
 def infer_model_family(model: nn.Module) -> Optional[str]:
-    if hasattr(model, "module"):
-        model = model.module
+    wrapped = getattr(model, "module", None)
+    if isinstance(wrapped, nn.Module):
+        model = wrapped
     class_name = type(model).__name__.lower()
     if "spikformer" in class_name:
         return "spikformer"

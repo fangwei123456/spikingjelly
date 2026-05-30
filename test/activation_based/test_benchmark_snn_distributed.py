@@ -187,7 +187,7 @@ def test_throughput_from_regime_matches_semantics():
         benchmark_regime="throughput_weak_scaling",
         elapsed=2.0,
         steps=10,
-        data_replicas=4,
+        world_size=4,
         global_batch_size=32,
         per_rank_batch_size=8,
     )
@@ -198,12 +198,25 @@ def test_throughput_from_regime_matches_semantics():
         benchmark_regime="latency_strong_scaling",
         elapsed=2.0,
         steps=10,
-        data_replicas=4,
+        world_size=4,
         global_batch_size=8,
         per_rank_batch_size=2,
     )
     assert strong_global == 40.0
     assert strong_per_device == 10.0
+
+
+def test_throughput_from_regime_uses_world_size_for_per_device_metric():
+    global_tp, per_device_tp = bench._throughput_from_regime(
+        benchmark_regime="throughput_weak_scaling",
+        elapsed=2.0,
+        steps=10,
+        world_size=8,
+        global_batch_size=16,
+        per_rank_batch_size=16,
+    )
+    assert global_tp == 80.0
+    assert per_device_tp == 10.0
 
 
 def test_make_synthetic_batch_uses_requested_batch_size():

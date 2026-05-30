@@ -9,11 +9,11 @@ from .. import base
 
 __all__ = [
     "collect_reset_modules",
+    "detach_net",
     "reset_collected_modules",
     "reset_net",
-    "set_step_mode",
     "set_backend",
-    "detach_net",
+    "set_step_mode",
 ]
 
 

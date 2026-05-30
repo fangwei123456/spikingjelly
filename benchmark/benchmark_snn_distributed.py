@@ -562,14 +562,14 @@ def _throughput_from_regime(
     benchmark_regime: str,
     elapsed: float,
     steps: int,
-    data_replicas: int,
+    world_size: int,
     global_batch_size: int,
     per_rank_batch_size: int,
 ) -> Tuple[float, float]:
     effective_steps = max(int(steps), 1)
     elapsed = max(float(elapsed), 1e-12)
     global_throughput = global_batch_size * effective_steps / elapsed
-    num_devices = max(1, int(global_batch_size / max(1, per_rank_batch_size)))
+    num_devices = max(1, int(world_size))
     per_device_throughput = global_throughput / num_devices
     return global_throughput, per_device_throughput
 
@@ -1084,7 +1084,7 @@ def benchmark(args, counter: _LinePatternCounter):
         benchmark_regime=args.benchmark_regime,
         elapsed=elapsed,
         steps=args.steps,
-        data_replicas=data_replicas,
+        world_size=world_size,
         global_batch_size=global_batch_size,
         per_rank_batch_size=per_rank_batch_size,
     )
@@ -1205,7 +1205,7 @@ def benchmark_pipeline(
         benchmark_regime=args.benchmark_regime,
         elapsed=elapsed,
         steps=args.steps,
-        data_replicas=data_replicas,
+        world_size=world_size,
         global_batch_size=global_batch_size,
         per_rank_batch_size=per_rank_batch_size,
     )
