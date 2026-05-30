@@ -293,13 +293,14 @@ def build_model(args, runtime: DistributedRuntime):
                 "tp mode requires at least one tensor-parallel target. "
                 "Do not disable both classifier TP and convolution TP."
             )
+        auto_tensor_parallel = not args.disable_classifier_tp
         return configure_snn_distributed(
             model,
             SNNDistributedConfig(
                 device_type=runtime.device.type,
                 mesh_shape=mesh_shape or (runtime.world_size,),
-                tensor_parallel_roots=["classifier"],
-                auto_tensor_parallel=not args.disable_classifier_tp,
+                tensor_parallel_roots=["classifier"] if auto_tensor_parallel else None,
+                auto_tensor_parallel=auto_tensor_parallel,
                 experimental_conv_tensor_parallel=not args.disable_conv_tp,
                 conv_tensor_parallel_roots=["features"]
                 if not args.disable_conv_tp
@@ -332,13 +333,14 @@ def build_model(args, runtime: DistributedRuntime):
             raise ValueError(
                 "fsdp2_tp mode requires at least one tensor-parallel target. "
                 "Do not disable both classifier TP and convolution TP."
-            )
+        )
         tp_mesh_dim = (
             args.tp_mesh_dim
             if args.tp_mesh_dim != 0 or args.dp_mesh_dim is not None
             else 1
         )
         dp_mesh_dim = args.dp_mesh_dim if args.dp_mesh_dim is not None else 0
+        auto_tensor_parallel = not args.disable_classifier_tp
         return configure_snn_distributed(
             model,
             SNNDistributedConfig(
@@ -347,8 +349,8 @@ def build_model(args, runtime: DistributedRuntime):
                 enable_fsdp2=True,
                 fsdp_shard_roots=["features"],
                 fsdp_shard_module_root=False,
-                tensor_parallel_roots=["classifier"],
-                auto_tensor_parallel=not args.disable_classifier_tp,
+                tensor_parallel_roots=["classifier"] if auto_tensor_parallel else None,
+                auto_tensor_parallel=auto_tensor_parallel,
                 experimental_conv_tensor_parallel=not args.disable_conv_tp,
                 conv_tensor_parallel_roots=["features"]
                 if not args.disable_conv_tp

@@ -219,6 +219,19 @@ def test_prepare_metrics_classification_output_reduces_time_major_logits():
     assert torch.equal(prepared.target, torch.tensor([0, 1, 2, 3]))
 
 
+def test_prepare_metrics_classification_output_preserves_singleton_index_targets():
+    logits = torch.randn(5, 4, 10)
+    labels = torch.tensor([[0], [1], [2], [3]])
+    prepared = prepare_classification_output(
+        logits,
+        labels,
+        require_full_logits=True,
+    )
+    assert isinstance(prepared, PreparedModelOutput)
+    torch.testing.assert_close(prepared.logits, logits.mean(dim=0))
+    assert torch.equal(prepared.target, torch.tensor([0, 1, 2, 3]))
+
+
 def test_plan_returns_structured_plan_from_analysis():
     model = ToyDistributedSNN()
     analysis = analyze(model, roots=["features"])
