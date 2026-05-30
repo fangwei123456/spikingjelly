@@ -52,7 +52,7 @@ class SNNDistributedRuntime:
             if mesh_shape is not None:
                 dims = tuple(int(size) for size in mesh_shape)
                 if dims:
-                    dim_names = ("dp", "tp", "pp", "vpp")
+                    dim_names = cls._legacy_mode_dim_names(mode=mode, ndim=len(dims))
                     mapping = {
                         dim_names[idx] if idx < len(dim_names) else f"dim{idx}": size
                         for idx, size in enumerate(dims)
@@ -80,6 +80,25 @@ class SNNDistributedRuntime:
             mode=mode,
             pipeline_runtime=pipeline_runtime,
         )
+
+    @staticmethod
+    def _legacy_mode_dim_names(*, mode: str, ndim: int) -> Tuple[str, ...]:
+        if ndim <= 0:
+            return tuple()
+        if ndim == 1:
+            if mode == "tp":
+                return ("tp",)
+            if mode == "pp":
+                return ("pp",)
+            return ("dp",)
+        if mode == "fsdp2_tp" and ndim >= 2:
+            names = ["dp", "tp"]
+            names.extend(f"dim{idx}" for idx in range(2, ndim))
+            return tuple(names)
+        preferred = ("dp", "tp", "pp", "vpp")
+        names = list(preferred[:ndim])
+        names.extend(f"dim{idx}" for idx in range(len(names), ndim))
+        return tuple(names[:ndim])
 
     def build_optimizer(
         self,

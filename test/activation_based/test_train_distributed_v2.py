@@ -65,6 +65,7 @@ def test_new_distributed_api_supports_manual_training_loop_single_rank():
             backend="torch",
             batch_size=2,
             model_family="cifar10dvs_vgg",
+            mode="fsdp2",
             features=sjdist.DistributedFeatureSet(
                 allow_experimental_conv_tp=False,
             ),
@@ -74,6 +75,8 @@ def test_new_distributed_api_supports_manual_training_loop_single_rank():
             plan=distributed_plan,
             device_type="cpu",
         )
+        assert runtime.plan is not None
+        assert runtime.plan.mode == "fsdp2"
 
         optimizer = runtime.build_optimizer(
             optimizer_cls=torch.optim.SGD,

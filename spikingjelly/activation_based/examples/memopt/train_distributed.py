@@ -317,6 +317,7 @@ def build_model(args, runtime: DistributedRuntime):
             SNNDistributedConfig(
                 device_type=runtime.device.type,
                 mesh_shape=mesh_shape or (runtime.world_size,),
+                auto_tensor_parallel=False,
                 enable_fsdp2=True,
                 fsdp_shard_roots=["features", "classifier"],
                 fsdp_shard_module_root=True,

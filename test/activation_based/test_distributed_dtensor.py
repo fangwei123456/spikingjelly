@@ -197,6 +197,11 @@ def test_topology_rejects_non_integer_world_size():
         SNNDistributedTopology.from_mapping({"dp": 2}, world_size=1.5)
 
 
+def test_topology_rejects_non_string_dim_names():
+    with pytest.raises(TypeError, match="Topology dimension names must be strings"):
+        SNNDistributedTopology.from_mapping({1: 2})
+
+
 def test_adapter_registry_lists_known_families():
     names = list_adapters()
     assert "cifar10dvs_vgg" in names
@@ -403,17 +408,21 @@ def test_apply_rejects_device_mesh_world_size_mismatch():
 
 
 def test_apply_rejects_pipeline_mode_without_example_input():
-    model = ToyDistributedSNN()
-    analysis = analyze(model, roots=["features"])
+    distributed_plan = SNNDistributedPlan(
+        mode="pp",
+        objective="capacity",
+        topology=SNNDistributedTopology.from_mapping({"pp": 2}),
+        model_family="toy_snn",
+        backend="inductor",
+        batch_size=8,
+        optimizer_strategy="none",
+        memopt_level=1,
+        rationale=(),
+        notes=(),
+        experimental_features=DistributedFeatureSet(),
+    )
     with pytest.raises(NotImplementedError, match="Pipeline parallelism"):
-        plan(
-            analysis=analysis,
-            objective="capacity",
-            topology={"pp": 2},
-            backend="inductor",
-            batch_size=8,
-            mode="pp",
-        )
+        apply(model=ToyDistributedSNN(), plan=distributed_plan, device_type="cpu")
 
 
 def test_analyze_stays_generic_without_model_family_specific_adapter():
@@ -465,6 +474,19 @@ def test_runtime_from_legacy_preserves_mesh_shape_metadata():
     )
     assert runtime.plan is not None
     assert runtime.plan.topology.mesh_shape == (2, 2)
+
+
+def test_runtime_from_legacy_uses_mode_for_single_axis_topology():
+    fake_mesh = SimpleNamespace(shape=(2,))
+    runtime = SNNDistributedRuntime.from_legacy(
+        kind="eager",
+        model=ToyDistributedSNN(),
+        mesh=fake_mesh,
+        analysis=None,
+        mode="tp",
+    )
+    assert runtime.plan is not None
+    assert runtime.plan.topology.dims == {"tp": 2}
 
 
 def test_runtime_reset_state_uses_pipeline_stage_when_available():

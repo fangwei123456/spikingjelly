@@ -20,6 +20,10 @@ class SNNDistributedTopology:
             raise ValueError("dims must not be empty.")
         volume = 1
         for name, size in self.dims.items():
+            if not isinstance(name, str):
+                raise TypeError(
+                    f"Topology dimension names must be strings, but got {type(name).__name__}."
+                )
             if not name:
                 raise ValueError("Topology dimension names must be non-empty.")
             if not isinstance(size, int) or isinstance(size, bool):

@@ -173,6 +173,16 @@ def test_resolve_benchmark_batch_semantics_strong_scaling():
     assert per_rank_batch == 2
 
 
+def test_resolve_benchmark_batch_semantics_memory_capacity():
+    global_batch, per_rank_batch = bench._resolve_benchmark_batch_semantics(
+        batch_size=8,
+        data_replicas=4,
+        benchmark_regime="memory_capacity",
+    )
+    assert global_batch == 8
+    assert per_rank_batch == 2
+
+
 def test_resolve_benchmark_batch_semantics_rejects_non_divisible_strong_scaling():
     with pytest.raises(ValueError, match="must be divisible by data_replicas=4"):
         bench._resolve_benchmark_batch_semantics(
@@ -204,6 +214,17 @@ def test_throughput_from_regime_matches_semantics():
     )
     assert strong_global == 40.0
     assert strong_per_device == 10.0
+
+    capacity_global, capacity_per_device = bench._throughput_from_regime(
+        benchmark_regime="memory_capacity",
+        elapsed=2.0,
+        steps=10,
+        world_size=4,
+        global_batch_size=8,
+        per_rank_batch_size=2,
+    )
+    assert capacity_global == 40.0
+    assert capacity_per_device == 10.0
 
 
 def test_throughput_from_regime_uses_world_size_for_per_device_metric():
