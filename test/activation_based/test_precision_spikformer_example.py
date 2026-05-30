@@ -159,3 +159,24 @@ def test_fp8_torchao_rejects_model_on_different_cuda_device():
 
     with pytest.raises(RuntimeError, match="target CUDA device 'cuda:1'"):
         prepare_model_for_precision(model, torch.device("cuda:1"), config)
+
+
+@pytest.mark.skipif(
+    not HAS_TORCHAO
+    or not torch.cuda.is_available()
+    or torch.cuda.get_device_capability(0) < (8, 9),
+    reason="This fp8-torchao unindexed CUDA test requires torchao and CUDA compute capability >= 8.9.",
+)
+def test_fp8_torchao_accepts_unindexed_cuda_device_string():
+    model = torch.nn.Sequential(
+        layer.Linear(16, 32),
+        torch.nn.ReLU(),
+        layer.Linear(32, 16),
+    ).to("cuda:0")
+    artifacts = prepare_model_for_precision(
+        model,
+        "cuda",
+        PrecisionConfig(mode="fp8-torchao", strictness="strict", device="cuda"),
+    )
+
+    assert any(isinstance(m, Float8LinearStepModule) for m in artifacts.model.modules())

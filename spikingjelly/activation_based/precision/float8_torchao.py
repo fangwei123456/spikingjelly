@@ -64,6 +64,8 @@ class Float8TorchAOPolicy(PrecisionPolicy):
             )
         model_devices = {p.device for p in model.parameters()}
         target_device = torch.device(device)
+        if target_device.type == "cuda" and target_device.index is None:
+            target_device = torch.device("cuda", torch.cuda.current_device())
         if model_devices and any(d != target_device for d in model_devices):
             raise RuntimeError(
                 f"All model parameters must be moved to the target CUDA device '{target_device}' "
