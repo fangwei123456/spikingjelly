@@ -60,7 +60,7 @@ def create_fptt_kernel(
     :return: CUDA kernel object with generated code
     :rtype: CKernel1D
     """
-        kernel_name = f"{kernel_name_prefix}_fptt_decayInput{decay_input}_{'hard' if hard_reset else 'soft'}Reset_{dtype}"
+    kernel_name = f"{kernel_name_prefix}_fptt_decayInput{decay_input}_{'hard' if hard_reset else 'soft'}Reset_{dtype}"
 
     if dtype == "fp32":
         code = rf"""
@@ -262,7 +262,7 @@ def create_bptt_kernel(
     :return: CUDA kernel object with generated code
     :rtype: CKernel1D
     """
-        kernel_name = f"LIFNode_bptt_decayInput{decay_input}_{'hard' if hard_reset else 'soft'}Reset_{'detachReset' if detach_reset else ''}_{dtype}"
+    kernel_name = f"LIFNode_bptt_decayInput{decay_input}_{'hard' if hard_reset else 'soft'}Reset_{'detachReset' if detach_reset else ''}_{dtype}"
 
     code_grad_s_to_h = sg_cuda_code_fun(x="over_th", y="grad_s_to_h", dtype=dtype)
 

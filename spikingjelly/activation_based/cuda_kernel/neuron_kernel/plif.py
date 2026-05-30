@@ -55,7 +55,7 @@ def create_fptt_kernel(decay_input: bool, hard_reset: bool, dtype: str):
     :return: CUDA kernel object with generated code
     :rtype: CKernel1D
     """
-        return lif_create_fptt_kernel(
+    return lif_create_fptt_kernel(
         decay_input, hard_reset, dtype, kernel_name_prefix="ParametricLIFNode"
     )
 
@@ -109,7 +109,7 @@ def create_bptt_kernel(
     :return: CUDA kernel object with generated code
     :rtype: CKernel1D
     """
-        kernel_name = f"ParametricLIFNode_bptt_decayInput{decay_input}_{'hard' if hard_reset else 'soft'}Reset_{'detachReset' if detach_reset else ''}_{dtype}"
+    kernel_name = f"ParametricLIFNode_bptt_decayInput{decay_input}_{'hard' if hard_reset else 'soft'}Reset_{'detachReset' if detach_reset else ''}_{dtype}"
 
     code_grad_s_to_h = sg_cuda_code_fun(x="over_th", y="grad_s_to_h", dtype=dtype)
 
