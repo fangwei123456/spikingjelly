@@ -42,8 +42,8 @@ def _single_rank_process_group():
 
 
 @pytest.mark.skipif(
-    not sjdist.DTENSOR_AVAILABLE,
-    reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
+    not (sjdist.DTENSOR_AVAILABLE and sjdist.FSDP2_AVAILABLE),
+    reason="DTensor DeviceMesh or FSDP2 APIs are unavailable in the current PyTorch build.",
 )
 def test_new_distributed_api_supports_manual_training_loop_single_rank():
     with _single_rank_process_group():
