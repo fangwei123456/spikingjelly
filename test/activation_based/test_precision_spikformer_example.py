@@ -61,6 +61,33 @@ def test_spikformer_precision_tools_support_custom_training_loop_fp32():
     assert report["converted_modules"] == []
 
 
+def test_precision_artifacts_backward_supports_accumulation_without_scaler():
+    model = _make_tiny_spikformer()
+    artifacts = prepare_model_for_precision(
+        model,
+        torch.device("cpu"),
+        PrecisionConfig(mode="fp32"),
+    )
+    model = artifacts.model
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+    x = torch.randn(2, 3, 64, 64)
+    target = torch.randint(0, 16, (2,))
+
+    functional.reset_net(model)
+    optimizer.zero_grad(set_to_none=True)
+    with artifacts.autocast_context():
+        y = model(x)
+        loss = torch.nn.functional.cross_entropy(y.mean(0), target)
+    grad_norm = artifacts.backward(
+        loss,
+        optimizer,
+        clip_grad_norm=1.0,
+        step_optimizer=False,
+    )
+    assert grad_norm is not None
+    assert any(p.grad is not None for p in model.parameters())
+
+
 @pytest.mark.skipif(
     not HAS_TORCHAO
     or not torch.cuda.is_available()

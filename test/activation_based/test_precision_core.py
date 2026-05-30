@@ -88,3 +88,15 @@ def test_build_capability_report_fp8_cpu_cannot_execute():
         "fp8-torchao",
     )
     assert report["can_execute"] is False
+
+
+def test_validate_capability_rejects_fp8_torchao_when_torchao_missing():
+    report = {
+        "requested_mode": "fp8-torchao",
+        "device_type": "cuda",
+        "cuda_available": True,
+        "cuda_device_capability": (9, 0),
+        "torchao_installed": False,
+    }
+    with pytest.raises(RuntimeError, match="torchao"):
+        validate_capability(report)

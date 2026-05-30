@@ -105,6 +105,10 @@ def validate_capability(report: dict[str, Any]) -> None:
         return
 
     if mode == "fp8-torchao":
+        if not report.get("torchao_installed", False):
+            raise RuntimeError(
+                "precision='fp8-torchao' requires torchao, but torchao is not installed."
+            )
         if device_type != "cuda":
             raise RuntimeError(
                 "precision='fp8-torchao' is only supported on CUDA in the current stage."

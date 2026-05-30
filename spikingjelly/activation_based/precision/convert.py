@@ -74,9 +74,14 @@ def convert_model_for_precision(model: nn.Module, policy) -> tuple[nn.Module, Co
             report.converted_modules.append("<root>")
             return wrap_float8_linear_module(model, converted), report
 
+        visited = set()
+
         def recursive_convert(module: nn.Module, prefix: str = "", memo=None):
             if memo is None:
                 memo = {}
+            if module in visited:
+                return
+            visited.add(module)
             for child_name, child in list(module.named_children()):
                 child_fqn = f"{prefix}.{child_name}" if prefix else child_name
                 if isinstance(child, (nn.Linear, layer.Linear)):

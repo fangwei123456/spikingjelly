@@ -108,3 +108,21 @@ def test_prepare_model_for_precision_replaces_root_linear_module():
     )
     assert isinstance(artifacts.model, Float8LinearStepModule)
     assert "<root>" in artifacts.policy.conversion_report()["converted_modules"]
+
+
+def test_convert_model_for_precision_preserves_shared_linear_module_identity():
+    shared = torch.nn.Linear(8, 8)
+    model = torch.nn.ModuleList([shared, shared])
+    policy = type(
+        "StubPolicy",
+        (),
+        {
+            "name": "fp32",
+        },
+    )()
+    converted, _ = prepare_model_for_precision(
+        model,
+        "cpu",
+        PrecisionConfig(mode="fp32"),
+    ).model, None
+    assert converted[0] is converted[1]

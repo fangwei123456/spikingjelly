@@ -32,6 +32,8 @@ class PrecisionArtifacts:
         parameters: Iterable[torch.nn.Parameter] | None = None,
         step_optimizer: bool = True,
     ) -> float | None:
+        if clip_grad_norm is not None and parameters is None:
+            parameters = self.model.parameters()
         if self.scaler is None:
             loss.backward()
             grad_norm = None
