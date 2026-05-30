@@ -11,6 +11,8 @@ class Float8LinearStepModule(nn.Module):
         super().__init__()
         self.wrapped = wrapped
         self.step_mode = step_mode
+        self._wrapped_load_from_state_dict = wrapped._load_from_state_dict
+        self.wrapped._load_from_state_dict = lambda *args, **kwargs: None
 
     def forward(self, x: torch.Tensor):
         if self.step_mode == "s":
@@ -40,7 +42,7 @@ class Float8LinearStepModule(nn.Module):
         unexpected_keys,
         error_msgs,
     ):
-        self.wrapped._load_from_state_dict(
+        self._wrapped_load_from_state_dict(
             state_dict,
             prefix,
             local_metadata,

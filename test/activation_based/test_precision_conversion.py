@@ -50,6 +50,13 @@ def test_float8_linear_step_module_delegates_attributes():
     assert wrapped.weight is base.weight
 
 
+def test_float8_linear_step_module_load_state_dict():
+    base = torch.nn.Linear(8, 4)
+    wrapped = Float8LinearStepModule(base, step_mode="s")
+    state_dict = wrapped.state_dict()
+    wrapped.load_state_dict(state_dict, strict=True)
+
+
 @pytest.mark.skipif(
     not HAS_TORCHAO
     or not torch.cuda.is_available()
