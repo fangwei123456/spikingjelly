@@ -20,6 +20,13 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
         capability = torch.cuda.get_device_capability(device)
     torchao_installed = importlib.util.find_spec("torchao") is not None
     cpu_bf16_autocast = hasattr(getattr(torch, "amp", None), "autocast")
+    mps_backend = getattr(torch.backends, "mps", None)
+    mps_available = bool(mps_backend is not None and mps_backend.is_available())
+    mps_bf16_supported = bool(
+        mps_backend is not None
+        and mps_available
+        and getattr(mps_backend, "is_bf16_supported", lambda: False)()
+    )
     can_convert = True
     can_execute = True
     runtime_validation_required = False
@@ -58,9 +65,10 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
         "bf16_supported": (
             torch.cuda.is_available() and torch.cuda.is_bf16_supported()
             if is_cuda
-            else (device_type == "mps")
+            else mps_bf16_supported
         ),
         "cpu_bf16_autocast": cpu_bf16_autocast if device_type == "cpu" else False,
+        "mps_available": mps_available,
         "model_class": type(model).__name__,
         "can_convert": can_convert,
         "can_execute": can_execute,
