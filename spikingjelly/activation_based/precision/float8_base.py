@@ -19,6 +19,37 @@ class Float8LinearStepModule(nn.Module):
             return functional.seq_to_ann_forward(x, self.wrapped)
         raise ValueError(f"Unsupported step_mode {self.step_mode!r}.")
 
+    def __getattr__(self, name: str):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.wrapped, name)
+
+    def state_dict(self, destination=None, prefix="", keep_vars=False):
+        return self.wrapped.state_dict(
+            destination=destination, prefix=prefix, keep_vars=keep_vars
+        )
+
+    def _load_from_state_dict(
+        self,
+        state_dict,
+        prefix,
+        local_metadata,
+        strict,
+        missing_keys,
+        unexpected_keys,
+        error_msgs,
+    ):
+        self.wrapped._load_from_state_dict(
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
+
 
 def wrap_float8_linear_module(original: nn.Module, converted: nn.Module) -> nn.Module:
     if isinstance(original, layer.Linear):

@@ -30,26 +30,37 @@ class PrecisionArtifacts:
         optimizer: torch.optim.Optimizer,
         clip_grad_norm: float | None = None,
         parameters: Iterable[torch.nn.Parameter] | None = None,
+        step_optimizer: bool = True,
     ) -> float | None:
         if self.scaler is None:
             loss.backward()
             grad_norm = None
             if clip_grad_norm is not None:
+                if not step_optimizer:
+                    raise ValueError(
+                        "clip_grad_norm with step_optimizer=False is not supported."
+                    )
                 if parameters is None:
                     raise ValueError("parameters must be provided when clip_grad_norm is set.")
                 grad_norm = torch.nn.utils.clip_grad_norm_(parameters, clip_grad_norm)
-            optimizer.step()
+            if step_optimizer:
+                optimizer.step()
             return None if grad_norm is None else float(grad_norm)
 
         self.scaler.scale(loss).backward()
-        self.scaler.unscale_(optimizer)
         grad_norm = None
         if clip_grad_norm is not None:
+            if not step_optimizer:
+                raise ValueError(
+                    "clip_grad_norm with step_optimizer=False is not supported."
+                )
             if parameters is None:
                 raise ValueError("parameters must be provided when clip_grad_norm is set.")
+            self.scaler.unscale_(optimizer)
             grad_norm = torch.nn.utils.clip_grad_norm_(parameters, clip_grad_norm)
-        self.scaler.step(optimizer)
-        self.scaler.update()
+        if step_optimizer:
+            self.scaler.step(optimizer)
+            self.scaler.update()
         return None if grad_norm is None else float(grad_norm)
 
     def describe(self) -> dict[str, Any]:

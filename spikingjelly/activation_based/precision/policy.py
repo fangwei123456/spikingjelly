@@ -74,7 +74,10 @@ class _AutocastPolicy(PrecisionPolicy):
     def create_grad_scaler(self):
         if self.device_type != "cuda":
             return None
-        return torch.amp.GradScaler("cuda")
+        try:
+            return torch.amp.GradScaler("cuda")
+        except AttributeError:
+            return torch.cuda.amp.GradScaler()
 
     def describe(self) -> dict:
         return {

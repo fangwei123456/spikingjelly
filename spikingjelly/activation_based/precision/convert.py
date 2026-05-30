@@ -62,7 +62,7 @@ def analyze_convertible_modules(model: nn.Module) -> ConversionReport:
 def convert_model_for_precision(model: nn.Module, policy) -> tuple[nn.Module, ConversionReport]:
     report = analyze_convertible_modules(model)
     if getattr(policy, "name", "") == "fp8-torchao":
-        from torchao.float8 import convert_to_float8_training
+        from torchao.float8.float8_linear import Float8Linear
         fp8_config = getattr(policy, "float8_linear_config", None)
         if fp8_config is None:
             raise RuntimeError(
@@ -70,28 +70,39 @@ def convert_model_for_precision(model: nn.Module, policy) -> tuple[nn.Module, Co
             )
 
         if isinstance(model, (nn.Linear, layer.Linear)):
-            converted = convert_to_float8_training(
-                model,
-                module_filter_fn=lambda _m, _fqn: True,
-                config=fp8_config,
-            )
+            converted = Float8Linear.from_float(model, config=fp8_config)
             report.converted_modules.append("<root>")
             return wrap_float8_linear_module(model, converted), report
 
-        def recursive_convert(module: nn.Module, prefix: str = ""):
+        def recursive_convert(module: nn.Module, prefix: str = "", memo=None):
+            if memo is None:
+                memo = {}
             for child_name, child in list(module.named_children()):
                 child_fqn = f"{prefix}.{child_name}" if prefix else child_name
                 if isinstance(child, (nn.Linear, layer.Linear)):
-                    converted = convert_to_float8_training(
-                        child,
-                        module_filter_fn=lambda _m, _fqn: True,
-                        config=fp8_config,
-                    )
-                    setattr(module, child_name, wrap_float8_linear_module(child, converted))
+                    if child in memo:
+                        wrapped = memo[child]
+                        if isinstance(module, nn.ModuleList):
+                            module[int(child_name)] = wrapped
+                        elif isinstance(module, nn.ModuleDict):
+                            module[child_name] = wrapped
+                        else:
+                            setattr(module, child_name, wrapped)
+                        report.converted_modules.append(child_fqn)
+                        continue
+                    converted = Float8Linear.from_float(child, config=fp8_config)
+                    wrapped = wrap_float8_linear_module(child, converted)
+                    memo[child] = wrapped
+                    if isinstance(module, nn.ModuleList):
+                        module[int(child_name)] = wrapped
+                    elif isinstance(module, nn.ModuleDict):
+                        module[child_name] = wrapped
+                    else:
+                        setattr(module, child_name, wrapped)
                     report.converted_modules.append(child_fqn)
                 else:
                     report.skipped_modules.append(child_fqn)
-                    recursive_convert(child, child_fqn)
+                    recursive_convert(child, child_fqn, memo)
 
         recursive_convert(model)
     return model, report

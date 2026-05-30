@@ -17,6 +17,12 @@ def test_precision_config_from_string():
     assert cfg.device == "cuda:0"
 
 
+def test_precision_config_from_none_uses_defaults():
+    cfg = PrecisionConfig.from_any(None, default_device="cpu")
+    assert cfg.mode == "fp32"
+    assert cfg.device == "cpu"
+
+
 def test_precision_config_from_dict_aliases_precision_key():
     cfg = PrecisionConfig.from_any({"precision": "fp16", "device": "cuda:0"})
     assert cfg.mode == "fp16"
@@ -82,4 +88,3 @@ def test_build_capability_report_fp8_cpu_cannot_execute():
         "fp8-torchao",
     )
     assert report["can_execute"] is False
-

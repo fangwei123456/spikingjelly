@@ -19,6 +19,8 @@ class PrecisionConfig:
         config: "PrecisionConfig | str | dict | Any",
         default_device: str | None = None,
     ) -> "PrecisionConfig":
+        if config is None:
+            return cls(device=default_device)
         if isinstance(config, cls):
             return config
         if isinstance(config, str):

@@ -42,6 +42,14 @@ def test_float8_linear_step_module_preserves_multistep_shape():
     assert y.shape == (3, 2, 4)
 
 
+def test_float8_linear_step_module_delegates_attributes():
+    base = torch.nn.Linear(8, 4)
+    wrapped = Float8LinearStepModule(base, step_mode="s")
+    assert wrapped.in_features == 8
+    assert wrapped.out_features == 4
+    assert wrapped.weight is base.weight
+
+
 @pytest.mark.skipif(
     not HAS_TORCHAO
     or not torch.cuda.is_available()
