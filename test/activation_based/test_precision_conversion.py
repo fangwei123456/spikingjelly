@@ -11,6 +11,7 @@ from spikingjelly.activation_based.precision import (
     analyze_convertible_modules,
     prepare_model_for_precision,
 )
+from spikingjelly.activation_based.precision.convert import convert_model_for_precision
 
 
 HAS_TORCHAO = importlib.util.find_spec("torchao") is not None
@@ -130,16 +131,54 @@ def test_prepare_model_for_precision_replaces_root_linear_module():
 def test_convert_model_for_precision_preserves_shared_linear_module_identity():
     shared = torch.nn.Linear(8, 8)
     model = torch.nn.ModuleList([shared, shared])
-    policy = type(
-        "StubPolicy",
-        (),
-        {
-            "name": "fp32",
-        },
-    )()
     converted, _ = prepare_model_for_precision(
         model,
         "cpu",
         PrecisionConfig(mode="fp32"),
     ).model, None
     assert converted[0] is converted[1]
+
+
+def test_convert_model_for_precision_preserves_shared_linear_module_identity_fp8(
+    monkeypatch,
+):
+    class DummyFloat8Linear(torch.nn.Module):
+        def __init__(self, base):
+            super().__init__()
+            self.base = base
+
+        @classmethod
+        def from_float(cls, base, config):
+            return cls(base)
+
+        def forward(self, x):
+            return self.base(x)
+
+    def _fake_import(*args, **kwargs):
+        return DummyFloat8Linear
+
+    monkeypatch.setattr(
+        "torchao.float8.float8_linear.Float8Linear",
+        DummyFloat8Linear,
+        raising=False,
+    )
+
+    class SharedLinearModule(torch.nn.Module):
+        def __init__(self, shared):
+            super().__init__()
+            self.first = shared
+            self.second = shared
+
+    shared = torch.nn.Linear(8, 8)
+    model = SharedLinearModule(shared)
+    policy = type(
+        "DummyPolicy",
+        (),
+        {
+            "name": "fp8-torchao",
+            "float8_linear_config": object(),
+        },
+    )()
+    converted, report = convert_model_for_precision(model, policy)
+    assert converted.first is converted.second
+    assert len(report.converted_modules) == 2

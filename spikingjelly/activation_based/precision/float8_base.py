@@ -12,6 +12,9 @@ class Float8LinearStepModule(nn.Module):
         self.wrapped = wrapped
         self.step_mode = step_mode
 
+    def set_step_mode(self, step_mode: str):
+        self.step_mode = step_mode
+
     def forward(self, x: torch.Tensor):
         if self.step_mode == "s":
             return self.wrapped(x)
@@ -62,6 +65,8 @@ class Float8LinearStepModule(nn.Module):
 def wrap_float8_linear_module(original: nn.Module, converted: nn.Module) -> nn.Module:
     if isinstance(original, layer.Linear):
         return Float8LinearStepModule(converted, step_mode=original.step_mode)
+    if isinstance(original, nn.Linear):
+        return Float8LinearStepModule(converted, step_mode="s")
     return converted
 
 __all__ = ["Float8LinearStepModule", "wrap_float8_linear_module"]
