@@ -1576,6 +1576,7 @@ def test_train_distributed_setup_runtime_normalizes_local_auto(monkeypatch):
     train_distributed = _load_train_distributed_module()
     monkeypatch.delenv("RANK", raising=False)
     monkeypatch.delenv("WORLD_SIZE", raising=False)
+    monkeypatch.delenv("LOCAL_RANK", raising=False)
     args = SimpleNamespace(distributed_mode="auto")
     runtime = train_distributed.setup_runtime(args)
     assert runtime.mode == "none"
