@@ -23,6 +23,15 @@ def test_precision_config_from_none_uses_defaults():
     assert cfg.device == "cpu"
 
 
+def test_precision_config_instance_with_none_device_uses_default_device():
+    cfg = PrecisionConfig.from_any(
+        PrecisionConfig(mode="bf16", device=None),
+        default_device="cuda:0",
+    )
+    assert cfg.mode == "bf16"
+    assert cfg.device == "cuda:0"
+
+
 def test_precision_config_from_dict_aliases_precision_key():
     cfg = PrecisionConfig.from_any({"precision": "fp16", "device": "cuda:0"})
     assert cfg.mode == "fp16"
@@ -41,6 +50,16 @@ def test_precision_config_from_object_with_precision_fields():
     assert cfg.mode == "fp8-torchao"
     assert cfg.strictness == "strict"
     assert cfg.report is False
+
+
+def test_precision_config_from_object_with_none_device_uses_default_device():
+    obj = SimpleNamespace(
+        precision="fp16",
+        device=None,
+    )
+    cfg = PrecisionConfig.from_any(obj, default_device="cuda:0")
+    assert cfg.mode == "fp16"
+    assert cfg.device == "cuda:0"
 
 
 def test_precision_config_from_legacy_amp_like_object():
