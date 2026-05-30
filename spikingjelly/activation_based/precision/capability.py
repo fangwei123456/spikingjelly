@@ -19,6 +19,7 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
     if is_cuda and torch.cuda.is_available():
         capability = torch.cuda.get_device_capability(device)
     torchao_installed = importlib.util.find_spec("torchao") is not None
+    cpu_bf16_autocast = hasattr(getattr(torch, "amp", None), "autocast")
     can_convert = True
     can_execute = True
     runtime_validation_required = False
@@ -59,6 +60,7 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
             if is_cuda
             else False
         ),
+        "cpu_bf16_autocast": cpu_bf16_autocast if device_type == "cpu" else False,
         "model_class": type(model).__name__,
         "can_convert": can_convert,
         "can_execute": can_execute,
@@ -83,6 +85,8 @@ def validate_capability(report: dict[str, Any]) -> None:
 
     if mode == "bf16":
         if device_type == "cpu":
+            return
+        if device_type == "mps" and report["bf16_supported"]:
             return
         if not report["cuda_available"]:
             raise RuntimeError("precision='bf16' requires CUDA or CPU bf16 autocast support.")

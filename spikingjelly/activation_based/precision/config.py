@@ -26,6 +26,8 @@ class PrecisionConfig:
             data = dict(config)
             if "device" not in data:
                 data["device"] = default_device
+            elif data["device"] is not None:
+                data["device"] = str(data["device"])
             if "precision" in data and "mode" not in data:
                 data["mode"] = data.pop("precision")
             return cls(**data)
@@ -37,7 +39,11 @@ class PrecisionConfig:
                 strictness=getattr(config, "precision_strict", "warn"),
                 fp8_recipe=getattr(config, "fp8_recipe", "auto"),
                 report=getattr(config, "fp8_report", True),
-                device=getattr(config, "device", default_device),
+                device=(
+                    str(getattr(config, "device", default_device))
+                    if getattr(config, "device", default_device) is not None
+                    else None
+                ),
             )
 
         if hasattr(config, "disable_amp") or hasattr(config, "device"):
@@ -46,7 +52,11 @@ class PrecisionConfig:
             else:
                 device = str(getattr(config, "device", default_device or "cpu"))
                 mode = "fp16" if device.startswith("cuda") else "fp32"
-            return cls(mode=mode, device=getattr(config, "device", default_device))
+            device_value = getattr(config, "device", default_device)
+            return cls(
+                mode=mode,
+                device=str(device_value) if device_value is not None else None,
+            )
 
         raise TypeError(
             "PrecisionConfig.from_any() expects a PrecisionConfig, str, dict, or an object "

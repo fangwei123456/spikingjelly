@@ -1,3 +1,5 @@
+import importlib.util
+
 import pytest
 import torch
 
@@ -9,6 +11,9 @@ from spikingjelly.activation_based.precision import (
     analyze_convertible_modules,
     prepare_model_for_precision,
 )
+
+
+HAS_TORCHAO = importlib.util.find_spec("torchao") is not None
 
 
 def test_conversion_report_marks_spikformer_linear_and_high_precision_modules():
@@ -38,7 +43,9 @@ def test_float8_linear_step_module_preserves_multistep_shape():
 
 
 @pytest.mark.skipif(
-    not torch.cuda.is_available() or torch.cuda.get_device_capability(0) < (8, 9),
+    not HAS_TORCHAO
+    or not torch.cuda.is_available()
+    or torch.cuda.get_device_capability(0) < (8, 9),
     reason="Static fp8-torchao replacement test requires CUDA compute capability >= 8.9.",
 )
 def test_prepare_model_for_precision_replaces_spikformer_head_with_float8_wrapper():
@@ -69,3 +76,20 @@ def test_capability_report_splits_can_convert_and_can_execute():
     report = artifacts.policy.capability_report()
     assert report["can_convert"] is True
     assert report["can_execute"] is True
+
+
+@pytest.mark.skipif(
+    not HAS_TORCHAO
+    or not torch.cuda.is_available()
+    or torch.cuda.get_device_capability(0) < (8, 9),
+    reason="Root Linear fp8-torchao conversion requires torchao and CUDA compute capability >= 8.9.",
+)
+def test_prepare_model_for_precision_replaces_root_linear_module():
+    model = layer.Linear(16, 32).cuda()
+    artifacts = prepare_model_for_precision(
+        model,
+        "cuda:0",
+        PrecisionConfig(mode="fp8-torchao", strictness="strict", device="cuda:0"),
+    )
+    assert isinstance(artifacts.model, Float8LinearStepModule)
+    assert "<root>" in artifacts.policy.conversion_report()["converted_modules"]

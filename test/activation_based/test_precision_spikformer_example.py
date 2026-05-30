@@ -1,3 +1,5 @@
+import importlib.util
+
 import pytest
 import torch
 
@@ -8,6 +10,8 @@ from spikingjelly.activation_based.precision import (
     PrecisionConfig,
     prepare_model_for_precision,
 )
+
+HAS_TORCHAO = importlib.util.find_spec("torchao") is not None
 
 
 def _make_tiny_spikformer():
@@ -58,7 +62,9 @@ def test_spikformer_precision_tools_support_custom_training_loop_fp32():
 
 
 @pytest.mark.skipif(
-    not torch.cuda.is_available() or torch.cuda.get_device_capability(0) < (8, 9),
+    not HAS_TORCHAO
+    or not torch.cuda.is_available()
+    or torch.cuda.get_device_capability(0) < (8, 9),
     reason="This fp8-torchao smoke test requires CUDA compute capability >= 8.9.",
 )
 def test_fp8_torchao_aligned_linear_smoke():
@@ -87,7 +93,7 @@ def test_fp8_torchao_aligned_linear_smoke():
 
 
 @pytest.mark.skipif(
-    not torch.cuda.is_available(),
+    not HAS_TORCHAO or not torch.cuda.is_available(),
     reason="CUDA is required to validate fp8-torchao capability handling.",
 )
 def test_spikformer_precision_tools_fp8_torchao_smoke():

@@ -3,7 +3,6 @@ from __future__ import annotations
 import torch
 
 from .config import PrecisionConfig
-from .float8_torchao import Float8TorchAOPolicy
 from .policy import BF16Policy, FP16Policy, FP32Policy
 
 
@@ -15,7 +14,12 @@ def resolve_precision_policy(config: PrecisionConfig | str | dict | object):
     cfg = PrecisionConfig.from_any(config)
     mode = cfg.mode.lower()
     device = cfg.device or "cuda"
-    device_type = "cuda" if str(device).startswith("cuda") else "cpu"
+    if str(device).startswith("cuda"):
+        device_type = "cuda"
+    elif str(device).startswith("mps"):
+        device_type = "mps"
+    else:
+        device_type = "cpu"
 
     if mode == "fp32":
         return FP32Policy()
@@ -24,6 +28,8 @@ def resolve_precision_policy(config: PrecisionConfig | str | dict | object):
     if mode == "bf16":
         return BF16Policy(device_type=device_type)
     if mode == "fp8-torchao":
+        from .float8_torchao import Float8TorchAOPolicy
+
         return Float8TorchAOPolicy(
             device_type=device_type,
             strict=cfg.strictness,

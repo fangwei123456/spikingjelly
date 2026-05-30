@@ -64,8 +64,14 @@ def convert_model_for_precision(model: nn.Module, policy) -> tuple[nn.Module, Co
     if getattr(policy, "name", "") == "fp8-torchao":
         from torchao.float8 import convert_to_float8_training
 
-        def module_filter_fn(module: nn.Module, fqn: str) -> bool:
-            return isinstance(module, (nn.Linear, layer.Linear))
+        if isinstance(model, (nn.Linear, layer.Linear)):
+            converted = convert_to_float8_training(
+                model,
+                module_filter_fn=lambda _m, _fqn: True,
+                config=policy.float8_linear_config,
+            )
+            report.converted_modules.append("<root>")
+            return wrap_float8_linear_module(model, converted), report
 
         def recursive_convert(module: nn.Module, prefix: str = ""):
             for child_name, child in list(module.named_children()):

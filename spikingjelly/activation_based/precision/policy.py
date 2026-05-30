@@ -49,6 +49,8 @@ class PrecisionPolicy:
                 "convertible_torch_linear": 0,
                 "convertible_modules": [],
                 "converted_modules": [],
+                "skipped_modules": [],
+                "high_precision_modules": [],
                 "unsupported_modules": [],
             }
         return self._conversion_report.to_dict()
