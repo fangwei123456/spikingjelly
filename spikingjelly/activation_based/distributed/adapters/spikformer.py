@@ -27,6 +27,10 @@ class SpikformerAdapter:
         device_mesh=None,
     ) -> SNNDistributedRuntime:
         enable_spikformer_tp = plan.mode in ("tp", "fsdp2_tp")
+        enable_experimental_tp = (
+            enable_spikformer_tp
+            and plan.experimental_features.allow_experimental_spikformer_tp
+        )
         num_blocks = len(getattr(model, "blocks", ()))
         fsdp_shard_roots = None
         fsdp_shard_module_root = True
@@ -48,25 +52,13 @@ class SpikformerAdapter:
             fsdp_shard_module_root=fsdp_shard_module_root,
             tensor_parallel_roots=["head"] if enable_spikformer_tp else None,
             auto_tensor_parallel=enable_spikformer_tp,
-            experimental_spikformer_tensor_parallel=(
-                enable_spikformer_tp
-                and plan.experimental_features.allow_experimental_spikformer_tp
-            ),
+            experimental_spikformer_tensor_parallel=enable_experimental_tp,
             spikformer_tensor_parallel_roots=["blocks"]
-            if (
-                enable_spikformer_tp
-                and plan.experimental_features.allow_experimental_spikformer_tp
-            )
+            if enable_experimental_tp
             else None,
-            experimental_spikformer_patch_stem_tensor_parallel=(
-                enable_spikformer_tp
-                and plan.experimental_features.allow_experimental_spikformer_tp
-            ),
+            experimental_spikformer_patch_stem_tensor_parallel=enable_experimental_tp,
             spikformer_patch_stem_tensor_parallel_roots=["patch_embed"]
-            if (
-                enable_spikformer_tp
-                and plan.experimental_features.allow_experimental_spikformer_tp
-            )
+            if enable_experimental_tp
             else None,
         )
         configured_model, mesh, analysis = configure_snn_distributed(model, config)

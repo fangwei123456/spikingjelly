@@ -21,7 +21,8 @@ def get_adapter(name: str) -> SNNDistributedAdapter:
 def resolve_adapter(
     model, model_family: Optional[str] = None
 ) -> Optional[SNNDistributedAdapter]:
-    family = model_family or infer_model_family(model)
+    family = model_family if model_family != "generic" else None
+    family = family or infer_model_family(model)
     if family is None:
         return None
     return _ADAPTER_REGISTRY.get(family)

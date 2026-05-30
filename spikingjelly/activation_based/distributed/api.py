@@ -156,24 +156,6 @@ def apply(
     device_type: str = "cuda",
     device_mesh=None,
 ) -> SNNDistributedRuntime:
-    if plan.mode == "pp":
-        raise NotImplementedError(
-            "Pipeline parallelism ('pp') is not supported via the unified `apply` API "
-            "because it requires an `example_input` to partition the model and measure stage costs. "
-            "Please use the dedicated pipeline configuration path directly."
-        )
-    use_adapter = plan.mode in ("tp", "fsdp2_tp", "pp") or (
-        plan.experimental_features.allow_experimental_conv_tp
-        or plan.experimental_features.allow_experimental_spikformer_tp
-    )
-    adapter = resolve_adapter(model, plan.model_family) if use_adapter else None
-    if adapter is not None:
-        return adapter.apply(
-            model,
-            plan,
-            device_type=device_type,
-            device_mesh=device_mesh,
-        )
     topology = (
         plan.topology
         if isinstance(plan.topology, SNNDistributedTopology)
@@ -193,6 +175,24 @@ def apply(
             raise ValueError(
                 f"device_mesh spans {mesh_volume} ranks, but plan.topology.world_size={topology.world_size}."
             )
+    if plan.mode == "pp":
+        raise NotImplementedError(
+            "Pipeline parallelism ('pp') is not supported via the unified `apply` API "
+            "because it requires an `example_input` to partition the model and measure stage costs. "
+            "Please use the dedicated pipeline configuration path directly."
+        )
+    use_adapter = plan.mode in ("tp", "fsdp2", "fsdp2_tp", "pp") or (
+        plan.experimental_features.allow_experimental_conv_tp
+        or plan.experimental_features.allow_experimental_spikformer_tp
+    )
+    adapter = resolve_adapter(model, plan.model_family) if use_adapter else None
+    if adapter is not None:
+        return adapter.apply(
+            model,
+            plan,
+            device_type=device_type,
+            device_mesh=device_mesh,
+        )
     config = SNNDistributedConfig(
         device_type=device_type,
         mesh_shape=plan.mesh_shape or topology.mesh_shape,

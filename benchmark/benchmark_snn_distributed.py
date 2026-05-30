@@ -660,7 +660,10 @@ def _benchmark_step_eager(
         device, lambda: _prepare_classification_output(out, y)
     )
     breakdown.materialize_ms += elapsed
-    loss = torch.nn.functional.cross_entropy(out, target)
+    loss, elapsed = _time_block(
+        device, lambda: torch.nn.functional.cross_entropy(out, target)
+    )
+    breakdown.forward_ms += elapsed
 
     _, elapsed = _time_block(device, loss.backward)
     breakdown.backward_ms += elapsed
@@ -763,7 +766,7 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
             )
         logical_stages = world_size * max(1, args.pp_virtual_stages)
         n_microbatches = args.pp_microbatches or recommended_pipeline_microbatches(
-            args.batch_size,
+            batch_size_per_rank,
             logical_stages,
         )
         if args.model == "cifar10dvs_vgg":
