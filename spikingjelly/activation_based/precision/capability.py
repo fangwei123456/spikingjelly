@@ -60,7 +60,9 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
         "device": device_str,
         "device_type": device_type,
         "cuda_available": torch.cuda.is_available(),
-        "cuda_device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+        "cuda_device_count": torch.cuda.device_count()
+        if torch.cuda.is_available()
+        else 0,
         "cuda_device_capability": capability,
         "torchao_installed": torchao_installed,
         "bf16_supported": (
@@ -87,11 +89,15 @@ def validate_capability(report: dict[str, Any]) -> None:
 
     if mode == "fp16":
         if device_type == "cpu":
-            raise RuntimeError("precision='fp16' is not supported on cpu in the current stage.")
+            raise RuntimeError(
+                "precision='fp16' is not supported on cpu in the current stage."
+            )
         if device_type == "mps":
             return
         if not report["cuda_available"]:
-            raise RuntimeError("precision='fp16' requires CUDA, but CUDA is not available.")
+            raise RuntimeError(
+                "precision='fp16' requires CUDA, but CUDA is not available."
+            )
         return
 
     if mode == "bf16":
@@ -104,7 +110,9 @@ def validate_capability(report: dict[str, Any]) -> None:
                 )
             return
         if not report["cuda_available"]:
-            raise RuntimeError("precision='bf16' requires CUDA or CPU bf16 autocast support.")
+            raise RuntimeError(
+                "precision='bf16' requires CUDA or CPU bf16 autocast support."
+            )
         if not report["bf16_supported"]:
             raise RuntimeError(
                 "precision='bf16' was requested on CUDA, but this CUDA device does not report bf16 support."

@@ -131,11 +131,14 @@ def test_prepare_model_for_precision_replaces_root_linear_module():
 def test_convert_model_for_precision_preserves_shared_linear_module_identity():
     shared = torch.nn.Linear(8, 8)
     model = torch.nn.ModuleList([shared, shared])
-    converted, _ = prepare_model_for_precision(
-        model,
-        "cpu",
-        PrecisionConfig(mode="fp32"),
-    ).model, None
+    converted, _ = (
+        prepare_model_for_precision(
+            model,
+            "cpu",
+            PrecisionConfig(mode="fp32"),
+        ).model,
+        None,
+    )
     assert converted[0] is converted[1]
 
 

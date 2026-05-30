@@ -81,4 +81,5 @@ def wrap_float8_linear_module(original: nn.Module, converted: nn.Module) -> nn.M
         return Float8LinearStepModule(converted, step_mode="s")
     return converted
 
+
 __all__ = ["Float8LinearStepModule", "wrap_float8_linear_module"]

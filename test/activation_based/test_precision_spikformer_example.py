@@ -95,11 +95,15 @@ def test_precision_artifacts_backward_supports_accumulation_without_scaler():
     reason="This fp8-torchao smoke test requires CUDA compute capability >= 8.9.",
 )
 def test_fp8_torchao_aligned_linear_smoke():
-    model = torch.nn.Sequential(
-        layer.Linear(16, 32),
-        torch.nn.ReLU(),
-        layer.Linear(32, 16),
-    ).train().to("cuda:0")
+    model = (
+        torch.nn.Sequential(
+            layer.Linear(16, 32),
+            torch.nn.ReLU(),
+            layer.Linear(32, 16),
+        )
+        .train()
+        .to("cuda:0")
+    )
     artifacts = prepare_model_for_precision(
         model,
         torch.device("cuda:0"),

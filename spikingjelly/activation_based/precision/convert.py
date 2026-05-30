@@ -59,10 +59,13 @@ def analyze_convertible_modules(model: nn.Module) -> ConversionReport:
     return report
 
 
-def convert_model_for_precision(model: nn.Module, policy) -> tuple[nn.Module, ConversionReport]:
+def convert_model_for_precision(
+    model: nn.Module, policy
+) -> tuple[nn.Module, ConversionReport]:
     report = analyze_convertible_modules(model)
     if getattr(policy, "name", "") == "fp8-torchao":
         from torchao.float8.float8_linear import Float8Linear
+
         fp8_config = getattr(policy, "float8_linear_config", None)
         if fp8_config is None:
             raise RuntimeError(
@@ -74,7 +77,9 @@ def convert_model_for_precision(model: nn.Module, policy) -> tuple[nn.Module, Co
             report.converted_modules.append("<root>")
             return wrap_float8_linear_module(model, converted), report
 
-        def recursive_convert(module: nn.Module, prefix: str = "", memo=None, visited=None):
+        def recursive_convert(
+            module: nn.Module, prefix: str = "", memo=None, visited=None
+        ):
             if memo is None:
                 memo = {}
             if visited is None:
