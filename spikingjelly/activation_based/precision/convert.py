@@ -63,12 +63,17 @@ def convert_model_for_precision(model: nn.Module, policy) -> tuple[nn.Module, Co
     report = analyze_convertible_modules(model)
     if getattr(policy, "name", "") == "fp8-torchao":
         from torchao.float8 import convert_to_float8_training
+        fp8_config = getattr(policy, "float8_linear_config", None)
+        if fp8_config is None:
+            raise RuntimeError(
+                "Float8TorchAOPolicy.check_capability() must be called before convert_model_for_precision()."
+            )
 
         if isinstance(model, (nn.Linear, layer.Linear)):
             converted = convert_to_float8_training(
                 model,
                 module_filter_fn=lambda _m, _fqn: True,
-                config=policy.float8_linear_config,
+                config=fp8_config,
             )
             report.converted_modules.append("<root>")
             return wrap_float8_linear_module(model, converted), report
@@ -80,7 +85,7 @@ def convert_model_for_precision(model: nn.Module, policy) -> tuple[nn.Module, Co
                     converted = convert_to_float8_training(
                         child,
                         module_filter_fn=lambda _m, _fqn: True,
-                        config=policy.float8_linear_config,
+                        config=fp8_config,
                     )
                     setattr(module, child_name, wrap_float8_linear_module(child, converted))
                     report.converted_modules.append(child_fqn)

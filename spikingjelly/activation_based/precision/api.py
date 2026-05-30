@@ -73,7 +73,7 @@ def prepare_model_for_precision(
     policy = resolve_precision_policy(requested)
     policy.check_capability(model, device)
     prepared_model = policy.prepare_model(model)
-    effective = requested
+    effective = requested  # Fallback resolution is intentionally deferred for now.
     scaler = policy.create_grad_scaler()
     return PrecisionArtifacts(
         requested_config=requested,
