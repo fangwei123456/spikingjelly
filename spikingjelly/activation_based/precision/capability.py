@@ -86,9 +86,7 @@ def validate_capability(report: dict[str, Any]) -> None:
         return
 
     if mode == "bf16":
-        if device_type == "cpu":
-            return
-        if device_type == "mps" and report["bf16_supported"]:
+        if device_type in ("cpu", "mps"):
             return
         if not report["cuda_available"]:
             raise RuntimeError("precision='bf16' requires CUDA or CPU bf16 autocast support.")
