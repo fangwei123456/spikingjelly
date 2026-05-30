@@ -532,4 +532,4 @@ For example:
 Combinations that should still be avoided for now:
 
 * ``hybrid`` (``DDP + TP``): still unsupported;
-* running high-level ``memopt`` (``level >= 2``) online on large ``Spikformer``-like workloads: it now works functionally, but the search cost is still high and it is more likely to trigger extra `inductor` recompiles, so it is best treated as an offline tuning workflow for now.
+* running high-level ``memopt`` (``level >= 2``) online on large ``Spikformer``-like workloads: it now works functionally, but the search cost is still high and it is more likely to trigger extra ``inductor`` recompiles, so it is best treated as an offline tuning workflow for now.

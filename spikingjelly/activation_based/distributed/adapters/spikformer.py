@@ -26,6 +26,10 @@ class SpikformerAdapter:
         device_type: str = "cuda",
         device_mesh=None,
     ) -> SNNDistributedRuntime:
+        if plan.mode == "pp":
+            raise NotImplementedError(
+                "Pipeline parallelism ('pp') is not supported by SpikformerAdapter.apply()."
+            )
         enable_spikformer_tp = plan.mode in ("tp", "fsdp2_tp")
         enable_experimental_tp = (
             enable_spikformer_tp

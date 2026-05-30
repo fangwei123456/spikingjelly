@@ -532,4 +532,4 @@ Benchmark 自动记录与对比
 当前建议避免的组合：
 
 * ``hybrid``（``DDP + TP``）：当前仍不支持；
-* 在大尺寸 ``Spikformer`` 工作负载上直接使用高 level ``memopt``（``level >= 2``）做在线搜索：虽然功能上已经可用，但 ``optimize_ms`` 仍然很高，并且更容易触发 `inductor` 的额外重编译，建议先离线搜索、再固定策略。
+* 在大尺寸 ``Spikformer`` 工作负载上直接使用高 level ``memopt``（``level >= 2``）做在线搜索：虽然功能上已经可用，但 ``optimize_ms`` 仍然很高，并且更容易触发 ``inductor`` 的额外重编译，建议先离线搜索、再固定策略。

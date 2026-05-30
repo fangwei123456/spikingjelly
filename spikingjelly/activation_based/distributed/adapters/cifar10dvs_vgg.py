@@ -28,6 +28,10 @@ class CIFAR10DVSVGGAdapter:
         device_type: str = "cuda",
         device_mesh=None,
     ) -> SNNDistributedRuntime:
+        if plan.mode == "pp":
+            raise NotImplementedError(
+                "Pipeline parallelism ('pp') is not supported by CIFAR10DVSVGGAdapter.apply()."
+            )
         fsdp_shard_roots = None
         fsdp_shard_module_root = True
         if plan.mode == "fsdp2":

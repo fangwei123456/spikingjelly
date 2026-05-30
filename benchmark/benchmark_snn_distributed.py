@@ -568,14 +568,9 @@ def _throughput_from_regime(
 ) -> Tuple[float, float]:
     effective_steps = max(int(steps), 1)
     elapsed = max(float(elapsed), 1e-12)
-    if benchmark_regime == "throughput_weak_scaling":
-        global_throughput = (
-            per_rank_batch_size * max(data_replicas, 1) * effective_steps / elapsed
-        )
-        per_device_throughput = per_rank_batch_size * effective_steps / elapsed
-        return global_throughput, per_device_throughput
     global_throughput = global_batch_size * effective_steps / elapsed
-    per_device_throughput = global_throughput / max(data_replicas, 1)
+    num_devices = max(1, int(global_batch_size / max(1, per_rank_batch_size)))
+    per_device_throughput = global_throughput / num_devices
     return global_throughput, per_device_throughput
 
 
