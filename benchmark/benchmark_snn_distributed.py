@@ -539,12 +539,21 @@ def _resolve_benchmark_batch_semantics(
     data_replicas: int,
     benchmark_regime: str,
 ) -> Tuple[int, int]:
+    if data_replicas <= 0:
+        raise ValueError(
+            f"data_replicas must be positive, but got {data_replicas}."
+        )
     if benchmark_regime == "throughput_weak_scaling":
         per_rank_batch_size = batch_size
-        global_batch_size = batch_size * max(data_replicas, 1)
+        global_batch_size = batch_size * data_replicas
     else:
+        if batch_size % data_replicas != 0:
+            raise ValueError(
+                f"batch_size={batch_size} must be divisible by data_replicas={data_replicas} "
+                f"for benchmark_regime='{benchmark_regime}'."
+            )
         global_batch_size = batch_size
-        per_rank_batch_size = max(1, batch_size // max(data_replicas, 1))
+        per_rank_batch_size = batch_size // data_replicas
     return global_batch_size, per_rank_batch_size
 
 
@@ -685,6 +694,7 @@ def _benchmark_step_pipeline(
         lambda: runtime.schedule.step(*step_args, losses=losses, **step_kwargs),
     )
     breakdown.forward_ms += elapsed
+    breakdown.backward_ms += elapsed
 
     _, elapsed = _time_block(device, optimizer.step)
     breakdown.optimizer_ms += elapsed
@@ -720,10 +730,12 @@ def _reduce_breakdown(
     )
 
 
-def build_model(args, device, world_size):
+def build_model(args, device, world_size, batch_size_per_rank: int):
     if args.model == "cifar10dvs_vgg":
         model = CIFAR10DVSVGG(dropout=0.0, backend=args.backend).to(device)
-        sample_input = torch.randn(args.batch_size, args.T, 2, 48, 48, device=device)
+        sample_input = torch.randn(
+            batch_size_per_rank, args.T, 2, 48, 48, device=device
+        )
     else:
         model = spikformer.__dict__[args.model](
             T=args.T,
@@ -733,7 +745,7 @@ def build_model(args, device, world_size):
             backend=args.backend,
         ).to(device)
         sample_input = torch.randn(
-            args.batch_size, 3, args.image_size, args.image_size, device=device
+            batch_size_per_rank, 3, args.image_size, args.image_size, device=device
         )
     defer_memopt_until_after_tp = (
         args.mode in ("tp", "fsdp2_tp") and args.memopt_level == 1
@@ -948,7 +960,32 @@ def benchmark(args, counter: _LinePatternCounter):
         raise RuntimeError(
             "optimizer_sharding='zero' requires torch.distributed.optim.ZeroRedundancyOptimizer."
         )
-    model, mesh, optimize_ms = build_model(args, device, world_size)
+    if args.mode == "pp":
+        data_replicas = 1
+        data_rank = 0
+    elif args.mode in ("dp", "fsdp2", "fsdp2_tp"):
+        if args.mesh_shape is not None:
+            mesh_shape = tuple(args.mesh_shape)
+            if args.dp_mesh_dim is not None:
+                data_replicas = mesh_shape[args.dp_mesh_dim]
+            elif len(mesh_shape) == 1:
+                data_replicas = mesh_shape[0]
+            else:
+                data_replicas = mesh_shape[0]
+        else:
+            data_replicas = world_size
+        data_rank = 0
+    else:
+        data_replicas = 1
+        data_rank = 0
+
+    global_batch_size, per_rank_batch_size = _resolve_benchmark_batch_semantics(
+        args.batch_size, data_replicas, args.benchmark_regime
+    )
+
+    model, mesh, optimize_ms = build_model(
+        args, device, world_size, per_rank_batch_size
+    )
     optimizer_target = model.stage_module if args.mode == "pp" else model
     optimizer = build_snn_optimizer(
         optimizer_target,
@@ -957,22 +994,25 @@ def benchmark(args, counter: _LinePatternCounter):
         optimizer_sharding=args.optimizer_sharding,
         foreach=False if args.mode in ("tp", "fsdp2_tp") else None,
     )
-    data_replicas, data_rank = resolve_data_parallel_partition(
-        mesh,
-        dp_mesh_dim=args.dp_mesh_dim
-        if args.dp_mesh_dim is not None
-        else (
-            0 if args.mode in ("dp", "fsdp2", "fsdp2_tp") and mesh is not None else None
-        ),
-        sharded_by_data_parallel=args.mode in ("dp", "fsdp2", "fsdp2_tp"),
-    )
+    if args.mode in ("dp", "fsdp2", "fsdp2_tp"):
+        data_replicas, data_rank = resolve_data_parallel_partition(
+            mesh,
+            dp_mesh_dim=args.dp_mesh_dim
+            if args.dp_mesh_dim is not None
+            else (
+                0
+                if args.mode in ("dp", "fsdp2", "fsdp2_tp") and mesh is not None
+                else None
+            ),
+            sharded_by_data_parallel=args.mode in ("dp", "fsdp2", "fsdp2_tp"),
+        )
+        global_batch_size, per_rank_batch_size = _resolve_benchmark_batch_semantics(
+            args.batch_size, data_replicas, args.benchmark_regime
+        )
     seed = 20260428 + data_rank
     torch.manual_seed(seed)
     if device.type == "cuda":
         torch.cuda.manual_seed(seed)
-    global_batch_size, per_rank_batch_size = _resolve_benchmark_batch_semantics(
-        args.batch_size, data_replicas, args.benchmark_regime
-    )
     if args.mode == "pp":
         x, y = _make_synthetic_batch(
             args,

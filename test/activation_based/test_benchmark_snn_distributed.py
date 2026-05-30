@@ -173,6 +173,15 @@ def test_resolve_benchmark_batch_semantics_strong_scaling():
     assert per_rank_batch == 2
 
 
+def test_resolve_benchmark_batch_semantics_rejects_non_divisible_strong_scaling():
+    with pytest.raises(ValueError, match="must be divisible by data_replicas=4"):
+        bench._resolve_benchmark_batch_semantics(
+            batch_size=10,
+            data_replicas=4,
+            benchmark_regime="latency_strong_scaling",
+        )
+
+
 def test_throughput_from_regime_matches_semantics():
     weak_global, weak_per_device = bench._throughput_from_regime(
         benchmark_regime="throughput_weak_scaling",
