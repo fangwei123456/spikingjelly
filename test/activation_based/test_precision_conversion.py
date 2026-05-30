@@ -155,9 +155,6 @@ def test_convert_model_for_precision_preserves_shared_linear_module_identity_fp8
         def forward(self, x):
             return self.base(x)
 
-    def _fake_import(*args, **kwargs):
-        return DummyFloat8Linear
-
     monkeypatch.setattr(
         "torchao.float8.float8_linear.Float8Linear",
         DummyFloat8Linear,

@@ -62,6 +62,7 @@ class Float8LinearStepModule(nn.Module):
         error_msgs,
     ):
         wrapped_prefix = prefix + "wrapped."
+        wrapped_keys = set(self.wrapped.state_dict().keys())
         keys_to_rename = [
             k
             for k in list(state_dict.keys())
@@ -69,7 +70,8 @@ class Float8LinearStepModule(nn.Module):
         ]
         for k in keys_to_rename:
             suffix = k[len(prefix) :]
-            state_dict[wrapped_prefix + suffix] = state_dict.pop(k)
+            if suffix in wrapped_keys:
+                state_dict[wrapped_prefix + suffix] = state_dict.pop(k)
 
 
 def wrap_float8_linear_module(original: nn.Module, converted: nn.Module) -> nn.Module:
