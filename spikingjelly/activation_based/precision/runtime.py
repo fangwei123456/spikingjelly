@@ -33,6 +33,7 @@ def resolve_precision_policy(config: PrecisionConfig | str | dict | object):
         return Float8TorchAOPolicy(
             device_type=device_type,
             strict=cfg.strictness,
+            fp8_recipe=cfg.fp8_recipe,
         )
 
     raise ValueError(

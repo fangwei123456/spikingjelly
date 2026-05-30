@@ -35,7 +35,7 @@ class ConversionReport:
 
 def analyze_convertible_modules(model: nn.Module) -> ConversionReport:
     report = ConversionReport()
-    unsupported_types = (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.LayerNorm, nn.MultiheadAttention)
+    unsupported_types = (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.MultiheadAttention)
     high_precision_types = (
         BaseNode,
         SimpleBaseNode,

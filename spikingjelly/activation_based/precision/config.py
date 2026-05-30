@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from typing import Any
 
@@ -30,7 +31,9 @@ class PrecisionConfig:
                 data["device"] = str(data["device"])
             if "precision" in data and "mode" not in data:
                 data["mode"] = data.pop("precision")
-            return cls(**data)
+            valid_fields = {f.name for f in dataclasses.fields(cls)}
+            filtered_data = {k: v for k, v in data.items() if k in valid_fields}
+            return cls(**filtered_data)
 
         precision = getattr(config, "precision", None)
         if precision is not None:

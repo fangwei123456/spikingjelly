@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import warnings
 
 from .policy import PrecisionPolicy
 
@@ -8,10 +9,16 @@ from .policy import PrecisionPolicy
 class Float8TorchAOPolicy(PrecisionPolicy):
     name = "fp8-torchao"
 
-    def __init__(self, device_type: str = "cuda", strict: str = "warn"):
+    def __init__(
+        self,
+        device_type: str = "cuda",
+        strict: str = "warn",
+        fp8_recipe: str = "auto",
+    ):
         super().__init__()
         self.device_type = device_type
         self.strict = strict
+        self.fp8_recipe = fp8_recipe
         self.float8_linear_config = None
 
     def describe(self) -> dict:
@@ -20,6 +27,7 @@ class Float8TorchAOPolicy(PrecisionPolicy):
             "backend": "torchao",
             "device_type": self.device_type,
             "strict": self.strict,
+            "fp8_recipe": self.fp8_recipe,
             "float8_linear_config": (
                 type(self.float8_linear_config).__name__
                 if self.float8_linear_config is not None
@@ -37,6 +45,12 @@ class Float8TorchAOPolicy(PrecisionPolicy):
             )
         from torchao.float8 import Float8LinearConfig
 
+        if self.fp8_recipe != "auto":
+            warnings.warn(
+                "fp8_recipe is currently ignored by the torchao backend and only kept for future extension.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
         self.float8_linear_config = Float8LinearConfig()
         if self.device_type != "cuda":
             raise RuntimeError(
