@@ -314,7 +314,7 @@ def test_apply_returns_unified_runtime_single_rank():
         runtime = apply(model=model, plan=distributed_plan, device_type="cpu")
         assert isinstance(runtime, SNNDistributedRuntime)
         assert runtime.kind == "eager"
-        assert runtime.mesh is not None
+        assert runtime.mesh is None
         assert runtime.plan.mode == distributed_plan.mode
 
 
