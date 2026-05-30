@@ -48,6 +48,20 @@ def test_neuromc_runtime_report_constructor_remains_backward_compatible():
     assert report.warnings == []
 
 
+def test_neuromc_runtime_report_preserves_legacy_positional_prefix():
+    report = NeuroMCRuntimeEnergyReport(
+        {"fp_soma": 1.0},
+        {"with_sg": 2.0},
+        {"sram": {"rh2l": 3.0}},
+        {"fp_soma": {"mac": 4}},
+        {"with_sg": {"mux": 5}},
+        [{"stage": "forward"}],
+    )
+    assert report.energy_by_core_type == {"fp_soma": 1.0}
+    assert report.energy_by_process_key == {"with_sg": 2.0}
+    assert report.mapping_summary == [{"stage": "forward"}]
+
+
 def test_neuromc_exact_ifnode_supports_sg_breakdown():
     model = nn.Sequential(nn.Linear(6, 6, bias=False), neuron.IFNode())
     x = (torch.rand(2, 6) > 0.6).float()

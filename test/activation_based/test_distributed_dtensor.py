@@ -381,8 +381,30 @@ def test_apply_returns_unified_runtime_single_rank():
         runtime = apply(model=model, plan=distributed_plan, device_type="cpu")
         assert isinstance(runtime, SNNDistributedRuntime)
         assert runtime.kind == "eager"
-        assert runtime.mesh is None
+        assert runtime.mesh is not None
         assert runtime.plan.mode == distributed_plan.mode
+
+
+@pytest.mark.skipif(
+    not DTENSOR_AVAILABLE,
+    reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
+)
+def test_configure_snn_distributed_materializes_mesh_when_mesh_shape_is_provided():
+    with _single_rank_process_group():
+        model = ToyDistributedSNN()
+        configured_model, mesh, analysis = configure_snn_distributed(
+            model,
+            SNNDistributedConfig(
+                device_type="cpu",
+                mesh_shape=(1,),
+                auto_tensor_parallel=False,
+                enable_data_parallel=False,
+                enable_fsdp2=False,
+            ),
+        )
+        assert configured_model is model
+        assert mesh is not None
+        assert isinstance(analysis, distributed_dtensor.SNNDistributedAnalysis)
 
 
 def test_configure_snn_distributed_noop_does_not_require_device_mesh():

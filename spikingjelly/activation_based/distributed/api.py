@@ -115,13 +115,7 @@ def plan(
     pp_virtual_stages = recommendation.pp_virtual_stages
     pp_layout = recommendation.pp_layout
     pp_delay_wgrad = recommendation.pp_delay_wgrad
-    if selected_mode == "tp":
-        mesh_shape = resolved_topology.mesh_shape
-    elif selected_mode == "fsdp2":
-        mesh_shape = resolved_topology.mesh_shape
-    elif selected_mode == "fsdp2_tp":
-        mesh_shape = resolved_topology.mesh_shape
-    elif selected_mode == "none":
+    if selected_mode in ("tp", "fsdp2", "fsdp2_tp", "none"):
         mesh_shape = resolved_topology.mesh_shape
     return SNNDistributedPlan(
         mode=selected_mode,
@@ -179,7 +173,7 @@ def apply(
             "because it requires an `example_input` to partition the model and measure stage costs. "
             "Please use the dedicated pipeline configuration path directly."
         )
-    use_adapter = plan.mode in ("tp", "fsdp2", "fsdp2_tp", "pp") or (
+    use_adapter = plan.mode in ("tp", "fsdp2", "fsdp2_tp") or (
         plan.experimental_features.allow_experimental_conv_tp
         or plan.experimental_features.allow_experimental_spikformer_tp
     )

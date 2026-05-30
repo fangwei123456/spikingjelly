@@ -3266,6 +3266,7 @@ def configure_snn_distributed(
 
     needs_device_mesh = (
         config.device_mesh is not None
+        or config.mesh_shape is not None
         or config.enable_data_parallel
         or config.enable_fsdp2
         or should_apply_tp
