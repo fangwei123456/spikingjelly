@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 import warnings
 
+import torch
+
 from .policy import PrecisionPolicy
 
 
@@ -61,8 +63,10 @@ class Float8TorchAOPolicy(PrecisionPolicy):
                 "precision='fp8-torchao' requires a CUDA device in the current stage."
             )
         model_devices = {p.device for p in model.parameters()}
-        if model_devices and not any(d.type == "cuda" for d in model_devices):
+        target_device = torch.device(device)
+        if model_devices and any(d != target_device for d in model_devices):
             raise RuntimeError(
-                f"The model must be moved to the target CUDA device (e.g. model.to('{device}')) "
-                "before calling prepare_model_for_precision() for 'fp8-torchao'."
+                f"All model parameters must be moved to the target CUDA device '{target_device}' "
+                f"(e.g. model.to('{target_device}')) before calling "
+                "prepare_model_for_precision() for 'fp8-torchao'."
             )

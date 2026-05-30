@@ -73,6 +73,13 @@ def prepare_model_for_precision(
     device: torch.device | str,
     config: PrecisionConfig | str | dict | Any,
 ) -> PrecisionArtifacts:
+    """Prepare a model for the requested precision mode.
+
+    Note:
+        This may replace modules in the model. Call it before constructing the
+        optimizer so the optimizer does not keep references to stale
+        parameters.
+    """
     device = torch.device(device)
     requested = PrecisionConfig.from_any(config, default_device=str(device))
     policy = resolve_precision_policy(requested)
