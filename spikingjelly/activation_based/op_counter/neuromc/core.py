@@ -218,6 +218,18 @@ class NeuroMCRuntimeEnergyReport:
     :return: None
     :rtype: None
     """
+    energy_total_pj: float
+    energy_compute_pj: float
+    energy_memory_pj: float
+    energy_by_stage: dict[str, float]
+    energy_by_op: dict[str, float]
+    primitive_counts: dict[str, Any]
+    memory_bits_by_level: dict[str, Any]
+    warnings: list[str]
+    energy_mac_pj: float
+    energy_base_memory_pj: float
+    energy_extra_memory_pj: float
+    energy_extra_compute_pj: float
     energy_by_core_type: dict[str, float]
     energy_by_process_key: dict[str, float]
     energy_by_memory_level_dir: dict[str, dict[str, float]]

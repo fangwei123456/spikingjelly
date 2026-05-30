@@ -8,43 +8,78 @@ import sys
 import threading
 import time
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import torch
 import torch.distributed as dist
-
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.distributed import (
-    SNNDistributedConfig,
+    PIPELINING_AVAILABLE,
     SNN_DISTRIBUTED_PREFERENCES,
     ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE,
     apply_pipeline_stage_memopt,
-    apply_snn_fsdp2,
     build_snn_optimizer,
+    enable_tp_communication_debug,
+    ensure_distributed_initialized,
+    get_tp_communication_debug_stats,
     recommend_snn_distributed_strategy,
     recommended_pipeline_microbatches,
-    configure_cifar10dvs_vgg_pipeline,
-    configure_cifar10dvs_vgg_distributed,
-    configure_cifar10dvs_vgg_fsdp2,
-    configure_spikformer_pipeline,
-    configure_spikformer_distributed,
-    configure_spikformer_fsdp2,
-    configure_snn_distributed,
-    ensure_distributed_initialized,
-    materialize_dtensor_output,
-    PIPELINING_AVAILABLE,
+    reset_tp_communication_debug_stats,
     resolve_data_parallel_partition,
 )
-from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
-from spikingjelly.activation_based.examples.memopt.models import VGGBlock
+from spikingjelly.activation_based.distributed.dtensor import (
+    SNNDistributedConfig,
+    apply_snn_fsdp2,
+    configure_cifar10dvs_vgg_pipeline,
+    configure_spikformer_pipeline,
+    configure_snn_distributed,
+)
+from spikingjelly.activation_based.distributed.metrics import (
+    prepare_classification_output as _prepare_metrics_output,
+)
+from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG, VGGBlock
+from spikingjelly.activation_based.layer.attention import SpikingSelfAttention
 from spikingjelly.activation_based.memopt import memory_optimization
 from spikingjelly.activation_based.model import spikformer
 from spikingjelly.activation_based.model.spikformer import (
     SpikformerConv2dBNLIF,
     SpikformerMLP,
 )
-from spikingjelly.activation_based.layer.attention import SpikingSelfAttention
+
+_BENCHMARK_REGIMES = (
+    "latency_strong_scaling",
+    "throughput_weak_scaling",
+    "memory_capacity",
+)
+
+
+@dataclass
+class _StepBreakdown:
+    forward_ms: float = 0.0
+    backward_ms: float = 0.0
+    optimizer_ms: float = 0.0
+    reset_ms: float = 0.0
+    materialize_ms: float = 0.0
+
+    def add(self, other: "_StepBreakdown") -> "_StepBreakdown":
+        self.forward_ms += other.forward_ms
+        self.backward_ms += other.backward_ms
+        self.optimizer_ms += other.optimizer_ms
+        self.reset_ms += other.reset_ms
+        self.materialize_ms += other.materialize_ms
+        return self
+
+    def to_dict(self, denom_steps: int) -> Dict[str, float]:
+        steps = max(int(denom_steps), 1)
+        return {
+            "forward_ms": self.forward_ms / steps,
+            "backward_ms": self.backward_ms / steps,
+            "optimizer_ms": self.optimizer_ms / steps,
+            "reset_ms": self.reset_ms / steps,
+            "materialize_ms": self.materialize_ms / steps,
+        }
 
 
 def _positive_int(value: str) -> int:
@@ -64,6 +99,18 @@ def _non_negative_int(value: str) -> int:
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Benchmark distributed SNN training modes."
+    )
+    parser.add_argument(
+        "--benchmark-regime",
+        type=str,
+        default="throughput_weak_scaling",
+        choices=_BENCHMARK_REGIMES,
+        help=(
+            "Benchmark interpretation regime. "
+            "'throughput_weak_scaling' keeps batch-size as per-rank batch, "
+            "'latency_strong_scaling' treats batch-size as global batch, and "
+            "'memory_capacity' emphasizes fit and latency rather than throughput scaling."
+        ),
     )
     parser.add_argument("--batch-size", type=_positive_int, default=8)
     parser.add_argument("--T", type=_positive_int, default=10)
@@ -117,6 +164,11 @@ def parse_args():
         type=str,
         default=str(Path("benchmark") / "results" / "benchmark_snn_distributed.jsonl"),
     )
+    parser.add_argument(
+        "--tp-debug-comm",
+        action="store_true",
+        help="Record experimental TP rowwise all-reduce counts and payload bytes.",
+    )
     return parser.parse_args()
 
 
@@ -128,6 +180,14 @@ def _reduce_classification_output(
     if target.ndim > 1:
         target = target.argmax(dim=1)
     return out, target
+
+
+def _prepare_classification_output(
+    out,
+    target: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    prepared = _prepare_metrics_output(out, target, require_full_logits=True)
+    return prepared.logits, prepared.target
 
 
 class _LinePatternCounter:
@@ -328,6 +388,7 @@ def _comparison_key(record: Dict[str, object]) -> Dict[str, object]:
         return value
 
     keys = (
+        "benchmark_regime",
         "model",
         "mode",
         "backend",
@@ -351,6 +412,8 @@ def _comparison_key(record: Dict[str, object]) -> Dict[str, object]:
         "pp_delay_wgrad",
         "memopt_compress_x",
         "prefer",
+        "global_batch_size",
+        "per_rank_batch_size",
     )
     return {key: _normalize_json_value(record.get(key)) for key in keys}
 
@@ -384,9 +447,18 @@ def _summarize_benchmark_comparison(
         return None
     summary: Dict[str, Dict[str, float]] = {}
     for key in (
-        "global_samples_per_second",
+        "step_latency_ms",
+        "global_throughput_sps",
+        "per_device_throughput_sps",
         "peak_allocated_mb",
         "optimize_ms",
+        "forward_ms",
+        "backward_ms",
+        "optimizer_ms",
+        "reset_ms",
+        "materialize_ms",
+        "tp_all_reduce_calls",
+        "tp_all_reduce_mb",
         "warning_count",
         "recompile_count",
         "graph_break_count",
@@ -462,6 +534,192 @@ def maybe_apply_pipeline_memopt(args, runtime):
     return runtime, float(optimize_tensor.item())
 
 
+def _resolve_benchmark_batch_semantics(
+    batch_size: int,
+    data_replicas: int,
+    benchmark_regime: str,
+) -> Tuple[int, int]:
+    if benchmark_regime == "throughput_weak_scaling":
+        per_rank_batch_size = batch_size
+        global_batch_size = batch_size * max(data_replicas, 1)
+    else:
+        global_batch_size = batch_size
+        per_rank_batch_size = max(1, batch_size // max(data_replicas, 1))
+    return global_batch_size, per_rank_batch_size
+
+
+def _throughput_from_regime(
+    *,
+    benchmark_regime: str,
+    elapsed: float,
+    steps: int,
+    data_replicas: int,
+    global_batch_size: int,
+    per_rank_batch_size: int,
+) -> Tuple[float, float]:
+    effective_steps = max(int(steps), 1)
+    elapsed = max(float(elapsed), 1e-12)
+    if benchmark_regime == "throughput_weak_scaling":
+        global_throughput = (
+            per_rank_batch_size * max(data_replicas, 1) * effective_steps / elapsed
+        )
+        per_device_throughput = per_rank_batch_size * effective_steps / elapsed
+        return global_throughput, per_device_throughput
+    global_throughput = global_batch_size * effective_steps / elapsed
+    per_device_throughput = global_throughput / max(data_replicas, 1)
+    return global_throughput, per_device_throughput
+
+
+def _synchronize_timing_device(device: torch.device) -> None:
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+
+
+def _time_block(device: torch.device, fn):
+    _synchronize_timing_device(device)
+    start = time.perf_counter()
+    result = fn()
+    _synchronize_timing_device(device)
+    return result, (time.perf_counter() - start) * 1000.0
+
+
+def _make_synthetic_batch(
+    args,
+    device: torch.device,
+    batch_size: int,
+    *,
+    pipeline_runtime=None,
+):
+    if pipeline_runtime is not None:
+        if args.model == "cifar10dvs_vgg":
+            x = (
+                torch.randn(batch_size, args.T, 2, 48, 48, device=device)
+                if pipeline_runtime.is_first
+                else None
+            )
+            y = (
+                torch.randint(0, 10, (batch_size,), device=device)
+                if pipeline_runtime.is_last
+                else None
+            )
+        else:
+            x = (
+                torch.randn(
+                    batch_size,
+                    3,
+                    args.image_size,
+                    args.image_size,
+                    device=device,
+                )
+                if pipeline_runtime.is_first
+                else None
+            )
+            y = (
+                torch.randint(0, args.num_classes, (batch_size,), device=device)
+                if pipeline_runtime.is_last
+                else None
+            )
+        return x, y
+
+    if args.model == "cifar10dvs_vgg":
+        return (
+            torch.randn(batch_size, args.T, 2, 48, 48, device=device),
+            torch.randint(0, 10, (batch_size,), device=device),
+        )
+    return (
+        torch.randn(batch_size, 3, args.image_size, args.image_size, device=device),
+        torch.randint(0, args.num_classes, (batch_size,), device=device),
+    )
+
+
+def _benchmark_step_eager(
+    model,
+    optimizer,
+    x: torch.Tensor,
+    y: torch.Tensor,
+    device: torch.device,
+    reset_modules,
+) -> _StepBreakdown:
+    breakdown = _StepBreakdown()
+
+    optimizer.zero_grad(set_to_none=True)
+
+    out, elapsed = _time_block(device, lambda: model(x))
+    breakdown.forward_ms += elapsed
+
+    (out, target), elapsed = _time_block(
+        device, lambda: _prepare_classification_output(out, y)
+    )
+    breakdown.materialize_ms += elapsed
+    loss = torch.nn.functional.cross_entropy(out, target)
+
+    _, elapsed = _time_block(device, loss.backward)
+    breakdown.backward_ms += elapsed
+
+    _, elapsed = _time_block(device, optimizer.step)
+    breakdown.optimizer_ms += elapsed
+
+    _, elapsed = _time_block(
+        device, lambda: functional.reset_collected_modules(reset_modules)
+    )
+    breakdown.reset_ms += elapsed
+    return breakdown
+
+
+def _benchmark_step_pipeline(
+    runtime,
+    optimizer,
+    x,
+    y,
+    device: torch.device,
+) -> _StepBreakdown:
+    breakdown = _StepBreakdown()
+
+    optimizer.zero_grad(set_to_none=True)
+    losses = [] if runtime.is_last else None
+    step_args = (x,) if runtime.is_first else ()
+    step_kwargs = {"target": y} if runtime.is_last else {}
+
+    _, elapsed = _time_block(
+        device,
+        lambda: runtime.schedule.step(*step_args, losses=losses, **step_kwargs),
+    )
+    breakdown.forward_ms += elapsed
+
+    _, elapsed = _time_block(device, optimizer.step)
+    breakdown.optimizer_ms += elapsed
+
+    _, elapsed = _time_block(device, lambda: functional.reset_net(runtime.stage_module))
+    breakdown.reset_ms += elapsed
+    return breakdown
+
+
+def _reduce_breakdown(
+    breakdown: _StepBreakdown,
+    device: torch.device,
+) -> _StepBreakdown:
+    values = torch.tensor(
+        [
+            breakdown.forward_ms,
+            breakdown.backward_ms,
+            breakdown.optimizer_ms,
+            breakdown.reset_ms,
+            breakdown.materialize_ms,
+        ],
+        device=device,
+        dtype=torch.float64,
+    )
+    if dist.is_initialized():
+        dist.all_reduce(values, op=dist.ReduceOp.MAX)
+    return _StepBreakdown(
+        forward_ms=float(values[0].item()),
+        backward_ms=float(values[1].item()),
+        optimizer_ms=float(values[2].item()),
+        reset_ms=float(values[3].item()),
+        materialize_ms=float(values[4].item()),
+    )
+
+
 def build_model(args, device, world_size):
     if args.model == "cifar10dvs_vgg":
         model = CIFAR10DVSVGG(dropout=0.0, backend=args.backend).to(device)
@@ -534,44 +792,57 @@ def build_model(args, device, world_size):
         return model, mesh, optimize_ms
     if args.mode == "tp":
         if args.model == "cifar10dvs_vgg":
-            model, mesh, _ = configure_cifar10dvs_vgg_distributed(
-                model,
+            config = SNNDistributedConfig(
                 device_type=device.type,
                 mesh_shape=mesh_shape or (world_size,),
+                tensor_parallel_roots=["classifier"],
+                auto_tensor_parallel=True,
+                experimental_conv_tensor_parallel=True,
+                conv_tensor_parallel_roots=["features"],
                 enable_data_parallel=False,
                 tp_mesh_dim=args.tp_mesh_dim,
                 dp_mesh_dim=args.dp_mesh_dim,
             )
         else:
-            model, mesh, _ = configure_spikformer_distributed(
-                model,
+            config = SNNDistributedConfig(
                 device_type=device.type,
                 mesh_shape=mesh_shape or (world_size,),
+                tensor_parallel_roots=["head"],
+                auto_tensor_parallel=True,
+                experimental_spikformer_tensor_parallel=True,
+                spikformer_tensor_parallel_roots=["blocks"],
+                experimental_spikformer_patch_stem_tensor_parallel=True,
+                spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
                 enable_data_parallel=False,
                 tp_mesh_dim=args.tp_mesh_dim,
                 dp_mesh_dim=args.dp_mesh_dim,
             )
+        model, mesh, _ = configure_snn_distributed(model, config)
         if defer_memopt_until_after_tp:
             model, optimize_ms = maybe_apply_memopt(args, model, sample_input)
         return model, mesh, optimize_ms
     if args.mode == "fsdp2":
         if args.model == "cifar10dvs_vgg":
-            model, mesh, _ = configure_cifar10dvs_vgg_fsdp2(
-                model,
+            config = SNNDistributedConfig(
                 device_type=device.type,
                 mesh_shape=mesh_shape or (world_size,),
-                enable_classifier_tensor_parallel=False,
-                enable_experimental_conv_tensor_parallel=False,
+                enable_fsdp2=True,
+                fsdp_shard_roots=["features", "classifier"],
+                fsdp_shard_module_root=True,
                 dp_mesh_dim=args.dp_mesh_dim if args.dp_mesh_dim is not None else 0,
             )
         else:
-            model, mesh, _ = configure_spikformer_fsdp2(
-                model,
+            num_blocks = len(getattr(model, "blocks", ()))
+            shard_roots = ["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)] + ["head"]
+            config = SNNDistributedConfig(
                 device_type=device.type,
                 mesh_shape=mesh_shape or (world_size,),
-                enable_head_tensor_parallel=False,
+                enable_fsdp2=True,
+                fsdp_shard_roots=shard_roots,
+                fsdp_shard_module_root=True,
                 dp_mesh_dim=args.dp_mesh_dim if args.dp_mesh_dim is not None else 0,
             )
+        model, mesh, _ = configure_snn_distributed(model, config)
         return model, mesh, optimize_ms
     if args.mode == "fsdp2_tp":
         if mesh_shape is None or len(mesh_shape) != 2:
@@ -584,17 +855,36 @@ def build_model(args, device, world_size):
             else 1
         )
         dp_mesh_dim = args.dp_mesh_dim if args.dp_mesh_dim is not None else 0
-        if args.model == "cifar10dvs_vgg":
-            if defer_memopt_until_after_tp:
-                model, mesh, _ = configure_cifar10dvs_vgg_distributed(
-                    model,
+        if defer_memopt_until_after_tp:
+            if args.model == "cifar10dvs_vgg":
+                tp_config = SNNDistributedConfig(
                     device_type=device.type,
                     mesh_shape=mesh_shape,
+                    tensor_parallel_roots=["classifier"],
+                    auto_tensor_parallel=True,
+                    experimental_conv_tensor_parallel=True,
+                    conv_tensor_parallel_roots=["features"],
                     enable_data_parallel=False,
                     tp_mesh_dim=tp_mesh_dim,
                     dp_mesh_dim=dp_mesh_dim,
                 )
-                model, optimize_ms = maybe_apply_memopt(args, model, sample_input)
+            else:
+                tp_config = SNNDistributedConfig(
+                    device_type=device.type,
+                    mesh_shape=mesh_shape,
+                    tensor_parallel_roots=["head"],
+                    auto_tensor_parallel=True,
+                    experimental_spikformer_tensor_parallel=True,
+                    spikformer_tensor_parallel_roots=["blocks"],
+                    experimental_spikformer_patch_stem_tensor_parallel=True,
+                    spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
+                    enable_data_parallel=False,
+                    tp_mesh_dim=tp_mesh_dim,
+                    dp_mesh_dim=dp_mesh_dim,
+                )
+            model, mesh, _ = configure_snn_distributed(model, tp_config)
+            model, optimize_ms = maybe_apply_memopt(args, model, sample_input)
+            if args.model == "cifar10dvs_vgg":
                 model = apply_snn_fsdp2(
                     model,
                     device_mesh=mesh,
@@ -603,30 +893,8 @@ def build_model(args, device, world_size):
                     shard_module_root=False,
                 )
             else:
-                model, mesh, _ = configure_cifar10dvs_vgg_fsdp2(
-                    model,
-                    device_type=device.type,
-                    mesh_shape=mesh_shape,
-                    enable_classifier_tensor_parallel=True,
-                    enable_experimental_conv_tensor_parallel=True,
-                    tp_mesh_dim=tp_mesh_dim,
-                    dp_mesh_dim=dp_mesh_dim,
-                )
-        else:
-            if defer_memopt_until_after_tp:
-                model, mesh, _ = configure_spikformer_distributed(
-                    model,
-                    device_type=device.type,
-                    mesh_shape=mesh_shape,
-                    enable_data_parallel=False,
-                    tp_mesh_dim=tp_mesh_dim,
-                    dp_mesh_dim=dp_mesh_dim,
-                )
-                model, optimize_ms = maybe_apply_memopt(args, model, sample_input)
                 num_blocks = len(getattr(model, "blocks", ()))
-                shard_roots = ["patch_embed"] + [
-                    f"blocks.{i}" for i in range(num_blocks)
-                ]
+                shard_roots = ["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)]
                 model = apply_snn_fsdp2(
                     model,
                     device_mesh=mesh,
@@ -634,15 +902,39 @@ def build_model(args, device, world_size):
                     shard_roots=shard_roots,
                     shard_module_root=False,
                 )
-            else:
-                model, mesh, _ = configure_spikformer_fsdp2(
-                    model,
-                    device_type=device.type,
-                    mesh_shape=mesh_shape,
-                    enable_head_tensor_parallel=True,
-                    tp_mesh_dim=tp_mesh_dim,
-                    dp_mesh_dim=dp_mesh_dim,
-                )
+            return model, mesh, optimize_ms
+        if args.model == "cifar10dvs_vgg":
+            config = SNNDistributedConfig(
+                device_type=device.type,
+                mesh_shape=mesh_shape,
+                enable_fsdp2=True,
+                fsdp_shard_roots=["features"],
+                fsdp_shard_module_root=False,
+                tensor_parallel_roots=["classifier"],
+                auto_tensor_parallel=True,
+                experimental_conv_tensor_parallel=True,
+                conv_tensor_parallel_roots=["features"],
+                tp_mesh_dim=tp_mesh_dim,
+                dp_mesh_dim=dp_mesh_dim,
+            )
+        else:
+            num_blocks = len(getattr(model, "blocks", ()))
+            config = SNNDistributedConfig(
+                device_type=device.type,
+                mesh_shape=mesh_shape,
+                enable_fsdp2=True,
+                fsdp_shard_roots=["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)],
+                fsdp_shard_module_root=False,
+                tensor_parallel_roots=["head"],
+                auto_tensor_parallel=True,
+                experimental_spikformer_tensor_parallel=True,
+                spikformer_tensor_parallel_roots=["blocks"],
+                experimental_spikformer_patch_stem_tensor_parallel=True,
+                spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
+                tp_mesh_dim=tp_mesh_dim,
+                dp_mesh_dim=dp_mesh_dim,
+            )
+        model, mesh, _ = configure_snn_distributed(model, config)
         return model, mesh, optimize_ms
     raise ValueError(args.mode)
 
@@ -650,6 +942,8 @@ def build_model(args, device, world_size):
 def benchmark(args, counter: _LinePatternCounter):
     device, rank, world_size = setup_runtime(args.mode)
     recommendation, recommendation_notes = resolve_strategy_args(args, world_size)
+    enable_tp_communication_debug(args.tp_debug_comm)
+    reset_tp_communication_debug_stats()
     if args.optimizer_sharding == "zero" and not ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE:
         raise RuntimeError(
             "optimizer_sharding='zero' requires torch.distributed.optim.ZeroRedundancyOptimizer."
@@ -676,35 +970,16 @@ def benchmark(args, counter: _LinePatternCounter):
     torch.manual_seed(seed)
     if device.type == "cuda":
         torch.cuda.manual_seed(seed)
+    global_batch_size, per_rank_batch_size = _resolve_benchmark_batch_semantics(
+        args.batch_size, data_replicas, args.benchmark_regime
+    )
     if args.mode == "pp":
-        if args.model == "cifar10dvs_vgg":
-            x = (
-                torch.randn(args.batch_size, args.T, 2, 48, 48, device=device)
-                if model.is_first
-                else None
-            )
-            y = (
-                torch.randint(0, 10, (args.batch_size,), device=device)
-                if model.is_last
-                else None
-            )
-        else:
-            x = (
-                torch.randn(
-                    args.batch_size,
-                    3,
-                    args.image_size,
-                    args.image_size,
-                    device=device,
-                )
-                if model.is_first
-                else None
-            )
-            y = (
-                torch.randint(0, args.num_classes, (args.batch_size,), device=device)
-                if model.is_last
-                else None
-            )
+        x, y = _make_synthetic_batch(
+            args,
+            device,
+            per_rank_batch_size,
+            pipeline_runtime=model,
+        )
         return benchmark_pipeline(
             args,
             model,
@@ -718,42 +993,35 @@ def benchmark(args, counter: _LinePatternCounter):
             recommendation,
             recommendation_notes,
             counter,
+            global_batch_size,
+            per_rank_batch_size,
+            data_replicas,
         )
 
-    if args.model == "cifar10dvs_vgg":
-        x = torch.randn(args.batch_size, args.T, 2, 48, 48, device=device)
-        y = torch.randint(0, 10, (args.batch_size,), device=device)
-    else:
-        x = torch.randn(
-            args.batch_size, 3, args.image_size, args.image_size, device=device
-        )
-        y = torch.randint(0, args.num_classes, (args.batch_size,), device=device)
+    x, y = _make_synthetic_batch(
+        args,
+        device,
+        per_rank_batch_size,
+    )
 
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
+    reset_modules = functional.collect_reset_modules(model)
 
     for _ in range(args.warmup):
-        optimizer.zero_grad(set_to_none=True)
-        out = materialize_dtensor_output(model(x))
-        out, target = _reduce_classification_output(out, y)
-        loss = torch.nn.functional.cross_entropy(out, target)
-        loss.backward()
-        optimizer.step()
-        functional.reset_net(model)
+        _benchmark_step_eager(model, optimizer, x, y, device, reset_modules)
 
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     if dist.is_initialized():
         dist.barrier()
+    reset_tp_communication_debug_stats()
     start = time.time()
+    breakdown = _StepBreakdown()
     for _ in range(args.steps):
-        optimizer.zero_grad(set_to_none=True)
-        out = materialize_dtensor_output(model(x))
-        out, target = _reduce_classification_output(out, y)
-        loss = torch.nn.functional.cross_entropy(out, target)
-        loss.backward()
-        optimizer.step()
-        functional.reset_net(model)
+        breakdown.add(
+            _benchmark_step_eager(model, optimizer, x, y, device, reset_modules)
+        )
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     if dist.is_initialized():
@@ -772,15 +1040,24 @@ def benchmark(args, counter: _LinePatternCounter):
         dist.all_reduce(peak_tensor, op=dist.ReduceOp.MAX)
     elapsed = elapsed_tensor.item()
     peak_allocated_mb = peak_tensor.item()
-
-    step_ms = elapsed * 1000 / args.steps
-    global_samples_per_second = args.batch_size * data_replicas * args.steps / elapsed
+    breakdown = _reduce_breakdown(breakdown, device)
+    step_latency_ms = elapsed * 1000 / args.steps
+    global_throughput_sps, per_device_throughput_sps = _throughput_from_regime(
+        benchmark_regime=args.benchmark_regime,
+        elapsed=elapsed,
+        steps=args.steps,
+        data_replicas=data_replicas,
+        global_batch_size=global_batch_size,
+        per_rank_batch_size=per_rank_batch_size,
+    )
 
     event_counts = _aggregate_event_counts(counter, device)
+    tp_stats = get_tp_communication_debug_stats()
     record = None
     if rank == 0:
         record = {
             "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "benchmark_regime": args.benchmark_regime,
             "model": args.model,
             "mode": args.mode,
             "prefer": args.prefer,
@@ -790,6 +1067,9 @@ def benchmark(args, counter: _LinePatternCounter):
             "memopt_level": args.memopt_level,
             "optimize_ms": optimize_ms,
             "batch_size": args.batch_size,
+            "global_batch_size": global_batch_size,
+            "per_rank_batch_size": per_rank_batch_size,
+            "data_replicas": data_replicas,
             "num_classes": args.num_classes,
             "T": args.T,
             "steps": args.steps,
@@ -807,8 +1087,9 @@ def benchmark(args, counter: _LinePatternCounter):
             "pp_virtual_stages": args.pp_virtual_stages,
             "pp_layout": args.pp_layout,
             "pp_delay_wgrad": args.pp_delay_wgrad,
-            "step_ms": step_ms,
-            "global_samples_per_second": global_samples_per_second,
+            "step_latency_ms": step_latency_ms,
+            "global_throughput_sps": global_throughput_sps,
+            "per_device_throughput_sps": per_device_throughput_sps,
             "peak_allocated_mb": peak_allocated_mb,
             "recommendation_mode": recommendation.mode
             if recommendation is not None
@@ -817,6 +1098,9 @@ def benchmark(args, counter: _LinePatternCounter):
             if recommendation is not None
             else (),
             "recommendation_notes": recommendation_notes,
+            "tp_all_reduce_calls": tp_stats["all_reduce_calls"],
+            "tp_all_reduce_mb": tp_stats["all_reduce_bytes"] / 1024.0 / 1024.0,
+            **breakdown.to_dict(args.steps),
             **event_counts,
         }
 
@@ -838,33 +1122,26 @@ def benchmark_pipeline(
     recommendation,
     recommendation_notes,
     counter: _LinePatternCounter,
+    global_batch_size: int,
+    per_rank_batch_size: int,
+    data_replicas: int,
 ):
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
 
     for _ in range(args.warmup):
-        optimizer.zero_grad(set_to_none=True)
-        losses = [] if runtime.is_last else None
-        step_args = (x,) if runtime.is_first else ()
-        step_kwargs = {"target": y} if runtime.is_last else {}
-        runtime.schedule.step(*step_args, losses=losses, **step_kwargs)
-        optimizer.step()
-        functional.reset_net(runtime.stage_module)
+        _benchmark_step_pipeline(runtime, optimizer, x, y, device)
 
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     if dist.is_initialized():
         dist.barrier()
+    reset_tp_communication_debug_stats()
 
     start = time.time()
+    breakdown = _StepBreakdown()
     for _ in range(args.steps):
-        optimizer.zero_grad(set_to_none=True)
-        losses = [] if runtime.is_last else None
-        step_args = (x,) if runtime.is_first else ()
-        step_kwargs = {"target": y} if runtime.is_last else {}
-        runtime.schedule.step(*step_args, losses=losses, **step_kwargs)
-        optimizer.step()
-        functional.reset_net(runtime.stage_module)
+        breakdown.add(_benchmark_step_pipeline(runtime, optimizer, x, y, device))
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     if dist.is_initialized():
@@ -884,14 +1161,24 @@ def benchmark_pipeline(
         dist.all_reduce(peak_tensor, op=dist.ReduceOp.MAX)
 
     elapsed = elapsed_tensor.item()
-    step_ms = elapsed * 1000 / args.steps
-    global_samples_per_second = args.batch_size * args.steps / elapsed
+    breakdown = _reduce_breakdown(breakdown, device)
+    step_latency_ms = elapsed * 1000 / args.steps
+    global_throughput_sps, per_device_throughput_sps = _throughput_from_regime(
+        benchmark_regime=args.benchmark_regime,
+        elapsed=elapsed,
+        steps=args.steps,
+        data_replicas=data_replicas,
+        global_batch_size=global_batch_size,
+        per_rank_batch_size=per_rank_batch_size,
+    )
 
     event_counts = _aggregate_event_counts(counter, device)
+    tp_stats = get_tp_communication_debug_stats()
     record = None
     if rank == 0:
         record = {
             "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "benchmark_regime": args.benchmark_regime,
             "model": args.model,
             "mode": args.mode,
             "prefer": args.prefer,
@@ -901,6 +1188,9 @@ def benchmark_pipeline(
             "memopt_level": args.memopt_level,
             "optimize_ms": optimize_ms,
             "batch_size": args.batch_size,
+            "global_batch_size": global_batch_size,
+            "per_rank_batch_size": per_rank_batch_size,
+            "data_replicas": data_replicas,
             "num_classes": args.num_classes,
             "T": args.T,
             "steps": args.steps,
@@ -919,8 +1209,9 @@ def benchmark_pipeline(
             "pp_layout": runtime.pp_layout,
             "pp_delay_wgrad": runtime.delayed_wgrad,
             "pp_memopt_stages": runtime.memopt_selected_stage_indices,
-            "step_ms": step_ms,
-            "global_samples_per_second": global_samples_per_second,
+            "step_latency_ms": step_latency_ms,
+            "global_throughput_sps": global_throughput_sps,
+            "per_device_throughput_sps": per_device_throughput_sps,
             "peak_allocated_mb": peak_tensor.item(),
             "recommendation_mode": recommendation.mode
             if recommendation is not None
@@ -929,6 +1220,9 @@ def benchmark_pipeline(
             if recommendation is not None
             else (),
             "recommendation_notes": recommendation_notes,
+            "tp_all_reduce_calls": tp_stats["all_reduce_calls"],
+            "tp_all_reduce_mb": tp_stats["all_reduce_bytes"] / 1024.0 / 1024.0,
+            **breakdown.to_dict(args.steps),
             **event_counts,
         }
 

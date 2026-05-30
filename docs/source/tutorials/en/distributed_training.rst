@@ -495,11 +495,23 @@ If you explicitly set ``--distributed-mode``, the ``prefer`` hint can still fill
 Automatic Benchmark Logging and Comparison
 +++++++++++++++++++++++++++++++++++++++++
 
-``benchmark/benchmark_snn_distributed.py`` now appends results to ``benchmark/results/benchmark_snn_distributed.jsonl`` by default and automatically compares each run against the most recent earlier run with the same configuration. Each record stores:
+``benchmark/benchmark_snn_distributed.py`` now appends results to ``benchmark/results/benchmark_snn_distributed.jsonl`` by default and automatically compares each run against the most recent earlier run with the same configuration. The newer records also make the benchmark regime and batch semantics explicit. Each record stores:
 
-* ``global_samples_per_second``
+* ``benchmark_regime``: ``throughput_weak_scaling`` / ``latency_strong_scaling`` / ``memory_capacity``
+* ``global_batch_size``
+* ``per_rank_batch_size``
+* ``step_latency_ms``
+* ``global_throughput_sps``
+* ``per_device_throughput_sps``
 * ``peak_allocated_mb``
 * ``optimize_ms``
+* ``forward_ms``
+* ``backward_ms``
+* ``optimizer_ms``
+* ``reset_ms``
+* ``materialize_ms``
+* ``tp_all_reduce_calls``
+* ``tp_all_reduce_mb``
 * ``warning_count``
 * ``recompile_count``
 * ``graph_break_count``

@@ -5,7 +5,28 @@ import torch.nn as nn
 
 from .. import base
 
-__all__ = ["reset_net", "set_step_mode", "set_backend", "detach_net"]
+__all__ = [
+    "collect_reset_modules",
+    "reset_collected_modules",
+    "reset_net",
+    "set_step_mode",
+    "set_backend",
+    "detach_net",
+]
+
+
+def collect_reset_modules(net: nn.Module) -> tuple[nn.Module, ...]:
+    return tuple(m for m in net.modules() if hasattr(m, "reset"))
+
+
+def reset_collected_modules(modules: tuple[nn.Module, ...]) -> None:
+    for m in modules:
+        if not isinstance(m, base.MemoryModule):
+            logging.warning(
+                f"Trying to call `reset()` of {m}, which is not spikingjelly.activation_based.base"
+                f".MemoryModule"
+            )
+        m.reset()
 
 
 def reset_net(net: nn.Module):
@@ -53,14 +74,7 @@ def reset_net(net: nn.Module):
 
     :raises Exception: Any exception raised by a submodule ``reset()`` call is propagated unchanged
     """
-    for m in net.modules():
-        if hasattr(m, "reset"):
-            if not isinstance(m, base.MemoryModule):
-                logging.warning(
-                    f"Trying to call `reset()` of {m}, which is not spikingjelly.activation_based.base"
-                    f".MemoryModule"
-                )
-            m.reset()
+    reset_collected_modules(collect_reset_modules(net))
 
 
 def set_step_mode(net: nn.Module, step_mode: str):

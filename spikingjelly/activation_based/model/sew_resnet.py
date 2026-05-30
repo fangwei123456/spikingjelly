@@ -605,6 +605,7 @@ def sew_resnet34(
     :type kwargs: dict
     :return: SEW-ResNet-34
     :rtype: torch.nn.Module
+    """
     return _sew_resnet(
         "resnet34",
         BasicBlock,

@@ -69,17 +69,6 @@ def create_fptt_kernel(hard_reset: bool, dtype: str):
         const float & a,
         const float & b, {"const float & v_reset," if hard_reset else ""}
         const int & neuron_num, const int & numel)
-
-        ----
-
-        .. _create_fptt_kernel-en:
-
-        * **English**
-
-        Create forward-pass CUDA kernel
-
-        :return: None
-        :rtype: None
         """
         code += r"""
         {
@@ -191,17 +180,6 @@ def create_bptt_kernel(
         const float & b, const float & neg_sum_v_rest_v_c,
         const float & v_threshold, {"const float & v_reset," if hard_reset else ""}
         const int & neuron_num, const int & numel)
-
-        ----
-
-        .. _create_bptt_kernel-en:
-
-        * **English**
-
-        Create backward-pass CUDA kernel
-
-        :return: None
-        :rtype: None
         """
 
         code += r"""

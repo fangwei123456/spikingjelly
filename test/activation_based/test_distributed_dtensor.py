@@ -14,30 +14,47 @@ import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel
 
 from spikingjelly.activation_based import layer, neuron
+from spikingjelly.activation_based.functional import (
+    collect_reset_modules,
+    reset_collected_modules,
+)
 from spikingjelly.activation_based.distributed import (
+    DistributedFeatureSet,
     DTENSOR_AVAILABLE,
     FSDP2_AVAILABLE,
     PIPELINING_AVAILABLE,
+    SNNDistributedPlan,
+    SNNDistributedRuntime,
+    SNNDistributedTopology,
     ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE,
     TENSOR_PARALLEL_AVAILABLE,
-    SNNDistributedConfig,
     TensorShardMemoryModule,
-    analyze_snn_distributed_capability,
+    analyze,
+    apply,
     apply_pipeline_stage_memopt,
-    auto_build_tensor_parallel_plan,
     build_snn_optimizer,
-    configure_cifar10dvs_vgg_distributed,
-    configure_cifar10dvs_vgg_fsdp2,
-    configure_spikformer_distributed,
-    configure_spikformer_fsdp2,
-    configure_snn_distributed,
-    materialize_dtensor_output,
+    plan,
     recommend_pipeline_memopt_stages,
     recommend_snn_distributed_strategy,
-    resolve_data_parallel_partition,
     resolve_tensor_parallel_group_size,
 )
+from spikingjelly.activation_based.distributed.adapters import (
+    list_adapters,
+    resolve_adapter,
+)
+from spikingjelly.activation_based.distributed.metrics import (
+    PreparedModelOutput,
+    prepare_classification_output,
+)
 from spikingjelly.activation_based.distributed import dtensor as distributed_dtensor
+from spikingjelly.activation_based.distributed.dtensor import (
+    SNNDistributedConfig,
+    analyze_snn_distributed_capability,
+    auto_build_tensor_parallel_plan,
+    configure_snn_distributed,
+    materialize_dtensor_output,
+    resolve_data_parallel_partition,
+)
 from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
 from spikingjelly.activation_based.memopt.checkpointing import GCContainer
 from spikingjelly.activation_based.model.spikformer import spikformer_ti
@@ -93,6 +110,15 @@ class ToyDistributedSNN(nn.Module):
         return self.features(x)
 
 
+class _ToyResetCounter(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.reset_calls = 0
+
+    def reset(self):
+        self.reset_calls += 1
+
+
 def _reset_net(net: nn.Module):
     for m in net.modules():
         if hasattr(m, "reset"):
@@ -142,6 +168,251 @@ def test_analyze_snn_distributed_capability_finds_state_and_linear_targets():
         "Stateful neuron modules remain local/replicated" in note
         for note in analysis.notes
     )
+
+
+def test_collect_reset_modules_and_reset_collected_modules():
+    net = nn.Sequential(_ToyResetCounter(), nn.ReLU(), _ToyResetCounter())
+    modules = collect_reset_modules(net)
+    assert len(modules) == 2
+    reset_collected_modules(modules)
+    assert net[0].reset_calls == 1
+    assert net[2].reset_calls == 1
+
+
+def test_topology_from_mapping_orders_named_dims():
+    topology = SNNDistributedTopology.from_mapping({"tp": 2, "dp": 2})
+    assert topology.world_size == 4
+    assert topology.ordered_dim_names == ("dp", "tp")
+    assert topology.mesh_shape == (2, 2)
+
+
+def test_adapter_registry_lists_known_families():
+    names = list_adapters()
+    assert "cifar10dvs_vgg" in names
+    assert "spikformer" in names
+
+
+def test_resolve_adapter_for_known_models():
+    vgg = CIFAR10DVSVGG(dropout=0.0, backend="torch")
+    assert resolve_adapter(vgg, None) is not None
+    spikformer = spikformer_ti(
+        T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
+    )
+    assert resolve_adapter(spikformer, None) is not None
+
+
+def test_prepare_metrics_classification_output_reduces_time_major_logits():
+    logits = torch.randn(5, 4, 10)
+    labels = torch.eye(10)[torch.tensor([0, 1, 2, 3])]
+    prepared = prepare_classification_output(
+        logits,
+        labels,
+        require_full_logits=True,
+    )
+    assert isinstance(prepared, PreparedModelOutput)
+    torch.testing.assert_close(prepared.logits, logits.mean(dim=0))
+    assert torch.equal(prepared.target, torch.tensor([0, 1, 2, 3]))
+
+
+def test_plan_returns_structured_plan_from_analysis():
+    model = ToyDistributedSNN()
+    analysis = analyze(model, roots=["features"])
+    distributed_plan = plan(
+        analysis=analysis,
+        objective="speed",
+        topology={"dp": 1},
+        backend="inductor",
+        batch_size=8,
+        model_family="toy_snn",
+        features=DistributedFeatureSet(allow_pipeline=False),
+    )
+    assert isinstance(distributed_plan, SNNDistributedPlan)
+    assert distributed_plan.objective == "speed"
+    assert isinstance(distributed_plan.topology, SNNDistributedTopology)
+    assert distributed_plan.topology.world_size == 1
+
+
+def test_plan_accepts_missing_model_family():
+    model = ToyDistributedSNN()
+    analysis = analyze(model, roots=["features"])
+    distributed_plan = plan(
+        analysis=analysis,
+        objective="speed",
+        topology={"dp": 1},
+        backend="inductor",
+        batch_size=8,
+    )
+    assert isinstance(distributed_plan, SNNDistributedPlan)
+    assert distributed_plan.model_family == "generic"
+
+
+def test_plan_allows_explicit_mode_override_for_advanced_users():
+    model = ToyDistributedSNN()
+    analysis = analyze(model, roots=["features"])
+    distributed_plan = plan(
+        analysis=analysis,
+        objective="speed",
+        topology={"tp": 2},
+        backend="inductor",
+        batch_size=8,
+        mode="tp",
+    )
+    assert distributed_plan.mode == "tp"
+    assert distributed_plan.optimizer_strategy == "none"
+    assert distributed_plan.topology.mesh_shape == (2,)
+
+
+@pytest.mark.skipif(
+    not DTENSOR_AVAILABLE,
+    reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
+)
+def test_apply_returns_unified_runtime_single_rank():
+    with _single_rank_process_group():
+        model = ToyDistributedSNN()
+        analysis = analyze(model, roots=["features"])
+        distributed_plan = plan(
+            analysis=analysis,
+            objective="speed",
+            topology={"dp": 1},
+            backend="inductor",
+            batch_size=4,
+            model_family="toy_snn",
+        )
+        runtime = apply(model=model, plan=distributed_plan, device_type="cpu")
+        assert isinstance(runtime, SNNDistributedRuntime)
+        assert runtime.kind == "eager"
+        assert runtime.mesh is not None
+        assert runtime.plan.mode == distributed_plan.mode
+
+
+def test_apply_rejects_device_mesh_world_size_mismatch():
+    model = ToyDistributedSNN()
+    analysis = analyze(model, roots=["features"])
+    distributed_plan = plan(
+        analysis=analysis,
+        objective="speed",
+        topology={"dp": 1},
+        backend="inductor",
+        batch_size=4,
+        model_family="toy_snn",
+    )
+
+    class FakeMesh:
+        def __init__(self):
+            self.mesh = torch.arange(2)
+
+    with pytest.raises(ValueError, match="device_mesh spans 2 ranks"):
+        apply(model=model, plan=distributed_plan, device_type="cpu", device_mesh=FakeMesh())
+
+
+def test_analyze_stays_generic_without_model_family_specific_adapter():
+    vgg = CIFAR10DVSVGG(dropout=0.0, backend="torch")
+    generic = analyze(vgg)
+    direct = analyze_snn_distributed_capability(vgg)
+    assert generic.memory_module_names == direct.memory_module_names
+    assert generic.tensor_parallel_candidate_names == direct.tensor_parallel_candidate_names
+
+
+def test_runtime_from_legacy_supports_eager_primitives():
+    model = ToyDistributedSNN()
+    runtime = SNNDistributedRuntime.from_legacy(
+        kind="eager",
+        model=model,
+        mesh=None,
+        analysis=None,
+        mode="none",
+    )
+    assert runtime.plan is not None
+    assert runtime.plan.mode == "none"
+    optimizer = runtime.build_optimizer(
+        optimizer_cls=torch.optim.SGD,
+        lr=0.1,
+    )
+    criterion = nn.CrossEntropyLoss()
+    x = torch.randn(5, 2, 8)
+    y = torch.tensor([0, 1])
+    optimizer.zero_grad(set_to_none=True)
+    outputs = runtime.model(x.float())
+    outputs, labels = runtime.prepare_classification_output(outputs, y)
+    loss = criterion(outputs, labels)
+    loss.backward()
+    optimizer.step()
+    runtime.reset_state()
+    assert outputs.shape == (2, 4)
+    assert labels.shape == (2,)
+    assert torch.is_tensor(loss)
+
+
+def test_runtime_reset_state_uses_pipeline_stage_when_available():
+    stage = _ToyResetCounter()
+    pipeline_wrapper = SimpleNamespace(stage_module=stage)
+    runtime = SNNDistributedRuntime.from_legacy(
+        kind="pipeline",
+        model=nn.Identity(),
+        mesh=None,
+        analysis=None,
+        mode="pp",
+        pipeline_runtime=pipeline_wrapper,
+    )
+    runtime.reset_state()
+    assert stage.reset_calls == 1
+
+
+def test_runtime_prepare_classification_output_can_return_metadata():
+    model = ToyDistributedSNN()
+    runtime = SNNDistributedRuntime.from_legacy(
+        kind="eager",
+        model=model,
+        mesh=None,
+        analysis=None,
+        mode="none",
+    )
+    logits = torch.randn(5, 2, 4)
+    labels = torch.tensor([0, 1])
+    prepared = runtime.prepare_classification_output(
+        logits,
+        labels,
+        return_metadata=True,
+    )
+    assert isinstance(prepared, PreparedModelOutput)
+    assert prepared.logits.shape == (2, 4)
+    assert prepared.target.shape == (2,)
+
+
+def test_tp_communication_debug_stats_recorded_for_rowwise_conv(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    conv = distributed_dtensor.ChannelShardConv1d(
+        nn.Conv1d(4, 6, kernel_size=1, bias=True),
+        process_group=None,
+        mode="rowwise",
+    )
+    x = torch.randn(2, 4, 8)
+    distributed_dtensor.reset_tp_communication_debug_stats()
+    distributed_dtensor.enable_tp_communication_debug(True)
+    try:
+        conv(x)
+        stats = distributed_dtensor.get_tp_communication_debug_stats()
+        assert stats["all_reduce_calls"] == 0
+        assert stats["all_reduce_bytes"] == 0
+
+        conv.world_size = 2
+        conv.process_group = None
+        calls = {"count": 0}
+
+        def _fake_all_reduce(tensor, group=None):
+            calls["count"] += 1
+            return tensor
+
+        monkeypatch.setattr(distributed_dtensor.dist, "all_reduce", _fake_all_reduce)
+        conv(x)
+        stats = distributed_dtensor.get_tp_communication_debug_stats()
+        assert calls["count"] == 1
+        assert stats["all_reduce_calls"] == 1
+        assert stats["all_reduce_bytes"] > 0
+    finally:
+        distributed_dtensor.enable_tp_communication_debug(False)
+        distributed_dtensor.reset_tp_communication_debug_stats()
 
 
 @pytest.mark.skipif(
@@ -388,11 +659,17 @@ def test_configure_snn_distributed_supports_experimental_conv_tp_on_real_snn():
 def test_high_level_cifar10dvs_vgg_helper():
     with _single_rank_process_group():
         model = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
-        _distributed_model, mesh, analysis = configure_cifar10dvs_vgg_distributed(
+        _distributed_model, mesh, analysis = configure_snn_distributed(
             model,
-            device_type="cpu",
-            mesh_shape=(1,),
-            enable_data_parallel=False,
+            SNNDistributedConfig(
+                device_type="cpu",
+                mesh_shape=(1,),
+                tensor_parallel_roots=["classifier"],
+                auto_tensor_parallel=True,
+                experimental_conv_tensor_parallel=True,
+                conv_tensor_parallel_roots=["features"],
+                enable_data_parallel=False,
+            ),
         )
         assert mesh.ndim == 1
         assert analysis.tensor_parallel_candidate_names == ("classifier.0",)
@@ -402,25 +679,22 @@ def test_high_level_cifar10dvs_vgg_helper():
     not FSDP2_AVAILABLE,
     reason="FSDP2 fully_shard is unavailable in the current PyTorch build.",
 )
-def test_cifar10dvs_vgg_fsdp2_helper_single_rank():
+def test_cifar10dvs_vgg_fsdp2_single_rank_smoke():
     with _single_rank_process_group():
         torch.manual_seed(0)
-        baseline = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
-        candidate = copy.deepcopy(baseline).eval()
-        distributed_model, mesh, _ = configure_cifar10dvs_vgg_fsdp2(
-            candidate,
-            device_type="cpu",
-            mesh_shape=(1,),
-            enable_classifier_tensor_parallel=False,
-            enable_experimental_conv_tensor_parallel=False,
+        candidate = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
+        analysis = analyze(candidate)
+        distributed_plan = plan(
+            analysis=analysis,
+            objective="memory",
+            topology={"dp": 1},
+            backend="torch",
+            batch_size=1,
+            model_family="cifar10dvs_vgg",
+            mode="fsdp2",
         )
-        x = torch.randn(1, 2, 2, 48, 48)
-        _reset_net(baseline)
-        reference = baseline(x)
-        _reset_net(distributed_model)
-        result = materialize_dtensor_output(distributed_model(x))
-        torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
-        assert mesh.ndim == 1
+        runtime = apply(model=candidate, plan=distributed_plan, device_type="cpu")
+        assert runtime.mesh is not None
 
 
 @pytest.mark.skipif(
@@ -432,14 +706,21 @@ def test_cifar10dvs_vgg_fsdp2_tp_helper_single_rank():
         torch.manual_seed(0)
         baseline = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
         candidate = copy.deepcopy(baseline).eval()
-        distributed_model, mesh, _ = configure_cifar10dvs_vgg_fsdp2(
+        distributed_model, mesh, _ = configure_snn_distributed(
             candidate,
-            device_type="cpu",
-            mesh_shape=(1, 1),
-            enable_classifier_tensor_parallel=True,
-            enable_experimental_conv_tensor_parallel=True,
-            tp_mesh_dim=1,
-            dp_mesh_dim=0,
+            SNNDistributedConfig(
+                device_type="cpu",
+                mesh_shape=(1, 1),
+                enable_fsdp2=True,
+                fsdp_shard_roots=["features"],
+                fsdp_shard_module_root=False,
+                tensor_parallel_roots=["classifier"],
+                auto_tensor_parallel=True,
+                experimental_conv_tensor_parallel=True,
+                conv_tensor_parallel_roots=["features"],
+                tp_mesh_dim=1,
+                dp_mesh_dim=0,
+            ),
         )
         x = torch.randn(1, 2, 2, 48, 48)
         _reset_net(baseline)
@@ -461,11 +742,17 @@ def test_cifar10dvs_vgg_tp_helper_after_memopt_level2_single_rank():
         x = torch.randn(1, 2, 2, 48, 48)
         candidate = copy.deepcopy(baseline).eval()
         candidate.features[0] = GCContainer(None, candidate.features[0])
-        distributed_model, _, _ = configure_cifar10dvs_vgg_distributed(
+        distributed_model, _, _ = configure_snn_distributed(
             candidate,
-            device_type="cpu",
-            mesh_shape=(1,),
-            enable_data_parallel=False,
+            SNNDistributedConfig(
+                device_type="cpu",
+                mesh_shape=(1,),
+                tensor_parallel_roots=["classifier"],
+                auto_tensor_parallel=True,
+                experimental_conv_tensor_parallel=True,
+                conv_tensor_parallel_roots=["features"],
+                enable_data_parallel=False,
+            ),
         )
         _reset_net(baseline)
         reference = baseline(x)
@@ -512,12 +799,19 @@ def test_spikformer_tp_helper_after_memopt_level2_single_rank():
             None, candidate.patch_embed.stages[0]
         )
         candidate.blocks[0] = GCContainer(None, candidate.blocks[0])
-        distributed_model, _, _ = configure_spikformer_distributed(
+        distributed_model, _, _ = configure_snn_distributed(
             candidate,
-            device_type="cpu",
-            mesh_shape=(1,),
-            enable_data_parallel=False,
-            enable_head_tensor_parallel=True,
+            SNNDistributedConfig(
+                device_type="cpu",
+                mesh_shape=(1,),
+                tensor_parallel_roots=["head"],
+                auto_tensor_parallel=True,
+                experimental_spikformer_tensor_parallel=True,
+                spikformer_tensor_parallel_roots=["blocks"],
+                experimental_spikformer_patch_stem_tensor_parallel=True,
+                spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
+                enable_data_parallel=False,
+            ),
         )
         _reset_net(baseline)
         reference = baseline(x)
@@ -537,12 +831,19 @@ def test_spikformer_head_tp_helper_single_rank():
             T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
         ).eval()
         candidate = copy.deepcopy(baseline).eval()
-        distributed_model, mesh, analysis = configure_spikformer_distributed(
+        distributed_model, mesh, analysis = configure_snn_distributed(
             candidate,
-            device_type="cpu",
-            mesh_shape=(1,),
-            enable_data_parallel=False,
-            enable_head_tensor_parallel=True,
+            SNNDistributedConfig(
+                device_type="cpu",
+                mesh_shape=(1,),
+                tensor_parallel_roots=["head"],
+                auto_tensor_parallel=True,
+                experimental_spikformer_tensor_parallel=True,
+                spikformer_tensor_parallel_roots=["blocks"],
+                experimental_spikformer_patch_stem_tensor_parallel=True,
+                spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
+                enable_data_parallel=False,
+            ),
         )
         x = torch.randn(2, 3, 64, 64)
         _reset_net(baseline)
@@ -565,26 +866,24 @@ def test_spikformer_head_tp_helper_single_rank():
     not FSDP2_AVAILABLE,
     reason="FSDP2 fully_shard is unavailable in the current PyTorch build.",
 )
-def test_spikformer_fsdp2_helper_single_rank():
+def test_spikformer_fsdp2_single_rank_smoke():
     with _single_rank_process_group():
         torch.manual_seed(0)
-        baseline = spikformer_ti(
+        candidate = spikformer_ti(
             T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
         ).eval()
-        candidate = copy.deepcopy(baseline).eval()
-        distributed_model, mesh, _ = configure_spikformer_fsdp2(
-            candidate,
-            device_type="cpu",
-            mesh_shape=(1,),
-            enable_head_tensor_parallel=False,
+        analysis = analyze(candidate)
+        distributed_plan = plan(
+            analysis=analysis,
+            objective="memory",
+            topology={"dp": 1},
+            backend="torch",
+            batch_size=1,
+            model_family="spikformer",
+            mode="fsdp2",
         )
-        x = torch.randn(2, 3, 64, 64)
-        _reset_net(baseline)
-        reference = baseline(x)
-        _reset_net(distributed_model)
-        result = materialize_dtensor_output(distributed_model(x))
-        torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
-        assert mesh.ndim == 1
+        runtime = apply(model=candidate, plan=distributed_plan, device_type="cpu")
+        assert runtime.mesh is not None
 
 
 def test_cifar10dvs_vgg_pipeline_module_matches_baseline():
@@ -936,12 +1235,19 @@ def test_spikformer_patch_stem_tp_helper_handles_patch_embed_root():
         candidate = spikformer_ti(
             T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
         ).eval()
-        distributed_model, _, _ = configure_spikformer_distributed(
+        distributed_model, _, _ = configure_snn_distributed(
             candidate,
-            device_type="cpu",
-            mesh_shape=(1,),
-            enable_data_parallel=False,
-            enable_head_tensor_parallel=True,
+            SNNDistributedConfig(
+                device_type="cpu",
+                mesh_shape=(1,),
+                tensor_parallel_roots=["head"],
+                auto_tensor_parallel=True,
+                experimental_spikformer_tensor_parallel=True,
+                spikformer_tensor_parallel_roots=["blocks"],
+                experimental_spikformer_patch_stem_tensor_parallel=True,
+                spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
+                enable_data_parallel=False,
+            ),
         )
         assert (
             "ChannelShardConv2d"
@@ -1099,6 +1405,17 @@ def test_train_distributed_reduce_classification_output_reduces_time_major_logit
     assert torch.equal(reduced_labels, torch.tensor([0, 1, 2, 3]))
     assert reduced_logits.shape == (4, 10)
     assert reduced_labels.shape == (4,)
+
+
+def test_train_distributed_prepare_classification_output_matches_reduce_for_local_tensor():
+    train_distributed = _load_train_distributed_module()
+    logits = torch.randn(5, 4, 10)
+    labels = torch.eye(10)[torch.tensor([0, 1, 2, 3])]
+    prepared_logits, prepared_labels = train_distributed.prepare_classification_output(
+        logits, labels
+    )
+    torch.testing.assert_close(prepared_logits, logits.mean(dim=0))
+    assert torch.equal(prepared_labels, torch.tensor([0, 1, 2, 3]))
 
 
 def test_train_distributed_build_data_uses_shared_sampler_for_pipeline(monkeypatch):

@@ -495,11 +495,23 @@ Spikformer 与 memopt 组合结果
 Benchmark 自动记录与对比
 +++++++++++++++++++++++
 
-``benchmark/benchmark_snn_distributed.py`` 现在会默认把结果追加到 ``benchmark/results/benchmark_snn_distributed.jsonl``，并自动和同配置的上一条记录做对比。记录里会统一保存：
+``benchmark/benchmark_snn_distributed.py`` 现在会默认把结果追加到 ``benchmark/results/benchmark_snn_distributed.jsonl``，并自动和同配置的上一条记录做对比。新版记录会显式区分 benchmark 口径与 batch 语义，统一保存：
 
-* ``global_samples_per_second``
+* ``benchmark_regime``：``throughput_weak_scaling`` / ``latency_strong_scaling`` / ``memory_capacity``
+* ``global_batch_size``
+* ``per_rank_batch_size``
+* ``step_latency_ms``
+* ``global_throughput_sps``
+* ``per_device_throughput_sps``
 * ``peak_allocated_mb``
 * ``optimize_ms``
+* ``forward_ms``
+* ``backward_ms``
+* ``optimizer_ms``
+* ``reset_ms``
+* ``materialize_ms``
+* ``tp_all_reduce_calls``
+* ``tp_all_reduce_mb``
 * ``warning_count``
 * ``recompile_count``
 * ``graph_break_count``
