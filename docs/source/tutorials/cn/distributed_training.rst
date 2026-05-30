@@ -16,41 +16,51 @@ English version: :doc:`../en/distributed_training`
 快速开始
 ++++++++++++++++++++++++
 
-低层入口是 :func:`configure_snn_distributed <spikingjelly.activation_based.distributed.configure_snn_distributed>`，高层入口包括：
-
-* :func:`configure_cifar10dvs_vgg_distributed <spikingjelly.activation_based.distributed.configure_cifar10dvs_vgg_distributed>`
-* :func:`configure_cifar10dvs_vgg_fsdp2 <spikingjelly.activation_based.distributed.configure_cifar10dvs_vgg_fsdp2>`
-* :func:`configure_cifar10dvs_vgg_pipeline <spikingjelly.activation_based.distributed.configure_cifar10dvs_vgg_pipeline>`
-* :func:`configure_spikformer_pipeline <spikingjelly.activation_based.distributed.configure_spikformer_pipeline>`
+当前低层入口是 :func:`configure_snn_distributed <spikingjelly.activation_based.distributed.dtensor.configure_snn_distributed>`，它位于 ``spikingjelly.activation_based.distributed.dtensor``。统一的新公开接口则是 ``spikingjelly.activation_based.distributed`` 下的 ``analyze`` / ``plan`` / ``apply``。
 
 例如，对 ``CIFAR10DVSVGG`` 启用纯 FSDP2：
 
 .. code:: python
 
-    from spikingjelly.activation_based.distributed import configure_cifar10dvs_vgg_fsdp2
+    from spikingjelly.activation_based.distributed.dtensor import (
+        SNNDistributedConfig,
+        configure_snn_distributed,
+    )
     from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
 
     model = CIFAR10DVSVGG(dropout=0.0, backend='inductor')
-    model, mesh, analysis = configure_cifar10dvs_vgg_fsdp2(
+    model, mesh, analysis = configure_snn_distributed(
         model,
-        device_type='cuda',
-        mesh_shape=(world_size,),
-        enable_classifier_tensor_parallel=False,
-        enable_experimental_conv_tensor_parallel=False,
+        SNNDistributedConfig(
+            device_type='cuda',
+            mesh_shape=(world_size,),
+            auto_tensor_parallel=False,
+            enable_fsdp2=True,
+            fsdp_shard_roots=['features', 'classifier'],
+            fsdp_shard_module_root=True,
+            dp_mesh_dim=0,
+        ),
     )
 
 若想启用 ``FSDP2 + TP``，可使用 2D mesh：
 
 .. code:: python
 
-    model, mesh, analysis = configure_cifar10dvs_vgg_fsdp2(
+    model, mesh, analysis = configure_snn_distributed(
         model,
-        device_type='cuda',
-        mesh_shape=(2, 2),   # (dp, tp)
-        enable_classifier_tensor_parallel=True,
-        enable_experimental_conv_tensor_parallel=True,
-        dp_mesh_dim=0,
-        tp_mesh_dim=1,
+        SNNDistributedConfig(
+            device_type='cuda',
+            mesh_shape=(2, 2),   # (dp, tp)
+            enable_fsdp2=True,
+            fsdp_shard_roots=['features'],
+            fsdp_shard_module_root=False,
+            tensor_parallel_roots=['classifier'],
+            auto_tensor_parallel=True,
+            experimental_conv_tensor_parallel=True,
+            conv_tensor_parallel_roots=['features'],
+            dp_mesh_dim=0,
+            tp_mesh_dim=1,
+        ),
     )
 
 训练脚本

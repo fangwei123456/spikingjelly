@@ -595,7 +595,7 @@ def _aggregate_tp_debug_stats(device: torch.device) -> Dict[str, int]:
         dtype=torch.int64,
     )
     if dist.is_initialized():
-        dist.all_reduce(values, op=dist.ReduceOp.SUM)
+        dist.all_reduce(values, op=dist.ReduceOp.MAX)
     return {
         "all_reduce_calls": int(values[0].item()),
         "all_reduce_bytes": int(values[1].item()),
@@ -851,6 +851,7 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
             config = SNNDistributedConfig(
                 device_type=device.type,
                 mesh_shape=mesh_shape or (world_size,),
+                auto_tensor_parallel=False,
                 enable_fsdp2=True,
                 fsdp_shard_roots=["features", "classifier"],
                 fsdp_shard_module_root=True,
@@ -862,6 +863,7 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
             config = SNNDistributedConfig(
                 device_type=device.type,
                 mesh_shape=mesh_shape or (world_size,),
+                auto_tensor_parallel=False,
                 enable_fsdp2=True,
                 fsdp_shard_roots=shard_roots,
                 fsdp_shard_module_root=True,

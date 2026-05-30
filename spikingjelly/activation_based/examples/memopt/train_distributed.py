@@ -435,7 +435,9 @@ def reduce_classification_output(outputs: torch.Tensor, labels: torch.Tensor):
     if outputs.ndim >= 3:
         outputs = outputs.mean(dim=0)
     if labels.ndim > 1:
-        labels = labels.argmax(dim=1)
+        labels = labels.squeeze(-1)
+        if labels.ndim > 1:
+            labels = labels.argmax(dim=-1)
     return outputs, labels
 
 

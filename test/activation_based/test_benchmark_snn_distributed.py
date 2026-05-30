@@ -2,6 +2,7 @@ import importlib.util
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -251,6 +252,36 @@ def test_aggregate_tp_debug_stats_returns_local_totals_without_process_group(
     stats = bench._aggregate_tp_debug_stats(torch.device("cpu"))
     assert stats["all_reduce_calls"] == 1
     assert stats["all_reduce_bytes"] == 16
+
+
+def test_build_model_fsdp2_disables_auto_tensor_parallel(monkeypatch: pytest.MonkeyPatch):
+    captured = {}
+
+    def _fake_configure(model, config):
+        captured["config"] = config
+        return model, None, None
+
+    monkeypatch.setattr(bench, "configure_snn_distributed", _fake_configure)
+    args = SimpleNamespace(
+        model="cifar10dvs_vgg",
+        mode="fsdp2",
+        memopt_level=0,
+        backend="torch",
+        T=4,
+        image_size=224,
+        num_classes=1000,
+        mesh_shape=None,
+        tp_mesh_dim=0,
+        dp_mesh_dim=None,
+        pp_microbatches=None,
+        pp_schedule="auto",
+        pp_virtual_stages=1,
+        pp_layout=None,
+        pp_delay_wgrad=False,
+        memopt_compress_x=False,
+    )
+    bench.build_model(args, torch.device("cpu"), 1, 2)
+    assert captured["config"].auto_tensor_parallel is False
 
 
 def test_make_synthetic_batch_uses_requested_batch_size():

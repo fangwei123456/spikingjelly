@@ -219,7 +219,6 @@ def test_resolve_adapter_for_known_models():
 
 def test_infer_model_family_unwraps_module_attribute():
     wrapped = SimpleNamespace(module=CIFAR10DVSVGG(dropout=0.0, backend="torch"))
-    assert distributed_dtensor is not None
     from spikingjelly.activation_based.distributed.adapters.base import infer_model_family
 
     assert infer_model_family(wrapped) == "cifar10dvs_vgg"
