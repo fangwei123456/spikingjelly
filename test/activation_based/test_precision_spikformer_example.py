@@ -99,7 +99,7 @@ def test_fp8_torchao_aligned_linear_smoke():
         layer.Linear(16, 32),
         torch.nn.ReLU(),
         layer.Linear(32, 16),
-    ).train()
+    ).train().to("cuda:0")
     artifacts = prepare_model_for_precision(
         model,
         torch.device("cuda:0"),
@@ -128,7 +128,7 @@ def test_spikformer_precision_tools_fp8_torchao_smoke():
     config = PrecisionConfig(mode="fp8-torchao", strictness="strict", device="cuda:0")
     if torch.cuda.get_device_capability(0) >= (8, 9):
         artifacts, y, loss = _run_one_training_step(
-            model,
+            model.to("cuda:0"),
             torch.device("cuda:0"),
             config,
             batch_size=16,

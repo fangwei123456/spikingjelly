@@ -60,3 +60,9 @@ class Float8TorchAOPolicy(PrecisionPolicy):
             raise RuntimeError(
                 "precision='fp8-torchao' requires a CUDA device in the current stage."
             )
+        model_devices = {p.device for p in model.parameters()}
+        if model_devices and not any(d.type == "cuda" for d in model_devices):
+            raise RuntimeError(
+                f"The model must be moved to the target CUDA device (e.g. model.to('{device}')) "
+                "before calling prepare_model_for_precision() for 'fp8-torchao'."
+            )

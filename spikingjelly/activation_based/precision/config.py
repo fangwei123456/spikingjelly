@@ -58,12 +58,13 @@ class PrecisionConfig:
             )
 
         if hasattr(config, "disable_amp") or hasattr(config, "device"):
+            device_attr = getattr(config, "device", None)
+            device_value = device_attr if device_attr is not None else default_device
             if getattr(config, "disable_amp", False):
                 mode = "fp32"
             else:
-                device = str(getattr(config, "device", default_device or "cpu"))
+                device = str(device_value or "cpu")
                 mode = "fp16" if device.startswith("cuda") else "fp32"
-            device_value = getattr(config, "device", default_device)
             return cls(
                 mode=mode,
                 device=str(device_value) if device_value is not None else None,
