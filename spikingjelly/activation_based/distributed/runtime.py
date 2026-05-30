@@ -76,13 +76,17 @@ class SNNDistributedRuntime:
         target = self.model
         if self.kind == "pipeline" and self.pipeline_runtime is not None:
             target = self.pipeline_runtime.stage_module
+        mode = self.plan.mode if self.plan is not None else self.mode
+        optimizer_strategy = (
+            self.plan.optimizer_strategy if self.plan is not None else "none"
+        )
         return build_snn_optimizer(
             target,
-            mode=self.plan.mode,
+            mode=mode,
             optimizer_cls=optimizer_cls,
             lr=lr,
             weight_decay=weight_decay,
-            optimizer_sharding=self.plan.optimizer_strategy,
+            optimizer_sharding=optimizer_strategy,
             **kwargs,
         )
 
@@ -148,11 +152,16 @@ class SNNDistributedRuntime:
                     dataset, num_replicas=1, rank=0, shuffle=shuffle
                 )
             else:
-                dp_mesh_dim = self.plan.dp_mesh_dim
+                dp_mesh_dim = self.plan.dp_mesh_dim if self.plan is not None else None
+                sharded = (
+                    self.plan.mode in ("dp", "fsdp2", "fsdp2_tp")
+                    if self.plan is not None
+                    else self.mode in ("dp", "fsdp2", "fsdp2_tp")
+                )
                 replicas, rank = resolve_data_parallel_partition(
                     self.mesh,
                     dp_mesh_dim=dp_mesh_dim,
-                    sharded_by_data_parallel=self.plan.mode in ("dp", "fsdp2", "fsdp2_tp"),
+                    sharded_by_data_parallel=sharded,
                 )
                 if replicas > 1:
                     sampler = DistributedSampler(

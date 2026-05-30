@@ -27,6 +27,15 @@ class SpikformerAdapter:
         device_mesh=None,
     ) -> SNNDistributedRuntime:
         enable_spikformer_tp = plan.mode in ("tp", "fsdp2_tp")
+        num_blocks = len(getattr(model, "blocks", ()))
+        fsdp_shard_roots = None
+        fsdp_shard_module_root = True
+        if plan.mode in ("fsdp2", "fsdp2_tp"):
+            fsdp_shard_roots = ["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)]
+            if plan.mode == "fsdp2":
+                fsdp_shard_roots.append("head")
+            else:
+                fsdp_shard_module_root = False
         config = SNNDistributedConfig(
             device_type=device_type,
             mesh_shape=plan.mesh_shape or plan.topology.mesh_shape,
@@ -35,6 +44,8 @@ class SpikformerAdapter:
             dp_mesh_dim=plan.dp_mesh_dim,
             enable_data_parallel=plan.mode == "dp",
             enable_fsdp2=plan.mode in ("fsdp2", "fsdp2_tp"),
+            fsdp_shard_roots=fsdp_shard_roots,
+            fsdp_shard_module_root=fsdp_shard_module_root,
             tensor_parallel_roots=["head"] if enable_spikformer_tp else None,
             auto_tensor_parallel=enable_spikformer_tp,
             experimental_spikformer_tensor_parallel=(

@@ -156,6 +156,12 @@ def apply(
     device_type: str = "cuda",
     device_mesh=None,
 ) -> SNNDistributedRuntime:
+    if plan.mode == "pp":
+        raise NotImplementedError(
+            "Pipeline parallelism ('pp') is not supported via the unified `apply` API "
+            "because it requires an `example_input` to partition the model and measure stage costs. "
+            "Please use the dedicated pipeline configuration path directly."
+        )
     use_adapter = plan.mode in ("tp", "fsdp2_tp", "pp") or (
         plan.experimental_features.allow_experimental_conv_tp
         or plan.experimental_features.allow_experimental_spikformer_tp

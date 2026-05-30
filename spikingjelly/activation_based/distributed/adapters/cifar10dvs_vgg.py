@@ -28,6 +28,13 @@ class CIFAR10DVSVGGAdapter:
         device_type: str = "cuda",
         device_mesh=None,
     ) -> SNNDistributedRuntime:
+        fsdp_shard_roots = None
+        fsdp_shard_module_root = True
+        if plan.mode == "fsdp2":
+            fsdp_shard_roots = ["features", "classifier"]
+        elif plan.mode == "fsdp2_tp":
+            fsdp_shard_roots = ["features"]
+            fsdp_shard_module_root = False
         config = SNNDistributedConfig(
             device_type=device_type,
             mesh_shape=plan.mesh_shape or plan.topology.mesh_shape,
@@ -36,6 +43,8 @@ class CIFAR10DVSVGGAdapter:
             dp_mesh_dim=plan.dp_mesh_dim,
             enable_data_parallel=plan.mode == "dp",
             enable_fsdp2=plan.mode in ("fsdp2", "fsdp2_tp"),
+            fsdp_shard_roots=fsdp_shard_roots,
+            fsdp_shard_module_root=fsdp_shard_module_root,
             tensor_parallel_roots=["classifier"] if plan.mode in ("tp", "fsdp2_tp") else None,
             auto_tensor_parallel=plan.mode in ("tp", "fsdp2_tp"),
             experimental_conv_tensor_parallel=(

@@ -12,6 +12,7 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel
+from torch.utils.data import TensorDataset
 
 from spikingjelly.activation_based import layer, neuron
 from spikingjelly.activation_based.functional import (
@@ -355,6 +356,21 @@ def test_apply_rejects_device_mesh_world_size_mismatch():
         apply(model=model, plan=distributed_plan, device_type="cpu", device_mesh=FakeMesh())
 
 
+def test_apply_rejects_pipeline_mode_without_example_input():
+    model = ToyDistributedSNN()
+    analysis = analyze(model, roots=["features"])
+    distributed_plan = plan(
+        analysis=analysis,
+        objective="capacity",
+        topology={"pp": 2},
+        backend="inductor",
+        batch_size=8,
+        mode="pp",
+    )
+    with pytest.raises(NotImplementedError, match="Pipeline parallelism"):
+        apply(model=model, plan=distributed_plan, device_type="cpu")
+
+
 def test_analyze_stays_generic_without_model_family_specific_adapter():
     vgg = CIFAR10DVSVGG(dropout=0.0, backend="torch")
     generic = analyze(vgg)
@@ -427,6 +443,26 @@ def test_runtime_prepare_classification_output_can_return_metadata():
     assert isinstance(prepared, PreparedModelOutput)
     assert prepared.logits.shape == (2, 4)
     assert prepared.target.shape == (2,)
+
+
+def test_runtime_prepare_dataloader_tolerates_missing_plan():
+    runtime = SNNDistributedRuntime(
+        kind="eager",
+        model=nn.Identity(),
+        mesh=None,
+        analysis=None,
+        plan=None,
+        mode="none",
+    )
+    loader = runtime.prepare_dataloader(
+        dataset=TensorDataset(torch.randn(2, 3), torch.tensor([0, 1])),
+        batch_size=1,
+        shuffle=False,
+        num_workers=0,
+        drop_last=False,
+        pin_memory=False,
+    )
+    assert len(list(loader)) == 2
 
 
 def test_prepare_metrics_classification_output_squeezes_singleton_label_dim():
