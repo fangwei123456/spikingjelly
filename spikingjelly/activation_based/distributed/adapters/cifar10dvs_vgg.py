@@ -39,6 +39,13 @@ class CIFAR10DVSVGGAdapter:
         elif plan.mode == "fsdp2_tp":
             fsdp_shard_roots = ["features"]
             fsdp_shard_module_root = False
+        tp_roots = None
+        if plan.mode in ("tp", "fsdp2_tp"):
+            tp_roots = (
+                list(plan.tensor_parallel_roots)
+                if plan.tensor_parallel_roots is not None
+                else ["classifier"]
+            )
         config = SNNDistributedConfig(
             device_type=device_type,
             mesh_shape=plan.mesh_shape or plan.topology.mesh_shape,
@@ -49,7 +56,7 @@ class CIFAR10DVSVGGAdapter:
             enable_fsdp2=plan.mode in ("fsdp2", "fsdp2_tp"),
             fsdp_shard_roots=fsdp_shard_roots,
             fsdp_shard_module_root=fsdp_shard_module_root,
-            tensor_parallel_roots=["classifier"] if plan.mode in ("tp", "fsdp2_tp") else None,
+            tensor_parallel_roots=tp_roots,
             auto_tensor_parallel=plan.mode in ("tp", "fsdp2_tp"),
             experimental_conv_tensor_parallel=(
                 plan.mode in ("tp", "fsdp2_tp")

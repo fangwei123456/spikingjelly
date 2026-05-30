@@ -587,6 +587,21 @@ def _time_block(device: torch.device, fn):
     return result, (time.perf_counter() - start) * 1000.0
 
 
+def _aggregate_tp_debug_stats(device: torch.device) -> Dict[str, int]:
+    stats = get_tp_communication_debug_stats()
+    values = torch.tensor(
+        [stats["all_reduce_calls"], stats["all_reduce_bytes"]],
+        device=device,
+        dtype=torch.int64,
+    )
+    if dist.is_initialized():
+        dist.all_reduce(values, op=dist.ReduceOp.SUM)
+    return {
+        "all_reduce_calls": int(values[0].item()),
+        "all_reduce_bytes": int(values[1].item()),
+    }
+
+
 def _make_synthetic_batch(
     args,
     device: torch.device,
@@ -1090,7 +1105,7 @@ def benchmark(args, counter: _LinePatternCounter):
     )
 
     event_counts = _aggregate_event_counts(counter, device)
-    tp_stats = get_tp_communication_debug_stats()
+    tp_stats = _aggregate_tp_debug_stats(device)
     record = None
     if rank == 0:
         record = {
@@ -1211,7 +1226,7 @@ def benchmark_pipeline(
     )
 
     event_counts = _aggregate_event_counts(counter, device)
-    tp_stats = get_tp_communication_debug_stats()
+    tp_stats = _aggregate_tp_debug_stats(device)
     record = None
     if rank == 0:
         record = {

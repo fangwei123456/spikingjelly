@@ -500,6 +500,7 @@ Automatic Benchmark Logging and Comparison
 * ``benchmark_regime``: ``throughput_weak_scaling`` / ``latency_strong_scaling`` / ``memory_capacity``
 * ``global_batch_size``
 * ``per_rank_batch_size``
+* ``data_replicas``
 * ``step_latency_ms``
 * ``global_throughput_sps``
 * ``per_device_throughput_sps``

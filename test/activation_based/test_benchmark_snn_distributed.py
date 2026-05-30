@@ -240,6 +240,19 @@ def test_throughput_from_regime_uses_world_size_for_per_device_metric():
     assert per_device_tp == 10.0
 
 
+def test_aggregate_tp_debug_stats_returns_local_totals_without_process_group(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        bench,
+        "get_tp_communication_debug_stats",
+        lambda: {"all_reduce_calls": 1, "all_reduce_bytes": 16},
+    )
+    stats = bench._aggregate_tp_debug_stats(torch.device("cpu"))
+    assert stats["all_reduce_calls"] == 1
+    assert stats["all_reduce_bytes"] == 16
+
+
 def test_make_synthetic_batch_uses_requested_batch_size():
     args = type(
         "Args",
