@@ -1181,6 +1181,8 @@ def benchmark(args, counter: _LinePatternCounter):
             dist.destroy_process_group()
         return record
     finally:
+        if dist.is_initialized():
+            dist.destroy_process_group()
         enable_tp_communication_debug(False)
         reset_tp_communication_debug_stats()
 
