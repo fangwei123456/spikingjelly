@@ -50,17 +50,19 @@ def test_neuromc_runtime_report_constructor_remains_backward_compatible():
 
 def test_neuromc_runtime_report_preserves_legacy_positional_prefix():
     report = NeuroMCRuntimeEnergyReport(
-        {"fp_soma": 1.0},
-        {"with_sg": 2.0},
-        {"sram": {"rh2l": 3.0}},
-        {"fp_soma": {"mac": 4}},
-        {"with_sg": {"mux": 5}},
-        [{"stage": "forward"}],
+        1.0,
+        2.0,
+        3.0,
+        {"forward": 4.0},
+        {"linear": 5.0},
+        {"totals": {"mac": 6}},
     )
-    assert report.energy_by_core_type == {"fp_soma": 1.0}
-    assert report.energy_by_process_key == {"with_sg": 2.0}
-    assert report.mapping_summary == [{"stage": "forward"}]
-    assert report.energy_total_pj == 0.0
+    assert report.energy_total_pj == 1.0
+    assert report.energy_compute_pj == 2.0
+    assert report.energy_memory_pj == 3.0
+    assert report.energy_by_stage == {"forward": 4.0}
+    assert report.energy_by_op == {"linear": 5.0}
+    assert report.primitive_counts == {"totals": {"mac": 6}}
 
 
 def test_neuromc_exact_ifnode_supports_sg_breakdown():

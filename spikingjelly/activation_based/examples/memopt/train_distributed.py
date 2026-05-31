@@ -541,7 +541,9 @@ def train_one_epoch_pipeline(
         if pipeline_runtime.is_last:
             labels = labels.to(runtime.device, non_blocking=True)
             if labels.ndim > 1:
-                labels = labels.argmax(dim=1)
+                labels = labels.squeeze(-1)
+                if labels.ndim > 1:
+                    labels = labels.argmax(dim=-1)
             step_kwargs = {"target": labels}
         outputs = pipeline_runtime.schedule.step(
             *step_args, losses=losses, **step_kwargs

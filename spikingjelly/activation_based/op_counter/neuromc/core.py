@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections import deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import torch
 import torch.nn as nn
@@ -239,13 +239,6 @@ class NeuroMCRuntimeEnergyReport:
 
     def __init__(
         self,
-        energy_by_core_type: Optional[dict[str, float]] = None,
-        energy_by_process_key: Optional[dict[str, float]] = None,
-        energy_by_memory_level_dir: Optional[dict[str, dict[str, float]]] = None,
-        counts_by_core_type: Optional[dict[str, dict[str, int]]] = None,
-        counts_by_process_key: Optional[dict[str, dict[str, int]]] = None,
-        mapping_summary: Optional[list[dict[str, Any]]] = None,
-        *,
         energy_total_pj: float = 0.0,
         energy_compute_pj: float = 0.0,
         energy_memory_pj: float = 0.0,
@@ -258,13 +251,13 @@ class NeuroMCRuntimeEnergyReport:
         energy_base_memory_pj: float = 0.0,
         energy_extra_memory_pj: float = 0.0,
         energy_extra_compute_pj: float = 0.0,
+        energy_by_core_type: Optional[dict[str, float]] = None,
+        energy_by_process_key: Optional[dict[str, float]] = None,
+        energy_by_memory_level_dir: Optional[dict[str, dict[str, float]]] = None,
+        counts_by_core_type: Optional[dict[str, dict[str, int]]] = None,
+        counts_by_process_key: Optional[dict[str, dict[str, int]]] = None,
+        mapping_summary: Optional[list[dict[str, Any]]] = None,
     ):
-        self.energy_by_core_type = dict(energy_by_core_type or {})
-        self.energy_by_process_key = dict(energy_by_process_key or {})
-        self.energy_by_memory_level_dir = dict(energy_by_memory_level_dir or {})
-        self.counts_by_core_type = dict(counts_by_core_type or {})
-        self.counts_by_process_key = dict(counts_by_process_key or {})
-        self.mapping_summary = list(mapping_summary or [])
         self.energy_total_pj = energy_total_pj
         self.energy_compute_pj = energy_compute_pj
         self.energy_memory_pj = energy_memory_pj
@@ -277,6 +270,12 @@ class NeuroMCRuntimeEnergyReport:
         self.energy_base_memory_pj = energy_base_memory_pj
         self.energy_extra_memory_pj = energy_extra_memory_pj
         self.energy_extra_compute_pj = energy_extra_compute_pj
+        self.energy_by_core_type = dict(energy_by_core_type or {})
+        self.energy_by_process_key = dict(energy_by_process_key or {})
+        self.energy_by_memory_level_dir = dict(energy_by_memory_level_dir or {})
+        self.counts_by_core_type = dict(counts_by_core_type or {})
+        self.counts_by_process_key = dict(counts_by_process_key or {})
+        self.mapping_summary = list(mapping_summary or [])
 
 
 @dataclass

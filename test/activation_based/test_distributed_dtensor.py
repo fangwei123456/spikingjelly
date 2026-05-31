@@ -1680,6 +1680,17 @@ def test_train_distributed_forward_loss_uses_normalized_singleton_labels():
     assert torch.is_tensor(loss)
 
 
+def test_train_distributed_reduce_classification_output_normalizes_singleton_labels():
+    train_distributed = _load_train_distributed_module()
+    logits = torch.randn(2, 4)
+    labels = torch.tensor([[1], [3]])
+    reduced_logits, reduced_labels = train_distributed.reduce_classification_output(
+        logits, labels
+    )
+    torch.testing.assert_close(reduced_logits, logits)
+    assert torch.equal(reduced_labels, torch.tensor([1, 3]))
+
+
 def test_train_distributed_build_data_uses_shared_sampler_for_pipeline(monkeypatch):
     train_distributed = _load_train_distributed_module()
 
