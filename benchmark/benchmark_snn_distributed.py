@@ -971,197 +971,201 @@ def benchmark(args, counter: _LinePatternCounter):
     recommendation, recommendation_notes = resolve_strategy_args(args, world_size)
     enable_tp_communication_debug(args.tp_debug_comm)
     reset_tp_communication_debug_stats()
-    if args.optimizer_sharding == "zero" and not ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE:
-        raise RuntimeError(
-            "optimizer_sharding='zero' requires torch.distributed.optim.ZeroRedundancyOptimizer."
-        )
-    if args.mode == "pp":
-        data_replicas = 1
-        data_rank = 0
-    elif args.mode in ("dp", "fsdp2", "fsdp2_tp"):
-        if args.mesh_shape is not None:
-            mesh_shape = tuple(args.mesh_shape)
-            if args.dp_mesh_dim is not None:
-                data_replicas = mesh_shape[args.dp_mesh_dim]
-            elif len(mesh_shape) == 1:
-                data_replicas = mesh_shape[0]
+    try:
+        if args.optimizer_sharding == "zero" and not ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE:
+            raise RuntimeError(
+                "optimizer_sharding='zero' requires torch.distributed.optim.ZeroRedundancyOptimizer."
+            )
+        if args.mode == "pp":
+            data_replicas = 1
+            data_rank = 0
+        elif args.mode in ("dp", "fsdp2", "fsdp2_tp"):
+            if args.mesh_shape is not None:
+                mesh_shape = tuple(args.mesh_shape)
+                if args.dp_mesh_dim is not None:
+                    data_replicas = mesh_shape[args.dp_mesh_dim]
+                elif len(mesh_shape) == 1:
+                    data_replicas = mesh_shape[0]
+                else:
+                    data_replicas = mesh_shape[0]
             else:
-                data_replicas = mesh_shape[0]
+                data_replicas = world_size
+            data_rank = 0
         else:
-            data_replicas = world_size
-        data_rank = 0
-    else:
-        data_replicas = 1
-        data_rank = 0
+            data_replicas = 1
+            data_rank = 0
 
-    global_batch_size, per_rank_batch_size = _resolve_benchmark_batch_semantics(
-        args.batch_size, data_replicas, args.benchmark_regime
-    )
-
-    model, mesh, optimize_ms = build_model(
-        args, device, world_size, per_rank_batch_size
-    )
-    optimizer_target = model.stage_module if args.mode == "pp" else model
-    optimizer = build_snn_optimizer(
-        optimizer_target,
-        mode=args.mode,
-        lr=1e-3,
-        optimizer_sharding=args.optimizer_sharding,
-        foreach=False if args.mode in ("tp", "fsdp2_tp") else None,
-    )
-    if args.mode in ("dp", "fsdp2", "fsdp2_tp"):
-        data_replicas, data_rank = resolve_data_parallel_partition(
-            mesh,
-            dp_mesh_dim=args.dp_mesh_dim
-            if args.dp_mesh_dim is not None
-            else (
-                0
-                if args.mode in ("dp", "fsdp2", "fsdp2_tp") and mesh is not None
-                else None
-            ),
-            sharded_by_data_parallel=args.mode in ("dp", "fsdp2", "fsdp2_tp"),
-        )
         global_batch_size, per_rank_batch_size = _resolve_benchmark_batch_semantics(
             args.batch_size, data_replicas, args.benchmark_regime
         )
-    seed = 20260428 + data_rank
-    torch.manual_seed(seed)
-    if device.type == "cuda":
-        torch.cuda.manual_seed(seed)
-    if args.mode == "pp":
+
+        model, mesh, optimize_ms = build_model(
+            args, device, world_size, per_rank_batch_size
+        )
+        optimizer_target = model.stage_module if args.mode == "pp" else model
+        optimizer = build_snn_optimizer(
+            optimizer_target,
+            mode=args.mode,
+            lr=1e-3,
+            optimizer_sharding=args.optimizer_sharding,
+            foreach=False if args.mode in ("tp", "fsdp2_tp") else None,
+        )
+        if args.mode in ("dp", "fsdp2", "fsdp2_tp"):
+            data_replicas, data_rank = resolve_data_parallel_partition(
+                mesh,
+                dp_mesh_dim=args.dp_mesh_dim
+                if args.dp_mesh_dim is not None
+                else (
+                    0
+                    if args.mode in ("dp", "fsdp2", "fsdp2_tp") and mesh is not None
+                    else None
+                ),
+                sharded_by_data_parallel=args.mode in ("dp", "fsdp2", "fsdp2_tp"),
+            )
+            global_batch_size, per_rank_batch_size = _resolve_benchmark_batch_semantics(
+                args.batch_size, data_replicas, args.benchmark_regime
+            )
+        seed = 20260428 + data_rank
+        torch.manual_seed(seed)
+        if device.type == "cuda":
+            torch.cuda.manual_seed(seed)
+        if args.mode == "pp":
+            x, y = _make_synthetic_batch(
+                args,
+                device,
+                per_rank_batch_size,
+                pipeline_runtime=model,
+            )
+            return benchmark_pipeline(
+                args,
+                model,
+                optimizer,
+                x,
+                y,
+                device,
+                rank,
+                world_size,
+                optimize_ms,
+                recommendation,
+                recommendation_notes,
+                counter,
+                global_batch_size,
+                per_rank_batch_size,
+                data_replicas,
+            )
+
         x, y = _make_synthetic_batch(
             args,
             device,
             per_rank_batch_size,
-            pipeline_runtime=model,
-        )
-        return benchmark_pipeline(
-            args,
-            model,
-            optimizer,
-            x,
-            y,
-            device,
-            rank,
-            world_size,
-            optimize_ms,
-            recommendation,
-            recommendation_notes,
-            counter,
-            global_batch_size,
-            per_rank_batch_size,
-            data_replicas,
         )
 
-    x, y = _make_synthetic_batch(
-        args,
-        device,
-        per_rank_batch_size,
-    )
+        if device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(device)
+        reset_modules = functional.collect_reset_modules(model)
 
-    if device.type == "cuda":
-        torch.cuda.reset_peak_memory_stats(device)
-    reset_modules = functional.collect_reset_modules(model)
-
-    for _ in range(args.warmup):
-        _benchmark_step_eager(model, optimizer, x, y, device, reset_modules)
-
-    if device.type == "cuda":
-        torch.cuda.synchronize(device)
-    if dist.is_initialized():
-        dist.barrier()
-    reset_tp_communication_debug_stats()
-    start = time.time()
-    breakdown = _StepBreakdown()
-    for _ in range(args.steps):
-        breakdown.add(
+        for _ in range(args.warmup):
             _benchmark_step_eager(model, optimizer, x, y, device, reset_modules)
+
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        if dist.is_initialized():
+            dist.barrier()
+        reset_tp_communication_debug_stats()
+        start = time.time()
+        breakdown = _StepBreakdown()
+        for _ in range(args.steps):
+            breakdown.add(
+                _benchmark_step_eager(model, optimizer, x, y, device, reset_modules)
+            )
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        if dist.is_initialized():
+            dist.barrier()
+        elapsed = time.time() - start
+        peak_allocated_mb = (
+            torch.cuda.max_memory_allocated(device) / 1024 / 1024
+            if device.type == "cuda" and torch.cuda.is_available()
+            else 0.0
         )
-    if device.type == "cuda":
-        torch.cuda.synchronize(device)
-    if dist.is_initialized():
-        dist.barrier()
-    elapsed = time.time() - start
-    peak_allocated_mb = (
-        torch.cuda.max_memory_allocated(device) / 1024 / 1024
-        if device.type == "cuda" and torch.cuda.is_available()
-        else 0.0
-    )
 
-    elapsed_tensor = torch.tensor(elapsed, device=device)
-    peak_tensor = torch.tensor(float(peak_allocated_mb), device=device)
-    if dist.is_initialized():
-        dist.all_reduce(elapsed_tensor, op=dist.ReduceOp.MAX)
-        dist.all_reduce(peak_tensor, op=dist.ReduceOp.MAX)
-    elapsed = elapsed_tensor.item()
-    peak_allocated_mb = peak_tensor.item()
-    breakdown = _reduce_breakdown(breakdown, device)
-    step_latency_ms = elapsed * 1000 / args.steps
-    global_throughput_sps, per_device_throughput_sps = _throughput_from_regime(
-        benchmark_regime=args.benchmark_regime,
-        elapsed=elapsed,
-        steps=args.steps,
-        world_size=world_size,
-        global_batch_size=global_batch_size,
-        per_rank_batch_size=per_rank_batch_size,
-    )
+        elapsed_tensor = torch.tensor(elapsed, device=device)
+        peak_tensor = torch.tensor(float(peak_allocated_mb), device=device)
+        if dist.is_initialized():
+            dist.all_reduce(elapsed_tensor, op=dist.ReduceOp.MAX)
+            dist.all_reduce(peak_tensor, op=dist.ReduceOp.MAX)
+        elapsed = elapsed_tensor.item()
+        peak_allocated_mb = peak_tensor.item()
+        breakdown = _reduce_breakdown(breakdown, device)
+        step_latency_ms = elapsed * 1000 / args.steps
+        global_throughput_sps, per_device_throughput_sps = _throughput_from_regime(
+            benchmark_regime=args.benchmark_regime,
+            elapsed=elapsed,
+            steps=args.steps,
+            world_size=world_size,
+            global_batch_size=global_batch_size,
+            per_rank_batch_size=per_rank_batch_size,
+        )
 
-    event_counts = _aggregate_event_counts(counter, device)
-    tp_stats = _aggregate_tp_debug_stats(device)
-    record = None
-    if rank == 0:
-        record = {
-            "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
-            "benchmark_regime": args.benchmark_regime,
-            "model": args.model,
-            "mode": args.mode,
-            "prefer": args.prefer,
-            "backend": args.backend,
-            "world_size": world_size,
-            "optimizer_sharding": args.optimizer_sharding,
-            "memopt_level": args.memopt_level,
-            "optimize_ms": optimize_ms,
-            "batch_size": args.batch_size,
-            "global_batch_size": global_batch_size,
-            "per_rank_batch_size": per_rank_batch_size,
-            "data_replicas": data_replicas,
-            "num_classes": args.num_classes,
-            "T": args.T,
-            "steps": args.steps,
-            "warmup": args.warmup,
-            "image_size": args.image_size,
-            "mesh_shape": tuple(args.mesh_shape)
-            if args.mesh_shape is not None
-            else None,
-            "tp_mesh_dim": args.tp_mesh_dim,
-            "dp_mesh_dim": args.dp_mesh_dim,
-            "memopt_compress_x": args.memopt_compress_x,
-            "pp_microbatches": args.pp_microbatches,
-            "pp_memopt_stage_budget_ratio": args.pp_memopt_stage_budget_ratio,
-            "pp_schedule": args.pp_schedule,
-            "pp_virtual_stages": args.pp_virtual_stages,
-            "pp_layout": args.pp_layout,
-            "pp_delay_wgrad": args.pp_delay_wgrad,
-            "step_latency_ms": step_latency_ms,
-            "global_throughput_sps": global_throughput_sps,
-            "per_device_throughput_sps": per_device_throughput_sps,
-            "peak_allocated_mb": peak_allocated_mb,
-            "recommendation_mode": recommendation.mode
-            if recommendation is not None
-            else None,
-            "recommendation_rationale": recommendation.rationale
-            if recommendation is not None
-            else (),
-            "recommendation_notes": recommendation_notes,
-            "tp_all_reduce_calls": tp_stats["all_reduce_calls"],
-            "tp_all_reduce_mb": tp_stats["all_reduce_bytes"] / 1024.0 / 1024.0,
-            **breakdown.to_dict(args.steps),
-            **event_counts,
-        }
+        event_counts = _aggregate_event_counts(counter, device)
+        tp_stats = _aggregate_tp_debug_stats(device)
+        record = None
+        if rank == 0:
+            record = {
+                "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
+                "benchmark_regime": args.benchmark_regime,
+                "model": args.model,
+                "mode": args.mode,
+                "prefer": args.prefer,
+                "backend": args.backend,
+                "world_size": world_size,
+                "optimizer_sharding": args.optimizer_sharding,
+                "memopt_level": args.memopt_level,
+                "optimize_ms": optimize_ms,
+                "batch_size": args.batch_size,
+                "global_batch_size": global_batch_size,
+                "per_rank_batch_size": per_rank_batch_size,
+                "data_replicas": data_replicas,
+                "num_classes": args.num_classes,
+                "T": args.T,
+                "steps": args.steps,
+                "warmup": args.warmup,
+                "image_size": args.image_size,
+                "mesh_shape": tuple(args.mesh_shape)
+                if args.mesh_shape is not None
+                else None,
+                "tp_mesh_dim": args.tp_mesh_dim,
+                "dp_mesh_dim": args.dp_mesh_dim,
+                "memopt_compress_x": args.memopt_compress_x,
+                "pp_microbatches": args.pp_microbatches,
+                "pp_memopt_stage_budget_ratio": args.pp_memopt_stage_budget_ratio,
+                "pp_schedule": args.pp_schedule,
+                "pp_virtual_stages": args.pp_virtual_stages,
+                "pp_layout": args.pp_layout,
+                "pp_delay_wgrad": args.pp_delay_wgrad,
+                "step_latency_ms": step_latency_ms,
+                "global_throughput_sps": global_throughput_sps,
+                "per_device_throughput_sps": per_device_throughput_sps,
+                "peak_allocated_mb": peak_allocated_mb,
+                "recommendation_mode": recommendation.mode
+                if recommendation is not None
+                else None,
+                "recommendation_rationale": recommendation.rationale
+                if recommendation is not None
+                else (),
+                "recommendation_notes": recommendation_notes,
+                "tp_all_reduce_calls": tp_stats["all_reduce_calls"],
+                "tp_all_reduce_mb": tp_stats["all_reduce_bytes"] / 1024.0 / 1024.0,
+                **breakdown.to_dict(args.steps),
+                **event_counts,
+            }
 
-    if dist.is_initialized():
-        dist.destroy_process_group()
-    return record
+        if dist.is_initialized():
+            dist.destroy_process_group()
+        return record
+    finally:
+        enable_tp_communication_debug(False)
+        reset_tp_communication_debug_stats()
 
 
 def benchmark_pipeline(

@@ -120,6 +120,12 @@ class _ToyResetCounter(nn.Module):
         self.reset_calls += 1
 
 
+class _ToyNonCallableReset(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.reset = 1
+
+
 def _reset_net(net: nn.Module):
     for m in net.modules():
         if hasattr(m, "reset"):
@@ -178,6 +184,12 @@ def test_collect_reset_modules_and_reset_collected_modules():
     reset_collected_modules(modules)
     assert net[0].reset_calls == 1
     assert net[2].reset_calls == 1
+
+
+def test_collect_reset_modules_ignores_non_callable_reset_attributes():
+    net = nn.Sequential(_ToyNonCallableReset(), _ToyResetCounter())
+    modules = collect_reset_modules(net)
+    assert modules == (net[1],)
 
 
 def test_topology_from_mapping_orders_named_dims():

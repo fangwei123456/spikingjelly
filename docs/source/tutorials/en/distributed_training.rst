@@ -27,7 +27,9 @@ For example, pure FSDP2 on ``CIFAR10DVSVGG``:
         configure_snn_distributed,
     )
     from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
+    import torch.distributed as dist
 
+    world_size = dist.get_world_size()  # requires init_process_group()
     model = CIFAR10DVSVGG(dropout=0.0, backend='inductor')
     model, mesh, analysis = configure_snn_distributed(
         model,

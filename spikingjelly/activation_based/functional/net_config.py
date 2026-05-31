@@ -18,7 +18,7 @@ __all__ = [
 
 
 def collect_reset_modules(net: nn.Module) -> tuple[nn.Module, ...]:
-    return tuple(m for m in net.modules() if hasattr(m, "reset"))
+    return tuple(m for m in net.modules() if callable(getattr(m, "reset", None)))
 
 
 def reset_collected_modules(modules: tuple[nn.Module, ...]) -> None:
