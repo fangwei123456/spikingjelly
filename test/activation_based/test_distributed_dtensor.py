@@ -1,9 +1,6 @@
 import copy
 import importlib.util
-import os
 import sys
-import tempfile
-from contextlib import contextmanager
 from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
@@ -11,7 +8,6 @@ from types import SimpleNamespace
 
 import pytest
 import torch
-import torch.distributed as dist
 import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import TensorDataset
@@ -62,6 +58,8 @@ from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
 from spikingjelly.activation_based.memopt.checkpointing import GCContainer
 from spikingjelly.activation_based.model.spikformer import spikformer_ti
 from spikingjelly.activation_based import functional
+
+from test.activation_based._distributed_test_utils import single_rank_process_group
 
 
 _TRAIN_DISTRIBUTED_PATH = (
@@ -132,36 +130,6 @@ def _reset_net(net: nn.Module):
     for m in net.modules():
         if hasattr(m, "reset"):
             m.reset()
-
-
-@contextmanager
-def _single_rank_process_group():
-    if dist.is_initialized():
-        if dist.get_world_size() != 1:
-            raise RuntimeError(
-                "_single_rank_process_group() requires world_size == 1 "
-                "when reusing an initialized process group."
-            )
-        yield
-        return
-
-    fd, path = tempfile.mkstemp()
-    os.close(fd)
-    init_method = "file:///" + path.replace("\\", "/")
-    dist.init_process_group(
-        backend="gloo",
-        init_method=init_method,
-        rank=0,
-        world_size=1,
-    )
-    try:
-        yield
-    finally:
-        dist.destroy_process_group()
-        try:
-            os.remove(path)
-        except FileNotFoundError:
-            pass
 
 
 def test_analyze_snn_distributed_capability_finds_state_and_linear_targets():
@@ -242,14 +210,18 @@ def test_resolve_adapter_for_known_models():
 
 def test_infer_model_family_unwraps_module_attribute():
     wrapped = SimpleNamespace(module=CIFAR10DVSVGG(dropout=0.0, backend="torch"))
-    from spikingjelly.activation_based.distributed.adapters.base import infer_model_family
+    from spikingjelly.activation_based.distributed.adapters.base import (
+        infer_model_family,
+    )
 
     assert infer_model_family(wrapped) == "cifar10dvs_vgg"
 
 
 def test_infer_model_family_ignores_non_module_module_attribute():
     wrapped = SimpleNamespace(module="not-a-module")
-    from spikingjelly.activation_based.distributed.adapters.base import infer_model_family
+    from spikingjelly.activation_based.distributed.adapters.base import (
+        infer_model_family,
+    )
 
     assert infer_model_family(wrapped) is None
 
@@ -365,7 +337,9 @@ def test_plan_allows_explicit_mode_override_for_advanced_users():
 def test_plan_rejects_tensor_parallel_without_candidates():
     model = nn.Sequential(neuron.IFNode(step_mode="m"))
     analysis = analyze(model)
-    with pytest.raises(ValueError, match="requires at least one tensor-parallel candidate"):
+    with pytest.raises(
+        ValueError, match="requires at least one tensor-parallel candidate"
+    ):
         plan(
             analysis=analysis,
             objective="memory",
@@ -396,7 +370,7 @@ def test_plan_rejects_pipeline_when_feature_flag_disables_it():
     reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
 )
 def test_apply_returns_unified_runtime_single_rank():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         model = ToyDistributedSNN()
         analysis = analyze(model, roots=["features"])
         distributed_plan = plan(
@@ -419,7 +393,7 @@ def test_apply_returns_unified_runtime_single_rank():
     reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
 )
 def test_configure_snn_distributed_materializes_mesh_when_mesh_shape_is_provided():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         model = ToyDistributedSNN()
         configured_model, mesh, analysis = configure_snn_distributed(
             model,
@@ -470,7 +444,12 @@ def test_apply_rejects_device_mesh_world_size_mismatch():
             self.mesh = torch.arange(2)
 
     with pytest.raises(ValueError, match="device_mesh spans 2 ranks"):
-        apply(model=model, plan=distributed_plan, device_type="cpu", device_mesh=FakeMesh())
+        apply(
+            model=model,
+            plan=distributed_plan,
+            device_type="cpu",
+            device_mesh=FakeMesh(),
+        )
 
 
 def test_apply_rejects_pipeline_mode_without_example_input():
@@ -496,7 +475,10 @@ def test_analyze_stays_generic_without_model_family_specific_adapter():
     generic = analyze(vgg)
     direct = analyze_snn_distributed_capability(vgg)
     assert generic.memory_module_names == direct.memory_module_names
-    assert generic.tensor_parallel_candidate_names == direct.tensor_parallel_candidate_names
+    assert (
+        generic.tensor_parallel_candidate_names
+        == direct.tensor_parallel_candidate_names
+    )
 
 
 def test_runtime_from_legacy_supports_eager_primitives():
@@ -681,7 +663,7 @@ def test_tp_communication_debug_stats_recorded_for_rowwise_conv(
     reason="DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
 def test_auto_tensor_parallel_plan_and_forward_match_single_rank():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         torch.manual_seed(0)
         baseline = ToyDistributedSNN()
         candidate = copy.deepcopy(baseline)
@@ -719,7 +701,7 @@ def test_auto_tensor_parallel_plan_and_forward_match_single_rank():
     reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
 )
 def test_configure_snn_distributed_supports_data_parallel_only():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         model = ToyDistributedSNN()
         config = SNNDistributedConfig(
             device_type="cpu",
@@ -744,7 +726,7 @@ def test_configure_snn_distributed_supports_data_parallel_only():
     reason="ZeroRedundancyOptimizer is unavailable in the current PyTorch build.",
 )
 def test_build_snn_optimizer_supports_zero_for_dp():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         model = ToyDistributedSNN()
         config = SNNDistributedConfig(
             device_type="cpu",
@@ -786,7 +768,7 @@ def test_build_snn_optimizer_rejects_zero_outside_dp():
     reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
 )
 def test_configure_snn_distributed_rejects_ddp_plus_tp():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         model = ToyDistributedSNN()
         config = SNNDistributedConfig(
             device_type="cpu",
@@ -806,7 +788,7 @@ def test_configure_snn_distributed_rejects_ddp_plus_tp():
     reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
 )
 def test_configure_snn_distributed_rejects_ddp_plus_experimental_conv_tp():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         model = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
         config = SNNDistributedConfig(
             device_type="cpu",
@@ -827,7 +809,7 @@ def test_configure_snn_distributed_rejects_ddp_plus_experimental_conv_tp():
     reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
 )
 def test_configure_snn_distributed_requires_dp_mesh_dim_for_multidim_data_parallel():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         model = ToyDistributedSNN()
         config = SNNDistributedConfig(
             device_type="cpu",
@@ -845,7 +827,7 @@ def test_configure_snn_distributed_requires_dp_mesh_dim_for_multidim_data_parall
     reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
 )
 def test_partition_helpers_respect_2d_mesh_coordinates():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         model = ToyDistributedSNN()
         config = SNNDistributedConfig(
             device_type="cpu",
@@ -876,7 +858,7 @@ def test_partition_helpers_respect_2d_mesh_coordinates():
     reason="DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
 def test_configure_snn_distributed_supports_experimental_conv_tp_on_real_snn():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         torch.manual_seed(0)
         baseline = CIFAR10DVSVGG(dropout=0.0, backend="torch")
         candidate = copy.deepcopy(baseline)
@@ -918,7 +900,7 @@ def test_configure_snn_distributed_supports_experimental_conv_tp_on_real_snn():
     reason="DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
 def test_high_level_cifar10dvs_vgg_helper():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         model = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
         _distributed_model, mesh, analysis = configure_snn_distributed(
             model,
@@ -941,7 +923,7 @@ def test_high_level_cifar10dvs_vgg_helper():
     reason="FSDP2 fully_shard or DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
 )
 def test_cifar10dvs_vgg_fsdp2_single_rank_smoke():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         torch.manual_seed(0)
         candidate = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
         analysis = analyze(candidate)
@@ -965,7 +947,7 @@ def test_cifar10dvs_vgg_fsdp2_single_rank_smoke():
     reason="FSDP2/DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
 def test_cifar10dvs_vgg_fsdp2_tp_helper_single_rank():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         torch.manual_seed(0)
         baseline = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
         candidate = copy.deepcopy(baseline).eval()
@@ -999,7 +981,7 @@ def test_cifar10dvs_vgg_fsdp2_tp_helper_single_rank():
     reason="DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
 def test_cifar10dvs_vgg_tp_helper_after_memopt_level2_single_rank():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         torch.manual_seed(0)
         baseline = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
         x = torch.randn(1, 2, 2, 48, 48)
@@ -1051,7 +1033,7 @@ def test_spikformer_fsdp2_tp_plus_memopt_level1_single_rank():
     reason="DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
 def test_spikformer_tp_helper_after_memopt_level2_single_rank():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         torch.manual_seed(0)
         baseline = spikformer_ti(
             T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
@@ -1088,7 +1070,7 @@ def test_spikformer_tp_helper_after_memopt_level2_single_rank():
     reason="DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
 def test_spikformer_head_tp_helper_single_rank():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         torch.manual_seed(0)
         baseline = spikformer_ti(
             T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
@@ -1130,7 +1112,7 @@ def test_spikformer_head_tp_helper_single_rank():
     reason="FSDP2 fully_shard or DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
 )
 def test_spikformer_fsdp2_single_rank_smoke():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         torch.manual_seed(0)
         candidate = spikformer_ti(
             T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
@@ -1187,7 +1169,7 @@ def test_spikformer_pipeline_module_matches_baseline():
     reason="torch.distributed.pipelining is unavailable in the current PyTorch build.",
 )
 def test_cifar10dvs_vgg_pipeline_runtime_supports_interleaved_single_rank():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         model = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
         x = torch.randn(2, 2, 2, 48, 48)
         runtime = distributed_dtensor.configure_cifar10dvs_vgg_pipeline(
@@ -1208,7 +1190,7 @@ def test_cifar10dvs_vgg_pipeline_runtime_supports_interleaved_single_rank():
     reason="torch.distributed.pipelining is unavailable in the current PyTorch build.",
 )
 def test_spikformer_pipeline_runtime_supports_zero_bubble_single_rank():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         model = spikformer_ti(
             T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
         ).eval()
@@ -1493,7 +1475,7 @@ def test_spikformer_pipeline_attaches_patch_embed_to_first_non_empty_stage():
     reason="DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
 def test_spikformer_patch_stem_tp_helper_handles_patch_embed_root():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         torch.manual_seed(0)
         candidate = spikformer_ti(
             T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
@@ -1526,7 +1508,7 @@ def test_spikformer_patch_stem_tp_helper_handles_patch_embed_root():
     reason="DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
 def test_spikformer_patch_stem_tp_helper_handles_single_stage_root_colwise():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         torch.manual_seed(0)
         candidate = spikformer_ti(
             T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
@@ -1555,7 +1537,7 @@ def test_spikformer_patch_stem_tp_helper_handles_single_stage_root_colwise():
     reason="DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
 def test_spikformer_patch_stem_tp_helper_rejects_unpaired_isolated_root():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         torch.manual_seed(0)
         candidate = spikformer_ti(
             T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"

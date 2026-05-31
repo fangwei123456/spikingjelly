@@ -21,6 +21,21 @@ from .runtime import SNNDistributedRuntime
 from .topology import SNNDistributedTopology
 
 
+def _normalize_mode(mode: Optional[str]) -> Optional[str]:
+    if mode is None:
+        return None
+    mode = mode.lower()
+    valid_modes = ("none", "dp", "tp", "fsdp2", "fsdp2_tp", "pp")
+    if mode not in valid_modes:
+        raise ValueError(f"Unsupported mode='{mode}'. Expected one of {valid_modes}.")
+    if mode == "pp":
+        raise NotImplementedError(
+            "Pipeline parallelism ('pp') is not supported by the unified analyze/plan/apply API. "
+            "Please use the dedicated pipeline configuration path directly."
+        )
+    return mode
+
+
 def analyze(
     model: nn.Module,
     *,
@@ -71,18 +86,7 @@ def plan(
         backend=backend,
         pipelining_available=False,
     )
-    if mode is not None:
-        mode = mode.lower()
-        valid_modes = ("none", "dp", "tp", "fsdp2", "fsdp2_tp", "pp")
-        if mode not in valid_modes:
-            raise ValueError(
-                f"Unsupported mode='{mode}'. Expected one of {valid_modes}."
-            )
-        if mode == "pp":
-            raise NotImplementedError(
-                "Pipeline parallelism ('pp') is not supported by the unified analyze/plan/apply API. "
-                "Please use the dedicated pipeline configuration path directly."
-            )
+    mode = _normalize_mode(mode)
     notes = list(analysis.notes)
     selected_mode = mode or recommendation.mode
     if (

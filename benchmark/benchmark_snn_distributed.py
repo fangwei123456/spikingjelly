@@ -599,7 +599,7 @@ def _aggregate_tp_debug_stats(device: torch.device) -> Dict[str, int]:
         dtype=torch.int64,
     )
     if dist.is_initialized():
-        dist.all_reduce(values, op=dist.ReduceOp.SUM)
+        dist.all_reduce(values, op=dist.ReduceOp.MAX)
     return {
         "all_reduce_calls": int(values[0].item()),
         "all_reduce_bytes": int(values[1].item()),

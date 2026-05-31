@@ -4,17 +4,49 @@ from typing import Optional, Protocol, runtime_checkable
 
 import torch.nn as nn
 
-from ..dtensor import SNNDistributedAnalysis
+from ..dtensor import (
+    SNNDistributedAnalysis,
+    SNNDistributedConfig,
+    configure_snn_distributed,
+)
 from ..planner import SNNDistributedPlan
 from ..runtime import SNNDistributedRuntime
+
+
+def build_distributed_runtime(
+    model: nn.Module,
+    plan: SNNDistributedPlan,
+    *,
+    device_type: str = "cuda",
+    device_mesh=None,
+    **config_overrides,
+) -> SNNDistributedRuntime:
+    config = SNNDistributedConfig(
+        device_type=device_type,
+        mesh_shape=plan.mesh_shape or plan.topology.mesh_shape,
+        device_mesh=device_mesh,
+        tp_mesh_dim=plan.tp_mesh_dim,
+        dp_mesh_dim=plan.dp_mesh_dim,
+        enable_data_parallel=plan.mode == "dp",
+        enable_fsdp2=plan.mode in ("fsdp2", "fsdp2_tp"),
+        auto_tensor_parallel=plan.mode in ("tp", "fsdp2_tp"),
+        **config_overrides,
+    )
+    configured_model, mesh, analysis = configure_snn_distributed(model, config)
+    return SNNDistributedRuntime(
+        kind="eager",
+        model=configured_model,
+        mesh=mesh,
+        analysis=analysis,
+        plan=plan,
+    )
 
 
 @runtime_checkable
 class SNNDistributedAdapter(Protocol):
     name: str
 
-    def analyze(self, model: nn.Module) -> SNNDistributedAnalysis:
-        ...
+    def analyze(self, model: nn.Module) -> SNNDistributedAnalysis: ...
 
     def apply(
         self,
@@ -23,8 +55,7 @@ class SNNDistributedAdapter(Protocol):
         *,
         device_type: str = "cuda",
         device_mesh=None,
-    ) -> SNNDistributedRuntime:
-        ...
+    ) -> SNNDistributedRuntime: ...
 
 
 def infer_model_family(model: nn.Module) -> Optional[str]:

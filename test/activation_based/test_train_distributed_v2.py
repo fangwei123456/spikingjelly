@@ -1,44 +1,11 @@
-import os
-import tempfile
-from contextlib import contextmanager
-
 import pytest
 import torch
-import torch.distributed as dist
 import torch.nn as nn
 from spikingjelly.activation_based import distributed as sjdist
 from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
 from torch.utils.data import TensorDataset
 
-
-@contextmanager
-def _single_rank_process_group():
-    if dist.is_initialized():
-        if dist.get_world_size() != 1:
-            raise RuntimeError(
-                "_single_rank_process_group() requires world_size == 1 "
-                "when reusing an initialized process group."
-            )
-        yield
-        return
-
-    fd, path = tempfile.mkstemp()
-    os.close(fd)
-    init_method = "file:///" + path.replace("\\", "/")
-    dist.init_process_group(
-        backend="gloo",
-        init_method=init_method,
-        rank=0,
-        world_size=1,
-    )
-    try:
-        yield
-    finally:
-        dist.destroy_process_group()
-        try:
-            os.remove(path)
-        except FileNotFoundError:
-            pass
+from test.activation_based._distributed_test_utils import single_rank_process_group
 
 
 @pytest.mark.skipif(
@@ -46,7 +13,7 @@ def _single_rank_process_group():
     reason="DTensor DeviceMesh or FSDP2 APIs are unavailable in the current PyTorch build.",
 )
 def test_new_distributed_api_supports_manual_training_loop_single_rank():
-    with _single_rank_process_group():
+    with single_rank_process_group():
         torch.manual_seed(0)
         model = CIFAR10DVSVGG(dropout=0.0, backend="torch").to("cpu")
         dataset = TensorDataset(

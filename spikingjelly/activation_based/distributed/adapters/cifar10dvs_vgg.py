@@ -2,14 +2,10 @@ from __future__ import annotations
 
 import torch.nn as nn
 
-from ..dtensor import (
-    SNNDistributedAnalysis,
-    SNNDistributedConfig,
-    analyze_snn_distributed_capability,
-    configure_snn_distributed,
-)
+from ..dtensor import SNNDistributedAnalysis, analyze_snn_distributed_capability
 from ..planner import SNNDistributedPlan
 from ..runtime import SNNDistributedRuntime
+from .base import build_distributed_runtime
 
 
 class CIFAR10DVSVGGAdapter:
@@ -32,7 +28,7 @@ class CIFAR10DVSVGGAdapter:
             raise NotImplementedError(
                 "Pipeline parallelism ('pp') is not supported by CIFAR10DVSVGGAdapter.apply()."
             )
-        fsdp_shard_roots = None
+        fsdp_shard_roots: list[str] | None = None
         fsdp_shard_module_root = True
         if plan.mode == "fsdp2":
             fsdp_shard_roots = ["features", "classifier"]
@@ -44,34 +40,18 @@ class CIFAR10DVSVGGAdapter:
             if plan.tensor_parallel_roots is not None
             else ["classifier"]
         )
-        config = SNNDistributedConfig(
+        enable_conv_tp = (
+            plan.mode in ("tp", "fsdp2_tp")
+            and plan.experimental_features.allow_experimental_conv_tp
+        )
+        return build_distributed_runtime(
+            model,
+            plan,
             device_type=device_type,
-            mesh_shape=plan.mesh_shape or plan.topology.mesh_shape,
             device_mesh=device_mesh,
-            tp_mesh_dim=plan.tp_mesh_dim,
-            dp_mesh_dim=plan.dp_mesh_dim,
-            enable_data_parallel=plan.mode == "dp",
-            enable_fsdp2=plan.mode in ("fsdp2", "fsdp2_tp"),
+            tensor_parallel_roots=analysis_roots,
             fsdp_shard_roots=fsdp_shard_roots,
             fsdp_shard_module_root=fsdp_shard_module_root,
-            tensor_parallel_roots=analysis_roots,
-            auto_tensor_parallel=plan.mode in ("tp", "fsdp2_tp"),
-            experimental_conv_tensor_parallel=(
-                plan.mode in ("tp", "fsdp2_tp")
-                and plan.experimental_features.allow_experimental_conv_tp
-            ),
-            conv_tensor_parallel_roots=["features"]
-            if (
-                plan.mode in ("tp", "fsdp2_tp")
-                and plan.experimental_features.allow_experimental_conv_tp
-            )
-            else None,
-        )
-        configured_model, mesh, analysis = configure_snn_distributed(model, config)
-        return SNNDistributedRuntime(
-            kind="eager",
-            model=configured_model,
-            mesh=mesh,
-            analysis=analysis,
-            plan=plan,
+            experimental_conv_tensor_parallel=enable_conv_tp,
+            conv_tensor_parallel_roots=["features"] if enable_conv_tp else None,
         )
