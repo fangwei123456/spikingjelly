@@ -251,6 +251,7 @@ def test_throughput_from_regime_uses_world_size_for_per_device_metric():
 def test_aggregate_tp_debug_stats_returns_local_totals_without_process_group(
     monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.setattr(bench.dist, "is_initialized", lambda: False)
     monkeypatch.setattr(
         bench,
         "get_tp_communication_debug_stats",

@@ -37,6 +37,7 @@ from spikingjelly.activation_based.distributed.dtensor import (
     configure_snn_distributed,
 )
 from spikingjelly.activation_based.distributed.metrics import (
+    _normalize_classification_labels,
     prepare_classification_output as _prepare_metrics_output,
 )
 from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG, VGGBlock
@@ -177,13 +178,7 @@ def _reduce_classification_output(
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     if out.ndim >= 3:
         out = out.mean(dim=0)
-    if target.ndim > 1:
-        target = target.squeeze(-1)
-        if target.ndim > 1:
-            target = target.argmax(dim=-1)
-            if target.ndim > 1:
-                target = target.squeeze(-1)
-    return out, target
+    return out, _normalize_classification_labels(target)
 
 
 def _prepare_classification_output(
@@ -364,6 +359,13 @@ def resolve_strategy_args(args, world_size: int):
     return recommendation, tuple(recommendation_notes)
 
 
+def _backend_supports_device(device: torch.device) -> bool:
+    backend = dist.get_backend()
+    if backend == "nccl" and device.type != "cuda":
+        return False
+    return True
+
+
 def _aggregate_event_counts(
     counter: _LinePatternCounter, device: torch.device
 ) -> Dict[str, int]:
@@ -372,7 +374,7 @@ def _aggregate_event_counts(
         device=device,
         dtype=torch.int64,
     )
-    if dist.is_initialized():
+    if dist.is_initialized() and _backend_supports_device(device):
         dist.all_reduce(values, op=dist.ReduceOp.SUM)
     return {
         "warning_count": int(values[0].item()),
@@ -598,7 +600,7 @@ def _aggregate_tp_debug_stats(device: torch.device) -> Dict[str, int]:
         device=device,
         dtype=torch.int64,
     )
-    if dist.is_initialized():
+    if dist.is_initialized() and _backend_supports_device(device):
         dist.all_reduce(values, op=dist.ReduceOp.MAX)
     return {
         "all_reduce_calls": int(values[0].item()),

@@ -21,6 +21,11 @@ def build_distributed_runtime(
     device_mesh=None,
     **config_overrides,
 ) -> SNNDistributedRuntime:
+    if plan.mode == "pp":
+        raise ValueError(
+            "Pipeline plans require the pipeline-specific runtime builder, "
+            "not build_distributed_runtime()."
+        )
     config = SNNDistributedConfig(
         device_type=device_type,
         mesh_shape=plan.mesh_shape or plan.topology.mesh_shape,
@@ -58,13 +63,18 @@ class SNNDistributedAdapter(Protocol):
     ) -> SNNDistributedRuntime: ...
 
 
+_FAMILY_PATTERNS = {
+    "spikformer": "spikformer",
+    "cifar10dvsvgg": "cifar10dvs_vgg",
+}
+
+
 def infer_model_family(model: nn.Module) -> Optional[str]:
     wrapped = getattr(model, "module", None)
     if isinstance(wrapped, nn.Module):
         model = wrapped
     class_name = type(model).__name__.lower()
-    if "spikformer" in class_name:
-        return "spikformer"
-    if "cifar10dvsvgg" in class_name:
-        return "cifar10dvs_vgg"
+    for pattern, family in _FAMILY_PATTERNS.items():
+        if pattern in class_name:
+            return family
     return None

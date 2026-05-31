@@ -13,6 +13,11 @@ def single_rank_process_group():
                 "single_rank_process_group() requires world_size == 1 "
                 "when reusing an initialized process group."
             )
+        if dist.get_backend() != "gloo":
+            raise RuntimeError(
+                "single_rank_process_group() reuses an existing process group "
+                f"with backend '{dist.get_backend()}', but expects 'gloo'."
+            )
         yield
         return
 
