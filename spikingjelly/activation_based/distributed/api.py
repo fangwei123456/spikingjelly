@@ -89,6 +89,11 @@ def plan(
     mode = _normalize_mode(mode)
     notes = list(analysis.notes)
     selected_mode = mode or recommendation.mode
+    if selected_mode == "fsdp2_tp":
+        if "dp" not in resolved_topology.ordered_dim_names or "tp" not in resolved_topology.ordered_dim_names:
+            raise ValueError(
+                "Hybrid 'fsdp2_tp' mode requires both 'dp' and 'tp' dimensions in the topology."
+            )
     if (
         selected_mode in ("tp", "fsdp2_tp")
         and not analysis.tensor_parallel_candidate_names

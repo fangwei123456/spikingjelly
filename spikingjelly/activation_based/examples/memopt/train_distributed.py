@@ -438,6 +438,8 @@ def reduce_classification_output(outputs: torch.Tensor, labels: torch.Tensor):
         labels = labels.squeeze(-1)
     if labels.ndim > 1:
         labels = labels.argmax(dim=-1)
+        while labels.ndim > 1 and labels.shape[-1] == 1:
+            labels = labels.squeeze(-1)
     return outputs, labels
 
 
@@ -540,10 +542,12 @@ def train_one_epoch_pipeline(
             step_args = (images,)
         if pipeline_runtime.is_last:
             labels = labels.to(runtime.device, non_blocking=True)
-            if labels.ndim > 1:
+            while labels.ndim > 1 and labels.shape[-1] == 1:
                 labels = labels.squeeze(-1)
-                if labels.ndim > 1:
-                    labels = labels.argmax(dim=-1)
+            if labels.ndim > 1:
+                labels = labels.argmax(dim=-1)
+                while labels.ndim > 1 and labels.shape[-1] == 1:
+                    labels = labels.squeeze(-1)
             step_kwargs = {"target": labels}
         outputs = pipeline_runtime.schedule.step(
             *step_args, losses=losses, **step_kwargs
