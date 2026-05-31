@@ -554,7 +554,7 @@ def test_runtime_reset_state_uses_pipeline_stage_when_available():
     assert stage.reset_calls == 1
 
 
-def test_runtime_forward_loss_uses_pipeline_stage_module():
+def test_runtime_forward_loss_rejects_pipeline_runtime():
     stage = nn.Linear(3, 2)
     model = nn.Linear(5, 4)
     runtime = SNNDistributedRuntime.from_legacy(
@@ -568,10 +568,8 @@ def test_runtime_forward_loss_uses_pipeline_stage_module():
     criterion = nn.CrossEntropyLoss()
     x = torch.randn(4, 3)
     y = torch.tensor([0, 1, 0, 1])
-    outputs, labels, loss = runtime.forward_loss(criterion, x, y)
-    assert outputs.shape == (4, 2)
-    assert torch.equal(labels, y)
-    assert torch.is_tensor(loss)
+    with pytest.raises(NotImplementedError, match="does not execute pipeline runtimes"):
+        runtime.forward_loss(criterion, x, y)
 
 
 def test_runtime_prepare_classification_output_can_return_metadata():
