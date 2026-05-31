@@ -983,6 +983,10 @@ def benchmark(args, counter: _LinePatternCounter):
             if args.mesh_shape is not None:
                 mesh_shape = tuple(args.mesh_shape)
                 if args.dp_mesh_dim is not None:
+                    if not 0 <= args.dp_mesh_dim < len(mesh_shape):
+                        raise ValueError(
+                            f"dp_mesh_dim={args.dp_mesh_dim} is out of range for mesh_shape={mesh_shape}."
+                        )
                     data_replicas = mesh_shape[args.dp_mesh_dim]
                 elif len(mesh_shape) == 1:
                     data_replicas = mesh_shape[0]

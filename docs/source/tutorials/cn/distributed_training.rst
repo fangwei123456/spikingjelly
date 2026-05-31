@@ -513,6 +513,7 @@ Benchmark 自动记录与对比
 * ``global_batch_size``
 * ``per_rank_batch_size``
 * ``data_replicas``
+* ``pp_memopt_stages``
 * ``step_latency_ms``
 * ``global_throughput_sps``
 * ``per_device_throughput_sps``

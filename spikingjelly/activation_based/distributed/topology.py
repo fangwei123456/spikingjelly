@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Mapping, Tuple
 
 
@@ -10,6 +11,8 @@ class SNNDistributedTopology:
     dims: Mapping[str, int]
 
     def __post_init__(self):
+        frozen_dims = MappingProxyType(dict(self.dims))
+        object.__setattr__(self, "dims", frozen_dims)
         if not isinstance(self.world_size, int) or isinstance(self.world_size, bool):
             raise TypeError(
                 f"world_size must be an integer, but got {type(self.world_size).__name__}."
@@ -19,7 +22,7 @@ class SNNDistributedTopology:
         if not self.dims:
             raise ValueError("dims must not be empty.")
         volume = 1
-        for name, size in self.dims.items():
+        for name, size in frozen_dims.items():
             if not isinstance(name, str):
                 raise TypeError(
                     f"Topology dimension names must be strings, but got {type(name).__name__}."
@@ -37,7 +40,7 @@ class SNNDistributedTopology:
             volume *= size
         if volume != self.world_size:
             raise ValueError(
-                f"Topology dims {dict(self.dims)} multiply to {volume}, but world_size={self.world_size}."
+                f"Topology dims {dict(frozen_dims)} multiply to {volume}, but world_size={self.world_size}."
             )
 
     @property

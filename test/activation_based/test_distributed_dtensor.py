@@ -193,7 +193,9 @@ def test_collect_reset_modules_ignores_non_callable_reset_attributes():
 
 
 def test_topology_from_mapping_orders_named_dims():
-    topology = SNNDistributedTopology.from_mapping({"tp": 2, "dp": 2})
+    dims = {"tp": 2, "dp": 2}
+    topology = SNNDistributedTopology.from_mapping(dims)
+    dims["pp"] = 4
     assert topology.world_size == 4
     assert topology.ordered_dim_names == ("dp", "tp")
     assert topology.mesh_shape == (2, 2)
@@ -921,8 +923,8 @@ def test_high_level_cifar10dvs_vgg_helper():
 
 
 @pytest.mark.skipif(
-    not FSDP2_AVAILABLE,
-    reason="FSDP2 fully_shard is unavailable in the current PyTorch build.",
+    not (FSDP2_AVAILABLE and DTENSOR_AVAILABLE),
+    reason="FSDP2 fully_shard or DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
 )
 def test_cifar10dvs_vgg_fsdp2_single_rank_smoke():
     with _single_rank_process_group():
@@ -940,6 +942,8 @@ def test_cifar10dvs_vgg_fsdp2_single_rank_smoke():
         )
         runtime = apply(model=candidate, plan=distributed_plan, device_type="cpu")
         assert runtime.mesh is not None
+        assert runtime.analysis is not None
+        assert runtime.analysis.tensor_parallel_roots == ("classifier",)
 
 
 @pytest.mark.skipif(
@@ -1108,8 +1112,8 @@ def test_spikformer_head_tp_helper_single_rank():
 
 
 @pytest.mark.skipif(
-    not FSDP2_AVAILABLE,
-    reason="FSDP2 fully_shard is unavailable in the current PyTorch build.",
+    not (FSDP2_AVAILABLE and DTENSOR_AVAILABLE),
+    reason="FSDP2 fully_shard or DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
 )
 def test_spikformer_fsdp2_single_rank_smoke():
     with _single_rank_process_group():
