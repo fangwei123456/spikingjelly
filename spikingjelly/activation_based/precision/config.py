@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass(frozen=True)
@@ -24,7 +23,7 @@ class PrecisionConfig:
     @classmethod
     def from_any(
         cls,
-        config: "PrecisionConfig | str | dict | Any",
+        config: "PrecisionConfig | str | dict",
         default_device: str | None = None,
     ) -> "PrecisionConfig":
         if config is None:

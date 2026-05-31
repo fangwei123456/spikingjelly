@@ -338,6 +338,7 @@ class FlopCounter(BaseCounter):
     operators as a coarse estimate of compute cost. See
     :meth:`__init__ <FlopCounter.__init__-en>` for constructor parameters.
     """
+
     def __init__(
         self,
         extra_rules: dict[Any, Callable] = {},

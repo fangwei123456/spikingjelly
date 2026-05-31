@@ -299,6 +299,7 @@ class MemoryAccessCounter(BaseCounter):
     :meth:`__init__ <MemoryAccessCounter.__init__-en>` for constructor
     parameters.
     """
+
     def __init__(
         self,
         extra_rules: dict[Any, Callable] = {},

@@ -1,13 +1,12 @@
+import multiprocessing
+import shutil
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional, Tuple
-import multiprocessing
-from concurrent.futures import ThreadPoolExecutor
-import shutil
 
 from torchvision.datasets.utils import extract_archive
 
 from .base import NeuromorphicDatasetFolder
-
 
 __all__ = ["HARDVS"]
 
@@ -26,7 +25,7 @@ class HARDVS(NeuromorphicDatasetFolder):
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
     ):
-        """
+        r"""
         **API Language:**
         :ref:`中文 <HARDVS.__init__-cn>` | :ref:`English <HARDVS.__init__-en>`
 
@@ -53,13 +52,13 @@ class HARDVS(NeuromorphicDatasetFolder):
 
         :param root: 数据集的根路径
         :type root: Union[str, Path]
-        :param train: 是否使用训练集
-        :type train: Optional[bool]
-        :param data_type: ``\"event\"`` 或 ``\"frame\"``
+        :param train_test_val: ``"train"``、``"val"`` 或 ``"test"``
+        :type train_test_val: str
+        :param data_type: ``"event"`` 或 ``"frame"``
         :type data_type: str
         :param frames_number: 积分帧的数量
         :type frames_number: Optional[int]
-        :param split_by: ``\"time\"`` 或 ``\"number\"``
+        :param split_by: ``"time"`` 或 ``"number"``
         :type split_by: Optional[str]
         :param duration: 每帧的时间时长
         :type duration: Optional[int]
@@ -74,13 +73,13 @@ class HARDVS(NeuromorphicDatasetFolder):
 
         :param root: Root directory of the dataset
         :type root: Union[str, Path]
-        :param train: Whether to use training set or test set
-        :type train: Optional[bool]
-        :param data_type: ``\"event\"`` or ``\"frame\"``
+        :param train_test_val: ``"train"``, ``"val"``, or ``"test"``
+        :type train_test_val: str
+        :param data_type: ``"event"`` or ``"frame"``
         :type data_type: str
         :param frames_number: Number of frames to integrate
         :type frames_number: Optional[int]
-        :param split_by: ``\"time\"`` or ``\"number\"``
+        :param split_by: ``"time"`` or ``"number"``
         :type split_by: Optional[str]
         :param duration: Time duration per frame
         :type duration: Optional[int]

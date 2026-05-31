@@ -56,6 +56,7 @@ class NeuroMCBaseCounter(BaseCounter):
     :return: None
     :rtype: None
     """
+
     def __init__(
         self,
         extra_rules: dict[Any, Callable] | None = None,

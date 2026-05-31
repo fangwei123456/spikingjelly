@@ -1,15 +1,36 @@
 from __future__ import annotations
 
-import importlib.util
 import warnings
 
 import torch
 import torch.nn as nn
 
 from .. import layer
-from .convert import _replace_child
 from .float8_base import wrap_float8_linear_module
 from .policy import PrecisionPolicy
+
+
+def _torchao_available() -> bool:
+    try:
+        import torchao  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _replace_child(
+    module: nn.Module, child_name: str, wrapped: nn.Module
+) -> None:
+    """Safely replace a child module in *module*."""
+    if isinstance(module, nn.ModuleDict):
+        module[child_name] = wrapped
+    elif isinstance(module, (nn.ModuleList, nn.Sequential)):
+        try:
+            module[int(child_name)] = wrapped
+        except ValueError:
+            setattr(module, child_name, wrapped)
+    else:
+        setattr(module, child_name, wrapped)
 
 
 def _fp8_recursive_convert(
@@ -86,19 +107,30 @@ class Float8TorchAOPolicy(PrecisionPolicy):
 
     def check_capability(self, model, device) -> None:
         super().check_capability(model, device)
-        if importlib.util.find_spec("torchao") is None:
+        self._ensure_torchao_available()
+        self._configure_float8()
+        self._ensure_cuda_device(device)
+        self._ensure_model_on_device(model, device)
+
+    def _ensure_torchao_available(self) -> None:
+        if not _torchao_available():
             raise RuntimeError(
                 "precision='fp8-torchao' requires torchao, but torchao is not installed."
             )
+
+    def _configure_float8(self) -> None:
         from torchao.float8 import Float8LinearConfig
 
         if self.fp8_recipe != "auto":
             warnings.warn(
-                "fp8_recipe is currently ignored by the torchao backend and only kept for future extension.",
+                "fp8_recipe is currently ignored by the torchao backend "
+                "and only kept for future extension.",
                 RuntimeWarning,
                 stacklevel=2,
             )
         self.float8_linear_config = Float8LinearConfig()
+
+    def _ensure_cuda_device(self, device) -> None:
         if self.device_type != "cuda":
             raise RuntimeError(
                 "precision='fp8-torchao' is only supported on CUDA in the current stage."
@@ -107,15 +139,17 @@ class Float8TorchAOPolicy(PrecisionPolicy):
             raise RuntimeError(
                 "precision='fp8-torchao' requires a CUDA device in the current stage."
             )
+
+    def _ensure_model_on_device(self, model, device) -> None:
         model_devices = {p.device for p in model.parameters()}
         target_device = torch.device(device)
         if target_device.type == "cuda" and target_device.index is None:
             target_device = torch.device("cuda", torch.cuda.current_device())
         if model_devices and any(d != target_device for d in model_devices):
             raise RuntimeError(
-                f"All model parameters must be moved to the target CUDA device '{target_device}' "
-                f"(e.g. model.to('{target_device}')) before calling "
-                "prepare_model_for_precision() for 'fp8-torchao'."
+                f"All model parameters must be moved to the target CUDA device "
+                f"'{target_device}' (e.g. model.to('{target_device}')) before "
+                "calling prepare_model_for_precision() for 'fp8-torchao'."
             )
 
     def _convert_modules(self, model, report):
@@ -128,7 +162,6 @@ class Float8TorchAOPolicy(PrecisionPolicy):
                 "before convert_model_for_precision()."
             )
 
-        # Root module is itself a Linear → replace in-place.
         if isinstance(model, (nn.Linear, layer.Linear)):
             converted = Float8Linear.from_float(model, config=fp8_config)
             report.converted_modules.append("<root>")

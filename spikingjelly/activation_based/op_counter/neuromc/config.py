@@ -51,6 +51,7 @@ class MemoryInstanceSpec:
     :return: None
     :rtype: None
     """
+
     name: str
     size_bits: int
     datawidth: int

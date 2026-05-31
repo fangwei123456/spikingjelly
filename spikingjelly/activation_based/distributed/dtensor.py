@@ -244,6 +244,7 @@ class SNNDistributedAnalysis:
 
     SNN distributed training analyzer.
     """
+
     memory_module_names: Tuple[str, ...]
     tensor_parallel_candidate_names: Tuple[str, ...]
     unsupported_tensor_parallel_names: Tuple[str, ...]
@@ -274,6 +275,7 @@ class SNNDistributedConfig:
 
     SNN distributed training configuration.
     """
+
     device_type: str = "cuda"
     mesh_shape: Optional[Tuple[int, ...]] = None
     device_mesh: Optional["DeviceMesh"] = None
@@ -325,6 +327,7 @@ class SNNPipelineRuntime:
 
     SNN pipeline parallel runtime.
     """
+
     schedule: Any
     stage_module: nn.Module
     stage_modules: Tuple[nn.Module, ...]
@@ -384,6 +387,7 @@ class SNNDistributedRecommendation:
 
     SNN distributed strategy recommendation.
     """
+
     prefer: str
     model: str
     world_size: int
@@ -2170,6 +2174,7 @@ class ChannelShardConv2d(nn.Module):
     :return: None
     :rtype: None
     """
+
     def __init__(self, source: nn.Module, process_group, mode: str):
         super().__init__()
         if source.groups != 1:
@@ -2308,6 +2313,7 @@ class ChannelShardConv1d(nn.Module):
     :return: None
     :rtype: None
     """
+
     def __init__(self, source: nn.Module, process_group, mode: str):
         super().__init__()
         if source.groups != 1:
@@ -2424,6 +2430,7 @@ class ChannelShardBatchNorm2d(nn.Module):
     :return: None
     :rtype: None
     """
+
     def __init__(self, source: nn.Module, process_group):
         super().__init__()
         self.process_group = process_group
@@ -2545,6 +2552,7 @@ class ChannelShardBatchNorm1d(nn.Module):
     :return: None
     :rtype: None
     """
+
     def __init__(self, source: nn.Module, process_group):
         super().__init__()
         self.process_group = process_group

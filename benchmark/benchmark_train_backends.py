@@ -16,11 +16,18 @@ The benchmark uses a multi-step SNN ConvNet with BN:
 
 import time
 from dataclasses import dataclass
-from importlib.util import find_spec
 
 import torch
 import torch.nn as nn
 from spikingjelly.activation_based import functional, layer, neuron, surrogate
+
+
+def _triton_available() -> bool:
+    try:
+        import triton  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 # ---------------------------------------------------------------------------
 # Fixed benchmark config
@@ -236,7 +243,7 @@ def run_one_mode(
 
 def main() -> None:
     has_cuda = torch.cuda.is_available()
-    has_triton_pkg = find_spec("triton") is not None
+    has_triton_pkg = _triton_available()
     has_compile = hasattr(torch, "compile")
 
     device = torch.device("cuda" if has_cuda else "cpu")

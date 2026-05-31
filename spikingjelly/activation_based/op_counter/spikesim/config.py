@@ -65,6 +65,9 @@ class SpikeSimEnergyConfig:
 
         复制当前配置并返回新对象。
 
+        :return: 当前配置的副本
+        :rtype: :class:`SpikeSimEnergyConfig`
+
         ----
 
         .. _SpikeSimEnergyConfig.copy-en:
@@ -72,6 +75,9 @@ class SpikeSimEnergyConfig:
         * **English**
 
         Return a copied config object.
+
+        :return: a copy of the current config
+        :rtype: :class:`SpikeSimEnergyConfig`
         """
         return replace(self)
 
@@ -136,8 +142,7 @@ class SpikeSimEnergyConfig:
         k_h, k_w = kernel_size
         if k_h <= 0 or k_w <= 0:
             raise ValueError(
-                "kernel_size dimensions must be positive, "
-                f"got ({k_h}, {k_w})."
+                f"kernel_size dimensions must be positive, got ({k_h}, {k_w})."
             )
         return (
             self.patch_control_energy_pj

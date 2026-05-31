@@ -32,26 +32,6 @@ class ConversionReport:
         }
 
 
-def _replace_child(
-    module: nn.Module, child_name: str, wrapped: nn.Module
-) -> None:
-    """Safely replace a child module in *module*.
-
-    Handles the three container shapes (ModuleList / Sequential /
-    ModuleDict) and plain attribute assignment, falling back to
-    ``setattr`` when a ``Sequential`` key cannot be parsed as an integer.
-    """
-    if isinstance(module, nn.ModuleDict):
-        module[child_name] = wrapped
-    elif isinstance(module, (nn.ModuleList, nn.Sequential)):
-        try:
-            module[int(child_name)] = wrapped
-        except ValueError:
-            setattr(module, child_name, wrapped)
-    else:
-        setattr(module, child_name, wrapped)
-
-
 def analyze_convertible_modules(model: nn.Module) -> ConversionReport:
     report = ConversionReport()
     unsupported_types = (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.MultiheadAttention)

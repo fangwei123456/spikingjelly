@@ -1,7 +1,11 @@
-import importlib.util
-
 import pytest
 import torch
+
+try:
+    import torchao  # noqa: F401
+    HAS_TORCHAO = True
+except ImportError:
+    HAS_TORCHAO = False
 
 from spikingjelly.activation_based import functional, layer
 from spikingjelly.activation_based.model import Spikformer
@@ -10,8 +14,6 @@ from spikingjelly.activation_based.precision import (
     PrecisionConfig,
     prepare_model_for_precision,
 )
-
-HAS_TORCHAO = importlib.util.find_spec("torchao") is not None
 
 
 def _make_tiny_spikformer():

@@ -57,6 +57,7 @@ class SpikingVGG(nn.Module):
 
     Spiking VGG network. Inherits from :class:`torchvision.models.VGG` with activations replaced by spiking neurons.
     """
+
     def __init__(
         self,
         cfg,

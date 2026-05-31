@@ -1,15 +1,21 @@
-from importlib.util import find_spec
-
 import pytest
 import torch
 
 from spikingjelly.activation_based import functional, neuron, surrogate
 
 
+def _cupy_available() -> bool:
+    try:
+        import cupy  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def _require_cuda_cupy():
     if not torch.cuda.is_available():
         pytest.skip("CUDA is required for CuPy backend tests.")
-    if find_spec("cupy") is None:
+    if not _cupy_available():
         pytest.skip("CuPy package is required for CuPy backend tests.")
 
 

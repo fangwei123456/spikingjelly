@@ -303,6 +303,7 @@ class SEWResNet(nn.Module):
 
     SEW (Spike-Element-Wise) ResNet network. Uses element-wise addition connections in shortcuts to reduce information loss.
     """
+
     def __init__(
         self,
         block,

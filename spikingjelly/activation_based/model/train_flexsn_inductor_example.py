@@ -34,6 +34,7 @@ class FlexSNTrainer(train_classify.Trainer):
 
     Trainer for FlexSN models. Inherits :class:`train_classify.Trainer`, overrides ``preprocess_train_sample`` and ``preprocess_test_sample`` to add the time dimension to data.
     """
+
     def preprocess_train_sample(self, args, x: torch.Tensor):
         return x.unsqueeze(0).expand(args.T, -1, -1, -1, -1)
 

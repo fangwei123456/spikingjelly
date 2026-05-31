@@ -652,8 +652,8 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
 
         :param root: 数据集的根路径
         :type root: Union[str, Path]
-        :param train: 是否使用训练集
-        :type train: Optional[bool]
+        :param split: "train"、"valid" 或 "test"
+        :type split: str
         :param data_type: ``"event"`` 或 ``"frame"``
         :type data_type: str
         :param frames_number: 积分帧的数量
@@ -673,8 +673,8 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
 
         :param root: Root directory of the dataset
         :type root: Union[str, Path]
-        :param train: Whether to use training set or test set
-        :type train: Optional[bool]
+        :param split: "train", "valid", or "test"
+        :type split: str
         :param data_type: ``"event"`` or ``"frame"``
         :type data_type: str
         :param frames_number: Number of frames to integrate

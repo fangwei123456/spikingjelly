@@ -26,12 +26,7 @@ class PrecisionPolicy:
         return model
 
     def _convert_modules(self, model, report):
-        """Hook for subclasses that need structural module replacement.
-
-        The default implementation returns *model* unchanged.  Policies
-        that require per-module transformation (e.g. fp8 linear
-        substitution) override this method.
-        """
+        """Subclasses override to transform modules (e.g. float8 substitution)."""
         return model
 
     def autocast_context(self):

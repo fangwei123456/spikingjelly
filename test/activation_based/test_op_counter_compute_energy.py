@@ -118,7 +118,9 @@ def test_compute_energy_warns_when_no_supported_ops_are_profiled():
     report = op_counter.estimate_compute_energy(model, x)
 
     assert report.energy_total_pj == pytest.approx(0.0)
-    assert any("did not match any supported operators" in msg for msg in report.warnings)
+    assert any(
+        "did not match any supported operators" in msg for msg in report.warnings
+    )
 
 
 def test_compute_energy_strict_raises_when_no_supported_ops_are_profiled():

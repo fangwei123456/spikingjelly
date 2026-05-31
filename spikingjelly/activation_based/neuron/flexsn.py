@@ -598,10 +598,10 @@ class FlexSNKernel:
 
         :raises RuntimeError: raised when CUDA is unavailable, because
             ``FlexSNKernel`` only supports the Triton kernels on CUDA devices.
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         if not torch.cuda.is_available():
             raise RuntimeError(

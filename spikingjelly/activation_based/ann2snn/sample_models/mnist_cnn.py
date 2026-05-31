@@ -24,6 +24,7 @@ class CNN(nn.Module):
 
     A simple ANN CNN for MNIST classification. Can be used as an example model for ANN-to-SNN conversion.
     """
+
     def __init__(self):
         super().__init__()
         self.network = nn.Sequential(

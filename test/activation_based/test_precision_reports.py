@@ -10,7 +10,9 @@ from spikingjelly.activation_based.precision import (
 
 
 def test_save_precision_reports_writes_expected_files(tmp_path):
-    model = torch.nn.Sequential(torch.nn.Linear(4, 8), torch.nn.ReLU(), torch.nn.Linear(8, 4))
+    model = torch.nn.Sequential(
+        torch.nn.Linear(4, 8), torch.nn.ReLU(), torch.nn.Linear(8, 4)
+    )
     artifacts = prepare_model_for_precision(model, "cpu", PrecisionConfig(mode="fp32"))
     save_precision_reports(artifacts, str(tmp_path))
 

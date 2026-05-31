@@ -1,7 +1,11 @@
-import importlib.util
-
 import pytest
 import torch
+
+try:
+    import torchao  # noqa: F401
+    HAS_TORCHAO = True
+except ImportError:
+    HAS_TORCHAO = False
 
 from spikingjelly.activation_based import layer
 from spikingjelly.activation_based.model import Spikformer
@@ -12,9 +16,6 @@ from spikingjelly.activation_based.precision import (
     prepare_model_for_precision,
 )
 from spikingjelly.activation_based.precision.convert import convert_model_for_precision
-
-
-HAS_TORCHAO = importlib.util.find_spec("torchao") is not None
 
 
 def test_conversion_report_marks_spikformer_linear_and_high_precision_modules():

@@ -218,6 +218,7 @@ class NeuroMCRuntimeEnergyReport:
     :return: None
     :rtype: None
     """
+
     energy_total_pj: float
     energy_compute_pj: float
     energy_memory_pj: float

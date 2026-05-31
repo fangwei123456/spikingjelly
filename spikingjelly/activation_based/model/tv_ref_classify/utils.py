@@ -20,7 +20,6 @@ __all__ = [
 ]
 
 
-
 class SmoothedValue:
     r"""
     **API Language:**
