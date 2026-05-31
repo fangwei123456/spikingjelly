@@ -747,7 +747,7 @@ def _reduce_breakdown(
         device=device,
         dtype=torch.float64,
     )
-    if dist.is_initialized():
+    if dist.is_initialized() and _backend_supports_device(device):
         dist.all_reduce(values, op=dist.ReduceOp.MAX)
     return _StepBreakdown(
         forward_ms=float(values[0].item()),

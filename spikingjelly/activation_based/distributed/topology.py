@@ -14,7 +14,7 @@ class SNNDistributedTopology:
     def __post_init__(self):
         frozen_dims = MappingProxyType(dict(self.dims))
         object.__setattr__(self, "dims", frozen_dims)
-        if not isinstance(self.world_size, int) or isinstance(self.world_size, bool):
+        if not isinstance(self.world_size, Integral) or isinstance(self.world_size, bool):
             raise TypeError(
                 f"world_size must be an integer, but got {type(self.world_size).__name__}."
             )
@@ -30,7 +30,7 @@ class SNNDistributedTopology:
                 )
             if not name:
                 raise ValueError("Topology dimension names must be non-empty.")
-            if not isinstance(size, int) or isinstance(size, bool):
+            if not isinstance(size, Integral) or isinstance(size, bool):
                 raise TypeError(
                     f"Topology dimension '{name}' must be an integer, but got {type(size).__name__}."
                 )

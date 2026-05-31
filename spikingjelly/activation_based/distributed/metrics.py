@@ -14,12 +14,10 @@ class PreparedModelOutput(NamedTuple):
 
 
 def _normalize_classification_labels(target: torch.Tensor) -> torch.Tensor:
-    if target.ndim > 1:
+    while target.ndim > 1 and target.shape[-1] == 1:
         target = target.squeeze(-1)
-        if target.ndim > 1:
-            target = target.argmax(dim=-1)
-            if target.ndim > 1:
-                target = target.squeeze(-1)
+    if target.ndim > 1:
+        target = target.argmax(dim=-1)
     return target
 
 
