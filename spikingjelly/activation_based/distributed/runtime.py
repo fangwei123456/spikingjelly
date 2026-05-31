@@ -181,9 +181,12 @@ class SNNDistributedRuntime:
         images: torch.Tensor,
         labels: torch.Tensor,
     ):
-        target = self.model
         if self.kind == "pipeline" and self.pipeline_runtime is not None:
-            target = self.pipeline_runtime.stage_module
+            raise NotImplementedError(
+                "SNNDistributedRuntime.forward_loss() does not execute pipeline runtimes. "
+                "Use pipeline_runtime.schedule.step(...) via the dedicated pipeline path instead."
+            )
+        target = self.model
         try:
             param = next(target.parameters())
             dtype = param.dtype
