@@ -165,10 +165,11 @@ def test_collect_reset_modules_ignores_non_callable_reset_attributes():
 def test_topology_from_mapping_orders_named_dims():
     dims = {"tp": 2, "dp": 2}
     topology = SNNDistributedTopology.from_mapping(dims)
-    dims["pp"] = 4
+    dims["pp"] = 4  # mutate original dict — topology must stay unaffected
     assert topology.world_size == 4
     assert topology.ordered_dim_names == ("dp", "tp")
     assert topology.mesh_shape == (2, 2)
+    assert "pp" not in topology.dims
 
 
 def test_topology_rejects_non_integer_dim_sizes():

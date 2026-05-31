@@ -3266,19 +3266,16 @@ def configure_snn_distributed(
 
     needs_device_mesh = (
         config.device_mesh is not None
-        or config.mesh_shape is not None
+        or (
+            config.mesh_shape is not None
+            and (config.enable_data_parallel or config.enable_fsdp2 or should_apply_tp)
+        )
         or config.enable_data_parallel
         or config.enable_fsdp2
         or should_apply_tp
     )
     if not needs_device_mesh:
         return module, None, analysis
-
-    if config.device_mesh is None and config.mesh_shape is None:
-        raise ValueError(
-            "Distributed features are enabled (data_parallel, fsdp2, or tensor_parallel) "
-            "but neither device_mesh nor mesh_shape was provided."
-        )
 
     if config.device_mesh is None:
         mesh_dim_names = None

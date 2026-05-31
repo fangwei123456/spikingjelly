@@ -103,14 +103,12 @@ def plan(
             notes.append(
                 "Zero optimizer was disabled by DistributedFeatureSet; planner fell back to optimizer_strategy='none'."
             )
-    mesh_shape = recommendation.mesh_shape or resolved_topology.mesh_shape
+    mesh_shape = resolved_topology.mesh_shape
     pp_microbatches = recommendation.pp_microbatches
     pp_schedule = recommendation.pp_schedule
     pp_virtual_stages = recommendation.pp_virtual_stages
     pp_layout = recommendation.pp_layout
     pp_delay_wgrad = recommendation.pp_delay_wgrad
-    if selected_mode in ("tp", "fsdp2", "fsdp2_tp", "none"):
-        mesh_shape = resolved_topology.mesh_shape
     return SNNDistributedPlan(
         mode=selected_mode,
         objective=objective,
@@ -142,6 +140,10 @@ def apply(
     device_type: str = "cuda",
     device_mesh=None,
 ) -> SNNDistributedRuntime:
+    wrapped = getattr(model, "module", None)
+    if isinstance(wrapped, nn.Module):
+        model = wrapped
+
     topology = (
         plan.topology
         if isinstance(plan.topology, SNNDistributedTopology)
