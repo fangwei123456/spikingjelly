@@ -27,7 +27,9 @@ def prepare_classification_output(
     if target.ndim > 1:
         target = target.squeeze(-1)
         if target.ndim > 1:
-            target = target.argmax(dim=1)
+            target = target.argmax(dim=-1)
+            if target.ndim > 1:
+                target = target.squeeze(-1)
     if hasattr(output, "device") and target.device != output.device:
         target = target.to(device=output.device)
     materialized = False

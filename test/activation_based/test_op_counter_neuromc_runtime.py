@@ -46,6 +46,12 @@ def test_neuromc_runtime_report_constructor_remains_backward_compatible():
     assert report.energy_total_pj == 0.0
     assert report.energy_by_stage == {}
     assert report.warnings == []
+    report.energy_by_stage["forward"] = 1.0
+    report.warnings.append("warn")
+
+    other = NeuroMCRuntimeEnergyReport()
+    assert other.energy_by_stage == {}
+    assert other.warnings == []
 
 
 def test_neuromc_runtime_report_preserves_legacy_positional_prefix():

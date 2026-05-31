@@ -154,6 +154,13 @@ def test_reduce_classification_output_keeps_batch_major_logits():
     assert reduced_target.shape == target.shape
 
 
+def test_reduce_classification_output_preserves_singleton_index_targets():
+    logits = torch.randn(4, 10)
+    target = torch.tensor([[0], [1], [2], [3]])
+    _, reduced_target = bench._reduce_classification_output(logits, target)
+    assert torch.equal(reduced_target, torch.tensor([0, 1, 2, 3]))
+
+
 def test_resolve_benchmark_batch_semantics_weak_scaling():
     global_batch, per_rank_batch = bench._resolve_benchmark_batch_semantics(
         batch_size=8,
@@ -315,6 +322,49 @@ def test_time_block_synchronizes_cuda_device(monkeypatch: pytest.MonkeyPatch):
     assert result == 7
     assert elapsed_ms >= 0.0
     assert calls["count"] == 2
+
+
+def test_benchmark_step_pipeline_uses_cached_reset_modules(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class _Schedule:
+        def step(self, *args, **kwargs):
+            return None
+
+    runtime = SimpleNamespace(
+        is_first=True,
+        is_last=True,
+        schedule=_Schedule(),
+        stage_module=object(),
+    )
+    calls = {"reset_net": 0, "reset_collected": 0}
+    monkeypatch.setattr(
+        bench.functional,
+        "reset_net",
+        lambda module: calls.__setitem__("reset_net", calls["reset_net"] + 1),
+    )
+    monkeypatch.setattr(
+        bench.functional,
+        "reset_collected_modules",
+        lambda modules: calls.__setitem__(
+            "reset_collected", calls["reset_collected"] + 1
+        ),
+    )
+    optimizer = SimpleNamespace(
+        zero_grad=lambda set_to_none=True: None,
+        step=lambda: None,
+    )
+
+    bench._benchmark_step_pipeline(
+        runtime,
+        optimizer,
+        torch.randn(1),
+        torch.tensor([0]),
+        torch.device("cpu"),
+        reset_modules=(object(),),
+    )
+
+    assert calls == {"reset_net": 0, "reset_collected": 1}
 
 
 def test_parse_args_rejects_non_positive_steps(monkeypatch: pytest.MonkeyPatch):

@@ -178,7 +178,11 @@ def _reduce_classification_output(
     if out.ndim >= 3:
         out = out.mean(dim=0)
     if target.ndim > 1:
-        target = target.argmax(dim=1)
+        target = target.squeeze(-1)
+        if target.ndim > 1:
+            target = target.argmax(dim=-1)
+            if target.ndim > 1:
+                target = target.squeeze(-1)
     return out, target
 
 
@@ -595,11 +599,17 @@ def _aggregate_tp_debug_stats(device: torch.device) -> Dict[str, int]:
         dtype=torch.int64,
     )
     if dist.is_initialized():
-        dist.all_reduce(values, op=dist.ReduceOp.MAX)
+        dist.all_reduce(values, op=dist.ReduceOp.SUM)
     return {
         "all_reduce_calls": int(values[0].item()),
         "all_reduce_bytes": int(values[1].item()),
     }
+
+
+def _seed_benchmark_rng(device: torch.device, seed: int) -> None:
+    torch.manual_seed(seed)
+    if device.type == "cuda":
+        torch.cuda.manual_seed(seed)
 
 
 def _make_synthetic_batch(
@@ -694,6 +704,7 @@ def _benchmark_step_pipeline(
     x,
     y,
     device: torch.device,
+    reset_modules,
 ) -> _StepBreakdown:
     breakdown = _StepBreakdown()
 
@@ -712,7 +723,9 @@ def _benchmark_step_pipeline(
     _, elapsed = _time_block(device, optimizer.step)
     breakdown.optimizer_ms += elapsed
 
-    _, elapsed = _time_block(device, lambda: functional.reset_net(runtime.stage_module))
+    _, elapsed = _time_block(
+        device, lambda: functional.reset_collected_modules(reset_modules)
+    )
     breakdown.reset_ms += elapsed
     return breakdown
 
@@ -1003,6 +1016,9 @@ def benchmark(args, counter: _LinePatternCounter):
             args.batch_size, data_replicas, args.benchmark_regime
         )
 
+        setup_seed = 20260428
+        _seed_benchmark_rng(device, setup_seed)
+
         model, mesh, optimize_ms = build_model(
             args, device, world_size, per_rank_batch_size
         )
@@ -1026,13 +1042,8 @@ def benchmark(args, counter: _LinePatternCounter):
                 ),
                 sharded_by_data_parallel=args.mode in ("dp", "fsdp2", "fsdp2_tp"),
             )
-            global_batch_size, per_rank_batch_size = _resolve_benchmark_batch_semantics(
-                args.batch_size, data_replicas, args.benchmark_regime
-            )
-        seed = 20260428 + data_rank
-        torch.manual_seed(seed)
-        if device.type == "cuda":
-            torch.cuda.manual_seed(seed)
+        data_seed = 20260428 + data_rank
+        _seed_benchmark_rng(device, data_seed)
         if args.mode == "pp":
             x, y = _make_synthetic_batch(
                 args,
@@ -1191,9 +1202,10 @@ def benchmark_pipeline(
 ):
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
+    reset_modules = functional.collect_reset_modules(runtime.stage_module)
 
     for _ in range(args.warmup):
-        _benchmark_step_pipeline(runtime, optimizer, x, y, device)
+        _benchmark_step_pipeline(runtime, optimizer, x, y, device, reset_modules)
 
     if device.type == "cuda":
         torch.cuda.synchronize(device)
@@ -1204,7 +1216,9 @@ def benchmark_pipeline(
     start = time.time()
     breakdown = _StepBreakdown()
     for _ in range(args.steps):
-        breakdown.add(_benchmark_step_pipeline(runtime, optimizer, x, y, device))
+        breakdown.add(
+            _benchmark_step_pipeline(runtime, optimizer, x, y, device, reset_modules)
+        )
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     if dist.is_initialized():

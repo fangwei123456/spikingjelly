@@ -4,6 +4,8 @@ import os
 import sys
 import tempfile
 from contextlib import contextmanager
+from decimal import Decimal
+from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -211,6 +213,13 @@ def test_topology_rejects_non_integer_world_size():
         SNNDistributedTopology.from_mapping({"dp": 2}, world_size=1.5)
 
 
+def test_topology_rejects_non_integral_numeric_types():
+    with pytest.raises(TypeError, match="must be an integer"):
+        SNNDistributedTopology.from_mapping({"dp": Decimal("1.5")})
+    with pytest.raises(TypeError, match="world_size must be an integer"):
+        SNNDistributedTopology.from_mapping({"dp": 1}, world_size=Fraction(3, 2))
+
+
 def test_topology_rejects_non_string_dim_names():
     with pytest.raises(TypeError, match="Topology dimension names must be strings"):
         SNNDistributedTopology.from_mapping({1: 2})
@@ -268,6 +277,13 @@ def test_prepare_metrics_classification_output_preserves_singleton_index_targets
     )
     assert isinstance(prepared, PreparedModelOutput)
     torch.testing.assert_close(prepared.logits, logits.mean(dim=0))
+    assert torch.equal(prepared.target, torch.tensor([0, 1, 2, 3]))
+
+
+def test_prepare_metrics_classification_output_reduces_last_axis_targets():
+    logits = torch.randn(5, 4, 10)
+    labels = torch.eye(10)[torch.tensor([0, 1, 2, 3])].unsqueeze(1)
+    prepared = prepare_classification_output(logits, labels)
     assert torch.equal(prepared.target, torch.tensor([0, 1, 2, 3]))
 
 
@@ -856,8 +872,8 @@ def test_partition_helpers_respect_2d_mesh_coordinates():
 
 
 @pytest.mark.skipif(
-    not DTENSOR_AVAILABLE,
-    reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
+    not (DTENSOR_AVAILABLE and TENSOR_PARALLEL_AVAILABLE),
+    reason="DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
 def test_configure_snn_distributed_supports_experimental_conv_tp_on_real_snn():
     with _single_rank_process_group():
@@ -898,8 +914,8 @@ def test_configure_snn_distributed_supports_experimental_conv_tp_on_real_snn():
 
 
 @pytest.mark.skipif(
-    not DTENSOR_AVAILABLE,
-    reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
+    not (DTENSOR_AVAILABLE and TENSOR_PARALLEL_AVAILABLE),
+    reason="DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
 def test_high_level_cifar10dvs_vgg_helper():
     with _single_rank_process_group():
@@ -979,8 +995,8 @@ def test_cifar10dvs_vgg_fsdp2_tp_helper_single_rank():
 
 
 @pytest.mark.skipif(
-    not DTENSOR_AVAILABLE,
-    reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
+    not (DTENSOR_AVAILABLE and TENSOR_PARALLEL_AVAILABLE),
+    reason="DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
 def test_cifar10dvs_vgg_tp_helper_after_memopt_level2_single_rank():
     with _single_rank_process_group():
@@ -1031,8 +1047,8 @@ def test_spikformer_fsdp2_tp_plus_memopt_level1_single_rank():
 
 
 @pytest.mark.skipif(
-    not DTENSOR_AVAILABLE,
-    reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
+    not (DTENSOR_AVAILABLE and TENSOR_PARALLEL_AVAILABLE),
+    reason="DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
 def test_spikformer_tp_helper_after_memopt_level2_single_rank():
     with _single_rank_process_group():

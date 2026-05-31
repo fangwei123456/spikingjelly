@@ -5,7 +5,6 @@ from typing import Mapping, Optional, Sequence, Union
 import torch.nn as nn
 
 from .adapters import resolve_adapter
-from .adapters.base import infer_model_family
 from .dtensor import (
     SNNDistributedAnalysis,
     SNNDistributedConfig,
@@ -20,15 +19,6 @@ from .planner import (
 )
 from .runtime import SNNDistributedRuntime
 from .topology import SNNDistributedTopology
-
-
-def _normalize_model_family(model_family: Optional[str], model: nn.Module) -> str:
-    if model_family is not None:
-        return model_family
-    inferred = infer_model_family(model)
-    if inferred is not None:
-        return inferred
-    return type(model).__name__.lower()
 
 
 def analyze(

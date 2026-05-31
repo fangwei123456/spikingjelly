@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from numbers import Integral
 from types import MappingProxyType
 from typing import Mapping, Tuple
 
@@ -68,11 +69,19 @@ class SNNDistributedTopology:
                 raise TypeError(
                     f"Topology dimension '{key}' must be an integer, but got bool."
                 )
-            if isinstance(value, float) and not value.is_integer():
+            if isinstance(value, Integral):
+                normalized_dims[key] = int(value)
+                continue
+            if isinstance(value, float) and value.is_integer():
+                normalized_dims[key] = int(value)
+                continue
+            if isinstance(value, float):
                 raise TypeError(
                     f"Topology dimension '{key}' must be an integer, but got float."
                 )
-            normalized_dims[key] = int(value)
+            raise TypeError(
+                f"Topology dimension '{key}' must be an integer, but got {type(value).__name__}."
+            )
         if world_size is None:
             volume = 1
             for size in normalized_dims.values():
@@ -81,6 +90,14 @@ class SNNDistributedTopology:
         else:
             if isinstance(world_size, bool):
                 raise TypeError("world_size must be an integer, but got bool.")
-            if isinstance(world_size, float) and not world_size.is_integer():
+            if isinstance(world_size, Integral):
+                world_size = int(world_size)
+            elif isinstance(world_size, float) and world_size.is_integer():
+                world_size = int(world_size)
+            elif isinstance(world_size, float):
                 raise TypeError("world_size must be an integer, but got float.")
+            else:
+                raise TypeError(
+                    f"world_size must be an integer, but got {type(world_size).__name__}."
+                )
         return cls(world_size=int(world_size), dims=normalized_dims)
