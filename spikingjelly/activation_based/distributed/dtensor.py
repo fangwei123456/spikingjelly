@@ -2,6 +2,7 @@ import os
 import inspect
 import copy
 import time
+import threading
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
 
@@ -46,7 +47,44 @@ __all__ = [
     "auto_build_tensor_parallel_plan",
     "parallelize_snn_module",
     "configure_snn_distributed",
+    "enable_tp_communication_debug",
+    "reset_tp_communication_debug_stats",
+    "get_tp_communication_debug_stats",
 ]
+
+
+_TP_COMMUNICATION_DEBUG_ENABLED = False
+_TP_COMMUNICATION_DEBUG_STATS = {"all_reduce_calls": 0, "all_reduce_bytes": 0}
+_TP_COMMUNICATION_DEBUG_LOCK = threading.Lock()
+
+
+def enable_tp_communication_debug(enabled: bool = True) -> None:
+    global _TP_COMMUNICATION_DEBUG_ENABLED
+    _TP_COMMUNICATION_DEBUG_ENABLED = bool(enabled)
+
+
+def reset_tp_communication_debug_stats() -> None:
+    with _TP_COMMUNICATION_DEBUG_LOCK:
+        _TP_COMMUNICATION_DEBUG_STATS["all_reduce_calls"] = 0
+        _TP_COMMUNICATION_DEBUG_STATS["all_reduce_bytes"] = 0
+
+
+def get_tp_communication_debug_stats() -> Dict[str, int]:
+    with _TP_COMMUNICATION_DEBUG_LOCK:
+        return {
+            "all_reduce_calls": int(_TP_COMMUNICATION_DEBUG_STATS["all_reduce_calls"]),
+            "all_reduce_bytes": int(_TP_COMMUNICATION_DEBUG_STATS["all_reduce_bytes"]),
+        }
+
+
+def _record_tp_all_reduce(tensor: torch.Tensor) -> None:
+    if not _TP_COMMUNICATION_DEBUG_ENABLED:
+        return
+    with _TP_COMMUNICATION_DEBUG_LOCK:
+        _TP_COMMUNICATION_DEBUG_STATS["all_reduce_calls"] += 1
+        _TP_COMMUNICATION_DEBUG_STATS["all_reduce_bytes"] += int(
+            tensor.numel() * tensor.element_size()
+        )
 
 
 try:
@@ -249,6 +287,7 @@ class SNNDistributedAnalysis:
     tensor_parallel_candidate_names: Tuple[str, ...]
     unsupported_tensor_parallel_names: Tuple[str, ...]
     notes: Tuple[str, ...]
+    tensor_parallel_roots: Optional[Tuple[str, ...]] = None
 
 
 @dataclass
@@ -1700,6 +1739,9 @@ def analyze_snn_distributed_capability(
         tensor_parallel_candidate_names=tuple(tensor_parallel_candidates),
         unsupported_tensor_parallel_names=tuple(unsupported_tp),
         notes=tuple(notes),
+        tensor_parallel_roots=(
+            tuple(tensor_parallel_roots) if tensor_parallel_roots is not None else None
+        ),
     )
 
 
@@ -2252,6 +2294,7 @@ class ChannelShardConv2d(nn.Module):
             self.groups,
         )
         if self.world_size > 1:
+            _record_tp_all_reduce(y)
             dist.all_reduce(y, group=self.process_group)
         if self.bias is not None:
             y = y + self.bias.view(1, -1, 1, 1)
@@ -2389,6 +2432,7 @@ class ChannelShardConv1d(nn.Module):
             self.groups,
         )
         if self.world_size > 1:
+            _record_tp_all_reduce(y)
             dist.all_reduce(y, group=self.process_group)
         if self.bias is not None:
             y = y + self.bias.view(1, -1, 1)
@@ -3216,6 +3260,31 @@ def configure_snn_distributed(
 
     Configure SNN distributed training.
     """
+    should_apply_tp = (
+        config.tensor_parallel_plan is not None
+        or config.auto_tensor_parallel
+        or config.experimental_conv_tensor_parallel
+        or config.experimental_spikformer_tensor_parallel
+        or config.experimental_spikformer_patch_stem_tensor_parallel
+    )
+
+    analysis = analyze_snn_distributed_capability(
+        module, tensor_parallel_roots=config.tensor_parallel_roots
+    )
+
+    needs_device_mesh = (
+        config.device_mesh is not None
+        or (
+            config.mesh_shape is not None
+            and (config.enable_data_parallel or config.enable_fsdp2 or should_apply_tp)
+        )
+        or config.enable_data_parallel
+        or config.enable_fsdp2
+        or should_apply_tp
+    )
+    if not needs_device_mesh:
+        return module, None, analysis
+
     if config.device_mesh is None:
         mesh_dim_names = None
         if config.mesh_shape is not None and len(config.mesh_shape) > 1:
@@ -3242,10 +3311,6 @@ def configure_snn_distributed(
         raise ValueError(
             "dp_mesh_dim must be specified when enable_data_parallel=True on a multi-dimensional DeviceMesh."
         )
-
-    analysis = analyze_snn_distributed_capability(
-        module, tensor_parallel_roots=config.tensor_parallel_roots
-    )
 
     if config.experimental_conv_tensor_parallel:
         if not config.conv_tensor_parallel_roots:
@@ -3284,13 +3349,6 @@ def configure_snn_distributed(
             tp_mesh_dim=config.tp_mesh_dim,
         )
 
-    should_apply_tp = (
-        config.tensor_parallel_plan is not None
-        or config.auto_tensor_parallel
-        or config.experimental_conv_tensor_parallel
-        or config.experimental_spikformer_tensor_parallel
-        or config.experimental_spikformer_patch_stem_tensor_parallel
-    )
     if should_apply_tp and config.enable_data_parallel and not config.enable_fsdp2:
         raise NotImplementedError(
             "Combining DDP-style data parallelism with DTensor tensor parallelism is not "
@@ -3346,149 +3404,6 @@ def configure_snn_distributed(
         )
 
     return module, device_mesh, analysis
-
-
-def configure_cifar10dvs_vgg_distributed(
-    module: nn.Module,
-    device_type: str = "cuda",
-    mesh_shape: Optional[Tuple[int, ...]] = None,
-    enable_data_parallel: bool = False,
-    enable_classifier_tensor_parallel: bool = True,
-    enable_experimental_conv_tensor_parallel: bool = True,
-    tp_mesh_dim: int = 0,
-    dp_mesh_dim: Optional[int] = None,
-) -> Tuple[nn.Module, "DeviceMesh", SNNDistributedAnalysis]:
-    config = SNNDistributedConfig(
-        device_type=device_type,
-        mesh_shape=mesh_shape,
-        tensor_parallel_roots=["classifier"]
-        if enable_classifier_tensor_parallel
-        else None,
-        auto_tensor_parallel=enable_classifier_tensor_parallel,
-        experimental_conv_tensor_parallel=enable_experimental_conv_tensor_parallel,
-        conv_tensor_parallel_roots=["features"]
-        if enable_experimental_conv_tensor_parallel
-        else None,
-        enable_data_parallel=enable_data_parallel,
-        tp_mesh_dim=tp_mesh_dim,
-        dp_mesh_dim=dp_mesh_dim,
-    )
-    return configure_snn_distributed(module, config)
-
-
-def configure_cifar10dvs_vgg_fsdp2(
-    module: nn.Module,
-    device_type: str = "cuda",
-    mesh_shape: Optional[Tuple[int, ...]] = None,
-    enable_classifier_tensor_parallel: bool = False,
-    enable_experimental_conv_tensor_parallel: bool = False,
-    tp_mesh_dim: int = 0,
-    dp_mesh_dim: Optional[int] = None,
-    fsdp_root_reshard_after_forward: Optional[bool] = False,
-    fsdp_param_dtype: Optional[torch.dtype] = None,
-    fsdp_reduce_dtype: Optional[torch.dtype] = None,
-    fsdp_output_dtype: Optional[torch.dtype] = None,
-) -> Tuple[nn.Module, "DeviceMesh", SNNDistributedAnalysis]:
-    tp_enabled = (
-        enable_classifier_tensor_parallel or enable_experimental_conv_tensor_parallel
-    )
-    fsdp_shard_roots = ["features"]
-    if not enable_classifier_tensor_parallel:
-        fsdp_shard_roots.append("classifier")
-    config = SNNDistributedConfig(
-        device_type=device_type,
-        mesh_shape=mesh_shape,
-        enable_fsdp2=True,
-        fsdp_shard_roots=fsdp_shard_roots,
-        fsdp_shard_module_root=not tp_enabled,
-        fsdp_root_reshard_after_forward=fsdp_root_reshard_after_forward,
-        fsdp_param_dtype=fsdp_param_dtype,
-        fsdp_reduce_dtype=fsdp_reduce_dtype,
-        fsdp_output_dtype=fsdp_output_dtype,
-        tensor_parallel_roots=["classifier"]
-        if enable_classifier_tensor_parallel
-        else None,
-        auto_tensor_parallel=enable_classifier_tensor_parallel,
-        experimental_conv_tensor_parallel=enable_experimental_conv_tensor_parallel,
-        conv_tensor_parallel_roots=["features"]
-        if enable_experimental_conv_tensor_parallel
-        else None,
-        tp_mesh_dim=tp_mesh_dim,
-        dp_mesh_dim=dp_mesh_dim,
-    )
-    return configure_snn_distributed(module, config)
-
-
-def configure_spikformer_distributed(
-    module: nn.Module,
-    device_type: str = "cuda",
-    mesh_shape: Optional[Tuple[int, ...]] = None,
-    enable_data_parallel: bool = False,
-    enable_head_tensor_parallel: bool = True,
-    tp_mesh_dim: int = 0,
-    dp_mesh_dim: Optional[int] = None,
-) -> Tuple[nn.Module, "DeviceMesh", SNNDistributedAnalysis]:
-    config = SNNDistributedConfig(
-        device_type=device_type,
-        mesh_shape=mesh_shape,
-        tensor_parallel_roots=["head"] if enable_head_tensor_parallel else None,
-        auto_tensor_parallel=enable_head_tensor_parallel,
-        experimental_spikformer_tensor_parallel=enable_head_tensor_parallel,
-        spikformer_tensor_parallel_roots=["blocks"]
-        if enable_head_tensor_parallel
-        else None,
-        experimental_spikformer_patch_stem_tensor_parallel=enable_head_tensor_parallel,
-        spikformer_patch_stem_tensor_parallel_roots=["patch_embed"]
-        if enable_head_tensor_parallel
-        else None,
-        enable_data_parallel=enable_data_parallel,
-        tp_mesh_dim=tp_mesh_dim,
-        dp_mesh_dim=dp_mesh_dim,
-    )
-    return configure_snn_distributed(module, config)
-
-
-def configure_spikformer_fsdp2(
-    module: nn.Module,
-    device_type: str = "cuda",
-    mesh_shape: Optional[Tuple[int, ...]] = None,
-    enable_head_tensor_parallel: bool = False,
-    tp_mesh_dim: int = 0,
-    dp_mesh_dim: Optional[int] = None,
-    fsdp_root_reshard_after_forward: Optional[bool] = False,
-    fsdp_param_dtype: Optional[torch.dtype] = None,
-    fsdp_reduce_dtype: Optional[torch.dtype] = None,
-    fsdp_output_dtype: Optional[torch.dtype] = None,
-) -> Tuple[nn.Module, "DeviceMesh", SNNDistributedAnalysis]:
-    tp_enabled = enable_head_tensor_parallel
-    num_blocks = len(getattr(module, "blocks", ()))
-    fsdp_shard_roots = ["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)]
-    if not enable_head_tensor_parallel:
-        fsdp_shard_roots.append("head")
-    config = SNNDistributedConfig(
-        device_type=device_type,
-        mesh_shape=mesh_shape,
-        enable_fsdp2=True,
-        fsdp_shard_roots=fsdp_shard_roots,
-        fsdp_shard_module_root=not tp_enabled,
-        fsdp_root_reshard_after_forward=fsdp_root_reshard_after_forward,
-        fsdp_param_dtype=fsdp_param_dtype,
-        fsdp_reduce_dtype=fsdp_reduce_dtype,
-        fsdp_output_dtype=fsdp_output_dtype,
-        tensor_parallel_roots=["head"] if enable_head_tensor_parallel else None,
-        auto_tensor_parallel=enable_head_tensor_parallel,
-        experimental_spikformer_tensor_parallel=enable_head_tensor_parallel,
-        spikformer_tensor_parallel_roots=["blocks"]
-        if enable_head_tensor_parallel
-        else None,
-        experimental_spikformer_patch_stem_tensor_parallel=enable_head_tensor_parallel,
-        spikformer_patch_stem_tensor_parallel_roots=["patch_embed"]
-        if enable_head_tensor_parallel
-        else None,
-        tp_mesh_dim=tp_mesh_dim,
-        dp_mesh_dim=dp_mesh_dim,
-    )
-    return configure_snn_distributed(module, config)
 
 
 def configure_cifar10dvs_vgg_pipeline(

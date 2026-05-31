@@ -57,7 +57,6 @@ class SpikingVGG(nn.Module):
 
     Spiking VGG network. Inherits from :class:`torchvision.models.VGG` with activations replaced by spiking neurons.
     """
-
     def __init__(
         self,
         cfg,
@@ -507,7 +506,6 @@ def spiking_vgg16(
     :return: Spiking VGG-16
     :rtype: torch.nn.Module
     """
-
     return _spiking_vgg(
         "vgg16", "D", False, pretrained, progress, None, spiking_neuron, **kwargs
     )
@@ -566,7 +564,6 @@ def spiking_vgg16_bn(
     :return: Spiking VGG-16 with BatchNorm
     :rtype: torch.nn.Module
     """
-
     return _spiking_vgg(
         "vgg16_bn",
         "D",
@@ -624,7 +621,6 @@ def spiking_vgg19(
     :return: Spiking VGG-19
     :rtype: torch.nn.Module
     """
-
     return _spiking_vgg(
         "vgg19", "E", False, pretrained, progress, None, spiking_neuron, **kwargs
     )
@@ -683,7 +679,6 @@ def spiking_vgg19_bn(
     :return: Spiking VGG-19 with BatchNorm
     :rtype: torch.nn.Module
     """
-
     return _spiking_vgg(
         "vgg19_bn",
         "E",

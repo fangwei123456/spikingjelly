@@ -6,34 +6,32 @@ from dataclasses import dataclass
 import torch
 import torch.distributed as dist
 import torch.nn as nn
-from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
-
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.distributed import (
-    SNNDistributedConfig,
+    PIPELINING_AVAILABLE,
     SNN_DISTRIBUTED_PREFERENCES,
     ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE,
     apply_pipeline_stage_memopt,
     build_snn_optimizer,
-    configure_cifar10dvs_vgg_pipeline,
-    configure_cifar10dvs_vgg_distributed,
-    configure_cifar10dvs_vgg_fsdp2,
-    configure_snn_distributed,
     ensure_distributed_initialized,
-    materialize_dtensor_output,
-    PIPELINING_AVAILABLE,
-    recommended_pipeline_microbatches,
     recommend_snn_distributed_strategy,
-    resolve_data_parallel_partition,
+    recommended_pipeline_microbatches,
     resolve_tensor_parallel_group_size,
+)
+from spikingjelly.activation_based.distributed.dtensor import (
+    SNNDistributedConfig,
+    configure_cifar10dvs_vgg_pipeline,
+    configure_snn_distributed,
+    materialize_dtensor_output,
+    resolve_data_parallel_partition,
 )
 from spikingjelly.activation_based.examples.memopt.data_module import (
     CIFAR10DVSDataModule,
 )
-from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
-from spikingjelly.activation_based.examples.memopt.models import VGGBlock
+from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG, VGGBlock
 from spikingjelly.activation_based.memopt import memory_optimization
+from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 
 
 @dataclass
@@ -114,7 +112,7 @@ def setup_runtime(args) -> DistributedRuntime:
     ):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         return DistributedRuntime(
-            mode=args.distributed_mode,
+            mode="none",
             is_distributed=False,
             rank=0,
             world_size=1,
@@ -295,25 +293,36 @@ def build_model(args, runtime: DistributedRuntime):
                 "tp mode requires at least one tensor-parallel target. "
                 "Do not disable both classifier TP and convolution TP."
             )
-        return configure_cifar10dvs_vgg_distributed(
+        auto_tensor_parallel = not args.disable_classifier_tp
+        return configure_snn_distributed(
             model,
-            device_type=runtime.device.type,
-            mesh_shape=mesh_shape or (runtime.world_size,),
-            enable_data_parallel=False,
-            enable_classifier_tensor_parallel=not args.disable_classifier_tp,
-            enable_experimental_conv_tensor_parallel=not args.disable_conv_tp,
-            tp_mesh_dim=args.tp_mesh_dim,
-            dp_mesh_dim=args.dp_mesh_dim,
+            SNNDistributedConfig(
+                device_type=runtime.device.type,
+                mesh_shape=mesh_shape or (runtime.world_size,),
+                tensor_parallel_roots=["classifier"] if auto_tensor_parallel else None,
+                auto_tensor_parallel=auto_tensor_parallel,
+                experimental_conv_tensor_parallel=not args.disable_conv_tp,
+                conv_tensor_parallel_roots=["features"]
+                if not args.disable_conv_tp
+                else None,
+                enable_data_parallel=False,
+                tp_mesh_dim=args.tp_mesh_dim,
+                dp_mesh_dim=args.dp_mesh_dim,
+            ),
         )
 
     if args.distributed_mode == "fsdp2":
-        return configure_cifar10dvs_vgg_fsdp2(
+        return configure_snn_distributed(
             model,
-            device_type=runtime.device.type,
-            mesh_shape=mesh_shape or (runtime.world_size,),
-            enable_classifier_tensor_parallel=False,
-            enable_experimental_conv_tensor_parallel=False,
-            dp_mesh_dim=args.dp_mesh_dim if args.dp_mesh_dim is not None else 0,
+            SNNDistributedConfig(
+                device_type=runtime.device.type,
+                mesh_shape=mesh_shape or (runtime.world_size,),
+                auto_tensor_parallel=False,
+                enable_fsdp2=True,
+                fsdp_shard_roots=["features", "classifier"],
+                fsdp_shard_module_root=True,
+                dp_mesh_dim=args.dp_mesh_dim if args.dp_mesh_dim is not None else 0,
+            ),
         )
 
     if args.distributed_mode == "fsdp2_tp":
@@ -325,21 +334,31 @@ def build_model(args, runtime: DistributedRuntime):
             raise ValueError(
                 "fsdp2_tp mode requires at least one tensor-parallel target. "
                 "Do not disable both classifier TP and convolution TP."
-            )
+        )
         tp_mesh_dim = (
             args.tp_mesh_dim
             if args.tp_mesh_dim != 0 or args.dp_mesh_dim is not None
             else 1
         )
         dp_mesh_dim = args.dp_mesh_dim if args.dp_mesh_dim is not None else 0
-        return configure_cifar10dvs_vgg_fsdp2(
+        auto_tensor_parallel = not args.disable_classifier_tp
+        return configure_snn_distributed(
             model,
-            device_type=runtime.device.type,
-            mesh_shape=mesh_shape,
-            enable_classifier_tensor_parallel=not args.disable_classifier_tp,
-            enable_experimental_conv_tensor_parallel=not args.disable_conv_tp,
-            tp_mesh_dim=tp_mesh_dim,
-            dp_mesh_dim=dp_mesh_dim,
+            SNNDistributedConfig(
+                device_type=runtime.device.type,
+                mesh_shape=mesh_shape,
+                enable_fsdp2=True,
+                fsdp_shard_roots=["features"],
+                fsdp_shard_module_root=False,
+                tensor_parallel_roots=["classifier"] if auto_tensor_parallel else None,
+                auto_tensor_parallel=auto_tensor_parallel,
+                experimental_conv_tensor_parallel=not args.disable_conv_tp,
+                conv_tensor_parallel_roots=["features"]
+                if not args.disable_conv_tp
+                else None,
+                tp_mesh_dim=tp_mesh_dim,
+                dp_mesh_dim=dp_mesh_dim,
+            ),
         )
 
     raise ValueError(f"Unsupported distributed mode '{args.distributed_mode}'.")
@@ -415,17 +434,26 @@ def reduce_mean(value: torch.Tensor) -> torch.Tensor:
 def reduce_classification_output(outputs: torch.Tensor, labels: torch.Tensor):
     if outputs.ndim >= 3:
         outputs = outputs.mean(dim=0)
+    while labels.ndim > 1 and labels.shape[-1] == 1:
+        labels = labels.squeeze(-1)
     if labels.ndim > 1:
-        labels = labels.argmax(dim=1)
+        labels = labels.argmax(dim=-1)
+        while labels.ndim > 1 and labels.shape[-1] == 1:
+            labels = labels.squeeze(-1)
+    return outputs, labels
+
+
+def prepare_classification_output(outputs, labels):
+    outputs, labels = reduce_classification_output(outputs, labels)
+    outputs = materialize_dtensor_output(outputs)
     return outputs, labels
 
 
 def forward_loss(model, criterion, images, labels):
     outputs = model(images.float())
-    outputs = materialize_dtensor_output(outputs)
-    outputs, labels = reduce_classification_output(outputs, labels)
+    outputs, labels = prepare_classification_output(outputs, labels)
     loss = criterion(outputs, labels)
-    return outputs, loss
+    return outputs, labels, loss
 
 
 def _reduce_stats_tensor(
@@ -462,15 +490,13 @@ def train_one_epoch(
         labels = labels.to(runtime.device, non_blocking=True)
 
         optimizer.zero_grad(set_to_none=True)
-        outputs, loss = forward_loss(model, criterion, images, labels)
+        outputs, labels, loss = forward_loss(model, criterion, images, labels)
         loss.backward()
         optimizer.step()
         functional.reset_net(model)
 
         batch_size = labels.shape[0]
         preds = outputs.argmax(dim=1)
-        if labels.ndim > 1:
-            labels = labels.argmax(dim=1)
         total_loss += loss.detach() * batch_size
         total_correct += (preds == labels).sum()
         total_samples += batch_size
@@ -516,8 +542,12 @@ def train_one_epoch_pipeline(
             step_args = (images,)
         if pipeline_runtime.is_last:
             labels = labels.to(runtime.device, non_blocking=True)
+            while labels.ndim > 1 and labels.shape[-1] == 1:
+                labels = labels.squeeze(-1)
             if labels.ndim > 1:
-                labels = labels.argmax(dim=1)
+                labels = labels.argmax(dim=-1)
+                while labels.ndim > 1 and labels.shape[-1] == 1:
+                    labels = labels.squeeze(-1)
             step_kwargs = {"target": labels}
         outputs = pipeline_runtime.schedule.step(
             *step_args, losses=losses, **step_kwargs
@@ -561,12 +591,10 @@ def evaluate(model, criterion, loader, runtime: DistributedRuntime, tp_group_siz
     for images, labels in loader:
         images = images.to(runtime.device, non_blocking=True)
         labels = labels.to(runtime.device, non_blocking=True)
-        outputs, loss = forward_loss(model, criterion, images, labels)
+        outputs, labels, loss = forward_loss(model, criterion, images, labels)
         functional.reset_net(model)
         batch_size = labels.shape[0]
         preds = outputs.argmax(dim=1)
-        if labels.ndim > 1:
-            labels = labels.argmax(dim=1)
         total_loss += loss.detach() * batch_size
         total_correct += (preds == labels).sum()
         total_samples += batch_size
