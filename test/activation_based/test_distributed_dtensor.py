@@ -385,7 +385,7 @@ def test_apply_returns_unified_runtime_single_rank():
         runtime = apply(model=model, plan=distributed_plan, device_type="cpu")
         assert isinstance(runtime, SNNDistributedRuntime)
         assert runtime.kind == "eager"
-        assert runtime.mesh is not None
+        assert runtime.mesh is None  # mode is "none", no parallel strategy active
         assert runtime.plan.mode == distributed_plan.mode
 
 
@@ -393,7 +393,8 @@ def test_apply_returns_unified_runtime_single_rank():
     not DTENSOR_AVAILABLE,
     reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
 )
-def test_configure_snn_distributed_materializes_mesh_when_mesh_shape_is_provided():
+def test_configure_snn_distributed_mesh_shape_alone_without_strategy_returns_none_mesh():
+    """mesh_shape alone doesn't trigger mesh creation — a parallel strategy must also be enabled."""
     with single_rank_process_group():
         model = ToyDistributedSNN()
         configured_model, mesh, analysis = configure_snn_distributed(
@@ -407,7 +408,7 @@ def test_configure_snn_distributed_materializes_mesh_when_mesh_shape_is_provided
             ),
         )
         assert configured_model is model
-        assert mesh is not None
+        assert mesh is None
         assert isinstance(analysis, distributed_dtensor.SNNDistributedAnalysis)
 
 
