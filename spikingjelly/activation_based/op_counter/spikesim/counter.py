@@ -111,6 +111,7 @@ class SpikeSimCounter(BaseCounter):
     :return: None
     :rtype: None
     """
+
     def __init__(
         self,
         *,

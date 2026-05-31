@@ -4,7 +4,6 @@ import subprocess
 import sys
 import textwrap
 from contextlib import contextmanager
-from importlib.util import find_spec
 
 import pytest
 import torch
@@ -12,10 +11,18 @@ import torch
 from spikingjelly.activation_based import functional, neuron, surrogate
 
 
+def _triton_available() -> bool:
+    try:
+        import triton  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def _require_cuda_triton_compile():
     if not torch.cuda.is_available():
         pytest.skip("CUDA is required for Triton compile compatibility tests.")
-    if find_spec("triton") is None:
+    if not _triton_available():
         pytest.skip("Triton package is required for Triton backend tests.")
     if not hasattr(torch, "compile"):
         pytest.skip("torch.compile is not available.")

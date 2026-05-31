@@ -97,6 +97,9 @@ class StatefulEncoder(base.MemoryModule):
         :param T: 编码周期。通常情况下，与SNN的仿真周期（总步长一致）
         :type T: int
 
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
         ----
 
         .. _StatefulEncoder.__init__-en:
@@ -110,6 +113,9 @@ class StatefulEncoder(base.MemoryModule):
 
         :param T: the encoding period. It is usually same with the total simulation time-steps of SNN
         :type T: int
+
+        :param step_mode: the step mode, which can be `'s'` (single-step) or `'m'` (multi-step)
+        :type step_mode: str
 
         ----
 

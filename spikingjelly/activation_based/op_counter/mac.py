@@ -124,6 +124,7 @@ class MACCounter(BaseCounter):
     for approximate hardware-oriented compute analysis. See
     :meth:`__init__ <MACCounter.__init__-en>` for constructor parameters.
     """
+
     def __init__(
         self,
         extra_rules: dict[Any, Callable] = {},

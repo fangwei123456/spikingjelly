@@ -1,0 +1,151 @@
+from types import SimpleNamespace
+
+import pytest
+import torch
+
+from spikingjelly.activation_based.precision import (
+    PrecisionConfig,
+    build_capability_report,
+    resolve_precision_policy,
+    validate_capability,
+)
+
+
+def test_precision_config_from_string():
+    cfg = PrecisionConfig.from_any("bf16", default_device="cuda:0")
+    assert cfg.mode == "bf16"
+    assert cfg.device == "cuda:0"
+
+
+def test_precision_config_from_none_uses_defaults():
+    cfg = PrecisionConfig.from_any(None, default_device="cpu")
+    assert cfg.mode == "fp32"
+    assert cfg.device == "cpu"
+
+
+def test_precision_config_with_none_mode_falls_back_to_fp32():
+    cfg = PrecisionConfig(mode=None)
+    assert cfg.mode == "fp32"
+
+
+def test_precision_config_instance_with_none_device_uses_default_device():
+    cfg = PrecisionConfig.from_any(
+        PrecisionConfig(mode="bf16", device=None),
+        default_device="cuda:0",
+    )
+    assert cfg.mode == "bf16"
+    assert cfg.device == "cuda:0"
+
+
+def test_precision_config_from_dict_aliases_precision_key():
+    cfg = PrecisionConfig.from_any({"precision": "fp16", "device": "cuda:0"})
+    assert cfg.mode == "fp16"
+    assert cfg.device == "cuda:0"
+
+
+def test_precision_config_from_dict_supports_precision_aliases():
+    cfg = PrecisionConfig.from_any(
+        {
+            "precision": "fp8-torchao",
+            "precision_strict": "strict",
+            "fp8_report": False,
+            "device": "cuda:0",
+        }
+    )
+    assert cfg.mode == "fp8-torchao"
+    assert cfg.strictness == "strict"
+    assert cfg.report is False
+
+
+def test_precision_config_from_object_with_precision_fields():
+    obj = SimpleNamespace(
+        precision="fp8-torchao",
+        precision_strict="strict",
+        fp8_recipe="auto",
+        fp8_report=False,
+        device="cuda:0",
+    )
+    cfg = PrecisionConfig.from_any(obj)
+    assert cfg.mode == "fp8-torchao"
+    assert cfg.strictness == "strict"
+    assert cfg.report is False
+
+
+def test_precision_config_from_object_with_none_device_uses_default_device():
+    obj = SimpleNamespace(
+        precision="fp16",
+        device=None,
+    )
+    cfg = PrecisionConfig.from_any(obj, default_device="cuda:0")
+    assert cfg.mode == "fp16"
+    assert cfg.device == "cuda:0"
+
+
+def test_precision_config_from_legacy_amp_like_object():
+    obj = SimpleNamespace(disable_amp=False, device="cuda:0")
+    cfg = PrecisionConfig.from_any(obj)
+    assert cfg.mode == "fp16"
+
+
+def test_precision_config_from_unknown_object_raises():
+    with pytest.raises(TypeError):
+        PrecisionConfig.from_any(object())
+
+
+def test_resolve_precision_policy_fp32():
+    policy = resolve_precision_policy(PrecisionConfig(mode="fp32"))
+    assert policy.describe()["name"] == "fp32"
+
+
+def test_build_capability_report_cpu_fp32():
+    report = build_capability_report(torch.nn.Linear(4, 4), torch.device("cpu"), "fp32")
+    assert report["device_type"] == "cpu"
+    assert report["can_convert"] is True
+    assert report["can_execute"] is True
+
+
+def test_build_capability_report_cpu_reports_bf16_autocast_support():
+    report = build_capability_report(torch.nn.Linear(4, 4), torch.device("cpu"), "bf16")
+    assert report["bf16_supported"] == report["cpu_bf16_autocast"]
+
+
+def test_build_capability_report_accepts_string_device():
+    report = build_capability_report(torch.nn.Linear(4, 4), "cpu", "fp32")
+    assert report["device"] == "cpu"
+    assert report["device_type"] == "cpu"
+
+
+def test_build_capability_report_mps_classification():
+    report = build_capability_report(
+        torch.nn.Linear(4, 4),
+        torch.device("mps"),
+        "fp32",
+    )
+    assert report["device_type"] == "mps"
+
+
+def test_validate_capability_rejects_fp16_on_cpu():
+    report = build_capability_report(torch.nn.Linear(4, 4), torch.device("cpu"), "fp16")
+    with pytest.raises(RuntimeError, match="fp16"):
+        validate_capability(report)
+
+
+def test_build_capability_report_fp8_cpu_cannot_execute():
+    report = build_capability_report(
+        torch.nn.Linear(4, 4),
+        torch.device("cpu"),
+        "fp8-torchao",
+    )
+    assert report["can_execute"] is False
+
+
+def test_validate_capability_rejects_fp8_torchao_when_torchao_missing():
+    report = {
+        "requested_mode": "fp8-torchao",
+        "device_type": "cuda",
+        "cuda_available": True,
+        "cuda_device_capability": (9, 0),
+        "torchao_installed": False,
+    }
+    with pytest.raises(RuntimeError, match="torchao"):
+        validate_capability(report)

@@ -37,6 +37,7 @@ class MNISTNet(nn.Module):
 
     Parametric LIF network for MNIST digit classification.
     """
+
     def __init__(self, channels=128, spiking_neuron: callable = None, **kwargs):
         super().__init__()
 
@@ -94,6 +95,7 @@ class FashionMNISTNet(MNISTNet):
     :param kwargs: Same as :class:`MNISTNet`
     :type kwargs: dict
     """
+
     pass
 
 
@@ -130,6 +132,7 @@ class NMNISTNet(MNISTNet):
     :param spiking_neuron: Spiking neuron class
     :type spiking_neuron: callable
     """
+
     def __init__(self, channels=128, spiking_neuron: callable = None, **kwargs):
         super().__init__(channels, spiking_neuron, **kwargs)
         self.conv_fc[0] = layer.Conv2d(
@@ -161,6 +164,7 @@ class CIFAR10Net(nn.Module):
 
     Parametric LIF network for CIFAR-10 classification.
     """
+
     def __init__(self, channels=256, spiking_neuron: callable = None, **kwargs):
         super().__init__()
 
@@ -221,6 +225,7 @@ class CIFAR10DVSNet(nn.Module):
 
     Parametric LIF network for CIFAR10-DVS event stream classification.
     """
+
     def __init__(self, channels=128, spiking_neuron: callable = None, **kwargs):
         super().__init__()
 
@@ -279,6 +284,7 @@ class DVSGestureNet(nn.Module):
 
     Parametric LIF network for DVS128 Gesture recognition.
     """
+
     def __init__(self, channels=128, spiking_neuron: callable = None, **kwargs):
         super().__init__()
 

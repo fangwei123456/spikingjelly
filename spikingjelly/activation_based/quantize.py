@@ -39,6 +39,7 @@ class round_atgf(torch.autograd.Function):
     :return: the output tensor
     :rtype: torch.Tensor
     """
+
     @staticmethod
     def forward(ctx, x: torch.Tensor):
         return torch.round(x)
@@ -122,6 +123,7 @@ class ceil_atgf(torch.autograd.Function):
     :return: the output tensor
     :rtype: torch.Tensor
     """
+
     @staticmethod
     def forward(ctx, x: torch.Tensor):
         return torch.ceil(x)
@@ -205,6 +207,7 @@ class floor_atgf(torch.autograd.Function):
     :return: the output tensor
     :rtype: torch.Tensor
     """
+
     @staticmethod
     def forward(ctx, x: torch.Tensor):
         return torch.floor(x)
@@ -363,6 +366,7 @@ class clamp_atgf(torch.autograd.Function):
     :return: the clamped tensor and ``None`` placeholders
     :rtype: torch.Tensor / tuple
     """
+
     @staticmethod
     def forward(ctx, x: torch.Tensor, min_value: float, max_value: float):
         if x.requires_grad:
@@ -538,6 +542,7 @@ class step_quantize_atgf(torch.autograd.Function):
     :return: the quantized result and ``None`` placeholders
     :rtype: torch.Tensor / tuple
     """
+
     @staticmethod
     def forward(ctx, x: torch.Tensor, step: float):
         return step_quantize_forward(x, step)
@@ -697,6 +702,7 @@ class k_bit_quantize_atgf(torch.autograd.Function):
     :return: the quantized result and ``None`` placeholders
     :rtype: torch.Tensor / tuple
     """
+
     @staticmethod
     def forward(ctx, x: torch.Tensor, k: int):
         return k_bit_quantize_forward(x, k)

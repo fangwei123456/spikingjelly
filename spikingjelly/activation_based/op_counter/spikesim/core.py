@@ -400,9 +400,7 @@ def estimate_spikesim_event_energy(
             if strict:
                 raise ValueError(message)
             neuron_warnings.append(message)
-    with SpikeSimEnergyProfiler(
-        config=cfg, strict=strict, verbose=verbose
-    ) as profiler:
+    with SpikeSimEnergyProfiler(config=cfg, strict=strict, verbose=verbose) as profiler:
         profiler.add_warnings(neuron_warnings)
         with torch.no_grad():
             _ = _call_model(model, inputs)

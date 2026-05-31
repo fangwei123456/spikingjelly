@@ -72,6 +72,7 @@ class _CapturedAutogradCtx:
         implement any gradient computation logic — it is purely a storage
         container.
     """
+
     saved_tensors = ()
 
     def save_for_backward(self, *tensors):

@@ -120,10 +120,10 @@ class GatedLIFNode(base.MemoryModule):
             Users can print ``self.supported_backends`` to check availability.
             Gated LIF only supports the ``'torch'`` backend
         :type backend: str
-        
+
         :return: None
         :rtype: None
-"""
+        """
         assert isinstance(init_tau, float) and init_tau < 1.0
         assert isinstance(T, int) and T is not None
         assert isinstance(inplane, int) or inplane is None
@@ -573,10 +573,10 @@ class CUBALIFNode(BaseNode):
 
         :param surrogate_function: surrogate function used to compute spike gradients during backpropagation
         :type surrogate_function: surrogate.SurrogateFunctionBase
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(v_threshold, v_reset, surrogate_function)
 
         self.register_memory("c", 0.0)
@@ -667,10 +667,10 @@ class LIAFNode(LIFNode):
         :type threshold_related: bool
 
         Other parameters in `*args, **kwargs` are the same as :class:`LIFNode`.
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(*args, **kwargs)
         self.act = act
         self.threshold_related = threshold_related

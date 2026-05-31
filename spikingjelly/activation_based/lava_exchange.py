@@ -75,6 +75,7 @@ class step_quantize_atgf(torch.autograd.Function):
 
     Custom autograd Function for ``step_quantize``. Uses ``step_quantize_forward`` for forward quantization and a straight-through estimator (STE) for backward.
     """
+
     @staticmethod
     def forward(ctx, x: torch.Tensor, step: float = 1.0):
         return step_quantize_forward(x, step)
@@ -391,6 +392,7 @@ class LeakyIntegratorStep(torch.autograd.Function):
     Forward implements leaky integration via integer arithmetic through ``_listep_forward``,
     and backward propagates gradients through ``_listep_backward``.
     """
+
     @staticmethod
     def forward(ctx, x, decay, state, w_scale):
         output = _listep_forward(

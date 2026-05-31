@@ -85,10 +85,10 @@ class Conv1d(nn.Conv1d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.Conv1d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(
             in_channels,
             out_channels,
@@ -159,10 +159,10 @@ class Conv2d(nn.Conv2d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.Conv2d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(
             in_channels,
             out_channels,
@@ -235,10 +235,10 @@ class Conv3d(nn.Conv3d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.Conv3d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(
             in_channels,
             out_channels,
@@ -305,10 +305,10 @@ class Upsample(nn.Upsample, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.Upsample` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(
             size, scale_factor, mode, align_corners, recompute_scale_factor
         )
@@ -367,10 +367,10 @@ class ConvTranspose1d(nn.ConvTranspose1d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.ConvTranspose1d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(
             in_channels,
             out_channels,
@@ -443,10 +443,10 @@ class ConvTranspose2d(nn.ConvTranspose2d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.ConvTranspose2d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(
             in_channels,
             out_channels,
@@ -521,10 +521,10 @@ class ConvTranspose3d(nn.ConvTranspose3d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.ConvTranspose3d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(
             in_channels,
             out_channels,
@@ -591,10 +591,10 @@ class GroupNorm(nn.GroupNorm, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.GroupNorm` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(num_groups, num_channels, eps, affine)
         self.step_mode = step_mode
 
@@ -645,10 +645,10 @@ class MaxPool1d(nn.MaxPool1d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.MaxPool1d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(
             kernel_size, stride, padding, dilation, return_indices, ceil_mode
         )
@@ -712,10 +712,10 @@ class MaxPool2d(nn.MaxPool2d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.MaxPool2d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(
             kernel_size, stride, padding, dilation, return_indices, ceil_mode
         )
@@ -780,10 +780,10 @@ class MaxPool3d(nn.MaxPool3d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.MaxPool3d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(
             kernel_size, stride, padding, dilation, return_indices, ceil_mode
         )
@@ -846,10 +846,10 @@ class AvgPool1d(nn.AvgPool1d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.AvgPool1d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(kernel_size, stride, padding, ceil_mode, count_include_pad)
         self.step_mode = step_mode
 
@@ -906,10 +906,10 @@ class AvgPool2d(nn.AvgPool2d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.AvgPool2d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(
             kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override
         )
@@ -970,10 +970,10 @@ class AvgPool3d(nn.AvgPool3d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.AvgPool3d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(
             kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override
         )
@@ -1026,10 +1026,10 @@ class AdaptiveAvgPool1d(nn.AdaptiveAvgPool1d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.AdaptiveAvgPool1d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(output_size)
         self.step_mode = step_mode
 
@@ -1079,10 +1079,10 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.AdaptiveAvgPool2d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(output_size)
         self.step_mode = step_mode
 
@@ -1135,10 +1135,10 @@ class AdaptiveAvgPool3d(nn.AdaptiveAvgPool3d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.AdaptiveAvgPool3d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(output_size)
         self.step_mode = step_mode
 
@@ -1188,10 +1188,10 @@ class Linear(nn.Linear, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.Linear` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(in_features, out_features, bias)
         self.step_mode = step_mode
 
@@ -1225,10 +1225,10 @@ class Flatten(nn.Flatten, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.Flatten` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(start_dim, end_dim)
         self.step_mode = step_mode
 
@@ -1299,10 +1299,10 @@ class WSConv2d(Conv2d):
         :type eps: float
 
         Refer to :class:`Conv2d` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(
             in_channels,
             out_channels,
@@ -1396,10 +1396,10 @@ class WSLinear(Linear):
         :type eps: float
 
         Refer to :class:`Linear` for other parameters' API
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__(in_features, out_features, bias, step_mode)
         if gain:
             self.gain = nn.Parameter(torch.ones(self.out_channels, 1))

@@ -62,6 +62,7 @@ class MemOptSummary:
     :param skipped_errors: Number of layers skipped due to errors
     :type skipped_errors: int
     """
+
     profile: Optional[str]
     checkpoint_budget: Optional[str]
     prefer: Optional[str]

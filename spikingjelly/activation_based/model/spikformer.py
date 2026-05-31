@@ -81,10 +81,10 @@ class SpikformerConv2dBN(nn.Module):
 
         :param pool: If ``True``, appends ``MaxPool2d(kernel_size=3, stride=2, padding=1)``. Default: ``False``
         :type pool: bool
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         layers = [
             nn.Conv2d(
@@ -194,10 +194,10 @@ class SpikformerConv2dBNLIF(nn.Module, base.MultiStepModule):
 
         :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
         :type detach_reset: bool
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         self.conv_bn = SpikformerConv2dBN(
             in_channels=in_channels,
@@ -304,10 +304,10 @@ class SpikformerPatchStem(nn.Module, base.MultiStepModule):
         :type detach_reset: bool
 
         :raises ValueError: If ``patch_size`` is not 16
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         if patch_size != 16:
             raise ValueError(
@@ -423,10 +423,10 @@ class SpikformerMLP(nn.Module, base.MultiStepModule):
 
         :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
         :type detach_reset: bool
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         self.fc1 = layer.SeqToANNContainer(
             nn.Conv1d(in_features, hidden_features, kernel_size=1, bias=False),
@@ -527,10 +527,10 @@ class SpikformerBlock(nn.Module, base.MultiStepModule):
         :type detach_reset: bool
 
         :raises ValueError: If the input is not a 5D tensor ``[T, N, C, H, W]``
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         self.attn = SpikingSelfAttention(dim=dim, num_heads=num_heads, backend=backend)
         hidden_features = int(dim * mlp_ratio)
@@ -671,10 +671,10 @@ class Spikformer(nn.Module, base.MultiStepModule):
 
         :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
         :type detach_reset: bool
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         self.T = T
         self.num_classes = num_classes

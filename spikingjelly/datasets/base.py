@@ -282,6 +282,9 @@ class NeuromorphicDatasetBuilder(abc.ABC):
 
         返回的可调用对象应加载单个处理后的文件并返回对应的样本。它将被传递给 :class:`DatasetFolder <torchvision.datasets.DatasetFolder>`。
 
+        :return: 加载处理后的数据集文件的函数
+        :rtype: Callable
+
         ----
 
         .. _NeuromorphicDatasetBuilder.get_loader-en:
@@ -292,6 +295,9 @@ class NeuromorphicDatasetBuilder(abc.ABC):
 
         The returned callable should load a single processed file and return
         the corresponding sample. It will be passed to :class:`DatasetFolder <torchvision.datasets.DatasetFolder>` .
+
+        :return: a loader function that returns a single sample from a processed file
+        :rtype: Callable
         """
         pass
 

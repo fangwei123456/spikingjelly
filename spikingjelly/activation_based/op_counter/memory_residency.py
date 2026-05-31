@@ -604,10 +604,10 @@ class MemoryResidencyCounter(BaseCounter):
         :param extra_ignore_modules: list of module classes to ignore. Memory accesses
             within these modules will not be counted
         :type extra_ignore_modules: Optional[list[type[nn.Module]]]
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         self.rules = dict(_RESIDENCY_ACCESS_RULES)
         if extra_rules is not None:
