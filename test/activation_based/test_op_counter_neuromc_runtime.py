@@ -60,6 +60,7 @@ def test_neuromc_runtime_report_preserves_legacy_positional_prefix():
     assert report.energy_by_core_type == {"fp_soma": 1.0}
     assert report.energy_by_process_key == {"with_sg": 2.0}
     assert report.mapping_summary == [{"stage": "forward"}]
+    assert report.energy_total_pj == 0.0
 
 
 def test_neuromc_exact_ifnode_supports_sg_breakdown():

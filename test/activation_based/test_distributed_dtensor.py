@@ -1663,6 +1663,23 @@ def test_train_distributed_prepare_classification_output_matches_reduce_for_loca
     assert torch.equal(prepared_labels, torch.tensor([0, 1, 2, 3]))
 
 
+def test_train_distributed_forward_loss_uses_normalized_singleton_labels():
+    train_distributed = _load_train_distributed_module()
+    model = nn.Linear(3, 4)
+    criterion = nn.CrossEntropyLoss()
+    images = torch.randn(2, 3)
+    labels = torch.tensor([[1], [3]])
+    logits, normalized_labels, loss = train_distributed.forward_loss(
+        model,
+        criterion,
+        images,
+        labels,
+    )
+    assert logits.shape == (2, 4)
+    assert torch.equal(normalized_labels, torch.tensor([1, 3]))
+    assert torch.is_tensor(loss)
+
+
 def test_train_distributed_build_data_uses_shared_sampler_for_pipeline(monkeypatch):
     train_distributed = _load_train_distributed_module()
 

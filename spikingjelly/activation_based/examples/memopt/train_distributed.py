@@ -451,7 +451,7 @@ def forward_loss(model, criterion, images, labels):
     outputs = model(images.float())
     outputs, labels = prepare_classification_output(outputs, labels)
     loss = criterion(outputs, labels)
-    return outputs, loss
+    return outputs, labels, loss
 
 
 def _reduce_stats_tensor(
@@ -488,15 +488,13 @@ def train_one_epoch(
         labels = labels.to(runtime.device, non_blocking=True)
 
         optimizer.zero_grad(set_to_none=True)
-        outputs, loss = forward_loss(model, criterion, images, labels)
+        outputs, labels, loss = forward_loss(model, criterion, images, labels)
         loss.backward()
         optimizer.step()
         functional.reset_net(model)
 
         batch_size = labels.shape[0]
         preds = outputs.argmax(dim=1)
-        if labels.ndim > 1:
-            labels = labels.argmax(dim=1)
         total_loss += loss.detach() * batch_size
         total_correct += (preds == labels).sum()
         total_samples += batch_size
@@ -587,12 +585,10 @@ def evaluate(model, criterion, loader, runtime: DistributedRuntime, tp_group_siz
     for images, labels in loader:
         images = images.to(runtime.device, non_blocking=True)
         labels = labels.to(runtime.device, non_blocking=True)
-        outputs, loss = forward_loss(model, criterion, images, labels)
+        outputs, labels, loss = forward_loss(model, criterion, images, labels)
         functional.reset_net(model)
         batch_size = labels.shape[0]
         preds = outputs.argmax(dim=1)
-        if labels.ndim > 1:
-            labels = labels.argmax(dim=1)
         total_loss += loss.detach() * batch_size
         total_correct += (preds == labels).sum()
         total_samples += batch_size
