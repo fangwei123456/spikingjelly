@@ -123,19 +123,19 @@ For large-scale SNN systems, SpikingJelly provides:
 
 SpikingJelly includes the following event-based and neuromorphic datasets: 
 
-- ASL-DVS
-- Bullying10K
-- CIFAR10-DVS
-- DVS-Lip
-- DVS128 Gesture
-- ES-ImageNet
-- HARDVS
-- N-Caltech101
-- N-MNIST
-- Nav Gesture
-- SHD
-- SSC
-- Speech Commands
+- [ASL-DVS](https://openaccess.thecvf.com/content_ICCV_2019/html/Bi_Graph-Based_Object_Classification_for_Neuromorphic_Vision_Sensing_ICCV_2019_paper.html)
+- [Bullying10K](https://proceedings.neurips.cc/paper_files/paper/2023/file/05ffe69463062b7f9fb506c8351ffdd7-Paper-Datasets_and_Benchmarks.pdf)
+- [CIFAR10-DVS](https://internal-journal.frontiersin.org/articles/10.3389/fnins.2017.00309/full)
+- [DVS-Lip](https://openaccess.thecvf.com/content/CVPR2022/html/Tan_Multi-Grained_Spatio-Temporal_Features_Perceived_Network_for_Event-Based_Lip-Reading_CVPR_2022_paper.html)
+- [DVS128 Gesture](https://openaccess.thecvf.com/content_cvpr_2017/html/Amir_A_Low_Power_CVPR_2017_paper.html)
+- [ES-ImageNet](https://www.frontiersin.org/articles/10.3389/fnins.2021.726582/full)
+- [HARDVS](https://arxiv.org/abs/2211.09648)
+- [N-Caltech101](https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full)
+- [N-MNIST](https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full)
+- [Nav Gesture](https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full)
+- [SHD](https://doi.org/10.1109/TNNLS.2020.3044364)
+- [SSC](https://doi.org/10.1109/TNNLS.2020.3044364)
+- [Speech Commands](https://arxiv.org/abs/1804.03209)
 
 Each dataset supports raw event access and frame representations. See the [neuromorphic datasets tutorial](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/en/neuromorphic_datasets.html) for the full workflow.
 
@@ -149,8 +149,9 @@ Export SpikingJelly models to neuromorphic hardware or other frameworks:
 
 ## Project Status and Version Notes
 
-> Development / release policy  
-> Odd version numbers track the development branch on GitHub / OpenI. Even version numbers are stable releases published to PyPI.
+**Development / release policy:**
+
+Odd version numbers track the development branch on GitHub / OpenI. Even version numbers are stable releases published to PyPI.
 
 <details>
 <summary>Compatibility, migration, and older docs</summary>
