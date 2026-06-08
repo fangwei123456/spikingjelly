@@ -9,7 +9,7 @@
 This page is auto-generated from ``publications.json`` and lists publications
 that use SpikingJelly.
 
-Total publications: 508
+Total publications: 589
 
 .. rubric:: Publication list
 
@@ -395,8 +395,6 @@ Total publications: 508
    - Publisher: ICCV 2023
    - Code: `GitHub <https://github.com/BICLab/ASA-SNN>`__
 
-#. `Training of Spiking Neural Network joint Curriculum Learning Strategy <https://arxiv.org/abs/2309.04737>`__
-
 #. `Spiking-Diffusion: Vector Quantized Discrete Diffusion Model with Spiking Neural Networks <https://arxiv.org/abs/2308.10187>`__
 
 #. `SpikeBERT: A Language Spikformer Trained with Two-Stage Knowledge Distillation from BERT <https://arxiv.org/abs/2308.15122>`__
@@ -765,11 +763,6 @@ Total publications: 508
 #. `Direct training high-performance deep spiking neural networks: a review of theories and methods <https://www.frontiersin.org/journals/neuroscience/articles/10.3389/fnins.2024.1383844/full>`__
 
    - Publisher: Frontiers in Neuroscience 2024
-
-#. `Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks <https://arxiv.org/abs/2505.05375>`__
-
-   - Publisher: IJCNN 2025
-   - Code: `GitHub <https://github.com/NneurotransmitterR/TM-OTTA-SNN>`__
 
 #. `Compass: Sram-based computing-in-memory snn accelerator with adaptive spike speculation <https://ieeexplore.ieee.org/abstract/document/10764497/>`__
 
@@ -1606,10 +1599,6 @@ Total publications: 508
 
 #. `SPAIC: a spike-based artificial intelligence computing framework <https://arxiv.org/pdf/2207.12750>`__
 
-#. `脉冲神经网络基准测试及类脑训练框架性能评估 <https://www.society.shu.edu.cn/CN/abstract/abstract21062.shtml>`__
-
-   - Publisher: 应用科学学报
-
 #. `TinySpiking: a lightweight and efficient python framework for unsupervised learning spiking neural networks <https://iopscience.iop.org/article/10.1088/2631-8695/ada725/meta>`__
 
    - Publisher: Engineering Research Express 2025
@@ -1868,10 +1857,6 @@ Total publications: 508
 
    - Publisher: 湖北大学
 
-#. `Efficient orbit-torque driven spiking neuromorphic device mimicking the selective attention mechanism for self-adaptive recognition <https://link.springer.com/article/10.1007/s40843-025-3535-8>`__
-
-   - Publisher: Science China Materials
-
 #. `BIVM: 类脑计算编译框架及其原型研究 <https://www.jos.org.cn/html/7420.htm>`__
 
    - Publisher: 软件学报
@@ -1909,3 +1894,330 @@ Total publications: 508
 
    - Publisher: ICLR 2026
    - Code: `GitHub <https://github.com/AllenYolk/snn-gradient-checkpointing>`__
+
+#. `Benchmarking SpikingJelly-Based SNNs Against Conventional ANNs: An MNIST Case Study on Accuracy and Synops <https://ieeexplore.ieee.org/abstract/document/11298123/>`__
+
+   - Publisher: 29th International Computer Science and Engineering Conference (ICSEC)
+
+#. `Brain signal analysis by Spiking neural networks <https://ieeexplore.ieee.org/abstract/document/11220467/>`__
+
+   - Publisher: 2025 International Conference on Cyber-Enabled Distributed Computing and Knowledge Discovery (CyberC)
+
+#. `A VelocitySNN-Fuzzy AI Architecture: Neuromorphic Event-Driven Spiking Neural Network and Fuzzy Logic AI System for 3D Velocity Determination in Martian Flight <https://ieeexplore.ieee.org/abstract/document/11235482/>`__
+
+   - Publisher: NAECON 2025 - IEEE National Aerospace and Electronics Conference
+
+#. `Improving Liver Disease Diagnosis with SNNDeep: A Custom Spiking Neural Network Using Diverse Learning Algorithms <https://arxiv.org/abs/2508.20125>`__
+
+#. `HiAER-spike software-hardware reconfigurable platform for event-driven neuromorphic computing at scale <https://www.nature.com/articles/s44335-026-00062-8>`__
+
+   - Publisher: npj Unconventional Computing
+   - Code: `GitHub <https://github.com/Integrated-Systems-Neuroengineering/hs_api>`__
+
+#. `Strain-gradient-driven synthetic antiferromagnetic skyrmion neuron with velocity-affine LIF dynamics for neuromorphic computing <https://iopscience.iop.org/article/10.1088/1361-6463/ae3fa8/meta>`__
+
+   - Publisher: Journal of Physics D: Applied Physics
+
+#. `Benchmarking microsaccade recognition with event cameras: a novel dataset and evaluation <https://arxiv.org/abs/2510.24231>`__
+
+   - Publisher: The 35th British Machine Vision Conference
+   - Code: `GitHub <https://github.com/waseemshariff126/microsaccades>`__
+
+#. `A Practical Tutorial on Spiking Neural Networks <https://www.mdpi.com/2673-4117/6/11/304>`__
+
+   - Publisher: Eng
+
+#. `Comparative Performance Evaluation of CNN and SNN Architectures for Real-Time Obstacle Avoidance in Autonomous Driving <https://ieeexplore.ieee.org/abstract/document/11416524/>`__
+
+   - Publisher: 2026 International Conference on Electronics and Renewable Systems (ICEARS)
+
+#. `Low-Cost Spiking Networks on FPGA for Event-Based Gesture Detection <https://ieeexplore.ieee.org/abstract/document/11105678/>`__
+
+   - Publisher: 2025 International Symposium on Signals, Circuits and Systems (ISSCS)
+
+#. `SE-SNN: Squeeze-and-Excitation-Enhanced Spiking Neural Networks with Learnable Neuron Dynamics for Event-Based Vision <https://www.mdpi.com/2313-7673/11/5/359>`__
+
+   - Publisher: Biomimetics
+   - Code: `GitHub <https://github.com/chuang-liu-cn/code>`__
+
+#. `Sg-snn: a self-organizing spiking neural network based on temporal information <https://link.springer.com/article/10.1007/s11571-024-10199-6>`__
+
+   - Publisher: Cognitive Neurodynamics
+
+#. `PSViT: Structurally Pruning Spiking Vision Transformers <https://arxiv.org/abs/2606.03257>`__
+
+#. `SU-YOLO: SNN for efficient underwater object detection <https://www.sciencedirect.com/science/article/pii/S0925231225009828>`__
+
+   - Publisher: Neurocomputing
+   - Code: `GitHub <https://github.com/lwxfight/snn-underwater>`__
+
+#. `EbESCNN: Eye Binary Event Spiking CNN for Eye Tracking <https://ieeexplore.ieee.org/abstract/document/11340169/>`__
+
+   - Publisher: 2025 IEEE International Conference on Metrology for eXtended Reality, Artificial Intelligence and Neural Engineering (MetroXRAINE)
+
+#. `Characterizing Neuromorphic Workloads from A System Perspective <https://www.researchsquare.com/article/rs-7959358/latest>`__
+
+#. `SpikGPT: A High-Accuracy and Interpretable Spiking Attention Framework for Single-Cell Annotation <https://arxiv.org/abs/2512.03286>`__
+
+#. `Leaky-Integrate-Fire Neuron via Synthetic Antiferromagnetic Coupling and Spin-Orbit Torque <https://advanced.onlinelibrary.wiley.com/doi/abs/10.1002/advs.202521732>`__
+
+   - Publisher: Wiley Advanced Science
+
+#. `PS3N: Probabilistic Spiking Structured State-Space Networks for Event-Based Visual-Tactile Slip Detection <https://ieeexplore.ieee.org/abstract/document/11495271/>`__
+
+   - Publisher: IEEE Transactions on Robotics
+
+#. `Closing the Theory-Practice Gap in Spiking Transformers via Effective Dimension <https://arxiv.org/abs/2604.15769>`__
+
+   - Code: `GitHub <https://github.com/airesearchrepo2025/spiking-attention-expressivity>`__
+
+#. `All-Spiking ECG Analysis for Arrhythmia Classification on Low-Power FPGA <https://ieeexplore.ieee.org/abstract/document/11399628/>`__
+
+   - Publisher: IEEE Sensors Journal
+
+#. `Neuromorphic Continual Learning for Sequential Deployment of Nuclear Plant Monitoring Systems <https://arxiv.org/abs/2604.18611>`__
+
+#. `Nanoscale exchange-bias magnetic tunnel junctions enabled memristive synapse and leaky-integrate-fire neuron for neuromorphic computing <https://www.nature.com/articles/s41467-026-70802-8>`__
+
+   - Publisher: Nature Communications
+
+#. `Energy-Efficient Drowsiness Detection with Spiking Neural Networks <https://ieeexplore.ieee.org/abstract/document/11416827/>`__
+
+   - Publisher: 2026 International Conference on Computing, Networking and Communications (ICNC)
+
+#. `Dynamic Loading Simulation Method for Large-scale Spiking Neural Network <https://dc-china-simulation.researchcommons.org/journal/vol37/iss2/20/>`__
+
+   - Publisher: Journal of System Simulation
+
+#. `Privacy in Federated Learning with Spiking Neural Networks <https://arxiv.org/abs/2511.21181>`__
+
+#. `Advanced SpikingYOLOX: Extending Spiking Neural Network on Object Detection with Spike-based Partial Self-Attention and 2D-Spiking Transformer <https://dl.acm.org/doi/abs/10.1145/3746027.3754854>`__
+
+   - Publisher: ACM MM 2025
+
+#. `Event-Driven Neuromorphic Vision Enables Energy-Efficient Visual Place Recognition <https://arxiv.org/abs/2604.03277>`__
+
+#. `Brain-Inspired Multimodal Spike Neural Network for Image-Text Retrieval <https://openaccess.thecvf.com/content/CVPR2026F/html/Zong_Brain-Inspired_Multimodal_Spike_Neural_Network_for_Image-Text_Retrieval_CVPRF_2026_paper.html>`__
+
+   - Publisher: CVPR 2026 Findings
+   - Code: `GitHub <https://github.com/zxt6174/CMSF>`__
+
+#. `Evaluating Spiking and Non-Spiking Neural Networks for Colorectal Serrated Polyp Subtype Classification <https://www.medrxiv.org/content/10.64898/2026.01.24.26344766.abstract>`__
+
+   - Code: `GitHub <https://github.com/qug125/snn-crcp>`__
+
+#. `DSA-NET: Bridging the GAP in Spiking Transformer Conversion Via Dynamic State Adaptation <https://ieeexplore.ieee.org/abstract/document/11352610/>`__
+
+   - Publisher: 2025 22nd International Computer Conference on Wavelet Active Media Technology and Information Processing (ICCWAMTIP)
+
+#. `Enhancing ResNet architectures based on spiking neural networks <https://link.springer.com/article/10.1007/s11227-025-08064-2>`__
+
+   - Publisher: The Journal of Supercomputing
+   - Code: `GitHub <https://github.com/BioCenter-SHU/E-SResNet>`__
+
+#. `Efficient Spiking Neural Networks for Accurate and Real-Time ECG Classification <https://ieeexplore.ieee.org/abstract/document/11508717/>`__
+
+   - Publisher: 2026 9th International Conference on Advanced Algorithms and Control Engineering (ICAACE)
+
+#. `Spiking Adapter for Event-Based Action Recognition <https://ieeexplore.ieee.org/abstract/document/11463269/>`__
+
+   - Publisher: ICASSP 2026
+
+#. `Spatial-Frequency Spiking Neural Network for Underwater Object Detection <https://ojs.aaai.org/index.php/AAAI/article/view/39109>`__
+
+   - Publisher: AAAI 2026
+
+#. `STAND-Net: A Spiking Temporal Attention autoeNcoDer Network for Efficient EEG Artifact Removal <https://ieeexplore.ieee.org/abstract/document/11421297/>`__
+
+   - Publisher: IEEE Journal of Biomedical and Health Informatics
+
+#. `BiSpikCLM: A Spiking Language Model integrating Softmax-Free Spiking Attention and Spike-Aware Alignment Distillation <https://arxiv.org/abs/2605.13859>`__
+
+#. `Systematic Evaluation of Biologically Inspired Motion Detection Models: From LGMD and EMD to Hybrid Spiking Neural Networks <https://www.mdpi.com/2313-7673/11/6/374>`__
+
+   - Publisher: Biomimetics
+   - Code: `GitHub <https://github.com/VanessaNdiangang/bio-inspired-collision-detection>`__
+
+#. `Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks <https://ieeexplore.ieee.org/abstract/document/11228835/>`__
+
+   - Publisher: IJCNN 2025
+   - Code: `GitHub <https://github.com/NneurotransmitterR/TM-OTTA-SNN>`__
+
+#. `UDC-SNN: An Uncertainty-Aware Dynamic Cascading Framework with Spiking Neural Network for Balancing Performance and Energy in Multimodal Emotion Recognition <https://www.mdpi.com/1424-8220/26/9/2859>`__
+
+   - Publisher: Sensors
+
+#. `Spiking Neural Networks Outperform Convolutional Models in Voice-Based Heart Failure Detection <https://ieeexplore.ieee.org/abstract/document/11436765/>`__
+
+   - Publisher: 2025 International Conference on Signal Processing, Computation, Electronics, Power and Telecommunication (IConSCEPT)
+
+#. `Neuromorphic Motion Segmentation with Spiking Neural Networks for Robotic Perception <https://www.sciencedirect.com/science/article/pii/S2405896325015770>`__
+
+   - Publisher: IFAC-PapersOnLine
+
+#. `Prediction and Optimization of Mechanical Properties of Water Hyacinth Fiber-Reinforced Polymer Composites Using Spiking Neural Networks <https://onlinelibrary.wiley.com/doi/abs/10.1002/pat.70564>`__
+
+   - Publisher: Polymers for Advanced Technologies
+
+#. `A Spiking Convolutional Neural Network Algorithm Based on Piecewise-Linear Complementary Leaky Integrate-and-Fire (PCLIF) Neurons and Hybrid Surrogate Gradient Training <https://ieeexplore.ieee.org/abstract/document/11328008/>`__
+
+   - Publisher: 2025 IEEE Biomedical Circuits and Systems Conference (BioCAS)
+
+#. `Direct-to-Event Spiking Neural Network Transfer <https://ieeexplore.ieee.org/abstract/document/11514967/>`__
+
+   - Publisher: IEEE Signal Processing Letters
+
+#. `LitSpikingNet: Lightweight Attention-Enhanced SNN for Medical Image Classification <https://ieeexplore.ieee.org/abstract/document/11357172/>`__
+
+   - Publisher: 2025 IEEE International Conference on Bioinformatics and Biomedicine (BIBM)
+
+#. `Gradient-Free Continual Learning in SNNs via ISI Regularization <https://arxiv.org/abs/2604.16496>`__
+
+#. `LightSNN: Lightweight Architecture Search for Sparse and Accurate Spiking Neural Networks <https://ieeexplore.ieee.org/abstract/document/11159365/>`__
+
+   - Publisher: 2025 International Conference on Advanced Machine Learning and Data Science (AMLDS)
+   - Code: `GitHub <https://github.com/YesmineAbdennadher/LightSNN>`__
+
+#. `A sustainable neuromorphic framework for disease diagnosis <https://www.sciencedirect.com/science/article/pii/S2666990024000387>`__
+
+   - Publisher: Computer Methods and Programs in Biomedicine Update
+
+#. `Energy-Efficient Spiking Spectral-Weighting Reconstruction Network for Compressive Hyperspectral Imaging <https://www.mdpi.com/2072-4292/18/11/1805>`__
+
+   - Publisher: Remote Sensing
+
+#. `CogniSNN: Enabling Neuron-Expandability, Pathway-Reusability, and Dynamic-Configurability with Random Graph Architectures in Spiking Neural Networks <https://arxiv.org/abs/2512.11743>`__
+
+   - Publisher: 28th European Conference on Artificial Intelligence (ECAI-2025)
+   - Code: `GitHub <https://github.com/Yongsheng124/CogniSNN>`__
+
+#. `SpikeMixer: Dynamic axial mixing for SNNs <https://www.sciencedirect.com/science/article/pii/S0925231226015183>`__
+
+   - Publisher: Neurocomputing
+
+#. `Spike Camera Image Reconstruction Based on an Efficient Spiking Transformer <https://dl.acm.org/doi/abs/10.1145/3769748.3773339>`__
+
+   - Publisher: ACM MMAsia 25 Workshops
+
+#. `An end-to-end memristive hardware system based on single-spike coding for human–machine interfaces <https://www.nature.com/articles/s41928-025-01544-6>`__
+
+   - Publisher: Nature Electronics
+   - Code: `GitHub <https://github.com/pekjuntiw/single-spiking-hmi>`__
+
+#. `Oligodendrocyte-Driven Spiking Neural Model <https://ojs.aaai.org/index.php/AAAI/article/view/39306>`__
+
+   - Publisher: AAAI 2026
+
+#. `Bio-Inspired Neural Network Dynamics-Aware Reinforcement Learning for Spiking Neural Network <https://www.mdpi.com/2313-7673/11/1/47>`__
+
+   - Publisher: Biomimetics
+
+#. `An energy-efficient dual-branch spiking neural network for epileptic seizure detection from electroencephalogram signals <https://www.sciencedirect.com/science/article/pii/S174680942600248X>`__
+
+   - Publisher: Biomedical Signal Processing and Control
+   - Code: `GitHub <https://github.com/xicheng105/DBSNet>`__
+
+#. `Spike-NVPT: Learning Robust Visual Prompts via Bio-Inspired Temporal Filtering and Discretization <https://arxiv.org/abs/2604.18284>`__
+
+#. `A lightweight SNN for EEG-based motor imagery classification <https://www.sciencedirect.com/science/article/pii/S0893608025006215>`__
+
+   - Publisher: Neural Networks
+   - Code: `GitHub <https://github.com/Zhr1110/SnnForMI>`__
+
+#. `Parallel Training Time-to-First-Spike Spiking Neural Networks <https://ojs.aaai.org/index.php/AAAI/article/view/37149>`__
+
+   - Publisher: AAAI 2026
+   - Code: `GitHub <https://github.com/CheKaiWei/PTTFS>`__
+
+#. `Combining hybrid spiking neuron with inception module for motor imagery classification <https://www.sciencedirect.com/science/article/pii/S1746809425019299>`__
+
+   - Publisher: Biomedical Signal Processing and Control
+
+#. `An Improved Spiking Squeeze-and-Excitation SNN for Event-camera Traffic Detection <https://ieeexplore.ieee.org/abstract/document/11487858/>`__
+
+   - Publisher: 2025 China Automation Congress (CAC)
+
+#. `Spikoder: Dual‐Mode Graphene Neuron Circuit for Hardware Intelligence <https://advanced.onlinelibrary.wiley.com/doi/abs/10.1002/aisy.202500327>`__
+
+   - Publisher: Advanced Intelligent Systems
+
+#. `I2E: Real-Time Image-to-Event Conversion for High-Performance Spiking Neural Networks <https://ojs.aaai.org/index.php/AAAI/article/view/37179>`__
+
+   - Publisher: AAAI 2026
+   - Code: `GitHub <https://github.com/Ruichen0424/I2E>`__
+
+#. `CKADisor: Central Kernel-Aligned Distillation for Event-Driven Object Recognition <https://ieeexplore.ieee.org/abstract/document/11419778/>`__
+
+   - Publisher: IEEE Signal Processing Letters
+
+#. `OCCA-SNN: Online Class-Center Anchoring with Alignment for Spiking Neural Networks in Class-Incremental Learning <https://ieeexplore.ieee.org/abstract/document/11453443/>`__
+
+   - Publisher: 2025 International Conference on Cognitive and Intelligent Technology (ICCIT)
+
+#. `Closed-loop control of seizure activity via real-time seizure forecasting by reservoir neuromorphic computing <https://iopscience.iop.org/article/10.1088/2634-4386/ae3e14/meta>`__
+
+   - Publisher: Neuromorphic Computing and Engineering
+
+#. `Augmented Gait Classification: Integrating YOLO, CNN–SNN Hybridization, and GAN Synthesis for Knee Osteoarthritis and Parkinson’s Disease <https://www.mdpi.com/2624-6120/6/4/64>`__
+
+   - Publisher: Signals
+
+#. `ShiftLIF: Efficient Multi-Level Spiking Neurons with Power-of-Two Quantization <https://arxiv.org/abs/2605.01866>`__
+
+#. `BrainFuse: a unified infrastructure integrating realistic biological modeling and core AI methodology <https://arxiv.org/abs/2601.21407>`__
+
+#. `Spiking CNN with ECA Mechanism for EEG-Based Motor Imagery <https://link.springer.com/chapter/10.1007/978-981-96-9894-3_25>`__
+
+   - Publisher: Advanced Intelligent Computing Technology and Applications
+(ICIC 2025)
+
+#. `SpikeCLR: Contrastive Self-Supervised Learning for Few-Shot Event-Based Vision using Spiking Neural Networks <https://arxiv.org/abs/2603.16338>`__
+
+   - Code: `GitHub <https://github.com/maxime-vaillant/SpikeCLR>`__
+
+#. `COVID-19 Detection from CT Scans Using Hybrid CNN-SNN Deep Learning <https://ieeexplore.ieee.org/abstract/document/11484852/>`__
+
+   - Publisher: 2025 IEEE International Conference on Communication Networks and Computing (CNC)
+
+#. `An Evolutionary Neuromorphic Deep Learning for Climate Policy <https://www.techrxiv.org/doi/full/10.36227/techrxiv.177220351.15863605>`__
+
+#. `Spikcommander: A high-performance spiking transformer with multi-view learning for efficient speech command recognition <https://ojs.aaai.org/index.php/AAAI/article/view/37194>`__
+
+   - Publisher: AAAI 2026
+   - Code: `GitHub <https://github.com/JackieWang9811/SCommander>`__
+
+#. `DESTformer: Energy-Efficient Monocular Depth Estimation with Spiking Transformer for Edge Devices <https://ieeexplore.ieee.org/abstract/document/11345912/>`__
+
+   - Publisher: 2025 International Conference on Neuromorphic Systems (ICONS)
+
+#. `From Lightweight CNNs to SpikeNets: Benchmarking Accuracy-Energy Tradeoffs with Pruned Spiking SqueezeNet <https://openaccess.thecvf.com/content/WACV2026/html/Bin_Kabir_From_Lightweight_CNNs_to_SpikeNets_Benchmarking_Accuracy-Energy_Tradeoffs_with_Pruned_WACV_2026_paper.html>`__
+
+   - Publisher: WACV 2026
+
+#. `Spiking neural P models with dynamic potential reset mechanism for remote sensing image classification <https://www.sciencedirect.com/science/article/pii/S0925231226006326>`__
+
+   - Publisher: Neurocomputing
+
+#. `Processing Continuous-Valued Signals for Multimodal Spike-Based Pose Regression <https://ieeexplore.ieee.org/abstract/document/10979088/>`__
+
+   - Publisher: 2025 IEEE International Conference on Simulation, Modeling, and Programming for Autonomous Robots (SIMPAR)
+
+#. `Nabil: A Text-to-SQL Model Based on Brain-Inspired Computing Techniques <https://www.mdpi.com/2079-9292/14/19/3910>`__
+
+   - Publisher: Electronics
+
+#. `Pipelining Kruskal's: A Neuromorphic Approach for Minimum Spanning Tree <https://arxiv.org/abs/2505.10771>`__
+
+#. `An efficient lightweight Spike Neuron Network applied to Post-stroke Dysarthria speech recognition <https://www.sciencedirect.com/science/article/pii/S0167639326000476>`__
+
+   - Publisher: Speech Communication
+
+#. `Spiking Brain Compression: Exploring One-Shot Post-Training Pruning and Quantization for Spiking Neural Networks <https://arxiv.org/abs/2506.03996>`__
+
+#. `Neuromorphic Hybrid Information Processing Architecture for High-Performance Information Compression <https://ieeexplore.ieee.org/abstract/document/11370794/>`__
+
+   - Publisher: IEEE Transactions on Very Large Scale Integration (VLSI) Systems
+
+#. `ESTU: Enabling Spiking Transformers on Ultra-Low-Power FPGAs <https://ieeexplore.ieee.org/abstract/document/11218914/>`__
+
+   - Publisher: IEEE Transactions on Circuits and Systems II: Express Briefs
