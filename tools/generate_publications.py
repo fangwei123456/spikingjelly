@@ -18,6 +18,12 @@ def _escape_rst_text(text: str) -> str:
     return text.replace("\\", "\\\\").replace("`", "``")
 
 
+def _flatten_whitespace(text: str) -> str:
+    # Collapse embedded newlines/tabs into single spaces so that downstream
+    # RST templates can safely interpolate the value into a single line.
+    return " ".join(text.split())
+
+
 def _format_link(label: str, url: str) -> str:
     return f"`{_escape_rst_text(label)} <{url}>`__"
 
@@ -62,6 +68,11 @@ def _validate_entry(entry: Any, index: int) -> dict[str, Any]:
         raise ValueError(f"Publication #{index} has an invalid paper_url.")
     if not isinstance(publisher, str):
         raise ValueError(f"Publication #{index} has an invalid publisher.")
+    if "\n" in publisher or "\r" in publisher or "\t" in publisher:
+        raise ValueError(
+            f"Publication #{index} has a publisher containing newlines or tabs; "
+            "collapse it to a single line before saving publications.json."
+        )
     if not isinstance(code_urls, list) or any(
         not isinstance(url, str) or not _URL_RE.match(url) for url in code_urls
     ):
@@ -112,7 +123,7 @@ def build_rst(publications: list[dict[str, Any]]) -> str:
 
     for publication in publications:
         title = _format_link(publication["title"], publication["paper_url"])
-        publisher = _escape_rst_text(publication["publisher"])
+        publisher = _flatten_whitespace(_escape_rst_text(publication["publisher"]))
         code_urls = publication["code_urls"]
         lines.append(f"#. {title}")
         if publisher or code_urls:

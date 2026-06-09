@@ -1720,7 +1720,7 @@ Total publications: 589
 
 #. `A 1.1 μJ/Inference Binary Spiking Neural Network Accelerator for DVS Gesture Recognition <https://ieeexplore.ieee.org/abstract/document/11128877/>`__
 
-   - Publisher: IEEE Transactions on Circuits and Systems I: Regular Papers  2025
+   - Publisher: IEEE Transactions on Circuits and Systems I: Regular Papers 2025
 
 #. `Efficient Training of Spiking Neural Networks by Spike-aware Data Pruning <https://arxiv.org/pdf/2510.04098>`__
 
@@ -1736,11 +1736,11 @@ Total publications: 589
 
 #. `Efficient Training and Neuro-Encoding for Bridging Hybrid ANN and SNN Computation <https://ieeexplore.ieee.org/abstract/document/11163623>`__
 
-   - Publisher: IEEE Transactions on Emerging Topics in Computing  2025
+   - Publisher: IEEE Transactions on Emerging Topics in Computing 2025
 
 #. `Research on hardware acceleration of traffic sign recognition based on spiking neural network and FPGA platform <https://ieeexplore.ieee.org/abstract/document/10715726>`__
 
-   - Publisher: IEEE Transactions on Very Large Scale Integration (VLSI) Systems  2025
+   - Publisher: IEEE Transactions on Very Large Scale Integration (VLSI) Systems 2025
 
 #. `Fully spiking actor network with intralayer connections for reinforcement learning <https://ieeexplore.ieee.org/abstract/document/10423179/>`__
 
@@ -2168,8 +2168,7 @@ Total publications: 589
 
 #. `Spiking CNN with ECA Mechanism for EEG-Based Motor Imagery <https://link.springer.com/chapter/10.1007/978-981-96-9894-3_25>`__
 
-   - Publisher: Advanced Intelligent Computing Technology and Applications
-(ICIC 2025)
+   - Publisher: Advanced Intelligent Computing Technology and Applications (ICIC 2025)
 
 #. `SpikeCLR: Contrastive Self-Supervised Learning for Few-Shot Event-Based Vision using Spiking Neural Networks <https://arxiv.org/abs/2603.16338>`__
 
