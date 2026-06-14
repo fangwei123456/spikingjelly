@@ -703,7 +703,7 @@ class SpikingRNNBase(nn.Module):
                         x.shape[1],
                         self.hidden_size,
                     ],
-                    dtype=torch.float,
+                    dtype=x.dtype,
                     device=x.device,
                 ).squeeze(0)
             else:
@@ -714,7 +714,7 @@ class SpikingRNNBase(nn.Module):
                         x.shape[1],
                         self.hidden_size,
                     ],
-                    dtype=torch.float,
+                    dtype=x.dtype,
                     device=x.device,
                 ).squeeze(0)
 
@@ -1021,7 +1021,7 @@ class SpikingLSTMCell(SpikingRNNCellBase):
         """
         if hc is None:
             h = torch.zeros(
-                size=[x.shape[0], self.hidden_size], dtype=torch.float, device=x.device
+                size=[x.shape[0], self.hidden_size], dtype=x.dtype, device=x.device
             )
             c = torch.zeros_like(h)
         else:
@@ -1335,7 +1335,7 @@ class SpikingVanillaRNNCell(SpikingRNNCellBase):
         """
         if h is None:
             h = torch.zeros(
-                size=[x.shape[0], self.hidden_size], dtype=torch.float, device=x.device
+                size=[x.shape[0], self.hidden_size], dtype=x.dtype, device=x.device
             )
         return self.surrogate_function(self.linear_ih(x) + self.linear_hh(h))
 
@@ -1570,7 +1570,7 @@ class SpikingGRUCell(SpikingRNNCellBase):
         """
         if h is None:
             h = torch.zeros(
-                size=[x.shape[0], self.hidden_size], dtype=torch.float, device=x.device
+                size=[x.shape[0], self.hidden_size], dtype=x.dtype, device=x.device
             )
 
         y_ih = torch.split(self.linear_ih(x), self.hidden_size, dim=1)
