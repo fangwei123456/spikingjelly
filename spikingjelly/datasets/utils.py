@@ -519,7 +519,7 @@ def integrate_events_segment_to_frame(
     H: int,
     W: int,
     j_l: int = 0,
-    j_r: int = -1,
+    j_r: Optional[int] = None,
 ) -> np.ndarray:
     r"""
     **API Language:**
@@ -557,8 +557,8 @@ def integrate_events_segment_to_frame(
     :param j_l: 积分区间的起始索引（包含）
     :type j_l: int
 
-    :param j_r: 积分区间的右端索引（不包含）
-    :type j_r: int
+    :param j_r: 积分区间的右端索引（不包含）。默认为 ``None``，表示包含所有事件
+    :type j_r: Optional[int]
 
     :return: 单个双通道帧
     :rtype: np.ndarray
@@ -595,8 +595,8 @@ def integrate_events_segment_to_frame(
     :param j_l: the start index of the integral interval, which is included
     :type j_l: int
 
-    :param j_r: the right index of the integral interval, which is not included
-    :type j_r: int
+    :param j_r: the right index of the integral interval, which is not included. Defaults to ``None``, meaning all events are included
+    :type j_r: Optional[int]
 
     :return: a single two-channel frame
     :rtype: np.ndarray
