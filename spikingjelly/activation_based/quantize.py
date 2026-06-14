@@ -770,7 +770,11 @@ def k_bit_quantize(x: torch.Tensor, k: int):
 
     :return: ``y = round((2 ** k - 1) * x) / (2 ** k - 1)``
     :rtype: torch.Tensor
+
+    :raises ValueError: if ``k < 1``
     """
+    if k < 1:
+        raise ValueError(f"k must be a positive integer, but got {k}")
     return k_bit_quantize_atgf.apply(x, k)
 
 

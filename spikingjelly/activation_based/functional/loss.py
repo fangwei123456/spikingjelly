@@ -44,6 +44,8 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
     :return: ret, shape=[N, N]的tensor， ``ret[i][j]`` 表示 ``x[i]`` 和 ``y[j]`` 的内积
     :rtype: torch.Tensor
 
+    :raises ValueError: 当 ``kernel`` 为 ``"gaussian"`` 且 ``sigma <= 0`` 时
+
     ----
 
     .. _kernel_dot_product-en:
@@ -73,6 +75,8 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
 
     :return: ret, Tensor of shape=[N, N], ``ret[i][j]`` is inner product of ``x[i]`` and ``y[j]``.
     :rtype: torch.Tensor
+
+    :raises ValueError: if ``kernel`` is ``"gaussian"`` and ``sigma <= 0``
     """
     if kernel == "linear":
         return x.mm(y.t())
@@ -84,6 +88,8 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
         return torch.sigmoid(alpha * x.mm(y.t()))
     elif kernel == "gaussian":
         sigma = args[0]
+        if sigma <= 0:
+            raise ValueError(f"sigma must be positive for the Gaussian kernel, but got {sigma}")
         N = x.shape[0]
         x2 = x.square().sum(dim=1)  # shape=[N]
         y2 = y.square().sum(dim=1)  # shape=[N]
