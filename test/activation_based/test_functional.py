@@ -48,6 +48,35 @@ class _StatefulCounter(base.MemoryModule):
         super().reset()
 
 
+class _EqualHashableResetCounter(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.reset_calls = 0
+
+    def __eq__(self, other):
+        return isinstance(other, _EqualHashableResetCounter)
+
+    def __hash__(self):
+        return 1
+
+    def reset(self):
+        self.reset_calls += 1
+
+
+class _EqualUnhashableResetCounter(nn.Module):
+    __hash__ = None
+
+    def __init__(self):
+        super().__init__()
+        self.reset_calls = 0
+
+    def __eq__(self, other):
+        return self is other
+
+    def reset(self):
+        self.reset_calls += 1
+
+
 def test_collect_reset_modules_ignores_non_callable_reset_attributes():
     net = nn.Sequential(_NonCallableReset(), _ResetCounter())
     modules = collect_reset_modules(net)
@@ -252,7 +281,7 @@ def test_reset_net_preserves_parameters():
     reset_net(net)
     try:
         params_after = list(net.parameters())
-        for pb, pa in zip(params_before, params_after):
+        for pb, pa in zip(params_before, params_after, strict=True):
             assert torch.equal(pb, pa)
     finally:
         invalidate_reset_cache(net)
@@ -324,6 +353,25 @@ def test_reset_net_cache_entry_is_released_for_top_level_memorymodule():
 
     assert net_ref() is None
     assert len(_RESET_MODULE_CACHE) == cache_size - 1
+
+
+def test_reset_net_bypasses_cache_for_equal_hashable_modules():
+    net1 = _EqualHashableResetCounter()
+    net2 = _EqualHashableResetCounter()
+
+    reset_net(net1)
+    reset_net(net2)
+
+    assert net1.reset_calls == 1
+    assert net2.reset_calls == 1
+    assert net1 not in _RESET_MODULE_CACHE
+    assert net2 not in _RESET_MODULE_CACHE
+
+
+def test_invalidate_reset_cache_ignores_unhashable_modules():
+    net = _EqualUnhashableResetCounter()
+
+    invalidate_reset_cache(net)
 
 
 def test_reset_net_cached_modules_follow_memorymodule_reset_semantics():

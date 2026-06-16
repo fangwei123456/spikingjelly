@@ -27,9 +27,24 @@ def collect_reset_modules(net: nn.Module) -> tuple[nn.Module, ...]:
     return tuple(m for m in net.modules() if callable(getattr(m, "reset", None)))
 
 
+def _supports_reset_cache_key(net: nn.Module) -> bool:
+    net_type = type(net)
+    if net_type.__eq__ is not object.__eq__:
+        return False
+    if net_type.__hash__ is not object.__hash__:
+        return False
+    try:
+        ref(net)
+    except TypeError:
+        return False
+    return True
+
+
 def _resolve_cached_reset_modules(
     net: nn.Module,
 ) -> Optional[tuple[nn.Module, ...]]:
+    if not _supports_reset_cache_key(net):
+        return None
     cached = _RESET_MODULE_CACHE.get(net)
     if cached is None:
         return None
@@ -81,7 +96,8 @@ def invalidate_reset_cache(net: nn.Module) -> None:
     :param net: Target network
     :type net: torch.nn.Module
     """
-    _RESET_MODULE_CACHE.pop(net, None)
+    if _supports_reset_cache_key(net):
+        _RESET_MODULE_CACHE.pop(net, None)
 
 
 def reset_net(net: nn.Module):
@@ -143,7 +159,11 @@ def reset_net(net: nn.Module):
         reset_collected_modules(cached)
         return
     modules = collect_reset_modules(net)
-    _RESET_MODULE_CACHE[net] = tuple(ref(module) for module in modules)
+    if _supports_reset_cache_key(net):
+        try:
+            _RESET_MODULE_CACHE[net] = tuple(ref(module) for module in modules)
+        except TypeError:
+            pass
     reset_collected_modules(modules)
 
 
