@@ -334,7 +334,7 @@ def build_model(args, runtime: DistributedRuntime):
             raise ValueError(
                 "fsdp2_tp mode requires at least one tensor-parallel target. "
                 "Do not disable both classifier TP and convolution TP."
-        )
+            )
         tp_mesh_dim = (
             args.tp_mesh_dim
             if args.tp_mesh_dim != 0 or args.dp_mesh_dim is not None

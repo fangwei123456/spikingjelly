@@ -13,14 +13,13 @@ from .policy import PrecisionPolicy
 def _torchao_available() -> bool:
     try:
         import torchao  # noqa: F401
+
         return True
     except ImportError:
         return False
 
 
-def _replace_child(
-    module: nn.Module, child_name: str, wrapped: nn.Module
-) -> None:
+def _replace_child(module: nn.Module, child_name: str, wrapped: nn.Module) -> None:
     """Safely replace a child module in *module*."""
     if isinstance(module, nn.ModuleDict):
         module[child_name] = wrapped

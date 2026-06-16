@@ -89,7 +89,9 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
     elif kernel == "gaussian":
         sigma = args[0]
         if sigma <= 0:
-            raise ValueError(f"sigma must be positive for the Gaussian kernel, but got {sigma}")
+            raise ValueError(
+                f"sigma must be positive for the Gaussian kernel, but got {sigma}"
+            )
         N = x.shape[0]
         x2 = x.square().sum(dim=1)  # shape=[N]
         y2 = y.square().sum(dim=1)  # shape=[N]

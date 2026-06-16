@@ -218,6 +218,7 @@ class NeuroMCRuntimeEnergyReport:
     :return: None
     :rtype: None
     """
+
     energy_total_pj: float = 0.0
     energy_compute_pj: float = 0.0
     energy_memory_pj: float = 0.0
@@ -232,7 +233,9 @@ class NeuroMCRuntimeEnergyReport:
     energy_extra_compute_pj: float = 0.0
     energy_by_core_type: dict[str, float] = field(default_factory=dict)
     energy_by_process_key: dict[str, float] = field(default_factory=dict)
-    energy_by_memory_level_dir: dict[str, dict[str, float]] = field(default_factory=dict)
+    energy_by_memory_level_dir: dict[str, dict[str, float]] = field(
+        default_factory=dict
+    )
     counts_by_core_type: dict[str, dict[str, int]] = field(default_factory=dict)
     counts_by_process_key: dict[str, dict[str, int]] = field(default_factory=dict)
     mapping_summary: list[dict[str, Any]] = field(default_factory=list)

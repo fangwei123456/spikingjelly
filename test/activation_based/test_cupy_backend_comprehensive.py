@@ -7,6 +7,7 @@ from spikingjelly.activation_based import functional, neuron, surrogate
 def _cupy_available() -> bool:
     try:
         import cupy  # noqa: F401
+
         return True
     except ImportError:
         return False

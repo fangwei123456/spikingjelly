@@ -8,6 +8,7 @@ import torch
 def _torchao_available() -> bool:
     try:
         import torchao  # noqa: F401
+
         return True
     except ImportError:
         return False

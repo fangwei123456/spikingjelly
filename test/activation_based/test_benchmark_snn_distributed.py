@@ -262,7 +262,9 @@ def test_aggregate_tp_debug_stats_returns_local_totals_without_process_group(
     assert stats["all_reduce_bytes"] == 16
 
 
-def test_build_model_fsdp2_disables_auto_tensor_parallel(monkeypatch: pytest.MonkeyPatch):
+def test_build_model_fsdp2_disables_auto_tensor_parallel(
+    monkeypatch: pytest.MonkeyPatch,
+):
     captured = {}
 
     def _fake_configure(model, config):

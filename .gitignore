@@ -151,7 +151,9 @@ AGENTS.md
 workspace/
 /w1.py
 
-# Hermes Agent & Codex local state
-.hermes/
+# Local-only agent skills & Codex state
+.agents/skills/
 .codex/
 .goal*/
+ObsidianVault
+.mimocode/

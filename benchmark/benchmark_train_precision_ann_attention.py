@@ -220,8 +220,12 @@ def run_training_step(
         sync_if_needed(device)
         return {
             "forward_ms": events["forward_start"].elapsed_time(events["forward_end"]),
-            "backward_ms": events["backward_start"].elapsed_time(events["backward_end"]),
-            "optimizer_ms": events["optimizer_start"].elapsed_time(events["optimizer_end"]),
+            "backward_ms": events["backward_start"].elapsed_time(
+                events["backward_end"]
+            ),
+            "optimizer_ms": events["optimizer_start"].elapsed_time(
+                events["optimizer_end"]
+            ),
             "total_step_ms": events["step_start"].elapsed_time(events["step_end"]),
         }
 
@@ -278,7 +282,9 @@ def benchmark_one_precision(
     total_step_ms = 0.0
     wall_start = time.perf_counter()
     for _ in range(args.steps):
-        step_metrics = run_training_step(model, artifacts, optimizer, criterion, x, target, device)
+        step_metrics = run_training_step(
+            model, artifacts, optimizer, criterion, x, target, device
+        )
         forward_ms += step_metrics["forward_ms"]
         backward_ms += step_metrics["backward_ms"]
         optimizer_ms += step_metrics["optimizer_ms"]

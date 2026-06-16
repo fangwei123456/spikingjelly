@@ -95,7 +95,9 @@ def run_single_scale(
     proc = subprocess.run(cmd, check=True, text=True, capture_output=True)
     start = proc.stdout.find("{")
     if start < 0:
-        raise RuntimeError(f"Failed to locate JSON payload in benchmark output:\n{proc.stdout}")
+        raise RuntimeError(
+            f"Failed to locate JSON payload in benchmark output:\n{proc.stdout}"
+        )
     payload = json.loads(proc.stdout[start:])
     payload["scale_name"] = scale_name
     payload["hidden_dim"] = hidden_dim
@@ -120,7 +122,10 @@ def plot_metric(
     plt.figure(figsize=(8, 5))
     for precision in sweep_results[0]["results_by_precision"]:
         x = [result["hidden_dim"] for result in sweep_results]
-        y = [result["results_by_precision"][precision][metric_key] for result in sweep_results]
+        y = [
+            result["results_by_precision"][precision][metric_key]
+            for result in sweep_results
+        ]
         plt.plot(x, y, marker="o", linewidth=2, label=precision)
 
     plt.xlabel("Hidden / Input Dimension")

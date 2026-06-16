@@ -3,6 +3,7 @@ import torch
 
 try:
     import torchao  # noqa: F401
+
     HAS_TORCHAO = True
 except ImportError:
     HAS_TORCHAO = False

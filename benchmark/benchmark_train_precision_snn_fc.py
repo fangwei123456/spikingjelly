@@ -107,7 +107,9 @@ def parse_args() -> argparse.Namespace:
             "fp8-torchao."
         )
     )
-    parser.add_argument("--device", default="cuda:0", help="CUDA device for the benchmark.")
+    parser.add_argument(
+        "--device", default="cuda:0", help="CUDA device for the benchmark."
+    )
     parser.add_argument("--time-steps", type=int, default=16)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--input-dim", type=int, default=4096)
@@ -140,7 +142,9 @@ def parse_args() -> argparse.Namespace:
         choices=("fp32", "bf16", "fp8-torchao"),
         help="Precision modes to benchmark.",
     )
-    parser.add_argument("--json", action="store_true", help="Print the full benchmark report as JSON.")
+    parser.add_argument(
+        "--json", action="store_true", help="Print the full benchmark report as JSON."
+    )
     return parser.parse_args()
 
 
@@ -241,10 +245,18 @@ def run_training_step(
         cuda_events["step_end"].record()
         sync_if_needed(device)
         return {
-            "forward_ms": _event_elapsed_ms(cuda_events["forward_start"], cuda_events["forward_end"]),
-            "backward_ms": _event_elapsed_ms(cuda_events["backward_start"], cuda_events["backward_end"]),
-            "optimizer_ms": _event_elapsed_ms(cuda_events["optimizer_start"], cuda_events["optimizer_end"]),
-            "total_step_ms": _event_elapsed_ms(cuda_events["step_start"], cuda_events["step_end"]),
+            "forward_ms": _event_elapsed_ms(
+                cuda_events["forward_start"], cuda_events["forward_end"]
+            ),
+            "backward_ms": _event_elapsed_ms(
+                cuda_events["backward_start"], cuda_events["backward_end"]
+            ),
+            "optimizer_ms": _event_elapsed_ms(
+                cuda_events["optimizer_start"], cuda_events["optimizer_end"]
+            ),
+            "total_step_ms": _event_elapsed_ms(
+                cuda_events["step_start"], cuda_events["step_end"]
+            ),
         }
 
     def forward_section():
@@ -253,7 +265,9 @@ def run_training_step(
             return logits, criterion(logits, target)
 
     forward_ms, (logits, loss) = _time_cpu_section(forward_section)
-    backward_ms, _ = _time_cpu_section(lambda: artifacts.backward(loss, optimizer, step_optimizer=False))
+    backward_ms, _ = _time_cpu_section(
+        lambda: artifacts.backward(loss, optimizer, step_optimizer=False)
+    )
     optimizer_ms, _ = _time_cpu_section(optimizer.step)
     _ = logits
     return {
@@ -303,7 +317,9 @@ def benchmark_one_precision(
     total_step_ms = 0.0
     wall_start = time.perf_counter()
     for _ in range(args.steps):
-        step_metrics = run_training_step(model, artifacts, optimizer, criterion, x_seq, target, device)
+        step_metrics = run_training_step(
+            model, artifacts, optimizer, criterion, x_seq, target, device
+        )
         forward_ms += step_metrics["forward_ms"]
         backward_ms += step_metrics["backward_ms"]
         optimizer_ms += step_metrics["optimizer_ms"]
@@ -378,7 +394,9 @@ def main() -> None:
 
     results = []
     for precision in args.precisions:
-        result = benchmark_one_precision(args, precision, model_state, x_seq, target, device)
+        result = benchmark_one_precision(
+            args, precision, model_state, x_seq, target, device
+        )
         results.append(result)
 
     print_table(results)

@@ -14,6 +14,7 @@ from spikingjelly.activation_based import functional, neuron, surrogate
 def _triton_available() -> bool:
     try:
         import triton  # noqa: F401
+
         return True
     except ImportError:
         return False
