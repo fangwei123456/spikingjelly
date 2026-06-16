@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from typing import Optional, Union
+from weakref import ReferenceType, WeakKeyDictionary, ref
 
 import torch.nn as nn
 
@@ -10,15 +11,52 @@ from .. import base
 __all__ = [
     "collect_reset_modules",
     "detach_net",
+    "invalidate_reset_cache",
     "reset_collected_modules",
     "reset_net",
     "set_backend",
     "set_step_mode",
 ]
 
+_RESET_MODULE_CACHE: WeakKeyDictionary[nn.Module, tuple[ReferenceType[nn.Module], ...]] = (
+    WeakKeyDictionary()
+)
+
 
 def collect_reset_modules(net: nn.Module) -> tuple[nn.Module, ...]:
     return tuple(m for m in net.modules() if callable(getattr(m, "reset", None)))
+
+
+def _supports_reset_cache_key(net: nn.Module) -> bool:
+    net_type = type(net)
+    if net_type.__eq__ is not object.__eq__:
+        return False
+    if net_type.__hash__ is not object.__hash__:
+        return False
+    try:
+        ref(net)
+    except TypeError:
+        return False
+    return True
+
+
+def _resolve_cached_reset_modules(
+    net: nn.Module,
+) -> Optional[tuple[nn.Module, ...]]:
+    if not _supports_reset_cache_key(net):
+        return None
+    cached = _RESET_MODULE_CACHE.get(net)
+    if cached is None:
+        return None
+
+    modules = []
+    for cached_module in cached:
+        module = cached_module()
+        if module is None:
+            invalidate_reset_cache(net)
+            return None
+        modules.append(module)
+    return tuple(modules)
 
 
 def reset_collected_modules(modules: tuple[nn.Module, ...]) -> None:
@@ -29,6 +67,37 @@ def reset_collected_modules(modules: tuple[nn.Module, ...]) -> None:
                 f".MemoryModule"
             )
         m.reset()
+
+
+def invalidate_reset_cache(net: nn.Module) -> None:
+    r"""
+    **API Language:**
+    :ref:`中文 <invalidate_reset_cache-cn>` | :ref:`English <invalidate_reset_cache-en>`
+
+    ----
+
+    .. _invalidate_reset_cache-cn:
+    * **中文**
+
+    清除 ``net`` 的 reset 模块缓存。当模型结构发生变化后调用
+    （如 ``torch.compile`` 或模块替换）。
+
+    :param net: 目标网络
+    :type net: torch.nn.Module
+
+    ----
+
+    .. _invalidate_reset_cache-en:
+    * **English**
+
+    Clear the reset module cache for ``net``.
+    Call after model structure changes (e.g. ``torch.compile`` or module swaps).
+
+    :param net: Target network
+    :type net: torch.nn.Module
+    """
+    if _supports_reset_cache_key(net):
+        _RESET_MODULE_CACHE.pop(net, None)
 
 
 def reset_net(net: nn.Module):
@@ -47,6 +116,10 @@ def reset_net(net: nn.Module):
     ``reset()`` 方法，则调用该方法。对于不是
     :class:`~spikingjelly.activation_based.base.MemoryModule` 但实现了
     ``reset()`` 的模块，此函数仍会调用 ``reset()``，同时记录告警。
+
+    首次调用时收集并缓存可重置模块列表，后续调用直接复用缓存。
+    若模型结构发生变化（如 ``torch.compile`` 或模块替换），
+    请调用 :func:`invalidate_reset_cache` 清除缓存。
 
     :param net: 任何属于 ``nn.Module`` 子类的网络
     :type net: torch.nn.Module
@@ -68,6 +141,11 @@ def reset_net(net: nn.Module):
     :class:`~spikingjelly.activation_based.base.MemoryModule` but still defines
     ``reset()``, the function will still call it and emit a warning.
 
+    On the first call, the resettable module list is collected and cached;
+    subsequent calls reuse the cache.
+    If the model structure changes (e.g. ``torch.compile`` or module swaps),
+    call :func:`invalidate_reset_cache` to clear the cache.
+
     :param net: Any network inherits from ``nn.Module``
     :type net: torch.nn.Module
 
@@ -76,7 +154,17 @@ def reset_net(net: nn.Module):
 
     :raises Exception: Any exception raised by a submodule ``reset()`` call is propagated unchanged
     """
-    reset_collected_modules(collect_reset_modules(net))
+    cached = _resolve_cached_reset_modules(net)
+    if cached is not None:
+        reset_collected_modules(cached)
+        return
+    modules = collect_reset_modules(net)
+    if _supports_reset_cache_key(net):
+        try:
+            _RESET_MODULE_CACHE[net] = tuple(ref(module) for module in modules)
+        except TypeError:
+            pass
+    reset_collected_modules(modules)
 
 
 def set_step_mode(net: nn.Module, step_mode: str):
