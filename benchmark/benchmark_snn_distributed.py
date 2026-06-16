@@ -170,6 +170,18 @@ def parse_args():
         action="store_true",
         help="Record experimental TP rowwise all-reduce counts and payload bytes.",
     )
+    parser.add_argument(
+        "--compile",
+        action="store_true",
+        help="Apply torch.compile to the model.",
+    )
+    parser.add_argument(
+        "--compile-mode",
+        type=str,
+        default="reduce-overhead",
+        choices=("default", "reduce-overhead", "max-autotune"),
+        help="torch.compile mode (default: reduce-overhead).",
+    )
     return parser.parse_args()
 
 
@@ -420,6 +432,7 @@ def _comparison_key(record: Dict[str, object]) -> Dict[str, object]:
         "prefer",
         "global_batch_size",
         "per_rank_batch_size",
+        "compile_enabled",
     )
     return {key: _normalize_json_value(record.get(key)) for key in keys}
 
@@ -465,6 +478,10 @@ def _summarize_benchmark_comparison(
         "materialize_ms",
         "tp_all_reduce_calls",
         "tp_all_reduce_mb",
+        "fsdp2_all_gather_calls",
+        "fsdp2_all_gather_mb",
+        "fsdp2_reduce_scatter_calls",
+        "fsdp2_reduce_scatter_mb",
         "warning_count",
         "recompile_count",
         "graph_break_count",
@@ -546,9 +563,7 @@ def _resolve_benchmark_batch_semantics(
     benchmark_regime: str,
 ) -> Tuple[int, int]:
     if data_replicas <= 0:
-        raise ValueError(
-            f"data_replicas must be positive, but got {data_replicas}."
-        )
+        raise ValueError(f"data_replicas must be positive, but got {data_replicas}.")
     if benchmark_regime == "throughput_weak_scaling":
         per_rank_batch_size = batch_size
         global_batch_size = batch_size * data_replicas
@@ -595,17 +610,22 @@ def _time_block(device: torch.device, fn):
 
 def _aggregate_tp_debug_stats(device: torch.device) -> Dict[str, int]:
     stats = get_tp_communication_debug_stats()
+    keys = [
+        "all_reduce_calls",
+        "all_reduce_bytes",
+        "all_gather_calls",
+        "all_gather_bytes",
+        "reduce_scatter_calls",
+        "reduce_scatter_bytes",
+    ]
     values = torch.tensor(
-        [stats["all_reduce_calls"], stats["all_reduce_bytes"]],
+        [stats.get(k, 0) for k in keys],
         device=device,
         dtype=torch.int64,
     )
     if dist.is_initialized() and _backend_supports_device(device):
         dist.all_reduce(values, op=dist.ReduceOp.MAX)
-    return {
-        "all_reduce_calls": int(values[0].item()),
-        "all_reduce_bytes": int(values[1].item()),
-    }
+    return {key: int(values[i].item()) for i, key in enumerate(keys)}
 
 
 def _seed_benchmark_rng(device: torch.device, seed: int) -> None:
@@ -874,7 +894,9 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
             )
         else:
             num_blocks = len(getattr(model, "blocks", ()))
-            shard_roots = ["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)] + ["head"]
+            shard_roots = (
+                ["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)] + ["head"]
+            )
             config = SNNDistributedConfig(
                 device_type=device.type,
                 mesh_shape=mesh_shape or (world_size,),
@@ -936,7 +958,9 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
                 )
             else:
                 num_blocks = len(getattr(model, "blocks", ()))
-                shard_roots = ["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)]
+                shard_roots = ["patch_embed"] + [
+                    f"blocks.{i}" for i in range(num_blocks)
+                ]
                 model = apply_snn_fsdp2(
                     model,
                     device_mesh=mesh,
@@ -965,7 +989,8 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
                 device_type=device.type,
                 mesh_shape=mesh_shape,
                 enable_fsdp2=True,
-                fsdp_shard_roots=["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)],
+                fsdp_shard_roots=["patch_embed"]
+                + [f"blocks.{i}" for i in range(num_blocks)],
                 fsdp_shard_module_root=False,
                 tensor_parallel_roots=["head"],
                 auto_tensor_parallel=True,
@@ -987,7 +1012,10 @@ def benchmark(args, counter: _LinePatternCounter):
     enable_tp_communication_debug(args.tp_debug_comm)
     reset_tp_communication_debug_stats()
     try:
-        if args.optimizer_sharding == "zero" and not ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE:
+        if (
+            args.optimizer_sharding == "zero"
+            and not ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE
+        ):
             raise RuntimeError(
                 "optimizer_sharding='zero' requires torch.distributed.optim.ZeroRedundancyOptimizer."
             )
@@ -1024,6 +1052,8 @@ def benchmark(args, counter: _LinePatternCounter):
         model, mesh, optimize_ms = build_model(
             args, device, world_size, per_rank_batch_size
         )
+        if args.compile:
+            model = torch.compile(model, mode=args.compile_mode)
         optimizer_target = model.stage_module if args.mode == "pp" else model
         optimizer = build_snn_optimizer(
             optimizer_target,
@@ -1160,6 +1190,12 @@ def benchmark(args, counter: _LinePatternCounter):
                 "pp_virtual_stages": args.pp_virtual_stages,
                 "pp_layout": args.pp_layout,
                 "pp_delay_wgrad": args.pp_delay_wgrad,
+                "compile_enabled": args.compile,
+                "compile_mode": args.compile_mode if args.compile else None,
+                "experimental_conv_tp": args.mode in ("tp", "fsdp2_tp")
+                and args.model == "cifar10dvs_vgg",
+                "experimental_spikformer_tp": args.mode in ("tp", "fsdp2_tp")
+                and args.model.startswith("spikformer"),
                 "step_latency_ms": step_latency_ms,
                 "global_throughput_sps": global_throughput_sps,
                 "per_device_throughput_sps": per_device_throughput_sps,
@@ -1173,6 +1209,12 @@ def benchmark(args, counter: _LinePatternCounter):
                 "recommendation_notes": recommendation_notes,
                 "tp_all_reduce_calls": tp_stats["all_reduce_calls"],
                 "tp_all_reduce_mb": tp_stats["all_reduce_bytes"] / 1024.0 / 1024.0,
+                "fsdp2_all_gather_calls": tp_stats["all_gather_calls"],
+                "fsdp2_all_gather_mb": tp_stats["all_gather_bytes"] / 1024.0 / 1024.0,
+                "fsdp2_reduce_scatter_calls": tp_stats["reduce_scatter_calls"],
+                "fsdp2_reduce_scatter_mb": tp_stats["reduce_scatter_bytes"]
+                / 1024.0
+                / 1024.0,
                 **breakdown.to_dict(args.steps),
                 **event_counts,
             }
@@ -1290,6 +1332,10 @@ def benchmark_pipeline(
             "pp_layout": runtime.pp_layout,
             "pp_delay_wgrad": runtime.delayed_wgrad,
             "pp_memopt_stages": runtime.memopt_selected_stage_indices,
+            "compile_enabled": args.compile,
+            "compile_mode": args.compile_mode if args.compile else None,
+            "experimental_conv_tp": False,
+            "experimental_spikformer_tp": False,
             "step_latency_ms": step_latency_ms,
             "global_throughput_sps": global_throughput_sps,
             "per_device_throughput_sps": per_device_throughput_sps,
@@ -1303,6 +1349,12 @@ def benchmark_pipeline(
             "recommendation_notes": recommendation_notes,
             "tp_all_reduce_calls": tp_stats["all_reduce_calls"],
             "tp_all_reduce_mb": tp_stats["all_reduce_bytes"] / 1024.0 / 1024.0,
+            "fsdp2_all_gather_calls": tp_stats["all_gather_calls"],
+            "fsdp2_all_gather_mb": tp_stats["all_gather_bytes"] / 1024.0 / 1024.0,
+            "fsdp2_reduce_scatter_calls": tp_stats["reduce_scatter_calls"],
+            "fsdp2_reduce_scatter_mb": tp_stats["reduce_scatter_bytes"]
+            / 1024.0
+            / 1024.0,
             **breakdown.to_dict(args.steps),
             **event_counts,
         }

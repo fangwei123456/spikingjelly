@@ -14,7 +14,9 @@ class SNNDistributedTopology:
     def __post_init__(self):
         frozen_dims = MappingProxyType(dict(self.dims))
         object.__setattr__(self, "dims", frozen_dims)
-        if not isinstance(self.world_size, Integral) or isinstance(self.world_size, bool):
+        if not isinstance(self.world_size, Integral) or isinstance(
+            self.world_size, bool
+        ):
             raise TypeError(
                 f"world_size must be an integer, but got {type(self.world_size).__name__}."
             )

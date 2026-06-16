@@ -90,7 +90,10 @@ def plan(
     notes = list(analysis.notes)
     selected_mode = mode or recommendation.mode
     if selected_mode == "fsdp2_tp":
-        if "dp" not in resolved_topology.ordered_dim_names or "tp" not in resolved_topology.ordered_dim_names:
+        if (
+            "dp" not in resolved_topology.ordered_dim_names
+            or "tp" not in resolved_topology.ordered_dim_names
+        ):
             raise ValueError(
                 "Hybrid 'fsdp2_tp' mode requires both 'dp' and 'tp' dimensions in the topology."
             )

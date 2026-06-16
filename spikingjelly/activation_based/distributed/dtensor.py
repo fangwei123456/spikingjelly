@@ -54,7 +54,14 @@ __all__ = [
 
 
 _TP_COMMUNICATION_DEBUG_ENABLED = False
-_TP_COMMUNICATION_DEBUG_STATS = {"all_reduce_calls": 0, "all_reduce_bytes": 0}
+_TP_COMMUNICATION_DEBUG_STATS = {
+    "all_reduce_calls": 0,
+    "all_reduce_bytes": 0,
+    "all_gather_calls": 0,
+    "all_gather_bytes": 0,
+    "reduce_scatter_calls": 0,
+    "reduce_scatter_bytes": 0,
+}
 _TP_COMMUNICATION_DEBUG_LOCK = threading.Lock()
 
 
@@ -65,16 +72,13 @@ def enable_tp_communication_debug(enabled: bool = True) -> None:
 
 def reset_tp_communication_debug_stats() -> None:
     with _TP_COMMUNICATION_DEBUG_LOCK:
-        _TP_COMMUNICATION_DEBUG_STATS["all_reduce_calls"] = 0
-        _TP_COMMUNICATION_DEBUG_STATS["all_reduce_bytes"] = 0
+        for key in _TP_COMMUNICATION_DEBUG_STATS:
+            _TP_COMMUNICATION_DEBUG_STATS[key] = 0
 
 
 def get_tp_communication_debug_stats() -> Dict[str, int]:
     with _TP_COMMUNICATION_DEBUG_LOCK:
-        return {
-            "all_reduce_calls": int(_TP_COMMUNICATION_DEBUG_STATS["all_reduce_calls"]),
-            "all_reduce_bytes": int(_TP_COMMUNICATION_DEBUG_STATS["all_reduce_bytes"]),
-        }
+        return {key: int(value) for key, value in _TP_COMMUNICATION_DEBUG_STATS.items()}
 
 
 def _record_tp_all_reduce(tensor: torch.Tensor) -> None:
