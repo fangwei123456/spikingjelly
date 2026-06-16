@@ -183,7 +183,8 @@ class LIFNode(BaseNode):
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端速度更快。
+            使用的步进模式支持的后端。该参数是显式执行后端选择：设置为 ``'torch'``、``'cupy'`` 或 ``'triton'`` 时，将分别使用
+            对应后端，不会隐式切换到其他后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端通常更快。
         :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
@@ -232,9 +233,10 @@ class LIFNode(BaseNode):
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-            using ``'cupy'`` or ``'triton'`` backend will be faster
+        :param backend: backend for this neurons layer. Different ``step_mode`` may support different backends. Users can
+            print ``self.supported_backends`` to check what backends are supported by the current ``step_mode``. This argument
+            is an explicit execution-backend choice: ``'torch'``, ``'cupy'``, and ``'triton'`` each use their own backend and
+            are not silently upgraded to another backend. If supported, ``'cupy'`` or ``'triton'`` is usually faster
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -498,50 +500,6 @@ class LIFNode(BaseNode):
             return self._inductor_multi_step_forward(x_seq)
         if self.training:
             if self.backend == "torch":
-                # On GPU with a supported surrogate, use the unified Triton kernel
-                # (much faster than the Python for loop in super()).
-                # Falls back to the Python loop for CPU or custom surrogates.
-                if x_seq.is_cuda and getattr(self.surrogate_function, "spiking", True):
-                    self.v_float_to_tensor(x_seq[0])
-                    try:
-                        spike_seq, v_seq = triton_kernel.multistep_lif(
-                            x_seq,
-                            self.v,
-                            self.decay_input,
-                            self.tau,
-                            self.v_threshold,
-                            self.v_reset,
-                            self.detach_reset,
-                            self.surrogate_function,
-                        )
-                        if self.store_v_seq:
-                            self.v_seq = v_seq
-                            self.v = v_seq[-1]
-                        else:
-                            self.v = v_seq[-1].clone()
-                        return spike_seq
-                    except (
-                        NotImplementedError,
-                        AttributeError,
-                        TypeError,
-                        KeyError,
-                    ) as e:
-                        logging.debug(
-                            "Falling back from Triton LIF kernel in training: %s", e
-                        )
-                    except RuntimeError as e:
-                        if _is_expected_triton_fallback_error(e):
-                            logging.debug(
-                                "Falling back from Triton LIF kernel in training: %s", e
-                            )
-                        else:
-                            logging.exception(
-                                "Unexpected Triton LIF kernel failure in training "
-                                "(dtype=%s, surrogate=%s)",
-                                x_seq.dtype,
-                                type(self.surrogate_function).__name__,
-                            )
-                            raise
                 return super().multi_step_forward(x_seq)
             elif self.backend == "cupy":
                 hard_reset = self.v_reset is not None
@@ -624,11 +582,7 @@ class LIFNode(BaseNode):
         else:
             self.v_float_to_tensor(x_seq[0])
 
-            # All backends: try Triton on GPU first (unified kernel covers all
-            # soft/hard reset x decay_input variants via tl.constexpr).
-            # Falls back to the unified Python loop for CPU, custom surrogates,
-            # or when spiking=False (Triton always emits hard spikes).
-            if x_seq.is_cuda and getattr(self.surrogate_function, "spiking", True):
+            if self.backend == "triton":
                 try:
                     spike_seq, v_seq = triton_kernel.multistep_lif(
                         x_seq,

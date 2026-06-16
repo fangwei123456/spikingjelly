@@ -104,7 +104,7 @@ net = nn.Sequential(
 
 ### 后端性能
 
-多步神经元支持 `torch`、`cupy` 或 `triton` 后端。后端在创建神经元时指定，后续可更改。所有后端均兼容 `torch.compile`。
+多步神经元支持 `torch`、`cupy` 或 `triton` 后端。后端在创建神经元时指定，后续可更改。所选后端会被显式遵守：设置 `backend="torch"` 或 `backend="cupy"` 时，不会隐式升级到 Triton。所有后端均兼容 `torch.compile`。
 
 下图：多步 LIF 神经元在 `torch` 与 `cupy` 上的执行时间对比。FlexSN 和 Triton 的详细内容见后端教程。
 

@@ -13,6 +13,8 @@ from typing import Callable
 import torch
 from packaging import version
 
+from ... import configure
+
 from . import dummy
 
 try:
@@ -120,6 +122,13 @@ def contiguous_and_device_guard(f: Callable) -> Callable:
             return f(*contiguous_args, **contiguous_kwargs)
 
     return wrapper
+
+
+def use_static_range_for_triton_neuron_kernel(T: int) -> bool:
+    threshold = configure.triton_neuron_kernel_static_range_max_T
+    if threshold is None:
+        return True
+    return T <= threshold
 
 
 _TMP_PY_LOCK = threading.Lock()

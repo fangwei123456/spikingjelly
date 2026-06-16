@@ -67,3 +67,16 @@ If `save_bool_spike_level == 1`, spikes will be saved in uint8 with each 8-bit s
 
 A larger `save_bool_spike_level` means less memory consumption but slower speed.
 """
+
+triton_neuron_kernel_static_range_max_T = 64
+"""
+`triton_neuron_kernel_static_range_max_T` controls when the Triton multi-step neuron kernels
+switch from aggressively unrolled `tl.static_range(...)` loops to regular `tl.range(...)`
+loops to reduce compilation overhead for large sequence lengths `T`.
+
+If `T <= triton_neuron_kernel_static_range_max_T`, the Triton neuron kernels use
+`tl.static_range(...)`.
+
+If `T > triton_neuron_kernel_static_range_max_T`, the Triton neuron kernels use
+`tl.range(...)`.
+"""

@@ -104,7 +104,7 @@ Next steps:
 
 ### Backend Performance
 
-Spiking neuron models run on `torch`, `cupy`, or `triton` backends. The backend is set at neuron creation and can be changed later. All backends are compatible with `torch.compile`.
+Spiking neuron models run on `torch`, `cupy`, or `triton` backends. The backend is set at neuron creation and can be changed later. The selected backend is respected explicitly: choosing `backend="torch"` or `backend="cupy"` does not silently upgrade execution to Triton. All backends are compatible with `torch.compile`.
 
 Below: execution time comparison for multi-step LIF neurons on `torch` vs `cupy`. Triton is covered in the backend tutorials.
 

@@ -84,7 +84,8 @@ class ParametricLIFNode(BaseNode):
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端速度更快。
+            使用的步进模式支持的后端。该参数是显式执行后端选择：设置为 ``'torch'``、``'cupy'`` 或 ``'triton'`` 时，将分别使用
+            对应后端，不会隐式切换到其他后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端通常更快。
         :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
@@ -134,9 +135,10 @@ class ParametricLIFNode(BaseNode):
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        :param backend: backend for this neurons layer. Different ``step_mode`` may support for different backends. The user can
-            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+        :param backend: backend for this neurons layer. Different ``step_mode`` may support different backends. Users can
+            print ``self.supported_backends`` to check what backends are supported by the current ``step_mode``. This argument
+            is an explicit execution-backend choice: ``'torch'``, ``'cupy'``, and ``'triton'`` each use their own backend and
+            are not silently upgraded to another backend. If supported, ``'cupy'`` or ``'triton'`` is usually faster
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
