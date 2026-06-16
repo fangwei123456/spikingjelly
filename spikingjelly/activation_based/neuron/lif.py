@@ -583,6 +583,11 @@ class LIFNode(BaseNode):
             self.v_float_to_tensor(x_seq[0])
 
             if self.backend == "triton":
+                if not getattr(self.surrogate_function, "spiking", True):
+                    raise NotImplementedError(
+                        "Triton backend only supports spiking surrogate functions. "
+                        "Use backend='torch' for non-spiking surrogate functions."
+                    )
                 try:
                     spike_seq, v_seq = triton_kernel.multistep_lif(
                         x_seq,

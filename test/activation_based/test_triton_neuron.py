@@ -2,7 +2,7 @@ import pytest
 import torch
 
 import spikingjelly.configure as configure
-from spikingjelly.activation_based import neuron
+from spikingjelly.activation_based import neuron, surrogate
 from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
     integrate_and_fire as if_triton_kernel,
 )
@@ -84,6 +84,32 @@ def test_lif_torch_backend_does_not_probe_triton_in_training(monkeypatch):
     node = neuron.LIFNode(tau=2.0, step_mode="m", backend="torch").train()
     x = torch.randn(5, 2, 4)
     node(x)
+
+
+def test_triton_backend_rejects_non_spiking_surrogate_in_eval():
+    if getattr(if_module, "triton_kernel", None) is None:
+        pytest.skip("Triton module import is unavailable in this environment.")
+    if getattr(if_module.triton_kernel, "__class__", None).__name__ == "DummyImport":
+        pytest.skip("Triton module import is unavailable in this environment.")
+
+    x = torch.randn(5, 2, 4)
+
+    if_node = neuron.IFNode(
+        step_mode="m",
+        backend="triton",
+        surrogate_function=surrogate.Sigmoid(spiking=False),
+    ).eval()
+    with pytest.raises(NotImplementedError, match="spiking surrogate functions"):
+        if_node(x)
+
+    lif_node = neuron.LIFNode(
+        tau=2.0,
+        step_mode="m",
+        backend="triton",
+        surrogate_function=surrogate.Sigmoid(spiking=False),
+    ).eval()
+    with pytest.raises(NotImplementedError, match="spiking surrogate functions"):
+        lif_node(x)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
