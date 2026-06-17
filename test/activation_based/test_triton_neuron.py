@@ -2,6 +2,7 @@ import pytest
 import torch
 
 import spikingjelly.configure as configure
+from spikingjelly.activation_based import base as activation_base
 from spikingjelly.activation_based import neuron, surrogate
 from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
     integrate_and_fire as if_triton_kernel,
@@ -87,9 +88,7 @@ def test_lif_torch_backend_does_not_probe_triton_in_training(monkeypatch):
 
 
 def test_triton_backend_rejects_non_spiking_surrogate_in_eval():
-    if getattr(if_module, "triton_kernel", None) is None:
-        pytest.skip("Triton module import is unavailable in this environment.")
-    if getattr(if_module.triton_kernel, "__class__", None).__name__ == "DummyImport":
+    if activation_base.triton is None:
         pytest.skip("Triton module import is unavailable in this environment.")
 
     x = torch.randn(5, 2, 4)

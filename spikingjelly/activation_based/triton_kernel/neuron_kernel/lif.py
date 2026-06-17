@@ -126,7 +126,7 @@ def _multistep_lif_forward_kernel_static(
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["T", "NCL", "dtype", "soft_reset", "save_intermediates"],
+    key=["NCL", "dtype", "soft_reset", "save_intermediates"],
     restore_value=["s_seq_ptr", "h_seq_ptr", "v_seq_ptr"],
 )
 @triton.jit
@@ -139,7 +139,7 @@ def _multistep_lif_forward_kernel_dynamic(
     tau,
     v_threshold,
     v_reset,
-    T: tl.constexpr,
+    T,
     NCL: tl.constexpr,
     BLOCK_NCL: tl.constexpr,
     dtype: tl.constexpr,
@@ -327,7 +327,7 @@ def _multistep_lif_backward_kernel_static(
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["T", "NCL", "dtype", "soft_reset", "detach_reset"],
+    key=["NCL", "dtype", "soft_reset", "detach_reset"],
     restore_value=["grad_x_seq_ptr", "grad_v_init_ptr"],
 )
 @triton.jit
@@ -341,7 +341,7 @@ def _multistep_lif_backward_kernel_dynamic(
     v_threshold,
     v_reset,
     sg_alpha,
-    T: tl.constexpr,
+    T,
     NCL: tl.constexpr,
     BLOCK_NCL: tl.constexpr,
     dtype: tl.constexpr,

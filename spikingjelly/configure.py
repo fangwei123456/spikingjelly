@@ -74,6 +74,10 @@ triton_neuron_kernel_static_range_max_T = 64
 switch from aggressively unrolled `tl.static_range(...)` loops to regular `tl.range(...)`
 loops to reduce compilation overhead for large sequence lengths `T`.
 
+Each distinct `T` can still lead to a separate Triton specialization. This option reduces
+per-`T` compile cost by avoiding large unrolled kernels for large `T`, rather than removing
+shape specialization entirely.
+
 If `T <= triton_neuron_kernel_static_range_max_T`, the Triton neuron kernels use
 `tl.static_range(...)`.
 
