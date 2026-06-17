@@ -82,9 +82,9 @@ def test_torch_backend_does_not_probe_triton_in_eval(
     ("node_factory", "kernel_attr"),
     [
         (
-            lambda: neuron.IFNode(
-                step_mode="m", backend="cupy", store_v_seq=True
-            ).to("cuda"),
+            lambda: neuron.IFNode(step_mode="m", backend="cupy", store_v_seq=True).to(
+                "cuda"
+            ),
             "multistep_if",
         ),
         (
@@ -296,20 +296,21 @@ def test_plif_triton_matches_torch_training(
     [
         (
             if_triton_kernel,
-            lambda T: neuron.IFNode(step_mode="m", backend="triton")
-            .to("cuda")(torch.randn(T, 2, 8, device="cuda")),
+            lambda T: neuron.IFNode(step_mode="m", backend="triton").to("cuda")(
+                torch.randn(T, 2, 8, device="cuda")
+            ),
         ),
         (
             lif_triton_kernel,
-            lambda T: neuron.LIFNode(tau=2.0, step_mode="m", backend="triton")
-            .to("cuda")(torch.randn(T, 2, 8, device="cuda")),
+            lambda T: neuron.LIFNode(tau=2.0, step_mode="m", backend="triton").to(
+                "cuda"
+            )(torch.randn(T, 2, 8, device="cuda")),
         ),
         (
             plif_triton_kernel,
             lambda T: neuron.ParametricLIFNode(
                 init_tau=2.0, step_mode="m", backend="triton"
-            )
-            .to("cuda")(torch.randn(T, 2, 8, device="cuda")),
+            ).to("cuda")(torch.randn(T, 2, 8, device="cuda")),
         ),
     ],
 )
@@ -338,9 +339,7 @@ def test_triton_loop_mode_switches_for_large_T(kernel_module, runner):
         ),
         (
             lif_triton_kernel,
-            lambda: neuron.LIFNode(tau=2.0, step_mode="m", backend="triton").to(
-                "cuda"
-            ),
+            lambda: neuron.LIFNode(tau=2.0, step_mode="m", backend="triton").to("cuda"),
         ),
         (
             plif_triton_kernel,

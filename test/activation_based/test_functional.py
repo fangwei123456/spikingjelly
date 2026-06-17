@@ -88,7 +88,10 @@ def test_reset_net_caches_modules():
     reset_net(net)
     try:
         assert net in _RESET_MODULE_CACHE
-        assert tuple(module() for module in _RESET_MODULE_CACHE[net]) == (net[0], net[2])
+        assert tuple(module() for module in _RESET_MODULE_CACHE[net]) == (
+            net[0],
+            net[2],
+        )
     finally:
         invalidate_reset_cache(net)
 
@@ -293,7 +296,10 @@ def test_reset_net_warns_for_non_memorymodule(caplog: pytest.LogCaptureFixture):
         reset_net(net)
     try:
         assert net[0].reset_calls == 1
-        assert any("not spikingjelly.activation_based.base.MemoryModule" in r.message for r in caplog.records)
+        assert any(
+            "not spikingjelly.activation_based.base.MemoryModule" in r.message
+            for r in caplog.records
+        )
     finally:
         invalidate_reset_cache(net)
 
