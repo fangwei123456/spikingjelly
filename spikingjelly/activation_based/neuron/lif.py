@@ -24,20 +24,6 @@ except BaseException as e:
 __all__ = ["SimpleLIFNode", "LIFNode", "NonSpikingLIFNode"]
 
 
-def _is_expected_triton_fallback_error(exc: RuntimeError) -> bool:
-    message = str(exc).lower()
-    expected_markers = (
-        "unsupported",
-        "not supported",
-        "no triton",
-        "triton is not installed",
-        "failed to import triton",
-        "dtype",
-        "invalid argument",
-    )
-    return any(marker in message for marker in expected_markers)
-
-
 class SimpleLIFNode(SimpleBaseNode):
     def __init__(
         self,
@@ -588,38 +574,22 @@ class LIFNode(BaseNode):
                         "Triton backend only supports spiking surrogate functions. "
                         "Use backend='torch' for non-spiking surrogate functions."
                     )
-                try:
-                    spike_seq, v_seq = triton_kernel.multistep_lif(
-                        x_seq,
-                        self.v,
-                        self.decay_input,
-                        self.tau,
-                        self.v_threshold,
-                        self.v_reset,
-                        self.detach_reset,
-                        self.surrogate_function,
-                    )
-                    if self.store_v_seq:
-                        self.v_seq = v_seq
-                        self.v = v_seq[-1]
-                    else:
-                        self.v = v_seq[-1].clone()
-                    return spike_seq
-                except (NotImplementedError, AttributeError, TypeError, KeyError) as e:
-                    logging.debug("Falling back from Triton LIF kernel in eval: %s", e)
-                except RuntimeError as e:
-                    if _is_expected_triton_fallback_error(e):
-                        logging.debug(
-                            "Falling back from Triton LIF kernel in eval: %s", e
-                        )
-                    else:
-                        logging.exception(
-                            "Unexpected Triton LIF kernel failure in eval "
-                            "(dtype=%s, surrogate=%s)",
-                            x_seq.dtype,
-                            type(self.surrogate_function).__name__,
-                        )
-                        raise
+                spike_seq, v_seq = triton_kernel.multistep_lif(
+                    x_seq,
+                    self.v,
+                    self.decay_input,
+                    self.tau,
+                    self.v_threshold,
+                    self.v_reset,
+                    self.detach_reset,
+                    self.surrogate_function,
+                )
+                if self.store_v_seq:
+                    self.v_seq = v_seq
+                    self.v = v_seq[-1]
+                else:
+                    self.v = v_seq[-1].clone()
+                return spike_seq
 
             # CPU or unsupported surrogate: unified Python fallback
             # (replaces the 8 separate jit_eval_multi_step_forward_* methods)
