@@ -458,36 +458,20 @@ class IFNode(BaseNode):
                         "Triton backend only supports spiking surrogate functions. "
                         "Use backend='torch' for non-spiking surrogate functions."
                     )
-                try:
-                    spike_seq, v_seq = triton_kernel.multistep_if(
-                        x_seq,
-                        self.v,
-                        self.v_threshold,
-                        self.v_reset,
-                        self.detach_reset,
-                        self.surrogate_function,
-                    )
-                    if self.store_v_seq:
-                        self.v_seq = v_seq
-                        self.v = v_seq[-1]
-                    else:
-                        self.v = v_seq[-1].clone()
-                    return spike_seq
-                except (NotImplementedError, AttributeError, TypeError, KeyError) as e:
-                    logging.debug("Falling back from Triton IF kernel in eval: %s", e)
-                except RuntimeError as e:
-                    if _is_expected_triton_fallback_error(e):
-                        logging.debug(
-                            "Falling back from Triton IF kernel in eval: %s", e
-                        )
-                    else:
-                        logging.exception(
-                            "Unexpected Triton IF kernel failure in eval "
-                            "(dtype=%s, surrogate=%s)",
-                            x_seq.dtype,
-                            type(self.surrogate_function).__name__,
-                        )
-                        raise
+                spike_seq, v_seq = triton_kernel.multistep_if(
+                    x_seq,
+                    self.v,
+                    self.v_threshold,
+                    self.v_reset,
+                    self.detach_reset,
+                    self.surrogate_function,
+                )
+                if self.store_v_seq:
+                    self.v_seq = v_seq
+                    self.v = v_seq[-1]
+                else:
+                    self.v = v_seq[-1].clone()
+                return spike_seq
 
             # torch & cupy backend:
             out = self._eval_multi_step_forward(
