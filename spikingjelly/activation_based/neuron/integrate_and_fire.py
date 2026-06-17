@@ -24,20 +24,6 @@ except BaseException as e:
 __all__ = ["SimpleIFNode", "IFNode", "NonSpikingIFNode"]
 
 
-def _is_expected_triton_fallback_error(exc: RuntimeError) -> bool:
-    message = str(exc).lower()
-    expected_markers = (
-        "unsupported",
-        "not supported",
-        "no triton",
-        "triton is not installed",
-        "failed to import triton",
-        "dtype",
-        "invalid argument",
-    )
-    return any(marker in message for marker in expected_markers)
-
-
 class SimpleIFNode(SimpleBaseNode):
     def __init__(
         self,
@@ -255,12 +241,7 @@ class IFNode(BaseNode):
 
     @staticmethod
     def _eval_single_step_forward(
-        x: torch.Tensor,
-        v: torch.Tensor,
-        v_threshold: float,
-        v_reset,
-        tau: Optional[float] = None,
-        decay_input: Optional[bool] = None,
+        x: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset
     ):
         """Unified single-step eval (replaces jit_eval_single_step_forward_*)."""
         v = v + x
@@ -278,8 +259,6 @@ class IFNode(BaseNode):
         v: torch.Tensor,
         v_threshold: float,
         v_reset,
-        tau: Optional[float] = None,
-        decay_input: Optional[bool] = None,
         store_v_seq: bool = False,
     ):
         """Unified multi-step eval (replaces jit_eval_multi_step_forward_*)."""
