@@ -16,6 +16,9 @@ from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
 from spikingjelly.activation_based.neuron import integrate_and_fire as if_module
 from spikingjelly.activation_based.neuron import lif as lif_module
 from spikingjelly.activation_based.neuron import plif as plif_module
+from spikingjelly.activation_based.cuda_kernel.auto_cuda import (
+    neuron_kernel as ac_neuron_kernel,
+)
 
 
 def _cupy_available() -> bool:
@@ -72,6 +75,40 @@ def test_torch_backend_does_not_probe_triton_in_eval(
     x = torch.randn(5, 2, 4)
 
     node_factory("torch")(x)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize(
+    ("node_factory", "kernel_attr"),
+    [
+        (
+            lambda: neuron.IFNode(
+                step_mode="m", backend="cupy", store_v_seq=True
+            ).to("cuda"),
+            "multistep_if",
+        ),
+        (
+            lambda: neuron.LIFNode(
+                tau=2.0, step_mode="m", backend="cupy", store_v_seq=True
+            ).to("cuda"),
+            "multistep_lif",
+        ),
+    ],
+)
+def test_cupy_backend_uses_cupy_path_in_eval(node_factory, kernel_attr, monkeypatch):
+    pytest.importorskip("cupy")
+    hits = {"count": 0}
+    original = getattr(ac_neuron_kernel, kernel_attr)
+
+    def _wrapped(*args, **kwargs):
+        hits["count"] += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(ac_neuron_kernel, kernel_attr, _wrapped)
+    node = node_factory().eval()
+    x = torch.randn(6, 3, 10, device="cuda")
+    node(x)
+    assert hits["count"] > 0
 
 
 def test_lif_torch_backend_does_not_probe_triton_in_training(monkeypatch):

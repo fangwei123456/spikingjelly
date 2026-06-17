@@ -590,8 +590,28 @@ class LIFNode(BaseNode):
                 else:
                     self.v = v_seq[-1].clone()
                 return spike_seq
+            elif self.backend == "cupy":
+                self.v_float_to_tensor(x_seq[0])
+                spike_seq, v_seq = ac_neuron_kernel.multistep_lif(
+                    x_seq=x_seq.flatten(1),
+                    v_init=self.v.flatten(0),
+                    decay_input=self.decay_input,
+                    tau=self.tau,
+                    v_threshold=self.v_threshold,
+                    v_reset=self.v_reset,
+                    detach_reset=self.detach_reset,
+                    surrogate_function=self.surrogate_function,
+                )
+                spike_seq = spike_seq.reshape(x_seq.shape)
+                v_seq = v_seq.reshape(x_seq.shape)
+                if self.store_v_seq:
+                    self.v_seq = v_seq
+                    self.v = v_seq[-1]
+                else:
+                    self.v = v_seq[-1].clone()
+                return spike_seq
 
-            # CPU or unsupported surrogate: unified Python fallback
+            # torch backend:
             # (replaces the 8 separate jit_eval_multi_step_forward_* methods)
             _spiking = getattr(self.surrogate_function, "spiking", True)
             out = self._eval_multi_step_forward(
