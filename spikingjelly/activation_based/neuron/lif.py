@@ -591,7 +591,6 @@ class LIFNode(BaseNode):
                     self.v = v_seq[-1].clone()
                 return spike_seq
             elif self.backend == "cupy":
-                self.v_float_to_tensor(x_seq[0])
                 spike_seq, v_seq = ac_neuron_kernel.multistep_lif(
                     x_seq=x_seq.flatten(1),
                     v_init=self.v.flatten(0),
