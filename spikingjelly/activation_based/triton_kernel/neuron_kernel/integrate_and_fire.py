@@ -3,7 +3,13 @@ from typing import Optional
 import torch
 
 from ..surrogate_kernel import resolve_sg_triton_id_and_alpha, sg_triton
-from ..triton_utils import convert_and_store, register_op, type_dict, wrap_triton
+from ..triton_utils import (
+    convert_and_store,
+    register_op,
+    type_dict,
+    use_static_range_for_triton_neuron_kernel,
+    wrap_triton,
+)
 
 try:
     import triton
@@ -32,7 +38,7 @@ __all__ = ["multistep_if"]
     restore_value=["s_seq_ptr", "h_seq_ptr", "v_seq_ptr"],
 )
 @triton.jit
-def _multistep_if_forward_kernel(
+def _multistep_if_forward_kernel_static(
     x_seq_ptr,  # [T, NCL]
     v_init_ptr,  # [1, NCL]
     s_seq_ptr,
@@ -114,11 +120,97 @@ def _multistep_if_forward_kernel(
         for f in [1, 2]
         for w in [4, 8]
     ],
+    key=["NCL", "dtype", "soft_reset", "save_intermediates"],
+    restore_value=["s_seq_ptr", "h_seq_ptr", "v_seq_ptr"],
+)
+@triton.jit
+def _multistep_if_forward_kernel_dynamic(
+    x_seq_ptr,  # [T, NCL]
+    v_init_ptr,  # [1, NCL]
+    s_seq_ptr,
+    h_seq_ptr,
+    v_seq_ptr,
+    v_threshold,
+    v_reset,
+    T,
+    NCL: tl.constexpr,
+    BLOCK_NCL: tl.constexpr,
+    dtype: tl.constexpr,
+    soft_reset: tl.constexpr,
+    save_intermediates: tl.constexpr,
+):
+    pid_ncl = tl.program_id(0)
+    ncl_offset = pid_ncl * BLOCK_NCL
+
+    v_init_ptrs = tl.make_block_ptr(
+        v_init_ptr,
+        shape=(1, NCL),
+        strides=(NCL, 1),
+        offsets=(0, ncl_offset),
+        block_shape=(1, BLOCK_NCL),
+        order=(1, 0),
+    )
+    v = tl.load(v_init_ptrs, boundary_check=(1,), padding_option="zero")
+
+    for t in tl.range(0, T, 1):
+        x_ptrs = tl.make_block_ptr(
+            x_seq_ptr,
+            shape=(T, NCL),
+            strides=(NCL, 1),
+            offsets=(t, ncl_offset),
+            block_shape=(1, BLOCK_NCL),
+            order=(1, 0),
+        )
+        x = tl.load(x_ptrs, boundary_check=(1,), padding_option="zero")
+
+        h = v + x
+        s = (h >= v_threshold).to(dtype)
+        if soft_reset:
+            v = h - s * v_threshold
+        else:
+            v = s * v_reset + (1.0 - s) * h
+
+        s_ptrs = tl.make_block_ptr(
+            s_seq_ptr,
+            shape=(T, NCL),
+            strides=(NCL, 1),
+            offsets=(t, ncl_offset),
+            block_shape=(1, BLOCK_NCL),
+            order=(1, 0),
+        )
+        convert_and_store(s_ptrs, s, boundary_check=(1,))
+        v_ptrs = tl.make_block_ptr(
+            v_seq_ptr,
+            shape=(T, NCL),
+            strides=(NCL, 1),
+            offsets=(t, ncl_offset),
+            block_shape=(1, BLOCK_NCL),
+            order=(1, 0),
+        )
+        convert_and_store(v_ptrs, v, boundary_check=(1,))
+        if save_intermediates:
+            h_ptrs = tl.make_block_ptr(
+                h_seq_ptr,
+                shape=(T, NCL),
+                strides=(NCL, 1),
+                offsets=(t, ncl_offset),
+                block_shape=(1, BLOCK_NCL),
+                order=(1, 0),
+            )
+            convert_and_store(h_ptrs, h, boundary_check=(1,))
+
+
+@triton.autotune(
+    configs=[
+        triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
+        for f in [1, 2]
+        for w in [4, 8]
+    ],
     key=["T", "NCL", "dtype", "soft_reset", "detach_reset"],
     restore_value=["grad_x_seq_ptr"],
 )
 @triton.jit
-def _multistep_if_backward_kernel(
+def _multistep_if_backward_kernel_static(
     grad_s_seq_ptr,
     grad_v_seq_ptr,
     h_seq_ptr,
@@ -212,6 +304,133 @@ def _multistep_if_backward_kernel(
     convert_and_store(grad_v_init_ptrs, grad_v_acc, boundary_check=(1,))
 
 
+@triton.autotune(
+    configs=[
+        triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
+        for f in [1, 2]
+        for w in [4, 8]
+    ],
+    key=["NCL", "dtype", "soft_reset", "detach_reset"],
+    restore_value=["grad_x_seq_ptr"],
+)
+@triton.jit
+def _multistep_if_backward_kernel_dynamic(
+    grad_s_seq_ptr,
+    grad_v_seq_ptr,
+    h_seq_ptr,
+    grad_x_seq_ptr,
+    grad_v_init_ptr,
+    v_threshold,
+    v_reset,
+    sg_alpha,
+    T,
+    NCL: tl.constexpr,
+    BLOCK_NCL: tl.constexpr,
+    dtype: tl.constexpr,
+    sg_triton_id: tl.constexpr,
+    soft_reset: tl.constexpr,
+    detach_reset: tl.constexpr,
+):
+    pid_ncl = tl.program_id(0)
+    ncl_offset = pid_ncl * BLOCK_NCL
+
+    grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=dtype)
+
+    for t in tl.range(T - 1, -1, -1):
+        grad_s_ptrs = tl.make_block_ptr(
+            grad_s_seq_ptr,
+            shape=(T, NCL),
+            strides=(NCL, 1),
+            offsets=(t, ncl_offset),
+            block_shape=(1, BLOCK_NCL),
+            order=(1, 0),
+        )
+        grad_s = tl.load(grad_s_ptrs, boundary_check=(1,), padding_option="zero")
+        grad_v_ptrs = tl.make_block_ptr(
+            grad_v_seq_ptr,
+            shape=(T, NCL),
+            strides=(NCL, 1),
+            offsets=(t, ncl_offset),
+            block_shape=(1, BLOCK_NCL),
+            order=(1, 0),
+        )
+        grad_v = tl.load(grad_v_ptrs, boundary_check=(1,), padding_option="zero")
+        h_ptrs = tl.make_block_ptr(
+            h_seq_ptr,
+            shape=(T, NCL),
+            strides=(NCL, 1),
+            offsets=(t, ncl_offset),
+            block_shape=(1, BLOCK_NCL),
+            order=(1, 0),
+        )
+        h = tl.load(h_ptrs, boundary_check=(1,), padding_option="zero")
+
+        sg = sg_triton(h - v_threshold, sg_alpha, sg_triton_id)
+        grad_v_combined = grad_v + grad_v_acc
+        if soft_reset:
+            if detach_reset:
+                grad_h = tl.fma(grad_s, sg, grad_v_combined)
+            else:
+                grad_h = tl.fma(
+                    grad_s - v_threshold * grad_v_combined, sg, grad_v_combined
+                )
+        else:
+            s = (h >= v_threshold).to(dtype)
+            if detach_reset:
+                grad_h = tl.fma(grad_s, sg, grad_v_combined * (1.0 - s))
+            else:
+                grad_h = tl.fma(
+                    tl.fma(grad_v_combined, v_reset - h, grad_s),
+                    sg,
+                    grad_v_combined * (1.0 - s),
+                )
+        grad_v_acc = grad_h
+        grad_x = grad_h
+
+        grad_x_ptrs = tl.make_block_ptr(
+            grad_x_seq_ptr,
+            shape=(T, NCL),
+            strides=(NCL, 1),
+            offsets=(t, ncl_offset),
+            block_shape=(1, BLOCK_NCL),
+            order=(1, 0),
+        )
+        convert_and_store(grad_x_ptrs, grad_x, boundary_check=(1,))
+
+    grad_v_init_ptrs = tl.make_block_ptr(
+        grad_v_init_ptr,
+        shape=(1, NCL),
+        strides=(NCL, 1),
+        offsets=(0, ncl_offset),
+        block_shape=(1, BLOCK_NCL),
+        order=(1, 0),
+    )
+    convert_and_store(grad_v_init_ptrs, grad_v_acc, boundary_check=(1,))
+
+
+# Test instrumentation only; not thread-safe.
+LAST_FORWARD_LOOP_MODE = None
+LAST_BACKWARD_LOOP_MODE = None
+
+
+def _select_forward_kernel(T: int):
+    global LAST_FORWARD_LOOP_MODE
+    if use_static_range_for_triton_neuron_kernel(T):
+        LAST_FORWARD_LOOP_MODE = "static"
+        return _multistep_if_forward_kernel_static
+    LAST_FORWARD_LOOP_MODE = "dynamic"
+    return _multistep_if_forward_kernel_dynamic
+
+
+def _select_backward_kernel(T: int):
+    global LAST_BACKWARD_LOOP_MODE
+    if use_static_range_for_triton_neuron_kernel(T):
+        LAST_BACKWARD_LOOP_MODE = "static"
+        return _multistep_if_backward_kernel_static
+    LAST_BACKWARD_LOOP_MODE = "dynamic"
+    return _multistep_if_backward_kernel_dynamic
+
+
 @register_op("sj::multistep_if_inference")
 def multistep_if_inference(
     x_seq: torch.Tensor,
@@ -231,7 +450,7 @@ def multistep_if_inference(
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
     with torch.cuda.device(x_seq.device.index):
-        wrap_triton(_multistep_if_forward_kernel)[grid](
+        wrap_triton(_select_forward_kernel(T))[grid](
             x_seq,
             v_init,
             s_seq,
@@ -285,7 +504,7 @@ def multistep_if_forward(
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
     with torch.cuda.device(x_seq.device.index):
-        wrap_triton(_multistep_if_forward_kernel)[grid](
+        wrap_triton(_select_forward_kernel(T))[grid](
             x_seq,
             v_init,
             s_seq,
@@ -350,7 +569,7 @@ def _multistep_if_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
     with torch.cuda.device(grad_s_seq.device.index):
-        wrap_triton(_multistep_if_backward_kernel)[grid](
+        wrap_triton(_select_backward_kernel(T))[grid](
             grad_s_seq,
             grad_v_seq,
             h_seq,

@@ -18,9 +18,9 @@ __all__ = [
     "set_step_mode",
 ]
 
-_RESET_MODULE_CACHE: WeakKeyDictionary[nn.Module, tuple[ReferenceType[nn.Module], ...]] = (
-    WeakKeyDictionary()
-)
+_RESET_MODULE_CACHE: WeakKeyDictionary[
+    nn.Module, tuple[ReferenceType[nn.Module], ...]
+] = WeakKeyDictionary()
 
 
 def collect_reset_modules(net: nn.Module) -> tuple[nn.Module, ...]:
