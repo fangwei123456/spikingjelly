@@ -429,6 +429,7 @@ def _multistep_lif_backward_kernel_dynamic(
     convert_and_store(grad_v_init_ptrs, grad_v_acc, boundary_check=(1,))
 
 
+# Test instrumentation only; not thread-safe.
 LAST_FORWARD_LOOP_MODE = None
 LAST_BACKWARD_LOOP_MODE = None
 

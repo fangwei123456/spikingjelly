@@ -59,7 +59,7 @@ def _assert_close(a: torch.Tensor, b: torch.Tensor, dtype: torch.dtype):
         ),
     ],
 )
-def test_non_triton_backends_do_not_probe_triton_in_eval(
+def test_torch_backend_does_not_probe_triton_in_eval(
     node_factory, module_obj, kernel_attr, monkeypatch
 ):
     if getattr(module_obj, "triton_kernel", None) is None:

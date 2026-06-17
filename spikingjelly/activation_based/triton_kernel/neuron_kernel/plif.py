@@ -473,6 +473,7 @@ def _multistep_plif_backward_kernel_dynamic(
     convert_and_store(grad_r_tau_ptrs, grad_r_tau_acc, boundary_check=(1,))
 
 
+# Test instrumentation only; not thread-safe.
 LAST_FORWARD_LOOP_MODE = None
 LAST_BACKWARD_LOOP_MODE = None
 
