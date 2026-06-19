@@ -1,4 +1,5 @@
-from typing import Any, Dict, Iterable, Tuple, Type
+import warnings
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Type
 
 import torch
 import torch.nn as nn
@@ -6,13 +7,22 @@ from torch import fx
 from torch.nn.utils.fusion import fuse_conv_bn_eval
 from tqdm import tqdm
 
-from spikingjelly.activation_based import neuron
-from spikingjelly.activation_based.ann2snn.modules import VoltageHook, VoltageScaler
+from spikingjelly.activation_based.ann2snn.factories import HookFactory, NeuronFactory
+from spikingjelly.activation_based.ann2snn.rules import ActivationRule, ReLURule
+from spikingjelly.activation_based.ann2snn.threshold import ThresholdOptimizer
 
 
 class Converter(nn.Module):
     def __init__(
-        self, dataloader, device=None, mode="Max", momentum=0.1, fuse_flag=True
+        self,
+        dataloader,
+        device=None,
+        mode="Max",
+        momentum=0.1,
+        fuse_flag=True,
+        rules: Optional[List[ActivationRule]] = None,
+        neuron_factory: Optional[NeuronFactory] = None,
+        threshold_optimizer: Optional[ThresholdOptimizer] = None,
     ):
         r"""
         **API Language:**
@@ -40,7 +50,8 @@ class Converter(nn.Module):
 
             您最好在ANN模型中使用平均池化而不是最大池化。否则，可能会损害转换后的SNN模型的性能。
 
-        :param dataloader: 数据加载器
+        :param dataloader: 数据加载器。迭代返回的每个 batch 必须支持
+            ``data[0]`` 取出输入张量，例如 ``(input, label)`` 或 ``(input,)``。
         :type dataloader: Dataloader
         :param device: Device
         :type device: str
@@ -50,6 +61,14 @@ class Converter(nn.Module):
         :type momentum: float
         :param fuse_flag: 标志位，设置为True，则进行conv与bn的融合，反之不进行。
         :type fuse_flag: bool
+        :param rules: 激活函数转换规则列表。每个规则必须实现
+            ``match``、``insert_hooks``、``find_replacements`` 和
+            ``replace_with_neurons``。默认使用 ``[ReLURule()]``。
+        :type rules: Optional[List[ActivationRule]]
+        :param neuron_factory: 脉冲神经元工厂。默认使用 ``NeuronFactory()``（IFNode, threshold=1.0）。
+        :type neuron_factory: Optional[NeuronFactory]
+        :param threshold_optimizer: 阈值优化器。默认使用 ``ThresholdOptimizer("fixed")``。
+        :type threshold_optimizer: Optional[ThresholdOptimizer]
 
         ----
 
@@ -73,7 +92,9 @@ class Converter(nn.Module):
 
             You'd better use ``avgpool`` rather than ``maxpool`` in your ann model. If not, the performance of the converted snn model may be ruined.
 
-        :param dataloader: Dataloader for converting
+        :param dataloader: Dataloader for converting. Each yielded batch must
+            support ``data[0]`` as the input tensor, for example
+            ``(input, label)`` or ``(input,)``.
         :type dataloader: Dataloader
         :param device: Device
         :type device: str
@@ -83,6 +104,14 @@ class Converter(nn.Module):
         :type momentum: float
         :param fuse_flag: Bool specifying if fusion of the conv and the bn happens, by default it happens.
         :type fuse_flag: bool
+        :param rules: List of activation conversion rules. Each rule must
+            implement ``match``, ``insert_hooks``, ``find_replacements`` and
+            ``replace_with_neurons``. Defaults to ``[ReLURule()]``.
+        :type rules: Optional[List[ActivationRule]]
+        :param neuron_factory: Neuron factory. Defaults to ``NeuronFactory()`` (IFNode, threshold=1.0).
+        :type neuron_factory: Optional[NeuronFactory]
+        :param threshold_optimizer: Threshold optimizer. Defaults to ``ThresholdOptimizer("fixed")``.
+        :type threshold_optimizer: Optional[ThresholdOptimizer]
         """
         super().__init__()
         self.mode = mode
@@ -91,6 +120,15 @@ class Converter(nn.Module):
         self._check_mode()
         self.device = device
         self.momentum = momentum
+        self.rules = rules if rules is not None else [ReLURule()]
+        self.neuron_factory = (
+            neuron_factory if neuron_factory is not None else NeuronFactory()
+        )
+        self.threshold_optimizer = (
+            threshold_optimizer
+            if threshold_optimizer is not None
+            else ThresholdOptimizer()
+        )
 
     def forward(self, ann: nn.Module):
         r"""
@@ -127,14 +165,13 @@ class Converter(nn.Module):
         ann.eval()
         ann_fused = self.fuse(ann, fuse_flag=self.fuse_flag).to(self.device)
         ann_with_hook = self.set_voltagehook(
-            ann_fused, momentum=self.momentum, mode=self.mode
+            ann_fused, momentum=self.momentum, mode=self.mode, rules=self.rules
         ).to(self.device)
         for _, data in enumerate(tqdm(self.dataloader)):
-            # changed this because I was using a detection dataset
             imgs = data[0].float()
             ann_with_hook(imgs.to(self.device))
-        snn = self.replace_by_ifnode(ann_with_hook).to(self.device)
-        return snn  # return type: GraphModule
+        snn = self.replace_by_neurons(ann_with_hook).to(self.device)
+        return snn
 
     def _check_mode(self):
         err_msg = "You have used a non-defined VoltageScale Method."
@@ -195,7 +232,6 @@ class Converter(nn.Module):
         :rtype: torch.fx.GraphModule
         """
 
-        # return asap is no fuse is needed
         if not fuse_flag:
             return fx_model
 
@@ -222,10 +258,6 @@ class Converter(nn.Module):
             node: fx.Node, modules: Dict[str, Any], new_module: torch.nn.Module
         ):
             def parent_name(target: str) -> Tuple[str, str]:
-                """
-                Splits a qualname into parent path and last atom.
-                For example, `foo.bar.baz` -> (`foo.bar`, `baz`)
-                """
                 *parent, name = target.rsplit(".", 1)
                 return parent[0] if parent else "", name
 
@@ -245,9 +277,7 @@ class Converter(nn.Module):
         for pattern in patterns:
             for node in fx_model.graph.nodes:
                 if matches_module_pattern(pattern, node, modules):
-                    if (
-                        len(node.args[0].users) > 1
-                    ):  # Output of conv is used by other nodes
+                    if len(node.args[0].users) > 1:
                         continue
                     conv = modules[node.args[0].target]
                     bn = modules[node.target]
@@ -256,13 +286,16 @@ class Converter(nn.Module):
                     node.replace_all_uses_with(node.args[0])
                     fx_model.graph.erase_node(node)
         fx_model.graph.lint()
-        fx_model.delete_all_unused_submodules()  # remove unused bn modules
+        fx_model.delete_all_unused_submodules()
         fx_model.recompile()
         return fx_model
 
     @staticmethod
     def set_voltagehook(
-        fx_model: torch.fx.GraphModule, mode="Max", momentum=0.1
+        fx_model: torch.fx.GraphModule,
+        mode="Max",
+        momentum=0.1,
+        rules: Optional[List[ActivationRule]] = None,
     ) -> torch.fx.GraphModule:
         r"""
         **API Language:**
@@ -282,6 +315,9 @@ class Converter(nn.Module):
         :type mode: str, float
         :param momentum: 动量值，用于VoltageHook
         :type momentum: float
+        :param rules: 自定义的激活匹配规则列表。默认值为 ``None``，此时使用 ``[ReLURule()]``，即匹配 ``ReLU`` / ``ReLU6`` 等
+            常见激活并为其前后插入 ``VoltageHook``。传入自定义规则可扩展匹配的激活类型或调整 hook 插入位置。
+        :type rules: Optional[List[ActivationRule]]
         :return: 带有VoltageHook的模型.
         :rtype: torch.fx.GraphModule
 
@@ -299,36 +335,102 @@ class Converter(nn.Module):
         :type mode: str, float
         :param momentum: momentum value used by VoltageHook
         :type momentum: float
+        :param rules: Optional list of activation matching rules. When ``None`` (default) ``[ReLURule()]`` is used,
+            which matches common activations such as ``ReLU`` / ``ReLU6`` and wraps them with ``VoltageHook``.
+            Pass custom rules to match additional activation types or to change where hooks are inserted.
+        :type rules: Optional[List[ActivationRule]]
         :return: fx_model with VoltageHook.
         :rtype: torch.fx.GraphModule
         """
+        hook_factory = HookFactory(mode=mode, momentum=momentum)
+        hook_counts_per_prefix: Dict[str, int] = {}
+        modules = dict(fx_model.named_modules())
+        active_rules = rules if rules is not None else [ReLURule()]
 
-        hook_counts_per_prefix = {}
         for node in fx_model.graph.nodes:
             if node.op != "call_module":
                 continue
+            if node.target not in modules:
+                continue
+            for rule in active_rules:
+                if rule.match(node, modules):
+                    rule.insert_hooks(
+                        fx_model, node, hook_factory, hook_counts_per_prefix
+                    )
+                    break
 
-            if type(fx_model.get_submodule(node.target)) is nn.ReLU:
-                # use the input to ReLU to get the prefix
-                prefix = str(node.args[0])
-                prefix = prefix.split("_")
+        fx_model.graph.lint()
+        fx_model.recompile()
+        return fx_model
 
-                # if we have a prefix, it means we are at a submodule
-                if len(prefix) > 1:
-                    prefix = ".".join(prefix[:-1])
-                    counter = hook_counts_per_prefix.get(prefix, 0)
-                    hook_counts_per_prefix[prefix] = counter + 1
-                    target = f"{prefix}.voltage_hook_{counter}"  # voltage_hook
+    def replace_by_neurons(
+        self, fx_model: torch.fx.GraphModule
+    ) -> torch.fx.GraphModule:
+        r"""
+        **API Language:**
+        :ref:`中文 <Converter.replace_by_neurons-cn>` | :ref:`English <Converter.replace_by_neurons-en>`
 
-                # if we don't have a prefix, it means we are at the first level of the module
-                else:
-                    prefix = "__FIRST_LEVEL_OF_MODULE__"
-                    counter = hook_counts_per_prefix.get(prefix, 0)
-                    hook_counts_per_prefix[prefix] = counter + 1
-                    target = f"voltage_hook_{counter}"  # voltage_hook
+        ----
 
-                m = VoltageHook(momentum=momentum, mode=mode)
-                _ = Converter._add_module_and_node(fx_model, target, node, m, (node,))
+        .. _Converter.replace_by_neurons-cn:
+
+        * **中文**
+
+        将 ``self.rules`` 匹配到的激活节点替换为脉冲神经元，并按 ``self.threshold_optimizer`` 计算出的阈值
+        完成 ``VoltageScaler(1/v_threshold) -> Neuron -> VoltageScaler(v_threshold)`` 的等价变换。
+        默认规则、神经元工厂与阈值优化器可复现原 ``replace_by_ifnode`` 的 ``ReLU -> IFNode`` 替换语义。
+
+        :param fx_model: 已插入校准 hook 的 ``GraphModule``
+        :type fx_model: torch.fx.GraphModule
+        :return: 激活节点被替换为脉冲神经元后的模型
+        :rtype: torch.fx.GraphModule
+
+        ----
+
+        .. _Converter.replace_by_neurons-en:
+
+        * **English**
+
+        Replace activations matched by ``self.rules`` with spiking neurons, applying the
+        ``VoltageScaler(1/v_threshold) -> Neuron -> VoltageScaler(v_threshold)`` transformation
+        using the threshold computed by ``self.threshold_optimizer``. With the default rule,
+        neuron factory and threshold optimizer this reproduces the original
+        ``replace_by_ifnode`` ``ReLU -> IFNode`` replacement semantics.
+
+        :param fx_model: ``GraphModule`` with calibration hooks already inserted.
+        :type fx_model: torch.fx.GraphModule
+        :return: Model with activations replaced by spiking neurons.
+        :rtype: torch.fx.GraphModule
+        """
+        return Converter._replace_by_neurons_impl(
+            fx_model,
+            self.rules,
+            self.neuron_factory,
+            self.threshold_optimizer,
+        )
+
+    @staticmethod
+    def _replace_by_neurons_impl(
+        fx_model: torch.fx.GraphModule,
+        rules: List[ActivationRule],
+        neuron_factory: NeuronFactory,
+        threshold_optimizer: ThresholdOptimizer,
+    ) -> torch.fx.GraphModule:
+        replaced_hooks = set()
+        for rule in rules:
+            modules = dict(fx_model.named_modules())
+            for activation_node, hook_node in rule.find_replacements(fx_model, modules):
+                if hook_node in replaced_hooks:
+                    continue
+                replaced_hooks.add(hook_node)
+                rule.replace_with_neurons(
+                    fx_model,
+                    activation_node,
+                    hook_node,
+                    neuron_factory,
+                    threshold_optimizer,
+                )
+                modules = dict(fx_model.named_modules())
 
         fx_model.graph.lint()
         fx_model.recompile()
@@ -336,95 +438,22 @@ class Converter(nn.Module):
 
     @staticmethod
     def replace_by_ifnode(fx_model: torch.fx.GraphModule) -> torch.fx.GraphModule:
-        r"""
-        **API Language:**
-        :ref:`中文 <Converter.replace_by_ifnode-cn>` | :ref:`English <Converter.replace_by_ifnode-en>`
+        r"""Replace ReLU with IF neurons (legacy API, use :meth:`replace_by_neurons` instead).
 
-        ----
-
-        .. _Converter.replace_by_ifnode-cn:
-        * **中文**
-
-        * **中文**
-
-        ``replace_by_ifnode`` 用于将模型的ReLU替换为IF脉冲神经元。
-
-        :param fx_model: 原模型
+        :deprecated: Use :meth:`replace_by_neurons` instead.
+        :param fx_model: Model with calibration hooks inserted.
         :type fx_model: torch.fx.GraphModule
-        :return: 将ReLU替换为IF脉冲神经元后的模型.
-        :rtype: torch.fx.GraphModule
-
-        ----
-
-        .. _Converter.replace_by_ifnode-en:
-        * **English**
-
-        * **English**
-
-        ``replace_by_ifnode`` is used to replace ReLU with IF neuron.
-
-        :param fx_model: Original fx_model
-        :type fx_model: torch.fx.GraphModule
-        :return: fx_model whose ReLU has been replaced by IF neuron.
+        :return: Model with ReLU replaced by IF neurons.
         :rtype: torch.fx.GraphModule
         """
-
-        hook_cnt = -1
-        for node in fx_model.graph.nodes:
-            if node.op != "call_module":
-                continue
-            if (
-                type(fx_model.get_submodule(node.target)) is VoltageHook
-                and type(fx_model.get_submodule(node.args[0].target)) is nn.ReLU
-            ):
-                hook_cnt += 1
-                hook_node = node
-                relu_node = node.args[0]
-                if len(relu_node.args) != 1:
-                    raise NotImplementedError(
-                        "The number of relu_node.args should be 1."
-                    )
-
-                # get the voltage hook prefix
-                prefix = node.name.replace("voltage_hook_", "spiking")
-                prefix = prefix.split("_")
-                prefix = ".".join(prefix)
-
-                s = fx_model.get_submodule(node.target).scale.item()
-                # this allows for easier import/export of the model
-                target0 = f"{prefix}.scaler0"  # voltage_scaler
-                target1 = f"{prefix}.if_node"  # IF_node
-                target2 = f"{prefix}.scaler1"  # voltage_scaler
-
-                m0 = VoltageScaler(1.0 / s)
-                m1 = neuron.IFNode(v_threshold=1.0, v_reset=None)
-                m2 = VoltageScaler(s)
-
-                node0 = Converter._add_module_and_node(
-                    fx_model, target0, hook_node, m0, relu_node.args
-                )
-                node1 = Converter._add_module_and_node(
-                    fx_model, target1, node0, m1, (node0,)
-                )
-                node2 = Converter._add_module_and_node(
-                    fx_model, target2, node1, m2, args=(node1,)
-                )
-
-                relu_node.replace_all_uses_with(node2)
-                node2.args = (node1,)
-                fx_model.graph.erase_node(hook_node)
-                fx_model.graph.erase_node(relu_node)
-                fx_model.delete_all_unused_submodules()
-
-        fx_model.graph.lint()
-        fx_model.recompile()
-        return fx_model
-
-    @staticmethod
-    def _add_module_and_node(
-        fx_model: fx.GraphModule, target: str, after: fx.Node, m: nn.Module, args: Tuple
-    ) -> fx.Node:
-        fx_model.add_submodule(target=target, m=m)
-        with fx_model.graph.inserting_after(n=after):
-            new_node = fx_model.graph.call_module(module_name=target, args=args)
-        return new_node
+        warnings.warn(
+            "replace_by_ifnode is deprecated, use replace_by_neurons instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return Converter._replace_by_neurons_impl(
+            fx_model,
+            [ReLURule()],
+            NeuronFactory(),
+            ThresholdOptimizer(),
+        )
