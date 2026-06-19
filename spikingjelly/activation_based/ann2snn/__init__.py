@@ -1,4 +1,4 @@
-"""
+r"""
 **API Language:**
 :ref:`中文 <ann2snn-cn>` | :ref:`English <ann2snn-en>`
 
@@ -8,10 +8,9 @@
 
 * **中文**
 
-ANN到SNN转换模块，包含转换器工具和示例模型。
-
-:return: None
-:rtype: None
+ANN 到 SNN 的转换模块。提供 :class:`Converter` 转换器，以及 ``HookFactory``、
+``NeuronFactory``、``ActivationRule``、``ThresholdOptimizer`` 等可扩展组件，
+并附带 ``download_url`` 工具函数。
 
 ----
 
@@ -19,13 +18,23 @@ ANN到SNN转换模块，包含转换器工具和示例模型。
 
 * **English**
 
-ANN-to-SNN conversion module with converter utilities and sample models.
-
-:return: None
-:rtype: None
+ANN-to-SNN conversion module. Provides the :class:`Converter` driver together
+with extensible building blocks — :class:`HookFactory`, :class:`NeuronFactory`,
+:class:`ActivationRule` and :class:`ThresholdOptimizer` — and a
+``download_url`` helper for fetching pretrained models.
 """
 
 from .converter import Converter
+from .factories import HookFactory, NeuronFactory
+from .rules import ReLURule
+from .threshold import ThresholdOptimizer
 from .utils import download_url
 
-__all__ = ["Converter", "download_url"]
+__all__ = [
+    "Converter",
+    "download_url",
+    "ReLURule",
+    "NeuronFactory",
+    "HookFactory",
+    "ThresholdOptimizer",
+]
