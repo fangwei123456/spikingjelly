@@ -1,3 +1,4 @@
+import math
 from typing import TYPE_CHECKING, Dict, Iterator, Protocol, Tuple
 
 import torch.nn as nn
@@ -349,9 +350,10 @@ class ReLURule:
         if not isinstance(hook, VoltageHook):
             raise TypeError("hook_node must target a VoltageHook module.")
         s = float(threshold_optimizer.compute_threshold(hook))
-        if not (s > 0.0):
+        if not (s > 0.0) or not math.isfinite(s):
             raise ValueError(
-                f"Threshold must be > 0, got {s} for hook {hook_node.target!r}."
+                f"Threshold must be a finite positive number, got {s} "
+                f"for hook {hook_node.target!r}."
             )
         target0 = f"{prefix}.scaler0"
         target1 = f"{prefix}.if_node"

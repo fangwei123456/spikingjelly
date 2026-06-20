@@ -278,6 +278,24 @@ class TestConverterBackwardCompat:
         with pytest.raises(NotImplementedError):
             Converter(dataloader=[], mode=0.0)
 
+    def test_tensor_dataloader_converts(self):
+        model = SimpleCNNNoBN()
+        model.eval()
+        imgs = torch.randn(2, 1, 28, 28)
+        converter = Converter(dataloader=[imgs], mode="Max", fuse_flag=False)
+        snn = converter(model)
+        assert snn is not None
+
+    def test_dict_dataloader_converts(self):
+        model = SimpleCNNNoBN()
+        model.eval()
+        imgs = torch.randn(2, 1, 28, 28)
+        converter = Converter(
+            dataloader=[{"input": imgs}], mode="Max", fuse_flag=False
+        )
+        snn = converter(model)
+        assert snn is not None
+
 
 class TestFuse:
     def test_conv_bn_fusion_matches_eval_output(self):
@@ -508,7 +526,7 @@ class TestRuleBasedConversion:
             fuse_flag=False,
         )
 
-        with pytest.raises(ValueError, match="Threshold must be > 0"):
+        with pytest.raises(ValueError, match="finite positive"):
             converter(model)
 
     def test_nan_threshold_raises(self):
@@ -524,7 +542,23 @@ class TestRuleBasedConversion:
             fuse_flag=False,
         )
 
-        with pytest.raises(ValueError, match="Threshold must be > 0"):
+        with pytest.raises(ValueError, match="finite positive"):
+            converter(model)
+
+    def test_infinite_threshold_raises(self):
+        class InfiniteScaleOptimizer:
+            def compute_threshold(self, hook):
+                return float("inf")
+
+        model = SimpleCNNNoBN()
+        model.eval()
+        converter = Converter(
+            dataloader=_make_loader(),
+            threshold_optimizer=InfiniteScaleOptimizer(),
+            fuse_flag=False,
+        )
+
+        with pytest.raises(ValueError, match="finite positive"):
             converter(model)
 
 

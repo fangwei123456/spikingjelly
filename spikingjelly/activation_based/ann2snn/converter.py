@@ -165,10 +165,20 @@ class Converter(nn.Module):
         ).to(self.device)
         with torch.no_grad():
             for _, data in enumerate(tqdm(self.dataloader)):
-                imgs = data[0].float()
+                imgs = self._extract_batch_input(data).float()
                 ann_with_hook(imgs.to(self.device))
         snn = self.replace_by_neurons(ann_with_hook).to(self.device)
         return snn
+
+    @staticmethod
+    def _extract_batch_input(data):
+        if isinstance(data, torch.Tensor):
+            return data
+        if isinstance(data, (list, tuple)):
+            return data[0]
+        if isinstance(data, dict):
+            return next(iter(data.values()))
+        return data[0]
 
     def _check_mode(self):
         err_msg = "You have used a non-defined VoltageScale Method."
