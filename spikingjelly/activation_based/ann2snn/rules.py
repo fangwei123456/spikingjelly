@@ -362,8 +362,12 @@ class ReLURule:
         m1 = neuron_factory.create(scale=s)
         neuron_threshold = getattr(m1, "v_threshold", 1.0)
         if hasattr(neuron_threshold, "item"):
-            neuron_threshold = neuron_threshold.item()
-        m0 = VoltageScaler(neuron_threshold / s)
+            if not hasattr(neuron_threshold, "numel") or neuron_threshold.numel() == 1:
+                neuron_threshold = neuron_threshold.item()
+        input_scale = neuron_threshold / s
+        if hasattr(input_scale, "detach"):
+            input_scale = input_scale.detach().cpu().tolist()
+        m0 = VoltageScaler(input_scale)
         m2 = VoltageScaler(s)
 
         node0 = _add_module_and_node(

@@ -296,6 +296,19 @@ class TestConverterBackwardCompat:
         snn = converter(model)
         assert snn is not None
 
+    def test_dict_dataloader_prefers_input_key(self):
+        model = SimpleCNNNoBN()
+        model.eval()
+        imgs = torch.randn(2, 1, 28, 28)
+        labels = torch.zeros(2, dtype=torch.long)
+        converter = Converter(
+            dataloader=[{"label": labels, "input": imgs}],
+            mode="Max",
+            fuse_flag=False,
+        )
+        snn = converter(model)
+        assert snn is not None
+
 
 class TestFuse:
     def test_conv_bn_fusion_matches_eval_output(self):
@@ -503,6 +516,26 @@ class TestRuleBasedConversion:
         assert scalers[0].scale.item() == pytest.approx(
             if_nodes[0].v_threshold.item() / scalers[1].scale.item()
         )
+
+    def test_multi_element_neuron_threshold_updates_input_scaler(self):
+        class MultiThresholdFactory(NeuronFactory):
+            def create(self, scale):
+                n = super().create(scale)
+                n.v_threshold = torch.tensor([2.0, 4.0])
+                return n
+
+        model = SimpleCNNNoBN()
+        model.eval()
+        snn = Converter(
+            dataloader=_make_loader(),
+            neuron_factory=MultiThresholdFactory(),
+            threshold_optimizer=ThresholdOptimizer("fixed"),
+            fuse_flag=False,
+        )(model)
+
+        scalers = [m for m in snn.modules() if isinstance(m, VoltageScaler)]
+        assert len(scalers) == 2
+        assert scalers[0].scale.shape == torch.Size([2])
 
     def test_module_names_with_underscores_convert(self):
         model = UnderscoreModuleCNN()

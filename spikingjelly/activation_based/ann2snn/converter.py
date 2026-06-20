@@ -165,8 +165,8 @@ class Converter(nn.Module):
         ).to(self.device)
         with torch.no_grad():
             for _, data in enumerate(tqdm(self.dataloader)):
-                imgs = self._extract_batch_input(data).float()
-                ann_with_hook(imgs.to(self.device))
+                imgs = self._extract_batch_input(data)
+                ann_with_hook(imgs.to(device=self.device, dtype=torch.float))
         snn = self.replace_by_neurons(ann_with_hook).to(self.device)
         return snn
 
@@ -177,6 +177,9 @@ class Converter(nn.Module):
         if isinstance(data, (list, tuple)):
             return data[0]
         if isinstance(data, dict):
+            for key in ("input", "image", "img", "x", "data", "pixel_values"):
+                if key in data:
+                    return data[key]
             return next(iter(data.values()))
         return data[0]
 
