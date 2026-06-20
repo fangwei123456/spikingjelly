@@ -331,6 +331,12 @@ class ReLURule:
         neuron_factory: "NeuronFactory",
         threshold_optimizer: "ThresholdOptimizer",
     ) -> None:
+        if len(activation_node.args) != 1:
+            raise ValueError(
+                f"The activation node {activation_node.target!r} must have exactly "
+                f"1 argument, but got {len(activation_node.args)}."
+            )
+
         # The prefix mirrors the hook target generated in insert_hooks. Keeping
         # the names paired makes exported GraphModules easier to inspect.
         if not isinstance(hook_node.target, str):
@@ -343,7 +349,7 @@ class ReLURule:
         if not isinstance(hook, VoltageHook):
             raise TypeError("hook_node must target a VoltageHook module.")
         s = float(threshold_optimizer.compute_threshold(hook))
-        if s <= 0.0:
+        if not (s > 0.0):
             raise ValueError(
                 f"Threshold must be > 0, got {s} for hook {hook_node.target!r}."
             )

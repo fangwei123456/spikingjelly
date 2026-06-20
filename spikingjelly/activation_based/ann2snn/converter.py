@@ -140,8 +140,6 @@ class Converter(nn.Module):
         .. _Converter.forward-cn:
         * **中文**
 
-        * **中文**
-
         :param ann: 待转换的ann
         :type ann: torch.nn.Module
         :return: 转换得到的snn
@@ -150,8 +148,6 @@ class Converter(nn.Module):
         ----
 
         .. _Converter.forward-en:
-        * **English**
-
         * **English**
 
         :param ann: ann to be converted
@@ -431,7 +427,6 @@ class Converter(nn.Module):
                     neuron_factory,
                     threshold_optimizer,
                 )
-                modules = dict(fx_model.named_modules())
 
         fx_model.graph.lint()
         fx_model.delete_all_unused_submodules()

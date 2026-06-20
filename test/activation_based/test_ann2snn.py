@@ -454,6 +454,22 @@ class TestRuleBasedConversion:
         with pytest.raises(ValueError, match="Threshold must be > 0"):
             converter(model)
 
+    def test_nan_threshold_raises(self):
+        class NaNScaleOptimizer:
+            def compute_threshold(self, hook):
+                return float("nan")
+
+        model = SimpleCNNNoBN()
+        model.eval()
+        converter = Converter(
+            dataloader=_make_loader(),
+            threshold_optimizer=NaNScaleOptimizer(),
+            fuse_flag=False,
+        )
+
+        with pytest.raises(ValueError, match="Threshold must be > 0"):
+            converter(model)
+
 
 class TestReplaceByIfnodeDeprecation:
     def test_set_voltagehook_static_legacy_api(self):
