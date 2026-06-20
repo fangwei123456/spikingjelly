@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 import torch
 import torch.nn as nn
@@ -282,6 +283,14 @@ class TestConverterBackwardCompat:
         model = SimpleCNNNoBN()
         model.eval()
         imgs = torch.randn(2, 1, 28, 28)
+        converter = Converter(dataloader=[imgs], mode="Max", fuse_flag=False)
+        snn = converter(model)
+        assert snn is not None
+
+    def test_numpy_dataloader_converts_full_batch(self):
+        model = SimpleCNNNoBN()
+        model.eval()
+        imgs = np.random.randn(2, 1, 28, 28).astype(np.float32)
         converter = Converter(dataloader=[imgs], mode="Max", fuse_flag=False)
         snn = converter(model)
         assert snn is not None

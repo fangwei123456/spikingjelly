@@ -183,7 +183,7 @@ class Converter(nn.Module):
                 if key in data:
                     return data[key]
             return next(iter(data.values()))
-        return data[0]
+        return data
 
     def _check_mode(self):
         err_msg = "You have used a non-defined VoltageScale Method."
