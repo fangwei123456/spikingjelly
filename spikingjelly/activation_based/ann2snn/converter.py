@@ -163,9 +163,10 @@ class Converter(nn.Module):
         ann_with_hook = self.set_voltagehook(
             ann_fused, momentum=self.momentum, mode=self.mode, rules=self.rules
         ).to(self.device)
-        for _, data in enumerate(tqdm(self.dataloader)):
-            imgs = data[0].float()
-            ann_with_hook(imgs.to(self.device))
+        with torch.no_grad():
+            for _, data in enumerate(tqdm(self.dataloader)):
+                imgs = data[0].float()
+                ann_with_hook(imgs.to(self.device))
         snn = self.replace_by_neurons(ann_with_hook).to(self.device)
         return snn
 
@@ -343,7 +344,7 @@ class Converter(nn.Module):
         modules = dict(fx_model.named_modules())
         active_rules = rules if rules is not None else [ReLURule()]
 
-        for node in fx_model.graph.nodes:
+        for node in list(fx_model.graph.nodes):
             if node.op != "call_module":
                 continue
             if node.target not in modules:
@@ -413,13 +414,18 @@ class Converter(nn.Module):
         threshold_optimizer: ThresholdOptimizer,
     ) -> torch.fx.GraphModule:
         replaced_hooks = set()
+        replaced_activations = set()
         for rule in rules:
             modules = dict(fx_model.named_modules())
             replacements = list(rule.find_replacements(fx_model, modules))
             for activation_node, hook_node in replacements:
-                if hook_node in replaced_hooks:
+                if (
+                    hook_node in replaced_hooks
+                    or activation_node in replaced_activations
+                ):
                     continue
                 replaced_hooks.add(hook_node)
+                replaced_activations.add(activation_node)
                 rule.replace_with_neurons(
                     fx_model,
                     activation_node,

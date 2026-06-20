@@ -405,6 +405,39 @@ class TestRuleBasedConversion:
         assert rule.find_count == 1
         assert rule.replace_count == 1
 
+    def test_duplicate_activation_replacements_are_skipped(self):
+        class DuplicateActivationRule(ReLURule):
+            def __init__(self):
+                self.replace_count = 0
+
+            def find_replacements(self, fx_model, modules):
+                replacements = list(super().find_replacements(fx_model, modules))
+                if len(replacements) != 1:
+                    return iter(replacements)
+                activation_node, hook_node = replacements[0]
+                return iter(
+                    [
+                        (activation_node, hook_node),
+                        (activation_node, object()),
+                    ]
+                )
+
+            def replace_with_neurons(self, *args, **kwargs):
+                self.replace_count += 1
+                return super().replace_with_neurons(*args, **kwargs)
+
+        rule = DuplicateActivationRule()
+        model = SimpleCNNNoBN()
+        model.eval()
+        snn = Converter(
+            dataloader=_make_loader(),
+            rules=[rule],
+            fuse_flag=False,
+        )(model)
+
+        assert rule.replace_count == 1
+        assert any(isinstance(m, neuron.IFNode) for m in snn.modules())
+
     def test_threshold_optimizer_is_used(self):
         class FixedScaleOptimizer:
             def __init__(self):
