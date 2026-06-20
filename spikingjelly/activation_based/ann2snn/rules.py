@@ -282,7 +282,7 @@ class ReLURule:
     def match(self, node: fx.Node, modules: Dict[str, nn.Module]) -> bool:
         if node.op != "call_module":
             return False
-        return type(modules[node.target]) is nn.ReLU
+        return type(modules.get(node.target)) is nn.ReLU
 
     def insert_hooks(
         self,
@@ -364,10 +364,7 @@ class ReLURule:
         if hasattr(neuron_threshold, "item"):
             if not hasattr(neuron_threshold, "numel") or neuron_threshold.numel() == 1:
                 neuron_threshold = neuron_threshold.item()
-        input_scale = neuron_threshold / s
-        if hasattr(input_scale, "detach"):
-            input_scale = input_scale.detach().cpu().tolist()
-        m0 = VoltageScaler(input_scale)
+        m0 = VoltageScaler(neuron_threshold / s)
         m2 = VoltageScaler(s)
 
         node0 = _add_module_and_node(

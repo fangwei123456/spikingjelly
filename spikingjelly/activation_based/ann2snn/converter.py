@@ -166,7 +166,9 @@ class Converter(nn.Module):
         with torch.no_grad():
             for _, data in enumerate(tqdm(self.dataloader)):
                 imgs = self._extract_batch_input(data)
-                ann_with_hook(imgs.to(device=self.device, dtype=torch.float))
+                ann_with_hook(
+                    torch.as_tensor(imgs).to(device=self.device, dtype=torch.float)
+                )
         snn = self.replace_by_neurons(ann_with_hook).to(self.device)
         return snn
 
