@@ -373,6 +373,7 @@ class Converter(nn.Module):
                     rule.insert_hooks(
                         fx_model, node, hook_factory, hook_counts_per_prefix
                     )
+                    modules = dict(fx_model.named_modules())
                     break
 
         fx_model.graph.lint()

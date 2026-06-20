@@ -453,6 +453,48 @@ class TestRuleBasedConversion:
         assert rule.find_count == 1
         assert rule.replace_count == 1
 
+    def test_set_voltagehook_refreshes_modules_after_rule_insert(self):
+        class TwoReLUCNN(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.relu0 = nn.ReLU()
+                self.relu1 = nn.ReLU()
+
+            def forward(self, x):
+                return self.relu1(self.relu0(x))
+
+        class MarkerRule:
+            def __init__(self):
+                self.inserted = False
+
+            def match(self, node, modules):
+                return not self.inserted and node.target == "relu0"
+
+            def insert_hooks(self, fx_model, node, *args, **kwargs):
+                self.inserted = True
+                fx_model.add_submodule("marker", nn.Identity())
+
+        class MarkerAwareRule:
+            def __init__(self):
+                self.saw_marker = False
+
+            def match(self, node, modules):
+                if node.target == "relu1" and "marker" in modules:
+                    self.saw_marker = True
+                return False
+
+        marker_rule = MarkerRule()
+        marker_aware_rule = MarkerAwareRule()
+        fx_model = torch.fx.symbolic_trace(TwoReLUCNN())
+
+        Converter.set_voltagehook(
+            fx_model,
+            rules=[marker_rule, marker_aware_rule],
+        )
+
+        assert marker_rule.inserted
+        assert marker_aware_rule.saw_marker
+
     def test_duplicate_activation_replacements_are_skipped(self):
         class DuplicateActivationRule(ReLURule):
             def __init__(self):
