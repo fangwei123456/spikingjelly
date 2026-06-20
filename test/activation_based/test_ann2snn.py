@@ -429,6 +429,30 @@ class TestRuleBasedConversion:
         assert scalers[0].scale.item() == pytest.approx(0.5)
         assert scalers[1].scale.item() == pytest.approx(2.0)
 
+    def test_tensor_neuron_threshold_updates_input_scaler(self):
+        class TensorThresholdFactory(NeuronFactory):
+            def create(self, scale):
+                n = super().create(scale)
+                n.v_threshold = torch.tensor(2.0)
+                return n
+
+        model = SimpleCNNNoBN()
+        model.eval()
+        snn = Converter(
+            dataloader=_make_loader(),
+            neuron_factory=TensorThresholdFactory(),
+            threshold_optimizer=ThresholdOptimizer("fixed"),
+            fuse_flag=False,
+        )(model)
+
+        scalers = [m for m in snn.modules() if isinstance(m, VoltageScaler)]
+        if_nodes = [m for m in snn.modules() if isinstance(m, neuron.IFNode)]
+        assert len(scalers) == 2
+        assert len(if_nodes) == 1
+        assert scalers[0].scale.item() == pytest.approx(
+            if_nodes[0].v_threshold.item() / scalers[1].scale.item()
+        )
+
     def test_module_names_with_underscores_convert(self):
         model = UnderscoreModuleCNN()
         model.eval()

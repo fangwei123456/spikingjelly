@@ -359,6 +359,8 @@ class ReLURule:
 
         m1 = neuron_factory.create(scale=s)
         neuron_threshold = getattr(m1, "v_threshold", 1.0)
+        if hasattr(neuron_threshold, "item"):
+            neuron_threshold = neuron_threshold.item()
         m0 = VoltageScaler(neuron_threshold / s)
         m2 = VoltageScaler(s)
 
@@ -368,8 +370,8 @@ class ReLURule:
         node1 = _add_module_and_node(fx_model, target1, node0, m1, (node0,))
         node2 = _add_module_and_node(fx_model, target2, node1, m2, args=(node1,))
 
+        hook_node.replace_all_uses_with(node2)
         activation_node.replace_all_uses_with(node2)
-        node2.args = (node1,)
         fx_model.graph.erase_node(hook_node)
         fx_model.graph.erase_node(activation_node)
 
