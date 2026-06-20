@@ -1,4 +1,4 @@
-from typing import Optional, Type
+from typing import Optional, Type, Union
 
 import torch.nn as nn
 
@@ -153,7 +153,7 @@ class HookFactory:
     :type momentum: float
     """
 
-    def __init__(self, mode: str = "Max", momentum: float = 0.1):
+    def __init__(self, mode: Union[str, float] = "Max", momentum: float = 0.1):
         self.mode = mode
         self.momentum = momentum
 

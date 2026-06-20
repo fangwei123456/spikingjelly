@@ -290,18 +290,17 @@ class ReLURule:
         hook_factory: "HookFactory",
         hook_counts_per_prefix: Dict[str, int],
     ) -> fx.Node:
-        prefix = str(node.args[0]).split("_")
-
-        if len(prefix) > 1:
-            prefix = ".".join(prefix[:-1])
-            counter = hook_counts_per_prefix.get(prefix, 0)
-            hook_counts_per_prefix[prefix] = counter + 1
-            target = f"{prefix}.voltage_hook_{counter}"
-        else:
-            prefix = "__FIRST_LEVEL_OF_MODULE__"
-            counter = hook_counts_per_prefix.get(prefix, 0)
-            hook_counts_per_prefix[prefix] = counter + 1
-            target = f"voltage_hook_{counter}"
+        if not isinstance(node.target, str):
+            raise TypeError("node.target must be a module path string.")
+        parent, _, _ = node.target.rpartition(".")
+        key = parent or "__FIRST_LEVEL_OF_MODULE__"
+        counter = hook_counts_per_prefix.get(key, 0)
+        hook_counts_per_prefix[key] = counter + 1
+        target = (
+            f"{parent}.voltage_hook_{counter}"
+            if parent
+            else f"voltage_hook_{counter}"
+        )
 
         m = hook_factory.create()
         return _add_module_and_node(fx_model, target, node, m, (node,))
@@ -334,14 +333,20 @@ class ReLURule:
     ) -> None:
         # The prefix mirrors the hook target generated in insert_hooks. Keeping
         # the names paired makes exported GraphModules easier to inspect.
-        prefix = hook_node.name.replace("voltage_hook_", "spiking")
-        prefix = prefix.split("_")
-        prefix = ".".join(prefix)
+        if not isinstance(hook_node.target, str):
+            raise TypeError("hook_node.target must be a module path string.")
+        hook_parent, _, hook_leaf = hook_node.target.rpartition(".")
+        spike_leaf = hook_leaf.replace("voltage_hook_", "spiking_")
+        prefix = f"{hook_parent}.{spike_leaf}" if hook_parent else spike_leaf
 
         hook = fx_model.get_submodule(hook_node.target)
         if not isinstance(hook, VoltageHook):
             raise TypeError("hook_node must target a VoltageHook module.")
-        s = threshold_optimizer.compute_threshold(hook)
+        s = float(threshold_optimizer.compute_threshold(hook))
+        if s <= 0.0:
+            raise ValueError(
+                f"Threshold must be > 0, got {s} for hook {hook_node.target!r}."
+            )
         target0 = f"{prefix}.scaler0"
         target1 = f"{prefix}.if_node"
         target2 = f"{prefix}.scaler1"
@@ -361,7 +366,6 @@ class ReLURule:
         node2.args = (node1,)
         fx_model.graph.erase_node(hook_node)
         fx_model.graph.erase_node(activation_node)
-        fx_model.delete_all_unused_submodules()
 
 
 def _add_module_and_node(

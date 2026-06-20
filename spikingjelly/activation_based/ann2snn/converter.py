@@ -315,8 +315,8 @@ class Converter(nn.Module):
         :type mode: str, float
         :param momentum: 动量值，用于VoltageHook
         :type momentum: float
-        :param rules: 自定义的激活匹配规则列表。默认值为 ``None``，此时使用 ``[ReLURule()]``，即匹配 ``ReLU`` / ``ReLU6`` 等
-            常见激活并为其前后插入 ``VoltageHook``。传入自定义规则可扩展匹配的激活类型或调整 hook 插入位置。
+        :param rules: 自定义的激活匹配规则列表。默认值为 ``None``，此时使用 ``[ReLURule()]``，即匹配
+            ``ReLU`` 并为其前后插入 ``VoltageHook``。传入自定义规则可扩展匹配的激活类型或调整 hook 插入位置。
         :type rules: Optional[List[ActivationRule]]
         :return: 带有VoltageHook的模型.
         :rtype: torch.fx.GraphModule
@@ -336,7 +336,7 @@ class Converter(nn.Module):
         :param momentum: momentum value used by VoltageHook
         :type momentum: float
         :param rules: Optional list of activation matching rules. When ``None`` (default) ``[ReLURule()]`` is used,
-            which matches common activations such as ``ReLU`` / ``ReLU6`` and wraps them with ``VoltageHook``.
+            which matches ``ReLU`` and wraps it with ``VoltageHook``.
             Pass custom rules to match additional activation types or to change where hooks are inserted.
         :type rules: Optional[List[ActivationRule]]
         :return: fx_model with VoltageHook.
@@ -419,7 +419,8 @@ class Converter(nn.Module):
         replaced_hooks = set()
         for rule in rules:
             modules = dict(fx_model.named_modules())
-            for activation_node, hook_node in rule.find_replacements(fx_model, modules):
+            replacements = list(rule.find_replacements(fx_model, modules))
+            for activation_node, hook_node in replacements:
                 if hook_node in replaced_hooks:
                     continue
                 replaced_hooks.add(hook_node)
@@ -433,6 +434,7 @@ class Converter(nn.Module):
                 modules = dict(fx_model.named_modules())
 
         fx_model.graph.lint()
+        fx_model.delete_all_unused_submodules()
         fx_model.recompile()
         return fx_model
 

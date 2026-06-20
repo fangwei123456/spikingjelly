@@ -9,7 +9,7 @@ r"""
 * **中文**
 
 ANN 到 SNN 的转换模块。提供 :class:`Converter` 转换器，以及 ``HookFactory``、
-``NeuronFactory``、``ActivationRule``、``ThresholdOptimizer`` 等可扩展组件，
+``NeuronFactory``、``ReLURule``、``ThresholdOptimizer`` 等可扩展组件，
 并附带 ``download_url`` 工具函数。
 
 ----
@@ -20,7 +20,7 @@ ANN 到 SNN 的转换模块。提供 :class:`Converter` 转换器，以及 ``Hoo
 
 ANN-to-SNN conversion module. Provides the :class:`Converter` driver together
 with extensible building blocks — :class:`HookFactory`, :class:`NeuronFactory`,
-:class:`ActivationRule` and :class:`ThresholdOptimizer` — and a
+:class:`ReLURule` and :class:`ThresholdOptimizer` — and a
 ``download_url`` helper for fetching pretrained models.
 """
 

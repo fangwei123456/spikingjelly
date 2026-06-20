@@ -44,6 +44,22 @@ class SimpleCNNNoBN(nn.Module):
         return self.fc(x)
 
 
+class UnderscoreModuleCNN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv_block = nn.Sequential(
+            nn.Conv2d(1, 8, 3, padding=1),
+            nn.ReLU(),
+            nn.AvgPool2d(2),
+        )
+        self.fc = nn.Linear(8 * 14 * 14, 10)
+
+    def forward(self, x):
+        x = self.conv_block(x)
+        x = x.view(x.size(0), -1)
+        return self.fc(x)
+
+
 def _make_loader(batch_size=2, channels=1, h=28, w=28):
     imgs = torch.randn(batch_size, channels, h, w)
     labels = torch.zeros(batch_size, dtype=torch.long)
@@ -413,6 +429,31 @@ class TestRuleBasedConversion:
         assert scalers[0].scale.item() == pytest.approx(0.5)
         assert scalers[1].scale.item() == pytest.approx(2.0)
 
+    def test_module_names_with_underscores_convert(self):
+        model = UnderscoreModuleCNN()
+        model.eval()
+        snn = Converter(dataloader=_make_loader(), fuse_flag=False)(model)
+
+        assert any(isinstance(m, neuron.IFNode) for m in snn.modules())
+        assert not any(isinstance(m, nn.ReLU) for m in snn.modules())
+        assert "conv_block.spiking_0.if_node" in dict(snn.named_modules())
+
+    def test_non_positive_threshold_raises(self):
+        class ZeroScaleOptimizer:
+            def compute_threshold(self, hook):
+                return 0.0
+
+        model = SimpleCNNNoBN()
+        model.eval()
+        converter = Converter(
+            dataloader=_make_loader(),
+            threshold_optimizer=ZeroScaleOptimizer(),
+            fuse_flag=False,
+        )
+
+        with pytest.raises(ValueError, match="Threshold must be > 0"):
+            converter(model)
+
 
 class TestReplaceByIfnodeDeprecation:
     def test_set_voltagehook_static_legacy_api(self):
@@ -449,12 +490,11 @@ class TestEndToEnd:
         img = torch.randn(1, 1, 28, 28)
         T = 10
         out = 0
-        for t in range(T):
-            for m in snn.modules():
-                if hasattr(m, "reset"):
-                    m.reset()
-            for _ in range(T):
-                out = out + snn(img)
+        for m in snn.modules():
+            if hasattr(m, "reset"):
+                m.reset()
+        for _ in range(T):
+            out = out + snn(img)
         assert out.shape == (1, 10)
 
     def test_snn_no_bn(self):
