@@ -177,8 +177,12 @@ class Converter(nn.Module):
         if isinstance(data, torch.Tensor):
             return data
         if isinstance(data, (list, tuple)):
+            if not data:
+                raise ValueError("Batch data is an empty list or tuple.")
             return data[0]
         if isinstance(data, dict):
+            if not data:
+                raise ValueError("Batch data is an empty dictionary.")
             for key in ("input", "image", "img", "x", "data", "pixel_values"):
                 if key in data:
                     return data[key]

@@ -318,6 +318,14 @@ class TestConverterBackwardCompat:
         snn = converter(model)
         assert snn is not None
 
+    def test_extract_batch_input_rejects_empty_sequence(self):
+        with pytest.raises(ValueError, match="empty list or tuple"):
+            Converter._extract_batch_input([])
+
+    def test_extract_batch_input_rejects_empty_dict(self):
+        with pytest.raises(ValueError, match="empty dictionary"):
+            Converter._extract_batch_input({})
+
 
 class TestFuse:
     def test_conv_bn_fusion_matches_eval_output(self):
