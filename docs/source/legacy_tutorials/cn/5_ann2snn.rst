@@ -1,3 +1,5 @@
+:orphan:
+
 ANN转换SNN
 =======================================
 本教程作者： `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_
@@ -175,8 +177,8 @@ ann2snn框架在2022年4月又迎来一次较大更新。取消了parser和simul
 
 ◆ Converter类
 该类用于将ReLU的ANN转换为SNN。这里实现了常见的三种模式。
-最常见的是最大电流转换模式，它利用前后层的激活上限，使发放率最高的情况能够对应激活取得最大值的情况。使用这种模式需要将参数mode设置为``max``[#f2]_。
-99.9%电流转换模式利用99.9%的激活分位点限制了激活上限。使用这种模式需要将参数mode设置为``99.9%``[#f1]_。
+最常见的是最大电流转换模式，它利用前后层的激活上限，使发放率最高的情况能够对应激活取得最大值的情况。使用这种模式需要将参数mode设置为 ``max`` [#f2]_。
+99.9%电流转换模式利用99.9%的激活分位点限制了激活上限。使用这种模式需要将参数mode设置为 ``99.9%`` [#f1]_。
 缩放转换模式下，用户需要给定缩放参数到模式中，即可利用缩放后的激活最大值对电流进行限制。使用这种模式需要将参数mode设置为0-1的浮点数。
 
 识别MNIST
@@ -390,11 +392,14 @@ snn_model就是输出来的SNN模型。
     plt.ylabel('Acc')
     plt.show()
 
-.. image:: ../../_static/tutorials/5_ann2snn/accuracy_mode.png
+.. image:: ../../_static/tutorials/5_ann2snn/accuracy_mode_new_added.png
 
 不同的设置可以得到不同的结果，有的推理速度快，但是最终精度低，有的推理慢，但是精度高。用户可以根据自己的需求选择模型设置。
 
 .. [#f1] Rueckauer B, Lungu I-A, Hu Y, Pfeiffer M and Liu S-C (2017) Conversion of Continuous-Valued Deep Networks to Efficient Event-Driven Networks for Image Classification. Front. Neurosci. 11:682.
 .. [#f2] Diehl, Peter U. , et al. Fast classifying, high-accuracy spiking deep networks through weight and threshold balancing. Neural Networks (IJCNN), 2015 International Joint Conference on IEEE, 2015.
-.. [#f3] Rueckauer, B., Lungu, I. A., Hu, Y., & Pfeiffer, M. (2016). Theory and tools for the conversion of analog to spiking convolutional neural networks. arXiv preprint arXiv:1612.04052.
-.. [#f4] Sengupta, A., Ye, Y., Wang, R., Liu, C., & Roy, K. (2019). Going deeper in spiking neural networks: Vgg and residual architectures. Frontiers in neuroscience, 13, 95.
+
+其他参考文献：
+
+* Rueckauer, B., Lungu, I. A., Hu, Y., & Pfeiffer, M. (2016). Theory and tools for the conversion of analog to spiking convolutional neural networks. arXiv preprint arXiv:1612.04052.
+* Sengupta, A., Ye, Y., Wang, R., Liu, C., & Roy, K. (2019). Going deeper in spiking neural networks: Vgg and residual architectures. Frontiers in neuroscience, 13, 95.

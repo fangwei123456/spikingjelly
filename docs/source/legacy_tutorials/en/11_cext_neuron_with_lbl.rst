@@ -1,3 +1,5 @@
+:orphan:
+
 Accelerate with CUDA-Enhanced Neuron and Layer-by-Layer Propagation
 ============================================================================================
 

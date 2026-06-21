@@ -1,3 +1,5 @@
+:orphan:
+
 利用Spiking LSTM实现基于文本的姓氏分类任务
 ==============================================================================
 本教程作者：`LiutaoYu <https://github.com/LiutaoYu>`_，`fangwei123456 <https://github.com/fangwei123456>`_

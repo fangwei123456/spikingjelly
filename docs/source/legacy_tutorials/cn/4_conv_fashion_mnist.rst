@@ -1,3 +1,5 @@
+:orphan:
+
 时间驱动：使用卷积SNN识别Fashion-MNIST
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_

@@ -40,7 +40,7 @@ class Converter(nn.Module):
 
         目前支持三种转换模式，由参数mode进行设置。
 
-        转换后ReLU模块被删除，SNN需要的新模块（包括VoltageScaler、IFNode等)被创建并存放在snn tailor父模块中。
+        转换后ReLU模块被删除，SNN需要的新模块（包括VoltageScaler、IFNode等）被创建并存放在snn tailor父模块中。
 
         由于返回值的类型为fx.GraphModule，建议使用print(fx.GraphModule.graph)查看计算图及前向传播关系。更多API参见 `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ 。
 
@@ -55,7 +55,8 @@ class Converter(nn.Module):
         :type dataloader: Dataloader
         :param device: Device
         :type device: str
-        :param mode: 转换模式。目前支持三种模式: 最大电流转换模式mode='max'，99.9%电流转换模式mode='99.9%'，以及缩放转换模式mode=x（0<x<=1）
+        :param mode: 转换模式。目前支持三种模式：最大电流转换模式 ``mode="max"``，
+            99.9% 电流转换模式 ``mode="99.9%"``，以及缩放转换模式 ``mode=x`` （``0 < x <= 1``）。
         :type mode: str, float
         :param momentum: 动量值，用于modules.VoltageHook
         :type momentum: float
@@ -63,11 +64,13 @@ class Converter(nn.Module):
         :type fuse_flag: bool
         :param rules: 激活函数转换规则列表。每个规则必须实现
             ``match``、``insert_hooks``、``find_replacements`` 和
-            ``replace_with_neurons``。默认使用 ``[ReLURule()]``。
+            ``replace_with_neurons`` 。默认使用 ``[ReLURule()]`` 。
         :type rules: Optional[List[ActivationRule]]
-        :param neuron_factory: 脉冲神经元工厂。默认使用 ``NeuronFactory()``（IFNode, threshold=1.0）。
+        :param neuron_factory: 脉冲神经元工厂。默认使用
+            ``NeuronFactory()`` （IFNode, threshold=1.0）。
         :type neuron_factory: Optional[NeuronFactory]
-        :param threshold_optimizer: 阈值优化器。默认使用 ``ThresholdOptimizer("fixed")``。
+        :param threshold_optimizer: 阈值优化器。默认使用
+            ``ThresholdOptimizer(strategy="fixed")``。
         :type threshold_optimizer: Optional[ThresholdOptimizer]
 
         ----
@@ -82,9 +85,9 @@ class Converter(nn.Module):
 
         Three common methods are implemented here, which can be selected by the value of parameter mode.
 
-        After converting, ReLU modules will be removed. And new modules needed by SNN, such as VoltageScaler and IFNode, will be created and stored in the parent module 'snn tailor'.
+        After converting, ReLU modules will be removed. And new modules needed by SNN, such as VoltageScaler and IFNode, will be created and stored in the parent module ``snn tailor``.
 
-        Due to the type of the return model is fx.GraphModule, you can use 'print(fx.GraphModule.graph)' to view how modules links and the how the forward method works. More APIs are here `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
+        Due to the type of the return model is fx.GraphModule, you can use ``print(fx.GraphModule.graph)`` to view how modules links and the how the forward method works. More APIs are here `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
 
         .. warning::
 
@@ -98,7 +101,9 @@ class Converter(nn.Module):
         :type dataloader: Dataloader
         :param device: Device
         :type device: str
-        :param mode: Conversion mode. Now support three mode, MaxNorm(mode='max'), RobustNorm(mode='99.9%'), and scaling mode(mode=x, where 0<x<=1)
+        :param mode: Conversion mode. Now support three mode,
+            MaxNorm (``mode="max"``), RobustNorm (``mode="99.9%"``), and
+            scaling mode (``mode=x``, where ``0 < x <= 1``).
         :type mode: str, float
         :param momentum: Momentum value used by modules.VoltageHook
         :type momentum: float
@@ -110,7 +115,8 @@ class Converter(nn.Module):
         :type rules: Optional[List[ActivationRule]]
         :param neuron_factory: Neuron factory. Defaults to ``NeuronFactory()`` (IFNode, threshold=1.0).
         :type neuron_factory: Optional[NeuronFactory]
-        :param threshold_optimizer: Threshold optimizer. Defaults to ``ThresholdOptimizer("fixed")``.
+        :param threshold_optimizer: Threshold optimizer. Defaults to
+            ``ThresholdOptimizer(strategy="fixed")``.
         :type threshold_optimizer: Optional[ThresholdOptimizer]
         """
         super().__init__()
@@ -138,6 +144,7 @@ class Converter(nn.Module):
         ----
 
         .. _Converter.forward-cn:
+
         * **中文**
 
         :param ann: 待转换的ann
@@ -148,6 +155,7 @@ class Converter(nn.Module):
         ----
 
         .. _Converter.forward-en:
+
         * **English**
 
         :param ann: ann to be converted

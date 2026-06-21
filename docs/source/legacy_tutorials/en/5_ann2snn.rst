@@ -1,3 +1,5 @@
+:orphan:
+
 spikingjelly.activation_based.ann2snn
 =======================================
 Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_
@@ -173,10 +175,12 @@ Implementation and optional configuration
 
 The ann2snn framework will receive another major update in April 2022. The two categories of parser and simulator have been cancelled. Using the converter class replaces the previous solution. The current scheme is more compact and has more room for transformation settings.
 
-◆ Converter class
+Converter class
+"""""""""""""""
+
 This class is used to convert ReLU's ANN to SNN. Three common patterns are implemented here.
-The most common is the maximum current switching mode, which utilizes the upper and lower activation limits of the front and rear layers so that the case with the highest firing rate corresponds to the case where the activation achieves the maximum value. Using this mode requires setting the parameter mode to ``max``[#f2]_.
-The 99.9% current switching mode utilizes the 99.9% activation quantile to limit the upper activation limit. Using this mode requires setting the parameter mode to ``99.9%``[#f1]_.
+The most common is the maximum current switching mode, which utilizes the upper and lower activation limits of the front and rear layers so that the case with the highest firing rate corresponds to the case where the activation achieves the maximum value. Using this mode requires setting the parameter mode to ``max`` [#f2]_.
+The 99.9% current switching mode utilizes the 99.9% activation quantile to limit the upper activation limit. Using this mode requires setting the parameter mode to ``99.9%`` [#f1]_.
 In the scaling conversion mode, the user needs to specify the scaling parameters into the mode, and the current can be limited by the activated maximum value after scaling. Using this mode requires setting the parameter mode to a float of 0-1.
 
 Classify MNIST
@@ -390,11 +394,14 @@ Based on the time-varying accuracy of the model output, we can plot the accuracy
     plt.ylabel('Acc')
     plt.show()
 
-.. image:: ../../_static/tutorials/5_ann2snn/accuracy_mode.png
+.. image:: ../../_static/tutorials/5_ann2snn/accuracy_mode_new_added.png
 
 Different settings can get different results, some inference speed is fast, but the final accuracy is low, and some inference is slow, but the accuracy is high. Users can choose model settings according to their needs.
 
 .. [#f1] Rueckauer B, Lungu I-A, Hu Y, Pfeiffer M and Liu S-C (2017) Conversion of Continuous-Valued Deep Networks to Efficient Event-Driven Networks for Image Classification. Front. Neurosci. 11:682.
 .. [#f2] Diehl, Peter U. , et al. Fast classifying, high-accuracy spiking deep networks through weight and threshold balancing. Neural Networks (IJCNN), 2015 International Joint Conference on IEEE, 2015.
-.. [#f3] Rueckauer, B., Lungu, I. A., Hu, Y., & Pfeiffer, M. (2016). Theory and tools for the conversion of analog to spiking convolutional neural networks. arXiv preprint arXiv:1612.04052.
-.. [#f4] Sengupta, A., Ye, Y., Wang, R., Liu, C., & Roy, K. (2019). Going deeper in spiking neural networks: Vgg and residual architectures. Frontiers in neuroscience, 13, 95.
+
+Additional references:
+
+* Rueckauer, B., Lungu, I. A., Hu, Y., & Pfeiffer, M. (2016). Theory and tools for the conversion of analog to spiking convolutional neural networks. arXiv preprint arXiv:1612.04052.
+* Sengupta, A., Ye, Y., Wang, R., Liu, C., & Roy, K. (2019). Going deeper in spiking neural networks: Vgg and residual architectures. Frontiers in neuroscience, 13, 95.

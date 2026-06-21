@@ -1,3 +1,5 @@
+:orphan:
+
 Neuromorphic Datasets Processing
 ======================================
 
@@ -200,7 +202,7 @@ Let us visualize a sample:
 
 We will get the images like:
 
-.. image:: ../../_static/tutorials/13_neuromorphic_datasets/dvsg.*
+.. image:: ../../_static/tutorials/neuromorphic_datasets/dvsg.*
     :width: 100%
 
 Fixed Duration Integrating
@@ -296,7 +298,7 @@ Now let us visualize the frames:
     frame, label = train_set[500]
     play_frame(frame)
 
-.. image:: ../../_static/tutorials/13_neuromorphic_datasets/dvsg2.*
+.. image:: ../../_static/tutorials/neuromorphic_datasets/dvsg2.*
     :width: 100%
 
 SpikingJelly provides more methods to integrate events to frames. Read the API doc for more details.

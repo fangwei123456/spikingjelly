@@ -1,3 +1,5 @@
+:orphan:
+
 Clock driven: Encoder
 =======================================
 Author: `Grasshlw <https://github.com/Grasshlw>`_, `Yanqi-Chen <https://github.com/Yanqi-Chen>`_, `fangwei123456 <https://github.com/fangwei123456>`_

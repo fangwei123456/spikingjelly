@@ -1,3 +1,5 @@
+:orphan:
+
 Recurrent Connections and Stateful Synapses
 ================================================
 

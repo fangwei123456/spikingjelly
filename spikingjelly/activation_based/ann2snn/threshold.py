@@ -15,7 +15,7 @@ class ThresholdOptimizer:
     阈值优化器。根据 :class:`VoltageHook` 在校准阶段记录的 ``scale`` 计算当前层的
     神经元阈值。当前内置策略：
 
-    * ``"fixed"`` — 阈值等于校准 ``scale``（默认，等价于 SpikingJelly 原有行为）。
+    * ``"fixed"``: 阈值等于校准 ``scale`` （默认，等价于 SpikingJelly 原有行为）。
 
     其他策略需通过子类化并重写 :meth:`compute_threshold` 实现；基类可接受任意策略
     名，但只有 ``"fixed"`` 在基类中真正生效。
@@ -33,7 +33,7 @@ class ThresholdOptimizer:
     ``scale`` recorded by :class:`VoltageHook` during calibration. Built-in
     strategy:
 
-    * ``"fixed"`` — threshold equals the calibrated ``scale`` (default,
+    * ``"fixed"``: threshold equals the calibrated ``scale`` (default,
       matches the original SpikingJelly behaviour).
 
     Additional strategies should be implemented by subclassing and overriding

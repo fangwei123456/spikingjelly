@@ -1,3 +1,5 @@
+:orphan:
+
 Classifying Names with a Character-level Spiking LSTM
 ==============================================================================
 Authors: `LiutaoYu <https://github.com/LiutaoYu>`_, `fangwei123456 <https://github.com/fangwei123456>`_

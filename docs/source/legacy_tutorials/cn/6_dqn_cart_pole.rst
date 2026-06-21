@@ -1,3 +1,5 @@
+:orphan:
+
 强化学习DQN
 =======================================
 本教程作者：`fangwei123456 <https://github.com/fangwei123456>`_，`lucifer2859 <https://github.com/lucifer2859>`_

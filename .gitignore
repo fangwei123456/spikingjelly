@@ -152,7 +152,7 @@ workspace/
 /w1.py
 
 # Local-only agent skills & Codex state
-.agents/skills/
+.agents/
 .codex/
 .goal*/
 ObsidianVault

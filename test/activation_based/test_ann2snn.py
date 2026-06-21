@@ -61,10 +61,25 @@ class UnderscoreModuleCNN(nn.Module):
         return self.fc(x)
 
 
+class IdentityMLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc0 = nn.Linear(4, 4)
+        self.identity = nn.Identity()
+        self.fc1 = nn.Linear(4, 2)
+
+    def forward(self, x):
+        return self.fc1(self.identity(self.fc0(x)))
+
+
 def _make_loader(batch_size=2, channels=1, h=28, w=28):
     imgs = torch.randn(batch_size, channels, h, w)
     labels = torch.zeros(batch_size, dtype=torch.long)
     return [(imgs, labels)]
+
+
+def _make_vector_loader(batch_size=2, features=4):
+    return [torch.randn(batch_size, features)]
 
 
 class TestVoltageHook:
@@ -452,6 +467,86 @@ class TestRuleBasedConversion:
         assert rule.insert_count == 1
         assert rule.find_count == 1
         assert rule.replace_count == 1
+
+    def test_duck_typed_activation_rule_replaces_identity(self):
+        class IdentityRule:
+            def __init__(self):
+                self.match_count = 0
+                self.insert_count = 0
+                self.find_count = 0
+                self.replace_count = 0
+                self.threshold = None
+
+            def match(self, node, modules):
+                if (
+                    node.op == "call_module"
+                    and node.target in modules
+                    and type(modules[node.target]) is nn.Identity
+                ):
+                    self.match_count += 1
+                    return True
+                return False
+
+            def insert_hooks(
+                self, fx_model, node, hook_factory, hook_counts_per_prefix
+            ):
+                self.insert_count += 1
+                target = f"{node.target}_voltage_hook"
+                fx_model.add_submodule(target, hook_factory.create())
+                with fx_model.graph.inserting_after(node):
+                    return fx_model.graph.call_module(target, args=(node,))
+
+            def find_replacements(self, fx_model, modules):
+                self.find_count += 1
+                for hook_node in fx_model.graph.nodes:
+                    if hook_node.op != "call_module":
+                        continue
+                    if not isinstance(modules.get(hook_node.target), VoltageHook):
+                        continue
+                    activation_node = hook_node.args[0]
+                    if self.match(activation_node, modules):
+                        yield activation_node, hook_node
+
+            def replace_with_neurons(
+                self,
+                fx_model,
+                activation_node,
+                hook_node,
+                neuron_factory,
+                threshold_optimizer,
+            ):
+                self.replace_count += 1
+                hook = fx_model.get_submodule(hook_node.target)
+                self.threshold = threshold_optimizer.compute_threshold(hook)
+                target = f"{activation_node.target}_spiking_identity"
+                fx_model.add_submodule(target, nn.Identity())
+                with fx_model.graph.inserting_after(hook_node):
+                    new_node = fx_model.graph.call_module(
+                        target, args=activation_node.args
+                    )
+                hook_node.replace_all_uses_with(new_node)
+                activation_node.replace_all_uses_with(new_node)
+                fx_model.graph.erase_node(hook_node)
+                fx_model.graph.erase_node(activation_node)
+
+        rule = IdentityRule()
+        model = IdentityMLP()
+        model.eval()
+        snn = Converter(
+            dataloader=_make_vector_loader(),
+            rules=[rule],
+            fuse_flag=False,
+        )(model)
+
+        assert rule.match_count >= 2
+        assert rule.insert_count == 1
+        assert rule.find_count == 1
+        assert rule.replace_count == 1
+        assert rule.threshold > 0
+        assert "identity_spiking_identity" in dict(snn.named_modules())
+        assert "identity_voltage_hook" not in dict(snn.named_modules())
+        x = torch.randn(2, 4)
+        assert torch.allclose(snn(x), model(x), atol=0.0, rtol=0.0)
 
     def test_set_voltagehook_refreshes_modules_after_rule_insert(self):
         class TwoReLUCNN(nn.Module):

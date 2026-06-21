@@ -406,6 +406,78 @@ Call the ``GraphModule.graph.print_tabular()`` method to view the graph of the i
     call_module  network_15      network.15      (snn_tailor_3_3,)  {}
     output       output          output          (network_15,)      {}
 
+Customizing conversion rules
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+By default, ``Converter`` uses ``ReLURule`` to replace ``nn.ReLU`` modules with
+``VoltageScaler(1 / s) -> IFNode -> VoltageScaler(s)``. The calibration scale
+``s`` is computed from ``VoltageHook`` by ``ThresholdOptimizer``.
+
+Advanced users can pass explicit extension points to ``Converter``:
+
+* ``rules`` match FX graph nodes, insert calibration hooks, find calibrated
+  activation-hook pairs, and replace them with an SNN subgraph.
+* ``NeuronFactory`` creates the neuron used during replacement. The default
+  factory creates ``IFNode(v_threshold=1.0, v_reset=None)``.
+* ``ThresholdOptimizer`` computes a finite positive scalar threshold from a
+  calibrated ``VoltageHook``.
+
+The following minimal rule shows the protocol shape without adding a new
+conversion algorithm. It matches ``nn.Identity`` and replaces the calibrated
+identity node with another ``nn.Identity`` module:
+
+.. code-block:: python
+
+    import torch
+    import torch.nn as nn
+
+    from spikingjelly.activation_based import ann2snn
+    from spikingjelly.activation_based.ann2snn.modules import VoltageHook
+
+
+    class IdentityRule:
+        def match(self, node, modules):
+            return node.op == 'call_module' and type(modules[node.target]) is nn.Identity
+
+        def insert_hooks(self, fx_model, node, hook_factory, hook_counts_per_prefix):
+            target = f'{node.target}_voltage_hook'
+            fx_model.add_submodule(target, hook_factory.create())
+            with fx_model.graph.inserting_after(node):
+                return fx_model.graph.call_module(target, args=(node,))
+
+        def find_replacements(self, fx_model, modules):
+            for hook_node in fx_model.graph.nodes:
+                if hook_node.op == 'call_module' and isinstance(
+                    modules.get(hook_node.target), VoltageHook
+                ):
+                    yield hook_node.args[0], hook_node
+
+        def replace_with_neurons(
+            self, fx_model, activation_node, hook_node, neuron_factory, threshold_optimizer
+        ):
+            hook = fx_model.get_submodule(hook_node.target)
+            threshold = threshold_optimizer.compute_threshold(hook)
+            # IdentityRule does not use a spiking threshold, but real rules
+            # should pass this scalar into their replacement subgraph.
+            target = f'{activation_node.target}_spiking_identity'
+            fx_model.add_submodule(target, nn.Identity())
+            with fx_model.graph.inserting_after(hook_node):
+                new_node = fx_model.graph.call_module(target, args=activation_node.args)
+            hook_node.replace_all_uses_with(new_node)
+            activation_node.replace_all_uses_with(new_node)
+            fx_model.graph.erase_node(hook_node)
+            fx_model.graph.erase_node(activation_node)
+
+
+    converter = ann2snn.Converter(
+        dataloader=[torch.randn(2, 4)],
+        rules=[IdentityRule()],
+    )
+
+The built-in ``ReLURule`` path currently has defined semantics only for scalar
+thresholds. Per-channel or tensor thresholds need explicit shape, broadcasting,
+and ``VoltageScaler`` semantics, and are not part of this conversion path yet.
+
 Comparison of different converting modes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -514,5 +586,8 @@ Different settings can get different results, some inference speed is fast, but 
 
 .. [#f1] Rueckauer B, Lungu I-A, Hu Y, Pfeiffer M and Liu S-C (2017) Conversion of Continuous-Valued Deep Networks to Efficient Event-Driven Networks for Image Classification. Front. Neurosci. 11:682.
 .. [#f2] Diehl, Peter U. , et al. Fast classifying, high-accuracy spiking deep networks through weight and threshold balancing. Neural Networks (IJCNN), 2015 International Joint Conference on IEEE, 2015.
-.. [#f3] Rueckauer, B., Lungu, I. A., Hu, Y., & Pfeiffer, M. (2016). Theory and tools for the conversion of analog to spiking convolutional neural networks. arXiv preprint arXiv:1612.04052.
-.. [#f4] Sengupta, A., Ye, Y., Wang, R., Liu, C., & Roy, K. (2019). Going deeper in spiking neural networks: Vgg and residual architectures. Frontiers in neuroscience, 13, 95.
+
+Additional references:
+
+* Rueckauer, B., Lungu, I. A., Hu, Y., & Pfeiffer, M. (2016). Theory and tools for the conversion of analog to spiking convolutional neural networks. arXiv preprint arXiv:1612.04052.
+* Sengupta, A., Ye, Y., Wang, R., Liu, C., & Roy, K. (2019). Going deeper in spiking neural networks: Vgg and residual architectures. Frontiers in neuroscience, 13, 95.

@@ -1,3 +1,5 @@
+:orphan:
+
 Propagation Pattern
 =======================================
 Authors: `fangwei123456 <https://github.com/fangwei123456>`_

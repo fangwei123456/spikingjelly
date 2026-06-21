@@ -1,3 +1,5 @@
+:orphan:
+
 Clock driven: Use single-layer fully connected SNN to identify MNIST
 =========================================================================
 

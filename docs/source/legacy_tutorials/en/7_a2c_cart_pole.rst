@@ -1,3 +1,5 @@
+:orphan:
+
 Reinforcement Learning: Advantage Actor Critic (A2C)
 =============================================================
 Author: `lucifer2859 <https://github.com/lucifer2859>`_

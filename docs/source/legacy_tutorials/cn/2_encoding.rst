@@ -1,3 +1,5 @@
+:orphan:
+
 时间驱动：编码器
 =======================================
 本教程作者： `Grasshlw <https://github.com/Grasshlw>`_, `Yanqi-Chen <https://github.com/Yanqi-Chen>`_, `fangwei123456 <https://github.com/fangwei123456>`_
