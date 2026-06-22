@@ -83,9 +83,6 @@ class Dropout(base.MemoryModule):
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
-        
-        :return: None
-        :rtype: None
 """
         super().__init__()
         self.step_mode = step_mode
@@ -156,9 +153,6 @@ class Dropout2d(Dropout):
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
-        
-        :return: None
-        :rtype: None
 """
         super().__init__(p, step_mode)
 
@@ -270,9 +264,6 @@ class DropConnectLinear(base.MemoryModule):
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.step_mode = step_mode
@@ -306,8 +297,6 @@ class DropConnectLinear(base.MemoryModule):
 
         * **中文**
 
-        :return: None
-        :rtype: None
 
         初始化模型中的可学习参数。
 
@@ -317,8 +306,6 @@ class DropConnectLinear(base.MemoryModule):
 
         * **English**
 
-        :return: None
-        :rtype: None
 
         Initialize the learnable parameters of this module.
         """
@@ -341,8 +328,6 @@ class DropConnectLinear(base.MemoryModule):
 
         将线性层重置为完全连接的状态，若 ``self.activation`` 也是一个有状态的层，则将其也重置。
 
-        :return: None
-        :rtype: None
 
         ----
 
@@ -352,9 +337,6 @@ class DropConnectLinear(base.MemoryModule):
 
         Reset the linear layer to fully-connected status. If ``self.activation`` is also stateful, this function will
         also reset it.
-
-        :return: None
-        :rtype: None
         """
         super().reset()
         if hasattr(self.activation, "reset"):

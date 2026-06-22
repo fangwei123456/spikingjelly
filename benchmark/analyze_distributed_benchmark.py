@@ -1,4 +1,5 @@
-"""Analyze and compare distributed SNN benchmark results.
+"""
+Analyze and compare distributed SNN benchmark results.
 
 Reads JSONL records produced by ``benchmark_snn_distributed.py`` and provides
 grouping, aggregation, and comparison utilities.

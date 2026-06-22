@@ -4,27 +4,6 @@ from torchvision.transforms.functional import InterpolationMode
 
 
 class ClassificationPresetTrain:
-    r"""
-    **API Language:**
-    :ref:`中文 <ClassificationPresetTrain-cn>` | :ref:`English <ClassificationPresetTrain-en>`
-
-    ----
-
-    .. _ClassificationPresetTrain-cn:
-
-    * **中文**
-
-    训练阶段的分类预处理配置。包含随机裁剪、翻转、自动增强和归一化。
-
-    ----
-
-    .. _ClassificationPresetTrain-en:
-
-    * **English**
-
-    Classification preprocessing preset for training. Includes random crop, flip, auto-augment and normalization.
-    """
-
     def __init__(
         self,
         crop_size,
@@ -35,6 +14,26 @@ class ClassificationPresetTrain:
         auto_augment_policy=None,
         random_erase_prob=0.0,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <ClassificationPresetTrain-cn>` | :ref:`English <ClassificationPresetTrain-en>`
+
+        ----
+
+        .. _ClassificationPresetTrain-cn:
+
+        * **中文**
+
+        训练阶段的分类预处理配置。包含随机裁剪、翻转、自动增强和归一化。
+
+        ----
+
+        .. _ClassificationPresetTrain-en:
+
+        * **English**
+
+        Classification preprocessing preset for training. Includes random crop, flip, auto-augment and normalization.
+        """
         trans = [transforms.RandomResizedCrop(crop_size, interpolation=interpolation)]
         if hflip_prob > 0:
             trans.append(transforms.RandomHorizontalFlip(hflip_prob))
@@ -69,27 +68,6 @@ class ClassificationPresetTrain:
 
 
 class ClassificationPresetEval:
-    r"""
-    **API Language:**
-    :ref:`中文 <ClassificationPresetEval-cn>` | :ref:`English <ClassificationPresetEval-en>`
-
-    ----
-
-    .. _ClassificationPresetEval-cn:
-
-    * **中文**
-
-    评估/推理阶段的分类预处理配置。包含缩放裁剪和归一化。
-
-    ----
-
-    .. _ClassificationPresetEval-en:
-
-    * **English**
-
-    Classification preprocessing preset for evaluation/inference. Includes resize, crop and normalization.
-    """
-
     def __init__(
         self,
         crop_size,
@@ -98,6 +76,26 @@ class ClassificationPresetEval:
         std=(0.229, 0.224, 0.225),
         interpolation=InterpolationMode.BILINEAR,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <ClassificationPresetEval-cn>` | :ref:`English <ClassificationPresetEval-en>`
+
+        ----
+
+        .. _ClassificationPresetEval-cn:
+
+        * **中文**
+
+        评估/推理阶段的分类预处理配置。包含缩放裁剪和归一化。
+
+        ----
+
+        .. _ClassificationPresetEval-en:
+
+        * **English**
+
+        Classification preprocessing preset for evaluation/inference. Includes resize, crop and normalization.
+        """
         self.transforms = transforms.Compose(
             [
                 transforms.Resize(resize_size, interpolation=interpolation),

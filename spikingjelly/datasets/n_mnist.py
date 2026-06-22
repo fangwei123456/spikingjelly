@@ -101,9 +101,6 @@ class NMNIST(NeuromorphicDatasetFolder):
         :type transform: Optional[Callable]
         :param target_transform: Target transform function
         :type target_transform: Optional[Callable]
-
-        :return: None
-        :rtype: None
         """
         if train is None:
             raise ValueError("`train` must be `True` or `False`")
@@ -222,8 +219,6 @@ class NMNIST(NeuromorphicDatasetFolder):
         :type download_root: Path
         :param extract_root: 提取目标目录
         :type extract_root: Path
-        :return: None
-        :rtype: None
 
         ----
 
@@ -237,8 +232,6 @@ class NMNIST(NeuromorphicDatasetFolder):
         :type download_root: Path
         :param extract_root: Directory to extract into
         :type extract_root: Path
-        :return: None
-        :rtype: None
         """
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
             futures = []
@@ -269,8 +262,6 @@ class NMNIST(NeuromorphicDatasetFolder):
         :type extract_root: Path
         :param raw_root: 保存原始数据的目录
         :type raw_root: Path
-        :return: None
-        :rtype: None
 
         ----
 
@@ -285,8 +276,6 @@ class NMNIST(NeuromorphicDatasetFolder):
         :type extract_root: Path
         :param raw_root: Directory to save the raw dataset
         :type raw_root: Path
-        :return: None
-        :rtype: None
         """
         t_ckp = time.time()
         with ThreadPoolExecutor(

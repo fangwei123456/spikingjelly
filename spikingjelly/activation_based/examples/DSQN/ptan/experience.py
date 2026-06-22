@@ -1,11 +1,10 @@
-import gym
-import torch
-import random
 import collections
+import random
+from collections import deque, namedtuple
 
+import gym
 import numpy as np
-
-from collections import namedtuple, deque
+import torch
 
 from .agent import BaseAgent
 from .common import utils
@@ -183,17 +182,16 @@ ExperienceFirstLast = collections.namedtuple(
 
 
 class ExperienceSourceFirstLast(ExperienceSource):
-    """
-    This is a wrapper around ExperienceSource to prevent storing full trajectory in replay buffer when we need
-    only first and last states. For every trajectory piece it calculates discounted reward and emits only first
-    and last states and action taken in the first state.
-
-    If we have partial trajectory at the end of episode, last_state will be None
-    """
-
     def __init__(
         self, env, agent, gamma, steps_count=1, steps_delta=1, vectorized=False
     ):
+        """
+        This is a wrapper around ExperienceSource to prevent storing full trajectory in replay buffer when we need
+        only first and last states. For every trajectory piece it calculates discounted reward and emits only first
+        and last states and action taken in the first state.
+
+        If we have partial trajectory at the end of episode, last_state will be None
+        """
         assert isinstance(gamma, float)
         super(ExperienceSourceFirstLast, self).__init__(
             env, agent, steps_count + 1, steps_delta, vectorized=vectorized
@@ -234,19 +232,17 @@ def discount_with_dones(rewards, dones, gamma):
 
 
 class ExperienceSourceRollouts:
-    """
-    N-step rollout experience source following A3C rollouts scheme. Have to be used with agent,
-    keeping the value in its state (for example, agent.ActorCriticAgent).
-
-    Yields batches of num_envs * n_steps samples with the following arrays:
-    1. observations
-    2. actions
-    3. discounted rewards, with values approximation
-    4. values
-    """
-
     def __init__(self, env, agent, gamma, steps_count=5):
         """
+        N-step rollout experience source following A3C rollouts scheme. Have to be used with agent,
+        keeping the value in its state (for example, agent.ActorCriticAgent).
+
+        Yields batches of num_envs * n_steps samples with the following arrays:
+        1. observations
+        2. actions
+        3. discounted rewards, with values approximation
+        4. values
+
         Constructs the rollout experience source
         :param env: environment or list of environments to be used
         :param agent: callable to convert batch of states into actions
@@ -532,13 +528,6 @@ class BatchPreprocessor:
 
 
 class QLearningPreprocessor(BatchPreprocessor):
-    """
-    Supports SimpleDQN, TargetDQN, DoubleDQN and can additionally feed TD-error back to
-    experience replay buffer.
-
-    To use different modes, use appropriate class method
-    """
-
     def __init__(
         self,
         model,
@@ -548,6 +537,12 @@ class QLearningPreprocessor(BatchPreprocessor):
         gamma=0.99,
         device="cpu",
     ):
+        """
+        Supports SimpleDQN, TargetDQN, DoubleDQN and can additionally feed TD-error back to
+        experience replay buffer.
+
+        To use different modes, use appropriate class method
+        """
         self.model = model
         self.target_model = target_model
         self.use_double_dqn = use_double_dqn

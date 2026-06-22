@@ -5,36 +5,10 @@ import torch
 from .. import surrogate
 from .lif import LIFNode
 
-
 __all__ = ["OTTTLIFNode", "SLTTLIFNode"]
 
 
 class OTTTLIFNode(LIFNode):
-    r"""
-    **API Language:**
-    :ref:`中文 <OTTTLIFNode-cn>` | :ref:`English <OTTTLIFNode-en>`
-
-    ----
-
-    .. _OTTTLIFNode-cn:
-
-    * **中文**
-
-    用于 OTTT 训练的单步 LIF 神经元。该类继承 :class:`LIFNode` 的放电行为，但仅支持
-    ``step_mode='s'`` 和 ``backend='torch'``，并在训练时额外维护迹以供后续模块使用。
-
-    ----
-
-    .. _OTTTLIFNode-en:
-
-    * **English**
-
-    Single-step LIF neuron for OTTT training. This class inherits the firing
-    behavior of :class:`LIFNode`, but only supports ``step_mode='s'`` and
-    ``backend='torch'``. During training it also maintains a trace for
-    downstream modules.
-    """
-
     def __init__(
         self,
         tau: float = 2.0,
@@ -56,6 +30,9 @@ class OTTTLIFNode(LIFNode):
         .. _OTTTLIFNode.__init__-cn:
 
         * **中文**
+
+        用于 OTTT 训练的单步 LIF 神经元。该类继承 :class:`LIFNode` 的放电行为，但仅支持
+        ``step_mode='s'`` 和 ``backend='torch'``，并在训练时额外维护迹以供后续模块使用。
 
         OTTT LIF 神经元模型，来源于
         `Online Training Through Time for Spiking Neural Networks
@@ -99,6 +76,11 @@ class OTTTLIFNode(LIFNode):
         .. _OTTTLIFNode.__init__-en:
 
         * **English**
+
+        Single-step LIF neuron for OTTT training. This class inherits the firing
+        behavior of :class:`LIFNode`, but only supports ``step_mode='s'`` and
+        ``backend='torch'``. During training it also maintains a trace for
+        downstream modules.
 
         OTTT LIF neuron, proposed in
         `Online Training Through Time for Spiking Neural Networks
@@ -144,9 +126,6 @@ class OTTTLIFNode(LIFNode):
             :class:`LIFNode`. This class only supports single-step mode and does
             not use ``self.v_seq``
         :type store_v_seq: bool
-
-        :return: None
-        :rtype: None
         """
 
         super().__init__(
@@ -166,7 +145,7 @@ class OTTTLIFNode(LIFNode):
         """
         膜电位将在前向传播过程中重新登记为缓存，以支持多卡分布式训练的情况下保留信息在各时刻进行多次反向传播
 
-        membrane potential will be registered as buffer during forward, to support multiple backpropagation for all time steps with 
+        membrane potential will be registered as buffer during forward, to support multiple backpropagation for all time steps with
         reserved informtion under distributed training on multiple GPUs
         """
         self._memories.pop("v")
@@ -281,31 +260,6 @@ class OTTTLIFNode(LIFNode):
 
 
 class SLTTLIFNode(LIFNode):
-    r"""
-    **API Language:**
-    :ref:`中文 <SLTTLIFNode-cn>` | :ref:`English <SLTTLIFNode-en>`
-
-    ----
-
-    .. _SLTTLIFNode-cn:
-
-    * **中文**
-
-    用于 SLTT 训练的单步 LIF 神经元。该类继承 :class:`LIFNode` 的放电行为，但仅支持
-    ``step_mode='s'`` 和 ``backend='torch'``，并通过截断时间梯度来降低训练的时间与显存开销。
-
-    ----
-
-    .. _SLTTLIFNode-en:
-
-    * **English**
-
-    Single-step LIF neuron for SLTT training. This class inherits the firing
-    behavior of :class:`LIFNode`, but only supports ``step_mode='s'`` and
-    ``backend='torch'``. It reduces training time and memory cost by truncating
-    temporal gradients.
-    """
-
     def __init__(
         self,
         tau: float = 2.0,
@@ -327,6 +281,9 @@ class SLTTLIFNode(LIFNode):
         .. _SLTTLIFNode.__init__-cn:
 
         * **中文**
+
+        用于 SLTT 训练的单步 LIF 神经元。该类继承 :class:`LIFNode` 的放电行为，但仅支持
+        ``step_mode='s'`` 和 ``backend='torch'``，并通过截断时间梯度来降低训练的时间与显存开销。
 
         SLTT LIF 神经元模型，来源于
         `Towards Memory- and Time-Efficient Backpropagation for Training Spiking Neural Networks
@@ -372,6 +329,11 @@ class SLTTLIFNode(LIFNode):
 
         * **English**
 
+        Single-step LIF neuron for SLTT training. This class inherits the firing
+        behavior of :class:`LIFNode`, but only supports ``step_mode='s'`` and
+        ``backend='torch'``. It reduces training time and memory cost by truncating
+        temporal gradients.
+
         SLTT LIF neuron, proposed in
         `Towards Memory- and Time-Efficient Backpropagation for Training Spiking Neural Networks
         <https://arxiv.org/pdf/2302.14311.pdf>`_.
@@ -416,9 +378,6 @@ class SLTTLIFNode(LIFNode):
             :class:`LIFNode`. This class only supports single-step mode and does
             not use ``self.v_seq``
         :type store_v_seq: bool
-
-        :return: None
-        :rtype: None
         """
         super().__init__(
             tau,

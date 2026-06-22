@@ -61,9 +61,6 @@ class BatchNorm1d(nn.BatchNorm1d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.BatchNorm1d` for other parameters' API
-
-        :return: None
-        :rtype: None
         """
         super().__init__(num_features, eps, momentum, affine, track_running_stats)
         self.step_mode = step_mode
@@ -126,9 +123,6 @@ class BatchNorm2d(nn.BatchNorm2d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.BatchNorm2d` for other parameters' API
-
-        :return: None
-        :rtype: None
         """
         super().__init__(num_features, eps, momentum, affine, track_running_stats)
         self.step_mode = step_mode
@@ -194,9 +188,6 @@ class BatchNorm3d(nn.BatchNorm3d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.BatchNorm3d` for other parameters' API
-
-        :return: None
-        :rtype: None
         """
         super().__init__(num_features, eps, momentum, affine, track_running_stats)
         self.step_mode = step_mode
@@ -311,9 +302,6 @@ class NeuNorm(base.MemoryModule):
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.step_mode = step_mode
@@ -402,9 +390,6 @@ class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
         :type v_th: float
 
         Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm1d`.
-
-        :return: None
-        :rtype: None
         """
         super().__init__(alpha, v_th, *args, **kwargs)
 
@@ -458,9 +443,6 @@ class ThresholdDependentBatchNorm2d(_ThresholdDependentBatchNormBase):
         :type v_th: float
 
         Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm2d`.
-
-        :return: None
-        :rtype: None
         """
         super().__init__(alpha, v_th, *args, **kwargs)
 
@@ -514,9 +496,6 @@ class ThresholdDependentBatchNorm3d(_ThresholdDependentBatchNormBase):
         :type v_th: float
 
         Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm3d`.
-
-        :return: None
-        :rtype: None
         """
         super().__init__(alpha, v_th, *args, **kwargs)
 
@@ -593,9 +572,6 @@ class TemporalEffectiveBatchNorm1d(_TemporalEffectiveBatchNormBase):
         :type T: int
 
         Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm1d`.
-
-        :return: None
-        :rtype: None
         """
         super().__init__(T, *args, **kwargs)
 
@@ -656,9 +632,6 @@ class TemporalEffectiveBatchNorm2d(_TemporalEffectiveBatchNormBase):
         :type T: int
 
         Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm2d`.
-
-        :return: None
-        :rtype: None
         """
         super().__init__(T, *args, **kwargs)
 
@@ -719,9 +692,6 @@ class TemporalEffectiveBatchNorm3d(_TemporalEffectiveBatchNormBase):
         :type T: int
 
         Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm3d`.
-
-        :return: None
-        :rtype: None
         """
         super().__init__(T, *args, **kwargs)
 
@@ -841,9 +811,6 @@ class BatchNormThroughTime1d(_BatchNormThroughTimeBase):
         :type step_mode: str
 
         Other parameters are same with those of :class:`torch.nn.BatchNorm1d`.
-
-        :return: None
-        :rtype: None
         """
         super().__init__(
             T, num_features, eps, momentum, affine, track_running_stats, step_mode
@@ -924,9 +891,6 @@ class BatchNormThroughTime2d(_BatchNormThroughTimeBase):
         :type step_mode: str
 
         Other parameters are same with those of :class:`torch.nn.BatchNorm2d`.
-
-        :return: None
-        :rtype: None
         """
         super().__init__(
             T, num_features, eps, momentum, affine, track_running_stats, step_mode
@@ -1007,9 +971,6 @@ class BatchNormThroughTime3d(_BatchNormThroughTimeBase):
         :type step_mode: str
 
         Other parameters are same with those of :class:`torch.nn.BatchNorm3d`.
-
-        :return: None
-        :rtype: None
         """
         super().__init__(
             T, num_features, eps, momentum, affine, track_running_stats, step_mode

@@ -330,37 +330,34 @@ class _LemaireForwardTracker:
 
 
 class LemaireEnergyProfiler:
-    r"""
-    **API Language:**
-    :ref:`中文 <LemaireEnergyProfiler-cn>` |
-    :ref:`English <LemaireEnergyProfiler-en>`
-
-    ----
-
-    .. _LemaireEnergyProfiler-cn:
-
-    * **中文**
-
-    基于多个 public counter 组装的、仅面向前向推理的 Lemaire 能耗分析器。
-
-    ----
-
-    .. _LemaireEnergyProfiler-en:
-
-    * **English**
-
-    Inference-only Lemaire energy profiler composed from public counters.
-
-    :param config: 能耗配置，若为 ``None`` 则使用默认配置
-    :type config: LemaireEnergyConfig | None
-
-    :param config: Energy configuration. If ``None``, uses the default configuration
-    :type config: LemaireEnergyConfig | None
-    :return: None
-    :rtype: None
-    """
-
     def __init__(self, *, config: LemaireEnergyConfig | None = None):
+        """
+        **API Language:**
+        :ref:`中文 <LemaireEnergyProfiler-cn>` |
+        :ref:`English <LemaireEnergyProfiler-en>`
+
+        ----
+
+        .. _LemaireEnergyProfiler-cn:
+
+        * **中文**
+
+        基于多个 public counter 组装的、仅面向前向推理的 Lemaire 能耗分析器。
+
+        :param config: 能耗配置，若为 ``None`` 则使用默认配置
+        :type config: LemaireEnergyConfig | None
+
+        ----
+
+        .. _LemaireEnergyProfiler-en:
+
+        * **English**
+
+        Inference-only Lemaire energy profiler composed from public counters.
+
+        :param config: Energy configuration. If ``None``, uses the default configuration
+        :type config: LemaireEnergyConfig | None
+        """
         self.config = copy.deepcopy(config or LemaireEnergyConfig())
         self.model: nn.Module | None = None
         ignore_neurons = [BaseNode]

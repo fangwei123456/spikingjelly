@@ -19,7 +19,6 @@ class Tempotron(nn.Module):
 
         Gutig R, Sompolinsky H. The tempotron: a neuron that learns spike timing–based decisions[J]. Nature \
         Neuroscience, 2006, 9(3): 420-428. 中提出的Tempotron模型
-
         """
         super().__init__()
         self.tau = tau

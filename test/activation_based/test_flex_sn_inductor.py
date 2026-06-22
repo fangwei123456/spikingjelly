@@ -1,5 +1,4 @@
 """Coverage for FlexSN's triton / inductor backend and HOP fallback helpers.
-
 The file exercises FlexSN's shared ``triton`` / ``inductor`` CUDA backend
 labels, the ``flex_sn_scan`` HOP path, and the low-level helper modules under
 ``triton_kernel.flexsn``. CUDA-specific cases are guarded individually so the

@@ -15,39 +15,38 @@ __all__ = [
 
 
 class GraphCollector:
-    """Provide this class to aot_function to collect forward and backward graph/module.
-    **API Language:**
-    :ref:`中文 <GraphCollector-cn>` | :ref:`English <GraphCollector-en>`
-
-    ----
-
-    .. _GraphCollector-cn:
-
-    * **中文**
-
-    FX 计算图收集器，用于追踪和记录 PyTorch 模型的计算图结构。
-
-    通过包装 Torch FX 的 ``GraphModule``，在模型前向传播时收集算子调用序列，
-    捕获每个算子的输入输出信息，以便后续生成等效的 Triton 代码。
-    主要用于将 PyTorch 模型转换为自定义 Triton kernel。
-
-    :rtype: None
-    We store both the raw GraphModule and the Graph to allow safe optimizations that
-    preserve module attributes/constants when possible.
-
-    ----
-
-    .. _GraphCollector-en:
-
-    * **English**
-
-    GraphCollector class
-
-    :return: None
-    :rtype: None
-    """
-
     def __init__(self):
+        """
+        Provide this class to aot_function to collect forward and backward graph/module.
+        **API Language:**
+        :ref:`中文 <GraphCollector-cn>` | :ref:`English <GraphCollector-en>`
+
+        ----
+
+        .. _GraphCollector-cn:
+
+        * **中文**
+
+        FX 计算图收集器，用于追踪和记录 PyTorch 模型的计算图结构。
+
+        通过包装 Torch FX 的 ``GraphModule``，在模型前向传播时收集算子调用序列，
+        捕获每个算子的输入输出信息，以便后续生成等效的 Triton 代码。
+        主要用于将 PyTorch 模型转换为自定义 Triton kernel。
+
+        ----
+
+        .. _GraphCollector-en:
+
+        * **English**
+
+        GraphCollector class for collecting forward and backward graphs.
+
+        This class wraps around Torch FX's ``GraphModule`` to collect the sequence of
+        operator calls during the model's forward pass, capturing the input and output
+        information of each operator. This information is essential for generating
+        equivalent Triton code later on. It is primarily used for converting PyTorch
+        models into custom Triton kernels.
+        """
         self.fwd_graph: Optional[fx.Graph] = None
         self.bwd_graph: Optional[fx.Graph] = None
         self.fwd_module: Optional[fx.GraphModule] = None

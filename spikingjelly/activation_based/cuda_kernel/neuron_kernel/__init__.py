@@ -10,9 +10,6 @@
 
 多步神经元CUDA kernel函数接口。
 
-:return: None
-:rtype: None
-
 ----
 
 .. _cuda_neuron_kernel-en:
@@ -20,9 +17,6 @@
 * **English**
 
 Multi-step neuron CUDA kernel function interfaces.
-
-:return: None
-:rtype: None
 """
 
 from .common import save_cuda_codes

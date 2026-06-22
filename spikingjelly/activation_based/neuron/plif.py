@@ -146,9 +146,6 @@ class ParametricLIFNode(BaseNode):
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
             memory consumption
         :type store_v_seq: bool
-
-        :return: None
-        :rtype: None
         """
         assert isinstance(init_tau, float) and init_tau > 1.0
         super().__init__(

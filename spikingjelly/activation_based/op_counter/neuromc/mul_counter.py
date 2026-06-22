@@ -164,54 +164,50 @@ def _mul_native_batch_norm_backward(args, kwargs, out):
 
 
 class NeuroMCMulCounter(NeuroMCBaseCounter):
-    """Counter for multiplication operations in the NeuroMC framework.
-    **API Language:**
-    :ref:`中文 <NeuroMCMulCounter-cn>` | :ref:`English <NeuroMCMulCounter-en>`
-
-    ----
-
-    .. _NeuroMCMulCounter-cn:
-
-    * **中文**
-
-    乘法运算计数器，继承自 :class:`NeuroMCBaseCounter`。
-
-    专门用于在模型前向传播和反向传播过程中统计乘法（Multiplication）操作次数，
-    包括矩阵乘法、逐元素乘法、卷积中的乘法等。已针对脉冲稀疏性进行优化：
-    当输入为二值脉冲时，利用稀疏性加速计数。
-
-    :return: None
-    :rtype: None
-
-    ----
-
-    .. _NeuroMCMulCounter-en:
-
-    * **English**
-
-    Multiplication operation counter, inheriting from :class:`NeuroMCBaseCounter`.
-
-    Counts multiplication operations during model forward and backward passes,
-    including matrix multiplications, element-wise multiplications, and
-    convolution multiplications. Optimized for spike sparsity: uses binary
-    spike structure to accelerate counting when inputs are spike tensors.
-
-    :return: None
-    :rtype: None
-    """
-
     def __init__(
         self,
         extra_rules: dict[Any, Callable] | None = None,
         extra_ignore_modules: list[nn.Module] | None = None,
     ):
         """
+        Counter for multiplication operations in the NeuroMC framework.
+        **API Language:**
+        :ref:`中文 <NeuroMCMulCounter-cn>` | :ref:`English <NeuroMCMulCounter-en>`
+
+        ----
+
+        .. _NeuroMCMulCounter-cn:
+
+        * **中文**
+
+        乘法运算计数器，继承自 :class:`NeuroMCBaseCounter`。
+
+        专门用于在模型前向传播和反向传播过程中统计乘法（Multiplication）操作次数，
+        包括矩阵乘法、逐元素乘法、卷积中的乘法等。已针对脉冲稀疏性进行优化：
+        当输入为二值脉冲时，利用稀疏性加速计数。
+
         :param extra_rules: Additional counting rules keyed by ATen operation
         :type extra_rules: dict[Any, Callable] | None
         :param extra_ignore_modules: Additional module types to ignore during counting
         :type extra_ignore_modules: list[nn.Module] | None
-        :return: None
-        :rtype: None
+
+        ----
+
+        .. _NeuroMCMulCounter-en:
+
+        * **English**
+
+        Multiplication operation counter, inheriting from :class:`NeuroMCBaseCounter`.
+
+        Counts multiplication operations during model forward and backward passes,
+        including matrix multiplications, element-wise multiplications, and
+        convolution multiplications. Optimized for spike sparsity: uses binary
+        spike structure to accelerate counting when inputs are spike tensors.
+
+        :param extra_rules: Additional counting rules keyed by ATen operation
+        :type extra_rules: dict[Any, Callable] | None
+        :param extra_ignore_modules: Additional module types to ignore during counting
+        :type extra_ignore_modules: list[nn.Module] | None
         """
         if extra_rules is None:
             extra_rules = {}

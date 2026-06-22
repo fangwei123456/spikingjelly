@@ -37,7 +37,6 @@ MEMOPT_PREFERENCES = ("speed", "balanced", "memory")
 @dataclass
 class MemOptSummary:
     """Summary of a memory optimization configuration.
-
     Records the selected profile, checkpoint budget, preference, device,
     and optimization level for a :func:`memory_optimization` run.
 
@@ -989,7 +988,6 @@ def _train_memory_profile(
 
 def _train_peak_memory_worker(net, dummy_input, q, device, worker_warmup=True):
     """Profile the peak training memory usage of the entire net.
-
     `net` and `dummy_input` should be deep copies located on CPU,
     since they must be pickle-able for multiprocessing.
     """

@@ -139,8 +139,6 @@ class IFNode(nn.Module):
         :param store_v_seq: kept for API compatibility; Lite ``forward`` currently
             returns ``spike_seq`` only
         :type store_v_seq: bool
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.v_th = v_threshold
@@ -812,8 +810,6 @@ class LIFNode(nn.Module):
         :param store_v_seq: kept for API compatibility; Lite ``forward`` currently
             returns ``spike_seq`` only
         :type store_v_seq: bool
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.decay = 1.0 / tau
@@ -1571,8 +1567,6 @@ class ParametricLIFNode(nn.Module):
         :param store_v_seq: kept for API compatibility; Lite ``forward`` currently
             returns ``spike_seq`` only
         :type store_v_seq: bool
-        :return: None
-        :rtype: None
         """
         super().__init__()
         init_w = -math.log(init_tau - 1.0)
@@ -2451,8 +2445,6 @@ class ILIFNode(nn.Module):
         :param store_v_seq: kept for API compatibility; Lite ``forward`` currently
             returns ``spike_seq`` only
         :type store_v_seq: bool
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.decay = decay

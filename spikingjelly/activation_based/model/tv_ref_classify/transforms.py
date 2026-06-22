@@ -7,51 +7,6 @@ from torchvision.transforms import functional as F
 
 
 class RandomMixup(torch.nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <RandomMixup-cn>` | :ref:`English <RandomMixup-en>`
-
-    ----
-
-    .. _RandomMixup-cn:
-
-    * **中文**
-
-    对输入 batch 和标签随机执行 MixUp 增强。
-
-    该模块实现了论文 `mixup: Beyond Empirical Risk Minimization
-    <https://arxiv.org/abs/1710.09412>`_ 中描述的数据增强方法。
-
-    :param num_classes: one-hot 编码使用的类别数
-    :type num_classes: int
-    :param p: batch 被增强的概率，默认为 ``0.5``
-    :type p: float
-    :param alpha: MixUp 所用 Beta 分布的超参数，默认为 ``1.0``
-    :type alpha: float
-    :param inplace: 是否原地修改输入，默认为 ``False``
-    :type inplace: bool
-
-    ----
-
-    .. _RandomMixup-en:
-
-    * **English**
-
-    Randomly apply MixUp augmentation to the provided batch and targets.
-
-    This module implements the data augmentation described in
-    `mixup: Beyond Empirical Risk Minimization <https://arxiv.org/abs/1710.09412>`_.
-
-    :param num_classes: Number of classes used for one-hot encoding
-    :type num_classes: int
-    :param p: Probability that the batch is transformed, default is ``0.5``
-    :type p: float
-    :param alpha: Hyperparameter of the Beta distribution used for MixUp, default is ``1.0``
-    :type alpha: float
-    :param inplace: Whether to modify the inputs in place, default is ``False``
-    :type inplace: bool
-    """
-
     def __init__(
         self,
         num_classes: int,
@@ -59,6 +14,50 @@ class RandomMixup(torch.nn.Module):
         alpha: float = 1.0,
         inplace: bool = False,
     ) -> None:
+        """
+        **API Language:**
+        :ref:`中文 <RandomMixup-cn>` | :ref:`English <RandomMixup-en>`
+
+        ----
+
+        .. _RandomMixup-cn:
+
+        * **中文**
+
+        对输入 batch 和标签随机执行 MixUp 增强。
+
+        该模块实现了论文 `mixup: Beyond Empirical Risk Minimization
+        <https://arxiv.org/abs/1710.09412>`_ 中描述的数据增强方法。
+
+        :param num_classes: one-hot 编码使用的类别数
+        :type num_classes: int
+        :param p: batch 被增强的概率，默认为 ``0.5``
+        :type p: float
+        :param alpha: MixUp 所用 Beta 分布的超参数，默认为 ``1.0``
+        :type alpha: float
+        :param inplace: 是否原地修改输入，默认为 ``False``
+        :type inplace: bool
+
+        ----
+
+        .. _RandomMixup-en:
+
+        * **English**
+
+        Randomly apply MixUp augmentation to the provided batch and targets.
+
+        This module implements the data augmentation described in
+        `mixup: Beyond Empirical Risk Minimization <https://arxiv.org/abs/1710.09412>`_.
+
+        :param num_classes: Number of classes used for one-hot encoding
+        :type num_classes: int
+        :param p: Probability that the batch is transformed, default is ``0.5``
+        :type p: float
+        :param alpha: Hyperparameter of the Beta distribution used for MixUp, default is ``1.0``
+        :type alpha: float
+        :param inplace: Whether to modify the inputs in place, default is ``False``
+        :type inplace: bool
+        """
         super().__init__()
         assert num_classes > 0, (
             "Please provide a valid positive value for the num_classes."
@@ -155,53 +154,6 @@ class RandomMixup(torch.nn.Module):
 
 
 class RandomCutmix(torch.nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <RandomCutmix-cn>` | :ref:`English <RandomCutmix-en>`
-
-    ----
-
-    .. _RandomCutmix-cn:
-
-    * **中文**
-
-    对输入 batch 和标签随机执行 CutMix 增强。
-
-    该模块实现了论文 `CutMix: Regularization Strategy to Train Strong
-    Classifiers with Localizable Features <https://arxiv.org/abs/1905.04899>`_
-    中描述的数据增强方法。
-
-    :param num_classes: one-hot 编码使用的类别数
-    :type num_classes: int
-    :param p: batch 被增强的概率，默认为 ``0.5``
-    :type p: float
-    :param alpha: CutMix 所用 Beta 分布的超参数，默认为 ``1.0``
-    :type alpha: float
-    :param inplace: 是否原地修改输入，默认为 ``False``
-    :type inplace: bool
-
-    ----
-
-    .. _RandomCutmix-en:
-
-    * **English**
-
-    Randomly apply CutMix augmentation to the provided batch and targets.
-
-    This module implements the data augmentation described in
-    `CutMix: Regularization Strategy to Train Strong Classifiers with
-    Localizable Features <https://arxiv.org/abs/1905.04899>`_.
-
-    :param num_classes: Number of classes used for one-hot encoding
-    :type num_classes: int
-    :param p: Probability that the batch is transformed, default is ``0.5``
-    :type p: float
-    :param alpha: Hyperparameter of the Beta distribution used for CutMix, default is ``1.0``
-    :type alpha: float
-    :param inplace: Whether to modify the inputs in place, default is ``False``
-    :type inplace: bool
-    """
-
     def __init__(
         self,
         num_classes: int,
@@ -209,6 +161,52 @@ class RandomCutmix(torch.nn.Module):
         alpha: float = 1.0,
         inplace: bool = False,
     ) -> None:
+        """
+        **API Language:**
+        :ref:`中文 <RandomCutmix-cn>` | :ref:`English <RandomCutmix-en>`
+
+        ----
+
+        .. _RandomCutmix-cn:
+
+        * **中文**
+
+        对输入 batch 和标签随机执行 CutMix 增强。
+
+        该模块实现了论文 `CutMix: Regularization Strategy to Train Strong
+        Classifiers with Localizable Features <https://arxiv.org/abs/1905.04899>`_
+        中描述的数据增强方法。
+
+        :param num_classes: one-hot 编码使用的类别数
+        :type num_classes: int
+        :param p: batch 被增强的概率，默认为 ``0.5``
+        :type p: float
+        :param alpha: CutMix 所用 Beta 分布的超参数，默认为 ``1.0``
+        :type alpha: float
+        :param inplace: 是否原地修改输入，默认为 ``False``
+        :type inplace: bool
+
+        ----
+
+        .. _RandomCutmix-en:
+
+        * **English**
+
+        Randomly apply CutMix augmentation to the provided batch and targets.
+
+        This module implements the data augmentation described in
+        `CutMix: Regularization Strategy to Train Strong Classifiers with
+        Localizable Features <https://arxiv.org/abs/1905.04899>`_.
+
+        :param num_classes: Number of classes used for one-hot encoding
+        :type num_classes: int
+        :param p: Probability that the batch is transformed, default is ``0.5``
+        :type p: float
+        :param alpha: Hyperparameter of the Beta distribution used for CutMix, default is ``1.0``
+        :type alpha: float
+        :param inplace: Whether to modify the inputs in place, default is ``False``
+        :type inplace: bool
+        """
         super().__init__()
         assert num_classes > 0, (
             "Please provide a valid positive value for the num_classes."

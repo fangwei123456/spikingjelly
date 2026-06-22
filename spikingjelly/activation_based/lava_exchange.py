@@ -276,8 +276,6 @@ class BatchNorm2d(nn.Module):
         :type weight_exp_bits: int
         :param pre_hook_fx: 归一化前对均值的预处理函数
         :type pre_hook_fx: Callable
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -300,8 +298,6 @@ class BatchNorm2d(nn.Module):
         :type weight_exp_bits: int
         :param pre_hook_fx: Pre-processing function applied to mean before normalization
         :type pre_hook_fx: Callable
-        :return: ``None``
-        :rtype: None
         """
         super().__init__()
         # lava.lib.dl.slayer.neuron.norm.WgtScaleBatchNorm
@@ -845,7 +841,6 @@ try:
 
         .. image:: ../_static/API/activation_based/lava_exchange/step_quantize.*
             :width: 100%
-
         """
         return _step_quantize.apply(x, step)
 

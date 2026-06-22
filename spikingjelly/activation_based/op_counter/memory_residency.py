@@ -199,61 +199,60 @@ _RESIDENCY_ACCESS_RULES: dict[Any, Callable] = {
 
 
 class MemoryResidencySimulator:
-    r"""
-    **API Language:**
-    :ref:`中文 <MemoryResidencySimulator-cn>` |
-    :ref:`English <MemoryResidencySimulator-en>`
-
-    ----
-
-    .. _MemoryResidencySimulator-cn:
-
-    * **中文**
-
-    内存驻留模拟器，用于模拟 SNN 推理过程中张量在不同存储层级（寄存器、SRAM、DRAM）的驻留和移动。
-
-    该模拟器使用 LRU 淘汰策略管理寄存器与 SRAM 缓存，追踪每个操作对各层级字节的读写，
-    以及各层级间的数据移动量。
-
-    典型用法是与 :class:`MemoryResidencyCounter` 配合使用，由计数器自动驱动模拟器更新。
-
-    :param config: 可选配置对象（需具有 ``capacity_bits`` 属性）
-    :type config: Optional[Any]
-
-    :param capacity_bits: 各层级的容量（以比特为单位），包含 ``reg``、``sram``、``dram`` 三个键。
-        若未提供则使用默认容量
-    :type capacity_bits: Optional[dict[str, float]]
-
-    ----
-
-    .. _MemoryResidencySimulator-en:
-
-    * **English**
-
-    Memory residency simulator that models tensor residency and movement across
-    different memory hierarchy levels (reg, SRAM, DRAM) during SNN inference.
-
-    The simulator manages register and SRAM caches with LRU eviction policy,
-    tracks per-operation read/write bytes at each level, and data movement
-    between levels.
-
-    Typical usage is to pair it with :class:`MemoryResidencyCounter`, which
-    automatically drives the simulator.
-
-    :param config: optional config object (must have ``capacity_bits`` attribute)
-    :type config: Optional[Any]
-
-    :param capacity_bits: capacity for each level in bits, with keys ``reg``,
-        ``sram``, and ``dram``. If not provided, default capacities are used
-    :type capacity_bits: Optional[dict[str, float]]
-    """
-
     def __init__(
         self,
         config: Any | None = None,
         *,
         capacity_bits: dict[str, float] | None = None,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <MemoryResidencySimulator-cn>` |
+        :ref:`English <MemoryResidencySimulator-en>`
+
+        ----
+
+        .. _MemoryResidencySimulator-cn:
+
+        * **中文**
+
+        内存驻留模拟器，用于模拟 SNN 推理过程中张量在不同存储层级（寄存器、SRAM、DRAM）的驻留和移动。
+
+        该模拟器使用 LRU 淘汰策略管理寄存器与 SRAM 缓存，追踪每个操作对各层级字节的读写，
+        以及各层级间的数据移动量。
+
+        典型用法是与 :class:`MemoryResidencyCounter` 配合使用，由计数器自动驱动模拟器更新。
+
+        :param config: 可选配置对象（需具有 ``capacity_bits`` 属性）
+        :type config: Optional[Any]
+
+        :param capacity_bits: 各层级的容量（以比特为单位），包含 ``reg``、``sram``、``dram`` 三个键。
+            若未提供则使用默认容量
+        :type capacity_bits: Optional[dict[str, float]]
+
+        ----
+
+        .. _MemoryResidencySimulator-en:
+
+        * **English**
+
+        Memory residency simulator that models tensor residency and movement across
+        different memory hierarchy levels (reg, SRAM, DRAM) during SNN inference.
+
+        The simulator manages register and SRAM caches with LRU eviction policy,
+        tracks per-operation read/write bytes at each level, and data movement
+        between levels.
+
+        Typical usage is to pair it with :class:`MemoryResidencyCounter`, which
+        automatically drives the simulator.
+
+        :param config: optional config object (must have ``capacity_bits`` attribute)
+        :type config: Optional[Any]
+
+        :param capacity_bits: capacity for each level in bits, with keys ``reg``,
+            ``sram``, and ``dram``. If not provided, default capacities are used
+        :type capacity_bits: Optional[dict[str, float]]
+        """
         if capacity_bits is None:
             if config is not None and hasattr(config, "capacity_bits"):
                 capacity_bits = getattr(config, "capacity_bits")
@@ -513,39 +512,6 @@ class MemoryResidencySimulator:
 
 
 class MemoryResidencyCounter(BaseCounter):
-    r"""
-    **API Language:**
-    :ref:`中文 <MemoryResidencyCounter-cn>` |
-    :ref:`English <MemoryResidencyCounter-en>`
-
-    ----
-
-    .. _MemoryResidencyCounter-cn:
-
-    * **中文**
-
-    内存驻留计数器，用于追踪 SNN 推理过程中张量在各存储层级（register、SRAM、DRAM）之间的驻留和移动。
-
-    该计数器使用 :class:`MemoryResidencySimulator` 模拟缓存行为，并结合 LRU
-    淘汰策略管理寄存器与 SRAM 层级。它可与
-    :class:`DispatchCounterMode <spikingjelly.activation_based.op_counter.base.DispatchCounterMode>`
-    配合使用来自动追踪每个 aten 操作的内存访问模式。
-
-    ----
-
-    .. _MemoryResidencyCounter-en:
-
-    * **English**
-
-    Memory residency counter that tracks tensor residency and movement across
-    memory hierarchy levels (register, SRAM, DRAM) during SNN inference.
-
-    It uses :class:`MemoryResidencySimulator` to model cache behavior with LRU
-    eviction policy at register and SRAM levels. It is designed to be used with
-    :class:`DispatchCounterMode <spikingjelly.activation_based.op_counter.base.DispatchCounterMode>`
-    to automatically track memory access patterns of each aten operation.
-    """
-
     def __init__(
         self,
         *,
@@ -564,6 +530,13 @@ class MemoryResidencyCounter(BaseCounter):
         .. _MemoryResidencyCounter.__init__-cn:
 
         * **中文**
+
+        内存驻留计数器，用于追踪 SNN 推理过程中张量在各存储层级（register、SRAM、DRAM）之间的驻留和移动。
+
+        该计数器使用 :class:`MemoryResidencySimulator` 模拟缓存行为，并结合 LRU
+        淘汰策略管理寄存器与 SRAM 层级。它可与
+        :class:`DispatchCounterMode <spikingjelly.activation_based.op_counter.base.DispatchCounterMode>`
+        配合使用来自动追踪每个 aten 操作的内存访问模式。
 
         初始化内存驻留计数器。
 
@@ -587,6 +560,14 @@ class MemoryResidencyCounter(BaseCounter):
 
         * **English**
 
+        Memory residency counter that tracks tensor residency and movement across
+        memory hierarchy levels (register, SRAM, DRAM) during SNN inference.
+
+        It uses :class:`MemoryResidencySimulator` to model cache behavior with LRU
+        eviction policy at register and SRAM levels. It is designed to be used with
+        :class:`DispatchCounterMode <spikingjelly.activation_based.op_counter.base.DispatchCounterMode>`
+        to automatically track memory access patterns of each aten operation.
+
         Initialize the memory residency counter.
 
         :param config: optional config object (must have ``capacity_bits`` attribute)
@@ -604,9 +585,6 @@ class MemoryResidencyCounter(BaseCounter):
         :param extra_ignore_modules: list of module classes to ignore. Memory accesses
             within these modules will not be counted
         :type extra_ignore_modules: Optional[list[type[nn.Module]]]
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.rules = dict(_RESIDENCY_ACCESS_RULES)
@@ -644,8 +622,6 @@ class MemoryResidencyCounter(BaseCounter):
 
         重置计数器和模拟器的所有记录状态。
 
-        :return: None
-        :rtype: None
 
         ----
 
@@ -654,9 +630,6 @@ class MemoryResidencyCounter(BaseCounter):
         * **English**
 
         Reset all recorded states of the counter and the underlying simulator.
-
-        :return: None
-        :rtype: None
         """
         self.records.clear()
         self.level_records.clear()

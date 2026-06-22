@@ -314,9 +314,7 @@ class TestConverterBackwardCompat:
         model = SimpleCNNNoBN()
         model.eval()
         imgs = torch.randn(2, 1, 28, 28)
-        converter = Converter(
-            dataloader=[{"input": imgs}], mode="Max", fuse_flag=False
-        )
+        converter = Converter(dataloader=[{"input": imgs}], mode="Max", fuse_flag=False)
         snn = converter(model)
         assert snn is not None
 

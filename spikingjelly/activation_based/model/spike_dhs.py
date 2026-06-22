@@ -14,7 +14,6 @@ from ...activation_based import layer
 from ..neuron import LIFNode
 from ..surrogate import SurrogateFunctionBase, heaviside
 
-
 __all__ = [
     "DSpike",
     "save_v_LIFNode",
@@ -127,28 +126,27 @@ class dSpike(Function):
 
 
 class DSpike(SurrogateFunctionBase):
-    r"""
-    **API Language:**
-    :ref:`中文 <DSpike-cn>` | :ref:`English <DSpike-en>`
-
-    ----
-
-    .. _DSpike-cn:
-
-    * **中文**
-
-    DSpike 替代梯度函数。
-
-    ----
-
-    .. _DSpike-en:
-
-    * **English**
-
-    DSpike surrogate gradient function.
-    """
-
     def __init__(self, alpha: float = 3, spiking=True):
+        """
+        **API Language:**
+        :ref:`中文 <DSpike-cn>` | :ref:`English <DSpike-en>`
+
+        ----
+
+        .. _DSpike-cn:
+
+        * **中文**
+
+        DSpike 替代梯度函数。
+
+        ----
+
+        .. _DSpike-en:
+
+        * **English**
+
+        DSpike surrogate gradient function.
+        """
         super().__init__(alpha, spiking)
         assert alpha > 0, "alpha must be lager than 0."
 
@@ -225,27 +223,6 @@ def get_save_v_SpikingNode(v_threshold=0.5):
 
 
 class SpikingConv2d(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <SpikingConv2d-cn>` | :ref:`English <SpikingConv2d-en>`
-
-    ----
-
-    .. _SpikingConv2d-cn:
-
-    * **中文**
-
-    DSpike 搜索中使用的脉冲卷积层。
-
-    ----
-
-    .. _SpikingConv2d-en:
-
-    * **English**
-
-    Spiking convolutional layer used in DSpike search.
-    """
-
     def __init__(
         self,
         input_c,
@@ -257,6 +234,26 @@ class SpikingConv2d(nn.Module):
         spiking=True,
         v_threshold=0.5,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <SpikingConv2d-cn>` | :ref:`English <SpikingConv2d-en>`
+
+        ----
+
+        .. _SpikingConv2d-cn:
+
+        * **中文**
+
+        DSpike 搜索中使用的脉冲卷积层。
+
+        ----
+
+        .. _SpikingConv2d-en:
+
+        * **English**
+
+        Spiking convolutional layer used in DSpike search.
+        """
         super(SpikingConv2d, self).__init__()
         self.conv = layer.Conv2d(
             input_c, output_c, kernel_size=kernel_size, stride=stride, padding=padding
@@ -274,27 +271,6 @@ class SpikingConv2d(nn.Module):
 
 
 class SearchSpikingConv2d_stem(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <SearchSpikingConv2d_stem-cn>` | :ref:`English <SearchSpikingConv2d_stem-en>`
-
-    ----
-
-    .. _SearchSpikingConv2d_stem-cn:
-
-    * **中文**
-
-    DSpike 搜索网络的 stem（入口）脉冲卷积层。
-
-    ----
-
-    .. _SearchSpikingConv2d_stem-en:
-
-    * **English**
-
-    Stem spiking conv layer for DSpike search network.
-    """
-
     def __init__(
         self,
         input_c,
@@ -306,6 +282,26 @@ class SearchSpikingConv2d_stem(nn.Module):
         spiking=True,
         v_threshold=0.5,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <SearchSpikingConv2d_stem-cn>` | :ref:`English <SearchSpikingConv2d_stem-en>`
+
+        ----
+
+        .. _SearchSpikingConv2d_stem-cn:
+
+        * **中文**
+
+        DSpike 搜索网络的 stem（入口）脉冲卷积层。
+
+        ----
+
+        .. _SearchSpikingConv2d_stem-en:
+
+        * **English**
+
+        Stem spiking conv layer for DSpike search network.
+        """
         super(SearchSpikingConv2d_stem, self).__init__()
         self.conv_m = layer.Conv2d(
             input_c, output_c, kernel_size=kernel_size, stride=stride, padding=padding
@@ -372,27 +368,6 @@ class SearchSpikingConv2d_stem(nn.Module):
 
 
 class SearchSpikingConv2d_cell(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <SearchSpikingConv2d_cell-cn>` | :ref:`English <SearchSpikingConv2d_cell-en>`
-
-    ----
-
-    .. _SearchSpikingConv2d_cell-cn:
-
-    * **中文**
-
-    DSpike 搜索网络的 cell（中间）脉冲卷积层。
-
-    ----
-
-    .. _SearchSpikingConv2d_cell-en:
-
-    * **English**
-
-    Cell spiking conv layer for DSpike search network.
-    """
-
     def __init__(
         self,
         io_c,
@@ -403,6 +378,26 @@ class SearchSpikingConv2d_cell(nn.Module):
         spiking=True,
         v_threshold=0.5,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <SearchSpikingConv2d_cell-cn>` | :ref:`English <SearchSpikingConv2d_cell-en>`
+
+        ----
+
+        .. _SearchSpikingConv2d_cell-cn:
+
+        * **中文**
+
+        DSpike 搜索网络的 cell（中间）脉冲卷积层。
+
+        ----
+
+        .. _SearchSpikingConv2d_cell-en:
+
+        * **English**
+
+        Cell spiking conv layer for DSpike search network.
+        """
         super(SearchSpikingConv2d_cell, self).__init__()
         [input_c1, output_c1, primitive1], [input_c2, output_c2, primitive2] = io_c
 
@@ -502,28 +497,27 @@ class SearchSpikingConv2d_cell(nn.Module):
 
 
 class SpikingLinear(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <SpikingLinear-cn>` | :ref:`English <SpikingLinear-en>`
-
-    ----
-
-    .. _SpikingLinear-cn:
-
-    * **中文**
-
-    DSpike 搜索中使用的脉冲全连接层。
-
-    ----
-
-    .. _SpikingLinear-en:
-
-    * **English**
-
-    Spiking linear layer used in DSpike search.
-    """
-
     def __init__(self, input_c, output_c, spiking=True):
+        """
+        **API Language:**
+        :ref:`中文 <SpikingLinear-cn>` | :ref:`English <SpikingLinear-en>`
+
+        ----
+
+        .. _SpikingLinear-cn:
+
+        * **中文**
+
+        DSpike 搜索中使用的脉冲全连接层。
+
+        ----
+
+        .. _SpikingLinear-en:
+
+        * **English**
+
+        Spiking linear layer used in DSpike search.
+        """
         super(SpikingLinear, self).__init__()
         self.linear = layer.Linear(input_c, output_c)
         self.bn = layer.SeqToANNContainer(nn.BatchNorm1d(output_c))
@@ -539,28 +533,27 @@ class SpikingLinear(nn.Module):
 
 
 class SpikingAvgPool2d(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <SpikingAvgPool2d-cn>` | :ref:`English <SpikingAvgPool2d-en>`
-
-    ----
-
-    .. _SpikingAvgPool2d-cn:
-
-    * **中文**
-
-    DSpike 搜索中使用的脉冲平均池化层。
-
-    ----
-
-    .. _SpikingAvgPool2d-en:
-
-    * **English**
-
-    Spiking avg pooling layer used in DSpike search.
-    """
-
     def __init__(self, kernel_size=5, stride=3, padding=0, b=3, spiking=True):
+        """
+        **API Language:**
+        :ref:`中文 <SpikingAvgPool2d-cn>` | :ref:`English <SpikingAvgPool2d-en>`
+
+        ----
+
+        .. _SpikingAvgPool2d-cn:
+
+        * **中文**
+
+        DSpike 搜索中使用的脉冲平均池化层。
+
+        ----
+
+        .. _SpikingAvgPool2d-en:
+
+        * **English**
+
+        Spiking avg pooling layer used in DSpike search.
+        """
         super(SpikingAvgPool2d, self).__init__()
         self.pooling = layer.SeqToANNContainer(
             nn.AvgPool2d(
@@ -577,28 +570,27 @@ class SpikingAvgPool2d(nn.Module):
 
 
 class SpikingAdaptiveAvgPool2d(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <SpikingAdaptiveAvgPool2d-cn>` | :ref:`English <SpikingAdaptiveAvgPool2d-en>`
-
-    ----
-
-    .. _SpikingAdaptiveAvgPool2d-cn:
-
-    * **中文**
-
-    DSpike 搜索中使用的脉冲自适应平均池化层。
-
-    ----
-
-    .. _SpikingAdaptiveAvgPool2d-en:
-
-    * **English**
-
-    Spiking adaptive avg pooling layer used in DSpike search.
-    """
-
     def __init__(self, dimension, b=3, spiking=True):
+        """
+        **API Language:**
+        :ref:`中文 <SpikingAdaptiveAvgPool2d-cn>` | :ref:`English <SpikingAdaptiveAvgPool2d-en>`
+
+        ----
+
+        .. _SpikingAdaptiveAvgPool2d-cn:
+
+        * **中文**
+
+        DSpike 搜索中使用的脉冲自适应平均池化层。
+
+        ----
+
+        .. _SpikingAdaptiveAvgPool2d-en:
+
+        * **English**
+
+        Spiking adaptive avg pooling layer used in DSpike search.
+        """
         super(SpikingAdaptiveAvgPool2d, self).__init__()
         self.pooling = layer.SeqToANNContainer(nn.AdaptiveAvgPool2d(dimension))
         self.spike = getSpikingNode()
@@ -888,7 +880,6 @@ class SpikeDHS(nn.Module):
         :param args: additional arguments
 
         The SpikeDHS `Auto-Spikformer: Spikformer Architecture Search <https://arxiv.org/abs/2306.00807>`_ implementation by Spikingjelly.
-
         """
         super(SpikeDHS, self).__init__()
         network_path_fea = [0, 0, 1, 1, 1, 2, 2, 2]

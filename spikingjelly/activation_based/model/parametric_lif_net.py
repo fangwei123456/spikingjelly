@@ -1,7 +1,10 @@
+from copy import deepcopy
+
 import torch
 import torch.nn as nn
-from copy import deepcopy
+
 from .. import layer
+
 # Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks https://arxiv.org/abs/2007.05785
 
 __all__ = [
@@ -96,38 +99,37 @@ class FashionMNISTNet(MNISTNet):
 
 
 class NMNISTNet(MNISTNet):
-    r"""
-    **API Language:**
-    :ref:`中文 <NMNISTNet-cn>` | :ref:`English <NMNISTNet-en>`
-
-    ----
-
-    .. _NMNISTNet-cn:
-
-    * **中文**
-
-    用于 N-MNIST 事件流分类的 Parametric LIF 网络。基于 :class:`MNISTNet`，将首层卷积输入通道调整为 2。
-
-    :param channels: 卷积层的通道数
-    :type channels: int
-    :param spiking_neuron: 脉冲神经元类
-    :type spiking_neuron: callable
-
-    ----
-
-    .. _NMNISTNet-en:
-
-    * **English**
-
-    Parametric LIF network for N-MNIST event stream classification. Based on :class:`MNISTNet` with first conv layer adjusted to 2 input channels.
-
-    :param channels: Number of channels in conv layers
-    :type channels: int
-    :param spiking_neuron: Spiking neuron class
-    :type spiking_neuron: callable
-    """
-
     def __init__(self, channels=128, spiking_neuron: callable = None, **kwargs):
+        """
+        **API Language:**
+        :ref:`中文 <NMNISTNet-cn>` | :ref:`English <NMNISTNet-en>`
+
+        ----
+
+        .. _NMNISTNet-cn:
+
+        * **中文**
+
+        用于 N-MNIST 事件流分类的 Parametric LIF 网络。基于 :class:`MNISTNet`，将首层卷积输入通道调整为 2。
+
+        :param channels: 卷积层的通道数
+        :type channels: int
+        :param spiking_neuron: 脉冲神经元类
+        :type spiking_neuron: callable
+
+        ----
+
+        .. _NMNISTNet-en:
+
+        * **English**
+
+        Parametric LIF network for N-MNIST event stream classification. Based on :class:`MNISTNet` with first conv layer adjusted to 2 input channels.
+
+        :param channels: Number of channels in conv layers
+        :type channels: int
+        :param spiking_neuron: Spiking neuron class
+        :type spiking_neuron: callable
+        """
         super().__init__(channels, spiking_neuron, **kwargs)
         self.conv_fc[0] = layer.Conv2d(
             2, channels, kernel_size=3, padding=1, bias=False
@@ -136,28 +138,27 @@ class NMNISTNet(MNISTNet):
 
 
 class CIFAR10Net(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <CIFAR10Net-cn>` | :ref:`English <CIFAR10Net-en>`
-
-    ----
-
-    .. _CIFAR10Net-cn:
-
-    * **中文**
-
-    用于 CIFAR-10 分类的 Parametric LIF 网络。
-
-    ----
-
-    .. _CIFAR10Net-en:
-
-    * **English**
-
-    Parametric LIF network for CIFAR-10 classification.
-    """
-
     def __init__(self, channels=256, spiking_neuron: callable = None, **kwargs):
+        """
+        **API Language:**
+        :ref:`中文 <CIFAR10Net-cn>` | :ref:`English <CIFAR10Net-en>`
+
+        ----
+
+        .. _CIFAR10Net-cn:
+
+        * **中文**
+
+        用于 CIFAR-10 分类的 Parametric LIF 网络。
+
+        ----
+
+        .. _CIFAR10Net-en:
+
+        * **English**
+
+        Parametric LIF network for CIFAR-10 classification.
+        """
         super().__init__()
 
         conv = []
@@ -195,28 +196,27 @@ class CIFAR10Net(nn.Module):
 
 
 class CIFAR10DVSNet(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <CIFAR10DVSNet-cn>` | :ref:`English <CIFAR10DVSNet-en>`
-
-    ----
-
-    .. _CIFAR10DVSNet-cn:
-
-    * **中文**
-
-    用于 CIFAR10-DVS 事件流分类的 Parametric LIF 网络。
-
-    ----
-
-    .. _CIFAR10DVSNet-en:
-
-    * **English**
-
-    Parametric LIF network for CIFAR10-DVS event stream classification.
-    """
-
     def __init__(self, channels=128, spiking_neuron: callable = None, **kwargs):
+        """
+        **API Language:**
+        :ref:`中文 <CIFAR10DVSNet-cn>` | :ref:`English <CIFAR10DVSNet-en>`
+
+        ----
+
+        .. _CIFAR10DVSNet-cn:
+
+        * **中文**
+
+        用于 CIFAR10-DVS 事件流分类的 Parametric LIF 网络。
+
+        ----
+
+        .. _CIFAR10DVSNet-en:
+
+        * **English**
+
+        Parametric LIF network for CIFAR10-DVS event stream classification.
+        """
         super().__init__()
 
         conv = []
@@ -252,28 +252,27 @@ class CIFAR10DVSNet(nn.Module):
 
 
 class DVSGestureNet(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <DVSGestureNet-cn>` | :ref:`English <DVSGestureNet-en>`
-
-    ----
-
-    .. _DVSGestureNet-cn:
-
-    * **中文**
-
-    用于 DVS128 Gesture 手势识别的 Parametric LIF 网络。
-
-    ----
-
-    .. _DVSGestureNet-en:
-
-    * **English**
-
-    Parametric LIF network for DVS128 Gesture recognition.
-    """
-
     def __init__(self, channels=128, spiking_neuron: callable = None, **kwargs):
+        """
+        **API Language:**
+        :ref:`中文 <DVSGestureNet-cn>` | :ref:`English <DVSGestureNet-en>`
+
+        ----
+
+        .. _DVSGestureNet-cn:
+
+        * **中文**
+
+        用于 DVS128 Gesture 手势识别的 Parametric LIF 网络。
+
+        ----
+
+        .. _DVSGestureNet-en:
+
+        * **English**
+
+        Parametric LIF network for DVS128 Gesture recognition.
+        """
         super().__init__()
 
         conv = []
@@ -310,7 +309,8 @@ class DVSGestureNet(nn.Module):
 
 def test_models():
     import torch
-    from .. import neuron, surrogate, functional
+
+    from .. import functional, neuron, surrogate
 
     x = torch.rand([2, 1, 28, 28])
     net = MNISTNet(16, neuron.IFNode, surrogate_function=surrogate.ATan())

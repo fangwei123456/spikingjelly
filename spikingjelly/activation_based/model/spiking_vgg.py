@@ -35,27 +35,6 @@ model_urls = {
 
 
 class SpikingVGG(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <SpikingVGG-cn>` | :ref:`English <SpikingVGG-en>`
-
-    ----
-
-    .. _SpikingVGG-cn:
-
-    * **中文**
-
-    脉冲 VGG 网络。继承自 :class:`torchvision.models.VGG`，将原网络的激活函数替换为脉冲神经元。
-
-    ----
-
-    .. _SpikingVGG-en:
-
-    * **English**
-
-    Spiking VGG network. Inherits from :class:`torchvision.models.VGG` with activations replaced by spiking neurons.
-    """
-
     def __init__(
         self,
         cfg,
@@ -66,6 +45,26 @@ class SpikingVGG(nn.Module):
         spiking_neuron: callable = None,
         **kwargs,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <SpikingVGG-cn>` | :ref:`English <SpikingVGG-en>`
+
+        ----
+
+        .. _SpikingVGG-cn:
+
+        * **中文**
+
+        脉冲 VGG 网络。继承自 :class:`torchvision.models.VGG`，将原网络的激活函数替换为脉冲神经元。
+
+        ----
+
+        .. _SpikingVGG-en:
+
+        * **English**
+
+        Spiking VGG network. Inherits from :class:`torchvision.models.VGG` with activations replaced by spiking neurons.
+        """
         super(SpikingVGG, self).__init__()
         self.features = self.make_layers(
             cfg=cfg,

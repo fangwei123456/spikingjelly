@@ -10,8 +10,6 @@
 
 分布式训练支持模块，包含张量并行和数据并行工具。
 
-:return: None
-:rtype: None
 
 ----
 
@@ -20,9 +18,6 @@
 * **English**
 
 Distributed training support module with tensor and data parallelism utilities.
-
-:return: None
-:rtype: None
 """
 
 from .api import analyze, apply, plan

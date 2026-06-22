@@ -469,7 +469,8 @@ class Converter(nn.Module):
 
     @staticmethod
     def replace_by_ifnode(fx_model: torch.fx.GraphModule) -> torch.fx.GraphModule:
-        r"""Replace ReLU with IF neurons (legacy API, use :meth:`replace_by_neurons` instead).
+        r"""
+        Replace ReLU with IF neurons (legacy API, use :meth:`replace_by_neurons` instead).
 
         :deprecated: Use :meth:`replace_by_neurons` instead.
         :param fx_model: Model with calibration hooks inserted.

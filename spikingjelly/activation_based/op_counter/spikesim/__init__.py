@@ -10,8 +10,6 @@
 
 SpikeSim能耗分析模块，基于脉冲驱动的计算成本建模。
 
-:return: None
-:rtype: None
 
 ----
 
@@ -20,9 +18,6 @@ SpikeSim能耗分析模块，基于脉冲驱动的计算成本建模。
 * **English**
 
 SpikeSim energy profiling module for spike-driven computation cost modeling.
-
-:return: None
-:rtype: None
 """
 
 from .config import SpikeSimEnergyConfig

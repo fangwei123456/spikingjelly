@@ -48,58 +48,57 @@ def hash_str(x: object):
 
 
 class VarNode:
-    r"""
-    **API Language:**
-    :ref:`中文 <varnode-cn>` | :ref:`English <varnode-en>`
-
-    ----
-
-    .. _varnode-cn:
-
-    * **中文**
-
-    自动 CUDA 代码生成中的变量节点描述类。该类统一管理节点的调试名称、规范化名称、类型信息、常量值与梯度相关属性，并提供前向/反向代码生成时使用的 CUDA 变量名访问接口。
-
-    :param prefix: 节点名称前缀，用于区分输入、中间量与输出等作用域。
-    :type prefix: str
-
-    :param name: 原始节点名称（例如 FX 图中的名字），会被规范化用于 CUDA 变量命名。
-    :type name: str
-
-    :param instance: 节点的实例类型或类型标识（如 ``Tensor``、``float``、``int``）。
-    :type instance: object
-
-    :param value: 常量节点的字面值；为 ``None`` 时表示该节点对应可索引或可传参变量。
-    :type value: typing.Optional[object]
-
-    :return: 变量节点对象。
-    :rtype: VarNode
-
-    ----
-
-    .. _varnode-en:
-
-    * **English**
-
-    Variable-node descriptor used by the auto CUDA code generator. It centralizes debug names, normalized names, type metadata, constant values, and gradient-related flags, and exposes CUDA variable-name accessors for forward/backward code emission.
-
-    :param prefix: Name prefix used to separate scopes such as input/intermediate/output.
-    :type prefix: str
-
-    :param name: Raw node name (for example from an FX graph); it will be normalized for CUDA variable naming.
-    :type name: str
-
-    :param instance: Instance/type identifier (for example ``Tensor``, ``float``, ``int``).
-    :type instance: object
-
-    :param value: Literal value for constant nodes; ``None`` means the node is treated as a variable input/indexed value.
-    :type value: typing.Optional[object]
-
-    :return: A variable node object.
-    :rtype: VarNode
-    """
-
     def __init__(self, prefix: str, name: str, instance: object, value=None):
+        """
+        **API Language:**
+        :ref:`中文 <varnode-cn>` | :ref:`English <varnode-en>`
+
+        ----
+
+        .. _varnode-cn:
+
+        * **中文**
+
+        自动 CUDA 代码生成中的变量节点描述类。该类统一管理节点的调试名称、规范化名称、类型信息、常量值与梯度相关属性，并提供前向/反向代码生成时使用的 CUDA 变量名访问接口。
+
+        :param prefix: 节点名称前缀，用于区分输入、中间量与输出等作用域。
+        :type prefix: str
+
+        :param name: 原始节点名称（例如 FX 图中的名字），会被规范化用于 CUDA 变量命名。
+        :type name: str
+
+        :param instance: 节点的实例类型或类型标识（如 ``Tensor``、``float``、``int``）。
+        :type instance: object
+
+        :param value: 常量节点的字面值；为 ``None`` 时表示该节点对应可索引或可传参变量。
+        :type value: typing.Optional[object]
+
+        :return: 变量节点对象。
+        :rtype: VarNode
+
+        ----
+
+        .. _varnode-en:
+
+        * **English**
+
+        Variable-node descriptor used by the auto CUDA code generator. It centralizes debug names, normalized names, type metadata, constant values, and gradient-related flags, and exposes CUDA variable-name accessors for forward/backward code emission.
+
+        :param prefix: Name prefix used to separate scopes such as input/intermediate/output.
+        :type prefix: str
+
+        :param name: Raw node name (for example from an FX graph); it will be normalized for CUDA variable naming.
+        :type name: str
+
+        :param instance: Instance/type identifier (for example ``Tensor``, ``float``, ``int``).
+        :type instance: object
+
+        :param value: Literal value for constant nodes; ``None`` means the node is treated as a variable input/indexed value.
+        :type value: typing.Optional[object]
+
+        :return: A variable node object.
+        :rtype: VarNode
+        """
         self.debug_name = name  # 原始的name形如 %8, v_last.1
         # 将原始的name进行转换
         self.name = prefix + "_" + name.replace(".", "_")

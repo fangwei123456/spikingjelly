@@ -112,8 +112,6 @@ def fptt_online_training(
         其中每个元素与一个优化器参数对应
     :type w_ra: list[torch.Tensor]
 
-    :return: ``None``
-    :rtype: None
 
     :raises IndexError: 若 ``target_seq`` 的时间长度小于 ``x_seq``，按时间步索引目标时会抛出异常
     :raises Exception: 任何模型前向、损失计算、反向传播或优化器更新异常都会原样向上传播
@@ -159,8 +157,6 @@ def fptt_online_training(
         to one optimizer parameter
     :type w_ra: list[torch.Tensor]
 
-    :return: ``None``
-    :rtype: None
 
     :raises IndexError: Raised when ``target_seq`` is shorter than ``x_seq`` along the time dimension
     :raises Exception: Any exception raised during model forward, loss computation, backward pass, or optimizer update is propagated unchanged

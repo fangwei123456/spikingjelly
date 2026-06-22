@@ -62,7 +62,6 @@ def convert_model_for_precision(
     model: nn.Module, policy
 ) -> tuple[nn.Module, ConversionReport]:
     """Analyse then delegate module-level conversion to *policy*.
-
     The default policy returns the model unchanged; policies that require
     structural changes (e.g. float8 kernel substitution) override
     ``_convert_modules`` to perform the actual transformation.

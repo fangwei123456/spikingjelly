@@ -30,7 +30,6 @@ class MemoryInstanceSpec:
     :type data_bit: int
     :param memory_cost_pj: Energy cost per access in picojoules
     :type memory_cost_pj: float
-    :rtype: None
     Describes the properties of one level in the memory hierarchy, including
     capacity, bit width, and access energy cost.
 
@@ -48,8 +47,6 @@ class MemoryInstanceSpec:
     :type capacity: int
     :type data_bit: int
     :type memory_cost_pj: float
-    :return: None
-    :rtype: None
     """
 
     name: str
@@ -152,9 +149,6 @@ class MemoryHierarchyConfig:
     * **English**
 
     MemoryHierarchyConfig class
-
-    :return: None
-    :rtype: None
     """
 
     preset_name: str = "neuromc_like_v1"

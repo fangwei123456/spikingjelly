@@ -3,7 +3,6 @@ from typing import Union
 import numpy as np
 import torch
 
-
 __all__ = ["random_temporal_delete", "RandomTemporalDelete"]
 
 
@@ -105,30 +104,6 @@ def random_temporal_delete(
 
 
 class RandomTemporalDelete(torch.nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <RandomTemporalDelete-cn>` | :ref:`English <RandomTemporalDelete-en>`
-
-    ----
-
-    .. _RandomTemporalDelete-cn:
-
-    * **中文**
-
-    :func:`random_temporal_delete` 的 ``torch.nn.Module`` 封装。前向传播时会使用构造时给定的
-    ``T_remain`` 和 ``batch_first`` 调用 :func:`random_temporal_delete`。
-
-    ----
-
-    .. _RandomTemporalDelete-en:
-
-    * **English**
-
-    A ``torch.nn.Module`` wrapper around :func:`random_temporal_delete`. During
-    ``forward``, it calls :func:`random_temporal_delete` with the ``T_remain``
-    and ``batch_first`` values provided at construction time.
-    """
-
     def __init__(self, T_remain: int, batch_first: bool):
         r"""
         **API Language:**
@@ -139,6 +114,9 @@ class RandomTemporalDelete(torch.nn.Module):
         .. _RandomTemporalDelete.__init__-cn:
 
         * **中文**
+
+        :func:`random_temporal_delete` 的 ``torch.nn.Module`` 封装。前向传播时会使用构造时给定的
+        ``T_remain`` 和 ``batch_first`` 调用 :func:`random_temporal_delete`。
 
         在 `Deep Residual Learning in Spiking Neural Networks <https://arxiv.org/abs/2102.04159>`_ 中使用的随机时间删除数据增强。
         详见 :func:`random_temporal_delete`。
@@ -155,6 +133,10 @@ class RandomTemporalDelete(torch.nn.Module):
 
         * **English**
 
+        A ``torch.nn.Module`` wrapper around :func:`random_temporal_delete`. During
+        ``forward``, it calls :func:`random_temporal_delete` with the ``T_remain``
+        and ``batch_first`` values provided at construction time.
+
         The random temporal delete data augmentation used in `Deep Residual Learning in Spiking Neural Networks <https://arxiv.org/abs/2102.04159>`_.
         Refer to :func:`random_temporal_delete` for more details.
 
@@ -163,8 +145,6 @@ class RandomTemporalDelete(torch.nn.Module):
 
         :param batch_first: if `True`, `x_seq` will be regarded as `shape = [N, T, *]`
         :type batch_first: bool
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.T_remain = T_remain

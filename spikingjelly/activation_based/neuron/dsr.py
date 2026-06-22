@@ -100,9 +100,6 @@ class DSRIFNode(base.MemoryModule):
             Users can print ``self.supported_backends`` to check availability.
             DSR-IF only supports the ``'torch'`` backend
         :type backend: str
-
-        :return: None
-        :rtype: None
         """
         assert isinstance(T, int) and T is not None
         assert isinstance(v_threshold, float) and v_threshold >= v_threshold_lower_bound
@@ -315,9 +312,6 @@ class DSRLIFNode(base.MemoryModule):
             Users can print ``self.supported_backends`` to check availability.
             DSR-LIF only supports the ``'torch'`` backend
         :type backend: str
-
-        :return: None
-        :rtype: None
         """
         assert isinstance(T, int) and T is not None
         assert isinstance(v_threshold, float) and v_threshold >= v_threshold_lower_bound

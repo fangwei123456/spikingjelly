@@ -1,10 +1,10 @@
+import collections
+import operator
 import sys
 import time
-import operator
 from datetime import timedelta
-import numpy as np
-import collections
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -138,7 +138,6 @@ class WeightedMSELoss(nn.Module):
 class SegmentTree(object):
     def __init__(self, capacity, operation, neutral_element):
         """Build a Segment Tree data structure.
-
         https://en.wikipedia.org/wiki/Segment_tree
 
         Can be used as regular array, but with two
@@ -278,14 +277,12 @@ class MinSegmentTree(SegmentTree):
 
 
 class TBMeanTracker:
-    """
-    TensorBoard value tracker: allows to batch fixed amount of historical values and write their mean into TB
-
-    Designed and tested with pytorch-tensorboard in mind
-    """
-
     def __init__(self, writer, batch_size):
         """
+        TensorBoard value tracker: allows to batch fixed amount of historical values and write their mean into TB
+
+        Designed and tested with pytorch-tensorboard in mind
+
         :param writer: writer with close() and add_scalar() methods
         :param batch_size: integer size of batch to track
         """

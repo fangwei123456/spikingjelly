@@ -10,8 +10,6 @@
 
 CUDA kernel模块，提供GPU加速的神经元计算后端。
 
-:return: None
-:rtype: None
 
 ----
 
@@ -20,9 +18,6 @@ CUDA kernel模块，提供GPU加速的神经元计算后端。
 * **English**
 
 CUDA kernel module providing GPU-accelerated neuron computation backends.
-
-:return: None
-:rtype: None
 """
 
 from . import auto_cuda  # noqa

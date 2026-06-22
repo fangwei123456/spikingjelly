@@ -40,8 +40,6 @@ def check_backend_library(backend: str):
     :param backend: ``'torch'``, ``'cupy'``, ``'triton'`` 或 ``'lava'``
     :type backend: str
 
-    :return: ``None``
-    :rtype: None
     :raises ImportError: 若所请求后端依赖的 Python 库未安装，则抛出 ``ImportError``
 
     ----
@@ -56,8 +54,6 @@ def check_backend_library(backend: str):
     :param backend: ``'torch'``, ``'cupy'``, ``'triton'`` or ``'lava'``
     :type backend: str
 
-    :return: ``None``
-    :rtype: None
     :raises ImportError: Raised when the Python package required by ``backend`` is not installed
     """
     if backend == "torch":
@@ -180,8 +176,6 @@ class StepModule:
         :param value: 步进模式
         :type value: str
 
-        :return: ``None``
-        :rtype: None
         :raises ValueError: 当 ``value`` 不在 ``self.supported_step_mode()`` 中时抛出
 
         ----
@@ -195,8 +189,6 @@ class StepModule:
         :param value: the step mode
         :type value: str
 
-        :return: ``None``
-        :rtype: None
         :raises ValueError: Raised when ``value`` is not included in ``self.supported_step_mode()``
         """
         if value not in self.supported_step_mode():
@@ -416,8 +408,6 @@ class MemoryModule(nn.Module, StepModule):
 
         :param value: 目标后端名称
         :type value: str
-        :return: ``None``
-        :rtype: None
         :raises NotImplementedError: 当 ``value`` 不在 ``supported_backends`` 中时抛出
         :raises ImportError: 当 ``value`` 对应的后端库未安装时抛出
 
@@ -435,8 +425,6 @@ class MemoryModule(nn.Module, StepModule):
 
         :param value: Target backend name
         :type value: str
-        :return: ``None``
-        :rtype: None
         :raises NotImplementedError: Raised when ``value`` is not listed in ``supported_backends``
         :raises ImportError: Raised when the backend library required by ``value`` is not installed
         """
@@ -621,8 +609,6 @@ class MemoryModule(nn.Module, StepModule):
         :param value: 状态变量的初始与重制值
         :type value: Any
 
-        :return: ``None``
-        :rtype: None
         :raises AssertionError: 当 ``name`` 已经是模块现有成员属性时抛出
 
         ----
@@ -644,8 +630,6 @@ class MemoryModule(nn.Module, StepModule):
         :param value: state variable's initial and reset value
         :type value: Any
 
-        :return: ``None``
-        :rtype: None
         :raises AssertionError: Raised when ``name`` already exists as an attribute of the module
         """
         assert not hasattr(self, name), f"{name} has been set as a member variable!"
@@ -668,8 +652,6 @@ class MemoryModule(nn.Module, StepModule):
         若当前状态与重制值均为同形状、同 dtype、同 device 的张量，则优先原地恢复；
         否则使用复制或重新赋值恢复。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -682,9 +664,6 @@ class MemoryModule(nn.Module, StepModule):
         If both the current state and the reset value are tensors with the same
         shape, dtype, and device, the state is restored in-place whenever
         possible; otherwise it falls back to copy or reassignment.
-
-        :return: ``None``
-        :rtype: None
         """
         for key in self._memories.keys():
             cur = self._memories[key]
@@ -727,8 +706,6 @@ class MemoryModule(nn.Module, StepModule):
         :type name: str
         :param value: 新的重制值
         :type value: Any
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -742,8 +719,6 @@ class MemoryModule(nn.Module, StepModule):
         :type name: str
         :param value: New reset value
         :type value: Any
-        :return: ``None``
-        :rtype: None
         """
         self._memories_rv[name] = copy.deepcopy(value)
 
@@ -854,8 +829,6 @@ class MemoryModule(nn.Module, StepModule):
 
             可以使用这个函数实现TBPTT (Truncated Back Propagation Through Time)。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -869,9 +842,6 @@ class MemoryModule(nn.Module, StepModule):
             :class: tip
 
             We can use this function to implement TBPTT (Truncated Back Propagation Through Time).
-
-        :return: ``None``
-        :rtype: None
         """
         for key in self._memories.keys():
             if isinstance(self._memories[key], torch.Tensor):
@@ -1042,8 +1012,6 @@ def load_memories(module: nn.Module, memory_list: list):
     :param memory_list: 状态变量值列表
     :type memory_list: list
 
-    :return: ``None``
-    :rtype: None
     :raises ValueError: 当 ``memory_list`` 的长度与 ``module`` 当前状态变量数量不一致时抛出
 
     ----
@@ -1060,8 +1028,6 @@ def load_memories(module: nn.Module, memory_list: list):
     :param memory_list: list of memory variable values
     :type memory_list: list
 
-    :return: ``None``
-    :rtype: None
     :raises ValueError: Raised when the length of ``memory_list`` does not match the number of current memory variables in ``module``
     """
 

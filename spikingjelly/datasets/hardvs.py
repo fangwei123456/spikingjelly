@@ -91,9 +91,6 @@ class HARDVS(NeuromorphicDatasetFolder):
         :type transform: Optional[Callable]
         :param target_transform: Target transform function
         :type target_transform: Optional[Callable]
-
-        :return: None
-        :rtype: None
         """
         self.train_test_val = train_test_val
         super().__init__(

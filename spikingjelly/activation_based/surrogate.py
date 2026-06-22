@@ -117,7 +117,6 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
         )
 
     :return: 无返回值，直接打印对比结果
-    :rtype: None
     """
     x = torch.arange(-2, 2, 32 / 8192)
     # x = torch.as_tensor([-1., 0., 1.])
@@ -161,7 +160,6 @@ def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
     :param kwargs: 传递给替代函数的关键字参数
     :type kwargs: dict
     :return: 无返回值，直接打印对比结果
-    :rtype: None
 
     .. admonition:: Example
         :class: tip
@@ -192,7 +190,6 @@ def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
     :param kwargs: keyword arguments to pass to the surrogate function
     :type kwargs: dict
     :return: no return value, directly prints comparison results
-    :rtype: None
 
     .. admonition:: Example
         :class: tip
@@ -245,7 +242,6 @@ def plot_surrogate_function(surrogate_function):
     :param surrogate_function: 替代函数模块的实例
     :type surrogate_function: SurrogateFunctionBase
     :return: 无返回值，直接保存并显示图像
-    :rtype: None
 
     ----
 
@@ -259,7 +255,6 @@ def plot_surrogate_function(surrogate_function):
     :param surrogate_function: an instance of surrogate function module
     :type surrogate_function: SurrogateFunctionBase
     :return: no return value, directly saves and shows the figure
-    :rtype: None
     """
     import matplotlib.pyplot as plt
     import scienceplots  # noqa
@@ -1641,7 +1636,6 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
             using the primitive function of the surrogate gradient function used in backward propagation
         :type spiking: bool
         :return: 无返回值
-        :rtype: None
         """
         super().__init__(spiking=spiking, alpha=alpha)
 
@@ -1823,7 +1817,6 @@ class Erf(SurrogateFunctionBase):
             using the primitive function of the surrogate gradient function used in backward propagation
         :type spiking: bool
         :return: 无返回值
-        :rtype: None
         """
         super().__init__(spiking=spiking, alpha=alpha)
 
@@ -2028,7 +2021,6 @@ class PiecewiseLeakyReLU(SurrogateFunctionBase):
             using the primitive function of the surrogate gradient function used in backward propagation
         :type spiking: bool
         :return: 无返回值
-        :rtype: None
         """
         assert w > 0.0
         super().__init__(spiking=spiking, w=w, c=c)
@@ -2210,7 +2202,6 @@ class SquarewaveFourierSeries(SurrogateFunctionBase):
             using the primitive function of the surrogate gradient function used in backward propagation
         :type spiking: bool
         :return: 无返回值
-        :rtype: None
         """
         assert isinstance(n, int) and T_period > 0.0
         super().__init__(spiking=spiking, n=n, T_period=T_period)
@@ -2357,7 +2348,6 @@ class S2NN(SurrogateFunctionBase):
             using the primitive function of the surrogate gradient function used in backward propagation
         :type spiking: bool
         :return: 无返回值
-        :rtype: None
         """
         super().__init__(spiking=spiking, alpha=alpha, beta=beta)
 
@@ -2537,7 +2527,6 @@ class QPseudoSpike(SurrogateFunctionBase):
             using the primitive function of the surrogate gradient function used in backward propagation
         :type spiking: bool
         :return: 无返回值
-        :rtype: None
         """
         super().__init__(spiking=spiking, alpha=alpha)
 
@@ -2738,7 +2727,6 @@ class LeakyKReLU(SurrogateFunctionBase):
         :type k: float
 
         :return: 无返回值
-        :rtype: None
 
         ----
 
@@ -2781,7 +2769,6 @@ class LeakyKReLU(SurrogateFunctionBase):
         :type k: float
 
         :return: No return value.
-        :rtype: None
         """
         super().__init__(spiking=spiking, leak=leak, k=k)
 
@@ -2959,7 +2946,6 @@ class FakeNumericalGradient(SurrogateFunctionBase):
         :type alpha: float
 
         :return: 无返回值
-        :rtype: None
 
         ----
 
@@ -2976,7 +2962,6 @@ class FakeNumericalGradient(SurrogateFunctionBase):
         :type alpha: float
 
         :return: No return value.
-        :rtype: None
         """
         super().__init__(spiking=True, alpha=alpha)
 
@@ -3208,7 +3193,6 @@ class LogTailedReLU(SurrogateFunctionBase):
             using the primitive function of the surrogate gradient function used in backward propagation
         :type spiking: bool
         :return: 无返回值
-        :rtype: None
         """
         super().__init__(spiking=spiking, alpha=alpha)
 
@@ -3347,7 +3331,6 @@ class DeterministicPass(SurrogateFunctionBase):
         :type spiking: bool
 
         :return: 无返回值
-        :rtype: None
 
         ----
 
@@ -3363,7 +3346,6 @@ class DeterministicPass(SurrogateFunctionBase):
         :type spiking: bool
 
         :return: No return value.
-        :rtype: None
         """
         super().__init__(spiking=spiking)
 
@@ -3443,7 +3425,6 @@ class PoissonPass(SurrogateFunctionBase):
         :type spiking: bool
 
         :return: 无返回值
-        :rtype: None
 
         ----
 
@@ -3460,7 +3441,6 @@ class PoissonPass(SurrogateFunctionBase):
         :type spiking: bool
 
         :return: No return value.
-        :rtype: None
         """
         super().__init__(spiking=spiking)
 
@@ -3606,7 +3586,6 @@ class Rect(SurrogateFunctionBase):
         :type spiking: bool
 
         :return: 无返回值
-        :rtype: None
 
         ----
 
@@ -3638,7 +3617,6 @@ class Rect(SurrogateFunctionBase):
         :type spiking: bool
 
         :return: No return value.
-        :rtype: None
         """
         super().__init__(spiking=spiking, alpha=alpha)
 

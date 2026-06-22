@@ -59,8 +59,6 @@ class SimpleBaseNode(base.MemoryModule):
         :type detach_reset: bool
         :param step_mode: the step mode, which can be ``'s'`` (single-step) or ``'m'`` (multi-step)
         :type step_mode: str
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.v_threshold = v_threshold
@@ -181,9 +179,6 @@ class BaseNode(base.MemoryModule):
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
             memory consumption
         :type store_v_seq: bool
-
-        :return: None
-        :rtype: None
         """
         assert isinstance(v_reset, float) or v_reset is None
         assert isinstance(v_threshold, float)
@@ -456,8 +451,6 @@ class NonSpikingBaseNode(nn.Module, base.MultiStepModule):
         """
         :param decode: 解码方式。若不为 ``None``，在 ``forward`` 中将使用该方式对膜电位序列进行解码
         :type decode: Optional[str]
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.decode = decode

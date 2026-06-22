@@ -247,8 +247,6 @@ def retain_flexsn_kernel_handle(handle: int) -> None:
 
     :param handle: FlexSN kernel handle
     :type handle: int
-    :return: None
-    :rtype: None
 
     ----
 
@@ -262,8 +260,6 @@ def retain_flexsn_kernel_handle(handle: int) -> None:
 
     :param handle: FlexSN kernel handle
     :type handle: int
-    :return: None
-    :rtype: None
     """
     handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
@@ -287,8 +283,6 @@ def retain_owner_flexsn_kernel_handle(handle: int) -> None:
 
     :param handle: FlexSN kernel handle
     :type handle: int
-    :return: None
-    :rtype: None
 
     ----
 
@@ -302,8 +296,6 @@ def retain_owner_flexsn_kernel_handle(handle: int) -> None:
 
     :param handle: FlexSN kernel handle
     :type handle: int
-    :return: None
-    :rtype: None
     """
     handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
@@ -327,8 +319,6 @@ def release_flexsn_kernel_handle(handle: int) -> None:
 
     :param handle: FlexSN kernel handle
     :type handle: int
-    :return: None
-    :rtype: None
 
     ----
 
@@ -341,8 +331,6 @@ def release_flexsn_kernel_handle(handle: int) -> None:
 
     :param handle: FlexSN kernel handle
     :type handle: int
-    :return: None
-    :rtype: None
     """
     handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
@@ -373,8 +361,6 @@ def release_active_flexsn_kernel_handle(handle: int) -> None:
 
     :param handle: FlexSN kernel handle
     :type handle: int
-    :return: None
-    :rtype: None
 
     ----
 
@@ -387,8 +373,6 @@ def release_active_flexsn_kernel_handle(handle: int) -> None:
 
     :param handle: FlexSN kernel handle
     :type handle: int
-    :return: None
-    :rtype: None
     """
     handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:

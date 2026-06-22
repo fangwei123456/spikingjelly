@@ -339,7 +339,6 @@ def generate_triton_code_str(
 
     生成Triton代码字符串
 
-    :rtype: None
     Args:
         graph (fx.Graph)
         fn_name (str): name of the original PyTorch function. For generating the Triton kernel name.
@@ -354,9 +353,6 @@ def generate_triton_code_str(
     * **English**
 
     Generate Triton code string
-
-    :return: None
-    :rtype: None
     """
     if verbose:
         print(graph)
@@ -417,7 +413,6 @@ def compile_triton_code_str(
 
     编译Triton代码字符串
 
-    :rtype: None
     Materializes the Triton code under the persistent codegen cache, loads or
     reuses the matching module object, and extracts the requested JIT function.
     Args:
@@ -439,9 +434,6 @@ def compile_triton_code_str(
     * **English**
 
     Compile Triton code string
-
-    :return: None
-    :rtype: None
     """
     if not _has_real_triton_runtime():
         raise ImportError(

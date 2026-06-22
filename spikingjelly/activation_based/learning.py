@@ -801,8 +801,6 @@ class STDPLearner(base.MemoryModule):
 
         重置学习器内部状态，并清空输入/输出脉冲监视器中已记录的数据。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -811,9 +809,6 @@ class STDPLearner(base.MemoryModule):
         * **English**
 
         Reset the learner state and clear all recorded data in the input/output spike monitors.
-
-        :return: ``None``
-        :rtype: None
         """
         super(STDPLearner, self).reset()
         self.in_spike_monitor.clear_recorded_data()
@@ -832,8 +827,6 @@ class STDPLearner(base.MemoryModule):
 
         禁用输入脉冲与输出脉冲监视器，使其停止记录新数据。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -842,9 +835,6 @@ class STDPLearner(base.MemoryModule):
         * **English**
 
         Disable the input and output spike monitors so they stop recording new data.
-
-        :return: ``None``
-        :rtype: None
         """
         self.in_spike_monitor.disable()
         self.out_spike_monitor.disable()
@@ -862,8 +852,6 @@ class STDPLearner(base.MemoryModule):
 
         启用输入脉冲与输出脉冲监视器，使其恢复记录。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -872,9 +860,6 @@ class STDPLearner(base.MemoryModule):
         * **English**
 
         Enable the input and output spike monitors so they resume recording.
-
-        :return: ``None``
-        :rtype: None
         """
         self.in_spike_monitor.enable()
         self.out_spike_monitor.enable()
@@ -1074,8 +1059,6 @@ class MSTDPLearner(base.MemoryModule):
 
         重置学习器内部状态，并清空监视器缓存。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -1084,9 +1067,6 @@ class MSTDPLearner(base.MemoryModule):
         * **English**
 
         Reset the learner state and clear the monitor buffers.
-
-        :return: ``None``
-        :rtype: None
         """
         super(MSTDPLearner, self).reset()
         self.in_spike_monitor.clear_recorded_data()
@@ -1105,8 +1085,6 @@ class MSTDPLearner(base.MemoryModule):
 
         禁用输入/输出监视器。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -1115,9 +1093,6 @@ class MSTDPLearner(base.MemoryModule):
         * **English**
 
         Disable the input/output monitors.
-
-        :return: ``None``
-        :rtype: None
         """
         self.in_spike_monitor.disable()
         self.out_spike_monitor.disable()
@@ -1135,8 +1110,6 @@ class MSTDPLearner(base.MemoryModule):
 
         启用输入/输出监视器。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -1145,9 +1118,6 @@ class MSTDPLearner(base.MemoryModule):
         * **English**
 
         Enable the input/output monitors.
-
-        :return: ``None``
-        :rtype: None
         """
         self.in_spike_monitor.enable()
         self.out_spike_monitor.enable()
@@ -1360,8 +1330,6 @@ class MSTDPETLearner(base.MemoryModule):
 
         重置学习器内部状态，并清空监视器缓存。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -1370,9 +1338,6 @@ class MSTDPETLearner(base.MemoryModule):
         * **English**
 
         Reset the learner state and clear the monitor buffers.
-
-        :return: ``None``
-        :rtype: None
         """
         super(MSTDPETLearner, self).reset()
         self.in_spike_monitor.clear_recorded_data()
@@ -1391,8 +1356,6 @@ class MSTDPETLearner(base.MemoryModule):
 
         禁用输入/输出监视器。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -1401,9 +1364,6 @@ class MSTDPETLearner(base.MemoryModule):
         * **English**
 
         Disable the input/output monitors.
-
-        :return: ``None``
-        :rtype: None
         """
         self.in_spike_monitor.disable()
         self.out_spike_monitor.disable()
@@ -1421,8 +1381,6 @@ class MSTDPETLearner(base.MemoryModule):
 
         启用输入/输出监视器。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -1431,9 +1389,6 @@ class MSTDPETLearner(base.MemoryModule):
         * **English**
 
         Enable the input/output monitors.
-
-        :return: ``None``
-        :rtype: None
         """
         self.in_spike_monitor.enable()
         self.out_spike_monitor.enable()

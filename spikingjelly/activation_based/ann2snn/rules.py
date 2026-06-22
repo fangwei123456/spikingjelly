@@ -222,8 +222,6 @@ class ActivationRule(Protocol):
         :type neuron_factory: NeuronFactory
         :param threshold_optimizer: 阈值优化器。
         :type threshold_optimizer: ThresholdOptimizer
-        :return: ``None``。
-        :rtype: None
 
         ----
 
@@ -245,8 +243,6 @@ class ActivationRule(Protocol):
         :type neuron_factory: NeuronFactory
         :param threshold_optimizer: Threshold optimizer.
         :type threshold_optimizer: ThresholdOptimizer
-        :return: ``None``.
-        :rtype: None
         """
         ...
 
@@ -298,9 +294,7 @@ class ReLURule:
         counter = hook_counts_per_prefix.get(key, 0)
         hook_counts_per_prefix[key] = counter + 1
         target = (
-            f"{parent}.voltage_hook_{counter}"
-            if parent
-            else f"voltage_hook_{counter}"
+            f"{parent}.voltage_hook_{counter}" if parent else f"voltage_hook_{counter}"
         )
 
         m = hook_factory.create()

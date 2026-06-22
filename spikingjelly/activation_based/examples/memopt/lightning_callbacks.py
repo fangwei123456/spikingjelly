@@ -5,17 +5,17 @@ from lightning.pytorch import callbacks
 
 
 class GlobalMeanBatchTimeCallback(callbacks.Callback):
-    """Global mean batch time calculator.
-
-    for each GPU, compute total_batch_duration and n_batch
-    sum over all GPUs: global_total_batch_duration and global_n_batch
-    global_mean_batch_time = global_total_batch_duration / global_n_batch
-
-    e.g. 2 GPUs; for each GPU, 2 batches take 200ms
-    global_mean_batch_time = (200ms + 200ms) / (2 + 2) = 100ms
-    """
-
     def __init__(self, reset_per_epoch: bool = False):
+        """
+        Global mean batch time calculator.
+
+        for each GPU, compute total_batch_duration and n_batch
+        sum over all GPUs: global_total_batch_duration and global_n_batch
+        global_mean_batch_time = global_total_batch_duration / global_n_batch
+
+        e.g. 2 GPUs; for each GPU, 2 batches take 200ms
+        global_mean_batch_time = (200ms + 200ms) / (2 + 2) = 100ms
+        """
         super().__init__()
         # all local: results on a single GPU
         self.local_train_batch_start_time = 0
@@ -116,18 +116,18 @@ class GlobalMeanBatchTimeCallback(callbacks.Callback):
 
 
 class SamplePerSecondCallback(callbacks.Callback):
-    """Sample per second calculator.
-
-    For each GPU, compute the number of samples.
-    Sum the number of samples across all GPUs to get global_total_samples.
-    Use the epoch duration (same for all GPUs in synchronized training) as global_total_duration.
-    SPS = global_total_samples / global_total_duration.
-
-    e.g. 2 GPUs, 2 batches per GPU, 5 samples per batch; take 200ms in total
-    sample_per_second = (2 * 2 * 5) / 200ms = 100 samples/s
-    """
-
     def __init__(self, batch_size=None):
+        """
+        Sample per second calculator.
+
+        For each GPU, compute the number of samples.
+        Sum the number of samples across all GPUs to get global_total_samples.
+        Use the epoch duration (same for all GPUs in synchronized training) as global_total_duration.
+        SPS = global_total_samples / global_total_duration.
+
+        e.g. 2 GPUs, 2 batches per GPU, 5 samples per batch; take 200ms in total
+        sample_per_second = (2 * 2 * 5) / 200ms = 100 samples/s
+        """
         super().__init__()
         # all local: results on a single GPU
         self.local_train_epoch_start_time = 0

@@ -1,5 +1,4 @@
 """Build Triton scan kernels for FlexSN's Triton/Inductor backends.
-
 Three entry points:
 * build_inference_kernel  — no-grad fast path (make_fx, no PYTORCH_JIT=0 needed)
 * build_inference_final_state_kernel — inference path that returns final states only
@@ -262,7 +261,6 @@ def _make_bwd_shim(
     diff_mask: List[bool],
 ) -> Tuple[str, str]:
     """Wrap the AOT backward function to match the template's calling convention.
-
     The template calls bwd_fn(saved..., grad_out0..., grad_state0...) for ALL
     outputs and states.  AOT autograd drops gradient arguments for non-
     differentiable outputs (e.g. spike signals from hard threshold), so the

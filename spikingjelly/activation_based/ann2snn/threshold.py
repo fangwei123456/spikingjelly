@@ -2,49 +2,48 @@ from spikingjelly.activation_based.ann2snn.modules import VoltageHook
 
 
 class ThresholdOptimizer:
-    r"""
-    **API Language:**
-    :ref:`中文 <ThresholdOptimizer.__init__-cn>` | :ref:`English <ThresholdOptimizer.__init__-en>`
-
-    ----
-
-    .. _ThresholdOptimizer.__init__-cn:
-
-    * **中文**
-
-    阈值优化器。根据 :class:`VoltageHook` 在校准阶段记录的 ``scale`` 计算当前层的
-    神经元阈值。当前内置策略：
-
-    * ``"fixed"``: 阈值等于校准 ``scale`` （默认，等价于 SpikingJelly 原有行为）。
-
-    其他策略需通过子类化并重写 :meth:`compute_threshold` 实现；基类可接受任意策略
-    名，但只有 ``"fixed"`` 在基类中真正生效。
-
-    :param strategy: 阈值计算策略名称。
-    :type strategy: str
-
-    ----
-
-    .. _ThresholdOptimizer.__init__-en:
-
-    * **English**
-
-    Threshold optimizer. Computes the neuron threshold for a layer from the
-    ``scale`` recorded by :class:`VoltageHook` during calibration. Built-in
-    strategy:
-
-    * ``"fixed"``: threshold equals the calibrated ``scale`` (default,
-      matches the original SpikingJelly behaviour).
-
-    Additional strategies should be implemented by subclassing and overriding
-    :meth:`compute_threshold`. The base class accepts any strategy name but
-    only implements ``"fixed"`` itself.
-
-    :param strategy: Name of the threshold computation strategy.
-    :type strategy: str
-    """
-
     def __init__(self, strategy: str = "fixed"):
+        """
+        **API Language:**
+        :ref:`中文 <ThresholdOptimizer.__init__-cn>` | :ref:`English <ThresholdOptimizer.__init__-en>`
+
+        ----
+
+        .. _ThresholdOptimizer.__init__-cn:
+
+        * **中文**
+
+        阈值优化器。根据 :class:`VoltageHook` 在校准阶段记录的 ``scale`` 计算当前层的
+        神经元阈值。当前内置策略：
+
+        * ``"fixed"``: 阈值等于校准 ``scale`` （默认，等价于 SpikingJelly 原有行为）。
+
+        其他策略需通过子类化并重写 :meth:`compute_threshold` 实现；基类可接受任意策略
+        名，但只有 ``"fixed"`` 在基类中真正生效。
+
+        :param strategy: 阈值计算策略名称。
+        :type strategy: str
+
+        ----
+
+        .. _ThresholdOptimizer.__init__-en:
+
+        * **English**
+
+        Threshold optimizer. Computes the neuron threshold for a layer from the
+        ``scale`` recorded by :class:`VoltageHook` during calibration. Built-in
+        strategy:
+
+        * ``"fixed"``: threshold equals the calibrated ``scale`` (default,
+          matches the original SpikingJelly behaviour).
+
+        Additional strategies should be implemented by subclassing and overriding
+        :meth:`compute_threshold`. The base class accepts any strategy name but
+        only implements ``"fixed"`` itself.
+
+        :param strategy: Name of the threshold computation strategy.
+        :type strategy: str
+        """
         self.strategy = strategy
 
     def compute_threshold(self, hook: VoltageHook) -> float:

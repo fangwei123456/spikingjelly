@@ -74,8 +74,6 @@ class SimpleIFNode(SimpleBaseNode):
         :type detach_reset: bool
         :param step_mode: Step mode, either ``"s"`` or ``"m"``
         :type step_mode: str
-        :return: None
-        :rtype: None
         """
         super().__init__(
             v_threshold, v_reset, surrogate_function, detach_reset, step_mode
@@ -100,7 +98,6 @@ class SimpleIFNode(SimpleBaseNode):
         :param x: 输入电压
         :type x: torch.Tensor
         :return: None（膜电位更新存储在 ``self.v`` 中）
-        :rtype: None
 
         ----
 
@@ -116,7 +113,6 @@ class SimpleIFNode(SimpleBaseNode):
         :param x: Input voltage
         :type x: torch.Tensor
         :return: None (membrane potential is stored in ``self.v``)
-        :rtype: None
         """
         self.v = self.v + x
 
@@ -212,8 +208,6 @@ class IFNode(BaseNode):
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
             memory consumption
         :type store_v_seq: bool
-        :return: None
-        :rtype: None
         """
         super().__init__(
             v_threshold,
@@ -574,8 +568,6 @@ class NonSpikingIFNode(NonSpikingBaseNode):
 
         :param decode: Decoding mode for non-spiking outputs, see :class:`NonSpikingBaseNode`
         :type decode: Optional[str]
-        :return: None
-        :rtype: None
         """
         super().__init__(decode)
 

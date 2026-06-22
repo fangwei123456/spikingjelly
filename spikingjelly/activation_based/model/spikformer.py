@@ -81,9 +81,6 @@ class SpikformerConv2dBN(nn.Module):
 
         :param pool: If ``True``, appends ``MaxPool2d(kernel_size=3, stride=2, padding=1)``. Default: ``False``
         :type pool: bool
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
         layers = [
@@ -194,9 +191,6 @@ class SpikformerConv2dBNLIF(nn.Module, base.MultiStepModule):
 
         :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
         :type detach_reset: bool
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.conv_bn = SpikformerConv2dBN(
@@ -304,9 +298,6 @@ class SpikformerPatchStem(nn.Module, base.MultiStepModule):
         :type detach_reset: bool
 
         :raises ValueError: If ``patch_size`` is not 16
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
         if patch_size != 16:
@@ -423,9 +414,6 @@ class SpikformerMLP(nn.Module, base.MultiStepModule):
 
         :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
         :type detach_reset: bool
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.fc1 = layer.SeqToANNContainer(
@@ -527,9 +515,6 @@ class SpikformerBlock(nn.Module, base.MultiStepModule):
         :type detach_reset: bool
 
         :raises ValueError: If the input is not a 5D tensor ``[T, N, C, H, W]``
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.attn = SpikingSelfAttention(dim=dim, num_heads=num_heads, backend=backend)
@@ -671,9 +656,6 @@ class Spikformer(nn.Module, base.MultiStepModule):
 
         :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
         :type detach_reset: bool
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.T = T

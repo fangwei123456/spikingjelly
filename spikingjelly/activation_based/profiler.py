@@ -82,9 +82,6 @@ class BaseProfiler(abc.ABC):
 
         :param models: a tuple of target neural network modules
         :type models: Tuple[nn.Module]
-
-        :return: None
-        :rtype: None
         """
         if isinstance(models, nn.Module):
             models = (models,)
@@ -200,9 +197,6 @@ class CategoryMemoryProfiler(BaseProfiler):
                 loss.backward()
                 results = prof.export()
                 optimizer.step()
-
-        :return: None
-        :rtype: None
         """
         super().__init__(models)
 
@@ -421,9 +415,6 @@ class HookProfiler(BaseProfiler):
 
         :param log_path: path to the log text file
         :type log_path: str
-
-        :return: None
-        :rtype: None
         """
         super().__init__(models)
 
@@ -613,9 +604,6 @@ class LayerWiseMemoryProfiler(HookProfiler):
                 loss.backward()
 
             results = prof.export()
-
-        :return: None
-        :rtype: None
         """
         super().__init__(models, model_names, search_mode, instances, log_path)
         self.device = device
@@ -936,9 +924,6 @@ class LayerWiseFPCUDATimeProfiler(HookProfiler):
                         x = torch.randn(32, 10)
                         _ = net(x)
             results = prof.export()
-
-        :return: None
-        :rtype: None
         """
         super().__init__(models, model_names, search_mode, instances, log_path)
         self.warmup = warmup
@@ -1142,9 +1127,6 @@ class LayerWiseBPCUDATimeProfiler(HookProfiler):
                     loss.backward()
                     functional.reset_net(net)
             results = prof.export()
-
-        :return: None
-        :rtype: None
         """
         super().__init__(models, model_names, search_mode, instances, log_path)
         self.warmup = warmup

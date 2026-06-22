@@ -139,9 +139,6 @@ class QIFNode(BaseNode):
             whether to store the membrane potential at all time steps in ``self.v_seq``.
             If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage
         :type store_v_seq: bool
-
-        :return: None
-        :rtype: None
         """
         assert isinstance(tau, float) and tau > 1.0
         if v_reset is not None:
@@ -340,9 +337,6 @@ class EIFNode(BaseNode):
             whether to store the membrane potential at all time steps in ``self.v_seq``.
             If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage
         :type store_v_seq: bool
-
-        :return: None
-        :rtype: None
         """
         assert isinstance(tau, float) and tau > 1.0
         if v_reset is not None:

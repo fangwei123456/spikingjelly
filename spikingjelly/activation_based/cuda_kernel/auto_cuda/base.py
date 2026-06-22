@@ -1388,7 +1388,6 @@ class CodeBlock:
         进入上下文时写入 ``{`` 并增加一级缩进。
 
         :return: 当前上下文对象（默认返回 ``None``）
-        :rtype: None
 
         ----
 
@@ -1399,7 +1398,6 @@ class CodeBlock:
         Enter the context by appending ``{`` and increasing indentation by one level.
 
         :return: Current context object (defaults to ``None``)
-        :rtype: None
         """
         self.env.append("{")
         self.env.indent += " "

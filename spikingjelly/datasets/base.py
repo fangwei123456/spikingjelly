@@ -155,8 +155,6 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         :param raw_root: root directory of the raw dataset. The builder will read
             data from this directory.
         :type raw_root: pathlib.Path
-        :return: None
-        :rtype: None
         """
         self.cfg = cfg
         self.raw_root = raw_root
@@ -341,8 +339,6 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         :type cfg: NeuromorphicDatasetConfig
         :param raw_root: Root directory of the raw data
         :type raw_root: Path
-        :return: None
-        :rtype: None
         """
         super().__init__(cfg, raw_root)
 
@@ -434,8 +430,6 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
         :type W: int
 
         Other arguments are the same as those in :class:`NeuromorphicDatasetBuilder`.
-        :return: None
-        :rtype: None
         """
         super().__init__(cfg, raw_root)
         self.H, self.W = H, W
@@ -536,8 +530,6 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
         :type W: int
 
         Other arguments are the same as those in :class:`NeuromorphicDatasetBuilder`.
-        :return: None
-        :rtype: None
         """
         super().__init__(cfg, raw_root)
         self.H, self.W = H, W
@@ -638,8 +630,6 @@ class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
         :type W: int
 
         Other arguments are the same as those in :class:`NeuromorphicDatasetBuilder`.
-        :return: None
-        :rtype: None
         """
         super().__init__(cfg, raw_root)
         self.H, self.W = H, W
@@ -869,8 +859,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :param target_transform: a function/transform that takes in the target
             and transforms it.
         :type target_transform: Optional[Callable]
-        :return: None
-        :rtype: None
         """
         self.cfg = NeuromorphicDatasetConfig(
             root=Path(root),
@@ -992,8 +980,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         2. 通过调用 :meth:`extract_downloaded_files` 将下载的文件提取到 ``root/extract`` 中。
         3. 通过调用 :meth:`create_raw_from_extracted` 将提取的数据转换为原始数据集，并将原始数据集保存到 :attr:`raw_root`。
 
-        :return: None
-        :rtype: None
 
         ----
 
@@ -1009,9 +995,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         1. Download dataset files to ``root/download`` (if supported) or verify existing downloads.
         2. Extract downloaded files into ``root/extract`` by calling :meth:`extract_downloaded_files`.
         3. Convert extracted data into raw dataset by calling :meth:`create_raw_from_extracted`, and save the raw dataset to :attr:`raw_root`.
-
-        :return: None
-        :rtype: None
         """
         if self.raw_root.exists():
             return
@@ -1281,8 +1264,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :param extract_root: 保存解压后文件的根目录。
         :type extract_root: pathlib.Path
 
-        :return: None
-        :rtype: None
 
         ----
 
@@ -1299,9 +1280,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :param extract_root: root directory that stores files extracted from
             the downloaded archives.
         :type extract_root: pathlib.Path
-
-        :return: None
-        :rtype: None
         """
         pass
 
@@ -1326,8 +1304,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :param raw_root: 保存转换后原始数据集文件的根目录。
         :type raw_root: pathlib.Path
 
-        :return: None
-        :rtype: None
 
         ----
 
@@ -1344,8 +1320,5 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :param raw_root: root directory where converted raw dataset files are
             saved.
         :type raw_root: pathlib.Path
-
-        :return: None
-        :rtype: None
         """
         pass

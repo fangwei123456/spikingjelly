@@ -10,8 +10,6 @@
 
 预定义SNN模型模块，包含Spikformer、SEW ResNet等模型。
 
-:return: None
-:rtype: None
 
 ----
 
@@ -20,9 +18,6 @@
 * **English**
 
 Pre-defined SNN model module including Spikformer, SEW ResNet, and more.
-
-:return: None
-:rtype: None
 """
 
 from .spikformer import (

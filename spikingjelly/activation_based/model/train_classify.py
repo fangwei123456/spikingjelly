@@ -48,8 +48,6 @@ def set_deterministic(_seed_: int = 2020, disable_uda=False):
     :param disable_uda: 是否禁用 UDA（不确定区域丢弃算法）
     :type disable_uda: bool
 
-    :return: None
-    :rtype: None
 
     ----
 
@@ -67,9 +65,6 @@ def set_deterministic(_seed_: int = 2020, disable_uda=False):
 
     :param disable_uda: whether to disable UDA (unreliable data augmentation)
     :type disable_uda: bool
-
-    :return: None
-    :rtype: None
     """
     random.seed(_seed_)
     np.random.seed(_seed_)
@@ -105,8 +100,6 @@ def seed_worker(worker_id):
     :param worker_id: worker 的索引
     :type worker_id: int
 
-    :return: None
-    :rtype: None
 
     ----
 
@@ -119,9 +112,6 @@ def seed_worker(worker_id):
 
     :param worker_id: the index of the worker
     :type worker_id: int
-
-    :return: None
-    :rtype: None
     """
     worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed)

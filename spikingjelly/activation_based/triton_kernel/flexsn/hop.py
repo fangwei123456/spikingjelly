@@ -1,5 +1,4 @@
 """FlexSN time-step scan as a HigherOrderOperator.
-
 Current progress:
 
 M1:
@@ -103,51 +102,47 @@ __all__ = [
 
 
 class FlexSNScan(HigherOrderOperator):
-    """HOP that runs a user-defined single-step ``core`` function over the
-    **API Language:**
-    :ref:`中文 <FlexSNScan-cn>` | :ref:`English <FlexSNScan-en>`
-
-    ----
-
-    .. _FlexSNScan-cn:
-
-    * **中文**
-
-    FlexSN 可微扫描操作（differentiable scanning operation）的高层封装。
-
-    提供与 PyTorch 原生 ``scan`` 操作兼容的扫描函数，支持在脉冲神经网络中
-    高效执行可微的时间维扫描计算。包含 eager 模式和可降图（lowerable）模式，
-    可根据上下文自动选择合适的执行后端。其核心可调用对象需遵循
-    ``[*inputs, *states] -> [*outputs, *states, *intermediates]`` 签名。
-
-    :rtype: None
-    leading time dimension of its inputs.
-    The HOP is invoked with a flat argument list so that Dynamo / AOTAutograd
-    can treat it uniformly. Shapes/semantics:
-    * ``core_fn``: callable with signature
-      ``(*step_inputs, *states) -> (*step_outputs, *updated_states)``.
-    * ``num_inputs`` / ``num_states`` / ``num_outputs``: int literals used to
-      partition the flat tensor args.
-    * ``flat_args``: first ``num_inputs`` tensors are input sequences with
-      leading time dim ``T``; the next ``num_states`` tensors are initial
-      states (no time dim); any remaining tensors are lifted freevars that are
-      passed through to ``core_fn`` unchanged at every time step.
-    Return: ``num_outputs`` output sequences followed by ``num_states`` state
-    sequences, all stacked along the leading time dim.
-
-    ----
-
-    .. _FlexSNScan-en:
-
-    * **English**
-
-    Flexsnscan function
-
-    :return: None
-    :rtype: None
-    """
-
     def __init__(self) -> None:
+        """
+        HOP that runs a user-defined single-step ``core`` function over the
+        **API Language:**
+        :ref:`中文 <FlexSNScan-cn>` | :ref:`English <FlexSNScan-en>`
+
+        ----
+
+        .. _FlexSNScan-cn:
+
+        * **中文**
+
+        FlexSN 可微扫描操作（differentiable scanning operation）的高层封装。
+
+        提供与 PyTorch 原生 ``scan`` 操作兼容的扫描函数，支持在脉冲神经网络中
+        高效执行可微的时间维扫描计算。包含 eager 模式和可降图（lowerable）模式，
+        可根据上下文自动选择合适的执行后端。其核心可调用对象需遵循
+        ``[*inputs, *states] -> [*outputs, *states, *intermediates]`` 签名。
+
+        leading time dimension of its inputs.
+        The HOP is invoked with a flat argument list so that Dynamo / AOTAutograd
+        can treat it uniformly. Shapes/semantics:
+        * ``core_fn``: callable with signature
+          ``(*step_inputs, *states) -> (*step_outputs, *updated_states)``.
+        * ``num_inputs`` / ``num_states`` / ``num_outputs``: int literals used to
+          partition the flat tensor args.
+        * ``flat_args``: first ``num_inputs`` tensors are input sequences with
+          leading time dim ``T``; the next ``num_states`` tensors are initial
+          states (no time dim); any remaining tensors are lifted freevars that are
+          passed through to ``core_fn`` unchanged at every time step.
+        Return: ``num_outputs`` output sequences followed by ``num_states`` state
+        sequences, all stacked along the leading time dim.
+
+        ----
+
+        .. _FlexSNScan-en:
+
+        * **English**
+
+        Flexsnscan function
+        """
         super().__init__("flex_sn_scan")
 
     def __call__(
@@ -160,7 +155,6 @@ class FlexSNScan(HigherOrderOperator):
         output_template_specs: Optional[OutputTemplateSpecs] = None,
     ) -> Tuple[torch.Tensor, ...]:
         """Invoke the FlexSN scan HigherOrderOperator.
-
         Chinese:
             调用 FlexSN scan HigherOrderOperator。
 

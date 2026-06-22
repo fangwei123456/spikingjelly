@@ -5,19 +5,19 @@ import torch.distributed as dist
 
 
 class RASampler(torch.utils.data.Sampler):
-    """Sampler that restricts data loading to a subset of the dataset for distributed,
-    with repeated augmentation.
-    It ensures that different each augmented version of a sample will be visible to a
-    different process (GPU).
-    Heavily based on 'torch.utils.data.DistributedSampler'.
-
-    This is borrowed from the DeiT Repo:
-    https://github.com/facebookresearch/deit/blob/main/samplers.py
-    """
-
     def __init__(
         self, dataset, num_replicas=None, rank=None, shuffle=True, seed=0, repetitions=3
     ):
+        """
+        Sampler that restricts data loading to a subset of the dataset for distributed,
+        with repeated augmentation.
+        It ensures that different each augmented version of a sample will be visible to a
+        different process (GPU).
+        Heavily based on 'torch.utils.data.DistributedSampler'.
+
+        This is borrowed from the DeiT Repo:
+        https://github.com/facebookresearch/deit/blob/main/samplers.py
+        """
         if num_replicas is None:
             if not dist.is_available():
                 raise RuntimeError("Requires distributed package to be available!")

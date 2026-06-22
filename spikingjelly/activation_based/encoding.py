@@ -193,8 +193,6 @@ class StatefulEncoder(base.MemoryModule):
         :param x: 输入数据
         :type x: torch.Tensor
 
-        :return: None
-        :rtype: None
 
         ----
 
@@ -204,9 +202,6 @@ class StatefulEncoder(base.MemoryModule):
 
         :param x: input data
         :type x: torch.Tensor
-
-        :return: None
-        :rtype: None
         """
         raise NotImplementedError
 
@@ -300,8 +295,6 @@ class PeriodicEncoder(StatefulEncoder):
 
         :param spike: 脉冲张量，其第0维为编码周期
         :type spike: torch.Tensor
-        :return: None
-        :rtype: None
 
         ----
 
@@ -314,8 +307,6 @@ class PeriodicEncoder(StatefulEncoder):
 
         :param spike: the spike tensor, whose 0-th dimension is the encoding period
         :type spike: torch.Tensor
-        :return: None
-        :rtype: None
         """
         self.spike = spike
         self.T = spike.shape[0]
@@ -436,8 +427,6 @@ class LatencyEncoder(StatefulEncoder):
 
         :param x: 输入数据，取值范围应为 ``[0, 1]``
         :type x: torch.Tensor
-        :return: None
-        :rtype: None
 
         ----
 
@@ -450,8 +439,6 @@ class LatencyEncoder(StatefulEncoder):
 
         :param x: input data, which should be in the range ``[0, 1]``
         :type x: torch.Tensor
-        :return: None
-        :rtype: None
         """
         if self.enc_function == "log":
             t_f = (self.T - 1.0 - torch.log(self.alpha * x + 1.0)).round().long()

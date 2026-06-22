@@ -13,7 +13,8 @@ import torch.nn as nn
 
 
 class LIFNode(nn.Module):
-    """Leaky Integrate-and-Fire neuron.
+    """
+    Leaky Integrate-and-Fire neuron.
 
     Matches SpikingJelly's LIFNode default configuration:
       decay_input=True, v_reset=0.0 (hard reset)

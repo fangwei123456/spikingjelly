@@ -5,7 +5,7 @@ import hashlib
 import os
 import statistics
 import time
-from collections import defaultdict, deque, OrderedDict
+from collections import OrderedDict, defaultdict, deque
 from numbers import Number
 from typing import Optional, Sequence, Union
 
@@ -21,41 +21,38 @@ __all__ = [
 
 
 class SmoothedValue:
-    r"""
-    **API Language:**
-    :ref:`中文 <SmoothedValue-cn>` | :ref:`English <SmoothedValue-en>`
-
-    ----
-
-    .. _SmoothedValue-cn:
-
-    * **中文**
-
-    记录一组数值，并提供滑动窗口统计量以及全局平均值。
-
-    ----
-
-    .. _SmoothedValue-en:
-
-    * **English**
-
-    Track a series of values and provide smoothed statistics over a window or
-    the global average.
-
-    :param window_size: 滑动窗口大小
-    :type window_size: int
-    :param fmt: 格式化字符串
-    :type fmt: str
-
-    :param window_size: Size of the smoothing window
-    :type window_size: int
-    :param fmt: Format string for output
-    :type fmt: str
-    :return: None
-    :rtype: None
-    """
-
     def __init__(self, window_size=20, fmt=None):
+        """
+        **API Language:**
+        :ref:`中文 <SmoothedValue-cn>` | :ref:`English <SmoothedValue-en>`
+
+        ----
+
+        .. _SmoothedValue-cn:
+
+        * **中文**
+
+        记录一组数值，并提供滑动窗口统计量以及全局平均值。
+
+        :param window_size: 滑动窗口大小
+        :type window_size: int
+        :param fmt: 格式化字符串
+        :type fmt: str
+
+        ----
+
+        .. _SmoothedValue-en:
+
+        * **English**
+
+        Track a series of values and provide smoothed statistics over a window or
+        the global average.
+
+        :param window_size: Size of the smoothing window
+        :type window_size: int
+        :param fmt: Format string for output
+        :type fmt: str
+        """
         if fmt is None:
             fmt = "{median:.4f} ({global_avg:.4f})"
         self.deque = deque(maxlen=window_size)
@@ -88,8 +85,6 @@ class SmoothedValue:
         * **English**
 
         Synchronize smoothed values between processes. Warning: does not synchronize the deque!
-        :return: None
-        :rtype: None
         """
         t = reduce_across_processes([self.count, self.total])
         t = t.tolist()
@@ -129,28 +124,27 @@ class SmoothedValue:
 
 
 class ThroughputValue:
-    r"""
-    **API Language:**
-    :ref:`中文 <ThroughputValue-cn>` | :ref:`English <ThroughputValue-en>`
-
-    ----
-
-    .. _ThroughputValue-cn:
-
-    * **中文**
-
-    按 ``total_samples / total_time`` 记录吞吐量。
-
-    ----
-
-    .. _ThroughputValue-en:
-
-    * **English**
-
-    Track throughput as ``total_samples / total_time``.
-    """
-
     def __init__(self, window_size=20, fmt=None):
+        """
+        **API Language:**
+        :ref:`中文 <ThroughputValue-cn>` | :ref:`English <ThroughputValue-en>`
+
+        ----
+
+        .. _ThroughputValue-cn:
+
+        * **中文**
+
+        按 ``total_samples / total_time`` 记录吞吐量。
+
+        ----
+
+        .. _ThroughputValue-en:
+
+        * **English**
+
+        Track throughput as ``total_samples / total_time``.
+        """
         if fmt is None:
             fmt = "{global_avg:.4f}"
         self.deque = deque(maxlen=window_size)
@@ -168,7 +162,6 @@ class ThroughputValue:
 
     def synchronize_between_processes(self):
         """Synchronize cumulative throughput statistics across ranks.
-
         Chinese:
             同步跨进程的累计吞吐统计量。
 
@@ -176,7 +169,6 @@ class ThroughputValue:
             Synchronize cumulative throughput statistics across distributed ranks.
 
         :return: EN: ``None``. Chinese: 无返回值。
-        :rtype: None
 
         .. note::
 
@@ -243,36 +235,33 @@ class ThroughputValue:
 
 
 class MetricLogger:
-    r"""
-    **API Language:**
-    :ref:`中文 <MetricLogger-cn>` | :ref:`English <MetricLogger-en>`
-
-    ----
-
-    .. _MetricLogger-cn:
-
-    * **中文**
-
-    指标记录器。用于追踪训练过程中的损失与准确率等指标。
-
-    ----
-
-    .. _MetricLogger-en:
-
-    * **English**
-
-    Metric logger for tracking training metrics like loss and accuracy.
-
-    :param delimiter: 分隔符
-    :type delimiter: str
-
-    :param delimiter: Delimiter used when logging
-    :type delimiter: str
-    :return: None
-    :rtype: None
-    """
-
     def __init__(self, delimiter="\t"):
+        """
+        **API Language:**
+        :ref:`中文 <MetricLogger-cn>` | :ref:`English <MetricLogger-en>`
+
+        ----
+
+        .. _MetricLogger-cn:
+
+        * **中文**
+
+        指标记录器。用于追踪训练过程中的损失与准确率等指标。
+
+        :param delimiter: 分隔符
+        :type delimiter: str
+
+        ----
+
+        .. _MetricLogger-en:
+
+        * **English**
+
+        Metric logger for tracking training metrics like loss and accuracy.
+
+        :param delimiter: Delimiter used when logging
+        :type delimiter: str
+        """
         self.meters = defaultdict(SmoothedValue)
         self.delimiter = delimiter
 
@@ -376,13 +365,14 @@ class MetricLogger:
 
 
 class ExponentialMovingAverage(torch.optim.swa_utils.AveragedModel):
-    """Maintains moving averages of model parameters using an exponential decay.
-    ``ema_avg = decay * avg_model_param + (1 - decay) * model_param``
-    `torch.optim.swa_utils.AveragedModel <https://pytorch.org/docs/stable/optim.html#custom-averaging-strategies>`_
-    is used to compute the EMA.
-    """
-
     def __init__(self, model, decay, device="cpu"):
+        """
+        Maintains moving averages of model parameters using an exponential decay.
+        ``ema_avg = decay * avg_model_param + (1 - decay) * model_param``
+        `torch.optim.swa_utils.AveragedModel <https://pytorch.org/docs/stable/optim.html#custom-averaging-strategies>`_
+        is used to compute the EMA.
+        """
+
         def ema_avg(avg_model_param, model_param, num_averaged):
             return decay * avg_model_param + (1 - decay) * model_param
 
@@ -437,8 +427,6 @@ def mkdir(path):
 
     :param path: 要创建的目录路径
     :type path: str
-    :return: None
-    :rtype: None
 
     ----
 
@@ -450,8 +438,6 @@ def mkdir(path):
 
     :param path: Directory path to create
     :type path: str
-    :return: None
-    :rtype: None
     """
 
     try:
@@ -521,8 +507,6 @@ def init_distributed_mode(args):
 
     :param args: 包含分布式配置的参数对象
     :type args: Any
-    :return: None
-    :rtype: None
 
     ----
 
@@ -534,8 +518,6 @@ def init_distributed_mode(args):
 
     :param args: Args object containing distributed configuration
     :type args: Any
-    :return: None
-    :rtype: None
     """
 
     if "RANK" in os.environ and "WORLD_SIZE" in os.environ:

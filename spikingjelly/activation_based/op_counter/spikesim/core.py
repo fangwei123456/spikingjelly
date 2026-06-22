@@ -100,38 +100,6 @@ class SpikeSimEnergyReport:
 
 
 class SpikeSimEnergyProfiler:
-    r"""
-    **API Language:**
-    :ref:`中文 <SpikeSimEnergyProfiler-cn>` |
-    :ref:`English <SpikeSimEnergyProfiler-en>`
-
-    ----
-
-    .. _SpikeSimEnergyProfiler-cn:
-
-    * **中文**
-
-    Runtime SpikeSim-aligned energy profiler.
-
-    使用方式：
-
-    - 以 context manager 方式包住一次真实前向传播
-    - 结束后调用 ``get_report()`` 获取能耗报告
-
-    ----
-
-    .. _SpikeSimEnergyProfiler-en:
-
-    * **English**
-
-    Runtime SpikeSim-aligned energy profiler.
-
-    Usage:
-
-    - wrap one real forward pass in the profiler context
-    - call ``get_report()`` afterwards to build the energy report
-    """
-
     def __init__(
         self,
         *,
@@ -150,6 +118,13 @@ class SpikeSimEnergyProfiler:
 
         * **中文**
 
+        Runtime SpikeSim-aligned energy profiler.
+
+        使用方式：
+
+        - 以 context manager 方式包住一次真实前向传播
+        - 结束后调用 ``get_report()`` 获取能耗报告
+
         :param config: SpikeSim 能耗配置；默认使用 ``SpikeSimEnergyConfig()``
         :param strict: 是否在 unsupported 情况下直接抛异常
         :param verbose: 是否打印逐 stage 的运行时统计信息
@@ -160,11 +135,16 @@ class SpikeSimEnergyProfiler:
 
         * **English**
 
+        Runtime SpikeSim-aligned energy profiler.
+
+        Usage:
+
+        - wrap one real forward pass in the profiler context
+        - call ``get_report()`` afterwards to build the energy report
+
         :param config: SpikeSim energy config; defaults to ``SpikeSimEnergyConfig()``
         :param strict: whether to raise immediately on unsupported behaviors
         :param verbose: whether to print per-stage runtime statistics
-        :return: None
-        :rtype: None
         """
         self.config = (config or SpikeSimEnergyConfig()).copy()
         self.config.validate()

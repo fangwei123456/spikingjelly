@@ -78,7 +78,6 @@ def prepare_model_for_precision(
     config: PrecisionConfig | str | dict,
 ) -> PrecisionArtifacts:
     """Prepare a model for the requested precision mode.
-
     Note:
         This may replace modules in the model. Call it before constructing the
         optimizer so the optimizer does not keep references to stale

@@ -239,44 +239,6 @@ class _Tempotron(nn.Module):
 
 # NOTE: Facade class for backward compatibility
 class Tempotron(nn.Module):
-    """
-    Tempotron is a Leaky Integrate-and-Fire (LIF) Neuron Model that accepts
-    spikes from sensory neurons spikes and learns to classify spatiotemporal
-    patterns of those spikes.
-
-    Reference:
-        | Gütig R, Sompolinsky H.
-        | The tempotron: a neuron that learns spike timing-based decisions.
-        | Nat Neurosci.
-        | 2006 Mar;9(3):420-8.
-        | DOI: 10.1038/nn1643.
-        | Epub 2006 Feb 12.
-        | PMID: 16474393.
-
-    Neuronal Simulation::
-
-                         ┌─────────────────────┐
-        Time:            │0 1 2 3 4 5 6 7 8 T-1│10 11 12 13 14 15 16 17 18 19 20 ......
-        Sensory Neuron 1:│------------|--------│---------------------------------------
-        Sensory Neuron 2:│----|----------------│---------------------------------------
-                         └─────────────────────┘
-                               Time Window
-
-    Tempotron Neuron accepts timing of spikes
-    from sensory neurons within a defined time window
-    and learns to classify different spatiotemporal patterns of those spikes.
-
-    Tempotron doesn't consider the rate of incoming spikes,
-    it consider the precise timing and spatial arrangement of incoming spikes.
-
-    Something like this::
-
-        -|--|------|--|----  vs  -|-----|-------|-|- (single neuron)
-
-        both have the same number of spikes, but different timing patterns.
-        Spike Patterns could be across multiple neurons too
-    """
-
     def __init__(
         self,
         in_features,
@@ -287,6 +249,42 @@ class Tempotron(nn.Module):
         v_threshold=1.0,
     ):
         """
+        Tempotron is a Leaky Integrate-and-Fire (LIF) Neuron Model that accepts
+        spikes from sensory neurons spikes and learns to classify spatiotemporal
+        patterns of those spikes.
+
+        Reference:
+            | Gütig R, Sompolinsky H.
+            | The tempotron: a neuron that learns spike timing-based decisions.
+            | Nat Neurosci.
+            | 2006 Mar;9(3):420-8.
+            | DOI: 10.1038/nn1643.
+            | Epub 2006 Feb 12.
+            | PMID: 16474393.
+
+        Neuronal Simulation::
+
+                                ┌─────────────────────┐
+            Time:            │0 1 2 3 4 5 6 7 8 T-1│10 11 12 13 14 15 16 17 18 19 20 ......
+            Sensory Neuron 1:│------------|--------│---------------------------------------
+            Sensory Neuron 2:│----|----------------│---------------------------------------
+                                └─────────────────────┘
+                                    Time Window
+
+        Tempotron Neuron accepts timing of spikes
+        from sensory neurons within a defined time window
+        and learns to classify different spatiotemporal patterns of those spikes.
+
+        Tempotron doesn't consider the rate of incoming spikes,
+        it consider the precise timing and spatial arrangement of incoming spikes.
+
+        Something like this::
+
+            -|--|------|--|----  vs  -|-----|-------|-|- (single neuron)
+
+            both have the same number of spikes, but different timing patterns.
+            Spike Patterns could be across multiple neurons too
+
         Parameters
         ----------
         in_features : int

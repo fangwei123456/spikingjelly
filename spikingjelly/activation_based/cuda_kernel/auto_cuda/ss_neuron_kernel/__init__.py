@@ -10,9 +10,6 @@
 
 单步神经元CUDA kernel自动生成模块。
 
-:return: None
-:rtype: None
-
 ----
 
 .. _ss_neuron_kernel-en:
@@ -20,9 +17,6 @@
 * **English**
 
 Single-step neuron CUDA kernel auto-generation module.
-
-:return: None
-:rtype: None
 """
 
 from .integrate_and_fire import IFNodeBPKernel, IFNodeFPKernel, ss_if_step

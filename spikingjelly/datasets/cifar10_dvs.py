@@ -226,9 +226,6 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
         :type transform: Optional[Callable]
         :param target_transform: Target transform function
         :type target_transform: Optional[Callable]
-
-        :return: None
-        :rtype: None
         """
         super().__init__(
             root,
@@ -500,9 +497,6 @@ class CIFAR10DVSTEBNSplit(CIFAR10DVS):
         :type transform: Optional[Callable]
         :param target_transform: Target transform function
         :type target_transform: Optional[Callable]
-
-        :return: None
-        :rtype: None
         """
         if train is None:
             raise ValueError("`train` must be `True` or `False`")

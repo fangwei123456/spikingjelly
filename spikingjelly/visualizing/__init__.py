@@ -64,7 +64,6 @@ def plot_2d_heatmap(
 
     .. image:: ../_static/API/visualizing/plot_2d_heatmap.*
         :width: 100%
-
     """
     if array.ndim != 2:
         raise ValueError(f"Expected 2D array, got {array.ndim}D array instead")
@@ -178,7 +177,6 @@ def plot_2d_bar_in_3d(
         plt.show()
 
     .. image:: ../_static/API/visualizing/plot_2d_bar_in_3d_1.png
-
     """
     if array.ndim != 2:
         raise ValueError(f"Expected 2D array, got {array.ndim}D array instead")
@@ -216,8 +214,6 @@ def plot_1d_spikes(
     dpi=200,
 ):
     """
-
-
     :param spikes: shape=[T, N]的np数组，其中的元素只为0或1，表示N个时长为T的脉冲数据
     :param title: 热力图的标题
     :param xlabel: 热力图的x轴的label
@@ -262,7 +258,6 @@ def plot_1d_spikes(
 
     .. image:: ../_static/API/visualizing/plot_1d_spikes.*
         :width: 100%
-
     """
     if spikes.ndim != 2:
         raise ValueError(f"Expected 2D array, got {spikes.ndim}D array instead")
@@ -366,7 +361,6 @@ def plot_2d_feature_map(
 
     .. image:: ../_static/API/visualizing/plot_2d_feature_map.*
         :width: 100%
-
     """
     if x3d.ndim != 3:
         raise ValueError(f"Expected 3D array, got {x3d.ndim}D array instead")

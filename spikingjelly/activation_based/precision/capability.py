@@ -50,7 +50,6 @@ def _assess_fp8_torchao(
     capability: tuple | None,
 ) -> tuple[bool, bool, str | None]:
     """Determine fp8-torchao viability from environment probes.
-
     Returns ``(can_convert, can_execute, execution_note)``.
     """
     can_convert = torchao_installed

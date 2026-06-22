@@ -1,6 +1,8 @@
+from copy import deepcopy
+
 import torch
 import torch.nn as nn
-from copy import deepcopy
+
 from .. import layer
 
 try:
@@ -277,27 +279,6 @@ class Bottleneck(nn.Module):
 
 
 class SEWResNet(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <SEWResNet-cn>` | :ref:`English <SEWResNet-en>`
-
-    ----
-
-    .. _SEWResNet-cn:
-
-    * **中文**
-
-    SEW（Spike-Element-Wise）ResNet 网络。使用逐元素相加连接代替传统 shortcut 中的激活函数，以减少信息损失。
-
-    ----
-
-    .. _SEWResNet-en:
-
-    * **English**
-
-    SEW (Spike-Element-Wise) ResNet network. Uses element-wise addition connections in shortcuts to reduce information loss.
-    """
-
     def __init__(
         self,
         block,
@@ -312,6 +293,26 @@ class SEWResNet(nn.Module):
         spiking_neuron: callable = None,
         **kwargs,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <SEWResNet-cn>` | :ref:`English <SEWResNet-en>`
+
+        ----
+
+        .. _SEWResNet-cn:
+
+        * **中文**
+
+        SEW（Spike-Element-Wise）ResNet 网络。使用逐元素相加连接代替传统 shortcut 中的激活函数，以减少信息损失。
+
+        ----
+
+        .. _SEWResNet-en:
+
+        * **English**
+
+        SEW (Spike-Element-Wise) ResNet network. Uses element-wise addition connections in shortcuts to reduce information loss.
+        """
         super().__init__()
         if norm_layer is None:
             norm_layer = layer.BatchNorm2d

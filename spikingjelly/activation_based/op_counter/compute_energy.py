@@ -192,43 +192,40 @@ class ComputeEnergyReport:
 
 
 class ComputeEnergyProfiler:
-    r"""
-    **API Language:**
-    :ref:`中文 <ComputeEnergyProfiler-cn>` |
-    :ref:`English <ComputeEnergyProfiler-en>`
-
-    ----
-
-    .. _ComputeEnergyProfiler-cn:
-
-    * **中文**
-
-    基于 public counter 组装的 compute-only MAC/AC 能耗分析器。
-
-    用法与其他能耗分析器一致：以 context manager 方式包住一次真实前向传播，
-    然后调用 ``get_report()``。
-
-    ----
-
-    .. _ComputeEnergyProfiler-en:
-
-    * **English**
-
-    Compute-only MAC/AC energy profiler composed from public counters.
-
-    Use it like the other energy profilers: wrap one real forward pass in the
-    context manager and call ``get_report()`` afterwards.
-
-    :param config: 能耗配置，若为 ``None`` 则使用默认配置
-    :type config: ComputeEnergyConfig | None
-
-    :param config: Energy configuration. If ``None``, uses the default configuration
-    :type config: ComputeEnergyConfig | None
-    :return: None
-    :rtype: None
-    """
-
     def __init__(self, *, config: ComputeEnergyConfig | None = None):
+        """
+        **API Language:**
+        :ref:`中文 <ComputeEnergyProfiler-cn>` |
+        :ref:`English <ComputeEnergyProfiler-en>`
+
+        ----
+
+        .. _ComputeEnergyProfiler-cn:
+
+        * **中文**
+
+        基于 public counter 组装的 compute-only MAC/AC 能耗分析器。
+
+        用法与其他能耗分析器一致：以 context manager 方式包住一次真实前向传播，
+        然后调用 ``get_report()``。
+
+        :param config: 能耗配置，若为 ``None`` 则使用默认配置
+        :type config: ComputeEnergyConfig | None
+
+        ----
+
+        .. _ComputeEnergyProfiler-en:
+
+        * **English**
+
+        Compute-only MAC/AC energy profiler composed from public counters.
+
+        Use it like the other energy profilers: wrap one real forward pass in the
+        context manager and call ``get_report()`` afterwards.
+
+        :param config: Energy configuration. If ``None``, uses the default configuration
+        :type config: ComputeEnergyConfig | None
+        """
         self.config = copy.deepcopy(config or ComputeEnergyConfig())
         ignore_modules = list(self.config.extra_ignore_modules or [])
         self.mac_counter = MACCounter(extra_ignore_modules=ignore_modules)

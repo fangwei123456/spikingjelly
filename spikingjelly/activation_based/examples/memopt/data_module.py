@@ -8,15 +8,15 @@ from spikingjelly.datasets import CIFAR10DVSTEBNSplit
 
 
 class Cutout:
-    """Randomly mask out one or more patches from an image.
-    Args:
-        n_holes (int): Number of patches to cut out of each image.
-        length (int): The length (in pixels) of each square patch.
-        max_length (int): If not None, randomly sample the length of the square
-            patch. If None, use the argument `length` instead.
-    """
-
     def __init__(self, n_holes, length=None, max_length=None):
+        """
+        Randomly mask out one or more patches from an image.
+        Args:
+            n_holes (int): Number of patches to cut out of each image.
+            length (int): The length (in pixels) of each square patch.
+            max_length (int): If not None, randomly sample the length of the square
+                patch. If None, use the argument `length` instead.
+        """
         self.n_holes = n_holes
         self.length = length
         self.max_length = max_length

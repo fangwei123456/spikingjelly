@@ -7,17 +7,17 @@ from .. import functional, layer
 
 
 class Float8LinearStepModule(nn.Module):
-    """Step-mode wrapper around a float8 linear module.
-
-    Note:
-        `_load_from_state_dict` rewrites the provided state_dict keys in place
-        from `prefix + key` to `prefix + "wrapped." + key` so that PyTorch's
-        recursive loading can populate the registered `wrapped` child module.
-        Callers that intend to reuse the same state dict object elsewhere should
-        clone or copy it first.
-    """
-
     def __init__(self, wrapped: nn.Module, step_mode: str = "s"):
+        """
+        Step-mode wrapper around a float8 linear module.
+
+        Note:
+            `_load_from_state_dict` rewrites the provided state_dict keys in place
+            from `prefix + key` to `prefix + "wrapped." + key` so that PyTorch's
+            recursive loading can populate the registered `wrapped` child module.
+            Callers that intend to reuse the same state dict object elsewhere should
+            clone or copy it first.
+        """
         super().__init__()
         self.wrapped = wrapped
         self.step_mode = step_mode

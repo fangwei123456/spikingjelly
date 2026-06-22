@@ -73,45 +73,6 @@ class _StageMetadata:
 
 
 class SpikeSimCounter(BaseCounter):
-    r"""
-    **API Language:**
-    :ref:`中文 <SpikeSimCounter-cn>` | :ref:`English <SpikeSimCounter-en>`
-
-    ----
-
-    .. _SpikeSimCounter-cn:
-
-    * **中文**
-
-    SpikeSim 计数器，用于在 spike 驱动的模拟中统计计算成本。
-
-    :param config: SpikeSim 能量配置
-    :type config: SpikeSimEnergyConfig
-    :param strict: 严格模式开关
-    :type strict: bool
-    :param verbose: 详细输出开关
-    :type verbose: bool
-    :return: None
-    :rtype: None
-
-    ----
-
-    .. _SpikeSimCounter-en:
-
-    * **English**
-
-    SpikeSim counter for profiling computation costs in spike-driven simulations.
-
-    :param config: SpikeSim energy configuration
-    :type config: SpikeSimEnergyConfig
-    :param strict: Whether to use strict mode
-    :type strict: bool
-    :param verbose: Whether to produce verbose output
-    :type verbose: bool
-    :return: None
-    :rtype: None
-    """
-
     def __init__(
         self,
         *,
@@ -119,6 +80,40 @@ class SpikeSimCounter(BaseCounter):
         strict: bool,
         verbose: bool,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <SpikeSimCounter-cn>` | :ref:`English <SpikeSimCounter-en>`
+
+        ----
+
+        .. _SpikeSimCounter-cn:
+
+        * **中文**
+
+        SpikeSim 计数器，用于在 spike 驱动的模拟中统计计算成本。
+
+        :param config: SpikeSim 能量配置
+        :type config: SpikeSimEnergyConfig
+        :param strict: 严格模式开关
+        :type strict: bool
+        :param verbose: 详细输出开关
+        :type verbose: bool
+
+        ----
+
+        .. _SpikeSimCounter-en:
+
+        * **English**
+
+        SpikeSim counter for profiling computation costs in spike-driven simulations.
+
+        :param config: SpikeSim energy configuration
+        :type config: SpikeSimEnergyConfig
+        :param strict: Whether to use strict mode
+        :type strict: bool
+        :param verbose: Whether to produce verbose output
+        :type verbose: bool
+        """
         super().__init__()
         self.config = config
         self.strict = strict

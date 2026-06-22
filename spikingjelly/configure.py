@@ -9,7 +9,6 @@ Do not change them in this way, which will not make effect:
 
     from spikingjelly.configure import cuda_threads
     cuda_threads = 512
-
 """
 
 max_threads_number_for_datasets_preprocess = 16

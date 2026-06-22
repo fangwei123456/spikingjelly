@@ -250,7 +250,6 @@ class SpikingRNNCellBase(nn.Module):
 
             All the weights and biases are initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`
             where :math:`k = \\frac{1}{\\text{hidden_size}}`.
-
         """
         super().__init__()
         self.input_size = input_size
@@ -270,8 +269,6 @@ class SpikingRNNCellBase(nn.Module):
 
         初始化所有可学习参数。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -280,9 +277,6 @@ class SpikingRNNCellBase(nn.Module):
         * **English**
 
         Initialize all learnable parameters.
-
-        :return: ``None``
-        :rtype: None
         """
         sqrt_k = math.sqrt(1 / self.hidden_size)
         for param in self.parameters():

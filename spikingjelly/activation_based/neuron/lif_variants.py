@@ -120,9 +120,6 @@ class GatedLIFNode(base.MemoryModule):
             Users can print ``self.supported_backends`` to check availability.
             Gated LIF only supports the ``'torch'`` backend
         :type backend: str
-
-        :return: None
-        :rtype: None
         """
         assert isinstance(init_tau, float) and init_tau < 1.0
         assert isinstance(T, int) and T is not None
@@ -459,9 +456,6 @@ class KLIFNode(BaseNode):
             whether to store the membrane potential at all time steps in ``self.v_seq``.
             If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage
         :type store_v_seq: bool
-        
-        :return: None
-        :rtype: None
 """
         assert isinstance(tau, float) and tau > 1.0
         super().__init__(
@@ -573,9 +567,6 @@ class CUBALIFNode(BaseNode):
 
         :param surrogate_function: surrogate function used to compute spike gradients during backpropagation
         :type surrogate_function: surrogate.SurrogateFunctionBase
-
-        :return: None
-        :rtype: None
         """
         super().__init__(v_threshold, v_reset, surrogate_function)
 
@@ -667,9 +658,6 @@ class LIAFNode(LIFNode):
         :type threshold_related: bool
 
         Other parameters in `*args, **kwargs` are the same as :class:`LIFNode`.
-
-        :return: None
-        :rtype: None
         """
         super().__init__(*args, **kwargs)
         self.act = act

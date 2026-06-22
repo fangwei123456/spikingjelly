@@ -168,8 +168,6 @@ class SpeechCommands(Dataset):
 
         :param download: whether to download the dataset, default is False
         :type download: Optional[bool]
-        :return: None
-        :rtype: None
         """
         self.split = verify_str_arg(split, "split", ("train", "val", "test"))
         self.label_dict = label_dict

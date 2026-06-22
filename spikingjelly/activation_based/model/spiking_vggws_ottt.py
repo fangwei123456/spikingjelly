@@ -1,6 +1,8 @@
-import torch.nn as nn
 from copy import deepcopy
-from .. import neuron, layer
+
+import torch.nn as nn
+
+from .. import layer, neuron
 
 __all__ = [
     "OTTTSpikingVGG",
@@ -28,63 +30,6 @@ class Scale(nn.Module):
 
 
 class OTTTSpikingVGG(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <OTTTSpikingVGG-cn>` | :ref:`English <OTTTSpikingVGG-en>`
-
-    ----
-
-    .. _OTTTSpikingVGG-cn:
-
-    * **中文**
-
-    使用 OTTT（Online Training Through Time）训练的脉冲 VGG 网络。继承自 :class:`torchvision.models.VGG`。
-
-    ----
-
-    .. _OTTTSpikingVGG-en:
-
-    * **English**
-
-    Spiking VGG network trained with OTTT (Online Training Through Time). Inherits from :class:`torchvision.models.VGG`.
-
-    :param cfg: VGG 网络配置
-    :type cfg: list
-    :param weight_standardization: 是否使用权重标准化
-    :type weight_standardization: bool
-    :param num_classes: 分类类别数
-    :type num_classes: int
-    :param init_weights: 是否初始化权重
-    :type init_weights: bool
-    :param spiking_neuron: 脉冲神经元类
-    :type spiking_neuron: callable
-    :param light_classifier: 是否使用轻量分类器
-    :type light_classifier: bool
-    :param drop_rate: Dropout 比率
-    :type drop_rate: float
-    :param kwargs: 传递给父类的额外参数
-    :type kwargs: dict
-
-    :param cfg: VGG network configuration
-    :type cfg: list
-    :param weight_standardization: Whether to use weight standardization
-    :type weight_standardization: bool
-    :param num_classes: Number of classes for classification
-    :type num_classes: int
-    :param init_weights: Whether to initialize weights
-    :type init_weights: bool
-    :param spiking_neuron: Spiking neuron class
-    :type spiking_neuron: callable
-    :param light_classifier: Whether to use a lightweight classifier
-    :type light_classifier: bool
-    :param drop_rate: Dropout rate
-    :type drop_rate: float
-    :param kwargs: Extra arguments for the parent class
-    :type kwargs: dict
-    :return: None
-    :rtype: None
-    """
-
     def __init__(
         self,
         cfg,
@@ -96,6 +41,60 @@ class OTTTSpikingVGG(nn.Module):
         drop_rate=0.0,
         **kwargs,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <OTTTSpikingVGG-cn>` | :ref:`English <OTTTSpikingVGG-en>`
+
+        ----
+
+        .. _OTTTSpikingVGG-cn:
+
+        * **中文**
+
+        使用 OTTT（Online Training Through Time）训练的脉冲 VGG 网络。继承自 :class:`torchvision.models.VGG`。
+
+        :param cfg: VGG 网络配置
+        :type cfg: list
+        :param weight_standardization: 是否使用权重标准化
+        :type weight_standardization: bool
+        :param num_classes: 分类类别数
+        :type num_classes: int
+        :param init_weights: 是否初始化权重
+        :type init_weights: bool
+        :param spiking_neuron: 脉冲神经元类
+        :type spiking_neuron: callable
+        :param light_classifier: 是否使用轻量分类器
+        :type light_classifier: bool
+        :param drop_rate: Dropout 比率
+        :type drop_rate: float
+        :param kwargs: 传递给父类的额外参数
+        :type kwargs: dict
+
+        ----
+
+        .. _OTTTSpikingVGG-en:
+
+        * **English**
+
+        Spiking VGG network trained with OTTT (Online Training Through Time). Inherits from :class:`torchvision.models.VGG`.
+
+        :param cfg: VGG network configuration
+        :type cfg: list
+        :param weight_standardization: Whether to use weight standardization
+        :type weight_standardization: bool
+        :param num_classes: Number of classes for classification
+        :type num_classes: int
+        :param init_weights: Whether to initialize weights
+        :type init_weights: bool
+        :param spiking_neuron: Spiking neuron class
+        :type spiking_neuron: callable
+        :param light_classifier: Whether to use a lightweight classifier
+        :type light_classifier: bool
+        :param drop_rate: Dropout rate
+        :type drop_rate: float
+        :param kwargs: Extra arguments for the parent class
+        :type kwargs: dict
+        """
         super(OTTTSpikingVGG, self).__init__()
         self.fc_hw = kwargs.get("fc_hw", 1)
         if weight_standardization:

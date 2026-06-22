@@ -96,8 +96,6 @@ def save_as_pic(
     :param pic_first_name: 图片文件名前缀，保存文件名形如 ``f"{pic_first_name}_{t}.png"``
     :type pic_first_name: str
 
-    :return: None
-    :rtype: None
 
     ----
 
@@ -118,8 +116,6 @@ def save_as_pic(
     :param pic_first_name: prefix for image names (stored image names are: ``f"{pic_first_name}_{t}.png"``)
     :type pic_first_name: str
 
-    :return: None
-    :rtype: None
 
     ----
 
@@ -180,8 +176,6 @@ def save_every_frame_of_an_entire_DVS_dataset(
     :param number_of_threads: 用于保存图像的线程数。
     :type number_of_threads: int
 
-    :return: None
-    :rtype: None
 
     :raises ValueError: 当必要参数为空, 或 ``dataset`` 不是 ``"DVS128Gesture"``,
         ``"CIFAR10DVS"``, ``"NCaltech101"`` 之一时抛出。
@@ -211,8 +205,6 @@ def save_every_frame_of_an_entire_DVS_dataset(
     :param number_of_threads: how many threads are used to save images.
     :type number_of_threads: int
 
-    :return: None
-    :rtype: None
 
     :raises ValueError: raised when required arguments are empty, or when
         ``dataset`` is not one of ``"DVS128Gesture"``, ``"CIFAR10DVS"``, or
@@ -298,8 +290,6 @@ def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> N
         如果不为 ``None``，此函数将不播放帧，而是将帧保存到路径 ``save_gif_to`` 中的 gif 文件
     :type save_gif_to: str
 
-    :return: None
-    :rtype: None
     ----
 
     .. _play_frame-en:
@@ -313,9 +303,6 @@ def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> N
         If not ``None``, this function will not play the frames but save the
         frames to a gif file in the path ``save_gif_to``
     :type save_gif_to: str
-
-    :return: None
-    :rtype: None
     """
     if isinstance(x, np.ndarray):
         x = torch.from_numpy(x)
@@ -872,8 +859,6 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(
     :param print_save: 若为 ``True``，则打印保存路径
     :type print_save: bool
 
-    :return: None
-    :rtype: None
 
     ----
 
@@ -909,9 +894,6 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(
 
     :param print_save: If ``True``, this function will print saved files' paths.
     :type print_save: bool
-
-    :return: None
-    :rtype: None
     """
     fname = os.path.join(output_dir, os.path.basename(events_np_file))
     np_savez(
@@ -1102,7 +1084,6 @@ def save_frames_to_npz_and_print(fname: str, frames: np.ndarray):
     :param frames: 帧对象
     :type frames: np.ndarray
 
-    :return: None
 
     ----
 
@@ -1115,8 +1096,6 @@ def save_frames_to_npz_and_print(fname: str, frames: np.ndarray):
 
     :param frames: frames object
     :type frames: np.ndarray
-
-    :return: None
     """
     np_savez(fname, frames=frames)
     print(f"Frames [{fname}] saved.")
@@ -1143,7 +1122,6 @@ def create_same_directory_structure(
     :param target_dir: 要复制到的目录的路径
     :type target_dir: Union[str, pathlib.Path]
 
-    :return: None
 
     ----
 
@@ -1158,8 +1136,6 @@ def create_same_directory_structure(
 
     :param target_dir: Path of the directory that be copied to
     :type target_dir: Union[str, pathlib.Path]
-
-    :return: None
     """
     for sub_dir_name in os.listdir(source_dir):
         source_sub_dir = os.path.join(source_dir, sub_dir_name)
@@ -1434,8 +1410,6 @@ def pad_sequence_collate(batch: list):
         x_p.shape=torch.Size([2, 18, 2]), label=tensor([14, 30]), x_len=tensor([18,  2])
         x_p.shape=torch.Size([2, 29, 2]), label=tensor([3, 6]), x_len=tensor([29, 26])
         x_p.shape=torch.Size([2, 23, 2]), label=tensor([ 9, 23]), x_len=tensor([23,  9])
-    :return: None
-    :rtype: None
     """
     x_list = []
     x_len_list = []
@@ -1526,8 +1500,6 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
                 [ True,  True,  True],
                 [False,  True,  True],
                 [False, False,  True]])
-    :return: None
-    :rtype: None
     """
     if T is None:
         T = sequence_len.max().item()
@@ -1594,8 +1566,6 @@ def create_sub_dataset(
     :param randomly: 若为 ``True``，则随机选择复制的文件。随机性由 ``numpy.random.seed`` 控制
     :type randomly: bool
 
-    :return: None
-    :rtype: None
 
     ----
 
@@ -1623,9 +1593,6 @@ def create_sub_dataset(
         be picked up randomly.
         The randomness is controlled by ``numpy.random.seed``
     :type randomly: bool
-
-    :return: None
-    :rtype: None
     """
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)

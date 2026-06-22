@@ -49,7 +49,6 @@ def sg_triton(h, alpha, sg_triton_id: tl.constexpr):
 
     sg triton 函数
 
-    :rtype: None
     All transcendentals upcast to float32 to avoid fp16 precision issues.
     The result is cast back to the input dtype before returning.
 
@@ -60,9 +59,6 @@ def sg_triton(h, alpha, sg_triton_id: tl.constexpr):
     * **English**
 
     Sg Triton function
-
-    :return: None
-    :rtype: None
     """
     if sg_triton_id == 0:  # Sigmoid:  alpha * sigmoid(alpha*h) * (1 - sigmoid(alpha*h))
         sg = tl.sigmoid(h.to(tl.float32) * alpha)
@@ -113,7 +109,6 @@ def resolve_sg_triton_id_and_alpha(surrogate_function) -> tuple[int, float]:
 
     resolve sg triton id and alpha 函数
 
-    :rtype: None
     Raises NotImplementedError for unsupported surrogate types.
 
     ----
@@ -123,9 +118,6 @@ def resolve_sg_triton_id_and_alpha(surrogate_function) -> tuple[int, float]:
     * **English**
 
     Resolve Sg Triton Id And Alpha function
-
-    :return: None
-    :rtype: None
     """
     sg_type = type(surrogate_function)
     sg_triton_id = None

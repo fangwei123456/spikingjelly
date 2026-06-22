@@ -237,8 +237,6 @@ class SynOpCounter(BaseCounter):
                 model(spike)
 
             print(f"SynOp count: {counter.get_total()}")
-        :return: None
-        :rtype: None
         """
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {

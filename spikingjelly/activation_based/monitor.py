@@ -31,8 +31,6 @@ class BaseMonitor:
 
         监视器基类。维护钩子句柄、被监视层列表、记录缓存以及启停状态。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -42,9 +40,6 @@ class BaseMonitor:
 
         Base monitor class. It maintains hook handles, monitored layer list, recorded data buffers,
         and enable/disable state.
-
-        :return: ``None``
-        :rtype: None
         """
         self.hooks = []
         self.monitored_layers = []

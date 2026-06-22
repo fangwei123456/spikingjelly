@@ -79,8 +79,6 @@ class BaseSpikeCompressor(abc.ABC):
         Abstract base class for spike compressors.
         To implement a spike compressor, you need to inherit this abstract base class
         and implement the ``_compress`` and ``_decompress`` methods.
-        :return: None
-        :rtype: None
         """
         pass
 
@@ -217,8 +215,6 @@ class NullSpikeCompressor(BaseSpikeCompressor):
             x = torch.randn(32, 10)
             compressed = compressor.compress(x)
             decompressed = compressor.decompress(compressed, x.shape)
-        :return: None
-        :rtype: None
         """
         super().__init__()
 
@@ -273,8 +269,6 @@ class BooleanSpikeCompressor(BaseSpikeCompressor):
             spikes = torch.randint(0, 2, (32, 100)).float()
             compressed = compressor.compress(spikes)
             decompressed = compressor.decompress(compressed, spikes.shape)
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.s_seq_dtype = torch.float32
@@ -330,8 +324,6 @@ class Uint8SpikeCompressor(BaseSpikeCompressor):
             x = torch.randn(32, 10)
             compressed = compressor.compress(x)
             decompressed = compressor.decompress(compressed, x.shape)
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.s_seq_dtype = torch.float32
@@ -388,8 +380,6 @@ class BitSpikeCompressor(BaseSpikeCompressor):
             spikes = torch.randint(0, 2, (32, 1000)).float()
             compressed = compressor.compress(spikes)
             decompressed = compressor.decompress(compressed, spikes.shape)
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.s_seq_dtype = torch.float32
@@ -454,8 +444,6 @@ class SparseSpikeCompressor(BaseSpikeCompressor):
             spikes = (torch.rand(32, 1000) < 0.04).float()
             compressed = compressor.compress(spikes)
             decompressed = compressor.decompress(compressed, spikes.shape)
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.dtype = dtype

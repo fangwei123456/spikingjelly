@@ -10,8 +10,6 @@
 
 NeuroMC能耗分析模块，包含内存和计算成本计数器。
 
-:return: None
-:rtype: None
 
 ----
 
@@ -20,9 +18,6 @@ NeuroMC能耗分析模块，包含内存和计算成本计数器。
 * **English**
 
 NeuroMC energy profiling module with memory and computation cost counters.
-
-:return: None
-:rtype: None
 """
 
 from .config import MemoryHierarchyConfig, MemoryInstanceSpec

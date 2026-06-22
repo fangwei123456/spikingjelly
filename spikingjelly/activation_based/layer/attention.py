@@ -68,9 +68,6 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
 
         :param dimension: Dimensions of input. If the input dimension is [T, N, C, H, W], dimension = 4; when the input dimension is [T, N, L], dimension = 2.
         :type dimension: int
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.step_mode = "m"
@@ -189,9 +186,6 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 
         :param kernel_size: convolution kernel size of SpatialAttention
         :type kernel_size: int
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
 
@@ -328,9 +322,6 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
 
         :param backend: backend used by the internal neurons of this module. Default: ``torch``
         :type backend: str
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
         if dim % num_heads != 0:
@@ -491,9 +482,6 @@ class QKAttention(nn.Module, base.MultiStepModule):
 
         :param backend: backend used by the internal neurons of this module. Default: ``torch``.
         :type backend: str
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
         if dim % num_heads != 0:
@@ -616,8 +604,6 @@ class TokenQKAttention(QKAttention):
         :type num_heads: int
         :param backend: Backend
         :type backend: str
-        :return: None
-        :rtype: None
         """
         super().__init__(dim, num_heads, qka_type="token", backend=backend)
 
@@ -640,7 +626,5 @@ class ChannelQKAttention(QKAttention):
         :type num_heads: int
         :param backend: Backend
         :type backend: str
-        :return: None
-        :rtype: None
         """
         super().__init__(dim, num_heads, qka_type="channel", backend=backend)

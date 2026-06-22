@@ -1,6 +1,7 @@
+from copy import deepcopy
+
 import torch
 import torch.nn as nn
-from copy import deepcopy
 
 try:
     from torchvision.models.utils import load_state_dict_from_url
@@ -8,7 +9,6 @@ except ImportError:
     from torchvision._internally_replaced_utils import load_state_dict_from_url
 
 from .. import layer
-
 
 __all__ = [
     "SpikingResNet",
@@ -254,71 +254,6 @@ class Bottleneck(nn.Module):
 
 
 class SpikingResNet(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <SpikingResNet-cn>` | :ref:`English <SpikingResNet-en>`
-
-    ----
-
-    .. _SpikingResNet-cn:
-
-    * **中文**
-
-    脉冲 ResNet 网络。继承自 :class:`torchvision.models.ResNet`，将原网络的激活函数替换为脉冲神经元。
-
-    ----
-
-    .. _SpikingResNet-en:
-
-    * **English**
-
-    Spiking ResNet network. Inherits from :class:`torchvision.models.ResNet` with activations replaced by spiking neurons.
-
-    :param block: 残差块的类型（``BasicBlock`` 或 ``Bottleneck``）
-    :type block: type
-    :param layers: 每个层的残差块数量
-    :type layers: list
-    :param num_classes: 分类任务的类别数
-    :type num_classes: int
-    :param zero_init_residual: 是否将最后一个 BN 初始化为零
-    :type zero_init_residual: bool
-    :param groups: 分组卷积的组数
-    :type groups: int
-    :param width_per_group: 每组的宽度
-    :type width_per_group: int
-    :param replace_stride_with_dilation: 是否用膨胀卷积替换步长
-    :type replace_stride_with_dilation: Optional[List[bool]]
-    :param norm_layer: 归一化层类型
-    :type norm_layer: Optional[Callable]
-    :param spiking_neuron: 脉冲神经元类
-    :type spiking_neuron: callable
-    :param kwargs: 传递给脉冲神经元的额外参数
-    :type kwargs: dict
-
-    :param block: Type of residual block (``BasicBlock`` or ``Bottleneck``)
-    :type block: type
-    :param layers: Number of residual blocks per layer
-    :type layers: list
-    :param num_classes: Number of classes for classification
-    :type num_classes: int
-    :param zero_init_residual: Whether to zero-initialize the last BN
-    :type zero_init_residual: bool
-    :param groups: Number of groups for grouped convolution
-    :type groups: int
-    :param width_per_group: Width per group
-    :type width_per_group: int
-    :param replace_stride_with_dilation: Replace stride with dilated convolution
-    :type replace_stride_with_dilation: Optional[List[bool]]
-    :param norm_layer: Normalization layer type
-    :type norm_layer: Optional[Callable]
-    :param spiking_neuron: Spiking neuron class
-    :type spiking_neuron: callable
-    :param kwargs: Extra arguments for the spiking neuron
-    :type kwargs: dict
-    :return: None
-    :rtype: None
-    """
-
     def __init__(
         self,
         block,
@@ -332,6 +267,68 @@ class SpikingResNet(nn.Module):
         spiking_neuron: callable = None,
         **kwargs,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <SpikingResNet-cn>` | :ref:`English <SpikingResNet-en>`
+
+        ----
+
+        .. _SpikingResNet-cn:
+
+        * **中文**
+
+        脉冲 ResNet 网络。继承自 :class:`torchvision.models.ResNet`，将原网络的激活函数替换为脉冲神经元。
+
+        :param block: 残差块的类型（``BasicBlock`` 或 ``Bottleneck``）
+        :type block: type
+        :param layers: 每个层的残差块数量
+        :type layers: list
+        :param num_classes: 分类任务的类别数
+        :type num_classes: int
+        :param zero_init_residual: 是否将最后一个 BN 初始化为零
+        :type zero_init_residual: bool
+        :param groups: 分组卷积的组数
+        :type groups: int
+        :param width_per_group: 每组的宽度
+        :type width_per_group: int
+        :param replace_stride_with_dilation: 是否用膨胀卷积替换步长
+        :type replace_stride_with_dilation: Optional[List[bool]]
+        :param norm_layer: 归一化层类型
+        :type norm_layer: Optional[Callable]
+        :param spiking_neuron: 脉冲神经元类
+        :type spiking_neuron: callable
+        :param kwargs: 传递给脉冲神经元的额外参数
+        :type kwargs: dict
+
+        ----
+
+        .. _SpikingResNet-en:
+
+        * **English**
+
+        Spiking ResNet network. Inherits from :class:`torchvision.models.ResNet` with activations replaced by spiking neurons.
+
+        :param block: Type of residual block (``BasicBlock`` or ``Bottleneck``)
+        :type block: type
+        :param layers: Number of residual blocks per layer
+        :type layers: list
+        :param num_classes: Number of classes for classification
+        :type num_classes: int
+        :param zero_init_residual: Whether to zero-initialize the last BN
+        :type zero_init_residual: bool
+        :param groups: Number of groups for grouped convolution
+        :type groups: int
+        :param width_per_group: Width per group
+        :type width_per_group: int
+        :param replace_stride_with_dilation: Replace stride with dilated convolution
+        :type replace_stride_with_dilation: Optional[List[bool]]
+        :param norm_layer: Normalization layer type
+        :type norm_layer: Optional[Callable]
+        :param spiking_neuron: Spiking neuron class
+        :type spiking_neuron: callable
+        :param kwargs: Extra arguments for the spiking neuron
+        :type kwargs: dict
+        """
         super(SpikingResNet, self).__init__()
         if norm_layer is None:
             norm_layer = layer.BatchNorm2d

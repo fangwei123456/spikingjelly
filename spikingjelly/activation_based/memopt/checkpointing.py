@@ -128,7 +128,6 @@ def _combine_args(input_args, tensor_args, tensor_args_indices) -> list:
 
 class InputCompressedGC(autograd.Function):
     """Gradient checkpointing with input compression.
-
     Reference:
     https://github.com/pytorch/pytorch/blob/v2.6.0/torch/utils/checkpoint.py
     """
@@ -419,8 +418,6 @@ class GCContainer(nn.Sequential):
 
             x = torch.randn(3, 10, requires_grad=True)
             result = container(x)
-        :return: None
-        :rtype: None
         """
         super().__init__(*args)
         self.x_compressor = (
@@ -462,82 +459,6 @@ class GCContainer(nn.Sequential):
 
 
 class TCGCContainer(GCContainer):
-    r"""
-    **API Language:**
-    :ref:`中文 <TCGCContainer-cn>` | :ref:`English <TCGCContainer-en>`
-
-    ----
-
-    .. _TCGCContainer-cn:
-
-    * **中文**
-
-    时间分块的 ``GCContainer`` 。
-
-    :param x_compressor: 脉冲压缩器。如果为 ``None`` 则使用 ``NullSpikeCompressor``
-    :type x_compressor: Optional[BaseSpikeCompressor]
-
-    :param *args: 传递给 ``nn.Sequential`` 的若干模块。必须以位置参数形式传入
-
-    :param n_chunk: 分块数量。默认为1。必须以关键字参数形式传入
-    :type n_chunk: int
-
-    :param n_seq_inputs: 需要分块处理的序列输入数量。默认为1。必须以关键字参数形式传入
-    :type n_seq_inputs: int
-
-    :param n_outputs: 输出数量。本模块假设输出都是 ``torch.Tensor`` 。默认为1。必须以关键字参数形式传入
-    :type n_outputs: int
-
-    ----
-
-    .. _TCGCContainer-en:
-
-    * **English**
-
-    Temporally Chunked ``GCContainer`` .
-
-    :param x_compressor: spike compressor. If None, use ``NullSpikeCompressor``
-    :type x_compressor: Optional[BaseSpikeCompressor]
-
-    :param *args: modules as arguments of ``nn.Sequential``. Must act as positional arguments
-
-    :param n_chunk: number of chunks. Default to 1. Must act as keyword arguments
-    :type n_chunk: int
-
-    :param n_seq_inputs: number of sequence inputs. Default to 1. Must act as keyword arguments
-    :type n_seq_inputs: int
-
-    :param n_outputs: number of outputs. This container assumes that all outputs are ``torch.Tensor``.
-        Default to 1. Must act as keyword arguments
-    :type n_outputs: int
-
-    ----
-
-    * **代码示例 | Example**
-
-    .. code-block:: python
-
-        import torch
-        import torch.nn as nn
-        from spikingjelly.activation_based.memopt import TCGCContainer
-        from spikingjelly.activation_based.memopt import NullSpikeCompressor
-
-        # Basic usage
-        tc_container = TCGCContainer(
-            NullSpikeCompressor(),
-            nn.Linear(10, 20),
-            nn.ReLU(),
-            nn.Linear(20, 5),
-            n_chunk=4,
-        )
-        x_seq = torch.randn(8, 3, 10, requires_grad=True)  # T=8
-        result = tc_container(x_seq)
-        print(f"Input shape: {x_seq.shape}")
-        print(f"Output shape: {result.shape}")
-    :return: None
-    :rtype: None
-    """
-
     def __init__(
         self,
         x_compressor: Optional[BaseSpikeCompressor],
@@ -546,6 +467,79 @@ class TCGCContainer(GCContainer):
         n_seq_inputs: int = 1,
         n_outputs: int = 1,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <TCGCContainer-cn>` | :ref:`English <TCGCContainer-en>`
+
+        ----
+
+        .. _TCGCContainer-cn:
+
+        * **中文**
+
+        时间分块的 ``GCContainer`` 。
+
+        :param x_compressor: 脉冲压缩器。如果为 ``None`` 则使用 ``NullSpikeCompressor``
+        :type x_compressor: Optional[BaseSpikeCompressor]
+
+        :param *args: 传递给 ``nn.Sequential`` 的若干模块。必须以位置参数形式传入
+
+        :param n_chunk: 分块数量。默认为1。必须以关键字参数形式传入
+        :type n_chunk: int
+
+        :param n_seq_inputs: 需要分块处理的序列输入数量。默认为1。必须以关键字参数形式传入
+        :type n_seq_inputs: int
+
+        :param n_outputs: 输出数量。本模块假设输出都是 ``torch.Tensor`` 。默认为1。必须以关键字参数形式传入
+        :type n_outputs: int
+
+        ----
+
+        .. _TCGCContainer-en:
+
+        * **English**
+
+        Temporally Chunked ``GCContainer`` .
+
+        :param x_compressor: spike compressor. If None, use ``NullSpikeCompressor``
+        :type x_compressor: Optional[BaseSpikeCompressor]
+
+        :param *args: modules as arguments of ``nn.Sequential``. Must act as positional arguments
+
+        :param n_chunk: number of chunks. Default to 1. Must act as keyword arguments
+        :type n_chunk: int
+
+        :param n_seq_inputs: number of sequence inputs. Default to 1. Must act as keyword arguments
+        :type n_seq_inputs: int
+
+        :param n_outputs: number of outputs. This container assumes that all outputs are ``torch.Tensor``.
+            Default to 1. Must act as keyword arguments
+        :type n_outputs: int
+
+        ----
+
+        * **代码示例 | Example**
+
+        .. code-block:: python
+
+            import torch
+            import torch.nn as nn
+            from spikingjelly.activation_based.memopt import TCGCContainer
+            from spikingjelly.activation_based.memopt import NullSpikeCompressor
+
+            # Basic usage
+            tc_container = TCGCContainer(
+                NullSpikeCompressor(),
+                nn.Linear(10, 20),
+                nn.ReLU(),
+                nn.Linear(20, 5),
+                n_chunk=4,
+            )
+            x_seq = torch.randn(8, 3, 10, requires_grad=True)  # T=8
+            result = tc_container(x_seq)
+            print(f"Input shape: {x_seq.shape}")
+            print(f"Output shape: {result.shape}")
+        """
         super().__init__(x_compressor, *args)
         self.n_chunk = n_chunk
         self.n_seq_inputs = n_seq_inputs

@@ -105,8 +105,6 @@ class MPBNBaseNode(BaseNode):
         :type bn_min_momentum: float
 
         Other parameters are the same as :class:`BaseNode`.
-        :return: None
-        :rtype: None
         """
         super().__init__(
             v_threshold,
@@ -407,8 +405,6 @@ class MPBNLIFNode(MPBNBaseNode):
         :type decay_input: bool
 
         Other parameters are the same as :class:`MPBNBaseNode`.
-        :return: None
-        :rtype: None
         """
         assert isinstance(tau, float) and tau > 1.0
         super().__init__(

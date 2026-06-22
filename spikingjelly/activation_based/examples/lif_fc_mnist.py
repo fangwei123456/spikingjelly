@@ -32,8 +32,6 @@ class SNN(nn.Module):
 
 def main():
     """
-    :return: None
-
     * :ref:`API in English <lif_fc_mnist.main-en>`
 
     .. _lif_fc_mnist.main-cn:

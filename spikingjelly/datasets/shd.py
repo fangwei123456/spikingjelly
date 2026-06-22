@@ -463,9 +463,6 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
             #. Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``.
             #. The raw dataset replicates the extracted dataset (by symbolic links). The raw dataset consists of two ``.h5`` files instead of a series of ``.npz`` files.
             #. When ``data_type == "event"``, the data loading procedure of ``DatasetFolder`` will be bypassed. Instead, data will be loaded in ``Dataset`` style.
-
-        :return: None
-        :rtype: None
         """
         if train is None:
             raise ValueError("`train` must be `True` or `False`")
@@ -699,9 +696,6 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
             #. Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``.
             #. The raw dataset replicates the extracted dataset (by symbolic links). The raw dataset consists of three ``.h5`` files instead of a series of ``.npz`` files.
             #. When ``data_type == "event"``, the data loading procedure of ``DatasetFolder`` will be bypassed. Instead, data will be loaded in ``Dataset`` style.
-
-        :return: None
-        :rtype: None
         """
         self.splits = ("train", "valid", "test")
         if split not in self.splits:

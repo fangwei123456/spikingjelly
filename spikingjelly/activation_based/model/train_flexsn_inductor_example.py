@@ -1,5 +1,4 @@
 """Example training entrypoint for FlexSN inductor models.
-
 This script mirrors ``train_imagenet_example.py`` but uses ``spiking_vgg`` with
 ``FlexSN(backend="inductor")`` and defaults to ``torch.compile`` so users can
 exercise the compile-friendly FlexSN training path end-to-end.

@@ -32,8 +32,9 @@ __all__ = [
 
 
 def _decode_v_reset(v_reset_value: float):
-    """Decode the v_reset parameter from a float value.
-
+    """
+    Decode the v_reset parameter from a float value.
+    
     In custom CUDA kernel calls, NaN is used as a sentinel for soft reset
     (equivalent to ``v_reset=None`` in Python).
 
@@ -46,8 +47,9 @@ def _decode_v_reset(v_reset_value: float):
 
 
 def _sg_obj_id(sg) -> int:
-    """Register a surrogate gradient function object and return its unique ID.
-
+    """
+    Register a surrogate gradient function object and return its unique ID.
+    
     The returned ID is used to look up the surrogate function during CUDA kernel
     code generation at runtime.
 
@@ -60,8 +62,9 @@ def _sg_obj_id(sg) -> int:
 
 
 class _CapturedAutogradCtx:
-    """A minimal autograd context for capturing saved tensors in CUDA kernels.
-
+    """
+    A minimal autograd context for capturing saved tensors in CUDA kernels.
+    
     This is used internally by the PTT (Python Truncated Taylor) CUDA kernel
     path to store tensors that need to be passed to the backward pass.
 
@@ -85,8 +88,9 @@ _CAPTURE_CTX_NEXT_ID = 0
 
 
 def _stash_capture_ctx(captured_ctx: _CapturedAutogradCtx) -> int:
-    """Store a captured autograd context and return its lookup ID.
-
+    """
+    Store a captured autograd context and return its lookup ID.
+    
     The context is stored in a thread-safe global dictionary and can be
     retrieved later via :func:`_take_capture_ctx`.
 
@@ -111,8 +115,9 @@ def _should_stash_capture_ctx(inputs) -> bool:
 
 
 def _take_capture_ctx(capture_id: int) -> _CapturedAutogradCtx:
-    """Retrieve and remove a previously stored autograd context by its ID.
-
+    """
+    Retrieve and remove a previously stored autograd context by its ID.
+    
     :param capture_id: The ID returned by :func:`_stash_capture_ctx`
     :type capture_id: int
     :return: The stored autograd context
@@ -127,8 +132,9 @@ def _take_capture_ctx(capture_id: int) -> _CapturedAutogradCtx:
 
 
 def _resolve_sg_cuda_code_fun(sg):
-    """Resolve the ``cuda_code`` function from a surrogate gradient object.
-
+    """
+    Resolve the ``cuda_code`` function from a surrogate gradient object.
+    
     :param sg: The surrogate gradient function object
     :type sg: ``surrogate.SurrogateFunctionBase``
     :return: The ``cuda_code`` callable of the surrogate function
@@ -161,8 +167,6 @@ def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
     :type cu_file_path: str
     :param cu_file_path: Output CUDA file path
     :type cu_file_path: str
-    :return: None
-    :rtype: None
 
     ----
 
@@ -175,8 +179,6 @@ def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
     :param cu_file_path: Output CUDA file path
     :type cu_file_path: str
     :type cu_file_path: str
-    :return: None
-    :rtype: None
     """
     from . import eif, integrate_and_fire, izhikevich, lif, plif, qif
 

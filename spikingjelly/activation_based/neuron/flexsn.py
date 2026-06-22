@@ -598,9 +598,6 @@ class FlexSNKernel:
 
         :raises RuntimeError: raised when CUDA is unavailable, because
             ``FlexSNKernel`` only supports the Triton kernels on CUDA devices.
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
         if not torch.cuda.is_available():
@@ -889,8 +886,6 @@ class FlexSN(base.MemoryModule):
             does not enforce that scan-backend shape/dtype check. Defaults to
             ``None`` when empty-sequence output templates are not needed.
         :type example_outputs: Optional[Tuple[torch.Tensor]]
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.core = core
@@ -1295,7 +1290,6 @@ class FlexSN(base.MemoryModule):
         :return: the list of initialized state tensors, whose order corresponds to
             the "states" part of ``core``.
         :rtype: List[torch.Tensor]
-
         """
 
         if step_mode == "s":

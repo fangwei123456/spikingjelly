@@ -27,8 +27,6 @@ class VoltageHook(nn.Module):
         :param mode: 模式。``"Max"`` 表示记录ANN激活最大值；``"99.9%"`` 表示记录99.9%分位点；
             0-1 的 float 表示记录激活最大值的对应倍数
         :type mode: str, float
-        :return: None
-        :rtype: None
 
         ----
 
@@ -46,8 +44,6 @@ class VoltageHook(nn.Module):
             ``"99.9%"`` means recording the 99.9% percentile; a float of 0-1 means
             recording the corresponding multiple of the maximum value
         :type mode: str, float
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.register_buffer("scale", torch.tensor(scale))
@@ -129,8 +125,6 @@ class VoltageScaler(nn.Module):
 
         :param scale: 缩放值
         :type scale: float
-        :return: None
-        :rtype: None
 
         ----
 
@@ -142,8 +136,6 @@ class VoltageScaler(nn.Module):
 
         :param scale: scaling value
         :type scale: float
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.register_buffer("scale", torch.tensor(scale))

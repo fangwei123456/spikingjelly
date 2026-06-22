@@ -1,16 +1,9 @@
 import numpy as np
 import torch
-
 from core_cuda import combined_shape
 
 
 class ReplayBuffer:
-    """
-    A simple FIFO experience replay buffer for DDPG agents.
-
-    with Running Mean and Var from hill-a/stable-baselines
-    """
-
     def __init__(
         self,
         obs_dim,
@@ -22,6 +15,9 @@ class ReplayBuffer:
         norm_update_every=1000,
     ):
         """
+        A simple FIFO experience replay buffer for DDPG agents
+        with Running Mean and Var from hill-a/stable-baselines.
+
         :param obs_dim: observation dimension
         :param act_dim: action dimension
         :param size: buffer sizes

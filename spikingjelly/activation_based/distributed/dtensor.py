@@ -1,8 +1,8 @@
-import os
-import inspect
 import copy
-import time
+import inspect
+import os
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
 
@@ -157,46 +157,6 @@ BatchNorm2dLike = (nn.BatchNorm2d, layer.BatchNorm2d)
 
 
 class TensorShardMemoryModule(base.MemoryModule):
-    r"""
-    **API Language:**
-    :ref:`中文 <TensorShardMemoryModule-cn>` | :ref:`English <TensorShardMemoryModule-en>`
-
-    ----
-
-    .. _TensorShardMemoryModule-cn:
-
-    * **中文**
-
-    支持张量并行分片的内存模块基类。
-
-    ----
-
-    .. _TensorShardMemoryModule-en:
-
-    * **English**
-    Base memory module supporting tensor parallel sharding.
-
-    :param source: 源 MemoryModule
-    :type source: base.MemoryModule
-    :param shard_dim: 切分维度
-    :type shard_dim: int
-    :param logical_dim_size: 逻辑维度大小（每一维的大小），用于验证分片正确性
-    :type logical_dim_size: Optional[int]
-    :param process_group: 分布式进程组
-    :type process_group: Any
-
-    :param source: Source MemoryModule
-    :type source: base.MemoryModule
-    :param shard_dim: Dimension along which to shard
-    :type shard_dim: int
-    :param logical_dim_size: Logical dimension size, used to validate sharding
-    :type logical_dim_size: Optional[int]
-    :param process_group: Distributed process group
-    :type process_group: Any
-    :return: None
-    :rtype: None
-    """
-
     def __init__(
         self,
         source: base.MemoryModule,
@@ -204,6 +164,43 @@ class TensorShardMemoryModule(base.MemoryModule):
         logical_dim_size: Optional[int] = None,
         process_group=None,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <TensorShardMemoryModule-cn>` | :ref:`English <TensorShardMemoryModule-en>`
+
+        ----
+
+        .. _TensorShardMemoryModule-cn:
+
+        * **中文**
+
+        支持张量并行分片的内存模块基类。
+
+        :param source: 源 MemoryModule
+        :type source: base.MemoryModule
+        :param shard_dim: 切分维度
+        :type shard_dim: int
+        :param logical_dim_size: 逻辑维度大小（每一维的大小），用于验证分片正确性
+        :type logical_dim_size: Optional[int]
+        :param process_group: 分布式进程组
+        :type process_group: Any
+
+        ----
+
+        .. _TensorShardMemoryModule-en:
+
+        * **English**
+        Base memory module supporting tensor parallel sharding.
+
+        :param source: Source MemoryModule
+        :type source: base.MemoryModule
+        :param shard_dim: Dimension along which to shard
+        :type shard_dim: int
+        :param logical_dim_size: Logical dimension size, used to validate sharding
+        :type logical_dim_size: Optional[int]
+        :param process_group: Distributed process group
+        :type process_group: Any
+        """
         super().__init__()
         self.inner = copy.deepcopy(source)
         self.shard_dim = shard_dim
@@ -2170,44 +2167,41 @@ def _shard_range(total: int, rank: int, world_size: int) -> Tuple[int, int]:
 
 
 class ChannelShardConv2d(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <ChannelShardConv2d-cn>` | :ref:`English <ChannelShardConv2d-en>`
-
-    ----
-
-    .. _ChannelShardConv2d-cn:
-
-    * **中文**
-
-    支持通道分片的二维卷积层。
-
-    ----
-
-    .. _ChannelShardConv2d-en:
-
-    * **English**
-
-    2D conv layer with channel sharding support.
-
-    :param source: 源 Conv2d 模块
-    :type source: nn.Module
-    :param process_group: 分布式进程组
-    :type process_group: Any
-    :param mode: 分片模式
-    :type mode: str
-
-    :param source: Source Conv2d module
-    :type source: nn.Module
-    :param process_group: Distributed process group
-    :type process_group: Any
-    :param mode: Sharding mode
-    :type mode: str
-    :return: None
-    :rtype: None
-    """
-
     def __init__(self, source: nn.Module, process_group, mode: str):
+        """
+        **API Language:**
+        :ref:`中文 <ChannelShardConv2d-cn>` | :ref:`English <ChannelShardConv2d-en>`
+
+        ----
+
+        .. _ChannelShardConv2d-cn:
+
+        * **中文**
+
+        支持通道分片的二维卷积层。
+
+        :param source: 源 Conv2d 模块
+        :type source: nn.Module
+        :param process_group: 分布式进程组
+        :type process_group: Any
+        :param mode: 分片模式
+        :type mode: str
+
+        ----
+
+        .. _ChannelShardConv2d-en:
+
+        * **English**
+
+        2D conv layer with channel sharding support.
+
+        :param source: Source Conv2d module
+        :type source: nn.Module
+        :param process_group: Distributed process group
+        :type process_group: Any
+        :param mode: Sharding mode
+        :type mode: str
+        """
         super().__init__()
         if source.groups != 1:
             raise NotImplementedError("ChannelShardConv2d only supports groups=1.")
@@ -2308,44 +2302,41 @@ class ChannelShardConv2d(nn.Module):
 
 
 class ChannelShardConv1d(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <ChannelShardConv1d-cn>` | :ref:`English <ChannelShardConv1d-en>`
-
-    ----
-
-    .. _ChannelShardConv1d-cn:
-
-    * **中文**
-
-    支持通道分片的一维卷积层。
-
-    ----
-
-    .. _ChannelShardConv1d-en:
-
-    * **English**
-
-    1D conv layer with channel sharding support.
-
-    :param source: 源 Conv1d 模块
-    :type source: nn.Module
-    :param process_group: 分布式进程组
-    :type process_group: Any
-    :param mode: 分片模式
-    :type mode: str
-
-    :param source: Source Conv1d module
-    :type source: nn.Module
-    :param process_group: Distributed process group
-    :type process_group: Any
-    :param mode: Sharding mode
-    :type mode: str
-    :return: None
-    :rtype: None
-    """
-
     def __init__(self, source: nn.Module, process_group, mode: str):
+        """
+        **API Language:**
+        :ref:`中文 <ChannelShardConv1d-cn>` | :ref:`English <ChannelShardConv1d-en>`
+
+        ----
+
+        .. _ChannelShardConv1d-cn:
+
+        * **中文**
+
+        支持通道分片的一维卷积层。
+
+        :param source: 源 Conv1d 模块
+        :type source: nn.Module
+        :param process_group: 分布式进程组
+        :type process_group: Any
+        :param mode: 分片模式
+        :type mode: str
+
+        ----
+
+        .. _ChannelShardConv1d-en:
+
+        * **English**
+
+        1D conv layer with channel sharding support.
+
+        :param source: Source Conv1d module
+        :type source: nn.Module
+        :param process_group: Distributed process group
+        :type process_group: Any
+        :param mode: Sharding mode
+        :type mode: str
+        """
         super().__init__()
         if source.groups != 1:
             raise NotImplementedError("ChannelShardConv1d only supports groups=1.")
@@ -2428,40 +2419,37 @@ class ChannelShardConv1d(nn.Module):
 
 
 class ChannelShardBatchNorm2d(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <ChannelShardBatchNorm2d-cn>` | :ref:`English <ChannelShardBatchNorm2d-en>`
-
-    ----
-
-    .. _ChannelShardBatchNorm2d-cn:
-
-    * **中文**
-
-    支持通道分片的二维批归一化层。
-
-    ----
-
-    .. _ChannelShardBatchNorm2d-en:
-
-    * **English**
-
-    2D batch norm layer with channel sharding.
-
-    :param source: 源 BatchNorm2d 模块
-    :type source: nn.Module
-    :param process_group: 分布式进程组
-    :type process_group: Any
-
-    :param source: Source BatchNorm2d module
-    :type source: nn.Module
-    :param process_group: Distributed process group
-    :type process_group: Any
-    :return: None
-    :rtype: None
-    """
-
     def __init__(self, source: nn.Module, process_group):
+        """
+        **API Language:**
+        :ref:`中文 <ChannelShardBatchNorm2d-cn>` | :ref:`English <ChannelShardBatchNorm2d-en>`
+
+        ----
+
+        .. _ChannelShardBatchNorm2d-cn:
+
+        * **中文**
+
+        支持通道分片的二维批归一化层。
+
+        :param source: 源 BatchNorm2d 模块
+        :type source: nn.Module
+        :param process_group: 分布式进程组
+        :type process_group: Any
+
+        ----
+
+        .. _ChannelShardBatchNorm2d-en:
+
+        * **English**
+
+        2D batch norm layer with channel sharding.
+
+        :param source: Source BatchNorm2d module
+        :type source: nn.Module
+        :param process_group: Distributed process group
+        :type process_group: Any
+        """
         super().__init__()
         self.process_group = process_group
         self.rank = dist.get_rank(process_group) if process_group is not None else 0
@@ -2548,40 +2536,37 @@ class ChannelShardBatchNorm2d(nn.Module):
 
 
 class ChannelShardBatchNorm1d(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <ChannelShardBatchNorm1d-cn>` | :ref:`English <ChannelShardBatchNorm1d-en>`
-
-    ----
-
-    .. _ChannelShardBatchNorm1d-cn:
-
-    * **中文**
-
-    支持通道分片的一维批归一化层。
-
-    ----
-
-    .. _ChannelShardBatchNorm1d-en:
-
-    * **English**
-
-    1D batch norm layer with channel sharding.
-
-    :param source: 源 BatchNorm1d 模块
-    :type source: nn.Module
-    :param process_group: 分布式进程组
-    :type process_group: Any
-
-    :param source: Source BatchNorm1d module
-    :type source: nn.Module
-    :param process_group: Distributed process group
-    :type process_group: Any
-    :return: None
-    :rtype: None
-    """
-
     def __init__(self, source: nn.Module, process_group):
+        """
+        **API Language:**
+        :ref:`中文 <ChannelShardBatchNorm1d-cn>` | :ref:`English <ChannelShardBatchNorm1d-en>`
+
+        ----
+
+        .. _ChannelShardBatchNorm1d-cn:
+
+        * **中文**
+
+        支持通道分片的一维批归一化层。
+
+        :param source: 源 BatchNorm1d 模块
+        :type source: nn.Module
+        :param process_group: 分布式进程组
+        :type process_group: Any
+
+        ----
+
+        .. _ChannelShardBatchNorm1d-en:
+
+        * **English**
+
+        1D batch norm layer with channel sharding.
+
+        :param source: Source BatchNorm1d module
+        :type source: nn.Module
+        :param process_group: Distributed process group
+        :type process_group: Any
+        """
         super().__init__()
         self.process_group = process_group
         self.rank = dist.get_rank(process_group) if process_group is not None else 0

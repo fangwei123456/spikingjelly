@@ -9,33 +9,6 @@ from ..memory_residency import MemoryResidencyCounter, _access_convolution_backw
 
 
 class NeuroMCMemoryResidencyCounter(MemoryResidencyCounter):
-    """Counter for memory residency in the NeuroMC framework.
-    **API Language:**
-    :ref:`中文 <NeuroMCMemoryResidencyCounter-cn>` | :ref:`English <NeuroMCMemoryResidencyCounter-en>`
-
-    ----
-
-    .. _NeuroMCMemoryResidencyCounter-cn:
-
-    * **中文**
-
-    NeuroMC内存驻留计数器
-
-    :return: None
-    :rtype: None
-
-    ----
-
-    .. _NeuroMCMemoryResidencyCounter-en:
-
-    * **English**
-
-    NeuroMC memory residency counter
-
-    :return: None
-    :rtype: None
-    """
-
     def __init__(
         self,
         memory_config: Any | None = None,
@@ -46,6 +19,18 @@ class NeuroMCMemoryResidencyCounter(MemoryResidencyCounter):
         capacity_bits: dict[str, float] | None = None,
     ):
         """
+        Counter for memory residency in the NeuroMC framework.
+        **API Language:**
+        :ref:`中文 <NeuroMCMemoryResidencyCounter-cn>` | :ref:`English <NeuroMCMemoryResidencyCounter-en>`
+
+        ----
+
+        .. _NeuroMCMemoryResidencyCounter-cn:
+
+        * **中文**
+
+        NeuroMC内存驻留计数器
+
         :param memory_config: (Deprecated) Use ``config`` instead.
         :type memory_config: Any | None
         :param extra_rules: Additional counting rules keyed by ATen operation
@@ -56,8 +41,25 @@ class NeuroMCMemoryResidencyCounter(MemoryResidencyCounter):
         :type config: Any | None
         :param capacity_bits: Capacity in bits per memory level
         :type capacity_bits: dict[str, float] | None
-        :return: None
-        :rtype: None
+
+        ----
+
+        .. _NeuroMCMemoryResidencyCounter-en:
+
+        * **English**
+
+        NeuroMC memory residency counter
+
+        :param memory_config: (Deprecated) Use ``config`` instead.
+        :type memory_config: Any | None
+        :param extra_rules: Additional counting rules keyed by ATen operation
+        :type extra_rules: dict[Any, Callable] | None
+        :param extra_ignore_modules: Additional module types to ignore during counting
+        :type extra_ignore_modules: list[nn.Module] | None
+        :param config: Memory hierarchy configuration
+        :type config: Any | None
+        :param capacity_bits: Capacity in bits per memory level
+        :type capacity_bits: dict[str, float] | None
         """
         if memory_config is not None:
             if config is not None:

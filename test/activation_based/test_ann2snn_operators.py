@@ -35,9 +35,7 @@ class TestTDSoftmax:
         y_seq = op(x_seq)
         expected = torch.softmax(x_seq.sum(dim=0), dim=-1)
 
-        assert torch.allclose(
-            y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6
-        )
+        assert torch.allclose(y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6)
 
     def test_positive_non_last_softmax_dim(self):
         x_seq = torch.randn(5, 2, 3, 4)
@@ -157,9 +155,7 @@ class TestTDLayerNorm:
             op.eps,
         )
 
-        assert torch.allclose(
-            y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6
-        )
+        assert torch.allclose(y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6)
 
     def test_multi_dimensional_normalized_shape(self):
         x_seq = torch.randn(5, 2, 3, 4)
@@ -214,12 +210,8 @@ class TestTDLayerNorm:
         assert op.state_dict() == {}
 
     def test_elementwise_affine_false_ignores_bias_flag(self):
-        op_true = TDLayerNorm(
-            normalized_shape=4, elementwise_affine=False, bias=True
-        )
-        op_false = TDLayerNorm(
-            normalized_shape=4, elementwise_affine=False, bias=False
-        )
+        op_true = TDLayerNorm(normalized_shape=4, elementwise_affine=False, bias=True)
+        op_false = TDLayerNorm(normalized_shape=4, elementwise_affine=False, bias=False)
 
         assert op_true.bias is None
         assert op_false.bias is None
@@ -318,9 +310,7 @@ class TestTDGELU:
         y_seq = op(x_seq)
         expected = F.gelu(x_seq.sum(dim=0), approximate=op.approximate)
 
-        assert torch.allclose(
-            y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6
-        )
+        assert torch.allclose(y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6)
 
     def test_single_timestep_returns_gelu_of_input(self):
         x_seq = torch.randn(1, 2, 3)
@@ -431,9 +421,7 @@ class TestTDScaledDotProductAttention:
             dropout_p=0.0,
         )
 
-        assert torch.allclose(
-            y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6
-        )
+        assert torch.allclose(y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6)
 
     def test_single_timestep_returns_sdpa_of_input(self):
         q_seq = torch.randn(1, 2, 3, 4)

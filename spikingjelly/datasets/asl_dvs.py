@@ -128,9 +128,6 @@ class ASLDVS(NeuromorphicDatasetFolder):
         :type transform: Optional[Callable]
         :param target_transform: Target transform function
         :type target_transform: Optional[Callable]
-
-        :return: None
-        :rtype: None
         """
         super().__init__(
             root,

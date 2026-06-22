@@ -54,8 +54,6 @@ def set_threshold_margin(
     :param threshold1: 输出层神经元在训练时，正样本的电压阈值
     :type threshold1: float
 
-    :return: ``None``
-    :rtype: None
 
     :raises RuntimeError: 若 ``output_layer.v_threshold`` 不支持被赋值为标量或与 ``label_one_hot`` 同形状的张量，则底层赋值异常会原样向上传播
 
@@ -90,8 +88,6 @@ def set_threshold_margin(
     :param threshold1: Voltage threshold of the corresponding neurons of **positive** samples in output layer when training
     :type threshold1: float
 
-    :return: ``None``
-    :rtype: None
 
     :raises RuntimeError: Any assignment error raised while updating ``output_layer.v_threshold`` is propagated unchanged
     """
@@ -255,8 +251,6 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
     :param net: 任何属于 ``nn.Module`` 子类的网络
     :type net: torch.nn.Module
 
-    :return: ``None``
-    :rtype: None
 
     :raises RuntimeError: 若某个权重张量不支持 Kaiming 初始化，则底层初始化异常会原样向上传播
 
@@ -272,8 +266,6 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
     :param net: Any network inherits from ``nn.Module``
     :type net: torch.nn.Module
 
-    :return: ``None``
-    :rtype: None
 
     :raises RuntimeError: Any initialization error raised by ``torch.nn.init.kaiming_normal_`` is propagated unchanged
     """

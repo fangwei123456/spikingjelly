@@ -19,7 +19,6 @@ def _prod(dims):
 
 def _is_spike(x: torch.Tensor) -> bool:
     """Return ``True`` if ``x`` is a binary spike tensor.
-
     :param x: Input tensor
     :type x: torch.Tensor
     :return: Whether ``x`` is a spike tensor
@@ -92,37 +91,6 @@ def _mac_native_batch_norm(args, kwargs, out):
 
 
 class MACCounter(BaseCounter):
-    r"""
-    **API Language:**
-    :ref:`中文 <MACCounter-cn>` | :ref:`English <MACCounter-en>`
-
-    ----
-
-    .. _MACCounter-cn:
-
-    * **中文**
-
-    硬件级乘累加（MAC）计数器。
-
-    该计数器统计网络中的 MAC 操作次数，并与
-    :class:`ACCounter <spikingjelly.activation_based.op_counter.ac.ACCounter>`
-    形成互补视角，用于近似刻画硬件上的乘累加开销。具体构造参数见
-    :meth:`__init__ <MACCounter.__init__-cn>`。
-
-    ----
-
-    .. _MACCounter-en:
-
-    * **English**
-
-    Hardware-level multiply-accumulate (MAC) counter.
-
-    This counter tracks MAC operations in a network and complements
-    :class:`ACCounter <spikingjelly.activation_based.op_counter.ac.ACCounter>`
-    for approximate hardware-oriented compute analysis. See
-    :meth:`__init__ <MACCounter.__init__-en>` for constructor parameters.
-    """
-
     def __init__(
         self,
         extra_rules: dict[Any, Callable] = {},
@@ -137,6 +105,13 @@ class MACCounter(BaseCounter):
         .. _MACCounter.__init__-cn:
 
         * **中文**
+
+        硬件级乘累加（MAC）计数器。
+
+        该计数器统计网络中的 MAC 操作次数，并与
+        :class:`ACCounter <spikingjelly.activation_based.op_counter.ac.ACCounter>`
+        形成互补视角，用于近似刻画硬件上的乘累加开销。具体构造参数见
+        :meth:`__init__ <MACCounter.__init__-cn>`。
 
         硬件级乘累加（Multiply-Accumulate，MAC）操作计数器，统计网络中所有 MAC 操作次数。
 
@@ -169,6 +144,13 @@ class MACCounter(BaseCounter):
         .. _MACCounter.__init__-en:
 
         * **English**
+
+        Hardware-level multiply-accumulate (MAC) counter.
+
+        This counter tracks MAC operations in a network and complements
+        :class:`ACCounter <spikingjelly.activation_based.op_counter.ac.ACCounter>`
+        for approximate hardware-oriented compute analysis. See
+        :meth:`__init__ <MACCounter.__init__-en>` for constructor parameters.
 
         Hardware-level Multiply-Accumulate (MAC) operation counter that counts all MAC operations
         in a network.
@@ -217,8 +199,6 @@ class MACCounter(BaseCounter):
                 output = model(x)
 
             print(f"Total MACs: {mac_counter.get_total()}")  # only the 2nd layer counts
-        :return: None
-        :rtype: None
         """
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {

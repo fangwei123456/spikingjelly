@@ -147,8 +147,6 @@ class LemaireAddressingCounter(BaseCounter):
         .. [#lemaire2022] Lemaire, Edgar, et al. "An Analytical Estimation of
             Spiking Neural Networks Energy Efficiency." International Conference
             on Neural Information Processing. 2022.
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.rules: dict[Any, Callable] = {
@@ -263,8 +261,6 @@ class LemaireAddressingCounter(BaseCounter):
         此方法继承自 :meth:`BaseCounter.reset`，额外清空了 :attr:`metric_records`
         和 :attr:`_pending_metrics`。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -276,9 +272,6 @@ class LemaireAddressingCounter(BaseCounter):
 
         This method extends :meth:`BaseCounter.reset` by also clearing
         :attr:`metric_records` and :attr:`_pending_metrics`.
-
-        :return: ``None``
-        :rtype: None
         """
         super().reset()
         self.metric_records = defaultdict(lambda: defaultdict(int))

@@ -124,8 +124,6 @@ def reset_net(net: nn.Module):
     :param net: 任何属于 ``nn.Module`` 子类的网络
     :type net: torch.nn.Module
 
-    :return: ``None``
-    :rtype: None
 
     :raises Exception: 任何子模块 ``reset()`` 在执行过程中抛出的异常都会原样向上传播
 
@@ -149,8 +147,6 @@ def reset_net(net: nn.Module):
     :param net: Any network inherits from ``nn.Module``
     :type net: torch.nn.Module
 
-    :return: ``None``
-    :rtype: None
 
     :raises Exception: Any exception raised by a submodule ``reset()`` call is propagated unchanged
     """
@@ -197,8 +193,6 @@ def set_step_mode(net: nn.Module, step_mode: str):
     :param step_mode: 's' (单步模式) 或 'm' (多步模式)
     :type step_mode: str
 
-    :return: ``None``
-    :rtype: None
 
     :raises ValueError: 若某个模块的 ``step_mode`` setter 不接受给定的 ``step_mode``，则该异常会原样向上传播
 
@@ -229,8 +223,6 @@ def set_step_mode(net: nn.Module, step_mode: str):
     :param step_mode: 's' (single-step) or 'm' (multi-step)
     :type step_mode: str
 
-    :return: ``None``
-    :rtype: None
 
     :raises ValueError: Propagated if a module rejects the provided ``step_mode`` in its setter
     """
@@ -306,8 +298,6 @@ def set_backend(
         若为 ``None`` ，则所有具有 ``backend`` 属性的模块都会被检查
     :type instance: Optional[Union[nn.Module, tuple[nn.Module]]]
 
-    :return: ``None``
-    :rtype: None
 
     :raises Exception: 若目标模块在访问 ``supported_backends`` 或设置 ``backend`` 时抛出异常，则该异常会原样向上传播
 
@@ -336,8 +326,6 @@ def set_backend(
         ``None``, all modules with a ``backend`` attribute will be checked
     :type instance: Optional[Union[nn.Module, tuple[nn.Module]]]
 
-    :return: ``None``
-    :rtype: None
 
     :raises Exception: Propagated if a target module raises while exposing ``supported_backends`` or assigning ``backend``
     """
@@ -377,8 +365,6 @@ def detach_net(net: nn.Module):
     :param net: 任何属于 ``nn.Module`` 子类的网络
     :type net: torch.nn.Module
 
-    :return: ``None``
-    :rtype: None
 
     :raises Exception: 任何子模块 ``detach()`` 在执行过程中抛出的异常都会原样向上传播
 
@@ -398,8 +384,6 @@ def detach_net(net: nn.Module):
     :param net: Any network inherits from ``nn.Module``
     :type net: torch.nn.Module
 
-    :return: ``None``
-    :rtype: None
 
     :raises Exception: Any exception raised by a submodule ``detach()`` call is propagated unchanged
     """

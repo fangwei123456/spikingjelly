@@ -285,9 +285,6 @@ class ESImageNet(NeuromorphicDatasetFolder):
         :type transform: Optional[Callable]
         :param target_transform: Target transform function
         :type target_transform: Optional[Callable]
-
-        :return: None
-        :rtype: None
         """
         if train is None:
             raise ValueError(

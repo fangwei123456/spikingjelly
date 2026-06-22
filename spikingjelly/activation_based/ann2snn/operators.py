@@ -76,8 +76,6 @@ class TDSoftmax(nn.Module):
 
         :param dim: Softmax 归一化维度。不能为第 0 维，因为第 0 维保留为时间维。
         :type dim: int
-        :return: None
-        :rtype: None
 
         ----
 
@@ -115,8 +113,6 @@ class TDSoftmax(nn.Module):
         :param dim: Softmax normalization dimension. It must not be dimension 0,
             which is reserved as the time dimension.
         :type dim: int
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.dim = dim
@@ -282,8 +278,6 @@ class TDLayerNorm(nn.Module):
         :type device: torch.device or str or None
         :param dtype: 参数初始化 dtype。
         :type dtype: torch.dtype or None
-        :return: None
-        :rtype: None
 
         ----
 
@@ -335,8 +329,6 @@ class TDLayerNorm(nn.Module):
         :type device: torch.device or str or None
         :param dtype: Dtype used to initialize parameters.
         :type dtype: torch.dtype or None
-        :return: None
-        :rtype: None
         """
         super().__init__()
         if isinstance(normalized_shape, int):
@@ -520,8 +512,6 @@ class TDGELU(nn.Module):
         :param approximate: GELU 近似模式，与 :class:`torch.nn.GELU` 的
             ``approximate`` 语义一致。
         :type approximate: Literal["none", "tanh"]
-        :return: None
-        :rtype: None
         :raises ValueError: 若 ``approximate`` 不是 ``"none"`` 或 ``"tanh"``。
 
         ----
@@ -565,8 +555,6 @@ class TDGELU(nn.Module):
         :param approximate: GELU approximation mode, with the same semantics as
             ``approximate`` in :class:`torch.nn.GELU`.
         :type approximate: Literal["none", "tanh"]
-        :return: None
-        :rtype: None
         :raises ValueError: If ``approximate`` is not ``"none"`` or ``"tanh"``.
         """
         super().__init__()
@@ -718,8 +706,6 @@ class TDScaledDotProductAttention(nn.Module):
         :type is_causal: bool
         :param scale: attention scale。若为 ``None``，使用 PyTorch SDPA 默认值。
         :type scale: Optional[float]
-        :return: None
-        :rtype: None
 
         ----
 
@@ -773,8 +759,6 @@ class TDScaledDotProductAttention(nn.Module):
         :param scale: Attention scale. If ``None``, use the PyTorch SDPA
             default.
         :type scale: Optional[float]
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.is_causal = is_causal

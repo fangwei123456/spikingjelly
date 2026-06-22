@@ -86,8 +86,6 @@ class Net(nn.Module):
 
 def main():
     """
-    :return: None
-
     * :ref:`API in English <tempotron_mnist.main-en>`
 
     .. _tempotron_mnist.main-cn:

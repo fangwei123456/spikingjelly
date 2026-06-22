@@ -101,8 +101,6 @@ class AdaptBaseNode(BaseNode):
         :type backend: str
         :param store_v_seq: Whether to store intermediate membrane potentials
         :type store_v_seq: bool
-        :return: None
-        :rtype: None
         """
         # b: jump amplitudes
         # a: subthreshold coupling
@@ -380,8 +378,6 @@ class IzhikevichNode(AdaptBaseNode):
         :type backend: str
         :param store_v_seq: Whether to store intermediate membrane potentials
         :type store_v_seq: bool
-        :return: None
-        :rtype: None
         """
         assert isinstance(tau, float) and tau > 1.0
         assert a0 > 0

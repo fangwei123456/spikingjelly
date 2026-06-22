@@ -6,28 +6,27 @@ import argparse
 
 ### Components ###
 class ScaleLayer(nn.Module):
-    r"""
-    **API Language:**
-    :ref:`中文 <ScaleLayer-cn>` | :ref:`English <ScaleLayer-en>`
-
-    ----
-
-    .. _ScaleLayer-cn:
-
-    * **中文**
-
-    可学习的缩放层，用于 SNAS 架构搜索网络中。
-
-    ----
-
-    .. _ScaleLayer-en:
-
-    * **English**
-
-    Learnable scaling layer used in SNAS architecture search networks.
-    """
-
     def __init__(self):
+        """
+        **API Language:**
+        :ref:`中文 <ScaleLayer-cn>` | :ref:`English <ScaleLayer-en>`
+
+        ----
+
+        .. _ScaleLayer-cn:
+
+        * **中文**
+
+        可学习的缩放层，用于 SNAS 架构搜索网络中。
+
+        ----
+
+        .. _ScaleLayer-en:
+
+        * **English**
+
+        Learnable scaling layer used in SNAS architecture search networks.
+        """
         super().__init__()
         self.scale = torch.tensor(0.0)
 
@@ -47,7 +46,6 @@ class Neuronal_Cell(nn.Module):
         :type con_mat: torch.Tensor
 
         Neuronal forward cell.
-
         """
         super(Neuronal_Cell, self).__init__()
         self.cell_architecture = nn.ModuleList([])
@@ -141,7 +139,6 @@ class Neuronal_Cell_backward(nn.Module):
         :type con_mat: torch.Tensor
 
         Neuronal backward cell.
-
         """
         super(Neuronal_Cell_backward, self).__init__()
 
@@ -318,7 +315,6 @@ class SNASNet(nn.Module):
         :type con_mat: torch.Tensor
 
         The SNASNet `Neural Architecture Search for Spiking Neural Networks <https://arxiv.org/abs/2201.10355>`_ implementation by Spikingjelly.
-
         """
         super(SNASNet, self).__init__()
 

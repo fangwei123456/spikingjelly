@@ -711,8 +711,6 @@ class NeuronATGFBase:
         :type args: tuple
         :param kwargs: 通过 ``ctx.xx = xx`` 保存的附加字段。
         :type kwargs: dict
-        :return: 无返回值。
-        :rtype: None
 
         ----
 
@@ -730,8 +728,6 @@ class NeuronATGFBase:
         :type args: tuple
         :param kwargs: Extra fields saved via ``ctx.xx = xx`` assignments.
         :type kwargs: dict
-        :return: No return value.
-        :rtype: None
         """
         if requires_grad:
             ctx.save_for_backward(*args)

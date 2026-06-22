@@ -20,7 +20,6 @@ def _memory_null(args, kwargs, out):
 
 def _memory_mm(args, kwargs, out):
     """Estimate memory access for matrix multiplication.
-
     :param args: Positional aten arguments
     :type args: tuple
     :param kwargs: Keyword aten arguments
@@ -40,7 +39,6 @@ def _memory_mm(args, kwargs, out):
 
 def _memory_addmm(args, kwargs, out):
     """Estimate memory access for ``out = beta * bias + alpha * (x @ y)``.
-
     :param args: Positional aten arguments
     :type args: tuple
     :param kwargs: Keyword aten arguments
@@ -67,7 +65,6 @@ def _memory_addmm(args, kwargs, out):
 
 def _memory_bmm(args, kwargs, out):
     """Estimate memory access for batched matrix multiplication.
-
     :param args: Positional aten arguments
     :type args: tuple
     :param kwargs: Keyword aten arguments
@@ -89,7 +86,6 @@ def _memory_bmm(args, kwargs, out):
 
 def _memory_baddbmm(args, kwargs, out):
     """Estimate memory access for batched add-batched-matmul.
-
     :param args: Positional aten arguments
     :type args: tuple
     :param kwargs: Keyword aten arguments
@@ -116,7 +112,6 @@ def _memory_baddbmm(args, kwargs, out):
 
 def _memory_convolution(args, kwargs, out):
     """Estimate memory access for convolution.
-
     :param args: Positional aten arguments
     :type args: tuple
     :param kwargs: Keyword aten arguments
@@ -135,7 +130,6 @@ def _memory_convolution(args, kwargs, out):
 
 def _memory_convolution_backward(args, kwargs, out):
     """Estimate memory access for convolution backward.
-
     :param args: Positional aten arguments
     :type args: tuple
     :param kwargs: Keyword aten arguments
@@ -267,37 +261,6 @@ def _memory_native_batch_norm_backward(args, kwargs, out):
 
 
 class MemoryAccessCounter(BaseCounter):
-    r"""
-    **API Language:**
-    :ref:`中文 <MemoryAccessCounter-cn>` | :ref:`English <MemoryAccessCounter-en>`
-
-    ----
-
-    .. _MemoryAccessCounter-cn:
-
-    * **中文**
-
-    内存访问量估计计数器。
-
-    该计数器以输入/输出张量的字节数为基础，估计算子的内存访问下界，
-    适合用于粗略分析不同网络结构的访存压力。具体构造参数见
-    :meth:`__init__ <MemoryAccessCounter.__init__-cn>`。
-
-    ----
-
-    .. _MemoryAccessCounter-en:
-
-    * **English**
-
-    Memory-access estimation counter.
-
-    The counter estimates a lower bound of operator memory access from the byte
-    size of input and output tensors, which is useful for coarse-grained memory
-    traffic analysis across network structures. See
-    :meth:`__init__ <MemoryAccessCounter.__init__-en>` for constructor
-    parameters.
-    """
-
     def __init__(
         self,
         extra_rules: dict[Any, Callable] = {},
@@ -312,6 +275,12 @@ class MemoryAccessCounter(BaseCounter):
         .. _MemoryAccessCounter.__init__-cn:
 
         * **中文**
+
+        内存访问量估计计数器。
+
+        该计数器以输入/输出张量的字节数为基础，估计算子的内存访问下界，
+        适合用于粗略分析不同网络结构的访存压力。具体构造参数见
+        :meth:`__init__ <MemoryAccessCounter.__init__-cn>`。
 
         内存访问计数器，用于粗略估计深度神经网络的内存访问量。
 
@@ -336,6 +305,14 @@ class MemoryAccessCounter(BaseCounter):
         .. _MemoryAccessCounter.__init__-en:
 
         * **English**
+
+        Memory-access estimation counter.
+
+        The counter estimates a lower bound of operator memory access from the byte
+        size of input and output tensors, which is useful for coarse-grained memory
+        traffic analysis across network structures. See
+        :meth:`__init__ <MemoryAccessCounter.__init__-en>` for constructor
+        parameters.
 
         Memory access counter for estimating memory access in deep networks.
 
@@ -378,8 +355,6 @@ class MemoryAccessCounter(BaseCounter):
 
             total_bytes = memory_counter.get_total()
             print(f"Total memory access: {total_bytes / 1024:.2f} KB")
-        :return: None
-        :rtype: None
         """
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {

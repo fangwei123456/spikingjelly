@@ -335,7 +335,6 @@ def cal_fun_t(
     :type f: Callable
     :return: used time in milliseconds
     :rtype: float
-
     """
     if n == 1:
         if device == "cpu":
@@ -396,7 +395,6 @@ def cal_blocks(numel: int, threads: int = -1):
     :rtype: int
 
     Returns the number of blocks to call :class:`cupy.RawKernel` by ``kernel((blocks,), (threads,), ...)``
-
     """
     if threads == -1:
         threads = configure.cuda_threads
@@ -438,7 +436,6 @@ def get_contiguous(*args):
         :class: note
 
         The making contiguous operation can not be done in-place. Hence, this function will return a new list.
-
     """
     ret_list = []
 
@@ -483,7 +480,6 @@ def wrap_args_to_raw_kernel(device: int, *args):
     :rtype: tuple
 
     This function can wrap ``torch.Tensor`` or ``cupy.ndarray`` to ``args`` in :class:`cupy.RawKernel.__call__`
-
     """
     # note that the input must be contiguous
     # check device and get data_ptr from tensor
@@ -543,7 +539,6 @@ class DeviceEnvironment:
 
             with DeviceEnvironment(device):
                 kernel((blocks,), (configure.cuda_threads,), ...)
-
         """
         self.device = device
         self.previous_device = None

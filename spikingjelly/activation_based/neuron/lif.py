@@ -84,8 +84,6 @@ class SimpleLIFNode(SimpleBaseNode):
         :type detach_reset: bool
         :param step_mode: Step mode, either ``\"s\"`` or ``\"m\"``
         :type step_mode: str
-        :return: None
-        :rtype: None
         """
         super().__init__(
             v_threshold, v_reset, surrogate_function, detach_reset, step_mode
@@ -230,9 +228,6 @@ class LIFNode(BaseNode):
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
             memory consumption
         :type store_v_seq: bool
-
-        :return: None
-        :rtype: None
         """
         assert isinstance(tau, float) and tau > 1.0
 
@@ -380,7 +375,6 @@ class LIFNode(BaseNode):
         surrogate_fn=None,
     ):
         """Unified fallback for all 4 LIF variants (CPU or unsupported surrogate).
-
         When *spiking* is False the surrogate primitive function is used to
         compute a continuous spike value instead of the hard Heaviside threshold,
         matching the behaviour of ``single_step_forward`` with ``spiking=False``.
@@ -696,7 +690,6 @@ class LIFNode(BaseNode):
 class NonSpikingLIFNode(NonSpikingBaseNode):
     def __init__(self, tau: float = 2.0, decode: Optional[str] = None):
         """Non-spiking version of :class:`LIFNode` that outputs continuous-valued membrane potentials instead of spikes.
-
         See also: :class:`spikingjelly.activation_based.layer.misc.SynapseFilter`.
 
         :param tau: 膜电位时间常数
@@ -708,8 +701,6 @@ class NonSpikingLIFNode(NonSpikingBaseNode):
         :type tau: float
         :param decode: Decoding method
         :type decode: Optional[str]
-        :return: None
-        :rtype: None
         """
         super().__init__(decode)
 

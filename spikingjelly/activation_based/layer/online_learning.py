@@ -71,8 +71,6 @@ class GradwithTrace(nn.Module):
         :type module: torch.nn.Module
 
         ----
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.module = module
@@ -142,8 +140,6 @@ class SpikeTraceOp(nn.Module):
         :param module: the module that requires wrapping
         :type module: torch.nn.Module
         ----
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.module = module
@@ -202,8 +198,6 @@ class OTTTSequential(nn.Sequential):
 
         :param args: 需要顺序执行的模块
         :type args: nn.Module
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -217,8 +211,6 @@ class OTTTSequential(nn.Sequential):
 
         :param args: Modules to be executed sequentially
         :type args: nn.Module
-        :return: ``None``
-        :rtype: None
         """
         super().__init__(*args)
 

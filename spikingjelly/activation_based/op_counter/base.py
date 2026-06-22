@@ -92,9 +92,6 @@ class ActiveModuleTracker(ModuleTracker):
 
         Attributes :attr:`active_modules` and :attr:`parents` are different: the former
         is a set of ``nn.Module`` instances, while the latter is a set of ``str`` (module names).
-
-        :return: None
-        :rtype: None
         """
         super().__init__()
         self.active_modules: set[nn.Module] = set()  # align with self.parents: set[str]
@@ -201,9 +198,6 @@ class BaseCounter:
 
         Subclasses need to implement specific rule functions in :attr:`rules` to define
         how to calculate counts for particular operations.
-
-        :return: None
-        :rtype: None
         """
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {}
@@ -426,8 +420,6 @@ class BaseCounter:
         此方法会将 :attr:`records` 重新初始化为空的嵌套字典，移除之前累积的全部计数结果。
         适用于开始新的计数会话之前显式清零计数器状态。
 
-        :return: ``None``
-        :rtype: None
 
         ----
 
@@ -440,9 +432,6 @@ class BaseCounter:
         This method reinitializes :attr:`records` to an empty nested dictionary,
         removing all previously accumulated count results. Call it before starting
         a new counting session when a counter instance is reused.
-
-        :return: ``None``
-        :rtype: None
         """
         self.records = defaultdict(lambda: defaultdict(int))
 
