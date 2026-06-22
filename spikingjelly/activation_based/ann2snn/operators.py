@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Union
+from typing import Literal, Optional, Sequence, Union
 
 import torch
 import torch.nn as nn
@@ -13,6 +13,19 @@ def _temporal_difference(y_cum: torch.Tensor) -> torch.Tensor:
     y_seq[0] = y_cum[0]
     y_seq[1:] = y_cum[1:] - y_cum[:-1]
     return y_seq
+
+
+def _check_time_sequence(x_seq: torch.Tensor, module_name: str) -> None:
+    if x_seq.dim() < 2:
+        raise ValueError(
+            f"{module_name} expects an input sequence with shape [T, ...] "
+            f"and at least 2 dimensions, but got shape {tuple(x_seq.shape)}."
+        )
+    if x_seq.shape[0] == 0:
+        raise ValueError(
+            f"{module_name} expects a non-empty time dimension, but got "
+            f"shape {tuple(x_seq.shape)}."
+        )
 
 
 class TDSoftmax(nn.Module):
@@ -130,11 +143,12 @@ class TDSoftmax(nn.Module):
         当 ``T = 1`` 时，``Y[0]`` 直接等于 ``torch.softmax(X[0], dim=dim)``。
         输出 dtype 与输入 dtype 相同，且该算子对 autograd 透明。
 
-        :param x_seq: 输入时间序列，形状为 ``[T, ...]``。
+        :param x_seq: 输入时间序列，形状为 ``[T, ...]``，且 ``T > 0``。
         :type x_seq: torch.Tensor
         :return: TD Softmax 差分序列，形状与 ``x_seq`` 相同。
         :rtype: torch.Tensor
-        :raises ValueError: 若 ``x_seq`` 少于 2 维，或 ``dim`` 指向时间维。
+        :raises ValueError: 若 ``x_seq`` 少于 2 维、时间维为空，或 ``dim``
+            指向时间维。
 
         ----
 
@@ -164,19 +178,15 @@ class TDSoftmax(nn.Module):
         ``torch.softmax(X[0], dim=dim)``. The output dtype matches the input
         dtype, and the operator is transparent to autograd.
 
-        :param x_seq: Input time sequence with shape ``[T, ...]``.
+        :param x_seq: Input time sequence with shape ``[T, ...]`` and ``T > 0``.
         :type x_seq: torch.Tensor
         :return: TD Softmax differential sequence with the same shape as
             ``x_seq``.
         :rtype: torch.Tensor
-        :raises ValueError: If ``x_seq`` has fewer than 2 dimensions, or ``dim``
-            refers to the time dimension.
+        :raises ValueError: If ``x_seq`` has fewer than 2 dimensions, the time
+            dimension is empty, or ``dim`` refers to the time dimension.
         """
-        if x_seq.dim() < 2:
-            raise ValueError(
-                "TDSoftmax expects an input sequence with shape [T, ...] "
-                f"and at least 2 dimensions, but got shape {tuple(x_seq.shape)}."
-            )
+        _check_time_sequence(x_seq, "TDSoftmax")
 
         dim = self.dim
         if dim < 0:
@@ -385,12 +395,12 @@ class TDLayerNorm(nn.Module):
         结果。
         输出 dtype 与输入 dtype 相同，且该算子对 autograd 透明。
 
-        :param x_seq: 输入时间序列，形状为 ``[T, ...]``，尾部形状必须
+        :param x_seq: 输入时间序列，形状为 ``[T, ...]``，且 ``T > 0``，尾部形状必须
             匹配 ``normalized_shape``。
         :type x_seq: torch.Tensor
         :return: TD LayerNorm 差分序列，形状与 ``x_seq`` 相同。
         :rtype: torch.Tensor
-        :raises ValueError: 若 ``x_seq`` 少于 2 维。
+        :raises ValueError: 若 ``x_seq`` 少于 2 维、时间维为空或尾部形状不匹配。
 
         ----
 
@@ -420,19 +430,16 @@ class TDLayerNorm(nn.Module):
         ``X[0]``. The output dtype matches the input dtype, and the operator is
         transparent to autograd.
 
-        :param x_seq: Input time sequence with shape ``[T, ...]``. The trailing
-            shape must match ``normalized_shape``.
+        :param x_seq: Input time sequence with shape ``[T, ...]`` and
+            ``T > 0``. The trailing shape must match ``normalized_shape``.
         :type x_seq: torch.Tensor
         :return: TD LayerNorm differential sequence with the same shape as
             ``x_seq``.
         :rtype: torch.Tensor
-        :raises ValueError: If ``x_seq`` has fewer than 2 dimensions.
+        :raises ValueError: If ``x_seq`` has fewer than 2 dimensions, the time
+            dimension is empty, or the trailing shape does not match.
         """
-        if x_seq.dim() < 2:
-            raise ValueError(
-                "TDLayerNorm expects an input sequence with shape [T, ...] "
-                f"and at least 2 dimensions, but got shape {tuple(x_seq.shape)}."
-            )
+        _check_time_sequence(x_seq, "TDLayerNorm")
         if len(self.normalized_shape) > x_seq.dim() - 1:
             trailing_shape = tuple(x_seq.shape[1:])
         else:
@@ -462,7 +469,7 @@ class TDLayerNorm(nn.Module):
 
 
 class TDGELU(nn.Module):
-    def __init__(self, approximate: str = "none") -> None:
+    def __init__(self, approximate: Literal["none", "tanh"] = "none") -> None:
         r"""
         **API Language:**
         :ref:`中文 <TDGELU.__init__-cn>` |
@@ -481,9 +488,11 @@ class TDGELU(nn.Module):
 
         返回值是浮点差分值，可能包含负值；它不是二值脉冲，也不表示 fully
         spike-driven GELU。输出 dtype 与输入 dtype 相同；推荐使用
-        ``float32``、``float16`` 或 ``float64`` 输入。该算子完全由 PyTorch
-        可微算子组成，对 autograd 透明。该算子无内部状态，多次 ``forward``
-        之间不需要调用 ``reset``。
+        ``float32``、``float16``、``bfloat16`` 或 ``float64`` 输入。该算子
+        完全由 PyTorch 可微算子组成，对 autograd 透明。该算子无内部状态，
+        多次 ``forward`` 之间不需要调用 ``reset``。该算子仅依赖
+        :func:`torch.nn.functional.gelu`，支持 CPU 与 CUDA，后端与
+        :mod:`torch` 一致，无 CuPy / Triton 专用路径。
 
         该算子的机制来源于 `SpikeZIP-TF: Conversion is All You Need for
         Transformer-based SNN <https://arxiv.org/abs/2406.03470>`_ 中对
@@ -500,9 +509,10 @@ class TDGELU(nn.Module):
 
         :param approximate: GELU 近似模式，与 :class:`torch.nn.GELU` 的
             ``approximate`` 语义一致。
-        :type approximate: str
+        :type approximate: Literal["none", "tanh"]
         :return: None
         :rtype: None
+        :raises ValueError: 若 ``approximate`` 不是 ``"none"`` 或 ``"tanh"``。
 
         ----
 
@@ -520,10 +530,13 @@ class TDGELU(nn.Module):
         The output contains floating-point differential values and may contain
         negative values. It is not a binary spike tensor and does not represent a
         fully spike-driven GELU. The output dtype matches the input dtype;
-        ``float32``, ``float16`` and ``float64`` inputs are recommended. The
-        operator is composed entirely of differentiable PyTorch operations and
-        is transparent to autograd. The operator is stateless, and repeated
-        ``forward`` calls do not require ``reset``.
+        ``float32``, ``float16``, ``bfloat16`` and ``float64`` inputs are
+        recommended. The operator is composed entirely of differentiable
+        PyTorch operations and is transparent to autograd. The operator is
+        stateless, and repeated ``forward`` calls do not require ``reset``. It
+        only depends on :func:`torch.nn.functional.gelu`, supports CPU and CUDA,
+        follows the :mod:`torch` backend behavior, and has no CuPy / Triton
+        specific path.
 
         The mechanism follows the cumulative-difference equivalence idea for
         Transformer nonlinear operators in `SpikeZIP-TF: Conversion is All You
@@ -541,11 +554,17 @@ class TDGELU(nn.Module):
 
         :param approximate: GELU approximation mode, with the same semantics as
             ``approximate`` in :class:`torch.nn.GELU`.
-        :type approximate: str
+        :type approximate: Literal["none", "tanh"]
         :return: None
         :rtype: None
+        :raises ValueError: If ``approximate`` is not ``"none"`` or ``"tanh"``.
         """
         super().__init__()
+        if approximate not in ("none", "tanh"):
+            raise ValueError(
+                "TDGELU: approximate must be 'none' or 'tanh', "
+                f"but got {approximate!r}."
+            )
         self.approximate = approximate
 
     def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
@@ -580,11 +599,11 @@ class TDGELU(nn.Module):
         当 ``T = 1`` 时，``Y[0]`` 直接等于对 ``X[0]`` 执行 GELU 的结果。
         输出 dtype 与输入 dtype 相同，且该算子对 autograd 透明。
 
-        :param x_seq: 输入时间序列，形状为 ``[T, ...]``。
+        :param x_seq: 输入时间序列，形状为 ``[T, ...]``，且 ``T > 0``。
         :type x_seq: torch.Tensor
         :return: TD GELU 差分序列，形状与 ``x_seq`` 相同。
         :rtype: torch.Tensor
-        :raises ValueError: 若 ``x_seq`` 少于 2 维。
+        :raises ValueError: 若 ``x_seq`` 少于 2 维或时间维为空。
 
         ----
 
@@ -614,18 +633,15 @@ class TDGELU(nn.Module):
         ``X[0]``. The output dtype matches the input dtype, and the operator is
         transparent to autograd.
 
-        :param x_seq: Input time sequence with shape ``[T, ...]``.
+        :param x_seq: Input time sequence with shape ``[T, ...]`` and ``T > 0``.
         :type x_seq: torch.Tensor
         :return: TD GELU differential sequence with the same shape as
             ``x_seq``.
         :rtype: torch.Tensor
-        :raises ValueError: If ``x_seq`` has fewer than 2 dimensions.
+        :raises ValueError: If ``x_seq`` has fewer than 2 dimensions or the time
+            dimension is empty.
         """
-        if x_seq.dim() < 2:
-            raise ValueError(
-                "TDGELU expects an input sequence with shape [T, ...] "
-                f"and at least 2 dimensions, but got shape {tuple(x_seq.shape)}."
-            )
+        _check_time_sequence(x_seq, "TDGELU")
 
         y_cum = F.gelu(x_seq.cumsum(dim=0), approximate=self.approximate)
         return _temporal_difference(y_cum)

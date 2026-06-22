@@ -107,6 +107,12 @@ class TestTDSoftmax:
         with pytest.raises(ValueError, match="at least 2 dimensions"):
             op(torch.randn(4))
 
+    def test_rejects_empty_time_dimension(self):
+        op = TDSoftmax(dim=-1)
+
+        with pytest.raises(ValueError, match="non-empty time dimension"):
+            op(torch.empty(0, 2, 3))
+
     def test_extra_repr(self):
         op = TDSoftmax(dim=-1)
 
@@ -271,6 +277,12 @@ class TestTDLayerNorm:
         with pytest.raises(ValueError, match="trailing shape"):
             op(torch.randn(3, 2, 5))
 
+    def test_rejects_empty_time_dimension(self):
+        op = TDLayerNorm(normalized_shape=4)
+
+        with pytest.raises(ValueError, match="non-empty time dimension"):
+            op(torch.empty(0, 2, 4))
+
     def test_extra_repr(self):
         op = TDLayerNorm(normalized_shape=(2, 3), eps=1e-4, bias=False)
 
@@ -320,14 +332,23 @@ class TestTDGELU:
         assert torch.allclose(y_seq[0], expected)
 
     def test_gradients_flow(self):
-        x_seq = torch.randn(3, 4, requires_grad=True)
+        x_seq = torch.randn(3, 4)
         op = TDGELU()
 
+        x_seq_ref = x_seq.clone().detach().requires_grad_()
+        y_cum_ref = F.gelu(x_seq_ref.cumsum(dim=0), approximate=op.approximate)
+        y_seq_ref = torch.empty_like(y_cum_ref)
+        y_seq_ref[0] = y_cum_ref[0]
+        y_seq_ref[1:] = y_cum_ref[1:] - y_cum_ref[:-1]
+        y_seq_ref.sum().backward()
+
+        x_seq = x_seq.clone().detach().requires_grad_()
         y_seq = op(x_seq)
         y_seq.sum().backward()
 
         assert x_seq.grad is not None
         assert torch.isfinite(x_seq.grad).all()
+        assert torch.allclose(x_seq.grad, x_seq_ref.grad, atol=1e-6, rtol=1e-6)
 
     def test_negative_values_are_allowed(self):
         x_seq = torch.tensor(
@@ -351,6 +372,16 @@ class TestTDGELU:
 
         with pytest.raises(ValueError, match="at least 2 dimensions"):
             op(torch.randn(4))
+
+    def test_rejects_empty_time_dimension(self):
+        op = TDGELU()
+
+        with pytest.raises(ValueError, match="non-empty time dimension"):
+            op(torch.empty(0, 2, 3))
+
+    def test_rejects_invalid_approximate(self):
+        with pytest.raises(ValueError, match="approximate must be 'none' or 'tanh'"):
+            TDGELU(approximate="foo")
 
     def test_extra_repr(self):
         op = TDGELU(approximate="tanh")
