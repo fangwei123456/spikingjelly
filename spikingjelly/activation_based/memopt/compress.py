@@ -65,7 +65,6 @@ class BaseSpikeCompressor(abc.ABC):
         ----
 
         .. _BaseSpikeCompressor.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -74,7 +73,6 @@ class BaseSpikeCompressor(abc.ABC):
         ----
 
         .. _BaseSpikeCompressor.__init__-en:
-        * **English**
 
         * **English**
 
@@ -184,7 +182,6 @@ class NullSpikeCompressor(BaseSpikeCompressor):
         ----
 
         .. _NullSpikeCompressor.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -196,7 +193,6 @@ class NullSpikeCompressor(BaseSpikeCompressor):
         ----
 
         .. _NullSpikeCompressor.__init__-en:
-        * **English**
 
         * **English**
 
@@ -244,7 +240,6 @@ class BooleanSpikeCompressor(BaseSpikeCompressor):
         ----
 
         .. _BooleanSpikeCompressor.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -255,7 +250,6 @@ class BooleanSpikeCompressor(BaseSpikeCompressor):
         ----
 
         .. _BooleanSpikeCompressor.__init__-en:
-        * **English**
 
         * **English**
 
@@ -304,7 +298,6 @@ class Uint8SpikeCompressor(BaseSpikeCompressor):
         ----
 
         .. _Uint8SpikeCompressor.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -315,7 +308,6 @@ class Uint8SpikeCompressor(BaseSpikeCompressor):
         ----
 
         .. _Uint8SpikeCompressor.__init__-en:
-        * **English**
 
         * **English**
 
@@ -363,7 +355,6 @@ class BitSpikeCompressor(BaseSpikeCompressor):
         ----
 
         .. _BitSpikeCompressor.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -375,7 +366,6 @@ class BitSpikeCompressor(BaseSpikeCompressor):
         ----
 
         .. _BitSpikeCompressor.__init__-en:
-        * **English**
 
         * **English**
 
@@ -424,7 +414,6 @@ class SparseSpikeCompressor(BaseSpikeCompressor):
         ----
 
         .. _SparseSpikeCompressor.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -439,7 +428,6 @@ class SparseSpikeCompressor(BaseSpikeCompressor):
         ----
 
         .. _SparseSpikeCompressor.__init__-en:
-        * **English**
 
         * **English**
 

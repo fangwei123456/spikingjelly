@@ -13,7 +13,6 @@ class ScaleLayer(nn.Module):
     ----
 
     .. _ScaleLayer-cn:
-    * **中文**
 
     * **中文**
 
@@ -22,7 +21,6 @@ class ScaleLayer(nn.Module):
     ----
 
     .. _ScaleLayer-en:
-    * **English**
 
     * **English**
 

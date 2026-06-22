@@ -137,7 +137,6 @@ class RandomTemporalDelete(torch.nn.Module):
         ----
 
         .. _RandomTemporalDelete.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -153,7 +152,6 @@ class RandomTemporalDelete(torch.nn.Module):
         ----
 
         .. _RandomTemporalDelete.__init__-en:
-        * **English**
 
         * **English**
 

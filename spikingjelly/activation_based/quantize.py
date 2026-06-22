@@ -9,7 +9,6 @@ class round_atgf(torch.autograd.Function):
     ----
 
     .. _round_atgf-cn:
-    * **中文**
 
     * **中文**
 
@@ -25,7 +24,6 @@ class round_atgf(torch.autograd.Function):
     ----
 
     .. _round_atgf-en:
-    * **English**
 
     * **English**
 
@@ -93,7 +91,6 @@ class ceil_atgf(torch.autograd.Function):
     ----
 
     .. _ceil_atgf-cn:
-    * **中文**
 
     * **中文**
 
@@ -109,7 +106,6 @@ class ceil_atgf(torch.autograd.Function):
     ----
 
     .. _ceil_atgf-en:
-    * **English**
 
     * **English**
 
@@ -177,7 +173,6 @@ class floor_atgf(torch.autograd.Function):
     ----
 
     .. _floor_atgf-cn:
-    * **中文**
 
     * **中文**
 
@@ -193,7 +188,6 @@ class floor_atgf(torch.autograd.Function):
     ----
 
     .. _floor_atgf-en:
-    * **English**
 
     * **English**
 
@@ -326,7 +320,6 @@ class clamp_atgf(torch.autograd.Function):
     ----
 
     .. _clamp_atgf-cn:
-    * **中文**
 
     * **中文**
 
@@ -347,7 +340,6 @@ class clamp_atgf(torch.autograd.Function):
     ----
 
     .. _clamp_atgf-en:
-    * **English**
 
     * **English**
 
@@ -394,7 +386,6 @@ def clamp(x: torch.Tensor, min_value: float, max_value: float):
     ----
 
     .. _clamp-cn:
-    * **中文**
 
     * **中文**
 
@@ -422,7 +413,6 @@ def clamp(x: torch.Tensor, min_value: float, max_value: float):
     ----
 
     .. _clamp-en:
-    * **English**
 
     * **English**
 
@@ -458,7 +448,6 @@ def step_quantize_forward(x: torch.Tensor, step: float):
     ----
 
     .. _step_quantize_forward-cn:
-    * **中文**
 
     * **中文**
 
@@ -478,7 +467,6 @@ def step_quantize_forward(x: torch.Tensor, step: float):
     ----
 
     .. _step_quantize_forward-en:
-    * **English**
 
     * **English**
 
@@ -507,7 +495,6 @@ class step_quantize_atgf(torch.autograd.Function):
     ----
 
     .. _step_quantize_atgf-cn:
-    * **中文**
 
     * **中文**
 
@@ -526,7 +513,6 @@ class step_quantize_atgf(torch.autograd.Function):
     ----
 
     .. _step_quantize_atgf-en:
-    * **English**
 
     * **English**
 
@@ -560,7 +546,6 @@ def step_quantize(x: torch.Tensor, step: float):
     ----
 
     .. _step_quantize-cn:
-    * **中文**
 
     * **中文**
 
@@ -583,7 +568,6 @@ def step_quantize(x: torch.Tensor, step: float):
     ----
 
     .. _step_quantize-en:
-    * **English**
 
     * **English**
 
@@ -614,7 +598,6 @@ def k_bit_quantize_forward(x: torch.Tensor, k: int):
     ----
 
     .. _k_bit_quantize_forward-cn:
-    * **中文**
 
     * **中文**
 
@@ -635,7 +618,6 @@ def k_bit_quantize_forward(x: torch.Tensor, k: int):
     ----
 
     .. _k_bit_quantize_forward-en:
-    * **English**
 
     * **English**
 
@@ -667,7 +649,6 @@ class k_bit_quantize_atgf(torch.autograd.Function):
     ----
 
     .. _k_bit_quantize_atgf-cn:
-    * **中文**
 
     * **中文**
 
@@ -686,7 +667,6 @@ class k_bit_quantize_atgf(torch.autograd.Function):
     ----
 
     .. _k_bit_quantize_atgf-en:
-    * **English**
 
     * **English**
 

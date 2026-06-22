@@ -95,7 +95,6 @@ class LemaireAddressingCounter(BaseCounter):
         ----
 
         .. _LemaireAddressingCounter.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -120,7 +119,6 @@ class LemaireAddressingCounter(BaseCounter):
         ----
 
         .. _LemaireAddressingCounter.__init__-en:
-        * **English**
 
         * **English**
 

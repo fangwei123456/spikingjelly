@@ -55,7 +55,6 @@ def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     ----
 
     .. _conv3x3-cn:
-    * **中文**
 
     * **中文**
 
@@ -77,7 +76,6 @@ def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     ----
 
     .. _conv3x3-en:
-    * **English**
 
     * **English**
 
@@ -116,7 +114,6 @@ def conv1x1(in_planes, out_planes, stride=1):
     ----
 
     .. _conv1x1-cn:
-    * **中文**
 
     * **中文**
 
@@ -134,7 +131,6 @@ def conv1x1(in_planes, out_planes, stride=1):
     ----
 
     .. _conv1x1-en:
-    * **English**
 
     * **English**
 
@@ -288,7 +284,6 @@ class SEWResNet(nn.Module):
     ----
 
     .. _SEWResNet-cn:
-    * **中文**
 
     * **中文**
 
@@ -297,7 +292,6 @@ class SEWResNet(nn.Module):
     ----
 
     .. _SEWResNet-en:
-    * **English**
 
     * **English**
 

@@ -28,7 +28,6 @@ class SmoothedValue:
     ----
 
     .. _SmoothedValue-cn:
-    * **中文**
 
     * **中文**
 
@@ -37,7 +36,6 @@ class SmoothedValue:
     ----
 
     .. _SmoothedValue-en:
-    * **English**
 
     * **English**
 
@@ -78,7 +76,6 @@ class SmoothedValue:
         ----
 
         .. _SmoothedValue.synchronize_between_processes-cn:
-        * **中文**
 
         * **中文**
 
@@ -87,7 +84,6 @@ class SmoothedValue:
         ----
 
         .. _SmoothedValue.synchronize_between_processes-en:
-        * **English**
 
         * **English**
 
@@ -140,7 +136,6 @@ class ThroughputValue:
     ----
 
     .. _ThroughputValue-cn:
-    * **中文**
 
     * **中文**
 
@@ -149,7 +144,6 @@ class ThroughputValue:
     ----
 
     .. _ThroughputValue-en:
-    * **English**
 
     * **English**
 
@@ -256,7 +250,6 @@ class MetricLogger:
     ----
 
     .. _MetricLogger-cn:
-    * **中文**
 
     * **中文**
 
@@ -265,7 +258,6 @@ class MetricLogger:
     ----
 
     .. _MetricLogger-en:
-    * **English**
 
     * **English**
 
@@ -438,7 +430,6 @@ def mkdir(path):
     ----
 
     .. _mkdir-cn:
-    * **中文**
 
     * **中文**
 
@@ -452,7 +443,6 @@ def mkdir(path):
     ----
 
     .. _mkdir-en:
-    * **English**
 
     * **English**
 
@@ -524,7 +514,6 @@ def init_distributed_mode(args):
     ----
 
     .. _init_distributed_mode-cn:
-    * **中文**
 
     * **中文**
 
@@ -538,7 +527,6 @@ def init_distributed_mode(args):
     ----
 
     .. _init_distributed_mode-en:
-    * **English**
 
     * **English**
 

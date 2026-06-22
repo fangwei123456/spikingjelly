@@ -274,7 +274,6 @@ class MemoryAccessCounter(BaseCounter):
     ----
 
     .. _MemoryAccessCounter-cn:
-    * **中文**
 
     * **中文**
 
@@ -287,7 +286,6 @@ class MemoryAccessCounter(BaseCounter):
     ----
 
     .. _MemoryAccessCounter-en:
-    * **English**
 
     * **English**
 

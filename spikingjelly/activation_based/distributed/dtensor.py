@@ -164,7 +164,6 @@ class TensorShardMemoryModule(base.MemoryModule):
     ----
 
     .. _TensorShardMemoryModule-cn:
-    * **中文**
 
     * **中文**
 
@@ -173,7 +172,6 @@ class TensorShardMemoryModule(base.MemoryModule):
     ----
 
     .. _TensorShardMemoryModule-en:
-    * **English**
 
     * **English**
     Base memory module supporting tensor parallel sharding.
@@ -271,7 +269,6 @@ class SNNDistributedAnalysis:
     ----
 
     .. _SNNDistributedAnalysis-cn:
-    * **中文**
 
     * **中文**
 
@@ -280,7 +277,6 @@ class SNNDistributedAnalysis:
     ----
 
     .. _SNNDistributedAnalysis-en:
-    * **English**
 
     * **English**
 
@@ -303,7 +299,6 @@ class SNNDistributedConfig:
     ----
 
     .. _SNNDistributedConfig-cn:
-    * **中文**
 
     * **中文**
 
@@ -312,7 +307,6 @@ class SNNDistributedConfig:
     ----
 
     .. _SNNDistributedConfig-en:
-    * **English**
 
     * **English**
 
@@ -355,7 +349,6 @@ class SNNPipelineRuntime:
     ----
 
     .. _SNNPipelineRuntime-cn:
-    * **中文**
 
     * **中文**
 
@@ -364,7 +357,6 @@ class SNNPipelineRuntime:
     ----
 
     .. _SNNPipelineRuntime-en:
-    * **English**
 
     * **English**
 
@@ -415,7 +407,6 @@ class SNNDistributedRecommendation:
     ----
 
     .. _SNNDistributedRecommendation-cn:
-    * **中文**
 
     * **中文**
 
@@ -424,7 +415,6 @@ class SNNDistributedRecommendation:
     ----
 
     .. _SNNDistributedRecommendation-en:
-    * **English**
 
     * **English**
 
@@ -916,7 +906,6 @@ def recommended_pipeline_microbatches(batch_size: int, num_stages: int) -> int:
     ----
 
     .. _recommended_pipeline_microbatches-cn:
-    * **中文**
 
     * **中文**
 
@@ -925,7 +914,6 @@ def recommended_pipeline_microbatches(batch_size: int, num_stages: int) -> int:
     ----
 
     .. _recommended_pipeline_microbatches-en:
-    * **English**
 
     * **English**
 
@@ -2189,7 +2177,6 @@ class ChannelShardConv2d(nn.Module):
     ----
 
     .. _ChannelShardConv2d-cn:
-    * **中文**
 
     * **中文**
 
@@ -2198,7 +2185,6 @@ class ChannelShardConv2d(nn.Module):
     ----
 
     .. _ChannelShardConv2d-en:
-    * **English**
 
     * **English**
 
@@ -2329,7 +2315,6 @@ class ChannelShardConv1d(nn.Module):
     ----
 
     .. _ChannelShardConv1d-cn:
-    * **中文**
 
     * **中文**
 
@@ -2338,7 +2323,6 @@ class ChannelShardConv1d(nn.Module):
     ----
 
     .. _ChannelShardConv1d-en:
-    * **English**
 
     * **English**
 
@@ -2451,7 +2435,6 @@ class ChannelShardBatchNorm2d(nn.Module):
     ----
 
     .. _ChannelShardBatchNorm2d-cn:
-    * **中文**
 
     * **中文**
 
@@ -2460,7 +2443,6 @@ class ChannelShardBatchNorm2d(nn.Module):
     ----
 
     .. _ChannelShardBatchNorm2d-en:
-    * **English**
 
     * **English**
 
@@ -2573,7 +2555,6 @@ class ChannelShardBatchNorm1d(nn.Module):
     ----
 
     .. _ChannelShardBatchNorm1d-cn:
-    * **中文**
 
     * **中文**
 
@@ -2582,7 +2563,6 @@ class ChannelShardBatchNorm1d(nn.Module):
     ----
 
     .. _ChannelShardBatchNorm1d-en:
-    * **English**
 
     * **English**
 

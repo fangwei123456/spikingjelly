@@ -200,7 +200,6 @@ class ComputeEnergyProfiler:
     ----
 
     .. _ComputeEnergyProfiler-cn:
-    * **中文**
 
     * **中文**
 
@@ -212,7 +211,6 @@ class ComputeEnergyProfiler:
     ----
 
     .. _ComputeEnergyProfiler-en:
-    * **English**
 
     * **English**
 

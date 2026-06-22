@@ -63,7 +63,6 @@ class BaseProfiler(abc.ABC):
         ----
 
         .. _BaseProfiler.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -75,7 +74,6 @@ class BaseProfiler(abc.ABC):
         ----
 
         .. _BaseProfiler.__init__-en:
-        * **English**
 
         * **English**
 

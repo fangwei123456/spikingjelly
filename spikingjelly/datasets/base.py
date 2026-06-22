@@ -599,7 +599,6 @@ class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
         ----
 
         .. _FrameCustomIntegrateBuilder.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -620,7 +619,6 @@ class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
         ----
 
         .. _FrameCustomIntegrateBuilder.__init__-en:
-        * **English**
 
         * **English**
 

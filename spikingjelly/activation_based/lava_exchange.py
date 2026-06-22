@@ -18,7 +18,6 @@ def step_quantize_forward(x: torch.Tensor, step: float):
     ----
 
     .. _step_quantize_forward-cn:
-    * **中文**
 
     * **中文**
 
@@ -34,7 +33,6 @@ def step_quantize_forward(x: torch.Tensor, step: float):
     ----
 
     .. _step_quantize_forward-en:
-    * **English**
 
     * **English**
 
@@ -60,7 +58,6 @@ class step_quantize_atgf(torch.autograd.Function):
     ----
 
     .. _step_quantize_atgf-cn:
-    * **中文**
 
     * **中文**
 
@@ -69,7 +66,6 @@ class step_quantize_atgf(torch.autograd.Function):
     ----
 
     .. _step_quantize_atgf-en:
-    * **English**
 
     * **English**
 
@@ -93,7 +89,6 @@ def step_quantize(x: torch.Tensor, step: float = 1.0):
     ----
 
     .. _step_quantize-cn:
-    * **中文**
 
     * **中文**
 
@@ -111,7 +106,6 @@ def step_quantize(x: torch.Tensor, step: float = 1.0):
     ----
 
     .. _step_quantize-en:
-    * **English**
 
     * **English**
 
@@ -137,7 +131,6 @@ def quantize_8b(x, scale, descale=False):
     ----
 
     .. _quantize_8b-cn:
-    * **中文**
 
     * **中文**
 
@@ -155,7 +148,6 @@ def quantize_8b(x, scale, descale=False):
     ----
 
     .. _quantize_8b-en:
-    * **English**
 
     * **English**
 
@@ -184,7 +176,6 @@ def right_shift_to_zero(x: torch.Tensor, bits: int):
     ----
 
     .. _right_shift_to_zero-cn:
-    * **中文**
 
     * **中文**
 
@@ -200,7 +191,6 @@ def right_shift_to_zero(x: torch.Tensor, bits: int):
     ----
 
     .. _right_shift_to_zero-en:
-    * **English**
 
     * **English**
 
@@ -374,7 +364,6 @@ class LeakyIntegratorStep(torch.autograd.Function):
     ----
 
     .. _LeakyIntegratorStep-cn:
-    * **中文**
 
     * **中文**
 
@@ -384,7 +373,6 @@ class LeakyIntegratorStep(torch.autograd.Function):
     ----
 
     .. _LeakyIntegratorStep-en:
-    * **English**
 
     * **English**
 
@@ -593,7 +581,6 @@ class CubaLIFNode(neuron.BaseNode):
         ----
 
         .. _CubaLIFNode.scale-cn:
-        * **中文**
 
         * **中文**
 
@@ -603,7 +590,6 @@ class CubaLIFNode(neuron.BaseNode):
         ----
 
         .. _CubaLIFNode.scale-en:
-        * **English**
 
         * **English**
 
@@ -621,7 +607,6 @@ class CubaLIFNode(neuron.BaseNode):
         ----
 
         .. _CubaLIFNode.s_scale-cn:
-        * **中文**
 
         * **中文**
 
@@ -631,7 +616,6 @@ class CubaLIFNode(neuron.BaseNode):
         ----
 
         .. _CubaLIFNode.s_scale-en:
-        * **English**
 
         * **English**
 
@@ -649,7 +633,6 @@ class CubaLIFNode(neuron.BaseNode):
         ----
 
         .. _CubaLIFNode.p_scale-cn:
-        * **中文**
 
         * **中文**
 
@@ -659,7 +642,6 @@ class CubaLIFNode(neuron.BaseNode):
         ----
 
         .. _CubaLIFNode.p_scale-en:
-        * **English**
 
         * **English**
 

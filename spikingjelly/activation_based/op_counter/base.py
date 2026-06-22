@@ -71,7 +71,6 @@ class ActiveModuleTracker(ModuleTracker):
         ----
 
         .. _ActiveModuleTracker.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -84,7 +83,6 @@ class ActiveModuleTracker(ModuleTracker):
         ----
 
         .. _ActiveModuleTracker.__init__-en:
-        * **English**
 
         * **English**
 
@@ -173,7 +171,6 @@ class BaseCounter:
         ----
 
         .. _BaseCounter.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -190,7 +187,6 @@ class BaseCounter:
         ----
 
         .. _BaseCounter.__init__-en:
-        * **English**
 
         * **English**
 

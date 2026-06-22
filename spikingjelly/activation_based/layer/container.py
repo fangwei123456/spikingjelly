@@ -39,7 +39,6 @@ class MultiStepContainer(nn.Sequential, base.MultiStepModule):
         ----
 
         .. _MultiStepContainer.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -49,7 +48,6 @@ class MultiStepContainer(nn.Sequential, base.MultiStepModule):
         ----
 
         .. _MultiStepContainer.__init__-en:
-        * **English**
 
         * **English**
 
@@ -82,7 +80,6 @@ class SeqToANNContainer(nn.Sequential, base.MultiStepModule):
         ----
 
         .. _SeqToANNContainer-cn:
-        * **中文**
 
         * **中文**
 
@@ -92,7 +89,6 @@ class SeqToANNContainer(nn.Sequential, base.MultiStepModule):
         ----
 
         .. _SeqToANNContainer-en:
-        * **English**
 
         * **English**
 

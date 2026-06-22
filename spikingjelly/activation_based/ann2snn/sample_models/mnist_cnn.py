@@ -9,7 +9,6 @@ class CNN(nn.Module):
     ----
 
     .. _CNN-cn:
-    * **中文**
 
     * **中文**
 
@@ -18,7 +17,6 @@ class CNN(nn.Module):
     ----
 
     .. _CNN-en:
-    * **English**
 
     * **English**
 

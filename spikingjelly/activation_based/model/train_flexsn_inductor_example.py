@@ -19,7 +19,6 @@ class FlexSNTrainer(train_classify.Trainer):
     ----
 
     .. _FlexSNTrainer-cn:
-    * **中文**
 
     * **中文**
 
@@ -28,7 +27,6 @@ class FlexSNTrainer(train_classify.Trainer):
     ----
 
     .. _FlexSNTrainer-en:
-    * **English**
 
     * **English**
 

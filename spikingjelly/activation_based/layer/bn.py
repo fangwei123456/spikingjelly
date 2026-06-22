@@ -552,7 +552,6 @@ class TemporalEffectiveBatchNorm1d(_TemporalEffectiveBatchNormBase):
         ----
 
         .. _TemporalEffectiveBatchNorm1d-cn:
-        * **中文**
 
         * **中文**
 
@@ -575,7 +574,6 @@ class TemporalEffectiveBatchNorm1d(_TemporalEffectiveBatchNormBase):
         ----
 
         .. _TemporalEffectiveBatchNorm1d-en:
-        * **English**
 
         * **English**
 
@@ -617,7 +615,6 @@ class TemporalEffectiveBatchNorm2d(_TemporalEffectiveBatchNormBase):
         ----
 
         .. _TemporalEffectiveBatchNorm2d-cn:
-        * **中文**
 
         * **中文**
 
@@ -640,7 +637,6 @@ class TemporalEffectiveBatchNorm2d(_TemporalEffectiveBatchNormBase):
         ----
 
         .. _TemporalEffectiveBatchNorm2d-en:
-        * **English**
 
         * **English**
 
@@ -682,7 +678,6 @@ class TemporalEffectiveBatchNorm3d(_TemporalEffectiveBatchNormBase):
         ----
 
         .. _TemporalEffectiveBatchNorm3d-cn:
-        * **中文**
 
         * **中文**
 
@@ -705,7 +700,6 @@ class TemporalEffectiveBatchNorm3d(_TemporalEffectiveBatchNormBase):
         ----
 
         .. _TemporalEffectiveBatchNorm3d-en:
-        * **English**
 
         * **English**
 

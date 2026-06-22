@@ -42,7 +42,6 @@ class SpikingVGG(nn.Module):
     ----
 
     .. _SpikingVGG-cn:
-    * **中文**
 
     * **中文**
 
@@ -51,7 +50,6 @@ class SpikingVGG(nn.Module):
     ----
 
     .. _SpikingVGG-en:
-    * **English**
 
     * **English**
 

@@ -338,7 +338,6 @@ class LemaireEnergyProfiler:
     ----
 
     .. _LemaireEnergyProfiler-cn:
-    * **中文**
 
     * **中文**
 
@@ -347,7 +346,6 @@ class LemaireEnergyProfiler:
     ----
 
     .. _LemaireEnergyProfiler-en:
-    * **English**
 
     * **English**
 

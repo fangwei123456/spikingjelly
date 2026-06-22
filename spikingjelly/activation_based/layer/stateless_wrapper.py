@@ -1006,7 +1006,6 @@ class AdaptiveAvgPool1d(nn.AdaptiveAvgPool1d, base.StepModule):
         ----
 
         .. _AdaptiveAvgPool1d.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -1018,7 +1017,6 @@ class AdaptiveAvgPool1d(nn.AdaptiveAvgPool1d, base.StepModule):
         ----
 
         .. _AdaptiveAvgPool1d.__init__-en:
-        * **English**
 
         * **English**
 
@@ -1059,7 +1057,6 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
         ----
 
         .. _AdaptiveAvgPool2d.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -1071,7 +1068,6 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
         ----
 
         .. _AdaptiveAvgPool2d.__init__-en:
-        * **English**
 
         * **English**
 
@@ -1115,7 +1111,6 @@ class AdaptiveAvgPool3d(nn.AdaptiveAvgPool3d, base.StepModule):
         ----
 
         .. _AdaptiveAvgPool3d.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -1127,7 +1122,6 @@ class AdaptiveAvgPool3d(nn.AdaptiveAvgPool3d, base.StepModule):
         ----
 
         .. _AdaptiveAvgPool3d.__init__-en:
-        * **English**
 
         * **English**
 
@@ -1205,7 +1199,6 @@ class Flatten(nn.Flatten, base.StepModule):
         ----
 
         .. _Flatten.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -1217,7 +1210,6 @@ class Flatten(nn.Flatten, base.StepModule):
         ----
 
         .. _Flatten.__init__-en:
-        * **English**
 
         * **English**
 

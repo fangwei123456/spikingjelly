@@ -136,7 +136,6 @@ class Trainer:
     ----
 
     .. _Trainer-cn:
-    * **中文**
 
     * **中文**
 
@@ -145,7 +144,6 @@ class Trainer:
     ----
 
     .. _Trainer-en:
-    * **English**
 
     * **English**
 

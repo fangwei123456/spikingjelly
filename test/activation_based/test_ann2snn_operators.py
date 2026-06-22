@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from spikingjelly.activation_based.ann2snn.operators import (
     TDGELU,
     TDLayerNorm,
+    TDScaledDotProductAttention,
     TDSoftmax,
 )
 
@@ -387,3 +388,245 @@ class TestTDGELU:
         op = TDGELU(approximate="tanh")
 
         assert op.extra_repr() == "approximate='tanh'"
+
+
+class TestTDScaledDotProductAttention:
+    def test_shape_is_preserved(self):
+        q_seq = torch.randn(4, 2, 3, 5)
+        k_seq = torch.randn(4, 2, 6, 5)
+        v_seq = torch.randn(4, 2, 6, 7)
+        op = TDScaledDotProductAttention()
+
+        y_seq = op(q_seq, k_seq, v_seq)
+
+        assert y_seq.shape == (4, 2, 3, 7)
+
+    def test_cumulative_output_matches_sdpa_on_cumulative_input(self):
+        q_seq = torch.randn(5, 2, 3, 4)
+        k_seq = torch.randn(5, 2, 6, 4)
+        v_seq = torch.randn(5, 2, 6, 7)
+        op = TDScaledDotProductAttention()
+
+        y_seq = op(q_seq, k_seq, v_seq)
+        expected = F.scaled_dot_product_attention(
+            q_seq.cumsum(dim=0),
+            k_seq.cumsum(dim=0),
+            v_seq.cumsum(dim=0),
+            dropout_p=0.0,
+        )
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_final_cumulative_output_matches_sdpa_on_total_input(self):
+        q_seq = torch.randn(6, 2, 3, 4)
+        k_seq = torch.randn(6, 2, 5, 4)
+        v_seq = torch.randn(6, 2, 5, 7)
+        op = TDScaledDotProductAttention()
+
+        y_seq = op(q_seq, k_seq, v_seq)
+        expected = F.scaled_dot_product_attention(
+            q_seq.sum(dim=0),
+            k_seq.sum(dim=0),
+            v_seq.sum(dim=0),
+            dropout_p=0.0,
+        )
+
+        assert torch.allclose(
+            y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6
+        )
+
+    def test_single_timestep_returns_sdpa_of_input(self):
+        q_seq = torch.randn(1, 2, 3, 4)
+        k_seq = torch.randn(1, 2, 5, 4)
+        v_seq = torch.randn(1, 2, 5, 7)
+        op = TDScaledDotProductAttention()
+
+        y_seq = op(q_seq, k_seq, v_seq)
+        expected = F.scaled_dot_product_attention(
+            q_seq[0],
+            k_seq[0],
+            v_seq[0],
+            dropout_p=0.0,
+        )
+
+        assert y_seq.shape == (1, 2, 3, 7)
+        assert torch.allclose(y_seq[0], expected, atol=1e-6, rtol=1e-6)
+
+    def test_multi_head_style_shape(self):
+        q_seq = torch.randn(4, 2, 3, 5, 4)
+        k_seq = torch.randn(4, 2, 3, 6, 4)
+        v_seq = torch.randn(4, 2, 3, 6, 7)
+        op = TDScaledDotProductAttention()
+
+        y_seq = op(q_seq, k_seq, v_seq)
+        expected = F.scaled_dot_product_attention(
+            q_seq.cumsum(dim=0),
+            k_seq.cumsum(dim=0),
+            v_seq.cumsum(dim=0),
+            dropout_p=0.0,
+        )
+
+        assert y_seq.shape == (4, 2, 3, 5, 7)
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    @pytest.mark.parametrize(
+        "attn_mask",
+        [
+            torch.tensor(
+                [
+                    [True, True, False, False],
+                    [True, True, True, False],
+                    [True, True, True, True],
+                ]
+            ),
+            torch.tensor(
+                [
+                    [0.0, 0.0, float("-inf"), float("-inf")],
+                    [0.0, 0.0, 0.0, float("-inf")],
+                    [0.0, 0.0, 0.0, 0.0],
+                ]
+            ),
+        ],
+    )
+    def test_supports_attention_mask(self, attn_mask):
+        q_seq = torch.randn(5, 2, 3, 4)
+        k_seq = torch.randn(5, 2, 4, 4)
+        v_seq = torch.randn(5, 2, 4, 6)
+        op = TDScaledDotProductAttention()
+
+        y_seq = op(q_seq, k_seq, v_seq, attn_mask=attn_mask)
+        expected = F.scaled_dot_product_attention(
+            q_seq.cumsum(dim=0),
+            k_seq.cumsum(dim=0),
+            v_seq.cumsum(dim=0),
+            attn_mask=attn_mask,
+            dropout_p=0.0,
+        )
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_supports_causal_attention(self):
+        q_seq = torch.randn(4, 2, 5, 4)
+        k_seq = torch.randn(4, 2, 5, 4)
+        v_seq = torch.randn(4, 2, 5, 6)
+        op = TDScaledDotProductAttention(is_causal=True)
+
+        y_seq = op(q_seq, k_seq, v_seq)
+        expected = F.scaled_dot_product_attention(
+            q_seq.cumsum(dim=0),
+            k_seq.cumsum(dim=0),
+            v_seq.cumsum(dim=0),
+            dropout_p=0.0,
+            is_causal=True,
+        )
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_supports_custom_scale(self):
+        q_seq = torch.randn(4, 2, 3, 4)
+        k_seq = torch.randn(4, 2, 5, 4)
+        v_seq = torch.randn(4, 2, 5, 6)
+        op = TDScaledDotProductAttention(scale=0.25)
+
+        y_seq = op(q_seq, k_seq, v_seq)
+        expected = F.scaled_dot_product_attention(
+            q_seq.cumsum(dim=0),
+            k_seq.cumsum(dim=0),
+            v_seq.cumsum(dim=0),
+            dropout_p=0.0,
+            scale=0.25,
+        )
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_gradients_match_reference(self):
+        q_seq = torch.randn(3, 2, 4, 5)
+        k_seq = torch.randn(3, 2, 6, 5)
+        v_seq = torch.randn(3, 2, 6, 7)
+        op = TDScaledDotProductAttention()
+
+        q_ref = q_seq.clone().detach().requires_grad_()
+        k_ref = k_seq.clone().detach().requires_grad_()
+        v_ref = v_seq.clone().detach().requires_grad_()
+        y_cum_ref = F.scaled_dot_product_attention(
+            q_ref.cumsum(dim=0),
+            k_ref.cumsum(dim=0),
+            v_ref.cumsum(dim=0),
+            dropout_p=0.0,
+        )
+        y_seq_ref = torch.empty_like(y_cum_ref)
+        y_seq_ref[0] = y_cum_ref[0]
+        y_seq_ref[1:] = y_cum_ref[1:] - y_cum_ref[:-1]
+        y_seq_ref.square().sum().backward()
+
+        q_seq = q_seq.clone().detach().requires_grad_()
+        k_seq = k_seq.clone().detach().requires_grad_()
+        v_seq = v_seq.clone().detach().requires_grad_()
+        y_seq = op(q_seq, k_seq, v_seq)
+        y_seq.square().sum().backward()
+
+        assert torch.allclose(q_seq.grad, q_ref.grad, atol=1e-6, rtol=1e-6)
+        assert torch.allclose(k_seq.grad, k_ref.grad, atol=1e-6, rtol=1e-6)
+        assert torch.allclose(v_seq.grad, v_ref.grad, atol=1e-6, rtol=1e-6)
+
+    def test_negative_values_are_allowed(self):
+        q_seq = torch.zeros(2, 1, 1, 1)
+        k_seq = torch.zeros(2, 1, 2, 1)
+        v_seq = torch.tensor([[[[2.0], [2.0]]], [[[-3.0], [-3.0]]]])
+        op = TDScaledDotProductAttention()
+
+        y_seq = op(q_seq, k_seq, v_seq)
+
+        assert (y_seq < 0).any()
+
+    def test_rejects_input_with_too_few_dimensions(self):
+        op = TDScaledDotProductAttention()
+
+        with pytest.raises(ValueError, match="at least 3 dimensions"):
+            op(torch.randn(4, 3), torch.randn(4, 3, 5), torch.randn(4, 3, 6))
+
+    def test_rejects_empty_time_dimension(self):
+        op = TDScaledDotProductAttention()
+
+        with pytest.raises(ValueError, match="non-empty time dimension"):
+            op(
+                torch.empty(0, 2, 3, 4),
+                torch.empty(0, 2, 5, 4),
+                torch.empty(0, 2, 5, 6),
+            )
+
+    def test_rejects_mismatched_time_lengths(self):
+        op = TDScaledDotProductAttention()
+
+        with pytest.raises(ValueError, match="same time length"):
+            op(
+                torch.randn(4, 2, 3, 4),
+                torch.randn(5, 2, 6, 4),
+                torch.randn(4, 2, 6, 7),
+            )
+
+    def test_rejects_mask_with_causal_attention(self):
+        op = TDScaledDotProductAttention(is_causal=True)
+
+        with pytest.raises(ValueError, match="attn_mask"):
+            op(
+                torch.randn(4, 2, 3, 4),
+                torch.randn(4, 2, 3, 4),
+                torch.randn(4, 2, 3, 6),
+                attn_mask=torch.ones(3, 3, dtype=torch.bool),
+            )
+
+    def test_invalid_attention_shape_raises_from_pytorch(self):
+        op = TDScaledDotProductAttention()
+
+        with pytest.raises(RuntimeError):
+            op(
+                torch.randn(4, 2, 3, 4),
+                torch.randn(4, 2, 5, 6),
+                torch.randn(4, 2, 5, 7),
+            )
+
+    def test_extra_repr(self):
+        op = TDScaledDotProductAttention(is_causal=True, scale=0.25)
+
+        assert op.extra_repr() == "is_causal=True, scale=0.25"

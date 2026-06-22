@@ -11,7 +11,6 @@ class SResNetTrainer(train_classify.Trainer):
     ----
 
     .. _SResNetTrainer-cn:
-    * **中文**
 
     * **中文**
 
@@ -28,7 +27,6 @@ class SResNetTrainer(train_classify.Trainer):
     ----
 
     .. _SResNetTrainer-en:
-    * **English**
 
     * **English**
 

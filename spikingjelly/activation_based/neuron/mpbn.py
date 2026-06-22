@@ -284,7 +284,6 @@ class MPBNBaseNode(BaseNode):
         ----
 
         .. _MPBNBaseNode.single_step_forward-cn:
-        * **中文**
 
         * **中文**
 
@@ -297,7 +296,6 @@ class MPBNBaseNode(BaseNode):
         ----
 
         .. _MPBNBaseNode.single_step_forward-en:
-        * **English**
 
         * **English**
 

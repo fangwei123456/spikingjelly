@@ -11,7 +11,6 @@ class ClassificationPresetTrain:
     ----
 
     .. _ClassificationPresetTrain-cn:
-    * **中文**
 
     * **中文**
 
@@ -20,7 +19,6 @@ class ClassificationPresetTrain:
     ----
 
     .. _ClassificationPresetTrain-en:
-    * **English**
 
     * **English**
 
@@ -78,7 +76,6 @@ class ClassificationPresetEval:
     ----
 
     .. _ClassificationPresetEval-cn:
-    * **中文**
 
     * **中文**
 
@@ -87,7 +84,6 @@ class ClassificationPresetEval:
     ----
 
     .. _ClassificationPresetEval-en:
-    * **English**
 
     * **English**
 

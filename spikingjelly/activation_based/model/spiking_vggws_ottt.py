@@ -35,7 +35,6 @@ class OTTTSpikingVGG(nn.Module):
     ----
 
     .. _OTTTSpikingVGG-cn:
-    * **中文**
 
     * **中文**
 
@@ -44,7 +43,6 @@ class OTTTSpikingVGG(nn.Module):
     ----
 
     .. _OTTTSpikingVGG-en:
-    * **English**
 
     * **English**
 
@@ -252,7 +250,6 @@ def ottt_spiking_vggws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     ----
 
     .. _ottt_spiking_vggws-cn:
-    * **中文**
 
     * **中文**
 
@@ -268,7 +265,6 @@ def ottt_spiking_vggws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     ----
 
     .. _ottt_spiking_vggws-en:
-    * **English**
 
     * **English**
 
@@ -295,7 +291,6 @@ def ottt_spiking_vgg11(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     ----
 
     .. _ottt_spiking_vgg11-cn:
-    * **中文**
 
     * **中文**
 
@@ -311,7 +306,6 @@ def ottt_spiking_vgg11(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     ----
 
     .. _ottt_spiking_vgg11-en:
-    * **English**
 
     * **English**
 
@@ -338,7 +332,6 @@ def ottt_spiking_vgg11_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
     ----
 
     .. _ottt_spiking_vgg11_ws-cn:
-    * **中文**
 
     * **中文**
 
@@ -354,7 +347,6 @@ def ottt_spiking_vgg11_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
     ----
 
     .. _ottt_spiking_vgg11_ws-en:
-    * **English**
 
     * **English**
 
@@ -381,7 +373,6 @@ def ottt_spiking_vgg13(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     ----
 
     .. _ottt_spiking_vgg13-cn:
-    * **中文**
 
     * **中文**
 
@@ -397,7 +388,6 @@ def ottt_spiking_vgg13(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     ----
 
     .. _ottt_spiking_vgg13-en:
-    * **English**
 
     * **English**
 
@@ -424,7 +414,6 @@ def ottt_spiking_vgg13_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
     ----
 
     .. _ottt_spiking_vgg13_ws-cn:
-    * **中文**
 
     * **中文**
 
@@ -440,7 +429,6 @@ def ottt_spiking_vgg13_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
     ----
 
     .. _ottt_spiking_vgg13_ws-en:
-    * **English**
 
     * **English**
 
@@ -467,7 +455,6 @@ def ottt_spiking_vgg16(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     ----
 
     .. _ottt_spiking_vgg16-cn:
-    * **中文**
 
     * **中文**
 
@@ -483,7 +470,6 @@ def ottt_spiking_vgg16(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     ----
 
     .. _ottt_spiking_vgg16-en:
-    * **English**
 
     * **English**
 
@@ -510,7 +496,6 @@ def ottt_spiking_vgg16_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
     ----
 
     .. _ottt_spiking_vgg16_ws-cn:
-    * **中文**
 
     * **中文**
 
@@ -526,7 +511,6 @@ def ottt_spiking_vgg16_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
     ----
 
     .. _ottt_spiking_vgg16_ws-en:
-    * **English**
 
     * **English**
 
@@ -553,7 +537,6 @@ def ottt_spiking_vgg19(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     ----
 
     .. _ottt_spiking_vgg19-cn:
-    * **中文**
 
     * **中文**
 
@@ -569,7 +552,6 @@ def ottt_spiking_vgg19(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     ----
 
     .. _ottt_spiking_vgg19-en:
-    * **English**
 
     * **English**
 
@@ -596,7 +578,6 @@ def ottt_spiking_vgg19_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
     ----
 
     .. _ottt_spiking_vgg19_ws-cn:
-    * **中文**
 
     * **中文**
 
@@ -612,7 +593,6 @@ def ottt_spiking_vgg19_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
     ----
 
     .. _ottt_spiking_vgg19_ws-en:
-    * **English**
 
     * **English**
 

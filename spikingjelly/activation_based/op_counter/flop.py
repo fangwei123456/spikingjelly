@@ -316,7 +316,6 @@ class FlopCounter(BaseCounter):
     ----
 
     .. _FlopCounter-cn:
-    * **中文**
 
     * **中文**
 
@@ -328,7 +327,6 @@ class FlopCounter(BaseCounter):
     ----
 
     .. _FlopCounter-en:
-    * **English**
 
     * **English**
 

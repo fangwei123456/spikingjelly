@@ -14,7 +14,6 @@ class RandomMixup(torch.nn.Module):
     ----
 
     .. _RandomMixup-cn:
-    * **中文**
 
     * **中文**
 
@@ -35,7 +34,6 @@ class RandomMixup(torch.nn.Module):
     ----
 
     .. _RandomMixup-en:
-    * **English**
 
     * **English**
 
@@ -80,7 +78,6 @@ class RandomMixup(torch.nn.Module):
         ----
 
         .. _RandomMixup.forward-cn:
-        * **中文**
 
         * **中文**
 
@@ -96,7 +93,6 @@ class RandomMixup(torch.nn.Module):
         ----
 
         .. _RandomMixup.forward-en:
-        * **English**
 
         * **English**
 
@@ -166,7 +162,6 @@ class RandomCutmix(torch.nn.Module):
     ----
 
     .. _RandomCutmix-cn:
-    * **中文**
 
     * **中文**
 
@@ -188,7 +183,6 @@ class RandomCutmix(torch.nn.Module):
     ----
 
     .. _RandomCutmix-en:
-    * **English**
 
     * **English**
 
@@ -234,7 +228,6 @@ class RandomCutmix(torch.nn.Module):
         ----
 
         .. _RandomCutmix.forward-cn:
-        * **中文**
 
         * **中文**
 
@@ -250,7 +243,6 @@ class RandomCutmix(torch.nn.Module):
         ----
 
         .. _RandomCutmix.forward-en:
-        * **English**
 
         * **English**
 

@@ -99,7 +99,6 @@ class MACCounter(BaseCounter):
     ----
 
     .. _MACCounter-cn:
-    * **中文**
 
     * **中文**
 
@@ -113,7 +112,6 @@ class MACCounter(BaseCounter):
     ----
 
     .. _MACCounter-en:
-    * **English**
 
     * **English**
 

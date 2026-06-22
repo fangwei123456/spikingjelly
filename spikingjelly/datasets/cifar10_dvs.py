@@ -252,7 +252,6 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
         ----
 
         .. _cifar10_dvs.get_H_W-cn:
-        * **中文**
 
         * **中文**
 
@@ -262,7 +261,6 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
         ----
 
         .. _cifar10_dvs.get_H_W-en:
-        * **English**
 
         * **English**
 

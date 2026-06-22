@@ -122,7 +122,6 @@ class NCaltech101(NeuromorphicDatasetFolder):
         ----
 
         .. _n_caltech101.get_H_W-cn:
-        * **中文**
 
         * **中文**
 
@@ -132,7 +131,6 @@ class NCaltech101(NeuromorphicDatasetFolder):
         ----
 
         .. _n_caltech101.get_H_W-en:
-        * **English**
 
         * **English**
 

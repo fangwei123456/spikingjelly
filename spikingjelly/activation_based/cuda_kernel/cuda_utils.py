@@ -212,7 +212,6 @@ def cpu_timer(f: Callable, *args, **kwargs):
     ----
 
     .. _cpu_timer-cn:
-    * **中文**
 
     * **中文**
 
@@ -226,7 +225,6 @@ def cpu_timer(f: Callable, *args, **kwargs):
     ----
 
     .. _cpu_timer-en:
-    * **English**
 
     * **English**
 
@@ -250,7 +248,6 @@ def cuda_timer(device: Union[torch.device, int], f: Callable, *args, **kwargs):
     ----
 
     .. _cuda_timer-cn:
-    * **中文**
 
     * **中文**
 
@@ -266,7 +263,6 @@ def cuda_timer(device: Union[torch.device, int], f: Callable, *args, **kwargs):
     ----
 
     .. _cuda_timer-en:
-    * **English**
 
     * **English**
 
@@ -373,7 +369,6 @@ def cal_blocks(numel: int, threads: int = -1):
     ----
 
     .. _cal_blocks-cn:
-    * **中文**
 
     * **中文**
 
@@ -389,7 +384,6 @@ def cal_blocks(numel: int, threads: int = -1):
     ----
 
     .. _cal_blocks-en:
-    * **English**
 
     * **English**
 
@@ -417,7 +411,6 @@ def get_contiguous(*args):
     ----
 
     .. _get_contiguous-cn:
-    * **中文**
 
     * **中文**
 
@@ -433,7 +426,6 @@ def get_contiguous(*args):
     ----
 
     .. _get_contiguous-en:
-    * **English**
 
     * **English**
 
@@ -469,7 +461,6 @@ def wrap_args_to_raw_kernel(device: int, *args):
     ----
 
     .. _wrap_args_to_raw_kernel-cn:
-    * **中文**
 
     * **中文**
 
@@ -483,7 +474,6 @@ def wrap_args_to_raw_kernel(device: int, *args):
     ----
 
     .. _wrap_args_to_raw_kernel-en:
-    * **English**
 
     * **English**
 
@@ -523,7 +513,6 @@ class DeviceEnvironment:
         ----
 
         .. _DeviceEnvironment.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -540,7 +529,6 @@ class DeviceEnvironment:
         ----
 
         .. _DeviceEnvironment.__init__-en:
-        * **English**
 
         * **English**
 

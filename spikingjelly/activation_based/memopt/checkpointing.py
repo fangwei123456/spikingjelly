@@ -383,7 +383,6 @@ class GCContainer(nn.Sequential):
         ----
 
         .. _GCContainer.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -395,7 +394,6 @@ class GCContainer(nn.Sequential):
         ----
 
         .. _GCContainer.__init__-en:
-        * **English**
 
         * **English**
 
@@ -471,7 +469,6 @@ class TCGCContainer(GCContainer):
     ----
 
     .. _TCGCContainer-cn:
-    * **中文**
 
     * **中文**
 
@@ -494,7 +491,6 @@ class TCGCContainer(GCContainer):
     ----
 
     .. _TCGCContainer-en:
-    * **English**
 
     * **English**
 

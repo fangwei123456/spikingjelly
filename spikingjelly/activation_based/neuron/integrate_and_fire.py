@@ -89,7 +89,6 @@ class SimpleIFNode(SimpleBaseNode):
         ----
 
         .. _SimpleIFNode.neuronal_charge-cn:
-        * **中文**
 
         * **中文**
 
@@ -106,7 +105,6 @@ class SimpleIFNode(SimpleBaseNode):
         ----
 
         .. _SimpleIFNode.neuronal_charge-en:
-        * **English**
 
         * **English**
 
@@ -558,7 +556,6 @@ class NonSpikingIFNode(NonSpikingBaseNode):
         ----
 
         .. _NonSpikingIFNode.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -570,7 +567,6 @@ class NonSpikingIFNode(NonSpikingBaseNode):
         ----
 
         .. _NonSpikingIFNode.__init__-en:
-        * **English**
 
         * **English**
 

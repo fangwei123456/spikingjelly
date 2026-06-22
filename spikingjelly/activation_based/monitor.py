@@ -26,7 +26,6 @@ class BaseMonitor:
         ----
 
         .. _BaseMonitor.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -38,7 +37,6 @@ class BaseMonitor:
         ----
 
         .. _BaseMonitor.__init__-en:
-        * **English**
 
         * **English**
 

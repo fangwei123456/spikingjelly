@@ -395,7 +395,6 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
         ----
 
         .. _dvs128_gesture.get_H_W-cn:
-        * **中文**
 
         * **中文**
 
@@ -405,7 +404,6 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
         ----
 
         .. _dvs128_gesture.get_H_W-en:
-        * **English**
 
         * **English**
 

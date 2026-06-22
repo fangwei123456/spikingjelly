@@ -36,7 +36,6 @@ def network_layer_to_space(net_arch):
     ----
 
     .. _network_layer_to_space-cn:
-    * **中文**
 
     * **中文**
 
@@ -50,7 +49,6 @@ def network_layer_to_space(net_arch):
     ----
 
     .. _network_layer_to_space-en:
-    * **English**
 
     * **English**
 
@@ -136,7 +134,6 @@ class DSpike(SurrogateFunctionBase):
     ----
 
     .. _DSpike-cn:
-    * **中文**
 
     * **中文**
 
@@ -145,7 +142,6 @@ class DSpike(SurrogateFunctionBase):
     ----
 
     .. _DSpike-en:
-    * **English**
 
     * **English**
 
@@ -169,7 +165,6 @@ class save_v_LIFNode(LIFNode):
     ----
 
     .. _save_v_LIFNode-cn:
-    * **中文**
 
     * **中文**
 
@@ -178,7 +173,6 @@ class save_v_LIFNode(LIFNode):
     ----
 
     .. _save_v_LIFNode-en:
-    * **English**
 
     * **English**
 
@@ -238,7 +232,6 @@ class SpikingConv2d(nn.Module):
     ----
 
     .. _SpikingConv2d-cn:
-    * **中文**
 
     * **中文**
 
@@ -247,7 +240,6 @@ class SpikingConv2d(nn.Module):
     ----
 
     .. _SpikingConv2d-en:
-    * **English**
 
     * **English**
 
@@ -289,7 +281,6 @@ class SearchSpikingConv2d_stem(nn.Module):
     ----
 
     .. _SearchSpikingConv2d_stem-cn:
-    * **中文**
 
     * **中文**
 
@@ -298,7 +289,6 @@ class SearchSpikingConv2d_stem(nn.Module):
     ----
 
     .. _SearchSpikingConv2d_stem-en:
-    * **English**
 
     * **English**
 
@@ -389,7 +379,6 @@ class SearchSpikingConv2d_cell(nn.Module):
     ----
 
     .. _SearchSpikingConv2d_cell-cn:
-    * **中文**
 
     * **中文**
 
@@ -398,7 +387,6 @@ class SearchSpikingConv2d_cell(nn.Module):
     ----
 
     .. _SearchSpikingConv2d_cell-en:
-    * **English**
 
     * **English**
 
@@ -521,7 +509,6 @@ class SpikingLinear(nn.Module):
     ----
 
     .. _SpikingLinear-cn:
-    * **中文**
 
     * **中文**
 
@@ -530,7 +517,6 @@ class SpikingLinear(nn.Module):
     ----
 
     .. _SpikingLinear-en:
-    * **English**
 
     * **English**
 
@@ -560,7 +546,6 @@ class SpikingAvgPool2d(nn.Module):
     ----
 
     .. _SpikingAvgPool2d-cn:
-    * **中文**
 
     * **中文**
 
@@ -569,7 +554,6 @@ class SpikingAvgPool2d(nn.Module):
     ----
 
     .. _SpikingAvgPool2d-en:
-    * **English**
 
     * **English**
 
@@ -600,7 +584,6 @@ class SpikingAdaptiveAvgPool2d(nn.Module):
     ----
 
     .. _SpikingAdaptiveAvgPool2d-cn:
-    * **中文**
 
     * **中文**
 
@@ -609,7 +592,6 @@ class SpikingAdaptiveAvgPool2d(nn.Module):
     ----
 
     .. _SpikingAdaptiveAvgPool2d-en:
-    * **English**
 
     * **English**
 

@@ -1364,7 +1364,6 @@ def pad_sequence_collate(batch: list):
     ----
 
     .. _pad_sequence_collate-cn:
-    * **中文**
 
     * **中文**
 
@@ -1382,7 +1381,6 @@ def pad_sequence_collate(batch: list):
     ----
 
     .. _pad_sequence_collate-en:
-    * **English**
 
     * **English**
 
@@ -1462,7 +1460,6 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
     ----
 
     .. _padded_sequence_mask-cn:
-    * **中文**
 
     * **中文**
 
@@ -1482,7 +1479,6 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
     ----
 
     .. _padded_sequence_mask-en:
-    * **English**
 
     * **English**
 

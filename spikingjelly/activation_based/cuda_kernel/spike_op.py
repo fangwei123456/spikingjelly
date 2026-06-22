@@ -494,7 +494,6 @@ class SpikeLinear(nn.Linear):
     ----
 
     .. _SpikeLinear-cn:
-    * **中文**
 
     * **中文**
 
@@ -511,7 +510,6 @@ class SpikeLinear(nn.Linear):
     ----
 
     .. _SpikeLinear-en:
-    * **English**
 
     * **English**
 
@@ -540,7 +538,6 @@ class SpikeConv1d(nn.Conv1d):
     ----
 
     .. _SpikeConv1d-cn:
-    * **中文**
 
     * **中文**
 
@@ -557,7 +554,6 @@ class SpikeConv1d(nn.Conv1d):
     ----
 
     .. _SpikeConv1d-en:
-    * **English**
 
     * **English**
 
@@ -600,7 +596,6 @@ class SpikeConv2d(nn.Conv2d):
     ----
 
     .. _SpikeConv2d-cn:
-    * **中文**
 
     * **中文**
 
@@ -617,7 +612,6 @@ class SpikeConv2d(nn.Conv2d):
     ----
 
     .. _SpikeConv2d-en:
-    * **English**
 
     * **English**
 
@@ -660,7 +654,6 @@ class SpikeConv3d(nn.Conv3d):
     ----
 
     .. _SpikeConv3d-cn:
-    * **中文**
 
     * **中文**
 
@@ -677,7 +670,6 @@ class SpikeConv3d(nn.Conv3d):
     ----
 
     .. _SpikeConv3d-en:
-    * **English**
 
     * **English**
 

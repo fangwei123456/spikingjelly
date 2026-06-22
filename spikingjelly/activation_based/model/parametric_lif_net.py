@@ -22,7 +22,6 @@ class MNISTNet(nn.Module):
     ----
 
     .. _MNISTNet-cn:
-    * **中文**
 
     * **中文**
 
@@ -31,7 +30,6 @@ class MNISTNet(nn.Module):
     ----
 
     .. _MNISTNet-en:
-    * **English**
 
     * **English**
 
@@ -72,7 +70,6 @@ class FashionMNISTNet(MNISTNet):
     ----
 
     .. _FashionMNISTNet-cn:
-    * **中文**
 
     * **中文**
 
@@ -85,7 +82,6 @@ class FashionMNISTNet(MNISTNet):
     ----
 
     .. _FashionMNISTNet-en:
-    * **English**
 
     * **English**
 
@@ -107,7 +103,6 @@ class NMNISTNet(MNISTNet):
     ----
 
     .. _NMNISTNet-cn:
-    * **中文**
 
     * **中文**
 
@@ -121,7 +116,6 @@ class NMNISTNet(MNISTNet):
     ----
 
     .. _NMNISTNet-en:
-    * **English**
 
     * **English**
 
@@ -149,7 +143,6 @@ class CIFAR10Net(nn.Module):
     ----
 
     .. _CIFAR10Net-cn:
-    * **中文**
 
     * **中文**
 
@@ -158,7 +151,6 @@ class CIFAR10Net(nn.Module):
     ----
 
     .. _CIFAR10Net-en:
-    * **English**
 
     * **English**
 
@@ -210,7 +202,6 @@ class CIFAR10DVSNet(nn.Module):
     ----
 
     .. _CIFAR10DVSNet-cn:
-    * **中文**
 
     * **中文**
 
@@ -219,7 +210,6 @@ class CIFAR10DVSNet(nn.Module):
     ----
 
     .. _CIFAR10DVSNet-en:
-    * **English**
 
     * **English**
 
@@ -269,7 +259,6 @@ class DVSGestureNet(nn.Module):
     ----
 
     .. _DVSGestureNet-cn:
-    * **中文**
 
     * **中文**
 
@@ -278,7 +267,6 @@ class DVSGestureNet(nn.Module):
     ----
 
     .. _DVSGestureNet-en:
-    * **English**
 
     * **English**
 
