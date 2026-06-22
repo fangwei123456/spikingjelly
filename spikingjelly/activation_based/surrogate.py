@@ -115,6 +115,7 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
         surrogate.check_manual_grad(
             surrogate.S2NN.primitive_function, s2nn_apply, alpha=4.0, beta=1.0
         )
+
     :return: 无返回值，直接打印对比结果
     :rtype: None
     """
@@ -1378,7 +1379,7 @@ class ATan(SurrogateFunctionBase):
         .. image:: ../_static/API/activation_based/surrogate/ATan.*
             :width: 100%
 
-        该函数在文章 [#Huh2018]_ [#huh2018gradient]_ 中使用。
+        该函数在文章 [#huh2018gradient]_ 中使用。
 
         :param alpha: 控制反向传播时梯度的平滑程度的参数
         :type alpha: float
@@ -1406,7 +1407,7 @@ class ATan(SurrogateFunctionBase):
         .. image:: ../_static/API/activation_based/surrogate/ATan.*
             :width: 100%
 
-        The function is used in [#Huh2018]_ [#huh2018gradient]_.
+        The function is used in [#huh2018gradient]_.
 
         :param alpha: parameter to control smoothness of gradient
         :type alpha: float
@@ -2733,7 +2734,7 @@ class LeakyKReLU(SurrogateFunctionBase):
         :param leak: ``x < 0`` 时的梯度值
         :type leak: float
 
-        :param k: ``x >= 0 `` 时的梯度值
+        :param k: ``x \geq 0`` 时的梯度值
         :type k: float
 
         :return: 无返回值
@@ -2776,7 +2777,7 @@ class LeakyKReLU(SurrogateFunctionBase):
         :param leak: gradient when ``x < 0``
         :type leak: float
 
-        :param k: gradient when ``x >= 0 ``
+        :param k: gradient when ``x \geq 0``
         :type k: float
 
         :return: No return value.
@@ -3586,9 +3587,9 @@ class Rect(SurrogateFunctionBase):
 
         .. math::
             g'(x) = \begin{cases}
-            \alpha, & |x| < \frac{0.5}{\alpha} \\\\
-            0, & |x| \geq \frac{0.5}{\alpha}
-            \\end{cases}
+            \alpha, & |x| < \frac{0.5}{\alpha} \\
+            0, & |x| \geq \frac{0.5}{\alpha}\\
+            \end{cases}
 
         对应的原函数为
 
@@ -3617,9 +3618,9 @@ class Rect(SurrogateFunctionBase):
 
         .. math::
             g'(x) = \begin{cases}
-            \alpha, & |x| < \frac{0.5}{\alpha} \\\\
-            0, & |x| \geq \frac{0.5}{\alpha}
-            \\end{cases}
+            \alpha, & |x| < \frac{0.5}{\alpha} \\
+            0, & |x| \geq \frac{0.5}{\alpha}\\
+            \end{cases}
 
         The primitive function is defined by
 

@@ -2,7 +2,7 @@ spikingjelly.activation_based.surrogate module
 =================================================
 
 .. automodule:: spikingjelly.activation_based.surrogate
-   :members: heaviside, check_manual_grad, check_cuda_grad, plot_surrogate_function, SurrogateFunctionBase, MultiArgsSurrogateFunctionBase, PiecewiseQuadratic, PiecewiseExp, Sigmoid, SoftSign, SuperSpike, ATan, NonzeroSignLogAbs, Erf, PiecewiseLeakyReLU, SquarewaveFourierSeries, S2NN, QPseudoSpike, LeakyKReLU, FakeNumericalGradient, LogTailedReLU, DeterministicPass, PoissonPass, Rect
+   :members: heaviside, check_manual_grad, check_cuda_grad, plot_surrogate_function, SurrogateFunctionBase, PiecewiseQuadratic, PiecewiseExp, Sigmoid, SoftSign, SuperSpike, ATan, NonzeroSignLogAbs, Erf, PiecewiseLeakyReLU, SquarewaveFourierSeries, S2NN, QPseudoSpike, LeakyKReLU, FakeNumericalGradient, LogTailedReLU, DeterministicPass, PoissonPass, Rect
    :undoc-members:
    :show-inheritance:
 
