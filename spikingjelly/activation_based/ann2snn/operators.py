@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-__all__ = ["TDSoftmax", "TDLayerNorm"]
+__all__ = ["TDSoftmax", "TDLayerNorm", "TDGELU"]
 
 
 def _temporal_difference(y_cum: torch.Tensor) -> torch.Tensor:
@@ -459,3 +459,176 @@ class TDLayerNorm(nn.Module):
             f"{self.normalized_shape}, eps={self.eps}, "
             f"elementwise_affine={self.elementwise_affine}, bias={has_bias}"
         )
+
+
+class TDGELU(nn.Module):
+    def __init__(self, approximate: str = "none") -> None:
+        r"""
+        **API Language:**
+        :ref:`中文 <TDGELU.__init__-cn>` |
+        :ref:`English <TDGELU.__init__-en>`
+
+        ----
+
+        .. _TDGELU.__init__-cn:
+
+        * **中文**
+
+        Temporal-difference (TD) GELU（Gaussian Error Linear Unit）算子。
+        输入必须是完整时间序列，时间维固定为第 0 维，形状为 ``[T, ...]``。
+        该模块先对输入在时间维做累积，再对每个累积输入执行
+        :func:`torch.nn.functional.gelu`，最后返回累积输出在时间维上的差分。
+
+        返回值是浮点差分值，可能包含负值；它不是二值脉冲，也不表示 fully
+        spike-driven GELU。输出 dtype 与输入 dtype 相同；推荐使用
+        ``float32``、``float16`` 或 ``float64`` 输入。该算子完全由 PyTorch
+        可微算子组成，对 autograd 透明。该算子无内部状态，多次 ``forward``
+        之间不需要调用 ``reset``。
+
+        该算子的机制来源于 `SpikeZIP-TF: Conversion is All You Need for
+        Transformer-based SNN <https://arxiv.org/abs/2406.03470>`_ 中对
+        Transformer 非线性算子的累积-差分等价转换思路。本文档中的 TD GELU
+        只实现张量级算子：它仍调用 :func:`torch.nn.functional.gelu`，需要
+        完整时间序列输入，不是逐时间步在线算子，也不是面向神经形态硬件的
+        fully spike-driven GELU。
+
+        .. code-block:: python
+
+            op = TDGELU(approximate="none")
+            x_seq = torch.randn(4, 2, 3)
+            y_seq = op(x_seq)
+
+        :param approximate: GELU 近似模式，与 :class:`torch.nn.GELU` 的
+            ``approximate`` 语义一致。
+        :type approximate: str
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _TDGELU.__init__-en:
+
+        * **English**
+
+        Temporal-difference (TD) GELU (Gaussian Error Linear Unit) operator.
+        The input must be a complete time sequence whose time dimension is
+        fixed at dimension 0, with shape ``[T, ...]``. This module first
+        accumulates the input over time, applies
+        :func:`torch.nn.functional.gelu` to each cumulative input, and returns
+        the temporal difference of the cumulative outputs.
+
+        The output contains floating-point differential values and may contain
+        negative values. It is not a binary spike tensor and does not represent a
+        fully spike-driven GELU. The output dtype matches the input dtype;
+        ``float32``, ``float16`` and ``float64`` inputs are recommended. The
+        operator is composed entirely of differentiable PyTorch operations and
+        is transparent to autograd. The operator is stateless, and repeated
+        ``forward`` calls do not require ``reset``.
+
+        The mechanism follows the cumulative-difference equivalence idea for
+        Transformer nonlinear operators in `SpikeZIP-TF: Conversion is All You
+        Need for Transformer-based SNN <https://arxiv.org/abs/2406.03470>`_.
+        This implementation provides only a tensor-level operator: it still
+        calls :func:`torch.nn.functional.gelu`, requires a complete time
+        sequence, is not a step-wise online operator, and is not a fully
+        spike-driven GELU for neuromorphic hardware.
+
+        .. code-block:: python
+
+            op = TDGELU(approximate="none")
+            x_seq = torch.randn(4, 2, 3)
+            y_seq = op(x_seq)
+
+        :param approximate: GELU approximation mode, with the same semantics as
+            ``approximate`` in :class:`torch.nn.GELU`.
+        :type approximate: str
+        :return: None
+        :rtype: None
+        """
+        super().__init__()
+        self.approximate = approximate
+
+    def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        r"""
+        **API Language:**
+        :ref:`中文 <TDGELU.forward-cn>` |
+        :ref:`English <TDGELU.forward-en>`
+
+        ----
+
+        .. _TDGELU.forward-cn:
+
+        * **中文**
+
+        对完整时间序列执行 TD GELU。计算过程为：
+
+        .. math::
+
+            X_{cum}[t] = \sum_{i=0}^{t} X[i]
+
+        .. math::
+
+            Y_{cum}[t] = \operatorname{GELU}(X_{cum}[t])
+
+        .. math::
+
+            Y[0] = Y_{cum}[0], \quad
+            Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
+
+        因此 ``Y.cumsum(dim=0)`` 与对 ``X.cumsum(dim=0)`` 逐时间步执行 ANN
+        GELU 的结果一致。输出是浮点差分值，可能为负，不是二值脉冲。
+        当 ``T = 1`` 时，``Y[0]`` 直接等于对 ``X[0]`` 执行 GELU 的结果。
+        输出 dtype 与输入 dtype 相同，且该算子对 autograd 透明。
+
+        :param x_seq: 输入时间序列，形状为 ``[T, ...]``。
+        :type x_seq: torch.Tensor
+        :return: TD GELU 差分序列，形状与 ``x_seq`` 相同。
+        :rtype: torch.Tensor
+        :raises ValueError: 若 ``x_seq`` 少于 2 维。
+
+        ----
+
+        .. _TDGELU.forward-en:
+
+        * **English**
+
+        Apply TD GELU to a complete time sequence:
+
+        .. math::
+
+            X_{cum}[t] = \sum_{i=0}^{t} X[i]
+
+        .. math::
+
+            Y_{cum}[t] = \operatorname{GELU}(X_{cum}[t])
+
+        .. math::
+
+            Y[0] = Y_{cum}[0], \quad
+            Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
+
+        Thus, ``Y.cumsum(dim=0)`` matches ANN GELU applied to
+        ``X.cumsum(dim=0)`` at each time step. The output contains
+        floating-point differential values, may be negative, and is not a binary
+        spike tensor. When ``T = 1``, ``Y[0]`` is exactly GELU applied to
+        ``X[0]``. The output dtype matches the input dtype, and the operator is
+        transparent to autograd.
+
+        :param x_seq: Input time sequence with shape ``[T, ...]``.
+        :type x_seq: torch.Tensor
+        :return: TD GELU differential sequence with the same shape as
+            ``x_seq``.
+        :rtype: torch.Tensor
+        :raises ValueError: If ``x_seq`` has fewer than 2 dimensions.
+        """
+        if x_seq.dim() < 2:
+            raise ValueError(
+                "TDGELU expects an input sequence with shape [T, ...] "
+                f"and at least 2 dimensions, but got shape {tuple(x_seq.shape)}."
+            )
+
+        y_cum = F.gelu(x_seq.cumsum(dim=0), approximate=self.approximate)
+        return _temporal_difference(y_cum)
+
+    def extra_repr(self) -> str:
+        return f"approximate={self.approximate!r}"

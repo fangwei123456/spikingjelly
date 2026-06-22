@@ -2,7 +2,11 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from spikingjelly.activation_based.ann2snn.operators import TDLayerNorm, TDSoftmax
+from spikingjelly.activation_based.ann2snn.operators import (
+    TDGELU,
+    TDLayerNorm,
+    TDSoftmax,
+)
 
 
 class TestTDSoftmax:
@@ -273,3 +277,82 @@ class TestTDLayerNorm:
         assert op.extra_repr() == (
             "(2, 3), eps=0.0001, elementwise_affine=True, bias=False"
         )
+
+
+class TestTDGELU:
+    def test_shape_is_preserved(self):
+        x_seq = torch.randn(4, 2, 3)
+        op = TDGELU()
+
+        y_seq = op(x_seq)
+
+        assert y_seq.shape == x_seq.shape
+
+    @pytest.mark.parametrize("approximate", ["none", "tanh"])
+    def test_cumulative_output_matches_gelu_on_cumulative_input(self, approximate):
+        x_seq = torch.randn(5, 2, 4)
+        op = TDGELU(approximate=approximate)
+
+        y_seq = op(x_seq)
+        expected = F.gelu(x_seq.cumsum(dim=0), approximate=approximate)
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_final_cumulative_output_matches_gelu_on_total_input(self):
+        x_seq = torch.randn(6, 3, 5)
+        op = TDGELU()
+
+        y_seq = op(x_seq)
+        expected = F.gelu(x_seq.sum(dim=0), approximate=op.approximate)
+
+        assert torch.allclose(
+            y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6
+        )
+
+    def test_single_timestep_returns_gelu_of_input(self):
+        x_seq = torch.randn(1, 2, 3)
+        op = TDGELU()
+
+        y_seq = op(x_seq)
+        expected = F.gelu(x_seq[0], approximate=op.approximate)
+
+        assert y_seq.shape == x_seq.shape
+        assert torch.allclose(y_seq[0], expected)
+
+    def test_gradients_flow(self):
+        x_seq = torch.randn(3, 4, requires_grad=True)
+        op = TDGELU()
+
+        y_seq = op(x_seq)
+        y_seq.sum().backward()
+
+        assert x_seq.grad is not None
+        assert torch.isfinite(x_seq.grad).all()
+
+    def test_negative_values_are_allowed(self):
+        x_seq = torch.tensor(
+            [
+                [[-2.0, 1.0]],
+                [[3.0, -1.0]],
+            ]
+        )
+        op = TDGELU()
+
+        y_seq = op(x_seq)
+
+        assert (y_seq < 0).any()
+        assert torch.allclose(
+            y_seq.cumsum(dim=0),
+            F.gelu(x_seq.cumsum(dim=0), approximate=op.approximate),
+        )
+
+    def test_rejects_one_dimensional_input(self):
+        op = TDGELU()
+
+        with pytest.raises(ValueError, match="at least 2 dimensions"):
+            op(torch.randn(4))
+
+    def test_extra_repr(self):
+        op = TDGELU(approximate="tanh")
+
+        assert op.extra_repr() == "approximate='tanh'"
