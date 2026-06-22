@@ -676,9 +676,6 @@ class LIAFNode(LIFNode):
         self.threshold_related = threshold_related
 
         assert self.backend == "torch", "LIAFNode only supports for backend='torch'!"
-        assert not self.single_step_cupy_fp32_inference, (
-            "LIAFNode does not support for single_step_cupy_fp32_inference!"
-        )
 
     @property
     def supported_backends(self):
