@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from spikingjelly.activation_based.ann2snn.operators import (
     TDGELU,
     TDLayerNorm,
+    TDLinear,
     TDScaledDotProductAttention,
     TDSoftmax,
 )
@@ -378,6 +379,139 @@ class TestTDGELU:
         op = TDGELU(approximate="tanh")
 
         assert op.extra_repr() == "approximate='tanh'"
+
+
+class TestTDLinear:
+    def test_shape_is_preserved_for_batched_input(self):
+        x_seq = torch.randn(4, 2, 3)
+        op = TDLinear(3, 5)
+
+        y_seq = op(x_seq)
+
+        assert y_seq.shape == (4, 2, 5)
+
+    def test_higher_rank_input_shape(self):
+        x_seq = torch.randn(4, 2, 6, 3)
+        op = TDLinear(3, 5)
+
+        y_seq = op(x_seq)
+
+        assert y_seq.shape == (4, 2, 6, 5)
+
+    def test_cumulative_output_matches_linear_on_cumulative_input(self):
+        x_seq = torch.randn(5, 2, 4)
+        op = TDLinear(4, 3)
+
+        y_seq = op(x_seq)
+        expected = F.linear(x_seq.cumsum(dim=0), op.weight, op.bias)
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_final_cumulative_output_matches_linear_on_total_input(self):
+        x_seq = torch.randn(6, 3, 5)
+        op = TDLinear(5, 4)
+
+        y_seq = op(x_seq)
+        expected = F.linear(x_seq.sum(dim=0), op.weight, op.bias)
+
+        assert torch.allclose(
+            y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6
+        )
+
+    def test_single_timestep_returns_linear_of_input(self):
+        x_seq = torch.randn(1, 2, 3)
+        op = TDLinear(3, 5)
+
+        y_seq = op(x_seq)
+        expected = F.linear(x_seq[0], op.weight, op.bias)
+
+        assert y_seq.shape == (1, 2, 5)
+        assert torch.allclose(y_seq[0], expected, atol=1e-6, rtol=1e-6)
+
+    def test_bias_is_not_repeatedly_accumulated(self):
+        x_seq = torch.zeros(4, 2, 3)
+        op = TDLinear(3, 5)
+        with torch.no_grad():
+            op.weight.zero_()
+            op.bias.copy_(torch.arange(5, dtype=x_seq.dtype))
+
+        y_seq = op(x_seq)
+
+        assert torch.allclose(y_seq.cumsum(dim=0)[-1], op.bias.expand(2, 5))
+        assert torch.allclose(y_seq[0], op.bias.expand(2, 5))
+        assert torch.count_nonzero(y_seq[1:]) == 0
+
+    def test_bias_false_has_weight_only(self):
+        op = TDLinear(3, 5, bias=False)
+
+        assert op.weight is not None
+        assert op.bias is None
+        assert set(op.state_dict().keys()) == {"weight"}
+
+    def test_reset_parameters_preserves_shapes_and_reinitializes_values(self):
+        op = TDLinear(3, 5)
+        with torch.no_grad():
+            op.weight.fill_(1.0)
+            op.bias.fill_(1.0)
+
+        op.reset_parameters()
+
+        assert op.weight.shape == (5, 3)
+        assert op.bias.shape == (5,)
+        assert not torch.equal(op.weight, torch.ones_like(op.weight))
+        assert not torch.equal(op.bias, torch.ones_like(op.bias))
+
+    def test_device_and_dtype_initialize_parameters(self):
+        op = TDLinear(3, 5, device="cpu", dtype=torch.float64)
+
+        assert op.weight.device.type == "cpu"
+        assert op.bias.device.type == "cpu"
+        assert op.weight.dtype == torch.float64
+        assert op.bias.dtype == torch.float64
+
+    def test_gradients_match_reference(self):
+        x_seq = torch.randn(3, 2, 4)
+        op = TDLinear(4, 5)
+
+        x_ref = x_seq.clone().detach().requires_grad_()
+        weight_ref = op.weight.clone().detach().requires_grad_()
+        bias_ref = op.bias.clone().detach().requires_grad_()
+        y_cum_ref = F.linear(x_ref.cumsum(dim=0), weight_ref, bias_ref)
+        y_seq_ref = torch.empty_like(y_cum_ref)
+        y_seq_ref[0] = y_cum_ref[0]
+        y_seq_ref[1:] = y_cum_ref[1:] - y_cum_ref[:-1]
+        y_seq_ref.square().sum().backward()
+
+        x_seq = x_seq.clone().detach().requires_grad_()
+        y_seq = op(x_seq)
+        y_seq.square().sum().backward()
+
+        assert torch.allclose(x_seq.grad, x_ref.grad, atol=1e-6, rtol=1e-6)
+        assert torch.allclose(op.weight.grad, weight_ref.grad, atol=1e-6, rtol=1e-6)
+        assert torch.allclose(op.bias.grad, bias_ref.grad, atol=1e-6, rtol=1e-6)
+
+    def test_rejects_one_dimensional_input(self):
+        op = TDLinear(3, 5)
+
+        with pytest.raises(ValueError, match="at least 2 dimensions"):
+            op(torch.randn(3))
+
+    def test_rejects_empty_time_dimension(self):
+        op = TDLinear(3, 5)
+
+        with pytest.raises(ValueError, match="non-empty time dimension"):
+            op(torch.empty(0, 2, 3))
+
+    def test_invalid_trailing_feature_size_raises_from_pytorch(self):
+        op = TDLinear(3, 5)
+
+        with pytest.raises(RuntimeError):
+            op(torch.randn(4, 2, 4))
+
+    def test_extra_repr(self):
+        op = TDLinear(3, 5, bias=False)
+
+        assert op.extra_repr() == "in_features=3, out_features=5, bias=False"
 
 
 class TestTDScaledDotProductAttention:

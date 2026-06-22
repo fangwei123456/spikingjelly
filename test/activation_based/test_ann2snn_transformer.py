@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from spikingjelly.activation_based.ann2snn.operators import (
     TDGELU,
     TDLayerNorm,
+    TDLinear,
     TDScaledDotProductAttention,
 )
 
@@ -19,16 +20,15 @@ class TinyTDTransformerBlock(nn.Module):
         self.head_dim = embed_dim // num_heads
 
         self.norm1 = TDLayerNorm(embed_dim)
-        # Bias-free Linear preserves cumulative equivalence on TD sequences.
-        self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
-        self.k_proj = nn.Linear(embed_dim, embed_dim, bias=False)
-        self.v_proj = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.q_proj = TDLinear(embed_dim, embed_dim)
+        self.k_proj = TDLinear(embed_dim, embed_dim)
+        self.v_proj = TDLinear(embed_dim, embed_dim)
         self.attn = TDScaledDotProductAttention()
-        self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.out_proj = TDLinear(embed_dim, embed_dim)
         self.norm2 = TDLayerNorm(embed_dim)
-        self.fc1 = nn.Linear(embed_dim, mlp_dim, bias=False)
+        self.fc1 = TDLinear(embed_dim, mlp_dim)
         self.act = TDGELU()
-        self.fc2 = nn.Linear(mlp_dim, embed_dim, bias=False)
+        self.fc2 = TDLinear(mlp_dim, embed_dim)
 
     def _split_heads(self, x_seq: torch.Tensor) -> torch.Tensor:
         t, batch_size, seq_len, _ = x_seq.shape
@@ -39,6 +39,10 @@ class TinyTDTransformerBlock(nn.Module):
         t, batch_size, _, seq_len, _ = x_seq.shape
         x_seq = x_seq.transpose(2, 3).contiguous()
         return x_seq.reshape(t, batch_size, seq_len, self.embed_dim)
+
+    @staticmethod
+    def _ann_linear(module: TDLinear, x_cum: torch.Tensor) -> torch.Tensor:
+        return F.linear(x_cum, module.weight, module.bias)
 
     def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         norm_seq = self.norm1(x_seq)
@@ -61,16 +65,16 @@ class TinyTDTransformerBlock(nn.Module):
             self.norm1.bias,
             self.norm1.eps,
         )
-        q_cum = self._split_heads(self.q_proj(norm_cum))
-        k_cum = self._split_heads(self.k_proj(norm_cum))
-        v_cum = self._split_heads(self.v_proj(norm_cum))
+        q_cum = self._split_heads(self._ann_linear(self.q_proj, norm_cum))
+        k_cum = self._split_heads(self._ann_linear(self.k_proj, norm_cum))
+        v_cum = self._split_heads(self._ann_linear(self.v_proj, norm_cum))
         attn_cum = F.scaled_dot_product_attention(
             q_cum,
             k_cum,
             v_cum,
             dropout_p=0.0,
         )
-        x_cum = x_cum + self.out_proj(self._merge_heads(attn_cum))
+        x_cum = x_cum + self._ann_linear(self.out_proj, self._merge_heads(attn_cum))
 
         mlp_cum = F.layer_norm(
             x_cum,
@@ -79,9 +83,9 @@ class TinyTDTransformerBlock(nn.Module):
             self.norm2.bias,
             self.norm2.eps,
         )
-        mlp_cum = self.fc1(mlp_cum)
+        mlp_cum = self._ann_linear(self.fc1, mlp_cum)
         mlp_cum = F.gelu(mlp_cum, approximate=self.act.approximate)
-        mlp_cum = self.fc2(mlp_cum)
+        mlp_cum = self._ann_linear(self.fc2, mlp_cum)
         return x_cum + mlp_cum
 
 
@@ -110,7 +114,7 @@ def test_tiny_transformer_block_final_cumulative_output_matches_total_input():
     )
 
 
-def test_tiny_transformer_block_uses_bias_free_linear_layers():
+def test_tiny_transformer_block_uses_affine_td_linear_layers():
     block = TinyTDTransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
 
     linear_layers = [
@@ -122,7 +126,7 @@ def test_tiny_transformer_block_uses_bias_free_linear_layers():
         block.fc2,
     ]
 
-    assert all(layer.bias is None for layer in linear_layers)
+    assert all(layer.bias is not None for layer in linear_layers)
 
 
 def test_tiny_transformer_block_autograd_smoke():
@@ -137,3 +141,5 @@ def test_tiny_transformer_block_autograd_smoke():
     for parameter in block.parameters():
         assert parameter.grad is not None
         assert torch.isfinite(parameter.grad).all()
+    assert block.q_proj.bias.grad is not None
+    assert torch.isfinite(block.q_proj.bias.grad).all()

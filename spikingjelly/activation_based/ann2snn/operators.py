@@ -1,3 +1,4 @@
+import math
 from typing import Literal, Optional, Sequence, Union
 
 import torch
@@ -5,7 +6,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-__all__ = ["TDSoftmax", "TDLayerNorm", "TDGELU", "TDScaledDotProductAttention"]
+__all__ = [
+    "TDSoftmax",
+    "TDLayerNorm",
+    "TDGELU",
+    "TDLinear",
+    "TDScaledDotProductAttention",
+]
 
 
 def _temporal_difference(y_cum: torch.Tensor) -> torch.Tensor:
@@ -646,6 +653,214 @@ class TDGELU(nn.Module):
 
     def extra_repr(self) -> str:
         return f"approximate={self.approximate!r}"
+
+
+class TDLinear(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        device: Optional[Union[torch.device, str]] = None,
+        dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        r"""
+        **API Language:**
+        :ref:`中文 <TDLinear.__init__-cn>` |
+        :ref:`English <TDLinear.__init__-en>`
+
+        ----
+
+        .. _TDLinear.__init__-cn:
+
+        * **中文**
+
+        Temporal-difference (TD) Linear 算子。输入必须是完整时间序列，
+        时间维固定为第 0 维，形状为 ``[T, ..., in_features]``。该模块先对
+        输入在时间维做累积，再执行 :func:`torch.nn.functional.linear`，最后
+        返回累积输出在时间维上的差分。
+
+        返回值是浮点差分值，可能包含负值；它不是二值脉冲，也不表示 fully
+        spike-driven Linear。输出 dtype 与 PyTorch Linear 一致；推荐使用
+        ``float32``、``float16``、``bfloat16`` 或 ``float64`` 输入。该算子
+        完全由 PyTorch 可微算子组成，对 autograd 透明。该算子无内部状态，
+        多次 ``forward`` 之间不需要调用 ``reset``。该算子仅依赖 PyTorch
+        Linear，支持 CPU 与 CUDA，后端与 :mod:`torch` 一致，无 CuPy / Triton
+        专用路径。
+
+        该算子用于处理带 bias 的 affine projection。普通
+        :class:`torch.nn.Linear` 直接作用在 TD 差分序列上会在时间累积后得到
+        ``T * bias``；TD Linear 在累积输入上执行 Linear 后再差分，使累计输出
+        保持 ``W @ x_cum + bias``。
+
+        .. code-block:: python
+
+            op = TDLinear(3, 5)
+            x_seq = torch.randn(4, 2, 3)
+            y_seq = op(x_seq)
+
+        :param in_features: 输入特征数。
+        :type in_features: int
+        :param out_features: 输出特征数。
+        :type out_features: int
+        :param bias: 若为 ``True``，使用可学习 bias 参数。
+        :type bias: bool
+        :param device: 参数初始化设备。
+        :type device: torch.device or str or None
+        :param dtype: 参数初始化 dtype。
+        :type dtype: torch.dtype or None
+
+        ----
+
+        .. _TDLinear.__init__-en:
+
+        * **English**
+
+        Temporal-difference (TD) Linear operator. The input must be a complete
+        time sequence whose time dimension is fixed at dimension 0, with shape
+        ``[T, ..., in_features]``. This module first accumulates the input over
+        time, applies :func:`torch.nn.functional.linear`, and returns the
+        temporal difference of the cumulative outputs.
+
+        The output contains floating-point differential values and may contain
+        negative values. It is not a binary spike tensor and does not represent
+        a fully spike-driven Linear. The output dtype follows PyTorch Linear;
+        ``float32``, ``float16``, ``bfloat16`` and ``float64`` inputs are
+        recommended. The operator is composed entirely of differentiable
+        PyTorch operations and is transparent to autograd. The operator is
+        stateless, and repeated ``forward`` calls do not require ``reset``. It
+        only depends on PyTorch Linear, supports CPU and CUDA, follows the
+        :mod:`torch` backend behavior, and has no CuPy / Triton specific path.
+
+        This operator handles affine projections with bias. Applying ordinary
+        :class:`torch.nn.Linear` directly to a TD differential sequence would
+        accumulate the bias as ``T * bias``. TD Linear applies Linear to the
+        cumulative input and then differences the cumulative output, preserving
+        ``W @ x_cum + bias``.
+
+        .. code-block:: python
+
+            op = TDLinear(3, 5)
+            x_seq = torch.randn(4, 2, 3)
+            y_seq = op(x_seq)
+
+        :param in_features: Number of input features.
+        :type in_features: int
+        :param out_features: Number of output features.
+        :type out_features: int
+        :param bias: If ``True``, use a learnable bias parameter.
+        :type bias: bool
+        :param device: Device used to initialize parameters.
+        :type device: torch.device or str or None
+        :param dtype: Dtype used to initialize parameters.
+        :type dtype: torch.dtype or None
+        """
+        super().__init__()
+        factory_kwargs = {"device": device, "dtype": dtype}
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weight = nn.Parameter(
+            torch.empty((out_features, in_features), **factory_kwargs)
+        )
+        if bias:
+            self.bias = nn.Parameter(torch.empty(out_features, **factory_kwargs))
+        else:
+            self.register_parameter("bias", None)
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        if self.bias is not None:
+            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+            nn.init.uniform_(self.bias, -bound, bound)
+
+    def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        r"""
+        **API Language:**
+        :ref:`中文 <TDLinear.forward-cn>` |
+        :ref:`English <TDLinear.forward-en>`
+
+        ----
+
+        .. _TDLinear.forward-cn:
+
+        * **中文**
+
+        对完整时间序列执行 TD Linear。计算过程为：
+
+        .. math::
+
+            X_{cum}[t] = \sum_{i=0}^{t} X[i]
+
+        .. math::
+
+            Y_{cum}[t] = X_{cum}[t] W^T + b
+
+        .. math::
+
+            Y[0] = Y_{cum}[0], \quad
+            Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
+
+        因此 ``Y.cumsum(dim=0)`` 与对 ``X.cumsum(dim=0)`` 逐时间步执行 ANN
+        Linear 的结果一致。输出是浮点差分值，可能为负，不是二值脉冲。当
+        ``T = 1`` 时，``Y[0]`` 直接等于对 ``X[0]`` 执行 Linear 的结果。
+        输出 dtype 与 PyTorch Linear 一致，且该算子对 autograd 透明。
+
+        :param x_seq: 输入时间序列，形状为 ``[T, ..., in_features]``，且
+            ``T > 0``。
+        :type x_seq: torch.Tensor
+        :return: TD Linear 差分序列，形状为 ``[T, ..., out_features]``。
+        :rtype: torch.Tensor
+        :raises ValueError: 若 ``x_seq`` 少于 2 维或时间维为空。
+
+        ----
+
+        .. _TDLinear.forward-en:
+
+        * **English**
+
+        Apply TD Linear to a complete time sequence:
+
+        .. math::
+
+            X_{cum}[t] = \sum_{i=0}^{t} X[i]
+
+        .. math::
+
+            Y_{cum}[t] = X_{cum}[t] W^T + b
+
+        .. math::
+
+            Y[0] = Y_{cum}[0], \quad
+            Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
+
+        Thus, ``Y.cumsum(dim=0)`` matches ANN Linear applied to
+        ``X.cumsum(dim=0)`` at each time step. The output contains
+        floating-point differential values, may be negative, and is not a
+        binary spike tensor. When ``T = 1``, ``Y[0]`` is exactly Linear applied
+        to ``X[0]``. The output dtype follows PyTorch Linear, and the operator
+        is transparent to autograd.
+
+        :param x_seq: Input time sequence with shape
+            ``[T, ..., in_features]`` and ``T > 0``.
+        :type x_seq: torch.Tensor
+        :return: TD Linear differential sequence with shape
+            ``[T, ..., out_features]``.
+        :rtype: torch.Tensor
+        :raises ValueError: If ``x_seq`` has fewer than 2 dimensions or the
+            time dimension is empty.
+        """
+        _check_time_sequence(x_seq, "TDLinear")
+
+        y_cum = F.linear(x_seq.cumsum(dim=0), self.weight, self.bias)
+        return _temporal_difference(y_cum)
+
+    def extra_repr(self) -> str:
+        return (
+            f"in_features={self.in_features}, out_features={self.out_features}, "
+            f"bias={self.bias is not None}"
+        )
 
 
 class TDScaledDotProductAttention(nn.Module):

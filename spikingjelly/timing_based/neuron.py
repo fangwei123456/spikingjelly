@@ -264,12 +264,12 @@ class Tempotron(nn.Module):
 
         Neuronal Simulation::
 
-                                ┌─────────────────────┐
+                             ┌─────────────────────┐
             Time:            │0 1 2 3 4 5 6 7 8 T-1│10 11 12 13 14 15 16 17 18 19 20 ......
             Sensory Neuron 1:│------------|--------│---------------------------------------
             Sensory Neuron 2:│----|----------------│---------------------------------------
-                                └─────────────────────┘
-                                    Time Window
+                             └─────────────────────┘
+                                 Time Window
 
         Tempotron Neuron accepts timing of spikes
         from sensory neurons within a defined time window
