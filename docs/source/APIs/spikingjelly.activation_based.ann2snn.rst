@@ -30,6 +30,11 @@ Extension Points
 Helper Modules and Functions
 ++++++++++++++++++++++++++++++
 
+.. automodule:: spikingjelly.activation_based.ann2snn.operators
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 .. automodule:: spikingjelly.activation_based.ann2snn.modules
    :members:
    :undoc-members:
