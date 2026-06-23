@@ -289,7 +289,7 @@ ann2snn框架在2022年4月又迎来一次较大更新。取消了parser和simul
 .. code-block:: python
 
     model_converter = ann2snn.Converter(mode='max', dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
 
 snn_model就是输出来的SNN模型。
 
@@ -300,7 +300,7 @@ snn_model就是输出来的SNN模型。
     print('---------------------------------------------')
     print('Converting using MaxNorm')
     model_converter = ann2snn.Converter(mode='max', dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_max_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_max_accs[-1]))
@@ -308,7 +308,7 @@ snn_model就是输出来的SNN模型。
     print('---------------------------------------------')
     print('Converting using RobustNorm')
     model_converter = ann2snn.Converter(mode='99.9%', dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_robust_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_robust_accs[-1]))
@@ -316,7 +316,7 @@ snn_model就是输出来的SNN模型。
     print('---------------------------------------------')
     print('Converting using 1/2 max(activation) as scales...')
     model_converter = ann2snn.Converter(mode=1.0 / 2, dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_two_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_two_accs[-1]))
@@ -324,7 +324,7 @@ snn_model就是输出来的SNN模型。
     print('---------------------------------------------')
     print('Converting using 1/3 max(activation) as scales')
     model_converter = ann2snn.Converter(mode=1.0 / 3, dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_three_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_three_accs[-1]))
@@ -332,7 +332,7 @@ snn_model就是输出来的SNN模型。
     print('---------------------------------------------')
     print('Converting using 1/4 max(activation) as scales')
     model_converter = ann2snn.Converter(mode=1.0 / 4, dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_four_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_four_accs[-1]))
@@ -340,7 +340,7 @@ snn_model就是输出来的SNN模型。
     print('---------------------------------------------')
     print('Converting using 1/5 max(activation) as scales')
     model_converter = ann2snn.Converter(mode=1.0 / 5, dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_five_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_five_accs[-1]))

@@ -1,5 +1,5 @@
 import warnings
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Type
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -8,22 +8,23 @@ from torch.nn.utils.fusion import fuse_conv_bn_eval
 from tqdm import tqdm
 
 from spikingjelly.activation_based.ann2snn.factories import HookFactory, NeuronFactory
+from spikingjelly.activation_based.ann2snn.operators import TDGELU, TDLayerNorm, TDLinear
 from spikingjelly.activation_based.ann2snn.rules import ActivationRule, ReLURule
 from spikingjelly.activation_based.ann2snn.threshold import ThresholdOptimizer
 
 
-class Converter(nn.Module):
+class Converter:
     def __init__(
         self,
-        dataloader,
-        device=None,
-        mode="Max",
-        momentum=0.1,
-        fuse_flag=True,
+        dataloader: Iterable,
+        device: Optional[Union[torch.device, str]] = None,
+        mode: Union[str, float] = "Max",
+        momentum: float = 0.1,
+        fuse_flag: bool = True,
         rules: Optional[List[ActivationRule]] = None,
         neuron_factory: Optional[NeuronFactory] = None,
         threshold_optimizer: Optional[ThresholdOptimizer] = None,
-    ):
+    ) -> None:
         r"""
         **API Language:**
         :ref:`中文 <Converter.__init__-cn>` | :ref:`English <Converter.__init__-en>`
@@ -34,15 +35,24 @@ class Converter(nn.Module):
 
         * **中文**
 
-        ``Converter`` 用于将带有ReLU的ANN转换为SNN。
+        ``Converter`` 是 ANN2SNN 转换器对象，而不是用于推理的
+        :class:`torch.nn.Module`。它提供显式转换方法：
+        :meth:`convert_to_spiking_neurons` 用于传统 ReLU→IFNode 校准转换，
+        :meth:`replace_by_td_operators` 用于 Transformer TD core operator
+        替换。
 
         ANN2SNN教程见此处 `ANN转换SNN <https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/cn/ann2snn.html>`_ 。
 
         目前支持三种转换模式，由参数mode进行设置。
 
-        转换后ReLU模块被删除，SNN需要的新模块（包括VoltageScaler、IFNode等）被创建并存放在snn tailor父模块中。
+        ReLU→IFNode 转换后 ReLU 模块被删除，SNN 需要的新模块（包括
+        VoltageScaler、IFNode 等）被创建并存放在 snn tailor 父模块中。
+        TD operator 替换不使用校准数据，只将支持的 ANN 模块替换为 TD
+        等价模块。
 
-        由于返回值的类型为fx.GraphModule，建议使用print(fx.GraphModule.graph)查看计算图及前向传播关系。更多API参见 `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ 。
+        由于返回值的类型为 ``fx.GraphModule``，建议使用
+        ``print(fx.GraphModule.graph)`` 查看计算图及前向传播关系。更多 API
+        参见 `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ 。
 
         .. warning::
 
@@ -52,9 +62,9 @@ class Converter(nn.Module):
 
         :param dataloader: 数据加载器。迭代返回的每个 batch 必须支持
             ``data[0]`` 取出输入张量，例如 ``(input, label)`` 或 ``(input,)``。
-        :type dataloader: Dataloader
+        :type dataloader: Iterable
         :param device: Device
-        :type device: str
+        :type device: torch.device or str or None
         :param mode: 转换模式。目前支持三种模式：最大电流转换模式 ``mode="max"``，
             99.9% 电流转换模式 ``mode="99.9%"``，以及缩放转换模式 ``mode=x`` （``0 < x <= 1``）。
         :type mode: str, float
@@ -79,15 +89,25 @@ class Converter(nn.Module):
 
         * **English**
 
-        ``Converter`` is used to convert ANN with to SNN.
+        ``Converter`` is an ANN2SNN conversion driver, not a
+        :class:`torch.nn.Module` for inference. It provides explicit conversion
+        methods: :meth:`convert_to_spiking_neurons` for the traditional
+        ReLU-to-IFNode calibrated conversion, and :meth:`replace_by_td_operators`
+        for Transformer TD core operator replacement.
 
         ANN2SNN tutorial is here `ANN2SNN <https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/en/ann2snn.html>`_ .
 
         Three common methods are implemented here, which can be selected by the value of parameter mode.
 
-        After converting, ReLU modules will be removed. And new modules needed by SNN, such as VoltageScaler and IFNode, will be created and stored in the parent module ``snn tailor``.
+        In the ReLU-to-IFNode path, ReLU modules will be removed, and new modules
+        needed by SNN, such as VoltageScaler and IFNode, will be created and
+        stored in the parent module ``snn tailor``. The TD operator replacement
+        path does not use calibration data; it only replaces supported ANN
+        modules with TD-equivalent modules.
 
-        Due to the type of the return model is fx.GraphModule, you can use ``print(fx.GraphModule.graph)`` to view how modules links and the how the forward method works. More APIs are here `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
+        Since the converted model is an ``fx.GraphModule``, use
+        ``print(fx.GraphModule.graph)`` to inspect the generated computation
+        graph. More APIs are here `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
 
         .. warning::
 
@@ -98,9 +118,9 @@ class Converter(nn.Module):
         :param dataloader: Dataloader for converting. Each yielded batch must
             support ``data[0]`` as the input tensor, for example
             ``(input, label)`` or ``(input,)``.
-        :type dataloader: Dataloader
+        :type dataloader: Iterable
         :param device: Device
-        :type device: str
+        :type device: torch.device or str or None
         :param mode: Conversion mode. Now support three mode,
             MaxNorm (``mode="max"``), RobustNorm (``mode="99.9%"``), and
             scaling mode (``mode=x``, where ``0 < x <= 1``).
@@ -119,7 +139,6 @@ class Converter(nn.Module):
             ``ThresholdOptimizer(strategy="fixed")``.
         :type threshold_optimizer: Optional[ThresholdOptimizer]
         """
-        super().__init__()
         self.mode = mode
         self.fuse_flag = fuse_flag
         self.dataloader = dataloader
@@ -136,31 +155,39 @@ class Converter(nn.Module):
             else ThresholdOptimizer()
         )
 
-    def forward(self, ann: nn.Module):
+    def convert_to_spiking_neurons(self, ann: nn.Module) -> torch.fx.GraphModule:
         r"""
         **API Language:**
-        :ref:`中文 <Converter.forward-cn>` | :ref:`English <Converter.forward-en>`
+        :ref:`中文 <Converter.convert_to_spiking_neurons-cn>` |
+        :ref:`English <Converter.convert_to_spiking_neurons-en>`
 
         ----
 
-        .. _Converter.forward-cn:
+        .. _Converter.convert_to_spiking_neurons-cn:
 
         * **中文**
 
-        :param ann: 待转换的ann
+        将带有 ReLU module 的 ANN 转换为 SNN ``GraphModule``。该方法会执行
+        FX tracing、可选 Conv-BN 融合、VoltageHook 校准和神经元替换。
+
+        :param ann: 待转换的 ANN。
         :type ann: torch.nn.Module
-        :return: 转换得到的snn
+        :return: 转换得到的 SNN。
         :rtype: torch.fx.GraphModule
 
         ----
 
-        .. _Converter.forward-en:
+        .. _Converter.convert_to_spiking_neurons-en:
 
         * **English**
 
-        :param ann: ann to be converted
+        Convert an ANN with ReLU modules to an SNN ``GraphModule``. This method
+        performs FX tracing, optional Conv-BN fusion, VoltageHook calibration,
+        and neuron replacement.
+
+        :param ann: ANN to be converted.
         :type ann: torch.nn.Module
-        :return: snn
+        :return: Converted SNN.
         :rtype: torch.fx.GraphModule
         """
         if self.device is None:
@@ -179,6 +206,75 @@ class Converter(nn.Module):
                 )
         snn = self.replace_by_neurons(ann_with_hook).to(self.device)
         return snn
+
+    def replace_by_td_operators(self, ann: nn.Module) -> torch.fx.GraphModule:
+        r"""
+        **API Language:**
+        :ref:`中文 <Converter.replace_by_td_operators-cn>` |
+        :ref:`English <Converter.replace_by_td_operators-en>`
+
+        ----
+
+        .. _Converter.replace_by_td_operators-cn:
+
+        * **中文**
+
+        将 ANN 中支持的 core modules 替换为 temporal-difference (TD) 等价
+        算子，并返回 ``GraphModule``。当前只自动替换
+        :class:`torch.nn.Linear`、:class:`torch.nn.LayerNorm` 和
+        :class:`torch.nn.GELU`。该方法不插入 ``VoltageHook``，不运行
+        dataloader 校准，也不自动识别 attention function 或
+        :class:`torch.nn.MultiheadAttention`。返回模型会保留输入模型及已替换
+        模块的 training/eval 状态。
+
+        :param ann: 待转换的 ANN。
+        :type ann: torch.nn.Module
+        :return: 已替换 core TD operators 的 ``GraphModule``。
+        :rtype: torch.fx.GraphModule
+
+        ----
+
+        .. _Converter.replace_by_td_operators-en:
+
+        * **English**
+
+        Replace supported core modules in an ANN with temporal-difference (TD)
+        equivalent operators and return a ``GraphModule``. Currently, only
+        :class:`torch.nn.Linear`, :class:`torch.nn.LayerNorm`, and
+        :class:`torch.nn.GELU` are replaced automatically. This method does not
+        insert ``VoltageHook``, does not run dataloader calibration, and does not
+        automatically recognize attention functions or
+        :class:`torch.nn.MultiheadAttention`. The returned model preserves the
+        training/eval state of the input model and replaced modules.
+
+        :param ann: ANN to be converted.
+        :type ann: torch.nn.Module
+        :return: ``GraphModule`` with core TD operators replaced.
+        :rtype: torch.fx.GraphModule
+        """
+        device = self.device
+        if device is None:
+            try:
+                device = next(ann.parameters()).device
+            except StopIteration:
+                device = torch.device("cpu")
+        fx_model = fx.symbolic_trace(ann).to(device)
+
+        modules = dict(fx_model.named_modules())
+        for node in fx_model.graph.nodes:
+            if node.op != "call_module":
+                continue
+            if not isinstance(node.target, str) or node.target not in modules:
+                continue
+            module = modules[node.target]
+            replacement = self._make_td_operator(module)
+            if replacement is None:
+                continue
+            self._replace_submodule(fx_model, node.target, replacement)
+
+        fx_model.graph.lint()
+        fx_model.recompile()
+        return fx_model
 
     @staticmethod
     def _extract_batch_input(data):
@@ -216,6 +312,63 @@ class Converter(nn.Module):
                 raise NotImplementedError(err_msg)
         else:
             raise NotImplementedError(err_msg)
+
+    @staticmethod
+    def _replace_submodule(
+        fx_model: torch.fx.GraphModule, target: str, module: nn.Module
+    ) -> None:
+        parent_name, _, child_name = target.rpartition(".")
+        parent = fx_model.get_submodule(parent_name) if parent_name else fx_model
+        setattr(parent, child_name, module)
+
+    @staticmethod
+    def _make_td_operator(module: nn.Module) -> Optional[nn.Module]:
+        if type(module) is nn.Linear:
+            td_module = TDLinear(
+                module.in_features,
+                module.out_features,
+                bias=module.bias is not None,
+                device=module.weight.device,
+                dtype=module.weight.dtype,
+            )
+            with torch.no_grad():
+                td_module.weight.copy_(module.weight)
+                if module.bias is not None:
+                    td_module.bias.copy_(module.bias)
+            td_module.train(module.training)
+            return td_module
+
+        if type(module) is nn.LayerNorm:
+            td_module = TDLayerNorm(
+                module.normalized_shape,
+                eps=module.eps,
+                elementwise_affine=module.elementwise_affine,
+                bias=module.bias is not None,
+                device=(
+                    module.weight.device
+                    if module.weight is not None
+                    else None
+                ),
+                dtype=(
+                    module.weight.dtype
+                    if module.weight is not None
+                    else None
+                ),
+            )
+            with torch.no_grad():
+                if module.weight is not None:
+                    td_module.weight.copy_(module.weight)
+                if module.bias is not None:
+                    td_module.bias.copy_(module.bias)
+            td_module.train(module.training)
+            return td_module
+
+        if type(module) is nn.GELU:
+            td_module = TDGELU(approximate=module.approximate)
+            td_module.train(module.training)
+            return td_module
+
+        return None
 
     @staticmethod
     def fuse(

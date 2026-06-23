@@ -67,7 +67,7 @@ def main():
     val(model, device, test_data_loader)
     print("Converting...")
     model_converter = ann2snn.Converter(mode="Max", dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print("SNN accuracy:")
     val(snn_model, device, test_data_loader, T=T)
 

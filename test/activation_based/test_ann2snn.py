@@ -14,6 +14,11 @@ from spikingjelly.activation_based.ann2snn import (
     ThresholdOptimizer,
 )
 from spikingjelly.activation_based.ann2snn.modules import VoltageHook, VoltageScaler
+from spikingjelly.activation_based.ann2snn.operators import (
+    TDGELU,
+    TDLayerNorm,
+    TDLinear,
+)
 
 
 class SimpleCNN(nn.Module):
@@ -70,6 +75,39 @@ class IdentityMLP(nn.Module):
 
     def forward(self, x):
         return self.fc1(self.identity(self.fc0(x)))
+
+
+class CoreTransformerMLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.norm = nn.LayerNorm(4)
+        self.fc0 = nn.Linear(4, 6)
+        self.act = nn.GELU(approximate="tanh")
+        self.keep = nn.Identity()
+        self.fc1 = nn.Linear(6, 4, bias=False)
+
+    def forward(self, x):
+        return self.fc1(self.keep(self.act(self.fc0(self.norm(x)))))
+
+
+class NoAffineLayerNormMLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.norm = nn.LayerNorm(4, elementwise_affine=False)
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x):
+        return self.fc(self.norm(x))
+
+
+class DropoutCoreMLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.dropout = nn.Dropout(p=0.5)
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x):
+        return self.fc(self.dropout(x))
 
 
 def _make_loader(batch_size=2, channels=1, h=28, w=28):
@@ -238,11 +276,18 @@ class TestThresholdOptimizer:
 
 
 class TestConverterBackwardCompat:
+    def test_converter_is_plain_conversion_driver(self):
+        converter = Converter(dataloader=_make_loader(), mode="Max", fuse_flag=False)
+
+        assert not isinstance(converter, nn.Module)
+        with pytest.raises(TypeError):
+            converter(SimpleCNN())
+
     def test_relu_model_converts(self):
         model = SimpleCNN()
         model.eval()
         converter = Converter(dataloader=_make_loader(), mode="Max", fuse_flag=False)
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         assert snn is not None
 
     def test_output_shape_preserved(self):
@@ -250,7 +295,7 @@ class TestConverterBackwardCompat:
         model.eval()
         dummy = torch.randn(1, 1, 28, 28)
         converter = Converter(dataloader=_make_loader(), mode="Max", fuse_flag=False)
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         out = snn(dummy)
         assert out.shape == (1, 10)
 
@@ -258,28 +303,28 @@ class TestConverterBackwardCompat:
         model = SimpleCNN()
         model.eval()
         converter = Converter(dataloader=_make_loader(), mode="Max", fuse_flag=True)
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         assert snn is not None
 
     def test_mode_max(self):
         model = SimpleCNN()
         model.eval()
         converter = Converter(dataloader=_make_loader(), mode="max")
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         assert snn is not None
 
     def test_mode_robust(self):
         model = SimpleCNN()
         model.eval()
         converter = Converter(dataloader=_make_loader(), mode="99.9%")
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         assert snn is not None
 
     def test_mode_scalar(self):
         model = SimpleCNN()
         model.eval()
         converter = Converter(dataloader=_make_loader(), mode=0.5)
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         assert snn is not None
 
     def test_invalid_mode_raises(self):
@@ -299,7 +344,7 @@ class TestConverterBackwardCompat:
         model.eval()
         imgs = torch.randn(2, 1, 28, 28)
         converter = Converter(dataloader=[imgs], mode="Max", fuse_flag=False)
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         assert snn is not None
 
     def test_numpy_dataloader_converts_full_batch(self):
@@ -307,7 +352,7 @@ class TestConverterBackwardCompat:
         model.eval()
         imgs = np.random.randn(2, 1, 28, 28).astype(np.float32)
         converter = Converter(dataloader=[imgs], mode="Max", fuse_flag=False)
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         assert snn is not None
 
     def test_dict_dataloader_converts(self):
@@ -315,7 +360,7 @@ class TestConverterBackwardCompat:
         model.eval()
         imgs = torch.randn(2, 1, 28, 28)
         converter = Converter(dataloader=[{"input": imgs}], mode="Max", fuse_flag=False)
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         assert snn is not None
 
     def test_dict_dataloader_prefers_input_key(self):
@@ -328,7 +373,7 @@ class TestConverterBackwardCompat:
             mode="Max",
             fuse_flag=False,
         )
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         assert snn is not None
 
     def test_extract_batch_input_rejects_empty_sequence(self):
@@ -338,6 +383,81 @@ class TestConverterBackwardCompat:
     def test_extract_batch_input_rejects_empty_dict(self):
         with pytest.raises(ValueError, match="empty dictionary"):
             Converter._extract_batch_input({})
+
+
+class TestConverterTDOperatorReplacement:
+    def test_replaces_core_modules_with_td_operators(self):
+        model = CoreTransformerMLP()
+        model.eval()
+
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+        modules = dict(converted.named_modules())
+
+        assert isinstance(modules["norm"], TDLayerNorm)
+        assert isinstance(modules["fc0"], TDLinear)
+        assert isinstance(modules["act"], TDGELU)
+        assert isinstance(modules["fc1"], TDLinear)
+        assert isinstance(modules["keep"], nn.Identity)
+
+    def test_copies_linear_layernorm_and_gelu_configuration(self):
+        model = CoreTransformerMLP()
+        model.eval()
+
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+        modules = dict(converted.named_modules())
+
+        assert torch.equal(modules["fc0"].weight, model.fc0.weight)
+        assert torch.equal(modules["fc0"].bias, model.fc0.bias)
+        assert torch.equal(modules["fc1"].weight, model.fc1.weight)
+        assert modules["fc1"].bias is None
+        assert torch.equal(modules["norm"].weight, model.norm.weight)
+        assert torch.equal(modules["norm"].bias, model.norm.bias)
+        assert modules["norm"].normalized_shape == model.norm.normalized_shape
+        assert modules["norm"].eps == model.norm.eps
+        assert modules["act"].approximate == "tanh"
+
+    def test_cumulative_output_matches_ann_reference(self):
+        model = CoreTransformerMLP()
+        model.eval()
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+        x_seq = torch.randn(5, 2, 3, 4)
+
+        y_seq = converted(x_seq)
+        expected = model(x_seq.cumsum(dim=0))
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+
+    def test_no_affine_layernorm_is_preserved(self):
+        model = NoAffineLayerNormMLP()
+        model.eval()
+
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+        modules = dict(converted.named_modules())
+
+        assert isinstance(modules["norm"], TDLayerNorm)
+        assert modules["norm"].weight is None
+        assert modules["norm"].bias is None
+        assert isinstance(modules["fc"], TDLinear)
+
+    def test_td_operator_replacement_preserves_training_mode(self):
+        model = DropoutCoreMLP()
+        model.train()
+
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+
+        assert converted.training
+        assert converted.dropout.training
+        assert converted.fc.training
+
+    def test_td_operator_replacement_preserves_eval_mode(self):
+        model = DropoutCoreMLP()
+        model.eval()
+
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+
+        assert not converted.training
+        assert not converted.dropout.training
+        assert not converted.fc.training
 
 
 class TestFuse:
@@ -358,14 +478,14 @@ class TestFuse:
         model = SimpleCNNNoBN()
         model.eval()
         converter = Converter(dataloader=_make_loader(), mode="Max", fuse_flag=True)
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         assert snn is not None
 
     def test_fuse_flag_false(self):
         model = SimpleCNN()
         model.eval()
         converter = Converter(dataloader=_make_loader(), mode="Max", fuse_flag=False)
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         assert snn is not None
 
 
@@ -378,7 +498,7 @@ class TestRuleBasedConversion:
             rules=[ReLURule()],
             fuse_flag=False,
         )
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         assert snn is not None
         assert any(isinstance(m, neuron.IFNode) for m in snn.modules())
 
@@ -390,7 +510,7 @@ class TestRuleBasedConversion:
             neuron_factory=NeuronFactory(v_threshold=2.0),
             fuse_flag=False,
         )
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         assert snn is not None
         if_nodes = [m for m in snn.modules() if isinstance(m, neuron.IFNode)]
         assert len(if_nodes) == 1
@@ -405,7 +525,7 @@ class TestRuleBasedConversion:
             threshold_optimizer=ThresholdOptimizer("fixed"),
             fuse_flag=False,
         )
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
 
         scalers = [m for m in snn.modules() if isinstance(m, VoltageScaler)]
         if_nodes = [m for m in snn.modules() if isinstance(m, neuron.IFNode)]
@@ -423,7 +543,7 @@ class TestRuleBasedConversion:
             rules=[],
             fuse_flag=False,
         )
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         assert any(isinstance(m, nn.ReLU) for m in snn.modules())
         assert not any(isinstance(m, neuron.IFNode) for m in snn.modules())
 
@@ -459,7 +579,7 @@ class TestRuleBasedConversion:
             dataloader=_make_loader(),
             rules=[rule],
             fuse_flag=False,
-        )(model)
+        ).convert_to_spiking_neurons(model)
 
         assert rule.match_count >= 2
         assert rule.insert_count == 1
@@ -530,11 +650,14 @@ class TestRuleBasedConversion:
         rule = IdentityRule()
         model = IdentityMLP()
         model.eval()
+        with torch.no_grad():
+            model.fc0.weight.zero_()
+            model.fc0.bias.fill_(1.0)
         snn = Converter(
             dataloader=_make_vector_loader(),
             rules=[rule],
             fuse_flag=False,
-        )(model)
+        ).convert_to_spiking_neurons(model)
 
         assert rule.match_count >= 2
         assert rule.insert_count == 1
@@ -616,7 +739,7 @@ class TestRuleBasedConversion:
             dataloader=_make_loader(),
             rules=[rule],
             fuse_flag=False,
-        )(model)
+        ).convert_to_spiking_neurons(model)
 
         assert rule.replace_count == 1
         assert any(isinstance(m, neuron.IFNode) for m in snn.modules())
@@ -637,7 +760,7 @@ class TestRuleBasedConversion:
             dataloader=_make_loader(),
             threshold_optimizer=optimizer,
             fuse_flag=False,
-        )(model)
+        ).convert_to_spiking_neurons(model)
 
         assert optimizer.called
         scalers = [m for m in snn.modules() if isinstance(m, VoltageScaler)]
@@ -659,7 +782,7 @@ class TestRuleBasedConversion:
             neuron_factory=TensorThresholdFactory(),
             threshold_optimizer=ThresholdOptimizer("fixed"),
             fuse_flag=False,
-        )(model)
+        ).convert_to_spiking_neurons(model)
 
         scalers = [m for m in snn.modules() if isinstance(m, VoltageScaler)]
         if_nodes = [m for m in snn.modules() if isinstance(m, neuron.IFNode)]
@@ -672,7 +795,9 @@ class TestRuleBasedConversion:
     def test_module_names_with_underscores_convert(self):
         model = UnderscoreModuleCNN()
         model.eval()
-        snn = Converter(dataloader=_make_loader(), fuse_flag=False)(model)
+        snn = Converter(
+            dataloader=_make_loader(), fuse_flag=False
+        ).convert_to_spiking_neurons(model)
 
         assert any(isinstance(m, neuron.IFNode) for m in snn.modules())
         assert not any(isinstance(m, nn.ReLU) for m in snn.modules())
@@ -692,7 +817,7 @@ class TestRuleBasedConversion:
         )
 
         with pytest.raises(ValueError, match="finite positive"):
-            converter(model)
+            converter.convert_to_spiking_neurons(model)
 
     def test_nan_threshold_raises(self):
         class NaNScaleOptimizer:
@@ -708,7 +833,7 @@ class TestRuleBasedConversion:
         )
 
         with pytest.raises(ValueError, match="finite positive"):
-            converter(model)
+            converter.convert_to_spiking_neurons(model)
 
     def test_infinite_threshold_raises(self):
         class InfiniteScaleOptimizer:
@@ -724,7 +849,7 @@ class TestRuleBasedConversion:
         )
 
         with pytest.raises(ValueError, match="finite positive"):
-            converter(model)
+            converter.convert_to_spiking_neurons(model)
 
 
 class TestReplaceByIfnodeDeprecation:
@@ -758,7 +883,7 @@ class TestEndToEnd:
         model = SimpleCNN()
         model.eval()
         converter = Converter(dataloader=_make_loader(), mode="Max", fuse_flag=True)
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         img = torch.randn(1, 1, 28, 28)
         T = 10
         out = 0
@@ -773,6 +898,6 @@ class TestEndToEnd:
         model = SimpleCNNNoBN()
         model.eval()
         converter = Converter(dataloader=_make_loader(), mode="Max", fuse_flag=False)
-        snn = converter(model)
+        snn = converter.convert_to_spiking_neurons(model)
         out = snn(torch.randn(1, 1, 28, 28))
         assert out.shape == (1, 10)

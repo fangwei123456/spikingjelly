@@ -197,7 +197,7 @@ ann2snn框架在2022年10月再次更新。在converter类中添加fuse方法，
 
 转换后ReLU模块被删除，SNN需要的新模块（包括VoltageScaler、IFNode等)被创建并存放在 ``snn tailor`` 父模块中。
 
-由于返回值的类型为fx.GraphModule，所以您可以使用print(fx.GraphModule.graph)查看计算图及前向传播关系。更多API参见 `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
+由于转换后模型的类型为 ``fx.GraphModule``，所以您可以使用 ``print(fx.GraphModule.graph)`` 查看生成的计算图。更多 API 参见 `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
 
 
 识别MNIST
@@ -314,7 +314,7 @@ ann2snn框架在2022年10月再次更新。在converter类中添加fuse方法，
 .. code-block:: python
 
     model_converter = ann2snn.Converter(mode='max', dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
 
 snn_model就是输出的SNN模型。查看snn_model的网络结构（BatchNorm2d的缺失，是由于转换过程中进行的conv_bn_fuse，也就是将bn层的参数吸收进conv层）：
 
@@ -479,7 +479,7 @@ shape、broadcast 和 ``VoltageScaler`` 语义，不属于当前转换路径。
     print('---------------------------------------------')
     print('Converting using MaxNorm')
     model_converter = ann2snn.Converter(mode='max', dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_max_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_max_accs[-1]))
@@ -487,7 +487,7 @@ shape、broadcast 和 ``VoltageScaler`` 语义，不属于当前转换路径。
     print('---------------------------------------------')
     print('Converting using RobustNorm')
     model_converter = ann2snn.Converter(mode='99.9%', dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_robust_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_robust_accs[-1]))
@@ -495,7 +495,7 @@ shape、broadcast 和 ``VoltageScaler`` 语义，不属于当前转换路径。
     print('---------------------------------------------')
     print('Converting using 1/2 max(activation) as scales...')
     model_converter = ann2snn.Converter(mode=1.0 / 2, dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_two_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_two_accs[-1]))
@@ -503,7 +503,7 @@ shape、broadcast 和 ``VoltageScaler`` 语义，不属于当前转换路径。
     print('---------------------------------------------')
     print('Converting using 1/3 max(activation) as scales')
     model_converter = ann2snn.Converter(mode=1.0 / 3, dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_three_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_three_accs[-1]))
@@ -511,7 +511,7 @@ shape、broadcast 和 ``VoltageScaler`` 语义，不属于当前转换路径。
     print('---------------------------------------------')
     print('Converting using 1/4 max(activation) as scales')
     model_converter = ann2snn.Converter(mode=1.0 / 4, dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_four_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_four_accs[-1]))
@@ -519,7 +519,7 @@ shape、broadcast 和 ``VoltageScaler`` 语义，不属于当前转换路径。
     print('---------------------------------------------')
     print('Converting using 1/5 max(activation) as scales')
     model_converter = ann2snn.Converter(mode=1.0 / 5, dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_five_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_five_accs[-1]))

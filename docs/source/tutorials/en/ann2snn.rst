@@ -203,7 +203,7 @@ You can set ``fuse_flag`` to ``True`` (by default), in order to fuse fuse the co
 
 After converting, ReLU modules will be removed. And new modules needed by SNN, such as VoltageScaler and IFNode, will be created and stored in the parent module ``snn tailor``.
 
-Due to the type of the return model is fx.GraphModule, you can use 'print(fx.GraphModule.graph)' to view how modules links and the how the forward method works. More APIs are here `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
+Since the converted model is an ``fx.GraphModule``, you can use ``print(fx.GraphModule.graph)`` to inspect the generated computation graph. More APIs are here `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
 
 
 Classify MNIST
@@ -319,7 +319,7 @@ Converting with Converter is very simple, you only need to set the mode you want
 .. code-block:: python
 
     model_converter = ann2snn.Converter(mode='max', dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
 
 snn_model is the output SNN model. View the network structure of the snn_model (the absence of BatchNorm2d is due to conv_bn_fuse during the conversion process, i.e. absorbing the parameters of the bn layer into the conv layer):
 
@@ -488,7 +488,7 @@ Following this example, we define the modes as ``max``, ``99.9%`` , ``1.0/2`` , 
     print('---------------------------------------------')
     print('Converting using MaxNorm')
     model_converter = ann2snn.Converter(mode='max', dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_max_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_max_accs[-1]))
@@ -496,7 +496,7 @@ Following this example, we define the modes as ``max``, ``99.9%`` , ``1.0/2`` , 
     print('---------------------------------------------')
     print('Converting using RobustNorm')
     model_converter = ann2snn.Converter(mode='99.9%', dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_robust_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_robust_accs[-1]))
@@ -504,7 +504,7 @@ Following this example, we define the modes as ``max``, ``99.9%`` , ``1.0/2`` , 
     print('---------------------------------------------')
     print('Converting using 1/2 max(activation) as scales...')
     model_converter = ann2snn.Converter(mode=1.0 / 2, dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_two_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_two_accs[-1]))
@@ -512,7 +512,7 @@ Following this example, we define the modes as ``max``, ``99.9%`` , ``1.0/2`` , 
     print('---------------------------------------------')
     print('Converting using 1/3 max(activation) as scales')
     model_converter = ann2snn.Converter(mode=1.0 / 3, dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_three_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_three_accs[-1]))
@@ -520,7 +520,7 @@ Following this example, we define the modes as ``max``, ``99.9%`` , ``1.0/2`` , 
     print('---------------------------------------------')
     print('Converting using 1/4 max(activation) as scales')
     model_converter = ann2snn.Converter(mode=1.0 / 4, dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_four_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_four_accs[-1]))
@@ -528,7 +528,7 @@ Following this example, we define the modes as ``max``, ``99.9%`` , ``1.0/2`` , 
     print('---------------------------------------------')
     print('Converting using 1/5 max(activation) as scales')
     model_converter = ann2snn.Converter(mode=1.0 / 5, dataloader=train_data_loader)
-    snn_model = model_converter(model)
+    snn_model = model_converter.convert_to_spiking_neurons(model)
     print('Simulating...')
     mode_five_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_five_accs[-1]))
