@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from spikingjelly.activation_based import ann2snn, neuron
+from spikingjelly.activation_based import ann2snn, neuron, surrogate
 from spikingjelly.activation_based.ann2snn import (
     Converter,
     HookFactory,
@@ -1246,6 +1246,66 @@ class TestRuleBasedConversion:
         assert scalers[0].scale.item() == pytest.approx(
             if_nodes[0].v_threshold.item() / scalers[1].scale.item()
         )
+
+    def test_custom_rule_can_insert_activation_aware_ifnode(self):
+        class ActivationAwareReLURule(ReLURule):
+            def replace_with_neurons(
+                self,
+                fx_model,
+                activation_node,
+                hook_node,
+                neuron_factory,
+                threshold_optimizer,
+            ):
+                hook = fx_model.get_submodule(hook_node.target)
+                scale = float(threshold_optimizer.compute_threshold(hook))
+                target = f"{activation_node.target}_activation_aware_if"
+                fx_model.add_submodule(
+                    target,
+                    neuron.ActivationAwareIFNode(
+                        v_threshold=torch.full((8,), scale),
+                        v_offset=torch.zeros(8),
+                        channel_dim=1,
+                        surrogate_function=surrogate.DeterministicPass(),
+                    ),
+                )
+                with fx_model.graph.inserting_after(hook_node):
+                    new_node = fx_model.graph.call_module(
+                        target, args=activation_node.args
+                    )
+                hook_node.replace_all_uses_with(new_node)
+                activation_node.replace_all_uses_with(new_node)
+                fx_model.graph.erase_node(hook_node)
+                fx_model.graph.erase_node(activation_node)
+
+        model = SimpleCNNNoBN()
+        model.eval()
+        snn = Converter(
+            dataloader=_make_loader(),
+            rules=[ActivationAwareReLURule()],
+            fuse_flag=False,
+        ).convert_to_spiking_neurons(model)
+
+        assert any(isinstance(m, neuron.ActivationAwareIFNode) for m in snn.modules())
+        assert not any(isinstance(m, neuron.IFNode) for m in snn.modules())
+        x = torch.rand(2, 1, 28, 28)
+        y = snn(x)
+        assert y.shape == (2, 10)
+
+    def test_default_conversion_still_uses_scalar_ifnode(self):
+        model = SimpleCNNNoBN()
+        model.eval()
+        snn = Converter(
+            dataloader=_make_loader(),
+            fuse_flag=False,
+        ).convert_to_spiking_neurons(model)
+
+        if_nodes = [m for m in snn.modules() if isinstance(m, neuron.IFNode)]
+        assert len(if_nodes) == 1
+        assert not any(
+            isinstance(m, neuron.ActivationAwareIFNode) for m in snn.modules()
+        )
+        assert isinstance(if_nodes[0].v_threshold, float)
 
     def test_module_names_with_underscores_convert(self):
         model = UnderscoreModuleCNN()
