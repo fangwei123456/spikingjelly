@@ -23,4 +23,4 @@ Examples
 .. toctree::
    :maxdepth: 1
 
-   spikingjelly.timing_based.examples
+   examples <spikingjelly.timing_based.examples>

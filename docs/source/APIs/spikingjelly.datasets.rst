@@ -59,18 +59,18 @@ Datasets
 .. toctree::
    :maxdepth: 2
 
-   spikingjelly.datasets.asl_dvs
-   spikingjelly.datasets.bullying10k
-   spikingjelly.datasets.cifar10_dvs
-   spikingjelly.datasets.dvs_lip
-   spikingjelly.datasets.dvs128_gesture
-   spikingjelly.datasets.es_imagenet
-   spikingjelly.datasets.hardvs
-   spikingjelly.datasets.n_caltech101
-   spikingjelly.datasets.n_mnist
-   spikingjelly.datasets.nav_gesture
-   spikingjelly.datasets.shd
-   spikingjelly.datasets.speechcommands
+   asl_dvs <spikingjelly.datasets.asl_dvs>
+   bullying10k <spikingjelly.datasets.bullying10k>
+   cifar10_dvs <spikingjelly.datasets.cifar10_dvs>
+   dvs_lip <spikingjelly.datasets.dvs_lip>
+   dvs128_gesture <spikingjelly.datasets.dvs128_gesture>
+   es_imagenet <spikingjelly.datasets.es_imagenet>
+   hardvs <spikingjelly.datasets.hardvs>
+   n_caltech101 <spikingjelly.datasets.n_caltech101>
+   n_mnist <spikingjelly.datasets.n_mnist>
+   nav_gesture <spikingjelly.datasets.nav_gesture>
+   shd <spikingjelly.datasets.shd>
+   speechcommands <spikingjelly.datasets.speechcommands>
 
 Dataset Base Class
 ------------------------
@@ -78,7 +78,7 @@ Dataset Base Class
 .. toctree::
    :maxdepth: 2
 
-   spikingjelly.datasets.base
+   base <spikingjelly.datasets.base>
 
 Dataset Utilities
 -----------------------
@@ -86,7 +86,7 @@ Dataset Utilities
 .. toctree::
    :maxdepth: 2
 
-   spikingjelly.datasets.utils
+   utils <spikingjelly.datasets.utils>
 
 Data Augmentations
 -----------------------
@@ -94,4 +94,4 @@ Data Augmentations
 .. toctree::
    :maxdepth: 2
 
-   spikingjelly.datasets.transform
+   transform <spikingjelly.datasets.transform>
