@@ -54,7 +54,7 @@ SpikingJelly's **containers** wrap common network architectures and support both
 .. toctree::
    :hidden:
 
-   spikingjelly.activation_based.layer.container
+   container <spikingjelly.activation_based.layer.container>
 
 Wrappers for Stateless Layers
 +++++++++++++++++++++++++++++
@@ -152,7 +152,7 @@ Group Normalization Layers
 .. toctree::
    :hidden:
 
-   spikingjelly.activation_based.layer.stateless_wrapper
+   stateless_wrapper <spikingjelly.activation_based.layer.stateless_wrapper>
 
 Attention Layers
 ++++++++++++++++
@@ -190,7 +190,7 @@ Attention for Spiking Transformers
 .. toctree::
    :hidden:
 
-   spikingjelly.activation_based.layer.attention
+   attention <spikingjelly.activation_based.layer.attention>
 
 Batch Normalization Variants
 ++++++++++++++++++++++++++++
@@ -260,7 +260,7 @@ Batch Normalization Through Time
 .. toctree::
    :hidden:
 
-   spikingjelly.activation_based.layer.bn
+   bn <spikingjelly.activation_based.layer.bn>
 
 Dropout Variants
 ++++++++++++++++
@@ -284,7 +284,7 @@ SpikingJelly provides **dropout implementations** suitable for SNNs with step mo
 .. toctree::
    :hidden:
 
-   spikingjelly.activation_based.layer.dropout
+   dropout <spikingjelly.activation_based.layer.dropout>
 
 Online Learning Modules
 +++++++++++++++++++++++
@@ -309,7 +309,7 @@ SpikingJelly's **online learning modules** provide auxiliary classes and operati
 .. toctree::
    :hidden:
 
-   spikingjelly.activation_based.layer.online_learning
+   online_learning <spikingjelly.activation_based.layer.online_learning>
 
 Miscellaneous
 +++++++++++++
@@ -334,4 +334,4 @@ SpikingJelly's **miscellaneous module** provides auxiliary layers and other util
 .. toctree::
    :hidden:
 
-   spikingjelly.activation_based.layer.misc
+   misc <spikingjelly.activation_based.layer.misc>

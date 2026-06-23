@@ -7,7 +7,7 @@ Predefined Neuron Kernels
 .. toctree::
    :maxdepth: 1
 
-   spikingjelly.activation_based.cuda_kernel.neuron_kernel
+   neuron_kernel <spikingjelly.activation_based.cuda_kernel.neuron_kernel>
 
 CUDA Code Auto-generation
 ------------------------------------------------------------------
@@ -15,7 +15,7 @@ CUDA Code Auto-generation
 .. toctree::
    :maxdepth: 1
 
-   spikingjelly.activation_based.cuda_kernel.auto_cuda
+   auto_cuda <spikingjelly.activation_based.cuda_kernel.auto_cuda>
 
 1-bit Spike Operation (Experimental)
 --------------------------------------------
@@ -23,8 +23,8 @@ CUDA Code Auto-generation
 .. toctree::
    :maxdepth: 1
 
-   spikingjelly.activation_based.cuda_kernel.spike_op
-   spikingjelly.activation_based.cuda_kernel.tensor_cache
+   spike_op <spikingjelly.activation_based.cuda_kernel.spike_op>
+   tensor_cache <spikingjelly.activation_based.cuda_kernel.tensor_cache>
 
 Utilities
 ------------------------------------------------------------------
@@ -32,4 +32,4 @@ Utilities
 .. toctree::
    :maxdepth: 1
 
-   spikingjelly.activation_based.cuda_kernel.cuda_utils
+   cuda_utils <spikingjelly.activation_based.cuda_kernel.cuda_utils>

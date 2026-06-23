@@ -40,7 +40,7 @@ fundamental building blocks for both research and practical applications.
 .. toctree::
    :hidden:
 
-   spikingjelly.activation_based.neuron.core
+   core <spikingjelly.activation_based.neuron.core>
 
 Base Classes
 ---------------------------
@@ -122,7 +122,7 @@ These neurons often originate from specific papers and are not so widely used as
 .. toctree::
    :hidden:
 
-   spikingjelly.activation_based.neuron.research
+   research <spikingjelly.activation_based.neuron.research>
 
 Adaptive Neurons
 --------------------------------------------

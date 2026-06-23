@@ -34,7 +34,7 @@ Automatic memory optimization pipeline for deep SNN training based on gradient c
 .. toctree::
     :hidden:
 
-    spikingjelly.activation_based.memopt.pipeline
+    pipeline <spikingjelly.activation_based.memopt.pipeline>
 
 Gradient Checkpointing Tools
 +++++++++++++++++++++++++++++++++++
@@ -61,7 +61,7 @@ Tools for implementing gradient checkpointing (GC) with input compression.
 .. toctree::
     :hidden:
 
-    spikingjelly.activation_based.memopt.checkpointing
+    checkpointing <spikingjelly.activation_based.memopt.checkpointing>
 
 Spike Compressors
 +++++++++++++++++++++++++++++++++++
@@ -90,4 +90,4 @@ Compressors that convert spike tensors represented in floating-point numbers int
 .. toctree::
     :hidden:
 
-    spikingjelly.activation_based.memopt.compress
+    compress <spikingjelly.activation_based.memopt.compress>

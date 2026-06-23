@@ -13,6 +13,24 @@
 #
 import os
 import sys
+import logging
+import dataclasses
+import inspect
+import typing
+import sys as _sys
+
+
+class _DocsBuildLogFilter(logging.Filter):
+    def filter(self, record):
+        message = record.getMessage()
+        ignored_prefixes = (
+            "spikingjelly.activation_based.spike_op: try to use `torch.utils.cpp_extension.load_inline`",
+            "If it is hanging, pleast try to delete torch_extensions cache directory.",
+        )
+        return not message.startswith(ignored_prefixes)
+
+
+logging.getLogger().addFilter(_DocsBuildLogFilter())
 
 # sys.path.insert(0, os.path.abspath('../../spikingjelly/'))
 sys.path.insert(0, os.path.abspath("../../"))
@@ -96,6 +114,132 @@ show_authors = True
 
 napoleon_use_ivar = True
 
+
+def _resolve_postponed_signature_annotations(obj):
+    try:
+        signature = inspect.signature(obj)
+        type_hints = typing.get_type_hints(obj, include_extras=True)
+    except Exception:
+        return None
+
+    changed = False
+    parameters = []
+    for parameter in signature.parameters.values():
+        annotation = type_hints.get(parameter.name, parameter.annotation)
+        if annotation is not parameter.annotation:
+            changed = True
+            parameter = parameter.replace(annotation=annotation)
+        parameters.append(parameter)
+
+    return_annotation = type_hints.get("return", signature.return_annotation)
+    if return_annotation is not signature.return_annotation:
+        changed = True
+
+    if not changed:
+        return None
+
+    return signature.replace(
+        parameters=parameters,
+        return_annotation=return_annotation,
+    )
+
+
+def _set_signature(obj, signature):
+    try:
+        obj.__signature__ = signature
+    except Exception:
+        pass
+
+
+def _signature_without_bound_self(signature):
+    parameters = list(signature.parameters.values())
+    if parameters and parameters[0].name in {"self", "cls"}:
+        parameters = parameters[1:]
+    return signature.replace(
+        parameters=parameters,
+        return_annotation=inspect.Signature.empty,
+    )
+
+
+def _signature_without_annotations(signature):
+    parameters = [
+        parameter.replace(annotation=inspect.Parameter.empty)
+        for parameter in signature.parameters.values()
+    ]
+    return signature.replace(
+        parameters=parameters,
+        return_annotation=inspect.Signature.empty,
+    )
+
+
+def _owner_class_for_method(method):
+    qualname = getattr(method, "__qualname__", "")
+    if "." not in qualname:
+        return None
+    owner_name = qualname.rsplit(".", 1)[0].split(".")[-1]
+    module = _sys.modules.get(getattr(method, "__module__", ""))
+    owner = getattr(module, owner_name, None) if module is not None else None
+    return owner if inspect.isclass(owner) else None
+
+
+def _class_from_fullname(name):
+    module_name, _, class_name = name.rpartition(".")
+    if not module_name:
+        return None
+    module = _sys.modules.get(module_name)
+    if module is None:
+        try:
+            module = __import__(module_name, fromlist=[class_name])
+        except Exception:
+            return None
+    owner = getattr(module, class_name, None)
+    return owner if inspect.isclass(owner) else None
+
+
+def _resolve_postponed_signature(app, obj, bound_method):
+    if inspect.isclass(obj) and dataclasses.is_dataclass(obj):
+        init_signature = _resolve_postponed_signature_annotations(obj.__init__)
+        if init_signature is not None:
+            _set_signature(obj.__init__, init_signature)
+            _set_signature(obj, _signature_without_bound_self(init_signature))
+        return None
+
+    signature = _resolve_postponed_signature_annotations(obj)
+    if signature is not None:
+        _set_signature(obj, signature)
+        owner = _owner_class_for_method(obj)
+        if owner is not None and dataclasses.is_dataclass(owner) and obj is owner.__init__:
+            _set_signature(owner, _signature_without_bound_self(signature))
+
+    return None
+
+
+def _resolve_postponed_type_hints(app, objtype, name, obj, options, args, retann):
+    _resolve_postponed_signature(app, obj, False)
+
+    cls = obj if inspect.isclass(obj) else _class_from_fullname(name)
+    if objtype == "class" and cls is not None and dataclasses.is_dataclass(cls):
+        signature = _resolve_postponed_signature_annotations(cls.__init__)
+        if signature is not None:
+            signature = _signature_without_bound_self(signature)
+            signature = _signature_without_annotations(signature)
+            return str(signature), None
+
+    return None
+
+
+def setup(app):
+    app.connect(
+        "autodoc-before-process-signature",
+        _resolve_postponed_signature,
+        priority=400,
+    )
+    app.connect(
+        "autodoc-process-signature",
+        _resolve_postponed_type_hints,
+        priority=400,
+    )
+
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
@@ -132,5 +276,11 @@ autodoc_mock_imports = [
 autoclass_content = "both"
 autodoc_member_order = "bysource"
 autodoc_inherit_docstrings = False
+autodoc_typehints = "description"
+autodoc_typehints_description_target = "all"
+autodoc_typehints_format = "short"
+python_use_unqualified_type_names = True
+python_trailing_comma_in_multi_line_signatures = False
+toc_object_entries_show_parents = "hide"
 
 master_doc = "index"

@@ -54,7 +54,7 @@ These functions help users set **configurations for each submodule** in a networ
 .. toctree::
    :hidden:
 
-   spikingjelly.activation_based.functional.net_config
+   net_config <spikingjelly.activation_based.functional.net_config>
 
 Forward Functions
 ++++++++++++++++++++++++++
@@ -81,7 +81,7 @@ SpikingJelly's **forward functions** provide multi-step forward propagation logi
 .. toctree::
    :hidden:
 
-   spikingjelly.activation_based.functional.forward
+   forward <spikingjelly.activation_based.functional.forward>
 
 Loss Functions
 +++++++++++++++
@@ -104,7 +104,7 @@ Loss Functions
 .. toctree::
    :hidden:
 
-   spikingjelly.activation_based.functional.loss
+   loss <spikingjelly.activation_based.functional.loss>
 
 Online Learning Pipelines
 +++++++++++++++++++++++++++++++
@@ -127,7 +127,7 @@ Auxiliary functions for **online learning** .
 .. toctree::
    :hidden:
 
-   spikingjelly.activation_based.functional.online_learning
+   online_learning <spikingjelly.activation_based.functional.online_learning>
 
 Miscellaneous
 +++++++++++++++++++++
@@ -154,4 +154,4 @@ Other auxiliary **tool functions** .
 .. toctree::
    :hidden:
 
-   spikingjelly.activation_based.functional.misc
+   misc <spikingjelly.activation_based.functional.misc>

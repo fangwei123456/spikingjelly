@@ -131,4 +131,4 @@ Common Utilities
 .. toctree::
    :maxdepth: 2
 
-   spikingjelly.activation_based.examples.common
+   common <spikingjelly.activation_based.examples.common>

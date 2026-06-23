@@ -52,4 +52,4 @@ Examples
 .. toctree::
    :maxdepth: 2
 
-   spikingjelly.activation_based.ann2snn.examples
+   examples <spikingjelly.activation_based.ann2snn.examples>

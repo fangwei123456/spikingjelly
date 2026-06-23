@@ -1,3 +1,154 @@
+/* Layout */
+
+html {
+    --sj-page-width-wide: 1800px;
+    --sj-article-width-wide: 76rem;
+    --sj-sidebar-primary-width-wide: 20rem;
+    --sj-sidebar-secondary-width-wide: 16rem;
+}
+
+.bd-page-width {
+    max-width: 100%;
+}
+
+@media (min-width: 1800px) {
+    .bd-page-width {
+        max-width: var(--sj-page-width-wide);
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
+
+@media (min-width: 1200px) {
+    .bd-main .bd-content .bd-article-container {
+        max-width: 100%;
+    }
+
+    .bd-main .bd-content .bd-article-container .bd-article {
+        max-width: var(--sj-article-width-wide);
+    }
+
+    .bd-sidebar-primary {
+        width: var(--sj-sidebar-primary-width-wide);
+    }
+
+    .bd-sidebar-secondary {
+        width: var(--sj-sidebar-secondary-width-wide);
+    }
+}
+
+@media (min-width: 1200px) and (max-width: 1599.98px) {
+    .bd-sidebar-primary {
+        width: 18rem;
+    }
+
+    .bd-sidebar-secondary {
+        width: 12rem;
+    }
+}
+
+/* Sidebar navigation */
+
+@media (min-width: 960px) {
+    .bd-sidebar-primary .nav-link,
+    .bd-sidebar-primary .toctree-l1 > a,
+    .bd-sidebar-primary .toctree-l2 > a,
+    .bd-sidebar-primary .toctree-l3 > a,
+    .bd-sidebar-primary .toctree-l4 > a {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        line-height: 1.35;
+    }
+
+    .bd-sidebar-primary .toctree-l2 > a.nav-link,
+    .bd-sidebar-primary .toctree-l2 > a,
+    .bd-sidebar-primary .toctree-l3 > a.nav-link,
+    .bd-sidebar-primary .toctree-l3 > a {
+        font-size: 0.86rem;
+    }
+
+    .bd-sidebar-primary .toctree-l2,
+    .bd-sidebar-primary .toctree-l3,
+    .bd-sidebar-primary .toctree-l4 {
+        min-width: 0;
+    }
+}
+
+/* Content rhythm and language dividers */
+
+.bd-article hr.docutils {
+    height: 2px;
+    margin: 2rem 0 1.5rem;
+    border: 0;
+    opacity: 1;
+    background: linear-gradient(
+        90deg,
+        var(--pst-color-primary),
+        var(--pst-color-border) 65%,
+        transparent
+    );
+}
+
+.bd-article hr.docutils + p,
+.bd-article hr.docutils + ul.simple {
+    margin-top: 0;
+}
+
+.bd-article ul.simple[id$="-cn"],
+.bd-article ul.simple[id$="-en"] {
+    margin: 1.25rem 0 0.75rem;
+    padding-left: 0;
+    list-style: none;
+}
+
+.bd-article ul.simple[id$="-cn"] > li,
+.bd-article ul.simple[id$="-en"] > li {
+    margin: 0;
+}
+
+.bd-article ul.simple[id$="-cn"] > li > p,
+.bd-article ul.simple[id$="-en"] > li > p {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.7rem;
+    margin: 0;
+    padding: 0.15rem 0.65rem;
+    border: 1px solid var(--pst-color-border);
+    border-left: 4px solid var(--pst-color-primary);
+    border-radius: 0.25rem;
+    background-color: var(--pst-color-surface);
+    color: var(--pst-color-text-base);
+    font-size: 0.86rem;
+    line-height: 1.25;
+}
+
+.bd-article .admonition > p:has(> strong:only-child) {
+    margin-top: 1.1rem;
+    margin-bottom: 0.75rem;
+}
+
+.bd-article .admonition > p:has(> strong:only-child) > strong {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.65rem;
+    border-left: 4px solid var(--pst-color-primary);
+    border-radius: 0.25rem;
+    background-color: var(--pst-color-surface);
+    font-size: 0.9rem;
+}
+
+.bd-article .admonition > p:first-of-type:has(> strong:only-child) {
+    margin-top: 0.25rem;
+}
+
+.bd-article .highlight,
+.bd-article .pst-scrollable-table-container {
+    margin-top: 0.9rem;
+    margin-bottom: 1.25rem;
+}
+
 dl.py.class {
     margin-top: 3rem;
     margin-bottom: 3rem;
@@ -13,6 +164,10 @@ dl.py > dt.sig.sig-object.py {
 
     display: block;
     white-space: normal;
+    overflow-x: auto;
+    line-height: 1.65;
+    overflow-wrap: normal;
+    word-break: normal;
 }
 
 dl.py.class > dt.sig.sig-object.py {
@@ -43,11 +198,24 @@ dl.py > dt.sig .sig-name {
 
 dl.py > dt.sig .sig-paren,
 dl.py > dt.sig .sig-param {
-    white-space: normal;
+    white-space: nowrap;
 }
 
 dl.py > dt.sig .sig-param {
     display: inline-block;
+}
+
+dl.py > dt.sig .sig-name,
+dl.py > dt.sig .sig-prename,
+dl.py > dt.sig .pre {
+    overflow-wrap: normal;
+    word-break: normal;
+}
+
+dl.py > dt.sig .sig-param > .p:has(+ .w + .n .s),
+dl.py > dt.sig .sig-param > .p:has(+ .w + .n .s) + .w,
+dl.py > dt.sig .sig-param > .n:has(.s) {
+    display: none;
 }
 
 dl.py > dt.sig .sig-param a.reference.external {

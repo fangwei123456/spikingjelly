@@ -27,7 +27,7 @@ Predefined Neuron Kernels
 .. toctree::
    :maxdepth: 3
 
-   spikingjelly.activation_based.triton_kernel.neuron_kernel
+   neuron_kernel <spikingjelly.activation_based.triton_kernel.neuron_kernel>
 
 FlexSN Implementation
 ---------------------------------------------------------------------
@@ -35,7 +35,7 @@ FlexSN Implementation
 .. toctree::
    :maxdepth: 3
 
-   spikingjelly.activation_based.triton_kernel.flexsn
+   flexsn <spikingjelly.activation_based.triton_kernel.flexsn>
 
 Torch-to-Triton Transpiler
 -----------------------------------------------------------------------------
@@ -43,7 +43,7 @@ Torch-to-Triton Transpiler
 .. toctree::
    :maxdepth: 3
 
-   spikingjelly.activation_based.triton_kernel.torch2triton
+   torch2triton <spikingjelly.activation_based.triton_kernel.torch2triton>
 
 Spike Compressors
 ---------------------------------------------------------------------
@@ -51,7 +51,7 @@ Spike Compressors
 .. toctree::
     :maxdepth: 2
 
-    spikingjelly.activation_based.triton_kernel.compress
+    compress <spikingjelly.activation_based.triton_kernel.compress>
 
 Utilities
 ---------------------------------------------------------------------
