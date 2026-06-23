@@ -1,6 +1,5 @@
 """
-**API Language:**
-:ref:`中文 <ss_neuron_kernel-cn>` | :ref:`English <ss_neuron_kernel-en>`
+**API Language** - :ref:`中文 <ss_neuron_kernel-cn>` | :ref:`English <ss_neuron_kernel-en>`
 
 ----
 

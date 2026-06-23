@@ -513,8 +513,7 @@ class FlexSNKernel:
         requires_grad: Optional[Tuple[bool]] = None,
     ):
         """
-        **API Language:**
-        :ref:`中文 <FlexSNKernel.__init__-cn>` | :ref:`English <FlexSNKernel.__init__-en>`
+        **API Language** - :ref:`中文 <FlexSNKernel.__init__-cn>` | :ref:`English <FlexSNKernel.__init__-en>`
 
         ----
 
@@ -753,8 +752,7 @@ class FlexSN(base.MemoryModule):
         example_outputs: Optional[Tuple[torch.Tensor]] = None,
     ):
         """
-        **API Language:**
-        :ref:`中文 <FlexSN.__init__-cn>` | :ref:`English <FlexSN.__init__-en>`
+        **API Language** - :ref:`中文 <FlexSN.__init__-cn>` | :ref:`English <FlexSN.__init__-en>`
 
         ----
 
@@ -1238,8 +1236,7 @@ class FlexSN(base.MemoryModule):
     @staticmethod
     def init_states(num_states: int, step_mode: str, *args) -> List[torch.Tensor]:
         """
-        **API Language:**
-        :ref:`中文 <FlexSN.init_states-cn>` | :ref:`English <FlexSN.init_states-en>`
+        **API Language** - :ref:`中文 <FlexSN.init_states-cn>` | :ref:`English <FlexSN.init_states-en>`
 
         ----
 

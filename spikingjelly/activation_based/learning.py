@@ -21,8 +21,7 @@ def stdp_linear_single_step(
     f_post: Callable = lambda x: x,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <stdp_linear_single_step-cn>` | :ref:`English <stdp_linear_single_step-en>`
+    **API Language** - :ref:`中文 <stdp_linear_single_step-cn>` | :ref:`English <stdp_linear_single_step-en>`
 
     ----
 
@@ -118,8 +117,7 @@ def mstdp_linear_single_step(
     f_post: Callable = lambda x: x,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <mstdp_linear_single_step-cn>` | :ref:`English <mstdp_linear_single_step-en>`
+    **API Language** - :ref:`中文 <mstdp_linear_single_step-cn>` | :ref:`English <mstdp_linear_single_step-en>`
 
     ----
 
@@ -216,8 +214,7 @@ def mstdpet_linear_single_step(
     f_post: Callable = lambda x: x,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <mstdpet_linear_single_step-cn>` | :ref:`English <mstdpet_linear_single_step-en>`
+    **API Language** - :ref:`中文 <mstdpet_linear_single_step-cn>` | :ref:`English <mstdpet_linear_single_step-en>`
 
     ----
 
@@ -311,8 +308,7 @@ def stdp_conv2d_single_step(
     f_post: Callable = lambda x: x,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <stdp_conv2d_single_step-cn>` | :ref:`English <stdp_conv2d_single_step-en>`
+    **API Language** - :ref:`中文 <stdp_conv2d_single_step-cn>` | :ref:`English <stdp_conv2d_single_step-en>`
 
     ----
 
@@ -460,8 +456,7 @@ def stdp_conv1d_single_step(
     f_post: Callable = lambda x: x,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <stdp_conv1d_single_step-cn>` | :ref:`English <stdp_conv1d_single_step-en>`
+    **API Language** - :ref:`中文 <stdp_conv1d_single_step-cn>` | :ref:`English <stdp_conv1d_single_step-en>`
 
     ----
 
@@ -602,8 +597,7 @@ def stdp_multi_step(
     f_post: Callable = lambda x: x,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <stdp_multi_step-cn>` | :ref:`English <stdp_multi_step-en>`
+    **API Language** - :ref:`中文 <stdp_multi_step-cn>` | :ref:`English <stdp_multi_step-en>`
 
     ----
 
@@ -713,8 +707,7 @@ class STDPLearner(base.MemoryModule):
         f_post: Callable = lambda x: x,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <STDPLearner.__init__-cn>` | :ref:`English <STDPLearner.__init__-en>`
+        **API Language** - :ref:`中文 <STDPLearner.__init__-cn>` | :ref:`English <STDPLearner.__init__-en>`
 
         ----
 
@@ -790,8 +783,7 @@ class STDPLearner(base.MemoryModule):
 
     def reset(self):
         r"""
-        **API Language:**
-        :ref:`中文 <STDPLearner.reset-cn>` | :ref:`English <STDPLearner.reset-en>`
+        **API Language** - :ref:`中文 <STDPLearner.reset-cn>` | :ref:`English <STDPLearner.reset-en>`
 
         ----
 
@@ -816,8 +808,7 @@ class STDPLearner(base.MemoryModule):
 
     def disable(self):
         r"""
-        **API Language:**
-        :ref:`中文 <STDPLearner.disable-cn>` | :ref:`English <STDPLearner.disable-en>`
+        **API Language** - :ref:`中文 <STDPLearner.disable-cn>` | :ref:`English <STDPLearner.disable-en>`
 
         ----
 
@@ -841,8 +832,7 @@ class STDPLearner(base.MemoryModule):
 
     def enable(self):
         r"""
-        **API Language:**
-        :ref:`中文 <STDPLearner.enable-cn>` | :ref:`English <STDPLearner.enable-en>`
+        **API Language** - :ref:`中文 <STDPLearner.enable-cn>` | :ref:`English <STDPLearner.enable-en>`
 
         ----
 
@@ -866,8 +856,7 @@ class STDPLearner(base.MemoryModule):
 
     def step(self, on_grad: bool = True, scale: float = 1.0):
         r"""
-        **API Language:**
-        :ref:`中文 <STDPLearner.step-cn>` | :ref:`English <STDPLearner.step-en>`
+        **API Language** - :ref:`中文 <STDPLearner.step-cn>` | :ref:`English <STDPLearner.step-en>`
 
         ----
 
@@ -972,8 +961,7 @@ class MSTDPLearner(base.MemoryModule):
         f_post: Callable = lambda x: x,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <MSTDPLearner.__init__-cn>` | :ref:`English <MSTDPLearner.__init__-en>`
+        **API Language** - :ref:`中文 <MSTDPLearner.__init__-cn>` | :ref:`English <MSTDPLearner.__init__-en>`
 
         ----
 
@@ -1048,8 +1036,7 @@ class MSTDPLearner(base.MemoryModule):
 
     def reset(self):
         r"""
-        **API Language:**
-        :ref:`中文 <MSTDPLearner.reset-cn>` | :ref:`English <MSTDPLearner.reset-en>`
+        **API Language** - :ref:`中文 <MSTDPLearner.reset-cn>` | :ref:`English <MSTDPLearner.reset-en>`
 
         ----
 
@@ -1074,8 +1061,7 @@ class MSTDPLearner(base.MemoryModule):
 
     def disable(self):
         r"""
-        **API Language:**
-        :ref:`中文 <MSTDPLearner.disable-cn>` | :ref:`English <MSTDPLearner.disable-en>`
+        **API Language** - :ref:`中文 <MSTDPLearner.disable-cn>` | :ref:`English <MSTDPLearner.disable-en>`
 
         ----
 
@@ -1099,8 +1085,7 @@ class MSTDPLearner(base.MemoryModule):
 
     def enable(self):
         r"""
-        **API Language:**
-        :ref:`中文 <MSTDPLearner.enable-cn>` | :ref:`English <MSTDPLearner.enable-en>`
+        **API Language** - :ref:`中文 <MSTDPLearner.enable-cn>` | :ref:`English <MSTDPLearner.enable-en>`
 
         ----
 
@@ -1124,8 +1109,7 @@ class MSTDPLearner(base.MemoryModule):
 
     def step(self, reward, on_grad: bool = True, scale: float = 1.0):
         r"""
-        **API Language:**
-        :ref:`中文 <MSTDPLearner.step-cn>` | :ref:`English <MSTDPLearner.step-en>`
+        **API Language** - :ref:`中文 <MSTDPLearner.step-cn>` | :ref:`English <MSTDPLearner.step-en>`
 
         ----
 
@@ -1242,8 +1226,7 @@ class MSTDPETLearner(base.MemoryModule):
         f_post: Callable = lambda x: x,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <MSTDPETLearner.__init__-cn>` | :ref:`English <MSTDPETLearner.__init__-en>`
+        **API Language** - :ref:`中文 <MSTDPETLearner.__init__-cn>` | :ref:`English <MSTDPETLearner.__init__-en>`
 
         ----
 
@@ -1319,8 +1302,7 @@ class MSTDPETLearner(base.MemoryModule):
 
     def reset(self):
         r"""
-        **API Language:**
-        :ref:`中文 <MSTDPETLearner.reset-cn>` | :ref:`English <MSTDPETLearner.reset-en>`
+        **API Language** - :ref:`中文 <MSTDPETLearner.reset-cn>` | :ref:`English <MSTDPETLearner.reset-en>`
 
         ----
 
@@ -1345,8 +1327,7 @@ class MSTDPETLearner(base.MemoryModule):
 
     def disable(self):
         r"""
-        **API Language:**
-        :ref:`中文 <MSTDPETLearner.disable-cn>` | :ref:`English <MSTDPETLearner.disable-en>`
+        **API Language** - :ref:`中文 <MSTDPETLearner.disable-cn>` | :ref:`English <MSTDPETLearner.disable-en>`
 
         ----
 
@@ -1370,8 +1351,7 @@ class MSTDPETLearner(base.MemoryModule):
 
     def enable(self):
         r"""
-        **API Language:**
-        :ref:`中文 <MSTDPETLearner.enable-cn>` | :ref:`English <MSTDPETLearner.enable-en>`
+        **API Language** - :ref:`中文 <MSTDPETLearner.enable-cn>` | :ref:`English <MSTDPETLearner.enable-en>`
 
         ----
 
@@ -1395,8 +1375,7 @@ class MSTDPETLearner(base.MemoryModule):
 
     def step(self, reward, on_grad: bool = True, scale: float = 1.0):
         r"""
-        **API Language:**
-        :ref:`中文 <MSTDPETLearner.step-cn>` | :ref:`English <MSTDPETLearner.step-en>`
+        **API Language** - :ref:`中文 <MSTDPETLearner.step-cn>` | :ref:`English <MSTDPETLearner.step-en>`
 
         ----
 

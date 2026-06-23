@@ -11,8 +11,7 @@ __all__ = [
 
 def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
     r"""
-    **API Language:**
-    :ref:`中文 <kernel_dot_product-cn>` | :ref:`English <kernel_dot_product-en>`
+    **API Language** - :ref:`中文 <kernel_dot_product-cn>` | :ref:`English <kernel_dot_product-en>`
 
     ----
 
@@ -108,8 +107,7 @@ def spike_similar_loss(
     spikes: Tensor, labels: Tensor, kernel_type="linear", loss_type="mse", *args
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spike_similar_loss-cn>` | :ref:`English <spike_similar_loss-en>`
+    **API Language** - :ref:`中文 <spike_similar_loss-cn>` | :ref:`English <spike_similar_loss-en>`
 
     ----
 
@@ -247,8 +245,7 @@ def spike_similar_loss(
 
 def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
     """
-    **API Language:**
-    :ref:`中文 <temporal_efficient_training_cross_entropy-cn>` | :ref:`English <temporal_efficient_training_cross_entropy-en>`
+    **API Language** - :ref:`中文 <temporal_efficient_training_cross_entropy-cn>` | :ref:`English <temporal_efficient_training_cross_entropy-en>`
 
     ----
 

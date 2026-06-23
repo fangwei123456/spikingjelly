@@ -373,8 +373,7 @@ class NeuronATGFBase:
     @staticmethod
     def pre_forward(py_dict: dict):
         r"""
-        **API Language:**
-        :ref:`中文 <ss_neuron_kernel_pre_forward-cn>` | :ref:`English <ss_neuron_kernel_pre_forward-en>`
+        **API Language** - :ref:`中文 <ss_neuron_kernel_pre_forward-cn>` | :ref:`English <ss_neuron_kernel_pre_forward-en>`
 
         ----
 

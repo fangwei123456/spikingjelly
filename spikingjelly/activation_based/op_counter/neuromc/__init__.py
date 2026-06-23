@@ -1,6 +1,5 @@
 """
-**API Language:**
-:ref:`中文 <neuromc-cn>` | :ref:`English <neuromc-en>`
+**API Language** - :ref:`中文 <neuromc-cn>` | :ref:`English <neuromc-en>`
 
 ----
 

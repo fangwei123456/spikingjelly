@@ -20,8 +20,7 @@ def _unpack_len1_tuple(x: Union[tuple, torch.Tensor]):
 class BaseMonitor:
     def __init__(self):
         r"""
-        **API Language:**
-        :ref:`中文 <BaseMonitor.__init__-cn>` | :ref:`English <BaseMonitor.__init__-en>`
+        **API Language** - :ref:`中文 <BaseMonitor.__init__-cn>` | :ref:`English <BaseMonitor.__init__-en>`
 
         ----
 
@@ -90,8 +89,7 @@ class OutputMonitor(BaseMonitor):
         function_on_output: Callable = lambda x: x,
     ):
         """
-        **API Language:**
-        :ref:`中文 <OutputMonitor-cn>` | :ref:`English <OutputMonitor-en>`
+        **API Language** - :ref:`中文 <OutputMonitor-cn>` | :ref:`English <OutputMonitor-en>`
 
         ----
 
@@ -204,8 +202,7 @@ class InputMonitor(BaseMonitor):
         function_on_input: Callable = lambda x: x,
     ):
         """
-        **API Language:**
-        :ref:`中文 <InputMonitor-cn>` | :ref:`English <InputMonitor-en>`
+        **API Language** - :ref:`中文 <InputMonitor-cn>` | :ref:`English <InputMonitor-en>`
 
         ----
 
@@ -325,8 +322,7 @@ class AttributeMonitor(BaseMonitor):
         function_on_attribute: Callable = lambda x: x,
     ):
         """
-        **API Language:**
-        :ref:`中文 <AttributeMonitor-cn>` | :ref:`English <AttributeMonitor-en>`
+        **API Language** - :ref:`中文 <AttributeMonitor-cn>` | :ref:`English <AttributeMonitor-en>`
 
         ----
 
@@ -470,8 +466,7 @@ class GradInputMonitor(BaseMonitor):
         function_on_grad_input: Callable = lambda x: x,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <GradInputMonitor-cn>` | :ref:`English <GradInputMonitor-en>`
+        **API Language** - :ref:`中文 <GradInputMonitor-cn>` | :ref:`English <GradInputMonitor-en>`
 
         ----
 
@@ -606,8 +601,7 @@ class GradOutputMonitor(BaseMonitor):
         function_on_grad_output: Callable = lambda x: x,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <GradOutputMonitor-cn>` | :ref:`English <GradOutputMonitor-en>`
+        **API Language** - :ref:`中文 <GradOutputMonitor-cn>` | :ref:`English <GradOutputMonitor-en>`
 
         ----
 
@@ -745,8 +739,7 @@ class GPUMonitor(threading.Thread):
         start_now=True,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <GPUMonitor.__init__-cn>` | :ref:`English <GPUMonitor.__init__-en>`
+        **API Language** - :ref:`中文 <GPUMonitor.__init__-cn>` | :ref:`English <GPUMonitor.__init__-en>`
 
         ----
 

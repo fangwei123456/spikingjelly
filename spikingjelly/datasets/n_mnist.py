@@ -36,8 +36,7 @@ class NMNIST(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ) -> None:
         """
-        **API Language:**
-        :ref:`中文 <NMNIST.__init__-cn>` | :ref:`English <NMNIST.__init__-en>`
+        **API Language** - :ref:`中文 <NMNIST.__init__-cn>` | :ref:`English <NMNIST.__init__-en>`
 
         ----
 
@@ -120,12 +119,12 @@ class NMNIST(NeuromorphicDatasetFolder):
     @classmethod
     def get_H_W(cls) -> Tuple:
         r"""
-        **API Language:**
-        :ref:`中文 <n_mnist.get_H_W-cn>` | :ref:`English <n_mnist.get_H_W-en>`
+        **API Language** - :ref:`中文 <n_mnist.get_H_W-cn>` | :ref:`English <n_mnist.get_H_W-en>`
 
         ----
 
         .. _n_mnist.get_H_W-cn:
+
         * **中文**
 
         :return: ``(34, 34)``
@@ -134,6 +133,7 @@ class NMNIST(NeuromorphicDatasetFolder):
         ----
 
         .. _n_mnist.get_H_W-en:
+
         * **English**
 
         :return: ``(34, 34)``
@@ -144,8 +144,7 @@ class NMNIST(NeuromorphicDatasetFolder):
     @classmethod
     def resource_url_md5(cls) -> list:
         r"""
-        **API Language:**
-        :ref:`中文 <n_mnist.resource_url_md5-cn>` | :ref:`English <n_mnist.resource_url_md5-en>`
+        **API Language** - :ref:`中文 <n_mnist.resource_url_md5-cn>` | :ref:`English <n_mnist.resource_url_md5-en>`
 
         ----
 
@@ -174,8 +173,7 @@ class NMNIST(NeuromorphicDatasetFolder):
     @classmethod
     def downloadable(cls) -> bool:
         r"""
-        **API Language:**
-        :ref:`中文 <n_mnist.downloadable-cn>` | :ref:`English <n_mnist.downloadable-en>`
+        **API Language** - :ref:`中文 <n_mnist.downloadable-cn>` | :ref:`English <n_mnist.downloadable-en>`
 
         ----
 
@@ -204,8 +202,7 @@ class NMNIST(NeuromorphicDatasetFolder):
     @classmethod
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
         r"""
-        **API Language:**
-        :ref:`中文 <n_mnist.extract_downloaded_files-cn>` | :ref:`English <n_mnist.extract_downloaded_files-en>`
+        **API Language** - :ref:`中文 <n_mnist.extract_downloaded_files-cn>` | :ref:`English <n_mnist.extract_downloaded_files-en>`
 
         ----
 
@@ -246,8 +243,7 @@ class NMNIST(NeuromorphicDatasetFolder):
     @classmethod
     def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
         r"""
-        **API Language:**
-        :ref:`中文 <n_mnist.create_raw_from_extracted-cn>` | :ref:`English <n_mnist.create_raw_from_extracted-en>`
+        **API Language** - :ref:`中文 <n_mnist.create_raw_from_extracted-cn>` | :ref:`English <n_mnist.create_raw_from_extracted-en>`
 
         ----
 

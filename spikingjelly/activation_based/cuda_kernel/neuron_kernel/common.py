@@ -152,8 +152,8 @@ def _resolve_sg_cuda_code_fun(sg):
 
 def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
     """Save generated CUDA kernel source text for neuron kernels to a ``.cu`` file.
-    **API Language:**
-    :ref:`中文 <save_cuda_codes-cn>` | :ref:`English <save_cuda_codes-en>`
+
+    **API Language** - :ref:`中文 <save_cuda_codes-cn>` | :ref:`English <save_cuda_codes-en>`
 
     ----
 
@@ -262,8 +262,8 @@ def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
 
 def multistep_if_ptt(*args, **kwargs):
     """Multi-step IF neuron forward/backward via PTT CUDA kernel.
-    **API Language:**
-    :ref:`中文 <multistep_if_ptt-cn>` | :ref:`English <multistep_if_ptt-en>`
+
+    **API Language** - :ref:`中文 <multistep_if_ptt-cn>` | :ref:`English <multistep_if_ptt-en>`
 
     ----
 
@@ -297,8 +297,8 @@ def multistep_if_ptt(*args, **kwargs):
 
 def multistep_lif_ptt(*args, **kwargs):
     """Multi-step LIF neuron forward/backward via PTT CUDA kernel.
-    **API Language:**
-    :ref:`中文 <multistep_lif_ptt-cn>` | :ref:`English <multistep_lif_ptt-en>`
+
+    **API Language** - :ref:`中文 <multistep_lif_ptt-cn>` | :ref:`English <multistep_lif_ptt-en>`
 
     ----
 
@@ -332,8 +332,8 @@ def multistep_lif_ptt(*args, **kwargs):
 
 def multistep_plif_ptt(*args, **kwargs):
     """Multi-step Parametric LIF neuron forward/backward via PTT CUDA kernel.
-    **API Language:**
-    :ref:`中文 <multistep_plif_ptt-cn>` | :ref:`English <multistep_plif_ptt-en>`
+
+    **API Language** - :ref:`中文 <multistep_plif_ptt-cn>` | :ref:`English <multistep_plif_ptt-en>`
 
     ----
 
@@ -367,8 +367,8 @@ def multistep_plif_ptt(*args, **kwargs):
 
 def multistep_qif_ptt(*args, **kwargs):
     """Multi-step QIF neuron forward/backward via PTT CUDA kernel.
-    **API Language:**
-    :ref:`中文 <multistep_qif_ptt-cn>` | :ref:`English <multistep_qif_ptt-en>`
+
+    **API Language** - :ref:`中文 <multistep_qif_ptt-cn>` | :ref:`English <multistep_qif_ptt-en>`
 
     ----
 
@@ -402,8 +402,8 @@ def multistep_qif_ptt(*args, **kwargs):
 
 def multistep_izhikevich_ptt(*args, **kwargs):
     """Multi-step Izhikevich neuron forward/backward via PTT CUDA kernel.
-    **API Language:**
-    :ref:`中文 <multistep_izhikevich_ptt-cn>` | :ref:`English <multistep_izhikevich_ptt-en>`
+
+    **API Language** - :ref:`中文 <multistep_izhikevich_ptt-cn>` | :ref:`English <multistep_izhikevich_ptt-en>`
 
     ----
 
@@ -437,8 +437,8 @@ def multistep_izhikevich_ptt(*args, **kwargs):
 
 def multistep_eif_ptt(*args, **kwargs):
     """Multi-step EIF neuron forward/backward via PTT CUDA kernel.
-    **API Language:**
-    :ref:`中文 <multistep_eif_ptt-cn>` | :ref:`English <multistep_eif_ptt-en>`
+
+    **API Language** - :ref:`中文 <multistep_eif_ptt-cn>` | :ref:`English <multistep_eif_ptt-en>`
 
     ----
 

@@ -206,8 +206,7 @@ def python_object_registry_key(obj: Any) -> str:
 
 def cpu_timer(f: Callable, *args, **kwargs):
     r"""
-    **API Language:**
-    :ref:`中文 <cpu_timer-cn>` | :ref:`English <cpu_timer-en>`
+    **API Language** - :ref:`中文 <cpu_timer-cn>` | :ref:`English <cpu_timer-en>`
 
     ----
 
@@ -242,8 +241,7 @@ def cpu_timer(f: Callable, *args, **kwargs):
 
 def cuda_timer(device: Union[torch.device, int], f: Callable, *args, **kwargs):
     r"""
-    **API Language:**
-    :ref:`中文 <cuda_timer-cn>` | :ref:`English <cuda_timer-en>`
+    **API Language** - :ref:`中文 <cuda_timer-cn>` | :ref:`English <cuda_timer-en>`
 
     ----
 
@@ -289,8 +287,7 @@ def cal_fun_t(
     n: int, device: Union[str, torch.device, int], f: Callable, *args, **kwargs
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <cal_fun_t-cn>` | :ref:`English <cal_fun_t-en>`
+    **API Language** - :ref:`中文 <cal_fun_t-cn>` | :ref:`English <cal_fun_t-en>`
 
     ----
 
@@ -362,8 +359,7 @@ def cal_fun_t(
 
 def cal_blocks(numel: int, threads: int = -1):
     r"""
-    **API Language:**
-    :ref:`中文 <cal_blocks-cn>` | :ref:`English <cal_blocks-en>`
+    **API Language** - :ref:`中文 <cal_blocks-cn>` | :ref:`English <cal_blocks-en>`
 
     ----
 
@@ -403,8 +399,7 @@ def cal_blocks(numel: int, threads: int = -1):
 
 def get_contiguous(*args):
     r"""
-    **API Language:**
-    :ref:`中文 <get_contiguous-cn>` | :ref:`English <get_contiguous-en>`
+    **API Language** - :ref:`中文 <get_contiguous-cn>` | :ref:`English <get_contiguous-en>`
 
     ----
 
@@ -452,8 +447,7 @@ def get_contiguous(*args):
 
 def wrap_args_to_raw_kernel(device: int, *args):
     r"""
-    **API Language:**
-    :ref:`中文 <wrap_args_to_raw_kernel-cn>` | :ref:`English <wrap_args_to_raw_kernel-en>`
+    **API Language** - :ref:`中文 <wrap_args_to_raw_kernel-cn>` | :ref:`English <wrap_args_to_raw_kernel-en>`
 
     ----
 
@@ -503,8 +497,7 @@ def wrap_args_to_raw_kernel(device: int, *args):
 class DeviceEnvironment:
     def __init__(self, device: int):
         r"""
-        **API Language:**
-        :ref:`中文 <DeviceEnvironment.__init__-cn>` | :ref:`English <DeviceEnvironment.__init__-en>`
+        **API Language** - :ref:`中文 <DeviceEnvironment.__init__-cn>` | :ref:`English <DeviceEnvironment.__init__-en>`
 
         ----
 

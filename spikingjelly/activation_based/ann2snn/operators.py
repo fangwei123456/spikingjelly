@@ -48,7 +48,8 @@ def _check_attention_sequence(x_seq: torch.Tensor, tensor_name: str) -> None:
 class TDSoftmax(nn.Module):
     def __init__(self, dim: int = -1) -> None:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <TDSoftmax.__init__-cn>` |
         :ref:`English <TDSoftmax.__init__-en>`
 
@@ -126,7 +127,8 @@ class TDSoftmax(nn.Module):
 
     def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <TDSoftmax.forward-cn>` |
         :ref:`English <TDSoftmax.forward-en>`
 
@@ -233,7 +235,8 @@ class TDLayerNorm(nn.Module):
         dtype: Optional[torch.dtype] = None,
     ) -> None:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <TDLayerNorm.__init__-cn>` |
         :ref:`English <TDLayerNorm.__init__-en>`
 
@@ -372,7 +375,8 @@ class TDLayerNorm(nn.Module):
 
     def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <TDLayerNorm.forward-cn>` |
         :ref:`English <TDLayerNorm.forward-en>`
 
@@ -480,7 +484,8 @@ class TDLayerNorm(nn.Module):
 class TDGELU(nn.Module):
     def __init__(self, approximate: Literal["none", "tanh"] = "none") -> None:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <TDGELU.__init__-cn>` |
         :ref:`English <TDGELU.__init__-en>`
 
@@ -574,7 +579,8 @@ class TDGELU(nn.Module):
 
     def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <TDGELU.forward-cn>` |
         :ref:`English <TDGELU.forward-en>`
 
@@ -870,7 +876,8 @@ class TDScaledDotProductAttention(nn.Module):
         scale: Optional[float] = None,
     ) -> None:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <TDScaledDotProductAttention.__init__-cn>` |
         :ref:`English <TDScaledDotProductAttention.__init__-en>`
 
@@ -987,7 +994,8 @@ class TDScaledDotProductAttention(nn.Module):
         attn_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <TDScaledDotProductAttention.forward-cn>` |
         :ref:`English <TDScaledDotProductAttention.forward-en>`
 

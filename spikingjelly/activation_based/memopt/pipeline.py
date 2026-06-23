@@ -108,8 +108,7 @@ def _build_compressor_from_spec(spec):
 
 def resolve_device() -> str:
     r"""
-    **API Language:**
-    :ref:`中文 <resolve_device-cn>` | :ref:`English <resolve_device-en>`
+    **API Language** - :ref:`中文 <resolve_device-cn>` | :ref:`English <resolve_device-en>`
 
     ----
 
@@ -666,8 +665,7 @@ def apply_gc(
     return_summary: bool = False,
 ) -> Union[nn.Module, Tuple[nn.Module, dict]]:
     r"""
-    **API Language:**
-    :ref:`中文 <_apply_gc-cn>` | :ref:`English <_apply_gc-en>`
+    **API Language** - :ref:`中文 <apply_gc-cn>` | :ref:`English <apply_gc-en>`
 
     ----
 
@@ -1073,8 +1071,7 @@ def get_module_and_parent(
     net: nn.Module, module_name: str
 ) -> Tuple[nn.Module, nn.Module, str]:
     r"""
-    **API Language:**
-    :ref:`中文 <_get_module_and_parent-cn>` | :ref:`English <_get_module_and_parent-en>`
+    **API Language** - :ref:`中文 <get_module_and_parent-cn>` | :ref:`English <get_module_and_parent-en>`
 
     ----
 
@@ -1240,8 +1237,7 @@ def memory_optimization(
     return_summary: bool = False,
 ) -> Union[nn.Module, Tuple[nn.Module, MemOptSummary]]:
     r"""
-    **API Language:**
-    :ref:`中文 <memory_optimization-cn>` | :ref:`English <memory_optimization-en>`
+    **API Language** - :ref:`中文 <memory_optimization-cn>` | :ref:`English <memory_optimization-en>`
 
     ----
 

@@ -30,8 +30,7 @@ def powerlaw_psd_gaussian(
     random_state: Optional[Union[int, Generator, RandomState]] = None,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <powerlaw_psd_gaussian-cn>` | :ref:`English <powerlaw_psd_gaussian-en>`
+    **API Language** - :ref:`中文 <powerlaw_psd_gaussian-cn>` | :ref:`English <powerlaw_psd_gaussian-en>`
 
     ----
 

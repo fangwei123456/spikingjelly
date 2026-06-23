@@ -9,8 +9,7 @@ __all__ = ["VoltageHook", "VoltageScaler"]
 class VoltageHook(nn.Module):
     def __init__(self, scale=1.0, momentum=0.1, mode="Max"):
         r"""
-        **API Language:**
-        :ref:`中文 <VoltageHook.__init__-cn>` | :ref:`English <VoltageHook.__init__-en>`
+        **API Language** - :ref:`中文 <VoltageHook.__init__-cn>` | :ref:`English <VoltageHook.__init__-en>`
 
         ----
 
@@ -53,8 +52,7 @@ class VoltageHook(nn.Module):
 
     def forward(self, x):
         r"""
-        **API Language:**
-        :ref:`中文 <VoltageHook.forward-cn>` | :ref:`English <VoltageHook.forward-en>`
+        **API Language** - :ref:`中文 <VoltageHook.forward-cn>` | :ref:`English <VoltageHook.forward-en>`
 
         ----
 
@@ -112,8 +110,7 @@ class VoltageHook(nn.Module):
 class VoltageScaler(nn.Module):
     def __init__(self, scale=1.0):
         r"""
-        **API Language:**
-        :ref:`中文 <VoltageScaler.__init__-cn>` | :ref:`English <VoltageScaler.__init__-en>`
+        **API Language** - :ref:`中文 <VoltageScaler.__init__-cn>` | :ref:`English <VoltageScaler.__init__-en>`
 
         ----
 
@@ -142,8 +139,7 @@ class VoltageScaler(nn.Module):
 
     def forward(self, x):
         r"""
-        **API Language:**
-        :ref:`中文 <VoltageScaler.forward-cn>` | :ref:`English <VoltageScaler.forward-en>`
+        **API Language** - :ref:`中文 <VoltageScaler.forward-cn>` | :ref:`English <VoltageScaler.forward-en>`
 
         ----
 

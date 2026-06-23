@@ -15,8 +15,7 @@ class NeuronFactory:
         **kwargs,
     ):
         """
-        **API Language:**
-        :ref:`中文 <NeuronFactory.__init__-cn>` | :ref:`English <NeuronFactory.__init__-en>`
+        **API Language** - :ref:`中文 <NeuronFactory.__init__-cn>` | :ref:`English <NeuronFactory.__init__-en>`
 
         ----
 
@@ -73,8 +72,7 @@ class NeuronFactory:
 
     def create(self, scale: float) -> nn.Module:
         r"""
-        **API Language:**
-        :ref:`中文 <NeuronFactory.create-cn>` | :ref:`English <NeuronFactory.create-en>`
+        **API Language** - :ref:`中文 <NeuronFactory.create-cn>` | :ref:`English <NeuronFactory.create-en>`
 
         ----
 
@@ -116,8 +114,7 @@ class NeuronFactory:
 class HookFactory:
     def __init__(self, mode: Union[str, float] = "Max", momentum: float = 0.1):
         """
-        **API Language:**
-        :ref:`中文 <HookFactory.__init__-cn>` | :ref:`English <HookFactory.__init__-en>`
+        **API Language** - :ref:`中文 <HookFactory.__init__-cn>` | :ref:`English <HookFactory.__init__-en>`
 
         ----
 
@@ -157,8 +154,7 @@ class HookFactory:
 
     def create(self) -> VoltageHook:
         r"""
-        **API Language:**
-        :ref:`中文 <HookFactory.create-cn>` | :ref:`English <HookFactory.create-en>`
+        **API Language** - :ref:`中文 <HookFactory.create-cn>` | :ref:`English <HookFactory.create-en>`
 
         ----
 

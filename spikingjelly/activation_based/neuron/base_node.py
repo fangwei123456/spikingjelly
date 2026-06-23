@@ -19,8 +19,7 @@ class SimpleBaseNode(base.MemoryModule):
         step_mode="s",
     ):
         """
-        **API Language:**
-        :ref:`中文 <SimpleBaseNode.__init__-cn>` | :ref:`English <SimpleBaseNode.__init__-en>`
+        **API Language** - :ref:`中文 <SimpleBaseNode.__init__-cn>` | :ref:`English <SimpleBaseNode.__init__-en>`
 
         ----
 
@@ -107,8 +106,7 @@ class BaseNode(base.MemoryModule):
         store_v_seq: bool = False,
     ):
         """
-        **API Language:**
-        :ref:`中文 <BaseNode.__init__-cn>` | :ref:`English <BaseNode.__init__-en>`
+        **API Language** - :ref:`中文 <BaseNode.__init__-cn>` | :ref:`English <BaseNode.__init__-en>`
 
         ----
 
@@ -233,8 +231,7 @@ class BaseNode(base.MemoryModule):
     @abstractmethod
     def neuronal_charge(self, x: torch.Tensor):
         """
-        **API Language:**
-        :ref:`中文 <BaseNode.neuronal_charge-cn>` | :ref:`English <BaseNode.neuronal_charge-en>`
+        **API Language** - :ref:`中文 <BaseNode.neuronal_charge-cn>` | :ref:`English <BaseNode.neuronal_charge-en>`
 
         ----
 
@@ -255,8 +252,7 @@ class BaseNode(base.MemoryModule):
 
     def neuronal_fire(self):
         """
-        **API Language:**
-        :ref:`中文 <BaseNode.neuronal_fire-cn>` | :ref:`English <BaseNode.neuronal_fire-en>`
+        **API Language** - :ref:`中文 <BaseNode.neuronal_fire-cn>` | :ref:`English <BaseNode.neuronal_fire-en>`
 
         ----
 
@@ -278,8 +274,7 @@ class BaseNode(base.MemoryModule):
 
     def neuronal_reset(self, spike):
         """
-        **API Language:**
-        :ref:`中文 <BaseNode.neuronal_reset-cn>` | :ref:`English <BaseNode.neuronal_reset-en>`
+        **API Language** - :ref:`中文 <BaseNode.neuronal_reset-cn>` | :ref:`English <BaseNode.neuronal_reset-en>`
 
         ----
 
@@ -315,8 +310,7 @@ class BaseNode(base.MemoryModule):
 
     def single_step_forward(self, x: torch.Tensor):
         """
-        **API Language:**
-        :ref:`中文 <BaseNode.single_step_forward-cn>` | :ref:`English <BaseNode.single_step_forward-en>`
+        **API Language** - :ref:`中文 <BaseNode.single_step_forward-cn>` | :ref:`English <BaseNode.single_step_forward-en>`
 
         ----
 

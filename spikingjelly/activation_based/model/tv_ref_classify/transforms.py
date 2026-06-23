@@ -15,8 +15,7 @@ class RandomMixup(torch.nn.Module):
         inplace: bool = False,
     ) -> None:
         """
-        **API Language:**
-        :ref:`中文 <RandomMixup-cn>` | :ref:`English <RandomMixup-en>`
+        **API Language** - :ref:`中文 <RandomMixup-cn>` | :ref:`English <RandomMixup-en>`
 
         ----
 
@@ -71,8 +70,7 @@ class RandomMixup(torch.nn.Module):
 
     def forward(self, batch: Tensor, target: Tensor) -> Tuple[Tensor, Tensor]:
         r"""
-        **API Language:**
-        :ref:`中文 <RandomMixup.forward-cn>` | :ref:`English <RandomMixup.forward-en>`
+        **API Language** - :ref:`中文 <RandomMixup.forward-cn>` | :ref:`English <RandomMixup.forward-en>`
 
         ----
 
@@ -162,8 +160,7 @@ class RandomCutmix(torch.nn.Module):
         inplace: bool = False,
     ) -> None:
         """
-        **API Language:**
-        :ref:`中文 <RandomCutmix-cn>` | :ref:`English <RandomCutmix-en>`
+        **API Language** - :ref:`中文 <RandomCutmix-cn>` | :ref:`English <RandomCutmix-en>`
 
         ----
 
@@ -220,8 +217,7 @@ class RandomCutmix(torch.nn.Module):
 
     def forward(self, batch: Tensor, target: Tensor) -> Tuple[Tensor, Tensor]:
         r"""
-        **API Language:**
-        :ref:`中文 <RandomCutmix.forward-cn>` | :ref:`English <RandomCutmix.forward-en>`
+        **API Language** - :ref:`中文 <RandomCutmix.forward-cn>` | :ref:`English <RandomCutmix.forward-en>`
 
         ----
 

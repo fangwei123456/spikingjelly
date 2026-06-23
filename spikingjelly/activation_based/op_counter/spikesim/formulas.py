@@ -31,8 +31,8 @@ def compute_spikesim_event_energy_breakdown(
     config: SpikeSimEnergyConfig,
 ) -> dict[str, float]:
     """Compute SpikeSim event-based energy breakdown for a layer.
-    **API Language:**
-    :ref:`中文 <compute_spikesim_event_energy_breakdown-cn>` | :ref:`English <compute_spikesim_event_energy_breakdown-en>`
+
+    **API Language** - :ref:`中文 <compute_spikesim_event_energy_breakdown-cn>` | :ref:`English <compute_spikesim_event_energy_breakdown-en>`
 
     ----
 

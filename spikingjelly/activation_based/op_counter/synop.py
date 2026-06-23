@@ -152,8 +152,7 @@ class SynOpCounter(BaseCounter):
         extra_ignore_modules: list[nn.Module] = [],
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <SynOpCounter.__init__-cn>` | :ref:`English <SynOpCounter.__init__-en>`
+        **API Language** - :ref:`中文 <SynOpCounter.__init__-cn>` | :ref:`English <SynOpCounter.__init__-en>`
 
         ----
 

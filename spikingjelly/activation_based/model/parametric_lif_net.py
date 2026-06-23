@@ -19,8 +19,7 @@ __all__ = [
 
 class MNISTNet(nn.Module):
     r"""
-    **API Language:**
-    :ref:`中文 <MNISTNet-cn>` | :ref:`English <MNISTNet-en>`
+    **API Language** - :ref:`中文 <MNISTNet-cn>` | :ref:`English <MNISTNet-en>`
 
     ----
 
@@ -67,8 +66,7 @@ class MNISTNet(nn.Module):
 
 class FashionMNISTNet(MNISTNet):
     r"""
-    **API Language:**
-    :ref:`中文 <FashionMNISTNet-cn>` | :ref:`English <FashionMNISTNet-en>`
+    **API Language** - :ref:`中文 <FashionMNISTNet-cn>` | :ref:`English <FashionMNISTNet-en>`
 
     ----
 
@@ -101,8 +99,7 @@ class FashionMNISTNet(MNISTNet):
 class NMNISTNet(MNISTNet):
     def __init__(self, channels=128, spiking_neuron: callable = None, **kwargs):
         """
-        **API Language:**
-        :ref:`中文 <NMNISTNet-cn>` | :ref:`English <NMNISTNet-en>`
+        **API Language** - :ref:`中文 <NMNISTNet-cn>` | :ref:`English <NMNISTNet-en>`
 
         ----
 
@@ -140,8 +137,7 @@ class NMNISTNet(MNISTNet):
 class CIFAR10Net(nn.Module):
     def __init__(self, channels=256, spiking_neuron: callable = None, **kwargs):
         """
-        **API Language:**
-        :ref:`中文 <CIFAR10Net-cn>` | :ref:`English <CIFAR10Net-en>`
+        **API Language** - :ref:`中文 <CIFAR10Net-cn>` | :ref:`English <CIFAR10Net-en>`
 
         ----
 
@@ -198,8 +194,7 @@ class CIFAR10Net(nn.Module):
 class CIFAR10DVSNet(nn.Module):
     def __init__(self, channels=128, spiking_neuron: callable = None, **kwargs):
         """
-        **API Language:**
-        :ref:`中文 <CIFAR10DVSNet-cn>` | :ref:`English <CIFAR10DVSNet-en>`
+        **API Language** - :ref:`中文 <CIFAR10DVSNet-cn>` | :ref:`English <CIFAR10DVSNet-en>`
 
         ----
 
@@ -254,8 +249,7 @@ class CIFAR10DVSNet(nn.Module):
 class DVSGestureNet(nn.Module):
     def __init__(self, channels=128, spiking_neuron: callable = None, **kwargs):
         """
-        **API Language:**
-        :ref:`中文 <DVSGestureNet-cn>` | :ref:`English <DVSGestureNet-en>`
+        **API Language** - :ref:`中文 <DVSGestureNet-cn>` | :ref:`English <DVSGestureNet-en>`
 
         ----
 

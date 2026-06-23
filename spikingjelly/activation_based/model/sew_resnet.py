@@ -51,8 +51,7 @@ def sew_function(x: torch.Tensor, y: torch.Tensor, cnf: str):
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """
-    **API Language:**
-    :ref:`中文 <conv3x3-cn>` | :ref:`English <conv3x3-en>`
+    **API Language** - :ref:`中文 <conv3x3-cn>` | :ref:`English <conv3x3-en>`
 
     ----
 
@@ -110,8 +109,7 @@ def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
 
 def conv1x1(in_planes, out_planes, stride=1):
     """
-    **API Language:**
-    :ref:`中文 <conv1x1-cn>` | :ref:`English <conv1x1-en>`
+    **API Language** - :ref:`中文 <conv1x1-cn>` | :ref:`English <conv1x1-en>`
 
     ----
 
@@ -294,8 +292,7 @@ class SEWResNet(nn.Module):
         **kwargs,
     ):
         """
-        **API Language:**
-        :ref:`中文 <SEWResNet-cn>` | :ref:`English <SEWResNet-en>`
+        **API Language** - :ref:`中文 <SEWResNet-cn>` | :ref:`English <SEWResNet-en>`
 
         ----
 
@@ -491,8 +488,7 @@ def sew_resnet18(
     **kwargs,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <sew_resnet18-cn>` | :ref:`English <sew_resnet18-en>`
+    **API Language** - :ref:`中文 <sew_resnet18-cn>` | :ref:`English <sew_resnet18-en>`
 
     ----
 
@@ -557,8 +553,7 @@ def sew_resnet34(
     **kwargs,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <sew_resnet34-cn>` | :ref:`English <sew_resnet34-en>`
+    **API Language** - :ref:`中文 <sew_resnet34-cn>` | :ref:`English <sew_resnet34-en>`
 
     ----
 
@@ -622,8 +617,7 @@ def sew_resnet50(
     **kwargs,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <sew_resnet50-cn>` | :ref:`English <sew_resnet50-en>`
+    **API Language** - :ref:`中文 <sew_resnet50-cn>` | :ref:`English <sew_resnet50-en>`
 
     ----
 

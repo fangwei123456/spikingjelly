@@ -26,8 +26,7 @@ class HARDVS(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <HARDVS.__init__-cn>` | :ref:`English <HARDVS.__init__-en>`
+        **API Language** - :ref:`中文 <HARDVS.__init__-cn>` | :ref:`English <HARDVS.__init__-en>`
 
         ----
 

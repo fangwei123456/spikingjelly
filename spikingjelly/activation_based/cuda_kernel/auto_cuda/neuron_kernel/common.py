@@ -149,7 +149,8 @@ class NeuronFPTTKernel(base.CKernel2D):
 
     def neuronal_charge(self) -> str:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <neuronfpttkernel-neuronal_charge-cn>` |
         :ref:`English <neuronfpttkernel-neuronal_charge-en>`
 
@@ -292,7 +293,8 @@ class NeuronBPTTKernel(base.CKernel2D):
 
     def grad_h_next_to_v(self) -> str:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <neuronbpttkernel-grad_h_next_to_v-cn>` |
         :ref:`English <neuronbpttkernel-grad_h_next_to_v-en>`
 
@@ -342,7 +344,8 @@ class NeuronBPTTKernel(base.CKernel2D):
 
     def grad_h_to_x(self) -> str:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <neuronbpttkernel-grad_h_to_x-cn>` |
         :ref:`English <neuronbpttkernel-grad_h_to_x-en>`
 
@@ -597,7 +600,8 @@ class NeuronATGFBase:
     @staticmethod
     def pre_forward(py_dict: dict):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <neuronatgfbase-pre_forward-cn>` |
         :ref:`English <neuronatgfbase-pre_forward-en>`
 
@@ -691,7 +695,8 @@ class NeuronATGFBase:
     @staticmethod
     def ctx_save(ctx, requires_grad: bool, *args, **kwargs):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <neuronatgfbase-ctx_save-cn>` |
         :ref:`English <neuronatgfbase-ctx_save-en>`
 
@@ -737,7 +742,8 @@ class NeuronATGFBase:
     @staticmethod
     def pre_backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <neuronatgfbase-pre_backward-cn>` |
         :ref:`English <neuronatgfbase-pre_backward-en>`
 

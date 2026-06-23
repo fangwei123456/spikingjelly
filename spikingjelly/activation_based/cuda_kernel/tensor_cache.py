@@ -95,8 +95,7 @@ class DataTypeConvertCUDACode:
 
 def float_spike_to_bool(spike: torch.Tensor):
     """
-    **API Language:**
-    :ref:`中文 <float_spike_to_bool-cn>` | :ref:`English <float_spike_to_bool-en>`
+    **API Language** - :ref:`中文 <float_spike_to_bool-cn>` | :ref:`English <float_spike_to_bool-en>`
 
     ----
 
@@ -190,8 +189,7 @@ def bool_spike_to_float(
     spike_b: torch.Tensor, s_dtype: torch.dtype, s_shape: torch.Size, s_padding: int = 0
 ):
     """
-    **API Language:**
-    :ref:`中文 <bool_spike_to_float-cn>` | :ref:`English <bool_spike_to_float-en>`
+    **API Language** - :ref:`中文 <bool_spike_to_float-cn>` | :ref:`English <bool_spike_to_float-en>`
 
     ----
 

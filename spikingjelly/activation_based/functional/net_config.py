@@ -71,12 +71,12 @@ def reset_collected_modules(modules: tuple[nn.Module, ...]) -> None:
 
 def invalidate_reset_cache(net: nn.Module) -> None:
     r"""
-    **API Language:**
-    :ref:`中文 <invalidate_reset_cache-cn>` | :ref:`English <invalidate_reset_cache-en>`
+    **API Language** - :ref:`中文 <invalidate_reset_cache-cn>` | :ref:`English <invalidate_reset_cache-en>`
 
     ----
 
     .. _invalidate_reset_cache-cn:
+
     * **中文**
 
     清除 ``net`` 的 reset 模块缓存。当模型结构发生变化后调用
@@ -88,6 +88,7 @@ def invalidate_reset_cache(net: nn.Module) -> None:
     ----
 
     .. _invalidate_reset_cache-en:
+
     * **English**
 
     Clear the reset module cache for ``net``.
@@ -102,12 +103,12 @@ def invalidate_reset_cache(net: nn.Module) -> None:
 
 def reset_net(net: nn.Module):
     r"""
-    **API Language:**
-    :ref:`中文 <reset_net-cn>` | :ref:`English <reset_net-en>`
+    **API Language** - :ref:`中文 <reset_net-cn>` | :ref:`English <reset_net-en>`
 
     ----
 
     .. _reset_net-cn:
+
     * **中文**
 
     重置 ``net`` 中所有可重置模块的状态。
@@ -130,6 +131,7 @@ def reset_net(net: nn.Module):
     ----
 
     .. _reset_net-en:
+
     * **English**
 
     Reset the states of all resettable modules in ``net``.
@@ -165,12 +167,12 @@ def reset_net(net: nn.Module):
 
 def set_step_mode(net: nn.Module, step_mode: str):
     r"""
-    **API Language:**
-    :ref:`中文 <set_step_mode-cn>` | :ref:`English <set_step_mode-en>`
+    **API Language** - :ref:`中文 <set_step_mode-cn>` | :ref:`English <set_step_mode-en>`
 
     ----
 
     .. _set_step_mode-cn:
+
     * **中文**
 
     将 ``net`` 中所有具有 ``step_mode`` 属性的模块的步进模式设置为
@@ -199,6 +201,7 @@ def set_step_mode(net: nn.Module, step_mode: str):
     ----
 
     .. _set_step_mode-en:
+
     * **English**
 
     Set ``step_mode`` to ``step_mode`` for all modules in ``net`` that expose a
@@ -272,8 +275,7 @@ def set_backend(
     instance: Optional[Union[nn.Module, tuple[nn.Module]]] = None,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <set_backend-cn>` | :ref:`English <set_backend-en>`
+    **API Language** - :ref:`中文 <set_backend-cn>` | :ref:`English <set_backend-en>`
 
     ----
 
@@ -347,12 +349,12 @@ def set_backend(
 
 def detach_net(net: nn.Module):
     r"""
-    **API Language:**
-    :ref:`中文 <detach_net-cn>` | :ref:`English <detach_net-en>`
+    **API Language** - :ref:`中文 <detach_net-cn>` | :ref:`English <detach_net-en>`
 
     ----
 
     .. _detach_net-cn:
+
     * **中文**
 
     将 ``net`` 中各有状态模块与之前时间步的计算图断开。
@@ -371,6 +373,7 @@ def detach_net(net: nn.Module):
     ----
 
     .. _detach_net-en:
+
     * **English**
 
     Detach stateful modules in ``net`` from the computation graphs of previous

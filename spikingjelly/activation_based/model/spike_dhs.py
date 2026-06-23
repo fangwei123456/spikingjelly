@@ -29,8 +29,7 @@ __all__ = [
 ### Components ###
 def network_layer_to_space(net_arch):
     """
-    **API Language:**
-    :ref:`中文 <network_layer_to_space-cn>` | :ref:`English <network_layer_to_space-en>`
+    **API Language** - :ref:`中文 <network_layer_to_space-cn>` | :ref:`English <network_layer_to_space-en>`
 
     ----
 
@@ -128,8 +127,7 @@ class dSpike(Function):
 class DSpike(SurrogateFunctionBase):
     def __init__(self, alpha: float = 3, spiking=True):
         """
-        **API Language:**
-        :ref:`中文 <DSpike-cn>` | :ref:`English <DSpike-en>`
+        **API Language** - :ref:`中文 <DSpike-cn>` | :ref:`English <DSpike-en>`
 
         ----
 
@@ -157,8 +155,7 @@ class DSpike(SurrogateFunctionBase):
 
 class save_v_LIFNode(LIFNode):
     r"""
-    **API Language:**
-    :ref:`中文 <save_v_LIFNode-cn>` | :ref:`English <save_v_LIFNode-en>`
+    **API Language** - :ref:`中文 <save_v_LIFNode-cn>` | :ref:`English <save_v_LIFNode-en>`
 
     ----
 
@@ -235,8 +232,7 @@ class SpikingConv2d(nn.Module):
         v_threshold=0.5,
     ):
         """
-        **API Language:**
-        :ref:`中文 <SpikingConv2d-cn>` | :ref:`English <SpikingConv2d-en>`
+        **API Language** - :ref:`中文 <SpikingConv2d-cn>` | :ref:`English <SpikingConv2d-en>`
 
         ----
 
@@ -283,8 +279,7 @@ class SearchSpikingConv2d_stem(nn.Module):
         v_threshold=0.5,
     ):
         """
-        **API Language:**
-        :ref:`中文 <SearchSpikingConv2d_stem-cn>` | :ref:`English <SearchSpikingConv2d_stem-en>`
+        **API Language** - :ref:`中文 <SearchSpikingConv2d_stem-cn>` | :ref:`English <SearchSpikingConv2d_stem-en>`
 
         ----
 
@@ -379,8 +374,7 @@ class SearchSpikingConv2d_cell(nn.Module):
         v_threshold=0.5,
     ):
         """
-        **API Language:**
-        :ref:`中文 <SearchSpikingConv2d_cell-cn>` | :ref:`English <SearchSpikingConv2d_cell-en>`
+        **API Language** - :ref:`中文 <SearchSpikingConv2d_cell-cn>` | :ref:`English <SearchSpikingConv2d_cell-en>`
 
         ----
 
@@ -499,8 +493,7 @@ class SearchSpikingConv2d_cell(nn.Module):
 class SpikingLinear(nn.Module):
     def __init__(self, input_c, output_c, spiking=True):
         """
-        **API Language:**
-        :ref:`中文 <SpikingLinear-cn>` | :ref:`English <SpikingLinear-en>`
+        **API Language** - :ref:`中文 <SpikingLinear-cn>` | :ref:`English <SpikingLinear-en>`
 
         ----
 
@@ -535,8 +528,7 @@ class SpikingLinear(nn.Module):
 class SpikingAvgPool2d(nn.Module):
     def __init__(self, kernel_size=5, stride=3, padding=0, b=3, spiking=True):
         """
-        **API Language:**
-        :ref:`中文 <SpikingAvgPool2d-cn>` | :ref:`English <SpikingAvgPool2d-en>`
+        **API Language** - :ref:`中文 <SpikingAvgPool2d-cn>` | :ref:`English <SpikingAvgPool2d-en>`
 
         ----
 
@@ -572,8 +564,7 @@ class SpikingAvgPool2d(nn.Module):
 class SpikingAdaptiveAvgPool2d(nn.Module):
     def __init__(self, dimension, b=3, spiking=True):
         """
-        **API Language:**
-        :ref:`中文 <SpikingAdaptiveAvgPool2d-cn>` | :ref:`English <SpikingAdaptiveAvgPool2d-en>`
+        **API Language** - :ref:`中文 <SpikingAdaptiveAvgPool2d-cn>` | :ref:`English <SpikingAdaptiveAvgPool2d-en>`
 
         ----
 

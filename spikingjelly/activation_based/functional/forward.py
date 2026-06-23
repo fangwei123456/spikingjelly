@@ -20,8 +20,7 @@ def multi_step_forward(
     ],
 ):
     """
-    **API Language:**
-    :ref:`中文 <multi_step_forward-cn>` | :ref:`English <multi_step_forward-en>`
+    **API Language** - :ref:`中文 <multi_step_forward-cn>` | :ref:`English <multi_step_forward-en>`
 
     ----
 
@@ -86,8 +85,7 @@ def t_last_multi_step_forward(
     ],
 ):
     """
-    **API Language:**
-    :ref:`中文 <t_last_multi_step_forward-cn>` | :ref:`English <t_last_multi_step_forward-en>`
+    **API Language** - :ref:`中文 <t_last_multi_step_forward-cn>` | :ref:`English <t_last_multi_step_forward-en>`
 
     ----
 
@@ -152,8 +150,7 @@ def chunk_multi_step_forward(
     split_size: int, x_seq: Tensor, multi_step_module: nn.Module
 ):
     """
-    **API Language:**
-    :ref:`中文 <chunk_multi_step_forward-cn>` | :ref:`English <chunk_multi_step_forward-en>`
+    **API Language** - :ref:`中文 <chunk_multi_step_forward-cn>` | :ref:`English <chunk_multi_step_forward-en>`
 
     ----
 
@@ -239,8 +236,7 @@ def seq_to_ann_forward(
     stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable],
 ):
     """
-    **API Language:**
-    :ref:`中文 <seq_to_ann_forward-cn>` | :ref:`English <seq_to_ann_forward-en>`
+    **API Language** - :ref:`中文 <seq_to_ann_forward-cn>` | :ref:`English <seq_to_ann_forward-en>`
 
     ----
 
@@ -300,8 +296,7 @@ def t_last_seq_to_ann_forward(
     stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable],
 ):
     """
-    **API Language:**
-    :ref:`中文 <t_last_seq_to_ann_forward-cn>` | :ref:`English <t_last_seq_to_ann_forward-en>`
+    **API Language** - :ref:`中文 <t_last_seq_to_ann_forward-cn>` | :ref:`English <t_last_seq_to_ann_forward-en>`
 
     ----
 

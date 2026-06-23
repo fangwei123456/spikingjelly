@@ -221,8 +221,7 @@ class ESImageNet(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
-        **API Language:**
-        :ref:`中文 <ESImageNet.__init__-cn>` | :ref:`English <ESImageNet.__init__-en>`
+        **API Language** - :ref:`中文 <ESImageNet.__init__-cn>` | :ref:`English <ESImageNet.__init__-en>`
 
         ----
 

@@ -61,8 +61,7 @@ class Conv1d(nn.Conv1d, base.StepModule):
         step_mode: str = "s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <Conv1d.__init__-cn>` | :ref:`English <Conv1d.__init__-en>`
+        **API Language** - :ref:`中文 <Conv1d.__init__-cn>` | :ref:`English <Conv1d.__init__-en>`
 
         ----
 
@@ -132,8 +131,7 @@ class Conv2d(nn.Conv2d, base.StepModule):
         step_mode: str = "s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <Conv2d.__init__-cn>` | :ref:`English <Conv2d.__init__-en>`
+        **API Language** - :ref:`中文 <Conv2d.__init__-cn>` | :ref:`English <Conv2d.__init__-en>`
 
         ----
 
@@ -205,8 +203,7 @@ class Conv3d(nn.Conv3d, base.StepModule):
         step_mode: str = "s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <Conv3d.__init__-cn>` | :ref:`English <Conv3d.__init__-en>`
+        **API Language** - :ref:`中文 <Conv3d.__init__-cn>` | :ref:`English <Conv3d.__init__-en>`
 
         ----
 
@@ -272,8 +269,7 @@ class Upsample(nn.Upsample, base.StepModule):
         step_mode: str = "s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <Upsample.__init__-cn>` | :ref:`English <Upsample.__init__-en>`
+        **API Language** - :ref:`中文 <Upsample.__init__-cn>` | :ref:`English <Upsample.__init__-en>`
 
         ----
 
@@ -331,8 +327,7 @@ class ConvTranspose1d(nn.ConvTranspose1d, base.StepModule):
         step_mode: str = "s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <ConvTranspose1d.__init__-cn>` | :ref:`English <ConvTranspose1d.__init__-en>`
+        **API Language** - :ref:`中文 <ConvTranspose1d.__init__-cn>` | :ref:`English <ConvTranspose1d.__init__-en>`
 
         ----
 
@@ -404,8 +399,7 @@ class ConvTranspose2d(nn.ConvTranspose2d, base.StepModule):
         step_mode: str = "s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <ConvTranspose2d.__init__-cn>` | :ref:`English <ConvTranspose2d.__init__-en>`
+        **API Language** - :ref:`中文 <ConvTranspose2d.__init__-cn>` | :ref:`English <ConvTranspose2d.__init__-en>`
 
         ----
 
@@ -479,8 +473,7 @@ class ConvTranspose3d(nn.ConvTranspose3d, base.StepModule):
         step_mode: str = "s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <ConvTranspose3d.__init__-cn>` | :ref:`English <ConvTranspose3d.__init__-en>`
+        **API Language** - :ref:`中文 <ConvTranspose3d.__init__-cn>` | :ref:`English <ConvTranspose3d.__init__-en>`
 
         ----
 
@@ -546,8 +539,7 @@ class GroupNorm(nn.GroupNorm, base.StepModule):
         step_mode="s",
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <GroupNorm.__init__-cn>` | :ref:`English <GroupNorm.__init__-en>`
+        **API Language** - :ref:`中文 <GroupNorm.__init__-cn>` | :ref:`English <GroupNorm.__init__-en>`
 
         ----
 
@@ -597,8 +589,7 @@ class MaxPool1d(nn.MaxPool1d, base.StepModule):
         step_mode="s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <MaxPool1d.__init__-cn>` | :ref:`English <MaxPool1d.__init__-en>`
+        **API Language** - :ref:`中文 <MaxPool1d.__init__-cn>` | :ref:`English <MaxPool1d.__init__-en>`
 
         ----
 
@@ -661,8 +652,7 @@ class MaxPool2d(nn.MaxPool2d, base.StepModule):
         step_mode="s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <MaxPool2d.__init__-cn>` | :ref:`English <MaxPool2d.__init__-en>`
+        **API Language** - :ref:`中文 <MaxPool2d.__init__-cn>` | :ref:`English <MaxPool2d.__init__-en>`
 
         ----
 
@@ -726,8 +716,7 @@ class MaxPool3d(nn.MaxPool3d, base.StepModule):
         step_mode="s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <MaxPool3d.__init__-cn>` | :ref:`English <MaxPool3d.__init__-en>`
+        **API Language** - :ref:`中文 <MaxPool3d.__init__-cn>` | :ref:`English <MaxPool3d.__init__-en>`
 
         ----
 
@@ -789,8 +778,7 @@ class AvgPool1d(nn.AvgPool1d, base.StepModule):
         step_mode="s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <AvgPool1d.__init__-cn>` | :ref:`English <AvgPool1d.__init__-en>`
+        **API Language** - :ref:`中文 <AvgPool1d.__init__-cn>` | :ref:`English <AvgPool1d.__init__-en>`
 
         ----
 
@@ -846,8 +834,7 @@ class AvgPool2d(nn.AvgPool2d, base.StepModule):
         step_mode="s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <AvgPool2d.__init__-cn>` | :ref:`English <AvgPool2d.__init__-en>`
+        **API Language** - :ref:`中文 <AvgPool2d.__init__-cn>` | :ref:`English <AvgPool2d.__init__-en>`
 
         ----
 
@@ -907,8 +894,7 @@ class AvgPool3d(nn.AvgPool3d, base.StepModule):
         step_mode="s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <AvgPool3d.__init__-cn>` | :ref:`English <AvgPool3d.__init__-en>`
+        **API Language** - :ref:`中文 <AvgPool3d.__init__-cn>` | :ref:`English <AvgPool3d.__init__-en>`
 
         ----
 
@@ -958,8 +944,7 @@ class AvgPool3d(nn.AvgPool3d, base.StepModule):
 class AdaptiveAvgPool1d(nn.AdaptiveAvgPool1d, base.StepModule):
     def __init__(self, output_size, step_mode="s") -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <AdaptiveAvgPool1d.__init__-cn>` | :ref:`English <AdaptiveAvgPool1d.__init__-en>`
+        **API Language** - :ref:`中文 <AdaptiveAvgPool1d.__init__-cn>` | :ref:`English <AdaptiveAvgPool1d.__init__-en>`
 
         ----
 
@@ -1006,8 +991,7 @@ class AdaptiveAvgPool1d(nn.AdaptiveAvgPool1d, base.StepModule):
 class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
     def __init__(self, output_size, step_mode="s") -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <AdaptiveAvgPool2d.__init__-cn>` | :ref:`English <AdaptiveAvgPool2d.__init__-en>`
+        **API Language** - :ref:`中文 <AdaptiveAvgPool2d.__init__-cn>` | :ref:`English <AdaptiveAvgPool2d.__init__-en>`
 
         ----
 
@@ -1057,8 +1041,7 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
 class AdaptiveAvgPool3d(nn.AdaptiveAvgPool3d, base.StepModule):
     def __init__(self, output_size, step_mode="s") -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <AdaptiveAvgPool3d.__init__-cn>` | :ref:`English <AdaptiveAvgPool3d.__init__-en>`
+        **API Language** - :ref:`中文 <AdaptiveAvgPool3d.__init__-cn>` | :ref:`English <AdaptiveAvgPool3d.__init__-en>`
 
         ----
 
@@ -1107,8 +1090,7 @@ class Linear(nn.Linear, base.StepModule):
         self, in_features: int, out_features: int, bias: bool = True, step_mode="s"
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <Linear.__init__-cn>` | :ref:`English <Linear.__init__-en>`
+        **API Language** - :ref:`中文 <Linear.__init__-cn>` | :ref:`English <Linear.__init__-en>`
 
         ----
 
@@ -1139,8 +1121,7 @@ class Linear(nn.Linear, base.StepModule):
 class Flatten(nn.Flatten, base.StepModule):
     def __init__(self, start_dim: int = 1, end_dim: int = -1, step_mode="s") -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <Flatten.__init__-cn>` | :ref:`English <Flatten.__init__-en>`
+        **API Language** - :ref:`中文 <Flatten.__init__-cn>` | :ref:`English <Flatten.__init__-en>`
 
         ----
 
@@ -1204,8 +1185,7 @@ class WSConv2d(Conv2d):
         eps: float = 1e-4,
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <WSConv2d.__init__-cn>` | :ref:`English <WSConv2d.__init__-en>`
+        **API Language** - :ref:`中文 <WSConv2d.__init__-cn>` | :ref:`English <WSConv2d.__init__-en>`
 
         ----
 
@@ -1298,8 +1278,7 @@ class WSLinear(Linear):
         eps=1e-4,
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <WSLinear.__init__-cn>` | :ref:`English <WSLinear.__init__-en>`
+        **API Language** - :ref:`中文 <WSLinear.__init__-cn>` | :ref:`English <WSLinear.__init__-en>`
 
         ----
 

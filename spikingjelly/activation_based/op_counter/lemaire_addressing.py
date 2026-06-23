@@ -88,7 +88,8 @@ def _address_convolution(args, kwargs, out):
 class LemaireAddressingCounter(BaseCounter):
     def __init__(self):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <LemaireAddressingCounter.__init__-cn>` |
         :ref:`English <LemaireAddressingCounter.__init__-en>`
 
@@ -220,7 +221,8 @@ class LemaireAddressingCounter(BaseCounter):
 
     def get_metric_counts(self) -> dict[str, dict[str, int]]:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <LemaireAddressingCounter.get_metric_counts-cn>` |
         :ref:`English <LemaireAddressingCounter.get_metric_counts-en>`
 
@@ -246,7 +248,8 @@ class LemaireAddressingCounter(BaseCounter):
 
     def reset(self):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <LemaireAddressingCounter.reset-cn>` |
         :ref:`English <LemaireAddressingCounter.reset-en>`
 

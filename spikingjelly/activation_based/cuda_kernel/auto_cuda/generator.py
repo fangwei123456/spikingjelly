@@ -9,8 +9,7 @@ import torch.fx as _fx
 
 def hash_str(x: object):
     r"""
-    **API Language:**
-    :ref:`中文 <hash_str-cn>` | :ref:`English <hash_str-en>`
+    **API Language** - :ref:`中文 <hash_str-cn>` | :ref:`English <hash_str-en>`
 
     ----
 
@@ -50,8 +49,7 @@ def hash_str(x: object):
 class VarNode:
     def __init__(self, prefix: str, name: str, instance: object, value=None):
         """
-        **API Language:**
-        :ref:`中文 <varnode-cn>` | :ref:`English <varnode-en>`
+        **API Language** - :ref:`中文 <varnode-cn>` | :ref:`English <varnode-en>`
 
         ----
 
@@ -144,8 +142,7 @@ class VarNode:
 
 def analyse_graph(custom_fun, requires_grad: tuple):
     r"""
-    **API Language:**
-    :ref:`中文 <analyse_graph-cn>` | :ref:`English <analyse_graph-en>`
+    **API Language** - :ref:`中文 <analyse_graph-cn>` | :ref:`English <analyse_graph-en>`
 
     ----
 
@@ -363,8 +360,7 @@ def gen_forward_codes(
     hard_reset: bool,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <gen_forward_codes-cn>` | :ref:`English <gen_forward_codes-en>`
+    **API Language** - :ref:`中文 <gen_forward_codes-cn>` | :ref:`English <gen_forward_codes-en>`
 
     ----
 
@@ -606,8 +602,7 @@ def gen_backward_codes(
     surrogate_fuction,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <gen_backward_codes-cn>` | :ref:`English <gen_backward_codes-en>`
+    **API Language** - :ref:`中文 <gen_backward_codes-cn>` | :ref:`English <gen_backward_codes-en>`
 
     ----
 

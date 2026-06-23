@@ -42,8 +42,7 @@ def startswiths(x: str, prefixes: tuple):
 class CKernel:
     def __init__(self, kernel_name: str):
         r"""
-        **API Language:**
-        :ref:`中文 <ckernel-init-cn>` | :ref:`English <ckernel-init-en>`
+        **API Language** - :ref:`中文 <ckernel-init-cn>` | :ref:`English <ckernel-init-en>`
 
         ----
 
@@ -77,7 +76,8 @@ class CKernel:
 
     def check_attributes(self, **kwargs):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <ckernel-check-attributes-cn>` |
         :ref:`English <ckernel-check-attributes-en>`
 
@@ -125,7 +125,8 @@ class CKernel:
 
     def set_contiguous(self, py_dict: dict):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <ckernel-set-contiguous-cn>` |
         :ref:`English <ckernel-set-contiguous-en>`
 
@@ -167,8 +168,7 @@ class CKernel:
 
     def get_device(self, py_dict: dict) -> int:
         r"""
-        **API Language:**
-        :ref:`中文 <ckernel-get-device-cn>` | :ref:`English <ckernel-get-device-en>`
+        **API Language** - :ref:`中文 <ckernel-get-device-cn>` | :ref:`English <ckernel-get-device-en>`
 
         ----
 
@@ -211,7 +211,8 @@ class CKernel:
 
     def check_device(self, device: int, py_dict: dict):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <ckernel-check-device-cn>` |
         :ref:`English <ckernel-check-device-en>`
 
@@ -251,8 +252,7 @@ class CKernel:
 
     def check_keys(self, py_dict: dict):
         r"""
-        **API Language:**
-        :ref:`中文 <ckernel-check-keys-cn>` | :ref:`English <ckernel-check-keys-en>`
+        **API Language** - :ref:`中文 <ckernel-check-keys-cn>` | :ref:`English <ckernel-check-keys-en>`
 
         ----
 
@@ -291,7 +291,8 @@ class CKernel:
 
     def check_ctypes(self, py_dict: dict):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <ckernel-check-ctypes-cn>` |
         :ref:`English <ckernel-check-ctypes-en>`
 
@@ -342,7 +343,8 @@ class CKernel:
 
     def check_half2(self, py_dict: dict):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <ckernel-check-half2-cn>` |
         :ref:`English <ckernel-check-half2-en>`
 
@@ -372,8 +374,7 @@ class CKernel:
 
     def get_ptrs(self, py_dict: dict):
         r"""
-        **API Language:**
-        :ref:`中文 <ckernel-get-ptrs-cn>` | :ref:`English <ckernel-get-ptrs-en>`
+        **API Language** - :ref:`中文 <ckernel-get-ptrs-cn>` | :ref:`English <ckernel-get-ptrs-en>`
 
         ----
 
@@ -416,8 +417,7 @@ class CKernel:
 
     def __call__(self, grid: tuple, block: tuple, py_dict: dict, *args_1, **kwargs):
         r"""
-        **API Language:**
-        :ref:`中文 <ckernel-call-cn>` | :ref:`English <ckernel-call-en>`
+        **API Language** - :ref:`中文 <ckernel-call-cn>` | :ref:`English <ckernel-call-en>`
 
         ----
 
@@ -478,8 +478,7 @@ class CKernel:
 
     def add_param(self, ctype: str, cname: str):
         r"""
-        **API Language:**
-        :ref:`中文 <ckernel-add-param-cn>` | :ref:`English <ckernel-add-param-en>`
+        **API Language** - :ref:`中文 <ckernel-add-param-cn>` | :ref:`English <ckernel-add-param-en>`
 
         ----
 
@@ -550,7 +549,8 @@ class CKernel:
     @property
     def full_codes(self):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <ckernel-full-codes-cn>` |
         :ref:`English <ckernel-full-codes-en>`
 
@@ -587,8 +587,7 @@ class CKernel:
 class CKernel1D(CKernel):
     def __init__(self, *args, **kwargs):
         r"""
-        **API Language:**
-        :ref:`中文 <ckernel1d-init-cn>` | :ref:`English <ckernel1d-init-en>`
+        **API Language** - :ref:`中文 <ckernel1d-init-cn>` | :ref:`English <ckernel1d-init-en>`
 
         ----
 
@@ -623,8 +622,7 @@ class CKernel1D(CKernel):
     @property
     def head(self):
         r"""
-        **API Language:**
-        :ref:`中文 <ckernel1d-head-cn>` | :ref:`English <ckernel1d-head-en>`
+        **API Language** - :ref:`中文 <ckernel1d-head-cn>` | :ref:`English <ckernel1d-head-en>`
 
         ----
 
@@ -660,8 +658,7 @@ class CKernel1D(CKernel):
     @property
     def tail(self):
         r"""
-        **API Language:**
-        :ref:`中文 <ckernel1d-tail-cn>` | :ref:`English <ckernel1d-tail-en>`
+        **API Language** - :ref:`中文 <ckernel1d-tail-cn>` | :ref:`English <ckernel1d-tail-en>`
 
         ----
 
@@ -694,7 +691,8 @@ class CKernel1D(CKernel):
 
     def check_half2(self, py_dict: dict):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <ckernel1d-check-half2-cn>` |
         :ref:`English <ckernel1d-check-half2-en>`
 
@@ -749,8 +747,7 @@ class CKernel1D(CKernel):
 
     def __call__(self, grid: tuple, block: tuple, py_dict: dict, *args_1, **kwargs):
         r"""
-        **API Language:**
-        :ref:`中文 <ckernel1d-call-cn>` | :ref:`English <ckernel1d-call-en>`
+        **API Language** - :ref:`中文 <ckernel1d-call-cn>` | :ref:`English <ckernel1d-call-en>`
 
         ----
 
@@ -826,7 +823,8 @@ class CKernel1D(CKernel):
 
     def simple_call(self, **kwargs):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <ckernel1d-simple-call-cn>` |
         :ref:`English <ckernel1d-simple-call-en>`
 
@@ -878,8 +876,7 @@ class CKernel1D(CKernel):
 class CKernel2D(CKernel):
     def __init__(self, kernel_name: str, reverse: bool = False):
         r"""
-        **API Language:**
-        :ref:`中文 <ckernel2d-init-cn>` | :ref:`English <ckernel2d-init-en>`
+        **API Language** - :ref:`中文 <ckernel2d-init-cn>` | :ref:`English <ckernel2d-init-en>`
 
         ----
 
@@ -948,7 +945,8 @@ class CKernel2D(CKernel):
 
     def check_shape(self, py_dict: dict):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <ckernel2d-check-shape-cn>` |
         :ref:`English <ckernel2d-check-shape-en>`
 
@@ -986,7 +984,8 @@ class CKernel2D(CKernel):
 
     def check_half2(self, py_dict: dict):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <ckernel2d-check-half2-cn>` |
         :ref:`English <ckernel2d-check-half2-en>`
 
@@ -1046,8 +1045,7 @@ class CKernel2D(CKernel):
 
     def __call__(self, grid: tuple, block: tuple, py_dict: dict, *args_1, **kwargs):
         r"""
-        **API Language:**
-        :ref:`中文 <ckernel2d-call-cn>` | :ref:`English <ckernel2d-call-en>`
+        **API Language** - :ref:`中文 <ckernel2d-call-cn>` | :ref:`English <ckernel2d-call-en>`
 
         ----
 
@@ -1214,7 +1212,8 @@ class CKernel2D(CKernel):
 
     def simple_call(self, **kwargs):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <ckernel2d-simple-call-cn>` |
         :ref:`English <ckernel2d-simple-call-en>`
 
@@ -1272,8 +1271,7 @@ class CKernel2D(CKernel):
 class CodeTyper:
     def __init__(self, indent_num: int):
         r"""
-        **API Language:**
-        :ref:`中文 <codetyper-init-cn>` | :ref:`English <codetyper-init-en>`
+        **API Language** - :ref:`中文 <codetyper-init-cn>` | :ref:`English <codetyper-init-en>`
 
         ----
 
@@ -1303,8 +1301,7 @@ class CodeTyper:
 
     def append(self, codes: str):
         r"""
-        **API Language:**
-        :ref:`中文 <codetyper-append-cn>` | :ref:`English <codetyper-append-en>`
+        **API Language** - :ref:`中文 <codetyper-append-cn>` | :ref:`English <codetyper-append-en>`
 
         ----
 
@@ -1344,8 +1341,7 @@ class CodeTyper:
 class CodeBlock:
     def __init__(self, env: CodeTyper):
         r"""
-        **API Language:**
-        :ref:`中文 <codeblock-init-cn>` | :ref:`English <codeblock-init-en>`
+        **API Language** - :ref:`中文 <codeblock-init-cn>` | :ref:`English <codeblock-init-en>`
 
         ----
 
@@ -1376,8 +1372,7 @@ class CodeBlock:
 
     def __enter__(self):
         r"""
-        **API Language:**
-        :ref:`中文 <codeblock-enter-cn>` | :ref:`English <codeblock-enter-en>`
+        **API Language** - :ref:`中文 <codeblock-enter-cn>` | :ref:`English <codeblock-enter-en>`
 
         ----
 
@@ -1404,8 +1399,7 @@ class CodeBlock:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         r"""
-        **API Language:**
-        :ref:`中文 <codeblock-exit-cn>` | :ref:`English <codeblock-exit-en>`
+        **API Language** - :ref:`中文 <codeblock-exit-cn>` | :ref:`English <codeblock-exit-en>`
 
         ----
 

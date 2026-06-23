@@ -262,8 +262,7 @@ class NeuroMCAddCounter(NeuroMCBaseCounter):
         extra_ignore_modules: list[nn.Module] | None = None,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <NeuroMCAddCounter.__init__-cn>` | :ref:`English <NeuroMCAddCounter.__init__-en>`
+        **API Language** - :ref:`中文 <NeuroMCAddCounter.__init__-cn>` | :ref:`English <NeuroMCAddCounter.__init__-en>`
 
         ----
 

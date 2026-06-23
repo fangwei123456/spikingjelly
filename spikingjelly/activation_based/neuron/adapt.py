@@ -33,8 +33,7 @@ class AdaptBaseNode(BaseNode):
         store_v_seq: bool = False,
     ):
         """
-        **API Language:**
-        :ref:`中文 <AdaptBaseNode.__init__-cn>` | :ref:`English <AdaptBaseNode.__init__-en>`
+        **API Language** - :ref:`中文 <AdaptBaseNode.__init__-cn>` | :ref:`English <AdaptBaseNode.__init__-en>`
 
         ----
 
@@ -136,8 +135,7 @@ class AdaptBaseNode(BaseNode):
 
     def neuronal_adaptation(self):
         """
-        **API Language:**
-        :ref:`中文 <AdaptBaseNode.neuronal_adaptation-cn>` | :ref:`English <AdaptBaseNode.neuronal_adaptation-en>`
+        **API Language** - :ref:`中文 <AdaptBaseNode.neuronal_adaptation-cn>` | :ref:`English <AdaptBaseNode.neuronal_adaptation-en>`
 
         ----
 
@@ -187,8 +185,7 @@ class AdaptBaseNode(BaseNode):
 
     def neuronal_reset(self, spike):
         """
-        **API Language:**
-        :ref:`中文 <AdaptBaseNode.neuronal_reset-cn>` | :ref:`English <AdaptBaseNode.neuronal_reset-en>`
+        **API Language** - :ref:`中文 <AdaptBaseNode.neuronal_reset-cn>` | :ref:`English <AdaptBaseNode.neuronal_reset-en>`
 
         ----
 
@@ -231,8 +228,7 @@ class AdaptBaseNode(BaseNode):
 
     def single_step_forward(self, x: torch.Tensor):
         """
-        **API Language:**
-        :ref:`中文 <AdaptBaseNode.single_step_forward-cn>` | :ref:`English <AdaptBaseNode.single_step_forward-en>`
+        **API Language** - :ref:`中文 <AdaptBaseNode.single_step_forward-cn>` | :ref:`English <AdaptBaseNode.single_step_forward-en>`
 
         ----
 
@@ -296,8 +292,7 @@ class IzhikevichNode(AdaptBaseNode):
         store_v_seq: bool = False,
     ):
         """
-        **API Language:**
-        :ref:`中文 <IzhikevichNode.__init__-cn>` | :ref:`English <IzhikevichNode.__init__-en>`
+        **API Language** - :ref:`中文 <IzhikevichNode.__init__-cn>` | :ref:`English <IzhikevichNode.__init__-en>`
 
         ----
 

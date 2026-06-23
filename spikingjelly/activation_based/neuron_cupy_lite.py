@@ -84,8 +84,7 @@ class IFNode(nn.Module):
         store_v_seq: bool = False,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <IFNode.__init__-cn>` | :ref:`English <IFNode.__init__-en>`
+        **API Language** - :ref:`中文 <IFNode.__init__-cn>` | :ref:`English <IFNode.__init__-en>`
 
         ----
 
@@ -742,8 +741,7 @@ class LIFNode(nn.Module):
         store_v_seq: bool = False,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <LIFNode.__init__-cn>` | :ref:`English <LIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <LIFNode.__init__-cn>` | :ref:`English <LIFNode.__init__-en>`
 
         ----
 
@@ -1499,8 +1497,7 @@ class ParametricLIFNode(nn.Module):
         store_v_seq: bool = False,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <ParametricLIFNode.__init__-cn>` | :ref:`English <ParametricLIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <ParametricLIFNode.__init__-cn>` | :ref:`English <ParametricLIFNode.__init__-en>`
 
         ----
 
@@ -2399,8 +2396,7 @@ class ILIFNode(nn.Module):
         **kwargs,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <ILIFNode.__init__-cn>` | :ref:`English <ILIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <ILIFNode.__init__-cn>` | :ref:`English <ILIFNode.__init__-en>`
 
         ----
 

@@ -23,8 +23,7 @@ __all__ = [
 class SmoothedValue:
     def __init__(self, window_size=20, fmt=None):
         """
-        **API Language:**
-        :ref:`中文 <SmoothedValue-cn>` | :ref:`English <SmoothedValue-en>`
+        **API Language** - :ref:`中文 <SmoothedValue-cn>` | :ref:`English <SmoothedValue-en>`
 
         ----
 
@@ -67,8 +66,7 @@ class SmoothedValue:
 
     def synchronize_between_processes(self):
         r"""
-        **API Language:**
-        :ref:`中文 <SmoothedValue.synchronize_between_processes-cn>` | :ref:`English <SmoothedValue.synchronize_between_processes-en>`
+        **API Language** - :ref:`中文 <SmoothedValue.synchronize_between_processes-cn>` | :ref:`English <SmoothedValue.synchronize_between_processes-en>`
 
         ----
 
@@ -126,8 +124,7 @@ class SmoothedValue:
 class ThroughputValue:
     def __init__(self, window_size=20, fmt=None):
         """
-        **API Language:**
-        :ref:`中文 <ThroughputValue-cn>` | :ref:`English <ThroughputValue-en>`
+        **API Language** - :ref:`中文 <ThroughputValue-cn>` | :ref:`English <ThroughputValue-en>`
 
         ----
 
@@ -237,8 +234,7 @@ class ThroughputValue:
 class MetricLogger:
     def __init__(self, delimiter="\t"):
         """
-        **API Language:**
-        :ref:`中文 <MetricLogger-cn>` | :ref:`English <MetricLogger-en>`
+        **API Language** - :ref:`中文 <MetricLogger-cn>` | :ref:`English <MetricLogger-en>`
 
         ----
 
@@ -414,8 +410,7 @@ def accuracy(output, target, topk=(1,)):
 
 def mkdir(path):
     r"""
-    **API Language:**
-    :ref:`中文 <mkdir-cn>` | :ref:`English <mkdir-en>`
+    **API Language** - :ref:`中文 <mkdir-cn>` | :ref:`English <mkdir-en>`
 
     ----
 
@@ -494,8 +489,7 @@ def save_on_master(*args, **kwargs):
 
 def init_distributed_mode(args):
     r"""
-    **API Language:**
-    :ref:`中文 <init_distributed_mode-cn>` | :ref:`English <init_distributed_mode-en>`
+    **API Language** - :ref:`中文 <init_distributed_mode-cn>` | :ref:`English <init_distributed_mode-en>`
 
     ----
 

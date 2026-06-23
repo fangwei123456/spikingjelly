@@ -1,6 +1,5 @@
 r"""
-**API Language:**
-:ref:`中文 <ann2snn-cn>` | :ref:`English <ann2snn-en>`
+**API Language** - :ref:`中文 <ann2snn-cn>` | :ref:`English <ann2snn-en>`
 
 ----
 

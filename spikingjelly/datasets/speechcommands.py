@@ -57,8 +57,7 @@ class SpeechCommands(Dataset):
         download: Optional[bool] = False,
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <SpeechCommands.__init__-cn>` | :ref:`English <SpeechCommands.__init__-en>`
+        **API Language** - :ref:`中文 <SpeechCommands.__init__-cn>` | :ref:`English <SpeechCommands.__init__-en>`
 
         ----
 

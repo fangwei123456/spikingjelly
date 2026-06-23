@@ -32,8 +32,7 @@ class QIFNode(BaseNode):
         store_v_seq: bool = False,
     ):
         """
-        **API Language:**
-        :ref:`中文 <QIFNode.__init__-cn>` | :ref:`English <QIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <QIFNode.__init__-cn>` | :ref:`English <QIFNode.__init__-en>`
 
         ----
 
@@ -228,8 +227,7 @@ class EIFNode(BaseNode):
         store_v_seq: bool = False,
     ):
         """
-        **API Language:**
-        :ref:`中文 <EIFNode.__init__-cn>` | :ref:`English <EIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <EIFNode.__init__-cn>` | :ref:`English <EIFNode.__init__-en>`
 
         ----
 

@@ -59,8 +59,7 @@ class BaseSpikeCompressor(abc.ABC):
 
     def __init__(self):
         r"""
-        **API Language:**
-        :ref:`中文 <BaseSpikeCompressor.__init__-cn>` | :ref:`English <BaseSpikeCompressor.__init__-en>`
+        **API Language** - :ref:`中文 <BaseSpikeCompressor.__init__-cn>` | :ref:`English <BaseSpikeCompressor.__init__-en>`
 
         ----
 
@@ -92,8 +91,7 @@ class BaseSpikeCompressor(abc.ABC):
 
     def compress(self, s_seq: torch.Tensor) -> torch.Tensor:
         r"""
-        **API Language:**
-        :ref:`中文 <BaseSpikeCompressor.compress-cn>` | :ref:`English <BaseSpikeCompressor.compress-en>`
+        **API Language** - :ref:`中文 <BaseSpikeCompressor.compress-cn>` | :ref:`English <BaseSpikeCompressor.compress-en>`
 
         ----
 
@@ -128,8 +126,7 @@ class BaseSpikeCompressor(abc.ABC):
 
     def decompress(self, s_seq: torch.Tensor, shape) -> torch.Tensor:
         r"""
-        **API Language:**
-        :ref:`中文 <BaseSpikeCompressor.decompress-cn>` | :ref:`English <BaseSpikeCompressor.decompress-en>`
+        **API Language** - :ref:`中文 <BaseSpikeCompressor.decompress-cn>` | :ref:`English <BaseSpikeCompressor.decompress-en>`
 
         ----
 
@@ -174,8 +171,7 @@ class NullSpikeCompressor(BaseSpikeCompressor):
 
     def __init__(self):
         r"""
-        **API Language:**
-        :ref:`中文 <NullSpikeCompressor.__init__-cn>` | :ref:`English <NullSpikeCompressor.__init__-en>`
+        **API Language** - :ref:`中文 <NullSpikeCompressor.__init__-cn>` | :ref:`English <NullSpikeCompressor.__init__-en>`
 
         ----
 
@@ -230,8 +226,7 @@ class BooleanSpikeCompressor(BaseSpikeCompressor):
 
     def __init__(self):
         r"""
-        **API Language:**
-        :ref:`中文 <BooleanSpikeCompressor.__init__-cn>` | :ref:`English <BooleanSpikeCompressor.__init__-en>`
+        **API Language** - :ref:`中文 <BooleanSpikeCompressor.__init__-cn>` | :ref:`English <BooleanSpikeCompressor.__init__-en>`
 
         ----
 
@@ -286,8 +281,7 @@ class Uint8SpikeCompressor(BaseSpikeCompressor):
 
     def __init__(self):
         r"""
-        **API Language:**
-        :ref:`中文 <Uint8SpikeCompressor.__init__-cn>` | :ref:`English <Uint8SpikeCompressor.__init__-en>`
+        **API Language** - :ref:`中文 <Uint8SpikeCompressor.__init__-cn>` | :ref:`English <Uint8SpikeCompressor.__init__-en>`
 
         ----
 
@@ -341,8 +335,7 @@ class BitSpikeCompressor(BaseSpikeCompressor):
 
     def __init__(self):
         r"""
-        **API Language:**
-        :ref:`中文 <BitSpikeCompressor.__init__-cn>` | :ref:`English <BitSpikeCompressor.__init__-en>`
+        **API Language** - :ref:`中文 <BitSpikeCompressor.__init__-cn>` | :ref:`English <BitSpikeCompressor.__init__-en>`
 
         ----
 
@@ -398,8 +391,7 @@ class SparseSpikeCompressor(BaseSpikeCompressor):
 
     def __init__(self, dtype=torch.int64):
         r"""
-        **API Language:**
-        :ref:`中文 <SparseSpikeCompressor.__init__-cn>` | :ref:`English <SparseSpikeCompressor.__init__-en>`
+        **API Language** - :ref:`中文 <SparseSpikeCompressor.__init__-cn>` | :ref:`English <SparseSpikeCompressor.__init__-en>`
 
         ----
 

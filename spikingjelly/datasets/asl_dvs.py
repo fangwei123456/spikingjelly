@@ -44,8 +44,7 @@ class ASLDVS(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
-        **API Language:**
-        :ref:`中文 <ASLDVS.__init__-cn>` | :ref:`English <ASLDVS.__init__-en>`
+        **API Language** - :ref:`中文 <ASLDVS.__init__-cn>` | :ref:`English <ASLDVS.__init__-en>`
 
         ----
 
@@ -145,12 +144,12 @@ class ASLDVS(NeuromorphicDatasetFolder):
     @classmethod
     def get_H_W(cls) -> Tuple:
         r"""
-        **API Language:**
-        :ref:`中文 <asl_dvs.get_H_W-cn>` | :ref:`English <asl_dvs.get_H_W-en>`
+        **API Language** - :ref:`中文 <asl_dvs.get_H_W-cn>` | :ref:`English <asl_dvs.get_H_W-en>`
 
         ----
 
         .. _asl_dvs.get_H_W-cn:
+
         * **中文**
 
         :return: ``(180, 240)``
@@ -159,6 +158,7 @@ class ASLDVS(NeuromorphicDatasetFolder):
         ----
 
         .. _asl_dvs.get_H_W-en:
+
         * **English**
 
         :return: ``(180, 240)``

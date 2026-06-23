@@ -12,8 +12,7 @@ from spikingjelly.activation_based.neuron.flexsn import FlexSN
 
 class FlexSNTrainer(train_classify.Trainer):
     r"""
-    **API Language:**
-    :ref:`中文 <FlexSNTrainer-cn>` | :ref:`English <FlexSNTrainer-en>`
+    **API Language** - :ref:`中文 <FlexSNTrainer-cn>` | :ref:`English <FlexSNTrainer-en>`
 
     ----
 

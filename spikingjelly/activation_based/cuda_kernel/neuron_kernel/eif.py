@@ -22,8 +22,7 @@ __all__ = ["create_fptt_kernel", "create_bptt_kernel", "multistep_eif_ptt"]
 
 def create_fptt_kernel(hard_reset: bool, dtype: str):
     r"""
-    **API Language:**
-    :ref:`中文 <create_fptt_kernel-cn>` | :ref:`English <create_fptt_kernel-en>`
+    **API Language** - :ref:`中文 <create_fptt_kernel-cn>` | :ref:`English <create_fptt_kernel-en>`
 
     ----
 
@@ -175,8 +174,7 @@ def create_bptt_kernel(
     sg_cuda_code_fun, hard_reset: bool, detach_reset: bool, dtype: str
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <create_bptt_kernel-cn>` | :ref:`English <create_bptt_kernel-en>`
+    **API Language** - :ref:`中文 <create_bptt_kernel-cn>` | :ref:`English <create_bptt_kernel-en>`
 
     ----
 
@@ -792,8 +790,8 @@ def multistep_eif_ptt(
     surrogate_function,
 ):
     """Multi-step EIF neuron forward pass via CuPy PTT custom op.
-    **API Language:**
-    :ref:`中文 <multistep_eif_ptt-cn>` | :ref:`English <multistep_eif_ptt-en>`
+
+    **API Language** - :ref:`中文 <multistep_eif_ptt-cn>` | :ref:`English <multistep_eif_ptt-en>`
 
     ----
 

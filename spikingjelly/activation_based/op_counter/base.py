@@ -25,8 +25,7 @@ __all__ = [
 
 def is_binary_tensor(x: torch.Tensor) -> bool:
     r"""
-    **API Language:**
-    :ref:`中文 <is_binary_tensor-cn>` | :ref:`English <is_binary_tensor-en>`
+    **API Language** - :ref:`中文 <is_binary_tensor-cn>` | :ref:`English <is_binary_tensor-en>`
 
     ----
 
@@ -65,8 +64,7 @@ def is_binary_tensor(x: torch.Tensor) -> bool:
 class ActiveModuleTracker(ModuleTracker):
     def __init__(self):
         r"""
-        **API Language:**
-        :ref:`中文 <ActiveModuleTracker.__init__-cn>` | :ref:`English <ActiveModuleTracker.__init__-en>`
+        **API Language** - :ref:`中文 <ActiveModuleTracker.__init__-cn>` | :ref:`English <ActiveModuleTracker.__init__-en>`
 
         ----
 
@@ -162,8 +160,7 @@ class ActiveModuleTracker(ModuleTracker):
 class BaseCounter:
     def __init__(self):
         r"""
-        **API Language:**
-        :ref:`中文 <BaseCounter.__init__-cn>` | :ref:`English <BaseCounter.__init__-en>`
+        **API Language** - :ref:`中文 <BaseCounter.__init__-cn>` | :ref:`English <BaseCounter.__init__-en>`
 
         ----
 
@@ -205,8 +202,7 @@ class BaseCounter:
 
     def has_rule(self, func) -> bool:
         r"""
-        **API Language:**
-        :ref:`中文 <BaseCounter.has_rule-cn>` | :ref:`English <BaseCounter.has_rule-en>`
+        **API Language** - :ref:`中文 <BaseCounter.has_rule-cn>` | :ref:`English <BaseCounter.has_rule-en>`
 
         ----
 
@@ -245,8 +241,7 @@ class BaseCounter:
         parent_names: Optional[set[str]] = None,
     ) -> int:
         r"""
-        **API Language:**
-        :ref:`中文 <BaseCounter.count-cn>` | :ref:`English <BaseCounter.count-en>`
+        **API Language** - :ref:`中文 <BaseCounter.count-cn>` | :ref:`English <BaseCounter.count-en>`
 
         ----
 
@@ -314,8 +309,7 @@ class BaseCounter:
 
     def record(self, scope, func, value):
         r"""
-        **API Language:**
-        :ref:`中文 <BaseCounter.record-cn>` | :ref:`English <BaseCounter.record-en>`
+        **API Language** - :ref:`中文 <BaseCounter.record-cn>` | :ref:`English <BaseCounter.record-en>`
 
         ----
 
@@ -356,8 +350,7 @@ class BaseCounter:
 
     def get_counts(self) -> dict[str, dict[Any, int]]:
         r"""
-        **API Language:**
-        :ref:`中文 <BaseCounter.get_counts-cn>` | :ref:`English <BaseCounter.get_counts-en>`
+        **API Language** - :ref:`中文 <BaseCounter.get_counts-cn>` | :ref:`English <BaseCounter.get_counts-en>`
 
         ----
 
@@ -381,8 +374,7 @@ class BaseCounter:
 
     def get_total(self) -> int:
         r"""
-        **API Language:**
-        :ref:`中文 <BaseCounter.get_total-cn>` | :ref:`English <BaseCounter.get_total-en>`
+        **API Language** - :ref:`中文 <BaseCounter.get_total-cn>` | :ref:`English <BaseCounter.get_total-en>`
 
         ----
 
@@ -406,8 +398,7 @@ class BaseCounter:
 
     def reset(self):
         r"""
-        **API Language:**
-        :ref:`中文 <BaseCounter.reset-cn>` | :ref:`English <BaseCounter.reset-en>`
+        **API Language** - :ref:`中文 <BaseCounter.reset-cn>` | :ref:`English <BaseCounter.reset-en>`
 
         ----
 
@@ -441,8 +432,7 @@ class DispatchCounterMode(TorchDispatchMode):
         self, counters: list[BaseCounter], strict: bool = False, verbose: bool = False
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <DispatchCounterMode.__init__-cn>` | :ref:`English <DispatchCounterMode.__init__-en>`
+        **API Language** - :ref:`中文 <DispatchCounterMode.__init__-cn>` | :ref:`English <DispatchCounterMode.__init__-en>`
 
         ----
 
@@ -617,8 +607,7 @@ class FunctionCounterMode(TorchFunctionMode):
         self, counters: list[BaseCounter], strict: bool = False, verbose: bool = False
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <FunctionCounterMode.__init__-cn>` | :ref:`English <FunctionCounterMode.__init__-en>`
+        **API Language** - :ref:`中文 <FunctionCounterMode.__init__-cn>` | :ref:`English <FunctionCounterMode.__init__-en>`
 
         ----
 

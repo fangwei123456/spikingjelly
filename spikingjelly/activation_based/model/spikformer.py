@@ -27,8 +27,7 @@ class SpikformerConv2dBN(nn.Module):
         pool: bool = False,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikformerConv2dBN-cn>` | :ref:`English <SpikformerConv2dBN-en>`
+        **API Language** - :ref:`中文 <SpikformerConv2dBN-cn>` | :ref:`English <SpikformerConv2dBN-en>`
 
         ----
 
@@ -119,8 +118,7 @@ class SpikformerConv2dBNLIF(nn.Module, base.MultiStepModule):
         detach_reset: bool = True,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikformerConv2dBNLIF-cn>` | :ref:`English <SpikformerConv2dBNLIF-en>`
+        **API Language** - :ref:`中文 <SpikformerConv2dBNLIF-cn>` | :ref:`English <SpikformerConv2dBNLIF-en>`
 
         ----
 
@@ -228,8 +226,7 @@ class SpikformerPatchStem(nn.Module, base.MultiStepModule):
         detach_reset: bool = True,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikformerPatchStem-cn>` | :ref:`English <SpikformerPatchStem-en>`
+        **API Language** - :ref:`中文 <SpikformerPatchStem-cn>` | :ref:`English <SpikformerPatchStem-en>`
 
         ----
 
@@ -360,8 +357,7 @@ class SpikformerMLP(nn.Module, base.MultiStepModule):
         detach_reset: bool = True,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikformerMLP-cn>` | :ref:`English <SpikformerMLP-en>`
+        **API Language** - :ref:`中文 <SpikformerMLP-cn>` | :ref:`English <SpikformerMLP-en>`
 
         ----
 
@@ -457,8 +453,7 @@ class SpikformerBlock(nn.Module, base.MultiStepModule):
         detach_reset: bool = True,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikformerBlock-cn>` | :ref:`English <SpikformerBlock-en>`
+        **API Language** - :ref:`中文 <SpikformerBlock-cn>` | :ref:`English <SpikformerBlock-en>`
 
         ----
 
@@ -558,8 +553,7 @@ class Spikformer(nn.Module, base.MultiStepModule):
         detach_reset: bool = True,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <Spikformer-cn>` | :ref:`English <Spikformer-en>`
+        **API Language** - :ref:`中文 <Spikformer-cn>` | :ref:`English <Spikformer-en>`
 
         ----
 
@@ -730,8 +724,7 @@ def spikformer_ti(
     backend: str = "torch",
 ) -> Spikformer:
     r"""
-    **API Language:**
-    :ref:`中文 <spikformer_ti-cn>` | :ref:`English <spikformer_ti-en>`
+    **API Language** - :ref:`中文 <spikformer_ti-cn>` | :ref:`English <spikformer_ti-en>`
 
     ----
 
@@ -802,8 +795,7 @@ def spikformer_s(
     backend: str = "torch",
 ) -> Spikformer:
     r"""
-    **API Language:**
-    :ref:`中文 <spikformer_s-cn>` | :ref:`English <spikformer_s-en>`
+    **API Language** - :ref:`中文 <spikformer_s-cn>` | :ref:`English <spikformer_s-en>`
 
     ----
 

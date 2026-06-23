@@ -647,8 +647,8 @@ def multistep_lif(
     surrogate_function,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Multi-step LIF neuron forward pass via Triton kernel.
-    **API Language:**
-    :ref:`中文 <multistep_lif-cn>` | :ref:`English <multistep_lif-en>`
+
+    **API Language** - :ref:`中文 <multistep_lif-cn>` | :ref:`English <multistep_lif-en>`
 
     ----
 

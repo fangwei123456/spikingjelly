@@ -165,8 +165,7 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
-        **API Language:**
-        :ref:`中文 <CIFAR10DVS.__init__-cn>` | :ref:`English <CIFAR10DVS.__init__-en>`
+        **API Language** - :ref:`中文 <CIFAR10DVS.__init__-cn>` | :ref:`English <CIFAR10DVS.__init__-en>`
 
         ----
 
@@ -243,8 +242,7 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
     @classmethod
     def get_H_W(cls) -> Tuple:
         r"""
-        **API Language:**
-        :ref:`中文 <cifar10_dvs.get_H_W-cn>` | :ref:`English <cifar10_dvs.get_H_W-en>`
+        **API Language** - :ref:`中文 <cifar10_dvs.get_H_W-cn>` | :ref:`English <cifar10_dvs.get_H_W-en>`
 
         ----
 
@@ -412,8 +410,7 @@ class CIFAR10DVSTEBNSplit(CIFAR10DVS):
         target_transform: Optional[Callable] = None,
     ):
         """
-        **API Language:**
-        :ref:`中文 <CIFAR10DVSTEBNSplit.__init__-cn>` | :ref:`English <CIFAR10DVSTEBNSplit.__init__-en>`
+        **API Language** - :ref:`中文 <CIFAR10DVSTEBNSplit.__init__-cn>` | :ref:`English <CIFAR10DVSTEBNSplit.__init__-en>`
 
         ----
 

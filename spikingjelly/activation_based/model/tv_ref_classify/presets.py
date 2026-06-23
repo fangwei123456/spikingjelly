@@ -15,8 +15,7 @@ class ClassificationPresetTrain:
         random_erase_prob=0.0,
     ):
         """
-        **API Language:**
-        :ref:`中文 <ClassificationPresetTrain-cn>` | :ref:`English <ClassificationPresetTrain-en>`
+        **API Language** - :ref:`中文 <ClassificationPresetTrain-cn>` | :ref:`English <ClassificationPresetTrain-en>`
 
         ----
 
@@ -77,8 +76,7 @@ class ClassificationPresetEval:
         interpolation=InterpolationMode.BILINEAR,
     ):
         """
-        **API Language:**
-        :ref:`中文 <ClassificationPresetEval-cn>` | :ref:`English <ClassificationPresetEval-en>`
+        **API Language** - :ref:`中文 <ClassificationPresetEval-cn>` | :ref:`English <ClassificationPresetEval-en>`
 
         ----
 

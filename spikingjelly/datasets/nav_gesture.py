@@ -215,8 +215,7 @@ class NAVGestureWalk(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
-        **API Language:**
-        :ref:`中文 <NAVGestureWalk.__init__-cn>` | :ref:`English <NAVGestureWalk.__init__-en>`
+        **API Language** - :ref:`中文 <NAVGestureWalk.__init__-cn>` | :ref:`English <NAVGestureWalk.__init__-en>`
 
         ----
 
@@ -293,12 +292,12 @@ class NAVGestureWalk(NeuromorphicDatasetFolder):
     @classmethod
     def get_H_W(cls) -> Tuple:
         r"""
-        **API Language:**
-        :ref:`中文 <NAVGesture.get_H_W-cn>` | :ref:`English <NAVGesture.get_H_W-en>`
+        **API Language** - :ref:`中文 <NAVGesture.get_H_W-cn>` | :ref:`English <NAVGesture.get_H_W-en>`
 
         ----
 
         .. _NAVGesture.get_H_W-cn:
+
         * **中文**
 
         :return: ``(240, 304)``
@@ -311,6 +310,7 @@ class NAVGestureWalk(NeuromorphicDatasetFolder):
         ----
 
         .. _NAVGesture.get_H_W-en:
+
         * **English**
 
         :return: ``(240, 304)``
@@ -409,8 +409,7 @@ class NAVGestureSit(NAVGestureWalk):
         target_transform: Optional[Callable] = None,
     ):
         """
-        **API Language:**
-        :ref:`中文 <NAVGestureSit.__init__-cn>` | :ref:`English <NAVGestureSit.__init__-en>`
+        **API Language** - :ref:`中文 <NAVGestureSit.__init__-cn>` | :ref:`English <NAVGestureSit.__init__-en>`
 
         ----
 

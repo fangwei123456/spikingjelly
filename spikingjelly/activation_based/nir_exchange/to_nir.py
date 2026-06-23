@@ -228,8 +228,7 @@ def export_to_nir(
     dt: float = 1e-4,
 ):
     """
-    **API Language:**
-    :ref:`中文 <export_to_nir-cn>` | :ref:`English <export_to_nir-en>`
+    **API Language** - :ref:`中文 <export_to_nir-cn>` | :ref:`English <export_to_nir-en>`
 
     ----
 

@@ -10,8 +10,7 @@ def random_temporal_delete(
     x_seq: Union[torch.Tensor, np.ndarray], T_remain: int, batch_first: bool
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <random_temporal_delete-cn>` | :ref:`English <random_temporal_delete-en>`
+    **API Language** - :ref:`中文 <random_temporal_delete-cn>` | :ref:`English <random_temporal_delete-en>`
 
     ----
 
@@ -106,8 +105,7 @@ def random_temporal_delete(
 class RandomTemporalDelete(torch.nn.Module):
     def __init__(self, T_remain: int, batch_first: bool):
         r"""
-        **API Language:**
-        :ref:`中文 <RandomTemporalDelete.__init__-cn>` | :ref:`English <RandomTemporalDelete.__init__-en>`
+        **API Language** - :ref:`中文 <RandomTemporalDelete.__init__-cn>` | :ref:`English <RandomTemporalDelete.__init__-en>`
 
         ----
 
@@ -154,8 +152,7 @@ class RandomTemporalDelete(torch.nn.Module):
         self, x_seq: Union[torch.Tensor, np.ndarray]
     ) -> Union[torch.Tensor, np.ndarray]:
         r"""
-        **API Language:**
-        :ref:`中文 <RandomTemporalDelete.forward-cn>` | :ref:`English <RandomTemporalDelete.forward-en>`
+        **API Language** - :ref:`中文 <RandomTemporalDelete.forward-cn>` | :ref:`English <RandomTemporalDelete.forward-en>`
 
         ----
 

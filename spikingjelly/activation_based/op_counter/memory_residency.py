@@ -206,7 +206,8 @@ class MemoryResidencySimulator:
         capacity_bits: dict[str, float] | None = None,
     ):
         """
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <MemoryResidencySimulator-cn>` |
         :ref:`English <MemoryResidencySimulator-en>`
 
@@ -521,7 +522,8 @@ class MemoryResidencyCounter(BaseCounter):
         extra_ignore_modules: list[type[nn.Module]] | None = None,
     ):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <MemoryResidencyCounter.__init__-cn>` |
         :ref:`English <MemoryResidencyCounter.__init__-en>`
 
@@ -610,7 +612,8 @@ class MemoryResidencyCounter(BaseCounter):
 
     def reset(self):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <MemoryResidencyCounter.reset-cn>` |
         :ref:`English <MemoryResidencyCounter.reset-en>`
 
@@ -651,7 +654,8 @@ class MemoryResidencyCounter(BaseCounter):
         parent_names: set[str] | None = None,
     ) -> int:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <MemoryResidencyCounter.count-cn>` |
         :ref:`English <MemoryResidencyCounter.count-en>`
 
@@ -752,7 +756,8 @@ class MemoryResidencyCounter(BaseCounter):
 
     def get_level_bits(self) -> dict[str, int]:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <MemoryResidencyCounter.get_level_bits-cn>` |
         :ref:`English <MemoryResidencyCounter.get_level_bits-en>`
 
@@ -778,7 +783,8 @@ class MemoryResidencyCounter(BaseCounter):
 
     def get_level_rw_bits(self) -> dict[str, dict[str, int]]:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <MemoryResidencyCounter.get_level_rw_bits-cn>` |
         :ref:`English <MemoryResidencyCounter.get_level_rw_bits-en>`
 
@@ -804,7 +810,8 @@ class MemoryResidencyCounter(BaseCounter):
 
     def get_op_level_bits(self) -> dict[str, dict[str, int]]:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <MemoryResidencyCounter.get_op_level_bits-cn>` |
         :ref:`English <MemoryResidencyCounter.get_op_level_bits-en>`
 
@@ -830,7 +837,8 @@ class MemoryResidencyCounter(BaseCounter):
 
     def get_stage_level_bits(self) -> dict[str, dict[str, int]]:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <MemoryResidencyCounter.get_stage_level_bits-cn>` |
         :ref:`English <MemoryResidencyCounter.get_stage_level_bits-en>`
 
@@ -856,7 +864,8 @@ class MemoryResidencyCounter(BaseCounter):
 
     def get_move_bits_by_edge(self) -> dict[str, int]:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <MemoryResidencyCounter.get_move_bits_by_edge-cn>` |
         :ref:`English <MemoryResidencyCounter.get_move_bits_by_edge-en>`
 
@@ -882,7 +891,8 @@ class MemoryResidencyCounter(BaseCounter):
 
     def get_move_bits_by_op(self) -> dict[str, dict[str, int]]:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <MemoryResidencyCounter.get_move_bits_by_op-cn>` |
         :ref:`English <MemoryResidencyCounter.get_move_bits_by_op-en>`
 

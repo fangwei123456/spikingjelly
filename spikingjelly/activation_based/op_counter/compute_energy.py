@@ -31,7 +31,8 @@ def _call_model(model: nn.Module, inputs):
 @dataclass
 class ComputeEnergyCostConfig:
     r"""
-    **API Language:**
+    .. rubric:: API Language
+
     :ref:`中文 <ComputeEnergyCostConfig-cn>` |
     :ref:`English <ComputeEnergyCostConfig-en>`
 
@@ -102,7 +103,8 @@ class ComputeEnergyCostConfig:
 @dataclass
 class ComputeEnergyConfig:
     r"""
-    **API Language:**
+    .. rubric:: API Language
+
     :ref:`中文 <ComputeEnergyConfig-cn>` |
     :ref:`English <ComputeEnergyConfig-en>`
 
@@ -141,7 +143,8 @@ class ComputeEnergyConfig:
 @dataclass
 class ComputeEnergyReport:
     r"""
-    **API Language:**
+    .. rubric:: API Language
+
     :ref:`中文 <ComputeEnergyReport-cn>` |
     :ref:`English <ComputeEnergyReport-en>`
 
@@ -194,7 +197,8 @@ class ComputeEnergyReport:
 class ComputeEnergyProfiler:
     def __init__(self, *, config: ComputeEnergyConfig | None = None):
         """
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <ComputeEnergyProfiler-cn>` |
         :ref:`English <ComputeEnergyProfiler-en>`
 
@@ -312,7 +316,8 @@ def estimate_compute_energy(
     config: ComputeEnergyConfig | None = None,
 ) -> ComputeEnergyReport:
     r"""
-    **API Language:**
+    .. rubric:: API Language
+
     :ref:`中文 <estimate_compute_energy-cn>` |
     :ref:`English <estimate_compute_energy-en>`
 

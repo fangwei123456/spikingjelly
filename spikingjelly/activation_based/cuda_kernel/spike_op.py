@@ -254,8 +254,7 @@ def spike_linear(
     spike: Tensor, weight: Tensor, bias: Optional[Tensor] = None
 ) -> Tensor:
     r"""
-    **API Language:**
-    :ref:`中文 <spike_linear-cn>` | :ref:`English <spike_linear-en>`
+    **API Language** - :ref:`中文 <spike_linear-cn>` | :ref:`English <spike_linear-en>`
 
     ----
 
@@ -307,8 +306,7 @@ def spike_conv1d(
     groups: _int = 1,
 ) -> Tensor:
     r"""
-    **API Language:**
-    :ref:`中文 <spike_conv1d-cn>` | :ref:`English <spike_conv1d-en>`
+    **API Language** - :ref:`中文 <spike_conv1d-cn>` | :ref:`English <spike_conv1d-en>`
 
     ----
 
@@ -370,8 +368,7 @@ def spike_conv2d(
     groups: _int = 1,
 ) -> Tensor:
     r"""
-    **API Language:**
-    :ref:`中文 <spike_conv2d-cn>` | :ref:`English <spike_conv2d-en>`
+    **API Language** - :ref:`中文 <spike_conv2d-cn>` | :ref:`English <spike_conv2d-en>`
 
     ----
 
@@ -433,8 +430,7 @@ def spike_conv3d(
     groups: _int = 1,
 ) -> Tensor:
     r"""
-    **API Language:**
-    :ref:`中文 <spike_conv3d-cn>` | :ref:`English <spike_conv3d-en>`
+    **API Language** - :ref:`中文 <spike_conv3d-cn>` | :ref:`English <spike_conv3d-en>`
 
     ----
 
@@ -488,8 +484,7 @@ def spike_conv3d(
 
 class SpikeLinear(nn.Linear):
     r"""
-    **API Language:**
-    :ref:`中文 <SpikeLinear-cn>` | :ref:`English <SpikeLinear-en>`
+    **API Language** - :ref:`中文 <SpikeLinear-cn>` | :ref:`English <SpikeLinear-en>`
 
     ----
 
@@ -532,8 +527,7 @@ class SpikeLinear(nn.Linear):
 
 class SpikeConv1d(nn.Conv1d):
     r"""
-    **API Language:**
-    :ref:`中文 <SpikeConv1d-cn>` | :ref:`English <SpikeConv1d-en>`
+    **API Language** - :ref:`中文 <SpikeConv1d-cn>` | :ref:`English <SpikeConv1d-en>`
 
     ----
 
@@ -590,8 +584,7 @@ class SpikeConv1d(nn.Conv1d):
 
 class SpikeConv2d(nn.Conv2d):
     r"""
-    **API Language:**
-    :ref:`中文 <SpikeConv2d-cn>` | :ref:`English <SpikeConv2d-en>`
+    **API Language** - :ref:`中文 <SpikeConv2d-cn>` | :ref:`English <SpikeConv2d-en>`
 
     ----
 
@@ -648,8 +641,7 @@ class SpikeConv2d(nn.Conv2d):
 
 class SpikeConv3d(nn.Conv3d):
     r"""
-    **API Language:**
-    :ref:`中文 <SpikeConv3d-cn>` | :ref:`English <SpikeConv3d-en>`
+    **API Language** - :ref:`中文 <SpikeConv3d-cn>` | :ref:`English <SpikeConv3d-en>`
 
     ----
 

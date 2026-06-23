@@ -26,8 +26,7 @@ class Converter:
         threshold_optimizer: Optional[ThresholdOptimizer] = None,
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <Converter.__init__-cn>` | :ref:`English <Converter.__init__-en>`
+        **API Language** - :ref:`中文 <Converter.__init__-cn>` | :ref:`English <Converter.__init__-en>`
 
         ----
 
@@ -157,9 +156,7 @@ class Converter:
 
     def convert_to_spiking_neurons(self, ann: nn.Module) -> torch.fx.GraphModule:
         r"""
-        **API Language:**
-        :ref:`中文 <Converter.convert_to_spiking_neurons-cn>` |
-        :ref:`English <Converter.convert_to_spiking_neurons-en>`
+        **API Language** - :ref:`中文 <Converter.convert_to_spiking_neurons-cn>` | :ref:`English <Converter.convert_to_spiking_neurons-en>`
 
         ----
 
@@ -375,8 +372,7 @@ class Converter:
         fx_model: torch.fx.GraphModule, fuse_flag: bool = True
     ) -> torch.fx.GraphModule:
         r"""
-        **API Language:**
-        :ref:`中文 <Converter.fuse-cn>` | :ref:`English <Converter.fuse-en>`
+        **API Language** - :ref:`中文 <Converter.fuse-cn>` | :ref:`English <Converter.fuse-en>`
 
         ----
 
@@ -475,8 +471,7 @@ class Converter:
         rules: Optional[List[ActivationRule]] = None,
     ) -> torch.fx.GraphModule:
         r"""
-        **API Language:**
-        :ref:`中文 <Converter.set_voltagehook-cn>` | :ref:`English <Converter.set_voltagehook-en>`
+        **API Language** - :ref:`中文 <Converter.set_voltagehook-cn>` | :ref:`English <Converter.set_voltagehook-en>`
 
         ----
 
@@ -545,8 +540,7 @@ class Converter:
         self, fx_model: torch.fx.GraphModule
     ) -> torch.fx.GraphModule:
         r"""
-        **API Language:**
-        :ref:`中文 <Converter.replace_by_neurons-cn>` | :ref:`English <Converter.replace_by_neurons-en>`
+        **API Language** - :ref:`中文 <Converter.replace_by_neurons-cn>` | :ref:`English <Converter.replace_by_neurons-en>`
 
         ----
 

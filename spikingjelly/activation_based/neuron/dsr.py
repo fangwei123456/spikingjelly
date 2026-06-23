@@ -24,8 +24,7 @@ class DSRIFNode(base.MemoryModule):
         **kwargs,
     ):
         """
-        **API Language:**
-        :ref:`中文 <DSRIFNode.__init__-cn>` | :ref:`English <DSRIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <DSRIFNode.__init__-cn>` | :ref:`English <DSRIFNode.__init__-en>`
 
         ----
 
@@ -225,8 +224,7 @@ class DSRLIFNode(base.MemoryModule):
         **kwargs,
     ):
         """
-        **API Language:**
-        :ref:`中文 <DSRLIFNode.__init__-cn>` | :ref:`English <DSRLIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <DSRLIFNode.__init__-cn>` | :ref:`English <DSRLIFNode.__init__-en>`
 
         ----
 

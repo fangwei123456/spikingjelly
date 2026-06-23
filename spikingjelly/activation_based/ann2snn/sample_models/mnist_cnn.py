@@ -4,8 +4,7 @@ import torch.nn as nn
 class CNN(nn.Module):
     def __init__(self):
         """
-        **API Language:**
-        :ref:`中文 <CNN-cn>` | :ref:`English <CNN-en>`
+        **API Language** - :ref:`中文 <CNN-cn>` | :ref:`English <CNN-en>`
 
         ----
 

@@ -171,8 +171,7 @@ class NeuroMCMulCounter(NeuroMCBaseCounter):
     ):
         """
         Counter for multiplication operations in the NeuroMC framework.
-        **API Language:**
-        :ref:`中文 <NeuroMCMulCounter-cn>` | :ref:`English <NeuroMCMulCounter-en>`
+        **API Language** - :ref:`中文 <NeuroMCMulCounter-cn>` | :ref:`English <NeuroMCMulCounter-en>`
 
         ----
 

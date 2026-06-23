@@ -9,8 +9,8 @@ __all__ = ["MemoryInstanceSpec", "MemoryHierarchyConfig"]
 @dataclass(frozen=True)
 class MemoryInstanceSpec:
     """Specification for a single memory instance in the memory hierarchy.
-    **API Language:**
-    :ref:`中文 <MemoryInstanceSpec-cn>` | :ref:`English <MemoryInstanceSpec-en>`
+
+    **API Language** - :ref:`中文 <MemoryInstanceSpec-cn>` | :ref:`English <MemoryInstanceSpec-en>`
 
     ----
 
@@ -127,8 +127,7 @@ _MEMORY_INSTANCES = {
 @dataclass
 class MemoryHierarchyConfig:
     r"""
-    **API Language:**
-    :ref:`中文 <MemoryHierarchyConfig-cn>` | :ref:`English <MemoryHierarchyConfig-en>`
+    **API Language** - :ref:`中文 <MemoryHierarchyConfig-cn>` | :ref:`English <MemoryHierarchyConfig-en>`
 
     ----
 

@@ -25,8 +25,7 @@ class DVSLip(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
-        **API Language:**
-        :ref:`中文 <DVSLip.__init__-cn>` | :ref:`English <DVSLip.__init__-en>`
+        **API Language** - :ref:`中文 <DVSLip.__init__-cn>` | :ref:`English <DVSLip.__init__-en>`
 
         ----
 
@@ -111,8 +110,7 @@ class DVSLip(NeuromorphicDatasetFolder):
     @classmethod
     def get_H_W(cls) -> Tuple:
         r"""
-        **API Language:**
-        :ref:`中文 <DVSLip.get_H_W-cn>` | :ref:`English <DVSLip.get_H_W-en>`
+        **API Language** - :ref:`中文 <DVSLip.get_H_W-cn>` | :ref:`English <DVSLip.get_H_W-en>`
 
         ----
 

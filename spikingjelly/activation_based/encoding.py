@@ -10,8 +10,7 @@ from abc import abstractmethod
 class StatelessEncoder(nn.Module, base.StepModule):
     def __init__(self, step_mode="s"):
         r"""
-        **API Language:**
-        :ref:`中文 <StatelessEncoder.__init__-cn>` | :ref:`English <StatelessEncoder.__init__-en>`
+        **API Language** - :ref:`中文 <StatelessEncoder.__init__-cn>` | :ref:`English <StatelessEncoder.__init__-en>`
 
         ----
 
@@ -44,8 +43,7 @@ class StatelessEncoder(nn.Module, base.StepModule):
     @abstractmethod
     def forward(self, x: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <StatelessEncoder.forward-cn>` | :ref:`English <StatelessEncoder.forward-en>`
+        **API Language** - :ref:`中文 <StatelessEncoder.forward-cn>` | :ref:`English <StatelessEncoder.forward-en>`
 
         ----
 
@@ -81,8 +79,7 @@ class StatelessEncoder(nn.Module, base.StepModule):
 class StatefulEncoder(base.MemoryModule):
     def __init__(self, T: int, step_mode="s"):
         r"""
-        **API Language:**
-        :ref:`中文 <StatefulEncoder.__init__-cn>` | :ref:`English <StatefulEncoder.__init__-en>`
+        **API Language** - :ref:`中文 <StatefulEncoder.__init__-cn>` | :ref:`English <StatefulEncoder.__init__-en>`
 
         ----
 
@@ -137,8 +134,7 @@ class StatefulEncoder(base.MemoryModule):
 
     def single_step_forward(self, x: torch.Tensor = None):
         r"""
-        **API Language:**
-        :ref:`中文 <StatefulEncoder.forward-cn>` | :ref:`English <StatefulEncoder.forward-en>`
+        **API Language** - :ref:`中文 <StatefulEncoder.forward-cn>` | :ref:`English <StatefulEncoder.forward-en>`
 
         ----
 
@@ -181,8 +177,7 @@ class StatefulEncoder(base.MemoryModule):
     @abstractmethod
     def single_step_encode(self, x: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <StatefulEncoder.single_step_encode-cn>` | :ref:`English <StatefulEncoder.single_step_encode-en>`
+        **API Language** - :ref:`中文 <StatefulEncoder.single_step_encode-cn>` | :ref:`English <StatefulEncoder.single_step_encode-en>`
 
         ----
 
@@ -207,8 +202,7 @@ class StatefulEncoder(base.MemoryModule):
 
     def extra_repr(self) -> str:
         r"""
-        **API Language:**
-        :ref:`中文 <StatefulEncoder.extra_repr-cn>` | :ref:`English <StatefulEncoder.extra_repr-en>`
+        **API Language** - :ref:`中文 <StatefulEncoder.extra_repr-cn>` | :ref:`English <StatefulEncoder.extra_repr-en>`
 
         ----
 
@@ -238,8 +232,7 @@ class StatefulEncoder(base.MemoryModule):
 class PeriodicEncoder(StatefulEncoder):
     def __init__(self, spike: torch.Tensor, step_mode="s"):
         r"""
-        **API Language:**
-        :ref:`中文 <PeriodicEncoder.__init__-cn>` | :ref:`English <PeriodicEncoder.__init__-en>`
+        **API Language** - :ref:`中文 <PeriodicEncoder.__init__-cn>` | :ref:`English <PeriodicEncoder.__init__-en>`
 
         ----
 
@@ -282,8 +275,7 @@ class PeriodicEncoder(StatefulEncoder):
 
     def single_step_encode(self, spike: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <PeriodicEncoder.single_step_encode-cn>` | :ref:`English <PeriodicEncoder.single_step_encode-en>`
+        **API Language** - :ref:`中文 <PeriodicEncoder.single_step_encode-cn>` | :ref:`English <PeriodicEncoder.single_step_encode-en>`
 
         ----
 
@@ -315,8 +307,7 @@ class PeriodicEncoder(StatefulEncoder):
 class LatencyEncoder(StatefulEncoder):
     def __init__(self, T: int, enc_function="linear", step_mode="s"):
         r"""
-        **API Language:**
-        :ref:`中文 <LatencyEncoder.__init__-cn>` | :ref:`English <LatencyEncoder.__init__-en>`
+        **API Language** - :ref:`中文 <LatencyEncoder.__init__-cn>` | :ref:`English <LatencyEncoder.__init__-en>`
 
         ----
 
@@ -414,8 +405,7 @@ class LatencyEncoder(StatefulEncoder):
 
     def single_step_encode(self, x: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <LatencyEncoder.single_step_encode-cn>` | :ref:`English <LatencyEncoder.single_step_encode-en>`
+        **API Language** - :ref:`中文 <LatencyEncoder.single_step_encode-cn>` | :ref:`English <LatencyEncoder.single_step_encode-en>`
 
         ----
 
@@ -455,8 +445,7 @@ class LatencyEncoder(StatefulEncoder):
 class PoissonEncoder(StatelessEncoder):
     def __init__(self, step_mode="s"):
         r"""
-        **API Language:**
-        :ref:`中文 <PoissonEncoder.__init__-cn>` | :ref:`English <PoissonEncoder.__init__-en>`
+        **API Language** - :ref:`中文 <PoissonEncoder.__init__-cn>` | :ref:`English <PoissonEncoder.__init__-en>`
 
         ----
 
@@ -493,8 +482,7 @@ class PoissonEncoder(StatelessEncoder):
 
     def forward(self, x: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <PoissonEncoder.forward-cn>` | :ref:`English <PoissonEncoder.forward-en>`
+        **API Language** - :ref:`中文 <PoissonEncoder.forward-cn>` | :ref:`English <PoissonEncoder.forward-en>`
 
         ----
 
@@ -530,8 +518,7 @@ class PoissonEncoder(StatelessEncoder):
 class WeightedPhaseEncoder(StatefulEncoder):
     def __init__(self, K: int, step_mode="s"):
         r"""
-        **API Language:**
-        :ref:`中文 <WeightedPhaseEncoder.__init__-cn>` | :ref:`English <WeightedPhaseEncoder.__init__-en>`
+        **API Language** - :ref:`中文 <WeightedPhaseEncoder.__init__-cn>` | :ref:`English <WeightedPhaseEncoder.__init__-en>`
 
         ----
 
@@ -612,8 +599,7 @@ class WeightedPhaseEncoder(StatefulEncoder):
 
     def single_step_encode(self, x: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <WeightedPhaseEncoder.single_step_encode-cn>` | :ref:`English <WeightedPhaseEncoder.single_step_encode-en>`
+        **API Language** - :ref:`中文 <WeightedPhaseEncoder.single_step_encode-cn>` | :ref:`English <WeightedPhaseEncoder.single_step_encode-en>`
 
         ----
 
@@ -655,8 +641,7 @@ class WeightedPhaseEncoder(StatefulEncoder):
 class PopSpikeEncoderDeterministic(nn.Module):
     def __init__(self, obs_dim, pop_dim, spike_ts, mean_range, std):
         r"""
-        **API Language:**
-        :ref:`中文 <PopSpikeEncoderDeterministic.__init__-cn>` | :ref:`English <PopSpikeEncoderDeterministic.__init__-en>`
+        **API Language** - :ref:`中文 <PopSpikeEncoderDeterministic.__init__-cn>` | :ref:`English <PopSpikeEncoderDeterministic.__init__-en>`
 
         ----
 
@@ -733,8 +718,7 @@ class PopSpikeEncoderDeterministic(nn.Module):
 
     def forward(self, obs):
         r"""
-        **API Language:**
-        :ref:`中文 <PopSpikeEncoderDeterministic.forward-cn>` | :ref:`English <PopSpikeEncoderDeterministic.forward-en>`
+        **API Language** - :ref:`中文 <PopSpikeEncoderDeterministic.forward-cn>` | :ref:`English <PopSpikeEncoderDeterministic.forward-en>`
 
         ----
 
@@ -777,8 +761,7 @@ class PopSpikeEncoderDeterministic(nn.Module):
 class PopSpikeEncoderRandom(nn.Module):
     def __init__(self, obs_dim, pop_dim, spike_ts, mean_range, std):
         r"""
-        **API Language:**
-        :ref:`中文 <PopSpikeEncoderRandom.__init__-cn>` | :ref:`English <PopSpikeEncoderRandom.__init__-en>`
+        **API Language** - :ref:`中文 <PopSpikeEncoderRandom.__init__-cn>` | :ref:`English <PopSpikeEncoderRandom.__init__-en>`
 
         ----
 
@@ -847,8 +830,7 @@ class PopSpikeEncoderRandom(nn.Module):
 
     def forward(self, obs):
         r"""
-        **API Language:**
-        :ref:`中文 <PopSpikeEncoderRandom.forward-cn>` | :ref:`English <PopSpikeEncoderRandom.forward-en>`
+        **API Language** - :ref:`中文 <PopSpikeEncoderRandom.forward-cn>` | :ref:`English <PopSpikeEncoderRandom.forward-en>`
 
         ----
 
@@ -898,8 +880,7 @@ class PopSpikeEncoderRandom(nn.Module):
 class PopEncoder(nn.Module):
     def __init__(self, obs_dim, pop_dim, spike_ts, mean_range, std):
         r"""
-        **API Language:**
-        :ref:`中文 <PopEncoder.__init__-cn>` | :ref:`English <PopEncoder.__init__-en>`
+        **API Language** - :ref:`中文 <PopEncoder.__init__-cn>` | :ref:`English <PopEncoder.__init__-en>`
 
         ----
 
@@ -965,8 +946,7 @@ class PopEncoder(nn.Module):
 
     def forward(self, obs):
         r"""
-        **API Language:**
-        :ref:`中文 <PopEncoder.forward-cn>` | :ref:`English <PopEncoder.forward-en>`
+        **API Language** - :ref:`中文 <PopEncoder.forward-cn>` | :ref:`English <PopEncoder.forward-en>`
 
         ----
 

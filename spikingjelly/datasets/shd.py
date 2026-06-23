@@ -382,8 +382,7 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
-        **API Language:**
-        :ref:`中文 <SpikingHeidelbergDigits.__init__-cn>` | :ref:`English <SpikingHeidelbergDigits.__init__-en>`
+        **API Language** - :ref:`中文 <SpikingHeidelbergDigits.__init__-cn>` | :ref:`English <SpikingHeidelbergDigits.__init__-en>`
 
         ----
 
@@ -615,8 +614,7 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
-        **API Language:**
-        :ref:`中文 <SpikingSpeechCommands.__init__-cn>` | :ref:`English <SpikingSpeechCommands.__init__-en>`
+        **API Language** - :ref:`中文 <SpikingSpeechCommands.__init__-cn>` | :ref:`English <SpikingSpeechCommands.__init__-en>`
 
         ----
 

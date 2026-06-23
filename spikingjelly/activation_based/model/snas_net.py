@@ -8,8 +8,7 @@ import argparse
 class ScaleLayer(nn.Module):
     def __init__(self):
         """
-        **API Language:**
-        :ref:`中文 <ScaleLayer-cn>` | :ref:`English <ScaleLayer-en>`
+        **API Language** - :ref:`中文 <ScaleLayer-cn>` | :ref:`English <ScaleLayer-en>`
 
         ----
 

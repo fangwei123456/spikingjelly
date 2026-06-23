@@ -27,8 +27,7 @@ def create_fptt_kernel(
     kernel_name_prefix: str = "LIFNode",
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <create_fptt_kernel-cn>` | :ref:`English <create_fptt_kernel-en>`
+    **API Language** - :ref:`中文 <create_fptt_kernel-cn>` | :ref:`English <create_fptt_kernel-en>`
 
     ----
 
@@ -221,8 +220,7 @@ def create_bptt_kernel(
     dtype: str,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <create_bptt_kernel-cn>` | :ref:`English <create_bptt_kernel-en>`
+    **API Language** - :ref:`中文 <create_bptt_kernel-cn>` | :ref:`English <create_bptt_kernel-en>`
 
     ----
 
@@ -795,8 +793,8 @@ def multistep_lif_ptt(
     surrogate_function,
 ):
     """Multi-step LIF neuron forward pass via CuPy PTT custom op.
-    **API Language:**
-    :ref:`中文 <multistep_lif_ptt-cn>` | :ref:`English <multistep_lif_ptt-en>`
+
+    **API Language** - :ref:`中文 <multistep_lif_ptt-cn>` | :ref:`English <multistep_lif_ptt-en>`
 
     ----
 

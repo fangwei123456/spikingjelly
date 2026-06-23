@@ -20,8 +20,7 @@ class NeuroMCMemoryResidencyCounter(MemoryResidencyCounter):
     ):
         """
         Counter for memory residency in the NeuroMC framework.
-        **API Language:**
-        :ref:`中文 <NeuroMCMemoryResidencyCounter-cn>` | :ref:`English <NeuroMCMemoryResidencyCounter-en>`
+        **API Language** - :ref:`中文 <NeuroMCMemoryResidencyCounter-cn>` | :ref:`English <NeuroMCMemoryResidencyCounter-en>`
 
         ----
 

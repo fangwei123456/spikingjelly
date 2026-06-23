@@ -46,8 +46,7 @@ class SpikingVGG(nn.Module):
         **kwargs,
     ):
         """
-        **API Language:**
-        :ref:`中文 <SpikingVGG-cn>` | :ref:`English <SpikingVGG-en>`
+        **API Language** - :ref:`中文 <SpikingVGG-cn>` | :ref:`English <SpikingVGG-en>`
 
         ----
 
@@ -224,8 +223,7 @@ def spiking_vgg11(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_vgg11-cn>` | :ref:`English <spiking_vgg11-en>`
+    **API Language** - :ref:`中文 <spiking_vgg11-cn>` | :ref:`English <spiking_vgg11-en>`
 
     ----
 
@@ -286,8 +284,7 @@ def spiking_vgg11_bn(
     **kwargs,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_vgg11_bn-cn>` | :ref:`English <spiking_vgg11_bn-en>`
+    **API Language** - :ref:`中文 <spiking_vgg11_bn-cn>` | :ref:`English <spiking_vgg11_bn-en>`
 
     ----
 
@@ -348,8 +345,7 @@ def spiking_vgg13(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_vgg13-cn>` | :ref:`English <spiking_vgg13-en>`
+    **API Language** - :ref:`中文 <spiking_vgg13-cn>` | :ref:`English <spiking_vgg13-en>`
 
     ----
 
@@ -402,8 +398,7 @@ def spiking_vgg13_bn(
     **kwargs,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_vgg13_bn-cn>` | :ref:`English <spiking_vgg13_bn-en>`
+    **API Language** - :ref:`中文 <spiking_vgg13_bn-cn>` | :ref:`English <spiking_vgg13_bn-en>`
 
     ----
 
@@ -463,8 +458,7 @@ def spiking_vgg16(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_vgg16-cn>` | :ref:`English <spiking_vgg16-en>`
+    **API Language** - :ref:`中文 <spiking_vgg16-cn>` | :ref:`English <spiking_vgg16-en>`
 
     ----
 
@@ -517,8 +511,7 @@ def spiking_vgg16_bn(
     **kwargs,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_vgg16_bn-cn>` | :ref:`English <spiking_vgg16_bn-en>`
+    **API Language** - :ref:`中文 <spiking_vgg16_bn-cn>` | :ref:`English <spiking_vgg16_bn-en>`
 
     ----
 
@@ -578,8 +571,7 @@ def spiking_vgg19(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_vgg19-cn>` | :ref:`English <spiking_vgg19-en>`
+    **API Language** - :ref:`中文 <spiking_vgg19-cn>` | :ref:`English <spiking_vgg19-en>`
 
     ----
 
@@ -632,8 +624,7 @@ def spiking_vgg19_bn(
     **kwargs,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_vgg19_bn-cn>` | :ref:`English <spiking_vgg19_bn-en>`
+    **API Language** - :ref:`中文 <spiking_vgg19_bn-cn>` | :ref:`English <spiking_vgg19_bn-en>`
 
     ----
 

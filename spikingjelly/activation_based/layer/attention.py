@@ -19,12 +19,12 @@ __all__ = [
 class TemporalWiseAttention(nn.Module, base.MultiStepModule):
     def __init__(self, T: int, reduction: int = 16, dimension: int = 4):
         """
-        **API Language:**
-        :ref:`中文 <TemporalWiseAttention.__init__-cn>` | :ref:`English <TemporalWiseAttention.__init__-en>`
+        **API Language** - :ref:`中文 <TemporalWiseAttention.__init__-cn>` | :ref:`English <TemporalWiseAttention.__init__-en>`
 
         ----
 
         .. _TemporalWiseAttention.__init__-cn:
+
         * **中文**
 
         `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_ 中提出
@@ -48,6 +48,7 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
         ----
 
         .. _TemporalWiseAttention.__init__-en:
+
         * **English**
 
         The TemporalWiseAttention layer is proposed in `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_.
@@ -124,8 +125,7 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
         kernel_size=3,
     ):
         """
-        **API Language:**
-        :ref:`中文 <MultiStepMultiDimensionalAttention.__init__-cn>` | :ref:`English <MultiStepMultiDimensionalAttention.__init__-en>`
+        **API Language** - :ref:`中文 <MultiStepMultiDimensionalAttention.__init__-cn>` | :ref:`English <MultiStepMultiDimensionalAttention.__init__-en>`
 
         ----
 
@@ -269,12 +269,12 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 class SpikingSelfAttention(nn.Module, base.MultiStepModule):
     def __init__(self, dim, num_heads=8, backend: str = "torch"):
         """
-        **API Language:**
-        :ref:`中文 <SpikingSelfAttention.__init__-cn>` | :ref:`English <SpikingSelfAttention.__init__-en>`
+        **API Language** - :ref:`中文 <SpikingSelfAttention.__init__-cn>` | :ref:`English <SpikingSelfAttention.__init__-en>`
 
         ----
 
         .. _SpikingSelfAttention.__init__-cn:
+
         * **中文**
 
         `Spikformer: When Spiking Neural Network Meets Transformer <https://openreview.net/forum?id=frE4fUwz_h>`_
@@ -298,6 +298,7 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         ----
 
         .. _SpikingSelfAttention.__init__-en:
+
         * **English**
 
         Spiking Self-Attention layer proposed in
@@ -421,8 +422,7 @@ class QKAttention(nn.Module, base.MultiStepModule):
         backend: str = "torch",
     ):
         """
-        **API Language:**
-        :ref:`中文 <QKAttention.__init__-cn>` | :ref:`English <QKAttention.__init__-en>`
+        **API Language** - :ref:`中文 <QKAttention.__init__-cn>` | :ref:`English <QKAttention.__init__-en>`
 
         ----
 

@@ -57,8 +57,7 @@ def _get_data_ptr(tensor: torch.Tensor) -> Optional[int]:
 class BaseProfiler(abc.ABC):
     def __init__(self, models: Tuple[nn.Module]):
         r"""
-        **API Language:**
-        :ref:`中文 <BaseProfiler.__init__-cn>` | :ref:`English <BaseProfiler.__init__-en>`
+        **API Language** - :ref:`中文 <BaseProfiler.__init__-cn>` | :ref:`English <BaseProfiler.__init__-en>`
 
         ----
 
@@ -93,8 +92,7 @@ class BaseProfiler(abc.ABC):
     @abc.abstractmethod
     def export(self):
         r"""
-        **API Language:**
-        :ref:`中文 <BaseProfiler.export-cn>` | :ref:`English <BaseProfiler.export-en>`
+        **API Language** - :ref:`中文 <BaseProfiler.export-cn>` | :ref:`English <BaseProfiler.export-en>`
 
         ----
 
@@ -141,8 +139,7 @@ class CategoryMemoryProfiler(BaseProfiler):
         log_path="snn_memory.prof.txt",
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <CategoryMemoryProfiler.__init__-cn>` | :ref:`English <CategoryMemoryProfiler.__init__-en>`
+        **API Language** - :ref:`中文 <CategoryMemoryProfiler.__init__-cn>` | :ref:`English <CategoryMemoryProfiler.__init__-en>`
 
         ----
 
@@ -272,8 +269,7 @@ class CategoryMemoryProfiler(BaseProfiler):
 
     def export(self, depth=2, output: bool = True, *args, **kwargs):
         r"""
-        **API Language:**
-        :ref:`中文 <CategoryMemoryProfiler.export-cn>` | :ref:`English <CategoryMemoryProfiler.export-en>`
+        **API Language** - :ref:`中文 <CategoryMemoryProfiler.export-cn>` | :ref:`English <CategoryMemoryProfiler.export-en>`
 
         ----
 
@@ -359,8 +355,7 @@ class HookProfiler(BaseProfiler):
         log_path: str = "prof.txt",
     ):
         """
-        **API Language:**
-        :ref:`中文 <HookProfiler.__init__-cn>` | :ref:`English <HookProfiler.__init__-en>`
+        **API Language** - :ref:`中文 <HookProfiler.__init__-cn>` | :ref:`English <HookProfiler.__init__-en>`
 
         ----
 
@@ -500,8 +495,7 @@ class LayerWiseMemoryProfiler(HookProfiler):
         device: str = "cuda",
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <LayerWiseMemoryProfiler.__init__-cn>` | :ref:`English <LayerWiseMemoryProfiler.__init__-en>`
+        **API Language** - :ref:`中文 <LayerWiseMemoryProfiler.__init__-cn>` | :ref:`English <LayerWiseMemoryProfiler.__init__-en>`
 
         ----
 
@@ -692,8 +686,7 @@ class LayerWiseMemoryProfiler(HookProfiler):
         **kwargs,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <LayerWiseMemoryProfiler.export-cn>` | :ref:`English <LayerWiseMemoryProfiler.export-en>`
+        **API Language** - :ref:`中文 <LayerWiseMemoryProfiler.export-cn>` | :ref:`English <LayerWiseMemoryProfiler.export-en>`
 
         ----
 
@@ -828,8 +821,7 @@ class LayerWiseFPCUDATimeProfiler(HookProfiler):
         log_path="layer_time_fp.prof.txt",
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <LayerWiseFPCUDATimeProfiler.__init__-cn>` | :ref:`English <LayerWiseFPCUDATimeProfiler.__init__-en>`
+        **API Language** - :ref:`中文 <LayerWiseFPCUDATimeProfiler.__init__-cn>` | :ref:`English <LayerWiseFPCUDATimeProfiler.__init__-en>`
 
         ----
 
@@ -967,8 +959,7 @@ class LayerWiseFPCUDATimeProfiler(HookProfiler):
 
     def export(self, output: bool = True, *args, **kwargs):
         r"""
-        **API Language:**
-        :ref:`中文 <LayerWiseFPCUDATimeProfiler.export-cn>` | :ref:`English <LayerWiseFPCUDATimeProfiler.export-en>`
+        **API Language** - :ref:`中文 <LayerWiseFPCUDATimeProfiler.export-cn>` | :ref:`English <LayerWiseFPCUDATimeProfiler.export-en>`
 
         ----
 
@@ -1030,8 +1021,7 @@ class LayerWiseBPCUDATimeProfiler(HookProfiler):
         log_path="layer_time_bp.prof.txt",
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <LayerWiseBPCUDATimeProfiler.__init__-cn>` | :ref:`English <LayerWiseBPCUDATimeProfiler.__init__-en>`
+        **API Language** - :ref:`中文 <LayerWiseBPCUDATimeProfiler.__init__-cn>` | :ref:`English <LayerWiseBPCUDATimeProfiler.__init__-en>`
 
         ----
 
@@ -1172,8 +1162,7 @@ class LayerWiseBPCUDATimeProfiler(HookProfiler):
 
     def export(self, output: bool = True, *args, **kwargs):
         r"""
-        **API Language:**
-        :ref:`中文 <LayerWiseBPCUDATimeProfiler.export-cn>` | :ref:`English <LayerWiseBPCUDATimeProfiler.export-en>`
+        **API Language** - :ref:`中文 <LayerWiseBPCUDATimeProfiler.export-cn>` | :ref:`English <LayerWiseBPCUDATimeProfiler.export-en>`
 
         ----
 

@@ -60,8 +60,7 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
-        **API Language:**
-        :ref:`中文 <Bullying10kClassification.__init__-cn>` | :ref:`English <Bullying10kClassification.__init__-en>`
+        **API Language** - :ref:`中文 <Bullying10kClassification.__init__-cn>` | :ref:`English <Bullying10kClassification.__init__-en>`
 
         ----
 
@@ -149,8 +148,7 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
     @classmethod
     def get_H_W(cls) -> Tuple:
         r"""
-        **API Language:**
-        :ref:`中文 <Bullying10K.get_H_W-cn>` | :ref:`English <Bullying10K.get_H_W-en>`
+        **API Language** - :ref:`中文 <Bullying10K.get_H_W-cn>` | :ref:`English <Bullying10K.get_H_W-en>`
 
         ----
 

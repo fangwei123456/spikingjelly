@@ -48,7 +48,8 @@ _SUPPORTED_LEMAIRE_MEMORY_MODULES = (
 @dataclass
 class LemaireEnergyCostConfig:
     r"""
-    **API Language:**
+    .. rubric:: API Language
+
     :ref:`中文 <LemaireEnergyCostConfig-cn>` |
     :ref:`English <LemaireEnergyCostConfig-en>`
 
@@ -115,7 +116,8 @@ class LemaireEnergyCostConfig:
 @dataclass
 class LemaireEnergyConfig:
     r"""
-    **API Language:**
+    .. rubric:: API Language
+
     :ref:`中文 <LemaireEnergyConfig-cn>` |
     :ref:`English <LemaireEnergyConfig-en>`
 
@@ -148,7 +150,8 @@ class LemaireEnergyConfig:
 @dataclass
 class LemaireEnergyReport:
     r"""
-    **API Language:**
+    .. rubric:: API Language
+
     :ref:`中文 <LemaireEnergyReport-cn>` |
     :ref:`English <LemaireEnergyReport-en>`
 
@@ -332,7 +335,8 @@ class _LemaireForwardTracker:
 class LemaireEnergyProfiler:
     def __init__(self, *, config: LemaireEnergyConfig | None = None):
         """
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <LemaireEnergyProfiler-cn>` |
         :ref:`English <LemaireEnergyProfiler-en>`
 
@@ -506,7 +510,8 @@ def estimate_lemaire_energy(
     config: LemaireEnergyConfig | None = None,
 ) -> LemaireEnergyReport:
     r"""
-    **API Language:**
+    .. rubric:: API Language
+
     :ref:`中文 <estimate_lemaire_energy-cn>` |
     :ref:`English <estimate_lemaire_energy-en>`
 

@@ -26,8 +26,7 @@ except BaseException:
 
 def check_backend_library(backend: str):
     r"""
-    **API Language:**
-    :ref:`中文 <check_backend_library-cn>` | :ref:`English <check_backend_library-en>`
+    **API Language** - :ref:`中文 <check_backend_library-cn>` | :ref:`English <check_backend_library-en>`
 
     ----
 
@@ -82,8 +81,7 @@ def check_backend_library(backend: str):
 
 class StepModule:
     r"""
-    **API Language:**
-    :ref:`中文 <StepModule-cn>` | :ref:`English <StepModule-en>`
+    **API Language** - :ref:`中文 <StepModule-cn>` | :ref:`English <StepModule-en>`
 
     ----
 
@@ -109,8 +107,7 @@ class StepModule:
 
     def supported_step_mode(self) -> Tuple[str]:
         r"""
-        **API Language:**
-        :ref:`中文 <StepModule.supported_step_mode-cn>` | :ref:`English <StepModule.supported_step_mode-en>`
+        **API Language** - :ref:`中文 <StepModule.supported_step_mode-cn>` | :ref:`English <StepModule.supported_step_mode-en>`
 
         ----
 
@@ -136,8 +133,7 @@ class StepModule:
     @property
     def step_mode(self) -> str:
         r"""
-        **API Language:**
-        :ref:`中文 <StepModule.step_mode-cn>` | :ref:`English <StepModule.step_mode-en>`
+        **API Language** - :ref:`中文 <StepModule.step_mode-cn>` | :ref:`English <StepModule.step_mode-en>`
 
         ----
 
@@ -162,8 +158,7 @@ class StepModule:
     @step_mode.setter
     def step_mode(self, value: str):
         r"""
-        **API Language:**
-        :ref:`中文 <StepModule.step_mode-setter-cn>` | :ref:`English <StepModule.step_mode-setter-en>`
+        **API Language** - :ref:`中文 <StepModule.step_mode-setter-cn>` | :ref:`English <StepModule.step_mode-setter-en>`
 
         ----
 
@@ -200,8 +195,7 @@ class StepModule:
 
 class SingleStepModule(StepModule):
     r"""
-    **API Language:**
-    :ref:`中文 <SingleStepModule-cn>` | :ref:`English <SingleStepModule-en>`
+    **API Language** - :ref:`中文 <SingleStepModule-cn>` | :ref:`English <SingleStepModule-en>`
 
     ----
 
@@ -226,8 +220,7 @@ class SingleStepModule(StepModule):
 
     def supported_step_mode(self):
         r"""
-        **API Language:**
-        :ref:`中文 <SingleStepModule.supported_step_mode-cn>` | :ref:`English <SingleStepModule.supported_step_mode-en>`
+        **API Language** - :ref:`中文 <SingleStepModule.supported_step_mode-cn>` | :ref:`English <SingleStepModule.supported_step_mode-en>`
 
         ----
 
@@ -252,8 +245,7 @@ class SingleStepModule(StepModule):
 
 class MultiStepModule(StepModule):
     r"""
-    **API Language:**
-    :ref:`中文 <MultiStepModule-cn>` | :ref:`English <MultiStepModule-en>`
+    **API Language** - :ref:`中文 <MultiStepModule-cn>` | :ref:`English <MultiStepModule-en>`
 
     ----
 
@@ -278,8 +270,7 @@ class MultiStepModule(StepModule):
 
     def supported_step_mode(self):
         r"""
-        **API Language:**
-        :ref:`中文 <MultiStepModule.supported_step_mode-cn>` | :ref:`English <MultiStepModule.supported_step_mode-en>`
+        **API Language** - :ref:`中文 <MultiStepModule.supported_step_mode-cn>` | :ref:`English <MultiStepModule.supported_step_mode-en>`
 
         ----
 
@@ -305,8 +296,7 @@ class MultiStepModule(StepModule):
 class MemoryModule(nn.Module, StepModule):
     def __init__(self):
         r"""
-        **API Language:**
-        :ref:`中文 <MemoryModule.__init__-cn>` | :ref:`English <MemoryModule.__init__-en>`
+        **API Language** - :ref:`中文 <MemoryModule.__init__-cn>` | :ref:`English <MemoryModule.__init__-en>`
 
         ----
 
@@ -340,8 +330,7 @@ class MemoryModule(nn.Module, StepModule):
     @property
     def supported_backends(self) -> Tuple[str]:
         r"""
-        **API Language:**
-        :ref:`中文 <MemoryModule.supported_backends-cn>` | :ref:`English <MemoryModule.supported_backends-en>`
+        **API Language** - :ref:`中文 <MemoryModule.supported_backends-cn>` | :ref:`English <MemoryModule.supported_backends-en>`
 
         ----
 
@@ -366,8 +355,7 @@ class MemoryModule(nn.Module, StepModule):
     @property
     def backend(self):
         r"""
-        **API Language:**
-        :ref:`中文 <MemoryModule.backend-cn>` | :ref:`English <MemoryModule.backend-en>`
+        **API Language** - :ref:`中文 <MemoryModule.backend-cn>` | :ref:`English <MemoryModule.backend-en>`
 
         ----
 
@@ -392,8 +380,7 @@ class MemoryModule(nn.Module, StepModule):
     @backend.setter
     def backend(self, value: str):
         r"""
-        **API Language:**
-        :ref:`中文 <MemoryModule.backend-setter-cn>` | :ref:`English <MemoryModule.backend-setter-en>`
+        **API Language** - :ref:`中文 <MemoryModule.backend-setter-cn>` | :ref:`English <MemoryModule.backend-setter-en>`
 
         ----
 
@@ -438,8 +425,7 @@ class MemoryModule(nn.Module, StepModule):
     @abstractmethod
     def single_step_forward(self, x: torch.Tensor, *args, **kwargs):
         r"""
-        **API Language:**
-        :ref:`中文 <MemoryModule.single_step_forward-cn>` | :ref:`English <MemoryModule.single_step_forward-en>`
+        **API Language** - :ref:`中文 <MemoryModule.single_step_forward-cn>` | :ref:`English <MemoryModule.single_step_forward-en>`
 
         ----
 
@@ -473,8 +459,7 @@ class MemoryModule(nn.Module, StepModule):
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
         r"""
-        **API Language:**
-        :ref:`中文 <MemoryModule.multi_step_forward-cn>` | :ref:`English <MemoryModule.multi_step_forward-en>`
+        **API Language** - :ref:`中文 <MemoryModule.multi_step_forward-cn>` | :ref:`English <MemoryModule.multi_step_forward-en>`
 
         ----
 
@@ -519,8 +504,7 @@ class MemoryModule(nn.Module, StepModule):
 
     def forward(self, *args, **kwargs):
         r"""
-        **API Language:**
-        :ref:`中文 <MemoryModule.forward-cn>` | :ref:`English <MemoryModule.forward-en>`
+        **API Language** - :ref:`中文 <MemoryModule.forward-cn>` | :ref:`English <MemoryModule.forward-en>`
 
         ----
 
@@ -559,8 +543,7 @@ class MemoryModule(nn.Module, StepModule):
 
     def extra_repr(self):
         r"""
-        **API Language:**
-        :ref:`中文 <MemoryModule.extra_repr-cn>` | :ref:`English <MemoryModule.extra_repr-en>`
+        **API Language** - :ref:`中文 <MemoryModule.extra_repr-cn>` | :ref:`English <MemoryModule.extra_repr-en>`
 
         ----
 
@@ -588,8 +571,7 @@ class MemoryModule(nn.Module, StepModule):
 
     def register_memory(self, name: str, value):
         r"""
-        **API Language:**
-        :ref:`中文 <MemoryModule.register_memory-cn>` | :ref:`English <MemoryModule.register_memory-en>`
+        **API Language** - :ref:`中文 <MemoryModule.register_memory-cn>` | :ref:`English <MemoryModule.register_memory-en>`
 
         ----
 
@@ -638,8 +620,7 @@ class MemoryModule(nn.Module, StepModule):
 
     def reset(self):
         r"""
-        **API Language:**
-        :ref:`中文 <MemoryModule.reset-cn>` | :ref:`English <MemoryModule.reset-en>`
+        **API Language** - :ref:`中文 <MemoryModule.reset-cn>` | :ref:`English <MemoryModule.reset-en>`
 
         ----
 
@@ -691,8 +672,7 @@ class MemoryModule(nn.Module, StepModule):
 
     def set_reset_value(self, name: str, value):
         r"""
-        **API Language:**
-        :ref:`中文 <MemoryModule.set_reset_value-cn>` | :ref:`English <MemoryModule.set_reset_value-en>`
+        **API Language** - :ref:`中文 <MemoryModule.set_reset_value-cn>` | :ref:`English <MemoryModule.set_reset_value-en>`
 
         ----
 
@@ -762,8 +742,7 @@ class MemoryModule(nn.Module, StepModule):
 
     def memories(self) -> Generator:
         r"""
-        **API Language:**
-        :ref:`中文 <MemoryModule.memories-cn>` | :ref:`English <MemoryModule.memories-en>`
+        **API Language** - :ref:`中文 <MemoryModule.memories-cn>` | :ref:`English <MemoryModule.memories-en>`
 
         ----
 
@@ -788,8 +767,7 @@ class MemoryModule(nn.Module, StepModule):
 
     def named_memories(self) -> Generator:
         r"""
-        **API Language:**
-        :ref:`中文 <MemoryModule.named_memories-cn>` | :ref:`English <MemoryModule.named_memories-en>`
+        **API Language** - :ref:`中文 <MemoryModule.named_memories-cn>` | :ref:`English <MemoryModule.named_memories-en>`
 
         ----
 
@@ -814,8 +792,7 @@ class MemoryModule(nn.Module, StepModule):
 
     def detach(self):
         r"""
-        **API Language:**
-        :ref:`中文 <MemoryModule.detach-cn>` | :ref:`English <MemoryModule.detach-en>`
+        **API Language** - :ref:`中文 <MemoryModule.detach-cn>` | :ref:`English <MemoryModule.detach-en>`
 
         ----
 
@@ -861,8 +838,7 @@ class MemoryModule(nn.Module, StepModule):
 
 def named_memories(module: nn.Module, prefix: str = "") -> Generator:
     r"""
-    **API Language:**
-    :ref:`中文 <named_memories-cn>` | :ref:`English <named_memories-en>`
+    **API Language** - :ref:`中文 <named_memories-cn>` | :ref:`English <named_memories-en>`
 
     ----
 
@@ -914,8 +890,7 @@ def named_memories(module: nn.Module, prefix: str = "") -> Generator:
 
 def memories(module: nn.Module) -> Generator:
     r"""
-    **API Language:**
-    :ref:`中文 <memories-cn>` | :ref:`English <memories-en>`
+    **API Language** - :ref:`中文 <memories-cn>` | :ref:`English <memories-en>`
 
     ----
 
@@ -955,8 +930,7 @@ def memories(module: nn.Module) -> Generator:
 
 def extract_memories(module: nn.Module) -> list:
     r"""
-    **API Language:**
-    :ref:`中文 <extract_memories-cn>` | :ref:`English <extract_memories-en>`
+    **API Language** - :ref:`中文 <extract_memories-cn>` | :ref:`English <extract_memories-en>`
 
     ----
 
@@ -995,8 +969,7 @@ def extract_memories(module: nn.Module) -> list:
 
 def load_memories(module: nn.Module, memory_list: list):
     r"""
-    **API Language:**
-    :ref:`中文 <load_memories-cn>` | :ref:`English <load_memories-en>`
+    **API Language** - :ref:`中文 <load_memories-cn>` | :ref:`English <load_memories-en>`
 
     ----
 
@@ -1078,8 +1051,7 @@ class _FunctionalForward:
 
 def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
     r"""
-    **API Language:**
-    :ref:`中文 <to_functional_forward-cn>` | :ref:`English <to_functional_forward-en>`
+    **API Language** - :ref:`中文 <to_functional_forward-cn>` | :ref:`English <to_functional_forward-en>`
 
     ----
 

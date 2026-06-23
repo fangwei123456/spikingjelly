@@ -18,8 +18,7 @@ __all__ = [
 
 def active_element_count(x: torch.Tensor) -> int:
     r"""
-    **API Language:**
-    :ref:`中文 <active_element_count-cn>` | :ref:`English <active_element_count-en>`
+    **API Language** - :ref:`中文 <active_element_count-cn>` | :ref:`English <active_element_count-en>`
 
     ----
 
@@ -50,8 +49,7 @@ def active_element_count(x: torch.Tensor) -> int:
 
 def dense_bytes(x: torch.Tensor) -> int:
     r"""
-    **API Language:**
-    :ref:`中文 <dense_bytes-cn>` | :ref:`English <dense_bytes-en>`
+    **API Language** - :ref:`中文 <dense_bytes-cn>` | :ref:`English <dense_bytes-en>`
 
     ----
 
@@ -82,8 +80,7 @@ def dense_bytes(x: torch.Tensor) -> int:
 
 def sparse_bytes(x: torch.Tensor) -> int:
     r"""
-    **API Language:**
-    :ref:`中文 <sparse_bytes-cn>` | :ref:`English <sparse_bytes-en>`
+    **API Language** - :ref:`中文 <sparse_bytes-cn>` | :ref:`English <sparse_bytes-en>`
 
     ----
 
@@ -116,8 +113,7 @@ def is_sparse_access_tensor(
     x: torch.Tensor, *, zero_ratio_threshold: float = 0.5
 ) -> bool:
     r"""
-    **API Language:**
-    :ref:`中文 <is_sparse_access_tensor-cn>` | :ref:`English <is_sparse_access_tensor-en>`
+    **API Language** - :ref:`中文 <is_sparse_access_tensor-cn>` | :ref:`English <is_sparse_access_tensor-en>`
 
     ----
 
@@ -165,8 +161,7 @@ def is_sparse_access_tensor(
 
 def dense_bytes_tree(tree: Any) -> int:
     r"""
-    **API Language:**
-    :ref:`中文 <dense_bytes_tree-cn>` | :ref:`English <dense_bytes_tree-en>`
+    **API Language** - :ref:`中文 <dense_bytes_tree-cn>` | :ref:`English <dense_bytes_tree-en>`
 
     ----
 
@@ -203,8 +198,7 @@ def dense_bytes_tree(tree: Any) -> int:
 
 def sparse_bytes_tree(tree: Any, *, zero_ratio_threshold: float = 0.5) -> int:
     r"""
-    **API Language:**
-    :ref:`中文 <sparse_bytes_tree-cn>` | :ref:`English <sparse_bytes_tree-en>`
+    **API Language** - :ref:`中文 <sparse_bytes_tree-cn>` | :ref:`English <sparse_bytes_tree-en>`
 
     ----
 

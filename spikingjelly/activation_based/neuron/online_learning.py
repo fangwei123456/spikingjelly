@@ -22,8 +22,7 @@ class OTTTLIFNode(LIFNode):
         store_v_seq: bool = False,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <OTTTLIFNode.__init__-cn>` | :ref:`English <OTTTLIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <OTTTLIFNode.__init__-cn>` | :ref:`English <OTTTLIFNode.__init__-en>`
 
         ----
 
@@ -191,8 +190,7 @@ class OTTTLIFNode(LIFNode):
 
     def single_step_forward(self, x: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <OTTTLIFNode.single_step_forward-cn>` | :ref:`English <OTTTLIFNode.single_step_forward-en>`
+        **API Language** - :ref:`中文 <OTTTLIFNode.single_step_forward-cn>` | :ref:`English <OTTTLIFNode.single_step_forward-en>`
 
         ----
 
@@ -273,8 +271,7 @@ class SLTTLIFNode(LIFNode):
         store_v_seq: bool = False,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <SLTTLIFNode.__init__-cn>` | :ref:`English <SLTTLIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <SLTTLIFNode.__init__-cn>` | :ref:`English <SLTTLIFNode.__init__-en>`
 
         ----
 
@@ -428,8 +425,7 @@ class SLTTLIFNode(LIFNode):
 
     def single_step_forward(self, x: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <SLTTLIFNode.single_step_forward-cn>` | :ref:`English <SLTTLIFNode.single_step_forward-en>`
+        **API Language** - :ref:`中文 <SLTTLIFNode.single_step_forward-cn>` | :ref:`English <SLTTLIFNode.single_step_forward-en>`
 
         ----
 

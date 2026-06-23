@@ -154,8 +154,7 @@ def import_from_nir(
     step_mode: str = "s",
 ) -> fx.GraphModule:
     """
-    **API Language:**
-    :ref:`中文 <import_from_nir-cn>` | :ref:`English <import_from_nir-en>`
+    **API Language** - :ref:`中文 <import_from_nir-cn>` | :ref:`English <import_from_nir-en>`
 
     ----
 

@@ -143,12 +143,12 @@ class SNNDistributedRuntime:
 
     def reset_state(self):
         r"""
-        **API Language:**
-        :ref:`中文 <reset_state-cn>` | :ref:`English <reset_state-en>`
+        **API Language** - :ref:`中文 <reset_state-cn>` | :ref:`English <reset_state-en>`
 
         ----
 
         .. _reset_state-cn:
+
         * **中文**
 
         重置模型中所有有状态模块（如神经元膜电位）。
@@ -156,6 +156,7 @@ class SNNDistributedRuntime:
         ----
 
         .. _reset_state-en:
+
         * **English**
 
         Reset all stateful modules in the model (e.g. neuron membrane potentials).

@@ -42,8 +42,7 @@ class OTTTSpikingVGG(nn.Module):
         **kwargs,
     ):
         """
-        **API Language:**
-        :ref:`中文 <OTTTSpikingVGG-cn>` | :ref:`English <OTTTSpikingVGG-en>`
+        **API Language** - :ref:`中文 <OTTTSpikingVGG-cn>` | :ref:`English <OTTTSpikingVGG-en>`
 
         ----
 
@@ -243,8 +242,7 @@ def _spiking_vgg(
 
 def ottt_spiking_vggws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     r"""
-    **API Language:**
-    :ref:`中文 <ottt_spiking_vggws-cn>` | :ref:`English <ottt_spiking_vggws-en>`
+    **API Language** - :ref:`中文 <ottt_spiking_vggws-cn>` | :ref:`English <ottt_spiking_vggws-en>`
 
     ----
 
@@ -284,8 +282,7 @@ def ottt_spiking_vggws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
 
 def ottt_spiking_vgg11(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     r"""
-    **API Language:**
-    :ref:`中文 <ottt_spiking_vgg11-cn>` | :ref:`English <ottt_spiking_vgg11-en>`
+    **API Language** - :ref:`中文 <ottt_spiking_vgg11-cn>` | :ref:`English <ottt_spiking_vgg11-en>`
 
     ----
 
@@ -325,8 +322,7 @@ def ottt_spiking_vgg11(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
 
 def ottt_spiking_vgg11_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     r"""
-    **API Language:**
-    :ref:`中文 <ottt_spiking_vgg11_ws-cn>` | :ref:`English <ottt_spiking_vgg11_ws-en>`
+    **API Language** - :ref:`中文 <ottt_spiking_vgg11_ws-cn>` | :ref:`English <ottt_spiking_vgg11_ws-en>`
 
     ----
 
@@ -366,8 +362,7 @@ def ottt_spiking_vgg11_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
 
 def ottt_spiking_vgg13(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     r"""
-    **API Language:**
-    :ref:`中文 <ottt_spiking_vgg13-cn>` | :ref:`English <ottt_spiking_vgg13-en>`
+    **API Language** - :ref:`中文 <ottt_spiking_vgg13-cn>` | :ref:`English <ottt_spiking_vgg13-en>`
 
     ----
 
@@ -407,8 +402,7 @@ def ottt_spiking_vgg13(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
 
 def ottt_spiking_vgg13_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     r"""
-    **API Language:**
-    :ref:`中文 <ottt_spiking_vgg13_ws-cn>` | :ref:`English <ottt_spiking_vgg13_ws-en>`
+    **API Language** - :ref:`中文 <ottt_spiking_vgg13_ws-cn>` | :ref:`English <ottt_spiking_vgg13_ws-en>`
 
     ----
 
@@ -448,8 +442,7 @@ def ottt_spiking_vgg13_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
 
 def ottt_spiking_vgg16(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     r"""
-    **API Language:**
-    :ref:`中文 <ottt_spiking_vgg16-cn>` | :ref:`English <ottt_spiking_vgg16-en>`
+    **API Language** - :ref:`中文 <ottt_spiking_vgg16-cn>` | :ref:`English <ottt_spiking_vgg16-en>`
 
     ----
 
@@ -489,8 +482,7 @@ def ottt_spiking_vgg16(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
 
 def ottt_spiking_vgg16_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     r"""
-    **API Language:**
-    :ref:`中文 <ottt_spiking_vgg16_ws-cn>` | :ref:`English <ottt_spiking_vgg16_ws-en>`
+    **API Language** - :ref:`中文 <ottt_spiking_vgg16_ws-cn>` | :ref:`English <ottt_spiking_vgg16_ws-en>`
 
     ----
 
@@ -530,8 +522,7 @@ def ottt_spiking_vgg16_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
 
 def ottt_spiking_vgg19(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     r"""
-    **API Language:**
-    :ref:`中文 <ottt_spiking_vgg19-cn>` | :ref:`English <ottt_spiking_vgg19-en>`
+    **API Language** - :ref:`中文 <ottt_spiking_vgg19-cn>` | :ref:`English <ottt_spiking_vgg19-en>`
 
     ----
 
@@ -571,8 +562,7 @@ def ottt_spiking_vgg19(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
 
 def ottt_spiking_vgg19_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     r"""
-    **API Language:**
-    :ref:`中文 <ottt_spiking_vgg19_ws-cn>` | :ref:`English <ottt_spiking_vgg19_ws-en>`
+    **API Language** - :ref:`中文 <ottt_spiking_vgg19_ws-cn>` | :ref:`English <ottt_spiking_vgg19_ws-en>`
 
     ----
 

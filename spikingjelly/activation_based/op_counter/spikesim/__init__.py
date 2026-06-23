@@ -1,6 +1,5 @@
 """
-**API Language:**
-:ref:`中文 <spikesim-cn>` | :ref:`English <spikesim-en>`
+**API Language** - :ref:`中文 <spikesim-cn>` | :ref:`English <spikesim-en>`
 
 ----
 

@@ -145,7 +145,8 @@ class NeuronStateCounter(BaseCounter):
         enable_sparse_memory_estimation: bool = True,
     ):
         """
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <NeuronStateCounter-cn>` |
         :ref:`English <NeuronStateCounter-en>`
 
@@ -245,7 +246,8 @@ class NeuronStateCounter(BaseCounter):
         parent_names: set[str] | None = None,
     ) -> int:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <NeuronStateCounter.count-cn>` |
         :ref:`English <NeuronStateCounter.count-en>`
 
@@ -499,7 +501,8 @@ class NeuronStateCounter(BaseCounter):
 
     def get_metric_counts(self) -> dict[str, dict[str, int]]:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <NeuronStateCounter.get_metric_counts-cn>` |
         :ref:`English <NeuronStateCounter.get_metric_counts-en>`
 
@@ -525,7 +528,8 @@ class NeuronStateCounter(BaseCounter):
 
     def get_projection_counts(self) -> dict[str, dict[str, int]]:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <NeuronStateCounter.get_projection_counts-cn>` |
         :ref:`English <NeuronStateCounter.get_projection_counts-en>`
 
@@ -551,7 +555,8 @@ class NeuronStateCounter(BaseCounter):
 
     def get_extra_counts(self) -> dict[str, dict[str, int]]:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <NeuronStateCounter.get_extra_counts-cn>` |
         :ref:`English <NeuronStateCounter.get_extra_counts-en>`
 

@@ -17,12 +17,12 @@ __all__ = [
 
 def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     """
-    **API Language:**
-    :ref:`中文 <fptt_online_training_init_w_ra-cn>` | :ref:`English <fptt_online_training_init_w_ra-en>`
+    **API Language** - :ref:`中文 <fptt_online_training_init_w_ra-cn>` | :ref:`English <fptt_online_training_init_w_ra-en>`
 
     ----
 
     .. _fptt_online_training_init_w_ra-cn:
+
     * **中文**
 
     初始化 :func:`fptt_online_training` 使用的 ``w_ra`` 列表。返回列表中的元素顺序与
@@ -39,6 +39,7 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     ----
 
     .. _fptt_online_training_init_w_ra-en:
+
     * **English**
 
     Initialize the ``w_ra`` list used by :func:`fptt_online_training`. The
@@ -73,8 +74,7 @@ def fptt_online_training(
     w_ra: list,
 ) -> None:
     """
-    **API Language:**
-    :ref:`中文 <fptt_online_training-cn>` | :ref:`English <fptt_online_training-en>`
+    **API Language** - :ref:`中文 <fptt_online_training-cn>` | :ref:`English <fptt_online_training-en>`
 
     ----
 
@@ -264,8 +264,7 @@ def ottt_online_training(
     online: bool,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    **API Language:**
-    :ref:`中文 <ottt_online_training-cn>` | :ref:`English <ottt_online_training-en>`
+    **API Language** - :ref:`中文 <ottt_online_training-cn>` | :ref:`English <ottt_online_training-en>`
 
     ----
 

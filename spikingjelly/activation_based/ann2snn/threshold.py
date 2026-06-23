@@ -4,8 +4,7 @@ from spikingjelly.activation_based.ann2snn.modules import VoltageHook
 class ThresholdOptimizer:
     def __init__(self, strategy: str = "fixed"):
         """
-        **API Language:**
-        :ref:`中文 <ThresholdOptimizer.__init__-cn>` | :ref:`English <ThresholdOptimizer.__init__-en>`
+        **API Language** - :ref:`中文 <ThresholdOptimizer.__init__-cn>` | :ref:`English <ThresholdOptimizer.__init__-en>`
 
         ----
 
@@ -48,8 +47,7 @@ class ThresholdOptimizer:
 
     def compute_threshold(self, hook: VoltageHook) -> float:
         r"""
-        **API Language:**
-        :ref:`中文 <ThresholdOptimizer.compute_threshold-cn>` | :ref:`English <ThresholdOptimizer.compute_threshold-en>`
+        **API Language** - :ref:`中文 <ThresholdOptimizer.compute_threshold-cn>` | :ref:`English <ThresholdOptimizer.compute_threshold-en>`
 
         ----
 

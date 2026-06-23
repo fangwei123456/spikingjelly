@@ -36,8 +36,7 @@ class SimpleLIFNode(SimpleBaseNode):
         step_mode="s",
     ):
         """
-        **API Language:**
-        :ref:`中文 <SimpleLIFNode.__init__-cn>` | :ref:`English <SimpleLIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <SimpleLIFNode.__init__-cn>` | :ref:`English <SimpleLIFNode.__init__-en>`
 
         ----
 
@@ -123,8 +122,7 @@ class LIFNode(BaseNode):
         store_v_seq: bool = False,
     ):
         """
-        **API Language:**
-        :ref:`中文 <LIFNode.__init__-cn>` | :ref:`English <LIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <LIFNode.__init__-cn>` | :ref:`English <LIFNode.__init__-en>`
 
         ----
 

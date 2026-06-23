@@ -81,8 +81,7 @@ class SpikeSimCounter(BaseCounter):
         verbose: bool,
     ):
         """
-        **API Language:**
-        :ref:`中文 <SpikeSimCounter-cn>` | :ref:`English <SpikeSimCounter-en>`
+        **API Language** - :ref:`中文 <SpikeSimCounter-cn>` | :ref:`English <SpikeSimCounter-en>`
 
         ----
 
@@ -139,8 +138,7 @@ class SpikeSimCounter(BaseCounter):
         parent_names=None,
     ) -> int:
         r"""
-        **API Language:**
-        :ref:`中文 <SpikeSimCounter.count-cn>` | :ref:`English <SpikeSimCounter.count-en>`
+        **API Language** - :ref:`中文 <SpikeSimCounter.count-cn>` | :ref:`English <SpikeSimCounter.count-en>`
 
         ----
 

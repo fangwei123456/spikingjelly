@@ -34,8 +34,7 @@ class SimpleIFNode(SimpleBaseNode):
         step_mode="s",
     ):
         """
-        **API Language:**
-        :ref:`中文 <SimpleIFNode.__init__-cn>` | :ref:`English <SimpleIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <SimpleIFNode.__init__-cn>` | :ref:`English <SimpleIFNode.__init__-en>`
 
         ----
 
@@ -81,8 +80,7 @@ class SimpleIFNode(SimpleBaseNode):
 
     def neuronal_charge(self, x: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <SimpleIFNode.neuronal_charge-cn>` | :ref:`English <SimpleIFNode.neuronal_charge-en>`
+        **API Language** - :ref:`中文 <SimpleIFNode.neuronal_charge-cn>` | :ref:`English <SimpleIFNode.neuronal_charge-en>`
 
         ----
 
@@ -129,8 +127,7 @@ class IFNode(BaseNode):
         store_v_seq: bool = False,
     ):
         """
-        **API Language:**
-        :ref:`中文 <IFNode.__init__-cn>` | :ref:`English <IFNode.__init__-en>`
+        **API Language** - :ref:`中文 <IFNode.__init__-cn>` | :ref:`English <IFNode.__init__-en>`
 
         ----
 
@@ -544,8 +541,7 @@ class IFNode(BaseNode):
 class NonSpikingIFNode(NonSpikingBaseNode):
     def __init__(self, decode: Optional[str] = None):
         """
-        **API Language:**
-        :ref:`中文 <NonSpikingIFNode.__init__-cn>` | :ref:`English <NonSpikingIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <NonSpikingIFNode.__init__-cn>` | :ref:`English <NonSpikingIFNode.__init__-en>`
 
         ----
 

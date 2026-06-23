@@ -30,8 +30,7 @@ class NeuroMCSqrtCounter(NeuroMCBaseCounter):
     ):
         """
         Counter for square root operations in the NeuroMC framework.
-        **API Language:**
-        :ref:`中文 <NeuroMCSqrtCounter-cn>` | :ref:`English <NeuroMCSqrtCounter-en>`
+        **API Language** - :ref:`中文 <NeuroMCSqrtCounter-cn>` | :ref:`English <NeuroMCSqrtCounter-en>`
 
         ----
 

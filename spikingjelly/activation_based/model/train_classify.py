@@ -29,8 +29,7 @@ except ImportError:
 
 def set_deterministic(_seed_: int = 2020, disable_uda=False):
     r"""
-    **API Language:**
-    :ref:`中文 <set_deterministic-cn>` | :ref:`English <set_deterministic-en>`
+    **API Language** - :ref:`中文 <set_deterministic-cn>` | :ref:`English <set_deterministic-en>`
 
     ----
 
@@ -85,8 +84,7 @@ def set_deterministic(_seed_: int = 2020, disable_uda=False):
 
 def seed_worker(worker_id):
     r"""
-    **API Language:**
-    :ref:`中文 <seed_worker-cn>` | :ref:`English <seed_worker-en>`
+    **API Language** - :ref:`中文 <seed_worker-cn>` | :ref:`English <seed_worker-en>`
 
     ----
 
@@ -120,8 +118,7 @@ def seed_worker(worker_id):
 
 class Trainer:
     r"""
-    **API Language:**
-    :ref:`中文 <Trainer-cn>` | :ref:`English <Trainer-en>`
+    **API Language** - :ref:`中文 <Trainer-cn>` | :ref:`English <Trainer-en>`
 
     ----
 

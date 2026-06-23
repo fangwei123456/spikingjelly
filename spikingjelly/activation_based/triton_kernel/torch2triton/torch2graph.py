@@ -18,8 +18,7 @@ class GraphCollector:
     def __init__(self):
         """
         Provide this class to aot_function to collect forward and backward graph/module.
-        **API Language:**
-        :ref:`中文 <GraphCollector-cn>` | :ref:`English <GraphCollector-en>`
+        **API Language** - :ref:`中文 <GraphCollector-cn>` | :ref:`English <GraphCollector-en>`
 
         ----
 
@@ -93,8 +92,8 @@ def _optimize_graph(graph_or_module: Any) -> fx.Graph:
 
 def generate_inference_graph(fn: Callable, example_inputs: tuple) -> fx.Graph:
     """Generate an optimized inference FX graph.
-    **API Language:**
-    :ref:`中文 <generate_inference_graph-cn>` | :ref:`English <generate_inference_graph-en>`
+
+    **API Language** - :ref:`中文 <generate_inference_graph-cn>` | :ref:`English <generate_inference_graph-en>`
 
     ----
 
@@ -161,8 +160,8 @@ def generate_forward_and_backward_graph(
     requires_grad: Optional[Sequence[bool]] = None,
 ) -> Tuple[fx.Graph, fx.Graph]:
     """Generate optimized forward/backward FX graphs.
-    **API Language:**
-    :ref:`中文 <generate_forward_and_backward_graph-cn>` | :ref:`English <generate_forward_and_backward_graph-en>`
+
+    **API Language** - :ref:`中文 <generate_forward_and_backward_graph-cn>` | :ref:`English <generate_forward_and_backward_graph-en>`
 
     ----
 

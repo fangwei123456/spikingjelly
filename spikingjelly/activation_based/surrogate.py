@@ -13,8 +13,7 @@ curly_bracket_r = "}"
 
 def heaviside(x: torch.Tensor):
     r"""
-    **API Language:**
-    :ref:`中文 <heaviside-cn>` | :ref:`English <heaviside-en>`
+    **API Language** - :ref:`中文 <heaviside-cn>` | :ref:`English <heaviside-en>`
 
     ----
 
@@ -65,8 +64,7 @@ def heaviside(x: torch.Tensor):
 
 def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
     r"""
-    **API Language:**
-    :ref:`中文 <check_manual_grad-cn>` | :ref:`English <check_manual_grad-en>`
+    **API Language** - :ref:`中文 <check_manual_grad-cn>` | :ref:`English <check_manual_grad-en>`
 
     ----
 
@@ -138,8 +136,7 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
 
 def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
     r"""
-    **API Language:**
-    :ref:`中文 <check_cuda_grad-cn>` | :ref:`English <check_cuda_grad-en>`
+    **API Language** - :ref:`中文 <check_cuda_grad-cn>` | :ref:`English <check_cuda_grad-en>`
 
     ----
 
@@ -228,8 +225,7 @@ def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
 
 def plot_surrogate_function(surrogate_function):
     r"""
-    **API Language:**
-    :ref:`中文 <plot_surrogate_function-cn>` | :ref:`English <plot_surrogate_function-en>`
+    **API Language** - :ref:`中文 <plot_surrogate_function-cn>` | :ref:`English <plot_surrogate_function-en>`
 
     ----
 
@@ -290,8 +286,7 @@ def plot_surrogate_function(surrogate_function):
 
 class SurrogateFunctionBase(nn.Module):
     r"""
-    **API Language:**
-    :ref:`中文 <SurrogateFunctionBase-cn>` | :ref:`English <SurrogateFunctionBase-en>`
+    **API Language** - :ref:`中文 <SurrogateFunctionBase-cn>` | :ref:`English <SurrogateFunctionBase-en>`
 
     ----
 
@@ -376,8 +371,7 @@ def piecewise_quadratic_backward(
     grad_output: torch.Tensor, x: torch.Tensor, alpha: float
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <piecewise_quadratic_backward-cn>` | :ref:`English <piecewise_quadratic_backward-en>`
+    **API Language** - :ref:`中文 <piecewise_quadratic_backward-cn>` | :ref:`English <piecewise_quadratic_backward-en>`
 
     ----
 
@@ -421,8 +415,7 @@ def piecewise_quadratic_backward(
 
 class piecewise_quadratic(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <piecewise_quadratic-cn>` | :ref:`English <piecewise_quadratic-en>`
+    **API Language** - :ref:`中文 <piecewise_quadratic-cn>` | :ref:`English <piecewise_quadratic-en>`
 
     ----
 
@@ -468,8 +461,7 @@ class piecewise_quadratic(torch.autograd.Function):
 class PiecewiseQuadratic(SurrogateFunctionBase):
     def __init__(self, alpha=1.0, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <PiecewiseQuadratic.__init__-cn>` | :ref:`English <PiecewiseQuadratic.__init__-en>`
+        **API Language** - :ref:`中文 <PiecewiseQuadratic.__init__-cn>` | :ref:`English <PiecewiseQuadratic.__init__-en>`
 
         ----
 
@@ -571,8 +563,7 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
 
 def piecewise_exp_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     r"""
-    **API Language:**
-    :ref:`中文 <piecewise_exp_backward-cn>` | :ref:`English <piecewise_exp_backward-en>`
+    **API Language** - :ref:`中文 <piecewise_exp_backward-cn>` | :ref:`English <piecewise_exp_backward-en>`
 
     ----
 
@@ -613,8 +604,7 @@ def piecewise_exp_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: fl
 
 class piecewise_exp(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <piecewise_exp-cn>` | :ref:`English <piecewise_exp-en>`
+    **API Language** - :ref:`中文 <piecewise_exp-cn>` | :ref:`English <piecewise_exp-en>`
 
     ----
 
@@ -658,8 +648,7 @@ class piecewise_exp(torch.autograd.Function):
 class PiecewiseExp(SurrogateFunctionBase):
     def __init__(self, alpha=1.0, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <PiecewiseExp.__init__-cn>` | :ref:`English <PiecewiseExp.__init__-en>`
+        **API Language** - :ref:`中文 <PiecewiseExp.__init__-cn>` | :ref:`English <PiecewiseExp.__init__-en>`
 
         ----
 
@@ -748,8 +737,7 @@ class PiecewiseExp(SurrogateFunctionBase):
 
 def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     r"""
-    **API Language:**
-    :ref:`中文 <sigmoid_backward-cn>` | :ref:`English <sigmoid_backward-en>`
+    **API Language** - :ref:`中文 <sigmoid_backward-cn>` | :ref:`English <sigmoid_backward-en>`
 
     ----
 
@@ -791,8 +779,7 @@ def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
 
 class sigmoid(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <sigmoid-cn>` | :ref:`English <sigmoid-en>`
+    **API Language** - :ref:`中文 <sigmoid-cn>` | :ref:`English <sigmoid-en>`
 
     ----
 
@@ -836,8 +823,7 @@ class sigmoid(torch.autograd.Function):
 class Sigmoid(SurrogateFunctionBase):
     def __init__(self, alpha=4.0, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <Sigmoid.__init__-cn>` | :ref:`English <Sigmoid.__init__-en>`
+        **API Language** - :ref:`中文 <Sigmoid.__init__-cn>` | :ref:`English <Sigmoid.__init__-en>`
 
         ----
 
@@ -943,8 +929,7 @@ class Sigmoid(SurrogateFunctionBase):
 
 def soft_sign_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     r"""
-    **API Language:**
-    :ref:`中文 <soft_sign_backward-cn>` | :ref:`English <soft_sign_backward-en>`
+    **API Language** - :ref:`中文 <soft_sign_backward-cn>` | :ref:`English <soft_sign_backward-en>`
 
     ----
 
@@ -985,8 +970,7 @@ def soft_sign_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float)
 
 class soft_sign(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <soft_sign-cn>` | :ref:`English <soft_sign-en>`
+    **API Language** - :ref:`中文 <soft_sign-cn>` | :ref:`English <soft_sign-en>`
 
     ----
 
@@ -1030,8 +1014,7 @@ class soft_sign(torch.autograd.Function):
 class SoftSign(SurrogateFunctionBase):
     def __init__(self, alpha=2.0, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <SoftSign.__init__-cn>` | :ref:`English <SoftSign.__init__-en>`
+        **API Language** - :ref:`中文 <SoftSign.__init__-cn>` | :ref:`English <SoftSign.__init__-en>`
 
         ----
 
@@ -1111,8 +1094,7 @@ class SoftSign(SurrogateFunctionBase):
 
 def super_spike_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     r"""
-    **API Language:**
-    :ref:`中文 <super_spike_backward-cn>` | :ref:`English <super_spike_backward-en>`
+    **API Language** - :ref:`中文 <super_spike_backward-cn>` | :ref:`English <super_spike_backward-en>`
 
     ----
 
@@ -1153,8 +1135,7 @@ def super_spike_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: floa
 
 class super_spike(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <super_spike-cn>` | :ref:`English <super_spike-en>`
+    **API Language** - :ref:`中文 <super_spike-cn>` | :ref:`English <super_spike-en>`
 
     ----
 
@@ -1198,8 +1179,7 @@ class super_spike(torch.autograd.Function):
 class SuperSpike(SurrogateFunctionBase):
     def __init__(self, alpha=1.0, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <SuperSpike.__init__-cn>` | :ref:`English <SuperSpike.__init__-en>`
+        **API Language** - :ref:`中文 <SuperSpike.__init__-cn>` | :ref:`English <SuperSpike.__init__-en>`
 
         ----
 
@@ -1263,8 +1243,7 @@ class SuperSpike(SurrogateFunctionBase):
 
 def atan_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     r"""
-    **API Language:**
-    :ref:`中文 <atan_backward-cn>` | :ref:`English <atan_backward-en>`
+    **API Language** - :ref:`中文 <atan_backward-cn>` | :ref:`English <atan_backward-en>`
 
     ----
 
@@ -1307,8 +1286,7 @@ def atan_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
 
 class atan(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <atan-cn>` | :ref:`English <atan-en>`
+    **API Language** - :ref:`中文 <atan-cn>` | :ref:`English <atan-en>`
 
     ----
 
@@ -1352,8 +1330,7 @@ class atan(torch.autograd.Function):
 class ATan(SurrogateFunctionBase):
     def __init__(self, alpha=2.0, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <ATan.__init__-cn>` | :ref:`English <ATan.__init__-en>`
+        **API Language** - :ref:`中文 <ATan.__init__-cn>` | :ref:`English <ATan.__init__-en>`
 
         ----
 
@@ -1460,8 +1437,7 @@ def nonzero_sign_log_abs_backward(
     grad_output: torch.Tensor, x: torch.Tensor, alpha: float
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <nonzero_sign_log_abs_backward-cn>` | :ref:`English <nonzero_sign_log_abs_backward-en>`
+    **API Language** - :ref:`中文 <nonzero_sign_log_abs_backward-cn>` | :ref:`English <nonzero_sign_log_abs_backward-en>`
 
     ----
 
@@ -1502,8 +1478,7 @@ def nonzero_sign_log_abs_backward(
 
 class nonzero_sign_log_abs(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <nonzero_sign_log_abs-cn>` | :ref:`English <nonzero_sign_log_abs-en>`
+    **API Language** - :ref:`中文 <nonzero_sign_log_abs-cn>` | :ref:`English <nonzero_sign_log_abs-en>`
 
     ----
 
@@ -1549,8 +1524,7 @@ class nonzero_sign_log_abs(torch.autograd.Function):
 class NonzeroSignLogAbs(SurrogateFunctionBase):
     def __init__(self, alpha=1.0, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <NonzeroSignLogAbs.__init__-cn>` | :ref:`English <NonzeroSignLogAbs.__init__-en>`
+        **API Language** - :ref:`中文 <NonzeroSignLogAbs.__init__-cn>` | :ref:`English <NonzeroSignLogAbs.__init__-en>`
 
         ----
 
@@ -1656,8 +1630,7 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
 
 def erf_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     r"""
-    **API Language:**
-    :ref:`中文 <erf_backward-cn>` | :ref:`English <erf_backward-en>`
+    **API Language** - :ref:`中文 <erf_backward-cn>` | :ref:`English <erf_backward-en>`
 
     ----
 
@@ -1700,8 +1673,7 @@ def erf_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
 
 class erf(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <erf-cn>` | :ref:`English <erf-en>`
+    **API Language** - :ref:`中文 <erf-cn>` | :ref:`English <erf-en>`
 
     ----
 
@@ -1745,8 +1717,7 @@ class erf(torch.autograd.Function):
 class Erf(SurrogateFunctionBase):
     def __init__(self, alpha=2.0, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <Erf.__init__-cn>` | :ref:`English <Erf.__init__-en>`
+        **API Language** - :ref:`中文 <Erf.__init__-cn>` | :ref:`English <Erf.__init__-en>`
 
         ----
 
@@ -1837,8 +1808,7 @@ def piecewise_leaky_relu_backward(
     grad_output: torch.Tensor, x: torch.Tensor, w: float, c: float
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <piecewise_leaky_relu_backward-cn>` | :ref:`English <piecewise_leaky_relu_backward-en>`
+    **API Language** - :ref:`中文 <piecewise_leaky_relu_backward-cn>` | :ref:`English <piecewise_leaky_relu_backward-en>`
 
     ----
 
@@ -1889,8 +1859,7 @@ def piecewise_leaky_relu_backward(
 
 class piecewise_leaky_relu(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <piecewise_leaky_relu-cn>` | :ref:`English <piecewise_leaky_relu-en>`
+    **API Language** - :ref:`中文 <piecewise_leaky_relu-cn>` | :ref:`English <piecewise_leaky_relu-en>`
 
     ----
 
@@ -1937,8 +1906,7 @@ class piecewise_leaky_relu(torch.autograd.Function):
 class PiecewiseLeakyReLU(SurrogateFunctionBase):
     def __init__(self, w=1.0, c=0.01, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <PiecewiseLeakyReLU.__init__-cn>` | :ref:`English <PiecewiseLeakyReLU.__init__-en>`
+        **API Language** - :ref:`中文 <PiecewiseLeakyReLU.__init__-cn>` | :ref:`English <PiecewiseLeakyReLU.__init__-en>`
 
         ----
 
@@ -2091,8 +2059,7 @@ class PiecewiseLeakyReLU(SurrogateFunctionBase):
 
 class squarewave_fourier_series(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <squarewave_fourier_series-cn>` | :ref:`English <squarewave_fourier_series-en>`
+    **API Language** - :ref:`中文 <squarewave_fourier_series-cn>` | :ref:`English <squarewave_fourier_series-en>`
 
     ----
 
@@ -2146,8 +2113,7 @@ class squarewave_fourier_series(torch.autograd.Function):
 class SquarewaveFourierSeries(SurrogateFunctionBase):
     def __init__(self, n: int = 2, T_period: float = 8, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <SquarewaveFourierSeries.__init__-cn>` | :ref:`English <SquarewaveFourierSeries.__init__-en>`
+        **API Language** - :ref:`中文 <SquarewaveFourierSeries.__init__-cn>` | :ref:`English <SquarewaveFourierSeries.__init__-en>`
 
         ----
 
@@ -2223,8 +2189,7 @@ class SquarewaveFourierSeries(SurrogateFunctionBase):
 
 class s2nn(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <s2nn-cn>` | :ref:`English <s2nn-en>`
+    **API Language** - :ref:`中文 <s2nn-cn>` | :ref:`English <s2nn-en>`
 
     ----
 
@@ -2274,8 +2239,7 @@ class s2nn(torch.autograd.Function):
 class S2NN(SurrogateFunctionBase):
     def __init__(self, alpha=4.0, beta=1.0, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <S2NN.__init__-cn>` | :ref:`English <S2NN.__init__-en>`
+        **API Language** - :ref:`中文 <S2NN.__init__-cn>` | :ref:`English <S2NN.__init__-en>`
 
         ----
 
@@ -2408,8 +2372,7 @@ class S2NN(SurrogateFunctionBase):
 
 class q_pseudo_spike(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <q_pseudo_spike-cn>` | :ref:`English <q_pseudo_spike-en>`
+    **API Language** - :ref:`中文 <q_pseudo_spike-cn>` | :ref:`English <q_pseudo_spike-en>`
 
     ----
 
@@ -2459,8 +2422,7 @@ class q_pseudo_spike(torch.autograd.Function):
 class QPseudoSpike(SurrogateFunctionBase):
     def __init__(self, alpha=2.0, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <QPseudoSpike.__init__-cn>` | :ref:`English <QPseudoSpike.__init__-en>`
+        **API Language** - :ref:`中文 <QPseudoSpike.__init__-cn>` | :ref:`English <QPseudoSpike.__init__-en>`
 
         ----
 
@@ -2578,8 +2540,7 @@ def leaky_k_relu_backward(
     grad_output: torch.Tensor, x: torch.Tensor, leak: float, k: float
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <leaky_k_relu_backward-cn>` | :ref:`English <leaky_k_relu_backward-en>`
+    **API Language** - :ref:`中文 <leaky_k_relu_backward-cn>` | :ref:`English <leaky_k_relu_backward-en>`
 
     ----
 
@@ -2626,8 +2587,7 @@ def leaky_k_relu_backward(
 
 class leaky_k_relu(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <leaky_k_relu-cn>` | :ref:`English <leaky_k_relu-en>`
+    **API Language** - :ref:`中文 <leaky_k_relu-cn>` | :ref:`English <leaky_k_relu-en>`
 
     ----
 
@@ -2684,8 +2644,7 @@ class leaky_k_relu(torch.autograd.Function):
 class LeakyKReLU(SurrogateFunctionBase):
     def __init__(self, leak: float = 0.0, k: float = 1.0, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <LeakyKReLU.__init__-cn>` | :ref:`English <LeakyKReLU.__init__-en>`
+        **API Language** - :ref:`中文 <LeakyKReLU.__init__-cn>` | :ref:`English <LeakyKReLU.__init__-en>`
 
         ----
 
@@ -2828,8 +2787,7 @@ def fake_numerical_gradient_backward(
     grad_output: torch.Tensor, x: torch.Tensor, alpha: float
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <fake_numerical_gradient_backward-cn>` | :ref:`English <fake_numerical_gradient_backward-en>`
+    **API Language** - :ref:`中文 <fake_numerical_gradient_backward-cn>` | :ref:`English <fake_numerical_gradient_backward-en>`
 
     ----
 
@@ -2873,8 +2831,7 @@ def fake_numerical_gradient_backward(
 
 class fake_numerical_gradient(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <fake_numerical_gradient-cn>` | :ref:`English <fake_numerical_gradient-en>`
+    **API Language** - :ref:`中文 <fake_numerical_gradient-cn>` | :ref:`English <fake_numerical_gradient-en>`
 
     ----
 
@@ -2928,8 +2885,7 @@ class fake_numerical_gradient(torch.autograd.Function):
 class FakeNumericalGradient(SurrogateFunctionBase):
     def __init__(self, alpha=0.3):
         r"""
-        **API Language:**
-        :ref:`中文 <FakeNumericalGradient.__init__-cn>` | :ref:`English <FakeNumericalGradient.__init__-en>`
+        **API Language** - :ref:`中文 <FakeNumericalGradient.__init__-cn>` | :ref:`English <FakeNumericalGradient.__init__-en>`
 
         ----
 
@@ -3011,8 +2967,7 @@ class FakeNumericalGradient(SurrogateFunctionBase):
 
 def log_tailed_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     r"""
-    **API Language:**
-    :ref:`中文 <log_tailed_relu_backward-cn>` | :ref:`English <log_tailed_relu_backward-en>`
+    **API Language** - :ref:`中文 <log_tailed_relu_backward-cn>` | :ref:`English <log_tailed_relu_backward-en>`
 
     ----
 
@@ -3060,8 +3015,7 @@ def log_tailed_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: 
 
 class log_tailed_relu(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <log_tailed_relu-cn>` | :ref:`English <log_tailed_relu-en>`
+    **API Language** - :ref:`中文 <log_tailed_relu-cn>` | :ref:`English <log_tailed_relu-en>`
 
     ----
 
@@ -3113,8 +3067,7 @@ class log_tailed_relu(torch.autograd.Function):
 class LogTailedReLU(SurrogateFunctionBase):
     def __init__(self, alpha=0.0, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <LogTailedReLU.__init__-cn>` | :ref:`English <LogTailedReLU.__init__-en>`
+        **API Language** - :ref:`中文 <LogTailedReLU.__init__-cn>` | :ref:`English <LogTailedReLU.__init__-en>`
 
         ----
 
@@ -3268,8 +3221,7 @@ class LogTailedReLU(SurrogateFunctionBase):
 
 class deterministic_pass(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <deterministic_pass-cn>` | :ref:`English <deterministic_pass-en>`
+    **API Language** - :ref:`中文 <deterministic_pass-cn>` | :ref:`English <deterministic_pass-en>`
 
     ----
 
@@ -3315,8 +3267,7 @@ class deterministic_pass(torch.autograd.Function):
 class DeterministicPass(SurrogateFunctionBase):
     def __init__(self, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <DeterministicPass.__init__-cn>` | :ref:`English <DeterministicPass.__init__-en>`
+        **API Language** - :ref:`中文 <DeterministicPass.__init__-cn>` | :ref:`English <DeterministicPass.__init__-en>`
 
         ----
 
@@ -3362,8 +3313,7 @@ class DeterministicPass(SurrogateFunctionBase):
 
 class poisson_pass(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <poisson_pass-cn>` | :ref:`English <poisson_pass-en>`
+    **API Language** - :ref:`中文 <poisson_pass-cn>` | :ref:`English <poisson_pass-en>`
 
     ----
 
@@ -3409,8 +3359,7 @@ class poisson_pass(torch.autograd.Function):
 class PoissonPass(SurrogateFunctionBase):
     def __init__(self, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <PoissonPass.__init__-cn>` | :ref:`English <PoissonPass.__init__-en>`
+        **API Language** - :ref:`中文 <PoissonPass.__init__-cn>` | :ref:`English <PoissonPass.__init__-en>`
 
         ----
 
@@ -3457,8 +3406,7 @@ class PoissonPass(SurrogateFunctionBase):
 
 def rect_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     r"""
-    **API Language:**
-    :ref:`中文 <rect_backward-cn>` | :ref:`English <rect_backward-en>`
+    **API Language** - :ref:`中文 <rect_backward-cn>` | :ref:`English <rect_backward-en>`
 
     ----
 
@@ -3501,8 +3449,7 @@ def rect_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
 
 class rect(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <rect-cn>` | :ref:`English <rect-en>`
+    **API Language** - :ref:`中文 <rect-cn>` | :ref:`English <rect-en>`
 
     ----
 
@@ -3554,8 +3501,7 @@ class rect(torch.autograd.Function):
 class Rect(SurrogateFunctionBase):
     def __init__(self, alpha=1.0, spiking=True):
         r"""
-        **API Language:**
-        :ref:`中文 <Rect.__init__-cn>` | :ref:`English <Rect.__init__-en>`
+        **API Language** - :ref:`中文 <Rect.__init__-cn>` | :ref:`English <Rect.__init__-en>`
 
         ----
 

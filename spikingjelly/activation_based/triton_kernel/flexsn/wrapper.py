@@ -32,8 +32,8 @@ _BACKWARD_XLARGE_MAX_NCL = 1 << 23
 
 def flexsn_backward_ncl_bucket(ncl: int) -> int:
     """Bucket a flattened sequence size for backward-kernel tuning.
-    **API Language:**
-    :ref:`中文 <flexsn_backward_ncl_bucket-cn>` | :ref:`English <flexsn_backward_ncl_bucket-en>`
+
+    **API Language** - :ref:`中文 <flexsn_backward_ncl_bucket-cn>` | :ref:`English <flexsn_backward_ncl_bucket-en>`
 
     ----
 
@@ -47,6 +47,7 @@ def flexsn_backward_ncl_bucket(ncl: int) -> int:
     :type ncl: int
     :return: EN: Bucket index in ``[0, 4]``. Chinese: ``[0, 4]`` 范围内的分桶索引。
     :rtype: int
+
     Chinese:
         将展平后的单步元素数 ``NCL`` 映射到 backward kernel 的调优分桶。
     English:
@@ -127,8 +128,8 @@ def _allocate_state_grad(
 
 def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
     """Run the inference kernel for a multi-step FlexSN core.
-    **API Language:**
-    :ref:`中文 <flexsn_inference-cn>` | :ref:`English <flexsn_inference-en>`
+
+    **API Language** - :ref:`中文 <flexsn_inference-cn>` | :ref:`English <flexsn_inference-en>`
 
     ----
 
@@ -143,6 +144,7 @@ def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
     :param args: EN: Input/state sequences accepted by the kernel. Chinese: kernel 接收的输入/状态序列。
     :return: EN: Output/state sequences. When ``T == 0``, returns empty tensors with the expected templates. Chinese: 输出/状态序列；当 ``T == 0`` 时, 返回符合模板的空张量。
     :rtype: tuple
+
     Chinese:
         执行 FlexSN 多步推理 kernel。
     English:
@@ -187,8 +189,8 @@ def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
 
 def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
     """Run the inference kernel and materialize final states.
-    **API Language:**
-    :ref:`中文 <flexsn_inference_final_state-cn>` | :ref:`English <flexsn_inference_final_state-en>`
+
+    **API Language** - :ref:`中文 <flexsn_inference_final_state-cn>` | :ref:`English <flexsn_inference_final_state-en>`
 
     ----
 
@@ -203,6 +205,7 @@ def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
     :param args: EN: Input/state sequences accepted by the kernel. Chinese: kernel 接收的输入/状态序列。
     :return: EN: Output sequences followed by final states. When ``T == 0``, output sequences are empty, provided initial states are cloned, and missing states are zero-filled. Chinese: 输出序列后接最终状态；当 ``T == 0`` 时, 输出序列为空, 已提供的初始状态会被克隆, 缺失状态会以零填充。
     :rtype: tuple
+
     Chinese:
         执行带最终状态物化的 FlexSN 多步推理 kernel。
     English:
@@ -261,8 +264,8 @@ def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
 
 def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
     """Run the training forward kernel for FlexSN.
-    **API Language:**
-    :ref:`中文 <flexsn_forward-cn>` | :ref:`English <flexsn_forward-en>`
+
+    **API Language** - :ref:`中文 <flexsn_forward-cn>` | :ref:`English <flexsn_forward-en>`
 
     ----
 
@@ -277,6 +280,7 @@ def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
     :param args: EN: Input/state sequences accepted by the kernel. Chinese: kernel 接收的输入/状态序列。
     :return: EN: Forward outputs plus any saved tensors required by backward. When ``T == 0``, returns empty tensors following the expected templates. Chinese: 前向输出以及 backward 所需的保存张量；当 ``T == 0`` 时, 返回符合模板的空张量。
     :rtype: tuple
+
     Chinese:
         执行 FlexSN 训练前向 kernel。
     English:
@@ -325,8 +329,8 @@ def flexsn_backward(
     state_templates: Optional[Tuple[torch.Tensor, ...]] = None,
 ) -> tuple:
     """Run the training backward kernel for FlexSN.
-    **API Language:**
-    :ref:`中文 <flexsn_backward-cn>` | :ref:`English <flexsn_backward-en>`
+
+    **API Language** - :ref:`中文 <flexsn_backward-cn>` | :ref:`English <flexsn_backward-en>`
 
     ----
 
@@ -346,6 +350,7 @@ def flexsn_backward(
     :type state_templates: Optional[Tuple[torch.Tensor, ...]]
     :return: EN: Gradients for inputs and initial states. When ``T == 0`` or all
     :rtype: tuple
+
     Chinese:
         执行 FlexSN 训练反向 kernel。
     English:

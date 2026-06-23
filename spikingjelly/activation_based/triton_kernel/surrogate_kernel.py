@@ -38,8 +38,8 @@ SG_TRITON_IDS: dict[type[surrogate.SurrogateFunctionBase], int] = {
 @triton.jit
 def sg_triton(h, alpha, sg_triton_id: tl.constexpr):
     """Surrogate gradient g'(h) in Triton JIT.
-    **API Language:**
-    :ref:`中文 <sg_triton-cn>` | :ref:`English <sg_triton-en>`
+
+    **API Language** - :ref:`中文 <sg_triton-cn>` | :ref:`English <sg_triton-en>`
 
     ----
 
@@ -98,8 +98,8 @@ def sg_triton(h, alpha, sg_triton_id: tl.constexpr):
 
 def resolve_sg_triton_id_and_alpha(surrogate_function) -> tuple[int, float]:
     """Return (sg_triton_id, alpha) for a surrogate function.
-    **API Language:**
-    :ref:`中文 <resolve_sg_triton_id_and_alpha-cn>` | :ref:`English <resolve_sg_triton_id_and_alpha-en>`
+
+    **API Language** - :ref:`中文 <resolve_sg_triton_id_and_alpha-cn>` | :ref:`English <resolve_sg_triton_id_and_alpha-en>`
 
     ----
 

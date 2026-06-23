@@ -1,6 +1,5 @@
 """
-**API Language:**
-:ref:`中文 <flexsn.custom_ops-cn>` | :ref:`English <flexsn.custom_ops-en>`
+**API Language** - :ref:`中文 <flexsn.custom_ops-cn>` | :ref:`English <flexsn.custom_ops-en>`
 
 ----
 
@@ -86,8 +85,7 @@ __all__ = [
 @dataclass
 class FlexSNKernelHandle:
     """
-    **API Language:**
-    :ref:`中文 <FlexSNKernelHandle-cn>` | :ref:`English <FlexSNKernelHandle-en>`
+    **API Language** - :ref:`中文 <FlexSNKernelHandle-cn>` | :ref:`English <FlexSNKernelHandle-en>`
 
     ----
 
@@ -155,8 +153,7 @@ def register_flexsn_kernel_handle(
     training_info,
 ) -> int:
     """
-    **API Language:**
-    :ref:`中文 <register_flexsn_kernel_handle-cn>` | :ref:`English <register_flexsn_kernel_handle-en>`
+    **API Language** - :ref:`中文 <register_flexsn_kernel_handle-cn>` | :ref:`English <register_flexsn_kernel_handle-en>`
 
     ----
 
@@ -233,8 +230,7 @@ def _lookup_kernel_handle(handle: int) -> FlexSNKernelHandle:
 
 def retain_flexsn_kernel_handle(handle: int) -> None:
     """
-    **API Language:**
-    :ref:`中文 <retain_flexsn_kernel_handle-cn>` | :ref:`English <retain_flexsn_kernel_handle-en>`
+    **API Language** - :ref:`中文 <retain_flexsn_kernel_handle-cn>` | :ref:`English <retain_flexsn_kernel_handle-en>`
 
     ----
 
@@ -269,8 +265,7 @@ def retain_flexsn_kernel_handle(handle: int) -> None:
 
 def retain_owner_flexsn_kernel_handle(handle: int) -> None:
     """
-    **API Language:**
-    :ref:`中文 <retain_owner_flexsn_kernel_handle-cn>` | :ref:`English <retain_owner_flexsn_kernel_handle-en>`
+    **API Language** - :ref:`中文 <retain_owner_flexsn_kernel_handle-cn>` | :ref:`English <retain_owner_flexsn_kernel_handle-en>`
 
     ----
 
@@ -305,8 +300,7 @@ def retain_owner_flexsn_kernel_handle(handle: int) -> None:
 
 def release_flexsn_kernel_handle(handle: int) -> None:
     """
-    **API Language:**
-    :ref:`中文 <release_flexsn_kernel_handle-cn>` | :ref:`English <release_flexsn_kernel_handle-en>`
+    **API Language** - :ref:`中文 <release_flexsn_kernel_handle-cn>` | :ref:`English <release_flexsn_kernel_handle-en>`
 
     ----
 
@@ -347,8 +341,7 @@ def release_flexsn_kernel_handle(handle: int) -> None:
 
 def release_active_flexsn_kernel_handle(handle: int) -> None:
     """
-    **API Language:**
-    :ref:`中文 <release_active_flexsn_kernel_handle-cn>` | :ref:`English <release_active_flexsn_kernel_handle-en>`
+    **API Language** - :ref:`中文 <release_active_flexsn_kernel_handle-cn>` | :ref:`English <release_active_flexsn_kernel_handle-en>`
 
     ----
 
@@ -557,8 +550,7 @@ def flexsn_inductor_inference(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     """
-    **API Language:**
-    :ref:`中文 <flexsn_inductor_inference-cn>` | :ref:`English <flexsn_inductor_inference-en>`
+    **API Language** - :ref:`中文 <flexsn_inductor_inference-cn>` | :ref:`English <flexsn_inductor_inference-en>`
 
     ----
 
@@ -603,8 +595,7 @@ def flexsn_inductor_inference_final_state(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     """
-    **API Language:**
-    :ref:`中文 <flexsn_inductor_inference_final_state-cn>` | :ref:`English <flexsn_inductor_inference_final_state-en>`
+    **API Language** - :ref:`中文 <flexsn_inductor_inference_final_state-cn>` | :ref:`English <flexsn_inductor_inference_final_state-en>`
 
     ----
 
@@ -688,8 +679,7 @@ def flexsn_inductor_training(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     """
-    **API Language:**
-    :ref:`中文 <flexsn_inductor_training-cn>` | :ref:`English <flexsn_inductor_training-en>`
+    **API Language** - :ref:`中文 <flexsn_inductor_training-cn>` | :ref:`English <flexsn_inductor_training-en>`
 
     ----
 
@@ -738,8 +728,7 @@ def flexsn_inductor_training_final_state(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     """
-    **API Language:**
-    :ref:`中文 <flexsn_inductor_training_final_state-cn>` | :ref:`English <flexsn_inductor_training_final_state-en>`
+    **API Language** - :ref:`中文 <flexsn_inductor_training_final_state-cn>` | :ref:`English <flexsn_inductor_training_final_state-en>`
 
     ----
 
@@ -826,8 +815,7 @@ def flexsn_inductor_backward(
     input_templates: List[torch.Tensor],
 ) -> List[torch.Tensor]:
     """
-    **API Language:**
-    :ref:`中文 <flexsn_inductor_backward-cn>` | :ref:`English <flexsn_inductor_backward-en>`
+    **API Language** - :ref:`中文 <flexsn_inductor_backward-cn>` | :ref:`English <flexsn_inductor_backward-en>`
 
     ----
 
@@ -1070,8 +1058,7 @@ torch.library.register_autograd(
 
 def attach_flexsn_handle_finalizer(owner, handle: int):
     """
-    **API Language:**
-    :ref:`中文 <attach_flexsn_handle_finalizer-cn>` | :ref:`English <attach_flexsn_handle_finalizer-en>`
+    **API Language** - :ref:`中文 <attach_flexsn_handle_finalizer-cn>` | :ref:`English <attach_flexsn_handle_finalizer-en>`
 
     ----
 

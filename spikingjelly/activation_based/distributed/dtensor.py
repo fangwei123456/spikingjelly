@@ -165,8 +165,7 @@ class TensorShardMemoryModule(base.MemoryModule):
         process_group=None,
     ):
         """
-        **API Language:**
-        :ref:`中文 <TensorShardMemoryModule-cn>` | :ref:`English <TensorShardMemoryModule-en>`
+        **API Language** - :ref:`中文 <TensorShardMemoryModule-cn>` | :ref:`English <TensorShardMemoryModule-en>`
 
         ----
 
@@ -190,6 +189,7 @@ class TensorShardMemoryModule(base.MemoryModule):
         .. _TensorShardMemoryModule-en:
 
         * **English**
+
         Base memory module supporting tensor parallel sharding.
 
         :param source: Source MemoryModule
@@ -260,8 +260,7 @@ class TensorShardMemoryModule(base.MemoryModule):
 @dataclass
 class SNNDistributedAnalysis:
     r"""
-    **API Language:**
-    :ref:`中文 <SNNDistributedAnalysis-cn>` | :ref:`English <SNNDistributedAnalysis-en>`
+    **API Language** - :ref:`中文 <SNNDistributedAnalysis-cn>` | :ref:`English <SNNDistributedAnalysis-en>`
 
     ----
 
@@ -290,8 +289,7 @@ class SNNDistributedAnalysis:
 @dataclass
 class SNNDistributedConfig:
     r"""
-    **API Language:**
-    :ref:`中文 <SNNDistributedConfig-cn>` | :ref:`English <SNNDistributedConfig-en>`
+    **API Language** - :ref:`中文 <SNNDistributedConfig-cn>` | :ref:`English <SNNDistributedConfig-en>`
 
     ----
 
@@ -340,8 +338,7 @@ class SNNDistributedConfig:
 @dataclass
 class SNNPipelineRuntime:
     r"""
-    **API Language:**
-    :ref:`中文 <SNNPipelineRuntime-cn>` | :ref:`English <SNNPipelineRuntime-en>`
+    **API Language** - :ref:`中文 <SNNPipelineRuntime-cn>` | :ref:`English <SNNPipelineRuntime-en>`
 
     ----
 
@@ -398,8 +395,7 @@ SNN_DISTRIBUTED_PREFERENCES = ("speed", "memory", "capacity")
 @dataclass(frozen=True)
 class SNNDistributedRecommendation:
     r"""
-    **API Language:**
-    :ref:`中文 <SNNDistributedRecommendation-cn>` | :ref:`English <SNNDistributedRecommendation-en>`
+    **API Language** - :ref:`中文 <SNNDistributedRecommendation-cn>` | :ref:`English <SNNDistributedRecommendation-en>`
 
     ----
 
@@ -799,8 +795,7 @@ def parse_pipeline_layout(
     total_units: int,
 ) -> Optional[Tuple[int, ...]]:
     r"""
-    **API Language:**
-    :ref:`中文 <parse_pipeline_layout-cn>` | :ref:`English <parse_pipeline_layout-en>`
+    **API Language** - :ref:`中文 <parse_pipeline_layout-cn>` | :ref:`English <parse_pipeline_layout-en>`
 
     ----
 
@@ -848,8 +843,7 @@ def resolve_pipeline_schedule_kind(
     delayed_wgrad: bool,
 ) -> str:
     r"""
-    **API Language:**
-    :ref:`中文 <resolve_pipeline_schedule_kind-cn>` | :ref:`English <resolve_pipeline_schedule_kind-en>`
+    **API Language** - :ref:`中文 <resolve_pipeline_schedule_kind-cn>` | :ref:`English <resolve_pipeline_schedule_kind-en>`
 
     ----
 
@@ -897,8 +891,7 @@ def resolve_pipeline_schedule_kind(
 
 def recommended_pipeline_microbatches(batch_size: int, num_stages: int) -> int:
     r"""
-    **API Language:**
-    :ref:`中文 <recommended_pipeline_microbatches-cn>` | :ref:`English <recommended_pipeline_microbatches-en>`
+    **API Language** - :ref:`中文 <recommended_pipeline_microbatches-cn>` | :ref:`English <recommended_pipeline_microbatches-en>`
 
     ----
 
@@ -951,8 +944,7 @@ def recommend_snn_distributed_strategy(
     tensor_parallel_available: Optional[bool] = None,
 ) -> SNNDistributedRecommendation:
     r"""
-    **API Language:**
-    :ref:`中文 <recommend_snn_distributed_strategy-cn>` | :ref:`English <recommend_snn_distributed_strategy-en>`
+    **API Language** - :ref:`中文 <recommend_snn_distributed_strategy-cn>` | :ref:`English <recommend_snn_distributed_strategy-en>`
 
     ----
 
@@ -1670,8 +1662,7 @@ def analyze_snn_distributed_capability(
     tensor_parallel_roots: Optional[Sequence[str]] = None,
 ) -> SNNDistributedAnalysis:
     r"""
-    **API Language:**
-    :ref:`中文 <analyze_snn_distributed_capability-cn>` | :ref:`English <analyze_snn_distributed_capability-en>`
+    **API Language** - :ref:`中文 <analyze_snn_distributed_capability-cn>` | :ref:`English <analyze_snn_distributed_capability-en>`
 
     ----
 
@@ -1739,8 +1730,7 @@ def auto_build_tensor_parallel_plan(
     tensor_parallel_roots: Optional[Sequence[str]] = None,
 ) -> Dict[str, "ParallelStyle"]:
     r"""
-    **API Language:**
-    :ref:`中文 <auto_build_tensor_parallel_plan-cn>` | :ref:`English <auto_build_tensor_parallel_plan-en>`
+    **API Language** - :ref:`中文 <auto_build_tensor_parallel_plan-cn>` | :ref:`English <auto_build_tensor_parallel_plan-en>`
 
     ----
 
@@ -1823,8 +1813,7 @@ def parallelize_snn_module(
     tp_mesh_dim: int = 0,
 ) -> nn.Module:
     r"""
-    **API Language:**
-    :ref:`中文 <parallelize_snn_module-cn>` | :ref:`English <parallelize_snn_module-en>`
+    **API Language** - :ref:`中文 <parallelize_snn_module-cn>` | :ref:`English <parallelize_snn_module-en>`
 
     ----
 
@@ -2169,8 +2158,7 @@ def _shard_range(total: int, rank: int, world_size: int) -> Tuple[int, int]:
 class ChannelShardConv2d(nn.Module):
     def __init__(self, source: nn.Module, process_group, mode: str):
         """
-        **API Language:**
-        :ref:`中文 <ChannelShardConv2d-cn>` | :ref:`English <ChannelShardConv2d-en>`
+        **API Language** - :ref:`中文 <ChannelShardConv2d-cn>` | :ref:`English <ChannelShardConv2d-en>`
 
         ----
 
@@ -2304,8 +2292,7 @@ class ChannelShardConv2d(nn.Module):
 class ChannelShardConv1d(nn.Module):
     def __init__(self, source: nn.Module, process_group, mode: str):
         """
-        **API Language:**
-        :ref:`中文 <ChannelShardConv1d-cn>` | :ref:`English <ChannelShardConv1d-en>`
+        **API Language** - :ref:`中文 <ChannelShardConv1d-cn>` | :ref:`English <ChannelShardConv1d-en>`
 
         ----
 
@@ -2421,8 +2408,7 @@ class ChannelShardConv1d(nn.Module):
 class ChannelShardBatchNorm2d(nn.Module):
     def __init__(self, source: nn.Module, process_group):
         """
-        **API Language:**
-        :ref:`中文 <ChannelShardBatchNorm2d-cn>` | :ref:`English <ChannelShardBatchNorm2d-en>`
+        **API Language** - :ref:`中文 <ChannelShardBatchNorm2d-cn>` | :ref:`English <ChannelShardBatchNorm2d-en>`
 
         ----
 
@@ -2538,8 +2524,7 @@ class ChannelShardBatchNorm2d(nn.Module):
 class ChannelShardBatchNorm1d(nn.Module):
     def __init__(self, source: nn.Module, process_group):
         """
-        **API Language:**
-        :ref:`中文 <ChannelShardBatchNorm1d-cn>` | :ref:`English <ChannelShardBatchNorm1d-en>`
+        **API Language** - :ref:`中文 <ChannelShardBatchNorm1d-cn>` | :ref:`English <ChannelShardBatchNorm1d-en>`
 
         ----
 
@@ -3210,8 +3195,7 @@ def configure_snn_distributed(
     config: SNNDistributedConfig,
 ) -> Tuple[nn.Module, "DeviceMesh", SNNDistributedAnalysis]:
     r"""
-    **API Language:**
-    :ref:`中文 <configure_snn_distributed-cn>` | :ref:`English <configure_snn_distributed-en>`
+    **API Language** - :ref:`中文 <configure_snn_distributed-cn>` | :ref:`English <configure_snn_distributed-en>`
 
     ----
 

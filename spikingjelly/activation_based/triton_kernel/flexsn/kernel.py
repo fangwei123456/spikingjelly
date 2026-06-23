@@ -58,8 +58,7 @@ def build_inference_kernel(
     example_inputs: Optional[Tuple[torch.Tensor, ...]] = None,
 ):
     """
-    **API Language:**
-    :ref:`中文 <build_inference_kernel-cn>` | :ref:`English <build_inference_kernel-en>`
+    **API Language** - :ref:`中文 <build_inference_kernel-cn>` | :ref:`English <build_inference_kernel-en>`
 
     ----
 
@@ -154,8 +153,7 @@ def build_inference_final_state_kernel(
     example_inputs: Optional[Tuple[torch.Tensor, ...]] = None,
 ):
     """
-    **API Language:**
-    :ref:`中文 <build_inference_final_state_kernel-cn>` | :ref:`English <build_inference_final_state_kernel-en>`
+    **API Language** - :ref:`中文 <build_inference_final_state_kernel-cn>` | :ref:`English <build_inference_final_state_kernel-en>`
 
     ----
 
@@ -296,8 +294,7 @@ def build_training_kernels(
     requires_grad: Optional[Tuple[bool, ...]] = None,
 ):
     """
-    **API Language:**
-    :ref:`中文 <build_training_kernels-cn>` | :ref:`English <build_training_kernels-en>`
+    **API Language** - :ref:`中文 <build_training_kernels-cn>` | :ref:`English <build_training_kernels-en>`
 
     ----
 

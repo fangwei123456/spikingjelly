@@ -20,8 +20,7 @@ class NeuroMCBaseCounter(BaseCounter):
     ):
         """
         Base counter for NeuroMC energy profiling framework.
-        **API Language:**
-        :ref:`中文 <NeuroMCBaseCounter-cn>` | :ref:`English <NeuroMCBaseCounter-en>`
+        **API Language** - :ref:`中文 <NeuroMCBaseCounter-cn>` | :ref:`English <NeuroMCBaseCounter-en>`
 
         ----
 

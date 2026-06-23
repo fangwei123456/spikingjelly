@@ -17,8 +17,7 @@ if TYPE_CHECKING:
 
 class ActivationRule(Protocol):
     r"""
-    **API Language:**
-    :ref:`中文 <ActivationRule-cn>` | :ref:`English <ActivationRule-en>`
+    **API Language** - :ref:`中文 <ActivationRule-cn>` | :ref:`English <ActivationRule-en>`
 
     ----
 
@@ -53,8 +52,7 @@ class ActivationRule(Protocol):
 
     def match(self, node: fx.Node, modules: Dict[str, nn.Module]) -> bool:
         r"""
-        **API Language:**
-        :ref:`中文 <ActivationRule.match-cn>` | :ref:`English <ActivationRule.match-en>`
+        **API Language** - :ref:`中文 <ActivationRule.match-cn>` | :ref:`English <ActivationRule.match-en>`
 
         ----
 
@@ -97,8 +95,7 @@ class ActivationRule(Protocol):
         hook_counts_per_prefix: Dict[str, int],
     ) -> fx.Node:
         r"""
-        **API Language:**
-        :ref:`中文 <ActivationRule.insert_hooks-cn>` | :ref:`English <ActivationRule.insert_hooks-en>`
+        **API Language** - :ref:`中文 <ActivationRule.insert_hooks-cn>` | :ref:`English <ActivationRule.insert_hooks-en>`
 
         ----
 
@@ -150,8 +147,7 @@ class ActivationRule(Protocol):
         self, fx_model: fx.GraphModule, modules: Dict[str, nn.Module]
     ) -> Iterator[Tuple[fx.Node, fx.Node]]:
         r"""
-        **API Language:**
-        :ref:`中文 <ActivationRule.find_replacements-cn>` | :ref:`English <ActivationRule.find_replacements-en>`
+        **API Language** - :ref:`中文 <ActivationRule.find_replacements-cn>` | :ref:`English <ActivationRule.find_replacements-en>`
 
         ----
 
@@ -199,8 +195,7 @@ class ActivationRule(Protocol):
         threshold_optimizer: "ThresholdOptimizer",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <ActivationRule.replace_with_neurons-cn>` | :ref:`English <ActivationRule.replace_with_neurons-en>`
+        **API Language** - :ref:`中文 <ActivationRule.replace_with_neurons-cn>` | :ref:`English <ActivationRule.replace_with_neurons-en>`
 
         ----
 
@@ -249,8 +244,7 @@ class ActivationRule(Protocol):
 
 class ReLURule:
     r"""
-    **API Language:**
-    :ref:`中文 <ReLURule-cn>` | :ref:`English <ReLURule-en>`
+    **API Language** - :ref:`中文 <ReLURule-cn>` | :ref:`English <ReLURule-en>`
 
     ----
 

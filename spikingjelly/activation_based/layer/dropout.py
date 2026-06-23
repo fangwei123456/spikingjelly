@@ -15,12 +15,12 @@ __all__ = ["Dropout", "Dropout2d", "DropConnectLinear"]
 class Dropout(base.MemoryModule):
     def __init__(self, p=0.5, step_mode="s"):
         r"""
-        **API Language:**
-        :ref:`中文 <Dropout.__init__-cn>` | :ref:`English <Dropout.__init__-en>`
+        **API Language** - :ref:`中文 <Dropout.__init__-cn>` | :ref:`English <Dropout.__init__-en>`
 
         ----
 
         .. _Dropout.__init__-cn:
+
         * **中文**
 
         与 ``torch.nn.Dropout`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\
@@ -53,6 +53,7 @@ class Dropout(base.MemoryModule):
         ----
 
         .. _Dropout.__init__-en:
+
         * **English**
 
         This layer is almost same with ``torch.nn.Dropout``. The difference is that elements have been zeroed at first
@@ -118,12 +119,12 @@ class Dropout(base.MemoryModule):
 class Dropout2d(Dropout):
     def __init__(self, p=0.2, step_mode="s"):
         r"""
-        **API Language:**
-        :ref:`中文 <Dropout2d.__init__-cn>` | :ref:`English <Dropout2d.__init__-en>`
+        **API Language** - :ref:`中文 <Dropout2d.__init__-cn>` | :ref:`English <Dropout2d.__init__-en>`
 
         ----
 
         .. _Dropout2d.__init__-cn:
+
         * **中文**
 
         与 ``torch.nn.Dropout2d`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\
@@ -140,6 +141,7 @@ class Dropout2d(Dropout):
         ----
 
         .. _Dropout2d.__init__-en:
+
         * **English**
 
         This layer is almost same with ``torch.nn.Dropout2d``. The difference is that elements have been zeroed at first
@@ -173,8 +175,7 @@ class DropConnectLinear(base.MemoryModule):
         step_mode="s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <DropConnectLinear.__init__-cn>` | :ref:`English <DropConnectLinear.__init__-en>`
+        **API Language** - :ref:`中文 <DropConnectLinear.__init__-cn>` | :ref:`English <DropConnectLinear.__init__-en>`
 
         ----
 
@@ -288,8 +289,7 @@ class DropConnectLinear(base.MemoryModule):
 
     def reset_parameters(self) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <DropConnectLinear.reset_parameters-cn>` | :ref:`English <DropConnectLinear.reset_parameters-en>`
+        **API Language** - :ref:`中文 <DropConnectLinear.reset_parameters-cn>` | :ref:`English <DropConnectLinear.reset_parameters-en>`
 
         ----
 
@@ -317,8 +317,7 @@ class DropConnectLinear(base.MemoryModule):
 
     def reset(self):
         r"""
-        **API Language:**
-        :ref:`中文 <DropConnectLinear.reset-cn>` | :ref:`English <DropConnectLinear.reset-en>`
+        **API Language** - :ref:`中文 <DropConnectLinear.reset-cn>` | :ref:`English <DropConnectLinear.reset-en>`
 
         ----
 

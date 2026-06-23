@@ -187,8 +187,7 @@ class _TrainConvBnWrapper(nn.Module):
 
 def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
     """
-    **API Language:**
-    :ref:`中文 <fuse_conv_bn_eval_modules-cn>` | :ref:`English <fuse_conv_bn_eval_modules-en>`
+    **API Language** - :ref:`中文 <fuse_conv_bn_eval_modules-cn>` | :ref:`English <fuse_conv_bn_eval_modules-en>`
 
     ----
 
@@ -263,8 +262,7 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
 
 def pack_conv_bn_train_modules(net: nn.Module) -> fx.GraphModule:
     """
-    **API Language:**
-    :ref:`中文 <pack_conv_bn_train_modules-cn>` | :ref:`English <pack_conv_bn_train_modules-en>`
+    **API Language** - :ref:`中文 <pack_conv_bn_train_modules-cn>` | :ref:`English <pack_conv_bn_train_modules-en>`
 
     ----
 

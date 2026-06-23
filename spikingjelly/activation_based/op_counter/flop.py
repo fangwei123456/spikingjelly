@@ -308,8 +308,7 @@ class FlopCounter(BaseCounter):
         extra_ignore_modules: list[nn.Module] = [],
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <FlopCounter.__init__-cn>` | :ref:`English <FlopCounter.__init__-en>`
+        **API Language** - :ref:`中文 <FlopCounter.__init__-cn>` | :ref:`English <FlopCounter.__init__-en>`
 
         ----
 

@@ -59,7 +59,8 @@ def _unsupported_neuron_modules(model: nn.Module) -> list[tuple[str, str]]:
 @dataclass
 class SpikeSimEnergyReport:
     r"""
-    **API Language:**
+    .. rubric:: API Language
+
     :ref:`中文 <SpikeSimEnergyReport-cn>` |
     :ref:`English <SpikeSimEnergyReport-en>`
 
@@ -108,7 +109,8 @@ class SpikeSimEnergyProfiler:
         verbose: bool = False,
     ):
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <SpikeSimEnergyProfiler.__init__-cn>` |
         :ref:`English <SpikeSimEnergyProfiler.__init__-en>`
 
@@ -177,7 +179,8 @@ class SpikeSimEnergyProfiler:
 
     def get_report(self) -> SpikeSimEnergyReport:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <SpikeSimEnergyProfiler.get_report-cn>` |
         :ref:`English <SpikeSimEnergyProfiler.get_report-en>`
 
@@ -256,7 +259,8 @@ class SpikeSimEnergyProfiler:
 
     def get_total(self) -> float:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <SpikeSimEnergyProfiler.get_total-cn>` |
         :ref:`English <SpikeSimEnergyProfiler.get_total-en>`
 
@@ -280,7 +284,8 @@ class SpikeSimEnergyProfiler:
 
     def get_counts(self) -> dict[str, Any]:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <SpikeSimEnergyProfiler.get_counts-cn>` |
         :ref:`English <SpikeSimEnergyProfiler.get_counts-en>`
 
@@ -321,7 +326,8 @@ def estimate_spikesim_event_energy(
     verbose: bool = False,
 ) -> SpikeSimEventEnergyReport:
     r"""
-    **API Language:**
+    .. rubric:: API Language
+
     :ref:`中文 <estimate_spikesim_event_energy-cn>` |
     :ref:`English <estimate_spikesim_event_energy-en>`
 

@@ -31,8 +31,7 @@ class NeuroMCCmpCounter(NeuroMCBaseCounter):
     ):
         """
         Counter for comparison operations in the NeuroMC framework.
-        **API Language:**
-        :ref:`中文 <NeuroMCCmpCounter-cn>` | :ref:`English <NeuroMCCmpCounter-en>`
+        **API Language** - :ref:`中文 <NeuroMCCmpCounter-cn>` | :ref:`English <NeuroMCCmpCounter-en>`
 
         ----
 

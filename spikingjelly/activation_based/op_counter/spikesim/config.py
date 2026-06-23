@@ -10,8 +10,7 @@ _SPIKESIM_XBAR_ROW_DIVISOR = 8.0
 @dataclass
 class SpikeSimEnergyConfig:
     r"""
-    **API Language:**
-    :ref:`中文 <SpikeSimEnergyConfig-cn>` | :ref:`English <SpikeSimEnergyConfig-en>`
+    **API Language** - :ref:`中文 <SpikeSimEnergyConfig-cn>` | :ref:`English <SpikeSimEnergyConfig-en>`
 
     ----
 
@@ -53,7 +52,8 @@ class SpikeSimEnergyConfig:
 
     def copy(self) -> "SpikeSimEnergyConfig":
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <SpikeSimEnergyConfig.copy-cn>` |
         :ref:`English <SpikeSimEnergyConfig.copy-en>`
 
@@ -83,7 +83,8 @@ class SpikeSimEnergyConfig:
 
     def validate(self) -> None:
         r"""
-        **API Language:**
+        .. rubric:: API Language
+
         :ref:`中文 <SpikeSimEnergyConfig.validate-cn>` |
         :ref:`English <SpikeSimEnergyConfig.validate-en>`
 

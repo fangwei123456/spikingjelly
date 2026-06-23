@@ -1,6 +1,5 @@
 """
-**API Language:**
-:ref:`中文 <cuda_kernel-cn>` | :ref:`English <cuda_kernel-en>`
+**API Language** - :ref:`中文 <cuda_kernel-cn>` | :ref:`English <cuda_kernel-en>`
 
 ----
 

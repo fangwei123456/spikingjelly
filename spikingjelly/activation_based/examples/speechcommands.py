@@ -330,9 +330,7 @@ class LIFWrapper(nn.Module):
 
     def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         r"""
-        **API Language:**
-
-        :ref:`中文 <LIFWrapper-forward-cn>` | :ref:`English <LIFWrapper-forward-en>`
+        **API Language** - :ref:`中文 <LIFWrapper-forward-cn>` | :ref:`English <LIFWrapper-forward-en>`
 
         ----
 
@@ -384,9 +382,7 @@ class LIFWrapper(nn.Module):
 class Net(nn.Module):
     def __init__(self):
         r"""
-        **API Language:**
-
-        :ref:`中文 <Net-init-cn>` | :ref:`English <Net-init-en>`
+        **API Language** - :ref:`中文 <Net-init-cn>` | :ref:`English <Net-init-en>`
 
         ----
 
@@ -477,9 +473,7 @@ class Net(nn.Module):
 
     def forward(self, x):
         r"""
-        **API Language:**
-
-        :ref:`中文 <Net-forward-cn>` | :ref:`English <Net-forward-en>`
+        **API Language** - :ref:`中文 <Net-forward-cn>` | :ref:`English <Net-forward-en>`
 
         ----
 

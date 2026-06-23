@@ -199,8 +199,7 @@ class ACCounter(BaseCounter):
         extra_ignore_modules: list[nn.Module] = [],
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <ACCounter.__init__-cn>` | :ref:`English <ACCounter.__init__-en>`
+        **API Language** - :ref:`中文 <ACCounter.__init__-cn>` | :ref:`English <ACCounter.__init__-en>`
 
         ----
 

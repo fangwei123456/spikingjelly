@@ -38,8 +38,7 @@ class ParametricLIFNode(BaseNode):
         store_v_seq: bool = False,
     ):
         """
-        **API Language:**
-        :ref:`中文 <ParametricLIFNode.__init__-cn>` | :ref:`English <ParametricLIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <ParametricLIFNode.__init__-cn>` | :ref:`English <ParametricLIFNode.__init__-en>`
 
         ----
 

@@ -40,8 +40,7 @@ model_urls = {
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """
-    **API Language:**
-    :ref:`中文 <conv3x3-cn>` | :ref:`English <conv3x3-en>`
+    **API Language** - :ref:`中文 <conv3x3-cn>` | :ref:`English <conv3x3-en>`
 
     ----
 
@@ -99,8 +98,7 @@ def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
 
 def conv1x1(in_planes, out_planes, stride=1):
     """
-    **API Language:**
-    :ref:`中文 <conv1x1-cn>` | :ref:`English <conv1x1-en>`
+    **API Language** - :ref:`中文 <conv1x1-cn>` | :ref:`English <conv1x1-en>`
 
     ----
 
@@ -268,8 +266,7 @@ class SpikingResNet(nn.Module):
         **kwargs,
     ):
         """
-        **API Language:**
-        :ref:`中文 <SpikingResNet-cn>` | :ref:`English <SpikingResNet-en>`
+        **API Language** - :ref:`中文 <SpikingResNet-cn>` | :ref:`English <SpikingResNet-en>`
 
         ----
 
@@ -496,8 +493,7 @@ def spiking_resnet18(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_resnet18-cn>` | :ref:`English <spiking_resnet18-en>`
+    **API Language** - :ref:`中文 <spiking_resnet18-cn>` | :ref:`English <spiking_resnet18-en>`
 
     ----
 
@@ -553,8 +549,7 @@ def spiking_resnet34(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_resnet34-cn>` | :ref:`English <spiking_resnet34-en>`
+    **API Language** - :ref:`中文 <spiking_resnet34-cn>` | :ref:`English <spiking_resnet34-en>`
 
     ----
 
@@ -609,8 +604,7 @@ def spiking_resnet50(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_resnet50-cn>` | :ref:`English <spiking_resnet50-en>`
+    **API Language** - :ref:`中文 <spiking_resnet50-cn>` | :ref:`English <spiking_resnet50-en>`
 
     ----
 
@@ -665,8 +659,7 @@ def spiking_resnet101(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_resnet101-cn>` | :ref:`English <spiking_resnet101-en>`
+    **API Language** - :ref:`中文 <spiking_resnet101-cn>` | :ref:`English <spiking_resnet101-en>`
 
     ----
 
@@ -721,8 +714,7 @@ def spiking_resnet152(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_resnet152-cn>` | :ref:`English <spiking_resnet152-en>`
+    **API Language** - :ref:`中文 <spiking_resnet152-cn>` | :ref:`English <spiking_resnet152-en>`
 
     ----
 
@@ -777,8 +769,7 @@ def spiking_resnext50_32x4d(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_resnext50_32x4d-cn>` | :ref:`English <spiking_resnext50_32x4d-en>`
+    **API Language** - :ref:`中文 <spiking_resnext50_32x4d-cn>` | :ref:`English <spiking_resnext50_32x4d-en>`
 
     ----
 
@@ -835,8 +826,7 @@ def spiking_resnext101_32x8d(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_resnext101_32x8d-cn>` | :ref:`English <spiking_resnext101_32x8d-en>`
+    **API Language** - :ref:`中文 <spiking_resnext101_32x8d-cn>` | :ref:`English <spiking_resnext101_32x8d-en>`
 
     ----
 
@@ -893,8 +883,7 @@ def spiking_wide_resnet50_2(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_wide_resnet50_2-cn>` | :ref:`English <spiking_wide_resnet50_2-en>`
+    **API Language** - :ref:`中文 <spiking_wide_resnet50_2-cn>` | :ref:`English <spiking_wide_resnet50_2-en>`
 
     ----
 
@@ -956,8 +945,7 @@ def spiking_wide_resnet101_2(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <spiking_wide_resnet101_2-cn>` | :ref:`English <spiking_wide_resnet101_2-en>`
+    **API Language** - :ref:`中文 <spiking_wide_resnet101_2-cn>` | :ref:`English <spiking_wide_resnet101_2-en>`
 
     ----
 

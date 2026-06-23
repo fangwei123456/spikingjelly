@@ -37,8 +37,7 @@ class BatchNorm1d(nn.BatchNorm1d, base.StepModule):
         step_mode="s",
     ):
         """
-        **API Language:**
-        :ref:`中文 <BatchNorm1d-cn>` | :ref:`English <BatchNorm1d-en>`
+        **API Language** - :ref:`中文 <BatchNorm1d-cn>` | :ref:`English <BatchNorm1d-en>`
 
         ----
 
@@ -99,8 +98,7 @@ class BatchNorm2d(nn.BatchNorm2d, base.StepModule):
         step_mode="s",
     ):
         """
-        **API Language:**
-        :ref:`中文 <BatchNorm2d-cn>` | :ref:`English <BatchNorm2d-en>`
+        **API Language** - :ref:`中文 <BatchNorm2d-cn>` | :ref:`English <BatchNorm2d-en>`
 
         ----
 
@@ -164,8 +162,7 @@ class BatchNorm3d(nn.BatchNorm3d, base.StepModule):
         step_mode="s",
     ):
         """
-        **API Language:**
-        :ref:`中文 <BatchNorm3d-cn>` | :ref:`English <BatchNorm3d-en>`
+        **API Language** - :ref:`中文 <BatchNorm3d-cn>` | :ref:`English <BatchNorm3d-en>`
 
         ----
 
@@ -226,8 +223,7 @@ class NeuNorm(base.MemoryModule):
         step_mode: str = "s",
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <NeuNorm-cn>` | :ref:`English <NeuNorm-en>`
+        **API Language** - :ref:`中文 <NeuNorm-cn>` | :ref:`English <NeuNorm-en>`
 
         ----
 
@@ -347,12 +343,12 @@ class _ThresholdDependentBatchNormBase(_BatchNorm, base.MultiStepModule):
 class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
         """
-        **API Language:**
-        :ref:`中文 <ThresholdDependentBatchNorm1d.__init__-cn>` | :ref:`English <ThresholdDependentBatchNorm1d.__init__-en>`
+        **API Language** - :ref:`中文 <ThresholdDependentBatchNorm1d.__init__-cn>` | :ref:`English <ThresholdDependentBatchNorm1d.__init__-en>`
 
         ----
 
         .. _ThresholdDependentBatchNorm1d.__init__-cn:
+
         * **中文**
 
         `Going Deeper With Directly-Trained Larger Spiking Neural Networks <https://arxiv.org/abs/2011.05280>`_
@@ -373,6 +369,7 @@ class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
         ----
 
         .. _ThresholdDependentBatchNorm1d.__init__-en:
+
         * **English**
 
         The Threshold-Dependent Batch Normalization (tdBN) proposed in
@@ -400,12 +397,12 @@ class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
 class ThresholdDependentBatchNorm2d(_ThresholdDependentBatchNormBase):
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
         """
-        **API Language:**
-        :ref:`中文 <ThresholdDependentBatchNorm2d.__init__-cn>` | :ref:`English <ThresholdDependentBatchNorm2d.__init__-en>`
+        **API Language** - :ref:`中文 <ThresholdDependentBatchNorm2d.__init__-cn>` | :ref:`English <ThresholdDependentBatchNorm2d.__init__-en>`
 
         ----
 
         .. _ThresholdDependentBatchNorm2d.__init__-cn:
+
         * **中文**
 
         `Going Deeper With Directly-Trained Larger Spiking Neural Networks <https://arxiv.org/abs/2011.05280>`_
@@ -426,6 +423,7 @@ class ThresholdDependentBatchNorm2d(_ThresholdDependentBatchNormBase):
         ----
 
         .. _ThresholdDependentBatchNorm2d.__init__-en:
+
         * **English**
 
         The Threshold-Dependent Batch Normalization (tdBN) proposed in
@@ -453,12 +451,12 @@ class ThresholdDependentBatchNorm2d(_ThresholdDependentBatchNormBase):
 class ThresholdDependentBatchNorm3d(_ThresholdDependentBatchNormBase):
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
         """
-        **API Language:**
-        :ref:`中文 <ThresholdDependentBatchNorm3d.__init__-cn>` | :ref:`English <ThresholdDependentBatchNorm3d.__init__-en>`
+        **API Language** - :ref:`中文 <ThresholdDependentBatchNorm3d.__init__-cn>` | :ref:`English <ThresholdDependentBatchNorm3d.__init__-en>`
 
         ----
 
         .. _ThresholdDependentBatchNorm3d.__init__-cn:
+
         * **中文**
 
         `Going Deeper With Directly-Trained Larger Spiking Neural Networks <https://arxiv.org/abs/2011.05280>`_
@@ -479,6 +477,7 @@ class ThresholdDependentBatchNorm3d(_ThresholdDependentBatchNormBase):
         ----
 
         .. _ThresholdDependentBatchNorm3d.__init__-en:
+
         * **English**
 
         The Threshold-Dependent Batch Normalization (tdBN) proposed in
@@ -525,8 +524,7 @@ class _TemporalEffectiveBatchNormBase(_BatchNorm, base.MultiStepModule):
 class TemporalEffectiveBatchNorm1d(_TemporalEffectiveBatchNormBase):
     def __init__(self, T: int, *args, **kwargs):
         """
-        **API Language:**
-        :ref:`中文 <TemporalEffectiveBatchNorm1d-cn>` | :ref:`English <TemporalEffectiveBatchNorm1d-en>`
+        **API Language** - :ref:`中文 <TemporalEffectiveBatchNorm1d-cn>` | :ref:`English <TemporalEffectiveBatchNorm1d-en>`
 
         ----
 
@@ -585,8 +583,7 @@ class TemporalEffectiveBatchNorm1d(_TemporalEffectiveBatchNormBase):
 class TemporalEffectiveBatchNorm2d(_TemporalEffectiveBatchNormBase):
     def __init__(self, T: int, *args, **kwargs):
         """
-        **API Language:**
-        :ref:`中文 <TemporalEffectiveBatchNorm2d-cn>` | :ref:`English <TemporalEffectiveBatchNorm2d-en>`
+        **API Language** - :ref:`中文 <TemporalEffectiveBatchNorm2d-cn>` | :ref:`English <TemporalEffectiveBatchNorm2d-en>`
 
         ----
 
@@ -645,8 +642,7 @@ class TemporalEffectiveBatchNorm2d(_TemporalEffectiveBatchNormBase):
 class TemporalEffectiveBatchNorm3d(_TemporalEffectiveBatchNormBase):
     def __init__(self, T: int, *args, **kwargs):
         """
-        **API Language:**
-        :ref:`中文 <TemporalEffectiveBatchNorm3d-cn>` | :ref:`English <TemporalEffectiveBatchNorm3d-en>`
+        **API Language** - :ref:`中文 <TemporalEffectiveBatchNorm3d-cn>` | :ref:`English <TemporalEffectiveBatchNorm3d-en>`
 
         ----
 
@@ -751,8 +747,7 @@ class BatchNormThroughTime1d(_BatchNormThroughTimeBase):
         step_mode: str = "s",
     ):
         """
-        **API Language:**
-        :ref:`中文 <BatchNormThroughTime1d-cn>` | :ref:`English <BatchNormThroughTime1d-en>`
+        **API Language** - :ref:`中文 <BatchNormThroughTime1d-cn>` | :ref:`English <BatchNormThroughTime1d-en>`
 
         ----
 
@@ -831,8 +826,7 @@ class BatchNormThroughTime2d(_BatchNormThroughTimeBase):
         step_mode: str = "s",
     ):
         """
-        **API Language:**
-        :ref:`中文 <BatchNormThroughTime2d-cn>` | :ref:`English <BatchNormThroughTime2d-en>`
+        **API Language** - :ref:`中文 <BatchNormThroughTime2d-cn>` | :ref:`English <BatchNormThroughTime2d-en>`
 
         ----
 
@@ -911,8 +905,7 @@ class BatchNormThroughTime3d(_BatchNormThroughTimeBase):
         step_mode: str = "s",
     ):
         """
-        **API Language:**
-        :ref:`中文 <BatchNormThroughTime3d-cn>` | :ref:`English <BatchNormThroughTime3d-en>`
+        **API Language** - :ref:`中文 <BatchNormThroughTime3d-cn>` | :ref:`English <BatchNormThroughTime3d-en>`
 
         ----
 

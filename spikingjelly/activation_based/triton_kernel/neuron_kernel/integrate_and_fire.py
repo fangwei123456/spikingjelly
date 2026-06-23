@@ -602,8 +602,8 @@ def multistep_if(
     surrogate_function,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Multi-step IF neuron forward pass via Triton kernel.
-    **API Language:**
-    :ref:`中文 <multistep_if-cn>` | :ref:`English <multistep_if-en>`
+
+    **API Language** - :ref:`中文 <multistep_if-cn>` | :ref:`English <multistep_if-en>`
 
     ----
 

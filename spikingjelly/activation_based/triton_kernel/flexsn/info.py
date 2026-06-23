@@ -28,8 +28,7 @@ def extract_info(
     num_outputs: int = 1,
 ) -> FlexSNInfo:
     r"""
-    **API Language:**
-    :ref:`中文 <extract_info-cn>` | :ref:`English <extract_info-en>`
+    **API Language** - :ref:`中文 <extract_info-cn>` | :ref:`English <extract_info-en>`
 
     ----
 

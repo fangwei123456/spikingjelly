@@ -3,8 +3,7 @@ import torch
 
 class round_atgf(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <round_atgf-cn>` | :ref:`English <round_atgf-en>`
+    **API Language** - :ref:`中文 <round_atgf-cn>` | :ref:`English <round_atgf-en>`
 
     ----
 
@@ -49,8 +48,7 @@ class round_atgf(torch.autograd.Function):
 
 def round(x: torch.Tensor):
     r"""
-    **API Language:**
-    :ref:`中文 <round-cn>` | :ref:`English <round-en>`
+    **API Language** - :ref:`中文 <round-cn>` | :ref:`English <round-en>`
 
     ----
 
@@ -85,8 +83,7 @@ def round(x: torch.Tensor):
 
 class ceil_atgf(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <ceil_atgf-cn>` | :ref:`English <ceil_atgf-en>`
+    **API Language** - :ref:`中文 <ceil_atgf-cn>` | :ref:`English <ceil_atgf-en>`
 
     ----
 
@@ -131,8 +128,7 @@ class ceil_atgf(torch.autograd.Function):
 
 def ceil(x: torch.Tensor):
     r"""
-    **API Language:**
-    :ref:`中文 <ceil-cn>` | :ref:`English <ceil-en>`
+    **API Language** - :ref:`中文 <ceil-cn>` | :ref:`English <ceil-en>`
 
     ----
 
@@ -167,8 +163,7 @@ def ceil(x: torch.Tensor):
 
 class floor_atgf(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <floor_atgf-cn>` | :ref:`English <floor_atgf-en>`
+    **API Language** - :ref:`中文 <floor_atgf-cn>` | :ref:`English <floor_atgf-en>`
 
     ----
 
@@ -213,8 +208,7 @@ class floor_atgf(torch.autograd.Function):
 
 def floor(x: torch.Tensor):
     r"""
-    **API Language:**
-    :ref:`中文 <floor-cn>` | :ref:`English <floor-en>`
+    **API Language** - :ref:`中文 <floor-cn>` | :ref:`English <floor-en>`
 
     ----
 
@@ -251,8 +245,7 @@ def clamp_backward(
     grad_output: torch.Tensor, x: torch.Tensor, min_value: float, max_value: float
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <clamp_backward-cn>` | :ref:`English <clamp_backward-en>`
+    **API Language** - :ref:`中文 <clamp_backward-cn>` | :ref:`English <clamp_backward-en>`
 
     ----
 
@@ -314,8 +307,7 @@ def clamp_backward(
 
 class clamp_atgf(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <clamp_atgf-cn>` | :ref:`English <clamp_atgf-en>`
+    **API Language** - :ref:`中文 <clamp_atgf-cn>` | :ref:`English <clamp_atgf-en>`
 
     ----
 
@@ -380,8 +372,7 @@ class clamp_atgf(torch.autograd.Function):
 
 def clamp(x: torch.Tensor, min_value: float, max_value: float):
     r"""
-    **API Language:**
-    :ref:`中文 <clamp-cn>` | :ref:`English <clamp-en>`
+    **API Language** - :ref:`中文 <clamp-cn>` | :ref:`English <clamp-en>`
 
     ----
 
@@ -442,8 +433,7 @@ def clamp(x: torch.Tensor, min_value: float, max_value: float):
 
 def step_quantize_forward(x: torch.Tensor, step: float):
     r"""
-    **API Language:**
-    :ref:`中文 <step_quantize_forward-cn>` | :ref:`English <step_quantize_forward-en>`
+    **API Language** - :ref:`中文 <step_quantize_forward-cn>` | :ref:`English <step_quantize_forward-en>`
 
     ----
 
@@ -489,8 +479,7 @@ def step_quantize_forward(x: torch.Tensor, step: float):
 
 class step_quantize_atgf(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <step_quantize_atgf-cn>` | :ref:`English <step_quantize_atgf-en>`
+    **API Language** - :ref:`中文 <step_quantize_atgf-cn>` | :ref:`English <step_quantize_atgf-en>`
 
     ----
 
@@ -540,8 +529,7 @@ class step_quantize_atgf(torch.autograd.Function):
 
 def step_quantize(x: torch.Tensor, step: float):
     r"""
-    **API Language:**
-    :ref:`中文 <step_quantize-cn>` | :ref:`English <step_quantize-en>`
+    **API Language** - :ref:`中文 <step_quantize-cn>` | :ref:`English <step_quantize-en>`
 
     ----
 
@@ -592,8 +580,7 @@ def step_quantize(x: torch.Tensor, step: float):
 
 def k_bit_quantize_forward(x: torch.Tensor, k: int):
     r"""
-    **API Language:**
-    :ref:`中文 <k_bit_quantize_forward-cn>` | :ref:`English <k_bit_quantize_forward-en>`
+    **API Language** - :ref:`中文 <k_bit_quantize_forward-cn>` | :ref:`English <k_bit_quantize_forward-en>`
 
     ----
 
@@ -643,8 +630,7 @@ def k_bit_quantize_forward(x: torch.Tensor, k: int):
 
 class k_bit_quantize_atgf(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <k_bit_quantize_atgf-cn>` | :ref:`English <k_bit_quantize_atgf-en>`
+    **API Language** - :ref:`中文 <k_bit_quantize_atgf-cn>` | :ref:`English <k_bit_quantize_atgf-en>`
 
     ----
 
@@ -694,8 +680,7 @@ class k_bit_quantize_atgf(torch.autograd.Function):
 
 def k_bit_quantize(x: torch.Tensor, k: int):
     r"""
-    **API Language:**
-    :ref:`中文 <k_bit_quantize-cn>` | :ref:`English <k_bit_quantize-en>`
+    **API Language** - :ref:`中文 <k_bit_quantize-cn>` | :ref:`English <k_bit_quantize-en>`
 
     ----
 
@@ -760,8 +745,7 @@ def k_bit_quantize(x: torch.Tensor, k: int):
 
 def affine_k_bit_quantize(x: torch.Tensor, k: int, w: torch.Tensor, b: torch.Tensor):
     r"""
-    **API Language:**
-    :ref:`中文 <affine_k_bit_quantize-cn>` | :ref:`English <affine_k_bit_quantize-en>`
+    **API Language** - :ref:`中文 <affine_k_bit_quantize-cn>` | :ref:`English <affine_k_bit_quantize-en>`
 
     ----
 
@@ -814,8 +798,7 @@ def affine_k_bit_quantize(x: torch.Tensor, k: int, w: torch.Tensor, b: torch.Ten
 
 def clamp_by_linear(x: torch.Tensor, eps: float = 1e-5):
     r"""
-    **API Language:**
-    :ref:`中文 <clamp_by_linear-cn>` | :ref:`English <clamp_by_linear-en>`
+    **API Language** - :ref:`中文 <clamp_by_linear-cn>` | :ref:`English <clamp_by_linear-en>`
 
     ----
 

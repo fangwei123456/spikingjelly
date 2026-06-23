@@ -6,8 +6,7 @@ from tqdm import tqdm
 
 def download_url(url, dst):
     r"""
-    **API Language:**
-    :ref:`中文 <download_url-cn>` | :ref:`English <download_url-en>`
+    **API Language** - :ref:`中文 <download_url-cn>` | :ref:`English <download_url-en>`
 
     ----
 

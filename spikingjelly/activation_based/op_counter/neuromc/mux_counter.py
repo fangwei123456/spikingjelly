@@ -24,8 +24,7 @@ class NeuroMCMuxCounter(NeuroMCBaseCounter):
     ):
         """
         Counter for multiplexer/selection operations in the NeuroMC framework.
-        **API Language:**
-        :ref:`中文 <NeuroMCMuxCounter-cn>` | :ref:`English <NeuroMCMuxCounter-en>`
+        **API Language** - :ref:`中文 <NeuroMCMuxCounter-cn>` | :ref:`English <NeuroMCMuxCounter-en>`
 
         ----
 

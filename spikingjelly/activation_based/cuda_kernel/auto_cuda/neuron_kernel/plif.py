@@ -509,8 +509,7 @@ def multistep_plif(
     backward_kernel: Optional[ParametricLIFNodeBPTTKernel] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     r"""
-    **API Language:**
-    :ref:`中文 <multistep_plif-cn>` | :ref:`English <multistep_plif-en>`
+    **API Language** - :ref:`中文 <multistep_plif-cn>` | :ref:`English <multistep_plif-en>`
 
     ----
 

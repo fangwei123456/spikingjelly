@@ -33,8 +33,7 @@ def _check_step_mode(block: nn.Sequential, caller: str = "MultiStepContainer"):
 class MultiStepContainer(nn.Sequential, base.MultiStepModule):
     def __init__(self, *args):
         r"""
-        **API Language:**
-        :ref:`中文 <MultiStepContainer.__init__-cn>` | :ref:`English <MultiStepContainer.__init__-en>`
+        **API Language** - :ref:`中文 <MultiStepContainer.__init__-cn>` | :ref:`English <MultiStepContainer.__init__-en>`
 
         ----
 
@@ -71,8 +70,7 @@ class MultiStepContainer(nn.Sequential, base.MultiStepModule):
 class SeqToANNContainer(nn.Sequential, base.MultiStepModule):
     def __init__(self, *args):
         """
-        **API Language:**
-        :ref:`中文 <SeqToANNContainer-cn>` | :ref:`English <SeqToANNContainer-en>`
+        **API Language** - :ref:`中文 <SeqToANNContainer-cn>` | :ref:`English <SeqToANNContainer-en>`
 
         ----
 
@@ -183,8 +181,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         self, sub_module: nn.Module, element_wise_function: Callable, step_mode="s"
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <ElementWiseRecurrentContainer.__init__-cn>` | :ref:`English <ElementWiseRecurrentContainer.__init__-en>`
+        **API Language** - :ref:`中文 <ElementWiseRecurrentContainer.__init__-cn>` | :ref:`English <ElementWiseRecurrentContainer.__init__-en>`
 
         ----
 
@@ -290,8 +287,7 @@ class LinearRecurrentContainer(base.MemoryModule):
         step_mode="s",
     ) -> None:
         r"""
-        **API Language:**
-        :ref:`中文 <LinearRecurrentContainer.__init__-cn>` | :ref:`English <LinearRecurrentContainer.__init__-en>`
+        **API Language** - :ref:`中文 <LinearRecurrentContainer.__init__-cn>` | :ref:`English <LinearRecurrentContainer.__init__-en>`
 
         ----
 

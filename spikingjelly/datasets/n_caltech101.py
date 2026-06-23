@@ -35,8 +35,7 @@ class NCaltech101(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ) -> None:
         """
-        **API Language:**
-        :ref:`中文 <NCaltech101.__init__-cn>` | :ref:`English <NCaltech101.__init__-en>`
+        **API Language** - :ref:`中文 <NCaltech101.__init__-cn>` | :ref:`English <NCaltech101.__init__-en>`
 
         ----
 
@@ -113,8 +112,7 @@ class NCaltech101(NeuromorphicDatasetFolder):
     @classmethod
     def get_H_W(cls) -> Tuple:
         r"""
-        **API Language:**
-        :ref:`中文 <n_caltech101.get_H_W-cn>` | :ref:`English <n_caltech101.get_H_W-en>`
+        **API Language** - :ref:`中文 <n_caltech101.get_H_W-cn>` | :ref:`English <n_caltech101.get_H_W-en>`
 
         ----
 
@@ -139,8 +137,7 @@ class NCaltech101(NeuromorphicDatasetFolder):
     @classmethod
     def resource_url_md5(cls) -> list:
         r"""
-        **API Language:**
-        :ref:`中文 <n_caltech101.resource_url_md5-cn>` | :ref:`English <n_caltech101.resource_url_md5-en>`
+        **API Language** - :ref:`中文 <n_caltech101.resource_url_md5-cn>` | :ref:`English <n_caltech101.resource_url_md5-en>`
 
         ----
 
@@ -175,8 +172,7 @@ class NCaltech101(NeuromorphicDatasetFolder):
     @classmethod
     def downloadable(cls) -> bool:
         r"""
-        **API Language:**
-        :ref:`中文 <n_caltech101.downloadable-cn>` | :ref:`English <n_caltech101.downloadable-en>`
+        **API Language** - :ref:`中文 <n_caltech101.downloadable-cn>` | :ref:`English <n_caltech101.downloadable-en>`
 
         ----
 
@@ -205,8 +201,7 @@ class NCaltech101(NeuromorphicDatasetFolder):
     @classmethod
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
         r"""
-        **API Language:**
-        :ref:`中文 <n_caltech101.extract_downloaded_files-cn>` | :ref:`English <n_caltech101.extract_downloaded_files-en>`
+        **API Language** - :ref:`中文 <n_caltech101.extract_downloaded_files-cn>` | :ref:`English <n_caltech101.extract_downloaded_files-en>`
 
         ----
 
@@ -241,8 +236,7 @@ class NCaltech101(NeuromorphicDatasetFolder):
     @classmethod
     def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
         r"""
-        **API Language:**
-        :ref:`中文 <n_caltech101.create_raw_from_extracted-cn>` | :ref:`English <n_caltech101.create_raw_from_extracted-en>`
+        **API Language** - :ref:`中文 <n_caltech101.create_raw_from_extracted-cn>` | :ref:`English <n_caltech101.create_raw_from_extracted-en>`
 
         ----
 
