@@ -2,10 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from spikingjelly.activation_based.ann2snn import Converter
 from spikingjelly.activation_based.ann2snn.operators import (
     TDGELU,
     TDLayerNorm,
     TDLinear,
+    TDMultiheadAttention,
     TDScaledDotProductAttention,
 )
 
@@ -89,6 +91,93 @@ class TinyTDTransformerBlock(nn.Module):
         return x_cum + mlp_cum
 
 
+class TinyANNFunctionalSDPATransformerBlock(nn.Module):
+    def __init__(self, embed_dim: int, num_heads: int, mlp_dim: int) -> None:
+        super().__init__()
+        if embed_dim % num_heads != 0:
+            raise ValueError("embed_dim must be divisible by num_heads.")
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.q_proj = nn.Linear(embed_dim, embed_dim)
+        self.k_proj = nn.Linear(embed_dim, embed_dim)
+        self.v_proj = nn.Linear(embed_dim, embed_dim)
+        self.out_proj = nn.Linear(embed_dim, embed_dim)
+        self.norm2 = nn.LayerNorm(embed_dim)
+        self.fc1 = nn.Linear(embed_dim, mlp_dim)
+        self.act = nn.GELU()
+        self.fc2 = nn.Linear(mlp_dim, embed_dim)
+
+    def _split_heads(self, x: torch.Tensor) -> torch.Tensor:
+        return x.unflatten(-1, (self.num_heads, self.head_dim)).transpose(-3, -2)
+
+    @staticmethod
+    def _merge_heads(x: torch.Tensor) -> torch.Tensor:
+        return x.transpose(-3, -2).flatten(-2)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        attn_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        norm = self.norm1(x)
+        q = self._split_heads(self.q_proj(norm))
+        k = self._split_heads(self.k_proj(norm))
+        v = self._split_heads(self.v_proj(norm))
+        attn = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            attn_mask=attn_mask,
+            dropout_p=0.0,
+        )
+        x = x + self.out_proj(self._merge_heads(attn))
+        return x + self.fc2(self.act(self.fc1(self.norm2(x))))
+
+
+class TinyANNMHATransformerBlock(nn.Module):
+    def __init__(self, embed_dim: int, num_heads: int, mlp_dim: int) -> None:
+        super().__init__()
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.attn = nn.MultiheadAttention(
+            embed_dim,
+            num_heads,
+            dropout=0.0,
+            batch_first=True,
+        )
+        self.norm2 = nn.LayerNorm(embed_dim)
+        self.fc1 = nn.Linear(embed_dim, mlp_dim)
+        self.act = nn.GELU()
+        self.fc2 = nn.Linear(mlp_dim, embed_dim)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        attn_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        norm = self.norm1(x)
+        attn, _ = self.attn(
+            norm,
+            norm,
+            norm,
+            attn_mask=attn_mask,
+            need_weights=False,
+        )
+        x = x + attn
+        return x + self.fc2(self.act(self.fc1(self.norm2(x))))
+
+
+def _apply_ann_to_cumulative(
+    block: nn.Module,
+    x_seq: torch.Tensor,
+    **kwargs,
+) -> torch.Tensor:
+    x_cum = x_seq.cumsum(dim=0)
+    return torch.stack([block(x_cum[t], **kwargs) for t in range(x_seq.shape[0])])
+
+
 def test_tiny_transformer_block_matches_ann_reference_on_cumulative_input():
     block = TinyTDTransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
     x_seq = torch.randn(5, 2, 4, 8)
@@ -143,3 +232,74 @@ def test_tiny_transformer_block_autograd_smoke():
         assert torch.isfinite(parameter.grad).all()
     assert block.q_proj.bias.grad is not None
     assert torch.isfinite(block.q_proj.bias.grad).all()
+
+
+def test_converter_functional_sdpa_transformer_block_matches_ann_reference():
+    block = TinyANNFunctionalSDPATransformerBlock(
+        embed_dim=8,
+        num_heads=2,
+        mlp_dim=16,
+    )
+    block.eval()
+    converted = Converter(dataloader=[]).replace_by_td_operators(block)
+    modules = dict(converted.named_modules())
+    x_seq = torch.randn(5, 2, 4, 8)
+    attn_mask = torch.tensor(
+        [
+            [0.0, 0.0, float("-inf"), float("-inf")],
+            [0.0, 0.0, 0.0, float("-inf")],
+            [0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0],
+        ]
+    )
+
+    y_seq = converted(x_seq, attn_mask)
+    expected = block(x_seq.cumsum(dim=0), attn_mask=attn_mask)
+
+    assert isinstance(modules["norm1"], TDLayerNorm)
+    assert isinstance(modules["q_proj"], TDLinear)
+    assert isinstance(modules["act"], TDGELU)
+    assert any(
+        isinstance(module, TDScaledDotProductAttention)
+        for module in modules.values()
+    )
+    assert not any(
+        node.op == "call_function"
+        and node.target is F.scaled_dot_product_attention
+        for node in converted.graph.nodes
+    )
+    assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+
+
+def test_converter_mha_transformer_block_matches_ann_reference():
+    block = TinyANNMHATransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
+    block.eval()
+    converted = Converter(dataloader=[]).replace_by_td_operators(block)
+    modules = dict(converted.named_modules())
+    x_seq = torch.randn(4, 2, 5, 8)
+    attn_mask = torch.zeros(5, 5)
+    attn_mask[:, -1] = float("-inf")
+
+    y_seq = converted(x_seq, attn_mask)
+    expected = _apply_ann_to_cumulative(block, x_seq, attn_mask=attn_mask)
+
+    assert isinstance(modules["norm1"], TDLayerNorm)
+    assert isinstance(modules["attn"], TDMultiheadAttention)
+    assert isinstance(modules["fc1"], TDLinear)
+    assert isinstance(modules["act"], TDGELU)
+    assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+
+
+def test_converter_transformer_block_autograd_smoke():
+    block = TinyANNMHATransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
+    converted = Converter(dataloader=[]).replace_by_td_operators(block)
+    x_seq = torch.randn(3, 2, 4, 8, requires_grad=True)
+
+    y_seq = converted(x_seq)
+    y_seq.square().sum().backward()
+
+    assert x_seq.grad is not None
+    assert torch.isfinite(x_seq.grad).all()
+    for parameter in converted.parameters():
+        assert parameter.grad is not None
+        assert torch.isfinite(parameter.grad).all()

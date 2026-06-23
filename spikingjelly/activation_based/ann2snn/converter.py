@@ -233,10 +233,22 @@ class Converter:
         ``VoltageHook``，不运行 dataloader 校准。返回模型会保留输入模型及
         已替换模块的 training/eval 状态。
 
+        该转换路径面向完整时间序列输入，约定转换后模型的输入张量使用第
+        0 维作为时间维，形状通常为 ``[T, ...]`` 且 ``T > 0``。TD 算子输出
+        浮点差分值，不是二值脉冲，也不表示 fully spike-driven 在线执行。
+        dtype、device 与后端行为跟随被替换算子的 PyTorch 实现；当前没有
+        CuPy / Triton 专用路径。该方法不改变输入模型本身，而是返回 tracing
+        后的 ``GraphModule``。
+
         :param ann: 待转换的 ANN。
         :type ann: torch.nn.Module
         :return: 已替换 core TD operators 的 ``GraphModule``。
         :rtype: torch.fx.GraphModule
+        :raises ValueError: 若 FX 图中包含当前不支持的 TD attention 配置，例如
+            非零 SDPA dropout、动态 SDPA 配置、``enable_gqa=True``、
+            ``nn.MultiheadAttention`` 的 ``dropout != 0``、
+            ``batch_first=False``、``need_weights=True``、
+            ``key_padding_mask`` 或非 packed q/k/v 参数。
 
         ----
 
@@ -256,10 +268,24 @@ class Converter:
         run dataloader calibration. The returned model preserves the
         training/eval state of the input model and replaced modules.
 
+        This conversion path targets complete time-sequence inputs. Converted
+        models conventionally use dimension 0 as the time dimension, with shape
+        ``[T, ...]`` and ``T > 0``. TD operators output floating-point
+        differential values; they are not binary spikes and do not represent
+        fully spike-driven online execution. Dtype, device, and backend behavior
+        follow the PyTorch implementation of each replaced operator; there is no
+        CuPy / Triton specific path currently. This method does not mutate the
+        input model itself; it returns a traced ``GraphModule``.
+
         :param ann: ANN to be converted.
         :type ann: torch.nn.Module
         :return: ``GraphModule`` with core TD operators replaced.
         :rtype: torch.fx.GraphModule
+        :raises ValueError: If the FX graph contains unsupported TD attention
+            configurations, such as nonzero SDPA dropout, dynamic SDPA
+            configuration, ``enable_gqa=True``, ``nn.MultiheadAttention`` with
+            ``dropout != 0``, ``batch_first=False``, ``need_weights=True``,
+            ``key_padding_mask``, or non-packed q/k/v parameters.
         """
         device = self.device
         if device is None:

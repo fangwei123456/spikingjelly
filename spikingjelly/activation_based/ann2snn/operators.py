@@ -1186,9 +1186,20 @@ class TDMultiheadAttention(nn.Module):
         返回值是 ``(attn_output_seq, None)``，用于匹配
         :class:`torch.nn.MultiheadAttention` 在 ``need_weights=False`` 时的
         tuple 返回结构。输出是浮点差分值，不是二值脉冲，也不是 fully
-        spike-driven attention。该算子无内部状态，支持 CPU 与 CUDA，后端与
-        :mod:`torch` 一致，无 CuPy / Triton 专用路径。当前只支持
+        spike-driven attention。输出 dtype 跟随 PyTorch Linear / SDPA；
+        推荐使用 ``float32``、``float16``、``bfloat16`` 或 ``float64`` 输入。
+        该算子完全由 PyTorch 可微算子组成，对 autograd 透明。该算子无内部
+        状态，多次 ``forward`` 之间不需要调用 ``reset``；支持 CPU 与 CUDA，
+        后端与 :mod:`torch` 一致，无 CuPy / Triton 专用路径。当前只支持
         ``dropout=0.0``、``batch_first=True`` 和 ``need_weights=False``。
+
+        该算子的机制来源于 `SpikeZIP-TF: Conversion is All You Need for
+        Transformer-based SNN <https://arxiv.org/abs/2406.03470>`_ 中的
+        累积-差分等价转换思路。本实现是窄子集 TD wrapper，仍使用浮点
+        ``TDLinear`` 和 PyTorch SDPA，不是逐时间步在线 attention，也不是面向
+        神经形态硬件的 fully spike-driven MultiheadAttention。``bias=True``
+        时 projection bias 由 ``TDLinear`` 在累积输入上处理，避免普通
+        ``nn.Linear`` 直接作用在差分序列时产生重复累计 bias。
 
         .. code-block:: python
 
@@ -1230,10 +1241,24 @@ class TDMultiheadAttention(nn.Module):
         structure of :class:`torch.nn.MultiheadAttention` when
         ``need_weights=False``. The output contains floating-point differential
         values, is not a binary spike tensor, and is not fully spike-driven
-        attention. The operator is stateless, supports CPU and CUDA, follows the
-        :mod:`torch` backend behavior, and has no CuPy / Triton specific path.
-        Currently only ``dropout=0.0``, ``batch_first=True`` and
-        ``need_weights=False`` are supported.
+        attention. The output dtype follows PyTorch Linear / SDPA;
+        ``float32``, ``float16``, ``bfloat16`` and ``float64`` inputs are
+        recommended. The operator is composed entirely of differentiable
+        PyTorch operations and is transparent to autograd. The operator is
+        stateless, and repeated ``forward`` calls do not require ``reset``. It
+        supports CPU and CUDA, follows the :mod:`torch` backend behavior, and
+        has no CuPy / Triton specific path. Currently only ``dropout=0.0``,
+        ``batch_first=True`` and ``need_weights=False`` are supported.
+
+        The mechanism follows the cumulative-difference equivalence idea in
+        `SpikeZIP-TF: Conversion is All You Need for Transformer-based SNN
+        <https://arxiv.org/abs/2406.03470>`_. This implementation is a narrow
+        TD wrapper: it still uses floating-point ``TDLinear`` and PyTorch SDPA,
+        is not step-wise online attention, and is not fully spike-driven
+        MultiheadAttention for neuromorphic hardware. When ``bias=True``,
+        projection biases are handled by ``TDLinear`` on cumulative inputs,
+        avoiding the repeated bias accumulation that would occur if ordinary
+        ``nn.Linear`` were applied directly to differential sequences.
 
         .. code-block:: python
 
@@ -1340,7 +1365,10 @@ class TDMultiheadAttention(nn.Module):
         为 ``[T, batch, seq, embed_dim]``，且 ``T > 0``。当
         ``need_weights=False`` 时返回 ``(attn_output_seq, None)``。输出是浮点
         差分值，且 ``attn_output_seq.cumsum(dim=0)`` 与对累积输入逐时间步执行
-        支持子集内的 ANN MultiheadAttention 输出一致。
+        支持子集内的 ANN MultiheadAttention 输出一致。当 ``T = 1`` 时，
+        ``attn_output_seq[0]`` 等于支持子集内 ANN MultiheadAttention 对第一步
+        输入的输出。输出 dtype 与 PyTorch Linear / SDPA 一致，且该算子对
+        autograd 透明。
 
         :param query_seq: query 时间序列，形状为
             ``[T, batch, target_len, embed_dim]``。
@@ -1382,7 +1410,10 @@ class TDMultiheadAttention(nn.Module):
         ``(attn_output_seq, None)``. The output contains floating-point
         differential values, and ``attn_output_seq.cumsum(dim=0)`` matches ANN
         MultiheadAttention in the supported subset applied to cumulative inputs
-        at each time step.
+        at each time step. When ``T = 1``, ``attn_output_seq[0]`` equals the
+        output of ANN MultiheadAttention in the supported subset applied to the
+        first input step. The output dtype follows PyTorch Linear / SDPA, and
+        the operator is transparent to autograd.
 
         :param query_seq: Query sequence with shape
             ``[T, batch, target_len, embed_dim]`` and ``T > 0``.
