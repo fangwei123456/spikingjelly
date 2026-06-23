@@ -61,7 +61,7 @@ English version: :doc:`../en/flexsn`
     f = lif_single_step_inference_closure(tau=99., v_th=0.5)
 
 FlexSN 使用流程
-^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
 
 以如下的自定义脉冲神经元为例：
 

@@ -26,9 +26,8 @@ class GatedLIFNode(base.MemoryModule):
         step_mode="m",
         backend="torch",
     ):
-        """
-        **API Language:**
-        :ref:`中文 <GatedLIFNode.__init__-cn>` | :ref:`English <GatedLIFNode.__init__-en>`
+        r"""
+        **API Language** - :ref:`中文 <GatedLIFNode.__init__-cn>` | :ref:`English <GatedLIFNode.__init__-en>`
 
         ----
 
@@ -281,9 +280,8 @@ class KLIFNode(BaseNode):
         backend="torch",
         store_v_seq: bool = False,
     ):
-        """
-        **API Language:**
-        :ref:`中文 <KLIFNode.__init__-cn>` | :ref:`English <KLIFNode.__init__-en>`
+        r"""
+        **API Language** - :ref:`中文 <KLIFNode.__init__-cn>` | :ref:`English <KLIFNode.__init__-en>`
 
         ----
 
@@ -302,38 +300,42 @@ class KLIFNode(BaseNode):
         若 ``decay_input == True``：
 
         .. math::
-            H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+            H[t] = V[t-1] + \frac{1}{\tau}(X[t] - (V[t-1] - V_{reset}))
 
         若 ``decay_input == False``：
 
         .. math::
-            H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+            H[t] = V[t-1] - \frac{1}{\tau}(V[t-1] - V_{reset}) + X[t]
 
         **放电与重置机制**
 
         KLIF 神经元的放电与重置形式如下：
 
         .. math::
-            F[t] &= \\mathrm{ReLU}(kH[t]) \\\\
-            S[t] &= \\Theta(F[t] - V_{th})
+            :nowrap:
+
+            \begin{align*}
+            F[t] &= \mathrm{ReLU}(kH[t]) \\
+            S[t] &= \Theta(F[t] - V_{th})
+            \end{align*}
 
         若 ``scale_reset == False``：
 
         .. math::
             V[t] =
-            \\begin{cases}
-                F[t](1-S[t]) + V_{reset}S[t], & \\text{hard reset} \\\\
-                F[t] - S[t]V_{th}, & \\text{soft reset}
-            \\end{cases}
+            \begin{cases}
+                F[t](1-S[t]) + V_{reset}S[t], & \text{hard reset} \\
+                F[t] - S[t]V_{th}, & \text{soft reset}
+            \end{cases}
 
         若 ``scale_reset == True``：
 
         .. math::
             V[t] =
-            \\begin{cases}
-                \\frac{F[t]}{k}(1-S[t]) + V_{reset}S[t], & \\text{hard reset} \\\\
-                \\frac{1}{k}(F[t] - S[t]V_{th}), & \\text{soft reset}
-            \\end{cases}
+            \begin{cases}
+                \frac{F[t]}{k}(1-S[t]) + V_{reset}S[t], & \text{hard reset} \\
+                \frac{1}{k}(F[t] - S[t]V_{th}), & \text{soft reset}
+            \end{cases}
 
         :param scale_reset: 是否在 ``neuronal_reset`` 阶段对膜电位 ``v`` 进行缩放
         :type scale_reset: bool
@@ -388,38 +390,42 @@ class KLIFNode(BaseNode):
         If ``decay_input == True``:
 
         .. math::
-            H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+            H[t] = V[t-1] + \frac{1}{\tau}(X[t] - (V[t-1] - V_{reset}))
 
         If ``decay_input == False``:
 
         .. math::
-            H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+            H[t] = V[t-1] - \frac{1}{\tau}(V[t-1] - V_{reset}) + X[t]
 
         **Firing and reset mechanism**
 
         The firing and reset equations of KLIF are as follows:
 
         .. math::
-            F[t] &= \\mathrm{ReLU}(kH[t]) \\\\
-            S[t] &= \\Theta(F[t] - V_{th})
+            :nowrap:
+
+            \begin{align*}
+            F[t] &= \mathrm{ReLU}(kH[t]) \\
+            S[t] &= \Theta(F[t] - V_{th})
+            \end{align*}
 
         If ``scale_reset == False``:
 
         .. math::
             V[t] =
-            \\begin{cases}
-                F[t](1-S[t]) + V_{reset}S[t], & \\text{hard reset} \\\\
-                F[t] - S[t]V_{th}, & \\text{soft reset}
-            \\end{cases}
+            \begin{cases}
+                F[t](1-S[t]) + V_{reset}S[t], & \text{hard reset} \\
+                F[t] - S[t]V_{th}, & \text{soft reset}
+            \end{cases}
 
         If ``scale_reset == True``:
 
         .. math::
             V[t] =
-            \\begin{cases}
-                \\frac{F[t]}{k}(1-S[t]) + V_{reset}S[t], & \\text{hard reset} \\\\
-                \\frac{1}{k}(F[t] - S[t]V_{th}), & \\text{soft reset}
-            \\end{cases}
+            \begin{cases}
+                \frac{F[t]}{k}(1-S[t]) + V_{reset}S[t], & \text{hard reset} \\
+                \frac{1}{k}(F[t] - S[t]V_{th}), & \text{soft reset}
+            \end{cases}
 
         :param scale_reset: whether to scale the membrane potential ``v`` during ``neuronal_reset``
         :type scale_reset: bool
@@ -456,7 +462,7 @@ class KLIFNode(BaseNode):
             whether to store the membrane potential at all time steps in ``self.v_seq``.
             If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage
         :type store_v_seq: bool
-"""
+        """
         assert isinstance(tau, float) and tau > 1.0
         super().__init__(
             v_threshold,
@@ -606,12 +612,12 @@ class CUBALIFNode(BaseNode):
 class LIAFNode(LIFNode):
     def __init__(self, act: Callable, threshold_related: bool, *args, **kwargs):
         """
-        **API Language:**
-        :ref:`中文 <LIAFNode.__init__-cn>` | :ref:`English <LIAFNode.__init__-en>`
+        **API Language** - :ref:`中文 <LIAFNode.__init__-cn>` | :ref:`English <LIAFNode.__init__-en>`
 
         ----
 
         .. _LIAFNode.__init__-cn:
+
         * **中文**
 
         LIAF（Leaky Integrate and Analog Fire）神经元的构造函数。
@@ -637,6 +643,7 @@ class LIAFNode(LIFNode):
         ----
 
         .. _LIAFNode.__init__-en:
+
         * **English**
 
         Constructor of the LIAF (Leaky Integrate and Analog Fire) neuron.

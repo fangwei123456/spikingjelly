@@ -14,21 +14,21 @@
 
 不同版本文档的地址（其中 `latest` 是开发版）：
 
-- `zero <https://spikingjelly.readthedocs.io/zh_CN/zero/>`_
+- `zero <https://spikingjelly.readthedocs.io/zh_CN/zero/>`__
 
-- `0.0.0.0.4 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.4/>`_
+- `0.0.0.0.4 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.4/>`__
 
-- `0.0.0.0.6 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.6/>`_
+- `0.0.0.0.6 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.6/>`__
 
-- `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/>`_
+- `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/>`__
 
-- `0.0.0.0.10 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/>`_
+- `0.0.0.0.10 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/>`__
 
-- `0.0.0.0.12 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/>`_
+- `0.0.0.0.12 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/>`__
 
-- `0.0.0.0.14 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/>`_
+- `0.0.0.0.14 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/>`__
 
-- `latest <https://spikingjelly.readthedocs.io/zh_CN/latest/>`_
+- `latest <https://spikingjelly.readthedocs.io/zh_CN/latest/>`__
 
 安装
 ----------------
@@ -150,21 +150,21 @@ Please refer to the tutorial :doc:`./tutorials/en/migrate_from_legacy`.
 
 Docs for different versions (`latest` is the developing version):
 
-- `zero <https://spikingjelly.readthedocs.io/zh_CN/zero/>`_
+- `zero <https://spikingjelly.readthedocs.io/zh_CN/zero/>`__
 
-- `0.0.0.0.4 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.4/#index-en>`_
+- `0.0.0.0.4 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.4/#index-en>`__
 
-- `0.0.0.0.6 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.6/#index-en>`_
+- `0.0.0.0.6 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.6/#index-en>`__
 
-- `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/#index-en>`_
+- `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/#index-en>`__
 
-- `0.0.0.0.10 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/#index-en>`_
+- `0.0.0.0.10 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/#index-en>`__
 
-- `0.0.0.0.12 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/#index-en>`_
+- `0.0.0.0.12 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/#index-en>`__
 
-- `0.0.0.0.14 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en>`_
+- `0.0.0.0.14 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en>`__
 
-- `latest <https://spikingjelly.readthedocs.io/zh_CN/latest/#index-en>`_
+- `latest <https://spikingjelly.readthedocs.io/zh_CN/latest/#index-en>`__
 
 Installation
 ----------------

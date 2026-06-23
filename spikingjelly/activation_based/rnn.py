@@ -11,8 +11,7 @@ def directional_rnn_cell_forward(
     cell: nn.Module, x: torch.Tensor, states: torch.Tensor
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <directional_rnn_cell_forward-cn>` | :ref:`English <directional_rnn_cell_forward-en>`
+    **API Language** - :ref:`中文 <directional_rnn_cell_forward-cn>` | :ref:`English <directional_rnn_cell_forward-en>`
 
     ----
 
@@ -100,8 +99,7 @@ def bidirectional_rnn_cell_forward(
     states_reverse: torch.Tensor,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <bidirectional_rnn_cell_forward-cn>` | :ref:`English <bidirectional_rnn_cell_forward-en>`
+    **API Language** - :ref:`中文 <bidirectional_rnn_cell_forward-cn>` | :ref:`English <bidirectional_rnn_cell_forward-en>`
 
     ----
 
@@ -202,8 +200,7 @@ def bidirectional_rnn_cell_forward(
 class SpikingRNNCellBase(nn.Module):
     def __init__(self, input_size: int, hidden_size: int, bias=True):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingRNNCellBase.__init__-cn>` | :ref:`English <SpikingRNNCellBase.__init__-en>`
+        **API Language** - :ref:`中文 <SpikingRNNCellBase.__init__-cn>` | :ref:`English <SpikingRNNCellBase.__init__-en>`
 
         ----
 
@@ -224,8 +221,8 @@ class SpikingRNNCellBase(nn.Module):
 
         .. note::
 
-            所有权重和偏置项都会按照 :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` 进行初始化。
-            其中 :math:`k = \\frac{1}{\\text{hidden_size}}`.
+            所有权重和偏置项都会按照 :math:`\mathcal{U}(-\sqrt{k}, \sqrt{k})` 进行初始化。
+            其中 :math:`k = \frac{1}{\text{hidden_size}}`.
 
         ----
 
@@ -248,8 +245,8 @@ class SpikingRNNCellBase(nn.Module):
         .. admonition:: Note
             :class: note
 
-            All the weights and biases are initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`
-            where :math:`k = \\frac{1}{\\text{hidden_size}}`.
+            All the weights and biases are initialized from :math:`\mathcal{U}(-\sqrt{k}, \sqrt{k})`
+            where :math:`k = \frac{1}{\text{hidden_size}}`.
         """
         super().__init__()
         self.input_size = input_size
@@ -258,8 +255,7 @@ class SpikingRNNCellBase(nn.Module):
 
     def reset_parameters(self):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingRNNCellBase.reset_parameters-cn>` | :ref:`English <SpikingRNNCellBase.reset_parameters-en>`
+        **API Language** - :ref:`中文 <SpikingRNNCellBase.reset_parameters-cn>` | :ref:`English <SpikingRNNCellBase.reset_parameters-en>`
 
         ----
 
@@ -284,8 +280,7 @@ class SpikingRNNCellBase(nn.Module):
 
     def weight_ih(self):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingRNNCellBase.weight_ih-cn>` | :ref:`English <SpikingRNNCellBase.weight_ih-en>`
+        **API Language** - :ref:`中文 <SpikingRNNCellBase.weight_ih-cn>` | :ref:`English <SpikingRNNCellBase.weight_ih-en>`
 
         ----
 
@@ -309,8 +304,7 @@ class SpikingRNNCellBase(nn.Module):
 
     def weight_hh(self):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingRNNCellBase.weight_hh-cn>` | :ref:`English <SpikingRNNCellBase.weight_hh-en>`
+        **API Language** - :ref:`中文 <SpikingRNNCellBase.weight_hh-cn>` | :ref:`English <SpikingRNNCellBase.weight_hh-en>`
 
         ----
 
@@ -334,8 +328,7 @@ class SpikingRNNCellBase(nn.Module):
 
     def bias_ih(self):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingRNNCellBase.bias_ih-cn>` | :ref:`English <SpikingRNNCellBase.bias_ih-en>`
+        **API Language** - :ref:`中文 <SpikingRNNCellBase.bias_ih-cn>` | :ref:`English <SpikingRNNCellBase.bias_ih-en>`
 
         ----
 
@@ -359,8 +352,7 @@ class SpikingRNNCellBase(nn.Module):
 
     def bias_hh(self):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingRNNCellBase.bias_hh-cn>` | :ref:`English <SpikingRNNCellBase.bias_hh-en>`
+        **API Language** - :ref:`中文 <SpikingRNNCellBase.bias_hh-cn>` | :ref:`English <SpikingRNNCellBase.bias_hh-en>`
 
         ----
 
@@ -397,8 +389,7 @@ class SpikingRNNBase(nn.Module):
         **kwargs,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingRNNBase.__init__-cn>` | :ref:`English <SpikingRNNBase.__init__-en>`
+        **API Language** - :ref:`中文 <SpikingRNNBase.__init__-cn>` | :ref:`English <SpikingRNNBase.__init__-en>`
 
         ----
 
@@ -417,11 +408,11 @@ class SpikingRNNBase(nn.Module):
         :type num_layers: int
         :param bias: 若为 ``False``, 则内部的隐藏层不会带有偏置项 ``b_ih`` 和 ``b_hh``。 默认为 ``True``
         :type bias: bool
-        :param dropout_p: 若非 ``0``，则除了最后一层，每个RNN层后会增加一个丢弃概率为 ``dropout_p`` 的 `Dropout` 层。
+        :param dropout_p: 若非 ``0``，则除了最后一层，每个RNN层后会增加一个丢弃概率为 ``dropout_p`` 的 ``Dropout`` 层。
             默认为 ``0``
         :type dropout_p: float
-        :param invariant_dropout_mask: 若为 ``False``，则使用普通的 `Dropout`；若为 ``True``，则使用SNN中特有的，`mask` 不
-            随着时间变化的 `Dropout``，参见 :class:`~spikingjelly.activation_based.layer.Dropout`。默认为 ``False``
+        :param invariant_dropout_mask: 若为 ``False``，则使用普通的 ``Dropout``；若为 ``True``，则使用SNN中特有的，``mask`` 不
+            随着时间变化的 ``Dropout``，参见 :class:`~spikingjelly.activation_based.layer.Dropout`。默认为 ``False``
         :type invariant_dropout_mask: bool
         :param bidirectional: 若为 ``True``，则使用双向RNN。默认为 ``False``
         :type bidirectional: bool
@@ -434,23 +425,23 @@ class SpikingRNNBase(nn.Module):
 
         * **English**
 
-        The base-class of a multi-layer `spiking` RNN.
+        The base-class of a multi-layer spiking RNN.
 
         :param input_size: The number of expected features in the input ``x``
         :type input_size: int
         :param hidden_size: The number of features in the hidden state ``h``
         :type hidden_size: int
         :param num_layers: Number of recurrent layers. E.g., setting ``num_layers=2`` would mean stacking two LSTMs
-            together to form a `stacked RNN`, with the second RNN taking in outputs of the first RNN and computing the
+            together to form a ``stacked RNN``, with the second RNN taking in outputs of the first RNN and computing the
             final results
         :type num_layers: int
-        :param bias: If ``False``, then the layer does not use bias weights `b_ih` and `b_hh`. Default: ``True``
+        :param bias: If ``False``, then the layer does not use bias weights ``b_ih`` and ``b_hh``. Default: ``True``
         :type bias: bool
-        :param dropout_p: If non-zero, introduces a `Dropout` layer on the outputs of each RNN layer except the last
+        :param dropout_p: If non-zero, introduces a ``Dropout`` layer on the outputs of each RNN layer except the last
             layer, with dropout probability equal to :attr:`dropout`. Default: 0
         :type dropout_p: float
-        :param invariant_dropout_mask: If ``False``，use the naive `Dropout`；If ``True``，use the dropout in SNN that
-            `mask` doesn't change in different time steps, see :class:`~spikingjelly.activation_based.layer.Dropout` for more
+        :param invariant_dropout_mask: If ``False``，use the naive ``Dropout``；If ``True``，use the dropout in SNN that
+            ``mask`` doesn't change in different time steps, see :class:`~spikingjelly.activation_based.layer.Dropout` for more
             information. Default: ``False``
         :type invariant_dropout_mask: bool
         :param bidirectional: If ``True``, becomes a bidirectional LSTM. Default: ``False``
@@ -477,8 +468,7 @@ class SpikingRNNBase(nn.Module):
 
     def create_cells(self, *args, **kwargs):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingRNNBase.create_cells-cn>` | :ref:`English <SpikingRNNBase.create_cells-en>`
+        **API Language** - :ref:`中文 <SpikingRNNBase.create_cells-cn>` | :ref:`English <SpikingRNNBase.create_cells-en>`
 
         ----
 
@@ -555,8 +545,7 @@ class SpikingRNNBase(nn.Module):
     @staticmethod
     def base_cell():
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingRNNBase.base_cell-cn>` | :ref:`English <SpikingRNNBase.base_cell-en>`
+        **API Language** - :ref:`中文 <SpikingRNNBase.base_cell-cn>` | :ref:`English <SpikingRNNBase.base_cell-en>`
 
         ----
 
@@ -583,8 +572,7 @@ class SpikingRNNBase(nn.Module):
     @staticmethod
     def states_num():
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingRNNBase.states_num-cn>` | :ref:`English <SpikingRNNBase.states_num-en>`
+        **API Language** - :ref:`中文 <SpikingRNNBase.states_num-cn>` | :ref:`English <SpikingRNNBase.states_num-en>`
 
         ----
 
@@ -614,8 +602,7 @@ class SpikingRNNBase(nn.Module):
 
     def forward(self, x: torch.Tensor, states=None):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingRNNBase.forward-cn>` | :ref:`English <SpikingRNNBase.forward-en>`
+        **API Language** - :ref:`中文 <SpikingRNNBase.forward-cn>` | :ref:`English <SpikingRNNBase.forward-en>`
 
         ----
 
@@ -826,8 +813,7 @@ class SpikingLSTMCell(SpikingRNNCellBase):
         surrogate_function2=None,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingLSTMCell.__init__-cn>` | :ref:`English <SpikingLSTMCell.__init__-en>`
+        **API Language** - :ref:`中文 <SpikingLSTMCell.__init__-cn>` | :ref:`English <SpikingLSTMCell.__init__-en>`
 
         ----
 
@@ -835,19 +821,22 @@ class SpikingLSTMCell(SpikingRNNCellBase):
 
         * **中文**
 
-        `脉冲` 长短时记忆 (LSTM) cell, 最先由 `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_
+        脉冲长短时记忆 (LSTM) cell, 最先由 `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_
         一文提出。
 
         .. math::
+            :nowrap:
 
-            i &= \\Theta(W_{ii} x + b_{ii} + W_{hi} h + b_{hi}) \\\\
-            f &= \\Theta(W_{if} x + b_{if} + W_{hf} h + b_{hf}) \\\\
-            g &= \\Theta(W_{ig} x + b_{ig} + W_{hg} h + b_{hg}) \\\\
-            o &= \\Theta(W_{io} x + b_{io} + W_{ho} h + b_{ho}) \\\\
-            c' &= f * c + i * g \\\\
-            h' &= o * c'
+            \begin{align*}
+            i &= \Theta(W_{ii} x + b_{ii} + W_{hi} h + b_{hi}) \\
+            f &= \Theta(W_{if} x + b_{if} + W_{hf} h + b_{hf}) \\
+            g &= \Theta(W_{ig} x + b_{ig} + W_{hg} h + b_{hg}) \\
+            o &= \Theta(W_{io} x + b_{io} + W_{ho} h + b_{ho}) \\
+            c' &= f \odot c + i \odot g \\
+            h' &= o \odot c'
+            \end{align*}
 
-        其中 :math:`\\Theta` 是heaviside阶跃函数（脉冲函数）, and :math:`*` 是Hadamard点积，即逐元素相乘。
+        其中 :math:`\Theta` 是 Heaviside 阶跃函数（脉冲函数），:math:`\odot` 是 Hadamard 点积，即逐元素相乘。
 
         :param input_size: 输入 ``x`` 的特征数
         :type input_size: int
@@ -867,8 +856,8 @@ class SpikingLSTMCell(SpikingRNNCellBase):
 
         .. note::
 
-            所有权重和偏置项都会按照 :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` 进行初始化。
-            其中 :math:`k = \\frac{1}{\\text{hidden_size}}`.
+            所有权重和偏置项都会按照 :math:`\mathcal{U}(-\sqrt{k}, \sqrt{k})` 进行初始化。
+            其中 :math:`k = \frac{1}{\text{hidden_size}}`.
 
         示例代码：
 
@@ -895,19 +884,22 @@ class SpikingLSTMCell(SpikingRNNCellBase):
 
         * **English**
 
-        A `spiking` long short-term memory (LSTM) cell, which is firstly proposed in
+        A spiking long short-term memory (LSTM) cell, which is firstly proposed in
         `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_.
 
         .. math::
+            :nowrap:
 
-            i &= \\Theta(W_{ii} x + b_{ii} + W_{hi} h + b_{hi}) \\\\
-            f &= \\Theta(W_{if} x + b_{if} + W_{hf} h + b_{hf}) \\\\
-            g &= \\Theta(W_{ig} x + b_{ig} + W_{hg} h + b_{hg}) \\\\
-            o &= \\Theta(W_{io} x + b_{io} + W_{ho} h + b_{ho}) \\\\
-            c' &= f * c + i * g \\\\
-            h' &= o * c'
+            \begin{align*}
+            i &= \Theta(W_{ii} x + b_{ii} + W_{hi} h + b_{hi}) \\
+            f &= \Theta(W_{if} x + b_{if} + W_{hf} h + b_{hf}) \\
+            g &= \Theta(W_{ig} x + b_{ig} + W_{hg} h + b_{hg}) \\
+            o &= \Theta(W_{io} x + b_{io} + W_{ho} h + b_{ho}) \\
+            c' &= f \odot c + i \odot g \\
+            h' &= o \odot c'
+            \end{align*}
 
-        where :math:`\\Theta` is the heaviside function, and :math:`*` is the Hadamard product.
+        where :math:`\Theta` is the Heaviside function, and :math:`\odot` is the Hadamard product.
 
         :param input_size: The number of expected features in the input ``x``
         :type input_size: int
@@ -931,8 +923,8 @@ class SpikingLSTMCell(SpikingRNNCellBase):
         .. admonition:: Note
             :class: note
 
-            All the weights and biases are initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`
-            where :math:`k = \\frac{1}{\\text{hidden_size}}`.
+            All the weights and biases are initialized from :math:`\mathcal{U}(-\sqrt{k}, \sqrt{k})`
+            where :math:`k = \frac{1}{\text{hidden_size}}`.
 
         Examples:
 
@@ -968,8 +960,7 @@ class SpikingLSTMCell(SpikingRNNCellBase):
 
     def forward(self, x: torch.Tensor, hc=None):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingLSTMCell.forward-cn>` | :ref:`English <SpikingLSTMCell.forward-en>`
+        **API Language** - :ref:`中文 <SpikingLSTMCell.forward-cn>` | :ref:`English <SpikingLSTMCell.forward-en>`
 
         ----
 
@@ -1067,8 +1058,7 @@ class SpikingLSTM(SpikingRNNBase):
         surrogate_function2=None,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingLSTM.__init__-cn>` | :ref:`English <SpikingLSTM.__init__-en>`
+        **API Language** - :ref:`中文 <SpikingLSTM.__init__-cn>` | :ref:`English <SpikingLSTM.__init__-en>`
 
         ----
 
@@ -1076,23 +1066,26 @@ class SpikingLSTM(SpikingRNNBase):
 
         * **中文**
 
-        多层`脉冲` 长短时记忆LSTM, 最先由 `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_
+        多层脉冲长短时记忆 LSTM, 最先由 `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_
         一文提出。
 
         每一层的计算按照
 
         .. math::
+            :nowrap:
 
-            i_{t} &= \\Theta(W_{ii} x_{t} + b_{ii} + W_{hi} h_{t-1} + b_{hi}) \\\\
-            f_{t} &= \\Theta(W_{if} x_{t} + b_{if} + W_{hf} h_{t-1} + b_{hf}) \\\\
-            g_{t} &= \\Theta(W_{ig} x_{t} + b_{ig} + W_{hg} h_{t-1} + b_{hg}) \\\\
-            o_{t} &= \\Theta(W_{io} x_{t} + b_{io} + W_{ho} h_{t-1} + b_{ho}) \\\\
-            c_{t} &= f_{t} * c_{t-1} + i_{t} * g_{t} \\\\
-            h_{t} &= o_{t} * c_{t-1}'
+            \begin{align*}
+            i_{t} &= \Theta(W_{ii} x_{t} + b_{ii} + W_{hi} h_{t-1} + b_{hi}) \\
+            f_{t} &= \Theta(W_{if} x_{t} + b_{if} + W_{hf} h_{t-1} + b_{hf}) \\
+            g_{t} &= \Theta(W_{ig} x_{t} + b_{ig} + W_{hg} h_{t-1} + b_{hg}) \\
+            o_{t} &= \Theta(W_{io} x_{t} + b_{io} + W_{ho} h_{t-1} + b_{ho}) \\
+            c_{t} &= f_{t} \odot c_{t-1} + i_{t} \odot g_{t} \\
+            h_{t} &= o_{t} \odot c_{t}
+            \end{align*}
 
         其中 :math:`h_{t}` 是 :math:`t` 时刻的隐藏状态，:math:`c_{t}` 是 :math:`t` 时刻的细胞状态，:math:`h_{t-1}` 是该层 :math:`t-1`
         时刻的隐藏状态或起始状态，:math:`i_{t}`，:math:`f_{t}`，:math:`g_{t}`，:math:`o_{t}` 分别是输入，遗忘，细胞，输出门，
-        :math:`\\Theta` 是heaviside阶跃函数（脉冲函数）, and :math:`*` 是Hadamard点积，即逐元素相乘。
+        :math:`\Theta` 是 Heaviside 阶跃函数（脉冲函数），:math:`\odot` 是 Hadamard 点积，即逐元素相乘。
 
         :param input_size: 输入 ``x`` 的特征数
         :type input_size: int
@@ -1103,11 +1096,11 @@ class SpikingLSTM(SpikingRNNBase):
         :type num_layers: int
         :param bias: 若为 ``False``, 则内部的隐藏层不会带有偏置项 ``b_ih`` 和 ``b_hh``。 默认为 ``True``
         :type bias: bool
-        :param dropout_p: 若非 ``0``，则除了最后一层，每个RNN层后会增加一个丢弃概率为 ``dropout_p`` 的 `Dropout` 层。
+        :param dropout_p: 若非 ``0``，则除了最后一层，每个RNN层后会增加一个丢弃概率为 ``dropout_p`` 的 ``Dropout`` 层。
             默认为 ``0``
         :type dropout_p: float
-        :param invariant_dropout_mask: 若为 ``False``，则使用普通的 `Dropout`；若为 ``True``，则使用SNN中特有的，`mask` 不
-            随着时间变化的 `Dropout``，参见 :class:`~spikingjelly.activation_based.layer.Dropout`。默认为 ``False``
+        :param invariant_dropout_mask: 若为 ``False``，则使用普通的 ``Dropout``；若为 ``True``，则使用SNN中特有的，``mask`` 不
+            随着时间变化的 ``Dropout``，参见 :class:`~spikingjelly.activation_based.layer.Dropout`。默认为 ``False``
         :type invariant_dropout_mask: bool
         :param bidirectional: 若为 ``True``，则使用双向RNN。默认为 ``False``
         :type bidirectional: bool
@@ -1123,43 +1116,46 @@ class SpikingLSTM(SpikingRNNBase):
 
         * **English**
 
-        The `spiking` multi-layer long short-term memory (LSTM), which is firstly proposed in
+        The spiking multi-layer long short-term memory (LSTM), which is firstly proposed in
         `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_.
 
         For each element in the input sequence, each layer computes the following
         function:
 
         .. math::
+            :nowrap:
 
-            i_{t} &= \\Theta(W_{ii} x_{t} + b_{ii} + W_{hi} h_{t-1} + b_{hi}) \\\\
-            f_{t} &= \\Theta(W_{if} x_{t} + b_{if} + W_{hf} h_{t-1} + b_{hf}) \\\\
-            g_{t} &= \\Theta(W_{ig} x_{t} + b_{ig} + W_{hg} h_{t-1} + b_{hg}) \\\\
-            o_{t} &= \\Theta(W_{io} x_{t} + b_{io} + W_{ho} h_{t-1} + b_{ho}) \\\\
-            c_{t} &= f_{t} * c_{t-1} + i_{t} * g_{t} \\\\
-            h_{t} &= o_{t} * c_{t-1}'
+            \begin{align*}
+            i_{t} &= \Theta(W_{ii} x_{t} + b_{ii} + W_{hi} h_{t-1} + b_{hi}) \\
+            f_{t} &= \Theta(W_{if} x_{t} + b_{if} + W_{hf} h_{t-1} + b_{hf}) \\
+            g_{t} &= \Theta(W_{ig} x_{t} + b_{ig} + W_{hg} h_{t-1} + b_{hg}) \\
+            o_{t} &= \Theta(W_{io} x_{t} + b_{io} + W_{ho} h_{t-1} + b_{ho}) \\
+            c_{t} &= f_{t} \odot c_{t-1} + i_{t} \odot g_{t} \\
+            h_{t} &= o_{t} \odot c_{t}
+            \end{align*}
 
-        where :math:`h_t` is the hidden state at time `t`, :math:`c_t` is the cell
-        state at time `t`, :math:`x_t` is the input at time `t`, :math:`h_{t-1}`
-        is the hidden state of the layer at time `t-1` or the initial hidden
-        state at time `0`, and :math:`i_t`, :math:`f_t`, :math:`g_t`,
+        where :math:`h_t` is the hidden state at time ``t``, :math:`c_t` is the cell
+        state at time ``t``, :math:`x_t` is the input at time ``t``, :math:`h_{t-1}`
+        is the hidden state of the layer at time ``t - 1`` or the initial hidden
+        state at time ``0``, and :math:`i_t`, :math:`f_t`, :math:`g_t`,
         :math:`o_t` are the input, forget, cell, and output gates, respectively.
-        :math:`\\Theta` is the heaviside function, and :math:`*` is the Hadamard product.
+        :math:`\Theta` is the Heaviside function, and :math:`\odot` is the Hadamard product.
 
         :param input_size: The number of expected features in the input ``x``
         :type input_size: int
         :param hidden_size: The number of features in the hidden state ``h``
         :type hidden_size: int
         :param num_layers: Number of recurrent layers. E.g., setting ``num_layers=2`` would mean stacking two LSTMs
-            together to form a `stacked RNN`, with the second RNN taking in outputs of the first RNN and computing the
+            together to form a ``stacked RNN``, with the second RNN taking in outputs of the first RNN and computing the
             final results
         :type num_layers: int
-        :param bias: If ``False``, then the layer does not use bias weights `b_ih` and `b_hh`. Default: ``True``
+        :param bias: If ``False``, then the layer does not use bias weights ``b_ih`` and ``b_hh``. Default: ``True``
         :type bias: bool
-        :param dropout_p: If non-zero, introduces a `Dropout` layer on the outputs of each RNN layer except the last
+        :param dropout_p: If non-zero, introduces a ``Dropout`` layer on the outputs of each RNN layer except the last
             layer, with dropout probability equal to :attr:`dropout`. Default: 0
         :type dropout_p: float
-        :param invariant_dropout_mask: If ``False``，use the naive `Dropout`；If ``True``，use the dropout in SNN that
-            `mask` doesn't change in different time steps, see :class:`~spikingjelly.activation_based.layer.Dropout` for more
+        :param invariant_dropout_mask: If ``False``，use the naive ``Dropout``；If ``True``，use the dropout in SNN that
+            ``mask`` doesn't change in different time steps, see :class:`~spikingjelly.activation_based.layer.Dropout` for more
             information. Default: ``False``
         :type invariant_dropout_mask: bool
         :param bidirectional: If ``True``, becomes a bidirectional LSTM. Default: ``False``
@@ -1187,8 +1183,7 @@ class SpikingLSTM(SpikingRNNBase):
     @staticmethod
     def base_cell():
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingLSTM.base_cell-cn>` | :ref:`English <SpikingLSTM.base_cell-en>`
+        **API Language** - :ref:`中文 <SpikingLSTM.base_cell-cn>` | :ref:`English <SpikingLSTM.base_cell-en>`
 
         ----
 
@@ -1213,8 +1208,7 @@ class SpikingLSTM(SpikingRNNBase):
     @staticmethod
     def states_num():
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingLSTM.states_num-cn>` | :ref:`English <SpikingLSTM.states_num-en>`
+        **API Language** - :ref:`中文 <SpikingLSTM.states_num-cn>` | :ref:`English <SpikingLSTM.states_num-en>`
 
         ----
 
@@ -1246,8 +1240,7 @@ class SpikingVanillaRNNCell(SpikingRNNCellBase):
         surrogate_function=surrogate.Erf(),
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingVanillaRNNCell.__init__-cn>` | :ref:`English <SpikingVanillaRNNCell.__init__-en>`
+        **API Language** - :ref:`中文 <SpikingVanillaRNNCell.__init__-cn>` | :ref:`English <SpikingVanillaRNNCell.__init__-en>`
 
         ----
 
@@ -1294,8 +1287,7 @@ class SpikingVanillaRNNCell(SpikingRNNCellBase):
 
     def forward(self, x: torch.Tensor, h=None):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingVanillaRNNCell.forward-cn>` | :ref:`English <SpikingVanillaRNNCell.forward-en>`
+        **API Language** - :ref:`中文 <SpikingVanillaRNNCell.forward-cn>` | :ref:`English <SpikingVanillaRNNCell.forward-en>`
 
         ----
 
@@ -1347,8 +1339,7 @@ class SpikingVanillaRNN(SpikingRNNBase):
         surrogate_function=surrogate.Erf(),
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingVanillaRNN.__init__-cn>` | :ref:`English <SpikingVanillaRNN.__init__-en>`
+        **API Language** - :ref:`中文 <SpikingVanillaRNN.__init__-cn>` | :ref:`English <SpikingVanillaRNN.__init__-en>`
 
         ----
 
@@ -1414,8 +1405,7 @@ class SpikingVanillaRNN(SpikingRNNBase):
     @staticmethod
     def base_cell():
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingVanillaRNN.base_cell-cn>` | :ref:`English <SpikingVanillaRNN.base_cell-en>`
+        **API Language** - :ref:`中文 <SpikingVanillaRNN.base_cell-cn>` | :ref:`English <SpikingVanillaRNN.base_cell-en>`
 
         ----
 
@@ -1440,8 +1430,7 @@ class SpikingVanillaRNN(SpikingRNNBase):
     @staticmethod
     def states_num():
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingVanillaRNN.states_num-cn>` | :ref:`English <SpikingVanillaRNN.states_num-en>`
+        **API Language** - :ref:`中文 <SpikingVanillaRNN.states_num-cn>` | :ref:`English <SpikingVanillaRNN.states_num-en>`
 
         ----
 
@@ -1474,8 +1463,7 @@ class SpikingGRUCell(SpikingRNNCellBase):
         surrogate_function2=None,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingGRUCell.__init__-cn>` | :ref:`English <SpikingGRUCell.__init__-en>`
+        **API Language** - :ref:`中文 <SpikingGRUCell.__init__-cn>` | :ref:`English <SpikingGRUCell.__init__-en>`
 
         ----
 
@@ -1529,8 +1517,7 @@ class SpikingGRUCell(SpikingRNNCellBase):
 
     def forward(self, x: torch.Tensor, h=None):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingGRUCell.forward-cn>` | :ref:`English <SpikingGRUCell.forward-en>`
+        **API Language** - :ref:`中文 <SpikingGRUCell.forward-cn>` | :ref:`English <SpikingGRUCell.forward-en>`
 
         ----
 
@@ -1596,8 +1583,7 @@ class SpikingGRU(SpikingRNNBase):
         surrogate_function2=None,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingGRU.__init__-cn>` | :ref:`English <SpikingGRU.__init__-en>`
+        **API Language** - :ref:`中文 <SpikingGRU.__init__-cn>` | :ref:`English <SpikingGRU.__init__-en>`
 
         ----
 
@@ -1668,8 +1654,7 @@ class SpikingGRU(SpikingRNNBase):
     @staticmethod
     def base_cell():
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingGRU.base_cell-cn>` | :ref:`English <SpikingGRU.base_cell-en>`
+        **API Language** - :ref:`中文 <SpikingGRU.base_cell-cn>` | :ref:`English <SpikingGRU.base_cell-en>`
 
         ----
 
@@ -1694,8 +1679,7 @@ class SpikingGRU(SpikingRNNBase):
     @staticmethod
     def states_num():
         r"""
-        **API Language:**
-        :ref:`中文 <SpikingGRU.states_num-cn>` | :ref:`English <SpikingGRU.states_num-en>`
+        **API Language** - :ref:`中文 <SpikingGRU.states_num-cn>` | :ref:`English <SpikingGRU.states_num-en>`
 
         ----
 

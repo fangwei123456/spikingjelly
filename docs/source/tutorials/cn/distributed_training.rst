@@ -137,7 +137,7 @@ English version: :doc:`../en/distributed_training`
 7. ``PP`` 在 microbatch 之间会显式重置每个 stage 内的神经元状态，避免不同样本的状态串扰。
 
 服务器实测结果（小网络 smoke benchmark）
-++++++++++++++++++++++++
++++++++++++++++++++++++++++++++++++++++++++++++++
 
 以下数据来自单机多卡服务器（RTX 4090），网络为 ``CIFAR10DVSVGG``，后端为 ``inductor``，输入配置为 ``batch_size=2``、``T=10``，指标为短步数训练 benchmark。表中的 ``global_samples/s`` 统一表示整个分布式作业的全局吞吐。这个工作负载非常小，更多用于 smoke test 和显存趋势对比，不适合作为最终扩展效率结论。
 
@@ -201,7 +201,7 @@ English version: :doc:`../en/distributed_training`
 * ``DDP + TP`` 目前仍不推荐，建议直接使用 ``fsdp2_tp``。
 
 实验性 PP benchmark（服务器复测）
-+++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++
 
 当前 ``PP`` 已经支持：
 
@@ -333,7 +333,7 @@ English version: :doc:`../en/distributed_training`
 * 不过 ``zero_bubble`` 仍会伴随额外的 ``inductor`` 重编译告警，因此当前更适合手动实验和容量优先场景，而不是默认推荐。
 
 Spikformer 与 memopt 组合结果
-++++++++++++++++++++++++
++++++++++++++++++++++++++++++
 
 在更接近 ImageNet 训练设置的 ``spikformer_ti`` 上，``TP`` 和 ``FSDP2 + TP`` 也已经可以和 ``memopt level=1`` 结合使用。下面的实验使用：
 
@@ -505,7 +505,7 @@ Spikformer 与 memopt 组合结果
 如果显式指定了 ``--distributed-mode``，那么 ``prefer`` 仍然可以帮你补默认的 ``memopt`` / ``optimizer_sharding`` 等参数，但不会覆盖你手工指定的模式。
 
 Benchmark 自动记录与对比
-+++++++++++++++++++++++
+++++++++++++++++++++++++++++
 
 ``benchmark/benchmark_snn_distributed.py`` 现在会默认把结果追加到 ``benchmark/results/benchmark_snn_distributed.jsonl``，并自动和同配置的上一条记录做对比。新版记录会显式区分 benchmark 口径与 batch 语义，统一保存：
 

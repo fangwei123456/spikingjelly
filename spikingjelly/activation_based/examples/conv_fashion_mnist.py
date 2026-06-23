@@ -55,28 +55,30 @@ class CSNN(nn.Module):
 
 def main():
     """
-    (sj-dev) wfang@Precision-5820-Tower-X-Series:~/spikingjelly_dev$ python -m spikingjelly.activation_based.examples.conv_fashion_mnist -h
+    Example command-line help::
 
-    usage: conv_fashion_mnist.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-data-dir DATA_DIR] [-out-dir OUT_DIR]
-                                 [-resume RESUME] [-amp] [-cupy] [-opt OPT] [-momentum MOMENTUM] [-lr LR]
+        (sj-dev) wfang@Precision-5820-Tower-X-Series:~/spikingjelly_dev$ python -m spikingjelly.activation_based.examples.conv_fashion_mnist -h
 
-    Classify Fashion-MNIST
+        usage: conv_fashion_mnist.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-data-dir DATA_DIR] [-out-dir OUT_DIR]
+                                     [-resume RESUME] [-amp] [-cupy] [-opt OPT] [-momentum MOMENTUM] [-lr LR]
 
-    optional arguments:
-      -h, --help          show this help message and exit
-      -T T                simulating time-steps
-      -device DEVICE      device
-      -b B                batch size
-      -epochs N           number of total epochs to run
-      -j N                number of data loading workers (default: 4)
-      -data-dir DATA_DIR  root dir of Fashion-MNIST dataset
-      -out-dir OUT_DIR    root dir for saving logs and checkpoint
-      -resume RESUME      resume from the checkpoint path
-      -amp                automatic mixed precision training
-      -cupy               use cupy neuron and multi-step forward mode
-      -opt OPT            use which optimizer. SDG or Adam
-      -momentum MOMENTUM  momentum for SGD
-      -save-es            dir for saving a batch spikes encoded by the first {Conv2d-BatchNorm2d-IFNode}
+        Classify Fashion-MNIST
+
+        optional arguments:
+          -h, --help          show this help message and exit
+          -T T                simulating time-steps
+          -device DEVICE      device
+          -b B                batch size
+          -epochs N           number of total epochs to run
+          -j N                number of data loading workers (default: 4)
+          -data-dir DATA_DIR  root dir of Fashion-MNIST dataset
+          -out-dir OUT_DIR    root dir for saving logs and checkpoint
+          -resume RESUME      resume from the checkpoint path
+          -amp                automatic mixed precision training
+          -cupy               use cupy neuron and multi-step forward mode
+          -opt OPT            use which optimizer. SDG or Adam
+          -momentum MOMENTUM  momentum for SGD
+          -save-es            dir for saving a batch spikes encoded by the first {Conv2d-BatchNorm2d-IFNode}
     """
     # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8
 

@@ -2,17 +2,20 @@
 Current progress:
 
 M1:
+
 * HOP definition with an eager Python time-step loop impl.
 * Eager autograd works via the natural computation graph (``x[t]`` indexing
   and ``torch.stack`` are differentiable, so the per-step ``core_fn`` graph
   is correctly chained through time). Verified with ``gradcheck``.
 
 M2:
+
 * AOTAutograd tracing (``torch.fx.experimental.proxy_tensor.make_fx`` /
   ``torch._functorch.aot_autograd.aot_function``) works by unrolling the scan
   into T copies of ``core_fn``'s aten ops.
 
 M3:
+
 * ``FlexSN(backend="hop")`` is available as an explicit backend.
 * Dynamo recognizes ``flex_sn_scan`` via a compatibility registration and can
   rewrite the call into a HOP node with a traced ``GraphModule`` body.
@@ -20,6 +23,7 @@ M3:
   Linux CI/server environment, including tensor lifted freevars/closures.
 
 M4:
+
 * ``lowerable_scan`` re-expresses the FlexSN step function through PyTorch's
   built-in ``torch.ops.higher_order.scan`` when that API is available.
 * It is kept as an explicit experimental helper for investigating a
@@ -31,6 +35,7 @@ M4:
 * The experimental while-loop path is wired into ``FlexSN(backend="hop")`` via
   ``SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP=1`` for compile-time forward
   evaluation, and has been validated on:
+
   - a single FlexSN layer,
   - ``Linear -> FlexSN -> Linear``,
   - ``SpikingVGG`` forward inference.
@@ -105,8 +110,9 @@ class FlexSNScan(HigherOrderOperator):
     def __init__(self) -> None:
         """
         HOP that runs a user-defined single-step ``core`` function over the
-        **API Language:**
-        :ref:`中文 <FlexSNScan-cn>` | :ref:`English <FlexSNScan-en>`
+        leading time dimension of its inputs.
+
+        **API Language** - :ref:`中文 <FlexSNScan-cn>` | :ref:`English <FlexSNScan-en>`
 
         ----
 
@@ -121,9 +127,16 @@ class FlexSNScan(HigherOrderOperator):
         可根据上下文自动选择合适的执行后端。其核心可调用对象需遵循
         ``[*inputs, *states] -> [*outputs, *states, *intermediates]`` 签名。
 
+        ----
+
+        .. _FlexSNScan-en:
+
+        * **English**
+
         leading time dimension of its inputs.
         The HOP is invoked with a flat argument list so that Dynamo / AOTAutograd
         can treat it uniformly. Shapes/semantics:
+
         * ``core_fn``: callable with signature
           ``(*step_inputs, *states) -> (*step_outputs, *updated_states)``.
         * ``num_inputs`` / ``num_states`` / ``num_outputs``: int literals used to
@@ -132,16 +145,9 @@ class FlexSNScan(HigherOrderOperator):
           leading time dim ``T``; the next ``num_states`` tensors are initial
           states (no time dim); any remaining tensors are lifted freevars that are
           passed through to ``core_fn`` unchanged at every time step.
+
         Return: ``num_outputs`` output sequences followed by ``num_states`` state
         sequences, all stacked along the leading time dim.
-
-        ----
-
-        .. _FlexSNScan-en:
-
-        * **English**
-
-        Flexsnscan function
         """
         super().__init__("flex_sn_scan")
 
@@ -304,8 +310,8 @@ def _output_template_specs_from_dynamo_body_result(
 
 def lowerable_scan_available() -> bool:
     """Report whether PyTorch's built-in ``scan`` HOP is available.
-    **API Language:**
-    :ref:`中文 <lowerable_scan_available-cn>` | :ref:`English <lowerable_scan_available-en>`
+
+    **API Language** - :ref:`中文 <lowerable_scan_available-cn>` | :ref:`English <lowerable_scan_available-en>`
 
     ----
 
@@ -317,6 +323,7 @@ def lowerable_scan_available() -> bool:
 
     :return: EN: ``True`` when ``torch.ops.higher_order.scan`` is available;
     :rtype: bool
+
     Chinese:
         返回当前环境是否提供 PyTorch 内置 ``scan`` HOP。
     English:
@@ -341,8 +348,8 @@ def lowerable_scan_available() -> bool:
 
 def dynamo_hop_available() -> bool:
     """Report whether the FlexSN Dynamo HOP registration succeeded.
-    **API Language:**
-    :ref:`中文 <dynamo_hop_available-cn>` | :ref:`English <dynamo_hop_available-en>`
+
+    **API Language** - :ref:`中文 <dynamo_hop_available-cn>` | :ref:`English <dynamo_hop_available-en>`
 
     ----
 
@@ -354,6 +361,7 @@ def dynamo_hop_available() -> bool:
 
     :return: EN: ``True`` when the Dynamo compatibility shim for
     :rtype: bool
+
     Chinese:
         返回 FlexSN 的 Dynamo HOP 注册是否成功。
     English:
@@ -379,8 +387,8 @@ def dynamo_hop_available() -> bool:
 
 def lowerable_while_loop_available() -> bool:
     """Report whether PyTorch's built-in ``while_loop`` HOP is available.
-    **API Language:**
-    :ref:`中文 <lowerable_while_loop_available-cn>` | :ref:`English <lowerable_while_loop_available-en>`
+
+    **API Language** - :ref:`中文 <lowerable_while_loop_available-cn>` | :ref:`English <lowerable_while_loop_available-en>`
 
     ----
 
@@ -392,6 +400,7 @@ def lowerable_while_loop_available() -> bool:
 
     :return: EN: ``True`` when ``torch.ops.higher_order.while_loop`` is
     :rtype: bool
+
     Chinese:
         返回当前环境是否提供 PyTorch 内置 ``while_loop`` HOP。
     English:
@@ -519,8 +528,8 @@ def eager_scan(
     output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run the FlexSN scan with an eager Python time-step loop.
-    **API Language:**
-    :ref:`中文 <eager_scan-cn>` | :ref:`English <eager_scan-en>`
+
+    **API Language** - :ref:`中文 <eager_scan-cn>` | :ref:`English <eager_scan-en>`
 
     ----
 
@@ -544,6 +553,7 @@ def eager_scan(
     :type output_template_specs: Optional[OutputTemplateSpecs]
     :return: EN: ``num_outputs`` output sequences followed by ``num_states``
     :rtype: Tuple[torch.Tensor, ...]
+
     Chinese:
         通过 Python 时间步循环执行 FlexSN scan。
     English:
@@ -675,8 +685,8 @@ def eager_scan_final_state(
     output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run the eager scan and return output sequences plus final states.
-    **API Language:**
-    :ref:`中文 <eager_scan_final_state-cn>` | :ref:`English <eager_scan_final_state-en>`
+
+    **API Language** - :ref:`中文 <eager_scan_final_state-cn>` | :ref:`English <eager_scan_final_state-en>`
 
     ----
 
@@ -700,6 +710,7 @@ def eager_scan_final_state(
     :type output_template_specs: Optional[OutputTemplateSpecs]
     :return: EN: ``num_outputs`` output sequences followed by the final states.
     :rtype: Tuple[torch.Tensor, ...]
+
     Chinese:
         执行 eager scan, 返回输出序列以及最终状态。
     English:
@@ -810,8 +821,8 @@ def lowerable_scan(
     output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run FlexSN scan through PyTorch's built-in ``scan`` HOP.
-    **API Language:**
-    :ref:`中文 <lowerable_scan-cn>` | :ref:`English <lowerable_scan-en>`
+
+    **API Language** - :ref:`中文 <lowerable_scan-cn>` | :ref:`English <lowerable_scan-en>`
 
     ----
 
@@ -835,6 +846,7 @@ def lowerable_scan(
     :type output_template_specs: Optional[OutputTemplateSpecs]
     :return: EN: ``num_outputs`` output sequences followed by ``num_states``
     :rtype: Tuple[torch.Tensor, ...]
+
     Chinese:
         通过 PyTorch 内置 ``scan`` HOP 执行 FlexSN scan。
     English:
@@ -980,8 +992,8 @@ def lowerable_scan_final_state(
     output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run the built-in ``scan`` HOP and return final states only.
-    **API Language:**
-    :ref:`中文 <lowerable_scan_final_state-cn>` | :ref:`English <lowerable_scan_final_state-en>`
+
+    **API Language** - :ref:`中文 <lowerable_scan_final_state-cn>` | :ref:`English <lowerable_scan_final_state-en>`
 
     ----
 
@@ -1005,6 +1017,7 @@ def lowerable_scan_final_state(
     :type output_template_specs: Optional[OutputTemplateSpecs]
     :return: EN: ``num_outputs`` output sequences followed by the final states.
     :rtype: Tuple[torch.Tensor, ...]
+
     Chinese:
         通过内置 ``scan`` HOP 执行 FlexSN, 返回输出序列与最终状态。
     English:
@@ -1166,8 +1179,8 @@ def lowerable_while_loop_scan(
     output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run FlexSN scan through PyTorch's built-in ``while_loop`` HOP.
-    **API Language:**
-    :ref:`中文 <lowerable_while_loop_scan-cn>` | :ref:`English <lowerable_while_loop_scan-en>`
+
+    **API Language** - :ref:`中文 <lowerable_while_loop_scan-cn>` | :ref:`English <lowerable_while_loop_scan-en>`
 
     ----
 
@@ -1191,6 +1204,7 @@ def lowerable_while_loop_scan(
     :type output_template_specs: Optional[OutputTemplateSpecs]
     :return: EN: ``num_outputs`` output sequences followed by ``num_states``
     :rtype: Tuple[torch.Tensor, ...]
+
     Chinese:
         通过 PyTorch 内置 ``while_loop`` HOP 执行 FlexSN scan。
     English:
@@ -1397,8 +1411,8 @@ def lowerable_while_loop_scan_final_state(
     output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run the while-loop HOP and return output sequences plus final states.
-    **API Language:**
-    :ref:`中文 <lowerable_while_loop_scan_final_state-cn>` | :ref:`English <lowerable_while_loop_scan_final_state-en>`
+
+    **API Language** - :ref:`中文 <lowerable_while_loop_scan_final_state-cn>` | :ref:`English <lowerable_while_loop_scan_final_state-en>`
 
     ----
 
@@ -1422,6 +1436,7 @@ def lowerable_while_loop_scan_final_state(
     :type output_template_specs: Optional[OutputTemplateSpecs]
     :return: EN: ``num_outputs`` output sequences followed by the final states.
     :rtype: Tuple[torch.Tensor, ...]
+
     Chinese:
         执行 while-loop HOP, 返回输出序列以及最终状态。
     English:

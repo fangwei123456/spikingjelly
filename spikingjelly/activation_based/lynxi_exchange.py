@@ -29,12 +29,9 @@ class BaseNode(nn.Module):
         return_v: bool = False,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <BaseNode.__init__-cn>` | :ref:`English <BaseNode.__init__-en>`
+        **API Language** - 中文 | English
 
         ----
-
-        .. _BaseNode.__init__-cn:
 
         * **中文**
 
@@ -71,8 +68,6 @@ class BaseNode(nn.Module):
         :type return_v: bool
 
         ----
-
-        .. _BaseNode.__init__-en:
 
         * **English**
 
@@ -180,8 +175,7 @@ class BaseNode(nn.Module):
 
 class IFNode(BaseNode):
     r"""
-    **API Language:**
-    :ref:`中文 <IFNode-cn>` | :ref:`English <IFNode-en>`
+    **API Language** - :ref:`中文 <IFNode-cn>` | :ref:`English <IFNode-en>`
 
     ----
 
@@ -230,8 +224,7 @@ class LIFNode(BaseNode):
         return_v: bool = False,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <LIFNode.__init__-cn>` | :ref:`English <LIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <LIFNode.__init__-cn>` | :ref:`English <LIFNode.__init__-en>`
 
         ----
 
@@ -353,8 +346,7 @@ class LIFNode(BaseNode):
 
 def to_lynxi_supported_module(m_in: nn.Module, T: int):
     r"""
-    **API Language:**
-    :ref:`中文 <to_lynxi_supported_module-cn>` | :ref:`English <to_lynxi_supported_module-en>`
+    **API Language** - :ref:`中文 <to_lynxi_supported_module-cn>` | :ref:`English <to_lynxi_supported_module-en>`
 
     ----
 
@@ -379,9 +371,9 @@ def to_lynxi_supported_module(m_in: nn.Module, T: int):
     - :class:`spikingjelly.activation_based.layer.Flatten` →
       :class:`torch.nn.Flatten`
     - :class:`spikingjelly.activation_based.neuron.IFNode` →
-      :class:`IFNode`（本模块内）
+      :class:`IFNode` （本模块内）
     - :class:`spikingjelly.activation_based.neuron.LIFNode` →
-      :class:`LIFNode`（本模块内）
+      :class:`LIFNode` （本模块内）
     - 其他类型：记录 ``critical`` 日志，返回深拷贝的原模块（移至 CPU）
 
     :param m_in: 待转换的输入模块
@@ -513,8 +505,7 @@ def to_lynxi_supported_module(m_in: nn.Module, T: int):
 
 def to_lynxi_supported_modules(net: Union[list, tuple, nn.Sequential], T: int):
     r"""
-    **API Language:**
-    :ref:`中文 <to_lynxi_supported_modules-cn>` | :ref:`English <to_lynxi_supported_modules-en>`
+    **API Language** - :ref:`中文 <to_lynxi_supported_modules-cn>` | :ref:`English <to_lynxi_supported_modules-en>`
 
     ----
 
@@ -577,8 +568,7 @@ try:
 
     def torch_tensor_to_lynxi(x: torch.Tensor, device_id: int = 0, to_apu: bool = True):
         r"""
-        **API Language:**
-        :ref:`中文 <torch_tensor_to_lynxi-cn>` | :ref:`English <torch_tensor_to_lynxi-en>`
+        **API Language** - :ref:`中文 <torch_tensor_to_lynxi-cn>` | :ref:`English <torch_tensor_to_lynxi-en>`
 
         ----
 
@@ -647,8 +637,7 @@ try:
         x: lynpy.Tensor, shape: Union[tuple, list] = None, dtype: str = None
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <lynxi_tensor_to_torch-cn>` | :ref:`English <lynxi_tensor_to_torch-en>`
+        **API Language** - :ref:`中文 <lynxi_tensor_to_torch-cn>` | :ref:`English <lynxi_tensor_to_torch-en>`
 
         ----
 
@@ -723,8 +712,7 @@ try:
         input_shape_dict: Dict = {},
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <compile_lynxi_model-cn>` | :ref:`English <compile_lynxi_model-en>`
+        **API Language** - :ref:`中文 <compile_lynxi_model-cn>` | :ref:`English <compile_lynxi_model-en>`
 
         ----
 
@@ -818,8 +806,7 @@ try:
 
     def load_lynxi_model(device_id: int, model_path: str):
         r"""
-        **API Language:**
-        :ref:`中文 <load_lynxi_model-cn>` | :ref:`English <load_lynxi_model-en>`
+        **API Language** - :ref:`中文 <load_lynxi_model-cn>` | :ref:`English <load_lynxi_model-en>`
 
         ----
 

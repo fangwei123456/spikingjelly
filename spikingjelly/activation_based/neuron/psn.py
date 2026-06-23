@@ -16,9 +16,8 @@ class PSN(nn.Module, base.MultiStepModule):
         T: int,
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.ATan(),
     ):
-        """
-        **API Language:**
-        :ref:`中文 <PSN.__init__-cn>` | :ref:`English <PSN.__init__-en>`
+        r"""
+        **API Language** - :ref:`中文 <PSN.__init__-cn>` | :ref:`English <PSN.__init__-en>`
 
         ----
 
@@ -29,8 +28,12 @@ class PSN(nn.Module, base.MultiStepModule):
         并行脉冲神经元（Parallel Spiking Neuron，PSN），由 `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_ 提出。神经元动力学定义如下：
 
         .. math::
-            H &= WX, ~~~~~~~~~~~~~~~W \\in \\mathbb{R}^{T \\times T}, X \\in \\mathbb{R}^{T \\times N}\\\\
-            S &= \\Theta(H - B), ~~~~~B \\in \\mathbb{R}^{T}, S\\in \\{0, 1\\}^{T \\times N}
+            :nowrap:
+
+            \begin{align*}
+            H &= WX, \qquad W \in \mathbb{R}^{T \times T}, X \in \mathbb{R}^{T \times N} \\
+            S &= \Theta(H - B), \qquad B \in \mathbb{R}^{T}, S \in \{0, 1\}^{T \times N}
+            \end{align*}
 
         其中 :math:`W` 是可学习的权重矩阵，:math:`B` 是可学习的阈值。
 
@@ -54,8 +57,12 @@ class PSN(nn.Module, base.MultiStepModule):
         The Parallel Spiking Neuron (PSN), proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as:
 
         .. math::
-            H &= WX, ~~~~~~~~~~~~~~~W \\in \\mathbb{R}^{T \\times T}, X \\in \\mathbb{R}^{T \\times N}\\\\
-            S &= \\Theta(H - B), ~~~~~B \\in \\mathbb{R}^{T}, S\\in \\{0, 1\\}^{T \\times N}
+            :nowrap:
+
+            \begin{align*}
+            H &= WX, \qquad W \in \mathbb{R}^{T \times T}, X \in \mathbb{R}^{T \times N} \\
+            S &= \Theta(H - B), \qquad B \in \mathbb{R}^{T}, S \in \{0, 1\}^{T \times N}
+            \end{align*}
 
         where :math:`W` is the learnable weight matrix, and :math:`B` is the learnable threshold.
 
@@ -101,9 +108,8 @@ class MaskedPSN(base.MemoryModule):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.ATan(),
         step_mode: str = "s",
     ):
-        """
-        **API Language:**
-        :ref:`中文 <MaskedPSN.__init__-cn>` | :ref:`English <MaskedPSN.__init__-en>`
+        r"""
+        **API Language** - :ref:`中文 <MaskedPSN.__init__-cn>` | :ref:`English <MaskedPSN.__init__-en>`
 
         ----
 
@@ -114,23 +120,27 @@ class MaskedPSN(base.MemoryModule):
         Masked Parallel Spiking Neuron，由 `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_ 提出。神经元动力学定义如下：
 
         .. math::
-            H &= (W \\cdot {M}_{k})X, ~~~~~~~~~~~~~~~W \\in \\mathbb{R}^{T \\times T}, {M}_{k} \\in \\mathbb{R}^{T \\times T}, X \\in \\mathbb{R}^{T \\times N} \\\\
-            S &= \\Theta(H - B), ~~~~~B \\in \\mathbb{R}^{T}, S\\in \\{0, 1\\}^{T \\times N}
+            :nowrap:
+
+            \begin{align*}
+            H &= (W \cdot {M}_{k})X, \qquad W \in \mathbb{R}^{T \times T}, {M}_{k} \in \mathbb{R}^{T \times T}, X \in \mathbb{R}^{T \times N} \\
+            S &= \Theta(H - B), \qquad B \in \mathbb{R}^{T}, S \in \{0, 1\}^{T \times N}
+            \end{align*}
 
         其中 :math:`W` 是可学习权重矩阵，:math:`B` 是可学习阈值，:math:`{M}_{k}` 定义为：
 
         .. math::
-            {M}_{k}[i][j] = \\begin{cases}
-                1, ~~ j \\leq i \\leq j + k - 1 \\\\
-                0, \\mathrm{otherwise}
-            \\end{cases}.
+            {M}_{k}[i][j] = \begin{cases}
+                1, & j \leq i \leq j + k - 1 \\
+                0, & \mathrm{otherwise}
+            \end{cases}.
 
-        :math:`\\lambda` 用于调节逐步掩码过程：
+        :math:`\lambda` 用于调节逐步掩码过程：
 
         .. math::
-            M_{k}(\\lambda) = \\lambda \\cdot M_{k} + (1 - \\lambda) \\cdot J,
+            M_{k}(\lambda) = \lambda \cdot M_{k} + (1 - \lambda) \cdot J,
 
-        其中 :math:`J` 为全 1 矩阵。用户可以在训练中通过 ``self.lambda_ = ...`` 设置 :math:`\\lambda`。
+        其中 :math:`J` 为全 1 矩阵。用户可以在训练中通过 ``self.lambda_ = ...`` 设置 :math:`\lambda`。
 
         .. admonition:: 注意
             :class: note
@@ -143,7 +153,7 @@ class MaskedPSN(base.MemoryModule):
         :param T: 时间步数
         :type T: int
 
-        :param lambda_init: :math:`\\lambda` 的初始值，用于调节逐步掩码过程
+        :param lambda_init: :math:`\lambda` 的初始值，用于调节逐步掩码过程
         :type lambda_init: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
@@ -161,23 +171,27 @@ class MaskedPSN(base.MemoryModule):
         Masked Parallel Spiking Neuron (Masked PSN), proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as:
 
         .. math::
-            H &= (W \\cdot {M}_{k})X, ~~~~~~~~~~~~~~~W \\in \\mathbb{R}^{T \\times T}, {M}_{k} \\in \\mathbb{R}^{T \\times T}, X \\in \\mathbb{R}^{T \\times N} \\\\
-            S &= \\Theta(H - B), ~~~~~B \\in \\mathbb{R}^{T}, S\\in \\{0, 1\\}^{T \\times N}
+            :nowrap:
+
+            \begin{align*}
+            H &= (W \cdot {M}_{k})X, \qquad W \in \mathbb{R}^{T \times T}, {M}_{k} \in \mathbb{R}^{T \times T}, X \in \mathbb{R}^{T \times N} \\
+            S &= \Theta(H - B), \qquad B \in \mathbb{R}^{T}, S \in \{0, 1\}^{T \times N}
+            \end{align*}
 
         where :math:`W` is the learnable weight matrix, :math:`B` is the learnable threshold, and :math:`{M}_{k}` is defined as:
 
         .. math::
-            {M}_{k}[i][j] = \\begin{cases}
-                1, ~~ j \\leq i \\leq j + k - 1 \\\\
-                0, \\mathrm{otherwise}
-            \\end{cases}.
+            {M}_{k}[i][j] = \begin{cases}
+                1, & j \leq i \leq j + k - 1 \\
+                0, & \mathrm{otherwise}
+            \end{cases}.
 
-        :math:`\\lambda` is used to adjust the progressive masking process:
+        :math:`\lambda` is used to adjust the progressive masking process:
 
         .. math::
-            M_{k}(\\lambda) = \\lambda \\cdot M_{k} + (1 - \\lambda) \\cdot J,
+            M_{k}(\lambda) = \lambda \cdot M_{k} + (1 - \lambda) \cdot J,
 
-        where :math:`J` is an all-one matrix. Users can set :math:`\\lambda` during training by calling ``self.lambda_ = ...``.
+        where :math:`J` is an all-one matrix. Users can set :math:`\lambda` during training by calling ``self.lambda_ = ...``.
 
         .. admonition:: Note
             :class: note
@@ -190,7 +204,7 @@ class MaskedPSN(base.MemoryModule):
         :param T: the number of time-steps
         :type T: int
 
-        :param lambda_init: the initial value of :math:`\\lambda` to adjust the progressive masking process
+        :param lambda_init: the initial value of :math:`\lambda` to adjust the progressive masking process
         :type lambda_init: float
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
@@ -296,9 +310,8 @@ class SlidingPSN(base.MemoryModule):
         step_mode: str = "s",
         backend: str = "gemm",
     ):
-        """
-        **API Language:**
-        :ref:`中文 <SlidingPSN.__init__-cn>` | :ref:`English <SlidingPSN.__init__-en>`
+        r"""
+        **API Language** - :ref:`中文 <SlidingPSN.__init__-cn>` | :ref:`English <SlidingPSN.__init__-en>`
 
         ----
 
@@ -309,10 +322,14 @@ class SlidingPSN(base.MemoryModule):
         Sliding Parallel Spiking Neuron，由 `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_ 提出。神经元动力学定义如下：
 
         .. math::
-            H[t] &= \\sum_{i=0}^{k-1} W_i \\cdot X[t - k + 1 + i], \\\\
-            S[t] &= \\Theta(H[t] - B),
+            :nowrap:
 
-        其中 :math:`W = [W_0, W_1, ..., W_{k-1}] \\in \\mathbb{R}^{T}` 是可学习权重，:math:`B` 是可学习阈值。
+            \begin{align*}
+            H[t] &= \sum_{i=0}^{k-1} W_i \cdot X[t - k + 1 + i] \\
+            S[t] &= \Theta(H[t] - B)
+            \end{align*}
+
+        其中 :math:`W = [W_0, W_1, ..., W_{k-1}] \in \mathbb{R}^{T}` 是可学习权重，:math:`B` 是可学习阈值。
 
         .. admonition:: 注意
             :class: note
@@ -343,10 +360,14 @@ class SlidingPSN(base.MemoryModule):
         Sliding Parallel Spiking Neuron (Sliding PSN), proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as:
 
         .. math::
-            H[t] &= \\sum_{i=0}^{k-1} W_i \\cdot X[t - k + 1 + i], \\\\
-            S[t] &= \\Theta(H[t] - B),
+            :nowrap:
 
-        where :math:`W = [W_0, W_1, ..., W_{k-1}] \\in \\mathbb{R}^{T}` is the learnable weight, and :math:`B` is the learnable threshold.
+            \begin{align*}
+            H[t] &= \sum_{i=0}^{k-1} W_i \cdot X[t - k + 1 + i] \\
+            S[t] &= \Theta(H[t] - B)
+            \end{align*}
+
+        where :math:`W = [W_0, W_1, ..., W_{k-1}] \in \mathbb{R}^{T}` is the learnable weight, and :math:`B` is the learnable threshold.
 
         .. admonition:: Note
             :class: note

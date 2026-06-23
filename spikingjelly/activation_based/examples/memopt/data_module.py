@@ -11,11 +11,14 @@ class Cutout:
     def __init__(self, n_holes, length=None, max_length=None):
         """
         Randomly mask out one or more patches from an image.
-        Args:
-            n_holes (int): Number of patches to cut out of each image.
-            length (int): The length (in pixels) of each square patch.
-            max_length (int): If not None, randomly sample the length of the square
-                patch. If None, use the argument `length` instead.
+
+        :param n_holes: Number of patches to cut out of each image.
+        :type n_holes: int
+        :param length: The length (in pixels) of each square patch.
+        :type length: int
+        :param max_length: If not ``None``, randomly sample the length of the
+            square patch. If ``None``, use ``length`` instead.
+        :type max_length: int
         """
         self.n_holes = n_holes
         self.length = length
@@ -23,10 +26,10 @@ class Cutout:
 
     def __call__(self, img):
         """
-        Args:
-            img (Tensor): Tensor image of size (C, H, W).
-        Returns:
-            Tensor: Image with n_holes of dimension length x length cut out of it.
+        :param img: Tensor image of size ``(C, H, W)``.
+        :type img: Tensor
+        :return: Image with ``n_holes`` patches cut out of it.
+        :rtype: Tensor
         """
         h = img.size(-2)
         w = img.size(-1)

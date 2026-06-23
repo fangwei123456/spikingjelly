@@ -95,8 +95,7 @@ class IFNode(nn.Module):
         store_v_seq: bool = False,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <IFNode.__init__-cn>` | :ref:`English <IFNode.__init__-en>`
+        **API Language** - :ref:`中文 <IFNode.__init__-cn>` | :ref:`English <IFNode.__init__-en>`
 
         ----
 
@@ -107,7 +106,9 @@ class IFNode(nn.Module):
         初始化 CuPy 加速的 IF 神经元。神经元的充电、发放与重置动力学如下：
 
         .. math::
+            :nowrap:
 
+            \begin{align*}
             H[t] &= V[t-1] + X[t] \\
             S[t] &= \Theta(H[t] - V_{th}) \\
             V[t] &= \begin{cases}
@@ -115,6 +116,7 @@ class IFNode(nn.Module):
                 H[t],      & \text{硬重置},\ S[t] = 0 \\
                 H[t] - S[t] \cdot V_{th}, & \text{软重置}
             \end{cases}
+            \end{align*}
 
         其中 :math:`\Theta` 为阶跃函数，反向传播时使用代理梯度函数近似。
 
@@ -148,7 +150,9 @@ class IFNode(nn.Module):
         The neuronal charge, fire, and reset dynamics are:
 
         .. math::
+            :nowrap:
 
+            \begin{align*}
             H[t] &= V[t-1] + X[t] \\
             S[t] &= \Theta(H[t] - V_{th}) \\
             V[t] &= \begin{cases}
@@ -156,6 +160,7 @@ class IFNode(nn.Module):
                 H[t],      & \text{hard reset},\ S[t] = 0 \\
                 H[t] - S[t] \cdot V_{th}, & \text{soft reset}
             \end{cases}
+            \end{align*}
 
         where :math:`\Theta` is the Heaviside step function, approximated during backpropagation
         by the surrogate gradient function.
@@ -843,8 +848,7 @@ class LIFNode(nn.Module):
         store_v_seq: bool = False,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <LIFNode.__init__-cn>` | :ref:`English <LIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <LIFNode.__init__-cn>` | :ref:`English <LIFNode.__init__-en>`
 
         ----
 
@@ -1714,8 +1718,7 @@ class ParametricLIFNode(nn.Module):
         store_v_seq: bool = False,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <ParametricLIFNode.__init__-cn>` | :ref:`English <ParametricLIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <ParametricLIFNode.__init__-cn>` | :ref:`English <ParametricLIFNode.__init__-en>`
 
         ----
 
@@ -2673,8 +2676,7 @@ class ILIFNode(nn.Module):
         **kwargs,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <ILIFNode.__init__-cn>` | :ref:`English <ILIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <ILIFNode.__init__-cn>` | :ref:`English <ILIFNode.__init__-en>`
 
         ----
 
@@ -2686,10 +2688,13 @@ class ILIFNode(nn.Module):
         该神经元的充电、发放与重置动力学如下：
 
         .. math::
+            :nowrap:
 
+            \begin{align*}
             H[t] &= \left(V[t-1] - S[t-1]\right) \cdot \text{decay} + X[t] \\
             V[t] &= \text{clamp}\left(H[t],\ \text{min\_value},\ \text{max\_value}\right) \\
             S[t] &= \text{round}\left(V[t]\right)
+            \end{align*}
 
         其中脉冲输出 :math:`S[t]` 为整数值（而非二值 0/1），由对膜电位 :math:`V[t]` 四舍五入得到。
         ``decay`` 控制膜电位的衰减速度，``min_value`` 和 ``max_value`` 对膜电位进行截断。
@@ -2719,10 +2724,13 @@ class ILIFNode(nn.Module):
         The neuronal charge, fire, and reset dynamics are:
 
         .. math::
+            :nowrap:
 
+            \begin{align*}
             H[t] &= \left(V[t-1] - S[t-1]\right) \cdot \text{decay} + X[t] \\
             V[t] &= \text{clamp}\left(H[t],\ \text{min\_value},\ \text{max\_value}\right) \\
             S[t] &= \text{round}\left(V[t]\right)
+            \end{align*}
 
         Unlike standard LIF neurons, the spike output :math:`S[t]` is an integer value (not
         binary 0/1), obtained by rounding the membrane potential :math:`V[t]`. ``decay``

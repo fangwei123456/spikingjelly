@@ -12,8 +12,7 @@ _hw_bits = 12
 
 def step_quantize_forward(x: torch.Tensor, step: float):
     r"""
-    **API Language:**
-    :ref:`中文 <step_quantize_forward-cn>` | :ref:`English <step_quantize_forward-en>`
+    **API Language** - :ref:`中文 <step_quantize_forward-cn>` | :ref:`English <step_quantize_forward-en>`
 
     ----
 
@@ -52,8 +51,7 @@ def step_quantize_forward(x: torch.Tensor, step: float):
 
 class step_quantize_atgf(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <step_quantize_atgf-cn>` | :ref:`English <step_quantize_atgf-en>`
+    **API Language** - :ref:`中文 <step_quantize_atgf-cn>` | :ref:`English <step_quantize_atgf-en>`
 
     ----
 
@@ -83,8 +81,7 @@ class step_quantize_atgf(torch.autograd.Function):
 
 def step_quantize(x: torch.Tensor, step: float = 1.0):
     r"""
-    **API Language:**
-    :ref:`中文 <step_quantize-cn>` | :ref:`English <step_quantize-en>`
+    **API Language** - :ref:`中文 <step_quantize-cn>` | :ref:`English <step_quantize-en>`
 
     ----
 
@@ -125,8 +122,7 @@ def step_quantize(x: torch.Tensor, step: float = 1.0):
 
 def quantize_8b(x, scale, descale=False):
     r"""
-    **API Language:**
-    :ref:`中文 <quantize_8b-cn>` | :ref:`English <quantize_8b-en>`
+    **API Language** - :ref:`中文 <quantize_8b-cn>` | :ref:`English <quantize_8b-en>`
 
     ----
 
@@ -170,8 +166,7 @@ def quantize_8b(x, scale, descale=False):
 
 def right_shift_to_zero(x: torch.Tensor, bits: int):
     r"""
-    **API Language:**
-    :ref:`中文 <right_shift_to_zero-cn>` | :ref:`English <right_shift_to_zero-en>`
+    **API Language** - :ref:`中文 <right_shift_to_zero-cn>` | :ref:`English <right_shift_to_zero-en>`
 
     ----
 
@@ -252,8 +247,7 @@ class BatchNorm2d(nn.Module):
         pre_hook_fx: Callable = lambda x: x,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <BatchNorm2d.__init__-cn>` | :ref:`English <BatchNorm2d.__init__-en>`
+        **API Language** - :ref:`中文 <BatchNorm2d.__init__-cn>` | :ref:`English <BatchNorm2d.__init__-en>`
 
         ----
 
@@ -354,8 +348,7 @@ class BatchNorm2d(nn.Module):
 
 class LeakyIntegratorStep(torch.autograd.Function):
     r"""
-    **API Language:**
-    :ref:`中文 <LeakyIntegratorStep-cn>` | :ref:`English <LeakyIntegratorStep-en>`
+    **API Language** - :ref:`中文 <LeakyIntegratorStep-cn>` | :ref:`English <LeakyIntegratorStep-en>`
 
     ----
 
@@ -414,8 +407,7 @@ class CubaLIFNode(neuron.BaseNode):
     ):
         # author: https://github.com/AllenYolk
         r"""
-        **API Language:**
-        :ref:`中文 <CubaLIFNode.__init__-cn>` | :ref:`English <CubaLIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <CubaLIFNode.__init__-cn>` | :ref:`English <CubaLIFNode.__init__-en>`
 
         ----
 
@@ -479,10 +471,10 @@ class CubaLIFNode(neuron.BaseNode):
         :type requires_grad: bool
         :param detach_reset: whether to detach the computational graph of reset in backward pass. Default to ``False`` .
         :type detach_reset: bool
-        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step). Default to `'s'` .
+        :param step_mode: the step mode, which can be ``'s'`` (single-step) or ``'m'`` (multi-step). Default to ``'s'`` .
         :type step_mode: str
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. Only `torch` is supported.
+            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. Only ``torch`` is supported.
         :type backend: str
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
             whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
@@ -494,6 +486,7 @@ class CubaLIFNode(neuron.BaseNode):
             only the current at last time-step will be stored to ``self.current_state`` with ``shape = [N, *]``, which can reduce the
             memory consumption. Default to ``False`` .
         :type store_i_seq: bool
+
         .. math::
             I[t] = (1 - \alpha_{I})I[t-1] + X[t]
             V[t] = (1 - \alpha_{V})V[t-1] + I[t]
@@ -571,8 +564,7 @@ class CubaLIFNode(neuron.BaseNode):
     @property
     def scale(self):
         r"""
-        **API Language:**
-        :ref:`中文 <CubaLIFNode.scale-cn>` | :ref:`English <CubaLIFNode.scale-en>`
+        **API Language** - :ref:`中文 <CubaLIFNode.scale-cn>` | :ref:`English <CubaLIFNode.scale-en>`
 
         ----
 
@@ -597,8 +589,7 @@ class CubaLIFNode(neuron.BaseNode):
     @property
     def s_scale(self):
         r"""
-        **API Language:**
-        :ref:`中文 <CubaLIFNode.s_scale-cn>` | :ref:`English <CubaLIFNode.s_scale-en>`
+        **API Language** - :ref:`中文 <CubaLIFNode.s_scale-cn>` | :ref:`English <CubaLIFNode.s_scale-en>`
 
         ----
 
@@ -623,8 +614,7 @@ class CubaLIFNode(neuron.BaseNode):
     @property
     def p_scale(self):
         r"""
-        **API Language:**
-        :ref:`中文 <CubaLIFNode.p_scale-cn>` | :ref:`English <CubaLIFNode.p_scale-en>`
+        **API Language** - :ref:`中文 <CubaLIFNode.p_scale-cn>` | :ref:`English <CubaLIFNode.p_scale-en>`
 
         ----
 
@@ -1140,18 +1130,19 @@ try:
     def to_lava_blocks(net: Union[list, tuple, nn.Sequential]):
         # https://lava-nc.org/lava-lib-dl/netx/netx.html
         """
-        Supported layer types
-        input  : {shape, type}
-        flatten: {shape, type}
-        average: {shape, type}
-        concat : {shape, type, layers}
-        dense  : {shape, type, neuron, inFeatures, outFeatures, weight, delay(if available)}
-        pool   : {shape, type, neuron, kernelSize, stride, padding, dilation, weight}
-        conv   : {shape, type, neuron, inChannels, outChannels, kernelSize, stride,
-                                |      padding, dilation, groups, weight, delay(if available)}
-                                |
-                                |-> this is the description of the compartment parameters
-                                |-> {iDecay, vDecay, vThMant, refDelay, ... (other additional params)}
+        Supported layer types::
+
+            input  : {shape, type}
+            flatten: {shape, type}
+            average: {shape, type}
+            concat : {shape, type, layers}
+            dense  : {shape, type, neuron, inFeatures, outFeatures, weight, delay(if available)}
+            pool   : {shape, type, neuron, kernelSize, stride, padding, dilation, weight}
+            conv   : {shape, type, neuron, inChannels, outChannels, kernelSize, stride,
+                                      |      padding, dilation, groups, weight, delay(if available)}
+                                      |
+                                      |-> this is the description of the compartment parameters
+                                      |-> {iDecay, vDecay, vThMant, refDelay, ... (other additional params)}
         """
         blocks = []
         length = net.__len__()

@@ -137,7 +137,7 @@ Current Scope
 7. ``PP`` explicitly resets neuron state between microbatches inside each stage so that different microbatches do not leak state into each other.
 
 Server Benchmarks (small-network smoke benchmark)
-++++++++++++++++++++++++
++++++++++++++++++++++++++++++++++++++++++++++++++
 
 The following numbers were collected on a multi-GPU RTX 4090 server with ``CIFAR10DVSVGG``, ``backend='inductor'``, ``batch_size=2``, and ``T=10`` using a short training-step benchmark. The ``global_samples/s`` column is the unified global throughput of the whole distributed job. This workload is intentionally tiny and should be read as a smoke benchmark plus a memory-trend probe rather than a definitive scaling study.
 
@@ -201,7 +201,7 @@ This small-network smoke benchmark shows that:
 * ``DDP + TP`` is still not recommended, and ``fsdp2_tp`` should be used instead.
 
 Experimental PP benchmark (server rerun)
-+++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++
 
 ``PP`` now includes:
 
@@ -333,7 +333,7 @@ These rerun results show that:
 * however, ``zero_bubble`` still comes with extra ``inductor`` recompilation warnings, so it is best viewed as a manual experimental or capacity-oriented option rather than the default recommendation today.
 
 Spikformer + memopt Results
-++++++++++++++++++++++++
+++++++++++++++++++++++++++++
 
 On ``spikformer_ti`` in a more ImageNet-like setting, ``TP`` and ``FSDP2 + TP`` can now also be combined with ``memopt level=1``. The following experiment uses:
 
@@ -505,7 +505,7 @@ When ``prefer=capacity`` and the environment supports it, the auto recommender n
 If you explicitly set ``--distributed-mode``, the ``prefer`` hint can still fill in defaults such as ``memopt`` or ``optimizer_sharding``, but it will not override the manually selected mode.
 
 Automatic Benchmark Logging and Comparison
-+++++++++++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++++
 
 ``benchmark/benchmark_snn_distributed.py`` now appends results to ``benchmark/results/benchmark_snn_distributed.jsonl`` by default and automatically compares each run against the most recent earlier run with the same configuration. The newer records also make the benchmark regime and batch semantics explicit. Each record stores:
 

@@ -28,8 +28,7 @@ class MPBNBaseNode(BaseNode):
         bn_min_momentum: float = 0.005,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <MPBNBaseNode.__init__-cn>` | :ref:`English <MPBNBaseNode.__init__-en>`
+        **API Language** - :ref:`中文 <MPBNBaseNode.__init__-cn>` | :ref:`English <MPBNBaseNode.__init__-en>`
 
         ----
 
@@ -42,8 +41,12 @@ class MPBNBaseNode(BaseNode):
         神经动力学方程如下：
 
         .. math::
+            :nowrap:
+
+            \begin{align*}
             H'[t] &= \mathbf{BN}(H[t]), & \text{（训练时）} \\
             (\tilde{V}_{th})_{i} &= \frac{(V_{th}-\beta_{i})\sqrt{\sigma_{i}^{2}}}{\gamma_{i}}+\mu_{i}, & \text{（测试时适应）}
+            \end{align*}
 
         :param mpbn: 是否启用 MPBN
         :type mpbn: bool
@@ -80,8 +83,12 @@ class MPBNBaseNode(BaseNode):
         The neuronal dynamics are described as:
 
         .. math::
+            :nowrap:
+
+            \begin{align*}
             H'[t] &= \mathbf{BN}(H[t]), & \text{(training)} \\
             (\tilde{V}_{th})_{i} &= \frac{(V_{th}-\beta_{i})\sqrt{\sigma_{i}^{2}}}{\gamma_{i}}+\mu_{i}, & \text{(test-time adaptation)}
+            \end{align*}
 
         :param mpbn: whether to enable MPBN
         :type mpbn: bool
@@ -276,8 +283,7 @@ class MPBNBaseNode(BaseNode):
 
     def single_step_forward(self, x: torch.Tensor):
         """
-        **API Language:**
-        :ref:`中文 <MPBNBaseNode.single_step_forward-cn>` | :ref:`English <MPBNBaseNode.single_step_forward-en>`
+        **API Language** - :ref:`中文 <MPBNBaseNode.single_step_forward-cn>` | :ref:`English <MPBNBaseNode.single_step_forward-en>`
 
         ----
 
@@ -358,8 +364,7 @@ class MPBNLIFNode(MPBNBaseNode):
         bn_min_momentum: float = 0.005,
     ):
         r"""
-        **API Language:**
-        :ref:`中文 <MPBNLIFNode.__init__-cn>` | :ref:`English <MPBNLIFNode.__init__-en>`
+        **API Language** - :ref:`中文 <MPBNLIFNode.__init__-cn>` | :ref:`English <MPBNLIFNode.__init__-en>`
 
         ----
 
@@ -372,8 +377,12 @@ class MPBNLIFNode(MPBNBaseNode):
         神经动力学方程如下：
 
         .. math::
+            :nowrap:
+
+            \begin{align*}
             H'[t] &= \mathbf{BN}(H[t]), & \text{（训练时）} \\
             (\tilde{V}_{th})_{i} &= \frac{(V_{th}-\beta_{i})\sqrt{\sigma_{i}^{2}}}{\gamma_{i}}+\mu_{i}, & \text{（测试时适应）}
+            \end{align*}
 
         :param tau: LIF中的时间常数
         :type tau: float
@@ -395,8 +404,12 @@ class MPBNLIFNode(MPBNBaseNode):
         The neuronal dynamics are described as:
 
         .. math::
+            :nowrap:
+
+            \begin{align*}
             H'[t] &= \mathbf{BN}(H[t]), & \text{(training)} \\
             (\tilde{V}_{th})_{i} &= \frac{(V_{th}-\beta_{i})\sqrt{\sigma_{i}^{2}}}{\gamma_{i}}+\mu_{i}, & \text{(test-time adaptation)}
+            \end{align*}
 
         :param tau: time constant in LIF
         :type tau: float

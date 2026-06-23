@@ -178,6 +178,7 @@ Now let us give inputs to the spiking neurons step-by-step, check the membrane p
                                     v_reset=if_layer.v_reset,
                                     figsize=figsize, dpi=dpi)
     plt.show()
+
 The input has ``shape=[1]``. So, there is only 1 neuron. Its membrane potential and output spikes are:
 
 .. image:: ../../_static/tutorials/neuron/0.*

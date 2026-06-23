@@ -44,8 +44,7 @@ def _gc_1st_forward():
 
 def in_gc_1st_forward() -> bool:
     r"""
-    **API Language:**
-    :ref:`中文 <in_gc_1st_forward-cn>` | :ref:`English <in_gc_1st_forward-en>`
+    **API Language** - :ref:`中文 <in_gc_1st_forward-cn>` | :ref:`English <in_gc_1st_forward-en>`
 
     ----
 
@@ -72,8 +71,7 @@ def in_gc_1st_forward() -> bool:
 
 def query_autocast() -> Tuple[str, torch.dtype, bool]:
     r"""
-    **API Language:**
-    :ref:`中文 <query_autocast-cn>` | :ref:`English <query_autocast-en>`
+    **API Language** - :ref:`中文 <query_autocast-cn>` | :ref:`English <query_autocast-en>`
 
     ----
 
@@ -203,8 +201,7 @@ class InputCompressedGC(autograd.Function):
 
 def input_compressed_gc(f_forward, x_compressor: BaseSpikeCompressor, x_seq, *args):
     r"""
-    **API Language:**
-    :ref:`中文 <input_compressed_gc-cn>` | :ref:`English <input_compressed_gc-en>`
+    **API Language** - :ref:`中文 <input_compressed_gc-cn>` | :ref:`English <input_compressed_gc-en>`
 
     ----
 
@@ -287,8 +284,7 @@ def to_gc_function(
     x_compressor: BaseSpikeCompressor, f_forward: Optional[Callable] = None
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <to_gc_function-cn>` | :ref:`English <to_gc_function-en>`
+    **API Language** - :ref:`中文 <to_gc_function-cn>` | :ref:`English <to_gc_function-en>`
 
     ----
 
@@ -376,8 +372,7 @@ def to_gc_function(
 class GCContainer(nn.Sequential):
     def __init__(self, x_compressor: Optional[BaseSpikeCompressor], *args):
         r"""
-        **API Language:**
-        :ref:`中文 <GCContainer.__init__-cn>` | :ref:`English <GCContainer.__init__-en>`
+        **API Language** - :ref:`中文 <GCContainer.__init__-cn>` | :ref:`English <GCContainer.__init__-en>`
 
         ----
 
@@ -468,8 +463,7 @@ class TCGCContainer(GCContainer):
         n_outputs: int = 1,
     ):
         """
-        **API Language:**
-        :ref:`中文 <TCGCContainer-cn>` | :ref:`English <TCGCContainer-en>`
+        **API Language** - :ref:`中文 <TCGCContainer-cn>` | :ref:`English <TCGCContainer-en>`
 
         ----
 
@@ -482,7 +476,7 @@ class TCGCContainer(GCContainer):
         :param x_compressor: 脉冲压缩器。如果为 ``None`` 则使用 ``NullSpikeCompressor``
         :type x_compressor: Optional[BaseSpikeCompressor]
 
-        :param *args: 传递给 ``nn.Sequential`` 的若干模块。必须以位置参数形式传入
+        :param args: 传递给 ``nn.Sequential`` 的若干模块。必须以位置参数形式传入
 
         :param n_chunk: 分块数量。默认为1。必须以关键字参数形式传入
         :type n_chunk: int
@@ -504,7 +498,7 @@ class TCGCContainer(GCContainer):
         :param x_compressor: spike compressor. If None, use ``NullSpikeCompressor``
         :type x_compressor: Optional[BaseSpikeCompressor]
 
-        :param *args: modules as arguments of ``nn.Sequential``. Must act as positional arguments
+        :param args: modules as arguments of ``nn.Sequential``. Must act as positional arguments
 
         :param n_chunk: number of chunks. Default to 1. Must act as keyword arguments
         :type n_chunk: int

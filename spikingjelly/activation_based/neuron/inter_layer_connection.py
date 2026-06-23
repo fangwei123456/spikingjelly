@@ -12,8 +12,7 @@ __all__ = ["ILCBaseNode", "ILCIFNode", "ILCLIFNode", "ILCCUBALIFNode"]
 
 class ILCBaseNode(nn.Module, base.MultiStepModule):
     r"""
-    **API Language:**
-    :ref:`中文 <ILCBaseNode-cn>` | :ref:`English <ILCBaseNode-en>`
+    **API Language** - :ref:`中文 <ILCBaseNode-cn>` | :ref:`English <ILCBaseNode-en>`
 
     ----
 
@@ -102,8 +101,7 @@ class ILCBaseNode(nn.Module, base.MultiStepModule):
     @abstractmethod
     def neuronal_charge(self, x: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <neuronal_charge-cn>` | :ref:`English <neuronal_charge-en>`
+        **API Language** - :ref:`中文 <neuronal_charge-cn>` | :ref:`English <neuronal_charge-en>`
 
         ----
 
@@ -142,8 +140,7 @@ class ILCBaseNode(nn.Module, base.MultiStepModule):
 
     def neuronal_fire(self):
         r"""
-        **API Language:**
-        :ref:`中文 <neuronal_fire-cn>` | :ref:`English <neuronal_fire-en>`
+        **API Language** - :ref:`中文 <neuronal_fire-cn>` | :ref:`English <neuronal_fire-en>`
 
         ----
 
@@ -188,8 +185,7 @@ class ILCBaseNode(nn.Module, base.MultiStepModule):
 
     def neuronal_reset(self, spike):
         r"""
-        **API Language:**
-        :ref:`中文 <neuronal_reset-cn>` | :ref:`English <neuronal_reset-en>`
+        **API Language** - :ref:`中文 <neuronal_reset-cn>` | :ref:`English <neuronal_reset-en>`
 
         ----
 
@@ -201,9 +197,9 @@ class ILCBaseNode(nn.Module, base.MultiStepModule):
 
         支持两种重置模式：
 
-        - **软重置**（当 ``v_reset`` 为 ``None`` 时）：膜电位减去阈值，即
+        - **软重置** （当 ``v_reset`` 为 ``None`` 时）：膜电位减去阈值，即
           :math:`V = V - S \\cdot V_{th}`
-        - **硬重置**（当 ``v_reset`` 为数值时）：膜电位重置为固定值，即
+        - **硬重置** （当 ``v_reset`` 为数值时）：膜电位重置为固定值，即
           :math:`V = V_{reset}` 或 :math:`V = (1 - S) \\cdot V + S \\cdot V_{reset}`
 
         这是充电-放电-重置循环的第三步。
@@ -240,8 +236,7 @@ class ILCBaseNode(nn.Module, base.MultiStepModule):
 
     def init_tensor(self, data: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <init_tensor-cn>` | :ref:`English <init_tensor-en>`
+        **API Language** - :ref:`中文 <init_tensor-cn>` | :ref:`English <init_tensor-en>`
 
         ----
 
@@ -277,8 +272,7 @@ class ILCBaseNode(nn.Module, base.MultiStepModule):
 
     def forward(self, x_seq: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <forward-cn>` | :ref:`English <forward-en>`
+        **API Language** - :ref:`中文 <forward-cn>` | :ref:`English <forward-en>`
 
         ----
 
@@ -352,8 +346,7 @@ class ILCIFNode(ILCBaseNode):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(),
     ):
         """
-        **API Language:**
-        :ref:`中文 <ILCIFNode-cn>` | :ref:`English <ILCIFNode-en>`
+        **API Language** - :ref:`中文 <ILCIFNode-cn>` | :ref:`English <ILCIFNode-en>`
 
         ----
 
@@ -384,8 +377,7 @@ class ILCIFNode(ILCBaseNode):
 
     def neuronal_charge(self, x: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <ILCIFNode.neuronal_charge-cn>` | :ref:`English <ILCIFNode.neuronal_charge-en>`
+        **API Language** - :ref:`中文 <ILCIFNode.neuronal_charge-cn>` | :ref:`English <ILCIFNode.neuronal_charge-en>`
 
         ----
 
@@ -430,8 +422,7 @@ class ILCLIFNode(ILCBaseNode):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(),
     ):
         """
-        **API Language:**
-        :ref:`中文 <ILCLIFNode-cn>` | :ref:`English <ILCLIFNode-en>`
+        **API Language** - :ref:`中文 <ILCLIFNode-cn>` | :ref:`English <ILCLIFNode-en>`
 
         ----
 
@@ -466,8 +457,7 @@ class ILCLIFNode(ILCBaseNode):
 
     def neuronal_charge(self, x: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <ILCLIFNode.neuronal_charge-cn>` | :ref:`English <ILCLIFNode.neuronal_charge-en>`
+        **API Language** - :ref:`中文 <ILCLIFNode.neuronal_charge-cn>` | :ref:`English <ILCLIFNode.neuronal_charge-en>`
 
         ----
 
@@ -515,8 +505,7 @@ class ILCCUBALIFNode(ILCBaseNode):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(),
     ):
         """
-        **API Language:**
-        :ref:`中文 <ILCCUBALIFNode-cn>` | :ref:`English <ILCCUBALIFNode-en>`
+        **API Language** - :ref:`中文 <ILCCUBALIFNode-cn>` | :ref:`English <ILCCUBALIFNode-en>`
 
         ----
 
@@ -561,8 +550,7 @@ class ILCCUBALIFNode(ILCBaseNode):
 
     def neuronal_charge(self, x: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <ILCCUBALIFNode.neuronal_charge-cn>` | :ref:`English <ILCCUBALIFNode.neuronal_charge-en>`
+        **API Language** - :ref:`中文 <ILCCUBALIFNode.neuronal_charge-cn>` | :ref:`English <ILCCUBALIFNode.neuronal_charge-en>`
 
         ----
 
@@ -603,8 +591,7 @@ class ILCCUBALIFNode(ILCBaseNode):
 
     def init_tensor(self, data: torch.Tensor):
         r"""
-        **API Language:**
-        :ref:`中文 <ILCCUBALIFNode.init_tensor-cn>` | :ref:`English <ILCCUBALIFNode.init_tensor-en>`
+        **API Language** - :ref:`中文 <ILCCUBALIFNode.init_tensor-cn>` | :ref:`English <ILCCUBALIFNode.init_tensor-en>`
 
         ----
 

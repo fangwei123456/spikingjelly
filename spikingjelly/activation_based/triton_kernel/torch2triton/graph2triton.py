@@ -328,8 +328,8 @@ def generate_triton_code_str(
     verbose: bool = False,
 ) -> Tuple[str, str]:
     """Given a fx.Graph, generate its corresponding Triton code string.
-    **API Language:**
-    :ref:`中文 <generate_triton_code_str-cn>` | :ref:`English <generate_triton_code_str-en>`
+
+    **API Language** - :ref:`中文 <generate_triton_code_str-cn>` | :ref:`English <generate_triton_code_str-en>`
 
     ----
 
@@ -402,8 +402,8 @@ def compile_triton_code_str(
     name_space: Optional[dict] = None,
 ):
     """Compile a Triton code string into a runnable Triton JIT function.
-    **API Language:**
-    :ref:`中文 <compile_triton_code_str-cn>` | :ref:`English <compile_triton_code_str-en>`
+
+    **API Language** - :ref:`中文 <compile_triton_code_str-cn>` | :ref:`English <compile_triton_code_str-en>`
 
     ----
 
@@ -413,19 +413,20 @@ def compile_triton_code_str(
 
     编译Triton代码字符串
 
-    Materializes the Triton code under the persistent codegen cache, loads or
-    reuses the matching module object, and extracts the requested JIT function.
-    Args:
-        triton_code (str): The Triton code string to compile/cache.
-        kernel_name (str): The name of the Triton function to extract.
-        verbose (bool, optional): If True, print whether the cached source was
-            written or reused, along with its path. Defaults to False.
-        name_space (Optional[dict], optional): Optional globals injected before execution.
-            When provided, it will be updated with symbols defined by the compiled module.
-            Calls without ``name_space`` reuse a cached module keyed by the generated
-            source hash; calls with ``name_space`` reload so injected symbols stay fresh.
-    Returns:
-        triton.JITFunction: The compiled Triton JIT function.
+    将 Triton 代码写入持久化 codegen cache，加载或复用匹配的模块对象，并返回指定的
+    JIT 函数。
+
+    :param triton_code: The Triton code string to compile/cache.
+    :type triton_code: str
+    :param kernel_name: The name of the Triton function to extract.
+    :type kernel_name: str
+    :param verbose: If ``True``, print whether the cached source was written or reused.
+    :type verbose: bool
+    :param name_space: Optional globals injected before execution. When provided,
+        it is updated with symbols defined by the compiled module.
+    :type name_space: Optional[dict]
+    :return: The compiled Triton JIT function.
+    :rtype: triton.JITFunction
 
     ----
 

@@ -75,8 +75,7 @@ def save_as_pic(
     pic_first_name: str = "pic",
 ) -> None:
     r"""
-    **API Language:**
-    :ref:`中文 <save_as_pic-cn>` | :ref:`English <save_as_pic-en>`
+    **API Language** - :ref:`中文 <save_as_pic-cn>` | :ref:`English <save_as_pic-en>`
 
     ----
 
@@ -150,8 +149,7 @@ def save_every_frame_of_an_entire_DVS_dataset(
     number_of_threads: int = 4,
 ):
     """
-    **API Language:**
-    :ref:`中文 <save_every_frame_of_an_entire_DVS_dataset-cn>` | :ref:`English <save_every_frame_of_an_entire_DVS_dataset-en>`
+    **API Language** - :ref:`中文 <save_every_frame_of_an_entire_DVS_dataset-cn>` | :ref:`English <save_every_frame_of_an_entire_DVS_dataset-en>`
 
     ----
 
@@ -274,8 +272,7 @@ def save_every_frame_of_an_entire_DVS_dataset(
 
 def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> None:
     r"""
-    **API Language:**
-    :ref:`中文 <play_frame-cn>` | :ref:`English <play_frame-en>`
+    **API Language** - :ref:`中文 <play_frame-cn>` | :ref:`English <play_frame-en>`
 
     ----
 
@@ -325,8 +322,7 @@ def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> N
 
 def load_aedat_v3(file_name: Union[str, Path]) -> dict:
     r"""
-    **API Language:**
-    :ref:`中文 <load_aedat_v3-cn>` | :ref:`English <load_aedat_v3-en>`
+    **API Language** - :ref:`中文 <load_aedat_v3-cn>` | :ref:`English <load_aedat_v3-en>`
 
     ----
 
@@ -414,8 +410,7 @@ def load_aedat_v3(file_name: Union[str, Path]) -> dict:
 
 def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
     r"""
-    **API Language:**
-    :ref:`中文 <load_ATIS_bin-cn>` | :ref:`English <load_ATIS_bin-en>`
+    **API Language** - :ref:`中文 <load_ATIS_bin-cn>` | :ref:`English <load_ATIS_bin-en>`
 
     ----
 
@@ -469,8 +464,7 @@ def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
 
 def load_npz_frames(file_name: Union[str, Path]) -> np.ndarray:
     r"""
-    **API Language:**
-    :ref:`中文 <load_npz_frames-cn>` | :ref:`English <load_npz_frames-en>`
+    **API Language** - :ref:`中文 <load_npz_frames-cn>` | :ref:`English <load_npz_frames-en>`
 
     ----
 
@@ -509,8 +503,7 @@ def integrate_events_segment_to_frame(
     j_r: Optional[int] = None,
 ) -> np.ndarray:
     r"""
-    **API Language:**
-    :ref:`中文 <integrate_events_segment_to_frame-cn>` | :ref:`English <integrate_events_segment_to_frame-en>`
+    **API Language** - :ref:`中文 <integrate_events_segment_to_frame-cn>` | :ref:`English <integrate_events_segment_to_frame-en>`
 
     ----
 
@@ -522,9 +515,9 @@ def integrate_events_segment_to_frame(
 
     .. math::
 
-        F(p, x, y) = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
+        F(p, x, y) = \sum_{i = j_{l}}^{j_{r} - 1} \mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
 
-    其中 :math:`\\lfloor \\cdot \\rfloor` 是取整运算，:math:`\\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` 是指示函数，仅在 :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})` 时等于 1。
+    其中 :math:`\lfloor \cdot \rfloor` 是取整运算，:math:`\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` 是指示函数，仅在 :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})` 时等于 1。
 
     :param x: 事件的 x 坐标
     :type x: numpy.ndarray
@@ -560,9 +553,9 @@ def integrate_events_segment_to_frame(
 
     .. math::
 
-        F(p, x, y) = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
+        F(p, x, y) = \sum_{i = j_{l}}^{j_{r} - 1} \mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
 
-    where :math:`\\lfloor \\cdot \\rfloor` is the floor operation, :math:`\\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` is an indicator function and it equals 1 only when :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`.
+    where :math:`\lfloor \cdot \rfloor` is the floor operation, :math:`\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` is an indicator function and it equals 1 only when :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`.
 
     :param x: x-coordinate of events
     :type x: numpy.ndarray
@@ -644,8 +637,7 @@ def cal_fixed_frames_number_segment_index(
     events_t: np.ndarray, split_by: str, frames_num: int
 ) -> tuple:
     r"""
-    **API Language:**
-    :ref:`中文 <cal_fixed_frames_number_segment_index-cn>` | :ref:`English <cal_fixed_frames_number_segment_index-en>`
+    **API Language** - :ref:`中文 <cal_fixed_frames_number_segment_index-cn>` | :ref:`English <cal_fixed_frames_number_segment_index-en>`
 
     ----
 
@@ -656,17 +648,23 @@ def cal_fixed_frames_number_segment_index(
     将 ``frames_num`` 记为 :math:`M`，如果 ``split_by`` 为 ``'time'``，则
 
     .. math::
+        :nowrap:
 
-        \\Delta T & = [\\frac{t_{N-1} - t_{0}}{M}] \\\\
-        j_{l} & = \\mathop{\\arg\\min}\\limits_{k} \\{t_{k} | t_{k} \\geq t_{0} + \\Delta T \\cdot j\\} \\\\
-        j_{r} & = \\begin{cases} \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} < t_{0} + \\Delta T \\cdot (j + 1)\\} + 1, & j <  M - 1 \\cr N, & j = M - 1 \\end{cases}
+        \begin{align*}
+        \Delta T & = [\frac{t_{N-1} - t_{0}}{M}] \\
+        j_{l} & = \mathop{\arg\min}\limits_{k} \{t_{k} | t_{k} \geq t_{0} + \Delta T \cdot j\} \\
+        j_{r} & = \begin{cases} \mathop{\arg\max}\limits_{k} \{t_{k} | t_{k} < t_{0} + \Delta T \cdot (j + 1)\} + 1, & j < M - 1 \\ N, & j = M - 1 \end{cases}
+        \end{align*}
 
     如果 ``split_by`` 为 ``'number'``，则
 
     .. math::
+        :nowrap:
 
-        j_{l} & = [\\frac{N}{M}] \\cdot j \\\\
-        j_{r} & = \\begin{cases} [\\frac{N}{M}] \\cdot (j + 1), & j <  M - 1 \\cr N, & j = M - 1 \\end{cases}
+        \begin{align*}
+        j_{l} & = [\frac{N}{M}] \cdot j \\
+        j_{r} & = \begin{cases} [\frac{N}{M}] \cdot (j + 1), & j < M - 1 \\ N, & j = M - 1 \end{cases}
+        \end{align*}
 
     :param events_t: 事件的 t
     :type events_t: numpy.ndarray
@@ -689,17 +687,23 @@ def cal_fixed_frames_number_segment_index(
     Denote ``frames_num`` as :math:`M`, if ``split_by`` is ``'time'``, then
 
     .. math::
+        :nowrap:
 
-        \\Delta T & = [\\frac{t_{N-1} - t_{0}}{M}] \\\\
-        j_{l} & = \\mathop{\\arg\\min}\\limits_{k} \\{t_{k} | t_{k} \\geq t_{0} + \\Delta T \\cdot j\\} \\\\
-        j_{r} & = \\begin{cases} \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} < t_{0} + \\Delta T \\cdot (j + 1)\\} + 1, & j <  M - 1 \\cr N, & j = M - 1 \\end{cases}
+        \begin{align*}
+        \Delta T & = [\frac{t_{N-1} - t_{0}}{M}] \\
+        j_{l} & = \mathop{\arg\min}\limits_{k} \{t_{k} | t_{k} \geq t_{0} + \Delta T \cdot j\} \\
+        j_{r} & = \begin{cases} \mathop{\arg\max}\limits_{k} \{t_{k} | t_{k} < t_{0} + \Delta T \cdot (j + 1)\} + 1, & j < M - 1 \\ N, & j = M - 1 \end{cases}
+        \end{align*}
 
     If ``split_by`` is ``'number'``, then
 
     .. math::
+        :nowrap:
 
-        j_{l} & = [\\frac{N}{M}] \\cdot j \\\\
-        j_{r} & = \\begin{cases} [\\frac{N}{M}] \\cdot (j + 1), & j <  M - 1 \\cr N, & j = M - 1 \\end{cases}
+        \begin{align*}
+        j_{l} & = [\frac{N}{M}] \cdot j \\
+        j_{r} & = \begin{cases} [\frac{N}{M}] \cdot (j + 1), & j < M - 1 \\ N, & j = M - 1 \end{cases}
+        \end{align*}
 
     :param events_t: events' t
     :type events_t: numpy.ndarray
@@ -746,8 +750,7 @@ def integrate_events_by_fixed_frames_number(
     events: dict, split_by: str, frames_num: int, H: int, W: int
 ) -> np.ndarray:
     r"""
-    **API Language:**
-    :ref:`中文 <integrate_events_by_fixed_frames_number-cn>` | :ref:`English <integrate_events_by_fixed_frames_number-en>`
+    **API Language** - :ref:`中文 <integrate_events_by_fixed_frames_number-cn>` | :ref:`English <integrate_events_by_fixed_frames_number-en>`
 
     ----
 
@@ -823,8 +826,7 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(
     print_save: bool = False,
 ) -> None:
     """
-    **API Language:**
-    :ref:`中文 <integrate_events_file_to_frames_file_by_fixed_frames_number-cn>` | :ref:`English <integrate_events_file_to_frames_file_by_fixed_frames_number-en>`
+    **API Language** - :ref:`中文 <integrate_events_file_to_frames_file_by_fixed_frames_number-cn>` | :ref:`English <integrate_events_file_to_frames_file_by_fixed_frames_number-en>`
 
     ----
 
@@ -910,8 +912,7 @@ def integrate_events_by_fixed_duration(
     events: dict, duration: int, H: int, W: int
 ) -> np.ndarray:
     r"""
-    **API Language:**
-    :ref:`中文 <integrate_events_by_fixed_duration-cn>` | :ref:`English <integrate_events_by_fixed_duration-en>`
+    **API Language** - :ref:`中文 <integrate_events_by_fixed_duration-cn>` | :ref:`English <integrate_events_by_fixed_duration-en>`
 
     ----
 
@@ -991,8 +992,7 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     print_save: bool = False,
 ) -> int:
     r"""
-    **API Language:**
-    :ref:`中文 <integrate_events_file_to_frames_file_by_fixed_duration-cn>` | :ref:`English <integrate_events_file_to_frames_file_by_fixed_duration-en>`
+    **API Language** - :ref:`中文 <integrate_events_file_to_frames_file_by_fixed_duration-cn>` | :ref:`English <integrate_events_file_to_frames_file_by_fixed_duration-en>`
 
     ----
 
@@ -1069,8 +1069,7 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
 
 def save_frames_to_npz_and_print(fname: str, frames: np.ndarray):
     r"""
-    **API Language:**
-    :ref:`中文 <save_frames_to_npz_and_print-cn>` | :ref:`English <save_frames_to_npz_and_print-en>`
+    **API Language** - :ref:`中文 <save_frames_to_npz_and_print-cn>` | :ref:`English <save_frames_to_npz_and_print-en>`
 
     ----
 
@@ -1105,8 +1104,7 @@ def create_same_directory_structure(
     source_dir: Union[str, Path], target_dir: Union[str, Path]
 ) -> None:
     r"""
-    **API Language:**
-    :ref:`中文 <create_same_directory_structure-cn>` | :ref:`English <create_same_directory_structure-en>`
+    **API Language** - :ref:`中文 <create_same_directory_structure-cn>` | :ref:`English <create_same_directory_structure-en>`
 
     ----
 
@@ -1153,8 +1151,7 @@ def split_to_train_test_set(
     random_split: bool = False,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <split_to_train_test_set-cn>` | :ref:`English <split_to_train_test_set-en>`
+    **API Language** - :ref:`中文 <split_to_train_test_set-cn>` | :ref:`English <split_to_train_test_set-en>`
 
     ----
 
@@ -1238,8 +1235,7 @@ def fast_split_to_train_test_set(
     batch_size: int = 16,
 ):
     r"""
-    **API Language:**
-    :ref:`中文 <fast_split_to_train_test_set-cn>` | :ref:`English <fast_split_to_train_test_set-en>`
+    **API Language** - :ref:`中文 <fast_split_to_train_test_set-cn>` | :ref:`English <fast_split_to_train_test_set-en>`
 
     ----
 
@@ -1334,8 +1330,7 @@ def fast_split_to_train_test_set(
 
 def pad_sequence_collate(batch: list):
     """
-    **API Language:**
-    :ref:`中文 <pad_sequence_collate-cn>` | :ref:`English <pad_sequence_collate-en>`
+    **API Language** - :ref:`中文 <pad_sequence_collate-cn>` | :ref:`English <pad_sequence_collate-en>`
 
     ----
 
@@ -1428,8 +1423,7 @@ def pad_sequence_collate(batch: list):
 
 def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
     r"""
-    **API Language:**
-    :ref:`中文 <padded_sequence_mask-cn>` | :ref:`English <padded_sequence_mask-en>`
+    **API Language** - :ref:`中文 <padded_sequence_mask-cn>` | :ref:`English <padded_sequence_mask-en>`
 
     ----
 
@@ -1538,8 +1532,7 @@ def create_sub_dataset(
     source_dir: str, target_dir: str, ratio: float, use_soft_link=True, randomly=False
 ):
     """
-    **API Language:**
-    :ref:`中文 <create_sub_dataset-cn>` | :ref:`English <create_sub_dataset-en>`
+    **API Language** - :ref:`中文 <create_sub_dataset-cn>` | :ref:`English <create_sub_dataset-en>`
 
     ----
 

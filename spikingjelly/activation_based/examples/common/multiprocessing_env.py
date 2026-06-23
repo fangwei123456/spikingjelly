@@ -63,12 +63,13 @@ class VecEnv(object):
     def step_wait(self):
         """
         Wait for the step taken with step_async().
-        Returns (obs, rews, dones, infos):
-         - obs: an array of observations, or a tuple of
-                arrays of observations.
-         - rews: an array of rewards
-         - dones: an array of "episode done" booleans
-         - infos: a sequence of info objects
+
+        Returns ``(obs, rews, dones, infos)``:
+
+        - ``obs``: an array of observations, or a tuple of arrays of observations.
+        - ``rews``: an array of rewards
+        - ``dones``: an array of "episode done" booleans
+        - ``infos``: a sequence of info objects
         """
         pass
 
