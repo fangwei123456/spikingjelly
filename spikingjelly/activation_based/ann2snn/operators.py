@@ -1,5 +1,5 @@
 import math
-from typing import Literal, Optional, Sequence, Union
+from typing import Literal, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -12,6 +12,7 @@ __all__ = [
     "TDGELU",
     "TDLinear",
     "TDScaledDotProductAttention",
+    "TDMultiheadAttention",
 ]
 
 
@@ -35,14 +36,56 @@ def _check_time_sequence(x_seq: torch.Tensor, module_name: str) -> None:
         )
 
 
-def _check_attention_sequence(x_seq: torch.Tensor, tensor_name: str) -> None:
-    module_name = "TDScaledDotProductAttention"
+def _check_attention_sequence(
+    x_seq: torch.Tensor, tensor_name: str, module_name: str
+) -> None:
     _check_time_sequence(x_seq, module_name)
     if x_seq.dim() < 3:
         raise ValueError(
             f"{module_name} expects {tensor_name} with shape [T, ..., L, E] "
             f"and at least 3 dimensions, but got shape {tuple(x_seq.shape)}."
         )
+
+
+def _td_scaled_dot_product_attention(
+    query_seq: torch.Tensor,
+    key_seq: torch.Tensor,
+    value_seq: torch.Tensor,
+    attn_mask: Optional[torch.Tensor],
+    is_causal: bool,
+    scale: Optional[float],
+    module_name: str,
+) -> torch.Tensor:
+    _check_attention_sequence(query_seq, "query_seq", module_name)
+    _check_attention_sequence(key_seq, "key_seq", module_name)
+    _check_attention_sequence(value_seq, "value_seq", module_name)
+
+    if (
+        query_seq.shape[0] != key_seq.shape[0]
+        or query_seq.shape[0] != value_seq.shape[0]
+    ):
+        raise ValueError(
+            f"{module_name} expects query_seq, key_seq, and value_seq to have "
+            "the same time length, but got "
+            f"{query_seq.shape[0]}, {key_seq.shape[0]}, and "
+            f"{value_seq.shape[0]}."
+        )
+    if is_causal and attn_mask is not None:
+        raise ValueError(
+            f"{module_name} does not allow attn_mask when is_causal=True; "
+            "use one masking mode at a time."
+        )
+
+    y_cum = F.scaled_dot_product_attention(
+        query_seq.cumsum(dim=0),
+        key_seq.cumsum(dim=0),
+        value_seq.cumsum(dim=0),
+        attn_mask=attn_mask,
+        dropout_p=0.0,
+        is_causal=is_causal,
+        scale=scale,
+    )
+    return _temporal_difference(y_cum)
 
 
 class TDSoftmax(nn.Module):
@@ -1098,36 +1141,306 @@ class TDScaledDotProductAttention(nn.Module):
             dimension is empty, the time lengths differ, or ``attn_mask`` is
             passed when ``is_causal=True``.
         """
-        _check_attention_sequence(query_seq, "query_seq")
-        _check_attention_sequence(key_seq, "key_seq")
-        _check_attention_sequence(value_seq, "value_seq")
-
-        if (
-            query_seq.shape[0] != key_seq.shape[0]
-            or query_seq.shape[0] != value_seq.shape[0]
-        ):
-            raise ValueError(
-                "TDScaledDotProductAttention expects query_seq, key_seq, and "
-                "value_seq to have the same time length, but got "
-                f"{query_seq.shape[0]}, {key_seq.shape[0]}, and "
-                f"{value_seq.shape[0]}."
-            )
-        if self.is_causal and attn_mask is not None:
-            raise ValueError(
-                "TDScaledDotProductAttention does not allow attn_mask when "
-                "is_causal=True; use one masking mode at a time."
-            )
-
-        y_cum = F.scaled_dot_product_attention(
-            query_seq.cumsum(dim=0),
-            key_seq.cumsum(dim=0),
-            value_seq.cumsum(dim=0),
-            attn_mask=attn_mask,
-            dropout_p=0.0,
-            is_causal=self.is_causal,
-            scale=self.scale,
+        return _td_scaled_dot_product_attention(
+            query_seq,
+            key_seq,
+            value_seq,
+            attn_mask,
+            self.is_causal,
+            self.scale,
+            "TDScaledDotProductAttention",
         )
-        return _temporal_difference(y_cum)
 
     def extra_repr(self) -> str:
         return f"is_causal={self.is_causal}, scale={self.scale}"
+
+
+class TDMultiheadAttention(nn.Module):
+    def __init__(
+        self,
+        embed_dim: int,
+        num_heads: int,
+        dropout: float = 0.0,
+        bias: bool = True,
+        batch_first: bool = True,
+        device: Optional[Union[torch.device, str]] = None,
+        dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        r"""
+        **API Language:**
+        :ref:`中文 <TDMultiheadAttention.__init__-cn>` |
+        :ref:`English <TDMultiheadAttention.__init__-en>`
+
+        ----
+
+        .. _TDMultiheadAttention.__init__-cn:
+
+        * **中文**
+
+        Temporal-difference (TD) MultiheadAttention 的窄子集实现。输入必须是
+        完整时间序列，时间维固定为第 0 维，形状为
+        ``[T, batch, seq, embed_dim]``。该模块使用 ``TDLinear`` 生成 q/k/v
+        projection，执行 TD scaled dot-product attention，再用 ``TDLinear``
+        执行输出 projection。
+
+        返回值是 ``(attn_output_seq, None)``，用于匹配
+        :class:`torch.nn.MultiheadAttention` 在 ``need_weights=False`` 时的
+        tuple 返回结构。输出是浮点差分值，不是二值脉冲，也不是 fully
+        spike-driven attention。该算子无内部状态，支持 CPU 与 CUDA，后端与
+        :mod:`torch` 一致，无 CuPy / Triton 专用路径。当前只支持
+        ``dropout=0.0``、``batch_first=True`` 和 ``need_weights=False``。
+
+        .. code-block:: python
+
+            op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+            x_seq = torch.randn(4, 2, 5, 8)
+            y_seq, weights = op(x_seq, x_seq, x_seq, need_weights=False)
+
+        :param embed_dim: 输入和输出 embedding 维度。
+        :type embed_dim: int
+        :param num_heads: attention head 数量，必须整除 ``embed_dim``。
+        :type num_heads: int
+        :param dropout: attention dropout。当前必须为 ``0.0``。
+        :type dropout: float
+        :param bias: 若为 ``True``，q/k/v 和 out projection 使用 bias。
+        :type bias: bool
+        :param batch_first: 当前必须为 ``True``，即每个时间步的输入形状为
+            ``[batch, seq, embed_dim]``。
+        :type batch_first: bool
+        :param device: 参数初始化设备。
+        :type device: torch.device or str or None
+        :param dtype: 参数初始化 dtype。
+        :type dtype: torch.dtype or None
+        :raises ValueError: 若 ``embed_dim`` 不能被 ``num_heads`` 整除、或传入
+            当前不支持的 ``dropout`` / ``batch_first``。
+
+        ----
+
+        .. _TDMultiheadAttention.__init__-en:
+
+        * **English**
+
+        Narrow temporal-difference (TD) MultiheadAttention implementation. The
+        input must be a complete time sequence whose time dimension is fixed at
+        dimension 0, with shape ``[T, batch, seq, embed_dim]``. This module uses
+        ``TDLinear`` for q/k/v projections, applies TD scaled dot-product
+        attention, and then applies a ``TDLinear`` output projection.
+
+        The return value is ``(attn_output_seq, None)`` to match the tuple
+        structure of :class:`torch.nn.MultiheadAttention` when
+        ``need_weights=False``. The output contains floating-point differential
+        values, is not a binary spike tensor, and is not fully spike-driven
+        attention. The operator is stateless, supports CPU and CUDA, follows the
+        :mod:`torch` backend behavior, and has no CuPy / Triton specific path.
+        Currently only ``dropout=0.0``, ``batch_first=True`` and
+        ``need_weights=False`` are supported.
+
+        .. code-block:: python
+
+            op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+            x_seq = torch.randn(4, 2, 5, 8)
+            y_seq, weights = op(x_seq, x_seq, x_seq, need_weights=False)
+
+        :param embed_dim: Input and output embedding dimension.
+        :type embed_dim: int
+        :param num_heads: Number of attention heads. Must divide ``embed_dim``.
+        :type num_heads: int
+        :param dropout: Attention dropout. It must be ``0.0`` currently.
+        :type dropout: float
+        :param bias: If ``True``, use bias in q/k/v and output projections.
+        :type bias: bool
+        :param batch_first: Must be ``True`` currently. Each time step has shape
+            ``[batch, seq, embed_dim]``.
+        :type batch_first: bool
+        :param device: Device used to initialize parameters.
+        :type device: torch.device or str or None
+        :param dtype: Dtype used to initialize parameters.
+        :type dtype: torch.dtype or None
+        :raises ValueError: If ``embed_dim`` is not divisible by ``num_heads``,
+            or unsupported ``dropout`` / ``batch_first`` is passed.
+        """
+        super().__init__()
+        if embed_dim % num_heads != 0:
+            raise ValueError("embed_dim must be divisible by num_heads.")
+        if dropout != 0.0:
+            raise ValueError("TDMultiheadAttention only supports dropout=0.0.")
+        if not batch_first:
+            raise ValueError("TDMultiheadAttention only supports batch_first=True.")
+
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.dropout = dropout
+        self.batch_first = batch_first
+        self.head_dim = embed_dim // num_heads
+
+        factory_kwargs = {"device": device, "dtype": dtype}
+        self.q_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
+        self.k_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
+        self.v_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
+        self.out_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
+
+    def _split_heads(self, x_seq: torch.Tensor) -> torch.Tensor:
+        if x_seq.dim() != 4:
+            raise ValueError(
+                "TDMultiheadAttention expects input with shape "
+                f"[T, batch, seq, embed_dim], but got {tuple(x_seq.shape)}."
+            )
+        if x_seq.shape[-1] != self.embed_dim:
+            raise ValueError(
+                "TDMultiheadAttention expects the last dimension to match "
+                f"embed_dim={self.embed_dim}, but got {x_seq.shape[-1]}."
+            )
+        t, batch_size, seq_len, _ = x_seq.shape
+        x_seq = x_seq.reshape(
+            t, batch_size, seq_len, self.num_heads, self.head_dim
+        )
+        return x_seq.transpose(2, 3)
+
+    def _merge_heads(self, x_seq: torch.Tensor) -> torch.Tensor:
+        t, batch_size, _, seq_len, _ = x_seq.shape
+        x_seq = x_seq.transpose(2, 3).contiguous()
+        return x_seq.reshape(t, batch_size, seq_len, self.embed_dim)
+
+    def _canonical_mha_attn_mask(
+        self,
+        attn_mask: Optional[torch.Tensor],
+        batch_size: int,
+    ) -> Optional[torch.Tensor]:
+        if attn_mask is None:
+            return None
+        if attn_mask.dtype == torch.bool:
+            attn_mask = torch.logical_not(attn_mask)
+        if attn_mask.dim() == 3 and attn_mask.shape[0] == batch_size * self.num_heads:
+            return attn_mask.reshape(batch_size, self.num_heads, *attn_mask.shape[1:])
+        return attn_mask
+
+    def forward(
+        self,
+        query_seq: torch.Tensor,
+        key_seq: torch.Tensor,
+        value_seq: torch.Tensor,
+        key_padding_mask: Optional[torch.Tensor] = None,
+        need_weights: bool = False,
+        attn_mask: Optional[torch.Tensor] = None,
+        average_attn_weights: bool = True,
+        is_causal: bool = False,
+    ) -> Tuple[torch.Tensor, None]:
+        r"""
+        **API Language:**
+        :ref:`中文 <TDMultiheadAttention.forward-cn>` |
+        :ref:`English <TDMultiheadAttention.forward-en>`
+
+        ----
+
+        .. _TDMultiheadAttention.forward-cn:
+
+        * **中文**
+
+        对完整 query/key/value 时间序列执行 TD multi-head attention。输入形状
+        为 ``[T, batch, seq, embed_dim]``，且 ``T > 0``。当
+        ``need_weights=False`` 时返回 ``(attn_output_seq, None)``。输出是浮点
+        差分值，且 ``attn_output_seq.cumsum(dim=0)`` 与对累积输入逐时间步执行
+        支持子集内的 ANN MultiheadAttention 输出一致。
+
+        :param query_seq: query 时间序列，形状为
+            ``[T, batch, target_len, embed_dim]``。
+        :type query_seq: torch.Tensor
+        :param key_seq: key 时间序列，形状为
+            ``[T, batch, source_len, embed_dim]``。
+        :type key_seq: torch.Tensor
+        :param value_seq: value 时间序列，形状为
+            ``[T, batch, source_len, embed_dim]``。
+        :type value_seq: torch.Tensor
+        :param key_padding_mask: 当前不支持，必须为 ``None``。
+        :type key_padding_mask: torch.Tensor or None
+        :param need_weights: 当前必须为 ``False``。
+        :type need_weights: bool
+        :param attn_mask: attention mask，语义与
+            :class:`torch.nn.MultiheadAttention` 一致；bool mask 中 ``True``
+            表示禁止 attention。
+        :type attn_mask: torch.Tensor or None
+        :param average_attn_weights: 为兼容
+            :class:`torch.nn.MultiheadAttention` 调用签名保留；由于当前不返回
+            attention weights，必须为 ``True``。
+        :type average_attn_weights: bool
+        :param is_causal: 是否应用 causal attention mask。
+        :type is_causal: bool
+        :return: ``(attn_output_seq, None)``，其中 ``attn_output_seq`` 形状为
+            ``[T, batch, target_len, embed_dim]``。
+        :rtype: Tuple[torch.Tensor, None]
+        :raises ValueError: 若传入不支持的 mask/options 或非法输入形状。
+
+        ----
+
+        .. _TDMultiheadAttention.forward-en:
+
+        * **English**
+
+        Apply TD multi-head attention to complete query/key/value time
+        sequences. Inputs have shape ``[T, batch, seq, embed_dim]`` with
+        ``T > 0``. When ``need_weights=False``, this method returns
+        ``(attn_output_seq, None)``. The output contains floating-point
+        differential values, and ``attn_output_seq.cumsum(dim=0)`` matches ANN
+        MultiheadAttention in the supported subset applied to cumulative inputs
+        at each time step.
+
+        :param query_seq: Query sequence with shape
+            ``[T, batch, target_len, embed_dim]`` and ``T > 0``.
+        :type query_seq: torch.Tensor
+        :param key_seq: Key sequence with shape
+            ``[T, batch, source_len, embed_dim]``.
+        :type key_seq: torch.Tensor
+        :param value_seq: Value sequence with shape
+            ``[T, batch, source_len, embed_dim]``.
+        :type value_seq: torch.Tensor
+        :param key_padding_mask: Unsupported in this narrow implementation.
+        :type key_padding_mask: torch.Tensor or None
+        :param need_weights: Must be ``False``. Attention weights are not
+            implemented.
+        :type need_weights: bool
+        :param attn_mask: Optional attention mask with the same semantics as
+            :class:`torch.nn.MultiheadAttention`; ``True`` values in a bool mask
+            disallow attention.
+        :type attn_mask: torch.Tensor or None
+        :param average_attn_weights: Kept for
+            :class:`torch.nn.MultiheadAttention` signature compatibility. It
+            must be ``True`` because attention weights are not returned.
+        :type average_attn_weights: bool
+        :param is_causal: Whether to apply causal masking.
+        :type is_causal: bool
+        :return: ``(attn_output_seq, None)`` where ``attn_output_seq`` has shape
+            ``[T, batch, target_len, embed_dim]``.
+        :rtype: Tuple[torch.Tensor, None]
+        :raises ValueError: If unsupported masks/options or invalid shapes are
+            passed.
+        """
+        if need_weights:
+            raise ValueError("TDMultiheadAttention only supports need_weights=False.")
+        if key_padding_mask is not None:
+            raise ValueError("TDMultiheadAttention does not support key_padding_mask.")
+        if not average_attn_weights:
+            raise ValueError(
+                "TDMultiheadAttention does not support average_attn_weights=False."
+            )
+
+        q_seq = self._split_heads(self.q_proj(query_seq))
+        k_seq = self._split_heads(self.k_proj(key_seq))
+        v_seq = self._split_heads(self.v_proj(value_seq))
+        attn_mask = self._canonical_mha_attn_mask(attn_mask, q_seq.shape[1])
+        attn_seq = _td_scaled_dot_product_attention(
+            q_seq,
+            k_seq,
+            v_seq,
+            attn_mask,
+            is_causal,
+            None,
+            "TDMultiheadAttention",
+        )
+        out_seq = self.out_proj(self._merge_heads(attn_seq))
+        return out_seq, None
+
+    def extra_repr(self) -> str:
+        return (
+            f"embed_dim={self.embed_dim}, num_heads={self.num_heads}, "
+            f"dropout={self.dropout}, batch_first={self.batch_first}"
+        )

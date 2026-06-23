@@ -3,12 +3,19 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import fx
 from torch.nn.utils.fusion import fuse_conv_bn_eval
 from tqdm import tqdm
 
 from spikingjelly.activation_based.ann2snn.factories import HookFactory, NeuronFactory
-from spikingjelly.activation_based.ann2snn.operators import TDGELU, TDLayerNorm, TDLinear
+from spikingjelly.activation_based.ann2snn.operators import (
+    TDGELU,
+    TDLayerNorm,
+    TDLinear,
+    TDMultiheadAttention,
+    TDScaledDotProductAttention,
+)
 from spikingjelly.activation_based.ann2snn.rules import ActivationRule, ReLURule
 from spikingjelly.activation_based.ann2snn.threshold import ThresholdOptimizer
 
@@ -216,13 +223,15 @@ class Converter:
 
         * **中文**
 
-        将 ANN 中支持的 core modules 替换为 temporal-difference (TD) 等价
-        算子，并返回 ``GraphModule``。当前只自动替换
-        :class:`torch.nn.Linear`、:class:`torch.nn.LayerNorm` 和
-        :class:`torch.nn.GELU`。该方法不插入 ``VoltageHook``，不运行
-        dataloader 校准，也不自动识别 attention function 或
-        :class:`torch.nn.MultiheadAttention`。返回模型会保留输入模型及已替换
-        模块的 training/eval 状态。
+        将 ANN 中支持的 core modules 和窄 attention 子集替换为
+        temporal-difference (TD) 等价算子，并返回 ``GraphModule``。当前自动
+        替换 :class:`torch.nn.Linear`、:class:`torch.nn.LayerNorm`、
+        :class:`torch.nn.GELU`、literal ``dropout_p=0.0`` 的
+        :func:`torch.nn.functional.scaled_dot_product_attention` 调用，以及
+        ``dropout=0.0``、``batch_first=True``、``need_weights=False`` 的
+        :class:`torch.nn.MultiheadAttention` 调用。该方法不插入
+        ``VoltageHook``，不运行 dataloader 校准。返回模型会保留输入模型及
+        已替换模块的 training/eval 状态。
 
         :param ann: 待转换的 ANN。
         :type ann: torch.nn.Module
@@ -235,13 +244,16 @@ class Converter:
 
         * **English**
 
-        Replace supported core modules in an ANN with temporal-difference (TD)
-        equivalent operators and return a ``GraphModule``. Currently, only
-        :class:`torch.nn.Linear`, :class:`torch.nn.LayerNorm`, and
-        :class:`torch.nn.GELU` are replaced automatically. This method does not
-        insert ``VoltageHook``, does not run dataloader calibration, and does not
-        automatically recognize attention functions or
-        :class:`torch.nn.MultiheadAttention`. The returned model preserves the
+        Replace supported core modules and a narrow attention subset in an ANN
+        with temporal-difference (TD) equivalent operators and return a
+        ``GraphModule``. Currently, :class:`torch.nn.Linear`,
+        :class:`torch.nn.LayerNorm`, :class:`torch.nn.GELU`, literal
+        ``dropout_p=0.0``
+        :func:`torch.nn.functional.scaled_dot_product_attention` calls, and
+        :class:`torch.nn.MultiheadAttention` calls with ``dropout=0.0``,
+        ``batch_first=True`` and ``need_weights=False`` are replaced
+        automatically. This method does not insert ``VoltageHook`` and does not
+        run dataloader calibration. The returned model preserves the
         training/eval state of the input model and replaced modules.
 
         :param ann: ANN to be converted.
@@ -258,18 +270,50 @@ class Converter:
         fx_model = fx.symbolic_trace(ann).to(device)
 
         modules = dict(fx_model.named_modules())
-        for node in fx_model.graph.nodes:
+        for node in list(fx_model.graph.nodes):
             if node.op != "call_module":
                 continue
             if not isinstance(node.target, str) or node.target not in modules:
                 continue
             module = modules[node.target]
-            replacement = self._make_td_operator(module)
+            replacement = self._make_td_operator(module, node)
             if replacement is None:
                 continue
             self._replace_submodule(fx_model, node.target, replacement)
+            modules[node.target] = replacement
+
+        sdpa_index = 0
+        for node in list(fx_model.graph.nodes):
+            if (
+                node.op != "call_function"
+                or node.target is not F.scaled_dot_product_attention
+            ):
+                continue
+            sdpa_kwargs = self._parse_sdpa_node(node)
+            target = f"td_scaled_dot_product_attention_{sdpa_index}"
+            sdpa_index += 1
+            fx_model.add_submodule(
+                target,
+                TDScaledDotProductAttention(
+                    is_causal=sdpa_kwargs["is_causal"],
+                    scale=sdpa_kwargs["scale"],
+                ),
+            )
+            with fx_model.graph.inserting_after(node):
+                new_node = fx_model.graph.call_module(
+                    target,
+                    args=(
+                        sdpa_kwargs["query"],
+                        sdpa_kwargs["key"],
+                        sdpa_kwargs["value"],
+                        sdpa_kwargs["attn_mask"],
+                    ),
+                )
+            node.replace_all_uses_with(new_node)
+            fx_model.graph.erase_node(node)
 
         fx_model.graph.lint()
+        fx_model.delete_all_unused_submodules()
         fx_model.recompile()
         return fx_model
 
@@ -319,7 +363,111 @@ class Converter:
         setattr(parent, child_name, module)
 
     @staticmethod
-    def _make_td_operator(module: nn.Module) -> Optional[nn.Module]:
+    def _get_literal_argument(
+        node: fx.Node,
+        name: str,
+        position: int,
+        default: Any,
+    ) -> Any:
+        if name in node.kwargs:
+            return node.kwargs[name]
+        if len(node.args) > position:
+            return node.args[position]
+        return default
+
+    @staticmethod
+    def _parse_sdpa_node(node: fx.Node) -> Dict[str, Any]:
+        if len(node.args) < 3:
+            raise ValueError("SDPA node must have query, key, and value arguments.")
+        dropout_p = Converter._get_literal_argument(node, "dropout_p", 4, 0.0)
+        if not isinstance(dropout_p, (int, float)) or float(dropout_p) != 0.0:
+            raise ValueError(
+                "TD SDPA conversion only supports literal dropout_p=0.0, "
+                f"but got {dropout_p!r}."
+            )
+        enable_gqa = Converter._get_literal_argument(node, "enable_gqa", 7, False)
+        if enable_gqa is not False:
+            raise ValueError("TD SDPA conversion does not support enable_gqa=True.")
+
+        is_causal = Converter._get_literal_argument(node, "is_causal", 5, False)
+        if not isinstance(is_causal, bool):
+            raise ValueError(
+                "TD SDPA conversion only supports literal bool is_causal, "
+                f"but got {is_causal!r}."
+            )
+        scale = Converter._get_literal_argument(node, "scale", 6, None)
+        if scale is not None and not isinstance(scale, (int, float)):
+            raise ValueError(
+                "TD SDPA conversion only supports literal numeric scale or None, "
+                f"but got {scale!r}."
+            )
+
+        return {
+            "query": node.args[0],
+            "key": node.args[1],
+            "value": node.args[2],
+            "attn_mask": Converter._get_literal_argument(node, "attn_mask", 3, None),
+            "is_causal": is_causal,
+            "scale": None if scale is None else float(scale),
+        }
+
+    @staticmethod
+    def _check_mha_node(module: nn.MultiheadAttention, node: fx.Node) -> None:
+        if module.dropout != 0.0:
+            raise ValueError("TD MHA conversion only supports dropout=0.0.")
+        if not module.batch_first:
+            raise ValueError("TD MHA conversion only supports batch_first=True.")
+        if module.kdim != module.embed_dim or module.vdim != module.embed_dim:
+            raise ValueError(
+                "TD MHA conversion only supports kdim == vdim == embed_dim."
+            )
+        if module.bias_k is not None or module.bias_v is not None:
+            raise ValueError("TD MHA conversion does not support add_bias_kv.")
+        if module.add_zero_attn:
+            raise ValueError("TD MHA conversion does not support add_zero_attn.")
+
+        need_weights = Converter._get_literal_argument(node, "need_weights", 4, True)
+        if need_weights is not False:
+            raise ValueError("TD MHA conversion requires need_weights=False.")
+        key_padding_mask = Converter._get_literal_argument(
+            node, "key_padding_mask", 3, None
+        )
+        if key_padding_mask is not None:
+            raise ValueError("TD MHA conversion does not support key_padding_mask.")
+        average_attn_weights = Converter._get_literal_argument(
+            node, "average_attn_weights", 6, True
+        )
+        if average_attn_weights is not True:
+            raise ValueError(
+                "TD MHA conversion does not support average_attn_weights=False."
+            )
+
+    @staticmethod
+    def _copy_mha_parameters(
+        source: nn.MultiheadAttention,
+        target: TDMultiheadAttention,
+    ) -> None:
+        if source.in_proj_weight is None:
+            raise ValueError("TD MHA conversion requires packed in_proj_weight.")
+        with torch.no_grad():
+            q_weight, k_weight, v_weight = source.in_proj_weight.chunk(3, dim=0)
+            target.q_proj.weight.copy_(q_weight)
+            target.k_proj.weight.copy_(k_weight)
+            target.v_proj.weight.copy_(v_weight)
+            if source.in_proj_bias is not None:
+                q_bias, k_bias, v_bias = source.in_proj_bias.chunk(3, dim=0)
+                target.q_proj.bias.copy_(q_bias)
+                target.k_proj.bias.copy_(k_bias)
+                target.v_proj.bias.copy_(v_bias)
+            target.out_proj.weight.copy_(source.out_proj.weight)
+            if source.out_proj.bias is not None:
+                target.out_proj.bias.copy_(source.out_proj.bias)
+
+    @staticmethod
+    def _make_td_operator(
+        module: nn.Module,
+        node: Optional[fx.Node] = None,
+    ) -> Optional[nn.Module]:
         if type(module) is nn.Linear:
             td_module = TDLinear(
                 module.in_features,
@@ -362,6 +510,23 @@ class Converter:
 
         if type(module) is nn.GELU:
             td_module = TDGELU(approximate=module.approximate)
+            td_module.train(module.training)
+            return td_module
+
+        if type(module) is nn.MultiheadAttention:
+            if node is None:
+                raise ValueError("TD MHA conversion requires an FX node.")
+            Converter._check_mha_node(module, node)
+            td_module = TDMultiheadAttention(
+                module.embed_dim,
+                module.num_heads,
+                dropout=module.dropout,
+                bias=module.in_proj_bias is not None,
+                batch_first=module.batch_first,
+                device=module.in_proj_weight.device,
+                dtype=module.in_proj_weight.dtype,
+            )
+            Converter._copy_mha_parameters(module, td_module)
             td_module.train(module.training)
             return td_module
 

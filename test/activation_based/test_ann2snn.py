@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from spikingjelly.activation_based import ann2snn, neuron
 from spikingjelly.activation_based.ann2snn import (
@@ -18,6 +19,8 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDGELU,
     TDLayerNorm,
     TDLinear,
+    TDMultiheadAttention,
+    TDScaledDotProductAttention,
 )
 
 
@@ -110,6 +113,213 @@ class DropoutCoreMLP(nn.Module):
         return self.fc(self.dropout(x))
 
 
+class SDPABlock(nn.Module):
+    def forward(self, query, key, value, attn_mask=None):
+        return F.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            attn_mask=attn_mask,
+            dropout_p=0.0,
+        )
+
+
+class SDPAPositionalBlock(nn.Module):
+    def forward(self, query, key, value):
+        return F.scaled_dot_product_attention(query, key, value, None, 0.0, False)
+
+
+class SDPACausalBlock(nn.Module):
+    def forward(self, query, key, value):
+        return F.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            dropout_p=0.0,
+            is_causal=True,
+        )
+
+
+class SDPAScaleBlock(nn.Module):
+    def forward(self, query, key, value):
+        return F.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            dropout_p=0.0,
+            scale=0.25,
+        )
+
+
+class SDPANonzeroDropoutBlock(nn.Module):
+    def forward(self, query, key, value):
+        return F.scaled_dot_product_attention(query, key, value, dropout_p=0.1)
+
+
+class SDPAEnableGQABlock(nn.Module):
+    def forward(self, query, key, value):
+        return F.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            dropout_p=0.0,
+            enable_gqa=True,
+        )
+
+
+class SelfAttentionBlock(nn.Module):
+    def __init__(self, batch_first=True, **kwargs):
+        super().__init__()
+        self.mha = nn.MultiheadAttention(
+            embed_dim=8,
+            num_heads=2,
+            batch_first=batch_first,
+            **kwargs,
+        )
+
+    def forward(self, x):
+        y, _ = self.mha(x, x, x, need_weights=False)
+        return y
+
+
+class SelfAttentionWithMaskBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mha = nn.MultiheadAttention(
+            embed_dim=8,
+            num_heads=2,
+            batch_first=True,
+        )
+
+    def forward(self, x, attn_mask):
+        y, _ = self.mha(x, x, x, need_weights=False, attn_mask=attn_mask)
+        return y
+
+
+class CrossAttentionBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mha = nn.MultiheadAttention(
+            embed_dim=8,
+            num_heads=2,
+            batch_first=True,
+        )
+
+    def forward(self, query, key, value, attn_mask=None):
+        y, _ = self.mha(
+            query,
+            key,
+            value,
+            attn_mask=attn_mask,
+            need_weights=False,
+        )
+        return y
+
+
+class MHAWithTupleReturn(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mha = nn.MultiheadAttention(
+            embed_dim=8,
+            num_heads=2,
+            batch_first=True,
+        )
+
+    def forward(self, x):
+        return self.mha(x, x, x, need_weights=False)
+
+
+class MHAWithDefaultNeedWeights(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mha = nn.MultiheadAttention(
+            embed_dim=8,
+            num_heads=2,
+            batch_first=True,
+        )
+
+    def forward(self, x):
+        y, _ = self.mha(x, x, x)
+        return y
+
+
+class MHAWithKeyPaddingMask(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mha = nn.MultiheadAttention(
+            embed_dim=8,
+            num_heads=2,
+            batch_first=True,
+        )
+
+    def forward(self, x, key_padding_mask):
+        y, _ = self.mha(
+            x,
+            x,
+            x,
+            key_padding_mask=key_padding_mask,
+            need_weights=False,
+        )
+        return y
+
+
+class MHAWithAverageWeightsFalse(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mha = nn.MultiheadAttention(
+            embed_dim=8,
+            num_heads=2,
+            batch_first=True,
+        )
+
+    def forward(self, x):
+        y, _ = self.mha(
+            x,
+            x,
+            x,
+            need_weights=False,
+            average_attn_weights=False,
+        )
+        return y
+
+
+class MHAWithCausalMask(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mha = nn.MultiheadAttention(
+            embed_dim=8,
+            num_heads=2,
+            batch_first=True,
+        )
+
+    def forward(self, x, attn_mask):
+        y, _ = self.mha(
+            x,
+            x,
+            x,
+            need_weights=False,
+            attn_mask=attn_mask,
+            is_causal=True,
+        )
+        return y
+
+
+class MHAWithSeparateKVDim(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mha = nn.MultiheadAttention(
+            embed_dim=8,
+            num_heads=2,
+            kdim=6,
+            vdim=6,
+            batch_first=True,
+        )
+
+    def forward(self, query, key, value):
+        y, _ = self.mha(query, key, value, need_weights=False)
+        return y
+
+
 def _make_loader(batch_size=2, channels=1, h=28, w=28):
     imgs = torch.randn(batch_size, channels, h, w)
     labels = torch.zeros(batch_size, dtype=torch.long)
@@ -118,6 +328,24 @@ def _make_loader(batch_size=2, channels=1, h=28, w=28):
 
 def _make_vector_loader(batch_size=2, features=4):
     return [torch.randn(batch_size, features)]
+
+
+def _apply_cumulative(module, *seq_args, **kwargs):
+    cumulative_args = [seq_arg.cumsum(dim=0) for seq_arg in seq_args]
+    outputs = [
+        module(*(seq_arg[t] for seq_arg in cumulative_args), **kwargs)
+        for t in range(cumulative_args[0].shape[0])
+    ]
+    if isinstance(outputs[0], tuple):
+        return tuple(
+            (
+                torch.stack([output[index] for output in outputs])
+                if outputs[0][index] is not None
+                else None
+            )
+            for index in range(len(outputs[0]))
+        )
+    return torch.stack(outputs)
 
 
 class TestVoltageHook:
@@ -458,6 +686,233 @@ class TestConverterTDOperatorReplacement:
         assert not converted.training
         assert not converted.dropout.training
         assert not converted.fc.training
+
+    def test_rewrites_sdpa_function_node(self):
+        model = SDPABlock()
+
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+        modules = dict(converted.named_modules())
+
+        assert any(
+            isinstance(module, TDScaledDotProductAttention)
+            for module in modules.values()
+        )
+        assert not any(
+            node.op == "call_function"
+            and node.target is F.scaled_dot_product_attention
+            for node in converted.graph.nodes
+        )
+
+    def test_sdpa_cumulative_output_matches_ann_reference(self):
+        model = SDPABlock()
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+        query_seq = torch.randn(4, 2, 3, 5, 8)
+        key_seq = torch.randn(4, 2, 3, 6, 8)
+        value_seq = torch.randn(4, 2, 3, 6, 7)
+
+        y_seq = converted(query_seq, key_seq, value_seq)
+        expected = model(
+            query_seq.cumsum(dim=0),
+            key_seq.cumsum(dim=0),
+            value_seq.cumsum(dim=0),
+        )
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_sdpa_rewrite_supports_mask_causal_scale_and_positional_args(self):
+        query_seq = torch.randn(4, 2, 3, 5, 8)
+        key_seq = torch.randn(4, 2, 3, 5, 8)
+        value_seq = torch.randn(4, 2, 3, 5, 7)
+        mask = torch.ones(5, 5, dtype=torch.bool).tril()
+
+        masked = Converter(dataloader=[]).replace_by_td_operators(SDPABlock())
+        y_masked = masked(query_seq, key_seq, value_seq, mask)
+        expected_masked = F.scaled_dot_product_attention(
+            query_seq.cumsum(dim=0),
+            key_seq.cumsum(dim=0),
+            value_seq.cumsum(dim=0),
+            attn_mask=mask,
+            dropout_p=0.0,
+        )
+        assert torch.allclose(
+            y_masked.cumsum(dim=0), expected_masked, atol=1e-6, rtol=1e-6
+        )
+
+        causal_model = SDPACausalBlock()
+        causal = Converter(dataloader=[]).replace_by_td_operators(causal_model)
+        y_causal = causal(query_seq, key_seq, value_seq)
+        expected_causal = causal_model(
+            query_seq.cumsum(dim=0),
+            key_seq.cumsum(dim=0),
+            value_seq.cumsum(dim=0),
+        )
+        assert torch.allclose(
+            y_causal.cumsum(dim=0), expected_causal, atol=1e-6, rtol=1e-6
+        )
+
+        scaled_model = SDPAScaleBlock()
+        scaled = Converter(dataloader=[]).replace_by_td_operators(scaled_model)
+        y_scaled = scaled(query_seq, key_seq, value_seq)
+        expected_scaled = scaled_model(
+            query_seq.cumsum(dim=0),
+            key_seq.cumsum(dim=0),
+            value_seq.cumsum(dim=0),
+        )
+        assert torch.allclose(
+            y_scaled.cumsum(dim=0), expected_scaled, atol=1e-6, rtol=1e-6
+        )
+
+        positional_model = SDPAPositionalBlock()
+        positional = Converter(dataloader=[]).replace_by_td_operators(
+            positional_model
+        )
+        y_positional = positional(query_seq, key_seq, value_seq)
+        expected_positional = positional_model(
+            query_seq.cumsum(dim=0),
+            key_seq.cumsum(dim=0),
+            value_seq.cumsum(dim=0),
+        )
+        assert torch.allclose(
+            y_positional.cumsum(dim=0),
+            expected_positional,
+            atol=1e-6,
+            rtol=1e-6,
+        )
+
+    def test_sdpa_rewrite_rejects_unsupported_options(self):
+        with pytest.raises(ValueError, match="dropout_p=0.0"):
+            Converter(dataloader=[]).replace_by_td_operators(SDPANonzeroDropoutBlock())
+        with pytest.raises(ValueError, match="enable_gqa"):
+            Converter(dataloader=[]).replace_by_td_operators(SDPAEnableGQABlock())
+
+    def test_replaces_mha_and_copies_parameters(self):
+        model = SelfAttentionBlock()
+        model.eval()
+
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+        td_mha = converted.mha
+        embed_dim = model.mha.embed_dim
+
+        assert isinstance(td_mha, TDMultiheadAttention)
+        assert torch.equal(td_mha.q_proj.weight, model.mha.in_proj_weight[:embed_dim])
+        assert torch.equal(
+            td_mha.k_proj.weight,
+            model.mha.in_proj_weight[embed_dim : 2 * embed_dim],
+        )
+        assert torch.equal(td_mha.v_proj.weight, model.mha.in_proj_weight[2 * embed_dim :])
+        assert torch.equal(td_mha.out_proj.weight, model.mha.out_proj.weight)
+        assert torch.equal(td_mha.q_proj.bias, model.mha.in_proj_bias[:embed_dim])
+        assert torch.equal(
+            td_mha.k_proj.bias,
+            model.mha.in_proj_bias[embed_dim : 2 * embed_dim],
+        )
+        assert torch.equal(td_mha.v_proj.bias, model.mha.in_proj_bias[2 * embed_dim :])
+        assert torch.equal(td_mha.out_proj.bias, model.mha.out_proj.bias)
+
+    def test_mha_replacement_preserves_training_mode(self):
+        model = SelfAttentionBlock()
+        model.train()
+
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+
+        assert converted.training
+        assert converted.mha.training
+
+    def test_mha_self_attention_cumulative_output_matches_ann_reference(self):
+        model = SelfAttentionBlock()
+        model.eval()
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+        x_seq = torch.randn(4, 2, 5, 8)
+
+        y_seq = converted(x_seq)
+        expected = _apply_cumulative(model, x_seq)
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+
+    def test_mha_cross_attention_cumulative_output_matches_ann_reference(self):
+        model = CrossAttentionBlock()
+        model.eval()
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+        query_seq = torch.randn(4, 2, 3, 8)
+        key_seq = torch.randn(4, 2, 5, 8)
+        value_seq = torch.randn(4, 2, 5, 8)
+        mask = torch.ones(3, 5, dtype=torch.bool)
+
+        y_seq = converted(query_seq, key_seq, value_seq, mask)
+        expected = _apply_cumulative(
+            model,
+            query_seq,
+            key_seq,
+            value_seq,
+            attn_mask=mask,
+        )
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+
+    def test_mha_replacement_supports_three_dimensional_attention_mask(self):
+        model = SelfAttentionWithMaskBlock()
+        model.eval()
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+        x_seq = torch.randn(4, 2, 5, 8)
+        mask = torch.zeros(4, 5, 5)
+        mask[:, :, -1] = float("-inf")
+
+        y_seq = converted(x_seq, mask)
+        expected = _apply_cumulative(model, x_seq, attn_mask=mask)
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+
+    def test_mha_tuple_return_graph_remains_valid(self):
+        model = MHAWithTupleReturn()
+        model.eval()
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+        x_seq = torch.randn(4, 2, 5, 8)
+
+        y_seq, weights = converted(x_seq)
+        expected, expected_weights = _apply_cumulative(model, x_seq)
+
+        assert weights is None
+        assert expected_weights is None
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+
+    def test_mha_rewrite_rejects_unsupported_configurations(self):
+        with pytest.raises(ValueError, match="dropout=0.0"):
+            Converter(dataloader=[]).replace_by_td_operators(
+                SelfAttentionBlock(dropout=0.1)
+            )
+        with pytest.raises(ValueError, match="batch_first=True"):
+            Converter(dataloader=[]).replace_by_td_operators(
+                SelfAttentionBlock(batch_first=False)
+            )
+        with pytest.raises(ValueError, match="kdim == vdim == embed_dim"):
+            Converter(dataloader=[]).replace_by_td_operators(MHAWithSeparateKVDim())
+        with pytest.raises(ValueError, match="add_bias_kv"):
+            Converter(dataloader=[]).replace_by_td_operators(
+                SelfAttentionBlock(add_bias_kv=True)
+            )
+        with pytest.raises(ValueError, match="add_zero_attn"):
+            Converter(dataloader=[]).replace_by_td_operators(
+                SelfAttentionBlock(add_zero_attn=True)
+            )
+
+    def test_mha_rewrite_rejects_unsupported_calls(self):
+        with pytest.raises(ValueError, match="need_weights=False"):
+            Converter(dataloader=[]).replace_by_td_operators(MHAWithDefaultNeedWeights())
+        with pytest.raises(ValueError, match="key_padding_mask"):
+            Converter(dataloader=[]).replace_by_td_operators(MHAWithKeyPaddingMask())
+        with pytest.raises(ValueError, match="average_attn_weights=False"):
+            Converter(dataloader=[]).replace_by_td_operators(
+                MHAWithAverageWeightsFalse()
+            )
+
+    def test_mha_causal_attention_rejects_explicit_mask_at_runtime(self):
+        model = MHAWithCausalMask()
+        converted = Converter(dataloader=[]).replace_by_td_operators(model)
+        x_seq = torch.randn(4, 2, 5, 8)
+        mask = torch.zeros(5, 5)
+
+        with pytest.raises(ValueError, match="attn_mask"):
+            converted(x_seq, mask)
 
 
 class TestFuse:

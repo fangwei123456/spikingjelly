@@ -6,9 +6,58 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDGELU,
     TDLayerNorm,
     TDLinear,
+    TDMultiheadAttention,
     TDScaledDotProductAttention,
     TDSoftmax,
 )
+
+
+def _copy_td_mha_to_ann(td_op, ann_op):
+    with torch.no_grad():
+        ann_op.in_proj_weight.copy_(
+            torch.cat(
+                [
+                    td_op.q_proj.weight,
+                    td_op.k_proj.weight,
+                    td_op.v_proj.weight,
+                ],
+                dim=0,
+            )
+        )
+        if ann_op.in_proj_bias is not None:
+            ann_op.in_proj_bias.copy_(
+                torch.cat(
+                    [
+                        td_op.q_proj.bias,
+                        td_op.k_proj.bias,
+                        td_op.v_proj.bias,
+                    ],
+                    dim=0,
+                )
+            )
+        ann_op.out_proj.weight.copy_(td_op.out_proj.weight)
+        if ann_op.out_proj.bias is not None:
+            ann_op.out_proj.bias.copy_(td_op.out_proj.bias)
+
+
+def _mha_cumulative_reference(td_op, query_seq, key_seq, value_seq, **kwargs):
+    ann_op = torch.nn.MultiheadAttention(
+        td_op.embed_dim,
+        td_op.num_heads,
+        dropout=0.0,
+        bias=td_op.q_proj.bias is not None,
+        batch_first=True,
+    )
+    _copy_td_mha_to_ann(td_op, ann_op)
+    q_cum = query_seq.cumsum(dim=0)
+    k_cum = key_seq.cumsum(dim=0)
+    v_cum = value_seq.cumsum(dim=0)
+    return torch.stack(
+        [
+            ann_op(q_cum[t], k_cum[t], v_cum[t], need_weights=False, **kwargs)[0]
+            for t in range(query_seq.shape[0])
+        ]
+    )
 
 
 class TestTDSoftmax:
@@ -752,3 +801,189 @@ class TestTDScaledDotProductAttention:
         op = TDScaledDotProductAttention(is_causal=True, scale=0.25)
 
         assert op.extra_repr() == "is_causal=True, scale=0.25"
+
+
+class TestTDMultiheadAttention:
+    def test_shape_is_preserved_and_weights_are_none(self):
+        x_seq = torch.randn(4, 2, 5, 8)
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        y_seq, weights = op(x_seq, x_seq, x_seq, need_weights=False)
+
+        assert y_seq.shape == x_seq.shape
+        assert weights is None
+
+    def test_cumulative_output_matches_ann_mha_on_cumulative_input(self):
+        x_seq = torch.randn(5, 2, 4, 8)
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        y_seq, _ = op(x_seq, x_seq, x_seq, need_weights=False)
+        expected = _mha_cumulative_reference(op, x_seq, x_seq, x_seq)
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+
+    def test_final_cumulative_output_matches_ann_mha_on_total_input(self):
+        x_seq = torch.randn(6, 2, 4, 8)
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        y_seq, _ = op(x_seq, x_seq, x_seq, need_weights=False)
+        expected = _mha_cumulative_reference(op, x_seq, x_seq, x_seq)[-1]
+
+        assert torch.allclose(
+            y_seq.cumsum(dim=0)[-1], expected, atol=1e-5, rtol=1e-5
+        )
+
+    def test_single_timestep_matches_ann_mha(self):
+        x_seq = torch.randn(1, 2, 4, 8)
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        y_seq, _ = op(x_seq, x_seq, x_seq, need_weights=False)
+        expected = _mha_cumulative_reference(op, x_seq, x_seq, x_seq)
+
+        assert torch.allclose(y_seq, expected, atol=1e-5, rtol=1e-5)
+
+    def test_cross_attention_matches_ann_mha(self):
+        query_seq = torch.randn(4, 2, 3, 8)
+        key_seq = torch.randn(4, 2, 5, 8)
+        value_seq = torch.randn(4, 2, 5, 8)
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        y_seq, _ = op(query_seq, key_seq, value_seq, need_weights=False)
+        expected = _mha_cumulative_reference(op, query_seq, key_seq, value_seq)
+
+        assert y_seq.shape == (4, 2, 3, 8)
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+
+    def test_supports_attention_mask(self):
+        x_seq = torch.randn(4, 2, 4, 8)
+        attn_mask = torch.tensor(
+            [
+                [0.0, 0.0, float("-inf"), float("-inf")],
+                [0.0, 0.0, 0.0, float("-inf")],
+                [0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0],
+            ]
+        )
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        y_seq, _ = op(x_seq, x_seq, x_seq, attn_mask=attn_mask, need_weights=False)
+        expected = _mha_cumulative_reference(op, x_seq, x_seq, x_seq, attn_mask=attn_mask)
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+
+    def test_bool_attention_mask_uses_mha_semantics(self):
+        x_seq = torch.randn(4, 2, 4, 8)
+        attn_mask = torch.tensor(
+            [
+                [False, False, True, True],
+                [False, False, False, True],
+                [False, False, False, False],
+                [False, False, False, False],
+            ]
+        )
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        y_seq, _ = op(x_seq, x_seq, x_seq, attn_mask=attn_mask, need_weights=False)
+        expected = _mha_cumulative_reference(op, x_seq, x_seq, x_seq, attn_mask=attn_mask)
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+
+    def test_three_dimensional_attention_mask_matches_mha(self):
+        x_seq = torch.randn(4, 2, 4, 8)
+        attn_mask = torch.zeros(4, 4, 4)
+        attn_mask[:, :, -1] = float("-inf")
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        y_seq, _ = op(x_seq, x_seq, x_seq, attn_mask=attn_mask, need_weights=False)
+        expected = _mha_cumulative_reference(
+            op,
+            x_seq,
+            x_seq,
+            x_seq,
+            attn_mask=attn_mask,
+        )
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+
+    def test_supports_causal_attention(self):
+        x_seq = torch.randn(4, 2, 5, 8)
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        y_seq, _ = op(x_seq, x_seq, x_seq, need_weights=False, is_causal=True)
+        q_seq = op._split_heads(op.q_proj(x_seq))
+        k_seq = op._split_heads(op.k_proj(x_seq))
+        v_seq = op._split_heads(op.v_proj(x_seq))
+        expected_attn = F.scaled_dot_product_attention(
+            q_seq.cumsum(dim=0),
+            k_seq.cumsum(dim=0),
+            v_seq.cumsum(dim=0),
+            dropout_p=0.0,
+            is_causal=True,
+        )
+        expected = F.linear(
+            op._merge_heads(expected_attn),
+            op.out_proj.weight,
+            op.out_proj.bias,
+        )
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+
+    def test_bias_false_has_no_bias_parameters(self):
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2, bias=False)
+
+        assert op.q_proj.bias is None
+        assert op.k_proj.bias is None
+        assert op.v_proj.bias is None
+        assert op.out_proj.bias is None
+        assert all("bias" not in key for key in op.state_dict())
+
+    def test_gradients_flow_to_input_and_parameters(self):
+        x_seq = torch.randn(3, 2, 4, 8, requires_grad=True)
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        y_seq, _ = op(x_seq, x_seq, x_seq, need_weights=False)
+        y_seq.square().sum().backward()
+
+        assert x_seq.grad is not None
+        assert torch.isfinite(x_seq.grad).all()
+        for parameter in op.parameters():
+            assert parameter.grad is not None
+            assert torch.isfinite(parameter.grad).all()
+
+    def test_rejects_invalid_constructor_arguments(self):
+        with pytest.raises(ValueError, match="divisible"):
+            TDMultiheadAttention(embed_dim=7, num_heads=2)
+        with pytest.raises(ValueError, match="dropout=0.0"):
+            TDMultiheadAttention(embed_dim=8, num_heads=2, dropout=0.1)
+        with pytest.raises(ValueError, match="batch_first=True"):
+            TDMultiheadAttention(embed_dim=8, num_heads=2, batch_first=False)
+
+    def test_rejects_invalid_input_shape(self):
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        with pytest.raises(ValueError, match="\\[T, batch, seq, embed_dim\\]"):
+            op(torch.randn(4, 5, 8), torch.randn(4, 5, 8), torch.randn(4, 5, 8))
+
+    def test_rejects_unsupported_forward_options(self):
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+        x_seq = torch.randn(4, 2, 5, 8)
+
+        with pytest.raises(ValueError, match="need_weights=False"):
+            op(x_seq, x_seq, x_seq, need_weights=True)
+        with pytest.raises(ValueError, match="key_padding_mask"):
+            op(
+                x_seq,
+                x_seq,
+                x_seq,
+                need_weights=False,
+                key_padding_mask=torch.zeros(2, 5, dtype=torch.bool),
+            )
+        with pytest.raises(ValueError, match="average_attn_weights=False"):
+            op(x_seq, x_seq, x_seq, need_weights=False, average_attn_weights=False)
+
+    def test_extra_repr(self):
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        assert op.extra_repr() == (
+            "embed_dim=8, num_heads=2, dropout=0.0, batch_first=True"
+        )
