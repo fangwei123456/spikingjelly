@@ -210,7 +210,7 @@ Classify MNIST
 --------------
 
 Build the ANN to be converted
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^6
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Now we use ``ann2snn`` to build a simple convolutional network to classify the MNIST dataset.
 

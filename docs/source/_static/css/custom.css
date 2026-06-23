@@ -5,6 +5,7 @@ html {
     --sj-article-width-wide: 76rem;
     --sj-sidebar-primary-width-wide: 20rem;
     --sj-sidebar-secondary-width-wide: 16rem;
+    --sj-image-max-width: 700px;
 }
 
 .bd-page-width {
@@ -45,6 +46,48 @@ html {
     .bd-sidebar-secondary {
         width: 12rem;
     }
+}
+
+/* Article images
+ * Cap image width so tall figures do not dominate the article on wide screens.
+ * RST `.. image::` / `.. figure::` set `style="width: 100%"` inline, but
+ * overriding that to `width: auto` lets each image start from its natural
+ * size — small thumbnails (e.g. 112x112 MNIST samples) stay at 112x112
+ * instead of being blown up to fill the column. The `max-width: min(...)`
+ * clamp then caps the image at --sj-image-max-width on wide screens and
+ * shrinks it to 100% of the column on narrow screens. */
+.bd-article img {
+    /* The RST :width: 100% directive on `.. image::` / `.. figure::` sets
+     * `style="width: 100%"` inline, which would otherwise force every image
+     * to fill the article column — and worse, upscale small thumbnails
+     * (e.g. 112x112 MNIST samples) to hundreds of pixels. Override it so
+     * each image starts from its natural size. */
+    width: auto !important;
+    max-width: var(--sj-image-max-width);
+    /* On viewports narrower than --sj-image-max-width, still shrink the
+     * image down to fit the column so it does not overflow. */
+    max-width: min(var(--sj-image-max-width), 100%);
+    height: auto;
+    /* Center every image: figure-wrapped images are already centered by
+     * pydata-sphinx-theme, and `.. image::` directives that have any option
+     * are wrapped in <a class="image-reference">. But a bare `.. image::`
+     * with no options at all is rendered as a raw <img> (no link wrapper,
+     * no figure), so apply the centering here as the catch-all. */
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Center images in `.. image::` directives. pydata-sphinx-theme already
+ * centers `figure > a > img` via `margin: auto`, so figure-wrapped images
+ * (e.g. from `.. figure::`) need no extra rule. `.. image::` renders as
+ * <a class="image-reference"><img></a> with display: inline, which would
+ * otherwise let small thumbnails flow inline with neighboring text. Make
+ * the link block-level so each image starts on its own line, then center
+ * the image within the link's full article width. */
+.bd-article a.image-reference {
+    display: block;
+    margin: 1rem 0;
 }
 
 /* Sidebar navigation */
