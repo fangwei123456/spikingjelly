@@ -1,9 +1,9 @@
 import logging
-from typing import Optional
+from typing import Optional, Union
 
 import torch
 
-from .. import surrogate
+from .. import base, surrogate
 from .base_node import BaseNode, NonSpikingBaseNode, SimpleBaseNode
 
 try:
@@ -21,7 +21,7 @@ except BaseException as e:
     triton_kernel = None
 
 
-__all__ = ["SimpleIFNode", "IFNode", "NonSpikingIFNode"]
+__all__ = ["SimpleIFNode", "IFNode", "ActivationAwareIFNode", "NonSpikingIFNode"]
 
 
 class SimpleIFNode(SimpleBaseNode):
@@ -536,6 +536,299 @@ class IFNode(BaseNode):
                 self.v_reset,
             )
             return spike
+
+
+class ActivationAwareIFNode(base.MemoryModule):
+    def __init__(
+        self,
+        v_threshold: Union[float, torch.Tensor] = 1.0,
+        v_offset: Union[float, torch.Tensor] = 0.0,
+        channel_dim: int = -1,
+        v_reset: Optional[float] = None,
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
+        detach_reset: bool = False,
+        step_mode: str = "s",
+        backend: str = "torch",
+        store_v_seq: bool = False,
+    ):
+        r"""
+        **API Language** - :ref:`中文 <ActivationAwareIFNode.__init__-cn>` | :ref:`English <ActivationAwareIFNode.__init__-en>`
+
+        ----
+
+        .. _ActivationAwareIFNode.__init__-cn:
+
+        * **中文**
+
+        实验性的 activation-aware IF 神经元，用于 ANN2SNN 中
+        Activation-Aware Redistribution (AAR) 风格的最小垂直切片。该神经元
+        支持标量或 1D channel-wise 的发放阈值 ``v_threshold`` 和膜电位偏移
+        ``v_offset``。当 ``v_threshold`` 或 ``v_offset`` 为 1D 张量时，会沿
+        ``channel_dim`` 广播到输入张量。
+
+        该类只支持 ``backend="torch"``，不继承 :class:`BaseNode`，也不改变
+        现有 :class:`IFNode` / :class:`BaseNode` 的标量 ``v_threshold`` 约定。
+        它面向研究和转换 POC，不表示默认 ANN2SNN 路径支持多元素阈值。
+
+        单步动力学为：
+
+        .. math::
+
+            H[t] = V[t-1] + X[t]
+
+        .. math::
+
+            S[t] = \Theta(H[t] + O - V_{th})
+
+        其中 ``O`` 为 ``v_offset``。软复位时：
+
+        .. math::
+
+            V[t] = H[t] - S[t] V_{th}
+
+        硬复位时：
+
+        .. math::
+
+            V[t] = S[t] V_{reset} + (1 - S[t]) H[t]
+
+        :param v_threshold: 发放阈值。必须为有限正标量，或有限正 1D 张量。
+        :type v_threshold: float or torch.Tensor
+        :param v_offset: 膜电位偏移。必须为有限标量，或有限 1D 张量。
+        :type v_offset: float or torch.Tensor
+        :param channel_dim: 1D ``v_threshold`` / ``v_offset`` 对应的输入通道维。
+        :type channel_dim: int
+        :param v_reset: 硬复位电压。``None`` 表示软复位。
+            若不为 ``None``，``reset()`` 会将膜电位 ``v`` 恢复为 ``v_reset``，
+            与 :class:`BaseNode` 的硬复位语义一致。
+        :type v_reset: Optional[float]
+        :param surrogate_function: 反向传播时使用的替代函数。
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param detach_reset: 是否在反向传播时分离 reset 计算图。
+        :type detach_reset: bool
+        :param step_mode: 步进模式，``"s"`` 为单步，``"m"`` 为多步。
+        :type step_mode: str
+        :param backend: 仅支持 ``"torch"``。
+        :type backend: str
+        :param store_v_seq: 多步模式下是否保存每个时间步的膜电位。
+        :type store_v_seq: bool
+        :raises ValueError: 当 backend、step_mode、channel_dim、threshold 或 offset 非法时抛出。
+
+        ----
+
+        .. _ActivationAwareIFNode.__init__-en:
+
+        * **English**
+
+        Experimental activation-aware IF neuron for an ANN2SNN
+        Activation-Aware Redistribution (AAR) style minimal vertical slice. This
+        neuron supports scalar or 1D channel-wise firing threshold
+        ``v_threshold`` and membrane offset ``v_offset``. A 1D ``v_threshold`` or
+        ``v_offset`` is broadcast to the input tensor along ``channel_dim``.
+
+        This class supports only ``backend="torch"``. It does not inherit from
+        :class:`BaseNode` and does not change the scalar ``v_threshold``
+        convention of existing :class:`IFNode` / :class:`BaseNode`. It is meant
+        for research and conversion POCs, and does not imply that the default
+        ANN2SNN path supports multi-element thresholds.
+
+        The single-step dynamics are:
+
+        .. math::
+
+            H[t] = V[t-1] + X[t]
+
+        .. math::
+
+            S[t] = \Theta(H[t] + O - V_{th})
+
+        where ``O`` is ``v_offset``. With soft reset:
+
+        .. math::
+
+            V[t] = H[t] - S[t] V_{th}
+
+        With hard reset:
+
+        .. math::
+
+            V[t] = S[t] V_{reset} + (1 - S[t]) H[t]
+
+        :param v_threshold: Firing threshold. It must be a finite positive
+            scalar or a finite positive 1D tensor.
+        :type v_threshold: float or torch.Tensor
+        :param v_offset: Membrane offset. It must be a finite scalar or a finite
+            1D tensor.
+        :type v_offset: float or torch.Tensor
+        :param channel_dim: Input channel dimension for 1D ``v_threshold`` /
+            ``v_offset``.
+        :type channel_dim: int
+        :param v_reset: Hard-reset voltage. ``None`` means soft reset.
+            If it is not ``None``, ``reset()`` restores membrane voltage ``v`` to
+            ``v_reset``, matching the hard-reset semantics of :class:`BaseNode`.
+        :type v_reset: Optional[float]
+        :param surrogate_function: Surrogate function used in backward.
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param detach_reset: Whether to detach the reset graph during backward.
+        :type detach_reset: bool
+        :param step_mode: Step mode, ``"s"`` for single-step and ``"m"`` for
+            multi-step.
+        :type step_mode: str
+        :param backend: Only ``"torch"`` is supported.
+        :type backend: str
+        :param store_v_seq: Whether to store membrane voltage at each time step
+            in multi-step mode.
+        :type store_v_seq: bool
+        :raises ValueError: If backend, step_mode, channel_dim, threshold, or
+            offset is invalid.
+        """
+        super().__init__()
+        if backend != "torch":
+            raise ValueError(
+                f"ActivationAwareIFNode only supports backend='torch', got {backend!r}."
+            )
+        if v_reset is not None and not isinstance(v_reset, float):
+            raise ValueError(
+                f"v_reset must be a float or None, got {type(v_reset).__name__}."
+            )
+        if not isinstance(detach_reset, bool):
+            raise ValueError("detach_reset must be bool.")
+        if not isinstance(store_v_seq, bool):
+            raise ValueError("store_v_seq must be bool.")
+        if not isinstance(channel_dim, int):
+            raise ValueError("channel_dim must be int.")
+
+        threshold = torch.as_tensor(v_threshold)
+        offset = torch.as_tensor(v_offset)
+        self._check_threshold(threshold)
+        self._check_offset(offset)
+
+        self.register_buffer("v_threshold", threshold.clone().detach())
+        self.register_buffer("v_offset", offset.clone().detach())
+        self.channel_dim = channel_dim
+        self.v_reset = v_reset
+        self.detach_reset = detach_reset
+        self.surrogate_function = surrogate_function
+        self.store_v_seq = store_v_seq
+        if v_reset is None:
+            self.register_memory("v", 0.0)
+        else:
+            self.register_memory("v", v_reset)
+        self.step_mode = step_mode
+        self.backend = backend
+
+    @staticmethod
+    def _check_threshold(v_threshold: torch.Tensor) -> None:
+        if v_threshold.dim() > 1:
+            raise ValueError(
+                "v_threshold must be a scalar or 1D tensor, "
+                f"but got shape {tuple(v_threshold.shape)}."
+            )
+        if not torch.is_floating_point(v_threshold):
+            v_threshold = v_threshold.to(torch.float)
+        if not torch.isfinite(v_threshold).all() or not (v_threshold > 0).all():
+            raise ValueError("v_threshold must contain finite positive values.")
+
+    @staticmethod
+    def _check_offset(v_offset: torch.Tensor) -> None:
+        if v_offset.dim() > 1:
+            raise ValueError(
+                "v_offset must be a scalar or 1D tensor, "
+                f"but got shape {tuple(v_offset.shape)}."
+            )
+        if not torch.is_floating_point(v_offset):
+            v_offset = v_offset.to(torch.float)
+        if not torch.isfinite(v_offset).all():
+            raise ValueError("v_offset must contain finite values.")
+
+    @property
+    def supported_backends(self):
+        return ("torch",)
+
+    @property
+    def store_v_seq(self):
+        return self._store_v_seq
+
+    @store_v_seq.setter
+    def store_v_seq(self, value: bool):
+        self._store_v_seq = value
+        if value and not hasattr(self, "v_seq"):
+            self.register_memory("v_seq", None)
+
+    def _canonical_channel_dim(self, x: torch.Tensor) -> int:
+        channel_dim = self.channel_dim
+        if channel_dim < 0:
+            channel_dim += x.dim()
+        if channel_dim < 0 or channel_dim >= x.dim():
+            raise ValueError(
+                f"channel_dim={self.channel_dim} is out of range for input "
+                f"with {x.dim()} dimensions."
+            )
+        return channel_dim
+
+    def _broadcast_parameter(
+        self, param: torch.Tensor, x: torch.Tensor, name: str
+    ) -> torch.Tensor:
+        param = param.to(device=x.device, dtype=x.dtype)
+        if param.dim() == 0:
+            return param
+
+        channel_dim = self._canonical_channel_dim(x)
+        if param.numel() != x.shape[channel_dim]:
+            raise ValueError(
+                f"{name} has length {param.numel()}, but input shape "
+                f"{tuple(x.shape)} has {x.shape[channel_dim]} channels at "
+                f"channel_dim={self.channel_dim}."
+            )
+        shape = [1] * x.dim()
+        shape[channel_dim] = param.numel()
+        return param.view(shape)
+
+    def v_float_to_tensor(self, x: torch.Tensor) -> None:
+        if isinstance(self.v, float):
+            self.v = torch.full_like(x, self.v, requires_grad=False)
+        elif isinstance(self.v, torch.Tensor):
+            if self.v.shape != x.shape:
+                fill_value = self.v_reset if self.v_reset is not None else 0.0
+                self.v = torch.full_like(x, fill_value, requires_grad=False)
+            elif self.v.dtype != x.dtype or self.v.device != x.device:
+                self.v = self.v.to(dtype=x.dtype, device=x.device)
+
+    def single_step_forward(self, x: torch.Tensor):
+        self.v_float_to_tensor(x)
+        threshold = self._broadcast_parameter(self.v_threshold, x, "v_threshold")
+        offset = self._broadcast_parameter(self.v_offset, x, "v_offset")
+        h = self.v + x
+        spike = self.surrogate_function(h + offset - threshold)
+        spike_d = spike.detach() if self.detach_reset else spike
+        if self.v_reset is None:
+            self.v = h - spike_d * threshold
+        else:
+            self.v = spike_d * self.v_reset + (1.0 - spike_d) * h
+        return spike
+
+    def multi_step_forward(self, x_seq: torch.Tensor):
+        T = x_seq.shape[0]
+        y_seq = []
+        if self.store_v_seq:
+            v_seq = []
+        for t in range(T):
+            y = self.single_step_forward(x_seq[t])
+            y_seq.append(y)
+            if self.store_v_seq:
+                v_seq.append(self.v)
+        if self.store_v_seq:
+            self.v_seq = torch.stack(v_seq, dim=0)
+        return torch.stack(y_seq, dim=0)
+
+    def extra_repr(self):
+        return (
+            f"v_threshold_shape={tuple(self.v_threshold.shape)}, "
+            f"v_offset_shape={tuple(self.v_offset.shape)}, "
+            f"channel_dim={self.channel_dim}, v_reset={self.v_reset}, "
+            f"detach_reset={self.detach_reset}, step_mode={self.step_mode}, "
+            f"backend={self.backend}"
+        )
 
 
 class NonSpikingIFNode(NonSpikingBaseNode):
