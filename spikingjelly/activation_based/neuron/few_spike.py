@@ -1,3 +1,4 @@
+import math
 from typing import Sequence, Union, Optional
 
 import torch
@@ -7,10 +8,10 @@ from .. import base, surrogate
 
 
 __all__ = [
-    "FewSpikeTable",
     "FewSpikeNode",
-    "OutlierAwareThresholdNode",
+    "FewSpikeTable",
     "HGNode",
+    "OutlierAwareThresholdNode",
 ]
 
 
@@ -409,20 +410,28 @@ class OutlierAwareThresholdNode(FewSpikeNode):
         :raises ValueError: Raised when table lengths are inconsistent or threshold
             arguments are invalid.
         """
+        if not isinstance(table, FewSpikeTable):
+            raise TypeError(
+                f"table must be FewSpikeTable, but got {type(table).__name__}."
+            )
         _check_table_length("outlier_table", outlier_table, table.K)
-        if split_threshold < 0:
-            raise ValueError("split_threshold must be non-negative.")
+        split_threshold = float(split_threshold)
+        if not math.isfinite(split_threshold) or split_threshold < 0:
+            raise ValueError("split_threshold must be a finite non-negative value.")
         if clamp_value is not None:
-            if clamp_value <= 0:
-                raise ValueError("clamp_value must be positive when it is not None.")
+            clamp_value = float(clamp_value)
+            if not math.isfinite(clamp_value) or clamp_value <= 0:
+                raise ValueError(
+                    "clamp_value must be finite and positive when it is not None."
+                )
             if clamp_value < split_threshold:
                 raise ValueError("clamp_value must be no smaller than split_threshold.")
         super().__init__(table, surrogate_function, step_mode)
         self.register_buffer("outlier_theta", outlier_table.theta.clone())
         self.register_buffer("outlier_h", outlier_table.h.clone())
         self.register_buffer("outlier_d", outlier_table.d.clone())
-        self.split_threshold = float(split_threshold)
-        self.clamp_value = None if clamp_value is None else float(clamp_value)
+        self.split_threshold = split_threshold
+        self.clamp_value = clamp_value
 
     def _forward_from_gate(
         self, gate: torch.Tensor, return_sequence: bool

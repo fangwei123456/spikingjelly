@@ -1745,9 +1745,8 @@ class TDMultiheadAttention(TDModule):
         神经形态硬件的 fully spike-driven MultiheadAttention。``bias=True``
         时 projection bias 由 ``TDLinear`` 在累积输入上处理，避免普通
         ``nn.Linear`` 直接作用在差分序列时产生重复累计 bias。
-        父模块的 ``step_mode`` 显式决定内部 q/k/v/out projection 调用
-        ``single_step_forward`` 还是 ``multi_step_forward``；因此父模块的
-        模式不依赖子 ``TDLinear`` 当前保存的 ``step_mode``。
+        父模块的 ``step_mode`` 会同步到内部 q/k/v/out projection，确保 projection
+        通过标准 ``nn.Module.__call__`` 执行，兼容 PyTorch hooks / profiling。
 
         .. code-block:: python
 
@@ -1813,10 +1812,10 @@ class TDMultiheadAttention(TDModule):
         projection biases are handled by ``TDLinear`` on cumulative inputs,
         avoiding the repeated bias accumulation that would occur if ordinary
         ``nn.Linear`` were applied directly to differential sequences.
-        The parent module's ``step_mode`` explicitly decides whether q/k/v/out
-        projections call ``single_step_forward`` or ``multi_step_forward``;
-        therefore the parent mode does not depend on the child ``TDLinear``
-        modules' stored ``step_mode`` values.
+        The parent module's ``step_mode`` is synchronized to the internal
+        q/k/v/out projections, so projections execute through the standard
+        ``nn.Module.__call__`` path and remain compatible with PyTorch hooks /
+        profiling.
 
         .. code-block:: python
 
@@ -1867,6 +1866,16 @@ class TDMultiheadAttention(TDModule):
         self.k_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
         self.v_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
         self.out_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
+        self.step_mode = step_mode
+
+    @TDModule.step_mode.setter
+    def step_mode(self, value: str):
+        base.StepModule.step_mode.fset(self, value)
+        if hasattr(self, "q_proj"):
+            self.q_proj.step_mode = value
+            self.k_proj.step_mode = value
+            self.v_proj.step_mode = value
+            self.out_proj.step_mode = value
 
     def _split_heads(self, x_seq: torch.Tensor) -> torch.Tensor:
         if x_seq.dim() != 4:
@@ -1951,9 +1960,9 @@ class TDMultiheadAttention(TDModule):
             key_padding_mask, need_weights, average_attn_weights
         )
 
-        q = self._split_heads_single(self.q_proj.single_step_forward(query))
-        k = self._split_heads_single(self.k_proj.single_step_forward(key))
-        v = self._split_heads_single(self.v_proj.single_step_forward(value))
+        q = self._split_heads_single(self.q_proj(query))
+        k = self._split_heads_single(self.k_proj(key))
+        v = self._split_heads_single(self.v_proj(value))
         attn_mask = self._canonical_mha_attn_mask(attn_mask, q.shape[0])
         attn = F.scaled_dot_product_attention(
             q,
@@ -1963,7 +1972,7 @@ class TDMultiheadAttention(TDModule):
             dropout_p=0.0,
             is_causal=is_causal,
         )
-        out = self.out_proj.single_step_forward(self._merge_heads_single(attn))
+        out = self.out_proj(self._merge_heads_single(attn))
         return out, None
 
     def multi_step_forward(
@@ -2076,9 +2085,9 @@ class TDMultiheadAttention(TDModule):
             key_padding_mask, need_weights, average_attn_weights
         )
 
-        q_seq = self._split_heads(self.q_proj.multi_step_forward(query_seq))
-        k_seq = self._split_heads(self.k_proj.multi_step_forward(key_seq))
-        v_seq = self._split_heads(self.v_proj.multi_step_forward(value_seq))
+        q_seq = self._split_heads(self.q_proj(query_seq))
+        k_seq = self._split_heads(self.k_proj(key_seq))
+        v_seq = self._split_heads(self.v_proj(value_seq))
         attn_mask = self._canonical_mha_attn_mask(attn_mask, q_seq.shape[1])
         attn_seq = _td_scaled_dot_product_attention(
             q_seq,
@@ -2089,7 +2098,7 @@ class TDMultiheadAttention(TDModule):
             None,
             "TDMultiheadAttention",
         )
-        out_seq = self.out_proj.multi_step_forward(self._merge_heads(attn_seq))
+        out_seq = self.out_proj(self._merge_heads(attn_seq))
         return out_seq, None
 
     def extra_repr(self) -> str:

@@ -204,6 +204,25 @@ def test_outlier_aware_threshold_node_multi_step_and_validation():
             outlier_table=_table(),
             split_threshold=0.5,
         )
+    with pytest.raises(TypeError, match="table must be FewSpikeTable"):
+        neuron.OutlierAwareThresholdNode(
+            table=torch.tensor([1.0]),
+            outlier_table=outlier,
+            split_threshold=0.5,
+        )
+    with pytest.raises(ValueError, match="finite non-negative"):
+        neuron.OutlierAwareThresholdNode(
+            table=normal,
+            outlier_table=outlier,
+            split_threshold=float("nan"),
+        )
+    with pytest.raises(ValueError, match="finite and positive"):
+        neuron.OutlierAwareThresholdNode(
+            table=normal,
+            outlier_table=outlier,
+            split_threshold=0.5,
+            clamp_value=float("inf"),
+        )
     with pytest.raises(ValueError):
         neuron.OutlierAwareThresholdNode(
             table=normal,

@@ -1406,18 +1406,30 @@ class TestTDMultiheadAttention:
 
         assert torch.allclose(y_seq[0], y, atol=1e-5, rtol=1e-5)
 
-    def test_parent_step_mode_does_not_depend_on_projection_step_modes(self):
-        # The parent explicitly calls projection single/multi-step methods, so
-        # parent step_mode alone controls this composite operator's path.
+    def test_parent_step_mode_propagates_to_projection_modules_and_uses_hooks(self):
         x = torch.randn(2, 4, 8)
         op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+        hook_calls = []
 
+        op.q_proj.register_forward_hook(
+            lambda module, inputs, output: hook_calls.append(module.step_mode)
+        )
         op.step_mode = "s"
-        assert op.q_proj.step_mode == "m"
+        assert op.q_proj.step_mode == "s"
+        assert op.k_proj.step_mode == "s"
+        assert op.v_proj.step_mode == "s"
+        assert op.out_proj.step_mode == "s"
         y, _ = op(x, x, x)
         expected = _ann_mha_reference(op, x, x, x)
 
         assert torch.allclose(y, expected, atol=1e-5, rtol=1e-5)
+        assert hook_calls == ["s"]
+
+        functional.set_step_mode(op, "m")
+        assert op.q_proj.step_mode == "m"
+        assert op.k_proj.step_mode == "m"
+        assert op.v_proj.step_mode == "m"
+        assert op.out_proj.step_mode == "m"
 
     def test_cross_attention_matches_ann_mha(self):
         query_seq = torch.randn(4, 2, 3, 8)

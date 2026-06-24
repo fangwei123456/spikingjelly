@@ -86,7 +86,7 @@ Few-Spike / LAS Neuron Primitives
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: extra_repr
+   :exclude-members: supported_backends, extra_repr
 
 Neurons with Inter-layer Connection
 --------------------------------------------------
