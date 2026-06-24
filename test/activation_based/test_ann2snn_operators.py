@@ -3,6 +3,8 @@ import torch
 import torch.nn.functional as F
 
 from spikingjelly.activation_based.ann2snn.operators import (
+    SNNElementWiseProduct,
+    SNNMatrixOperator,
     TDGELU,
     TDLayerNorm,
     TDLinear,
@@ -10,6 +12,7 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDScaledDotProductAttention,
     TDSoftmax,
 )
+from spikingjelly.activation_based import neuron, surrogate
 
 
 def _copy_td_mha_to_ann(td_op, ann_op):
@@ -58,6 +61,31 @@ def _mha_cumulative_reference(td_op, query_seq, key_seq, value_seq, **kwargs):
             for t in range(query_seq.shape[0])
         ]
     )
+
+
+def _temporal_difference(y_cum):
+    y_seq = torch.empty_like(y_cum)
+    y_seq[0] = y_cum[0]
+    y_seq[1:] = y_cum[1:] - y_cum[:-1]
+    return y_seq
+
+
+def _snn_matrix_loop_reference(a_seq, b_seq):
+    a_sum = None
+    b_sum = None
+    y_seq = []
+    for t in range(a_seq.shape[0]):
+        if t == 0:
+            a_sum = a_seq[t]
+            b_sum = b_seq[t]
+            y_t = torch.matmul(a_sum, b_sum)
+        else:
+            prev = torch.matmul(a_sum, b_sum)
+            a_sum = a_sum + a_seq[t]
+            b_sum = b_sum + b_seq[t]
+            y_t = torch.matmul(a_sum, b_sum) - prev
+        y_seq.append(y_t)
+    return torch.stack(y_seq)
 
 
 class TestTDSoftmax:
@@ -456,6 +484,15 @@ class TestTDLinear:
 
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
 
+    def test_bias_false_matches_per_timestep_linear(self):
+        x_seq = torch.randn(5, 2, 4)
+        op = TDLinear(4, 3, bias=False)
+
+        y_seq = op(x_seq)
+        expected = F.linear(x_seq, op.weight, None)
+
+        assert torch.allclose(y_seq, expected, atol=1e-6, rtol=1e-6)
+
     def test_final_cumulative_output_matches_linear_on_total_input(self):
         x_seq = torch.randn(6, 3, 5)
         op = TDLinear(5, 4)
@@ -463,9 +500,7 @@ class TestTDLinear:
         y_seq = op(x_seq)
         expected = F.linear(x_seq.sum(dim=0), op.weight, op.bias)
 
-        assert torch.allclose(
-            y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6
-        )
+        assert torch.allclose(y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6)
 
     def test_single_timestep_returns_linear_of_input(self):
         x_seq = torch.randn(1, 2, 3)
@@ -487,6 +522,9 @@ class TestTDLinear:
         y_seq = op(x_seq)
 
         assert torch.allclose(y_seq.cumsum(dim=0)[-1], op.bias.expand(2, 5))
+        assert not torch.allclose(
+            y_seq.cumsum(dim=0)[-1], op.bias.mul(x_seq.shape[0]).expand(2, 5)
+        )
         assert torch.allclose(y_seq[0], op.bias.expand(2, 5))
         assert torch.count_nonzero(y_seq[1:]) == 0
 
@@ -561,6 +599,226 @@ class TestTDLinear:
         op = TDLinear(3, 5, bias=False)
 
         assert op.extra_repr() == "in_features=3, out_features=5, bias=False"
+
+
+class TestSNNMatrixOperator:
+    def test_matches_las_style_loop_reference(self):
+        a_seq = torch.randn(4, 2, 3, 5, dtype=torch.float64)
+        b_seq = torch.randn(4, 2, 5, 7, dtype=torch.float64)
+        op = SNNMatrixOperator()
+
+        y_seq = op(a_seq, b_seq)
+        expected = _snn_matrix_loop_reference(a_seq, b_seq)
+
+        assert y_seq.shape == (4, 2, 3, 7)
+        assert torch.allclose(y_seq, expected, atol=1e-6, rtol=1e-6)
+
+    def test_cumulative_output_matches_matmul_on_cumulative_inputs(self):
+        a_seq = torch.randn(5, 2, 3, 4)
+        b_seq = torch.randn(5, 2, 4, 6)
+        op = SNNMatrixOperator()
+
+        y_seq = op(a_seq, b_seq)
+        expected = torch.matmul(a_seq.cumsum(dim=0), b_seq.cumsum(dim=0))
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_preserves_cross_time_terms(self):
+        a_seq = torch.tensor([[[[1.0]]], [[[2.0]]]])
+        b_seq = torch.tensor([[[[3.0]]], [[[5.0]]]])
+        op = SNNMatrixOperator()
+
+        y_seq = op(a_seq, b_seq)
+        naive = torch.matmul(a_seq, b_seq)
+
+        assert torch.allclose(y_seq.flatten(), torch.tensor([3.0, 21.0]))
+        assert not torch.allclose(y_seq, naive)
+
+    def test_supports_broadcast_batch_dimensions(self):
+        a_seq = torch.randn(3, 2, 4, 5)
+        b_seq = torch.randn(3, 1, 5, 6)
+        op = SNNMatrixOperator()
+
+        y_seq = op(a_seq, b_seq)
+        expected = torch.matmul(a_seq.cumsum(dim=0), b_seq.cumsum(dim=0))
+
+        assert y_seq.shape == (3, 2, 4, 6)
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_broadcast_ignores_time_dimension_when_ranks_differ(self):
+        a_seq = torch.randn(3, 2, 4, 5)
+        b_seq = torch.randn(3, 5, 6)
+        op = SNNMatrixOperator()
+
+        y_seq = op(a_seq, b_seq)
+        expected = torch.matmul(a_seq.cumsum(dim=0), b_seq.unsqueeze(1).cumsum(dim=0))
+
+        assert y_seq.shape == (3, 2, 4, 6)
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_gradients_match_reference(self):
+        a_seq = torch.randn(3, 2, 4, 5)
+        b_seq = torch.randn(3, 2, 5, 6)
+        op = SNNMatrixOperator()
+
+        a_ref = a_seq.clone().detach().requires_grad_()
+        b_ref = b_seq.clone().detach().requires_grad_()
+        y_ref = _temporal_difference(
+            torch.matmul(a_ref.cumsum(dim=0), b_ref.cumsum(dim=0))
+        )
+        y_ref.square().sum().backward()
+
+        a_seq = a_seq.clone().detach().requires_grad_()
+        b_seq = b_seq.clone().detach().requires_grad_()
+        y_seq = op(a_seq, b_seq)
+        y_seq.square().sum().backward()
+
+        assert torch.allclose(a_seq.grad, a_ref.grad, atol=1e-6, rtol=1e-6)
+        assert torch.allclose(b_seq.grad, b_ref.grad, atol=1e-6, rtol=1e-6)
+
+    def test_preserves_dtype_and_device(self):
+        a_seq = torch.randn(3, 2, 4, 5, dtype=torch.float64)
+        b_seq = torch.randn(3, 2, 5, 6, dtype=torch.float64)
+        op = SNNMatrixOperator()
+
+        y_seq = op(a_seq, b_seq)
+
+        assert y_seq.dtype == torch.float64
+        assert y_seq.device == a_seq.device
+
+    def test_rejects_mismatched_time_lengths(self):
+        op = SNNMatrixOperator()
+
+        with pytest.raises(ValueError, match="same time length"):
+            op(torch.randn(3, 2, 4, 5), torch.randn(4, 2, 5, 6))
+
+    def test_rejects_empty_time_dimension(self):
+        op = SNNMatrixOperator()
+
+        with pytest.raises(ValueError, match="non-empty time dimension"):
+            op(torch.empty(0, 2, 4, 5), torch.empty(0, 2, 5, 6))
+
+    def test_rejects_inputs_with_too_few_dimensions(self):
+        op = SNNMatrixOperator()
+
+        with pytest.raises(ValueError, match="at least 3 dimensions"):
+            op(torch.randn(3, 5), torch.randn(3, 5, 6))
+
+    def test_invalid_matmul_shape_raises_from_pytorch(self):
+        op = SNNMatrixOperator()
+
+        with pytest.raises(RuntimeError):
+            op(torch.randn(3, 2, 4, 5), torch.randn(3, 2, 4, 6))
+
+
+class TestSNNElementWiseProduct:
+    def test_cumulative_output_matches_product_on_cumulative_inputs(self):
+        a_seq = torch.randn(5, 2, 3)
+        b_seq = torch.randn(5, 2, 3)
+        op = SNNElementWiseProduct()
+
+        y_seq = op(a_seq, b_seq)
+        expected = a_seq.cumsum(dim=0) * b_seq.cumsum(dim=0)
+
+        assert y_seq.shape == (5, 2, 3)
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_final_sum_matches_product_of_final_sums(self):
+        a_seq = torch.randn(5, 2, 3)
+        b_seq = torch.randn(5, 2, 3)
+        op = SNNElementWiseProduct()
+
+        y_seq = op(a_seq, b_seq)
+        expected = a_seq.sum(dim=0) * b_seq.sum(dim=0)
+
+        assert torch.allclose(y_seq.sum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_supports_broadcast(self):
+        a_seq = torch.randn(4, 2, 3)
+        b_seq = torch.randn(4, 1, 3)
+        op = SNNElementWiseProduct()
+
+        y_seq = op(a_seq, b_seq)
+        expected = a_seq.cumsum(dim=0) * b_seq.cumsum(dim=0)
+
+        assert y_seq.shape == (4, 2, 3)
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_broadcast_ignores_time_dimension_when_ranks_differ(self):
+        a_seq = torch.randn(4, 2, 3)
+        b_seq = torch.randn(4, 3)
+        op = SNNElementWiseProduct()
+
+        y_seq = op(a_seq, b_seq)
+        expected = a_seq.cumsum(dim=0) * b_seq.unsqueeze(1).cumsum(dim=0)
+
+        assert y_seq.shape == (4, 2, 3)
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_gradients_match_reference(self):
+        a_seq = torch.randn(3, 2, 4)
+        b_seq = torch.randn(3, 2, 4)
+        op = SNNElementWiseProduct()
+
+        a_ref = a_seq.clone().detach().requires_grad_()
+        b_ref = b_seq.clone().detach().requires_grad_()
+        y_ref = _temporal_difference(a_ref.cumsum(dim=0) * b_ref.cumsum(dim=0))
+        y_ref.square().sum().backward()
+
+        a_seq = a_seq.clone().detach().requires_grad_()
+        b_seq = b_seq.clone().detach().requires_grad_()
+        y_seq = op(a_seq, b_seq)
+        y_seq.square().sum().backward()
+
+        assert torch.allclose(a_seq.grad, a_ref.grad, atol=1e-6, rtol=1e-6)
+        assert torch.allclose(b_seq.grad, b_ref.grad, atol=1e-6, rtol=1e-6)
+
+    def test_rejects_mismatched_time_lengths(self):
+        op = SNNElementWiseProduct()
+
+        with pytest.raises(ValueError, match="same time length"):
+            op(torch.randn(3, 2, 4), torch.randn(4, 2, 4))
+
+    def test_rejects_empty_time_dimension(self):
+        op = SNNElementWiseProduct()
+
+        with pytest.raises(ValueError, match="non-empty time dimension"):
+            op(torch.empty(0, 2, 4), torch.empty(0, 2, 4))
+
+    def test_rejects_one_dimensional_input(self):
+        op = SNNElementWiseProduct()
+
+        with pytest.raises(ValueError, match="at least 2 dimensions"):
+            op(torch.randn(3), torch.randn(3))
+
+    def test_invalid_broadcast_shape_raises_from_pytorch(self):
+        op = SNNElementWiseProduct()
+
+        with pytest.raises(RuntimeError):
+            op(torch.randn(3, 2, 4), torch.randn(3, 2, 5))
+
+
+def test_few_spike_tdlinear_few_spike_sequence_smoke():
+    table = neuron.FewSpikeTable(
+        theta=torch.tensor([0.25, 0.5, 0.75]),
+        h=torch.tensor([0.1, 0.1, 0.1]),
+        d=torch.tensor([1.0, 2.0, 4.0]),
+    )
+    first = neuron.FewSpikeNode(
+        table, surrogate_function=surrogate.Sigmoid(), step_mode="m"
+    )
+    linear = TDLinear(4, 5)
+    second = neuron.FewSpikeNode(
+        table, surrogate_function=surrogate.Sigmoid(), step_mode="m"
+    )
+    x_seq = torch.randn(table.K, 2, 4, requires_grad=True)
+
+    y_seq = second(linear(first(x_seq)))
+    y_seq.sum().backward()
+
+    assert y_seq.shape == (table.K, 2, 5)
+    assert x_seq.grad is not None
+    assert torch.isfinite(x_seq.grad).all()
 
 
 class TestTDScaledDotProductAttention:
@@ -880,9 +1138,7 @@ class TestTDMultiheadAttention:
         y_seq, _ = op(x_seq, x_seq, x_seq, need_weights=False)
         expected = _mha_cumulative_reference(op, x_seq, x_seq, x_seq)[-1]
 
-        assert torch.allclose(
-            y_seq.cumsum(dim=0)[-1], expected, atol=1e-5, rtol=1e-5
-        )
+        assert torch.allclose(y_seq.cumsum(dim=0)[-1], expected, atol=1e-5, rtol=1e-5)
 
     def test_single_timestep_matches_ann_mha(self):
         x_seq = torch.randn(1, 2, 4, 8)
@@ -918,7 +1174,9 @@ class TestTDMultiheadAttention:
         op = TDMultiheadAttention(embed_dim=8, num_heads=2)
 
         y_seq, _ = op(x_seq, x_seq, x_seq, attn_mask=attn_mask, need_weights=False)
-        expected = _mha_cumulative_reference(op, x_seq, x_seq, x_seq, attn_mask=attn_mask)
+        expected = _mha_cumulative_reference(
+            op, x_seq, x_seq, x_seq, attn_mask=attn_mask
+        )
 
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
 
@@ -935,7 +1193,9 @@ class TestTDMultiheadAttention:
         op = TDMultiheadAttention(embed_dim=8, num_heads=2)
 
         y_seq, _ = op(x_seq, x_seq, x_seq, attn_mask=attn_mask, need_weights=False)
-        expected = _mha_cumulative_reference(op, x_seq, x_seq, x_seq, attn_mask=attn_mask)
+        expected = _mha_cumulative_reference(
+            op, x_seq, x_seq, x_seq, attn_mask=attn_mask
+        )
 
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
 

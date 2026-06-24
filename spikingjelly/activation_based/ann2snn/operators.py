@@ -11,6 +11,8 @@ __all__ = [
     "TDLayerNorm",
     "TDGELU",
     "TDLinear",
+    "SNNMatrixOperator",
+    "SNNElementWiseProduct",
     "TDScaledDotProductAttention",
     "TDMultiheadAttention",
 ]
@@ -34,6 +36,32 @@ def _check_time_sequence(x_seq: torch.Tensor, module_name: str) -> None:
             f"{module_name} expects a non-empty time dimension, but got "
             f"shape {tuple(x_seq.shape)}."
         )
+
+
+def _check_pair_time_sequence(
+    a_seq: torch.Tensor,
+    b_seq: torch.Tensor,
+    a_name: str,
+    b_name: str,
+    module_name: str,
+) -> None:
+    _check_time_sequence(a_seq, module_name)
+    _check_time_sequence(b_seq, module_name)
+    if a_seq.shape[0] != b_seq.shape[0]:
+        raise ValueError(
+            f"{module_name} expects {a_name} and {b_name} to have the same "
+            f"time length, but got {a_seq.shape[0]} and {b_seq.shape[0]}."
+        )
+
+
+def _align_sequence_ranks(
+    a_seq: torch.Tensor, b_seq: torch.Tensor
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    while a_seq.dim() < b_seq.dim():
+        a_seq = a_seq.unsqueeze(1)
+    while b_seq.dim() < a_seq.dim():
+        b_seq = b_seq.unsqueeze(1)
+    return a_seq, b_seq
 
 
 def _check_attention_sequence(
@@ -725,9 +753,9 @@ class TDLinear(nn.Module):
         * **中文**
 
         Temporal-difference (TD) Linear 算子。输入必须是完整时间序列，
-        时间维固定为第 0 维，形状为 ``[T, ..., in_features]``。该模块先对
-        输入在时间维做累积，再执行 :func:`torch.nn.functional.linear`，最后
-        返回累积输出在时间维上的差分。
+        时间维固定为第 0 维，形状为 ``[T, ..., in_features]``。该模块返回
+        sequence-preserving affine 差分序列，使 ``Y.cumsum(dim=0)`` 等于对
+        ``X.cumsum(dim=0)`` 逐时间步执行 :func:`torch.nn.functional.linear`。
 
         返回值是浮点差分值，可能包含负值；它不是二值脉冲，也不表示 fully
         spike-driven Linear。输出 dtype 与 PyTorch Linear 一致；推荐使用
@@ -739,8 +767,9 @@ class TDLinear(nn.Module):
 
         该算子用于处理带 bias 的 affine projection。普通
         :class:`torch.nn.Linear` 直接作用在 TD 差分序列上会在时间累积后得到
-        ``T * bias``；TD Linear 在累积输入上执行 Linear 后再差分，使累计输出
-        保持 ``W @ x_cum + bias``。
+        ``T * bias``；TD Linear 使累计输出保持 ``W @ x_cum + bias``。当
+        ``bias=False`` 时，该算子退化为普通逐时间步 Linear；当 ``bias=True``
+        时，bias 只在第 0 个时间步进入差分序列。
 
         .. code-block:: python
 
@@ -767,9 +796,10 @@ class TDLinear(nn.Module):
 
         Temporal-difference (TD) Linear operator. The input must be a complete
         time sequence whose time dimension is fixed at dimension 0, with shape
-        ``[T, ..., in_features]``. This module first accumulates the input over
-        time, applies :func:`torch.nn.functional.linear`, and returns the
-        temporal difference of the cumulative outputs.
+        ``[T, ..., in_features]``. This module returns a sequence-preserving
+        affine differential sequence such that ``Y.cumsum(dim=0)`` matches
+        :func:`torch.nn.functional.linear` applied to ``X.cumsum(dim=0)`` at
+        every time step.
 
         The output contains floating-point differential values and may contain
         negative values. It is not a binary spike tensor and does not represent
@@ -785,7 +815,9 @@ class TDLinear(nn.Module):
         :class:`torch.nn.Linear` directly to a TD differential sequence would
         accumulate the bias as ``T * bias``. TD Linear applies Linear to the
         cumulative input and then differences the cumulative output, preserving
-        ``W @ x_cum + bias``.
+        ``W @ x_cum + bias``. When ``bias=False``, this operator degenerates to
+        ordinary per-time-step Linear. When ``bias=True``, the bias appears only
+        at the first time step of the differential sequence.
 
         .. code-block:: python
 
@@ -852,9 +884,11 @@ class TDLinear(nn.Module):
             Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
 
         因此 ``Y.cumsum(dim=0)`` 与对 ``X.cumsum(dim=0)`` 逐时间步执行 ANN
-        Linear 的结果一致。输出是浮点差分值，可能为负，不是二值脉冲。当
-        ``T = 1`` 时，``Y[0]`` 直接等于对 ``X[0]`` 执行 Linear 的结果。
-        输出 dtype 与 PyTorch Linear 一致，且该算子对 autograd 透明。
+        Linear 的结果一致。若 ``bias`` 为 ``None``，该计算等价于直接对
+        ``X`` 逐时间步执行 Linear；若存在 bias，bias 只出现在 ``Y[0]`` 中，
+        避免累计后得到 ``T * bias``。输出是浮点差分值，可能为负，不是二值
+        脉冲。当 ``T = 1`` 时，``Y[0]`` 直接等于对 ``X[0]`` 执行 Linear 的
+        结果。输出 dtype 与 PyTorch Linear 一致，且该算子对 autograd 透明。
 
         :param x_seq: 输入时间序列，形状为 ``[T, ..., in_features]``，且
             ``T > 0``。
@@ -885,11 +919,14 @@ class TDLinear(nn.Module):
             Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
 
         Thus, ``Y.cumsum(dim=0)`` matches ANN Linear applied to
-        ``X.cumsum(dim=0)`` at each time step. The output contains
-        floating-point differential values, may be negative, and is not a
-        binary spike tensor. When ``T = 1``, ``Y[0]`` is exactly Linear applied
-        to ``X[0]``. The output dtype follows PyTorch Linear, and the operator
-        is transparent to autograd.
+        ``X.cumsum(dim=0)`` at each time step. If ``bias`` is ``None``, this is
+        equivalent to applying Linear to ``X`` at each time step directly. If a
+        bias exists, the bias appears only in ``Y[0]``, avoiding ``T * bias``
+        after accumulation. The output contains floating-point differential
+        values, may be negative, and is not a binary spike tensor. When
+        ``T = 1``, ``Y[0]`` is exactly Linear applied to ``X[0]``. The output
+        dtype follows PyTorch Linear, and the operator is transparent to
+        autograd.
 
         :param x_seq: Input time sequence with shape
             ``[T, ..., in_features]`` and ``T > 0``.
@@ -902,6 +939,9 @@ class TDLinear(nn.Module):
         """
         _check_time_sequence(x_seq, "TDLinear")
 
+        if self.bias is None:
+            return F.linear(x_seq, self.weight, None)
+
         y_cum = F.linear(x_seq.cumsum(dim=0), self.weight, self.bias)
         return _temporal_difference(y_cum)
 
@@ -910,6 +950,304 @@ class TDLinear(nn.Module):
             f"in_features={self.in_features}, out_features={self.out_features}, "
             f"bias={self.bias is not None}"
         )
+
+
+class SNNMatrixOperator(nn.Module):
+    def __init__(self) -> None:
+        r"""
+        .. rubric:: API Language
+
+        :ref:`中文 <SNNMatrixOperator.__init__-cn>` |
+        :ref:`English <SNNMatrixOperator.__init__-en>`
+
+        ----
+
+        .. _SNNMatrixOperator.__init__-cn:
+
+        * **中文**
+
+        Sequence-preserving SNN 矩阵乘法算子。输入必须是两条完整时间序列，
+        时间维固定为第 0 维，形状分别为 ``[T, ..., M, N]`` 和
+        ``[T, ..., N, P]``。该模块先分别对两条输入在时间维做累积，再执行
+        :func:`torch.matmul`，最后返回累积输出在时间维上的差分。
+
+        该算子满足
+        ``Y.cumsum(dim=0) == torch.matmul(A.cumsum(dim=0), B.cumsum(dim=0))``。
+        因而它保留 cross-time terms，例如 ``A[0] @ B[1]`` 与
+        ``A[1] @ B[0]``；这不同于逐时间步执行 ``A[t] @ B[t]``。该算子是
+        LAS ``SNNMatrixOperater`` prefix recurrence 的 sequence-preserving
+        张量级形式，但不会在内部自动 ``sum(0)``。
+
+        输出是浮点差分值，可能包含负值；它不是二值脉冲，也不表示 fully
+        spike-driven matrix multiplication。dtype、device 与 broadcast 语义遵循
+        :func:`torch.matmul`。该算子无内部状态，多次 ``forward`` 之间不需要
+        调用 ``reset``。
+
+        ----
+
+        .. _SNNMatrixOperator.__init__-en:
+
+        * **English**
+
+        Sequence-preserving SNN matrix multiplication operator. The inputs must
+        be two complete time sequences whose time dimension is fixed at
+        dimension 0, with shapes ``[T, ..., M, N]`` and ``[T, ..., N, P]``.
+        This module accumulates both inputs over time, applies
+        :func:`torch.matmul`, and returns the temporal difference of the
+        cumulative outputs.
+
+        The operator satisfies
+        ``Y.cumsum(dim=0) == torch.matmul(A.cumsum(dim=0), B.cumsum(dim=0))``.
+        Therefore it preserves cross-time terms such as ``A[0] @ B[1]`` and
+        ``A[1] @ B[0]``; it is not equivalent to applying ``A[t] @ B[t]`` at
+        each time step independently. It is the sequence-preserving tensor
+        form of the LAS ``SNNMatrixOperater`` prefix recurrence, but it does
+        not implicitly call ``sum(0)``.
+
+        The output contains floating-point differential values and may contain
+        negative values. It is not a binary spike tensor and does not represent
+        fully spike-driven matrix multiplication. Dtype, device and broadcasting
+        semantics follow :func:`torch.matmul`. The operator is stateless, and
+        repeated ``forward`` calls do not require ``reset``.
+        """
+        super().__init__()
+
+    def forward(self, a_seq: torch.Tensor, b_seq: torch.Tensor) -> torch.Tensor:
+        r"""
+        .. rubric:: API Language
+
+        :ref:`中文 <SNNMatrixOperator.forward-cn>` |
+        :ref:`English <SNNMatrixOperator.forward-en>`
+
+        ----
+
+        .. _SNNMatrixOperator.forward-cn:
+
+        * **中文**
+
+        对两条完整时间序列执行 sequence-preserving SNN 矩阵乘法：
+
+        .. math::
+
+            A_{cum}[t] = \sum_{i=0}^{t} A[i]
+
+        .. math::
+
+            B_{cum}[t] = \sum_{i=0}^{t} B[i]
+
+        .. math::
+
+            Y_{cum}[t] = A_{cum}[t] B_{cum}[t]
+
+        .. math::
+
+            Y[0] = Y_{cum}[0], \quad
+            Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
+
+        :param a_seq: 左输入序列，形状为 ``[T, ..., M, N]``，且 ``T > 0``。
+        :type a_seq: torch.Tensor
+        :param b_seq: 右输入序列，形状为 ``[T, ..., N, P]``，且 ``T > 0``。
+        :type b_seq: torch.Tensor
+        :return: 差分输出序列，形状为 ``[T, ..., M, P]``。
+        :rtype: torch.Tensor
+        :raises ValueError: 若输入少于 3 维、时间维为空或时间长度不一致。
+
+        ----
+
+        .. _SNNMatrixOperator.forward-en:
+
+        * **English**
+
+        Apply sequence-preserving SNN matrix multiplication to two complete time
+        sequences:
+
+        .. math::
+
+            A_{cum}[t] = \sum_{i=0}^{t} A[i]
+
+        .. math::
+
+            B_{cum}[t] = \sum_{i=0}^{t} B[i]
+
+        .. math::
+
+            Y_{cum}[t] = A_{cum}[t] B_{cum}[t]
+
+        .. math::
+
+            Y[0] = Y_{cum}[0], \quad
+            Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
+
+        :param a_seq: Left input sequence with shape ``[T, ..., M, N]`` and
+            ``T > 0``.
+        :type a_seq: torch.Tensor
+        :param b_seq: Right input sequence with shape ``[T, ..., N, P]`` and
+            ``T > 0``.
+        :type b_seq: torch.Tensor
+        :return: Differential output sequence with shape ``[T, ..., M, P]``.
+        :rtype: torch.Tensor
+        :raises ValueError: If an input has fewer than 3 dimensions, the time
+            dimension is empty, or the time lengths differ.
+        """
+        if a_seq.dim() < 3:
+            raise ValueError(
+                "SNNMatrixOperator expects a_seq with shape [T, ..., M, N] "
+                f"and at least 3 dimensions, but got shape {tuple(a_seq.shape)}."
+            )
+        if b_seq.dim() < 3:
+            raise ValueError(
+                "SNNMatrixOperator expects b_seq with shape [T, ..., N, P] "
+                f"and at least 3 dimensions, but got shape {tuple(b_seq.shape)}."
+            )
+        _check_pair_time_sequence(a_seq, b_seq, "a_seq", "b_seq", "SNNMatrixOperator")
+
+        a_seq, b_seq = _align_sequence_ranks(a_seq, b_seq)
+        y_cum = torch.matmul(a_seq.cumsum(dim=0), b_seq.cumsum(dim=0))
+        return _temporal_difference(y_cum)
+
+
+class SNNElementWiseProduct(nn.Module):
+    def __init__(self) -> None:
+        r"""
+        .. rubric:: API Language
+
+        :ref:`中文 <SNNElementWiseProduct.__init__-cn>` |
+        :ref:`English <SNNElementWiseProduct.__init__-en>`
+
+        ----
+
+        .. _SNNElementWiseProduct.__init__-cn:
+
+        * **中文**
+
+        Sequence-preserving SNN 逐元素乘法算子。输入必须是两条完整时间序列，
+        时间维固定为第 0 维，形状为 ``[T, ...]``，非时间维遵循 PyTorch
+        broadcast 规则。该模块先分别对两条输入在时间维做累积，再执行逐元素
+        乘法，最后返回累积输出在时间维上的差分。
+
+        该算子满足 ``Y.cumsum(dim=0) == A.cumsum(dim=0) * B.cumsum(dim=0)``。
+        它是 LAS ``SNNMACOperater`` 核心乘法-累积语义的 sequence-preserving
+        张量级形式，但不会在内部自动 ``sum(0)``；需要单步聚合时由调用方显式
+        完成。
+
+        输出是浮点差分值，可能包含负值；它不是二值脉冲，也不表示 fully
+        spike-driven multiply-accumulate。dtype、device 与 broadcast 语义遵循
+        PyTorch 逐元素乘法。该算子无内部状态，多次 ``forward`` 之间不需要调用
+        ``reset``。
+
+        ----
+
+        .. _SNNElementWiseProduct.__init__-en:
+
+        * **English**
+
+        Sequence-preserving SNN element-wise product operator. The inputs must
+        be two complete time sequences whose time dimension is fixed at
+        dimension 0, with shape ``[T, ...]``. Non-time dimensions follow
+        PyTorch broadcasting rules. This module accumulates both inputs over
+        time, applies element-wise multiplication, and returns the temporal
+        difference of the cumulative outputs.
+
+        The operator satisfies
+        ``Y.cumsum(dim=0) == A.cumsum(dim=0) * B.cumsum(dim=0)``. It is the
+        sequence-preserving tensor form of the core multiply-accumulate
+        semantics in LAS ``SNNMACOperater``, but it does not implicitly call
+        ``sum(0)``; callers should aggregate explicitly when a single-step
+        output is required.
+
+        The output contains floating-point differential values and may contain
+        negative values. It is not a binary spike tensor and does not represent
+        fully spike-driven multiply-accumulate. Dtype, device and broadcasting
+        semantics follow PyTorch element-wise multiplication. The operator is
+        stateless, and repeated ``forward`` calls do not require ``reset``.
+        """
+        super().__init__()
+
+    def forward(self, a_seq: torch.Tensor, b_seq: torch.Tensor) -> torch.Tensor:
+        r"""
+        .. rubric:: API Language
+
+        :ref:`中文 <SNNElementWiseProduct.forward-cn>` |
+        :ref:`English <SNNElementWiseProduct.forward-en>`
+
+        ----
+
+        .. _SNNElementWiseProduct.forward-cn:
+
+        * **中文**
+
+        对两条完整时间序列执行 sequence-preserving SNN 逐元素乘法：
+
+        .. math::
+
+            A_{cum}[t] = \sum_{i=0}^{t} A[i]
+
+        .. math::
+
+            B_{cum}[t] = \sum_{i=0}^{t} B[i]
+
+        .. math::
+
+            Y_{cum}[t] = A_{cum}[t] \odot B_{cum}[t]
+
+        .. math::
+
+            Y[0] = Y_{cum}[0], \quad
+            Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
+
+        :param a_seq: 左输入序列，形状为 ``[T, ...]``，且 ``T > 0``。
+        :type a_seq: torch.Tensor
+        :param b_seq: 右输入序列，形状为 ``[T, ...]``，且 ``T > 0``。
+        :type b_seq: torch.Tensor
+        :return: 差分输出序列，形状由 PyTorch broadcast 规则决定。
+        :rtype: torch.Tensor
+        :raises ValueError: 若输入少于 2 维、时间维为空或时间长度不一致。
+
+        ----
+
+        .. _SNNElementWiseProduct.forward-en:
+
+        * **English**
+
+        Apply sequence-preserving SNN element-wise product to two complete time
+        sequences:
+
+        .. math::
+
+            A_{cum}[t] = \sum_{i=0}^{t} A[i]
+
+        .. math::
+
+            B_{cum}[t] = \sum_{i=0}^{t} B[i]
+
+        .. math::
+
+            Y_{cum}[t] = A_{cum}[t] \odot B_{cum}[t]
+
+        .. math::
+
+            Y[0] = Y_{cum}[0], \quad
+            Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
+
+        :param a_seq: Left input sequence with shape ``[T, ...]`` and
+            ``T > 0``.
+        :type a_seq: torch.Tensor
+        :param b_seq: Right input sequence with shape ``[T, ...]`` and
+            ``T > 0``.
+        :type b_seq: torch.Tensor
+        :return: Differential output sequence whose shape follows PyTorch
+            broadcasting rules.
+        :rtype: torch.Tensor
+        :raises ValueError: If an input has fewer than 2 dimensions, the time
+            dimension is empty, or the time lengths differ.
+        """
+        _check_pair_time_sequence(
+            a_seq, b_seq, "a_seq", "b_seq", "SNNElementWiseProduct"
+        )
+
+        a_seq, b_seq = _align_sequence_ranks(a_seq, b_seq)
+        y_cum = a_seq.cumsum(dim=0) * b_seq.cumsum(dim=0)
+        return _temporal_difference(y_cum)
 
 
 class TDScaledDotProductAttention(nn.Module):
@@ -1316,9 +1654,7 @@ class TDMultiheadAttention(nn.Module):
                 f"embed_dim={self.embed_dim}, but got {x_seq.shape[-1]}."
             )
         t, batch_size, seq_len, _ = x_seq.shape
-        x_seq = x_seq.reshape(
-            t, batch_size, seq_len, self.num_heads, self.head_dim
-        )
+        x_seq = x_seq.reshape(t, batch_size, seq_len, self.num_heads, self.head_dim)
         return x_seq.transpose(2, 3)
 
     def _merge_heads(self, x_seq: torch.Tensor) -> torch.Tensor:
