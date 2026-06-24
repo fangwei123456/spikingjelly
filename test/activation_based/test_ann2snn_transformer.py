@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from spikingjelly.activation_based import neuron, surrogate
 from spikingjelly.activation_based.ann2snn import Converter
 from spikingjelly.activation_based.ann2snn.operators import (
     TDGELU,
@@ -10,6 +11,18 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDMultiheadAttention,
     TDScaledDotProductAttention,
 )
+
+
+def _activation_aware_calibration_channel_last(
+    activation: torch.Tensor,
+    threshold_std_scale: float = 3.0,
+    eps: float = 1e-6,
+):
+    reduce_dims = tuple(range(activation.dim() - 1))
+    offset = activation.mean(dim=reduce_dims)
+    threshold = activation.std(dim=reduce_dims, unbiased=False) * threshold_std_scale
+    threshold = torch.clamp(threshold, min=eps)
+    return threshold.detach(), offset.detach()
 
 
 class TinyTDTransformerBlock(nn.Module):
@@ -89,6 +102,42 @@ class TinyTDTransformerBlock(nn.Module):
         mlp_cum = F.gelu(mlp_cum, approximate=self.act.approximate)
         mlp_cum = self._ann_linear(self.fc2, mlp_cum)
         return x_cum + mlp_cum
+
+
+class TinyActivationAwareTDTransformerBlock(TinyTDTransformerBlock):
+    def __init__(
+        self,
+        embed_dim: int,
+        num_heads: int,
+        mlp_dim: int,
+        v_threshold: torch.Tensor,
+        v_offset: torch.Tensor,
+        surrogate_function: surrogate.SurrogateFunctionBase,
+    ) -> None:
+        super().__init__(embed_dim, num_heads, mlp_dim)
+        self.activation_neuron = neuron.ActivationAwareIFNode(
+            v_threshold=v_threshold,
+            v_offset=v_offset,
+            channel_dim=-1,
+            surrogate_function=surrogate_function,
+            step_mode="m",
+        )
+        self.hidden_spike_seq = None
+
+    def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        norm_seq = self.norm1(x_seq)
+        q_seq = self._split_heads(self.q_proj(norm_seq))
+        k_seq = self._split_heads(self.k_proj(norm_seq))
+        v_seq = self._split_heads(self.v_proj(norm_seq))
+        attn_seq = self._merge_heads(self.attn(q_seq, k_seq, v_seq))
+        x_seq = x_seq + self.out_proj(attn_seq)
+
+        mlp_seq = self.fc1(self.norm2(x_seq))
+        mlp_seq = self.act(mlp_seq)
+        mlp_seq = self.activation_neuron(mlp_seq)
+        self.hidden_spike_seq = mlp_seq
+        mlp_seq = self.fc2(mlp_seq)
+        return x_seq + mlp_seq
 
 
 class TinyANNFunctionalSDPATransformerBlock(nn.Module):
@@ -232,6 +281,80 @@ def test_tiny_transformer_block_autograd_smoke():
         assert torch.isfinite(parameter.grad).all()
     assert block.q_proj.bias.grad is not None
     assert torch.isfinite(block.q_proj.bias.grad).all()
+
+
+def test_activation_aware_calibration_for_tiny_transformer_hidden_activation():
+    torch.manual_seed(0)
+    probe_block = TinyTDTransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
+    x_seq = torch.randn(5, 2, 4, 8)
+    hidden_seq = probe_block.act(probe_block.fc1(probe_block.norm2(x_seq)))
+
+    threshold, offset = _activation_aware_calibration_channel_last(hidden_seq)
+
+    assert threshold.shape == (16,)
+    assert offset.shape == (16,)
+    assert torch.isfinite(threshold).all()
+    assert torch.isfinite(offset).all()
+    assert (threshold > 0).all()
+
+
+def test_activation_aware_tiny_transformer_block_forward_and_spike_sanity():
+    torch.manual_seed(1)
+    probe_block = TinyTDTransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
+    x_seq = torch.linspace(-1.0, 1.0, steps=5 * 2 * 4 * 8).view(5, 2, 4, 8)
+    hidden_seq = probe_block.act(probe_block.fc1(probe_block.norm2(x_seq)))
+    threshold, offset = _activation_aware_calibration_channel_last(hidden_seq)
+    block = TinyActivationAwareTDTransformerBlock(
+        embed_dim=8,
+        num_heads=2,
+        mlp_dim=16,
+        v_threshold=threshold,
+        v_offset=offset,
+        surrogate_function=surrogate.DeterministicPass(),
+    )
+
+    y_seq = block(x_seq)
+
+    assert y_seq.shape == x_seq.shape
+    assert torch.isfinite(y_seq).all()
+    assert torch.isfinite(y_seq.cumsum(dim=0)).all()
+    assert block.activation_neuron.v_threshold.shape == (16,)
+    assert block.activation_neuron.v_offset.shape == (16,)
+    assert block.hidden_spike_seq is not None
+    assert torch.isfinite(block.hidden_spike_seq).all()
+    assert block.hidden_spike_seq.sum() > 0
+
+    block.activation_neuron.reset()
+    y_seq_after_reset = block(x_seq)
+    assert torch.allclose(y_seq, y_seq_after_reset)
+
+
+def test_activation_aware_tiny_transformer_block_autograd_smoke():
+    torch.manual_seed(2)
+    probe_block = TinyTDTransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
+    calibration_seq = torch.randn(4, 2, 3, 8)
+    hidden_seq = probe_block.act(
+        probe_block.fc1(probe_block.norm2(calibration_seq))
+    )
+    threshold, offset = _activation_aware_calibration_channel_last(hidden_seq)
+    block = TinyActivationAwareTDTransformerBlock(
+        embed_dim=8,
+        num_heads=2,
+        mlp_dim=16,
+        v_threshold=threshold,
+        v_offset=offset,
+        surrogate_function=surrogate.Sigmoid(),
+    )
+    x_seq = torch.randn(4, 2, 3, 8, requires_grad=True)
+
+    y_seq = block(x_seq)
+    y_seq.square().mean().backward()
+
+    assert x_seq.grad is not None
+    assert torch.isfinite(x_seq.grad).all()
+    for parameter in block.parameters():
+        assert parameter.grad is not None
+        assert torch.isfinite(parameter.grad).all()
 
 
 def test_converter_functional_sdpa_transformer_block_matches_ann_reference():
