@@ -135,6 +135,25 @@ def test_few_spike_node_autograd_and_dtype_follow_module_buffers():
     assert torch.isfinite(x.grad).all()
 
 
+def test_few_spike_nodes_do_not_share_default_surrogate_module():
+    table = _table()
+    node0 = neuron.FewSpikeNode(table=table)
+    node1 = neuron.FewSpikeNode(table=table)
+    oat = neuron.OutlierAwareThresholdNode(
+        table=neuron.FewSpikeTable(theta=[0.25], h=[0.1], d=[1.0]),
+        outlier_table=neuron.FewSpikeTable(theta=[0.25], h=[0.1], d=[2.0]),
+        split_threshold=1.0,
+    )
+    hg = neuron.HGNode(
+        tables=[neuron.FewSpikeTable(theta=[0.25], h=[0.1], d=[1.0])],
+        gate_thresholds=[],
+    )
+
+    assert node0.surrogate_function is not node1.surrogate_function
+    assert node0.surrogate_function is not oat.surrogate_function
+    assert node0.surrogate_function is not hg.surrogate_function
+
+
 def test_outlier_aware_threshold_node_matches_reference():
     normal = neuron.FewSpikeTable(theta=[0.25, 0.5], h=[0.1, 0.1], d=[1.0, 2.0])
     outlier = neuron.FewSpikeTable(theta=[0.25, 0.5], h=[0.1, 0.1], d=[10.0, 20.0])

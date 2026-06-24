@@ -1845,6 +1845,10 @@ class TDMultiheadAttention(TDModule):
             or unsupported ``dropout`` / ``batch_first`` is passed.
         """
         super().__init__(step_mode)
+        if embed_dim <= 0:
+            raise ValueError("embed_dim must be positive.")
+        if num_heads <= 0:
+            raise ValueError("num_heads must be positive.")
         if embed_dim % num_heads != 0:
             raise ValueError("embed_dim must be divisible by num_heads.")
         if dropout != 0.0:

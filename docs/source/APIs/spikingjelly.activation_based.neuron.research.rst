@@ -104,4 +104,4 @@ Neurons with Input or Output Noise
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members:
+   :exclude-members: supported_backends, extra_repr

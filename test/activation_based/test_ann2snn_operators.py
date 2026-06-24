@@ -1532,6 +1532,12 @@ class TestTDMultiheadAttention:
             assert torch.isfinite(parameter.grad).all()
 
     def test_rejects_invalid_constructor_arguments(self):
+        with pytest.raises(ValueError, match="embed_dim must be positive"):
+            TDMultiheadAttention(embed_dim=0, num_heads=2)
+        with pytest.raises(ValueError, match="num_heads must be positive"):
+            TDMultiheadAttention(embed_dim=8, num_heads=0)
+        with pytest.raises(ValueError, match="num_heads must be positive"):
+            TDMultiheadAttention(embed_dim=8, num_heads=-2)
         with pytest.raises(ValueError, match="divisible"):
             TDMultiheadAttention(embed_dim=7, num_heads=2)
         with pytest.raises(ValueError, match="dropout=0.0"):

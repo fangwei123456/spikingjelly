@@ -159,7 +159,7 @@ class FewSpikeNode(nn.Module, base.StepModule):
     def __init__(
         self,
         table: FewSpikeTable,
-        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
+        surrogate_function: Optional[surrogate.SurrogateFunctionBase] = None,
         step_mode: str = "s",
     ):
         r"""
@@ -182,6 +182,8 @@ class FewSpikeNode(nn.Module, base.StepModule):
         self.register_buffer("theta", table.theta.clone())
         self.register_buffer("h", table.h.clone())
         self.register_buffer("d", table.d.clone())
+        if surrogate_function is None:
+            surrogate_function = surrogate.Sigmoid()
         self.surrogate_function = surrogate_function
         self.step_mode = step_mode
 
@@ -217,16 +219,16 @@ class FewSpikeNode(nn.Module, base.StepModule):
         v = gate
         y_seq = []
         y = None
-        for k in range(theta.numel()):
-            z = self.surrogate_function(v - theta[k])
-            weighted_spike = d[k] * z
+        for theta_k, h_k, d_k in zip(theta.unbind(0), h.unbind(0), d.unbind(0)):
+            z = self.surrogate_function(v - theta_k)
+            weighted_spike = d_k * z
             if return_sequence:
                 y_seq.append(weighted_spike)
             else:
                 if y is None:
                     y = torch.zeros_like(gate)
                 y = y + weighted_spike
-            v = v - h[k] * z
+            v = v - h_k * z
         if return_sequence:
             return torch.stack(y_seq, dim=0)
         return y
@@ -335,7 +337,7 @@ class OutlierAwareThresholdNode(FewSpikeNode):
         outlier_table: FewSpikeTable,
         split_threshold: float,
         clamp_value: Optional[float] = None,
-        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
+        surrogate_function: Optional[surrogate.SurrogateFunctionBase] = None,
         step_mode: str = "s",
     ):
         r"""
@@ -431,19 +433,31 @@ class OutlierAwareThresholdNode(FewSpikeNode):
             gate = gate.clamp(min=-self.clamp_value, max=self.clamp_value)
         signs = torch.sign(gate).detach()
         magnitude = gate.abs()
-        normal = self._run_table(magnitude, self.theta, self.h, self.d, return_sequence)
-        outlier = self._run_table(
-            magnitude,
-            self.outlier_theta,
-            self.outlier_h,
-            self.outlier_d,
-            return_sequence,
-        )
         mask = magnitude <= self.split_threshold
+        v = magnitude
+        y_seq = []
+        y = None
+        for theta_k, h_k, d_k, outlier_theta_k, outlier_h_k, outlier_d_k in zip(
+            self.theta.unbind(0),
+            self.h.unbind(0),
+            self.d.unbind(0),
+            self.outlier_theta.unbind(0),
+            self.outlier_h.unbind(0),
+            self.outlier_d.unbind(0),
+        ):
+            z = self.surrogate_function(v - torch.where(mask, theta_k, outlier_theta_k))
+            weighted_spike = torch.where(mask, d_k, outlier_d_k) * z
+            if return_sequence:
+                y_seq.append(weighted_spike)
+            else:
+                if y is None:
+                    y = torch.zeros_like(gate)
+                y = y + weighted_spike
+            v = v - torch.where(mask, h_k, outlier_h_k) * z
         if return_sequence:
-            mask = mask.unsqueeze(0)
             signs = signs.unsqueeze(0)
-        return torch.where(mask, normal, outlier) * signs
+            return torch.stack(y_seq, dim=0) * signs
+        return y * signs
 
     def extra_repr(self) -> str:
         return super().extra_repr() + (
@@ -456,7 +470,7 @@ class HGNode(FewSpikeNode):
         self,
         tables: Sequence[FewSpikeTable],
         gate_thresholds: TensorLike1D,
-        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
+        surrogate_function: Optional[surrogate.SurrogateFunctionBase] = None,
         step_mode: str = "s",
     ):
         r"""
@@ -561,25 +575,24 @@ class HGNode(FewSpikeNode):
         self, gate: torch.Tensor, return_sequence: bool
     ) -> torch.Tensor:
         region_ids = torch.bucketize(gate.detach(), self.gate_thresholds)
-        y = self._run_table(
-            gate,
-            self.region_theta[0],
-            self.region_h[0],
-            self.region_d[0],
-            return_sequence,
-        )
-        for i in range(1, self.region_theta.shape[0]):
-            region_y = self._run_table(
-                gate,
-                self.region_theta[i],
-                self.region_h[i],
-                self.region_d[i],
-                return_sequence,
-            )
-            mask = region_ids == i
+        v = gate
+        y_seq = []
+        y = None
+        for k in range(self.K):
+            theta_k = self.region_theta[:, k][region_ids]
+            h_k = self.region_h[:, k][region_ids]
+            d_k = self.region_d[:, k][region_ids]
+            z = self.surrogate_function(v - theta_k)
+            weighted_spike = d_k * z
             if return_sequence:
-                mask = mask.unsqueeze(0)
-            y = torch.where(mask, region_y, y)
+                y_seq.append(weighted_spike)
+            else:
+                if y is None:
+                    y = torch.zeros_like(gate)
+                y = y + weighted_spike
+            v = v - h_k * z
+        if return_sequence:
+            return torch.stack(y_seq, dim=0)
         return y
 
     def extra_repr(self) -> str:
