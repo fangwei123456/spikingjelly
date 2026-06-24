@@ -218,15 +218,15 @@ class FewSpikeNode(nn.Module, base.StepModule):
     ) -> torch.Tensor:
         v = gate
         y_seq = []
-        y = None
-        for theta_k, h_k, d_k in zip(theta.unbind(0), h.unbind(0), d.unbind(0)):
+        y = torch.zeros_like(gate) if not return_sequence else None
+        for theta_k, h_k, d_k in zip(
+            theta.unbind(0), h.unbind(0), d.unbind(0), strict=True
+        ):
             z = self.surrogate_function(v - theta_k)
             weighted_spike = d_k * z
             if return_sequence:
                 y_seq.append(weighted_spike)
             else:
-                if y is None:
-                    y = torch.zeros_like(gate)
                 y = y + weighted_spike
             v = v - h_k * z
         if return_sequence:
@@ -436,7 +436,7 @@ class OutlierAwareThresholdNode(FewSpikeNode):
         mask = magnitude <= self.split_threshold
         v = magnitude
         y_seq = []
-        y = None
+        y = torch.zeros_like(gate) if not return_sequence else None
         for theta_k, h_k, d_k, outlier_theta_k, outlier_h_k, outlier_d_k in zip(
             self.theta.unbind(0),
             self.h.unbind(0),
@@ -444,14 +444,13 @@ class OutlierAwareThresholdNode(FewSpikeNode):
             self.outlier_theta.unbind(0),
             self.outlier_h.unbind(0),
             self.outlier_d.unbind(0),
+            strict=True,
         ):
             z = self.surrogate_function(v - torch.where(mask, theta_k, outlier_theta_k))
             weighted_spike = torch.where(mask, d_k, outlier_d_k) * z
             if return_sequence:
                 y_seq.append(weighted_spike)
             else:
-                if y is None:
-                    y = torch.zeros_like(gate)
                 y = y + weighted_spike
             v = v - torch.where(mask, h_k, outlier_h_k) * z
         if return_sequence:
@@ -577,7 +576,7 @@ class HGNode(FewSpikeNode):
         region_ids = torch.bucketize(gate.detach(), self.gate_thresholds)
         v = gate
         y_seq = []
-        y = None
+        y = torch.zeros_like(gate) if not return_sequence else None
         for k in range(self.K):
             theta_k = self.region_theta[:, k][region_ids]
             h_k = self.region_h[:, k][region_ids]
@@ -587,8 +586,6 @@ class HGNode(FewSpikeNode):
             if return_sequence:
                 y_seq.append(weighted_spike)
             else:
-                if y is None:
-                    y = torch.zeros_like(gate)
                 y = y + weighted_spike
             v = v - h_k * z
         if return_sequence:
