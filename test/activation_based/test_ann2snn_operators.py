@@ -2,9 +2,11 @@ import pytest
 import torch
 import torch.nn.functional as F
 
+from spikingjelly.activation_based import base, functional
 from spikingjelly.activation_based.ann2snn.operators import (
     SNNElementWiseProduct,
     SNNMatrixOperator,
+    TDModule,
     TDGELU,
     TDLayerNorm,
     TDLinear,
@@ -88,6 +90,44 @@ def _snn_matrix_loop_reference(a_seq, b_seq):
     return torch.stack(y_seq)
 
 
+def _ann_mha_reference(td_op, query, key, value, **kwargs):
+    ann_op = torch.nn.MultiheadAttention(
+        td_op.embed_dim,
+        td_op.num_heads,
+        dropout=0.0,
+        bias=td_op.q_proj.bias is not None,
+        batch_first=True,
+    )
+    _copy_td_mha_to_ann(td_op, ann_op)
+    return ann_op(query, key, value, need_weights=False, **kwargs)[0]
+
+
+def test_td_modules_support_step_mode_switching():
+    modules = [
+        TDSoftmax(),
+        TDLayerNorm(3),
+        TDGELU(),
+        TDLinear(3, 4),
+        SNNMatrixOperator(),
+        SNNElementWiseProduct(),
+        TDScaledDotProductAttention(),
+        TDMultiheadAttention(embed_dim=4, num_heads=2),
+    ]
+
+    for module in modules:
+        assert isinstance(module, TDModule)
+        assert isinstance(module, base.StepModule)
+        assert module.step_mode == "m"
+
+        functional.set_step_mode(module, "s")
+        assert module.step_mode == "s"
+        functional.set_step_mode(module, "m")
+        assert module.step_mode == "m"
+
+        with pytest.raises(ValueError, match="step_mode can only be"):
+            module.step_mode = "bogus"
+
+
 class TestTDSoftmax:
     def test_shape_is_preserved(self):
         x_seq = torch.randn(4, 2, 3)
@@ -132,6 +172,31 @@ class TestTDSoftmax:
 
         assert y_seq.shape == x_seq.shape
         assert torch.allclose(y_seq[0], torch.softmax(x_seq[0], dim=-1))
+
+    def test_single_step_mode_matches_softmax(self):
+        x = torch.randn(2, 3)
+        op = TDSoftmax(dim=0, step_mode="s")
+
+        y = op(x)
+
+        assert torch.allclose(y, torch.softmax(x, dim=0))
+
+    def test_single_step_softmax_scalar_matches_torch(self):
+        x = torch.tensor(1.0)
+        op = TDSoftmax(dim=0, step_mode="s")
+
+        y = op(x)
+
+        assert torch.allclose(y, torch.softmax(x, dim=0))
+
+    def test_one_step_multi_step_matches_single_step(self):
+        x = torch.randn(2, 3)
+        op = TDSoftmax(dim=-1)
+
+        y_seq = op(x.unsqueeze(0))
+        functional.set_step_mode(op, "s")
+
+        assert torch.allclose(y_seq[0], op(x))
 
     def test_gradients_flow(self):
         x_seq = torch.randn(3, 4, requires_grad=True)
@@ -265,6 +330,24 @@ class TestTDLayerNorm:
 
         assert y_seq.shape == x_seq.shape
         assert torch.allclose(y_seq[0], expected)
+
+    def test_single_step_mode_matches_layer_norm(self):
+        x = torch.randn(2, 3)
+        op = TDLayerNorm(normalized_shape=3, step_mode="s")
+
+        y = op(x)
+        expected = F.layer_norm(x, op.normalized_shape, op.weight, op.bias, op.eps)
+
+        assert torch.allclose(y, expected)
+
+    def test_one_step_multi_step_matches_single_step(self):
+        x = torch.randn(2, 3)
+        op = TDLayerNorm(normalized_shape=3)
+
+        y_seq = op(x.unsqueeze(0))
+        functional.set_step_mode(op, "s")
+
+        assert torch.allclose(y_seq[0], op(x))
 
     def test_gradients_flow_to_input_and_affine_parameters(self):
         x_seq = torch.randn(3, 4, requires_grad=True)
@@ -400,6 +483,23 @@ class TestTDGELU:
         assert y_seq.shape == x_seq.shape
         assert torch.allclose(y_seq[0], expected)
 
+    def test_single_step_mode_matches_gelu(self):
+        x = torch.randn(2, 3)
+        op = TDGELU(approximate="tanh", step_mode="s")
+
+        y = op(x)
+
+        assert torch.allclose(y, F.gelu(x, approximate="tanh"))
+
+    def test_one_step_multi_step_matches_single_step(self):
+        x = torch.randn(2, 3)
+        op = TDGELU(approximate="tanh")
+
+        y_seq = op(x.unsqueeze(0))
+        functional.set_step_mode(op, "s")
+
+        assert torch.allclose(y_seq[0], op(x))
+
     def test_gradients_flow(self):
         x_seq = torch.randn(3, 4)
         op = TDGELU()
@@ -512,6 +612,24 @@ class TestTDLinear:
         assert y_seq.shape == (1, 2, 5)
         assert torch.allclose(y_seq[0], expected, atol=1e-6, rtol=1e-6)
 
+    def test_single_step_mode_matches_linear(self):
+        x = torch.randn(2, 3)
+        op = TDLinear(3, 5, step_mode="s")
+
+        y = op(x)
+        expected = F.linear(x, op.weight, op.bias)
+
+        assert torch.allclose(y, expected, atol=1e-6, rtol=1e-6)
+
+    def test_one_step_multi_step_matches_single_step(self):
+        x = torch.randn(2, 3)
+        op = TDLinear(3, 5)
+
+        y_seq = op(x.unsqueeze(0))
+        functional.set_step_mode(op, "s")
+
+        assert torch.allclose(y_seq[0], op(x), atol=1e-6, rtol=1e-6)
+
     def test_bias_is_not_repeatedly_accumulated(self):
         x_seq = torch.zeros(4, 2, 3)
         op = TDLinear(3, 5)
@@ -623,6 +741,25 @@ class TestSNNMatrixOperator:
 
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
 
+    def test_single_step_mode_matches_matmul(self):
+        a = torch.randn(2, 3, 4)
+        b = torch.randn(2, 4, 6)
+        op = SNNMatrixOperator(step_mode="s")
+
+        y = op(a, b)
+
+        assert torch.allclose(y, torch.matmul(a, b))
+
+    def test_one_step_multi_step_matches_single_step(self):
+        a = torch.randn(2, 3, 4)
+        b = torch.randn(2, 4, 6)
+        op = SNNMatrixOperator()
+
+        y_seq = op(a.unsqueeze(0), b.unsqueeze(0))
+        functional.set_step_mode(op, "s")
+
+        assert torch.allclose(y_seq[0], op(a, b))
+
     def test_preserves_cross_time_terms(self):
         a_seq = torch.tensor([[[[1.0]]], [[[2.0]]]])
         b_seq = torch.tensor([[[[3.0]]], [[[5.0]]]])
@@ -733,6 +870,25 @@ class TestSNNElementWiseProduct:
 
         assert torch.allclose(y_seq.sum(dim=0), expected, atol=1e-6, rtol=1e-6)
 
+    def test_single_step_mode_matches_product(self):
+        a = torch.randn(2, 3)
+        b = torch.randn(2, 3)
+        op = SNNElementWiseProduct(step_mode="s")
+
+        y = op(a, b)
+
+        assert torch.allclose(y, a * b)
+
+    def test_one_step_multi_step_matches_single_step(self):
+        a = torch.randn(2, 3)
+        b = torch.randn(2, 3)
+        op = SNNElementWiseProduct()
+
+        y_seq = op(a.unsqueeze(0), b.unsqueeze(0))
+        functional.set_step_mode(op, "s")
+
+        assert torch.allclose(y_seq[0], op(a, b))
+
     def test_supports_broadcast(self):
         a_seq = torch.randn(4, 2, 3)
         b_seq = torch.randn(4, 1, 3)
@@ -821,6 +977,65 @@ def test_few_spike_tdlinear_few_spike_sequence_smoke():
     assert torch.isfinite(x_seq.grad).all()
 
 
+def test_td_mlp_switches_between_single_and_multi_step_modes():
+    model = torch.nn.Sequential(
+        TDLinear(4, 6),
+        TDGELU(),
+        TDLinear(6, 3),
+    )
+
+    functional.set_step_mode(model, "s")
+    x = torch.randn(2, 4)
+    y = model(x)
+    expected = model[2].single_step_forward(
+        model[1].single_step_forward(model[0].single_step_forward(x))
+    )
+
+    assert y.shape == (2, 3)
+    assert torch.allclose(y, expected, atol=1e-6, rtol=1e-6)
+
+    functional.set_step_mode(model, "m")
+    x_seq = torch.randn(5, 2, 4)
+    y_seq = model(x_seq)
+    functional.set_step_mode(model, "s")
+    expected_from_total = model(x_seq.sum(dim=0))
+
+    assert y_seq.shape == (5, 2, 3)
+    assert torch.allclose(y_seq.sum(dim=0), expected_from_total, atol=1e-6, rtol=1e-6)
+
+
+def test_few_spike_tdlinear_few_spike_switches_step_modes():
+    table = neuron.FewSpikeTable(
+        theta=torch.tensor([0.25, 0.5, 0.75]),
+        h=torch.tensor([0.1, 0.1, 0.1]),
+        d=torch.tensor([1.0, 2.0, 4.0]),
+    )
+    model = torch.nn.Sequential(
+        neuron.FewSpikeNode(
+            table, surrogate_function=surrogate.Sigmoid(), step_mode="m"
+        ),
+        TDLinear(4, 5),
+        neuron.FewSpikeNode(
+            table, surrogate_function=surrogate.Sigmoid(), step_mode="m"
+        ),
+    )
+
+    functional.set_step_mode(model, "s")
+    x = torch.randn(2, 4)
+    y = model(x)
+
+    assert y.shape == (2, 5)
+
+    functional.set_step_mode(model, "m")
+    x_seq = torch.randn(table.K, 2, 4)
+    y_seq = model(x_seq)
+    functional.set_step_mode(model, "s")
+    expected_from_total = model(x_seq.sum(dim=0))
+
+    assert y_seq.shape == (table.K, 2, 5)
+    assert torch.allclose(y_seq.sum(dim=0), expected_from_total, atol=1e-5, rtol=1e-5)
+
+
 class TestTDScaledDotProductAttention:
     # CUDA SDPA kernels can differ from the reference cumulative comparison by
     # a few ulps, especially after cumsum and temporal differencing. Keep this
@@ -896,6 +1111,28 @@ class TestTDScaledDotProductAttention:
 
         assert y_seq.shape == (1, 2, 3, 7)
         assert torch.allclose(y_seq[0], expected, atol=1e-6, rtol=1e-6)
+
+    def test_single_step_mode_matches_sdpa(self):
+        q = torch.randn(2, 3, 4)
+        k = torch.randn(2, 5, 4)
+        v = torch.randn(2, 5, 7)
+        op = TDScaledDotProductAttention(step_mode="s")
+
+        y = op(q, k, v)
+        expected = F.scaled_dot_product_attention(q, k, v, dropout_p=0.0)
+
+        assert torch.allclose(y, expected, atol=1e-6, rtol=1e-6)
+
+    def test_one_step_multi_step_matches_single_step(self):
+        q = torch.randn(2, 3, 4)
+        k = torch.randn(2, 5, 4)
+        v = torch.randn(2, 5, 7)
+        op = TDScaledDotProductAttention()
+
+        y_seq = op(q.unsqueeze(0), k.unsqueeze(0), v.unsqueeze(0))
+        functional.set_step_mode(op, "s")
+
+        assert torch.allclose(y_seq[0], op(q, k, v), atol=1e-6, rtol=1e-6)
 
     def test_multi_head_style_shape(self):
         q_seq = torch.randn(4, 2, 3, 5, 4)
@@ -1148,6 +1385,39 @@ class TestTDMultiheadAttention:
         expected = _mha_cumulative_reference(op, x_seq, x_seq, x_seq)
 
         assert torch.allclose(y_seq, expected, atol=1e-5, rtol=1e-5)
+
+    def test_single_step_mode_matches_ann_mha(self):
+        x = torch.randn(2, 4, 8)
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2, step_mode="s")
+
+        y, weights = op(x, x, x, need_weights=False)
+        expected = _ann_mha_reference(op, x, x, x)
+
+        assert weights is None
+        assert torch.allclose(y, expected, atol=1e-5, rtol=1e-5)
+
+    def test_one_step_multi_step_matches_single_step(self):
+        x = torch.randn(2, 4, 8)
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        y_seq, _ = op(x.unsqueeze(0), x.unsqueeze(0), x.unsqueeze(0))
+        functional.set_step_mode(op, "s")
+        y, _ = op(x, x, x)
+
+        assert torch.allclose(y_seq[0], y, atol=1e-5, rtol=1e-5)
+
+    def test_parent_step_mode_does_not_depend_on_projection_step_modes(self):
+        # The parent explicitly calls projection single/multi-step methods, so
+        # parent step_mode alone controls this composite operator's path.
+        x = torch.randn(2, 4, 8)
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        op.step_mode = "s"
+        assert op.q_proj.step_mode == "m"
+        y, _ = op(x, x, x)
+        expected = _ann_mha_reference(op, x, x, x)
+
+        assert torch.allclose(y, expected, atol=1e-5, rtol=1e-5)
 
     def test_cross_attention_matches_ann_mha(self):
         query_seq = torch.randn(4, 2, 3, 8)
