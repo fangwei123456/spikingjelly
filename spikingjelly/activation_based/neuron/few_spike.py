@@ -219,9 +219,7 @@ class FewSpikeNode(nn.Module, base.StepModule):
         v = gate
         y_seq = []
         y = torch.zeros_like(gate) if not return_sequence else None
-        for theta_k, h_k, d_k in zip(
-            theta.unbind(0), h.unbind(0), d.unbind(0), strict=True
-        ):
+        for theta_k, h_k, d_k in zip(theta.unbind(0), h.unbind(0), d.unbind(0)):
             z = self.surrogate_function(v - theta_k)
             weighted_spike = d_k * z
             if return_sequence:
@@ -444,7 +442,6 @@ class OutlierAwareThresholdNode(FewSpikeNode):
             self.outlier_theta.unbind(0),
             self.outlier_h.unbind(0),
             self.outlier_d.unbind(0),
-            strict=True,
         ):
             z = self.surrogate_function(v - torch.where(mask, theta_k, outlier_theta_k))
             weighted_spike = torch.where(mask, d_k, outlier_d_k) * z
@@ -553,7 +550,10 @@ class HGNode(FewSpikeNode):
                 device=tables[0].theta.device,
             )
         else:
-            thresholds = _as_float_1d_tensor("gate_thresholds", gate_thresholds)
+            thresholds = _as_float_1d_tensor("gate_thresholds", gate_thresholds).to(
+                device=tables[0].theta.device,
+                dtype=tables[0].theta.dtype,
+            )
         if thresholds.numel() != len(tables) - 1:
             raise ValueError(
                 "gate_thresholds must have length len(tables) - 1, but got "
