@@ -1088,21 +1088,6 @@ class TDLinear(TDModule):
         y_cum = F.linear(x_seq.cumsum(dim=0), self.weight, self.bias)
         return _temporal_difference(y_cum)
 
-    def forward(
-        self, x: torch.Tensor, step_mode: Optional[Literal["s", "m"]] = None
-    ) -> torch.Tensor:
-        if step_mode is None:
-            return super().forward(x)
-        if step_mode == "s":
-            return self.single_step_forward(x)
-        elif step_mode == "m":
-            return self.multi_step_forward(x)
-        else:
-            raise ValueError(
-                f"step_mode can only be {self.supported_step_mode()}, "
-                f'but got "{step_mode}"!'
-            )
-
     def extra_repr(self) -> str:
         return (
             f"in_features={self.in_features}, out_features={self.out_features}, "
@@ -1989,9 +1974,9 @@ class TDMultiheadAttention(TDModule):
             key_padding_mask, need_weights, average_attn_weights
         )
 
-        q = self._split_heads_single(self.q_proj(query, step_mode="s"))
-        k = self._split_heads_single(self.k_proj(key, step_mode="s"))
-        v = self._split_heads_single(self.v_proj(value, step_mode="s"))
+        q = self._split_heads_single(self.q_proj.single_step_forward(query))
+        k = self._split_heads_single(self.k_proj.single_step_forward(key))
+        v = self._split_heads_single(self.v_proj.single_step_forward(value))
         self._check_attention_leading_dims(q, k, v, "TDMultiheadAttention")
         if is_causal and attn_mask is not None:
             raise ValueError(
@@ -2007,7 +1992,7 @@ class TDMultiheadAttention(TDModule):
             dropout_p=0.0,
             is_causal=is_causal,
         )
-        out = self.out_proj(self._merge_heads_single(attn), step_mode="s")
+        out = self.out_proj.single_step_forward(self._merge_heads_single(attn))
         return out, None
 
     def multi_step_forward(
@@ -2120,9 +2105,9 @@ class TDMultiheadAttention(TDModule):
             key_padding_mask, need_weights, average_attn_weights
         )
 
-        q_seq = self._split_heads(self.q_proj(query_seq, step_mode="m"))
-        k_seq = self._split_heads(self.k_proj(key_seq, step_mode="m"))
-        v_seq = self._split_heads(self.v_proj(value_seq, step_mode="m"))
+        q_seq = self._split_heads(self.q_proj.multi_step_forward(query_seq))
+        k_seq = self._split_heads(self.k_proj.multi_step_forward(key_seq))
+        v_seq = self._split_heads(self.v_proj.multi_step_forward(value_seq))
         self._check_attention_leading_dims(q_seq, k_seq, v_seq, "TDMultiheadAttention")
         attn_mask = self._canonical_mha_attn_mask(attn_mask, q_seq.shape[1])
         attn_seq = _td_scaled_dot_product_attention(
@@ -2134,7 +2119,7 @@ class TDMultiheadAttention(TDModule):
             None,
             "TDMultiheadAttention",
         )
-        out_seq = self.out_proj(self._merge_heads(attn_seq), step_mode="m")
+        out_seq = self.out_proj.multi_step_forward(self._merge_heads(attn_seq))
         return out_seq, None
 
     def extra_repr(self) -> str:

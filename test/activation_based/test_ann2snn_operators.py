@@ -1432,14 +1432,10 @@ class TestTDMultiheadAttention:
         assert op.v_proj.step_mode == "s"
         assert op.out_proj.step_mode == "s"
 
-    def test_parent_step_mode_propagates_to_projection_modules_and_uses_hooks(self):
+    def test_parent_step_mode_propagates_to_projection_modules(self):
         x = torch.randn(2, 4, 8)
         op = TDMultiheadAttention(embed_dim=8, num_heads=2)
-        hook_calls = []
 
-        op.q_proj.register_forward_hook(
-            lambda module, inputs, output: hook_calls.append(output.shape)
-        )
         op.step_mode = "s"
         assert op.q_proj.step_mode == "s"
         assert op.k_proj.step_mode == "s"
@@ -1449,7 +1445,6 @@ class TestTDMultiheadAttention:
         expected = _ann_mha_reference(op, x, x, x)
 
         assert torch.allclose(y, expected, atol=1e-5, rtol=1e-5)
-        assert hook_calls == [x.shape]
 
         functional.set_step_mode(op, "m")
         assert op.q_proj.step_mode == "m"
