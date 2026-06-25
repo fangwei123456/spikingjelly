@@ -82,8 +82,6 @@ class ConversionRecipe:
     object that the next step should use.
     """
 
-    name = "conversion"
-
     def validate(self, converter: "Converter") -> None:
         r"""
         **API Language** - :ref:`中文 <ConversionRecipe.validate-cn>` | :ref:`English <ConversionRecipe.validate-en>`
@@ -366,65 +364,6 @@ class ConversionRecipe:
 
 
 class RateCodingRecipe(ConversionRecipe):
-    r"""
-    **API Language** - :ref:`中文 <RateCodingRecipe-cn>` | :ref:`English <RateCodingRecipe-en>`
-
-    ----
-
-    .. _RateCodingRecipe-cn:
-
-    * **中文**
-
-    传统 rate-coding ReLU→IFNode 转换 recipe。该 recipe 拥有 rate-coding
-    算法参数，并执行 Conv-BN 融合、VoltageHook 校准和 neuron replacement。
-
-    :param dataloader: 校准数据加载器。每个 batch 可为输入 tensor、tuple/list
-        或 dict。
-    :type dataloader: Iterable
-    :param mode: VoltageHook 统计模式，支持 ``"Max"``、百分位字符串和
-        ``0 < mode <= 1`` 的浮点缩放。
-    :type mode: str or float
-    :param momentum: VoltageHook 动量。
-    :type momentum: float
-    :param fuse_flag: 是否执行 Conv-BN 融合。
-    :type fuse_flag: bool
-    :param rules: 激活转换规则。默认 ``[ReLURule()]``。
-    :type rules: Optional[List[ActivationRule]]
-    :param neuron_factory: 脉冲神经元工厂。
-    :type neuron_factory: Optional[NeuronFactory]
-    :param threshold_optimizer: 阈值优化器。
-    :type threshold_optimizer: Optional[ThresholdOptimizer]
-
-    ----
-
-    .. _RateCodingRecipe-en:
-
-    * **English**
-
-    Traditional rate-coding ReLU-to-IFNode conversion recipe. This recipe owns
-    rate-coding algorithm parameters and performs Conv-BN fusion, VoltageHook
-    calibration and neuron replacement.
-
-    :param dataloader: Calibration dataloader. Each batch can be an input tensor,
-        tuple/list, or dict.
-    :type dataloader: Iterable
-    :param mode: VoltageHook statistics mode. Supports ``"Max"``, percentile
-        strings, and float scaling with ``0 < mode <= 1``.
-    :type mode: str or float
-    :param momentum: VoltageHook momentum.
-    :type momentum: float
-    :param fuse_flag: Whether to fuse Conv-BN modules.
-    :type fuse_flag: bool
-    :param rules: Activation conversion rules. Defaults to ``[ReLURule()]``.
-    :type rules: Optional[List[ActivationRule]]
-    :param neuron_factory: Spiking-neuron factory.
-    :type neuron_factory: Optional[NeuronFactory]
-    :param threshold_optimizer: Threshold optimizer.
-    :type threshold_optimizer: Optional[ThresholdOptimizer]
-    """
-
-    name = "rate_coding"
-
     def __init__(
         self,
         dataloader: Iterable,
@@ -435,6 +374,63 @@ class RateCodingRecipe(ConversionRecipe):
         neuron_factory: Optional[NeuronFactory] = None,
         threshold_optimizer: Optional[ThresholdOptimizer] = None,
     ) -> None:
+        r"""
+        **API Language** - :ref:`中文 <RateCodingRecipe.__init__-cn>` | :ref:`English <RateCodingRecipe.__init__-en>`
+
+        ----
+
+        .. _RateCodingRecipe.__init__-cn:
+
+        * **中文**
+
+        构造传统 rate-coding ReLU→IFNode 转换 recipe。该 recipe 拥有
+        rate-coding 算法参数，并执行 Conv-BN 融合、VoltageHook 校准和
+        neuron replacement。
+
+        :param dataloader: 校准数据加载器。每个 batch 可为输入 tensor、
+            tuple/list 或 dict。
+        :type dataloader: Iterable
+        :param mode: VoltageHook 统计模式，支持 ``"Max"``、百分位字符串和
+            ``0 < mode <= 1`` 的浮点缩放。
+        :type mode: str or float
+        :param momentum: VoltageHook 动量。
+        :type momentum: float
+        :param fuse_flag: 是否执行 Conv-BN 融合。
+        :type fuse_flag: bool
+        :param rules: 激活转换规则。默认 ``[ReLURule()]``。
+        :type rules: Optional[List[ActivationRule]]
+        :param neuron_factory: 脉冲神经元工厂。
+        :type neuron_factory: Optional[NeuronFactory]
+        :param threshold_optimizer: 阈值优化器。
+        :type threshold_optimizer: Optional[ThresholdOptimizer]
+
+        ----
+
+        .. _RateCodingRecipe.__init__-en:
+
+        * **English**
+
+        Construct a traditional rate-coding ReLU-to-IFNode conversion recipe.
+        This recipe owns rate-coding algorithm parameters and performs Conv-BN
+        fusion, VoltageHook calibration and neuron replacement.
+
+        :param dataloader: Calibration dataloader. Each batch can be an input
+            tensor, tuple/list, or dict.
+        :type dataloader: Iterable
+        :param mode: VoltageHook statistics mode. Supports ``"Max"``,
+            percentile strings, and float scaling with ``0 < mode <= 1``.
+        :type mode: str or float
+        :param momentum: VoltageHook momentum.
+        :type momentum: float
+        :param fuse_flag: Whether to fuse Conv-BN modules.
+        :type fuse_flag: bool
+        :param rules: Activation conversion rules. Defaults to ``[ReLURule()]``.
+        :type rules: Optional[List[ActivationRule]]
+        :param neuron_factory: Spiking-neuron factory.
+        :type neuron_factory: Optional[NeuronFactory]
+        :param threshold_optimizer: Threshold optimizer.
+        :type threshold_optimizer: Optional[ThresholdOptimizer]
+        """
         self.dataloader = dataloader
         self.mode = mode
         self.momentum = momentum
@@ -452,7 +448,7 @@ class RateCodingRecipe(ConversionRecipe):
     def validate(self, converter: "Converter") -> None:
         if self.dataloader is None:
             raise ValueError(
-                f"{self.name} recipe requires a dataloader. "
+                "RateCodingRecipe requires a dataloader. "
                 "Pass dataloader to RateCodingRecipe."
             )
         self._check_mode()
@@ -489,6 +485,42 @@ class RateCodingRecipe(ConversionRecipe):
     def replace(
         self, converter: "Converter", fx_model: fx.GraphModule
     ) -> fx.GraphModule:
+        r"""
+        **API Language** - :ref:`中文 <RateCodingRecipe.replace-cn>` | :ref:`English <RateCodingRecipe.replace-en>`
+
+        ----
+
+        .. _RateCodingRecipe.replace-cn:
+
+        * **中文**
+
+        将已校准的 activation-hook 节点对替换为 rate-coding SNN 子图，并将
+        结果移动到当前转换 device。
+
+        :param converter: 执行当前 recipe 的转换器。
+        :type converter: Converter
+        :param fx_model: 已插入并校准 ``VoltageHook`` 的 ``GraphModule``。
+        :type fx_model: torch.fx.GraphModule
+        :return: 替换后的 ``GraphModule``。
+        :rtype: torch.fx.GraphModule
+
+        ----
+
+        .. _RateCodingRecipe.replace-en:
+
+        * **English**
+
+        Replace calibrated activation-hook node pairs with rate-coding SNN
+        subgraphs, and move the result to the current conversion device.
+
+        :param converter: Converter that executes this recipe.
+        :type converter: Converter
+        :param fx_model: ``GraphModule`` with inserted and calibrated
+            ``VoltageHook`` modules.
+        :type fx_model: torch.fx.GraphModule
+        :return: Replaced ``GraphModule``.
+        :rtype: torch.fx.GraphModule
+        """
         return self._replace_by_neurons(fx_model).to(converter.device)
 
     @staticmethod
@@ -666,11 +698,50 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
     core modules and narrow attention subset with TD-equivalent operators.
     """
 
-    name = "transformer_spike_equivalent"
-
     def replace(
         self, converter: "Converter", fx_model: fx.GraphModule
     ) -> fx.GraphModule:
+        r"""
+        **API Language** - :ref:`中文 <TransformerSpikeEquivalentRecipe.replace-cn>` | :ref:`English <TransformerSpikeEquivalentRecipe.replace-en>`
+
+        ----
+
+        .. _TransformerSpikeEquivalentRecipe.replace-cn:
+
+        * **中文**
+
+        将当前支持的 Transformer core modules、SDPA 调用和窄
+        ``MultiheadAttention`` 调用替换为 TD / spike-equivalent 算子。
+        该步骤不插入 observer，也不运行 rate-coding 校准。
+
+        :param converter: 执行当前 recipe 的转换器。
+        :type converter: Converter
+        :param fx_model: 已 trace 的 ``GraphModule``。
+        :type fx_model: torch.fx.GraphModule
+        :return: 替换后的 ``GraphModule``。
+        :rtype: torch.fx.GraphModule
+        :raises ValueError: 当 attention 调用或配置不在当前支持范围内时抛出。
+
+        ----
+
+        .. _TransformerSpikeEquivalentRecipe.replace-en:
+
+        * **English**
+
+        Replace currently supported Transformer core modules, SDPA calls and
+        narrow ``MultiheadAttention`` calls with TD / spike-equivalent
+        operators. This step does not insert observers or run rate-coding
+        calibration.
+
+        :param converter: Converter that executes this recipe.
+        :type converter: Converter
+        :param fx_model: Traced ``GraphModule``.
+        :type fx_model: torch.fx.GraphModule
+        :return: Replaced ``GraphModule``.
+        :rtype: torch.fx.GraphModule
+        :raises ValueError: If an attention call or configuration is outside
+            the currently supported subset.
+        """
         modules = dict(fx_model.named_modules())
         for node in list(fx_model.graph.nodes):
             if node.op != "call_module":

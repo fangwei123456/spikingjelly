@@ -427,29 +427,16 @@ does not run rate-coding calibration. It replaces currently supported ANN
 modules and attention calls with TD / spike-equivalent operators. It does not
 claim fully spike-driven LLM conversion.
 
-To add a new conversion algorithm, subclass ``ConversionRecipe`` and implement
-only the steps you need. A recipe is not an executor and should not provide
+To add a new conversion algorithm, subclass ``ConversionRecipe`` and override
+only the steps you need. Methods that are not overridden use the base no-op
+implementation. A recipe is not an executor and should not provide
 ``convert()``, ``run()``, or ``__call__()``:
 
 .. code-block:: python
 
     class MyRecipe(ann2snn.ConversionRecipe):
-        def before_trace(self, converter, ann):
-            return ann
-
-        def after_trace(self, converter, fx_model):
-            return fx_model
-
-        def insert_observers(self, converter, fx_model):
-            return fx_model
-
-        def calibrate(self, converter, fx_model):
-            return fx_model
-
         def replace(self, converter, fx_model):
-            return fx_model
-
-        def finalize(self, converter, fx_model):
+            # Implement the algorithm-specific graph rewrite here.
             return fx_model
 
 The fixed step order is ``validate`` -> ``before_trace`` -> ``after_trace`` -> ``insert_observers`` -> ``calibrate`` -> ``replace`` -> ``finalize``.

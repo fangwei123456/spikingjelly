@@ -415,29 +415,15 @@ snn_model的类型为 ``GraphModule`` ，参见 `GraphModule <https://pytorch.or
 校准。它会把当前支持的 ANN 模块和 attention 调用替换为 TD /
 spike-equivalent 算子，但不承诺完整的 fully spike-driven LLM 转换。
 
-如果要添加新的转换算法，可以继承 ``ConversionRecipe``，只实现需要改变的
-步骤方法。Recipe 不是执行器，不应提供 ``convert()``、``run()`` 或
-``__call__()``：
+如果要添加新的转换算法，可以继承 ``ConversionRecipe``，只覆盖需要改变的
+步骤方法。未覆盖的方法会使用基类的默认 no-op 实现。Recipe 不是执行器，
+不应提供 ``convert()``、``run()`` 或 ``__call__()``：
 
 .. code-block:: python
 
     class MyRecipe(ann2snn.ConversionRecipe):
-        def before_trace(self, converter, ann):
-            return ann
-
-        def after_trace(self, converter, fx_model):
-            return fx_model
-
-        def insert_observers(self, converter, fx_model):
-            return fx_model
-
-        def calibrate(self, converter, fx_model):
-            return fx_model
-
         def replace(self, converter, fx_model):
-            return fx_model
-
-        def finalize(self, converter, fx_model):
+            # Implement the algorithm-specific graph rewrite here.
             return fx_model
 
 固定步骤顺序为 ``validate`` -> ``before_trace`` -> ``after_trace`` -> ``insert_observers`` -> ``calibrate`` -> ``replace`` -> ``finalize``。

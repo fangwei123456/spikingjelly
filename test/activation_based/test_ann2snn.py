@@ -533,6 +533,11 @@ class TestPublicExports:
         assert not hasattr(ConversionRecipe, "run")
         assert "__call__" not in ConversionRecipe.__dict__
 
+    def test_recipe_api_has_no_name_metadata(self):
+        assert not hasattr(ConversionRecipe, "name")
+        assert not hasattr(RateCodingRecipe, "name")
+        assert not hasattr(TransformerSpikeEquivalentRecipe, "name")
+
 
 class TestConverterRecipes:
     def test_converter_signature_is_algorithm_agnostic(self):
