@@ -1746,8 +1746,10 @@ class TDMultiheadAttention(TDModule):
         神经形态硬件的 fully spike-driven MultiheadAttention。``bias=True``
         时 projection bias 由 ``TDLinear`` 在累积输入上处理，避免普通
         ``nn.Linear`` 直接作用在差分序列时产生重复累计 bias。
-        父模块的 ``step_mode`` 会同步到内部 q/k/v/out projection，确保 projection
-        通过标准 ``nn.Module.__call__`` 执行，兼容 PyTorch hooks / profiling。
+        父模块的 ``step_mode`` 会同步到内部 q/k/v/out projection。常规
+        ``forward`` 调用由父模块的 ``step_mode`` 分发；直接调用
+        ``single_step_forward`` 或 ``multi_step_forward`` 时，父模块会显式调用内部
+        projection 的对应 step 方法，而不依赖子模块当前 ``step_mode``。
 
         .. code-block:: python
 
@@ -1814,9 +1816,11 @@ class TDMultiheadAttention(TDModule):
         avoiding the repeated bias accumulation that would occur if ordinary
         ``nn.Linear`` were applied directly to differential sequences.
         The parent module's ``step_mode`` is synchronized to the internal
-        q/k/v/out projections, so projections execute through the standard
-        ``nn.Module.__call__`` path and remain compatible with PyTorch hooks /
-        profiling.
+        q/k/v/out projections. Regular ``forward`` calls are dispatched by the
+        parent ``step_mode``; when ``single_step_forward`` or
+        ``multi_step_forward`` is called directly, the parent explicitly invokes
+        the matching child projection step method instead of depending on the
+        child modules' current ``step_mode``.
 
         .. code-block:: python
 
