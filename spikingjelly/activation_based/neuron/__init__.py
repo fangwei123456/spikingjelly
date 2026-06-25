@@ -7,6 +7,7 @@ from .psn import *
 from .adapt import *
 from .nonlinear_if import *
 from .flexsn import *
+from .few_spike import *
 
 # research-specific neurons
 from .dsr import *

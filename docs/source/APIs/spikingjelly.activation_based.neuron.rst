@@ -63,6 +63,8 @@ Integrate-and-fire (IF) Neurons
      - Simplified IF neuron.
    * - :class:`IFNode <spikingjelly.activation_based.neuron.integrate_and_fire.IFNode>`
      - IF neuron.
+   * - :class:`ActivationAwareIFNode <spikingjelly.activation_based.neuron.integrate_and_fire.ActivationAwareIFNode>`
+     - Activation-aware IF neuron for channel-wise threshold and offset control.
    * - :class:`NonSpikingIFNode <spikingjelly.activation_based.neuron.integrate_and_fire.NonSpikingIFNode>`
      - IF variant that does not emit spikes.
 
@@ -187,6 +189,20 @@ Neurons for Online Learning
      - LIF neuron for online training through time (OTTT).
    * - :class:`SLTTLIFNode <spikingjelly.activation_based.neuron.online_learning.SLTTLIFNode>`
      - LIF neuron for spatial learning through time (SLTT).
+
+Few-Spike / LAS Neuron Primitives
+--------------------------------------------------
+
+.. list-table::
+
+   * - :class:`FewSpikeTable <spikingjelly.activation_based.neuron.few_spike.FewSpikeTable>`
+     - Coding table for Few-Spike neuron dynamics.
+   * - :class:`FewSpikeNode <spikingjelly.activation_based.neuron.few_spike.FewSpikeNode>`
+     - Memoryless Few-Spike node with single-step and multi-step modes.
+   * - :class:`OutlierAwareThresholdNode <spikingjelly.activation_based.neuron.few_spike.OutlierAwareThresholdNode>`
+     - Outlier-aware Few-Spike thresholding node.
+   * - :class:`HGNode <spikingjelly.activation_based.neuron.few_spike.HGNode>`
+     - Hierarchically-gated Few-Spike node.
 
 Neurons with Inter-layer Connection
 --------------------------------------------------

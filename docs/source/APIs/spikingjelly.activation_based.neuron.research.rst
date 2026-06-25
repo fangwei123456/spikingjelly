@@ -79,6 +79,15 @@ Neurons for Online Learning
    :show-inheritance:
    :exclude-members: supported_backends
 
+Few-Spike / LAS Neuron Primitives
+--------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.neuron.few_spike
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :exclude-members: supported_backends, extra_repr
+
 Neurons with Inter-layer Connection
 --------------------------------------------------
 
@@ -95,4 +104,4 @@ Neurons with Input or Output Noise
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members:
+   :exclude-members: supported_backends, extra_repr

@@ -5,12 +5,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .. import base
+
 
 __all__ = [
+    "TDModule",
     "TDSoftmax",
     "TDLayerNorm",
     "TDGELU",
     "TDLinear",
+    "SNNMatrixOperator",
+    "SNNElementWiseProduct",
     "TDScaledDotProductAttention",
     "TDMultiheadAttention",
 ]
@@ -21,6 +26,94 @@ def _temporal_difference(y_cum: torch.Tensor) -> torch.Tensor:
     y_seq[0] = y_cum[0]
     y_seq[1:] = y_cum[1:] - y_cum[:-1]
     return y_seq
+
+
+def _resolve_dim(dim: int, ndim: int) -> int:
+    resolved = dim
+    if resolved < 0:
+        resolved += ndim
+    if resolved < 0 or resolved >= ndim:
+        raise ValueError(
+            f"dim must be in the range [{-ndim}, {ndim - 1}], "
+            f"but got {dim} for an input with {ndim} dimensions."
+        )
+    return resolved
+
+
+class TDModule(nn.Module, base.StepModule):
+    def __init__(self, step_mode: str = "m") -> None:
+        r"""
+        .. rubric:: API Language
+
+        :ref:`中文 <TDModule.__init__-cn>` |
+        :ref:`English <TDModule.__init__-en>`
+
+        ----
+
+        .. _TDModule.__init__-cn:
+
+        * **中文**
+
+        Temporal-difference / sequence-preserving 算子的基类。该类实现
+        :class:`spikingjelly.activation_based.base.StepModule` 的 ``step_mode``
+        分发，但不引入 memory 或 ``reset`` 语义。
+
+        ``step_mode="s"`` 时，输入被解释为单步 tensor，并调用对应的普通
+        PyTorch 算子；``step_mode="m"`` 时，输入第 0 维被解释为时间维，并
+        调用 TD / sequence-preserving 多步算子。子类必须实现
+        :meth:`single_step_forward` 和 :meth:`multi_step_forward`。子类
+        ``__init__`` 应调用 ``super().__init__(step_mode)`` 初始化步进模式。
+
+        :param step_mode: 步进模式，``"s"`` 或 ``"m"``。默认 ``"m"`` 保持既有
+            TD operator 行为。
+        :type step_mode: str
+        :raises ValueError: 当 ``step_mode`` 非法时，由
+            :class:`~spikingjelly.activation_based.base.StepModule` 的 setter
+            抛出；若子类绕过 setter 写入非法模式，``forward`` 也会抛出。
+
+        ----
+
+        .. _TDModule.__init__-en:
+
+        * **English**
+
+        Base class for temporal-difference / sequence-preserving operators. It
+        implements :class:`spikingjelly.activation_based.base.StepModule`
+        ``step_mode`` dispatch without introducing memory or ``reset``
+        semantics.
+
+        With ``step_mode="s"``, inputs are interpreted as single-step tensors
+        and the corresponding ordinary PyTorch operator is called. With
+        ``step_mode="m"``, dimension 0 is interpreted as the time dimension and
+        the TD / sequence-preserving multi-step operator is called. Subclasses
+        must implement :meth:`single_step_forward` and
+        :meth:`multi_step_forward`. Subclass ``__init__`` methods should call
+        ``super().__init__(step_mode)`` to initialize the step mode.
+
+        :param step_mode: Step mode, ``"s"`` or ``"m"``. The default ``"m"``
+            preserves existing TD operator behavior.
+        :type step_mode: str
+        :raises ValueError: Raised by
+            :class:`~spikingjelly.activation_based.base.StepModule`'s setter
+            when ``step_mode`` is invalid; ``forward`` also raises if a
+            subclass bypasses the setter and writes an invalid mode.
+        """
+        super().__init__()
+        self.step_mode = step_mode
+
+    def single_step_forward(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def multi_step_forward(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def forward(self, *args, **kwargs):
+        if self.step_mode == "s":
+            return self.single_step_forward(*args, **kwargs)
+        elif self.step_mode == "m":
+            return self.multi_step_forward(*args, **kwargs)
+        else:
+            raise ValueError(self.step_mode)
 
 
 def _check_time_sequence(x_seq: torch.Tensor, module_name: str) -> None:
@@ -34,6 +127,32 @@ def _check_time_sequence(x_seq: torch.Tensor, module_name: str) -> None:
             f"{module_name} expects a non-empty time dimension, but got "
             f"shape {tuple(x_seq.shape)}."
         )
+
+
+def _check_pair_time_sequence(
+    a_seq: torch.Tensor,
+    b_seq: torch.Tensor,
+    a_name: str,
+    b_name: str,
+    module_name: str,
+) -> None:
+    _check_time_sequence(a_seq, module_name)
+    _check_time_sequence(b_seq, module_name)
+    if a_seq.shape[0] != b_seq.shape[0]:
+        raise ValueError(
+            f"{module_name} expects {a_name} and {b_name} to have the same "
+            f"time length, but got {a_seq.shape[0]} and {b_seq.shape[0]}."
+        )
+
+
+def _align_sequence_ranks(
+    a_seq: torch.Tensor, b_seq: torch.Tensor
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    while a_seq.dim() < b_seq.dim():
+        a_seq = a_seq.unsqueeze(1)
+    while b_seq.dim() < a_seq.dim():
+        b_seq = b_seq.unsqueeze(1)
+    return a_seq, b_seq
 
 
 def _check_attention_sequence(
@@ -88,8 +207,8 @@ def _td_scaled_dot_product_attention(
     return _temporal_difference(y_cum)
 
 
-class TDSoftmax(nn.Module):
-    def __init__(self, dim: int = -1) -> None:
+class TDSoftmax(TDModule):
+    def __init__(self, dim: int = -1, step_mode: str = "m") -> None:
         r"""
         .. rubric:: API Language
 
@@ -102,10 +221,12 @@ class TDSoftmax(nn.Module):
 
         * **中文**
 
-        Temporal-difference (TD) Softmax 算子。输入必须是完整时间序列，
-        时间维固定为第 0 维，形状为 ``[T, ...]``。该模块先对输入在时间维
-        做累积，再沿 ``dim`` 计算 ``torch.softmax``，最后返回累积输出在
-        时间维上的差分。
+        Temporal-difference (TD) Softmax 算子。``step_mode="m"`` 时输入
+        必须是完整时间序列，时间维固定为第 0 维，形状为 ``[T, ...]``；
+        模块先对输入在时间维做累积，再沿 ``dim`` 计算
+        ``torch.softmax``，最后返回累积输出在时间维上的差分。
+        ``step_mode="s"`` 时输入被解释为单步 tensor，并直接调用
+        ``torch.softmax``。
 
         返回值是浮点差分值，可能包含负值；它不是二值脉冲，也不表示 fully
         spike-driven Softmax。输出 dtype 与输入 dtype 相同；推荐使用
@@ -115,9 +236,9 @@ class TDSoftmax(nn.Module):
         该算子的机制来源于 `SpikeZIP-TF: Conversion is All You Need for
         Transformer-based SNN <https://arxiv.org/abs/2406.03470>`_ 中对
         Transformer 非线性算子的累积-差分等价转换思路。本文档中的 TD
-        Softmax 只实现张量级算子：它仍调用 ``torch.softmax``，需要完整时间
-        序列输入，不是逐时间步在线算子，也不是面向神经形态硬件的 fully
-        spike-driven Softmax。
+        Softmax 只实现张量级算子：在多步模式下它仍调用
+        ``torch.softmax``，需要完整时间序列输入，不是逐时间步在线算子，
+        也不是面向神经形态硬件的 fully spike-driven Softmax。
 
         .. code-block:: python
 
@@ -125,8 +246,11 @@ class TDSoftmax(nn.Module):
             x_seq = torch.randn(4, 2, 3)
             y_seq = op(x_seq)
 
-        :param dim: Softmax 归一化维度。不能为第 0 维，因为第 0 维保留为时间维。
+        :param dim: Softmax 归一化维度。``step_mode="m"`` 时不能为第 0 维，
+            因为第 0 维保留为时间维；``step_mode="s"`` 时可为任意合法维度。
         :type dim: int
+        :param step_mode: 步进模式，``"s"`` 或 ``"m"``。默认 ``"m"``。
+        :type step_mode: str
 
         ----
 
@@ -134,11 +258,13 @@ class TDSoftmax(nn.Module):
 
         * **English**
 
-        Temporal-difference (TD) Softmax operator. The input must be a complete
-        time sequence whose time dimension is fixed at dimension 0, with shape
-        ``[T, ...]``. This module first accumulates the input over time, applies
-        ``torch.softmax`` along ``dim`` to each cumulative input, and returns
-        the temporal difference of the cumulative outputs.
+        Temporal-difference (TD) Softmax operator. With ``step_mode="m"``, the
+        input must be a complete time sequence whose time dimension is fixed at
+        dimension 0, with shape ``[T, ...]``. This module first accumulates the
+        input over time, applies ``torch.softmax`` along ``dim`` to each
+        cumulative input, and returns the temporal difference of the cumulative
+        outputs. With ``step_mode="s"``, the input is interpreted as a
+        single-step tensor and ``torch.softmax`` is called directly.
 
         The output contains floating-point differential values and may contain
         negative values. It is not a binary spike tensor and does not represent a
@@ -150,10 +276,10 @@ class TDSoftmax(nn.Module):
         The mechanism follows the cumulative-difference equivalence idea for
         Transformer nonlinear operators in `SpikeZIP-TF: Conversion is All You
         Need for Transformer-based SNN <https://arxiv.org/abs/2406.03470>`_.
-        This implementation provides only a tensor-level operator: it still
-        calls ``torch.softmax``, requires a complete time sequence, is not a
-        step-wise online operator, and is not a fully spike-driven Softmax for
-        neuromorphic hardware.
+        This implementation provides only a tensor-level operator: in
+        multi-step mode it still calls ``torch.softmax``, requires a complete
+        time sequence, is not a step-wise online operator, and is not a fully
+        spike-driven Softmax for neuromorphic hardware.
 
         .. code-block:: python
 
@@ -161,14 +287,20 @@ class TDSoftmax(nn.Module):
             x_seq = torch.randn(4, 2, 3)
             y_seq = op(x_seq)
 
-        :param dim: Softmax normalization dimension. It must not be dimension 0,
-            which is reserved as the time dimension.
+        :param dim: Softmax normalization dimension. With ``step_mode="m"``, it
+            must not be dimension 0, which is reserved as the time dimension.
+            With ``step_mode="s"``, any valid dimension is allowed.
         :type dim: int
+        :param step_mode: Step mode, ``"s"`` or ``"m"``. The default is ``"m"``.
+        :type step_mode: str
         """
-        super().__init__()
+        super().__init__(step_mode)
         self.dim = dim
 
-    def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.softmax(x, dim=self.dim)
+
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         r"""
         .. rubric:: API Language
 
@@ -246,14 +378,7 @@ class TDSoftmax(nn.Module):
         """
         _check_time_sequence(x_seq, "TDSoftmax")
 
-        dim = self.dim
-        if dim < 0:
-            dim += x_seq.dim()
-        if dim < 0 or dim >= x_seq.dim():
-            raise ValueError(
-                f"dim must be in the range [{-x_seq.dim()}, {x_seq.dim() - 1}], "
-                f"but got {self.dim} for an input with {x_seq.dim()} dimensions."
-            )
+        dim = _resolve_dim(self.dim, x_seq.dim())
         if dim == 0:
             raise ValueError(
                 "TDSoftmax reserves dimension 0 as the time dimension; "
@@ -267,7 +392,7 @@ class TDSoftmax(nn.Module):
         return f"dim={self.dim}"
 
 
-class TDLayerNorm(nn.Module):
+class TDLayerNorm(TDModule):
     def __init__(
         self,
         normalized_shape: Union[int, Sequence[int], torch.Size],
@@ -276,6 +401,7 @@ class TDLayerNorm(nn.Module):
         bias: bool = True,
         device: Optional[Union[torch.device, str]] = None,
         dtype: Optional[torch.dtype] = None,
+        step_mode: str = "m",
     ) -> None:
         r"""
         .. rubric:: API Language
@@ -289,11 +415,12 @@ class TDLayerNorm(nn.Module):
 
         * **中文**
 
-        Temporal-difference (TD) LayerNorm 算子。输入必须是完整时间序列，
-        时间维固定为第 0 维，形状为 ``[T, ...]``。该模块先对输入在时间维
-        做累积，再对每个累积输入执行
+        Temporal-difference (TD) LayerNorm 算子。``step_mode="m"`` 时输入
+        必须是完整时间序列，时间维固定为第 0 维，形状为 ``[T, ...]``；
+        模块先对输入在时间维做累积，再对每个累积输入执行
         :func:`torch.nn.functional.layer_norm`，最后返回累积输出在时间维上的
-        差分。
+        差分。``step_mode="s"`` 时输入被解释为单步 tensor，并直接调用
+        :func:`torch.nn.functional.layer_norm`。
 
         返回值是浮点差分值，可能包含负值；它不是二值脉冲，也不表示 fully
         spike-driven LayerNorm。输出 dtype 与输入 dtype 相同；推荐使用
@@ -304,7 +431,7 @@ class TDLayerNorm(nn.Module):
         该算子的机制来源于 `SpikeZIP-TF: Conversion is All You Need for
         Transformer-based SNN <https://arxiv.org/abs/2406.03470>`_ 中对
         Transformer 非线性算子的累积-差分等价转换思路。本文档中的 TD
-        LayerNorm 只实现张量级算子：它仍调用
+        LayerNorm 只实现张量级算子：在多步模式下它仍调用
         :func:`torch.nn.functional.layer_norm`，需要完整时间序列输入，不是逐
         时间步在线算子，也不是面向神经形态硬件的 fully spike-driven
         LayerNorm。
@@ -331,6 +458,8 @@ class TDLayerNorm(nn.Module):
         :type device: torch.device or str or None
         :param dtype: 参数初始化 dtype。
         :type dtype: torch.dtype or None
+        :param step_mode: 步进模式，``"s"`` 或 ``"m"``。默认 ``"m"``。
+        :type step_mode: str
 
         ----
 
@@ -338,11 +467,14 @@ class TDLayerNorm(nn.Module):
 
         * **English**
 
-        Temporal-difference (TD) LayerNorm operator. The input must be a
-        complete time sequence whose time dimension is fixed at dimension 0,
-        with shape ``[T, ...]``. This module first accumulates the input over
-        time, applies :func:`torch.nn.functional.layer_norm` to each cumulative
-        input, and returns the temporal difference of the cumulative outputs.
+        Temporal-difference (TD) LayerNorm operator. With ``step_mode="m"``,
+        the input must be a complete time sequence whose time dimension is
+        fixed at dimension 0, with shape ``[T, ...]``. This module first
+        accumulates the input over time, applies
+        :func:`torch.nn.functional.layer_norm` to each cumulative input, and
+        returns the temporal difference of the cumulative outputs. With
+        ``step_mode="s"``, the input is interpreted as a single-step tensor and
+        :func:`torch.nn.functional.layer_norm` is called directly.
 
         The output contains floating-point differential values and may contain
         negative values. It is not a binary spike tensor and does not represent a
@@ -355,8 +487,9 @@ class TDLayerNorm(nn.Module):
         The mechanism follows the cumulative-difference equivalence idea for
         Transformer nonlinear operators in `SpikeZIP-TF: Conversion is All You
         Need for Transformer-based SNN <https://arxiv.org/abs/2406.03470>`_.
-        This implementation provides only a tensor-level operator: it still
-        calls :func:`torch.nn.functional.layer_norm`, requires a complete time
+        This implementation provides only a tensor-level operator: in
+        multi-step mode it still calls
+        :func:`torch.nn.functional.layer_norm`, requires a complete time
         sequence, is not a step-wise online operator, and is not a fully
         spike-driven LayerNorm for neuromorphic hardware.
 
@@ -382,8 +515,10 @@ class TDLayerNorm(nn.Module):
         :type device: torch.device or str or None
         :param dtype: Dtype used to initialize parameters.
         :type dtype: torch.dtype or None
+        :param step_mode: Step mode, ``"s"`` or ``"m"``. The default is ``"m"``.
+        :type step_mode: str
         """
-        super().__init__()
+        super().__init__(step_mode)
         if isinstance(normalized_shape, int):
             normalized_shape = (normalized_shape,)
         else:
@@ -416,7 +551,16 @@ class TDLayerNorm(nn.Module):
             if self.bias is not None:
                 nn.init.zeros_(self.bias)
 
-    def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
+        return F.layer_norm(
+            x,
+            self.normalized_shape,
+            self.weight,
+            self.bias,
+            self.eps,
+        )
+
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         r"""
         .. rubric:: API Language
 
@@ -524,8 +668,12 @@ class TDLayerNorm(nn.Module):
         )
 
 
-class TDGELU(nn.Module):
-    def __init__(self, approximate: Literal["none", "tanh"] = "none") -> None:
+class TDGELU(TDModule):
+    def __init__(
+        self,
+        approximate: Literal["none", "tanh"] = "none",
+        step_mode: str = "m",
+    ) -> None:
         r"""
         .. rubric:: API Language
 
@@ -539,9 +687,11 @@ class TDGELU(nn.Module):
         * **中文**
 
         Temporal-difference (TD) GELU（Gaussian Error Linear Unit）算子。
-        输入必须是完整时间序列，时间维固定为第 0 维，形状为 ``[T, ...]``。
-        该模块先对输入在时间维做累积，再对每个累积输入执行
-        :func:`torch.nn.functional.gelu`，最后返回累积输出在时间维上的差分。
+        ``step_mode="m"`` 时输入必须是完整时间序列，时间维固定为第 0 维，
+        形状为 ``[T, ...]``；模块先对输入在时间维做累积，再对每个累积输入
+        执行 :func:`torch.nn.functional.gelu`，最后返回累积输出在时间维上的
+        差分。``step_mode="s"`` 时输入被解释为单步 tensor，并直接调用
+        :func:`torch.nn.functional.gelu`。
 
         返回值是浮点差分值，可能包含负值；它不是二值脉冲，也不表示 fully
         spike-driven GELU。输出 dtype 与输入 dtype 相同；推荐使用
@@ -554,9 +704,9 @@ class TDGELU(nn.Module):
         该算子的机制来源于 `SpikeZIP-TF: Conversion is All You Need for
         Transformer-based SNN <https://arxiv.org/abs/2406.03470>`_ 中对
         Transformer 非线性算子的累积-差分等价转换思路。本文档中的 TD GELU
-        只实现张量级算子：它仍调用 :func:`torch.nn.functional.gelu`，需要
-        完整时间序列输入，不是逐时间步在线算子，也不是面向神经形态硬件的
-        fully spike-driven GELU。
+        只实现张量级算子：在多步模式下它仍调用
+        :func:`torch.nn.functional.gelu`，需要完整时间序列输入，不是逐时间步
+        在线算子，也不是面向神经形态硬件的 fully spike-driven GELU。
 
         .. code-block:: python
 
@@ -567,6 +717,8 @@ class TDGELU(nn.Module):
         :param approximate: GELU 近似模式，与 :class:`torch.nn.GELU` 的
             ``approximate`` 语义一致。
         :type approximate: Literal["none", "tanh"]
+        :param step_mode: 步进模式，``"s"`` 或 ``"m"``。默认 ``"m"``。
+        :type step_mode: str
         :raises ValueError: 若 ``approximate`` 不是 ``"none"`` 或 ``"tanh"``。
 
         ----
@@ -576,11 +728,13 @@ class TDGELU(nn.Module):
         * **English**
 
         Temporal-difference (TD) GELU (Gaussian Error Linear Unit) operator.
-        The input must be a complete time sequence whose time dimension is
-        fixed at dimension 0, with shape ``[T, ...]``. This module first
-        accumulates the input over time, applies
+        With ``step_mode="m"``, the input must be a complete time sequence
+        whose time dimension is fixed at dimension 0, with shape ``[T, ...]``.
+        This module first accumulates the input over time, applies
         :func:`torch.nn.functional.gelu` to each cumulative input, and returns
-        the temporal difference of the cumulative outputs.
+        the temporal difference of the cumulative outputs. With
+        ``step_mode="s"``, the input is interpreted as a single-step tensor and
+        :func:`torch.nn.functional.gelu` is called directly.
 
         The output contains floating-point differential values and may contain
         negative values. It is not a binary spike tensor and does not represent a
@@ -596,10 +750,10 @@ class TDGELU(nn.Module):
         The mechanism follows the cumulative-difference equivalence idea for
         Transformer nonlinear operators in `SpikeZIP-TF: Conversion is All You
         Need for Transformer-based SNN <https://arxiv.org/abs/2406.03470>`_.
-        This implementation provides only a tensor-level operator: it still
-        calls :func:`torch.nn.functional.gelu`, requires a complete time
-        sequence, is not a step-wise online operator, and is not a fully
-        spike-driven GELU for neuromorphic hardware.
+        This implementation provides only a tensor-level operator: in
+        multi-step mode it still calls :func:`torch.nn.functional.gelu`,
+        requires a complete time sequence, is not a step-wise online operator,
+        and is not a fully spike-driven GELU for neuromorphic hardware.
 
         .. code-block:: python
 
@@ -610,9 +764,11 @@ class TDGELU(nn.Module):
         :param approximate: GELU approximation mode, with the same semantics as
             ``approximate`` in :class:`torch.nn.GELU`.
         :type approximate: Literal["none", "tanh"]
+        :param step_mode: Step mode, ``"s"`` or ``"m"``. The default is ``"m"``.
+        :type step_mode: str
         :raises ValueError: If ``approximate`` is not ``"none"`` or ``"tanh"``.
         """
-        super().__init__()
+        super().__init__(step_mode)
         if approximate not in ("none", "tanh"):
             raise ValueError(
                 "TDGELU: approximate must be 'none' or 'tanh', "
@@ -620,7 +776,10 @@ class TDGELU(nn.Module):
             )
         self.approximate = approximate
 
-    def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
+        return F.gelu(x, approximate=self.approximate)
+
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         r"""
         .. rubric:: API Language
 
@@ -704,7 +863,7 @@ class TDGELU(nn.Module):
         return f"approximate={self.approximate!r}"
 
 
-class TDLinear(nn.Module):
+class TDLinear(TDModule):
     def __init__(
         self,
         in_features: int,
@@ -712,6 +871,7 @@ class TDLinear(nn.Module):
         bias: bool = True,
         device: Optional[Union[torch.device, str]] = None,
         dtype: Optional[torch.dtype] = None,
+        step_mode: str = "m",
     ) -> None:
         r"""
         **API Language:**
@@ -724,10 +884,12 @@ class TDLinear(nn.Module):
 
         * **中文**
 
-        Temporal-difference (TD) Linear 算子。输入必须是完整时间序列，
-        时间维固定为第 0 维，形状为 ``[T, ..., in_features]``。该模块先对
-        输入在时间维做累积，再执行 :func:`torch.nn.functional.linear`，最后
-        返回累积输出在时间维上的差分。
+        Temporal-difference (TD) Linear 算子。``step_mode="m"`` 时输入必须
+        是完整时间序列，时间维固定为第 0 维，形状为
+        ``[T, ..., in_features]``；模块返回 sequence-preserving affine
+        差分序列，使 ``Y.cumsum(dim=0)`` 等于对 ``X.cumsum(dim=0)`` 逐时间
+        步执行 :func:`torch.nn.functional.linear`。``step_mode="s"`` 时输入
+        被解释为单步 tensor，并直接调用 :func:`torch.nn.functional.linear`。
 
         返回值是浮点差分值，可能包含负值；它不是二值脉冲，也不表示 fully
         spike-driven Linear。输出 dtype 与 PyTorch Linear 一致；推荐使用
@@ -739,8 +901,9 @@ class TDLinear(nn.Module):
 
         该算子用于处理带 bias 的 affine projection。普通
         :class:`torch.nn.Linear` 直接作用在 TD 差分序列上会在时间累积后得到
-        ``T * bias``；TD Linear 在累积输入上执行 Linear 后再差分，使累计输出
-        保持 ``W @ x_cum + bias``。
+        ``T * bias``；TD Linear 使累计输出保持 ``W @ x_cum + bias``。当
+        ``bias=False`` 时，该算子退化为普通逐时间步 Linear；当 ``bias=True``
+        时，bias 只在第 0 个时间步进入差分序列。
 
         .. code-block:: python
 
@@ -758,6 +921,8 @@ class TDLinear(nn.Module):
         :type device: torch.device or str or None
         :param dtype: 参数初始化 dtype。
         :type dtype: torch.dtype or None
+        :param step_mode: 步进模式，``"s"`` 或 ``"m"``。默认 ``"m"``。
+        :type step_mode: str
 
         ----
 
@@ -765,11 +930,14 @@ class TDLinear(nn.Module):
 
         * **English**
 
-        Temporal-difference (TD) Linear operator. The input must be a complete
-        time sequence whose time dimension is fixed at dimension 0, with shape
-        ``[T, ..., in_features]``. This module first accumulates the input over
-        time, applies :func:`torch.nn.functional.linear`, and returns the
-        temporal difference of the cumulative outputs.
+        Temporal-difference (TD) Linear operator. With ``step_mode="m"``, the
+        input must be a complete time sequence whose time dimension is fixed at
+        dimension 0, with shape ``[T, ..., in_features]``. This module returns a
+        sequence-preserving affine differential sequence such that
+        ``Y.cumsum(dim=0)`` matches :func:`torch.nn.functional.linear` applied
+        to ``X.cumsum(dim=0)`` at every time step. With ``step_mode="s"``, the
+        input is interpreted as a single-step tensor and
+        :func:`torch.nn.functional.linear` is called directly.
 
         The output contains floating-point differential values and may contain
         negative values. It is not a binary spike tensor and does not represent
@@ -785,7 +953,9 @@ class TDLinear(nn.Module):
         :class:`torch.nn.Linear` directly to a TD differential sequence would
         accumulate the bias as ``T * bias``. TD Linear applies Linear to the
         cumulative input and then differences the cumulative output, preserving
-        ``W @ x_cum + bias``.
+        ``W @ x_cum + bias``. When ``bias=False``, this operator degenerates to
+        ordinary per-time-step Linear. When ``bias=True``, the bias appears only
+        at the first time step of the differential sequence.
 
         .. code-block:: python
 
@@ -803,8 +973,10 @@ class TDLinear(nn.Module):
         :type device: torch.device or str or None
         :param dtype: Dtype used to initialize parameters.
         :type dtype: torch.dtype or None
+        :param step_mode: Step mode, ``"s"`` or ``"m"``. The default is ``"m"``.
+        :type step_mode: str
         """
-        super().__init__()
+        super().__init__(step_mode)
         factory_kwargs = {"device": device, "dtype": dtype}
         self.in_features = in_features
         self.out_features = out_features
@@ -824,7 +996,10 @@ class TDLinear(nn.Module):
             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
             nn.init.uniform_(self.bias, -bound, bound)
 
-    def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
+        return F.linear(x, self.weight, self.bias)
+
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         r"""
         **API Language:**
         :ref:`中文 <TDLinear.forward-cn>` |
@@ -852,9 +1027,11 @@ class TDLinear(nn.Module):
             Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
 
         因此 ``Y.cumsum(dim=0)`` 与对 ``X.cumsum(dim=0)`` 逐时间步执行 ANN
-        Linear 的结果一致。输出是浮点差分值，可能为负，不是二值脉冲。当
-        ``T = 1`` 时，``Y[0]`` 直接等于对 ``X[0]`` 执行 Linear 的结果。
-        输出 dtype 与 PyTorch Linear 一致，且该算子对 autograd 透明。
+        Linear 的结果一致。若 ``bias`` 为 ``None``，该计算等价于直接对
+        ``X`` 逐时间步执行 Linear；若存在 bias，bias 只出现在 ``Y[0]`` 中，
+        避免累计后得到 ``T * bias``。输出是浮点差分值，可能为负，不是二值
+        脉冲。当 ``T = 1`` 时，``Y[0]`` 直接等于对 ``X[0]`` 执行 Linear 的
+        结果。输出 dtype 与 PyTorch Linear 一致，且该算子对 autograd 透明。
 
         :param x_seq: 输入时间序列，形状为 ``[T, ..., in_features]``，且
             ``T > 0``。
@@ -885,11 +1062,14 @@ class TDLinear(nn.Module):
             Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
 
         Thus, ``Y.cumsum(dim=0)`` matches ANN Linear applied to
-        ``X.cumsum(dim=0)`` at each time step. The output contains
-        floating-point differential values, may be negative, and is not a
-        binary spike tensor. When ``T = 1``, ``Y[0]`` is exactly Linear applied
-        to ``X[0]``. The output dtype follows PyTorch Linear, and the operator
-        is transparent to autograd.
+        ``X.cumsum(dim=0)`` at each time step. If ``bias`` is ``None``, this is
+        equivalent to applying Linear to ``X`` at each time step directly. If a
+        bias exists, the bias appears only in ``Y[0]``, avoiding ``T * bias``
+        after accumulation. The output contains floating-point differential
+        values, may be negative, and is not a binary spike tensor. When
+        ``T = 1``, ``Y[0]`` is exactly Linear applied to ``X[0]``. The output
+        dtype follows PyTorch Linear, and the operator is transparent to
+        autograd.
 
         :param x_seq: Input time sequence with shape
             ``[T, ..., in_features]`` and ``T > 0``.
@@ -902,8 +1082,12 @@ class TDLinear(nn.Module):
         """
         _check_time_sequence(x_seq, "TDLinear")
 
-        y_cum = F.linear(x_seq.cumsum(dim=0), self.weight, self.bias)
-        return _temporal_difference(y_cum)
+        if self.bias is None:
+            return F.linear(x_seq, self.weight, None)
+
+        y_seq = F.linear(x_seq, self.weight, None)
+        y_first = y_seq[:1] + self.bias
+        return torch.cat((y_first, y_seq[1:]), dim=0)
 
     def extra_repr(self) -> str:
         return (
@@ -912,11 +1096,340 @@ class TDLinear(nn.Module):
         )
 
 
-class TDScaledDotProductAttention(nn.Module):
+class SNNMatrixOperator(TDModule):
+    def __init__(self, step_mode: str = "m") -> None:
+        r"""
+        .. rubric:: API Language
+
+        :ref:`中文 <SNNMatrixOperator.__init__-cn>` |
+        :ref:`English <SNNMatrixOperator.__init__-en>`
+
+        ----
+
+        .. _SNNMatrixOperator.__init__-cn:
+
+        * **中文**
+
+        Sequence-preserving SNN 矩阵乘法算子。``step_mode="m"`` 时输入必须
+        是两条完整时间序列，时间维固定为第 0 维，形状分别为
+        ``[T, ..., M, N]`` 和 ``[T, ..., N, P]``；模块先分别对两条输入在时间
+        维做累积，再执行 :func:`torch.matmul`，最后返回累积输出在时间维上的
+        差分。``step_mode="s"`` 时输入被解释为单步 tensor，并直接调用
+        :func:`torch.matmul`。
+
+        该算子满足
+        ``Y.cumsum(dim=0) == torch.matmul(A.cumsum(dim=0), B.cumsum(dim=0))``。
+        因而它保留 cross-time terms，例如 ``A[0] @ B[1]`` 与
+        ``A[1] @ B[0]``；这不同于逐时间步执行 ``A[t] @ B[t]``。该算子是
+        LAS ``SNNMatrixOperator`` prefix recurrence 的 sequence-preserving
+        张量级形式，但不会在内部自动 ``sum(0)``。
+
+        输出是浮点差分值，可能包含负值；它不是二值脉冲，也不表示 fully
+        spike-driven matrix multiplication。dtype、device 与 broadcast 语义遵循
+        :func:`torch.matmul`。该算子无内部状态，多次 ``forward`` 之间不需要
+        调用 ``reset``。
+
+        :param step_mode: 步进模式，``"s"`` 或 ``"m"``。默认 ``"m"``。
+        :type step_mode: str
+
+        ----
+
+        .. _SNNMatrixOperator.__init__-en:
+
+        * **English**
+
+        Sequence-preserving SNN matrix multiplication operator. With
+        ``step_mode="m"``, the inputs must be two complete time sequences whose
+        time dimension is fixed at dimension 0, with shapes
+        ``[T, ..., M, N]`` and ``[T, ..., N, P]``. This module accumulates both
+        inputs over time, applies :func:`torch.matmul`, and returns the
+        temporal difference of the cumulative outputs. With ``step_mode="s"``,
+        the inputs are interpreted as single-step tensors and
+        :func:`torch.matmul` is called directly.
+
+        The operator satisfies
+        ``Y.cumsum(dim=0) == torch.matmul(A.cumsum(dim=0), B.cumsum(dim=0))``.
+        Therefore it preserves cross-time terms such as ``A[0] @ B[1]`` and
+        ``A[1] @ B[0]``; it is not equivalent to applying ``A[t] @ B[t]`` at
+        each time step independently. It is the sequence-preserving tensor
+        form of the LAS ``SNNMatrixOperator`` prefix recurrence, but it does
+        not implicitly call ``sum(0)``.
+
+        The output contains floating-point differential values and may contain
+        negative values. It is not a binary spike tensor and does not represent
+        fully spike-driven matrix multiplication. Dtype, device and broadcasting
+        semantics follow :func:`torch.matmul`. The operator is stateless, and
+        repeated ``forward`` calls do not require ``reset``.
+
+        :param step_mode: Step mode, ``"s"`` or ``"m"``. The default is ``"m"``.
+        :type step_mode: str
+        """
+        super().__init__(step_mode)
+
+    def single_step_forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        return torch.matmul(a, b)
+
+    def multi_step_forward(
+        self, a_seq: torch.Tensor, b_seq: torch.Tensor
+    ) -> torch.Tensor:
+        r"""
+        .. rubric:: API Language
+
+        :ref:`中文 <SNNMatrixOperator.forward-cn>` |
+        :ref:`English <SNNMatrixOperator.forward-en>`
+
+        ----
+
+        .. _SNNMatrixOperator.forward-cn:
+
+        * **中文**
+
+        对两条完整时间序列执行 sequence-preserving SNN 矩阵乘法：
+
+        .. math::
+
+            A_{cum}[t] = \sum_{i=0}^{t} A[i]
+
+        .. math::
+
+            B_{cum}[t] = \sum_{i=0}^{t} B[i]
+
+        .. math::
+
+            Y_{cum}[t] = A_{cum}[t] B_{cum}[t]
+
+        .. math::
+
+            Y[0] = Y_{cum}[0], \quad
+            Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
+
+        :param a_seq: 左输入序列，形状为 ``[T, ..., M, N]``，且 ``T > 0``。
+        :type a_seq: torch.Tensor
+        :param b_seq: 右输入序列，形状为 ``[T, ..., N, P]``，且 ``T > 0``。
+        :type b_seq: torch.Tensor
+        :return: 差分输出序列，形状为 ``[T, ..., M, P]``。
+        :rtype: torch.Tensor
+        :raises ValueError: 若输入少于 3 维、时间维为空或时间长度不一致。
+
+        ----
+
+        .. _SNNMatrixOperator.forward-en:
+
+        * **English**
+
+        Apply sequence-preserving SNN matrix multiplication to two complete time
+        sequences:
+
+        .. math::
+
+            A_{cum}[t] = \sum_{i=0}^{t} A[i]
+
+        .. math::
+
+            B_{cum}[t] = \sum_{i=0}^{t} B[i]
+
+        .. math::
+
+            Y_{cum}[t] = A_{cum}[t] B_{cum}[t]
+
+        .. math::
+
+            Y[0] = Y_{cum}[0], \quad
+            Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
+
+        :param a_seq: Left input sequence with shape ``[T, ..., M, N]`` and
+            ``T > 0``.
+        :type a_seq: torch.Tensor
+        :param b_seq: Right input sequence with shape ``[T, ..., N, P]`` and
+            ``T > 0``.
+        :type b_seq: torch.Tensor
+        :return: Differential output sequence with shape ``[T, ..., M, P]``.
+        :rtype: torch.Tensor
+        :raises ValueError: If an input has fewer than 3 dimensions, the time
+            dimension is empty, or the time lengths differ.
+        """
+        if a_seq.dim() < 3:
+            raise ValueError(
+                "SNNMatrixOperator expects a_seq with shape [T, ..., M, N] "
+                f"and at least 3 dimensions, but got shape {tuple(a_seq.shape)}."
+            )
+        if b_seq.dim() < 3:
+            raise ValueError(
+                "SNNMatrixOperator expects b_seq with shape [T, ..., N, P] "
+                f"and at least 3 dimensions, but got shape {tuple(b_seq.shape)}."
+            )
+        _check_pair_time_sequence(a_seq, b_seq, "a_seq", "b_seq", "SNNMatrixOperator")
+
+        a_seq, b_seq = _align_sequence_ranks(a_seq, b_seq)
+        y_cum = torch.matmul(a_seq.cumsum(dim=0), b_seq.cumsum(dim=0))
+        return _temporal_difference(y_cum)
+
+
+class SNNElementWiseProduct(TDModule):
+    def __init__(self, step_mode: str = "m") -> None:
+        r"""
+        .. rubric:: API Language
+
+        :ref:`中文 <SNNElementWiseProduct.__init__-cn>` |
+        :ref:`English <SNNElementWiseProduct.__init__-en>`
+
+        ----
+
+        .. _SNNElementWiseProduct.__init__-cn:
+
+        * **中文**
+
+        Sequence-preserving SNN 逐元素乘法算子。``step_mode="m"`` 时输入
+        必须是两条完整时间序列，时间维固定为第 0 维，形状为 ``[T, ...]``，
+        非时间维遵循 PyTorch broadcast 规则；模块先分别对两条输入在时间维做
+        累积，再执行逐元素乘法，最后返回累积输出在时间维上的差分。
+        ``step_mode="s"`` 时输入被解释为单步 tensor，并直接执行 PyTorch
+        逐元素乘法。
+
+        该算子满足 ``Y.cumsum(dim=0) == A.cumsum(dim=0) * B.cumsum(dim=0)``。
+        它是 LAS ``SNNMACOperator`` 核心乘法-累积语义的 sequence-preserving
+        张量级形式，但不会在内部自动 ``sum(0)``；需要单步聚合时由调用方显式
+        完成。
+
+        输出是浮点差分值，可能包含负值；它不是二值脉冲，也不表示 fully
+        spike-driven multiply-accumulate。dtype、device 与 broadcast 语义遵循
+        PyTorch 逐元素乘法。该算子无内部状态，多次 ``forward`` 之间不需要调用
+        ``reset``。
+
+        :param step_mode: 步进模式，``"s"`` 或 ``"m"``。默认 ``"m"``。
+        :type step_mode: str
+
+        ----
+
+        .. _SNNElementWiseProduct.__init__-en:
+
+        * **English**
+
+        Sequence-preserving SNN element-wise product operator. With
+        ``step_mode="m"``, the inputs must be two complete time sequences whose
+        time dimension is fixed at dimension 0, with shape ``[T, ...]``.
+        Non-time dimensions follow PyTorch broadcasting rules. This module
+        accumulates both inputs over time, applies element-wise multiplication,
+        and returns the temporal difference of the cumulative outputs. With
+        ``step_mode="s"``, the inputs are interpreted as single-step tensors
+        and PyTorch element-wise multiplication is applied directly.
+
+        The operator satisfies
+        ``Y.cumsum(dim=0) == A.cumsum(dim=0) * B.cumsum(dim=0)``. It is the
+        sequence-preserving tensor form of the core multiply-accumulate
+        semantics in LAS ``SNNMACOperator``, but it does not implicitly call
+        ``sum(0)``; callers should aggregate explicitly when a single-step
+        output is required.
+
+        The output contains floating-point differential values and may contain
+        negative values. It is not a binary spike tensor and does not represent
+        fully spike-driven multiply-accumulate. Dtype, device and broadcasting
+        semantics follow PyTorch element-wise multiplication. The operator is
+        stateless, and repeated ``forward`` calls do not require ``reset``.
+
+        :param step_mode: Step mode, ``"s"`` or ``"m"``. The default is ``"m"``.
+        :type step_mode: str
+        """
+        super().__init__(step_mode)
+
+    def single_step_forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        return a * b
+
+    def multi_step_forward(
+        self, a_seq: torch.Tensor, b_seq: torch.Tensor
+    ) -> torch.Tensor:
+        r"""
+        .. rubric:: API Language
+
+        :ref:`中文 <SNNElementWiseProduct.forward-cn>` |
+        :ref:`English <SNNElementWiseProduct.forward-en>`
+
+        ----
+
+        .. _SNNElementWiseProduct.forward-cn:
+
+        * **中文**
+
+        对两条完整时间序列执行 sequence-preserving SNN 逐元素乘法：
+
+        .. math::
+
+            A_{cum}[t] = \sum_{i=0}^{t} A[i]
+
+        .. math::
+
+            B_{cum}[t] = \sum_{i=0}^{t} B[i]
+
+        .. math::
+
+            Y_{cum}[t] = A_{cum}[t] \odot B_{cum}[t]
+
+        .. math::
+
+            Y[0] = Y_{cum}[0], \quad
+            Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
+
+        :param a_seq: 左输入序列，形状为 ``[T, ...]``，且 ``T > 0``。
+        :type a_seq: torch.Tensor
+        :param b_seq: 右输入序列，形状为 ``[T, ...]``，且 ``T > 0``。
+        :type b_seq: torch.Tensor
+        :return: 差分输出序列，形状由 PyTorch broadcast 规则决定。
+        :rtype: torch.Tensor
+        :raises ValueError: 若输入少于 2 维、时间维为空或时间长度不一致。
+
+        ----
+
+        .. _SNNElementWiseProduct.forward-en:
+
+        * **English**
+
+        Apply sequence-preserving SNN element-wise product to two complete time
+        sequences:
+
+        .. math::
+
+            A_{cum}[t] = \sum_{i=0}^{t} A[i]
+
+        .. math::
+
+            B_{cum}[t] = \sum_{i=0}^{t} B[i]
+
+        .. math::
+
+            Y_{cum}[t] = A_{cum}[t] \odot B_{cum}[t]
+
+        .. math::
+
+            Y[0] = Y_{cum}[0], \quad
+            Y[t] = Y_{cum}[t] - Y_{cum}[t-1]
+
+        :param a_seq: Left input sequence with shape ``[T, ...]`` and
+            ``T > 0``.
+        :type a_seq: torch.Tensor
+        :param b_seq: Right input sequence with shape ``[T, ...]`` and
+            ``T > 0``.
+        :type b_seq: torch.Tensor
+        :return: Differential output sequence whose shape follows PyTorch
+            broadcasting rules.
+        :rtype: torch.Tensor
+        :raises ValueError: If an input has fewer than 2 dimensions, the time
+            dimension is empty, or the time lengths differ.
+        """
+        _check_pair_time_sequence(
+            a_seq, b_seq, "a_seq", "b_seq", "SNNElementWiseProduct"
+        )
+
+        a_seq, b_seq = _align_sequence_ranks(a_seq, b_seq)
+        y_cum = a_seq.cumsum(dim=0) * b_seq.cumsum(dim=0)
+        return _temporal_difference(y_cum)
+
+
+class TDScaledDotProductAttention(TDModule):
     def __init__(
         self,
         is_causal: bool = False,
         scale: Optional[float] = None,
+        step_mode: str = "m",
     ) -> None:
         r"""
         .. rubric:: API Language
@@ -930,13 +1443,14 @@ class TDScaledDotProductAttention(nn.Module):
 
         * **中文**
 
-        Temporal-difference (TD) scaled dot-product attention 算子。输入必须
-        是完整时间序列，时间维固定为第 0 维。``query_seq`` 的形状为
-        ``[T, ..., L, E]``，``key_seq`` 的形状为 ``[T, ..., S, E]``，
-        ``value_seq`` 的形状为 ``[T, ..., S, Ev]``。该模块先分别对
-        query、key、value 在时间维做累积，再调用
+        Temporal-difference (TD) scaled dot-product attention 算子。
+        ``step_mode="m"`` 时输入必须是完整时间序列，时间维固定为第 0 维。
+        ``query_seq`` 的形状为 ``[T, ..., L, E]``，``key_seq`` 的形状为
+        ``[T, ..., S, E]``，``value_seq`` 的形状为 ``[T, ..., S, Ev]``；
+        模块先分别对 query、key、value 在时间维做累积，再调用
         :func:`torch.nn.functional.scaled_dot_product_attention`，最后返回
-        累积输出在时间维上的差分。
+        累积输出在时间维上的差分。``step_mode="s"`` 时输入被解释为单步
+        tensor，并直接调用 PyTorch SDPA。
 
         返回值是浮点差分值，可能包含负值；它不是二值脉冲，也不表示 fully
         spike-driven attention。dtype、device 与 mask broadcast 语义遵循
@@ -950,9 +1464,9 @@ class TDScaledDotProductAttention(nn.Module):
         该算子的机制来源于 `SpikeZIP-TF: Conversion is All You Need for
         Transformer-based SNN <https://arxiv.org/abs/2406.03470>`_ 中对
         Transformer 算子的累积-差分等价转换思路。本文档中的 TD scaled
-        dot-product attention 只实现张量级最小 primitive：它仍调用 PyTorch
-        SDPA，需要完整时间序列输入，不是逐时间步在线算子，也不是面向神经
-        形态硬件的 fully spike-driven attention。本实现固定
+        dot-product attention 只实现张量级最小 primitive：在多步模式下它仍
+        调用 PyTorch SDPA，需要完整时间序列输入，不是逐时间步在线算子，也
+        不是面向神经形态硬件的 fully spike-driven attention。本实现固定
         ``dropout_p=0.0``，且不暴露 ``enable_gqa``。组合 TD Transformer
         block 时，普通带 bias 的 :class:`torch.nn.Linear` 不能直接作用在差分
         序列上，因为累计后 bias 会被重复累加；应使用 ``bias=False`` 或专门的
@@ -971,6 +1485,8 @@ class TDScaledDotProductAttention(nn.Module):
         :type is_causal: bool
         :param scale: attention scale。若为 ``None``，使用 PyTorch SDPA 默认值。
         :type scale: Optional[float]
+        :param step_mode: 步进模式，``"s"`` 或 ``"m"``。默认 ``"m"``。
+        :type step_mode: str
 
         ----
 
@@ -978,14 +1494,16 @@ class TDScaledDotProductAttention(nn.Module):
 
         * **English**
 
-        Temporal-difference (TD) scaled dot-product attention operator. The
-        inputs must be complete time sequences whose time dimension is fixed at
-        dimension 0. ``query_seq`` has shape ``[T, ..., L, E]``, ``key_seq``
-        has shape ``[T, ..., S, E]``, and ``value_seq`` has shape
-        ``[T, ..., S, Ev]``. This module first accumulates query, key, and
-        value over time, calls
+        Temporal-difference (TD) scaled dot-product attention operator. With
+        ``step_mode="m"``, the inputs must be complete time sequences whose
+        time dimension is fixed at dimension 0. ``query_seq`` has shape
+        ``[T, ..., L, E]``, ``key_seq`` has shape ``[T, ..., S, E]``, and
+        ``value_seq`` has shape ``[T, ..., S, Ev]``. This module first
+        accumulates query, key, and value over time, calls
         :func:`torch.nn.functional.scaled_dot_product_attention`, and returns
-        the temporal difference of the cumulative outputs.
+        the temporal difference of the cumulative outputs. With
+        ``step_mode="s"``, the inputs are interpreted as single-step tensors
+        and PyTorch SDPA is called directly.
 
         The output contains floating-point differential values and may contain
         negative values. It is not a binary spike tensor and does not represent
@@ -1001,10 +1519,11 @@ class TDScaledDotProductAttention(nn.Module):
         The mechanism follows the cumulative-difference equivalence idea for
         Transformer operators in `SpikeZIP-TF: Conversion is All You Need for
         Transformer-based SNN <https://arxiv.org/abs/2406.03470>`_. This
-        implementation provides only a tensor-level minimal primitive: it still
-        calls PyTorch SDPA, requires a complete time sequence, is not a
-        step-wise online operator, and is not fully spike-driven attention for
-        neuromorphic hardware. This implementation fixes ``dropout_p=0.0`` and
+        implementation provides only a tensor-level minimal primitive: in
+        multi-step mode it still calls PyTorch SDPA, requires a complete time
+        sequence, is not a step-wise online operator, and is not fully
+        spike-driven attention for neuromorphic hardware. This implementation
+        fixes ``dropout_p=0.0`` and
         does not expose ``enable_gqa``. When composing TD Transformer blocks,
         ordinary :class:`torch.nn.Linear` layers with bias must not be applied
         directly to differential sequences, because the bias would be
@@ -1024,12 +1543,36 @@ class TDScaledDotProductAttention(nn.Module):
         :param scale: Attention scale. If ``None``, use the PyTorch SDPA
             default.
         :type scale: Optional[float]
+        :param step_mode: Step mode, ``"s"`` or ``"m"``. The default is ``"m"``.
+        :type step_mode: str
         """
-        super().__init__()
+        super().__init__(step_mode)
         self.is_causal = is_causal
         self.scale = scale
 
-    def forward(
+    def single_step_forward(
+        self,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        attn_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        if self.is_causal and attn_mask is not None:
+            raise ValueError(
+                "TDScaledDotProductAttention does not allow attn_mask when "
+                "is_causal=True; use one masking mode at a time."
+            )
+        return F.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            attn_mask=attn_mask,
+            dropout_p=0.0,
+            is_causal=self.is_causal,
+            scale=self.scale,
+        )
+
+    def multi_step_forward(
         self,
         query_seq: torch.Tensor,
         key_seq: torch.Tensor,
@@ -1155,7 +1698,7 @@ class TDScaledDotProductAttention(nn.Module):
         return f"is_causal={self.is_causal}, scale={self.scale}"
 
 
-class TDMultiheadAttention(nn.Module):
+class TDMultiheadAttention(TDModule):
     def __init__(
         self,
         embed_dim: int,
@@ -1165,6 +1708,7 @@ class TDMultiheadAttention(nn.Module):
         batch_first: bool = True,
         device: Optional[Union[torch.device, str]] = None,
         dtype: Optional[torch.dtype] = None,
+        step_mode: str = "m",
     ) -> None:
         r"""
         **API Language:**
@@ -1177,11 +1721,13 @@ class TDMultiheadAttention(nn.Module):
 
         * **中文**
 
-        Temporal-difference (TD) MultiheadAttention 的窄子集实现。输入必须是
-        完整时间序列，时间维固定为第 0 维，形状为
-        ``[T, batch, seq, embed_dim]``。该模块使用 ``TDLinear`` 生成 q/k/v
-        projection，执行 TD scaled dot-product attention，再用 ``TDLinear``
-        执行输出 projection。
+        Temporal-difference (TD) MultiheadAttention 的窄子集实现。
+        ``step_mode="m"`` 时输入必须是完整时间序列，时间维固定为第 0 维，
+        形状为 ``[T, batch, seq, embed_dim]``；该模块使用 ``TDLinear`` 生成
+        q/k/v projection，执行 TD scaled dot-product attention，再用
+        ``TDLinear`` 执行输出 projection。``step_mode="s"`` 时输入被解释为
+        单步 tensor，形状为 ``[batch, seq, embed_dim]``，并退化为普通
+        MultiheadAttention 数值路径。
 
         返回值是 ``(attn_output_seq, None)``，用于匹配
         :class:`torch.nn.MultiheadAttention` 在 ``need_weights=False`` 时的
@@ -1200,6 +1746,10 @@ class TDMultiheadAttention(nn.Module):
         神经形态硬件的 fully spike-driven MultiheadAttention。``bias=True``
         时 projection bias 由 ``TDLinear`` 在累积输入上处理，避免普通
         ``nn.Linear`` 直接作用在差分序列时产生重复累计 bias。
+        父模块的 ``step_mode`` 会同步到内部 q/k/v/out projection。常规
+        ``forward`` 调用由父模块的 ``step_mode`` 分发；直接调用
+        ``single_step_forward`` 或 ``multi_step_forward`` 时，父模块会显式调用内部
+        projection 的对应 step 方法，而不依赖子模块当前 ``step_mode``。
 
         .. code-block:: python
 
@@ -1222,6 +1772,8 @@ class TDMultiheadAttention(nn.Module):
         :type device: torch.device or str or None
         :param dtype: 参数初始化 dtype。
         :type dtype: torch.dtype or None
+        :param step_mode: 步进模式，``"s"`` 或 ``"m"``。默认 ``"m"``。
+        :type step_mode: str
         :raises ValueError: 若 ``embed_dim`` 不能被 ``num_heads`` 整除、或传入
             当前不支持的 ``dropout`` / ``batch_first``。
 
@@ -1231,11 +1783,15 @@ class TDMultiheadAttention(nn.Module):
 
         * **English**
 
-        Narrow temporal-difference (TD) MultiheadAttention implementation. The
-        input must be a complete time sequence whose time dimension is fixed at
-        dimension 0, with shape ``[T, batch, seq, embed_dim]``. This module uses
-        ``TDLinear`` for q/k/v projections, applies TD scaled dot-product
-        attention, and then applies a ``TDLinear`` output projection.
+        Narrow temporal-difference (TD) MultiheadAttention implementation. With
+        ``step_mode="m"``, the input must be a complete time sequence whose
+        time dimension is fixed at dimension 0, with shape
+        ``[T, batch, seq, embed_dim]``. This module uses ``TDLinear`` for q/k/v
+        projections, applies TD scaled dot-product attention, and then applies
+        a ``TDLinear`` output projection. With ``step_mode="s"``, the input is
+        interpreted as a single-step tensor with shape
+        ``[batch, seq, embed_dim]`` and the module degenerates to the ordinary
+        MultiheadAttention numeric path.
 
         The return value is ``(attn_output_seq, None)`` to match the tuple
         structure of :class:`torch.nn.MultiheadAttention` when
@@ -1259,6 +1815,12 @@ class TDMultiheadAttention(nn.Module):
         projection biases are handled by ``TDLinear`` on cumulative inputs,
         avoiding the repeated bias accumulation that would occur if ordinary
         ``nn.Linear`` were applied directly to differential sequences.
+        The parent module's ``step_mode`` is synchronized to the internal
+        q/k/v/out projections. Regular ``forward`` calls are dispatched by the
+        parent ``step_mode``; when ``single_step_forward`` or
+        ``multi_step_forward`` is called directly, the parent explicitly invokes
+        the matching child projection step method instead of depending on the
+        child modules' current ``step_mode``.
 
         .. code-block:: python
 
@@ -1281,10 +1843,16 @@ class TDMultiheadAttention(nn.Module):
         :type device: torch.device or str or None
         :param dtype: Dtype used to initialize parameters.
         :type dtype: torch.dtype or None
+        :param step_mode: Step mode, ``"s"`` or ``"m"``. The default is ``"m"``.
+        :type step_mode: str
         :raises ValueError: If ``embed_dim`` is not divisible by ``num_heads``,
             or unsupported ``dropout`` / ``batch_first`` is passed.
         """
-        super().__init__()
+        super().__init__(step_mode)
+        if embed_dim <= 0:
+            raise ValueError("embed_dim must be positive.")
+        if num_heads <= 0:
+            raise ValueError("num_heads must be positive.")
         if embed_dim % num_heads != 0:
             raise ValueError("embed_dim must be divisible by num_heads.")
         if dropout != 0.0:
@@ -1299,10 +1867,28 @@ class TDMultiheadAttention(nn.Module):
         self.head_dim = embed_dim // num_heads
 
         factory_kwargs = {"device": device, "dtype": dtype}
-        self.q_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
-        self.k_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
-        self.v_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
-        self.out_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
+        self.q_proj = TDLinear(
+            embed_dim, embed_dim, bias=bias, step_mode=step_mode, **factory_kwargs
+        )
+        self.k_proj = TDLinear(
+            embed_dim, embed_dim, bias=bias, step_mode=step_mode, **factory_kwargs
+        )
+        self.v_proj = TDLinear(
+            embed_dim, embed_dim, bias=bias, step_mode=step_mode, **factory_kwargs
+        )
+        self.out_proj = TDLinear(
+            embed_dim, embed_dim, bias=bias, step_mode=step_mode, **factory_kwargs
+        )
+        self.step_mode = step_mode
+
+    @TDModule.step_mode.setter
+    def step_mode(self, value: str):
+        base.StepModule.step_mode.fset(self, value)
+        if hasattr(self, "q_proj"):
+            self.q_proj.step_mode = value
+            self.k_proj.step_mode = value
+            self.v_proj.step_mode = value
+            self.out_proj.step_mode = value
 
     def _split_heads(self, x_seq: torch.Tensor) -> torch.Tensor:
         if x_seq.dim() != 4:
@@ -1316,15 +1902,33 @@ class TDMultiheadAttention(nn.Module):
                 f"embed_dim={self.embed_dim}, but got {x_seq.shape[-1]}."
             )
         t, batch_size, seq_len, _ = x_seq.shape
-        x_seq = x_seq.reshape(
-            t, batch_size, seq_len, self.num_heads, self.head_dim
-        )
+        x_seq = x_seq.reshape(t, batch_size, seq_len, self.num_heads, self.head_dim)
         return x_seq.transpose(2, 3)
 
     def _merge_heads(self, x_seq: torch.Tensor) -> torch.Tensor:
         t, batch_size, _, seq_len, _ = x_seq.shape
         x_seq = x_seq.transpose(2, 3).contiguous()
         return x_seq.reshape(t, batch_size, seq_len, self.embed_dim)
+
+    def _split_heads_single(self, x: torch.Tensor) -> torch.Tensor:
+        if x.dim() != 3:
+            raise ValueError(
+                "TDMultiheadAttention expects single-step input with shape "
+                f"[batch, seq, embed_dim], but got {tuple(x.shape)}."
+            )
+        if x.shape[-1] != self.embed_dim:
+            raise ValueError(
+                "TDMultiheadAttention expects the last dimension to match "
+                f"embed_dim={self.embed_dim}, but got {x.shape[-1]}."
+            )
+        batch_size, seq_len, _ = x.shape
+        x = x.reshape(batch_size, seq_len, self.num_heads, self.head_dim)
+        return x.transpose(1, 2)
+
+    def _merge_heads_single(self, x: torch.Tensor) -> torch.Tensor:
+        batch_size, _, seq_len, _ = x.shape
+        x = x.transpose(1, 2).contiguous()
+        return x.reshape(batch_size, seq_len, self.embed_dim)
 
     def _canonical_mha_attn_mask(
         self,
@@ -1339,7 +1943,72 @@ class TDMultiheadAttention(nn.Module):
             return attn_mask.reshape(batch_size, self.num_heads, *attn_mask.shape[1:])
         return attn_mask
 
-    def forward(
+    def _check_forward_options(
+        self,
+        key_padding_mask: Optional[torch.Tensor],
+        need_weights: bool,
+        average_attn_weights: bool,
+    ) -> None:
+        if need_weights:
+            raise ValueError("TDMultiheadAttention only supports need_weights=False.")
+        if key_padding_mask is not None:
+            raise ValueError("TDMultiheadAttention does not support key_padding_mask.")
+        if not average_attn_weights:
+            raise ValueError(
+                "TDMultiheadAttention does not support average_attn_weights=False."
+            )
+
+    def _check_attention_leading_dims(
+        self,
+        q: torch.Tensor,
+        k: torch.Tensor,
+        v: torch.Tensor,
+        name: str,
+    ) -> None:
+        if q.shape[:-2] != k.shape[:-2] or q.shape[:-2] != v.shape[:-2]:
+            raise ValueError(
+                f"{name} requires query, key and value leading dimensions to "
+                f"match exactly before SDPA, but got {tuple(q.shape[:-2])}, "
+                f"{tuple(k.shape[:-2])} and {tuple(v.shape[:-2])}."
+            )
+
+    def single_step_forward(
+        self,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        key_padding_mask: Optional[torch.Tensor] = None,
+        need_weights: bool = False,
+        attn_mask: Optional[torch.Tensor] = None,
+        average_attn_weights: bool = True,
+        is_causal: bool = False,
+    ) -> Tuple[torch.Tensor, None]:
+        self._check_forward_options(
+            key_padding_mask, need_weights, average_attn_weights
+        )
+
+        q = self._split_heads_single(self.q_proj.single_step_forward(query))
+        k = self._split_heads_single(self.k_proj.single_step_forward(key))
+        v = self._split_heads_single(self.v_proj.single_step_forward(value))
+        self._check_attention_leading_dims(q, k, v, "TDMultiheadAttention")
+        if is_causal and attn_mask is not None:
+            raise ValueError(
+                "TDMultiheadAttention does not allow attn_mask when "
+                "is_causal=True; use one masking mode at a time."
+            )
+        attn_mask = self._canonical_mha_attn_mask(attn_mask, q.shape[0])
+        attn = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            attn_mask=attn_mask,
+            dropout_p=0.0,
+            is_causal=is_causal,
+        )
+        out = self.out_proj.single_step_forward(self._merge_heads_single(attn))
+        return out, None
+
+    def multi_step_forward(
         self,
         query_seq: torch.Tensor,
         key_seq: torch.Tensor,
@@ -1445,18 +2114,14 @@ class TDMultiheadAttention(nn.Module):
         :raises ValueError: If unsupported masks/options or invalid shapes are
             passed.
         """
-        if need_weights:
-            raise ValueError("TDMultiheadAttention only supports need_weights=False.")
-        if key_padding_mask is not None:
-            raise ValueError("TDMultiheadAttention does not support key_padding_mask.")
-        if not average_attn_weights:
-            raise ValueError(
-                "TDMultiheadAttention does not support average_attn_weights=False."
-            )
+        self._check_forward_options(
+            key_padding_mask, need_weights, average_attn_weights
+        )
 
-        q_seq = self._split_heads(self.q_proj(query_seq))
-        k_seq = self._split_heads(self.k_proj(key_seq))
-        v_seq = self._split_heads(self.v_proj(value_seq))
+        q_seq = self._split_heads(self.q_proj.multi_step_forward(query_seq))
+        k_seq = self._split_heads(self.k_proj.multi_step_forward(key_seq))
+        v_seq = self._split_heads(self.v_proj.multi_step_forward(value_seq))
+        self._check_attention_leading_dims(q_seq, k_seq, v_seq, "TDMultiheadAttention")
         attn_mask = self._canonical_mha_attn_mask(attn_mask, q_seq.shape[1])
         attn_seq = _td_scaled_dot_product_attention(
             q_seq,
@@ -1467,7 +2132,7 @@ class TDMultiheadAttention(nn.Module):
             None,
             "TDMultiheadAttention",
         )
-        out_seq = self.out_proj(self._merge_heads(attn_seq))
+        out_seq = self.out_proj.multi_step_forward(self._merge_heads(attn_seq))
         return out_seq, None
 
     def extra_repr(self) -> str:
