@@ -1623,6 +1623,27 @@ class TestTDMultiheadAttention:
             )
         with pytest.raises(ValueError, match="average_attn_weights=False"):
             op(x_seq, x_seq, x_seq, need_weights=False, average_attn_weights=False)
+        with pytest.raises(ValueError, match="attn_mask when is_causal=True"):
+            op(
+                x_seq,
+                x_seq,
+                x_seq,
+                need_weights=False,
+                attn_mask=torch.zeros(5, 5),
+                is_causal=True,
+            )
+
+        functional.set_step_mode(op, "s")
+        x = torch.randn(2, 5, 8)
+        with pytest.raises(ValueError, match="attn_mask when is_causal=True"):
+            op(
+                x,
+                x,
+                x,
+                need_weights=False,
+                attn_mask=torch.zeros(5, 5),
+                is_causal=True,
+            )
 
     def test_extra_repr(self):
         op = TDMultiheadAttention(embed_dim=8, num_heads=2)

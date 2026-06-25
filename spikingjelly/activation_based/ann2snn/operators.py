@@ -1993,6 +1993,11 @@ class TDMultiheadAttention(TDModule):
         k = self._split_heads_single(self.k_proj(key, step_mode="s"))
         v = self._split_heads_single(self.v_proj(value, step_mode="s"))
         self._check_attention_leading_dims(q, k, v, "TDMultiheadAttention")
+        if is_causal and attn_mask is not None:
+            raise ValueError(
+                "TDMultiheadAttention does not allow attn_mask when "
+                "is_causal=True; use one masking mode at a time."
+            )
         attn_mask = self._canonical_mha_attn_mask(attn_mask, q.shape[0])
         attn = F.scaled_dot_product_attention(
             q,
