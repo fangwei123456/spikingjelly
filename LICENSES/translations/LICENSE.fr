@@ -2,8 +2,10 @@
 
 ## Language 
 
-[English](https://github.com/fangwei123456/spikingjelly/blob/master/LICENSE) | French(français) | [中文(Chinese)](https://github.com/fangwei123456/spikingjelly/blob/master/LICENSE-CN)
+[English](https://github.com/fangwei123456/spikingjelly/blob/master/LICENSES/translations/LICENSE.en) | [Deutsch](https://github.com/fangwei123456/spikingjelly/blob/master/LICENSES/translations/LICENSE.de) | French(français) | [Hindi(हिन्दी)](https://github.com/fangwei123456/spikingjelly/blob/master/LICENSES/translations/LICENSE.hi) | [中文(Chinese)](https://github.com/fangwei123456/spikingjelly/blob/master/LICENSE)
 
+
+Avis : ceci est une traduction française de la licence chinoise Open-Intelligence Open Source License V1.0. La version chinoise dans le fichier LICENSE à la racine du dépôt constitue le texte original et faisant foi. En cas de divergence, la version chinoise prévaut.
 
 Licence Open Source à intelligence ouverte
 V1.0
