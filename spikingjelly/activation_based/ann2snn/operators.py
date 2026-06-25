@@ -1877,6 +1877,28 @@ class TDMultiheadAttention(TDModule):
             self.v_proj.step_mode = value
             self.out_proj.step_mode = value
 
+    def _projection_step_modes(self) -> Tuple[str, str, str, str]:
+        return (
+            self.q_proj.step_mode,
+            self.k_proj.step_mode,
+            self.v_proj.step_mode,
+            self.out_proj.step_mode,
+        )
+
+    def _set_projection_step_mode(self, step_mode: str) -> None:
+        self.q_proj.step_mode = step_mode
+        self.k_proj.step_mode = step_mode
+        self.v_proj.step_mode = step_mode
+        self.out_proj.step_mode = step_mode
+
+    def _restore_projection_step_modes(self, modes: Tuple[str, str, str, str]) -> None:
+        (
+            self.q_proj.step_mode,
+            self.k_proj.step_mode,
+            self.v_proj.step_mode,
+            self.out_proj.step_mode,
+        ) = modes
+
     def _split_heads(self, x_seq: torch.Tensor) -> torch.Tensor:
         if x_seq.dim() != 4:
             raise ValueError(
@@ -1945,6 +1967,20 @@ class TDMultiheadAttention(TDModule):
                 "TDMultiheadAttention does not support average_attn_weights=False."
             )
 
+    def _check_attention_leading_dims(
+        self,
+        q: torch.Tensor,
+        k: torch.Tensor,
+        v: torch.Tensor,
+        name: str,
+    ) -> None:
+        if q.shape[:-2] != k.shape[:-2] or q.shape[:-2] != v.shape[:-2]:
+            raise ValueError(
+                f"{name} requires query, key and value leading dimensions to "
+                f"match exactly before SDPA, but got {tuple(q.shape[:-2])}, "
+                f"{tuple(k.shape[:-2])} and {tuple(v.shape[:-2])}."
+            )
+
     def single_step_forward(
         self,
         query: torch.Tensor,
@@ -1960,19 +1996,25 @@ class TDMultiheadAttention(TDModule):
             key_padding_mask, need_weights, average_attn_weights
         )
 
-        q = self._split_heads_single(self.q_proj(query))
-        k = self._split_heads_single(self.k_proj(key))
-        v = self._split_heads_single(self.v_proj(value))
-        attn_mask = self._canonical_mha_attn_mask(attn_mask, q.shape[0])
-        attn = F.scaled_dot_product_attention(
-            q,
-            k,
-            v,
-            attn_mask=attn_mask,
-            dropout_p=0.0,
-            is_causal=is_causal,
-        )
-        out = self.out_proj(self._merge_heads_single(attn))
+        projection_modes = self._projection_step_modes()
+        self._set_projection_step_mode("s")
+        try:
+            q = self._split_heads_single(self.q_proj(query))
+            k = self._split_heads_single(self.k_proj(key))
+            v = self._split_heads_single(self.v_proj(value))
+            self._check_attention_leading_dims(q, k, v, "TDMultiheadAttention")
+            attn_mask = self._canonical_mha_attn_mask(attn_mask, q.shape[0])
+            attn = F.scaled_dot_product_attention(
+                q,
+                k,
+                v,
+                attn_mask=attn_mask,
+                dropout_p=0.0,
+                is_causal=is_causal,
+            )
+            out = self.out_proj(self._merge_heads_single(attn))
+        finally:
+            self._restore_projection_step_modes(projection_modes)
         return out, None
 
     def multi_step_forward(
@@ -2085,20 +2127,28 @@ class TDMultiheadAttention(TDModule):
             key_padding_mask, need_weights, average_attn_weights
         )
 
-        q_seq = self._split_heads(self.q_proj(query_seq))
-        k_seq = self._split_heads(self.k_proj(key_seq))
-        v_seq = self._split_heads(self.v_proj(value_seq))
-        attn_mask = self._canonical_mha_attn_mask(attn_mask, q_seq.shape[1])
-        attn_seq = _td_scaled_dot_product_attention(
-            q_seq,
-            k_seq,
-            v_seq,
-            attn_mask,
-            is_causal,
-            None,
-            "TDMultiheadAttention",
-        )
-        out_seq = self.out_proj(self._merge_heads(attn_seq))
+        projection_modes = self._projection_step_modes()
+        self._set_projection_step_mode("m")
+        try:
+            q_seq = self._split_heads(self.q_proj(query_seq))
+            k_seq = self._split_heads(self.k_proj(key_seq))
+            v_seq = self._split_heads(self.v_proj(value_seq))
+            self._check_attention_leading_dims(
+                q_seq, k_seq, v_seq, "TDMultiheadAttention"
+            )
+            attn_mask = self._canonical_mha_attn_mask(attn_mask, q_seq.shape[1])
+            attn_seq = _td_scaled_dot_product_attention(
+                q_seq,
+                k_seq,
+                v_seq,
+                attn_mask,
+                is_causal,
+                None,
+                "TDMultiheadAttention",
+            )
+            out_seq = self.out_proj(self._merge_heads(attn_seq))
+        finally:
+            self._restore_projection_step_modes(projection_modes)
         return out_seq, None
 
     def extra_repr(self) -> str:

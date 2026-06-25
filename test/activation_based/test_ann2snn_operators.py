@@ -1406,6 +1406,32 @@ class TestTDMultiheadAttention:
 
         assert torch.allclose(y_seq[0], y, atol=1e-5, rtol=1e-5)
 
+    def test_direct_step_entrypoints_force_projection_step_modes(self):
+        x = torch.randn(2, 4, 8)
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        y, _ = op.single_step_forward(x, x, x)
+        expected = _ann_mha_reference(op, x, x, x)
+
+        assert torch.allclose(y, expected, atol=1e-5, rtol=1e-5)
+        assert op.step_mode == "m"
+        assert op.q_proj.step_mode == "m"
+        assert op.k_proj.step_mode == "m"
+        assert op.v_proj.step_mode == "m"
+        assert op.out_proj.step_mode == "m"
+
+        functional.set_step_mode(op, "s")
+        x_seq = x.unsqueeze(0)
+        y_seq, _ = op.multi_step_forward(x_seq, x_seq, x_seq)
+        expected_seq = _mha_cumulative_reference(op, x_seq, x_seq, x_seq)
+
+        assert torch.allclose(y_seq, expected_seq, atol=1e-5, rtol=1e-5)
+        assert op.step_mode == "s"
+        assert op.q_proj.step_mode == "s"
+        assert op.k_proj.step_mode == "s"
+        assert op.v_proj.step_mode == "s"
+        assert op.out_proj.step_mode == "s"
+
     def test_parent_step_mode_propagates_to_projection_modules_and_uses_hooks(self):
         x = torch.randn(2, 4, 8)
         op = TDMultiheadAttention(embed_dim=8, num_heads=2)
@@ -1562,6 +1588,24 @@ class TestTDMultiheadAttention:
 
         with pytest.raises(ValueError, match="\\[T, batch, seq, embed_dim\\]"):
             op(torch.randn(4, 5, 8), torch.randn(4, 5, 8), torch.randn(4, 5, 8))
+
+    def test_rejects_mismatched_attention_batch_dimensions(self):
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
+
+        with pytest.raises(ValueError, match="leading dimensions"):
+            op(
+                torch.randn(4, 2, 3, 8),
+                torch.randn(4, 1, 5, 8),
+                torch.randn(4, 1, 5, 8),
+            )
+
+        functional.set_step_mode(op, "s")
+        with pytest.raises(ValueError, match="leading dimensions"):
+            op(
+                torch.randn(2, 3, 8),
+                torch.randn(1, 5, 8),
+                torch.randn(1, 5, 8),
+            )
 
     def test_rejects_unsupported_forward_options(self):
         op = TDMultiheadAttention(embed_dim=8, num_heads=2)
