@@ -532,7 +532,15 @@ class RateCodingRecipe(ConversionRecipe):
         if isinstance(data, dict):
             if not data:
                 raise ValueError("Batch data is an empty dictionary.")
-            for key in ("input", "image", "img", "x", "data", "pixel_values"):
+            for key in (
+                "input",
+                "image",
+                "images",
+                "img",
+                "x",
+                "data",
+                "pixel_values",
+            ):
                 if key in data:
                     return data[key]
             return next(iter(data.values()))

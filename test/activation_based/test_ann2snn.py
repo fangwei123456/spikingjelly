@@ -547,6 +547,14 @@ class TestVoltageHook:
         hook(x)
         assert hook.scale.item() > 0
 
+    def test_percentile_mode_uses_torch_quantile(self):
+        hook = VoltageHook(mode="50%")
+        x = torch.arange(101, dtype=torch.float32)
+
+        hook(x)
+
+        assert hook.scale.item() == pytest.approx(torch.quantile(x, 0.5).item())
+
     def test_scalar_mode(self):
         hook = VoltageHook(mode=0.5)
         hook(torch.tensor([10.0]))
@@ -1006,6 +1014,16 @@ raise SystemExit(1)
         )
         snn = converter.convert(model)
         assert snn is not None
+
+    def test_dict_dataloader_prefers_images_key(self):
+        imgs = torch.randn(2, 1, 28, 28)
+        labels = torch.zeros(2, dtype=torch.long)
+
+        extracted = RateCodingRecipe._extract_batch_input(
+            {"labels": labels, "images": imgs}
+        )
+
+        assert extracted is imgs
 
     def test_nested_dataloader_extracts_tensor(self):
         imgs = torch.randn(2, 1, 28, 28)

@@ -1,6 +1,5 @@
 import torch.nn as nn
 import torch
-import numpy as np
 
 
 __all__ = ["VoltageHook", "VoltageScaler"]
@@ -87,9 +86,7 @@ class VoltageHook(nn.Module):
                 raise NotImplementedError(err_msg)
             if self.mode[-1] == "%":
                 try:
-                    s_t = torch.tensor(
-                        np.percentile(x.detach().cpu(), float(self.mode[:-1]))
-                    )
+                    s_t = torch.quantile(x.detach(), float(self.mode[:-1]) / 100.0)
                 except ValueError as exc:
                     raise NotImplementedError(err_msg) from exc
             elif self.mode.lower() in ["max"]:
