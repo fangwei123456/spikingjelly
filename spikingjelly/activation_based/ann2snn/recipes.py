@@ -580,7 +580,7 @@ class RateCodingRecipe(ConversionRecipe):
                     return False
                 if current_node.target not in modules:
                     return False
-                if type(modules[current_node.target]) is not expected_type:
+                if not isinstance(modules[current_node.target], expected_type):
                     return False
             return True
 
@@ -922,7 +922,7 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
         module: nn.Module,
         node: Optional[fx.Node] = None,
     ) -> Optional[nn.Module]:
-        if type(module) is nn.Linear:
+        if isinstance(module, nn.Linear):
             td_module = TDLinear(
                 module.in_features,
                 module.out_features,
@@ -937,7 +937,7 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             td_module.train(module.training)
             return td_module
 
-        if type(module) is nn.LayerNorm:
+        if isinstance(module, nn.LayerNorm):
             td_module = TDLayerNorm(
                 module.normalized_shape,
                 eps=module.eps,
@@ -954,12 +954,12 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             td_module.train(module.training)
             return td_module
 
-        if type(module) is nn.GELU:
+        if isinstance(module, nn.GELU):
             td_module = TDGELU(approximate=module.approximate)
             td_module.train(module.training)
             return td_module
 
-        if type(module) is nn.MultiheadAttention:
+        if isinstance(module, nn.MultiheadAttention):
             if node is None:
                 raise ValueError("TD MHA conversion requires an FX node.")
             self._check_mha_node(module, node)

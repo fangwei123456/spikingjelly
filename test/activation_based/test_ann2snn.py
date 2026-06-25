@@ -45,6 +45,33 @@ class SimpleCNN(nn.Module):
         return self.fc(x)
 
 
+class CustomConv2d(nn.Conv2d):
+    pass
+
+
+class CustomBatchNorm2d(nn.BatchNorm2d):
+    pass
+
+
+CustomConv2d.__module__ = nn.Conv2d.__module__
+CustomBatchNorm2d.__module__ = nn.BatchNorm2d.__module__
+
+
+class SubclassCNN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv = CustomConv2d(1, 8, 3, padding=1)
+        self.bn = CustomBatchNorm2d(8)
+        self.relu = nn.ReLU()
+        self.pool = nn.AvgPool2d(2)
+        self.fc = nn.Linear(8 * 14 * 14, 10)
+
+    def forward(self, x):
+        x = self.pool(self.relu(self.bn(self.conv(x))))
+        x = x.view(x.size(0), -1)
+        return self.fc(x)
+
+
 class SimpleCNNNoBN(nn.Module):
     def __init__(self):
         super().__init__()
@@ -97,6 +124,35 @@ class CoreTransformerMLP(nn.Module):
 
     def forward(self, x):
         return self.fc1(self.keep(self.act(self.fc0(self.norm(x)))))
+
+
+class CustomLinear(nn.Linear):
+    pass
+
+
+class CustomLayerNorm(nn.LayerNorm):
+    pass
+
+
+class CustomGELU(nn.GELU):
+    pass
+
+
+CustomLinear.__module__ = nn.Linear.__module__
+CustomLayerNorm.__module__ = nn.LayerNorm.__module__
+CustomGELU.__module__ = nn.GELU.__module__
+
+
+class SubclassTransformerMLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.norm = CustomLayerNorm(4)
+        self.fc0 = CustomLinear(4, 6)
+        self.act = CustomGELU(approximate="tanh")
+        self.fc1 = CustomLinear(6, 4)
+
+    def forward(self, x):
+        return self.fc1(self.act(self.fc0(self.norm(x))))
 
 
 class NoAffineLayerNormMLP(nn.Module):
@@ -206,6 +262,27 @@ class SelfAttentionBlock(nn.Module):
             num_heads=2,
             batch_first=batch_first,
             **kwargs,
+        )
+
+    def forward(self, x):
+        y, _ = self.mha(x, x, x, need_weights=False)
+        return y
+
+
+class CustomMultiheadAttention(nn.MultiheadAttention):
+    pass
+
+
+CustomMultiheadAttention.__module__ = nn.MultiheadAttention.__module__
+
+
+class SubclassSelfAttentionBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mha = CustomMultiheadAttention(
+            embed_dim=8,
+            num_heads=2,
+            batch_first=True,
         )
 
     def forward(self, x):
@@ -970,6 +1047,18 @@ class TestConverterTDOperatorReplacement:
         assert isinstance(modules["fc1"], TDLinear)
         assert isinstance(modules["keep"], nn.Identity)
 
+    def test_replaces_module_subclasses_with_td_operators(self):
+        model = SubclassTransformerMLP()
+        model.eval()
+
+        converted = _td_converter().convert(model)
+        modules = dict(converted.named_modules())
+
+        assert isinstance(modules["norm"], TDLayerNorm)
+        assert isinstance(modules["fc0"], TDLinear)
+        assert isinstance(modules["act"], TDGELU)
+        assert isinstance(modules["fc1"], TDLinear)
+
     def test_copies_linear_layernorm_and_gelu_configuration(self):
         model = CoreTransformerMLP()
         model.eval()
@@ -1163,6 +1252,14 @@ class TestConverterTDOperatorReplacement:
         assert torch.equal(td_mha.v_proj.bias, model.mha.in_proj_bias[2 * embed_dim :])
         assert torch.equal(td_mha.out_proj.bias, model.mha.out_proj.bias)
 
+    def test_replaces_mha_subclass(self):
+        model = SubclassSelfAttentionBlock()
+        model.eval()
+
+        converted = _td_converter().convert(model)
+
+        assert isinstance(converted.mha, TDMultiheadAttention)
+
     def test_mha_replacement_preserves_training_mode(self):
         model = SelfAttentionBlock()
         model.train()
@@ -1264,6 +1361,19 @@ class TestConverterTDOperatorReplacement:
 class TestFuse:
     def test_conv_bn_fusion_matches_eval_output(self):
         model = SimpleCNN()
+        model.eval()
+        fx_model = torch.fx.symbolic_trace(model)
+        x = torch.randn(2, 1, 28, 28)
+        expected = fx_model(x)
+
+        fused = RateCodingRecipe._fuse(fx_model, fuse_flag=True)
+        result = fused(x)
+
+        assert torch.allclose(result, expected, atol=1e-5, rtol=1e-5)
+        assert not any(isinstance(m, nn.BatchNorm2d) for m in fused.modules())
+
+    def test_conv_bn_fusion_supports_module_subclasses(self):
+        model = SubclassCNN()
         model.eval()
         fx_model = torch.fx.symbolic_trace(model)
         x = torch.randn(2, 1, 28, 28)
