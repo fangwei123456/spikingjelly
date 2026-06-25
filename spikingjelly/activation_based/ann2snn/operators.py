@@ -1121,7 +1121,7 @@ class SNNMatrixOperator(TDModule):
         ``Y.cumsum(dim=0) == torch.matmul(A.cumsum(dim=0), B.cumsum(dim=0))``。
         因而它保留 cross-time terms，例如 ``A[0] @ B[1]`` 与
         ``A[1] @ B[0]``；这不同于逐时间步执行 ``A[t] @ B[t]``。该算子是
-        LAS ``SNNMatrixOperater`` prefix recurrence 的 sequence-preserving
+        LAS ``SNNMatrixOperator`` prefix recurrence 的 sequence-preserving
         张量级形式，但不会在内部自动 ``sum(0)``。
 
         输出是浮点差分值，可能包含负值；它不是二值脉冲，也不表示 fully
@@ -1152,7 +1152,7 @@ class SNNMatrixOperator(TDModule):
         Therefore it preserves cross-time terms such as ``A[0] @ B[1]`` and
         ``A[1] @ B[0]``; it is not equivalent to applying ``A[t] @ B[t]`` at
         each time step independently. It is the sequence-preserving tensor
-        form of the LAS ``SNNMatrixOperater`` prefix recurrence, but it does
+        form of the LAS ``SNNMatrixOperator`` prefix recurrence, but it does
         not implicitly call ``sum(0)``.
 
         The output contains floating-point differential values and may contain
@@ -1287,7 +1287,7 @@ class SNNElementWiseProduct(TDModule):
         逐元素乘法。
 
         该算子满足 ``Y.cumsum(dim=0) == A.cumsum(dim=0) * B.cumsum(dim=0)``。
-        它是 LAS ``SNNMACOperater`` 核心乘法-累积语义的 sequence-preserving
+        它是 LAS ``SNNMACOperator`` 核心乘法-累积语义的 sequence-preserving
         张量级形式，但不会在内部自动 ``sum(0)``；需要单步聚合时由调用方显式
         完成。
 
@@ -1317,7 +1317,7 @@ class SNNElementWiseProduct(TDModule):
         The operator satisfies
         ``Y.cumsum(dim=0) == A.cumsum(dim=0) * B.cumsum(dim=0)``. It is the
         sequence-preserving tensor form of the core multiply-accumulate
-        semantics in LAS ``SNNMACOperater``, but it does not implicitly call
+        semantics in LAS ``SNNMACOperator``, but it does not implicitly call
         ``sum(0)``; callers should aggregate explicitly when a single-step
         output is required.
 
@@ -1867,10 +1867,18 @@ class TDMultiheadAttention(TDModule):
         self.head_dim = embed_dim // num_heads
 
         factory_kwargs = {"device": device, "dtype": dtype}
-        self.q_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
-        self.k_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
-        self.v_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
-        self.out_proj = TDLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
+        self.q_proj = TDLinear(
+            embed_dim, embed_dim, bias=bias, step_mode=step_mode, **factory_kwargs
+        )
+        self.k_proj = TDLinear(
+            embed_dim, embed_dim, bias=bias, step_mode=step_mode, **factory_kwargs
+        )
+        self.v_proj = TDLinear(
+            embed_dim, embed_dim, bias=bias, step_mode=step_mode, **factory_kwargs
+        )
+        self.out_proj = TDLinear(
+            embed_dim, embed_dim, bias=bias, step_mode=step_mode, **factory_kwargs
+        )
         self.step_mode = step_mode
 
     @TDModule.step_mode.setter

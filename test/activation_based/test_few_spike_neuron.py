@@ -232,6 +232,29 @@ def test_outlier_aware_threshold_node_multi_step_and_validation():
         )
 
 
+def test_outlier_aware_threshold_node_aligns_outlier_buffer_dtype():
+    normal = neuron.FewSpikeTable(
+        theta=torch.tensor([0.25, 0.5], dtype=torch.float64),
+        h=torch.tensor([0.1, 0.1], dtype=torch.float64),
+        d=torch.tensor([1.0, 2.0], dtype=torch.float64),
+    )
+    outlier = neuron.FewSpikeTable(
+        theta=torch.tensor([0.25, 0.5], dtype=torch.float32),
+        h=torch.tensor([0.1, 0.1], dtype=torch.float32),
+        d=torch.tensor([10.0, 20.0], dtype=torch.float32),
+    )
+
+    node = neuron.OutlierAwareThresholdNode(
+        table=normal,
+        outlier_table=outlier,
+        split_threshold=0.5,
+    )
+
+    assert node.outlier_theta.dtype == node.theta.dtype == torch.float64
+    assert node.outlier_h.dtype == node.h.dtype == torch.float64
+    assert node.outlier_d.dtype == node.d.dtype == torch.float64
+
+
 def test_hg_node_matches_region_reference():
     table_low = neuron.FewSpikeTable(theta=[0.25, 0.5], h=[0.1, 0.1], d=[1.0, 2.0])
     table_mid = neuron.FewSpikeTable(theta=[0.25, 0.5], h=[0.1, 0.1], d=[10.0, 20.0])
@@ -289,3 +312,25 @@ def test_hg_node_multi_step_and_validation():
         neuron.HGNode(tables=[table0, table1], gate_thresholds=[1.0, 2.0])
     with pytest.raises(ValueError):
         neuron.HGNode(tables=[table0, table1, table0], gate_thresholds=[1.0, 0.0])
+
+
+def test_hg_node_does_not_register_unused_parent_table_buffers():
+    table0 = neuron.FewSpikeTable(theta=[0.25, 0.5], h=[0.1, 0.1], d=[1.0, 2.0])
+    table1 = neuron.FewSpikeTable(theta=[0.25, 0.5], h=[0.1, 0.1], d=[10.0, 20.0])
+
+    node = neuron.HGNode(
+        tables=[table0, table1],
+        gate_thresholds=[0.0],
+    )
+
+    assert isinstance(node, neuron.FewSpikeNode)
+    assert node.K == table0.K
+    assert "theta" not in node.state_dict()
+    assert "h" not in node.state_dict()
+    assert "d" not in node.state_dict()
+    assert set(node.state_dict().keys()) == {
+        "region_theta",
+        "region_h",
+        "region_d",
+        "gate_thresholds",
+    }

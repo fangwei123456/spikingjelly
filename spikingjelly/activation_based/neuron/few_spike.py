@@ -45,6 +45,10 @@ def _check_table_length(name: str, table: "FewSpikeTable", K: int):
         raise ValueError(f"{name}.K must be {K}, but got {table.K}.")
 
 
+def _table_tensor_to_reference(tensor: torch.Tensor, reference: torch.Tensor):
+    return tensor.to(device=reference.device, dtype=reference.dtype).detach().clone()
+
+
 class FewSpikeTable:
     def __init__(
         self,
@@ -66,7 +70,8 @@ class FewSpikeTable:
         ``theta``、``h``、``d`` 会被注册为 buffer，因此会跟随模块的
         ``device`` 和 ``dtype`` 迁移。
 
-        :param theta: 长度为 ``K`` 的阈值序列，形状为 ``[K]``。
+        :param theta: 长度为 ``K`` 的阈值序列，形状为 ``[K]``。该类不强制
+            ``theta`` 单调；调用方应传入与目标 Few-Spike 编码表一致的顺序。
         :type theta: Union[torch.Tensor, Sequence[float]]
         :param h: 长度为 ``K`` 的膜电位扣减序列，形状为 ``[K]``。
         :type h: Union[torch.Tensor, Sequence[float]]
@@ -88,6 +93,8 @@ class FewSpikeTable:
         conversions.
 
         :param theta: Threshold sequence with length ``K`` and shape ``[K]``.
+            This class does not enforce monotonic ``theta``; callers should pass
+            the order used by the target Few-Spike coding table.
         :type theta: Union[torch.Tensor, Sequence[float]]
         :param h: Membrane subtraction sequence with length ``K`` and shape ``[K]``.
         :type h: Union[torch.Tensor, Sequence[float]]
@@ -167,7 +174,7 @@ class FewSpikeNode(nn.Module, base.StepModule):
         :param table: Few-Spike 编码表 / Few-Spike coding table.
         :type table: FewSpikeTable
         :param surrogate_function: 替代梯度函数 / surrogate function for spike generation.
-        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :type surrogate_function: Optional[surrogate.SurrogateFunctionBase]
         :param step_mode: 步进模式，``"s"`` 或 ``"m"`` / step mode, ``"s"`` or ``"m"``.
         :type step_mode: str
         :raises TypeError: 当 ``table`` 不是 :class:`FewSpikeTable` 时抛出 /
@@ -368,10 +375,12 @@ class OutlierAwareThresholdNode(FewSpikeNode):
         :param clamp_value: 可选的对称截断幅值。若不为 ``None``，必须大于等于 ``split_threshold``。
         :type clamp_value: Optional[float]
         :param surrogate_function: 替代梯度函数。
-        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :type surrogate_function: Optional[surrogate.SurrogateFunctionBase]
         :param step_mode: 步进模式，``"s"`` 或 ``"m"``。
         :type step_mode: str
         :raises ValueError: 当 table 长度不一致或阈值参数非法时抛出。
+        :raises TypeError: 当 ``table`` 或 ``outlier_table`` 不是
+            :class:`FewSpikeTable` 时抛出。
 
         ----
 
@@ -404,11 +413,13 @@ class OutlierAwareThresholdNode(FewSpikeNode):
             it must be no smaller than ``split_threshold``.
         :type clamp_value: Optional[float]
         :param surrogate_function: Surrogate function.
-        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :type surrogate_function: Optional[surrogate.SurrogateFunctionBase]
         :param step_mode: Step mode, ``"s"`` or ``"m"``.
         :type step_mode: str
         :raises ValueError: Raised when table lengths are inconsistent or threshold
             arguments are invalid.
+        :raises TypeError: Raised when ``table`` or ``outlier_table`` is not a
+            :class:`FewSpikeTable`.
         """
         if not isinstance(table, FewSpikeTable):
             raise TypeError(
@@ -427,9 +438,18 @@ class OutlierAwareThresholdNode(FewSpikeNode):
             if clamp_value < split_threshold:
                 raise ValueError("clamp_value must be no smaller than split_threshold.")
         super().__init__(table, surrogate_function, step_mode)
-        self.register_buffer("outlier_theta", outlier_table.theta.clone())
-        self.register_buffer("outlier_h", outlier_table.h.clone())
-        self.register_buffer("outlier_d", outlier_table.d.clone())
+        self.register_buffer(
+            "outlier_theta",
+            _table_tensor_to_reference(outlier_table.theta, table.theta),
+        )
+        self.register_buffer(
+            "outlier_h",
+            _table_tensor_to_reference(outlier_table.h, table.h),
+        )
+        self.register_buffer(
+            "outlier_d",
+            _table_tensor_to_reference(outlier_table.d, table.d),
+        )
         self.split_threshold = split_threshold
         self.clamp_value = clamp_value
 
@@ -489,9 +509,9 @@ class HGNode(FewSpikeNode):
 
         通用 hierarchically-gated Few-Spike 节点。``gate_thresholds`` 按升序把 gate input
         划分为 ``len(tables)`` 个区间：第一个 table 处理 ``x <= gate_thresholds[0]``，
-        中间 table 处理相邻阈值之间的元素，最后一个 table 处理
-        ``x > gate_thresholds[-1]``。所有 table 的 ``K`` 必须一致。单步模式输入输出形状
-        为 ``[...]``；多步模式输入形状必须为 ``[K, ...]``，输出形状为 ``[K, ...]``。
+        中间 table 处理 ``(gate_thresholds[i-1], gate_thresholds[i]]``，最后一个 table
+        处理 ``x > gate_thresholds[-1]``。所有 table 的 ``K`` 必须一致。单步模式输入输出
+        形状为 ``[...]``；多步模式输入形状必须为 ``[K, ...]``，输出形状为 ``[K, ...]``。
 
         该类提供区域路由形式的通用层级门控，不声明与 LAS 中某个具体 fitted activation
         模块完全等价。需要复现特定 LAS 非线性时，应使用与该非线性对应的 table 和阈值。
@@ -501,7 +521,7 @@ class HGNode(FewSpikeNode):
         :param gate_thresholds: 升序一维阈值序列，长度必须为 ``len(tables) - 1``。
         :type gate_thresholds: Union[torch.Tensor, Sequence[float]]
         :param surrogate_function: 替代梯度函数。
-        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :type surrogate_function: Optional[surrogate.SurrogateFunctionBase]
         :param step_mode: 步进模式，``"s"`` 或 ``"m"``。
         :type step_mode: str
         :raises ValueError: 当 table 数量、阈值数量、阈值顺序或 table 长度非法时抛出。
@@ -515,8 +535,9 @@ class HGNode(FewSpikeNode):
 
         Generic hierarchically-gated Few-Spike node. ``gate_thresholds`` partitions the
         gate input into ``len(tables)`` regions in ascending order: the first table
-        handles ``x <= gate_thresholds[0]``, middle tables handle adjacent
-        threshold intervals, and the last table handles ``x > gate_thresholds[-1]``.
+        handles ``x <= gate_thresholds[0]``, middle tables handle
+        ``(gate_thresholds[i-1], gate_thresholds[i]]``, and the last table
+        handles ``x > gate_thresholds[-1]``.
         All tables must have the same ``K``. Single-step input and output shape is
         ``[...]``; multi-step input must have shape ``[K, ...]`` and output shape is
         ``[K, ...]``.
@@ -532,7 +553,7 @@ class HGNode(FewSpikeNode):
             ``len(tables) - 1``.
         :type gate_thresholds: Union[torch.Tensor, Sequence[float]]
         :param surrogate_function: Surrogate function.
-        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :type surrogate_function: Optional[surrogate.SurrogateFunctionBase]
         :param step_mode: Step mode, ``"s"`` or ``"m"``.
         :type step_mode: str
         :raises ValueError: Raised when table count, threshold count, threshold
@@ -571,13 +592,40 @@ class HGNode(FewSpikeNode):
         if thresholds.numel() > 1 and not torch.all(thresholds[1:] > thresholds[:-1]):
             raise ValueError("gate_thresholds must be strictly increasing.")
 
-        super().__init__(tables[0], surrogate_function, step_mode)
+        nn.Module.__init__(self)
+        if surrogate_function is None:
+            surrogate_function = surrogate.Sigmoid()
+        self.surrogate_function = surrogate_function
+        self.step_mode = step_mode
+        reference_theta = tables[0].theta
+        reference_h = tables[0].h
+        reference_d = tables[0].d
         self.register_buffer(
-            "region_theta", torch.stack([table.theta for table in tables])
+            "region_theta",
+            torch.stack(
+                [
+                    _table_tensor_to_reference(table.theta, reference_theta)
+                    for table in tables
+                ]
+            ),
         )
-        self.register_buffer("region_h", torch.stack([table.h for table in tables]))
-        self.register_buffer("region_d", torch.stack([table.d for table in tables]))
+        self.register_buffer(
+            "region_h",
+            torch.stack(
+                [_table_tensor_to_reference(table.h, reference_h) for table in tables]
+            ),
+        )
+        self.register_buffer(
+            "region_d",
+            torch.stack(
+                [_table_tensor_to_reference(table.d, reference_d) for table in tables]
+            ),
+        )
         self.register_buffer("gate_thresholds", thresholds)
+
+    @property
+    def K(self) -> int:
+        return self.region_theta.shape[1]
 
     def _forward_from_gate(
         self, gate: torch.Tensor, return_sequence: bool

@@ -1390,6 +1390,10 @@ class TestTDMultiheadAttention:
         x = torch.randn(2, 4, 8)
         op = TDMultiheadAttention(embed_dim=8, num_heads=2, step_mode="s")
 
+        assert op.q_proj.step_mode == "s"
+        assert op.k_proj.step_mode == "s"
+        assert op.v_proj.step_mode == "s"
+        assert op.out_proj.step_mode == "s"
         y, weights = op(x, x, x, need_weights=False)
         expected = _ann_mha_reference(op, x, x, x)
 
