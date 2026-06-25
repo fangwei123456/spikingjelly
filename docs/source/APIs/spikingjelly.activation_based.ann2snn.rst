@@ -12,6 +12,10 @@ Converter
 Extension Points
 ++++++++++++++++
 
+The ``recipes`` module is the public extension surface for ANN2SNN conversion
+algorithms. A recipe defines the algorithm-specific steps, while
+``Converter.convert(model)`` owns execution.
+
 .. automodule:: spikingjelly.activation_based.ann2snn.recipes
    :members:
    :undoc-members:

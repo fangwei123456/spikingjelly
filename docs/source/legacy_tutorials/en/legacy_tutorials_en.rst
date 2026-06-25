@@ -6,6 +6,12 @@ Because of the limited time and energy of the developers, not all tutorials can 
 And some tutorials have been pruned and absorbed in the new tutorials. Here we list some legacy tutorials which may be \
 helpful.
 
+.. toctree::
+   :hidden:
+
+   ann2snn_converter_legacy
+   5_ann2snn
+
 The predecessor of `Activation-based`
 --------------------------------------------
 `Activation-based` is called as `Clock-driven` in the previous version of SpikingJelly. Here is a tutorial about `Clock-driven`:
@@ -20,9 +26,16 @@ This tutorial has not been updated. The user can refer to the old tutorial for t
 
 ANN to SNN conversion
 --------------------------------------------
-This tutorial has not been updated. The user can refer to the old tutorial for the moment:
+There are two legacy ANN2SNN tutorials for different API generations:
 
-`ANN2SNN <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/clock_driven_en/5_ann2snn.html>`_
+`ANN2SNN legacy Converter API <ann2snn_converter_legacy.html>`_
+
+`ANN2SNN older clock-driven-era API <5_ann2snn.html>`_
+
+The original external page for the older clock-driven-era tutorial is also
+available:
+
+`ANN2SNN on ReadTheDocs 0.0.0.0.12 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/clock_driven_en/5_ann2snn.html>`_
 
 Applications of SNNs on other tasks
 --------------------------------------------

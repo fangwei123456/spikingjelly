@@ -5,6 +5,12 @@
 由于开发者精力有限，有一些教程并未随着SpikingJelly的代码更新而同步更新，还有一些教程被精简合并进了新版教程。\
 下面列出一些可能对读者有帮助的老版教程。
 
+.. toctree::
+   :hidden:
+
+   ann2snn_converter_legacy
+   5_ann2snn
+
 `Activation-based` 的设计来源
 --------------------------------------------
 在早期的框架中，`Activation-based` 被称之为 `Clock-driven`，下面是相关的教程：
@@ -19,9 +25,15 @@
 
 ANN转换SNN
 --------------------------------------------
-新版框架还没有来得及进行更新，可以先查看老版本的教程：
+ANN2SNN 有两套 legacy 教程，对应不同 API 世代：
 
-`ANN转换SNN <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/clock_driven/5_ann2snn.html>`_
+`ANN2SNN legacy Converter API <ann2snn_converter_legacy.html>`_
+
+`ANN2SNN 更早期 clock-driven 时代 API <5_ann2snn.html>`_
+
+更早期 clock-driven 时代教程的原始外部页面也可参考：
+
+`ReadTheDocs 0.0.0.0.12 上的 ANN转换SNN <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/clock_driven/5_ann2snn.html>`_
 
 SNN在其他任务的应用
 --------------------------------------------
@@ -48,4 +60,3 @@ CUPY后端的设计来源
 诚待英才
 --------------------------------------------
 我们非常欢迎有余力的读者，将这些教程更新到与框架的master版本匹配，并提交Pull Request到master版本中。遗产教程可在Github仓库的`docs/source/legacy_tutorials <https://github.com/fangwei123456/spikingjelly/tree/master/docs/source/legacy_tutorials>`_路径下找到。
-

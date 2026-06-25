@@ -38,9 +38,10 @@ def val(net, device, data_loader, T=None):
 
 def main():
     torch.random.manual_seed(0)
-    torch.cuda.manual_seed(0)
-    device = "cuda"
-    dataset_dir = "G:/Dataset/mnist"
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(0)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    dataset_dir = "./data/mnist"
     batch_size = 100
     T = 50
 
@@ -80,7 +81,9 @@ def main():
     #     print('Validating Accuracy: %.3f' % (acc))
     #     print()
 
-    model.load_state_dict(torch.load("SJ-mnist-cnn_model-sample.pth"))
+    model.load_state_dict(
+        torch.load("SJ-mnist-cnn_model-sample.pth", map_location=device)
+    )
     acc = val(model, device, test_data_loader)
     print("ANN Validating Accuracy: %.4f" % (acc))
 
