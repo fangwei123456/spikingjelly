@@ -1085,8 +1085,9 @@ class TDLinear(TDModule):
         if self.bias is None:
             return F.linear(x_seq, self.weight, None)
 
-        y_cum = F.linear(x_seq.cumsum(dim=0), self.weight, self.bias)
-        return _temporal_difference(y_cum)
+        y_seq = F.linear(x_seq, self.weight, None)
+        y_seq[0] = y_seq[0] + self.bias
+        return y_seq
 
     def extra_repr(self) -> str:
         return (
