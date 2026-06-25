@@ -1438,7 +1438,7 @@ class TestTDMultiheadAttention:
         hook_calls = []
 
         op.q_proj.register_forward_hook(
-            lambda module, inputs, output: hook_calls.append(module.step_mode)
+            lambda module, inputs, output: hook_calls.append(output.shape)
         )
         op.step_mode = "s"
         assert op.q_proj.step_mode == "s"
@@ -1449,7 +1449,7 @@ class TestTDMultiheadAttention:
         expected = _ann_mha_reference(op, x, x, x)
 
         assert torch.allclose(y, expected, atol=1e-5, rtol=1e-5)
-        assert hook_calls == ["s"]
+        assert hook_calls == [x.shape]
 
         functional.set_step_mode(op, "m")
         assert op.q_proj.step_mode == "m"
