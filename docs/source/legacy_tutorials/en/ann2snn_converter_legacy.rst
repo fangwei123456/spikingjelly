@@ -79,7 +79,7 @@ Next, let's plot the firing frequency of the IF neuron against the input :math:`
 .. code-block:: python
 
     plt.subplot(1, 2, 1)
-    firing_rate = np.mean(out_spikes, axis=1)
+    firing_rate = np.mean(out_spikes, axis=0)
     plt.plot(x, firing_rate)
     plt.title('Input $x_{i}$ and firing rate')
     plt.xlabel('Input $x_{i}$')
@@ -152,7 +152,7 @@ Conversion mainly solves two problems:
 
 Assume that the parameters of BatchNorm are: :math:`\gamma` (``BatchNorm.weight``), :math:`\beta` (``BatchNorm.bias``), :math:`\mu` (``BatchNorm.running_mean``) ,
 :math:`\sigma` (``BatchNorm.running_var``, :math:`\sigma = \sqrt{\mathrm{running\_var}}`). For specific parameter definitions, see
-`torch.nn.BatchNorm1d <https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm2d.html#torch.nn.BatchNorm1d>`_ .
+`torch.nn.BatchNorm1d <https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html#torch.nn.BatchNorm1d>`_ .
 Parameter modules (e.g. Linear) have weight :math:`W` and bias :math:`b` . BatchNorm parameter absorption transfers the BatchNorm parameters to the :math:`W` and :math:`b` of the parameter module, so that the new module output is the same as the original BatchNorm output.
 For this, the :math:`\bar{W}` and :math:`\bar{b}` formulas for the new model are expressed as:
 

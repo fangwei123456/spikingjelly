@@ -127,10 +127,10 @@ class Converter:
         :return: Converted ``GraphModule``.
         :rtype: torch.fx.GraphModule
         """
-        self.recipe.validate(self)
         configured_device = self.device
         self.device = self._resolve_device(ann)
         try:
+            self.recipe.validate(self)
             ann = self.recipe.before_trace(self, ann)
             fx_model = fx.symbolic_trace(ann).to(self.device)
             fx_model = self.recipe.after_trace(self, fx_model)

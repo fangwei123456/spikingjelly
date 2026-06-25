@@ -55,6 +55,9 @@ def main():
     train_data_loader = torch.utils.data.DataLoader(
         dataset=train_data_dataset, batch_size=batch_size, shuffle=True, drop_last=False
     )
+    calibration_data_loader = torch.utils.data.DataLoader(
+        dataset=train_data_dataset, batch_size=batch_size, shuffle=False, drop_last=False
+    )
     test_data_dataset = torchvision.datasets.MNIST(
         root=dataset_dir,
         train=False,
@@ -90,7 +93,7 @@ def main():
     print("---------------------------------------------")
     print("Converting using MaxNorm")
     model_converter = ann2snn.Converter(
-        recipe=ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode="max")
+        recipe=ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode="max")
     )
     snn_model = model_converter.convert(model)
     print("Simulating...")
@@ -100,7 +103,9 @@ def main():
     print("---------------------------------------------")
     print("Converting using RobustNorm")
     model_converter = ann2snn.Converter(
-        recipe=ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode="99.9%")
+        recipe=ann2snn.RateCodingRecipe(
+            dataloader=calibration_data_loader, mode="99.9%"
+        )
     )
     snn_model = model_converter.convert(model)
     print("Simulating...")
@@ -110,7 +115,9 @@ def main():
     print("---------------------------------------------")
     print("Converting using 1/2 max(activation) as scales...")
     model_converter = ann2snn.Converter(
-        recipe=ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode=1.0 / 2)
+        recipe=ann2snn.RateCodingRecipe(
+            dataloader=calibration_data_loader, mode=1.0 / 2
+        )
     )
     snn_model = model_converter.convert(model)
     print("Simulating...")
@@ -120,7 +127,9 @@ def main():
     print("---------------------------------------------")
     print("Converting using 1/3 max(activation) as scales")
     model_converter = ann2snn.Converter(
-        recipe=ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode=1.0 / 3)
+        recipe=ann2snn.RateCodingRecipe(
+            dataloader=calibration_data_loader, mode=1.0 / 3
+        )
     )
     snn_model = model_converter.convert(model)
     print("Simulating...")
@@ -130,7 +139,9 @@ def main():
     print("---------------------------------------------")
     print("Converting using 1/4 max(activation) as scales")
     model_converter = ann2snn.Converter(
-        recipe=ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode=1.0 / 4)
+        recipe=ann2snn.RateCodingRecipe(
+            dataloader=calibration_data_loader, mode=1.0 / 4
+        )
     )
     snn_model = model_converter.convert(model)
     print("Simulating...")
@@ -140,7 +151,9 @@ def main():
     print("---------------------------------------------")
     print("Converting using 1/5 max(activation) as scales")
     model_converter = ann2snn.Converter(
-        recipe=ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode=1.0 / 5)
+        recipe=ann2snn.RateCodingRecipe(
+            dataloader=calibration_data_loader, mode=1.0 / 5
+        )
     )
     snn_model = model_converter.convert(model)
     print("Simulating...")

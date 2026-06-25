@@ -473,13 +473,11 @@ class RateCodingRecipe(ConversionRecipe):
         with torch.no_grad():
             for _, data in enumerate(tqdm(self.dataloader)):
                 imgs = self._extract_batch_input(data)
-                fx_model(
-                    torch.as_tensor(
-                        imgs,
-                        device=converter.device,
-                        dtype=torch.float,
-                    )
-                )
+                if isinstance(imgs, torch.Tensor):
+                    imgs = imgs.to(device=converter.device)
+                else:
+                    imgs = torch.as_tensor(imgs, device=converter.device)
+                fx_model(imgs)
         return fx_model
 
     def replace(
@@ -530,7 +528,7 @@ class RateCodingRecipe(ConversionRecipe):
         if isinstance(data, (list, tuple)):
             if not data:
                 raise ValueError("Batch data is an empty list or tuple.")
-            return data[0]
+            return RateCodingRecipe._extract_batch_input(data[0])
         if isinstance(data, dict):
             if not data:
                 raise ValueError("Batch data is an empty dictionary.")
@@ -543,16 +541,18 @@ class RateCodingRecipe(ConversionRecipe):
     def _check_mode(self):
         err_msg = "You have used a non-defined VoltageScale Method."
         if isinstance(self.mode, str):
+            if not self.mode:
+                raise NotImplementedError(err_msg)
             if self.mode[-1] == "%":
                 try:
                     float(self.mode[:-1])
-                except ValueError:
-                    raise NotImplementedError(err_msg)
+                except ValueError as exc:
+                    raise NotImplementedError(err_msg) from exc
             elif self.mode.lower() in ["max"]:
                 pass
             else:
                 raise NotImplementedError(err_msg)
-        elif isinstance(self.mode, float):
+        elif isinstance(self.mode, (int, float)) and not isinstance(self.mode, bool):
             if not (0 < self.mode <= 1):
                 raise NotImplementedError(err_msg)
         else:
@@ -764,6 +764,10 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
                 continue
             sdpa_kwargs = self._parse_sdpa_node(node)
             target = f"td_scaled_dot_product_attention_{sdpa_index}"
+            existing_modules = dict(fx_model.named_modules())
+            while target in existing_modules:
+                sdpa_index += 1
+                target = f"td_scaled_dot_product_attention_{sdpa_index}"
             sdpa_index += 1
             fx_model.add_submodule(
                 target,
@@ -867,6 +871,8 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             raise ValueError(
                 "TD MHA conversion only supports kdim == vdim == embed_dim."
             )
+        if module.in_proj_weight is None:
+            raise ValueError("TD MHA conversion requires packed in_proj_weight.")
         if module.bias_k is not None or module.bias_v is not None:
             raise ValueError("TD MHA conversion does not support add_bias_kv.")
         if module.add_zero_attn:

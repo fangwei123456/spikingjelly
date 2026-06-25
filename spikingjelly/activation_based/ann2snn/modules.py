@@ -83,18 +83,25 @@ class VoltageHook(nn.Module):
         """
         err_msg = "You have used a non-defined VoltageScale Method."
         if isinstance(self.mode, str):
+            if not self.mode:
+                raise NotImplementedError(err_msg)
             if self.mode[-1] == "%":
                 try:
                     s_t = torch.tensor(
                         np.percentile(x.detach().cpu(), float(self.mode[:-1]))
                     )
-                except ValueError:
-                    raise NotImplementedError(err_msg)
+                except ValueError as exc:
+                    raise NotImplementedError(err_msg) from exc
             elif self.mode.lower() in ["max"]:
                 s_t = x.max().detach()
             else:
                 raise NotImplementedError(err_msg)
-        elif isinstance(self.mode, float) and self.mode <= 1 and self.mode > 0:
+        elif (
+            isinstance(self.mode, (int, float))
+            and not isinstance(self.mode, bool)
+            and self.mode <= 1
+            and self.mode > 0
+        ):
             s_t = x.max().detach() * self.mode
         else:
             raise NotImplementedError(err_msg)

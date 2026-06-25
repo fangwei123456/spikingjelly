@@ -58,4 +58,4 @@ The predecessor of CUPY backend:
 
 Call for Updating
 --------------------------------------------
-We encourage the users to update these tutorials with the master version of SpikingJelly and create the Pull Request. Legacy tutorials can be found in `docs/source/legacy_tutorials <https://github.com/fangwei123456/SpikingJelly/tree/master/docs/source/legacy_tutorials>`_.`
+We encourage the users to update these tutorials with the master version of SpikingJelly and create the Pull Request. Legacy tutorials can be found in `docs/source/legacy_tutorials <https://github.com/fangwei123456/SpikingJelly/tree/master/docs/source/legacy_tutorials>`_.

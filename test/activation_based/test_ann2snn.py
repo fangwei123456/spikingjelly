@@ -140,6 +140,21 @@ class SDPABlock(nn.Module):
         )
 
 
+class SDPAWithExistingTargetBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.td_scaled_dot_product_attention_0 = nn.Identity()
+
+    def forward(self, query, key, value):
+        query = self.td_scaled_dot_product_attention_0(query)
+        return F.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            dropout_p=0.0,
+        )
+
+
 class SDPAPositionalBlock(nn.Module):
     def forward(self, query, key, value):
         return F.scaled_dot_product_attention(query, key, value, None, 0.0, False)
@@ -333,6 +348,21 @@ class MHAWithSeparateKVDim(nn.Module):
 
     def forward(self, query, key, value):
         y, _ = self.mha(query, key, value, need_weights=False)
+        return y
+
+
+class MHAWithMissingPackedWeight(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mha = nn.MultiheadAttention(
+            embed_dim=8,
+            num_heads=2,
+            batch_first=True,
+        )
+        self.mha.in_proj_weight = None
+
+    def forward(self, x):
+        y, _ = self.mha(x, x, x, need_weights=False)
         return y
 
 
@@ -643,6 +673,21 @@ class TestConverterRecipes:
             "finalize",
         ]
 
+    def test_validate_sees_resolved_device(self):
+        class DeviceCheckingRecipe(ConversionRecipe):
+            def __init__(self):
+                self.device = None
+
+            def validate(self, converter):
+                self.device = converter.device
+
+        recipe = DeviceCheckingRecipe()
+        model = nn.Sequential(nn.Linear(2, 2))
+
+        Converter(recipe=recipe).convert(model)
+
+        assert recipe.device == torch.device("cpu")
+
     def test_unified_convert_uses_rate_coding_recipe(self):
         model = SimpleCNNNoBN()
         model.eval()
@@ -800,8 +845,20 @@ class TestConverterBackwardCompat:
         snn = converter.convert(model)
         assert snn is not None
 
+    def test_mode_integer_one(self):
+        model = SimpleCNN()
+        model.eval()
+        converter = _rate_converter(mode=1)
+        snn = converter.convert(model)
+        assert snn is not None
+
     def test_invalid_mode_raises(self):
         recipe = RateCodingRecipe(dataloader=[], mode="invalid")
+        with pytest.raises(NotImplementedError):
+            Converter(recipe=recipe).convert(nn.Identity())
+
+    def test_empty_mode_raises(self):
+        recipe = RateCodingRecipe(dataloader=[], mode="")
         with pytest.raises(NotImplementedError):
             Converter(recipe=recipe).convert(nn.Identity())
 
@@ -871,6 +928,23 @@ raise SystemExit(1)
             fuse_flag=False,
         )
         snn = converter.convert(model)
+        assert snn is not None
+
+    def test_nested_dataloader_extracts_tensor(self):
+        imgs = torch.randn(2, 1, 28, 28)
+
+        extracted = RateCodingRecipe._extract_batch_input(({"input": imgs},))
+
+        assert extracted is imgs
+
+    def test_calibration_preserves_tensor_dtype(self):
+        model = SimpleCNNNoBN().double()
+        model.eval()
+        imgs = torch.randn(2, 1, 28, 28, dtype=torch.float64)
+        converter = _rate_converter(dataloader=[imgs], mode="Max", fuse_flag=False)
+
+        snn = converter.convert(model)
+
         assert snn is not None
 
     def test_extract_batch_input_rejects_empty_sequence(self):
@@ -969,6 +1043,18 @@ class TestConverterTDOperatorReplacement:
         assert not any(
             node.op == "call_function" and node.target is F.scaled_dot_product_attention
             for node in converted.graph.nodes
+        )
+
+    def test_sdpa_rewrite_avoids_existing_target_name(self):
+        model = SDPAWithExistingTargetBlock()
+
+        converted = _td_converter().convert(model)
+        modules = dict(converted.named_modules())
+
+        assert isinstance(modules["td_scaled_dot_product_attention_0"], nn.Identity)
+        assert isinstance(
+            modules["td_scaled_dot_product_attention_1"],
+            TDScaledDotProductAttention,
         )
 
     def test_sdpa_cumulative_output_matches_ann_reference(self):
@@ -1150,6 +1236,8 @@ class TestConverterTDOperatorReplacement:
             _td_converter().convert(SelfAttentionBlock(batch_first=False))
         with pytest.raises(ValueError, match="kdim == vdim == embed_dim"):
             _td_converter().convert(MHAWithSeparateKVDim())
+        with pytest.raises(ValueError, match="packed in_proj_weight"):
+            _td_converter().convert(MHAWithMissingPackedWeight())
         with pytest.raises(ValueError, match="add_bias_kv"):
             _td_converter().convert(SelfAttentionBlock(add_bias_kv=True))
         with pytest.raises(ValueError, match="add_zero_attn"):

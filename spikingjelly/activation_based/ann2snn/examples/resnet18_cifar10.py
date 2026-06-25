@@ -67,7 +67,8 @@ def main():
     val(model, device, test_data_loader)
     print("Converting...")
     model_converter = ann2snn.Converter(
-        recipe=ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode="Max")
+        recipe=ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode="Max"),
+        device=device,
     )
     snn_model = model_converter.convert(model)
     print("SNN accuracy:")

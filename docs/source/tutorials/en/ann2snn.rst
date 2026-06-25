@@ -75,7 +75,7 @@ Plot the firing rate against the input :math:`x_{i}` and compare it with :math:`
 .. code-block:: python
 
     plt.subplot(1, 2, 1)
-    firing_rate = np.mean(out_spikes, axis=1)
+    firing_rate = np.mean(out_spikes, axis=0)
     plt.plot(x, firing_rate)
     plt.title('Input $x_{i}$ and firing rate')
     plt.xlabel('Input $x_{i}$')
@@ -146,7 +146,7 @@ Conversion mainly solves two problems:
 
 Assume that the parameters of BatchNorm are: :math:`\gamma` (``BatchNorm.weight``), :math:`\beta` (``BatchNorm.bias``), :math:`\mu` (``BatchNorm.running_mean``) ,
 :math:`\sigma` (``BatchNorm.running_var``, :math:`\sigma = \sqrt{\mathrm{running\_var}}`). For specific parameter definitions, see
-`torch.nn.BatchNorm1d <https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm2d.html#torch.nn.BatchNorm1d>`_ .
+`torch.nn.BatchNorm1d <https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html#torch.nn.BatchNorm1d>`_ .
 A parameter module (e.g. Linear) has weight :math:`W` and bias :math:`b`. BatchNorm absorption folds the BatchNorm parameters into :math:`W` and :math:`b` so the new module produces the same output as the original module-plus-BatchNorm pair. The resulting :math:`\bar{W}` and :math:`\bar{b}` are:
 
 .. math::
@@ -295,6 +295,9 @@ Set the runtime options:
     train_data_loader = torch.utils.data.DataLoader(
         dataset=train_data_dataset, batch_size=batch_size, shuffle=True, drop_last=False
     )
+    calibration_data_loader = torch.utils.data.DataLoader(
+        dataset=train_data_dataset, batch_size=batch_size, shuffle=False, drop_last=False
+    )
     test_data_dataset = torchvision.datasets.MNIST(
         root=dataset_dir,
         train=False,
@@ -329,12 +332,12 @@ Make the conversion with the converter
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The ANN is trained and validated. Select the rate-coding recipe, pass the
-training dataloader for calibration, and run ``Converter`` to execute the
+deterministic calibration dataloader, and run ``Converter`` to execute the
 conversion:
 
 .. code-block:: python
 
-    recipe = ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode="max")
+    recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode="max")
     model_converter = ann2snn.Converter(recipe=recipe)
     snn_model = model_converter.convert(model)
 
@@ -524,7 +527,7 @@ Using the same model, convert with each mode (``max``, ``99.9%``, ``1.0/2``, ``1
 
     print('---------------------------------------------')
     print('Converting using MaxNorm')
-    recipe = ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode="max")
+    recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode="max")
     model_converter = ann2snn.Converter(recipe=recipe)
     snn_model = model_converter.convert(model)
     print('Simulating...')
@@ -533,7 +536,7 @@ Using the same model, convert with each mode (``max``, ``99.9%``, ``1.0/2``, ``1
 
     print('---------------------------------------------')
     print('Converting using RobustNorm')
-    recipe = ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode="99.9%")
+    recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode="99.9%")
     model_converter = ann2snn.Converter(recipe=recipe)
     snn_model = model_converter.convert(model)
     print('Simulating...')
@@ -542,7 +545,7 @@ Using the same model, convert with each mode (``max``, ``99.9%``, ``1.0/2``, ``1
 
     print('---------------------------------------------')
     print('Converting using 1/2 max(activation) as scales...')
-    recipe = ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode=1.0 / 2)
+    recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode=1.0 / 2)
     model_converter = ann2snn.Converter(recipe=recipe)
     snn_model = model_converter.convert(model)
     print('Simulating...')
@@ -551,7 +554,7 @@ Using the same model, convert with each mode (``max``, ``99.9%``, ``1.0/2``, ``1
 
     print('---------------------------------------------')
     print('Converting using 1/3 max(activation) as scales')
-    recipe = ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode=1.0 / 3)
+    recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode=1.0 / 3)
     model_converter = ann2snn.Converter(recipe=recipe)
     snn_model = model_converter.convert(model)
     print('Simulating...')
@@ -560,7 +563,7 @@ Using the same model, convert with each mode (``max``, ``99.9%``, ``1.0/2``, ``1
 
     print('---------------------------------------------')
     print('Converting using 1/4 max(activation) as scales')
-    recipe = ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode=1.0 / 4)
+    recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode=1.0 / 4)
     model_converter = ann2snn.Converter(recipe=recipe)
     snn_model = model_converter.convert(model)
     print('Simulating...')
@@ -569,7 +572,7 @@ Using the same model, convert with each mode (``max``, ``99.9%``, ``1.0/2``, ``1
 
     print('---------------------------------------------')
     print('Converting using 1/5 max(activation) as scales')
-    recipe = ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode=1.0 / 5)
+    recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode=1.0 / 5)
     model_converter = ann2snn.Converter(recipe=recipe)
     snn_model = model_converter.convert(model)
     print('Simulating...')
