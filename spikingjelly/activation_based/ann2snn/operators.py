@@ -1086,8 +1086,8 @@ class TDLinear(TDModule):
             return F.linear(x_seq, self.weight, None)
 
         y_seq = F.linear(x_seq, self.weight, None)
-        y_seq[0] = y_seq[0] + self.bias
-        return y_seq
+        y_first = y_seq[:1] + self.bias
+        return torch.cat((y_first, y_seq[1:]), dim=0)
 
     def extra_repr(self) -> str:
         return (
