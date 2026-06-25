@@ -309,12 +309,14 @@ ann2snn框架在2022年10月再次更新。在converter类中添加fuse方法，
 使用Converter进行转换
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-使用Converter进行转换非常简单，只需要参数中设置希望使用的模式即可。例如使用MaxNorm，需要先定义一个 ``ann2snn.Converter`` ，并且把模型forward给这个对象：
+使用 Converter 进行转换非常简单：先用校准 dataloader 和转换模式定义
+``RateCodingRecipe``，再传给 ``ann2snn.Converter`` 并调用 ``convert``：
 
 .. code-block:: python
 
-    model_converter = ann2snn.Converter(mode='max', dataloader=train_data_loader)
-    snn_model = model_converter.convert_to_spiking_neurons(model)
+    recipe = ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode='max')
+    model_converter = ann2snn.Converter(recipe=recipe)
+    snn_model = model_converter.convert(model)
 
 snn_model就是输出的SNN模型。查看snn_model的网络结构（BatchNorm2d的缺失，是由于转换过程中进行的conv_bn_fuse，也就是将bn层的参数吸收进conv层）：
 
@@ -404,11 +406,11 @@ snn_model的类型为 ``GraphModule`` ，参见 `GraphModule <https://pytorch.or
 自定义转换规则
 ^^^^^^^^^^^^^^
 
-默认情况下，``Converter`` 使用 ``ReLURule`` 将 ``nn.ReLU`` 模块替换为
+默认情况下，``RateCodingRecipe`` 使用 ``ReLURule`` 将 ``nn.ReLU`` 模块替换为
 ``VoltageScaler(1 / s) -> IFNode -> VoltageScaler(s)``。其中校准尺度 ``s``
 由 ``ThresholdOptimizer`` 基于 ``VoltageHook`` 计算得到。
 
-高级用户可以向 ``Converter`` 显式传入以下扩展点：
+高级用户可以向 ``RateCodingRecipe`` 显式传入以下扩展点：
 
 * ``rules`` 负责匹配 FX 计算图节点、插入校准 hook、查找完成校准的
   activation-hook 节点对，并把它们替换为 SNN 子图。
@@ -461,10 +463,11 @@ snn_model的类型为 ``GraphModule`` ，参见 `GraphModule <https://pytorch.or
             fx_model.graph.erase_node(activation_node)
 
 
-    converter = ann2snn.Converter(
+    recipe = ann2snn.RateCodingRecipe(
         dataloader=[torch.randn(2, 4)],
         rules=[IdentityRule()],
     )
+    converter = ann2snn.Converter(recipe=recipe)
 
 当前内置 ``ReLURule`` 路径只对标量阈值有明确语义。Per-channel 或张量阈值还需要先定义
 shape、broadcast 和 ``VoltageScaler`` 语义，不属于当前转换路径。
@@ -478,48 +481,54 @@ shape、broadcast 和 ``VoltageScaler`` 语义，不属于当前转换路径。
 
     print('---------------------------------------------')
     print('Converting using MaxNorm')
-    model_converter = ann2snn.Converter(mode='max', dataloader=train_data_loader)
-    snn_model = model_converter.convert_to_spiking_neurons(model)
+    recipe = ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode='max')
+    model_converter = ann2snn.Converter(recipe=recipe)
+    snn_model = model_converter.convert(model)
     print('Simulating...')
     mode_max_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_max_accs[-1]))
 
     print('---------------------------------------------')
     print('Converting using RobustNorm')
-    model_converter = ann2snn.Converter(mode='99.9%', dataloader=train_data_loader)
-    snn_model = model_converter.convert_to_spiking_neurons(model)
+    recipe = ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode='99.9%')
+    model_converter = ann2snn.Converter(recipe=recipe)
+    snn_model = model_converter.convert(model)
     print('Simulating...')
     mode_robust_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_robust_accs[-1]))
 
     print('---------------------------------------------')
     print('Converting using 1/2 max(activation) as scales...')
-    model_converter = ann2snn.Converter(mode=1.0 / 2, dataloader=train_data_loader)
-    snn_model = model_converter.convert_to_spiking_neurons(model)
+    recipe = ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode=1.0 / 2)
+    model_converter = ann2snn.Converter(recipe=recipe)
+    snn_model = model_converter.convert(model)
     print('Simulating...')
     mode_two_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_two_accs[-1]))
 
     print('---------------------------------------------')
     print('Converting using 1/3 max(activation) as scales')
-    model_converter = ann2snn.Converter(mode=1.0 / 3, dataloader=train_data_loader)
-    snn_model = model_converter.convert_to_spiking_neurons(model)
+    recipe = ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode=1.0 / 3)
+    model_converter = ann2snn.Converter(recipe=recipe)
+    snn_model = model_converter.convert(model)
     print('Simulating...')
     mode_three_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_three_accs[-1]))
 
     print('---------------------------------------------')
     print('Converting using 1/4 max(activation) as scales')
-    model_converter = ann2snn.Converter(mode=1.0 / 4, dataloader=train_data_loader)
-    snn_model = model_converter.convert_to_spiking_neurons(model)
+    recipe = ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode=1.0 / 4)
+    model_converter = ann2snn.Converter(recipe=recipe)
+    snn_model = model_converter.convert(model)
     print('Simulating...')
     mode_four_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_four_accs[-1]))
 
     print('---------------------------------------------')
     print('Converting using 1/5 max(activation) as scales')
-    model_converter = ann2snn.Converter(mode=1.0 / 5, dataloader=train_data_loader)
-    snn_model = model_converter.convert_to_spiking_neurons(model)
+    recipe = ann2snn.RateCodingRecipe(dataloader=train_data_loader, mode=1.0 / 5)
+    model_converter = ann2snn.Converter(recipe=recipe)
+    snn_model = model_converter.convert(model)
     print('Simulating...')
     mode_five_accs = val(snn_model, device, test_data_loader, T=T)
     print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_five_accs[-1]))

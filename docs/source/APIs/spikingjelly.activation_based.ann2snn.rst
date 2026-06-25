@@ -12,6 +12,11 @@ Converter
 Extension Points
 ++++++++++++++++
 
+.. automodule:: spikingjelly.activation_based.ann2snn.recipes
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 .. automodule:: spikingjelly.activation_based.ann2snn.rules
    :members:
    :undoc-members:
