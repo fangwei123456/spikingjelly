@@ -7,9 +7,9 @@ r"""
 
 * **中文**
 
-ANN 到 SNN 的转换模块。提供 :class:`Converter` 转换器，以及 ``HookFactory``、
-``NeuronFactory``、``ReLURule``、``ThresholdOptimizer`` 等可扩展组件，
-并附带 ``download_url`` 工具函数。
+ANN 到 SNN 的转换模块。提供 :class:`Converter` 转换器、转换
+``Recipe``，以及 ``HookFactory``、``NeuronFactory``、``ReLURule``、
+``ThresholdOptimizer`` 等可扩展组件，并附带 ``download_url`` 工具函数。
 
 ----
 
@@ -17,20 +17,29 @@ ANN 到 SNN 的转换模块。提供 :class:`Converter` 转换器，以及 ``Hoo
 
 * **English**
 
-ANN-to-SNN conversion module. Provides the :class:`Converter` driver together
-with extensible building blocks — :class:`HookFactory`, :class:`NeuronFactory`,
-:class:`ReLURule` and :class:`ThresholdOptimizer` — and a
-``download_url`` helper for fetching pretrained models.
+ANN-to-SNN conversion module. Provides the :class:`Converter` driver,
+conversion ``Recipe`` classes, extensible building blocks —
+:class:`HookFactory`, :class:`NeuronFactory`, :class:`ReLURule` and
+:class:`ThresholdOptimizer` — and a ``download_url`` helper for fetching
+pretrained models.
 """
 
 from .converter import Converter
 from .factories import HookFactory, NeuronFactory
+from .recipes import (
+    ConversionRecipe,
+    RateCodingRecipe,
+    TransformerSpikeEquivalentRecipe,
+)
 from .rules import ReLURule
 from .threshold import ThresholdOptimizer
 from .utils import download_url
 
 __all__ = [
     "Converter",
+    "ConversionRecipe",
+    "RateCodingRecipe",
+    "TransformerSpikeEquivalentRecipe",
     "download_url",
     "ReLURule",
     "NeuronFactory",

@@ -3,7 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from spikingjelly.activation_based import neuron, surrogate
-from spikingjelly.activation_based.ann2snn import Converter
+from spikingjelly.activation_based.ann2snn import (
+    Converter,
+    TransformerSpikeEquivalentRecipe,
+)
 from spikingjelly.activation_based.ann2snn.operators import (
     TDGELU,
     TDLayerNorm,
@@ -333,9 +336,7 @@ def test_activation_aware_tiny_transformer_block_autograd_smoke():
     torch.manual_seed(2)
     probe_block = TinyTDTransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
     calibration_seq = torch.randn(4, 2, 3, 8)
-    hidden_seq = probe_block.act(
-        probe_block.fc1(probe_block.norm2(calibration_seq))
-    )
+    hidden_seq = probe_block.act(probe_block.fc1(probe_block.norm2(calibration_seq)))
     threshold, offset = _activation_aware_calibration_channel_last(hidden_seq)
     block = TinyActivationAwareTDTransformerBlock(
         embed_dim=8,
@@ -364,7 +365,7 @@ def test_converter_functional_sdpa_transformer_block_matches_ann_reference():
         mlp_dim=16,
     )
     block.eval()
-    converted = Converter(dataloader=[]).replace_by_td_operators(block)
+    converted = Converter(recipe=TransformerSpikeEquivalentRecipe()).convert(block)
     modules = dict(converted.named_modules())
     x_seq = torch.randn(5, 2, 4, 8)
     attn_mask = torch.tensor(
@@ -383,12 +384,10 @@ def test_converter_functional_sdpa_transformer_block_matches_ann_reference():
     assert isinstance(modules["q_proj"], TDLinear)
     assert isinstance(modules["act"], TDGELU)
     assert any(
-        isinstance(module, TDScaledDotProductAttention)
-        for module in modules.values()
+        isinstance(module, TDScaledDotProductAttention) for module in modules.values()
     )
     assert not any(
-        node.op == "call_function"
-        and node.target is F.scaled_dot_product_attention
+        node.op == "call_function" and node.target is F.scaled_dot_product_attention
         for node in converted.graph.nodes
     )
     assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
@@ -397,7 +396,7 @@ def test_converter_functional_sdpa_transformer_block_matches_ann_reference():
 def test_converter_mha_transformer_block_matches_ann_reference():
     block = TinyANNMHATransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
     block.eval()
-    converted = Converter(dataloader=[]).replace_by_td_operators(block)
+    converted = Converter(recipe=TransformerSpikeEquivalentRecipe()).convert(block)
     modules = dict(converted.named_modules())
     x_seq = torch.randn(4, 2, 5, 8)
     attn_mask = torch.zeros(5, 5)
@@ -415,7 +414,7 @@ def test_converter_mha_transformer_block_matches_ann_reference():
 
 def test_converter_transformer_block_autograd_smoke():
     block = TinyANNMHATransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
-    converted = Converter(dataloader=[]).replace_by_td_operators(block)
+    converted = Converter(recipe=TransformerSpikeEquivalentRecipe()).convert(block)
     x_seq = torch.randn(3, 2, 4, 8, requires_grad=True)
 
     y_seq = converted(x_seq)

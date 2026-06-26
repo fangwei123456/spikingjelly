@@ -1,25 +1,34 @@
-spikingjelly.activation_based.ann2snn
+ANN2SNN (legacy Converter API)
 =======================================
-Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_
+
+Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_, `Lv Liuzhenghao <https://github.com/Lyu6PosHao>`_
+
+中文版：:doc:`../cn/ann2snn_converter_legacy`
 
 .. admonition:: ANN2SNN tutorial versions
 
     The ANN2SNN public API has gone through three tutorial generations:
 
-    #. Older clock-driven-era ANN2SNN API, documented on this page.
-    #. :doc:`Legacy pre-Recipe Converter API <ann2snn_converter_legacy>`, which used ``Converter(mode=..., dataloader=...)`` and ``convert_to_spiking_neurons(model)``.
+    #. :doc:`Older clock-driven-era ANN2SNN API <5_ann2snn>`.
+    #. Legacy pre-Recipe Converter API, documented on this page: ``Converter(mode=..., dataloader=...)`` and ``convert_to_spiking_neurons(model)``.
     #. :doc:`Current Recipe API <../../tutorials/en/ann2snn>`, which uses ``RateCodingRecipe`` or ``TransformerSpikeEquivalentRecipe`` with ``Converter.convert(model)``.
 
 This tutorial focuses on ``spikingjelly.activation_based.ann2snn``, introduce how to convert the trained feedforward ANN to SNN and simulate it on the SpikingJelly framework.
 
-There are two sets of implementations in earlier implementations: ONNX-based and PyTorch-based. Due to the instability of ONNX, this version is an enhanced version of PyTorch, which natively supports complex topologies (such as ResNet). Let's have a look!
+ANN2SNN api references are here `api references <https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.activation_based.ann2snn.html>`_ .
+
+There are two sets of implementations in earlier implementations: ONNX-based and PyTorch-based. This version is based on torch.fx. Fx is specially used to transform nn.Module instances, and will natively decouple complex models when building graph intermediate representation. Let's have a look!
 
 Theoretical basis of ANN2SNN
 ----------------------------
 
-Compared with ANN, the generated pulses of SNN are discrete, which is conducive to efficient communication. Today, with the popularity of ANN, the direct training of SNN requires more resources. Naturally, we will think of using the now very mature ANN to convert to SNN, and hope that SNN can have similar performance. This involves the problem of how to build a bridge between ANN and SNN. Now the mainstream way of SNN is to use frequency encoding, so for the output layer, we will use the number of neuron output pulses to judge the category. Is there a relationship between the release rate and ANN?
+Compared with ANN, the generated pulses of SNN are discrete, which is conducive to efficient communication. Today, with the popularity of ANN, the direct training of SNN requires more resources.
 
-Fortunately, there is a strong correlation between the nonlinear activation of ReLU neurons in ANN and the firing rate of IF neurons in SNN (reset by subtracting the threshold: math:`V_{threshold}`). this feature to convert. The neuron update method mentioned here is the Soft method mentioned in `Time-driven tutorial <https://spikingjelly.readthedocs.io/zh_CN/latest/legacy_tutorials/en/0_neuron.html>`_.
+Naturally, we will think of using the now very mature ANN to convert to SNN, and hope that SNN can have similar performance. This involves the problem of how to build a bridge between ANN and SNN.
+
+Now the mainstream way of SNN is to use frequency encoding, so for the output layer, we will use the number of neuron output pulses to judge the category. Is there a relationship between the release rate and ANN?
+
+Fortunately, there is a strong correlation between the nonlinear activation of ReLU neurons in ANN and the firing rate of IF neurons in SNN (reset by subtracting the threshold :math:`V_{threshold}` ). this feature to convert. The neuron update method mentioned here is the Soft method mentioned in `Neuron tutorial <https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/en/neuron.html>`_.
 
 Experiment: Relationship between IF neuron spiking frequency and input
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -141,10 +150,10 @@ Conversion mainly solves two problems:
 
 ◆ BatchNorm parameter absorption
 
-Assume that the parameters of BatchNorm are: math:`\gamma` (``BatchNorm.weight``), :math:`\beta` (``BatchNorm.bias``), :math:`\mu` (``BatchNorm. .running_mean``) ,
+Assume that the parameters of BatchNorm are: :math:`\gamma` (``BatchNorm.weight``), :math:`\beta` (``BatchNorm.bias``), :math:`\mu` (``BatchNorm.running_mean``) ,
 :math:`\sigma` (``BatchNorm.running_var``, :math:`\sigma = \sqrt{\mathrm{running\_var}}`). For specific parameter definitions, see
 `torch.nn.BatchNorm1d <https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html#torch.nn.BatchNorm1d>`_ .
-Parameter modules (eg Linear) have parameters :math:`W` and :math:`b` . BatchNorm parameter absorption is to transfer the parameters of BatchNorm to :math:`W` and :math:`b` of the parameter module by operation, so that the output of the new module of data input is the same as when there is BatchNorm.
+Parameter modules (e.g. Linear) have weight :math:`W` and bias :math:`b` . BatchNorm parameter absorption transfers the BatchNorm parameters to the :math:`W` and :math:`b` of the parameter module, so that the new module output is the same as the original BatchNorm output.
 For this, the :math:`\bar{W}` and :math:`\bar{b}` formulas for the new model are expressed as:
 
 .. math::
@@ -155,7 +164,7 @@ For this, the :math:`\bar{W}` and :math:`\bar{b}` formulas for the new model are
 
 ◆ Model Normalization
 
-For a parameter module, it is assumed that its input tensor and output tensor are obtained, the maximum value of its input tensor is: math:`\lambda_{pre}`, and the maximum value of its output tensor is: math:`\lambda `
+For a parameter module, it is assumed that its input tensor and output tensor are obtained, the maximum value of its input tensor is :math:`\lambda_{pre}`, and the maximum value of its output tensor is :math:`\lambda`.
 Then, the normalized weight :math:`\hat{W}` is:
 
 .. math::
@@ -177,20 +186,39 @@ There is currently no very ideal solution for max pooling in ANNs. The best solu
 When simulating, according to the transformation theory, the SNN needs to input a constant analog input. Using a Poisson encoder will bring about a reduction in accuracy.
 
 Implementation and optional configuration
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The ann2snn framework will receive another major update in April 2022. The two categories of parser and simulator have been cancelled. Using the converter class replaces the previous solution. The current scheme is more compact and has more room for transformation settings.
+The ann2snn framework was updated in April 2022. The two categories of parser and simulator have been cancelled,  and instead the converter class has been used. It is more concise and has more modes for transformation settings.
 
-Converter class
-"""""""""""""""
+The framework was updated again in October 2022. Fuse method has benn added to the converter class to fuse the conv layer and the bn layer.
 
-This class is used to convert ReLU's ANN to SNN. Three common patterns are implemented here.
-The most common is the maximum current switching mode, which utilizes the upper and lower activation limits of the front and rear layers so that the case with the highest firing rate corresponds to the case where the activation achieves the maximum value. Using this mode requires setting the parameter mode to ``max`` [#f2]_.
-The 99.9% current switching mode utilizes the 99.9% activation quantile to limit the upper activation limit. Using this mode requires setting the parameter mode to ``99.9%`` [#f1]_.
+
+◆ Converter class
+
+This class is used to convert ReLU's ANN to SNN.
+
+Three common patterns are implemented here:
+
+The most common is the maximum current switching mode (MaxNorm), which utilizes the upper and lower activation limits of the front and rear layers so that the case with the highest firing rate corresponds to the case where the activation achieves the maximum value. Using this mode requires setting the parameter mode to ``max`` [#f2]_.
+
+The 99.9% current switching mode (RobustNorm) utilizes the 99.9% activation quantile to limit the upper activation limit. Using this mode requires setting the parameter mode to ``99.9%`` [#f1]_.
+
 In the scaling conversion mode, the user needs to specify the scaling parameters into the mode, and the current can be limited by the activated maximum value after scaling. Using this mode requires setting the parameter mode to a float of 0-1.
+
+The optional fuse_conv_bn feature is realized:
+
+You can set ``fuse_flag`` to ``True`` (by default), in order to fuse fuse the conv layer and the bn layer.
+
+After converting, ReLU modules will be removed. And new modules needed by SNN, such as VoltageScaler and IFNode, will be created and stored in the parent module ``snn tailor``.
+
+Since the converted model is an ``fx.GraphModule``, you can use ``print(fx.GraphModule.graph)`` to inspect the generated computation graph. More APIs are here `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
+
 
 Classify MNIST
 --------------
+
+Build the ANN to be converted
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Now we use ``ann2snn`` to build a simple convolutional network to classify the MNIST dataset.
 
@@ -243,13 +271,11 @@ Here T is the inference time step used in inference for a while.
 
 If you want to train, you also need to initialize the data loader, optimizer, loss function, for example:
 
-.. code-block::python
+.. code-block:: python
 
     lr = 1e-3
     epochs = 10
-    # define the loss function
     loss_function = nn.CrossEntropyLoss()
-    # Use Adam optimizer
     optimizer = torch.optim.Adam(ann.parameters(), lr=lr, weight_decay=5e-4)
 
 Train the ANN. In the example, our model is trained for 10 epochs. The test set accuracy changes during training are as follows:
@@ -292,6 +318,10 @@ The output is as follows:
     100%|██████████| 200/200 [00:02<00:00, 89.44it/s]
     ANN Validating Accuracy: 0.9870
 
+
+Make the conversion with the converter
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 Converting with Converter is very simple, you only need to set the mode you want to use in the parameters. For example, to use MaxNorm, you need to define an ``ann2snn.Converter`` first, and forward the model to this object:
 
 .. code-block:: python
@@ -299,9 +329,167 @@ Converting with Converter is very simple, you only need to set the mode you want
     model_converter = ann2snn.Converter(mode='max', dataloader=train_data_loader)
     snn_model = model_converter.convert_to_spiking_neurons(model)
 
-snn_model is the output SNN model.
+snn_model is the output SNN model. View the network structure of the snn_model (the absence of BatchNorm2d is due to conv_bn_fuse during the conversion process, i.e. absorbing the parameters of the bn layer into the conv layer):
 
-Following this example, we define the modes as ``max``, ``99.9%``, ``1.0/2``, ``1.0/3``, ``1.0/4``, ``1.0/5`` case SNN transformation and separate inference T steps to get the accuracy.
+.. code-block:: python
+
+    ANN(
+      (network): Module(
+        (0): Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1))
+        (3): AvgPool2d(kernel_size=2, stride=2, padding=0)
+        (4): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
+        (7): AvgPool2d(kernel_size=2, stride=2, padding=0)
+        (8): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
+        (11): AvgPool2d(kernel_size=2, stride=2, padding=0)
+        (12): Flatten(start_dim=1, end_dim=-1)
+        (13): Linear(in_features=32, out_features=10, bias=True)
+        (15): Softmax(dim=1)
+      )
+      (snn tailor): Module(
+        (0): Module(
+          (0): VoltageScaler(0.240048)
+          (1): IFNode(
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
+          )
+          (2): VoltageScaler(4.165831)
+        )
+        (1): Module(
+          (0): VoltageScaler(0.307485)
+          (1): IFNode(
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
+          )
+          (2): VoltageScaler(3.252196)
+        )
+        (2): Module(
+          (0): VoltageScaler(0.141659)
+          (1): IFNode(
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
+          )
+          (2): VoltageScaler(7.059210)
+        )
+        (3): Module(
+          (0): VoltageScaler(0.060785)
+          (1): IFNode(
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
+          )
+          (2): VoltageScaler(16.451399)
+        )
+      )
+    )
+
+The type of snn_model is ``GraphModule`` , referring to `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
+
+Call the ``GraphModule.graph.print_tabular()`` method to view the graph of the intermediate representation of the model in tabular form:
+
+.. code-block:: shell
+
+    #snn_model.graph.print_tabular()
+    opcode       name            target          args               kwargs
+    -----------  --------------  --------------  -----------------  --------
+    placeholder  x               x               ()                 {}
+    call_module  network_0       network.0       (x,)               {}
+    call_module  snn_tailor_0_1  snn tailor.0.0  (network_0,)       {}
+    call_module  snn_tailor_0_2  snn tailor.0.1  (snn_tailor_0_1,)  {}
+    call_module  snn_tailor_0_3  snn tailor.0.2  (snn_tailor_0_2,)  {}
+    call_module  network_3       network.3       (snn_tailor_0_3,)  {}
+    call_module  network_4       network.4       (network_3,)       {}
+    call_module  snn_tailor_1_1  snn tailor.1.0  (network_4,)       {}
+    call_module  snn_tailor_1_2  snn tailor.1.1  (snn_tailor_1_1,)  {}
+    call_module  snn_tailor_1_3  snn tailor.1.2  (snn_tailor_1_2,)  {}
+    call_module  network_7       network.7       (snn_tailor_1_3,)  {}
+    call_module  network_8       network.8       (network_7,)       {}
+    call_module  snn_tailor_2_1  snn tailor.2.0  (network_8,)       {}
+    call_module  snn_tailor_2_2  snn tailor.2.1  (snn_tailor_2_1,)  {}
+    call_module  snn_tailor_2_3  snn tailor.2.2  (snn_tailor_2_2,)  {}
+    call_module  network_11      network.11      (snn_tailor_2_3,)  {}
+    call_module  network_12      network.12      (network_11,)      {}
+    call_module  network_13      network.13      (network_12,)      {}
+    call_module  snn_tailor_3_1  snn tailor.3.0  (network_13,)      {}
+    call_module  snn_tailor_3_2  snn tailor.3.1  (snn_tailor_3_1,)  {}
+    call_module  snn_tailor_3_3  snn tailor.3.2  (snn_tailor_3_2,)  {}
+    call_module  network_15      network.15      (snn_tailor_3_3,)  {}
+    output       output          output          (network_15,)      {}
+
+Customizing conversion rules
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+By default, ``Converter`` uses ``ReLURule`` to replace ``nn.ReLU`` modules with
+``VoltageScaler(1 / s) -> IFNode -> VoltageScaler(s)``. The calibration scale
+``s`` is computed from ``VoltageHook`` by ``ThresholdOptimizer``.
+
+Advanced users can pass explicit extension points to ``Converter``:
+
+* ``rules`` match FX graph nodes, insert calibration hooks, find calibrated
+  activation-hook pairs, and replace them with an SNN subgraph.
+* ``NeuronFactory`` creates the neuron used during replacement. The default
+  factory creates ``IFNode(v_threshold=1.0, v_reset=None)``.
+* ``ThresholdOptimizer`` computes a finite positive scalar threshold from a
+  calibrated ``VoltageHook``.
+
+The following minimal rule shows the protocol shape without adding a new
+conversion algorithm. It matches ``nn.Identity`` and replaces the calibrated
+identity node with another ``nn.Identity`` module:
+
+.. code-block:: python
+
+    import torch
+    import torch.nn as nn
+
+    from spikingjelly.activation_based import ann2snn
+    from spikingjelly.activation_based.ann2snn.modules import VoltageHook
+
+
+    class IdentityRule:
+        def match(self, node, modules):
+            return node.op == 'call_module' and type(modules[node.target]) is nn.Identity
+
+        def insert_hooks(self, fx_model, node, hook_factory, hook_counts_per_prefix):
+            target = f'{node.target}_voltage_hook'
+            fx_model.add_submodule(target, hook_factory.create())
+            with fx_model.graph.inserting_after(node):
+                return fx_model.graph.call_module(target, args=(node,))
+
+        def find_replacements(self, fx_model, modules):
+            for hook_node in fx_model.graph.nodes:
+                if hook_node.op == 'call_module' and isinstance(
+                    modules.get(hook_node.target), VoltageHook
+                ):
+                    yield hook_node.args[0], hook_node
+
+        def replace_with_neurons(
+            self, fx_model, activation_node, hook_node, neuron_factory, threshold_optimizer
+        ):
+            hook = fx_model.get_submodule(hook_node.target)
+            threshold = threshold_optimizer.compute_threshold(hook)
+            # IdentityRule does not use a spiking threshold, but real rules
+            # should pass this scalar into their replacement subgraph.
+            target = f'{activation_node.target}_spiking_identity'
+            fx_model.add_submodule(target, nn.Identity())
+            with fx_model.graph.inserting_after(hook_node):
+                new_node = fx_model.graph.call_module(target, args=activation_node.args)
+            hook_node.replace_all_uses_with(new_node)
+            activation_node.replace_all_uses_with(new_node)
+            fx_model.graph.erase_node(hook_node)
+            fx_model.graph.erase_node(activation_node)
+
+
+    converter = ann2snn.Converter(
+        dataloader=[torch.randn(2, 4)],
+        rules=[IdentityRule()],
+    )
+
+The built-in ``ReLURule`` path currently has defined semantics only for scalar
+thresholds. Per-channel or tensor thresholds need explicit shape, broadcasting,
+and ``VoltageScaler`` semantics, and are not part of this conversion path yet.
+
+Comparison of different converting modes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Following this example, we define the modes as ``max``, ``99.9%`` , ``1.0/2`` , ``1.0/3`` , ``1.0/4`` , ``1.0/ 5`` case SNN transformation and separate inference T steps to get the accuracy.
 
 .. code-block:: python
 
