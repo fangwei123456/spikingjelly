@@ -629,7 +629,8 @@ class RateCodingRecipe(ConversionRecipe):
         def replace_node_module(
             node: fx.Node, modules: Dict[str, Any], new_module: torch.nn.Module
         ):
-            assert isinstance(node.target, str)
+            if not isinstance(node.target, str):
+                raise ValueError("FX module replacement requires a string target.")
             parent_path, _, child_name = node.target.rpartition(".")
             modules[node.target] = new_module
             parent = fx_model.get_submodule(parent_path) if parent_path else fx_model

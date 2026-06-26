@@ -1526,6 +1526,23 @@ class TestConverterTDOperatorReplacement:
 
 
 class TestFuse:
+    def test_fuse_module_replacement_does_not_depend_on_asserts(self):
+        code = """
+import inspect
+from spikingjelly.activation_based.ann2snn import RateCodingRecipe
+
+source = inspect.getsource(RateCodingRecipe._fuse)
+raise SystemExit(int("assert isinstance(node.target, str)" in source))
+"""
+        result = subprocess.run(
+            [sys.executable, "-O", "-c", code],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stderr
+
     def test_conv_bn_fusion_matches_eval_output(self):
         model = SimpleCNN()
         model.eval()
