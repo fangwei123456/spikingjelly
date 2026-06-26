@@ -567,6 +567,12 @@ class RateCodingRecipe(ConversionRecipe):
                     return RateCodingRecipe._extract_batch_input(
                         data[key], _inside_input=True
                     )
+            if len(data) != 1:
+                raise ValueError(
+                    "Batch dictionaries with multiple fields must contain one "
+                    "of 'input', 'image', 'images', 'img', 'x', 'data', or "
+                    "'pixel_values'."
+                )
             return RateCodingRecipe._extract_batch_input(
                 next(iter(data.values())), _inside_input=True
             )
@@ -995,7 +1001,7 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             return td_module
 
         if isinstance(module, nn.GELU):
-            td_module = TDGELU(approximate=module.approximate)
+            td_module = TDGELU(approximate=getattr(module, "approximate", "none"))
             td_module.train(module.training)
             return td_module
 

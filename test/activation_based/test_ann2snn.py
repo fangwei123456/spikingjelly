@@ -1058,6 +1058,15 @@ raise SystemExit(1)
 
         assert extracted is imgs
 
+    def test_ambiguous_multi_key_dict_dataloader_raises(self):
+        with pytest.raises(ValueError, match="multiple fields"):
+            RateCodingRecipe._extract_batch_input(
+                {
+                    "labels": torch.zeros(2, dtype=torch.long),
+                    "metadata": ["sample-0", "sample-1"],
+                }
+            )
+
     def test_nested_dataloader_extracts_tensor(self):
         imgs = torch.randn(2, 1, 28, 28)
 
@@ -1206,6 +1215,15 @@ class TestConverterTDOperatorReplacement:
         assert modules["norm"].normalized_shape == model.norm.normalized_shape
         assert modules["norm"].eps == model.norm.eps
         assert modules["act"].approximate == "tanh"
+
+    def test_gelu_without_approximate_attribute_defaults_to_none(self):
+        gelu = nn.GELU()
+        delattr(gelu, "approximate")
+
+        td_gelu = TransformerSpikeEquivalentRecipe()._make_td_operator(gelu)
+
+        assert isinstance(td_gelu, TDGELU)
+        assert td_gelu.approximate == "none"
 
     def test_cumulative_output_matches_ann_reference(self):
         model = CoreTransformerMLP()
