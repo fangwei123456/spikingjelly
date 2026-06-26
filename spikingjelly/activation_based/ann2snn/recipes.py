@@ -542,8 +542,8 @@ class RateCodingRecipe(ConversionRecipe):
                 "pixel_values",
             ):
                 if key in data:
-                    return data[key]
-            return next(iter(data.values()))
+                    return RateCodingRecipe._extract_batch_input(data[key])
+            return RateCodingRecipe._extract_batch_input(next(iter(data.values())))
         return data
 
     def _check_mode(self):
@@ -553,7 +553,9 @@ class RateCodingRecipe(ConversionRecipe):
                 raise NotImplementedError(err_msg)
             if self.mode[-1] == "%":
                 try:
-                    float(self.mode[:-1])
+                    percentile = float(self.mode[:-1])
+                    if not (0.0 <= percentile <= 100.0):
+                        raise NotImplementedError(err_msg)
                 except ValueError as exc:
                     raise NotImplementedError(err_msg) from exc
             elif self.mode.lower() in ["max"]:

@@ -555,6 +555,12 @@ class TestVoltageHook:
 
         assert hook.scale.item() == pytest.approx(torch.quantile(x, 0.5).item())
 
+    def test_out_of_range_percentile_mode_raises(self):
+        hook = VoltageHook(mode="101%")
+
+        with pytest.raises(NotImplementedError):
+            hook(torch.arange(10, dtype=torch.float32))
+
     def test_scalar_mode(self):
         hook = VoltageHook(mode=0.5)
         hook(torch.tensor([10.0]))
@@ -957,6 +963,11 @@ class TestConverterBackwardCompat:
         with pytest.raises(NotImplementedError):
             Converter(recipe=recipe).convert(nn.Identity())
 
+    def test_invalid_percentile_raises(self):
+        recipe = RateCodingRecipe(dataloader=[], mode="101%")
+        with pytest.raises(NotImplementedError):
+            Converter(recipe=recipe).convert(nn.Identity())
+
     def test_invalid_scalar_rejected_when_asserts_are_optimized(self):
         code = """
 from spikingjelly.activation_based.ann2snn import RateCodingRecipe
@@ -1029,6 +1040,15 @@ raise SystemExit(1)
         imgs = torch.randn(2, 1, 28, 28)
 
         extracted = RateCodingRecipe._extract_batch_input(({"input": imgs},))
+
+        assert extracted is imgs
+
+    def test_nested_dict_dataloader_extracts_tensor(self):
+        imgs = torch.randn(2, 1, 28, 28)
+
+        extracted = RateCodingRecipe._extract_batch_input(
+            {"labels": torch.zeros(2), "images": (imgs,)}
+        )
 
         assert extracted is imgs
 
