@@ -7,7 +7,6 @@ from typing import (
     List,
     Optional,
     TYPE_CHECKING,
-    Tuple,
     Type,
     Union,
 )
@@ -598,14 +597,10 @@ class RateCodingRecipe(ConversionRecipe):
         def replace_node_module(
             node: fx.Node, modules: Dict[str, Any], new_module: torch.nn.Module
         ):
-            def parent_name(target: str) -> Tuple[str, str]:
-                *parent, name = target.rsplit(".", 1)
-                return parent[0] if parent else "", name
-
             assert isinstance(node.target, str)
-            parent_name, name = parent_name(node.target)
+            parent_path, _, child_name = node.target.rpartition(".")
             modules[node.target] = new_module
-            setattr(modules[parent_name], name, new_module)
+            setattr(modules[parent_path], child_name, new_module)
 
         patterns = [
             (nn.Conv1d, nn.BatchNorm1d),
