@@ -126,15 +126,6 @@ class IdentityMLP(nn.Module):
         return self.fc1(self.identity(self.fc0(x)))
 
 
-class TwoInputAddRelu(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.relu = nn.ReLU()
-
-    def forward(self, x0, x1):
-        return self.relu(x0 + x1)
-
-
 class CoreTransformerMLP(nn.Module):
     def __init__(self):
         super().__init__()
@@ -1083,25 +1074,64 @@ raise SystemExit(1)
 
         assert extracted is imgs
 
-    def test_extract_batch_input_preserves_multi_input_tuple(self):
-        x0 = torch.randn(2, 4)
-        x1 = torch.randn(2, 4)
-        label = torch.zeros(2, dtype=torch.long)
-
-        extracted = RateCodingRecipe._extract_batch_input(((x0, x1), label))
-
-        assert extracted == (x0, x1)
-
-    def test_calibration_accepts_multi_input_tuple(self):
-        model = TwoInputAddRelu()
+    def test_calibration_rejects_multi_input_batch(self):
+        model = SimpleCNNNoBN()
         model.eval()
-        x0 = torch.randn(2, 4)
-        x1 = torch.randn(2, 4)
+        x0 = torch.randn(2, 1, 28, 28)
+        x1 = torch.randn(2, 1, 28, 28)
         label = torch.zeros(2, dtype=torch.long)
         converter = _rate_converter(
             dataloader=[((x0, x1), label)],
             mode="Max",
             fuse_flag=False,
+        )
+
+        with pytest.raises(ValueError, match="single-input calibration"):
+            converter.convert(model)
+
+    def test_calibration_rejects_dict_input_batch(self):
+        model = SimpleCNNNoBN()
+        model.eval()
+        x = torch.randn(2, 1, 28, 28)
+        converter = _rate_converter(
+            dataloader=[{"input": {"x": x}}],
+            mode="Max",
+            fuse_flag=False,
+        )
+
+        with pytest.raises(ValueError, match="single-input calibration"):
+            converter.convert(model)
+
+    def test_custom_recipe_can_extend_multi_input_calibration(self):
+        class TwoInputAddRelu(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.relu = nn.ReLU()
+
+            def forward(self, x0, x1):
+                return self.relu(x0 + x1)
+
+        class TwoInputRateCodingRecipe(RateCodingRecipe):
+            def calibrate(self, converter, fx_model):
+                with torch.no_grad():
+                    for (x0, x1), _ in self.dataloader:
+                        fx_model(
+                            x0.to(device=converter.device),
+                            x1.to(device=converter.device),
+                        )
+                return fx_model
+
+        model = TwoInputAddRelu()
+        model.eval()
+        x0 = torch.randn(2, 4)
+        x1 = torch.randn(2, 4)
+        label = torch.zeros(2, dtype=torch.long)
+        converter = Converter(
+            recipe=TwoInputRateCodingRecipe(
+                dataloader=[((x0, x1), label)],
+                mode="Max",
+                fuse_flag=False,
+            )
         )
 
         snn = converter.convert(model)
