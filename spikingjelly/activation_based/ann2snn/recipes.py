@@ -918,11 +918,14 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             target.v_proj.weight.copy_(v_weight)
             if source.in_proj_bias is not None:
                 q_bias, k_bias, v_bias = source.in_proj_bias.chunk(3, dim=0)
-                target.q_proj.bias.copy_(q_bias)
-                target.k_proj.bias.copy_(k_bias)
-                target.v_proj.bias.copy_(v_bias)
+                if target.q_proj.bias is not None:
+                    target.q_proj.bias.copy_(q_bias)
+                if target.k_proj.bias is not None:
+                    target.k_proj.bias.copy_(k_bias)
+                if target.v_proj.bias is not None:
+                    target.v_proj.bias.copy_(v_bias)
             target.out_proj.weight.copy_(source.out_proj.weight)
-            if source.out_proj.bias is not None:
+            if source.out_proj.bias is not None and target.out_proj.bias is not None:
                 target.out_proj.bias.copy_(source.out_proj.bias)
 
     def _make_td_operator(

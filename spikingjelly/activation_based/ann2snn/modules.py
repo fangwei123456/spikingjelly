@@ -89,7 +89,10 @@ class VoltageHook(nn.Module):
                     quantile = float(self.mode[:-1]) / 100.0
                     if not (0.0 <= quantile <= 1.0):
                         raise NotImplementedError(err_msg)
-                    s_t = torch.quantile(x.detach(), quantile)
+                    quantile_input = x.detach()
+                    if quantile_input.dtype in [torch.float16, torch.bfloat16]:
+                        quantile_input = quantile_input.to(torch.float32)
+                    s_t = torch.quantile(quantile_input, quantile).to(x.dtype)
                 except (ValueError, RuntimeError) as exc:
                     raise NotImplementedError(err_msg) from exc
             elif self.mode.lower() in ["max"]:

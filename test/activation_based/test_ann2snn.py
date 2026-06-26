@@ -568,6 +568,15 @@ class TestVoltageHook:
 
         assert hook.scale.item() == pytest.approx(torch.quantile(x, 0.5).item())
 
+    def test_percentile_mode_supports_half_precision(self):
+        hook = VoltageHook(mode="50%")
+        x = torch.arange(101, dtype=torch.float16)
+
+        hook(x)
+
+        assert hook.scale.dtype == torch.float16
+        assert hook.scale.item() == pytest.approx(50.0)
+
     def test_out_of_range_percentile_mode_raises(self):
         hook = VoltageHook(mode="101%")
 
@@ -1309,6 +1318,24 @@ class TestConverterTDOperatorReplacement:
         )
         assert torch.equal(td_mha.v_proj.bias, model.mha.in_proj_bias[2 * embed_dim :])
         assert torch.equal(td_mha.out_proj.bias, model.mha.out_proj.bias)
+
+    def test_copy_mha_parameters_tolerates_missing_target_bias(self):
+        source = nn.MultiheadAttention(embed_dim=8, num_heads=2, batch_first=True)
+        target = TDMultiheadAttention(
+            embed_dim=8,
+            num_heads=2,
+            bias=False,
+            batch_first=True,
+        )
+
+        TransformerSpikeEquivalentRecipe._copy_mha_parameters(source, target)
+
+        assert target.q_proj.bias is None
+        assert target.k_proj.bias is None
+        assert target.v_proj.bias is None
+        assert target.out_proj.bias is None
+        assert torch.equal(target.q_proj.weight, source.in_proj_weight[:8])
+        assert torch.equal(target.out_proj.weight, source.out_proj.weight)
 
     def test_replaces_mha_subclass(self):
         model = SubclassSelfAttentionBlock()
