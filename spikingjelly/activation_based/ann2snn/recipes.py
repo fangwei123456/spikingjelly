@@ -24,6 +24,7 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDGELU,
     TDLayerNorm,
     TDLinear,
+    TDModule,
     TDMultiheadAttention,
     TDScaledDotProductAttention,
 )
@@ -932,6 +933,9 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
         module: nn.Module,
         node: Optional[fx.Node] = None,
     ) -> Optional[nn.Module]:
+        if isinstance(module, TDModule):
+            return None
+
         if isinstance(module, nn.Linear):
             td_module = TDLinear(
                 module.in_features,

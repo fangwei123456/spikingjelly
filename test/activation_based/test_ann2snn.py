@@ -1110,6 +1110,13 @@ class TestConverterTDOperatorReplacement:
         assert isinstance(modules["act"], TDGELU)
         assert isinstance(modules["fc1"], TDLinear)
 
+    def test_td_operator_replacement_skips_existing_td_modules(self):
+        recipe = TransformerSpikeEquivalentRecipe()
+
+        assert recipe._make_td_operator(TDLinear(4, 4)) is None
+        assert recipe._make_td_operator(TDLayerNorm(4)) is None
+        assert recipe._make_td_operator(TDGELU()) is None
+
     def test_copies_linear_layernorm_and_gelu_configuration(self):
         model = CoreTransformerMLP()
         model.eval()
