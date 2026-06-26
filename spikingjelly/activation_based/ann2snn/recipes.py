@@ -473,11 +473,13 @@ class RateCodingRecipe(ConversionRecipe):
         with torch.no_grad():
             for _, data in enumerate(tqdm(self.dataloader)):
                 imgs = self._extract_batch_input(data)
-                if isinstance(imgs, torch.Tensor):
-                    imgs = imgs.to(device=converter.device)
+                imgs = self._move_to_device(imgs, converter.device)
+                if isinstance(imgs, dict):
+                    fx_model(**imgs)
+                elif isinstance(imgs, (list, tuple)):
+                    fx_model(*imgs)
                 else:
-                    imgs = torch.as_tensor(imgs, device=converter.device)
-                fx_model(imgs)
+                    fx_model(imgs)
         return fx_model
 
     def replace(
@@ -522,13 +524,17 @@ class RateCodingRecipe(ConversionRecipe):
         return self._replace_by_neurons(fx_model).to(converter.device)
 
     @staticmethod
-    def _extract_batch_input(data):
+    def _extract_batch_input(data, unpack_sequence=True):
         if isinstance(data, torch.Tensor):
             return data
         if isinstance(data, (list, tuple)):
             if not data:
                 raise ValueError("Batch data is an empty list or tuple.")
-            return RateCodingRecipe._extract_batch_input(data[0])
+            if unpack_sequence or len(data) == 1:
+                return RateCodingRecipe._extract_batch_input(
+                    data[0], unpack_sequence=False
+                )
+            return data
         if isinstance(data, dict):
             if not data:
                 raise ValueError("Batch data is an empty dictionary.")
@@ -542,9 +548,32 @@ class RateCodingRecipe(ConversionRecipe):
                 "pixel_values",
             ):
                 if key in data:
-                    return RateCodingRecipe._extract_batch_input(data[key])
-            return RateCodingRecipe._extract_batch_input(next(iter(data.values())))
+                    return RateCodingRecipe._extract_batch_input(
+                        data[key], unpack_sequence=False
+                    )
+            if unpack_sequence:
+                return RateCodingRecipe._extract_batch_input(
+                    next(iter(data.values())), unpack_sequence=False
+                )
+            return data
         return data
+
+    @staticmethod
+    def _move_to_device(data, device: torch.device):
+        if isinstance(data, torch.Tensor):
+            return data.to(device=device)
+        if isinstance(data, list):
+            return [RateCodingRecipe._move_to_device(value, device) for value in data]
+        if isinstance(data, tuple):
+            return tuple(
+                RateCodingRecipe._move_to_device(value, device) for value in data
+            )
+        if isinstance(data, dict):
+            return {
+                key: RateCodingRecipe._move_to_device(value, device)
+                for key, value in data.items()
+            }
+        return torch.as_tensor(data, device=device)
 
     def _check_mode(self):
         err_msg = "You have used a non-defined VoltageScale Method."
