@@ -615,7 +615,7 @@ class RateCodingRecipe(ConversionRecipe):
         modules = dict(fx_model.named_modules())
 
         for pattern in patterns:
-            for node in fx_model.graph.nodes:
+            for node in list(fx_model.graph.nodes):
                 if matches_module_pattern(pattern, node, modules):
                     if len(node.args[0].users) > 1:
                         continue

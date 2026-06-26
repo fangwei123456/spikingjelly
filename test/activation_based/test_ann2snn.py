@@ -72,6 +72,19 @@ class SubclassCNN(nn.Module):
         return self.fc(x)
 
 
+class TwoConvBN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv0 = nn.Conv2d(1, 4, 3, padding=1)
+        self.bn0 = nn.BatchNorm2d(4)
+        self.conv1 = nn.Conv2d(4, 8, 3, padding=1)
+        self.bn1 = nn.BatchNorm2d(8)
+
+    def forward(self, x):
+        x = self.bn0(self.conv0(x))
+        return self.bn1(self.conv1(x))
+
+
 class SimpleCNNNoBN(nn.Module):
     def __init__(self):
         super().__init__()
@@ -1412,6 +1425,19 @@ class TestFuse:
 
     def test_conv_bn_fusion_supports_module_subclasses(self):
         model = SubclassCNN()
+        model.eval()
+        fx_model = torch.fx.symbolic_trace(model)
+        x = torch.randn(2, 1, 28, 28)
+        expected = fx_model(x)
+
+        fused = RateCodingRecipe._fuse(fx_model, fuse_flag=True)
+        result = fused(x)
+
+        assert torch.allclose(result, expected, atol=1e-5, rtol=1e-5)
+        assert not any(isinstance(m, nn.BatchNorm2d) for m in fused.modules())
+
+    def test_conv_bn_fusion_handles_multiple_pairs(self):
+        model = TwoConvBN()
         model.eval()
         fx_model = torch.fx.symbolic_trace(model)
         x = torch.randn(2, 1, 28, 28)
