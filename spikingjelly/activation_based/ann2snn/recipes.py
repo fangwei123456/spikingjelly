@@ -600,7 +600,8 @@ class RateCodingRecipe(ConversionRecipe):
             assert isinstance(node.target, str)
             parent_path, _, child_name = node.target.rpartition(".")
             modules[node.target] = new_module
-            setattr(modules[parent_path], child_name, new_module)
+            parent = fx_model.get_submodule(parent_path) if parent_path else fx_model
+            setattr(parent, child_name, new_module)
 
         patterns = [
             (nn.Conv1d, nn.BatchNorm1d),
@@ -762,6 +763,7 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             modules[node.target] = replacement
 
         sdpa_index = 0
+        existing_modules = set(dict(fx_model.named_modules()).keys())
         for node in list(fx_model.graph.nodes):
             if (
                 node.op != "call_function"
@@ -770,7 +772,6 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
                 continue
             sdpa_kwargs = self._parse_sdpa_node(node)
             target = f"td_scaled_dot_product_attention_{sdpa_index}"
-            existing_modules = dict(fx_model.named_modules())
             while target in existing_modules:
                 sdpa_index += 1
                 target = f"td_scaled_dot_product_attention_{sdpa_index}"
@@ -782,6 +783,7 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
                     scale=sdpa_kwargs["scale"],
                 ),
             )
+            existing_modules.add(target)
             with fx_model.graph.inserting_after(node):
                 new_node = fx_model.graph.call_module(
                     target,
