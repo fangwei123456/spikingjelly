@@ -1,7 +1,7 @@
 import copy
 import logging
 from abc import abstractmethod
-from typing import Tuple, Generator, Optional, Callable
+from typing import Tuple, Generator, Optional, Callable, Any
 
 import torch
 import torch.nn as nn
@@ -701,6 +701,42 @@ class MemoryModule(nn.Module, StepModule):
         :type value: Any
         """
         self._memories_rv[name] = copy.deepcopy(value)
+
+    def get_reset_value(self, name: str) -> Any:
+        r"""
+        **API Language** - :ref:`中文 <MemoryModule.get_reset_value-cn>` | :ref:`English <MemoryModule.get_reset_value-en>`
+
+        ----
+
+        .. _MemoryModule.get_reset_value-cn:
+
+        * **中文**
+
+        获取状态变量 ``self.name`` 的重置值。
+
+        :param name: 状态变量名称
+        :type name: str
+        :return: 状态变量的重置值
+        :rtype: Any
+        :raises KeyError: 当 ``name`` 不是已注册的状态变量时抛出
+
+        ----
+
+        .. _MemoryModule.get_reset_value-en:
+
+        * **English**
+
+        Get the reset value of state variable ``self.name``.
+
+        :param name: Name of the state variable
+        :type name: str
+        :return: Reset value of the state variable
+        :rtype: Any
+        :raises KeyError: Raised when ``name`` is not a registered state variable
+        """
+        if name not in self._memories_rv:
+            raise KeyError(f"{name} is not a registered memory.")
+        return self._memories_rv[name]
 
     def __getattr__(self, name: str):
         #! use self.__dict__ instead of direct access to avoid infinite recursion

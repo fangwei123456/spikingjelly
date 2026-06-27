@@ -13,7 +13,7 @@ Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https:/
     #. :doc:`Legacy pre-Recipe Converter API <../../legacy_tutorials/en/ann2snn_converter_legacy>`, which used ``Converter(mode=..., dataloader=...)`` and ``convert_to_spiking_neurons(model)``.
     #. Current Recipe API, documented on this page: ``RateCodingRecipe`` or ``TransformerSpikeEquivalentRecipe`` defines the algorithm, and ``Converter.convert(model)`` executes it.
 
-This tutorial focuses on ``spikingjelly.activation_based.ann2snn``. It shows how to convert a trained feedforward ANN to an SNN with the current Recipe API and simulate the converted model in SpikingJelly.
+This tutorial focuses on ``spikingjelly.activation_based.ann2snn``. It shows how to convert a trained feedforward ANN to an SNN using the Recipe API and simulate the result.
 
 ANN2SNN API references are available `here <https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.activation_based.ann2snn.html>`_.
 
@@ -22,14 +22,14 @@ The current implementation is based on ``torch.fx``. ``torch.fx`` traces ``nn.Mo
 Theoretical basis of ANN2SNN
 ----------------------------
 
-SNNs communicate with discrete spikes, which enables efficient event-driven computation, but direct SNN training often requires more resources than ANN training. A practical route is to train an ANN first and then convert it to an SNN with similar behavior. This requires connecting ANN activations with SNN firing rates. For rate-coded SNNs, output classes are read from spike counts. The core question is whether the firing rate of a spiking neuron can approximate the activation of an ANN neuron.
+SNNs communicate with discrete spikes, which enables efficient event-driven computation, but direct SNN training often requires more resources than ANN training. One approach is to train an ANN first, then convert it to an SNN with similar behavior. For rate-coded SNNs, output classes are read from spike counts. The key question is whether a spiking neuron's firing rate can approximate an ANN neuron's activation.
 
-ReLU activations in ANNs are strongly related to the firing rates of IF neurons with subtractive reset, where the membrane voltage is reset by subtracting :math:`V_{threshold}`. ``RateCodingRecipe`` uses this relationship for conversion. This neuron update method is the Soft reset method described in the `Neuron tutorial <https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/en/neuron.html>`_.
+ReLU activations in ANNs are strongly related to the firing rates of IF neurons with subtractive reset, where the membrane voltage is reset by subtracting :math:`V_{threshold}`. This neuron update method is the Soft reset method described in the `Neuron tutorial <https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/en/neuron.html>`_. ``RateCodingRecipe`` uses this relationship for conversion.
 
 Experiment: Relationship between IF neuron spiking frequency and input
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Give constant input to an IF neuron and observe its output spikes and firing rate. First import the relevant modules, create an IF neuron layer, and plot the input :math:`x_{i}` for each neuron:
+Apply constant input to an IF neuron and observe its output spikes and firing rate. First import the modules, create an IF neuron layer, and plot the input :math:`x_{i}` for each neuron:
 
 .. code-block:: python
 
@@ -95,8 +95,8 @@ Plot the firing rate against the input :math:`x_{i}` and compare it with :math:`
 
 The two curves are nearly identical. However, the firing rate cannot exceed 1, so the IF neuron cannot approximate ReLU activations larger than 1.
 
-Theoretical basis of ANN2SNN
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Theoretical proof
+^^^^^^^^^^^^^^^^^
 
 Literature [#f1]_ provides an analytical basis for ANN-to-SNN conversion. The theory shows that an IF neuron in an SNN is an unbiased estimator of the ReLU activation over time.
 
@@ -136,11 +136,11 @@ See [#f1]_ for the full derivation. The methods in ann2snn are based on [#f1]_.
 Converting to spiking neural network
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Conversion mainly solves two problems:
+Conversion addresses two problems:
 
-1. ANNs use Batch Normalization for faster training and convergence. Batch normalization normalizes activations to zero mean, which conflicts with SNN properties. The BN parameters can be absorbed into the preceding parameter layers (Linear, Conv2d).
+1. ANNs use Batch Normalization to speed up training. It normalizes activations to zero mean, which conflicts with SNN properties. The BN parameters can be absorbed into the preceding parameter layers (Linear, Conv2d).
 
-2. According to the conversion theory, each layer's inputs and outputs must lie within [0, 1], which requires scaling the parameters (model normalization)
+2. According to the conversion theory, each layer's inputs and outputs must lie within [0, 1], requiring parameter scaling (model normalization).
 
 ◆ BatchNorm parameter absorption
 
@@ -187,8 +187,7 @@ accuracy loss.
 Implementation and optional configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The current ann2snn API separates **what algorithm to run** from **how to run
-the conversion**:
+The current ann2snn API separates algorithm definition from execution:
 
 * A recipe owns algorithm-specific options and graph transformations.
 * ``Converter`` is the executor. It receives a recipe, traces the model with
@@ -234,7 +233,7 @@ Classify MNIST
 Build and load the ANN
 ^^^^^^^^^^^^^^^^^^^^^^
 
-This section builds a simple convolutional network with ``ann2snn`` to classify the MNIST dataset.
+This section uses ``ann2snn`` to build a simple convolutional network for MNIST classification.
 
 The complete runnable example is ``spikingjelly.activation_based.ann2snn.examples.cnn_mnist``.
 The network structure is defined in ``ann2snn.sample_models.mnist_cnn``:
@@ -268,7 +267,7 @@ The network structure is defined in ``ann2snn.sample_models.mnist_cnn``:
             x = self.network(x)
             return x
 
-Note: when the tensor needs to be flattened, define an ``nn.Flatten`` module in the network and call it in ``forward`` instead of using ``view``.
+Note: to flatten the tensor, define an ``nn.Flatten`` module in the network and call it in ``forward`` rather than using ``view``.
 
 Set the runtime options:
 
@@ -308,20 +307,24 @@ Set the runtime options:
         dataset=test_data_dataset, batch_size=50, shuffle=True, drop_last=False
     )
 
-The example script downloads a pretrained checkpoint. Load it and validate the ANN first:
+The example script downloads a pretrained checkpoint. The entrypoint ``download_checkpoint`` wraps the download logic, falling back to streamed ``requests`` download when ``download_url`` fails. Load the checkpoint and validate the ANN first:
 
 .. code-block:: python
 
-    ann2snn.download_url(
-        "https://ndownloader.figshare.com/files/34960191",
-        "./SJ-mnist-cnn_model-sample.pth",
+    from spikingjelly.activation_based.ann2snn.examples.cnn_mnist import (
+        DEFAULT_CHECKPOINT_PATH,
+        DEFAULT_CHECKPOINT_URL,
+        download_checkpoint,
     )
+    from spikingjelly.activation_based.ann2snn.sample_models import mnist_cnn
+
+    download_checkpoint(DEFAULT_CHECKPOINT_URL, DEFAULT_CHECKPOINT_PATH)
     model = mnist_cnn.CNN().to(device)
-    model.load_state_dict(torch.load("SJ-mnist-cnn_model-sample.pth", map_location=device))
+    model.load_state_dict(torch.load(DEFAULT_CHECKPOINT_PATH, map_location=device))
     acc = val(model, device, test_data_loader)
     print('ANN Validating Accuracy: %.4f' % (acc))
 
-The ANN accuracy is:
+ANN accuracy:
 
 .. code-block:: shell
 
@@ -331,9 +334,7 @@ The ANN accuracy is:
 Make the conversion with the converter
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The ANN is trained and validated. Select the rate-coding recipe, pass the
-deterministic calibration dataloader, and run ``Converter`` to execute the
-conversion:
+The ANN is trained and validated. Select the rate-coding recipe, pass the deterministic calibration dataloader, and run ``Converter`` to execute the conversion:
 
 .. code-block:: python
 
@@ -341,9 +342,7 @@ conversion:
     model_converter = ann2snn.Converter(recipe=recipe)
     snn_model = model_converter.convert(model)
 
-``snn_model`` is the converted SNN model. View its structure below. The
-``BatchNorm2d`` modules disappear because the default rate-coding recipe fuses
-BatchNorm parameters into the preceding Conv layers before calibration:
+``snn_model`` is the converted SNN model. The ``BatchNorm2d`` modules have disappeared because the default rate-coding recipe fuses BatchNorm parameters into the preceding Conv layers before calibration:
 
 .. code-block:: python
 
@@ -386,7 +385,7 @@ BatchNorm parameters into the preceding Conv layers before calibration:
 
 ``snn_model`` is an ``fx.GraphModule``; see `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_.
 
-Call ``GraphModule.graph.print_tabular()`` to inspect the computation graph in tabular form:
+Call ``GraphModule.graph.print_tabular()`` to inspect the computation graph:
 
 .. code-block:: shell
 
@@ -416,24 +415,16 @@ Call ``GraphModule.graph.print_tabular()`` to inspect the computation graph in t
 Other recipes and custom recipes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The MNIST example above uses rate coding because it converts ReLU activations
-to IF neurons. Transformer models can use
-``TransformerSpikeEquivalentRecipe`` instead:
+The MNIST example above uses rate coding to convert ReLU activations to IF neurons. Transformer models can use ``TransformerSpikeEquivalentRecipe`` instead:
 
 .. code-block:: python
 
     recipe = ann2snn.TransformerSpikeEquivalentRecipe()
     td_model = ann2snn.Converter(recipe=recipe).convert(transformer_ann)
 
-This recipe does not need a dataloader, does not insert ``VoltageHook``, and
-does not run rate-coding calibration. It replaces currently supported ANN
-modules and attention calls with TD / spike-equivalent operators. It does not
-claim fully spike-driven LLM conversion.
+This recipe does not need a dataloader, does not insert ``VoltageHook``, and does not run rate-coding calibration. It replaces currently supported ANN modules and attention calls with TD / spike-equivalent operators, but does not cover fully spike-driven LLM conversion.
 
-To add a new conversion algorithm, subclass ``ConversionRecipe`` and override
-only the steps you need. Methods that are not overridden use the base no-op
-implementation. A recipe is not an executor and should not provide
-``convert()``, ``run()``, or ``__call__()``:
+To add a new conversion algorithm, subclass ``ConversionRecipe`` and override only the steps you need. Unoverridden methods use the base no-op implementation. A recipe is not an executor and should not provide ``convert()``, ``run()``, or ``__()``:
 
 .. code-block:: python
 
@@ -461,8 +452,7 @@ Advanced users can pass explicit extension points to ``RateCodingRecipe``:
 * ``ThresholdOptimizer`` computes a finite positive scalar threshold from a
   calibrated ``VoltageHook``.
 
-The following minimal rule shows the protocol shape without adding a new
-conversion algorithm. It matches ``nn.Identity`` and replaces the calibrated
+The following minimal rule demonstrates the protocol shape without implementing a new conversion algorithm. It matches ``nn.Identity`` and replaces the calibrated
 identity node with another ``nn.Identity`` module:
 
 .. code-block:: python
@@ -521,63 +511,15 @@ and ``VoltageScaler`` semantics, and are not part of this conversion path yet.
 Comparison of different converting modes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Using the same model, convert with each mode (``max``, ``99.9%``, ``1.0/2``, ``1.0/3``, ``1.0/4``, ``1.0/5``) and run inference for T steps to compare accuracy.
+Following this example, we can compare timestep convergence curves for different
+normalization modes in ``RateCodingRecipe``. The full example keeps this legacy
+experiment and can generate the plot with ``--plot-mode-sweep``:
 
-.. code-block:: python
+.. code-block:: shell
 
-    print('---------------------------------------------')
-    print('Converting using MaxNorm')
-    recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode="max")
-    model_converter = ann2snn.Converter(recipe=recipe)
-    snn_model = model_converter.convert(model)
-    print('Simulating...')
-    mode_max_accs = val(snn_model, device, test_data_loader, T=T)
-    print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_max_accs[-1]))
-
-    print('---------------------------------------------')
-    print('Converting using RobustNorm')
-    recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode="99.9%")
-    model_converter = ann2snn.Converter(recipe=recipe)
-    snn_model = model_converter.convert(model)
-    print('Simulating...')
-    mode_robust_accs = val(snn_model, device, test_data_loader, T=T)
-    print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_robust_accs[-1]))
-
-    print('---------------------------------------------')
-    print('Converting using 1/2 max(activation) as scales...')
-    recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode=1.0 / 2)
-    model_converter = ann2snn.Converter(recipe=recipe)
-    snn_model = model_converter.convert(model)
-    print('Simulating...')
-    mode_two_accs = val(snn_model, device, test_data_loader, T=T)
-    print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_two_accs[-1]))
-
-    print('---------------------------------------------')
-    print('Converting using 1/3 max(activation) as scales')
-    recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode=1.0 / 3)
-    model_converter = ann2snn.Converter(recipe=recipe)
-    snn_model = model_converter.convert(model)
-    print('Simulating...')
-    mode_three_accs = val(snn_model, device, test_data_loader, T=T)
-    print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_three_accs[-1]))
-
-    print('---------------------------------------------')
-    print('Converting using 1/4 max(activation) as scales')
-    recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode=1.0 / 4)
-    model_converter = ann2snn.Converter(recipe=recipe)
-    snn_model = model_converter.convert(model)
-    print('Simulating...')
-    mode_four_accs = val(snn_model, device, test_data_loader, T=T)
-    print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_four_accs[-1]))
-
-    print('---------------------------------------------')
-    print('Converting using 1/5 max(activation) as scales')
-    recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode=1.0 / 5)
-    model_converter = ann2snn.Converter(recipe=recipe)
-    snn_model = model_converter.convert(model)
-    print('Simulating...')
-    mode_five_accs = val(snn_model, device, test_data_loader, T=T)
-    print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_five_accs[-1]))
+    python -m spikingjelly.activation_based.ann2snn.examples.cnn_mnist \
+      --time-steps 50 \
+      --plot-mode-sweep
 
 The following output was measured with ``T=50`` on an NVIDIA GeForce RTX 4090:
 
@@ -621,32 +563,138 @@ The following output was measured with ``T=50`` on an NVIDIA GeForce RTX 4090:
     Simulation: 7.26s
     SNN accuracy (simulation 50 time-steps): 0.9472
 
-RobustNorm and moderate scaling usually converge faster than MaxNorm in early
-SNN timesteps on this example. Based on the time-varying accuracy of the model
-output, we can plot the accuracy for different settings.
-
-.. code-block:: python
-
-    fig = plt.figure()
-    plt.plot(np.arange(0, T), mode_max_accs, label="mode: max")
-    plt.plot(np.arange(0, T), mode_robust_accs, label="mode: 99.9%")
-    plt.plot(np.arange(0, T), mode_two_accs, label="mode: 1.0/2")
-    plt.plot(np.arange(0, T), mode_three_accs, label="mode: 1.0/3")
-    plt.plot(np.arange(0, T), mode_four_accs, label="mode: 1.0/4")
-    plt.plot(np.arange(0, T), mode_five_accs, label="mode: 1.0/5")
-    plt.legend()
-    plt.xlabel("t")
-    plt.ylabel("Acc")
-    plt.show()
-
 .. image:: ../../_static/tutorials/5_ann2snn/accuracy_mode_recipe_api.png
 
-Different settings trade off early-timestep convergence and final accuracy.
-Users can choose the normalization mode according to latency and accuracy
-requirements.
+Different normalization modes trade off early-timestep convergence against final accuracy. Choose based on latency and accuracy requirements.
+
+Conversion recipe comparison
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Besides the basic ``RateCodingRecipe``, SpikingJelly also provides
+``LocalThresholdBalancingRecipe`` for estimating local thresholds during
+conversion. This recipe follows the local-threshold-balancing method [#f3]_.
+The following comparison uses the ANN, legacy scalar-threshold RobustNorm, and
+the LTB recipe. The runnable entrypoint is still
+``spikingjelly.activation_based.ann2snn.examples.cnn_mnist``:
+
+.. code-block:: shell
+
+    python -m spikingjelly.activation_based.ann2snn.examples.cnn_mnist \
+      --time-steps 32 \
+      --output /tmp/ann2snn_mnist_t32.json
+
+The table below is generated by this command. RobustNorm uses
+``RateCodingRecipe(dataloader=..., mode="99.9%")``. LTB uses
+``LocalThresholdBalancingRecipe(dataloader=..., time_steps=32, mode="99.9%")``.
+This MNIST run uses all 60000 training samples for calibration and evaluates on
+the full 10000-image test set:
+
+.. list-table:: MNIST CNN conversion results
+    :header-rows: 1
+    :widths: 24 20 18 16 18
+
+    * - Method
+      - Calibration samples
+      - Test samples
+      - Timesteps
+      - Top-1 (%)
+    * - ANN
+      - -
+      - 10000
+      - -
+      - 98.70
+    * - RobustNorm (legacy, scalar threshold)
+      - 60000
+      - 10000
+      - 32
+      - 98.35
+    * - LocalThresholdBalancingRecipe
+      - 60000
+      - 10000
+      - 32
+      - 98.53
+
+ResNet-18 conversion
+--------------------
+
+The ImageNet ResNet-18 example demonstrates the same recipes on a larger
+classification model. It uses torchvision
+``ResNet18_Weights.IMAGENET1K_V1`` and the corresponding preprocessing. The
+calibration set is a deterministic 50000-image subset from ImageNet train, and
+the evaluation set is the full 50000-image ImageNet validation set.
+The command assumes that ``/path/to/imagenet`` contains ``train/`` and ``val/``.
+If your dataset is nested under an additional directory such as
+``ILSVRC2012/``, point ``--data-root`` to the directory that directly contains
+``train/`` and ``val/``.
+
+.. note::
+
+    ``LocalThresholdBalancingRecipe`` in SpikingJelly is an engineering
+    implementation of the main local-threshold-balancing idea within the
+    current ANN2SNN recipe framework. It is not a full reproduction of the
+    original LTB paper pipeline [#f3]_. Some paper-specific engineering details
+    and evaluation settings are intentionally not included. Therefore, the
+    accuracy below should be interpreted as the result of this SpikingJelly
+    recipe implementation, not as the official accuracy of the LTB paper or a
+    directly comparable reproduction.
+
+Run the example as follows:
+
+.. code-block:: shell
+
+    CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.imagenet_resnet18_ltb \
+      --data-root /path/to/imagenet \
+      --calib-samples 50000 \
+      --batch-size 128 \
+      --num-workers 8 \
+      --device cuda:0 \
+      --time-steps 32 \
+      --recipes ann robust_legacy ltb \
+      --delay-start auto \
+      --output /tmp/ann2snn_imagenet_t32_delayauto_calib50k_tutorial.json
+
+The ``robust_legacy`` recipe name denotes the legacy scalar-threshold
+``RateCodingRecipe`` without ``channel_wise`` or ``half_threshold``.
+``--delay-start auto`` estimates the delayed-readout start timestep before
+evaluation and skips the early transient SNN timesteps. It only changes the
+readout window and does not change the converted neuron dynamics. In this run,
+the estimated ``delay_start`` is about 27; the exact value can vary with the
+model, calibration data, and implementation details.
+
+.. list-table:: ImageNet ResNet-18 conversion results
+    :header-rows: 1
+    :widths: 30 18 18 14 16 16
+
+    * - Method
+      - Calibration samples
+      - Validation samples
+      - Timesteps
+      - Top-1 (%)
+      - Top-5 (%)
+    * - ANN
+      - -
+      - 50000
+      - -
+      - 69.76
+      - 89.08
+    * - RobustNorm (legacy, scalar threshold)
+      - 50000
+      - 50000
+      - 32
+      - 12.57
+      - 28.99
+    * - LocalThresholdBalancingRecipe
+      - 50000
+      - 50000
+      - 32
+      - 65.45
+      - 86.60
+
+Scalar-threshold robust normalization without per-channel normalization achieves only 12.57% Top-1 on this deeper ImageNet CNN. The LTB recipe raises it to 65.45% Top-1.
 
 .. [#f1] Rueckauer B, Lungu I-A, Hu Y, Pfeiffer M and Liu S-C (2017) Conversion of Continuous-Valued Deep Networks to Efficient Event-Driven Networks for Image Classification. Front. Neurosci. 11:682.
 .. [#f2] Diehl, Peter U. , et al. Fast classifying, high-accuracy spiking deep networks through weight and threshold balancing. Neural Networks (IJCNN), 2015 International Joint Conference on IEEE, 2015.
+.. [#f3] Bu T, Li M, Yu Z. Inference-Scale Complexity in ANN-SNN Conversion for High-Performance and Low-Power Applications. arXiv:2409.03368, 2024. Accepted by CVPR 2025.
 
 Additional references:
 
