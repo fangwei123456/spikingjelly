@@ -220,7 +220,6 @@ def estimate_delay_start(
         except StopIteration:
             original_device = None
     original_training_modes = {module: module.training for module in model.modules()}
-    model.eval().to(device)
     ratios: Dict[BaseNode, List[float]] = {module: [] for module, _ in paths}
     handles = []
 
@@ -237,6 +236,7 @@ def estimate_delay_start(
         return hook
 
     try:
+        model.eval().to(device)
         for module, post_scaler in paths:
             handles.append(module.register_forward_hook(make_hook(module, post_scaler)))
 
@@ -261,9 +261,9 @@ def estimate_delay_start(
         if original_device is not None:
             model.to(original_device)
         for module, training in original_training_modes.items():
-            module.train(training)
+            module.training = training
 
-    delay_start = int(math.ceil(delay)) if math.isfinite(delay) else time_steps
+    delay_start = math.ceil(delay) if math.isfinite(delay) else time_steps
     if time_steps < delay_start + _MIN_READOUT_STEPS:
         return max(time_steps - _MIN_READOUT_STEPS, 0)
     return min(delay_start, time_steps - 1)

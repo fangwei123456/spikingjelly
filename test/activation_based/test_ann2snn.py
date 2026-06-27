@@ -2315,6 +2315,16 @@ class TestLocalThresholdBalancingRecipe:
         assert node.v_threshold == 1.0
         assert node.v == 0.5
 
+    def test_half_threshold_if_node_accepts_scalar_tensor_threshold(self):
+        node = neuron.HalfThresholdIFNode(v_threshold=torch.tensor(2.0))
+
+        assert node.v_threshold == 2.0
+        assert node.v == 1.0
+
+    def test_half_threshold_if_node_rejects_non_scalar_tensor_threshold(self):
+        with pytest.raises(ValueError, match="scalar finite positive"):
+            neuron.HalfThresholdIFNode(v_threshold=torch.ones(2))
+
     def test_half_threshold_if_node_reinitializes_new_shape_to_half_threshold(self):
         node = neuron.HalfThresholdIFNode()
         node(torch.tensor([0.1]))
@@ -2587,6 +2597,46 @@ class TestDelayedReadoutEstimation:
 
 
 class TestDownloadUrl:
+    def test_resume_accepts_case_insensitive_content_range(
+        self, tmp_path, monkeypatch
+    ):
+        dst = tmp_path / "checkpoint.pth"
+        dst.write_bytes(b"partial")
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, headers, chunks=()):
+                self.status_code = status_code
+                self.headers = headers
+                self._chunks = chunks
+
+            def iter_content(self, chunk_size):
+                yield from self._chunks
+
+            def close(self):
+                pass
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            calls.append(headers)
+            if len(calls) == 1:
+                return FakeResponse(200, {"content-length": "10"})
+            return FakeResponse(
+                206,
+                {"Content-Range": "Bytes 7-9/10"},
+                [b"890"],
+            )
+
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        file_size = ann2snn_utils.download_url(
+            "https://example.com/model.pth", str(dst)
+        )
+
+        assert file_size == 10
+        assert dst.read_bytes() == b"partial890"
+        assert calls[1] == {"Range": "bytes=7-9"}
+        assert len(calls) == 2
+
     def test_resume_restarts_when_server_ignores_range(self, tmp_path, monkeypatch):
         dst = tmp_path / "checkpoint.pth"
         dst.write_bytes(b"partial")
@@ -2600,6 +2650,9 @@ class TestDownloadUrl:
 
             def iter_content(self, chunk_size):
                 yield from self._chunks
+
+            def close(self):
+                pass
 
         def fake_get(url, headers=None, stream=False, timeout=None):
             calls.append(headers)

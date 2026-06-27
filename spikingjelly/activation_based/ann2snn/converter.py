@@ -145,5 +145,5 @@ class Converter:
             return fx_model
         finally:
             for module, training in original_training_modes.items():
-                module.train(training)
+                module.training = training
             self.device = configured_device

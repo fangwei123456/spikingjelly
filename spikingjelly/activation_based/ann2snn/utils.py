@@ -48,7 +48,10 @@ def download_url(url, dst):
     }
 
     response = requests.get(url, headers=headers, stream=True, timeout=30)  # (1)
-    file_size = int(response.headers["content-length"])  # (2)
+    try:
+        file_size = int(response.headers["content-length"])  # (2)
+    finally:
+        response.close()
     if os.path.exists(dst):
         first_byte = os.path.getsize(dst)  # (3)
     else:
@@ -62,20 +65,30 @@ def download_url(url, dst):
         total=file_size, initial=first_byte, unit="B", unit_scale=True, desc=dst
     )
     req = requests.get(url, headers=header, stream=True, timeout=30)  # (5)
-    mode = "ab"
-    if first_byte > 0:
-        content_range = req.headers.get("Content-Range", "")
-        match = re.match(r"bytes (\d+)-(\d+)/(\d+)", content_range)
-        if req.status_code != 206 or match is None or int(match.group(1)) != first_byte:
-            first_byte = 0
-            pbar.reset(total=file_size)
-            header = {"Range": f"bytes=0-{file_size - 1}"}
-            req = requests.get(url, headers=header, stream=True, timeout=30)
-            mode = "wb"
-    with open(dst, mode) as f:
-        for chunk in req.iter_content(chunk_size=1024):  # (6)
-            if chunk:
-                f.write(chunk)
-                pbar.update(1024)
-    pbar.close()
+    try:
+        mode = "ab"
+        if first_byte > 0:
+            content_range = req.headers.get("Content-Range", "")
+            match = re.match(
+                r"bytes (\d+)-(\d+)/(\d+)", content_range, re.IGNORECASE
+            )
+            if (
+                req.status_code != 206
+                or match is None
+                or int(match.group(1)) != first_byte
+            ):
+                req.close()
+                first_byte = 0
+                pbar.reset(total=file_size)
+                header = {"Range": f"bytes=0-{file_size - 1}"}
+                req = requests.get(url, headers=header, stream=True, timeout=30)
+                mode = "wb"
+        with open(dst, mode) as f:
+            for chunk in req.iter_content(chunk_size=1024):  # (6)
+                if chunk:
+                    f.write(chunk)
+                    pbar.update(1024)
+    finally:
+        req.close()
+        pbar.close()
     return file_size

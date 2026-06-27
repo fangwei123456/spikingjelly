@@ -583,8 +583,8 @@ class HalfThresholdIFNode(BaseNode):
         训练时使用 ``surrogate_function`` 为脉冲函数提供替代梯度；前向输出仍为
         离散脉冲。
 
-        :param v_threshold: 神经元阈值电压，必须为正实数
-        :type v_threshold: float
+        :param v_threshold: 神经元阈值电压，必须为正实数或单元素张量
+        :type v_threshold: float or torch.Tensor
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: surrogate.SurrogateFunctionBase
         :param detach_reset: 是否在反向传播时分离 reset 计算图
@@ -595,8 +595,8 @@ class HalfThresholdIFNode(BaseNode):
         :type backend: str
         :param store_v_seq: 在 ``step_mode="m"`` 时是否保存每个时间步的膜电位序列
         :type store_v_seq: bool
-        :raises TypeError: 当 ``v_threshold`` 不是实数时抛出
-        :raises ValueError: 当 ``v_threshold`` 非正或不是有限值时抛出
+        :raises TypeError: 当 ``v_threshold`` 不是实数或张量时抛出
+        :raises ValueError: 当 ``v_threshold`` 不是单元素有限正数时抛出
 
         ----
 
@@ -626,8 +626,8 @@ class HalfThresholdIFNode(BaseNode):
         the spike function; the forward output remains discrete spikes.
 
         :param v_threshold: Threshold voltage of the neuron, which must be a
-            positive real number
-        :type v_threshold: float
+            finite positive real number or a scalar tensor
+        :type v_threshold: float or torch.Tensor
         :param surrogate_function: Surrogate gradient function for the spike
             function in backward propagation
         :type surrogate_function: surrogate.SurrogateFunctionBase
@@ -642,10 +642,16 @@ class HalfThresholdIFNode(BaseNode):
         :param store_v_seq: Whether to store membrane potentials at every time
             step when ``step_mode="m"``
         :type store_v_seq: bool
-        :raises TypeError: Raised when ``v_threshold`` is not a real number
-        :raises ValueError: Raised when ``v_threshold`` is not finite positive
+        :raises TypeError: Raised when ``v_threshold`` is not a real number or
+            tensor
+        :raises ValueError: Raised when ``v_threshold`` is not scalar finite
+            positive
         """
-        if not isinstance(v_threshold, numbers.Real):
+        if isinstance(v_threshold, torch.Tensor):
+            if v_threshold.numel() != 1:
+                raise ValueError("v_threshold must be scalar finite positive.")
+            v_threshold = float(v_threshold)
+        elif not isinstance(v_threshold, numbers.Real):
             raise TypeError("v_threshold must be a real number.")
         v_threshold = float(v_threshold)
         if not torch.isfinite(torch.tensor(v_threshold)) or v_threshold <= 0.0:
