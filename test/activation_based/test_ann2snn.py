@@ -2673,6 +2673,52 @@ class TestDownloadUrl:
         assert calls[1] == {"Range": "bytes=7-9"}
         assert calls[2] == {"Range": "bytes=0-9"}
 
+    def test_resume_restarts_when_content_range_end_mismatches(
+        self, tmp_path, monkeypatch
+    ):
+        dst = tmp_path / "checkpoint.pth"
+        dst.write_bytes(b"partial")
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, headers, chunks=()):
+                self.status_code = status_code
+                self.headers = headers
+                self._chunks = chunks
+
+            def iter_content(self, chunk_size):
+                yield from self._chunks
+
+            def close(self):
+                pass
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            calls.append(headers)
+            if len(calls) == 1:
+                return FakeResponse(200, {"content-length": "10"})
+            if len(calls) == 2:
+                return FakeResponse(
+                    206,
+                    {"Content-Range": "bytes 7-8/10"},
+                    [b"89"],
+                )
+            return FakeResponse(
+                206,
+                {"Content-Range": "bytes 0-9/10"},
+                [b"0123456789"],
+            )
+
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        file_size = ann2snn_utils.download_url(
+            "https://example.com/model.pth", str(dst)
+        )
+
+        assert file_size == 10
+        assert dst.read_bytes() == b"0123456789"
+        assert calls[1] == {"Range": "bytes=7-9"}
+        assert calls[2] == {"Range": "bytes=0-9"}
+
 
 class TestChannelWiseRateCodingRecipe:
     def test_recipe_converts_relu_to_channel_scalers_and_ifnode(self):

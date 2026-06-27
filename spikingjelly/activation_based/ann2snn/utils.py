@@ -76,18 +76,36 @@ def download_url(url, dst):
                 req.status_code != 206
                 or match is None
                 or int(match.group(1)) != first_byte
+                or int(match.group(2)) != file_size - 1
+                or int(match.group(3)) != file_size
             ):
                 req.close()
                 first_byte = 0
                 pbar.reset(total=file_size)
                 header = {"Range": f"bytes=0-{file_size - 1}"}
                 req = requests.get(url, headers=header, stream=True, timeout=30)
+                if req.status_code not in (200, 206):
+                    req.raise_for_status()
+                if req.status_code == 206:
+                    content_range = req.headers.get("Content-Range", "")
+                    match = re.match(
+                        r"bytes (\d+)-(\d+)/(\d+)", content_range, re.IGNORECASE
+                    )
+                    if (
+                        match is None
+                        or int(match.group(1)) != 0
+                        or int(match.group(2)) != file_size - 1
+                        or int(match.group(3)) != file_size
+                    ):
+                        raise RuntimeError(
+                            "Invalid Content-Range for restarted download."
+                        )
                 mode = "wb"
         with open(dst, mode) as f:
             for chunk in req.iter_content(chunk_size=1024):  # (6)
                 if chunk:
                     f.write(chunk)
-                    pbar.update(1024)
+                    pbar.update(len(chunk))
     finally:
         req.close()
         pbar.close()
