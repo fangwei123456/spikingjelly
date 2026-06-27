@@ -129,7 +129,9 @@ class Converter:
         """
         configured_device = self.device
         original_ann = ann
-        original_training = ann.training
+        original_training_modes = {
+            module: module.training for module in original_ann.modules()
+        }
         self.device = self._resolve_device(ann)
         try:
             self.recipe.validate(self)
@@ -142,5 +144,6 @@ class Converter:
             fx_model = self.recipe.finalize(self, fx_model)
             return fx_model
         finally:
-            original_ann.train(original_training)
+            for module, training in original_training_modes.items():
+                module.train(training)
             self.device = configured_device

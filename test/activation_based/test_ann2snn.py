@@ -21,6 +21,8 @@ from spikingjelly.activation_based.ann2snn import (
     ThresholdOptimizer,
     TransformerSpikeEquivalentRecipe,
 )
+from spikingjelly.activation_based.ann2snn import delay as ann2snn_delay
+from spikingjelly.activation_based.ann2snn import utils as ann2snn_utils
 from spikingjelly.activation_based.ann2snn.modules import (
     ChannelVoltageScaler,
     VoltageHook,
@@ -2389,8 +2391,12 @@ class TestLocalThresholdBalancingRecipe:
     def test_recipe_does_not_mutate_ann_state_dict(self, training):
         model = SimpleCNNNoBN()
         model.train(training)
+        model.relu.eval()
+        model.pool.train()
         before = {k: v.detach().clone() for k, v in model.state_dict().items()}
-        training_before = model.training
+        training_before = {
+            name: module.training for name, module in model.named_modules()
+        }
         converter = Converter(
             recipe=LocalThresholdBalancingRecipe(
                 dataloader=_make_loader(batch_size=4),
@@ -2402,7 +2408,8 @@ class TestLocalThresholdBalancingRecipe:
         )
         converter.convert(model)
 
-        assert model.training is training_before
+        for name, module in model.named_modules():
+            assert module.training is training_before[name]
         after = model.state_dict()
         assert before.keys() == after.keys()
         for key, value in before.items():
@@ -2519,6 +2526,43 @@ class TestDelayedReadoutEstimation:
         y = model(x)
         assert torch.equal(y, torch.full((2, 2), 4.0))
 
+    def test_delay_estimation_restores_training_modes(self):
+        model = _trace_ann2snn_leaf(
+            ScalerNeuronScalerNet(neuron.HalfThresholdIFNode(), [4.0, 4.0])
+        )
+        model.train()
+        model.if_node.eval()
+        training_before = {
+            name: module.training for name, module in model.named_modules()
+        }
+        loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
+
+        ann2snn.estimate_delay_start(model, loader, device="cpu", time_steps=32)
+
+        for name, module in model.named_modules():
+            assert module.training is training_before[name]
+
+    def test_delay_estimation_handles_nonfinite_ratio(self, monkeypatch):
+        model = _trace_ann2snn_leaf(
+            ScalerNeuronScalerNet(neuron.HalfThresholdIFNode(), [4.0, 4.0])
+        )
+        loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
+
+        def compute_nonfinite_delay_ratio(*args, **kwargs):
+            return torch.tensor(float("inf"))
+
+        monkeypatch.setattr(
+            ann2snn_delay,
+            "_compute_delay_ratio",
+            compute_nonfinite_delay_ratio,
+        )
+
+        delay_start = ann2snn.estimate_delay_start(
+            model, loader, device="cpu", time_steps=8
+        )
+
+        assert delay_start == 4
+
     def test_delay_estimation_cleans_hooks_after_exception(self):
         model = _trace_ann2snn_leaf(
             ScalerNeuronScalerNet(neuron.HalfThresholdIFNode(), [4.0, 4.0])
@@ -2540,6 +2584,41 @@ class TestDelayedReadoutEstimation:
         )
 
         assert delay_start == 0
+
+
+class TestDownloadUrl:
+    def test_resume_restarts_when_server_ignores_range(self, tmp_path, monkeypatch):
+        dst = tmp_path / "checkpoint.pth"
+        dst.write_bytes(b"partial")
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, headers, chunks=()):
+                self.status_code = status_code
+                self.headers = headers
+                self._chunks = chunks
+
+            def iter_content(self, chunk_size):
+                yield from self._chunks
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            calls.append(headers)
+            if len(calls) == 1:
+                return FakeResponse(200, {"content-length": "10"})
+            if len(calls) == 2:
+                return FakeResponse(200, {}, [b"bad-body"])
+            return FakeResponse(200, {}, [b"0123456789"])
+
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        file_size = ann2snn_utils.download_url(
+            "https://example.com/model.pth", str(dst)
+        )
+
+        assert file_size == 10
+        assert dst.read_bytes() == b"0123456789"
+        assert calls[1] == {"Range": "bytes=7-9"}
+        assert calls[2] == {"Range": "bytes=0-9"}
 
 
 class TestChannelWiseRateCodingRecipe:

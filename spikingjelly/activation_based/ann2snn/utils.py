@@ -1,4 +1,5 @@
 import os
+import re
 
 import requests
 from tqdm import tqdm
@@ -55,13 +56,23 @@ def download_url(url, dst):
     if first_byte >= file_size:  # (4)
         return file_size
 
-    header = {"Range": f"bytes={first_byte}-{file_size}"}
+    header = {"Range": f"bytes={first_byte}-{file_size - 1}"}
 
     pbar = tqdm(
         total=file_size, initial=first_byte, unit="B", unit_scale=True, desc=dst
     )
     req = requests.get(url, headers=header, stream=True, timeout=30)  # (5)
-    with open(dst, "ab") as f:
+    mode = "ab"
+    if first_byte > 0:
+        content_range = req.headers.get("Content-Range", "")
+        match = re.match(r"bytes (\d+)-(\d+)/(\d+)", content_range)
+        if req.status_code != 206 or match is None or int(match.group(1)) != first_byte:
+            first_byte = 0
+            pbar.reset(total=file_size)
+            header = {"Range": f"bytes=0-{file_size - 1}"}
+            req = requests.get(url, headers=header, stream=True, timeout=30)
+            mode = "wb"
+    with open(dst, mode) as f:
         for chunk in req.iter_content(chunk_size=1024):  # (6)
             if chunk:
                 f.write(chunk)

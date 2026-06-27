@@ -211,6 +211,15 @@ def estimate_delay_start(
     if not paths:
         return 0
 
+    original_device = None
+    try:
+        original_device = next(model.parameters()).device
+    except StopIteration:
+        try:
+            original_device = next(model.buffers()).device
+        except StopIteration:
+            original_device = None
+    original_training_modes = {module: module.training for module in model.modules()}
     model.eval().to(device)
     ratios: Dict[BaseNode, List[float]] = {module: [] for module, _ in paths}
     handles = []
@@ -249,8 +258,12 @@ def estimate_delay_start(
         for handle in handles:
             handle.remove()
         _reset_snn(model)
+        if original_device is not None:
+            model.to(original_device)
+        for module, training in original_training_modes.items():
+            module.train(training)
 
-    delay_start = int(math.ceil(delay))
+    delay_start = int(math.ceil(delay)) if math.isfinite(delay) else time_steps
     if time_steps < delay_start + _MIN_READOUT_STEPS:
         return max(time_steps - _MIN_READOUT_STEPS, 0)
     return min(delay_start, time_steps - 1)
