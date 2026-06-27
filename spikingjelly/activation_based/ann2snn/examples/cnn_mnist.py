@@ -84,6 +84,7 @@ def download_checkpoint(checkpoint_url, checkpoint_path):
     checkpoint_path = Path(checkpoint_path)
     if checkpoint_path.exists():
         return
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"Downloading {checkpoint_path}...")
     try:
         ann2snn.download_url(checkpoint_url, str(checkpoint_path))
@@ -97,7 +98,9 @@ def download_checkpoint(checkpoint_url, checkpoint_path):
             )
         }
         tmp_path = checkpoint_path.with_suffix(checkpoint_path.suffix + ".tmp")
-        response = requests.get(checkpoint_url, headers=headers, stream=True)
+        response = requests.get(
+            checkpoint_url, headers=headers, stream=True, timeout=30
+        )
         response.raise_for_status()
         with tmp_path.open("wb") as f:
             for chunk in response.iter_content(chunk_size=1024 * 1024):

@@ -734,7 +734,7 @@ class MemoryModule(nn.Module, StepModule):
         :rtype: Any
         :raises KeyError: Raised when ``name`` is not a registered state variable
         """
-        if name not in self._memories_rv:
+        if name not in self._memories:
             raise KeyError(f"{name} is not a registered memory.")
         return self._memories_rv[name]
 

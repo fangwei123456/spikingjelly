@@ -46,7 +46,7 @@ def download_url(url, dst):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0"
     }
 
-    response = requests.get(url, headers=headers, stream=True)  # (1)
+    response = requests.get(url, headers=headers, stream=True, timeout=30)  # (1)
     file_size = int(response.headers["content-length"])  # (2)
     if os.path.exists(dst):
         first_byte = os.path.getsize(dst)  # (3)
@@ -60,7 +60,7 @@ def download_url(url, dst):
     pbar = tqdm(
         total=file_size, initial=first_byte, unit="B", unit_scale=True, desc=dst
     )
-    req = requests.get(url, headers=header, stream=True)  # (5)
+    req = requests.get(url, headers=header, stream=True, timeout=30)  # (5)
     with open(dst, "ab") as f:
         for chunk in req.iter_content(chunk_size=1024):  # (6)
             if chunk:

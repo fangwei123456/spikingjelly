@@ -66,7 +66,7 @@ def _compute_delay_ratio(
 
     try:
         v_init = module.get_reset_value("v")
-    except KeyError:
+    except (KeyError, AttributeError):
         v_init = getattr(module, "v_reset", 0.0)
     if v_init is None:
         v_init = 0.0
@@ -252,5 +252,5 @@ def estimate_delay_start(
 
     delay_start = int(math.ceil(delay))
     if time_steps < delay_start + _MIN_READOUT_STEPS:
-        return max(time_steps - _MIN_READOUT_STEPS - 1, 0)
+        return max(time_steps - _MIN_READOUT_STEPS, 0)
     return min(delay_start, time_steps - 1)

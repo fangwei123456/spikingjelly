@@ -33,7 +33,7 @@ def _safe_quantile(
         values = x.reshape(-1)
         if values.numel() > max_elements:
             stride = math.ceil(values.numel() / max_elements)
-            values = values[::stride][:max_elements]
+            values = values[::stride][:max_elements].contiguous()
         rank = quantile * (values.numel() - 1)
         lower_idx = int(math.floor(rank))
         upper_idx = int(math.ceil(rank))
@@ -49,10 +49,10 @@ def _safe_quantile(
         raise ValueError("dim is out of range.")
     values = x.movedim(dim, -1)
     original_shape = values.shape[:-1]
-    values = values.reshape(-1, values.shape[-1])
+    values = values.reshape(-1, values.shape[-1]).contiguous()
     if values.shape[-1] > max_elements:
         stride = math.ceil(values.shape[-1] / max_elements)
-        values = values[:, ::stride][:, :max_elements]
+        values = values[:, ::stride][:, :max_elements].contiguous()
     rank = quantile * (values.shape[-1] - 1)
     lower_idx = int(math.floor(rank))
     upper_idx = int(math.ceil(rank))
@@ -287,6 +287,8 @@ class ChannelVoltageScaler(nn.Module):
         scale_tensor = torch.as_tensor(scale).detach().clone()
         if scale_tensor.dim() > 1:
             raise ValueError("scale must be a scalar or a 1D tensor.")
+        if scale_tensor.numel() == 0:
+            raise ValueError("scale must not be empty.")
         if not torch.isfinite(scale_tensor).all() or (scale_tensor <= 0).any():
             raise ValueError("scale must contain finite positive values.")
         self.register_buffer("scale", scale_tensor)

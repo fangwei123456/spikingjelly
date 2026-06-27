@@ -424,7 +424,7 @@ The MNIST example above uses rate coding to convert ReLU activations to IF neuro
 
 This recipe does not need a dataloader, does not insert ``VoltageHook``, and does not run rate-coding calibration. It replaces currently supported ANN modules and attention calls with TD / spike-equivalent operators, but does not cover fully spike-driven LLM conversion.
 
-To add a new conversion algorithm, subclass ``ConversionRecipe`` and override only the steps you need. Unoverridden methods use the base no-op implementation. A recipe is not an executor and should not provide ``convert()``, ``run()``, or ``__()``:
+To add a new conversion algorithm, subclass ``ConversionRecipe`` and override only the steps you need. Unoverridden methods use the base no-op implementation. A recipe is not an executor and should not provide ``convert()``, ``run()``, or ``__call__()``:
 
 .. code-block:: python
 

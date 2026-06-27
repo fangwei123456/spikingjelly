@@ -742,6 +742,8 @@ class TestChannelVoltageScaler:
         assert loaded.channel_dim == scaler.channel_dim
 
     def test_rejects_bad_scale(self):
+        with pytest.raises(ValueError, match="empty"):
+            ChannelVoltageScaler(torch.tensor([]), channel_dim=1)
         with pytest.raises(ValueError, match="finite positive"):
             ChannelVoltageScaler(torch.tensor([1.0, 0.0]), channel_dim=1)
 
@@ -2383,10 +2385,12 @@ class TestLocalThresholdBalancingRecipe:
         )
         assert maxpool_idx < if_node_idx
 
-    def test_recipe_does_not_mutate_ann_state_dict(self):
+    @pytest.mark.parametrize("training", [False, True])
+    def test_recipe_does_not_mutate_ann_state_dict(self, training):
         model = SimpleCNNNoBN()
-        model.eval()
+        model.train(training)
         before = {k: v.detach().clone() for k, v in model.state_dict().items()}
+        training_before = model.training
         converter = Converter(
             recipe=LocalThresholdBalancingRecipe(
                 dataloader=_make_loader(batch_size=4),
@@ -2398,6 +2402,7 @@ class TestLocalThresholdBalancingRecipe:
         )
         converter.convert(model)
 
+        assert model.training is training_before
         after = model.state_dict()
         assert before.keys() == after.keys()
         for key, value in before.items():

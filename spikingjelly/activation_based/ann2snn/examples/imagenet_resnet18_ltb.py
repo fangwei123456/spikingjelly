@@ -21,7 +21,10 @@ def parse_args():
     parser.add_argument("--eval-samples", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--num-workers", type=int, default=8)
-    parser.add_argument("--device", default="cuda:0")
+    parser.add_argument(
+        "--device",
+        default="cuda:0" if torch.cuda.is_available() else "cpu",
+    )
     parser.add_argument("--time-steps", type=int, nargs="+", default=[32, 64])
     parser.add_argument(
         "--delay-start",
@@ -157,7 +160,9 @@ def make_model(weights):
 def save_results(results, output_path):
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(results, indent=2, sort_keys=True), encoding="utf-8")
+    tmp = output.with_suffix(output.suffix + ".tmp")
+    tmp.write_text(json.dumps(results, indent=2, sort_keys=True), encoding="utf-8")
+    tmp.replace(output)
 
 
 def main():
