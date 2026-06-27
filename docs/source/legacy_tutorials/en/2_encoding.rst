@@ -74,7 +74,7 @@ steps are simulated to obtain 20 spike matrices.
     plt.imshow(x, cmap='gray')
     plt.axis('off')
 
-    visualizing.plot_2d_spiking_feature_map(out_spike.float().numpy(), 4, 5, 30, 'PoissonEncoder')
+    visualizing.plot_2d_feature_map(out_spike.float().numpy(), 4, 5, 30, 'PoissonEncoder')
     plt.axis('off')
     plt.show()
 
@@ -111,7 +111,7 @@ in each step, and obtain the result of the superposition of steps 1, 128, 256, 3
         superposition_[i] = (superposition_[i] - min_) / (max_ - min_)
 
     # 画图
-    visualizing.plot_2d_spiking_feature_map(superposition_.numpy(), 1, 5, 30, 'PoissonEncoder')
+    visualizing.plot_2d_feature_map(superposition_.numpy(), 1, 5, 30, 'PoissonEncoder')
     plt.axis('off')
 
     plt.show()

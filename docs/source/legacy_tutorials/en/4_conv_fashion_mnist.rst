@@ -343,7 +343,7 @@ Let us extract a image from the data set, send it to the encoder, and check the 
                         if out_spikes_c[i].max().item() > out_spikes_c[i].min().item():
                             # Normalize each feature map to make the display clearer
                             out_spikes_c[i] = (out_spikes_c[i] - out_spikes_c[i].min()) / (out_spikes_c[i].max() - out_spikes_c[i].min())
-                    visualizing.plot_2d_spiking_feature_map(out_spikes_c, 8, 16, 1, None)
+                    visualizing.plot_2d_feature_map(out_spikes_c, 8, 16, 1, None)
                     plt.title('$\\sum_{t} S_{t}$ at $t = ' + str(t) + '$', fontsize=20)
                     plt.show()
 
