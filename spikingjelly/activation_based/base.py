@@ -718,7 +718,7 @@ class MemoryModule(nn.Module, StepModule):
         :type name: str
         :return: 状态变量的重置值
         :rtype: Any
-        :raises KeyError: 当 ``name`` 不是已注册的状态变量时抛出
+        :raises KeyError: 当 ``name`` 不是已注册的状态变量，或没有设置重置值时抛出
 
         ----
 
@@ -732,10 +732,12 @@ class MemoryModule(nn.Module, StepModule):
         :type name: str
         :return: Reset value of the state variable
         :rtype: Any
-        :raises KeyError: Raised when ``name`` is not a registered state variable
+        :raises KeyError: Raised when ``name`` is not a registered state variable, or has no reset value
         """
         if name not in self._memories:
             raise KeyError(f"{name} is not a registered memory.")
+        if name not in self._memories_rv:
+            raise KeyError(f"{name} has no reset value. Call set_reset_value first.")
         return self._memories_rv[name]
 
     def __getattr__(self, name: str):

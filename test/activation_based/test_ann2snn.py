@@ -2597,6 +2597,14 @@ class TestDelayedReadoutEstimation:
 
 
 class TestDownloadUrl:
+    USER_AGENT = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) "
+        "Gecko/20100101 Firefox/67.0"
+    )
+
+    def _expected_range_header(self, range_value):
+        return {"User-Agent": self.USER_AGENT, "Range": range_value}
+
     def test_download_rejects_probe_error_before_writing(self, tmp_path, monkeypatch):
         dst = tmp_path / "checkpoint.pth"
 
@@ -2774,7 +2782,7 @@ class TestDownloadUrl:
 
         assert file_size == 10
         assert dst.read_bytes() == b"partial890"
-        assert calls[1] == {"Range": "bytes=7-9"}
+        assert calls[1] == self._expected_range_header("bytes=7-9")
         assert len(calls) == 2
 
     def test_resume_restarts_when_server_ignores_range(self, tmp_path, monkeypatch):
@@ -2814,8 +2822,8 @@ class TestDownloadUrl:
 
         assert file_size == 10
         assert dst.read_bytes() == b"0123456789"
-        assert calls[1] == {"Range": "bytes=7-9"}
-        assert calls[2] == {"Range": "bytes=0-9"}
+        assert calls[1] == self._expected_range_header("bytes=7-9")
+        assert calls[2] == self._expected_range_header("bytes=0-9")
 
     def test_resume_restarts_when_content_range_end_mismatches(
         self, tmp_path, monkeypatch
@@ -2864,8 +2872,85 @@ class TestDownloadUrl:
 
         assert file_size == 10
         assert dst.read_bytes() == b"0123456789"
-        assert calls[1] == {"Range": "bytes=7-9"}
-        assert calls[2] == {"Range": "bytes=0-9"}
+        assert calls[1] == self._expected_range_header("bytes=7-9")
+        assert calls[2] == self._expected_range_header("bytes=0-9")
+
+    def test_download_rejects_short_ranged_response(self, tmp_path, monkeypatch):
+        dst = tmp_path / "checkpoint.pth"
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, headers, chunks=()):
+                self.status_code = status_code
+                self.headers = headers
+                self._chunks = chunks
+
+            def iter_content(self, chunk_size):
+                yield from self._chunks
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise RuntimeError("download failed")
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            calls.append(headers)
+            if len(calls) == 1:
+                return FakeResponse(200, {"content-length": "10"})
+            return FakeResponse(
+                206,
+                {"Content-Range": "bytes 0-9/10"},
+                [b"01234"],
+            )
+
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        with pytest.raises(RuntimeError, match="Downloaded 5 bytes"):
+            ann2snn_utils.download_url("https://example.com/model.pth", str(dst))
+
+    def test_download_closes_pbar_when_stream_fails(self, tmp_path, monkeypatch):
+        dst = tmp_path / "checkpoint.pth"
+        closed = []
+
+        class FakePbar:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def update(self, value):
+                pass
+
+            def close(self):
+                closed.append(True)
+
+        class FakeResponse:
+            def __init__(self, status_code, headers):
+                self.status_code = status_code
+                self.headers = headers
+
+            def iter_content(self, chunk_size):
+                yield b"01234"
+                raise RuntimeError("stream failed")
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                pass
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            if "Range" not in headers:
+                return FakeResponse(200, {"content-length": "10"})
+            return FakeResponse(206, {"Content-Range": "bytes 0-9/10"})
+
+        monkeypatch.setattr(ann2snn_utils, "tqdm", FakePbar)
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        with pytest.raises(RuntimeError, match="stream failed"):
+            ann2snn_utils.download_url("https://example.com/model.pth", str(dst))
+
+        assert closed == [True]
 
 
 class TestChannelWiseRateCodingRecipe:
