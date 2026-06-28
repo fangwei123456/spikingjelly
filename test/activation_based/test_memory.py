@@ -90,6 +90,22 @@ def test_memories():
         assert memory == 0.0
 
 
+def test_get_reset_value_reports_missing_reset_value():
+    class StatefulModule(base.MemoryModule):
+        def __init__(self):
+            super().__init__()
+            self.register_memory("state", 0)
+
+        def single_step_forward(self, x):
+            return x
+
+    module = StatefulModule()
+    del module._memories_rv["state"]
+
+    with pytest.raises(KeyError, match="state has no reset value"):
+        module.get_reset_value("state")
+
+
 def test_extract_memories():
     """Test extract_memories function."""
     net = _create_test_model()

@@ -128,6 +128,10 @@ class Converter:
         :rtype: torch.fx.GraphModule
         """
         configured_device = self.device
+        original_ann = ann
+        original_training_modes = {
+            module: module.training for module in original_ann.modules()
+        }
         self.device = self._resolve_device(ann)
         try:
             self.recipe.validate(self)
@@ -140,4 +144,6 @@ class Converter:
             fx_model = self.recipe.finalize(self, fx_model)
             return fx_model
         finally:
+            for module, training in original_training_modes.items():
+                module.training = training
             self.device = configured_device

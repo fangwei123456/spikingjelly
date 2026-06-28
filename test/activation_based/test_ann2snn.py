@@ -14,13 +14,21 @@ from spikingjelly.activation_based.ann2snn import (
     Converter,
     ConversionRecipe,
     HookFactory,
+    LocalThresholdBalancingRecipe,
     NeuronFactory,
     RateCodingRecipe,
     ReLURule,
     ThresholdOptimizer,
     TransformerSpikeEquivalentRecipe,
 )
-from spikingjelly.activation_based.ann2snn.modules import VoltageHook, VoltageScaler
+from spikingjelly.activation_based.ann2snn import delay as ann2snn_delay
+from spikingjelly.activation_based.ann2snn import utils as ann2snn_utils
+from spikingjelly.activation_based.ann2snn.modules import (
+    ChannelVoltageScaler,
+    VoltageHook,
+    VoltageScaler,
+    _safe_quantile,
+)
 from spikingjelly.activation_based.ann2snn.operators import (
     TDGELU,
     TDLayerNorm,
@@ -28,6 +36,10 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDMultiheadAttention,
     TDScaledDotProductAttention,
 )
+from spikingjelly.activation_based.ann2snn.recipes.local_threshold_balancing import (
+    LocalThresholdBalancingHook,
+)
+from spikingjelly.activation_based.ann2snn.recipes.rate_coding import ChannelVoltageHook
 
 
 class SimpleCNN(nn.Module):
@@ -196,6 +208,48 @@ class FunctionalDropoutCoreMLP(nn.Module):
     def forward(self, x):
         x = F.dropout(x, p=0.5, training=self.training)
         return self.fc(x)
+
+
+class ScalerNeuronScalerNet(nn.Module):
+    def __init__(self, if_node: nn.Module, theta):
+        super().__init__()
+        theta = torch.as_tensor(theta, dtype=torch.float32)
+        self.scaler0 = ChannelVoltageScaler(1.0 / theta, channel_dim=1)
+        self.if_node = if_node
+        self.scaler1 = ChannelVoltageScaler(theta, channel_dim=1)
+
+    def forward(self, x):
+        return self.scaler1(self.if_node(self.scaler0(x)))
+
+
+class TwoStageScalerNeuronNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.stage0 = ScalerNeuronScalerNet(neuron.HalfThresholdIFNode(), [4.0, 4.0])
+        self.stage1 = ScalerNeuronScalerNet(neuron.HalfThresholdIFNode(), [4.0, 4.0])
+
+    def forward(self, x):
+        return self.stage1(self.stage0(x))
+
+
+def _trace_ann2snn_leaf(model: nn.Module) -> torch.fx.GraphModule:
+    class Ann2SNNLeafTracer(torch.fx.Tracer):
+        def is_leaf_module(self, m: nn.Module, module_qualified_name: str) -> bool:
+            if isinstance(
+                m,
+                (
+                    ChannelVoltageScaler,
+                    VoltageScaler,
+                    neuron.IFNode,
+                    neuron.HalfThresholdIFNode,
+                ),
+            ):
+                return True
+            return super().is_leaf_module(m, module_qualified_name)
+
+    tracer = Ann2SNNLeafTracer()
+    graph = tracer.trace(model)
+    return torch.fx.GraphModule(model, graph)
 
 
 class SDPABlock(nn.Module):
@@ -568,6 +622,22 @@ class TestVoltageHook:
 
         assert hook.scale.item() == pytest.approx(torch.quantile(x, 0.5).item())
 
+    def test_safe_quantile_matches_torch_quantile(self):
+        x = torch.randn(5, 7, 11)
+
+        assert torch.allclose(
+            _safe_quantile(x, 0.999),
+            torch.quantile(x, 0.999),
+            atol=1e-6,
+            rtol=1e-6,
+        )
+        assert torch.allclose(
+            _safe_quantile(x.reshape(5, -1), 0.75, dim=1),
+            torch.quantile(x.reshape(5, -1), 0.75, dim=1),
+            atol=1e-6,
+            rtol=1e-6,
+        )
+
     def test_percentile_mode_supports_half_precision(self):
         hook = VoltageHook(mode="50%")
         x = torch.arange(101, dtype=torch.float16)
@@ -606,6 +676,34 @@ class TestVoltageHook:
         assert torch.equal(out, x)
 
 
+class TestChannelVoltageHook:
+    def test_max_mode_for_matrix_and_image(self):
+        matrix_hook = ChannelVoltageHook(mode="Max", channel_dim=1)
+        matrix_hook(torch.tensor([[1.0, 2.0, 3.0], [4.0, 1.0, 2.0]]))
+        assert torch.allclose(matrix_hook.compute_threshold(), torch.tensor([4.0, 2.0, 3.0]))
+
+        image_hook = ChannelVoltageHook(mode="Max", channel_dim=1)
+        image_hook(torch.ones(2, 4, 3, 3))
+        assert image_hook.scale.shape == (4,)
+        assert torch.isfinite(image_hook.scale).all()
+        assert (image_hook.scale > 0).all()
+
+    def test_percentile_mode_matches_channel_quantile(self):
+        hook = ChannelVoltageHook(mode="50%", channel_dim=1)
+        x = torch.arange(24, dtype=torch.float32).reshape(2, 3, 4)
+
+        hook(x)
+
+        expected = torch.quantile(x.movedim(1, 0).reshape(3, -1), 0.5, dim=1)
+        assert torch.allclose(hook.compute_threshold(), expected)
+
+    def test_invalid_shape_raises(self):
+        hook = ChannelVoltageHook(mode="Max", channel_dim=1)
+
+        with pytest.raises(ValueError, match="at least 2 dimensions"):
+            hook(torch.tensor([1.0, 2.0]))
+
+
 class TestVoltageScaler:
     def test_scaling(self):
         scaler = VoltageScaler(2.5)
@@ -621,6 +719,40 @@ class TestVoltageScaler:
     def test_extra_repr(self):
         scaler = VoltageScaler(3.14)
         assert "3.14" in scaler.extra_repr()
+
+
+class TestChannelVoltageScaler:
+    def test_channel_scaling_4d(self):
+        scaler = ChannelVoltageScaler(torch.tensor([1.0, 2.0, 3.0]), channel_dim=1)
+        x = torch.ones(2, 3, 4, 5)
+        y = scaler(x)
+        assert y.shape == x.shape
+        assert torch.allclose(y[:, 0], torch.ones(2, 4, 5))
+        assert torch.allclose(y[:, 1], torch.full((2, 4, 5), 2.0))
+        assert torch.allclose(y[:, 2], torch.full((2, 4, 5), 3.0))
+
+    def test_channel_scaling_2d(self):
+        scaler = ChannelVoltageScaler(torch.tensor([2.0, 4.0]), channel_dim=1)
+        x = torch.ones(3, 2)
+        assert torch.allclose(scaler(x), torch.tensor([[2.0, 4.0]]).expand(3, 2))
+
+    def test_state_dict_round_trip(self):
+        scaler = ChannelVoltageScaler(torch.tensor([1.5, 2.5]), channel_dim=1)
+        loaded = ChannelVoltageScaler(torch.ones(2), channel_dim=1)
+        loaded.load_state_dict(scaler.state_dict())
+        assert torch.allclose(loaded.scale, scaler.scale)
+        assert loaded.channel_dim == scaler.channel_dim
+
+    def test_rejects_bad_scale(self):
+        with pytest.raises(ValueError, match="empty"):
+            ChannelVoltageScaler(torch.tensor([]), channel_dim=1)
+        with pytest.raises(ValueError, match="finite positive"):
+            ChannelVoltageScaler(torch.tensor([1.0, 0.0]), channel_dim=1)
+
+    def test_rejects_channel_mismatch(self):
+        scaler = ChannelVoltageScaler(torch.ones(3), channel_dim=1)
+        with pytest.raises(ValueError, match="does not match"):
+            scaler(torch.ones(2, 4))
 
 
 class TestReLURule:
@@ -656,7 +788,10 @@ class TestPublicExports:
             "Converter",
             "ConversionRecipe",
             "RateCodingRecipe",
+            "LocalThresholdBalancingRecipe",
             "TransformerSpikeEquivalentRecipe",
+            "ChannelVoltageScaler",
+            "estimate_delay_start",
             "download_url",
             "ReLURule",
             "NeuronFactory",
@@ -667,6 +802,8 @@ class TestPublicExports:
     def test_recipe_api_is_importable(self):
         assert ann2snn.ConversionRecipe is ConversionRecipe
         assert ann2snn.RateCodingRecipe is RateCodingRecipe
+        assert ann2snn.LocalThresholdBalancingRecipe is LocalThresholdBalancingRecipe
+        assert ann2snn.ChannelVoltageScaler is ChannelVoltageScaler
         assert (
             ann2snn.TransformerSpikeEquivalentRecipe is TransformerSpikeEquivalentRecipe
         )
@@ -679,6 +816,7 @@ class TestPublicExports:
     def test_recipe_api_has_no_name_metadata(self):
         assert not hasattr(ConversionRecipe, "name")
         assert not hasattr(RateCodingRecipe, "name")
+        assert not hasattr(LocalThresholdBalancingRecipe, "name")
         assert not hasattr(TransformerSpikeEquivalentRecipe, "name")
 
 
@@ -2134,6 +2272,791 @@ class TestRuleBasedConversion:
 
         with pytest.raises(ValueError, match="finite positive"):
             converter.convert(model)
+
+
+class TestLocalThresholdBalancingRecipe:
+    def test_hook_channelwise_threshold_for_matrix_and_image(self):
+        matrix_hook = LocalThresholdBalancingHook(mode="Max", channel_dim=1)
+        matrix_hook(torch.tensor([[1.0, 2.0, 3.0], [4.0, 1.0, 2.0]]))
+        assert matrix_hook.scale.shape == (3,)
+        assert torch.allclose(matrix_hook.scale, torch.tensor([5.0, 3.0, 5.0]))
+
+        image_hook = LocalThresholdBalancingHook(mode="Max", channel_dim=1)
+        image_hook(torch.ones(2, 4, 3, 3))
+        assert image_hook.scale.shape == (4,)
+        assert torch.isfinite(image_hook.scale).all()
+        assert (image_hook.scale > 0).all()
+
+    def test_hook_updates_threshold_and_clips_forward_activation(self):
+        x = torch.tensor([[0.0, 2.0], [4.0, 6.0]])
+        hook = LocalThresholdBalancingHook(mode="Max", channel_dim=1)
+        y = hook(x)
+        assert torch.allclose(hook.compute_threshold(), torch.tensor([4.0, 8.0]))
+        assert torch.allclose(y, x)
+
+        hook.threshold = torch.tensor([1.0, 1.0])
+        y = hook(x)
+        expected_threshold = torch.tensor([4.0, 7.0])
+        assert torch.allclose(hook.compute_threshold(), expected_threshold)
+        assert torch.allclose(y, torch.minimum(x, expected_threshold.reshape(1, 2)))
+
+    def test_half_threshold_if_node_initializes_membrane(self):
+        node = neuron.HalfThresholdIFNode()
+        spike = node(torch.tensor([0.6]))
+        assert torch.equal(spike, torch.tensor([1.0]))
+        node.reset()
+        assert node.v == 0.5
+        spike = node(torch.tensor([0.4]))
+        assert torch.equal(spike, torch.tensor([0.0]))
+
+    def test_half_threshold_if_node_accepts_integer_threshold(self):
+        node = neuron.HalfThresholdIFNode(v_threshold=1)
+
+        assert node.v_threshold == 1.0
+        assert node.v == 0.5
+
+    def test_half_threshold_if_node_accepts_scalar_tensor_threshold(self):
+        node = neuron.HalfThresholdIFNode(v_threshold=torch.tensor(2.0))
+
+        assert node.v_threshold == 2.0
+        assert node.v == 1.0
+
+    def test_half_threshold_if_node_rejects_non_scalar_tensor_threshold(self):
+        with pytest.raises(ValueError, match="scalar finite positive"):
+            neuron.HalfThresholdIFNode(v_threshold=torch.ones(2))
+
+    def test_half_threshold_if_node_reinitializes_new_shape_to_half_threshold(self):
+        node = neuron.HalfThresholdIFNode()
+        node(torch.tensor([0.1]))
+        node(torch.zeros(2, 3))
+
+        assert node.v.shape == (2, 3)
+        assert torch.allclose(node.v, torch.full((2, 3), 0.5))
+
+    def test_half_threshold_if_node_uses_surrogate_backward(self):
+        node = neuron.HalfThresholdIFNode()
+        x = torch.tensor([0.0], requires_grad=True)
+        spike = node(x)
+        spike.sum().backward()
+
+        assert torch.equal(spike.detach(), torch.tensor([0.0]))
+        assert x.grad is not None
+        assert torch.isfinite(x.grad).all()
+        assert (x.grad != 0).all()
+
+    def test_recipe_converts_relu_to_channel_scalers_and_ifnode(self):
+        model = SimpleCNNNoBN()
+        model.eval()
+        converter = Converter(
+            recipe=LocalThresholdBalancingRecipe(
+                dataloader=_make_loader(batch_size=4),
+                time_steps=4,
+                mode="Max",
+                threshold_candidates=(0.5, 1.0),
+                fuse_flag=False,
+            )
+        )
+        snn = converter.convert(model)
+
+        assert not any(isinstance(m, nn.ReLU) for m in snn.modules())
+        assert any(isinstance(m, ChannelVoltageScaler) for m in snn.modules())
+        if_nodes = [
+            m for m in snn.modules() if isinstance(m, neuron.HalfThresholdIFNode)
+        ]
+        assert len(if_nodes) == 1
+        assert if_nodes[0].v_reset is None
+        y = snn(torch.rand(2, 1, 28, 28))
+        assert y.shape == (2, 10)
+
+    def test_recipe_uses_pre_spike_maxpooling(self):
+        model = nn.Sequential(
+            nn.Conv2d(1, 2, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Flatten(),
+            nn.Linear(2 * 14 * 14, 3),
+        )
+        model.eval()
+        converter = Converter(
+            recipe=LocalThresholdBalancingRecipe(
+                dataloader=_make_loader(batch_size=4),
+                time_steps=4,
+                mode="Max",
+                threshold_candidates=(1.0,),
+                fuse_flag=False,
+            )
+        )
+        snn = converter.convert(model)
+        graph_targets = [
+            node.target for node in snn.graph.nodes if node.op == "call_module"
+        ]
+
+        maxpool_idx = graph_targets.index("2")
+        if_node_idx = next(
+            idx for idx, target in enumerate(graph_targets) if str(target).endswith("if_node")
+        )
+        assert maxpool_idx < if_node_idx
+
+    @pytest.mark.parametrize("training", [False, True])
+    def test_recipe_does_not_mutate_ann_state_dict(self, training):
+        model = SimpleCNNNoBN()
+        model.train(training)
+        model.relu.eval()
+        model.pool.train()
+        before = {k: v.detach().clone() for k, v in model.state_dict().items()}
+        training_before = {
+            name: module.training for name, module in model.named_modules()
+        }
+        converter = Converter(
+            recipe=LocalThresholdBalancingRecipe(
+                dataloader=_make_loader(batch_size=4),
+                time_steps=4,
+                mode="Max",
+                threshold_candidates=(0.5, 1.0),
+                fuse_flag=False,
+            )
+        )
+        converter.convert(model)
+
+        for name, module in model.named_modules():
+            assert module.training is training_before[name]
+        after = model.state_dict()
+        assert before.keys() == after.keys()
+        for key, value in before.items():
+            assert torch.equal(value, after[key])
+
+    @pytest.mark.parametrize(
+        "kwargs, match",
+        [
+            ({"time_steps": 0}, "time_steps"),
+            ({"threshold_candidates": ()}, "threshold_candidates"),
+            ({"threshold_candidates": (1.0, 0.0)}, "finite positive"),
+            ({"eps": 0.0}, "eps"),
+        ],
+    )
+    def test_recipe_rejects_invalid_parameters(self, kwargs, match):
+        recipe_kwargs = dict(
+            dataloader=_make_loader(),
+            time_steps=4,
+            mode="Max",
+            threshold_candidates=(1.0,),
+            fuse_flag=False,
+        )
+        recipe_kwargs.update(kwargs)
+        converter = Converter(recipe=LocalThresholdBalancingRecipe(**recipe_kwargs))
+        with pytest.raises(ValueError, match=match):
+            converter.convert(SimpleCNNNoBN())
+
+    def test_recipe_rejects_unsupported_activation_shape(self):
+        model = nn.Sequential(nn.ReLU())
+        converter = Converter(
+            recipe=LocalThresholdBalancingRecipe(
+                dataloader=[torch.randn(4)],
+                time_steps=4,
+                mode="Max",
+                threshold_candidates=(1.0,),
+                fuse_flag=False,
+            )
+        )
+        with pytest.raises(ValueError, match="at least 2 dimensions"):
+            converter.convert(model)
+
+
+class TestDelayedReadoutEstimation:
+    def test_half_threshold_delay_matches_legacy_ltb_formula(self):
+        model = _trace_ann2snn_leaf(
+            ScalerNeuronScalerNet(neuron.HalfThresholdIFNode(), [4.0, 4.0])
+        )
+        loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
+
+        delay_start = ann2snn.estimate_delay_start(
+            model, loader, device="cpu", time_steps=32
+        )
+
+        assert delay_start == 2
+
+    def test_if_node_delay_is_twice_half_threshold_delay(self):
+        loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
+        half_model = _trace_ann2snn_leaf(
+            ScalerNeuronScalerNet(neuron.HalfThresholdIFNode(), [4.0, 4.0])
+        )
+        if_model = _trace_ann2snn_leaf(
+            ScalerNeuronScalerNet(
+                neuron.IFNode(v_threshold=1.0, v_reset=None), [4.0, 4.0]
+            )
+        )
+
+        half_delay = ann2snn.estimate_delay_start(
+            half_model, loader, device="cpu", time_steps=32
+        )
+        if_delay = ann2snn.estimate_delay_start(
+            if_model, loader, device="cpu", time_steps=32
+        )
+
+        assert half_delay == 2
+        assert if_delay == 4
+
+    def test_delay_estimation_ceil_and_resets_between_batches(self):
+        model = _trace_ann2snn_leaf(
+            ScalerNeuronScalerNet(neuron.HalfThresholdIFNode(), [4.0, 4.0])
+        )
+        loader = [
+            (torch.full((2, 2), 8.0), torch.zeros(2, dtype=torch.long)),
+            (torch.full((2, 2), 8.0), torch.zeros(2, dtype=torch.long)),
+        ]
+
+        delay_start = ann2snn.estimate_delay_start(
+            model, loader, device="cpu", time_steps=32, num_batches=2
+        )
+
+        assert delay_start == 1
+
+    def test_delay_probe_uses_analog_passthrough_for_later_layers(self):
+        model = _trace_ann2snn_leaf(TwoStageScalerNeuronNet())
+        loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
+
+        delay_start = ann2snn.estimate_delay_start(
+            model, loader, device="cpu", time_steps=32
+        )
+
+        assert delay_start > 2
+
+    def test_delay_estimation_removes_hooks_and_keeps_spike_forward(self):
+        model = _trace_ann2snn_leaf(
+            ScalerNeuronScalerNet(neuron.HalfThresholdIFNode(), [4.0, 4.0])
+        )
+        node = model.if_node
+        x = torch.full((2, 2), 2.0)
+        loader = [(x, torch.zeros(2, dtype=torch.long))]
+
+        ann2snn.estimate_delay_start(model, loader, device="cpu", time_steps=32)
+
+        assert len(node._forward_hooks) == 0
+        node.reset()
+        y = model(x)
+        assert torch.equal(y, torch.full((2, 2), 4.0))
+
+    def test_delay_estimation_restores_training_modes(self):
+        model = _trace_ann2snn_leaf(
+            ScalerNeuronScalerNet(neuron.HalfThresholdIFNode(), [4.0, 4.0])
+        )
+        model.train()
+        model.if_node.eval()
+        training_before = {
+            name: module.training for name, module in model.named_modules()
+        }
+        loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
+
+        ann2snn.estimate_delay_start(model, loader, device="cpu", time_steps=32)
+
+        for name, module in model.named_modules():
+            assert module.training is training_before[name]
+
+    def test_delay_estimation_handles_nonfinite_ratio(self, monkeypatch):
+        model = _trace_ann2snn_leaf(
+            ScalerNeuronScalerNet(neuron.HalfThresholdIFNode(), [4.0, 4.0])
+        )
+        loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
+
+        def compute_nonfinite_delay_ratio(*args, **kwargs):
+            return torch.tensor(float("inf"))
+
+        monkeypatch.setattr(
+            ann2snn_delay,
+            "_compute_delay_ratio",
+            compute_nonfinite_delay_ratio,
+        )
+
+        delay_start = ann2snn.estimate_delay_start(
+            model, loader, device="cpu", time_steps=8
+        )
+
+        assert delay_start == 4
+
+    def test_delay_estimation_cleans_hooks_after_exception(self):
+        model = _trace_ann2snn_leaf(
+            ScalerNeuronScalerNet(neuron.HalfThresholdIFNode(), [4.0, 4.0])
+        )
+        node = model.if_node
+        loader = [((torch.ones(2, 2), torch.ones(2, 2)),)]
+
+        with pytest.raises(TypeError, match="extracted model input"):
+            ann2snn.estimate_delay_start(model, loader, device="cpu", time_steps=32)
+
+        assert len(node._forward_hooks) == 0
+
+    def test_delay_estimation_skips_unmatched_graphs(self):
+        model = _trace_ann2snn_leaf(nn.Sequential(neuron.IFNode()))
+        loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
+
+        delay_start = ann2snn.estimate_delay_start(
+            model, loader, device="cpu", time_steps=32
+        )
+
+        assert delay_start == 0
+
+
+class TestDownloadUrl:
+    USER_AGENT = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) "
+        "Gecko/20100101 Firefox/67.0"
+    )
+
+    def _expected_range_header(self, range_value):
+        return {"User-Agent": self.USER_AGENT, "Range": range_value}
+
+    def test_download_rejects_probe_error_before_writing(self, tmp_path, monkeypatch):
+        dst = tmp_path / "checkpoint.pth"
+
+        class FakeResponse:
+            status_code = 500
+            headers = {}
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                raise RuntimeError("probe failed")
+
+        monkeypatch.setattr(
+            ann2snn_utils.requests,
+            "get",
+            lambda *args, **kwargs: FakeResponse(),
+        )
+
+        with pytest.raises(RuntimeError, match="probe failed"):
+            ann2snn_utils.download_url("https://example.com/model.pth", str(dst))
+
+        assert not dst.exists()
+
+    def test_download_without_content_length_uses_single_pass(
+        self, tmp_path, monkeypatch
+    ):
+        dst = tmp_path / "checkpoint.pth"
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, headers, chunks=()):
+                self.status_code = status_code
+                self.headers = headers
+                self._chunks = chunks
+
+            def iter_content(self, chunk_size):
+                yield from self._chunks
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise RuntimeError("download failed")
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            calls.append(headers)
+            if len(calls) == 1:
+                return FakeResponse(200, {})
+            return FakeResponse(200, {}, [b"abc", b"defg"])
+
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        file_size = ann2snn_utils.download_url(
+            "https://example.com/model.pth", str(dst)
+        )
+
+        assert file_size == 7
+        assert dst.read_bytes() == b"abcdefg"
+        assert "Range" not in calls[1]
+
+    def test_download_without_resume_closes_pbar_when_request_fails(
+        self, tmp_path, monkeypatch
+    ):
+        dst = tmp_path / "checkpoint.pth"
+        calls = []
+        closed = []
+
+        class FakePbar:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def update(self, value):
+                pass
+
+            def close(self):
+                closed.append(True)
+
+        class FakeResponse:
+            status_code = 200
+            headers = {}
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                pass
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            calls.append(headers)
+            if len(calls) == 1:
+                return FakeResponse()
+            raise RuntimeError("connect failed")
+
+        monkeypatch.setattr(ann2snn_utils, "tqdm", FakePbar)
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        with pytest.raises(RuntimeError, match="connect failed"):
+            ann2snn_utils.download_url("https://example.com/model.pth", str(dst))
+
+        assert closed == [True]
+        assert not dst.exists()
+
+    def test_download_rejects_error_response_before_writing(self, tmp_path, monkeypatch):
+        dst = tmp_path / "checkpoint.pth"
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, headers, chunks=()):
+                self.status_code = status_code
+                self.headers = headers
+                self._chunks = chunks
+
+            def iter_content(self, chunk_size):
+                yield from self._chunks
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                raise RuntimeError("download failed")
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            calls.append(headers)
+            if len(calls) == 1:
+                return FakeResponse(200, {"content-length": "10"})
+            return FakeResponse(500, {}, [b"error-body"])
+
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        with pytest.raises(RuntimeError, match="download failed"):
+            ann2snn_utils.download_url("https://example.com/model.pth", str(dst))
+
+        assert not dst.exists()
+
+    def test_resume_accepts_case_insensitive_content_range(
+        self, tmp_path, monkeypatch
+    ):
+        dst = tmp_path / "checkpoint.pth"
+        dst.write_bytes(b"partial")
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, headers, chunks=()):
+                self.status_code = status_code
+                self.headers = headers
+                self._chunks = chunks
+
+            def iter_content(self, chunk_size):
+                yield from self._chunks
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise RuntimeError("download failed")
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            calls.append(headers)
+            if len(calls) == 1:
+                return FakeResponse(200, {"content-length": "10"})
+            return FakeResponse(
+                206,
+                {"Content-Range": "Bytes 7-9/10"},
+                [b"890"],
+            )
+
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        file_size = ann2snn_utils.download_url(
+            "https://example.com/model.pth", str(dst)
+        )
+
+        assert file_size == 10
+        assert dst.read_bytes() == b"partial890"
+        assert calls[1] == self._expected_range_header("bytes=7-9")
+        assert len(calls) == 2
+
+    def test_resume_restarts_when_server_ignores_range(self, tmp_path, monkeypatch):
+        dst = tmp_path / "checkpoint.pth"
+        dst.write_bytes(b"partial")
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, headers, chunks=()):
+                self.status_code = status_code
+                self.headers = headers
+                self._chunks = chunks
+
+            def iter_content(self, chunk_size):
+                yield from self._chunks
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise RuntimeError("download failed")
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            calls.append(headers)
+            if len(calls) == 1:
+                return FakeResponse(200, {"content-length": "10"})
+            if len(calls) == 2:
+                return FakeResponse(200, {}, [b"bad-body"])
+            return FakeResponse(200, {}, [b"0123456789"])
+
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        file_size = ann2snn_utils.download_url(
+            "https://example.com/model.pth", str(dst)
+        )
+
+        assert file_size == 10
+        assert dst.read_bytes() == b"0123456789"
+        assert calls[1] == self._expected_range_header("bytes=7-9")
+        assert calls[2] == self._expected_range_header("bytes=0-9")
+
+    def test_resume_restarts_when_content_range_end_mismatches(
+        self, tmp_path, monkeypatch
+    ):
+        dst = tmp_path / "checkpoint.pth"
+        dst.write_bytes(b"partial")
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, headers, chunks=()):
+                self.status_code = status_code
+                self.headers = headers
+                self._chunks = chunks
+
+            def iter_content(self, chunk_size):
+                yield from self._chunks
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise RuntimeError("download failed")
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            calls.append(headers)
+            if len(calls) == 1:
+                return FakeResponse(200, {"content-length": "10"})
+            if len(calls) == 2:
+                return FakeResponse(
+                    206,
+                    {"Content-Range": "bytes 7-8/10"},
+                    [b"89"],
+                )
+            return FakeResponse(
+                206,
+                {"Content-Range": "bytes 0-9/10"},
+                [b"0123456789"],
+            )
+
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        file_size = ann2snn_utils.download_url(
+            "https://example.com/model.pth", str(dst)
+        )
+
+        assert file_size == 10
+        assert dst.read_bytes() == b"0123456789"
+        assert calls[1] == self._expected_range_header("bytes=7-9")
+        assert calls[2] == self._expected_range_header("bytes=0-9")
+
+    def test_download_rejects_short_ranged_response(self, tmp_path, monkeypatch):
+        dst = tmp_path / "checkpoint.pth"
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, headers, chunks=()):
+                self.status_code = status_code
+                self.headers = headers
+                self._chunks = chunks
+
+            def iter_content(self, chunk_size):
+                yield from self._chunks
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise RuntimeError("download failed")
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            calls.append(headers)
+            if len(calls) == 1:
+                return FakeResponse(200, {"content-length": "10"})
+            return FakeResponse(
+                206,
+                {"Content-Range": "bytes 0-9/10"},
+                [b"01234"],
+            )
+
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        with pytest.raises(RuntimeError, match="Downloaded 5 bytes"):
+            ann2snn_utils.download_url("https://example.com/model.pth", str(dst))
+
+    def test_download_closes_pbar_when_stream_fails(self, tmp_path, monkeypatch):
+        dst = tmp_path / "checkpoint.pth"
+        closed = []
+
+        class FakePbar:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def update(self, value):
+                pass
+
+            def close(self):
+                closed.append(True)
+
+        class FakeResponse:
+            def __init__(self, status_code, headers):
+                self.status_code = status_code
+                self.headers = headers
+
+            def iter_content(self, chunk_size):
+                yield b"01234"
+                raise RuntimeError("stream failed")
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                pass
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            if "Range" not in headers:
+                return FakeResponse(200, {"content-length": "10"})
+            return FakeResponse(206, {"Content-Range": "bytes 0-9/10"})
+
+        monkeypatch.setattr(ann2snn_utils, "tqdm", FakePbar)
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        with pytest.raises(RuntimeError, match="stream failed"):
+            ann2snn_utils.download_url("https://example.com/model.pth", str(dst))
+
+        assert closed == [True]
+
+
+class TestChannelWiseRateCodingRecipe:
+    def test_recipe_converts_relu_to_channel_scalers_and_ifnode(self):
+        model = SimpleCNNNoBN()
+        model.eval()
+        converter = Converter(
+            recipe=RateCodingRecipe(
+                dataloader=_make_loader(batch_size=4),
+                mode="Max",
+                fuse_flag=False,
+                channel_wise=True,
+            )
+        )
+        snn = converter.convert(model)
+
+        assert not any(isinstance(m, nn.ReLU) for m in snn.modules())
+        assert any(isinstance(m, ChannelVoltageScaler) for m in snn.modules())
+        assert any(isinstance(m, neuron.IFNode) for m in snn.modules())
+        y = snn(torch.rand(2, 1, 28, 28))
+        assert y.shape == (2, 10)
+
+    def test_recipe_can_use_half_threshold_if_node(self):
+        model = SimpleCNNNoBN()
+        model.eval()
+        converter = Converter(
+            recipe=RateCodingRecipe(
+                dataloader=_make_loader(batch_size=4),
+                mode="Max",
+                fuse_flag=False,
+                channel_wise=True,
+                half_threshold=True,
+            )
+        )
+        snn = converter.convert(model)
+
+        assert any(isinstance(m, neuron.HalfThresholdIFNode) for m in snn.modules())
+
+    def test_recipe_uses_pre_spike_maxpooling(self):
+        model = nn.Sequential(
+            nn.Conv2d(1, 2, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Flatten(),
+            nn.Linear(2 * 14 * 14, 3),
+        )
+        model.eval()
+        converter = Converter(
+            recipe=RateCodingRecipe(
+                dataloader=_make_loader(batch_size=4),
+                mode="Max",
+                fuse_flag=False,
+                channel_wise=True,
+                pre_spike_maxpool=True,
+            )
+        )
+        snn = converter.convert(model)
+        graph_targets = [
+            node.target for node in snn.graph.nodes if node.op == "call_module"
+        ]
+
+        maxpool_idx = graph_targets.index("2")
+        if_node_idx = next(
+            idx for idx, target in enumerate(graph_targets) if str(target).endswith("if_node")
+        )
+        assert maxpool_idx < if_node_idx
+
+    def test_legacy_rate_coding_remains_layer_wise_by_default(self):
+        model = SimpleCNNNoBN()
+        model.eval()
+        converter = Converter(
+            recipe=RateCodingRecipe(
+                dataloader=_make_loader(batch_size=4),
+                mode="Max",
+                fuse_flag=False,
+            )
+        )
+        snn = converter.convert(model)
+
+        assert any(isinstance(m, VoltageScaler) for m in snn.modules())
+        assert not any(isinstance(m, ChannelVoltageScaler) for m in snn.modules())
+
+    def test_channel_wise_rejects_custom_rules(self):
+        with pytest.raises(ValueError, match="custom rules"):
+            RateCodingRecipe(
+                dataloader=[],
+                channel_wise=True,
+                rules=[ReLURule()],
+            )
+
+    def test_channel_wise_rejects_custom_threshold_optimizer(self):
+        with pytest.raises(ValueError, match="threshold_optimizer"):
+            RateCodingRecipe(
+                dataloader=[],
+                channel_wise=True,
+                threshold_optimizer=ThresholdOptimizer(),
+            )
+
+    def test_half_threshold_rejects_custom_neuron_factory(self):
+        with pytest.raises(ValueError, match="neuron_factory"):
+            RateCodingRecipe(
+                dataloader=[],
+                channel_wise=True,
+                half_threshold=True,
+                neuron_factory=NeuronFactory(),
+            )
 
 
 class TestConverterAlgorithmBoundary:

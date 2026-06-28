@@ -1,4 +1,5 @@
 import logging
+import numbers
 from typing import Optional, Union
 
 import torch
@@ -21,7 +22,13 @@ except BaseException as e:
     triton_kernel = None
 
 
-__all__ = ["SimpleIFNode", "IFNode", "ActivationAwareIFNode", "NonSpikingIFNode"]
+__all__ = [
+    "SimpleIFNode",
+    "IFNode",
+    "HalfThresholdIFNode",
+    "ActivationAwareIFNode",
+    "NonSpikingIFNode",
+]
 
 
 class SimpleIFNode(SimpleBaseNode):
@@ -536,6 +543,148 @@ class IFNode(BaseNode):
                 self.v_reset,
             )
             return spike
+
+
+class HalfThresholdIFNode(BaseNode):
+    def __init__(
+        self,
+        v_threshold: float = 1.0,
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
+        detach_reset: bool = False,
+        step_mode="s",
+        backend="torch",
+        store_v_seq: bool = False,
+    ):
+        r"""
+        **API Language** - :ref:`中文 <HalfThresholdIFNode.__init__-cn>` | :ref:`English <HalfThresholdIFNode.__init__-en>`
+
+        ----
+
+        .. _HalfThresholdIFNode.__init__-cn:
+
+        * **中文**
+
+        半阈值初始膜电位的 Integrate-and-Fire 神经元。每次调用 ``reset()``
+        后膜电位会恢复为 ``v_threshold / 2``。单步前向中的脉冲后重置仍使用
+        标准软重置。除此之外，其充电、放电和重置动力学与软重置 IF 神经元一致：
+
+        .. math::
+
+            H[t] = V[t-1] + X[t]
+
+        .. math::
+
+            S[t] = \Theta(H[t] - V_{threshold})
+
+        .. math::
+
+            V[t] = H[t] - S[t] V_{threshold}
+
+        训练时使用 ``surrogate_function`` 为脉冲函数提供替代梯度；前向输出仍为
+        离散脉冲。
+
+        :param v_threshold: 神经元阈值电压，必须为正实数或单元素张量
+        :type v_threshold: float or torch.Tensor
+        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param detach_reset: 是否在反向传播时分离 reset 计算图
+        :type detach_reset: bool
+        :param step_mode: 步进模式，可以为 ``"s"`` 或 ``"m"``
+        :type step_mode: str
+        :param backend: 后端名称。当前实现支持 ``"torch"``
+        :type backend: str
+        :param store_v_seq: 在 ``step_mode="m"`` 时是否保存每个时间步的膜电位序列
+        :type store_v_seq: bool
+        :raises TypeError: 当 ``v_threshold`` 不是实数或张量时抛出
+        :raises ValueError: 当 ``v_threshold`` 不是单元素有限正数时抛出
+
+        ----
+
+        .. _HalfThresholdIFNode.__init__-en:
+
+        * **English**
+
+        An Integrate-and-Fire neuron with half-threshold initial membrane
+        potential. After each explicit ``reset()``, its membrane potential is
+        restored to ``v_threshold / 2``. The per-step post-spike reset still
+        uses the standard soft reset. Apart from the initial reset value, its
+        charge, fire, and reset dynamics are the same as a soft-reset IF neuron:
+
+        .. math::
+
+            H[t] = V[t-1] + X[t]
+
+        .. math::
+
+            S[t] = \Theta(H[t] - V_{threshold})
+
+        .. math::
+
+            V[t] = H[t] - S[t] V_{threshold}
+
+        During training, ``surrogate_function`` provides surrogate gradients for
+        the spike function; the forward output remains discrete spikes.
+
+        :param v_threshold: Threshold voltage of the neuron, which must be a
+            finite positive real number or a scalar tensor
+        :type v_threshold: float or torch.Tensor
+        :param surrogate_function: Surrogate gradient function for the spike
+            function in backward propagation
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param detach_reset: Whether to detach the reset computation graph in
+            backward propagation
+        :type detach_reset: bool
+        :param step_mode: Step mode, either ``"s"`` or ``"m"``
+        :type step_mode: str
+        :param backend: Backend name. The current implementation supports
+            ``"torch"``
+        :type backend: str
+        :param store_v_seq: Whether to store membrane potentials at every time
+            step when ``step_mode="m"``
+        :type store_v_seq: bool
+        :raises TypeError: Raised when ``v_threshold`` is not a real number or
+            tensor
+        :raises ValueError: Raised when ``v_threshold`` is not scalar finite
+            positive
+        """
+        if isinstance(v_threshold, torch.Tensor):
+            if v_threshold.numel() != 1:
+                raise ValueError("v_threshold must be scalar finite positive.")
+            v_threshold = float(v_threshold)
+        elif not isinstance(v_threshold, numbers.Real):
+            raise TypeError("v_threshold must be a real number.")
+        v_threshold = float(v_threshold)
+        if not torch.isfinite(torch.tensor(v_threshold)) or v_threshold <= 0.0:
+            raise ValueError("v_threshold must be finite positive.")
+        super().__init__(
+            v_threshold=v_threshold,
+            v_reset=None,
+            surrogate_function=surrogate_function,
+            detach_reset=detach_reset,
+            step_mode=step_mode,
+            backend=backend,
+            store_v_seq=store_v_seq,
+        )
+        half_threshold = self.v_threshold / 2.0
+        self.set_reset_value("v", half_threshold)
+        self.v = half_threshold
+
+    @property
+    def supported_backends(self):
+        return ("torch",)
+
+    def v_float_to_tensor(self, x: torch.Tensor):
+        half_threshold = self.v_threshold / 2.0
+        if isinstance(self.v, float):
+            self.v = torch.full_like(x, self.v, requires_grad=False)
+        elif isinstance(self.v, torch.Tensor):
+            if self.v.shape != x.shape:
+                self.v = torch.full_like(x, half_threshold, requires_grad=False)
+            elif self.v.dtype != x.dtype or self.v.device != x.device:
+                self.v = self.v.to(dtype=x.dtype, device=x.device)
+
+    def neuronal_charge(self, x: torch.Tensor):
+        self.v = self.v + x
 
 
 class ActivationAwareIFNode(base.MemoryModule):

@@ -25,9 +25,12 @@ pretrained models.
 """
 
 from .converter import Converter
+from .delay import estimate_delay_start
 from .factories import HookFactory, NeuronFactory
+from .modules import ChannelVoltageScaler
 from .recipes import (
     ConversionRecipe,
+    LocalThresholdBalancingRecipe,
     RateCodingRecipe,
     TransformerSpikeEquivalentRecipe,
 )
@@ -39,7 +42,10 @@ __all__ = [
     "Converter",
     "ConversionRecipe",
     "RateCodingRecipe",
+    "LocalThresholdBalancingRecipe",
     "TransformerSpikeEquivalentRecipe",
+    "ChannelVoltageScaler",
+    "estimate_delay_start",
     "download_url",
     "ReLURule",
     "NeuronFactory",
