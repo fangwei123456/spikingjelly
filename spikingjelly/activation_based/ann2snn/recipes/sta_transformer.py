@@ -57,7 +57,7 @@ class _STAThresholdObserver:
         return channel_dim
 
     def __call__(self, output: torch.Tensor) -> None:
-        if isinstance(output, tuple):
+        if isinstance(output, (tuple, list)):
             output = output[0]
         if not torch.is_tensor(output):
             raise TypeError("STA observer output must be a tensor.")
@@ -91,9 +91,7 @@ class _STAThresholdObserver:
             0.125,
             2.0,
             steps=31,
-            device=values.device,
-            dtype=values.dtype,
-        ):
+        ).tolist():
             threshold = torch.clamp(max_abs * factor, min=self.eps)
             step_threshold = threshold[:, None] / self.time_steps
             quantized = torch.trunc(values / step_threshold) * step_threshold
@@ -973,15 +971,18 @@ class STATransformerRecipe(ConversionRecipe):
         iterator = self.dataloader
         if self.show_progress:
             iterator = tqdm(iterator, desc="STA calibration")
-        with torch.no_grad():
-            for batch_index, batch in enumerate(iterator):
-                if (
-                    self.num_calibration_batches is not None
-                    and batch_index >= self.num_calibration_batches
-                ):
-                    break
-                args, kwargs = self._batch_to_args(batch, converter.device)
-                fx_model(*args, **kwargs)
+        try:
+            with torch.no_grad():
+                for batch_index, batch in enumerate(iterator):
+                    if (
+                        self.num_calibration_batches is not None
+                        and batch_index >= self.num_calibration_batches
+                    ):
+                        break
+                    args, kwargs = self._batch_to_args(batch, converter.device)
+                    fx_model(*args, **kwargs)
+        finally:
+            self._remove_hooks()
         return fx_model
 
     def replace(

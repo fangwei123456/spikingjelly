@@ -847,6 +847,7 @@ def test_sta_transformer_recipe_does_not_wrap_functional_keyword_weight():
     ]
 
     assert "weight" in tensor_get_attrs
+    assert "bias" not in tensor_get_attrs
     assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
 
 
