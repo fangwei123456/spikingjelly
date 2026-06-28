@@ -300,7 +300,7 @@ class _STAAnalogConv2d(nn.Module, _STATimeStepMixin):
         )
 
 
-class _STAOnlineLayerNorm(nn.Module, _STASpikeMixin):
+class _STAOnlineLayerNorm(nn.Module):
     def __init__(
         self,
         source: nn.LayerNorm,
@@ -356,7 +356,7 @@ class _STAOnlineLayerNorm(nn.Module, _STASpikeMixin):
         return delta
 
 
-class _STAOnlineGELU(nn.Module, _STASpikeMixin):
+class _STAOnlineGELU(nn.Module):
     def __init__(
         self,
         source: nn.GELU,
@@ -396,7 +396,7 @@ class _STAOnlineGELU(nn.Module, _STASpikeMixin):
         return delta
 
 
-class _STAOnlineMultiheadAttention(nn.Module, _STASpikeMixin):
+class _STAOnlineMultiheadAttention(nn.Module):
     def __init__(
         self,
         source: nn.MultiheadAttention,
@@ -490,6 +490,7 @@ class _STAOnlineMultiheadAttention(nn.Module, _STASpikeMixin):
 
 
 class _STAConvertedModel(nn.Module):
+    _STATIC_TENSOR_ARG_INDICES = frozenset({3, 4})
     _STATIC_TENSOR_KWARGS = frozenset(
         {
             "attention_mask",
@@ -537,7 +538,11 @@ class _STAConvertedModel(nn.Module):
         raise TypeError("STA converted model can only accumulate tensor outputs.")
 
     @staticmethod
-    def _zero_tensors(value: Any, preserve_tensor: bool = False) -> Any:
+    def _zero_tensors(
+        value: Any,
+        preserve_tensor: bool = False,
+        static_arg_indices: Optional[frozenset[int]] = None,
+    ) -> Any:
         if torch.is_tensor(value):
             if preserve_tensor:
                 return value
@@ -549,9 +554,25 @@ class _STAConvertedModel(nn.Module):
                 )
             return torch.zeros_like(value)
         if isinstance(value, tuple):
-            return tuple(_STAConvertedModel._zero_tensors(x) for x in value)
+            return tuple(
+                _STAConvertedModel._zero_tensors(
+                    x,
+                    preserve_tensor=(
+                        static_arg_indices is not None and i in static_arg_indices
+                    ),
+                )
+                for i, x in enumerate(value)
+            )
         if isinstance(value, list):
-            return [_STAConvertedModel._zero_tensors(x) for x in value]
+            return [
+                _STAConvertedModel._zero_tensors(
+                    x,
+                    preserve_tensor=(
+                        static_arg_indices is not None and i in static_arg_indices
+                    ),
+                )
+                for i, x in enumerate(value)
+            ]
         if isinstance(value, dict):
             return {
                 key: _STAConvertedModel._zero_tensors(
@@ -565,7 +586,10 @@ class _STAConvertedModel(nn.Module):
     def forward(self, *args: Any, **kwargs: Any) -> Any:
         self.reset()
         output = None
-        zero_args = self._zero_tensors(args)
+        zero_args = self._zero_tensors(
+            args,
+            static_arg_indices=self._STATIC_TENSOR_ARG_INDICES,
+        )
         zero_kwargs = self._zero_tensors(kwargs)
         for step in range(self.time_steps):
             step_args = args if step == 0 else zero_args
@@ -588,10 +612,24 @@ class _STAFirstStepConstant(nn.Module, _STATimeStepMixin):
             )
         else:
             self.register_buffer("value", value.detach().clone())
+        self._zero_value: Optional[torch.Tensor] = None
+        self.t = 0
+
+    def _reset_sta_state(self) -> None:
         self.t = 0
 
     def forward(self) -> torch.Tensor:
-        output = self.value if self.t == 0 else torch.zeros_like(self.value)
+        if self.t == 0:
+            output = self.value
+        else:
+            if (
+                self._zero_value is None
+                or self._zero_value.shape != self.value.shape
+                or self._zero_value.device != self.value.device
+                or self._zero_value.dtype != self.value.dtype
+            ):
+                self._zero_value = torch.zeros_like(self.value)
+            output = self._zero_value
         self.t += 1
         return output
 
@@ -772,10 +810,13 @@ class STATransformerRecipe(ConversionRecipe):
         self._hook_handles: List[torch.utils.hooks.RemovableHandle] = []
 
     def validate(self, converter: "Converter") -> None:
-        if self.mode != "equivalent" and self.dataloader is None:
+        needs_calibration = (
+            self.mode == "spiking_encoder" or self.spike_linear or self.spike_conv2d
+        )
+        if needs_calibration and self.dataloader is None:
             raise ValueError(
-                "STATransformerRecipe requires a dataloader when mode is not "
-                "'equivalent'. "
+                "STATransformerRecipe requires a dataloader when calibration "
+                "is enabled. "
                 "Pass dataloader to STATransformerRecipe."
             )
         if (
@@ -1050,7 +1091,11 @@ class STATransformerRecipe(ConversionRecipe):
 
     @staticmethod
     def _is_static_control_attr(node: fx.Node) -> bool:
+        static_arg_indices = _STAConvertedModel._STATIC_TENSOR_ARG_INDICES
         for user in node.users:
+            for index, value in enumerate(user.args):
+                if index in static_arg_indices and value is node:
+                    return True
             for key, value in user.kwargs.items():
                 if key in _STAConvertedModel._STATIC_TENSOR_KWARGS and value is node:
                     return True

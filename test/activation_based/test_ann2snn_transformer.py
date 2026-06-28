@@ -277,6 +277,18 @@ class TinyFloatMaskBufferTransformerClassifier(nn.Module):
         return x.mean(dim=1)
 
 
+class TinyPositionalSDPAMaskTransformerClassifier(nn.Module):
+    def forward(self, x: torch.Tensor, attn_mask: torch.Tensor) -> torch.Tensor:
+        x = F.scaled_dot_product_attention(
+            x.unsqueeze(1),
+            x.unsqueeze(1),
+            x.unsqueeze(1),
+            attn_mask,
+            0.0,
+        ).squeeze(1)
+        return x.mean(dim=1)
+
+
 class TinyKeywordTransformerClassifier(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -1125,10 +1137,31 @@ def test_sta_transformer_recipe_does_not_wrap_static_floating_control_constants(
     assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
 
 
+def test_sta_transformer_recipe_preserves_positional_attention_masks():
+    model = TinyPositionalSDPAMaskTransformerClassifier().eval()
+    calibration = [(torch.randn(2, 2, 4), torch.zeros(1, 1, 2, 2))]
+
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
+    ).convert(model)
+    x = torch.randn(2, 2, 4)
+    attn_mask = torch.zeros(1, 1, 2, 2)
+    attn_mask[..., 1] = -10000.0
+
+    assert torch.allclose(
+        converted(x, attn_mask),
+        model(x, attn_mask),
+        atol=1e-5,
+        rtol=1e-5,
+    )
+
+
 @pytest.mark.parametrize(
     "kwargs, match",
     [
         ({"dataloader": None, "mode": "spiking_encoder"}, "dataloader"),
+        ({"dataloader": None, "spike_linear": True}, "dataloader"),
+        ({"dataloader": None, "spike_conv2d": True}, "dataloader"),
         ({"time_steps": 0}, "time_steps"),
         ({"time_steps": True}, "time_steps"),
         ({"mode": "missing"}, "mode"),
