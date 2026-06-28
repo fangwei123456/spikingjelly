@@ -32,6 +32,7 @@ from .recipes import (
     ConversionRecipe,
     LocalThresholdBalancingRecipe,
     RateCodingRecipe,
+    STATransformerRecipe,
     TransformerSpikeEquivalentRecipe,
 )
 from .rules import ReLURule
@@ -43,6 +44,7 @@ __all__ = [
     "ConversionRecipe",
     "RateCodingRecipe",
     "LocalThresholdBalancingRecipe",
+    "STATransformerRecipe",
     "TransformerSpikeEquivalentRecipe",
     "ChannelVoltageScaler",
     "estimate_delay_start",

@@ -33,7 +33,8 @@ class Converter:
             :class:`~spikingjelly.activation_based.ann2snn.recipes.ConversionRecipe`
             实例，或稳定的内置 recipe 字符串。目前字符串别名仅支持
             ``"transformer_spike_equivalent"``。Rate-coding 转换需要显式传入
-            ``RateCodingRecipe(dataloader=...)``。
+            ``RateCodingRecipe(dataloader=...)``；STA Transformer 转换需要显式
+            传入 ``STATransformerRecipe(dataloader=..., time_steps=...)``。
         :type recipe: str or ConversionRecipe
         :param device: 转换目标 device。若为 ``None``，从模型参数推断；无参数
             模型使用 CPU。
@@ -55,7 +56,9 @@ class Converter:
             instance, or a stable built-in recipe string. Currently, the only
             supported string alias is ``"transformer_spike_equivalent"``.
             Rate-coding conversion must pass
-            ``RateCodingRecipe(dataloader=...)`` explicitly.
+            ``RateCodingRecipe(dataloader=...)`` explicitly; STA Transformer
+            conversion must pass
+            ``STATransformerRecipe(dataloader=..., time_steps=...)`` explicitly.
         :type recipe: str or ConversionRecipe
         :param device: Target conversion device. If ``None``, infer it from the
             model parameters; parameterless models use CPU.
@@ -75,6 +78,12 @@ class Converter:
                 "The rate_coding recipe requires parameters. "
                 "Pass RateCodingRecipe(dataloader=...) to Converter."
             )
+        if recipe == "sta_transformer":
+            raise ValueError(
+                "The sta_transformer recipe requires parameters. "
+                "Pass STATransformerRecipe(dataloader=..., time_steps=...) "
+                "to Converter."
+            )
         if isinstance(recipe, str):
             raise ValueError(f"Unknown ann2snn conversion recipe: {recipe!r}.")
         raise TypeError(
@@ -90,7 +99,7 @@ class Converter:
         except StopIteration:
             return torch.device("cpu")
 
-    def convert(self, ann: nn.Module) -> torch.fx.GraphModule:
+    def convert(self, ann: nn.Module) -> nn.Module:
         r"""
         **API Language** - :ref:`中文 <Converter.convert-cn>` | :ref:`English <Converter.convert-en>`
 
@@ -107,8 +116,8 @@ class Converter:
 
         :param ann: 待转换的 ANN。
         :type ann: torch.nn.Module
-        :return: 转换后的 ``GraphModule``。
-        :rtype: torch.fx.GraphModule
+        :return: 转换后的模型。
+        :rtype: torch.nn.Module
 
         ----
 
@@ -124,8 +133,8 @@ class Converter:
 
         :param ann: ANN to be converted.
         :type ann: torch.nn.Module
-        :return: Converted ``GraphModule``.
-        :rtype: torch.fx.GraphModule
+        :return: Converted model.
+        :rtype: torch.nn.Module
         """
         configured_device = self.device
         original_ann = ann

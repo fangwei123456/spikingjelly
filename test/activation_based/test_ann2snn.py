@@ -18,6 +18,7 @@ from spikingjelly.activation_based.ann2snn import (
     NeuronFactory,
     RateCodingRecipe,
     ReLURule,
+    STATransformerRecipe,
     ThresholdOptimizer,
     TransformerSpikeEquivalentRecipe,
 )
@@ -791,6 +792,7 @@ class TestPublicExports:
             "ConversionRecipe",
             "RateCodingRecipe",
             "LocalThresholdBalancingRecipe",
+            "STATransformerRecipe",
             "TransformerSpikeEquivalentRecipe",
             "ChannelVoltageScaler",
             "estimate_delay_start",
@@ -805,6 +807,7 @@ class TestPublicExports:
         assert ann2snn.ConversionRecipe is ConversionRecipe
         assert ann2snn.RateCodingRecipe is RateCodingRecipe
         assert ann2snn.LocalThresholdBalancingRecipe is LocalThresholdBalancingRecipe
+        assert ann2snn.STATransformerRecipe is STATransformerRecipe
         assert ann2snn.ChannelVoltageScaler is ChannelVoltageScaler
         assert (
             ann2snn.TransformerSpikeEquivalentRecipe is TransformerSpikeEquivalentRecipe
@@ -819,6 +822,7 @@ class TestPublicExports:
         assert not hasattr(ConversionRecipe, "name")
         assert not hasattr(RateCodingRecipe, "name")
         assert not hasattr(LocalThresholdBalancingRecipe, "name")
+        assert not hasattr(STATransformerRecipe, "name")
         assert not hasattr(TransformerSpikeEquivalentRecipe, "name")
 
 
@@ -865,6 +869,10 @@ class TestConverterRecipes:
     def test_rate_coding_recipe_name_requires_recipe_object(self):
         with pytest.raises(ValueError, match="rate_coding recipe"):
             Converter(recipe="rate_coding")
+
+    def test_sta_transformer_recipe_name_requires_recipe_object(self):
+        with pytest.raises(ValueError, match="sta_transformer recipe"):
+            Converter(recipe="sta_transformer")
 
     def test_unknown_recipe_raises(self):
         with pytest.raises(ValueError, match="Unknown ann2snn conversion recipe"):

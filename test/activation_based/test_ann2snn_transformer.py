@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import pytest
 
 from spikingjelly.activation_based import neuron, surrogate
 from spikingjelly.activation_based.ann2snn import (
     Converter,
+    STATransformerRecipe,
     TransformerSpikeEquivalentRecipe,
 )
 from spikingjelly.activation_based.ann2snn.operators import (
@@ -221,6 +223,66 @@ class TinyANNMHATransformerBlock(nn.Module):
         return x + self.fc2(self.act(self.fc1(self.norm2(x))))
 
 
+class TinyImageTransformerClassifier(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.patch = nn.Conv2d(3, 8, kernel_size=4, stride=4)
+        self.norm = nn.LayerNorm(8)
+        self.fc1 = nn.Linear(8, 16)
+        self.act = nn.GELU()
+        self.fc2 = nn.Linear(16, 5)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.patch(x).flatten(2).transpose(1, 2)
+        x = self.norm(x)
+        x = self.fc2(self.act(self.fc1(x)))
+        return x.mean(dim=1)
+
+
+class TinyConstantTransformerClassifier(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.bias_token = nn.Parameter(torch.randn(1, 1, 8))
+        self.norm = nn.LayerNorm(8)
+        self.fc = nn.Linear(8, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x + self.bias_token
+        return self.fc(self.norm(x)).mean(dim=1)
+
+
+class TinyKeywordTransformerClassifier(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.norm = nn.LayerNorm(4)
+        self.fc = nn.Linear(4, 3)
+
+    def forward(self, pixel_values: torch.Tensor) -> torch.Tensor:
+        return self.fc(self.norm(pixel_values)).mean(dim=1)
+
+
+class TinyDictOutputTransformerClassifier(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.norm = nn.LayerNorm(4)
+        self.fc = nn.Linear(4, 3)
+
+    def forward(self, x: torch.Tensor) -> dict:
+        logits = self.fc(self.norm(x)).mean(dim=1)
+        return {"logits": logits}
+
+
+class TinyHeadClassifier(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.norm = nn.LayerNorm(4)
+        self.body = nn.Linear(4, 4)
+        self.head = nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.head(self.body(self.norm(x))).mean(dim=1)
+
+
 def _apply_ann_to_cumulative(
     block: nn.Module,
     x_seq: torch.Tensor,
@@ -425,3 +487,323 @@ def test_converter_transformer_block_autograd_smoke():
     for parameter in converted.parameters():
         assert parameter.grad is not None
         assert torch.isfinite(parameter.grad).all()
+
+
+def test_sta_transformer_recipe_converts_affine_layers_and_runs_inner_steps():
+    torch.manual_seed(3)
+    model = TinyImageTransformerClassifier().eval()
+    calibration = [(torch.randn(2, 3, 16, 16), torch.zeros(2, dtype=torch.long))]
+    recipe = STATransformerRecipe(
+        dataloader=calibration,
+        time_steps=4,
+        threshold_mode="mse",
+    )
+
+    converted = Converter(recipe=recipe).convert(model)
+    modules = dict(converted.named_modules())
+    x = torch.randn(2, 3, 16, 16)
+    y = converted(x)
+
+    assert converted.time_steps == 4
+    assert not hasattr(modules["model.patch"], "v_threshold")
+    assert not hasattr(modules["model.fc1"], "v_threshold")
+    assert not hasattr(modules["model.fc2"], "v_threshold")
+    assert y.shape == (2, 5)
+    assert torch.isfinite(y).all()
+
+
+def test_sta_transformer_recipe_repeated_forward_resets_state():
+    torch.manual_seed(31)
+    model = TinyImageTransformerClassifier().eval()
+    calibration = [(torch.randn(2, 3, 16, 16),)]
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
+    ).convert(model)
+    x = torch.randn(2, 3, 16, 16)
+
+    y0 = converted(x)
+    y1 = converted(x)
+
+    assert torch.allclose(y0, y1, atol=1e-6, rtol=1e-6)
+
+
+def test_sta_transformer_recipe_equivalent_mha_matches_ann():
+    torch.manual_seed(32)
+    model = TinyANNMHATransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16).eval()
+    calibration = [(torch.randn(2, 4, 8),)]
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
+    ).convert(model)
+    modules = dict(converted.named_modules())
+    x = torch.randn(2, 4, 8)
+
+    assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
+    assert modules["model.attn"].attn.batch_first is True
+
+
+def test_sta_transformer_recipe_spiking_encoder_mode_encodes_nonlinear_outputs():
+    torch.manual_seed(8)
+    model = TinyImageTransformerClassifier().eval()
+    calibration = [(torch.randn(2, 3, 16, 16),)]
+
+    converted = Converter(
+        recipe=STATransformerRecipe(
+            dataloader=calibration,
+            time_steps=4,
+            mode="spiking_encoder",
+            threshold_mode="mse",
+        )
+    ).convert(model)
+    modules = dict(converted.named_modules())
+    y = converted(torch.randn(2, 3, 16, 16))
+
+    assert not hasattr(modules["model.fc1"], "v_threshold")
+    assert not hasattr(modules["model.fc2"], "v_threshold")
+    assert hasattr(modules["model.norm"].encoder, "v_threshold")
+    assert hasattr(modules["model.act"].encoder, "v_threshold")
+    assert y.shape == (2, 5)
+    assert torch.isfinite(y).all()
+
+
+def test_sta_transformer_recipe_spiking_encoder_mode_encodes_mha_output():
+    torch.manual_seed(33)
+    model = TinyANNMHATransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16).eval()
+    calibration = [(torch.randn(2, 4, 8),)]
+    converted = Converter(
+        recipe=STATransformerRecipe(
+            dataloader=calibration,
+            time_steps=4,
+            mode="spiking_encoder",
+        )
+    ).convert(model)
+    modules = dict(converted.named_modules())
+    y = converted(torch.randn(2, 4, 8))
+
+    assert hasattr(modules["model.attn"].encoder, "v_threshold")
+    assert torch.isfinite(y).all()
+
+
+def test_sta_transformer_recipe_threshold_mode_max_path():
+    torch.manual_seed(34)
+    model = TinyImageTransformerClassifier().eval()
+    calibration = [(torch.randn(2, 3, 16, 16),)]
+
+    converted = Converter(
+        recipe=STATransformerRecipe(
+            dataloader=calibration,
+            time_steps=4,
+            mode="spiking_affine",
+            threshold_mode="max",
+        )
+    ).convert(model)
+    threshold = dict(converted.named_modules())["model.fc1"].v_threshold
+    y = converted(torch.randn(2, 3, 16, 16))
+
+    assert torch.isfinite(threshold).all()
+    assert (threshold > 0).all()
+    assert torch.isfinite(y).all()
+
+
+def test_sta_transformer_recipe_time_steps_affects_mse_thresholds():
+    torch.manual_seed(4)
+    model_t2 = TinyImageTransformerClassifier().eval()
+    model_t8 = TinyImageTransformerClassifier().eval()
+    model_t8.load_state_dict(model_t2.state_dict())
+    calibration = [(torch.randn(2, 3, 16, 16),)]
+
+    converted_t2 = Converter(
+        recipe=STATransformerRecipe(
+            dataloader=calibration,
+            time_steps=2,
+            mode="spiking_affine",
+            threshold_mode="mse",
+        )
+    ).convert(model_t2)
+    converted_t8 = Converter(
+        recipe=STATransformerRecipe(
+            dataloader=calibration,
+            time_steps=8,
+            mode="spiking_affine",
+            threshold_mode="mse",
+        )
+    ).convert(model_t8)
+
+    threshold_t2 = dict(converted_t2.named_modules())["model.fc1"].v_threshold
+    threshold_t8 = dict(converted_t8.named_modules())["model.fc1"].v_threshold
+
+    assert not torch.allclose(threshold_t2, threshold_t8)
+
+
+def test_sta_transformer_recipe_threshold_scale_rescales_thresholds():
+    torch.manual_seed(5)
+    model_base = TinyImageTransformerClassifier().eval()
+    model_scaled = TinyImageTransformerClassifier().eval()
+    model_scaled.load_state_dict(model_base.state_dict())
+    calibration = [(torch.randn(2, 3, 16, 16),)]
+
+    converted_base = Converter(
+        recipe=STATransformerRecipe(
+            dataloader=calibration,
+            time_steps=4,
+            mode="spiking_affine",
+            threshold_mode="mse",
+        )
+    ).convert(model_base)
+    converted_scaled = Converter(
+        recipe=STATransformerRecipe(
+            dataloader=calibration,
+            time_steps=4,
+            mode="spiking_affine",
+            threshold_mode="mse",
+            threshold_scale=0.5,
+        )
+    ).convert(model_scaled)
+
+    threshold_base = dict(converted_base.named_modules())["model.fc1"].v_threshold
+    threshold_scaled = dict(converted_scaled.named_modules())["model.fc1"].v_threshold
+
+    assert torch.allclose(threshold_scaled, threshold_base * 0.5)
+
+
+def test_sta_transformer_recipe_num_calibration_batches_limits_observer_updates():
+    torch.manual_seed(35)
+    model = TinyImageTransformerClassifier().eval()
+    calibration = [(torch.randn(2, 3, 16, 16),) for _ in range(3)]
+    recipe = STATransformerRecipe(
+        dataloader=calibration,
+        time_steps=4,
+        mode="spiking_affine",
+        num_calibration_batches=1,
+    )
+
+    Converter(recipe=recipe).convert(model)
+
+    assert recipe._observers
+    assert all(
+        observer.num_batches_tracked == 1 for observer in recipe._observers.values()
+    )
+
+
+def test_sta_transformer_recipe_dict_batch_and_dict_output_are_supported():
+    torch.manual_seed(36)
+    model = TinyDictOutputTransformerClassifier().eval()
+    calibration = [(torch.randn(2, 4, 4),)]
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
+    ).convert(model)
+
+    x = torch.randn(2, 4, 4)
+    output = converted(x)
+
+    assert set(output.keys()) == {"logits"}
+    assert torch.allclose(output["logits"], model(x)["logits"], atol=1e-5, rtol=1e-5)
+
+
+def test_sta_transformer_recipe_kwargs_calibration_path():
+    torch.manual_seed(37)
+    model = TinyKeywordTransformerClassifier().eval()
+    calibration = [{"pixel_values": torch.randn(2, 4, 4)}]
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
+    ).convert(model)
+    x = torch.randn(2, 4, 4)
+
+    assert torch.allclose(converted(pixel_values=x), model(x), atol=1e-5, rtol=1e-5)
+
+
+def test_sta_transformer_recipe_spike_classifier_flag_controls_head_conversion():
+    torch.manual_seed(38)
+    model_default = TinyHeadClassifier().eval()
+    model_with_head = TinyHeadClassifier().eval()
+    model_with_head.load_state_dict(model_default.state_dict())
+    calibration = [(torch.randn(2, 4, 4),)]
+
+    converted_default = Converter(
+        recipe=STATransformerRecipe(
+            dataloader=calibration,
+            time_steps=4,
+            mode="spiking_affine",
+        )
+    ).convert(model_default)
+    converted_with_head = Converter(
+        recipe=STATransformerRecipe(
+            dataloader=calibration,
+            time_steps=4,
+            mode="spiking_affine",
+            spike_classifier=True,
+        )
+    ).convert(model_with_head)
+
+    assert not hasattr(
+        dict(converted_default.named_modules())["model.head"], "v_threshold"
+    )
+    assert hasattr(
+        dict(converted_with_head.named_modules())["model.head"], "v_threshold"
+    )
+
+
+def test_sta_transformer_recipe_can_spike_conv2d_explicitly():
+    torch.manual_seed(6)
+    model = TinyImageTransformerClassifier().eval()
+    calibration = [(torch.randn(2, 3, 16, 16),)]
+
+    converted = Converter(
+        recipe=STATransformerRecipe(
+            dataloader=calibration,
+            time_steps=4,
+            mode="spiking_affine",
+            threshold_mode="mse",
+            spike_conv2d=True,
+        )
+    ).convert(model)
+    modules = dict(converted.named_modules())
+
+    assert hasattr(modules["model.patch"], "v_threshold")
+    assert modules["model.patch"].v_threshold.shape == (8,)
+
+
+def test_sta_transformer_recipe_wraps_tensor_constants_as_first_step_inputs():
+    torch.manual_seed(7)
+    model = TinyConstantTransformerClassifier().eval()
+    calibration = [(torch.randn(2, 4, 8),)]
+    converted = Converter(
+        recipe=STATransformerRecipe(
+            dataloader=calibration,
+            time_steps=4,
+            threshold_mode="mse",
+        )
+    ).convert(model)
+    x = torch.randn(2, 4, 8)
+    tensor_get_attrs = [
+        node
+        for node in converted.model.graph.nodes
+        if node.op == "get_attr"
+        and torch.is_tensor(
+            STATransformerRecipe._get_attr_value(converted.model, node.target)
+        )
+    ]
+
+    assert tensor_get_attrs == []
+    assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
+
+
+@pytest.mark.parametrize(
+    "kwargs, match",
+    [
+        ({"time_steps": 0}, "time_steps"),
+        ({"mode": "missing"}, "mode"),
+        ({"threshold_mode": "missing"}, "threshold_mode"),
+        ({"threshold_scale": 0.0}, "threshold_scale"),
+        ({"momentum": 1.5}, "momentum"),
+        ({"num_calibration_batches": 0}, "num_calibration_batches"),
+    ],
+)
+def test_sta_transformer_recipe_validate_errors(kwargs, match):
+    model = TinyImageTransformerClassifier().eval()
+    recipe = STATransformerRecipe(
+        dataloader=[(torch.randn(2, 3, 16, 16),)],
+        **kwargs,
+    )
+
+    with pytest.raises(ValueError, match=match):
+        Converter(recipe=recipe).convert(model)

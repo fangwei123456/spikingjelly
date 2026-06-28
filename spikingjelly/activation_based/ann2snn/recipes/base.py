@@ -292,9 +292,7 @@ class ConversionRecipe:
         """
         return fx_model
 
-    def finalize(
-        self, converter: "Converter", fx_model: fx.GraphModule
-    ) -> fx.GraphModule:
+    def finalize(self, converter: "Converter", fx_model: fx.GraphModule) -> nn.Module:
         r"""
         **API Language** - :ref:`中文 <ConversionRecipe.finalize-cn>` | :ref:`English <ConversionRecipe.finalize-en>`
 
@@ -305,14 +303,15 @@ class ConversionRecipe:
         * **中文**
 
         转换结束前的收尾步骤。默认直接返回 ``fx_model``。子类可在此做最终
-        graph lint、清理临时模块或恢复状态。
+        graph lint、清理临时模块、恢复状态，或包装最终返回的
+        :class:`torch.nn.Module`。
 
         :param converter: 执行当前 recipe 的转换器。
         :type converter: Converter
         :param fx_model: 当前 ``GraphModule``。
         :type fx_model: torch.fx.GraphModule
         :return: 最终转换结果。
-        :rtype: torch.fx.GraphModule
+        :rtype: torch.nn.Module
 
         ----
 
@@ -322,13 +321,14 @@ class ConversionRecipe:
 
         Final step before returning the converted model. The default
         implementation returns ``fx_model`` unchanged. Subclasses can perform
-        final graph linting, clean temporary modules, or restore state here.
+        final graph linting, clean temporary modules, restore state, or wrap the
+        final returned :class:`torch.nn.Module`.
 
         :param converter: Converter that executes this recipe.
         :type converter: Converter
         :param fx_model: Current ``GraphModule``.
         :type fx_model: torch.fx.GraphModule
         :return: Final converted model.
-        :rtype: torch.fx.GraphModule
+        :rtype: torch.nn.Module
         """
         return fx_model
