@@ -5,6 +5,23 @@ import requests
 from tqdm import tqdm
 
 
+def _validate_download_response(req, first_byte, file_size):
+    if req.status_code not in (200, 206):
+        req.raise_for_status()
+    if req.status_code == 200:
+        if first_byte != 0:
+            return False
+        return True
+    content_range = req.headers.get("Content-Range", "")
+    match = re.match(r"bytes (\d+)-(\d+)/(\d+)", content_range, re.IGNORECASE)
+    return (
+        match is not None
+        and int(match.group(1)) == first_byte
+        and int(match.group(2)) == file_size - 1
+        and int(match.group(3)) == file_size
+    )
+
+
 def download_url(url, dst):
     r"""
     **API Language** - :ref:`中文 <download_url-cn>` | :ref:`English <download_url-en>`
@@ -67,40 +84,17 @@ def download_url(url, dst):
     req = requests.get(url, headers=header, stream=True, timeout=30)  # (5)
     try:
         mode = "ab"
-        if first_byte > 0:
-            content_range = req.headers.get("Content-Range", "")
-            match = re.match(
-                r"bytes (\d+)-(\d+)/(\d+)", content_range, re.IGNORECASE
-            )
-            if (
-                req.status_code != 206
-                or match is None
-                or int(match.group(1)) != first_byte
-                or int(match.group(2)) != file_size - 1
-                or int(match.group(3)) != file_size
-            ):
-                req.close()
-                first_byte = 0
-                pbar.reset(total=file_size)
-                header = {"Range": f"bytes=0-{file_size - 1}"}
-                req = requests.get(url, headers=header, stream=True, timeout=30)
-                if req.status_code not in (200, 206):
-                    req.raise_for_status()
-                if req.status_code == 206:
-                    content_range = req.headers.get("Content-Range", "")
-                    match = re.match(
-                        r"bytes (\d+)-(\d+)/(\d+)", content_range, re.IGNORECASE
-                    )
-                    if (
-                        match is None
-                        or int(match.group(1)) != 0
-                        or int(match.group(2)) != file_size - 1
-                        or int(match.group(3)) != file_size
-                    ):
-                        raise RuntimeError(
-                            "Invalid Content-Range for restarted download."
-                        )
-                mode = "wb"
+        valid_response = _validate_download_response(req, first_byte, file_size)
+        if first_byte > 0 and not valid_response:
+            req.close()
+            first_byte = 0
+            pbar.reset(total=file_size)
+            header = {"Range": f"bytes=0-{file_size - 1}"}
+            req = requests.get(url, headers=header, stream=True, timeout=30)
+            valid_response = _validate_download_response(req, first_byte, file_size)
+            mode = "wb"
+        if not valid_response:
+            raise RuntimeError("Invalid response for download.")
         with open(dst, mode) as f:
             for chunk in req.iter_content(chunk_size=1024):  # (6)
                 if chunk:

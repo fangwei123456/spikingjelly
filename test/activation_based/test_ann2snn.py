@@ -2597,6 +2597,38 @@ class TestDelayedReadoutEstimation:
 
 
 class TestDownloadUrl:
+    def test_download_rejects_error_response_before_writing(self, tmp_path, monkeypatch):
+        dst = tmp_path / "checkpoint.pth"
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, headers, chunks=()):
+                self.status_code = status_code
+                self.headers = headers
+                self._chunks = chunks
+
+            def iter_content(self, chunk_size):
+                yield from self._chunks
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                raise RuntimeError("download failed")
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            calls.append(headers)
+            if len(calls) == 1:
+                return FakeResponse(200, {"content-length": "10"})
+            return FakeResponse(500, {}, [b"error-body"])
+
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        with pytest.raises(RuntimeError, match="download failed"):
+            ann2snn_utils.download_url("https://example.com/model.pth", str(dst))
+
+        assert not dst.exists()
+
     def test_resume_accepts_case_insensitive_content_range(
         self, tmp_path, monkeypatch
     ):
