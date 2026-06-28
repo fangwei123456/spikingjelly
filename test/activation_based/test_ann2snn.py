@@ -680,7 +680,9 @@ class TestChannelVoltageHook:
     def test_max_mode_for_matrix_and_image(self):
         matrix_hook = ChannelVoltageHook(mode="Max", channel_dim=1)
         matrix_hook(torch.tensor([[1.0, 2.0, 3.0], [4.0, 1.0, 2.0]]))
-        assert torch.allclose(matrix_hook.compute_threshold(), torch.tensor([4.0, 2.0, 3.0]))
+        assert torch.allclose(
+            matrix_hook.compute_threshold(), torch.tensor([4.0, 2.0, 3.0])
+        )
 
         image_hook = ChannelVoltageHook(mode="Max", channel_dim=1)
         image_hook(torch.ones(2, 4, 3, 3))
@@ -2393,7 +2395,9 @@ class TestLocalThresholdBalancingRecipe:
 
         maxpool_idx = graph_targets.index("2")
         if_node_idx = next(
-            idx for idx, target in enumerate(graph_targets) if str(target).endswith("if_node")
+            idx
+            for idx, target in enumerate(graph_targets)
+            if str(target).endswith("if_node")
         )
         assert maxpool_idx < if_node_idx
 
@@ -2598,8 +2602,7 @@ class TestDelayedReadoutEstimation:
 
 class TestDownloadUrl:
     USER_AGENT = (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) "
-        "Gecko/20100101 Firefox/67.0"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0"
     )
 
     def _expected_range_header(self, range_value):
@@ -2709,7 +2712,9 @@ class TestDownloadUrl:
         assert closed == [True]
         assert not dst.exists()
 
-    def test_download_rejects_error_response_before_writing(self, tmp_path, monkeypatch):
+    def test_download_rejects_error_response_before_writing(
+        self, tmp_path, monkeypatch
+    ):
         dst = tmp_path / "checkpoint.pth"
         calls = []
 
@@ -2741,9 +2746,7 @@ class TestDownloadUrl:
 
         assert not dst.exists()
 
-    def test_resume_accepts_case_insensitive_content_range(
-        self, tmp_path, monkeypatch
-    ):
+    def test_resume_accepts_case_insensitive_content_range(self, tmp_path, monkeypatch):
         dst = tmp_path / "checkpoint.pth"
         dst.write_bytes(b"partial")
         calls = []
@@ -3014,7 +3017,9 @@ class TestChannelWiseRateCodingRecipe:
 
         maxpool_idx = graph_targets.index("2")
         if_node_idx = next(
-            idx for idx, target in enumerate(graph_targets) if str(target).endswith("if_node")
+            idx
+            for idx, target in enumerate(graph_targets)
+            if str(target).endswith("if_node")
         )
         assert maxpool_idx < if_node_idx
 

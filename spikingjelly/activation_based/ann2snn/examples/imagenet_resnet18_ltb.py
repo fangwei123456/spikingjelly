@@ -16,7 +16,9 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Evaluate ann2snn LocalThresholdBalancingRecipe on ImageNet ResNet-18."
     )
-    parser.add_argument("--data-root", required=True, help="ImageNet root with train/val.")
+    parser.add_argument(
+        "--data-root", required=True, help="ImageNet root with train/val."
+    )
     parser.add_argument("--calib-samples", type=int, default=50000)
     parser.add_argument("--eval-samples", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=128)
@@ -87,10 +89,7 @@ def accuracy(output, target, topk=(1, 5)):
         _, pred = output.topk(maxk, dim=1)
         pred = pred.t()
         correct = pred.eq(target.reshape(1, -1).expand_as(pred))
-        return [
-            correct[:k].reshape(-1).float().sum().item()
-            for k in topk
-        ]
+        return [correct[:k].reshape(-1).float().sum().item() for k in topk]
 
 
 def evaluate_ann(model, data_loader, device):

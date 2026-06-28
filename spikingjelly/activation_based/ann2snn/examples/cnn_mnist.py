@@ -138,8 +138,7 @@ def run_recipe_comparison(
         checkpoint_path,
     )
     print(
-        "SNN accuracy (simulation %d time-steps): %.4f"
-        % (time_steps, robust_accs[-1])
+        "SNN accuracy (simulation %d time-steps): %.4f" % (time_steps, robust_accs[-1])
     )
     results[f"robust_scalar_t{time_steps}"] = {
         "time_steps": time_steps,
@@ -159,10 +158,7 @@ def run_recipe_comparison(
         time_steps,
         checkpoint_path,
     )
-    print(
-        "SNN accuracy (simulation %d time-steps): %.4f"
-        % (time_steps, ltb_accs[-1])
-    )
+    print("SNN accuracy (simulation %d time-steps): %.4f" % (time_steps, ltb_accs[-1]))
     results[f"ltb_t{time_steps}"] = {
         "time_steps": time_steps,
         "top1": ltb_accs[-1] * 100.0,
@@ -292,7 +288,10 @@ def main(args):
         dataset=train_data_dataset, batch_size=batch_size, shuffle=True, drop_last=False
     )
     calibration_data_loader = torch.utils.data.DataLoader(
-        dataset=train_data_dataset, batch_size=batch_size, shuffle=False, drop_last=False
+        dataset=train_data_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=False,
     )
     test_data_dataset = torchvision.datasets.MNIST(
         root=dataset_dir,

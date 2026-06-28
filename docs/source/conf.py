@@ -208,7 +208,11 @@ def _resolve_postponed_signature(app, obj, bound_method):
     if signature is not None:
         _set_signature(obj, signature)
         owner = _owner_class_for_method(obj)
-        if owner is not None and dataclasses.is_dataclass(owner) and obj is owner.__init__:
+        if (
+            owner is not None
+            and dataclasses.is_dataclass(owner)
+            and obj is owner.__init__
+        ):
             _set_signature(owner, _signature_without_bound_self(signature))
 
     return None
@@ -239,6 +243,7 @@ def setup(app):
         _resolve_postponed_type_hints,
         priority=400,
     )
+
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

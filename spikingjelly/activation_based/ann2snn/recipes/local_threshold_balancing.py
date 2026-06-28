@@ -100,6 +100,7 @@ class LocalThresholdBalancingHook(nn.Module):
             raise ValueError("Balanced thresholds must be finite positive values.")
         return threshold.detach()
 
+
 class LocalThresholdBalancingReLURule:
     def __init__(self, channel_dim: int = 1) -> None:
         self.channel_dim = channel_dim
@@ -121,9 +122,7 @@ class LocalThresholdBalancingReLURule:
         key = parent or "__FIRST_LEVEL_OF_MODULE__"
         counter = hook_counts_per_prefix.get(key, 0)
         hook_counts_per_prefix[key] = counter + 1
-        target = (
-            f"{parent}.ltb_hook_{counter}" if parent else f"ltb_hook_{counter}"
-        )
+        target = f"{parent}.ltb_hook_{counter}" if parent else f"ltb_hook_{counter}"
         modules = dict(fx_model.named_modules())
         hook_input = node
         users = list(node.users)
@@ -149,7 +148,9 @@ class LocalThresholdBalancingReLURule:
         for hook_node in fx_model.graph.nodes:
             if hook_node.op != "call_module":
                 continue
-            if not isinstance(modules.get(hook_node.target), LocalThresholdBalancingHook):
+            if not isinstance(
+                modules.get(hook_node.target), LocalThresholdBalancingHook
+            ):
                 continue
             if len(hook_node.args) == 0 or not isinstance(hook_node.args[0], fx.Node):
                 continue
@@ -163,9 +164,8 @@ class LocalThresholdBalancingReLURule:
                 continue
             if not isinstance(modules.get(hook_input_node.target), nn.MaxPool2d):
                 continue
-            if (
-                len(hook_input_node.args) == 0
-                or not isinstance(hook_input_node.args[0], fx.Node)
+            if len(hook_input_node.args) == 0 or not isinstance(
+                hook_input_node.args[0], fx.Node
             ):
                 continue
             activation_node = hook_input_node.args[0]
@@ -200,7 +200,9 @@ class LocalThresholdBalancingReLURule:
             if not (
                 hook_input_node.op == "call_module"
                 and isinstance(hook_input_node.target, str)
-                and isinstance(fx_model.get_submodule(hook_input_node.target), nn.MaxPool2d)
+                and isinstance(
+                    fx_model.get_submodule(hook_input_node.target), nn.MaxPool2d
+                )
             ):
                 raise TypeError(
                     "LocalThresholdBalancingRecipe only supports hooks after "
@@ -222,7 +224,9 @@ class LocalThresholdBalancingReLURule:
 
         fx_model.add_submodule(target=target0, m=m0)
         with fx_model.graph.inserting_after(n=hook_node):
-            spike_input_args = (hook_input_node,) if pre_spike_maxpool else activation_node.args
+            spike_input_args = (
+                (hook_input_node,) if pre_spike_maxpool else activation_node.args
+            )
             node0 = fx_model.graph.call_module(target0, args=spike_input_args)
         fx_model.add_submodule(target=target1, m=m1)
         with fx_model.graph.inserting_after(n=node0):
@@ -352,9 +356,7 @@ class LocalThresholdBalancingRecipe(ConversionRecipe):
 
     def validate(self, converter: "Converter") -> None:
         if self.dataloader is None:
-            raise ValueError(
-                "LocalThresholdBalancingRecipe requires a dataloader."
-            )
+            raise ValueError("LocalThresholdBalancingRecipe requires a dataloader.")
         if not isinstance(self.time_steps, int) or self.time_steps <= 0:
             raise ValueError("time_steps must be a positive int.")
         if not isinstance(self.channel_dim, int):
@@ -362,7 +364,9 @@ class LocalThresholdBalancingRecipe(ConversionRecipe):
         if not self.threshold_candidates:
             raise ValueError("threshold_candidates must not be empty.")
         if any(v <= 0 or not math.isfinite(v) for v in self.threshold_candidates):
-            raise ValueError("threshold_candidates must contain finite positive values.")
+            raise ValueError(
+                "threshold_candidates must contain finite positive values."
+            )
         if self.eps <= 0:
             raise ValueError("eps must be positive.")
         validate_rate_coding_mode(self.mode)
@@ -418,7 +422,9 @@ class LocalThresholdBalancingRecipe(ConversionRecipe):
         replaced_hooks = set()
         replaced_activations = set()
         modules = dict(fx_model.named_modules())
-        for activation_node, hook_node in self.rule.find_replacements(fx_model, modules):
+        for activation_node, hook_node in self.rule.find_replacements(
+            fx_model, modules
+        ):
             if hook_node in replaced_hooks or activation_node in replaced_activations:
                 continue
             replaced_hooks.add(hook_node)

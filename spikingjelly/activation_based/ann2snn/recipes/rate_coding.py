@@ -238,9 +238,8 @@ class ChannelWiseRateCodingReLURule:
                 continue
             if not isinstance(modules.get(hook_input_node.target), nn.MaxPool2d):
                 continue
-            if (
-                len(hook_input_node.args) == 0
-                or not isinstance(hook_input_node.args[0], fx.Node)
+            if len(hook_input_node.args) == 0 or not isinstance(
+                hook_input_node.args[0], fx.Node
             ):
                 continue
             activation_node = hook_input_node.args[0]
@@ -277,7 +276,9 @@ class ChannelWiseRateCodingReLURule:
             if not (
                 hook_input_node.op == "call_module"
                 and isinstance(hook_input_node.target, str)
-                and isinstance(fx_model.get_submodule(hook_input_node.target), nn.MaxPool2d)
+                and isinstance(
+                    fx_model.get_submodule(hook_input_node.target), nn.MaxPool2d
+                )
             ):
                 raise TypeError(
                     "Channel-wise RateCodingRecipe only supports hooks after "
@@ -308,8 +309,7 @@ class ChannelWiseRateCodingReLURule:
                     neuron_threshold = neuron_threshold.item()
             if not isinstance(neuron_threshold, (int, float)):
                 raise ValueError(
-                    "Channel-wise RateCodingRecipe requires a scalar neuron "
-                    "threshold."
+                    "Channel-wise RateCodingRecipe requires a scalar neuron threshold."
                 )
             if not (neuron_threshold > 0.0) or not math.isfinite(neuron_threshold):
                 raise ValueError(
@@ -323,7 +323,9 @@ class ChannelWiseRateCodingReLURule:
 
         fx_model.add_submodule(target=target0, m=m0)
         with fx_model.graph.inserting_after(n=hook_node):
-            spike_input_args = (hook_input_node,) if pre_spike_maxpool else activation_node.args
+            spike_input_args = (
+                (hook_input_node,) if pre_spike_maxpool else activation_node.args
+            )
             node0 = fx_model.graph.call_module(target0, args=spike_input_args)
         fx_model.add_submodule(target=target1, m=m1)
         with fx_model.graph.inserting_after(n=node0):
@@ -468,7 +470,11 @@ class RateCodingRecipe(ConversionRecipe):
                 "support custom neuron_factory."
             )
         self.rules = (
-            [ChannelWiseRateCodingReLURule(channel_dim, pre_spike_maxpool, half_threshold)]
+            [
+                ChannelWiseRateCodingReLURule(
+                    channel_dim, pre_spike_maxpool, half_threshold
+                )
+            ]
             if channel_wise
             else (rules if rules is not None else [ReLURule()])
         )
