@@ -2659,6 +2659,48 @@ class TestDownloadUrl:
         assert dst.read_bytes() == b"abcdefg"
         assert "Range" not in calls[1]
 
+    def test_download_without_resume_closes_pbar_when_request_fails(
+        self, tmp_path, monkeypatch
+    ):
+        dst = tmp_path / "checkpoint.pth"
+        calls = []
+        closed = []
+
+        class FakePbar:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def update(self, value):
+                pass
+
+            def close(self):
+                closed.append(True)
+
+        class FakeResponse:
+            status_code = 200
+            headers = {}
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                pass
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            calls.append(headers)
+            if len(calls) == 1:
+                return FakeResponse()
+            raise RuntimeError("connect failed")
+
+        monkeypatch.setattr(ann2snn_utils, "tqdm", FakePbar)
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        with pytest.raises(RuntimeError, match="connect failed"):
+            ann2snn_utils.download_url("https://example.com/model.pth", str(dst))
+
+        assert closed == [True]
+        assert not dst.exists()
+
     def test_download_rejects_error_response_before_writing(self, tmp_path, monkeypatch):
         dst = tmp_path / "checkpoint.pth"
         calls = []

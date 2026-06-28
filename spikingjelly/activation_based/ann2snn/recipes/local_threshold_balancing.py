@@ -137,9 +137,7 @@ class LocalThresholdBalancingReLURule:
                 hook_input = user
         fx_model.add_submodule(target=target, m=hook_factory.create())
         with fx_model.graph.inserting_after(n=hook_input):
-            hook_node = fx_model.graph.call_module(
-                module_name=target, args=(hook_input,)
-            )
+            hook_node = fx_model.graph.call_module(target, args=(hook_input,))
         for user in list(hook_input.users):
             if user is not hook_node:
                 user.replace_input_with(hook_input, hook_node)

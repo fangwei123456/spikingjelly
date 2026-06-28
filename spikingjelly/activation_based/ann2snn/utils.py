@@ -24,8 +24,9 @@ def _validate_download_response(req, first_byte, file_size):
 
 def _download_without_resume(url, dst, headers):
     pbar = tqdm(unit="B", unit_scale=True, desc=dst)
-    req = requests.get(url, headers=headers, stream=True, timeout=30)
+    req = None
     try:
+        req = requests.get(url, headers=headers, stream=True, timeout=30)
         req.raise_for_status()
         with open(dst, "wb") as f:
             for chunk in req.iter_content(chunk_size=1024):
@@ -33,7 +34,8 @@ def _download_without_resume(url, dst, headers):
                     f.write(chunk)
                     pbar.update(len(chunk))
     finally:
-        req.close()
+        if req is not None:
+            req.close()
         pbar.close()
     return os.path.getsize(dst)
 
@@ -101,8 +103,9 @@ def download_url(url, dst):
     pbar = tqdm(
         total=file_size, initial=first_byte, unit="B", unit_scale=True, desc=dst
     )
-    req = requests.get(url, headers=header, stream=True, timeout=30)  # (5)
+    req = None
     try:
+        req = requests.get(url, headers=header, stream=True, timeout=30)  # (5)
         mode = "ab"
         valid_response = _validate_download_response(req, first_byte, file_size)
         if first_byte > 0 and not valid_response:
@@ -121,6 +124,7 @@ def download_url(url, dst):
                     f.write(chunk)
                     pbar.update(len(chunk))
     finally:
-        req.close()
+        if req is not None:
+            req.close()
         pbar.close()
     return file_size
