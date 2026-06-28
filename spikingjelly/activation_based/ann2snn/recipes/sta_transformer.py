@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import math
+import operator
 from typing import Any, Dict, Iterable, List, Optional, TYPE_CHECKING, Tuple
 
 import torch
@@ -125,7 +126,12 @@ class _STASpikeMixin(_STATimeStepMixin):
 
     def _spike(self, analog: torch.Tensor, channel_dim: int) -> torch.Tensor:
         threshold = self._broadcast_threshold(self.v_threshold, analog, channel_dim)
-        if self.mem is None or self.mem.shape != analog.shape:
+        if (
+            self.mem is None
+            or self.mem.shape != analog.shape
+            or self.mem.device != analog.device
+            or self.mem.dtype != analog.dtype
+        ):
             self.mem = torch.zeros_like(analog)
         self.mem = self.mem + analog
         spike_count = torch.trunc(self.mem / threshold)
@@ -320,7 +326,12 @@ class _STAOnlineLayerNorm(nn.Module, _STASpikeMixin):
             self.encoder._reset_sta_state()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.mem is None or self.mem.shape != x.shape:
+        if (
+            self.mem is None
+            or self.mem.shape != x.shape
+            or self.mem.device != x.device
+            or self.mem.dtype != x.dtype
+        ):
             self.mem = torch.zeros_like(x)
             self.prev_output = torch.zeros_like(x)
         self.mem = self.mem + x
@@ -361,7 +372,12 @@ class _STAOnlineGELU(nn.Module, _STASpikeMixin):
             self.encoder._reset_sta_state()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.mem is None or self.mem.shape != x.shape:
+        if (
+            self.mem is None
+            or self.mem.shape != x.shape
+            or self.mem.device != x.device
+            or self.mem.dtype != x.dtype
+        ):
             self.mem = torch.zeros_like(x)
             self.prev_output = torch.zeros_like(x)
         self.mem = self.mem + x
@@ -419,6 +435,12 @@ class _STAOnlineMultiheadAttention(nn.Module, _STASpikeMixin):
             or self.q_mem.shape != query.shape
             or self.k_mem.shape != key.shape
             or self.v_mem.shape != value.shape
+            or self.q_mem.device != query.device
+            or self.k_mem.device != key.device
+            or self.v_mem.device != value.device
+            or self.q_mem.dtype != query.dtype
+            or self.k_mem.dtype != key.dtype
+            or self.v_mem.dtype != value.dtype
         ):
             self.q_mem = torch.zeros_like(query)
             self.k_mem = torch.zeros_like(key)
@@ -448,7 +470,12 @@ class _STAOnlineMultiheadAttention(nn.Module, _STASpikeMixin):
             weights_delta = None
             self.prev_weights = None
         else:
-            if self.prev_weights is None or self.prev_weights.shape != weights.shape:
+            if (
+                self.prev_weights is None
+                or self.prev_weights.shape != weights.shape
+                or self.prev_weights.device != weights.device
+                or self.prev_weights.dtype != weights.dtype
+            ):
                 self.prev_weights = torch.zeros_like(weights)
             weights_delta = weights - self.prev_weights
             self.prev_weights = weights
@@ -934,6 +961,16 @@ class STATransformerRecipe(ConversionRecipe):
         if isinstance(batch, (tuple, list)):
             if len(batch) == 0:
                 raise ValueError("Calibration batch must not be empty.")
+            if isinstance(batch[0], (tuple, list)):
+                args = tuple(
+                    STATransformerRecipe._to_device(value, device) for value in batch[0]
+                )
+                kwargs = (
+                    STATransformerRecipe._to_device(batch[1], device)
+                    if len(batch) > 1 and isinstance(batch[1], dict)
+                    else {}
+                )
+                return args, kwargs
             return (STATransformerRecipe._to_device(batch[0], device),), {}
         return (STATransformerRecipe._to_device(batch, device),), {}
 
@@ -976,6 +1013,8 @@ class STATransformerRecipe(ConversionRecipe):
             value = self._get_attr_value(fx_model, node.target)
             if not torch.is_tensor(value):
                 continue
+            if self._is_functional_parameter_attr(node):
+                continue
             target = f"sta_time_constant_{constant_index}"
             while target in existing_modules:
                 constant_index += 1
@@ -988,6 +1027,29 @@ class STATransformerRecipe(ConversionRecipe):
             for user in list(node.users):
                 user.replace_input_with(node, constant_node)
             fx_model.graph.erase_node(node)
+
+    @staticmethod
+    def _is_functional_parameter_attr(node: fx.Node) -> bool:
+        weighted_function_targets = {
+            F.linear,
+            F.conv1d,
+            F.conv2d,
+            F.conv3d,
+        }
+        matmul_targets = {
+            torch.matmul,
+            operator.matmul,
+        }
+        for user in node.users:
+            if user.op != "call_function":
+                continue
+            args = tuple(user.args)
+            if user.target in weighted_function_targets and len(args) > 1:
+                if node is args[1]:
+                    return True
+            elif user.target in matmul_targets and node in args:
+                return True
+        return False
 
     def _should_spike_linear(self, target: str) -> bool:
         if not self.spike_linear:

@@ -324,6 +324,26 @@ class TinyMHAWeightsBlock(nn.Module):
         )
 
 
+class TinyFunctionalLinearClassifier(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(3, 4))
+        self.bias = nn.Parameter(torch.randn(3))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return F.linear(x, self.weight, self.bias).mean(dim=1)
+
+
+class TinyTwoInputClassifier(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.norm = nn.LayerNorm(4)
+        self.fc = nn.Linear(4, 2)
+
+    def forward(self, x0: torch.Tensor, x1: torch.Tensor) -> torch.Tensor:
+        return self.fc(self.norm(x0 + x1)).mean(dim=1)
+
+
 def _apply_ann_to_cumulative(
     block: nn.Module,
     x_seq: torch.Tensor,
@@ -658,6 +678,67 @@ def test_sta_transformer_recipe_returns_attention_weight_deltas():
 
     assert torch.allclose(converted_output, expected_output, atol=1e-5, rtol=1e-5)
     assert torch.allclose(converted_weights, expected_weights, atol=1e-5, rtol=1e-5)
+
+
+def test_sta_transformer_recipe_does_not_wrap_functional_linear_weight():
+    torch.manual_seed(42)
+    model = TinyFunctionalLinearClassifier().eval()
+    calibration = [(torch.randn(2, 4, 4),)]
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
+    ).convert(model)
+    x = torch.randn(2, 4, 4)
+    tensor_get_attrs = [
+        node.target
+        for node in converted.model.graph.nodes
+        if node.op == "get_attr"
+        and torch.is_tensor(
+            STATransformerRecipe._get_attr_value(converted.model, node.target)
+        )
+    ]
+
+    assert "weight" in tensor_get_attrs
+    assert "bias" not in tensor_get_attrs
+    assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
+
+
+def test_sta_transformer_recipe_calibrates_explicit_multi_input_batch():
+    torch.manual_seed(43)
+    model = TinyTwoInputClassifier().eval()
+    x0 = torch.randn(2, 4, 4)
+    x1 = torch.randn(2, 4, 4)
+    calibration = [((x0, x1), torch.zeros(2, dtype=torch.long))]
+
+    converted = Converter(
+        recipe=STATransformerRecipe(
+            dataloader=calibration,
+            time_steps=4,
+            mode="spiking_encoder",
+        )
+    ).convert(model)
+
+    assert torch.isfinite(converted(x0, x1)).all()
+
+
+def test_sta_transformer_recipe_state_buffers_rebuild_after_dtype_change():
+    torch.manual_seed(44)
+    model = TinyImageTransformerClassifier().eval()
+    calibration = [(torch.randn(2, 3, 16, 16),)]
+    converted = Converter(
+        recipe=STATransformerRecipe(
+            dataloader=calibration,
+            time_steps=4,
+            mode="spiking_encoder",
+        )
+    ).convert(model)
+    act = dict(converted.named_modules())["model.act"]
+
+    act(torch.randn(2, 4, 16))
+    act.double()
+    y = act(torch.randn(2, 4, 16, dtype=torch.float64))
+
+    assert y.dtype == torch.float64
+    assert torch.isfinite(y).all()
 
 
 def test_sta_transformer_recipe_spiking_encoder_mode_encodes_nonlinear_outputs():
