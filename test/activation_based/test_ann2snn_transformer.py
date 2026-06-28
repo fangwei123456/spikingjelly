@@ -1,3 +1,5 @@
+from collections import namedtuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -16,6 +18,9 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDMultiheadAttention,
     TDScaledDotProductAttention,
 )
+
+
+TinyModelOutput = namedtuple("TinyModelOutput", ["logits", "hidden"])
 
 
 def _activation_aware_calibration_channel_last(
@@ -308,6 +313,18 @@ class TinyDictOutputTransformerClassifier(nn.Module):
     def forward(self, x: torch.Tensor) -> dict:
         logits = self.fc(self.norm(x)).mean(dim=1)
         return {"logits": logits}
+
+
+class TinyNamedTupleOutputTransformerClassifier(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.norm = nn.LayerNorm(4)
+        self.fc = nn.Linear(4, 3)
+
+    def forward(self, x: torch.Tensor) -> TinyModelOutput:
+        hidden = self.norm(x)
+        logits = self.fc(hidden).mean(dim=1)
+        return TinyModelOutput(logits=logits, hidden=hidden)
 
 
 class TinyKeywordDictOutputTransformerClassifier(nn.Module):
@@ -1001,6 +1018,20 @@ def test_sta_transformer_recipe_dict_batch_and_dict_output_are_supported():
     )
 
 
+def test_sta_transformer_recipe_preserves_namedtuple_outputs():
+    model = TinyNamedTupleOutputTransformerClassifier().eval()
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=None, time_steps=4)
+    ).convert(model)
+    x = torch.randn(2, 4, 4)
+    output = converted(x)
+    expected = model(x)
+
+    assert isinstance(output, TinyModelOutput)
+    assert torch.allclose(output.logits, expected.logits, atol=1e-5, rtol=1e-5)
+    assert torch.allclose(output.hidden, expected.hidden, atol=1e-5, rtol=1e-5)
+
+
 def test_sta_transformer_recipe_kwargs_calibration_path():
     torch.manual_seed(37)
     model = TinyKeywordTransformerClassifier().eval()
@@ -1154,6 +1185,19 @@ def test_sta_transformer_recipe_preserves_positional_attention_masks():
         atol=1e-5,
         rtol=1e-5,
     )
+
+
+def test_sta_transformer_recipe_preserves_nested_static_mask_tensors():
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=None, time_steps=2)
+    ).convert(nn.Identity())
+    mask = torch.tensor([[True, False]])
+    nested = {"attention_mask": (mask, [mask])}
+
+    zeroed = converted._zero_tensors(nested)
+
+    assert zeroed["attention_mask"][0] is mask
+    assert zeroed["attention_mask"][1][0] is mask
 
 
 @pytest.mark.parametrize(

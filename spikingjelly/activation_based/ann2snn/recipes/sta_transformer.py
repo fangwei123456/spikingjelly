@@ -518,21 +518,42 @@ class _STAConvertedModel(nn.Module):
                 reset()
 
     @staticmethod
+    def _rebuild_container(source: Any, items: Any) -> Any:
+        if isinstance(source, tuple) and hasattr(source, "_fields"):
+            return type(source)(*items)
+        if type(source) is tuple:
+            return tuple(items)
+        if type(source) is list:
+            return list(items)
+        if type(source) is dict:
+            return dict(items)
+        return type(source)(items)
+
+    @staticmethod
     def _add_outputs(a: Any, b: Any) -> Any:
         if torch.is_tensor(a) and torch.is_tensor(b):
             return a + b
         if isinstance(a, tuple) and isinstance(b, tuple):
             if len(a) != len(b):
                 raise TypeError("STA converted model output tuple lengths must match.")
-            return tuple(_STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b))
+            return _STAConvertedModel._rebuild_container(
+                a,
+                (_STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b)),
+            )
         if isinstance(a, list) and isinstance(b, list):
             if len(a) != len(b):
                 raise TypeError("STA converted model output list lengths must match.")
-            return [_STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b)]
+            return _STAConvertedModel._rebuild_container(
+                a,
+                (_STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b)),
+            )
         if isinstance(a, dict) and isinstance(b, dict):
             if a.keys() != b.keys():
                 raise TypeError("STA converted model output dict keys must match.")
-            return {key: _STAConvertedModel._add_outputs(a[key], b[key]) for key in a}
+            return _STAConvertedModel._rebuild_container(
+                a,
+                {key: _STAConvertedModel._add_outputs(a[key], b[key]) for key in a},
+            )
         if a is None and b is None:
             return None
         raise TypeError("STA converted model can only accumulate tensor outputs.")
@@ -554,33 +575,41 @@ class _STAConvertedModel(nn.Module):
                 )
             return torch.zeros_like(value)
         if isinstance(value, tuple):
-            return tuple(
-                _STAConvertedModel._zero_tensors(
-                    x,
-                    preserve_tensor=(
-                        static_arg_indices is not None and i in static_arg_indices
-                    ),
-                )
-                for i, x in enumerate(value)
+            return _STAConvertedModel._rebuild_container(
+                value,
+                (
+                    _STAConvertedModel._zero_tensors(
+                        x,
+                        preserve_tensor=preserve_tensor
+                        or (static_arg_indices is not None and i in static_arg_indices),
+                    )
+                    for i, x in enumerate(value)
+                ),
             )
         if isinstance(value, list):
-            return [
-                _STAConvertedModel._zero_tensors(
-                    x,
-                    preserve_tensor=(
-                        static_arg_indices is not None and i in static_arg_indices
-                    ),
-                )
-                for i, x in enumerate(value)
-            ]
+            return _STAConvertedModel._rebuild_container(
+                value,
+                (
+                    _STAConvertedModel._zero_tensors(
+                        x,
+                        preserve_tensor=preserve_tensor
+                        or (static_arg_indices is not None and i in static_arg_indices),
+                    )
+                    for i, x in enumerate(value)
+                ),
+            )
         if isinstance(value, dict):
-            return {
-                key: _STAConvertedModel._zero_tensors(
-                    x,
-                    preserve_tensor=key in _STAConvertedModel._STATIC_TENSOR_KWARGS,
-                )
-                for key, x in value.items()
-            }
+            return _STAConvertedModel._rebuild_container(
+                value,
+                {
+                    key: _STAConvertedModel._zero_tensors(
+                        x,
+                        preserve_tensor=preserve_tensor
+                        or key in _STAConvertedModel._STATIC_TENSOR_KWARGS,
+                    )
+                    for key, x in value.items()
+                },
+            )
         return value
 
     def forward(self, *args: Any, **kwargs: Any) -> Any:
