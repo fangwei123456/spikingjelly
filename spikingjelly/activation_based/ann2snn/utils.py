@@ -22,6 +22,22 @@ def _validate_download_response(req, first_byte, file_size):
     )
 
 
+def _download_without_resume(url, dst, headers):
+    pbar = tqdm(unit="B", unit_scale=True, desc=dst)
+    req = requests.get(url, headers=headers, stream=True, timeout=30)
+    try:
+        req.raise_for_status()
+        with open(dst, "wb") as f:
+            for chunk in req.iter_content(chunk_size=1024):
+                if chunk:
+                    f.write(chunk)
+                    pbar.update(len(chunk))
+    finally:
+        req.close()
+        pbar.close()
+    return os.path.getsize(dst)
+
+
 def download_url(url, dst):
     r"""
     **API Language** - :ref:`中文 <download_url-cn>` | :ref:`English <download_url-en>`
@@ -66,9 +82,13 @@ def download_url(url, dst):
 
     response = requests.get(url, headers=headers, stream=True, timeout=30)  # (1)
     try:
-        file_size = int(response.headers["content-length"])  # (2)
+        response.raise_for_status()
+        content_length = response.headers.get("content-length")
     finally:
         response.close()
+    if content_length is None:
+        return _download_without_resume(url, dst, headers)
+    file_size = int(content_length)  # (2)
     if os.path.exists(dst):
         first_byte = os.path.getsize(dst)  # (3)
     else:

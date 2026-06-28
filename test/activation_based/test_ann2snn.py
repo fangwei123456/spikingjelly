@@ -2597,6 +2597,68 @@ class TestDelayedReadoutEstimation:
 
 
 class TestDownloadUrl:
+    def test_download_rejects_probe_error_before_writing(self, tmp_path, monkeypatch):
+        dst = tmp_path / "checkpoint.pth"
+
+        class FakeResponse:
+            status_code = 500
+            headers = {}
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                raise RuntimeError("probe failed")
+
+        monkeypatch.setattr(
+            ann2snn_utils.requests,
+            "get",
+            lambda *args, **kwargs: FakeResponse(),
+        )
+
+        with pytest.raises(RuntimeError, match="probe failed"):
+            ann2snn_utils.download_url("https://example.com/model.pth", str(dst))
+
+        assert not dst.exists()
+
+    def test_download_without_content_length_uses_single_pass(
+        self, tmp_path, monkeypatch
+    ):
+        dst = tmp_path / "checkpoint.pth"
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, headers, chunks=()):
+                self.status_code = status_code
+                self.headers = headers
+                self._chunks = chunks
+
+            def iter_content(self, chunk_size):
+                yield from self._chunks
+
+            def close(self):
+                pass
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise RuntimeError("download failed")
+
+        def fake_get(url, headers=None, stream=False, timeout=None):
+            calls.append(headers)
+            if len(calls) == 1:
+                return FakeResponse(200, {})
+            return FakeResponse(200, {}, [b"abc", b"defg"])
+
+        monkeypatch.setattr(ann2snn_utils.requests, "get", fake_get)
+
+        file_size = ann2snn_utils.download_url(
+            "https://example.com/model.pth", str(dst)
+        )
+
+        assert file_size == 7
+        assert dst.read_bytes() == b"abcdefg"
+        assert "Range" not in calls[1]
+
     def test_download_rejects_error_response_before_writing(self, tmp_path, monkeypatch):
         dst = tmp_path / "checkpoint.pth"
         calls = []
@@ -2648,6 +2710,10 @@ class TestDownloadUrl:
             def close(self):
                 pass
 
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise RuntimeError("download failed")
+
         def fake_get(url, headers=None, stream=False, timeout=None):
             calls.append(headers)
             if len(calls) == 1:
@@ -2686,6 +2752,10 @@ class TestDownloadUrl:
             def close(self):
                 pass
 
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise RuntimeError("download failed")
+
         def fake_get(url, headers=None, stream=False, timeout=None):
             calls.append(headers)
             if len(calls) == 1:
@@ -2723,6 +2793,10 @@ class TestDownloadUrl:
 
             def close(self):
                 pass
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise RuntimeError("download failed")
 
         def fake_get(url, headers=None, stream=False, timeout=None):
             calls.append(headers)
