@@ -390,6 +390,33 @@ class TinyMHAWeightsBlock(nn.Module):
         )
 
 
+class TinyPositionalMHAMaskBlock(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.attn = nn.MultiheadAttention(
+            8,
+            2,
+            dropout=0.0,
+            batch_first=True,
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        key_padding_mask: torch.Tensor | None = None,
+        attn_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        output, _ = self.attn(
+            x,
+            x,
+            x,
+            key_padding_mask,
+            False,
+            attn_mask,
+        )
+        return output.mean(dim=1)
+
+
 class TinyFunctionalLinearClassifier(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -1226,6 +1253,26 @@ def test_sta_transformer_recipe_preserves_positional_attention_masks():
     assert torch.allclose(
         converted(x, attn_mask),
         model(x, attn_mask),
+        atol=1e-5,
+        rtol=1e-5,
+    )
+
+
+def test_sta_transformer_recipe_preserves_positional_mha_masks():
+    model = TinyPositionalMHAMaskBlock().eval()
+    x = torch.randn(2, 4, 8)
+    key_padding_mask = torch.zeros(2, 4)
+    key_padding_mask[0, -1] = -4.0
+    key_padding_mask[1, 1] = -4.0
+    attn_mask = torch.zeros(4, 4)
+    attn_mask[:, -1] = -4.0
+
+    converted = Converter(recipe=STATransformerRecipe(time_steps=4)).convert(model)
+
+    assert converted.static_arg_indices == frozenset({1, 2})
+    assert torch.allclose(
+        converted(x, key_padding_mask, attn_mask),
+        model(x, key_padding_mask, attn_mask),
         atol=1e-5,
         rtol=1e-5,
     )

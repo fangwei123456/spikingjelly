@@ -1106,7 +1106,8 @@ class STATransformerRecipe(ConversionRecipe):
         return value
 
     def _wrap_time_constants(self, fx_model: fx.GraphModule) -> None:
-        existing_modules = set(dict(fx_model.named_modules()).keys())
+        modules = dict(fx_model.named_modules())
+        existing_modules = set(modules.keys())
         constant_index = 0
         for node in list(fx_model.graph.nodes):
             if node.op != "get_attr" or not isinstance(node.target, str):
@@ -1116,7 +1117,7 @@ class STATransformerRecipe(ConversionRecipe):
                 continue
             if not value.is_floating_point():
                 continue
-            if self._is_static_control_attr(node):
+            if self._is_static_control_attr(node, modules):
                 continue
             if self._is_functional_parameter_attr(node):
                 continue
@@ -1134,9 +1135,9 @@ class STATransformerRecipe(ConversionRecipe):
             fx_model.graph.erase_node(node)
 
     @staticmethod
-    def _is_static_control_attr(node: fx.Node) -> bool:
+    def _is_static_control_attr(node: fx.Node, modules: Dict[str, nn.Module]) -> bool:
         for user in node.users:
-            if STATransformerRecipe._is_static_control_arg(user, node):
+            if STATransformerRecipe._is_static_control_arg(user, node, modules):
                 return True
             for key, value in user.kwargs.items():
                 if key in _STAConvertedModel._STATIC_TENSOR_KWARGS and value is node:
@@ -1144,10 +1145,29 @@ class STATransformerRecipe(ConversionRecipe):
         return False
 
     @staticmethod
-    def _is_static_control_arg(user: fx.Node, node: fx.Node) -> bool:
+    def _is_static_control_arg(
+        user: fx.Node,
+        node: fx.Node,
+        modules: Optional[Dict[str, nn.Module]] = None,
+    ) -> bool:
+        args = tuple(user.args)
+        if user.op == "call_module":
+            target = getattr(user, "target", None)
+            if not isinstance(target, str) or modules is None:
+                return False
+            module = modules.get(target)
+            if not isinstance(
+                module, (nn.MultiheadAttention, _STAOnlineMultiheadAttention)
+            ):
+                return False
+            return (
+                (len(args) > 3 and args[3] is node)
+                or (len(args) > 5 and args[5] is node)
+                or user.kwargs.get("key_padding_mask") is node
+                or user.kwargs.get("attn_mask") is node
+            )
         if user.op != "call_function":
             return False
-        args = tuple(user.args)
         if user.target is F.scaled_dot_product_attention:
             return len(args) > 3 and args[3] is node
         if user.target is torch._C._nn.scaled_dot_product_attention:
@@ -1157,12 +1177,13 @@ class STATransformerRecipe(ConversionRecipe):
     @staticmethod
     def _find_static_placeholder_indices(fx_model: fx.GraphModule) -> frozenset[int]:
         indices = set()
+        modules = dict(fx_model.named_modules())
         placeholder_index = 0
         for node in fx_model.graph.nodes:
             if node.op != "placeholder":
                 continue
             for user in node.users:
-                if STATransformerRecipe._is_static_control_arg(user, node):
+                if STATransformerRecipe._is_static_control_arg(user, node, modules):
                     indices.add(placeholder_index)
                     break
                 if any(
