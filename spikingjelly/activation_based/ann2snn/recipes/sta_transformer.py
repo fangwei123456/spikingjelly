@@ -499,6 +499,7 @@ class _STAConvertedModel(nn.Module):
             "encoder_attention_mask",
             "key_padding_mask",
             "mask",
+            "padding_mask",
         }
     )
 
@@ -598,7 +599,7 @@ class _STAFirstStepConstant(nn.Module, _STATimeStepMixin):
 class STATransformerRecipe(ConversionRecipe):
     def __init__(
         self,
-        dataloader: Iterable,
+        dataloader: Optional[Iterable] = None,
         time_steps: int = 32,
         mode: str = "equivalent",
         threshold_mode: str = "mse",
@@ -643,8 +644,9 @@ class STATransformerRecipe(ConversionRecipe):
 
         :param dataloader: 校准数据加载器。每个 batch 可为单输入 tensor、
             ``(input, target)`` 风格的 tuple/list，或传递给模型的 kwargs
-            dict。
-        :type dataloader: Iterable
+            dict。``mode="equivalent"`` 不执行校准，可传 ``None``；其他模式
+            必须提供。
+        :type dataloader: Optional[Iterable]
         :param time_steps: STA 内部推理时间步数，也用于阈值搜索。
         :type time_steps: int
         :param mode: 转换模式，支持 ``"equivalent"``、
@@ -708,8 +710,9 @@ class STATransformerRecipe(ConversionRecipe):
 
         :param dataloader: Calibration dataloader. Each batch can be a
             single-input tensor, a ``(input, target)``-style tuple/list, or a
-            kwargs dict passed to the model.
-        :type dataloader: Iterable
+            kwargs dict passed to the model. ``mode="equivalent"`` does not run
+            calibration and can use ``None``; other modes require a dataloader.
+        :type dataloader: Optional[Iterable]
         :param time_steps: Number of STA internal inference timesteps. It is
             also used by threshold search.
         :type time_steps: int
@@ -769,9 +772,10 @@ class STATransformerRecipe(ConversionRecipe):
         self._hook_handles: List[torch.utils.hooks.RemovableHandle] = []
 
     def validate(self, converter: "Converter") -> None:
-        if self.dataloader is None:
+        if self.mode != "equivalent" and self.dataloader is None:
             raise ValueError(
-                "STATransformerRecipe requires a dataloader. "
+                "STATransformerRecipe requires a dataloader when mode is not "
+                "'equivalent'. "
                 "Pass dataloader to STATransformerRecipe."
             )
         if (
@@ -1027,6 +1031,8 @@ class STATransformerRecipe(ConversionRecipe):
                 continue
             if not value.is_floating_point():
                 continue
+            if self._is_static_control_attr(node):
+                continue
             if self._is_functional_parameter_attr(node):
                 continue
             target = f"sta_time_constant_{constant_index}"
@@ -1041,6 +1047,14 @@ class STATransformerRecipe(ConversionRecipe):
             for user in list(node.users):
                 user.replace_input_with(node, constant_node)
             fx_model.graph.erase_node(node)
+
+    @staticmethod
+    def _is_static_control_attr(node: fx.Node) -> bool:
+        for user in node.users:
+            for key, value in user.kwargs.items():
+                if key in _STAConvertedModel._STATIC_TENSOR_KWARGS and value is node:
+                    return True
+        return False
 
     @staticmethod
     def _is_functional_parameter_attr(node: fx.Node) -> bool:

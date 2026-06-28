@@ -840,6 +840,15 @@ class TestConverterRecipes:
             "rules",
             "neuron_factory",
             "threshold_optimizer",
+            "time_steps",
+            "threshold_mode",
+            "threshold_scale",
+            "spike_linear",
+            "spike_conv2d",
+            "spike_classifier",
+            "num_calibration_batches",
+            "show_progress",
+            "eps",
         }
         assert algorithm_parameters.isdisjoint(signature.parameters)
 

@@ -260,6 +260,23 @@ class TinyMaskBufferTransformerClassifier(nn.Module):
         return x.masked_fill(self.attention_mask.unsqueeze(-1), 0.0).mean(dim=1)
 
 
+class TinyFloatMaskBufferTransformerClassifier(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("padding_mask", torch.zeros(1, 1, 2, 2))
+        self.padding_mask[..., 1] = -10000.0
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = F.scaled_dot_product_attention(
+            x.unsqueeze(1),
+            x.unsqueeze(1),
+            x.unsqueeze(1),
+            attn_mask=self.padding_mask,
+            dropout_p=0.0,
+        ).squeeze(1)
+        return x.mean(dim=1)
+
+
 class TinyKeywordTransformerClassifier(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -278,6 +295,17 @@ class TinyDictOutputTransformerClassifier(nn.Module):
 
     def forward(self, x: torch.Tensor) -> dict:
         logits = self.fc(self.norm(x)).mean(dim=1)
+        return {"logits": logits}
+
+
+class TinyKeywordDictOutputTransformerClassifier(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.norm = nn.LayerNorm(4)
+        self.fc = nn.Linear(4, 3)
+
+    def forward(self, pixel_values: torch.Tensor) -> dict:
+        logits = self.fc(self.norm(pixel_values)).mean(dim=1)
         return {"logits": logits}
 
 
@@ -912,6 +940,16 @@ def test_sta_transformer_recipe_preserves_source_requires_grad_flags():
     assert not any(parameter.requires_grad for parameter in converted.parameters())
 
 
+def test_sta_transformer_recipe_equivalent_mode_does_not_require_dataloader():
+    model = TinyImageTransformerClassifier().eval()
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=None, time_steps=4)
+    ).convert(model)
+    x = torch.randn(2, 3, 16, 16)
+
+    assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
+
+
 def test_sta_transformer_recipe_num_calibration_batches_limits_observer_updates():
     torch.manual_seed(35)
     model = TinyImageTransformerClassifier().eval()
@@ -933,17 +971,22 @@ def test_sta_transformer_recipe_num_calibration_batches_limits_observer_updates(
 
 def test_sta_transformer_recipe_dict_batch_and_dict_output_are_supported():
     torch.manual_seed(36)
-    model = TinyDictOutputTransformerClassifier().eval()
-    calibration = [(torch.randn(2, 4, 4),)]
+    model = TinyKeywordDictOutputTransformerClassifier().eval()
+    calibration = [{"pixel_values": torch.randn(2, 4, 4)}]
     converted = Converter(
         recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
     ).convert(model)
 
     x = torch.randn(2, 4, 4)
-    output = converted(x)
+    output = converted(pixel_values=x)
 
     assert set(output.keys()) == {"logits"}
-    assert torch.allclose(output["logits"], model(x)["logits"], atol=1e-5, rtol=1e-5)
+    assert torch.allclose(
+        output["logits"],
+        model(pixel_values=x)["logits"],
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
 def test_sta_transformer_recipe_kwargs_calibration_path():
@@ -1057,10 +1100,35 @@ def test_sta_transformer_recipe_does_not_wrap_nonfloating_tensor_constants():
     )
 
 
+def test_sta_transformer_recipe_does_not_wrap_static_floating_control_constants():
+    model = TinyFloatMaskBufferTransformerClassifier().eval()
+    calibration = [(torch.randn(2, 2, 4),)]
+
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
+    ).convert(model)
+    tensor_get_attr_values = [
+        STATransformerRecipe._get_attr_value(converted.model, node.target)
+        for node in converted.model.graph.nodes
+        if node.op == "get_attr"
+        and torch.is_tensor(
+            STATransformerRecipe._get_attr_value(converted.model, node.target)
+        )
+    ]
+    x = torch.randn(2, 2, 4)
+
+    assert any(value.dtype.is_floating_point for value in tensor_get_attr_values)
+    assert not any(
+        name.startswith("sta_time_constant")
+        for name, _module in converted.model.named_modules()
+    )
+    assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
+
+
 @pytest.mark.parametrize(
     "kwargs, match",
     [
-        ({"dataloader": None}, "dataloader"),
+        ({"dataloader": None, "mode": "spiking_encoder"}, "dataloader"),
         ({"time_steps": 0}, "time_steps"),
         ({"time_steps": True}, "time_steps"),
         ({"mode": "missing"}, "mode"),
