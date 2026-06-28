@@ -165,6 +165,9 @@ class _STASpikeConv2d(nn.Module, _STASpikeMixin):
         self.dilation = source.dilation
         self.groups = source.groups
         self.padding_mode = source.padding_mode
+        self._sta_reversed_padding_repeated_twice = tuple(
+            source._reversed_padding_repeated_twice
+        )
         self.weight = nn.Parameter(source.weight.detach().clone())
         if source.bias is None:
             self.register_parameter("bias", None)
@@ -178,7 +181,11 @@ class _STASpikeConv2d(nn.Module, _STASpikeMixin):
         bias = self.bias if self.t == 0 else None
         self.t += 1
         if self.padding_mode != "zeros":
-            x = F.pad(x, self._reversed_padding_repeated_twice)
+            x = F.pad(
+                x,
+                self._sta_reversed_padding_repeated_twice,
+                mode=self.padding_mode,
+            )
             analog = F.conv2d(
                 x,
                 self.weight,
@@ -199,13 +206,6 @@ class _STASpikeConv2d(nn.Module, _STASpikeMixin):
                 self.groups,
             )
         return self._spike(analog, channel_dim=1)
-
-    @property
-    def _reversed_padding_repeated_twice(self) -> Tuple[int, int, int, int]:
-        padding = self.padding
-        if isinstance(padding, int):
-            padding = (padding, padding)
-        return (padding[1], padding[1], padding[0], padding[0])
 
 
 class _STAActivationSpikeEncoder(nn.Module, _STASpikeMixin):
@@ -248,6 +248,9 @@ class _STAAnalogConv2d(nn.Module, _STATimeStepMixin):
         self.dilation = source.dilation
         self.groups = source.groups
         self.padding_mode = source.padding_mode
+        self._sta_reversed_padding_repeated_twice = tuple(
+            source._reversed_padding_repeated_twice
+        )
         self.weight = nn.Parameter(source.weight.detach().clone())
         if source.bias is None:
             self.register_parameter("bias", None)
@@ -259,7 +262,11 @@ class _STAAnalogConv2d(nn.Module, _STATimeStepMixin):
         bias = self.bias if self.t == 0 else None
         self.t += 1
         if self.padding_mode != "zeros":
-            x = F.pad(x, self._reversed_padding_repeated_twice)
+            x = F.pad(
+                x,
+                self._sta_reversed_padding_repeated_twice,
+                mode=self.padding_mode,
+            )
             return F.conv2d(
                 x,
                 self.weight,
@@ -278,13 +285,6 @@ class _STAAnalogConv2d(nn.Module, _STATimeStepMixin):
             self.dilation,
             self.groups,
         )
-
-    @property
-    def _reversed_padding_repeated_twice(self) -> Tuple[int, int, int, int]:
-        padding = self.padding
-        if isinstance(padding, int):
-            padding = (padding, padding)
-        return (padding[1], padding[1], padding[0], padding[0])
 
 
 class _STAOnlineLayerNorm(nn.Module, _STASpikeMixin):
@@ -385,6 +385,7 @@ class _STAOnlineMultiheadAttention(nn.Module, _STASpikeMixin):
         self.k_mem: Optional[torch.Tensor] = None
         self.v_mem: Optional[torch.Tensor] = None
         self.prev_output: Optional[torch.Tensor] = None
+        self.prev_weights: Optional[torch.Tensor] = None
         self.encoder = (
             None
             if encoder_threshold is None
@@ -396,6 +397,7 @@ class _STAOnlineMultiheadAttention(nn.Module, _STASpikeMixin):
         self.k_mem = None
         self.v_mem = None
         self.prev_output = None
+        self.prev_weights = None
         if self.encoder is not None:
             self.encoder._reset_sta_state()
 
@@ -422,6 +424,7 @@ class _STAOnlineMultiheadAttention(nn.Module, _STASpikeMixin):
             self.k_mem = torch.zeros_like(key)
             self.v_mem = torch.zeros_like(value)
             self.prev_output = None
+            self.prev_weights = None
         self.q_mem = self.q_mem + query
         self.k_mem = self.k_mem + key
         self.v_mem = self.v_mem + value
@@ -441,10 +444,32 @@ class _STAOnlineMultiheadAttention(nn.Module, _STASpikeMixin):
         self.prev_output = output
         if self.encoder is not None:
             delta = self.encoder(delta)
-        return delta, weights
+        if weights is None:
+            weights_delta = None
+            self.prev_weights = None
+        else:
+            if self.prev_weights is None or self.prev_weights.shape != weights.shape:
+                self.prev_weights = torch.zeros_like(weights)
+            weights_delta = weights - self.prev_weights
+            self.prev_weights = weights
+        return delta, weights_delta
 
 
 class _STAConvertedModel(nn.Module):
+    _STATIC_TENSOR_KWARGS = {
+        "attention_mask",
+        "attn_mask",
+        "causal_mask",
+        "decoder_attention_mask",
+        "encoder_attention_mask",
+        "input_ids",
+        "key_padding_mask",
+        "labels",
+        "mask",
+        "position_ids",
+        "token_type_ids",
+    }
+
     def __init__(self, model: nn.Module, time_steps: int) -> None:
         super().__init__()
         self.model = model
@@ -463,9 +488,17 @@ class _STAConvertedModel(nn.Module):
         if torch.is_tensor(a) and torch.is_tensor(b):
             return a + b
         if isinstance(a, tuple) and isinstance(b, tuple):
-            return tuple(_STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b))
+            if len(a) != len(b):
+                raise TypeError("STA converted model output tuple lengths must match.")
+            return tuple(
+                _STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b, strict=True)
+            )
         if isinstance(a, list) and isinstance(b, list):
-            return [_STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b)]
+            if len(a) != len(b):
+                raise TypeError("STA converted model output list lengths must match.")
+            return [
+                _STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b, strict=True)
+            ]
         if isinstance(a, dict) and isinstance(b, dict):
             if a.keys() != b.keys():
                 raise TypeError("STA converted model output dict keys must match.")
@@ -475,8 +508,10 @@ class _STAConvertedModel(nn.Module):
         raise TypeError("STA converted model can only accumulate tensor outputs.")
 
     @staticmethod
-    def _zero_tensors(value: Any) -> Any:
+    def _zero_tensors(value: Any, preserve_tensor: bool = False) -> Any:
         if torch.is_tensor(value):
+            if preserve_tensor or not value.is_floating_point():
+                return value
             return torch.zeros_like(value)
         if isinstance(value, tuple):
             return tuple(_STAConvertedModel._zero_tensors(x) for x in value)
@@ -484,7 +519,11 @@ class _STAConvertedModel(nn.Module):
             return [_STAConvertedModel._zero_tensors(x) for x in value]
         if isinstance(value, dict):
             return {
-                key: _STAConvertedModel._zero_tensors(x) for key, x in value.items()
+                key: _STAConvertedModel._zero_tensors(
+                    x,
+                    preserve_tensor=key in _STAConvertedModel._STATIC_TENSOR_KWARGS,
+                )
+                for key, x in value.items()
             }
         return value
 
@@ -804,6 +843,8 @@ class STATransformerRecipe(ConversionRecipe):
     def calibrate(
         self, converter: "Converter", fx_model: fx.GraphModule
     ) -> fx.GraphModule:
+        if not self._observers:
+            return fx_model
         fx_model.eval()
         iterator = self.dataloader
         if self.show_progress:
@@ -876,7 +917,9 @@ class STATransformerRecipe(ConversionRecipe):
         return fx_model
 
     def finalize(self, converter: "Converter", fx_model: fx.GraphModule) -> nn.Module:
-        return _STAConvertedModel(fx_model, time_steps=self.time_steps)
+        converted = _STAConvertedModel(fx_model, time_steps=self.time_steps)
+        converted.train(fx_model.training)
+        return converted
 
     @staticmethod
     def _batch_to_args(
@@ -957,7 +1000,7 @@ class STATransformerRecipe(ConversionRecipe):
     def _compute_scaled_threshold(
         self, observer: Optional[_STAThresholdObserver]
     ) -> Optional[torch.Tensor]:
-        if observer is None:
+        if observer is None or observer.threshold is None:
             return None
         return observer.compute_threshold() * self.threshold_scale
 
