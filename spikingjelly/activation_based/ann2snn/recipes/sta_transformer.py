@@ -489,12 +489,8 @@ class _STAConvertedModel(nn.Module):
         "causal_mask",
         "decoder_attention_mask",
         "encoder_attention_mask",
-        "input_ids",
         "key_padding_mask",
-        "labels",
         "mask",
-        "position_ids",
-        "token_type_ids",
     }
 
     def __init__(self, model: nn.Module, time_steps: int) -> None:
@@ -537,8 +533,14 @@ class _STAConvertedModel(nn.Module):
     @staticmethod
     def _zero_tensors(value: Any, preserve_tensor: bool = False) -> Any:
         if torch.is_tensor(value):
-            if preserve_tensor or not value.is_floating_point():
+            if preserve_tensor:
                 return value
+            if not value.is_floating_point():
+                raise TypeError(
+                    "STA converted model cannot infer zero-input timesteps for "
+                    "non-floating data tensors. Pass masks as named static kwargs "
+                    "or convert token inputs to floating embeddings before conversion."
+                )
             return torch.zeros_like(value)
         if isinstance(value, tuple):
             return tuple(_STAConvertedModel._zero_tensors(x) for x in value)
@@ -1062,8 +1064,12 @@ class STATransformerRecipe(ConversionRecipe):
     def _compute_scaled_threshold(
         self, observer: Optional[_STAThresholdObserver]
     ) -> Optional[torch.Tensor]:
-        if observer is None or observer.threshold is None:
+        if observer is None:
             return None
+        if observer.threshold is None:
+            raise RuntimeError(
+                "STA threshold observer did not collect calibration data."
+            )
         return observer.compute_threshold() * self.threshold_scale
 
     def _remove_hooks(self) -> None:

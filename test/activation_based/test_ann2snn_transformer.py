@@ -662,6 +662,17 @@ def test_sta_transformer_recipe_preserves_static_attention_mask_kwargs():
     )
 
 
+def test_sta_transformer_recipe_rejects_nonfloating_data_tensors_after_step0():
+    model = TinyKeywordTransformerClassifier().eval()
+    calibration = [{"pixel_values": torch.randn(2, 4, 4)}]
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
+    ).convert(model)
+
+    with pytest.raises(TypeError, match="non-floating data tensors"):
+        converted(pixel_values=torch.ones(2, 4, 4, dtype=torch.long))
+
+
 def test_sta_transformer_recipe_returns_attention_weight_deltas():
     torch.manual_seed(41)
     model = TinyMHAWeightsBlock().eval()
@@ -802,6 +813,19 @@ def test_sta_transformer_recipe_threshold_mode_max_path():
     assert torch.isfinite(threshold).all()
     assert (threshold > 0).all()
     assert torch.isfinite(y).all()
+
+
+def test_sta_transformer_recipe_raises_when_observer_never_calibrated():
+    model = TinyImageTransformerClassifier().eval()
+
+    with pytest.raises(RuntimeError, match="did not collect calibration data"):
+        Converter(
+            recipe=STATransformerRecipe(
+                dataloader=[],
+                time_steps=4,
+                mode="spiking_affine",
+            )
+        ).convert(model)
 
 
 def test_sta_transformer_recipe_time_steps_affects_mse_thresholds():
