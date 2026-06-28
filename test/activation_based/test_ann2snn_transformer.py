@@ -251,6 +251,15 @@ class TinyConstantTransformerClassifier(nn.Module):
         return self.fc(self.norm(x)).mean(dim=1)
 
 
+class TinyMaskBufferTransformerClassifier(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("attention_mask", torch.tensor([[True, False]]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x.masked_fill(self.attention_mask.unsqueeze(-1), 0.0).mean(dim=1)
+
+
 class TinyKeywordTransformerClassifier(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -597,6 +606,7 @@ def test_sta_transformer_recipe_preserves_final_wrapper_training_flag():
     ).convert(model)
 
     assert converted.training is False
+    assert model.training is True
 
 
 def test_sta_transformer_recipe_equivalent_mode_skips_calibration_loop():
@@ -889,6 +899,19 @@ def test_sta_transformer_recipe_threshold_scale_rescales_thresholds():
     assert torch.allclose(threshold_scaled, threshold_base * 0.5)
 
 
+def test_sta_transformer_recipe_preserves_source_requires_grad_flags():
+    model = TinyImageTransformerClassifier().eval()
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    calibration = [(torch.randn(2, 3, 16, 16),)]
+
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
+    ).convert(model)
+
+    assert not any(parameter.requires_grad for parameter in converted.parameters())
+
+
 def test_sta_transformer_recipe_num_calibration_batches_limits_observer_updates():
     torch.manual_seed(35)
     model = TinyImageTransformerClassifier().eval()
@@ -1011,21 +1034,53 @@ def test_sta_transformer_recipe_wraps_tensor_constants_as_first_step_inputs():
     assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
 
 
+def test_sta_transformer_recipe_does_not_wrap_nonfloating_tensor_constants():
+    model = TinyMaskBufferTransformerClassifier().eval()
+    calibration = [(torch.randn(2, 2, 4),)]
+
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
+    ).convert(model)
+    tensor_get_attr_values = [
+        STATransformerRecipe._get_attr_value(converted.model, node.target)
+        for node in converted.model.graph.nodes
+        if node.op == "get_attr"
+        and torch.is_tensor(
+            STATransformerRecipe._get_attr_value(converted.model, node.target)
+        )
+    ]
+
+    assert any(value.dtype == torch.bool for value in tensor_get_attr_values)
+    assert not any(
+        name.startswith("sta_time_constant")
+        for name, _module in converted.model.named_modules()
+    )
+
+
 @pytest.mark.parametrize(
     "kwargs, match",
     [
+        ({"dataloader": None}, "dataloader"),
         ({"time_steps": 0}, "time_steps"),
+        ({"time_steps": True}, "time_steps"),
         ({"mode": "missing"}, "mode"),
         ({"threshold_mode": "missing"}, "threshold_mode"),
         ({"threshold_scale": 0.0}, "threshold_scale"),
+        ({"spike_linear": 1}, "spike_linear"),
+        ({"spike_conv2d": 1}, "spike_conv2d"),
+        ({"spike_classifier": 1}, "spike_classifier"),
         ({"momentum": 1.5}, "momentum"),
         ({"num_calibration_batches": 0}, "num_calibration_batches"),
+        ({"num_calibration_batches": True}, "num_calibration_batches"),
+        ({"show_progress": 1}, "show_progress"),
+        ({"eps": 0.0}, "eps"),
     ],
 )
 def test_sta_transformer_recipe_validate_errors(kwargs, match):
     model = TinyImageTransformerClassifier().eval()
+    dataloader = kwargs.pop("dataloader", [(torch.randn(2, 3, 16, 16),)])
     recipe = STATransformerRecipe(
-        dataloader=[(torch.randn(2, 3, 16, 16),)],
+        dataloader=dataloader,
         **kwargs,
     )
 

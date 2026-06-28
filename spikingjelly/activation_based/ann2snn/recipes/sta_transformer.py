@@ -22,6 +22,13 @@ __all__ = [
 ]
 
 
+def _clone_parameter(parameter: nn.Parameter) -> nn.Parameter:
+    return nn.Parameter(
+        parameter.detach().clone(),
+        requires_grad=parameter.requires_grad,
+    )
+
+
 class _STAThresholdObserver:
     def __init__(
         self,
@@ -145,11 +152,11 @@ class _STASpikeLinear(nn.Module, _STASpikeMixin):
         super().__init__()
         self.in_features = source.in_features
         self.out_features = source.out_features
-        self.weight = nn.Parameter(source.weight.detach().clone())
+        self.weight = _clone_parameter(source.weight)
         if source.bias is None:
             self.register_parameter("bias", None)
         else:
-            self.bias = nn.Parameter(source.bias.detach().clone())
+            self.bias = _clone_parameter(source.bias)
         self.register_buffer("v_threshold", threshold.detach().clone())
         self.mem: Optional[torch.Tensor] = None
         self.t = 0
@@ -174,11 +181,11 @@ class _STASpikeConv2d(nn.Module, _STASpikeMixin):
         self._sta_reversed_padding_repeated_twice = tuple(
             source._reversed_padding_repeated_twice
         )
-        self.weight = nn.Parameter(source.weight.detach().clone())
+        self.weight = _clone_parameter(source.weight)
         if source.bias is None:
             self.register_parameter("bias", None)
         else:
-            self.bias = nn.Parameter(source.bias.detach().clone())
+            self.bias = _clone_parameter(source.bias)
         self.register_buffer("v_threshold", threshold.detach().clone())
         self.mem: Optional[torch.Tensor] = None
         self.t = 0
@@ -230,11 +237,11 @@ class _STAAnalogLinear(nn.Module, _STATimeStepMixin):
         super().__init__()
         self.in_features = source.in_features
         self.out_features = source.out_features
-        self.weight = nn.Parameter(source.weight.detach().clone())
+        self.weight = _clone_parameter(source.weight)
         if source.bias is None:
             self.register_parameter("bias", None)
         else:
-            self.bias = nn.Parameter(source.bias.detach().clone())
+            self.bias = _clone_parameter(source.bias)
         self.t = 0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -257,11 +264,11 @@ class _STAAnalogConv2d(nn.Module, _STATimeStepMixin):
         self._sta_reversed_padding_repeated_twice = tuple(
             source._reversed_padding_repeated_twice
         )
-        self.weight = nn.Parameter(source.weight.detach().clone())
+        self.weight = _clone_parameter(source.weight)
         if source.bias is None:
             self.register_parameter("bias", None)
         else:
-            self.bias = nn.Parameter(source.bias.detach().clone())
+            self.bias = _clone_parameter(source.bias)
         self.t = 0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -306,11 +313,11 @@ class _STAOnlineLayerNorm(nn.Module, _STASpikeMixin):
         if source.weight is None:
             self.register_parameter("weight", None)
         else:
-            self.weight = nn.Parameter(source.weight.detach().clone())
+            self.weight = _clone_parameter(source.weight)
         if source.bias is None:
             self.register_parameter("bias", None)
         else:
-            self.bias = nn.Parameter(source.bias.detach().clone())
+            self.bias = _clone_parameter(source.bias)
         self.mem: Optional[torch.Tensor] = None
         self.prev_output: Optional[torch.Tensor] = None
         self.encoder = (
@@ -483,15 +490,17 @@ class _STAOnlineMultiheadAttention(nn.Module, _STASpikeMixin):
 
 
 class _STAConvertedModel(nn.Module):
-    _STATIC_TENSOR_KWARGS = {
-        "attention_mask",
-        "attn_mask",
-        "causal_mask",
-        "decoder_attention_mask",
-        "encoder_attention_mask",
-        "key_padding_mask",
-        "mask",
-    }
+    _STATIC_TENSOR_KWARGS = frozenset(
+        {
+            "attention_mask",
+            "attn_mask",
+            "causal_mask",
+            "decoder_attention_mask",
+            "encoder_attention_mask",
+            "key_padding_mask",
+            "mask",
+        }
+    )
 
     def __init__(self, model: nn.Module, time_steps: int) -> None:
         super().__init__()
@@ -513,15 +522,11 @@ class _STAConvertedModel(nn.Module):
         if isinstance(a, tuple) and isinstance(b, tuple):
             if len(a) != len(b):
                 raise TypeError("STA converted model output tuple lengths must match.")
-            return tuple(
-                _STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b, strict=True)
-            )
+            return tuple(_STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b))
         if isinstance(a, list) and isinstance(b, list):
             if len(a) != len(b):
                 raise TypeError("STA converted model output list lengths must match.")
-            return [
-                _STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b, strict=True)
-            ]
+            return [_STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b)]
         if isinstance(a, dict) and isinstance(b, dict):
             if a.keys() != b.keys():
                 raise TypeError("STA converted model output dict keys must match.")
@@ -769,7 +774,11 @@ class STATransformerRecipe(ConversionRecipe):
                 "STATransformerRecipe requires a dataloader. "
                 "Pass dataloader to STATransformerRecipe."
             )
-        if not isinstance(self.time_steps, int) or self.time_steps <= 0:
+        if (
+            not isinstance(self.time_steps, int)
+            or isinstance(self.time_steps, bool)
+            or self.time_steps <= 0
+        ):
             raise ValueError("time_steps must be a positive integer.")
         if not isinstance(self.mode, str):
             raise ValueError("mode must be str.")
@@ -801,6 +810,7 @@ class STATransformerRecipe(ConversionRecipe):
             raise ValueError("momentum must be in [0, 1].")
         if self.num_calibration_batches is not None and (
             not isinstance(self.num_calibration_batches, int)
+            or isinstance(self.num_calibration_batches, bool)
             or self.num_calibration_batches <= 0
         ):
             raise ValueError("num_calibration_batches must be positive or None.")
@@ -1014,6 +1024,8 @@ class STATransformerRecipe(ConversionRecipe):
                 continue
             value = self._get_attr_value(fx_model, node.target)
             if not torch.is_tensor(value):
+                continue
+            if not value.is_floating_point():
                 continue
             if self._is_functional_parameter_attr(node):
                 continue
