@@ -467,7 +467,12 @@ class _STAOnlineMultiheadAttention(nn.Module):
             average_attn_weights=average_attn_weights,
             is_causal=is_causal,
         )
-        if self.prev_output is None or self.prev_output.shape != output.shape:
+        if (
+            self.prev_output is None
+            or self.prev_output.shape != output.shape
+            or self.prev_output.device != output.device
+            or self.prev_output.dtype != output.dtype
+        ):
             self.prev_output = torch.zeros_like(output)
         delta = output - self.prev_output
         self.prev_output = output
@@ -490,7 +495,6 @@ class _STAOnlineMultiheadAttention(nn.Module):
 
 
 class _STAConvertedModel(nn.Module):
-    _STATIC_TENSOR_ARG_INDICES = frozenset({3, 4})
     _STATIC_TENSOR_KWARGS = frozenset(
         {
             "attention_mask",
@@ -504,10 +508,16 @@ class _STAConvertedModel(nn.Module):
         }
     )
 
-    def __init__(self, model: nn.Module, time_steps: int) -> None:
+    def __init__(
+        self,
+        model: nn.Module,
+        time_steps: int,
+        static_arg_indices: Optional[frozenset[int]] = None,
+    ) -> None:
         super().__init__()
         self.model = model
         self.time_steps = time_steps
+        self.static_arg_indices = static_arg_indices or frozenset()
 
     def reset(self) -> None:
         for module in self.modules():
@@ -617,7 +627,7 @@ class _STAConvertedModel(nn.Module):
         output = None
         zero_args = self._zero_tensors(
             args,
-            static_arg_indices=self._STATIC_TENSOR_ARG_INDICES,
+            static_arg_indices=self.static_arg_indices,
         )
         zero_kwargs = self._zero_tensors(kwargs)
         for step in range(self.time_steps):
@@ -711,8 +721,8 @@ class STATransformerRecipe(ConversionRecipe):
 
         :param dataloader: 校准数据加载器。每个 batch 可为单输入 tensor、
             ``(input, target)`` 风格的 tuple/list，或传递给模型的 kwargs
-            dict。``mode="equivalent"`` 不执行校准，可传 ``None``；其他模式
-            必须提供。
+            dict。``mode="equivalent"`` 默认不执行校准，可传 ``None``；显式
+            启用 ``spike_linear`` 或 ``spike_conv2d`` 时也需要提供。
         :type dataloader: Optional[Iterable]
         :param time_steps: STA 内部推理时间步数，也用于阈值搜索。
         :type time_steps: int
@@ -777,8 +787,9 @@ class STATransformerRecipe(ConversionRecipe):
 
         :param dataloader: Calibration dataloader. Each batch can be a
             single-input tensor, a ``(input, target)``-style tuple/list, or a
-            kwargs dict passed to the model. ``mode="equivalent"`` does not run
-            calibration and can use ``None``; other modes require a dataloader.
+            kwargs dict passed to the model. ``mode="equivalent"`` skips
+            calibration by default and can use ``None``; explicitly enabling
+            ``spike_linear`` or ``spike_conv2d`` still requires a dataloader.
         :type dataloader: Optional[Iterable]
         :param time_steps: Number of STA internal inference timesteps. It is
             also used by threshold search.
@@ -1030,7 +1041,11 @@ class STATransformerRecipe(ConversionRecipe):
         return fx_model
 
     def finalize(self, converter: "Converter", fx_model: fx.GraphModule) -> nn.Module:
-        converted = _STAConvertedModel(fx_model, time_steps=self.time_steps)
+        converted = _STAConvertedModel(
+            fx_model,
+            time_steps=self.time_steps,
+            static_arg_indices=self._find_static_placeholder_indices(fx_model),
+        )
         converted.train(fx_model.training)
         return converted
 
@@ -1120,15 +1135,44 @@ class STATransformerRecipe(ConversionRecipe):
 
     @staticmethod
     def _is_static_control_attr(node: fx.Node) -> bool:
-        static_arg_indices = _STAConvertedModel._STATIC_TENSOR_ARG_INDICES
         for user in node.users:
-            for index, value in enumerate(user.args):
-                if index in static_arg_indices and value is node:
-                    return True
+            if STATransformerRecipe._is_static_control_arg(user, node):
+                return True
             for key, value in user.kwargs.items():
                 if key in _STAConvertedModel._STATIC_TENSOR_KWARGS and value is node:
                     return True
         return False
+
+    @staticmethod
+    def _is_static_control_arg(user: fx.Node, node: fx.Node) -> bool:
+        if user.op != "call_function":
+            return False
+        args = tuple(user.args)
+        if user.target is F.scaled_dot_product_attention:
+            return len(args) > 3 and args[3] is node
+        if user.target is torch._C._nn.scaled_dot_product_attention:
+            return len(args) > 3 and args[3] is node
+        return False
+
+    @staticmethod
+    def _find_static_placeholder_indices(fx_model: fx.GraphModule) -> frozenset[int]:
+        indices = set()
+        placeholder_index = 0
+        for node in fx_model.graph.nodes:
+            if node.op != "placeholder":
+                continue
+            for user in node.users:
+                if STATransformerRecipe._is_static_control_arg(user, node):
+                    indices.add(placeholder_index)
+                    break
+                if any(
+                    key in _STAConvertedModel._STATIC_TENSOR_KWARGS and value is node
+                    for key, value in user.kwargs.items()
+                ):
+                    indices.add(placeholder_index)
+                    break
+            placeholder_index += 1
+        return frozenset(indices)
 
     @staticmethod
     def _is_functional_parameter_attr(node: fx.Node) -> bool:
@@ -1146,11 +1190,16 @@ class STATransformerRecipe(ConversionRecipe):
             if user.op != "call_function":
                 continue
             args = tuple(user.args)
-            if user.target in weighted_function_targets and len(args) > 1:
-                if node is args[1]:
+            if user.target in weighted_function_targets:
+                if len(args) > 1 and node is args[1]:
                     return True
-            elif user.target in matmul_targets and node in args:
-                return True
+                if user.kwargs.get("weight") is node:
+                    return True
+            elif user.target in matmul_targets:
+                if node in args:
+                    return True
+                if user.kwargs.get("input") is node or user.kwargs.get("other") is node:
+                    return True
         return False
 
     def _should_spike_linear(self, target: str) -> bool:

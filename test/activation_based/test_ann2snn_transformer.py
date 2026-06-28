@@ -400,6 +400,16 @@ class TinyFunctionalLinearClassifier(nn.Module):
         return F.linear(x, self.weight, self.bias).mean(dim=1)
 
 
+class TinyFunctionalLinearKwargClassifier(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(3, 4))
+        self.bias = nn.Parameter(torch.randn(3))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return F.linear(x, weight=self.weight, bias=self.bias).mean(dim=1)
+
+
 class TinyTwoInputClassifier(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -408,6 +418,18 @@ class TinyTwoInputClassifier(nn.Module):
 
     def forward(self, x0: torch.Tensor, x1: torch.Tensor) -> torch.Tensor:
         return self.fc(self.norm(x0 + x1)).mean(dim=1)
+
+
+class TinyFiveInputClassifier(nn.Module):
+    def forward(
+        self,
+        x0: torch.Tensor,
+        x1: torch.Tensor,
+        x2: torch.Tensor,
+        x3: torch.Tensor,
+        x4: torch.Tensor,
+    ) -> torch.Tensor:
+        return (x0 + x1 + x2 + x3 + x4).mean(dim=1)
 
 
 def _apply_ann_to_cumulative(
@@ -777,6 +799,27 @@ def test_sta_transformer_recipe_does_not_wrap_functional_linear_weight():
 
     assert "weight" in tensor_get_attrs
     assert "bias" not in tensor_get_attrs
+    assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
+
+
+def test_sta_transformer_recipe_does_not_wrap_functional_keyword_weight():
+    torch.manual_seed(13)
+    model = TinyFunctionalLinearKwargClassifier().eval()
+    calibration = [(torch.randn(2, 4, 4),)]
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
+    ).convert(model)
+    x = torch.randn(2, 4, 4)
+    tensor_get_attrs = [
+        node.target
+        for node in converted.model.graph.nodes
+        if node.op == "get_attr"
+        and torch.is_tensor(
+            STATransformerRecipe._get_attr_value(converted.model, node.target)
+        )
+    ]
+
+    assert "weight" in tensor_get_attrs
     assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
 
 
@@ -1179,12 +1222,24 @@ def test_sta_transformer_recipe_preserves_positional_attention_masks():
     attn_mask = torch.zeros(1, 1, 2, 2)
     attn_mask[..., 1] = -10000.0
 
+    assert converted.static_arg_indices == frozenset({1})
     assert torch.allclose(
         converted(x, attn_mask),
         model(x, attn_mask),
         atol=1e-5,
         rtol=1e-5,
     )
+
+
+def test_sta_transformer_recipe_does_not_preserve_ordinary_fourth_positional_input():
+    model = TinyFiveInputClassifier().eval()
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=None, time_steps=4)
+    ).convert(model)
+    inputs = tuple(torch.randn(2, 4) for _ in range(5))
+
+    assert converted.static_arg_indices == frozenset()
+    assert torch.allclose(converted(*inputs), model(*inputs), atol=1e-5, rtol=1e-5)
 
 
 def test_sta_transformer_recipe_preserves_nested_static_mask_tensors():
