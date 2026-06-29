@@ -1,0 +1,204 @@
+name: OCR PR Review
+
+# pull_request_target: secrets 可用于 fork PR（OCR 只读 diff，不执行 PR 代码，安全）
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ocr-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # issue_comment 触发时，只对 PR 评论中的 /ocr 关键词响应
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '/ocr'))
+    runs-on: ubuntu-latest
+    steps:
+      # ── 1. 获取 PR 上下文（仅 issue_comment 需要） ──
+      - name: Get PR context
+        if: github.event_name == 'issue_comment'
+        id: pr-context
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            core.setOutput('base_ref', pr.base.ref);
+            core.setOutput('head_ref', pr.head.ref);
+            core.setOutput('head_sha', pr.head.sha);
+
+      # ── 2. Checkout ──
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || steps.pr-context.outputs.head_sha }}
+
+      # ── 3. Fetch PR head（确保 fork commits 可用） ──
+      - name: Fetch PR head
+        run: |
+          git fetch origin pull/${{ github.event.pull_request.number || github.event.issue.number }}/head
+
+      # ── 4. Setup Node.js ──
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── 5. Install OCR ──
+      - name: Install OpenCodeReview
+        run: |
+          npm install -g @alibaba-group/open-code-review
+          echo "OCR version:"
+          ocr version || true
+
+      # ── 6. Configure OCR ──
+      - name: Configure OCR
+        env:
+          OCR_LLM_URL: ${{ secrets.OCR_LLM_URL }}
+          OCR_LLM_AUTH_TOKEN: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
+          OCR_LLM_MODEL: ${{ secrets.OCR_LLM_MODEL }}
+        run: |
+          ocr config set llm.url "$OCR_LLM_URL"
+          ocr config set llm.auth_token "$OCR_LLM_AUTH_TOKEN"
+          ocr config set llm.model "$OCR_LLM_MODEL"
+          # 禁用 thinking mode 以兼容更多 provider
+          ocr config set llm.extra_body '{"thinking":{"type":"disabled"}}'
+
+      # ── 7. Run OCR Review ──
+      - name: Run OCR review
+        id: ocr-review
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || steps.pr-context.outputs.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || steps.pr-context.outputs.head_sha }}
+        run: |
+          ocr review \
+            --from "origin/${BASE_REF}" \
+            --to "${HEAD_SHA}" \
+            --format json \
+            > /tmp/ocr-result.json 2>/tmp/ocr-stderr.log || true
+          echo "Review complete. Output:"
+          cat /tmp/ocr-result.json | head -c 2000
+
+      # ── 8. Post Review Comments ──
+      - name: Post review comments
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || steps.pr-context.outputs.head_sha }}
+        with:
+          script: |
+            const fs = require('fs');
+
+            let result;
+            try {
+              result = JSON.parse(fs.readFileSync('/tmp/ocr-result.json', 'utf8'));
+            } catch (e) {
+              console.log('Failed to parse OCR result:', e.message);
+              // 发一条总结评论说明 OCR 没有产出结果
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: parseInt(process.env.PR_NUMBER),
+                body: '🤖 **OCR Review**: No review comments generated. This may mean the diff is clean or too small to review.',
+              });
+              return;
+            }
+
+            const comments = result.comments || [];
+            const warnings = result.warnings || [];
+            const message = result.message || 'Review complete.';
+
+            if (comments.length === 0 && warnings.length === 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: parseInt(process.env.PR_NUMBER),
+                body: `✅ **OCR Review**: ${message}`,
+              });
+              return;
+            }
+
+            // 构建 inline review comments
+            const reviewComments = [];
+
+            for (const c of comments) {
+              if (!c.file || c.line == null) continue;
+              reviewComments.push({
+                path: c.file,
+                line: c.line,
+                body: `**[${c.severity || 'info'}]** ${c.message || c.body || ''}${c.suggestion ? '\n\n```suggestion\n' + c.suggestion + '\n```' : ''}`,
+              });
+            }
+
+            for (const w of warnings) {
+              if (!w.file || w.line == null) continue;
+              reviewComments.push({
+                path: w.file,
+                line: w.line,
+                body: `⚠️ ${w.message || w.body || ''}`,
+              });
+            }
+
+            // 尝试批量发 review
+            if (reviewComments.length > 0) {
+              try {
+                await github.rest.pulls.createReview({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: parseInt(process.env.PR_NUMBER),
+                  commit_sha: process.env.HEAD_SHA,
+                  event: 'COMMENT',
+                  body: `🤖 **OCR Review** — ${comments.length} comment(s), ${warnings.length} warning(s)\n\n${message}`,
+                  comments: reviewComments.map(c => ({
+                    path: c.path,
+                    line: c.line,
+                    body: c.body,
+                  })),
+                });
+                console.log(`Posted batch review with ${reviewComments.length} comments.`);
+              } catch (batchErr) {
+                console.log('Batch review failed, falling back to individual comments:', batchErr.message);
+                // fallback: 逐条发
+                for (const c of reviewComments) {
+                  try {
+                    await github.rest.pulls.createReviewComment({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      pull_number: parseInt(process.env.PR_NUMBER),
+                      commit_id: process.env.HEAD_SHA,
+                      path: c.path,
+                      line: c.line,
+                      body: c.body,
+                    });
+                    await new Promise(r => setTimeout(r, 2000));
+                  } catch (commentErr) {
+                    console.log(`Failed to post comment on ${c.path}:${c.line}:`, commentErr.message);
+                  }
+                }
+              }
+            }
+
+            // 发总结评论
+            const summaryParts = [`🤖 **OCR Review** — ${comments.length} comment(s), ${warnings.length} warning(s)`];
+            if (message) summaryParts.push('', message);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: parseInt(process.env.PR_NUMBER),
+              body: summaryParts.join('\n'),
+            });
