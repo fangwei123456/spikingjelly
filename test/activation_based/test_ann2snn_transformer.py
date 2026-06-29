@@ -18,9 +18,169 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDMultiheadAttention,
     TDScaledDotProductAttention,
 )
+from spikingjelly.activation_based.ann2snn.recipes.sta_transformer import (
+    _STAAnalogLinear,
+    _STAOnlineGELU,
+    _STAOnlineLayerNorm,
+    _STAOnlineMultiheadAttention,
+)
 
 
 TinyModelOutput = namedtuple("TinyModelOutput", ["logits", "hidden"])
+
+
+def _first_real_then_zero_sequence(x: torch.Tensor, time_steps: int) -> torch.Tensor:
+    steps = [x]
+    steps.extend(torch.zeros_like(x) for _ in range(time_steps - 1))
+    return torch.stack(steps, dim=0)
+
+
+def _run_online_steps(module: nn.Module, x_seq: torch.Tensor):
+    reset = getattr(module, "_reset_sta_state", None)
+    if reset is not None:
+        reset()
+    outputs = []
+    for x in x_seq:
+        outputs.append(module(x))
+    return torch.stack(outputs, dim=0)
+
+
+def _copy_linear_to_td(source: nn.Linear, target: TDLinear) -> None:
+    with torch.no_grad():
+        target.weight.copy_(source.weight)
+        if source.bias is None:
+            assert target.bias is None
+        else:
+            target.bias.copy_(source.bias)
+
+
+def _copy_layer_norm_to_td(source: nn.LayerNorm, target: TDLayerNorm) -> None:
+    with torch.no_grad():
+        if source.weight is None:
+            assert target.weight is None
+        else:
+            target.weight.copy_(source.weight)
+        if source.bias is None:
+            assert target.bias is None
+        else:
+            target.bias.copy_(source.bias)
+
+
+def _copy_mha_to_td(
+    source: nn.MultiheadAttention, target: TDMultiheadAttention
+) -> None:
+    with torch.no_grad():
+        q_weight, k_weight, v_weight = source.in_proj_weight.chunk(3, dim=0)
+        target.q_proj.weight.copy_(q_weight)
+        target.k_proj.weight.copy_(k_weight)
+        target.v_proj.weight.copy_(v_weight)
+        if source.in_proj_bias is None:
+            assert target.q_proj.bias is None
+            assert target.k_proj.bias is None
+            assert target.v_proj.bias is None
+        else:
+            q_bias, k_bias, v_bias = source.in_proj_bias.chunk(3, dim=0)
+            target.q_proj.bias.copy_(q_bias)
+            target.k_proj.bias.copy_(k_bias)
+            target.v_proj.bias.copy_(v_bias)
+        target.out_proj.weight.copy_(source.out_proj.weight)
+        if source.out_proj.bias is None:
+            assert target.out_proj.bias is None
+        else:
+            target.out_proj.bias.copy_(source.out_proj.bias)
+
+
+def test_sta_sequence_linear_matches_online_linear():
+    torch.manual_seed(71)
+    source = nn.Linear(5, 7).eval()
+    online = _STAAnalogLinear(source).eval()
+    sequence = TDLinear(5, 7).eval()
+    _copy_linear_to_td(source, sequence)
+    x_seq = _first_real_then_zero_sequence(torch.randn(3, 5), time_steps=6)
+
+    online_seq = _run_online_steps(online, x_seq)
+    sequence_seq = sequence(x_seq)
+
+    assert torch.allclose(sequence_seq, online_seq, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(
+        sequence_seq.cumsum(dim=0),
+        online_seq.cumsum(dim=0),
+        atol=1e-6,
+        rtol=1e-6,
+    )
+
+
+def test_sta_sequence_layer_norm_matches_online_layer_norm():
+    torch.manual_seed(72)
+    source = nn.LayerNorm(5).eval()
+    online = _STAOnlineLayerNorm(source).eval()
+    sequence = TDLayerNorm(5).eval()
+    _copy_layer_norm_to_td(source, sequence)
+    x_seq = _first_real_then_zero_sequence(torch.randn(3, 4, 5), time_steps=6)
+
+    online_seq = _run_online_steps(online, x_seq)
+    sequence_seq = sequence(x_seq)
+
+    assert torch.allclose(sequence_seq, online_seq, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(
+        sequence_seq.cumsum(dim=0),
+        online_seq.cumsum(dim=0),
+        atol=1e-6,
+        rtol=1e-6,
+    )
+
+
+def test_sta_sequence_gelu_matches_online_gelu():
+    torch.manual_seed(73)
+    source = nn.GELU(approximate="tanh").eval()
+    online = _STAOnlineGELU(source).eval()
+    sequence = TDGELU(approximate="tanh").eval()
+    x_seq = _first_real_then_zero_sequence(torch.randn(3, 4, 5), time_steps=6)
+
+    online_seq = _run_online_steps(online, x_seq)
+    sequence_seq = sequence(x_seq)
+
+    assert torch.allclose(sequence_seq, online_seq, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(
+        sequence_seq.cumsum(dim=0),
+        online_seq.cumsum(dim=0),
+        atol=1e-6,
+        rtol=1e-6,
+    )
+
+
+def test_sta_sequence_mha_matches_online_mha():
+    torch.manual_seed(74)
+    source = nn.MultiheadAttention(
+        embed_dim=8,
+        num_heads=2,
+        dropout=0.0,
+        batch_first=True,
+    ).eval()
+    online = _STAOnlineMultiheadAttention(source).eval()
+    sequence = TDMultiheadAttention(embed_dim=8, num_heads=2).eval()
+    _copy_mha_to_td(source, sequence)
+    x_seq = _first_real_then_zero_sequence(torch.randn(2, 4, 8), time_steps=5)
+
+    online_outputs = []
+    online._reset_sta_state()
+    for x in x_seq:
+        y, weights = online(x, x, x, need_weights=False)
+        assert weights is None
+        online_outputs.append(y)
+    online_seq = torch.stack(online_outputs, dim=0)
+    sequence_seq, sequence_weights = sequence(
+        x_seq, x_seq, x_seq, need_weights=False
+    )
+
+    assert sequence_weights is None
+    assert torch.allclose(sequence_seq, online_seq, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(
+        sequence_seq.cumsum(dim=0),
+        online_seq.cumsum(dim=0),
+        atol=1e-6,
+        rtol=1e-6,
+    )
 
 
 def _activation_aware_calibration_channel_last(

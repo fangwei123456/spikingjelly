@@ -119,7 +119,13 @@ def resolve_delay_start(model, data_loader, device, time_steps, delay_start):
     if delay_start == "none":
         return 0
     if delay_start == "auto":
-        return ann2snn.estimate_delay_start(model, data_loader, device, time_steps)
+        value = ann2snn.estimate_delay_start(model, data_loader, device, time_steps)
+        if value < 0 or value >= time_steps:
+            raise ValueError(
+                "auto delay_start must be in [0, time_steps), "
+                f"but got {value} for time_steps={time_steps}."
+            )
+        return value
     value = int(delay_start)
     if value < 0 or value >= time_steps:
         raise ValueError("--delay-start must be none, auto, or in [0, time_steps).")
@@ -127,6 +133,8 @@ def resolve_delay_start(model, data_loader, device, time_steps, delay_start):
 
 
 def evaluate_snn(model, data_loader, device, time_steps, delay_start=0):
+    if delay_start < 0 or delay_start >= time_steps:
+        raise ValueError("delay_start must be in [0, time_steps).")
     model.eval().to(device)
     total = 0
     top1 = 0.0

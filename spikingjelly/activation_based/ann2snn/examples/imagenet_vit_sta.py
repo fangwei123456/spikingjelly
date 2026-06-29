@@ -42,11 +42,20 @@ def require_cuda(device):
         raise ValueError("--device must be a CUDA device such as cuda:0.")
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required to run this ImageNet ViT STA example.")
+    if device.index is not None and device.index >= torch.cuda.device_count():
+        raise ValueError(
+            f"--device index {device.index} is out of range for "
+            f"{torch.cuda.device_count()} CUDA device(s)."
+        )
     torch.cuda.get_device_name(device)
 
 
 def build_loaders(args, transform):
-    dataset = ImageFolder(Path(args.data_root), transform=transform)
+    data_root = Path(args.data_root)
+    try:
+        dataset = ImageFolder(data_root, transform=transform)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"Could not open --data-root {data_root}.") from exc
     if args.calib_samples <= 0:
         raise ValueError("--calib-samples must be positive.")
     if args.calib_samples > len(dataset):
@@ -54,13 +63,17 @@ def build_loaders(args, transform):
     if args.eval_samples is not None:
         if args.eval_samples <= 0:
             raise ValueError("--eval-samples must be positive when set.")
-        if args.eval_samples > len(dataset):
-            raise ValueError("--eval-samples exceeds the dataset size.")
+        if args.calib_samples + args.eval_samples > len(dataset):
+            raise ValueError(
+                "--calib-samples + --eval-samples exceeds the dataset size; "
+                "use disjoint calibration and evaluation subsets."
+            )
 
     calib_set = Subset(dataset, range(args.calib_samples))
     eval_set = dataset
     if args.eval_samples is not None:
-        eval_set = Subset(dataset, range(args.eval_samples))
+        start = args.calib_samples
+        eval_set = Subset(dataset, range(start, start + args.eval_samples))
 
     loader_kwargs = dict(
         batch_size=args.batch_size,
@@ -110,7 +123,8 @@ def evaluate(model, data_loader, device, name):
 
 
 def format_scale_label(scale):
-    return f"{scale:g}".replace("-", "m").replace(".", "")
+    text = f"{scale:.8f}".rstrip("0").rstrip(".")
+    return text.replace("-", "m").replace(".", "p")
 
 
 def main():
@@ -121,7 +135,13 @@ def main():
     weights = ViT_B_16_Weights.DEFAULT
     transform = weights.transforms()
     calib_loader, eval_loader, dataset_size = build_loaders(args, transform)
-    model = vit_b_16(weights=weights).to(device).eval()
+    try:
+        model = vit_b_16(weights=weights).to(device).eval()
+    except Exception as exc:
+        raise RuntimeError(
+            "Could not load ViT-B/16 weights; check network access and the "
+            "torchvision cache."
+        ) from exc
 
     env = {
         "data_root": args.data_root,

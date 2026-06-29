@@ -18,9 +18,8 @@ def _safe_quantile(
 
     Large activation tensors can make ``torch.quantile`` allocate enough
     temporary memory to dominate ANN2SNN calibration. This helper limits each
-    reduction to at most ``max_elements`` evenly spaced values, then applies
-    kth-value interpolation. The result is deterministic but approximate when
-    subsampling is used.
+    reduction to at most ``max_elements`` sampled values, then applies kth-value
+    interpolation. The result is approximate when subsampling is used.
     """
     if not (0.0 <= quantile <= 1.0):
         raise ValueError("quantile must be in [0, 1].")
@@ -140,6 +139,8 @@ class VoltageHook(nn.Module):
         :rtype: torch.Tensor
         """
         err_msg = "You have used a non-defined VoltageScale Method."
+        if not self.training:
+            return x
         if isinstance(self.mode, str):
             if not self.mode:
                 raise NotImplementedError(err_msg)
@@ -152,7 +153,9 @@ class VoltageHook(nn.Module):
                     if quantile_input.dtype in [torch.float16, torch.bfloat16]:
                         quantile_input = quantile_input.to(torch.float32)
                     s_t = _safe_quantile(quantile_input, quantile).to(x.dtype)
-                except (ValueError, RuntimeError) as exc:
+                except ValueError:
+                    raise
+                except RuntimeError as exc:
                     raise NotImplementedError(err_msg) from exc
             elif self.mode.lower() in ["max"]:
                 s_t = x.max().detach()
@@ -172,7 +175,7 @@ class VoltageHook(nn.Module):
             self.scale = s_t
         else:
             self.scale = (1 - self.momentum) * self.scale + self.momentum * s_t
-        self.num_batches_tracked += x.shape[0]
+        self.num_batches_tracked += x.shape[0] if x.dim() > 0 else 1
         return x
 
 

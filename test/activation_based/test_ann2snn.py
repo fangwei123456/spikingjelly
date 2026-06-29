@@ -670,6 +670,30 @@ class TestVoltageHook:
         hook(torch.tensor([7.0]))
         assert hook.scale.item() == pytest.approx(7.0)
 
+    def test_eval_mode_does_not_update_scale(self):
+        hook = VoltageHook(mode="Max")
+        hook(torch.tensor([7.0]))
+        hook.eval()
+
+        hook(torch.tensor([100.0]))
+
+        assert hook.scale.item() == pytest.approx(7.0)
+        assert hook.num_batches_tracked == 1
+
+    def test_scalar_input_updates_batch_count(self):
+        hook = VoltageHook(mode="Max")
+
+        hook(torch.tensor(3.0))
+
+        assert hook.scale.item() == pytest.approx(3.0)
+        assert hook.num_batches_tracked == 1
+
+    def test_empty_quantile_input_raises_value_error(self):
+        hook = VoltageHook(mode="50%")
+
+        with pytest.raises(ValueError, match="must not be empty"):
+            hook(torch.empty(0))
+
     def test_passthrough(self):
         hook = VoltageHook(mode="Max")
         x = torch.randn(3, 4)
@@ -1018,6 +1042,14 @@ class TestNeuronFactory:
         n = factory.create(scale=1.0)
         assert isinstance(n, neuron.LIFNode)
 
+    def test_invalid_neuron_type_raises(self):
+        with pytest.raises(TypeError, match="nn.Module subclass"):
+            NeuronFactory(neuron_type=object)
+
+    def test_invalid_threshold_raises(self):
+        with pytest.raises(ValueError, match="positive"):
+            NeuronFactory(v_threshold=0.0)
+
 
 class TestHookFactory:
     def test_default_mode(self):
@@ -1031,6 +1063,14 @@ class TestHookFactory:
         hook = factory.create()
         assert hook.mode == "99.9%"
         assert hook.momentum == 0.5
+
+    def test_invalid_mode_raises(self):
+        with pytest.raises(ValueError, match="mode"):
+            HookFactory(mode="bad")
+
+    def test_invalid_momentum_raises(self):
+        with pytest.raises(ValueError, match="momentum"):
+            HookFactory(momentum=1.1)
 
 
 class TestThresholdOptimizer:
@@ -2532,15 +2572,31 @@ class TestDelayedReadoutEstimation:
 
         assert delay_start == 1
 
-    def test_delay_probe_uses_analog_passthrough_for_later_layers(self):
+    def test_delay_probe_does_not_replace_outputs_for_later_layers(self, monkeypatch):
         model = _trace_ann2snn_leaf(TwoStageScalerNeuronNet())
         loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
+        observed_inputs = []
+
+        def record_delay_ratio(module, post_scaler, x):
+            observed_inputs.append((module, x.detach().clone()))
+            return torch.tensor(0.0)
+
+        monkeypatch.setattr(
+            ann2snn_delay,
+            "_compute_delay_ratio",
+            record_delay_ratio,
+        )
 
         delay_start = ann2snn.estimate_delay_start(
             model, loader, device="cpu", time_steps=32
         )
 
-        assert delay_start > 2
+        assert delay_start == 0
+        assert len(observed_inputs) == 2
+        assert observed_inputs[0][0] is model.stage0.if_node
+        assert observed_inputs[1][0] is model.stage1.if_node
+        assert torch.allclose(observed_inputs[0][1], torch.full((2, 2), 0.25))
+        assert torch.allclose(observed_inputs[1][1], torch.zeros(2, 2))
 
     def test_delay_estimation_removes_hooks_and_keeps_spike_forward(self):
         model = _trace_ann2snn_leaf(
@@ -2593,6 +2649,19 @@ class TestDelayedReadoutEstimation:
         )
 
         assert delay_start == 4
+
+    def test_delay_estimation_warns_when_readout_budget_is_too_small(self):
+        model = _trace_ann2snn_leaf(
+            ScalerNeuronScalerNet(neuron.IFNode(v_threshold=1.0, v_reset=None), [4.0, 4.0])
+        )
+        loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
+
+        with pytest.warns(RuntimeWarning, match="time_steps is too small"):
+            delay_start = ann2snn.estimate_delay_start(
+                model, loader, device="cpu", time_steps=4
+            )
+
+        assert delay_start == 0
 
     def test_delay_estimation_cleans_hooks_after_exception(self):
         model = _trace_ann2snn_leaf(
