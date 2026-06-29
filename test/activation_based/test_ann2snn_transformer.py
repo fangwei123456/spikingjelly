@@ -304,17 +304,6 @@ class TinyKeywordTransformerClassifier(nn.Module):
         return self.fc(self.norm(pixel_values)).mean(dim=1)
 
 
-class TinyDictOutputTransformerClassifier(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.norm = nn.LayerNorm(4)
-        self.fc = nn.Linear(4, 3)
-
-    def forward(self, x: torch.Tensor) -> dict:
-        logits = self.fc(self.norm(x)).mean(dim=1)
-        return {"logits": logits}
-
-
 class TinyNamedTupleOutputTransformerClassifier(nn.Module):
     def __init__(self) -> None:
         super().__init__()

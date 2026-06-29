@@ -214,9 +214,10 @@ The minimal rate-coding call is:
 
 After conversion, ReLU modules are removed. New modules needed by the SNN, such
 as ``VoltageScaler`` and ``IFNode``, are created as ``spiking_*`` submodules
-under the original parent module. Since the converted model is an
-``fx.GraphModule``, you can use ``snn.graph.print_tabular()`` to inspect the
-generated computation graph. More APIs are documented in `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
+under the original parent module. With ``RateCodingRecipe``, the converted
+model is an ``fx.GraphModule``, so you can use ``snn.graph.print_tabular()`` to
+inspect the generated computation graph. More APIs are documented in
+`GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
 
 .. note::
 
@@ -383,7 +384,8 @@ The ANN is trained and validated. Select the rate-coding recipe, pass the determ
       )
     )
 
-``snn_model`` is an ``fx.GraphModule``; see `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_.
+With ``RateCodingRecipe``, ``snn_model`` is an ``fx.GraphModule``; see
+`GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_.
 
 Call ``GraphModule.graph.print_tabular()`` to inspect the computation graph:
 

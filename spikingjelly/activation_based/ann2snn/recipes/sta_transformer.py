@@ -401,6 +401,8 @@ class _STAOnlineMultiheadAttention(nn.Module):
         encoder_threshold: Optional[torch.Tensor] = None,
     ) -> None:
         super().__init__()
+        # MultiheadAttention carries fused projection parameters and option
+        # fields; deepcopy preserves that full internal layout.
         self.attn = copy.deepcopy(source)
         self.q_mem: Optional[torch.Tensor] = None
         self.k_mem: Optional[torch.Tensor] = None
@@ -577,9 +579,10 @@ class _STAConvertedModel(nn.Module):
                 return value
             if not value.is_floating_point():
                 raise TypeError(
-                    "STA converted model cannot infer zero-input timesteps for "
-                    "non-floating data tensors. Pass masks as named static kwargs "
-                    "or convert token inputs to floating embeddings before conversion."
+                    "STA converted model cannot create zero-input timesteps for "
+                    "non-floating data tensors. Pass control masks as named static "
+                    "kwargs, or convert data inputs to floating tensors before "
+                    "conversion."
                 )
             return torch.zeros_like(value)
         if isinstance(value, tuple):
@@ -696,7 +699,7 @@ class STATransformerRecipe(ConversionRecipe):
 
         * **中文**
 
-        构造基于 Spatio-Temporal Approximation (STA) 思路的
+        实现基于 Spatio-Temporal Approximation (STA) [#sta_transformer]_ 思路的
         training-free Transformer 转换 recipe。该 recipe 将普通 ANN 输入编码
         为第 0 步真实输入和后续 0 输入，并在模型内部执行 ``time_steps`` 次
         循环后返回累计输出。
@@ -752,14 +755,20 @@ class STATransformerRecipe(ConversionRecipe):
             time step、非正缩放因子、非法动量、非法校准 batch 上限，或布尔
             选项类型错误时抛出。
 
+        .. [#sta_transformer] Y. Jiang, K. Hu, T. Zhang, H. Gao, Y. Liu,
+           Y. Fang, and F. Chen, "Spatio-Temporal Approximation: A
+           Training-Free SNN Conversion for Transformers," ICLR 2024.
+           https://openreview.net/forum?id=XrunSYwoLr
+
         ----
 
         .. _STATransformerRecipe.__init__-en:
 
         * **English**
 
-        Construct a training-free Transformer conversion recipe inspired by
-        Spatio-Temporal Approximation (STA). The recipe encodes ordinary ANN
+        Implement a training-free Transformer conversion recipe based on
+        Spatio-Temporal Approximation (STA) [#sta_transformer]_. The recipe
+        encodes ordinary ANN
         inputs as one real input step followed by zero-input steps, runs
         ``time_steps`` internal iterations, and returns the cumulative output.
         Conversion traces and calibrates the original ANN in ``eval`` mode;
@@ -1170,8 +1179,6 @@ class STATransformerRecipe(ConversionRecipe):
         if user.op != "call_function":
             return False
         if user.target is F.scaled_dot_product_attention:
-            return len(args) > 3 and args[3] is node
-        if user.target is torch._C._nn.scaled_dot_product_attention:
             return len(args) > 3 and args[3] is node
         return False
 

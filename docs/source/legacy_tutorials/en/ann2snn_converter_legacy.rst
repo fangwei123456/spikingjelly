@@ -211,7 +211,7 @@ You can set ``fuse_flag`` to ``True`` (by default), in order to fuse fuse the co
 
 After converting, ReLU modules will be removed. And new modules needed by SNN, such as VoltageScaler and IFNode, will be created and stored in the parent module ``snn tailor``.
 
-Since the converted model is an ``fx.GraphModule``, you can use ``print(fx.GraphModule.graph)`` to inspect the generated computation graph. More APIs are here `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
+In this legacy rate-coding flow, the converted model is an ``fx.GraphModule``, so you can use ``print(fx.GraphModule.graph)`` to inspect the generated computation graph. More APIs are here `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
 
 
 Classify MNIST
@@ -381,7 +381,7 @@ snn_model is the output SNN model. View the network structure of the snn_model (
       )
     )
 
-The type of snn_model is ``GraphModule`` , referring to `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
+In this legacy rate-coding flow, the type of snn_model is ``GraphModule`` , referring to `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
 
 Call the ``GraphModule.graph.print_tabular()`` method to view the graph of the intermediate representation of the model in tabular form:
 
