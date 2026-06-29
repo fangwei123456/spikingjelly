@@ -5,13 +5,20 @@ Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https:/
 
 中文版：:doc:`../cn/ann2snn`
 
-.. admonition:: ANN2SNN tutorial versions
+.. admonition:: ANN2SNN tutorial map
 
-    The ANN2SNN public API has gone through three tutorial generations:
+    Current ANN2SNN tutorials are split by conversion workflow:
+
+    #. This page covers the current Recipe API for rate-coded CNN conversion:
+       ``RateCodingRecipe`` / ``LocalThresholdBalancingRecipe`` define the
+       algorithm, and ``Converter.convert(model)`` executes it.
+    #. :doc:`STA-based Transformer ANN2SNN conversion <ann2snn_transformer>`
+       covers ``STATransformerRecipe`` for Transformer models.
+
+    Legacy API tutorials remain available:
 
     #. :doc:`Older clock-driven-era ANN2SNN API <../../legacy_tutorials/en/5_ann2snn>`.
     #. :doc:`Legacy pre-Recipe Converter API <../../legacy_tutorials/en/ann2snn_converter_legacy>`, which used ``Converter(mode=..., dataloader=...)`` and ``convert_to_spiking_neurons(model)``.
-    #. Current Recipe API, documented on this page: ``RateCodingRecipe`` or ``TransformerSpikeEquivalentRecipe`` defines the algorithm, and ``Converter.convert(model)`` executes it.
 
 This tutorial focuses on ``spikingjelly.activation_based.ann2snn``. It shows how to convert a trained feedforward ANN to an SNN using the Recipe API and simulate the result.
 

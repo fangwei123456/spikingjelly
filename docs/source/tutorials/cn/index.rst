@@ -17,6 +17,7 @@
 
     /tutorials/cn/stdp
     /tutorials/cn/ann2snn
+    /tutorials/cn/ann2snn_transformer
     /tutorials/cn/lif_fc_mnist
     /tutorials/cn/conv_fashion_mnist
     /tutorials/cn/recurrent_connection_and_stateful_synapse

@@ -4,13 +4,20 @@ ANN转换SNN
 
 English version: :doc:`../en/ann2snn`
 
-.. admonition:: ANN2SNN 教程版本导航
+.. admonition:: ANN2SNN 教程导航
 
-    ANN2SNN public API 经历了三代教程：
+    当前 ANN2SNN 教程按转换流程拆分：
+
+    #. 本页介绍当前 Recipe API 中的 rate-coded CNN 转换：
+       ``RateCodingRecipe`` / ``LocalThresholdBalancingRecipe`` 定义算法，
+       ``Converter.convert(model)`` 执行转换。
+    #. :doc:`基于 STA 的 Transformer ANN2SNN 转换 <ann2snn_transformer>`
+       介绍面向 Transformer 模型的 ``STATransformerRecipe``。
+
+    旧 API 教程仍可查阅：
 
     #. :doc:`更早期 clock-driven 时代 ANN2SNN API <../../legacy_tutorials/cn/5_ann2snn>`。
     #. :doc:`legacy pre-Recipe Converter API <../../legacy_tutorials/cn/ann2snn_converter_legacy>`，使用 ``Converter(mode=..., dataloader=...)`` 和 ``convert_to_spiking_neurons(model)``。
-    #. 当前 Recipe API，即本页内容：``RateCodingRecipe`` 或 ``TransformerSpikeEquivalentRecipe`` 定义算法，``Converter.convert(model)`` 执行转换。
 
 本节介绍 ``spikingjelly.activation_based.ann2snn``，展示如何用当前 Recipe API 将训练好的前馈 ANN 转换为 SNN 并在 SpikingJelly 中仿真。
 
