@@ -159,3 +159,4 @@ workspace/
 ObsidianVault
 .mimocode/
 .codegraph/
+ENV.md
