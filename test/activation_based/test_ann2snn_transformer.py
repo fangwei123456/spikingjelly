@@ -48,6 +48,75 @@ def _run_online_steps(module: nn.Module, x_seq: torch.Tensor):
     return torch.stack(outputs, dim=0)
 
 
+def _slice_step_value(value, step: int, preserve_tensor: bool = False):
+    if torch.is_tensor(value):
+        return value if preserve_tensor else value[step]
+    if isinstance(value, tuple):
+        items = [_slice_step_value(x, step, preserve_tensor) for x in value]
+        return type(value)(*items) if hasattr(value, "_fields") else tuple(items)
+    if isinstance(value, list):
+        return [_slice_step_value(x, step, preserve_tensor) for x in value]
+    if isinstance(value, dict):
+        return {
+            key: _slice_step_value(x, step, preserve_tensor)
+            for key, x in value.items()
+        }
+    return value
+
+
+def _run_converted_step_loop(converted: nn.Module, *args, **kwargs):
+    functional.set_step_mode(converted, "s")
+    functional.reset_net(converted)
+    seq_args, seq_kwargs = converted.encode_inputs(*args, **kwargs)
+    outputs = []
+    for step in range(converted.time_steps):
+        step_args = tuple(
+            _slice_step_value(
+                arg,
+                step,
+                preserve_tensor=i in converted.static_arg_indices,
+            )
+            for i, arg in enumerate(seq_args)
+        )
+        step_kwargs = {
+            key: _slice_step_value(
+                value,
+                step,
+                preserve_tensor=key in converted._STATIC_TENSOR_KWARGS,
+            )
+            for key, value in seq_kwargs.items()
+        }
+        outputs.append(converted(*step_args, **step_kwargs))
+    return torch.stack(outputs, dim=0)
+
+
+def _run_converted_multistep(converted: nn.Module, *args, **kwargs):
+    functional.set_step_mode(converted, "m")
+    functional.reset_net(converted)
+    seq_args, seq_kwargs = converted.encode_inputs(*args, **kwargs)
+    return converted(*seq_args, **seq_kwargs)
+
+
+def _run_converted_readout(converted: nn.Module, *args, **kwargs):
+    return converted.sum_time(_run_converted_multistep(converted, *args, **kwargs))
+
+
+def _assert_converted_readout_matches_ann(
+    converted: nn.Module,
+    model: nn.Module,
+    *args,
+    atol: float = 1e-5,
+    rtol: float = 1e-5,
+    **kwargs,
+) -> None:
+    assert torch.allclose(
+        _run_converted_readout(converted, *args, **kwargs),
+        model(*args, **kwargs),
+        atol=atol,
+        rtol=rtol,
+    )
+
+
 def _measure_min_forward_seconds(
     module: nn.Module,
     x: torch.Tensor,
@@ -921,146 +990,128 @@ def test_sta_transformer_recipe_converts_affine_layers_and_runs_inner_steps():
     converted = Converter(recipe=recipe).convert(model)
     modules = dict(converted.named_modules())
     x = torch.randn(2, 3, 16, 16)
-    y = converted(x)
+    y_seq = _run_converted_multistep(converted, x)
+    y = converted.sum_time(y_seq)
 
     assert converted.time_steps == 4
     assert not hasattr(modules["model.patch"], "v_threshold")
     assert not hasattr(modules["model.fc1"], "v_threshold")
     assert not hasattr(modules["model.fc2"], "v_threshold")
+    assert y_seq.shape == (4, 2, 5)
     assert y.shape == (2, 5)
     assert torch.isfinite(y).all()
 
 
-def test_sta_transformer_recipe_default_execution_mode_is_online():
-    recipe = STATransformerRecipe(time_steps=4)
+def test_sta_transformer_recipe_default_step_mode_is_single_step():
+    converted = Converter(recipe=STATransformerRecipe(time_steps=4)).convert(
+        TinyANNFFNBlock(embed_dim=8, mlp_dim=16).eval()
+    )
 
-    assert recipe.execution_mode == "online"
+    assert converted.step_mode == "s"
 
 
-def test_sta_transformer_recipe_sequence_equivalent_mha_matches_online():
+def test_sta_transformer_recipe_encode_inputs_requires_recipe_time_steps():
+    converted = Converter(recipe=STATransformerRecipe(time_steps=4)).convert(
+        TinyANNFFNBlock(embed_dim=8, mlp_dim=16).eval()
+    )
+
+    with pytest.raises(ValueError, match="time_steps"):
+        converted.encode_inputs(torch.randn(2, 4, 8), time_steps=3)
+
+
+def test_sta_transformer_recipe_mha_single_loop_matches_multistep():
     torch.manual_seed(75)
     model = TinyANNMHATransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16).eval()
-    sequence_model = TinyANNMHATransformerBlock(
-        embed_dim=8, num_heads=2, mlp_dim=16
-    ).eval()
-    sequence_model.load_state_dict(model.state_dict())
     calibration = [(torch.randn(2, 4, 8),)]
-    online = Converter(
+    converted = Converter(
         recipe=STATransformerRecipe(
             dataloader=calibration,
             time_steps=5,
             mode="equivalent",
-            execution_mode="online",
         )
     ).convert(model)
-    sequence = Converter(
-        recipe=STATransformerRecipe(
-            dataloader=calibration,
-            time_steps=5,
-            mode="equivalent",
-            execution_mode="sequence",
-        )
-    ).convert(sequence_model)
     x = torch.randn(2, 4, 8)
 
-    assert torch.allclose(sequence(x), online(x), atol=1e-5, rtol=1e-5)
+    single_seq = _run_converted_step_loop(converted, x)
+    multi_seq = _run_converted_multistep(converted, x)
+
+    assert torch.allclose(multi_seq, single_seq, atol=1e-5, rtol=1e-5)
 
 
-def test_sta_transformer_recipe_sequence_backend_timing_smoke_matches_online_loop():
+def test_sta_transformer_recipe_multistep_timing_smoke_matches_single_loop():
     torch.manual_seed(750)
     old_threads = torch.get_num_threads()
     torch.set_num_threads(1)
     try:
         model = TinyANNFFNBlock(embed_dim=16, mlp_dim=32, depth=2).eval()
-        sequence_model = TinyANNFFNBlock(embed_dim=16, mlp_dim=32, depth=2).eval()
-        sequence_model.load_state_dict(model.state_dict())
         time_steps = 128
-        online = Converter(
+        converted = Converter(
             recipe=STATransformerRecipe(
                 time_steps=time_steps,
                 mode="equivalent",
-                execution_mode="online",
             )
         ).convert(model)
-        sequence = Converter(
-            recipe=STATransformerRecipe(
-                time_steps=time_steps,
-                mode="equivalent",
-                execution_mode="sequence",
-            )
-        ).convert(sequence_model)
         x = torch.randn(1, 4, 16)
 
-        online_output = online(x)
-        sequence_output = sequence(x)
-        assert torch.allclose(sequence_output, online_output, atol=1e-5, rtol=1e-5)
+        single_seq = _run_converted_step_loop(converted, x)
+        multi_seq = _run_converted_multistep(converted, x)
+        assert torch.allclose(multi_seq, single_seq, atol=1e-5, rtol=1e-5)
 
-        online_seconds = _measure_min_forward_seconds(online, x)
-        sequence_seconds = _measure_min_forward_seconds(sequence, x)
+        seq_args, seq_kwargs = converted.encode_inputs(x)
+        functional.set_step_mode(converted, "m")
+        sequence_seconds = _measure_min_forward_seconds(
+            converted, *seq_args, **seq_kwargs
+        )
+        functional.set_step_mode(converted, "s")
+        single_seconds = _measure_min_forward_seconds(
+            lambda value: _run_converted_step_loop(converted, value), x
+        )
 
-        assert online_seconds > 0
+        assert single_seconds > 0
         assert sequence_seconds > 0
     finally:
         torch.set_num_threads(old_threads)
 
 
-def test_sta_transformer_recipe_sequence_spiking_encoder_matches_online():
+def test_sta_transformer_recipe_spiking_encoder_single_loop_matches_multistep():
     torch.manual_seed(76)
     model = TinyANNMHATransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16).eval()
-    sequence_model = TinyANNMHATransformerBlock(
-        embed_dim=8, num_heads=2, mlp_dim=16
-    ).eval()
-    sequence_model.load_state_dict(model.state_dict())
     calibration = [(torch.randn(2, 4, 8),)]
-    online = Converter(
+    converted = Converter(
         recipe=STATransformerRecipe(
             dataloader=calibration,
             time_steps=5,
             mode="spiking_encoder",
-            execution_mode="online",
         )
     ).convert(model)
-    sequence = Converter(
-        recipe=STATransformerRecipe(
-            dataloader=calibration,
-            time_steps=5,
-            mode="spiking_encoder",
-            execution_mode="sequence",
-        )
-    ).convert(sequence_model)
     x = torch.randn(2, 4, 8)
 
-    assert torch.allclose(sequence(x), online(x), atol=1e-5, rtol=1e-5)
+    single_seq = _run_converted_step_loop(converted, x)
+    multi_seq = _run_converted_multistep(converted, x)
+
+    assert torch.allclose(multi_seq, single_seq, atol=1e-5, rtol=1e-5)
 
 
-def test_sta_transformer_recipe_sequence_vit_shaped_classifier_matches_online():
+def test_sta_transformer_recipe_vit_shaped_classifier_single_loop_matches_multistep():
     torch.manual_seed(77)
     model = TinyImageTransformerClassifier().eval()
-    sequence_model = TinyImageTransformerClassifier().eval()
-    sequence_model.load_state_dict(model.state_dict())
     calibration = [(torch.randn(2, 3, 16, 16),)]
-    online = Converter(
+    converted = Converter(
         recipe=STATransformerRecipe(
             dataloader=calibration,
             time_steps=4,
             mode="spiking_encoder",
-            execution_mode="online",
         )
     ).convert(model)
-    sequence = Converter(
-        recipe=STATransformerRecipe(
-            dataloader=calibration,
-            time_steps=4,
-            mode="spiking_encoder",
-            execution_mode="sequence",
-        )
-    ).convert(sequence_model)
     x = torch.randn(2, 3, 16, 16)
 
-    assert torch.allclose(sequence(x), online(x), atol=1e-5, rtol=1e-5)
+    single_seq = _run_converted_step_loop(converted, x)
+    multi_seq = _run_converted_multistep(converted, x)
+
+    assert torch.allclose(multi_seq, single_seq, atol=1e-5, rtol=1e-5)
 
 
-def test_sta_transformer_recipe_sequence_replaces_conv2d_with_td_conv2d():
+def test_sta_transformer_recipe_replaces_conv2d_with_td_conv2d():
     model = TinyImageTransformerClassifier().eval()
 
     converted = Converter(
@@ -1068,41 +1119,34 @@ def test_sta_transformer_recipe_sequence_replaces_conv2d_with_td_conv2d():
             dataloader=[(torch.randn(2, 3, 16, 16),)],
             time_steps=4,
             mode="spiking_encoder",
-            execution_mode="sequence",
         )
     ).convert(model)
 
     assert isinstance(dict(converted.named_modules())["model.patch"], TDConv2d)
 
 
-def test_sta_transformer_recipe_sequence_functional_view_matches_online():
+def test_sta_transformer_recipe_functional_view_single_loop_matches_multistep():
     torch.manual_seed(78)
     model = TinyFunctionalViewTransformerClassifier().eval()
-    sequence_model = TinyFunctionalViewTransformerClassifier().eval()
-    sequence_model.load_state_dict(model.state_dict())
     calibration = [(torch.randn(2, 3, 16, 16),)]
-    online = Converter(
+    converted = Converter(
         recipe=STATransformerRecipe(
             dataloader=calibration,
             time_steps=4,
             mode="spiking_encoder",
-            execution_mode="online",
         )
     ).convert(model)
-    sequence = Converter(
-        recipe=STATransformerRecipe(
-            dataloader=calibration,
-            time_steps=4,
-            mode="spiking_encoder",
-            execution_mode="sequence",
-        )
-    ).convert(sequence_model)
     x = torch.randn(2, 3, 16, 16)
 
-    assert torch.allclose(sequence(x), online(x), atol=1e-5, rtol=1e-5)
+    assert torch.allclose(
+        _run_converted_multistep(converted, x),
+        _run_converted_step_loop(converted, x),
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
-def test_sta_transformer_recipe_sequence_rejects_spiking_affine():
+def test_sta_transformer_recipe_rejects_spiking_affine():
     model = TinyImageTransformerClassifier().eval()
 
     with pytest.raises(ValueError, match="spiking affine"):
@@ -1111,12 +1155,11 @@ def test_sta_transformer_recipe_sequence_rejects_spiking_affine():
                 dataloader=[(torch.randn(2, 3, 16, 16),)],
                 time_steps=4,
                 mode="spiking_affine",
-                execution_mode="sequence",
             )
         ).convert(model)
 
 
-def test_sta_transformer_recipe_sequence_rejects_unsupported_method():
+def test_sta_transformer_recipe_rejects_unsupported_method():
     model = TinyUnsupportedSequenceOpClassifier().eval()
 
     with pytest.raises(ValueError, match="tensor method 'permute'"):
@@ -1124,36 +1167,30 @@ def test_sta_transformer_recipe_sequence_rejects_unsupported_method():
             recipe=STATransformerRecipe(
                 time_steps=4,
                 mode="equivalent",
-                execution_mode="sequence",
             )
         ).convert(model)
 
 
-def test_sta_transformer_recipe_sequence_mha_default_need_weights_runs():
+def test_sta_transformer_recipe_mha_default_need_weights_runs():
     torch.manual_seed(79)
     model = TinyMHADefaultWeightsBlock().eval()
-    sequence_model = TinyMHADefaultWeightsBlock().eval()
-    sequence_model.load_state_dict(model.state_dict())
     x = torch.randn(2, 4, 8)
-    online = Converter(
+    converted = Converter(
         recipe=STATransformerRecipe(
             time_steps=4,
             mode="equivalent",
-            execution_mode="online",
         )
     ).convert(model)
-    sequence = Converter(
-        recipe=STATransformerRecipe(
-            time_steps=4,
-            mode="equivalent",
-            execution_mode="sequence",
-        )
-    ).convert(sequence_model)
 
-    assert torch.allclose(sequence(x), online(x), atol=1e-5, rtol=1e-5)
+    assert torch.allclose(
+        converted.sum_time(_run_converted_multistep(converted, x)),
+        converted.sum_time(_run_converted_step_loop(converted, x)),
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
-def test_sta_transformer_recipe_sequence_rejects_mha_attention_weights():
+def test_sta_transformer_recipe_rejects_mha_attention_weights():
     model = TinyMHAWeightsBlock().eval()
 
     with pytest.raises(ValueError, match="need_weights=False|attention weights"):
@@ -1161,26 +1198,24 @@ def test_sta_transformer_recipe_sequence_rejects_mha_attention_weights():
             recipe=STATransformerRecipe(
                 time_steps=4,
                 mode="equivalent",
-                execution_mode="sequence",
             )
         ).convert(model)
 
 
-def test_sta_transformer_recipe_sequence_equivalent_replaces_mha_with_td_mha():
+def test_sta_transformer_recipe_equivalent_replaces_mha_with_td_mha():
     model = TinyANNMHATransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16).eval()
 
     converted = Converter(
         recipe=STATransformerRecipe(
             time_steps=4,
             mode="equivalent",
-            execution_mode="sequence",
         )
     ).convert(model)
 
     assert isinstance(dict(converted.named_modules())["model.attn"], TDMultiheadAttention)
 
 
-def test_sta_transformer_recipe_sequence_spiking_encoder_stacks_mha_encoder():
+def test_sta_transformer_recipe_spiking_encoder_stacks_mha_encoder():
     model = TinyANNMHATransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16).eval()
 
     converted = Converter(
@@ -1188,7 +1223,6 @@ def test_sta_transformer_recipe_sequence_spiking_encoder_stacks_mha_encoder():
             dataloader=[(torch.randn(2, 4, 8),)],
             time_steps=4,
             mode="spiking_encoder",
-            execution_mode="sequence",
         )
     ).convert(model)
     modules = dict(converted.named_modules())
@@ -1197,23 +1231,19 @@ def test_sta_transformer_recipe_sequence_spiking_encoder_stacks_mha_encoder():
     assert hasattr(modules["model.getitem_sta_encoder"], "v_threshold")
 
 
-def test_sta_transformer_recipe_sequence_rejects_key_padding_mask():
+def test_sta_transformer_recipe_rejects_key_padding_mask():
     model = TinyPositionalMHAMaskBlock().eval()
-    converted = Converter(
-        recipe=STATransformerRecipe(
-            time_steps=4,
-            mode="equivalent",
-            execution_mode="sequence",
-        )
-    ).convert(model)
-    x = torch.randn(2, 4, 8)
-    key_padding_mask = torch.zeros(2, 4)
 
     with pytest.raises(ValueError, match="key_padding_mask"):
-        converted(x, key_padding_mask=key_padding_mask)
+        Converter(
+            recipe=STATransformerRecipe(
+                time_steps=4,
+                mode="equivalent",
+            )
+        ).convert(model)
 
 
-def test_sta_transformer_recipe_repeated_forward_resets_state():
+def test_sta_transformer_recipe_forward_does_not_auto_reset_state():
     torch.manual_seed(31)
     model = TinyImageTransformerClassifier().eval()
     calibration = [(torch.randn(2, 3, 16, 16),)]
@@ -1222,10 +1252,31 @@ def test_sta_transformer_recipe_repeated_forward_resets_state():
     ).convert(model)
     x = torch.randn(2, 3, 16, 16)
 
-    y0 = converted(x)
-    y1 = converted(x)
+    y0_seq = _run_converted_multistep(converted, x)
+    y1_seq_without_reset = converted(*converted.encode_inputs(x)[0])
+    functional.reset_net(converted)
+    y1_seq_after_reset = converted(*converted.encode_inputs(x)[0])
 
-    assert torch.allclose(y0, y1, atol=1e-6, rtol=1e-6)
+    assert not torch.allclose(y0_seq, y1_seq_without_reset)
+    assert torch.allclose(y0_seq, y1_seq_after_reset, atol=1e-6, rtol=1e-6)
+
+
+def test_sta_transformer_recipe_reset_resets_inner_memory_modules():
+    torch.manual_seed(310)
+    model = TinyImageTransformerClassifier().eval()
+    calibration = [(torch.randn(2, 3, 16, 16),)]
+    converted = Converter(
+        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
+    ).convert(model)
+    x = torch.randn(2, 3, 16, 16)
+    functional.set_step_mode(converted, "m")
+    seq_args, seq_kwargs = converted.encode_inputs(x)
+
+    y0_seq = converted(*seq_args, **seq_kwargs)
+    converted.reset()
+    y1_seq = converted(*seq_args, **seq_kwargs)
+
+    assert torch.allclose(y0_seq, y1_seq, atol=1e-6, rtol=1e-6)
 
 
 def test_sta_transformer_recipe_preserves_final_wrapper_training_flag():
@@ -1255,7 +1306,9 @@ def test_sta_transformer_recipe_equivalent_mode_skips_calibration_loop():
         )
     ).convert(model)
 
-    assert torch.isfinite(converted(torch.randn(2, 3, 16, 16))).all()
+    assert torch.isfinite(
+        _run_converted_readout(converted, torch.randn(2, 3, 16, 16))
+    ).all()
 
 
 def test_sta_transformer_recipe_preserves_nonzero_conv_padding_mode():
@@ -1267,7 +1320,7 @@ def test_sta_transformer_recipe_preserves_nonzero_conv_padding_mode():
     ).convert(model)
     x = torch.randn(2, 3, 8, 8)
 
-    assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
+    _assert_converted_readout_matches_ann(converted, model, x)
 
 
 def test_sta_transformer_recipe_equivalent_mha_matches_ann():
@@ -1280,8 +1333,9 @@ def test_sta_transformer_recipe_equivalent_mha_matches_ann():
     modules = dict(converted.named_modules())
     x = torch.randn(2, 4, 8)
 
-    assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
-    assert modules["model.attn"].attn.batch_first is True
+    _assert_converted_readout_matches_ann(converted, model, x)
+    assert isinstance(modules["model.attn"], TDMultiheadAttention)
+    assert modules["model.attn"].batch_first is True
 
 
 def test_sta_transformer_recipe_preserves_static_attention_mask_kwargs():
@@ -1296,7 +1350,7 @@ def test_sta_transformer_recipe_preserves_static_attention_mask_kwargs():
     attn_mask[:, -1] = float("-inf")
 
     assert torch.allclose(
-        converted(x, attn_mask=attn_mask),
+        _run_converted_readout(converted, x, attn_mask=attn_mask),
         model(x, attn_mask=attn_mask),
         atol=1e-5,
         rtol=1e-5,
@@ -1311,69 +1365,30 @@ def test_sta_transformer_recipe_rejects_nonfloating_data_tensors_after_step0():
     ).convert(model)
 
     with pytest.raises(TypeError, match="non-floating data tensors"):
-        converted(pixel_values=torch.ones(2, 4, 4, dtype=torch.long))
+        converted.encode_inputs(pixel_values=torch.ones(2, 4, 4, dtype=torch.long))
 
 
 def test_sta_transformer_recipe_returns_attention_weight_deltas():
-    torch.manual_seed(41)
     model = TinyMHAWeightsBlock().eval()
-    calibration = [(torch.randn(2, 4, 8),)]
-    converted = Converter(
-        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
-    ).convert(model)
-    x = torch.randn(2, 4, 8)
-    attn_mask = torch.zeros(4, 4)
-    attn_mask[:, -1] = float("-inf")
 
-    converted_output, converted_weights = converted(x, attn_mask=attn_mask)
-    expected_output, expected_weights = model(x, attn_mask=attn_mask)
-
-    assert torch.allclose(converted_output, expected_output, atol=1e-5, rtol=1e-5)
-    assert torch.allclose(converted_weights, expected_weights, atol=1e-5, rtol=1e-5)
+    with pytest.raises(ValueError, match="attention weights|need_weights"):
+        Converter(recipe=STATransformerRecipe(time_steps=4)).convert(model)
 
 
-def test_sta_transformer_recipe_does_not_wrap_functional_linear_weight():
+def test_sta_transformer_recipe_rejects_functional_linear():
     torch.manual_seed(42)
     model = TinyFunctionalLinearClassifier().eval()
-    calibration = [(torch.randn(2, 4, 4),)]
-    converted = Converter(
-        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
-    ).convert(model)
-    x = torch.randn(2, 4, 4)
-    tensor_get_attrs = [
-        node.target
-        for node in converted.model.graph.nodes
-        if node.op == "get_attr"
-        and torch.is_tensor(
-            STATransformerRecipe._get_attr_value(converted.model, node.target)
-        )
-    ]
 
-    assert "weight" in tensor_get_attrs
-    assert "bias" not in tensor_get_attrs
-    assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
+    with pytest.raises(ValueError, match="function node.*linear"):
+        Converter(recipe=STATransformerRecipe(time_steps=4)).convert(model)
 
 
-def test_sta_transformer_recipe_does_not_wrap_functional_keyword_weight():
+def test_sta_transformer_recipe_rejects_functional_keyword_linear():
     torch.manual_seed(13)
     model = TinyFunctionalLinearKwargClassifier().eval()
-    calibration = [(torch.randn(2, 4, 4),)]
-    converted = Converter(
-        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
-    ).convert(model)
-    x = torch.randn(2, 4, 4)
-    tensor_get_attrs = [
-        node.target
-        for node in converted.model.graph.nodes
-        if node.op == "get_attr"
-        and torch.is_tensor(
-            STATransformerRecipe._get_attr_value(converted.model, node.target)
-        )
-    ]
 
-    assert "weight" in tensor_get_attrs
-    assert "bias" not in tensor_get_attrs
-    assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
+    with pytest.raises(ValueError, match="function node.*linear"):
+        Converter(recipe=STATransformerRecipe(time_steps=4)).convert(model)
 
 
 def test_sta_transformer_recipe_calibrates_explicit_multi_input_batch():
@@ -1391,7 +1406,7 @@ def test_sta_transformer_recipe_calibrates_explicit_multi_input_batch():
         )
     ).convert(model)
 
-    assert torch.isfinite(converted(x0, x1)).all()
+    assert torch.isfinite(_run_converted_readout(converted, x0, x1)).all()
 
 
 def test_sta_transformer_recipe_state_buffers_rebuild_after_dtype_change():
@@ -1429,12 +1444,12 @@ def test_sta_transformer_recipe_spiking_encoder_mode_encodes_nonlinear_outputs()
         )
     ).convert(model)
     modules = dict(converted.named_modules())
-    y = converted(torch.randn(2, 3, 16, 16))
+    y = _run_converted_readout(converted, torch.randn(2, 3, 16, 16))
 
     assert not hasattr(modules["model.fc1"], "v_threshold")
     assert not hasattr(modules["model.fc2"], "v_threshold")
-    assert hasattr(modules["model.norm"].encoder, "v_threshold")
-    assert hasattr(modules["model.act"].encoder, "v_threshold")
+    assert hasattr(modules["model.norm_sta_encoder"], "v_threshold")
+    assert hasattr(modules["model.act_sta_encoder"], "v_threshold")
     assert y.shape == (2, 5)
     assert torch.isfinite(y).all()
 
@@ -1451,37 +1466,32 @@ def test_sta_transformer_recipe_spiking_encoder_mode_encodes_mha_output():
         )
     ).convert(model)
     modules = dict(converted.named_modules())
-    y = converted(torch.randn(2, 4, 8))
+    y = _run_converted_readout(converted, torch.randn(2, 4, 8))
 
-    assert hasattr(modules["model.attn"].encoder, "v_threshold")
+    assert hasattr(modules["model.getitem_sta_encoder"], "v_threshold")
     assert torch.isfinite(y).all()
 
 
-def test_sta_transformer_recipe_threshold_mode_max_path():
+def test_sta_transformer_recipe_rejects_spiking_affine_threshold_mode_max_path():
     torch.manual_seed(34)
     model = TinyImageTransformerClassifier().eval()
     calibration = [(torch.randn(2, 3, 16, 16),)]
 
-    converted = Converter(
-        recipe=STATransformerRecipe(
-            dataloader=calibration,
-            time_steps=4,
-            mode="spiking_affine",
-            threshold_mode="max",
-        )
-    ).convert(model)
-    threshold = dict(converted.named_modules())["model.fc1"].v_threshold
-    y = converted(torch.randn(2, 3, 16, 16))
-
-    assert torch.isfinite(threshold).all()
-    assert (threshold > 0).all()
-    assert torch.isfinite(y).all()
+    with pytest.raises(ValueError, match="spiking affine"):
+        Converter(
+            recipe=STATransformerRecipe(
+                dataloader=calibration,
+                time_steps=4,
+                mode="spiking_affine",
+                threshold_mode="max",
+            )
+        ).convert(model)
 
 
 def test_sta_transformer_recipe_raises_when_observer_never_calibrated():
     model = TinyImageTransformerClassifier().eval()
 
-    with pytest.raises(RuntimeError, match="did not collect calibration data"):
+    with pytest.raises(ValueError, match="spiking affine"):
         Converter(
             recipe=STATransformerRecipe(
                 dataloader=[],
@@ -1502,7 +1512,7 @@ def test_sta_transformer_recipe_time_steps_affects_mse_thresholds():
         recipe=STATransformerRecipe(
             dataloader=calibration,
             time_steps=2,
-            mode="spiking_affine",
+            mode="spiking_encoder",
             threshold_mode="mse",
         )
     ).convert(model_t2)
@@ -1510,13 +1520,17 @@ def test_sta_transformer_recipe_time_steps_affects_mse_thresholds():
         recipe=STATransformerRecipe(
             dataloader=calibration,
             time_steps=8,
-            mode="spiking_affine",
+            mode="spiking_encoder",
             threshold_mode="mse",
         )
     ).convert(model_t8)
 
-    threshold_t2 = dict(converted_t2.named_modules())["model.fc1"].v_threshold
-    threshold_t8 = dict(converted_t8.named_modules())["model.fc1"].v_threshold
+    threshold_t2 = dict(converted_t2.named_modules())[
+        "model.norm_sta_encoder"
+    ].v_threshold
+    threshold_t8 = dict(converted_t8.named_modules())[
+        "model.norm_sta_encoder"
+    ].v_threshold
 
     assert not torch.allclose(threshold_t2, threshold_t8)
 
@@ -1532,7 +1546,7 @@ def test_sta_transformer_recipe_threshold_scale_rescales_thresholds():
         recipe=STATransformerRecipe(
             dataloader=calibration,
             time_steps=4,
-            mode="spiking_affine",
+            mode="spiking_encoder",
             threshold_mode="mse",
         )
     ).convert(model_base)
@@ -1540,14 +1554,18 @@ def test_sta_transformer_recipe_threshold_scale_rescales_thresholds():
         recipe=STATransformerRecipe(
             dataloader=calibration,
             time_steps=4,
-            mode="spiking_affine",
+            mode="spiking_encoder",
             threshold_mode="mse",
             threshold_scale=0.5,
         )
     ).convert(model_scaled)
 
-    threshold_base = dict(converted_base.named_modules())["model.fc1"].v_threshold
-    threshold_scaled = dict(converted_scaled.named_modules())["model.fc1"].v_threshold
+    threshold_base = dict(converted_base.named_modules())[
+        "model.norm_sta_encoder"
+    ].v_threshold
+    threshold_scaled = dict(converted_scaled.named_modules())[
+        "model.norm_sta_encoder"
+    ].v_threshold
 
     assert torch.allclose(threshold_scaled, threshold_base * 0.5)
 
@@ -1572,7 +1590,7 @@ def test_sta_transformer_recipe_equivalent_mode_does_not_require_dataloader():
     ).convert(model)
     x = torch.randn(2, 3, 16, 16)
 
-    assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
+    _assert_converted_readout_matches_ann(converted, model, x)
 
 
 def test_sta_transformer_recipe_num_calibration_batches_limits_observer_updates():
@@ -1582,7 +1600,7 @@ def test_sta_transformer_recipe_num_calibration_batches_limits_observer_updates(
     recipe = STATransformerRecipe(
         dataloader=calibration,
         time_steps=4,
-        mode="spiking_affine",
+        mode="spiking_encoder",
         num_calibration_batches=1,
     )
 
@@ -1603,7 +1621,7 @@ def test_sta_transformer_recipe_dict_batch_and_dict_output_are_supported():
     ).convert(model)
 
     x = torch.randn(2, 4, 4)
-    output = converted(pixel_values=x)
+    output = _run_converted_readout(converted, pixel_values=x)
 
     assert set(output.keys()) == {"logits"}
     assert torch.allclose(
@@ -1620,7 +1638,7 @@ def test_sta_transformer_recipe_preserves_namedtuple_outputs():
         recipe=STATransformerRecipe(dataloader=None, time_steps=4)
     ).convert(model)
     x = torch.randn(2, 4, 4)
-    output = converted(x)
+    output = _run_converted_readout(converted, x)
     expected = model(x)
 
     assert isinstance(output, TinyModelOutput)
@@ -1637,58 +1655,55 @@ def test_sta_transformer_recipe_kwargs_calibration_path():
     ).convert(model)
     x = torch.randn(2, 4, 4)
 
-    assert torch.allclose(converted(pixel_values=x), model(x), atol=1e-5, rtol=1e-5)
+    assert torch.allclose(
+        _run_converted_readout(converted, pixel_values=x),
+        model(x),
+        atol=1e-5,
+        rtol=1e-5,
+    )
 
 
-def test_sta_transformer_recipe_spike_classifier_flag_controls_head_conversion():
+def test_sta_transformer_recipe_rejects_spike_classifier_affine_path():
     torch.manual_seed(38)
     model_default = TinyHeadClassifier().eval()
     model_with_head = TinyHeadClassifier().eval()
     model_with_head.load_state_dict(model_default.state_dict())
     calibration = [(torch.randn(2, 4, 4),)]
 
-    converted_default = Converter(
-        recipe=STATransformerRecipe(
-            dataloader=calibration,
-            time_steps=4,
-            mode="spiking_affine",
-        )
-    ).convert(model_default)
-    converted_with_head = Converter(
-        recipe=STATransformerRecipe(
-            dataloader=calibration,
-            time_steps=4,
-            mode="spiking_affine",
-            spike_classifier=True,
-        )
-    ).convert(model_with_head)
-
-    assert not hasattr(
-        dict(converted_default.named_modules())["model.head"], "v_threshold"
-    )
-    assert hasattr(
-        dict(converted_with_head.named_modules())["model.head"], "v_threshold"
-    )
+    with pytest.raises(ValueError, match="spiking affine"):
+        Converter(
+            recipe=STATransformerRecipe(
+                dataloader=calibration,
+                time_steps=4,
+                mode="spiking_affine",
+            )
+        ).convert(model_default)
+    with pytest.raises(ValueError, match="spiking affine"):
+        Converter(
+            recipe=STATransformerRecipe(
+                dataloader=calibration,
+                time_steps=4,
+                mode="spiking_affine",
+                spike_classifier=True,
+            )
+        ).convert(model_with_head)
 
 
-def test_sta_transformer_recipe_can_spike_conv2d_explicitly():
+def test_sta_transformer_recipe_rejects_spike_conv2d_explicitly():
     torch.manual_seed(6)
     model = TinyImageTransformerClassifier().eval()
     calibration = [(torch.randn(2, 3, 16, 16),)]
 
-    converted = Converter(
-        recipe=STATransformerRecipe(
-            dataloader=calibration,
-            time_steps=4,
-            mode="spiking_affine",
-            threshold_mode="mse",
-            spike_conv2d=True,
-        )
-    ).convert(model)
-    modules = dict(converted.named_modules())
-
-    assert hasattr(modules["model.patch"], "v_threshold")
-    assert modules["model.patch"].v_threshold.shape == (8,)
+    with pytest.raises(ValueError, match="spiking affine"):
+        Converter(
+            recipe=STATransformerRecipe(
+                dataloader=calibration,
+                time_steps=4,
+                mode="spiking_affine",
+                threshold_mode="mse",
+                spike_conv2d=True,
+            )
+        ).convert(model)
 
 
 def test_sta_transformer_recipe_wraps_tensor_constants_as_first_step_inputs():
@@ -1713,7 +1728,7 @@ def test_sta_transformer_recipe_wraps_tensor_constants_as_first_step_inputs():
     ]
 
     assert tensor_get_attrs == []
-    assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
+    _assert_converted_readout_matches_ann(converted, model, x)
 
 
 def test_sta_transformer_recipe_does_not_wrap_nonfloating_tensor_constants():
@@ -1739,69 +1754,18 @@ def test_sta_transformer_recipe_does_not_wrap_nonfloating_tensor_constants():
     )
 
 
-def test_sta_transformer_recipe_does_not_wrap_static_floating_control_constants():
+def test_sta_transformer_recipe_rejects_functional_sdpa_with_static_control_constant():
     model = TinyFloatMaskBufferTransformerClassifier().eval()
-    calibration = [(torch.randn(2, 2, 4),)]
 
-    converted = Converter(
-        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
-    ).convert(model)
-    tensor_get_attr_values = [
-        STATransformerRecipe._get_attr_value(converted.model, node.target)
-        for node in converted.model.graph.nodes
-        if node.op == "get_attr"
-        and torch.is_tensor(
-            STATransformerRecipe._get_attr_value(converted.model, node.target)
-        )
-    ]
-    x = torch.randn(2, 2, 4)
-
-    assert any(value.dtype.is_floating_point for value in tensor_get_attr_values)
-    assert not any(
-        name.startswith("sta_time_constant")
-        for name, _module in converted.model.named_modules()
-    )
-    assert torch.allclose(converted(x), model(x), atol=1e-5, rtol=1e-5)
+    with pytest.raises(ValueError, match="scaled_dot_product_attention"):
+        Converter(recipe=STATransformerRecipe(time_steps=4)).convert(model)
 
 
-def test_sta_transformer_recipe_preserves_positional_attention_masks():
+def test_sta_transformer_recipe_rejects_functional_sdpa_positional_attention_masks():
     model = TinyPositionalSDPAMaskTransformerClassifier().eval()
-    calibration = [(torch.randn(2, 2, 4), torch.zeros(1, 1, 2, 2))]
 
-    converted = Converter(
-        recipe=STATransformerRecipe(dataloader=calibration, time_steps=4)
-    ).convert(model)
-    x = torch.randn(2, 2, 4)
-    attn_mask = torch.zeros(1, 1, 2, 2)
-    attn_mask[..., 1] = -10000.0
-
-    assert converted.static_arg_indices == frozenset({1})
-    assert torch.allclose(
-        converted(x, attn_mask),
-        model(x, attn_mask),
-        atol=1e-5,
-        rtol=1e-5,
-    )
-
-
-def test_sta_transformer_recipe_preserves_positional_mha_masks():
-    model = TinyPositionalMHAMaskBlock().eval()
-    x = torch.randn(2, 4, 8)
-    key_padding_mask = torch.zeros(2, 4)
-    key_padding_mask[0, -1] = -4.0
-    key_padding_mask[1, 1] = -4.0
-    attn_mask = torch.zeros(4, 4)
-    attn_mask[:, -1] = -4.0
-
-    converted = Converter(recipe=STATransformerRecipe(time_steps=4)).convert(model)
-
-    assert converted.static_arg_indices == frozenset({1, 2})
-    assert torch.allclose(
-        converted(x, key_padding_mask, attn_mask),
-        model(x, key_padding_mask, attn_mask),
-        atol=1e-5,
-        rtol=1e-5,
-    )
+    with pytest.raises(ValueError, match="scaled_dot_product_attention"):
+        Converter(recipe=STATransformerRecipe(time_steps=4)).convert(model)
 
 
 def test_sta_transformer_recipe_does_not_preserve_ordinary_fourth_positional_input():
@@ -1812,7 +1776,7 @@ def test_sta_transformer_recipe_does_not_preserve_ordinary_fourth_positional_inp
     inputs = tuple(torch.randn(2, 4) for _ in range(5))
 
     assert converted.static_arg_indices == frozenset()
-    assert torch.allclose(converted(*inputs), model(*inputs), atol=1e-5, rtol=1e-5)
+    _assert_converted_readout_matches_ann(converted, model, *inputs)
 
 
 def test_sta_transformer_recipe_preserves_nested_static_mask_tensors():
@@ -1822,10 +1786,10 @@ def test_sta_transformer_recipe_preserves_nested_static_mask_tensors():
     mask = torch.tensor([[True, False]])
     nested = {"attention_mask": (mask, [mask])}
 
-    zeroed = converted._zero_tensors(nested)
+    encoded = converted.encode_inputs(**nested)[1]
 
-    assert zeroed["attention_mask"][0] is mask
-    assert zeroed["attention_mask"][1][0] is mask
+    assert encoded["attention_mask"][0] is mask
+    assert encoded["attention_mask"][1][0] is mask
 
 
 @pytest.mark.parametrize(
@@ -1837,7 +1801,6 @@ def test_sta_transformer_recipe_preserves_nested_static_mask_tensors():
         ({"time_steps": 0}, "time_steps"),
         ({"time_steps": True}, "time_steps"),
         ({"mode": "missing"}, "mode"),
-        ({"execution_mode": "bogus"}, "execution_mode"),
         ({"threshold_mode": "missing"}, "threshold_mode"),
         ({"threshold_scale": 0.0}, "threshold_scale"),
         ({"spike_linear": 1}, "spike_linear"),

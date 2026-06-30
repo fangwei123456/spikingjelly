@@ -431,7 +431,13 @@ The MNIST example above uses rate coding to convert ReLU activations to IF neuro
     recipe = ann2snn.TransformerSpikeEquivalentRecipe()
     td_model = ann2snn.Converter(recipe=recipe).convert(transformer_ann)
 
-This recipe does not need a dataloader, does not insert ``VoltageHook``, and does not run rate-coding calibration. It replaces currently supported ANN modules and attention calls with TD / spike-equivalent operators, but does not cover fully spike-driven LLM conversion.
+This recipe does not need a dataloader, does not insert ``VoltageHook``, and
+does not run rate-coding calibration. It replaces currently supported ANN
+modules and attention calls with TD / spike-equivalent operators, but does not
+cover fully spike-driven LLM conversion. In these TD operators,
+``ann_forward(...)`` is the ordinary stateless PyTorch path;
+``single_step_forward(...)`` is a stateful temporal-difference step and should
+be reset before an independent sequence.
 
 To add a new conversion algorithm, subclass ``ConversionRecipe`` and override only the steps you need. Unoverridden methods use the base no-op implementation. A recipe is not an executor and should not provide ``convert()``, ``run()``, or ``__call__()``:
 

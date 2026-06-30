@@ -586,7 +586,7 @@ class _STAOnlineMultiheadAttention(nn.Module):
         return delta, weights_delta
 
 
-class _STAConvertedModel(nn.Module):
+class _STAStepModeConvertedModel(base.MemoryModule):
     _STATIC_TENSOR_KWARGS = frozenset(
         {
             "attention_mask",
@@ -605,19 +605,59 @@ class _STAConvertedModel(nn.Module):
         model: nn.Module,
         time_steps: int,
         static_arg_indices: Optional[frozenset[int]] = None,
+        step_mode: str = "s",
     ) -> None:
         super().__init__()
         self.model = model
         self.time_steps = time_steps
         self.static_arg_indices = static_arg_indices or frozenset()
+        self.step_mode = step_mode
+
+    def single_step_forward(self, *args: Any, **kwargs: Any) -> Any:
+        self._set_inner_step_mode_for_single_step()
+        seq_args = self._single_step_sequence_tensors(
+            args,
+            static_arg_indices=self.static_arg_indices,
+        )
+        seq_kwargs = self._single_step_sequence_tensors(kwargs)
+        return self._select_first_time(self.model(*seq_args, **seq_kwargs))
+
+    def multi_step_forward(self, *args: Any, **kwargs: Any) -> Any:
+        self._set_inner_step_mode("m")
+        self._check_sequence_length(
+            args,
+            static_arg_indices=self.static_arg_indices,
+            context="STA converted model input",
+        )
+        self._check_sequence_length(
+            kwargs,
+            context="STA converted model keyword input",
+        )
+        return self.model(*args, **kwargs)
+
+    def _set_inner_step_mode(self, step_mode: str) -> None:
+        for module in self.model.modules():
+            if hasattr(module, "step_mode"):
+                module.step_mode = step_mode
+
+    def _set_inner_step_mode_for_single_step(self) -> None:
+        for module in self.model.modules():
+            if isinstance(module, _STAConstant):
+                module.step_mode = "s"
+            elif hasattr(module, "step_mode"):
+                module.step_mode = "m"
 
     def reset(self) -> None:
+        super().reset()
         for module in self.modules():
             if module is self:
                 continue
-            reset = getattr(module, "_reset_sta_state", None)
-            if reset is not None:
-                reset()
+            if isinstance(module, base.MemoryModule):
+                module.reset()
+            else:
+                reset = getattr(module, "_reset_sta_state", None)
+                if reset is not None:
+                    reset()
 
     @staticmethod
     def _rebuild_container(source: Any, items: Any) -> Any:
@@ -632,169 +672,59 @@ class _STAConvertedModel(nn.Module):
         return type(source)(items)
 
     @staticmethod
-    def _add_outputs(a: Any, b: Any) -> Any:
+    def add_outputs(a: Any, b: Any) -> Any:
         if torch.is_tensor(a) and torch.is_tensor(b):
             return a + b
         if isinstance(a, tuple) and isinstance(b, tuple):
             if len(a) != len(b):
                 raise TypeError("STA converted model output tuple lengths must match.")
-            return _STAConvertedModel._rebuild_container(
+            return _STAStepModeConvertedModel._rebuild_container(
                 a,
-                (_STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b)),
+                (_STAStepModeConvertedModel.add_outputs(x, y) for x, y in zip(a, b)),
             )
         if isinstance(a, list) and isinstance(b, list):
             if len(a) != len(b):
                 raise TypeError("STA converted model output list lengths must match.")
-            return _STAConvertedModel._rebuild_container(
+            return _STAStepModeConvertedModel._rebuild_container(
                 a,
-                (_STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b)),
+                (_STAStepModeConvertedModel.add_outputs(x, y) for x, y in zip(a, b)),
             )
         if isinstance(a, dict) and isinstance(b, dict):
             if a.keys() != b.keys():
                 raise TypeError("STA converted model output dict keys must match.")
-            return _STAConvertedModel._rebuild_container(
+            return _STAStepModeConvertedModel._rebuild_container(
                 a,
-                {key: _STAConvertedModel._add_outputs(a[key], b[key]) for key in a},
+                {
+                    key: _STAStepModeConvertedModel.add_outputs(a[key], b[key])
+                    for key in a
+                },
             )
         if a is None and b is None:
             return None
         raise TypeError("STA converted model can only accumulate tensor outputs.")
 
     @staticmethod
-    def _zero_tensors(
-        value: Any,
-        preserve_tensor: bool = False,
-        static_arg_indices: Optional[frozenset[int]] = None,
-    ) -> Any:
+    def sum_time(value: Any) -> Any:
         if torch.is_tensor(value):
-            if preserve_tensor:
-                return value
-            if not value.is_floating_point():
-                raise TypeError(
-                    "STA converted model cannot create zero-input timesteps for "
-                    "non-floating data tensors. Pass control masks as named static "
-                    "kwargs, or convert data inputs to floating tensors before "
-                    "conversion."
-                )
-            return torch.zeros_like(value)
+            if value.dim() == 0:
+                raise TypeError("STA converted model output must include time dimension.")
+            return value.sum(dim=0)
         if isinstance(value, tuple):
-            return _STAConvertedModel._rebuild_container(
-                value,
-                (
-                    _STAConvertedModel._zero_tensors(
-                        x,
-                        preserve_tensor=preserve_tensor
-                        or (static_arg_indices is not None and i in static_arg_indices),
-                    )
-                    for i, x in enumerate(value)
-                ),
+            return _STAStepModeConvertedModel._rebuild_container(
+                value, (_STAStepModeConvertedModel.sum_time(x) for x in value)
             )
         if isinstance(value, list):
-            return _STAConvertedModel._rebuild_container(
-                value,
-                (
-                    _STAConvertedModel._zero_tensors(
-                        x,
-                        preserve_tensor=preserve_tensor
-                        or (static_arg_indices is not None and i in static_arg_indices),
-                    )
-                    for i, x in enumerate(value)
-                ),
+            return _STAStepModeConvertedModel._rebuild_container(
+                value, (_STAStepModeConvertedModel.sum_time(x) for x in value)
             )
         if isinstance(value, dict):
-            return _STAConvertedModel._rebuild_container(
+            return _STAStepModeConvertedModel._rebuild_container(
                 value,
-                {
-                    key: _STAConvertedModel._zero_tensors(
-                        x,
-                        preserve_tensor=preserve_tensor
-                        or key in _STAConvertedModel._STATIC_TENSOR_KWARGS,
-                    )
-                    for key, x in value.items()
-                },
+                {key: _STAStepModeConvertedModel.sum_time(value[key]) for key in value},
             )
-        return value
-
-    def forward(self, *args: Any, **kwargs: Any) -> Any:
-        self.reset()
-        output = None
-        zero_args = self._zero_tensors(
-            args,
-            static_arg_indices=self.static_arg_indices,
-        )
-        zero_kwargs = self._zero_tensors(kwargs)
-        for step in range(self.time_steps):
-            step_args = args if step == 0 else zero_args
-            step_kwargs = kwargs if step == 0 else zero_kwargs
-            step_output = self.model(*step_args, **step_kwargs)
-            output = (
-                step_output
-                if output is None
-                else self._add_outputs(output, step_output)
-            )
-        return output
-
-
-class _STAFirstStepConstant(nn.Module, _STATimeStepMixin):
-    def __init__(self, value: torch.Tensor) -> None:
-        super().__init__()
-        if isinstance(value, nn.Parameter):
-            self.value = nn.Parameter(
-                value.detach().clone(), requires_grad=value.requires_grad
-            )
-        else:
-            self.register_buffer("value", value.detach().clone())
-        self._zero_value: Optional[torch.Tensor] = None
-        self.t = 0
-
-    def _reset_sta_state(self) -> None:
-        self.t = 0
-
-    def forward(self) -> torch.Tensor:
-        if self.t == 0:
-            output = self.value
-        else:
-            if (
-                self._zero_value is None
-                or self._zero_value.shape != self.value.shape
-                or self._zero_value.device != self.value.device
-                or self._zero_value.dtype != self.value.dtype
-            ):
-                self._zero_value = torch.zeros_like(self.value)
-            output = self._zero_value
-        self.t += 1
-        return output
-
-
-class _STASequenceConstant(nn.Module):
-    def __init__(self, value: torch.Tensor, time_steps: int) -> None:
-        super().__init__()
-        self.time_steps = time_steps
-        if isinstance(value, nn.Parameter):
-            self.value = nn.Parameter(
-                value.detach().clone(), requires_grad=value.requires_grad
-            )
-        else:
-            self.register_buffer("value", value.detach().clone())
-
-    def forward(self) -> torch.Tensor:
-        zeros = torch.zeros_like(self.value).expand(
-            self.time_steps - 1, *self.value.shape
-        )
-        return torch.cat((self.value.unsqueeze(0), zeros), dim=0)
-
-
-class _STASequenceConvertedModel(nn.Module):
-    def __init__(
-        self,
-        model: nn.Module,
-        time_steps: int,
-        static_arg_indices: Optional[frozenset[int]] = None,
-    ) -> None:
-        super().__init__()
-        self.model = model
-        self.time_steps = time_steps
-        self.static_arg_indices = static_arg_indices or frozenset()
+        if value is None:
+            return None
+        raise TypeError("STA converted model can only sum tensor outputs.")
 
     @staticmethod
     def _sequence_tensors(
@@ -808,18 +738,20 @@ class _STASequenceConvertedModel(nn.Module):
                 return value
             if not value.is_floating_point():
                 raise TypeError(
-                    "STA sequence model cannot create input sequences for "
+                    "STA converted model cannot create input sequences for "
                     "non-floating data tensors. Pass control masks as named "
                     "static kwargs, or convert data inputs to floating tensors "
                     "before conversion."
                 )
+            if time_steps == 1:
+                return value.unsqueeze(0)
             zeros = torch.zeros_like(value).expand(time_steps - 1, *value.shape)
             return torch.cat((value.unsqueeze(0), zeros), dim=0)
         if isinstance(value, tuple):
-            return _STAConvertedModel._rebuild_container(
+            return _STAStepModeConvertedModel._rebuild_container(
                 value,
                 (
-                    _STASequenceConvertedModel._sequence_tensors(
+                    _STAStepModeConvertedModel._sequence_tensors(
                         x,
                         preserve_tensor=preserve_tensor
                         or (static_arg_indices is not None and i in static_arg_indices),
@@ -829,10 +761,10 @@ class _STASequenceConvertedModel(nn.Module):
                 ),
             )
         if isinstance(value, list):
-            return _STAConvertedModel._rebuild_container(
+            return _STAStepModeConvertedModel._rebuild_container(
                 value,
                 (
-                    _STASequenceConvertedModel._sequence_tensors(
+                    _STAStepModeConvertedModel._sequence_tensors(
                         x,
                         preserve_tensor=preserve_tensor
                         or (static_arg_indices is not None and i in static_arg_indices),
@@ -842,13 +774,13 @@ class _STASequenceConvertedModel(nn.Module):
                 ),
             )
         if isinstance(value, dict):
-            return _STAConvertedModel._rebuild_container(
+            return _STAStepModeConvertedModel._rebuild_container(
                 value,
                 {
-                    key: _STASequenceConvertedModel._sequence_tensors(
+                    key: _STAStepModeConvertedModel._sequence_tensors(
                         x,
                         preserve_tensor=preserve_tensor
-                        or key in _STAConvertedModel._STATIC_TENSOR_KWARGS,
+                        or key in _STAStepModeConvertedModel._STATIC_TENSOR_KWARGS,
                         time_steps=time_steps,
                     )
                     for key, x in value.items()
@@ -857,37 +789,178 @@ class _STASequenceConvertedModel(nn.Module):
         return value
 
     @staticmethod
-    def _sum_time(value: Any) -> Any:
+    def _single_step_sequence_tensors(
+        value: Any,
+        preserve_tensor: bool = False,
+        static_arg_indices: Optional[frozenset[int]] = None,
+    ) -> Any:
         if torch.is_tensor(value):
-            if value.dim() == 0:
-                raise TypeError("STA sequence model output must include time dimension.")
-            return value.sum(dim=0)
+            if preserve_tensor:
+                return value
+            if not value.is_floating_point():
+                raise TypeError(
+                    "STA converted model cannot create single-step sequences for "
+                    "non-floating data tensors. Pass control masks as named "
+                    "static kwargs, or convert data inputs to floating tensors "
+                    "before conversion."
+                )
+            return value.unsqueeze(0)
         if isinstance(value, tuple):
-            return _STAConvertedModel._rebuild_container(
-                value, (_STASequenceConvertedModel._sum_time(x) for x in value)
+            return _STAStepModeConvertedModel._rebuild_container(
+                value,
+                (
+                    _STAStepModeConvertedModel._single_step_sequence_tensors(
+                        x,
+                        preserve_tensor=preserve_tensor
+                        or (static_arg_indices is not None and i in static_arg_indices),
+                    )
+                    for i, x in enumerate(value)
+                ),
             )
         if isinstance(value, list):
-            return _STAConvertedModel._rebuild_container(
-                value, (_STASequenceConvertedModel._sum_time(x) for x in value)
+            return _STAStepModeConvertedModel._rebuild_container(
+                value,
+                (
+                    _STAStepModeConvertedModel._single_step_sequence_tensors(
+                        x,
+                        preserve_tensor=preserve_tensor
+                        or (static_arg_indices is not None and i in static_arg_indices),
+                    )
+                    for i, x in enumerate(value)
+                ),
             )
         if isinstance(value, dict):
-            return _STAConvertedModel._rebuild_container(
+            return _STAStepModeConvertedModel._rebuild_container(
                 value,
-                {key: _STASequenceConvertedModel._sum_time(value[key]) for key in value},
+                {
+                    key: _STAStepModeConvertedModel._single_step_sequence_tensors(
+                        x,
+                        preserve_tensor=preserve_tensor
+                        or key in _STAStepModeConvertedModel._STATIC_TENSOR_KWARGS,
+                    )
+                    for key, x in value.items()
+                },
+            )
+        return value
+
+    @staticmethod
+    def _select_first_time(value: Any) -> Any:
+        if torch.is_tensor(value):
+            if value.dim() == 0:
+                raise TypeError("STA converted model output must include time dimension.")
+            return value[0]
+        if isinstance(value, tuple):
+            return _STAStepModeConvertedModel._rebuild_container(
+                value, (_STAStepModeConvertedModel._select_first_time(x) for x in value)
+            )
+        if isinstance(value, list):
+            return _STAStepModeConvertedModel._rebuild_container(
+                value, (_STAStepModeConvertedModel._select_first_time(x) for x in value)
+            )
+        if isinstance(value, dict):
+            return _STAStepModeConvertedModel._rebuild_container(
+                value,
+                {
+                    key: _STAStepModeConvertedModel._select_first_time(value[key])
+                    for key in value
+                },
             )
         if value is None:
             return None
-        raise TypeError("STA sequence model can only accumulate tensor outputs.")
+        raise TypeError("STA converted model can only select tensor outputs.")
 
-    def forward(self, *args: Any, **kwargs: Any) -> Any:
-        functional.reset_net(self.model)
+    def encode_inputs(
+        self,
+        *args: Any,
+        time_steps: Optional[int] = None,
+        **kwargs: Any,
+    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+        if time_steps is None:
+            time_steps = self.time_steps
+        if (
+            not isinstance(time_steps, int)
+            or isinstance(time_steps, bool)
+            or time_steps <= 0
+        ):
+            raise ValueError("time_steps must be a positive integer.")
+        if time_steps != self.time_steps:
+            raise ValueError(
+                "STA converted model encode_inputs time_steps must match "
+                f"converted time_steps {self.time_steps}."
+            )
         seq_args = self._sequence_tensors(
             args,
             static_arg_indices=self.static_arg_indices,
-            time_steps=self.time_steps,
+            time_steps=time_steps,
         )
-        seq_kwargs = self._sequence_tensors(kwargs, time_steps=self.time_steps)
-        return self._sum_time(self.model(*seq_args, **seq_kwargs))
+        seq_kwargs = self._sequence_tensors(kwargs, time_steps=time_steps)
+        return seq_args, seq_kwargs
+
+    def _check_sequence_length(
+        self,
+        value: Any,
+        preserve_tensor: bool = False,
+        static_arg_indices: Optional[frozenset[int]] = None,
+        context: str = "STA converted model input",
+    ) -> None:
+        if torch.is_tensor(value):
+            if preserve_tensor:
+                return
+            if not value.is_floating_point():
+                raise TypeError(
+                    f"{context} must be floating point or a static control tensor."
+                )
+            if value.dim() == 0 or value.shape[0] != self.time_steps:
+                raise ValueError(
+                    f"{context} expects time dimension length {self.time_steps}, "
+                    f"but got shape {tuple(value.shape)}."
+                )
+            return
+        if isinstance(value, (tuple, list)):
+            for i, x in enumerate(value):
+                self._check_sequence_length(
+                    x,
+                    preserve_tensor=preserve_tensor
+                    or (static_arg_indices is not None and i in static_arg_indices),
+                    context=context,
+                )
+            return
+        if isinstance(value, dict):
+            for key, x in value.items():
+                self._check_sequence_length(
+                    x,
+                    preserve_tensor=preserve_tensor
+                    or key in self._STATIC_TENSOR_KWARGS,
+                    context=context,
+                )
+
+
+class _STAConstant(base.MemoryModule):
+    def __init__(self, value: torch.Tensor, time_steps: int, step_mode: str = "s") -> None:
+        super().__init__()
+        self.time_steps = time_steps
+        if isinstance(value, nn.Parameter):
+            self.value = nn.Parameter(
+                value.detach().clone(), requires_grad=value.requires_grad
+            )
+        else:
+            self.register_buffer("value", value.detach().clone())
+        self.register_memory("t", 0)
+        self.step_mode = step_mode
+
+    def single_step_forward(self) -> torch.Tensor:
+        if self.t == 0:
+            output = self.value
+        else:
+            output = torch.zeros_like(self.value)
+        self.t += 1
+        return output
+
+    def multi_step_forward(self) -> torch.Tensor:
+        zeros = torch.zeros_like(self.value).expand(
+            self.time_steps - 1, *self.value.shape
+        )
+        return torch.cat((self.value.unsqueeze(0), zeros), dim=0)
 
 
 class STATransformerRecipe(ConversionRecipe):
@@ -905,7 +978,6 @@ class STATransformerRecipe(ConversionRecipe):
         num_calibration_batches: Optional[int] = None,
         show_progress: bool = False,
         eps: float = 1e-6,
-        execution_mode: str = "online",
     ) -> None:
         r"""
         **API Language** - :ref:`中文 <STATransformerRecipe.__init__-cn>` | :ref:`English <STATransformerRecipe.__init__-en>`
@@ -917,9 +989,9 @@ class STATransformerRecipe(ConversionRecipe):
         * **中文**
 
         实现基于 Spatio-Temporal Approximation (STA) [#sta_transformer]_ 思路的
-        training-free Transformer 转换 recipe。该 recipe 将普通 ANN 输入编码
-        为第 0 步真实输入和后续 0 输入，并在模型内部执行 ``time_steps`` 次
-        循环后返回累计输出。
+        training-free Transformer 转换 recipe。该 recipe 将 Transformer 中的
+        Linear、Conv2d、LayerNorm、GELU、``MultiheadAttention`` 等算子替换为
+        支持 STA 差分时间传播的 step-mode 模块。
         转换过程中会以 ``eval`` 模式 trace 和校准原 ANN；``Converter`` 会在
         转换结束后恢复原 ANN 的 ``training`` 标志。
 
@@ -933,9 +1005,15 @@ class STATransformerRecipe(ConversionRecipe):
         保持主干 affine 在线等价。``mode="spiking_affine"`` 会为选中的
         Linear/Conv2d 统计阈值并替换为有状态 bipolar IF / burst affine 模块；
         LayerNorm、GELU 和 ``MultiheadAttention`` 仍使用在线累计-差分浮点
-        模块。它是 STA affine spiking 路径，不修改 rate-coding recipe，也
-        不依赖 tutorial。``time_steps`` 参与阈值搜索和最终推理循环，因而是
-        转换 recipe 的一部分，而不仅是外部评估循环参数。
+        模块。当前 step-mode 对齐后端暂不支持 ``mode="spiking_affine"``、
+        ``spike_linear=True`` 或 ``spike_conv2d=True``；这些配置会明确报错。
+        ``time_steps`` 参与阈值搜索、默认输入序列 helper 长度和常量序列长度
+        校验，因而是转换 recipe 的一部分，而不仅是外部评估循环参数。
+
+        转换产物遵循 SpikingJelly 的 ``step_mode`` 语义。``step_mode="s"``
+        时，用户自己按时间步调用转换后的模型；``step_mode="m"`` 时，模型
+        接收第 0 维为时间维的序列 tensor 并返回输出序列。最终累计 readout
+        由用户显式执行，例如对时间维求和或调用转换产物的 ``sum_time`` helper。
 
         :param dataloader: 校准数据加载器。每个 batch 可为单输入 tensor、
             ``(input, target)`` 风格的 tuple/list，或传递给模型的 kwargs
@@ -968,12 +1046,9 @@ class STATransformerRecipe(ConversionRecipe):
         :type show_progress: bool
         :param eps: 阈值数值下界。
         :type eps: float
-        :param execution_mode: 执行模式。``"online"`` 保持逐时间步图级循环；
-            ``"sequence"`` 使用实验性的 layer-wise 序列执行后端。
-        :type execution_mode: str
         :raises ValueError: 当校验发现不支持的转换模式、阈值模式、非正
             time step、非正缩放因子、非法动量、非法校准 batch 上限、非法
-            执行模式，或布尔选项类型错误时抛出。
+            模式组合，或布尔选项类型错误时抛出。
 
         .. [#sta_transformer] Y. Jiang, K. Hu, T. Zhang, H. Gao, Y. Liu,
            Y. Fang, and F. Chen, "Spatio-Temporal Approximation: A
@@ -988,9 +1063,9 @@ class STATransformerRecipe(ConversionRecipe):
 
         Implement a training-free Transformer conversion recipe based on
         Spatio-Temporal Approximation (STA) [#sta_transformer]_. The recipe
-        encodes ordinary ANN
-        inputs as one real input step followed by zero-input steps, runs
-        ``time_steps`` internal iterations, and returns the cumulative output.
+        replaces Transformer Linear, Conv2d, LayerNorm, GELU,
+        ``MultiheadAttention`` and related operators with step-mode modules
+        that support STA differential temporal propagation.
         Conversion traces and calibrates the original ANN in ``eval`` mode;
         ``Converter`` restores the original ANN ``training`` flags after
         conversion finishes.
@@ -1007,10 +1082,20 @@ class STATransformerRecipe(ConversionRecipe):
         calibrates thresholds for selected Linear/Conv2d modules and replaces
         them with stateful bipolar IF / burst affine modules; LayerNorm, GELU
         and ``MultiheadAttention`` remain online cumulative-difference
-        floating-point modules. It is the STA affine spiking path, separate
-        from the rate-coding recipe and from tutorials. ``time_steps`` is used
-        by threshold search and by the final inference loop, so it belongs to
-        the conversion recipe rather than only to an external evaluation loop.
+        floating-point modules. The current step-mode-aligned backend does
+        not support ``mode="spiking_affine"``, ``spike_linear=True`` or
+        ``spike_conv2d=True``; these configurations raise a clear error.
+        ``time_steps`` is used by threshold search, the default input sequence
+        helper length and constant sequence length validation, so it belongs
+        to the conversion recipe rather than only to an external evaluation
+        loop.
+
+        The converted model follows SpikingJelly ``step_mode`` semantics. With
+        ``step_mode="s"``, users call the converted model once per timestep.
+        With ``step_mode="m"``, the model consumes sequence tensors whose first
+        dimension is time and returns output sequences. Final accumulated
+        readout is explicit, e.g. summing the time dimension or calling the
+        converted model's ``sum_time`` helper.
 
         :param dataloader: Calibration dataloader. Each batch can be a
             single-input tensor, a ``(input, target)``-style tuple/list, or a
@@ -1048,14 +1133,10 @@ class STATransformerRecipe(ConversionRecipe):
         :type show_progress: bool
         :param eps: Numeric lower bound for thresholds.
         :type eps: float
-        :param execution_mode: Execution mode. ``"online"`` preserves the
-            timestep-wise graph loop; ``"sequence"`` uses the experimental
-            layer-wise sequence backend.
-        :type execution_mode: str
         :raises ValueError: If validation finds an unsupported mode, threshold
             mode, non-positive timestep count, non-positive scale, invalid
-            momentum, invalid calibration batch limit, invalid execution mode,
-            or invalid type for a boolean option.
+            momentum, invalid calibration batch limit, unsupported mode
+            combination, or invalid type for a boolean option.
         """
         self.dataloader = dataloader
         self.time_steps = time_steps
@@ -1077,7 +1158,6 @@ class STATransformerRecipe(ConversionRecipe):
         self.num_calibration_batches = num_calibration_batches
         self.show_progress = show_progress
         self.eps = eps
-        self.execution_mode = execution_mode
         self._observers: Dict[str, _STAThresholdObserver] = {}
         self._hook_handles: List[torch.utils.hooks.RemovableHandle] = []
 
@@ -1103,18 +1183,6 @@ class STATransformerRecipe(ConversionRecipe):
             raise ValueError(
                 "mode must be 'equivalent', 'spiking_encoder' or 'spiking_affine'."
             )
-        if not isinstance(self.execution_mode, str):
-            raise ValueError("execution_mode must be str.")
-        if self.execution_mode not in ("online", "sequence"):
-            raise ValueError("execution_mode must be 'online' or 'sequence'.")
-        if self.execution_mode == "sequence" and (
-            self.mode == "spiking_affine" or self.spike_linear or self.spike_conv2d
-        ):
-            raise ValueError(
-                "STATransformerRecipe execution_mode='sequence' currently supports "
-                "only equivalent and spiking_encoder modes without spiking affine "
-                "Linear/Conv2d replacements."
-            )
         if not isinstance(self.threshold_mode, str):
             raise ValueError("threshold_mode must be str.")
         if self.threshold_mode not in ("mse", "max"):
@@ -1131,6 +1199,12 @@ class STATransformerRecipe(ConversionRecipe):
             raise ValueError("spike_conv2d must be bool.")
         if not isinstance(self.spike_classifier, bool):
             raise ValueError("spike_classifier must be bool.")
+        if self.mode == "spiking_affine" or self.spike_linear or self.spike_conv2d:
+            raise ValueError(
+                "STATransformerRecipe step-mode backend currently supports only "
+                "equivalent and spiking_encoder modes without spiking affine "
+                "Linear/Conv2d replacements."
+            )
         if not isinstance(self.momentum, (int, float)) or isinstance(
             self.momentum, bool
         ):
@@ -1234,63 +1308,7 @@ class STATransformerRecipe(ConversionRecipe):
     def replace(
         self, converter: "Converter", fx_model: fx.GraphModule
     ) -> fx.GraphModule:
-        if self.execution_mode == "sequence":
-            return self._replace_sequence(fx_model)
-        return self._replace_online(fx_model)
-
-    def _replace_online(self, fx_model: fx.GraphModule) -> fx.GraphModule:
-        self._remove_hooks()
-        modules = dict(fx_model.named_modules())
-        for node in fx_model.graph.nodes:
-            if node.op != "call_module" or not isinstance(node.target, str):
-                continue
-            module = modules.get(node.target)
-            if isinstance(module, nn.Linear):
-                observer = self._observers.get(node.target)
-                threshold = self._compute_scaled_threshold(observer)
-                if threshold is None:
-                    replacement = _STAAnalogLinear(module)
-                else:
-                    replacement = _STASpikeLinear(module, threshold)
-            elif isinstance(module, nn.Conv2d):
-                observer = self._observers.get(node.target)
-                threshold = self._compute_scaled_threshold(observer)
-                if threshold is None:
-                    replacement = _STAAnalogConv2d(module)
-                else:
-                    replacement = _STASpikeConv2d(module, threshold)
-            else:
-                continue
-            replacement.train(module.training)
-            self._replace_submodule(fx_model, node.target, replacement)
-            modules[node.target] = replacement
-        self._wrap_time_constants(fx_model)
-        modules = dict(fx_model.named_modules())
-        for node in fx_model.graph.nodes:
-            if node.op != "call_module" or not isinstance(node.target, str):
-                continue
-            module = modules.get(node.target)
-            if isinstance(module, nn.LayerNorm):
-                observer = self._observers.get(node.target)
-                threshold = self._compute_scaled_threshold(observer)
-                replacement = _STAOnlineLayerNorm(module, threshold)
-            elif isinstance(module, nn.GELU):
-                observer = self._observers.get(node.target)
-                threshold = self._compute_scaled_threshold(observer)
-                replacement = _STAOnlineGELU(module, threshold)
-            elif isinstance(module, nn.MultiheadAttention):
-                observer = self._observers.get(node.target)
-                threshold = self._compute_scaled_threshold(observer)
-                replacement = _STAOnlineMultiheadAttention(module, threshold)
-            else:
-                continue
-            replacement.train(module.training)
-            self._replace_submodule(fx_model, node.target, replacement)
-            modules[node.target] = replacement
-        fx_model.graph.lint()
-        fx_model.delete_all_unused_submodules()
-        fx_model.recompile()
-        return fx_model
+        return self._replace_sequence(fx_model)
 
     def _replace_sequence(self, fx_model: fx.GraphModule) -> fx.GraphModule:
         self._remove_hooks()
@@ -1309,7 +1327,7 @@ class STATransformerRecipe(ConversionRecipe):
             self._replace_submodule(fx_model, node.target, replacement)
             modules[node.target] = replacement
 
-        self._wrap_time_constants(fx_model, sequence=True)
+        self._wrap_time_constants(fx_model)
         modules = dict(fx_model.named_modules())
         for node in fx_model.graph.nodes:
             if node.op != "call_module" or not isinstance(node.target, str):
@@ -1352,18 +1370,11 @@ class STATransformerRecipe(ConversionRecipe):
         return fx_model
 
     def finalize(self, converter: "Converter", fx_model: fx.GraphModule) -> nn.Module:
-        if self.execution_mode == "sequence":
-            converted = _STASequenceConvertedModel(
-                fx_model,
-                time_steps=self.time_steps,
-                static_arg_indices=self._find_static_placeholder_indices(fx_model),
-            )
-        else:
-            converted = _STAConvertedModel(
-                fx_model,
-                time_steps=self.time_steps,
-                static_arg_indices=self._find_static_placeholder_indices(fx_model),
-            )
+        converted = _STAStepModeConvertedModel(
+            fx_model,
+            time_steps=self.time_steps,
+            static_arg_indices=self._find_static_placeholder_indices(fx_model),
+        )
         converted.train(fx_model.training)
         return converted
 
@@ -1455,16 +1466,22 @@ class STATransformerRecipe(ConversionRecipe):
 
     @staticmethod
     def _validate_sequence_mha_node(node: fx.Node) -> None:
+        if STATransformerRecipe._mha_key_padding_mask_argument(node) is not None:
+            raise ValueError(
+                "STATransformerRecipe step-mode backend does not support "
+                "MultiheadAttention key_padding_mask. Apply padding masking "
+                "to the input tensors directly or use attn_mask instead."
+            )
         need_weights = STATransformerRecipe._mha_need_weights_argument(node)
         if need_weights is True:
             raise ValueError(
-                "STATransformerRecipe execution_mode='sequence' requires "
+                "STATransformerRecipe step-mode backend requires "
                 "MultiheadAttention calls with need_weights=False. Use "
-                "execution_mode='online' when attention weights are required."
+                "a custom online wrapper when attention weights are required."
             )
         if need_weights not in (None, False):
             raise ValueError(
-                "STATransformerRecipe execution_mode='sequence' only supports "
+                "STATransformerRecipe step-mode backend only supports "
                 "literal need_weights=False for MultiheadAttention."
             )
         if (
@@ -1472,10 +1489,18 @@ class STATransformerRecipe(ConversionRecipe):
             and STATransformerRecipe._mha_attention_weights_output_is_used(node)
         ):
             raise ValueError(
-                "STATransformerRecipe execution_mode='sequence' does not support "
+                "STATransformerRecipe step-mode backend does not support "
                 "using MultiheadAttention attention weights. Pass "
-                "need_weights=False or use execution_mode='online'."
+                "need_weights=False."
             )
+
+    @staticmethod
+    def _mha_key_padding_mask_argument(node: fx.Node):
+        if "key_padding_mask" in node.kwargs:
+            return node.kwargs["key_padding_mask"]
+        if len(node.args) > 3:
+            return node.args[3]
+        return None
 
     @staticmethod
     def _insert_sequence_encoder(
@@ -1520,7 +1545,7 @@ class STATransformerRecipe(ConversionRecipe):
                 break
         if output_node is None:
             raise ValueError(
-                "STATransformerRecipe execution_mode='sequence' with "
+                "STATransformerRecipe step-mode backend with "
                 "spiking_encoder requires MultiheadAttention output to be "
                 "unpacked before use."
             )
@@ -1585,9 +1610,7 @@ class STATransformerRecipe(ConversionRecipe):
             value = getattr(value, atom)
         return value
 
-    def _wrap_time_constants(
-        self, fx_model: fx.GraphModule, sequence: bool = False
-    ) -> None:
+    def _wrap_time_constants(self, fx_model: fx.GraphModule) -> None:
         modules = dict(fx_model.named_modules())
         existing_modules = set(modules.keys())
         constant_index = 0
@@ -1608,11 +1631,7 @@ class STATransformerRecipe(ConversionRecipe):
                 constant_index += 1
                 target = f"sta_time_constant_{constant_index}"
             constant_index += 1
-            module = (
-                _STASequenceConstant(value, self.time_steps)
-                if sequence
-                else _STAFirstStepConstant(value)
-            )
+            module = _STAConstant(value, self.time_steps)
             fx_model.add_submodule(target, module)
             existing_modules.add(target)
             with fx_model.graph.inserting_after(node):
@@ -1643,11 +1662,12 @@ class STATransformerRecipe(ConversionRecipe):
                         TDMultiheadAttention,
                         TDConv2d,
                         _STASpikeEncoder,
+                        _STAConstant,
                     ),
                 ):
                     continue
                 raise ValueError(
-                    "STATransformerRecipe execution_mode='sequence' does not "
+                    "STATransformerRecipe step-mode backend does not "
                     f"support module node {node.target!r}."
                 )
             if node.op == "call_method":
@@ -1656,6 +1676,9 @@ class STATransformerRecipe(ConversionRecipe):
                     continue
                 if node.target == "transpose":
                     STATransformerRecipe._shift_transpose_node_dims(node)
+                    continue
+                if node.target == "unsqueeze":
+                    STATransformerRecipe._shift_unsqueeze_node_dim(node)
                     continue
                 if node.target == "mean":
                     args = list(node.args)
@@ -1668,22 +1691,25 @@ class STATransformerRecipe(ConversionRecipe):
                         )
                     else:
                         raise ValueError(
-                            "STATransformerRecipe execution_mode='sequence' does not "
+                            "STATransformerRecipe step-mode backend does not "
                             "support mean without an explicit dim."
                         )
                     node.args = tuple(args)
                     node.kwargs = kwargs
                     continue
+                if node.target == "masked_fill":
+                    continue
                 raise ValueError(
-                    "STATransformerRecipe execution_mode='sequence' does not "
-                    f"support tensor method {node.target!r}. Use "
-                    "execution_mode='online' or rewrite the model with supported "
-                    "sequence-preserving operations."
+                    "STATransformerRecipe step-mode backend does not "
+                    f"support tensor method {node.target!r}. Rewrite the model "
+                    "with supported sequence-preserving operations."
                 )
             if node.op == "call_function":
+                if hasattr(node.target, "_fields"):
+                    continue
                 if node.target not in supported_call_functions:
                     raise ValueError(
-                        "STATransformerRecipe execution_mode='sequence' does not "
+                        "STATransformerRecipe step-mode backend does not "
                         f"support function node {node.target!r}."
                     )
                 if node.target is torch.flatten:
@@ -1729,6 +1755,22 @@ class STATransformerRecipe(ConversionRecipe):
         node.kwargs = kwargs
 
     @staticmethod
+    def _shift_unsqueeze_node_dim(node: fx.Node) -> None:
+        args = list(node.args)
+        kwargs = dict(node.kwargs)
+        if len(args) > 1:
+            args[1] = STATransformerRecipe._shift_sequence_dim(args[1])
+        elif "dim" in kwargs:
+            kwargs["dim"] = STATransformerRecipe._shift_sequence_dim(kwargs["dim"])
+        else:
+            raise ValueError(
+                "STATransformerRecipe step-mode backend does not support "
+                "unsqueeze without an explicit dim."
+            )
+        node.args = tuple(args)
+        node.kwargs = kwargs
+
+    @staticmethod
     def _shift_sequence_dim(dim: Any) -> Any:
         if isinstance(dim, int):
             return dim + 1 if dim >= 0 else dim
@@ -1737,7 +1779,7 @@ class STATransformerRecipe(ConversionRecipe):
         if isinstance(dim, list):
             return [STATransformerRecipe._shift_sequence_dim(d) for d in dim]
         raise ValueError(
-            "STATransformerRecipe execution_mode='sequence' requires literal "
+            "STATransformerRecipe step-mode backend requires literal "
             f"integer dimensions, but got {dim!r}."
         )
 
@@ -1747,7 +1789,10 @@ class STATransformerRecipe(ConversionRecipe):
             if STATransformerRecipe._is_static_control_arg(user, node, modules):
                 return True
             for key, value in user.kwargs.items():
-                if key in _STAConvertedModel._STATIC_TENSOR_KWARGS and value is node:
+                if (
+                    key in _STAStepModeConvertedModel._STATIC_TENSOR_KWARGS
+                    and value is node
+                ):
                     return True
         return False
 
@@ -1764,7 +1809,12 @@ class STATransformerRecipe(ConversionRecipe):
                 return False
             module = modules.get(target)
             if not isinstance(
-                module, (nn.MultiheadAttention, _STAOnlineMultiheadAttention)
+                module,
+                (
+                    nn.MultiheadAttention,
+                    _STAOnlineMultiheadAttention,
+                    TDMultiheadAttention,
+                ),
             ):
                 return False
             return (
@@ -1792,7 +1842,8 @@ class STATransformerRecipe(ConversionRecipe):
                     indices.add(placeholder_index)
                     break
                 if any(
-                    key in _STAConvertedModel._STATIC_TENSOR_KWARGS and value is node
+                    key in _STAStepModeConvertedModel._STATIC_TENSOR_KWARGS
+                    and value is node
                     for key, value in user.kwargs.items()
                 ):
                     indices.add(placeholder_index)
