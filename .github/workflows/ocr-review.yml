@@ -72,11 +72,14 @@ jobs:
           OCR_LLM_AUTH_TOKEN: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
           OCR_LLM_MODEL: ${{ secrets.OCR_LLM_MODEL }}
         run: |
-          ocr config set llm.url "$OCR_LLM_URL"
-          ocr config set llm.auth_token "$OCR_LLM_AUTH_TOKEN"
-          ocr config set llm.model "$OCR_LLM_MODEL"
-          # 禁用 thinking mode 以兼容更多 provider
-          ocr config set llm.extra_body '{"thinking":{"type":"disabled"}}'
+          ocr config set provider minimax
+          ocr config set providers.minimax.url "$OCR_LLM_URL"
+          ocr config set providers.minimax.api_key "$OCR_LLM_AUTH_TOKEN"
+          ocr config set providers.minimax.model "$OCR_LLM_MODEL"
+
+      - name: Test OCR LLM connection
+        run: |
+          ocr llm test
 
       # ── 7. Run OCR Review ──
       - name: Run OCR review
