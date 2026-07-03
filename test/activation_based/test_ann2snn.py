@@ -1587,6 +1587,18 @@ class TestConverterTDOperatorReplacement:
         assert isinstance(modules["flatten"], layer.Flatten)
         assert torch.allclose(y_single, y_multi, atol=1e-6, rtol=1e-6)
 
+    def test_conv2d_replacement_preserves_requires_grad_flags(self):
+        model = ConvTransformerEquivalentNet()
+        model.conv.weight.requires_grad_(False)
+        model.conv.bias.requires_grad_(False)
+
+        converted = _td_converter().convert(model)
+
+        assert isinstance(converted.conv, TDConv2d)
+        assert not converted.conv.weight.requires_grad
+        assert converted.conv.bias is not None
+        assert not converted.conv.bias.requires_grad
+
     def test_no_affine_layernorm_is_preserved(self):
         model = NoAffineLayerNormMLP()
         model.eval()

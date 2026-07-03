@@ -631,10 +631,17 @@ class _STAConstant(base.MemoryModule):
         return output
 
     def multi_step_forward(self) -> torch.Tensor:
-        zeros = torch.zeros_like(self.value).expand(
-            self.time_steps - 1, *self.value.shape
-        )
-        return torch.cat((self.value.unsqueeze(0), zeros), dim=0)
+        if self.t == 0:
+            zeros = torch.zeros_like(self.value).expand(
+                self.time_steps - 1, *self.value.shape
+            )
+            output = torch.cat((self.value.unsqueeze(0), zeros), dim=0)
+        else:
+            output = torch.zeros_like(self.value).expand(
+                self.time_steps, *self.value.shape
+            )
+        self.t += self.time_steps
+        return output
 
 
 class STATransformerRecipe(ConversionRecipe):

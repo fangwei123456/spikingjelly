@@ -24,6 +24,7 @@ from spikingjelly.activation_based.ann2snn.operators import (
 from spikingjelly.activation_based.ann2snn.recipes.sta_transformer import (
     _STATIC_TENSOR_KWARGS,
     _STAAnalogLinear,
+    _STAConstant,
     _STAOnlineGELU,
     _STAOnlineLayerNorm,
     _STAOnlineMultiheadAttention,
@@ -31,6 +32,7 @@ from spikingjelly.activation_based.ann2snn.recipes.sta_transformer import (
 )
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
     _StatelessExpand,
+    _StatelessReshape,
     _StatelessTensorOp,
 )
 
@@ -1398,6 +1400,40 @@ def test_sta_transformer_recipe_rejects_static_expand_multistep():
 
     with pytest.raises(ValueError, match="time-distributed"):
         expand(torch.zeros(1, 1, 4), 2, -1, -1)
+
+
+def test_sta_transformer_recipe_reshape_accepts_tuple_size():
+    reshape = _StatelessReshape(step_mode="m")
+    x_seq = torch.randn(3, 2, 4)
+
+    assert torch.equal(
+        reshape(x_seq, (2, 2, 2)),
+        x_seq.reshape(3, 2, 2, 2),
+    )
+
+
+def test_sta_transformer_recipe_expand_accepts_tuple_size():
+    expand = _StatelessExpand(step_mode="m")
+    x_seq = torch.randn(3, 2, 1, 4)
+
+    assert torch.equal(
+        expand(x_seq, (2, 5, 4)),
+        x_seq.expand(3, 2, 5, 4),
+    )
+
+
+def test_sta_transformer_constant_multistep_continues_state():
+    constant = _STAConstant(torch.tensor([1.0, 2.0]), time_steps=3, step_mode="m")
+
+    first = constant()
+    second = constant()
+
+    assert torch.equal(
+        first,
+        torch.tensor([[1.0, 2.0], [0.0, 0.0], [0.0, 0.0]]),
+    )
+    assert torch.equal(second, torch.zeros(3, 2))
+    assert constant.t == 6
 
 
 def test_sta_transformer_recipe_mha_default_need_weights_runs():

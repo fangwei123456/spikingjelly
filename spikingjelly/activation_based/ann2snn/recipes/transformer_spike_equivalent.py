@@ -301,6 +301,9 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
                 td_module.weight.copy_(module.weight)
                 if module.bias is not None:
                     td_module.bias.copy_(module.bias)
+            td_module.weight.requires_grad = module.weight.requires_grad
+            if module.bias is not None:
+                td_module.bias.requires_grad = module.bias.requires_grad
             td_module.train(module.training)
             return td_module
 
@@ -322,6 +325,9 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
                 td_module.weight.copy_(module.weight)
                 if module.bias is not None:
                     td_module.bias.copy_(module.bias)
+            td_module.weight.requires_grad = module.weight.requires_grad
+            if module.bias is not None:
+                td_module.bias.requires_grad = module.bias.requires_grad
             td_module.train(module.training)
             return td_module
 

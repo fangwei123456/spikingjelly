@@ -287,6 +287,8 @@ class _StatelessReshape(nn.Module, base.StepModule):
         return f"step_mode={self.step_mode}"
 
     def forward(self, x: torch.Tensor, *sizes: int) -> torch.Tensor:
+        if len(sizes) == 1 and isinstance(sizes[0], (tuple, list)):
+            sizes = tuple(sizes[0])
         if self.step_mode == "s":
             return x.reshape(*sizes)
         if self.step_mode == "m":
@@ -312,6 +314,8 @@ class _StatelessExpand(nn.Module, base.StepModule):
         return f"step_mode={self.step_mode}"
 
     def forward(self, x: torch.Tensor, *sizes: int) -> torch.Tensor:
+        if len(sizes) == 1 and isinstance(sizes[0], (tuple, list)):
+            sizes = tuple(sizes[0])
         if self.step_mode == "s":
             return x.expand(*sizes)
         if self.step_mode == "m":
