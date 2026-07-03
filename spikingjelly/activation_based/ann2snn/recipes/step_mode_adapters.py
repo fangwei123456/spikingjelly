@@ -285,6 +285,34 @@ class _StatelessDim(nn.Module, base.StepModule):
         raise ValueError(self.step_mode)
 
 
+class _StatelessSize(nn.Module, base.StepModule):
+    def __init__(self, step_mode: str = "s") -> None:
+        super().__init__()
+        self.step_mode = step_mode
+
+    def extra_repr(self) -> str:
+        return f"step_mode={self.step_mode}"
+
+    def forward(self, x: torch.Tensor, *args: int):
+        if len(args) > 1:
+            raise ValueError(f"{self.__class__.__name__} accepts at most one dim.")
+        dim = args[0] if args else None
+        if self.step_mode == "s":
+            return x.size(dim) if dim is not None else x.size()
+        if self.step_mode == "m":
+            if dim is None:
+                return x.size()[1:]
+            rank = x.dim() - 1
+            normalized = dim + rank if dim < 0 else dim
+            if normalized < 0 or normalized >= rank:
+                raise ValueError(
+                    f"{self.__class__.__name__} got dim={dim}, which is out "
+                    f"of range for an ANN tensor rank of {rank}."
+                )
+            return x.size(normalized + 1)
+        raise ValueError(self.step_mode)
+
+
 class _StatelessReshape(nn.Module, base.StepModule):
     def __init__(self, step_mode: str = "s") -> None:
         super().__init__()
@@ -332,6 +360,11 @@ class _StatelessExpand(nn.Module, base.StepModule):
                 raise ValueError(
                     f"{self.__class__.__name__} requires a time-distributed "
                     "input tensor in multi-step mode."
+                )
+            if sizes[0] != x.shape[1] and sizes[0] != -1 and x.shape[1] != 1:
+                raise ValueError(
+                    f"{self.__class__.__name__} only supports expand that "
+                    "preserves the original batch dimension in multi-step mode."
                 )
             return x.expand(x.shape[0], *sizes)
         raise ValueError(self.step_mode)
@@ -775,12 +808,16 @@ def _make_cat_module(node: fx.Node, context: str) -> Tuple[_StatelessCat, Tuple[
 
 
 def _getitem_preserves_batch_dim(item: Any) -> bool:
+    if item is Ellipsis:
+        return True
     if isinstance(item, slice):
         return item == slice(None, None, None)
     if isinstance(item, tuple):
         if not item:
             return False
         first = item[0]
+        if first is Ellipsis:
+            return True
         return isinstance(first, slice) and first == slice(None, None, None)
     return False
 
@@ -809,7 +846,8 @@ def _is_non_tensor_getitem_input(node: Any) -> bool:
             node.op == "call_method"
             and node.target == "size"
         )
-        or node.meta.get("ann2snn_step_mode_module") is _StatelessShape
+        or node.meta.get("ann2snn_step_mode_module")
+        in (_StatelessShape, _StatelessSize)
         or (
             node.op == "call_module"
             and any(
@@ -821,6 +859,20 @@ def _is_non_tensor_getitem_input(node: Any) -> bool:
                 and not user.users
                 for user in node.users
             )
+        )
+    )
+
+
+def _is_batch_size_node(node: Any, tensor_node: Any) -> bool:
+    return isinstance(node, fx.Node) and (
+        (
+            node.op == "call_method"
+            and node.target == "size"
+            and node.args == (tensor_node, 0)
+        )
+        or (
+            node.meta.get("ann2snn_step_mode_module") is _StatelessSize
+            and node.args == (tensor_node, 0)
         )
     )
 
@@ -914,6 +966,25 @@ def adapt_step_mode_graph(
 
         if node.op == "call_method":
             if node.target == "size":
+                if any(
+                    user.op == "call_method"
+                    and user.target == "view"
+                    and len(user.args) == 3
+                    and user.args[0] is node.args[0]
+                    and user.args[1] is node
+                    and user.args[2] == -1
+                    for user in node.users
+                ):
+                    continue
+                tensor_op_index = _replace_tensor_op_node(
+                    fx_model,
+                    node,
+                    _StatelessSize(),
+                    existing_modules,
+                    tensor_op_index,
+                    context,
+                    input_args=tuple(node.args),
+                )
                 continue
             if node.target == "dim":
                 tensor_op_index = _replace_tensor_op_node(
@@ -928,10 +999,7 @@ def adapt_step_mode_graph(
             if node.target == "view":
                 if (
                     len(node.args) == 3
-                    and isinstance(node.args[1], fx.Node)
-                    and node.args[1].op == "call_method"
-                    and node.args[1].target == "size"
-                    and node.args[1].args == (node.args[0], 0)
+                    and _is_batch_size_node(node.args[1], node.args[0])
                     and node.args[2] == -1
                 ):
                     size_node = node.args[1]
@@ -949,10 +1017,16 @@ def adapt_step_mode_graph(
                     if not size_node.users:
                         fx_model.graph.erase_node(size_node)
                     continue
-                raise ValueError(
-                    f"{context} does not support tensor method {node.target!r}. "
-                    "Use a sequence-preserving flatten/view pattern."
+                tensor_op_index = _replace_tensor_op_node(
+                    fx_model,
+                    node,
+                    _StatelessReshape(),
+                    existing_modules,
+                    tensor_op_index,
+                    context,
+                    input_args=tuple(node.args),
                 )
+                continue
             if node.target == "flatten":
                 tensor_op_index = _replace_tensor_op_node(
                     fx_model,
@@ -1055,9 +1129,7 @@ def adapt_step_mode_graph(
                 )
             if node.target is builtins.getattr:
                 if len(node.args) != 2 or node.args[1] != "shape":
-                    raise ValueError(
-                        f"{context} only supports getattr(tensor, 'shape')."
-                    )
+                    continue
                 tensor_op_index = _replace_tensor_op_node(
                     fx_model,
                     node,
@@ -1079,7 +1151,7 @@ def adapt_step_mode_graph(
                             "getitem because it is not sequence-preserving."
                         )
                     continue
-                if not isinstance(item, (slice, tuple)):
+                if not isinstance(item, (slice, tuple)) and item is not Ellipsis:
                     raise ValueError(
                         f"{context} does not support getitem index {item!r}."
                     )

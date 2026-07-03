@@ -34,6 +34,7 @@ from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
     _StatelessCat,
     _StatelessExpand,
     _StatelessReshape,
+    _StatelessSize,
     _StatelessTensorOp,
 )
 
@@ -363,6 +364,21 @@ class TinyUnsafeGetItemClassifier(nn.Module):
 class TinyDynamicGetItemClassifier(nn.Module):
     def forward(self, x: torch.Tensor, index: int) -> torch.Tensor:
         return x[:, index]
+
+
+class TinyEllipsisGetItemClassifier(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x[..., :2]
+
+
+class TinySizeClassifier(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x.reshape(x.size(0), x.size(1), x.size(-1))
+
+
+class TinyGeneralViewClassifier(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x.view(x.shape[0], x.shape[1], x.shape[2])
 
 
 def _activation_aware_calibration_channel_last(
@@ -1417,6 +1433,49 @@ def test_sta_transformer_recipe_rejects_dynamic_tensor_getitem():
         ).convert(model)
 
 
+def test_sta_transformer_recipe_accepts_ellipsis_tensor_getitem():
+    model = TinyEllipsisGetItemClassifier().eval()
+    converted = Converter(
+        recipe=STATransformerRecipe(time_steps=4, mode="equivalent")
+    ).convert(model)
+    x = torch.randn(2, 3, 4)
+
+    y_single = _run_converted_step_loop(converted, x).sum(dim=0)
+    functional.set_step_mode(converted, "m")
+    functional.reset_net(converted)
+    y_multi = converted(_first_real_then_zero_sequence(x, 4)).sum(dim=0)
+
+    assert torch.allclose(y_single, y_multi)
+
+
+def test_sta_transformer_recipe_size_matches_step_modes():
+    model = TinySizeClassifier().eval()
+    converted = Converter(
+        recipe=STATransformerRecipe(time_steps=4, mode="equivalent")
+    ).convert(model)
+    x = torch.randn(2, 3, 4)
+
+    y_single = _run_converted_step_loop(converted, x).sum(dim=0)
+    functional.set_step_mode(converted, "m")
+    functional.reset_net(converted)
+    y_multi = converted(_first_real_then_zero_sequence(x, 4)).sum(dim=0)
+
+    assert torch.allclose(y_single, y_multi)
+
+
+def test_sta_transformer_recipe_general_view_matches_step_modes():
+    model = TinyGeneralViewClassifier().eval()
+    converted = Converter(
+        recipe=STATransformerRecipe(time_steps=4, mode="equivalent")
+    ).convert(model)
+    x = torch.randn(2, 3, 4)
+
+    y_single = _run_converted_step_loop(converted, x).sum(dim=0)
+    y_multi = _run_converted_multistep(converted, x).sum(dim=0)
+
+    assert torch.allclose(y_single, y_multi)
+
+
 def test_sta_transformer_recipe_rejects_static_expand_multistep():
     expand = _StatelessExpand(step_mode="m")
 
@@ -1460,6 +1519,30 @@ def test_sta_transformer_recipe_expand_accepts_tuple_size():
         expand(x_seq, (2, 5, 4)),
         x_seq.expand(3, 2, 5, 4),
     )
+
+
+def test_sta_transformer_recipe_expand_rejects_batch_change_multistep():
+    expand = _StatelessExpand(step_mode="m")
+    x_seq = torch.randn(3, 2, 4)
+
+    with pytest.raises(ValueError, match="preserves the original batch"):
+        expand(x_seq, 3, 4)
+
+
+def test_sta_transformer_recipe_expand_accepts_singleton_batch_broadcast():
+    expand = _StatelessExpand(step_mode="m")
+    x_seq = torch.randn(3, 1, 4)
+
+    assert torch.equal(expand(x_seq, 2, 4), x_seq.expand(3, 2, 4))
+
+
+def test_sta_transformer_recipe_size_accepts_ann_dims_multistep():
+    size = _StatelessSize(step_mode="m")
+    x_seq = torch.randn(3, 2, 4, 5)
+
+    assert size(x_seq) == torch.Size([2, 4, 5])
+    assert size(x_seq, 0) == 2
+    assert size(x_seq, -1) == 5
 
 
 def test_sta_transformer_recipe_cat_negative_dim_matches_multistep():
