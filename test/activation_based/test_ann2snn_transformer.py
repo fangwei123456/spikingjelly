@@ -360,6 +360,11 @@ class TinyUnsafeGetItemClassifier(nn.Module):
         return x[0]
 
 
+class TinyDynamicGetItemClassifier(nn.Module):
+    def forward(self, x: torch.Tensor, index: int) -> torch.Tensor:
+        return x[:, index]
+
+
 def _activation_aware_calibration_channel_last(
     activation: torch.Tensor,
     threshold_std_scale: float = 3.0,
@@ -1403,6 +1408,15 @@ def test_sta_transformer_recipe_rejects_unsafe_tensor_integer_getitem():
         ).convert(model)
 
 
+def test_sta_transformer_recipe_rejects_dynamic_tensor_getitem():
+    model = TinyDynamicGetItemClassifier().eval()
+
+    with pytest.raises(ValueError, match="static literals"):
+        Converter(
+            recipe=STATransformerRecipe(time_steps=4, mode="equivalent")
+        ).convert(model)
+
+
 def test_sta_transformer_recipe_rejects_static_expand_multistep():
     expand = _StatelessExpand(step_mode="m")
 
@@ -1428,6 +1442,14 @@ def test_sta_transformer_recipe_reshape_accepts_inferred_batch_size():
         reshape(x_seq, -1, 2, 2),
         x_seq.reshape(3, 2, 2, 2),
     )
+
+
+def test_sta_transformer_recipe_reshape_rejects_only_inferred_size():
+    reshape = _StatelessReshape(step_mode="m")
+    x_seq = torch.randn(3, 2, 4)
+
+    with pytest.raises(ValueError, match="preserve the original batch"):
+        reshape(x_seq, -1)
 
 
 def test_sta_transformer_recipe_expand_accepts_tuple_size():

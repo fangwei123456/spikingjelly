@@ -301,7 +301,9 @@ class _StatelessReshape(nn.Module, base.StepModule):
         if self.step_mode == "m":
             if not sizes:
                 raise ValueError("reshape requires at least one output size.")
-            if sizes[0] not in (-1, x.shape[1]):
+            if sizes[0] != x.shape[1] and not (
+                sizes[0] == -1 and len(sizes) > 1
+            ):
                 raise ValueError(
                     f"{self.__class__.__name__} only supports reshapes that "
                     "preserve the original batch dimension in multi-step mode."
@@ -783,6 +785,18 @@ def _getitem_preserves_batch_dim(item: Any) -> bool:
     return False
 
 
+def _contains_fx_node(value: Any) -> bool:
+    if isinstance(value, fx.Node):
+        return True
+    if isinstance(value, slice):
+        return any(
+            _contains_fx_node(part) for part in (value.start, value.stop, value.step)
+        )
+    if isinstance(value, tuple):
+        return any(_contains_fx_node(part) for part in value)
+    return False
+
+
 def _is_non_tensor_getitem_input(node: Any) -> bool:
     return isinstance(node, fx.Node) and (
         (
@@ -1068,6 +1082,11 @@ def adapt_step_mode_graph(
                 if not isinstance(item, (slice, tuple)):
                     raise ValueError(
                         f"{context} does not support getitem index {item!r}."
+                    )
+                if _contains_fx_node(item):
+                    raise ValueError(
+                        f"{context} requires tensor getitem indices to be "
+                        "static literals."
                     )
                 if not _getitem_preserves_batch_dim(item):
                     raise ValueError(

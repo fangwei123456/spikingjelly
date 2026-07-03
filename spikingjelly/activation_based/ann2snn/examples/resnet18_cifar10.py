@@ -14,8 +14,8 @@ def val(net, device, data_loader, T=None):
     total = 0.0
     with torch.no_grad():
         for batch, (img, label) in enumerate(tqdm(data_loader)):
-            img = img.to(device, non_blocking=True)
-            label = label.to(device, non_blocking=True)
+            img = img.to(device)
+            label = label.to(device)
             if T is None:
                 out = net(img)
             else:
@@ -90,7 +90,11 @@ if __name__ == "__main__":
         "https://ndownloader.figshare.com/files/26676110",
         checkpoint_path,
     )
-    if not os.path.isfile(checkpoint_path) or os.path.getsize(checkpoint_path) < 1024:
+    expected_min_size = 1024 * 1024
+    if (
+        not os.path.isfile(checkpoint_path)
+        or os.path.getsize(checkpoint_path) < expected_min_size
+    ):
         raise RuntimeError(
             f"Checkpoint download failed or is truncated: {checkpoint_path}"
         )

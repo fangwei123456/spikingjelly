@@ -142,7 +142,18 @@ def make_calibration(
     args: argparse.Namespace,
     device: torch.device,
 ) -> list[tuple[torch.Tensor]]:
-    return [(batch,) for batch in make_batches(args, device)[: args.calibration_batches]]
+    return [
+        (
+            torch.randn(
+                args.batch_size,
+                args.in_channels,
+                args.image_size,
+                args.image_size,
+                device=device,
+            ),
+        )
+        for _ in range(args.calibration_batches)
+    ]
 
 
 def make_repeated_sequence(x: torch.Tensor, time_steps: int) -> torch.Tensor:

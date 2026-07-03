@@ -41,6 +41,8 @@ def parse_args():
 
 def val(net, device, data_loader, T=None):
     net.eval().to(device)
+    if T is not None and T <= 0:
+        raise ValueError("T must be positive.")
     correct = 0.0
     total = 0.0
     if T is not None:
@@ -89,7 +91,7 @@ def download_checkpoint(checkpoint_url, checkpoint_path):
     try:
         ann2snn.download_url(checkpoint_url, str(checkpoint_path))
     except KeyError as exc:
-        if "content-length" not in str(exc):
+        if exc.args != ("content-length",):
             raise
         headers = {
             "User-Agent": (
@@ -108,7 +110,7 @@ def download_checkpoint(checkpoint_url, checkpoint_path):
                     if chunk:
                         f.write(chunk)
             tmp_path.replace(checkpoint_path)
-        except Exception:
+        except (requests.RequestException, OSError):
             if tmp_path.exists():
                 tmp_path.unlink()
             raise

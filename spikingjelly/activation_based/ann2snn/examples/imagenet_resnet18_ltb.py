@@ -134,7 +134,10 @@ def resolve_delay_start(model, data_loader, device, time_steps, delay_start):
 
 def evaluate_snn(model, data_loader, device, time_steps, delay_start=0):
     if delay_start < 0 or delay_start >= time_steps:
-        raise ValueError("delay_start must be in [0, time_steps).")
+        raise ValueError(
+            "delay_start must be in [0, time_steps), "
+            f"but got delay_start={delay_start}, time_steps={time_steps}."
+        )
     model.eval().to(device)
     total = 0
     top1 = 0.0
