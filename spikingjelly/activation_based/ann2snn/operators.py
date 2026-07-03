@@ -147,6 +147,9 @@ class TDModule(base.MemoryModule):
 
     def _accumulate_inputs(self, *xs: torch.Tensor) -> Tuple[torch.Tensor, ...]:
         if len(xs) == 1:
+            if isinstance(self.x_cum, tuple):
+                self.x_cum = None
+                self.y_cum = None
             return (self._accumulate_one_input(xs[0]),)
         if self.x_cum is None:
             self.x_cum = tuple(None for _ in xs)

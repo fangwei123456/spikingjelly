@@ -293,6 +293,8 @@ def main() -> None:
         )
 
     torch.manual_seed(args.seed)
+    if device.type == "cuda":
+        torch.cuda.manual_seed_all(args.seed)
     batches = make_batches(args, device)
     base = build_converted_model(args, device)
     single_model = copy.deepcopy(base).eval()
