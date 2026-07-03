@@ -85,13 +85,39 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.ref || steps.pr-context.outputs.base_ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || steps.pr-context.outputs.head_sha }}
         run: |
+          set +e
           ocr review \
             --from "origin/${BASE_REF}" \
             --to "${HEAD_SHA}" \
             --format json \
-            > /tmp/ocr-result.json 2>/tmp/ocr-stderr.log || true
-          echo "Review complete. Output:"
-          cat /tmp/ocr-result.json | head -c 2000
+            > /tmp/ocr-result.json 2>/tmp/ocr-stderr.log
+          status=$?
+          set -e
+
+          echo "exit_code=${status}" >> "$GITHUB_OUTPUT"
+          echo "Review complete. Exit code: ${status}"
+
+          echo "::group::OCR stdout preview"
+          if [ -s /tmp/ocr-result.json ]; then
+            head -c 4000 /tmp/ocr-result.json
+            echo
+          else
+            echo "(empty)"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::OCR stderr preview"
+          if [ -s /tmp/ocr-stderr.log ]; then
+            sed -E \
+              -e 's/(sk-[A-Za-z0-9_-]{6})[A-Za-z0-9_-]+/\1***/g' \
+              -e 's/(Authorization: Bearer )[A-Za-z0-9._-]+/\1***/Ig' \
+              -e 's/(auth[_-]?token[=: ]+)[^[:space:]]+/\1***/Ig' \
+              /tmp/ocr-stderr.log | head -c 4000
+            echo
+          else
+            echo "(empty)"
+          fi
+          echo "::endgroup::"
 
       # ── 8. Post Review Comments ──
       - name: Post review comments
@@ -99,22 +125,68 @@ jobs:
         env:
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || steps.pr-context.outputs.head_sha }}
+          OCR_EXIT_CODE: ${{ steps.ocr-review.outputs.exit_code }}
         with:
           script: |
             const fs = require('fs');
 
-            let result;
-            try {
-              result = JSON.parse(fs.readFileSync('/tmp/ocr-result.json', 'utf8'));
-            } catch (e) {
-              console.log('Failed to parse OCR result:', e.message);
-              // 发一条总结评论说明 OCR 没有产出结果
+            function readFile(path) {
+              try {
+                return fs.readFileSync(path, 'utf8');
+              } catch {
+                return '';
+              }
+            }
+
+            function sanitize(text) {
+              return text
+                .replace(/sk-[A-Za-z0-9_-]{6}[A-Za-z0-9_-]+/g, 'sk-***')
+                .replace(/(Authorization: Bearer )[\w.-]+/ig, '$1***')
+                .replace(/(auth[_-]?token[=: ]+)\S+/ig, '$1***');
+            }
+
+            const exitCode = Number.parseInt(process.env.OCR_EXIT_CODE || '0', 10);
+            const resultText = readFile('/tmp/ocr-result.json');
+            const stderrText = sanitize(readFile('/tmp/ocr-stderr.log')).trim();
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            async function reportFailure(reason) {
+              const stderrBlock = stderrText
+                ? `\n\n**stderr preview**\n\n\`\`\`text\n${stderrText.slice(0, 2000)}\n\`\`\``
+                : '';
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: parseInt(process.env.PR_NUMBER),
-                body: '🤖 **OCR Review**: No review comments generated. This may mean the diff is clean or too small to review.',
+                body: [
+                  '❌ **OCR Review failed**',
+                  '',
+                  reason,
+                  '',
+                  `Exit code: \`${Number.isNaN(exitCode) ? 'unknown' : exitCode}\``,
+                  `Workflow run: ${runUrl}`,
+                  stderrBlock,
+                ].join('\n'),
               });
+              core.setFailed(reason);
+            }
+
+            if (exitCode !== 0) {
+              await reportFailure('The OCR CLI exited with a non-zero status before producing a valid review result.');
+              return;
+            }
+
+            if (resultText.trim().length === 0) {
+              await reportFailure('The OCR CLI produced an empty JSON result. This is a tool/configuration failure, not a clean review.');
+              return;
+            }
+
+            let result;
+            try {
+              result = JSON.parse(resultText);
+            } catch (e) {
+              console.log('Failed to parse OCR result:', e.message);
+              await reportFailure(`Failed to parse OCR JSON output: ${e.message}`);
               return;
             }
 
