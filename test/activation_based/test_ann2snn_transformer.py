@@ -30,6 +30,7 @@ from spikingjelly.activation_based.ann2snn.recipes.sta_transformer import (
     _STASpikeEncoder,
 )
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
+    _StatelessExpand,
     _StatelessTensorOp,
 )
 
@@ -343,7 +344,17 @@ def test_sta_sequence_spike_encoder_rejects_invalid_multistep_input():
 
 class TinyUnsupportedSequenceOpClassifier(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x.permute(0, 2, 1)
+        return x.permute(1, 0, 2)
+
+
+class TinyUnsafeReshapeClassifier(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x.reshape(x.shape[0] * 2, -1)
+
+
+class TinyUnsafeGetItemClassifier(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x[0]
 
 
 def _activation_aware_calibration_channel_last(
@@ -600,6 +611,31 @@ class TinyFunctionalViewTransformerClassifier(nn.Module):
         x = self.norm(x)
         x = self.fc2(self.act(self.fc1(x)))
         return x.mean(dim=1)
+
+
+class TinyTorchvisionViTStyleClassifier(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.patch = nn.Conv2d(3, 8, kernel_size=4, stride=4)
+        self.class_token = nn.Parameter(torch.zeros(1, 1, 8))
+        self.pos_embedding = nn.Parameter(torch.zeros(1, 17, 8))
+        self.dropout = nn.Dropout(p=0.0)
+        self.norm = nn.LayerNorm(8)
+        self.fc = nn.Linear(8, 5)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        n, _c, h, w = x.shape
+        torch._assert(h == 16, "Wrong image height")
+        torch._assert(w == 16, "Wrong image width")
+        x = self.patch(x)
+        x = x.reshape(n, 8, (h // 4) * (w // 4))
+        x = x.permute(0, 2, 1)
+        cls = self.class_token.expand(x.shape[0], -1, -1)
+        x = torch.cat([cls, x], dim=1)
+        torch._assert(x.dim() == 3, "Expected tokens")
+        x = self.dropout(x + self.pos_embedding)
+        x = self.norm(x)
+        return self.fc(x[:, 0])
 
 
 class TinyTensorOpAdapterModel(nn.Module):
@@ -1166,6 +1202,24 @@ def test_sta_transformer_recipe_mha_single_loop_matches_multistep():
     assert torch.allclose(multi_seq, single_seq, atol=1e-5, rtol=1e-5)
 
 
+def test_sta_transformer_recipe_mha_preserves_source_dtype():
+    model = TinyANNMHATransformerBlock(
+        embed_dim=8,
+        num_heads=2,
+        mlp_dim=16,
+    ).eval().double()
+    converted = Converter(
+        recipe=STATransformerRecipe(time_steps=4, mode="equivalent")
+    ).convert(model)
+    attn = dict(converted.named_modules())["attn"]
+
+    assert isinstance(attn, TDMultiheadAttention)
+    assert attn.q_proj.weight.dtype == torch.float64
+    assert attn.k_proj.weight.dtype == torch.float64
+    assert attn.v_proj.weight.dtype == torch.float64
+    assert attn.out_proj.weight.dtype == torch.float64
+
+
 def test_sta_transformer_recipe_multistep_timing_smoke_matches_single_loop():
     torch.manual_seed(750)
     old_threads = torch.get_num_threads()
@@ -1239,6 +1293,25 @@ def test_sta_transformer_recipe_vit_shaped_classifier_single_loop_matches_multis
     assert torch.allclose(multi_seq, single_seq, atol=1e-5, rtol=1e-5)
 
 
+def test_sta_transformer_recipe_torchvision_vit_style_ops_match_multistep():
+    torch.manual_seed(770)
+    model = TinyTorchvisionViTStyleClassifier().eval()
+    calibration = [(torch.randn(2, 3, 16, 16),)]
+    converted = Converter(
+        recipe=STATransformerRecipe(
+            dataloader=calibration,
+            time_steps=4,
+            mode="spiking_encoder",
+        )
+    ).convert(model)
+    x = torch.randn(2, 3, 16, 16)
+
+    single_seq = _run_converted_step_loop(converted, x)
+    multi_seq = _run_converted_multistep(converted, x)
+
+    assert torch.allclose(multi_seq, single_seq, atol=1e-5, rtol=1e-5)
+
+
 def test_sta_transformer_recipe_replaces_conv2d_with_td_conv2d():
     model = TinyImageTransformerClassifier().eval()
 
@@ -1290,13 +1363,41 @@ def test_sta_transformer_recipe_rejects_spiking_affine():
 def test_sta_transformer_recipe_rejects_unsupported_method():
     model = TinyUnsupportedSequenceOpClassifier().eval()
 
-    with pytest.raises(ValueError, match="tensor method 'permute'"):
+    with pytest.raises(ValueError, match="preserve the original batch"):
         Converter(
             recipe=STATransformerRecipe(
                 time_steps=4,
                 mode="equivalent",
             )
         ).convert(model)
+
+
+def test_sta_transformer_recipe_rejects_unsafe_reshape_multistep():
+    model = TinyUnsafeReshapeClassifier().eval()
+    converted = Converter(
+        recipe=STATransformerRecipe(time_steps=4, mode="equivalent")
+    ).convert(model)
+    functional.set_step_mode(converted, "m")
+    functional.reset_net(converted)
+
+    with pytest.raises(ValueError, match="preserve the original batch"):
+        converted(_first_real_then_zero_sequence(torch.randn(2, 4, 4), 4))
+
+
+def test_sta_transformer_recipe_rejects_unsafe_tensor_integer_getitem():
+    model = TinyUnsafeGetItemClassifier().eval()
+
+    with pytest.raises(ValueError, match="integer tensor getitem"):
+        Converter(
+            recipe=STATransformerRecipe(time_steps=4, mode="equivalent")
+        ).convert(model)
+
+
+def test_sta_transformer_recipe_rejects_static_expand_multistep():
+    expand = _StatelessExpand(step_mode="m")
+
+    with pytest.raises(ValueError, match="time-distributed"):
+        expand(torch.zeros(1, 1, 4), 2, -1, -1)
 
 
 def test_sta_transformer_recipe_mha_default_need_weights_runs():

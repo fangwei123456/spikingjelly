@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader, Subset
 from torchvision.datasets import ImageFolder
 from torchvision.models import ViT_B_16_Weights, vit_b_16
 
+from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.ann2snn import Converter, STATransformerRecipe
 
 
@@ -122,6 +123,42 @@ def evaluate(model, data_loader, device, name):
     }
 
 
+def make_first_real_then_zero_sequence(x, time_steps):
+    if time_steps <= 0:
+        raise ValueError(f"time_steps must be positive, got {time_steps}.")
+    x_seq = torch.zeros((time_steps, *x.shape), dtype=x.dtype, device=x.device)
+    x_seq[0] = x
+    return x_seq
+
+
+def evaluate_sta(model, data_loader, device, name, time_steps):
+    model.eval().to(device)
+    functional.set_step_mode(model, "m")
+    total = 0
+    top1 = 0.0
+    top5 = 0.0
+    start = time.time()
+    with torch.no_grad():
+        for i, (x, y) in enumerate(data_loader):
+            x = x.to(device, non_blocking=True)
+            y = y.to(device, non_blocking=True)
+            functional.reset_net(model)
+            x_seq = make_first_real_then_zero_sequence(x, time_steps)
+            out = model(x_seq).sum(dim=0)
+            acc1, acc5 = accuracy(out, y)
+            top1 += acc1
+            top5 += acc5
+            total += y.numel()
+            if (i + 1) % 100 == 0:
+                print(name, i + 1, total, top1 / total, top5 / total, flush=True)
+    return {
+        "top1": top1 / total,
+        "top5": top5 / total,
+        "total": total,
+        "seconds": time.time() - start,
+    }
+
+
 def format_scale_label(scale):
     text = f"{scale:.8f}".rstrip("0").rstrip(".")
     return text.replace("-", "m").replace(".", "p")
@@ -173,11 +210,12 @@ def main():
         f"STA_SPIKING_ENCODER_T{args.time_steps}_"
         f"S{format_scale_label(args.threshold_scale)}"
     )
-    sta = evaluate(
+    sta = evaluate_sta(
         converted,
         eval_loader,
         device,
         sta_label.lower(),
+        args.time_steps,
     )
     print(sta_label, json.dumps(sta), flush=True)
     print("DROP", baseline["top1"] - sta["top1"], flush=True)

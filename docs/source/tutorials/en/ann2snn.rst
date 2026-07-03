@@ -219,6 +219,35 @@ The minimal rate-coding call is:
     recipe = ann2snn.RateCodingRecipe(dataloader=train_loader, mode="max")
     snn = ann2snn.Converter(recipe=recipe).convert(ann)
 
+Step-mode execution follows the same convention as other
+``spikingjelly.activation_based`` modules. In single-step mode, users write the
+time loop explicitly. Rate-coding and LTB models receive the same static ANN
+input at each timestep:
+
+.. code-block:: python
+
+    from spikingjelly.activation_based import functional
+
+    functional.set_step_mode(snn, "s")
+    functional.reset_net(snn)
+
+    y = None
+    for t in range(T):
+        y_t = snn(x)
+        y = y_t if y is None else y + y_t
+
+To run the layer-wise multi-step path, pass a sequence whose first dimension is
+time and then perform the accumulated readout explicitly:
+
+.. code-block:: python
+
+    functional.set_step_mode(snn, "m")
+    functional.reset_net(snn)
+
+    x_seq = x.unsqueeze(0).expand(T, *x.shape)
+    y_seq = snn(x_seq)
+    y = y_seq.sum(dim=0)
+
 After conversion, ReLU modules are removed. New modules needed by the SNN, such
 as ``VoltageScaler`` and ``IFNode``, are created as ``spiking_*`` submodules
 under the original parent module. With ``RateCodingRecipe``, the converted

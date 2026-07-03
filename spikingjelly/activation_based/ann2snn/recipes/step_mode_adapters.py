@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import operator
 from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Type
 
@@ -182,6 +183,8 @@ class _StatelessTensorOp(nn.Module, base.StepModule):
                 rank,
                 module_name,
             )
+        elif self.op_name == "permute":
+            return
 
     def _apply_op(self, x: torch.Tensor) -> torch.Tensor:
         if self.op_name == "mean":
@@ -208,6 +211,8 @@ class _StatelessTensorOp(nn.Module, base.StepModule):
                 self.op_kwargs["dim"],
                 self.op_kwargs["unflattened_size"],
             )
+        if self.op_name == "permute":
+            return x.permute(self.op_kwargs["dims"])
         raise ValueError(f"Unsupported stateless tensor op {self.op_name!r}.")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -216,6 +221,123 @@ class _StatelessTensorOp(nn.Module, base.StepModule):
         if self.step_mode == "m":
             self._validate_multi_step(x)
             return functional.seq_to_ann_forward(x, self._apply_op)
+        raise ValueError(self.step_mode)
+
+
+class _StatelessCat(nn.Module, base.StepModule):
+    def __init__(self, dim: int = 0, step_mode: str = "s") -> None:
+        super().__init__()
+        self.dim = dim
+        self.step_mode = step_mode
+
+    def extra_repr(self) -> str:
+        return f"dim={self.dim}, step_mode={self.step_mode}"
+
+    def forward(self, *tensors: torch.Tensor) -> torch.Tensor:
+        if self.step_mode == "s":
+            return torch.cat(tensors, dim=self.dim)
+        if self.step_mode == "m":
+            if self.dim == 0:
+                raise ValueError(
+                    f"{self.__class__.__name__} does not support concatenating "
+                    "along the original batch dimension in multi-step mode."
+                )
+            return torch.cat(tensors, dim=self.dim + 1)
+        raise ValueError(self.step_mode)
+
+
+class _StatelessShape(nn.Module, base.StepModule):
+    def __init__(self, step_mode: str = "s") -> None:
+        super().__init__()
+        self.step_mode = step_mode
+
+    def extra_repr(self) -> str:
+        return f"step_mode={self.step_mode}"
+
+    def forward(self, x: torch.Tensor) -> torch.Size:
+        if self.step_mode == "s":
+            return x.shape
+        if self.step_mode == "m":
+            return x.shape[1:]
+        raise ValueError(self.step_mode)
+
+
+class _StatelessDim(nn.Module, base.StepModule):
+    def __init__(self, step_mode: str = "s") -> None:
+        super().__init__()
+        self.step_mode = step_mode
+
+    def extra_repr(self) -> str:
+        return f"step_mode={self.step_mode}"
+
+    def forward(self, x: torch.Tensor) -> int:
+        if self.step_mode == "s":
+            return x.dim()
+        if self.step_mode == "m":
+            return x.dim() - 1
+        raise ValueError(self.step_mode)
+
+
+class _StatelessReshape(nn.Module, base.StepModule):
+    def __init__(self, step_mode: str = "s") -> None:
+        super().__init__()
+        self.step_mode = step_mode
+
+    def extra_repr(self) -> str:
+        return f"step_mode={self.step_mode}"
+
+    def forward(self, x: torch.Tensor, *sizes: int) -> torch.Tensor:
+        if self.step_mode == "s":
+            return x.reshape(*sizes)
+        if self.step_mode == "m":
+            if not sizes:
+                raise ValueError("reshape requires at least one output size.")
+            if sizes[0] != x.shape[1]:
+                raise ValueError(
+                    f"{self.__class__.__name__} only supports reshapes that "
+                    "preserve the original batch dimension in multi-step mode."
+                )
+            flat = x.flatten(0, 1)
+            y = flat.reshape(flat.shape[0], *sizes[1:])
+            return y.view(x.shape[0], x.shape[1], *y.shape[1:])
+        raise ValueError(self.step_mode)
+
+
+class _StatelessExpand(nn.Module, base.StepModule):
+    def __init__(self, step_mode: str = "s") -> None:
+        super().__init__()
+        self.step_mode = step_mode
+
+    def extra_repr(self) -> str:
+        return f"step_mode={self.step_mode}"
+
+    def forward(self, x: torch.Tensor, *sizes: int) -> torch.Tensor:
+        if self.step_mode == "s":
+            return x.expand(*sizes)
+        if self.step_mode == "m":
+            if x.dim() != len(sizes) + 1:
+                raise ValueError(
+                    f"{self.__class__.__name__} requires a time-distributed "
+                    "input tensor in multi-step mode."
+                )
+            return x.expand(x.shape[0], *sizes)
+        raise ValueError(self.step_mode)
+
+
+class _StatelessGetItem(nn.Module, base.StepModule):
+    def __init__(self, item: Any, step_mode: str = "s") -> None:
+        super().__init__()
+        self.item = item
+        self.step_mode = step_mode
+
+    def extra_repr(self) -> str:
+        return f"item={self.item!r}, step_mode={self.step_mode}"
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.step_mode == "s":
+            return x[self.item]
+        if self.step_mode == "m":
+            return functional.seq_to_ann_forward(x, lambda value: value[self.item])
         raise ValueError(self.step_mode)
 
 
@@ -583,6 +705,80 @@ def _make_unflatten_module(node: fx.Node, context: str) -> _StatelessTensorOp:
     )
 
 
+def _make_permute_module(node: fx.Node, context: str) -> _StatelessTensorOp:
+    args = list(node.args)
+    if len(args) < 2:
+        raise ValueError(f"{context} does not support permute without dims.")
+    dims = args[1:]
+    if len(dims) == 1 and isinstance(dims[0], (tuple, list)):
+        dims = tuple(dims[0])
+    for dim in dims:
+        _check_literal_dim(dim, context)
+    if not dims or dims[0] != 0:
+        raise ValueError(
+            f"{context} requires permute to preserve the original batch "
+            "dimension."
+        )
+    return _StatelessTensorOp(op_name="permute", op_kwargs={"dims": tuple(dims)})
+
+
+def _make_cat_module(node: fx.Node, context: str) -> Tuple[_StatelessCat, Tuple[Any, ...]]:
+    args = list(node.args)
+    kwargs = dict(node.kwargs)
+    if args:
+        tensors = args[0]
+    elif "tensors" in kwargs:
+        tensors = kwargs["tensors"]
+    else:
+        raise ValueError(f"{context} does not support cat without tensors.")
+    dim = kwargs.get("dim", 0)
+    if len(args) > 1:
+        dim = args[1]
+    _check_literal_dim(dim, context)
+    if not isinstance(tensors, (tuple, list)):
+        raise ValueError(f"{context} requires cat tensors to be a tuple or list.")
+    return _StatelessCat(dim=int(dim)), tuple(tensors)
+
+
+def _getitem_preserves_batch_dim(item: Any) -> bool:
+    if isinstance(item, slice):
+        return item == slice(None, None, None)
+    if isinstance(item, tuple):
+        if not item:
+            return False
+        first = item[0]
+        return isinstance(first, slice) and first == slice(None, None, None)
+    return False
+
+
+def _is_non_tensor_getitem_input(node: Any) -> bool:
+    return isinstance(node, fx.Node) and (
+        (
+            node.op == "call_function"
+            and node.target is builtins.getattr
+            and len(node.args) == 2
+            and node.args[1] == "shape"
+        )
+        or (
+            node.op == "call_method"
+            and node.target == "size"
+        )
+        or node.meta.get("ann2snn_step_mode_module") is _StatelessShape
+        or (
+            node.op == "call_module"
+            and any(
+                user.op == "call_function"
+                and user.target is operator.getitem
+                and len(user.args) >= 2
+                and user.args[0] is node
+                and user.args[1] == 1
+                and not user.users
+                for user in node.users
+            )
+        )
+    )
+
+
 def _replace_tensor_op_node(
     fx_model: fx.GraphModule,
     node: fx.Node,
@@ -590,6 +786,7 @@ def _replace_tensor_op_node(
     existing_modules: set[str],
     tensor_op_index: int,
     context: str,
+    input_args: Optional[Tuple[Any, ...]] = None,
 ) -> int:
     target = f"step_mode_tensor_op_{tensor_op_index}"
     while target in existing_modules:
@@ -601,8 +798,9 @@ def _replace_tensor_op_node(
     with fx_model.graph.inserting_after(node):
         new_node = fx_model.graph.call_module(
             target,
-            args=(_tensor_op_input_arg(node, context),),
+            args=input_args or (_tensor_op_input_arg(node, context),),
         )
+    new_node.meta["ann2snn_step_mode_module"] = module.__class__
     node.replace_all_uses_with(new_node)
     fx_model.graph.erase_node(node)
     return tensor_op_index
@@ -619,10 +817,18 @@ def adapt_step_mode_graph(
     modules = dict(fx_model.named_modules())
     existing_modules = set(modules.keys())
     tensor_op_index = 0
-    supported_call_functions = {
+    passthrough_call_functions = {
         operator.add,
+        operator.eq,
+        operator.floordiv,
         torch.add,
+        torch._assert,
+        operator.mul,
+    }
+    rewritten_call_functions = {
         operator.getitem,
+        torch.cat,
+        builtins.getattr,
         torch.flatten,
         torch.mean,
         torch.transpose,
@@ -663,6 +869,16 @@ def adapt_step_mode_graph(
         if node.op == "call_method":
             if node.target == "size":
                 continue
+            if node.target == "dim":
+                tensor_op_index = _replace_tensor_op_node(
+                    fx_model,
+                    node,
+                    _StatelessDim(),
+                    existing_modules,
+                    tensor_op_index,
+                    context,
+                )
+                continue
             if node.target == "view":
                 if (
                     len(node.args) == 3
@@ -699,6 +915,38 @@ def adapt_step_mode_graph(
                     existing_modules,
                     tensor_op_index,
                     context,
+                )
+                continue
+            if node.target == "reshape":
+                tensor_op_index = _replace_tensor_op_node(
+                    fx_model,
+                    node,
+                    _StatelessReshape(),
+                    existing_modules,
+                    tensor_op_index,
+                    context,
+                    input_args=tuple(node.args),
+                )
+                continue
+            if node.target == "permute":
+                tensor_op_index = _replace_tensor_op_node(
+                    fx_model,
+                    node,
+                    _make_permute_module(node, context),
+                    existing_modules,
+                    tensor_op_index,
+                    context,
+                )
+                continue
+            if node.target == "expand":
+                tensor_op_index = _replace_tensor_op_node(
+                    fx_model,
+                    node,
+                    _StatelessExpand(),
+                    existing_modules,
+                    tensor_op_index,
+                    context,
+                    input_args=tuple(node.args),
                 )
                 continue
             if node.target == "transpose":
@@ -753,10 +1001,57 @@ def adapt_step_mode_graph(
                 continue
             if node.target in safe_call_functions:
                 continue
-            if node.target not in supported_call_functions:
+            if node.target in passthrough_call_functions:
+                continue
+            if node.target not in rewritten_call_functions:
                 raise ValueError(
                     f"{context} does not support function node {node.target!r}."
                 )
+            if node.target is builtins.getattr:
+                if len(node.args) != 2 or node.args[1] != "shape":
+                    raise ValueError(
+                        f"{context} only supports getattr(tensor, 'shape')."
+                    )
+                tensor_op_index = _replace_tensor_op_node(
+                    fx_model,
+                    node,
+                    _StatelessShape(),
+                    existing_modules,
+                    tensor_op_index,
+                    context,
+                    input_args=(node.args[0],),
+                )
+                continue
+            if node.target is operator.getitem:
+                if len(node.args) < 2:
+                    raise ValueError(f"{context} got malformed getitem node.")
+                item = node.args[1]
+                if isinstance(item, int):
+                    if not _is_non_tensor_getitem_input(node.args[0]):
+                        raise ValueError(
+                            f"{context} does not support integer tensor "
+                            "getitem because it is not sequence-preserving."
+                        )
+                    continue
+                if not isinstance(item, (slice, tuple)):
+                    raise ValueError(
+                        f"{context} does not support getitem index {item!r}."
+                    )
+                if not _getitem_preserves_batch_dim(item):
+                    raise ValueError(
+                        f"{context} requires tensor getitem to preserve the "
+                        "original batch dimension."
+                    )
+                tensor_op_index = _replace_tensor_op_node(
+                    fx_model,
+                    node,
+                    _StatelessGetItem(item),
+                    existing_modules,
+                    tensor_op_index,
+                    context,
+                    input_args=(node.args[0],),
+                )
+                continue
             if node.target is torch.flatten:
                 tensor_op_index = _replace_tensor_op_node(
                     fx_model,
@@ -792,6 +1087,17 @@ def adapt_step_mode_graph(
                     existing_modules,
                     tensor_op_index,
                     context,
+                )
+            elif node.target is torch.cat:
+                module, input_args = _make_cat_module(node, context)
+                tensor_op_index = _replace_tensor_op_node(
+                    fx_model,
+                    node,
+                    module,
+                    existing_modules,
+                    tensor_op_index,
+                    context,
+                    input_args=input_args,
                 )
 
     fx_model.graph.lint()

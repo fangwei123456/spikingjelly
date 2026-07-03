@@ -21,6 +21,7 @@ from spikingjelly.activation_based.ann2snn.operators import (
 )
 from spikingjelly.activation_based.ann2snn.recipes.base import ConversionRecipe
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
+    _TRANSFORMER_SAFE_MODULE_TYPES,
     adapt_step_mode_graph,
 )
 
@@ -62,6 +63,8 @@ def _make_td_multihead_attention(source: nn.MultiheadAttention) -> TDMultiheadAt
         dropout=source.dropout,
         bias=source.in_proj_bias is not None,
         batch_first=source.batch_first,
+        device=source.in_proj_weight.device,
+        dtype=source.in_proj_weight.dtype,
     )
     with torch.no_grad():
         q_weight, k_weight, v_weight = source.in_proj_weight.chunk(3, dim=0)
@@ -1038,6 +1041,7 @@ class STATransformerRecipe(ConversionRecipe):
         return adapt_step_mode_graph(
             fx_model,
             context="STATransformerRecipe step-mode backend",
+            safe_module_types=_TRANSFORMER_SAFE_MODULE_TYPES,
         )
 
     def finalize(self, converter: "Converter", fx_model: fx.GraphModule) -> nn.Module:
