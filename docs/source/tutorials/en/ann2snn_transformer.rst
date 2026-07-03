@@ -216,8 +216,8 @@ ANN2SNN recipes:
     converted.eval()
 
 ``time_steps`` is part of the recipe because it is used by threshold
-calibration, by the default length of ``encode_inputs(...)``, and by converted
-graph constants that cannot infer a sequence length from runtime inputs.
+calibration and by converted graph constants that cannot infer a sequence
+length from runtime inputs.
 
 There are three STA modes:
 
@@ -231,9 +231,11 @@ This tutorial uses ``spiking_encoder`` for the model-level result.
 Step-mode execution
 -------------------
 
-``STATransformerRecipe`` converted models default to ``step_mode="s"``. In
-single-step mode, users write the time loop explicitly and reset state before an
-independent sequence:
+``STATransformerRecipe`` converted models are plain ``nn.Module`` /
+``fx.GraphModule`` instances. Users call ``functional.set_step_mode`` to
+recursively configure their internal step-mode modules. In single-step mode,
+users write the time loop explicitly and reset state before an independent
+sequence:
 
 .. code-block:: python
 
@@ -243,12 +245,11 @@ independent sequence:
     functional.set_step_mode(converted, "s")
     functional.reset_net(converted)
 
-    seq_args, seq_kwargs = converted.encode_inputs(x)
     y = None
     for t in range(converted.time_steps):
-        step_args = tuple(arg[t] if torch.is_tensor(arg) else arg for arg in seq_args)
-        y_t = converted(*step_args, **seq_kwargs)
-        y = y_t if y is None else converted.add_outputs(y, y_t)
+        x_t = x if t == 0 else torch.zeros_like(x)
+        y_t = converted(x_t)
+        y = y_t if y is None else y + y_t
 
 For layer-wise multi-step acceleration, switch the converted model to
 ``step_mode="m"`` and pass sequence tensors whose first dimension is time:
@@ -260,15 +261,16 @@ For layer-wise multi-step acceleration, switch the converted model to
     functional.set_step_mode(converted, "m")
     functional.reset_net(converted)
 
-    seq_args, seq_kwargs = converted.encode_inputs(x)
-    y_seq = converted(*seq_args, **seq_kwargs)
-    y = converted.sum_time(y_seq)
+    x_zeros = torch.zeros_like(x).expand(converted.time_steps - 1, *x.shape)
+    x_seq = torch.cat((x.unsqueeze(0), x_zeros), dim=0)
+    y_seq = converted(x_seq)
+    y = y_seq.sum(dim=0)
 
-``encode_inputs(...)`` is a convenience helper that turns ordinary ANN floating
-inputs into ``[x, 0, ..., 0]`` sequences. Named static control tensors such as
-``attn_mask`` are preserved without adding a time dimension. ``sum_time(...)``
-performs the final accumulated readout explicitly and supports tensor outputs,
-tuples, lists, dictionaries, namedtuples, and ``None`` values.
+For multi-input models, users construct floating-point input sequences
+explicitly. Named static control tensors such as ``attn_mask`` should be kept
+unchanged without adding a time dimension. Users perform the final accumulated
+readout by summing the output time dimension, recursively when outputs are
+structured.
 
 The multi-step backend is intentionally stricter than arbitrary PyTorch. It
 currently rejects ``mode="spiking_affine"``, ``spike_linear=True``,

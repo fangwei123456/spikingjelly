@@ -197,8 +197,8 @@ dataloader 校准，并依赖 ``time_steps``。
     converted = ann2snn.Converter(recipe=recipe, device="cuda:0").convert(model)
     converted.eval()
 
-``time_steps`` 属于 recipe 参数，因为它参与阈值校准、``encode_inputs(...)``
-默认序列长度，以及图中无法从运行时输入推断长度的常量序列校验。
+``time_steps`` 属于 recipe 参数，因为它参与阈值校准，以及图中无法从运行时
+输入推断长度的常量序列展开。
 
 STA 当前有三种模式：
 
@@ -211,8 +211,9 @@ STA 当前有三种模式：
 Step-mode 执行
 --------------
 
-``STATransformerRecipe`` 的转换产物默认是 ``step_mode="s"``。单步模式下，
-用户显式编写时间循环，并在处理独立序列前重置状态：
+``STATransformerRecipe`` 的转换产物是普通 ``nn.Module`` / ``fx.GraphModule``。
+用户通过 ``functional.set_step_mode`` 递归设置其内部 step-mode 模块。单步
+模式下，用户显式编写时间循环，并在处理独立序列前重置状态：
 
 .. code-block:: python
 
@@ -222,12 +223,11 @@ Step-mode 执行
     functional.set_step_mode(converted, "s")
     functional.reset_net(converted)
 
-    seq_args, seq_kwargs = converted.encode_inputs(x)
     y = None
     for t in range(converted.time_steps):
-        step_args = tuple(arg[t] if torch.is_tensor(arg) else arg for arg in seq_args)
-        y_t = converted(*step_args, **seq_kwargs)
-        y = y_t if y is None else converted.add_outputs(y, y_t)
+        x_t = x if t == 0 else torch.zeros_like(x)
+        y_t = converted(x_t)
+        y = y_t if y is None else y + y_t
 
 如果要触发 layer-wise 多步加速，将转换产物切换为 ``step_mode="m"``，并输入
 第 0 维为时间维的序列 tensor：
@@ -239,14 +239,14 @@ Step-mode 执行
     functional.set_step_mode(converted, "m")
     functional.reset_net(converted)
 
-    seq_args, seq_kwargs = converted.encode_inputs(x)
-    y_seq = converted(*seq_args, **seq_kwargs)
-    y = converted.sum_time(y_seq)
+    x_zeros = torch.zeros_like(x).expand(converted.time_steps - 1, *x.shape)
+    x_seq = torch.cat((x.unsqueeze(0), x_zeros), dim=0)
+    y_seq = converted(x_seq)
+    y = y_seq.sum(dim=0)
 
-``encode_inputs(...)`` 是便捷 helper，会把普通 ANN 浮点输入变成
-``[x, 0, ..., 0]`` 序列。``attn_mask`` 等具名静态控制 tensor 会保持原样，
-不额外添加时间维。``sum_time(...)`` 显式执行最终累计读出，支持 tensor、
-tuple、list、dict、namedtuple 和 ``None`` 输出。
+多输入模型同样由用户显式构造浮点输入序列。``attn_mask`` 等具名静态控制
+tensor 应保持原样，不额外添加时间维。最终累计读出由用户对输出时间维求和
+或按输出结构自行递归求和。
 
 多步后端比任意 PyTorch 图更严格。它当前会拒绝 ``mode="spiking_affine"``、
 ``spike_linear=True``、``spike_conv2d=True``、请求或使用 attention weights
