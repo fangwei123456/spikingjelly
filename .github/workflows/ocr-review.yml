@@ -209,23 +209,64 @@ jobs:
 
             // 构建 inline review comments
             const reviewComments = [];
+            const summaryComments = [];
 
             for (const c of comments) {
-              if (!c.file || c.line == null) continue;
+              const path = c.path || c.file;
+              const startLine = c.start_line ?? c.startLine;
+              const endLine = c.end_line ?? c.endLine ?? c.line;
+              const body = c.content || c.message || c.body || '';
+              if (!path || (startLine == null && endLine == null)) {
+                summaryComments.push(c);
+                continue;
+              }
+              const line = endLine ?? startLine;
+              const comment = {
+                path,
+                line,
+                body: body + formatSuggestion(c),
+              };
+              if (
+                startLine != null &&
+                endLine != null &&
+                startLine !== endLine
+              ) {
+                comment.start_line = startLine;
+                comment.start_side = "RIGHT";
+              }
+              comment.side = "RIGHT";
               reviewComments.push({
-                path: c.file,
-                line: c.line,
-                body: `**[${c.severity || 'info'}]** ${c.message || c.body || ''}${c.suggestion ? '\n\n```suggestion\n' + c.suggestion + '\n```' : ''}`,
+                ...comment,
               });
             }
 
             for (const w of warnings) {
-              if (!w.file || w.line == null) continue;
+              const path = w.path || w.file;
+              const line = w.end_line ?? w.line ?? w.start_line;
+              if (!path || line == null) continue;
               reviewComments.push({
-                path: w.file,
-                line: w.line,
-                body: `⚠️ ${w.message || w.body || ''}`,
+                path,
+                line,
+                side: "RIGHT",
+                body: `⚠️ ${w.content || w.message || w.body || ''}`,
               });
+            }
+
+            function formatSuggestion(comment) {
+              const suggestion = comment.suggestion_code || comment.suggestion;
+              return suggestion ? `\n\n\`\`\`suggestion\n${suggestion}\n\`\`\`` : '';
+            }
+
+            function formatSummaryComment(comment) {
+              const path = comment.path || comment.file || 'unknown file';
+              const content = comment.content || comment.message || comment.body || '';
+              return `### \`${path}\`\n\n${content}${formatSuggestion(comment)}`;
+            }
+
+            function cleanPayload(payload) {
+              return Object.fromEntries(
+                Object.entries(payload).filter(([, value]) => value !== undefined)
+              );
             }
 
             // 尝试批量发 review
@@ -238,9 +279,12 @@ jobs:
                   commit_sha: process.env.HEAD_SHA,
                   event: 'COMMENT',
                   body: `🤖 **OCR Review** — ${comments.length} comment(s), ${warnings.length} warning(s)\n\n${message}`,
-                  comments: reviewComments.map(c => ({
+                  comments: reviewComments.map(c => cleanPayload({
                     path: c.path,
+                    start_line: c.start_line,
                     line: c.line,
+                    start_side: c.start_side,
+                    side: c.side,
                     body: c.body,
                   })),
                 });
@@ -250,15 +294,18 @@ jobs:
                 // fallback: 逐条发
                 for (const c of reviewComments) {
                   try {
-                    await github.rest.pulls.createReviewComment({
+                    await github.rest.pulls.createReviewComment(cleanPayload({
                       owner: context.repo.owner,
                       repo: context.repo.repo,
                       pull_number: parseInt(process.env.PR_NUMBER),
                       commit_id: process.env.HEAD_SHA,
                       path: c.path,
+                      start_line: c.start_line,
                       line: c.line,
+                      start_side: c.start_side,
+                      side: c.side,
                       body: c.body,
-                    });
+                    }));
                     await new Promise(r => setTimeout(r, 2000));
                   } catch (commentErr) {
                     console.log(`Failed to post comment on ${c.path}:${c.line}:`, commentErr.message);
@@ -270,6 +317,14 @@ jobs:
             // 发总结评论
             const summaryParts = [`🤖 **OCR Review** — ${comments.length} comment(s), ${warnings.length} warning(s)`];
             if (message) summaryParts.push('', message);
+            if (summaryComments.length > 0) {
+              summaryParts.push(
+                '',
+                `Comments without inline locations (${summaryComments.length}):`,
+                '',
+                summaryComments.map(formatSummaryComment).join('\n\n---\n\n'),
+              );
+            }
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
