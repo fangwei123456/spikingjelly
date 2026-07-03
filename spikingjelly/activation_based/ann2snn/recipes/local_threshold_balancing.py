@@ -5,6 +5,7 @@ from typing import Dict, Iterable, Iterator, TYPE_CHECKING, Tuple, Union
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import fx
 from tqdm import tqdm
 
@@ -15,6 +16,11 @@ from spikingjelly.activation_based.ann2snn.recipes.base import ConversionRecipe
 from spikingjelly.activation_based.ann2snn.recipes.rate_coding import (
     RateCodingRecipe,
     validate_rate_coding_mode,
+)
+from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
+    _RATE_CODING_SAFE_MODULE_TYPES,
+    _RATE_CODING_STATELESS_MODULE_TYPES,
+    adapt_step_mode_graph,
 )
 
 if TYPE_CHECKING:
@@ -433,6 +439,13 @@ class LocalThresholdBalancingRecipe(ConversionRecipe):
         fx_model.graph.lint()
         fx_model.delete_all_unused_submodules()
         fx_model.recompile()
+        fx_model = adapt_step_mode_graph(
+            fx_model,
+            context="LocalThresholdBalancingRecipe step-mode backend",
+            wrap_module_types=_RATE_CODING_STATELESS_MODULE_TYPES,
+            safe_module_types=_RATE_CODING_SAFE_MODULE_TYPES,
+            safe_call_functions=(F.dropout,),
+        )
         return fx_model.to(converter.device)
 
     @staticmethod

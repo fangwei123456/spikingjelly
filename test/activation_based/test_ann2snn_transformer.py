@@ -27,8 +27,10 @@ from spikingjelly.activation_based.ann2snn.recipes.sta_transformer import (
     _STAOnlineGELU,
     _STAOnlineLayerNorm,
     _STAOnlineMultiheadAttention,
-    _STAStatelessTensorOp,
     _STASpikeEncoder,
+)
+from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
+    _StatelessTensorOp,
 )
 
 
@@ -1110,7 +1112,7 @@ def test_sta_transformer_recipe_tensor_ops_single_loop_match_multistep():
     op_names = {
         module.op_name
         for module in converted.modules()
-        if isinstance(module, _STAStatelessTensorOp)
+        if isinstance(module, _StatelessTensorOp)
     }
 
     assert {"mean", "flatten", "transpose", "unsqueeze"}.issubset(op_names)

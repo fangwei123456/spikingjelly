@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from torch import fx
 
 from spikingjelly.activation_based.ann2snn.operators import (
+    TDConv2d,
     TDGELU,
     TDLayerNorm,
     TDLinear,
@@ -16,6 +17,11 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDScaledDotProductAttention,
 )
 from spikingjelly.activation_based.ann2snn.recipes.base import ConversionRecipe
+from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
+    _SHAPE_ONLY_MODULE_TYPES,
+    _TRANSFORMER_SAFE_MODULE_TYPES,
+    adapt_step_mode_graph,
+)
 
 if TYPE_CHECKING:
     from spikingjelly.activation_based.ann2snn.converter import Converter
@@ -142,10 +148,12 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             node.replace_all_uses_with(new_node)
             fx_model.graph.erase_node(node)
 
-        fx_model.graph.lint()
-        fx_model.delete_all_unused_submodules()
-        fx_model.recompile()
-        return fx_model
+        return adapt_step_mode_graph(
+            fx_model,
+            context="TransformerSpikeEquivalentRecipe step-mode backend",
+            wrap_module_types=_SHAPE_ONLY_MODULE_TYPES,
+            safe_module_types=_TRANSFORMER_SAFE_MODULE_TYPES,
+        )
 
     @staticmethod
     def _replace_submodule(
@@ -286,6 +294,27 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
                 module.in_features,
                 module.out_features,
                 bias=module.bias is not None,
+                device=module.weight.device,
+                dtype=module.weight.dtype,
+            )
+            with torch.no_grad():
+                td_module.weight.copy_(module.weight)
+                if module.bias is not None:
+                    td_module.bias.copy_(module.bias)
+            td_module.train(module.training)
+            return td_module
+
+        if isinstance(module, nn.Conv2d):
+            td_module = TDConv2d(
+                module.in_channels,
+                module.out_channels,
+                module.kernel_size,
+                stride=module.stride,
+                padding=module.padding,
+                dilation=module.dilation,
+                groups=module.groups,
+                bias=module.bias is not None,
+                padding_mode=module.padding_mode,
                 device=module.weight.device,
                 dtype=module.weight.dtype,
             )
