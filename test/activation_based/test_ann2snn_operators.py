@@ -651,6 +651,12 @@ class TestTDLinear:
         assert torch.allclose(y_seq[0], op.bias.expand(2, 5))
         assert torch.count_nonzero(y_seq[1:]) == 0
 
+    def test_empty_time_sequence_raises_clear_error(self):
+        op = TDLinear(3, 5)
+
+        with pytest.raises(ValueError, match="non-empty time"):
+            op(torch.empty(0, 2, 3))
+
     def test_bias_false_has_weight_only(self):
         op = TDLinear(3, 5, bias=False)
 

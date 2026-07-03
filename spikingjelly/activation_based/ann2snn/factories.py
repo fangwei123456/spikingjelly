@@ -71,9 +71,23 @@ class NeuronFactory:
                 f"but got {neuron_type!r}."
             )
         if not isinstance(v_threshold, (int, float)) or isinstance(v_threshold, bool):
-            raise TypeError("v_threshold must be a positive number.")
-        if v_threshold <= 0:
+            raise TypeError(
+                "v_threshold must be a real number, "
+                f"got {type(v_threshold).__name__}."
+            )
+        if not (v_threshold > 0):
             raise ValueError(f"v_threshold must be positive, got {v_threshold}.")
+        if (
+            v_reset is not None
+            and (
+                not isinstance(v_reset, (int, float))
+                or isinstance(v_reset, bool)
+            )
+        ):
+            raise TypeError(
+                "v_reset must be None or a real number, "
+                f"got {v_reset!r}."
+            )
         reserved = self.neuron_kwargs_reserved_keys() & kwargs.keys()
         if reserved:
             names = ", ".join(sorted(reserved))
@@ -179,9 +193,9 @@ class HookFactory:
                     raise ValueError(
                         "mode percentile string must contain a numeric value."
                     ) from exc
-                if not (0.0 <= percentile <= 100.0):
+                if not (0.0 < percentile <= 100.0):
                     raise ValueError(
-                        f"mode percentile must lie in [0, 100], got {mode!r}."
+                        f"mode percentile must lie in (0, 100], got {mode!r}."
                     )
             elif mode.lower() != "max":
                 raise ValueError(
@@ -196,7 +210,10 @@ class HookFactory:
                 f"got {type(mode).__name__}."
             )
         if not isinstance(momentum, (int, float)) or isinstance(momentum, bool):
-            raise TypeError("momentum must be a number in [0, 1].")
+            raise TypeError(
+                "momentum must be a real number, "
+                f"got {type(momentum).__name__}."
+            )
         if not (0.0 <= float(momentum) <= 1.0):
             raise ValueError(f"momentum must lie in [0, 1], got {momentum!r}.")
         self.mode = mode

@@ -135,6 +135,24 @@ class SimpleCNNNoBN(nn.Module):
         return self.fc(x)
 
 
+class AvgPool1dDivisorOverrideNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.pool = nn.AvgPool1d(2)
+
+    def forward(self, x):
+        return self.pool(x)
+
+
+class InplaceDropoutNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.dropout = nn.Dropout(p=0.5, inplace=True)
+
+    def forward(self, x):
+        return self.dropout(x)
+
+
 class UnsupportedLeafModule(nn.Module):
     def forward(self, x):
         return x.square()
@@ -1111,6 +1129,27 @@ class TestConverterRecipes:
                 fuse_flag=False,
             ).convert(model)
 
+    def test_rate_coding_wraps_avgpool1d_without_divisor_override(self):
+        model = AvgPool1dDivisorOverrideNet()
+        model.eval()
+
+        converted = _rate_converter(
+            dataloader=[torch.rand(2, 1, 4)],
+            fuse_flag=False,
+        ).convert(model)
+
+        assert isinstance(converted.pool, layer.AvgPool1d)
+
+    def test_rate_coding_rejects_inplace_dropout_adapter(self):
+        model = InplaceDropoutNet()
+        model.eval()
+
+        with pytest.raises(ValueError, match="Dropout.*inplace=True"):
+            _rate_converter(
+                dataloader=[torch.rand(2, 4)],
+                fuse_flag=False,
+            ).convert(model)
+
     def test_rate_coding_recipe_sets_eval_before_tracing(self):
         model = FunctionalDropoutCoreMLP()
         model.train()
@@ -1169,6 +1208,16 @@ class TestNeuronFactory:
         with pytest.raises(ValueError, match="positive"):
             NeuronFactory(v_threshold=0.0)
 
+    def test_invalid_threshold_type_raises(self):
+        with pytest.raises(TypeError, match="real number"):
+            NeuronFactory(v_threshold="1.0")
+
+    def test_invalid_v_reset_raises(self):
+        factory = NeuronFactory(v_reset=-1.0)
+        assert factory.create(scale=1.0).v_reset == -1.0
+        with pytest.raises(TypeError, match="v_reset"):
+            NeuronFactory(v_reset="0.0")
+
 
 class TestHookFactory:
     def test_default_mode(self):
@@ -1186,10 +1235,14 @@ class TestHookFactory:
     def test_invalid_mode_raises(self):
         with pytest.raises(ValueError, match="mode"):
             HookFactory(mode="bad")
+        with pytest.raises(ValueError, match="mode percentile"):
+            HookFactory(mode="0%")
 
     def test_invalid_momentum_raises(self):
         with pytest.raises(ValueError, match="momentum"):
             HookFactory(momentum=1.1)
+        with pytest.raises(TypeError, match="real number"):
+            HookFactory(momentum="0.1")
 
 
 class TestThresholdOptimizer:

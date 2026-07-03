@@ -56,7 +56,22 @@ def _clone_parameter(parameter: nn.Parameter) -> nn.Parameter:
 
 def _make_td_multihead_attention(source: nn.MultiheadAttention) -> TDMultiheadAttention:
     if source.in_proj_weight is None:
-        raise ValueError("STA sequence MHA requires fused in_proj_weight.")
+        raise ValueError(
+            "STATransformerRecipe step-mode backend requires a fused "
+            "MultiheadAttention.in_proj_weight. Models with separate K/V "
+            "projections (kdim != embed_dim or vdim != embed_dim) are not "
+            "currently supported."
+        )
+    if source.bias_k is not None or source.bias_v is not None:
+        raise ValueError(
+            "STATransformerRecipe step-mode backend does not support "
+            "MultiheadAttention add_bias_kv."
+        )
+    if source.add_zero_attn:
+        raise ValueError(
+            "STATransformerRecipe step-mode backend does not support "
+            "MultiheadAttention add_zero_attn."
+        )
     replacement = TDMultiheadAttention(
         source.embed_dim,
         source.num_heads,

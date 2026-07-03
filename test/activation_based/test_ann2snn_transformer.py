@@ -31,6 +31,7 @@ from spikingjelly.activation_based.ann2snn.recipes.sta_transformer import (
     _STASpikeEncoder,
 )
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
+    _StatelessCat,
     _StatelessExpand,
     _StatelessReshape,
     _StatelessTensorOp,
@@ -533,7 +534,13 @@ class TinyANNFunctionalSDPATransformerBlock(nn.Module):
 
 
 class TinyANNMHATransformerBlock(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, mlp_dim: int) -> None:
+    def __init__(
+        self,
+        embed_dim: int,
+        num_heads: int,
+        mlp_dim: int,
+        **mha_kwargs,
+    ) -> None:
         super().__init__()
         self.norm1 = nn.LayerNorm(embed_dim)
         self.attn = nn.MultiheadAttention(
@@ -541,6 +548,7 @@ class TinyANNMHATransformerBlock(nn.Module):
             num_heads,
             dropout=0.0,
             batch_first=True,
+            **mha_kwargs,
         )
         self.norm2 = nn.LayerNorm(embed_dim)
         self.fc1 = nn.Linear(embed_dim, mlp_dim)
@@ -1412,6 +1420,16 @@ def test_sta_transformer_recipe_reshape_accepts_tuple_size():
     )
 
 
+def test_sta_transformer_recipe_reshape_accepts_inferred_batch_size():
+    reshape = _StatelessReshape(step_mode="m")
+    x_seq = torch.randn(3, 2, 4)
+
+    assert torch.equal(
+        reshape(x_seq, -1, 2, 2),
+        x_seq.reshape(3, 2, 2, 2),
+    )
+
+
 def test_sta_transformer_recipe_expand_accepts_tuple_size():
     expand = _StatelessExpand(step_mode="m")
     x_seq = torch.randn(3, 2, 1, 4)
@@ -1420,6 +1438,23 @@ def test_sta_transformer_recipe_expand_accepts_tuple_size():
         expand(x_seq, (2, 5, 4)),
         x_seq.expand(3, 2, 5, 4),
     )
+
+
+def test_sta_transformer_recipe_cat_negative_dim_matches_multistep():
+    cat = _StatelessCat(dim=-1, step_mode="m")
+    a = torch.randn(3, 2, 4, 5)
+    b = torch.randn(3, 2, 4, 6)
+
+    assert torch.equal(cat(a, b), torch.cat([a, b], dim=-1))
+
+
+def test_sta_transformer_recipe_cat_rejects_negative_batch_dim_multistep():
+    cat = _StatelessCat(dim=-3, step_mode="m")
+    a = torch.randn(3, 2, 4, 5)
+    b = torch.randn(3, 2, 4, 5)
+
+    with pytest.raises(ValueError, match="batch dimension"):
+        cat(a, b)
 
 
 def test_sta_transformer_constant_multistep_continues_state():
@@ -1494,6 +1529,42 @@ def test_sta_transformer_recipe_spiking_encoder_stacks_mha_encoder():
 
     assert isinstance(modules["attn"], TDMultiheadAttention)
     assert hasattr(modules["getitem_sta_encoder"], "v_threshold")
+
+
+def test_sta_transformer_recipe_rejects_mha_add_bias_kv():
+    model = TinyANNMHATransformerBlock(
+        embed_dim=8,
+        num_heads=2,
+        mlp_dim=16,
+        add_bias_kv=True,
+    ).eval()
+
+    with pytest.raises(ValueError, match="add_bias_kv"):
+        Converter(
+            recipe=STATransformerRecipe(
+                dataloader=[(torch.randn(2, 4, 8),)],
+                time_steps=4,
+                mode="spiking_encoder",
+            )
+        ).convert(model)
+
+
+def test_sta_transformer_recipe_rejects_mha_add_zero_attn():
+    model = TinyANNMHATransformerBlock(
+        embed_dim=8,
+        num_heads=2,
+        mlp_dim=16,
+        add_zero_attn=True,
+    ).eval()
+
+    with pytest.raises(ValueError, match="add_zero_attn"):
+        Converter(
+            recipe=STATransformerRecipe(
+                dataloader=[(torch.randn(2, 4, 8),)],
+                time_steps=4,
+                mode="spiking_encoder",
+            )
+        ).convert(model)
 
 
 def test_sta_transformer_recipe_rejects_key_padding_mask():

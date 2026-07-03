@@ -177,6 +177,9 @@ class TDModule(base.MemoryModule):
         return y
 
     def _diff_sequence_output(self, y_cum_seq: torch.Tensor) -> torch.Tensor:
+        if y_cum_seq.shape[0] == 0:
+            self.y_cum = None
+            return y_cum_seq
         if (
             self.y_cum is None
             or not isinstance(self.y_cum, torch.Tensor)
@@ -191,6 +194,12 @@ class TDModule(base.MemoryModule):
         return y_seq
 
     def _td_sequence_forward(self, input_seqs: Tuple[torch.Tensor, ...], ann_forward):
+        for x_seq in input_seqs:
+            if x_seq.shape[0] == 0:
+                raise ValueError(
+                    f"{self.__class__.__name__} expects a non-empty time "
+                    f"dimension, but got shape {tuple(x_seq.shape)}."
+                )
         cum_seqs = tuple(x_seq.cumsum(dim=0) for x_seq in input_seqs)
         if len(cum_seqs) == 1:
             prev_inputs = (

@@ -237,12 +237,19 @@ class _StatelessCat(nn.Module, base.StepModule):
         if self.step_mode == "s":
             return torch.cat(tensors, dim=self.dim)
         if self.step_mode == "m":
-            if self.dim == 0:
+            rank = tensors[0].dim() - 1
+            normalized = self.dim + rank if self.dim < 0 else self.dim
+            if normalized == 0:
                 raise ValueError(
                     f"{self.__class__.__name__} does not support concatenating "
                     "along the original batch dimension in multi-step mode."
                 )
-            return torch.cat(tensors, dim=self.dim + 1)
+            if not (0 <= normalized < rank):
+                raise ValueError(
+                    f"{self.__class__.__name__} received dim={self.dim}, "
+                    f"which is out of range for tensors with rank {rank}."
+                )
+            return torch.cat(tensors, dim=normalized + 1)
         raise ValueError(self.step_mode)
 
 
@@ -294,7 +301,7 @@ class _StatelessReshape(nn.Module, base.StepModule):
         if self.step_mode == "m":
             if not sizes:
                 raise ValueError("reshape requires at least one output size.")
-            if sizes[0] != x.shape[1]:
+            if sizes[0] not in (-1, x.shape[1]):
                 raise ValueError(
                     f"{self.__class__.__name__} only supports reshapes that "
                     "preserve the original batch dimension in multi-step mode."
@@ -497,14 +504,23 @@ def _make_step_module(module: nn.Module) -> Optional[nn.Module]:
             pool_cls = layer.AvgPool2d
         else:
             pool_cls = layer.AvgPool3d
-        return pool_cls(
-            module.kernel_size,
-            stride=module.stride,
-            padding=module.padding,
-            ceil_mode=module.ceil_mode,
-            count_include_pad=module.count_include_pad,
-            divisor_override=module.divisor_override,
-        )
+        kwargs = {
+            "stride": module.stride,
+            "padding": module.padding,
+            "ceil_mode": module.ceil_mode,
+            "count_include_pad": module.count_include_pad,
+        }
+        divisor_override = getattr(module, "divisor_override", None)
+        if isinstance(module, nn.AvgPool1d):
+            if divisor_override is not None:
+                raise ValueError(
+                    "Step-mode adapter does not support nn.AvgPool1d with "
+                    "divisor_override because layer.AvgPool1d does not expose "
+                    "that parameter."
+                )
+        else:
+            kwargs["divisor_override"] = divisor_override
+        return pool_cls(module.kernel_size, **kwargs)
     if isinstance(
         module,
         (nn.AdaptiveAvgPool1d, nn.AdaptiveAvgPool2d, nn.AdaptiveAvgPool3d),
@@ -554,10 +570,22 @@ def _make_step_module(module: nn.Module) -> Optional[nn.Module]:
     if isinstance(module, nn.Flatten):
         return layer.Flatten(module.start_dim, module.end_dim)
     if isinstance(module, nn.Dropout2d):
+        if module.inplace:
+            raise ValueError(
+                "Step-mode adapter does not support nn.Dropout2d with "
+                "inplace=True because layer.Dropout2d does not expose that "
+                "parameter."
+            )
         replacement = layer.Dropout2d(p=module.p)
         replacement.train(module.training)
         return replacement
     if isinstance(module, nn.Dropout):
+        if module.inplace:
+            raise ValueError(
+                "Step-mode adapter does not support nn.Dropout with "
+                "inplace=True because layer.Dropout does not expose that "
+                "parameter."
+            )
         replacement = layer.Dropout(p=module.p)
         replacement.train(module.training)
         return replacement
