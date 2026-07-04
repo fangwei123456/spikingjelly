@@ -381,6 +381,11 @@ class TinySizeClassifier(nn.Module):
         return x.reshape(x.size(0), x.size(1), x.size(-1))
 
 
+class TinyKeywordSizeClassifier(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x.reshape(x.size(dim=0), x.size(dim=1), x.size(dim=-1))
+
+
 class TinyGeneralViewClassifier(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x.view(x.shape[0], x.shape[1], x.shape[2])
@@ -1492,6 +1497,21 @@ def test_sta_transformer_recipe_accepts_ellipsis_tensor_getitem():
 
 def test_sta_transformer_recipe_size_matches_step_modes():
     model = TinySizeClassifier().eval()
+    converted = Converter(
+        recipe=STATransformerRecipe(time_steps=4, mode="equivalent")
+    ).convert(model)
+    x = torch.randn(2, 3, 4)
+
+    y_single = _run_converted_step_loop(converted, x).sum(dim=0)
+    functional.set_step_mode(converted, "m")
+    functional.reset_net(converted)
+    y_multi = converted(_first_real_then_zero_sequence(x, 4)).sum(dim=0)
+
+    assert torch.allclose(y_single, y_multi)
+
+
+def test_sta_transformer_recipe_keyword_size_matches_step_modes():
+    model = TinyKeywordSizeClassifier().eval()
     converted = Converter(
         recipe=STATransformerRecipe(time_steps=4, mode="equivalent")
     ).convert(model)

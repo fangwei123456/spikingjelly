@@ -814,6 +814,19 @@ def _make_cat_module(node: fx.Node, context: str) -> Tuple[_StatelessCat, Tuple[
     return _StatelessCat(dim=int(dim)), tuple(tensors)
 
 
+def _size_args_for_step_mode_node(node: fx.Node, context: str) -> Tuple[Any, ...]:
+    args = list(node.args)
+    if "dim" in node.kwargs:
+        if len(args) > 1:
+            raise ValueError(f"{context} got size dim as both arg and keyword.")
+        args.append(node.kwargs["dim"])
+    if len(args) > 2:
+        raise ValueError(f"{context} does not support size with extra arguments.")
+    if len(args) == 2:
+        _check_literal_dim(args[1], context)
+    return tuple(args)
+
+
 def _getitem_preserves_batch_dim(item: Any) -> bool:
     if item is Ellipsis:
         return True
@@ -995,7 +1008,7 @@ def adapt_step_mode_graph(
                     existing_modules,
                     tensor_op_index,
                     context,
-                    input_args=tuple(node.args),
+                    input_args=_size_args_for_step_mode_node(node, context),
                 )
                 continue
             if node.target == "dim":
