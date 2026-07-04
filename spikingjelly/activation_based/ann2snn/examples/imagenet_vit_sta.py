@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader, Subset
 from torchvision.datasets import ImageFolder
 from torchvision.models import ViT_B_16_Weights, vit_b_16
 
+from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.ann2snn import Converter, STATransformerRecipe
 
 
@@ -42,11 +43,20 @@ def require_cuda(device):
         raise ValueError("--device must be a CUDA device such as cuda:0.")
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required to run this ImageNet ViT STA example.")
+    if device.index is not None and device.index >= torch.cuda.device_count():
+        raise ValueError(
+            f"--device index {device.index} is out of range for "
+            f"{torch.cuda.device_count()} CUDA device(s)."
+        )
     torch.cuda.get_device_name(device)
 
 
 def build_loaders(args, transform):
-    dataset = ImageFolder(Path(args.data_root), transform=transform)
+    data_root = Path(args.data_root)
+    try:
+        dataset = ImageFolder(data_root, transform=transform)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"Could not open --data-root {data_root}.") from exc
     if args.calib_samples <= 0:
         raise ValueError("--calib-samples must be positive.")
     if args.calib_samples > len(dataset):
@@ -54,13 +64,17 @@ def build_loaders(args, transform):
     if args.eval_samples is not None:
         if args.eval_samples <= 0:
             raise ValueError("--eval-samples must be positive when set.")
-        if args.eval_samples > len(dataset):
-            raise ValueError("--eval-samples exceeds the dataset size.")
+        if args.calib_samples + args.eval_samples > len(dataset):
+            raise ValueError(
+                "--calib-samples + --eval-samples exceeds the dataset size; "
+                "use disjoint calibration and evaluation subsets."
+            )
 
     calib_set = Subset(dataset, range(args.calib_samples))
     eval_set = dataset
     if args.eval_samples is not None:
-        eval_set = Subset(dataset, range(args.eval_samples))
+        start = args.calib_samples
+        eval_set = Subset(dataset, range(start, start + args.eval_samples))
 
     loader_kwargs = dict(
         batch_size=args.batch_size,
@@ -109,8 +123,45 @@ def evaluate(model, data_loader, device, name):
     }
 
 
+def make_first_real_then_zero_sequence(x, time_steps):
+    if time_steps <= 0:
+        raise ValueError(f"time_steps must be positive, got {time_steps}.")
+    x_seq = torch.zeros((time_steps, *x.shape), dtype=x.dtype, device=x.device)
+    x_seq[0] = x
+    return x_seq
+
+
+def evaluate_sta(model, data_loader, device, name, time_steps):
+    model.eval().to(device)
+    functional.set_step_mode(model, "m")
+    total = 0
+    top1 = 0.0
+    top5 = 0.0
+    start = time.time()
+    with torch.no_grad():
+        for i, (x, y) in enumerate(data_loader):
+            x = x.to(device, non_blocking=True)
+            y = y.to(device, non_blocking=True)
+            functional.reset_net(model)
+            x_seq = make_first_real_then_zero_sequence(x, time_steps)
+            out = model(x_seq).sum(dim=0)
+            acc1, acc5 = accuracy(out, y)
+            top1 += acc1
+            top5 += acc5
+            total += y.numel()
+            if (i + 1) % 100 == 0:
+                print(name, i + 1, total, top1 / total, top5 / total, flush=True)
+    return {
+        "top1": top1 / total,
+        "top5": top5 / total,
+        "total": total,
+        "seconds": time.time() - start,
+    }
+
+
 def format_scale_label(scale):
-    return f"{scale:g}".replace("-", "m").replace(".", "")
+    text = f"{scale:.8f}".rstrip("0").rstrip(".")
+    return text.replace("-", "m").replace(".", "p")
 
 
 def main():
@@ -121,7 +172,13 @@ def main():
     weights = ViT_B_16_Weights.DEFAULT
     transform = weights.transforms()
     calib_loader, eval_loader, dataset_size = build_loaders(args, transform)
-    model = vit_b_16(weights=weights).to(device).eval()
+    try:
+        model = vit_b_16(weights=weights).to(device).eval()
+    except Exception as exc:
+        raise RuntimeError(
+            "Could not load ViT-B/16 weights; check network access and the "
+            "torchvision cache."
+        ) from exc
 
     env = {
         "data_root": args.data_root,
@@ -153,11 +210,12 @@ def main():
         f"STA_SPIKING_ENCODER_T{args.time_steps}_"
         f"S{format_scale_label(args.threshold_scale)}"
     )
-    sta = evaluate(
+    sta = evaluate_sta(
         converted,
         eval_loader,
         device,
         sta_label.lower(),
+        args.time_steps,
     )
     print(sta_label, json.dumps(sta), flush=True)
     print("DROP", baseline["top1"] - sta["top1"], flush=True)

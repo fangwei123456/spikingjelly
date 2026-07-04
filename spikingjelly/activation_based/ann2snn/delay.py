@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import warnings
 from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 import torch
@@ -81,6 +82,7 @@ def _compute_delay_ratio(
     channel_dim = _channel_dim(post_scaler)
     if channel_dim is None or scale.dim() == 0:
         max_mean_activation = original_activation.mean()
+        reduced_required_charge = original_required_charge.mean()
     else:
         if channel_dim < 0:
             channel_dim += original_activation.dim()
@@ -90,10 +92,11 @@ def _compute_delay_ratio(
             dim for dim in range(original_activation.dim()) if dim != channel_dim
         )
         max_mean_activation = original_activation.mean(dim=reduce_dims).max()
+        reduced_required_charge = original_required_charge.mean(dim=reduce_dims).max()
 
     if max_mean_activation <= 0:
         return torch.zeros((), device=x.device, dtype=x.dtype)
-    return (original_required_charge.mean() / max_mean_activation).detach()
+    return (reduced_required_charge / max_mean_activation).detach()
 
 
 def _find_scaler_neuron_scaler_paths(
@@ -218,13 +221,13 @@ def estimate_delay_start(
         try:
             original_device = next(model.buffers()).device
         except StopIteration:
-            original_device = None
+            original_device = torch.device("cpu")
     original_training_modes = {module: module.training for module in model.modules()}
     ratios: Dict[BaseNode, List[float]] = {module: [] for module, _ in paths}
     handles = []
 
     def make_hook(module: BaseNode, post_scaler: Scaler):
-        def hook(_module, inputs, _output):
+        def hook(_module, inputs, output):
             if len(inputs) != 1 or not isinstance(inputs[0], torch.Tensor):
                 raise TypeError(
                     "Delay estimation neuron hook expects one tensor input."
@@ -232,8 +235,7 @@ def estimate_delay_start(
             x = inputs[0]
             ratio = _compute_delay_ratio(module, post_scaler, x)
             ratios[module].append(float(ratio.detach().cpu().item()))
-            max_value = float(_as_runtime_tensor(module.v_threshold, x).item())
-            return torch.clamp(x, min=0, max=max_value)
+            return output
 
         return hook
 
@@ -256,6 +258,13 @@ def estimate_delay_start(
         for values in ratios.values():
             if values:
                 delay += sum(values) / len(values)
+        if not any(ratios.values()):
+            warnings.warn(
+                "estimate_delay_start did not collect any delay ratios; "
+                "no delayed readout will be applied.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
     finally:
         for handle in handles:
             handle.remove()
@@ -267,5 +276,12 @@ def estimate_delay_start(
 
     delay_start = math.ceil(delay) if math.isfinite(delay) else time_steps
     if time_steps < delay_start + _MIN_READOUT_STEPS:
+        warnings.warn(
+            "estimate_delay_start: time_steps is too small to keep "
+            f"{_MIN_READOUT_STEPS} readout steps after the estimated delay; "
+            "disabling delayed readout.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         return max(time_steps - _MIN_READOUT_STEPS, 0)
     return min(delay_start, time_steps - 1)

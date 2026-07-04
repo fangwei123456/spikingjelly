@@ -137,21 +137,19 @@ class Converter:
         :rtype: torch.nn.Module
         """
         configured_device = self.device
-        original_ann = ann
-        original_training_modes = {
-            module: module.training for module in original_ann.modules()
-        }
+        original_training_modes = {module: module.training for module in ann.modules()}
         self.device = self._resolve_device(ann)
         try:
-            self.recipe.validate(self)
-            ann = self.recipe.before_trace(self, ann)
-            fx_model = fx.symbolic_trace(ann).to(self.device)
-            fx_model = self.recipe.after_trace(self, fx_model)
-            fx_model = self.recipe.insert_observers(self, fx_model)
-            fx_model = self.recipe.calibrate(self, fx_model)
-            fx_model = self.recipe.replace(self, fx_model)
-            fx_model = self.recipe.finalize(self, fx_model)
-            return fx_model
+            with torch.no_grad():
+                self.recipe.validate(self)
+                ann = self.recipe.before_trace(self, ann)
+                fx_model = fx.symbolic_trace(ann).to(self.device)
+                fx_model = self.recipe.after_trace(self, fx_model)
+                fx_model = self.recipe.insert_observers(self, fx_model)
+                fx_model = self.recipe.calibrate(self, fx_model)
+                fx_model = self.recipe.replace(self, fx_model)
+                fx_model = self.recipe.finalize(self, fx_model)
+                return fx_model
         finally:
             for module, training in original_training_modes.items():
                 module.training = training

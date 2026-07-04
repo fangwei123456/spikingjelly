@@ -16,6 +16,7 @@ from typing import (
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import fx
 from torch.nn.utils.fusion import fuse_conv_bn_eval
 from tqdm import tqdm
@@ -29,6 +30,11 @@ from spikingjelly.activation_based.ann2snn.modules import (
 from spikingjelly.activation_based.ann2snn.rules import ActivationRule, ReLURule
 from spikingjelly.activation_based.ann2snn.threshold import ThresholdOptimizer
 from spikingjelly.activation_based.ann2snn.recipes.base import ConversionRecipe
+from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
+    _RATE_CODING_SAFE_MODULE_TYPES,
+    _RATE_CODING_STATELESS_MODULE_TYPES,
+    adapt_step_mode_graph,
+)
 
 if TYPE_CHECKING:
     from spikingjelly.activation_based.ann2snn.converter import Converter
@@ -578,7 +584,15 @@ class RateCodingRecipe(ConversionRecipe):
         :return: Replaced ``GraphModule``.
         :rtype: torch.fx.GraphModule
         """
-        return self._replace_by_neurons(fx_model).to(converter.device)
+        fx_model = self._replace_by_neurons(fx_model)
+        fx_model = adapt_step_mode_graph(
+            fx_model,
+            context="RateCodingRecipe step-mode backend",
+            wrap_module_types=_RATE_CODING_STATELESS_MODULE_TYPES,
+            safe_module_types=_RATE_CODING_SAFE_MODULE_TYPES,
+            safe_call_functions=(F.dropout,),
+        )
+        return fx_model.to(converter.device)
 
     @staticmethod
     def _extract_batch_input(data, _inside_input=False):

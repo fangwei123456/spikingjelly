@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from spikingjelly.activation_based import neuron, surrogate
+from spikingjelly.activation_based import functional, neuron, surrogate
 from spikingjelly.activation_based.ann2snn.operators import (
     SNNElementWiseProduct,
     TDLinear,
@@ -80,6 +80,7 @@ def test_few_spike_mlp_block_final_sum_matches_single_step_reference():
     x_seq = torch.randn(table.K, 2, 4)
 
     y_seq = block(x_seq)
+    functional.reset_net(block)
     expected = _single_step_mlp_reference(block, x_seq)
 
     assert y_seq.shape == (table.K, 2, 3)
@@ -97,6 +98,7 @@ def test_few_spike_mlp_block_supports_higher_rank_input():
     x_seq = torch.randn(table.K, 2, 3, 5)
 
     y_seq = block(x_seq)
+    functional.reset_net(block)
     expected = _single_step_mlp_reference(block, x_seq)
 
     assert y_seq.shape == (table.K, 2, 3, 2)
@@ -138,7 +140,9 @@ def test_few_spike_gated_block_final_sum_matches_single_step_reference():
     up_seq = block.activation(block.up_proj(x_seq))
     gate_seq = block.gate(block.gate_proj(x_seq))
     product_seq = block.product(up_seq, gate_seq)
+    functional.reset_net(block)
     y_seq = block(x_seq)
+    functional.reset_net(block)
     expected = _single_step_gated_reference(block, x_seq)
 
     assert up_seq.shape == (table.K, 2, 6)
@@ -179,6 +183,7 @@ def test_oat_activation_block_matches_single_step_reference():
     )
 
     y_seq = block(x_seq)
+    functional.reset_net(block)
     expected = _single_step_mlp_reference(block, x_seq)
 
     assert y_seq.shape == (normal.K, 2, 2)
@@ -225,13 +230,14 @@ def test_hg_gate_block_matches_single_step_reference():
     )
 
     y_seq = block(x_seq)
+    functional.reset_net(block)
     expected = _single_step_gated_reference(block, x_seq)
 
     assert y_seq.shape == (table_low.K, 2, 2)
     assert torch.allclose(y_seq.sum(dim=0), expected)
 
 
-def test_gated_block_autograd_and_stateless_forward():
+def test_gated_block_autograd_and_resettable_forward():
     table = _table()
     block = _FewSpikeGatedMLPBlock(
         in_features=4,
@@ -251,6 +257,7 @@ def test_gated_block_autograd_and_stateless_forward():
     x_seq = torch.randn(table.K, 2, 4, requires_grad=True)
 
     y0 = block(x_seq)
+    functional.reset_net(block)
     y1 = block(x_seq)
     y0.square().sum().backward()
 

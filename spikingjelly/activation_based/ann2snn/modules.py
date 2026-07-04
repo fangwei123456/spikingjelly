@@ -4,6 +4,8 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
+from spikingjelly.activation_based import base, functional
+
 
 __all__ = ["VoltageHook", "VoltageScaler", "ChannelVoltageScaler"]
 
@@ -18,9 +20,8 @@ def _safe_quantile(
 
     Large activation tensors can make ``torch.quantile`` allocate enough
     temporary memory to dominate ANN2SNN calibration. This helper limits each
-    reduction to at most ``max_elements`` evenly spaced values, then applies
-    kth-value interpolation. The result is deterministic but approximate when
-    subsampling is used.
+    reduction to at most ``max_elements`` sampled values, then applies kth-value
+    interpolation. The result is approximate when subsampling is used.
     """
     if not (0.0 <= quantile <= 1.0):
         raise ValueError("quantile must be in [0, 1].")
@@ -140,6 +141,8 @@ class VoltageHook(nn.Module):
         :rtype: torch.Tensor
         """
         err_msg = "You have used a non-defined VoltageScale Method."
+        if not self.training:
+            return x
         if isinstance(self.mode, str):
             if not self.mode:
                 raise NotImplementedError(err_msg)
@@ -152,7 +155,9 @@ class VoltageHook(nn.Module):
                     if quantile_input.dtype in [torch.float16, torch.bfloat16]:
                         quantile_input = quantile_input.to(torch.float32)
                     s_t = _safe_quantile(quantile_input, quantile).to(x.dtype)
-                except (ValueError, RuntimeError) as exc:
+                except ValueError:
+                    raise
+                except RuntimeError as exc:
                     raise NotImplementedError(err_msg) from exc
             elif self.mode.lower() in ["max"]:
                 s_t = x.max().detach()
@@ -172,12 +177,12 @@ class VoltageHook(nn.Module):
             self.scale = s_t
         else:
             self.scale = (1 - self.momentum) * self.scale + self.momentum * s_t
-        self.num_batches_tracked += x.shape[0]
+        self.num_batches_tracked += x.shape[0] if x.dim() > 0 else 1
         return x
 
 
-class VoltageScaler(nn.Module):
-    def __init__(self, scale=1.0):
+class VoltageScaler(nn.Module, base.StepModule):
+    def __init__(self, scale=1.0, step_mode: str = "s"):
         r"""
         **API Language** - :ref:`中文 <VoltageScaler.__init__-cn>` | :ref:`English <VoltageScaler.__init__-en>`
 
@@ -191,6 +196,8 @@ class VoltageScaler(nn.Module):
 
         :param scale: 缩放值
         :type scale: float
+        :param step_mode: 步进模式，``"s"`` 表示单步输入，``"m"`` 表示第 0 维为时间维的多步输入。
+        :type step_mode: str
 
         ----
 
@@ -202,9 +209,16 @@ class VoltageScaler(nn.Module):
 
         :param scale: scaling value
         :type scale: float
+        :param step_mode: Step mode. ``"s"`` for single-step input and ``"m"`` for
+            multi-step input with the time dimension at dimension 0.
+        :type step_mode: str
         """
         super().__init__()
         self.register_buffer("scale", torch.tensor(scale))
+        self.step_mode = step_mode
+
+    def _forward(self, x):
+        return x * self.scale
 
     def forward(self, x):
         r"""
@@ -236,14 +250,21 @@ class VoltageScaler(nn.Module):
         :return: current after scaling
         :rtype: torch.Tensor
         """
-        return x * self.scale
+        if self.step_mode == "s":
+            return self._forward(x)
+        return functional.seq_to_ann_forward(x, self._forward)
 
     def extra_repr(self):
-        return "%f" % self.scale.item()
+        return f"{self.scale.item():f}, step_mode={self.step_mode}"
 
 
-class ChannelVoltageScaler(nn.Module):
-    def __init__(self, scale=1.0, channel_dim: int = 1):
+class ChannelVoltageScaler(nn.Module, base.StepModule):
+    def __init__(
+        self,
+        scale=1.0,
+        channel_dim: int = 1,
+        step_mode: str = "s",
+    ):
         r"""
         **API Language** - :ref:`中文 <ChannelVoltageScaler.__init__-cn>` | :ref:`English <ChannelVoltageScaler.__init__-en>`
 
@@ -261,6 +282,8 @@ class ChannelVoltageScaler(nn.Module):
         :type scale: float or torch.Tensor
         :param channel_dim: ``scale`` 对应的输入通道维。
         :type channel_dim: int
+        :param step_mode: 步进模式，``"s"`` 表示单步输入，``"m"`` 表示第 0 维为时间维的多步输入。
+        :type step_mode: str
         :raises ValueError: 当 ``scale`` 或 ``channel_dim`` 非法时抛出。
 
         ----
@@ -279,6 +302,9 @@ class ChannelVoltageScaler(nn.Module):
         :type scale: float or torch.Tensor
         :param channel_dim: Input channel dimension corresponding to ``scale``.
         :type channel_dim: int
+        :param step_mode: Step mode. ``"s"`` for single-step input and ``"m"`` for
+            multi-step input with the time dimension at dimension 0.
+        :type step_mode: str
         :raises ValueError: If ``scale`` or ``channel_dim`` is invalid.
         """
         super().__init__()
@@ -293,6 +319,7 @@ class ChannelVoltageScaler(nn.Module):
             raise ValueError("scale must contain finite positive values.")
         self.register_buffer("scale", scale_tensor)
         self.channel_dim = channel_dim
+        self.step_mode = step_mode
 
     def _view_scale(self, x: torch.Tensor) -> torch.Tensor:
         if self.scale.dim() == 0:
@@ -310,6 +337,9 @@ class ChannelVoltageScaler(nn.Module):
         shape = [1] * x.dim()
         shape[channel_dim] = self.scale.numel()
         return self.scale.reshape(shape)
+
+    def _forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x * self._view_scale(x).to(dtype=x.dtype, device=x.device)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         r"""
@@ -341,7 +371,12 @@ class ChannelVoltageScaler(nn.Module):
         :return: Scaled tensor.
         :rtype: torch.Tensor
         """
-        return x * self._view_scale(x).to(dtype=x.dtype, device=x.device)
+        if self.step_mode == "s":
+            return self._forward(x)
+        return functional.seq_to_ann_forward(x, self._forward)
 
     def extra_repr(self):
-        return f"scale_shape={tuple(self.scale.shape)}, channel_dim={self.channel_dim}"
+        return (
+            f"scale_shape={tuple(self.scale.shape)}, channel_dim={self.channel_dim}, "
+            f"step_mode={self.step_mode}"
+        )

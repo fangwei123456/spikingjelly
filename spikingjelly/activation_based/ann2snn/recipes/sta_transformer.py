@@ -3,15 +3,27 @@ from __future__ import annotations
 import copy
 import math
 import operator
-from typing import Any, Dict, Iterable, List, Optional, TYPE_CHECKING, Tuple
+from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import fx
 from tqdm import tqdm
+from spikingjelly.activation_based import base
 
+from spikingjelly.activation_based.ann2snn.operators import (
+    TDConv2d,
+    TDGELU,
+    TDLayerNorm,
+    TDLinear,
+    TDMultiheadAttention,
+)
 from spikingjelly.activation_based.ann2snn.recipes.base import ConversionRecipe
+from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
+    _TRANSFORMER_SAFE_MODULE_TYPES,
+    adapt_step_mode_graph,
+)
 
 if TYPE_CHECKING:
     from spikingjelly.activation_based.ann2snn.converter import Converter
@@ -21,12 +33,85 @@ __all__ = [
     "STATransformerRecipe",
 ]
 
+_STATIC_TENSOR_KWARGS = frozenset(
+    {
+        "attention_mask",
+        "attn_mask",
+        "causal_mask",
+        "decoder_attention_mask",
+        "encoder_attention_mask",
+        "key_padding_mask",
+        "mask",
+        "padding_mask",
+    }
+)
+
 
 def _clone_parameter(parameter: nn.Parameter) -> nn.Parameter:
     return nn.Parameter(
         parameter.detach().clone(),
         requires_grad=parameter.requires_grad,
     )
+
+
+def _make_td_multihead_attention(source: nn.MultiheadAttention) -> TDMultiheadAttention:
+    if source.in_proj_weight is None:
+        raise ValueError(
+            "STATransformerRecipe step-mode backend requires a fused "
+            "MultiheadAttention.in_proj_weight. Models with separate K/V "
+            "projections (kdim != embed_dim or vdim != embed_dim) are not "
+            "currently supported."
+        )
+    if source.bias_k is not None or source.bias_v is not None:
+        raise ValueError(
+            "STATransformerRecipe step-mode backend does not support "
+            "MultiheadAttention add_bias_kv."
+        )
+    if source.add_zero_attn:
+        raise ValueError(
+            "STATransformerRecipe step-mode backend does not support "
+            "MultiheadAttention add_zero_attn."
+        )
+    replacement = TDMultiheadAttention(
+        source.embed_dim,
+        source.num_heads,
+        dropout=source.dropout,
+        bias=source.in_proj_bias is not None,
+        batch_first=source.batch_first,
+        device=source.in_proj_weight.device,
+        dtype=source.in_proj_weight.dtype,
+    )
+    with torch.no_grad():
+        q_weight, k_weight, v_weight = source.in_proj_weight.chunk(3, dim=0)
+        replacement.q_proj.weight.copy_(q_weight)
+        replacement.k_proj.weight.copy_(k_weight)
+        replacement.v_proj.weight.copy_(v_weight)
+        if source.in_proj_bias is not None:
+            q_bias, k_bias, v_bias = source.in_proj_bias.chunk(3, dim=0)
+            replacement.q_proj.bias.copy_(q_bias)
+            replacement.k_proj.bias.copy_(k_bias)
+            replacement.v_proj.bias.copy_(v_bias)
+        replacement.out_proj.weight.copy_(source.out_proj.weight)
+        if source.out_proj.bias is not None:
+            replacement.out_proj.bias.copy_(source.out_proj.bias)
+    for proj in (replacement.q_proj, replacement.k_proj, replacement.v_proj):
+        proj.weight.requires_grad = source.in_proj_weight.requires_grad
+        if source.in_proj_bias is not None:
+            proj.bias.requires_grad = source.in_proj_bias.requires_grad
+    replacement.out_proj.weight.requires_grad = source.out_proj.weight.requires_grad
+    if source.out_proj.bias is not None:
+        replacement.out_proj.bias.requires_grad = source.out_proj.bias.requires_grad
+    return replacement
+
+
+def _broadcast_channel_vector(
+    value: torch.Tensor, output: torch.Tensor, channel_dim: int
+) -> torch.Tensor:
+    if channel_dim < 0:
+        channel_dim += output.dim()
+    shape = [1] * output.dim()
+    shape[channel_dim] = value.numel()
+    return value.to(device=output.device, dtype=output.dtype).view(shape)
 
 
 class _STAThresholdObserver:
@@ -123,11 +208,7 @@ class _STASpikeMixin(_STATimeStepMixin):
     def _broadcast_threshold(
         threshold: torch.Tensor, output: torch.Tensor, channel_dim: int
     ) -> torch.Tensor:
-        if channel_dim < 0:
-            channel_dim += output.dim()
-        shape = [1] * output.dim()
-        shape[channel_dim] = threshold.numel()
-        return threshold.to(device=output.device, dtype=output.dtype).view(shape)
+        return _broadcast_channel_vector(threshold, output, channel_dim)
 
     def _spike(self, analog: torch.Tensor, channel_dim: int) -> torch.Tensor:
         threshold = self._broadcast_threshold(self.v_threshold, analog, channel_dim)
@@ -219,15 +300,59 @@ class _STASpikeConv2d(nn.Module, _STASpikeMixin):
         return self._spike(analog, channel_dim=1)
 
 
-class _STAActivationSpikeEncoder(nn.Module, _STASpikeMixin):
-    def __init__(self, threshold: torch.Tensor, channel_dim: int = -1) -> None:
+class _STASpikeEncoder(base.MemoryModule):
+    def __init__(
+        self,
+        threshold: torch.Tensor,
+        channel_dim: int = -1,
+        step_mode: str = "s",
+    ) -> None:
         super().__init__()
         self.channel_dim = channel_dim
         self.register_buffer("v_threshold", threshold.detach().clone())
-        self.mem: Optional[torch.Tensor] = None
+        self.register_memory("mem", None)
+        self.step_mode = step_mode
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self._spike(x, channel_dim=self.channel_dim)
+    @staticmethod
+    def _broadcast_threshold(
+        threshold: torch.Tensor, output: torch.Tensor, channel_dim: int
+    ) -> torch.Tensor:
+        return _broadcast_channel_vector(threshold, output, channel_dim)
+
+    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
+        threshold = self._broadcast_threshold(self.v_threshold, x, self.channel_dim)
+        threshold = torch.clamp(threshold, min=torch.finfo(threshold.dtype).eps)
+        if (
+            self.mem is None
+            or self.mem.shape != x.shape
+            or self.mem.device != x.device
+            or self.mem.dtype != x.dtype
+        ):
+            self.mem = torch.zeros_like(x)
+        self.mem = self.mem + x
+        spike_count = torch.trunc(self.mem / threshold)
+        spike = spike_count * threshold
+        self.mem = self.mem - spike
+        return spike
+
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        if x_seq.dim() < 2:
+            raise ValueError(
+                "STA spike encoder multi-step forward expects an input sequence "
+                "with a time dimension and at least one data dimension."
+            )
+        if x_seq.shape[0] == 0:
+            raise ValueError("STA spike encoder expects a non-empty time dimension.")
+        outputs = []
+        for x in x_seq:
+            outputs.append(self.single_step_forward(x))
+        return torch.stack(outputs, dim=0)
+
+    def _reset_sta_state(self) -> None:
+        self.reset()
+
+    def extra_repr(self) -> str:
+        return f"channel_dim={self.channel_dim}, step_mode={self.step_mode}"
 
 
 class _STAAnalogLinear(nn.Module, _STATimeStepMixin):
@@ -321,7 +446,7 @@ class _STAOnlineLayerNorm(nn.Module):
         self.encoder = (
             None
             if encoder_threshold is None
-            else _STAActivationSpikeEncoder(encoder_threshold, channel_dim=-1)
+            else _STASpikeEncoder(encoder_threshold, channel_dim=-1, step_mode="s")
         )
 
     def _reset_sta_state(self) -> None:
@@ -367,7 +492,7 @@ class _STAOnlineGELU(nn.Module):
         self.encoder = (
             None
             if encoder_threshold is None
-            else _STAActivationSpikeEncoder(encoder_threshold, channel_dim=-1)
+            else _STASpikeEncoder(encoder_threshold, channel_dim=-1, step_mode="s")
         )
 
     def _reset_sta_state(self) -> None:
@@ -412,7 +537,7 @@ class _STAOnlineMultiheadAttention(nn.Module):
         self.encoder = (
             None
             if encoder_threshold is None
-            else _STAActivationSpikeEncoder(encoder_threshold, channel_dim=-1)
+            else _STASpikeEncoder(encoder_threshold, channel_dim=-1, step_mode="s")
         )
 
     def _reset_sta_state(self) -> None:
@@ -494,183 +619,43 @@ class _STAOnlineMultiheadAttention(nn.Module):
         return delta, weights_delta
 
 
-class _STAConvertedModel(nn.Module):
-    _STATIC_TENSOR_KWARGS = frozenset(
-        {
-            "attention_mask",
-            "attn_mask",
-            "causal_mask",
-            "decoder_attention_mask",
-            "encoder_attention_mask",
-            "key_padding_mask",
-            "mask",
-            "padding_mask",
-        }
-    )
-
+class _STAConstant(base.MemoryModule):
     def __init__(
         self,
-        model: nn.Module,
+        value: torch.Tensor,
         time_steps: int,
-        static_arg_indices: Optional[frozenset[int]] = None,
+        step_mode: str = "s",
     ) -> None:
         super().__init__()
-        self.model = model
         self.time_steps = time_steps
-        self.static_arg_indices = static_arg_indices or frozenset()
-
-    def reset(self) -> None:
-        for module in self.modules():
-            if module is self:
-                continue
-            reset = getattr(module, "_reset_sta_state", None)
-            if reset is not None:
-                reset()
-
-    @staticmethod
-    def _rebuild_container(source: Any, items: Any) -> Any:
-        if isinstance(source, tuple) and hasattr(source, "_fields"):
-            return type(source)(*items)
-        if type(source) is tuple:
-            return tuple(items)
-        if type(source) is list:
-            return list(items)
-        if type(source) is dict:
-            return dict(items)
-        return type(source)(items)
-
-    @staticmethod
-    def _add_outputs(a: Any, b: Any) -> Any:
-        if torch.is_tensor(a) and torch.is_tensor(b):
-            return a + b
-        if isinstance(a, tuple) and isinstance(b, tuple):
-            if len(a) != len(b):
-                raise TypeError("STA converted model output tuple lengths must match.")
-            return _STAConvertedModel._rebuild_container(
-                a,
-                (_STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b)),
-            )
-        if isinstance(a, list) and isinstance(b, list):
-            if len(a) != len(b):
-                raise TypeError("STA converted model output list lengths must match.")
-            return _STAConvertedModel._rebuild_container(
-                a,
-                (_STAConvertedModel._add_outputs(x, y) for x, y in zip(a, b)),
-            )
-        if isinstance(a, dict) and isinstance(b, dict):
-            if a.keys() != b.keys():
-                raise TypeError("STA converted model output dict keys must match.")
-            return _STAConvertedModel._rebuild_container(
-                a,
-                {key: _STAConvertedModel._add_outputs(a[key], b[key]) for key in a},
-            )
-        if a is None and b is None:
-            return None
-        raise TypeError("STA converted model can only accumulate tensor outputs.")
-
-    @staticmethod
-    def _zero_tensors(
-        value: Any,
-        preserve_tensor: bool = False,
-        static_arg_indices: Optional[frozenset[int]] = None,
-    ) -> Any:
-        if torch.is_tensor(value):
-            if preserve_tensor:
-                return value
-            if not value.is_floating_point():
-                raise TypeError(
-                    "STA converted model cannot create zero-input timesteps for "
-                    "non-floating data tensors. Pass control masks as named static "
-                    "kwargs, or convert data inputs to floating tensors before "
-                    "conversion."
-                )
-            return torch.zeros_like(value)
-        if isinstance(value, tuple):
-            return _STAConvertedModel._rebuild_container(
-                value,
-                (
-                    _STAConvertedModel._zero_tensors(
-                        x,
-                        preserve_tensor=preserve_tensor
-                        or (static_arg_indices is not None and i in static_arg_indices),
-                    )
-                    for i, x in enumerate(value)
-                ),
-            )
-        if isinstance(value, list):
-            return _STAConvertedModel._rebuild_container(
-                value,
-                (
-                    _STAConvertedModel._zero_tensors(
-                        x,
-                        preserve_tensor=preserve_tensor
-                        or (static_arg_indices is not None and i in static_arg_indices),
-                    )
-                    for i, x in enumerate(value)
-                ),
-            )
-        if isinstance(value, dict):
-            return _STAConvertedModel._rebuild_container(
-                value,
-                {
-                    key: _STAConvertedModel._zero_tensors(
-                        x,
-                        preserve_tensor=preserve_tensor
-                        or key in _STAConvertedModel._STATIC_TENSOR_KWARGS,
-                    )
-                    for key, x in value.items()
-                },
-            )
-        return value
-
-    def forward(self, *args: Any, **kwargs: Any) -> Any:
-        self.reset()
-        output = None
-        zero_args = self._zero_tensors(
-            args,
-            static_arg_indices=self.static_arg_indices,
-        )
-        zero_kwargs = self._zero_tensors(kwargs)
-        for step in range(self.time_steps):
-            step_args = args if step == 0 else zero_args
-            step_kwargs = kwargs if step == 0 else zero_kwargs
-            step_output = self.model(*step_args, **step_kwargs)
-            output = (
-                step_output
-                if output is None
-                else self._add_outputs(output, step_output)
-            )
-        return output
-
-
-class _STAFirstStepConstant(nn.Module, _STATimeStepMixin):
-    def __init__(self, value: torch.Tensor) -> None:
-        super().__init__()
         if isinstance(value, nn.Parameter):
             self.value = nn.Parameter(
                 value.detach().clone(), requires_grad=value.requires_grad
             )
         else:
             self.register_buffer("value", value.detach().clone())
-        self._zero_value: Optional[torch.Tensor] = None
-        self.t = 0
+        self.register_memory("t", 0)
+        self.step_mode = step_mode
 
-    def _reset_sta_state(self) -> None:
-        self.t = 0
-
-    def forward(self) -> torch.Tensor:
+    def single_step_forward(self) -> torch.Tensor:
         if self.t == 0:
             output = self.value
         else:
-            if (
-                self._zero_value is None
-                or self._zero_value.shape != self.value.shape
-                or self._zero_value.device != self.value.device
-                or self._zero_value.dtype != self.value.dtype
-            ):
-                self._zero_value = torch.zeros_like(self.value)
-            output = self._zero_value
+            output = torch.zeros_like(self.value)
         self.t += 1
+        return output
+
+    def multi_step_forward(self) -> torch.Tensor:
+        if self.t == 0:
+            zeros = torch.zeros_like(self.value).expand(
+                self.time_steps - 1, *self.value.shape
+            )
+            output = torch.cat((self.value.unsqueeze(0), zeros), dim=0)
+        else:
+            output = torch.zeros_like(self.value).expand(
+                self.time_steps, *self.value.shape
+            )
+        self.t += self.time_steps
         return output
 
 
@@ -700,9 +685,9 @@ class STATransformerRecipe(ConversionRecipe):
         * **中文**
 
         实现基于 Spatio-Temporal Approximation (STA) [#sta_transformer]_ 思路的
-        training-free Transformer 转换 recipe。该 recipe 将普通 ANN 输入编码
-        为第 0 步真实输入和后续 0 输入，并在模型内部执行 ``time_steps`` 次
-        循环后返回累计输出。
+        training-free Transformer 转换 recipe。该 recipe 将 Transformer 中的
+        Linear、Conv2d、LayerNorm、GELU、``MultiheadAttention`` 等算子替换为
+        支持 STA 差分时间传播的 step-mode 模块。
         转换过程中会以 ``eval`` 模式 trace 和校准原 ANN；``Converter`` 会在
         转换结束后恢复原 ANN 的 ``training`` 标志。
 
@@ -716,9 +701,16 @@ class STATransformerRecipe(ConversionRecipe):
         保持主干 affine 在线等价。``mode="spiking_affine"`` 会为选中的
         Linear/Conv2d 统计阈值并替换为有状态 bipolar IF / burst affine 模块；
         LayerNorm、GELU 和 ``MultiheadAttention`` 仍使用在线累计-差分浮点
-        模块。它是 STA affine spiking 路径，不修改 rate-coding recipe，也
-        不依赖 tutorial。``time_steps`` 参与阈值搜索和最终推理循环，因而是
-        转换 recipe 的一部分，而不仅是外部评估循环参数。
+        模块。当前 step-mode 对齐后端暂不支持 ``mode="spiking_affine"``、
+        ``spike_linear=True`` 或 ``spike_conv2d=True``；这些配置会明确报错。
+        ``time_steps`` 参与阈值搜索和图中常量的多步展开，因而是转换 recipe
+        的一部分，而不仅是外部评估循环参数。
+
+        转换产物是普通 ``nn.Module`` / ``fx.GraphModule``。用户通过
+        :func:`spikingjelly.activation_based.functional.set_step_mode` 递归设置
+        内部 step-mode 模块。``step_mode="s"`` 时，用户自己按时间步调用转换
+        后的模型；``step_mode="m"`` 时，模型接收第 0 维为时间维的序列 tensor
+        并返回输出序列。最终累计 readout 由用户显式执行，例如对时间维求和。
 
         :param dataloader: 校准数据加载器。每个 batch 可为单输入 tensor、
             ``(input, target)`` 风格的 tuple/list，或传递给模型的 kwargs
@@ -752,8 +744,8 @@ class STATransformerRecipe(ConversionRecipe):
         :param eps: 阈值数值下界。
         :type eps: float
         :raises ValueError: 当校验发现不支持的转换模式、阈值模式、非正
-            time step、非正缩放因子、非法动量、非法校准 batch 上限，或布尔
-            选项类型错误时抛出。
+            time step、非正缩放因子、非法动量、非法校准 batch 上限、非法
+            模式组合，或布尔选项类型错误时抛出。
 
         .. [#sta_transformer] Y. Jiang, K. Hu, T. Zhang, H. Gao, Y. Liu,
            Y. Fang, and F. Chen, "Spatio-Temporal Approximation: A
@@ -768,9 +760,9 @@ class STATransformerRecipe(ConversionRecipe):
 
         Implement a training-free Transformer conversion recipe based on
         Spatio-Temporal Approximation (STA) [#sta_transformer]_. The recipe
-        encodes ordinary ANN
-        inputs as one real input step followed by zero-input steps, runs
-        ``time_steps`` internal iterations, and returns the cumulative output.
+        replaces Transformer Linear, Conv2d, LayerNorm, GELU,
+        ``MultiheadAttention`` and related operators with step-mode modules
+        that support STA differential temporal propagation.
         Conversion traces and calibrates the original ANN in ``eval`` mode;
         ``Converter`` restores the original ANN ``training`` flags after
         conversion finishes.
@@ -787,10 +779,20 @@ class STATransformerRecipe(ConversionRecipe):
         calibrates thresholds for selected Linear/Conv2d modules and replaces
         them with stateful bipolar IF / burst affine modules; LayerNorm, GELU
         and ``MultiheadAttention`` remain online cumulative-difference
-        floating-point modules. It is the STA affine spiking path, separate
-        from the rate-coding recipe and from tutorials. ``time_steps`` is used
-        by threshold search and by the final inference loop, so it belongs to
-        the conversion recipe rather than only to an external evaluation loop.
+        floating-point modules. The current step-mode-aligned backend does
+        not support ``mode="spiking_affine"``, ``spike_linear=True`` or
+        ``spike_conv2d=True``; these configurations raise a clear error.
+        ``time_steps`` is used by threshold search and multi-step expansion of
+        graph constants, so it belongs to the conversion recipe rather than only
+        to an external evaluation loop.
+
+        The converted model is a plain ``nn.Module`` / ``fx.GraphModule``. Users
+        call :func:`spikingjelly.activation_based.functional.set_step_mode` to
+        recursively configure internal step-mode modules. With
+        ``step_mode="s"``, users call the converted model once per timestep.
+        With ``step_mode="m"``, the model consumes sequence tensors whose first
+        dimension is time and returns output sequences. Final accumulated
+        readout is explicit, e.g. summing the time dimension.
 
         :param dataloader: Calibration dataloader. Each batch can be a
             single-input tensor, a ``(input, target)``-style tuple/list, or a
@@ -830,8 +832,8 @@ class STATransformerRecipe(ConversionRecipe):
         :type eps: float
         :raises ValueError: If validation finds an unsupported mode, threshold
             mode, non-positive timestep count, non-positive scale, invalid
-            momentum, invalid calibration batch limit, or invalid type for a
-            boolean option.
+            momentum, invalid calibration batch limit, unsupported mode
+            combination, or invalid type for a boolean option.
         """
         self.dataloader = dataloader
         self.time_steps = time_steps
@@ -894,6 +896,12 @@ class STATransformerRecipe(ConversionRecipe):
             raise ValueError("spike_conv2d must be bool.")
         if not isinstance(self.spike_classifier, bool):
             raise ValueError("spike_classifier must be bool.")
+        if self.mode == "spiking_affine" or self.spike_linear or self.spike_conv2d:
+            raise ValueError(
+                "STATransformerRecipe step-mode backend currently supports only "
+                "equivalent and spiking_encoder modes without spiking affine "
+                "Linear/Conv2d replacements."
+            )
         if not isinstance(self.momentum, (int, float)) or isinstance(
             self.momentum, bool
         ):
@@ -997,6 +1005,9 @@ class STATransformerRecipe(ConversionRecipe):
     def replace(
         self, converter: "Converter", fx_model: fx.GraphModule
     ) -> fx.GraphModule:
+        return self._replace_sequence(fx_model)
+
+    def _replace_sequence(self, fx_model: fx.GraphModule) -> fx.GraphModule:
         self._remove_hooks()
         modules = dict(fx_model.named_modules())
         for node in fx_model.graph.nodes:
@@ -1004,60 +1015,236 @@ class STATransformerRecipe(ConversionRecipe):
                 continue
             module = modules.get(node.target)
             if isinstance(module, nn.Linear):
-                observer = self._observers.get(node.target)
-                threshold = self._compute_scaled_threshold(observer)
-                if threshold is None:
-                    replacement = _STAAnalogLinear(module)
-                else:
-                    replacement = _STASpikeLinear(module, threshold)
+                replacement = self._make_td_linear(module)
             elif isinstance(module, nn.Conv2d):
-                observer = self._observers.get(node.target)
-                threshold = self._compute_scaled_threshold(observer)
-                if threshold is None:
-                    replacement = _STAAnalogConv2d(module)
-                else:
-                    replacement = _STASpikeConv2d(module, threshold)
+                replacement = self._make_td_conv2d(module)
             else:
                 continue
             replacement.train(module.training)
             self._replace_submodule(fx_model, node.target, replacement)
             modules[node.target] = replacement
+
         self._wrap_time_constants(fx_model)
         modules = dict(fx_model.named_modules())
         for node in fx_model.graph.nodes:
             if node.op != "call_module" or not isinstance(node.target, str):
                 continue
             module = modules.get(node.target)
+            threshold = None
             if isinstance(module, nn.LayerNorm):
                 observer = self._observers.get(node.target)
                 threshold = self._compute_scaled_threshold(observer)
-                replacement = _STAOnlineLayerNorm(module, threshold)
+                replacement = self._make_td_layer_norm(module)
             elif isinstance(module, nn.GELU):
                 observer = self._observers.get(node.target)
                 threshold = self._compute_scaled_threshold(observer)
-                replacement = _STAOnlineGELU(module, threshold)
+                replacement = self._make_td_gelu(module)
             elif isinstance(module, nn.MultiheadAttention):
+                self._validate_sequence_mha_node(node)
                 observer = self._observers.get(node.target)
                 threshold = self._compute_scaled_threshold(observer)
-                replacement = _STAOnlineMultiheadAttention(module, threshold)
+                replacement = _make_td_multihead_attention(module)
             else:
                 continue
             replacement.train(module.training)
             self._replace_submodule(fx_model, node.target, replacement)
             modules[node.target] = replacement
-        fx_model.graph.lint()
-        fx_model.delete_all_unused_submodules()
-        fx_model.recompile()
-        return fx_model
+            if threshold is not None:
+                if isinstance(replacement, TDMultiheadAttention):
+                    encoder_target = self._insert_sequence_mha_output_encoder(
+                        fx_model, node, threshold
+                    )
+                else:
+                    encoder_target = self._insert_sequence_encoder(
+                        fx_model, node, threshold, channel_dim=-1
+                    )
+                modules[encoder_target] = fx_model.get_submodule(encoder_target)
+
+        return adapt_step_mode_graph(
+            fx_model,
+            context="STATransformerRecipe step-mode backend",
+            safe_module_types=_TRANSFORMER_SAFE_MODULE_TYPES,
+        )
 
     def finalize(self, converter: "Converter", fx_model: fx.GraphModule) -> nn.Module:
-        converted = _STAConvertedModel(
-            fx_model,
-            time_steps=self.time_steps,
-            static_arg_indices=self._find_static_placeholder_indices(fx_model),
+        object.__setattr__(fx_model, "time_steps", self.time_steps)
+        return fx_model
+
+    @staticmethod
+    def _make_td_linear(module: nn.Linear) -> TDLinear:
+        replacement = TDLinear(
+            module.in_features,
+            module.out_features,
+            bias=module.bias is not None,
+            device=module.weight.device,
+            dtype=module.weight.dtype,
         )
-        converted.train(fx_model.training)
-        return converted
+        with torch.no_grad():
+            replacement.weight.copy_(module.weight)
+            if module.bias is not None:
+                replacement.bias.copy_(module.bias)
+        replacement.weight.requires_grad = module.weight.requires_grad
+        if module.bias is not None:
+            replacement.bias.requires_grad = module.bias.requires_grad
+        return replacement
+
+    @staticmethod
+    def _make_td_conv2d(module: nn.Conv2d) -> TDConv2d:
+        replacement = TDConv2d(
+            module.in_channels,
+            module.out_channels,
+            module.kernel_size,
+            stride=module.stride,
+            padding=module.padding,
+            dilation=module.dilation,
+            groups=module.groups,
+            bias=module.bias is not None,
+            padding_mode=module.padding_mode,
+            device=module.weight.device,
+            dtype=module.weight.dtype,
+        )
+        with torch.no_grad():
+            replacement.weight.copy_(module.weight)
+            if module.bias is not None:
+                replacement.bias.copy_(module.bias)
+        replacement.weight.requires_grad = module.weight.requires_grad
+        if module.bias is not None:
+            replacement.bias.requires_grad = module.bias.requires_grad
+        return replacement
+
+    @staticmethod
+    def _make_td_layer_norm(module: nn.LayerNorm) -> TDLayerNorm:
+        replacement = TDLayerNorm(
+            module.normalized_shape,
+            eps=module.eps,
+            elementwise_affine=module.elementwise_affine,
+            bias=module.bias is not None,
+            device=module.weight.device if module.weight is not None else None,
+            dtype=module.weight.dtype if module.weight is not None else None,
+        )
+        with torch.no_grad():
+            if module.weight is not None:
+                replacement.weight.copy_(module.weight)
+                replacement.weight.requires_grad = module.weight.requires_grad
+            if module.bias is not None:
+                replacement.bias.copy_(module.bias)
+                replacement.bias.requires_grad = module.bias.requires_grad
+        return replacement
+
+    @staticmethod
+    def _make_td_gelu(module: nn.GELU) -> TDGELU:
+        return TDGELU(approximate=getattr(module, "approximate", "none"))
+
+    @staticmethod
+    def _mha_need_weights_argument(node: fx.Node):
+        if "need_weights" in node.kwargs:
+            return node.kwargs["need_weights"]
+        if len(node.args) > 4:
+            return node.args[4]
+        return None
+
+    @staticmethod
+    def _mha_attention_weights_output_is_used(node: fx.Node) -> bool:
+        for user in node.users:
+            if (
+                user.op == "call_function"
+                and user.target is operator.getitem
+                and len(user.args) >= 2
+                and user.args[1] == 1
+                and len(user.users) > 0
+            ):
+                return True
+        return False
+
+    @staticmethod
+    def _validate_sequence_mha_node(node: fx.Node) -> None:
+        if STATransformerRecipe._mha_key_padding_mask_argument(node) is not None:
+            raise ValueError(
+                "STATransformerRecipe step-mode backend does not support "
+                "MultiheadAttention key_padding_mask. Apply padding masking "
+                "to the input tensors directly or use attn_mask instead."
+            )
+        need_weights = STATransformerRecipe._mha_need_weights_argument(node)
+        if need_weights is True:
+            raise ValueError(
+                "STATransformerRecipe step-mode backend requires "
+                "MultiheadAttention calls with need_weights=False. Use "
+                "a custom online wrapper when attention weights are required."
+            )
+        if need_weights not in (None, False):
+            raise ValueError(
+                "STATransformerRecipe step-mode backend only supports "
+                "literal need_weights=False for MultiheadAttention."
+            )
+        if (
+            need_weights is None
+            and STATransformerRecipe._mha_attention_weights_output_is_used(node)
+        ):
+            raise ValueError(
+                "STATransformerRecipe step-mode backend does not support "
+                "using MultiheadAttention attention weights. Pass "
+                "need_weights=False."
+            )
+
+    @staticmethod
+    def _mha_key_padding_mask_argument(node: fx.Node):
+        if "key_padding_mask" in node.kwargs:
+            return node.kwargs["key_padding_mask"]
+        if len(node.args) > 3:
+            return node.args[3]
+        return None
+
+    @staticmethod
+    def _insert_sequence_encoder(
+        fx_model: fx.GraphModule,
+        node: fx.Node,
+        threshold: torch.Tensor,
+        channel_dim: int,
+    ) -> str:
+        modules = dict(fx_model.named_modules())
+        index = 0
+        target_base = node.target if isinstance(node.target, str) else node.name
+        target = f"{target_base}_sta_encoder"
+        while target in modules:
+            index += 1
+            target = f"{target_base}_sta_encoder_{index}"
+        fx_model.add_submodule(
+            target,
+            _STASpikeEncoder(threshold, channel_dim=channel_dim, step_mode="m"),
+        )
+        with fx_model.graph.inserting_after(node):
+            encoder_node = fx_model.graph.call_module(target, args=(node,))
+        for user in list(node.users):
+            if user is not encoder_node:
+                user.replace_input_with(node, encoder_node)
+        return target
+
+    @staticmethod
+    def _insert_sequence_mha_output_encoder(
+        fx_model: fx.GraphModule,
+        node: fx.Node,
+        threshold: torch.Tensor,
+    ) -> str:
+        output_node = None
+        for user in node.users:
+            if (
+                user.op == "call_function"
+                and user.target is operator.getitem
+                and len(user.args) >= 2
+                and user.args[1] == 0
+            ):
+                output_node = user
+                break
+        if output_node is None:
+            raise ValueError(
+                "STATransformerRecipe step-mode backend with "
+                "spiking_encoder requires MultiheadAttention output to be "
+                "unpacked before use."
+            )
+        return STATransformerRecipe._insert_sequence_encoder(
+            fx_model, output_node, threshold, channel_dim=-1
+        )
+
 
     @staticmethod
     def _batch_to_args(
@@ -1136,7 +1323,8 @@ class STATransformerRecipe(ConversionRecipe):
                 constant_index += 1
                 target = f"sta_time_constant_{constant_index}"
             constant_index += 1
-            fx_model.add_submodule(target, _STAFirstStepConstant(value))
+            module = _STAConstant(value, self.time_steps)
+            fx_model.add_submodule(target, module)
             existing_modules.add(target)
             with fx_model.graph.inserting_after(node):
                 constant_node = fx_model.graph.call_module(target, args=())
@@ -1150,7 +1338,7 @@ class STATransformerRecipe(ConversionRecipe):
             if STATransformerRecipe._is_static_control_arg(user, node, modules):
                 return True
             for key, value in user.kwargs.items():
-                if key in _STAConvertedModel._STATIC_TENSOR_KWARGS and value is node:
+                if key in _STATIC_TENSOR_KWARGS and value is node:
                     return True
         return False
 
@@ -1167,7 +1355,12 @@ class STATransformerRecipe(ConversionRecipe):
                 return False
             module = modules.get(target)
             if not isinstance(
-                module, (nn.MultiheadAttention, _STAOnlineMultiheadAttention)
+                module,
+                (
+                    nn.MultiheadAttention,
+                    _STAOnlineMultiheadAttention,
+                    TDMultiheadAttention,
+                ),
             ):
                 return False
             return (
@@ -1181,27 +1374,6 @@ class STATransformerRecipe(ConversionRecipe):
         if user.target is F.scaled_dot_product_attention:
             return len(args) > 3 and args[3] is node
         return False
-
-    @staticmethod
-    def _find_static_placeholder_indices(fx_model: fx.GraphModule) -> frozenset[int]:
-        indices = set()
-        modules = dict(fx_model.named_modules())
-        placeholder_index = 0
-        for node in fx_model.graph.nodes:
-            if node.op != "placeholder":
-                continue
-            for user in node.users:
-                if STATransformerRecipe._is_static_control_arg(user, node, modules):
-                    indices.add(placeholder_index)
-                    break
-                if any(
-                    key in _STAConvertedModel._STATIC_TENSOR_KWARGS and value is node
-                    for key, value in user.kwargs.items()
-                ):
-                    indices.add(placeholder_index)
-                    break
-            placeholder_index += 1
-        return frozenset(indices)
 
     @staticmethod
     def _is_functional_parameter_attr(node: fx.Node) -> bool:

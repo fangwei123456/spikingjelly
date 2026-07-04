@@ -6,6 +6,7 @@ from spikingjelly.activation_based import base, functional
 from spikingjelly.activation_based.ann2snn.operators import (
     SNNElementWiseProduct,
     SNNMatrixOperator,
+    TDConv2d,
     TDModule,
     TDGELU,
     TDLayerNorm,
@@ -128,6 +129,15 @@ def test_td_modules_support_step_mode_switching():
             module.step_mode = "bogus"
 
 
+def test_td_module_requires_explicit_multistep_forward():
+    class DummyTDModule(TDModule):
+        def ann_forward(self, x):
+            return x
+
+    with pytest.raises(NotImplementedError, match="multi_step_forward"):
+        DummyTDModule()(torch.zeros(2, 3))
+
+
 class TestTDSoftmax:
     def test_shape_is_preserved(self):
         x_seq = torch.randn(4, 2, 3)
@@ -173,19 +183,19 @@ class TestTDSoftmax:
         assert y_seq.shape == x_seq.shape
         assert torch.allclose(y_seq[0], torch.softmax(x_seq[0], dim=-1))
 
-    def test_single_step_mode_matches_softmax(self):
+    def test_ann_forward_matches_softmax(self):
         x = torch.randn(2, 3)
-        op = TDSoftmax(dim=0, step_mode="s")
+        op = TDSoftmax(dim=0)
 
-        y = op(x)
+        y = op.ann_forward(x)
 
         assert torch.allclose(y, torch.softmax(x, dim=0))
 
-    def test_single_step_softmax_scalar_matches_torch(self):
+    def test_ann_forward_softmax_scalar_matches_torch(self):
         x = torch.tensor(1.0)
-        op = TDSoftmax(dim=0, step_mode="s")
+        op = TDSoftmax(dim=0)
 
-        y = op(x)
+        y = op.ann_forward(x)
 
         assert torch.allclose(y, torch.softmax(x, dim=0))
 
@@ -194,6 +204,7 @@ class TestTDSoftmax:
         op = TDSoftmax(dim=-1)
 
         y_seq = op(x.unsqueeze(0))
+        op.reset()
         functional.set_step_mode(op, "s")
 
         assert torch.allclose(y_seq[0], op(x))
@@ -331,11 +342,11 @@ class TestTDLayerNorm:
         assert y_seq.shape == x_seq.shape
         assert torch.allclose(y_seq[0], expected)
 
-    def test_single_step_mode_matches_layer_norm(self):
+    def test_ann_forward_matches_layer_norm(self):
         x = torch.randn(2, 3)
-        op = TDLayerNorm(normalized_shape=3, step_mode="s")
+        op = TDLayerNorm(normalized_shape=3)
 
-        y = op(x)
+        y = op.ann_forward(x)
         expected = F.layer_norm(x, op.normalized_shape, op.weight, op.bias, op.eps)
 
         assert torch.allclose(y, expected)
@@ -345,6 +356,7 @@ class TestTDLayerNorm:
         op = TDLayerNorm(normalized_shape=3)
 
         y_seq = op(x.unsqueeze(0))
+        op.reset()
         functional.set_step_mode(op, "s")
 
         assert torch.allclose(y_seq[0], op(x))
@@ -483,11 +495,11 @@ class TestTDGELU:
         assert y_seq.shape == x_seq.shape
         assert torch.allclose(y_seq[0], expected)
 
-    def test_single_step_mode_matches_gelu(self):
+    def test_ann_forward_matches_gelu(self):
         x = torch.randn(2, 3)
-        op = TDGELU(approximate="tanh", step_mode="s")
+        op = TDGELU(approximate="tanh")
 
-        y = op(x)
+        y = op.ann_forward(x)
 
         assert torch.allclose(y, F.gelu(x, approximate="tanh"))
 
@@ -496,6 +508,7 @@ class TestTDGELU:
         op = TDGELU(approximate="tanh")
 
         y_seq = op(x.unsqueeze(0))
+        op.reset()
         functional.set_step_mode(op, "s")
 
         assert torch.allclose(y_seq[0], op(x))
@@ -612,11 +625,11 @@ class TestTDLinear:
         assert y_seq.shape == (1, 2, 5)
         assert torch.allclose(y_seq[0], expected, atol=1e-6, rtol=1e-6)
 
-    def test_single_step_mode_matches_linear(self):
+    def test_ann_forward_matches_linear(self):
         x = torch.randn(2, 3)
-        op = TDLinear(3, 5, step_mode="s")
+        op = TDLinear(3, 5)
 
-        y = op(x)
+        y = op.ann_forward(x)
         expected = F.linear(x, op.weight, op.bias)
 
         assert torch.allclose(y, expected, atol=1e-6, rtol=1e-6)
@@ -626,6 +639,7 @@ class TestTDLinear:
         op = TDLinear(3, 5)
 
         y_seq = op(x.unsqueeze(0))
+        op.reset()
         functional.set_step_mode(op, "s")
 
         assert torch.allclose(y_seq[0], op(x), atol=1e-6, rtol=1e-6)
@@ -645,6 +659,12 @@ class TestTDLinear:
         )
         assert torch.allclose(y_seq[0], op.bias.expand(2, 5))
         assert torch.count_nonzero(y_seq[1:]) == 0
+
+    def test_empty_time_sequence_raises_clear_error(self):
+        op = TDLinear(3, 5)
+
+        with pytest.raises(ValueError, match="non-empty time"):
+            op(torch.empty(0, 2, 3))
 
     def test_bias_false_has_weight_only(self):
         op = TDLinear(3, 5, bias=False)
@@ -719,6 +739,172 @@ class TestTDLinear:
         assert op.extra_repr() == "in_features=3, out_features=5, bias=False"
 
 
+class TestTDConv2d:
+    def test_shape_is_preserved_for_batched_input(self):
+        x_seq = torch.randn(4, 2, 3, 8, 8)
+        op = TDConv2d(3, 5, kernel_size=3, padding=1)
+
+        y_seq = op(x_seq)
+
+        assert y_seq.shape == (4, 2, 5, 8, 8)
+
+    def test_cumulative_output_matches_conv2d_on_cumulative_input(self):
+        x_seq = torch.randn(5, 2, 3, 8, 8)
+        op = TDConv2d(3, 4, kernel_size=3, padding=1)
+
+        y_seq = op(x_seq)
+        expected = F.conv2d(
+            x_seq.cumsum(dim=0).flatten(0, 1),
+            op.weight,
+            op.bias,
+            op.stride,
+            op.padding,
+            op.dilation,
+            op.groups,
+        ).reshape(5, 2, 4, 8, 8)
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_bias_false_matches_per_timestep_conv2d(self):
+        x_seq = torch.randn(5, 2, 3, 8, 8)
+        op = TDConv2d(3, 4, kernel_size=3, padding=1, bias=False)
+
+        y_seq = op(x_seq)
+        expected = F.conv2d(
+            x_seq.flatten(0, 1),
+            op.weight,
+            None,
+            op.stride,
+            op.padding,
+            op.dilation,
+            op.groups,
+        ).reshape(5, 2, 4, 8, 8)
+
+        assert torch.allclose(y_seq, expected, atol=1e-6, rtol=1e-6)
+
+    def test_padding_same_matches_conv2d_on_cumulative_input(self):
+        x_seq = torch.randn(4, 2, 3, 8, 8)
+        op = TDConv2d(3, 4, kernel_size=3, padding="same")
+        ann = torch.nn.Conv2d(3, 4, kernel_size=3, padding="same")
+        with torch.no_grad():
+            ann.weight.copy_(op.weight)
+            ann.bias.copy_(op.bias)
+
+        y_seq = op(x_seq)
+        expected = ann(x_seq.cumsum(dim=0).flatten(0, 1)).reshape(4, 2, 4, 8, 8)
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_padding_valid_matches_conv2d_on_cumulative_input(self):
+        x_seq = torch.randn(4, 2, 3, 8, 8)
+        op = TDConv2d(3, 4, kernel_size=3, padding="valid")
+        ann = torch.nn.Conv2d(3, 4, kernel_size=3, padding="valid")
+        with torch.no_grad():
+            ann.weight.copy_(op.weight)
+            ann.bias.copy_(op.bias)
+
+        y_seq = op(x_seq)
+        expected = ann(x_seq.cumsum(dim=0).flatten(0, 1)).reshape(4, 2, 4, 6, 6)
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_nonzero_padding_mode_matches_conv2d_on_cumulative_input(self):
+        x_seq = torch.randn(4, 2, 3, 8, 8)
+        op = TDConv2d(
+            3,
+            4,
+            kernel_size=3,
+            padding=1,
+            padding_mode="reflect",
+        )
+        ann = torch.nn.Conv2d(
+            3,
+            4,
+            kernel_size=3,
+            padding=1,
+            padding_mode="reflect",
+        )
+        with torch.no_grad():
+            ann.weight.copy_(op.weight)
+            ann.bias.copy_(op.bias)
+
+        y_seq = op(x_seq)
+        expected = ann(x_seq.cumsum(dim=0).flatten(0, 1)).reshape(4, 2, 4, 8, 8)
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_bias_is_not_repeatedly_accumulated(self):
+        x_seq = torch.zeros(4, 2, 3, 6, 6)
+        op = TDConv2d(3, 5, kernel_size=1)
+        with torch.no_grad():
+            op.weight.zero_()
+            op.bias.copy_(torch.arange(5, dtype=x_seq.dtype))
+
+        y_seq = op(x_seq)
+        expected_bias = op.bias.view(1, 5, 1, 1).expand(2, 5, 6, 6)
+
+        assert torch.allclose(y_seq.cumsum(dim=0)[-1], expected_bias)
+        assert not torch.allclose(
+            y_seq.cumsum(dim=0)[-1],
+            op.bias.mul(x_seq.shape[0]).view(1, 5, 1, 1).expand(2, 5, 6, 6),
+        )
+        assert torch.allclose(y_seq[0], expected_bias)
+        assert torch.count_nonzero(y_seq[1:]) == 0
+
+    def test_ann_forward_matches_conv2d(self):
+        x = torch.randn(2, 3, 8, 8)
+        op = TDConv2d(3, 5, kernel_size=3, padding=1)
+
+        y = op.ann_forward(x)
+        expected = F.conv2d(
+            x,
+            op.weight,
+            op.bias,
+            op.stride,
+            op.padding,
+            op.dilation,
+            op.groups,
+        )
+
+        assert torch.allclose(y, expected, atol=1e-6, rtol=1e-6)
+
+    def test_rejects_non_5d_multistep_input(self):
+        op = TDConv2d(3, 5, kernel_size=3)
+
+        with pytest.raises(ValueError, match=r"\[T, N, C, H, W\]"):
+            op(torch.randn(4, 3, 8, 8))
+
+    def test_device_and_dtype_initialize_parameters(self):
+        op = TDConv2d(3, 5, kernel_size=3, device="cpu", dtype=torch.float64)
+
+        assert op.weight.device.type == "cpu"
+        assert op.bias.device.type == "cpu"
+        assert op.weight.dtype == torch.float64
+        assert op.bias.dtype == torch.float64
+
+    def test_extra_repr(self):
+        op = TDConv2d(3, 5, kernel_size=3, padding=1, bias=False)
+
+        assert (
+            op.extra_repr()
+            == "3, 5, kernel_size=(3, 3), stride=(1, 1), "
+            "padding=(1, 1), bias=False"
+        )
+
+    def test_extra_repr_quotes_string_padding(self):
+        op = TDConv2d(3, 5, kernel_size=3, padding="valid")
+
+        assert "padding='valid'" in op.extra_repr()
+
+    def test_rejects_invalid_padding(self):
+        with pytest.raises(ValueError, match="padding"):
+            TDConv2d(3, 5, kernel_size=3, padding="bad")
+
+    def test_rejects_same_padding_with_stride(self):
+        with pytest.raises(ValueError, match="padding='same'"):
+            TDConv2d(3, 5, kernel_size=3, padding="same", stride=2)
+
+
 class TestSNNMatrixOperator:
     def test_matches_las_style_loop_reference(self):
         a_seq = torch.randn(4, 2, 3, 5, dtype=torch.float64)
@@ -741,12 +927,12 @@ class TestSNNMatrixOperator:
 
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
 
-    def test_single_step_mode_matches_matmul(self):
+    def test_ann_forward_matches_matmul(self):
         a = torch.randn(2, 3, 4)
         b = torch.randn(2, 4, 6)
-        op = SNNMatrixOperator(step_mode="s")
+        op = SNNMatrixOperator()
 
-        y = op(a, b)
+        y = op.ann_forward(a, b)
 
         assert torch.allclose(y, torch.matmul(a, b))
 
@@ -756,6 +942,7 @@ class TestSNNMatrixOperator:
         op = SNNMatrixOperator()
 
         y_seq = op(a.unsqueeze(0), b.unsqueeze(0))
+        op.reset()
         functional.set_step_mode(op, "s")
 
         assert torch.allclose(y_seq[0], op(a, b))
@@ -870,12 +1057,12 @@ class TestSNNElementWiseProduct:
 
         assert torch.allclose(y_seq.sum(dim=0), expected, atol=1e-6, rtol=1e-6)
 
-    def test_single_step_mode_matches_product(self):
+    def test_ann_forward_matches_product(self):
         a = torch.randn(2, 3)
         b = torch.randn(2, 3)
-        op = SNNElementWiseProduct(step_mode="s")
+        op = SNNElementWiseProduct()
 
-        y = op(a, b)
+        y = op.ann_forward(a, b)
 
         assert torch.allclose(y, a * b)
 
@@ -885,6 +1072,7 @@ class TestSNNElementWiseProduct:
         op = SNNElementWiseProduct()
 
         y_seq = op(a.unsqueeze(0), b.unsqueeze(0))
+        op.reset()
         functional.set_step_mode(op, "s")
 
         assert torch.allclose(y_seq[0], op(a, b))
@@ -987,6 +1175,7 @@ def test_td_mlp_switches_between_single_and_multi_step_modes():
     functional.set_step_mode(model, "s")
     x = torch.randn(2, 4)
     y = model(x)
+    functional.reset_net(model)
     expected = model[2].single_step_forward(
         model[1].single_step_forward(model[0].single_step_forward(x))
     )
@@ -994,9 +1183,11 @@ def test_td_mlp_switches_between_single_and_multi_step_modes():
     assert y.shape == (2, 3)
     assert torch.allclose(y, expected, atol=1e-6, rtol=1e-6)
 
+    functional.reset_net(model)
     functional.set_step_mode(model, "m")
     x_seq = torch.randn(5, 2, 4)
     y_seq = model(x_seq)
+    functional.reset_net(model)
     functional.set_step_mode(model, "s")
     expected_from_total = model(x_seq.sum(dim=0))
 
@@ -1112,13 +1303,13 @@ class TestTDScaledDotProductAttention:
         assert y_seq.shape == (1, 2, 3, 7)
         assert torch.allclose(y_seq[0], expected, atol=1e-6, rtol=1e-6)
 
-    def test_single_step_mode_matches_sdpa(self):
+    def test_ann_forward_matches_sdpa(self):
         q = torch.randn(2, 3, 4)
         k = torch.randn(2, 5, 4)
         v = torch.randn(2, 5, 7)
-        op = TDScaledDotProductAttention(step_mode="s")
+        op = TDScaledDotProductAttention()
 
-        y = op(q, k, v)
+        y = op.ann_forward(q, k, v)
         expected = F.scaled_dot_product_attention(q, k, v, dropout_p=0.0)
 
         assert torch.allclose(y, expected, atol=1e-6, rtol=1e-6)
@@ -1130,6 +1321,7 @@ class TestTDScaledDotProductAttention:
         op = TDScaledDotProductAttention()
 
         y_seq = op(q.unsqueeze(0), k.unsqueeze(0), v.unsqueeze(0))
+        op.reset()
         functional.set_step_mode(op, "s")
 
         assert torch.allclose(y_seq[0], op(q, k, v), atol=1e-6, rtol=1e-6)
@@ -1386,15 +1578,11 @@ class TestTDMultiheadAttention:
 
         assert torch.allclose(y_seq, expected, atol=1e-5, rtol=1e-5)
 
-    def test_single_step_mode_matches_ann_mha(self):
+    def test_ann_forward_matches_ann_mha(self):
         x = torch.randn(2, 4, 8)
-        op = TDMultiheadAttention(embed_dim=8, num_heads=2, step_mode="s")
+        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
 
-        assert op.q_proj.step_mode == "s"
-        assert op.k_proj.step_mode == "s"
-        assert op.v_proj.step_mode == "s"
-        assert op.out_proj.step_mode == "s"
-        y, weights = op(x, x, x, need_weights=False)
+        y, weights = op.ann_forward(x, x, x, need_weights=False)
         expected = _ann_mha_reference(op, x, x, x)
 
         assert weights is None
@@ -1405,6 +1593,7 @@ class TestTDMultiheadAttention:
         op = TDMultiheadAttention(embed_dim=8, num_heads=2)
 
         y_seq, _ = op(x.unsqueeze(0), x.unsqueeze(0), x.unsqueeze(0))
+        op.reset()
         functional.set_step_mode(op, "s")
         y, _ = op(x, x, x)
 
@@ -1424,6 +1613,7 @@ class TestTDMultiheadAttention:
         assert op.v_proj.step_mode == "m"
         assert op.out_proj.step_mode == "m"
 
+        op.reset()
         functional.set_step_mode(op, "s")
         x_seq = x.unsqueeze(0)
         y_seq, _ = op.multi_step_forward(x_seq, x_seq, x_seq)
@@ -1528,13 +1718,13 @@ class TestTDMultiheadAttention:
         op = TDMultiheadAttention(embed_dim=8, num_heads=2)
 
         y_seq, _ = op(x_seq, x_seq, x_seq, need_weights=False, is_causal=True)
-        q_seq = op._split_heads(op.q_proj(x_seq))
-        k_seq = op._split_heads(op.k_proj(x_seq))
-        v_seq = op._split_heads(op.v_proj(x_seq))
+        q_cum = op._split_heads(op.q_proj.ann_forward(x_seq.cumsum(dim=0)))
+        k_cum = op._split_heads(op.k_proj.ann_forward(x_seq.cumsum(dim=0)))
+        v_cum = op._split_heads(op.v_proj.ann_forward(x_seq.cumsum(dim=0)))
         expected_attn = F.scaled_dot_product_attention(
-            q_seq.cumsum(dim=0),
-            k_seq.cumsum(dim=0),
-            v_seq.cumsum(dim=0),
+            q_cum,
+            k_cum,
+            v_cum,
             dropout_p=0.0,
             is_causal=True,
         )

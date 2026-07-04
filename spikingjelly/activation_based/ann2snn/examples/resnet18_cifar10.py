@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torchvision
 from tqdm import tqdm
@@ -7,34 +9,38 @@ from spikingjelly.activation_based.ann2snn.sample_models import cifar10_resnet
 
 def val(net, device, data_loader, T=None):
     net.eval().to(device)
+    if T is not None and T <= 0:
+        raise ValueError(f"T must be positive, got {T}.")
+    reset_modules = None
     correct = 0.0
     total = 0.0
     with torch.no_grad():
         for batch, (img, label) in enumerate(tqdm(data_loader)):
             img = img.to(device)
+            label = label.to(device)
             if T is None:
                 out = net(img)
             else:
-                for m in net.modules():
-                    if hasattr(m, "reset"):
-                        m.reset()
-                for t in range(T):
-                    if t == 0:
-                        out = net(img)
-                    else:
-                        out += net(img)
-            correct += (out.argmax(dim=1) == label.to(device)).float().sum().item()
+                if reset_modules is None:
+                    reset_modules = [m for m in net.modules() if hasattr(m, "reset")]
+                for m in reset_modules:
+                    m.reset()
+                out = net(img)
+                for t in range(1, T):
+                    out += net(img)
+            correct += (out.argmax(dim=1) == label).float().sum().item()
             total += out.shape[0]
         acc = correct / total
         print("Validating Accuracy: %.3f" % (acc))
     return acc
 
 
-def main():
+def main(checkpoint_path="./SJ-cifar10-resnet18_model-sample.pth"):
     torch.random.manual_seed(0)
-    torch.cuda.manual_seed(0)
-    device = "cuda:9"
-    dataset_dir = "~/dataset/cifar10"
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(0)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    dataset_dir = os.path.expanduser("~/dataset/cifar10")
     batch_size = 100
     T = 400
 
@@ -48,7 +54,12 @@ def main():
     )
 
     model = cifar10_resnet.ResNet18()
-    model.load_state_dict(torch.load("SJ-cifar10-resnet18_model-sample.pth"))
+    state_dict = torch.load(
+        checkpoint_path,
+        map_location="cpu",
+        weights_only=True,
+    )
+    model.load_state_dict(state_dict)
 
     train_data_dataset = torchvision.datasets.CIFAR10(
         root=dataset_dir, train=True, transform=transform, download=True
@@ -60,7 +71,7 @@ def main():
         root=dataset_dir, train=False, transform=transform, download=True
     )
     test_data_loader = torch.utils.data.DataLoader(
-        dataset=test_data_dataset, batch_size=50, shuffle=True, drop_last=False
+        dataset=test_data_dataset, batch_size=50, shuffle=False, drop_last=False
     )
 
     print("ANN accuracy:")
@@ -76,9 +87,18 @@ def main():
 
 
 if __name__ == "__main__":
+    checkpoint_path = "./SJ-cifar10-resnet18_model-sample.pth"
     print("Downloading SJ-cifar10-resnet18_model-sample.pth")
     ann2snn.download_url(
         "https://ndownloader.figshare.com/files/26676110",
-        "./SJ-cifar10-resnet18_model-sample.pth",
+        checkpoint_path,
     )
-    main()
+    expected_min_size = 40 * 1024 * 1024
+    if (
+        not os.path.isfile(checkpoint_path)
+        or os.path.getsize(checkpoint_path) < expected_min_size
+    ):
+        raise RuntimeError(
+            f"Checkpoint download failed or is truncated: {checkpoint_path}"
+        )
+    main(checkpoint_path)

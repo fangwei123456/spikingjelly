@@ -1,3 +1,4 @@
+import math
 from typing import Optional, Type, Union
 
 import torch.nn as nn
@@ -65,10 +66,48 @@ class NeuronFactory:
         :param kwargs: Additional keyword arguments forwarded to the neuron
             constructor.
         """
+        if not isinstance(neuron_type, type) or not issubclass(neuron_type, nn.Module):
+            raise TypeError(
+                "neuron_type must be an nn.Module subclass, "
+                f"but got {neuron_type!r}."
+            )
+        if not isinstance(v_threshold, (int, float)) or isinstance(v_threshold, bool):
+            raise TypeError(
+                "v_threshold must be a real number, "
+                f"got {type(v_threshold).__name__}."
+            )
+        if not math.isfinite(float(v_threshold)) or not (v_threshold > 0):
+            raise ValueError(
+                f"v_threshold must be finite and positive, got {v_threshold}."
+            )
+        if (
+            v_reset is not None
+            and (
+                not isinstance(v_reset, (int, float))
+                or isinstance(v_reset, bool)
+            )
+        ):
+            raise TypeError(
+                "v_reset must be None or a real number, "
+                f"got {v_reset!r}."
+            )
+        if v_reset is not None and not math.isfinite(float(v_reset)):
+            raise ValueError(f"v_reset must be finite, got {v_reset}.")
+        reserved = self.neuron_kwargs_reserved_keys() & kwargs.keys()
+        if reserved:
+            names = ", ".join(sorted(reserved))
+            raise TypeError(
+                f"neuron kwargs contain reserved key(s): {names}. "
+                "Use NeuronFactory parameters instead."
+            )
         self.neuron_type = neuron_type
         self.v_threshold = v_threshold
         self.v_reset = v_reset
         self.neuron_kwargs = kwargs
+
+    @staticmethod
+    def neuron_kwargs_reserved_keys() -> set[str]:
+        return {"v_threshold", "v_reset"}
 
     def create(self, scale: float) -> nn.Module:
         r"""
@@ -149,6 +188,39 @@ class HookFactory:
         :param momentum: EMA momentum for :class:`VoltageHook`.
         :type momentum: float
         """
+        if isinstance(mode, str):
+            if not mode:
+                raise ValueError("mode must be 'Max', a percentile string, or a float.")
+            if mode[-1] == "%":
+                try:
+                    percentile = float(mode[:-1])
+                except ValueError as exc:
+                    raise ValueError(
+                        "mode percentile string must contain a numeric value."
+                    ) from exc
+                if not (0.0 <= percentile <= 100.0):
+                    raise ValueError(
+                        f"mode percentile must lie in [0, 100], got {mode!r}."
+                    )
+            elif mode.lower() != "max":
+                raise ValueError(
+                    f"mode string must be 'Max' or a percentile string, got {mode!r}."
+                )
+        elif isinstance(mode, (int, float)) and not isinstance(mode, bool):
+            if not math.isfinite(float(mode)) or not (0.0 < float(mode) <= 1.0):
+                raise ValueError(f"mode float must lie in (0, 1], got {mode!r}.")
+        else:
+            raise TypeError(
+                "mode must be a string or a float in (0, 1], "
+                f"got {type(mode).__name__}."
+            )
+        if not isinstance(momentum, (int, float)) or isinstance(momentum, bool):
+            raise TypeError(
+                "momentum must be a real number, "
+                f"got {type(momentum).__name__}."
+            )
+        if not math.isfinite(float(momentum)) or not (0.0 <= float(momentum) <= 1.0):
+            raise ValueError(f"momentum must lie in [0, 1], got {momentum!r}.")
         self.mode = mode
         self.momentum = momentum
 

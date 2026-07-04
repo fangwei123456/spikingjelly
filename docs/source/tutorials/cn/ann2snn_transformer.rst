@@ -22,8 +22,8 @@ Spatio-Temporal Approximation (STA) [#sta]_ 的 training-free 转换 recipe。
     因此，``STATransformerRecipe`` 应理解为一种 training-free Transformer
     ANN2SNN 近似转换流程，而不是完整 fully spike-driven LLM conversion 的承诺。
     以整数 token 为输入的语言模型需要额外定义 input 和 embedding 的转换契约。
-    当前 STA 实现刻意采用在线、有状态形式；Layer-wise sequence TD execution
-    和更快 multi-step inference 属于后续执行后端工作，不是本教程中的默认路径。
+    转换后的 STA 模型是有状态模块，并遵循 SpikingJelly ``step_mode`` 的单步
+    和多步执行语义。
 
 STA 转换思想
 ------------
@@ -76,18 +76,20 @@ STA 用在线时序近似来处理它们。
 结果的差分，并且常量与 bias 只计算一次，那么把所有时间步输出相加即可
 恢复 ANN 模块的输出。
 
-不带脉冲编码的在线等价路径的执行模式如下：
+不带脉冲编码的在线等价路径遵循 SpikingJelly 其它模块相同的 step-mode
+执行约定：
 
 * 第 0 个时间步输入原始 ANN 输入；
 * 后续时间步输入零值浮点 tensor；
-* 转换后的模型在内部执行 ``time_steps`` 次循环；
 * 有状态转换模块输出累计结果的差分；
-* 包装模块累加每步输出并返回累计结果。
+* ``step_mode="s"`` 只执行一个时间步，外层时间循环由用户自己写；
+* ``step_mode="m"`` 接收第 0 维为时间维的序列 tensor，并返回完整输出序列。
 
-高层执行流程如下：
+单步模式的高层执行流程如下：
 
 .. code-block:: text
 
+    reset converted state
     y = 0
     for t in range(time_steps):
         if t == 0:
@@ -97,9 +99,18 @@ STA 用在线时序近似来处理它们。
         y = y + converted_graph_step(x_t, static_control_tensors)
     return y
 
-这里的 ``converted_graph_step`` 表示转换后的 FX 计算图在一个内部时间步上的
-一次执行。该计算图包含有状态模块，会记住上一时间步的累计输出，因此每次调用
-只返回当前增量。
+多步模式直接把完整序列交给转换后的模型：
+
+.. code-block:: text
+
+    reset converted state
+    x_seq = [original_input, zeros_like(original_input), ...]
+    y_seq = converted_graph(x_seq, static_control_tensors)
+    y = sum over the time dimension of y_seq
+
+这里，每一次单步调用或序列中的每个元素都对应 STA 的一个时间步。转换后的
+FX 计算图包含有状态模块，会记住上一时间步的累计输出，因此每个时间步只返回
+当前增量。
 
 带脉冲的 spike encoder
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -186,28 +197,74 @@ dataloader 校准，并依赖 ``time_steps``。
     converted = ann2snn.Converter(recipe=recipe, device="cuda:0").convert(model)
     converted.eval()
 
-``time_steps`` 属于 recipe 参数，因为它既参与阈值校准，也参与转换后模型内部
-的推理循环。与 rate-coded CNN 转换不同，用户不需要在 Python 外层按时间步
-反复调用转换后的 Transformer；包装模块自己持有这个循环。
+``time_steps`` 属于 recipe 参数，因为它参与阈值校准，以及图中无法从运行时
+输入推断长度的常量序列展开。
 
 STA 当前有三种模式：
 
-* ``equivalent``：无需校准的在线累计差分基线；
+* ``equivalent``：无需校准的累计差分基线；
 * ``spiking_encoder``：在非线性和 attention 输出上使用校准 spike encoder；
-* ``spiking_affine``：高级路径，会进一步把选中的 affine 模块替换为 spiking
-  affine 模块。
+* ``spiking_affine``：当前 step-mode 对齐 STA 后端会明确拒绝。
 
 本教程的模型级结果使用 ``spiking_encoder``。
+
+Step-mode 执行
+--------------
+
+``STATransformerRecipe`` 的转换产物是普通 ``nn.Module`` / ``fx.GraphModule``。
+用户通过 ``functional.set_step_mode`` 递归设置其内部 step-mode 模块。单步
+模式下，用户显式编写时间循环，并在处理独立序列前重置状态：
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import functional
+
+    functional.set_step_mode(converted, "s")
+    functional.reset_net(converted)
+
+    y = None
+    for t in range(converted.time_steps):
+        x_t = x if t == 0 else torch.zeros_like(x)
+        y_t = converted(x_t)
+        y = y_t if y is None else y + y_t
+
+如果要触发 layer-wise 多步加速，将转换产物切换为 ``step_mode="m"``，并输入
+第 0 维为时间维的序列 tensor：
+
+.. code-block:: python
+
+    from spikingjelly.activation_based import functional
+
+    functional.set_step_mode(converted, "m")
+    functional.reset_net(converted)
+
+    x_zeros = torch.zeros_like(x).expand(converted.time_steps - 1, *x.shape)
+    x_seq = torch.cat((x.unsqueeze(0), x_zeros), dim=0)
+    y_seq = converted(x_seq)
+    y = y_seq.sum(dim=0)
+
+多输入模型同样由用户显式构造浮点输入序列。``attn_mask`` 等具名静态控制
+tensor 应保持原样，不额外添加时间维。最终累计读出由用户对输出时间维求和
+或按输出结构自行递归求和。
+
+多步后端比任意 PyTorch 图更严格。它当前会拒绝 ``mode="spiking_affine"``、
+``spike_linear=True``、``spike_conv2d=True``、请求或使用 attention weights
+的 ``MultiheadAttention`` 调用、``key_padding_mask``、functional
+``scaled_dot_product_attention``，以及不支持的 FX tensor 操作。如果转换器
+报出这些限制，请将模型改写为受支持的 sequence-preserving 模块和操作。
 
 与 TransformerSpikeEquivalentRecipe 的关系
 --------------------------------------------
 
 ``TransformerSpikeEquivalentRecipe`` 是一个不需要 dataloader 的替换路径，
 用于将当前支持的 Transformer 算子替换为 TD / spike-equivalent 模块。它适合
-作为算子级转换基线，但不进行 STA 校准，也不持有内部时间步循环。
+作为算子级转换基线，但不进行 STA 校准，也不提供 STA 输入编码和累计读出
+helper。
 
 ``STATransformerRecipe`` 是模型级 STA 流程。启用 spike encoder 时它需要校准，
-并返回一个内部执行 ``time_steps`` 循环的包装模块。
+并返回一个 step-mode 模块；该模块既可以一次执行一个时间步，也可以接收完整
+时间序列。
 
 ViT-B/16 ImageNet 示例
 ----------------------

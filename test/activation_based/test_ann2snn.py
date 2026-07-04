@@ -9,7 +9,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from spikingjelly.activation_based import ann2snn, neuron, surrogate
+from spikingjelly.activation_based import (
+    ann2snn,
+    base,
+    functional,
+    layer,
+    neuron,
+    surrogate,
+)
 from spikingjelly.activation_based.ann2snn import (
     Converter,
     ConversionRecipe,
@@ -31,6 +38,7 @@ from spikingjelly.activation_based.ann2snn.modules import (
     _safe_quantile,
 )
 from spikingjelly.activation_based.ann2snn.operators import (
+    TDConv2d,
     TDGELU,
     TDLayerNorm,
     TDLinear,
@@ -85,6 +93,21 @@ class SubclassCNN(nn.Module):
         return self.fc(x)
 
 
+class SubclassPoolCNN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Conv2d(1, 8, 3, padding=1)
+        self.bn = CustomBatchNorm2d(8)
+        self.relu = nn.ReLU()
+        self.pool = nn.AvgPool2d(2)
+        self.fc = nn.Linear(8 * 14 * 14, 10)
+
+    def forward(self, x):
+        x = self.pool(self.relu(self.bn(self.conv(x))))
+        x = x.view(x.size(0), -1)
+        return self.fc(x)
+
+
 class TwoConvBN(nn.Module):
     def __init__(self):
         super().__init__()
@@ -110,6 +133,42 @@ class SimpleCNNNoBN(nn.Module):
         x = self.pool(self.relu(self.conv(x)))
         x = x.view(x.size(0), -1)
         return self.fc(x)
+
+
+class AvgPool1dDivisorOverrideNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.pool = nn.AvgPool1d(2)
+
+    def forward(self, x):
+        return self.pool(x)
+
+
+class InplaceDropoutNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.dropout = nn.Dropout(p=0.5, inplace=True)
+
+    def forward(self, x):
+        return self.dropout(x)
+
+
+class UnsupportedLeafModule(nn.Module):
+    def forward(self, x):
+        return x.square()
+
+
+UnsupportedLeafModule.__module__ = nn.Linear.__module__
+
+
+class UnsupportedLeafCNN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.relu = nn.ReLU()
+        self.unsupported = UnsupportedLeafModule()
+
+    def forward(self, x):
+        return self.unsupported(self.relu(x))
 
 
 class UnderscoreModuleCNN(nn.Module):
@@ -199,6 +258,17 @@ class DropoutCoreMLP(nn.Module):
 
     def forward(self, x):
         return self.fc(self.dropout(x))
+
+
+class ConvTransformerEquivalentNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Conv2d(1, 2, 3, padding=1)
+        self.flatten = nn.Flatten()
+        self.fc = nn.Linear(2 * 4 * 4, 4)
+
+    def forward(self, x):
+        return self.fc(self.flatten(self.conv(x)))
 
 
 class FunctionalDropoutCoreMLP(nn.Module):
@@ -521,6 +591,22 @@ def _make_vector_loader(batch_size=2, features=4):
     return [torch.randn(batch_size, features)]
 
 
+def _repeat_sequence(x: torch.Tensor, time_steps: int) -> torch.Tensor:
+    return x.unsqueeze(0).repeat(time_steps, *([1] * x.dim()))
+
+
+def _rate_multistep_output(model: nn.Module, x: torch.Tensor, time_steps: int):
+    functional.set_step_mode(model, "m")
+    functional.reset_net(model)
+    return model(_repeat_sequence(x, time_steps))
+
+
+def _rate_single_loop_output(model: nn.Module, x: torch.Tensor, time_steps: int):
+    functional.set_step_mode(model, "s")
+    functional.reset_net(model)
+    return torch.stack([model(x) for _ in range(time_steps)], dim=0)
+
+
 def _rate_converter(
     dataloader=None,
     mode="Max",
@@ -670,6 +756,30 @@ class TestVoltageHook:
         hook(torch.tensor([7.0]))
         assert hook.scale.item() == pytest.approx(7.0)
 
+    def test_eval_mode_does_not_update_scale(self):
+        hook = VoltageHook(mode="Max")
+        hook(torch.tensor([7.0]))
+        hook.eval()
+
+        hook(torch.tensor([100.0]))
+
+        assert hook.scale.item() == pytest.approx(7.0)
+        assert hook.num_batches_tracked == 1
+
+    def test_scalar_input_updates_batch_count(self):
+        hook = VoltageHook(mode="Max")
+
+        hook(torch.tensor(3.0))
+
+        assert hook.scale.item() == pytest.approx(3.0)
+        assert hook.num_batches_tracked == 1
+
+    def test_empty_quantile_input_raises_value_error(self):
+        hook = VoltageHook(mode="50%")
+
+        with pytest.raises(ValueError, match="must not be empty"):
+            hook(torch.empty(0))
+
     def test_passthrough(self):
         hook = VoltageHook(mode="Max")
         x = torch.randn(3, 4)
@@ -722,6 +832,7 @@ class TestVoltageScaler:
     def test_extra_repr(self):
         scaler = VoltageScaler(3.14)
         assert "3.14" in scaler.extra_repr()
+        assert "step_mode" in scaler.extra_repr()
 
 
 class TestChannelVoltageScaler:
@@ -756,6 +867,17 @@ class TestChannelVoltageScaler:
         scaler = ChannelVoltageScaler(torch.ones(3), channel_dim=1)
         with pytest.raises(ValueError, match="does not match"):
             scaler(torch.ones(2, 4))
+
+    def test_multistep_matches_single_step_channel_scaling(self):
+        scaler = ChannelVoltageScaler(torch.tensor([1.0, 2.0, 3.0]), channel_dim=1)
+        x = torch.randn(4, 2, 3, 5)
+
+        functional.set_step_mode(scaler, "s")
+        y_single = torch.stack([scaler(x_t) for x_t in x], dim=0)
+        functional.set_step_mode(scaler, "m")
+        y_multi = scaler(x)
+
+        assert torch.allclose(y_multi, y_single)
 
 
 class TestReLURule:
@@ -968,6 +1090,66 @@ class TestConverterRecipes:
         assert isinstance(snn, torch.fx.GraphModule)
         assert any(isinstance(m, neuron.IFNode) for m in snn.modules())
 
+    def test_rate_coding_step_mode_product_matches_single_loop(self):
+        model = SimpleCNNNoBN()
+        model.eval()
+        snn = _rate_converter(fuse_flag=False).convert(model)
+        x = torch.rand(2, 1, 28, 28)
+
+        assert not isinstance(snn, base.StepModule)
+        assert not hasattr(snn, "step_mode")
+        assert isinstance(dict(snn.named_modules())["conv"], layer.Conv2d)
+        assert isinstance(dict(snn.named_modules())["pool"], layer.AvgPool2d)
+        assert isinstance(dict(snn.named_modules())["fc"], layer.Linear)
+        assert torch.allclose(
+            _rate_single_loop_output(snn, x, time_steps=4),
+            _rate_multistep_output(snn, x, time_steps=4),
+            atol=1e-6,
+            rtol=1e-6,
+        )
+
+    def test_rate_coding_step_mode_wraps_module_subclasses(self):
+        model = SubclassPoolCNN()
+        model.eval()
+        snn = _rate_converter(fuse_flag=False).convert(model)
+        modules = dict(snn.named_modules())
+
+        assert isinstance(modules["conv"], layer.Conv2d)
+        assert isinstance(modules["bn"], layer.BatchNorm2d)
+        assert isinstance(modules["pool"], layer.AvgPool2d)
+        assert isinstance(modules["fc"], layer.Linear)
+
+    def test_rate_coding_rejects_unknown_leaf_module(self):
+        model = UnsupportedLeafCNN()
+        model.eval()
+
+        with pytest.raises(ValueError, match="UnsupportedLeafModule"):
+            _rate_converter(
+                dataloader=[torch.rand(2, 1, 4, 4)],
+                fuse_flag=False,
+            ).convert(model)
+
+    def test_rate_coding_wraps_avgpool1d_without_divisor_override(self):
+        model = AvgPool1dDivisorOverrideNet()
+        model.eval()
+
+        converted = _rate_converter(
+            dataloader=[torch.rand(2, 1, 4)],
+            fuse_flag=False,
+        ).convert(model)
+
+        assert isinstance(converted.pool, layer.AvgPool1d)
+
+    def test_rate_coding_rejects_inplace_dropout_adapter(self):
+        model = InplaceDropoutNet()
+        model.eval()
+
+        with pytest.raises(ValueError, match="Dropout.*inplace=True"):
+            _rate_converter(
+                dataloader=[torch.rand(2, 4)],
+                fuse_flag=False,
+            ).convert(model)
+
     def test_rate_coding_recipe_sets_eval_before_tracing(self):
         model = FunctionalDropoutCoreMLP()
         model.train()
@@ -1018,6 +1200,28 @@ class TestNeuronFactory:
         n = factory.create(scale=1.0)
         assert isinstance(n, neuron.LIFNode)
 
+    def test_invalid_neuron_type_raises(self):
+        with pytest.raises(TypeError, match="nn.Module subclass"):
+            NeuronFactory(neuron_type=object)
+
+    def test_invalid_threshold_raises(self):
+        with pytest.raises(ValueError, match="positive"):
+            NeuronFactory(v_threshold=0.0)
+        with pytest.raises(ValueError, match="finite"):
+            NeuronFactory(v_threshold=float("inf"))
+
+    def test_invalid_threshold_type_raises(self):
+        with pytest.raises(TypeError, match="real number"):
+            NeuronFactory(v_threshold="1.0")
+
+    def test_invalid_v_reset_raises(self):
+        factory = NeuronFactory(v_reset=-1.0)
+        assert factory.create(scale=1.0).v_reset == -1.0
+        with pytest.raises(ValueError, match="finite"):
+            NeuronFactory(v_reset=float("nan"))
+        with pytest.raises(TypeError, match="v_reset"):
+            NeuronFactory(v_reset="0.0")
+
 
 class TestHookFactory:
     def test_default_mode(self):
@@ -1031,6 +1235,23 @@ class TestHookFactory:
         hook = factory.create()
         assert hook.mode == "99.9%"
         assert hook.momentum == 0.5
+
+    def test_invalid_mode_raises(self):
+        with pytest.raises(ValueError, match="mode"):
+            HookFactory(mode="bad")
+        assert HookFactory(mode="0%").create().mode == "0%"
+        with pytest.raises(ValueError, match="mode percentile"):
+            HookFactory(mode="-1%")
+        with pytest.raises(ValueError, match="mode float"):
+            HookFactory(mode=float("nan"))
+
+    def test_invalid_momentum_raises(self):
+        with pytest.raises(ValueError, match="momentum"):
+            HookFactory(momentum=1.1)
+        with pytest.raises(ValueError, match="momentum"):
+            HookFactory(momentum=float("inf"))
+        with pytest.raises(TypeError, match="real number"):
+            HookFactory(momentum="0.1")
 
 
 class TestThresholdOptimizer:
@@ -1331,6 +1552,8 @@ class TestConverterTDOperatorReplacement:
         converted = _td_converter().convert(model)
         modules = dict(converted.named_modules())
 
+        assert not isinstance(converted, base.StepModule)
+        assert not hasattr(converted, "step_mode")
         assert isinstance(modules["norm"], TDLayerNorm)
         assert isinstance(modules["fc0"], TDLinear)
         assert isinstance(modules["act"], TDGELU)
@@ -1393,6 +1616,51 @@ class TestConverterTDOperatorReplacement:
 
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
 
+    def test_single_loop_matches_multistep(self):
+        model = CoreTransformerMLP()
+        model.eval()
+        converted = _td_converter().convert(model)
+        x_seq = torch.randn(4, 2, 3, 4)
+
+        functional.set_step_mode(converted, "s")
+        functional.reset_net(converted)
+        y_single = torch.stack([converted(x_t) for x_t in x_seq], dim=0)
+        functional.set_step_mode(converted, "m")
+        functional.reset_net(converted)
+        y_multi = converted(x_seq)
+
+        assert torch.allclose(y_single, y_multi, atol=1e-6, rtol=1e-6)
+
+    def test_conv2d_single_loop_matches_multistep(self):
+        model = ConvTransformerEquivalentNet()
+        model.eval()
+        converted = _td_converter().convert(model)
+        modules = dict(converted.named_modules())
+        x_seq = torch.randn(4, 2, 1, 4, 4)
+
+        functional.set_step_mode(converted, "s")
+        functional.reset_net(converted)
+        y_single = torch.stack([converted(x_t) for x_t in x_seq], dim=0)
+        functional.set_step_mode(converted, "m")
+        functional.reset_net(converted)
+        y_multi = converted(x_seq)
+
+        assert isinstance(modules["conv"], TDConv2d)
+        assert isinstance(modules["flatten"], layer.Flatten)
+        assert torch.allclose(y_single, y_multi, atol=1e-6, rtol=1e-6)
+
+    def test_conv2d_replacement_preserves_requires_grad_flags(self):
+        model = ConvTransformerEquivalentNet()
+        model.conv.weight.requires_grad_(False)
+        model.conv.bias.requires_grad_(False)
+
+        converted = _td_converter().convert(model)
+
+        assert isinstance(converted.conv, TDConv2d)
+        assert not converted.conv.weight.requires_grad
+        assert converted.conv.bias is not None
+        assert not converted.conv.bias.requires_grad
+
     def test_no_affine_layernorm_is_preserved(self):
         model = NoAffineLayerNormMLP()
         model.eval()
@@ -1412,6 +1680,7 @@ class TestConverterTDOperatorReplacement:
         converted = _td_converter().convert(model)
 
         assert converted.training
+        assert isinstance(converted.dropout, nn.Dropout)
         assert converted.dropout.training
         assert converted.fc.training
 
@@ -1422,6 +1691,7 @@ class TestConverterTDOperatorReplacement:
         converted = _td_converter().convert(model)
 
         assert not converted.training
+        assert isinstance(converted.dropout, nn.Dropout)
         assert not converted.dropout.training
         assert not converted.fc.training
 
@@ -2387,6 +2657,34 @@ class TestLocalThresholdBalancingRecipe:
         y = snn(torch.rand(2, 1, 28, 28))
         assert y.shape == (2, 10)
 
+    def test_recipe_step_mode_product_matches_single_loop(self):
+        model = SimpleCNNNoBN()
+        model.eval()
+        converter = Converter(
+            recipe=LocalThresholdBalancingRecipe(
+                dataloader=_make_loader(batch_size=4),
+                time_steps=4,
+                mode="Max",
+                threshold_candidates=(0.5, 1.0),
+                fuse_flag=False,
+            )
+        )
+        snn = converter.convert(model)
+        x = torch.rand(2, 1, 28, 28)
+        modules = dict(snn.named_modules())
+
+        assert not isinstance(snn, base.StepModule)
+        assert not hasattr(snn, "step_mode")
+        assert isinstance(modules["conv"], layer.Conv2d)
+        assert isinstance(modules["pool"], layer.AvgPool2d)
+        assert isinstance(modules["fc"], layer.Linear)
+        assert torch.allclose(
+            _rate_single_loop_output(snn, x, time_steps=4),
+            _rate_multistep_output(snn, x, time_steps=4),
+            atol=1e-6,
+            rtol=1e-6,
+        )
+
     def test_recipe_uses_pre_spike_maxpooling(self):
         model = nn.Sequential(
             nn.Conv2d(1, 2, 3, padding=1),
@@ -2532,15 +2830,31 @@ class TestDelayedReadoutEstimation:
 
         assert delay_start == 1
 
-    def test_delay_probe_uses_analog_passthrough_for_later_layers(self):
+    def test_delay_probe_does_not_replace_outputs_for_later_layers(self, monkeypatch):
         model = _trace_ann2snn_leaf(TwoStageScalerNeuronNet())
         loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
+        observed_inputs = []
+
+        def record_delay_ratio(module, post_scaler, x):
+            observed_inputs.append((module, x.detach().clone()))
+            return torch.tensor(0.0)
+
+        monkeypatch.setattr(
+            ann2snn_delay,
+            "_compute_delay_ratio",
+            record_delay_ratio,
+        )
 
         delay_start = ann2snn.estimate_delay_start(
             model, loader, device="cpu", time_steps=32
         )
 
-        assert delay_start > 2
+        assert delay_start == 0
+        assert len(observed_inputs) == 2
+        assert observed_inputs[0][0] is model.stage0.if_node
+        assert observed_inputs[1][0] is model.stage1.if_node
+        assert torch.allclose(observed_inputs[0][1], torch.full((2, 2), 0.25))
+        assert torch.allclose(observed_inputs[1][1], torch.zeros(2, 2))
 
     def test_delay_estimation_removes_hooks_and_keeps_spike_forward(self):
         model = _trace_ann2snn_leaf(
@@ -2593,6 +2907,19 @@ class TestDelayedReadoutEstimation:
         )
 
         assert delay_start == 4
+
+    def test_delay_estimation_warns_when_readout_budget_is_too_small(self):
+        model = _trace_ann2snn_leaf(
+            ScalerNeuronScalerNet(neuron.IFNode(v_threshold=1.0, v_reset=None), [4.0, 4.0])
+        )
+        loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
+
+        with pytest.warns(RuntimeWarning, match="time_steps is too small"):
+            delay_start = ann2snn.estimate_delay_start(
+                model, loader, device="cpu", time_steps=4
+            )
+
+        assert delay_start == 0
 
     def test_delay_estimation_cleans_hooks_after_exception(self):
         model = _trace_ann2snn_leaf(

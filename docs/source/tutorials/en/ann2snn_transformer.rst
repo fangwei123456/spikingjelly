@@ -25,10 +25,9 @@ For classical ReLU-to-IFNode rate-coding conversion on CNNs, see
     ``STATransformerRecipe`` should therefore be read as a training-free
     Transformer ANN2SNN approximation workflow, not as a promise of fully
     spike-driven LLM conversion. Integer token-input language models need a
-    separate input and embedding contract. The current STA implementation is
-    intentionally online and stateful; layer-wise sequence TD execution and
-    faster multi-step inference are later execution-backend work, not the
-    default path shown here.
+    separate input and embedding contract. The converted STA model is stateful
+    and follows SpikingJelly ``step_mode`` semantics for single-step and
+    multi-step execution.
 
 STA conversion idea
 -------------------
@@ -86,18 +85,21 @@ This identity explains the online-equivalent part of STA: if every converted
 block emits cumulative-output differences and constants/bias terms are counted
 once, summing the timestep outputs recovers the ANN block output.
 
-The online-equivalent path uses the following execution pattern:
+The online-equivalent path uses the same step-mode execution contract as other
+SpikingJelly modules:
 
 * timestep 0 receives the original ANN input;
 * later timesteps receive zero-valued floating inputs;
-* the converted model runs an internal ``time_steps`` loop;
 * stateful converted modules emit cumulative-output differences;
-* the wrapper accumulates the outputs and returns the accumulated result.
+* ``step_mode="s"`` runs one timestep and leaves the time loop to the user;
+* ``step_mode="m"`` consumes a sequence tensor whose first dimension is time
+  and returns the full output sequence.
 
-At a high level:
+At a high level, single-step execution is:
 
 .. code-block:: text
 
+    reset converted state
     y = 0
     for t in range(time_steps):
         if t == 0:
@@ -107,10 +109,18 @@ At a high level:
         y = y + converted_graph_step(x_t, static_control_tensors)
     return y
 
-Here, ``converted_graph_step`` means one execution of the converted FX graph for
-a single internal timestep. The graph contains stateful modules that remember
-their previous cumulative outputs, so each call returns only the current
-increment.
+Multi-step execution gives the converted model the complete sequence directly:
+
+.. code-block:: text
+
+    reset converted state
+    x_seq = [original_input, zeros_like(original_input), ...]
+    y_seq = converted_graph(x_seq, static_control_tensors)
+    y = sum over the time dimension of y_seq
+
+Here, each call or sequence element executes the converted FX graph for one STA
+timestep. The graph contains stateful modules that remember their previous
+cumulative outputs, so each timestep returns only the current increment.
 
 Spike Encoding Path
 ^^^^^^^^^^^^^^^^^^^
@@ -205,20 +215,70 @@ ANN2SNN recipes:
     converted = ann2snn.Converter(recipe=recipe, device="cuda:0").convert(model)
     converted.eval()
 
-``time_steps`` is part of the recipe because it is used both by threshold
-calibration and by the converted model's internal inference loop. Unlike
-rate-coded CNN conversion, users do not call the converted Transformer
-once per timestep from Python; the wrapper owns that loop.
+``time_steps`` is part of the recipe because it is used by threshold
+calibration and by converted graph constants that cannot infer a sequence
+length from runtime inputs.
 
 There are three STA modes:
 
-* ``equivalent``: online cumulative-difference baseline without calibration;
+* ``equivalent``: cumulative-difference baseline without calibration;
 * ``spiking_encoder``: calibrated spike encoders on nonlinear and attention
   outputs;
-* ``spiking_affine``: an advanced path that also replaces selected affine
-  modules with spiking affine modules.
+* ``spiking_affine``: currently rejected by the step-mode-aligned STA backend.
 
 This tutorial uses ``spiking_encoder`` for the model-level result.
+
+Step-mode execution
+-------------------
+
+``STATransformerRecipe`` converted models are plain ``nn.Module`` /
+``fx.GraphModule`` instances. Users call ``functional.set_step_mode`` to
+recursively configure their internal step-mode modules. In single-step mode,
+users write the time loop explicitly and reset state before an independent
+sequence:
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import functional
+
+    functional.set_step_mode(converted, "s")
+    functional.reset_net(converted)
+
+    y = None
+    for t in range(converted.time_steps):
+        x_t = x if t == 0 else torch.zeros_like(x)
+        y_t = converted(x_t)
+        y = y_t if y is None else y + y_t
+
+For layer-wise multi-step acceleration, switch the converted model to
+``step_mode="m"`` and pass sequence tensors whose first dimension is time:
+
+.. code-block:: python
+
+    from spikingjelly.activation_based import functional
+
+    functional.set_step_mode(converted, "m")
+    functional.reset_net(converted)
+
+    x_zeros = torch.zeros_like(x).expand(converted.time_steps - 1, *x.shape)
+    x_seq = torch.cat((x.unsqueeze(0), x_zeros), dim=0)
+    y_seq = converted(x_seq)
+    y = y_seq.sum(dim=0)
+
+For multi-input models, users construct floating-point input sequences
+explicitly. Named static control tensors such as ``attn_mask`` should be kept
+unchanged without adding a time dimension. Users perform the final accumulated
+readout by summing the output time dimension, recursively when outputs are
+structured.
+
+The multi-step backend is intentionally stricter than arbitrary PyTorch. It
+currently rejects ``mode="spiking_affine"``, ``spike_linear=True``,
+``spike_conv2d=True``, ``MultiheadAttention`` calls that request or use
+attention weights, ``key_padding_mask``, functional
+``scaled_dot_product_attention``, and unsupported FX tensor operations. Rewrite
+the model around supported sequence-preserving modules and operations when the
+converter reports one of these limits.
 
 Relation to TransformerSpikeEquivalentRecipe
 --------------------------------------------
@@ -229,8 +289,8 @@ useful operator-level conversion baseline, but it does not perform STA
 calibration and does not own an internal timestep loop.
 
 ``STATransformerRecipe`` is a model-level STA workflow. It uses calibration
-when spike encoders are enabled and returns a wrapper module that runs
-``time_steps`` internally.
+when spike encoders are enabled and returns a step-mode module that can run one
+timestep at a time or consume a full temporal sequence.
 
 ViT-B/16 ImageNet example
 -------------------------

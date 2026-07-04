@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from spikingjelly.activation_based import neuron, surrogate
+from spikingjelly.activation_based import functional, neuron, surrogate
 from spikingjelly.activation_based.ann2snn.operators import (
     SNNElementWiseProduct,
     SNNMatrixOperator,
@@ -63,7 +63,8 @@ class _FewSpikeSelfAttentionBlock(nn.Module):
         self.k_proj = TDLinear(embed_dim, embed_dim, bias=False)
         self.v_proj = TDLinear(embed_dim, embed_dim, bias=False)
         self.score_node = score_node
-        self.matmul = SNNMatrixOperator()
+        self.score_matmul = SNNMatrixOperator()
+        self.context_matmul = SNNMatrixOperator()
         self.out_proj = TDLinear(embed_dim, embed_dim, bias=False)
 
     def _project_sequence(self, x_seq):
@@ -73,7 +74,7 @@ class _FewSpikeSelfAttentionBlock(nn.Module):
         return q_seq, k_seq, v_seq
 
     def _score_sequence_from_projected(self, q_seq, k_seq):
-        return self.matmul(q_seq, k_seq.transpose(-1, -2))
+        return self.score_matmul(q_seq, k_seq.transpose(-1, -2))
 
     def score_sequence(self, x_seq):
         q_seq, k_seq, _ = self._project_sequence(x_seq)
@@ -88,7 +89,7 @@ class _FewSpikeSelfAttentionBlock(nn.Module):
     def context_sequence(self, x_seq):
         q_seq, k_seq, v_seq = self._project_sequence(x_seq)
         score_seq = self._encoded_score_sequence_from_projected(q_seq, k_seq)
-        return self.matmul(score_seq, v_seq)
+        return self.context_matmul(score_seq, v_seq)
 
     def forward(self, x_seq):
         context_seq = _merge_heads(self.context_sequence(x_seq))
@@ -200,6 +201,7 @@ def test_single_head_attention_final_sum_matches_single_step_reference():
     x_seq = torch.randn(table.K, 2, 3, 4)
 
     y_seq = block(x_seq)
+    functional.reset_net(block)
     expected = _single_step_attention_reference(block, x_seq)
 
     assert y_seq.shape == (table.K, 2, 3, 4)
@@ -216,9 +218,13 @@ def test_multi_head_attention_keeps_score_and_context_sequences():
     x_seq = torch.randn(table.K, 2, 4, 6)
 
     score_seq = block.score_sequence(x_seq)
+    functional.reset_net(block)
     encoded_score_seq = block.score_node(score_seq)
+    functional.reset_net(block)
     context_seq = block.context_sequence(x_seq)
+    functional.reset_net(block)
     y_seq = block(x_seq)
+    functional.reset_net(block)
     expected = _single_step_attention_reference(block, x_seq)
 
     assert score_seq.shape == (table.K, 2, 2, 4, 4)
@@ -257,6 +263,7 @@ def test_attention_oat_score_branch_matches_single_step_reference():
     )
 
     y_seq = block(x_seq)
+    functional.reset_net(block)
     expected = _single_step_attention_reference(block, x_seq)
 
     assert y_seq.shape == (normal.K, 2, 2, 4)
@@ -280,6 +287,7 @@ def test_attention_hg_score_branch_matches_single_step_reference():
     x_seq = torch.randn(table_low.K, 2, 3, 4)
 
     y_seq = block(x_seq)
+    functional.reset_net(block)
     expected = _single_step_attention_reference(block, x_seq)
 
     assert y_seq.shape == (table_low.K, 2, 3, 4)
@@ -298,7 +306,7 @@ def test_attention_rejects_wrong_time_length_from_score_node():
         block(torch.randn(table.K - 1, 2, 3, 4))
 
 
-def test_decoder_block_final_sum_matches_reference_and_is_stateless():
+def test_decoder_block_final_sum_matches_reference_after_reset():
     table = _table()
     block = _TinyFewSpikeDecoderBlock(
         embed_dim=4,
@@ -311,7 +319,9 @@ def test_decoder_block_final_sum_matches_reference_and_is_stateless():
     x_seq = torch.randn(table.K, 2, 3, 4)
 
     y0 = block(x_seq)
+    functional.reset_net(block)
     y1 = block(x_seq)
+    functional.reset_net(block)
     expected = _single_step_decoder_reference(block, x_seq)
 
     assert y0.shape == (table.K, 2, 3, 4)
@@ -332,6 +342,7 @@ def test_decoder_block_autograd_with_sigmoid_surrogates():
     x_seq = torch.randn(table.K, 2, 3, 4, requires_grad=True)
 
     y_seq = block(x_seq)
+    functional.reset_net(block)
     expected = _single_step_decoder_reference(block, x_seq)
     y_seq.square().sum().backward()
 
@@ -373,6 +384,7 @@ def test_synthetic_decoder_stack_benchmark_smoke():
     )
 
     y_seq = stack(x_seq)
+    functional.reset_net(stack)
     expected = _single_step_stack_reference(stack, x_seq)
     y_seq.square().sum().backward()
 
