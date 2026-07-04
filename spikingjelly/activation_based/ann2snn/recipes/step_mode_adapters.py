@@ -926,9 +926,13 @@ def adapt_step_mode_graph(
         operator.add,
         operator.eq,
         operator.floordiv,
+        operator.neg,
         torch.add,
+        torch.neg,
+        torch.sub,
         torch._assert,
         operator.mul,
+        operator.sub,
     }
     rewritten_call_functions = {
         operator.getitem,

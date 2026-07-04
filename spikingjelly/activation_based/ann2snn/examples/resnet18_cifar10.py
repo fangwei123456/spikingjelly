@@ -23,10 +23,9 @@ def val(net, device, data_loader, T=None):
             else:
                 for m in reset_modules:
                     m.reset()
-                out = None
-                for t in range(T):
-                    step = net(img)
-                    out = step if out is None else out + step
+                out = net(img)
+                for t in range(1, T):
+                    out += net(img)
             correct += (out.argmax(dim=1) == label).float().sum().item()
             total += out.shape[0]
         acc = correct / total

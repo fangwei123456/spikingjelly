@@ -690,6 +690,11 @@ class TinyFunctionalTensorOpAdapterModel(nn.Module):
         return torch.mean(input=x, dim=1)
 
 
+class TinyPassthroughArithmeticModel(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.sub(-(x - 1.0), torch.neg(x))
+
+
 class TinyConstantTransformerClassifier(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -1200,6 +1205,21 @@ def test_sta_transformer_recipe_functional_tensor_ops_match_multistep():
     torch.manual_seed(92)
     converted = Converter(recipe=STATransformerRecipe(time_steps=4)).convert(
         TinyFunctionalTensorOpAdapterModel().eval()
+    )
+    x = torch.randn(2, 3, 4)
+
+    assert torch.allclose(
+        _run_converted_multistep(converted, x),
+        _run_converted_step_loop(converted, x),
+        atol=1e-6,
+        rtol=1e-6,
+    )
+
+
+def test_sta_transformer_recipe_passthrough_arithmetic_matches_multistep():
+    torch.manual_seed(93)
+    converted = Converter(recipe=STATransformerRecipe(time_steps=4)).convert(
+        TinyPassthroughArithmeticModel().eval()
     )
     x = torch.randn(2, 3, 4)
 

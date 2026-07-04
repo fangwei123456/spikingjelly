@@ -231,7 +231,7 @@ class TDModule(base.MemoryModule):
         if should_continue:
             cum_seqs = tuple(
                 prev + x_cum_seq
-                for prev, x_cum_seq in zip(prev_inputs, cum_seqs)
+                for prev, x_cum_seq in zip(prev_inputs, cum_seqs, strict=True)
             )
         else:
             self.y_cum = None
