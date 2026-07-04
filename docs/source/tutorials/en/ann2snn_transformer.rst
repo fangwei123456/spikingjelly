@@ -231,7 +231,7 @@ The command below assumes that ``/path/to/imagenet/val`` directly contains the c
     CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.imagenet_vit_sta \
       --data-root /path/to/imagenet/val \
       --device cuda:0 \
-      --batch-size 64 \
+      --batch-size 16 \
       --num-workers 8 \
       --calib-samples 2048 \
       --time-steps 8 \
@@ -273,17 +273,17 @@ The full ImageNet validation run below was measured on an NVIDIA A100-SXM4-80GB 
       - 2048
       - 50000
       - 8
-      - 80.590
-      - 95.074
+      - 80.700
+      - 95.202
 
-The Top-1 drop is 0.478 percentage points. The measured inference time was about 115.4 seconds for the ANN baseline and 1197.1 seconds for the converted STA model in the original run. A rerun with the same accuracy result measured about 250.8 seconds for the ANN baseline and 2613.1 seconds for STA, reflecting sensitivity to runtime conditions. For single-step versus multi-step execution timing, use the dedicated step-mode benchmarks.
+The Top-1 drop is 0.368 percentage points. The measured inference time was about 181.6 seconds for the ANN baseline and 1834.0 seconds for the converted STA model with ``batch_size=16``. Wall-clock time is sensitive to runtime conditions. For single-step versus multi-step execution timing, use the dedicated step-mode benchmarks.
 
 The key stdout lines are:
 
 .. code-block:: shell
 
-    BASELINE {"top1": 0.81068, "top5": 0.95318, "total": 50000, "seconds": 115.39487862586975}
-    STA_SPIKING_ENCODER_T8_S05 {"top1": 0.8059, "top5": 0.95074, "total": 50000, "seconds": 1197.0657494068146}
-    DROP 0.0047800000000000065
+    BASELINE {"top1": 0.81068, "top5": 0.95318, "total": 50000, "seconds": 181.58131194114685}
+    STA_SPIKING_ENCODER_T8_S0p5 {"top1": 0.807, "top5": 0.95202, "total": 50000, "seconds": 1833.9626359939575}
+    DROP 0.0036799999999999056
 
 .. [#sta] Y. Jiang, K. Hu, T. Zhang, H. Gao, Y. Liu, Y. Fang, and F. Chen, "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers," ICLR 2024. https://openreview.net/forum?id=XrunSYwoLr

@@ -616,7 +616,7 @@ ResNet-18 转换
       --delay-start auto \
       --output /tmp/ann2snn_imagenet_t32_delayauto_calib50k_tutorial.json
 
-命令中的 ``robust_legacy`` 对应不启用 ``channel_wise`` 和 ``half_threshold`` 的 legacy 标量阈值 ``RateCodingRecipe``。``--delay-start auto`` 会在评估前估计 delayed readout 的起始时间步，用于跳过 SNN 早期 transient。该设置只影响读出窗口，不改变转换后的神经元动力学。本次运行中自动估计的 ``delay_start`` 约为 27；该值依赖模型、校准数据和实现细节，用户运行时可能得到不同数值。
+命令中的 ``robust_legacy`` 对应不启用 ``channel_wise`` 和 ``half_threshold`` 的 legacy 标量阈值 ``RateCodingRecipe``。``--delay-start auto`` 会在评估前估计 delayed readout 的起始时间步，用于跳过 SNN 早期 transient。该设置只影响读出窗口，不改变转换后的神经元动力学。本次运行中 ``robust_legacy`` 自动估计的 ``delay_start`` 为 28，``LocalThresholdBalancingRecipe`` 为 21；该值依赖模型、校准数据和实现细节，用户运行时可能得到不同数值。
 
 .. list-table:: ImageNet ResNet-18 转换结果
     :header-rows: 1
@@ -632,22 +632,22 @@ ResNet-18 转换
       - -
       - 50000
       - -
-      - 69.76
-      - 89.08
+      - 69.756
+      - 89.074
     * - RobustNorm（legacy，标量阈值）
       - 50000
       - 50000
       - 32
-      - 12.57
-      - 28.99
+      - 12.462
+      - 28.662
     * - LocalThresholdBalancingRecipe
       - 50000
       - 50000
       - 32
-      - 65.45
-      - 86.60
+      - 64.906
+      - 86.368
 
-在较深的 ImageNet CNN 上，缺少 per-channel 归一化的标量阈值 robust normalization 转换精度较低（Top-1 仅 12.57%）。LTB recipe 通过局部阈值估计将 Top-1 提升至 65.45%。
+在较深的 ImageNet CNN 上，缺少 per-channel 归一化的标量阈值 robust normalization 转换精度较低（Top-1 仅 12.462%）。LTB recipe 通过局部阈值估计将 Top-1 提升至 64.906%。
 
 .. [#f1] Rueckauer B, Lungu I-A, Hu Y, Pfeiffer M and Liu S-C (2017) Conversion of Continuous-Valued Deep Networks to Efficient Event-Driven Networks for Image Classification. Front. Neurosci. 11:682.
 .. [#f2] Diehl, Peter U. , et al. Fast classifying, high-accuracy spiking deep networks through weight and threshold balancing. Neural Networks (IJCNN), 2015 International Joint Conference on IEEE, 2015.

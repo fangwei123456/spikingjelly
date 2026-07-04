@@ -618,7 +618,7 @@ Run the example as follows:
       --delay-start auto \
       --output /tmp/ann2snn_imagenet_t32_delayauto_calib50k_tutorial.json
 
-The ``robust_legacy`` recipe name denotes the legacy scalar-threshold ``RateCodingRecipe`` without ``channel_wise`` or ``half_threshold``. ``--delay-start auto`` estimates the delayed-readout start timestep before evaluation and skips the early transient SNN timesteps. It only changes the readout window and does not change the converted neuron dynamics. In this run, the estimated ``delay_start`` is about 27; the exact value can vary with the model, calibration data, and implementation details.
+The ``robust_legacy`` recipe name denotes the legacy scalar-threshold ``RateCodingRecipe`` without ``channel_wise`` or ``half_threshold``. ``--delay-start auto`` estimates the delayed-readout start timestep before evaluation and skips the early transient SNN timesteps. It only changes the readout window and does not change the converted neuron dynamics. In this run, the estimated ``delay_start`` is 28 for ``robust_legacy`` and 21 for ``LocalThresholdBalancingRecipe``; the exact value can vary with the model, calibration data, and implementation details.
 
 .. list-table:: ImageNet ResNet-18 conversion results
     :header-rows: 1
@@ -634,22 +634,22 @@ The ``robust_legacy`` recipe name denotes the legacy scalar-threshold ``RateCodi
       - -
       - 50000
       - -
-      - 69.76
-      - 89.08
+      - 69.756
+      - 89.074
     * - RobustNorm (legacy, scalar threshold)
       - 50000
       - 50000
       - 32
-      - 12.57
-      - 28.99
+      - 12.462
+      - 28.662
     * - LocalThresholdBalancingRecipe
       - 50000
       - 50000
       - 32
-      - 65.45
-      - 86.60
+      - 64.906
+      - 86.368
 
-Scalar-threshold robust normalization without per-channel normalization achieves only 12.57% Top-1 on this deeper ImageNet CNN. The LTB recipe raises it to 65.45% Top-1.
+Scalar-threshold robust normalization without per-channel normalization achieves only 12.462% Top-1 on this deeper ImageNet CNN. The LTB recipe raises it to 64.906% Top-1.
 
 .. [#f1] Rueckauer B, Lungu I-A, Hu Y, Pfeiffer M and Liu S-C (2017) Conversion of Continuous-Valued Deep Networks to Efficient Event-Driven Networks for Image Classification. Front. Neurosci. 11:682.
 .. [#f2] Diehl, Peter U. , et al. Fast classifying, high-accuracy spiking deep networks through weight and threshold balancing. Neural Networks (IJCNN), 2015 International Joint Conference on IEEE, 2015.

@@ -235,7 +235,7 @@ ViT-B/16 ImageNet 示例
     CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.imagenet_vit_sta \
       --data-root /path/to/imagenet/val \
       --device cuda:0 \
-      --batch-size 64 \
+      --batch-size 16 \
       --num-workers 8 \
       --calib-samples 2048 \
       --time-steps 8 \
@@ -277,17 +277,17 @@ ViT-B/16 ImageNet 示例
       - 2048
       - 50000
       - 8
-      - 80.590
-      - 95.074
+      - 80.700
+      - 95.202
 
-Top-1 下降 0.478 个百分点。原始运行中 ANN baseline 推理耗时约 115.4 秒， STA 转换模型约 1197.1 秒；一次精度相同的重跑中分别为 250.8 秒和 2613.1 秒， wall-clock time 对运行时环境比较敏感。如需比较 single-step 和 multi-step 执行耗时，请使用专门的 step-mode benchmark。
+Top-1 下降 0.368 个百分点。本次使用 ``batch_size=16`` 的完整运行中 ANN baseline 推理耗时约 181.6 秒， STA 转换模型约 1834.0 秒；wall-clock time 对运行时环境比较敏感。如需比较 single-step 和 multi-step 执行耗时，请使用专门的 step-mode benchmark。
 
 关键 stdout 行如下：
 
 .. code-block:: shell
 
-    BASELINE {"top1": 0.81068, "top5": 0.95318, "total": 50000, "seconds": 115.39487862586975}
-    STA_SPIKING_ENCODER_T8_S05 {"top1": 0.8059, "top5": 0.95074, "total": 50000, "seconds": 1197.0657494068146}
-    DROP 0.0047800000000000065
+    BASELINE {"top1": 0.81068, "top5": 0.95318, "total": 50000, "seconds": 181.58131194114685}
+    STA_SPIKING_ENCODER_T8_S0p5 {"top1": 0.807, "top5": 0.95202, "total": 50000, "seconds": 1833.9626359939575}
+    DROP 0.0036799999999999056
 
 .. [#sta] Y. Jiang, K. Hu, T. Zhang, H. Gao, Y. Liu, Y. Fang, and F. Chen, "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers," ICLR 2024. https://openreview.net/forum?id=XrunSYwoLr
