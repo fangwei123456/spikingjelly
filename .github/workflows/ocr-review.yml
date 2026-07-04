@@ -77,6 +77,7 @@ jobs:
           ocr config set providers.minimax.url "$OCR_LLM_URL"
           ocr config set providers.minimax.api_key "$OCR_LLM_AUTH_TOKEN"
           ocr config set providers.minimax.model "$OCR_LLM_MODEL"
+          ocr config set providers.minimax.extra_body '{"thinking":{"type":"adaptive"},"reasoning_split":true}'
 
       - name: Test OCR LLM connection
         run: |
