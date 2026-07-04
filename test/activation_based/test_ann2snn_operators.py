@@ -129,6 +129,15 @@ def test_td_modules_support_step_mode_switching():
             module.step_mode = "bogus"
 
 
+def test_td_module_requires_explicit_multistep_forward():
+    class DummyTDModule(TDModule):
+        def ann_forward(self, x):
+            return x
+
+    with pytest.raises(NotImplementedError, match="multi_step_forward"):
+        DummyTDModule()(torch.zeros(2, 3))
+
+
 class TestTDSoftmax:
     def test_shape_is_preserved(self):
         x_seq = torch.randn(4, 2, 3)

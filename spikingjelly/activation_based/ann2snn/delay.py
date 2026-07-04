@@ -82,7 +82,7 @@ def _compute_delay_ratio(
     channel_dim = _channel_dim(post_scaler)
     if channel_dim is None or scale.dim() == 0:
         max_mean_activation = original_activation.mean()
-        required_charge = original_required_charge.mean()
+        reduced_required_charge = original_required_charge.mean()
     else:
         if channel_dim < 0:
             channel_dim += original_activation.dim()
@@ -92,11 +92,11 @@ def _compute_delay_ratio(
             dim for dim in range(original_activation.dim()) if dim != channel_dim
         )
         max_mean_activation = original_activation.mean(dim=reduce_dims).max()
-        required_charge = original_required_charge.mean(dim=reduce_dims).max()
+        reduced_required_charge = original_required_charge.mean(dim=reduce_dims).max()
 
     if max_mean_activation <= 0:
         return torch.zeros((), device=x.device, dtype=x.dtype)
-    return (required_charge / max_mean_activation).detach()
+    return (reduced_required_charge / max_mean_activation).detach()
 
 
 def _find_scaler_neuron_scaler_paths(
@@ -260,7 +260,8 @@ def estimate_delay_start(
                 delay += sum(values) / len(values)
         if not any(ratios.values()):
             warnings.warn(
-                "estimate_delay_start did not collect any delay ratios; returning 0.",
+                "estimate_delay_start did not collect any delay ratios; "
+                "no delayed readout will be applied.",
                 RuntimeWarning,
                 stacklevel=2,
             )

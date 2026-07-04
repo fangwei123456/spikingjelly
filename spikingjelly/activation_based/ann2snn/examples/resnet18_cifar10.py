@@ -9,6 +9,8 @@ from spikingjelly.activation_based.ann2snn.sample_models import cifar10_resnet
 
 def val(net, device, data_loader, T=None):
     net.eval().to(device)
+    if T is not None and T <= 0:
+        raise ValueError("T must be positive.")
     reset_modules = [m for m in net.modules() if hasattr(m, "reset")] if T else []
     correct = 0.0
     total = 0.0
@@ -32,7 +34,7 @@ def val(net, device, data_loader, T=None):
     return acc
 
 
-def main():
+def main(checkpoint_path):
     torch.random.manual_seed(0)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(0)
@@ -52,7 +54,7 @@ def main():
 
     model = cifar10_resnet.ResNet18()
     state_dict = torch.load(
-        "SJ-cifar10-resnet18_model-sample.pth",
+        checkpoint_path,
         map_location="cpu",
         weights_only=True,
     )
@@ -98,4 +100,4 @@ if __name__ == "__main__":
         raise RuntimeError(
             f"Checkpoint download failed or is truncated: {checkpoint_path}"
         )
-    main()
+    main(checkpoint_path)

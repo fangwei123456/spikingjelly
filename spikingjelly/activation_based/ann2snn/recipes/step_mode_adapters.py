@@ -335,10 +335,10 @@ class _StatelessReshape(nn.Module, base.StepModule):
                 raise ValueError(
                     f"{self.__class__.__name__} only supports reshapes that "
                     "preserve the original batch dimension in multi-step mode."
-                )
+            )
             flat = x.flatten(0, 1)
             y = flat.reshape(flat.shape[0], *sizes[1:])
-            return y.view(x.shape[0], x.shape[1], *y.shape[1:])
+            return y.reshape(x.shape[0], x.shape[1], *y.shape[1:])
         raise ValueError(self.step_mode)
 
 
@@ -781,12 +781,19 @@ def _make_permute_module(node: fx.Node, context: str) -> _StatelessTensorOp:
         dims = tuple(dims[0])
     for dim in dims:
         _check_literal_dim(dim, context)
-    if not dims or dims[0] != 0:
+    rank = len(dims)
+    normalized_dims = tuple(_normalize_dim(dim, rank, context) for dim in dims)
+    if sorted(normalized_dims) != list(range(rank)):
+        raise ValueError(
+            f"{context} requires permute dims to be a permutation of "
+            f"range({rank}), but got {dims!r}."
+        )
+    if not normalized_dims or normalized_dims[0] != 0:
         raise ValueError(
             f"{context} requires permute to preserve the original batch "
             "dimension."
         )
-    return _StatelessTensorOp(op_name="permute", op_kwargs={"dims": tuple(dims)})
+    return _StatelessTensorOp(op_name="permute", op_kwargs={"dims": normalized_dims})
 
 
 def _make_cat_module(node: fx.Node, context: str) -> Tuple[_StatelessCat, Tuple[Any, ...]]:

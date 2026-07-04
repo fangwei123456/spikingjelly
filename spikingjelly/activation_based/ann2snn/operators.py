@@ -111,6 +111,11 @@ class TDModule(base.MemoryModule):
     def ann_forward(self, *args, **kwargs):
         raise NotImplementedError
 
+    def multi_step_forward(self, *args, **kwargs):
+        raise NotImplementedError(
+            f"{type(self).__name__} must implement multi_step_forward."
+        )
+
     def single_step_forward(self, *args, **kwargs):
         y_cum = self.ann_forward(*self._accumulate_inputs(*args), **kwargs)
         return self._diff_output(y_cum)
@@ -225,8 +230,8 @@ class TDModule(base.MemoryModule):
         )
         if should_continue:
             cum_seqs = tuple(
-                x_cum_seq + prev
-                for x_cum_seq, prev in zip(cum_seqs, prev_inputs)
+                prev + x_cum_seq
+                for prev, x_cum_seq in zip(prev_inputs, cum_seqs)
             )
         else:
             self.y_cum = None

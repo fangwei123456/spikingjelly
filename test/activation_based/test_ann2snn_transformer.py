@@ -351,6 +351,11 @@ class TinyUnsupportedSequenceOpClassifier(nn.Module):
         return x.permute(1, 0, 2)
 
 
+class TinyInvalidPermuteClassifier(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x.permute(0, 1, 1)
+
+
 class TinyUnsafeReshapeClassifier(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x.reshape(x.shape[0] * 2, -1)
@@ -1395,6 +1400,18 @@ def test_sta_transformer_recipe_rejects_unsupported_method():
     model = TinyUnsupportedSequenceOpClassifier().eval()
 
     with pytest.raises(ValueError, match="preserve the original batch"):
+        Converter(
+            recipe=STATransformerRecipe(
+                time_steps=4,
+                mode="equivalent",
+            )
+        ).convert(model)
+
+
+def test_sta_transformer_recipe_rejects_invalid_permute_dims():
+    model = TinyInvalidPermuteClassifier().eval()
+
+    with pytest.raises(ValueError, match="permutation"):
         Converter(
             recipe=STATransformerRecipe(
                 time_steps=4,
