@@ -1207,6 +1207,8 @@ class TestNeuronFactory:
     def test_invalid_threshold_raises(self):
         with pytest.raises(ValueError, match="positive"):
             NeuronFactory(v_threshold=0.0)
+        with pytest.raises(ValueError, match="finite"):
+            NeuronFactory(v_threshold=float("inf"))
 
     def test_invalid_threshold_type_raises(self):
         with pytest.raises(TypeError, match="real number"):
@@ -1215,6 +1217,8 @@ class TestNeuronFactory:
     def test_invalid_v_reset_raises(self):
         factory = NeuronFactory(v_reset=-1.0)
         assert factory.create(scale=1.0).v_reset == -1.0
+        with pytest.raises(ValueError, match="finite"):
+            NeuronFactory(v_reset=float("nan"))
         with pytest.raises(TypeError, match="v_reset"):
             NeuronFactory(v_reset="0.0")
 
@@ -1235,12 +1239,17 @@ class TestHookFactory:
     def test_invalid_mode_raises(self):
         with pytest.raises(ValueError, match="mode"):
             HookFactory(mode="bad")
+        assert HookFactory(mode="0%").create().mode == "0%"
         with pytest.raises(ValueError, match="mode percentile"):
-            HookFactory(mode="0%")
+            HookFactory(mode="-1%")
+        with pytest.raises(ValueError, match="mode float"):
+            HookFactory(mode=float("nan"))
 
     def test_invalid_momentum_raises(self):
         with pytest.raises(ValueError, match="momentum"):
             HookFactory(momentum=1.1)
+        with pytest.raises(ValueError, match="momentum"):
+            HookFactory(momentum=float("inf"))
         with pytest.raises(TypeError, match="real number"):
             HookFactory(momentum="0.1")
 

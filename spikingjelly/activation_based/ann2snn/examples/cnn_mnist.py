@@ -179,14 +179,16 @@ def run_legacy_mode_sweep(
 ):
     import matplotlib.pyplot as plt
 
+    model = load_ann(device, checkpoint_path)
+
     print("---------------------------------------------")
     print("Converting using MaxNorm")
     mode_max_accs = convert_and_eval(
         ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode="max"),
         device,
+        model,
         test_data_loader,
         time_steps,
-        checkpoint_path,
     )
     print(
         "SNN accuracy (simulation %d time-steps): %.4f"
@@ -198,9 +200,9 @@ def run_legacy_mode_sweep(
     mode_robust_accs = convert_and_eval(
         ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode="99.9%"),
         device,
+        model,
         test_data_loader,
         time_steps,
-        checkpoint_path,
     )
     print(
         "SNN accuracy (simulation %d time-steps): %.4f"
@@ -212,9 +214,9 @@ def run_legacy_mode_sweep(
     mode_two_accs = convert_and_eval(
         ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode=1.0 / 2),
         device,
+        model,
         test_data_loader,
         time_steps,
-        checkpoint_path,
     )
     print(
         "SNN accuracy (simulation %d time-steps): %.4f"
@@ -226,9 +228,9 @@ def run_legacy_mode_sweep(
     mode_three_accs = convert_and_eval(
         ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode=1.0 / 3),
         device,
+        model,
         test_data_loader,
         time_steps,
-        checkpoint_path,
     )
     print(
         "SNN accuracy (simulation %d time-steps): %.4f"
@@ -240,9 +242,9 @@ def run_legacy_mode_sweep(
     mode_four_accs = convert_and_eval(
         ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode=1.0 / 4),
         device,
+        model,
         test_data_loader,
         time_steps,
-        checkpoint_path,
     )
     print(
         "SNN accuracy (simulation %d time-steps): %.4f"
@@ -254,9 +256,9 @@ def run_legacy_mode_sweep(
     mode_five_accs = convert_and_eval(
         ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode=1.0 / 5),
         device,
+        model,
         test_data_loader,
         time_steps,
-        checkpoint_path,
     )
     print(
         "SNN accuracy (simulation %d time-steps): %.4f"

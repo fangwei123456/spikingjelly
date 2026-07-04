@@ -10,8 +10,8 @@ from spikingjelly.activation_based.ann2snn.sample_models import cifar10_resnet
 def val(net, device, data_loader, T=None):
     net.eval().to(device)
     if T is not None and T <= 0:
-        raise ValueError("T must be positive.")
-    reset_modules = [m for m in net.modules() if hasattr(m, "reset")] if T else []
+        raise ValueError(f"T must be positive, got {T}.")
+    reset_modules = None
     correct = 0.0
     total = 0.0
     with torch.no_grad():
@@ -21,6 +21,8 @@ def val(net, device, data_loader, T=None):
             if T is None:
                 out = net(img)
             else:
+                if reset_modules is None:
+                    reset_modules = [m for m in net.modules() if hasattr(m, "reset")]
                 for m in reset_modules:
                     m.reset()
                 out = net(img)
@@ -33,7 +35,7 @@ def val(net, device, data_loader, T=None):
     return acc
 
 
-def main(checkpoint_path):
+def main(checkpoint_path="./SJ-cifar10-resnet18_model-sample.pth"):
     torch.random.manual_seed(0)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(0)
@@ -91,7 +93,7 @@ if __name__ == "__main__":
         "https://ndownloader.figshare.com/files/26676110",
         checkpoint_path,
     )
-    expected_min_size = 1024 * 1024
+    expected_min_size = 40 * 1024 * 1024
     if (
         not os.path.isfile(checkpoint_path)
         or os.path.getsize(checkpoint_path) < expected_min_size

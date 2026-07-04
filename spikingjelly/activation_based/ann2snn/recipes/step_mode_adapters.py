@@ -940,6 +940,7 @@ def adapt_step_mode_graph(
         builtins.getattr,
         torch.flatten,
         torch.mean,
+        torch.reshape,
         torch.transpose,
         torch.unsqueeze,
     }
@@ -1203,6 +1204,16 @@ def adapt_step_mode_graph(
                     existing_modules,
                     tensor_op_index,
                     context,
+                )
+            elif node.target is torch.reshape:
+                tensor_op_index = _replace_tensor_op_node(
+                    fx_model,
+                    node,
+                    _StatelessReshape(),
+                    existing_modules,
+                    tensor_op_index,
+                    context,
+                    input_args=tuple(node.args),
                 )
             elif node.target is torch.transpose:
                 tensor_op_index = _replace_tensor_op_node(

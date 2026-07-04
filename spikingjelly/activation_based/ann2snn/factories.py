@@ -1,3 +1,4 @@
+import math
 from typing import Optional, Type, Union
 
 import torch.nn as nn
@@ -75,8 +76,10 @@ class NeuronFactory:
                 "v_threshold must be a real number, "
                 f"got {type(v_threshold).__name__}."
             )
-        if not (v_threshold > 0):
-            raise ValueError(f"v_threshold must be positive, got {v_threshold}.")
+        if not math.isfinite(float(v_threshold)) or not (v_threshold > 0):
+            raise ValueError(
+                f"v_threshold must be finite and positive, got {v_threshold}."
+            )
         if (
             v_reset is not None
             and (
@@ -88,6 +91,8 @@ class NeuronFactory:
                 "v_reset must be None or a real number, "
                 f"got {v_reset!r}."
             )
+        if v_reset is not None and not math.isfinite(float(v_reset)):
+            raise ValueError(f"v_reset must be finite, got {v_reset}.")
         reserved = self.neuron_kwargs_reserved_keys() & kwargs.keys()
         if reserved:
             names = ", ".join(sorted(reserved))
@@ -193,16 +198,16 @@ class HookFactory:
                     raise ValueError(
                         "mode percentile string must contain a numeric value."
                     ) from exc
-                if not (0.0 < percentile <= 100.0):
+                if not (0.0 <= percentile <= 100.0):
                     raise ValueError(
-                        f"mode percentile must lie in (0, 100], got {mode!r}."
+                        f"mode percentile must lie in [0, 100], got {mode!r}."
                     )
             elif mode.lower() != "max":
                 raise ValueError(
                     f"mode string must be 'Max' or a percentile string, got {mode!r}."
                 )
         elif isinstance(mode, (int, float)) and not isinstance(mode, bool):
-            if not (0.0 < float(mode) <= 1.0):
+            if not math.isfinite(float(mode)) or not (0.0 < float(mode) <= 1.0):
                 raise ValueError(f"mode float must lie in (0, 1], got {mode!r}.")
         else:
             raise TypeError(
@@ -214,7 +219,7 @@ class HookFactory:
                 "momentum must be a real number, "
                 f"got {type(momentum).__name__}."
             )
-        if not (0.0 <= float(momentum) <= 1.0):
+        if not math.isfinite(float(momentum)) or not (0.0 <= float(momentum) <= 1.0):
             raise ValueError(f"momentum must lie in [0, 1], got {momentum!r}.")
         self.mode = mode
         self.momentum = momentum
