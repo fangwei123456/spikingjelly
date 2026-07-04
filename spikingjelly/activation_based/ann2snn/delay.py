@@ -227,7 +227,7 @@ def estimate_delay_start(
     handles = []
 
     def make_hook(module: BaseNode, post_scaler: Scaler):
-        def hook(_module, inputs, output):
+        def hook(_module, inputs, _output):
             if len(inputs) != 1 or not isinstance(inputs[0], torch.Tensor):
                 raise TypeError(
                     "Delay estimation neuron hook expects one tensor input."
@@ -235,7 +235,8 @@ def estimate_delay_start(
             x = inputs[0]
             ratio = _compute_delay_ratio(module, post_scaler, x)
             ratios[module].append(float(ratio.detach().cpu().item()))
-            return output
+            max_value = float(_as_runtime_tensor(module.v_threshold, x).item())
+            return torch.clamp(x, min=0, max=max_value)
 
         return hook
 
@@ -283,5 +284,5 @@ def estimate_delay_start(
             RuntimeWarning,
             stacklevel=2,
         )
-        return max(time_steps - _MIN_READOUT_STEPS, 0)
+        return max(time_steps - _MIN_READOUT_STEPS - 1, 0)
     return min(delay_start, time_steps - 1)

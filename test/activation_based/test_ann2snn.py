@@ -2830,7 +2830,7 @@ class TestDelayedReadoutEstimation:
 
         assert delay_start == 1
 
-    def test_delay_probe_does_not_replace_outputs_for_later_layers(self, monkeypatch):
+    def test_delay_probe_propagates_clipped_analog_activation(self, monkeypatch):
         model = _trace_ann2snn_leaf(TwoStageScalerNeuronNet())
         loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
         observed_inputs = []
@@ -2854,7 +2854,7 @@ class TestDelayedReadoutEstimation:
         assert observed_inputs[0][0] is model.stage0.if_node
         assert observed_inputs[1][0] is model.stage1.if_node
         assert torch.allclose(observed_inputs[0][1], torch.full((2, 2), 0.25))
-        assert torch.allclose(observed_inputs[1][1], torch.zeros(2, 2))
+        assert torch.allclose(observed_inputs[1][1], torch.full((2, 2), 0.25))
 
     def test_delay_estimation_removes_hooks_and_keeps_spike_forward(self):
         model = _trace_ann2snn_leaf(
@@ -2906,7 +2906,7 @@ class TestDelayedReadoutEstimation:
             model, loader, device="cpu", time_steps=8
         )
 
-        assert delay_start == 4
+        assert delay_start == 3
 
     def test_delay_estimation_warns_when_readout_budget_is_too_small(self):
         model = _trace_ann2snn_leaf(
