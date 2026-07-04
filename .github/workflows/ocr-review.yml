@@ -3,7 +3,7 @@ name: OCR PR Review
 # pull_request_target: secrets 可用于 fork PR（OCR 只读 diff，不执行 PR 代码，安全）
 on:
   pull_request_target:
-    types: [opened, synchronize]
+    types: [opened]
   issue_comment:
     types: [created]
 
@@ -14,7 +14,8 @@ permissions:
 
 jobs:
   review:
-    # issue_comment 触发时，只对 PR 评论中的 /ocr 关键词响应
+    # PR opened 自动跑一次；后续 push 不自动跑，避免大 PR 反复消耗 token。
+    # issue_comment 触发时，只对 PR 评论中的 /ocr 关键词响应。
     if: >-
       github.event_name == 'pull_request_target' ||
       (github.event_name == 'issue_comment' &&
