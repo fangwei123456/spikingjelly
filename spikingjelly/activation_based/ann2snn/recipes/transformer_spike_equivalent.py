@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import operator
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
 import torch
@@ -8,6 +9,7 @@ import torch.nn.functional as F
 from torch import fx
 
 from spikingjelly.activation_based.ann2snn.operators import (
+    SNNMatrixOperator,
     TDConv2d,
     TDGELU,
     TDLayerNorm,
@@ -15,6 +17,7 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDModule,
     TDMultiheadAttention,
     TDScaledDotProductAttention,
+    TDSoftmax,
 )
 from spikingjelly.activation_based.ann2snn.recipes.base import ConversionRecipe
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
@@ -28,6 +31,14 @@ if TYPE_CHECKING:
 
 
 __all__ = ["TransformerSpikeEquivalentRecipe"]
+
+
+class _TDTanh(TDModule):
+    def ann_forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.tanh(x)
+
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        return self._td_sequence_forward((x_seq,), torch.tanh)
 
 
 class TransformerSpikeEquivalentRecipe(ConversionRecipe):
@@ -55,6 +66,19 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
     force train/eval mode changes. It only replaces the currently supported ANN
     core modules and narrow attention subset with TD-equivalent operators.
     """
+
+    def __init__(self, time_steps: Optional[int] = None) -> None:
+        self.time_steps = time_steps
+
+    def validate(self, converter: "Converter") -> None:
+        if self.time_steps is None:
+            return
+        if (
+            not isinstance(self.time_steps, int)
+            or isinstance(self.time_steps, bool)
+            or self.time_steps <= 0
+        ):
+            raise ValueError("time_steps must be a positive integer when set.")
 
     def replace(
         self, converter: "Converter", fx_model: fx.GraphModule
@@ -113,6 +137,8 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             self._replace_submodule(fx_model, node.target, replacement)
             modules[node.target] = replacement
 
+        self._replace_functional_td_ops(fx_model)
+
         sdpa_index = 0
         existing_modules = set(dict(fx_model.named_modules()).keys())
         for node in list(fx_model.graph.nodes):
@@ -153,7 +179,17 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             context="TransformerSpikeEquivalentRecipe step-mode backend",
             wrap_module_types=_SHAPE_ONLY_MODULE_TYPES,
             safe_module_types=_TRANSFORMER_SAFE_MODULE_TYPES,
+            safe_call_functions=(
+                torch.div,
+                operator.truediv,
+            ),
         )
+
+    def finalize(self, converter: "Converter", fx_model: fx.GraphModule) -> nn.Module:
+        object.__setattr__(fx_model, "ann2snn_recipe", "transformer_spike_equivalent")
+        if self.time_steps is not None:
+            object.__setattr__(fx_model, "time_steps", self.time_steps)
+        return fx_model
 
     @staticmethod
     def _replace_submodule(
@@ -353,6 +389,19 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             td_module.train(module.training)
             return td_module
 
+        if isinstance(module, nn.Tanh):
+            td_module = _TDTanh()
+            td_module.train(module.training)
+            return td_module
+
+        if isinstance(module, nn.Softmax):
+            dim = module.dim
+            if not isinstance(dim, int):
+                raise ValueError(
+                    "TD softmax conversion requires nn.Softmax dim to be a literal int."
+                )
+            return TDSoftmax(dim=dim)
+
         if isinstance(module, nn.MultiheadAttention):
             if node is None:
                 raise ValueError("TD MHA conversion requires an FX node.")
@@ -371,3 +420,105 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             return td_module
 
         return None
+
+    @staticmethod
+    def _insert_call_module_after(
+        fx_model: fx.GraphModule,
+        node: fx.Node,
+        module: nn.Module,
+        prefix: str,
+        index: int,
+        args: tuple[Any, ...],
+    ) -> int:
+        existing = set(dict(fx_model.named_modules()).keys())
+        target = f"{prefix}_{index}"
+        while target in existing:
+            index += 1
+            target = f"{prefix}_{index}"
+        fx_model.add_submodule(target, module)
+        with fx_model.graph.inserting_after(node):
+            new_node = fx_model.graph.call_module(target, args=args)
+        node.replace_all_uses_with(new_node)
+        fx_model.graph.erase_node(node)
+        return index + 1
+
+    def _replace_functional_td_ops(self, fx_model: fx.GraphModule) -> None:
+        softmax_index = 0
+        matmul_index = 0
+        gelu_index = 0
+        for node in list(fx_model.graph.nodes):
+            if node.op == "call_function" and node.target is F.gelu:
+                approximate = self._get_literal_argument(node, "approximate", 1, "none")
+                if approximate not in ("none", "tanh"):
+                    raise ValueError(
+                        "TD GELU conversion requires approximate to be 'none' or 'tanh'."
+                    )
+                gelu_index = self._insert_call_module_after(
+                    fx_model,
+                    node,
+                    TDGELU(approximate=approximate),
+                    "td_gelu",
+                    gelu_index,
+                    (node.args[0],),
+                )
+                continue
+            if node.op == "call_function" and node.target in (F.softmax, torch.softmax):
+                dim = self._get_literal_argument(node, "dim", 1, None)
+                if not isinstance(dim, int):
+                    raise ValueError("TD softmax conversion requires literal int dim.")
+                softmax_index = self._insert_call_module_after(
+                    fx_model,
+                    node,
+                    TDSoftmax(dim=dim),
+                    "td_softmax",
+                    softmax_index,
+                    (node.args[0],),
+                )
+                continue
+            if node.op == "call_method" and node.target == "softmax":
+                dim = self._get_literal_argument(node, "dim", 1, None)
+                if not isinstance(dim, int):
+                    raise ValueError(
+                        "TD tensor.softmax conversion requires literal int dim."
+                    )
+                softmax_index = self._insert_call_module_after(
+                    fx_model,
+                    node,
+                    TDSoftmax(dim=dim),
+                    "td_softmax",
+                    softmax_index,
+                    (node.args[0],),
+                )
+                continue
+            if node.op == "call_function" and node.target in (
+                torch.matmul,
+                operator.matmul,
+            ):
+                if len(node.args) < 2:
+                    raise ValueError("TD matmul conversion got malformed matmul node.")
+                matmul_index = self._insert_call_module_after(
+                    fx_model,
+                    node,
+                    SNNMatrixOperator(),
+                    "td_matmul",
+                    matmul_index,
+                    (node.args[0], node.args[1]),
+                )
+                continue
+            if node.op == "call_method" and node.target == "matmul":
+                if len(node.args) < 2:
+                    raise ValueError(
+                        "TD tensor.matmul conversion got malformed matmul node."
+                    )
+                matmul_index = self._insert_call_module_after(
+                    fx_model,
+                    node,
+                    SNNMatrixOperator(),
+                    "td_matmul",
+                    matmul_index,
+                    (node.args[0], node.args[1]),
+                )
+
+        fx_model.graph.lint()
+        fx_model.delete_all_unused_submodules()
+        fx_model.recompile()

@@ -25,7 +25,7 @@ from spikingjelly.activation_based.ann2snn import (
     NeuronFactory,
     RateCodingRecipe,
     ReLURule,
-    SpikeZIPTFRecipe,
+    SpikeZIPTFQANNRecipe,
     STATransformerRecipe,
     ThresholdOptimizer,
     TransformerSpikeEquivalentRecipe,
@@ -915,9 +915,9 @@ class TestPublicExports:
             "ConversionRecipe",
             "RateCodingRecipe",
             "LocalThresholdBalancingRecipe",
-            "SpikeZIPTFRecipe",
             "STATransformerRecipe",
             "TransformerSpikeEquivalentRecipe",
+            "SpikeZIPTFQANNRecipe",
             "ChannelVoltageScaler",
             "estimate_delay_start",
             "download_url",
@@ -931,12 +931,12 @@ class TestPublicExports:
         assert ann2snn.ConversionRecipe is ConversionRecipe
         assert ann2snn.RateCodingRecipe is RateCodingRecipe
         assert ann2snn.LocalThresholdBalancingRecipe is LocalThresholdBalancingRecipe
-        assert ann2snn.SpikeZIPTFRecipe is SpikeZIPTFRecipe
         assert ann2snn.STATransformerRecipe is STATransformerRecipe
         assert ann2snn.ChannelVoltageScaler is ChannelVoltageScaler
         assert (
             ann2snn.TransformerSpikeEquivalentRecipe is TransformerSpikeEquivalentRecipe
         )
+        assert ann2snn.SpikeZIPTFQANNRecipe is SpikeZIPTFQANNRecipe
 
     def test_recipe_base_has_no_execution_entrypoint(self):
         assert not hasattr(ConversionRecipe, "convert")
@@ -947,9 +947,9 @@ class TestPublicExports:
         assert not hasattr(ConversionRecipe, "name")
         assert not hasattr(RateCodingRecipe, "name")
         assert not hasattr(LocalThresholdBalancingRecipe, "name")
-        assert not hasattr(SpikeZIPTFRecipe, "name")
         assert not hasattr(STATransformerRecipe, "name")
         assert not hasattr(TransformerSpikeEquivalentRecipe, "name")
+        assert not hasattr(SpikeZIPTFQANNRecipe, "name")
 
 
 class TestConverterRecipes:

@@ -6,7 +6,6 @@ from torch import fx
 
 from spikingjelly.activation_based.ann2snn.recipes import (
     ConversionRecipe,
-    SpikeZIPTFRecipe,
     TransformerSpikeEquivalentRecipe,
 )
 
@@ -33,9 +32,8 @@ class Converter:
         :param recipe: 转换 recipe。传入
             :class:`~spikingjelly.activation_based.ann2snn.recipes.ConversionRecipe`
             实例，或稳定的内置 recipe 字符串。目前字符串别名仅支持
-            ``"transformer_spike_equivalent"`` 和 ``"spikezip_tf"``。Rate-coding 转换需要显式传入
-            ``RateCodingRecipe(dataloader=...)``；STA Transformer 转换需要显式
-            传入 ``STATransformerRecipe(dataloader=..., time_steps=...)``。
+            ``"transformer_spike_equivalent"``。Rate-coding、STA Transformer
+            和 SpikeZIP QANN 转换需要显式传入带参数的 recipe 对象。
         :type recipe: str or ConversionRecipe
         :param device: 转换目标 device。若为 ``None``，从模型参数推断；无参数
             模型使用 CPU。
@@ -55,12 +53,10 @@ class Converter:
         :param recipe: Conversion recipe. Pass a
             :class:`~spikingjelly.activation_based.ann2snn.recipes.ConversionRecipe`
             instance, or a stable built-in recipe string. Currently, the only
-            supported string aliases are ``"transformer_spike_equivalent"`` and
-            ``"spikezip_tf"``.
+            supported string alias is ``"transformer_spike_equivalent"``.
             Rate-coding conversion must pass
             ``RateCodingRecipe(dataloader=...)`` explicitly; STA Transformer
-            conversion must pass
-            ``STATransformerRecipe(dataloader=..., time_steps=...)`` explicitly.
+            and SpikeZIP QANN conversion must pass an explicit recipe object.
         :type recipe: str or ConversionRecipe
         :param device: Target conversion device. If ``None``, infer it from the
             model parameters; parameterless models use CPU.
@@ -75,8 +71,6 @@ class Converter:
             return recipe
         if recipe == "transformer_spike_equivalent":
             return TransformerSpikeEquivalentRecipe()
-        if recipe == "spikezip_tf":
-            return SpikeZIPTFRecipe()
         if recipe == "rate_coding":
             raise ValueError(
                 "The rate_coding recipe requires parameters. "
@@ -147,6 +141,9 @@ class Converter:
             with torch.no_grad():
                 self.recipe.validate(self)
                 ann = self.recipe.before_trace(self, ann)
+                if not self.recipe.requires_fx_trace():
+                    ann = ann.to(self.device)
+                    return self.recipe.finalize(self, ann)
                 fx_model = fx.symbolic_trace(ann).to(self.device)
                 fx_model = self.recipe.after_trace(self, fx_model)
                 fx_model = self.recipe.insert_observers(self, fx_model)

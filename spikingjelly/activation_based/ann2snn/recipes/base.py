@@ -53,6 +53,39 @@ class ConversionRecipe:
     object that the next step should use.
     """
 
+    def requires_fx_trace(self) -> bool:
+        r"""
+        **API Language** - :ref:`中文 <ConversionRecipe.requires_fx_trace-cn>` | :ref:`English <ConversionRecipe.requires_fx_trace-en>`
+
+        ----
+
+        .. _ConversionRecipe.requires_fx_trace-cn:
+
+        * **中文**
+
+        返回该 recipe 是否使用 ``Converter`` 的 FX tracing 图转换模板。
+        默认返回 ``True``。不基于 FX 的 recipe 可以返回 ``False``，此时
+        ``Converter`` 只执行 ``validate``、``before_trace`` 和 ``finalize``。
+
+        :return: 是否需要 FX tracing。
+        :rtype: bool
+
+        ----
+
+        .. _ConversionRecipe.requires_fx_trace-en:
+
+        * **English**
+
+        Return whether this recipe uses the ``Converter`` FX tracing graph
+        conversion template. The default is ``True``. Non-FX recipes can return
+        ``False``; then ``Converter`` only runs ``validate``, ``before_trace``
+        and ``finalize``.
+
+        :return: Whether FX tracing is required.
+        :rtype: bool
+        """
+        return True
+
     def validate(self, converter: "Converter") -> None:
         r"""
         **API Language** - :ref:`中文 <ConversionRecipe.validate-cn>` | :ref:`English <ConversionRecipe.validate-en>`

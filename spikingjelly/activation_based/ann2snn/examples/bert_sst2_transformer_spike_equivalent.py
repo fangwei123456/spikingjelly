@@ -8,7 +8,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from spikingjelly.activation_based import functional
-from spikingjelly.activation_based.ann2snn import Converter, SpikeZIPTFRecipe
+from spikingjelly.activation_based.ann2snn import Converter, TransformerSpikeEquivalentRecipe
 
 
 def import_huggingface():
@@ -136,7 +136,7 @@ class FXFriendlyBertEncoder(nn.Module):
 def parse_args():
     parser = argparse.ArgumentParser(
         description=(
-            "Evaluate SpikeZIPTFRecipe on a BERT SST-2 classifier "
+            "Evaluate TransformerSpikeEquivalentRecipe on a BERT SST-2 classifier "
             "classification through an embedding-output conversion boundary."
         )
     )
@@ -297,7 +297,14 @@ def check_hf_wrapper_parity(wrapper, hf_model, loader, device, max_batches, atol
     }
 
 
-def evaluate_spikezip_tf(converted, hf_model, loader, device, time_steps, name):
+def evaluate_transformer_spike_equivalent(
+    converted,
+    hf_model,
+    loader,
+    device,
+    time_steps,
+    name,
+):
     converted.eval().to(device)
     hf_model.eval().to(device)
     functional.set_step_mode(converted, "m")
@@ -362,7 +369,7 @@ def main():
         "batch_size": args.batch_size,
         "max_length": args.max_length,
         "time_steps": args.time_steps,
-        "recipe": "SpikeZIPTFRecipe",
+        "recipe": "TransformerSpikeEquivalentRecipe",
         "conversion_boundary": "bert embeddings output",
         "parity_batches": args.parity_batches,
         "parity_atol": args.parity_atol,
@@ -382,27 +389,27 @@ def main():
     baseline = evaluate_ann(wrapper, hf_model, loader, device, "baseline")
     print("BASELINE", json.dumps(baseline), flush=True)
 
-    recipe = SpikeZIPTFRecipe(time_steps=args.time_steps)
+    recipe = TransformerSpikeEquivalentRecipe(time_steps=args.time_steps)
     converted = (
         Converter(recipe=recipe, device=device).convert(wrapper).to(device).eval()
     )
-    converted_result = evaluate_spikezip_tf(
+    converted_result = evaluate_transformer_spike_equivalent(
         converted,
         hf_model,
         loader,
         device,
         args.time_steps,
-        f"spikezip_tf_t{args.time_steps}",
+        f"transformer_spike_equivalent_t{args.time_steps}",
     )
     drop = baseline["accuracy"] - converted_result["accuracy"]
-    print("SPIKEZIP_TF", json.dumps(converted_result), flush=True)
+    print("TRANSFORMER_SPIKE_EQUIVALENT", json.dumps(converted_result), flush=True)
     print("DROP", drop, flush=True)
 
     payload = {
         "env": env,
         "hf_wrapper_parity": parity,
         "baseline": baseline,
-        "spikezip_tf": converted_result,
+        "transformer_spike_equivalent": converted_result,
         "drop": drop,
     }
     write_output(args.output, payload)

@@ -290,14 +290,14 @@ Top-1 下降 0.368 个百分点。本次使用 ``batch_size=16`` 的完整运行
     STA_SPIKING_ENCODER_T8_S0p5 {"top1": 0.807, "top5": 0.95202, "total": 50000, "seconds": 1833.9626359939575}
     DROP 0.0036799999999999056
 
-SpikeZIP-TF-style BERT SST-2 示例
----------------------------------
+Transformer TD-equivalent BERT SST-2 示例
+------------------------------------------------
 
-``SpikeZIPTFRecipe`` 是一个窄版 SpikeZIP-TF-style 累计差分 recipe，面向语言 Transformer 分类模型。第一条公开支持路径是 BERT-style SST-2 分类，并采用 embedding 输出之后的转换边界。原 Hugging Face BERT embedding 层仍然接收整数 ``input_ids``。ANN2SNN 转换图从浮点 ``embedding_output`` 和 ``extended_attention_mask`` 开始，转换 encoder、pooler、dropout 和 classifier wrapper。
+``TransformerSpikeEquivalentRecipe`` 是一个窄版 Transformer TD-equivalent 累计差分 recipe，面向语言 Transformer 分类模型。第一条公开支持路径是 BERT-style SST-2 分类，并采用 embedding 输出之后的转换边界。原 Hugging Face BERT embedding 层仍然接收整数 ``input_ids``。ANN2SNN 转换图从浮点 ``embedding_output`` 和 ``extended_attention_mask`` 开始，转换 encoder、pooler、dropout 和 classifier wrapper。
 
-这个边界把 tokenization、整数 token id、embedding lookup 和 Hugging Face mask 构造保留在 ANN2SNN 图外，也避免把该示例误读为完整 autoregressive LLM conversion：``SpikeZIPTFRecipe`` 不支持 decoder generation、KV cache、causal language-model perplexity 评测，也不实现完整 SpikeZIP-TF 论文中的 ST-BIF+ 与 activation quantization。它复用 SpikingJelly 现有 TD 算子来覆盖 Linear、LayerNorm、GELU、Softmax 和 attention matrix multiplication。
+这个边界把 tokenization、整数 token id、embedding lookup 和 Hugging Face mask 构造保留在 ANN2SNN 图外，也避免把该示例误读为完整 autoregressive LLM conversion：``TransformerSpikeEquivalentRecipe`` 不支持 decoder generation、KV cache、causal language-model perplexity 评测，也不实现 SpikeZIP-TF QANN-to-SNN 组件，例如 ST-BIF+、SESA、Spike-Softmax、Spike-LayerNorm 与 activation quantization。它复用 SpikingJelly 现有 TD 算子来覆盖 Linear、LayerNorm、GELU、Softmax 和 attention matrix multiplication。
 
-完整可运行示例是 ``spikingjelly.activation_based.ann2snn.examples.bert_sst2_spikezip_tf``。Hugging Face 依赖是可选依赖，只在运行该示例时安装：
+完整可运行示例是 ``spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_spike_equivalent``。Hugging Face 依赖是可选依赖，只在运行该示例时安装：
 
 .. code-block:: shell
 
@@ -307,7 +307,7 @@ SpikeZIP-TF-style BERT SST-2 示例
 
 .. code-block:: shell
 
-    CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.bert_sst2_spikezip_tf \
+    CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_spike_equivalent \
       --model-name-or-path textattack/bert-base-uncased-SST-2 \
       --dataset-name nyu-mll/glue \
       --dataset-config sst2 \
@@ -316,13 +316,13 @@ SpikeZIP-TF-style BERT SST-2 示例
       --batch-size 32 \
       --eval-samples 256 \
       --time-steps 8 \
-      --output benchmark/output/bert_sst2_spikezip_tf_t8_small.json
+      --output benchmark/output/bert_sst2_transformer_spike_equivalent_t8_small.json
 
 完整 SST-2 验证时去掉 ``--eval-samples``：
 
 .. code-block:: shell
 
-    CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.bert_sst2_spikezip_tf \
+    CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_spike_equivalent \
       --model-name-or-path textattack/bert-base-uncased-SST-2 \
       --dataset-name nyu-mll/glue \
       --dataset-config sst2 \
@@ -330,7 +330,7 @@ SpikeZIP-TF-style BERT SST-2 示例
       --device cuda:0 \
       --batch-size 32 \
       --time-steps 8 \
-      --output benchmark/output/bert_sst2_spikezip_tf_t8_full.json
+      --output benchmark/output/bert_sst2_transformer_spike_equivalent_t8_full.json
 
 转换产物遵循相同的显式 step-mode 契约：
 
@@ -351,7 +351,7 @@ SpikeZIP-TF-style BERT SST-2 示例
 
 下表数据在 NVIDIA A100-SXM4-80GB 上，使用 SST-2 validation split 的 872 条样本测得：
 
-.. list-table:: BERT SST-2 SpikeZIP-TF-style 转换结果
+.. list-table:: BERT SST-2 Transformer TD-equivalent 转换结果
     :header-rows: 1
     :widths: 36 18 18 18
 
@@ -363,7 +363,7 @@ SpikeZIP-TF-style BERT SST-2 示例
       - 872
       - -
       - 92.431
-    * - ``SpikeZIPTFRecipe``
+    * - ``TransformerSpikeEquivalentRecipe``
       - 872
       - 8
       - 92.431
@@ -374,7 +374,33 @@ Accuracy 下降 0.000 个百分点。评测前，示例会先在前两个 batch 
 
     HF_WRAPPER_PARITY {"checked_batches": 2, "max_abs_diff": 5.245208740234375e-06, "atol": 1e-05}
     BASELINE {"accuracy": 0.9243119266055045, "total": 872, "seconds": 1.5974977016448975}
-    SPIKEZIP_TF {"accuracy": 0.9243119266055045, "total": 872, "seconds": 9.204399347305298}
+    TRANSFORMER_SPIKE_EQUIVALENT {"accuracy": 0.9243119266055045, "total": 872, "seconds": 9.204399347305298}
     DROP 0.0
+
+SpikeZIP QANN-to-SNN synthetic RoBERTa 示例
+------------------------------------------------
+
+``SpikeZIPTFQANNRecipe`` 是 SpikeZIP QANN-to-SNN 路径。它不会把任意 ANN 量化成 QANN。输入模型必须已经是 SpikeZIP-compatible QANN：当前支持的 RoBERTa-style self-attention module 需要暴露 ``query``、``key``、``value`` linear layers，以及带有 ``s``、``sym``、``pos_max``、``neg_min``、``level`` 属性的 ``query_quan``、``key_quan``、``value_quan``、``attn_quan``、``after_attn_quan`` quantizers。该 recipe 会把 QANN 侧 quantizers 和 Transformer operators 替换为 SNN 侧 ST-BIF、SESA attention multiplication、Spike-Softmax、Spike-LayerNorm、embedding 与 linear wrappers。
+
+第一条公开示例使用 synthetic QANN，因为 SpikingJelly 不随包发布 SpikeZIP 作者的量化 Transformer checkpoints。该示例验证的契约是：SpikeZIP-compatible QANN 可以被转换为 SNN wrapper，且 SNN 累计 logits 与 QANN logits 对齐：
+
+.. code-block:: shell
+
+    python -m spikingjelly.activation_based.ann2snn.examples.roberta_spikezip_qann_synthetic \
+      --device cpu \
+      --time-steps 32 \
+      --batch-size 3 \
+      --seq-len 5 \
+      --output benchmark/output/roberta_spikezip_qann_synthetic_cpu.json
+
+该示例也接受 ``--qann-checkpoint``，用于加载同一 tiny QANN architecture 的 state dict。对于真实 SpikeZIP checkpoints，用户需要先适配模型 wrapper，使量化 attention modules 暴露相同的底层 quantizer contract，再传给 ``Converter(recipe=SpikeZIPTFQANNRecipe(...))``。
+
+预期 stdout 包含接近 0 的 parity error 和 ST-BIF state 摘要：
+
+.. code-block:: shell
+
+    {"max_abs_diff": 2.682209014892578e-07, "recipe": "SpikeZIPTFQANNRecipe", "sequence_shape": [32, 3, 2], "stbif_state": {"last_step_spike_values": [0.0], "max_accumulated": 0.75, "min_accumulated": -1.0}}
+
+这个结果是 synthetic QANN 的转换 parity check，不是任务准确率 benchmark。
 
 .. [#sta] Y. Jiang, K. Hu, T. Zhang, H. Gao, Y. Liu, Y. Fang, and F. Chen, "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers," ICLR 2024. https://openreview.net/forum?id=XrunSYwoLr

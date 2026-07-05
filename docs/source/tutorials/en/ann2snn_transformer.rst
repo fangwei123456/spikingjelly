@@ -286,14 +286,14 @@ The key stdout lines are:
     STA_SPIKING_ENCODER_T8_S0p5 {"top1": 0.807, "top5": 0.95202, "total": 50000, "seconds": 1833.9626359939575}
     DROP 0.0036799999999999056
 
-SpikeZIP-TF-style BERT SST-2 example
-------------------------------------
+Transformer TD-equivalent BERT SST-2 example
+------------------------------------------------
 
-``SpikeZIPTFRecipe`` is a narrow SpikeZIP-TF-style cumulative-difference recipe for language Transformer classification models. The first supported public path is BERT-style SST-2 classification through an embedding-output boundary. The original Hugging Face BERT embedding layer still consumes integer ``input_ids``. The converted graph starts from floating-point ``embedding_output`` and ``extended_attention_mask``, then converts the encoder, pooler, dropout, and classifier wrapper.
+``TransformerSpikeEquivalentRecipe`` is a narrow Transformer TD-equivalent cumulative-difference recipe for language Transformer classification models. The first supported public path is BERT-style SST-2 classification through an embedding-output boundary. The original Hugging Face BERT embedding layer still consumes integer ``input_ids``. The converted graph starts from floating-point ``embedding_output`` and ``extended_attention_mask``, then converts the encoder, pooler, dropout, and classifier wrapper.
 
-This boundary keeps tokenization, integer token ids, embedding lookup, and Hugging Face mask construction outside the ANN2SNN graph. It also avoids claiming full autoregressive LLM conversion: ``SpikeZIPTFRecipe`` does not support decoder generation, KV cache, causal language-model perplexity evaluation, or the full SpikeZIP-TF paper stack such as ST-BIF+ and activation quantization. It reuses SpikingJelly TD operators for Linear, LayerNorm, GELU, Softmax, and attention matrix multiplication.
+This boundary keeps tokenization, integer token ids, embedding lookup, and Hugging Face mask construction outside the ANN2SNN graph. It also avoids claiming full autoregressive LLM conversion: ``TransformerSpikeEquivalentRecipe`` does not support decoder generation, KV cache, causal language-model perplexity evaluation, or SpikeZIP-TF QANN-to-SNN components such as ST-BIF+, SESA, Spike-Softmax, Spike-LayerNorm, and activation quantization. It reuses SpikingJelly TD operators for Linear, LayerNorm, GELU, Softmax, and attention matrix multiplication.
 
-The runnable example is ``spikingjelly.activation_based.ann2snn.examples.bert_sst2_spikezip_tf``. It keeps Hugging Face packages optional; install them only when running this example:
+The runnable example is ``spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_spike_equivalent``. It keeps Hugging Face packages optional; install them only when running this example:
 
 .. code-block:: shell
 
@@ -303,7 +303,7 @@ Run a small validation slice first:
 
 .. code-block:: shell
 
-    CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.bert_sst2_spikezip_tf \
+    CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_spike_equivalent \
       --model-name-or-path textattack/bert-base-uncased-SST-2 \
       --dataset-name nyu-mll/glue \
       --dataset-config sst2 \
@@ -312,13 +312,13 @@ Run a small validation slice first:
       --batch-size 32 \
       --eval-samples 256 \
       --time-steps 8 \
-      --output benchmark/output/bert_sst2_spikezip_tf_t8_small.json
+      --output benchmark/output/bert_sst2_transformer_spike_equivalent_t8_small.json
 
 For a full SST-2 validation run, omit ``--eval-samples``:
 
 .. code-block:: shell
 
-    CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.bert_sst2_spikezip_tf \
+    CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_spike_equivalent \
       --model-name-or-path textattack/bert-base-uncased-SST-2 \
       --dataset-name nyu-mll/glue \
       --dataset-config sst2 \
@@ -326,7 +326,7 @@ For a full SST-2 validation run, omit ``--eval-samples``:
       --device cuda:0 \
       --batch-size 32 \
       --time-steps 8 \
-      --output benchmark/output/bert_sst2_spikezip_tf_t8_full.json
+      --output benchmark/output/bert_sst2_transformer_spike_equivalent_t8_full.json
 
 The converted model follows the same explicit step-mode contract:
 
@@ -347,7 +347,7 @@ The converted model follows the same explicit step-mode contract:
 
 The full SST-2 validation run below was measured on an NVIDIA A100-SXM4-80GB with the 872-sample validation split:
 
-.. list-table:: BERT SST-2 SpikeZIP-TF-style conversion results
+.. list-table:: BERT SST-2 Transformer TD-equivalent conversion results
     :header-rows: 1
     :widths: 36 18 18 18
 
@@ -359,7 +359,7 @@ The full SST-2 validation run below was measured on an NVIDIA A100-SXM4-80GB wit
       - 872
       - -
       - 92.431
-    * - ``SpikeZIPTFRecipe``
+    * - ``TransformerSpikeEquivalentRecipe``
       - 872
       - 8
       - 92.431
@@ -370,7 +370,33 @@ The accuracy drop is 0.000 percentage points. Before evaluation, the example che
 
     HF_WRAPPER_PARITY {"checked_batches": 2, "max_abs_diff": 5.245208740234375e-06, "atol": 1e-05}
     BASELINE {"accuracy": 0.9243119266055045, "total": 872, "seconds": 1.5974977016448975}
-    SPIKEZIP_TF {"accuracy": 0.9243119266055045, "total": 872, "seconds": 9.204399347305298}
+    TRANSFORMER_SPIKE_EQUIVALENT {"accuracy": 0.9243119266055045, "total": 872, "seconds": 9.204399347305298}
     DROP 0.0
+
+SpikeZIP QANN-to-SNN synthetic RoBERTa example
+------------------------------------------------
+
+``SpikeZIPTFQANNRecipe`` is the SpikeZIP QANN-to-SNN path. It does not quantize an arbitrary ANN. The input model must already be a SpikeZIP-compatible QANN: supported RoBERTa-style self-attention modules expose ``query``, ``key``, ``value`` linear layers and ``query_quan``, ``key_quan``, ``value_quan``, ``attn_quan``, ``after_attn_quan`` quantizers with ``s``, ``sym``, ``pos_max``, ``neg_min``, and ``level`` attributes. The recipe replaces the QANN-side quantizers and Transformer operators with SNN-side ST-BIF, SESA attention multiplication, Spike-Softmax, Spike-LayerNorm, embedding, and linear wrappers.
+
+The first public example is synthetic because SpikingJelly does not ship the SpikeZIP authors' quantized Transformer checkpoints. It verifies the contract that a SpikeZIP-compatible QANN can be converted to an SNN wrapper whose accumulated logits match the QANN logits:
+
+.. code-block:: shell
+
+    python -m spikingjelly.activation_based.ann2snn.examples.roberta_spikezip_qann_synthetic \
+      --device cpu \
+      --time-steps 32 \
+      --batch-size 3 \
+      --seq-len 5 \
+      --output benchmark/output/roberta_spikezip_qann_synthetic_cpu.json
+
+The example also accepts ``--qann-checkpoint`` to load a state dict for the same tiny QANN architecture. For real SpikeZIP checkpoints, users should adapt the model wrapper so that its quantized attention modules expose the same low-level quantizer contract before passing it to ``Converter(recipe=SpikeZIPTFQANNRecipe(...))``.
+
+Expected stdout contains a near-zero parity error and ST-BIF state summary:
+
+.. code-block:: shell
+
+    {"max_abs_diff": 2.682209014892578e-07, "recipe": "SpikeZIPTFQANNRecipe", "sequence_shape": [32, 3, 2], "stbif_state": {"last_step_spike_values": [0.0], "max_accumulated": 0.75, "min_accumulated": -1.0}}
+
+This result is a conversion parity check for a synthetic QANN, not a task accuracy benchmark.
 
 .. [#sta] Y. Jiang, K. Hu, T. Zhang, H. Gao, Y. Liu, Y. Fang, and F. Chen, "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers," ICLR 2024. https://openreview.net/forum?id=XrunSYwoLr
