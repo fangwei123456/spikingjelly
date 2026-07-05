@@ -32,3 +32,11 @@ ImageNet ViT-B/16 with STATransformerRecipe
    :members:
    :undoc-members:
    :show-inheritance:
+
+BERT SST-2 with SpikeZIPTFRecipe
+--------------------------------
+
+.. automodule:: spikingjelly.activation_based.ann2snn.examples.bert_sst2_spikezip_tf
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -25,6 +25,7 @@ from spikingjelly.activation_based.ann2snn import (
     NeuronFactory,
     RateCodingRecipe,
     ReLURule,
+    SpikeZIPTFRecipe,
     STATransformerRecipe,
     ThresholdOptimizer,
     TransformerSpikeEquivalentRecipe,
@@ -914,6 +915,7 @@ class TestPublicExports:
             "ConversionRecipe",
             "RateCodingRecipe",
             "LocalThresholdBalancingRecipe",
+            "SpikeZIPTFRecipe",
             "STATransformerRecipe",
             "TransformerSpikeEquivalentRecipe",
             "ChannelVoltageScaler",
@@ -929,6 +931,7 @@ class TestPublicExports:
         assert ann2snn.ConversionRecipe is ConversionRecipe
         assert ann2snn.RateCodingRecipe is RateCodingRecipe
         assert ann2snn.LocalThresholdBalancingRecipe is LocalThresholdBalancingRecipe
+        assert ann2snn.SpikeZIPTFRecipe is SpikeZIPTFRecipe
         assert ann2snn.STATransformerRecipe is STATransformerRecipe
         assert ann2snn.ChannelVoltageScaler is ChannelVoltageScaler
         assert (
@@ -944,6 +947,7 @@ class TestPublicExports:
         assert not hasattr(ConversionRecipe, "name")
         assert not hasattr(RateCodingRecipe, "name")
         assert not hasattr(LocalThresholdBalancingRecipe, "name")
+        assert not hasattr(SpikeZIPTFRecipe, "name")
         assert not hasattr(STATransformerRecipe, "name")
         assert not hasattr(TransformerSpikeEquivalentRecipe, "name")
 

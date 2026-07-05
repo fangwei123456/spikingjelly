@@ -10,16 +10,19 @@ import pytest
 from spikingjelly.activation_based import base, functional, neuron, surrogate
 from spikingjelly.activation_based.ann2snn import (
     Converter,
+    SpikeZIPTFRecipe,
     STATransformerRecipe,
     TransformerSpikeEquivalentRecipe,
 )
 from spikingjelly.activation_based.ann2snn.operators import (
+    SNNMatrixOperator,
     TDConv2d,
     TDGELU,
     TDLayerNorm,
     TDLinear,
     TDMultiheadAttention,
     TDScaledDotProductAttention,
+    TDSoftmax,
 )
 from spikingjelly.activation_based.ann2snn.recipes.sta_transformer import (
     _STATIC_TENSOR_KWARGS,
@@ -156,6 +159,36 @@ def _run_converted_readout(converted: nn.Module, *args, **kwargs):
     return _sum_time_value(_run_converted_multistep(converted, *args, **kwargs))
 
 
+def _sequence_kwargs_first_real_then_zero(converted: nn.Module, **kwargs):
+    seq_kwargs = {}
+    for key, value in kwargs.items():
+        if torch.is_tensor(value) and value.is_floating_point():
+            seq_kwargs[key] = _first_real_then_zero_sequence(value, converted.time_steps)
+        else:
+            seq_kwargs[key] = value
+    return seq_kwargs
+
+
+def _run_spikezip_tf_static_mask_step_loop(
+    converted: nn.Module,
+    embedding_output: torch.Tensor,
+    extended_attention_mask: torch.Tensor,
+) -> torch.Tensor:
+    functional.set_step_mode(converted, "s")
+    functional.reset_net(converted)
+    embedding_seq = _first_real_then_zero_sequence(
+        embedding_output,
+        converted.time_steps,
+    )
+    return torch.stack(
+        [
+            converted(embedding_t, extended_attention_mask)
+            for embedding_t in embedding_seq
+        ],
+        dim=0,
+    )
+
+
 def _assert_converted_readout_matches_ann(
     converted: nn.Module,
     model: nn.Module,
@@ -252,6 +285,185 @@ def test_sta_sequence_linear_matches_online_linear():
         atol=1e-6,
         rtol=1e-6,
     )
+
+
+class _TinyBertSelfAttention(nn.Module):
+    def __init__(self, hidden_size: int = 8, num_heads: int = 2) -> None:
+        super().__init__()
+        if hidden_size % num_heads != 0:
+            raise ValueError("hidden_size must be divisible by num_heads.")
+        self.hidden_size = hidden_size
+        self.num_heads = num_heads
+        self.head_dim = hidden_size // num_heads
+        self.query = nn.Linear(hidden_size, hidden_size)
+        self.key = nn.Linear(hidden_size, hidden_size)
+        self.value = nn.Linear(hidden_size, hidden_size)
+        self.softmax = nn.Softmax(dim=-1)
+        self.out = nn.Linear(hidden_size, hidden_size)
+        self.norm = nn.LayerNorm(hidden_size)
+
+    def _transpose_for_scores(self, x: torch.Tensor) -> torch.Tensor:
+        batch, seq_len, _ = x.shape
+        x = x.view(batch, seq_len, self.num_heads, self.head_dim)
+        return x.permute(0, 2, 1, 3)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        extended_attention_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        query = self._transpose_for_scores(self.query(hidden_states))
+        key = self._transpose_for_scores(self.key(hidden_states))
+        value = self._transpose_for_scores(self.value(hidden_states))
+        scores = torch.matmul(query, key.transpose(-1, -2))
+        scores = scores / (self.head_dim ** 0.5)
+        scores = scores + extended_attention_mask
+        probs = self.softmax(scores)
+        context = torch.matmul(probs, value)
+        context = context.permute(0, 2, 1, 3).reshape(
+            hidden_states.shape[0],
+            hidden_states.shape[1],
+            self.hidden_size,
+        )
+        return self.norm(F.gelu(self.out(context)) + hidden_states)
+
+
+class _TinyBertSST2FromEmbeddings(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.attention = _TinyBertSelfAttention()
+        self.pooler = nn.Sequential(nn.Linear(8, 8), nn.Tanh())
+        self.classifier = nn.Linear(8, 2)
+
+    def forward(
+        self,
+        embedding_output: torch.Tensor,
+        extended_attention_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        hidden = self.attention(embedding_output, extended_attention_mask)
+        pooled = self.pooler(hidden[:, 0])
+        return self.classifier(pooled)
+
+
+class _TinyUnsupportedBertBranch(nn.Module):
+    def forward(self, embedding_output: torch.Tensor) -> torch.Tensor:
+        return embedding_output.masked_fill(embedding_output < 0, 0.0)
+
+
+def test_spikezip_tf_recipe_converts_tiny_bert_like_block():
+    torch.manual_seed(251)
+    model = _TinyBertSST2FromEmbeddings().eval()
+    embedding_output = torch.randn(3, 5, 8)
+    attention_mask = torch.tensor(
+        [[1, 1, 1, 0, 0], [1, 1, 1, 1, 0], [1, 1, 1, 1, 1]],
+        dtype=torch.float32,
+    )
+    extended_attention_mask = (1.0 - attention_mask[:, None, None, :]) * -10000.0
+
+    converted = Converter(
+        recipe=SpikeZIPTFRecipe(time_steps=4),
+        device="cpu",
+    ).convert(model).eval()
+
+    assert converted.time_steps == 4
+    assert converted.ann2snn_recipe == "spikezip_tf"
+    assert any(isinstance(module, TDLinear) for module in converted.modules())
+    assert any(isinstance(module, TDLayerNorm) for module in converted.modules())
+    assert any(isinstance(module, TDGELU) for module in converted.modules())
+    assert any(isinstance(module, TDSoftmax) for module in converted.modules())
+    assert any(isinstance(module, SNNMatrixOperator) for module in converted.modules())
+
+    functional.set_step_mode(converted, "m")
+    functional.reset_net(converted)
+    embedding_seq = _first_real_then_zero_sequence(
+        embedding_output,
+        converted.time_steps,
+    )
+    y_seq = converted(embedding_seq, extended_attention_mask)
+    assert torch.allclose(
+        y_seq.sum(dim=0),
+        model(embedding_output, extended_attention_mask),
+        atol=1e-5,
+        rtol=1e-5,
+    )
+
+    y_loop = _run_spikezip_tf_static_mask_step_loop(
+        converted,
+        embedding_output,
+        extended_attention_mask,
+    )
+    assert torch.allclose(y_loop, y_seq, atol=1e-5, rtol=1e-5)
+
+
+def test_spikezip_tf_recipe_accepts_static_attention_mask_contract():
+    torch.manual_seed(252)
+    model = _TinyBertSST2FromEmbeddings().eval()
+    embedding_output = torch.randn(2, 4, 8)
+    masks = (
+        torch.zeros(2, 1, 1, 4),
+        torch.tensor(
+            [[[[0.0, 0.0, -10000.0, -10000.0]]], [[[0.0, 0.0, 0.0, -10000.0]]]]
+        ),
+    )
+    converted = Converter(recipe=SpikeZIPTFRecipe(time_steps=4)).convert(model).eval()
+
+    for extended_attention_mask in masks:
+        embedding_seq = _first_real_then_zero_sequence(
+            embedding_output,
+            converted.time_steps,
+        )
+        functional.set_step_mode(converted, "m")
+        functional.reset_net(converted)
+        y_seq = converted(embedding_seq, extended_attention_mask)
+        assert torch.allclose(
+            y_seq.sum(dim=0),
+            model(embedding_output, extended_attention_mask),
+            atol=1e-5,
+            rtol=1e-5,
+        )
+
+        y_loop = _run_spikezip_tf_static_mask_step_loop(
+            converted,
+            embedding_output,
+            extended_attention_mask,
+        )
+        assert torch.allclose(y_loop, y_seq, atol=1e-5, rtol=1e-5)
+
+
+def test_spikezip_tf_recipe_reset_repeats_outputs():
+    torch.manual_seed(252)
+    model = _TinyBertSST2FromEmbeddings().eval()
+    converted = Converter(recipe=SpikeZIPTFRecipe(time_steps=3)).convert(model).eval()
+    embedding_output = torch.randn(2, 4, 8)
+    extended_attention_mask = torch.zeros(2, 1, 1, 4)
+    kwargs = _sequence_kwargs_first_real_then_zero(
+        converted,
+        embedding_output=embedding_output,
+        extended_attention_mask=extended_attention_mask,
+    )
+
+    functional.set_step_mode(converted, "m")
+    functional.reset_net(converted)
+    first = converted(**kwargs)
+    functional.reset_net(converted)
+    second = converted(**kwargs)
+
+    assert torch.allclose(first, second, atol=1e-6, rtol=1e-6)
+
+
+def test_spikezip_tf_recipe_rejects_invalid_options():
+    with pytest.raises(ValueError, match="time_steps"):
+        SpikeZIPTFRecipe(time_steps=0).validate(None)
+    with pytest.raises(ValueError, match="supported_model='bert'"):
+        SpikeZIPTFRecipe(supported_model="gpt2").validate(None)
+    with pytest.raises(ValueError, match="strict=True"):
+        SpikeZIPTFRecipe(strict=False).validate(None)
+
+
+def test_spikezip_tf_recipe_rejects_unsupported_tensor_branch():
+    model = _TinyUnsupportedBertBranch().eval()
+    with pytest.raises(ValueError, match="unsupported|does not support"):
+        Converter(recipe=SpikeZIPTFRecipe(time_steps=2)).convert(model)
 
 
 def test_sta_sequence_layer_norm_matches_online_layer_norm():

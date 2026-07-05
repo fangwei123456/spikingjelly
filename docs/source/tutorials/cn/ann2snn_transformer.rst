@@ -290,4 +290,91 @@ Top-1 下降 0.368 个百分点。本次使用 ``batch_size=16`` 的完整运行
     STA_SPIKING_ENCODER_T8_S0p5 {"top1": 0.807, "top5": 0.95202, "total": 50000, "seconds": 1833.9626359939575}
     DROP 0.0036799999999999056
 
+SpikeZIP-TF-style BERT SST-2 示例
+---------------------------------
+
+``SpikeZIPTFRecipe`` 是一个窄版 SpikeZIP-TF-style 累计差分 recipe，面向语言 Transformer 分类模型。第一条公开支持路径是 BERT-style SST-2 分类，并采用 embedding 输出之后的转换边界。原 Hugging Face BERT embedding 层仍然接收整数 ``input_ids``。ANN2SNN 转换图从浮点 ``embedding_output`` 和 ``extended_attention_mask`` 开始，转换 encoder、pooler、dropout 和 classifier wrapper。
+
+这个边界把 tokenization、整数 token id、embedding lookup 和 Hugging Face mask 构造保留在 ANN2SNN 图外，也避免把该示例误读为完整 autoregressive LLM conversion：``SpikeZIPTFRecipe`` 不支持 decoder generation、KV cache、causal language-model perplexity 评测，也不实现完整 SpikeZIP-TF 论文中的 ST-BIF+ 与 activation quantization。它复用 SpikingJelly 现有 TD 算子来覆盖 Linear、LayerNorm、GELU、Softmax 和 attention matrix multiplication。
+
+完整可运行示例是 ``spikingjelly.activation_based.ann2snn.examples.bert_sst2_spikezip_tf``。Hugging Face 依赖是可选依赖，只在运行该示例时安装：
+
+.. code-block:: shell
+
+    uv pip install transformers datasets
+
+建议先运行一个小验证切片：
+
+.. code-block:: shell
+
+    CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.bert_sst2_spikezip_tf \
+      --model-name-or-path textattack/bert-base-uncased-SST-2 \
+      --dataset-name nyu-mll/glue \
+      --dataset-config sst2 \
+      --split validation \
+      --device cuda:0 \
+      --batch-size 32 \
+      --eval-samples 256 \
+      --time-steps 8 \
+      --output benchmark/output/bert_sst2_spikezip_tf_t8_small.json
+
+完整 SST-2 验证时去掉 ``--eval-samples``：
+
+.. code-block:: shell
+
+    CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.bert_sst2_spikezip_tf \
+      --model-name-or-path textattack/bert-base-uncased-SST-2 \
+      --dataset-name nyu-mll/glue \
+      --dataset-config sst2 \
+      --split validation \
+      --device cuda:0 \
+      --batch-size 32 \
+      --time-steps 8 \
+      --output benchmark/output/bert_sst2_spikezip_tf_t8_full.json
+
+转换产物遵循相同的显式 step-mode 契约：
+
+.. code-block:: python
+
+    functional.set_step_mode(converted, "m")
+    functional.reset_net(converted)
+    embedding_seq = torch.zeros(
+        converted.time_steps,
+        *embedding_output.shape,
+        device=embedding_output.device,
+        dtype=embedding_output.dtype,
+    )
+    embedding_seq[0] = embedding_output
+    logits = converted(embedding_seq, extended_attention_mask).sum(dim=0)
+
+``extended_attention_mask`` 是静态控制 tensor，保持原样传入，不添加时间维。
+
+下表数据在 NVIDIA A100-SXM4-80GB 上，使用 SST-2 validation split 的 872 条样本测得：
+
+.. list-table:: BERT SST-2 SpikeZIP-TF-style 转换结果
+    :header-rows: 1
+    :widths: 36 18 18 18
+
+    * - 方法
+      - 验证样本
+      - 时间步
+      - Accuracy (%)
+    * - ANN
+      - 872
+      - -
+      - 92.431
+    * - ``SpikeZIPTFRecipe``
+      - 872
+      - 8
+      - 92.431
+
+Accuracy 下降 0.000 个百分点。评测前，示例会先在前两个 batch 上检查 FX-friendly wrapper 与原 Hugging Face classifier 的 logits 是否对齐。本次使用 ``batch_size=32`` 的完整运行中 ANN wrapper 推理耗时约 1.60 秒，转换模型约 9.20 秒。关键 stdout 行如下：
+
+.. code-block:: shell
+
+    HF_WRAPPER_PARITY {"checked_batches": 2, "max_abs_diff": 5.245208740234375e-06, "atol": 1e-05}
+    BASELINE {"accuracy": 0.9243119266055045, "total": 872, "seconds": 1.5974977016448975}
+    SPIKEZIP_TF {"accuracy": 0.9243119266055045, "total": 872, "seconds": 9.204399347305298}
+    DROP 0.0
+
 .. [#sta] Y. Jiang, K. Hu, T. Zhang, H. Gao, Y. Liu, Y. Fang, and F. Chen, "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers," ICLR 2024. https://openreview.net/forum?id=XrunSYwoLr

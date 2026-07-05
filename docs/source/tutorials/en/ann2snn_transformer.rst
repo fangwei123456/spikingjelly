@@ -286,4 +286,91 @@ The key stdout lines are:
     STA_SPIKING_ENCODER_T8_S0p5 {"top1": 0.807, "top5": 0.95202, "total": 50000, "seconds": 1833.9626359939575}
     DROP 0.0036799999999999056
 
+SpikeZIP-TF-style BERT SST-2 example
+------------------------------------
+
+``SpikeZIPTFRecipe`` is a narrow SpikeZIP-TF-style cumulative-difference recipe for language Transformer classification models. The first supported public path is BERT-style SST-2 classification through an embedding-output boundary. The original Hugging Face BERT embedding layer still consumes integer ``input_ids``. The converted graph starts from floating-point ``embedding_output`` and ``extended_attention_mask``, then converts the encoder, pooler, dropout, and classifier wrapper.
+
+This boundary keeps tokenization, integer token ids, embedding lookup, and Hugging Face mask construction outside the ANN2SNN graph. It also avoids claiming full autoregressive LLM conversion: ``SpikeZIPTFRecipe`` does not support decoder generation, KV cache, causal language-model perplexity evaluation, or the full SpikeZIP-TF paper stack such as ST-BIF+ and activation quantization. It reuses SpikingJelly TD operators for Linear, LayerNorm, GELU, Softmax, and attention matrix multiplication.
+
+The runnable example is ``spikingjelly.activation_based.ann2snn.examples.bert_sst2_spikezip_tf``. It keeps Hugging Face packages optional; install them only when running this example:
+
+.. code-block:: shell
+
+    uv pip install transformers datasets
+
+Run a small validation slice first:
+
+.. code-block:: shell
+
+    CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.bert_sst2_spikezip_tf \
+      --model-name-or-path textattack/bert-base-uncased-SST-2 \
+      --dataset-name nyu-mll/glue \
+      --dataset-config sst2 \
+      --split validation \
+      --device cuda:0 \
+      --batch-size 32 \
+      --eval-samples 256 \
+      --time-steps 8 \
+      --output benchmark/output/bert_sst2_spikezip_tf_t8_small.json
+
+For a full SST-2 validation run, omit ``--eval-samples``:
+
+.. code-block:: shell
+
+    CUDA_VISIBLE_DEVICES=0 python -m spikingjelly.activation_based.ann2snn.examples.bert_sst2_spikezip_tf \
+      --model-name-or-path textattack/bert-base-uncased-SST-2 \
+      --dataset-name nyu-mll/glue \
+      --dataset-config sst2 \
+      --split validation \
+      --device cuda:0 \
+      --batch-size 32 \
+      --time-steps 8 \
+      --output benchmark/output/bert_sst2_spikezip_tf_t8_full.json
+
+The converted model follows the same explicit step-mode contract:
+
+.. code-block:: python
+
+    functional.set_step_mode(converted, "m")
+    functional.reset_net(converted)
+    embedding_seq = torch.zeros(
+        converted.time_steps,
+        *embedding_output.shape,
+        device=embedding_output.device,
+        dtype=embedding_output.dtype,
+    )
+    embedding_seq[0] = embedding_output
+    logits = converted(embedding_seq, extended_attention_mask).sum(dim=0)
+
+``extended_attention_mask`` is a static control tensor and is passed unchanged, without a time dimension.
+
+The full SST-2 validation run below was measured on an NVIDIA A100-SXM4-80GB with the 872-sample validation split:
+
+.. list-table:: BERT SST-2 SpikeZIP-TF-style conversion results
+    :header-rows: 1
+    :widths: 36 18 18 18
+
+    * - Method
+      - Validation samples
+      - Timesteps
+      - Accuracy (%)
+    * - ANN
+      - 872
+      - -
+      - 92.431
+    * - ``SpikeZIPTFRecipe``
+      - 872
+      - 8
+      - 92.431
+
+The accuracy drop is 0.000 percentage points. Before evaluation, the example checks that the FX-friendly wrapper matches the original Hugging Face classifier on the first two batches. The measured inference time was about 1.60 seconds for the ANN wrapper and 9.20 seconds for the converted model with ``batch_size=32``. The key stdout lines are:
+
+.. code-block:: shell
+
+    HF_WRAPPER_PARITY {"checked_batches": 2, "max_abs_diff": 5.245208740234375e-06, "atol": 1e-05}
+    BASELINE {"accuracy": 0.9243119266055045, "total": 872, "seconds": 1.5974977016448975}
+    SPIKEZIP_TF {"accuracy": 0.9243119266055045, "total": 872, "seconds": 9.204399347305298}
+    DROP 0.0
+
 .. [#sta] Y. Jiang, K. Hu, T. Zhang, H. Gao, Y. Liu, Y. Fang, and F. Chen, "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers," ICLR 2024. https://openreview.net/forum?id=XrunSYwoLr

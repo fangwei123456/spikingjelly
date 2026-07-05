@@ -32,6 +32,7 @@ from .recipes import (
     ConversionRecipe,
     LocalThresholdBalancingRecipe,
     RateCodingRecipe,
+    SpikeZIPTFRecipe,
     STATransformerRecipe,
     TransformerSpikeEquivalentRecipe,
 )
@@ -44,6 +45,7 @@ __all__ = [
     "ConversionRecipe",
     "RateCodingRecipe",
     "LocalThresholdBalancingRecipe",
+    "SpikeZIPTFRecipe",
     "STATransformerRecipe",
     "TransformerSpikeEquivalentRecipe",
     "ChannelVoltageScaler",

@@ -6,6 +6,7 @@ from torch import fx
 
 from spikingjelly.activation_based.ann2snn.recipes import (
     ConversionRecipe,
+    SpikeZIPTFRecipe,
     TransformerSpikeEquivalentRecipe,
 )
 
@@ -32,7 +33,7 @@ class Converter:
         :param recipe: 转换 recipe。传入
             :class:`~spikingjelly.activation_based.ann2snn.recipes.ConversionRecipe`
             实例，或稳定的内置 recipe 字符串。目前字符串别名仅支持
-            ``"transformer_spike_equivalent"``。Rate-coding 转换需要显式传入
+            ``"transformer_spike_equivalent"`` 和 ``"spikezip_tf"``。Rate-coding 转换需要显式传入
             ``RateCodingRecipe(dataloader=...)``；STA Transformer 转换需要显式
             传入 ``STATransformerRecipe(dataloader=..., time_steps=...)``。
         :type recipe: str or ConversionRecipe
@@ -54,7 +55,8 @@ class Converter:
         :param recipe: Conversion recipe. Pass a
             :class:`~spikingjelly.activation_based.ann2snn.recipes.ConversionRecipe`
             instance, or a stable built-in recipe string. Currently, the only
-            supported string alias is ``"transformer_spike_equivalent"``.
+            supported string aliases are ``"transformer_spike_equivalent"`` and
+            ``"spikezip_tf"``.
             Rate-coding conversion must pass
             ``RateCodingRecipe(dataloader=...)`` explicitly; STA Transformer
             conversion must pass
@@ -73,6 +75,8 @@ class Converter:
             return recipe
         if recipe == "transformer_spike_equivalent":
             return TransformerSpikeEquivalentRecipe()
+        if recipe == "spikezip_tf":
+            return SpikeZIPTFRecipe()
         if recipe == "rate_coding":
             raise ValueError(
                 "The rate_coding recipe requires parameters. "
