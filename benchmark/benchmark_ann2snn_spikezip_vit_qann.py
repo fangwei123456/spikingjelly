@@ -30,19 +30,21 @@ class SpikeZIPMyQuan(nn.Module):
         self.level = int(level)
         self.sym = bool(sym)
         if sym:
-            self.pos_max = torch.tensor(float(level // 2 - 1))
-            self.neg_min = torch.tensor(float(-level // 2))
+            pos_max = level // 2 - 1
+            neg_min = -level // 2
         else:
-            self.pos_max = torch.tensor(float(level - 1))
-            self.neg_min = torch.tensor(0.0)
+            pos_max = level - 1
+            neg_min = 0
+        self.register_buffer("pos_max", torch.tensor(float(pos_max)))
+        self.register_buffer("neg_min", torch.tensor(float(neg_min)))
         self.s = nn.Parameter(torch.tensor(1.0))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return (
             torch.clamp(
                 torch.floor(x / self.s + 0.5),
-                min=float(self.neg_min),
-                max=float(self.pos_max),
+                min=self.neg_min,
+                max=self.pos_max,
             )
             * self.s
         )

@@ -186,9 +186,7 @@ class STBIFNeuron(base.MemoryModule):
         self.acc_q = self.acc_q + self.cur_output
         self.q[spike_position] = self.q[spike_position] - 1
         self.q[neg_spike_position] = self.q[neg_spike_position] + 1
-        self.is_work = not (
-            bool((normalized == 0).all()) and bool((self.cur_output == 0).all())
-        )
+        self.is_work = bool((normalized != 0).any() | (self.cur_output != 0).any())
         return self.cur_output * q_threshold
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
@@ -220,7 +218,7 @@ class STBIFNeuron(base.MemoryModule):
         self.q = q
         self.acc_q = acc_q
         self.cur_output = cur_output
-        self.is_work = bool(torch.any(x_seq != 0) or torch.any(out_seq != 0))
+        self.is_work = bool((x_seq != 0).any() | (out_seq != 0).any())
         return out_seq
 
     def _multi_step_forward_triton(self, x_seq: torch.Tensor) -> torch.Tensor:

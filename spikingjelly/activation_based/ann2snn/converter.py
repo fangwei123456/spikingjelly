@@ -284,6 +284,7 @@ class ModuleConverter:
                         "a torch.nn.Module, got "
                         f"{type(converted).__name__}."
                     )
+                converted.train(ann.training)
                 return converted.to(self.device)
         finally:
             for module, training in original_training_modes.items():

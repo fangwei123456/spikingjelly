@@ -1076,6 +1076,17 @@ class TestConverterRecipes:
         with pytest.raises(TypeError, match="convert_module must return"):
             ModuleConverter(recipe=InvalidModuleRecipe()).convert(nn.Linear(2, 2))
 
+    def test_module_converter_matches_returned_module_training_mode(self):
+        class NewModuleRecipe(ModuleConversionRecipe):
+            def convert_module(self, converter, ann):
+                return nn.Sequential(nn.Dropout())
+
+        model = nn.Linear(2, 2).eval()
+        converted = ModuleConverter(recipe=NewModuleRecipe()).convert(model)
+
+        assert not converted.training
+        assert not converted[0].training
+
     def test_custom_recipe_runs_template_steps_in_order(self):
         class RecordingRecipe(ConversionRecipe):
             def __init__(self):
