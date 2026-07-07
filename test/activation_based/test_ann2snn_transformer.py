@@ -8,6 +8,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pytest
 
+try:
+    import triton  # noqa: F401
+
+    _TRITON_AVAILABLE = True
+except (ImportError, OSError):
+    _TRITON_AVAILABLE = False
+
 from spikingjelly.activation_based import base, functional, neuron, surrogate
 from spikingjelly.activation_based.ann2snn import (
     Converter,
@@ -920,8 +927,8 @@ def test_spikezip_stbif_declares_triton_backend():
 
 
 @pytest.mark.skipif(
-    not torch.cuda.is_available(),
-    reason="CUDA is required for SpikeZIP ST-BIF Triton backend.",
+    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
+    reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
 )
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
 @pytest.mark.parametrize("time_steps", [8, 32, 64])
@@ -1008,6 +1015,17 @@ def test_spikezip_embedding_multi_step_matches_single_step_loop():
     assert torch.allclose(y_seq, loop_seq)
     assert torch.allclose(y_seq[0], source(x))
     assert torch.count_nonzero(y_seq[1:]) == 0
+
+
+def test_spikezip_embedding_single_step_zero_shape_tracks_current_input():
+    source = nn.Embedding(12, 5).eval()
+    spike = SpikeZIPEmbedding(copy.deepcopy(source)).eval()
+    spike(torch.tensor([[1, 2, 3], [4, 5, 6]]))
+
+    y = spike(torch.tensor([[7, 8]]))
+
+    assert y.shape == (1, 2, 5)
+    assert torch.count_nonzero(y) == 0
 
 
 def test_spikezip_recipe_infers_attention_level_from_quantizer_bounds():
@@ -1354,8 +1372,8 @@ def test_spikezip_qann_vit_blocks_single_step_matches_multi_step():
 
 
 @pytest.mark.skipif(
-    not torch.cuda.is_available(),
-    reason="CUDA is required for SpikeZIP ST-BIF Triton backend.",
+    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
+    reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
 )
 def test_spikezip_qann_vit_multistep_triton_matches_torch():
     torch.manual_seed(284)

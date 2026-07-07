@@ -173,18 +173,17 @@ class SpikeZIPEmbedding(base.MemoryModule):
 
     def reset(self) -> None:
         self.t = 0
-        self.shape = None
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.t == 0:
             y = self.embedding(x)
-            self.shape = y.shape
             self.t += 1
             return y
-        if self.shape is None:
-            raise RuntimeError("SpikeZIPEmbedding has no cached output shape.")
         return torch.zeros(
-            self.shape, device=x.device, dtype=self.embedding.weight.dtype
+            *x.shape,
+            self.embedding.embedding_dim,
+            device=x.device,
+            dtype=self.embedding.weight.dtype,
         )
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
@@ -198,7 +197,6 @@ class SpikeZIPEmbedding(base.MemoryModule):
             dtype=y0.dtype,
         )
         y_seq[0] = y0
-        self.shape = y0.shape
         self.t = x_seq.shape[0]
         return y_seq
 
