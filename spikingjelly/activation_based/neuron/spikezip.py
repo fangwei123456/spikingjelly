@@ -154,10 +154,19 @@ class STBIFNeuron(base.MemoryModule):
         self.is_work = False
 
     def _init_state(self, x: torch.Tensor) -> None:
-        if self.cur_output is None or self.cur_output.shape != x.shape:
+        if (
+            self.cur_output is None
+            or self.acc_q is None
+            or self.q is None
+            or self.cur_output.shape != x.shape
+        ):
             self.cur_output = torch.zeros_like(x)
             self.acc_q = torch.zeros_like(x)
             self.q = torch.zeros_like(x) + 0.5
+        elif self.cur_output.device != x.device or self.cur_output.dtype != x.dtype:
+            self.cur_output = self.cur_output.to(device=x.device, dtype=x.dtype)
+            self.acc_q = self.acc_q.to(device=x.device, dtype=x.dtype)
+            self.q = self.q.to(device=x.device, dtype=x.dtype)
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         q_threshold = self.q_threshold.to(device=x.device, dtype=x.dtype)
@@ -195,7 +204,6 @@ class STBIFNeuron(base.MemoryModule):
         q = self.q
         acc_q = self.acc_q
         out_seq = torch.empty_like(x_seq)
-        work = torch.zeros((), device=x_seq.device, dtype=torch.bool)
         for t in range(x_seq.shape[0]):
             normalized = (x_seq[t] / q_threshold).detach()
             q = q + normalized
@@ -208,12 +216,11 @@ class STBIFNeuron(base.MemoryModule):
             acc_q = acc_q + cur_output
             q = torch.where(spike_position, q - 1, q)
             q = torch.where(neg_spike_position, q + 1, q)
-            work = work | torch.any((normalized != 0) | (cur_output != 0))
             out_seq[t] = cur_output * q_threshold
         self.q = q
         self.acc_q = acc_q
         self.cur_output = cur_output
-        self.is_work = bool(work.item())
+        self.is_work = bool(torch.any(x_seq != 0) or torch.any(out_seq != 0))
         return out_seq
 
     def _multi_step_forward_triton(self, x_seq: torch.Tensor) -> torch.Tensor:

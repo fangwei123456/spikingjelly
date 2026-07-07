@@ -33,6 +33,10 @@ if TYPE_CHECKING:
 __all__ = ["TransformerTDEquivalentRecipe"]
 
 
+def _td_softmax_dim(dim: int) -> int:
+    return dim + 1 if dim >= 0 else dim
+
+
 class _TDTanh(TDModule):
     def ann_forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.tanh(x)
@@ -400,7 +404,7 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
                 raise ValueError(
                     "TD softmax conversion requires nn.Softmax dim to be a literal int."
                 )
-            return TDSoftmax(dim=dim)
+            return TDSoftmax(dim=_td_softmax_dim(dim))
 
         if isinstance(module, nn.MultiheadAttention):
             if node is None:
@@ -469,7 +473,7 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
                 softmax_index = self._insert_call_module_after(
                     fx_model,
                     node,
-                    TDSoftmax(dim=dim),
+                    TDSoftmax(dim=_td_softmax_dim(dim)),
                     "td_softmax",
                     softmax_index,
                     (node.args[0],),
@@ -484,7 +488,7 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
                 softmax_index = self._insert_call_module_after(
                     fx_model,
                     node,
-                    TDSoftmax(dim=dim),
+                    TDSoftmax(dim=_td_softmax_dim(dim)),
                     "td_softmax",
                     softmax_index,
                     (node.args[0],),

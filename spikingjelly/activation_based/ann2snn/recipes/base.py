@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 
 
 __all__ = [
-    "FXConversionRecipe",
     "ConversionRecipe",
+    "FXConversionRecipe",
     "ModuleConversionRecipe",
 ]
 

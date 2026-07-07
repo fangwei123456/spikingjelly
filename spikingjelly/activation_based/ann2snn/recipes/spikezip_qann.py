@@ -23,14 +23,14 @@ if TYPE_CHECKING:
 
 
 __all__ = [
-    "SpikeZIPTFQANNRecipe",
     "STBIFNeuron",
-    "SpikeZIPLinear",
     "SpikeZIPConv2d",
     "SpikeZIPEmbedding",
     "SpikeZIPLayerNorm",
-    "SpikeZIPSoftmax",
+    "SpikeZIPLinear",
     "SpikeZIPRobertaSelfAttention",
+    "SpikeZIPSoftmax",
+    "SpikeZIPTFQANNRecipe",
     "SpikeZIPViTSelfAttention",
 ]
 
@@ -265,7 +265,13 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
         super().__init__()
         self.num_attention_heads = int(source.num_attention_heads)
         self.attention_head_size = int(source.attention_head_size)
-        self.all_head_size = int(source.all_head_size)
+        self.all_head_size = int(
+            getattr(
+                source,
+                "all_head_size",
+                self.num_attention_heads * self.attention_head_size,
+            )
+        )
         self.query = SpikeZIPLinear(source.query, level)
         self.key = SpikeZIPLinear(source.key, level)
         self.value = SpikeZIPLinear(source.value, level)
@@ -275,7 +281,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
         self.attn_if = STBIFNeuron.from_quantizer(source.attn_quan)
         self.after_attn_if = STBIFNeuron.from_quantizer(source.after_attn_quan)
         self.softmax = SpikeZIPSoftmax(dim=-1)
-        self.dropout = copy.deepcopy(source.dropout)
+        self.dropout = copy.deepcopy(getattr(source, "dropout", nn.Identity()))
         self.step_mode = "s"
         self.t = 0
         self.position_embedding_type = getattr(
@@ -305,11 +311,12 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
         self.t = 0
 
     def transpose_for_scores(self, x: torch.Tensor) -> torch.Tensor:
-        shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
+        shape = (*x.size()[:-1], self.num_attention_heads, self.attention_head_size)
         return x.view(shape).permute(0, 2, 1, 3)
 
     def transpose_sequence_for_scores(self, x_seq: torch.Tensor) -> torch.Tensor:
-        shape = x_seq.size()[:-1] + (
+        shape = (
+            *x_seq.size()[:-1],
             self.num_attention_heads,
             self.attention_head_size,
         )
@@ -358,7 +365,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
         )
         context = self.after_attn_if(context)
         context = context.permute(0, 2, 1, 3).contiguous()
-        context = context.view(context.size()[:-2] + (self.all_head_size,))
+        context = context.view(*context.size()[:-2], self.all_head_size)
         self.t += 1
         return (context, attention_probs) if output_attentions else (context,)
 
@@ -412,7 +419,8 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
             context_seq = self.after_attn_if(context_seq)
             context_seq = context_seq.permute(0, 1, 3, 2, 4).contiguous()
             context_seq = context_seq.view(
-                context_seq.size()[:-2] + (self.all_head_size,)
+                *context_seq.size()[:-2],
+                self.all_head_size,
             )
             if output_attentions:
                 return context_seq, attention_probs
@@ -426,7 +434,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
         super().__init__()
         self.num_heads = int(source.num_heads)
         self.head_dim = int(source.head_dim)
-        self.scale = float(source.scale)
+        self.scale = float(getattr(source, "scale", self.head_dim**-0.5))
         self.is_softmax = bool(getattr(source, "is_softmax", True))
         self.qkv = SpikeZIPLinear(source.qkv, level, bias_steps=1)
         self.proj = SpikeZIPLinear(source.proj, level, bias_steps=1)
@@ -436,8 +444,8 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
         self.attn_if = STBIFNeuron.from_quantizer(source.attn_quan)
         self.after_attn_if = STBIFNeuron.from_quantizer(source.after_attn_quan)
         self.proj_if = STBIFNeuron.from_quantizer(source.quan_proj)
-        self.attn_drop = copy.deepcopy(source.attn_drop)
-        self.proj_drop = copy.deepcopy(source.proj_drop)
+        self.attn_drop = copy.deepcopy(getattr(source, "attn_drop", nn.Identity()))
+        self.proj_drop = copy.deepcopy(getattr(source, "proj_drop", nn.Identity()))
         self.step_mode = "s"
         if self.is_softmax:
             self.softmax = SpikeZIPSoftmax(dim=-1)
@@ -567,6 +575,8 @@ def _is_roberta_qattention(module: nn.Module) -> bool:
             "after_attn_quan",
             "num_attention_heads",
             "attention_head_size",
+            "all_head_size",
+            "dropout",
         )
     )
 
@@ -585,21 +595,33 @@ def _is_vit_qattention(module: nn.Module) -> bool:
             "quan_proj",
             "num_heads",
             "head_dim",
+            "scale",
+            "attn_drop",
+            "proj_drop",
         )
     )
 
 
 def _spikezip_vit_patch_embed(model: nn.Module, x: torch.Tensor) -> torch.Tensor:
     patch_embed = model.patch_embed
+    used_proj = False
+    input_dim = x.dim()
     if hasattr(patch_embed, "proj"):
         x = patch_embed.proj(x)
+        used_proj = True
     else:
         x = patch_embed(x)
+        if x.dim() == input_dim - 1:
+            return x
     if x.dim() == 4:
-        return x.flatten(2).transpose(1, 2)
-    if x.dim() == 5:
-        return x.flatten(3).transpose(2, 3)
-    raise ValueError("SpikeZIP ViT patch_embed expects [B,C,H,W] or [T,B,C,H,W].")
+        x = x.flatten(2).transpose(1, 2)
+    elif x.dim() == 5:
+        x = x.flatten(3).transpose(2, 3)
+    else:
+        raise ValueError("SpikeZIP ViT patch_embed expects [B,C,H,W] or [T,B,C,H,W].")
+    if used_proj and hasattr(patch_embed, "norm"):
+        x = patch_embed.norm(x)
+    return x
 
 
 def _spikezip_vit_token_sequence(
@@ -625,13 +647,33 @@ def _spikezip_vit_token_sequence(
     return cls_seq, pos_seq
 
 
+def _spikezip_vit_single_tokens(
+    model: nn.Module,
+    batch_size: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    t = getattr(model, "_spikezip_t", 0)
+    if t == 0:
+        cls = model.cls_token.expand(batch_size, -1, -1)
+        pos = model.pos_embed
+    else:
+        cls = torch.zeros(
+            batch_size,
+            *model.cls_token.shape[1:],
+            device=model.cls_token.device,
+            dtype=model.cls_token.dtype,
+        )
+        pos = torch.zeros_like(model.pos_embed)
+    model._spikezip_t = t + 1
+    return cls, pos
+
+
 def _spikezip_vit_forward_features(self: nn.Module, x: torch.Tensor) -> torch.Tensor:
     if x.dim() == 4:
         hidden = _spikezip_vit_patch_embed(self, x)
-        cls = self.cls_token.expand(hidden.shape[0], -1, -1)
+        cls, pos = _spikezip_vit_single_tokens(self, hidden.shape[0])
         hidden = torch.cat((cls, hidden), dim=1)
         pos_drop = getattr(self, "pos_drop", None)
-        hidden = hidden + self.pos_embed
+        hidden = hidden + pos
         if pos_drop is not None:
             hidden = pos_drop(hidden)
         if hasattr(self, "blocks"):
@@ -675,6 +717,15 @@ def _patch_spikezip_vit_forward(model: nn.Module) -> None:
         for name in ("patch_embed", "cls_token", "pos_embed", "head")
     ):
         return
+    model._spikezip_t = 0
+    original_reset = getattr(model, "reset", None)
+
+    def _spikezip_vit_reset(self: nn.Module) -> None:
+        self._spikezip_t = 0
+        if original_reset is not None:
+            original_reset()
+
+    model.reset = types.MethodType(_spikezip_vit_reset, model)
     model.forward_features = types.MethodType(_spikezip_vit_forward_features, model)
     model.forward = types.MethodType(_spikezip_vit_forward, model)
 
@@ -711,13 +762,15 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
         SpikeZIP-TF QANN-to-SNN recipe。该 recipe 不执行 ANN 量化或后训练，
         只把已经兼容 SpikeZIP 的 QANN 原位替换为透明 SNN module。当前版本支持
         ``"roberta"`` 与 ``"vit"`` 两类已量化模型。RoBERTa-style self-attention
-        module 需要暴露 ``query``、``key``、``value`` linear layers，以及
-        带有 ``s``、``sym``、``pos_max``、``neg_min``、``level`` 属性的
-        ``query_quan``、``key_quan``、``value_quan``、``attn_quan``、
-        ``after_attn_quan`` quantizers。ViT-style attention module 需要暴露
-        ``qkv``、``proj``、``quan_q``、``quan_k``、``quan_v``、
-        ``attn_quan``、``after_attn_quan``、``quan_proj``、``num_heads`` 与
-        ``head_dim``。RoBERTa attention mask 仅在第一个时间步加入，随后由
+        module 需要暴露 ``query``、``key``、``value`` linear layers，
+        ``num_attention_heads``、``attention_head_size``、``all_head_size``、
+        ``dropout``，以及带有 ``s``、``sym``、``pos_max``、``neg_min``、
+        ``level`` 属性的 ``query_quan``、``key_quan``、``value_quan``、
+        ``attn_quan``、``after_attn_quan`` quantizers。ViT-style attention
+        module 需要暴露 ``qkv``、``proj``、``quan_q``、``quan_k``、
+        ``quan_v``、``attn_quan``、``after_attn_quan``、``quan_proj``、
+        ``num_heads``、``head_dim``、``scale``、``attn_drop`` 与
+        ``proj_drop``。RoBERTa attention mask 仅在第一个时间步加入，随后由
         temporal-difference softmax 的累计状态传播该静态 mask 影响。
         若 quantizer 未显式暴露 ``level``，则按 ``pos_max - neg_min + 1`` 推断。
 
@@ -741,13 +794,15 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
         post-train an ANN; it only converts an already SpikeZIP-compatible QANN
         into transparent SNN modules. The current version supports ``"roberta"`` and
         ``"vit"`` quantized models. RoBERTa-style self-attention modules must
-        expose ``query``, ``key`` and ``value`` linear layers, plus
-        ``query_quan``, ``key_quan``, ``value_quan``, ``attn_quan`` and
-        ``after_attn_quan`` quantizers with ``s``, ``sym``, ``pos_max``,
-        ``neg_min`` and ``level`` attributes. ViT-style attention modules must
-        expose ``qkv``, ``proj``, ``quan_q``, ``quan_k``, ``quan_v``,
-        ``attn_quan``, ``after_attn_quan``, ``quan_proj``, ``num_heads`` and
-        ``head_dim``. RoBERTa attention masks are added only at the first
+        expose ``query``, ``key`` and ``value`` linear layers,
+        ``num_attention_heads``, ``attention_head_size``, ``all_head_size`` and
+        ``dropout``, plus ``query_quan``, ``key_quan``, ``value_quan``,
+        ``attn_quan`` and ``after_attn_quan`` quantizers with ``s``, ``sym``,
+        ``pos_max``, ``neg_min`` and ``level`` attributes. ViT-style attention
+        modules must expose ``qkv``, ``proj``, ``quan_q``, ``quan_k``,
+        ``quan_v``, ``attn_quan``, ``after_attn_quan``, ``quan_proj``,
+        ``num_heads``, ``head_dim``, ``scale``, ``attn_drop`` and
+        ``proj_drop``. RoBERTa attention masks are added only at the first
         timestep; the temporal-difference softmax state carries the static mask
         effect afterwards. If a quantizer does not expose ``level`` explicitly,
         the recipe infers it as ``pos_max - neg_min + 1``.

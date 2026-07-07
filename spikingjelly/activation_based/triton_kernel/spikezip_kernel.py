@@ -12,7 +12,7 @@ from .triton_utils import (
 try:
     import triton
     import triton.language as tl
-except BaseException as e:
+except (ImportError, OSError) as e:
     import logging
 
     from . import dummy
@@ -174,10 +174,10 @@ def multi_step_stbif(
     q_final_flat = q_final.reshape(N)
     acc_q_final_flat = acc_q_final.reshape(N)
     cur_output_flat = cur_output.reshape(N)
-    grid = lambda meta: (triton.cdiv(N, meta["BLOCK_N"]),)
-    work_flags = torch.zeros(
-        grid({"BLOCK_N": 128})[0], device=x_seq.device, dtype=torch.int32
-    )
+    def grid(meta):
+        return (triton.cdiv(N, meta["BLOCK_N"]),)
+
+    work_flags = torch.zeros(triton.cdiv(N, 32), device=x_seq.device, dtype=torch.int32)
 
     q_threshold_value = float(q_threshold.detach().item())
     pos_max_value = float(pos_max.detach().item())

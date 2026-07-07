@@ -357,6 +357,25 @@ class _TinyBertSST2FromEmbeddings(nn.Module):
         return self.classifier(pooled)
 
 
+class _TinyPositiveDimSoftmax(nn.Module):
+    def __init__(self, dim: int = 1) -> None:
+        super().__init__()
+        self.softmax = nn.Softmax(dim=dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.softmax(x)
+
+
+class _TinyFunctionalSoftmax(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return F.softmax(x, dim=1)
+
+
+class _TinyTensorSoftmax(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x.softmax(dim=1)
+
+
 class _TinyUnsupportedBertBranch(nn.Module):
     def forward(self, embedding_output: torch.Tensor) -> torch.Tensor:
         return embedding_output.masked_fill(embedding_output < 0, 0.0)
@@ -473,6 +492,38 @@ def test_transformer_td_equivalent_recipe_reset_repeats_outputs():
     second = converted(**kwargs)
 
     assert torch.allclose(first, second, atol=1e-6, rtol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        _TinyPositiveDimSoftmax(),
+        _TinyFunctionalSoftmax(),
+        _TinyTensorSoftmax(),
+    ],
+)
+def test_transformer_td_equivalent_softmax_shifts_positive_dim(model):
+    x = torch.randn(3, 5)
+    converted = (
+        Converter(recipe=TransformerTDEquivalentRecipe(time_steps=4))
+        .convert(model.eval())
+        .eval()
+    )
+
+    td_softmax = next(module for module in converted.modules() if isinstance(module, TDSoftmax))
+    assert td_softmax.dim == 2
+
+    x_seq = _first_real_then_zero_sequence(x, converted.time_steps)
+    functional.set_step_mode(converted, "m")
+    functional.reset_net(converted)
+    y_seq = converted(x_seq)
+
+    assert torch.allclose(
+        y_seq.sum(dim=0),
+        model(x),
+        atol=1e-6,
+        rtol=1e-6,
+    )
 
 
 def test_transformer_td_equivalent_recipe_rejects_invalid_options():
@@ -686,13 +737,26 @@ class _TinySpikeZIPViTBlocksQANNClassifier(nn.Module):
         self.head = nn.Linear(8, 3)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        hidden = self.patch_embed(x).flatten(2).transpose(1, 2)
+        hidden = self.patch_embed(x)
+        if hidden.dim() == 4:
+            hidden = hidden.flatten(2).transpose(1, 2)
         cls = self.cls_token.expand(hidden.shape[0], -1, -1)
         hidden = torch.cat((cls, hidden), dim=1)
         hidden = self.pos_drop(hidden + self.pos_embed)
         hidden = self.blocks(hidden)
         hidden = self.norm(hidden)
         return self.head(hidden[:, 0])
+
+
+class _TinyPatchEmbedWithNorm(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.proj = nn.Conv2d(3, 8, kernel_size=2, stride=2)
+        self.norm = nn.LayerNorm(8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.proj(x).flatten(2).transpose(1, 2)
+        return self.norm(x)
 
 
 class _TinyIncompleteSpikeZIPViTQANNClassifier(nn.Module):
@@ -745,6 +809,20 @@ def test_spikezip_stbif_single_step_matches_multi_step():
 
     assert torch.allclose(y_seq, loop_seq)
     assert torch.allclose(y_seq.sum(dim=0), quantizer(x_seq[0]))
+
+
+def test_spikezip_stbif_state_tracks_input_dtype():
+    quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
+    neuron = STBIFNeuron.from_quantizer(quantizer)
+    x = torch.randn(2, 3, dtype=torch.float32)
+    neuron(x)
+
+    y = neuron(x.to(torch.float64))
+
+    assert y.dtype == torch.float64
+    assert neuron.q.dtype == torch.float64
+    assert neuron.acc_q.dtype == torch.float64
+    assert neuron.cur_output.dtype == torch.float64
 
 
 @pytest.mark.parametrize("sym", [False, True])
@@ -1147,6 +1225,8 @@ def test_spikezip_qann_recipe_converts_tiny_vit_classifier():
 def test_spikezip_qann_vit_single_step_matches_multi_step():
     torch.manual_seed(282)
     qann = _TinySpikeZIPViTQANNClassifier().eval()
+    qann.cls_token.data.normal_(0.0, 0.1)
+    qann.pos_embed.data.normal_(0.0, 0.1)
     images = torch.randn(2, 3, 4, 4) * 0.2
     converted = ModuleConverter(
         recipe=SpikeZIPTFQANNRecipe(time_steps=32, model_family="vit")
@@ -1164,6 +1244,23 @@ def test_spikezip_qann_vit_single_step_matches_multi_step():
 
     assert torch.allclose(multi, loop, atol=1e-6, rtol=1e-6)
     assert torch.allclose(sequence.sum(dim=0), loop, atol=1e-6, rtol=1e-6)
+
+
+def test_spikezip_qann_vit_preserves_patch_embed_norm():
+    torch.manual_seed(285)
+    qann = _TinySpikeZIPViTBlocksQANNClassifier().eval()
+    qann.patch_embed = _TinyPatchEmbedWithNorm()
+    images = torch.randn(2, 3, 4, 4) * 0.2
+    expected = qann(images)
+
+    converted = ModuleConverter(
+        recipe=SpikeZIPTFQANNRecipe(time_steps=32, model_family="vit")
+    ).convert(qann)
+    x_seq = _first_real_then_zero_sequence(images, converted.time_steps)
+    functional.set_step_mode(converted, "m")
+    actual = converted(x_seq).sum(dim=0)
+
+    assert torch.allclose(actual, expected, atol=1e-5, rtol=1e-5)
 
 
 def test_spikezip_qann_vit_blocks_single_step_matches_multi_step():

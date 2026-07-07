@@ -34,9 +34,19 @@ class SpikeZIPMyQuan(nn.Module):
         self.s = nn.Parameter(torch.tensor(1.0))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        pos_max = self.pos_max.to(device=x.device, dtype=x.dtype)
-        neg_min = self.neg_min.to(device=x.device, dtype=x.dtype)
-        return torch.clamp(torch.floor(x / self.s + 0.5), neg_min, pos_max) * self.s
+        return (
+            torch.clamp(
+                torch.floor(x / self.s + 0.5),
+                min=float(self.neg_min),
+                max=float(self.pos_max),
+            )
+            * self.s
+        )
+
+
+def _sync(device: torch.device) -> None:
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
 
 
 class SpikeZIPQAttention(nn.Module):
@@ -562,9 +572,12 @@ def main() -> None:
             images = images.to(device)
             labels = None if labels is None else labels.to(device)
             has_labels = has_labels or labels is not None
+            _sync(device)
             started = time.perf_counter()
             qann_logits = model(images)
+            _sync(device)
             qann_seconds += time.perf_counter() - started
+            _sync(device)
             started = time.perf_counter()
             if device.type == "cuda":
                 torch.cuda.reset_peak_memory_stats(device)
@@ -573,6 +586,7 @@ def main() -> None:
                 images,
                 args,
             )
+            _sync(device)
             if device.type == "cuda":
                 cuda_peak_memory_allocated = max(
                     cuda_peak_memory_allocated or 0,

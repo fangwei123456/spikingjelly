@@ -244,7 +244,7 @@ This tutorial uses ``spiking_encoder`` for the model-level result.
 Step-mode Execution
 ^^^^^^^^^^^^^^^^^^^
 
-``STATransformerRecipe`` produces plain ``nn.Module`` or ``fx.GraphModule`` instances. Users call ``functional.set_step_mode`` to recursively configure their internal step-mode modules. The single-step example below shows the ``[x, 0, 0, ...]`` differential sequence for an ordinary ANN input ``x``; each ``converted(x_t)`` call is one STA timestep, and the final ``y`` is the ANN-level readout. If the input is already temporal, pass the corresponding differential timestep in the same way. Reset state before an independent sequence:
+``STATransformerRecipe`` is an FX graph recipe. It produces an ``fx.GraphModule``, which is an ``nn.Module`` subclass. Users call ``functional.set_step_mode`` to recursively configure its internal step-mode modules. The single-step example below shows the ``[x, 0, 0, ...]`` differential sequence for an ordinary ANN input ``x``; each ``converted(x_t)`` call is one STA timestep, and the final ``y`` is the ANN-level readout. If the input is already temporal, pass the corresponding differential timestep in the same way. Reset state before an independent sequence:
 
 .. code-block:: python
 
@@ -353,8 +353,8 @@ Conversion Contract And API
 
 ``SpikeZIPTFQANNRecipe`` converts a quantized ANN (QANN) into an SNN. The input model must already be a SpikeZIP-compatible QANN. The current implementation supports two attention module contracts:
 
-* RoBERTa-style self-attention must expose ``query``, ``key``, and ``value`` linear layers, plus ``query_quan``, ``key_quan``, ``value_quan``, ``attn_quan``, and ``after_attn_quan`` quantizers with ``s``, ``sym``, ``pos_max``, ``neg_min``, and ``level`` attributes.
-* ViT-style self-attention must expose ``qkv`` and ``proj`` linear layers, ``quan_q``, ``quan_k``, ``quan_v``, ``attn_quan``, ``after_attn_quan``, and ``quan_proj`` quantizers with the same quantization attributes, plus ``num_heads``, ``head_dim``, and ``scale``.
+* RoBERTa-style self-attention must expose ``query``, ``key``, and ``value`` linear layers; ``num_attention_heads``, ``attention_head_size``, ``all_head_size``, and ``dropout``; plus ``query_quan``, ``key_quan``, ``value_quan``, ``attn_quan``, and ``after_attn_quan`` quantizers with ``s``, ``sym``, ``pos_max``, ``neg_min``, and ``level`` attributes.
+* ViT-style self-attention must expose ``qkv`` and ``proj`` linear layers; ``quan_q``, ``quan_k``, ``quan_v``, ``attn_quan``, ``after_attn_quan``, and ``quan_proj`` quantizers with the same quantization attributes; plus ``num_heads``, ``head_dim``, ``scale``, ``attn_drop``, and ``proj_drop``.
 
 The recipe replaces the QANN-side quantizers and Transformer operators with transparent SNN-side ST-BIF, SESA attention multiplication, Spike-Softmax, Spike-LayerNorm, embedding, and linear modules. This algorithm directly modifies the ``nn.Module`` tree and does not run FX tracing, so use ``ModuleConverter``:
 
@@ -459,7 +459,7 @@ The full validation result below was measured on ``g2`` with an NVIDIA A100-SXM4
       - 96.034
       - ``step_mode="m"``, ``stbif_backend="triton"``
 
-The Top-1 difference is ``+0.090`` percentage points, and the Top-1 prediction agreement is ``97.34%``. QANN inference took ``79.20`` seconds; SNN inference took ``3719.15`` seconds (``61.99`` minutes), using ``snn_batch_size=4`` and peaking at ``25.63`` GiB of allocated CUDA memory. In the benchmark output, ``parity_pass=false`` because that field checks strict logits equality with ``max_abs_diff <= 1e-4``.
+The Top-1 difference is ``+0.090`` percentage points, and the Top-1 prediction agreement is ``97.34%``. QANN inference took ``79.20`` seconds; SNN inference took ``3719.15`` seconds (``61.99`` minutes), using ``snn_batch_size=4`` and peaking at ``25.63`` GiB of allocated CUDA memory. In the benchmark output, ``parity_pass=false`` because that field checks logits with ``torch.allclose(snn_logits, qann_logits, atol=parity_atol, rtol=1e-5)``; this run used ``parity_atol=1e-4``.
 
 .. [#sta] Jiang Y., et al., "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers", ICLR 2024.
 

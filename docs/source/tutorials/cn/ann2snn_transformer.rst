@@ -246,7 +246,7 @@ STA 当前有三种模式：
 Step-mode 执行
 ^^^^^^^^^^^^^^
 
-``STATransformerRecipe`` 的转换产物是普通的 ``nn.Module`` 或 ``fx.GraphModule``。用户通过 ``functional.set_step_mode`` 递归设置内部模块的 step-mode。下面的单步示例展示普通 ANN 输入 ``x`` 的 ``[x, 0, 0, ...]`` 差分序列；每次 ``converted(x_t)`` 调用只是一个 STA 时间步，最后的 ``y`` 才对应原 ANN 级别的一次读出。如果已有时间序列输入，则按同样方式逐时间步传入对应差分。处理独立序列前需要重置状态：
+``STATransformerRecipe`` 是 FX graph recipe，转换产物是 ``fx.GraphModule``，也就是 ``nn.Module`` 的子类。用户通过 ``functional.set_step_mode`` 递归设置内部模块的 step-mode。下面的单步示例展示普通 ANN 输入 ``x`` 的 ``[x, 0, 0, ...]`` 差分序列；每次 ``converted(x_t)`` 调用只是一个 STA 时间步，最后的 ``y`` 才对应原 ANN 级别的一次读出。如果已有时间序列输入，则按同样方式逐时间步传入对应差分。处理独立序列前需要重置状态：
 
 .. code-block:: python
 
@@ -355,8 +355,8 @@ Path 3: SpikeZIP 转换
 
 ``SpikeZIPTFQANNRecipe`` 将量化 ANN (QANN) 转化为 SNN。它要求输入模型必须已经是 SpikeZIP-compatible QANN。当前支持两类 attention module contract：
 
-* RoBERTa 风格 self-attention 需要暴露 ``query``、``key``、``value`` linear layers，以及带 ``s``、``sym``、``pos_max``、``neg_min``、``level`` 属性的 ``query_quan``、``key_quan``、``value_quan``、``attn_quan``、``after_attn_quan`` quantizers；
-* ViT 风格 self-attention 需要暴露 ``qkv``、``proj`` linear layers，带上述量化属性的 ``quan_q``、``quan_k``、``quan_v``、``attn_quan``、``after_attn_quan``、``quan_proj`` quantizers，以及 ``num_heads``、``head_dim`` 和 ``scale``。
+* RoBERTa 风格 self-attention 需要暴露 ``query``、``key``、``value`` linear layers，``num_attention_heads``、``attention_head_size``、``all_head_size``、``dropout``，以及带 ``s``、``sym``、``pos_max``、``neg_min``、``level`` 属性的 ``query_quan``、``key_quan``、``value_quan``、``attn_quan``、``after_attn_quan`` quantizers；
+* ViT 风格 self-attention 需要暴露 ``qkv``、``proj`` linear layers，带上述量化属性的 ``quan_q``、``quan_k``、``quan_v``、``attn_quan``、``after_attn_quan``、``quan_proj`` quantizers，以及 ``num_heads``、``head_dim``、``scale``、``attn_drop`` 和 ``proj_drop``。
 
 recipe 会把 QANN 侧的 quantizers 和 Transformer 算子替换为透明的 SNN 侧 ST-BIF、SESA attention 乘法、Spike-Softmax、Spike-LayerNorm、embedding 与 linear module。该算法直接针对 ``nn.Module`` 进行改动，不执行 FX tracing，故应使用 ``ModuleConverter``：
 
@@ -461,7 +461,7 @@ SpikeZIP ViT-Small ImageNet Benchmark
       - 96.034
       - ``step_mode="m"``，``stbif_backend="triton"``
 
-Top-1 差值为 ``+0.090`` 个百分点，Top-1 prediction agreement 为 ``97.34%``。QANN 推理耗时 ``79.20`` 秒；SNN 推理耗时 ``3719.15`` 秒（``61.99`` 分钟），使用 ``snn_batch_size=4``，峰值 CUDA allocated memory 为 ``25.63`` GiB。benchmark 中 ``parity_pass=false`` 是因为该字段检查严格 logits 相等，阈值为 ``max_abs_diff <= 1e-4``。
+Top-1 差值为 ``+0.090`` 个百分点，Top-1 prediction agreement 为 ``97.34%``。QANN 推理耗时 ``79.20`` 秒；SNN 推理耗时 ``3719.15`` 秒（``61.99`` 分钟），使用 ``snn_batch_size=4``，峰值 CUDA allocated memory 为 ``25.63`` GiB。benchmark 中 ``parity_pass=false`` 是因为该字段使用 ``torch.allclose(snn_logits, qann_logits, atol=parity_atol, rtol=1e-5)`` 检查 logits；本次记录的 ``parity_atol`` 为 ``1e-4``。
 
 .. [#sta] Jiang Y., et al., "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers", ICLR 2024.
 
