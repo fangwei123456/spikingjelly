@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.ann2snn import (
     Converter,
-    TransformerSpikeEquivalentRecipe,
+    TransformerTDEquivalentRecipe,
 )
 
 
@@ -139,7 +139,7 @@ class FXFriendlyBertEncoder(nn.Module):
 def parse_args():
     parser = argparse.ArgumentParser(
         description=(
-            "Evaluate TransformerSpikeEquivalentRecipe on a BERT SST-2 classifier "
+            "Evaluate TransformerTDEquivalentRecipe on a BERT SST-2 classifier "
             "classification through an embedding-output conversion boundary."
         )
     )
@@ -300,7 +300,7 @@ def check_hf_wrapper_parity(wrapper, hf_model, loader, device, max_batches, atol
     }
 
 
-def evaluate_transformer_spike_equivalent(
+def evaluate_transformer_td_equivalent(
     converted,
     hf_model,
     loader,
@@ -376,7 +376,7 @@ def main():
         "batch_size": args.batch_size,
         "max_length": args.max_length,
         "time_steps": args.time_steps,
-        "recipe": "TransformerSpikeEquivalentRecipe",
+        "recipe": "TransformerTDEquivalentRecipe",
         "conversion_boundary": "bert embeddings output",
         "parity_batches": args.parity_batches,
         "parity_atol": args.parity_atol,
@@ -396,27 +396,27 @@ def main():
     baseline = evaluate_ann(wrapper, hf_model, loader, device, "baseline")
     print("BASELINE", json.dumps(baseline), flush=True)
 
-    recipe = TransformerSpikeEquivalentRecipe(time_steps=args.time_steps)
+    recipe = TransformerTDEquivalentRecipe(time_steps=args.time_steps)
     converted = (
         Converter(recipe=recipe, device=device).convert(wrapper).to(device).eval()
     )
-    converted_result = evaluate_transformer_spike_equivalent(
+    converted_result = evaluate_transformer_td_equivalent(
         converted,
         hf_model,
         loader,
         device,
         args.time_steps,
-        f"transformer_spike_equivalent_t{args.time_steps}",
+        f"transformer_td_equivalent_t{args.time_steps}",
     )
     drop = baseline["accuracy"] - converted_result["accuracy"]
-    print("TRANSFORMER_SPIKE_EQUIVALENT", json.dumps(converted_result), flush=True)
+    print("TRANSFORMER_TD_EQUIVALENT", json.dumps(converted_result), flush=True)
     print("DROP", drop, flush=True)
 
     payload = {
         "env": env,
         "hf_wrapper_parity": parity,
         "baseline": baseline,
-        "transformer_spike_equivalent": converted_result,
+        "transformer_td_equivalent": converted_result,
         "drop": drop,
     }
     write_output(args.output, payload)

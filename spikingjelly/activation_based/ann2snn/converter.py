@@ -7,7 +7,7 @@ from torch import fx
 from spikingjelly.activation_based.ann2snn.recipes import (
     FXConversionRecipe,
     ModuleConversionRecipe,
-    TransformerSpikeEquivalentRecipe,
+    TransformerTDEquivalentRecipe,
 )
 
 
@@ -33,7 +33,7 @@ class FXConverter:
         :param recipe: 转换 recipe。传入
             :class:`~spikingjelly.activation_based.ann2snn.recipes.FXConversionRecipe`
             实例（或兼容名 ``ConversionRecipe``），或稳定的内置 recipe 字符串。
-            目前字符串别名仅支持 ``"transformer_spike_equivalent"``。
+            目前字符串别名仅支持 ``"transformer_td_equivalent"``。
             Rate-coding、STA Transformer 需要显式传入带参数的 recipe 对象。
             SpikeZIP QANN 等 module-tree recipe 使用 :class:`ModuleConverter`。
         :type recipe: str or FXConversionRecipe
@@ -57,7 +57,7 @@ class FXConverter:
             :class:`~spikingjelly.activation_based.ann2snn.recipes.FXConversionRecipe`
             instance (or the compatibility name ``ConversionRecipe``), or a
             stable built-in recipe string. Currently, the only supported string
-            alias is ``"transformer_spike_equivalent"``. Rate-coding and STA
+            alias is ``"transformer_td_equivalent"``. Rate-coding and STA
             Transformer conversion must pass explicit recipe objects.
             Module-tree recipes such as SpikeZIP QANN use :class:`ModuleConverter`
             instead.
@@ -78,8 +78,8 @@ class FXConverter:
                 "FXConverter/Converter requires an FXConversionRecipe. "
                 "Use ModuleConverter for ModuleConversionRecipe instances."
             )
-        if recipe == "transformer_spike_equivalent":
-            return TransformerSpikeEquivalentRecipe()
+        if recipe == "transformer_td_equivalent":
+            return TransformerTDEquivalentRecipe()
         if recipe == "rate_coding":
             raise ValueError(
                 "The rate_coding recipe requires parameters. "

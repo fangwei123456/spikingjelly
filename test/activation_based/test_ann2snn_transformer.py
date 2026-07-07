@@ -13,7 +13,7 @@ from spikingjelly.activation_based.ann2snn import (
     ModuleConverter,
     SpikeZIPTFQANNRecipe,
     STATransformerRecipe,
-    TransformerSpikeEquivalentRecipe,
+    TransformerTDEquivalentRecipe,
 )
 from spikingjelly.activation_based.ann2snn.operators import (
     SNNMatrixOperator,
@@ -179,7 +179,7 @@ def _sequence_kwargs_first_real_then_zero(converted: nn.Module, **kwargs):
     return seq_kwargs
 
 
-def _run_transformer_spike_equivalent_static_mask_step_loop(
+def _run_transformer_td_equivalent_static_mask_step_loop(
     converted: nn.Module,
     embedding_output: torch.Tensor,
     extended_attention_mask: torch.Tensor,
@@ -360,7 +360,7 @@ class _TinyUnsupportedBertBranch(nn.Module):
         return embedding_output.masked_fill(embedding_output < 0, 0.0)
 
 
-def test_transformer_spike_equivalent_recipe_converts_tiny_bert_like_block():
+def test_transformer_td_equivalent_recipe_converts_tiny_bert_like_block():
     torch.manual_seed(251)
     model = _TinyBertSST2FromEmbeddings().eval()
     embedding_output = torch.randn(3, 5, 8)
@@ -372,7 +372,7 @@ def test_transformer_spike_equivalent_recipe_converts_tiny_bert_like_block():
 
     converted = (
         Converter(
-            recipe=TransformerSpikeEquivalentRecipe(time_steps=4),
+            recipe=TransformerTDEquivalentRecipe(time_steps=4),
             device="cpu",
         )
         .convert(model)
@@ -380,7 +380,7 @@ def test_transformer_spike_equivalent_recipe_converts_tiny_bert_like_block():
     )
 
     assert converted.time_steps == 4
-    assert converted.ann2snn_recipe == "transformer_spike_equivalent"
+    assert converted.ann2snn_recipe == "transformer_td_equivalent"
     assert any(isinstance(module, TDLinear) for module in converted.modules())
     assert any(isinstance(module, TDLayerNorm) for module in converted.modules())
     assert any(isinstance(module, TDGELU) for module in converted.modules())
@@ -401,7 +401,7 @@ def test_transformer_spike_equivalent_recipe_converts_tiny_bert_like_block():
         rtol=1e-5,
     )
 
-    y_loop = _run_transformer_spike_equivalent_static_mask_step_loop(
+    y_loop = _run_transformer_td_equivalent_static_mask_step_loop(
         converted,
         embedding_output,
         extended_attention_mask,
@@ -409,7 +409,7 @@ def test_transformer_spike_equivalent_recipe_converts_tiny_bert_like_block():
     assert torch.allclose(y_loop, y_seq, atol=1e-5, rtol=1e-5)
 
 
-def test_transformer_spike_equivalent_recipe_accepts_static_attention_mask_contract():
+def test_transformer_td_equivalent_recipe_accepts_static_attention_mask_contract():
     torch.manual_seed(252)
     model = _TinyBertSST2FromEmbeddings().eval()
     embedding_output = torch.randn(2, 4, 8)
@@ -420,7 +420,7 @@ def test_transformer_spike_equivalent_recipe_accepts_static_attention_mask_contr
         ),
     )
     converted = (
-        Converter(recipe=TransformerSpikeEquivalentRecipe(time_steps=4))
+        Converter(recipe=TransformerTDEquivalentRecipe(time_steps=4))
         .convert(model)
         .eval()
     )
@@ -440,7 +440,7 @@ def test_transformer_spike_equivalent_recipe_accepts_static_attention_mask_contr
             rtol=1e-5,
         )
 
-        y_loop = _run_transformer_spike_equivalent_static_mask_step_loop(
+        y_loop = _run_transformer_td_equivalent_static_mask_step_loop(
             converted,
             embedding_output,
             extended_attention_mask,
@@ -448,11 +448,11 @@ def test_transformer_spike_equivalent_recipe_accepts_static_attention_mask_contr
         assert torch.allclose(y_loop, y_seq, atol=1e-5, rtol=1e-5)
 
 
-def test_transformer_spike_equivalent_recipe_reset_repeats_outputs():
+def test_transformer_td_equivalent_recipe_reset_repeats_outputs():
     torch.manual_seed(252)
     model = _TinyBertSST2FromEmbeddings().eval()
     converted = (
-        Converter(recipe=TransformerSpikeEquivalentRecipe(time_steps=3))
+        Converter(recipe=TransformerTDEquivalentRecipe(time_steps=3))
         .convert(model)
         .eval()
     )
@@ -473,19 +473,19 @@ def test_transformer_spike_equivalent_recipe_reset_repeats_outputs():
     assert torch.allclose(first, second, atol=1e-6, rtol=1e-6)
 
 
-def test_transformer_spike_equivalent_recipe_rejects_invalid_options():
+def test_transformer_td_equivalent_recipe_rejects_invalid_options():
     with pytest.raises(ValueError, match="time_steps"):
-        TransformerSpikeEquivalentRecipe(time_steps=0).validate(None)
+        TransformerTDEquivalentRecipe(time_steps=0).validate(None)
     with pytest.raises(ValueError, match="time_steps"):
-        TransformerSpikeEquivalentRecipe(time_steps=-1).validate(None)
+        TransformerTDEquivalentRecipe(time_steps=-1).validate(None)
     with pytest.raises(ValueError, match="time_steps"):
-        TransformerSpikeEquivalentRecipe(time_steps=True).validate(None)
+        TransformerTDEquivalentRecipe(time_steps=True).validate(None)
 
 
-def test_transformer_spike_equivalent_recipe_rejects_unsupported_tensor_branch():
+def test_transformer_td_equivalent_recipe_rejects_unsupported_tensor_branch():
     model = _TinyUnsupportedBertBranch().eval()
     with pytest.raises(ValueError, match="unsupported|does not support"):
-        Converter(recipe=TransformerSpikeEquivalentRecipe(time_steps=2)).convert(model)
+        Converter(recipe=TransformerTDEquivalentRecipe(time_steps=2)).convert(model)
 
 
 class _TinySpikeZIPQuantizer(nn.Module):
@@ -2007,7 +2007,7 @@ def test_converter_functional_sdpa_transformer_block_matches_ann_reference():
         mlp_dim=16,
     )
     block.eval()
-    converted = Converter(recipe=TransformerSpikeEquivalentRecipe()).convert(block)
+    converted = Converter(recipe=TransformerTDEquivalentRecipe()).convert(block)
     modules = dict(converted.named_modules())
     x_seq = torch.randn(5, 2, 4, 8)
     attn_mask = torch.tensor(
@@ -2038,7 +2038,7 @@ def test_converter_functional_sdpa_transformer_block_matches_ann_reference():
 def test_converter_mha_transformer_block_matches_ann_reference():
     block = TinyANNMHATransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
     block.eval()
-    converted = Converter(recipe=TransformerSpikeEquivalentRecipe()).convert(block)
+    converted = Converter(recipe=TransformerTDEquivalentRecipe()).convert(block)
     modules = dict(converted.named_modules())
     x_seq = torch.randn(4, 2, 5, 8)
     attn_mask = torch.zeros(5, 5)
@@ -2056,7 +2056,7 @@ def test_converter_mha_transformer_block_matches_ann_reference():
 
 def test_converter_transformer_block_autograd_smoke():
     block = TinyANNMHATransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
-    converted = Converter(recipe=TransformerSpikeEquivalentRecipe()).convert(block)
+    converted = Converter(recipe=TransformerTDEquivalentRecipe()).convert(block)
     x_seq = torch.randn(3, 2, 4, 8, requires_grad=True)
 
     y_seq = converted(x_seq)

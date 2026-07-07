@@ -9,8 +9,8 @@ Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https:/
 
     Current ANN2SNN tutorials are split by conversion workflow:
 
-    #. This page covers the current Recipe API for rate-coded CNN conversion: ``RateCodingRecipe`` / ``LocalThresholdBalancingRecipe`` define the algorithm, and ``Converter.convert(model)`` executes it.
-    #. :doc:`STA-based Transformer ANN2SNN conversion <ann2snn_transformer>` covers ``STATransformerRecipe`` for Transformer models.
+    #. This page covers the current FX graph Recipe API for rate-coded CNN conversion: ``RateCodingRecipe`` / ``LocalThresholdBalancingRecipe`` define the algorithm, and ``Converter`` (the compatibility name for ``FXConverter``) executes it.
+    #. :doc:`Transformer ANN2SNN conversion <ann2snn_transformer>` covers ``STATransformerRecipe`` and ``SpikeZIPTFQANNRecipe`` for Transformer models.
 
     Legacy API tutorials remain available:
 
@@ -21,7 +21,7 @@ This tutorial focuses on ``spikingjelly.activation_based.ann2snn``. It shows how
 
 ANN2SNN API references are available `here <https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.activation_based.ann2snn.html>`_.
 
-The current implementation is based on ``torch.fx``. ``torch.fx`` traces ``nn.Module`` instances into a graph representation, which is then transformed by ANN2SNN recipes.
+The rate-coding path covered on this page is based on ``torch.fx``. ``torch.fx`` traces ``nn.Module`` instances into a graph representation, which is then transformed by ANN2SNN FX recipes. ANN2SNN also provides ``ModuleConverter`` for conversions that directly replace an ``nn.Module`` tree without FX tracing, such as SpikeZIP; see the SpikeZIP section in the Transformer ANN2SNN tutorial for that path.
 
 Theoretical basis of ANN2SNN
 ----------------------------
@@ -176,10 +176,11 @@ BatchNorm fusion and model normalization are algebraic transformations before sp
 Implementation and optional configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The current ann2snn API separates algorithm definition from execution:
+The current ann2snn API separates algorithm definition from execution. For the rate-coded CNN conversion on this page, use the FX path:
 
-* A recipe owns algorithm-specific options and graph transformations.
-* ``Converter`` is the executor. It receives a recipe, traces the model with ``torch.fx``, and calls the recipe steps through ``convert(model)``.
+* ``FXConversionRecipe`` owns algorithm-specific options and graph transformations. The compatibility name ``ConversionRecipe`` is equivalent to ``FXConversionRecipe``.
+* ``FXConverter`` is the executor. The compatibility name ``Converter`` is equivalent to ``FXConverter``. It receives an FX recipe, traces the model with ``torch.fx``, and calls the FX recipe steps through ``convert(model)``.
+* Direct ``nn.Module`` tree conversion uses ``ModuleConversionRecipe`` and ``ModuleConverter``. It does not run FX tracing, and ``Converter`` does not automatically dispatch to it.
 
 For ReLU-to-IFNode rate-coding conversion, use ``RateCodingRecipe``. It needs a calibration dataloader because it measures activation ranges before replacing ReLU modules. The common normalization modes are:
 
@@ -225,7 +226,7 @@ After conversion, ReLU modules are removed. New modules needed by the SNN, such 
 
 .. note::
 
-    Current versions require ``Converter(recipe=...)`` and ``Converter.convert(model)``. Older public algorithm methods, including ``convert_to_spiking_neurons()``, ``replace_by_td_operators()``, ``fuse()``, ``set_voltagehook()``, ``replace_by_neurons()``, and ``replace_by_ifnode()``, have been removed.
+    The FX conversion path on this page uses ``Converter(recipe=...)`` and ``Converter.convert(model)``. ``Converter`` is the compatibility name for ``FXConverter`` and only accepts ``FXConversionRecipe`` / ``ConversionRecipe``. Older public algorithm methods, including ``convert_to_spiking_neurons()``, ``replace_by_td_operators()``, ``fuse()``, ``set_voltagehook()``, ``replace_by_neurons()``, and ``replace_by_ifnode()``, have been removed.
 
 
 Classify MNIST
@@ -415,25 +416,36 @@ Call ``GraphModule.graph.print_tabular()`` to inspect the computation graph:
 Other recipes and custom recipes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The MNIST example above uses rate coding to convert ReLU activations to IF neurons. Transformer models can use ``TransformerSpikeEquivalentRecipe`` instead:
+The MNIST example above uses rate coding to convert ReLU activations to IF neurons. Transformer models can use ``TransformerTDEquivalentRecipe`` instead:
 
 .. code-block:: python
 
-    recipe = ann2snn.TransformerSpikeEquivalentRecipe()
+    recipe = ann2snn.TransformerTDEquivalentRecipe()
     td_model = ann2snn.Converter(recipe=recipe).convert(transformer_ann)
 
-This recipe does not need a dataloader, does not insert ``VoltageHook``, and does not run rate-coding calibration. It replaces currently supported ANN modules and attention calls with TD / spike-equivalent operators, but does not cover fully spike-driven LLM conversion. In these TD operators, ``ann_forward(...)`` is the ordinary stateless PyTorch path; ``single_step_forward(...)`` is a stateful temporal-difference step and should be reset before an independent sequence.
+This recipe does not need a dataloader, does not insert ``VoltageHook``, and does not run rate-coding calibration. It replaces currently supported ANN modules and attention calls with TD-equivalent operators, but does not cover fully spike-driven LLM conversion. In these TD operators, ``ann_forward(...)`` is the ordinary stateless PyTorch path; ``single_step_forward(...)`` is a stateful temporal-difference step and should be reset before an independent sequence.
 
-To add a new conversion algorithm, subclass ``ConversionRecipe`` and override only the steps you need. Unoverridden methods use the base no-op implementation. A recipe is not an executor and should not provide ``convert()``, ``run()``, or ``__call__()``:
+To add a new FX graph conversion algorithm, subclass ``FXConversionRecipe`` (or the compatibility name ``ConversionRecipe``) and override only the steps you need. Unoverridden methods use the base no-op implementation. A recipe is not an executor and should not provide ``convert()``, ``run()``, or ``__call__()``:
 
 .. code-block:: python
 
-    class MyRecipe(ann2snn.ConversionRecipe):
+    class MyFXRecipe(ann2snn.FXConversionRecipe):
         def replace(self, converter, fx_model):
             # Implement the algorithm-specific graph rewrite here.
             return fx_model
 
-The fixed step order is ``validate`` -> ``before_trace`` -> ``after_trace`` -> ``insert_observers`` -> ``calibrate`` -> ``replace`` -> ``finalize``.
+The fixed FX step order is ``validate`` -> ``before_trace`` -> ``after_trace`` -> ``insert_observers`` -> ``calibrate`` -> ``replace`` -> ``finalize``.
+
+If an algorithm does not need an FX graph and directly replaces an ``nn.Module`` tree, subclass ``ModuleConversionRecipe`` and execute it with ``ModuleConverter``. This path has only ``validate`` -> ``convert_module`` and has no ``before_trace`` or ``finalize``:
+
+.. code-block:: python
+
+    class MyModuleRecipe(ann2snn.ModuleConversionRecipe):
+        def convert_module(self, converter, ann):
+            # Replace submodules in ann or return a converted copy.
+            return ann
+
+    converted = ann2snn.ModuleConverter(recipe=MyModuleRecipe()).convert(ann)
 
 Customizing conversion rules
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

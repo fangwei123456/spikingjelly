@@ -32,7 +32,7 @@ from spikingjelly.activation_based.ann2snn import (
     SpikeZIPTFQANNRecipe,
     STATransformerRecipe,
     ThresholdOptimizer,
-    TransformerSpikeEquivalentRecipe,
+    TransformerTDEquivalentRecipe,
 )
 from spikingjelly.activation_based.ann2snn import delay as ann2snn_delay
 from spikingjelly.activation_based.ann2snn import utils as ann2snn_utils
@@ -635,7 +635,7 @@ def _rate_converter(
 
 
 def _td_converter():
-    return Converter(recipe=TransformerSpikeEquivalentRecipe())
+    return Converter(recipe=TransformerTDEquivalentRecipe())
 
 
 def _activation_aware_calibration(
@@ -924,7 +924,7 @@ class TestPublicExports:
             "RateCodingRecipe",
             "LocalThresholdBalancingRecipe",
             "STATransformerRecipe",
-            "TransformerSpikeEquivalentRecipe",
+            "TransformerTDEquivalentRecipe",
             "SpikeZIPTFQANNRecipe",
             "ChannelVoltageScaler",
             "estimate_delay_start",
@@ -949,7 +949,7 @@ class TestPublicExports:
         assert ann2snn.STATransformerRecipe is STATransformerRecipe
         assert ann2snn.ChannelVoltageScaler is ChannelVoltageScaler
         assert (
-            ann2snn.TransformerSpikeEquivalentRecipe is TransformerSpikeEquivalentRecipe
+            ann2snn.TransformerTDEquivalentRecipe is TransformerTDEquivalentRecipe
         )
         assert ann2snn.SpikeZIPTFQANNRecipe is SpikeZIPTFQANNRecipe
 
@@ -963,7 +963,7 @@ class TestPublicExports:
         assert not hasattr(RateCodingRecipe, "name")
         assert not hasattr(LocalThresholdBalancingRecipe, "name")
         assert not hasattr(STATransformerRecipe, "name")
-        assert not hasattr(TransformerSpikeEquivalentRecipe, "name")
+        assert not hasattr(TransformerTDEquivalentRecipe, "name")
         assert not hasattr(SpikeZIPTFQANNRecipe, "name")
 
 
@@ -1010,11 +1010,11 @@ class TestConverterRecipes:
     )
     def test_converter_rejects_algorithm_parameters(self, kwargs):
         with pytest.raises(TypeError):
-            Converter(recipe=TransformerSpikeEquivalentRecipe(), **kwargs)
+            Converter(recipe=TransformerTDEquivalentRecipe(), **kwargs)
 
     def test_transformer_recipe_does_not_require_dataloader(self):
-        converter = Converter(recipe="transformer_spike_equivalent")
-        assert isinstance(converter.recipe, TransformerSpikeEquivalentRecipe)
+        converter = Converter(recipe="transformer_td_equivalent")
+        assert isinstance(converter.recipe, TransformerTDEquivalentRecipe)
 
     def test_rate_coding_recipe_name_requires_recipe_object(self):
         with pytest.raises(ValueError, match="rate_coding recipe"):
@@ -1222,7 +1222,7 @@ class TestConverterRecipes:
     def test_unified_convert_uses_transformer_recipe(self):
         model = CoreTransformerMLP()
         model.eval()
-        converter = Converter(recipe="transformer_spike_equivalent")
+        converter = Converter(recipe="transformer_td_equivalent")
 
         converted = converter.convert(model)
         modules = dict(converted.named_modules())
@@ -1624,7 +1624,7 @@ class TestConverterTDOperatorReplacement:
         assert isinstance(modules["fc1"], TDLinear)
 
     def test_td_operator_replacement_skips_existing_td_modules(self):
-        recipe = TransformerSpikeEquivalentRecipe()
+        recipe = TransformerTDEquivalentRecipe()
 
         assert recipe._make_td_operator(TDLinear(4, 4)) is None
         assert recipe._make_td_operator(TDLayerNorm(4)) is None
@@ -1651,7 +1651,7 @@ class TestConverterTDOperatorReplacement:
         gelu = nn.GELU()
         delattr(gelu, "approximate")
 
-        td_gelu = TransformerSpikeEquivalentRecipe()._make_td_operator(gelu)
+        td_gelu = TransformerTDEquivalentRecipe()._make_td_operator(gelu)
 
         assert isinstance(td_gelu, TDGELU)
         assert td_gelu.approximate == "none"
@@ -1888,7 +1888,7 @@ class TestConverterTDOperatorReplacement:
             batch_first=True,
         )
 
-        TransformerSpikeEquivalentRecipe._copy_mha_parameters(source, target)
+        TransformerTDEquivalentRecipe._copy_mha_parameters(source, target)
 
         assert target.q_proj.bias is None
         assert target.k_proj.bias is None

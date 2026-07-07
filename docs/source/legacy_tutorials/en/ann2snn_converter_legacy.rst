@@ -11,7 +11,7 @@ Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https:/
 
     #. :doc:`Older clock-driven-era ANN2SNN API <5_ann2snn>`.
     #. Legacy pre-Recipe Converter API, documented on this page: ``Converter(mode=..., dataloader=...)`` and ``convert_to_spiking_neurons(model)``.
-    #. :doc:`Current Recipe API <../../tutorials/en/ann2snn>`, which uses ``RateCodingRecipe`` or ``TransformerSpikeEquivalentRecipe`` with ``Converter.convert(model)``.
+    #. :doc:`Current Recipe API <../../tutorials/en/ann2snn>`, which uses ``RateCodingRecipe`` or ``TransformerTDEquivalentRecipe`` with ``Converter.convert(model)``.
 
 This tutorial focuses on ``spikingjelly.activation_based.ann2snn``, introduce how to convert the trained feedforward ANN to SNN and simulate it on the SpikingJelly framework.
 

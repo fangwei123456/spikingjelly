@@ -42,7 +42,7 @@ from .recipes import (
     RateCodingRecipe,
     SpikeZIPTFQANNRecipe,
     STATransformerRecipe,
-    TransformerSpikeEquivalentRecipe,
+    TransformerTDEquivalentRecipe,
 )
 from .rules import ReLURule
 from .threshold import ThresholdOptimizer
@@ -59,7 +59,7 @@ __all__ = [
     "LocalThresholdBalancingRecipe",
     "SpikeZIPTFQANNRecipe",
     "STATransformerRecipe",
-    "TransformerSpikeEquivalentRecipe",
+    "TransformerTDEquivalentRecipe",
     "ChannelVoltageScaler",
     "estimate_delay_start",
     "download_url",

@@ -1,25 +1,78 @@
 spikingjelly.activation\_based.ann2snn package
 ==============================================
 
-Converter
-+++++++++++
+Overview
+++++++++
+
+``spikingjelly.activation_based.ann2snn`` is organized around two conversion
+paths:
+
+* FX graph conversion for recipes that trace and rewrite a
+  ``torch.fx.GraphModule``.
+* Direct ``nn.Module`` tree conversion for recipes that replace modules without
+  FX tracing.
+
+Most users start by choosing a converter, then a conversion recipe. Lower-level
+operators, rules, factories, threshold utilities, and helper functions are
+documented after the public conversion APIs.
+
+Converters
+++++++++++
+
+ANN2SNN exposes two explicit conversion executors:
+
+* ``FXConverter`` converts through a ``torch.fx.GraphModule``. The historical
+  public names ``Converter`` and ``ConversionRecipe`` are compatibility aliases
+  for ``FXConverter`` and ``FXConversionRecipe``.
+* ``ModuleConverter`` converts a plain ``nn.Module`` tree without FX tracing.
+  It accepts only ``ModuleConversionRecipe`` instances. This is the path used
+  by module-tree conversions such as SpikeZIP QANN-to-SNN.
+
+There is no automatic cross-path dispatch. Passing a module-tree recipe to
+``Converter`` / ``FXConverter`` or an FX recipe to ``ModuleConverter`` raises a
+``TypeError``.
 
 .. automodule:: spikingjelly.activation_based.ann2snn.converter
    :members:
    :undoc-members:
    :show-inheritance:
 
-Extension Points
-++++++++++++++++
+Conversion Recipes
+++++++++++++++++++
 
-The ``recipes`` module is the public extension surface for ANN2SNN conversion
-algorithms. A recipe defines the algorithm-specific steps, while
-``Converter.convert(model)`` owns execution.
+Recipes describe the conversion algorithm. The built-in recipes fall into three
+groups:
+
+* **CNN and rate-coding conversion**: ``RateCodingRecipe`` and
+  ``LocalThresholdBalancingRecipe``.
+* **Transformer FX conversion**: ``TransformerTDEquivalentRecipe`` and
+  ``STATransformerRecipe``.
+* **Module-tree QANN-to-SNN conversion**: ``SpikeZIPTFQANNRecipe``.
+
+FX recipes subclass ``FXConversionRecipe`` and are executed by
+``FXConverter`` / ``Converter``. Module-tree recipes subclass
+``ModuleConversionRecipe`` and are executed by ``ModuleConverter``. The
+historical name ``ConversionRecipe`` is a compatibility alias for
+``FXConversionRecipe``.
 
 .. automodule:: spikingjelly.activation_based.ann2snn.recipes
    :members:
    :undoc-members:
    :show-inheritance:
+
+Rate-Coding Rules, Factories, and Thresholds
+++++++++++++++++++++++++++++++++++++++++++++
+
+These modules support the ReLU-to-spiking-neuron path used by rate-coding
+recipes, primarily ``RateCodingRecipe`` and ``LocalThresholdBalancingRecipe``.
+``ActivationRule`` / ``ReLURule`` match FX activation nodes, insert calibration
+hooks, and replace calibrated activations with spiking-neuron subgraphs.
+``HookFactory``, ``NeuronFactory``, and ``ThresholdOptimizer`` are the matching
+calibration and construction utilities.
+
+Transformer TD-equivalent, STA Transformer, and SpikeZIP conversions do not use
+this graph-rule interface. They implement their own recipe-specific operator or
+module replacement logic.
 
 .. automodule:: spikingjelly.activation_based.ann2snn.rules
    :members:
@@ -36,8 +89,8 @@ algorithms. A recipe defines the algorithm-specific steps, while
    :undoc-members:
    :show-inheritance:
 
-Helper Modules and Functions
-++++++++++++++++++++++++++++++
+Stateful Operators and Runtime Modules
+++++++++++++++++++++++++++++++++++++++
 
 Temporal-difference (TD) operators in
 ``spikingjelly.activation_based.ann2snn.operators`` follow stateful
@@ -67,13 +120,16 @@ PyTorch module at one non-temporal input.
    :show-inheritance:
    :exclude-members: extra_repr
 
+Utilities
++++++++++
+
 .. automodule:: spikingjelly.activation_based.ann2snn.utils
    :members:
    :undoc-members:
    :show-inheritance:
 
 Examples
-++++++++++++
+++++++++
 
 .. toctree::
    :maxdepth: 2

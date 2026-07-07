@@ -33,10 +33,10 @@ ImageNet ViT-B/16 with STATransformerRecipe
    :undoc-members:
    :show-inheritance:
 
-BERT SST-2 with TransformerSpikeEquivalentRecipe
+BERT SST-2 with TransformerTDEquivalentRecipe
 ------------------------------------------------
 
-.. automodule:: spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_spike_equivalent
+.. automodule:: spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_td_equivalent
    :members:
    :undoc-members:
    :show-inheritance:

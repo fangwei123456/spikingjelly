@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from spikingjelly.activation_based.ann2snn.converter import Converter
 
 
-__all__ = ["TransformerSpikeEquivalentRecipe"]
+__all__ = ["TransformerTDEquivalentRecipe"]
 
 
 class _TDTanh(TDModule):
@@ -41,27 +41,27 @@ class _TDTanh(TDModule):
         return self._td_sequence_forward((x_seq,), torch.tanh)
 
 
-class TransformerSpikeEquivalentRecipe(ConversionRecipe):
+class TransformerTDEquivalentRecipe(ConversionRecipe):
     r"""
-    **API Language** - :ref:`中文 <TransformerSpikeEquivalentRecipe-cn>` | :ref:`English <TransformerSpikeEquivalentRecipe-en>`
+    **API Language** - :ref:`中文 <TransformerTDEquivalentRecipe-cn>` | :ref:`English <TransformerTDEquivalentRecipe-en>`
 
     ----
 
-    .. _TransformerSpikeEquivalentRecipe-cn:
+    .. _TransformerTDEquivalentRecipe-cn:
 
     * **中文**
 
-    Transformer TD / spike-equivalent operator 替换 recipe。该 recipe 不插入
+    Transformer TD-equivalent operator 替换 recipe。该 recipe 不插入
     observer，不运行 dataloader 校准，也不强制切换模型 train/eval 状态；它仅
     将当前支持的 ANN core modules 和窄 attention 子集替换为 TD 等价算子。
 
     ----
 
-    .. _TransformerSpikeEquivalentRecipe-en:
+    .. _TransformerTDEquivalentRecipe-en:
 
     * **English**
 
-    Transformer TD / spike-equivalent operator replacement recipe. This recipe
+    Transformer TD-equivalent operator replacement recipe. This recipe
     does not insert observers, does not run dataloader calibration, and does not
     force train/eval mode changes. It only replaces the currently supported ANN
     core modules and narrow attention subset with TD-equivalent operators.
@@ -84,16 +84,16 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
         self, converter: "Converter", fx_model: fx.GraphModule
     ) -> fx.GraphModule:
         r"""
-        **API Language** - :ref:`中文 <TransformerSpikeEquivalentRecipe.replace-cn>` | :ref:`English <TransformerSpikeEquivalentRecipe.replace-en>`
+        **API Language** - :ref:`中文 <TransformerTDEquivalentRecipe.replace-cn>` | :ref:`English <TransformerTDEquivalentRecipe.replace-en>`
 
         ----
 
-        .. _TransformerSpikeEquivalentRecipe.replace-cn:
+        .. _TransformerTDEquivalentRecipe.replace-cn:
 
         * **中文**
 
         将当前支持的 Transformer core modules、SDPA 调用和窄
-        ``MultiheadAttention`` 调用替换为 TD / spike-equivalent 算子。
+        ``MultiheadAttention`` 调用替换为 TD-equivalent 算子。
         该步骤不插入 observer，也不运行 rate-coding 校准。
 
         :param converter: 执行当前 recipe 的转换器。
@@ -106,12 +106,12 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
 
         ----
 
-        .. _TransformerSpikeEquivalentRecipe.replace-en:
+        .. _TransformerTDEquivalentRecipe.replace-en:
 
         * **English**
 
         Replace currently supported Transformer core modules, SDPA calls and
-        narrow ``MultiheadAttention`` calls with TD / spike-equivalent
+        narrow ``MultiheadAttention`` calls with TD-equivalent
         operators. This step does not insert observers or run rate-coding
         calibration.
 
@@ -176,7 +176,7 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
 
         return adapt_step_mode_graph(
             fx_model,
-            context="TransformerSpikeEquivalentRecipe step-mode backend",
+            context="TransformerTDEquivalentRecipe step-mode backend",
             wrap_module_types=_SHAPE_ONLY_MODULE_TYPES,
             safe_module_types=_TRANSFORMER_SAFE_MODULE_TYPES,
             safe_call_functions=(
@@ -186,7 +186,7 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
         )
 
     def finalize(self, converter: "Converter", fx_model: fx.GraphModule) -> nn.Module:
-        object.__setattr__(fx_model, "ann2snn_recipe", "transformer_spike_equivalent")
+        object.__setattr__(fx_model, "ann2snn_recipe", "transformer_td_equivalent")
         if self.time_steps is not None:
             object.__setattr__(fx_model, "time_steps", self.time_steps)
         return fx_model
@@ -216,7 +216,7 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
     def _parse_sdpa_node(node: fx.Node) -> Dict[str, Any]:
         if len(node.args) < 3:
             raise ValueError("SDPA node must have query, key, and value arguments.")
-        dropout_p = TransformerSpikeEquivalentRecipe._get_literal_argument(
+        dropout_p = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "dropout_p", 4, 0.0
         )
         if not isinstance(dropout_p, (int, float)) or float(dropout_p) != 0.0:
@@ -224,13 +224,13 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
                 "TD SDPA conversion only supports literal dropout_p=0.0, "
                 f"but got {dropout_p!r}."
             )
-        enable_gqa = TransformerSpikeEquivalentRecipe._get_literal_argument(
+        enable_gqa = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "enable_gqa", 7, False
         )
         if enable_gqa is not False:
             raise ValueError("TD SDPA conversion does not support enable_gqa=True.")
 
-        is_causal = TransformerSpikeEquivalentRecipe._get_literal_argument(
+        is_causal = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "is_causal", 5, False
         )
         if not isinstance(is_causal, bool):
@@ -238,7 +238,7 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
                 "TD SDPA conversion only supports literal bool is_causal, "
                 f"but got {is_causal!r}."
             )
-        scale = TransformerSpikeEquivalentRecipe._get_literal_argument(
+        scale = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "scale", 6, None
         )
         if scale is not None and not isinstance(scale, (int, float)):
@@ -251,7 +251,7 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             "query": node.args[0],
             "key": node.args[1],
             "value": node.args[2],
-            "attn_mask": TransformerSpikeEquivalentRecipe._get_literal_argument(
+            "attn_mask": TransformerTDEquivalentRecipe._get_literal_argument(
                 node, "attn_mask", 3, None
             ),
             "is_causal": is_causal,
@@ -275,17 +275,17 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
         if module.add_zero_attn:
             raise ValueError("TD MHA conversion does not support add_zero_attn.")
 
-        need_weights = TransformerSpikeEquivalentRecipe._get_literal_argument(
+        need_weights = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "need_weights", 4, True
         )
         if need_weights is not False:
             raise ValueError("TD MHA conversion requires need_weights=False.")
-        key_padding_mask = TransformerSpikeEquivalentRecipe._get_literal_argument(
+        key_padding_mask = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "key_padding_mask", 3, None
         )
         if key_padding_mask is not None:
             raise ValueError("TD MHA conversion does not support key_padding_mask.")
-        average_attn_weights = TransformerSpikeEquivalentRecipe._get_literal_argument(
+        average_attn_weights = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "average_attn_weights", 6, True
         )
         if average_attn_weights is not True:
