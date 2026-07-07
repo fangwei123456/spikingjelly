@@ -20,8 +20,12 @@ from spikingjelly.activation_based import (
 from spikingjelly.activation_based.ann2snn import (
     Converter,
     ConversionRecipe,
+    FXConverter,
+    FXConversionRecipe,
     HookFactory,
     LocalThresholdBalancingRecipe,
+    ModuleConverter,
+    ModuleConversionRecipe,
     NeuronFactory,
     RateCodingRecipe,
     ReLURule,
@@ -912,7 +916,11 @@ class TestPublicExports:
     def test_all_contains_new_public_api(self):
         assert set(ann2snn.__all__) == {
             "Converter",
+            "FXConverter",
+            "ModuleConverter",
             "ConversionRecipe",
+            "FXConversionRecipe",
+            "ModuleConversionRecipe",
             "RateCodingRecipe",
             "LocalThresholdBalancingRecipe",
             "STATransformerRecipe",
@@ -928,7 +936,14 @@ class TestPublicExports:
         }
 
     def test_recipe_api_is_importable(self):
+        assert ann2snn.Converter is FXConverter
         assert ann2snn.ConversionRecipe is ConversionRecipe
+        assert ann2snn.FXConverter is FXConverter
+        assert ann2snn.ModuleConverter is ModuleConverter
+        assert ann2snn.FXConversionRecipe is FXConversionRecipe
+        assert ann2snn.ModuleConversionRecipe is ModuleConversionRecipe
+        assert Converter is FXConverter
+        assert ConversionRecipe is FXConversionRecipe
         assert ann2snn.RateCodingRecipe is RateCodingRecipe
         assert ann2snn.LocalThresholdBalancingRecipe is LocalThresholdBalancingRecipe
         assert ann2snn.STATransformerRecipe is STATransformerRecipe
@@ -1017,9 +1032,41 @@ class TestConverterRecipes:
         with pytest.raises(TypeError, match="recipe must be"):
             Converter(recipe=object())
 
+    def test_fx_converter_rejects_module_recipe(self):
+        with pytest.raises(TypeError, match="ModuleConverter"):
+            Converter(recipe=ModuleConversionRecipe())
+
+    def test_module_converter_rejects_fx_recipe(self):
+        with pytest.raises(TypeError, match="FXConverter"):
+            ModuleConverter(recipe=ConversionRecipe())
+
     def test_none_recipe_raises(self):
         with pytest.raises(TypeError, match="recipe must be"):
             Converter(recipe=None)
+
+    def test_module_converter_runs_module_recipe_only(self):
+        class RecordingModuleRecipe(ModuleConversionRecipe):
+            def __init__(self):
+                self.calls = []
+
+            def validate(self, converter):
+                self.calls.append("validate")
+
+            def convert_module(self, converter, ann):
+                self.calls.append("convert_module")
+                converted = nn.Sequential(ann, nn.ReLU())
+                converted.marker = "module"
+                return converted
+
+        recipe = RecordingModuleRecipe()
+        model = nn.Linear(2, 2).train()
+        converter = ModuleConverter(recipe=recipe)
+        converted = converter.convert(model)
+        assert recipe.calls == ["validate", "convert_module"]
+        assert converted.marker == "module"
+        assert isinstance(converted, nn.Sequential)
+        assert model.training
+        assert converter.device is None
 
     def test_custom_recipe_runs_template_steps_in_order(self):
         class RecordingRecipe(ConversionRecipe):
@@ -2914,7 +2961,9 @@ class TestDelayedReadoutEstimation:
 
     def test_delay_estimation_warns_when_readout_budget_is_too_small(self):
         model = _trace_ann2snn_leaf(
-            ScalerNeuronScalerNet(neuron.IFNode(v_threshold=1.0, v_reset=None), [4.0, 4.0])
+            ScalerNeuronScalerNet(
+                neuron.IFNode(v_threshold=1.0, v_reset=None), [4.0, 4.0]
+            )
         )
         loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
 

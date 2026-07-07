@@ -210,11 +210,7 @@ class TDModule(base.MemoryModule):
                 )
         cum_seqs = tuple(x_seq.cumsum(dim=0) for x_seq in input_seqs)
         if len(cum_seqs) == 1:
-            prev_inputs = (
-                self.x_cum
-                if isinstance(self.x_cum, tuple)
-                else (self.x_cum,)
-            )
+            prev_inputs = self.x_cum if isinstance(self.x_cum, tuple) else (self.x_cum,)
         else:
             prev_inputs = self.x_cum
 
@@ -1305,9 +1301,7 @@ class TDConv2d(TDModule):
             raise ValueError("out_channels must be divisible by groups")
         if isinstance(padding, str):
             if padding not in {"same", "valid"}:
-                raise ValueError(
-                    "padding must be an int, a tuple, 'same', or 'valid'."
-                )
+                raise ValueError("padding must be an int, a tuple, 'same', or 'valid'.")
             if padding == "same" and any(s != 1 for s in _pair(stride)):
                 raise ValueError(
                     "padding='same' is not supported for strided convolutions"

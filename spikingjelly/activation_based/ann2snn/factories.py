@@ -68,29 +68,20 @@ class NeuronFactory:
         """
         if not isinstance(neuron_type, type) or not issubclass(neuron_type, nn.Module):
             raise TypeError(
-                "neuron_type must be an nn.Module subclass, "
-                f"but got {neuron_type!r}."
+                f"neuron_type must be an nn.Module subclass, but got {neuron_type!r}."
             )
         if not isinstance(v_threshold, (int, float)) or isinstance(v_threshold, bool):
             raise TypeError(
-                "v_threshold must be a real number, "
-                f"got {type(v_threshold).__name__}."
+                f"v_threshold must be a real number, got {type(v_threshold).__name__}."
             )
         if not math.isfinite(float(v_threshold)) or not (v_threshold > 0):
             raise ValueError(
                 f"v_threshold must be finite and positive, got {v_threshold}."
             )
-        if (
-            v_reset is not None
-            and (
-                not isinstance(v_reset, (int, float))
-                or isinstance(v_reset, bool)
-            )
+        if v_reset is not None and (
+            not isinstance(v_reset, (int, float)) or isinstance(v_reset, bool)
         ):
-            raise TypeError(
-                "v_reset must be None or a real number, "
-                f"got {v_reset!r}."
-            )
+            raise TypeError(f"v_reset must be None or a real number, got {v_reset!r}.")
         if v_reset is not None and not math.isfinite(float(v_reset)):
             raise ValueError(f"v_reset must be finite, got {v_reset}.")
         reserved = self.neuron_kwargs_reserved_keys() & kwargs.keys()
@@ -216,8 +207,7 @@ class HookFactory:
             )
         if not isinstance(momentum, (int, float)) or isinstance(momentum, bool):
             raise TypeError(
-                "momentum must be a real number, "
-                f"got {type(momentum).__name__}."
+                f"momentum must be a real number, got {type(momentum).__name__}."
             )
         if not math.isfinite(float(momentum)) or not (0.0 <= float(momentum) <= 1.0):
             raise ValueError(f"momentum must lie in [0, 1], got {momentum!r}.")

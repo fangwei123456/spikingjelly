@@ -160,3 +160,5 @@ ObsidianVault
 .mimocode/
 .codegraph/
 ENV.md
+benchmark/output
+ocr.*

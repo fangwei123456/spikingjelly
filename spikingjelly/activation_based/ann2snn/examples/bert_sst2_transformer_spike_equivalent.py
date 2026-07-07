@@ -8,7 +8,10 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from spikingjelly.activation_based import functional
-from spikingjelly.activation_based.ann2snn import Converter, TransformerSpikeEquivalentRecipe
+from spikingjelly.activation_based.ann2snn import (
+    Converter,
+    TransformerSpikeEquivalentRecipe,
+)
 
 
 def import_huggingface():
@@ -71,7 +74,7 @@ class FXFriendlyBertSelfAttention(nn.Module):
         key_layer = self.transpose_for_scores(self.key(hidden_states))
         value_layer = self.transpose_for_scores(self.value(hidden_states))
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
-        attention_scores = attention_scores / (self.attention_head_size ** 0.5)
+        attention_scores = attention_scores / (self.attention_head_size**0.5)
         attention_scores = attention_scores + extended_attention_mask
         attention_probs = torch.softmax(attention_scores, dim=-1)
         attention_probs = self.dropout(attention_probs)
@@ -348,10 +351,14 @@ def main():
         args.model_name_or_path,
         cache_dir=args.cache_dir,
     )
-    hf_model = model_cls.from_pretrained(
-        args.model_name_or_path,
-        cache_dir=args.cache_dir,
-    ).to(device).eval()
+    hf_model = (
+        model_cls.from_pretrained(
+            args.model_name_or_path,
+            cache_dir=args.cache_dir,
+        )
+        .to(device)
+        .eval()
+    )
     loader, dataset_size = build_loader(args, tokenizer)
     wrapper = BertSST2FromEmbeddings(hf_model).to(device).eval()
 

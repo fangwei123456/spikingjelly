@@ -886,8 +886,7 @@ class TestTDConv2d:
         op = TDConv2d(3, 5, kernel_size=3, padding=1, bias=False)
 
         assert (
-            op.extra_repr()
-            == "3, 5, kernel_size=(3, 3), stride=(1, 1), "
+            op.extra_repr() == "3, 5, kernel_size=(3, 3), stride=(1, 1), "
             "padding=(1, 1), bias=False"
         )
 

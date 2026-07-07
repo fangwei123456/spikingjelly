@@ -7,8 +7,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from spikingjelly.activation_based.ann2snn import Converter, SpikeZIPTFQANNRecipe
-from spikingjelly.activation_based.ann2snn.recipes.spikezip_qann import STBIFNeuron
+from spikingjelly.activation_based import functional
+from spikingjelly.activation_based.ann2snn import ModuleConverter, SpikeZIPTFQANNRecipe
+from spikingjelly.activation_based.neuron import STBIFNeuron
 
 
 class SpikeZIPQuantizer(nn.Module):
@@ -73,7 +74,7 @@ class TinyQRobertaSelfAttention(nn.Module):
             self.value_quan(self.value(hidden_states))
         )
         scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
-        scores = scores / (self.attention_head_size ** 0.5)
+        scores = scores / (self.attention_head_size**0.5)
         if attention_mask is not None:
             scores = scores + attention_mask
         attention_probs = F.softmax(scores, dim=-1)
@@ -124,10 +125,12 @@ def parse_args():
     parser.add_argument("--time-steps", type=int, default=32)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--seq-len", type=int, default=6)
+    parser.add_argument("--vocab-size", type=int, default=32)
     parser.add_argument("--hidden-size", type=int, default=16)
     parser.add_argument("--num-heads", type=int, default=4)
     parser.add_argument("--level", type=int, default=8)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--parity-atol", type=float, default=1e-5)
     parser.add_argument("--qann-checkpoint", default=None)
     parser.add_argument("--output", default=None)
     return parser.parse_args()
@@ -153,10 +156,14 @@ def collect_stbif_state(model: nn.Module):
         current_min = float(accumulated.min().cpu())
         current_max = float(accumulated.max().cpu())
         min_accumulated = (
-            current_min if min_accumulated is None else min(min_accumulated, current_min)
+            current_min
+            if min_accumulated is None
+            else min(min_accumulated, current_min)
         )
         max_accumulated = (
-            current_max if max_accumulated is None else max(max_accumulated, current_max)
+            current_max
+            if max_accumulated is None
+            else max(max_accumulated, current_max)
         )
     return {
         "last_step_spike_values": sorted(values),
@@ -169,16 +176,38 @@ def main():
     args = parse_args()
     torch.manual_seed(args.seed)
     device = torch.device(args.device)
-    model = TinyQRobertaClassifier(
-        hidden_size=args.hidden_size,
-        num_heads=args.num_heads,
-        level=args.level,
-    ).to(device).eval()
+    model = (
+        TinyQRobertaClassifier(
+            vocab_size=args.vocab_size,
+            hidden_size=args.hidden_size,
+            num_heads=args.num_heads,
+            level=args.level,
+        )
+        .to(device)
+        .eval()
+    )
     if args.qann_checkpoint is not None:
-        state = torch.load(args.qann_checkpoint, map_location=device)
-        model.load_state_dict(state)
+        state = torch.load(
+            args.qann_checkpoint,
+            map_location=device,
+            weights_only=True,
+        )
+        result = model.load_state_dict(state, strict=False)
+        if result.missing_keys or result.unexpected_keys:
+            raise RuntimeError(
+                "QANN checkpoint does not match the configured "
+                "TinyQRobertaClassifier. Re-run with the same "
+                "--vocab-size/--hidden-size/--num-heads/--level as the "
+                f"checkpoint. Missing: {result.missing_keys}; "
+                f"unexpected: {result.unexpected_keys}."
+            )
 
-    tokens = torch.randint(0, 32, (args.batch_size, args.seq_len), device=device)
+    tokens = torch.randint(
+        0,
+        args.vocab_size,
+        (args.batch_size, args.seq_len),
+        device=device,
+    )
     attention_mask = torch.zeros(args.batch_size, 1, 1, args.seq_len, device=device)
     if args.seq_len > 2:
         attention_mask[:, :, :, -1] = -10000.0
@@ -186,19 +215,32 @@ def main():
     start = time.time()
     with torch.no_grad():
         qann_logits = model(tokens, attention_mask=attention_mask)
-        converted = Converter(
-            recipe=SpikeZIPTFQANNRecipe(
-                time_steps=args.time_steps,
-                model_family="roberta",
-            ),
-            device=device,
-        ).convert(model).eval()
-        snn_logits, sequence = converted(
-            tokens,
-            attention_mask=attention_mask,
-            return_sequences=True,
+        converted = (
+            ModuleConverter(
+                recipe=SpikeZIPTFQANNRecipe(
+                    time_steps=args.time_steps,
+                    model_family="roberta",
+                ),
+                device=device,
+            )
+            .convert(model)
+            .eval()
         )
-    max_abs_diff = (qann_logits - snn_logits).abs().max().item()
+        functional.set_step_mode(converted, "s")
+        functional.reset_net(converted)
+        accumulated = None
+        accumulated_sequence = []
+        for _ in range(args.time_steps):
+            step_logits = converted(tokens, attention_mask=attention_mask)
+            accumulated = (
+                step_logits if accumulated is None else accumulated + step_logits
+            )
+            accumulated_sequence.append(accumulated)
+        snn_logits = accumulated
+        accumulated_sequence = torch.stack(accumulated_sequence, dim=0)
+    diff = (qann_logits - snn_logits).abs()
+    max_abs_diff = diff.max().item()
+    mean_abs_diff = diff.mean().item()
     stbif_state = collect_stbif_state(converted)
     payload = {
         "env": {
@@ -210,24 +252,29 @@ def main():
             "time_steps": args.time_steps,
             "batch_size": args.batch_size,
             "seq_len": args.seq_len,
+            "vocab_size": args.vocab_size,
             "hidden_size": args.hidden_size,
             "num_heads": args.num_heads,
             "level": args.level,
+            "parity_atol": args.parity_atol,
             "qann_checkpoint": args.qann_checkpoint,
         },
         "recipe": "SpikeZIPTFQANNRecipe",
         "max_abs_diff": max_abs_diff,
-        "sequence_shape": list(sequence.shape),
+        "mean_abs_diff": mean_abs_diff,
+        "accumulated_sequence_shape": list(accumulated_sequence.shape),
         "stbif_state": stbif_state,
         "seconds": time.time() - start,
     }
     print(json.dumps(payload, sort_keys=True), flush=True)
-    if max_abs_diff > 1e-5:
-        raise RuntimeError(f"SpikeZIP QANN parity failed: max_abs_diff={max_abs_diff}.")
+    if max_abs_diff > args.parity_atol:
+        raise RuntimeError(
+            "SpikeZIP QANN parity failed: "
+            f"max_abs_diff={max_abs_diff} > parity_atol={args.parity_atol}."
+        )
     if not set(stbif_state["last_step_spike_values"]).issubset({-1.0, 0.0, 1.0}):
         raise RuntimeError(
-            "Unexpected ST-BIF spike values: "
-            f"{stbif_state['last_step_spike_values']}."
+            f"Unexpected ST-BIF spike values: {stbif_state['last_step_spike_values']}."
         )
     write_output(args.output, payload)
 
