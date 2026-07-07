@@ -841,6 +841,7 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
 
     def convert_module(self, converter: "ModuleConverter", ann: nn.Module) -> nn.Module:
         model = copy.deepcopy(ann).eval()
+        self._global_level = self._level_from_model(model)
         self._replace_weight(model)
         model.ann2snn_recipe = "spikezip_tf_qann"
         model.time_steps = self.time_steps
@@ -919,4 +920,4 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
             if hasattr(child, "level"):
                 return int(child.level)
             return int(float(child.pos_max) - float(child.neg_min) + 1)
-        return self.time_steps
+        return getattr(self, "_global_level", self.time_steps)

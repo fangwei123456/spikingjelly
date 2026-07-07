@@ -725,6 +725,21 @@ class _TinySpikeZIPQANNClassifier(nn.Module):
         return self.classifier(hidden[:, 0])
 
 
+class _TinySpikeZIPNestedLinearQANNClassifier(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.embedding = nn.Embedding(16, 8)
+        self.attention = _TinyQRobertaSelfAttention(level=8)
+        self.norm = nn.LayerNorm(8)
+        self.head = nn.Sequential(nn.Linear(8, 2))
+
+    def forward(self, tokens: torch.Tensor, attention_mask: torch.Tensor | None = None):
+        hidden = self.embedding(tokens)
+        hidden = self.attention(hidden, attention_mask=attention_mask)[0]
+        hidden = self.norm(hidden)
+        return self.head(hidden[:, 0])
+
+
 class _TinySpikeZIPViTQANNClassifier(nn.Module):
     def __init__(self):
         super().__init__()
@@ -1239,6 +1254,17 @@ def test_spikezip_qann_roberta_transparent_single_step_loop():
         for _ in range(converted.time_steps)
     )
     assert torch.allclose(repeated, loop, atol=1e-6, rtol=1e-6)
+
+
+def test_spikezip_qann_recipe_uses_global_level_for_nested_linear_bias():
+    qann = _TinySpikeZIPNestedLinearQANNClassifier().eval()
+
+    converted = ModuleConverter(
+        recipe=SpikeZIPTFQANNRecipe(time_steps=32, model_family="roberta")
+    ).convert(qann)
+
+    assert isinstance(converted.head[0], SpikeZIPLinear)
+    assert converted.head[0].bias_steps == 8
 
 
 def test_spikezip_qann_recipe_converts_tiny_vit_classifier():

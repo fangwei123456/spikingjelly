@@ -11,13 +11,17 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.serialization import safe_globals
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.ann2snn import ModuleConverter, SpikeZIPTFQANNRecipe
 from spikingjelly.activation_based.neuron import STBIFNeuron
+
+try:
+    from torch.serialization import safe_globals
+except ImportError:
+    safe_globals = None
 
 
 class SpikeZIPMyQuan(nn.Module):
@@ -178,8 +182,11 @@ def _load_checkpoint(
                 "Checkpoint requires argparse.Namespace in torch weights_only mode. "
                 "Pass --allow-namespace-checkpoint only for trusted local checkpoints."
             ) from exc
-        with safe_globals([argparse.Namespace]):
-            checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+        if safe_globals is None:
+            checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+        else:
+            with safe_globals([argparse.Namespace]):
+                checkpoint = torch.load(path, map_location="cpu", weights_only=True)
     return checkpoint["model"]
 
 
