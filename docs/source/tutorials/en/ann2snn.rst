@@ -19,7 +19,7 @@ Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https:/
 
 This tutorial focuses on ``spikingjelly.activation_based.ann2snn``. It shows how to convert a trained feedforward ANN to an SNN using the Recipe API and simulate the result.
 
-ANN2SNN API references are available `here <https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.activation_based.ann2snn.html>`_.
+ANN2SNN API references are available `here <https://spikingjelly.readthedocs.io/zh_CN/latest/APIs/spikingjelly.activation_based.ann2snn.html>`_.
 
 The rate-coding path covered on this page is based on ``torch.fx``. ``torch.fx`` traces ``nn.Module`` instances into a graph representation, which is then transformed by ANN2SNN FX recipes. ANN2SNN also provides ``ModuleConverter`` for conversions that directly replace an ``nn.Module`` tree without FX tracing, such as SpikeZIP; see the SpikeZIP section in the Transformer ANN2SNN tutorial for that path.
 

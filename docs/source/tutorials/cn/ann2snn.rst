@@ -18,7 +18,7 @@ English version: :doc:`../en/ann2snn`
 
 本节介绍 ``spikingjelly.activation_based.ann2snn``，展示如何用当前 Recipe API 将训练好的前馈 ANN 转换为 SNN 并在 SpikingJelly 中仿真。
 
-相关API见此处 `API参考 <https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.activation_based.ann2snn.html>`_ 。
+相关 API 见 `API 参考 <https://spikingjelly.readthedocs.io/zh_CN/latest/APIs/spikingjelly.activation_based.ann2snn.html>`_。
 
 本页介绍的 rate-coding 路径基于 ``torch.fx``。``torch.fx`` 会将 ``nn.Module`` 实例 trace 为计算图表示，然后由 ANN2SNN FX recipe 对该计算图进行变换。ANN2SNN 也提供不 trace FX graph 的 ``ModuleConverter``，用于 SpikeZIP 这类直接替换 ``nn.Module`` tree 的转换；该路径见 Transformer ANN2SNN 教程中的 SpikeZIP 示例。
 
@@ -134,7 +134,7 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 .. math::
     r^l = W^l r^{l-1}+b^l- \frac{V^l_T}{T V_{threshold}}
 
-完整推导见文献 [#f1]_ 。ann2snn中的方法基于该文献
+完整推导见文献 [#f1]_。ann2snn 中的方法基于该文献。
 
 转换到脉冲神经网络
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -147,9 +147,9 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 
 ◆ BatchNorm参数吸收
 
-假定BatchNorm的参数为 :math:`\gamma` (``BatchNorm.weight``)， :math:`\beta` (``BatchNorm.bias``)， :math:`\mu` (``BatchNorm.running_mean``) ，
+假定BatchNorm的参数为 :math:`\gamma` (``BatchNorm.weight``)， :math:`\beta` (``BatchNorm.bias``)， :math:`\mu` (``BatchNorm.running_mean``)，
 :math:`\sigma` (``BatchNorm.running_var``，:math:`\sigma = \sqrt{\mathrm{running\_var}}`)。具体参数定义详见
-`torch.nn.BatchNorm1d <https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html#torch.nn.BatchNorm1d>`_ 。参数模块（例如 Linear）具有权重 :math:`W` 和偏置 :math:`b` 。BatchNorm 参数吸收就是将 BatchNorm 的参数通过运算转移到参数模块的 :math:`W` 和 :math:`b` 中，使得数据输入新模块的输出和有 BatchNorm 时相同。对此，新模型的 :math:`\bar{W}` 和 :math:`\bar{b}` 公式表示为：
+`torch.nn.BatchNorm1d <https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html#torch.nn.BatchNorm1d>`_。参数模块（例如 Linear）具有权重 :math:`W` 和偏置 :math:`b`。BatchNorm 参数吸收就是将 BatchNorm 的参数通过运算转移到参数模块的 :math:`W` 和 :math:`b` 中，使得数据输入新模块的输出和有 BatchNorm 时相同。对此，新模型的 :math:`\bar{W}` 和 :math:`\bar{b}` 公式表示为：
 
 .. math::
     \bar{W} = \frac{\gamma}{\sigma}  W
@@ -171,7 +171,7 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 
 ANN每层输出中常常存在较大的离群值，导致整体神经元发放率降低。鲁棒归一化将缩放因子从张量最大值改为张量的p分位点，推荐分位点为99.9% [#f1]_。
 
-BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。随后 rate-coding recipe 会将 ReLU 激活替换为 IF 神经元。对于 ANN 中的平均池化，转换后的模型保留空间下采样。由于 IF 神经元会在时间上近似 ReLU 激活，在空间下采样后立即再增加一个 IF 神经元通常对结果影响很小。当前 rate-coding recipe 没有通用的最大池化转换规则。文献中使用基于动量累计脉冲的门控函数控制脉冲通道 [#f1]_ 。因此，本教程的示例模型仍推荐使用 ``AvgPool2d``。仿真时，依照该转换理论，转换后的 SNN 应输入恒定的模拟输入。使用 Poisson 编码器可能引入额外的准确率损失。
+BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。随后 rate-coding recipe 会将 ReLU 激活替换为 IF 神经元。对于 ANN 中的平均池化，转换后的模型保留空间下采样。由于 IF 神经元会在时间上近似 ReLU 激活，在空间下采样后立即再增加一个 IF 神经元通常对结果影响很小。当前 rate-coding recipe 没有通用的最大池化转换规则。文献中使用基于动量累计脉冲的门控函数控制脉冲通道 [#f1]_。因此，本教程的示例模型仍推荐使用 ``AvgPool2d``。仿真时，依照该转换理论，转换后的 SNN 应输入恒定的模拟输入。使用 Poisson 编码器可能引入额外的准确率损失。
 
 实现与可选配置
 ^^^^^^^^^^^^^^^^^^^^^^^^
