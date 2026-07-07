@@ -61,6 +61,10 @@ def _compare_state(
     return {key: _max_abs_diff(a[key], b[key]) for key in a}
 
 
+def _safe_speedup(numerator: float, denominator: float) -> float:
+    return numerator / max(denominator, 1e-9)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="cpu")
@@ -122,6 +126,8 @@ def main() -> None:
             args.repeat,
             lambda: (functional.reset_net(torch_opt), torch_opt(x_seq))[1],
         )
+        functional.reset_net(torch_opt)
+        torch_out = torch_opt(x_seq)
         torch_state = _state(torch_opt)
 
         result = {
@@ -139,7 +145,7 @@ def main() -> None:
             "sym": args.sym,
             "loop_seconds": loop_seconds,
             "torch_seconds": torch_seconds,
-            "torch_speedup_vs_loop": loop_seconds / torch_seconds,
+            "torch_speedup_vs_loop": _safe_speedup(loop_seconds, torch_seconds),
             "torch_max_abs_diff": _max_abs_diff(loop_out, torch_out),
             "torch_state_max_abs_diff": _compare_state(loop_state, torch_state),
         }
@@ -157,12 +163,18 @@ def main() -> None:
                 args.repeat,
                 lambda: (functional.reset_net(triton_neuron), triton_neuron(x_seq))[1],
             )
+            functional.reset_net(triton_neuron)
+            triton_out = triton_neuron(x_seq)
             triton_state = _state(triton_neuron)
             result.update(
                 {
                     "triton_seconds": triton_seconds,
-                    "triton_speedup_vs_loop": loop_seconds / triton_seconds,
-                    "triton_speedup_vs_torch": torch_seconds / triton_seconds,
+                    "triton_speedup_vs_loop": _safe_speedup(
+                        loop_seconds, triton_seconds
+                    ),
+                    "triton_speedup_vs_torch": _safe_speedup(
+                        torch_seconds, triton_seconds
+                    ),
                     "triton_max_abs_diff": _max_abs_diff(loop_out, triton_out),
                     "triton_state_max_abs_diff": _compare_state(
                         loop_state, triton_state

@@ -1,3 +1,4 @@
+import copy
 from collections import namedtuple
 import io
 import time
@@ -42,6 +43,7 @@ from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
     _StatelessTensorOp,
 )
 from spikingjelly.activation_based.ann2snn.recipes.spikezip_qann import (
+    SpikeZIPEmbedding,
     SpikeZIPConv2d,
     SpikeZIPLayerNorm,
     SpikeZIPLinear,
@@ -845,6 +847,45 @@ def test_spikezip_linear_is_tdlinear_with_distributed_bias():
     spike.reset()
     loop_seq = torch.stack([spike(step) for step in x_seq], dim=0)
     assert torch.allclose(spike_seq, loop_seq, atol=1e-6, rtol=1e-6)
+
+
+def test_spikezip_linear_casts_single_step_bias_to_output_dtype():
+    source = nn.Linear(4, 3).eval()
+    spike = SpikeZIPLinear(source, level=4, bias_steps=4).eval()
+    spike.spikezip_bias.data = spike.spikezip_bias.data.to(torch.float64)
+    x = torch.randn(2, 4, dtype=torch.float32) * 0.2
+
+    y = spike(x)
+
+    assert y.dtype == x.dtype
+
+
+def test_spikezip_embedding_multi_step_matches_single_step_loop():
+    torch.manual_seed(281)
+    source = nn.Embedding(12, 5).eval()
+    x = torch.tensor([[1, 2, 3], [4, 5, 6]])
+    x_seq = torch.zeros(4, *x.shape, dtype=x.dtype)
+    x_seq[0] = x
+
+    multi = SpikeZIPEmbedding(copy.deepcopy(source)).eval()
+    functional.set_step_mode(multi, "m")
+    y_seq = multi(x_seq)
+
+    single = SpikeZIPEmbedding(copy.deepcopy(source)).eval()
+    loop_seq = torch.stack([single(step) for step in x_seq], dim=0)
+
+    assert torch.allclose(y_seq, loop_seq)
+    assert torch.allclose(y_seq[0], source(x))
+    assert torch.count_nonzero(y_seq[1:]) == 0
+
+
+def test_spikezip_recipe_infers_attention_level_from_quantizer_bounds():
+    attention = _TinyQRobertaSelfAttention(level=8).eval()
+    delattr(attention.query_quan, "level")
+    delattr(attention.key_quan, "level")
+    delattr(attention.value_quan, "level")
+
+    assert SpikeZIPTFQANNRecipe._level_from_qann(attention) == 8
 
 
 def test_spikezip_conv2d_is_tdconv2d_with_distributed_bias():

@@ -73,7 +73,8 @@ class SpikeZIPLinear(TDLinear):
             if self.realize_time > 0:
                 self.realize_time -= 1
                 self.is_work = True
-                y = y + self.spikezip_bias / self.bias_steps
+                bias = self.spikezip_bias.to(device=y.device, dtype=y.dtype)
+                y = y + bias / self.bias_steps
         return y
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -187,7 +188,19 @@ class SpikeZIPEmbedding(base.MemoryModule):
         )
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
-        return torch.stack([self.single_step_forward(x) for x in x_seq], dim=0)
+        if x_seq.shape[0] == 0:
+            raise ValueError("SpikeZIPEmbedding expects a non-empty sequence.")
+        y0 = self.embedding(x_seq[0])
+        y_seq = torch.zeros(
+            x_seq.shape[0],
+            *y0.shape,
+            device=y0.device,
+            dtype=y0.dtype,
+        )
+        y_seq[0] = y0
+        self.shape = y0.shape
+        self.t = x_seq.shape[0]
+        return y_seq
 
 
 class SpikeZIPLayerNorm(TDLayerNorm):
@@ -836,12 +849,19 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
             "quan_v",
         ):
             quantizer = getattr(module, name, None)
-            if quantizer is not None and hasattr(quantizer, "level"):
+            if quantizer is None:
+                continue
+            if hasattr(quantizer, "level"):
                 return int(quantizer.level)
+            if hasattr(quantizer, "pos_max") and hasattr(quantizer, "neg_min"):
+                return int(float(quantizer.pos_max) - float(quantizer.neg_min) + 1)
         raise ValueError("SpikeZIP QANN attention must expose quantizer level.")
 
     def _level_from_model(self, module: nn.Module) -> int:
         for child in module.modules():
-            if self._is_quantizer(child) and hasattr(child, "level"):
+            if not self._is_quantizer(child):
+                continue
+            if hasattr(child, "level"):
                 return int(child.level)
+            return int(float(child.pos_max) - float(child.neg_min) + 1)
         return self.time_steps
