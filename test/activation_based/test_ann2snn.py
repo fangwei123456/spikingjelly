@@ -1068,6 +1068,14 @@ class TestConverterRecipes:
         assert model.training
         assert converter.device is None
 
+    def test_module_converter_rejects_non_module_result(self):
+        class InvalidModuleRecipe(ModuleConversionRecipe):
+            def convert_module(self, converter, ann):
+                return None
+
+        with pytest.raises(TypeError, match="convert_module must return"):
+            ModuleConverter(recipe=InvalidModuleRecipe()).convert(nn.Linear(2, 2))
+
     def test_custom_recipe_runs_template_steps_in_order(self):
         class RecordingRecipe(ConversionRecipe):
             def __init__(self):

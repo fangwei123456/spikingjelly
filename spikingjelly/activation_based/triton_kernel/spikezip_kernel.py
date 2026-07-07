@@ -182,7 +182,7 @@ def multi_step_stbif(
     q_threshold_value = float(q_threshold.detach().item())
     pos_max_value = float(pos_max.detach().item())
     neg_min_value = float(neg_min.detach().item())
-    with torch.cuda.device(x_seq.device.index):
+    with torch.cuda.device(x_seq.device):
         wrap_triton(_select_stbif_kernel(T))[grid](
             x_seq_flat,
             q_flat,

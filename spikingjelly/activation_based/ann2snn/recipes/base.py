@@ -423,7 +423,8 @@ class ModuleConversionRecipe:
 
         * **中文**
 
-        执行直接 module-tree 转换。默认直接返回 ``ann``。
+        执行直接 module-tree 转换。默认直接返回 ``ann``。实现必须返回
+        ``torch.nn.Module`` 实例。
 
         :param converter: 执行当前 recipe 的 module converter。
         :type converter: ModuleConverter
@@ -439,7 +440,8 @@ class ModuleConversionRecipe:
         * **English**
 
         Execute direct module-tree conversion. The default implementation
-        returns ``ann`` unchanged.
+        returns ``ann`` unchanged. Implementations must return a
+        ``torch.nn.Module`` instance.
 
         :param converter: Module converter that executes this recipe.
         :type converter: ModuleConverter

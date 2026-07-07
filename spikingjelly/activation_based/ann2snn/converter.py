@@ -144,9 +144,12 @@ class FXConverter:
         :rtype: torch.nn.Module
         """
         configured_device = self.device
-        original_training_modes = {module: module.training for module in ann.modules()}
-        self.device = self._resolve_device(ann)
+        original_training_modes: dict[nn.Module, bool] = {}
         try:
+            original_training_modes = {
+                module: module.training for module in ann.modules()
+            }
+            self.device = self._resolve_device(ann)
             with torch.no_grad():
                 self.recipe.validate(self)
                 ann = self.recipe.before_trace(self, ann)
@@ -266,12 +269,21 @@ class ModuleConverter:
         :rtype: torch.nn.Module
         """
         configured_device = self.device
-        original_training_modes = {module: module.training for module in ann.modules()}
-        self.device = self._resolve_device(ann)
+        original_training_modes: dict[nn.Module, bool] = {}
         try:
+            original_training_modes = {
+                module: module.training for module in ann.modules()
+            }
+            self.device = self._resolve_device(ann)
             with torch.no_grad():
                 self.recipe.validate(self)
                 converted = self.recipe.convert_module(self, ann)
+                if not isinstance(converted, nn.Module):
+                    raise TypeError(
+                        "ModuleConversionRecipe.convert_module must return "
+                        "a torch.nn.Module, got "
+                        f"{type(converted).__name__}."
+                    )
                 return converted.to(self.device)
         finally:
             for module, training in original_training_modes.items():

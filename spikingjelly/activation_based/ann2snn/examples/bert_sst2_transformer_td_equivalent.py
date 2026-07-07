@@ -58,8 +58,7 @@ class FXFriendlyBertSelfAttention(nn.Module):
 
     def transpose_for_scores(self, x: torch.Tensor) -> torch.Tensor:
         x = x.view(
-            x.shape[0],
-            x.shape[1],
+            *x.size()[:-1],
             self.num_attention_heads,
             self.attention_head_size,
         )
@@ -80,8 +79,7 @@ class FXFriendlyBertSelfAttention(nn.Module):
         attention_probs = self.dropout(attention_probs)
         context_layer = torch.matmul(attention_probs, value_layer)
         context_layer = context_layer.permute(0, 2, 1, 3).reshape(
-            hidden_states.shape[0],
-            hidden_states.shape[1],
+            *hidden_states.size()[:-1],
             self.all_head_size,
         )
         return context_layer
@@ -206,20 +204,21 @@ def build_loader(args, tokenizer):
 
 
 def make_embedding_batch(hf_model, batch, device):
-    input_ids = batch["input_ids"].to(device)
-    attention_mask = batch["attention_mask"].to(device)
-    token_type_ids = batch.get("token_type_ids")
-    if token_type_ids is not None:
-        token_type_ids = token_type_ids.to(device)
-    labels = batch["labels"].to(device)
-    embedding_output = hf_model.bert.embeddings(
-        input_ids=input_ids,
-        token_type_ids=token_type_ids,
-    )
-    extended_attention_mask = hf_model.get_extended_attention_mask(
-        attention_mask,
-        input_ids.shape,
-    )
+    with torch.no_grad():
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+        token_type_ids = batch.get("token_type_ids")
+        if token_type_ids is not None:
+            token_type_ids = token_type_ids.to(device)
+        labels = batch["labels"].to(device)
+        embedding_output = hf_model.bert.embeddings(
+            input_ids=input_ids,
+            token_type_ids=token_type_ids,
+        )
+        extended_attention_mask = hf_model.get_extended_attention_mask(
+            attention_mask,
+            input_ids.shape,
+        )
     return embedding_output, extended_attention_mask, labels
 
 
@@ -345,8 +344,7 @@ def write_output(path, payload):
 def main():
     args = parse_args()
     device = torch.device(args.device)
-    load_dataset, model_cls, tokenizer_cls = import_huggingface()
-    _ = load_dataset
+    _, model_cls, tokenizer_cls = import_huggingface()
     tokenizer = tokenizer_cls.from_pretrained(
         args.model_name_or_path,
         cache_dir=args.cache_dir,

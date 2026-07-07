@@ -172,7 +172,7 @@ def _load_checkpoint(
 ) -> dict[str, torch.Tensor]:
     try:
         checkpoint = torch.load(path, map_location="cpu", weights_only=True)
-    except pickle.UnpicklingError as exc:
+    except (pickle.UnpicklingError, ValueError, AttributeError) as exc:
         if not allow_namespace_checkpoint:
             raise RuntimeError(
                 "Checkpoint requires argparse.Namespace in torch weights_only mode. "

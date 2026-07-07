@@ -376,6 +376,15 @@ class _TinyTensorSoftmax(nn.Module):
         return x.softmax(dim=1)
 
 
+class _TinyNegativeDimSoftmax(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.softmax(x)
+
+
 class _TinyUnsupportedBertBranch(nn.Module):
     def forward(self, embedding_output: torch.Tensor) -> torch.Tensor:
         return embedding_output.masked_fill(embedding_output < 0, 0.0)
@@ -510,8 +519,37 @@ def test_transformer_td_equivalent_softmax_shifts_positive_dim(model):
         .eval()
     )
 
-    td_softmax = next(module for module in converted.modules() if isinstance(module, TDSoftmax))
+    td_softmax = next(
+        module for module in converted.modules() if isinstance(module, TDSoftmax)
+    )
     assert td_softmax.dim == 2
+
+    x_seq = _first_real_then_zero_sequence(x, converted.time_steps)
+    functional.set_step_mode(converted, "m")
+    functional.reset_net(converted)
+    y_seq = converted(x_seq)
+
+    assert torch.allclose(
+        y_seq.sum(dim=0),
+        model(x),
+        atol=1e-6,
+        rtol=1e-6,
+    )
+
+
+def test_transformer_td_equivalent_softmax_preserves_negative_dim():
+    model = _TinyNegativeDimSoftmax().eval()
+    x = torch.randn(3, 5)
+    converted = (
+        Converter(recipe=TransformerTDEquivalentRecipe(time_steps=4))
+        .convert(model)
+        .eval()
+    )
+
+    td_softmax = next(
+        module for module in converted.modules() if isinstance(module, TDSoftmax)
+    )
+    assert td_softmax.dim == -1
 
     x_seq = _first_real_then_zero_sequence(x, converted.time_steps)
     functional.set_step_mode(converted, "m")
@@ -1318,7 +1356,7 @@ def test_spikezip_qann_vit_multistep_triton_matches_torch():
 
 def test_spikezip_qann_vit_rejects_incomplete_top_level_contract():
     qann = _TinyIncompleteSpikeZIPViTQANNClassifier().eval()
-    with pytest.raises(ValueError, match="blocks or attn|norm"):
+    with pytest.raises(ValueError, match="top-level norm"):
         ModuleConverter(
             recipe=SpikeZIPTFQANNRecipe(time_steps=32, model_family="vit")
         ).convert(qann)

@@ -34,6 +34,9 @@ __all__ = ["TransformerTDEquivalentRecipe"]
 
 
 def _td_softmax_dim(dim: int) -> int:
+    # `dim` indexes the ANN tensor. TD prepends a time axis, so non-negative
+    # dims shift by +1. Negative dims stay negative because TDSoftmax resolves
+    # them against the TD tensor rank, preserving the same feature axis.
     return dim + 1 if dim >= 0 else dim
 
 

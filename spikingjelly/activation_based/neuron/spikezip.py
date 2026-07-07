@@ -162,7 +162,7 @@ class STBIFNeuron(base.MemoryModule):
         ):
             self.cur_output = torch.zeros_like(x)
             self.acc_q = torch.zeros_like(x)
-            self.q = torch.zeros_like(x) + 0.5
+            self.q = torch.full_like(x, 0.5)
         elif self.cur_output.device != x.device or self.cur_output.dtype != x.dtype:
             self.cur_output = self.cur_output.to(device=x.device, dtype=x.dtype)
             self.acc_q = self.acc_q.to(device=x.device, dtype=x.dtype)
