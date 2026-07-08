@@ -13,6 +13,10 @@ from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
 from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
     plif as plif_triton_kernel,
 )
+from spikingjelly.activation_based.triton_kernel.fp8_capability import (
+    supports_triton_fp8_neuron_forward,
+    triton_fp8_neuron_capability_report,
+)
 from spikingjelly.activation_based.neuron import integrate_and_fire as if_module
 from spikingjelly.activation_based.neuron import lif as lif_module
 from spikingjelly.activation_based.neuron import plif as plif_module
@@ -36,6 +40,62 @@ def _assert_close(a: torch.Tensor, b: torch.Tensor, dtype: torch.dtype):
     else:
         atol, rtol = 1e-6, 1e-6
     torch.testing.assert_close(a, b, atol=atol, rtol=rtol)
+
+
+def test_triton_fp8_capability_report_cpu_is_unavailable():
+    report = triton_fp8_neuron_capability_report(torch.device("cpu"))
+    assert report["device_type"] == "cpu"
+    for dtype_report in report["dtypes"].values():
+        assert dtype_report["available"] is False
+        assert dtype_report["reason"]
+
+
+def test_triton_fp8_capability_rejects_invalid_dtype():
+    with pytest.raises(ValueError, match="Unsupported Triton FP8 dtype"):
+        supports_triton_fp8_neuron_forward(torch.float32, torch.device("cpu"))
+
+
+def test_lif_mixed_precision_forward_rejects_invalid_options():
+    x = torch.randn(4, 2)
+    v = torch.zeros(2)
+    with pytest.raises(ValueError, match="storage dtype"):
+        lif_triton_kernel.multistep_lif_mixed_precision_forward(
+            x,
+            v,
+            decay_input=True,
+            tau=2.0,
+            v_threshold=1.0,
+            v_reset=0.0,
+            storage_dtype=torch.int32,
+        )
+    with pytest.raises(ValueError, match="compute_dtype"):
+        lif_triton_kernel.multistep_lif_mixed_precision_forward(
+            x,
+            v,
+            decay_input=True,
+            tau=2.0,
+            v_threshold=1.0,
+            v_reset=0.0,
+            storage_dtype=torch.float32,
+            compute_dtype="bad",
+        )
+
+
+def test_lif_mixed_precision_forward_fp8_cpu_fails_with_capability_reason():
+    if not hasattr(torch, "float8_e4m3fn"):
+        pytest.skip("This PyTorch build does not expose torch.float8_e4m3fn.")
+    x = torch.randn(4, 2)
+    v = torch.zeros(2)
+    with pytest.raises(RuntimeError, match="unavailable"):
+        lif_triton_kernel.multistep_lif_mixed_precision_forward(
+            x,
+            v,
+            decay_input=True,
+            tau=2.0,
+            v_threshold=1.0,
+            v_reset=0.0,
+            storage_dtype=torch.float8_e4m3fn,
+        )
 
 
 @pytest.mark.parametrize(
@@ -251,6 +311,53 @@ def test_lif_triton_matches_torch_training(tau, detach_reset, v_threshold, v_res
     out1.sum().backward()
     out2.sum().backward()
     _assert_close(x1.grad, x2.grad, torch.float32)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("T", [8, 32])
+@pytest.mark.parametrize("decay_input", [True, False])
+@pytest.mark.parametrize("v_reset", [0.0, None])
+def test_lif_mixed_precision_float32_matches_torch_eval(T, decay_input, v_reset):
+    original_threshold = configure.triton_neuron_kernel_static_range_max_T
+    try:
+        configure.triton_neuron_kernel_static_range_max_T = 16
+        x = torch.randn(T, 4, 8, device="cuda", dtype=torch.float32)
+        v_init = torch.zeros_like(x[0])
+        lif = neuron.LIFNode(
+            tau=2.0,
+            decay_input=decay_input,
+            v_threshold=1.0,
+            v_reset=v_reset,
+            step_mode="m",
+            backend="torch",
+            store_v_seq=True,
+        ).to("cuda").eval()
+
+        lif_triton_kernel.LAST_FORWARD_LOOP_MODE = None
+        with torch.no_grad():
+            expected = lif(x)
+            spike, v_seq, h_seq = (
+                lif_triton_kernel.multistep_lif_mixed_precision_forward(
+                    x,
+                    v_init,
+                    decay_input=decay_input,
+                    tau=2.0,
+                    v_threshold=1.0,
+                    v_reset=v_reset,
+                    storage_dtype=torch.float32,
+                    compute_dtype="fp32",
+                    spike_dtype=torch.float32,
+                    save_intermediates=True,
+                )
+            )
+        _assert_close(expected, spike, torch.float32)
+        _assert_close(lif.v_seq, v_seq, torch.float32)
+        assert h_seq is not None and h_seq.dtype == torch.float32
+        assert lif_triton_kernel.LAST_FORWARD_LOOP_MODE == (
+            "static" if T <= 16 else "dynamic"
+        )
+    finally:
+        configure.triton_neuron_kernel_static_range_max_T = original_threshold
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
