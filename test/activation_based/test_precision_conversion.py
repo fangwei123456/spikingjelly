@@ -1,3 +1,6 @@
+import sys
+import types
+
 import pytest
 import torch
 
@@ -11,12 +14,56 @@ except ImportError:
 from spikingjelly.activation_based import layer
 from spikingjelly.activation_based.model import Spikformer
 from spikingjelly.activation_based.precision import (
+    Float8PointwiseConv1dStepModule,
     Float8LinearStepModule,
     PrecisionConfig,
     analyze_convertible_modules,
+    make_linear_from_pointwise_conv1d,
     prepare_model_for_precision,
 )
 from spikingjelly.activation_based.precision.convert import convert_model_for_precision
+
+
+def _install_fake_te(monkeypatch):
+    fake_te = types.ModuleType("transformer_engine.pytorch")
+
+    class FakeTELinear(torch.nn.Linear):
+        def __init__(
+            self,
+            in_features,
+            out_features,
+            bias=True,
+            params_dtype=torch.float32,
+            **kwargs,
+        ):
+            super().__init__(
+                in_features,
+                out_features,
+                bias=bias,
+                dtype=params_dtype,
+            )
+
+    class FakeContext:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+    def fp8_autocast(enabled=True):
+        return FakeContext()
+
+    def is_fp8_available(return_reason=False):
+        return (True, None) if return_reason else True
+
+    fake_te.Linear = FakeTELinear
+    fake_te.fp8_autocast = fp8_autocast
+    fake_te.is_fp8_available = is_fp8_available
+    fake_root = types.ModuleType("transformer_engine")
+    fake_root.pytorch = fake_te
+    monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
+    monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", fake_te)
+    return fake_te
 
 
 def test_conversion_report_marks_spikformer_linear_and_high_precision_modules():
@@ -75,6 +122,46 @@ def test_float8_linear_step_module_parent_load_state_dict_has_no_duplicate_error
     incompatible = parent.load_state_dict(state_dict, strict=False)
     assert incompatible.missing_keys == []
     assert incompatible.unexpected_keys == []
+
+
+def test_pointwise_conv1d_linear_adapter_matches_conv1d():
+    conv = torch.nn.Conv1d(8, 4, kernel_size=1, bias=True)
+    linear = make_linear_from_pointwise_conv1d(conv)
+    wrapped = Float8PointwiseConv1dStepModule(linear, conv, step_mode="s")
+    x = torch.randn(3, 8, 5)
+    torch.testing.assert_close(wrapped(x), conv(x))
+
+
+def test_pointwise_conv1d_step_module_preserves_multistep_shape_and_values():
+    conv = layer.Conv1d(8, 4, kernel_size=1, bias=False, step_mode="m")
+    linear = make_linear_from_pointwise_conv1d(conv)
+    wrapped = Float8PointwiseConv1dStepModule(linear, conv, step_mode="m")
+    x = torch.randn(2, 3, 8, 5)
+    torch.testing.assert_close(wrapped(x), conv(x))
+    assert wrapped.step_mode == "m"
+
+
+def test_pointwise_conv1d_step_module_load_state_dict_from_parent():
+    conv = torch.nn.Conv1d(8, 4, kernel_size=1, bias=True)
+    linear = make_linear_from_pointwise_conv1d(conv)
+    parent = torch.nn.Sequential(
+        Float8PointwiseConv1dStepModule(linear, conv, step_mode="s")
+    )
+    state_dict = parent.state_dict()
+    assert state_dict["0.weight"].shape == conv.weight.shape
+    assert all("wrapped" not in k for k in state_dict), state_dict.keys()
+    parent.load_state_dict(state_dict, strict=True)
+
+
+def test_conversion_report_marks_pointwise_conv1d_convertible():
+    model = torch.nn.Sequential(
+        torch.nn.Conv1d(8, 16, kernel_size=1, bias=False),
+        torch.nn.Conv1d(16, 16, kernel_size=3, padding=1, bias=False),
+    )
+    report = analyze_convertible_modules(model).to_dict()
+    assert report["convertible_pointwise_conv1d"] == 1
+    assert "0" in report["convertible_modules"]
+    assert "1" in report["unsupported_modules"]
 
 
 @pytest.mark.skipif(
@@ -231,3 +318,119 @@ def test_convert_model_for_precision_skips_revisiting_shared_non_linear_modules(
     assert converted.first is converted.second
     assert converted.first.linear is converted.second.linear
     assert report.converted_modules == ["first.linear"]
+
+
+@pytest.mark.skipif(not HAS_TORCHAO, reason="torchao not installed")
+def test_convert_model_for_precision_replaces_pointwise_conv1d_fp8(monkeypatch):
+    class DummyFloat8Linear(torch.nn.Module):
+        def __init__(self, base):
+            super().__init__()
+            self.weight = torch.nn.Parameter(base.weight.detach().clone())
+            self.bias = (
+                torch.nn.Parameter(base.bias.detach().clone())
+                if base.bias is not None
+                else None
+            )
+
+        @classmethod
+        def from_float(cls, base, config):
+            return cls(base)
+
+        def forward(self, x):
+            return torch.nn.functional.linear(x, self.weight, self.bias)
+
+    monkeypatch.setattr(
+        "torchao.float8.float8_linear.Float8Linear",
+        DummyFloat8Linear,
+        raising=False,
+    )
+
+    from spikingjelly.activation_based.precision.float8_torchao import (
+        Float8TorchAOPolicy,
+    )
+
+    model = torch.nn.Sequential(
+        torch.nn.Conv1d(8, 16, kernel_size=1, bias=False),
+        torch.nn.Conv1d(16, 16, kernel_size=3, padding=1, bias=False),
+    )
+    policy = Float8TorchAOPolicy()
+    policy.float8_linear_config = object()
+    converted, report = convert_model_for_precision(model, policy)
+    assert isinstance(converted[0], Float8PointwiseConv1dStepModule)
+    assert isinstance(converted[1], torch.nn.Conv1d)
+    assert report.converted_modules == ["0"]
+    assert "1" in report.unsupported_modules
+
+
+def test_convert_model_for_precision_replaces_nested_linear_fp8_te(monkeypatch):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.Sequential(
+        torch.nn.Linear(8, 16),
+        torch.nn.ReLU(),
+        torch.nn.Linear(16, 4),
+    )
+    x = torch.randn(3, 8)
+    expected = model(x)
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+    torch.testing.assert_close(converted(x), expected)
+    assert isinstance(converted[0], Float8LinearStepModule)
+    assert isinstance(converted[2], Float8LinearStepModule)
+    assert report.converted_modules == ["0", "2"]
+
+
+def test_convert_model_for_precision_replaces_root_linear_fp8_te(monkeypatch):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.Linear(8, 16)
+    x = torch.randn(3, 8)
+    expected = model(x)
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+    torch.testing.assert_close(converted(x), expected)
+    assert isinstance(converted, Float8LinearStepModule)
+    assert report.converted_modules == ["<root>"]
+
+
+def test_convert_model_for_precision_preserves_layer_linear_step_mode_fp8_te(
+    monkeypatch,
+):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = layer.Linear(8, 16, step_mode="m")
+    x = torch.randn(2, 3, 8)
+    expected = model(x)
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+    torch.testing.assert_close(converted(x), expected)
+    assert isinstance(converted, Float8LinearStepModule)
+    assert converted.step_mode == "m"
+    assert report.converted_modules == ["<root>"]
+
+
+def test_float8_te_linear_step_module_load_state_dict_from_parent(monkeypatch):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.Sequential(torch.nn.Linear(8, 16))
+    policy = Float8TransformerEnginePolicy()
+    converted, _ = convert_model_for_precision(model, policy)
+    state_dict = converted.state_dict()
+    assert all("wrapped" not in k for k in state_dict), state_dict.keys()
+    converted.load_state_dict(state_dict, strict=True)

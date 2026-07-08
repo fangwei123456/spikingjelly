@@ -41,7 +41,7 @@ class SingleLinearModel(torch_nn.Module):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Benchmark one giant Linear layer under fp32, bf16, and fp8-torchao."
+        description="Benchmark one giant Linear layer under fp32, bf16, fp8-torchao, and fp8-te."
     )
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--batch-size", type=int, default=32768)
@@ -56,7 +56,7 @@ def parse_args() -> argparse.Namespace:
         "--precisions",
         nargs="+",
         default=["fp32", "bf16", "fp8-torchao"],
-        choices=("fp32", "bf16", "fp8-torchao"),
+        choices=("fp32", "bf16", "fp8-torchao", "fp8-te"),
     )
     parser.add_argument("--json", action="store_true")
     return parser.parse_args()

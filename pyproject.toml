@@ -48,6 +48,9 @@ cupy12 = ["cupy-cuda12x"]
 triton = ["triton>=3.3.1"]
 nir = ["nir", "nirtorch"]
 lightning = ["lightning", "jsonargparse[signatures]"]
+fp8-te = [
+    "transformer-engine[pytorch]>=2.16,<3; platform_system == 'Linux' and platform_machine == 'x86_64'",
+]
 
 [dependency-groups]
 dev = [

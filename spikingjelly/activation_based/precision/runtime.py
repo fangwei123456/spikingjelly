@@ -29,8 +29,16 @@ def resolve_precision_policy(config: PrecisionConfig | str | dict | object):
             strict=cfg.strictness,
             fp8_recipe=cfg.fp8_recipe,
         )
+    if mode == "fp8-te":
+        from .float8_te import Float8TransformerEnginePolicy
+
+        return Float8TransformerEnginePolicy(
+            device_type=device_type,
+            strict=cfg.strictness,
+            fp8_recipe=cfg.fp8_recipe,
+        )
 
     raise ValueError(
         f"Unsupported precision mode {mode!r}. "
-        "Supported modes in the current stage are: fp32, fp16, bf16, fp8-torchao."
+        "Supported modes in the current stage are: fp32, fp16, bf16, fp8-torchao, fp8-te."
     )

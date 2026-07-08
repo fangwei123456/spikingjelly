@@ -7,7 +7,14 @@ from .convert import (
     convert_model_for_precision,
 )
 from .float8_base import Float8LinearStepModule, wrap_float8_linear_module
+from .float8_conv import (
+    Float8PointwiseConv1dStepModule,
+    is_supported_pointwise_conv1d,
+    make_linear_from_pointwise_conv1d,
+    wrap_float8_pointwise_conv1d_module,
+)
 from .float8_torchao import Float8TorchAOPolicy
+from .float8_te import Float8TransformerEnginePolicy
 from .policy import BF16Policy, FP16Policy, FP32Policy, PrecisionPolicy
 from .runtime import resolve_precision_policy
 
@@ -23,7 +30,12 @@ __all__ = [
     "convert_model_for_precision",
     "Float8LinearStepModule",
     "wrap_float8_linear_module",
+    "Float8PointwiseConv1dStepModule",
+    "is_supported_pointwise_conv1d",
+    "make_linear_from_pointwise_conv1d",
+    "wrap_float8_pointwise_conv1d_module",
     "Float8TorchAOPolicy",
+    "Float8TransformerEnginePolicy",
     "PrecisionPolicy",
     "FP32Policy",
     "FP16Policy",

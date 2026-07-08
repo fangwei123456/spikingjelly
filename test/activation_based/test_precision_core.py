@@ -1,11 +1,15 @@
 from types import SimpleNamespace
+import sys
+import types
 
 import pytest
 import torch
 
 from spikingjelly.activation_based.precision import (
+    PrecisionArtifacts,
     PrecisionConfig,
     build_capability_report,
+    prepare_model_for_precision,
     resolve_precision_policy,
     validate_capability,
 )
@@ -97,10 +101,31 @@ def test_resolve_precision_policy_fp32():
     assert policy.describe()["name"] == "fp32"
 
 
+def test_resolve_precision_policy_fp8_te():
+    policy = resolve_precision_policy(PrecisionConfig(mode="fp8-te"))
+    assert policy.describe()["name"] == "fp8-te"
+    assert policy.describe()["backend"] == "transformer-engine"
+
+
 def test_build_capability_report_cpu_fp32():
     report = build_capability_report(torch.nn.Linear(4, 4), torch.device("cpu"), "fp32")
     assert report["device_type"] == "cpu"
     assert report["can_convert"] is True
+    assert report["can_execute"] is True
+
+
+def test_build_capability_report_fp32_does_not_probe_broken_te(monkeypatch):
+    class BrokenTE(types.ModuleType):
+        def __getattr__(self, name):
+            raise RuntimeError("broken te should not be probed")
+
+    fake_root = types.ModuleType("transformer_engine")
+    fake_root.pytorch = BrokenTE("transformer_engine.pytorch")
+    monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
+    monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", fake_root.pytorch)
+
+    report = build_capability_report(torch.nn.Linear(4, 4), torch.device("cpu"), "fp32")
+    assert report["requested_mode"] == "fp32"
     assert report["can_execute"] is True
 
 
@@ -149,3 +174,111 @@ def test_validate_capability_rejects_fp8_torchao_when_torchao_missing():
     }
     with pytest.raises(RuntimeError, match="torchao"):
         validate_capability(report)
+
+
+def test_prepare_model_for_precision_warn_falls_back_to_fp32_when_fp8_unavailable():
+    model = torch.nn.Linear(4, 4)
+    with pytest.warns(RuntimeWarning, match="falling back to fp32"):
+        artifacts = prepare_model_for_precision(
+            model,
+            "cpu",
+            PrecisionConfig(mode="fp8-torchao", strictness="warn"),
+        )
+    assert artifacts.requested_config.mode == "fp8-torchao"
+    assert artifacts.effective_config.mode == "fp32"
+    assert artifacts.policy.describe()["name"] == "fp32"
+    assert artifacts.fallback_reason
+    assert artifacts.policy.capability_report()["requested_mode"] == "fp8-torchao"
+
+
+def test_prepare_model_for_precision_strict_keeps_fp8_capability_error():
+    model = torch.nn.Linear(4, 4)
+    with pytest.raises(RuntimeError, match="fp8-torchao|torchao"):
+        prepare_model_for_precision(
+            model,
+            "cpu",
+            PrecisionConfig(mode="fp8-torchao", strictness="strict"),
+        )
+
+
+def test_build_capability_report_fp8_te_cpu_reports_te_fields(monkeypatch):
+    fake_te = types.ModuleType("transformer_engine.pytorch")
+
+    def is_fp8_available(return_reason=False):
+        return (True, None) if return_reason else True
+
+    fake_te.is_fp8_available = is_fp8_available
+    fake_root = types.ModuleType("transformer_engine")
+    fake_root.pytorch = fake_te
+    monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
+    monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", fake_te)
+
+    report = build_capability_report(
+        torch.nn.Linear(4, 4),
+        torch.device("cpu"),
+        "fp8-te",
+    )
+    assert report["transformer_engine_installed"] is True
+    assert report["te_fp8_available"] is True
+    assert report["can_convert"] is True
+    assert report["can_execute"] is False
+    assert report["execution_note"] == "fp8-te requires a CUDA device"
+
+
+def test_prepare_model_for_precision_warn_falls_back_to_fp32_when_fp8_te_unavailable():
+    model = torch.nn.Linear(4, 4)
+    with pytest.warns(RuntimeWarning, match="falling back to fp32"):
+        artifacts = prepare_model_for_precision(
+            model,
+            "cpu",
+            PrecisionConfig(mode="fp8-te", strictness="warn"),
+        )
+    assert artifacts.requested_config.mode == "fp8-te"
+    assert artifacts.effective_config.mode == "fp32"
+    assert artifacts.policy.describe()["name"] == "fp32"
+    assert artifacts.fallback_reason
+    assert artifacts.policy.capability_report()["requested_mode"] == "fp8-te"
+
+
+def test_prepare_model_for_precision_strict_keeps_fp8_te_capability_error():
+    model = torch.nn.Linear(4, 4)
+    with pytest.raises(RuntimeError, match="fp8-te|transformer-engine|CUDA"):
+        prepare_model_for_precision(
+            model,
+            "cpu",
+            PrecisionConfig(mode="fp8-te", strictness="strict"),
+        )
+
+
+def test_precision_artifacts_autocast_context_delegates_to_fake_te(monkeypatch):
+    fake_te = types.ModuleType("transformer_engine.pytorch")
+    state = {"entered": False, "exited": False, "enabled": None}
+
+    class FakeContext:
+        def __enter__(self):
+            state["entered"] = True
+
+        def __exit__(self, exc_type, exc, tb):
+            state["exited"] = True
+
+    def fp8_autocast(enabled=True):
+        state["enabled"] = enabled
+        return FakeContext()
+
+    fake_te.fp8_autocast = fp8_autocast
+    fake_root = types.ModuleType("transformer_engine")
+    fake_root.pytorch = fake_te
+    monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
+    monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", fake_te)
+
+    policy = resolve_precision_policy(PrecisionConfig(mode="fp8-te"))
+    artifacts = PrecisionArtifacts(
+        requested_config=PrecisionConfig(mode="fp8-te"),
+        effective_config=PrecisionConfig(mode="fp8-te"),
+        policy=policy,
+        model=torch.nn.Linear(4, 4),
+    )
+    with artifacts.autocast_context():
+        assert state["entered"] is True
+    assert state["enabled"] is True
+    assert state["exited"] is True

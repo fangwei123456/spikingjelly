@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import warnings
 from contextlib import AbstractContextManager
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Iterable
@@ -9,6 +10,7 @@ from typing import TYPE_CHECKING, Iterable
 import torch
 
 from .config import PrecisionConfig
+from .policy import FP32Policy
 from .runtime import resolve_precision_policy
 
 if TYPE_CHECKING:
@@ -86,9 +88,32 @@ def prepare_model_for_precision(
     device = torch.device(device)
     requested = PrecisionConfig.from_any(config, default_device=str(device))
     policy = resolve_precision_policy(requested)
-    policy.check_capability(model, device)
+    fallback_reason = None
+    try:
+        policy.check_capability(model, device)
+    except RuntimeError as exc:
+        if requested.strictness == "strict":
+            raise
+        fallback_reason = str(exc)
+        if requested.strictness == "warn":
+            warnings.warn(
+                f"precision={requested.mode!r} is falling back to fp32: {fallback_reason}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        fallback_policy = FP32Policy()
+        fallback_policy.set_capability_report(policy.capability_report())
+        policy = fallback_policy
     prepared_model = policy.prepare_model(model)
-    effective = requested  # Fallback resolution is intentionally deferred for now.
+    effective = requested
+    if fallback_reason is not None:
+        effective = PrecisionConfig(
+            mode="fp32",
+            strictness=requested.strictness,
+            fp8_recipe=requested.fp8_recipe,
+            report=requested.report,
+            device=requested.device,
+        )
     scaler = policy.create_grad_scaler()
     return PrecisionArtifacts(
         requested_config=requested,
@@ -96,7 +121,7 @@ def prepare_model_for_precision(
         policy=policy,
         model=prepared_model,
         scaler=scaler,
-        fallback_reason=None,
+        fallback_reason=fallback_reason,
     )
 
 
