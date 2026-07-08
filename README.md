@@ -44,10 +44,16 @@ SpikingJelly is built on PyTorch. Install [PyTorch, torchvision, and torchaudio]
 - Python `>=3.11`
 - PyTorch `>=2.6.0` (tested with `2.7.1`)
 
-Install the latest stable release `0.0.0.0.15`:
+Install the latest stable PyPI release:
 
 ```bash
 pip install spikingjelly
+```
+
+Install V2 pre-releases from PyPI when they are published:
+
+```bash
+pip install --pre spikingjelly
 ```
 
 Install the latest development version from source:
@@ -66,8 +72,6 @@ Optional dependencies:
 | Triton backend | `pip install triton==3.3.1` |
 | NIR exchange | `pip install nir nirtorch` |
 | Lightning integration | `pip install lightning jsonargparse[signatures]` |
-
-Version note: SpikingJelly uses a `0.0.0.0.X` scheme where odd `X` tracks development versions and even `X` tracks stable releases.
 
 ## Quick Start
 
@@ -151,11 +155,17 @@ Export SpikingJelly models to neuromorphic hardware or other frameworks:
 
 **Development / release policy:**
 
-Odd version numbers track the development branch on GitHub / OpenI. Even version numbers are stable releases published to PyPI.
+Starting from SpikingJelly V2, release versions follow PEP 440 compatible,
+SemVer-style `MAJOR.MINOR.PATCH` semantics. `MAJOR` marks compatibility
+generations, `MINOR` adds backward-compatible functionality, and `PATCH` fixes
+bugs. Python package pre-release spelling is used for V2 development releases,
+for example `2.0.0.dev0`, `2.0.0a1`, `2.0.0b1`, and `2.0.0rc1`.
 
 <details>
 <summary>Compatibility, migration, and older docs</summary>
 
+- Before V2, SpikingJelly used a legacy `0.0.0.0.X` scheme: odd `X` tracked development versions on GitHub / OpenI, and even `X` tracked stable releases published to PyPI.
+- If your project must stay on pre-V2 releases, pin dependencies with an upper bound such as `spikingjelly<2`.
 - From `0.0.0.0.14`, modules including `clock_driven` and `event_driven` were renamed. See [Migrate From Old Versions](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/migrate_from_legacy.html).
 - The default documentation points to the latest development version.
 - If you rely on an older release, check [bugs.md](./bugs.md) and switch to the matching documentation version.

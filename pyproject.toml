@@ -10,7 +10,7 @@ include = ["spikingjelly*"]
 
 [project]
 name = "spikingjelly"
-version = "0.0.0.0.15"
+version = "2.0.0.dev0"
 description = "A deep learning framework for SNNs built on PyTorch."
 readme = {file = "README.md", content-type = "text/markdown"}
 authors = [
@@ -24,15 +24,17 @@ dependencies = [
     "torch>=2.6.0",
     "torchvision",
     "torchaudio",
-    "tensorboard",
-    "numpy",
-    "scipy",
     "einops",
-    "tqdm",
-    "matplotlib",
-    "SciencePlots",
     "h5py",
+    "matplotlib",
+    "numpy",
+    "packaging",
     "pydantic",
+    "requests",
+    "SciencePlots",
+    "scipy",
+    "tensorboard",
+    "tqdm",
 ]
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",

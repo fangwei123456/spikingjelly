@@ -1,21 +1,22 @@
 # Core Dependencies
-torch>=2.2.0   # tested on 2.7.1+cu118
+torch>=2.6.0   # tested on 2.7.1+cu118
 torchvision
 torchaudio
-tensorboard
-numpy
-scipy
 einops
-tqdm
 h5py
-pydantic
-
-# Visualization
 matplotlib
+numpy
+packaging
+pydantic
+requests
 SciencePlots
+scipy
+tensorboard
+tqdm
 
 # Cupy Backend
-# cupy
+# cupy-cuda11x
+# cupy-cuda12x
 
 # Triton Backend
 # triton>=3.3.1
@@ -26,3 +27,8 @@ SciencePlots
 
 # lightning
 # jsonargparse[signatures]
+
+# dev group
+# pytest
+# pydata-sphinx-theme>=0.16.1
+# sphinx>=8.0.0,<9
