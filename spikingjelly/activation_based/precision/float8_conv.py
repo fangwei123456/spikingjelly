@@ -50,6 +50,7 @@ class Float8PointwiseConv1dStepModule(nn.Module):
 
     @property
     def weight(self):
+        # Conv1d-compatible view; the actual Parameter is self.wrapped.weight.
         return self.wrapped.weight.unsqueeze(-1)
 
     @property

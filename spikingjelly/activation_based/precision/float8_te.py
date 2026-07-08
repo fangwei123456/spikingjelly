@@ -245,24 +245,44 @@ class Float8TELayerNormMLPModule(_Float8TEPatternModule):
 
 def _is_layer_norm_linear_pattern(module: nn.Module) -> bool:
     children = list(module.children())
-    return (
+    if not (
         isinstance(module, nn.Sequential)
         and len(children) == 2
         and _is_supported_layer_norm(children[0])
         and isinstance(children[1], (nn.Linear, layer.Linear))
+    ):
+        return False
+    hidden_size = int(children[0].normalized_shape[0])
+    linear = children[1]
+    return linear.in_features == hidden_size
+
+
+def _is_layer_norm_mlp_shape_compatible(
+    norm: nn.LayerNorm,
+    fc1: nn.Linear,
+    fc2: nn.Linear,
+) -> bool:
+    hidden_size = int(norm.normalized_shape[0])
+    return (
+        fc1.in_features == hidden_size
+        and fc2.in_features == fc1.out_features
+        and fc2.out_features == hidden_size
+        and (fc1.bias is None) == (fc2.bias is None)
     )
 
 
 def _is_layer_norm_mlp_pattern(module: nn.Module) -> bool:
     children = list(module.children())
-    return (
+    if not (
         isinstance(module, nn.Sequential)
         and len(children) == 4
         and _is_supported_layer_norm(children[0])
         and isinstance(children[1], (nn.Linear, layer.Linear))
         and isinstance(children[2], nn.GELU)
         and isinstance(children[3], (nn.Linear, layer.Linear))
-    )
+    ):
+        return False
+    return _is_layer_norm_mlp_shape_compatible(children[0], children[1], children[3])
 
 
 def _convert_layer_norm_linear_pattern(module: nn.Sequential, te) -> nn.Module | None:
@@ -324,13 +344,13 @@ def _convert_fused_pattern(module: nn.Module, te) -> tuple[nn.Module, str] | Non
 def _te_recursive_convert(root: nn.Module, TELinear: type, report) -> None:
     memo: dict[nn.Module, nn.Module] = {}
     visited: set[int] = set()
+    te = _import_te_pytorch()
 
     def _walk(module: nn.Module, prefix: str = "") -> None:
         for child_name, child in list(module._modules.items()):
             if child is None:
                 continue
             child_fqn = f"{prefix}.{child_name}" if prefix else child_name
-            te = _import_te_pytorch()
             pattern = _convert_fused_pattern(child, te)
             if pattern is not None:
                 wrapped, pattern_name = pattern
@@ -390,6 +410,7 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
         self.fp8_recipe = fp8_recipe
         self._resolved_recipe_name: str | None = None
         self._resolved_recipe = None
+        self._recipe_resolved = False
 
     def describe(self) -> dict:
         return {
@@ -440,6 +461,7 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
             get_default_recipe = getattr(te, "get_default_recipe", None)
             self._resolved_recipe_name = "auto"
             self._resolved_recipe = get_default_recipe() if get_default_recipe else None
+            self._recipe_resolved = True
             return self._resolved_recipe
 
         try:
@@ -460,6 +482,7 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
             if recipe_cls is not None:
                 self._resolved_recipe_name = recipe_name
                 self._resolved_recipe = recipe_cls()
+                self._recipe_resolved = True
                 return self._resolved_recipe
         raise RuntimeError(
             f"transformer-engine does not expose a recipe class for {recipe_name!r}."
@@ -482,7 +505,7 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
             te = _import_te_pytorch()
         except ImportError:
             return nullcontext()
-        recipe = self._resolve_recipe(te)
+        recipe = self._resolved_recipe if self._recipe_resolved else self._resolve_recipe(te)
         autocast = getattr(te, "autocast", None)
         if autocast is not None:
             if recipe is None:

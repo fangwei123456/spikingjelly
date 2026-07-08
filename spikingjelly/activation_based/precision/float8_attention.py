@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import torch
 import torch.nn as nn
 
@@ -58,7 +60,7 @@ class TransformerEngineDotProductAttentionAdapter(nn.Module):
             raise ValueError("fp8-te SDPA adapter v1 only supports attn_mask=None.")
         if is_causal:
             raise ValueError("fp8-te SDPA adapter v1 does not support causal masks.")
-        if dropout_p not in (0, 0.0, self.attention_dropout):
+        if dropout_p != 0.0 and not math.isclose(dropout_p, self.attention_dropout):
             raise ValueError("fp8-te SDPA adapter v1 requires fixed adapter dropout.")
         if scale is not None:
             raise ValueError("fp8-te SDPA adapter v1 does not support custom scale.")
@@ -95,9 +97,7 @@ class TransformerEngineDotProductAttentionAdapter(nn.Module):
                     query,
                     key,
                     value,
-                    attention_mask=None,
-                    qkv_layout=self.qkv_layout,
-                    attn_mask_type="no_mask",
+                    qkv_format=self.qkv_layout,
                 )
             except TypeError:
                 return self.wrapped(query, key, value)

@@ -703,6 +703,11 @@ def test_convert_model_for_precision_fuses_layer_norm_linear_fp8_te(monkeypatch)
     assert "0.1.weight" in state_dict
     assert all("wrapped" not in k for k in state_dict)
     converted.load_state_dict(state_dict, strict=True)
+    modified_state_dict = {k: v.clone() for k, v in state_dict.items()}
+    modified_state_dict["0.0.weight"].add_(1.0)
+    expected_weight = modified_state_dict["0.0.weight"].clone()
+    converted.load_state_dict(modified_state_dict, strict=True)
+    torch.testing.assert_close(converted.state_dict()["0.0.weight"], expected_weight)
 
 
 def test_convert_model_for_precision_fuses_layer_norm_mlp_fp8_te(monkeypatch):
@@ -736,6 +741,38 @@ def test_convert_model_for_precision_fuses_layer_norm_mlp_fp8_te(monkeypatch):
     assert "0.3.weight" in state_dict
     assert all("wrapped" not in k for k in state_dict)
     converted.load_state_dict(state_dict, strict=True)
+    modified_state_dict = {k: v.clone() for k, v in state_dict.items()}
+    modified_state_dict["0.3.bias"].add_(1.0)
+    expected_bias = modified_state_dict["0.3.bias"].clone()
+    converted.load_state_dict(modified_state_dict, strict=True)
+    torch.testing.assert_close(converted.state_dict()["0.3.bias"], expected_bias)
+
+
+def test_convert_model_for_precision_skips_incompatible_layer_norm_mlp_fp8_te(
+    monkeypatch,
+):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.Sequential(
+        torch.nn.Sequential(
+            torch.nn.LayerNorm(8),
+            torch.nn.Linear(8, 16),
+            torch.nn.GELU(),
+            torch.nn.Linear(16, 4),
+        )
+    )
+    x = torch.randn(3, 5, 8)
+    expected = model(x)
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+    torch.testing.assert_close(converted(x), expected)
+    assert not isinstance(converted[0], Float8TELayerNormMLPModule)
+    assert converted(x).shape[-1] == 4
+    assert report.converted_patterns == []
 
 
 def test_transformer_engine_sdpa_adapter_matches_torch_sdpa(monkeypatch):

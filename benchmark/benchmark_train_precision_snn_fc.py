@@ -103,7 +103,7 @@ class DeepFCSNN(torch_nn.Module):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Benchmark SpikingJelly deep FC SNN training under fp32, bf16, and "
+            "Benchmark SpikingJelly deep FC SNN training under fp32, bf16, "
             "fp8-torchao, and fp8-te."
         )
     )

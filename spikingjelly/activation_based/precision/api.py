@@ -4,7 +4,7 @@ import json
 import os
 import warnings
 from contextlib import AbstractContextManager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import TYPE_CHECKING, Iterable
 
 import torch
@@ -107,13 +107,7 @@ def prepare_model_for_precision(
     prepared_model = policy.prepare_model(model)
     effective = requested
     if fallback_reason is not None:
-        effective = PrecisionConfig(
-            mode="fp32",
-            strictness=requested.strictness,
-            fp8_recipe=requested.fp8_recipe,
-            report=requested.report,
-            device=requested.device,
-        )
+        effective = replace(requested, mode="fp32")
     scaler = policy.create_grad_scaler()
     return PrecisionArtifacts(
         requested_config=requested,

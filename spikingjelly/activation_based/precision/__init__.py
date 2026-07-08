@@ -14,12 +14,12 @@ from .float8_conv import (
     make_linear_from_pointwise_conv1d,
     wrap_float8_pointwise_conv1d_module,
 )
-from .float8_torchao import Float8TorchAOPolicy
 from .float8_te import (
     Float8TELayerNormLinearModule,
     Float8TELayerNormMLPModule,
     Float8TransformerEnginePolicy,
 )
+from .float8_torchao import Float8TorchAOPolicy
 from .policy import BF16Policy, FP16Policy, FP32Policy, PrecisionPolicy
 from .runtime import resolve_precision_policy
 
