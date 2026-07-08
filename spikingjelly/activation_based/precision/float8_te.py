@@ -8,6 +8,11 @@ import torch.nn as nn
 
 from .. import layer
 from .float8_base import wrap_float8_linear_module
+from .float8_conv import (
+    is_supported_pointwise_conv1d,
+    make_linear_from_pointwise_conv1d,
+    wrap_float8_pointwise_conv1d_module,
+)
 from .policy import PrecisionPolicy
 
 
@@ -62,13 +67,20 @@ def _te_recursive_convert(root: nn.Module, TELinear: type, report) -> None:
             if child is None:
                 continue
             child_fqn = f"{prefix}.{child_name}" if prefix else child_name
-            if isinstance(child, (nn.Linear, layer.Linear)):
+            if isinstance(child, (nn.Linear, layer.Linear)) or is_supported_pointwise_conv1d(
+                child
+            ):
                 if child in memo:
                     _replace_child(module, child_name, memo[child])
                     report.converted_modules.append(child_fqn)
                     continue
-                converted = _make_te_linear(child, TELinear)
-                wrapped = wrap_float8_linear_module(child, converted)
+                if is_supported_pointwise_conv1d(child):
+                    source = make_linear_from_pointwise_conv1d(child)
+                    converted = _make_te_linear(source, TELinear)
+                    wrapped = wrap_float8_pointwise_conv1d_module(child, converted)
+                else:
+                    converted = _make_te_linear(child, TELinear)
+                    wrapped = wrap_float8_linear_module(child, converted)
                 memo[child] = wrapped
                 _replace_child(module, child_name, wrapped)
                 report.converted_modules.append(child_fqn)
@@ -146,6 +158,11 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
             converted = _make_te_linear(model, TELinear)
             report.converted_modules.append("<root>")
             return wrap_float8_linear_module(model, converted)
+        if is_supported_pointwise_conv1d(model):
+            source = make_linear_from_pointwise_conv1d(model)
+            converted = _make_te_linear(source, TELinear)
+            report.converted_modules.append("<root>")
+            return wrap_float8_pointwise_conv1d_module(model, converted)
 
         _te_recursive_convert(model, TELinear, report)
         return model

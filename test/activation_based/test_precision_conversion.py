@@ -421,6 +421,101 @@ def test_convert_model_for_precision_preserves_layer_linear_step_mode_fp8_te(
     assert report.converted_modules == ["<root>"]
 
 
+def test_convert_model_for_precision_replaces_pointwise_conv1d_fp8_te(monkeypatch):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.Sequential(
+        torch.nn.Conv1d(8, 16, kernel_size=1, bias=False),
+        torch.nn.Conv1d(16, 16, kernel_size=3, padding=1, bias=False),
+    )
+    x = torch.randn(3, 8, 5)
+    expected = model(x)
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+    torch.testing.assert_close(converted(x), expected)
+    assert isinstance(converted[0], Float8PointwiseConv1dStepModule)
+    assert isinstance(converted[1], torch.nn.Conv1d)
+    assert report.converted_modules == ["0"]
+    assert "1" in report.unsupported_modules
+
+
+def test_convert_model_for_precision_replaces_root_pointwise_conv1d_fp8_te(
+    monkeypatch,
+):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = layer.Conv1d(8, 16, kernel_size=1, bias=False, step_mode="m")
+    x = torch.randn(2, 3, 8, 5)
+    expected = model(x)
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+    torch.testing.assert_close(converted(x), expected)
+    assert isinstance(converted, Float8PointwiseConv1dStepModule)
+    assert converted.step_mode == "m"
+    assert report.converted_modules == ["<root>"]
+
+
+def test_convert_model_for_precision_replaces_spikformer_projections_fp8_te(
+    monkeypatch,
+):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = Spikformer(
+        T=2,
+        in_channels=3,
+        img_size_h=64,
+        img_size_w=64,
+        num_classes=7,
+        embed_dims=64,
+        num_heads=4,
+        depths=2,
+        backend="torch",
+    )
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+
+    for block in converted.blocks:
+        assert isinstance(
+            next(block.attn.qkv_conv_bn.children()), Float8PointwiseConv1dStepModule
+        )
+        assert isinstance(
+            next(block.attn.proj_conv_bn.children()), Float8PointwiseConv1dStepModule
+        )
+        assert isinstance(
+            next(block.mlp.fc1.children()), Float8PointwiseConv1dStepModule
+        )
+        assert isinstance(
+            next(block.mlp.fc2.children()), Float8PointwiseConv1dStepModule
+        )
+    assert isinstance(converted.head, Float8LinearStepModule)
+    assert isinstance(
+        converted.patch_embed.stages[0].conv_bn.block[0], torch.nn.Conv2d
+    )
+    assert report.converted_modules == [
+        "blocks.0.attn.qkv_conv_bn.0",
+        "blocks.0.attn.proj_conv_bn.0",
+        "blocks.0.mlp.fc1.0",
+        "blocks.0.mlp.fc2.0",
+        "blocks.1.attn.qkv_conv_bn.0",
+        "blocks.1.attn.proj_conv_bn.0",
+        "blocks.1.mlp.fc1.0",
+        "blocks.1.mlp.fc2.0",
+        "head",
+    ]
+
+
 def test_float8_te_linear_step_module_load_state_dict_from_parent(monkeypatch):
     _install_fake_te(monkeypatch)
 
