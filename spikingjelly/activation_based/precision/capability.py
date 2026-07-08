@@ -14,24 +14,73 @@ def _torchao_available() -> bool:
         return False
 
 
-def _transformer_engine_fp8_status() -> tuple[bool, bool, str | None]:
+def _transformer_engine_fp8_status() -> tuple[
+    bool,
+    bool,
+    str | None,
+    str | None,
+    dict[str, bool],
+]:
     try:
         import transformer_engine.pytorch as te
     except ImportError:
-        return False, False, "transformer-engine is not installed"
+        return (
+            False,
+            False,
+            "transformer-engine is not installed",
+            None,
+            {},
+        )
     except Exception as exc:
-        return False, False, f"transformer-engine import failed: {exc}"
+        return (
+            False,
+            False,
+            f"transformer-engine import failed: {exc}",
+            None,
+            {},
+        )
+
+    if hasattr(te, "autocast"):
+        autocast_api = "autocast"
+    elif hasattr(te, "fp8_autocast"):
+        autocast_api = "fp8_autocast"
+    else:
+        autocast_api = None
+
+    recipe_availability = {
+        "auto": True,
+        "delayed": True,
+        "current": True,
+        "block": False,
+        "mxfp8": False,
+    }
+    for recipe_name, probe_name in (
+        ("block", "is_fp8_block_scaling_available"),
+        ("mxfp8", "is_mxfp8_available"),
+    ):
+        probe = getattr(te, probe_name, None)
+        if probe is not None:
+            try:
+                recipe_availability[recipe_name] = bool(probe())
+            except Exception:
+                recipe_availability[recipe_name] = False
 
     is_fp8_available = getattr(te, "is_fp8_available", None)
     if is_fp8_available is None:
-        return True, False, "transformer_engine.pytorch.is_fp8_available is missing"
+        return (
+            True,
+            False,
+            "transformer_engine.pytorch.is_fp8_available is missing",
+            autocast_api,
+            recipe_availability,
+        )
 
     try:
         result = is_fp8_available(return_reason=True)
     except TypeError:
         result = is_fp8_available()
     except Exception as exc:
-        return True, False, str(exc)
+        return True, False, str(exc), autocast_api, recipe_availability
 
     if isinstance(result, tuple):
         available = bool(result[0])
@@ -39,7 +88,13 @@ def _transformer_engine_fp8_status() -> tuple[bool, bool, str | None]:
     else:
         available = bool(result)
         reason = None
-    return True, available, None if available else reason
+    return (
+        True,
+        available,
+        None if available else reason,
+        autocast_api,
+        recipe_availability,
+    )
 
 
 def _detect_cpu_bf16() -> bool:
@@ -146,11 +201,15 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
     transformer_engine_installed = False
     te_fp8_available = False
     te_fp8_unavailable_reason = None
+    te_autocast_api = None
+    te_recipe_availability = {}
     if mode == "fp8-te":
         (
             transformer_engine_installed,
             te_fp8_available,
             te_fp8_unavailable_reason,
+            te_autocast_api,
+            te_recipe_availability,
         ) = _transformer_engine_fp8_status()
 
     mps_backend = getattr(torch.backends, "mps", None)
@@ -197,6 +256,11 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
         "transformer_engine_installed": transformer_engine_installed,
         "te_fp8_available": te_fp8_available,
         "te_fp8_unavailable_reason": te_fp8_unavailable_reason,
+        "te_autocast_api": te_autocast_api,
+        "te_recipe_availability": te_recipe_availability,
+        "te_recipe_requested": None,
+        "te_recipe_resolved": None,
+        "te_recipe_fallback_reason": None,
         "bf16_supported": bf16_supported,
         "cpu_bf16_autocast": cpu_bf16 if device_type == "cpu" else False,
         "mps_available": mps_available,

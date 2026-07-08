@@ -15,8 +15,10 @@ class ConversionReport:
     convertible_linear: int = 0
     convertible_torch_linear: int = 0
     convertible_pointwise_conv1d: int = 0
+    convertible_layer_norm: int = 0
     convertible_modules: list[str] = field(default_factory=list)
     converted_modules: list[str] = field(default_factory=list)
+    converted_patterns: list[dict[str, str]] = field(default_factory=list)
     skipped_modules: list[str] = field(default_factory=list)
     high_precision_modules: list[str] = field(default_factory=list)
     unsupported_modules: list[str] = field(default_factory=list)
@@ -27,8 +29,10 @@ class ConversionReport:
             "convertible_linear": self.convertible_linear,
             "convertible_torch_linear": self.convertible_torch_linear,
             "convertible_pointwise_conv1d": self.convertible_pointwise_conv1d,
+            "convertible_layer_norm": self.convertible_layer_norm,
             "convertible_modules": self.convertible_modules,
             "converted_modules": self.converted_modules,
+            "converted_patterns": self.converted_patterns,
             "skipped_modules": self.skipped_modules,
             "high_precision_modules": self.high_precision_modules,
             "unsupported_modules": self.unsupported_modules,
@@ -44,7 +48,6 @@ def analyze_convertible_modules(model: nn.Module) -> ConversionReport:
         nn.BatchNorm1d,
         nn.BatchNorm2d,
         nn.BatchNorm3d,
-        nn.LayerNorm,
     )
     for name, module in model.named_modules():
         report.total_modules += 1
@@ -56,6 +59,9 @@ def analyze_convertible_modules(model: nn.Module) -> ConversionReport:
             report.convertible_modules.append(name or "<root>")
         elif is_supported_pointwise_conv1d(module):
             report.convertible_pointwise_conv1d += 1
+            report.convertible_modules.append(name or "<root>")
+        elif isinstance(module, nn.LayerNorm):
+            report.convertible_layer_norm += 1
             report.convertible_modules.append(name or "<root>")
         elif isinstance(module, high_precision_types):
             report.high_precision_modules.append(name or "<root>")

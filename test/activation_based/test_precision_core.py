@@ -207,7 +207,13 @@ def test_build_capability_report_fp8_te_cpu_reports_te_fields(monkeypatch):
     def is_fp8_available(return_reason=False):
         return (True, None) if return_reason else True
 
+    def autocast(enabled=True, recipe=None):
+        return None
+
     fake_te.is_fp8_available = is_fp8_available
+    fake_te.autocast = autocast
+    fake_te.is_fp8_block_scaling_available = lambda: False
+    fake_te.is_mxfp8_available = lambda: False
     fake_root = types.ModuleType("transformer_engine")
     fake_root.pytorch = fake_te
     monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
@@ -220,6 +226,9 @@ def test_build_capability_report_fp8_te_cpu_reports_te_fields(monkeypatch):
     )
     assert report["transformer_engine_installed"] is True
     assert report["te_fp8_available"] is True
+    assert report["te_autocast_api"] == "autocast"
+    assert report["te_recipe_availability"]["auto"] is True
+    assert report["te_recipe_availability"]["mxfp8"] is False
     assert report["can_convert"] is True
     assert report["can_execute"] is False
     assert report["execution_note"] == "fp8-te requires a CUDA device"
@@ -252,7 +261,7 @@ def test_prepare_model_for_precision_strict_keeps_fp8_te_capability_error():
 
 def test_precision_artifacts_autocast_context_delegates_to_fake_te(monkeypatch):
     fake_te = types.ModuleType("transformer_engine.pytorch")
-    state = {"entered": False, "exited": False, "enabled": None}
+    state = {"entered": False, "exited": False, "enabled": None, "recipe": "unset"}
 
     class FakeContext:
         def __enter__(self):
@@ -261,11 +270,12 @@ def test_precision_artifacts_autocast_context_delegates_to_fake_te(monkeypatch):
         def __exit__(self, exc_type, exc, tb):
             state["exited"] = True
 
-    def fp8_autocast(enabled=True):
+    def autocast(enabled=True, recipe=None):
         state["enabled"] = enabled
+        state["recipe"] = recipe
         return FakeContext()
 
-    fake_te.fp8_autocast = fp8_autocast
+    fake_te.autocast = autocast
     fake_root = types.ModuleType("transformer_engine")
     fake_root.pytorch = fake_te
     monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
@@ -281,4 +291,87 @@ def test_precision_artifacts_autocast_context_delegates_to_fake_te(monkeypatch):
     with artifacts.autocast_context():
         assert state["entered"] is True
     assert state["enabled"] is True
+    assert state["recipe"] is None
     assert state["exited"] is True
+
+
+def test_precision_artifacts_autocast_context_resolves_fake_te_recipe(monkeypatch):
+    fake_te = types.ModuleType("transformer_engine.pytorch")
+    fake_recipe_module = types.ModuleType("transformer_engine.common.recipe")
+    state = {"recipe": None}
+
+    class FakeDelayedScaling:
+        pass
+
+    class FakeContext:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+    def autocast(enabled=True, recipe=None):
+        state["recipe"] = recipe
+        return FakeContext()
+
+    fake_recipe_module.DelayedScaling = FakeDelayedScaling
+    fake_te.autocast = autocast
+    fake_root = types.ModuleType("transformer_engine")
+    fake_common = types.ModuleType("transformer_engine.common")
+    fake_common.recipe = fake_recipe_module
+    fake_root.pytorch = fake_te
+    fake_root.common = fake_common
+    monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
+    monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", fake_te)
+    monkeypatch.setitem(sys.modules, "transformer_engine.common", fake_common)
+    monkeypatch.setitem(
+        sys.modules,
+        "transformer_engine.common.recipe",
+        fake_recipe_module,
+    )
+
+    policy = resolve_precision_policy(
+        PrecisionConfig(mode="fp8-te", fp8_recipe="delayed")
+    )
+    artifacts = PrecisionArtifacts(
+        requested_config=PrecisionConfig(mode="fp8-te", fp8_recipe="delayed"),
+        effective_config=PrecisionConfig(mode="fp8-te", fp8_recipe="delayed"),
+        policy=policy,
+        model=torch.nn.Linear(4, 4),
+    )
+    with artifacts.autocast_context():
+        pass
+    assert isinstance(state["recipe"], FakeDelayedScaling)
+
+
+def test_fp8_te_unknown_recipe_warn_falls_back_to_fp32():
+    model = torch.nn.Linear(4, 4)
+    with pytest.warns(RuntimeWarning, match="falling back to fp32"):
+        artifacts = prepare_model_for_precision(
+            model,
+            "cpu",
+            PrecisionConfig(
+                mode="fp8-te",
+                strictness="warn",
+                fp8_recipe="unknown-recipe",
+            ),
+        )
+    assert artifacts.effective_config.mode == "fp32"
+    assert "unsupported Transformer Engine FP8 recipe" in artifacts.fallback_reason
+    report = artifacts.policy.capability_report()
+    assert report["te_recipe_requested"] == "unknown-recipe"
+    assert report["te_recipe_fallback_reason"]
+
+
+def test_fp8_te_unknown_recipe_strict_raises():
+    model = torch.nn.Linear(4, 4)
+    with pytest.raises(RuntimeError, match="unsupported Transformer Engine FP8 recipe"):
+        prepare_model_for_precision(
+            model,
+            "cpu",
+            PrecisionConfig(
+                mode="fp8-te",
+                strictness="strict",
+                fp8_recipe="unknown-recipe",
+            ),
+        )

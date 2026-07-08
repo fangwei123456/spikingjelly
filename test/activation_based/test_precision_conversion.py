@@ -16,7 +16,10 @@ from spikingjelly.activation_based.model import Spikformer
 from spikingjelly.activation_based.precision import (
     Float8PointwiseConv1dStepModule,
     Float8LinearStepModule,
+    Float8TELayerNormLinearModule,
+    Float8TELayerNormMLPModule,
     PrecisionConfig,
+    TransformerEngineDotProductAttentionAdapter,
     analyze_convertible_modules,
     make_linear_from_pointwise_conv1d,
     prepare_model_for_precision,
@@ -43,6 +46,114 @@ def _install_fake_te(monkeypatch):
                 dtype=params_dtype,
             )
 
+    class FakeTELayerNorm(torch.nn.LayerNorm):
+        def __init__(self, hidden_size, eps=1e-5, params_dtype=torch.float32, **kwargs):
+            super().__init__(hidden_size, eps=eps, dtype=params_dtype)
+
+    class FakeTELayerNormLinear(torch.nn.Module):
+        def __init__(
+            self,
+            hidden_size,
+            out_features,
+            eps=1e-5,
+            bias=True,
+            params_dtype=torch.float32,
+            **kwargs,
+        ):
+            super().__init__()
+            self.layer_norm_weight = torch.nn.Parameter(
+                torch.ones(hidden_size, dtype=params_dtype)
+            )
+            self.layer_norm_bias = torch.nn.Parameter(
+                torch.zeros(hidden_size, dtype=params_dtype)
+            )
+            self.weight = torch.nn.Parameter(
+                torch.empty(out_features, hidden_size, dtype=params_dtype)
+            )
+            self.bias = (
+                torch.nn.Parameter(torch.empty(out_features, dtype=params_dtype))
+                if bias
+                else None
+            )
+            self.eps = eps
+            torch.nn.init.kaiming_uniform_(self.weight, a=5**0.5)
+            if self.bias is not None:
+                torch.nn.init.zeros_(self.bias)
+
+        def forward(self, x):
+            x = torch.nn.functional.layer_norm(
+                x,
+                self.layer_norm_weight.shape,
+                self.layer_norm_weight,
+                self.layer_norm_bias,
+                self.eps,
+            )
+            return torch.nn.functional.linear(x, self.weight, self.bias)
+
+    class FakeTELayerNormMLP(torch.nn.Module):
+        def __init__(
+            self,
+            hidden_size,
+            ffn_hidden_size,
+            eps=1e-5,
+            bias=True,
+            params_dtype=torch.float32,
+            **kwargs,
+        ):
+            super().__init__()
+            self.layer_norm_weight = torch.nn.Parameter(
+                torch.ones(hidden_size, dtype=params_dtype)
+            )
+            self.layer_norm_bias = torch.nn.Parameter(
+                torch.zeros(hidden_size, dtype=params_dtype)
+            )
+            self.fc1_weight = torch.nn.Parameter(
+                torch.empty(ffn_hidden_size, hidden_size, dtype=params_dtype)
+            )
+            self.fc1_bias = (
+                torch.nn.Parameter(torch.empty(ffn_hidden_size, dtype=params_dtype))
+                if bias
+                else None
+            )
+            self.fc2_weight = torch.nn.Parameter(
+                torch.empty(hidden_size, ffn_hidden_size, dtype=params_dtype)
+            )
+            self.fc2_bias = (
+                torch.nn.Parameter(torch.empty(hidden_size, dtype=params_dtype))
+                if bias
+                else None
+            )
+            self.eps = eps
+            torch.nn.init.kaiming_uniform_(self.fc1_weight, a=5**0.5)
+            torch.nn.init.kaiming_uniform_(self.fc2_weight, a=5**0.5)
+            if self.fc1_bias is not None:
+                torch.nn.init.zeros_(self.fc1_bias)
+            if self.fc2_bias is not None:
+                torch.nn.init.zeros_(self.fc2_bias)
+
+        def forward(self, x):
+            x = torch.nn.functional.layer_norm(
+                x,
+                self.layer_norm_weight.shape,
+                self.layer_norm_weight,
+                self.layer_norm_bias,
+                self.eps,
+            )
+            x = torch.nn.functional.linear(x, self.fc1_weight, self.fc1_bias)
+            x = torch.nn.functional.gelu(x)
+            return torch.nn.functional.linear(x, self.fc2_weight, self.fc2_bias)
+
+    class FakeTEDotProductAttention(torch.nn.Module):
+        def __init__(self, *args, **kwargs):
+            super().__init__()
+
+        def forward(self, query, key, value, *args, **kwargs):
+            q = query.transpose(1, 2)
+            k = key.transpose(1, 2)
+            v = value.transpose(1, 2)
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v)
+            return y.transpose(1, 2)
+
     class FakeContext:
         def __enter__(self):
             return None
@@ -50,14 +161,18 @@ def _install_fake_te(monkeypatch):
         def __exit__(self, exc_type, exc, tb):
             return None
 
-    def fp8_autocast(enabled=True):
+    def autocast(enabled=True, recipe=None):
         return FakeContext()
 
     def is_fp8_available(return_reason=False):
         return (True, None) if return_reason else True
 
     fake_te.Linear = FakeTELinear
-    fake_te.fp8_autocast = fp8_autocast
+    fake_te.LayerNorm = FakeTELayerNorm
+    fake_te.LayerNormLinear = FakeTELayerNormLinear
+    fake_te.LayerNormMLP = FakeTELayerNormMLP
+    fake_te.DotProductAttention = FakeTEDotProductAttention
+    fake_te.autocast = autocast
     fake_te.is_fp8_available = is_fp8_available
     fake_root = types.ModuleType("transformer_engine")
     fake_root.pytorch = fake_te
@@ -162,6 +277,14 @@ def test_conversion_report_marks_pointwise_conv1d_convertible():
     assert report["convertible_pointwise_conv1d"] == 1
     assert "0" in report["convertible_modules"]
     assert "1" in report["unsupported_modules"]
+
+
+def test_conversion_report_marks_layer_norm_convertible():
+    model = torch.nn.Sequential(torch.nn.LayerNorm(8), torch.nn.BatchNorm1d(8))
+    report = analyze_convertible_modules(model).to_dict()
+    assert report["convertible_layer_norm"] == 1
+    assert "0" in report["convertible_modules"]
+    assert "1" in report["high_precision_modules"]
 
 
 @pytest.mark.skipif(
@@ -514,6 +637,118 @@ def test_convert_model_for_precision_replaces_spikformer_projections_fp8_te(
         "blocks.1.mlp.fc2.0",
         "head",
     ]
+
+
+def test_convert_model_for_precision_replaces_layer_norm_fp8_te(monkeypatch):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.Sequential(
+        torch.nn.LayerNorm(8),
+        torch.nn.ReLU(),
+        torch.nn.Linear(8, 4),
+    )
+    x = torch.randn(3, 5, 8)
+    expected = model(x)
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+    torch.testing.assert_close(converted(x), expected)
+    assert isinstance(converted[0], torch.nn.LayerNorm)
+    assert isinstance(converted[2], Float8LinearStepModule)
+    assert report.converted_modules == ["0", "2"]
+
+
+def test_convert_model_for_precision_replaces_root_layer_norm_fp8_te(monkeypatch):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.LayerNorm(8)
+    x = torch.randn(3, 5, 8)
+    expected = model(x)
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+    torch.testing.assert_close(converted(x), expected)
+    assert isinstance(converted, torch.nn.LayerNorm)
+    assert report.converted_modules == ["<root>"]
+
+
+def test_convert_model_for_precision_fuses_layer_norm_linear_fp8_te(monkeypatch):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.Sequential(
+        torch.nn.Sequential(torch.nn.LayerNorm(8), torch.nn.Linear(8, 4))
+    )
+    x = torch.randn(3, 5, 8)
+    expected = model(x)
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+    torch.testing.assert_close(converted(x), expected)
+    assert isinstance(converted[0], Float8TELayerNormLinearModule)
+    assert report.converted_modules == ["0"]
+    assert report.converted_patterns == [
+        {"module": "0", "pattern": "LayerNormLinear", "backend": "te"}
+    ]
+    state_dict = converted.state_dict()
+    assert "0.0.weight" in state_dict
+    assert "0.1.weight" in state_dict
+    assert all("wrapped" not in k for k in state_dict)
+    converted.load_state_dict(state_dict, strict=True)
+
+
+def test_convert_model_for_precision_fuses_layer_norm_mlp_fp8_te(monkeypatch):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.Sequential(
+        torch.nn.Sequential(
+            torch.nn.LayerNorm(8),
+            torch.nn.Linear(8, 16),
+            torch.nn.GELU(),
+            torch.nn.Linear(16, 8),
+        )
+    )
+    x = torch.randn(3, 5, 8)
+    expected = model(x)
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+    torch.testing.assert_close(converted(x), expected)
+    assert isinstance(converted[0], Float8TELayerNormMLPModule)
+    assert report.converted_modules == ["0"]
+    assert report.converted_patterns == [
+        {"module": "0", "pattern": "LayerNormMLP", "backend": "te"}
+    ]
+    state_dict = converted.state_dict()
+    assert "0.0.weight" in state_dict
+    assert "0.1.weight" in state_dict
+    assert "0.3.weight" in state_dict
+    assert all("wrapped" not in k for k in state_dict)
+    converted.load_state_dict(state_dict, strict=True)
+
+
+def test_transformer_engine_sdpa_adapter_matches_torch_sdpa(monkeypatch):
+    _install_fake_te(monkeypatch)
+    adapter = TransformerEngineDotProductAttentionAdapter(
+        num_attention_heads=2,
+        head_dim=4,
+    )
+    query = torch.randn(3, 2, 5, 4)
+    key = torch.randn(3, 2, 5, 4)
+    value = torch.randn(3, 2, 5, 4)
+    expected = torch.nn.functional.scaled_dot_product_attention(query, key, value)
+    torch.testing.assert_close(adapter(query, key, value), expected)
 
 
 def test_float8_te_linear_step_module_load_state_dict_from_parent(monkeypatch):
