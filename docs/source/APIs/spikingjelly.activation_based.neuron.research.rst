@@ -88,6 +88,15 @@ Few-Spike / LAS Neuron Primitives
    :show-inheritance:
    :exclude-members: supported_backends, extra_repr
 
+SpikeZIP Neuron Primitives
+--------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.neuron.spikezip
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :exclude-members: supported_backends, extra_repr
+
 Neurons with Inter-layer Connection
 --------------------------------------------------
 

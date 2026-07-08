@@ -1245,7 +1245,6 @@ class STATransformerRecipe(ConversionRecipe):
             fx_model, output_node, threshold, channel_dim=-1
         )
 
-
     @staticmethod
     def _batch_to_args(
         batch: Any, device: torch.device

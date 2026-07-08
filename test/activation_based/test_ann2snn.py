@@ -20,14 +20,19 @@ from spikingjelly.activation_based import (
 from spikingjelly.activation_based.ann2snn import (
     Converter,
     ConversionRecipe,
+    FXConverter,
+    FXConversionRecipe,
     HookFactory,
     LocalThresholdBalancingRecipe,
+    ModuleConverter,
+    ModuleConversionRecipe,
     NeuronFactory,
     RateCodingRecipe,
     ReLURule,
+    SpikeZIPTFQANNRecipe,
     STATransformerRecipe,
     ThresholdOptimizer,
-    TransformerSpikeEquivalentRecipe,
+    TransformerTDEquivalentRecipe,
 )
 from spikingjelly.activation_based.ann2snn import delay as ann2snn_delay
 from spikingjelly.activation_based.ann2snn import utils as ann2snn_utils
@@ -334,6 +339,17 @@ class SDPABlock(nn.Module):
         )
 
 
+class SDPAKeywordBlock(nn.Module):
+    def forward(self, query, key, value, attn_mask=None):
+        return F.scaled_dot_product_attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=attn_mask,
+            dropout_p=0.0,
+        )
+
+
 class SDPAWithExistingTargetBlock(nn.Module):
     def __init__(self):
         super().__init__()
@@ -630,7 +646,7 @@ def _rate_converter(
 
 
 def _td_converter():
-    return Converter(recipe=TransformerSpikeEquivalentRecipe())
+    return Converter(recipe=TransformerTDEquivalentRecipe())
 
 
 def _activation_aware_calibration(
@@ -911,11 +927,16 @@ class TestPublicExports:
     def test_all_contains_new_public_api(self):
         assert set(ann2snn.__all__) == {
             "Converter",
+            "FXConverter",
+            "ModuleConverter",
             "ConversionRecipe",
+            "FXConversionRecipe",
+            "ModuleConversionRecipe",
             "RateCodingRecipe",
             "LocalThresholdBalancingRecipe",
             "STATransformerRecipe",
-            "TransformerSpikeEquivalentRecipe",
+            "TransformerTDEquivalentRecipe",
+            "SpikeZIPTFQANNRecipe",
             "ChannelVoltageScaler",
             "estimate_delay_start",
             "download_url",
@@ -926,14 +947,22 @@ class TestPublicExports:
         }
 
     def test_recipe_api_is_importable(self):
+        assert ann2snn.Converter is FXConverter
         assert ann2snn.ConversionRecipe is ConversionRecipe
+        assert ann2snn.FXConverter is FXConverter
+        assert ann2snn.ModuleConverter is ModuleConverter
+        assert ann2snn.FXConversionRecipe is FXConversionRecipe
+        assert ann2snn.ModuleConversionRecipe is ModuleConversionRecipe
+        assert Converter is FXConverter
+        assert ConversionRecipe is FXConversionRecipe
         assert ann2snn.RateCodingRecipe is RateCodingRecipe
         assert ann2snn.LocalThresholdBalancingRecipe is LocalThresholdBalancingRecipe
         assert ann2snn.STATransformerRecipe is STATransformerRecipe
         assert ann2snn.ChannelVoltageScaler is ChannelVoltageScaler
         assert (
-            ann2snn.TransformerSpikeEquivalentRecipe is TransformerSpikeEquivalentRecipe
+            ann2snn.TransformerTDEquivalentRecipe is TransformerTDEquivalentRecipe
         )
+        assert ann2snn.SpikeZIPTFQANNRecipe is SpikeZIPTFQANNRecipe
 
     def test_recipe_base_has_no_execution_entrypoint(self):
         assert not hasattr(ConversionRecipe, "convert")
@@ -945,7 +974,8 @@ class TestPublicExports:
         assert not hasattr(RateCodingRecipe, "name")
         assert not hasattr(LocalThresholdBalancingRecipe, "name")
         assert not hasattr(STATransformerRecipe, "name")
-        assert not hasattr(TransformerSpikeEquivalentRecipe, "name")
+        assert not hasattr(TransformerTDEquivalentRecipe, "name")
+        assert not hasattr(SpikeZIPTFQANNRecipe, "name")
 
 
 class TestConverterRecipes:
@@ -991,11 +1021,16 @@ class TestConverterRecipes:
     )
     def test_converter_rejects_algorithm_parameters(self, kwargs):
         with pytest.raises(TypeError):
-            Converter(recipe=TransformerSpikeEquivalentRecipe(), **kwargs)
+            Converter(recipe=TransformerTDEquivalentRecipe(), **kwargs)
 
     def test_transformer_recipe_does_not_require_dataloader(self):
-        converter = Converter(recipe="transformer_spike_equivalent")
-        assert isinstance(converter.recipe, TransformerSpikeEquivalentRecipe)
+        converter = Converter(recipe="transformer_td_equivalent")
+        assert isinstance(converter.recipe, TransformerTDEquivalentRecipe)
+
+    def test_transformer_spike_equivalent_string_is_compat_alias(self):
+        with pytest.warns(DeprecationWarning, match="transformer_spike_equivalent"):
+            converter = Converter(recipe="transformer_spike_equivalent")
+        assert isinstance(converter.recipe, TransformerTDEquivalentRecipe)
 
     def test_rate_coding_recipe_name_requires_recipe_object(self):
         with pytest.raises(ValueError, match="rate_coding recipe"):
@@ -1013,9 +1048,61 @@ class TestConverterRecipes:
         with pytest.raises(TypeError, match="recipe must be"):
             Converter(recipe=object())
 
+    def test_fx_converter_rejects_module_recipe(self):
+        with pytest.raises(TypeError, match="ModuleConverter"):
+            Converter(recipe=ModuleConversionRecipe())
+
+    def test_module_converter_rejects_fx_recipe(self):
+        with pytest.raises(TypeError, match="FXConverter"):
+            ModuleConverter(recipe=ConversionRecipe())
+
     def test_none_recipe_raises(self):
         with pytest.raises(TypeError, match="recipe must be"):
             Converter(recipe=None)
+
+    def test_module_converter_runs_module_recipe_only(self):
+        class RecordingModuleRecipe(ModuleConversionRecipe):
+            def __init__(self):
+                self.calls = []
+
+            def validate(self, converter):
+                self.calls.append("validate")
+
+            def convert_module(self, converter, ann):
+                self.calls.append("convert_module")
+                converted = nn.Sequential(ann, nn.ReLU())
+                converted.marker = "module"
+                return converted
+
+        recipe = RecordingModuleRecipe()
+        model = nn.Linear(2, 2).train()
+        converter = ModuleConverter(recipe=recipe)
+        converted = converter.convert(model)
+        assert recipe.calls == ["validate", "convert_module"]
+        assert converted.marker == "module"
+        assert isinstance(converted, nn.Sequential)
+        assert model.training
+        assert converter.device is None
+
+    def test_module_converter_rejects_non_module_result(self):
+        class InvalidModuleRecipe(ModuleConversionRecipe):
+            def convert_module(self, converter, ann):
+                return None
+
+        with pytest.raises(TypeError, match="convert_module must return"):
+            ModuleConverter(recipe=InvalidModuleRecipe()).convert(nn.Linear(2, 2))
+
+    def test_module_converter_preserves_recipe_returned_training_mode(self):
+        class NewModuleRecipe(ModuleConversionRecipe):
+            def convert_module(self, converter, ann):
+                return nn.Sequential(nn.Dropout()).eval()
+
+        model = nn.Linear(2, 2).train()
+        converted = ModuleConverter(recipe=NewModuleRecipe()).convert(model)
+
+        assert not converted.training
+        assert not converted[0].training
+        assert model.training
 
     def test_custom_recipe_runs_template_steps_in_order(self):
         class RecordingRecipe(ConversionRecipe):
@@ -1171,7 +1258,7 @@ class TestConverterRecipes:
     def test_unified_convert_uses_transformer_recipe(self):
         model = CoreTransformerMLP()
         model.eval()
-        converter = Converter(recipe="transformer_spike_equivalent")
+        converter = Converter(recipe="transformer_td_equivalent")
 
         converted = converter.convert(model)
         modules = dict(converted.named_modules())
@@ -1573,7 +1660,7 @@ class TestConverterTDOperatorReplacement:
         assert isinstance(modules["fc1"], TDLinear)
 
     def test_td_operator_replacement_skips_existing_td_modules(self):
-        recipe = TransformerSpikeEquivalentRecipe()
+        recipe = TransformerTDEquivalentRecipe()
 
         assert recipe._make_td_operator(TDLinear(4, 4)) is None
         assert recipe._make_td_operator(TDLayerNorm(4)) is None
@@ -1600,7 +1687,7 @@ class TestConverterTDOperatorReplacement:
         gelu = nn.GELU()
         delattr(gelu, "approximate")
 
-        td_gelu = TransformerSpikeEquivalentRecipe()._make_td_operator(gelu)
+        td_gelu = TransformerTDEquivalentRecipe()._make_td_operator(gelu)
 
         assert isinstance(td_gelu, TDGELU)
         assert td_gelu.approximate == "none"
@@ -1723,20 +1810,22 @@ class TestConverterTDOperatorReplacement:
         )
 
     def test_sdpa_cumulative_output_matches_ann_reference(self):
-        model = SDPABlock()
-        converted = _td_converter().convert(model)
         query_seq = torch.randn(4, 2, 3, 5, 8)
         key_seq = torch.randn(4, 2, 3, 6, 8)
         value_seq = torch.randn(4, 2, 3, 6, 7)
 
-        y_seq = converted(query_seq, key_seq, value_seq)
-        expected = model(
-            query_seq.cumsum(dim=0),
-            key_seq.cumsum(dim=0),
-            value_seq.cumsum(dim=0),
-        )
+        for model in (SDPABlock(), SDPAKeywordBlock()):
+            converted = _td_converter().convert(model)
+            y_seq = converted(query_seq, key_seq, value_seq)
+            expected = model(
+                query_seq.cumsum(dim=0),
+                key_seq.cumsum(dim=0),
+                value_seq.cumsum(dim=0),
+            )
 
-        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+            assert torch.allclose(
+                y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6
+            )
 
     def test_sdpa_rewrite_supports_mask_causal_scale_and_positional_args(self):
         query_seq = torch.randn(4, 2, 3, 5, 8)
@@ -1837,7 +1926,7 @@ class TestConverterTDOperatorReplacement:
             batch_first=True,
         )
 
-        TransformerSpikeEquivalentRecipe._copy_mha_parameters(source, target)
+        TransformerTDEquivalentRecipe._copy_mha_parameters(source, target)
 
         assert target.q_proj.bias is None
         assert target.k_proj.bias is None
@@ -2910,7 +2999,9 @@ class TestDelayedReadoutEstimation:
 
     def test_delay_estimation_warns_when_readout_budget_is_too_small(self):
         model = _trace_ann2snn_leaf(
-            ScalerNeuronScalerNet(neuron.IFNode(v_threshold=1.0, v_reset=None), [4.0, 4.0])
+            ScalerNeuronScalerNet(
+                neuron.IFNode(v_threshold=1.0, v_reset=None), [4.0, 4.0]
+            )
         )
         loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import operator
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
 import torch
@@ -8,6 +9,7 @@ import torch.nn.functional as F
 from torch import fx
 
 from spikingjelly.activation_based.ann2snn.operators import (
+    SNNMatrixOperator,
     TDConv2d,
     TDGELU,
     TDLayerNorm,
@@ -15,6 +17,7 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDModule,
     TDMultiheadAttention,
     TDScaledDotProductAttention,
+    TDSoftmax,
 )
 from spikingjelly.activation_based.ann2snn.recipes.base import ConversionRecipe
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
@@ -27,49 +30,77 @@ if TYPE_CHECKING:
     from spikingjelly.activation_based.ann2snn.converter import Converter
 
 
-__all__ = ["TransformerSpikeEquivalentRecipe"]
+__all__ = ["TransformerTDEquivalentRecipe"]
 
 
-class TransformerSpikeEquivalentRecipe(ConversionRecipe):
+def _td_softmax_dim(dim: int) -> int:
+    # `dim` indexes the ANN tensor. TD prepends a time axis, so non-negative
+    # dims shift by +1. Negative dims stay negative because TDSoftmax resolves
+    # them against the TD tensor rank, preserving the same feature axis.
+    return dim + 1 if dim >= 0 else dim
+
+
+class _TDTanh(TDModule):
+    def ann_forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.tanh(x)
+
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        return self._td_sequence_forward((x_seq,), torch.tanh)
+
+
+class TransformerTDEquivalentRecipe(ConversionRecipe):
     r"""
-    **API Language** - :ref:`中文 <TransformerSpikeEquivalentRecipe-cn>` | :ref:`English <TransformerSpikeEquivalentRecipe-en>`
+    **API Language** - :ref:`中文 <TransformerTDEquivalentRecipe-cn>` | :ref:`English <TransformerTDEquivalentRecipe-en>`
 
     ----
 
-    .. _TransformerSpikeEquivalentRecipe-cn:
+    .. _TransformerTDEquivalentRecipe-cn:
 
     * **中文**
 
-    Transformer TD / spike-equivalent operator 替换 recipe。该 recipe 不插入
+    Transformer TD-equivalent operator 替换 recipe。该 recipe 不插入
     observer，不运行 dataloader 校准，也不强制切换模型 train/eval 状态；它仅
     将当前支持的 ANN core modules 和窄 attention 子集替换为 TD 等价算子。
 
     ----
 
-    .. _TransformerSpikeEquivalentRecipe-en:
+    .. _TransformerTDEquivalentRecipe-en:
 
     * **English**
 
-    Transformer TD / spike-equivalent operator replacement recipe. This recipe
+    Transformer TD-equivalent operator replacement recipe. This recipe
     does not insert observers, does not run dataloader calibration, and does not
     force train/eval mode changes. It only replaces the currently supported ANN
     core modules and narrow attention subset with TD-equivalent operators.
     """
 
+    def __init__(self, time_steps: Optional[int] = None) -> None:
+        self.time_steps = time_steps
+
+    def validate(self, converter: "Converter") -> None:
+        if self.time_steps is None:
+            return
+        if (
+            not isinstance(self.time_steps, int)
+            or isinstance(self.time_steps, bool)
+            or self.time_steps <= 0
+        ):
+            raise ValueError("time_steps must be a positive integer when set.")
+
     def replace(
         self, converter: "Converter", fx_model: fx.GraphModule
     ) -> fx.GraphModule:
         r"""
-        **API Language** - :ref:`中文 <TransformerSpikeEquivalentRecipe.replace-cn>` | :ref:`English <TransformerSpikeEquivalentRecipe.replace-en>`
+        **API Language** - :ref:`中文 <TransformerTDEquivalentRecipe.replace-cn>` | :ref:`English <TransformerTDEquivalentRecipe.replace-en>`
 
         ----
 
-        .. _TransformerSpikeEquivalentRecipe.replace-cn:
+        .. _TransformerTDEquivalentRecipe.replace-cn:
 
         * **中文**
 
         将当前支持的 Transformer core modules、SDPA 调用和窄
-        ``MultiheadAttention`` 调用替换为 TD / spike-equivalent 算子。
+        ``MultiheadAttention`` 调用替换为 TD-equivalent 算子。
         该步骤不插入 observer，也不运行 rate-coding 校准。
 
         :param converter: 执行当前 recipe 的转换器。
@@ -82,12 +113,12 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
 
         ----
 
-        .. _TransformerSpikeEquivalentRecipe.replace-en:
+        .. _TransformerTDEquivalentRecipe.replace-en:
 
         * **English**
 
         Replace currently supported Transformer core modules, SDPA calls and
-        narrow ``MultiheadAttention`` calls with TD / spike-equivalent
+        narrow ``MultiheadAttention`` calls with TD-equivalent
         operators. This step does not insert observers or run rate-coding
         calibration.
 
@@ -112,6 +143,8 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
                 continue
             self._replace_submodule(fx_model, node.target, replacement)
             modules[node.target] = replacement
+
+        self._replace_functional_td_ops(fx_model)
 
         sdpa_index = 0
         existing_modules = set(dict(fx_model.named_modules()).keys())
@@ -150,10 +183,20 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
 
         return adapt_step_mode_graph(
             fx_model,
-            context="TransformerSpikeEquivalentRecipe step-mode backend",
+            context="TransformerTDEquivalentRecipe step-mode backend",
             wrap_module_types=_SHAPE_ONLY_MODULE_TYPES,
             safe_module_types=_TRANSFORMER_SAFE_MODULE_TYPES,
+            safe_call_functions=(
+                torch.div,
+                operator.truediv,
+            ),
         )
+
+    def finalize(self, converter: "Converter", fx_model: fx.GraphModule) -> nn.Module:
+        object.__setattr__(fx_model, "ann2snn_recipe", "transformer_td_equivalent")
+        if self.time_steps is not None:
+            object.__setattr__(fx_model, "time_steps", self.time_steps)
+        return fx_model
 
     @staticmethod
     def _replace_submodule(
@@ -177,10 +220,18 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
         return default
 
     @staticmethod
+    def _get_tensor_argument(node: fx.Node, name: str, position: int) -> Any:
+        if len(node.args) > position:
+            return node.args[position]
+        if name in node.kwargs:
+            return node.kwargs[name]
+        raise ValueError(
+            f"TD conversion got malformed {node.target!r} node: missing {name!r}."
+        )
+
+    @staticmethod
     def _parse_sdpa_node(node: fx.Node) -> Dict[str, Any]:
-        if len(node.args) < 3:
-            raise ValueError("SDPA node must have query, key, and value arguments.")
-        dropout_p = TransformerSpikeEquivalentRecipe._get_literal_argument(
+        dropout_p = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "dropout_p", 4, 0.0
         )
         if not isinstance(dropout_p, (int, float)) or float(dropout_p) != 0.0:
@@ -188,13 +239,13 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
                 "TD SDPA conversion only supports literal dropout_p=0.0, "
                 f"but got {dropout_p!r}."
             )
-        enable_gqa = TransformerSpikeEquivalentRecipe._get_literal_argument(
+        enable_gqa = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "enable_gqa", 7, False
         )
         if enable_gqa is not False:
             raise ValueError("TD SDPA conversion does not support enable_gqa=True.")
 
-        is_causal = TransformerSpikeEquivalentRecipe._get_literal_argument(
+        is_causal = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "is_causal", 5, False
         )
         if not isinstance(is_causal, bool):
@@ -202,7 +253,7 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
                 "TD SDPA conversion only supports literal bool is_causal, "
                 f"but got {is_causal!r}."
             )
-        scale = TransformerSpikeEquivalentRecipe._get_literal_argument(
+        scale = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "scale", 6, None
         )
         if scale is not None and not isinstance(scale, (int, float)):
@@ -212,10 +263,16 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             )
 
         return {
-            "query": node.args[0],
-            "key": node.args[1],
-            "value": node.args[2],
-            "attn_mask": TransformerSpikeEquivalentRecipe._get_literal_argument(
+            "query": TransformerTDEquivalentRecipe._get_tensor_argument(
+                node, "query", 0
+            ),
+            "key": TransformerTDEquivalentRecipe._get_tensor_argument(
+                node, "key", 1
+            ),
+            "value": TransformerTDEquivalentRecipe._get_tensor_argument(
+                node, "value", 2
+            ),
+            "attn_mask": TransformerTDEquivalentRecipe._get_literal_argument(
                 node, "attn_mask", 3, None
             ),
             "is_causal": is_causal,
@@ -239,17 +296,17 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
         if module.add_zero_attn:
             raise ValueError("TD MHA conversion does not support add_zero_attn.")
 
-        need_weights = TransformerSpikeEquivalentRecipe._get_literal_argument(
+        need_weights = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "need_weights", 4, True
         )
         if need_weights is not False:
             raise ValueError("TD MHA conversion requires need_weights=False.")
-        key_padding_mask = TransformerSpikeEquivalentRecipe._get_literal_argument(
+        key_padding_mask = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "key_padding_mask", 3, None
         )
         if key_padding_mask is not None:
             raise ValueError("TD MHA conversion does not support key_padding_mask.")
-        average_attn_weights = TransformerSpikeEquivalentRecipe._get_literal_argument(
+        average_attn_weights = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "average_attn_weights", 6, True
         )
         if average_attn_weights is not True:
@@ -353,6 +410,19 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             td_module.train(module.training)
             return td_module
 
+        if isinstance(module, nn.Tanh):
+            td_module = _TDTanh()
+            td_module.train(module.training)
+            return td_module
+
+        if isinstance(module, nn.Softmax):
+            dim = module.dim
+            if not isinstance(dim, int):
+                raise ValueError(
+                    "TD softmax conversion requires nn.Softmax dim to be a literal int."
+                )
+            return TDSoftmax(dim=_td_softmax_dim(dim))
+
         if isinstance(module, nn.MultiheadAttention):
             if node is None:
                 raise ValueError("TD MHA conversion requires an FX node.")
@@ -371,3 +441,118 @@ class TransformerSpikeEquivalentRecipe(ConversionRecipe):
             return td_module
 
         return None
+
+    @staticmethod
+    def _insert_call_module_after(
+        fx_model: fx.GraphModule,
+        node: fx.Node,
+        module: nn.Module,
+        prefix: str,
+        index: int,
+        args: tuple[Any, ...],
+    ) -> int:
+        existing = set(dict(fx_model.named_modules()).keys())
+        target = f"{prefix}_{index}"
+        while target in existing:
+            index += 1
+            target = f"{prefix}_{index}"
+        fx_model.add_submodule(target, module)
+        with fx_model.graph.inserting_after(node):
+            new_node = fx_model.graph.call_module(target, args=args)
+        node.replace_all_uses_with(new_node)
+        fx_model.graph.erase_node(node)
+        return index + 1
+
+    def _replace_functional_td_ops(self, fx_model: fx.GraphModule) -> None:
+        softmax_index = 0
+        matmul_index = 0
+        gelu_index = 0
+        tanh_index = 0
+        for node in list(fx_model.graph.nodes):
+            if node.op == "call_function" and node.target is F.gelu:
+                approximate = self._get_literal_argument(node, "approximate", 1, "none")
+                if approximate not in ("none", "tanh"):
+                    raise ValueError(
+                        "TD GELU conversion requires approximate to be 'none' or 'tanh'."
+                    )
+                gelu_index = self._insert_call_module_after(
+                    fx_model,
+                    node,
+                    TDGELU(approximate=approximate),
+                    "td_gelu",
+                    gelu_index,
+                    (self._get_tensor_argument(node, "input", 0),),
+                )
+                continue
+            if node.op == "call_function" and node.target in (torch.tanh, F.tanh):
+                tanh_index = self._insert_call_module_after(
+                    fx_model,
+                    node,
+                    _TDTanh(),
+                    "td_tanh",
+                    tanh_index,
+                    (self._get_tensor_argument(node, "input", 0),),
+                )
+                continue
+            if node.op == "call_function" and node.target in (F.softmax, torch.softmax):
+                dim = self._get_literal_argument(node, "dim", 1, None)
+                if not isinstance(dim, int):
+                    raise ValueError("TD softmax conversion requires literal int dim.")
+                softmax_index = self._insert_call_module_after(
+                    fx_model,
+                    node,
+                    TDSoftmax(dim=_td_softmax_dim(dim)),
+                    "td_softmax",
+                    softmax_index,
+                    (self._get_tensor_argument(node, "input", 0),),
+                )
+                continue
+            if node.op == "call_method" and node.target == "softmax":
+                dim = self._get_literal_argument(node, "dim", 1, None)
+                if not isinstance(dim, int):
+                    raise ValueError(
+                        "TD tensor.softmax conversion requires literal int dim."
+                    )
+                softmax_index = self._insert_call_module_after(
+                    fx_model,
+                    node,
+                    TDSoftmax(dim=_td_softmax_dim(dim)),
+                    "td_softmax",
+                    softmax_index,
+                    (node.args[0],),
+                )
+                continue
+            if node.op == "call_function" and node.target in (
+                torch.matmul,
+                operator.matmul,
+            ):
+                matmul_index = self._insert_call_module_after(
+                    fx_model,
+                    node,
+                    SNNMatrixOperator(),
+                    "td_matmul",
+                    matmul_index,
+                    (
+                        self._get_tensor_argument(node, "input", 0),
+                        self._get_tensor_argument(node, "other", 1),
+                    ),
+                )
+                continue
+            if node.op == "call_method" and node.target == "matmul":
+                if len(node.args) < 2:
+                    raise ValueError(
+                        "TD tensor.matmul conversion got malformed matmul node."
+                    )
+                matmul_index = self._insert_call_module_after(
+                    fx_model,
+                    node,
+                    SNNMatrixOperator(),
+                    "td_matmul",
+                    matmul_index,
+                    (node.args[0], node.args[1]),
+                )
+                continue
+
+        fx_model.graph.lint()
+        fx_model.delete_all_unused_submodules()
+        fx_model.recompile()

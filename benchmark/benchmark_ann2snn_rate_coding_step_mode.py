@@ -242,14 +242,18 @@ def assert_parity(
 
 
 def build_converted_model(args: argparse.Namespace, device: torch.device) -> nn.Module:
-    model = ConvClassifier(
-        in_channels=args.in_channels,
-        channels=args.channels,
-        image_size=args.image_size,
-        depth=args.depth,
-        hidden_dim=args.hidden_dim,
-        num_classes=args.num_classes,
-    ).to(device).eval()
+    model = (
+        ConvClassifier(
+            in_channels=args.in_channels,
+            channels=args.channels,
+            image_size=args.image_size,
+            depth=args.depth,
+            hidden_dim=args.hidden_dim,
+            num_classes=args.num_classes,
+        )
+        .to(device)
+        .eval()
+    )
     recipe = RateCodingRecipe(
         dataloader=make_calibration(args, device),
         mode="Max",
@@ -339,14 +343,11 @@ def main() -> None:
             json.dumps(
                 {
                     "config": {
-                        key: value
-                        for key, value in vars(args).items()
-                        if key != "json"
+                        key: value for key, value in vars(args).items() if key != "json"
                     },
                     "results": [asdict(result) for result in results],
                     "multi_step_speedup": (
-                        single_result.seconds_per_epoch
-                        / multi_result.seconds_per_epoch
+                        single_result.seconds_per_epoch / multi_result.seconds_per_epoch
                     ),
                 },
                 indent=2,

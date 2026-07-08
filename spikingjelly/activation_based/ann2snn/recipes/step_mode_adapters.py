@@ -38,9 +38,7 @@ _RATE_CODING_STATELESS_MODULE_TYPES: Tuple[Type[nn.Module], ...] = (
     nn.Dropout2d,
 )
 
-_SHAPE_ONLY_MODULE_TYPES: Tuple[Type[nn.Module], ...] = (
-    nn.Flatten,
-)
+_SHAPE_ONLY_MODULE_TYPES: Tuple[Type[nn.Module], ...] = (nn.Flatten,)
 _RATE_CODING_SAFE_MODULE_TYPES: Tuple[Type[nn.Module], ...] = (nn.ReLU,)
 _TRANSFORMER_SAFE_MODULE_TYPES: Tuple[Type[nn.Module], ...] = (
     nn.Dropout,
@@ -329,13 +327,11 @@ class _StatelessReshape(nn.Module, base.StepModule):
         if self.step_mode == "m":
             if not sizes:
                 raise ValueError("reshape requires at least one output size.")
-            if sizes[0] != x.shape[1] and not (
-                sizes[0] == -1 and len(sizes) > 1
-            ):
+            if sizes[0] != x.shape[1] and not (sizes[0] == -1 and len(sizes) > 1):
                 raise ValueError(
                     f"{self.__class__.__name__} only supports reshapes that "
                     "preserve the original batch dimension in multi-step mode."
-            )
+                )
             flat = x.flatten(0, 1)
             y = flat.reshape(flat.shape[0], *sizes[1:])
             return y.reshape(x.shape[0], x.shape[1], *y.shape[1:])
@@ -659,9 +655,7 @@ def _check_literal_dim(dim: Any, context: str) -> None:
         for d in dim:
             _check_literal_dim(d, context)
         return
-    raise ValueError(
-        f"{context} requires literal integer dimensions, but got {dim!r}."
-    )
+    raise ValueError(f"{context} requires literal integer dimensions, but got {dim!r}.")
 
 
 def _make_mean_module(node: fx.Node, context: str) -> _StatelessTensorOp:
@@ -763,8 +757,7 @@ def _make_unflatten_module(node: fx.Node, context: str) -> _StatelessTensorOp:
     _check_literal_dim(dim, context)
     if not isinstance(unflattened_size, (tuple, list, torch.Size)):
         raise ValueError(
-            f"{context} requires literal unflatten sizes, but got "
-            f"{unflattened_size!r}."
+            f"{context} requires literal unflatten sizes, but got {unflattened_size!r}."
         )
     return _StatelessTensorOp(
         op_name="unflatten",
@@ -790,13 +783,14 @@ def _make_permute_module(node: fx.Node, context: str) -> _StatelessTensorOp:
         )
     if not normalized_dims or normalized_dims[0] != 0:
         raise ValueError(
-            f"{context} requires permute to preserve the original batch "
-            "dimension."
+            f"{context} requires permute to preserve the original batch dimension."
         )
     return _StatelessTensorOp(op_name="permute", op_kwargs={"dims": normalized_dims})
 
 
-def _make_cat_module(node: fx.Node, context: str) -> Tuple[_StatelessCat, Tuple[Any, ...]]:
+def _make_cat_module(
+    node: fx.Node, context: str
+) -> Tuple[_StatelessCat, Tuple[Any, ...]]:
     args = list(node.args)
     kwargs = dict(node.kwargs)
     if args:
@@ -862,10 +856,7 @@ def _is_non_tensor_getitem_input(node: Any) -> bool:
             and len(node.args) == 2
             and node.args[1] == "shape"
         )
-        or (
-            node.op == "call_method"
-            and node.target == "size"
-        )
+        or (node.op == "call_method" and node.target == "size")
         or node.meta.get("ann2snn_step_mode_module")
         in (_StatelessShape, _StatelessSize)
         or (

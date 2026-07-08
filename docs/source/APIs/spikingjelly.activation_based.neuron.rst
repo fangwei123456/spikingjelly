@@ -204,6 +204,14 @@ Few-Spike / LAS Neuron Primitives
    * - :class:`HGNode <spikingjelly.activation_based.neuron.few_spike.HGNode>`
      - Hierarchically-gated Few-Spike node.
 
+SpikeZIP Neuron Primitives
+--------------------------------------------------
+
+.. list-table::
+
+   * - :class:`STBIFNeuron <spikingjelly.activation_based.neuron.spikezip.STBIFNeuron>`
+     - Signed ternary BIF neuron for SpikeZIP QANN-to-SNN conversion.
+
 Neurons with Inter-layer Connection
 --------------------------------------------------
 

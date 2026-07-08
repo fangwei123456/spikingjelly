@@ -32,3 +32,19 @@ ImageNet ViT-B/16 with STATransformerRecipe
    :members:
    :undoc-members:
    :show-inheritance:
+
+BERT SST-2 with TransformerTDEquivalentRecipe
+------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_td_equivalent
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Synthetic RoBERTa QANN with SpikeZIPTFQANNRecipe
+------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.ann2snn.examples.roberta_spikezip_qann_synthetic
+   :members:
+   :undoc-members:
+   :show-inheritance:

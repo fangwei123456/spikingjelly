@@ -195,11 +195,7 @@ def run_single_step_epoch(
         output = None
         for step in range(time_steps):
             step_output = model(x_seq[step])
-            output = (
-                step_output
-                if output is None
-                else output + step_output
-            )
+            output = step_output if output is None else output + step_output
         last_output = output
     return last_output
 
@@ -268,19 +264,21 @@ def assert_parity(
 
 
 def build_converted_model(args: argparse.Namespace, device: torch.device) -> nn.Module:
-    model = TransformerClassifier(
-        input_dim=args.input_dim,
-        embed_dim=args.embed_dim,
-        seq_len=args.seq_len,
-        depth=args.depth,
-        num_heads=args.num_heads,
-        mlp_dim=args.mlp_dim,
-        num_classes=args.num_classes,
-    ).to(device).eval()
+    model = (
+        TransformerClassifier(
+            input_dim=args.input_dim,
+            embed_dim=args.embed_dim,
+            seq_len=args.seq_len,
+            depth=args.depth,
+            num_heads=args.num_heads,
+            mlp_dim=args.mlp_dim,
+            num_classes=args.num_classes,
+        )
+        .to(device)
+        .eval()
+    )
     dataloader = (
-        make_calibration(args, device)
-        if args.mode == "spiking_encoder"
-        else None
+        make_calibration(args, device) if args.mode == "spiking_encoder" else None
     )
     recipe = STATransformerRecipe(
         dataloader=dataloader,
@@ -369,14 +367,11 @@ def main() -> None:
             json.dumps(
                 {
                     "config": {
-                        key: value
-                        for key, value in vars(args).items()
-                        if key != "json"
+                        key: value for key, value in vars(args).items() if key != "json"
                     },
                     "results": [asdict(result) for result in results],
                     "multi_step_speedup": (
-                        single_result.seconds_per_epoch
-                        / multi_result.seconds_per_epoch
+                        single_result.seconds_per_epoch / multi_result.seconds_per_epoch
                     ),
                 },
                 indent=2,

@@ -10,6 +10,7 @@ from .flexsn import *
 from .few_spike import *
 
 # research-specific neurons
+from .spikezip import *
 from .dsr import *
 from .inter_layer_connection import *
 from .lif_variants import *

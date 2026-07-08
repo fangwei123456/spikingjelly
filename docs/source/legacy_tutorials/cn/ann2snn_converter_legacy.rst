@@ -10,7 +10,7 @@ English version: :doc:`../en/ann2snn_converter_legacy`
 
     #. :doc:`更早期 clock-driven 时代 ANN2SNN API <5_ann2snn>`。
     #. legacy pre-Recipe Converter API，即本页内容：``Converter(mode=..., dataloader=...)`` 和 ``convert_to_spiking_neurons(model)``。
-    #. :doc:`当前 Recipe API <../../tutorials/cn/ann2snn>`，使用 ``RateCodingRecipe`` 或 ``TransformerSpikeEquivalentRecipe`` 配合 ``Converter.convert(model)``。
+    #. :doc:`当前 Recipe API <../../tutorials/cn/ann2snn>`，使用 ``RateCodingRecipe`` 或 ``TransformerTDEquivalentRecipe`` 配合 ``Converter.convert(model)``。
 
 本节教程主要关注 ``spikingjelly.activation_based.ann2snn``，介绍如何将训练好的ANN转换SNN，并且在SpikingJelly框架上进行仿真。
 
