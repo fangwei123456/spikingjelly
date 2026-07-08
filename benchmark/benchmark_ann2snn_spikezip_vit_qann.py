@@ -28,12 +28,14 @@ class SpikeZIPMyQuan(nn.Module):
     def __init__(self, level: int, sym: bool = False) -> None:
         super().__init__()
         self.level = int(level)
+        if self.level < 2:
+            raise ValueError(f"level must be >= 2, got {level}.")
         self.sym = bool(sym)
-        if sym:
-            pos_max = level // 2 - 1
-            neg_min = -level // 2
+        if self.sym:
+            pos_max = self.level // 2 - 1
+            neg_min = -self.level // 2
         else:
-            pos_max = level - 1
+            pos_max = self.level - 1
             neg_min = 0
         self.register_buffer("pos_max", torch.tensor(float(pos_max)))
         self.register_buffer("neg_min", torch.tensor(float(neg_min)))
@@ -135,15 +137,22 @@ class SpikeZIPViTBlock(nn.Module):
 
 
 class SpikeZIPViTSmallQANN(nn.Module):
+    class _PatchEmbed(nn.Module):
+        def __init__(self, dim: int, level: int) -> None:
+            super().__init__()
+            self.proj = nn.Sequential(
+                nn.Conv2d(3, dim, kernel_size=16, stride=16),
+                SpikeZIPMyQuan(level, sym=True),
+            )
+            self.num_patches = 196
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.proj(x)
+
     def __init__(self, level: int = 32) -> None:
         super().__init__()
         dim = 384
-        self.patch_embed = nn.Module()
-        self.patch_embed.proj = nn.Sequential(
-            nn.Conv2d(3, dim, kernel_size=16, stride=16),
-            SpikeZIPMyQuan(level, sym=True),
-        )
-        self.patch_embed.num_patches = 196
+        self.patch_embed = self._PatchEmbed(dim, level)
         self.cls_token = nn.Parameter(torch.zeros(1, 1, dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, 197, dim))
         self.pos_drop = nn.Dropout(0.0)
@@ -185,10 +194,13 @@ def _load_checkpoint(
                 "Pass --allow-namespace-checkpoint only for trusted local checkpoints."
             ) from exc
         if safe_globals is None:
-            checkpoint = torch.load(path, map_location="cpu", weights_only=False)
-        else:
-            with safe_globals([argparse.Namespace]):
-                checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+            raise RuntimeError(
+                "Loading argparse.Namespace checkpoints requires torch serialization "
+                "safe_globals support. Refusing to fall back to weights_only=False; "
+                "re-save a state_dict-only checkpoint or upgrade PyTorch."
+            ) from exc
+        with safe_globals([argparse.Namespace]):
+            checkpoint = torch.load(path, map_location="cpu", weights_only=True)
     return checkpoint["model"]
 
 
@@ -368,6 +380,8 @@ def _iter_image_batches(args):
 
 
 def _first_real_then_zero_sequence(x: torch.Tensor, time_steps: int) -> torch.Tensor:
+    # Single-shot deterministic sequence: the real input is injected at t=0 and
+    # later steps release residual SpikeZIP state.
     x_seq = torch.zeros(
         time_steps,
         *x.shape,
@@ -434,16 +448,24 @@ def _debug_block_diffs(
     return result
 
 
+def _make_debug_hook(features, max_items: int):
+    def hook(_module, _inputs, output):
+        if len(features) < max_items:
+            features.append(output.detach())
+
+    return hook
+
+
 def _forward_snn(converted, images: torch.Tensor, args):
     x_seq = _first_real_then_zero_sequence(images, args.time_steps)
     if args.step_mode == "m":
-        chunk_size = args.snn_batch_size or images.shape[0]
+        chunk_size = args.snn_batch_size or args.time_steps
         if chunk_size <= 0:
             raise ValueError("--snn-batch-size must be positive when it is set.")
         logits_chunks = []
         sequence_chunks = []
-        for chunk in x_seq.split(chunk_size, dim=1):
-            functional.reset_net(converted)
+        functional.reset_net(converted)
+        for chunk in x_seq.split(chunk_size, dim=0):
             if args.return_sequences:
                 sequence = converted(chunk)
                 logits = sequence.sum(dim=0)
@@ -451,9 +473,9 @@ def _forward_snn(converted, images: torch.Tensor, args):
             else:
                 logits = converted(chunk).sum(dim=0)
             logits_chunks.append(logits)
-        snn_logits = torch.cat(logits_chunks, dim=0)
+        snn_logits = torch.stack(logits_chunks, dim=0).sum(dim=0)
         if args.return_sequences:
-            sequence = torch.cat(sequence_chunks, dim=1)
+            sequence = torch.cat(sequence_chunks, dim=0)
             return snn_logits, args.time_steps, list(sequence.shape)
         return (
             snn_logits,
@@ -511,10 +533,14 @@ def main() -> None:
         )
     if (
         args.debug_blocks
-        and args.snn_batch_size is not None
-        and args.snn_batch_size < args.batch_size
+        and args.sequence_loop_bottlenecks
     ):
-        raise ValueError("--debug-blocks requires --snn-batch-size >= --batch-size.")
+        raise ValueError(
+            "--debug-blocks does not support --sequence-loop-bottlenecks because "
+            "mixed sequence and looped block outputs are ambiguous."
+        )
+    if args.level < 2:
+        raise ValueError("--level must be >= 2.")
     device = torch.device(args.device)
     model = SpikeZIPViTSmallQANN(level=args.level).eval()
     msg = model.load_state_dict(
@@ -549,20 +575,20 @@ def main() -> None:
     qann_handles = []
     snn_handles = []
     if args.debug_blocks:
+        qann_debug_limit = len(model.blocks)
+        snn_debug_limit = len(converted.blocks) * (
+            args.time_steps if args.step_mode == "s" else 1
+        )
         for i, block in enumerate(model.blocks):
             qann_handles.append(
                 block.register_forward_hook(
-                    lambda _m, _inp, out, index=i: qann_features.append(
-                        (index, out.detach().cpu())
-                    )
+                    _make_debug_hook(qann_features, qann_debug_limit)
                 )
             )
         for i, block in enumerate(converted.blocks):
             snn_handles.append(
                 block.register_forward_hook(
-                    lambda _m, _inp, out, index=i: snn_features.append(
-                        (index, out.detach().cpu())
-                    )
+                    _make_debug_hook(snn_features, snn_debug_limit)
                 )
             )
 
@@ -574,6 +600,7 @@ def main() -> None:
     sequence_shape = None
     executed_steps = None
     has_labels = False
+    debug_batches = 0
     with torch.inference_mode():
         for batch_index, (images, labels) in enumerate(
             _iter_image_batches(args), start=1
@@ -607,6 +634,8 @@ def main() -> None:
                 )
             snn_seconds += time.perf_counter() - started
             metrics.update(qann_logits, snn_logits, labels)
+            if args.debug_blocks and debug_batches == 0:
+                debug_batches = 1
             if args.print_freq > 0 and batch_index % args.print_freq == 0:
                 print(
                     json.dumps(
@@ -624,9 +653,19 @@ def main() -> None:
     for handle in qann_handles + snn_handles:
         handle.remove()
     if args.debug_blocks:
-        qann_outputs = _debug_qann_outputs(qann_features)
-        snn_outputs = _debug_snn_outputs(snn_features, args.time_steps)
-        debug["debug_batches"] = batch_index if "batch_index" in locals() else 0
+        qann_outputs = _debug_qann_outputs(
+            (index, value)
+            for index, value in enumerate(qann_features)
+        )
+        snn_outputs = _debug_snn_outputs(
+            (
+                index % len(converted.blocks),
+                value,
+            )
+            for index, value in enumerate(snn_features)
+            if len(converted.blocks) > 0
+        )
+        debug["debug_batches"] = debug_batches
         debug["block_max_abs_diff"] = _debug_block_diffs(qann_outputs, snn_outputs)
 
     result = {

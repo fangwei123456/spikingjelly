@@ -1,6 +1,7 @@
 import argparse
 import json
 import time
+from functools import partial
 from pathlib import Path
 
 import torch
@@ -21,7 +22,7 @@ def import_huggingface():
     except ImportError as exc:
         raise ImportError(
             "This example requires optional Hugging Face dependencies. Install "
-            "them with: uv pip install transformers datasets"
+            "them with: pip install transformers datasets"
         ) from exc
     return load_dataset, AutoModelForSequenceClassification, AutoTokenizer
 
@@ -193,10 +194,10 @@ def build_loader(args, tokenizer):
             batch_size=args.batch_size,
             shuffle=False,
             num_workers=args.num_workers,
-            collate_fn=lambda batch: collate_tokenized(
-                batch,
-                tokenizer,
-                args.max_length,
+            collate_fn=partial(
+                collate_tokenized,
+                tokenizer=tokenizer,
+                max_length=args.max_length,
             ),
         ),
         len(dataset),

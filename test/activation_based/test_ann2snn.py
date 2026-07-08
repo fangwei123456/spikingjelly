@@ -1016,6 +1016,11 @@ class TestConverterRecipes:
         converter = Converter(recipe="transformer_td_equivalent")
         assert isinstance(converter.recipe, TransformerTDEquivalentRecipe)
 
+    def test_transformer_spike_equivalent_string_is_compat_alias(self):
+        with pytest.warns(DeprecationWarning, match="transformer_spike_equivalent"):
+            converter = Converter(recipe="transformer_spike_equivalent")
+        assert isinstance(converter.recipe, TransformerTDEquivalentRecipe)
+
     def test_rate_coding_recipe_name_requires_recipe_object(self):
         with pytest.raises(ValueError, match="rate_coding recipe"):
             Converter(recipe="rate_coding")
@@ -1076,16 +1081,17 @@ class TestConverterRecipes:
         with pytest.raises(TypeError, match="convert_module must return"):
             ModuleConverter(recipe=InvalidModuleRecipe()).convert(nn.Linear(2, 2))
 
-    def test_module_converter_matches_returned_module_training_mode(self):
+    def test_module_converter_preserves_recipe_returned_training_mode(self):
         class NewModuleRecipe(ModuleConversionRecipe):
             def convert_module(self, converter, ann):
-                return nn.Sequential(nn.Dropout())
+                return nn.Sequential(nn.Dropout()).eval()
 
-        model = nn.Linear(2, 2).eval()
+        model = nn.Linear(2, 2).train()
         converted = ModuleConverter(recipe=NewModuleRecipe()).convert(model)
 
         assert not converted.training
         assert not converted[0].training
+        assert model.training
 
     def test_custom_recipe_runs_template_steps_in_order(self):
         class RecordingRecipe(ConversionRecipe):

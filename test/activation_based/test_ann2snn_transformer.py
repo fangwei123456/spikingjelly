@@ -378,9 +378,24 @@ class _TinyFunctionalSoftmax(nn.Module):
         return F.softmax(x, dim=1)
 
 
+class _TinyKeywordFunctionalSoftmax(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return F.softmax(input=x, dim=1)
+
+
 class _TinyTensorSoftmax(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x.softmax(dim=1)
+
+
+class _TinyFunctionalTanh(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.tanh(x)
+
+
+class _TinyKeywordFunctionalTanh(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.tanh(input=x)
 
 
 class _TinyNegativeDimSoftmax(nn.Module):
@@ -515,6 +530,7 @@ def test_transformer_td_equivalent_recipe_reset_repeats_outputs():
     [
         _TinyPositiveDimSoftmax(),
         _TinyFunctionalSoftmax(),
+        _TinyKeywordFunctionalSoftmax(),
         _TinyTensorSoftmax(),
     ],
 )
@@ -530,6 +546,36 @@ def test_transformer_td_equivalent_softmax_shifts_positive_dim(model):
         module for module in converted.modules() if isinstance(module, TDSoftmax)
     )
     assert td_softmax.dim == 2
+
+    x_seq = _first_real_then_zero_sequence(x, converted.time_steps)
+    functional.set_step_mode(converted, "m")
+    functional.reset_net(converted)
+    y_seq = converted(x_seq)
+
+    assert torch.allclose(
+        y_seq.sum(dim=0),
+        model(x),
+        atol=1e-6,
+        rtol=1e-6,
+    )
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        _TinyFunctionalTanh(),
+        _TinyKeywordFunctionalTanh(),
+    ],
+)
+def test_transformer_td_equivalent_functional_tanh_matches_ann(model):
+    x = torch.randn(3, 5)
+    converted = (
+        Converter(recipe=TransformerTDEquivalentRecipe(time_steps=4))
+        .convert(model.eval())
+        .eval()
+    )
+
+    assert any(module.__class__.__name__ == "_TDTanh" for module in converted.modules())
 
     x_seq = _first_real_then_zero_sequence(x, converted.time_steps)
     functional.set_step_mode(converted, "m")

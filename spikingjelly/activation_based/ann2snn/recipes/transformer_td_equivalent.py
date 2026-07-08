@@ -220,6 +220,16 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
         return default
 
     @staticmethod
+    def _get_tensor_argument(node: fx.Node, name: str, position: int) -> Any:
+        if len(node.args) > position:
+            return node.args[position]
+        if name in node.kwargs:
+            return node.kwargs[name]
+        raise ValueError(
+            f"TD conversion got malformed {node.target!r} node: missing {name!r}."
+        )
+
+    @staticmethod
     def _parse_sdpa_node(node: fx.Node) -> Dict[str, Any]:
         if len(node.args) < 3:
             raise ValueError("SDPA node must have query, key, and value arguments.")
@@ -453,6 +463,7 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
         softmax_index = 0
         matmul_index = 0
         gelu_index = 0
+        tanh_index = 0
         for node in list(fx_model.graph.nodes):
             if node.op == "call_function" and node.target is F.gelu:
                 approximate = self._get_literal_argument(node, "approximate", 1, "none")
@@ -466,7 +477,17 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
                     TDGELU(approximate=approximate),
                     "td_gelu",
                     gelu_index,
-                    (node.args[0],),
+                    (self._get_tensor_argument(node, "input", 0),),
+                )
+                continue
+            if node.op == "call_function" and node.target in (torch.tanh, F.tanh):
+                tanh_index = self._insert_call_module_after(
+                    fx_model,
+                    node,
+                    _TDTanh(),
+                    "td_tanh",
+                    tanh_index,
+                    (self._get_tensor_argument(node, "input", 0),),
                 )
                 continue
             if node.op == "call_function" and node.target in (F.softmax, torch.softmax):
@@ -479,7 +500,7 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
                     TDSoftmax(dim=_td_softmax_dim(dim)),
                     "td_softmax",
                     softmax_index,
-                    (node.args[0],),
+                    (self._get_tensor_argument(node, "input", 0),),
                 )
                 continue
             if node.op == "call_method" and node.target == "softmax":
@@ -501,15 +522,16 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
                 torch.matmul,
                 operator.matmul,
             ):
-                if len(node.args) < 2:
-                    raise ValueError("TD matmul conversion got malformed matmul node.")
                 matmul_index = self._insert_call_module_after(
                     fx_model,
                     node,
                     SNNMatrixOperator(),
                     "td_matmul",
                     matmul_index,
-                    (node.args[0], node.args[1]),
+                    (
+                        self._get_tensor_argument(node, "input", 0),
+                        self._get_tensor_argument(node, "other", 1),
+                    ),
                 )
                 continue
             if node.op == "call_method" and node.target == "matmul":
@@ -525,6 +547,7 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
                     matmul_index,
                     (node.args[0], node.args[1]),
                 )
+                continue
 
         fx_model.graph.lint()
         fx_model.delete_all_unused_submodules()
