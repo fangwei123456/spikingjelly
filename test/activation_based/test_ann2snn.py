@@ -339,6 +339,17 @@ class SDPABlock(nn.Module):
         )
 
 
+class SDPAKeywordBlock(nn.Module):
+    def forward(self, query, key, value, attn_mask=None):
+        return F.scaled_dot_product_attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=attn_mask,
+            dropout_p=0.0,
+        )
+
+
 class SDPAWithExistingTargetBlock(nn.Module):
     def __init__(self):
         super().__init__()
@@ -1799,20 +1810,22 @@ class TestConverterTDOperatorReplacement:
         )
 
     def test_sdpa_cumulative_output_matches_ann_reference(self):
-        model = SDPABlock()
-        converted = _td_converter().convert(model)
         query_seq = torch.randn(4, 2, 3, 5, 8)
         key_seq = torch.randn(4, 2, 3, 6, 8)
         value_seq = torch.randn(4, 2, 3, 6, 7)
 
-        y_seq = converted(query_seq, key_seq, value_seq)
-        expected = model(
-            query_seq.cumsum(dim=0),
-            key_seq.cumsum(dim=0),
-            value_seq.cumsum(dim=0),
-        )
+        for model in (SDPABlock(), SDPAKeywordBlock()):
+            converted = _td_converter().convert(model)
+            y_seq = converted(query_seq, key_seq, value_seq)
+            expected = model(
+                query_seq.cumsum(dim=0),
+                key_seq.cumsum(dim=0),
+                value_seq.cumsum(dim=0),
+            )
 
-        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+            assert torch.allclose(
+                y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6
+            )
 
     def test_sdpa_rewrite_supports_mask_causal_scale_and_positional_args(self):
         query_seq = torch.randn(4, 2, 3, 5, 8)

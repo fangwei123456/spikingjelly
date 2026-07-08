@@ -109,21 +109,25 @@ class STBIFNeuron(base.MemoryModule):
         :type step_mode: str
         """
         super().__init__()
+        self.level = int(level)
+        if isinstance(level, bool) or self.level < 2:
+            raise ValueError("SpikeZIP quantizer level must be >= 2.")
+        self.sym = bool(sym)
         self.register_buffer("q_threshold", _as_scalar_tensor(q_threshold).float())
         self.register_buffer(
             "pos_max",
             _as_scalar_tensor(
-                (level // 2 - 1 if sym else level - 1) if pos_max is None else pos_max
+                (
+                    self.level // 2 - 1 if self.sym else self.level - 1
+                ) if pos_max is None else pos_max
             ).float(),
         )
         self.register_buffer(
             "neg_min",
             _as_scalar_tensor(
-                (-level // 2 if sym else 0) if neg_min is None else neg_min
+                (-self.level // 2 if self.sym else 0) if neg_min is None else neg_min
             ).float(),
         )
-        self.level = int(level)
-        self.sym = bool(sym)
         self.step_mode = step_mode
         self.reset()
 
@@ -139,8 +143,8 @@ class STBIFNeuron(base.MemoryModule):
             + 1
         )
         level = int(getattr(quantizer, "level", default_level))
-        if level <= 0:
-            raise ValueError("SpikeZIP quantizer level must be positive.")
+        if isinstance(getattr(quantizer, "level", level), bool) or level < 2:
+            raise ValueError("SpikeZIP quantizer level must be >= 2.")
         return cls(scale, level=level, sym=sym, pos_max=pos_max, neg_min=neg_min)
 
     @property

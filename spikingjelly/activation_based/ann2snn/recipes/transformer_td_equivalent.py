@@ -231,8 +231,6 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
 
     @staticmethod
     def _parse_sdpa_node(node: fx.Node) -> Dict[str, Any]:
-        if len(node.args) < 3:
-            raise ValueError("SDPA node must have query, key, and value arguments.")
         dropout_p = TransformerTDEquivalentRecipe._get_literal_argument(
             node, "dropout_p", 4, 0.0
         )
@@ -265,9 +263,15 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
             )
 
         return {
-            "query": node.args[0],
-            "key": node.args[1],
-            "value": node.args[2],
+            "query": TransformerTDEquivalentRecipe._get_tensor_argument(
+                node, "query", 0
+            ),
+            "key": TransformerTDEquivalentRecipe._get_tensor_argument(
+                node, "key", 1
+            ),
+            "value": TransformerTDEquivalentRecipe._get_tensor_argument(
+                node, "value", 2
+            ),
             "attn_mask": TransformerTDEquivalentRecipe._get_literal_argument(
                 node, "attn_mask", 3, None
             ),

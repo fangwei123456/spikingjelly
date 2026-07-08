@@ -972,6 +972,12 @@ def test_spikezip_stbif_declares_triton_backend():
     assert "triton" in neuron.supported_backends
 
 
+@pytest.mark.parametrize("level", [0, 1, True])
+def test_spikezip_stbif_rejects_invalid_level(level):
+    with pytest.raises(ValueError, match="level must be >= 2"):
+        STBIFNeuron(0.25, level=level, sym=True)
+
+
 @pytest.mark.skipif(
     not torch.cuda.is_available() or not _TRITON_AVAILABLE,
     reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
