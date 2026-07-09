@@ -382,6 +382,71 @@ def test_precision_artifacts_autocast_context_resolves_fake_te_recipe(monkeypatc
     assert isinstance(state["recipe"], FakeDelayedScaling)
 
 
+def test_precision_artifacts_fp8_autocast_context_passes_legacy_recipe(monkeypatch):
+    fake_te = types.ModuleType("transformer_engine.pytorch")
+    fake_recipe_module = types.ModuleType("transformer_engine.common.recipe")
+    state = {"recipe": None}
+
+    class FakeDelayedScaling:
+        pass
+
+    class FakeContext:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+    def fp8_autocast(enabled=True, fp8_recipe=None):
+        state["recipe"] = fp8_recipe
+        return FakeContext()
+
+    fake_recipe_module.DelayedScaling = FakeDelayedScaling
+    fake_te.fp8_autocast = fp8_autocast
+    fake_root = types.ModuleType("transformer_engine")
+    fake_common = types.ModuleType("transformer_engine.common")
+    fake_common.recipe = fake_recipe_module
+    fake_root.pytorch = fake_te
+    fake_root.common = fake_common
+    monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
+    monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", fake_te)
+    monkeypatch.setitem(sys.modules, "transformer_engine.common", fake_common)
+    monkeypatch.setitem(
+        sys.modules,
+        "transformer_engine.common.recipe",
+        fake_recipe_module,
+    )
+
+    policy = resolve_precision_policy(
+        PrecisionConfig(mode="fp8-te", fp8_recipe="delayed")
+    )
+    artifacts = PrecisionArtifacts(
+        requested_config=PrecisionConfig(mode="fp8-te", fp8_recipe="delayed"),
+        effective_config=PrecisionConfig(mode="fp8-te", fp8_recipe="delayed"),
+        policy=policy,
+        model=torch.nn.Linear(4, 4),
+    )
+    with pytest.warns(RuntimeWarning, match="fp8_autocast"):
+        with artifacts.autocast_context():
+            pass
+    assert isinstance(state["recipe"], FakeDelayedScaling)
+
+
+def test_fp8_te_device_check_includes_buffers():
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    class BufferOnly(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.register_buffer("state", torch.empty(1, device="meta"))
+
+    policy = Float8TransformerEnginePolicy()
+    with pytest.raises(RuntimeError, match="parameters and buffers"):
+        policy._ensure_model_on_device(BufferOnly(), torch.device("cpu"))
+
+
 def test_fp8_te_unknown_recipe_warn_falls_back_to_fp32():
     model = torch.nn.Linear(4, 4)
     with pytest.warns(RuntimeWarning, match="falling back to fp32"):

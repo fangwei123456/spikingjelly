@@ -76,9 +76,7 @@ def _install_fake_te(monkeypatch):
                 if bias
                 else None
             )
-            self.register_buffer(
-                "fp8_scale", torch.ones(1, dtype=params_dtype), persistent=True
-            )
+            self._extra_state = {"fp8_scale": torch.ones(1, dtype=params_dtype)}
             self.eps = eps
             torch.nn.init.kaiming_uniform_(self.weight, a=5**0.5)
             if self.bias is not None:
@@ -93,6 +91,12 @@ def _install_fake_te(monkeypatch):
                 self.eps,
             )
             return torch.nn.functional.linear(x, self.weight, self.bias)
+
+        def get_extra_state(self):
+            return self._extra_state
+
+        def set_extra_state(self, state):
+            self._extra_state = state
 
     class FakeTELayerNormMLP(torch.nn.Module):
         def __init__(
@@ -127,9 +131,7 @@ def _install_fake_te(monkeypatch):
                 if bias
                 else None
             )
-            self.register_buffer(
-                "fp8_scale", torch.ones(1, dtype=params_dtype), persistent=True
-            )
+            self._extra_state = {"fp8_scale": torch.ones(1, dtype=params_dtype)}
             self.eps = eps
             torch.nn.init.kaiming_uniform_(self.fc1_weight, a=5**0.5)
             torch.nn.init.kaiming_uniform_(self.fc2_weight, a=5**0.5)
@@ -150,6 +152,12 @@ def _install_fake_te(monkeypatch):
             x = torch.nn.functional.gelu(x)
             return torch.nn.functional.linear(x, self.fc2_weight, self.fc2_bias)
 
+        def get_extra_state(self):
+            return self._extra_state
+
+        def set_extra_state(self, state):
+            self._extra_state = state
+
     class FakeTEDotProductAttention(torch.nn.Module):
         def __init__(self, *args, **kwargs):
             super().__init__()
@@ -168,7 +176,7 @@ def _install_fake_te(monkeypatch):
         def __exit__(self, exc_type, exc, tb):
             return None
 
-    def autocast(enabled=True, recipe=None):
+    def autocast(enabled=True, recipe=None, **kwargs):
         return FakeContext()
 
     def is_fp8_available(return_reason=False):
@@ -186,6 +194,23 @@ def _install_fake_te(monkeypatch):
     monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
     monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", fake_te)
     return fake_te
+
+
+def _clone_state_dict(state_dict):
+    cloned = {}
+    for key, value in state_dict.items():
+        if hasattr(value, "clone"):
+            cloned[key] = value.clone()
+        elif isinstance(value, dict):
+            cloned[key] = {
+                nested_key: nested_value.clone()
+                if hasattr(nested_value, "clone")
+                else nested_value
+                for nested_key, nested_value in value.items()
+            }
+        else:
+            cloned[key] = value
+    return cloned
 
 
 def test_conversion_report_marks_spikformer_linear_and_high_precision_modules():
@@ -703,6 +728,46 @@ def test_convert_model_for_precision_replaces_root_layer_norm_fp8_te(monkeypatch
     assert report.converted_modules == ["<root>"]
 
 
+def test_convert_model_for_precision_copies_alt_named_layer_norm_fp8_te(monkeypatch):
+    fake_te = _install_fake_te(monkeypatch)
+
+    class FakeAltTELayerNorm(torch.nn.Module):
+        def __init__(self, hidden_size, eps=1e-5, params_dtype=torch.float32, **kwargs):
+            super().__init__()
+            self.layer_norm_weight = torch.nn.Parameter(
+                torch.ones(hidden_size, dtype=params_dtype)
+            )
+            self.layer_norm_bias = torch.nn.Parameter(
+                torch.zeros(hidden_size, dtype=params_dtype)
+            )
+            self.eps = eps
+
+        def forward(self, x):
+            return torch.nn.functional.layer_norm(
+                x,
+                self.layer_norm_weight.shape,
+                self.layer_norm_weight,
+                self.layer_norm_bias,
+                self.eps,
+            )
+
+    fake_te.LayerNorm = FakeAltTELayerNorm
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.LayerNorm(8)
+    with torch.no_grad():
+        model.weight.fill_(2.0)
+        model.bias.fill_(0.5)
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+    torch.testing.assert_close(converted.layer_norm_weight, model.weight)
+    torch.testing.assert_close(converted.layer_norm_bias, model.bias)
+    assert report.converted_modules == ["<root>"]
+
+
 def test_convert_model_for_precision_reports_root_layer_norm_skip_without_te_layer_norm(
     monkeypatch,
 ):
@@ -744,9 +809,9 @@ def test_convert_model_for_precision_fuses_layer_norm_linear_fp8_te(monkeypatch)
     state_dict = converted.state_dict()
     assert "0.0.weight" in state_dict
     assert "0.1.weight" in state_dict
-    assert "0.wrapped.fp8_scale" in state_dict
+    assert "0.wrapped._extra_state" in state_dict
     converted.load_state_dict(state_dict, strict=True)
-    modified_state_dict = {k: v.clone() for k, v in state_dict.items()}
+    modified_state_dict = _clone_state_dict(state_dict)
     modified_state_dict["0.0.weight"].add_(1.0)
     expected_weight = modified_state_dict["0.0.weight"].clone()
     converted.load_state_dict(modified_state_dict, strict=True)
@@ -803,9 +868,9 @@ def test_convert_model_for_precision_fuses_layer_norm_mlp_fp8_te(monkeypatch):
     assert "0.0.weight" in state_dict
     assert "0.1.weight" in state_dict
     assert "0.3.weight" in state_dict
-    assert "0.wrapped.fp8_scale" in state_dict
+    assert "0.wrapped._extra_state" in state_dict
     converted.load_state_dict(state_dict, strict=True)
-    modified_state_dict = {k: v.clone() for k, v in state_dict.items()}
+    modified_state_dict = _clone_state_dict(state_dict)
     modified_state_dict["0.3.bias"].add_(1.0)
     expected_bias = modified_state_dict["0.3.bias"].clone()
     converted.load_state_dict(modified_state_dict, strict=True)
@@ -864,6 +929,23 @@ def test_transformer_engine_sdpa_adapter_rejects_dropout_mismatch(monkeypatch):
     value = torch.randn(3, 2, 5, 4)
     with pytest.raises(ValueError, match="dropout"):
         adapter(query, key, value, dropout_p=0.0)
+
+
+def test_transformer_engine_sdpa_adapter_allows_zero_dropout_in_eval(monkeypatch):
+    _install_fake_te(monkeypatch)
+    adapter = TransformerEngineDotProductAttentionAdapter(
+        num_attention_heads=2,
+        head_dim=4,
+        attention_dropout=0.1,
+    )
+    adapter.eval()
+    query = torch.randn(3, 2, 5, 4)
+    key = torch.randn(3, 2, 5, 4)
+    value = torch.randn(3, 2, 5, 4)
+    expected = torch.nn.functional.scaled_dot_product_attention(query, key, value)
+    torch.testing.assert_close(adapter(query, key, value, dropout_p=0.0), expected)
+    with pytest.raises(ValueError, match="evaluation"):
+        adapter(query, key, value, dropout_p=0.1)
 
 
 def test_transformer_engine_sdpa_adapter_rejects_key_value_shape_mismatch(

@@ -106,11 +106,19 @@ def _make_te_layer_norm(source: nn.LayerNorm, TELayerNorm: type) -> nn.Module:
     except TypeError:
         converted = TELayerNorm(hidden_size, eps=source.eps)
     converted = converted.to(device=source.weight.device, dtype=source.weight.dtype)
-    if not _copy_to_first_existing(source.weight, converted, ("weight",)):
+    if not _copy_to_first_existing(
+        source.weight,
+        converted,
+        ("weight", "layer_norm_weight", "ln_weight"),
+    ):
         raise RuntimeError(
             "TE LayerNorm does not expose a compatible weight parameter."
         )
-    if not _copy_to_first_existing(source.bias, converted, ("bias",)):
+    if not _copy_to_first_existing(
+        source.bias,
+        converted,
+        ("bias", "layer_norm_bias", "ln_bias"),
+    ):
         raise RuntimeError("TE LayerNorm does not expose a compatible bias parameter.")
     return converted
 
@@ -508,13 +516,15 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
         )
 
     def _ensure_model_on_device(self, model, device) -> None:
-        model_devices = {p.device for p in model.parameters()}
+        model_devices = {p.device for p in model.parameters()} | {
+            b.device for b in model.buffers()
+        }
         target_device = torch.device(device)
         if target_device.type == "cuda" and target_device.index is None:
             target_device = torch.device("cuda", torch.cuda.current_device())
         if model_devices and any(d != target_device for d in model_devices):
             raise RuntimeError(
-                f"All model parameters must be moved to the target CUDA device "
+                f"All model parameters and buffers must be moved to the target CUDA device "
                 f"'{target_device}' (e.g. model.to('{target_device}')) before "
                 "calling prepare_model_for_precision() for 'fp8-te'."
             )
@@ -543,15 +553,18 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
             if recipe is None:
                 return fp8_autocast(enabled=True)
             try:
-                return fp8_autocast(enabled=True, recipe=recipe)
+                return fp8_autocast(enabled=True, fp8_recipe=recipe)
             except TypeError:
-                warnings.warn(
-                    "transformer_engine.pytorch.fp8_autocast does not accept "
-                    "a recipe argument; using its default recipe.",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
-                return fp8_autocast(enabled=True)
+                try:
+                    return fp8_autocast(enabled=True, recipe=recipe)
+                except TypeError:
+                    warnings.warn(
+                        "transformer_engine.pytorch.fp8_autocast does not accept "
+                        "an FP8 recipe argument; using its default recipe.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                    return fp8_autocast(enabled=True)
         return nullcontext()
 
     def _convert_modules(self, model, report):

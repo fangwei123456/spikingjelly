@@ -87,8 +87,16 @@ class TransformerEngineDotProductAttentionAdapter(nn.Module):
             raise ValueError("fp8-te SDPA adapter v1 only supports attn_mask=None.")
         if is_causal:
             raise ValueError("fp8-te SDPA adapter v1 does not support causal masks.")
-        if not math.isclose(dropout_p, self.attention_dropout):
-            raise ValueError("fp8-te SDPA adapter v1 requires fixed adapter dropout.")
+        if self.training:
+            if not math.isclose(dropout_p, self.attention_dropout):
+                raise ValueError(
+                    "fp8-te SDPA adapter v1 requires fixed adapter dropout "
+                    "during training."
+                )
+        elif not math.isclose(dropout_p, 0.0):
+            raise ValueError(
+                "fp8-te SDPA adapter v1 requires dropout_p=0.0 during evaluation."
+            )
         if scale is not None:
             raise ValueError("fp8-te SDPA adapter v1 does not support custom scale.")
         if query.ndim != 4 or key.ndim != 4 or value.ndim != 4:
