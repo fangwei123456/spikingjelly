@@ -18,6 +18,13 @@ class TransformerEngineDotProductAttentionAdapter(nn.Module):
 
     The public input/output layout is PyTorch's common ``[B, H, S, D]`` layout.
     Internally the adapter calls TE with explicit ``bshd`` layout tensors.
+
+    Version 1 intentionally supports only no-mask SDPA: ``attn_mask`` must be
+    ``None``, ``is_causal`` must be ``False``, and ``scale`` must be ``None``.
+    During training, ``dropout_p`` must match the adapter's fixed
+    ``attention_dropout``; during evaluation it must be ``0.0``. Query sequence
+    length may differ from key/value sequence length for cross-attention, but
+    key and value sequence lengths must match.
     """
 
     def __init__(

@@ -56,7 +56,7 @@ def _copy_to_first_existing(
         return True
     for name in names:
         target_value = getattr(target, name, None)
-        if target_value is not None:
+        if target_value is not None and hasattr(target_value, "copy_"):
             with torch.no_grad():
                 target_value.copy_(value)
             return True
@@ -308,6 +308,7 @@ def _is_layer_norm_mlp_pattern(module: nn.Module) -> bool:
         and _is_supported_layer_norm(children[0])
         and isinstance(children[1], (nn.Linear, layer.Linear))
         and isinstance(children[2], nn.GELU)
+        and getattr(children[2], "approximate", "none") in (None, "none")
         and isinstance(children[3], (nn.Linear, layer.Linear))
     ):
         return False
@@ -540,8 +541,18 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
         autocast = getattr(te, "autocast", None)
         if autocast is not None:
             if recipe is None:
-                return autocast(enabled=True)
-            return autocast(enabled=True, recipe=recipe)
+                try:
+                    return autocast(enabled=True, device=self.device_type)
+                except TypeError:
+                    return autocast(enabled=True)
+            try:
+                return autocast(
+                    enabled=True,
+                    recipe=recipe,
+                    device=self.device_type,
+                )
+            except TypeError:
+                return autocast(enabled=True, recipe=recipe)
         fp8_autocast = getattr(te, "fp8_autocast", None)
         if fp8_autocast is not None:
             warnings.warn(
@@ -551,20 +562,38 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
                 stacklevel=2,
             )
             if recipe is None:
-                return fp8_autocast(enabled=True)
+                try:
+                    return fp8_autocast(enabled=True, device=self.device_type)
+                except TypeError:
+                    return fp8_autocast(enabled=True)
             try:
-                return fp8_autocast(enabled=True, fp8_recipe=recipe)
+                return fp8_autocast(
+                    enabled=True,
+                    fp8_recipe=recipe,
+                    device=self.device_type,
+                )
             except TypeError:
                 try:
-                    return fp8_autocast(enabled=True, recipe=recipe)
+                    return fp8_autocast(enabled=True, fp8_recipe=recipe)
                 except TypeError:
-                    warnings.warn(
-                        "transformer_engine.pytorch.fp8_autocast does not accept "
-                        "an FP8 recipe argument; using its default recipe.",
-                        RuntimeWarning,
-                        stacklevel=2,
-                    )
-                    return fp8_autocast(enabled=True)
+                    try:
+                        return fp8_autocast(
+                            enabled=True,
+                            recipe=recipe,
+                            device=self.device_type,
+                        )
+                    except TypeError:
+                        try:
+                            return fp8_autocast(enabled=True, recipe=recipe)
+                        except TypeError:
+                            warnings.warn(
+                                "transformer_engine.pytorch.fp8_autocast does not "
+                                "accept an FP8 recipe argument; using its default "
+                                "recipe.",
+                                RuntimeWarning,
+                                stacklevel=2,
+                            )
+                            return fp8_autocast(enabled=True)
         return nullcontext()
 
     def _convert_modules(self, model, report):
@@ -586,6 +615,7 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
                 report.converted_modules.append("<root>")
                 return _make_te_layer_norm(model, TELayerNorm)
             report.skipped_modules.append("<root>")
+            return model
         pattern = _convert_fused_pattern(model, te)
         if pattern is not None:
             wrapped, pattern_name = pattern

@@ -74,8 +74,9 @@ def validate_args(args: argparse.Namespace) -> None:
     invalid = [f"{k}={v}" for k, v in constrained.items() if v % FP8_ALIGNMENT != 0]
     if invalid:
         requested = ", ".join(sorted(fp8_precisions))
+        verb = "require" if len(fp8_precisions) > 1 else "requires"
         raise ValueError(
-            f"{requested} requires all dimensions divisible by {FP8_ALIGNMENT}: "
+            f"{requested} {verb} all dimensions divisible by {FP8_ALIGNMENT}: "
             + ", ".join(invalid)
         )
 

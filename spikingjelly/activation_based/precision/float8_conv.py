@@ -65,7 +65,7 @@ class Float8PointwiseConv1dStepModule(nn.Module):
             raise ValueError(
                 f"expected x with shape [N, C, L], but got x with shape {x.shape}!"
             )
-        y = self.wrapped(x.transpose(1, 2))
+        y = self.wrapped(x.transpose(1, 2).contiguous())
         return y.transpose(1, 2).contiguous()
 
     def forward(self, x: torch.Tensor):
@@ -76,7 +76,7 @@ class Float8PointwiseConv1dStepModule(nn.Module):
                 raise ValueError(
                     f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
                 )
-            y = self.wrapped(x.permute(0, 1, 3, 2))
+            y = self.wrapped(x.permute(0, 1, 3, 2).contiguous())
             return y.permute(0, 1, 3, 2).contiguous()
         raise ValueError(f"Unsupported step_mode {self.step_mode!r}.")
 

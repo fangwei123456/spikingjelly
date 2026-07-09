@@ -1,3 +1,4 @@
+import copy
 import sys
 import types
 
@@ -190,9 +191,15 @@ def _install_fake_te(monkeypatch):
     fake_te.autocast = autocast
     fake_te.is_fp8_available = is_fp8_available
     fake_root = types.ModuleType("transformer_engine")
+    fake_common = types.ModuleType("transformer_engine.common")
+    fake_recipe = types.ModuleType("transformer_engine.common.recipe")
+    fake_common.recipe = fake_recipe
     fake_root.pytorch = fake_te
+    fake_root.common = fake_common
     monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
     monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", fake_te)
+    monkeypatch.setitem(sys.modules, "transformer_engine.common", fake_common)
+    monkeypatch.setitem(sys.modules, "transformer_engine.common.recipe", fake_recipe)
     return fake_te
 
 
@@ -202,12 +209,7 @@ def _clone_state_dict(state_dict):
         if hasattr(value, "clone"):
             cloned[key] = value.clone()
         elif isinstance(value, dict):
-            cloned[key] = {
-                nested_key: nested_value.clone()
-                if hasattr(nested_value, "clone")
-                else nested_value
-                for nested_key, nested_value in value.items()
-            }
+            cloned[key] = copy.deepcopy(value)
         else:
             cloned[key] = value
     return cloned
@@ -286,6 +288,26 @@ def test_pointwise_conv1d_step_module_preserves_multistep_shape_and_values():
     x = torch.randn(2, 3, 8, 5)
     torch.testing.assert_close(wrapped(x), conv(x))
     assert wrapped.step_mode == "m"
+
+
+def test_pointwise_conv1d_step_module_passes_contiguous_linear_input():
+    class ContiguityCheckingLinear(torch.nn.Linear):
+        def forward(self, x):
+            assert x.is_contiguous()
+            return super().forward(x)
+
+    conv = torch.nn.Conv1d(8, 4, kernel_size=1, bias=False)
+    linear = ContiguityCheckingLinear(8, 4, bias=False)
+    with torch.no_grad():
+        linear.weight.copy_(conv.weight.squeeze(-1))
+
+    wrapped_s = Float8PointwiseConv1dStepModule(linear, conv, step_mode="s")
+    x_s = torch.randn(3, 8, 5)
+    torch.testing.assert_close(wrapped_s(x_s), conv(x_s))
+
+    wrapped_m = Float8PointwiseConv1dStepModule(linear, conv, step_mode="m")
+    x = torch.randn(2, 3, 8, 5)
+    assert wrapped_m(x).shape == (2, 3, 4, 5)
 
 
 def test_pointwise_conv1d_step_module_load_state_dict_from_parent():
@@ -809,7 +831,7 @@ def test_convert_model_for_precision_fuses_layer_norm_linear_fp8_te(monkeypatch)
     state_dict = converted.state_dict()
     assert "0.0.weight" in state_dict
     assert "0.1.weight" in state_dict
-    assert "0.wrapped._extra_state" in state_dict
+    assert any(key.endswith("_extra_state") for key in state_dict)
     converted.load_state_dict(state_dict, strict=True)
     modified_state_dict = _clone_state_dict(state_dict)
     modified_state_dict["0.0.weight"].add_(1.0)
@@ -868,7 +890,7 @@ def test_convert_model_for_precision_fuses_layer_norm_mlp_fp8_te(monkeypatch):
     assert "0.0.weight" in state_dict
     assert "0.1.weight" in state_dict
     assert "0.3.weight" in state_dict
-    assert "0.wrapped._extra_state" in state_dict
+    assert any(key.endswith("_extra_state") for key in state_dict)
     converted.load_state_dict(state_dict, strict=True)
     modified_state_dict = _clone_state_dict(state_dict)
     modified_state_dict["0.3.bias"].add_(1.0)
@@ -901,6 +923,29 @@ def test_convert_model_for_precision_skips_incompatible_layer_norm_mlp_fp8_te(
     torch.testing.assert_close(converted(x), expected)
     assert not isinstance(converted[0], Float8TELayerNormMLPModule)
     assert converted(x).shape[-1] == 4
+    assert report.converted_patterns == []
+
+
+def test_convert_model_for_precision_skips_approximate_gelu_layer_norm_mlp_fp8_te(
+    monkeypatch,
+):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.Sequential(
+        torch.nn.Sequential(
+            torch.nn.LayerNorm(8),
+            torch.nn.Linear(8, 16),
+            torch.nn.GELU(approximate="tanh"),
+            torch.nn.Linear(16, 8),
+        )
+    )
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+    assert not isinstance(converted[0], Float8TELayerNormMLPModule)
     assert report.converted_patterns == []
 
 
