@@ -334,11 +334,10 @@ def test_pointwise_conv1d_step_module_load_state_dict_ignores_neighbor_prefix():
 
     parent = Parent()
     state_dict = parent.state_dict()
-    original_neighbor_weight = state_dict["conv_extra.weight"].clone()
+    expected_neighbor_weight = state_dict["conv_extra.weight"].clone() + 1
+    state_dict["conv_extra.weight"] = expected_neighbor_weight
     parent.load_state_dict(state_dict, strict=True)
-    torch.testing.assert_close(
-        state_dict["conv_extra.weight"], original_neighbor_weight
-    )
+    torch.testing.assert_close(parent.conv_extra.weight, expected_neighbor_weight)
 
 
 def test_conversion_report_marks_pointwise_conv1d_convertible():
