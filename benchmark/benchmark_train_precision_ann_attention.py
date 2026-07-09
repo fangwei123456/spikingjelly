@@ -113,7 +113,7 @@ class DeepANN(torch_nn.Module):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Benchmark ANN training under fp32, bf16, fp8-torchao, and fp8-te on a pure "
+            "Benchmark ANN training under fp32, bf16, and fp8-torchao on a pure "
             "GEMM-heavy workload without spiking neurons."
         )
     )
@@ -135,7 +135,7 @@ def parse_args() -> argparse.Namespace:
         "--precisions",
         nargs="+",
         default=["fp32", "bf16", "fp8-torchao"],
-        choices=("fp32", "bf16", "fp8-torchao", "fp8-te"),
+        choices=("fp32", "bf16", "fp8-torchao"),
     )
     parser.add_argument("--json", action="store_true")
     return parser.parse_args()

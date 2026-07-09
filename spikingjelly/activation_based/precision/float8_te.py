@@ -351,9 +351,14 @@ def _te_recursive_convert(root: nn.Module, TELinear: type, report) -> None:
             if child is None:
                 continue
             child_fqn = f"{prefix}.{child_name}" if prefix else child_name
+            if child in memo:
+                _replace_child(module, child_name, memo[child])
+                report.converted_modules.append(child_fqn)
+                continue
             pattern = _convert_fused_pattern(child, te)
             if pattern is not None:
                 wrapped, pattern_name = pattern
+                memo[child] = wrapped
                 _replace_child(module, child_name, wrapped)
                 report.converted_modules.append(child_fqn)
                 report.converted_patterns.append(
@@ -364,10 +369,6 @@ def _te_recursive_convert(root: nn.Module, TELinear: type, report) -> None:
                 or is_supported_pointwise_conv1d(child)
                 or _is_supported_layer_norm(child)
             ):
-                if child in memo:
-                    _replace_child(module, child_name, memo[child])
-                    report.converted_modules.append(child_fqn)
-                    continue
                 if is_supported_pointwise_conv1d(child):
                     source = make_linear_from_pointwise_conv1d(child)
                     converted = _make_te_linear(source, TELinear)

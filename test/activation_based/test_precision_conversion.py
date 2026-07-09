@@ -11,7 +11,8 @@ try:
 except ImportError:
     HAS_TORCHAO = False
 
-from spikingjelly.activation_based import layer
+from spikingjelly.activation_based import layer, neuron
+from spikingjelly.activation_based.layer.attention import SpikingSelfAttention
 from spikingjelly.activation_based.model import Spikformer
 from spikingjelly.activation_based.precision import (
     Float8PointwiseConv1dStepModule,
@@ -606,26 +607,44 @@ def test_convert_model_for_precision_replaces_spikformer_projections_fp8_te(
         depths=2,
         backend="torch",
     )
+    model.eval()
+    x = torch.randn(2, 3, 64, 64)
     policy = Float8TransformerEnginePolicy()
     converted, report = convert_model_for_precision(model, policy)
+    converted.eval()
 
     for block in converted.blocks:
+        assert isinstance(block.attn, SpikingSelfAttention)
         assert isinstance(
             next(block.attn.qkv_conv_bn.children()), Float8PointwiseConv1dStepModule
         )
+        assert isinstance(block.attn.qkv_conv_bn[1], torch.nn.BatchNorm1d)
+        assert isinstance(block.attn.qkv_lif, neuron.LIFNode)
+        assert isinstance(block.attn.attn_lif, neuron.LIFNode)
         assert isinstance(
             next(block.attn.proj_conv_bn.children()), Float8PointwiseConv1dStepModule
         )
+        assert isinstance(block.attn.proj_conv_bn[1], torch.nn.BatchNorm1d)
+        assert isinstance(block.attn.proj_lif, neuron.LIFNode)
         assert isinstance(
             next(block.mlp.fc1.children()), Float8PointwiseConv1dStepModule
         )
+        assert isinstance(block.mlp.fc1[1], torch.nn.BatchNorm1d)
+        assert isinstance(block.mlp.neuron1, neuron.LIFNode)
         assert isinstance(
             next(block.mlp.fc2.children()), Float8PointwiseConv1dStepModule
         )
+        assert isinstance(block.mlp.fc2[1], torch.nn.BatchNorm1d)
+        assert isinstance(block.mlp.neuron2, neuron.LIFNode)
     assert isinstance(converted.head, Float8LinearStepModule)
     assert isinstance(
         converted.patch_embed.stages[0].conv_bn.block[0], torch.nn.Conv2d
     )
+    assert isinstance(
+        converted.patch_embed.stages[0].conv_bn.block[1], torch.nn.BatchNorm2d
+    )
+    assert isinstance(converted.patch_embed.stages[0].neuron, neuron.LIFNode)
+    assert converted(x).shape == (2, 2, 7)
     assert report.converted_modules == [
         "blocks.0.attn.qkv_conv_bn.0",
         "blocks.0.attn.proj_conv_bn.0",
@@ -710,6 +729,27 @@ def test_convert_model_for_precision_fuses_layer_norm_linear_fp8_te(monkeypatch)
     torch.testing.assert_close(converted.state_dict()["0.0.weight"], expected_weight)
 
 
+def test_convert_model_for_precision_preserves_shared_fused_pattern_fp8_te(
+    monkeypatch,
+):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    shared = torch.nn.Sequential(torch.nn.LayerNorm(8), torch.nn.Linear(8, 4))
+    model = torch.nn.ModuleList([shared, shared])
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+    assert isinstance(converted[0], Float8TELayerNormLinearModule)
+    assert converted[0] is converted[1]
+    assert report.converted_modules == ["0", "1"]
+    assert report.converted_patterns == [
+        {"module": "0", "pattern": "LayerNormLinear", "backend": "te"}
+    ]
+
+
 def test_convert_model_for_precision_fuses_layer_norm_mlp_fp8_te(monkeypatch):
     _install_fake_te(monkeypatch)
 
@@ -786,6 +826,20 @@ def test_transformer_engine_sdpa_adapter_matches_torch_sdpa(monkeypatch):
     value = torch.randn(3, 2, 5, 4)
     expected = torch.nn.functional.scaled_dot_product_attention(query, key, value)
     torch.testing.assert_close(adapter(query, key, value), expected)
+
+
+def test_transformer_engine_sdpa_adapter_rejects_dropout_mismatch(monkeypatch):
+    _install_fake_te(monkeypatch)
+    adapter = TransformerEngineDotProductAttentionAdapter(
+        num_attention_heads=2,
+        head_dim=4,
+        attention_dropout=0.1,
+    )
+    query = torch.randn(3, 2, 5, 4)
+    key = torch.randn(3, 2, 5, 4)
+    value = torch.randn(3, 2, 5, 4)
+    with pytest.raises(ValueError, match="dropout"):
+        adapter(query, key, value, dropout_p=0.0)
 
 
 def test_float8_te_linear_step_module_load_state_dict_from_parent(monkeypatch):
