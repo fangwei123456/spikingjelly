@@ -88,7 +88,7 @@ class Float8PointwiseConv1dStepModule(nn.Module):
             if wrapped is None:
                 raise AttributeError(
                     f"'{type(self).__name__}' object has no attribute '{name}'"
-                )
+                ) from None
             return getattr(wrapped, name)
 
     def state_dict(self, destination=None, prefix="", keep_vars=False):

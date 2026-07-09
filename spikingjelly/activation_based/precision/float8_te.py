@@ -206,16 +206,20 @@ class _Float8TEPatternModule(nn.Module):
             if wrapped is None:
                 raise AttributeError(
                     f"'{type(self).__name__}' object has no attribute '{name}'"
-                )
+                ) from None
             return getattr(wrapped, name)
 
     def state_dict(self, destination=None, prefix="", keep_vars=False):
         if destination is None:
             destination = {}
         wrapped_state = self.wrapped.state_dict(keep_vars=keep_vars)
+        mapped_wrapped_keys = set(self._state_key_map.values())
         for public_key, wrapped_key in self._state_key_map.items():
             if wrapped_key in wrapped_state:
                 destination[prefix + public_key] = wrapped_state[wrapped_key]
+        for wrapped_key, value in wrapped_state.items():
+            if wrapped_key not in mapped_wrapped_keys:
+                destination[prefix + "wrapped." + wrapped_key] = value
         return destination
 
     def _load_from_state_dict(
@@ -398,6 +402,7 @@ def _te_recursive_convert(root: nn.Module, TELinear: type, report) -> None:
 
 class Float8TransformerEnginePolicy(PrecisionPolicy):
     name = "fp8-te"
+    supports_layer_norm_conversion = True
 
     def __init__(
         self,

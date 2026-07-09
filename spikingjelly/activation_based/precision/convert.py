@@ -39,7 +39,11 @@ class ConversionReport:
         }
 
 
-def analyze_convertible_modules(model: nn.Module) -> ConversionReport:
+def analyze_convertible_modules(
+    model: nn.Module,
+    *,
+    include_layer_norm: bool = False,
+) -> ConversionReport:
     report = ConversionReport()
     unsupported_types = (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.MultiheadAttention)
     high_precision_types = (
@@ -60,7 +64,7 @@ def analyze_convertible_modules(model: nn.Module) -> ConversionReport:
         elif is_supported_pointwise_conv1d(module):
             report.convertible_pointwise_conv1d += 1
             report.convertible_modules.append(name or "<root>")
-        elif isinstance(module, nn.LayerNorm):
+        elif include_layer_norm and isinstance(module, nn.LayerNorm):
             report.convertible_layer_norm += 1
             report.convertible_modules.append(name or "<root>")
         elif isinstance(module, high_precision_types):
@@ -78,6 +82,9 @@ def convert_model_for_precision(
     structural changes (e.g. float8 kernel substitution) override
     ``_convert_modules`` to perform the actual transformation.
     """
-    report = analyze_convertible_modules(model)
+    report = analyze_convertible_modules(
+        model,
+        include_layer_norm=getattr(policy, "supports_layer_norm_conversion", False),
+    )
     model = policy._convert_modules(model, report)
     return model, report

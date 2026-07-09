@@ -234,6 +234,31 @@ def test_build_capability_report_fp8_te_cpu_reports_te_fields(monkeypatch):
     assert report["execution_note"] == "fp8-te requires a CUDA device"
 
 
+def test_build_capability_report_fp8_te_catches_legacy_probe_failure(monkeypatch):
+    fake_te = types.ModuleType("transformer_engine.pytorch")
+
+    def is_fp8_available(*args, **kwargs):
+        if kwargs:
+            raise TypeError("return_reason is unsupported")
+        raise RuntimeError("driver probe failed")
+
+    fake_te.is_fp8_available = is_fp8_available
+    fake_te.autocast = lambda enabled=True, recipe=None: None
+    fake_root = types.ModuleType("transformer_engine")
+    fake_root.pytorch = fake_te
+    monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
+    monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", fake_te)
+
+    report = build_capability_report(
+        torch.nn.Linear(4, 4),
+        torch.device("cpu"),
+        "fp8-te",
+    )
+    assert report["transformer_engine_installed"] is True
+    assert report["te_fp8_available"] is False
+    assert report["te_fp8_unavailable_reason"] == "driver probe failed"
+
+
 def test_prepare_model_for_precision_warn_falls_back_to_fp32_when_fp8_te_unavailable():
     model = torch.nn.Linear(4, 4)
     with pytest.warns(RuntimeWarning, match="falling back to fp32"):

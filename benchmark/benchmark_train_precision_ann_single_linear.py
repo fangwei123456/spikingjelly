@@ -63,7 +63,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def validate_args(args: argparse.Namespace) -> None:
-    if "fp8-torchao" not in args.precisions:
+    fp8_precisions = {"fp8-torchao", "fp8-te"} & set(args.precisions)
+    if not fp8_precisions:
         return
     constrained = {
         "batch_size": args.batch_size,
@@ -72,8 +73,9 @@ def validate_args(args: argparse.Namespace) -> None:
     }
     invalid = [f"{k}={v}" for k, v in constrained.items() if v % FP8_ALIGNMENT != 0]
     if invalid:
+        requested = ", ".join(sorted(fp8_precisions))
         raise ValueError(
-            f"fp8-torchao requires all dimensions divisible by {FP8_ALIGNMENT}: "
+            f"{requested} requires all dimensions divisible by {FP8_ALIGNMENT}: "
             + ", ".join(invalid)
         )
 

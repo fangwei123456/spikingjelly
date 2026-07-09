@@ -76,9 +76,10 @@ def _transformer_engine_fp8_status() -> tuple[
         )
 
     try:
-        result = is_fp8_available(return_reason=True)
-    except TypeError:
-        result = is_fp8_available()
+        try:
+            result = is_fp8_available(return_reason=True)
+        except TypeError:
+            result = is_fp8_available()
     except Exception as exc:
         return True, False, str(exc), autocast_api, recipe_availability
 

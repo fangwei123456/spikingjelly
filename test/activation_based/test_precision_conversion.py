@@ -76,6 +76,9 @@ def _install_fake_te(monkeypatch):
                 if bias
                 else None
             )
+            self.register_buffer(
+                "fp8_scale", torch.ones(1, dtype=params_dtype), persistent=True
+            )
             self.eps = eps
             torch.nn.init.kaiming_uniform_(self.weight, a=5**0.5)
             if self.bias is not None:
@@ -123,6 +126,9 @@ def _install_fake_te(monkeypatch):
                 torch.nn.Parameter(torch.empty(hidden_size, dtype=params_dtype))
                 if bias
                 else None
+            )
+            self.register_buffer(
+                "fp8_scale", torch.ones(1, dtype=params_dtype), persistent=True
             )
             self.eps = eps
             torch.nn.init.kaiming_uniform_(self.fc1_weight, a=5**0.5)
@@ -280,11 +286,11 @@ def test_conversion_report_marks_pointwise_conv1d_convertible():
     assert "1" in report["unsupported_modules"]
 
 
-def test_conversion_report_marks_layer_norm_convertible():
+def test_conversion_report_does_not_mark_layer_norm_convertible_by_default():
     model = torch.nn.Sequential(torch.nn.LayerNorm(8), torch.nn.BatchNorm1d(8))
     report = analyze_convertible_modules(model).to_dict()
-    assert report["convertible_layer_norm"] == 1
-    assert "0" in report["convertible_modules"]
+    assert report["convertible_layer_norm"] == 0
+    assert "0" not in report["convertible_modules"]
     assert "1" in report["high_precision_modules"]
 
 
@@ -615,25 +621,25 @@ def test_convert_model_for_precision_replaces_spikformer_projections_fp8_te(
 
     for block in converted.blocks:
         assert isinstance(block.attn, SpikingSelfAttention)
-        assert isinstance(
-            next(block.attn.qkv_conv_bn.children()), Float8PointwiseConv1dStepModule
-        )
+        qkv_children = list(block.attn.qkv_conv_bn.children())
+        assert qkv_children
+        assert isinstance(qkv_children[0], Float8PointwiseConv1dStepModule)
         assert isinstance(block.attn.qkv_conv_bn[1], torch.nn.BatchNorm1d)
         assert isinstance(block.attn.qkv_lif, neuron.LIFNode)
         assert isinstance(block.attn.attn_lif, neuron.LIFNode)
-        assert isinstance(
-            next(block.attn.proj_conv_bn.children()), Float8PointwiseConv1dStepModule
-        )
+        proj_children = list(block.attn.proj_conv_bn.children())
+        assert proj_children
+        assert isinstance(proj_children[0], Float8PointwiseConv1dStepModule)
         assert isinstance(block.attn.proj_conv_bn[1], torch.nn.BatchNorm1d)
         assert isinstance(block.attn.proj_lif, neuron.LIFNode)
-        assert isinstance(
-            next(block.mlp.fc1.children()), Float8PointwiseConv1dStepModule
-        )
+        fc1_children = list(block.mlp.fc1.children())
+        assert fc1_children
+        assert isinstance(fc1_children[0], Float8PointwiseConv1dStepModule)
         assert isinstance(block.mlp.fc1[1], torch.nn.BatchNorm1d)
         assert isinstance(block.mlp.neuron1, neuron.LIFNode)
-        assert isinstance(
-            next(block.mlp.fc2.children()), Float8PointwiseConv1dStepModule
-        )
+        fc2_children = list(block.mlp.fc2.children())
+        assert fc2_children
+        assert isinstance(fc2_children[0], Float8PointwiseConv1dStepModule)
         assert isinstance(block.mlp.fc2[1], torch.nn.BatchNorm1d)
         assert isinstance(block.mlp.neuron2, neuron.LIFNode)
     assert isinstance(converted.head, Float8LinearStepModule)
@@ -677,6 +683,7 @@ def test_convert_model_for_precision_replaces_layer_norm_fp8_te(monkeypatch):
     torch.testing.assert_close(converted(x), expected)
     assert isinstance(converted[0], torch.nn.LayerNorm)
     assert isinstance(converted[2], Float8LinearStepModule)
+    assert report.convertible_layer_norm == 1
     assert report.converted_modules == ["0", "2"]
 
 
@@ -720,7 +727,7 @@ def test_convert_model_for_precision_fuses_layer_norm_linear_fp8_te(monkeypatch)
     state_dict = converted.state_dict()
     assert "0.0.weight" in state_dict
     assert "0.1.weight" in state_dict
-    assert all("wrapped" not in k for k in state_dict)
+    assert "0.wrapped.fp8_scale" in state_dict
     converted.load_state_dict(state_dict, strict=True)
     modified_state_dict = {k: v.clone() for k, v in state_dict.items()}
     modified_state_dict["0.0.weight"].add_(1.0)
@@ -779,7 +786,7 @@ def test_convert_model_for_precision_fuses_layer_norm_mlp_fp8_te(monkeypatch):
     assert "0.0.weight" in state_dict
     assert "0.1.weight" in state_dict
     assert "0.3.weight" in state_dict
-    assert all("wrapped" not in k for k in state_dict)
+    assert "0.wrapped.fp8_scale" in state_dict
     converted.load_state_dict(state_dict, strict=True)
     modified_state_dict = {k: v.clone() for k, v in state_dict.items()}
     modified_state_dict["0.3.bias"].add_(1.0)
