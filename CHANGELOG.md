@@ -1,0 +1,211 @@
+# Changelog / 更新日志
+
+All notable changes to SpikingJelly are documented in this file.
+
+SpikingJelly starts maintaining this standard changelog from `2.0.0.dev0`.
+For older releases, see the historical fatal-bug record in
+[bugs.md](https://github.com/fangwei123456/spikingjelly/blob/master/bugs.md)
+and the archived documentation linked from the project README.
+
+SpikingJelly 从 `2.0.0.dev0` 开始维护标准更新日志。更早版本的历史严重
+bug 记录见
+[bugs.md](https://github.com/fangwei123456/spikingjelly/blob/master/bugs.md)，
+历史文档入口见项目 README。
+
+## Unreleased / 未发布
+
+### Added / 新增
+
+- None.
+- 暂无。
+
+### Changed / 变更
+
+- None.
+- 暂无。
+
+### Fixed / 修复
+
+- None.
+- 暂无。
+
+### Breaking Changes / 破坏性变更
+
+- None.
+- 暂无。
+
+### Migration Notes / 迁移说明
+
+- None.
+- 暂无。
+
+## 2.0.0.dev0 - 2026-07-09
+
+This entry summarizes the user-visible changes since the previous PyPI stable
+release, `0.0.0.0.14`
+(`294133011f4897756db6d1cd4a617a00bfb8d7f8`), through `2.0.0.dev0`
+(`b4f3b68a6260ebd42cf1585a3284cf6bcee1e112`). It is a curated release
+summary rather than a commit-by-commit list.
+
+本条目总结自上一个 PyPI 稳定版 `0.0.0.0.14`
+（`294133011f4897756db6d1cd4a617a00bfb8d7f8`）到 `2.0.0.dev0`
+（`b4f3b68a6260ebd42cf1585a3284cf6bcee1e112`）之间的用户可见变化。
+它是面向发布的归纳总结，而不是逐提交列表。
+
+### Added / 新增
+
+- Added the new ANN2SNN conversion framework, including rule/factory/threshold
+  conversion pipelines and extensible recipe objects.
+- 新增 ANN2SNN 转换框架，包括 rule/factory/threshold 转换流水线和可扩展
+  recipe 对象。
+
+- Added time-distributed ANN2SNN operators and Transformer-oriented conversion
+  support, including TD linear, activation, attention, softmax, and sequence SNN
+  building blocks.
+- 新增面向 Transformer 转换的时间分布 ANN2SNN 算子，包括 TD linear、激活、
+  attention、softmax 和 sequence SNN 构件。
+
+- Added STA Transformer conversion support and tutorial coverage for the
+  Transformer conversion workflow.
+- 新增 STA Transformer conversion 支持，并补充 Transformer 转换流程教程。
+
+- Added Local Threshold Balancing and SpikeZIP QANN/Transformer conversion
+  recipes, examples, and documentation.
+- 新增 Local Threshold Balancing 与 SpikeZIP QANN/Transformer 转换 recipe、
+  示例和文档。
+
+- Added few-spike neuron primitives and related toy attention/block tests for
+  conversion experiments.
+- 新增 few-spike neuron primitives，并补充相关 toy attention/block 测试用于
+  转换实验。
+
+- Added FP8 precision tooling, conversion reports, and precision examples.
+- 新增 FP8 precision tooling、转换报告和 precision 示例。
+
+- Added memory-optimization and checkpointing utilities.
+- 新增内存优化与 checkpointing 工具。
+
+- Added distributed/dtensor support and distributed training/benchmark tests.
+- 新增 distributed/dtensor 支持以及分布式训练和 benchmark 测试。
+
+- Added operation counting and energy-estimation utilities, including compute
+  energy and SpikeSim-style event energy reporting.
+- 新增 op counter 和能耗估计工具，包括 compute energy 与 SpikeSim 风格的
+  event energy 报告。
+
+- Added broad regression coverage for ANN2SNN, Triton/CuPy backends,
+  distributed execution, precision conversion, checkpointing, op counters, and
+  visualization.
+- 扩展 ANN2SNN、Triton/CuPy 后端、分布式执行、precision conversion、
+  checkpointing、op counter 和 visualizing 的回归测试覆盖。
+
+### Changed / 变更
+
+- Changed the package version scheme from legacy `0.0.0.0.X` development
+  numbering to PEP 440 compatible V2 versions such as `2.0.0.dev0`.
+- 将包版本方案从历史遗留的 `0.0.0.0.X` 开发版编号切换为兼容 PEP 440 的
+  V2 版本号，例如 `2.0.0.dev0`。
+
+- Raised the package dependency baseline to Python `>=3.11` and
+  `torch>=2.6.0`; documentation builds target the PyTorch 2.7 line.
+- 提高依赖基线到 Python `>=3.11` 和 `torch>=2.6.0`；文档构建面向
+  PyTorch 2.7 系列。
+
+- Updated README and documentation version policy to describe V2 SemVer-style
+  releases, V2 pre-release installation with `pip install --pre spikingjelly`,
+  and the recommended `spikingjelly<2` pin for pre-V2 projects.
+- 更新 README 和文档中的版本策略，说明 V2 语义化版本风格、通过
+  `pip install --pre spikingjelly` 安装 V2 先行版，以及 V2 前项目推荐使用
+  `spikingjelly<2` 固定依赖。
+
+- Refactored `spikingjelly.visualizing` into focused submodules and added
+  torch-backed visualization support.
+- 将 `spikingjelly.visualizing` 重构为更聚焦的子模块，并增加基于 torch 的
+  可视化支持。
+
+- Reworked public API documentation and docstrings toward bilingual Chinese and
+  English content with consistent Sphinx/RST fields.
+- 重写和规范化大量公共 API 文档与 docstring，使其采用中英双语内容和一致的
+  Sphinx/RST 字段。
+
+- Refined datasets, timing-based modules, NIR/Lava/Lynxi exchange paths, CUDA
+  kernel utilities, Triton kernels, model helpers, and training utilities across
+  the V2 development line.
+- 在 V2 开发线中持续改进 datasets、timing-based 模块、NIR/Lava/Lynxi
+  exchange 路径、CUDA kernel 工具、Triton kernel、model helper 和训练工具。
+
+### Fixed / 修复
+
+- Fixed an `LIAFNode.__init__` attribute error caused by a dead assertion.
+- 修复 `LIAFNode.__init__` 中由无效断言导致的属性错误。
+
+- Fixed CuPy and Triton backend dispatch issues, including strict backend
+  handling for IF/LIF neuron evaluation paths.
+- 修复 CuPy 和 Triton backend dispatch 问题，包括 IF/LIF 神经元 eval 路径中
+  的严格 backend 处理。
+
+- Fixed `reset_net` cache-key handling to avoid stale or unsafe reset behavior.
+- 修复 `reset_net` cache key 处理，避免陈旧或不安全的 reset 行为。
+
+- Fixed dataset and preprocessing edge cases, including frame integration
+  boundaries and publisher-field sanitization for publication metadata.
+- 修复数据集和预处理边界问题，包括 frame integration 边界以及论文元数据中
+  publisher 字段换行清理。
+
+- Fixed spiking RNN hidden-state dtype handling so default hidden states follow
+  the input dtype.
+- 修复 spiking RNN hidden state dtype 处理，使默认 hidden state 跟随输入
+  dtype。
+
+- Hardened ANN2SNN calibration, step-mode adapters, mask handling, module
+  refresh, neuron replacement, download validation, and conversion input
+  validation.
+- 加固 ANN2SNN calibration、step-mode adapter、mask 处理、module refresh、
+  neuron replacement、下载校验和转换输入校验。
+
+- Fixed docstring, Sphinx rendering, tutorial, and API toctree issues found
+  during the V2 documentation cleanup.
+- 修复 V2 文档整理过程中发现的 docstring、Sphinx 渲染、教程和 API toctree
+  问题。
+
+### Breaking Changes / 破坏性变更
+
+- V2 starts a new compatibility generation. Projects that must remain on the
+  legacy release line should pin `spikingjelly<2`.
+- V2 开启新的兼容性世代。必须停留在旧版本线的项目应使用 `spikingjelly<2`
+  固定依赖。
+
+- The minimum supported runtime baseline is higher than `0.0.0.0.14`, including
+  Python `>=3.11` and `torch>=2.6.0`.
+- 最低运行环境基线高于 `0.0.0.0.14`，包括 Python `>=3.11` 和
+  `torch>=2.6.0`。
+
+- Some experimental or internal ANN2SNN conversion interfaces were refactored
+  around the V2 recipe and operator model. Code depending on internal
+  conversion details should migrate to the V2 documentation.
+- 部分实验性或内部 ANN2SNN 转换接口围绕 V2 recipe 和 operator 模型进行了
+  重构。依赖内部转换细节的代码应迁移到 V2 文档描述的接口。
+
+- Documentation structure and public API pages were reorganized; external links
+  to old generated API pages may need to be updated.
+- 文档结构和公共 API 页面经过重组；指向旧版生成 API 页面的外部链接可能需要
+  更新。
+
+### Migration Notes / 迁移说明
+
+- Before upgrading from `0.0.0.0.14`, review this changelog and the V2 README
+  installation notes.
+- 从 `0.0.0.0.14` 升级前，请先阅读本更新日志和 V2 README 安装说明。
+
+- Conservative projects should pin `spikingjelly<2` until they are ready to
+  validate V2 behavior.
+- 保守项目应使用 `spikingjelly<2` 固定在旧版本线，直到完成 V2 行为验证。
+
+- To test published V2 pre-releases, install with
+  `pip install --pre spikingjelly`.
+- 如需测试已发布的 V2 先行版，请使用 `pip install --pre spikingjelly`。
+
+- For source installs, follow the current README and ensure the selected
+  PyTorch build matches the target CPU/CUDA environment.
+- 从源码安装时，请遵循当前 README，并确保所选 PyTorch 构建匹配目标
+  CPU/CUDA 环境。

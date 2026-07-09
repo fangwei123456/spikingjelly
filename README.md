@@ -161,6 +161,8 @@ generations, `MINOR` adds backward-compatible functionality, and `PATCH` fixes
 bugs. Python package pre-release spelling is used for V2 development releases,
 for example `2.0.0.dev0`, `2.0.0a1`, `2.0.0b1`, and `2.0.0rc1`.
 
+See [CHANGELOG.md](./CHANGELOG.md) for the V2 release changelog.
+
 <details>
 <summary>Compatibility, migration, and older docs</summary>
 
