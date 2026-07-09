@@ -8,6 +8,8 @@ from ..triton_utils import (
     normalize_triton_compute_dtype_name,
     normalize_triton_storage_dtype,
     resolve_triton_compute_dtype,
+    torch_dtype_to_triton_neuron_dtype_id,
+    triton_compute_dtype_name_to_neuron_dtype_id,
 )
 
 
@@ -35,6 +37,10 @@ class TritonNeuronExecutionPlan:
     backward_compute_dtype_name: str
     backward_compute_tl_dtype: Any
     spike_dtype: torch.dtype
+    storage_dtype_id: int
+    forward_compute_dtype_id: int
+    backward_compute_dtype_id: int
+    spike_dtype_id: int
     save_intermediates: bool
 
     @property
@@ -218,6 +224,14 @@ def prepare_triton_neuron_execution_plan(
         backward_compute_dtype_name=backward_compute_dtype_name,
         backward_compute_tl_dtype=backward_compute_tl_dtype,
         spike_dtype=spike_dtype,
+        storage_dtype_id=torch_dtype_to_triton_neuron_dtype_id(storage_dtype),
+        forward_compute_dtype_id=triton_compute_dtype_name_to_neuron_dtype_id(
+            forward_compute_dtype_name, storage_dtype
+        ),
+        backward_compute_dtype_id=triton_compute_dtype_name_to_neuron_dtype_id(
+            backward_compute_dtype_name, storage_dtype
+        ),
+        spike_dtype_id=torch_dtype_to_triton_neuron_dtype_id(spike_dtype),
         save_intermediates=save_intermediates,
     )
 

@@ -233,6 +233,28 @@ def test_resolve_triton_compute_dtype_reports_unavailable_type_dict(monkeypatch)
         triton_utils.resolve_triton_compute_dtype("fp16")
 
 
+def test_triton_neuron_dtype_id_roundtrip():
+    dtypes = [torch.float32, torch.float16]
+    if hasattr(torch, "bfloat16"):
+        dtypes.append(torch.bfloat16)
+    if hasattr(torch, "float8_e4m3fn"):
+        dtypes.append(torch.float8_e4m3fn)
+    if hasattr(torch, "float8_e5m2"):
+        dtypes.append(torch.float8_e5m2)
+    for dtype in dtypes:
+        dtype_id = triton_utils.torch_dtype_to_triton_neuron_dtype_id(dtype)
+        assert triton_utils.triton_neuron_dtype_id_to_torch_dtype(dtype_id) == dtype
+
+    with pytest.raises(ValueError, match="dtype id"):
+        triton_utils.triton_neuron_dtype_id_to_torch_dtype(999)
+
+
+def test_mixed_precision_uses_custom_op_not_autograd_function():
+    assert not hasattr(if_triton_kernel, "_MixedPrecisionIF")
+    assert not hasattr(lif_triton_kernel, "_MixedPrecisionLIF")
+    assert not hasattr(plif_triton_kernel, "_MixedPrecisionPLIF")
+
+
 def test_fp8_backward_capability_uses_backward_probe(monkeypatch):
     storage_dtype = getattr(torch, "float8_e4m3fn", None)
     if storage_dtype is None:
@@ -329,6 +351,10 @@ def test_triton_neuron_forward_plan_matches_config():
         backward_compute_dtype_name="fp32",
         backward_compute_tl_dtype=object(),
         spike_dtype=torch.float32,
+        storage_dtype_id=0,
+        forward_compute_dtype_id=0,
+        backward_compute_dtype_id=0,
+        spike_dtype_id=0,
         save_intermediates=True,
     )
 
