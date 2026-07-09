@@ -51,6 +51,10 @@ def _variant_timeout(seconds: float | None):
         del signum, frame
         raise _VariantTimeoutError(f"variant exceeded {seconds:g}s timeout")
 
+    if not hasattr(signal, "SIGALRM") or not hasattr(signal, "setitimer"):
+        yield
+        return
+
     previous_handler = signal.getsignal(signal.SIGALRM)
     previous_timer = signal.setitimer(signal.ITIMER_REAL, seconds)
     signal.signal(signal.SIGALRM, _handle_timeout)
@@ -354,9 +358,9 @@ def _compare_plan_overhead(
                 v_reset=v_reset,
                 decay_input=decay_input,
                 storage_dtype=storage_dtype,
-            compute_dtype=compute_dtype,
-            backward_compute_dtype=backward_compute_dtype,
-        )
+                compute_dtype=compute_dtype,
+                backward_compute_dtype=backward_compute_dtype,
+            )
     torch.cuda.synchronize(x.device)
     safe_wrapper_total_ms = (time.perf_counter() - start) * 1000.0
 
@@ -425,19 +429,21 @@ def _compare_plan_overhead(
     plan_grads, with_plan_grad_finite = _run_backward(use_plan=True)
     grad_x_abs_error = (safe_grads["x"] - plan_grads["x"]).abs()
 
+    # _run_backward includes forward + backward + setup, so these metrics measure
+    # end-to-end backward-path latency rather than backward-kernel-only time.
     torch.cuda.synchronize(x.device)
     start = time.perf_counter()
     for _ in range(repeat):
         _run_backward(use_plan=False)
     torch.cuda.synchronize(x.device)
-    safe_wrapper_backward_total_ms = (time.perf_counter() - start) * 1000.0
+    safe_wrapper_forward_backward_total_ms = (time.perf_counter() - start) * 1000.0
 
     torch.cuda.synchronize(x.device)
     start = time.perf_counter()
     for _ in range(repeat):
         _run_backward(use_plan=True)
     torch.cuda.synchronize(x.device)
-    with_plan_backward_total_ms = (time.perf_counter() - start) * 1000.0
+    with_plan_forward_backward_total_ms = (time.perf_counter() - start) * 1000.0
 
     return {
         "compile_success": True,
@@ -448,10 +454,16 @@ def _compare_plan_overhead(
         "with_plan_total_ms": with_plan_total_ms,
         "safe_wrapper_avg_ms": safe_wrapper_total_ms / repeat,
         "with_plan_avg_ms": with_plan_total_ms / repeat,
-        "safe_wrapper_backward_total_ms": safe_wrapper_backward_total_ms,
-        "with_plan_backward_total_ms": with_plan_backward_total_ms,
-        "safe_wrapper_backward_avg_ms": safe_wrapper_backward_total_ms / repeat,
-        "with_plan_backward_avg_ms": with_plan_backward_total_ms / repeat,
+        "safe_wrapper_forward_backward_total_ms": (
+            safe_wrapper_forward_backward_total_ms
+        ),
+        "with_plan_forward_backward_total_ms": with_plan_forward_backward_total_ms,
+        "safe_wrapper_forward_backward_avg_ms": (
+            safe_wrapper_forward_backward_total_ms / repeat
+        ),
+        "with_plan_forward_backward_avg_ms": (
+            with_plan_forward_backward_total_ms / repeat
+        ),
         "safe_grad_finite": safe_grad_finite,
         "with_plan_grad_finite": with_plan_grad_finite,
         "grad_x_max_abs_error": float(grad_x_abs_error.max().item()),

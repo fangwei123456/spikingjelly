@@ -99,25 +99,49 @@ def _validate_mixed_precision_options(
     return storage_dtype, compute_dtype_name
 
 
+def _check_fp8_capability(
+    storage_dtype: torch.dtype,
+    device: torch.device,
+    compute_dtype_name: str,
+    neuron_name: str,
+    pass_name: str,
+) -> None:
+    if not is_fp8_dtype(storage_dtype):
+        return
+    from ..fp8_capability import (
+        triton_fp8_neuron_backward_capability,
+        triton_fp8_neuron_capability,
+    )
+
+    if pass_name == "forward":
+        dtype_report = triton_fp8_neuron_capability(
+            storage_dtype, device, compute_dtype=compute_dtype_name
+        )
+        kw = "compute_dtype"
+    elif pass_name == "backward":
+        dtype_report = triton_fp8_neuron_backward_capability(
+            storage_dtype, device, compute_dtype=compute_dtype_name
+        )
+        kw = "backward_compute_dtype"
+    else:
+        raise ValueError(f"Unsupported Triton FP8 pass name: {pass_name!r}.")
+    if not dtype_report.get("available", False):
+        reason = dtype_report.get("reason", "unknown reason")
+        raise RuntimeError(
+            f"Triton FP8 {neuron_name} {pass_name} is unavailable for "
+            f"{storage_dtype} with {kw}={compute_dtype_name!r}: {reason}"
+        )
+
+
 def _check_fp8_forward_capability(
     storage_dtype: torch.dtype,
     device: torch.device,
     compute_dtype_name: str,
     neuron_name: str,
 ) -> None:
-    if not is_fp8_dtype(storage_dtype):
-        return
-    from ..fp8_capability import triton_fp8_neuron_capability
-
-    dtype_report = triton_fp8_neuron_capability(
-        storage_dtype, device, compute_dtype=compute_dtype_name
+    _check_fp8_capability(
+        storage_dtype, device, compute_dtype_name, neuron_name, "forward"
     )
-    if not dtype_report.get("available", False):
-        reason = dtype_report.get("reason", "unknown reason")
-        raise RuntimeError(
-            f"Triton FP8 {neuron_name} forward is unavailable for "
-            f"{storage_dtype} with compute_dtype={compute_dtype_name!r}: {reason}"
-        )
 
 
 def _check_fp8_backward_capability(
@@ -126,20 +150,9 @@ def _check_fp8_backward_capability(
     compute_dtype_name: str,
     neuron_name: str,
 ) -> None:
-    if not is_fp8_dtype(storage_dtype):
-        return
-    from ..fp8_capability import triton_fp8_neuron_capability
-
-    dtype_report = triton_fp8_neuron_capability(
-        storage_dtype, device, compute_dtype=compute_dtype_name
+    _check_fp8_capability(
+        storage_dtype, device, compute_dtype_name, neuron_name, "backward"
     )
-    if not dtype_report.get("available", False):
-        reason = dtype_report.get("reason", "unknown reason")
-        raise RuntimeError(
-            f"Triton FP8 {neuron_name} backward is unavailable for "
-            f"{storage_dtype} with backward_compute_dtype={compute_dtype_name!r}: "
-            f"{reason}"
-        )
 
 
 def prepare_triton_neuron_execution_plan(

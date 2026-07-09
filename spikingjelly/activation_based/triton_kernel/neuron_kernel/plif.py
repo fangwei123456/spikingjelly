@@ -7,6 +7,7 @@ from ..surrogate_kernel import resolve_sg_triton_id_and_alpha, sg_triton
 from ..triton_utils import (
     convert_and_store,
     register_op,
+    torch_dtype_for_triton_compute_dtype,
     type_dict,
     use_static_range_for_triton_neuron_kernel,
     wrap_triton,
@@ -259,6 +260,7 @@ def _multistep_plif_backward_kernel_static(
     pid_ncl = tl.program_id(0)
     ncl_offset = pid_ncl * BLOCK_NCL
 
+    r_tau = tl.full([1], r_tau, dtype=compute_dtype)
     grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
     grad_r_tau_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
 
@@ -400,6 +402,7 @@ def _multistep_plif_backward_kernel_dynamic(
     pid_ncl = tl.program_id(0)
     ncl_offset = pid_ncl * BLOCK_NCL
 
+    r_tau = tl.full([1], r_tau, dtype=compute_dtype)
     grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
     grad_r_tau_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
 
@@ -920,8 +923,11 @@ class _MixedPrecisionPLIF(torch.autograd.Function):
         grad_v_init = torch.empty(
             h_seq[0].shape, dtype=ctx.v_init_dtype, device=h_seq.device
         )
+        grad_r_tau_dtype = torch_dtype_for_triton_compute_dtype(
+            plan.backward_compute_dtype_name
+        )
         grad_r_tau_seq = torch.empty(
-            h_seq[0].shape, dtype=ctx.r_tau_dtype, device=h_seq.device
+            h_seq[0].shape, dtype=grad_r_tau_dtype, device=h_seq.device
         )
 
         _launch_plif_backward_kernel(

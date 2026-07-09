@@ -164,8 +164,12 @@ def is_fp8_dtype(dtype: torch.dtype) -> bool:
 def resolve_triton_compute_dtype(compute_dtype, storage_dtype=None):
     name = normalize_triton_compute_dtype_name(compute_dtype)
     if name == "fp32":
+        if torch.float32 not in type_dict:
+            raise ValueError("Triton fp32 compute dtype is unavailable.")
         return type_dict[torch.float32]
     if name == "fp16":
+        if torch.float16 not in type_dict:
+            raise ValueError("Triton fp16 compute dtype is unavailable.")
         return type_dict[torch.float16]
     if name == "bf16":
         if not hasattr(torch, "bfloat16") or torch.bfloat16 not in type_dict:
@@ -190,7 +194,22 @@ def resolve_triton_compute_dtype(compute_dtype, storage_dtype=None):
         raise ValueError(
             f"Unsupported FP8 storage dtype for compute_dtype='fp8': {storage_dtype}."
         )
-    raise ValueError(f"Unsupported Triton compute dtype: {compute_dtype!r}.")
+
+
+def torch_dtype_for_triton_compute_dtype(compute_dtype) -> torch.dtype:
+    name = normalize_triton_compute_dtype_name(compute_dtype)
+    if name == "fp32":
+        return torch.float32
+    if name == "fp16":
+        return torch.float16
+    if name == "bf16":
+        if not hasattr(torch, "bfloat16"):
+            raise ValueError("torch.bfloat16 is unavailable.")
+        return torch.bfloat16
+    if name == "fp8":
+        # PyTorch does not provide useful reductions for float8 tensors. Keep
+        # reduction buffers in fp32 while the Triton kernel computes in fp8.
+        return torch.float32
 
 
 @triton.jit

@@ -20,6 +20,7 @@ from spikingjelly.activation_based.triton_kernel.fp8_capability import (
     supports_triton_fp8_neuron_forward,
     triton_fp8_neuron_capability_report,
 )
+from spikingjelly.activation_based.triton_kernel import triton_utils
 from spikingjelly.activation_based.neuron import integrate_and_fire as if_module
 from spikingjelly.activation_based.neuron import lif as lif_module
 from spikingjelly.activation_based.neuron import plif as plif_module
@@ -222,6 +223,47 @@ def test_triton_fp8_capability_report_cpu_is_unavailable():
 def test_triton_fp8_capability_rejects_invalid_dtype():
     with pytest.raises(ValueError, match="Unsupported Triton FP8 dtype"):
         supports_triton_fp8_neuron_forward(torch.float32, torch.device("cpu"))
+
+
+def test_resolve_triton_compute_dtype_reports_unavailable_type_dict(monkeypatch):
+    monkeypatch.setattr(triton_utils, "type_dict", {})
+    with pytest.raises(ValueError, match="fp32 compute dtype is unavailable"):
+        triton_utils.resolve_triton_compute_dtype("fp32")
+    with pytest.raises(ValueError, match="fp16 compute dtype is unavailable"):
+        triton_utils.resolve_triton_compute_dtype("fp16")
+
+
+def test_fp8_backward_capability_uses_backward_probe(monkeypatch):
+    storage_dtype = getattr(torch, "float8_e4m3fn", None)
+    if storage_dtype is None:
+        pytest.skip("This PyTorch build does not expose torch.float8_e4m3fn.")
+
+    from spikingjelly.activation_based.triton_kernel import fp8_capability
+
+    calls = {"forward": 0, "backward": 0}
+
+    def _unexpected_forward(*args, **kwargs):
+        del args, kwargs
+        calls["forward"] += 1
+        return {"available": True, "reason": None}
+
+    def _backward_probe(*args, **kwargs):
+        del args, kwargs
+        calls["backward"] += 1
+        return {"available": False, "reason": "backward probe failed"}
+
+    monkeypatch.setattr(
+        fp8_capability, "triton_fp8_neuron_capability", _unexpected_forward
+    )
+    monkeypatch.setattr(
+        fp8_capability, "triton_fp8_neuron_backward_capability", _backward_probe
+    )
+
+    with pytest.raises(RuntimeError, match="backward probe failed"):
+        neuron_triton_utils._check_fp8_backward_capability(
+            storage_dtype, torch.device("cuda", 0), "fp32", "LIF"
+        )
+    assert calls == {"forward": 0, "backward": 1}
 
 
 def test_prepare_triton_neuron_forward_plan_rejects_cpu_device():
