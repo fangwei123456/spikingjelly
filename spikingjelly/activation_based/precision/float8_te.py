@@ -412,7 +412,8 @@ def _te_recursive_convert(root: nn.Module, TELinear: type, report) -> None:
                 _replace_child(module, child_name, wrapped)
                 report.converted_modules.append(child_fqn)
             else:
-                report.skipped_modules.append(child_fqn)
+                if next(child.children(), None) is None:
+                    report.skipped_modules.append(child_fqn)
                 child_id = id(child)
                 if child_id in visited:
                     continue

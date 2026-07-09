@@ -117,19 +117,14 @@ class Float8PointwiseConv1dStepModule(nn.Module):
         error_msgs,
     ):
         wrapped_prefix = prefix + "wrapped."
-        wrapped_keys = set(self.wrapped.state_dict().keys())
-        keys_to_rename = [
-            k
-            for k in list(state_dict.keys())
-            if k.startswith(prefix) and not k.startswith(wrapped_prefix)
-        ]
-        for k in keys_to_rename:
-            suffix = k[len(prefix) :]
-            if suffix in wrapped_keys:
-                value = state_dict.pop(k)
-                if suffix == "weight" and value.dim() == 3:
-                    value = value.squeeze(-1)
-                state_dict[wrapped_prefix + suffix] = value
+        for suffix in self.wrapped.state_dict().keys():
+            key = prefix + suffix
+            if key not in state_dict:
+                continue
+            value = state_dict.pop(key)
+            if suffix == "weight" and value.dim() == 3:
+                value = value.squeeze(-1)
+            state_dict[wrapped_prefix + suffix] = value
 
 
 def wrap_float8_pointwise_conv1d_module(

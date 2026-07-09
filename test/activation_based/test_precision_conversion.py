@@ -322,6 +322,25 @@ def test_pointwise_conv1d_step_module_load_state_dict_from_parent():
     parent.load_state_dict(state_dict, strict=True)
 
 
+def test_pointwise_conv1d_step_module_load_state_dict_ignores_neighbor_prefix():
+    conv = torch.nn.Conv1d(8, 4, kernel_size=1, bias=True)
+    linear = make_linear_from_pointwise_conv1d(conv)
+
+    class Parent(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = Float8PointwiseConv1dStepModule(linear, conv, step_mode="s")
+            self.conv_extra = torch.nn.Linear(8, 4)
+
+    parent = Parent()
+    state_dict = parent.state_dict()
+    original_neighbor_weight = state_dict["conv_extra.weight"].clone()
+    parent.load_state_dict(state_dict, strict=True)
+    torch.testing.assert_close(
+        state_dict["conv_extra.weight"], original_neighbor_weight
+    )
+
+
 def test_conversion_report_marks_pointwise_conv1d_convertible():
     model = torch.nn.Sequential(
         torch.nn.Conv1d(8, 16, kernel_size=1, bias=False),
@@ -619,6 +638,26 @@ def test_convert_model_for_precision_replaces_pointwise_conv1d_fp8_te(monkeypatc
     assert isinstance(converted[1], torch.nn.Conv1d)
     assert report.converted_modules == ["0"]
     assert "1" in report.unsupported_modules
+
+
+def test_convert_model_for_precision_reports_only_leaf_skips_fp8_te(monkeypatch):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.Sequential(
+        torch.nn.Sequential(torch.nn.ReLU(), torch.nn.Linear(8, 4)),
+        torch.nn.Sequential(torch.nn.BatchNorm1d(4)),
+    )
+    policy = Float8TransformerEnginePolicy()
+    _, report = convert_model_for_precision(model, policy)
+    assert report.converted_modules == ["0.1"]
+    assert "0" not in report.skipped_modules
+    assert "1" not in report.skipped_modules
+    assert "0.0" in report.skipped_modules
+    assert "1.0" in report.skipped_modules
 
 
 def test_convert_model_for_precision_replaces_root_pointwise_conv1d_fp8_te(
