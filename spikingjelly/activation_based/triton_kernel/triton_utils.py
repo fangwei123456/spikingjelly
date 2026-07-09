@@ -41,12 +41,13 @@ try:
     }
 
     # check bfloat16 support
-    dc = torch.cuda.get_device_capability()
-    if dc[0] < 8 or not hasattr(tl, "bfloat16") or not hasattr(torch, "bfloat16"):
-        print("bfloat16 is not supported on this device.")
-    else:
-        type_dict[torch.bfloat16] = tl.bfloat16
-        type_str_dict[torch.bfloat16] = "tl.bfloat16"
+    if torch.cuda.is_available():
+        dc = torch.cuda.get_device_capability()
+        if dc[0] >= 8 and hasattr(tl, "bfloat16") and hasattr(torch, "bfloat16"):
+            type_dict[torch.bfloat16] = tl.bfloat16
+            type_str_dict[torch.bfloat16] = "tl.bfloat16"
+        else:
+            print("bfloat16 is not supported on this device.")
 except BaseException as e:
     import logging
 
@@ -55,6 +56,141 @@ except BaseException as e:
     tl = dummy.DummyImport()
     type_dict = {}
     type_str_dict = {}
+
+
+_TRITON_COMPUTE_DTYPE_ALIASES = {
+    "float32": "fp32",
+    "torch.float32": "fp32",
+    "float": "fp32",
+    "fp32": "fp32",
+    "float16": "fp16",
+    "torch.float16": "fp16",
+    "half": "fp16",
+    "fp16": "fp16",
+    "bfloat16": "bf16",
+    "torch.bfloat16": "bf16",
+    "bf16": "bf16",
+    "float8": "fp8",
+    "fp8": "fp8",
+}
+
+
+def normalize_triton_compute_dtype_name(compute_dtype) -> str:
+    if isinstance(compute_dtype, torch.dtype):
+        if compute_dtype == torch.float32:
+            return "fp32"
+        if compute_dtype == torch.float16:
+            return "fp16"
+        if hasattr(torch, "bfloat16") and compute_dtype == torch.bfloat16:
+            return "bf16"
+        raise ValueError(f"Unsupported Triton compute dtype: {compute_dtype}.")
+    if not isinstance(compute_dtype, str):
+        raise ValueError(
+            "compute_dtype must be a string or torch.dtype, "
+            f"but got {type(compute_dtype).__name__}."
+        )
+    key = compute_dtype.lower()
+    try:
+        return _TRITON_COMPUTE_DTYPE_ALIASES[key]
+    except KeyError as e:
+        raise ValueError(
+            "compute_dtype must be one of 'fp8', 'fp16', 'bf16', or 'fp32', "
+            f"but got {compute_dtype!r}."
+        ) from e
+
+
+def normalize_triton_storage_dtype(storage_dtype) -> torch.dtype:
+    if isinstance(storage_dtype, torch.dtype):
+        dtype = storage_dtype
+    elif isinstance(storage_dtype, str):
+        key = storage_dtype.lower().replace("torch.", "")
+        mapping = {
+            "float32": torch.float32,
+            "fp32": torch.float32,
+            "float": torch.float32,
+            "float16": torch.float16,
+            "fp16": torch.float16,
+            "half": torch.float16,
+        }
+        if hasattr(torch, "bfloat16"):
+            mapping.update({"bfloat16": torch.bfloat16, "bf16": torch.bfloat16})
+        if hasattr(torch, "float8_e4m3fn"):
+            mapping.update(
+                {
+                    "float8_e4m3fn": torch.float8_e4m3fn,
+                    "fp8_e4m3fn": torch.float8_e4m3fn,
+                    "e4m3fn": torch.float8_e4m3fn,
+                }
+            )
+        if hasattr(torch, "float8_e5m2"):
+            mapping.update(
+                {
+                    "float8_e5m2": torch.float8_e5m2,
+                    "fp8_e5m2": torch.float8_e5m2,
+                    "e5m2": torch.float8_e5m2,
+                }
+            )
+        try:
+            dtype = mapping[key]
+        except KeyError as e:
+            raise ValueError(
+                f"Unsupported Triton storage dtype: {storage_dtype!r}."
+            ) from e
+    else:
+        raise ValueError(
+            "storage_dtype must be a string or torch.dtype, "
+            f"but got {type(storage_dtype).__name__}."
+        )
+
+    allowed = {torch.float32, torch.float16}
+    if hasattr(torch, "bfloat16"):
+        allowed.add(torch.bfloat16)
+    if hasattr(torch, "float8_e4m3fn"):
+        allowed.add(torch.float8_e4m3fn)
+    if hasattr(torch, "float8_e5m2"):
+        allowed.add(torch.float8_e5m2)
+    if dtype not in allowed:
+        raise ValueError(f"Unsupported Triton storage dtype: {dtype}.")
+    return dtype
+
+
+def is_fp8_dtype(dtype: torch.dtype) -> bool:
+    return (
+        (hasattr(torch, "float8_e4m3fn") and dtype == torch.float8_e4m3fn)
+        or (hasattr(torch, "float8_e5m2") and dtype == torch.float8_e5m2)
+    )
+
+
+def resolve_triton_compute_dtype(compute_dtype, storage_dtype=None):
+    name = normalize_triton_compute_dtype_name(compute_dtype)
+    if name == "fp32":
+        return type_dict[torch.float32]
+    if name == "fp16":
+        return type_dict[torch.float16]
+    if name == "bf16":
+        if not hasattr(torch, "bfloat16") or torch.bfloat16 not in type_dict:
+            raise ValueError("Triton bfloat16 compute dtype is unavailable.")
+        return type_dict[torch.bfloat16]
+    if name == "fp8":
+        if storage_dtype is None:
+            raise ValueError("compute_dtype='fp8' requires an FP8 storage_dtype.")
+        storage_dtype = normalize_triton_storage_dtype(storage_dtype)
+        if not is_fp8_dtype(storage_dtype):
+            raise ValueError("compute_dtype='fp8' requires an FP8 storage_dtype.")
+        if hasattr(torch, "float8_e4m3fn") and storage_dtype == torch.float8_e4m3fn:
+            tl_dtype = getattr(tl, "float8e4nv", None)
+            if tl_dtype is None:
+                raise ValueError("Triton float8e4nv dtype is unavailable.")
+            return tl_dtype
+        if hasattr(torch, "float8_e5m2") and storage_dtype == torch.float8_e5m2:
+            tl_dtype = getattr(tl, "float8e5", None)
+            if tl_dtype is None:
+                raise ValueError("Triton float8e5 dtype is unavailable.")
+            return tl_dtype
+        raise ValueError(
+            f"Unsupported FP8 storage dtype for compute_dtype='fp8': {storage_dtype}."
+        )
+    raise ValueError(f"Unsupported Triton compute dtype: {compute_dtype!r}.")
 
 
 @triton.jit

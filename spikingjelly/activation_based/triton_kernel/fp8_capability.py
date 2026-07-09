@@ -5,6 +5,13 @@ from typing import Any
 
 import torch
 
+from .triton_utils import (
+    is_fp8_dtype,
+    normalize_triton_compute_dtype_name,
+    normalize_triton_storage_dtype,
+    resolve_triton_compute_dtype,
+)
+
 try:
     import triton
     import triton.language as tl
@@ -17,6 +24,7 @@ __all__ = [
     "supports_triton_fp8_e4m3fn",
     "supports_triton_fp8_e5m2",
     "supports_triton_fp8_neuron_forward",
+    "triton_fp8_neuron_capability",
     "triton_fp8_neuron_capability_report",
 ]
 
@@ -25,12 +33,20 @@ if triton is not None:
 
     @triton.jit
     def _fp8_neuron_forward_probe_kernel(
-        x_ptr, y_ptr, N: tl.constexpr, BLOCK: tl.constexpr
+        x_ptr,
+        y_ptr,
+        N: tl.constexpr,
+        compute_dtype: tl.constexpr,
+        BLOCK: tl.constexpr,
     ):
         offsets = tl.arange(0, BLOCK)
         mask = offsets < N
-        x = tl.load(x_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
-        y = x + 0.0
+        x = tl.load(x_ptr + offsets, mask=mask, other=0.0).to(compute_dtype)
+        v = tl.full([BLOCK], 0.125, dtype=compute_dtype)
+        r_tau = tl.full([1], 0.5, dtype=compute_dtype)
+        h = v + r_tau * (0.0 - v + x)
+        s = tl.where(h >= 1.0, 1.0, 0.0).to(compute_dtype)
+        y = h - s * 1.0
         tl.store(y_ptr + offsets, y, mask=mask)
 
 else:
@@ -49,40 +65,11 @@ def _fp8_dtype_candidates() -> dict[str, torch.dtype | None]:
 
 
 def _normalize_fp8_dtype(dtype) -> torch.dtype:
-    if isinstance(dtype, torch.dtype):
-        normalized = dtype
-    elif isinstance(dtype, str):
-        key = dtype.lower().replace("torch.", "")
-        mapping = {}
-        e4m3fn = getattr(torch, "float8_e4m3fn", None)
-        e5m2 = getattr(torch, "float8_e5m2", None)
-        if e4m3fn is not None:
-            mapping.update(
-                {
-                    "float8_e4m3fn": e4m3fn,
-                    "fp8_e4m3fn": e4m3fn,
-                    "e4m3fn": e4m3fn,
-                }
-            )
-        if e5m2 is not None:
-            mapping.update(
-                {
-                    "float8_e5m2": e5m2,
-                    "fp8_e5m2": e5m2,
-                    "e5m2": e5m2,
-                }
-            )
-        try:
-            normalized = mapping[key]
-        except KeyError as e:
-            raise ValueError(f"Unsupported Triton FP8 dtype: {dtype!r}.") from e
-    else:
-        raise ValueError(
-            "dtype must be a string or torch.dtype, "
-            f"but got {type(dtype).__name__}."
-        )
-
-    if normalized not in {d for d in _fp8_dtype_candidates().values() if d is not None}:
+    try:
+        normalized = normalize_triton_storage_dtype(dtype)
+    except ValueError as e:
+        raise ValueError(f"Unsupported Triton FP8 dtype: {dtype!r}.") from e
+    if not is_fp8_dtype(normalized):
         raise ValueError(f"Unsupported Triton FP8 dtype: {normalized}.")
     return normalized
 
@@ -106,10 +93,13 @@ def _failure(available: bool, reason: str | None = None) -> dict[str, Any]:
 def _probe_cached(
     dtype_name: str,
     device_str: str,
+    compute_dtype_name: str,
     capability: str,
     torch_version: str,
     triton_version: str,
 ):
+    # These parameters are lru_cache keys that invalidate stale probe results when
+    # the GPU capability or library versions change.
     del capability, torch_version, triton_version
     try:
         dtype = _normalize_fp8_dtype(dtype_name)
@@ -125,6 +115,10 @@ def _probe_cached(
         return _failure(False, "Triton FP8 neuron forward requires a CUDA device")
     if _fp8_neuron_forward_probe_kernel is None:
         return _failure(False, "Triton FP8 probe kernel is unavailable")
+    try:
+        compute_tl_dtype = resolve_triton_compute_dtype(compute_dtype_name, dtype)
+    except ValueError as e:
+        return _failure(False, str(e))
 
     try:
         with torch.cuda.device(device):
@@ -134,20 +128,26 @@ def _probe_cached(
                 dtype=torch.float32,
             ).to(dtype=dtype)
             y = torch.empty_like(x)
-            _fp8_neuron_forward_probe_kernel[(1,)](x, y, N=x.numel(), BLOCK=8)
+            _fp8_neuron_forward_probe_kernel[(1,)](
+                x,
+                y,
+                N=x.numel(),
+                compute_dtype=compute_tl_dtype,
+                BLOCK=8,
+            )
             torch.cuda.synchronize(device)
             yf = y.to(dtype=torch.float32)
             if not torch.isfinite(yf).all():
                 return _failure(False, "probe produced non-finite values")
     except Exception as e:
-        first_line = str(e).splitlines()[0] if str(e) else repr(e)
-        return _failure(False, f"{type(e).__name__}: {first_line}")
+        return _failure(False, f"{type(e).__name__}: {e}")
     return _failure(True)
 
 
-def _probe(dtype, device) -> dict[str, Any]:
+def _probe(dtype, device, compute_dtype="fp32") -> dict[str, Any]:
     dtype = _normalize_fp8_dtype(dtype)
     device = _normalize_cuda_device(device)
+    compute_dtype_name = normalize_triton_compute_dtype_name(compute_dtype)
     triton_version = (
         getattr(triton, "__version__", None) if triton is not None else None
     )
@@ -158,6 +158,7 @@ def _probe(dtype, device) -> dict[str, Any]:
     return _probe_cached(
         _torch_dtype_name(dtype),
         str(device),
+        compute_dtype_name,
         capability,
         torch.__version__,
         str(triton_version),
@@ -174,8 +175,12 @@ def supports_triton_fp8_e5m2(device) -> bool:
     return False if dtype is None else bool(_probe(dtype, device)["available"])
 
 
-def supports_triton_fp8_neuron_forward(dtype, device) -> bool:
-    return bool(_probe(dtype, device)["available"])
+def supports_triton_fp8_neuron_forward(dtype, device, compute_dtype="fp32") -> bool:
+    return bool(_probe(dtype, device, compute_dtype=compute_dtype)["available"])
+
+
+def triton_fp8_neuron_capability(dtype, device, compute_dtype="fp32") -> dict[str, Any]:
+    return _probe(dtype, device, compute_dtype=compute_dtype)
 
 
 def triton_fp8_neuron_capability_report(device) -> dict[str, Any]:
