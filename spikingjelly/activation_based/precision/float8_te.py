@@ -212,10 +212,15 @@ class _Float8TEPatternModule(nn.Module):
         self,
         wrapped: nn.Module,
         state_key_map: dict[str, str],
+        step_mode: str = "s",
     ):
         super().__init__()
         self.wrapped = wrapped
         self._state_key_map = state_key_map
+        self.step_mode = step_mode
+
+    def set_step_mode(self, step_mode: str):
+        self.step_mode = step_mode
 
     def _unwrap_output(self, output):
         return output[0] if isinstance(output, tuple) else output
@@ -321,6 +326,7 @@ def _convert_layer_norm_linear_pattern(module: nn.Sequential, te) -> nn.Module |
         return None
     norm, linear = list(module.children())
     converted = _make_te_layer_norm_linear(norm, linear, TELayerNormLinear)
+    step_mode = getattr(linear, "step_mode", "s")
     return Float8TELayerNormLinearModule(
         converted,
         {
@@ -331,6 +337,7 @@ def _convert_layer_norm_linear_pattern(module: nn.Sequential, te) -> nn.Module |
             "1.weight": _first_existing_name(converted, ("weight",)),
             "1.bias": _first_existing_name(converted, ("bias",)),
         },
+        step_mode=step_mode,
     )
 
 
@@ -340,6 +347,7 @@ def _convert_layer_norm_mlp_pattern(module: nn.Sequential, te) -> nn.Module | No
         return None
     norm, fc1, _, fc2 = list(module.children())
     converted = _make_te_layer_norm_mlp(norm, fc1, fc2, TELayerNormMLP)
+    step_mode = getattr(fc1, "step_mode", "s")
     return Float8TELayerNormMLPModule(
         converted,
         {
@@ -352,6 +360,7 @@ def _convert_layer_norm_mlp_pattern(module: nn.Sequential, te) -> nn.Module | No
             "3.weight": _first_existing_name(converted, ("fc2_weight", "weight2")),
             "3.bias": _first_existing_name(converted, ("fc2_bias", "bias2")),
         },
+        step_mode=step_mode,
     )
 
 

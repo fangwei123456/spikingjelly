@@ -854,7 +854,7 @@ def test_convert_model_for_precision_fuses_layer_norm_linear_fp8_te(monkeypatch)
     )
 
     model = torch.nn.Sequential(
-        torch.nn.Sequential(torch.nn.LayerNorm(8), torch.nn.Linear(8, 4))
+        torch.nn.Sequential(torch.nn.LayerNorm(8), layer.Linear(8, 4, step_mode="m"))
     )
     x = torch.randn(3, 5, 8)
     expected = model(x)
@@ -862,6 +862,9 @@ def test_convert_model_for_precision_fuses_layer_norm_linear_fp8_te(monkeypatch)
     converted, report = convert_model_for_precision(model, policy)
     torch.testing.assert_close(converted(x), expected)
     assert isinstance(converted[0], Float8TELayerNormLinearModule)
+    assert converted[0].step_mode == "m"
+    converted[0].set_step_mode("s")
+    assert converted[0].step_mode == "s"
     assert report.converted_modules == ["0"]
     assert report.converted_patterns == [
         {"module": "0", "pattern": "LayerNormLinear", "backend": "te"}
@@ -909,7 +912,7 @@ def test_convert_model_for_precision_fuses_layer_norm_mlp_fp8_te(monkeypatch):
     model = torch.nn.Sequential(
         torch.nn.Sequential(
             torch.nn.LayerNorm(8),
-            torch.nn.Linear(8, 16),
+            layer.Linear(8, 16, step_mode="m"),
             torch.nn.GELU(),
             torch.nn.Linear(16, 8),
         )
@@ -920,6 +923,9 @@ def test_convert_model_for_precision_fuses_layer_norm_mlp_fp8_te(monkeypatch):
     converted, report = convert_model_for_precision(model, policy)
     torch.testing.assert_close(converted(x), expected)
     assert isinstance(converted[0], Float8TELayerNormMLPModule)
+    assert converted[0].step_mode == "m"
+    converted[0].set_step_mode("s")
+    assert converted[0].step_mode == "s"
     assert report.converted_modules == ["0"]
     assert report.converted_patterns == [
         {"module": "0", "pattern": "LayerNormMLP", "backend": "te"}
