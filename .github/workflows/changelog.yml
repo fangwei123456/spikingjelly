@@ -1,0 +1,30 @@
+name: Changelog
+
+on:
+  pull_request:
+    paths:
+      - CHANGELOG.md
+      - docs/source/changelog.rst
+      - docs/source/index.rst
+      - tools/generate_changelog_rst.py
+      - .github/workflows/changelog.yml
+  push:
+    branches:
+      - master
+    paths:
+      - CHANGELOG.md
+      - docs/source/changelog.rst
+      - docs/source/index.rst
+      - tools/generate_changelog_rst.py
+      - .github/workflows/changelog.yml
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check generated changelog
+        run: python tools/generate_changelog_rst.py --check

@@ -12,6 +12,8 @@
 ----------------
 自 ``0.0.0.0.14`` 版本开始，包括 ``clock_driven`` 和 ``event_driven`` 在内的模块被重命名了，请参考教程 :doc:`./tutorials/cn/migrate_from_legacy`。
 
+V2 版本更新记录见 :doc:`./changelog`。
+
 不同版本文档的地址（其中 `latest` 是开发版）：
 
 - `zero <https://spikingjelly.readthedocs.io/zh_CN/zero/>`__
@@ -33,9 +35,9 @@
 安装
 ----------------
 
-SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingJelly。最新版的 SpikingJelly 要求 ``torch>=2.2.0`` ，并在 ``torch==2.7.1`` 上测试。
+SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingJelly。最新版的 SpikingJelly 要求 ``torch>=2.6.0`` ，并在 ``torch==2.7.1`` 上测试。
 
-奇数版本是开发版，随着GitHub/OpenI不断更新。偶数版本是稳定版，可以从PyPI获取。
+从 SpikingJelly V2 起，发布版本采用兼容 PEP 440 的语义化版本号。V2 之前使用历史遗留的 ``0.0.0.0.X`` 版本方案，其中奇数 ``X`` 对应 GitHub/OpenI 上的开发版，偶数 ``X`` 对应 PyPI 稳定版。
 
 **从 PyPI 安装最新的稳定版本：**
 
@@ -148,6 +150,8 @@ Notification
 From the version ``0.0.0.0.14``, modules including ``clock_driven`` and ``event_driven`` are renamed. \
 Please refer to the tutorial :doc:`./tutorials/en/migrate_from_legacy`.
 
+See :doc:`./changelog` for the V2 release changelog.
+
 Docs for different versions (`latest` is the developing version):
 
 - `zero <https://spikingjelly.readthedocs.io/zh_CN/zero/>`__
@@ -169,9 +173,9 @@ Docs for different versions (`latest` is the developing version):
 Installation
 ----------------
 
-Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly. The latest version of SpikingJelly requires ``torch>=2.2.0`` and is tested on ``torch==2.7.1`` .
+Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly. The latest version of SpikingJelly requires ``torch>=2.6.0`` and is tested on ``torch==2.7.1`` .
 
-The odd version number is the developing version, which is updated with GitHub/OpenI repository. The even version number is the stable version and available at PyPI.
+Starting from SpikingJelly V2, release versions use PEP 440 compatible SemVer-style version numbers. Before V2, SpikingJelly used the legacy ``0.0.0.0.X`` scheme: odd ``X`` tracked the development version on GitHub/OpenI, and even ``X`` tracked the stable PyPI release.
 
 **Install the last stable version from PyPI:**
 
@@ -272,13 +276,6 @@ The list of contributors can be found at `contributors <https://github.com/fangw
    :hidden:
 
    /APIs/spikingjelly
-
-.. toctree::
-    :hidden:
-
-    publications
-
-.. toctree::
-    :hidden:
-
-    贡献指南 | Contributing <https://github.com/fangwei123456/spikingjelly/blob/master/CONTRIBUTING.md>
+   changelog
+   publications
+   贡献指南 | Contributing <https://github.com/fangwei123456/spikingjelly/blob/master/CONTRIBUTING.md>
