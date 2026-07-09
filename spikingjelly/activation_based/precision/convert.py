@@ -52,6 +52,7 @@ def analyze_convertible_modules(
         nn.BatchNorm1d,
         nn.BatchNorm2d,
         nn.BatchNorm3d,
+        nn.LayerNorm,
     )
     for name, module in model.named_modules():
         report.total_modules += 1

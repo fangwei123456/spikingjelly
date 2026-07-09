@@ -54,6 +54,9 @@ def _transformer_engine_fp8_status() -> tuple[
         "block": False,
         "mxfp8": False,
     }
+    # TE does not expose stable probes for every recipe across releases.
+    # The common recipes above are resolved later by importing their classes;
+    # hardware-gated recipes with public probes are checked here.
     for recipe_name, probe_name in (
         ("block", "is_fp8_block_scaling_available"),
         ("mxfp8", "is_mxfp8_available"),
@@ -184,9 +187,7 @@ def _assess_fp8_te(
             te_fp8_unavailable_reason or "Transformer Engine FP8 is unavailable"
         )
     else:
-        execution_note = (
-            "runtime execution still requires validation with Transformer Engine fp8_autocast"
-        )
+        execution_note = "runtime execution still requires validation with Transformer Engine fp8_autocast"
     return can_convert, can_execute, execution_note
 
 
@@ -341,12 +342,19 @@ def _validate_fp8_te(report: dict[str, Any]) -> None:
             "precision='fp8-te' is only supported on CUDA in the current stage."
         )
     if not report["cuda_available"]:
-        raise RuntimeError("precision='fp8-te' requires CUDA, but CUDA is not available.")
+        raise RuntimeError(
+            "precision='fp8-te' requires CUDA, but CUDA is not available."
+        )
     if not report.get("te_fp8_available", False):
         reason = report.get("te_fp8_unavailable_reason")
         raise RuntimeError(
             "precision='fp8-te' requires Transformer Engine FP8 support"
             + (f": {reason}" if reason else ".")
+        )
+    if not report.get("te_autocast_api"):
+        raise RuntimeError(
+            "precision='fp8-te' requires transformer_engine.pytorch.autocast "
+            "or transformer_engine.pytorch.fp8_autocast."
         )
 
 

@@ -259,6 +259,19 @@ def test_build_capability_report_fp8_te_catches_legacy_probe_failure(monkeypatch
     assert report["te_fp8_unavailable_reason"] == "driver probe failed"
 
 
+def test_validate_capability_rejects_fp8_te_without_autocast_api():
+    report = {
+        "requested_mode": "fp8-te",
+        "device_type": "cuda",
+        "cuda_available": True,
+        "transformer_engine_installed": True,
+        "te_fp8_available": True,
+        "te_autocast_api": None,
+    }
+    with pytest.raises(RuntimeError, match="autocast"):
+        validate_capability(report)
+
+
 def test_prepare_model_for_precision_warn_falls_back_to_fp32_when_fp8_te_unavailable():
     model = torch.nn.Linear(4, 4)
     with pytest.warns(RuntimeWarning, match="falling back to fp32"):

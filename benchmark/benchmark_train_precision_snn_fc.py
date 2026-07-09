@@ -212,8 +212,8 @@ def validate_precision_shape_constraints(args: argparse.Namespace) -> None:
     if invalid_dims:
         requested = ", ".join(sorted(fp8_precisions))
         raise ValueError(
-            f"{requested} currently requires every linear dimension used by this "
-            f"benchmark to be divisible by {FP8_ALIGNMENT}. Invalid values: "
+            f"{requested} benchmark runs currently require every linear dimension "
+            f"to be divisible by {FP8_ALIGNMENT}. Invalid values: "
             + ", ".join(invalid_dims)
         )
 

@@ -57,14 +57,13 @@ def _fp8_recursive_convert(
             if child is None:
                 continue
             child_fqn = f"{prefix}.{child_name}" if prefix else child_name
-            if isinstance(child, (nn.Linear, layer.Linear)) or is_supported_pointwise_conv1d(
-                child
-            ):
+            is_pointwise_conv1d = is_supported_pointwise_conv1d(child)
+            if isinstance(child, (nn.Linear, layer.Linear)) or is_pointwise_conv1d:
                 if child in memo:
                     _replace_child(module, child_name, memo[child])
                     report.converted_modules.append(child_fqn)
                     continue
-                if is_supported_pointwise_conv1d(child):
+                if is_pointwise_conv1d:
                     source = make_linear_from_pointwise_conv1d(child)
                     converted = Float8Linear.from_float(source, config=fp8_config)
                     wrapped = wrap_float8_pointwise_conv1d_module(child, converted)

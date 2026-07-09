@@ -107,7 +107,9 @@ def _make_te_layer_norm(source: nn.LayerNorm, TELayerNorm: type) -> nn.Module:
         converted = TELayerNorm(hidden_size, eps=source.eps)
     converted = converted.to(device=source.weight.device, dtype=source.weight.dtype)
     if not _copy_to_first_existing(source.weight, converted, ("weight",)):
-        raise RuntimeError("TE LayerNorm does not expose a compatible weight parameter.")
+        raise RuntimeError(
+            "TE LayerNorm does not expose a compatible weight parameter."
+        )
     if not _copy_to_first_existing(source.bias, converted, ("bias",)):
         raise RuntimeError("TE LayerNorm does not expose a compatible bias parameter.")
     return converted
@@ -153,8 +155,7 @@ def _make_te_layer_norm_mlp(
 ) -> nn.Module:
     hidden_size = int(norm.normalized_shape[0])
     bias = (
-        getattr(fc1, "bias", None) is not None
-        or getattr(fc2, "bias", None) is not None
+        getattr(fc1, "bias", None) is not None or getattr(fc2, "bias", None) is not None
     )
     kwargs = {
         "eps": norm.eps,
@@ -165,7 +166,21 @@ def _make_te_layer_norm_mlp(
     try:
         converted = TELayerNormMLP(hidden_size, fc1.out_features, **kwargs)
     except TypeError:
-        converted = TELayerNormMLP(hidden_size, fc1.out_features, bias=bias)
+        try:
+            converted = TELayerNormMLP(
+                hidden_size,
+                fc1.out_features,
+                bias=bias,
+                activation="gelu",
+            )
+        except TypeError:
+            warnings.warn(
+                "TE LayerNormMLP does not accept activation='gelu'; falling back "
+                "to the TE default activation.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            converted = TELayerNormMLP(hidden_size, fc1.out_features, bias=bias)
     converted = converted.to(device=fc1.weight.device, dtype=fc1.weight.dtype)
     copies = (
         _copy_to_first_existing(
@@ -178,7 +193,9 @@ def _make_te_layer_norm_mlp(
         _copy_to_first_existing(fc2.bias, converted, ("fc2_bias", "bias2")),
     )
     if not all(copies):
-        raise RuntimeError("TE LayerNormMLP does not expose compatible parameter names.")
+        raise RuntimeError(
+            "TE LayerNormMLP does not expose compatible parameter names."
+        )
     return converted
 
 
@@ -301,9 +318,7 @@ def _convert_layer_norm_linear_pattern(module: nn.Sequential, te) -> nn.Module |
             "0.weight": _first_existing_name(
                 converted, ("layer_norm_weight", "ln_weight")
             ),
-            "0.bias": _first_existing_name(
-                converted, ("layer_norm_bias", "ln_bias")
-            ),
+            "0.bias": _first_existing_name(converted, ("layer_norm_bias", "ln_bias")),
             "1.weight": _first_existing_name(converted, ("weight",)),
             "1.bias": _first_existing_name(converted, ("bias",)),
         },
@@ -322,9 +337,7 @@ def _convert_layer_norm_mlp_pattern(module: nn.Sequential, te) -> nn.Module | No
             "0.weight": _first_existing_name(
                 converted, ("layer_norm_weight", "ln_weight")
             ),
-            "0.bias": _first_existing_name(
-                converted, ("layer_norm_bias", "ln_bias")
-            ),
+            "0.bias": _first_existing_name(converted, ("layer_norm_bias", "ln_bias")),
             "1.weight": _first_existing_name(converted, ("fc1_weight", "weight1")),
             "1.bias": _first_existing_name(converted, ("fc1_bias", "bias1")),
             "3.weight": _first_existing_name(converted, ("fc2_weight", "weight2")),
@@ -478,10 +491,10 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
             ) from exc
 
         constructors = {
-            "delayed": ("DelayedScaling", "DelayedScaling"),
+            "delayed": ("DelayedScaling",),
             "current": ("Float8CurrentScaling", "CurrentScaling"),
-            "block": ("Float8BlockScaling", "MXFP8BlockScaling"),
-            "mxfp8": ("MXFP8BlockScaling", "Float8BlockScaling"),
+            "block": ("Float8BlockScaling",),
+            "mxfp8": ("MXFP8BlockScaling",),
         }
         for class_name in constructors[recipe_name]:
             recipe_cls = getattr(recipe_module, class_name, None)
@@ -511,7 +524,9 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
             te = _import_te_pytorch()
         except ImportError:
             return nullcontext()
-        recipe = self._resolved_recipe if self._recipe_resolved else self._resolve_recipe(te)
+        recipe = (
+            self._resolved_recipe if self._recipe_resolved else self._resolve_recipe(te)
+        )
         autocast = getattr(te, "autocast", None)
         if autocast is not None:
             if recipe is None:
@@ -525,7 +540,18 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
                 RuntimeWarning,
                 stacklevel=2,
             )
-            return fp8_autocast(enabled=True)
+            if recipe is None:
+                return fp8_autocast(enabled=True)
+            try:
+                return fp8_autocast(enabled=True, recipe=recipe)
+            except TypeError:
+                warnings.warn(
+                    "transformer_engine.pytorch.fp8_autocast does not accept "
+                    "a recipe argument; using its default recipe.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                return fp8_autocast(enabled=True)
         return nullcontext()
 
     def _convert_modules(self, model, report):
@@ -546,6 +572,7 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
             if TELayerNorm is not None:
                 report.converted_modules.append("<root>")
                 return _make_te_layer_norm(model, TELayerNorm)
+            report.skipped_modules.append("<root>")
         pattern = _convert_fused_pattern(model, te)
         if pattern is not None:
             wrapped, pattern_name = pattern

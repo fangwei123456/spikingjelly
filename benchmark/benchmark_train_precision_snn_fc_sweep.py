@@ -10,7 +10,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Run multi-scale training benchmarks for the five-layer FC SNN and "
-            "plot speed / memory curves for fp32, bf16, fp8-torchao, and fp8-te."
+            "plot speed / memory curves for the selected precision modes."
         )
     )
     parser.add_argument("--device", default="cuda:0")

@@ -291,6 +291,7 @@ def test_conversion_report_does_not_mark_layer_norm_convertible_by_default():
     report = analyze_convertible_modules(model).to_dict()
     assert report["convertible_layer_norm"] == 0
     assert "0" not in report["convertible_modules"]
+    assert "0" in report["high_precision_modules"]
     assert "1" in report["high_precision_modules"]
 
 
@@ -643,9 +644,7 @@ def test_convert_model_for_precision_replaces_spikformer_projections_fp8_te(
         assert isinstance(block.mlp.fc2[1], torch.nn.BatchNorm1d)
         assert isinstance(block.mlp.neuron2, neuron.LIFNode)
     assert isinstance(converted.head, Float8LinearStepModule)
-    assert isinstance(
-        converted.patch_embed.stages[0].conv_bn.block[0], torch.nn.Conv2d
-    )
+    assert isinstance(converted.patch_embed.stages[0].conv_bn.block[0], torch.nn.Conv2d)
     assert isinstance(
         converted.patch_embed.stages[0].conv_bn.block[1], torch.nn.BatchNorm2d
     )
@@ -702,6 +701,24 @@ def test_convert_model_for_precision_replaces_root_layer_norm_fp8_te(monkeypatch
     torch.testing.assert_close(converted(x), expected)
     assert isinstance(converted, torch.nn.LayerNorm)
     assert report.converted_modules == ["<root>"]
+
+
+def test_convert_model_for_precision_reports_root_layer_norm_skip_without_te_layer_norm(
+    monkeypatch,
+):
+    fake_te = _install_fake_te(monkeypatch)
+    del fake_te.LayerNorm
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.LayerNorm(8)
+    policy = Float8TransformerEnginePolicy()
+    converted, report = convert_model_for_precision(model, policy)
+    assert converted is model
+    assert report.converted_modules == []
+    assert report.skipped_modules == ["<root>"]
 
 
 def test_convert_model_for_precision_fuses_layer_norm_linear_fp8_te(monkeypatch):
@@ -847,6 +864,21 @@ def test_transformer_engine_sdpa_adapter_rejects_dropout_mismatch(monkeypatch):
     value = torch.randn(3, 2, 5, 4)
     with pytest.raises(ValueError, match="dropout"):
         adapter(query, key, value, dropout_p=0.0)
+
+
+def test_transformer_engine_sdpa_adapter_rejects_key_value_shape_mismatch(
+    monkeypatch,
+):
+    _install_fake_te(monkeypatch)
+    adapter = TransformerEngineDotProductAttentionAdapter(
+        num_attention_heads=2,
+        head_dim=4,
+    )
+    query = torch.randn(3, 2, 5, 4)
+    key = torch.randn(3, 2, 5, 4)
+    value = torch.randn(3, 2, 6, 4)
+    with pytest.raises(ValueError, match="same sequence length"):
+        adapter(query, key, value)
 
 
 def test_float8_te_linear_step_module_load_state_dict_from_parent(monkeypatch):
