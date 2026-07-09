@@ -1,4 +1,4 @@
-# Changelog
+# 变更日志 | Changelog
 
 All notable changes to SpikingJelly are documented in this file.
 
@@ -9,96 +9,123 @@ and the archived documentation linked from the project README.
 
 ## Unreleased
 
-### Added
+### Features
 
 - None.
 
-### Changed
+### Improvements
 
 - None.
 
-### Fixed
+### Bug Fixes
 
 - None.
 
-### Breaking Changes
-
-- None.
-
-### Migration Notes
+### Breaking Changes and Notices
 
 - None.
 
 ## 2.0.0.dev0 - 2026-07-09
 
-This entry summarizes the user-visible changes since the previous PyPI stable
-release, `0.0.0.0.14`
-(`294133011f4897756db6d1cd4a617a00bfb8d7f8`), through `2.0.0.dev0`
-(`b4f3b68a6260ebd42cf1585a3284cf6bcee1e112`).
+This entry summarizes the user-visible changes since the previous PyPI stable release, `0.0.0.0.14` (`2941330`), through `2.0.0.dev0` (`b4f3b68`).
 
-### Added
+### Features
 
-- Added a redesigned ANN-to-SNN conversion subsystem with extensible recipes,
-  new conversion operators, and workflows for Transformer-oriented models.
+#### ANN-to-SNN Conversion
 
-- Added conversion recipes and examples for local threshold balancing,
+Module: `spikingjelly.activation_based.ann2snn`.
+
+- Added a redesigned conversion subsystem with recipe-based workflows.
+
+- Added conversion recipes and examples for LTB,
   STA-style Transformer conversion, and SpikeZIP QANN/Transformer experiments.
 
-- Added new neuron and conversion primitives for few-spike and
-  activation-aware research workflows.
+#### Few-Spike and Activation-Aware Neurons
 
-- Added FP8 precision tooling, memory-optimization utilities, distributed
-  training helpers, and operation/energy counting tools.
+Modules: `spikingjelly.activation_based.neuron`
 
-- Added broader tutorials, API documentation, and regression tests for the V2
-  development line.
+- Added few-spike neuron for ann2snn research.
+- Added activation-aware IF neuron for ann2snn research.
 
-### Changed
+#### Memory Optimization
 
-- Changed the package version scheme from legacy `0.0.0.0.X` numbering to
-  PEP 440 compatible V2 versions such as `2.0.0.dev0`.
+Module: `spikingjelly.activation_based.memopt`.
+
+- Added the training memory optimization pipeline with gradient checkpointing and spike compression.
+
+#### Precision
+
+Module: `spikingjelly.activation_based.precision`.
+
+- Added a common precision policy interface for configuring precision behavior
+  without depending on backend-specific implementation details.
+
+#### Distributed Training
+
+Module: `spikingjelly.activation_based.distributed`.
+
+- Added distributed training and DTensor utilities for larger-scale SNN
+  experiments.
+
+#### Profiling and Energy Estimation
+
+Module: `spikingjelly.activation_based.op_counter`.
+
+- Added operation counting tools for profiling SNN models.
+- Added inference energy estimation tools.
+
+### Improvements
+
+- Updated the package version scheme from legacy `0.0.0.0.X` numbering to
+  PEP 440 compatible V2 versions.
 
 - Raised the runtime baseline to Python `>=3.11` and `torch>=2.6.0`.
 
 - Updated README and documentation pages for the V2 release policy,
   pre-release installation, and pre-V2 dependency pinning.
 
-- Refactored `spikingjelly.visualizing` into focused submodules and added
-  torch-backed visualization support.
+- Refactored `spikingjelly.visualizing` into focused submodules.
 
+- Refactored the official website.
+- Added broader tutorials and API documentation.
 - Reworked public API documentation and docstrings across the project.
 
 - Refined datasets, timing-based modules, exchange utilities, backend kernels,
   model helpers, and training utilities across the V2 development line.
 
-### Fixed
+- Added broader regression tests for V2.
 
-- Fixed neuron initialization, reset-state handling, and spiking RNN dtype
-  edge cases.
+### Bug Fixes
+
+- Fixed neuron initialization edge cases.
+
+- Fixed reset-state handling edge cases.
+
+- Fixed spiking RNN hidden-state dtype handling.
 
 - Fixed CuPy and Triton backend dispatch issues for neuron evaluation paths.
 
-- Fixed dataset preprocessing and metadata-cleanup edge cases.
+- Fixed dataset preprocessing edge cases.
 
-- Hardened ANN-to-SNN conversion validation, calibration, step-mode handling,
-  mask handling, downloads, and module replacement.
+- Fixed publication metadata cleanup edge cases.
+
+- Hardened ANN-to-SNN conversion validation and calibration.
+
+- Hardened ANN-to-SNN step-mode, mask-handling, download, and module-replacement
+  paths.
 
 - Fixed documentation rendering, tutorial, and API navigation issues.
 
-### Breaking Changes
+### Breaking Changes and Notices
 
 - V2 starts a new compatibility generation. Projects that must remain on the
   legacy release line should pin `spikingjelly<2`.
-
-- The minimum supported runtime baseline is higher than `0.0.0.0.14`.
 
 - Some experimental or internal ANN2SNN conversion interfaces were refactored
   around the V2 recipe and operator model.
 
 - Documentation structure and public API pages were reorganized; external links
   to old generated API pages may need to be updated.
-
-### Migration Notes
 
 - Before upgrading from `0.0.0.0.14`, review this changelog and the V2 README
   installation notes.

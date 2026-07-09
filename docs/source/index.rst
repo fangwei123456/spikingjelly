@@ -276,14 +276,6 @@ The list of contributors can be found at `contributors <https://github.com/fangw
    :hidden:
 
    /APIs/spikingjelly
-
-.. toctree::
-    :hidden:
-
-    changelog
-    publications
-
-.. toctree::
-    :hidden:
-
-    贡献指南 | Contributing <https://github.com/fangwei123456/spikingjelly/blob/master/CONTRIBUTING.md>
+   changelog
+   publications
+   贡献指南 | Contributing <https://github.com/fangwei123456/spikingjelly/blob/master/CONTRIBUTING.md>

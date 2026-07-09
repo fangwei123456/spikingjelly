@@ -28,6 +28,7 @@ HEADING_CHARS = {
     1: "=",
     2: "-",
     3: "~",
+    4: "^",
 }
 
 
@@ -49,7 +50,7 @@ def convert_inline(text: str) -> str:
 
 
 def convert_heading(line: str) -> list[str] | None:
-    match = re.match(r"^(#{1,3})\s+(.+)$", line)
+    match = re.match(r"^(#{1,4})\s+(.+)$", line)
     if match is None:
         return None
 
