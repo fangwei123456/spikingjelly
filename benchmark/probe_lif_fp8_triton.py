@@ -60,8 +60,8 @@ def _variant_timeout(seconds: float | None):
         return
 
     previous_handler = signal.getsignal(signal.SIGALRM)
-    previous_timer = signal.setitimer(signal.ITIMER_REAL, seconds)
     signal.signal(signal.SIGALRM, _handle_timeout)
+    previous_timer = signal.setitimer(signal.ITIMER_REAL, seconds)
     try:
         yield
     finally:

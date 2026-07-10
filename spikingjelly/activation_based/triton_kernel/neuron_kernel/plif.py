@@ -552,12 +552,15 @@ def _launch_plif_forward_kernel(
 ) -> None:
     T = x_seq.shape[0]
     NCL = x_seq[0].numel()
-    grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+
+    def grid(meta):
+        return (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+
     kernel = _select_forward_kernel(T)
     if use_torch_wrap:
         kernel = wrap_triton(kernel)
 
-    with torch.cuda.device(x_seq.device.index):
+    with torch.cuda.device(x_seq.device):
         kernel[grid](
             x_seq,
             v_init,
@@ -598,12 +601,15 @@ def _launch_plif_backward_kernel(
 ) -> None:
     T = grad_s_seq.shape[0]
     NCL = grad_s_seq[0].numel()
-    grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+
+    def grid(meta):
+        return (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+
     kernel = _select_backward_kernel(T)
     if use_torch_wrap:
         kernel = wrap_triton(kernel)
 
-    with torch.cuda.device(grad_s_seq.device.index):
+    with torch.cuda.device(grad_s_seq.device):
         kernel[grid](
             grad_s_seq,
             grad_v_seq,

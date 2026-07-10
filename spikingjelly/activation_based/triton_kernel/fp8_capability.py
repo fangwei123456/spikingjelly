@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 import logging
-import re
+import traceback
 from typing import Any
 
 import torch
@@ -87,7 +87,8 @@ if triton is not None:
             v_last = tl.load(v_ptr + base, mask=mask, other=0.0).to(compute_dtype)
             s = tl.where(h >= 1.0, 1.0, 0.0).to(compute_dtype)
             over_th = alpha * (h - 1.0)
-            sg = alpha * tl.sigmoid(over_th) * (1.0 - tl.sigmoid(over_th))
+            sig_over_th = 1.0 / (1.0 + tl.exp(-over_th))
+            sg = alpha * sig_over_th * (1.0 - sig_over_th)
             grad_v_combined = grad_v + grad_v_acc
             grad_h = tl.fma(grad_s - grad_v_combined * (h - 0.0), sg, grad_v_combined)
             grad_x = grad_h * r_tau
@@ -140,16 +141,10 @@ def _failure(available: bool, reason: str | None = None) -> dict[str, Any]:
 
 
 def _probe_exception_reason(e: Exception) -> str:
-    msg = str(e) if str(e) else repr(e)
-    value_error = re.search(r'ValueError\("([^"]+)"\)', msg)
-    if value_error is not None:
-        msg = value_error.group(1)
-    else:
-        lines = [line.strip() for line in msg.splitlines() if line.strip()]
-        for line in reversed(lines):
-            if line != "^" and not line.startswith("def "):
-                msg = line
-                break
+    msg = traceback.format_exception_only(type(e), e)[-1].strip()
+    prefix = f"{type(e).__name__}: "
+    if msg.startswith(prefix):
+        msg = msg[len(prefix) :]
     return f"{type(e).__name__}: {msg}"
 
 
@@ -308,13 +303,15 @@ def _probe(dtype, device, compute_dtype="fp32") -> dict[str, Any]:
     dtype, device, compute_dtype_name, capability, triton_version = _cache_key_parts(
         dtype, device, compute_dtype
     )
-    return _probe_cached(
-        _torch_dtype_name(dtype),
-        str(device),
-        compute_dtype_name,
-        capability,
-        torch.__version__,
-        str(triton_version),
+    return dict(
+        _probe_cached(
+            _torch_dtype_name(dtype),
+            str(device),
+            compute_dtype_name,
+            capability,
+            torch.__version__,
+            str(triton_version),
+        )
     )
 
 
@@ -322,13 +319,15 @@ def _backward_probe(dtype, device, compute_dtype="fp32") -> dict[str, Any]:
     dtype, device, compute_dtype_name, capability, triton_version = _cache_key_parts(
         dtype, device, compute_dtype
     )
-    return _backward_probe_cached(
-        _torch_dtype_name(dtype),
-        str(device),
-        compute_dtype_name,
-        capability,
-        torch.__version__,
-        str(triton_version),
+    return dict(
+        _backward_probe_cached(
+            _torch_dtype_name(dtype),
+            str(device),
+            compute_dtype_name,
+            capability,
+            torch.__version__,
+            str(triton_version),
+        )
     )
 
 

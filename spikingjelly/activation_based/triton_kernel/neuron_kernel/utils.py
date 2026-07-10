@@ -13,7 +13,7 @@ from ..triton_utils import (
 )
 
 
-_SUPPORTED_PLAN_NEURON_TYPES = {"if", "lif", "plif"}
+_SUPPORTED_PLAN_NEURON_TYPES = frozenset({"if", "lif", "plif"})
 
 
 def _normalize_plan_device(device) -> torch.device:
@@ -48,7 +48,7 @@ class TritonNeuronExecutionPlan:
         return self.forward_compute_dtype_name
 
     @property
-    def compute_tl_dtype(self):
+    def compute_tl_dtype(self) -> Any:
         return self.forward_compute_tl_dtype
 
     def matches(
@@ -153,11 +153,11 @@ def _check_fp8_forward_capability(
 def _check_fp8_backward_capability(
     storage_dtype: torch.dtype,
     device: torch.device,
-    compute_dtype_name: str,
+    backward_compute_dtype_name: str,
     neuron_name: str,
 ) -> None:
     _check_fp8_capability(
-        storage_dtype, device, compute_dtype_name, neuron_name, "backward"
+        storage_dtype, device, backward_compute_dtype_name, neuron_name, "backward"
     )
 
 
@@ -266,7 +266,7 @@ def _check_mp_cuda_inputs(
         raise RuntimeError(
             f"Mixed-precision Triton {neuron_name} forward requires CUDA tensors."
         )
-    if x_seq.device != v_init.device:
+    if _normalize_plan_device(x_seq.device) != _normalize_plan_device(v_init.device):
         raise RuntimeError("x_seq and v_init must be on the same CUDA device.")
 
 
