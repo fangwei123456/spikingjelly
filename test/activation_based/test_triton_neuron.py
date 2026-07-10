@@ -868,6 +868,50 @@ def test_mixed_precision_forward_with_plan_skips_repeated_preflight(kind, monkey
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+@pytest.mark.parametrize("use_plan", [False, True])
+def test_mixed_precision_rejects_v_init_shape_mismatch(kind, use_plan):
+    x = torch.randn(8, 2, 4, device="cuda", dtype=torch.float32)
+    v_init = torch.zeros(4, device="cuda", dtype=torch.float32)
+    r_tau = torch.tensor(0.5, device=x.device, dtype=torch.float32)
+    plan = None
+    if use_plan:
+        plan = neuron_triton_utils.prepare_triton_neuron_forward_plan(
+            neuron_type=kind,
+            device=x.device,
+            storage_dtype=torch.float32,
+            compute_dtype="fp32",
+            spike_dtype=torch.float32,
+            save_intermediates=True,
+        )
+
+    with torch.no_grad(), pytest.raises(RuntimeError, match="v_init shape"):
+        if use_plan:
+            _call_mixed_precision_forward_with_plan(
+                kind,
+                x,
+                v_init,
+                plan,
+                decay_input=True,
+                v_reset=0.0,
+                r_tau=r_tau,
+            )
+        else:
+            _call_mixed_precision_forward(
+                kind,
+                x,
+                v_init,
+                decay_input=True,
+                v_reset=0.0,
+                storage_dtype=torch.float32,
+                compute_dtype="fp32",
+                spike_dtype=torch.float32,
+                save_intermediates=True,
+                r_tau=r_tau,
+            )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
 def test_mixed_precision_backward_with_plan_skips_repeated_preflight(
     kind, monkeypatch
 ):

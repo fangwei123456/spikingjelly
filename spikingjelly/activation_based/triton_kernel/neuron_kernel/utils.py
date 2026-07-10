@@ -268,6 +268,12 @@ def _check_mp_cuda_inputs(
         )
     if _normalize_plan_device(x_seq.device) != _normalize_plan_device(v_init.device):
         raise RuntimeError("x_seq and v_init must be on the same CUDA device.")
+    expected_shape = x_seq.shape[1:]
+    if v_init.shape != expected_shape:
+        raise RuntimeError(
+            f"v_init shape {v_init.shape} must match x_seq[0] shape "
+            f"{torch.Size(expected_shape)}."
+        )
 
 
 def _check_plan_inputs(
