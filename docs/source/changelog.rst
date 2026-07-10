@@ -31,6 +31,21 @@ Module: ``spikingjelly.activation_based.precision``.
 - Added Transformer Engine adapters for Linear, pointwise Conv1d,
   LayerNorm, and exact LayerNormLinear / LayerNormMLP fusion patterns.
 
+Triton Neuron Kernels
+^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
+
+- Added experimental mixed-precision Triton forward and backward paths for
+  multi-step IF, LIF, and ParametricLIF neurons, including FP8 storage
+  experiments with configurable forward and backward compute dtypes.
+
+- Added FP8 Triton neuron capability probes and a reusable execution plan for
+  repeated mixed-precision neuron launches.
+
+- Added an FP8 Triton neuron benchmark harness for IF, LIF, and ParametricLIF
+  accuracy, backward-gradient, and prepared-plan overhead measurements.
+
 Improvements
 ~~~~~~~~~~~~
 
