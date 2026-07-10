@@ -16,7 +16,7 @@ from ..triton_utils import (
 )
 from .utils import (
     TritonNeuronForwardPlan,
-    _check_mixed_precision_cuda_inputs,
+    _check_mp_cuda_inputs,
     _check_plan_inputs,
     prepare_triton_neuron_forward_plan,
 )
@@ -734,8 +734,8 @@ def _multistep_plif_forward_fake(
     )
 
 
-@register_op("sj::multistep_plif_mixed_precision_inference")
-def multistep_plif_mixed_precision_inference_op(
+@register_op("sj::multistep_plif_mp_inference")
+def multistep_plif_mp_inference(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     r_tau: torch.Tensor,
@@ -748,7 +748,7 @@ def multistep_plif_mixed_precision_inference_op(
     spike_dtype_id: int,
     save_intermediates: bool,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    _check_mixed_precision_cuda_inputs(x_seq, v_init, "PLIF")
+    _check_mp_cuda_inputs(x_seq, v_init, "PLIF")
     storage_dtype = triton_neuron_dtype_id_to_torch_dtype(storage_dtype_id)
     spike_dtype = triton_neuron_dtype_id_to_torch_dtype(spike_dtype_id)
     compute_tl_dtype = triton_neuron_compute_dtype_id_to_tl_dtype(
@@ -783,8 +783,8 @@ def multistep_plif_mixed_precision_inference_op(
     return s_seq, v_seq, h_seq
 
 
-@torch.library.register_fake("sj::multistep_plif_mixed_precision_inference")
-def _multistep_plif_mixed_precision_inference_fake(
+@torch.library.register_fake("sj::multistep_plif_mp_inference")
+def _multistep_plif_mp_inference_fake(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     r_tau: torch.Tensor,
@@ -816,8 +816,8 @@ def _multistep_plif_mixed_precision_inference_fake(
     )
 
 
-@register_op("sj::multistep_plif_mixed_precision_forward")
-def multistep_plif_mixed_precision_forward_op(
+@register_op("sj::multistep_plif_mp_forward")
+def multistep_plif_mp_forward(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     r_tau: torch.Tensor,
@@ -834,7 +834,7 @@ def multistep_plif_mixed_precision_forward_op(
     spike_dtype_id: int,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     del detach_reset, backward_compute_dtype_id
-    _check_mixed_precision_cuda_inputs(x_seq, v_init, "PLIF")
+    _check_mp_cuda_inputs(x_seq, v_init, "PLIF")
     storage_dtype = triton_neuron_dtype_id_to_torch_dtype(storage_dtype_id)
     spike_dtype = triton_neuron_dtype_id_to_torch_dtype(spike_dtype_id)
     compute_tl_dtype = triton_neuron_compute_dtype_id_to_tl_dtype(
@@ -864,8 +864,8 @@ def multistep_plif_mixed_precision_forward_op(
     return s_seq, v_seq, h_seq
 
 
-@torch.library.register_fake("sj::multistep_plif_mixed_precision_forward")
-def _multistep_plif_mixed_precision_forward_fake(
+@torch.library.register_fake("sj::multistep_plif_mp_forward")
+def _multistep_plif_mp_forward_fake(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     r_tau: torch.Tensor,
@@ -903,7 +903,7 @@ def _multistep_plif_mixed_precision_forward_fake(
     )
 
 
-def multistep_plif_mixed_precision_forward_with_plan(
+def multistep_plif_mp_with_plan(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     r_tau: torch.Tensor,
@@ -928,7 +928,7 @@ def multistep_plif_mixed_precision_forward_with_plan(
         if surrogate_function is None:
             surrogate_function = surrogate.Sigmoid()
         sg_triton_id, sg_alpha = resolve_sg_triton_id_and_alpha(surrogate_function)
-        s_seq, v_seq, h_seq = multistep_plif_mixed_precision_forward_op(
+        s_seq, v_seq, h_seq = multistep_plif_mp_forward(
             x_seq,
             v_init,
             r_tau,
@@ -945,7 +945,7 @@ def multistep_plif_mixed_precision_forward_with_plan(
             plan.spike_dtype_id,
         )
         return s_seq, v_seq, (h_seq if plan.save_intermediates else None)
-    s_seq, v_seq, h_seq = multistep_plif_mixed_precision_inference_op(
+    s_seq, v_seq, h_seq = multistep_plif_mp_inference(
         x_seq,
         v_init,
         r_tau,
@@ -961,7 +961,7 @@ def multistep_plif_mixed_precision_forward_with_plan(
     return s_seq, v_seq, (h_seq if plan.save_intermediates else None)
 
 
-def multistep_plif_mixed_precision_forward(
+def multistep_plif_mp(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     r_tau: torch.Tensor,
@@ -1000,7 +1000,7 @@ def multistep_plif_mixed_precision_forward(
         spike_dtype=spike_dtype,
         save_intermediates=save_intermediates,
     )
-    return multistep_plif_mixed_precision_forward_with_plan(
+    return multistep_plif_mp_with_plan(
         x_seq,
         v_init,
         r_tau,
@@ -1013,7 +1013,11 @@ def multistep_plif_mixed_precision_forward(
     )
 
 
-def _setup_mixed_precision_plif_context(ctx, inputs, output):
+multistep_plif_mixed_precision_forward = multistep_plif_mp
+multistep_plif_mixed_precision_forward_with_plan = multistep_plif_mp_with_plan
+
+
+def _setup_mp_plif_context(ctx, inputs, output):
     (
         x_seq,
         v_init,
@@ -1051,7 +1055,7 @@ def _setup_mixed_precision_plif_context(ctx, inputs, output):
     ctx.spike_dtype_id = spike_dtype_id
 
 
-def _multistep_plif_mixed_precision_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
+def _multistep_plif_mp_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
     h_seq, v_init_v_seq, r_tau = ctx.saved_tensors
     del grad_h_seq
     storage_dtype = triton_neuron_dtype_id_to_torch_dtype(ctx.storage_dtype_id)
@@ -1116,9 +1120,9 @@ def _multistep_plif_mixed_precision_backward(ctx, grad_s_seq, grad_v_seq, grad_h
 
 
 torch.library.register_autograd(
-    "sj::multistep_plif_mixed_precision_forward",
-    _multistep_plif_mixed_precision_backward,
-    setup_context=_setup_mixed_precision_plif_context,
+    "sj::multistep_plif_mp_forward",
+    _multistep_plif_mp_backward,
+    setup_context=_setup_mp_plif_context,
 )
 
 

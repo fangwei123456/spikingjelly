@@ -19,16 +19,16 @@ from spikingjelly.activation_based.triton_kernel.fp8_capability import (
     triton_fp8_neuron_capability_report,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.integrate_and_fire import (
-    multistep_if_mixed_precision_forward,
-    multistep_if_mixed_precision_forward_with_plan,
+    multistep_if_mp,
+    multistep_if_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.lif import (
-    multistep_lif_mixed_precision_forward,
-    multistep_lif_mixed_precision_forward_with_plan,
+    multistep_lif_mp,
+    multistep_lif_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.plif import (
-    multistep_plif_mixed_precision_forward,
-    multistep_plif_mixed_precision_forward_with_plan,
+    multistep_plif_mp,
+    multistep_plif_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.utils import (
     prepare_triton_neuron_forward_plan,
@@ -182,7 +182,7 @@ def _call_mixed_precision_variant(
     if v_init is None:
         v_init = torch.zeros_like(x[0])
     if neuron_type == "if":
-        return multistep_if_mixed_precision_forward(
+        return multistep_if_mp(
             x,
             v_init,
             v_threshold=v_threshold,
@@ -194,7 +194,7 @@ def _call_mixed_precision_variant(
             save_intermediates=True,
         )
     if neuron_type == "lif":
-        return multistep_lif_mixed_precision_forward(
+        return multistep_lif_mp(
             x,
             v_init,
             decay_input=bool(decay_input),
@@ -210,7 +210,7 @@ def _call_mixed_precision_variant(
     if neuron_type == "plif":
         if r_tau_tensor is None:
             r_tau_tensor = torch.tensor(r_tau, device=x.device, dtype=torch.float32)
-        return multistep_plif_mixed_precision_forward(
+        return multistep_plif_mp(
             x,
             v_init,
             r_tau_tensor,
@@ -260,7 +260,7 @@ def _call_mixed_precision_variant_with_plan(
     if v_init is None:
         v_init = torch.zeros_like(x[0])
     if neuron_type == "if":
-        return multistep_if_mixed_precision_forward_with_plan(
+        return multistep_if_mp_with_plan(
             x,
             v_init,
             plan,
@@ -268,7 +268,7 @@ def _call_mixed_precision_variant_with_plan(
             v_reset=v_reset,
         )
     if neuron_type == "lif":
-        return multistep_lif_mixed_precision_forward_with_plan(
+        return multistep_lif_mp_with_plan(
             x,
             v_init,
             plan,
@@ -280,7 +280,7 @@ def _call_mixed_precision_variant_with_plan(
     if neuron_type == "plif":
         if r_tau_tensor is None:
             r_tau_tensor = torch.tensor(r_tau, device=x.device, dtype=torch.float32)
-        return multistep_plif_mixed_precision_forward_with_plan(
+        return multistep_plif_mp_with_plan(
             x,
             v_init,
             r_tau_tensor,

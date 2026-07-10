@@ -85,7 +85,7 @@ class TritonNeuronExecutionPlan:
 TritonNeuronForwardPlan = TritonNeuronExecutionPlan
 
 
-def _validate_mixed_precision_options(
+def _validate_mp_options(
     storage_dtype,
     compute_dtype,
     spike_dtype: torch.dtype,
@@ -176,7 +176,7 @@ def prepare_triton_neuron_execution_plan(
             "neuron_type must be one of 'if', 'lif', or 'plif', "
             f"but got {neuron_type!r}."
         )
-    storage_dtype, forward_compute_dtype_name = _validate_mixed_precision_options(
+    storage_dtype, forward_compute_dtype_name = _validate_mp_options(
         storage_dtype, forward_compute_dtype, spike_dtype, save_intermediates
     )
     try:
@@ -257,7 +257,7 @@ def prepare_triton_neuron_forward_plan(
     )
 
 
-def _check_mixed_precision_cuda_inputs(
+def _check_mp_cuda_inputs(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     neuron_name: str,
@@ -276,7 +276,7 @@ def _check_plan_inputs(
     plan: TritonNeuronExecutionPlan,
     neuron_name: str,
 ) -> None:
-    _check_mixed_precision_cuda_inputs(x_seq, v_init, neuron_name)
+    _check_mp_cuda_inputs(x_seq, v_init, neuron_name)
     if _normalize_plan_device(x_seq.device) != plan.device:
         raise RuntimeError(
             f"Mixed-precision Triton {neuron_name} forward input device "

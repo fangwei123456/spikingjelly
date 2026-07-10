@@ -62,7 +62,7 @@ def _call_mixed_precision_forward(
     r_tau=None,
 ):
     if kind == "if":
-        return if_triton_kernel.multistep_if_mixed_precision_forward(
+        return if_triton_kernel.multistep_if_mp(
             x,
             v,
             v_threshold=1.0,
@@ -75,7 +75,7 @@ def _call_mixed_precision_forward(
             detach_reset=detach_reset,
         )
     if kind == "lif":
-        return lif_triton_kernel.multistep_lif_mixed_precision_forward(
+        return lif_triton_kernel.multistep_lif_mp(
             x,
             v,
             decay_input=decay_input,
@@ -92,7 +92,7 @@ def _call_mixed_precision_forward(
     if kind == "plif":
         if r_tau is None:
             r_tau = torch.tensor(0.5, device=x.device, dtype=torch.float32)
-        return plif_triton_kernel.multistep_plif_mixed_precision_forward(
+        return plif_triton_kernel.multistep_plif_mp(
             x,
             v,
             r_tau,
@@ -121,7 +121,7 @@ def _call_mixed_precision_forward_with_plan(
     r_tau=None,
 ):
     if kind == "if":
-        return if_triton_kernel.multistep_if_mixed_precision_forward_with_plan(
+        return if_triton_kernel.multistep_if_mp_with_plan(
             x,
             v,
             plan,
@@ -130,7 +130,7 @@ def _call_mixed_precision_forward_with_plan(
             detach_reset=detach_reset,
         )
     if kind == "lif":
-        return lif_triton_kernel.multistep_lif_mixed_precision_forward_with_plan(
+        return lif_triton_kernel.multistep_lif_mp_with_plan(
             x,
             v,
             plan,
@@ -143,7 +143,7 @@ def _call_mixed_precision_forward_with_plan(
     if kind == "plif":
         if r_tau is None:
             r_tau = torch.tensor(0.5, device=x.device, dtype=torch.float32)
-        return plif_triton_kernel.multistep_plif_mixed_precision_forward_with_plan(
+        return plif_triton_kernel.multistep_plif_mp_with_plan(
             x,
             v,
             r_tau,
@@ -253,6 +253,18 @@ def test_mixed_precision_uses_custom_op_not_autograd_function():
     assert not hasattr(if_triton_kernel, "_MixedPrecisionIF")
     assert not hasattr(lif_triton_kernel, "_MixedPrecisionLIF")
     assert not hasattr(plif_triton_kernel, "_MixedPrecisionPLIF")
+    assert hasattr(if_triton_kernel, "multistep_if_mp_forward")
+    assert hasattr(lif_triton_kernel, "multistep_lif_mp_forward")
+    assert hasattr(plif_triton_kernel, "multistep_plif_mp_forward")
+    assert if_triton_kernel.multistep_if_mixed_precision_forward is (
+        if_triton_kernel.multistep_if_mp
+    )
+    assert lif_triton_kernel.multistep_lif_mixed_precision_forward is (
+        lif_triton_kernel.multistep_lif_mp
+    )
+    assert plif_triton_kernel.multistep_plif_mixed_precision_forward is (
+        plif_triton_kernel.multistep_plif_mp
+    )
 
 
 def test_fp8_backward_capability_uses_backward_probe(monkeypatch):
