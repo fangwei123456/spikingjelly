@@ -498,15 +498,22 @@ def _compare_plan_overhead(
             raise ValueError(f"Unsupported backward path: {path}.")
         _backward_probe_loss(out).backward()
         grads = {
-            "x": x_req.grad.detach(),
-            "v_init": v_req.grad.detach(),
-            "r_tau": r_tau_req.grad.detach() if neuron_type == "plif" else None,
+            "x": x_req.grad.detach() if x_req.grad is not None else None,
+            "v_init": v_req.grad.detach() if v_req.grad is not None else None,
+            "r_tau": (
+                r_tau_req.grad.detach()
+                if neuron_type == "plif" and r_tau_req.grad is not None
+                else None
+            ),
         }
-        finite = torch.isfinite(grads["x"]).all() and torch.isfinite(
-            grads["v_init"]
-        ).all()
+        finite = grads["x"] is not None and torch.isfinite(grads["x"]).all()
+        finite = finite and (
+            grads["v_init"] is not None and torch.isfinite(grads["v_init"]).all()
+        )
         if neuron_type == "plif":
-            finite = finite and torch.isfinite(grads["r_tau"]).all()
+            finite = finite and (
+                grads["r_tau"] is not None and torch.isfinite(grads["r_tau"]).all()
+            )
         return grads, bool(finite.item() if isinstance(finite, torch.Tensor) else finite)
 
     safe_grads, safe_grad_finite = _run_backward("safe")

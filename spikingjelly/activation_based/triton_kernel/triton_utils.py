@@ -238,16 +238,18 @@ def triton_neuron_compute_dtype_id_to_tl_dtype(
     if dtype_id == TRITON_NEURON_DTYPE_FP8_E4M3FN:
         if storage_dtype_id != TRITON_NEURON_DTYPE_FP8_E4M3FN:
             raise ValueError("FP8 E4M3 compute requires E4M3 storage dtype.")
-        tl_dtype = getattr(tl, "float8e4nv", None)
+        tl_dtype = getattr(tl, "float8e4m3fn", None) or getattr(
+            tl, "float8e4nv", None
+        )
         if tl_dtype is None:
-            raise ValueError("Triton float8e4nv dtype is unavailable.")
+            raise ValueError("Triton float8e4m3fn/float8e4nv dtype is unavailable.")
         return tl_dtype
     if dtype_id == TRITON_NEURON_DTYPE_FP8_E5M2:
         if storage_dtype_id != TRITON_NEURON_DTYPE_FP8_E5M2:
             raise ValueError("FP8 E5M2 compute requires E5M2 storage dtype.")
-        tl_dtype = getattr(tl, "float8e5", None)
+        tl_dtype = getattr(tl, "float8e5m2", None) or getattr(tl, "float8e5", None)
         if tl_dtype is None:
-            raise ValueError("Triton float8e5 dtype is unavailable.")
+            raise ValueError("Triton float8e5m2/float8e5 dtype is unavailable.")
         return tl_dtype
     raise ValueError(f"Unsupported Triton neuron compute dtype id: {dtype_id}.")
 
@@ -273,14 +275,18 @@ def resolve_triton_compute_dtype(compute_dtype, storage_dtype=None):
         if not is_fp8_dtype(storage_dtype):
             raise ValueError("compute_dtype='fp8' requires an FP8 storage_dtype.")
         if hasattr(torch, "float8_e4m3fn") and storage_dtype == torch.float8_e4m3fn:
-            tl_dtype = getattr(tl, "float8e4nv", None)
+            tl_dtype = getattr(tl, "float8e4m3fn", None) or getattr(
+                tl, "float8e4nv", None
+            )
             if tl_dtype is None:
-                raise ValueError("Triton float8e4nv dtype is unavailable.")
+                raise ValueError(
+                    "Triton float8e4m3fn/float8e4nv dtype is unavailable."
+                )
             return tl_dtype
         if hasattr(torch, "float8_e5m2") and storage_dtype == torch.float8_e5m2:
-            tl_dtype = getattr(tl, "float8e5", None)
+            tl_dtype = getattr(tl, "float8e5m2", None) or getattr(tl, "float8e5", None)
             if tl_dtype is None:
-                raise ValueError("Triton float8e5 dtype is unavailable.")
+                raise ValueError("Triton float8e5m2/float8e5 dtype is unavailable.")
             return tl_dtype
         raise ValueError(
             f"Unsupported FP8 storage dtype for compute_dtype='fp8': {storage_dtype}."
