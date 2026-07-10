@@ -103,8 +103,8 @@ class DeepFCSNN(torch_nn.Module):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Benchmark SpikingJelly deep FC SNN training under fp32, bf16, and "
-            "fp8-torchao."
+            "Benchmark SpikingJelly deep FC SNN training under fp32, bf16, "
+            "fp8-torchao, and fp8-te."
         )
     )
     parser.add_argument(
@@ -139,7 +139,7 @@ def parse_args() -> argparse.Namespace:
         "--precisions",
         nargs="+",
         default=["fp32", "bf16", "fp8-torchao"],
-        choices=("fp32", "bf16", "fp8-torchao"),
+        choices=("fp32", "bf16", "fp8-torchao", "fp8-te"),
         help="Precision modes to benchmark.",
     )
     parser.add_argument(
@@ -201,7 +201,8 @@ def validate_precision_shape_constraints(args: argparse.Namespace) -> None:
         raise ValueError(
             f"hidden_dim={args.hidden_dim} must be divisible by num_heads={args.num_heads}."
         )
-    if "fp8-torchao" not in args.precisions:
+    fp8_precisions = {"fp8-torchao", "fp8-te"} & set(args.precisions)
+    if not fp8_precisions:
         return
     invalid_dims = [
         f"{name}={value}"
@@ -209,9 +210,10 @@ def validate_precision_shape_constraints(args: argparse.Namespace) -> None:
         if value % FP8_ALIGNMENT != 0
     ]
     if invalid_dims:
+        requested = ", ".join(sorted(fp8_precisions))
         raise ValueError(
-            "fp8-torchao currently requires every linear dimension used by this "
-            f"benchmark to be divisible by {FP8_ALIGNMENT}. Invalid values: "
+            f"{requested} benchmark runs currently require every linear dimension "
+            f"to be divisible by {FP8_ALIGNMENT}. Invalid values: "
             + ", ".join(invalid_dims)
         )
 
