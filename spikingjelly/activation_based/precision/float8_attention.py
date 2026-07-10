@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import math
+import warnings
 
 import torch
 import torch.nn as nn
@@ -49,6 +50,17 @@ class TransformerEngineDotProductAttentionAdapter(nn.Module):
                 head_dim,
                 attention_dropout=attention_dropout,
             )
+            try:
+                self.wrapped.attn_mask_type = "no_mask"
+            except AttributeError:
+                warnings.warn(
+                    "fp8-te SDPA adapter could not force "
+                    "attn_mask_type='no_mask' on the legacy TE "
+                    "DotProductAttention; downstream behavior may diverge "
+                    "from the v1 contract.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
         self.num_attention_heads = num_attention_heads
         self.head_dim = head_dim
         self.attention_dropout = attention_dropout
@@ -78,6 +90,14 @@ class TransformerEngineDotProductAttentionAdapter(nn.Module):
             return full_kwargs
         if "qkv_format" in parameters:
             return {"qkv_format": self.qkv_layout}
+        warnings.warn(
+            "fp8-te SDPA adapter v1 could not detect "
+            "qkv_format/attention_mask/attn_mask_type on the wrapped TE "
+            "DotProductAttention.forward; the adapter will rely on TE "
+            "defaults, which may break the v1 contract.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         return {}
 
     def forward(
@@ -107,29 +127,48 @@ class TransformerEngineDotProductAttentionAdapter(nn.Module):
         if scale is not None:
             raise ValueError("fp8-te SDPA adapter v1 does not support custom scale.")
         if query.ndim != 4 or key.ndim != 4 or value.ndim != 4:
-            raise ValueError("expected query/key/value with shape [B, H, S, D].")
+            raise ValueError(
+                "expected query/key/value with shape [B, H, S, D], but got "
+                f"query.shape={tuple(query.shape)}, "
+                f"key.shape={tuple(key.shape)}, "
+                f"value.shape={tuple(value.shape)}."
+            )
         if (
             query.shape[1] != self.num_attention_heads
             or query.shape[-1] != self.head_dim
         ):
             raise ValueError(
-                "query shape does not match adapter num_attention_heads/head_dim."
+                "query shape does not match adapter "
+                f"num_attention_heads={self.num_attention_heads} and "
+                f"head_dim={self.head_dim}; got query.shape={tuple(query.shape)}."
             )
         if key.shape[1] != self.num_attention_heads or key.shape[-1] != self.head_dim:
             raise ValueError(
-                "key shape does not match adapter num_attention_heads/head_dim."
+                "key shape does not match adapter "
+                f"num_attention_heads={self.num_attention_heads} and "
+                f"head_dim={self.head_dim}; got key.shape={tuple(key.shape)}."
             )
         if (
             value.shape[1] != self.num_attention_heads
             or value.shape[-1] != self.head_dim
         ):
             raise ValueError(
-                "value shape does not match adapter num_attention_heads/head_dim."
+                "value shape does not match adapter "
+                f"num_attention_heads={self.num_attention_heads} and "
+                f"head_dim={self.head_dim}; got value.shape={tuple(value.shape)}."
             )
         if not (query.shape[0] == key.shape[0] == value.shape[0]):
-            raise ValueError("query/key/value must have the same batch size.")
+            raise ValueError(
+                "query/key/value must have the same batch size, but got "
+                f"query.shape={tuple(query.shape)}, "
+                f"key.shape={tuple(key.shape)}, "
+                f"value.shape={tuple(value.shape)}."
+            )
         if key.shape[2] != value.shape[2]:
-            raise ValueError("key/value must have the same sequence length.")
+            raise ValueError(
+                "key/value must have the same sequence length, but got "
+                f"key.shape={tuple(key.shape)} and value.shape={tuple(value.shape)}."
+            )
 
         q = query.transpose(1, 2).contiguous()
         k = key.transpose(1, 2).contiguous()
@@ -141,7 +180,7 @@ class TransformerEngineDotProductAttentionAdapter(nn.Module):
 
     def _call_te_attention(
         self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor
-    ):
+    ) -> torch.Tensor | tuple:
         return self.wrapped(query, key, value, **self._te_forward_kwargs)
 
 

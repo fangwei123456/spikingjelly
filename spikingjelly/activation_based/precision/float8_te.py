@@ -181,14 +181,11 @@ def _make_te_layer_norm_mlp(
                 bias=bias,
                 activation="gelu",
             )
-        except TypeError:
-            warnings.warn(
-                "TE LayerNormMLP does not accept activation='gelu'; falling back "
-                "to the TE default activation.",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-            converted = TELayerNormMLP(hidden_size, fc1.out_features, bias=bias)
+        except TypeError as exc:
+            raise RuntimeError(
+                "TE LayerNormMLP rejected activation='gelu'; cannot guarantee "
+                "GELU-equivalent semantics for the converted fused MLP."
+            ) from exc
     converted = converted.to(device=fc1.weight.device, dtype=fc1.weight.dtype)
     copies = (
         _copy_to_first_existing(
@@ -262,6 +259,9 @@ class _Float8TEPatternModule(nn.Module):
         unexpected_keys,
         error_msgs,
     ):
+        # This rewrite mutates the caller-provided state_dict in place so
+        # PyTorch's recursive loader can route public keys into ``wrapped``.
+        # Clone the state_dict first if it will be reused after loading.
         wrapped_prefix = prefix + "wrapped."
         for public_key, wrapped_key in self._state_key_map.items():
             key = prefix + public_key
@@ -444,6 +444,9 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
     ):
         super().__init__()
         self.device_type = device_type
+        # Strictness is consumed by api.prepare_model_for_precision() when it
+        # decides whether capability failures fall back to fp32. The policy
+        # stores it only for diagnostics in describe().
         self.strict = strict
         self.fp8_recipe = fp8_recipe
         self._resolved_recipe_name: str | None = None

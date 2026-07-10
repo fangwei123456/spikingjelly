@@ -307,6 +307,8 @@ def test_pointwise_conv1d_step_module_passes_contiguous_linear_input():
 
     wrapped_m = Float8PointwiseConv1dStepModule(linear, conv, step_mode="m")
     x = torch.randn(2, 3, 8, 5)
+    expected_m = conv(x.flatten(0, 1)).view(2, 3, 4, 5)
+    torch.testing.assert_close(wrapped_m(x), expected_m)
     assert wrapped_m(x).shape == (2, 3, 4, 5)
 
 
@@ -993,6 +995,36 @@ def test_convert_model_for_precision_skips_approximate_gelu_layer_norm_mlp_fp8_t
     assert report.converted_patterns == []
 
 
+def test_convert_model_for_precision_rejects_layer_norm_mlp_without_gelu_fp8_te(
+    monkeypatch,
+):
+    fake_te = _install_fake_te(monkeypatch)
+
+    class FakeNoActivationLayerNormMLP(torch.nn.Module):
+        def __init__(self, *args, activation=None, **kwargs):
+            if activation is not None:
+                raise TypeError("activation is not supported")
+            super().__init__()
+
+    fake_te.LayerNormMLP = FakeNoActivationLayerNormMLP
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.Sequential(
+        torch.nn.Sequential(
+            torch.nn.LayerNorm(8),
+            torch.nn.Linear(8, 16),
+            torch.nn.GELU(),
+            torch.nn.Linear(16, 8),
+        )
+    )
+    policy = Float8TransformerEnginePolicy()
+    with pytest.raises(RuntimeError, match="activation='gelu'"):
+        convert_model_for_precision(model, policy)
+
+
 def test_transformer_engine_sdpa_adapter_matches_torch_sdpa(monkeypatch):
     _install_fake_te(monkeypatch)
     adapter = TransformerEngineDotProductAttentionAdapter(
@@ -1003,7 +1035,9 @@ def test_transformer_engine_sdpa_adapter_matches_torch_sdpa(monkeypatch):
     key = torch.randn(3, 2, 5, 4)
     value = torch.randn(3, 2, 5, 4)
     expected = torch.nn.functional.scaled_dot_product_attention(query, key, value)
-    torch.testing.assert_close(adapter(query, key, value), expected)
+    out = adapter(query, key, value)
+    assert out.shape == query.shape
+    torch.testing.assert_close(out, expected)
 
 
 def test_transformer_engine_sdpa_adapter_rejects_dropout_mismatch(monkeypatch):
@@ -1016,8 +1050,35 @@ def test_transformer_engine_sdpa_adapter_rejects_dropout_mismatch(monkeypatch):
     query = torch.randn(3, 2, 5, 4)
     key = torch.randn(3, 2, 5, 4)
     value = torch.randn(3, 2, 5, 4)
-    with pytest.raises(ValueError, match="dropout"):
+    with pytest.raises(ValueError, match="fixed adapter dropout"):
         adapter(query, key, value, dropout_p=0.0)
+
+
+def test_transformer_engine_sdpa_adapter_legacy_attention_sets_no_mask(monkeypatch):
+    fake_te = types.ModuleType("transformer_engine.pytorch")
+
+    class FakeLegacyDotProductAttention(torch.nn.Module):
+        def __init__(self, num_attention_heads, head_dim, attention_dropout=0.0):
+            super().__init__()
+            self.num_attention_heads = num_attention_heads
+            self.head_dim = head_dim
+            self.attention_dropout = attention_dropout
+
+        def forward(self, query, key, value):
+            return query
+
+    fake_te.DotProductAttention = FakeLegacyDotProductAttention
+    fake_root = types.ModuleType("transformer_engine")
+    fake_root.pytorch = fake_te
+    monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
+    monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", fake_te)
+
+    with pytest.warns(RuntimeWarning, match="qkv_format"):
+        adapter = TransformerEngineDotProductAttentionAdapter(
+            num_attention_heads=2,
+            head_dim=4,
+        )
+    assert adapter.wrapped.attn_mask_type == "no_mask"
 
 
 def test_transformer_engine_sdpa_adapter_allows_zero_dropout_in_eval(monkeypatch):
