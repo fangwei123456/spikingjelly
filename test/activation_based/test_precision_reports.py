@@ -1,5 +1,6 @@
 import json
 
+import pytest
 import torch
 
 from spikingjelly.activation_based.precision import (
@@ -36,3 +37,20 @@ def test_save_precision_reports_writes_expected_files(tmp_path):
     assert "converted_modules" in conversion
     assert "high_precision_modules" in conversion
     assert "skipped_modules" in conversion
+
+
+def test_save_precision_reports_includes_fp8_te_capability_fields(tmp_path):
+    model = torch.nn.Linear(4, 4)
+    with pytest.warns(RuntimeWarning, match="falling back to fp32"):
+        artifacts = prepare_model_for_precision(
+            model,
+            "cpu",
+            PrecisionConfig(mode="fp8-te", strictness="warn"),
+        )
+    save_precision_reports(artifacts, str(tmp_path))
+
+    capability = json.loads((tmp_path / "capability_report.json").read_text())
+    assert capability["requested_mode"] == "fp8-te"
+    assert "transformer_engine_installed" in capability
+    assert "te_fp8_available" in capability
+    assert "te_fp8_unavailable_reason" in capability

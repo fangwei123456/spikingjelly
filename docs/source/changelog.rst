@@ -18,17 +18,40 @@ Unreleased
 Features
 ~~~~~~~~
 
-- None.
+Precision
+^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.precision``.
+
+- Added optional Transformer Engine FP8 backend support via
+  ``PrecisionConfig(mode="fp8-te")``.
+
+- Added FP8 optional dependency extras for ``fp8-te`` and ``fp8-torchao``.
+
+- Added Transformer Engine adapters for Linear, pointwise Conv1d,
+  LayerNorm, and exact LayerNormLinear / LayerNormMLP fusion patterns.
 
 Improvements
 ~~~~~~~~~~~~
 
-- None.
+- Extended precision conversion reports with pointwise Conv1d, LayerNorm,
+  and fused-pattern metadata.
+
+- Added fake-TE and Spikformer conversion smoke tests to verify that
+  Spikformer projections and heads can convert while SSA, BatchNorm,
+  Conv2d, and LIFNode stay in high precision.
 
 Bug Fixes
 ~~~~~~~~~
 
-- None.
+- Hardened ``fp8-te`` fallback behavior for missing Transformer Engine,
+  unsupported recipes, and non-FP8-capable devices.
+
+- Preserved shared-module identity for Transformer Engine fused precision
+  patterns.
+
+- Fixed the Transformer Engine SDPA adapter to reject mismatched dropout
+  arguments.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

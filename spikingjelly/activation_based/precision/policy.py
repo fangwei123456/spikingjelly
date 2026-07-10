@@ -15,10 +15,13 @@ class PrecisionPolicy:
         self._capability_report = None
         self._conversion_report = None
 
+    def set_capability_report(self, report) -> None:
+        self._capability_report = report
+
     def check_capability(self, model, device) -> None:
         report = build_capability_report(model, device, self.name)
-        validate_capability(report)
         self._capability_report = report
+        validate_capability(report)
 
     def prepare_model(self, model):
         model, report = convert_model_for_precision(model, self)
@@ -51,8 +54,11 @@ class PrecisionPolicy:
                 "total_modules": 0,
                 "convertible_linear": 0,
                 "convertible_torch_linear": 0,
+                "convertible_pointwise_conv1d": 0,
+                "convertible_layer_norm": 0,
                 "convertible_modules": [],
                 "converted_modules": [],
+                "converted_patterns": [],
                 "skipped_modules": [],
                 "high_precision_modules": [],
                 "unsupported_modules": [],

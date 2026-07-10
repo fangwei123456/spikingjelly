@@ -21,6 +21,10 @@ tqdm
 # Triton Backend
 # triton>=3.3.1
 
+# FP8 Optional Backends
+# torchao>=0.13,<0.18
+# transformer-engine[pytorch]>=2.16,<3
+
 # NIR Exchange
 # nir
 # nirtorch

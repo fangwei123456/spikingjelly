@@ -41,7 +41,7 @@ class SingleLinearModel(torch_nn.Module):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Benchmark one giant Linear layer under fp32, bf16, and fp8-torchao."
+        description="Benchmark one giant Linear layer under fp32, bf16, fp8-torchao, and fp8-te."
     )
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--batch-size", type=int, default=32768)
@@ -56,14 +56,15 @@ def parse_args() -> argparse.Namespace:
         "--precisions",
         nargs="+",
         default=["fp32", "bf16", "fp8-torchao"],
-        choices=("fp32", "bf16", "fp8-torchao"),
+        choices=("fp32", "bf16", "fp8-torchao", "fp8-te"),
     )
     parser.add_argument("--json", action="store_true")
     return parser.parse_args()
 
 
 def validate_args(args: argparse.Namespace) -> None:
-    if "fp8-torchao" not in args.precisions:
+    fp8_precisions = {"fp8-torchao", "fp8-te"} & set(args.precisions)
+    if not fp8_precisions:
         return
     constrained = {
         "batch_size": args.batch_size,
@@ -72,8 +73,10 @@ def validate_args(args: argparse.Namespace) -> None:
     }
     invalid = [f"{k}={v}" for k, v in constrained.items() if v % FP8_ALIGNMENT != 0]
     if invalid:
+        requested = ", ".join(sorted(fp8_precisions))
+        verb = "require" if len(fp8_precisions) > 1 else "requires"
         raise ValueError(
-            f"fp8-torchao requires all dimensions divisible by {FP8_ALIGNMENT}: "
+            f"{requested} {verb} all dimensions divisible by {FP8_ALIGNMENT}: "
             + ", ".join(invalid)
         )
 
