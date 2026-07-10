@@ -36,6 +36,9 @@ from spikingjelly.activation_based.triton_kernel.neuron_kernel.plif import (
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.utils import (
     prepare_triton_neuron_forward_plan,
 )
+from spikingjelly.activation_based.triton_kernel.triton_utils import (
+    normalize_triton_compute_dtype_name,
+)
 
 VariantOutput = tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]
 _BENCHMARK_SURROGATE = surrogate.Sigmoid()
@@ -415,7 +418,12 @@ def _compare_plan_overhead(
             if safe_tensor is not plan_tensor:
                 raise RuntimeError("safe wrapper and with-plan outputs differ")
             continue
-        torch.testing.assert_close(safe_tensor, plan_tensor, atol=0.0, rtol=0.0)
+        torch.testing.assert_close(
+            safe_tensor.to(torch.float32),
+            plan_tensor.to(torch.float32),
+            atol=0.0,
+            rtol=0.0,
+        )
 
     torch.cuda.synchronize(x.device)
     start = time.perf_counter()
@@ -578,8 +586,10 @@ def _compare_plan_overhead(
     }
     result.update(grad_metrics)
     # Backward-compatible field names kept for existing result parsers.
-    result["grad_x_max_abs_error"] = result["safe_vs_plan_x_max_abs_error"]
-    result["grad_x_mean_abs_error"] = result["safe_vs_plan_x_mean_abs_error"]
+    result["grad_x_max_abs_error"] = grad_metrics.get("safe_vs_plan_x_max_abs_error")
+    result["grad_x_mean_abs_error"] = grad_metrics.get(
+        "safe_vs_plan_x_mean_abs_error"
+    )
     return result
 
 
@@ -748,8 +758,13 @@ def main() -> None:
     reset_cases = [("hard_reset", 0.0), ("soft_reset", None)]
     decay_cases = [True, False]
     compute_modes = [
-        item.strip() for item in args.compute_dtypes.split(",") if item.strip()
+        normalize_triton_compute_dtype_name(item.strip())
+        for item in args.compute_dtypes.split(",")
+        if item.strip()
     ]
+    backward_compute_dtype = normalize_triton_compute_dtype_name(
+        args.backward_compute_dtype
+    )
     neuron_types = [item.strip() for item in args.neurons.split(",") if item.strip()]
     unsupported_neurons = sorted(set(neuron_types) - {"if", "lif", "plif"})
     if unsupported_neurons:
@@ -822,7 +837,7 @@ def main() -> None:
                                 decay_input=decay_input,
                                 storage_dtype=storage_dtype,
                                 compute_dtype=compute_dtype,
-                                backward_compute_dtype=args.backward_compute_dtype,
+                                backward_compute_dtype=backward_compute_dtype,
                                 timeout_s=args.variant_timeout_s,
                                 warmup_iterations=args.warmup_iterations,
                             )
@@ -832,7 +847,7 @@ def main() -> None:
                                     "storage_dtype": dtype_name,
                                     "compute_dtype": compute_dtype,
                                     "backward_compute_dtype": (
-                                        args.backward_compute_dtype
+                                        backward_compute_dtype
                                     ),
                                 }
                             )
@@ -852,7 +867,7 @@ def main() -> None:
                                                     storage_dtype=storage_dtype,
                                                     compute_dtype=compute_dtype,
                                                     backward_compute_dtype=(
-                                                        args.backward_compute_dtype
+                                                        backward_compute_dtype
                                                     ),
                                                     repeat=args.repeat,
                                                 )

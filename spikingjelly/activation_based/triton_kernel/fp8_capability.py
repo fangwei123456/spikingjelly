@@ -29,6 +29,7 @@ __all__ = [
     "supports_triton_fp8_e4m3fn",
     "supports_triton_fp8_e5m2",
     "supports_triton_fp8_neuron_forward",
+    "supports_triton_fp8_neuron_backward",
     "triton_fp8_neuron_capability",
     "triton_fp8_neuron_backward_capability",
     "triton_fp8_neuron_capability_report",
@@ -90,7 +91,7 @@ if triton is not None:
             sig_over_th = 1.0 / (1.0 + tl.exp(-over_th))
             sg = alpha * sig_over_th * (1.0 - sig_over_th)
             grad_v_combined = grad_v + grad_v_acc
-            grad_h = tl.fma(grad_s - grad_v_combined * (h - 0.0), sg, grad_v_combined)
+            grad_h = tl.fma(grad_s - grad_v_combined * h, sg, grad_v_combined)
             grad_x = grad_h * r_tau
             grad_v_acc = grad_h * (1.0 - r_tau) * (1.0 - s)
             grad_r_tau_acc += grad_h * (h - v_last) / r_tau
@@ -141,11 +142,7 @@ def _failure(available: bool, reason: str | None = None) -> dict[str, Any]:
 
 
 def _probe_exception_reason(e: Exception) -> str:
-    msg = traceback.format_exception_only(type(e), e)[-1].strip()
-    prefix = f"{type(e).__name__}: "
-    if msg.startswith(prefix):
-        msg = msg[len(prefix) :]
-    return f"{type(e).__name__}: {msg}"
+    return traceback.format_exception_only(type(e), e)[-1].strip()
 
 
 @functools.lru_cache(maxsize=None)
@@ -347,6 +344,12 @@ def supports_triton_fp8_neuron_forward(dtype, device, compute_dtype="fp32") -> b
     return bool(_probe(dtype, device, compute_dtype=compute_dtype)["available"])
 
 
+def supports_triton_fp8_neuron_backward(dtype, device, compute_dtype="fp32") -> bool:
+    return bool(
+        _backward_probe(dtype, device, compute_dtype=compute_dtype)["available"]
+    )
+
+
 def triton_fp8_neuron_capability(dtype, device, compute_dtype="fp32") -> dict[str, Any]:
     return _probe(dtype, device, compute_dtype=compute_dtype)
 
@@ -376,9 +379,19 @@ def triton_fp8_neuron_capability_report(device) -> dict[str, Any]:
 
     for dtype_name, dtype in _fp8_dtype_candidates().items():
         if dtype is None:
-            report["dtypes"][dtype_name] = _failure(
+            dtype_report = _failure(
                 False, f"{dtype_name} is unavailable in this PyTorch build"
             )
         else:
-            report["dtypes"][dtype_name] = _probe(dtype, device)
+            dtype_report = _probe(dtype, device)
+        backward_report = (
+            dtype_report
+            if dtype is None
+            else _backward_probe(dtype, device)
+        )
+        report["dtypes"][dtype_name] = {
+            **dtype_report,
+            "forward": dtype_report,
+            "backward": backward_report,
+        }
     return report

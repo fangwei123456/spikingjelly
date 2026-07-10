@@ -89,6 +89,10 @@ def normalize_triton_compute_dtype_name(compute_dtype) -> str:
             return "fp16"
         if hasattr(torch, "bfloat16") and compute_dtype == torch.bfloat16:
             return "bf16"
+        if hasattr(torch, "float8_e4m3fn") and compute_dtype == torch.float8_e4m3fn:
+            return "fp8"
+        if hasattr(torch, "float8_e5m2") and compute_dtype == torch.float8_e5m2:
+            return "fp8"
         raise ValueError(f"Unsupported Triton compute dtype: {compute_dtype}.")
     if not isinstance(compute_dtype, str):
         raise ValueError(

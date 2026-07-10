@@ -55,10 +55,10 @@ class TritonNeuronExecutionPlan:
         self,
         *,
         neuron_type: str,
-        device,
-        storage_dtype,
-        compute_dtype,
-        backward_compute_dtype="fp32",
+        device: torch.device | str | int,
+        storage_dtype: torch.dtype | str,
+        compute_dtype: str | torch.dtype,
+        backward_compute_dtype: str | torch.dtype = "fp32",
         spike_dtype: torch.dtype,
         save_intermediates: bool,
     ) -> bool:
@@ -90,11 +90,12 @@ def _validate_mp_options(
     compute_dtype,
     spike_dtype: torch.dtype,
     save_intermediates: bool,
+    *,
+    compute_label: str = "compute_dtype",
 ) -> tuple[torch.dtype, str]:
     storage_dtype = normalize_triton_storage_dtype(storage_dtype)
     compute_dtype_name = normalize_triton_compute_dtype_name(compute_dtype)
-    if compute_dtype_name == "fp8" and not is_fp8_dtype(storage_dtype):
-        raise ValueError("compute_dtype='fp8' requires an FP8 storage_dtype.")
+    _require_fp8_storage_dtype(compute_dtype_name, storage_dtype, compute_label)
     if spike_dtype not in (torch.float32, torch.float16, torch.bfloat16):
         raise ValueError(
             "spike_dtype must be torch.float32, torch.float16, or torch.bfloat16, "
@@ -103,6 +104,15 @@ def _validate_mp_options(
     if not isinstance(save_intermediates, bool):
         raise ValueError("save_intermediates must be bool.")
     return storage_dtype, compute_dtype_name
+
+
+def _require_fp8_storage_dtype(
+    compute_dtype_name: str,
+    storage_dtype: torch.dtype,
+    label: str,
+) -> None:
+    if compute_dtype_name == "fp8" and not is_fp8_dtype(storage_dtype):
+        raise ValueError(f"{label}='fp8' requires an FP8 storage_dtype.")
 
 
 def _check_fp8_capability(
@@ -185,8 +195,9 @@ def prepare_triton_neuron_execution_plan(
         )
     except ValueError as e:
         raise ValueError(f"Invalid backward_compute_dtype: {e}") from e
-    if backward_compute_dtype_name == "fp8" and not is_fp8_dtype(storage_dtype):
-        raise ValueError("backward_compute_dtype='fp8' requires an FP8 storage_dtype.")
+    _require_fp8_storage_dtype(
+        backward_compute_dtype_name, storage_dtype, "backward_compute_dtype"
+    )
     device = _normalize_plan_device(device)
     if device.type != "cuda":
         raise RuntimeError(

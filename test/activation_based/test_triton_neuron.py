@@ -17,6 +17,7 @@ from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
     utils as neuron_triton_utils,
 )
 from spikingjelly.activation_based.triton_kernel.fp8_capability import (
+    supports_triton_fp8_neuron_backward,
     supports_triton_fp8_neuron_forward,
     triton_fp8_neuron_capability_report,
 )
@@ -218,11 +219,28 @@ def test_triton_fp8_capability_report_cpu_is_unavailable():
     for dtype_report in report["dtypes"].values():
         assert dtype_report["available"] is False
         assert dtype_report["reason"]
+        assert dtype_report["forward"]["available"] is False
+        assert dtype_report["backward"]["available"] is False
 
 
 def test_triton_fp8_capability_rejects_invalid_dtype():
     with pytest.raises(ValueError, match="Unsupported Triton FP8 dtype"):
         supports_triton_fp8_neuron_forward(torch.float32, torch.device("cpu"))
+    with pytest.raises(ValueError, match="Unsupported Triton FP8 dtype"):
+        supports_triton_fp8_neuron_backward(torch.float32, torch.device("cpu"))
+
+
+def test_normalize_triton_compute_dtype_accepts_native_fp8_dtype():
+    if hasattr(torch, "float8_e4m3fn"):
+        assert (
+            triton_utils.normalize_triton_compute_dtype_name(torch.float8_e4m3fn)
+            == "fp8"
+        )
+    if hasattr(torch, "float8_e5m2"):
+        assert (
+            triton_utils.normalize_triton_compute_dtype_name(torch.float8_e5m2)
+            == "fp8"
+        )
 
 
 def test_resolve_triton_compute_dtype_reports_unavailable_type_dict(monkeypatch):
