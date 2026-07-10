@@ -285,6 +285,7 @@ def resolve_triton_compute_dtype(compute_dtype, storage_dtype=None):
         raise ValueError(
             f"Unsupported FP8 storage dtype for compute_dtype='fp8': {storage_dtype}."
         )
+    raise ValueError(f"Unsupported Triton compute dtype name: {name!r}.")
 
 
 def torch_dtype_for_triton_compute_dtype(compute_dtype) -> torch.dtype:
@@ -301,6 +302,7 @@ def torch_dtype_for_triton_compute_dtype(compute_dtype) -> torch.dtype:
         # PyTorch does not provide useful reductions for float8 tensors. Keep
         # reduction buffers in fp32 while the Triton kernel computes in fp8.
         return torch.float32
+    raise ValueError(f"Unsupported Triton compute dtype name: {name!r}.")
 
 
 def torch_dtype_for_triton_neuron_compute_dtype_id(dtype_id: int) -> torch.dtype:

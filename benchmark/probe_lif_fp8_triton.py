@@ -485,6 +485,7 @@ def _run_variant(
     decay_input: bool | None,
     storage_dtype: torch.dtype,
     compute_dtype: str,
+    backward_compute_dtype: str,
     timeout_s: float | None,
     warmup_iterations: int,
 ) -> tuple[dict[str, Any], VariantOutput | None]:
@@ -501,6 +502,7 @@ def _run_variant(
                         decay_input=decay_input,
                         storage_dtype=storage_dtype,
                         compute_dtype=compute_dtype,
+                        backward_compute_dtype=backward_compute_dtype,
                     )
             torch.cuda.synchronize(x.device)
             start = time.perf_counter()
@@ -514,6 +516,7 @@ def _run_variant(
                     decay_input=decay_input,
                     storage_dtype=storage_dtype,
                     compute_dtype=compute_dtype,
+                    backward_compute_dtype=backward_compute_dtype,
                 )
             torch.cuda.synchronize(x.device)
             elapsed_ms = (time.perf_counter() - start) * 1000.0
@@ -711,6 +714,7 @@ def main() -> None:
                                 decay_input=decay_input,
                                 storage_dtype=storage_dtype,
                                 compute_dtype=compute_dtype,
+                                backward_compute_dtype=args.backward_compute_dtype,
                                 timeout_s=args.variant_timeout_s,
                                 warmup_iterations=args.warmup_iterations,
                             )
@@ -728,22 +732,23 @@ def main() -> None:
                                 variant.update(_metrics(ref_s, ref_v, ref_h, *out))
                                 if args.compare_plan_overhead:
                                     try:
-                                        variant["plan_overhead"] = (
-                                            _compare_plan_overhead(
-                                                x,
-                                                neuron_type=neuron_type,
-                                                r_tau=r_tau,
-                                                v_threshold=1.0,
-                                                v_reset=v_reset,
-                                                decay_input=decay_input,
-                                                storage_dtype=storage_dtype,
-                                                compute_dtype=compute_dtype,
-                                                backward_compute_dtype=(
-                                                    args.backward_compute_dtype
-                                                ),
-                                                repeat=args.repeat,
+                                        with _variant_timeout(args.variant_timeout_s):
+                                            variant["plan_overhead"] = (
+                                                _compare_plan_overhead(
+                                                    x,
+                                                    neuron_type=neuron_type,
+                                                    r_tau=r_tau,
+                                                    v_threshold=1.0,
+                                                    v_reset=v_reset,
+                                                    decay_input=decay_input,
+                                                    storage_dtype=storage_dtype,
+                                                    compute_dtype=compute_dtype,
+                                                    backward_compute_dtype=(
+                                                        args.backward_compute_dtype
+                                                    ),
+                                                    repeat=args.repeat,
+                                                )
                                             )
-                                        )
                                     except Exception as e:
                                         msg = str(e) if str(e) else repr(e)
                                         variant["plan_overhead"] = {

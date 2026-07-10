@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import functools
+import logging
+import re
 from typing import Any
 
 import torch
@@ -15,7 +17,10 @@ from .triton_utils import (
 try:
     import triton
     import triton.language as tl
-except BaseException:
+except Exception as e:
+    logging.getLogger(__name__).info(
+        "Failed to import Triton for FP8 capability probe: %s", e
+    )
     triton = None
     tl = None
 
@@ -134,6 +139,20 @@ def _failure(available: bool, reason: str | None = None) -> dict[str, Any]:
     return {"available": available, "reason": reason}
 
 
+def _probe_exception_reason(e: Exception) -> str:
+    msg = str(e) if str(e) else repr(e)
+    value_error = re.search(r'ValueError\("([^"]+)"\)', msg)
+    if value_error is not None:
+        msg = value_error.group(1)
+    else:
+        lines = [line.strip() for line in msg.splitlines() if line.strip()]
+        for line in reversed(lines):
+            if line != "^" and not line.startswith("def "):
+                msg = line
+                break
+    return f"{type(e).__name__}: {msg}"
+
+
 @functools.lru_cache(maxsize=None)
 def _probe_cached(
     dtype_name: str,
@@ -185,7 +204,7 @@ def _probe_cached(
             if not torch.isfinite(yf).all():
                 return _failure(False, "probe produced non-finite values")
     except Exception as e:
-        return _failure(False, f"{type(e).__name__}: {e}")
+        return _failure(False, _probe_exception_reason(e))
     return _failure(True)
 
 
@@ -267,7 +286,7 @@ def _backward_probe_cached(
             if not all(torch.isfinite(out).all() for out in outputs):
                 return _failure(False, "backward probe produced non-finite values")
     except Exception as e:
-        return _failure(False, f"{type(e).__name__}: {e}")
+        return _failure(False, _probe_exception_reason(e))
     return _failure(True)
 
 
