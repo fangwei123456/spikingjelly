@@ -26,6 +26,7 @@ def _create_test_model():
     return net
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_context_manager_basic():
     net = _create_test_model().cuda()
     optimizer = optim.Adam(net.parameters(), lr=0.001)
@@ -40,6 +41,7 @@ def test_context_manager_basic():
         prof.export()
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_layer_wise_profiling():
     net = _create_test_model().cuda()
     with LayerWiseMemoryProfiler(
@@ -59,6 +61,7 @@ def test_layer_wise_profiling():
     prof.export(output=True)
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_time_profiling():
     net = _create_test_model().cuda()
     with LayerWiseFPCUDATimeProfiler(
@@ -78,6 +81,7 @@ def test_time_profiling():
     prof.export(output=True)
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_exception_safety():
     net = _create_test_model().cuda()
 
