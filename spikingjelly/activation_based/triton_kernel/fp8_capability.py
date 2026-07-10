@@ -285,7 +285,9 @@ def _backward_probe_cached(
     return _failure(True)
 
 
-def _cache_key_parts(dtype, device, compute_dtype) -> tuple[torch.dtype, torch.device, str, str, str | None]:
+def _cache_key_parts(
+    dtype, device, compute_dtype
+) -> tuple[torch.dtype, torch.device, str, str, str | None]:
     dtype = _normalize_fp8_dtype(dtype)
     device = _normalize_cuda_device(device)
     compute_dtype_name = normalize_triton_compute_dtype_name(compute_dtype)

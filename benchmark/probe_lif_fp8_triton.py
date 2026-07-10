@@ -506,15 +506,19 @@ def _compare_plan_overhead(
                 else None
             ),
         }
-        finite = grads["x"] is not None and torch.isfinite(grads["x"]).all()
+        finite = (
+            grads["x"] is not None and torch.isfinite(grads["x"]).all().item()
+        )
         finite = finite and (
-            grads["v_init"] is not None and torch.isfinite(grads["v_init"]).all()
+            grads["v_init"] is not None
+            and torch.isfinite(grads["v_init"]).all().item()
         )
         if neuron_type == "plif":
             finite = finite and (
-                grads["r_tau"] is not None and torch.isfinite(grads["r_tau"]).all()
+                grads["r_tau"] is not None
+                and torch.isfinite(grads["r_tau"]).all().item()
             )
-        return grads, bool(finite.item() if isinstance(finite, torch.Tensor) else finite)
+        return grads, bool(finite)
 
     safe_grads, safe_grad_finite = _run_backward("safe")
     plan_grads, with_plan_grad_finite = _run_backward("plan")
