@@ -478,3 +478,102 @@ def test_fp8_te_unknown_recipe_strict_raises():
                 fp8_recipe="unknown-recipe",
             ),
         )
+
+
+def _install_fake_te_without_delayed_recipe(monkeypatch):
+    fake_te = types.ModuleType("transformer_engine.pytorch")
+    fake_recipe_module = types.ModuleType("transformer_engine.common.recipe")
+    fake_common = types.ModuleType("transformer_engine.common")
+    fake_root = types.ModuleType("transformer_engine")
+
+    fake_te.autocast = lambda enabled=True, recipe=None, device=None: None
+    fake_common.recipe = fake_recipe_module
+    fake_root.pytorch = fake_te
+    fake_root.common = fake_common
+    monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
+    monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", fake_te)
+    monkeypatch.setitem(sys.modules, "transformer_engine.common", fake_common)
+    monkeypatch.setitem(
+        sys.modules,
+        "transformer_engine.common.recipe",
+        fake_recipe_module,
+    )
+
+
+def _patch_fp8_te_executable_report(monkeypatch):
+    def fake_report(model, device, mode):
+        assert mode == "fp8-te"
+        return {
+            "requested_mode": "fp8-te",
+            "device": "cuda:0",
+            "device_type": "cuda",
+            "cuda_available": True,
+            "cuda_device_count": 1,
+            "cuda_device_capability": (9, 0),
+            "torchao_installed": False,
+            "transformer_engine_installed": True,
+            "te_fp8_available": True,
+            "te_fp8_unavailable_reason": None,
+            "te_autocast_api": "autocast",
+            "te_recipe_availability": {
+                "auto": True,
+                "delayed": True,
+                "current": True,
+                "block": False,
+                "mxfp8": False,
+            },
+            "te_recipe_requested": None,
+            "te_recipe_resolved": None,
+            "te_recipe_fallback_reason": None,
+            "bf16_supported": True,
+            "cpu_bf16_autocast": False,
+            "mps_available": False,
+            "model_class": type(model).__name__,
+            "can_convert": True,
+            "can_execute": True,
+            "runtime_validation_required": True,
+            "execution_note": None,
+        }
+
+    monkeypatch.setattr(
+        "spikingjelly.activation_based.precision.float8_te.build_capability_report",
+        fake_report,
+    )
+
+
+def test_fp8_te_recipe_resolution_failure_warn_falls_back_to_fp32(monkeypatch):
+    _install_fake_te_without_delayed_recipe(monkeypatch)
+    _patch_fp8_te_executable_report(monkeypatch)
+    model = torch.nn.Linear(4, 4)
+    with pytest.warns(RuntimeWarning, match="falling back to fp32"):
+        artifacts = prepare_model_for_precision(
+            model,
+            "cuda:0",
+            PrecisionConfig(
+                mode="fp8-te",
+                strictness="warn",
+                fp8_recipe="delayed",
+            ),
+        )
+    assert artifacts.effective_config.mode == "fp32"
+    assert "Failed to resolve FP8 recipe" in artifacts.fallback_reason
+    report = artifacts.policy.capability_report()
+    assert report["te_recipe_requested"] == "delayed"
+    assert report["te_recipe_resolved"] is None
+    assert "does not expose a recipe class" in report["te_recipe_fallback_reason"]
+
+
+def test_fp8_te_recipe_resolution_failure_strict_raises(monkeypatch):
+    _install_fake_te_without_delayed_recipe(monkeypatch)
+    _patch_fp8_te_executable_report(monkeypatch)
+    model = torch.nn.Linear(4, 4)
+    with pytest.raises(RuntimeError, match="Failed to resolve FP8 recipe"):
+        prepare_model_for_precision(
+            model,
+            "cuda:0",
+            PrecisionConfig(
+                mode="fp8-te",
+                strictness="strict",
+                fp8_recipe="delayed",
+            ),
+        )

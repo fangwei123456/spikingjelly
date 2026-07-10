@@ -467,6 +467,14 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
         self._capability_report = report
         self._annotate_recipe_report(report)
         validate_capability(report)
+        if report.get("transformer_engine_installed", False):
+            try:
+                te = _import_te_pytorch()
+                self._resolve_recipe(te)
+            except Exception as exc:
+                report["te_recipe_resolved"] = None
+                report["te_recipe_fallback_reason"] = str(exc)
+                raise RuntimeError(f"Failed to resolve FP8 recipe: {exc}") from exc
         self._ensure_model_on_device(model, device)
 
     def _annotate_recipe_report(self, report: dict) -> None:
