@@ -64,6 +64,8 @@ def _multistep_if_forward_kernel_static(
 ):
     pid_ncl = tl.program_id(0)
     ncl_offset = pid_ncl * BLOCK_NCL
+    v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
+    v_reset = tl.full([1], v_reset, dtype=compute_dtype)
 
     v_init_ptrs = tl.make_block_ptr(
         v_init_ptr,
@@ -154,6 +156,8 @@ def _multistep_if_forward_kernel_dynamic(
 ):
     pid_ncl = tl.program_id(0)
     ncl_offset = pid_ncl * BLOCK_NCL
+    v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
+    v_reset = tl.full([1], v_reset, dtype=compute_dtype)
 
     v_init_ptrs = tl.make_block_ptr(
         v_init_ptr,
@@ -246,6 +250,8 @@ def _multistep_if_backward_kernel_static(
 ):
     pid_ncl = tl.program_id(0)
     ncl_offset = pid_ncl * BLOCK_NCL
+    v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
+    v_reset = tl.full([1], v_reset, dtype=compute_dtype)
 
     grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
 
@@ -356,6 +362,8 @@ def _multistep_if_backward_kernel_dynamic(
 ):
     pid_ncl = tl.program_id(0)
     ncl_offset = pid_ncl * BLOCK_NCL
+    v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
+    v_reset = tl.full([1], v_reset, dtype=compute_dtype)
 
     grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
 

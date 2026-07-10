@@ -732,6 +732,7 @@ def test_lif_triton_matches_torch_training(tau, detach_reset, v_threshold, v_res
 def test_mixed_precision_float32_matches_torch_eval(
     kind, kernel_module, T, decay_input, v_reset
 ):
+    pytest.importorskip("triton")
     original_threshold = configure.triton_neuron_kernel_static_range_max_T
     try:
         configure.triton_neuron_kernel_static_range_max_T = 16
