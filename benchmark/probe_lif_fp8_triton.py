@@ -14,19 +14,22 @@ from typing import Any
 
 import torch
 
-from spikingjelly.activation_based import neuron
+from spikingjelly.activation_based import neuron, surrogate
 from spikingjelly.activation_based.triton_kernel.fp8_capability import (
     triton_fp8_neuron_capability_report,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.integrate_and_fire import (
+    multistep_if,
     multistep_if_mp,
     multistep_if_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.lif import (
+    multistep_lif,
     multistep_lif_mp,
     multistep_lif_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.plif import (
+    multistep_plif,
     multistep_plif_mp,
     multistep_plif_mp_with_plan,
 )
@@ -35,6 +38,7 @@ from spikingjelly.activation_based.triton_kernel.neuron_kernel.utils import (
 )
 
 VariantOutput = tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]
+_BENCHMARK_SURROGATE = surrogate.Sigmoid()
 
 
 class _VariantTimeoutError(TimeoutError):
@@ -292,6 +296,73 @@ def _call_mixed_precision_variant_with_plan(
     raise ValueError(f"Unsupported neuron type: {neuron_type}.")
 
 
+def _call_stable_triton_variant(
+    x: torch.Tensor,
+    *,
+    neuron_type: str,
+    r_tau: float,
+    v_threshold: float,
+    v_reset: float | None,
+    decay_input: bool | None,
+    v_init: torch.Tensor,
+    r_tau_tensor: torch.Tensor | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if neuron_type == "if":
+        return multistep_if(
+            x,
+            v_init,
+            v_threshold,
+            v_reset,
+            False,
+            _BENCHMARK_SURROGATE,
+        )
+    if neuron_type == "lif":
+        return multistep_lif(
+            x,
+            v_init,
+            bool(decay_input),
+            1.0 / r_tau,
+            v_threshold,
+            v_reset,
+            False,
+            _BENCHMARK_SURROGATE,
+        )
+    if neuron_type == "plif":
+        if r_tau_tensor is None:
+            r_tau_tensor = torch.tensor(r_tau, device=x.device, dtype=torch.float32)
+        return multistep_plif(
+            x,
+            v_init,
+            r_tau_tensor,
+            bool(decay_input),
+            v_threshold,
+            v_reset,
+            False,
+            _BENCHMARK_SURROGATE,
+        )
+    raise ValueError(f"Unsupported neuron type: {neuron_type}.")
+
+
+def _backward_probe_loss(out: tuple[torch.Tensor, ...]) -> torch.Tensor:
+    return out[0].sum() + out[1].float().sum() * 0.125
+
+
+def _grad_error_metrics(
+    prefix: str,
+    lhs: dict[str, torch.Tensor | None],
+    rhs: dict[str, torch.Tensor | None],
+) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for name, lhs_grad in lhs.items():
+        rhs_grad = rhs.get(name)
+        if lhs_grad is None or rhs_grad is None:
+            continue
+        abs_error = (lhs_grad.to(torch.float32) - rhs_grad.to(torch.float32)).abs()
+        metrics[f"{prefix}_{name}_max_abs_error"] = float(abs_error.max().item())
+        metrics[f"{prefix}_{name}_mean_abs_error"] = float(abs_error.mean().item())
+    return metrics
+
+
 def _compare_plan_overhead(
     x: torch.Tensor,
     *,
@@ -380,13 +451,13 @@ def _compare_plan_overhead(
     torch.cuda.synchronize(x.device)
     with_plan_total_ms = (time.perf_counter() - start) * 1000.0
 
-    def _run_backward(use_plan: bool):
+    def _run_backward(path: str):
         x_req = x.detach().clone().requires_grad_()
         v_req = torch.zeros_like(x[0]).requires_grad_()
         r_tau_req = torch.tensor(r_tau, device=x.device, dtype=torch.float32)
         if neuron_type == "plif":
             r_tau_req.requires_grad_()
-        if use_plan:
+        if path == "plan":
             out = _call_mixed_precision_variant_with_plan(
                 x_req,
                 plan=plan,
@@ -398,7 +469,7 @@ def _compare_plan_overhead(
                 v_init=v_req,
                 r_tau_tensor=r_tau_req,
             )
-        else:
+        elif path == "safe":
             out = _call_mixed_precision_variant(
                 x_req,
                 neuron_type=neuron_type,
@@ -412,7 +483,20 @@ def _compare_plan_overhead(
                 v_init=v_req,
                 r_tau_tensor=r_tau_req,
             )
-        out[0].sum().backward()
+        elif path == "reference":
+            out = _call_stable_triton_variant(
+                x_req,
+                neuron_type=neuron_type,
+                r_tau=r_tau,
+                v_threshold=v_threshold,
+                v_reset=v_reset,
+                decay_input=decay_input,
+                v_init=v_req,
+                r_tau_tensor=r_tau_req,
+            )
+        else:
+            raise ValueError(f"Unsupported backward path: {path}.")
+        _backward_probe_loss(out).backward()
         grads = {
             "x": x_req.grad.detach(),
             "v_init": v_req.grad.detach(),
@@ -425,27 +509,36 @@ def _compare_plan_overhead(
             finite = finite and torch.isfinite(grads["r_tau"]).all()
         return grads, bool(finite.item() if isinstance(finite, torch.Tensor) else finite)
 
-    safe_grads, safe_grad_finite = _run_backward(use_plan=False)
-    plan_grads, with_plan_grad_finite = _run_backward(use_plan=True)
-    grad_x_abs_error = (safe_grads["x"] - plan_grads["x"]).abs()
+    safe_grads, safe_grad_finite = _run_backward("safe")
+    plan_grads, with_plan_grad_finite = _run_backward("plan")
+    reference_grads, reference_grad_finite = _run_backward("reference")
 
     # _run_backward includes forward + backward + setup, so these metrics measure
     # end-to-end backward-path latency rather than backward-kernel-only time.
     torch.cuda.synchronize(x.device)
     start = time.perf_counter()
     for _ in range(repeat):
-        _run_backward(use_plan=False)
+        _run_backward("safe")
     torch.cuda.synchronize(x.device)
     safe_wrapper_forward_backward_total_ms = (time.perf_counter() - start) * 1000.0
 
     torch.cuda.synchronize(x.device)
     start = time.perf_counter()
     for _ in range(repeat):
-        _run_backward(use_plan=True)
+        _run_backward("plan")
     torch.cuda.synchronize(x.device)
     with_plan_forward_backward_total_ms = (time.perf_counter() - start) * 1000.0
 
-    return {
+    grad_metrics = {}
+    grad_metrics.update(_grad_error_metrics("safe_vs_plan", safe_grads, plan_grads))
+    grad_metrics.update(
+        _grad_error_metrics("safe_vs_reference", safe_grads, reference_grads)
+    )
+    grad_metrics.update(
+        _grad_error_metrics("with_plan_vs_reference", plan_grads, reference_grads)
+    )
+
+    result = {
         "compile_success": True,
         "repeat": repeat,
         "backward_compute_dtype": backward_compute_dtype,
@@ -466,13 +559,17 @@ def _compare_plan_overhead(
         ),
         "safe_grad_finite": safe_grad_finite,
         "with_plan_grad_finite": with_plan_grad_finite,
-        "grad_x_max_abs_error": float(grad_x_abs_error.max().item()),
-        "grad_x_mean_abs_error": float(grad_x_abs_error.mean().item()),
+        "reference_grad_finite": reference_grad_finite,
         "preflight_calls": {
             "safe_wrapper_prepares": repeat,
             "with_plan_prepares": 1,
         },
     }
+    result.update(grad_metrics)
+    # Backward-compatible field names kept for existing result parsers.
+    result["grad_x_max_abs_error"] = result["safe_vs_plan_x_max_abs_error"]
+    result["grad_x_mean_abs_error"] = result["safe_vs_plan_x_mean_abs_error"]
+    return result
 
 
 def _run_variant(
