@@ -95,7 +95,7 @@ from spikingjelly.activation_based.distributed.tensor_parallel.linear import (
     wrap_tp_memory_modules,  # noqa: F401
 )
 from spikingjelly.activation_based.distributed.tensor_parallel.state import (
-    TensorShardMemoryModule,
+    make_tensor_shard_memory_module,
 )
 
 try:
@@ -118,7 +118,7 @@ __all__ = [
     "SNNPipelineRuntime",
     "SNNDistributedAnalysis",
     "SNNDistributedRecommendation",
-    "TensorShardMemoryModule",
+    "make_tensor_shard_memory_module",
     "ChannelShardConv2d",
     "ChannelShardConv1d",
     "ChannelShardBatchNorm2d",

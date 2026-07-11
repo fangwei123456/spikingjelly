@@ -48,9 +48,9 @@ from .planner import (
 )
 from .runtime import SNNDistributedRuntime
 from .tensor_parallel import (
-    TensorShardMemoryModule,
     enable_tp_communication_debug,
     get_tp_communication_debug_stats,
+    make_tensor_shard_memory_module,
     reset_tp_communication_debug_stats,
 )
 from .topology import SNNDistributedTopology
@@ -66,7 +66,7 @@ __all__ = [
     "SNNDistributedAnalysis",
     "SNNDistributedRuntime",
     "SNNDistributedTopology",
-    "TensorShardMemoryModule",
+    "make_tensor_shard_memory_module",
     "ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE",
     "analyze",
     "apply",

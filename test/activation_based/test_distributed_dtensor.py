@@ -29,11 +29,11 @@ from spikingjelly.activation_based.distributed import (
     SNNDistributedTopology,
     ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE,
     TENSOR_PARALLEL_AVAILABLE,
-    TensorShardMemoryModule,
     analyze,
     apply,
     apply_pipeline_stage_memopt,
     build_snn_optimizer,
+    make_tensor_shard_memory_module,
     plan,
     recommend_pipeline_memopt_stages,
     recommend_snn_distributed_strategy,
@@ -137,7 +137,7 @@ from spikingjelly.activation_based.distributed.tensor_parallel.linear import (
     wrap_tp_memory_modules as canonical_wrap_tp_memory_modules,
 )
 from spikingjelly.activation_based.distributed.tensor_parallel.state import (
-    TensorShardMemoryModule as CanonicalTensorShardMemoryModule,
+    make_tensor_shard_memory_module as canonical_make_tensor_shard_memory_module,
 )
 from spikingjelly.activation_based.distributed.tensor_parallel.spikformer import (
     parallelize_spikformer_blocks as canonical_parallelize_spikformer_blocks,
@@ -227,7 +227,7 @@ _DTENSOR_PUBLIC_NAMES = (
     "SNNPipelineRuntime",
     "SNNDistributedAnalysis",
     "SNNDistributedRecommendation",
-    "TensorShardMemoryModule",
+    "make_tensor_shard_memory_module",
     "ChannelShardConv2d",
     "ChannelShardConv1d",
     "ChannelShardBatchNorm2d",
@@ -269,7 +269,7 @@ def test_package_root_reexports_keep_object_identity_and_signatures():
         "SNNDistributedRuntime": SNNDistributedRuntime,
         "SNNDistributedTopology": SNNDistributedTopology,
         "SNNDistributedAnalysis": CanonicalSNNDistributedAnalysis,
-        "TensorShardMemoryModule": CanonicalTensorShardMemoryModule,
+        "make_tensor_shard_memory_module": canonical_make_tensor_shard_memory_module,
         "build_snn_optimizer": canonical_build_snn_optimizer,
         "build_device_mesh": canonical_build_device_mesh,
         "ensure_distributed_initialized": canonical_ensure_distributed_initialized,
@@ -421,7 +421,10 @@ def test_package_root_reexports_keep_object_identity_and_signatures():
     )
     assert distributed_dtensor.wrap_tp_memory_modules is canonical_wrap_tp_memory_modules
     assert distributed_dtensor.parallelize_snn_module is canonical_parallelize_snn_module
-    assert distributed_dtensor.TensorShardMemoryModule is CanonicalTensorShardMemoryModule
+    assert (
+        distributed_dtensor.make_tensor_shard_memory_module
+        is canonical_make_tensor_shard_memory_module
+    )
     assert distributed_dtensor.ChannelShardConv2d is CanonicalChannelShardConv2d
     assert distributed_dtensor.ChannelShardConv1d is CanonicalChannelShardConv1d
     assert (

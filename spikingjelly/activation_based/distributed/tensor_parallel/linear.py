@@ -10,7 +10,7 @@ from spikingjelly.activation_based.distributed.analysis import (
     analyze_snn_distributed_capability,
 )
 from spikingjelly.activation_based.distributed.tensor_parallel.state import (
-    TensorShardMemoryModule,
+    make_tensor_shard_memory_module,
 )
 
 try:
@@ -163,7 +163,7 @@ def wrap_tp_memory_modules(
             if next_name in wrapped:
                 continue
             if isinstance(next_module, base.MemoryModule):
-                parent[next_index] = TensorShardMemoryModule(
+                parent[next_index] = make_tensor_shard_memory_module(
                     next_module,
                     shard_dim=-1,
                     logical_dim_size=source.out_features,

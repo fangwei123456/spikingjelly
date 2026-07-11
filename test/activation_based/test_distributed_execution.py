@@ -1,4 +1,8 @@
 # ruff: noqa: F401,F403,F405
+from spikingjelly.activation_based.distributed.tensor_parallel.state import (
+    _has_tensor_shard_input_validator,
+)
+
 from test.activation_based._distributed_dtensor_test_support import *
 
 
@@ -396,3 +400,4 @@ def test_cifar10dvs_vgg_fsdp2_tp_helper_single_rank():
         result = materialize_dtensor_output(distributed_model(x))
         torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
         assert mesh.ndim == 2
+        assert _has_tensor_shard_input_validator(distributed_model.features[0].neuron)

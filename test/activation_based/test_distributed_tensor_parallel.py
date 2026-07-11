@@ -1,5 +1,27 @@
 # ruff: noqa: F401,F403,F405
+import pickle
+
+from spikingjelly.activation_based import base
+from spikingjelly.activation_based.distributed.tensor_parallel.state import (
+    _has_tensor_shard_input_validator,
+)
+
 from test.activation_based._distributed_dtensor_test_support import *
+
+
+class _ResetCountingMemoryModule(base.MemoryModule):
+    def __init__(self):
+        super().__init__()
+        self.register_memory("v", 0.0)
+        self.reset_calls = 0
+
+    def single_step_forward(self, x: torch.Tensor):
+        self.v = x * 2
+        return self.v
+
+    def reset(self):
+        self.reset_calls += 1
+        super().reset()
 
 
 def test_tp_communication_debug_stats_recorded_for_rowwise_conv(
@@ -93,17 +115,116 @@ def test_channel_shard_conv1d_preserves_padding_and_multistep_shape():
     torch.testing.assert_close(wrapped(x), reference)
 
 
-def test_tensor_shard_memory_module_uses_channel_dim_for_single_step():
-    module = TensorShardMemoryModule(
-        neuron.IFNode(step_mode="s"),
+def test_make_tensor_shard_memory_module_uses_channel_dim_for_single_step():
+    source = neuron.IFNode(step_mode="s")
+    module = make_tensor_shard_memory_module(
+        source,
         shard_dim=2,
         logical_dim_size=4,
         process_group=None,
     )
     x = torch.ones(2, 4, 3, 3)
 
-    assert module.shard_dim == 1
+    assert module is not source
+    assert type(module) is type(source)
     assert module(x).shape == x.shape
+
+
+def test_make_tensor_shard_memory_module_rejects_invalid_shard_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    for shard_dim in (3, -3):
+        module = make_tensor_shard_memory_module(
+            neuron.IFNode(step_mode="s"), shard_dim, None, None
+        )
+        with pytest.raises(ValueError, match="is invalid for input"):
+            module(torch.ones(2, 4))
+
+    process_group = object()
+    monkeypatch.setattr(torch.distributed, "get_rank", lambda _group: 0)
+    monkeypatch.setattr(torch.distributed, "get_world_size", lambda _group: 2)
+    with pytest.raises(ValueError, match="logical_dim_size=3 must be divisible"):
+        make_tensor_shard_memory_module(
+            neuron.IFNode(step_mode="s"), -1, 3, process_group
+        )
+
+
+def test_make_tensor_shard_memory_module_preserves_memory_interface():
+    source = _ResetCountingMemoryModule()
+    module = make_tensor_shard_memory_module(
+        source,
+        shard_dim=-1,
+        logical_dim_size=3,
+        process_group=None,
+    )
+    module(torch.ones(2, 3, requires_grad=True))
+
+    assert list(source.named_memories()) == [("v", 0.0)]
+    assert module.get_reset_value("v") == 0.0
+    assert module.v.requires_grad
+
+    module.detach()
+    assert not module.v.requires_grad
+
+    functional.reset_net(module)
+    assert module.reset_calls == 1
+    assert module.v == 0.0
+
+
+def test_make_tensor_shard_memory_module_preserves_source_runtime_options():
+    source = neuron.IFNode(step_mode="m", backend="torch", store_v_seq=True)
+    module = make_tensor_shard_memory_module(source, -1, 4, None)
+
+    assert module.step_mode == "m"
+    assert module.backend == "torch"
+    assert module.store_v_seq is True
+
+
+def test_make_tensor_shard_memory_module_is_idempotent_and_serializable():
+    source = neuron.IFNode(step_mode="s")
+    module = make_tensor_shard_memory_module(source, -1, 4, None)
+
+    assert make_tensor_shard_memory_module(module, -1, 4, None) is module
+    assert not source._forward_pre_hooks
+
+    for restored in (copy.deepcopy(module), pickle.loads(pickle.dumps(module))):
+        assert restored(torch.ones(2, 4)).shape == (2, 4)
+        with pytest.raises(ValueError, match="Expected local shard size 4"):
+            restored(torch.ones(2, 3))
+
+
+def test_tensor_shard_validator_precedes_existing_hook_and_accepts_keyword_input():
+    events = []
+    source = neuron.IFNode(step_mode="s")
+    source.register_forward_pre_hook(lambda _module, _args: events.append("source"))
+    module = make_tensor_shard_memory_module(source, -1, 4, None)
+
+    assert module(x=torch.ones(2, 4)).shape == (2, 4)
+    assert events == ["source"]
+
+    events.clear()
+    with pytest.raises(ValueError, match="Expected local shard size 4"):
+        module(x=torch.ones(2, 3))
+    assert events == []
+
+    with pytest.raises(TypeError, match="first positional argument or the 'x'"):
+        module(input=torch.ones(2, 4))
+
+
+def test_tensor_shard_memory_module_keeps_source_state_dict_paths():
+    source = neuron.ParametricLIFNode(step_mode="s")
+    module = make_tensor_shard_memory_module(source, -1, 4, None)
+
+    assert tuple(module.state_dict()) == ("w",)
+    assert "inner" not in dict(module.named_modules())
+    module.load_state_dict(source.state_dict(), strict=True)
+
+
+def test_tensor_shard_memory_module_compiles_for_valid_input():
+    module = make_tensor_shard_memory_module(neuron.IFNode(step_mode="s"), -1, 4, None)
+    compiled = torch.compile(module, backend="eager", fullgraph=True)
+
+    assert compiled(torch.ones(2, 4)).shape == (2, 4)
 
 
 def test_channel_shard_conv2d_colwise_all_reduces_input_gradient(monkeypatch):
@@ -206,7 +327,9 @@ def test_auto_tensor_parallel_plan_and_forward_match_single_rank():
         result = materialize_dtensor_output(distributed_model(x))
 
         torch.testing.assert_close(reference, result)
-        assert isinstance(distributed_model.features[1], TensorShardMemoryModule)
+        assert type(distributed_model.features[1]) is type(baseline.features[1])
+        assert not hasattr(distributed_model.features[1], "inner")
+        assert _has_tensor_shard_input_validator(distributed_model.features[1])
 
         plan = auto_build_tensor_parallel_plan(
             candidate, tensor_parallel_roots=["features"]
@@ -245,9 +368,11 @@ def test_configure_snn_distributed_supports_experimental_conv_tp_on_real_snn():
             "ChannelShardConv2d"
             in type(distributed_model.features[0].proj_bn[-2]).__name__
         )
-        assert isinstance(distributed_model.features[0].neuron, TensorShardMemoryModule)
+        assert type(distributed_model.features[0].neuron) is type(
+            baseline.features[0].neuron
+        )
         assert (
-            distributed_model.features[0].neuron.inner.v.shape[1]
+            distributed_model.features[0].neuron.v.shape[1]
             == distributed_model.features[0].proj_bn[-2].out_channels
         )
 
@@ -355,8 +480,9 @@ def test_spikformer_head_tp_helper_single_rank():
         assert mesh.ndim == 1
         assert analysis.tensor_parallel_candidate_names == ("head",)
         assert isinstance(
-            distributed_model.patch_embed.stages[0].neuron, TensorShardMemoryModule
+            distributed_model.patch_embed.stages[0].neuron, base.MemoryModule
         )
+        assert not hasattr(distributed_model.patch_embed.stages[0].neuron, "inner")
         assert (
             "ChannelShardConv2d"
             in type(distributed_model.patch_embed.stages[0].conv_bn.block[0]).__name__
@@ -408,8 +534,9 @@ def test_spikformer_patch_stem_tp_helper_handles_patch_embed_root():
             in type(distributed_model.patch_embed.stages[0].conv_bn.block[0]).__name__
         )
         assert isinstance(
-            distributed_model.patch_embed.stages[0].neuron, TensorShardMemoryModule
+            distributed_model.patch_embed.stages[0].neuron, base.MemoryModule
         )
+        assert not hasattr(distributed_model.patch_embed.stages[0].neuron, "inner")
 
 
 def test_spikformer_patch_stem_tp_helper_handles_single_stage_root_colwise():

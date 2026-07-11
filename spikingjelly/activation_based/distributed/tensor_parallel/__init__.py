@@ -20,7 +20,7 @@ from .spikformer import (
     parallelize_spikformer_blocks,
     parallelize_spikformer_patch_stem,
 )
-from .state import TensorShardMemoryModule
+from .state import make_tensor_shard_memory_module
 
 __all__ = [
     "ChannelShardBatchNorm1d",
@@ -28,7 +28,7 @@ __all__ = [
     "ChannelShardConv1d",
     "ChannelShardConv2d",
     "TENSOR_PARALLEL_AVAILABLE",
-    "TensorShardMemoryModule",
+    "make_tensor_shard_memory_module",
     "auto_build_tensor_parallel_plan",
     "enable_tp_communication_debug",
     "get_tp_communication_debug_stats",

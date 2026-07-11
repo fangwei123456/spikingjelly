@@ -11,7 +11,7 @@ from spikingjelly.activation_based.distributed.tensor_parallel.channel import (
     ChannelShardConv2d,
 )
 from spikingjelly.activation_based.distributed.tensor_parallel.state import (
-    TensorShardMemoryModule,
+    make_tensor_shard_memory_module,
 )
 from spikingjelly.activation_based.distributed.tensor_parallel.utils import (
     _overwrite_sequential_children,
@@ -79,7 +79,7 @@ def _try_convert_spiking_self_attention(
     if converted is not None:
         attn.qkv_conv_bn = converted
         if isinstance(attn.qkv_lif, base.MemoryModule):
-            attn.qkv_lif = TensorShardMemoryModule(
+            attn.qkv_lif = make_tensor_shard_memory_module(
                 attn.qkv_lif,
                 shard_dim=2,
                 logical_dim_size=getattr(attn, "dim", None) * 3
@@ -88,7 +88,7 @@ def _try_convert_spiking_self_attention(
                 process_group=process_group,
             )
         if isinstance(attn.attn_lif, base.MemoryModule):
-            attn.attn_lif = TensorShardMemoryModule(
+            attn.attn_lif = make_tensor_shard_memory_module(
                 attn.attn_lif,
                 shard_dim=2,
                 logical_dim_size=None,
@@ -116,7 +116,7 @@ def _try_convert_spikformer_mlp(mlp: nn.Module, process_group) -> Optional[nn.Mo
                 conv = next(iter(mlp.fc1.children()))
                 if hasattr(conv, "out_channels"):
                     logical_dim = conv.out_channels
-                mlp.neuron1 = TensorShardMemoryModule(
+                mlp.neuron1 = make_tensor_shard_memory_module(
                     mlp.neuron1,
                     shard_dim=2,
                     logical_dim_size=logical_dim,
@@ -238,7 +238,7 @@ def _try_convert_spikformer_stem_block(
     if mode == "colwise":
         converted.append(ChannelShardBatchNorm2d(bn, process_group))
         if isinstance(block.neuron, base.MemoryModule):
-            block.neuron = TensorShardMemoryModule(
+            block.neuron = make_tensor_shard_memory_module(
                 block.neuron,
                 shard_dim=2,
                 logical_dim_size=conv.out_channels,

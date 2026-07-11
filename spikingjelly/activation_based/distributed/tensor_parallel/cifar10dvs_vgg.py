@@ -9,7 +9,7 @@ from spikingjelly.activation_based.distributed.tensor_parallel.channel import (
     ChannelShardConv2d,
 )
 from spikingjelly.activation_based.distributed.tensor_parallel.state import (
-    TensorShardMemoryModule,
+    make_tensor_shard_memory_module,
 )
 from spikingjelly.activation_based.distributed.tensor_parallel.utils import (
     _overwrite_sequential_children,
@@ -43,7 +43,7 @@ def _try_convert_vgg_like_block(
     if mode == "colwise":
         converted.append(ChannelShardBatchNorm2d(bn, process_group))
         if isinstance(block.neuron, base.MemoryModule):
-            block.neuron = TensorShardMemoryModule(
+            block.neuron = make_tensor_shard_memory_module(
                 block.neuron,
                 shard_dim=2,
                 logical_dim_size=conv.out_channels,

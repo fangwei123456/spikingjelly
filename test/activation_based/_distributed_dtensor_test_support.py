@@ -28,7 +28,7 @@ from spikingjelly.activation_based.distributed import (
     SNNDistributedTopology,
     TENSOR_PARALLEL_AVAILABLE,
     ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE,
-    TensorShardMemoryModule,
+    make_tensor_shard_memory_module,
     analyze,
     apply,
     apply_pipeline_stage_memopt,

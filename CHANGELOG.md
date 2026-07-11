@@ -54,7 +54,14 @@ Module: `spikingjelly.activation_based.triton_kernel.neuron_kernel`.
 
 ### Breaking Changes and Notices
 
-- None.
+#### Distributed Training
+
+Module: `spikingjelly.activation_based.distributed`.
+
+- Replaced `TensorShardMemoryModule` with the
+  `make_tensor_shard_memory_module()` factory. Tensor-parallel stateful modules
+  now keep their concrete module type and original state-dict paths instead of
+  adding an `inner` module namespace.
 
 ## 2.0.0.dev0 - 2026-07-09
 

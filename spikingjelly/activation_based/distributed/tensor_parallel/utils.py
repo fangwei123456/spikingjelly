@@ -4,7 +4,8 @@ import torch.nn as nn
 
 from spikingjelly.activation_based import base
 from spikingjelly.activation_based.distributed.tensor_parallel.state import (
-    TensorShardMemoryModule,
+    _has_tensor_shard_input_validator,
+    make_tensor_shard_memory_module,
 )
 
 
@@ -35,10 +36,12 @@ def _wrap_tensor_shard_memory_module(
     shard_dim: int,
     logical_dim_size: Optional[int] = None,
 ) -> Optional[nn.Module]:
-    if isinstance(module, TensorShardMemoryModule):
+    if isinstance(module, base.MemoryModule) and _has_tensor_shard_input_validator(
+        module
+    ):
         return module
     if isinstance(module, base.MemoryModule):
-        return TensorShardMemoryModule(
+        return make_tensor_shard_memory_module(
             module,
             shard_dim=shard_dim,
             logical_dim_size=logical_dim_size,
