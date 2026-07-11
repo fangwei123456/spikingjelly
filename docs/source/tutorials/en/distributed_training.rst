@@ -357,38 +357,67 @@ Pipeline Parallelism
 
 The pipeline runtime supports cost-aware stage balancing, automatic microbatch selection, ``gpipe`` / ``1f1b`` / ``interleaved`` / ``zero_bubble`` schedules, optional virtual stages, manual ``pp_layout`` overrides, and stage-local neuron-state reset between microbatches.
 
-``CIFAR10DVSVGG``, ``backend='triton'``, 2 GPUs, per-rank ``batch_size=16``, ``T=4``, ``memopt_level=0``:
+``CIFAR10DVSVGG``, ``backend='triton'``, single-GPU baseline plus 2-GPU PP, ``batch_size=128``, ``T=10``, ``memopt_level=0``. The PP rows use ``data_replicas=1``, so the global batch size remains 128.
 
 .. list-table::
     :header-rows: 1
 
-    * - Schedule
+    * - Mode / schedule
+      - #GPUs
       - ``pp_virtual_stages``
+      - ``pp_microbatches``
+      - microbatch size
       - ``step_ms``
       - ``global_samples/s``
       - ``peak_allocated_mb``
-    * - ``gpipe``
+      - Notes
+    * - ``none``
       - 1
-      - 64.90
-      - 246.52
-      - 803.91
-    * - ``1f1b``
+      - -
+      - -
+      - -
+      - 298.36
+      - 429.01
+      - 15834.60
+      - single-GPU baseline
+    * - ``pp`` / ``gpipe``
+      - 2
       - 1
-      - 64.72
-      - 247.22
-      - 483.33
-    * - ``interleaved``
+      - 8
+      - 16
+      - 329.13
+      - 388.91
+      - 9782.20
+      - best PP throughput
+    * - ``pp`` / ``1f1b``
       - 2
-      - 91.63
-      - 174.62
-      - 491.17
-    * - ``zero_bubble``
+      - 1
+      - 8
+      - 16
+      - 382.29
+      - 334.82
+      - 4973.04
+      - best PP memory
+    * - ``pp`` / ``interleaved``
       - 2
-      - 122.44
-      - 130.67
-      - 485.89
+      - 2
+      - 16
+      - 8
+      - 495.61
+      - 258.27
+      - 6272.98
+      - virtual-stage schedule
+    * - ``pp`` / ``zero_bubble``
+      - 2
+      - 2
+      - 16
+      - 8
+      - 492.13
+      - 260.09
+      - 6396.97
+      - virtual-stage zero-bubble schedule
 
-In this run, ``1f1b`` is marginally the best PP schedule for throughput and also uses the least peak memory. ``gpipe`` has nearly identical throughput but higher peak memory. ``interleaved`` and ``zero_bubble`` run successfully, but they are slower for this workload and batch size.
+With this larger batch size, PP still reduces peak memory substantially, but it does not beat the single-GPU throughput baseline on this small CIFAR10-DVS VGG workload. ``gpipe`` is the best PP schedule for throughput here, reaching about ``0.91x`` of the baseline throughput while reducing peak memory to about ``62%`` of the baseline. ``1f1b`` gives the lowest PP memory, about ``31%`` of the baseline, at about ``0.78x`` throughput. ``interleaved`` and ``zero_bubble`` run successfully, but their extra virtual-stage scheduling overhead makes them slower here.
 
 Spikformer Strategy Benchmark
 +++++++++++++++++++++++++++++
@@ -462,7 +491,7 @@ If you already know your main objective, the following rules of thumb work well:
 * **Pipeline experiments or stage-level memory pressure**:
 
   * use ``pp`` through the dedicated pipeline runtime;
-  * in the current CIFAR10DVSVGG PP benchmark, ``1f1b`` is the best default because it slightly leads throughput and uses the least peak memory.
+  * in the current CIFAR10DVSVGG PP benchmark, ``gpipe`` is the best PP throughput default while ``1f1b`` is the best PP memory default; PP should still be treated as a memory/capacity path rather than a throughput win over the single-GPU baseline.
 
 * **Safest and simplest distributed entry point**:
 

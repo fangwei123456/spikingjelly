@@ -107,6 +107,7 @@ from spikingjelly.activation_based.distributed.tensor_parallel.debug import (
     reset_tp_communication_debug_stats,
 )
 from spikingjelly.activation_based.distributed.tensor_parallel.linear import (
+    _replace_module_by_name,
     auto_build_tensor_parallel_plan,
     parallelize_snn_module,
     wrap_tp_memory_modules,

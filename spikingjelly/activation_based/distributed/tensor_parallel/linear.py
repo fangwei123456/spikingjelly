@@ -87,7 +87,7 @@ def _is_colwise_local_style(style: Union[str, "ParallelStyle"]) -> bool:
 
 def _replace_module_by_name(module: nn.Module, module_name: str, new_module: nn.Module):
     parent_name, _, child_name = module_name.rpartition(".")
-    parent = module if not parent_name else dict(module.named_modules())[parent_name]
+    parent = module if not parent_name else module.get_submodule(parent_name)
     if isinstance(parent, (nn.Sequential, nn.ModuleList)) and child_name.isdigit():
         parent[int(child_name)] = new_module
     else:

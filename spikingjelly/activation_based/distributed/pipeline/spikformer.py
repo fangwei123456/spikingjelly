@@ -38,7 +38,7 @@ class _SpikformerPipelineStage(nn.Module):
                     raise RuntimeError(
                         "Spikformer pipeline stage requires T for 4D inputs."
                     )
-                x = x.unsqueeze(0).repeat(self.T, 1, 1, 1, 1)
+                x = x.unsqueeze(0).expand(self.T, -1, -1, -1, -1)
             elif x.ndim != 5:
                 raise ValueError(
                     f"expected 4D [N, C, H, W] or 5D [T, N, C, H, W] input, but got {tuple(x.shape)}"
@@ -79,7 +79,7 @@ def _build_spikformer_pipeline_module(
             raise RuntimeError(
                 "Spikformer pipeline stage requires module.T to be set when a 4D example input is provided."
             )
-        current = current.unsqueeze(0).repeat(int(stage_T), 1, 1, 1, 1)
+        current = current.unsqueeze(0).expand(int(stage_T), -1, -1, -1, -1)
     elif current.ndim != 5:
         raise ValueError(
             f"expected 4D [N, C, H, W] or 5D [T, N, C, H, W] example input, but got {tuple(current.shape)}"

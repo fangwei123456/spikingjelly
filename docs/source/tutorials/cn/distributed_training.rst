@@ -315,38 +315,67 @@ Pipeline Parallelism
 
 pipeline runtime 支持基于 cost 的 stage balance、自动 microbatch 选择、``gpipe`` / ``1f1b`` / ``interleaved`` / ``zero_bubble`` 调度、可选 virtual stages、手工 ``pp_layout`` 覆盖，以及 microbatch 之间的 stage-local 神经元状态 reset。
 
-``CIFAR10DVSVGG``，``backend='triton'``，2 张 GPU，每 rank ``batch_size=16``，``T=4``，``memopt_level=0``：
+``CIFAR10DVSVGG``，``backend='triton'``，单卡基线加 2-GPU PP，``batch_size=128``，``T=10``，``memopt_level=0``。PP 行使用 ``data_replicas=1``，因此全局 batch size 仍为 128。
 
 .. list-table::
     :header-rows: 1
 
-    * - 调度
+    * - 模式 / 调度
+      - GPU 数
       - ``pp_virtual_stages``
+      - ``pp_microbatches``
+      - microbatch size
       - ``step_ms``
       - ``global_samples/s``
       - ``peak_allocated_mb``
-    * - ``gpipe``
+      - 备注
+    * - ``none``
       - 1
-      - 64.90
-      - 246.52
-      - 803.91
-    * - ``1f1b``
+      - -
+      - -
+      - -
+      - 298.36
+      - 429.01
+      - 15834.60
+      - 单卡基线
+    * - ``pp`` / ``gpipe``
+      - 2
       - 1
-      - 64.72
-      - 247.22
-      - 483.33
-    * - ``interleaved``
+      - 8
+      - 16
+      - 329.13
+      - 388.91
+      - 9782.20
+      - PP 中吞吐最佳
+    * - ``pp`` / ``1f1b``
       - 2
-      - 91.63
-      - 174.62
-      - 491.17
-    * - ``zero_bubble``
+      - 1
+      - 8
+      - 16
+      - 382.29
+      - 334.82
+      - 4973.04
+      - PP 中显存最佳
+    * - ``pp`` / ``interleaved``
       - 2
-      - 122.44
-      - 130.67
-      - 485.89
+      - 2
+      - 16
+      - 8
+      - 495.61
+      - 258.27
+      - 6272.98
+      - virtual-stage 调度
+    * - ``pp`` / ``zero_bubble``
+      - 2
+      - 2
+      - 16
+      - 8
+      - 492.13
+      - 260.09
+      - 6396.97
+      - virtual-stage zero-bubble 调度
 
-这组结果里，``1f1b`` 的吞吐略高，同时峰值显存最低。``gpipe`` 的吞吐几乎相同，但显存更高。``interleaved`` 和 ``zero_bubble`` 可以正常运行，但在这个 workload 和 batch size 下更慢。
+在这个更大的 batch size 下，PP 仍然显著降低峰值显存，但在这个较小的 CIFAR10-DVS VGG workload 上没有超过单卡基线吞吐。``gpipe`` 是这里吞吐最高的 PP 调度：吞吐约为单卡基线的 ``0.91x``，峰值显存约为单卡基线的 ``62%``。``1f1b`` 的 PP 显存最低，约为单卡基线的 ``31%``，吞吐约为 ``0.78x``。``interleaved`` 和 ``zero_bubble`` 可以正常运行，但额外的 virtual-stage 调度开销让它们在这里更慢。
 
 Spikformer 策略 benchmark
 +++++++++++++++++++++++++
@@ -420,7 +449,7 @@ Spikformer 策略 benchmark
 * **pipeline 实验或 stage 级显存压力**：
 
   * 通过专用 pipeline runtime 使用 ``pp``；
-  * 当前 CIFAR10DVSVGG PP benchmark 中，``1f1b`` 是更好的默认调度：吞吐略高，同时峰值显存最低。
+  * 当前 CIFAR10DVSVGG PP benchmark 中，``gpipe`` 是吞吐优先的 PP 默认调度，``1f1b`` 是显存优先的 PP 默认调度；PP 更应被视为显存/容量路径，而不是相对单卡基线的吞吐提升路径。
 
 * **只想要最省心、最稳妥的分布式训练入口**：
 

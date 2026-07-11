@@ -425,6 +425,15 @@ def test_auto_tensor_parallel_plan_and_forward_match_single_rank():
         assert set(plan.keys()) == {"features.0", "features.2"}
 
 
+def test_replace_module_by_name_replaces_nested_indexed_module():
+    model = nn.Sequential(nn.ModuleList([nn.Identity(), nn.Linear(2, 2)]))
+    replacement = nn.Linear(2, 3)
+
+    _replace_module_by_name(model, "0.1", replacement)
+
+    assert model[0][1] is replacement
+
+
 def test_wrap_tp_memory_modules_skips_stateless_layers_before_memory_module():
     module = nn.Sequential(
         nn.Linear(4, 6),
