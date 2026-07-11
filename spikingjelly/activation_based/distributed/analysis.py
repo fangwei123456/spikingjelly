@@ -40,6 +40,25 @@ class SNNDistributedAnalysis:
     tensor_parallel_roots: Optional[Tuple[str, ...]] = None
 
 
+SNNDistributedAnalysis.__init__.__doc__ = r"""Initialize distributed capability analysis results.
+
+.. admonition:: Chinese
+
+    初始化 SNN 分布式能力分析结果，包括状态模块、张量并行候选模块和提示信息。
+
+:param memory_module_names: Names of stateful memory modules.
+:type memory_module_names: tuple[str, ...]
+:param tensor_parallel_candidate_names: Names of modules that can use tensor parallelism.
+:type tensor_parallel_candidate_names: tuple[str, ...]
+:param unsupported_tensor_parallel_names: Names seen under tensor-parallel roots but not supported.
+:type unsupported_tensor_parallel_names: tuple[str, ...]
+:param notes: Human-readable analysis notes.
+:type notes: tuple[str, ...]
+:param tensor_parallel_roots: Roots used by the analysis.
+:type tensor_parallel_roots: tuple[str, ...] or None
+"""
+
+
 def _iter_named_modules_under_roots(
     module: nn.Module,
     roots: Optional[Sequence[str]] = None,

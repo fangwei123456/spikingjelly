@@ -11,6 +11,19 @@ def recommend_pipeline_memopt_stages(
     stage_costs: Sequence[float],
     stage_budget_ratio: float = 0.5,
 ) -> Tuple[int, ...]:
+    """Select pipeline stages that should receive memory optimization.
+
+    .. admonition:: Chinese
+
+        按 stage 代价从高到低选择需要应用内存优化的 pipeline stage。
+
+    :param stage_costs: Per-stage cost estimates.
+    :type stage_costs: sequence[float]
+    :param stage_budget_ratio: Fraction of stages to optimize, in ``(0, 1]``.
+    :type stage_budget_ratio: float
+    :return: Sorted logical stage indices selected for optimization.
+    :rtype: tuple[int, ...]
+    """
     if not stage_costs:
         return ()
     if stage_budget_ratio <= 0.0 or stage_budget_ratio > 1.0:
@@ -36,6 +49,26 @@ def apply_pipeline_stage_memopt(
     stage_budget_ratio: float = 0.5,
     use_plan_cache: bool = True,
 ) -> Tuple[SNNPipelineRuntime, float, bool]:
+    """Apply memory optimization to selected local pipeline stages.
+
+    .. admonition:: Chinese
+
+        根据 stage 代价选择本 rank 持有的 pipeline stage，并对其内部模块应用
+        SpikingJelly 内存优化。
+
+    :param runtime: Pipeline runtime returned by a pipeline configurator.
+    :type runtime: SNNPipelineRuntime
+    :param memopt_level: Memory optimization level. Values ``<= 0`` disable it.
+    :type memopt_level: int
+    :param compress_x: Whether to enable activation compression.
+    :type compress_x: bool
+    :param stage_budget_ratio: Fraction of stages to optimize.
+    :type stage_budget_ratio: float
+    :param use_plan_cache: Whether to use memopt plan cache when supported.
+    :type use_plan_cache: bool
+    :return: ``(runtime, optimize_ms, applied)``.
+    :rtype: tuple[SNNPipelineRuntime, float, bool]
+    """
     if memopt_level <= 0:
         runtime.memopt_selected_stage_indices = ()
         return runtime, 0.0, False

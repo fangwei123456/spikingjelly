@@ -18,7 +18,9 @@ from spikingjelly.activation_based.distributed import (
     recommended_pipeline_microbatches,
     resolve_tensor_parallel_group_size,
 )
-from spikingjelly.activation_based.distributed.config import EagerParallelPolicy
+from spikingjelly.activation_based.distributed.adapters import (
+    build_cifar10dvs_vgg_eager_policy,
+)
 from spikingjelly.activation_based.distributed.data_parallel import (
     materialize_dtensor_output,
 )
@@ -283,14 +285,7 @@ def build_model(args, runtime: DistributedRuntime):
         return pipeline_runtime, None, None
 
     mesh_shape = tuple(args.mesh_shape) if args.mesh_shape else None
-    eager_policy = EagerParallelPolicy(
-        linear_tensor_parallel_roots=("classifier",),
-        conv_tensor_parallel_roots=("features",),
-        fsdp_shard_roots=("features", "classifier"),
-        fsdp2_tp_shard_roots=("features",),
-        fsdp_shard_module_root=True,
-        fsdp2_tp_shard_module_root=False,
-    )
+    eager_policy = build_cifar10dvs_vgg_eager_policy()
 
     if args.distributed_mode == "dp":
         config = build_eager_config(

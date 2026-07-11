@@ -38,6 +38,22 @@ def analyze(
     model_family: Optional[str] = None,
     roots: Optional[Sequence[str]] = None,
 ) -> SNNDistributedAnalysis:
+    """Analyze an SNN model for distributed execution.
+
+    .. admonition:: Chinese
+
+        分析 SNN 模型中可用于分布式执行的状态模块、张量并行候选模块和
+        不支持项。
+
+    :param model: Model to inspect.
+    :type model: torch.nn.Module
+    :param model_family: Optional model-family hint reserved for API symmetry.
+    :type model_family: str or None
+    :param roots: Optional module roots that constrain tensor-parallel analysis.
+    :type roots: sequence[str] or None
+    :return: Structured distributed capability analysis.
+    :rtype: SNNDistributedAnalysis
+    """
     return analyze_snn_distributed_capability(model, tensor_parallel_roots=roots)
 
 
@@ -52,6 +68,31 @@ def plan(
     mode: Optional[str] = None,
     features: Optional[DistributedFeatureSet] = None,
 ) -> SNNDistributedPlan:
+    """Build an eager distributed execution plan from analysis results.
+
+    .. admonition:: Chinese
+
+        根据模型分析结果、目标、拓扑和后端选择 SNN eager 分布式执行策略。
+
+    :param analysis: Capability analysis returned by :func:`analyze`.
+    :type analysis: SNNDistributedAnalysis
+    :param objective: Optimization objective, for example ``"speed"``.
+    :type objective: str
+    :param topology: Logical topology mapping or topology object.
+    :type topology: Mapping[str, int] or SNNDistributedTopology
+    :param backend: Execution backend name.
+    :type backend: str
+    :param batch_size: Per-step batch size used by the recommender.
+    :type batch_size: int
+    :param model_family: Optional model-family hint.
+    :type model_family: str or None
+    :param mode: Optional explicit distributed mode override.
+    :type mode: str or None
+    :param features: Optional feature gates for experimental or optional behavior.
+    :type features: DistributedFeatureSet or None
+    :return: Distributed execution plan.
+    :rtype: SNNDistributedPlan
+    """
     objective = objective.lower()
     if objective not in SNN_DISTRIBUTED_PREFERENCES:
         raise ValueError(
@@ -144,6 +185,23 @@ def apply(
     device_type: str = "cuda",
     device_mesh=None,
 ) -> SNNDistributedRuntime:
+    """Apply an eager distributed plan to a model.
+
+    .. admonition:: Chinese
+
+        将 :class:`SNNDistributedPlan` 应用到模型并返回包含已包装模型、mesh 和
+        分析结果的运行时对象。
+
+    :param model: Model to configure. DDP-style ``.module`` wrappers are unwrapped.
+    :type model: torch.nn.Module
+    :param plan: Plan returned by :func:`plan`.
+    :type plan: SNNDistributedPlan
+    :param device_type: Device type used when constructing a mesh.
+    :type device_type: str
+    :param device_mesh: Optional pre-built PyTorch ``DeviceMesh``.
+    :return: Runtime wrapper for the configured model.
+    :rtype: SNNDistributedRuntime
+    """
     wrapped = getattr(model, "module", None)
     if isinstance(wrapped, nn.Module):
         model = wrapped

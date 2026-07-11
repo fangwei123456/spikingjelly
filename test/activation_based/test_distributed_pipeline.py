@@ -1,20 +1,12 @@
 # ruff: noqa: F401,F403,F405
-from test.activation_based.test_distributed_dtensor import *
-from test.activation_based.test_distributed_dtensor import (
-    _ToyNonCallableReset,
-    _ToyResetCounter,
-    _load_train_distributed_module,
-    _reset_net,
-    _train_args,
-    _train_runtime,
-)
+from test.activation_based._distributed_dtensor_test_support import *
 
 
 def test_cifar10dvs_vgg_pipeline_module_matches_baseline():
     torch.manual_seed(0)
     baseline = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
     x = torch.randn(1, 2, 2, 48, 48)
-    pipeline_module = distributed_dtensor._build_cifar10dvs_vgg_pipeline_module(
+    pipeline_module = _build_cifar10dvs_vgg_pipeline_module(
         copy.deepcopy(baseline),
         num_logical_stages=2,
         example_input=x,
@@ -30,7 +22,7 @@ def test_spikformer_pipeline_module_matches_baseline():
         T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
     ).eval()
     x = torch.randn(2, 3, 64, 64)
-    pipeline_module = distributed_dtensor._build_spikformer_pipeline_module(
+    pipeline_module = _build_spikformer_pipeline_module(
         copy.deepcopy(baseline),
         num_logical_stages=3,
         example_input=x,
@@ -45,7 +37,7 @@ def test_cifar10dvs_vgg_pipeline_runtime_supports_interleaved_single_rank():
     with single_rank_process_group():
         model = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
         x = torch.randn(2, 2, 2, 48, 48)
-        runtime = distributed_dtensor.configure_cifar10dvs_vgg_pipeline(
+        runtime = configure_cifar10dvs_vgg_pipeline(
             copy.deepcopy(model),
             example_input=x,
             device=torch.device("cpu"),
@@ -63,7 +55,7 @@ def test_spikformer_pipeline_runtime_supports_zero_bubble_single_rank():
             T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
         ).eval()
         x = torch.randn(2, 3, 64, 64)
-        runtime = distributed_dtensor.configure_spikformer_pipeline(
+        runtime = configure_spikformer_pipeline(
             copy.deepcopy(model),
             example_input=x,
             device=torch.device("cpu"),
@@ -85,13 +77,13 @@ def test_recommend_pipeline_memopt_stages_prefers_heavy_stages():
 def test_apply_pipeline_stage_memopt_only_wraps_selected_heavy_stage():
     torch.manual_seed(0)
     model = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
-    stage = distributed_dtensor._CIFAR10DVSVGGPipelineStage(
+    stage = _CIFAR10DVSVGGPipelineStage(
         feature_modules=[copy.deepcopy(model.features[0])],
         classifier=None,
         transpose_input=True,
     ).eval()
-    wrapped_stage = distributed_dtensor._MicrobatchResetStage(stage)
-    runtime = distributed_dtensor.SNNPipelineRuntime(
+    wrapped_stage = _MicrobatchResetStage(stage)
+    runtime = SNNPipelineRuntime(
         schedule=None,
         stage_module=wrapped_stage,
         stage_modules=(wrapped_stage,),
@@ -120,13 +112,13 @@ def test_apply_pipeline_stage_memopt_only_wraps_selected_heavy_stage():
 def test_apply_pipeline_stage_memopt_supports_legacy_memopt_signature(monkeypatch):
     torch.manual_seed(0)
     model = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
-    stage = distributed_dtensor._CIFAR10DVSVGGPipelineStage(
+    stage = _CIFAR10DVSVGGPipelineStage(
         feature_modules=[copy.deepcopy(model.features[0])],
         classifier=None,
         transpose_input=True,
     ).eval()
-    wrapped_stage = distributed_dtensor._MicrobatchResetStage(stage)
-    runtime = distributed_dtensor.SNNPipelineRuntime(
+    wrapped_stage = _MicrobatchResetStage(stage)
+    runtime = SNNPipelineRuntime(
         schedule=None,
         stage_module=wrapped_stage,
         stage_modules=(wrapped_stage,),
@@ -167,34 +159,34 @@ def test_apply_pipeline_stage_memopt_supports_legacy_memopt_signature(monkeypatc
     assert calls["count"] == 1
 
 def test_parse_pipeline_layout_validates_counts():
-    counts = distributed_dtensor.parse_pipeline_layout("1|2|3", 3, 6)
+    counts = parse_pipeline_layout("1|2|3", 3, 6)
     assert counts == (1, 2, 3)
     with pytest.raises(ValueError, match="requires 6 units"):
-        distributed_dtensor.parse_pipeline_layout("1|2|2", 3, 6)
+        parse_pipeline_layout("1|2|2", 3, 6)
 
 def test_resolve_pipeline_schedule_kind_rules():
     assert (
-        distributed_dtensor.resolve_pipeline_schedule_kind("auto", 1, False) == "1f1b"
+        resolve_pipeline_schedule_kind("auto", 1, False) == "1f1b"
     )
     assert (
-        distributed_dtensor.resolve_pipeline_schedule_kind("auto", 2, False)
+        resolve_pipeline_schedule_kind("auto", 2, False)
         == "interleaved"
     )
     assert (
-        distributed_dtensor.resolve_pipeline_schedule_kind("auto", 2, True)
+        resolve_pipeline_schedule_kind("auto", 2, True)
         == "zero_bubble"
     )
     with pytest.raises(ValueError, match="requires pp_virtual_stages >= 2"):
-        distributed_dtensor.resolve_pipeline_schedule_kind("interleaved", 1, False)
+        resolve_pipeline_schedule_kind("interleaved", 1, False)
     with pytest.raises(ValueError, match="does not support pp_virtual_stages=2"):
-        distributed_dtensor.resolve_pipeline_schedule_kind("gpipe", 2, False)
+        resolve_pipeline_schedule_kind("gpipe", 2, False)
     with pytest.raises(ValueError, match="does not support pp_virtual_stages=2"):
-        distributed_dtensor.resolve_pipeline_schedule_kind("1f1b", 2, False)
+        resolve_pipeline_schedule_kind("1f1b", 2, False)
 
 def test_make_pipeline_outputs_contiguous_clones_views():
     base = torch.randn(2, 3, 4)
     view = base.transpose(0, 1)
-    out = distributed_dtensor._make_pipeline_outputs_contiguous(view)
+    out = _make_pipeline_outputs_contiguous(view)
     torch.testing.assert_close(out, view)
     assert out.data_ptr() != view.data_ptr()
 
@@ -202,7 +194,7 @@ def test_cifar_pipeline_transposes_on_first_non_empty_stage():
     torch.manual_seed(0)
     baseline = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
     example = torch.randn(1, 2, 2, 48, 48)
-    pipeline = distributed_dtensor._build_cifar10dvs_vgg_pipeline_module(
+    pipeline = _build_cifar10dvs_vgg_pipeline_module(
         copy.deepcopy(baseline),
         num_logical_stages=2,
         example_input=example,
@@ -226,7 +218,7 @@ def test_spikformer_pipeline_attaches_patch_embed_to_first_non_empty_stage():
         backend="torch",
     ).eval()
     example = torch.randn(1, 3, 64, 64)
-    pipeline = distributed_dtensor._build_spikformer_pipeline_module(
+    pipeline = _build_spikformer_pipeline_module(
         copy.deepcopy(baseline),
         num_logical_stages=2,
         example_input=example,

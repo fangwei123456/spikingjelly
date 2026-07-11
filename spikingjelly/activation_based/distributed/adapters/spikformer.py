@@ -9,6 +9,33 @@ from ..runtime import SNNDistributedRuntime
 from .base import build_distributed_runtime
 
 
+def build_spikformer_eager_policy(model: nn.Module) -> EagerParallelPolicy:
+    """Build the eager parallel policy for Spikformer models.
+
+    .. admonition:: Chinese
+
+        根据 Spikformer block 数量构造 eager 分布式路径中复用的并行策略。
+
+    :param model: Spikformer-like model with optional ``blocks`` attribute.
+    :type model: torch.nn.Module
+    :return: Eager distributed policy for the model family.
+    :rtype: EagerParallelPolicy
+    """
+    num_blocks = len(getattr(model, "blocks", ()))
+    fsdp2_tp_shard_roots = tuple(
+        ["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)]
+    )
+    return EagerParallelPolicy(
+        linear_tensor_parallel_roots=("head",),
+        spikformer_tensor_parallel_roots=("blocks",),
+        spikformer_patch_stem_tensor_parallel_roots=("patch_embed",),
+        fsdp_shard_roots=fsdp2_tp_shard_roots + ("head",),
+        fsdp2_tp_shard_roots=fsdp2_tp_shard_roots,
+        fsdp_shard_module_root=True,
+        fsdp2_tp_shard_module_root=False,
+    )
+
+
 class SpikformerAdapter:
     name = "spikformer"
 
@@ -32,19 +59,7 @@ class SpikformerAdapter:
             enable_spikformer_tp
             and plan.experimental_features.allow_experimental_spikformer_tp
         )
-        num_blocks = len(getattr(model, "blocks", ()))
-        fsdp2_tp_shard_roots = tuple(
-            ["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)]
-        )
-        policy = EagerParallelPolicy(
-            linear_tensor_parallel_roots=("head",),
-            spikformer_tensor_parallel_roots=("blocks",),
-            spikformer_patch_stem_tensor_parallel_roots=("patch_embed",),
-            fsdp_shard_roots=fsdp2_tp_shard_roots + ("head",),
-            fsdp2_tp_shard_roots=fsdp2_tp_shard_roots,
-            fsdp_shard_module_root=True,
-            fsdp2_tp_shard_module_root=False,
-        )
+        policy = build_spikformer_eager_policy(model)
         return build_distributed_runtime(
             model,
             plan,

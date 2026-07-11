@@ -29,7 +29,10 @@ from spikingjelly.activation_based.distributed import (
     reset_tp_communication_debug_stats,
     resolve_data_parallel_partition,
 )
-from spikingjelly.activation_based.distributed.config import EagerParallelPolicy
+from spikingjelly.activation_based.distributed.adapters import (
+    build_cifar10dvs_vgg_eager_policy,
+    build_spikformer_eager_policy,
+)
 from spikingjelly.activation_based.distributed.execution import (
     build_eager_config,
     configure_snn_distributed,
@@ -686,30 +689,10 @@ def _make_synthetic_batch(
     )
 
 
-def _eager_policy_for_model(model_name: str, model) -> EagerParallelPolicy:
+def _eager_policy_for_model(model_name: str, model):
     if model_name == "cifar10dvs_vgg":
-        return EagerParallelPolicy(
-            linear_tensor_parallel_roots=("classifier",),
-            conv_tensor_parallel_roots=("features",),
-            fsdp_shard_roots=("features", "classifier"),
-            fsdp2_tp_shard_roots=("features",),
-            fsdp_shard_module_root=True,
-            fsdp2_tp_shard_module_root=False,
-        )
-
-    num_blocks = len(getattr(model, "blocks", ()))
-    fsdp2_tp_shard_roots = tuple(
-        ["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)]
-    )
-    return EagerParallelPolicy(
-        linear_tensor_parallel_roots=("head",),
-        spikformer_tensor_parallel_roots=("blocks",),
-        spikformer_patch_stem_tensor_parallel_roots=("patch_embed",),
-        fsdp_shard_roots=fsdp2_tp_shard_roots + ("head",),
-        fsdp2_tp_shard_roots=fsdp2_tp_shard_roots,
-        fsdp_shard_module_root=True,
-        fsdp2_tp_shard_module_root=False,
-    )
+        return build_cifar10dvs_vgg_eager_policy()
+    return build_spikformer_eager_policy(model)
 
 
 def _benchmark_step_eager(

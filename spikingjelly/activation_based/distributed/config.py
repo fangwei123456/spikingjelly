@@ -55,6 +55,30 @@ class SNNDistributedConfig:
     fsdp_output_dtype: Optional[torch.dtype] = None
 
 
+SNNDistributedConfig.__init__.__doc__ = r"""Initialize SNN distributed training configuration.
+
+.. admonition:: Chinese
+
+    初始化 SNN 分布式训练配置，包括 mesh、数据并行、张量并行和 FSDP2 设置。
+
+:param device_type: Device type used by distributed mesh construction.
+:type device_type: str
+:param mesh_shape: Optional logical mesh shape.
+:type mesh_shape: tuple[int, ...] or None
+:param device_mesh: Optional pre-built device mesh.
+:param tp_mesh_dim: Tensor-parallel mesh dimension.
+:type tp_mesh_dim: int
+:param dp_mesh_dim: Data-parallel mesh dimension.
+:type dp_mesh_dim: int or None
+:param enable_data_parallel: Whether to wrap the model with data parallelism.
+:type enable_data_parallel: bool
+:param enable_fsdp2: Whether to apply FSDP2 sharding.
+:type enable_fsdp2: bool
+:param tensor_parallel_roots: Optional roots for linear tensor parallelism.
+:type tensor_parallel_roots: sequence[str] or None
+"""
+
+
 @dataclass(frozen=True)
 class EagerParallelPolicy:
     linear_tensor_parallel_roots: Tuple[str, ...] = ()

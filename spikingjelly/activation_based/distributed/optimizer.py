@@ -25,6 +25,28 @@ def build_snn_optimizer(
     optimizer_cls=torch.optim.Adam,
     **optimizer_kwargs,
 ):
+    """Build an optimizer for an SNN distributed training mode.
+
+    .. admonition:: Chinese
+
+        为 SNN 分布式训练构造优化器，并在纯数据并行模式下可选启用
+        ``ZeroRedundancyOptimizer``。
+
+    :param module: Model whose parameters are optimized.
+    :type module: torch.nn.Module
+    :param mode: Distributed mode, such as ``"dp"``.
+    :type mode: str
+    :param lr: Learning rate.
+    :type lr: float
+    :param weight_decay: Weight decay.
+    :type weight_decay: float
+    :param optimizer_sharding: ``"none"`` or ``"zero"``.
+    :type optimizer_sharding: str
+    :param foreach: Optional foreach flag passed to the optimizer.
+    :type foreach: bool or None
+    :param optimizer_cls: Optimizer class to instantiate.
+    :return: Optimizer instance.
+    """
     if optimizer_sharding not in ("none", "zero"):
         raise ValueError(
             f"Unsupported optimizer_sharding='{optimizer_sharding}'. Expected 'none' or 'zero'."

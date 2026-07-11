@@ -88,6 +88,35 @@ class SNNPipelineRuntime:
         )
 
 
+SNNPipelineRuntime.__init__.__doc__ = r"""Initialize an SNN pipeline runtime.
+
+.. admonition:: Chinese
+
+    初始化 SNN 流水线并行运行时，记录本 rank 的 stage、调度器、microbatch 和
+    stage 代价信息。
+
+:param schedule: PyTorch pipeline schedule object.
+:param stage_module: Local stage module used by this rank.
+:type stage_module: torch.nn.Module
+:param stage_modules: Local stage modules held by this rank.
+:type stage_modules: tuple[torch.nn.Module, ...]
+:param local_stage_indices: Logical stage indices held locally.
+:type local_stage_indices: tuple[int, ...]
+:param stage_index: Primary local stage index.
+:type stage_index: int
+:param num_stages: Total logical pipeline stages.
+:type num_stages: int
+:param device: Device used by this runtime.
+:type device: torch.device
+:param n_microbatches: Number of pipeline microbatches.
+:type n_microbatches: int
+:param model_family: Model family used for pipeline helpers.
+:type model_family: str
+:param split_points: Pipeline split points.
+:type split_points: tuple[str, ...]
+"""
+
+
 def _collect_resettable_modules(module: nn.Module) -> Tuple[nn.Module, ...]:
     return tuple(child for child in module.modules() if hasattr(child, "reset"))
 

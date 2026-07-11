@@ -1,13 +1,5 @@
 # ruff: noqa: F401,F403,F405
-from test.activation_based.test_distributed_dtensor import *
-from test.activation_based.test_distributed_dtensor import (
-    _ToyNonCallableReset,
-    _ToyResetCounter,
-    _load_train_distributed_module,
-    _reset_net,
-    _train_args,
-    _train_runtime,
-)
+from test.activation_based._distributed_dtensor_test_support import *
 
 
 def test_tp_communication_debug_stats_recorded_for_rowwise_conv(

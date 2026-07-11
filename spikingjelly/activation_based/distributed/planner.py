@@ -113,6 +113,31 @@ class SNNDistributedRecommendation:
     rationale: Tuple[str, ...] = ()
 
 
+SNNDistributedRecommendation.__init__.__doc__ = r"""Initialize an SNN distributed strategy recommendation.
+
+.. admonition:: Chinese
+
+    初始化 SNN 分布式策略推荐，包括并行模式、optimizer sharding、流水线参数和推荐理由。
+
+:param prefer: Optimization preference such as ``"speed"`` or ``"memory"``.
+:type prefer: str
+:param model: Model family name.
+:type model: str
+:param world_size: Distributed world size.
+:type world_size: int
+:param mode: Recommended distributed mode.
+:type mode: str
+:param optimizer_sharding: Optimizer sharding strategy.
+:type optimizer_sharding: str
+:param memopt_level: Recommended memory optimization level.
+:type memopt_level: int
+:param mesh_shape: Recommended mesh shape.
+:type mesh_shape: tuple[int, ...] or None
+:param rationale: Recommendation rationale.
+:type rationale: tuple[str, ...]
+"""
+
+
 def recommended_pipeline_microbatches(batch_size: int, num_stages: int) -> int:
     r"""
     **API Language** - :ref:`中文 <recommended_pipeline_microbatches-cn>` | :ref:`English <recommended_pipeline_microbatches-en>`
