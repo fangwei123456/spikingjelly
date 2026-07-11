@@ -71,6 +71,11 @@ def _iter_named_modules_under_roots(
 
     named_children = dict(module.named_modules())
     for root in roots:
+        if not root:
+            raise ValueError(
+                "tensor_parallel_roots entries must be non-empty module paths; "
+                "pass None or omit the argument to scan the full model."
+            )
         if root not in named_children:
             raise KeyError(
                 f"tensor_parallel_roots contains unknown module path '{root}'."
@@ -111,7 +116,8 @@ def analyze_snn_distributed_capability(
     unsupported_tp: List[str] = []
     notes: List[str] = []
 
-    for name, child in module.named_modules():
+    full_modules = list(module.named_modules())
+    for name, child in full_modules:
         if not name:
             continue
         if isinstance(child, base.MemoryModule):
@@ -120,7 +126,11 @@ def analyze_snn_distributed_capability(
     for name, child in _iter_named_modules_under_roots(module, tensor_parallel_roots):
         if isinstance(child, LinearLike):
             tensor_parallel_candidates.append(name)
-        elif isinstance(
+
+    for name, child in full_modules:
+        if not name:
+            continue
+        if isinstance(
             child,
             (nn.Conv1d, nn.Conv2d, nn.Conv3d, layer.Conv1d, layer.Conv2d, layer.Conv3d),
         ):

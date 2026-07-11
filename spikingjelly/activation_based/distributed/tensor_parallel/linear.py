@@ -1,10 +1,12 @@
 import inspect
-from typing import Dict, Iterable, Mapping, Optional, Sequence, Tuple, Union
+from typing import Dict, Mapping, Optional, Sequence, Union
 
 import torch.nn as nn
 
-from spikingjelly.activation_based import base, layer
+from spikingjelly.activation_based import base
 from spikingjelly.activation_based.distributed.analysis import (
+    LinearLike,
+    _iter_named_modules_under_roots,  # noqa: F401
     analyze_snn_distributed_capability,
 )
 from spikingjelly.activation_based.distributed.tensor_parallel.state import (
@@ -32,9 +34,6 @@ except ImportError:
     make_output_tensor = None
     parallelize_module = None
     TENSOR_PARALLEL_AVAILABLE = False
-
-
-LinearLike = (nn.Linear, layer.Linear)
 
 
 def _make_colwise_parallel(local_output: bool) -> "ParallelStyle":
@@ -82,30 +81,6 @@ def _is_colwise_local_style(style: Union[str, "ParallelStyle"]) -> bool:
             return True
         return False
     return False
-
-
-def _iter_named_modules_under_roots(
-    module: nn.Module,
-    roots: Optional[Sequence[str]] = None,
-) -> Iterable[Tuple[str, nn.Module]]:
-    if not roots:
-        for name, child in module.named_modules():
-            if name:
-                yield name, child
-        return
-
-    named_children = dict(module.named_modules())
-    for root in roots:
-        if root not in named_children:
-            raise KeyError(
-                f"tensor_parallel_roots contains unknown module path '{root}'."
-            )
-
-        root_module = named_children[root]
-        for sub_name, child in root_module.named_modules():
-            full_name = root if not sub_name else f"{root}.{sub_name}"
-            if full_name:
-                yield full_name, child
 
 
 def _replace_module_by_name(module: nn.Module, module_name: str, new_module: nn.Module):

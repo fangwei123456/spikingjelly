@@ -23,19 +23,19 @@ from .spikformer import (
 from .state import TensorShardMemoryModule
 
 __all__ = [
-    "ChannelShardConv2d",
-    "ChannelShardConv1d",
-    "ChannelShardBatchNorm2d",
     "ChannelShardBatchNorm1d",
-    "TensorShardMemoryModule",
+    "ChannelShardBatchNorm2d",
+    "ChannelShardConv1d",
+    "ChannelShardConv2d",
     "TENSOR_PARALLEL_AVAILABLE",
+    "TensorShardMemoryModule",
     "auto_build_tensor_parallel_plan",
-    "wrap_tp_memory_modules",
-    "parallelize_snn_module",
-    "parallelize_snn_conv_blocks",
-    "parallelize_spikformer_blocks",
-    "parallelize_spikformer_patch_stem",
     "enable_tp_communication_debug",
     "get_tp_communication_debug_stats",
+    "parallelize_snn_conv_blocks",
+    "parallelize_snn_module",
+    "parallelize_spikformer_blocks",
+    "parallelize_spikformer_patch_stem",
     "reset_tp_communication_debug_stats",
+    "wrap_tp_memory_modules",
 ]

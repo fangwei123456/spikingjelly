@@ -110,7 +110,8 @@ class TensorShardMemoryModule(base.MemoryModule):
         shard_dim = self.shard_dim if self.shard_dim >= 0 else x.dim() + self.shard_dim
         if shard_dim < 0 or shard_dim >= x.dim():
             raise ValueError(
-                f"shard_dim={self.shard_dim} is invalid for input with shape {tuple(x.shape)}."
+                f"shard_dim={shard_dim} (from self.shard_dim={self.shard_dim}) "
+                f"is invalid for input with shape {tuple(x.shape)}."
             )
         if (
             self.expected_local_dim_size is not None

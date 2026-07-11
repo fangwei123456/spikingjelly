@@ -113,13 +113,9 @@ def _try_convert_spikformer_mlp(mlp: nn.Module, process_group) -> Optional[nn.Mo
             mlp.fc1 = converted
             if isinstance(mlp.neuron1, base.MemoryModule):
                 logical_dim = None
-                conv = list(mlp.fc1.children())[0]
+                conv = next(iter(mlp.fc1.children()))
                 if hasattr(conv, "out_channels"):
-                    logical_dim = (
-                        conv.out_channels
-                        if not hasattr(conv, "local_out_channels")
-                        else conv.out_channels
-                    )
+                    logical_dim = conv.out_channels
                 mlp.neuron1 = TensorShardMemoryModule(
                     mlp.neuron1,
                     shard_dim=2,
@@ -278,6 +274,8 @@ def _convert_spikformer_stem_tree(
                 return True
         converted_container = _convert_leading_conv2d_bn(module, process_group, mode)
         if converted_container is not None:
+            _overwrite_sequential_children(module, converted_container)
+            state["projection_converted"] = True
             return True
 
     if state["projection_converted"] and not state["memory_wrapped"]:
@@ -373,7 +371,9 @@ def parallelize_spikformer_patch_stem(
                         stage_sequence[int(child_name)] = replacement
                     block_index += 1
             continue
-        if isinstance(root_module, (nn.Sequential, nn.ModuleList)):
+        if isinstance(root_module, (nn.Sequential, nn.ModuleList)) and not isinstance(
+            root_module, layer.SeqToANNContainer
+        ):
             block_index = 0
             for child_name, child in list(root_module.named_children()):
                 mode = "colwise" if block_index % 2 == 0 else "rowwise"
@@ -388,7 +388,7 @@ def parallelize_spikformer_patch_stem(
             continue
 
         parent_name, _, child_name = root.rpartition(".")
-        parent_module = named_modules.get(parent_name) if parent_name else None
+        parent_module = named_modules.get(parent_name) if parent_name else module
         if (
             isinstance(parent_module, (nn.Sequential, nn.ModuleList))
             and child_name.isdigit()

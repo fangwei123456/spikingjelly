@@ -23,7 +23,9 @@ def _overwrite_sequential_children(target: nn.Module, source: nn.Module):
             f"Cannot overwrite {type(target)} with {type(source)} because child counts differ: "
             f"{len(target_children)} vs {len(source_children)}."
         )
-    for (target_name, _), (_, source_child) in zip(target_children, source_children):
+    for (target_name, _), (_, source_child) in zip(
+        target_children, source_children, strict=True
+    ):
         _replace_child_module(target, target_name, source_child)
 
 

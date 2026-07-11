@@ -16,6 +16,7 @@ def test_cifar10dvs_vgg_pipeline_module_matches_baseline():
     result = pipeline_module(x)
     torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
 
+
 def test_spikformer_pipeline_module_matches_baseline():
     torch.manual_seed(0)
     baseline = spikformer_ti(
@@ -33,6 +34,7 @@ def test_spikformer_pipeline_module_matches_baseline():
     result = pipeline_module(x)
     torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
 
+
 def test_cifar10dvs_vgg_pipeline_runtime_supports_interleaved_single_rank():
     with single_rank_process_group():
         model = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
@@ -48,6 +50,7 @@ def test_cifar10dvs_vgg_pipeline_runtime_supports_interleaved_single_rank():
         assert runtime.schedule_kind == "interleaved"
         assert runtime.virtual_pipeline_size == 2
         assert len(runtime.stage_modules) == 2
+
 
 def test_spikformer_pipeline_runtime_supports_zero_bubble_single_rank():
     with single_rank_process_group():
@@ -68,11 +71,13 @@ def test_spikformer_pipeline_runtime_supports_zero_bubble_single_rank():
         assert runtime.delayed_wgrad is True
         assert len(runtime.stage_modules) == 2
 
+
 def test_recommend_pipeline_memopt_stages_prefers_heavy_stages():
     selected = recommend_pipeline_memopt_stages(
         (1.0, 8.0, 3.0, 7.0), stage_budget_ratio=0.5
     )
     assert selected == (1, 3)
+
 
 def test_apply_pipeline_stage_memopt_only_wraps_selected_heavy_stage():
     torch.manual_seed(0)
@@ -95,7 +100,6 @@ def test_apply_pipeline_stage_memopt_only_wraps_selected_heavy_stage():
         model_family="cifar10dvs_vgg",
         split_points=("stages.1",),
         stage_costs=(10.0, 1.0),
-        stage_input_example=torch.randn(1, 2, 2, 48, 48),
         stage_input_examples=(torch.randn(1, 2, 2, 48, 48),),
     )
     runtime, optimize_ms, applied = apply_pipeline_stage_memopt(
@@ -108,6 +112,7 @@ def test_apply_pipeline_stage_memopt_only_wraps_selected_heavy_stage():
     assert optimize_ms >= 0.0
     assert runtime.memopt_selected_stage_indices == (0,)
     assert isinstance(runtime.stage_module.inner.features[0], GCContainer)
+
 
 def test_apply_pipeline_stage_memopt_supports_legacy_memopt_signature(monkeypatch):
     torch.manual_seed(0)
@@ -130,7 +135,6 @@ def test_apply_pipeline_stage_memopt_supports_legacy_memopt_signature(monkeypatc
         model_family="cifar10dvs_vgg",
         split_points=("stages.1",),
         stage_costs=(10.0, 1.0),
-        stage_input_example=torch.randn(1, 2, 2, 48, 48),
         stage_input_examples=(torch.randn(1, 2, 2, 48, 48),),
     )
 
@@ -158,24 +162,18 @@ def test_apply_pipeline_stage_memopt_supports_legacy_memopt_signature(monkeypatc
     assert optimize_ms >= 0.0
     assert calls["count"] == 1
 
+
 def test_parse_pipeline_layout_validates_counts():
     counts = parse_pipeline_layout("1|2|3", 3, 6)
     assert counts == (1, 2, 3)
     with pytest.raises(ValueError, match="requires 6 units"):
         parse_pipeline_layout("1|2|2", 3, 6)
 
+
 def test_resolve_pipeline_schedule_kind_rules():
-    assert (
-        resolve_pipeline_schedule_kind("auto", 1, False) == "1f1b"
-    )
-    assert (
-        resolve_pipeline_schedule_kind("auto", 2, False)
-        == "interleaved"
-    )
-    assert (
-        resolve_pipeline_schedule_kind("auto", 2, True)
-        == "zero_bubble"
-    )
+    assert resolve_pipeline_schedule_kind("auto", 1, False) == "1f1b"
+    assert resolve_pipeline_schedule_kind("auto", 2, False) == "interleaved"
+    assert resolve_pipeline_schedule_kind("auto", 2, True) == "zero_bubble"
     with pytest.raises(ValueError, match="requires pp_virtual_stages >= 2"):
         resolve_pipeline_schedule_kind("interleaved", 1, False)
     with pytest.raises(ValueError, match="does not support pp_virtual_stages=2"):
@@ -183,12 +181,14 @@ def test_resolve_pipeline_schedule_kind_rules():
     with pytest.raises(ValueError, match="does not support pp_virtual_stages=2"):
         resolve_pipeline_schedule_kind("1f1b", 2, False)
 
+
 def test_make_pipeline_outputs_contiguous_clones_views():
     base = torch.randn(2, 3, 4)
     view = base.transpose(0, 1)
     out = _make_pipeline_outputs_contiguous(view)
     torch.testing.assert_close(out, view)
     assert out.data_ptr() != view.data_ptr()
+
 
 def test_cifar_pipeline_transposes_on_first_non_empty_stage():
     torch.manual_seed(0)
@@ -207,6 +207,7 @@ def test_cifar_pipeline_transposes_on_first_non_empty_stage():
     functional.reset_net(pipeline)
     result = pipeline(example)
     torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
+
 
 def test_spikformer_pipeline_attaches_patch_embed_to_first_non_empty_stage():
     torch.manual_seed(0)

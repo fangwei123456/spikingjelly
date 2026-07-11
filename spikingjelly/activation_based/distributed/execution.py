@@ -84,8 +84,7 @@ def build_eager_config(
     )
     spikformer_patch_stem_roots = (
         policy.spikformer_patch_stem_tensor_parallel_roots
-        if enable_spikformer_patch_stem_tensor_parallel
-        and mode in ("tp", "fsdp2_tp")
+        if enable_spikformer_patch_stem_tensor_parallel and mode in ("tp", "fsdp2_tp")
         else ()
     )
     if auto_tensor_parallel is None:
@@ -96,11 +95,13 @@ def build_eager_config(
     if mode == "fsdp2":
         fsdp_shard_roots = _optional_list(policy.fsdp_shard_roots)
     elif mode == "fsdp2_tp":
-        fsdp2_tp_roots = (
-            policy.fsdp2_tp_shard_roots or policy.fsdp_shard_roots
-        )
+        fsdp2_tp_roots = policy.fsdp2_tp_shard_roots or policy.fsdp_shard_roots
         fsdp_shard_roots = _optional_list(fsdp2_tp_roots)
-        fsdp_shard_module_root = policy.fsdp2_tp_shard_module_root
+        fsdp_shard_module_root = (
+            policy.fsdp2_tp_shard_module_root
+            if policy.fsdp2_tp_shard_roots or policy.fsdp2_tp_shard_module_root
+            else policy.fsdp_shard_module_root
+        )
 
     config_kwargs = {
         "device_type": device_type,
@@ -153,8 +154,7 @@ def configure_snn_distributed(
     Configure SNN distributed training.
     """
     should_apply_linear_tp = (
-        config.tensor_parallel_plan is not None
-        or config.auto_tensor_parallel
+        config.tensor_parallel_plan is not None or config.auto_tensor_parallel
     )
     should_apply_tp = (
         should_apply_linear_tp
@@ -169,10 +169,6 @@ def configure_snn_distributed(
 
     needs_device_mesh = (
         config.device_mesh is not None
-        or (
-            config.mesh_shape is not None
-            and (config.enable_data_parallel or config.enable_fsdp2 or should_apply_tp)
-        )
         or config.enable_data_parallel
         or config.enable_fsdp2
         or should_apply_tp
@@ -183,6 +179,16 @@ def configure_snn_distributed(
     if config.device_mesh is None:
         mesh_dim_names = None
         if config.mesh_shape is not None and len(config.mesh_shape) > 1:
+            if config.tp_mesh_dim < 0 or config.tp_mesh_dim >= len(config.mesh_shape):
+                raise ValueError(
+                    f"tp_mesh_dim={config.tp_mesh_dim} is out of range for a mesh with {len(config.mesh_shape)} dimensions."
+                )
+            if config.dp_mesh_dim is not None and (
+                config.dp_mesh_dim < 0 or config.dp_mesh_dim >= len(config.mesh_shape)
+            ):
+                raise ValueError(
+                    f"dp_mesh_dim={config.dp_mesh_dim} is out of range for a mesh with {len(config.mesh_shape)} dimensions."
+                )
             generated_names = [f"mesh_dim_{i}" for i in range(len(config.mesh_shape))]
             generated_names[config.tp_mesh_dim] = "tp"
             if config.dp_mesh_dim is not None:
@@ -205,6 +211,23 @@ def configure_snn_distributed(
     if config.enable_data_parallel and mesh_ndim > 1 and config.dp_mesh_dim is None:
         raise ValueError(
             "dp_mesh_dim must be specified when enable_data_parallel=True on a multi-dimensional DeviceMesh."
+        )
+    if config.tp_mesh_dim < 0 or config.tp_mesh_dim >= mesh_ndim:
+        raise ValueError(
+            f"tp_mesh_dim={config.tp_mesh_dim} is out of range for a mesh with {mesh_ndim} dimensions."
+        )
+    if config.dp_mesh_dim is not None and (
+        config.dp_mesh_dim < 0 or config.dp_mesh_dim >= mesh_ndim
+    ):
+        raise ValueError(
+            f"dp_mesh_dim={config.dp_mesh_dim} is out of range for a mesh with {mesh_ndim} dimensions."
+        )
+
+    if should_apply_tp and config.enable_data_parallel and not config.enable_fsdp2:
+        raise NotImplementedError(
+            "Combining DDP-style data parallelism with DTensor tensor parallelism is not "
+            "supported in this implementation because DistributedDataParallel state sync "
+            "mixes Tensor and DTensor parameters. Please use FSDP2 + TP instead."
         )
 
     if config.experimental_conv_tensor_parallel:
@@ -244,12 +267,6 @@ def configure_snn_distributed(
             tp_mesh_dim=config.tp_mesh_dim,
         )
 
-    if should_apply_tp and config.enable_data_parallel and not config.enable_fsdp2:
-        raise NotImplementedError(
-            "Combining DDP-style data parallelism with DTensor tensor parallelism is not "
-            "supported in this implementation because DistributedDataParallel state sync "
-            "mixes Tensor and DTensor parameters. Please use FSDP2 + TP instead."
-        )
     if should_apply_linear_tp:
         if config.tensor_parallel_plan is not None:
             tp_plan = dict(config.tensor_parallel_plan)
@@ -287,7 +304,11 @@ def configure_snn_distributed(
         dp_group = _resolve_dp_group_from_mesh(device_mesh, config.dp_mesh_dim)
         device_ids = None
         if config.device_type == "cuda" and torch.cuda.is_available():
-            local_rank = int(os.environ.get("LOCAL_RANK", torch.cuda.current_device()))
+            local_rank = (
+                int(os.environ["LOCAL_RANK"])
+                if "LOCAL_RANK" in os.environ
+                else int(os.environ.get("RANK", 0))
+            )
             device_ids = [local_rank]
         module = prepare_snn_data_parallel(
             module=module,

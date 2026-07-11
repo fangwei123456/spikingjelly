@@ -106,9 +106,7 @@ class ChannelShardConv2d(nn.Module):
 
     def _conv2d(self, x: torch.Tensor) -> torch.Tensor:
         if self.padding_mode != "zeros":
-            x = F.pad(
-                x, self._reversed_padding_repeated_twice, mode=self.padding_mode
-            )
+            x = F.pad(x, self._reversed_padding_repeated_twice, mode=self.padding_mode)
             padding = (0, 0)
         else:
             padding = self.padding
@@ -250,9 +248,7 @@ class ChannelShardConv1d(nn.Module):
 
     def _conv1d(self, x: torch.Tensor) -> torch.Tensor:
         if self.padding_mode != "zeros":
-            x = F.pad(
-                x, self._reversed_padding_repeated_twice, mode=self.padding_mode
-            )
+            x = F.pad(x, self._reversed_padding_repeated_twice, mode=self.padding_mode)
             padding = (0,)
         else:
             padding = self.padding
@@ -291,9 +287,7 @@ class ChannelShardConv1d(nn.Module):
         if self.step_mode != "m":
             raise ValueError(f"Unsupported step_mode='{self.step_mode}'.")
         if x.dim() != 4:
-            raise ValueError(
-                f"expected x with shape [T, N, C, L], but got {x.shape}!"
-            )
+            raise ValueError(f"expected x with shape [T, N, C, L], but got {x.shape}!")
 
         y_shape = [x.shape[0], x.shape[1]]
         y = self._conv1d(x.flatten(0, 1))
@@ -384,12 +378,17 @@ class ChannelShardBatchNorm2d(nn.Module):
         return f"step_mode={self.step_mode}, num_features={self.num_features}"
 
     def _batch_norm(self, x: torch.Tensor) -> torch.Tensor:
+        exponential_average_factor = self.momentum
         if (
             self.training
             and self.track_running_stats
             and self.num_batches_tracked is not None
         ):
             self.num_batches_tracked.add_(1)
+            if self.momentum is None:
+                exponential_average_factor = 1.0 / float(
+                    self.num_batches_tracked.item()
+                )
         return F.batch_norm(
             x,
             self.running_mean,
@@ -397,7 +396,7 @@ class ChannelShardBatchNorm2d(nn.Module):
             self.weight,
             self.bias,
             self.training or not self.track_running_stats,
-            self.momentum,
+            exponential_average_factor,
             self.eps,
         )
 
@@ -500,12 +499,17 @@ class ChannelShardBatchNorm1d(nn.Module):
         return f"step_mode={self.step_mode}, num_features={self.num_features}"
 
     def _batch_norm(self, x: torch.Tensor) -> torch.Tensor:
+        exponential_average_factor = self.momentum
         if (
             self.training
             and self.track_running_stats
             and self.num_batches_tracked is not None
         ):
             self.num_batches_tracked.add_(1)
+            if self.momentum is None:
+                exponential_average_factor = 1.0 / float(
+                    self.num_batches_tracked.item()
+                )
         return F.batch_norm(
             x,
             self.running_mean,
@@ -513,7 +517,7 @@ class ChannelShardBatchNorm1d(nn.Module):
             self.weight,
             self.bias,
             self.training or not self.track_running_stats,
-            self.momentum,
+            exponential_average_factor,
             self.eps,
         )
 
@@ -524,9 +528,7 @@ class ChannelShardBatchNorm1d(nn.Module):
         if self.step_mode != "m":
             raise ValueError(f"Unsupported step_mode='{self.step_mode}'.")
         if x.dim() != 4:
-            raise ValueError(
-                f"expected x with shape [T, N, C, L], but got {x.shape}!"
-            )
+            raise ValueError(f"expected x with shape [T, N, C, L], but got {x.shape}!")
         y_shape = [x.shape[0], x.shape[1]]
         y = self._batch_norm(x.flatten(0, 1))
         y_shape.extend(y.shape[1:])

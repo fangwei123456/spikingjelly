@@ -68,7 +68,6 @@ class SNNPipelineRuntime:
     split_points: Tuple[str, ...]
     group: Optional[Any] = None
     stage_costs: Tuple[float, ...] = ()
-    stage_input_example: Optional[Any] = None
     stage_input_examples: Tuple[Any, ...] = ()
     memopt_selected_stage_indices: Tuple[int, ...] = ()
     schedule_kind: str = "gpipe"
@@ -86,6 +85,10 @@ class SNNPipelineRuntime:
             bool(self.local_stage_indices)
             and self.local_stage_indices[-1] == self.num_stages - 1
         )
+
+    @property
+    def stage_input_example(self) -> Optional[Any]:
+        return self.stage_input_examples[0] if self.stage_input_examples else None
 
 
 SNNPipelineRuntime.__init__.__doc__ = r"""Initialize an SNN pipeline runtime.
@@ -118,7 +121,9 @@ SNNPipelineRuntime.__init__.__doc__ = r"""Initialize an SNN pipeline runtime.
 
 
 def _collect_resettable_modules(module: nn.Module) -> Tuple[nn.Module, ...]:
-    return tuple(child for child in module.modules() if hasattr(child, "reset"))
+    return tuple(
+        child for child in module.modules() if callable(getattr(child, "reset", None))
+    )
 
 
 def _reset_collected_modules(modules: Sequence[nn.Module]):
@@ -239,27 +244,32 @@ def _measure_module_cost(module: nn.Module, input_value: Any) -> Tuple[Any, floa
     autograd_input = _clone_tensor_tree_for_autograd(input_value)
     _reset_collected_modules(reset_modules)
     module.zero_grad(set_to_none=True)
-    if device is not None and device.type == "cuda":
-        torch.cuda.synchronize(device)
-        output_autograd = module(autograd_input)
-        loss = _tensor_tree_sum(output_autograd)
-        if loss is not None and loss.requires_grad:
-            start_event = torch.cuda.Event(enable_timing=True)
-            end_event = torch.cuda.Event(enable_timing=True)
-            start_event.record()
-            loss.backward()
-            end_event.record()
+    try:
+        if device is not None and device.type == "cuda":
             torch.cuda.synchronize(device)
-            backward_ms = float(start_event.elapsed_time(end_event))
-    else:
-        output_autograd = module(autograd_input)
-        loss = _tensor_tree_sum(output_autograd)
-        if loss is not None and loss.requires_grad:
-            start_time = time.perf_counter()
-            loss.backward()
-            backward_ms = (time.perf_counter() - start_time) * 1000.0
-    module.zero_grad(set_to_none=True)
-    _reset_collected_modules(reset_modules)
+            output_autograd = module(autograd_input)
+            loss = _tensor_tree_sum(output_autograd)
+            if loss is not None and loss.requires_grad:
+                start_event = torch.cuda.Event(enable_timing=True)
+                end_event = torch.cuda.Event(enable_timing=True)
+                start_event.record()
+                loss.backward()
+                end_event.record()
+                torch.cuda.synchronize(device)
+                backward_ms = float(start_event.elapsed_time(end_event))
+        else:
+            output_autograd = module(autograd_input)
+            loss = _tensor_tree_sum(output_autograd)
+            if loss is not None and loss.requires_grad:
+                start_time = time.perf_counter()
+                loss.backward()
+                backward_ms = (time.perf_counter() - start_time) * 1000.0
+        del output_autograd, loss
+    finally:
+        module.zero_grad(set_to_none=True)
+        _reset_collected_modules(reset_modules)
+        if device is not None and device.type == "cuda":
+            torch.cuda.empty_cache()
 
     param_numel = sum(p.numel() for p in module.parameters(recurse=True))
     activation_cost = signal / 1_000_000.0
@@ -293,7 +303,10 @@ def snn_sequence_cross_entropy(
     if outputs.ndim >= 3:
         outputs = outputs.mean(dim=0)
     if target.ndim > 1:
-        target = target.argmax(dim=1)
+        if target.shape[-1] > 1:
+            target = target.argmax(dim=-1)
+        else:
+            target = target.squeeze(-1)
     return F.cross_entropy(outputs, target)
 
 
@@ -390,7 +403,7 @@ def _build_snn_pipeline_runtime(
     if len(stage_modules) == 1:
         stage_module = stage_modules[0]
     else:
-        stage_module = nn.ModuleList(stage_modules)
+        stage_module = _PipelineSequentialModule(stage_modules)
     microbatch_input = _example_microbatch_args(example_input, n_microbatches)[0]
     stage_inputs: list[Any] = []
     stage_outputs: list[Any] = []
@@ -456,7 +469,6 @@ def _build_snn_pipeline_runtime(
         stage_costs=tuple(
             float(cost) for cost in getattr(pipeline_module, "stage_costs", ())
         ),
-        stage_input_example=stage_inputs[local_stage_indices[0]],
         stage_input_examples=tuple(stage_inputs[idx] for idx in local_stage_indices),
         memopt_selected_stage_indices=(),
         schedule_kind=schedule_kind,

@@ -29,6 +29,25 @@ def test_build_eager_config_expands_hybrid_policy():
     assert config.tp_mesh_dim == 1
     assert config.dp_mesh_dim == 0
 
+
+def test_build_eager_config_fsdp2_tp_falls_back_to_root_shard_flag():
+    config = build_eager_config(
+        mode="fsdp2_tp",
+        device_type="cpu",
+        mesh_shape=(1, 1),
+        tp_mesh_dim=1,
+        dp_mesh_dim=0,
+        policy=EagerParallelPolicy(
+            linear_tensor_parallel_roots=("classifier",),
+            fsdp_shard_roots=("features", "classifier"),
+            fsdp_shard_module_root=True,
+        ),
+    )
+
+    assert config.fsdp_shard_roots == ["features", "classifier"]
+    assert config.fsdp_shard_module_root is True
+
+
 def test_build_eager_config_allows_disabling_linear_tp_only():
     config = build_eager_config(
         mode="tp",
@@ -46,12 +65,14 @@ def test_build_eager_config_allows_disabling_linear_tp_only():
     assert config.experimental_conv_tensor_parallel is True
     assert config.conv_tensor_parallel_roots == ["features"]
 
+
 def test_configure_snn_distributed_conv_only_tp_does_not_build_linear_plan(
     monkeypatch: pytest.MonkeyPatch,
 ):
     import spikingjelly.activation_based.distributed.execution as execution
 
     with single_rank_process_group():
+
         def _unexpected_auto_plan(*args, **kwargs):
             raise AssertionError("linear tensor parallel plan should not be built")
 
@@ -74,6 +95,7 @@ def test_configure_snn_distributed_conv_only_tp_does_not_build_linear_plan(
         assert configured_model is model
         assert mesh is not None
 
+
 def test_apply_returns_unified_runtime_single_rank():
     with single_rank_process_group():
         model = ToyDistributedSNN()
@@ -91,6 +113,7 @@ def test_apply_returns_unified_runtime_single_rank():
         assert runtime.kind == "eager"
         assert runtime.mesh is None  # mode is "none", no parallel strategy active
         assert runtime.plan.mode == distributed_plan.mode
+
 
 def test_configure_snn_distributed_mesh_shape_alone_without_strategy_returns_none_mesh():
     """mesh_shape alone doesn't trigger mesh creation — a parallel strategy must also be enabled."""
@@ -110,6 +133,7 @@ def test_configure_snn_distributed_mesh_shape_alone_without_strategy_returns_non
         assert mesh is None
         assert isinstance(analysis, distributed_dtensor.SNNDistributedAnalysis)
 
+
 def test_configure_snn_distributed_noop_does_not_require_device_mesh():
     model = ToyDistributedSNN()
     configured_model, mesh, analysis = configure_snn_distributed(
@@ -125,6 +149,7 @@ def test_configure_snn_distributed_noop_does_not_require_device_mesh():
     assert configured_model is model
     assert mesh is None
     assert isinstance(analysis, distributed_dtensor.SNNDistributedAnalysis)
+
 
 def test_apply_rejects_device_mesh_world_size_mismatch():
     model = ToyDistributedSNN()
@@ -150,6 +175,7 @@ def test_apply_rejects_device_mesh_world_size_mismatch():
             device_mesh=FakeMesh(),
         )
 
+
 def test_apply_rejects_pipeline_mode_without_example_input():
     distributed_plan = SNNDistributedPlan(
         mode="pp",
@@ -166,6 +192,7 @@ def test_apply_rejects_pipeline_mode_without_example_input():
     )
     with pytest.raises(NotImplementedError, match="Pipeline parallelism"):
         apply(model=ToyDistributedSNN(), plan=distributed_plan, device_type="cpu")
+
 
 def test_configure_snn_distributed_supports_data_parallel_only():
     with single_rank_process_group():
@@ -187,6 +214,7 @@ def test_configure_snn_distributed_supports_data_parallel_only():
         y = distributed_model(x)
         assert y.shape == (3, 2, 4)
 
+
 def test_configure_snn_distributed_rejects_ddp_plus_tp():
     with single_rank_process_group():
         model = ToyDistributedSNN()
@@ -201,6 +229,7 @@ def test_configure_snn_distributed_rejects_ddp_plus_tp():
         )
         with pytest.raises(NotImplementedError, match="FSDP2 \\+ TP"):
             configure_snn_distributed(model, config)
+
 
 def test_configure_snn_distributed_rejects_ddp_plus_experimental_conv_tp():
     with single_rank_process_group():
@@ -217,6 +246,8 @@ def test_configure_snn_distributed_rejects_ddp_plus_experimental_conv_tp():
         )
         with pytest.raises(NotImplementedError, match="FSDP2 \\+ TP"):
             configure_snn_distributed(model, config)
+        assert "ChannelShardConv2d" not in type(model.features[0].proj_bn[-2]).__name__
+
 
 def test_configure_snn_distributed_requires_dp_mesh_dim_for_multidim_data_parallel():
     with single_rank_process_group():
@@ -230,6 +261,36 @@ def test_configure_snn_distributed_requires_dp_mesh_dim_for_multidim_data_parall
         )
         with pytest.raises(ValueError, match="dp_mesh_dim must be specified"):
             configure_snn_distributed(model, config)
+
+
+def test_configure_snn_distributed_rejects_out_of_range_mesh_dims():
+    with single_rank_process_group():
+        model = ToyDistributedSNN()
+        with pytest.raises(ValueError, match="tp_mesh_dim=2 is out of range"):
+            configure_snn_distributed(
+                model,
+                SNNDistributedConfig(
+                    device_type="cpu",
+                    mesh_shape=(1, 1),
+                    tensor_parallel_roots=["features"],
+                    auto_tensor_parallel=True,
+                    tp_mesh_dim=2,
+                    dp_mesh_dim=0,
+                ),
+            )
+        with pytest.raises(ValueError, match="dp_mesh_dim=2 is out of range"):
+            configure_snn_distributed(
+                model,
+                SNNDistributedConfig(
+                    device_type="cpu",
+                    mesh_shape=(1, 1),
+                    auto_tensor_parallel=False,
+                    enable_data_parallel=True,
+                    tp_mesh_dim=1,
+                    dp_mesh_dim=2,
+                ),
+            )
+
 
 def test_high_level_cifar10dvs_vgg_helper():
     with single_rank_process_group():
@@ -249,6 +310,7 @@ def test_high_level_cifar10dvs_vgg_helper():
         assert mesh.ndim == 1
         assert analysis.tensor_parallel_candidate_names == ("classifier.0",)
 
+
 def test_cifar10dvs_vgg_fsdp2_single_rank_smoke():
     with single_rank_process_group():
         torch.manual_seed(0)
@@ -267,6 +329,7 @@ def test_cifar10dvs_vgg_fsdp2_single_rank_smoke():
         assert runtime.mesh is not None
         assert runtime.analysis is not None
         assert runtime.analysis.tensor_parallel_roots == ("classifier",)
+
 
 def test_cifar10dvs_vgg_fsdp2_tp_helper_single_rank():
     with single_rank_process_group():

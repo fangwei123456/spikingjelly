@@ -16,10 +16,32 @@ def test_analyze_snn_distributed_capability_finds_state_and_linear_targets():
         for note in analysis.notes
     )
 
+
+def test_analyze_rejects_empty_tensor_parallel_root():
+    with pytest.raises(ValueError, match="non-empty module paths"):
+        analyze_snn_distributed_capability(
+            ToyDistributedSNN(), tensor_parallel_roots=[""]
+        )
+
+
+def test_analyze_reports_unsupported_convs_outside_selected_roots():
+    model = nn.Module()
+    model.features = nn.Sequential(nn.Conv2d(2, 4, kernel_size=1))
+    model.classifier = nn.Sequential(layer.Linear(4, 2))
+
+    analysis = analyze_snn_distributed_capability(
+        model, tensor_parallel_roots=["classifier"]
+    )
+
+    assert analysis.tensor_parallel_candidate_names == ("classifier.0",)
+    assert analysis.unsupported_tensor_parallel_names == ("features.0",)
+
+
 def test_adapter_registry_lists_known_families():
     names = list_adapters()
     assert "cifar10dvs_vgg" in names
     assert "spikformer" in names
+
 
 def test_resolve_adapter_for_known_models():
     vgg = CIFAR10DVSVGG(dropout=0.0, backend="torch")
@@ -29,6 +51,7 @@ def test_resolve_adapter_for_known_models():
     )
     assert resolve_adapter(spikformer, None) is not None
 
+
 def test_infer_model_family_unwraps_module_attribute():
     wrapped = SimpleNamespace(module=CIFAR10DVSVGG(dropout=0.0, backend="torch"))
     from spikingjelly.activation_based.distributed.adapters.base import (
@@ -37,6 +60,7 @@ def test_infer_model_family_unwraps_module_attribute():
 
     assert infer_model_family(wrapped) == "cifar10dvs_vgg"
 
+
 def test_infer_model_family_ignores_non_module_module_attribute():
     wrapped = SimpleNamespace(module="not-a-module")
     from spikingjelly.activation_based.distributed.adapters.base import (
@@ -44,6 +68,7 @@ def test_infer_model_family_ignores_non_module_module_attribute():
     )
 
     assert infer_model_family(wrapped) is None
+
 
 def test_analyze_stays_generic_without_model_family_specific_adapter():
     vgg = CIFAR10DVSVGG(dropout=0.0, backend="torch")

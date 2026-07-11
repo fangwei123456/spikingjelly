@@ -37,6 +37,7 @@ def test_tp_communication_debug_stats_recorded_for_rowwise_conv(
         distributed_dtensor.enable_tp_communication_debug(False)
         distributed_dtensor.reset_tp_communication_debug_stats()
 
+
 def test_channel_shard_conv2d_preserves_nonzero_padding_mode():
     torch.manual_seed(0)
     source = nn.Conv2d(
@@ -50,6 +51,7 @@ def test_channel_shard_conv2d_preserves_nonzero_padding_mode():
     wrapped = ChannelShardConv2d(source, process_group=None, mode="colwise")
     x = torch.randn(3, 2, 8, 8)
     torch.testing.assert_close(wrapped(x), source(x))
+
 
 def test_channel_shard_conv1d_preserves_padding_and_multistep_shape():
     torch.manual_seed(0)
@@ -66,6 +68,27 @@ def test_channel_shard_conv1d_preserves_padding_and_multistep_shape():
     x = torch.randn(5, 3, 2, 8)
     reference = source(x.flatten(0, 1)).view(5, 3, 4, 8)
     torch.testing.assert_close(wrapped(x), reference)
+
+
+def test_channel_shard_batch_norm2d_supports_cumulative_momentum():
+    torch.manual_seed(0)
+    source = nn.BatchNorm2d(4, momentum=None)
+    wrapped = ChannelShardBatchNorm2d(source, process_group=None)
+    x = torch.randn(3, 4, 5, 5)
+
+    torch.testing.assert_close(wrapped(x), source(x))
+    assert wrapped.num_batches_tracked.item() == source.num_batches_tracked.item()
+
+
+def test_channel_shard_batch_norm1d_supports_cumulative_momentum():
+    torch.manual_seed(0)
+    source = nn.BatchNorm1d(4, momentum=None)
+    wrapped = ChannelShardBatchNorm1d(source, process_group=None)
+    x = torch.randn(3, 4, 5)
+
+    torch.testing.assert_close(wrapped(x), source(x))
+    assert wrapped.num_batches_tracked.item() == source.num_batches_tracked.item()
+
 
 def test_auto_tensor_parallel_plan_and_forward_match_single_rank():
     with single_rank_process_group():
@@ -99,6 +122,7 @@ def test_auto_tensor_parallel_plan_and_forward_match_single_rank():
             candidate, tensor_parallel_roots=["features"]
         )
         assert set(plan.keys()) == {"features.0", "features.2"}
+
 
 def test_configure_snn_distributed_supports_experimental_conv_tp_on_real_snn():
     with single_rank_process_group():
@@ -137,6 +161,7 @@ def test_configure_snn_distributed_supports_experimental_conv_tp_on_real_snn():
             == distributed_model.features[0].proj_bn[-2].out_channels
         )
 
+
 def test_cifar10dvs_vgg_tp_helper_after_memopt_level2_single_rank():
     with single_rank_process_group():
         torch.manual_seed(0)
@@ -162,11 +187,20 @@ def test_cifar10dvs_vgg_tp_helper_after_memopt_level2_single_rank():
         result = materialize_dtensor_output(distributed_model(x))
         torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
 
+
+@pytest.mark.skip(
+    reason="Spikformer TP + memopt level1 coverage is not implemented yet."
+)
 def test_spikformer_tp_plus_memopt_level1_single_rank():
     pass
 
+
+@pytest.mark.skip(
+    reason="Spikformer FSDP2+TP + memopt level1 coverage is not implemented yet."
+)
 def test_spikformer_fsdp2_tp_plus_memopt_level1_single_rank():
     pass
+
 
 def test_spikformer_tp_helper_after_memopt_level2_single_rank():
     with single_rank_process_group():
@@ -199,6 +233,7 @@ def test_spikformer_tp_helper_after_memopt_level2_single_rank():
         _reset_net(distributed_model)
         result = materialize_dtensor_output(distributed_model(x))
         torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
+
 
 def test_spikformer_head_tp_helper_single_rank():
     with single_rank_process_group():
@@ -237,6 +272,7 @@ def test_spikformer_head_tp_helper_single_rank():
             in type(distributed_model.patch_embed.stages[0].conv_bn.block[0]).__name__
         )
 
+
 def test_spikformer_fsdp2_single_rank_smoke():
     with single_rank_process_group():
         torch.manual_seed(0)
@@ -255,6 +291,7 @@ def test_spikformer_fsdp2_single_rank_smoke():
         )
         runtime = apply(model=candidate, plan=distributed_plan, device_type="cpu")
         assert runtime.mesh is not None
+
 
 def test_spikformer_patch_stem_tp_helper_handles_patch_embed_root():
     with single_rank_process_group():
@@ -284,6 +321,7 @@ def test_spikformer_patch_stem_tp_helper_handles_patch_embed_root():
             distributed_model.patch_embed.stages[0].neuron, TensorShardMemoryModule
         )
 
+
 def test_spikformer_patch_stem_tp_helper_handles_single_stage_root_colwise():
     with single_rank_process_group():
         torch.manual_seed(0)
@@ -307,6 +345,33 @@ def test_spikformer_patch_stem_tp_helper_handles_single_stage_root_colwise():
         next_conv = distributed_model.patch_embed.stages[1].conv_bn.block[0]
         assert "ChannelShardConv2d" in type(next_conv).__name__
         assert next_conv.mode == "rowwise"
+
+
+def test_spikformer_patch_stem_tp_helper_handles_seq_to_ann_root():
+    with single_rank_process_group():
+        stem = (
+            spikformer_ti(
+                T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
+            )
+            .patch_embed.stages[0]
+            .conv_bn.block
+        )
+        module = nn.Sequential(stem, copy.deepcopy(stem))
+
+        distributed_model, _, _ = configure_snn_distributed(
+            module,
+            SNNDistributedConfig(
+                device_type="cpu",
+                mesh_shape=(1,),
+                auto_tensor_parallel=False,
+                experimental_spikformer_patch_stem_tensor_parallel=True,
+                spikformer_patch_stem_tensor_parallel_roots=["0"],
+                enable_data_parallel=False,
+            ),
+        )
+
+        assert "ChannelShardConv2d" in type(distributed_model[0][0]).__name__
+
 
 def test_spikformer_patch_stem_tp_helper_rejects_unpaired_isolated_root():
     with single_rank_process_group():

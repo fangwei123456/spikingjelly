@@ -11,13 +11,16 @@ def test_topology_from_mapping_orders_named_dims():
     assert topology.mesh_shape == (2, 2)
     assert "pp" not in topology.dims
 
+
 def test_topology_rejects_non_integer_dim_sizes():
     with pytest.raises(TypeError, match="must be an integer"):
         SNNDistributedTopology.from_mapping({"dp": 1.5, "tp": 2}, world_size=3)
 
+
 def test_topology_rejects_non_integer_world_size():
     with pytest.raises(TypeError, match="world_size must be an integer"):
         SNNDistributedTopology.from_mapping({"dp": 2}, world_size=1.5)
+
 
 def test_topology_rejects_non_integral_numeric_types():
     with pytest.raises(TypeError, match="must be an integer"):
@@ -25,35 +28,33 @@ def test_topology_rejects_non_integral_numeric_types():
     with pytest.raises(TypeError, match="world_size must be an integer"):
         SNNDistributedTopology.from_mapping({"dp": 1}, world_size=Fraction(3, 2))
 
+
 def test_topology_rejects_non_string_dim_names():
     with pytest.raises(TypeError, match="Topology dimension names must be strings"):
         SNNDistributedTopology.from_mapping({1: 2})
 
+
 def test_partition_helpers_respect_2d_mesh_coordinates():
-    with single_rank_process_group():
-        model = ToyDistributedSNN()
-        config = SNNDistributedConfig(
-            device_type="cpu",
-            mesh_shape=(1, 1),
-            tensor_parallel_roots=["features"],
-            auto_tensor_parallel=True,
-            enable_data_parallel=False,
-            tp_mesh_dim=1,
-            dp_mesh_dim=0,
+    class FakeMesh:
+        mesh = torch.zeros(2, 3)
+
+        def get_coordinate(self):
+            return (1, 2)
+
+    mesh = FakeMesh()
+    assert resolve_data_parallel_partition(
+        mesh, dp_mesh_dim=0, sharded_by_data_parallel=False
+    ) == (1, 0)
+    assert resolve_data_parallel_partition(
+        mesh, dp_mesh_dim=0, sharded_by_data_parallel=True
+    ) == (2, 1)
+    assert (
+        resolve_tensor_parallel_group_size(
+            mesh, tp_mesh_dim=1, tensor_parallel_enabled=True
         )
-        _, mesh, _ = configure_snn_distributed(model, config)
-        assert resolve_data_parallel_partition(
-            mesh, dp_mesh_dim=0, sharded_by_data_parallel=False
-        ) == (1, 0)
-        assert resolve_data_parallel_partition(
-            mesh, dp_mesh_dim=0, sharded_by_data_parallel=True
-        ) == (1, 0)
-        assert (
-            resolve_tensor_parallel_group_size(
-                mesh, tp_mesh_dim=1, tensor_parallel_enabled=True
-            )
-            == 1
-        )
+        == 3
+    )
+
 
 def test_resolve_data_parallel_partition_rejects_mesh_without_rank_coordinate():
     class FakeMesh:

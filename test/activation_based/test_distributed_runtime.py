@@ -1,5 +1,9 @@
 # ruff: noqa: F401,F403,F405
 from test.activation_based._distributed_dtensor_test_support import *
+from spikingjelly.activation_based.distributed.pipeline.runtime import (
+    _collect_resettable_modules,
+    snn_sequence_cross_entropy,
+)
 
 
 def test_collect_reset_modules_and_reset_collected_modules():
@@ -10,10 +14,18 @@ def test_collect_reset_modules_and_reset_collected_modules():
     assert net[0].reset_calls == 1
     assert net[2].reset_calls == 1
 
+
 def test_collect_reset_modules_ignores_non_callable_reset_attributes():
     net = nn.Sequential(_ToyNonCallableReset(), _ToyResetCounter())
     modules = collect_reset_modules(net)
     assert modules == (net[1],)
+
+
+def test_pipeline_collect_resettable_modules_ignores_non_callable_reset_attributes():
+    net = nn.Sequential(_ToyNonCallableReset(), _ToyResetCounter())
+    modules = _collect_resettable_modules(net)
+    assert modules == (net[1],)
+
 
 def test_prepare_metrics_classification_output_reduces_time_major_logits():
     logits = torch.randn(5, 4, 10)
@@ -27,6 +39,7 @@ def test_prepare_metrics_classification_output_reduces_time_major_logits():
     torch.testing.assert_close(prepared.logits, logits.mean(dim=0))
     assert torch.equal(prepared.target, torch.tensor([0, 1, 2, 3]))
 
+
 def test_prepare_metrics_classification_output_preserves_singleton_index_targets():
     logits = torch.randn(5, 4, 10)
     labels = torch.tensor([[0], [1], [2], [3]])
@@ -39,14 +52,26 @@ def test_prepare_metrics_classification_output_preserves_singleton_index_targets
     torch.testing.assert_close(prepared.logits, logits.mean(dim=0))
     assert torch.equal(prepared.target, torch.tensor([0, 1, 2, 3]))
 
+
+def test_snn_sequence_cross_entropy_preserves_singleton_index_targets():
+    logits = torch.tensor([[0.1, 1.0, 0.2], [0.2, 0.1, 1.1]])
+    labels = torch.tensor([[1], [2]])
+
+    loss = snn_sequence_cross_entropy(logits, labels)
+    expected = torch.nn.functional.cross_entropy(logits, labels.squeeze(-1))
+
+    torch.testing.assert_close(loss, expected)
+
+
 def test_prepare_metrics_classification_output_reduces_last_axis_targets():
     logits = torch.randn(5, 4, 10)
     labels = torch.eye(10)[torch.tensor([0, 1, 2, 3])].unsqueeze(1)
     prepared = prepare_classification_output(logits, labels)
     assert torch.equal(prepared.target, torch.tensor([0, 1, 2, 3]))
 
+
 def test_prepare_metrics_classification_output_preserves_target_device():
-    logits = torch.randn(2, 4)
+    logits = torch.randn(2, 4, device="meta")
     labels = torch.tensor([1, 3])
     prepared = prepare_classification_output(
         logits,
@@ -54,6 +79,7 @@ def test_prepare_metrics_classification_output_preserves_target_device():
         require_full_logits=True,
     )
     assert prepared.target.device == prepared.logits.device
+
 
 def test_runtime_from_legacy_supports_eager_primitives():
     model = ToyDistributedSNN()
@@ -84,6 +110,7 @@ def test_runtime_from_legacy_supports_eager_primitives():
     assert labels.shape == (2,)
     assert torch.is_tensor(loss)
 
+
 def test_runtime_from_legacy_preserves_mesh_shape_metadata():
     fake_mesh = SimpleNamespace(shape=(2, 2))
     runtime = SNNDistributedRuntime.from_legacy(
@@ -96,6 +123,7 @@ def test_runtime_from_legacy_preserves_mesh_shape_metadata():
     assert runtime.plan is not None
     assert runtime.plan.topology.mesh_shape == (2, 2)
 
+
 def test_runtime_from_legacy_uses_mode_for_single_axis_topology():
     fake_mesh = SimpleNamespace(shape=(2,))
     runtime = SNNDistributedRuntime.from_legacy(
@@ -107,6 +135,7 @@ def test_runtime_from_legacy_uses_mode_for_single_axis_topology():
     )
     assert runtime.plan is not None
     assert runtime.plan.topology.dims == {"tp": 2}
+
 
 def test_runtime_reset_state_uses_pipeline_stage_when_available():
     stage = _ToyResetCounter()
@@ -121,6 +150,7 @@ def test_runtime_reset_state_uses_pipeline_stage_when_available():
     )
     runtime.reset_state()
     assert stage.reset_calls == 1
+
 
 def test_runtime_forward_loss_rejects_pipeline_runtime():
     stage = nn.Linear(3, 2)
@@ -138,6 +168,7 @@ def test_runtime_forward_loss_rejects_pipeline_runtime():
     y = torch.tensor([0, 1, 0, 1])
     with pytest.raises(NotImplementedError, match="does not execute pipeline runtimes"):
         runtime.forward_loss(criterion, x, y)
+
 
 def test_runtime_prepare_classification_output_can_return_metadata():
     model = ToyDistributedSNN()
@@ -159,6 +190,7 @@ def test_runtime_prepare_classification_output_can_return_metadata():
     assert prepared.logits.shape == (2, 4)
     assert prepared.target.shape == (2,)
 
+
 def test_runtime_prepare_dataloader_tolerates_missing_plan():
     runtime = SNNDistributedRuntime(
         kind="eager",
@@ -178,6 +210,7 @@ def test_runtime_prepare_dataloader_tolerates_missing_plan():
     )
     assert len(list(loader)) == 2
 
+
 def test_prepare_metrics_classification_output_squeezes_singleton_label_dim():
     logits = torch.randn(2, 4)
     labels = torch.tensor([[1], [3]])
@@ -187,6 +220,7 @@ def test_prepare_metrics_classification_output_squeezes_singleton_label_dim():
         require_full_logits=True,
     )
     assert torch.equal(prepared.target, torch.tensor([1, 3]))
+
 
 def test_build_snn_optimizer_supports_zero_for_dp():
     with single_rank_process_group():
@@ -213,6 +247,7 @@ def test_build_snn_optimizer_supports_zero_for_dp():
         loss.backward()
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
+
 
 def test_build_snn_optimizer_rejects_zero_outside_dp():
     model = ToyDistributedSNN()

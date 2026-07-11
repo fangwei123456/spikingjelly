@@ -63,7 +63,7 @@ def _build_cifar10dvs_vgg_pipeline_module(
         feature_costs.append(cost)
     classifier_input = torch.flatten(current, 2)
     _, classifier_cost = _measure_module_cost(module.classifier, classifier_input)
-    unit_costs = feature_costs + [classifier_cost]
+    unit_costs = [*feature_costs, classifier_cost]
     feature_counts = (
         list(layout_counts)
         if layout_counts is not None
