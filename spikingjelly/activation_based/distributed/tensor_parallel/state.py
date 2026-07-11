@@ -67,7 +67,7 @@ class _TensorShardInputValidator:
 def _has_tensor_shard_input_validator(module: base.MemoryModule) -> bool:
     validator = getattr(module, _TENSOR_SHARD_VALIDATOR_ATTR, None)
     return isinstance(validator, _TensorShardInputValidator) and any(
-        hook is validator for hook in module._forward_pre_hooks.values()
+        hook == validator for hook in module._forward_pre_hooks.values()
     )
 
 

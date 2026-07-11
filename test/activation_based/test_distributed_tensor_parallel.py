@@ -188,6 +188,7 @@ def test_make_tensor_shard_memory_module_is_idempotent_and_serializable():
     assert not source._forward_pre_hooks
 
     for restored in (copy.deepcopy(module), pickle.loads(pickle.dumps(module))):
+        assert make_tensor_shard_memory_module(restored, -1, 4, None) is restored
         assert restored(torch.ones(2, 4)).shape == (2, 4)
         with pytest.raises(ValueError, match="Expected local shard size 4"):
             restored(torch.ones(2, 3))
