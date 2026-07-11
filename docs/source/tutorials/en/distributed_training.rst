@@ -289,10 +289,14 @@ Read the headline metrics together:
 Benchmark Appendix
 ++++++++++++++++++
 
-Server Benchmarks (small-network smoke benchmark)
+Server Benchmarks (Triton, compile disabled)
 +++++++++++++++++++++++++++++++++++++++++++++++++
 
-The following numbers were collected on a multi-GPU RTX 4090 server with ``CIFAR10DVSVGG``, ``backend='inductor'``, ``batch_size=2``, and ``T=10`` using a short training-step benchmark. The ``global_samples/s`` column is the unified global throughput of the whole distributed job. This workload is intentionally tiny and should be read as a smoke benchmark plus a memory-trend probe rather than a definitive scaling study.
+The following numbers were collected on ``g3``, a 7-GPU RTX 4090 server, with PyTorch ``2.7.1+cu118`` and Triton ``3.3.1``. The benchmark used ``backend='triton'``, ``NCCL_P2P_DISABLE=1``, ``TORCH_COMPILE_DISABLE=1``, ``TORCHDYNAMO_DISABLE=1``, and ``memopt_level=0``. No ``torch.compile`` path was enabled. The tables therefore focus on the effect of distributed parallel strategies, not memory-optimization rewrites.
+
+All rows use ``benchmark_regime='throughput_weak_scaling'``. ``global_samples/s`` is the end-to-end throughput of the whole distributed job, and ``peak_allocated_mb`` is the maximum CUDA allocation observed on any rank.
+
+``CIFAR10DVSVGG``, ``batch_size=2``, ``T=10``:
 
 .. list-table::
     :header-rows: 1
@@ -305,301 +309,139 @@ The following numbers were collected on a multi-GPU RTX 4090 server with ``CIFAR
       - Notes
     * - ``none``
       - 1
-      - 12.86
-      - 155.52
-      - 401.63
+      - 10.96
+      - 182.40
+      - 576.46
       - single-GPU baseline
     * - ``dp``
       - 2
-      - 83.71
-      - 47.78
-      - 434.25
-      - pure DDP; communication dominates at this tiny batch size
+      - 13.89
+      - 287.89
+      - 609.34
+      - pure DDP weak scaling
     * - ``dp`` + ``zero``
       - 2
-      - 96.79
-      - 41.33
-      - 410.22
-      - pure DDP + ``ZeroRedundancyOptimizer``
+      - 16.54
+      - 241.85
+      - 609.34
+      - DDP with ``ZeroRedundancyOptimizer``
     * - ``tp``
       - 2
-      - 86.58
-      - 23.10
-      - 308.88
-      - pure TP with neuron states kept on local feature/channel shards
+      - 17.93
+      - 111.57
+      - 503.46
+      - tensor parallelism reduces per-GPU memory but lowers throughput here
     * - ``fsdp2``
       - 2
-      - 97.11
-      - 41.19
-      - 400.61
-      - pure FSDP2
+      - 18.66
+      - 214.37
+      - 595.94
+      - parameter/gradient/optimizer-state sharding
     * - ``fsdp2_tp``
       - 4
-      - 26.68
-      - 149.91
-      - 316.27
-      - recommended ``FSDP2 + TP`` strategy
+      - 30.21
+      - 132.42
+      - 510.52
+      - hybrid FSDP2 + TP on a ``(2, 2)`` mesh
     * - ``hybrid`` (``DDP + TP``)
       - 4
       - -
       - -
       - -
-      - explicitly unsupported for now; use ``fsdp2_tp`` instead
+      - explicitly unsupported; use ``fsdp2_tp`` instead
 
-This small-network smoke benchmark shows that:
+On this small convolutional workload, ``dp`` gives the best throughput because the per-rank compute is small and the model is easy to replicate. ``tp`` and ``fsdp2_tp`` reduce peak memory, but their communication and sharded execution overhead outweigh the memory benefit at this scale.
 
-* both ``TP`` and ``FSDP2 + TP`` can now execute real SNN training steps with standard neurons running on ``backend='inductor'``;
-* explicit neuron sharding keeps neuron states aligned with local feature/channel shards instead of fully replicating them;
-* even at this tiny scale, ``TP`` / ``FSDP2 + TP`` already reduce per-GPU peak allocated memory;
-* ``DDP + TP`` is still not recommended, and ``fsdp2_tp`` should be used instead.
+Pipeline Parallelism
+++++++++++++++++++++
 
-Experimental PP benchmark (server rerun)
-++++++++++++++++++++++++++++++++++++++++
+The pipeline runtime supports cost-aware stage balancing, automatic microbatch selection, ``gpipe`` / ``1f1b`` / ``interleaved`` / ``zero_bubble`` schedules, optional virtual stages, manual ``pp_layout`` overrides, and stage-local neuron-state reset between microbatches.
 
-``PP`` now includes:
-
-* cost-aware stage balancing based on dry-run module timings rather than simple layer counts;
-* a more aggressive automatic ``pp_microbatches`` heuristic that prefers values dividing ``batch_size`` cleanly;
-* multiple schedules: ``gpipe``, ``1f1b``, ``interleaved``, and ``zero_bubble``;
-* explicit ``pp_layout`` overrides for manual stage placement;
-* lighter microbatch reset handling to avoid repeated full-module tree scans.
-
-The following numbers come from rerunning the larger PP benchmarks on the server. They are more useful for deciding which schedule should be the default recommendation than for claiming that ``PP`` is already the primary throughput path.
-
-``CIFAR10DVSVGG``, ``backend='inductor'``, 2 GPUs, ``batch_size=8``, ``T=4``:
+``CIFAR10DVSVGG``, ``backend='triton'``, 2 GPUs, ``batch_size=8``, ``T=4``, ``memopt_level=0``:
 
 .. list-table::
     :header-rows: 1
 
     * - Schedule
       - ``pp_virtual_stages``
-      - ``memopt``
-      - ``optimize_ms``
       - ``step_ms``
       - ``global_samples/s``
       - ``peak_allocated_mb``
     * - ``gpipe``
       - 1
-      - 0
-      - 0.0
-      - 93.70
-      - 85.38
-      - 507.84
+      - 64.36
+      - 124.31
+      - 566.74
     * - ``1f1b``
       - 1
-      - 0
-      - 0.0
-      - 102.65
-      - 77.93
-      - 259.09
+      - 64.03
+      - 124.95
+      - 398.76
     * - ``interleaved``
       - 2
-      - 0
-      - 0.0
-      - 87.63
-      - 91.29
-      - 361.45
-    * - ``interleaved``
-      - 2
-      - 1
-      - 1521.40
-      - 84.39
-      - 94.79
-      - 361.45
+      - 46.11
+      - 173.48
+      - 466.24
     * - ``zero_bubble``
       - 2
-      - 0
-      - 0.0
-      - 145.17
-      - 55.11
-      - 452.67
-    * - ``zero_bubble``
-      - 2
-      - 1
-      - 1535.38
-      - 118.00
-      - 67.80
-      - 452.67
+      - 57.79
+      - 138.44
+      - 475.04
 
-``spikformer_ti``, ``backend='inductor'``, 2 GPUs, ``batch_size=4``, ``T=8``, ``image_size=224``:
+In this run, ``interleaved`` is the best PP schedule for throughput, while ``1f1b`` uses the least peak memory. ``zero_bubble`` runs successfully but is not the fastest option for this workload.
 
-.. list-table::
-    :header-rows: 1
+Spikformer Strategy Benchmark
++++++++++++++++++++++++++++++
 
-    * - Schedule
-      - ``pp_virtual_stages``
-      - ``memopt``
-      - ``optimize_ms``
-      - ``step_ms``
-      - ``global_samples/s``
-      - ``peak_allocated_mb``
-    * - ``gpipe``
-      - 1
-      - 0
-      - 0.0
-      - 423.64
-      - 9.44
-      - 1286.03
-    * - ``1f1b``
-      - 1
-      - 0
-      - 0.0
-      - 461.92
-      - 8.66
-      - 679.22
-    * - ``interleaved``
-      - 2
-      - 0
-      - 0.0
-      - 394.63
-      - 10.14
-      - 1389.71
-    * - ``interleaved``
-      - 2
-      - 1
-      - 112.83
-      - 423.73
-      - 9.44
-      - 541.91
-    * - ``zero_bubble``
-      - 2
-      - 0
-      - 0.0
-      - 455.79
-      - 8.78
-      - 1356.73
-    * - ``zero_bubble``
-      - 2
-      - 1
-      - 164.35
-      - 473.41
-      - 8.45
-      - 483.31
-
-These rerun results show that:
-
-* ``PP`` already works with standard neurons running on ``backend='inductor'``;
-* for a small convolutional SNN such as ``CIFAR10DVSVGG``, ``interleaved`` is currently the best default schedule for throughput, while ``1f1b`` is more attractive when memory is the main concern;
-* for ``spikformer_ti``, ``interleaved`` is also the strongest default schedule, and adding ``memopt level=1`` can reduce ``peak_allocated_mb`` from about ``1.39 GB`` to about ``0.54 GB``;
-* ``zero_bubble`` now runs successfully on both ``CIFAR10DVSVGG`` and ``spikformer_ti``, but it is still not the strongest throughput option on either workload;
-* for ``spikformer_ti``, ``zero_bubble + memopt level=1`` now also works and reduces ``peak_allocated_mb`` to about ``0.48 GB``;
-* however, ``zero_bubble`` still comes with extra ``inductor`` recompilation warnings, so it is best viewed as a manual experimental or capacity-oriented option rather than the default recommendation today.
-
-Spikformer + memopt Results
-++++++++++++++++++++++++++++
-
-On ``spikformer_ti`` in a more ImageNet-like setting, ``TP`` and ``FSDP2 + TP`` can now also be combined with ``memopt level=1``. The following experiment uses:
-
-* model: ``spikformer_ti``
-* input resolution: ``224x224``
-* ``batch_size=4``
-* ``T=8``
-* backend: ``inductor``
-* GPU: RTX 4090
+``spikformer_ti``, ``backend='triton'``, ``batch_size=4``, ``T=8``, ``image_size=224``, ``memopt_level=0``:
 
 .. list-table::
     :header-rows: 1
 
     * - Mode
-      - ``optimizer_sharding``
-      - ``memopt``
-      - ``optimize_ms``
+      - #GPUs
       - ``step_ms``
       - ``global_samples/s``
       - ``peak_allocated_mb``
+      - Notes
     * - ``none``
-      - ``none``
-      - ``0``
-      - 0.0
-      - 36.70
-      - 109.00
-      - 2070.34
-    * - ``none``
-      - ``none``
-      - ``1``
-      - 26852.97
-      - 57.35
-      - 69.74
-      - 1298.16
+      - 1
+      - 34.71
+      - 115.22
+      - 2290.53
+      - single-GPU baseline
     * - ``dp``
-      - ``none``
-      - ``0``
-      - 0.0
-      - 126.56
-      - 63.21
-      - 2070.93
-    * - ``dp``
-      - ``zero``
-      - ``0``
-      - 0.0
-      - 122.28
-      - 65.42
-      - 2055.70
-    * - ``dp``
-      - ``none``
-      - ``1``
-      - 22591.25
-      - 134.48
-      - 59.49
-      - 1315.71
-    * - ``dp``
-      - ``zero``
-      - ``1``
-      - 23030.79
-      - 149.21
-      - 53.61
-      - 1297.59
+      - 2
+      - 38.87
+      - 205.81
+      - 2307.49
+      - best throughput in this no-memopt run
+    * - ``dp`` + ``zero``
+      - 2
+      - 40.05
+      - 199.77
+      - 2307.49
+      - optimizer sharding does not reduce peak activation memory here
     * - ``fsdp2``
-      - ``none``
-      - ``0``
-      - 0.0
-      - 111.08
-      - 72.02
-      - 2033.86
-    * - ``fsdp2``
-      - ``none``
-      - ``1``
-      - 22919.87
-      - 132.65
-      - 60.31
-      - 1272.13
+      - 2
+      - 50.09
+      - 159.71
+      - 2289.38
+      - lower throughput than DP for this short run
     * - ``tp``
-      - ``none``
-      - ``0``
-      - 0.0
-      - 196.41
-      - 20.37
-      - 1321.38
-    * - ``tp``
-      - ``none``
-      - ``1``
-      - 26913.14
-      - 173.65
-      - 23.03
-      - 767.51
+      - 2
+      - 58.24
+      - 68.68
+      - 1557.10
+      - clear per-GPU memory reduction
     * - ``fsdp2_tp``
-      - ``none``
-      - ``0``
-      - 0.0
-      - 131.90
-      - 60.65
-      - 1319.68
-    * - ``fsdp2_tp``
-      - ``none``
-      - ``1``
-      - 26403.47
-      - 103.95
-      - 76.96
-      - 761.26
+      - 4
+      - 90.75
+      - 88.16
+      - 1561.62
+      - hybrid path with similar memory to pure TP
 
-These numbers highlight that:
-
-* ``memopt level=1`` now works with ``none / dp / fsdp2 / tp / fsdp2_tp``;
-* higher ``memopt`` levels on ``tp / fsdp2_tp / pp`` (``level >= 2``) are now functional as well by running split-search before TP/FSDP2/PP materialization; however, this path is still expensive and is better suited to offline tuning or smoke validation than to frequent online retuning;
-* for larger SNNs such as ``Spikformer``, ``TP`` / ``FSDP2 + TP`` already give a clear per-GPU memory reduction when the neurons use the standard ``inductor`` backend;
-* adding ``memopt level=1`` reduces ``tp`` / ``fsdp2_tp`` further to about ``0.76 GB`` per GPU in this benchmark;
-* in this particular benchmark, ``fsdp2_tp + memopt level=1`` improves both memory usage and throughput;
-* whether ``dp + zero`` beats plain ``dp`` remains workload-dependent, but it is still a useful option when optimizer state becomes meaningful.
+For ``spikformer_ti``, tensor-parallel modes reduce per-GPU peak allocation from about ``2.29 GB`` to about ``1.56 GB`` without using memopt. The cost is lower throughput in this short weak-scaling run. Plain ``dp`` remains the strongest throughput baseline when memory is sufficient.
 
 Recommended Combinations
 ++++++++++++++++++++++++
@@ -608,25 +450,24 @@ If you already know your main objective, the following rules of thumb work well:
 
 * **Throughput first, memory is not the main bottleneck**:
 
-  * for tiny models or single-GPU work, start by checking whether ``none`` is already sufficient;
-  * for larger distributed workloads, prefer ``fsdp2`` or ``fsdp2_tp``;
-  * ``dp + zero`` is a useful pure-DP enhancement, but its benefit depends strongly on the workload.
+  * start with ``dp`` for straightforward weak scaling;
+  * use ``dp + zero`` when optimizer state is expected to matter, but benchmark it because the benefit is workload-dependent;
+  * for small models, sharding can easily cost more than it saves.
 
-* **Per-GPU memory first, especially for ImageNet-scale or Transformer-style SNNs**:
+* **Per-GPU memory first, especially for Transformer-style SNNs**:
 
-  * prefer ``tp + memopt level=1`` or ``fsdp2_tp + memopt level=1``;
-  * in the current measurements, both combinations reduce ``Spikformer`` peak per-GPU memory to about ``0.76 GB``.
+  * try ``tp`` when activation and neuron-state memory dominate;
+  * use ``fsdp2_tp`` when you also need FSDP2-style sharding, but keep an explicit 2D mesh such as ``--mesh-shape 2 2``.
 
-* **Balanced speed/memory tradeoff**:
+* **Pipeline experiments or stage-level memory pressure**:
 
-  * ``fsdp2_tp`` is currently the most balanced primary recommendation;
-  * if your workload is close to the ``Spikformer`` benchmark above, it is worth trying ``fsdp2_tp + memopt level=1`` directly;
-  * if memory is already sufficient, keep ``fsdp2_tp`` without ``memopt`` to avoid the extra optimization pass.
+  * use ``pp`` through the dedicated pipeline runtime;
+  * in the current CIFAR10DVSVGG PP benchmark, ``interleaved`` is the best throughput default and ``1f1b`` is the lower-memory schedule.
 
 * **Safest and simplest distributed entry point**:
 
   * begin with ``dp``;
-  * move to ``fsdp2`` or ``fsdp2_tp`` only when you need to scale to larger models or tighter per-GPU memory.
+  * move to ``fsdp2``, ``tp``, ``fsdp2_tp``, or ``pp`` only when the model size or memory profile justifies the extra machinery.
 
 If you do not want to hand-pick the mode yourself, the training script and benchmark now also expose a high-level recommender:
 

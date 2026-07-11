@@ -1,6 +1,8 @@
 import importlib.util
 import os
+import subprocess
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -144,6 +146,24 @@ def test_capture_benchmark_events_counts_fd_level_warnings():
     with bench.capture_benchmark_events() as counter:
         os.write(2, b"W9999 native warning that bypasses sys.stderr\n")
     assert counter.warning_count == 1
+
+
+def test_capture_benchmark_events_does_not_wait_for_inherited_fd(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(bench, "_CAPTURE_THREAD_JOIN_TIMEOUT_S", 0.05)
+    child = None
+    start = time.monotonic()
+    try:
+        with bench.capture_benchmark_events():
+            child = subprocess.Popen(
+                [sys.executable, "-c", "import time; time.sleep(2)"]
+            )
+        assert time.monotonic() - start < 1.0
+    finally:
+        if child is not None:
+            child.terminate()
+            child.wait(timeout=5)
 
 
 def test_reduce_classification_output_keeps_batch_major_logits():
@@ -425,6 +445,7 @@ def test_build_model_config_matrix(
         assert config.fsdp_shard_roots == ["patch_embed"] + [
             f"blocks.{i}" for i in range(num_blocks)
         ]
+
 
 def test_eager_policy_for_model_rejects_unknown_model_name():
     with pytest.raises(ValueError, match="No eager policy registered"):

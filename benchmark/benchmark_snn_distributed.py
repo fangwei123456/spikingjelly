@@ -60,6 +60,7 @@ _BENCHMARK_REGIMES = (
     "throughput_weak_scaling",
     "memory_capacity",
 )
+_CAPTURE_THREAD_JOIN_TIMEOUT_S = 1.0
 
 
 @dataclass
@@ -284,8 +285,9 @@ class _FDRedirectCapture:
         os.close(self._write_fd)
         self._write_fd = None
         if self._thread is not None:
-            self._thread.join()
-            self._thread = None
+            self._thread.join(timeout=_CAPTURE_THREAD_JOIN_TIMEOUT_S)
+            if not self._thread.is_alive():
+                self._thread = None
         os.close(self._saved_fd)
         self._saved_fd = None
 

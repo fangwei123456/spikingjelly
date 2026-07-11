@@ -247,10 +247,14 @@ benchmark 脚本可用于 smoke test，也可在相同硬件、模型和 batch r
 Benchmark 附录
 ++++++++++++++
 
-服务器实测结果（小网络 smoke benchmark）
+服务器实测结果（Triton，关闭 compile）
 +++++++++++++++++++++++++++++++++++++++++++++++++
 
-以下数据来自单机多卡服务器（RTX 4090），网络为 ``CIFAR10DVSVGG``，后端为 ``inductor``，输入配置为 ``batch_size=2``、``T=10``，指标为短步数训练 benchmark。表中的 ``global_samples/s`` 统一表示整个分布式作业的全局吞吐。这个工作负载非常小，更多用于 smoke test 和显存趋势对比，不适合作为最终扩展效率结论。
+以下数据来自 ``g3``，一台 7 卡 RTX 4090 服务器；环境为 PyTorch ``2.7.1+cu118`` 和 Triton ``3.3.1``。benchmark 使用 ``backend='triton'``、``NCCL_P2P_DISABLE=1``、``TORCH_COMPILE_DISABLE=1``、``TORCHDYNAMO_DISABLE=1`` 和 ``memopt_level=0``。本轮没有启用 ``torch.compile`` 路径；这些表只考察分布式并行策略的影响，不比较 memory optimization rewrite 的作用。
+
+所有结果都使用 ``benchmark_regime='throughput_weak_scaling'``。``global_samples/s`` 表示整个分布式作业的端到端吞吐，``peak_allocated_mb`` 表示所有 rank 中观测到的最大 CUDA allocation。
+
+``CIFAR10DVSVGG``，``batch_size=2``，``T=10``：
 
 .. list-table::
     :header-rows: 1
@@ -263,40 +267,40 @@ Benchmark 附录
       - 备注
     * - ``none``
       - 1
-      - 12.86
-      - 155.52
-      - 401.63
+      - 10.96
+      - 182.40
+      - 576.46
       - 单卡基线
     * - ``dp``
       - 2
-      - 83.71
-      - 47.78
-      - 434.25
-      - 纯 DDP，小 batch 下通信开销占主导
+      - 13.89
+      - 287.89
+      - 609.34
+      - 纯 DDP weak scaling
     * - ``dp`` + ``zero``
       - 2
-      - 96.79
-      - 41.33
-      - 410.22
-      - 纯 DDP + ``ZeroRedundancyOptimizer``
+      - 16.54
+      - 241.85
+      - 609.34
+      - DDP + ``ZeroRedundancyOptimizer``
     * - ``tp``
       - 2
-      - 86.58
-      - 23.10
-      - 308.88
-      - 纯 TP，神经元按 shard 后特征/通道局部执行
+      - 17.93
+      - 111.57
+      - 503.46
+      - TP 降低单卡显存，但这组配置下吞吐下降
     * - ``fsdp2``
       - 2
-      - 97.11
-      - 41.19
-      - 400.61
-      - 纯 FSDP2
+      - 18.66
+      - 214.37
+      - 595.94
+      - 参数、梯度和优化器状态分片
     * - ``fsdp2_tp``
       - 4
-      - 26.68
-      - 149.91
-      - 316.27
-      - 推荐的 ``FSDP2 + TP`` 方案
+      - 30.21
+      - 132.42
+      - 510.52
+      - ``(2, 2)`` mesh 上的 FSDP2 + TP
     * - ``hybrid``（``DDP + TP``）
       - 4
       - -
@@ -304,260 +308,98 @@ Benchmark 附录
       - -
       - 当前显式不支持；请改用 ``fsdp2_tp``
 
-从这组小网络 smoke benchmark 可以看出：
+在这个小型卷积 workload 上，``dp`` 的吞吐最好，因为单 rank 计算量较小，模型复制成本也低。``tp`` 和 ``fsdp2_tp`` 能降低峰值显存，但在这个规模下通信与分片执行开销超过了显存收益。
 
-* ``TP`` 和 ``FSDP2 + TP`` 都已经可以在标准神经元 ``backend='inductor'`` 下完成真实 SNN 训练 step。
-* 显式 neuron shard 后，神经元状态会随特征/通道切分，而不再保持完整复制。
-* 即使在很小的网络和 batch 上，``TP`` / ``FSDP2 + TP`` 也已经能带来可见的单卡显存下降。
-* ``DDP + TP`` 目前仍不推荐，建议直接使用 ``fsdp2_tp``。
+Pipeline Parallelism
+++++++++++++++++++++
 
-实验性 PP benchmark（服务器复测）
-++++++++++++++++++++++++++++++++++++++++
+pipeline runtime 支持基于 cost 的 stage balance、自动 microbatch 选择、``gpipe`` / ``1f1b`` / ``interleaved`` / ``zero_bubble`` 调度、可选 virtual stages、手工 ``pp_layout`` 覆盖，以及 microbatch 之间的 stage-local 神经元状态 reset。
 
-当前 ``PP`` 已经支持：
-
-* 基于 dry-run 实际耗时的 stage balance，而不是简单按层数均分；
-* 自动选择更积极的 ``pp_microbatches``（优先选择 ``batch_size`` 的可整除值）；
-* ``gpipe / 1f1b / interleaved / zero_bubble`` 多种调度；
-* 显式 ``pp_layout`` 覆盖自动切分；
-* 更轻量的 microbatch reset 逻辑，减少每次调度的遍历开销。
-
-下面的结果来自重新在服务器上跑的 schedule 对比。它们更适合回答“当前哪种 PP 调度更值得默认推荐”，而不是把 ``PP`` 说成已经是吞吐主力。
-
-``CIFAR10DVSVGG``，``backend='inductor'``，2 张 GPU，``batch_size=8``，``T=4``：
+``CIFAR10DVSVGG``，``backend='triton'``，2 张 GPU，``batch_size=8``，``T=4``，``memopt_level=0``：
 
 .. list-table::
     :header-rows: 1
 
     * - 调度
       - ``pp_virtual_stages``
-      - ``memopt``
-      - ``optimize_ms``
       - ``step_ms``
       - ``global_samples/s``
       - ``peak_allocated_mb``
     * - ``gpipe``
       - 1
-      - 0
-      - 0.0
-      - 93.70
-      - 85.38
-      - 507.84
+      - 64.36
+      - 124.31
+      - 566.74
     * - ``1f1b``
       - 1
-      - 0
-      - 0.0
-      - 102.65
-      - 77.93
-      - 259.09
+      - 64.03
+      - 124.95
+      - 398.76
     * - ``interleaved``
       - 2
-      - 0
-      - 0.0
-      - 87.63
-      - 91.29
-      - 361.45
-    * - ``interleaved``
-      - 2
-      - 1
-      - 1521.40
-      - 84.39
-      - 94.79
-      - 361.45
+      - 46.11
+      - 173.48
+      - 466.24
     * - ``zero_bubble``
       - 2
-      - 0
-      - 0.0
-      - 145.17
-      - 55.11
-      - 452.67
-    * - ``zero_bubble``
-      - 2
-      - 1
-      - 1535.38
-      - 118.00
-      - 67.80
-      - 452.67
+      - 57.79
+      - 138.44
+      - 475.04
 
-``spikformer_ti``，``backend='inductor'``，2 张 GPU，``batch_size=4``，``T=8``，``image_size=224``：
+这组结果里，``interleaved`` 是吞吐最好的 PP 调度，``1f1b`` 的峰值显存最低。``zero_bubble`` 可以正常运行，但不是这个 workload 上最快的选项。
 
-.. list-table::
-    :header-rows: 1
+Spikformer 策略 benchmark
++++++++++++++++++++++++++
 
-    * - 调度
-      - ``pp_virtual_stages``
-      - ``memopt``
-      - ``optimize_ms``
-      - ``step_ms``
-      - ``global_samples/s``
-      - ``peak_allocated_mb``
-    * - ``gpipe``
-      - 1
-      - 0
-      - 0.0
-      - 423.64
-      - 9.44
-      - 1286.03
-    * - ``1f1b``
-      - 1
-      - 0
-      - 0.0
-      - 461.92
-      - 8.66
-      - 679.22
-    * - ``interleaved``
-      - 2
-      - 0
-      - 0.0
-      - 394.63
-      - 10.14
-      - 1389.71
-    * - ``interleaved``
-      - 2
-      - 1
-      - 112.83
-      - 423.73
-      - 9.44
-      - 541.91
-    * - ``zero_bubble``
-      - 2
-      - 0
-      - 0.0
-      - 455.79
-      - 8.78
-      - 1356.73
-    * - ``zero_bubble``
-      - 2
-      - 1
-      - 164.35
-      - 473.41
-      - 8.45
-      - 483.31
-
-这组服务器复测说明：
-
-* ``PP`` 与标准神经元 ``backend='inductor'`` 已经能够真实训练；
-* 对 ``CIFAR10DVSVGG`` 这类小型卷积 SNN，``interleaved`` 目前是最好的默认调度，吞吐最好；``1f1b`` 的优势更多体现在显存；
-* 对 ``spikformer_ti``，``interleaved`` 同样是当前最好的默认调度；如果叠加 ``memopt level=1``，可以把 ``peak_allocated_mb`` 从约 ``1.39 GB`` 压到约 ``0.54 GB``；
-* ``zero_bubble`` 已经能在 ``CIFAR10DVSVGG`` 和 ``spikformer_ti`` 上功能跑通，但当前吞吐都还不占优；
-* 对 ``spikformer_ti``，``zero_bubble + memopt level=1`` 现在也已经可用，并能把 ``peak_allocated_mb`` 压到约 ``0.48 GB``；
-* 不过 ``zero_bubble`` 仍会伴随额外的 ``inductor`` 重编译告警，因此当前更适合手动实验和容量优先场景，而不是默认推荐。
-
-Spikformer 与 memopt 组合结果
-+++++++++++++++++++++++++++++
-
-在更接近 ImageNet 训练设置的 ``spikformer_ti`` 上，``TP`` 和 ``FSDP2 + TP`` 也已经可以和 ``memopt level=1`` 结合使用。下面的实验使用：
-
-* 模型：``spikformer_ti``
-* 输入：``224x224``
-* ``batch_size=4``
-* ``T=8``
-* 后端：``inductor``
-* GPU：RTX 4090
+``spikformer_ti``，``backend='triton'``，``batch_size=4``，``T=8``，``image_size=224``，``memopt_level=0``：
 
 .. list-table::
     :header-rows: 1
 
     * - 模式
-      - ``optimizer_sharding``
-      - ``memopt``
-      - ``optimize_ms``
+      - GPU 数
       - ``step_ms``
       - ``global_samples/s``
       - ``peak_allocated_mb``
+      - 备注
     * - ``none``
-      - ``none``
-      - ``0``
-      - 0.0
-      - 36.70
-      - 109.00
-      - 2070.34
-    * - ``none``
-      - ``none``
-      - ``1``
-      - 26852.97
-      - 57.35
-      - 69.74
-      - 1298.16
+      - 1
+      - 34.71
+      - 115.22
+      - 2290.53
+      - 单卡基线
     * - ``dp``
-      - ``none``
-      - ``0``
-      - 0.0
-      - 126.56
-      - 63.21
-      - 2070.93
-    * - ``dp``
-      - ``zero``
-      - ``0``
-      - 0.0
-      - 122.28
-      - 65.42
-      - 2055.70
-    * - ``dp``
-      - ``none``
-      - ``1``
-      - 22591.25
-      - 134.48
-      - 59.49
-      - 1315.71
-    * - ``dp``
-      - ``zero``
-      - ``1``
-      - 23030.79
-      - 149.21
-      - 53.61
-      - 1297.59
+      - 2
+      - 38.87
+      - 205.81
+      - 2307.49
+      - 本轮无 memopt benchmark 中吞吐最高
+    * - ``dp`` + ``zero``
+      - 2
+      - 40.05
+      - 199.77
+      - 2307.49
+      - 这组配置里 optimizer sharding 不降低 activation 峰值显存
     * - ``fsdp2``
-      - ``none``
-      - ``0``
-      - 0.0
-      - 111.08
-      - 72.02
-      - 2033.86
-    * - ``fsdp2``
-      - ``none``
-      - ``1``
-      - 22919.87
-      - 132.65
-      - 60.31
-      - 1272.13
+      - 2
+      - 50.09
+      - 159.71
+      - 2289.38
+      - 这个短 benchmark 中吞吐低于 DP
     * - ``tp``
-      - ``none``
-      - ``0``
-      - 0.0
-      - 196.41
-      - 20.37
-      - 1321.38
-    * - ``tp``
-      - ``none``
-      - ``1``
-      - 26913.14
-      - 173.65
-      - 23.03
-      - 767.51
+      - 2
+      - 58.24
+      - 68.68
+      - 1557.10
+      - 明显降低单卡显存
     * - ``fsdp2_tp``
-      - ``none``
-      - ``0``
-      - 0.0
-      - 131.90
-      - 60.65
-      - 1319.68
-    * - ``fsdp2_tp``
-      - ``none``
-      - ``1``
-      - 26403.47
-      - 103.95
-      - 76.96
-      - 761.26
+      - 4
+      - 90.75
+      - 88.16
+      - 1561.62
+      - 混合路径，显存与纯 TP 接近
 
-可以看到：
-
-* ``memopt level=1`` 与 ``none / dp / fsdp2 / tp / fsdp2_tp`` 都已经可以组合使用；
-* ``tp / fsdp2_tp / pp`` 上更高 level 的 ``memopt``（``level >= 2``）现在也已经打通，做法是在 TP/FSDP2/PP 物化之前先完成 split-search；不过这类搜索开销很大，更适合离线调优或小规模 smoke 验证；
-* 对 ``Spikformer`` 这类更大的 SNN，``TP`` / ``FSDP2 + TP`` 在 ``inductor`` 神经元下已经能明显降低单卡峰值显存；
-* 再叠加 ``memopt level=1`` 后，``tp`` 与 ``fsdp2_tp`` 的单卡峰值显存都可以压到约 ``0.76 GB``；
-* 这组 benchmark 里，``fsdp2_tp + memopt level=1`` 同时拿到了更低显存和更好的吞吐；
-* ``dp + zero`` 是否优于纯 ``dp`` 取决于工作负载，在较大模型上更值得尝试。
+对 ``spikformer_ti``，不使用 memopt 时，tensor-parallel 模式已经能把单卡峰值显存从约 ``2.29 GB`` 降到约 ``1.56 GB``。代价是在这个短 weak-scaling run 里吞吐较低。当显存足够时，纯 ``dp`` 仍然是最强吞吐基线。
 
 推荐组合
 +++++++++++++++++++++++
@@ -566,25 +408,24 @@ Spikformer 与 memopt 组合结果
 
 * **吞吐优先，显存压力不大**：
 
-  * 对小模型或单卡训练，先看 ``none``；
-  * 对更大的分布式 workload，优先尝试 ``fsdp2`` 或 ``fsdp2_tp``；
-  * ``dp + zero`` 可以作为纯数据并行路线的一个可选增强，但收益和 workload 强相关。
+  * 先用 ``dp`` 做直接 weak scaling；
+  * 如果优化器状态可能成为瓶颈，可以尝试 ``dp + zero``，但收益和 workload 强相关，需要实测；
+  * 对小模型，分片开销很容易超过节省的收益。
 
-* **单卡显存优先，尤其是 ImageNet / Transformer 型 SNN**：
+* **单卡显存优先，尤其是 Transformer 型 SNN**：
 
-  * 优先尝试 ``tp + memopt level=1`` 或 ``fsdp2_tp + memopt level=1``；
-  * 当前实测里，这两种组合都能把 ``Spikformer`` 的单卡峰值显存压到约 ``0.76 GB``。
+  * activation 和神经元状态显存占主导时，优先尝试 ``tp``；
+  * 如果还需要 FSDP2 风格的分片，再尝试 ``fsdp2_tp``，并显式使用 2D mesh，例如 ``--mesh-shape 2 2``。
 
-* **希望在速度和显存之间取得折中**：
+* **pipeline 实验或 stage 级显存压力**：
 
-  * ``fsdp2_tp`` 仍然是最稳妥的主推荐；
-  * 如果你的工作负载与这里的 ``Spikformer`` benchmark 接近，可以直接试 ``fsdp2_tp + memopt level=1``；
-  * 如果显存已经足够，则保留 ``fsdp2_tp`` 而不开 ``memopt``，可以减少优化前处理时间。
+  * 通过专用 pipeline runtime 使用 ``pp``；
+  * 当前 CIFAR10DVSVGG PP benchmark 中，``interleaved`` 是吞吐最好的默认调度，``1f1b`` 是显存更低的调度。
 
 * **只想要最省心、最稳妥的分布式训练入口**：
 
   * 从 ``dp`` 开始；
-  * 如果要进一步扩展到更大模型，再迁移到 ``fsdp2`` 或 ``fsdp2_tp``。
+  * 只有当模型规模或显存曲线确实需要时，再迁移到 ``fsdp2``、``tp``、``fsdp2_tp`` 或 ``pp``。
 
 如果你不想自己手工挑模式，现在训练脚本和 benchmark 也支持高层自动推荐器：
 
