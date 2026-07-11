@@ -157,6 +157,8 @@ def recommended_pipeline_microbatches(batch_size: int, num_stages: int) -> int:
     * **English**
 
     Recommend microbatches for pipeline parallelism.
+
+    :raises ValueError: If no recommended microbatch count evenly divides ``batch_size``.
     """
     if batch_size <= 0:
         raise ValueError(f"batch_size must be positive, but got {batch_size}.")
@@ -172,7 +174,10 @@ def recommended_pipeline_microbatches(batch_size: int, num_stages: int) -> int:
     for candidate in range(target, num_stages - 1, -1):
         if batch_size % candidate == 0:
             return candidate
-    return num_stages
+    raise ValueError(
+        f"batch_size ({batch_size}) must be divisible by at least one microbatch "
+        f"count in [{num_stages}, {target}] for pipeline parallelism."
+    )
 
 
 def _recommended_fsdp2_tp_mesh_shape(world_size: int) -> Optional[Tuple[int, int]]:

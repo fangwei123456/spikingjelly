@@ -12,6 +12,17 @@ from spikingjelly.activation_based.distributed.tensor_parallel.state import (
 )
 
 
+def _reversed_padding_repeated_twice(source: nn.Module) -> tuple[int, ...]:
+    padding = getattr(source, "_reversed_padding_repeated_twice", None)
+    if padding is not None:
+        return tuple(padding)
+
+    padding = source.padding
+    if isinstance(padding, int):
+        padding = (padding,)
+    return tuple(value for pad in reversed(padding) for value in (pad, pad))
+
+
 class _ColwiseBackwardAllReduce(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x: torch.Tensor, process_group, world_size: int):
@@ -78,9 +89,7 @@ class ChannelShardConv2d(nn.Module):
         self.dilation = source.dilation
         self.groups = source.groups
         self.padding_mode = source.padding_mode
-        self._reversed_padding_repeated_twice = tuple(
-            source._reversed_padding_repeated_twice
-        )
+        self._reversed_padding_repeated_twice = _reversed_padding_repeated_twice(source)
 
         self.in_channels = source.in_channels
         self.out_channels = source.out_channels
@@ -225,9 +234,7 @@ class ChannelShardConv1d(nn.Module):
         self.dilation = source.dilation
         self.groups = source.groups
         self.padding_mode = source.padding_mode
-        self._reversed_padding_repeated_twice = tuple(
-            source._reversed_padding_repeated_twice
-        )
+        self._reversed_padding_repeated_twice = _reversed_padding_repeated_twice(source)
         self.in_channels = source.in_channels
         self.out_channels = source.out_channels
         self.kernel_size = source.kernel_size

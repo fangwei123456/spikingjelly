@@ -48,9 +48,12 @@ def test_channel_shard_conv2d_preserves_nonzero_padding_mode():
         padding_mode="reflect",
         bias=True,
     )
-    wrapped = ChannelShardConv2d(source, process_group=None, mode="colwise")
     x = torch.randn(3, 2, 8, 8)
-    torch.testing.assert_close(wrapped(x), source(x))
+    reference = source(x)
+    delattr(source, "_reversed_padding_repeated_twice")
+
+    wrapped = ChannelShardConv2d(source, process_group=None, mode="colwise")
+    torch.testing.assert_close(wrapped(x), reference)
 
 
 def test_channel_shard_conv1d_preserves_padding_and_multistep_shape():
@@ -64,10 +67,25 @@ def test_channel_shard_conv1d_preserves_padding_and_multistep_shape():
         bias=True,
     )
     source.step_mode = "m"
-    wrapped = ChannelShardConv1d(source, process_group=None, mode="colwise")
     x = torch.randn(5, 3, 2, 8)
     reference = source(x.flatten(0, 1)).view(5, 3, 4, 8)
+    delattr(source, "_reversed_padding_repeated_twice")
+
+    wrapped = ChannelShardConv1d(source, process_group=None, mode="colwise")
     torch.testing.assert_close(wrapped(x), reference)
+
+
+def test_tensor_shard_memory_module_uses_channel_dim_for_single_step():
+    module = TensorShardMemoryModule(
+        neuron.IFNode(step_mode="s"),
+        shard_dim=2,
+        logical_dim_size=4,
+        process_group=None,
+    )
+    x = torch.ones(2, 4, 3, 3)
+
+    assert module.shard_dim == 1
+    assert module(x).shape == x.shape
 
 
 def test_channel_shard_conv2d_colwise_all_reduces_input_gradient(monkeypatch):

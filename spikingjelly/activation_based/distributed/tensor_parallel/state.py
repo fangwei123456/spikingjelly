@@ -69,7 +69,8 @@ class TensorShardMemoryModule(base.MemoryModule):
         """
         super().__init__()
         self.inner = copy.deepcopy(source)
-        self.shard_dim = shard_dim
+        self.step_mode = getattr(self.inner, "step_mode", "s")
+        self.shard_dim = 1 if shard_dim == 2 and self.step_mode == "s" else shard_dim
         self.logical_dim_size = logical_dim_size
         self.process_group = process_group
         self.rank = dist.get_rank(process_group) if process_group is not None else 0
@@ -81,7 +82,6 @@ class TensorShardMemoryModule(base.MemoryModule):
             _require_even_shard(logical_dim_size, self.world_size, "logical_dim_size")
             start, end = _shard_range(logical_dim_size, self.rank, self.world_size)
             self.expected_local_dim_size = end - start
-        self.step_mode = getattr(self.inner, "step_mode", "s")
         if hasattr(self.inner, "backend"):
             self.backend = self.inner.backend
 
