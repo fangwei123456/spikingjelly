@@ -859,7 +859,6 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
             runtime, optimize_ms = maybe_apply_pipeline_memopt(args, runtime)
         return runtime, None, optimize_ms
     mesh_shape = tuple(args.mesh_shape) if args.mesh_shape else None
-    eager_policy = _eager_policy_for_model(args.model, model)
     if args.mode == "dp":
         config = build_eager_config(
             mode="dp",
@@ -870,6 +869,7 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
         model, mesh, _ = configure_snn_distributed(model, config)
         return model, mesh, optimize_ms
     if args.mode == "tp":
+        eager_policy = _eager_policy_for_model(args.model, model)
         config = build_eager_config(
             mode="tp",
             device_type=device.type,
@@ -883,6 +883,7 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
             model, optimize_ms = maybe_apply_memopt(args, model, sample_input)
         return model, mesh, optimize_ms
     if args.mode == "fsdp2":
+        eager_policy = _eager_policy_for_model(args.model, model)
         config = build_eager_config(
             mode="fsdp2",
             device_type=device.type,
@@ -903,6 +904,7 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
             else 1
         )
         dp_mesh_dim = args.dp_mesh_dim if args.dp_mesh_dim is not None else 0
+        eager_policy = _eager_policy_for_model(args.model, model)
         if defer_memopt_until_after_tp:
             tp_config = build_eager_config(
                 mode="tp",

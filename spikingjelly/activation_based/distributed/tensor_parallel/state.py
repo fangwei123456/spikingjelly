@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import warnings
 from dataclasses import dataclass
 from typing import Any, Optional, Tuple
 
@@ -173,6 +174,12 @@ def TensorShardMemoryModule(
     process_group: Optional[Any] = None,
 ) -> base.MemoryModule:
     """Deprecated callable alias for :func:`make_tensor_shard_memory_module`."""
+    warnings.warn(
+        "TensorShardMemoryModule is deprecated and will be removed in a future "
+        "version. Use make_tensor_shard_memory_module instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return make_tensor_shard_memory_module(
         source=source,
         shard_dim=shard_dim,

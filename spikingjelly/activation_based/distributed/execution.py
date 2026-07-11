@@ -216,9 +216,14 @@ def configure_snn_distributed(
         if mesh_tensor is not None
         else getattr(device_mesh, "ndim", 1)
     )
-    if config.enable_data_parallel and mesh_ndim > 1 and config.dp_mesh_dim is None:
+    if (
+        (config.enable_data_parallel or config.enable_fsdp2)
+        and mesh_ndim > 1
+        and config.dp_mesh_dim is None
+    ):
         raise ValueError(
-            "dp_mesh_dim must be specified when enable_data_parallel=True on a multi-dimensional DeviceMesh."
+            "dp_mesh_dim must be specified when enable_data_parallel=True or "
+            "enable_fsdp2=True on a multi-dimensional DeviceMesh."
         )
     if config.tp_mesh_dim < 0 or config.tp_mesh_dim >= mesh_ndim:
         raise ValueError(

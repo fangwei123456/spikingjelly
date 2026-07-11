@@ -254,7 +254,8 @@ def test_tensor_shard_memory_module_keeps_source_state_dict_paths():
 
 def test_tensor_shard_memory_module_legacy_alias_points_to_factory():
     source = neuron.IFNode(step_mode="s")
-    module = TensorShardMemoryModule(source, -1, 4, None)
+    with pytest.warns(DeprecationWarning, match="TensorShardMemoryModule"):
+        module = TensorShardMemoryModule(source, -1, 4, None)
 
     assert distributed_dtensor.TensorShardMemoryModule is TensorShardMemoryModule
     assert module is not source

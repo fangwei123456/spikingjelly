@@ -298,6 +298,20 @@ def test_configure_snn_distributed_requires_dp_mesh_dim_for_multidim_data_parall
             configure_snn_distributed(model, config)
 
 
+def test_configure_snn_distributed_requires_dp_mesh_dim_for_multidim_fsdp2():
+    with single_rank_process_group():
+        model = ToyDistributedSNN()
+        config = SNNDistributedConfig(
+            device_type="cpu",
+            mesh_shape=(1, 1),
+            auto_tensor_parallel=False,
+            enable_fsdp2=True,
+            dp_mesh_dim=None,
+        )
+        with pytest.raises(ValueError, match="dp_mesh_dim must be specified"):
+            configure_snn_distributed(model, config)
+
+
 def test_configure_snn_distributed_rejects_out_of_range_mesh_dims():
     with single_rank_process_group():
         model = ToyDistributedSNN()

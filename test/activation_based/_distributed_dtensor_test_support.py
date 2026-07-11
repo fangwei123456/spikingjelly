@@ -82,6 +82,7 @@ from spikingjelly.activation_based.distributed.pipeline.partition import (
 from spikingjelly.activation_based.distributed.pipeline.runtime import (
     _MicrobatchResetStage,
     _make_pipeline_outputs_contiguous,
+    _measure_module_cost,
     SNNPipelineRuntime,
 )
 from spikingjelly.activation_based.distributed.pipeline.spikformer import (

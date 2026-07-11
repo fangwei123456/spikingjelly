@@ -245,25 +245,26 @@ def _measure_module_cost(module: nn.Module, input_value: Any) -> Tuple[Any, floa
     _reset_collected_modules(reset_modules)
     module.zero_grad(set_to_none=True)
     try:
-        if device is not None and device.type == "cuda":
-            torch.cuda.synchronize(device)
-            output_autograd = module(autograd_input)
-            loss = _tensor_tree_sum(output_autograd)
-            if loss is not None and loss.requires_grad:
-                start_event = torch.cuda.Event(enable_timing=True)
-                end_event = torch.cuda.Event(enable_timing=True)
-                start_event.record()
-                loss.backward()
-                end_event.record()
+        with torch.enable_grad():
+            if device is not None and device.type == "cuda":
                 torch.cuda.synchronize(device)
-                backward_ms = float(start_event.elapsed_time(end_event))
-        else:
-            output_autograd = module(autograd_input)
-            loss = _tensor_tree_sum(output_autograd)
-            if loss is not None and loss.requires_grad:
-                start_time = time.perf_counter()
-                loss.backward()
-                backward_ms = (time.perf_counter() - start_time) * 1000.0
+                output_autograd = module(autograd_input)
+                loss = _tensor_tree_sum(output_autograd)
+                if loss is not None and loss.requires_grad:
+                    start_event = torch.cuda.Event(enable_timing=True)
+                    end_event = torch.cuda.Event(enable_timing=True)
+                    start_event.record()
+                    loss.backward()
+                    end_event.record()
+                    torch.cuda.synchronize(device)
+                    backward_ms = float(start_event.elapsed_time(end_event))
+            else:
+                output_autograd = module(autograd_input)
+                loss = _tensor_tree_sum(output_autograd)
+                if loss is not None and loss.requires_grad:
+                    start_time = time.perf_counter()
+                    loss.backward()
+                    backward_ms = (time.perf_counter() - start_time) * 1000.0
         del output_autograd, loss
     finally:
         module.zero_grad(set_to_none=True)

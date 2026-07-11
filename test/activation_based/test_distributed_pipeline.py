@@ -35,6 +35,17 @@ def test_spikformer_pipeline_module_matches_baseline():
     torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
 
 
+def test_measure_module_cost_uses_autograd_inside_no_grad():
+    module = nn.Linear(3, 2)
+    x = torch.randn(4, 3)
+
+    with torch.no_grad():
+        _output, cost = _measure_module_cost(module, x)
+
+    assert cost > 0
+    assert module.weight.grad is None
+
+
 def test_cifar10dvs_vgg_pipeline_runtime_supports_interleaved_single_rank():
     with single_rank_process_group():
         model = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()

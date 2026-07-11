@@ -452,6 +452,27 @@ def test_eager_policy_for_model_rejects_unknown_model_name():
         bench._eager_policy_for_model("unknown_model", object())
 
 
+def test_build_model_dp_does_not_resolve_eager_policy(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured = {}
+
+    def _fake_configure(model, config):
+        captured["config"] = config
+        return model, None, None
+
+    def _unexpected_policy(*_args, **_kwargs):
+        raise AssertionError("dp mode must not resolve eager policy")
+
+    monkeypatch.setattr(bench, "configure_snn_distributed", _fake_configure)
+    monkeypatch.setattr(bench, "_eager_policy_for_model", _unexpected_policy)
+    args = _benchmark_args(mode="dp", model="cifar10dvs_vgg")
+
+    bench.build_model(args, torch.device("cpu"), world_size=1, batch_size_per_rank=1)
+
+    assert captured["config"].enable_data_parallel is True
+
+
 def test_build_model_fsdp2_disables_auto_tensor_parallel(
     monkeypatch: pytest.MonkeyPatch,
 ):
