@@ -229,30 +229,37 @@ def test_mstdp_learners_step_detaches_reward():
         learner.reset()
 
 
-def test_mstdp_learner_returns_detached_delta_w():
-    fc = layer.Linear(8, 5, bias=False)
-    sn = neuron.IFNode()
-    critic = nn.Linear(5, 1)
-    learner = learning.MSTDPLearner(
-        step_mode="s",
-        synapse=fc,
-        sn=sn,
-        tau_pre=2.0,
-        tau_post=2.0,
-        batch_size=3,
-        f_pre=f_weight,
-        f_post=f_weight,
-    )
-    in_spike = (torch.rand(3, 8) > 0.5).float()
-    out_spike = sn(fc(in_spike))
-    reward = critic(out_spike).squeeze(-1)
+def test_mstdp_learners_return_detached_delta_w():
+    for cls, kwargs, batched in (
+        (learning.MSTDPLearner, {"batch_size": 3}, True),
+        (learning.MSTDPETLearner, {"tau_trace": 2.0}, False),
+    ):
+        fc = layer.Linear(8, 5, bias=False)
+        sn = neuron.IFNode()
+        critic = nn.Linear(5, 1)
+        learner = cls(
+            step_mode="s",
+            synapse=fc,
+            sn=sn,
+            tau_pre=2.0,
+            tau_post=2.0,
+            f_pre=f_weight,
+            f_post=f_weight,
+            **kwargs,
+        )
+        if batched:
+            in_spike = (torch.rand(3, 8) > 0.5).float()
+        else:
+            in_spike = (torch.rand(8) > 0.5).float()
+        out_spike = sn(fc(in_spike))
+        reward = critic(out_spike).squeeze(-1) if batched else critic(out_spike).mean()
 
-    delta_w = learner.step(reward, on_grad=False)
-    assert delta_w.grad_fn is None
-    assert not delta_w.requires_grad
+        delta_w = learner.step(reward, on_grad=False)
+        assert delta_w.grad_fn is None
+        assert not delta_w.requires_grad
 
-    functional.reset_net(sn)
-    learner.reset()
+        functional.reset_net(sn)
+        learner.reset()
 
 
 def test_mstdp_learners_free_tensors_with_graph_connected_reward():
@@ -278,6 +285,6 @@ if __name__ == "__main__":
     test_stdp_learner_frees_tensors_across_runs()
     test_mstdp_learners_records_are_detached()
     test_mstdp_learners_step_detaches_reward()
-    test_mstdp_learner_returns_detached_delta_w()
+    test_mstdp_learners_return_detached_delta_w()
     test_mstdp_learners_free_tensors_with_graph_connected_reward()
     print("Done!")
