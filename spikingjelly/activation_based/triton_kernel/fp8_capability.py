@@ -105,10 +105,6 @@ else:
     _fp8_neuron_backward_probe_kernel = None
 
 
-def _torch_dtype_name(dtype: torch.dtype) -> str:
-    return str(dtype)
-
-
 def _fp8_dtype_candidates() -> dict[str, torch.dtype | None]:
     return {
         "torch.float8_e4m3fn": getattr(torch, "float8_e4m3fn", None),
@@ -255,6 +251,9 @@ def _backward_probe_cached(
             ).to(dtype=dtype)
             grad_x = torch.empty_like(grad_s)
             grad_v_init = torch.empty((4,), device=device, dtype=dtype)
+            # The kernel may compute in fp8/fp16/bf16. Keep the reduction buffer
+            # in fp32; Triton promotes on store and PyTorch reductions on fp8 are
+            # not generally useful.
             grad_r_tau = torch.empty((4,), device=device, dtype=torch.float32)
             _fp8_neuron_backward_probe_kernel[(1,)](
                 grad_s,
@@ -304,7 +303,7 @@ def _probe(dtype, device, compute_dtype="fp32") -> dict[str, Any]:
     )
     return dict(
         _probe_cached(
-            _torch_dtype_name(dtype),
+            str(dtype),
             str(device),
             compute_dtype_name,
             capability,
@@ -320,7 +319,7 @@ def _backward_probe(dtype, device, compute_dtype="fp32") -> dict[str, Any]:
     )
     return dict(
         _backward_probe_cached(
-            _torch_dtype_name(dtype),
+            str(dtype),
             str(device),
             compute_dtype_name,
             capability,
@@ -390,7 +389,6 @@ def triton_fp8_neuron_capability_report(device) -> dict[str, Any]:
             else _backward_probe(dtype, device)
         )
         report["dtypes"][dtype_name] = {
-            **dtype_report,
             "forward": dtype_report,
             "backward": backward_report,
         }

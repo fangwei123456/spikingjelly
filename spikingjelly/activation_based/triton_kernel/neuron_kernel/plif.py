@@ -1051,8 +1051,8 @@ def _setup_mp_plif_context(ctx, inputs, output):
     del forward_compute_dtype_id
     _, v_seq, h_seq = output
     storage_dtype = triton_neuron_dtype_id_to_torch_dtype(storage_dtype_id)
-    v_storage = v_init.to(dtype=storage_dtype).contiguous()
-    v_init_v_seq = torch.cat([v_storage.unsqueeze(0), v_seq], dim=0)
+    v_storage = v_init.detach().to(dtype=storage_dtype).contiguous()
+    v_init_v_seq = torch.cat([v_storage.unsqueeze(0), v_seq.detach()], dim=0)
     ctx.save_for_backward(h_seq, v_init_v_seq, r_tau)
     ctx.x_dtype = x_seq.dtype
     ctx.v_init_dtype = v_init.dtype

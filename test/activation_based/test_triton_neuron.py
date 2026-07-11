@@ -217,10 +217,10 @@ def test_triton_fp8_capability_report_cpu_is_unavailable():
     report = triton_fp8_neuron_capability_report(torch.device("cpu"))
     assert report["device_type"] == "cpu"
     for dtype_report in report["dtypes"].values():
-        assert dtype_report["available"] is False
-        assert dtype_report["reason"]
         assert dtype_report["forward"]["available"] is False
+        assert dtype_report["forward"]["reason"]
         assert dtype_report["backward"]["available"] is False
+        assert dtype_report["backward"]["reason"]
 
 
 def test_triton_fp8_capability_rejects_invalid_dtype():
@@ -241,6 +241,11 @@ def test_normalize_triton_compute_dtype_accepts_native_fp8_dtype():
             triton_utils.normalize_triton_compute_dtype_name(torch.float8_e5m2)
             == "fp8"
         )
+
+
+def test_normalize_triton_storage_dtype_rejects_ambiguous_fp8_alias():
+    with pytest.raises(ValueError, match="ambiguous"):
+        triton_utils.normalize_triton_storage_dtype("fp8")
 
 
 def test_resolve_triton_compute_dtype_reports_unavailable_type_dict(monkeypatch):
@@ -459,6 +464,14 @@ def test_triton_neuron_forward_plan_matches_config():
         backward_compute_dtype="fp32",
         spike_dtype=torch.float32,
         save_intermediates=False,
+    )
+    assert not plan.matches(
+        neuron_type="lif",
+        device="invalid-device",
+        storage_dtype=torch.float32,
+        compute_dtype="fp32",
+        spike_dtype=torch.float32,
+        save_intermediates=True,
     )
 
 

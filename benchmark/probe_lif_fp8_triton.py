@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import time
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,7 @@ from spikingjelly.activation_based.triton_kernel.neuron_kernel.plif import (
     multistep_plif_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.utils import (
+    TritonNeuronForwardPlan,
     prepare_triton_neuron_forward_plan,
 )
 from spikingjelly.activation_based.triton_kernel.triton_utils import (
@@ -59,6 +61,12 @@ def _variant_timeout(seconds: float | None):
         raise _VariantTimeoutError(f"variant exceeded {seconds:g}s timeout")
 
     if not hasattr(signal, "SIGALRM") or not hasattr(signal, "setitimer"):
+        warnings.warn(
+            "Per-variant timeout requested but signal.SIGALRM/"
+            "signal.setitimer is unavailable on this platform; skipping "
+            "timeout enforcement.",
+            stacklevel=2,
+        )
         yield
         return
 
@@ -240,7 +248,7 @@ def _prepare_variant_plan(
     storage_dtype: torch.dtype,
     compute_dtype: str,
     backward_compute_dtype: str = "fp32",
-):
+) -> TritonNeuronForwardPlan:
     return prepare_triton_neuron_forward_plan(
         neuron_type=neuron_type,
         device=x.device,
@@ -255,7 +263,7 @@ def _prepare_variant_plan(
 def _call_mixed_precision_variant_with_plan(
     x: torch.Tensor,
     *,
-    plan,
+    plan: TritonNeuronForwardPlan,
     neuron_type: str,
     r_tau: float,
     v_threshold: float,
@@ -712,6 +720,10 @@ def main() -> None:
     device = torch.device(args.device)
     if device.type != "cuda" or not torch.cuda.is_available():
         raise RuntimeError("This probe requires CUDA.")
+    if args.T <= 0:
+        raise ValueError("--T must be > 0.")
+    if args.N <= 0:
+        raise ValueError("--N must be > 0.")
     torch.manual_seed(0)
 
     capability = triton_fp8_neuron_capability_report(device)
@@ -762,10 +774,14 @@ def main() -> None:
         for item in args.compute_dtypes.split(",")
         if item.strip()
     ]
+    if not compute_modes:
+        raise ValueError("--compute-dtypes must contain at least one dtype.")
     backward_compute_dtype = normalize_triton_compute_dtype_name(
         args.backward_compute_dtype
     )
     neuron_types = [item.strip() for item in args.neurons.split(",") if item.strip()]
+    if not neuron_types:
+        raise ValueError("--neurons must contain at least one of 'if', 'lif', 'plif'.")
     unsupported_neurons = sorted(set(neuron_types) - {"if", "lif", "plif"})
     if unsupported_neurons:
         raise ValueError(f"Unsupported neuron types: {unsupported_neurons}.")

@@ -69,7 +69,7 @@ class TritonNeuronExecutionPlan:
             backward_compute_dtype_name = normalize_triton_compute_dtype_name(
                 backward_compute_dtype
             )
-        except ValueError:
+        except (ValueError, RuntimeError, TypeError):
             return False
         return (
             self.neuron_type == neuron_type
