@@ -163,6 +163,52 @@ def test_apply_pipeline_stage_memopt_supports_legacy_memopt_signature(monkeypatc
     assert calls["count"] == 1
 
 
+def test_apply_pipeline_stage_memopt_moves_dummy_input_to_runtime_device(monkeypatch):
+    torch.manual_seed(0)
+    model = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
+    stage = _CIFAR10DVSVGGPipelineStage(
+        feature_modules=[copy.deepcopy(model.features[0])],
+        classifier=None,
+        transpose_input=True,
+    ).eval()
+    wrapped_stage = _MicrobatchResetStage(stage)
+    runtime = SNNPipelineRuntime(
+        schedule=None,
+        stage_module=wrapped_stage,
+        stage_modules=(wrapped_stage,),
+        local_stage_indices=(0,),
+        stage_index=0,
+        num_stages=2,
+        device=torch.device("meta"),
+        n_microbatches=2,
+        model_family="cifar10dvs_vgg",
+        split_points=("stages.1",),
+        stage_costs=(10.0, 1.0),
+        stage_input_examples=(torch.randn(1, 2, 2, 48, 48),),
+    )
+
+    import spikingjelly.activation_based.memopt as memopt
+
+    def fake_memory_optimization(
+        module, target_types, dummy_input, compress_x, level, verbose
+    ):
+        assert next(module.parameters()).device.type == "meta"
+        assert dummy_input[0].device.type == "meta"
+        return module
+
+    monkeypatch.setattr(memopt, "memory_optimization", fake_memory_optimization)
+
+    _, _, applied = apply_pipeline_stage_memopt(
+        runtime,
+        memopt_level=1,
+        compress_x=False,
+        stage_budget_ratio=0.5,
+        use_plan_cache=False,
+    )
+
+    assert applied is True
+
+
 def test_parse_pipeline_layout_validates_counts():
     counts = parse_pipeline_layout("1|2|3", 3, 6)
     assert counts == (1, 2, 3)

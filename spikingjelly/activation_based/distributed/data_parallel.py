@@ -41,4 +41,10 @@ def materialize_dtensor_output(output):
     full_tensor = getattr(output, "full_tensor", None)
     if callable(full_tensor):
         return full_tensor()
+    if isinstance(output, tuple):
+        return tuple(materialize_dtensor_output(item) for item in output)
+    if isinstance(output, list):
+        return [materialize_dtensor_output(item) for item in output]
+    if isinstance(output, dict):
+        return {key: materialize_dtensor_output(value) for key, value in output.items()}
     return output

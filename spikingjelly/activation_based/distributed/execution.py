@@ -1,4 +1,3 @@
-import os
 from typing import Optional, Tuple
 
 import torch
@@ -322,12 +321,7 @@ def configure_snn_distributed(
         dp_group = _resolve_dp_group_from_mesh(device_mesh, config.dp_mesh_dim)
         device_ids = None
         if config.device_type == "cuda" and torch.cuda.is_available():
-            local_rank = (
-                int(os.environ["LOCAL_RANK"])
-                if "LOCAL_RANK" in os.environ
-                else int(os.environ.get("RANK", 0))
-            )
-            device_ids = [local_rank]
+            device_ids = [torch.cuda.current_device()]
         module = prepare_snn_data_parallel(
             module=module,
             process_group=dp_group,

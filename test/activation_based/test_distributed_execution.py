@@ -100,6 +100,37 @@ def test_configure_snn_distributed_conv_only_tp_does_not_build_linear_plan(
         assert mesh is not None
 
 
+def test_configure_snn_distributed_uses_current_cuda_device_for_ddp(monkeypatch):
+    import spikingjelly.activation_based.distributed.execution as execution
+
+    captured = {}
+
+    monkeypatch.setattr(execution.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(execution.torch.cuda, "current_device", lambda: 3)
+    monkeypatch.setattr(execution, "_resolve_dp_group_from_mesh", lambda *args: None)
+
+    def fake_prepare_snn_data_parallel(module, **kwargs):
+        captured["device_ids"] = kwargs["device_ids"]
+        return module
+
+    monkeypatch.setattr(
+        execution, "prepare_snn_data_parallel", fake_prepare_snn_data_parallel
+    )
+
+    module, _, _ = configure_snn_distributed(
+        ToyDistributedSNN(),
+        SNNDistributedConfig(
+            device_type="cuda",
+            device_mesh=SimpleNamespace(ndim=1),
+            enable_data_parallel=True,
+            auto_tensor_parallel=False,
+        ),
+    )
+
+    assert isinstance(module, ToyDistributedSNN)
+    assert captured["device_ids"] == [3]
+
+
 def test_apply_returns_unified_runtime_single_rank():
     with single_rank_process_group():
         model = ToyDistributedSNN()

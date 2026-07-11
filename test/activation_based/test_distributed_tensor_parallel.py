@@ -115,6 +115,37 @@ def test_channel_shard_conv1d_preserves_padding_and_multistep_shape():
     torch.testing.assert_close(wrapped(x), reference)
 
 
+def test_channel_shard_conv_preserves_requires_grad_flags():
+    for conv_cls, wrapper_cls in (
+        (nn.Conv1d, ChannelShardConv1d),
+        (nn.Conv2d, ChannelShardConv2d),
+    ):
+        for mode in ("colwise", "rowwise"):
+            source = conv_cls(4, 8, kernel_size=1, bias=True)
+            source.weight.requires_grad_(False)
+            source.bias.requires_grad_(False)
+
+            wrapped = wrapper_cls(source, process_group=None, mode=mode)
+
+            assert wrapped.weight.requires_grad is False
+            assert wrapped.bias.requires_grad is False
+
+
+def test_channel_shard_batch_norm_preserves_requires_grad_flags():
+    for bn_cls, wrapper_cls in (
+        (nn.BatchNorm1d, ChannelShardBatchNorm1d),
+        (nn.BatchNorm2d, ChannelShardBatchNorm2d),
+    ):
+        source = bn_cls(4)
+        source.weight.requires_grad_(False)
+        source.bias.requires_grad_(False)
+
+        wrapped = wrapper_cls(source, process_group=None)
+
+        assert wrapped.weight.requires_grad is False
+        assert wrapped.bias.requires_grad is False
+
+
 def test_make_tensor_shard_memory_module_uses_channel_dim_for_single_step():
     source = neuron.IFNode(step_mode="s")
     module = make_tensor_shard_memory_module(
@@ -265,6 +296,32 @@ def test_channel_shard_conv2d_colwise_all_reduces_input_gradient(monkeypatch):
     torch.testing.assert_close(x.grad, x_ref.grad * 2)
 
 
+def test_colwise_backward_all_reduce_contiguous_grad(monkeypatch):
+    from spikingjelly.activation_based.distributed.tensor_parallel.channel import (
+        _ColwiseBackwardAllReduce,
+    )
+
+    x = torch.randn(2, 3, requires_grad=True)
+    non_contiguous_grad = torch.ones(3, 2).t()
+    assert not non_contiguous_grad.is_contiguous()
+    calls = {"count": 0}
+
+    def _fake_all_reduce(tensor, group=None):
+        calls["count"] += 1
+        assert tensor.is_contiguous()
+        return tensor
+
+    monkeypatch.setattr(distributed_dtensor.dist, "is_available", lambda: True)
+    monkeypatch.setattr(distributed_dtensor.dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(distributed_dtensor.dist, "all_reduce", _fake_all_reduce)
+
+    y = _ColwiseBackwardAllReduce.apply(x, None, 2)
+    y.backward(non_contiguous_grad)
+
+    assert calls["count"] == 1
+    torch.testing.assert_close(x.grad, non_contiguous_grad)
+
+
 def test_channel_shard_conv1d_colwise_all_reduces_input_gradient(monkeypatch):
     torch.manual_seed(0)
     source = nn.Conv1d(2, 4, kernel_size=1, bias=False)
@@ -310,6 +367,26 @@ def test_channel_shard_batch_norm1d_supports_cumulative_momentum():
 
     torch.testing.assert_close(wrapped(x), source(x))
     assert wrapped.num_batches_tracked.item() == source.num_batches_tracked.item()
+
+
+def test_materialize_dtensor_output_recurses_nested_containers():
+    class FakeDTensor:
+        def __init__(self, value):
+            self.value = value
+
+        def full_tensor(self):
+            return self.value
+
+    result = materialize_dtensor_output(
+        {
+            "a": FakeDTensor(torch.tensor([1])),
+            "b": [FakeDTensor(torch.tensor([2])), (FakeDTensor(torch.tensor([3])),)],
+        }
+    )
+
+    torch.testing.assert_close(result["a"], torch.tensor([1]))
+    torch.testing.assert_close(result["b"][0], torch.tensor([2]))
+    torch.testing.assert_close(result["b"][1][0], torch.tensor([3]))
 
 
 def test_auto_tensor_parallel_plan_and_forward_match_single_rank():

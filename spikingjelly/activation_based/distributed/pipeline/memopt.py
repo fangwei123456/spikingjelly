@@ -119,6 +119,9 @@ def apply_pipeline_stage_memopt(
             raise RuntimeError(
                 f"Pipeline memopt requires a stage_input_example for logical stage {logical_idx}."
             )
+        stage_wrapper.inner = stage_wrapper.inner.to(runtime.device)
+        if hasattr(stage_input_example, "to"):
+            stage_input_example = stage_input_example.to(runtime.device)
         optimize_kwargs = dict(
             dummy_input=(stage_input_example,),
             compress_x=compress_x,

@@ -50,6 +50,7 @@ class _ColwiseBackwardAllReduce(torch.autograd.Function):
     def backward(ctx, grad_output: torch.Tensor):
         if ctx.world_size > 1 and dist.is_available() and dist.is_initialized():
             _record_tp_all_reduce(grad_output)
+            grad_output = grad_output.contiguous()
             dist.all_reduce(grad_output, group=ctx.process_group)
         return grad_output, None, None
 
@@ -121,9 +122,15 @@ class ChannelShardConv2d(nn.Module):
                 else None
             )
             self.local_out_channels = end - start
-            self.register_parameter("weight", nn.Parameter(weight))
             self.register_parameter(
-                "bias", nn.Parameter(bias) if bias is not None else None
+                "weight",
+                nn.Parameter(weight, requires_grad=source.weight.requires_grad),
+            )
+            self.register_parameter(
+                "bias",
+                nn.Parameter(bias, requires_grad=source.bias.requires_grad)
+                if bias is not None
+                else None,
             )
         elif mode == "rowwise":
             _require_even_shard(source.in_channels, self.world_size, "in_channels")
@@ -131,9 +138,15 @@ class ChannelShardConv2d(nn.Module):
             weight = source.weight.detach()[:, start:end].clone()
             bias = source.bias.detach().clone() if source.bias is not None else None
             self.local_in_channels = end - start
-            self.register_parameter("weight", nn.Parameter(weight))
             self.register_parameter(
-                "bias", nn.Parameter(bias) if bias is not None else None
+                "weight",
+                nn.Parameter(weight, requires_grad=source.weight.requires_grad),
+            )
+            self.register_parameter(
+                "bias",
+                nn.Parameter(bias, requires_grad=source.bias.requires_grad)
+                if bias is not None
+                else None,
             )
         else:
             raise ValueError(f"Unsupported ChannelShardConv2d mode '{mode}'.")
@@ -265,9 +278,15 @@ class ChannelShardConv1d(nn.Module):
                 else None
             )
             self.local_out_channels = end - start
-            self.register_parameter("weight", nn.Parameter(weight))
             self.register_parameter(
-                "bias", nn.Parameter(bias) if bias is not None else None
+                "weight",
+                nn.Parameter(weight, requires_grad=source.weight.requires_grad),
+            )
+            self.register_parameter(
+                "bias",
+                nn.Parameter(bias, requires_grad=source.bias.requires_grad)
+                if bias is not None
+                else None,
             )
         elif mode == "rowwise":
             _require_even_shard(source.in_channels, self.world_size, "in_channels")
@@ -275,9 +294,15 @@ class ChannelShardConv1d(nn.Module):
             weight = source.weight.detach()[:, start:end].clone()
             bias = source.bias.detach().clone() if source.bias is not None else None
             self.local_in_channels = end - start
-            self.register_parameter("weight", nn.Parameter(weight))
             self.register_parameter(
-                "bias", nn.Parameter(bias) if bias is not None else None
+                "weight",
+                nn.Parameter(weight, requires_grad=source.weight.requires_grad),
+            )
+            self.register_parameter(
+                "bias",
+                nn.Parameter(bias, requires_grad=source.bias.requires_grad)
+                if bias is not None
+                else None,
             )
         else:
             raise ValueError(f"Unsupported ChannelShardConv1d mode '{mode}'.")
@@ -390,10 +415,18 @@ class ChannelShardBatchNorm2d(nn.Module):
 
         if self.affine:
             self.register_parameter(
-                "weight", nn.Parameter(source.weight.detach()[start:end].clone())
+                "weight",
+                nn.Parameter(
+                    source.weight.detach()[start:end].clone(),
+                    requires_grad=source.weight.requires_grad,
+                ),
             )
             self.register_parameter(
-                "bias", nn.Parameter(source.bias.detach()[start:end].clone())
+                "bias",
+                nn.Parameter(
+                    source.bias.detach()[start:end].clone(),
+                    requires_grad=source.bias.requires_grad,
+                ),
             )
         else:
             self.register_parameter("weight", None)
@@ -511,10 +544,18 @@ class ChannelShardBatchNorm1d(nn.Module):
 
         if self.affine:
             self.register_parameter(
-                "weight", nn.Parameter(source.weight.detach()[start:end].clone())
+                "weight",
+                nn.Parameter(
+                    source.weight.detach()[start:end].clone(),
+                    requires_grad=source.weight.requires_grad,
+                ),
             )
             self.register_parameter(
-                "bias", nn.Parameter(source.bias.detach()[start:end].clone())
+                "bias",
+                nn.Parameter(
+                    source.bias.detach()[start:end].clone(),
+                    requires_grad=source.bias.requires_grad,
+                ),
             )
         else:
             self.register_parameter("weight", None)
