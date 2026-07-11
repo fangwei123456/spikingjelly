@@ -189,6 +189,15 @@ def configure_snn_distributed(
                 raise ValueError(
                     f"dp_mesh_dim={config.dp_mesh_dim} is out of range for a mesh with {len(config.mesh_shape)} dimensions."
                 )
+            if (
+                should_apply_tp
+                and config.dp_mesh_dim is not None
+                and config.tp_mesh_dim == config.dp_mesh_dim
+            ):
+                raise ValueError(
+                    "tp_mesh_dim and dp_mesh_dim must be different when tensor parallelism "
+                    f"is enabled, but both are {config.tp_mesh_dim}."
+                )
             generated_names = [f"mesh_dim_{i}" for i in range(len(config.mesh_shape))]
             generated_names[config.tp_mesh_dim] = "tp"
             if config.dp_mesh_dim is not None:
@@ -221,6 +230,15 @@ def configure_snn_distributed(
     ):
         raise ValueError(
             f"dp_mesh_dim={config.dp_mesh_dim} is out of range for a mesh with {mesh_ndim} dimensions."
+        )
+    if (
+        should_apply_tp
+        and config.dp_mesh_dim is not None
+        and config.tp_mesh_dim == config.dp_mesh_dim
+    ):
+        raise ValueError(
+            "tp_mesh_dim and dp_mesh_dim must be different when tensor parallelism "
+            f"is enabled, but both are {config.tp_mesh_dim}."
         )
 
     if should_apply_tp and config.enable_data_parallel and not config.enable_fsdp2:

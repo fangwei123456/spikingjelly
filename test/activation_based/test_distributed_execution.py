@@ -292,6 +292,43 @@ def test_configure_snn_distributed_rejects_out_of_range_mesh_dims():
             )
 
 
+def test_configure_snn_distributed_rejects_overlapping_tp_and_dp_mesh_dims():
+    with single_rank_process_group():
+        model = ToyDistributedSNN()
+        with pytest.raises(ValueError, match="tp_mesh_dim and dp_mesh_dim"):
+            configure_snn_distributed(
+                model,
+                SNNDistributedConfig(
+                    device_type="cpu",
+                    mesh_shape=(1, 1),
+                    enable_fsdp2=True,
+                    tensor_parallel_roots=["features"],
+                    auto_tensor_parallel=True,
+                    tp_mesh_dim=1,
+                    dp_mesh_dim=1,
+                ),
+            )
+
+
+def test_configure_snn_distributed_allows_same_dim_for_data_parallel_only():
+    with single_rank_process_group():
+        model = ToyDistributedSNN()
+        distributed_model, mesh, _ = configure_snn_distributed(
+            model,
+            SNNDistributedConfig(
+                device_type="cpu",
+                mesh_shape=(1,),
+                auto_tensor_parallel=False,
+                enable_data_parallel=True,
+                tp_mesh_dim=0,
+                dp_mesh_dim=0,
+            ),
+        )
+
+        assert isinstance(distributed_model, DistributedDataParallel)
+        assert mesh.ndim == 1
+
+
 def test_high_level_cifar10dvs_vgg_helper():
     with single_rank_process_group():
         model = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
