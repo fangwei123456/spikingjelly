@@ -169,6 +169,8 @@ def test_recommend_snn_distributed_strategy_capacity_falls_back_when_batch_too_s
     assert recommendation.mode == "fsdp2_tp"
     assert recommendation.memopt_level == 1
     assert recommendation.mesh_shape == (2, 2)
+    assert any("global batch is smaller" in note for note in recommendation.rationale)
+    assert not any("Pipeline APIs are unavailable" in note for note in recommendation.rationale)
 
 def test_recommended_pipeline_microbatches_rejects_too_small_batch():
     with pytest.raises(ValueError, match=r"batch_size .* must be >= num_stages"):

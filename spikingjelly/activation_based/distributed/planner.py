@@ -382,9 +382,14 @@ def recommend_snn_distributed_strategy(
                 rationale=tuple(rationale),
             )
 
-    rationale.append(
-        "Pipeline APIs are unavailable, so capacity preference falls back to the strongest memory-oriented strategy."
-    )
+    if pipeline_available:
+        rationale.append(
+            "Pipeline parallelism is infeasible for this batch size, so capacity preference falls back to the strongest memory-oriented strategy."
+        )
+    else:
+        rationale.append(
+            "Pipeline APIs are unavailable, so capacity preference falls back to the strongest memory-oriented strategy."
+        )
     fallback = recommend_snn_distributed_strategy(
         model=model,
         world_size=world_size,
