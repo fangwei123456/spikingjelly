@@ -10,7 +10,7 @@ include = ["spikingjelly*"]
 
 [project]
 name = "spikingjelly"
-version = "2.0.0.dev0"
+version = "2.0.0.dev1"
 description = "A deep learning framework for SNNs built on PyTorch."
 readme = {file = "README.md", content-type = "text/markdown"}
 authors = [

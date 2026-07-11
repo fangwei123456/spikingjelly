@@ -5,17 +5,13 @@ from typing import Mapping, Optional, Sequence, Union
 import torch.nn as nn
 
 from .adapters import resolve_adapter
-from .dtensor import (
-    SNNDistributedAnalysis,
-    SNNDistributedConfig,
-    SNN_DISTRIBUTED_PREFERENCES,
-    analyze_snn_distributed_capability,
-    configure_snn_distributed,
-    recommend_snn_distributed_strategy,
-)
+from .analysis import SNNDistributedAnalysis, analyze_snn_distributed_capability
+from .execution import build_eager_config, configure_snn_distributed
 from .planner import (
     DistributedFeatureSet,
+    SNN_DISTRIBUTED_PREFERENCES,
     SNNDistributedPlan,
+    recommend_snn_distributed_strategy,
 )
 from .runtime import SNNDistributedRuntime
 from .topology import SNNDistributedTopology
@@ -189,14 +185,13 @@ def apply(
             device_type=device_type,
             device_mesh=device_mesh,
         )
-    config = SNNDistributedConfig(
+    config = build_eager_config(
+        mode=plan.mode,
         device_type=device_type,
         mesh_shape=plan.mesh_shape or topology.mesh_shape,
         device_mesh=device_mesh,
         tp_mesh_dim=plan.tp_mesh_dim,
         dp_mesh_dim=plan.dp_mesh_dim,
-        enable_data_parallel=plan.mode == "dp",
-        enable_fsdp2=plan.mode in ("fsdp2", "fsdp2_tp"),
         tensor_parallel_roots=plan.tensor_parallel_roots,
         auto_tensor_parallel=plan.mode in ("tp", "fsdp2_tp"),
     )

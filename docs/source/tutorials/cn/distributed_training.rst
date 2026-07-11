@@ -3,76 +3,142 @@ SNN 分布式训练（DTensor / FSDP2）
 
 English version: :doc:`../en/distributed_training`
 
-本教程介绍 ``spikingjelly.activation_based.distributed`` 中新增的实验性分布式训练工具。当前实现重点支持：
+本教程介绍 ``spikingjelly.activation_based.distributed`` 中的分布式训练工具。它有两条阅读路线：
 
-* `DP`：常规数据并行
-* `TP`：面向 SNN 的简单 tensor parallel
-* `FSDP2`：基于 DTensor 的参数、梯度与优化器状态分片
-* `FSDP2 + TP`：推荐的混合分布式训练方案
-* `PP`：实验性的 pipeline parallel（当前先支持 ``CIFAR10DVSVGG`` 和 ``Spikformer``）
+* 新手可以沿着 **Analyze -> Plan -> Apply** 和官方训练脚本使用。
+* 高级用户在需要手工 mesh 维度、tensor-parallel roots、FSDP roots 或 pipeline 控制时，可以直接使用 ``SNNDistributedConfig``。
 
-其中，传统的 ``DDP + TP`` 组合在当前 PyTorch 版本下仍会在参数同步阶段遇到 ``Tensor`` / ``DTensor`` 混用问题，因此本实现会直接提示用户改用 ``FSDP2 + TP``。
+运行示例前，需要了解最小 PyTorch 分布式概念：``torchrun`` 会为每个 rank 启动一个进程，``world_size`` 是参与训练的 rank 数，``init_process_group`` 会创建 DeviceMesh、DTensor、DDP、FSDP2 和 pipeline schedule 使用的进程组。
 
-快速开始
-++++++++++++++++++++++++
+为什么 SNN 分布式训练需要特殊处理
+++++++++++++++++++++++++++++++++++
 
-当前低层入口是 :func:`configure_snn_distributed <spikingjelly.activation_based.distributed.dtensor.configure_snn_distributed>`，它位于 ``spikingjelly.activation_based.distributed.dtensor``。统一的新公开接口则是 ``spikingjelly.activation_based.distributed`` 下的 ``analyze`` / ``plan`` / ``apply``。
+SNN 模块会在时间步之间携带神经元状态。分布式包装必须让这些状态和每个 rank 持有的 activation shard 保持一致。例如，Linear tensor parallelism 切分特征维，而 Conv/BN/neuron channel tensor parallelism 切分通道维。因此，有状态神经元应该只保存本地 shard 对应的状态，而不是悄悄复制完整全局状态。
 
-例如，对 ``CIFAR10DVSVGG`` 启用纯 FSDP2：
+Pipeline parallelism 还有另一个 SNN 特有问题：不同 microbatch 不能共享神经元状态。pipeline runtime 会在每个 stage 内的 microbatch 之间重置状态，避免一个 microbatch 的电压或其它状态泄漏到下一个 microbatch。
+
+并行模式
+++++++++
+
+.. list-table::
+    :header-rows: 1
+
+    * - 模式
+      - 适用目标
+      - Mesh
+      - 说明
+    * - ``dp``
+      - 简单吞吐扩展
+      - 1D data mesh
+      - 使用 DDP 风格复制；可选 ``ZeroRedundancyOptimizer``。
+    * - ``tp``
+      - 降低单 rank activation/state 显存
+      - 1D tensor mesh
+      - Linear TP 较稳定；Conv/BN 和 Spikformer TP 是实验性开关。
+    * - ``fsdp2``
+      - 参数、梯度、优化器状态分片
+      - 1D data mesh
+      - 使用 DTensor/FSDP2，是推荐的显存基线。
+    * - ``fsdp2_tp``
+      - 混合显存优化与模型并行
+      - 2D ``(dp, tp)`` mesh
+      - 推荐的混合路径；避开不支持的 DDP + TP 同步问题。
+    * - ``pp``
+      - stage 级显存压力或 pipeline 实验
+      - pipeline ranks，可选 virtual stages
+      - 使用专用 pipeline builder，不走统一 ``apply()`` 路径。
+
+DeviceMesh 为 rank 提供名字和坐标。DTensor 记录 tensor 在 mesh 上的 placement。SNN helpers 用这两个概念让模型权重、梯度、优化器状态、activation 和神经元状态与所选策略对齐。
+
+新手主线：Analyze -> Plan -> Apply
+++++++++++++++++++++++++++++++++++
+
+高层工作流使用包根公开接口：
 
 .. code:: python
 
-    from spikingjelly.activation_based.distributed.dtensor import (
-        SNNDistributedConfig,
-        configure_snn_distributed,
-    )
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import TensorDataset
+
+    from spikingjelly.activation_based import distributed as sjdist
     from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
-    import torch.distributed as dist
 
-    world_size = dist.get_world_size()  # 需要先 init_process_group()
-    model = CIFAR10DVSVGG(dropout=0.0, backend='inductor')
-    model, mesh, analysis = configure_snn_distributed(
-        model,
-        SNNDistributedConfig(
-            device_type='cuda',
-            mesh_shape=(world_size,),
-            auto_tensor_parallel=False,
-            enable_fsdp2=True,
-            fsdp_shard_roots=['features', 'classifier'],
-            fsdp_shard_module_root=True,
-            dp_mesh_dim=0,
-        ),
+    model = CIFAR10DVSVGG(dropout=0.0, backend="torch")
+    dataset = TensorDataset(
+        torch.randn(4, 2, 2, 48, 48),
+        torch.tensor([0, 1, 2, 3]),
     )
 
-若想启用 ``FSDP2 + TP``，可使用 2D mesh：
-
-.. code:: python
-
-    model, mesh, analysis = configure_snn_distributed(
-        model,
-        SNNDistributedConfig(
-            device_type='cuda',
-            mesh_shape=(2, 2),   # (dp, tp)
-            enable_fsdp2=True,
-            fsdp_shard_roots=['features'],
-            fsdp_shard_module_root=False,
-            tensor_parallel_roots=['classifier'],
-            auto_tensor_parallel=True,
-            experimental_conv_tensor_parallel=True,
-            conv_tensor_parallel_roots=['features'],
-            dp_mesh_dim=0,
-            tp_mesh_dim=1,
+    analysis = sjdist.analyze(model, model_family="cifar10dvs_vgg")
+    plan = sjdist.plan(
+        analysis=analysis,
+        objective="memory",
+        topology={"dp": 1},
+        backend="torch",
+        batch_size=2,
+        model_family="cifar10dvs_vgg",
+        mode="fsdp2",
+        features=sjdist.DistributedFeatureSet(
+            allow_experimental_conv_tp=False,
         ),
     )
+    runtime = sjdist.apply(model=model, plan=plan, device_type="cpu")
 
-训练脚本
-++++++++++++++++++++++++
+    optimizer = runtime.build_optimizer(torch.optim.SGD, lr=1e-3)
+    loader = runtime.prepare_dataloader(
+        dataset=dataset,
+        batch_size=2,
+        shuffle=False,
+        num_workers=0,
+        drop_last=False,
+        pin_memory=False,
+    )
+    criterion = nn.CrossEntropyLoss()
 
-仓库中提供了一个真实训练入口：
+    runtime.model.train()
+    for images, labels in loader:
+        optimizer.zero_grad(set_to_none=True)
+        logits = runtime.model(images.float())
+        logits, labels = runtime.prepare_classification_output(logits, labels)
+        loss = criterion(logits, labels)
+        loss.backward()
+        optimizer.step()
+        runtime.reset_state()
 
-* ``spikingjelly/activation_based/examples/memopt/train_distributed.py``
+多进程启动使用同一份代码，但要在 ``torchrun`` 下运行，并在创建 distributed runtime 前初始化进程组：
 
-示例：
+.. code:: bash
+
+    torchrun --nproc_per_node=4 train.py
+
+内部工作流程
+++++++++++++
+
+高层路径保持较小的公开接口，内部实现拆到聚焦模块：
+
+.. code:: text
+
+    analyze(model) -> analysis.py scans stateful modules and TP candidates
+        |
+        v
+    plan(...) -> planner.py chooses mode, mesh, roots, and notes
+        |
+        v
+    apply(...) -> api.py selects an adapter when a model family needs one
+        |
+        v
+    build_eager_config(...) -> execution.py assembles SNNDistributedConfig
+        |
+        v
+    configure_snn_distributed(...) -> TP, FSDP2, or DDP modules are applied
+
+模型 adapter 只提供模型族 policy，例如 classifier roots、Conv/BN roots、Spikformer roots 和 FSDP shard roots。共享 eager config builder 是唯一把 ``mode + topology + policy + feature flags`` 展开成 ``SNNDistributedConfig`` 的位置。
+
+官方训练脚本
+++++++++++++
+
+仓库提供 CIFAR10-DVS 训练入口：
 
 .. code:: bash
 
@@ -86,55 +152,82 @@ English version: :doc:`../en/distributed_training`
       --epochs 1 \
       --print-summary
 
-该脚本支持的模式有：
+常用模式选择：
 
-* ``none``
-* ``dp``
-* ``tp``
-* ``fsdp2``
-* ``fsdp2_tp``
-* ``pp``：当前是实验性训练入口，优先面向 smoke benchmark 和结构验证
+* 先用 ``fsdp2`` 在 1D mesh 上降低显存。
+* 当模型也适合 tensor parallelism 时，使用 ``fsdp2_tp --mesh-shape DP TP``。
+* 只有明确需要无 FSDP2 的 tensor parallelism 时，才使用 ``tp``。
+* stage 级实验通过专用 pipeline 路径使用 ``pp``。
 
-``PP`` 还支持一组更接近 Megatron 风格的调度与布局参数：
+高级用户：SNNDistributedConfig
+++++++++++++++++++++++++++++++
 
-* ``--pp-schedule gpipe``：最简单的 GPipe 调度；
-* ``--pp-schedule 1f1b``：标准 1F1B；
-* ``--pp-schedule interleaved``：interleaved / VPP 风格调度；
-* ``--pp-schedule zero_bubble``：基于 delayed-``wgrad`` 的实验性 zero-bubble 调度；
-* ``--pp-virtual-stages N``：每个物理 stage 持有 ``N`` 个虚拟 chunk；
-* ``--pp-layout``：显式指定逻辑 stage 的连续切分，例如 ``1|2|2|1``；
-* ``--pp-delay-wgrad``：在可用调度下显式打开 delayed-``wgrad`` 风格优化。
+高级用户仍可绕过 planner，通过 ``distributed.dtensor`` 兼容低层入口直接调用。这个路径适合需要精确控制 TP/FSDP roots 或手工 2D mesh 维度的场景。
 
-历史上的 ``hybrid``（``DDP + TP``）组合当前仍不支持，也没有在脚本里继续暴露；推荐直接使用 ``fsdp2_tp``。
+.. code:: python
 
-如果希望在纯 ``dp`` 路径上进一步压缩优化器状态，还可以启用 ``ZeroRedundancyOptimizer``：
+    from spikingjelly.activation_based.distributed.dtensor import (
+        SNNDistributedConfig,
+        configure_snn_distributed,
+    )
+
+    model, mesh, analysis = configure_snn_distributed(
+        model,
+        SNNDistributedConfig(
+            device_type="cuda",
+            mesh_shape=(2, 2),
+            enable_fsdp2=True,
+            fsdp_shard_roots=["features"],
+            fsdp_shard_module_root=False,
+            tensor_parallel_roots=["classifier"],
+            auto_tensor_parallel=True,
+            experimental_conv_tensor_parallel=True,
+            conv_tensor_parallel_roots=["features"],
+            dp_mesh_dim=0,
+            tp_mesh_dim=1,
+        ),
+    )
+
+低层路径会保持兼容，但除非需要直接控制 roots 或 mesh 维度，多数用户应优先使用 ``analyze`` / ``plan`` / ``apply``。
+
+Pipeline Parallelism
+++++++++++++++++++++
+
+Pipeline parallelism 仍使用专用 builder，因为它需要 ``example_input`` 来构造 stage 并测量 cost。统一 ``apply()`` API 会有意拒绝 ``mode='pp'``。
+
+pipeline 模块负责 stage partition、schedule selection、microbatch reset 和可选 stage-level memory optimization。可用控制包括 ``--pp-schedule``、``--pp-microbatches``、``--pp-virtual-stages``、``--pp-layout`` 和 ``--pp-delay-wgrad``。关键 SNN 不变量是 stage-local 神经元状态会在 microbatch 之间重置。
+
+限制与故障排查
+++++++++++++++
+
+* ``DDP + TP`` 不支持，因为 DDP 状态同步会混合普通 ``Tensor`` 参数和 ``DTensor`` 参数。请使用 ``fsdp2_tp``。
+* ``fsdp2_tp`` 应显式使用 2D mesh，例如 ``--mesh-shape 2 4``。
+* Pipeline batch size 必须与选择的 microbatch 数兼容。
+* 一些功能依赖可选 PyTorch API。``DTENSOR_AVAILABLE``、``FSDP2_AVAILABLE`` 和 ``PIPELINING_AVAILABLE`` 等 availability flags 在包根导出。
+* DTensor 路径的输出在进入普通 loss 或 metric 代码前可能需要 materialization。``SNNDistributedRuntime.prepare_classification_output`` 会处理常见分类任务。
+
+Benchmark 使用和结果解释
++++++++++++++++++++++++++
+
+benchmark 脚本可用于 smoke test，也可在相同硬件、模型和 batch regime 下比较不同模式：
 
 .. code:: bash
 
-    torchrun --nproc_per_node=2 \
+    torchrun --nproc_per_node=4 \
       benchmark/benchmark_snn_distributed.py \
       --model cifar10dvs_vgg \
-      --mode dp \
-      --optimizer-sharding zero \
-      --backend inductor \
+      --mode fsdp2_tp \
+      --mesh-shape 2 2 \
+      --backend torch \
+      --steps 2 \
+      --warmup 1 \
       --batch-size 2 \
-      --T 10
+      --T 4
 
-当前实现范围
-++++++++++++++++++++++++
+短 smoke run 只能证明启动、前向、反向、optimizer step、状态 reset 和正常退出。它不能证明扩展效率。若要讨论扩展性，应使用相同 benchmark regime 的更长运行，并同时报告吞吐和峰值显存。
 
-1. 线性层使用官方 tensor-parallel API。
-2. 逐元素脉冲神经元现在会显式跟随上游 shard：
-
-   * 对 ``[T, N, C]`` 激活，按最后一维 ``C`` 切分；
-   * 对 ``[T, N, C, H, W]`` 激活，按通道维 ``C`` 切分。
-
-   这意味着神经元内部状态 ``v`` 只保留本地 shard，而不是完整复制一份全局状态。
-3. ``CIFAR10DVSVGG`` 的 ``Conv + BN + Neuron`` 主干支持实验性的 channel tensor parallel。
-4. ``FSDP2 + TP`` 当前优先对 ``features`` 做 FSDP2 分片；当 ``classifier`` 已经启用 TP 时，不再额外对其做 root fully-shard，以避免跨 mesh 维度重复切分。
-5. 传统 ``hybrid``（即 ``DDP + TP``）当前显式不支持，接口会直接提示改用 ``fsdp2_tp``。
-6. ``PP`` 当前通过手工 stage 切分实现，而不是依赖 ``torch.export`` 整图切分；这样可以兼容标准脉冲神经元的内部状态写入。
-7. ``PP`` 在 microbatch 之间会显式重置每个 stage 内的神经元状态，避免不同样本的状态串扰。
+Benchmark 附录
+++++++++++++++
 
 服务器实测结果（小网络 smoke benchmark）
 +++++++++++++++++++++++++++++++++++++++++++++++++

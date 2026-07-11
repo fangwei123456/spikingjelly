@@ -29,12 +29,15 @@ from spikingjelly.activation_based.distributed import (
     reset_tp_communication_debug_stats,
     resolve_data_parallel_partition,
 )
-from spikingjelly.activation_based.distributed.dtensor import (
-    SNNDistributedConfig,
-    apply_snn_fsdp2,
+from spikingjelly.activation_based.distributed.config import EagerParallelPolicy
+from spikingjelly.activation_based.distributed.execution import (
+    build_eager_config,
+    configure_snn_distributed,
+)
+from spikingjelly.activation_based.distributed.fsdp import apply_snn_fsdp2
+from spikingjelly.activation_based.distributed.pipeline import (
     configure_cifar10dvs_vgg_pipeline,
     configure_spikformer_pipeline,
-    configure_snn_distributed,
 )
 from spikingjelly.activation_based.distributed.metrics import (
     _normalize_classification_labels,
@@ -683,6 +686,32 @@ def _make_synthetic_batch(
     )
 
 
+def _eager_policy_for_model(model_name: str, model) -> EagerParallelPolicy:
+    if model_name == "cifar10dvs_vgg":
+        return EagerParallelPolicy(
+            linear_tensor_parallel_roots=("classifier",),
+            conv_tensor_parallel_roots=("features",),
+            fsdp_shard_roots=("features", "classifier"),
+            fsdp2_tp_shard_roots=("features",),
+            fsdp_shard_module_root=True,
+            fsdp2_tp_shard_module_root=False,
+        )
+
+    num_blocks = len(getattr(model, "blocks", ()))
+    fsdp2_tp_shard_roots = tuple(
+        ["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)]
+    )
+    return EagerParallelPolicy(
+        linear_tensor_parallel_roots=("head",),
+        spikformer_tensor_parallel_roots=("blocks",),
+        spikformer_patch_stem_tensor_parallel_roots=("patch_embed",),
+        fsdp_shard_roots=fsdp2_tp_shard_roots + ("head",),
+        fsdp2_tp_shard_roots=fsdp2_tp_shard_roots,
+        fsdp_shard_module_root=True,
+        fsdp2_tp_shard_module_root=False,
+    )
+
+
 def _benchmark_step_eager(
     model,
     optimizer,
@@ -840,72 +869,37 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
             runtime, optimize_ms = maybe_apply_pipeline_memopt(args, runtime)
         return runtime, None, optimize_ms
     mesh_shape = tuple(args.mesh_shape) if args.mesh_shape else None
+    eager_policy = _eager_policy_for_model(args.model, model)
     if args.mode == "dp":
-        config = SNNDistributedConfig(
+        config = build_eager_config(
+            mode="dp",
             device_type=device.type,
             mesh_shape=mesh_shape or (world_size,),
-            auto_tensor_parallel=False,
-            enable_data_parallel=True,
             dp_mesh_dim=args.dp_mesh_dim if args.dp_mesh_dim is not None else 0,
         )
         model, mesh, _ = configure_snn_distributed(model, config)
         return model, mesh, optimize_ms
     if args.mode == "tp":
-        if args.model == "cifar10dvs_vgg":
-            config = SNNDistributedConfig(
-                device_type=device.type,
-                mesh_shape=mesh_shape or (world_size,),
-                tensor_parallel_roots=["classifier"],
-                auto_tensor_parallel=True,
-                experimental_conv_tensor_parallel=True,
-                conv_tensor_parallel_roots=["features"],
-                enable_data_parallel=False,
-                tp_mesh_dim=args.tp_mesh_dim,
-                dp_mesh_dim=args.dp_mesh_dim,
-            )
-        else:
-            config = SNNDistributedConfig(
-                device_type=device.type,
-                mesh_shape=mesh_shape or (world_size,),
-                tensor_parallel_roots=["head"],
-                auto_tensor_parallel=True,
-                experimental_spikformer_tensor_parallel=True,
-                spikformer_tensor_parallel_roots=["blocks"],
-                experimental_spikformer_patch_stem_tensor_parallel=True,
-                spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
-                enable_data_parallel=False,
-                tp_mesh_dim=args.tp_mesh_dim,
-                dp_mesh_dim=args.dp_mesh_dim,
-            )
+        config = build_eager_config(
+            mode="tp",
+            device_type=device.type,
+            mesh_shape=mesh_shape or (world_size,),
+            policy=eager_policy,
+            tp_mesh_dim=args.tp_mesh_dim,
+            dp_mesh_dim=args.dp_mesh_dim,
+        )
         model, mesh, _ = configure_snn_distributed(model, config)
         if defer_memopt_until_after_tp:
             model, optimize_ms = maybe_apply_memopt(args, model, sample_input)
         return model, mesh, optimize_ms
     if args.mode == "fsdp2":
-        if args.model == "cifar10dvs_vgg":
-            config = SNNDistributedConfig(
-                device_type=device.type,
-                mesh_shape=mesh_shape or (world_size,),
-                auto_tensor_parallel=False,
-                enable_fsdp2=True,
-                fsdp_shard_roots=["features", "classifier"],
-                fsdp_shard_module_root=True,
-                dp_mesh_dim=args.dp_mesh_dim if args.dp_mesh_dim is not None else 0,
-            )
-        else:
-            num_blocks = len(getattr(model, "blocks", ()))
-            shard_roots = (
-                ["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)] + ["head"]
-            )
-            config = SNNDistributedConfig(
-                device_type=device.type,
-                mesh_shape=mesh_shape or (world_size,),
-                auto_tensor_parallel=False,
-                enable_fsdp2=True,
-                fsdp_shard_roots=shard_roots,
-                fsdp_shard_module_root=True,
-                dp_mesh_dim=args.dp_mesh_dim if args.dp_mesh_dim is not None else 0,
-            )
+        config = build_eager_config(
+            mode="fsdp2",
+            device_type=device.type,
+            mesh_shape=mesh_shape or (world_size,),
+            policy=eager_policy,
+            dp_mesh_dim=args.dp_mesh_dim if args.dp_mesh_dim is not None else 0,
+        )
         model, mesh, _ = configure_snn_distributed(model, config)
         return model, mesh, optimize_ms
     if args.mode == "fsdp2_tp":
@@ -920,87 +914,32 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
         )
         dp_mesh_dim = args.dp_mesh_dim if args.dp_mesh_dim is not None else 0
         if defer_memopt_until_after_tp:
-            if args.model == "cifar10dvs_vgg":
-                tp_config = SNNDistributedConfig(
-                    device_type=device.type,
-                    mesh_shape=mesh_shape,
-                    tensor_parallel_roots=["classifier"],
-                    auto_tensor_parallel=True,
-                    experimental_conv_tensor_parallel=True,
-                    conv_tensor_parallel_roots=["features"],
-                    enable_data_parallel=False,
-                    tp_mesh_dim=tp_mesh_dim,
-                    dp_mesh_dim=dp_mesh_dim,
-                )
-            else:
-                tp_config = SNNDistributedConfig(
-                    device_type=device.type,
-                    mesh_shape=mesh_shape,
-                    tensor_parallel_roots=["head"],
-                    auto_tensor_parallel=True,
-                    experimental_spikformer_tensor_parallel=True,
-                    spikformer_tensor_parallel_roots=["blocks"],
-                    experimental_spikformer_patch_stem_tensor_parallel=True,
-                    spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
-                    enable_data_parallel=False,
-                    tp_mesh_dim=tp_mesh_dim,
-                    dp_mesh_dim=dp_mesh_dim,
-                )
+            tp_config = build_eager_config(
+                mode="tp",
+                device_type=device.type,
+                mesh_shape=mesh_shape,
+                policy=eager_policy,
+                tp_mesh_dim=tp_mesh_dim,
+                dp_mesh_dim=dp_mesh_dim,
+            )
             model, mesh, _ = configure_snn_distributed(model, tp_config)
             model, optimize_ms = maybe_apply_memopt(args, model, sample_input)
-            if args.model == "cifar10dvs_vgg":
-                model = apply_snn_fsdp2(
-                    model,
-                    device_mesh=mesh,
-                    dp_mesh_dim=dp_mesh_dim,
-                    shard_roots=["features"],
-                    shard_module_root=False,
-                )
-            else:
-                num_blocks = len(getattr(model, "blocks", ()))
-                shard_roots = ["patch_embed"] + [
-                    f"blocks.{i}" for i in range(num_blocks)
-                ]
-                model = apply_snn_fsdp2(
-                    model,
-                    device_mesh=mesh,
-                    dp_mesh_dim=dp_mesh_dim,
-                    shard_roots=shard_roots,
-                    shard_module_root=False,
-                )
+            model = apply_snn_fsdp2(
+                model,
+                device_mesh=mesh,
+                dp_mesh_dim=dp_mesh_dim,
+                shard_roots=list(eager_policy.fsdp2_tp_shard_roots),
+                shard_module_root=eager_policy.fsdp2_tp_shard_module_root,
+            )
             return model, mesh, optimize_ms
-        if args.model == "cifar10dvs_vgg":
-            config = SNNDistributedConfig(
-                device_type=device.type,
-                mesh_shape=mesh_shape,
-                enable_fsdp2=True,
-                fsdp_shard_roots=["features"],
-                fsdp_shard_module_root=False,
-                tensor_parallel_roots=["classifier"],
-                auto_tensor_parallel=True,
-                experimental_conv_tensor_parallel=True,
-                conv_tensor_parallel_roots=["features"],
-                tp_mesh_dim=tp_mesh_dim,
-                dp_mesh_dim=dp_mesh_dim,
-            )
-        else:
-            num_blocks = len(getattr(model, "blocks", ()))
-            config = SNNDistributedConfig(
-                device_type=device.type,
-                mesh_shape=mesh_shape,
-                enable_fsdp2=True,
-                fsdp_shard_roots=["patch_embed"]
-                + [f"blocks.{i}" for i in range(num_blocks)],
-                fsdp_shard_module_root=False,
-                tensor_parallel_roots=["head"],
-                auto_tensor_parallel=True,
-                experimental_spikformer_tensor_parallel=True,
-                spikformer_tensor_parallel_roots=["blocks"],
-                experimental_spikformer_patch_stem_tensor_parallel=True,
-                spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
-                tp_mesh_dim=tp_mesh_dim,
-                dp_mesh_dim=dp_mesh_dim,
-            )
+        config = build_eager_config(
+            mode="fsdp2_tp",
+            device_type=device.type,
+            mesh_shape=mesh_shape,
+            policy=eager_policy,
+            tp_mesh_dim=tp_mesh_dim,
+            dp_mesh_dim=dp_mesh_dim,
+        )
         model, mesh, _ = configure_snn_distributed(model, config)
         return model, mesh, optimize_ms
     raise ValueError(args.mode)

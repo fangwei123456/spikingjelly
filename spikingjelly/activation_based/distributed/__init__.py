@@ -20,31 +20,39 @@ Distributed training support module with tensor and data parallelism utilities.
 """
 
 from .api import analyze, apply, plan
+from .analysis import SNNDistributedAnalysis
+from .data_parallel import unwrap_parallel_module
 from .dtensor import (
     DTENSOR_AVAILABLE,
-    FSDP2_AVAILABLE,
     PIPELINING_AVAILABLE,
-    SNN_DISTRIBUTED_PREFERENCES,
     TENSOR_PARALLEL_AVAILABLE,
-    ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE,
-    SNNDistributedAnalysis,
-    TensorShardMemoryModule,
-    apply_pipeline_stage_memopt,
+)
+from .fsdp import FSDP2_AVAILABLE
+from .mesh import (
     build_device_mesh,
-    build_snn_optimizer,
-    enable_tp_communication_debug,
     ensure_distributed_initialized,
-    get_tp_communication_debug_stats,
-    recommend_pipeline_memopt_stages,
-    recommend_snn_distributed_strategy,
-    recommended_pipeline_microbatches,
-    reset_tp_communication_debug_stats,
     resolve_data_parallel_partition,
     resolve_tensor_parallel_group_size,
-    unwrap_parallel_module,
 )
-from .planner import DistributedFeatureSet, SNNDistributedPlan
+from .optimizer import ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE, build_snn_optimizer
+from .pipeline import (
+    apply_pipeline_stage_memopt,
+    recommend_pipeline_memopt_stages,
+)
+from .planner import (
+    DistributedFeatureSet,
+    SNN_DISTRIBUTED_PREFERENCES,
+    SNNDistributedPlan,
+    recommend_snn_distributed_strategy,
+    recommended_pipeline_microbatches,
+)
 from .runtime import SNNDistributedRuntime
+from .tensor_parallel import (
+    TensorShardMemoryModule,
+    enable_tp_communication_debug,
+    get_tp_communication_debug_stats,
+    reset_tp_communication_debug_stats,
+)
 from .topology import SNNDistributedTopology
 
 __all__ = [

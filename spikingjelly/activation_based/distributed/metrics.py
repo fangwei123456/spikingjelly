@@ -4,7 +4,7 @@ from typing import NamedTuple
 
 import torch
 
-from .dtensor import materialize_dtensor_output
+from .data_parallel import materialize_dtensor_output
 
 
 class PreparedModelOutput(NamedTuple):

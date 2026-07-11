@@ -3,76 +3,164 @@ Distributed SNN Training (DTensor / FSDP2)
 
 中文版： :doc:`../cn/distributed_training`
 
-This tutorial introduces the experimental distributed-training helpers in ``spikingjelly.activation_based.distributed``. The current implementation focuses on:
+This tutorial explains the distributed-training helpers in
+``spikingjelly.activation_based.distributed``. It is written for two reading
+paths:
 
-* `DP`: conventional data parallelism
-* `TP`: simple SNN-oriented tensor parallelism
-* `FSDP2`: DTensor-based parameter, gradient, and optimizer-state sharding
-* `FSDP2 + TP`: the recommended hybrid distributed strategy
-* `PP`: experimental pipeline parallelism (currently implemented first for ``CIFAR10DVSVGG`` and ``Spikformer``)
+* New users can follow **Analyze -> Plan -> Apply** and the official training
+  script.
+* Advanced users can use ``SNNDistributedConfig`` directly when they need manual
+  mesh dimensions, tensor-parallel roots, FSDP roots, or pipeline controls.
 
-In contrast, the traditional ``DDP + TP`` combination still runs into ``Tensor`` / ``DTensor`` synchronization issues in the current PyTorch version, so this implementation reports an actionable error and recommends ``FSDP2 + TP`` instead.
+Before running the examples, you should know the minimum PyTorch distributed
+vocabulary: ``torchrun`` starts one process per rank, ``world_size`` is the
+number of participating ranks, and ``init_process_group`` creates the process
+group used by DeviceMesh, DTensor, DDP, FSDP2, and pipeline schedules.
 
-Quick Start
-++++++++++++++++++++++++
+Why SNN Distributed Training Needs Special Handling
+++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-The current low-level entry is :func:`configure_snn_distributed <spikingjelly.activation_based.distributed.dtensor.configure_snn_distributed>`, which lives in ``spikingjelly.activation_based.distributed.dtensor``. The unified public API is the newer ``analyze`` / ``plan`` / ``apply`` trio on ``spikingjelly.activation_based.distributed``.
+SNN modules carry neuron state across timesteps. A distributed wrapper must keep
+that state consistent with the activation shard owned by each rank. For example,
+Linear tensor parallelism shards the feature dimension, while Conv/BN/neuron
+channel tensor parallelism shards the channel dimension. Stateful neurons should
+therefore keep local state for the local shard instead of silently replicating a
+full global state.
 
-For example, pure FSDP2 on ``CIFAR10DVSVGG``:
+Pipeline parallelism adds another SNN-specific concern: microbatches must not
+share neuron state. The pipeline runtime resets state inside each stage between
+microbatches, so one microbatch cannot leak voltage or other state into the next.
+
+Parallel Modes
+++++++++++++++
+
+.. list-table::
+    :header-rows: 1
+
+    * - Mode
+      - Best fit
+      - Mesh
+      - Notes
+    * - ``dp``
+      - Simple throughput scaling
+      - 1D data mesh
+      - Uses DDP-style replication. ``ZeroRedundancyOptimizer`` is optional.
+    * - ``tp``
+      - Reducing per-rank activation/state memory
+      - 1D tensor mesh
+      - Linear TP is stable; Conv/BN and Spikformer TP are experimental flags.
+    * - ``fsdp2``
+      - Parameter, gradient, and optimizer-state sharding
+      - 1D data mesh
+      - Uses DTensor/FSDP2 and is the recommended memory baseline.
+    * - ``fsdp2_tp``
+      - Hybrid memory reduction and model parallelism
+      - 2D ``(dp, tp)`` mesh
+      - Recommended hybrid path. Avoids unsupported DDP + TP synchronization.
+    * - ``pp``
+      - Stage-level memory pressure or pipeline experiments
+      - pipeline ranks, optional virtual stages
+      - Uses dedicated pipeline builders, not the unified ``apply()`` path.
+
+DeviceMesh gives names and coordinates to the ranks. DTensor records how a
+tensor is placed on that mesh. The SNN helpers use those two concepts to keep
+model weights, gradients, optimizer state, activations, and neuron state aligned
+with the selected strategy.
+
+Beginner Path: Analyze -> Plan -> Apply
++++++++++++++++++++++++++++++++++++++++
+
+Use the public package root for the high-level workflow:
 
 .. code:: python
 
-    from spikingjelly.activation_based.distributed.dtensor import (
-        SNNDistributedConfig,
-        configure_snn_distributed,
-    )
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import TensorDataset
+
+    from spikingjelly.activation_based import distributed as sjdist
     from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
-    import torch.distributed as dist
 
-    world_size = dist.get_world_size()  # requires init_process_group()
-    model = CIFAR10DVSVGG(dropout=0.0, backend='inductor')
-    model, mesh, analysis = configure_snn_distributed(
-        model,
-        SNNDistributedConfig(
-            device_type='cuda',
-            mesh_shape=(world_size,),
-            auto_tensor_parallel=False,
-            enable_fsdp2=True,
-            fsdp_shard_roots=['features', 'classifier'],
-            fsdp_shard_module_root=True,
-            dp_mesh_dim=0,
-        ),
+    model = CIFAR10DVSVGG(dropout=0.0, backend="torch")
+    dataset = TensorDataset(
+        torch.randn(4, 2, 2, 48, 48),
+        torch.tensor([0, 1, 2, 3]),
     )
 
-To enable ``FSDP2 + TP``, use a 2D mesh:
-
-.. code:: python
-
-    model, mesh, analysis = configure_snn_distributed(
-        model,
-        SNNDistributedConfig(
-            device_type='cuda',
-            mesh_shape=(2, 2),   # (dp, tp)
-            enable_fsdp2=True,
-            fsdp_shard_roots=['features'],
-            fsdp_shard_module_root=False,
-            tensor_parallel_roots=['classifier'],
-            auto_tensor_parallel=True,
-            experimental_conv_tensor_parallel=True,
-            conv_tensor_parallel_roots=['features'],
-            dp_mesh_dim=0,
-            tp_mesh_dim=1,
+    analysis = sjdist.analyze(model, model_family="cifar10dvs_vgg")
+    plan = sjdist.plan(
+        analysis=analysis,
+        objective="memory",
+        topology={"dp": 1},
+        backend="torch",
+        batch_size=2,
+        model_family="cifar10dvs_vgg",
+        mode="fsdp2",
+        features=sjdist.DistributedFeatureSet(
+            allow_experimental_conv_tp=False,
         ),
     )
+    runtime = sjdist.apply(model=model, plan=plan, device_type="cpu")
 
-Training Script
+    optimizer = runtime.build_optimizer(torch.optim.SGD, lr=1e-3)
+    loader = runtime.prepare_dataloader(
+        dataset=dataset,
+        batch_size=2,
+        shuffle=False,
+        num_workers=0,
+        drop_last=False,
+        pin_memory=False,
+    )
+    criterion = nn.CrossEntropyLoss()
+
+    runtime.model.train()
+    for images, labels in loader:
+        optimizer.zero_grad(set_to_none=True)
+        logits = runtime.model(images.float())
+        logits, labels = runtime.prepare_classification_output(logits, labels)
+        loss = criterion(logits, labels)
+        loss.backward()
+        optimizer.step()
+        runtime.reset_state()
+
+A multi-process launch uses the same code, but it must run under ``torchrun`` and
+initialize the process group before creating the distributed runtime:
+
+.. code:: bash
+
+    torchrun --nproc_per_node=4 train.py
+
+Internal Workflow
++++++++++++++++++
+
+The high-level path keeps the public interface small while the implementation is
+split into focused modules:
+
+.. code:: text
+
+    analyze(model) -> analysis.py scans stateful modules and TP candidates
+        |
+        v
+    plan(...) -> planner.py chooses mode, mesh, roots, and notes
+        |
+        v
+    apply(...) -> api.py selects an adapter when a model family needs one
+        |
+        v
+    build_eager_config(...) -> execution.py assembles SNNDistributedConfig
+        |
+        v
+    configure_snn_distributed(...) -> TP, FSDP2, or DDP modules are applied
+
+Model adapters only provide model-family policy such as classifier roots,
+Conv/BN roots, Spikformer roots, and FSDP shard roots. The shared eager config
+builder is the single place that expands ``mode + topology + policy + feature
+flags`` into ``SNNDistributedConfig``.
+
+Official Training Script
 ++++++++++++++++++++++++
 
-The repository now includes a real distributed training entry:
-
-* ``spikingjelly/activation_based/examples/memopt/train_distributed.py``
-
-Example:
+The repository includes a CIFAR10-DVS training entry:
 
 .. code:: bash
 
@@ -86,55 +174,102 @@ Example:
       --epochs 1 \
       --print-summary
 
-Supported modes in the script:
+Common mode choices:
 
-* ``none``
-* ``dp``
-* ``tp``
-* ``fsdp2``
-* ``fsdp2_tp``
-* ``pp``: currently exposed as an experimental training path aimed first at smoke benchmarks and structural validation
+* Start with ``fsdp2`` for memory reduction on a 1D mesh.
+* Use ``fsdp2_tp --mesh-shape DP TP`` when the model also benefits from tensor
+  parallelism.
+* Use ``tp`` only when you explicitly want tensor parallelism without FSDP2.
+* Use ``pp`` through the dedicated pipeline path for stage-level experiments.
 
-``PP`` also exposes a set of scheduling and layout controls that move it closer to Megatron-style pipeline tuning:
+Advanced Path: SNNDistributedConfig
++++++++++++++++++++++++++++++++++++
 
-* ``--pp-schedule gpipe``: the simplest GPipe schedule;
-* ``--pp-schedule 1f1b``: standard 1F1B;
-* ``--pp-schedule interleaved``: interleaved / VPP-style scheduling;
-* ``--pp-schedule zero_bubble``: an experimental zero-bubble schedule driven by delayed ``wgrad``;
-* ``--pp-virtual-stages N``: keep ``N`` virtual chunks on each physical stage;
-* ``--pp-layout``: explicitly describe the contiguous logical-stage split, for example ``1|2|2|1``;
-* ``--pp-delay-wgrad``: explicitly enable delayed-``wgrad`` style optimization when the chosen schedule supports it.
+Advanced users can still bypass the planner and call the compatibility low-level
+entry through ``distributed.dtensor``. This path is useful when you need exact
+TP/FSDP roots or manual 2D mesh dimensions.
 
-The historical ``hybrid`` (``DDP + TP``) combination is still unsupported and is no longer exposed in the script; use ``fsdp2_tp`` instead.
+.. code:: python
 
-If you want to further shard optimizer state on the pure ``dp`` path, you can also enable ``ZeroRedundancyOptimizer``:
+    from spikingjelly.activation_based.distributed.dtensor import (
+        SNNDistributedConfig,
+        configure_snn_distributed,
+    )
+
+    model, mesh, analysis = configure_snn_distributed(
+        model,
+        SNNDistributedConfig(
+            device_type="cuda",
+            mesh_shape=(2, 2),
+            enable_fsdp2=True,
+            fsdp_shard_roots=["features"],
+            fsdp_shard_module_root=False,
+            tensor_parallel_roots=["classifier"],
+            auto_tensor_parallel=True,
+            experimental_conv_tensor_parallel=True,
+            conv_tensor_parallel_roots=["features"],
+            dp_mesh_dim=0,
+            tp_mesh_dim=1,
+        ),
+    )
+
+This low-level path is stable for compatibility, but most users should prefer
+``analyze`` / ``plan`` / ``apply`` unless they need direct control over roots or
+mesh dimensions.
+
+Pipeline Parallelism
+++++++++++++++++++++
+
+Pipeline parallelism still uses dedicated builders because it requires an
+``example_input`` for stage construction and cost measurement. The unified
+``apply()`` API intentionally rejects ``mode='pp'``.
+
+The pipeline modules own stage partitioning, schedule selection, microbatch
+reset, and optional stage-level memory optimization. Supported controls include
+``--pp-schedule``, ``--pp-microbatches``, ``--pp-virtual-stages``,
+``--pp-layout``, and ``--pp-delay-wgrad``. The important SNN invariant is that
+stage-local neuron state is reset between microbatches.
+
+Limits and Troubleshooting
+++++++++++++++++++++++++++
+
+* ``DDP + TP`` is not supported because DDP state synchronization mixes regular
+  ``Tensor`` parameters and ``DTensor`` parameters. Use ``fsdp2_tp`` instead.
+* ``fsdp2_tp`` should use an explicit 2D mesh such as ``--mesh-shape 2 4``.
+* Pipeline batch size must be compatible with the selected microbatch count.
+* Some features depend on optional PyTorch APIs. Availability flags such as
+  ``DTENSOR_AVAILABLE``, ``FSDP2_AVAILABLE``, and ``PIPELINING_AVAILABLE`` are
+  exported at the package root.
+* Outputs from DTensor paths may need materialization before ordinary loss or
+  metric code. ``SNNDistributedRuntime.prepare_classification_output`` handles
+  the common classification case.
+
+Benchmark Usage and Result Interpretation
++++++++++++++++++++++++++++++++++++++++++
+
+Use the benchmark script for smoke tests and for comparing modes under the same
+hardware, model, and batch regime:
 
 .. code:: bash
 
-    torchrun --nproc_per_node=2 \
+    torchrun --nproc_per_node=4 \
       benchmark/benchmark_snn_distributed.py \
       --model cifar10dvs_vgg \
-      --mode dp \
-      --optimizer-sharding zero \
-      --backend inductor \
+      --mode fsdp2_tp \
+      --mesh-shape 2 2 \
+      --backend torch \
+      --steps 2 \
+      --warmup 1 \
       --batch-size 2 \
-      --T 10
+      --T 4
 
-Current Scope
-++++++++++++++++++++++++
+A short smoke run proves startup, forward, backward, optimizer step, state reset,
+and clean shutdown. It does not prove scaling efficiency. For scaling claims,
+compare longer runs with identical benchmark regimes and report both throughput
+and peak memory.
 
-1. Linear layers use PyTorch's official tensor-parallel APIs.
-2. Element-wise spiking neurons now explicitly follow upstream sharding:
-
-   * for ``[T, N, C]`` activations, they shard along the last feature dimension ``C``;
-   * for ``[T, N, C, H, W]`` activations, they shard along the channel dimension ``C``.
-
-   In other words, the neuron state ``v`` now only keeps the local shard rather than a full replicated global state.
-3. The ``Conv + BN + Neuron`` backbone in ``CIFAR10DVSVGG`` supports experimental channel tensor parallelism.
-4. Under ``FSDP2 + TP``, the current implementation prioritizes FSDP2 sharding on ``features``; when the ``classifier`` is already tensor-parallelized, it is not additionally root-sharded, avoiding repeated cross-mesh sharding.
-5. Traditional ``hybrid`` (that is, ``DDP + TP``) is explicitly unsupported for now and will recommend ``fsdp2_tp`` instead.
-6. ``PP`` currently uses manual stage splitting rather than ``torch.export`` full-graph partitioning, which makes it compatible with standard spiking neurons that mutate internal state.
-7. ``PP`` explicitly resets neuron state between microbatches inside each stage so that different microbatches do not leak state into each other.
+Benchmark Appendix
+++++++++++++++++++
 
 Server Benchmarks (small-network smoke benchmark)
 +++++++++++++++++++++++++++++++++++++++++++++++++
