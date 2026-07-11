@@ -17,11 +17,15 @@ from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.lif import (
     multistep_lif,
-    multistep_lif_mp,
+    multistep_lif_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.plif import (
     multistep_plif,
-    multistep_plif_mp,
+    multistep_plif_mp_with_plan,
+)
+from spikingjelly.activation_based.triton_kernel.neuron_kernel.utils import (
+    TritonNeuronForwardPlan,
+    prepare_triton_neuron_forward_plan,
 )
 
 
@@ -58,46 +62,35 @@ def _mp_call(
     v: torch.Tensor,
     neuron_type: str,
     r_tau: torch.Tensor,
-    dtype: torch.dtype,
-    compute_dtype: str,
+    plan: TritonNeuronForwardPlan,
 ) -> tuple[torch.Tensor, ...]:
-    kwargs = {
-        "storage_dtype": dtype,
-        "compute_dtype": compute_dtype,
-        "backward_compute_dtype": compute_dtype,
-        "spike_dtype": dtype,
-        "save_intermediates": True,
-    }
     if neuron_type == "if":
-        return integrate_and_fire.multistep_if_mp(
-            x, v, v_threshold=1.0, v_reset=0.0, **kwargs
+        return integrate_and_fire.multistep_if_mp_with_plan(
+            x, v, plan, v_threshold=1.0, v_reset=0.0
         )
     if neuron_type == "lif":
-        return multistep_lif_mp(
+        return multistep_lif_mp_with_plan(
             x,
             v,
+            plan,
             decay_input=True,
             tau=2.0,
             v_threshold=1.0,
             v_reset=0.0,
-            **kwargs,
         )
-    return multistep_plif_mp(
+    return multistep_plif_mp_with_plan(
         x,
         v,
         r_tau,
+        plan,
         decay_input=True,
         v_threshold=1.0,
         v_reset=0.0,
-        **kwargs,
     )
 
 
 def _loss(outputs: tuple[torch.Tensor, ...]) -> torch.Tensor:
-    value = outputs[0].float().sum() + outputs[1].float().sum() * 0.125
-    if len(outputs) > 2 and outputs[2] is not None:
-        value = value + outputs[2].float().sum() * 0.03125
-    return value
+    return outputs[0].float().sum() + outputs[1].float().sum() * 0.125
 
 
 def _measure(
@@ -171,7 +164,8 @@ def main() -> None:
         "dtypes": [item[0] for item in dtypes],
         "note": (
             "MP uses the same storage/compute/backward/spike dtype as stable "
-            "input dtype."
+            "input dtype, reuses a prebuilt plan, saves intermediates only for "
+            "training, and computes loss from common outputs only."
         ),
     }
     rows: list[dict[str, Any]] = []
@@ -184,8 +178,25 @@ def main() -> None:
                 torch.manual_seed(0)
                 x = torch.randn(T, N, device=device, dtype=torch.float32).to(dtype)
                 r_tau = torch.tensor(_R_TAU, device=device, dtype=dtype)
-                for variant in ("stable", "mp"):
-                    for process in ("inference_forward", "training_forward_backward"):
+                plans = {
+                    process: prepare_triton_neuron_forward_plan(
+                        neuron_type=neuron_type,
+                        device=device,
+                        storage_dtype=dtype,
+                        compute_dtype=compute_dtype,
+                        backward_compute_dtype=compute_dtype,
+                        spike_dtype=dtype,
+                        save_intermediates=(
+                            process == "training_forward_backward"
+                        ),
+                    )
+                    for process in (
+                        "inference_forward",
+                        "training_forward_backward",
+                    )
+                }
+                for process in ("inference_forward", "training_forward_backward"):
+                    for variant in ("stable", "mp"):
                         print(
                             "START",
                             T,
@@ -203,6 +214,11 @@ def main() -> None:
                             "dtype": dtype_name,
                             "variant": variant,
                             "process": process,
+                            "mp_plan_reused": variant == "mp",
+                            "save_intermediates": (
+                                process == "training_forward_backward"
+                            ),
+                            "loss_outputs": "s_seq,v_seq",
                         }
                         try:
                             if process == "inference_forward":
@@ -218,8 +234,7 @@ def main() -> None:
                                                 v,
                                                 neuron_type,
                                                 r_tau,
-                                                dtype,
-                                                compute_dtype,
+                                                plans[process],
                                             )
 
                             else:
@@ -249,8 +264,7 @@ def main() -> None:
                                             v,
                                             neuron_type,
                                             r_tau_req,
-                                            dtype,
-                                            compute_dtype,
+                                            plans[process],
                                         )
                                     _loss(outputs).backward()
 

@@ -145,6 +145,7 @@ def _prepare_mp_plan(
     storage_dtype: torch.dtype,
     compute_dtype: str,
     backward_compute_dtype: str,
+    save_intermediates: bool,
 ) -> TritonNeuronForwardPlan:
     return prepare_triton_neuron_forward_plan(
         neuron_type=neuron_type,
@@ -153,7 +154,7 @@ def _prepare_mp_plan(
         compute_dtype=compute_dtype,
         backward_compute_dtype=backward_compute_dtype,
         spike_dtype=torch.float32,
-        save_intermediates=True,
+        save_intermediates=save_intermediates,
     )
 
 
@@ -207,6 +208,7 @@ def _call_mp_safe(
     storage_dtype: torch.dtype,
     compute_dtype: str,
     backward_compute_dtype: str,
+    save_intermediates: bool,
 ) -> tuple[torch.Tensor, ...]:
     if neuron_type == "if":
         return multistep_if_mp(
@@ -218,7 +220,7 @@ def _call_mp_safe(
             compute_dtype=compute_dtype,
             backward_compute_dtype=backward_compute_dtype,
             spike_dtype=torch.float32,
-            save_intermediates=True,
+            save_intermediates=save_intermediates,
         )
     if neuron_type == "lif":
         return multistep_lif_mp(
@@ -232,7 +234,7 @@ def _call_mp_safe(
             compute_dtype=compute_dtype,
             backward_compute_dtype=backward_compute_dtype,
             spike_dtype=torch.float32,
-            save_intermediates=True,
+            save_intermediates=save_intermediates,
         )
     if neuron_type == "plif":
         if r_tau_tensor is None:
@@ -248,16 +250,13 @@ def _call_mp_safe(
             compute_dtype=compute_dtype,
             backward_compute_dtype=backward_compute_dtype,
             spike_dtype=torch.float32,
-            save_intermediates=True,
+            save_intermediates=save_intermediates,
         )
     raise ValueError(f"Unsupported neuron type: {neuron_type}.")
 
 
 def _loss(outputs: tuple[torch.Tensor, ...]) -> torch.Tensor:
-    loss = outputs[0].float().sum() + outputs[1].float().sum() * 0.125
-    if len(outputs) > 2 and outputs[2] is not None:
-        loss = loss + outputs[2].float().sum() * 0.03125
-    return loss
+    return outputs[0].float().sum() + outputs[1].float().sum() * 0.125
 
 
 def _measure(
@@ -338,6 +337,7 @@ def _benchmark_inference(
                         storage_dtype=storage_dtype,
                         compute_dtype=compute_dtype,
                         backward_compute_dtype=backward_compute_dtype,
+                        save_intermediates=False,
                     )
 
     return _measure(device=device, repeats=repeats, warmup=warmup, fn=fn)
@@ -396,6 +396,7 @@ def _benchmark_training(
                     storage_dtype=storage_dtype,
                     compute_dtype=compute_dtype,
                     backward_compute_dtype=backward_compute_dtype,
+                    save_intermediates=True,
                 )
         _loss(outputs).backward()
 
@@ -577,6 +578,10 @@ def main() -> None:
         "backward_compute_dtype": backward_compute_dtype,
         "warmup": args.warmup,
         "repeats": args.repeats,
+        "mp_plan_reuse": True,
+        "inference_save_intermediates": False,
+        "training_save_intermediates": True,
+        "loss_outputs": "s_seq,v_seq",
         "v_reset": _V_RESET,
         "v_threshold": _V_THRESHOLD,
         "r_tau": _R_TAU,
@@ -597,51 +602,23 @@ def main() -> None:
                     "storage_dtype": "float32",
                     "compute_dtype": "fp32",
                     "plan": None,
+                    "uses_plan": False,
                     "storage_dtype_obj": None,
                     "plan_prepare_ms": None,
                 }
             ]
             for storage_name, storage_dtype in dtype_variants:
                 for compute_dtype in compute_dtypes:
-                    plan = None
-                    plan_prepare_ms = None
-                    try:
-                        _cuda_sync(device)
-                        start = time.perf_counter()
-                        plan = _prepare_mp_plan(
-                            neuron_type=neuron_type,
-                            device=device,
-                            storage_dtype=storage_dtype,
-                            compute_dtype=compute_dtype,
-                            backward_compute_dtype=backward_compute_dtype,
-                        )
-                        _cuda_sync(device)
-                        plan_prepare_ms = (time.perf_counter() - start) * 1000.0
-                    except Exception as e:
-                        variants.append(
-                            {
-                                "variant": f"mp_plan_{storage_name}_{compute_dtype}",
-                                "variant_kind": "mixed_precision",
-                                "storage_dtype": storage_name,
-                                "compute_dtype": compute_dtype,
-                                "plan": None,
-                                "storage_dtype_obj": storage_dtype,
-                                "plan_prepare_ms": None,
-                                "plan_failure_reason": (
-                                    f"{type(e).__name__}: {e or repr(e)}"
-                                ),
-                            }
-                        )
-                        continue
                     variants.append(
                         {
                             "variant": f"mp_plan_{storage_name}_{compute_dtype}",
                             "variant_kind": "mixed_precision",
                             "storage_dtype": storage_name,
                             "compute_dtype": compute_dtype,
-                            "plan": plan,
+                            "plan": None,
+                            "uses_plan": True,
                             "storage_dtype_obj": storage_dtype,
-                            "plan_prepare_ms": plan_prepare_ms,
+                            "plan_prepare_ms": None,
                         }
                     )
                     if args.include_safe_wrapper:
@@ -652,13 +629,14 @@ def main() -> None:
                                 "storage_dtype": storage_name,
                                 "compute_dtype": compute_dtype,
                                 "plan": None,
+                                "uses_plan": False,
                                 "storage_dtype_obj": storage_dtype,
                                 "plan_prepare_ms": None,
                             }
                         )
 
-            for variant in variants:
-                for process in ("inference_forward", "training_forward_backward"):
+            for process in ("inference_forward", "training_forward_backward"):
+                for variant in variants:
                     print(
                         "START "
                         f"T={T} N={N} neuron={neuron_type} "
@@ -676,24 +654,49 @@ def main() -> None:
                         "backward_compute_dtype": backward_compute_dtype,
                         "process": process,
                         "plan_prepare_ms": variant.get("plan_prepare_ms"),
+                        "save_intermediates": (
+                            process == "training_forward_backward"
+                        ),
+                        "loss_outputs": "s_seq,v_seq",
                     }
-                    if variant.get("plan_failure_reason") is not None:
-                        row.update(
-                            {
-                                "success": False,
-                                "failure_reason": variant["plan_failure_reason"],
-                            }
-                        )
-                        rows.append(row)
-                        _write_outputs(output_dir, metadata, rows)
-                        print(
-                            "DONE "
-                            f"T={T} N={N} neuron={neuron_type} "
-                            f"variant={variant['variant']} process={process} "
-                            f"success={row['success']}",
-                            flush=True,
-                        )
-                        continue
+                    plan = variant["plan"]
+                    if variant.get("uses_plan") and plan is None:
+                        try:
+                            _cuda_sync(device)
+                            start = time.perf_counter()
+                            plan = _prepare_mp_plan(
+                                neuron_type=neuron_type,
+                                device=device,
+                                storage_dtype=variant["storage_dtype_obj"],
+                                compute_dtype=variant["compute_dtype"],
+                                backward_compute_dtype=backward_compute_dtype,
+                                save_intermediates=(
+                                    process == "training_forward_backward"
+                                ),
+                            )
+                            _cuda_sync(device)
+                            row["plan_prepare_ms"] = (
+                                time.perf_counter() - start
+                            ) * 1000.0
+                        except Exception as e:
+                            row.update(
+                                {
+                                    "success": False,
+                                    "failure_reason": (
+                                        f"{type(e).__name__}: {e or repr(e)}"
+                                    ),
+                                }
+                            )
+                            rows.append(row)
+                            _write_outputs(output_dir, metadata, rows)
+                            print(
+                                "DONE "
+                                f"T={T} N={N} neuron={neuron_type} "
+                                f"variant={variant['variant']} process={process} "
+                                f"success={row['success']}",
+                                flush=True,
+                            )
+                            continue
                     try:
                         if process == "inference_forward":
                             metrics = _benchmark_inference(
@@ -703,7 +706,7 @@ def main() -> None:
                                 repeats=args.repeats,
                                 warmup=args.warmup,
                                 variant_kind=variant["variant_kind"],
-                                plan=variant["plan"],
+                                plan=plan,
                                 storage_dtype=variant["storage_dtype_obj"],
                                 compute_dtype=variant["compute_dtype"],
                                 backward_compute_dtype=backward_compute_dtype,
@@ -716,7 +719,7 @@ def main() -> None:
                                 repeats=args.repeats,
                                 warmup=args.warmup,
                                 variant_kind=variant["variant_kind"],
-                                plan=variant["plan"],
+                                plan=plan,
                                 storage_dtype=variant["storage_dtype_obj"],
                                 compute_dtype=variant["compute_dtype"],
                                 backward_compute_dtype=backward_compute_dtype,
