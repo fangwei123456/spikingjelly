@@ -53,6 +53,13 @@ Bug Fixes
 - Fixed the Transformer Engine SDPA adapter to reject mismatched dropout
   arguments.
 
+- Fixed ``STDPLearner``, ``MSTDPLearner``, and ``MSTDPETLearner`` retaining the
+  autograd graph of the network's forward pass, which caused unbounded
+  memory growth (and eventual OOM) when models and learners were recreated
+  in a loop, e.g. during hyperparameter search (#576). Spikes recorded by
+  the learners' monitors are now detached, so ``step()`` no longer needs to
+  be wrapped in ``torch.no_grad()``.
+
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
