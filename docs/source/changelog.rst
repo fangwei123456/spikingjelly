@@ -52,21 +52,6 @@ Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
 - Added an FP8 Triton neuron benchmark harness for IF, LIF, and ParametricLIF
   accuracy, backward-gradient, and prepared-plan overhead measurements.
 
-Distributed Training
-^^^^^^^^^^^^^^^^^^^^
-
-Module: ``spikingjelly.activation_based.distributed``.
-
-- Refactored distributed SNN training into focused analysis, planning,
-  execution, mesh, optimizer, pipeline, and tensor-parallel modules while
-  preserving the legacy ``distributed.dtensor`` compatibility surface.
-
-- Added model-family adapters and shared eager policy builders for
-  CIFAR10-DVS VGG and Spikformer distributed execution.
-
-- Added pipeline runtime helpers, stage-level memory optimization, tensor
-  parallel communication counters, and distributed benchmark/training coverage.
-
 Bug Fixes
 ~~~~~~~~~
 

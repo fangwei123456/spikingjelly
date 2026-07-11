@@ -63,6 +63,9 @@ class ChannelShardConv2d(nn.Module):
         self.dilation = source.dilation
         self.groups = source.groups
         self.padding_mode = source.padding_mode
+        self._reversed_padding_repeated_twice = tuple(
+            source._reversed_padding_repeated_twice
+        )
 
         self.in_channels = source.in_channels
         self.out_channels = source.out_channels
@@ -102,13 +105,21 @@ class ChannelShardConv2d(nn.Module):
         )
 
     def _conv2d(self, x: torch.Tensor) -> torch.Tensor:
+        if self.padding_mode != "zeros":
+            x = F.pad(
+                x, self._reversed_padding_repeated_twice, mode=self.padding_mode
+            )
+            padding = (0, 0)
+        else:
+            padding = self.padding
+
         if self.mode == "colwise":
             return F.conv2d(
                 x,
                 self.weight,
                 self.bias,
                 self.stride,
-                self.padding,
+                padding,
                 self.dilation,
                 self.groups,
             )
@@ -118,7 +129,7 @@ class ChannelShardConv2d(nn.Module):
             self.weight,
             None,
             self.stride,
-            self.padding,
+            padding,
             self.dilation,
             self.groups,
         )
@@ -191,11 +202,15 @@ class ChannelShardConv1d(nn.Module):
         self.world_size = (
             dist.get_world_size(process_group) if process_group is not None else 1
         )
+        self.step_mode = getattr(source, "step_mode", "s")
         self.stride = source.stride
         self.padding = source.padding
         self.dilation = source.dilation
         self.groups = source.groups
         self.padding_mode = source.padding_mode
+        self._reversed_padding_repeated_twice = tuple(
+            source._reversed_padding_repeated_twice
+        )
         self.in_channels = source.in_channels
         self.out_channels = source.out_channels
         self.kernel_size = source.kernel_size
@@ -229,18 +244,26 @@ class ChannelShardConv1d(nn.Module):
 
     def extra_repr(self) -> str:
         return (
-            f"mode={self.mode}, in_channels={self.in_channels}, "
+            f"mode={self.mode}, step_mode={self.step_mode}, in_channels={self.in_channels}, "
             f"out_channels={self.out_channels}"
         )
 
-    def forward(self, x: torch.Tensor):
+    def _conv1d(self, x: torch.Tensor) -> torch.Tensor:
+        if self.padding_mode != "zeros":
+            x = F.pad(
+                x, self._reversed_padding_repeated_twice, mode=self.padding_mode
+            )
+            padding = (0,)
+        else:
+            padding = self.padding
+
         if self.mode == "colwise":
             return F.conv1d(
                 x,
                 self.weight,
                 self.bias,
                 self.stride,
-                self.padding,
+                padding,
                 self.dilation,
                 self.groups,
             )
@@ -250,7 +273,7 @@ class ChannelShardConv1d(nn.Module):
             self.weight,
             None,
             self.stride,
-            self.padding,
+            padding,
             self.dilation,
             self.groups,
         )
@@ -260,6 +283,22 @@ class ChannelShardConv1d(nn.Module):
         if self.bias is not None:
             y = y + self.bias.view(1, -1, 1)
         return y
+
+    def forward(self, x: torch.Tensor):
+        if self.step_mode == "s":
+            return self._conv1d(x)
+
+        if self.step_mode != "m":
+            raise ValueError(f"Unsupported step_mode='{self.step_mode}'.")
+        if x.dim() != 4:
+            raise ValueError(
+                f"expected x with shape [T, N, C, L], but got {x.shape}!"
+            )
+
+        y_shape = [x.shape[0], x.shape[1]]
+        y = self._conv1d(x.flatten(0, 1))
+        y_shape.extend(y.shape[1:])
+        return y.view(y_shape)
 
 
 class ChannelShardBatchNorm2d(nn.Module):
@@ -333,11 +372,11 @@ class ChannelShardBatchNorm2d(nn.Module):
                     "num_batches_tracked", num_batches_tracked.detach().clone()
                 )
             else:
-                self.num_batches_tracked = None
+                self.register_buffer("num_batches_tracked", None)
         else:
             self.register_buffer("running_mean", None)
             self.register_buffer("running_var", None)
-            self.num_batches_tracked = None
+            self.register_buffer("num_batches_tracked", None)
 
         self.training = source.training
 
@@ -415,6 +454,7 @@ class ChannelShardBatchNorm1d(nn.Module):
         self.world_size = (
             dist.get_world_size(process_group) if process_group is not None else 1
         )
+        self.step_mode = getattr(source, "step_mode", "s")
         self.eps = source.eps
         self.momentum = source.momentum
         self.affine = source.affine
@@ -448,18 +488,18 @@ class ChannelShardBatchNorm1d(nn.Module):
                     "num_batches_tracked", num_batches_tracked.detach().clone()
                 )
             else:
-                self.num_batches_tracked = None
+                self.register_buffer("num_batches_tracked", None)
         else:
             self.register_buffer("running_mean", None)
             self.register_buffer("running_var", None)
-            self.num_batches_tracked = None
+            self.register_buffer("num_batches_tracked", None)
 
         self.training = source.training
 
     def extra_repr(self) -> str:
-        return f"num_features={self.num_features}"
+        return f"step_mode={self.step_mode}, num_features={self.num_features}"
 
-    def forward(self, x: torch.Tensor):
+    def _batch_norm(self, x: torch.Tensor) -> torch.Tensor:
         if (
             self.training
             and self.track_running_stats
@@ -476,3 +516,18 @@ class ChannelShardBatchNorm1d(nn.Module):
             self.momentum,
             self.eps,
         )
+
+    def forward(self, x: torch.Tensor):
+        if self.step_mode == "s":
+            return self._batch_norm(x)
+
+        if self.step_mode != "m":
+            raise ValueError(f"Unsupported step_mode='{self.step_mode}'.")
+        if x.dim() != 4:
+            raise ValueError(
+                f"expected x with shape [T, N, C, L], but got {x.shape}!"
+            )
+        y_shape = [x.shape[0], x.shape[1]]
+        y = self._batch_norm(x.flatten(0, 1))
+        y_shape.extend(y.shape[1:])
+        return y.view(y_shape)

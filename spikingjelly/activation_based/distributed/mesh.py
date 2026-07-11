@@ -178,9 +178,12 @@ def resolve_data_parallel_partition(
         return world_size, rank
 
     mesh_shape = tuple(int(v) for v in mesh_tensor.shape)
+    raw_coordinate = (
+        device_mesh.get_coordinate() if hasattr(device_mesh, "get_coordinate") else None
+    )
     coordinate = (
-        tuple(int(v) for v in device_mesh.get_coordinate())
-        if hasattr(device_mesh, "get_coordinate")
+        tuple(int(v) for v in raw_coordinate)
+        if raw_coordinate is not None
         else None
     )
     if dp_mesh_dim is None:
@@ -188,12 +191,12 @@ def resolve_data_parallel_partition(
             raise ValueError(
                 "dp_mesh_dim must be specified for data-parallel sharding on a multi-dimensional mesh."
             )
-        rank = (
-            coordinate[0]
-            if coordinate is not None
-            else (dist.get_rank() if dist.is_initialized() else 0)
-        )
-        return mesh_shape[0], rank
+        if coordinate is None:
+            raise ValueError(
+                "Current rank does not belong to the supplied DeviceMesh; "
+                "cannot derive a data-parallel partition index."
+            )
+        return mesh_shape[0], coordinate[0]
 
     if dp_mesh_dim < 0 or dp_mesh_dim >= len(mesh_shape):
         raise ValueError(
@@ -201,7 +204,8 @@ def resolve_data_parallel_partition(
         )
     if coordinate is None:
         raise ValueError(
-            "DeviceMesh does not expose coordinates for data partitioning."
+            "Current rank does not belong to the supplied DeviceMesh; "
+            "cannot derive a data-parallel partition index."
         )
     return mesh_shape[dp_mesh_dim], coordinate[dp_mesh_dim]
 

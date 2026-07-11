@@ -152,9 +152,12 @@ def configure_snn_distributed(
 
     Configure SNN distributed training.
     """
-    should_apply_tp = (
+    should_apply_linear_tp = (
         config.tensor_parallel_plan is not None
         or config.auto_tensor_parallel
+    )
+    should_apply_tp = (
+        should_apply_linear_tp
         or config.experimental_conv_tensor_parallel
         or config.experimental_spikformer_tensor_parallel
         or config.experimental_spikformer_patch_stem_tensor_parallel
@@ -247,7 +250,7 @@ def configure_snn_distributed(
             "supported in this implementation because DistributedDataParallel state sync "
             "mixes Tensor and DTensor parameters. Please use FSDP2 + TP instead."
         )
-    if should_apply_tp:
+    if should_apply_linear_tp:
         if config.tensor_parallel_plan is not None:
             tp_plan = dict(config.tensor_parallel_plan)
         else:

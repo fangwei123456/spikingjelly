@@ -426,6 +426,10 @@ def test_build_model_config_matrix(
             f"blocks.{i}" for i in range(num_blocks)
         ]
 
+def test_eager_policy_for_model_rejects_unknown_model_name():
+    with pytest.raises(ValueError, match="No eager policy registered"):
+        bench._eager_policy_for_model("unknown_model", object())
+
 
 def test_build_model_fsdp2_disables_auto_tensor_parallel(
     monkeypatch: pytest.MonkeyPatch,

@@ -37,6 +37,36 @@ def test_tp_communication_debug_stats_recorded_for_rowwise_conv(
         distributed_dtensor.enable_tp_communication_debug(False)
         distributed_dtensor.reset_tp_communication_debug_stats()
 
+def test_channel_shard_conv2d_preserves_nonzero_padding_mode():
+    torch.manual_seed(0)
+    source = nn.Conv2d(
+        2,
+        4,
+        kernel_size=3,
+        padding=1,
+        padding_mode="reflect",
+        bias=True,
+    )
+    wrapped = ChannelShardConv2d(source, process_group=None, mode="colwise")
+    x = torch.randn(3, 2, 8, 8)
+    torch.testing.assert_close(wrapped(x), source(x))
+
+def test_channel_shard_conv1d_preserves_padding_and_multistep_shape():
+    torch.manual_seed(0)
+    source = nn.Conv1d(
+        2,
+        4,
+        kernel_size=3,
+        padding=1,
+        padding_mode="reflect",
+        bias=True,
+    )
+    source.step_mode = "m"
+    wrapped = ChannelShardConv1d(source, process_group=None, mode="colwise")
+    x = torch.randn(5, 3, 2, 8)
+    reference = source(x.flatten(0, 1)).view(5, 3, 4, 8)
+    torch.testing.assert_close(wrapped(x), reference)
+
 def test_auto_tensor_parallel_plan_and_forward_match_single_rank():
     with single_rank_process_group():
         torch.manual_seed(0)

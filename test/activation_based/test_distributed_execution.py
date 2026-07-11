@@ -46,6 +46,34 @@ def test_build_eager_config_allows_disabling_linear_tp_only():
     assert config.experimental_conv_tensor_parallel is True
     assert config.conv_tensor_parallel_roots == ["features"]
 
+def test_configure_snn_distributed_conv_only_tp_does_not_build_linear_plan(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import spikingjelly.activation_based.distributed.execution as execution
+
+    with single_rank_process_group():
+        def _unexpected_auto_plan(*args, **kwargs):
+            raise AssertionError("linear tensor parallel plan should not be built")
+
+        monkeypatch.setattr(
+            execution, "auto_build_tensor_parallel_plan", _unexpected_auto_plan
+        )
+        model = ToyDistributedSNN()
+        configured_model, mesh, _ = configure_snn_distributed(
+            model,
+            SNNDistributedConfig(
+                device_type="cpu",
+                mesh_shape=(1,),
+                auto_tensor_parallel=False,
+                experimental_conv_tensor_parallel=True,
+                conv_tensor_parallel_roots=["features"],
+                enable_data_parallel=False,
+            ),
+        )
+
+        assert configured_model is model
+        assert mesh is not None
+
 def test_apply_returns_unified_runtime_single_rank():
     with single_rank_process_group():
         model = ToyDistributedSNN()

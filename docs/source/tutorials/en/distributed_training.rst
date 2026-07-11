@@ -95,7 +95,7 @@ Use the public package root for the high-level workflow:
         backend="torch",
         batch_size=2,
         model_family="cifar10dvs_vgg",
-        mode="fsdp2",
+        mode="none",
         features=sjdist.DistributedFeatureSet(
             allow_experimental_conv_tp=False,
         ),
@@ -267,6 +267,24 @@ A short smoke run proves startup, forward, backward, optimizer step, state reset
 and clean shutdown. It does not prove scaling efficiency. For scaling claims,
 compare longer runs with identical benchmark regimes and report both throughput
 and peak memory.
+
+Read the headline metrics together:
+
+.. list-table::
+    :header-rows: 1
+
+    * - Metric
+      - Meaning
+      - Compare by
+    * - ``global_samples/s``
+      - End-to-end throughput for the whole distributed job.
+      - Higher is better only under the same model, backend, batch regime, and step count.
+    * - ``peak_memory_mb``
+      - Peak memory observed on a rank.
+      - Lower is better when the run still completes the same workload.
+    * - ``step_ms``
+      - Per-step latency after warmup.
+      - Lower is better for latency runs; use throughput for weak-scaling runs.
 
 Benchmark Appendix
 ++++++++++++++++++

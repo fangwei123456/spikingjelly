@@ -692,7 +692,12 @@ def _make_synthetic_batch(
 def _eager_policy_for_model(model_name: str, model):
     if model_name == "cifar10dvs_vgg":
         return build_cifar10dvs_vgg_eager_policy()
-    return build_spikformer_eager_policy(model)
+    if model_name.startswith("spikformer"):
+        return build_spikformer_eager_policy(model)
+    raise ValueError(
+        f"No eager policy registered for model '{model_name}'. "
+        "Expected one of: 'cifar10dvs_vgg', 'spikformer_ti', 'spikformer_s'."
+    )
 
 
 def _benchmark_step_eager(

@@ -54,3 +54,19 @@ def test_partition_helpers_respect_2d_mesh_coordinates():
             )
             == 1
         )
+
+def test_resolve_data_parallel_partition_rejects_mesh_without_rank_coordinate():
+    class FakeMesh:
+        mesh = torch.zeros(2)
+
+        def get_coordinate(self):
+            return None
+
+    with pytest.raises(ValueError, match="Current rank does not belong"):
+        resolve_data_parallel_partition(
+            FakeMesh(), dp_mesh_dim=None, sharded_by_data_parallel=True
+        )
+    with pytest.raises(ValueError, match="Current rank does not belong"):
+        resolve_data_parallel_partition(
+            FakeMesh(), dp_mesh_dim=0, sharded_by_data_parallel=True
+        )
