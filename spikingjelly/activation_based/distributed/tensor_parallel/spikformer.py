@@ -73,11 +73,13 @@ def _try_convert_spiking_self_attention(
     if not hasattr(attn, "qkv_conv_bn"):
         return None
 
+    did_convert = False
     converted = _convert_seq_to_ann_conv1d_bn(
         attn.qkv_conv_bn, process_group, mode="colwise"
     )
     if converted is not None:
         attn.qkv_conv_bn = converted
+        did_convert = True
         if isinstance(attn.qkv_lif, base.MemoryModule):
             attn.qkv_lif = make_tensor_shard_memory_module(
                 attn.qkv_lif,
@@ -99,18 +101,21 @@ def _try_convert_spiking_self_attention(
     )
     if converted is not None:
         attn.proj_conv_bn = converted
-    return attn
+        did_convert = True
+    return attn if did_convert else None
 
 
 def _try_convert_spikformer_mlp(mlp: nn.Module, process_group) -> Optional[nn.Module]:
     if not (hasattr(mlp, "fc1") or hasattr(mlp, "fc2")):
         return None
+    did_convert = False
     if hasattr(mlp, "fc1"):
         converted = _convert_seq_to_ann_conv1d_bn(
             mlp.fc1, process_group, mode="colwise"
         )
         if converted is not None:
             mlp.fc1 = converted
+            did_convert = True
             if isinstance(mlp.neuron1, base.MemoryModule):
                 logical_dim = None
                 conv = next(iter(mlp.fc1.children()))
@@ -128,7 +133,8 @@ def _try_convert_spikformer_mlp(mlp: nn.Module, process_group) -> Optional[nn.Mo
         )
         if converted is not None:
             mlp.fc2 = converted
-    return mlp
+            did_convert = True
+    return mlp if did_convert else None
 
 
 def _convert_spiking_self_attention_tree(module: nn.Module, process_group) -> bool:
@@ -169,12 +175,6 @@ def _convert_spikformer_mlp_tree(
             ):
                 _overwrite_sequential_children(module, converted_fc1)
             state["fc1_converted"] = True
-            return True
-
-    if state["fc1_converted"] and not state["neuron1_wrapped"]:
-        wrapped = _wrap_tensor_shard_memory_module(module, process_group, shard_dim=2)
-        if wrapped is not None and wrapped is not module:
-            state["neuron1_wrapped"] = True
             return True
 
     if state["neuron1_wrapped"] and not state["fc2_converted"]:
@@ -278,12 +278,6 @@ def _convert_spikformer_stem_tree(
             state["projection_converted"] = True
             return True
 
-    if state["projection_converted"] and not state["memory_wrapped"]:
-        wrapped = _wrap_tensor_shard_memory_module(module, process_group, shard_dim=2)
-        if wrapped is not None and wrapped is not module:
-            state["memory_wrapped"] = True
-            return True
-
     changed = False
     for child_name, child in list(module.named_children()):
         replacement = child
@@ -366,10 +360,9 @@ def parallelize_spikformer_patch_stem(
                     process_group=process_group,
                     mode=mode,
                 )
-                if changed:
-                    if replacement is not child:
-                        stage_sequence[int(child_name)] = replacement
-                    block_index += 1
+                if changed and replacement is not child:
+                    stage_sequence[int(child_name)] = replacement
+                block_index += 1
             continue
         if isinstance(root_module, (nn.Sequential, nn.ModuleList)) and not isinstance(
             root_module, layer.SeqToANNContainer
@@ -381,10 +374,9 @@ def parallelize_spikformer_patch_stem(
                 changed = _convert_spikformer_stem_tree(
                     replacement, process_group=process_group, mode=mode
                 )
-                if changed:
-                    if replacement is not child:
-                        root_module[int(child_name)] = replacement
-                    block_index += 1
+                if changed and replacement is not child:
+                    root_module[int(child_name)] = replacement
+                block_index += 1
             continue
 
         parent_name, _, child_name = root.rpartition(".")
@@ -412,10 +404,9 @@ def parallelize_spikformer_patch_stem(
                     process_group=process_group,
                     mode=mode,
                 )
-                if changed:
-                    if replacement is not child:
-                        parent_module[int(current_name)] = replacement
-                    block_index += 1
+                if changed and replacement is not child:
+                    parent_module[int(current_name)] = replacement
+                block_index += 1
             continue
 
         raise ValueError(

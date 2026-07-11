@@ -5,10 +5,10 @@ from typing import Iterable, List, Optional, Sequence, Tuple
 
 import torch.nn as nn
 
-from spikingjelly.activation_based import base, layer
+from spikingjelly.activation_based import base
 
 
-LinearLike = (nn.Linear, layer.Linear)
+LinearLike = (nn.Linear,)
 
 
 @dataclass
@@ -127,7 +127,7 @@ def analyze_snn_distributed_capability(
             tensor_parallel_candidates.append(name)
         elif isinstance(
             child,
-            (nn.Conv1d, nn.Conv2d, nn.Conv3d, layer.Conv1d, layer.Conv2d, layer.Conv3d),
+            (nn.Conv1d, nn.Conv2d, nn.Conv3d),
         ):
             unsupported_tp.append(name)
 

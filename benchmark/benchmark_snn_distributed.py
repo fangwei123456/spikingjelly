@@ -918,7 +918,7 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
                 model,
                 device_mesh=mesh,
                 dp_mesh_dim=dp_mesh_dim,
-                shard_roots=list(eager_policy.fsdp2_tp_shard_roots),
+                shard_roots=eager_policy.fsdp2_tp_shard_roots,
                 shard_module_root=eager_policy.fsdp2_tp_shard_module_root,
             )
             return model, mesh, optimize_ms

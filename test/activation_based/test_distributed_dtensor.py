@@ -29,6 +29,7 @@ from spikingjelly.activation_based.distributed import (
     SNNDistributedTopology,
     ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE,
     TENSOR_PARALLEL_AVAILABLE,
+    TensorShardMemoryModule,
     analyze,
     apply,
     apply_pipeline_stage_memopt,
@@ -227,6 +228,7 @@ _DTENSOR_PUBLIC_NAMES = (
     "SNNPipelineRuntime",
     "SNNDistributedAnalysis",
     "SNNDistributedRecommendation",
+    "TensorShardMemoryModule",
     "make_tensor_shard_memory_module",
     "ChannelShardConv2d",
     "ChannelShardConv1d",
@@ -275,9 +277,7 @@ def test_package_root_reexports_keep_object_identity_and_signatures():
         "ensure_distributed_initialized": canonical_ensure_distributed_initialized,
         "recommend_snn_distributed_strategy": canonical_recommend_snn_distributed_strategy,
         "recommended_pipeline_microbatches": canonical_recommended_pipeline_microbatches,
-        "resolve_data_parallel_partition": (
-            canonical_resolve_data_parallel_partition
-        ),
+        "resolve_data_parallel_partition": (canonical_resolve_data_parallel_partition),
         "resolve_tensor_parallel_group_size": (
             canonical_resolve_tensor_parallel_group_size
         ),
@@ -298,6 +298,7 @@ def test_package_root_reexports_keep_object_identity_and_signatures():
     )
     assert distributed_dtensor.SNNPipelineRuntime is CanonicalSNNPipelineRuntime
     assert distributed_dtensor.SNNDistributedAnalysis is CanonicalSNNDistributedAnalysis
+    assert distributed_dtensor.TensorShardMemoryModule is not None
     assert (
         distributed_dtensor.SNNDistributedRecommendation
         is CanonicalSNNDistributedRecommendation
@@ -335,17 +336,13 @@ def test_package_root_reexports_keep_object_identity_and_signatures():
         distributed_dtensor._make_pipeline_outputs_contiguous
         is canonical_make_pipeline_outputs_contiguous
     )
-    assert (
-        distributed_dtensor._MicrobatchResetStage
-        is CanonicalMicrobatchResetStage
-    )
+    assert distributed_dtensor._MicrobatchResetStage is CanonicalMicrobatchResetStage
     assert (
         distributed_dtensor._CIFAR10DVSVGGPipelineStage
         is CanonicalCIFAR10DVSVGGPipelineStage
     )
     assert (
-        distributed_dtensor._SpikformerPipelineStage
-        is CanonicalSpikformerPipelineStage
+        distributed_dtensor._SpikformerPipelineStage is CanonicalSpikformerPipelineStage
     )
     assert (
         distributed_dtensor._build_snn_pipeline_runtime
@@ -381,7 +378,9 @@ def test_package_root_reexports_keep_object_identity_and_signatures():
         is canonical_resolve_tensor_parallel_group_size
     )
     assert distributed_dtensor.build_snn_optimizer is canonical_build_snn_optimizer
-    assert distributed_dtensor.unwrap_parallel_module is canonical_unwrap_parallel_module
+    assert (
+        distributed_dtensor.unwrap_parallel_module is canonical_unwrap_parallel_module
+    )
     assert (
         distributed_dtensor.materialize_dtensor_output
         is canonical_materialize_dtensor_output
@@ -393,8 +392,7 @@ def test_package_root_reexports_keep_object_identity_and_signatures():
     )
     assert distributed_dtensor.apply_snn_fsdp2 is canonical_apply_snn_fsdp2
     assert (
-        distributed_dtensor.fully_shard_snn_module
-        is canonical_fully_shard_snn_module
+        distributed_dtensor.fully_shard_snn_module is canonical_fully_shard_snn_module
     )
     assert distributed_dtensor._build_fsdp_mp_policy is canonical_build_fsdp_mp_policy
     assert (
@@ -407,20 +405,25 @@ def test_package_root_reexports_keep_object_identity_and_signatures():
         is canonical_normalize_parallel_style
     )
     assert (
-        distributed_dtensor._is_colwise_local_style
-        is canonical_is_colwise_local_style
+        distributed_dtensor._is_colwise_local_style is canonical_is_colwise_local_style
     )
     assert (
         distributed_dtensor._iter_named_modules_under_roots
         is canonical_iter_named_modules_under_roots
     )
-    assert distributed_dtensor._replace_module_by_name is canonical_replace_module_by_name
+    assert (
+        distributed_dtensor._replace_module_by_name is canonical_replace_module_by_name
+    )
     assert (
         distributed_dtensor.auto_build_tensor_parallel_plan
         is canonical_auto_build_tensor_parallel_plan
     )
-    assert distributed_dtensor.wrap_tp_memory_modules is canonical_wrap_tp_memory_modules
-    assert distributed_dtensor.parallelize_snn_module is canonical_parallelize_snn_module
+    assert (
+        distributed_dtensor.wrap_tp_memory_modules is canonical_wrap_tp_memory_modules
+    )
+    assert (
+        distributed_dtensor.parallelize_snn_module is canonical_parallelize_snn_module
+    )
     assert (
         distributed_dtensor.make_tensor_shard_memory_module
         is canonical_make_tensor_shard_memory_module
@@ -428,12 +431,10 @@ def test_package_root_reexports_keep_object_identity_and_signatures():
     assert distributed_dtensor.ChannelShardConv2d is CanonicalChannelShardConv2d
     assert distributed_dtensor.ChannelShardConv1d is CanonicalChannelShardConv1d
     assert (
-        distributed_dtensor.ChannelShardBatchNorm2d
-        is CanonicalChannelShardBatchNorm2d
+        distributed_dtensor.ChannelShardBatchNorm2d is CanonicalChannelShardBatchNorm2d
     )
     assert (
-        distributed_dtensor.ChannelShardBatchNorm1d
-        is CanonicalChannelShardBatchNorm1d
+        distributed_dtensor.ChannelShardBatchNorm1d is CanonicalChannelShardBatchNorm1d
     )
     assert (
         distributed_dtensor.parallelize_snn_conv_blocks
@@ -475,6 +476,33 @@ def test_package_root_reexports_keep_object_identity_and_signatures():
     )
     for public, canonical in signature_pairs:
         assert inspect.signature(public) == inspect.signature(canonical)
+
+
+def test_spikformer_pipeline_builder_rejects_4d_input_without_T():
+    model = spikformer_ti(
+        T=2, img_size_h=32, img_size_w=32, num_classes=4, backend="torch"
+    ).eval()
+    model.T = None
+
+    with pytest.raises(RuntimeError, match="module.T to be set"):
+        canonical_build_spikformer_pipeline_module(
+            model,
+            num_logical_stages=2,
+            example_input=torch.randn(1, 3, 32, 32),
+        )
+
+
+def test_spikformer_pipeline_builder_rejects_invalid_input_rank():
+    model = spikformer_ti(
+        T=2, img_size_h=32, img_size_w=32, num_classes=4, backend="torch"
+    ).eval()
+
+    with pytest.raises(ValueError, match="expected 4D .* or 5D"):
+        canonical_build_spikformer_pipeline_module(
+            model,
+            num_logical_stages=2,
+            example_input=torch.randn(3, 32, 32),
+        )
 
 
 def _train_runtime(mode: str = "tp"):

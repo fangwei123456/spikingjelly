@@ -74,7 +74,16 @@ def _build_spikformer_pipeline_module(
     blocks = list(module.blocks)
     current = example_input
     if current.ndim == 4:
-        current = current.unsqueeze(0).repeat(getattr(module, "T", 1), 1, 1, 1, 1)
+        stage_T = getattr(module, "T", None)
+        if stage_T is None:
+            raise RuntimeError(
+                "Spikformer pipeline stage requires module.T to be set when a 4D example input is provided."
+            )
+        current = current.unsqueeze(0).repeat(int(stage_T), 1, 1, 1, 1)
+    elif current.ndim != 5:
+        raise ValueError(
+            f"expected 4D [N, C, H, W] or 5D [T, N, C, H, W] example input, but got {tuple(current.shape)}"
+        )
     unit_costs: list[float] = []
     current, patch_cost = _measure_module_cost(module.patch_embed, current)
     unit_costs.append(patch_cost)

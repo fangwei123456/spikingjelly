@@ -220,6 +220,16 @@ def test_tensor_shard_memory_module_keeps_source_state_dict_paths():
     module.load_state_dict(source.state_dict(), strict=True)
 
 
+def test_tensor_shard_memory_module_legacy_alias_points_to_factory():
+    source = neuron.IFNode(step_mode="s")
+    module = TensorShardMemoryModule(source, -1, 4, None)
+
+    assert distributed_dtensor.TensorShardMemoryModule is TensorShardMemoryModule
+    assert module is not source
+    assert type(module) is type(source)
+    assert _has_tensor_shard_input_validator(module)
+
+
 def test_tensor_shard_memory_module_compiles_for_valid_input():
     module = make_tensor_shard_memory_module(neuron.IFNode(step_mode="s"), -1, 4, None)
     compiled = torch.compile(module, backend="eager", fullgraph=True)
@@ -337,6 +347,27 @@ def test_auto_tensor_parallel_plan_and_forward_match_single_rank():
         assert set(plan.keys()) == {"features.0", "features.2"}
 
 
+def test_wrap_tp_memory_modules_skips_stateless_layers_before_memory_module():
+    module = nn.Sequential(
+        nn.Linear(4, 6),
+        nn.Dropout(p=0.0),
+        nn.Identity(),
+        neuron.ParametricLIFNode(step_mode="s"),
+    )
+
+    wrapped = wrap_tp_memory_modules(
+        module,
+        {"0": "colwise_local_output"},
+        process_group=None,
+    )
+
+    assert wrapped is module
+    assert _has_tensor_shard_input_validator(module[3])
+    assert module[3](torch.ones(2, 6)).shape == (2, 6)
+    with pytest.raises(ValueError, match="Expected local shard size 6"):
+        module[3](torch.ones(2, 5))
+
+
 def test_configure_snn_distributed_supports_experimental_conv_tp_on_real_snn():
     with single_rank_process_group():
         torch.manual_seed(0)
@@ -401,20 +432,9 @@ def test_cifar10dvs_vgg_tp_helper_after_memopt_level2_single_rank():
         _reset_net(distributed_model)
         result = materialize_dtensor_output(distributed_model(x))
         torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
-
-
-@pytest.mark.skip(
-    reason="Spikformer TP + memopt level1 coverage is not implemented yet."
-)
-def test_spikformer_tp_plus_memopt_level1_single_rank():
-    pass
-
-
-@pytest.mark.skip(
-    reason="Spikformer FSDP2+TP + memopt level1 coverage is not implemented yet."
-)
-def test_spikformer_fsdp2_tp_plus_memopt_level1_single_rank():
-    pass
+        assert _has_tensor_shard_input_validator(
+            distributed_model.features[0][0].neuron
+        )
 
 
 def test_spikformer_tp_helper_after_memopt_level2_single_rank():
@@ -448,6 +468,16 @@ def test_spikformer_tp_helper_after_memopt_level2_single_rank():
         _reset_net(distributed_model)
         result = materialize_dtensor_output(distributed_model(x))
         torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
+        assert _has_tensor_shard_input_validator(
+            distributed_model.patch_embed.stages[0][0].neuron
+        )
+        assert (
+            "ChannelShardConv1d"
+            in type(distributed_model.blocks[0][0].attn.qkv_conv_bn[0]).__name__
+        )
+        assert _has_tensor_shard_input_validator(
+            distributed_model.blocks[0][0].mlp.neuron1
+        )
 
 
 def test_spikformer_head_tp_helper_single_rank():
@@ -506,7 +536,10 @@ def test_spikformer_fsdp2_single_rank_smoke():
             mode="fsdp2",
         )
         runtime = apply(model=candidate, plan=distributed_plan, device_type="cpu")
-        assert runtime.mesh is not None
+        mesh = runtime.mesh
+        assert mesh is not None
+        assert tuple(mesh.shape) == tuple(distributed_plan.topology.mesh_shape)
+        assert runtime.plan is distributed_plan
 
 
 def test_spikformer_patch_stem_tp_helper_handles_patch_embed_root():

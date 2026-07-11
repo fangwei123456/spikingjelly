@@ -145,6 +145,7 @@ def test_recommend_snn_distributed_strategy_capacity_prefers_pp():
     assert recommendation.pp_microbatches == 8
     assert recommendation.pp_schedule == "interleaved"
     assert recommendation.pp_virtual_stages == 2
+    assert recommendation.pp_layout == (1, 1, 1, 1, 1, 1, 1, 1)
     assert recommendation.pp_delay_wgrad is False
 
 
@@ -183,6 +184,7 @@ def test_recommend_snn_distributed_strategy_capacity_falls_back_when_batch_too_s
     assert not any(
         "Pipeline APIs are unavailable" in note for note in recommendation.rationale
     )
+    assert not any("prefer='memory'" in note for note in recommendation.rationale)
 
 
 def test_recommended_pipeline_microbatches_rejects_too_small_batch():

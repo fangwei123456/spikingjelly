@@ -64,20 +64,20 @@ def _build_cifar10dvs_vgg_pipeline_module(
     classifier_input = torch.flatten(current, 2)
     _, classifier_cost = _measure_module_cost(module.classifier, classifier_input)
     unit_costs = [*feature_costs, classifier_cost]
-    feature_counts = (
+    stage_unit_counts = (
         list(layout_counts)
         if layout_counts is not None
         else _partition_costs_contiguously(unit_costs, num_logical_stages)
     )
     first_active_stage_idx = next(
-        (idx for idx, count in enumerate(feature_counts) if count > 0), None
+        (idx for idx, count in enumerate(stage_unit_counts) if count > 0), None
     )
     stages: list[nn.Module] = []
     cursor = 0
     total_feature_modules = len(feature_modules)
     classifier_assigned = False
     stage_costs: list[float] = []
-    for stage_idx, count in enumerate(feature_counts):
+    for stage_idx, count in enumerate(stage_unit_counts):
         feature_end = min(cursor + count, total_feature_modules)
         stage_features = feature_modules[cursor:feature_end]
         classifier = None
@@ -114,7 +114,7 @@ def configure_cifar10dvs_vgg_pipeline(
 ) -> SNNPipelineRuntime:
     physical_num_stages = dist.get_world_size(group) if dist.is_initialized() else 1
     logical_num_stages = physical_num_stages * pp_virtual_stages
-    feature_count = len(list(module.features.children()))
+    feature_count = len(module.features)
     total_units = feature_count + 1
     layout_counts = parse_pipeline_layout(pp_layout, logical_num_stages, total_units)
     pipeline_module = _build_cifar10dvs_vgg_pipeline_module(

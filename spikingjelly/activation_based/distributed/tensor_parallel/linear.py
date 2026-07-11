@@ -13,6 +13,8 @@ from spikingjelly.activation_based.distributed.tensor_parallel.state import (
     make_tensor_shard_memory_module,
 )
 
+_STATELESS_TP_MEMORY_LOOKAHEAD = (nn.Dropout, nn.Identity)
+
 try:
     from torch.distributed.tensor.parallel import (
         ColwiseParallel,
@@ -154,22 +156,25 @@ def wrap_tp_memory_modules(
                 continue
             child_index = int(child_name)
             next_index = child_index + 1
-            if next_index >= len(parent):
-                continue
-            next_module = parent[next_index]
-            next_name = (
-                f"{parent_name}.{next_index}" if parent_name else str(next_index)
-            )
-            if next_name in wrapped:
-                continue
-            if isinstance(next_module, base.MemoryModule):
-                parent[next_index] = make_tensor_shard_memory_module(
-                    next_module,
-                    shard_dim=-1,
-                    logical_dim_size=source.out_features,
-                    process_group=process_group,
+            while next_index < len(parent):
+                next_module = parent[next_index]
+                if isinstance(next_module, _STATELESS_TP_MEMORY_LOOKAHEAD):
+                    next_index += 1
+                    continue
+                next_name = (
+                    f"{parent_name}.{next_index}" if parent_name else str(next_index)
                 )
-                wrapped.add(next_name)
+                if next_name in wrapped:
+                    break
+                if isinstance(next_module, base.MemoryModule):
+                    parent[next_index] = make_tensor_shard_memory_module(
+                        next_module,
+                        shard_dim=-1,
+                        logical_dim_size=source.out_features,
+                        process_group=process_group,
+                    )
+                    wrapped.add(next_name)
+                break
     return module
 
 

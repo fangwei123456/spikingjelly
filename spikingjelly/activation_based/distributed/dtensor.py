@@ -1,3 +1,10 @@
+"""Backward-compatible re-export facade for SNN distributed training.
+
+Implementation lives in the focused submodules under
+``spikingjelly.activation_based.distributed``. This module preserves the legacy
+``spikingjelly.activation_based.distributed.dtensor`` import path.
+"""
+
 import torch.distributed as dist  # noqa: F401
 
 from spikingjelly.activation_based.distributed.analysis import (
@@ -95,6 +102,7 @@ from spikingjelly.activation_based.distributed.tensor_parallel.linear import (
     wrap_tp_memory_modules,  # noqa: F401
 )
 from spikingjelly.activation_based.distributed.tensor_parallel.state import (
+    TensorShardMemoryModule,
     make_tensor_shard_memory_module,
 )
 
@@ -118,6 +126,7 @@ __all__ = [
     "SNNPipelineRuntime",
     "SNNDistributedAnalysis",
     "SNNDistributedRecommendation",
+    "TensorShardMemoryModule",
     "make_tensor_shard_memory_module",
     "ChannelShardConv2d",
     "ChannelShardConv1d",

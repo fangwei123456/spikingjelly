@@ -22,8 +22,8 @@ def build_spikformer_eager_policy(model: nn.Module) -> EagerParallelPolicy:
     :rtype: EagerParallelPolicy
     """
     num_blocks = len(getattr(model, "blocks", ()))
-    fsdp2_tp_shard_roots = tuple(
-        ["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)]
+    fsdp2_tp_shard_roots = ("patch_embed",) + tuple(
+        f"blocks.{i}" for i in range(num_blocks)
     )
     return EagerParallelPolicy(
         linear_tensor_parallel_roots=("head",),

@@ -95,12 +95,6 @@ def _convert_vgg_like_tree(
             state["projection_converted"] = True
             return True
 
-    if state["projection_converted"] and not state["memory_wrapped"]:
-        wrapped = _wrap_tensor_shard_memory_module(module, process_group, shard_dim=2)
-        if wrapped is not None and wrapped is not module:
-            state["memory_wrapped"] = True
-            return True
-
     changed = False
     for child_name, child in list(module.named_children()):
         replacement = child
