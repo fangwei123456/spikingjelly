@@ -173,10 +173,111 @@ def test_mstdp_learners_records_are_detached():
         functional.reset_net(sn)
 
 
+def _run_mstdp_with_critic_reward(steps=4):
+    # reward comes out of a differentiable critic, as in reward-modulated
+    # training loops, and is passed to step() without an explicit detach
+    fc = layer.Linear(8, 5, bias=False)
+    sn = neuron.IFNode()
+    critic = nn.Linear(5, 1)
+    learner = learning.MSTDPLearner(
+        step_mode="s",
+        synapse=fc,
+        sn=sn,
+        tau_pre=2.0,
+        tau_post=2.0,
+        batch_size=3,
+        f_pre=f_weight,
+        f_post=f_weight,
+    )
+    for _ in range(steps):
+        in_spike = (torch.rand(3, 8) > 0.5).float()
+        out_spike = sn(fc(in_spike))
+        reward = critic(out_spike).squeeze(-1)
+        learner.step(reward, on_grad=True)
+    return fc, sn, learner
+
+
+def _run_mstdpet_with_critic_reward(steps=4):
+    fc = layer.Linear(8, 5, bias=False)
+    sn = neuron.IFNode()
+    critic = nn.Linear(5, 1)
+    learner = learning.MSTDPETLearner(
+        step_mode="s",
+        synapse=fc,
+        sn=sn,
+        tau_pre=2.0,
+        tau_post=2.0,
+        tau_trace=2.0,
+        f_pre=f_weight,
+        f_post=f_weight,
+    )
+    for _ in range(steps):
+        in_spike = (torch.rand(8) > 0.5).float()
+        out_spike = sn(fc(in_spike))
+        reward = critic(out_spike).mean()
+        learner.step(reward, on_grad=True)
+    return fc, sn, learner
+
+
+def test_mstdp_learners_step_detaches_reward():
+    for run in (_run_mstdp_with_critic_reward, _run_mstdpet_with_critic_reward):
+        fc, sn, learner = run()
+        assert fc.weight.grad is not None
+        assert fc.weight.grad.grad_fn is None
+        assert not fc.weight.grad.requires_grad
+        functional.reset_net(sn)
+        learner.reset()
+
+
+def test_mstdp_learner_returns_detached_delta_w():
+    fc = layer.Linear(8, 5, bias=False)
+    sn = neuron.IFNode()
+    critic = nn.Linear(5, 1)
+    learner = learning.MSTDPLearner(
+        step_mode="s",
+        synapse=fc,
+        sn=sn,
+        tau_pre=2.0,
+        tau_post=2.0,
+        batch_size=3,
+        f_pre=f_weight,
+        f_post=f_weight,
+    )
+    in_spike = (torch.rand(3, 8) > 0.5).float()
+    out_spike = sn(fc(in_spike))
+    reward = critic(out_spike).squeeze(-1)
+
+    delta_w = learner.step(reward, on_grad=False)
+    assert delta_w.grad_fn is None
+    assert not delta_w.requires_grad
+
+    functional.reset_net(sn)
+    learner.reset()
+
+
+def test_mstdp_learners_free_tensors_with_graph_connected_reward():
+    # regression test for the reward-side counterpart of #576: a
+    # graph-connected reward must not accumulate retained graphs across runs
+    def one_run():
+        for run in (_run_mstdp_with_critic_reward, _run_mstdpet_with_critic_reward):
+            fc, sn, learner = run()
+            functional.reset_net(sn)
+            learner.reset()
+
+    one_run()
+    baseline = _count_alive_tensors()
+    for _ in range(3):
+        one_run()
+    assert _count_alive_tensors() <= baseline + 5
+
+
 if __name__ == "__main__":
     test_stdp_learner_records_are_detached()
     test_stdp_learner_step_does_not_retain_graph()
     test_stdp_learner_matches_functional_update()
     test_stdp_learner_frees_tensors_across_runs()
     test_mstdp_learners_records_are_detached()
+    test_mstdp_learners_step_detaches_reward()
+    test_mstdp_learner_returns_detached_delta_w()
+    test_mstdp_learners_free_tensors_with_graph_connected_reward()
     print("Done!")
