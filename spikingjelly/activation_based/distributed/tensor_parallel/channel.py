@@ -12,6 +12,21 @@ from spikingjelly.activation_based.distributed.tensor_parallel.state import (
 )
 
 
+class _ColwiseBackwardAllReduce(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, process_group, world_size: int):
+        ctx.process_group = process_group
+        ctx.world_size = int(world_size)
+        return x
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor):
+        if ctx.world_size > 1 and dist.is_available() and dist.is_initialized():
+            _record_tp_all_reduce(grad_output)
+            dist.all_reduce(grad_output, group=ctx.process_group)
+        return grad_output, None, None
+
+
 class ChannelShardConv2d(nn.Module):
     def __init__(self, source: nn.Module, process_group, mode: str):
         """
@@ -112,6 +127,10 @@ class ChannelShardConv2d(nn.Module):
             padding = self.padding
 
         if self.mode == "colwise":
+            if self.world_size > 1:
+                x = _ColwiseBackwardAllReduce.apply(
+                    x, self.process_group, self.world_size
+                )
             return F.conv2d(
                 x,
                 self.weight,
@@ -254,6 +273,10 @@ class ChannelShardConv1d(nn.Module):
             padding = self.padding
 
         if self.mode == "colwise":
+            if self.world_size > 1:
+                x = _ColwiseBackwardAllReduce.apply(
+                    x, self.process_group, self.world_size
+                )
             return F.conv1d(
                 x,
                 self.weight,

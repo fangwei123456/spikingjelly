@@ -24,7 +24,7 @@ def test_analyze_rejects_empty_tensor_parallel_root():
         )
 
 
-def test_analyze_reports_unsupported_convs_outside_selected_roots():
+def test_analyze_does_not_report_unsupported_convs_outside_selected_roots():
     model = nn.Module()
     model.features = nn.Sequential(nn.Conv2d(2, 4, kernel_size=1))
     model.classifier = nn.Sequential(layer.Linear(4, 2))
@@ -34,7 +34,7 @@ def test_analyze_reports_unsupported_convs_outside_selected_roots():
     )
 
     assert analysis.tensor_parallel_candidate_names == ("classifier.0",)
-    assert analysis.unsupported_tensor_parallel_names == ("features.0",)
+    assert analysis.unsupported_tensor_parallel_names == ()
 
 
 def test_adapter_registry_lists_known_families():

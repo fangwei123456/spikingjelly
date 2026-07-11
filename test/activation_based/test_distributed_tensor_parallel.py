@@ -70,6 +70,60 @@ def test_channel_shard_conv1d_preserves_padding_and_multistep_shape():
     torch.testing.assert_close(wrapped(x), reference)
 
 
+def test_channel_shard_conv2d_colwise_all_reduces_input_gradient(monkeypatch):
+    torch.manual_seed(0)
+    source = nn.Conv2d(2, 4, kernel_size=1, bias=False)
+    wrapped = ChannelShardConv2d(source, process_group=None, mode="colwise")
+    wrapped.world_size = 2
+    x = torch.randn(1, 2, 3, 3, requires_grad=True)
+    x_ref = x.detach().clone().requires_grad_(True)
+    calls = {"count": 0}
+
+    def _fake_all_reduce(tensor, group=None):
+        calls["count"] += 1
+        tensor.mul_(2)
+        return tensor
+
+    monkeypatch.setattr(distributed_dtensor.dist, "is_available", lambda: True)
+    monkeypatch.setattr(distributed_dtensor.dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(distributed_dtensor.dist, "all_reduce", _fake_all_reduce)
+
+    wrapped(x).sum().backward()
+    torch.nn.functional.conv2d(
+        x_ref, wrapped.weight, wrapped.bias, wrapped.stride
+    ).sum().backward()
+
+    assert calls["count"] == 1
+    torch.testing.assert_close(x.grad, x_ref.grad * 2)
+
+
+def test_channel_shard_conv1d_colwise_all_reduces_input_gradient(monkeypatch):
+    torch.manual_seed(0)
+    source = nn.Conv1d(2, 4, kernel_size=1, bias=False)
+    wrapped = ChannelShardConv1d(source, process_group=None, mode="colwise")
+    wrapped.world_size = 2
+    x = torch.randn(1, 2, 5, requires_grad=True)
+    x_ref = x.detach().clone().requires_grad_(True)
+    calls = {"count": 0}
+
+    def _fake_all_reduce(tensor, group=None):
+        calls["count"] += 1
+        tensor.mul_(2)
+        return tensor
+
+    monkeypatch.setattr(distributed_dtensor.dist, "is_available", lambda: True)
+    monkeypatch.setattr(distributed_dtensor.dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(distributed_dtensor.dist, "all_reduce", _fake_all_reduce)
+
+    wrapped(x).sum().backward()
+    torch.nn.functional.conv1d(
+        x_ref, wrapped.weight, wrapped.bias, wrapped.stride
+    ).sum().backward()
+
+    assert calls["count"] == 1
+    torch.testing.assert_close(x.grad, x_ref.grad * 2)
+
+
 def test_channel_shard_batch_norm2d_supports_cumulative_momentum():
     torch.manual_seed(0)
     source = nn.BatchNorm2d(4, momentum=None)
