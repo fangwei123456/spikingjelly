@@ -56,6 +56,24 @@ def test_channel_shard_conv2d_preserves_nonzero_padding_mode():
     torch.testing.assert_close(wrapped(x), reference)
 
 
+def test_channel_shard_conv2d_preserves_string_padding_fallback():
+    torch.manual_seed(0)
+    source = nn.Conv2d(
+        2,
+        4,
+        kernel_size=3,
+        padding="same",
+        padding_mode="reflect",
+        bias=True,
+    )
+    x = torch.randn(3, 2, 8, 8)
+    reference = source(x)
+    delattr(source, "_reversed_padding_repeated_twice")
+
+    wrapped = ChannelShardConv2d(source, process_group=None, mode="colwise")
+    torch.testing.assert_close(wrapped(x), reference)
+
+
 def test_channel_shard_conv1d_preserves_padding_and_multistep_shape():
     torch.manual_seed(0)
     source = nn.Conv1d(

@@ -18,6 +18,22 @@ def _reversed_padding_repeated_twice(source: nn.Module) -> tuple[int, ...]:
         return tuple(padding)
 
     padding = source.padding
+    if isinstance(padding, str):
+        if padding == "valid":
+            return tuple(0 for _ in range(2 * len(source.kernel_size)))
+        if padding != "same":
+            raise ValueError(f"Unsupported padding string '{padding}'.")
+        total_padding = [
+            dilation * (kernel - 1)
+            for dilation, kernel in zip(
+                source.dilation, source.kernel_size, strict=True
+            )
+        ]
+        return tuple(
+            value
+            for total in reversed(total_padding)
+            for value in (total // 2, total - total // 2)
+        )
     if isinstance(padding, int):
         padding = (padding,)
     return tuple(value for pad in reversed(padding) for value in (pad, pad))
