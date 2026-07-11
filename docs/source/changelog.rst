@@ -24,34 +24,43 @@ Precision
 Module: ``spikingjelly.activation_based.precision``.
 
 - Added optional Transformer Engine FP8 backend support via
-  ``PrecisionConfig(mode="fp8-te")``.
+  ``PrecisionConfig(mode="fp8-te")``, including guarded fallback behavior for
+  missing Transformer Engine, unsupported recipes, and non-FP8-capable devices.
 
 - Added FP8 optional dependency extras for ``fp8-te`` and ``fp8-torchao``.
 
 - Added Transformer Engine adapters for Linear, pointwise Conv1d,
-  LayerNorm, and exact LayerNormLinear / LayerNormMLP fusion patterns.
+  LayerNorm, exact LayerNormLinear / LayerNormMLP fusion patterns, and SDPA
+  argument validation.
 
-Improvements
-~~~~~~~~~~~~
+- Added precision conversion reports with pointwise Conv1d, LayerNorm,
+  fused-pattern metadata, and shared-module identity preservation for
+  Transformer Engine fused precision patterns.
 
-- Extended precision conversion reports with pointwise Conv1d, LayerNorm,
-  and fused-pattern metadata.
+Triton Neuron Kernels
+^^^^^^^^^^^^^^^^^^^^^
 
-- Added fake-TE and Spikformer conversion smoke tests to verify that
-  Spikformer projections and heads can convert while SSA, BatchNorm,
-  Conv2d, and LIFNode stay in high precision.
+Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
+
+- Added experimental mixed-precision Triton forward and backward paths for
+  multi-step IF, LIF, and ParametricLIF neurons, including FP8 storage
+  experiments with configurable forward and backward compute dtypes.
+
+- Added FP8 Triton neuron capability probes and a reusable execution plan for
+  repeated mixed-precision neuron launches.
+
+- Added an FP8 Triton neuron benchmark harness for IF, LIF, and ParametricLIF
+  accuracy, backward-gradient, and prepared-plan overhead measurements.
 
 Bug Fixes
 ~~~~~~~~~
 
-- Hardened ``fp8-te`` fallback behavior for missing Transformer Engine,
-  unsupported recipes, and non-FP8-capable devices.
-
-- Preserved shared-module identity for Transformer Engine fused precision
-  patterns.
-
-- Fixed the Transformer Engine SDPA adapter to reject mismatched dropout
-  arguments.
+- Fixed ``STDPLearner``, ``MSTDPLearner``, and ``MSTDPETLearner`` retaining the
+  autograd graph of the network's forward pass, which caused unbounded
+  memory growth (and eventual OOM) when models and learners were recreated
+  in a loop, e.g. during hyperparameter search (#576). Spikes recorded by
+  the learners' monitors are now detached, so ``step()`` no longer needs to
+  be wrapped in ``torch.no_grad()``.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -775,8 +775,14 @@ class STDPLearner(base.MemoryModule):
         self.f_pre = f_pre
         self.f_post = f_post
         self.synapse = synapse
-        self.in_spike_monitor = monitor.InputMonitor(synapse)
-        self.out_spike_monitor = monitor.OutputMonitor(sn)
+        # detach recorded spikes so the learner never builds or retains the
+        # autograd graph of the network's forward pass (#576)
+        self.in_spike_monitor = monitor.InputMonitor(
+            synapse, function_on_input=lambda x: x.detach()
+        )
+        self.out_spike_monitor = monitor.OutputMonitor(
+            sn, function_on_output=lambda x: x.detach()
+        )
 
         self.register_memory("trace_pre", None)
         self.register_memory("trace_post", None)
@@ -1028,8 +1034,14 @@ class MSTDPLearner(base.MemoryModule):
         self.f_pre = f_pre
         self.f_post = f_post
         self.synapse = synapse
-        self.in_spike_monitor = monitor.InputMonitor(synapse)
-        self.out_spike_monitor = monitor.OutputMonitor(sn)
+        # detach recorded spikes so the learner never builds or retains the
+        # autograd graph of the network's forward pass (#576)
+        self.in_spike_monitor = monitor.InputMonitor(
+            synapse, function_on_input=lambda x: x.detach()
+        )
+        self.out_spike_monitor = monitor.OutputMonitor(
+            sn, function_on_output=lambda x: x.detach()
+        )
 
         self.register_memory("trace_pre", None)
         self.register_memory("trace_post", None)
@@ -1293,8 +1305,14 @@ class MSTDPETLearner(base.MemoryModule):
         self.f_pre = f_pre
         self.f_post = f_post
         self.synapse = synapse
-        self.in_spike_monitor = monitor.InputMonitor(synapse)
-        self.out_spike_monitor = monitor.OutputMonitor(sn)
+        # detach recorded spikes so the learner never builds or retains the
+        # autograd graph of the network's forward pass (#576)
+        self.in_spike_monitor = monitor.InputMonitor(
+            synapse, function_on_input=lambda x: x.detach()
+        )
+        self.out_spike_monitor = monitor.OutputMonitor(
+            sn, function_on_output=lambda x: x.detach()
+        )
 
         self.register_memory("trace_pre", None)
         self.register_memory("trace_post", None)
