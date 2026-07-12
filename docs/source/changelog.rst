@@ -62,6 +62,32 @@ Bug Fixes
   the learners' monitors are now detached, so ``step()`` no longer needs to
   be wrapped in ``torch.no_grad()``.
 
+Improvements
+~~~~~~~~~~~~
+
+Distributed Training
+^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.distributed``.
+
+- Refactored the distributed SNN helpers around an Analyze -> Plan -> Apply
+  workflow, with model capability analysis, structured execution plans, and
+  runtime summaries for data parallel, tensor parallel, FSDP2, FSDP2+TP, and
+  pipeline configurations.
+
+- Reorganized eager distributed configuration, model-specific policies for
+  ``CIFAR10DVSVGG`` and Spikformer, and compatibility exports while keeping the
+  low-level ``SNNDistributedConfig`` path available for manual mesh and root
+  selection.
+
+- Split the distributed implementation into focused tensor-parallel, FSDP2,
+  pipeline-partitioning, pipeline-runtime, mesh, optimizer, and metrics helpers
+  for DTensor-based SNN experiments.
+
+- Updated the distributed benchmark and English/Chinese tutorials with the
+  current distributed strategy results, pipeline-parallel setup, and
+  troubleshooting notes.
+
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
