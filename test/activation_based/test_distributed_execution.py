@@ -70,6 +70,20 @@ def test_build_eager_config_allows_disabling_linear_tp_only():
     assert config.conv_tensor_parallel_roots == ["features"]
 
 
+def test_build_eager_config_disabling_linear_tp_overrides_explicit_auto_tp():
+    config = build_eager_config(
+        mode="tp",
+        device_type="cpu",
+        mesh_shape=(4,),
+        policy=EagerParallelPolicy(linear_tensor_parallel_roots=("classifier",)),
+        enable_linear_tensor_parallel=False,
+        auto_tensor_parallel=True,
+    )
+
+    assert config.auto_tensor_parallel is False
+    assert config.tensor_parallel_roots is None
+
+
 def test_configure_snn_distributed_conv_only_tp_does_not_build_linear_plan(
     monkeypatch: pytest.MonkeyPatch,
 ):

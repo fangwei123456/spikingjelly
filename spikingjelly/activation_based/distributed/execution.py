@@ -86,7 +86,9 @@ def build_eager_config(
         if enable_spikformer_patch_stem_tensor_parallel and mode in ("tp", "fsdp2_tp")
         else ()
     )
-    if auto_tensor_parallel is None:
+    if not enable_linear_tensor_parallel:
+        auto_tensor_parallel = False
+    elif auto_tensor_parallel is None:
         auto_tensor_parallel = bool(linear_roots)
 
     fsdp_shard_roots = None
