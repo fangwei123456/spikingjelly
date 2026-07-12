@@ -1,4 +1,4 @@
-Distributed SNN Training (DTensor / FSDP2)
+Distributed SNN Training
 ==========================================
 
 中文版： :doc:`../cn/distributed_training`
@@ -164,8 +164,10 @@ Use the public package root for the high-level workflow:
         optimizer.step()
         runtime.reset_state()
 
-A multi-process launch uses the same code, but it must run under ``torchrun``
-and initialize the process group before creating the distributed runtime:
+The example above is a single-process smoke path because it uses ``mode="none"``.
+For distributed runs, launch the training script with ``torchrun``, initialize
+the process group, and choose a distributed mode such as ``dp``, ``fsdp2``,
+``tp``, or ``fsdp2_tp`` before creating the runtime:
 
 .. code:: bash
 
@@ -261,7 +263,7 @@ Pipeline parallelism uses dedicated builders because it requires an
 
 Supported controls include ``--pp-schedule``, ``--pp-microbatches``,
 ``--pp-virtual-stages``, ``--pp-layout``, and ``--pp-delay-wgrad``. The
-important SNN invariant is that stage-local neuron state is reset between
+SNN invariant is that stage-local neuron state is reset between
 microbatches.
 
 Choosing a Strategy
@@ -280,7 +282,7 @@ If you already know your main objective, the following rules of thumb work well:
   the dedicated pipeline runtime. In the current CIFAR10DVSVGG benchmark,
   ``gpipe`` is the best PP throughput default, while ``1f1b`` is the best PP
   memory default.
-* **Safest and simplest distributed entry point**: begin with ``dp``. Move to
+* **Simplest distributed entry point**: begin with ``dp``. Move to
   ``fsdp2``, ``tp``, ``fsdp2_tp``, or ``pp`` only when the model size or memory
   profile justifies the extra machinery.
 
@@ -340,13 +342,13 @@ Read the headline metrics together:
     * - Metric
       - Meaning
       - Compare by
-    * - ``global_samples/s``
+    * - ``global_throughput_sps``
       - End-to-end throughput for the whole distributed job.
       - Higher is better only under the same model, backend, batch regime, and step count.
-    * - ``peak_memory_mb``
+    * - ``peak_allocated_mb``
       - Peak memory observed on a rank.
       - Lower is better when the run still completes the same workload.
-    * - ``step_ms``
+    * - ``step_latency_ms``
       - Per-step latency after warmup.
       - Lower is better for latency runs; use throughput for weak-scaling runs.
 
@@ -499,8 +501,8 @@ neuron-state reset between microbatches.
       - 6396.97
       - virtual-stage zero-bubble schedule
 
-With this larger batch size, PP still reduces peak memory substantially, but it
-does not beat the single-GPU throughput baseline on this small CIFAR10-DVS VGG
+With this larger batch size, PP reduces peak memory, but it does not beat
+the single-GPU throughput baseline on this small CIFAR10-DVS VGG
 workload. ``gpipe`` is the best PP schedule for throughput here, reaching about
 ``0.91x`` of the baseline throughput while reducing peak memory to about ``62%``
 of the baseline. ``1f1b`` gives the lowest PP memory, about ``31%`` of the
@@ -563,7 +565,7 @@ Spikformer Strategy Results
 For ``spikformer_ti``, plain ``dp`` reaches about ``1.95x`` global throughput
 over the single-GPU baseline, and ``fsdp2`` reaches about ``1.86x``.
 Tensor-parallel modes reduce per-GPU peak allocation from about ``8.26 GB`` to
-about ``5.38 GB`` without using memopt. The cost is much lower throughput, so
+about ``5.38 GB`` without using memopt. The cost is lower throughput, so
 plain ``dp`` remains the strongest throughput baseline when memory is
 sufficient.
 
@@ -608,7 +610,7 @@ Limitations and Troubleshooting
 * Outputs from DTensor paths may need materialization before ordinary loss or
   metric code. ``SNNDistributedRuntime.prepare_classification_output`` handles
   the common classification case.
-* High-level ``memopt`` (``level >= 2``) works functionally on large
+* High-level ``memopt`` (``level >= 2``) is available on large
   Spikformer-like workloads, but the search cost is high and is more likely to
   trigger extra ``inductor`` recompiles. Treat it as an offline tuning workflow
   for now.
