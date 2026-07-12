@@ -1,6 +1,7 @@
 # ruff: noqa: F401,F403,F405
 import pickle
 
+import spikingjelly.activation_based.distributed.tensor_parallel.linear as tp_linear
 from spikingjelly.activation_based import base
 from spikingjelly.activation_based.distributed.tensor_parallel.state import (
     _has_tensor_shard_input_validator,
@@ -49,6 +50,8 @@ def test_tp_communication_debug_stats_recorded_for_rowwise_conv(
             calls["count"] += 1
             return tensor
 
+        monkeypatch.setattr(distributed_dtensor.dist, "is_available", lambda: True)
+        monkeypatch.setattr(distributed_dtensor.dist, "is_initialized", lambda: True)
         monkeypatch.setattr(distributed_dtensor.dist, "all_reduce", _fake_all_reduce)
         conv(x)
         stats = distributed_dtensor.get_tp_communication_debug_stats()
@@ -58,6 +61,37 @@ def test_tp_communication_debug_stats_recorded_for_rowwise_conv(
     finally:
         distributed_dtensor.enable_tp_communication_debug(False)
         distributed_dtensor.reset_tp_communication_debug_stats()
+
+
+def test_make_colwise_parallel_rejects_unavailable_local_output(monkeypatch):
+    class _LegacyColwiseParallel:
+        def __init__(self):
+            pass
+
+    monkeypatch.setattr(tp_linear, "TENSOR_PARALLEL_AVAILABLE", True)
+    monkeypatch.setattr(tp_linear, "ColwiseParallel", _LegacyColwiseParallel)
+    monkeypatch.setattr(tp_linear, "make_output_tensor", None)
+
+    with pytest.raises(RuntimeError, match="Cannot produce local output"):
+        tp_linear._make_colwise_parallel(local_output=True)
+
+
+def test_parallelize_snn_module_validates_named_mesh_dim_bounds(monkeypatch):
+    class _FakeMesh:
+        ndim = 2
+        mesh_dim_names = ("dp", "tp")
+
+        def __getitem__(self, key):
+            return key
+
+    def _fake_parallelize_module(module, device_mesh, parallelize_plan):
+        return module
+
+    monkeypatch.setattr(tp_linear, "TENSOR_PARALLEL_AVAILABLE", True)
+    monkeypatch.setattr(tp_linear, "parallelize_module", _fake_parallelize_module)
+
+    with pytest.raises(ValueError, match="tp_mesh_dim=2 is out of range"):
+        parallelize_snn_module(nn.Identity(), _FakeMesh(), {}, tp_mesh_dim=2)
 
 
 def test_channel_shard_conv2d_preserves_nonzero_padding_mode():

@@ -31,6 +31,10 @@ class _SpikformerPipelineStage(nn.Module):
         self.head = head
         self.T = T
 
+    @staticmethod
+    def _pool_features(x: torch.Tensor) -> torch.Tensor:
+        return x.flatten(3).mean(dim=-1)
+
     def forward(self, x: torch.Tensor):
         if self.patch_embed is not None:
             if x.ndim == 4:
@@ -45,11 +49,16 @@ class _SpikformerPipelineStage(nn.Module):
                 )
             x = self.patch_embed(x)
 
+        if self.blocks and x.ndim != 5:
+            raise ValueError(
+                "Spikformer pipeline stage expects 5D [T, N, D, H', W'] "
+                f"input before blocks, but got {tuple(x.shape)}."
+            )
         for block in self.blocks:
             x = block(x)
 
         if self.head is not None:
-            x = x.flatten(3).mean(dim=-1)
+            x = self._pool_features(x)
             x = self.head(x)
         return x
 
@@ -90,7 +99,7 @@ def _build_spikformer_pipeline_module(
     for block in blocks:
         current, block_cost = _measure_module_cost(block, current)
         unit_costs.append(block_cost)
-    head_input = current.flatten(3).mean(dim=-1)
+    head_input = _SpikformerPipelineStage._pool_features(current)
     _, head_cost = _measure_module_cost(module.head, head_input)
     unit_costs.append(head_cost)
     block_counts = (
@@ -124,7 +133,7 @@ def _build_spikformer_pipeline_module(
                 patch_embed=patch_embed,
                 blocks=stage_blocks,
                 head=head,
-                T=getattr(module, "T", None),
+                T=getattr(module, "T", None) if patch_embed is not None else None,
             )
         )
         stage_costs.append(

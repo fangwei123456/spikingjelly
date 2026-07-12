@@ -312,7 +312,11 @@ def configure_snn_distributed(
     if config.enable_fsdp2:
         fsdp_mesh_dim = config.dp_mesh_dim if config.dp_mesh_dim is not None else 0
         fsdp_mesh = _resolve_mesh_submesh(device_mesh, fsdp_mesh_dim)
-        mp_policy = _build_fsdp_mp_policy(config)
+        mp_policy = _build_fsdp_mp_policy(
+            config.fsdp_param_dtype,
+            config.fsdp_reduce_dtype,
+            config.fsdp_output_dtype,
+        )
         module = fully_shard_snn_module(
             module=module,
             device_mesh=fsdp_mesh,

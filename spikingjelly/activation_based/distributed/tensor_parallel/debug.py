@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import threading
-from typing import Dict
 
 import torch
 
@@ -10,10 +9,6 @@ _TP_COMMUNICATION_DEBUG_ENABLED = False
 _TP_COMMUNICATION_DEBUG_STATS = {
     "all_reduce_calls": 0,
     "all_reduce_bytes": 0,
-    "all_gather_calls": 0,
-    "all_gather_bytes": 0,
-    "reduce_scatter_calls": 0,
-    "reduce_scatter_bytes": 0,
 }
 _TP_COMMUNICATION_DEBUG_LOCK = threading.Lock()
 
@@ -44,7 +39,7 @@ def reset_tp_communication_debug_stats() -> None:
             _TP_COMMUNICATION_DEBUG_STATS[key] = 0
 
 
-def get_tp_communication_debug_stats() -> Dict[str, int]:
+def get_tp_communication_debug_stats() -> dict[str, int]:
     """Return a snapshot of tensor-parallel communication counters.
 
     .. admonition:: Chinese
@@ -64,25 +59,5 @@ def _record_tp_all_reduce(tensor: torch.Tensor) -> None:
     with _TP_COMMUNICATION_DEBUG_LOCK:
         _TP_COMMUNICATION_DEBUG_STATS["all_reduce_calls"] += 1
         _TP_COMMUNICATION_DEBUG_STATS["all_reduce_bytes"] += int(
-            tensor.numel() * tensor.element_size()
-        )
-
-
-def _record_tp_all_gather(tensor: torch.Tensor) -> None:
-    if not _TP_COMMUNICATION_DEBUG_ENABLED:
-        return
-    with _TP_COMMUNICATION_DEBUG_LOCK:
-        _TP_COMMUNICATION_DEBUG_STATS["all_gather_calls"] += 1
-        _TP_COMMUNICATION_DEBUG_STATS["all_gather_bytes"] += int(
-            tensor.numel() * tensor.element_size()
-        )
-
-
-def _record_tp_reduce_scatter(tensor: torch.Tensor) -> None:
-    if not _TP_COMMUNICATION_DEBUG_ENABLED:
-        return
-    with _TP_COMMUNICATION_DEBUG_LOCK:
-        _TP_COMMUNICATION_DEBUG_STATS["reduce_scatter_calls"] += 1
-        _TP_COMMUNICATION_DEBUG_STATS["reduce_scatter_bytes"] += int(
             tensor.numel() * tensor.element_size()
         )

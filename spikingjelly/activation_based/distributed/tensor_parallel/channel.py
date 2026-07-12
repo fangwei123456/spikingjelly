@@ -188,7 +188,7 @@ class ChannelShardConv2d(nn.Module):
             self.dilation,
             self.groups,
         )
-        if self.world_size > 1:
+        if self.world_size > 1 and dist.is_available() and dist.is_initialized():
             _record_tp_all_reduce(y)
             dist.all_reduce(y, group=self.process_group)
         if self.bias is not None:
@@ -344,7 +344,7 @@ class ChannelShardConv1d(nn.Module):
             self.dilation,
             self.groups,
         )
-        if self.world_size > 1:
+        if self.world_size > 1 and dist.is_available() and dist.is_initialized():
             _record_tp_all_reduce(y)
             dist.all_reduce(y, group=self.process_group)
         if self.bias is not None:

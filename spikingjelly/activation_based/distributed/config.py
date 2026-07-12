@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, Union
 
 import torch
+
+if TYPE_CHECKING:
+    from torch.distributed._tensor import DeviceMesh
 
 
 @dataclass
@@ -30,7 +33,7 @@ class SNNDistributedConfig:
 
     device_type: str = "cuda"
     mesh_shape: Optional[Tuple[int, ...]] = None
-    device_mesh: Optional[Any] = None
+    device_mesh: Optional["DeviceMesh"] = None
     tp_mesh_dim: int = 0
     dp_mesh_dim: Optional[int] = None
     enable_data_parallel: bool = False
@@ -66,7 +69,7 @@ SNNDistributedConfig.__init__.__doc__ = r"""Initialize SNN distributed training 
 :param mesh_shape: Optional logical mesh shape.
 :type mesh_shape: tuple[int, ...] or None
 :param device_mesh: Optional pre-built device mesh.
-:type device_mesh: Any or None
+:type device_mesh: torch.distributed._tensor.DeviceMesh or None
 :param tp_mesh_dim: Tensor-parallel mesh dimension.
 :type tp_mesh_dim: int
 :param dp_mesh_dim: Data-parallel mesh dimension.

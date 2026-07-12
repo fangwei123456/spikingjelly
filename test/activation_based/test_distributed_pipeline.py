@@ -1,4 +1,7 @@
 # ruff: noqa: F401,F403,F405
+from spikingjelly.activation_based.distributed.pipeline.spikformer import (
+    _SpikformerPipelineStage,
+)
 from test.activation_based._distributed_dtensor_test_support import *
 
 
@@ -33,6 +36,13 @@ def test_spikformer_pipeline_module_matches_baseline():
     functional.reset_net(pipeline_module)
     result = pipeline_module(x)
     torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
+
+
+def test_spikformer_pipeline_middle_stage_rejects_4d_block_input():
+    stage = _SpikformerPipelineStage(blocks=[nn.Identity()])
+
+    with pytest.raises(ValueError, match="expects 5D"):
+        stage(torch.randn(2, 3, 4, 4))
 
 
 def test_measure_module_cost_uses_autograd_inside_no_grad():

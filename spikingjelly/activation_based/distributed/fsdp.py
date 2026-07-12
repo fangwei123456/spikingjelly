@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Optional, Sequence
 import torch
 import torch.nn as nn
 
-from .config import SNNDistributedConfig
 from .mesh import _resolve_mesh_submesh
 
 if TYPE_CHECKING:
@@ -21,19 +20,19 @@ except ImportError:
     FSDP2_AVAILABLE = False
 
 
-def _build_fsdp_mp_policy(config: SNNDistributedConfig):
+def _build_fsdp_mp_policy(
+    param_dtype: Optional[torch.dtype],
+    reduce_dtype: Optional[torch.dtype],
+    output_dtype: Optional[torch.dtype],
+):
     if MixedPrecisionPolicy is None:
         return None
-    if (
-        config.fsdp_param_dtype is None
-        and config.fsdp_reduce_dtype is None
-        and config.fsdp_output_dtype is None
-    ):
+    if param_dtype is None and reduce_dtype is None and output_dtype is None:
         return None
     return MixedPrecisionPolicy(
-        param_dtype=config.fsdp_param_dtype,
-        reduce_dtype=config.fsdp_reduce_dtype,
-        output_dtype=config.fsdp_output_dtype,
+        param_dtype=param_dtype,
+        reduce_dtype=reduce_dtype,
+        output_dtype=output_dtype,
     )
 
 
@@ -43,7 +42,7 @@ def fully_shard_snn_module(
     shard_roots: Optional[Sequence[str]] = None,
     shard_module_root: bool = True,
     root_reshard_after_forward: Optional[bool] = False,
-    mp_policy=None,
+    mp_policy: Optional["MixedPrecisionPolicy"] = None,
 ) -> nn.Module:
     if not FSDP2_AVAILABLE:
         raise RuntimeError(
@@ -89,19 +88,9 @@ def apply_snn_fsdp2(
     reduce_dtype: Optional[torch.dtype] = None,
     output_dtype: Optional[torch.dtype] = None,
 ) -> nn.Module:
-    config = SNNDistributedConfig(
-        enable_fsdp2=True,
-        dp_mesh_dim=dp_mesh_dim,
-        fsdp_shard_roots=shard_roots,
-        fsdp_shard_module_root=shard_module_root,
-        fsdp_root_reshard_after_forward=root_reshard_after_forward,
-        fsdp_param_dtype=param_dtype,
-        fsdp_reduce_dtype=reduce_dtype,
-        fsdp_output_dtype=output_dtype,
-    )
     fsdp_mesh_dim = dp_mesh_dim if dp_mesh_dim is not None else 0
     fsdp_mesh = _resolve_mesh_submesh(device_mesh, fsdp_mesh_dim)
-    mp_policy = _build_fsdp_mp_policy(config)
+    mp_policy = _build_fsdp_mp_policy(param_dtype, reduce_dtype, output_dtype)
     return fully_shard_snn_module(
         module=module,
         device_mesh=fsdp_mesh,

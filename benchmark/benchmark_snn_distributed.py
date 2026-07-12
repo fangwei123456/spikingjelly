@@ -263,7 +263,10 @@ class _FDRedirectCapture:
                 if text:
                     self.counter.feed(text)
                 if self._saved_fd is not None:
-                    os.write(self._saved_fd, chunk)
+                    try:
+                        os.write(self._saved_fd, chunk)
+                    except OSError:
+                        pass
             tail = self._decoder.decode(b"", final=True)
             if tail:
                 self.counter.feed(tail)
@@ -486,10 +489,6 @@ def _summarize_benchmark_comparison(
         "materialize_ms",
         "tp_all_reduce_calls",
         "tp_all_reduce_mb",
-        "fsdp2_all_gather_calls",
-        "fsdp2_all_gather_mb",
-        "fsdp2_reduce_scatter_calls",
-        "fsdp2_reduce_scatter_mb",
         "warning_count",
         "recompile_count",
         "graph_break_count",
@@ -621,10 +620,6 @@ def _aggregate_tp_debug_stats(device: torch.device) -> Dict[str, int]:
     keys = [
         "all_reduce_calls",
         "all_reduce_bytes",
-        "all_gather_calls",
-        "all_gather_bytes",
-        "reduce_scatter_calls",
-        "reduce_scatter_bytes",
     ]
     values = torch.tensor(
         [stats.get(k, 0) for k in keys],
@@ -1140,12 +1135,6 @@ def benchmark(args, counter: _LinePatternCounter):
                 "recommendation_notes": recommendation_notes,
                 "tp_all_reduce_calls": tp_stats["all_reduce_calls"],
                 "tp_all_reduce_mb": tp_stats["all_reduce_bytes"] / 1024.0 / 1024.0,
-                "fsdp2_all_gather_calls": tp_stats["all_gather_calls"],
-                "fsdp2_all_gather_mb": tp_stats["all_gather_bytes"] / 1024.0 / 1024.0,
-                "fsdp2_reduce_scatter_calls": tp_stats["reduce_scatter_calls"],
-                "fsdp2_reduce_scatter_mb": tp_stats["reduce_scatter_bytes"]
-                / 1024.0
-                / 1024.0,
                 **breakdown.to_dict(args.steps),
                 **event_counts,
             }
@@ -1280,12 +1269,6 @@ def benchmark_pipeline(
             "recommendation_notes": recommendation_notes,
             "tp_all_reduce_calls": tp_stats["all_reduce_calls"],
             "tp_all_reduce_mb": tp_stats["all_reduce_bytes"] / 1024.0 / 1024.0,
-            "fsdp2_all_gather_calls": tp_stats["all_gather_calls"],
-            "fsdp2_all_gather_mb": tp_stats["all_gather_bytes"] / 1024.0 / 1024.0,
-            "fsdp2_reduce_scatter_calls": tp_stats["reduce_scatter_calls"],
-            "fsdp2_reduce_scatter_mb": tp_stats["reduce_scatter_bytes"]
-            / 1024.0
-            / 1024.0,
             **breakdown.to_dict(args.steps),
             **event_counts,
         }

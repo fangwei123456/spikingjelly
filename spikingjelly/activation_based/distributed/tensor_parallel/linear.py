@@ -46,6 +46,12 @@ def _make_colwise_parallel(local_output: bool) -> "ParallelStyle":
         return ColwiseParallel(use_local_output=local_output)
     if local_output and make_output_tensor is not None:
         return ColwiseParallel(_prepare_output=make_output_tensor)
+    if local_output:
+        raise RuntimeError(
+            "Cannot produce local output from ColwiseParallel: this PyTorch build "
+            "lacks both the 'use_local_output' argument and 'make_output_tensor'. "
+            "Please upgrade PyTorch."
+        )
     return ColwiseParallel()
 
 
@@ -221,8 +227,14 @@ def parallelize_snn_module(
             tp_mesh_dim=tp_mesh_dim,
         )
     if getattr(device_mesh, "ndim", 1) > 1:
-        if getattr(device_mesh, "mesh_dim_names", None):
-            mesh_name = device_mesh.mesh_dim_names[tp_mesh_dim]
+        mesh_dim_names = getattr(device_mesh, "mesh_dim_names", None)
+        if mesh_dim_names:
+            if tp_mesh_dim < 0 or tp_mesh_dim >= len(mesh_dim_names):
+                raise ValueError(
+                    f"tp_mesh_dim={tp_mesh_dim} is out of range for a mesh with "
+                    f"{len(mesh_dim_names)} dimensions."
+                )
+            mesh_name = mesh_dim_names[tp_mesh_dim]
             device_mesh = device_mesh[mesh_name]
         else:
             raise ValueError(

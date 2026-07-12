@@ -278,6 +278,7 @@ def test_aggregate_tp_debug_stats_returns_local_totals_without_process_group(
         lambda: {"all_reduce_calls": 1, "all_reduce_bytes": 16},
     )
     stats = bench._aggregate_tp_debug_stats(torch.device("cpu"))
+    assert set(stats) == {"all_reduce_calls", "all_reduce_bytes"}
     assert stats["all_reduce_calls"] == 1
     assert stats["all_reduce_bytes"] == 16
 

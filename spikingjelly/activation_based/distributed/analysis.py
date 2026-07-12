@@ -84,8 +84,7 @@ def _iter_named_modules_under_roots(
         root_module = named_children[root]
         for sub_name, child in root_module.named_modules():
             full_name = root if not sub_name else f"{root}.{sub_name}"
-            if full_name:
-                yield full_name, child
+            yield full_name, child
 
 
 def analyze_snn_distributed_capability(
