@@ -1130,8 +1130,13 @@ class MSTDPLearner(base.MemoryModule):
         * **中文**
 
         使用外部奖励 ``reward`` 对当前 eligibility 进行调制，并生成一次 mSTDP 权重更新。
+        若 ``reward`` 为张量，则在计算前将其从
+        autograd 计算图中分离，
+        因此写入的 ``weight.grad`` 或返回的权重增量不会连接到
+        ``reward`` 的计算图。
 
-        :param reward: 每个样本对应的奖励，通常 ``shape = [batch_size]``
+        :param reward: 每个样本对应的奖励，通常 ``shape = [batch_size]``。
+            张量奖励会在计算前分离
         :type reward: torch.Tensor
         :param on_grad: 是否将结果写入 ``self.synapse.weight.grad``
         :type on_grad: bool
@@ -1150,8 +1155,12 @@ class MSTDPLearner(base.MemoryModule):
 
         Modulate the current eligibility with the external reward ``reward`` and
         generate one mSTDP weight update.
+        Tensor rewards are detached from the autograd graph before computation,
+        so neither the written ``weight.grad`` nor the returned weight increment
+        is connected to the reward graph.
 
-        :param reward: Reward for each sample, typically with ``shape = [batch_size]``
+        :param reward: Reward for each sample, typically with
+            ``shape = [batch_size]``. Tensor rewards are detached before computation
         :type reward: torch.Tensor
         :param on_grad: Whether to write the result into ``self.synapse.weight.grad``
         :type on_grad: bool
@@ -1408,8 +1417,14 @@ class MSTDPETLearner(base.MemoryModule):
         * **中文**
 
         使用外部奖励 ``reward`` 对 eligibility trace 进行调制，并生成一次 mSTDP-ET 权重更新。
+        若 ``reward`` 为张量，则在计算前将其从
+        autograd 计算图中分离，
+        因此写入的 ``weight.grad`` 或返回的权重增量不会连接到
+        ``reward`` 的计算图。
 
-        :param reward: 奖励信号，通常为标量或 ``shape = [batch_size]`` 的张量
+        :param reward: 奖励信号，通常为标量或
+            ``shape = [batch_size]`` 的张量。
+            张量奖励会在计算前分离
         :type reward: torch.Tensor
         :param on_grad: 是否将结果写入 ``self.synapse.weight.grad``
         :type on_grad: bool
@@ -1428,8 +1443,12 @@ class MSTDPETLearner(base.MemoryModule):
 
         Modulate the eligibility trace with the external reward ``reward`` and
         generate one mSTDP-ET weight update.
+        Tensor rewards are detached from the autograd graph before computation,
+        so neither the written ``weight.grad`` nor the returned weight increment
+        is connected to the reward graph.
 
-        :param reward: Reward signal, typically a scalar or a tensor with ``shape = [batch_size]``
+        :param reward: Reward signal, typically a scalar or a tensor with
+            ``shape = [batch_size]``. Tensor rewards are detached before computation
         :type reward: torch.Tensor
         :param on_grad: Whether to write the result into ``self.synapse.weight.grad``
         :type on_grad: bool
