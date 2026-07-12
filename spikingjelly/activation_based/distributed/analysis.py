@@ -70,6 +70,7 @@ def _iter_named_modules_under_roots(
         return
 
     named_children = dict(module.named_modules())
+    seen = set()
     for root in roots:
         if not root:
             raise ValueError(
@@ -84,6 +85,9 @@ def _iter_named_modules_under_roots(
         root_module = named_children[root]
         for sub_name, child in root_module.named_modules():
             full_name = root if not sub_name else f"{root}.{sub_name}"
+            if full_name in seen:
+                continue
+            seen.add(full_name)
             yield full_name, child
 
 

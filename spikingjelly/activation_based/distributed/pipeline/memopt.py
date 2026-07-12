@@ -1,4 +1,5 @@
 import inspect
+import math
 import time
 from typing import Sequence, Tuple
 
@@ -26,9 +27,13 @@ def recommend_pipeline_memopt_stages(
     """
     if not stage_costs:
         return ()
-    if stage_budget_ratio <= 0.0 or stage_budget_ratio > 1.0:
+    if (
+        not math.isfinite(stage_budget_ratio)
+        or stage_budget_ratio <= 0.0
+        or stage_budget_ratio > 1.0
+    ):
         raise ValueError(
-            f"stage_budget_ratio must be in (0, 1], but got {stage_budget_ratio}."
+            f"stage_budget_ratio must be a finite number in (0, 1], but got {stage_budget_ratio}."
         )
     num_stages = len(stage_costs)
     target_count = max(1, min(num_stages, int(round(num_stages * stage_budget_ratio))))

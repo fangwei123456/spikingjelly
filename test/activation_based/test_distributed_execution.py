@@ -52,6 +52,26 @@ def test_build_eager_config_fsdp2_tp_falls_back_to_root_shard_flag():
     assert config.fsdp_shard_module_root is True
 
 
+def test_build_eager_config_fsdp2_tp_respects_explicit_empty_shard_roots():
+    config = build_eager_config(
+        mode="fsdp2_tp",
+        device_type="cpu",
+        mesh_shape=(1, 1),
+        tp_mesh_dim=1,
+        dp_mesh_dim=0,
+        policy=EagerParallelPolicy(
+            linear_tensor_parallel_roots=("classifier",),
+            fsdp_shard_roots=("features", "classifier"),
+            fsdp2_tp_shard_roots=(),
+            fsdp_shard_module_root=True,
+            fsdp2_tp_shard_module_root=False,
+        ),
+    )
+
+    assert config.fsdp_shard_roots is None
+    assert config.fsdp_shard_module_root is False
+
+
 def test_build_eager_config_allows_disabling_linear_tp_only():
     config = build_eager_config(
         mode="tp",
@@ -143,6 +163,77 @@ def test_configure_snn_distributed_uses_current_cuda_device_for_ddp(monkeypatch)
 
     assert isinstance(module, ToyDistributedSNN)
     assert captured["device_ids"] == [3]
+
+
+def test_configure_snn_distributed_warns_when_device_mesh_overrides_mesh_shape():
+    with pytest.warns(UserWarning, match="mesh_shape.*ignored"):
+        _, mesh, _ = configure_snn_distributed(
+            ToyDistributedSNN(),
+            SNNDistributedConfig(
+                device_type="cpu",
+                device_mesh=SimpleNamespace(ndim=1),
+                mesh_shape=(2, 2),
+                auto_tensor_parallel=False,
+                enable_data_parallel=False,
+                enable_fsdp2=False,
+            ),
+        )
+
+    assert mesh.ndim == 1
+
+
+def test_configure_snn_distributed_rejects_dp_tp_before_mesh_build(monkeypatch):
+    import spikingjelly.activation_based.distributed.execution as execution
+
+    def _unexpected_build_device_mesh(*args, **kwargs):
+        raise AssertionError("mesh should not be built before DP + TP rejection")
+
+    monkeypatch.setattr(execution, "build_device_mesh", _unexpected_build_device_mesh)
+
+    with pytest.raises(NotImplementedError, match="DDP-style data parallelism"):
+        configure_snn_distributed(
+            ToyDistributedSNN(),
+            SNNDistributedConfig(
+                device_type="cpu",
+                mesh_shape=(1,),
+                enable_data_parallel=True,
+                auto_tensor_parallel=True,
+            ),
+        )
+
+
+def test_analyze_snn_distributed_capability_deduplicates_overlapping_roots():
+    model = ToyDistributedSNN()
+    analysis = analyze_snn_distributed_capability(
+        model,
+        tensor_parallel_roots=["features", "features.0", "features"],
+    )
+
+    assert analysis.tensor_parallel_candidate_names.count("features.0") == 1
+    assert analysis.tensor_parallel_candidate_names.count("features.2") == 1
+
+
+def test_fully_shard_snn_module_shards_root_once_when_root_is_listed(monkeypatch):
+    import spikingjelly.activation_based.distributed.fsdp as fsdp
+
+    calls = []
+
+    def fake_fully_shard(module, **kwargs):
+        calls.append(module)
+
+    monkeypatch.setattr(fsdp, "FSDP2_AVAILABLE", True)
+    monkeypatch.setattr(fsdp, "fully_shard", fake_fully_shard)
+
+    model = nn.Sequential(nn.Linear(2, 2))
+    result = fsdp.fully_shard_snn_module(
+        model,
+        device_mesh=object(),
+        shard_roots=[""],
+        shard_module_root=True,
+    )
+
+    assert result is model
+    assert calls == [model]
 
 
 def test_apply_returns_unified_runtime_single_rank():

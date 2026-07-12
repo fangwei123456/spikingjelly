@@ -160,6 +160,11 @@ def test_recommend_pipeline_memopt_stages_prefers_heavy_stages():
     assert selected == (1, 3)
 
 
+def test_recommend_pipeline_memopt_stages_rejects_nan_ratio():
+    with pytest.raises(ValueError, match="finite number"):
+        recommend_pipeline_memopt_stages((1.0, 2.0), stage_budget_ratio=float("nan"))
+
+
 def test_apply_pipeline_stage_memopt_only_wraps_selected_heavy_stage():
     torch.manual_seed(0)
     model = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
@@ -315,6 +320,12 @@ def test_make_pipeline_outputs_contiguous_clones_views():
     out = _make_pipeline_outputs_contiguous(view)
     torch.testing.assert_close(out, view)
     assert out.data_ptr() != view.data_ptr()
+
+
+def test_make_pipeline_outputs_contiguous_reuses_contiguous_tensors():
+    value = torch.randn(2, 3, 4)
+    out = _make_pipeline_outputs_contiguous(value)
+    assert out is value
 
 
 def test_cifar_pipeline_transposes_on_first_non_empty_stage():

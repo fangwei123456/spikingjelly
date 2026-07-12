@@ -383,7 +383,7 @@ def recommend_snn_distributed_strategy(
                 pp_memopt_stage_budget_ratio=0.5,
                 pp_schedule=pp_schedule,
                 pp_virtual_stages=pp_virtual_stages,
-                pp_layout=tuple(1 for _ in range(logical_stages)),
+                pp_layout=None,
                 pp_delay_wgrad=pp_delay_wgrad,
                 rationale=tuple(rationale),
             )

@@ -1,3 +1,4 @@
+import warnings
 from typing import Optional, Tuple
 
 import torch
@@ -43,7 +44,7 @@ from spikingjelly.activation_based.distributed.tensor_parallel.spikformer import
 )
 
 
-def _optional_list(values: Tuple[str, ...]) -> Optional[list[str]]:
+def _optional_list(values: Optional[Tuple[str, ...]]) -> Optional[list[str]]:
     return list(values) if values else None
 
 
@@ -96,11 +97,18 @@ def build_eager_config(
     if mode == "fsdp2":
         fsdp_shard_roots = _optional_list(policy.fsdp_shard_roots)
     elif mode == "fsdp2_tp":
-        fsdp2_tp_roots = policy.fsdp2_tp_shard_roots or policy.fsdp_shard_roots
+        fsdp2_tp_roots = (
+            policy.fsdp2_tp_shard_roots
+            if policy.fsdp2_tp_shard_roots is not None
+            else policy.fsdp_shard_roots
+        )
         fsdp_shard_roots = _optional_list(fsdp2_tp_roots)
         fsdp_shard_module_root = (
             policy.fsdp2_tp_shard_module_root
-            if policy.fsdp2_tp_shard_roots or policy.fsdp2_tp_shard_module_root
+            if (
+                policy.fsdp2_tp_shard_roots is not None
+                or policy.fsdp2_tp_shard_module_root
+            )
             else policy.fsdp_shard_module_root
         )
 
@@ -134,7 +142,7 @@ def build_eager_config(
 def configure_snn_distributed(
     module: nn.Module,
     config: SNNDistributedConfig,
-) -> Tuple[nn.Module, "DeviceMesh", SNNDistributedAnalysis]:
+) -> Tuple[nn.Module, Optional["DeviceMesh"], SNNDistributedAnalysis]:
     r"""
     **API Language** - :ref:`中文 <configure_snn_distributed-cn>` | :ref:`English <configure_snn_distributed-en>`
 
@@ -163,6 +171,12 @@ def configure_snn_distributed(
         or config.experimental_spikformer_tensor_parallel
         or config.experimental_spikformer_patch_stem_tensor_parallel
     )
+    if should_apply_tp and config.enable_data_parallel and not config.enable_fsdp2:
+        raise NotImplementedError(
+            "Combining DDP-style data parallelism with DTensor tensor parallelism is not "
+            "supported in this implementation because DistributedDataParallel state sync "
+            "mixes Tensor and DTensor parameters. Please use FSDP2 + TP instead."
+        )
 
     analysis = analyze_snn_distributed_capability(
         module, tensor_parallel_roots=config.tensor_parallel_roots
@@ -210,6 +224,12 @@ def configure_snn_distributed(
             mesh_dim_names=mesh_dim_names,
         )
     else:
+        if config.mesh_shape is not None:
+            warnings.warn(
+                "`device_mesh` was supplied explicitly; `mesh_shape` is ignored.",
+                UserWarning,
+                stacklevel=2,
+            )
         device_mesh = config.device_mesh
 
     mesh_tensor = getattr(device_mesh, "mesh", None)
@@ -245,13 +265,6 @@ def configure_snn_distributed(
         raise ValueError(
             "tp_mesh_dim and dp_mesh_dim must be different when tensor parallelism "
             f"is enabled, but both are {config.tp_mesh_dim}."
-        )
-
-    if should_apply_tp and config.enable_data_parallel and not config.enable_fsdp2:
-        raise NotImplementedError(
-            "Combining DDP-style data parallelism with DTensor tensor parallelism is not "
-            "supported in this implementation because DistributedDataParallel state sync "
-            "mixes Tensor and DTensor parameters. Please use FSDP2 + TP instead."
         )
 
     if config.experimental_conv_tensor_parallel:

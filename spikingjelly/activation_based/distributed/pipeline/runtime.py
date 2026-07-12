@@ -170,9 +170,13 @@ def _make_pipeline_outputs_contiguous(value: Any) -> Any:
         # Zero-bubble pipeline backward currently calls in-place ``detach_`` on
         # cached stage outputs. Contiguous views still fail that path, so ensure
         # stage outputs become standalone tensors when necessary.
-        if value._is_view():
+        is_view = getattr(value, "is_view", None)
+        value_is_view = is_view() if callable(is_view) else value._is_view()
+        if value_is_view:
             return value.clone(memory_format=torch.contiguous_format)
-        return value.contiguous()
+        if not value.is_contiguous():
+            return value.contiguous()
+        return value
     if isinstance(value, tuple):
         return tuple(_make_pipeline_outputs_contiguous(item) for item in value)
     if isinstance(value, list):
@@ -265,7 +269,6 @@ def _measure_module_cost(module: nn.Module, input_value: Any) -> Tuple[Any, floa
                     start_time = time.perf_counter()
                     loss.backward()
                     backward_ms = (time.perf_counter() - start_time) * 1000.0
-        del output_autograd, loss
     finally:
         module.zero_grad(set_to_none=True)
         _reset_collected_modules(reset_modules)

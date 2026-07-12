@@ -106,7 +106,7 @@ SNNDistributedConfig.__init__.__doc__ = r"""Initialize SNN distributed training 
 :type fsdp_shard_roots: sequence[str] or None
 :param fsdp_shard_module_root: Whether to shard the root module with FSDP2.
 :type fsdp_shard_module_root: bool
-:param fsdp_root_reshard_after_forward: Whether the FSDP2 root reshares after forward.
+:param fsdp_root_reshard_after_forward: Whether the FSDP2 root reshards after forward.
 :type fsdp_root_reshard_after_forward: bool
 :param fsdp_param_dtype: Optional FSDP2 parameter dtype policy.
 :type fsdp_param_dtype: torch.dtype or None
@@ -124,6 +124,6 @@ class EagerParallelPolicy:
     spikformer_tensor_parallel_roots: Tuple[str, ...] = ()
     spikformer_patch_stem_tensor_parallel_roots: Tuple[str, ...] = ()
     fsdp_shard_roots: Tuple[str, ...] = ()
-    fsdp2_tp_shard_roots: Tuple[str, ...] = ()
+    fsdp2_tp_shard_roots: Optional[Tuple[str, ...]] = None
     fsdp_shard_module_root: bool = True
     fsdp2_tp_shard_module_root: bool = False

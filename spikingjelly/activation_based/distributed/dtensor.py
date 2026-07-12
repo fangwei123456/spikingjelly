@@ -14,6 +14,7 @@ from spikingjelly.activation_based.distributed.analysis import (
 from spikingjelly.activation_based.distributed.config import SNNDistributedConfig
 from spikingjelly.activation_based.distributed.data_parallel import (
     materialize_dtensor_output,  # noqa: F401
+    prepare_snn_data_parallel,  # noqa: F401
     unwrap_parallel_module,  # noqa: F401
 )
 from spikingjelly.activation_based.distributed.execution import (
@@ -139,6 +140,7 @@ __all__ = [
     "analyze_snn_distributed_capability",
     "auto_build_tensor_parallel_plan",
     "parallelize_snn_module",
+    "prepare_snn_data_parallel",
     "configure_snn_distributed",
     "enable_tp_communication_debug",
     "reset_tp_communication_debug_stats",

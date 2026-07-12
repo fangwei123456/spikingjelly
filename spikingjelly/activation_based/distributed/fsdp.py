@@ -51,16 +51,20 @@ def fully_shard_snn_module(
 
     named_modules = dict(module.named_modules())
     shard_roots = list(shard_roots or [])
+    shard_root_seen = False
     for name in shard_roots:
         if name not in named_modules:
             raise KeyError(f"Unknown FSDP shard root '{name}'.")
+        if name == "":
+            shard_root_seen = True
+            continue
         submodule = named_modules[name]
         if mp_policy is None:
             fully_shard(submodule, mesh=device_mesh)
         else:
             fully_shard(submodule, mesh=device_mesh, mp_policy=mp_policy)
 
-    if shard_module_root:
+    if shard_module_root or shard_root_seen:
         if mp_policy is None:
             fully_shard(
                 module,

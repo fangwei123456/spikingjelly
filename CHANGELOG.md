@@ -83,6 +83,10 @@ Module: `spikingjelly.activation_based.distributed`.
   current distributed strategy results, pipeline-parallel setup, and
   troubleshooting notes.
 
+- Updated the distributed benchmark result schema around current latency,
+  throughput, peak-memory, and tensor-parallel debug fields; legacy
+  FSDP2-specific communication counter keys are no longer emitted.
+
 ### Breaking Changes and Notices
 
 #### Distributed Training

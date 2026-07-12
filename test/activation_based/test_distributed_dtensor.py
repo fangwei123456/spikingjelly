@@ -54,6 +54,7 @@ from spikingjelly.activation_based.distributed.config import (
 )
 from spikingjelly.activation_based.distributed.data_parallel import (
     materialize_dtensor_output as canonical_materialize_dtensor_output,
+    prepare_snn_data_parallel as canonical_prepare_snn_data_parallel,
     unwrap_parallel_module as canonical_unwrap_parallel_module,
 )
 from spikingjelly.activation_based.distributed.execution import (
@@ -241,6 +242,7 @@ _DTENSOR_PUBLIC_NAMES = (
     "analyze_snn_distributed_capability",
     "auto_build_tensor_parallel_plan",
     "parallelize_snn_module",
+    "prepare_snn_data_parallel",
     "configure_snn_distributed",
     "enable_tp_communication_debug",
     "reset_tp_communication_debug_stats",
@@ -378,6 +380,10 @@ def test_package_root_reexports_keep_object_identity_and_signatures():
         is canonical_resolve_tensor_parallel_group_size
     )
     assert distributed_dtensor.build_snn_optimizer is canonical_build_snn_optimizer
+    assert (
+        distributed_dtensor.prepare_snn_data_parallel
+        is canonical_prepare_snn_data_parallel
+    )
     assert (
         distributed_dtensor.unwrap_parallel_module is canonical_unwrap_parallel_module
     )
