@@ -49,6 +49,26 @@ try:
             type_str_dict[torch.bfloat16] = "tl.bfloat16"
         else:
             logging.info("bfloat16 is not supported on this device.")
+    if hasattr(torch, "float8_e4m3fn"):
+        if hasattr(tl, "float8e4m3fn"):
+            type_dict[torch.float8_e4m3fn] = tl.float8e4m3fn
+            type_str_dict[torch.float8_e4m3fn] = "tl.float8e4m3fn"
+        elif hasattr(tl, "float8e4nv"):
+            type_dict[torch.float8_e4m3fn] = tl.float8e4nv
+            type_str_dict[torch.float8_e4m3fn] = "tl.float8e4nv"
+    if hasattr(torch, "float8_e4m3fnuz") and hasattr(tl, "float8e4b15"):
+        type_dict[torch.float8_e4m3fnuz] = tl.float8e4b15
+        type_str_dict[torch.float8_e4m3fnuz] = "tl.float8e4b15"
+    if hasattr(torch, "float8_e5m2"):
+        if hasattr(tl, "float8e5m2"):
+            type_dict[torch.float8_e5m2] = tl.float8e5m2
+            type_str_dict[torch.float8_e5m2] = "tl.float8e5m2"
+        elif hasattr(tl, "float8e5"):
+            type_dict[torch.float8_e5m2] = tl.float8e5
+            type_str_dict[torch.float8_e5m2] = "tl.float8e5"
+    if hasattr(torch, "float8_e5m2fnuz") and hasattr(tl, "float8e5b16"):
+        type_dict[torch.float8_e5m2fnuz] = tl.float8e5b16
+        type_str_dict[torch.float8_e5m2fnuz] = "tl.float8e5b16"
 except BaseException as e:
     import logging
 

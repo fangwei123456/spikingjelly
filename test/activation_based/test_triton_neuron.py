@@ -1291,5 +1291,57 @@ def test_triton_backward_loop_mode_switches_for_large_T(kernel_module, node_fact
         configure.triton_neuron_kernel_static_range_max_T = original_threshold
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+@pytest.mark.parametrize("variant", ["stable", "mp"])
+def test_triton_plif_low_precision_dynamic_backward_compiles(dtype, variant):
+    if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
+        pytest.skip("CUDA device does not support bfloat16")
+
+    original_threshold = configure.triton_neuron_kernel_static_range_max_T
+    try:
+        configure.triton_neuron_kernel_static_range_max_T = 16
+        x = torch.rand(32, 64, device="cuda", dtype=dtype, requires_grad=True)
+        v = torch.zeros(64, device="cuda", dtype=dtype, requires_grad=True)
+        r_tau = torch.tensor(0.25, device="cuda", dtype=dtype, requires_grad=True)
+        plif_triton_kernel.LAST_BACKWARD_LOOP_MODE = None
+
+        if variant == "stable":
+            s_seq, v_seq = plif_triton_kernel.multistep_plif(
+                x,
+                v,
+                r_tau,
+                True,
+                1.0,
+                0.0,
+                False,
+                surrogate.Sigmoid(),
+            )
+        else:
+            compute_dtype = "fp16" if dtype == torch.float16 else "bf16"
+            s_seq, v_seq, _ = plif_triton_kernel.multistep_plif_mp(
+                x,
+                v,
+                r_tau,
+                decay_input=True,
+                v_threshold=1.0,
+                v_reset=0.0,
+                storage_dtype=dtype,
+                compute_dtype=compute_dtype,
+                backward_compute_dtype=compute_dtype,
+                spike_dtype=dtype,
+                surrogate_function=surrogate.Sigmoid(),
+            )
+
+        (s_seq.float().mean() + v_seq.float().mean()).backward()
+
+        assert plif_triton_kernel.LAST_BACKWARD_LOOP_MODE == "dynamic"
+        assert torch.isfinite(x.grad.float()).all()
+        assert torch.isfinite(v.grad.float()).all()
+        assert torch.isfinite(r_tau.grad.float()).all()
+    finally:
+        configure.triton_neuron_kernel_static_range_max_T = original_threshold
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

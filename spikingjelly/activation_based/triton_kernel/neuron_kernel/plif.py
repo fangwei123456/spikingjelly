@@ -353,7 +353,7 @@ def _multistep_plif_backward_kernel_static(
             order=(1, 0),
         )
         convert_and_store(grad_x_ptrs, grad_x, boundary_check=(1,))
-        grad_r_tau_acc = grad_r_tau_acc + grad_r_tau
+        grad_r_tau_acc = grad_r_tau_acc + grad_r_tau.to(compute_dtype)
 
     grad_v_init_ptrs = tl.make_block_ptr(
         grad_v_init_ptr,
@@ -497,7 +497,7 @@ def _multistep_plif_backward_kernel_dynamic(
             order=(1, 0),
         )
         convert_and_store(grad_x_ptrs, grad_x, boundary_check=(1,))
-        grad_r_tau_acc = grad_r_tau_acc + grad_r_tau
+        grad_r_tau_acc = grad_r_tau_acc + grad_r_tau.to(compute_dtype)
 
     grad_v_init_ptrs = tl.make_block_ptr(
         grad_v_init_ptr,

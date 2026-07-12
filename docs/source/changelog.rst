@@ -62,6 +62,13 @@ Bug Fixes
   the learners' monitors are now detached, so ``step()`` no longer needs to
   be wrapped in ``torch.no_grad()``.
 
+- Fixed ``MSTDPLearner.step()`` and ``MSTDPETLearner.step()`` retaining the
+  autograd graph of a graph-connected ``reward`` (e.g. the output of a critic
+  network), which leaked the forward pass's graph into ``weight.grad`` and the
+  returned ``delta_w`` and accumulated memory across training iterations — the
+  reward-side counterpart of #576. The reward is now detached inside
+  ``step()``.
+
 Improvements
 ~~~~~~~~~~~~
 
