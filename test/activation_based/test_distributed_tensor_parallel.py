@@ -1,5 +1,6 @@
 # ruff: noqa: F401,F403,F405
 import pickle
+from typing import NamedTuple
 
 import spikingjelly.activation_based.distributed.tensor_parallel.linear as tp_linear
 from spikingjelly.activation_based import base
@@ -422,6 +423,30 @@ def test_materialize_dtensor_output_recurses_nested_containers():
     torch.testing.assert_close(result["a"], torch.tensor([1]))
     torch.testing.assert_close(result["b"][0], torch.tensor([2]))
     torch.testing.assert_close(result["b"][1][0], torch.tensor([3]))
+
+
+def test_materialize_dtensor_output_preserves_named_tuple_type():
+    class FakeDTensor:
+        def __init__(self, value):
+            self.value = value
+
+        def full_tensor(self):
+            return self.value
+
+    class ModelOutput(NamedTuple):
+        logits: torch.Tensor
+        hidden: tuple[torch.Tensor]
+
+    result = materialize_dtensor_output(
+        ModelOutput(
+            logits=FakeDTensor(torch.tensor([1])),
+            hidden=(FakeDTensor(torch.tensor([2])),),
+        )
+    )
+
+    assert isinstance(result, ModelOutput)
+    torch.testing.assert_close(result.logits, torch.tensor([1]))
+    torch.testing.assert_close(result.hidden[0], torch.tensor([2]))
 
 
 def test_auto_tensor_parallel_plan_and_forward_match_single_rank():

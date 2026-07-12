@@ -51,6 +51,8 @@ def build_snn_optimizer(
         raise ValueError(
             f"Unsupported optimizer_sharding='{optimizer_sharding}'. Expected 'none' or 'zero'."
         )
+    if foreach is not None:
+        optimizer_kwargs["foreach"] = foreach
 
     if optimizer_sharding == "zero":
         if mode != "dp":
@@ -70,7 +72,6 @@ def build_snn_optimizer(
             optimizer_class=optimizer_cls,
             lr=lr,
             weight_decay=weight_decay,
-            foreach=foreach,
             **optimizer_kwargs,
         )
 
@@ -78,6 +79,5 @@ def build_snn_optimizer(
         module.parameters(),
         lr=lr,
         weight_decay=weight_decay,
-        foreach=foreach,
         **optimizer_kwargs,
     )

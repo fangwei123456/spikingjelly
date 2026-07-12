@@ -405,7 +405,10 @@ def _build_snn_pipeline_runtime(
         stage_module = stage_modules[0]
     else:
         stage_module = _PipelineSequentialModule(stage_modules)
-    microbatch_input = _example_microbatch_args(example_input, n_microbatches)[0]
+    pipeline_module = pipeline_module.to(device)
+    microbatch_input = _example_microbatch_args(example_input, n_microbatches)[0].to(
+        device
+    )
     stage_inputs: list[Any] = []
     stage_outputs: list[Any] = []
     pipeline_reset_modules = _collect_resettable_modules(pipeline_module)

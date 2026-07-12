@@ -249,6 +249,33 @@ def test_build_snn_optimizer_supports_zero_for_dp():
         optimizer.zero_grad(set_to_none=True)
 
 
+def test_build_snn_optimizer_omits_default_foreach_for_custom_optimizer():
+    class OptimizerWithoutForeach(torch.optim.Optimizer):
+        def __init__(self, params, lr, weight_decay=0.0):
+            super().__init__(params, {"lr": lr, "weight_decay": weight_decay})
+
+        def step(self, closure=None):
+            return None
+
+    model = ToyDistributedSNN()
+    optimizer = build_snn_optimizer(
+        model,
+        mode="none",
+        lr=1e-3,
+        optimizer_cls=OptimizerWithoutForeach,
+    )
+    assert isinstance(optimizer, OptimizerWithoutForeach)
+
+    with pytest.raises(TypeError, match="foreach"):
+        build_snn_optimizer(
+            model,
+            mode="none",
+            lr=1e-3,
+            foreach=True,
+            optimizer_cls=OptimizerWithoutForeach,
+        )
+
+
 def test_build_snn_optimizer_rejects_zero_outside_dp():
     model = ToyDistributedSNN()
     with pytest.raises(ValueError, match="pure 'dp' mode only"):

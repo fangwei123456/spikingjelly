@@ -42,6 +42,10 @@ def materialize_dtensor_output(output):
     if callable(full_tensor):
         return full_tensor()
     if isinstance(output, tuple):
+        if hasattr(output, "_fields"):
+            return output.__class__(
+                *(materialize_dtensor_output(item) for item in output)
+            )
         return tuple(materialize_dtensor_output(item) for item in output)
     if isinstance(output, list):
         return [materialize_dtensor_output(item) for item in output]

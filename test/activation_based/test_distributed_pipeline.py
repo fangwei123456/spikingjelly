@@ -1,4 +1,8 @@
 # ruff: noqa: F401,F403,F405
+from spikingjelly.activation_based.distributed.pipeline import runtime as pipeline_runtime
+from spikingjelly.activation_based.distributed.pipeline.runtime import (
+    _build_snn_pipeline_runtime,
+)
 from spikingjelly.activation_based.distributed.pipeline.spikformer import (
     _SpikformerPipelineStage,
 )
@@ -91,6 +95,62 @@ def test_spikformer_pipeline_runtime_supports_zero_bubble_single_rank():
         assert runtime.schedule_kind == "zero_bubble"
         assert runtime.delayed_wgrad is True
         assert len(runtime.stage_modules) == 2
+
+
+def test_build_snn_pipeline_runtime_moves_dry_run_to_target_device(monkeypatch):
+    class DeviceCheckingStage(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = nn.Parameter(torch.empty(1))
+            self.seen_devices = []
+
+        def forward(self, x):
+            param_device = next(self.parameters()).device.type
+            self.seen_devices.append((param_device, x.device.type))
+            return x
+
+    class PipelineModule(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.stages = nn.ModuleList([DeviceCheckingStage()])
+
+    class FakePipelineStage:
+        def __init__(
+            self,
+            module,
+            *,
+            stage_index,
+            num_stages,
+            device,
+            input_args,
+            output_args,
+            group,
+        ):
+            assert next(module.parameters()).device.type == "meta"
+            assert input_args.device.type == "meta"
+            assert output_args.device.type == "meta"
+
+    class FakeSchedule:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    monkeypatch.setattr(pipeline_runtime, "PipelineStage", FakePipelineStage)
+    monkeypatch.setattr(pipeline_runtime, "ScheduleGPipe", FakeSchedule)
+
+    with single_rank_process_group():
+        pipeline_module = PipelineModule()
+        runtime = _build_snn_pipeline_runtime(
+            pipeline_module,
+            example_input=torch.randn(2, 3),
+            device=torch.device("meta"),
+            n_microbatches=1,
+            stage_index=0,
+            model_family="toy",
+            schedule_kind="gpipe",
+        )
+
+    assert pipeline_module.stages[0].seen_devices == [("meta", "meta")]
+    assert runtime.stage_input_examples[0].device.type == "meta"
 
 
 def test_recommend_pipeline_memopt_stages_prefers_heavy_stages():
