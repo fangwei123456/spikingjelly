@@ -4,11 +4,8 @@ from typing import Optional, Protocol, runtime_checkable
 
 import torch.nn as nn
 
-from ..dtensor import (
-    SNNDistributedAnalysis,
-    SNNDistributedConfig,
-    configure_snn_distributed,
-)
+from ..analysis import SNNDistributedAnalysis
+from ..execution import build_eager_config, configure_snn_distributed
 from ..planner import SNNDistributedPlan
 from ..runtime import SNNDistributedRuntime
 
@@ -26,14 +23,13 @@ def build_distributed_runtime(
             "Pipeline plans require the pipeline-specific runtime builder, "
             "not build_distributed_runtime()."
         )
-    config = SNNDistributedConfig(
+    config = build_eager_config(
+        mode=plan.mode,
         device_type=device_type,
         mesh_shape=plan.mesh_shape or plan.topology.mesh_shape,
         device_mesh=device_mesh,
         tp_mesh_dim=plan.tp_mesh_dim,
         dp_mesh_dim=plan.dp_mesh_dim,
-        enable_data_parallel=plan.mode == "dp",
-        enable_fsdp2=plan.mode in ("fsdp2", "fsdp2_tp"),
         auto_tensor_parallel=plan.mode in ("tp", "fsdp2_tp"),
         **config_overrides,
     )

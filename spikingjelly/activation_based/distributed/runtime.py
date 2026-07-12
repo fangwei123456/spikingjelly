@@ -11,13 +11,11 @@ from torch.utils.data.distributed import DistributedSampler
 
 from spikingjelly.activation_based import functional
 
-from .dtensor import (
-    SNNDistributedAnalysis,
-    SNNPipelineRuntime,
-    build_snn_optimizer,
-    resolve_data_parallel_partition,
-)
+from .analysis import SNNDistributedAnalysis
 from .metrics import PreparedModelOutput, prepare_classification_output
+from .mesh import resolve_data_parallel_partition
+from .optimizer import build_snn_optimizer
+from .pipeline.runtime import SNNPipelineRuntime
 from .planner import DistributedFeatureSet, SNNDistributedPlan
 from .topology import SNNDistributedTopology
 

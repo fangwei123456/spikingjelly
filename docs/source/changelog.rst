@@ -69,10 +69,48 @@ Bug Fixes
   reward-side counterpart of #576. The reward is now detached inside
   ``step()``.
 
+Improvements
+~~~~~~~~~~~~
+
+Distributed Training
+^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.distributed``.
+
+- Refactored the distributed SNN helpers around an Analyze -> Plan -> Apply
+  workflow, with model capability analysis, structured execution plans, and
+  runtime summaries for data parallel, tensor parallel, FSDP2, FSDP2+TP, and
+  pipeline configurations.
+
+- Reorganized eager distributed configuration, model-specific policies for
+  ``CIFAR10DVSVGG`` and Spikformer, and compatibility exports while keeping the
+  low-level ``SNNDistributedConfig`` path available for manual mesh and root
+  selection.
+
+- Split the distributed implementation into focused tensor-parallel, FSDP2,
+  pipeline-partitioning, pipeline-runtime, mesh, optimizer, and metrics helpers
+  for DTensor-based SNN experiments.
+
+- Updated the distributed benchmark and English/Chinese tutorials with the
+  current distributed strategy results, pipeline-parallel setup, and
+  troubleshooting notes.
+
+- Updated the distributed benchmark result schema around current latency,
+  throughput, peak-memory, and tensor-parallel debug fields; legacy
+  FSDP2-specific communication counter keys are no longer emitted.
+
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- None.
+Distributed Training
+^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.distributed``.
+
+- Replaced ``TensorShardMemoryModule`` with the
+  ``make_tensor_shard_memory_module()`` factory. Tensor-parallel stateful modules
+  now keep their concrete module type and original state-dict paths instead of
+  adding an ``inner`` module namespace.
 
 2.0.0.dev0 - 2026-07-09
 -----------------------
