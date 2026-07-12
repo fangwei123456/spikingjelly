@@ -1162,6 +1162,12 @@ class MSTDPLearner(base.MemoryModule):
         :raises NotImplementedError: Only some ``step_mode`` / synapse-type combinations are currently supported
         :raises ValueError: Raised when ``self.step_mode`` is invalid
         """
+        # detach the reward so a graph-connected reward (e.g. produced by a
+        # critic network) never leaks the forward pass's autograd graph into
+        # weight.grad or the returned delta_w (#576)
+        if isinstance(reward, torch.Tensor):
+            reward = reward.detach()
+
         length = self.in_spike_monitor.records.__len__()
         delta_w = None
 
@@ -1434,6 +1440,12 @@ class MSTDPETLearner(base.MemoryModule):
         :raises NotImplementedError: Only some ``step_mode`` / synapse-type combinations are currently supported
         :raises ValueError: Raised when ``self.step_mode`` is invalid
         """
+        # detach the reward so a graph-connected reward (e.g. produced by a
+        # critic network) never leaks the forward pass's autograd graph into
+        # weight.grad or the returned delta_w (#576)
+        if isinstance(reward, torch.Tensor):
+            reward = reward.detach()
+
         length = self.in_spike_monitor.records.__len__()
         delta_w = None
 
