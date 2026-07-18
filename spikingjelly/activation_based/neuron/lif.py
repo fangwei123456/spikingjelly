@@ -538,7 +538,7 @@ class LIFNode(BaseNode):
                 return spike_seq
             elif self.backend == "triton":
                 self.v_float_to_tensor(x_seq[0])
-                spike_seq, v_seq = triton_kernel.multistep_lif(
+                spike_seq, v_out = triton_kernel.multistep_lif(
                     x_seq,
                     self.v,
                     self.decay_input,
@@ -547,12 +547,13 @@ class LIFNode(BaseNode):
                     self.v_reset,
                     self.detach_reset,
                     self.surrogate_function,
+                    self.store_v_seq,
                 )
                 if self.store_v_seq:
-                    self.v_seq = v_seq
-                    self.v = v_seq[-1]
+                    self.v_seq = v_out
+                    self.v = v_out[-1]
                 else:
-                    self.v = v_seq[-1].clone()
+                    self.v = v_out
                 return spike_seq
             else:
                 raise ValueError(self.backend)
@@ -566,7 +567,7 @@ class LIFNode(BaseNode):
                         "Triton backend only supports spiking surrogate functions. "
                         "Use backend='torch' for non-spiking surrogate functions."
                     )
-                spike_seq, v_seq = triton_kernel.multistep_lif(
+                spike_seq, v_out = triton_kernel.multistep_lif(
                     x_seq,
                     self.v,
                     self.decay_input,
@@ -575,12 +576,13 @@ class LIFNode(BaseNode):
                     self.v_reset,
                     self.detach_reset,
                     self.surrogate_function,
+                    self.store_v_seq,
                 )
                 if self.store_v_seq:
-                    self.v_seq = v_seq
-                    self.v = v_seq[-1]
+                    self.v_seq = v_out
+                    self.v = v_out[-1]
                 else:
-                    self.v = v_seq[-1].clone()
+                    self.v = v_out
                 return spike_seq
             elif self.backend == "cupy":
                 spike_seq, v_seq = ac_neuron_kernel.multistep_lif(

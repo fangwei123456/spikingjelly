@@ -9,6 +9,12 @@ import pytest
 import torch
 
 from spikingjelly.activation_based import functional, neuron, surrogate
+from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
+    integrate_and_fire as triton_if_kernel,
+)
+from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
+    lif as triton_lif_kernel,
+)
 
 
 def _triton_available() -> bool:
@@ -326,6 +332,132 @@ def test_triton_vs_torch_forward_backward_consistency(kind, sg_name):
         assert torch.allclose(
             torch_node.w.grad, triton_node.w.grad, atol=1e-5, rtol=1e-4
         )
+
+
+@pytest.mark.parametrize("kind", ["lif", "if"])
+@pytest.mark.parametrize("T", [7, 65])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+@pytest.mark.parametrize("v_reset,detach_reset", [(0.0, False), (None, True)])
+def test_triton_last_state_matches_full_voltage_sequence(
+    kind, T, dtype, v_reset, detach_reset
+):
+    _require_cuda_triton_compile()
+    if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
+        pytest.skip("CUDA device does not support bfloat16")
+
+    def make_node(store_v_seq):
+        common = {
+            "v_threshold": 1.0,
+            "v_reset": v_reset,
+            "surrogate_function": surrogate.ATan(alpha=2.0),
+            "detach_reset": detach_reset,
+            "step_mode": "m",
+            "backend": "triton",
+            "store_v_seq": store_v_seq,
+        }
+        if kind == "lif":
+            return neuron.LIFNode(tau=2.0, decay_input=True, **common)
+        return neuron.IFNode(**common)
+
+    torch.manual_seed(20260718)
+    torch.cuda.manual_seed_all(20260718)
+    full_node = make_node(True).cuda().train()
+    last_node = make_node(False).cuda().train()
+    x = torch.randn(T, 3, 37, device="cuda", dtype=dtype)
+    grad_spike = torch.randn_like(x)
+    grad_v = torch.randn_like(x[0])
+    x_full = x.detach().clone().requires_grad_(True)
+    x_last = x.detach().clone().requires_grad_(True)
+
+    spike_full = full_node(x_full)
+    spike_last = last_node(x_last)
+    loss_full = (spike_full * grad_spike).sum() + (full_node.v * grad_v).sum()
+    loss_last = (spike_last * grad_spike).sum() + (last_node.v * grad_v).sum()
+    loss_full.backward()
+    loss_last.backward()
+
+    assert full_node.v_seq.shape == x.shape
+    assert last_node.v.shape == x.shape[1:]
+    if dtype == torch.float32:
+        atol, rtol = 1e-5, 1e-4
+    elif dtype == torch.float16:
+        atol, rtol = 1e-3, 1e-3
+    else:
+        atol, rtol = 1e-2, 1e-2
+    assert torch.allclose(spike_full, spike_last, atol=atol, rtol=rtol)
+    assert torch.allclose(full_node.v, last_node.v, atol=atol, rtol=rtol)
+    assert torch.allclose(x_full.grad, x_last.grad, atol=atol, rtol=rtol)
+
+
+@pytest.mark.parametrize("kind", ["lif", "if"])
+@pytest.mark.parametrize("T", [1, 65])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+@pytest.mark.parametrize("v_reset", [0.0, None])
+def test_triton_last_state_inference_matches_full_voltage_sequence(
+    kind, T, dtype, v_reset
+):
+    _require_cuda_triton_compile()
+    if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
+        pytest.skip("CUDA device does not support bfloat16")
+
+    common = {
+        "v_threshold": 1.0,
+        "v_reset": v_reset,
+        "step_mode": "m",
+        "backend": "triton",
+    }
+    cls = neuron.LIFNode if kind == "lif" else neuron.IFNode
+    full_node = cls(store_v_seq=True, **common).cuda().eval()
+    last_node = cls(store_v_seq=False, **common).cuda().eval()
+    torch.manual_seed(20260718)
+    torch.cuda.manual_seed_all(20260718)
+    x = torch.randn(T, 3, 37, device="cuda", dtype=dtype)
+
+    with torch.inference_mode():
+        spike_full = full_node(x)
+        spike_last = last_node(x)
+
+    if dtype == torch.float32:
+        atol, rtol = 1e-5, 1e-4
+    elif dtype == torch.float16:
+        atol, rtol = 1e-3, 1e-3
+    else:
+        atol, rtol = 1e-2, 1e-2
+    assert full_node.v_seq.shape == x.shape
+    assert last_node.v.shape == x.shape[1:]
+    assert torch.allclose(spike_full, spike_last, atol=atol, rtol=rtol)
+    assert torch.allclose(full_node.v, last_node.v, atol=atol, rtol=rtol)
+
+
+@pytest.mark.parametrize("kind", ["lif", "if"])
+def test_triton_last_state_fake_output_shapes(kind):
+    x_seq = torch.empty(7, 3, 37)
+    v_init = torch.empty(3, 37)
+
+    if kind == "lif":
+        inference_outputs = triton_lif_kernel._multistep_lif_inference_fake(
+            x_seq, v_init, True, 2.0, 1.0, 0.0, False, False
+        )
+        forward_outputs = triton_lif_kernel._multistep_lif_forward_fake(
+            x_seq, v_init, True, 2.0, 1.0, 0.0, False, False, 0, 2.0, False
+        )
+    else:
+        inference_outputs = triton_if_kernel._multistep_if_inference_fake(
+            x_seq, v_init, 1.0, 0.0, False, False
+        )
+        forward_outputs = triton_if_kernel._multistep_if_forward_fake(
+            x_seq, v_init, 1.0, 0.0, False, False, 0, 2.0, False
+        )
+
+    assert tuple(output.shape for output in inference_outputs) == (
+        x_seq.shape,
+        v_init.shape,
+    )
+    assert tuple(output.shape for output in forward_outputs) == (
+        x_seq.shape,
+        v_init.shape,
+        x_seq.shape,
+    )
 
 
 _SUBPROCESS_SCRIPT = textwrap.dedent(

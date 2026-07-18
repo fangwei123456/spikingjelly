@@ -43,7 +43,14 @@ __all__ = ["multistep_if"]
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["T", "NCL", "compute_dtype", "soft_reset", "save_intermediates"],
+    key=[
+        "T",
+        "NCL",
+        "compute_dtype",
+        "soft_reset",
+        "save_intermediates",
+        "store_v_seq",
+    ],
     restore_value=["s_seq_ptr", "h_seq_ptr", "v_seq_ptr"],
 )
 @triton.jit
@@ -61,6 +68,7 @@ def _multistep_if_forward_kernel_static(
     compute_dtype: tl.constexpr,
     soft_reset: tl.constexpr,
     save_intermediates: tl.constexpr,
+    store_v_seq: tl.constexpr,
 ):
     pid_ncl = tl.program_id(0)
     ncl_offset = pid_ncl * BLOCK_NCL
@@ -108,15 +116,16 @@ def _multistep_if_forward_kernel_static(
             order=(1, 0),
         )
         convert_and_store(s_ptrs, s, boundary_check=(1,))
-        v_ptrs = tl.make_block_ptr(
-            v_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        convert_and_store(v_ptrs, v, boundary_check=(1,))
+        if store_v_seq:
+            v_ptrs = tl.make_block_ptr(
+                v_seq_ptr,
+                shape=(T, NCL),
+                strides=(NCL, 1),
+                offsets=(t, ncl_offset),
+                block_shape=(1, BLOCK_NCL),
+                order=(1, 0),
+            )
+            convert_and_store(v_ptrs, v, boundary_check=(1,))
         if save_intermediates:
             h_ptrs = tl.make_block_ptr(
                 h_seq_ptr,
@@ -128,6 +137,17 @@ def _multistep_if_forward_kernel_static(
             )
             convert_and_store(h_ptrs, h, boundary_check=(1,))
 
+    if not store_v_seq:
+        v_last_ptrs = tl.make_block_ptr(
+            v_seq_ptr,
+            shape=(1, NCL),
+            strides=(NCL, 1),
+            offsets=(0, ncl_offset),
+            block_shape=(1, BLOCK_NCL),
+            order=(1, 0),
+        )
+        convert_and_store(v_last_ptrs, v, boundary_check=(1,))
+
 
 @triton.autotune(
     configs=[
@@ -135,7 +155,13 @@ def _multistep_if_forward_kernel_static(
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["NCL", "compute_dtype", "soft_reset", "save_intermediates"],
+    key=[
+        "NCL",
+        "compute_dtype",
+        "soft_reset",
+        "save_intermediates",
+        "store_v_seq",
+    ],
     restore_value=["s_seq_ptr", "h_seq_ptr", "v_seq_ptr"],
 )
 @triton.jit
@@ -153,6 +179,7 @@ def _multistep_if_forward_kernel_dynamic(
     compute_dtype: tl.constexpr,
     soft_reset: tl.constexpr,
     save_intermediates: tl.constexpr,
+    store_v_seq: tl.constexpr,
 ):
     pid_ncl = tl.program_id(0)
     ncl_offset = pid_ncl * BLOCK_NCL
@@ -200,15 +227,16 @@ def _multistep_if_forward_kernel_dynamic(
             order=(1, 0),
         )
         convert_and_store(s_ptrs, s, boundary_check=(1,))
-        v_ptrs = tl.make_block_ptr(
-            v_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        convert_and_store(v_ptrs, v, boundary_check=(1,))
+        if store_v_seq:
+            v_ptrs = tl.make_block_ptr(
+                v_seq_ptr,
+                shape=(T, NCL),
+                strides=(NCL, 1),
+                offsets=(t, ncl_offset),
+                block_shape=(1, BLOCK_NCL),
+                order=(1, 0),
+            )
+            convert_and_store(v_ptrs, v, boundary_check=(1,))
         if save_intermediates:
             h_ptrs = tl.make_block_ptr(
                 h_seq_ptr,
@@ -220,6 +248,17 @@ def _multistep_if_forward_kernel_dynamic(
             )
             convert_and_store(h_ptrs, h, boundary_check=(1,))
 
+    if not store_v_seq:
+        v_last_ptrs = tl.make_block_ptr(
+            v_seq_ptr,
+            shape=(1, NCL),
+            strides=(NCL, 1),
+            offsets=(0, ncl_offset),
+            block_shape=(1, BLOCK_NCL),
+            order=(1, 0),
+        )
+        convert_and_store(v_last_ptrs, v, boundary_check=(1,))
+
 
 @triton.autotune(
     configs=[
@@ -227,7 +266,14 @@ def _multistep_if_forward_kernel_dynamic(
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["T", "NCL", "compute_dtype", "soft_reset", "detach_reset"],
+    key=[
+        "T",
+        "NCL",
+        "compute_dtype",
+        "soft_reset",
+        "detach_reset",
+        "store_v_seq",
+    ],
     restore_value=["grad_x_seq_ptr"],
 )
 @triton.jit
@@ -247,13 +293,27 @@ def _multistep_if_backward_kernel_static(
     sg_triton_id: tl.constexpr,
     soft_reset: tl.constexpr,
     detach_reset: tl.constexpr,
+    store_v_seq: tl.constexpr,
 ):
     pid_ncl = tl.program_id(0)
     ncl_offset = pid_ncl * BLOCK_NCL
     v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
     v_reset = tl.full([1], v_reset, dtype=compute_dtype)
 
-    grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
+    if store_v_seq:
+        grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
+    else:
+        grad_v_last_ptrs = tl.make_block_ptr(
+            grad_v_seq_ptr,
+            shape=(1, NCL),
+            strides=(NCL, 1),
+            offsets=(0, ncl_offset),
+            block_shape=(1, BLOCK_NCL),
+            order=(1, 0),
+        )
+        grad_v_acc = tl.load(
+            grad_v_last_ptrs, boundary_check=(1,), padding_option="zero"
+        ).to(compute_dtype)
 
     for t in tl.static_range(T - 1, -1, -1):
         grad_s_ptrs = tl.make_block_ptr(
@@ -264,20 +324,21 @@ def _multistep_if_backward_kernel_static(
             block_shape=(1, BLOCK_NCL),
             order=(1, 0),
         )
-        grad_s = tl.load(
-            grad_s_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
-        grad_v_ptrs = tl.make_block_ptr(
-            grad_v_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
+        grad_s = tl.load(grad_s_ptrs, boundary_check=(1,), padding_option="zero").to(
+            compute_dtype
         )
-        grad_v = tl.load(
-            grad_v_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
+        if store_v_seq:
+            grad_v_ptrs = tl.make_block_ptr(
+                grad_v_seq_ptr,
+                shape=(T, NCL),
+                strides=(NCL, 1),
+                offsets=(t, ncl_offset),
+                block_shape=(1, BLOCK_NCL),
+                order=(1, 0),
+            )
+            grad_v = tl.load(
+                grad_v_ptrs, boundary_check=(1,), padding_option="zero"
+            ).to(compute_dtype)
         h_ptrs = tl.make_block_ptr(
             h_seq_ptr,
             shape=(T, NCL),
@@ -291,7 +352,10 @@ def _multistep_if_backward_kernel_static(
         )
 
         sg = sg_triton(h - v_threshold, sg_alpha, sg_triton_id)
-        grad_v_combined = grad_v + grad_v_acc
+        if store_v_seq:
+            grad_v_combined = grad_v + grad_v_acc
+        else:
+            grad_v_combined = grad_v_acc
         if soft_reset:
             if detach_reset:
                 grad_h = tl.fma(grad_s, sg, grad_v_combined)
@@ -339,7 +403,13 @@ def _multistep_if_backward_kernel_static(
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["NCL", "compute_dtype", "soft_reset", "detach_reset"],
+    key=[
+        "NCL",
+        "compute_dtype",
+        "soft_reset",
+        "detach_reset",
+        "store_v_seq",
+    ],
     restore_value=["grad_x_seq_ptr"],
 )
 @triton.jit
@@ -359,13 +429,27 @@ def _multistep_if_backward_kernel_dynamic(
     sg_triton_id: tl.constexpr,
     soft_reset: tl.constexpr,
     detach_reset: tl.constexpr,
+    store_v_seq: tl.constexpr,
 ):
     pid_ncl = tl.program_id(0)
     ncl_offset = pid_ncl * BLOCK_NCL
     v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
     v_reset = tl.full([1], v_reset, dtype=compute_dtype)
 
-    grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
+    if store_v_seq:
+        grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
+    else:
+        grad_v_last_ptrs = tl.make_block_ptr(
+            grad_v_seq_ptr,
+            shape=(1, NCL),
+            strides=(NCL, 1),
+            offsets=(0, ncl_offset),
+            block_shape=(1, BLOCK_NCL),
+            order=(1, 0),
+        )
+        grad_v_acc = tl.load(
+            grad_v_last_ptrs, boundary_check=(1,), padding_option="zero"
+        ).to(compute_dtype)
 
     for t in tl.range(T - 1, -1, -1):
         grad_s_ptrs = tl.make_block_ptr(
@@ -376,20 +460,21 @@ def _multistep_if_backward_kernel_dynamic(
             block_shape=(1, BLOCK_NCL),
             order=(1, 0),
         )
-        grad_s = tl.load(
-            grad_s_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
-        grad_v_ptrs = tl.make_block_ptr(
-            grad_v_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
+        grad_s = tl.load(grad_s_ptrs, boundary_check=(1,), padding_option="zero").to(
+            compute_dtype
         )
-        grad_v = tl.load(
-            grad_v_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
+        if store_v_seq:
+            grad_v_ptrs = tl.make_block_ptr(
+                grad_v_seq_ptr,
+                shape=(T, NCL),
+                strides=(NCL, 1),
+                offsets=(t, ncl_offset),
+                block_shape=(1, BLOCK_NCL),
+                order=(1, 0),
+            )
+            grad_v = tl.load(
+                grad_v_ptrs, boundary_check=(1,), padding_option="zero"
+            ).to(compute_dtype)
         h_ptrs = tl.make_block_ptr(
             h_seq_ptr,
             shape=(T, NCL),
@@ -403,7 +488,10 @@ def _multistep_if_backward_kernel_dynamic(
         )
 
         sg = sg_triton(h - v_threshold, sg_alpha, sg_triton_id)
-        grad_v_combined = grad_v + grad_v_acc
+        if store_v_seq:
+            grad_v_combined = grad_v + grad_v_acc
+        else:
+            grad_v_combined = grad_v_acc
         if soft_reset:
             if detach_reset:
                 grad_h = tl.fma(grad_s, sg, grad_v_combined)
@@ -480,6 +568,7 @@ def _launch_if_forward_kernel(
     soft_reset: bool,
     compute_dtype,
     save_intermediates: bool,
+    store_v_seq: bool,
     use_torch_wrap: bool,
 ) -> None:
     T = x_seq.shape[0]
@@ -506,6 +595,7 @@ def _launch_if_forward_kernel(
             compute_dtype=compute_dtype,
             soft_reset=soft_reset,
             save_intermediates=save_intermediates,
+            store_v_seq=store_v_seq,
         )
 
 
@@ -523,6 +613,7 @@ def _launch_if_backward_kernel(
     sg_triton_id: int,
     soft_reset: bool,
     detach_reset: bool,
+    store_v_seq: bool,
     use_torch_wrap: bool,
 ) -> None:
     T = grad_s_seq.shape[0]
@@ -551,6 +642,7 @@ def _launch_if_backward_kernel(
             sg_triton_id=sg_triton_id,
             soft_reset=soft_reset,
             detach_reset=detach_reset,
+            store_v_seq=store_v_seq,
         )
 
 
@@ -561,12 +653,13 @@ def multistep_if_inference(
     v_threshold: float,
     v_reset: float,
     soft_reset: bool,
+    store_v_seq: bool,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     x_seq = x_seq.contiguous()
     v_init = v_init.contiguous()
 
     s_seq = torch.empty_like(x_seq)
-    v_seq = torch.empty_like(x_seq)
+    v_seq = torch.empty_like(x_seq) if store_v_seq else torch.empty_like(v_init)
     dtype = x_seq.dtype
     _launch_if_forward_kernel(
         x_seq,
@@ -579,6 +672,7 @@ def multistep_if_inference(
         soft_reset=soft_reset,
         compute_dtype=type_dict[dtype],
         save_intermediates=False,
+        store_v_seq=store_v_seq,
         use_torch_wrap=True,
     )
     return s_seq, v_seq
@@ -591,10 +685,11 @@ def _multistep_if_inference_fake(
     v_threshold: float,
     v_reset: float,
     soft_reset: bool,
+    store_v_seq: bool,
 ):
     return (
         x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape if store_v_seq else v_init.shape),
     )
 
 
@@ -608,12 +703,13 @@ def multistep_if_forward(
     detach_reset: bool,
     sg_triton_id: int,
     sg_alpha: float,
+    store_v_seq: bool,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     x_seq = x_seq.contiguous()
     v_init = v_init.contiguous()
 
     s_seq = torch.empty_like(x_seq)
-    v_seq = torch.empty_like(x_seq)
+    v_seq = torch.empty_like(x_seq) if store_v_seq else torch.empty_like(v_init)
     h_seq = torch.empty_like(x_seq)
     dtype = x_seq.dtype
     _launch_if_forward_kernel(
@@ -627,6 +723,7 @@ def multistep_if_forward(
         soft_reset=soft_reset,
         compute_dtype=type_dict[dtype],
         save_intermediates=True,
+        store_v_seq=store_v_seq,
         use_torch_wrap=True,
     )
     return s_seq, v_seq, h_seq
@@ -642,10 +739,11 @@ def _multistep_if_forward_fake(
     detach_reset: bool,
     sg_triton_id: int,
     sg_alpha: float,
+    store_v_seq: bool,
 ):
     return (
         x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape if store_v_seq else v_init.shape),
         x_seq.new_empty(x_seq.shape),
     )
 
@@ -690,6 +788,7 @@ def multistep_if_mp_inference(
         soft_reset=soft_reset,
         compute_dtype=compute_tl_dtype,
         save_intermediates=save_intermediates,
+        store_v_seq=True,
         use_torch_wrap=True,
     )
     return s_seq, v_seq, h_seq
@@ -757,6 +856,7 @@ def multistep_if_mp_forward(
         soft_reset=soft_reset,
         compute_dtype=compute_tl_dtype,
         save_intermediates=True,
+        store_v_seq=True,
         use_torch_wrap=True,
     )
     return s_seq, v_seq, h_seq
@@ -960,9 +1060,23 @@ def _multistep_if_mp_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
         sg_triton_id=ctx.sg_triton_id,
         soft_reset=ctx.soft_reset,
         detach_reset=ctx.detach_reset,
+        store_v_seq=True,
         use_torch_wrap=True,
     )
-    return grad_x_seq, grad_v_init, None, None, None, None, None, None, None, None, None, None
+    return (
+        grad_x_seq,
+        grad_v_init,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
 
 
 torch.library.register_autograd(
@@ -973,7 +1087,15 @@ torch.library.register_autograd(
 
 
 def _setup_context(ctx, inputs, output):
-    v_threshold, v_reset, soft_reset, detach_reset, sg_triton_id, sg_alpha = inputs[2:]
+    (
+        v_threshold,
+        v_reset,
+        soft_reset,
+        detach_reset,
+        sg_triton_id,
+        sg_alpha,
+        store_v_seq,
+    ) = inputs[2:]
     h_seq = output[2]
     ctx.save_for_backward(h_seq)
     ctx.v_threshold = v_threshold
@@ -982,6 +1104,7 @@ def _setup_context(ctx, inputs, output):
     ctx.detach_reset = detach_reset
     ctx.sg_triton_id = sg_triton_id
     ctx.sg_alpha = sg_alpha
+    ctx.store_v_seq = store_v_seq
 
 
 def _multistep_if_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
@@ -990,7 +1113,7 @@ def _multistep_if_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
         raise RuntimeError("backward called without saved intermediates")
 
     grad_x_seq = torch.empty_like(grad_s_seq)
-    grad_v_init = torch.empty_like(grad_v_seq[0])
+    grad_v_init = torch.empty_like(h_seq[0])
     dtype = grad_s_seq.dtype
     if dtype not in type_dict:
         raise NotImplementedError(dtype)
@@ -1007,9 +1130,10 @@ def _multistep_if_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
         sg_triton_id=ctx.sg_triton_id,
         soft_reset=ctx.soft_reset,
         detach_reset=ctx.detach_reset,
+        store_v_seq=ctx.store_v_seq,
         use_torch_wrap=True,
     )
-    return grad_x_seq, grad_v_init, None, None, None, None, None, None
+    return grad_x_seq, grad_v_init, None, None, None, None, None, None, None
 
 
 torch.library.register_autograd(
@@ -1024,6 +1148,7 @@ def multistep_if(
     v_reset: Optional[float],
     detach_reset: bool,
     surrogate_function,
+    store_v_seq: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Multi-step IF neuron forward pass via Triton kernel.
 
@@ -1049,7 +1174,11 @@ def multistep_if(
     :type detach_reset: bool
     :param surrogate_function: Surrogate gradient function
     :type surrogate_function: ``surrogate.SurrogateFunctionBase``
-    :return: Tuple of (spike_seq, v_seq)
+    :param store_v_seq: Whether to return the full membrane-potential sequence. If
+        ``False``, the second output contains only the final membrane potential.
+    :type store_v_seq: bool
+    :return: Tuple of ``(spike_seq, v_seq)`` when ``store_v_seq=True`` or
+        ``(spike_seq, v_last)`` otherwise
     :rtype: tuple[torch.Tensor, torch.Tensor]
 
     ----
@@ -1072,7 +1201,11 @@ def multistep_if(
     :type v_reset: Optional[float]
     :type detach_reset: bool
     :type surrogate_function: ``surrogate.SurrogateFunctionBase``
-    :return: Tuple of (spike_seq, v_seq)
+    :param store_v_seq: Whether to return the full membrane-potential sequence. If
+        ``False``, the second output contains only the final membrane potential.
+    :type store_v_seq: bool
+    :return: Tuple of ``(spike_seq, v_seq)`` when ``store_v_seq=True`` or
+        ``(spike_seq, v_last)`` otherwise
     :rtype: tuple[torch.Tensor, torch.Tensor]
     """
     soft_reset = v_reset is None
@@ -1091,6 +1224,7 @@ def multistep_if(
             detach_reset,
             sg_triton_id,
             sg_alpha,
+            store_v_seq,
         )
     else:
         s_seq, v_seq = multistep_if_inference(
@@ -1099,5 +1233,6 @@ def multistep_if(
             v_threshold,
             v_reset,
             soft_reset,
+            store_v_seq,
         )
     return s_seq, v_seq
