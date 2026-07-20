@@ -272,6 +272,19 @@ def test_validate_capability_rejects_fp8_te_without_autocast_api():
         validate_capability(report)
 
 
+def test_validate_capability_preserves_transformer_engine_import_error():
+    report = {
+        "requested_mode": "fp8-te",
+        "transformer_engine_installed": False,
+        "te_fp8_unavailable_reason": (
+            "transformer-engine import failed: missing CUDA symbol"
+        ),
+    }
+
+    with pytest.raises(RuntimeError, match="missing CUDA symbol"):
+        validate_capability(report)
+
+
 def test_prepare_model_for_precision_warn_falls_back_to_fp32_when_fp8_te_unavailable():
     model = torch.nn.Linear(4, 4)
     with pytest.warns(RuntimeWarning, match="falling back to fp32"):
@@ -285,6 +298,24 @@ def test_prepare_model_for_precision_warn_falls_back_to_fp32_when_fp8_te_unavail
     assert artifacts.policy.describe()["name"] == "fp32"
     assert artifacts.fallback_reason
     assert artifacts.policy.capability_report()["requested_mode"] == "fp8-te"
+
+
+def test_fp8_te_warn_fallback_does_not_resolve_current_cuda_device(monkeypatch):
+    def fail_current_device():
+        raise AssertionError("current_device must not be called without CUDA")
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch.cuda, "current_device", fail_current_device)
+
+    with pytest.warns(RuntimeWarning, match="falling back to fp32"):
+        artifacts = prepare_model_for_precision(
+            torch.nn.Linear(4, 4),
+            "cuda",
+            PrecisionConfig(mode="fp8-te", strictness="warn"),
+        )
+
+    assert artifacts.effective_config.mode == "fp32"
+    assert artifacts.fallback_reason
 
 
 def test_prepare_model_for_precision_strict_keeps_fp8_te_capability_error():
@@ -430,6 +461,49 @@ def test_precision_artifacts_fp8_autocast_context_passes_legacy_recipe(monkeypat
         with artifacts.autocast_context():
             pass
     assert isinstance(state["recipe"], FakeDelayedScaling)
+
+
+def test_fp8_te_autocast_uses_configured_cuda_device(monkeypatch):
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    events = []
+    fake_te = types.ModuleType("transformer_engine.pytorch")
+
+    class RecordingContext:
+        def __init__(self, name):
+            self.name = name
+
+        def __enter__(self):
+            events.append(f"enter:{self.name}")
+
+        def __exit__(self, exc_type, exc, tb):
+            events.append(f"exit:{self.name}")
+
+    fake_te.autocast = lambda **kwargs: RecordingContext("te")
+    fake_root = types.ModuleType("transformer_engine")
+    fake_root.pytorch = fake_te
+    monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
+    monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", fake_te)
+    monkeypatch.setattr(
+        torch.cuda,
+        "device",
+        lambda device: RecordingContext(str(device)),
+    )
+    policy = Float8TransformerEnginePolicy()
+    policy._target_device = torch.device("cuda:1")
+
+    with policy.autocast_context():
+        events.append("body")
+
+    assert events == [
+        "enter:cuda:1",
+        "enter:te",
+        "body",
+        "exit:te",
+        "exit:cuda:1",
+    ]
 
 
 def test_fp8_te_device_check_includes_buffers():

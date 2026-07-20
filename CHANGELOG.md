@@ -25,6 +25,14 @@ Module: `spikingjelly.activation_based.precision`.
   LayerNorm, exact LayerNormLinear / LayerNormMLP fusion patterns, and SDPA
   argument validation.
 
+- Added Transformer Engine SDPA output-layout compatibility for both
+  `[B, S, H, D]` and flattened `[B, S, H * D]` results, and scoped FP8
+  autocast to the configured indexed CUDA device.
+
+- Improved Transformer Engine capability failures to preserve the underlying
+  import or runtime error instead of reporting every import failure as a
+  missing installation.
+
 - Added precision conversion reports with pointwise Conv1d, LayerNorm,
   fused-pattern metadata, and shared-module identity preservation for
   Transformer Engine fused precision patterns.
@@ -38,10 +46,18 @@ Module: `spikingjelly.activation_based.triton_kernel.neuron_kernel`.
   experiments with configurable forward and backward compute dtypes.
 
 - Added FP8 Triton neuron capability probes and a reusable execution plan for
-  repeated mixed-precision neuron launches.
+  repeated mixed-precision neuron launches. Capability reports distinguish
+  FP32, FP16, BF16, and FP8 compute probes for each FP8 storage format.
 
 - Added an FP8 Triton neuron benchmark harness for IF, LIF, and ParametricLIF
-  accuracy, backward-gradient, and prepared-plan overhead measurements.
+  accuracy, backward-gradient, prepared-plan overhead, FP16/BF16 comparisons,
+  timing quartiles, and allocated/reserved CUDA memory measurements.
+
+- Validated FP8 training and inference on RTX 5090 with PyTorch 2.7.1 / Triton
+  3.3.1 and PyTorch 2.11 / Triton 3.6. The validated boundary is FP8 storage
+  and GEMM with higher-precision scalar computation or accumulation; pure FP8
+  scalar neuron computation is unsupported, and the measurements do not show
+  a universal speed or peak-memory advantage over BF16.
 
 ### Bug Fixes
 

@@ -15,25 +15,59 @@ def _import_te_pytorch():
 
 
 class TransformerEngineDotProductAttentionAdapter(nn.Module):
-    """Adapter for standard PyTorch SDPA tensors backed by TE DotProductAttention.
-
-    The public input/output layout is PyTorch's common ``[B, H, S, D]`` layout.
-    Internally the adapter calls TE with explicit ``bshd`` layout tensors.
-
-    Version 1 intentionally supports only no-mask SDPA: ``attn_mask`` must be
-    ``None``, ``is_causal`` must be ``False``, and ``scale`` must be ``None``.
-    During training, ``dropout_p`` must match the adapter's fixed
-    ``attention_dropout``; during evaluation it must be ``0.0``. Query sequence
-    length may differ from key/value sequence length for cross-attention, but
-    key and value sequence lengths must match.
-    """
-
     def __init__(
         self,
         num_attention_heads: int,
         head_dim: int,
         attention_dropout: float = 0.0,
-    ):
+    ) -> None:
+        r"""
+        **API Language** - 中文 | English
+
+        中文
+        ----
+
+        将 PyTorch SDPA 常用的 ``[B, H, S, D]`` 输入输出布局适配到
+        Transformer Engine ``DotProductAttention`` 的 ``bshd`` 布局。兼容 TE
+        返回 ``[B, S, H, D]`` 或展平的 ``[B, S, H * D]`` 张量。
+        交叉注意力允许查询序列长度与键值序列长度不同，但键和值的序列长度
+        必须相同。
+
+        当前仅支持无掩码注意力：``attn_mask`` 必须为 ``None``，
+        ``is_causal`` 必须为 ``False``，``scale`` 必须为 ``None``。训练时
+        ``dropout_p`` 必须等于固定的 ``attention_dropout``；推理时必须为
+        ``0.0``。
+
+        :param num_attention_heads: 注意力头数，必须与输入的 ``H`` 一致。
+        :type num_attention_heads: int
+        :param head_dim: 每个注意力头的维度，必须与输入的 ``D`` 一致。
+        :type head_dim: int
+        :param attention_dropout: 训练时使用的固定注意力 dropout 概率。
+        :type attention_dropout: float
+
+        English
+        -------
+
+        Adapts PyTorch SDPA's common ``[B, H, S, D]`` input/output layout to
+        Transformer Engine ``DotProductAttention`` with the ``bshd`` layout. TE
+        outputs in either ``[B, S, H, D]`` or flattened ``[B, S, H * D]`` form
+        are supported. Cross-attention may use a different query sequence length,
+        but the key and value sequence lengths must match.
+
+        This version supports unmasked attention only: ``attn_mask`` must be
+        ``None``, ``is_causal`` must be ``False``, and ``scale`` must be
+        ``None``. During training, ``dropout_p`` must equal the fixed
+        ``attention_dropout``; during evaluation it must be ``0.0``.
+
+        :param num_attention_heads: Number of attention heads; must match input
+            dimension ``H``.
+        :type num_attention_heads: int
+        :param head_dim: Per-head dimension; must match input dimension ``D``.
+        :type head_dim: int
+        :param attention_dropout: Fixed attention dropout probability for
+            training.
+        :type attention_dropout: float
+        """
         super().__init__()
         te = _import_te_pytorch()
         DotProductAttention = te.DotProductAttention
@@ -176,6 +210,24 @@ class TransformerEngineDotProductAttentionAdapter(nn.Module):
         output = self._call_te_attention(q, k, v)
         if isinstance(output, tuple):
             output = output[0]
+        expected_shape = (
+            query.shape[0],
+            query.shape[2],
+            self.num_attention_heads,
+            self.head_dim,
+        )
+        if output.ndim == 3 and output.shape == (
+            expected_shape[0],
+            expected_shape[1],
+            expected_shape[2] * expected_shape[3],
+        ):
+            output = output.reshape(expected_shape)
+        elif output.shape != expected_shape:
+            raise RuntimeError(
+                "Transformer Engine DotProductAttention returned an unsupported "
+                f"shape {tuple(output.shape)}; expected {expected_shape} or "
+                f"{expected_shape[:2] + (expected_shape[2] * expected_shape[3],)}."
+            )
         return output.transpose(1, 2).contiguous()
 
     def _call_te_attention(

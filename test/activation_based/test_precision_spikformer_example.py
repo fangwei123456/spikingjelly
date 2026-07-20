@@ -94,8 +94,8 @@ def test_precision_artifacts_backward_supports_accumulation_without_scaler():
 @pytest.mark.skipif(
     not HAS_TORCHAO
     or not torch.cuda.is_available()
-    or torch.cuda.get_device_capability(0) < (9, 0),
-    reason="This fp8-torchao smoke test requires Hopper / Blackwell or newer (CUDA compute capability >= 9.0).",
+    or torch.cuda.get_device_capability(0) < (8, 9),
+    reason="This fp8-torchao smoke test requires CUDA compute capability >= 8.9.",
 )
 def test_fp8_torchao_aligned_linear_smoke():
     model = (
@@ -133,7 +133,7 @@ def test_fp8_torchao_aligned_linear_smoke():
 def test_spikformer_precision_tools_fp8_torchao_smoke():
     model = _make_tiny_spikformer()
     config = PrecisionConfig(mode="fp8-torchao", strictness="strict", device="cuda:0")
-    if torch.cuda.get_device_capability(0) >= (9, 0):
+    if torch.cuda.get_device_capability(0) >= (8, 9):
         artifacts, y, loss = _run_one_training_step(
             model.to("cuda:0"),
             torch.device("cuda:0"),
