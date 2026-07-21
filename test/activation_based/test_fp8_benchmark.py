@@ -1,13 +1,17 @@
 from argparse import Namespace
+from contextlib import contextmanager
 
 import pytest
+import torch
 
 from benchmark.benchmark_fp8_training_inference import (
     _aggregate_precision_trials,
     _commit,
+    _cuda_time_ms,
     _samples_per_second,
     validate_args,
 )
+import benchmark.benchmark_triton_neuron_kernels as triton_neuron_benchmark
 from benchmark.benchmark_triton_neuron_kernels import (
     _higher_precision_variants,
     _write_markdown,
@@ -17,6 +21,73 @@ from benchmark.fp8_efficiency import (
     assess_triton_efficiency,
     require_efficiency,
 )
+
+
+def _patch_cuda_timing(monkeypatch):
+    active_devices: list[torch.device] = []
+    entered_devices: list[torch.device] = []
+
+    @contextmanager
+    def cuda_device(device: torch.device):
+        active_devices.append(device)
+        entered_devices.append(device)
+        try:
+            yield
+        finally:
+            active_devices.pop()
+
+    def require_active_device(*args, **kwargs):
+        del args, kwargs
+        assert active_devices
+        return 1.0
+
+    class Event:
+        def __init__(self, *, enable_timing: bool):
+            assert enable_timing
+            assert active_devices
+
+        def record(self):
+            assert active_devices
+
+        def synchronize(self):
+            assert active_devices
+
+        def elapsed_time(self, other):
+            assert isinstance(other, Event)
+            assert active_devices
+            return 2.0
+
+    monkeypatch.setattr(torch.cuda, "device", cuda_device)
+    monkeypatch.setattr(torch.cuda, "Event", Event)
+    monkeypatch.setattr(torch.cuda, "synchronize", require_active_device)
+    monkeypatch.setattr(torch.cuda, "empty_cache", require_active_device)
+    monkeypatch.setattr(torch.cuda, "reset_peak_memory_stats", require_active_device)
+    monkeypatch.setattr(torch.cuda, "max_memory_allocated", require_active_device)
+    monkeypatch.setattr(torch.cuda, "max_memory_reserved", require_active_device)
+    return entered_devices
+
+
+def test_model_benchmark_timing_uses_requested_cuda_device(monkeypatch):
+    entered_devices = _patch_cuda_timing(monkeypatch)
+    device = torch.device("cuda", 1)
+
+    elapsed_ms = _cuda_time_ms(device, 2, lambda: None)
+
+    assert elapsed_ms == pytest.approx(1.0)
+    assert entered_devices == [device]
+
+
+def test_triton_benchmark_timing_uses_requested_cuda_device(monkeypatch):
+    entered_devices = _patch_cuda_timing(monkeypatch)
+    monkeypatch.setattr(triton_neuron_benchmark, "_cuda_sync", lambda device: None)
+    device = torch.device("cuda", 1)
+
+    result = triton_neuron_benchmark._measure(
+        device=device, repeats=2, warmup=1, fn=lambda: None
+    )
+
+    assert result["median_ms"] == pytest.approx(2.0)
+    assert entered_devices == [device]
 
 
 def test_aggregate_precision_trials_uses_medians_and_preserves_raw_trials():

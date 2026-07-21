@@ -273,33 +273,34 @@ def _measure(
     warmup: int,
     fn: Callable[[], Any],
 ) -> dict[str, float]:
-    timings: list[float] = []
-    torch.cuda.empty_cache()
-    _cuda_sync(device)
-    for _ in range(warmup):
-        fn()
-    _cuda_sync(device)
-    torch.cuda.reset_peak_memory_stats(device)
-    for _ in range(repeats):
-        start = torch.cuda.Event(enable_timing=True)
-        end = torch.cuda.Event(enable_timing=True)
-        start.record()
-        fn()
-        end.record()
-        end.synchronize()
-        timings.append(start.elapsed_time(end))
-    peak_allocated_mb = torch.cuda.max_memory_allocated(device) / 1024.0 / 1024.0
-    peak_reserved_mb = torch.cuda.max_memory_reserved(device) / 1024.0 / 1024.0
-    return {
-        "avg_ms": sum(timings) / len(timings),
-        "median_ms": median(timings),
-        "p25_ms": _percentile(timings, 0.25),
-        "p75_ms": _percentile(timings, 0.75),
-        "min_ms": min(timings),
-        "max_ms": max(timings),
-        "peak_allocated_mb": peak_allocated_mb,
-        "peak_reserved_mb": peak_reserved_mb,
-    }
+    with torch.cuda.device(device):
+        timings: list[float] = []
+        torch.cuda.empty_cache()
+        _cuda_sync(device)
+        for _ in range(warmup):
+            fn()
+        _cuda_sync(device)
+        torch.cuda.reset_peak_memory_stats(device)
+        for _ in range(repeats):
+            start = torch.cuda.Event(enable_timing=True)
+            end = torch.cuda.Event(enable_timing=True)
+            start.record()
+            fn()
+            end.record()
+            end.synchronize()
+            timings.append(start.elapsed_time(end))
+        peak_allocated_mb = torch.cuda.max_memory_allocated(device) / 1024.0 / 1024.0
+        peak_reserved_mb = torch.cuda.max_memory_reserved(device) / 1024.0 / 1024.0
+        return {
+            "avg_ms": sum(timings) / len(timings),
+            "median_ms": median(timings),
+            "p25_ms": _percentile(timings, 0.25),
+            "p75_ms": _percentile(timings, 0.75),
+            "min_ms": min(timings),
+            "max_ms": max(timings),
+            "peak_allocated_mb": peak_allocated_mb,
+            "peak_reserved_mb": peak_reserved_mb,
+        }
 
 
 def _percentile(values: list[float], quantile: float) -> float:

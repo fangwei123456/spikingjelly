@@ -146,15 +146,16 @@ def validate_args(args: argparse.Namespace) -> None:
 
 
 def _cuda_time_ms(device: torch.device, steps: int, fn) -> float:
-    start = torch.cuda.Event(enable_timing=True)
-    end = torch.cuda.Event(enable_timing=True)
-    torch.cuda.synchronize(device)
-    start.record()
-    for _ in range(steps):
-        fn()
-    end.record()
-    end.synchronize()
-    return start.elapsed_time(end) / steps
+    with torch.cuda.device(device):
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        torch.cuda.synchronize(device)
+        start.record()
+        for _ in range(steps):
+            fn()
+        end.record()
+        end.synchronize()
+        return start.elapsed_time(end) / steps
 
 
 def _samples_per_second(batch_size: int, elapsed_ms: float) -> float:
