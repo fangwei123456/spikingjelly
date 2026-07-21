@@ -14,6 +14,14 @@ from typing import Any, Callable
 
 import torch
 
+try:
+    from benchmark.fp8_efficiency import (
+        assess_triton_efficiency,
+        percentile,
+        require_efficiency,
+    )
+except ModuleNotFoundError:
+    from fp8_efficiency import assess_triton_efficiency, percentile, require_efficiency
 from spikingjelly.activation_based import surrogate
 from spikingjelly.activation_based.triton_kernel.fp8_capability import (
     triton_fp8_neuron_capability_report,
@@ -91,8 +99,8 @@ def _cuda_sync(device: torch.device) -> None:
     torch.cuda.synchronize(device)
 
 
-def _make_input(T: int, N: int, device: torch.device) -> torch.Tensor:
-    return torch.randn(T, N, device=device, dtype=torch.float32)
+def _make_input(T: int, N: int) -> torch.Tensor:
+    return torch.randn(T, N, device="cpu", dtype=torch.float32)
 
 
 def _call_stable(
@@ -266,26 +274,36 @@ def _measure(
     warmup: int,
     fn: Callable[[], Any],
 ) -> dict[str, float]:
-    timings: list[float] = []
-    torch.cuda.empty_cache()
-    _cuda_sync(device)
-    for _ in range(warmup):
-        fn()
-    _cuda_sync(device)
-    torch.cuda.reset_peak_memory_stats(device)
-    for _ in range(repeats):
-        start = time.perf_counter()
-        fn()
+    with torch.cuda.device(device):
+        timings: list[float] = []
+        torch.cuda.empty_cache()
         _cuda_sync(device)
-        timings.append((time.perf_counter() - start) * 1000.0)
-    peak_allocated_mb = torch.cuda.max_memory_allocated(device) / 1024.0 / 1024.0
-    return {
-        "avg_ms": sum(timings) / len(timings),
-        "median_ms": median(timings),
-        "min_ms": min(timings),
-        "max_ms": max(timings),
-        "peak_allocated_mb": peak_allocated_mb,
-    }
+        for _ in range(warmup):
+            fn()
+        _cuda_sync(device)
+        torch.cuda.reset_peak_memory_stats(device)
+        starts = [torch.cuda.Event(enable_timing=True) for _ in range(repeats)]
+        ends = [torch.cuda.Event(enable_timing=True) for _ in range(repeats)]
+        for start, end in zip(starts, ends, strict=True):
+            start.record()
+            fn()
+            end.record()
+        _cuda_sync(device)
+        timings = [
+            start.elapsed_time(end) for start, end in zip(starts, ends, strict=True)
+        ]
+        peak_allocated_mb = torch.cuda.max_memory_allocated(device) / 1024.0 / 1024.0
+        peak_reserved_mb = torch.cuda.max_memory_reserved(device) / 1024.0 / 1024.0
+        return {
+            "avg_ms": sum(timings) / len(timings),
+            "median_ms": median(timings),
+            "p25_ms": percentile(timings, 0.25),
+            "p75_ms": percentile(timings, 0.75),
+            "min_ms": min(timings),
+            "max_ms": max(timings),
+            "peak_allocated_mb": peak_allocated_mb,
+            "peak_reserved_mb": peak_reserved_mb,
+        }
 
 
 def _benchmark_inference(
@@ -303,7 +321,7 @@ def _benchmark_inference(
 ) -> dict[str, float]:
     v_init = torch.zeros_like(x[0])
     r_tau_tensor = (
-        torch.tensor(_R_TAU, device=device, dtype=torch.float32)
+        torch.tensor(_R_TAU, device=x.device, dtype=x.dtype)
         if neuron_type == "plif"
         else None
     )
@@ -361,7 +379,7 @@ def _benchmark_training(
     r_tau_tensor = None
     if neuron_type == "plif":
         r_tau_tensor = torch.tensor(
-            _R_TAU, device=device, dtype=torch.float32, requires_grad=True
+            _R_TAU, device=x.device, dtype=x.dtype, requires_grad=True
         )
 
     def fn() -> None:
@@ -412,6 +430,13 @@ def _dtype_variants() -> list[tuple[str, torch.dtype]]:
     return variants
 
 
+def _higher_precision_variants() -> list[tuple[str, torch.dtype, str]]:
+    return [
+        ("float16", torch.float16, "fp16"),
+        ("bfloat16", torch.bfloat16, "bf16"),
+    ]
+
+
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     fieldnames = [
         "T",
@@ -426,10 +451,13 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "success",
         "avg_ms",
         "median_ms",
+        "p25_ms",
+        "p75_ms",
         "min_ms",
         "max_ms",
         "throughput_melems_s",
         "peak_allocated_mb",
+        "peak_reserved_mb",
         "plan_prepare_ms",
         "failure_reason",
     ]
@@ -450,7 +478,12 @@ def _format_float(value: Any, digits: int = 3) -> str:
     return str(value)
 
 
-def _write_markdown(path: Path, rows: list[dict[str, Any]], metadata: dict[str, Any]) -> None:
+def _write_markdown(
+    path: Path,
+    rows: list[dict[str, Any]],
+    metadata: dict[str, Any],
+    efficiency: dict[str, Any],
+) -> None:
     lines = [
         "# Triton Neuron Kernel Benchmark",
         "",
@@ -459,7 +492,7 @@ def _write_markdown(path: Path, rows: list[dict[str, Any]], metadata: dict[str, 
         f"- Commit: `{metadata.get('commit')}` ({metadata.get('commit_source')})",
         f"- Command: `{metadata['command']}`",
         "",
-        "| T | N | neuron | variant | process | avg ms | median ms | throughput Melem/s | peak MB |",
+        "| T | N | neuron | variant | process | median ms | P25-P75 ms | throughput Melem/s | allocated/reserved MB |",
         "|---:|---:|---|---|---|---:|---:|---:|---:|",
     ]
     for row in rows:
@@ -474,10 +507,11 @@ def _write_markdown(path: Path, rows: list[dict[str, Any]], metadata: dict[str, 
                     str(row["neuron_type"]),
                     str(row["variant"]),
                     str(row["process"]),
-                    _format_float(row["avg_ms"]),
                     _format_float(row["median_ms"]),
+                    f"{_format_float(row['p25_ms'])}-{_format_float(row['p75_ms'])}",
                     _format_float(row["throughput_melems_s"]),
-                    _format_float(row["peak_allocated_mb"]),
+                    f"{_format_float(row['peak_allocated_mb'])}/"
+                    f"{_format_float(row['peak_reserved_mb'])}",
                 ]
             )
             + " |"
@@ -486,12 +520,51 @@ def _write_markdown(path: Path, rows: list[dict[str, Any]], metadata: dict[str, 
     if failures:
         lines.extend(["", "## Failures", ""])
         for row in failures:
-            lines.append(
-                "- "
+            failure_reason = (
+                str(row.get("failure_reason")).replace("\r", " ").replace("\n", " ")
+            )
+            failure = (
                 f"T={row['T']} N={row['N']} neuron={row['neuron_type']} "
                 f"variant={row['variant']} process={row['process']}: "
-                f"{row.get('failure_reason')}"
+                f"{failure_reason}"
             )
+            code_fence = "`"
+            while code_fence in failure:
+                code_fence += "`"
+            lines.append(f"- {code_fence}{failure}{code_fence}")
+    lines.extend(
+        [
+            "",
+            "## FP8-Storage Mixed-Precision Efficiency",
+            "",
+            f"Required speedup: `{efficiency['min_speedup']:.3f}x`",
+            "",
+            "| T | N | neuron | process | best FP8 plan | compute | speedup | "
+            "memory ratio | passed |",
+            "|---:|---:|---|---|---|---|---:|---:|---|",
+        ]
+    )
+    for comparison in efficiency["comparisons"]:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    str(comparison["T"]),
+                    str(comparison["N"]),
+                    str(comparison["neuron_type"]),
+                    str(comparison["process"]),
+                    str(comparison["best_fp8_variant"]),
+                    str(comparison["best_compute_dtype"]),
+                    f"{comparison['speedup']:.3f}x",
+                    f"{comparison['memory_ratio']:.3f}x",
+                    str(comparison["passed"]),
+                ]
+            )
+            + " |"
+        )
+    if efficiency["failures"]:
+        lines.extend(["", "### Efficiency Failures", ""])
+        lines.extend(f"- {failure}" for failure in efficiency["failures"])
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -499,14 +572,16 @@ def _write_outputs(
     output_dir: Path,
     metadata: dict[str, Any],
     rows: list[dict[str, Any]],
-) -> None:
-    payload = {"metadata": metadata, "rows": rows}
+) -> dict[str, Any]:
+    efficiency = assess_triton_efficiency(rows, min_speedup=metadata["min_speedup"])
+    payload = {"metadata": metadata, "rows": rows, "efficiency": efficiency}
     json_path = output_dir / "triton_neuron_kernel_benchmark.json"
     csv_path = output_dir / "triton_neuron_kernel_benchmark.csv"
     md_path = output_dir / "triton_neuron_kernel_benchmark.md"
-    json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     _write_csv(csv_path, rows)
-    _write_markdown(md_path, rows, metadata)
+    _write_markdown(md_path, rows, metadata, efficiency)
+    return efficiency
 
 
 def main() -> None:
@@ -520,10 +595,19 @@ def main() -> None:
         help="Comma-separated T x N sizes.",
     )
     parser.add_argument("--neurons", default="if,lif,plif")
-    parser.add_argument("--compute-dtypes", default="fp16,bf16,fp32")
+    parser.add_argument("--compute-dtypes", default="fp8,fp16,bf16,fp32")
     parser.add_argument("--backward-compute-dtype", default="fp32")
     parser.add_argument("--warmup", type=int, default=5)
     parser.add_argument("--repeats", type=int, default=20)
+    parser.add_argument("--min-speedup", type=float, default=1.05)
+    parser.add_argument(
+        "--require-efficiency",
+        action="store_true",
+        help=(
+            "Exit non-zero unless the fastest successful FP8-storage prepared "
+            "plan for every case beats stable FP32 by --min-speedup."
+        ),
+    )
     parser.add_argument(
         "--include-safe-wrapper",
         action="store_true",
@@ -538,6 +622,8 @@ def main() -> None:
         raise ValueError("--warmup must be >= 0.")
     if args.repeats <= 0:
         raise ValueError("--repeats must be > 0.")
+    if args.min_speedup <= 0:
+        raise ValueError("--min-speedup must be > 0.")
 
     sizes = _parse_sizes(args.sizes)
     neurons = [item.strip() for item in args.neurons.split(",") if item.strip()]
@@ -578,7 +664,9 @@ def main() -> None:
         "backward_compute_dtype": backward_compute_dtype,
         "warmup": args.warmup,
         "repeats": args.repeats,
+        "min_speedup": args.min_speedup,
         "mp_plan_reuse": True,
+        "variant_order": "rotated_by_size_neuron_and_process",
         "inference_save_intermediates": False,
         "training_save_intermediates": True,
         "loss_outputs": "s_seq,v_seq",
@@ -591,10 +679,10 @@ def main() -> None:
     dtype_variants = _dtype_variants()
     _write_outputs(output_dir, metadata, rows)
 
-    for T, N in sizes:
-        x = _make_input(T, N, device)
+    for size_index, (T, N) in enumerate(sizes):
+        x_host = _make_input(T, N)
         elements = T * N
-        for neuron_type in neurons:
+        for neuron_index, neuron_type in enumerate(neurons):
             variants: list[dict[str, Any]] = [
                 {
                     "variant": "stable_fp32",
@@ -604,9 +692,28 @@ def main() -> None:
                     "plan": None,
                     "uses_plan": False,
                     "storage_dtype_obj": None,
+                    "input_dtype_obj": torch.float32,
                     "plan_prepare_ms": None,
                 }
             ]
+            for (
+                storage_name,
+                storage_dtype,
+                compute_dtype,
+            ) in _higher_precision_variants():
+                variants.append(
+                    {
+                        "variant": f"stable_{storage_name}",
+                        "variant_kind": "stable",
+                        "storage_dtype": storage_name,
+                        "compute_dtype": compute_dtype,
+                        "plan": None,
+                        "uses_plan": False,
+                        "storage_dtype_obj": None,
+                        "input_dtype_obj": storage_dtype,
+                        "plan_prepare_ms": None,
+                    }
+                )
             for storage_name, storage_dtype in dtype_variants:
                 for compute_dtype in compute_dtypes:
                     variants.append(
@@ -618,6 +725,7 @@ def main() -> None:
                             "plan": None,
                             "uses_plan": True,
                             "storage_dtype_obj": storage_dtype,
+                            "input_dtype_obj": torch.float32,
                             "plan_prepare_ms": None,
                         }
                     )
@@ -631,12 +739,17 @@ def main() -> None:
                                 "plan": None,
                                 "uses_plan": False,
                                 "storage_dtype_obj": storage_dtype,
+                                "input_dtype_obj": torch.float32,
                                 "plan_prepare_ms": None,
                             }
                         )
 
-            for process in ("inference_forward", "training_forward_backward"):
-                for variant in variants:
+            for process_index, process in enumerate(
+                ("inference_forward", "training_forward_backward")
+            ):
+                offset = (size_index + neuron_index + process_index) % len(variants)
+                ordered_variants = variants[offset:] + variants[:offset]
+                for variant in ordered_variants:
                     print(
                         "START "
                         f"T={T} N={N} neuron={neuron_type} "
@@ -654,9 +767,7 @@ def main() -> None:
                         "backward_compute_dtype": backward_compute_dtype,
                         "process": process,
                         "plan_prepare_ms": variant.get("plan_prepare_ms"),
-                        "save_intermediates": (
-                            process == "training_forward_backward"
-                        ),
+                        "save_intermediates": (process == "training_forward_backward"),
                         "loss_outputs": "s_seq,v_seq",
                     }
                     plan = variant["plan"]
@@ -698,6 +809,10 @@ def main() -> None:
                             )
                             continue
                     try:
+                        x = x_host.to(
+                            device=device,
+                            dtype=variant["input_dtype_obj"],
+                        )
                         if process == "inference_forward":
                             metrics = _benchmark_inference(
                                 x=x,
@@ -726,7 +841,9 @@ def main() -> None:
                             )
                         row.update(metrics)
                         row["success"] = True
-                        row["throughput_melems_s"] = elements / row["avg_ms"] / 1000.0
+                        row["throughput_melems_s"] = (
+                            elements / row["median_ms"] / 1000.0
+                        )
                     except Exception as e:
                         row.update(
                             {
@@ -734,6 +851,9 @@ def main() -> None:
                                 "failure_reason": f"{type(e).__name__}: {e or repr(e)}",
                             }
                         )
+                    finally:
+                        if "x" in locals():
+                            del x
                     rows.append(row)
                     _write_outputs(output_dir, metadata, rows)
                     print(
@@ -744,13 +864,16 @@ def main() -> None:
                         flush=True,
                     )
 
-    _write_outputs(output_dir, metadata, rows)
+    efficiency = _write_outputs(output_dir, metadata, rows)
     json_path = output_dir / "triton_neuron_kernel_benchmark.json"
     csv_path = output_dir / "triton_neuron_kernel_benchmark.csv"
     md_path = output_dir / "triton_neuron_kernel_benchmark.md"
     print(f"Wrote {json_path}")
     print(f"Wrote {csv_path}")
     print(f"Wrote {md_path}")
+    print(f"FP8 efficiency passed={efficiency['passed']}")
+    if args.require_efficiency:
+        require_efficiency(efficiency)
 
 
 if __name__ == "__main__":

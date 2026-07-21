@@ -47,6 +47,26 @@ def _assert_close(a: torch.Tensor, b: torch.Tensor, dtype: torch.dtype):
     torch.testing.assert_close(a, b, atol=atol, rtol=rtol)
 
 
+def _relative_l2(candidate: torch.Tensor, reference: torch.Tensor) -> float:
+    numerator = torch.linalg.vector_norm(candidate.float() - reference.float())
+    denominator = torch.linalg.vector_norm(reference.float()).clamp_min(1e-12)
+    return float((numerator / denominator).item())
+
+
+def _assert_gradient_metrics(candidate: torch.Tensor, reference: torch.Tensor) -> None:
+    candidate = candidate.float().reshape(-1)
+    reference = reference.float().reshape(-1)
+    reference_norm = float(torch.linalg.vector_norm(reference).item())
+    if reference_norm < 1e-8:
+        assert float(torch.linalg.vector_norm(candidate).item()) < 1e-5
+        return
+    # FP8 acceptance bounds cover both e4m3fn and e5m2 and were calibrated by
+    # the dual-environment RTX 5090 validation documented in CHANGELOG.md.
+    cosine = float(torch.nn.functional.cosine_similarity(candidate, reference, dim=0))
+    assert cosine >= 0.95
+    assert _relative_l2(candidate, reference) <= 0.30
+
+
 def _call_mixed_precision_forward(
     kind,
     x,
@@ -157,18 +177,31 @@ def _call_mixed_precision_forward_with_plan(
     raise ValueError(f"Unsupported mixed-precision neuron kind: {kind}.")
 
 
-def _fp8_storage_dtype_or_skip() -> torch.dtype:
-    dtype_candidates = []
-    if hasattr(torch, "float8_e5m2"):
-        dtype_candidates.append(torch.float8_e5m2)
-    if hasattr(torch, "float8_e4m3fn"):
-        dtype_candidates.append(torch.float8_e4m3fn)
-    for storage_dtype in dtype_candidates:
-        if supports_triton_fp8_neuron_forward(
-            storage_dtype, torch.device("cuda"), compute_dtype="fp32"
-        ):
-            return storage_dtype
-    pytest.skip("No supported Triton FP8 storage dtype is available on this CUDA device.")
+def _fp8_storage_dtype_or_skip(
+    dtype_name: str,
+    *,
+    compute_dtype: str = "fp32",
+    require_backward: bool = False,
+) -> torch.dtype:
+    storage_dtype = getattr(torch, dtype_name, None)
+    if storage_dtype is None:
+        pytest.skip(f"This PyTorch build does not expose torch.{dtype_name}.")
+    device = torch.device("cuda")
+    if not supports_triton_fp8_neuron_forward(
+        storage_dtype, device, compute_dtype=compute_dtype
+    ):
+        pytest.skip(
+            f"Triton forward does not support {dtype_name} with "
+            f"compute_dtype={compute_dtype!r} on this CUDA device."
+        )
+    if require_backward and not supports_triton_fp8_neuron_backward(
+        storage_dtype, device, compute_dtype=compute_dtype
+    ):
+        pytest.skip(
+            f"Triton backward does not support {dtype_name} with "
+            f"compute_dtype={compute_dtype!r} on this CUDA device."
+        )
+    return storage_dtype
 
 
 def _quantize_for_storage(x: torch.Tensor, storage_dtype: torch.dtype) -> torch.Tensor:
@@ -216,11 +249,29 @@ def _mixed_precision_reference(
 def test_triton_fp8_capability_report_cpu_is_unavailable():
     report = triton_fp8_neuron_capability_report(torch.device("cpu"))
     assert report["device_type"] == "cpu"
+    assert {"fp32", "fp16", "bf16", "fp8"} <= set(report["compute_dtypes"])
     for dtype_report in report["dtypes"].values():
         assert dtype_report["forward"]["available"] is False
         assert dtype_report["forward"]["reason"]
         assert dtype_report["backward"]["available"] is False
         assert dtype_report["backward"]["reason"]
+    for compute_report in report["compute_dtypes"].values():
+        for dtype_report in compute_report.values():
+            assert dtype_report["forward"]["available"] is False
+            assert dtype_report["forward"]["reason"]
+            assert dtype_report["backward"]["available"] is False
+            assert dtype_report["backward"]["reason"]
+
+
+def test_triton_fp8_capability_compatibility_field_is_independent():
+    report = triton_fp8_neuron_capability_report(torch.device("cpu"))
+    dtype_name = next(iter(report["dtypes"]))
+    compute_entry = report["compute_dtypes"]["fp32"][dtype_name]["forward"]
+    original_reason = compute_entry["reason"]
+
+    report["dtypes"][dtype_name]["forward"]["reason"] = "mutated"
+
+    assert compute_entry["reason"] == original_reason
 
 
 def test_triton_fp8_capability_rejects_invalid_dtype():
@@ -238,8 +289,7 @@ def test_normalize_triton_compute_dtype_accepts_native_fp8_dtype():
         )
     if hasattr(torch, "float8_e5m2"):
         assert (
-            triton_utils.normalize_triton_compute_dtype_name(torch.float8_e5m2)
-            == "fp8"
+            triton_utils.normalize_triton_compute_dtype_name(torch.float8_e5m2) == "fp8"
         )
 
 
@@ -752,35 +802,47 @@ def test_mixed_precision_float32_matches_torch_eval(
         x = torch.randn(T, 4, 8, device="cuda", dtype=torch.float32)
         v_init = torch.zeros_like(x[0])
         if kind == "if":
-            node = neuron.IFNode(
-                v_threshold=1.0,
-                v_reset=v_reset,
-                step_mode="m",
-                backend="torch",
-                store_v_seq=True,
-            ).to("cuda").eval()
+            node = (
+                neuron.IFNode(
+                    v_threshold=1.0,
+                    v_reset=v_reset,
+                    step_mode="m",
+                    backend="torch",
+                    store_v_seq=True,
+                )
+                .to("cuda")
+                .eval()
+            )
             r_tau = None
         elif kind == "lif":
-            node = neuron.LIFNode(
-                tau=2.0,
-                decay_input=decay_input,
-                v_threshold=1.0,
-                v_reset=v_reset,
-                step_mode="m",
-                backend="torch",
-                store_v_seq=True,
-            ).to("cuda").eval()
+            node = (
+                neuron.LIFNode(
+                    tau=2.0,
+                    decay_input=decay_input,
+                    v_threshold=1.0,
+                    v_reset=v_reset,
+                    step_mode="m",
+                    backend="torch",
+                    store_v_seq=True,
+                )
+                .to("cuda")
+                .eval()
+            )
             r_tau = None
         elif kind == "plif":
-            node = neuron.ParametricLIFNode(
-                init_tau=2.0,
-                decay_input=decay_input,
-                v_threshold=1.0,
-                v_reset=v_reset,
-                step_mode="m",
-                backend="torch",
-                store_v_seq=True,
-            ).to("cuda").eval()
+            node = (
+                neuron.ParametricLIFNode(
+                    init_tau=2.0,
+                    decay_input=decay_input,
+                    v_threshold=1.0,
+                    v_reset=v_reset,
+                    step_mode="m",
+                    backend="torch",
+                    store_v_seq=True,
+                )
+                .to("cuda")
+                .eval()
+            )
             r_tau = node.w.sigmoid().to(x)
         else:
             raise ValueError(kind)
@@ -944,9 +1006,7 @@ def test_mixed_precision_rejects_v_init_shape_mismatch(kind, use_plan):
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
-def test_mixed_precision_backward_with_plan_skips_repeated_preflight(
-    kind, monkeypatch
-):
+def test_mixed_precision_backward_with_plan_skips_repeated_preflight(kind, monkeypatch):
     x = torch.randn(8, 4, device="cuda", dtype=torch.float32)
     v_init = torch.zeros_like(x[0])
     r_tau = torch.tensor(0.5, device=x.device, dtype=torch.float32)
@@ -1070,15 +1130,16 @@ def test_mixed_precision_autograd_with_plan_matches_safe_wrapper(kind, v_reset):
     torch.testing.assert_close(x_safe.grad, x_plan.grad, atol=0.0, rtol=0.0)
     torch.testing.assert_close(v_safe.grad, v_plan.grad, atol=0.0, rtol=0.0)
     if kind == "plif":
-        torch.testing.assert_close(
-            r_tau_safe.grad, r_tau_plan.grad, atol=0.0, rtol=0.0
-        )
+        torch.testing.assert_close(r_tau_safe.grad, r_tau_plan.grad, atol=0.0, rtol=0.0)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
-def test_mixed_precision_fp8_storage_backward_fp32_compute_produces_finite_grad(kind):
-    storage_dtype = _fp8_storage_dtype_or_skip()
+@pytest.mark.parametrize("dtype_name", ["float8_e4m3fn", "float8_e5m2"])
+def test_mixed_precision_fp8_storage_backward_fp32_compute_produces_finite_grad(
+    kind, dtype_name
+):
+    storage_dtype = _fp8_storage_dtype_or_skip(dtype_name, require_backward=True)
     x = torch.randn(8, 4, device="cuda", dtype=torch.float32).requires_grad_()
     v_init = torch.zeros(4, device="cuda", dtype=torch.float32).requires_grad_()
     r_tau = torch.tensor(0.5, device=x.device, dtype=torch.float32)
@@ -1109,8 +1170,11 @@ def test_mixed_precision_fp8_storage_backward_fp32_compute_produces_finite_grad(
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
 @pytest.mark.parametrize("v_reset", [0.0, None])
-def test_mixed_precision_fp8_storage_matches_quantized_reference(kind, v_reset):
-    storage_dtype = _fp8_storage_dtype_or_skip()
+@pytest.mark.parametrize("dtype_name", ["float8_e4m3fn", "float8_e5m2"])
+def test_mixed_precision_fp8_storage_matches_quantized_reference(
+    kind, v_reset, dtype_name
+):
+    storage_dtype = _fp8_storage_dtype_or_skip(dtype_name, require_backward=False)
     x = torch.tensor(
         [
             [0.25, 0.50, 0.75, 1.00],
@@ -1180,6 +1244,232 @@ def test_mixed_precision_fp8_storage_matches_quantized_reference(kind, v_reset):
     torch.testing.assert_close(
         plan_h_seq.to(torch.float32), expected_h, atol=0.0625, rtol=0.0
     )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+@pytest.mark.parametrize("dtype_name", ["float8_e4m3fn", "float8_e5m2"])
+def test_mixed_precision_fp8_inference_runs_without_saved_intermediates(
+    kind, dtype_name
+):
+    storage_dtype = _fp8_storage_dtype_or_skip(dtype_name, require_backward=False)
+    x = torch.tensor(
+        [
+            [0.25, 0.50, 0.75, 1.00],
+            [0.50, -0.25, 0.25, -0.50],
+            [0.25, 0.75, -0.50, 0.50],
+            [-0.25, 0.50, 0.25, 0.75],
+        ],
+        device="cuda",
+        dtype=torch.float32,
+    )
+    v_init = torch.zeros_like(x[0])
+    r_tau = torch.tensor(0.5, device=x.device, dtype=torch.float32)
+
+    with torch.inference_mode():
+        spike, v_seq, h_seq = _call_mixed_precision_forward(
+            kind,
+            x,
+            v_init,
+            decay_input=True,
+            v_reset=0.0,
+            storage_dtype=storage_dtype,
+            compute_dtype="fp32",
+            backward_compute_dtype="fp32",
+            spike_dtype=torch.float32,
+            save_intermediates=False,
+            r_tau=r_tau,
+        )
+    expected_spike, expected_v, _ = _mixed_precision_reference(
+        kind,
+        x,
+        v_init,
+        storage_dtype=storage_dtype,
+        decay_input=True,
+        v_reset=0.0,
+        r_tau=float(r_tau.item()),
+    )
+
+    assert h_seq is None
+    torch.testing.assert_close(spike, expected_spike, atol=0.0, rtol=0.0)
+    torch.testing.assert_close(
+        v_seq.to(torch.float32), expected_v, atol=0.0625, rtol=0.0
+    )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+@pytest.mark.parametrize("dtype_name", ["float8_e4m3fn", "float8_e5m2"])
+def test_mixed_precision_pure_fp8_compute_runs_forward_and_backward(kind, dtype_name):
+    storage_dtype = _fp8_storage_dtype_or_skip(
+        dtype_name,
+        compute_dtype="fp8",
+        require_backward=True,
+    )
+    x = (
+        torch.linspace(-0.1, 0.1, 16, device="cuda", dtype=torch.float32)
+        .reshape(4, 4)
+        .requires_grad_()
+    )
+    v_init = torch.zeros(4, device="cuda", dtype=torch.float32).requires_grad_()
+    r_tau = torch.tensor(
+        0.5,
+        device=x.device,
+        dtype=torch.float32,
+        requires_grad=kind == "plif",
+    )
+
+    spike, v_seq, h_seq = _call_mixed_precision_forward(
+        kind,
+        x,
+        v_init,
+        decay_input=True,
+        v_reset=0.0,
+        storage_dtype=storage_dtype,
+        compute_dtype="fp8",
+        backward_compute_dtype="fp8",
+        spike_dtype=torch.float32,
+        save_intermediates=True,
+        r_tau=r_tau,
+    )
+    loss = spike.float().sum() + v_seq.float().sum() * 0.125
+    loss.backward()
+
+    reference_x = x.detach().clone().requires_grad_()
+    reference_v_init = v_init.detach().clone().requires_grad_()
+    reference_r_tau = r_tau.detach().clone().requires_grad_(kind == "plif")
+    reference_spike, reference_v_seq, _ = _call_mixed_precision_forward(
+        kind,
+        reference_x,
+        reference_v_init,
+        decay_input=True,
+        v_reset=0.0,
+        storage_dtype=torch.float32,
+        compute_dtype="fp32",
+        backward_compute_dtype="fp32",
+        spike_dtype=torch.float32,
+        save_intermediates=True,
+        r_tau=reference_r_tau,
+    )
+    reference_loss = (
+        reference_spike.float().sum() + reference_v_seq.float().sum() * 0.125
+    )
+    reference_loss.backward()
+
+    assert h_seq is not None
+    assert torch.isfinite(spike).all()
+    assert torch.isfinite(v_seq.float()).all()
+    assert torch.isfinite(h_seq.float()).all()
+    assert x.grad is not None and torch.isfinite(x.grad).all()
+    assert v_init.grad is not None and torch.isfinite(v_init.grad).all()
+    torch.testing.assert_close(spike, reference_spike, atol=0.0, rtol=0.0)
+    torch.testing.assert_close(
+        v_seq.float(), reference_v_seq.float(), atol=0.125, rtol=0.25
+    )
+    _assert_gradient_metrics(x.grad, reference_x.grad)
+    _assert_gradient_metrics(v_init.grad, reference_v_init.grad)
+    if kind == "plif":
+        assert r_tau.grad is not None and torch.isfinite(r_tau.grad).all()
+        _assert_gradient_metrics(r_tau.grad, reference_r_tau.grad)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+@pytest.mark.parametrize(
+    ("dtype_name", "compute_dtype", "v_reset", "decay_input", "detach_reset", "T"),
+    [
+        ("float8_e4m3fn", "fp16", 0.0, True, False, 8),
+        ("float8_e4m3fn", "bf16", None, False, True, 32),
+        ("float8_e4m3fn", "fp32", 0.0, False, True, 65),
+        ("float8_e5m2", "fp32", 0.0, False, True, 65),
+        ("float8_e5m2", "fp16", None, True, False, 16),
+        ("float8_e5m2", "bf16", None, False, True, 32),
+    ],
+)
+def test_mixed_precision_fp8_matrix_meets_numerical_gates(
+    kind,
+    dtype_name,
+    compute_dtype,
+    v_reset,
+    decay_input,
+    detach_reset,
+    T,
+):
+    storage_dtype = _fp8_storage_dtype_or_skip(
+        dtype_name,
+        compute_dtype=compute_dtype,
+        require_backward=False,
+    )
+    # The execution plan uses the selected dtype for forward and FP32 for backward.
+    if not supports_triton_fp8_neuron_backward(
+        storage_dtype, torch.device("cuda"), compute_dtype="fp32"
+    ):
+        pytest.skip(
+            f"Triton backward does not support {dtype_name} with "
+            "compute_dtype='fp32' on this CUDA device."
+        )
+    N = 32
+    x = torch.full((T, N), -0.5, device="cuda", dtype=torch.float32)
+    x[::4] = 3.0
+    x.requires_grad_()
+    v_init = torch.zeros(N, device="cuda", dtype=torch.float32, requires_grad=True)
+    r_tau = torch.tensor(
+        0.5,
+        device="cuda",
+        dtype=torch.float32,
+        requires_grad=kind == "plif",
+    )
+    reference_x = x.detach().clone().requires_grad_()
+    reference_v = v_init.detach().clone().requires_grad_()
+    reference_r_tau = r_tau.detach().clone().requires_grad_(kind == "plif")
+
+    spike, v_seq, h_seq = _call_mixed_precision_forward(
+        kind,
+        x,
+        v_init,
+        decay_input=decay_input,
+        v_reset=v_reset,
+        storage_dtype=storage_dtype,
+        compute_dtype=compute_dtype,
+        backward_compute_dtype="fp32",
+        spike_dtype=torch.float32,
+        save_intermediates=True,
+        detach_reset=detach_reset,
+        r_tau=r_tau,
+    )
+    reference_spike, reference_v_seq, reference_h_seq = _call_mixed_precision_forward(
+        kind,
+        reference_x,
+        reference_v,
+        decay_input=decay_input,
+        v_reset=v_reset,
+        storage_dtype=torch.float32,
+        compute_dtype="fp32",
+        backward_compute_dtype="fp32",
+        spike_dtype=torch.float32,
+        save_intermediates=True,
+        detach_reset=detach_reset,
+        r_tau=reference_r_tau,
+    )
+    loss = spike.float().sum() + v_seq.float().sum() * 0.125
+    reference_loss = (
+        reference_spike.float().sum() + reference_v_seq.float().sum() * 0.125
+    )
+    loss.backward()
+    reference_loss.backward()
+
+    # These state-error budgets come from the same RTX 5090 FP8 acceptance runs.
+    max_state_relative_l2 = 0.10 if dtype_name == "float8_e4m3fn" else 0.18
+    assert h_seq is not None and reference_h_seq is not None
+    assert reference_spike.any()
+    assert (reference_spike == 0).any()
+    torch.testing.assert_close(spike, reference_spike, atol=0.0, rtol=0.0)
+    assert _relative_l2(v_seq, reference_v_seq) <= max_state_relative_l2
+    assert _relative_l2(h_seq, reference_h_seq) <= max_state_relative_l2
+    _assert_gradient_metrics(x.grad, reference_x.grad)
+    _assert_gradient_metrics(v_init.grad, reference_v.grad)
+    if kind == "plif":
+        _assert_gradient_metrics(r_tau.grad, reference_r_tau.grad)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

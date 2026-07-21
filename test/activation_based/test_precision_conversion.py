@@ -1040,6 +1040,30 @@ def test_transformer_engine_sdpa_adapter_matches_torch_sdpa(monkeypatch):
     torch.testing.assert_close(out, expected)
 
 
+def test_transformer_engine_sdpa_adapter_accepts_flattened_te_output(monkeypatch):
+    _install_fake_te(monkeypatch)
+    adapter = TransformerEngineDotProductAttentionAdapter(
+        num_attention_heads=2,
+        head_dim=4,
+    )
+    original_forward = adapter.wrapped.forward
+
+    def flattened_forward(query, key, value, *args, **kwargs):
+        output = original_forward(query, key, value, *args, **kwargs)
+        return output.flatten(start_dim=2)
+
+    adapter.wrapped.forward = flattened_forward
+    query = torch.randn(3, 2, 5, 4)
+    key = torch.randn(3, 2, 5, 4)
+    value = torch.randn(3, 2, 5, 4)
+    expected = torch.nn.functional.scaled_dot_product_attention(query, key, value)
+
+    out = adapter(query, key, value)
+
+    assert out.shape == query.shape
+    torch.testing.assert_close(out, expected)
+
+
 def test_transformer_engine_sdpa_adapter_rejects_dropout_mismatch(monkeypatch):
     _install_fake_te(monkeypatch)
     adapter = TransformerEngineDotProductAttentionAdapter(

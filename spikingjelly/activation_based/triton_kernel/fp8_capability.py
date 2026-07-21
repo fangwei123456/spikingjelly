@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import functools
 import logging
 import traceback
@@ -78,12 +79,8 @@ if triton is not None:
 
         for t in tl.static_range(1, -1, -1):
             base = t * N + offsets
-            grad_s = tl.load(grad_s_ptr + base, mask=mask, other=0.0).to(
-                compute_dtype
-            )
-            grad_v = tl.load(grad_v_ptr + base, mask=mask, other=0.0).to(
-                compute_dtype
-            )
+            grad_s = tl.load(grad_s_ptr + base, mask=mask, other=0.0).to(compute_dtype)
+            grad_v = tl.load(grad_v_ptr + base, mask=mask, other=0.0).to(compute_dtype)
             h = tl.load(h_ptr + base, mask=mask, other=0.0).to(compute_dtype)
             v_last = tl.load(v_ptr + base, mask=mask, other=0.0).to(compute_dtype)
             s = tl.where(h >= 1.0, 1.0, 0.0).to(compute_dtype)
@@ -359,7 +356,40 @@ def triton_fp8_neuron_backward_capability(
     return _backward_probe(dtype, device, compute_dtype=compute_dtype)
 
 
-def triton_fp8_neuron_capability_report(device) -> dict[str, Any]:
+def triton_fp8_neuron_capability_report(
+    device: torch.device | str,
+) -> dict[str, Any]:
+    r"""
+    **API Language** - 中文 | English
+
+    中文
+    ----
+
+    探测指定设备上 Triton 神经元内核的 FP8 能力。返回值保留兼容字段
+    ``dtypes``（对应 FP32 compute），并通过 ``compute_dtypes`` 分别报告
+    FP32、FP16、BF16 和 FP8 compute 与每种 FP8 storage dtype 的前向、
+    反向可用性及失败原因。探测会实际编译并运行最小 Triton kernel。
+
+    :param device: 待探测的 CUDA 设备；非 CUDA 设备返回不可用报告。
+    :type device: torch.device | str
+    :return: 包含设备、版本、storage dtype 和 compute dtype 探测结果的字典。
+    :rtype: dict[str, Any]
+
+    English
+    -------
+
+    Probes FP8 support for Triton neuron kernels on a device. The compatibility
+    field ``dtypes`` reports FP32-compute results, while ``compute_dtypes``
+    reports forward/backward availability and failure reasons for every FP8
+    storage dtype with FP32, FP16, BF16, and FP8 compute. The probe compiles and
+    executes minimal Triton kernels.
+
+    :param device: CUDA device to probe; non-CUDA devices return an unavailable
+        report.
+    :type device: torch.device | str
+    :return: Device, version, storage-dtype, and compute-dtype probe results.
+    :rtype: dict[str, Any]
+    """
     device = _normalize_cuda_device(device)
     report = {
         "device": str(device),
@@ -372,24 +402,27 @@ def triton_fp8_neuron_capability_report(device) -> dict[str, Any]:
         else None,
         "cuda_device_capability": None,
         "dtypes": {},
+        "compute_dtypes": {},
     }
     if device.type == "cuda" and torch.cuda.is_available():
         report["cuda_device_capability"] = torch.cuda.get_device_capability(device)
 
-    for dtype_name, dtype in _fp8_dtype_candidates().items():
-        if dtype is None:
-            dtype_report = _failure(
-                False, f"{dtype_name} is unavailable in this PyTorch build"
-            )
-        else:
-            dtype_report = _probe(dtype, device)
-        backward_report = (
-            dtype_report
-            if dtype is None
-            else _backward_probe(dtype, device)
-        )
-        report["dtypes"][dtype_name] = {
-            "forward": dtype_report,
-            "backward": backward_report,
-        }
+    dtype_candidates = _fp8_dtype_candidates()
+    for compute_dtype in ("fp32", "fp16", "bf16", "fp8"):
+        compute_report = {}
+        for dtype_name, dtype in dtype_candidates.items():
+            if dtype is None:
+                forward_report = _failure(
+                    False, f"{dtype_name} is unavailable in this PyTorch build"
+                )
+                backward_report = forward_report
+            else:
+                forward_report = _probe(dtype, device, compute_dtype)
+                backward_report = _backward_probe(dtype, device, compute_dtype)
+            compute_report[dtype_name] = {
+                "forward": forward_report,
+                "backward": backward_report,
+            }
+        report["compute_dtypes"][compute_dtype] = compute_report
+    report["dtypes"] = copy.deepcopy(report["compute_dtypes"]["fp32"])
     return report

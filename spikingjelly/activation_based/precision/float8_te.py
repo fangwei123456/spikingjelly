@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 import importlib
 import warnings
 
@@ -18,6 +18,12 @@ from .float8_conv import (
 from .policy import PrecisionPolicy
 
 _SUPPORTED_TE_RECIPES = {"auto", "delayed", "current", "block", "mxfp8"}
+
+
+@contextmanager
+def _cuda_device_autocast_context(device: torch.device, autocast_context):
+    with torch.cuda.device(device), autocast_context:
+        yield
 
 
 def _import_te_pytorch():
@@ -452,6 +458,7 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
         self._resolved_recipe_name: str | None = None
         self._resolved_recipe = None
         self._recipe_resolved = False
+        self._target_device: torch.device | None = None
 
     def describe(self) -> dict:
         return {
@@ -466,10 +473,14 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
         }
 
     def check_capability(self, model, device) -> None:
+        target_device = torch.device(device)
         report = build_capability_report(model, device, self.name)
         self._capability_report = report
         self._annotate_recipe_report(report)
         validate_capability(report)
+        if target_device.type == "cuda" and target_device.index is None:
+            target_device = torch.device("cuda", torch.cuda.current_device())
+        self._target_device = target_device
         if report.get("transformer_engine_installed", False):
             try:
                 te = _import_te_pytorch()
@@ -552,6 +563,12 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
             )
 
     def autocast_context(self):
+        context = self._te_autocast_context()
+        if self._target_device is not None and self._target_device.type == "cuda":
+            return _cuda_device_autocast_context(self._target_device, context)
+        return context
+
+    def _te_autocast_context(self):
         try:
             te = _import_te_pytorch()
         except ImportError:

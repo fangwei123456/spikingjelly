@@ -23,11 +23,11 @@ def _transformer_engine_fp8_status() -> tuple[
 ]:
     try:
         import transformer_engine.pytorch as te
-    except ImportError:
+    except ImportError as exc:
         return (
             False,
             False,
-            "transformer-engine is not installed",
+            f"transformer-engine import failed: {exc}",
             None,
             {},
         )
@@ -333,10 +333,10 @@ def _validate_fp8(report: dict[str, Any]) -> None:
 
 def _validate_fp8_te(report: dict[str, Any]) -> None:
     if not report.get("transformer_engine_installed", False):
-        raise RuntimeError(
-            "precision='fp8-te' requires transformer-engine, but transformer-engine "
-            "is not installed."
+        reason = report.get("te_fp8_unavailable_reason") or (
+            "transformer-engine is not installed."
         )
+        raise RuntimeError(f"precision='fp8-te' is unavailable: {reason}")
     if report["device_type"] != "cuda":
         raise RuntimeError(
             "precision='fp8-te' is only supported on CUDA in the current stage."
