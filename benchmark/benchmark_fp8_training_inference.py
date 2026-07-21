@@ -18,9 +18,13 @@ import torch
 import torch.nn as nn
 
 try:
-    from benchmark.fp8_efficiency import assess_model_efficiency, require_efficiency
+    from benchmark.fp8_efficiency import (
+        assess_model_efficiency,
+        percentile,
+        require_efficiency,
+    )
 except ModuleNotFoundError:
-    from fp8_efficiency import assess_model_efficiency, require_efficiency
+    from fp8_efficiency import assess_model_efficiency, percentile, require_efficiency
 from spikingjelly.activation_based.precision import (
     PrecisionConfig,
     prepare_model_for_precision,
@@ -328,22 +332,9 @@ def _aggregate_precision_trials(
     for metric_name in metric_names:
         values = [float(trial[metric_name]) for trial in trials]
         result[metric_name] = median(values)
-        result[f"{metric_name}_p25"] = _percentile(values, 0.25)
-        result[f"{metric_name}_p75"] = _percentile(values, 0.75)
+        result[f"{metric_name}_p25"] = percentile(values, 0.25)
+        result[f"{metric_name}_p75"] = percentile(values, 0.75)
     return result
-
-
-def _percentile(values: list[float], quantile: float) -> float:
-    if not values:
-        raise ValueError("Cannot compute a percentile from an empty sequence.")
-    if not 0.0 <= quantile <= 1.0:
-        raise ValueError("quantile must be in [0, 1].")
-    ordered = sorted(values)
-    position = (len(ordered) - 1) * quantile
-    lower = int(position)
-    upper = min(lower + 1, len(ordered) - 1)
-    fraction = position - lower
-    return ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
 
 
 def _print_results(results: list[dict[str, Any]], efficiency: dict[str, Any]) -> None:

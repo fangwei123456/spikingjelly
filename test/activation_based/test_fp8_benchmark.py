@@ -19,6 +19,7 @@ from benchmark.benchmark_triton_neuron_kernels import (
 from benchmark.fp8_efficiency import (
     assess_model_efficiency,
     assess_triton_efficiency,
+    percentile,
     require_efficiency,
 )
 
@@ -103,6 +104,14 @@ def test_triton_benchmark_timing_uses_requested_cuda_device(monkeypatch):
     assert result["median_ms"] == pytest.approx(2.0)
     assert entered_devices == [device]
     assert not event_synchronize_calls
+
+
+def test_percentile_rejects_invalid_inputs():
+    assert percentile([3.0, 1.0, 2.0], 0.25) == pytest.approx(1.5)
+    with pytest.raises(ValueError, match="empty sequence"):
+        percentile([], 0.5)
+    with pytest.raises(ValueError, match="quantile"):
+        percentile([1.0], 1.1)
 
 
 def test_aggregate_precision_trials_uses_medians_and_preserves_raw_trials():

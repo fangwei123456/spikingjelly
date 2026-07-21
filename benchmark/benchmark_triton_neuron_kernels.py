@@ -17,10 +17,11 @@ import torch
 try:
     from benchmark.fp8_efficiency import (
         assess_triton_efficiency,
+        percentile,
         require_efficiency,
     )
 except ModuleNotFoundError:
-    from fp8_efficiency import assess_triton_efficiency, require_efficiency
+    from fp8_efficiency import assess_triton_efficiency, percentile, require_efficiency
 from spikingjelly.activation_based import surrogate
 from spikingjelly.activation_based.triton_kernel.fp8_capability import (
     triton_fp8_neuron_capability_report,
@@ -296,24 +297,13 @@ def _measure(
         return {
             "avg_ms": sum(timings) / len(timings),
             "median_ms": median(timings),
-            "p25_ms": _percentile(timings, 0.25),
-            "p75_ms": _percentile(timings, 0.75),
+            "p25_ms": percentile(timings, 0.25),
+            "p75_ms": percentile(timings, 0.75),
             "min_ms": min(timings),
             "max_ms": max(timings),
             "peak_allocated_mb": peak_allocated_mb,
             "peak_reserved_mb": peak_reserved_mb,
         }
-
-
-def _percentile(values: list[float], quantile: float) -> float:
-    if not values:
-        raise ValueError("Cannot compute a percentile from an empty sequence.")
-    ordered = sorted(values)
-    position = (len(ordered) - 1) * quantile
-    lower = int(position)
-    upper = min(lower + 1, len(ordered) - 1)
-    fraction = position - lower
-    return ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
 
 
 def _benchmark_inference(

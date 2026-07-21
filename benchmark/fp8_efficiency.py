@@ -27,6 +27,19 @@ def _row_precision(row: Mapping[str, Any]) -> str:
     return str(row["precision"])
 
 
+def percentile(values: list[float], quantile: float) -> float:
+    if not values:
+        raise ValueError("Cannot compute a percentile from an empty sequence.")
+    if not 0.0 <= quantile <= 1.0:
+        raise ValueError("quantile must be in [0, 1].")
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * quantile
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    fraction = position - lower
+    return ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
+
+
 def assess_model_efficiency(
     results: Iterable[Mapping[str, Any]],
     *,
