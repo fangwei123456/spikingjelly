@@ -87,7 +87,7 @@ def _require_backend_capability(
         _unavailable_backend(mode, str(exc))
     if recipe in {"block", "mxfp8"}:
         availability = report.get("te_recipe_availability") or {}
-        if availability.get(recipe) is not True:
+        if not availability.get(recipe):
             reason = f"Transformer Engine recipe {recipe!r} is unavailable."
             if recipe in _required_recipes():
                 pytest.fail(f"Required FP8 recipe {recipe!r} is unavailable.")
@@ -449,7 +449,7 @@ def test_fp8_backend_training_converges_comparably_to_bf16(mode):
 
 @pytest.mark.parametrize("mode", FP8_MODES)
 def test_fp8_backend_runs_inference_on_second_cuda_device(mode):
-    device = _cuda_device_or_skip(mode)
+    _cuda_device_or_skip(mode)
     if torch.cuda.device_count() < 2:
         pytest.skip("A second CUDA device is required for this smoke test.")
     device = torch.device("cuda", 1)

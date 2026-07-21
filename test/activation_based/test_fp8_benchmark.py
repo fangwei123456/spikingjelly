@@ -244,6 +244,58 @@ def test_assess_model_efficiency_reports_missing_metric():
         )
 
 
+def test_assess_model_efficiency_reports_missing_precision():
+    with pytest.raises(ValueError, match="precision is required"):
+        assess_model_efficiency(
+            [
+                {
+                    "training_samples_per_sec": 100.0,
+                    "inference_samples_per_sec": 200.0,
+                    "training_peak_allocated_mb": 1000.0,
+                    "inference_peak_allocated_mb": 600.0,
+                }
+            ],
+            baseline_precision="bf16",
+            min_training_speedup=1.0,
+            min_inference_speedup=1.0,
+        )
+
+
+def test_assess_triton_efficiency_reports_fp8_group_without_baseline():
+    rows = [
+        {
+            "T": 4,
+            "N": 8,
+            "neuron_type": "if",
+            "process": "inference_forward",
+            "variant": "stable_fp32",
+            "success": True,
+            "median_ms": 2.0,
+            "peak_allocated_mb": 8.0,
+        },
+        {
+            "T": 8,
+            "N": 8,
+            "neuron_type": "if",
+            "process": "inference_forward",
+            "variant": "mp_plan_float8_e4m3fn_fp8",
+            "success": True,
+            "median_ms": 1.0,
+            "peak_allocated_mb": 4.0,
+        },
+    ]
+
+    report = assess_triton_efficiency(rows, min_speedup=1.0)
+
+    assert report["passed"] is False
+    assert report["failures"] == [
+        "T=4 N=8 neuron=if process=inference_forward has no successful FP8 "
+        "prepared-plan result",
+        "T=8 N=8 neuron=if process=inference_forward has no successful "
+        "stable_fp32 baseline",
+    ]
+
+
 def test_assess_model_efficiency_rejects_fp8_baseline():
     with pytest.raises(ValueError, match="must not be an FP8 variant"):
         assess_model_efficiency(

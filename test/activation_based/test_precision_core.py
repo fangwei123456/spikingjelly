@@ -285,6 +285,16 @@ def test_validate_capability_preserves_transformer_engine_import_error():
         validate_capability(report)
 
 
+def test_validate_capability_reports_missing_transformer_engine():
+    report = {
+        "requested_mode": "fp8-te",
+        "transformer_engine_installed": False,
+    }
+
+    with pytest.raises(RuntimeError, match="transformer-engine is not installed"):
+        validate_capability(report)
+
+
 def test_prepare_model_for_precision_warn_falls_back_to_fp32_when_fp8_te_unavailable():
     model = torch.nn.Linear(4, 4)
     with pytest.warns(RuntimeWarning, match="falling back to fp32"):

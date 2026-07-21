@@ -183,7 +183,7 @@ def _commit(explicit_commit: str | None = None) -> str | None:
             stderr=subprocess.DEVNULL,
             text=True,
         ).strip()
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         return None
 
 
@@ -359,9 +359,9 @@ def _print_results(results: list[dict[str, Any]], efficiency: dict[str, Any]) ->
             f"{result['inference_samples_per_sec']:16.1f} "
             f"{result['preparation_ms']:10.3f} "
             f"{result['training_peak_allocated_mb']:9.1f}/"
-            f"{result['training_peak_reserved_mb']:<9.1f} "
+            f"{result['training_peak_reserved_mb']:<10.1f}"
             f"{result['inference_peak_allocated_mb']:9.1f}/"
-            f"{result['inference_peak_reserved_mb']:<9.1f}"
+            f"{result['inference_peak_reserved_mb']:<10.1f}"
         )
     for comparison in efficiency["comparisons"]:
         print(

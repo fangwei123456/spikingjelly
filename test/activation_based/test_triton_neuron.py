@@ -1252,7 +1252,7 @@ def test_mixed_precision_fp8_storage_matches_quantized_reference(
 def test_mixed_precision_fp8_inference_runs_without_saved_intermediates(
     kind, dtype_name
 ):
-    storage_dtype = _fp8_storage_dtype_or_skip(dtype_name, require_backward=True)
+    storage_dtype = _fp8_storage_dtype_or_skip(dtype_name, require_backward=False)
     x = torch.tensor(
         [
             [0.25, 0.50, 0.75, 1.00],
@@ -1401,11 +1401,13 @@ def test_mixed_precision_fp8_matrix_meets_numerical_gates(
         require_backward=False,
     )
     # The execution plan uses the selected dtype for forward and FP32 for backward.
-    _fp8_storage_dtype_or_skip(
-        dtype_name,
-        compute_dtype="fp32",
-        require_backward=True,
-    )
+    if not supports_triton_fp8_neuron_backward(
+        storage_dtype, torch.device("cuda"), compute_dtype="fp32"
+    ):
+        pytest.skip(
+            f"Triton backward does not support {dtype_name} with "
+            "compute_dtype='fp32' on this CUDA device."
+        )
     N = 32
     x = torch.full((T, N), -0.5, device="cuda", dtype=torch.float32)
     x[::4] = 3.0

@@ -333,13 +333,10 @@ def _validate_fp8(report: dict[str, Any]) -> None:
 
 def _validate_fp8_te(report: dict[str, Any]) -> None:
     if not report.get("transformer_engine_installed", False):
-        reason = report.get("te_fp8_unavailable_reason")
-        if reason:
-            raise RuntimeError(f"precision='fp8-te' is unavailable: {reason}")
-        raise RuntimeError(
-            "precision='fp8-te' requires transformer-engine, but transformer-engine "
-            "is not installed."
+        reason = report.get("te_fp8_unavailable_reason") or (
+            "transformer-engine is not installed."
         )
+        raise RuntimeError(f"precision='fp8-te' is unavailable: {reason}")
     if report["device_type"] != "cuda":
         raise RuntimeError(
             "precision='fp8-te' is only supported on CUDA in the current stage."

@@ -21,6 +21,12 @@ def _positive_float(row: Mapping[str, Any], key: str) -> float:
     return value
 
 
+def _row_precision(row: Mapping[str, Any]) -> str:
+    if "precision" not in row:
+        raise ValueError("precision is required.")
+    return str(row["precision"])
+
+
 def assess_model_efficiency(
     results: Iterable[Mapping[str, Any]],
     *,
@@ -41,13 +47,13 @@ def assess_model_efficiency(
             "baseline_precision must not be an FP8 variant, but got "
             f"{baseline_precision!r}."
         )
-    baselines = [row for row in results if row["precision"] == baseline_precision]
+    baselines = [row for row in results if _row_precision(row) == baseline_precision]
     if len(baselines) != 1:
         raise ValueError(
             f"Expected exactly one {baseline_precision!r} baseline, "
             f"but found {len(baselines)}."
         )
-    candidates = [row for row in results if str(row["precision"]).startswith("fp8-")]
+    candidates = [row for row in results if _row_precision(row).startswith("fp8-")]
     if not candidates:
         raise ValueError("At least one FP8 precision result is required.")
 
@@ -60,7 +66,7 @@ def assess_model_efficiency(
     failures = []
 
     for candidate in candidates:
-        precision = str(candidate["precision"])
+        precision = _row_precision(candidate)
         training_speedup = (
             _positive_float(candidate, "training_samples_per_sec") / baseline_training
         )
@@ -188,6 +194,19 @@ def assess_triton_efficiency(
                 "passed": passed,
             }
         )
+
+    baseline_groups = {
+        tuple(row.get(field) for field in group_fields) for row in all_baselines
+    }
+    fp8_groups = {
+        tuple(row.get(field) for field in group_fields)
+        for row in rows
+        if row.get("success") is True
+        and str(row.get("variant", "")).startswith("mp_plan_float8_")
+    }
+    for group in sorted(fp8_groups - baseline_groups, key=repr):
+        label = f"T={group[0]} N={group[1]} neuron={group[2]} process={group[3]}"
+        failures.append(f"{label} has no successful stable_fp32 baseline")
 
     return {
         "baseline_variant": "stable_fp32",
