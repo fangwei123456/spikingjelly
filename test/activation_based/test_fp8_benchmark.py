@@ -26,6 +26,8 @@ from benchmark.fp8_efficiency import (
 def _patch_cuda_timing(monkeypatch):
     active_devices: list[torch.device] = []
     entered_devices: list[torch.device] = []
+    event_synchronize_calls: list[None] = []
+    created_events: list[None] = []
 
     @contextmanager
     def cuda_device(device: torch.device):
@@ -45,12 +47,14 @@ def _patch_cuda_timing(monkeypatch):
         def __init__(self, *, enable_timing: bool):
             assert enable_timing
             assert active_devices
+            created_events.append(None)
 
         def record(self):
             assert active_devices
 
         def synchronize(self):
             assert active_devices
+            event_synchronize_calls.append(None)
 
         def elapsed_time(self, other):
             assert isinstance(other, Event)
@@ -64,30 +68,41 @@ def _patch_cuda_timing(monkeypatch):
     monkeypatch.setattr(torch.cuda, "reset_peak_memory_stats", require_active_device)
     monkeypatch.setattr(torch.cuda, "max_memory_allocated", require_active_device)
     monkeypatch.setattr(torch.cuda, "max_memory_reserved", require_active_device)
-    return entered_devices
+    return entered_devices, event_synchronize_calls, created_events
 
 
 def test_model_benchmark_timing_uses_requested_cuda_device(monkeypatch):
-    entered_devices = _patch_cuda_timing(monkeypatch)
+    entered_devices, event_synchronize_calls, _ = _patch_cuda_timing(monkeypatch)
     device = torch.device("cuda", 1)
 
     elapsed_ms = _cuda_time_ms(device, 2, lambda: None)
 
     assert elapsed_ms == pytest.approx(1.0)
     assert entered_devices == [device]
+    assert len(event_synchronize_calls) == 1
 
 
 def test_triton_benchmark_timing_uses_requested_cuda_device(monkeypatch):
-    entered_devices = _patch_cuda_timing(monkeypatch)
+    entered_devices, event_synchronize_calls, created_events = _patch_cuda_timing(
+        monkeypatch
+    )
     monkeypatch.setattr(triton_neuron_benchmark, "_cuda_sync", lambda device: None)
     device = torch.device("cuda", 1)
+    calls = 0
+
+    def benchmark_fn():
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            assert len(created_events) == 4
 
     result = triton_neuron_benchmark._measure(
-        device=device, repeats=2, warmup=1, fn=lambda: None
+        device=device, repeats=2, warmup=1, fn=benchmark_fn
     )
 
     assert result["median_ms"] == pytest.approx(2.0)
     assert entered_devices == [device]
+    assert not event_synchronize_calls
 
 
 def test_aggregate_precision_trials_uses_medians_and_preserves_raw_trials():

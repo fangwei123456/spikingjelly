@@ -281,14 +281,16 @@ def _measure(
             fn()
         _cuda_sync(device)
         torch.cuda.reset_peak_memory_stats(device)
-        for _ in range(repeats):
-            start = torch.cuda.Event(enable_timing=True)
-            end = torch.cuda.Event(enable_timing=True)
+        starts = [torch.cuda.Event(enable_timing=True) for _ in range(repeats)]
+        ends = [torch.cuda.Event(enable_timing=True) for _ in range(repeats)]
+        for start, end in zip(starts, ends, strict=True):
             start.record()
             fn()
             end.record()
-            end.synchronize()
-            timings.append(start.elapsed_time(end))
+        _cuda_sync(device)
+        timings = [
+            start.elapsed_time(end) for start, end in zip(starts, ends, strict=True)
+        ]
         peak_allocated_mb = torch.cuda.max_memory_allocated(device) / 1024.0 / 1024.0
         peak_reserved_mb = torch.cuda.max_memory_reserved(device) / 1024.0 / 1024.0
         return {
@@ -862,7 +864,6 @@ def main() -> None:
                     finally:
                         if "x" in locals():
                             del x
-                        torch.cuda.empty_cache()
                     rows.append(row)
                     _write_outputs(output_dir, metadata, rows)
                     print(
