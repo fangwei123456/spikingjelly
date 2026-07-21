@@ -63,10 +63,11 @@ Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
   timing quartiles, and allocated/reserved CUDA memory measurements.
 
 - Validated FP8 training and inference on RTX 5090 with PyTorch 2.7.1 / Triton
-  3.3.1 and PyTorch 2.11 / Triton 3.6. The validated boundary is FP8 storage
-  and GEMM with higher-precision scalar computation or accumulation; pure FP8
-  scalar neuron computation is unsupported, and the measurements do not show
-  a universal speed or peak-memory advantage over BF16.
+  3.3.1 and PyTorch 2.11 / Triton 3.6. Triton IF, LIF, and ParametricLIF
+  kernels experimentally support FP8 storage and FP8 forward/backward compute;
+  reduction buffers remain FP32, numerical accuracy is bounded by the hardware
+  tests, and the measurements do not show a universal speed or peak-memory
+  advantage over BF16.
 
 Bug Fixes
 ~~~~~~~~~
