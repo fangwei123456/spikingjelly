@@ -1,9 +1,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from types import MappingProxyType
+from typing import TYPE_CHECKING, List, Mapping, Optional, Tuple, Union
 
 from .topology import SNNDistributedTopology
+
+if TYPE_CHECKING:
+    from torch.distributed.tensor.parallel import ParallelStyle
+
+
+TensorParallelStyle = Union[str, "ParallelStyle"]
+r"""Tensor-parallel style accepted by explicit distributed plans.
+
+**中文**：显式 tensor-parallel plan 接受 style 名称字符串或 PyTorch
+``ParallelStyle`` 对象。
+
+**English**: An explicit tensor-parallel plan accepts either a style-name string
+or a PyTorch ``ParallelStyle`` object.
+"""
 
 try:
     from torch.distributed.fsdp import fully_shard
@@ -62,6 +77,7 @@ class SNNDistributedPlan:
     rationale: Tuple[str, ...]
     notes: Tuple[str, ...]
     tensor_parallel_roots: Optional[Tuple[str, ...]] = None
+    tensor_parallel_plan: Optional[Mapping[str, TensorParallelStyle]] = None
     mesh_shape: Optional[Tuple[int, ...]] = None
     tp_mesh_dim: int = 0
     dp_mesh_dim: Optional[int] = None
@@ -71,6 +87,133 @@ class SNNDistributedPlan:
     pp_layout: Optional[Tuple[int, ...]] = None
     pp_delay_wgrad: bool = False
     experimental_features: DistributedFeatureSet = DistributedFeatureSet()
+
+    def __post_init__(self) -> None:
+        if self.tensor_parallel_plan is not None:
+            object.__setattr__(
+                self,
+                "tensor_parallel_plan",
+                MappingProxyType(dict(self.tensor_parallel_plan)),
+            )
+
+
+SNNDistributedPlan.__init__.__doc__ = r"""Initialize an immutable SNN distributed execution plan.
+
+.. rubric:: API Language
+
+:ref:`中文 <SNNDistributedPlan.__init__-cn>` |
+:ref:`English <SNNDistributedPlan.__init__-en>`
+
+----
+
+.. _SNNDistributedPlan.__init__-cn:
+
+* **中文**
+
+  保存 Analyze -> Plan -> Apply 流程的执行决策。显式
+  ``tensor_parallel_plan`` 会被复制为只读 mapping；其 key 必须是 analysis
+  发现的模块路径。``TDLinear`` 可使用 ``"td_colwise_replicated"`` 或
+  ``"td_rowwise_replicated"``，两者对 TD 激活保持 replicated local tensor。
+
+:param mode: 分布式执行模式。
+:type mode: str
+:param objective: 规划优化目标。
+:type objective: str
+:param topology: 逻辑分布式拓扑。
+:type topology: SNNDistributedTopology
+:param model_family: 模型族 adapter 名称或 ``"generic"``。
+:type model_family: str
+:param backend: 执行后端名称。
+:type backend: str
+:param batch_size: 规划器使用的 batch size。
+:type batch_size: int
+:param optimizer_strategy: 优化器分片策略。
+:type optimizer_strategy: str
+:param memopt_level: 内存优化级别。
+:type memopt_level: int
+:param rationale: 规划理由条目。
+:type rationale: tuple[str, ...]
+:param notes: 分析与规划备注。
+:type notes: tuple[str, ...]
+:param tensor_parallel_roots: 扫描 TP 候选模块的可选根路径。
+:type tensor_parallel_roots: tuple[str, ...] or None
+:param tensor_parallel_plan: 可选的模块路径到 TP style mapping；构造时复制为
+    只读 mapping。
+:type tensor_parallel_plan: Mapping[str, TensorParallelStyle] or None
+:param mesh_shape: 可选的 device mesh shape。
+:type mesh_shape: tuple[int, ...] or None
+:param tp_mesh_dim: tensor-parallel mesh 维度。
+:type tp_mesh_dim: int
+:param dp_mesh_dim: 可选的 data-parallel mesh 维度。
+:type dp_mesh_dim: int or None
+:param pp_microbatches: 可选的 pipeline microbatch 数量。
+:type pp_microbatches: int or None
+:param pp_schedule: pipeline 调度名称。
+:type pp_schedule: str
+:param pp_virtual_stages: virtual pipeline stage 数量。
+:type pp_virtual_stages: int
+:param pp_layout: 可选的 pipeline stage 布局。
+:type pp_layout: tuple[int, ...] or None
+:param pp_delay_wgrad: 是否延迟计算 pipeline weight gradient。
+:type pp_delay_wgrad: bool
+:param experimental_features: 可选分布式行为的功能开关。
+:type experimental_features: DistributedFeatureSet
+
+----
+
+.. _SNNDistributedPlan.__init__-en:
+
+* **English**
+
+  Store the execution decision produced by the Analyze -> Plan -> Apply flow.
+  An explicit ``tensor_parallel_plan`` is copied into a read-only mapping, and
+  its keys must be module paths found by analysis. ``TDLinear`` accepts
+  ``"td_colwise_replicated"`` and ``"td_rowwise_replicated"``; both retain
+  replicated local TD activations.
+
+:param mode: Distributed execution mode.
+:type mode: str
+:param objective: Planning objective.
+:type objective: str
+:param topology: Logical distributed topology.
+:type topology: SNNDistributedTopology
+:param model_family: Model-family adapter name or ``"generic"``.
+:type model_family: str
+:param backend: Execution backend name.
+:type backend: str
+:param batch_size: Batch size used by the planner.
+:type batch_size: int
+:param optimizer_strategy: Optimizer sharding strategy.
+:type optimizer_strategy: str
+:param memopt_level: Memory-optimization level.
+:type memopt_level: int
+:param rationale: Planner rationale entries.
+:type rationale: tuple[str, ...]
+:param notes: Analysis and planning notes.
+:type notes: tuple[str, ...]
+:param tensor_parallel_roots: Optional roots scanned for TP candidates.
+:type tensor_parallel_roots: tuple[str, ...] or None
+:param tensor_parallel_plan: Optional explicit module-path to TP-style mapping.
+:type tensor_parallel_plan: Mapping[str, TensorParallelStyle] or None
+:param mesh_shape: Optional device-mesh shape.
+:type mesh_shape: tuple[int, ...] or None
+:param tp_mesh_dim: Tensor-parallel mesh dimension.
+:type tp_mesh_dim: int
+:param dp_mesh_dim: Optional data-parallel mesh dimension.
+:type dp_mesh_dim: int or None
+:param pp_microbatches: Optional pipeline microbatch count.
+:type pp_microbatches: int or None
+:param pp_schedule: Pipeline schedule name.
+:type pp_schedule: str
+:param pp_virtual_stages: Number of virtual pipeline stages.
+:type pp_virtual_stages: int
+:param pp_layout: Optional pipeline-stage layout.
+:type pp_layout: tuple[int, ...] or None
+:param pp_delay_wgrad: Whether pipeline weight-gradient computation is delayed.
+:type pp_delay_wgrad: bool
+:param experimental_features: Feature gates for optional distributed behavior.
+:type experimental_features: DistributedFeatureSet
+"""
 
 
 @dataclass(frozen=True)

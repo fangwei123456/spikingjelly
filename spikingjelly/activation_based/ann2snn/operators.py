@@ -13,7 +13,9 @@ __all__ = [
     "TDModule",
     "TDSoftmax",
     "TDLayerNorm",
+    "TDRMSNorm",
     "TDGELU",
+    "TDSiLU",
     "TDLinear",
     "TDConv2d",
     "SNNMatrixOperator",
@@ -198,7 +200,7 @@ class TDModule(base.MemoryModule):
             y_seq = torch.empty_like(y_cum_seq)
             y_seq[0] = y_cum_seq[0] - self.y_cum
             y_seq[1:] = y_cum_seq[1:] - y_cum_seq[:-1]
-        self.y_cum = y_cum_seq[-1]
+        self.y_cum = y_cum_seq[-1].clone()
         return y_seq
 
     def _td_sequence_forward(self, input_seqs: Tuple[torch.Tensor, ...], ann_forward):
@@ -234,7 +236,7 @@ class TDModule(base.MemoryModule):
 
         y_cum_seq = ann_forward(*cum_seqs)
         y_seq = self._diff_sequence_output(y_cum_seq)
-        final_inputs = tuple(x_cum_seq[-1] for x_cum_seq in cum_seqs)
+        final_inputs = tuple(x_cum_seq[-1].clone() for x_cum_seq in cum_seqs)
         self.x_cum = final_inputs[0] if len(final_inputs) == 1 else final_inputs
         return y_seq
 
@@ -761,6 +763,265 @@ class TDLayerNorm(TDModule):
         )
 
 
+class TDRMSNorm(TDModule):
+    def __init__(
+        self,
+        normalized_shape: Union[int, Sequence[int], torch.Size],
+        eps: Optional[float] = None,
+        elementwise_affine: bool = True,
+        device: Optional[Union[torch.device, str]] = None,
+        dtype: Optional[torch.dtype] = None,
+        step_mode: str = "m",
+    ) -> None:
+        r"""
+        .. rubric:: API Language
+
+        :ref:`中文 <TDRMSNorm.__init__-cn>` |
+        :ref:`English <TDRMSNorm.__init__-en>`
+
+        ----
+
+        .. _TDRMSNorm.__init__-cn:
+
+        * **中文**
+
+        Temporal-difference (TD) RMSNorm 算子。``step_mode="m"`` 接收形状
+        为 ``[T, ...]`` 的完整时间差分序列，先沿时间累积，对每个累积输入执行
+        :func:`torch.nn.functional.rms_norm`，再返回输出的时间差分。
+        ``step_mode="s"`` 接收单个时间步并维护累积状态。输出是可正可负的浮点
+        差分，不是二值脉冲或 fully spike-driven RMSNorm。独立序列之间必须调用
+        ``reset``。算子由 PyTorch 可微操作组成，支持 autograd，device 和 dtype
+        约束与 :class:`torch.nn.RMSNorm` 一致。
+
+        :param normalized_shape: 需要归一化的输入尾部形状。
+        :type normalized_shape: int or Sequence[int] or torch.Size
+        :param eps: 数值稳定项；``None`` 使用 PyTorch 基于输入 dtype 的默认值。
+        :type eps: Optional[float]
+        :param elementwise_affine: 是否使用可学习的逐元素 weight。
+        :type elementwise_affine: bool
+        :param device: 参数初始化设备。
+        :type device: torch.device or str or None
+        :param dtype: 参数初始化 dtype。
+        :type dtype: torch.dtype or None
+        :param step_mode: 步进模式，``"s"`` 或 ``"m"``。
+        :type step_mode: str
+        :raises ValueError: 若 ``step_mode`` 不是 ``"s"`` 或 ``"m"``。
+
+        ----
+
+        .. _TDRMSNorm.__init__-en:
+
+        * **English**
+
+        Temporal-difference (TD) RMSNorm operator. With ``step_mode="m"``, it
+        accepts a complete differential sequence with shape ``[T, ...]``,
+        accumulates the sequence over time, applies
+        :func:`torch.nn.functional.rms_norm` to every cumulative input, and
+        returns temporal differences of those outputs. With ``step_mode="s"``,
+        it accepts one differential step and maintains cumulative state. Outputs
+        are floating-point differences that may be negative; they are not binary
+        spikes or a fully spike-driven RMSNorm. Call ``reset`` between
+        independent sequences. The operator consists of differentiable PyTorch
+        operations, supports autograd, and follows :class:`torch.nn.RMSNorm`
+        device and dtype constraints.
+
+        :param normalized_shape: Trailing input shape to normalize.
+        :type normalized_shape: int or Sequence[int] or torch.Size
+        :param eps: Numerical stability term. ``None`` uses PyTorch's input-dtype
+            default.
+        :type eps: Optional[float]
+        :param elementwise_affine: Whether to use a learnable elementwise weight.
+        :type elementwise_affine: bool
+        :param device: Parameter initialization device.
+        :type device: torch.device or str or None
+        :param dtype: Parameter initialization dtype.
+        :type dtype: torch.dtype or None
+        :param step_mode: Step mode, ``"s"`` or ``"m"``.
+        :type step_mode: str
+        :raises ValueError: If ``step_mode`` is neither ``"s"`` nor ``"m"``.
+        """
+        super().__init__(step_mode)
+        if isinstance(normalized_shape, int):
+            normalized_shape = (normalized_shape,)
+        else:
+            normalized_shape = tuple(normalized_shape)
+        self.normalized_shape = normalized_shape
+        self.eps = eps
+        self.elementwise_affine = elementwise_affine
+        if elementwise_affine:
+            self.weight = nn.Parameter(
+                torch.empty(self.normalized_shape, device=device, dtype=dtype)
+            )
+        else:
+            self.register_parameter("weight", None)
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        r"""
+        **API Language** - 中文 | English
+
+        将可学习的 RMSNorm weight 重置为 1。
+
+        Reset the learnable RMSNorm weight to one.
+        """
+        if self.weight is not None:
+            nn.init.ones_(self.weight)
+
+    def ann_forward(self, x: torch.Tensor) -> torch.Tensor:
+        r"""
+        **API Language** - 中文 | English
+
+        对普通非时间序列输入执行 RMSNorm，不读取或修改 TD memory。
+
+        Apply RMSNorm to an ordinary non-temporal input without reading or
+        modifying TD memory.
+
+        :param x: 尾部形状匹配 ``normalized_shape`` 的输入张量。 / Input tensor
+            whose trailing shape matches ``normalized_shape``.
+        :type x: torch.Tensor
+        :return: RMSNorm 输出，形状、device 和 dtype 与输入一致。 / RMSNorm
+            output with the same shape, device, and dtype as the input.
+        :rtype: torch.Tensor
+        :raises RuntimeError: 若输入尾部形状与 ``normalized_shape`` 不匹配。 /
+            If the input trailing shape does not match ``normalized_shape``.
+        """
+        return F.rms_norm(x, self.normalized_shape, self.weight, self.eps)
+
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        r"""
+        对完整时间序列执行 TD RMSNorm。
+        Apply TD RMSNorm to a complete time sequence.
+
+        :param x_seq: 输入时间差分序列，形状为 ``[T, ...]``，``T > 0``，尾部
+            形状必须匹配 ``normalized_shape``。 / Input differential sequence
+            with shape ``[T, ...]`` and ``T > 0`` whose trailing shape matches
+            ``normalized_shape``.
+        :type x_seq: torch.Tensor
+        :return: 与输入形状相同的 TD RMSNorm 差分序列。 / TD RMSNorm
+            differential sequence with the same shape as the input.
+        :rtype: torch.Tensor
+        :raises ValueError: 若时间维为空、输入维数不足或尾部形状不匹配。 / If
+            the time dimension is empty, rank is insufficient, or the trailing
+            shape does not match.
+        """
+        _check_time_sequence(x_seq, "TDRMSNorm")
+        if len(self.normalized_shape) > x_seq.dim() - 1:
+            trailing_shape = tuple(x_seq.shape[1:])
+        else:
+            trailing_shape = tuple(x_seq.shape[-len(self.normalized_shape) :])
+        if trailing_shape != self.normalized_shape:
+            raise ValueError(
+                "TDRMSNorm expects the trailing shape of x_seq to match "
+                f"normalized_shape={self.normalized_shape}, but got "
+                f"{trailing_shape}."
+            )
+        return self._td_sequence_forward(
+            (x_seq,),
+            lambda x_cum: F.rms_norm(
+                x_cum,
+                self.normalized_shape,
+                self.weight,
+                self.eps,
+            ),
+        )
+
+    def extra_repr(self) -> str:
+        r"""
+        **API Language** - 中文 | English
+
+        返回用于 ``repr`` 的归一化形状、epsilon 和 affine 配置。
+
+        Return the normalized shape, epsilon, and affine configuration used by
+        ``repr``.
+
+        :return: 模块配置字符串。 / Module configuration string.
+        :rtype: str
+        """
+        return (
+            f"{self.normalized_shape}, eps={self.eps}, "
+            f"elementwise_affine={self.elementwise_affine}"
+        )
+
+
+class TDSiLU(TDModule):
+    def __init__(self, step_mode: str = "m") -> None:
+        r"""
+        .. rubric:: API Language
+
+        :ref:`中文 <TDSiLU.__init__-cn>` |
+        :ref:`English <TDSiLU.__init__-en>`
+
+        ----
+
+        .. _TDSiLU.__init__-cn:
+
+        * **中文**
+
+        Temporal-difference (TD) SiLU 算子。多步模式先累积输入，对每个累积
+        输入执行 :func:`torch.nn.functional.silu`，再返回输出差分；单步模式
+        维护相同的跨时间状态。输出是可正可负的浮点差分，不是二值脉冲或 fully
+        spike-driven SiLU。独立序列之间必须调用 ``reset``。该算子支持 PyTorch
+        autograd，device 和 dtype 约束与 :func:`torch.nn.functional.silu` 一致。
+
+        :param step_mode: 步进模式，``"s"`` 或 ``"m"``。
+        :type step_mode: str
+        :raises ValueError: 若 ``step_mode`` 不是 ``"s"`` 或 ``"m"``。
+
+        ----
+
+        .. _TDSiLU.__init__-en:
+
+        * **English**
+
+        Temporal-difference (TD) SiLU operator. Multi-step mode accumulates the
+        input, applies :func:`torch.nn.functional.silu` to every cumulative
+        input, and returns output differences; single-step mode maintains the
+        same temporal state. Outputs are floating-point differences that may be
+        negative, not binary spikes or a fully spike-driven SiLU. Call ``reset``
+        between independent sequences. The operator supports PyTorch autograd
+        and follows :func:`torch.nn.functional.silu` device and dtype constraints.
+
+        :param step_mode: Step mode, ``"s"`` or ``"m"``.
+        :type step_mode: str
+        :raises ValueError: If ``step_mode`` is neither ``"s"`` nor ``"m"``.
+        """
+        super().__init__(step_mode)
+
+    def ann_forward(self, x: torch.Tensor) -> torch.Tensor:
+        r"""
+        **API Language** - 中文 | English
+
+        对普通非时间序列输入执行 SiLU，不读取或修改 TD memory。
+
+        Apply SiLU to an ordinary non-temporal input without reading or
+        modifying TD memory.
+
+        :param x: 任意形状的浮点输入张量。 / Floating-point input tensor of any
+            shape.
+        :type x: torch.Tensor
+        :return: SiLU 输出，形状、device 和 dtype 与输入一致。 / SiLU output
+            with the same shape, device, and dtype as the input.
+        :rtype: torch.Tensor
+        """
+        return F.silu(x)
+
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        r"""
+        对完整时间序列执行 TD SiLU。 / Apply TD SiLU to a complete sequence.
+
+        :param x_seq: 形状为 ``[T, ...]`` 且 ``T > 0`` 的输入差分序列。 /
+            Input differential sequence with shape ``[T, ...]`` and ``T > 0``.
+        :type x_seq: torch.Tensor
+        :return: 与输入形状相同的 TD SiLU 差分序列。 / TD SiLU differential
+            sequence with the same shape as the input.
+        :rtype: torch.Tensor
+        :raises ValueError: 若输入维数不足或时间维为空。 / If input rank is
+            insufficient or the time dimension is empty.
+        """
+        _check_time_sequence(x_seq, "TDSiLU")
+        return self._td_sequence_forward((x_seq,), F.silu)
+
+
 class TDGELU(TDModule):
     def __init__(
         self,
@@ -1183,9 +1444,7 @@ class TDLinear(TDModule):
         """
         _check_time_sequence(x_seq, "TDLinear")
 
-        return self._td_sequence_forward(
-            (x_seq,), lambda x_cum: F.linear(x_cum, self.weight, self.bias)
-        )
+        return self._td_sequence_forward((x_seq,), self.ann_forward)
 
     def extra_repr(self) -> str:
         return (

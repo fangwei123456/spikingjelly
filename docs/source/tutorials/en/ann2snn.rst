@@ -10,7 +10,7 @@ Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https:/
     Current ANN2SNN tutorials are split by conversion workflow:
 
     #. This page covers the current FX graph Recipe API for rate-coded CNN conversion: ``RateCodingRecipe`` / ``LocalThresholdBalancingRecipe`` define the algorithm, and ``Converter`` (the compatibility name for ``FXConverter``) executes it.
-    #. :doc:`Transformer ANN2SNN conversion <ann2snn_transformer>` covers ``STATransformerRecipe`` and ``SpikeZIPTFQANNRecipe`` for Transformer models.
+    #. :doc:`Transformer ANN2SNN conversion <ann2snn_transformer>` covers ``STATransformerRecipe``, ``SpikeZIPTFQANNRecipe``, and offline multi-step ``Qwen2SNNRecipe`` conversion.
 
     Legacy API tutorials remain available:
 
@@ -21,7 +21,7 @@ This tutorial focuses on ``spikingjelly.activation_based.ann2snn``. It shows how
 
 ANN2SNN API references are available `here <https://spikingjelly.readthedocs.io/zh_CN/latest/APIs/spikingjelly.activation_based.ann2snn.html>`_.
 
-The rate-coding path covered on this page is based on ``torch.fx``. ``torch.fx`` traces ``nn.Module`` instances into a graph representation, which is then transformed by ANN2SNN FX recipes. ANN2SNN also provides ``ModuleConverter`` for conversions that directly replace an ``nn.Module`` tree without FX tracing, such as SpikeZIP; see the SpikeZIP section in the Transformer ANN2SNN tutorial for that path.
+The rate-coding path covered on this page is based on ``torch.fx``. ``torch.fx`` traces ``nn.Module`` instances into a graph representation, which is then transformed by ANN2SNN FX recipes. ANN2SNN also provides ``ModuleConverter`` for conversions that directly replace an ``nn.Module`` tree without FX tracing, such as SpikeZIP and Qwen2; see the Transformer ANN2SNN tutorial for those paths.
 
 Theoretical basis of ANN2SNN
 ----------------------------

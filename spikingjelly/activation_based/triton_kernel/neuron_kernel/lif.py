@@ -1190,13 +1190,16 @@ def _setup_context(ctx, inputs, output):
 
 def _multistep_lif_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
     (h_seq,) = ctx.saved_tensors
+    grad_s_seq = grad_s_seq.contiguous()
+    grad_v_seq = grad_v_seq.contiguous()
+    h_seq = h_seq.contiguous()
     grad_x_seq = torch.empty_like(grad_s_seq)
     grad_v_init = torch.empty_like(h_seq[0])
     dtype = grad_s_seq.dtype
     _launch_lif_backward_kernel(
-        grad_s_seq.contiguous(),
-        grad_v_seq.contiguous(),
-        h_seq.contiguous(),
+        grad_s_seq,
+        grad_v_seq,
+        h_seq,
         grad_x_seq,
         grad_v_init,
         tau=ctx.tau,

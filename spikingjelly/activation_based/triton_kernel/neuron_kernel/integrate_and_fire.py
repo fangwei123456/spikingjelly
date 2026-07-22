@@ -1112,15 +1112,18 @@ def _multistep_if_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
     if h_seq.numel() == 0:
         raise RuntimeError("backward called without saved intermediates")
 
+    grad_s_seq = grad_s_seq.contiguous()
+    grad_v_seq = grad_v_seq.contiguous()
+    h_seq = h_seq.contiguous()
     grad_x_seq = torch.empty_like(grad_s_seq)
     grad_v_init = torch.empty_like(h_seq[0])
     dtype = grad_s_seq.dtype
     if dtype not in type_dict:
         raise NotImplementedError(dtype)
     _launch_if_backward_kernel(
-        grad_s_seq.contiguous(),
-        grad_v_seq.contiguous(),
-        h_seq.contiguous(),
+        grad_s_seq,
+        grad_v_seq,
+        h_seq,
         grad_x_seq,
         grad_v_init,
         v_threshold=ctx.v_threshold,

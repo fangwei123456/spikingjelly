@@ -34,15 +34,21 @@ from .converter import Converter, FXConverter, ModuleConverter
 from .delay import estimate_delay_start
 from .factories import HookFactory, NeuronFactory
 from .modules import ChannelVoltageScaler
+from .qcfs import SignedQCFSSequenceEncoder
 from .recipes import (
     ConversionRecipe,
     FXConversionRecipe,
     LocalThresholdBalancingRecipe,
     ModuleConversionRecipe,
+    Qwen2SNNCalibration,
+    Qwen2SNNConfig,
+    Qwen2SNNModel,
+    Qwen2SNNRecipe,
     RateCodingRecipe,
     SpikeZIPTFQANNRecipe,
     STATransformerRecipe,
     TransformerTDEquivalentRecipe,
+    calibrate_qwen2_snn,
 )
 from .rules import ReLURule
 from .threshold import ThresholdOptimizer
@@ -55,12 +61,18 @@ __all__ = [
     "ConversionRecipe",
     "FXConversionRecipe",
     "ModuleConversionRecipe",
+    "Qwen2SNNCalibration",
+    "Qwen2SNNConfig",
+    "Qwen2SNNModel",
+    "Qwen2SNNRecipe",
+    "calibrate_qwen2_snn",
     "RateCodingRecipe",
     "LocalThresholdBalancingRecipe",
     "SpikeZIPTFQANNRecipe",
     "STATransformerRecipe",
     "TransformerTDEquivalentRecipe",
     "ChannelVoltageScaler",
+    "SignedQCFSSequenceEncoder",
     "estimate_delay_start",
     "download_url",
     "ReLURule",

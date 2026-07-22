@@ -9,7 +9,7 @@ English version: :doc:`../en/ann2snn`
     当前 ANN2SNN 教程按转换流程拆分：
 
     #. 本页介绍当前 Recipe API 中基于 FX graph 的 rate-coded CNN 转换：``RateCodingRecipe`` / ``LocalThresholdBalancingRecipe`` 定义算法，``Converter`` （即 ``FXConverter`` 的兼容名）执行转换。
-    #. :doc:`Transformer ANN2SNN 转换 <ann2snn_transformer>` 介绍面向 Transformer 模型的 ``STATransformerRecipe`` 和 ``SpikeZIPTFQANNRecipe``。
+    #. :doc:`Transformer ANN2SNN 转换 <ann2snn_transformer>` 介绍面向 Transformer 模型的 ``STATransformerRecipe``、``SpikeZIPTFQANNRecipe`` 和离线多步 ``Qwen2SNNRecipe``。
 
     旧 API 教程仍可查阅：
 
@@ -20,7 +20,7 @@ English version: :doc:`../en/ann2snn`
 
 相关 API 见 `API 参考 <https://spikingjelly.readthedocs.io/zh_CN/latest/APIs/spikingjelly.activation_based.ann2snn.html>`_。
 
-本页介绍的 rate-coding 路径基于 ``torch.fx``。``torch.fx`` 会将 ``nn.Module`` 实例 trace 为计算图表示，然后由 ANN2SNN FX recipe 对该计算图进行变换。ANN2SNN 也提供不 trace FX graph 的 ``ModuleConverter``，用于 SpikeZIP 这类直接替换 ``nn.Module`` tree 的转换；该路径见 Transformer ANN2SNN 教程中的 SpikeZIP 示例。
+本页介绍的 rate-coding 路径基于 ``torch.fx``。``torch.fx`` 会将 ``nn.Module`` 实例 trace 为计算图表示，然后由 ANN2SNN FX recipe 对该计算图进行变换。ANN2SNN 也提供不 trace FX graph 的 ``ModuleConverter``，用于 SpikeZIP 和 Qwen2 这类直接替换 ``nn.Module`` tree 的转换；这些路径见 Transformer ANN2SNN 教程。
 
 ANN转换SNN的理论基础
 --------------------

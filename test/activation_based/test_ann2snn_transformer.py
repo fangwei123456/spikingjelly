@@ -29,6 +29,8 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDGELU,
     TDLayerNorm,
     TDLinear,
+    TDRMSNorm,
+    TDSiLU,
     TDMultiheadAttention,
     TDScaledDotProductAttention,
     TDSoftmax,
@@ -2339,6 +2341,59 @@ def test_converter_transformer_block_autograd_smoke():
     for parameter in converted.parameters():
         assert parameter.grad is not None
         assert torch.isfinite(parameter.grad).all()
+
+
+def test_transformer_td_recipe_converts_rms_norm_and_silu_paths():
+    class RMSNormSiLUBlock(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.norm = nn.RMSNorm(8, eps=1e-6)
+            self.act = nn.SiLU()
+
+        def forward(self, x):
+            return F.silu(self.act(self.norm(x)))
+
+    block = RMSNormSiLUBlock().eval()
+    converted = Converter(recipe=TransformerTDEquivalentRecipe()).convert(block)
+    modules = dict(converted.named_modules())
+    x_seq = torch.randn(4, 2, 3, 8)
+
+    y_seq = converted(x_seq)
+    expected = block(x_seq.cumsum(dim=0))
+
+    assert isinstance(modules["norm"], TDRMSNorm)
+    assert isinstance(modules["act"], TDSiLU)
+    assert sum(isinstance(module, TDSiLU) for module in modules.values()) == 2
+    assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+
+
+def test_rms_norm_and_silu_conversion_preserves_module_properties():
+    class RMSNormSiLUBlock(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.norm = nn.RMSNorm(6, eps=2e-6, dtype=torch.float64)
+            self.act = nn.SiLU()
+
+        def forward(self, x):
+            return F.silu(self.act(self.norm(x)))
+
+    block = RMSNormSiLUBlock().train()
+    block.norm.weight.requires_grad_(False)
+    converted = Converter(recipe=TransformerTDEquivalentRecipe()).convert(block)
+    modules = dict(converted.named_modules())
+
+    assert converted.training
+    assert modules["norm"].training
+    assert modules["act"].training
+    assert modules["norm"].weight.dtype == torch.float64
+    assert modules["norm"].weight.device.type == "cpu"
+    assert modules["norm"].weight.requires_grad is False
+    assert modules["norm"].eps == 2e-6
+    functional_silu = [
+        module for name, module in modules.items() if name.startswith("td_silu")
+    ]
+    assert len(functional_silu) == 1
+    assert functional_silu[0].training
 
 
 def test_sta_transformer_recipe_converts_affine_layers_and_runs_inner_steps():

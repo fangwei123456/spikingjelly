@@ -2,6 +2,9 @@
 from spikingjelly.activation_based.distributed.tensor_parallel.state import (
     _has_tensor_shard_input_validator,
 )
+from spikingjelly.activation_based.distributed.adapters import (
+    base as distributed_adapter_base,
+)
 
 from test.activation_based._distributed_dtensor_test_support import *
 
@@ -253,6 +256,77 @@ def test_apply_returns_unified_runtime_single_rank():
         assert runtime.kind == "eager"
         assert runtime.mesh is None  # mode is "none", no parallel strategy active
         assert runtime.plan.mode == distributed_plan.mode
+
+
+def test_apply_passes_explicit_tensor_parallel_plan_and_disables_auto_plan(
+    monkeypatch,
+):
+    model = nn.Sequential(TDLinear(4, 6, bias=False))
+    analysis = analyze(model)
+    distributed_plan = plan(
+        analysis=analysis,
+        objective="capacity",
+        topology={"tp": 1},
+        backend="gloo",
+        batch_size=1,
+        mode="tp",
+        tensor_parallel_plan={"0": "td_colwise_replicated"},
+    )
+    captured = {}
+
+    def fake_configure(candidate, config):
+        captured["config"] = config
+        return candidate, object(), analysis
+
+    monkeypatch.setattr(distributed_api, "configure_snn_distributed", fake_configure)
+    runtime = distributed_api.apply(
+        model=model,
+        plan=distributed_plan,
+        device_type="cpu",
+    )
+
+    assert dict(captured["config"].tensor_parallel_plan) == {
+        "0": "td_colwise_replicated"
+    }
+    assert captured["config"].auto_tensor_parallel is False
+    assert runtime.model is model
+
+
+def test_adapter_runtime_passes_explicit_tp_plan_and_disables_auto(monkeypatch):
+    model = nn.Sequential(TDLinear(4, 6, bias=False))
+    analysis = analyze(model)
+    distributed_plan = plan(
+        analysis=analysis,
+        objective="capacity",
+        topology={"tp": 1},
+        backend="gloo",
+        batch_size=1,
+        mode="tp",
+        tensor_parallel_plan={"0": "td_colwise_replicated"},
+    )
+    captured = {}
+
+    def fake_build_eager_config(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace()
+
+    monkeypatch.setattr(
+        distributed_adapter_base, "build_eager_config", fake_build_eager_config
+    )
+    monkeypatch.setattr(
+        distributed_adapter_base,
+        "configure_snn_distributed",
+        lambda candidate, config: (candidate, object(), analysis),
+    )
+
+    distributed_adapter_base.build_distributed_runtime(
+        model,
+        distributed_plan,
+        device_type="cpu",
+    )
+
+    assert dict(captured["tensor_parallel_plan"]) == {"0": "td_colwise_replicated"}
+    assert captured["auto_tensor_parallel"] is False
 
 
 def test_configure_snn_distributed_mesh_shape_alone_without_strategy_returns_none_mesh():

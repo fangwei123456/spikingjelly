@@ -5,13 +5,14 @@ Author: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_
 
 中文版：:doc:`../cn/ann2snn_transformer`
 
-This page introduces Transformer-oriented ANN2SNN paths in ``spikingjelly.activation_based.ann2snn``, including the ``TransformerTDEquivalentRecipe`` baseline, ``STATransformerRecipe`` based on Spatio-Temporal Approximation (STA) [#sta]_, and ``SpikeZIPTFQANNRecipe`` for SpikeZIP-compatible QANNs [#spikezip]_. For classical ReLU-to-IFNode rate-coding conversion on CNNs, see :doc:`ann2snn`.
+This page introduces Transformer-oriented ANN2SNN paths in ``spikingjelly.activation_based.ann2snn``, including the ``TransformerTDEquivalentRecipe`` baseline, ``STATransformerRecipe`` based on Spatio-Temporal Approximation (STA) [#sta]_, ``SpikeZIPTFQANNRecipe`` for SpikeZIP-compatible QANNs [#spikezip]_, and calibration-driven ``Qwen2SNNRecipe`` conversion. For classical ReLU-to-IFNode rate-coding conversion on CNNs, see :doc:`ann2snn`.
 
-This page orders three Transformer ANN2SNN paths from the simplest to the most specialized:
+This page orders four Transformer ANN2SNN paths from the simplest to the most specialized:
 
 * **Path 1: TransformerTDEquivalentRecipe baseline**. This is the most direct TD-equivalent operator replacement path. The BERT SST-2 example shows the conversion boundary for language classification models after the embedding output.
 * **Path 2: Spatio-Temporal Approximation (STA) Transformer conversion**. This is the model-level enhanced path implemented by ``STATransformerRecipe``. It keeps the cumulative-difference and explicit step-mode readout idea, then adds dataloader calibration and spike encoders. This page reports a full ViT-B/16 ImageNet result.
 * **Path 3: SpikeZIP QANN-to-SNN conversion**. This is the ``SpikeZIPTFQANNRecipe`` module-tree path. The input must already be a SpikeZIP-compatible QANN. This page gives a synthetic RoBERTa parity check and a ViT-Small ImageNet reproducibility entry point.
+* **Path 4: Qwen2 offline multi-step conversion**. ``Qwen2SNNRecipe`` calibrates a Hugging Face Qwen2 causal LM and converts every decoder block with current SpikingJelly TD operators and signed activation-aware IF neurons.
 
 .. warning::
 
@@ -33,7 +34,7 @@ The later ``STATransformerRecipe`` can be understood as a model-level enhancemen
 TD-equivalent Online Differences
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Transformer models contain affine projections, LayerNorm, GELU, attention, residual additions, masks, and tensor constants. A ReLU-to-IFNode rate-coding rule cannot cover these components directly, so Transformer conversion needs a different route. A common method is temporal differencing.
+Transformer models contain affine projections, LayerNorm or RMSNorm, GELU or SiLU, attention, residual additions, masks, and tensor constants. A ReLU-to-IFNode rate-coding rule cannot cover these components directly, so Transformer conversion needs a different route. A common method is temporal differencing.
 
 For an ordinary ANN input :math:`x`, embed it as the following differential input sequence:
 
@@ -79,7 +80,7 @@ For ordinary ANN inference on one sample :math:`x`, the common differential inpu
 BERT SST-2 Example
 ^^^^^^^^^^^^^^^^^^
 
-``TransformerTDEquivalentRecipe`` converts common Transformer core operators into TD-equivalent stateful modules, so the converted model can run single-step or multi-step inference with the SpikingJelly ``step_mode`` contract. This example uses BERT-style SST-2 classification and places the conversion boundary after the embedding output: the original Hugging Face BERT embedding layer still consumes integer ``input_ids``, while the ANN2SNN graph starts from floating-point ``embedding_output`` and ``extended_attention_mask`` and covers the encoder, pooler, dropout, and classifier wrapper. The runnable example is ``spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_td_equivalent``.
+``TransformerTDEquivalentRecipe`` converts common Transformer core operators into TD-equivalent stateful modules, so the converted model can run single-step or multi-step inference with the SpikingJelly ``step_mode`` contract. In addition to the BERT operators below, the recipe converts ``nn.RMSNorm`` to ``TDRMSNorm`` and both ``nn.SiLU`` and ``torch.nn.functional.silu`` to ``TDSiLU``. Their outputs are floating-point temporal differences, not binary spikes. This example uses BERT-style SST-2 classification and places the conversion boundary after the embedding output: the original Hugging Face BERT embedding layer still consumes integer ``input_ids``, while the ANN2SNN graph starts from floating-point ``embedding_output`` and ``extended_attention_mask`` and covers the encoder, pooler, dropout, and classifier wrapper. The runnable example is ``spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_td_equivalent``.
 
 Hugging Face packages are optional; install them only when running this example:
 
@@ -460,6 +461,149 @@ The full validation result below was measured on ``g2`` with an NVIDIA A100-SXM4
       - ``step_mode="m"``, ``stbif_backend="triton"``
 
 The Top-1 difference is ``+0.090`` percentage points, and the Top-1 prediction agreement is ``97.34%``. QANN inference took ``79.20`` seconds; SNN inference took ``3719.15`` seconds (``61.99`` minutes), using ``snn_batch_size=4`` and peaking at ``25.63`` GiB of allocated CUDA memory. In the benchmark output, ``parity_pass=false`` because that field checks logits with ``torch.allclose(snn_logits, qann_logits, atol=parity_atol, rtol=1e-5)``; this run used ``parity_atol=1e-4``.
+
+Path 4: Qwen2 Offline Multi-step Conversion
+-------------------------------------------
+
+``Qwen2SNNRecipe`` is a ``ModuleConverter`` recipe for evaluation-mode Hugging
+Face Qwen2 causal LMs. Install the pinned optional dependency with
+``uv pip install -e '.[qwen]'``. Calibration produces a reusable
+``Qwen2SNNCalibration`` artifact; conversion replaces the complete decoder
+stack with TD RMSNorm, TD linear, TD SiLU/product, TD SDPA, and
+``SignedQCFSSequenceEncoder`` modules backed by current SpikingJelly
+``ActivationAwareIFNode`` implementations.
+
+The converted SNN uses the explicit temporal layout ``[T,B,S,H]`` and executes
+``layerwise_offline_multistep``: each signed encoder produces a complete T-step
+sequence, and the next stage consumes its temporal aggregate. Consequently the
+schedule is closer to :math:`L T` work than online T-step inference. It does not
+offer a single-step Qwen execution claim. Call ``functional.reset_net(model)``
+before independent prompts; KV-cache continuation remains explicit through
+``past_key_values``.
+
+The public Qwen2 path deliberately exposes only the real ``signed_if`` temporal
+execution (plus ``exact_td`` for equivalence checks). It does not replace the
+spike sequence with a count-domain shortcut during quality evaluation.
+
+Minimal calibration and inference
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The following example loads a local Qwen2.5 checkpoint, calibrates per-channel
+scales, converts the complete decoder, and runs the real multi-step path. The
+small prompt bank demonstrates the API; reproducing the quality results below
+requires the pinned WikiText-2 calibration protocol in
+``benchmark/snn_llm/qwen_conversion``.
+
+.. code-block:: python
+
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    from spikingjelly.activation_based import ann2snn, functional
+
+    device = torch.device("cuda:0")
+    model_root = "/path/to/Qwen2.5-0.5B"
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_root, local_files_only=True, trust_remote_code=False
+    )
+    ann = AutoModelForCausalLM.from_pretrained(
+        model_root,
+        local_files_only=True,
+        trust_remote_code=False,
+        dtype=torch.bfloat16,
+        attn_implementation="sdpa",
+    ).to(device).eval()
+
+    config = ann2snn.Qwen2SNNConfig(
+        time_steps=160,
+        calibration_levels=16,
+        calibration_quantile=0.999,
+        neuron_backend="triton",
+    )
+    calibration_text = [
+        "Spiking neural networks communicate with discrete events.",
+        "Qwen2 conversion uses an explicit temporal sequence.",
+    ]
+    encoded = tokenizer(
+        calibration_text, padding=True, truncation=True, return_tensors="pt"
+    )
+    calibration_batches = [
+        {
+            "input_ids": encoded["input_ids"].to(device),
+            "attention_mask": encoded["attention_mask"].to(device),
+        }
+    ]
+    calibration = ann2snn.calibrate_qwen2_snn(
+        ann, calibration_batches, config
+    )
+    torch.save(calibration.state_dict(), "qwen2_snn_calibration.pt")
+
+    recipe = ann2snn.Qwen2SNNRecipe(calibration, config)
+    snn = ann2snn.ModuleConverter(recipe, device=device).convert(ann)
+    del ann
+
+    batch = tokenizer("SpikingJelly is", return_tensors="pt")
+    input_ids = batch["input_ids"].to(device)
+    attention_mask = batch["attention_mask"].to(device)
+    functional.reset_net(snn)
+    with torch.inference_mode():
+        output = snn(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            encoding_mode="signed_if",
+            use_cache=False,
+        )
+    next_token = output.logits[:, -1].argmax(dim=-1)
+
+The calibration state contains tensors and basic Python values and can be
+restored with ``Qwen2SNNCalibration.from_state_dict(torch.load(...,
+weights_only=True))``. Calibration metadata must exactly match the conversion
+configuration. Use the Torch neuron backend for a reference implementation;
+the Triton backend is CUDA, multi-step, inference-only.
+
+Reference quality evidence
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The pinned BF16 evaluations use the full WikiText-2 test split (584 windows,
+298,937 target tokens) and six zero-shot tasks: LAMBADA, PIQA, HellaSwag,
+WinoGrande, ARC-Easy, and ARC-Challenge. ``Mean drop`` and ``max drop`` are
+dense-minus-SNN accuracy percentage points across those tasks.
+
+.. list-table:: Qwen2.5 Base offline multi-step quality
+   :header-rows: 1
+
+   * - Model
+     - T / levels / quantile
+     - Dense PPL
+     - SNN PPL
+     - PPL degradation
+     - Mean / max drop (pp)
+   * - 0.5B
+     - 160 / 16 / 0.999
+     - 11.509
+     - 12.453
+     - 8.20%
+     - 2.19 / 5.78
+   * - 1.5B
+     - 512 / 128 / 1.0
+     - 8.160
+     - 8.232
+     - 0.87%
+     - 0.99 / 3.16
+   * - 3B
+     - 512 / 16 / 0.999
+     - 7.095
+     - 7.703
+     - 8.57%
+     - 0.41 / 1.96
+
+These are quality results for an offline layerwise schedule, not latency or
+energy claims. High-T execution remains substantially slower than dense Qwen
+on the evaluated A100 GPU. The 3B checkpoint is governed by the Qwen Research
+License; SpikingJelly does not redistribute it. The benchmark README at
+``benchmark/snn_llm/qwen_conversion/README.md`` records the pinned revisions,
+acceptance thresholds, report digests, correctness evidence, and performance
+provenance behind this table.
 
 .. [#sta] Jiang Y., et al., "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers", ICLR 2024.
 

@@ -6,9 +6,10 @@ from typing import Iterable, List, Optional, Sequence, Tuple
 import torch.nn as nn
 
 from spikingjelly.activation_based import base
+from ..ann2snn.operators import TDLinear
 
 
-LinearLike = (nn.Linear,)
+LinearLike = (nn.Linear, TDLinear)
 
 
 @dataclass

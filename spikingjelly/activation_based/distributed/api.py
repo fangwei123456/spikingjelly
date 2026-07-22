@@ -11,6 +11,7 @@ from .planner import (
     DistributedFeatureSet,
     SNN_DISTRIBUTED_PREFERENCES,
     SNNDistributedPlan,
+    TensorParallelStyle,
     recommend_snn_distributed_strategy,
 )
 from .runtime import SNNDistributedRuntime
@@ -67,12 +68,58 @@ def plan(
     model_family: Optional[str] = None,
     mode: Optional[str] = None,
     features: Optional[DistributedFeatureSet] = None,
+    tensor_parallel_plan: Optional[Mapping[str, TensorParallelStyle]] = None,
 ) -> SNNDistributedPlan:
-    """Build an eager distributed execution plan from analysis results.
+    r"""
+    **API Language** - :ref:`中文 <distributed-plan-cn>` | :ref:`English <distributed-plan-en>`
 
-    .. admonition:: Chinese
+    ----
 
-        根据模型分析结果、目标、拓扑和后端选择 SNN eager 分布式执行策略。
+    .. _distributed-plan-cn:
+
+    * **中文**
+
+    根据模型分析结果、优化目标、拓扑和后端构建 eager 分布式执行计划。显式
+    ``tensor_parallel_plan`` 的 key 必须属于 ``analysis`` 发现的候选模块；提供
+    该 mapping 后，应用阶段不会运行自动 TP 规划。``TDLinear`` 支持
+    ``"td_colwise_replicated"`` 和 ``"td_rowwise_replicated"``。
+
+    :param analysis: :func:`analyze` 返回的能力分析结果。
+    :type analysis: SNNDistributedAnalysis
+    :param objective: 优化目标，例如 ``"speed"``。
+    :type objective: str
+    :param topology: 逻辑拓扑 mapping 或拓扑对象。
+    :type topology: Mapping[str, int] or SNNDistributedTopology
+    :param backend: 执行后端名称。
+    :type backend: str
+    :param batch_size: 规划器使用的单步 batch size。
+    :type batch_size: int
+    :param model_family: 可选的模型族提示。
+    :type model_family: str or None
+    :param mode: 可选的显式分布式模式覆盖。
+    :type mode: str or None
+    :param features: 实验性或可选行为的功能开关。
+    :type features: DistributedFeatureSet or None
+    :param tensor_parallel_plan: 从已分析模块路径到 TP style 名称或 PyTorch
+        ``ParallelStyle`` 对象的可选 mapping。
+    :type tensor_parallel_plan: Mapping[str, TensorParallelStyle] or None
+    :return: 不可变的分布式执行计划。
+    :rtype: SNNDistributedPlan
+    :raises ValueError: 当目标、模式、拓扑或显式 TP plan 不合法，或 plan 引用
+        analysis 候选集合之外的模块时。
+    :raises NotImplementedError: 当请求统一 API 尚不支持的 pipeline 模式时。
+
+    ----
+
+    .. _distributed-plan-en:
+
+    * **English**
+
+    Build an eager distributed execution plan from model analysis, objective,
+    topology, and backend. Keys in an explicit ``tensor_parallel_plan`` must be
+    candidates found by ``analysis``; supplying the mapping disables automatic
+    TP planning during apply. ``TDLinear`` accepts
+    ``"td_colwise_replicated"`` and ``"td_rowwise_replicated"``.
 
     :param analysis: Capability analysis returned by :func:`analyze`.
     :type analysis: SNNDistributedAnalysis
@@ -82,16 +129,23 @@ def plan(
     :type topology: Mapping[str, int] or SNNDistributedTopology
     :param backend: Execution backend name.
     :type backend: str
-    :param batch_size: Per-step batch size used by the recommender.
+    :param batch_size: Per-step batch size used by the planner.
     :type batch_size: int
     :param model_family: Optional model-family hint.
     :type model_family: str or None
-    :param mode: Optional explicit distributed mode override.
+    :param mode: Optional explicit distributed-mode override.
     :type mode: str or None
-    :param features: Optional feature gates for experimental or optional behavior.
+    :param features: Feature gates for experimental or optional behavior.
     :type features: DistributedFeatureSet or None
-    :return: Distributed execution plan.
+    :param tensor_parallel_plan: Optional mapping from analyzed module paths to TP
+        style names or PyTorch ``ParallelStyle`` objects.
+    :type tensor_parallel_plan: Mapping[str, TensorParallelStyle] or None
+    :return: Immutable distributed execution plan.
     :rtype: SNNDistributedPlan
+    :raises ValueError: If the objective, mode, topology, or explicit TP plan is
+        invalid, or the plan references modules outside the analyzed candidates.
+    :raises NotImplementedError: If the unsupported unified pipeline mode is
+        requested.
     """
     objective = objective.lower()
     if objective not in SNN_DISTRIBUTED_PREFERENCES:
@@ -141,6 +195,21 @@ def plan(
         raise ValueError(
             f"mode='{selected_mode}' requires at least one tensor-parallel candidate, but analysis found none."
         )
+    if tensor_parallel_plan is not None:
+        if selected_mode not in ("tp", "fsdp2_tp"):
+            raise ValueError(
+                "tensor_parallel_plan requires mode='tp' or mode='fsdp2_tp'."
+            )
+        if not tensor_parallel_plan:
+            raise ValueError("tensor_parallel_plan must not be empty.")
+        unknown = set(tensor_parallel_plan) - set(
+            analysis.tensor_parallel_candidate_names
+        )
+        if unknown:
+            raise ValueError(
+                "tensor_parallel_plan contains modules outside the analysis "
+                f"candidates: {sorted(unknown)!r}."
+            )
     optimizer_strategy = recommendation.optimizer_sharding
     if selected_mode != "dp" or not features.allow_zero_optimizer:
         optimizer_strategy = "none"
@@ -166,6 +235,7 @@ def plan(
         rationale=tuple(recommendation.rationale),
         notes=tuple(notes),
         tensor_parallel_roots=analysis.tensor_parallel_roots,
+        tensor_parallel_plan=tensor_parallel_plan,
         mesh_shape=mesh_shape,
         tp_mesh_dim=tp_mesh_dim,
         dp_mesh_dim=dp_mesh_dim,
@@ -251,7 +321,10 @@ def apply(
         tp_mesh_dim=plan.tp_mesh_dim,
         dp_mesh_dim=plan.dp_mesh_dim,
         tensor_parallel_roots=plan.tensor_parallel_roots,
-        auto_tensor_parallel=plan.mode in ("tp", "fsdp2_tp"),
+        tensor_parallel_plan=plan.tensor_parallel_plan,
+        auto_tensor_parallel=(
+            plan.mode in ("tp", "fsdp2_tp") and plan.tensor_parallel_plan is None
+        ),
     )
     configured_model, mesh, analysis = configure_snn_distributed(model, config)
     return SNNDistributedRuntime(

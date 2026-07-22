@@ -11,6 +11,8 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDGELU,
     TDLayerNorm,
     TDLinear,
+    TDRMSNorm,
+    TDSiLU,
     TDMultiheadAttention,
     TDScaledDotProductAttention,
     TDSoftmax,
@@ -108,6 +110,8 @@ def test_td_modules_support_step_mode_switching():
         TDSoftmax(),
         TDLayerNorm(3),
         TDGELU(),
+        TDRMSNorm(3),
+        TDSiLU(),
         TDLinear(3, 4),
         SNNMatrixOperator(),
         SNNElementWiseProduct(),
@@ -136,6 +140,47 @@ def test_td_module_requires_explicit_multistep_forward():
 
     with pytest.raises(NotImplementedError, match="multi_step_forward"):
         DummyTDModule()(torch.zeros(2, 3))
+
+
+def test_td_multistep_state_owns_only_final_step_storage():
+    def assert_compact(tensor):
+        assert (
+            tensor.untyped_storage().nbytes() == tensor.numel() * tensor.element_size()
+        )
+
+    with torch.no_grad():
+        linear = TDLinear(3, 5)
+        linear(torch.randn(8, 2, 3))
+
+        assert_compact(linear.x_cum)
+        assert_compact(linear.y_cum)
+
+        product = SNNElementWiseProduct()
+        product(torch.randn(8, 2, 4), torch.randn(8, 2, 4))
+
+        assert isinstance(product.x_cum, tuple)
+        for x_cum in product.x_cum:
+            assert_compact(x_cum)
+        assert_compact(product.y_cum)
+
+
+def test_td_multistep_compact_state_preserves_chunked_gradients():
+    full = TDLinear(3, 5)
+    chunked = TDLinear(3, 5)
+    chunked.load_state_dict(full.state_dict())
+
+    x_full = torch.randn(8, 2, 3, requires_grad=True)
+    y_full = full(x_full)
+    y_full.square().sum().backward()
+
+    x_chunked = x_full.detach().clone().requires_grad_()
+    y_chunked = torch.cat((chunked(x_chunked[:3]), chunked(x_chunked[3:])))
+    y_chunked.square().sum().backward()
+
+    assert torch.allclose(y_chunked, y_full, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(x_chunked.grad, x_full.grad, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(chunked.weight.grad, full.weight.grad, atol=1e-5, rtol=1e-6)
+    assert torch.allclose(chunked.bias.grad, full.bias.grad, atol=1e-5, rtol=1e-6)
 
 
 class TestTDSoftmax:
@@ -455,6 +500,86 @@ class TestTDLayerNorm:
         assert op.extra_repr() == (
             "(2, 3), eps=0.0001, elementwise_affine=True, bias=False"
         )
+
+
+class TestTDRMSNorm:
+    def test_cumulative_output_matches_pytorch_rms_norm(self):
+        torch.manual_seed(7)
+        x_seq = torch.randn(5, 2, 3, 4, requires_grad=True)
+        op = TDRMSNorm(4, eps=1e-6)
+        with torch.no_grad():
+            op.weight.copy_(torch.linspace(0.5, 1.5, 4))
+
+        y_seq = op(x_seq)
+        expected = F.rms_norm(
+            x_seq.cumsum(dim=0),
+            (4,),
+            op.weight,
+            op.eps,
+        )
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
+        y_seq.square().mean().backward()
+        assert x_seq.grad is not None
+        assert torch.isfinite(x_seq.grad).all()
+        assert op.weight.grad is not None
+        assert torch.isfinite(op.weight.grad).all()
+
+    def test_reset_replays_an_independent_sequence(self):
+        x_seq = torch.randn(4, 2, 5)
+        op = TDRMSNorm(5)
+
+        first = op(x_seq)
+        functional.reset_net(op)
+        replay = op(x_seq)
+
+        assert torch.equal(first, replay)
+
+    def test_single_step_and_multi_step_match(self):
+        x_seq = torch.randn(5, 2, 4)
+        multi_step = TDRMSNorm(4, step_mode="m")
+        single_step = TDRMSNorm(4, step_mode="s")
+        with torch.no_grad():
+            single_step.weight.copy_(multi_step.weight)
+
+        expected = multi_step(x_seq)
+        actual = torch.stack([single_step(x) for x in x_seq])
+
+        assert torch.allclose(actual, expected, atol=1e-6, rtol=1e-6)
+
+
+class TestTDSiLU:
+    def test_cumulative_output_matches_pytorch_silu(self):
+        x_seq = torch.randn(6, 2, 4)
+        op = TDSiLU()
+
+        y_seq = op(x_seq)
+        expected = F.silu(x_seq.cumsum(dim=0))
+
+        assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
+
+    def test_single_step_and_multi_step_match(self):
+        x_seq = torch.randn(5, 2, 4)
+        multi_step = TDSiLU(step_mode="m")
+        single_step = TDSiLU(step_mode="s")
+
+        expected = multi_step(x_seq)
+        actual = torch.stack([single_step(x) for x in x_seq])
+
+        assert torch.allclose(actual, expected, atol=1e-6, rtol=1e-6)
+
+    def test_reset_replay_and_autograd_are_finite(self):
+        x_seq = torch.randn(5, 2, 4, requires_grad=True)
+        op = TDSiLU()
+
+        first = op(x_seq)
+        first.square().mean().backward()
+        assert x_seq.grad is not None
+        assert torch.isfinite(x_seq.grad).all()
+
+        functional.reset_net(op)
+        replay = op(x_seq.detach())
+        assert torch.equal(first.detach(), replay)
 
 
 class TestTDGELU:

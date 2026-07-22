@@ -160,6 +160,14 @@ ObsidianVault
 .mimocode/
 .codegraph/
 ENV.md
-benchmark/output
+benchmark/output/
+benchmark/**/report.json
+benchmark/**/*.log
+benchmark/**/*.pth
+benchmark/**/*.ckpt
+benchmark/**/*.safetensors
+benchmark/**/*.nsys-rep
+benchmark/**/*.qdrep
+benchmark/**/*.sqlite
 results/fp8-blackwell-5090/
 ocr.*

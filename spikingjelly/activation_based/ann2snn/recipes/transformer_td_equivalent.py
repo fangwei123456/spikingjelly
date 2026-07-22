@@ -15,6 +15,8 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDLayerNorm,
     TDLinear,
     TDModule,
+    TDRMSNorm,
+    TDSiLU,
     TDMultiheadAttention,
     TDScaledDotProductAttention,
     TDSoftmax,
@@ -266,9 +268,7 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
             "query": TransformerTDEquivalentRecipe._get_tensor_argument(
                 node, "query", 0
             ),
-            "key": TransformerTDEquivalentRecipe._get_tensor_argument(
-                node, "key", 1
-            ),
+            "key": TransformerTDEquivalentRecipe._get_tensor_argument(node, "key", 1),
             "value": TransformerTDEquivalentRecipe._get_tensor_argument(
                 node, "value", 2
             ),
@@ -405,8 +405,29 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
             td_module.train(module.training)
             return td_module
 
+        if isinstance(module, nn.RMSNorm):
+            td_module = TDRMSNorm(
+                module.normalized_shape,
+                eps=module.eps,
+                elementwise_affine=module.elementwise_affine,
+                device=(module.weight.device if module.weight is not None else None),
+                dtype=(module.weight.dtype if module.weight is not None else None),
+            )
+            with torch.no_grad():
+                if module.weight is not None:
+                    td_module.weight.copy_(module.weight)
+            if module.weight is not None:
+                td_module.weight.requires_grad = module.weight.requires_grad
+            td_module.train(module.training)
+            return td_module
+
         if isinstance(module, nn.GELU):
             td_module = TDGELU(approximate=getattr(module, "approximate", "none"))
+            td_module.train(module.training)
+            return td_module
+
+        if isinstance(module, nn.SiLU):
+            td_module = TDSiLU()
             td_module.train(module.training)
             return td_module
 
@@ -468,7 +489,20 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
         matmul_index = 0
         gelu_index = 0
         tanh_index = 0
+        silu_index = 0
         for node in list(fx_model.graph.nodes):
+            if node.op == "call_function" and node.target is F.silu:
+                td_silu = TDSiLU()
+                td_silu.train(fx_model.training)
+                silu_index = self._insert_call_module_after(
+                    fx_model,
+                    node,
+                    td_silu,
+                    "td_silu",
+                    silu_index,
+                    (self._get_tensor_argument(node, "input", 0),),
+                )
+                continue
             if node.op == "call_function" and node.target is F.gelu:
                 approximate = self._get_literal_argument(node, "approximate", 1, "none")
                 if approximate not in ("none", "tanh"):

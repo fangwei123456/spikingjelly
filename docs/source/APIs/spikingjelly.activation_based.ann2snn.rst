@@ -47,7 +47,8 @@ groups:
   ``LocalThresholdBalancingRecipe``.
 * **Transformer FX conversion**: ``TransformerTDEquivalentRecipe`` and
   ``STATransformerRecipe``.
-* **Module-tree QANN-to-SNN conversion**: ``SpikeZIPTFQANNRecipe``.
+* **Module-tree QANN/LLM-to-SNN conversion**: ``SpikeZIPTFQANNRecipe`` and
+  ``Qwen2SNNRecipe``.
 
 FX recipes subclass ``FXConversionRecipe`` and are executed by
 ``FXConverter`` / ``Converter``. Module-tree recipes subclass
@@ -110,6 +111,11 @@ operators. Use ``ann_forward`` when comparing a TD module with the source
 PyTorch module at one non-temporal input.
 
 .. automodule:: spikingjelly.activation_based.ann2snn.operators
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: spikingjelly.activation_based.ann2snn.qcfs
    :members:
    :undoc-members:
    :show-inheritance:

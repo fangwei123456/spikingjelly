@@ -14,6 +14,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import TensorDataset
 
 from spikingjelly.activation_based import functional, layer, neuron
+from spikingjelly.activation_based.ann2snn.operators import TDLinear
 from spikingjelly.activation_based.functional import (
     collect_reset_modules,
     reset_collected_modules,
@@ -41,6 +42,7 @@ from spikingjelly.activation_based.distributed import (
     resolve_tensor_parallel_group_size,
 )
 from spikingjelly.activation_based.distributed import dtensor as distributed_dtensor
+from spikingjelly.activation_based.distributed import api as distributed_api
 from spikingjelly.activation_based.distributed.adapters import (
     build_cifar10dvs_vgg_eager_policy,
     build_spikformer_eager_policy,

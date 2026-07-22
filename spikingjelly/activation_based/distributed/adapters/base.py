@@ -30,7 +30,10 @@ def build_distributed_runtime(
         device_mesh=device_mesh,
         tp_mesh_dim=plan.tp_mesh_dim,
         dp_mesh_dim=plan.dp_mesh_dim,
-        auto_tensor_parallel=plan.mode in ("tp", "fsdp2_tp"),
+        tensor_parallel_plan=plan.tensor_parallel_plan,
+        auto_tensor_parallel=(
+            plan.mode in ("tp", "fsdp2_tp") and plan.tensor_parallel_plan is None
+        ),
         **config_overrides,
     )
     configured_model, mesh, analysis = configure_snn_distributed(model, config)

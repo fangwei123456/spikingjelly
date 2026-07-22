@@ -18,6 +18,42 @@ Unreleased
 Features
 ~~~~~~~~
 
+ANN-to-SNN Conversion
+^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.ann2snn``.
+
+- Added temporal-difference ``TDRMSNorm`` and ``TDSiLU`` operators with single-step,
+  multi-step, reset, and autograd support. Their floating-point differential
+  outputs preserve cumulative RMSNorm / SiLU semantics and are not binary or
+  fully spike-driven operators.
+- Extended ``TransformerTDEquivalentRecipe`` to convert ``torch.nn.RMSNorm``,
+  ``torch.nn.SiLU``, and functional SiLU calls while preserving source parameters,
+  dtype, device, training mode, and gradient requirements.
+- Added public ``Qwen2SNNConfig``, ``Qwen2SNNCalibration``, ``Qwen2SNNModel``, and
+  ``Qwen2SNNRecipe``
+  APIs for calibration-driven Qwen2 causal-LM conversion through
+  ``ModuleConverter``. The converted model uses current SpikingJelly TD operators
+  and signed activation-aware IF neurons, retains an explicit ``[T,B,S,H]``
+  multi-step layout, and supports resettable KV-cache inference. This is an
+  offline layerwise schedule rather than online SNN inference.
+- Added ``SignedQCFSSequenceEncoder`` with Torch/Triton activation-aware IF
+  backends and a temporal-sum reconstruction method for diagnostic parity
+  checks. Qwen quality evaluation continues to execute the explicit multi-step
+  spike sequence.
+- Fixed BF16 signed QCFS boundary replay at large time-step counts by using
+  exact threshold pulses through the activation-aware IF neurons.
+- Fixed ``SignedQCFSSequenceEncoder`` statistics masks for non-last channel
+  dimensions and boundary-correction fractions, rejected invalid scalar or
+  empty-mask inputs, and skipped boundary replay when the initial spike counts
+  already match QCFS counts.
+- Fixed converted Qwen2 inference to honor explicit and left-padding-aware
+  rotary position IDs, reject inconsistent cache use, and require all
+  calibration metadata to match the conversion configuration.
+- Added revision-pinned Qwen2.5 Base 0.5B-3B correctness, quality, efficiency,
+  and tensor-parallel evaluation tools for the experimental offline multi-step
+  path. Their results are not guaranteed latency or energy improvements.
+
 Precision
 ^^^^^^^^^
 
@@ -50,6 +86,11 @@ Triton Neuron Kernels
 
 Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
 
+- Added a CUDA multi-step inference-only Triton backend for
+  ``ActivationAwareIFNode``, including scalar or channel-wise thresholds and
+  membrane offsets, soft or hard reset, compact final-state storage, and FP32 /
+  BF16 execution. Training and autograd remain unsupported for this backend.
+
 - Added experimental mixed-precision Triton forward and backward paths for
   multi-step IF, LIF, and ParametricLIF neurons, including FP8 storage
   experiments with configurable forward and backward compute dtypes.
@@ -71,6 +112,26 @@ Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
 
 Bug Fixes
 ~~~~~~~~~
+
+ANN-to-SNN Conversion
+^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.ann2snn``.
+
+- Fixed multi-step TD operators retaining the complete cumulative-sequence
+  storage through their final-step state views. TD state now owns compact
+  final-step storage, substantially reducing inference memory without changing
+  continuation or gradient semantics.
+- Fixed FX conversion on PyTorch 2.6 and 2.7 for dynamic ``torch.reshape``
+  calls and forward signatures containing PEP 604 union annotations.
+
+Triton Neuron Kernels
+^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
+
+- Fixed corrupted IF, LIF, and ParametricLIF input and parameter gradients when
+  stable multi-step Triton kernels receive non-contiguous upstream gradients.
 
 - Fixed ``STDPLearner``, ``MSTDPLearner``, and ``MSTDPETLearner`` retaining the
   autograd graph of the network's forward pass, which caused unbounded
@@ -107,6 +168,13 @@ Module: ``spikingjelly.activation_based.distributed``.
   workflow, with model capability analysis, structured execution plans, and
   runtime summaries for data parallel, tensor parallel, FSDP2, FSDP2+TP, and
   pipeline configurations.
+
+- Added immutable explicit tensor-parallel plans to the Analyze -> Plan -> Apply
+  workflow and replicated-activation colwise/rowwise DTensor styles for
+  ``TDLinear``, allowing converted temporal models to shard parameters without
+  changing their existing TD state and activation semantics.
+- Made replicated-activation ``TDLinear`` redistribution complete before its
+  result is consumed, avoiding unresolved asynchronous DTensor collectives.
 
 - Reorganized eager distributed configuration, model-specific policies for
   ``CIFAR10DVSVGG`` and Spikformer, and compatibility exports while keeping the

@@ -937,6 +937,12 @@ class TestPublicExports:
             "STATransformerRecipe",
             "TransformerTDEquivalentRecipe",
             "SpikeZIPTFQANNRecipe",
+            "SignedQCFSSequenceEncoder",
+            "Qwen2SNNCalibration",
+            "Qwen2SNNConfig",
+            "Qwen2SNNModel",
+            "Qwen2SNNRecipe",
+            "calibrate_qwen2_snn",
             "ChannelVoltageScaler",
             "estimate_delay_start",
             "download_url",
@@ -959,9 +965,7 @@ class TestPublicExports:
         assert ann2snn.LocalThresholdBalancingRecipe is LocalThresholdBalancingRecipe
         assert ann2snn.STATransformerRecipe is STATransformerRecipe
         assert ann2snn.ChannelVoltageScaler is ChannelVoltageScaler
-        assert (
-            ann2snn.TransformerTDEquivalentRecipe is TransformerTDEquivalentRecipe
-        )
+        assert ann2snn.TransformerTDEquivalentRecipe is TransformerTDEquivalentRecipe
         assert ann2snn.SpikeZIPTFQANNRecipe is SpikeZIPTFQANNRecipe
 
     def test_recipe_base_has_no_execution_entrypoint(self):
@@ -1823,9 +1827,7 @@ class TestConverterTDOperatorReplacement:
                 value_seq.cumsum(dim=0),
             )
 
-            assert torch.allclose(
-                y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6
-            )
+            assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
 
     def test_sdpa_rewrite_supports_mask_causal_scale_and_positional_args(self):
         query_seq = torch.randn(4, 2, 3, 5, 8)
