@@ -148,6 +148,6 @@ It can be observed that when both the data scale and sequence length ``T`` are l
 
     When using predefined Triton neuron kernels, please note the following:
 
-    * Currently, only the most commonly used ``IFNode``, ``LIFNode``, and ``PLIFNode`` are equipped with Triton kernels. More Triton kernels will be added in future updates.
+    * ``IFNode``, ``LIFNode``, and ``PLIFNode`` provide predefined Triton kernels for inference and training. The experimental ``ActivationAwareIFNode`` additionally provides a multi-step inference-only Triton kernel for scalar or channel-wise thresholds and membrane offsets; it rejects training and autograd instead of falling back to PyTorch.
     * The Triton backend should be executed on a GPU.
     * The Triton backend only supports multi-step mode ``step_mode="m"``.

@@ -43,6 +43,7 @@ from .planner import (
     DistributedFeatureSet,
     SNN_DISTRIBUTED_PREFERENCES,
     SNNDistributedPlan,
+    TensorParallelStyle,
     recommend_snn_distributed_strategy,
     recommended_pipeline_microbatches,
 )
@@ -68,6 +69,7 @@ __all__ = [
     "SNNDistributedRuntime",
     "SNNDistributedTopology",
     "TensorShardMemoryModule",
+    "TensorParallelStyle",
     "make_tensor_shard_memory_module",
     "ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE",
     "analyze",

@@ -280,9 +280,9 @@ def _multistep_lif_backward_kernel_static(
             block_shape=(1, BLOCK_NCL),
             order=(1, 0),
         )
-        grad_s = tl.load(
-            grad_s_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
+        grad_s = tl.load(grad_s_ptrs, boundary_check=(1,), padding_option="zero").to(
+            compute_dtype
+        )
         grad_v_ptrs = tl.make_block_ptr(
             grad_v_seq_ptr,
             shape=(T, NCL),
@@ -291,9 +291,9 @@ def _multistep_lif_backward_kernel_static(
             block_shape=(1, BLOCK_NCL),
             order=(1, 0),
         )
-        grad_v = tl.load(
-            grad_v_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
+        grad_v = tl.load(grad_v_ptrs, boundary_check=(1,), padding_option="zero").to(
+            compute_dtype
+        )
         h_ptrs = tl.make_block_ptr(
             h_seq_ptr,
             shape=(T, NCL),
@@ -396,9 +396,9 @@ def _multistep_lif_backward_kernel_dynamic(
             block_shape=(1, BLOCK_NCL),
             order=(1, 0),
         )
-        grad_s = tl.load(
-            grad_s_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
+        grad_s = tl.load(grad_s_ptrs, boundary_check=(1,), padding_option="zero").to(
+            compute_dtype
+        )
         grad_v_ptrs = tl.make_block_ptr(
             grad_v_seq_ptr,
             shape=(T, NCL),
@@ -407,9 +407,9 @@ def _multistep_lif_backward_kernel_dynamic(
             block_shape=(1, BLOCK_NCL),
             order=(1, 0),
         )
-        grad_v = tl.load(
-            grad_v_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
+        grad_v = tl.load(grad_v_ptrs, boundary_check=(1,), padding_option="zero").to(
+            compute_dtype
+        )
         h_ptrs = tl.make_block_ptr(
             h_seq_ptr,
             shape=(T, NCL),
@@ -1091,13 +1091,20 @@ def _setup_context(ctx, inputs, output):
 
 def _multistep_lif_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
     (h_seq,) = ctx.saved_tensors
-    grad_x_seq = torch.empty_like(grad_s_seq)
-    grad_v_init = torch.empty_like(grad_v_seq[0])
+    grad_s_seq = grad_s_seq.contiguous()
+    grad_v_seq = grad_v_seq.contiguous()
+    h_seq = h_seq.contiguous()
+    grad_x_seq = torch.empty(
+        grad_s_seq.shape, dtype=grad_s_seq.dtype, device=grad_s_seq.device
+    )
+    grad_v_init = torch.empty(
+        grad_v_seq.shape[1:], dtype=grad_v_seq.dtype, device=grad_v_seq.device
+    )
     dtype = grad_s_seq.dtype
     _launch_lif_backward_kernel(
-        grad_s_seq.contiguous(),
-        grad_v_seq.contiguous(),
-        h_seq.contiguous(),
+        grad_s_seq,
+        grad_v_seq,
+        h_seq,
         grad_x_seq,
         grad_v_init,
         tau=ctx.tau,

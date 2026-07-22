@@ -47,6 +47,22 @@ def _assert_close(a: torch.Tensor, b: torch.Tensor, dtype: torch.dtype):
     torch.testing.assert_close(a, b, atol=atol, rtol=rtol)
 
 
+def _make_training_node(kind: str, backend: str):
+    common_kwargs = {
+        "v_threshold": 1.0,
+        "v_reset": 0.0,
+        "step_mode": "m",
+        "backend": backend,
+    }
+    if kind == "if":
+        return neuron.IFNode(**common_kwargs).to("cuda")
+    if kind == "lif":
+        return neuron.LIFNode(tau=2.0, **common_kwargs).to("cuda")
+    if kind == "plif":
+        return neuron.ParametricLIFNode(init_tau=2.0, **common_kwargs).to("cuda")
+    raise ValueError(f"Unsupported neuron kind: {kind}.")
+
+
 def _relative_l2(candidate: torch.Tensor, reference: torch.Tensor) -> float:
     numerator = torch.linalg.vector_norm(candidate.float() - reference.float())
     denominator = torch.linalg.vector_norm(reference.float()).clamp_min(1e-12)
@@ -778,6 +794,79 @@ def test_lif_triton_matches_torch_training(tau, detach_reset, v_threshold, v_res
     out1.sum().backward()
     out2.sum().backward()
     _assert_close(x1.grad, x2.grad, torch.float32)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+def test_triton_backward_accepts_noncontiguous_upstream_gradient(kind):
+    torch.manual_seed(20260713)
+    torch_node = _make_training_node(kind, "torch")
+    triton_node = _make_training_node(kind, "triton")
+    x = torch.randn(8, 3, 4, device="cuda", dtype=torch.float32)
+    x_torch = x.clone().requires_grad_()
+    x_triton = x.clone().requires_grad_()
+
+    out_torch = torch_node(x_torch)
+    out_triton = triton_node(x_triton)
+    _assert_close(out_torch, out_triton, torch.float32)
+
+    upstream = torch.randn(3, 8, 4, device="cuda", dtype=torch.float32)
+    assert not upstream.permute(1, 0, 2).is_contiguous()
+    received_grad_layouts = []
+    out_triton.register_hook(
+        lambda grad: received_grad_layouts.append(grad.is_contiguous())
+    )
+
+    out_torch.permute(1, 0, 2).backward(upstream)
+    out_triton.permute(1, 0, 2).backward(upstream)
+
+    assert received_grad_layouts == [False]
+    _assert_close(x_torch.grad, x_triton.grad, torch.float32)
+    if kind == "plif":
+        _assert_close(torch_node.w.grad, triton_node.w.grad, torch.float32)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+def test_mixed_precision_backward_accepts_noncontiguous_upstream_gradient(kind):
+    torch.manual_seed(20260713)
+    torch_node = _make_training_node(kind, "torch")
+    x = torch.randn(8, 3, 4, device="cuda", dtype=torch.float32)
+    x_torch = x.clone().requires_grad_()
+    x_mixed = x.clone().requires_grad_()
+    v_torch = torch.zeros_like(x[0], requires_grad=True)
+    v_mixed = torch.zeros_like(x[0], requires_grad=True)
+    torch_node.v = v_torch
+    r_tau = torch.tensor(0.5, device="cuda", dtype=torch.float32)
+    if kind == "plif":
+        r_tau.requires_grad_()
+
+    out_torch = torch_node(x_torch)
+    out_mixed, _, _ = _call_mixed_precision_forward(
+        kind,
+        x_mixed,
+        v_mixed,
+        backward_compute_dtype="fp16",
+        r_tau=r_tau,
+    )
+    _assert_close(out_torch, out_mixed, torch.float16)
+
+    upstream = torch.randn(3, 8, 4, device="cuda", dtype=torch.float32)
+    assert not upstream.permute(1, 0, 2).is_contiguous()
+    received_grad_layouts = []
+    out_mixed.register_hook(
+        lambda grad: received_grad_layouts.append(grad.is_contiguous())
+    )
+
+    out_torch.permute(1, 0, 2).backward(upstream)
+    out_mixed.permute(1, 0, 2).backward(upstream)
+
+    assert received_grad_layouts == [False]
+    _assert_close(x_torch.grad, x_mixed.grad, torch.float16)
+    _assert_close(v_torch.grad, v_mixed.grad, torch.float16)
+    if kind == "plif":
+        expected_w_grad = r_tau.grad * r_tau.detach() * (1.0 - r_tau.detach())
+        _assert_close(torch_node.w.grad, expected_w_grad, torch.float16)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

@@ -264,9 +264,9 @@ def _multistep_if_backward_kernel_static(
             block_shape=(1, BLOCK_NCL),
             order=(1, 0),
         )
-        grad_s = tl.load(
-            grad_s_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
+        grad_s = tl.load(grad_s_ptrs, boundary_check=(1,), padding_option="zero").to(
+            compute_dtype
+        )
         grad_v_ptrs = tl.make_block_ptr(
             grad_v_seq_ptr,
             shape=(T, NCL),
@@ -275,9 +275,9 @@ def _multistep_if_backward_kernel_static(
             block_shape=(1, BLOCK_NCL),
             order=(1, 0),
         )
-        grad_v = tl.load(
-            grad_v_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
+        grad_v = tl.load(grad_v_ptrs, boundary_check=(1,), padding_option="zero").to(
+            compute_dtype
+        )
         h_ptrs = tl.make_block_ptr(
             h_seq_ptr,
             shape=(T, NCL),
@@ -376,9 +376,9 @@ def _multistep_if_backward_kernel_dynamic(
             block_shape=(1, BLOCK_NCL),
             order=(1, 0),
         )
-        grad_s = tl.load(
-            grad_s_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
+        grad_s = tl.load(grad_s_ptrs, boundary_check=(1,), padding_option="zero").to(
+            compute_dtype
+        )
         grad_v_ptrs = tl.make_block_ptr(
             grad_v_seq_ptr,
             shape=(T, NCL),
@@ -387,9 +387,9 @@ def _multistep_if_backward_kernel_dynamic(
             block_shape=(1, BLOCK_NCL),
             order=(1, 0),
         )
-        grad_v = tl.load(
-            grad_v_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
+        grad_v = tl.load(grad_v_ptrs, boundary_check=(1,), padding_option="zero").to(
+            compute_dtype
+        )
         h_ptrs = tl.make_block_ptr(
             h_seq_ptr,
             shape=(T, NCL),
@@ -962,7 +962,20 @@ def _multistep_if_mp_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
         detach_reset=ctx.detach_reset,
         use_torch_wrap=True,
     )
-    return grad_x_seq, grad_v_init, None, None, None, None, None, None, None, None, None, None
+    return (
+        grad_x_seq,
+        grad_v_init,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
 
 
 torch.library.register_autograd(
@@ -989,15 +1002,22 @@ def _multistep_if_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
     if h_seq.numel() == 0:
         raise RuntimeError("backward called without saved intermediates")
 
-    grad_x_seq = torch.empty_like(grad_s_seq)
-    grad_v_init = torch.empty_like(grad_v_seq[0])
+    grad_s_seq = grad_s_seq.contiguous()
+    grad_v_seq = grad_v_seq.contiguous()
+    h_seq = h_seq.contiguous()
+    grad_x_seq = torch.empty(
+        grad_s_seq.shape, dtype=grad_s_seq.dtype, device=grad_s_seq.device
+    )
+    grad_v_init = torch.empty(
+        grad_v_seq.shape[1:], dtype=grad_v_seq.dtype, device=grad_v_seq.device
+    )
     dtype = grad_s_seq.dtype
     if dtype not in type_dict:
         raise NotImplementedError(dtype)
     _launch_if_backward_kernel(
-        grad_s_seq.contiguous(),
-        grad_v_seq.contiguous(),
-        h_seq.contiguous(),
+        grad_s_seq,
+        grad_v_seq,
+        h_seq,
         grad_x_seq,
         grad_v_init,
         v_threshold=ctx.v_threshold,

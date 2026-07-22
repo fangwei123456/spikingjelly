@@ -1,0 +1,12 @@
+{
+  "sources": {
+    "spikegpt": {
+      "repository": "https://github.com/ridgerchu/SpikeGPT.git",
+      "revision": "029f86f0536f2b2451524038fc9890cc76c2429e"
+    },
+    "spikingjelly": {
+      "repository": "https://github.com/fangwei123456/spikingjelly.git",
+      "revision": "2797c5575515b59d7f09a3d5b732d6d25e148d13"
+    }
+  }
+}

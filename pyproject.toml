@@ -56,12 +56,19 @@ fp8-torchao = [
 fp8-te = [
     "transformer-engine[pytorch]>=2.16,<3",
 ]
+qwen = [
+    "transformers==5.13.0",
+]
 
 [dependency-groups]
 dev = [
     "pytest",
     "pydata-sphinx-theme>=0.16.1",
     "sphinx>=8.0.0,<9",
+]
+llm-benchmark = [
+    "datasets>=5,<6",
+    "lm-eval[hf]==0.4.12",
 ]
 
 [project.urls]

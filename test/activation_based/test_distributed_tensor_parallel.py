@@ -77,6 +77,49 @@ def test_make_colwise_parallel_rejects_unavailable_local_output(monkeypatch):
         tp_linear._make_colwise_parallel(local_output=True)
 
 
+def test_tdlinear_replicated_tp_styles_preserve_multistep_output_single_rank():
+    with single_rank_process_group():
+        torch.manual_seed(0)
+        baseline = nn.Sequential(
+            TDLinear(4, 6),
+            TDLinear(6, 3),
+        ).eval()
+        candidate = copy.deepcopy(baseline)
+        automatic_plan = auto_build_tensor_parallel_plan(candidate)
+        assert type(automatic_plan["0"]).__name__ == "_TDLinearColwiseReplicated"
+        assert type(automatic_plan["1"]).__name__ == "_TDLinearRowwiseReplicated"
+        x = torch.randn(5, 2, 4, requires_grad=True)
+        reference = baseline(x)
+        reference.square().sum().backward()
+        reference_input_grad = x.grad.detach().clone()
+
+        distributed_model, _, _ = configure_snn_distributed(
+            candidate,
+            SNNDistributedConfig(
+                device_type="cpu",
+                mesh_shape=(1,),
+                tensor_parallel_plan={
+                    "0": "td_colwise_replicated",
+                    "1": "td_rowwise_replicated",
+                },
+                enable_data_parallel=False,
+            ),
+        )
+        distributed_input = x.detach().clone().requires_grad_(True)
+        result = materialize_dtensor_output(distributed_model(distributed_input))
+        result.square().sum().backward()
+
+        torch.testing.assert_close(reference, result)
+        torch.testing.assert_close(reference_input_grad, distributed_input.grad)
+        for reference_parameter, distributed_parameter in zip(
+            baseline.parameters(), distributed_model.parameters(), strict=True
+        ):
+            distributed_grad = distributed_parameter.grad
+            if hasattr(distributed_grad, "to_local"):
+                distributed_grad = distributed_grad.to_local()
+            torch.testing.assert_close(reference_parameter.grad, distributed_grad)
+
+
 def test_parallelize_snn_module_validates_named_mesh_dim_bounds(monkeypatch):
     class _FakeMesh:
         ndim = 2

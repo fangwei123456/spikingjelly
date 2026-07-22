@@ -66,6 +66,28 @@ def test_plan_allows_explicit_mode_override_for_advanced_users():
     assert distributed_plan.topology.mesh_shape == (2,)
 
 
+def test_plan_carries_an_immutable_explicit_tensor_parallel_plan():
+    model = nn.Sequential(TDLinear(4, 6, bias=False))
+    analysis = analyze(model)
+    explicit_plan = {"0": "td_colwise_replicated"}
+
+    distributed_plan = plan(
+        analysis=analysis,
+        objective="capacity",
+        topology={"tp": 2},
+        backend="nccl",
+        batch_size=1,
+        mode="tp",
+        tensor_parallel_plan=explicit_plan,
+    )
+    explicit_plan["new"] = "rowwise"
+
+    assert analysis.tensor_parallel_candidate_names == ("0",)
+    assert dict(distributed_plan.tensor_parallel_plan) == {"0": "td_colwise_replicated"}
+    with pytest.raises(TypeError):
+        distributed_plan.tensor_parallel_plan["0"] = "rowwise"
+
+
 def test_plan_rejects_tensor_parallel_without_candidates():
     model = nn.Sequential(neuron.IFNode(step_mode="m"))
     analysis = analyze(model)

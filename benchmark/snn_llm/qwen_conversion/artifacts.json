@@ -1,0 +1,54 @@
+{
+  "datasets": {
+    "arc": {
+      "repository": "allenai/ai2_arc",
+      "revision": "210d026faf9955653af8916fad021475a3f00453"
+    },
+    "hellaswag": {
+      "repository": "Rowan/hellaswag",
+      "revision": "218ec52e09a7e7462a5400043bb9a69a41d06b76"
+    },
+    "lambada_openai": {
+      "repository": "EleutherAI/lambada_openai",
+      "revision": "900124bf3b8235c6daf21033af9948b3f07346c4"
+    },
+    "piqa": {
+      "repository": "baber/piqa",
+      "revision": "142f6d7367fd9877f0fb3b5734ea6a545f54cdd1"
+    },
+    "wikitext": {
+      "config": "wikitext-2-raw-v1",
+      "repository": "Salesforce/wikitext",
+      "revision": "b08601e04326c79dfdd32d625aee71d232d685c3"
+    },
+    "winogrande": {
+      "config": "winogrande_xl",
+      "repository": "allenai/winogrande",
+      "revision": "01e74176c63542e6b0bcb004dcdea22d94fb67b5"
+    }
+  },
+  "models": {
+    "0.5b": {
+      "layer_count": 24,
+      "license": "Apache-2.0",
+      "parameter_count": 494032768,
+      "repository": "Qwen/Qwen2.5-0.5B",
+      "revision": "060db6499f32faf8b98477b0a26969ef7d8b9987"
+    },
+    "1.5b": {
+      "layer_count": 28,
+      "license": "Apache-2.0",
+      "parameter_count": 1543714304,
+      "repository": "Qwen/Qwen2.5-1.5B",
+      "revision": "8faed761d45a263340a0528343f099c05c9a4323"
+    },
+    "3b": {
+      "layer_count": 36,
+      "license": "Qwen-Research",
+      "parameter_count": 3085938688,
+      "repository": "Qwen/Qwen2.5-3B",
+      "revision": "3aab1f1954e9cc14eb9509a215f9e5ca08227a9b"
+    }
+  },
+  "schema_version": 1
+}

@@ -1,3 +1,5 @@
+import threading
+import types
 import warnings
 from typing import Optional, Union
 
@@ -10,6 +12,35 @@ from spikingjelly.activation_based.ann2snn.recipes import (
     ModuleConversionRecipe,
     TransformerTDEquivalentRecipe,
 )
+
+
+_FX_TRACE_LOCK = threading.Lock()
+
+
+def _symbolic_trace(root: nn.Module) -> fx.GraphModule:
+    with _FX_TRACE_LOCK:
+        original_reshape = torch.reshape
+
+        def proxy_aware_reshape(input, shape):
+            if isinstance(input, fx.Proxy):
+                return input.tracer.create_proxy(
+                    "call_function", original_reshape, (input, shape), {}
+                )
+            return original_reshape(input, shape)
+
+        # Torch 2.6/2.7 validates reshape's shape before dispatching FX Proxy inputs.
+        torch.reshape = proxy_aware_reshape
+        try:
+            tracer = fx.Tracer()
+            graph = tracer.trace(root)
+        finally:
+            torch.reshape = original_reshape
+
+    # Torch 2.6/2.7 FX codegen cannot register repeated PEP 604 union types.
+    for node in graph.nodes:
+        if isinstance(node.type, types.UnionType):
+            node.type = None
+    return fx.GraphModule(tracer.root, graph)
 
 
 class FXConverter:
@@ -162,7 +193,7 @@ class FXConverter:
             with torch.no_grad():
                 self.recipe.validate(self)
                 ann = self.recipe.before_trace(self, ann)
-                fx_model = fx.symbolic_trace(ann).to(self.device)
+                fx_model = _symbolic_trace(ann).to(self.device)
                 fx_model = self.recipe.after_trace(self, fx_model)
                 fx_model = self.recipe.insert_observers(self, fx_model)
                 fx_model = self.recipe.calibrate(self, fx_model)
