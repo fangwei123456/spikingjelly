@@ -35,7 +35,7 @@ __all__ = []
         "N",
         "compute_dtype",
         "soft_reset",
-        "save_v_seq",
+        "store_v_seq",
         "threshold_is_scalar",
         "offset_is_scalar",
     ],
@@ -47,8 +47,7 @@ def _multistep_activation_aware_if_forward_static(
     threshold_ptr,
     offset_ptr,
     spike_seq_ptr,
-    v_final_ptr,
-    v_seq_ptr,
+    v_out_ptr,
     v_reset,
     T: tl.constexpr,
     N: tl.constexpr,
@@ -57,7 +56,7 @@ def _multistep_activation_aware_if_forward_static(
     BLOCK_N: tl.constexpr,
     compute_dtype: tl.constexpr,
     soft_reset: tl.constexpr,
-    save_v_seq: tl.constexpr,
+    store_v_seq: tl.constexpr,
     threshold_is_scalar: tl.constexpr,
     offset_is_scalar: tl.constexpr,
 ):
@@ -88,9 +87,10 @@ def _multistep_activation_aware_if_forward_static(
         else:
             v = spike * reset + (1.0 - spike) * h
         tl.store(spike_seq_ptr + t * N + offsets, spike, mask=mask)
-        if save_v_seq:
-            tl.store(v_seq_ptr + t * N + offsets, v, mask=mask)
-    tl.store(v_final_ptr + offsets, v, mask=mask)
+        if store_v_seq:
+            tl.store(v_out_ptr + t * N + offsets, v, mask=mask)
+    if not store_v_seq:
+        tl.store(v_out_ptr + offsets, v, mask=mask)
 
 
 @triton.autotune(
@@ -102,7 +102,7 @@ def _multistep_activation_aware_if_forward_static(
         "N",
         "compute_dtype",
         "soft_reset",
-        "save_v_seq",
+        "store_v_seq",
         "threshold_is_scalar",
         "offset_is_scalar",
     ],
@@ -114,8 +114,7 @@ def _multistep_activation_aware_if_forward_dynamic(
     threshold_ptr,
     offset_ptr,
     spike_seq_ptr,
-    v_final_ptr,
-    v_seq_ptr,
+    v_out_ptr,
     v_reset,
     T,
     N: tl.constexpr,
@@ -124,7 +123,7 @@ def _multistep_activation_aware_if_forward_dynamic(
     BLOCK_N: tl.constexpr,
     compute_dtype: tl.constexpr,
     soft_reset: tl.constexpr,
-    save_v_seq: tl.constexpr,
+    store_v_seq: tl.constexpr,
     threshold_is_scalar: tl.constexpr,
     offset_is_scalar: tl.constexpr,
 ):
@@ -155,9 +154,10 @@ def _multistep_activation_aware_if_forward_dynamic(
         else:
             v = spike * reset + (1.0 - spike) * h
         tl.store(spike_seq_ptr + t * N + offsets, spike, mask=mask)
-        if save_v_seq:
-            tl.store(v_seq_ptr + t * N + offsets, v, mask=mask)
-    tl.store(v_final_ptr + offsets, v, mask=mask)
+        if store_v_seq:
+            tl.store(v_out_ptr + t * N + offsets, v, mask=mask)
+    if not store_v_seq:
+        tl.store(v_out_ptr + offsets, v, mask=mask)
 
 
 def _launch_activation_aware_if_forward(
@@ -166,14 +166,13 @@ def _launch_activation_aware_if_forward(
     threshold: torch.Tensor,
     offset: torch.Tensor,
     spike_seq: torch.Tensor,
-    v_final: torch.Tensor,
-    v_seq: torch.Tensor,
+    v_out: torch.Tensor,
     *,
     channel_size: int,
     inner_size: int,
     v_reset: float,
     soft_reset: bool,
-    save_v_seq: bool,
+    store_v_seq: bool,
 ) -> None:
     T = x_seq.shape[0]
     N = x_seq[0].numel()
@@ -193,8 +192,7 @@ def _launch_activation_aware_if_forward(
             threshold,
             offset,
             spike_seq,
-            v_final,
-            v_seq,
+            v_out,
             v_reset,
             T=T,
             N=N,
@@ -202,7 +200,7 @@ def _launch_activation_aware_if_forward(
             INNER_SIZE=inner_size,
             compute_dtype=type_dict[x_seq.dtype],
             soft_reset=soft_reset,
-            save_v_seq=save_v_seq,
+            store_v_seq=store_v_seq,
             threshold_is_scalar=threshold.dim() == 0,
             offset_is_scalar=offset.dim() == 0,
         )
@@ -218,30 +216,28 @@ def _multistep_activation_aware_if_inference(
     inner_size: int,
     v_reset: float,
     soft_reset: bool,
-    save_v_seq: bool,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    store_v_seq: bool,
+) -> tuple[torch.Tensor, torch.Tensor]:
     x_seq = x_seq.contiguous()
     v_init = v_init.contiguous()
     threshold = threshold.to(device=x_seq.device, dtype=x_seq.dtype).contiguous()
     offset = offset.to(device=x_seq.device, dtype=x_seq.dtype).contiguous()
     spike_seq = torch.empty_like(x_seq)
-    v_final = torch.empty_like(v_init)
-    v_seq = torch.empty_like(x_seq) if save_v_seq else x_seq.new_empty((0,))
+    v_out = torch.empty_like(x_seq) if store_v_seq else torch.empty_like(v_init)
     _launch_activation_aware_if_forward(
         x_seq,
         v_init,
         threshold,
         offset,
         spike_seq,
-        v_final,
-        v_seq,
+        v_out,
         channel_size=channel_size,
         inner_size=inner_size,
         v_reset=v_reset,
         soft_reset=soft_reset,
-        save_v_seq=save_v_seq,
+        store_v_seq=store_v_seq,
     )
-    return spike_seq, v_final, v_seq
+    return spike_seq, v_out
 
 
 @torch.library.register_fake("sj::multistep_activation_aware_if_inference")
@@ -254,14 +250,12 @@ def _multistep_activation_aware_if_inference_fake(
     inner_size: int,
     v_reset: float,
     soft_reset: bool,
-    save_v_seq: bool,
+    store_v_seq: bool,
 ):
     del threshold, offset, channel_size, inner_size, v_reset, soft_reset
-    v_seq_shape = x_seq.shape if save_v_seq else (0,)
     return (
         torch.empty_like(x_seq),
-        torch.empty_like(v_init),
-        x_seq.new_empty(v_seq_shape),
+        x_seq.new_empty(x_seq.shape if store_v_seq else v_init.shape),
     )
 
 
@@ -274,11 +268,11 @@ def _multistep_activation_aware_if(
     channel_size: int,
     inner_size: int,
     v_reset: float | None,
-    save_v_seq: bool,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
+    store_v_seq: bool,
+) -> tuple[torch.Tensor, torch.Tensor]:
     soft_reset = v_reset is None
     reset = 0.0 if soft_reset else v_reset
-    spike_seq, v_final, v_seq = _multistep_activation_aware_if_inference(
+    return _multistep_activation_aware_if_inference(
         x_seq,
         v_init,
         threshold,
@@ -287,6 +281,5 @@ def _multistep_activation_aware_if(
         inner_size,
         reset,
         soft_reset,
-        save_v_seq,
+        store_v_seq,
     )
-    return spike_seq, v_final, (v_seq if save_v_seq else None)

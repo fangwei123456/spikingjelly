@@ -1184,7 +1184,7 @@ class ActivationAwareIFNode(base.MemoryModule):
             channel_size = 1
             inner_size = x_seq[0].numel()
 
-        spike_seq, self.v, v_seq = (
+        spike_seq, v_out = (
             activation_aware_if_triton_kernel._multistep_activation_aware_if(
                 x_seq,
                 self.v,
@@ -1193,11 +1193,14 @@ class ActivationAwareIFNode(base.MemoryModule):
                 channel_size=channel_size,
                 inner_size=inner_size,
                 v_reset=self.v_reset,
-                save_v_seq=self.store_v_seq,
+                store_v_seq=self.store_v_seq,
             )
         )
         if self.store_v_seq:
-            self.v_seq = v_seq
+            self.v_seq = v_out
+            self.v = v_out[-1].clone()
+        else:
+            self.v = v_out
         return spike_seq
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:

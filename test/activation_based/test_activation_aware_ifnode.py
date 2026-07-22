@@ -4,6 +4,9 @@ import torch
 import spikingjelly.configure as configure
 from spikingjelly.activation_based import neuron, surrogate
 from spikingjelly.activation_based.neuron import integrate_and_fire
+from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
+    activation_aware_if as activation_aware_if_triton_kernel,
+)
 
 
 def _manual_activation_aware_if(
@@ -179,11 +182,37 @@ class TestActivationAwareIFNode:
             torch.testing.assert_close(
                 candidate.v_seq, reference.v_seq, atol=1e-6, rtol=1e-6
             )
+            assert candidate.v.untyped_storage().data_ptr() != (
+                candidate.v_seq.untyped_storage().data_ptr()
+            )
         else:
             assert not hasattr(candidate, "v_seq")
             assert candidate.v.untyped_storage().nbytes() == (
                 candidate.v.numel() * candidate.v.element_size()
             )
+
+    @pytest.mark.parametrize("store_v_seq", [False, True])
+    def test_triton_fake_output_follows_voltage_storage_contract(self, store_v_seq):
+        x_seq = torch.empty(7, 2, 3, 5)
+        v_init = torch.empty_like(x_seq[0])
+
+        outputs = activation_aware_if_triton_kernel._multistep_activation_aware_if_inference_fake(
+            x_seq,
+            v_init,
+            torch.ones(5),
+            torch.zeros(5),
+            5,
+            1,
+            0.0,
+            True,
+            store_v_seq,
+        )
+
+        expected_voltage_shape = x_seq.shape if store_v_seq else v_init.shape
+        assert tuple(output.shape for output in outputs) == (
+            x_seq.shape,
+            expected_voltage_shape,
+        )
 
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is unavailable")
     def test_triton_inference_rejects_training_autograd_and_nonspiking(self):
