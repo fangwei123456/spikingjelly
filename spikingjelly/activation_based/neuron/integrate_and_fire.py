@@ -413,17 +413,20 @@ class IFNode(BaseNode):
                 return spike_seq
             elif self.backend == "triton":
                 self.v_float_to_tensor(x_seq[0])
-                spike_seq, v_seq = triton_kernel.multistep_if(
+                spike_seq, v_out = triton_kernel.multistep_if(
                     x_seq,
                     self.v,
                     self.v_threshold,
                     self.v_reset,
                     self.detach_reset,
                     self.surrogate_function,
+                    self.store_v_seq,
                 )
                 if self.store_v_seq:
-                    self.v_seq = v_seq
-                self.v = v_seq[-1].clone()
+                    self.v_seq = v_out
+                    self.v = v_out[-1].clone()
+                else:
+                    self.v = v_out
                 return spike_seq
             else:
                 raise ValueError(self.backend)
@@ -437,19 +440,20 @@ class IFNode(BaseNode):
                         "Triton backend only supports spiking surrogate functions. "
                         "Use backend='torch' for non-spiking surrogate functions."
                     )
-                spike_seq, v_seq = triton_kernel.multistep_if(
+                spike_seq, v_out = triton_kernel.multistep_if(
                     x_seq,
                     self.v,
                     self.v_threshold,
                     self.v_reset,
                     self.detach_reset,
                     self.surrogate_function,
+                    self.store_v_seq,
                 )
                 if self.store_v_seq:
-                    self.v_seq = v_seq
-                    self.v = v_seq[-1]
+                    self.v_seq = v_out
+                    self.v = v_out[-1]
                 else:
-                    self.v = v_seq[-1].clone()
+                    self.v = v_out
                 return spike_seq
             elif self.backend == "cupy":
                 spike_seq, v_seq = ac_neuron_kernel.multistep_if(

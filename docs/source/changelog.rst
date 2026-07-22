@@ -150,6 +150,15 @@ Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
 Improvements
 ~~~~~~~~~~~~
 
+Triton IF/LIF Memory Optimisation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
+
+- Reduced memory usage for standard Triton IF and LIF neurons with
+  ``store_v_seq=False`` by retaining only the final membrane potential instead of
+  materialising the full voltage sequence.
+
 Distributed Training
 ^^^^^^^^^^^^^^^^^^^^
 
