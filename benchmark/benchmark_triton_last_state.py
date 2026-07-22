@@ -31,6 +31,7 @@ CASES = tuple(
 
 
 def percentile(values, q):
+    """Return an interpolated quantile from a non-empty sequence."""
     values = sorted(values)
     index = (len(values) - 1) * q
     lower = int(index)
@@ -40,6 +41,7 @@ def percentile(values, q):
 
 
 def make_node(kind):
+    """Create the requested Triton neuron in last-state mode."""
     cls = IFNode if kind == "if" else LIFNode
     return cls(step_mode="m", backend="triton", store_v_seq=False).cuda()
 
@@ -54,6 +56,7 @@ def run_case(
     repetitions,
     iterations_per_repetition,
 ):
+    """Measure latency and peak allocation for one benchmark case."""
     torch.manual_seed(20260717)
     x = torch.randn(
         T,
@@ -67,6 +70,7 @@ def run_case(
     if mode == "training":
 
         def step():
+            """Run one forward and backward benchmark iteration."""
             node.reset()
             x.grad = None
             spikes = node(x)
@@ -75,6 +79,7 @@ def run_case(
     else:
 
         def step():
+            """Run one inference benchmark iteration."""
             node.reset()
             with torch.inference_mode():
                 node(x)
@@ -124,6 +129,7 @@ def run_case(
 
 
 def main():
+    """Run the benchmark matrix and write the results as JSON."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--warmup", type=int, default=5)
     parser.add_argument("--repetitions", type=int, default=25)

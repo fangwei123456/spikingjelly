@@ -341,11 +341,13 @@ def test_triton_vs_torch_forward_backward_consistency(kind, sg_name):
 def test_triton_last_state_matches_full_voltage_sequence(
     kind, T, dtype, v_reset, detach_reset
 ):
+    """Match training results and gradients against full voltage storage."""
     _require_cuda_triton_compile()
     if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
         pytest.skip("CUDA device does not support bfloat16")
 
     def make_node(store_v_seq):
+        """Create a Triton node with the requested voltage storage mode."""
         common = {
             "v_threshold": 1.0,
             "v_reset": v_reset,
@@ -398,6 +400,7 @@ def test_triton_last_state_matches_full_voltage_sequence(
 def test_triton_last_state_inference_matches_full_voltage_sequence(
     kind, T, dtype, v_reset
 ):
+    """Match inference results against full voltage storage."""
     _require_cuda_triton_compile()
     if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
         pytest.skip("CUDA device does not support bfloat16")
@@ -433,6 +436,7 @@ def test_triton_last_state_inference_matches_full_voltage_sequence(
 
 @pytest.mark.parametrize("kind", ["lif", "if"])
 def test_triton_last_state_fake_output_shapes(kind):
+    """Check fake operators return final-state voltage shapes."""
     x_seq = torch.empty(7, 3, 37)
     v_init = torch.empty(3, 37)
 
