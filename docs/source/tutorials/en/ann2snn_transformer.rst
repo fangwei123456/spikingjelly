@@ -7,7 +7,7 @@ Author: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_
 
 This page introduces Transformer-oriented ANN2SNN paths in ``spikingjelly.activation_based.ann2snn``, including the ``TransformerTDEquivalentRecipe`` baseline, ``STATransformerRecipe`` based on Spatio-Temporal Approximation (STA) [#sta]_, ``SpikeZIPTFQANNRecipe`` for SpikeZIP-compatible QANNs [#spikezip]_, and calibration-driven ``Qwen2SNNRecipe`` conversion. For classical ReLU-to-IFNode rate-coding conversion on CNNs, see :doc:`ann2snn`.
 
-This page orders three Transformer ANN2SNN paths from the simplest to the most specialized:
+This page orders four Transformer ANN2SNN paths from the simplest to the most specialized:
 
 * **Path 1: TransformerTDEquivalentRecipe baseline**. This is the most direct TD-equivalent operator replacement path. The BERT SST-2 example shows the conversion boundary for language classification models after the embedding output.
 * **Path 2: Spatio-Temporal Approximation (STA) Transformer conversion**. This is the model-level enhanced path implemented by ``STATransformerRecipe``. It keeps the cumulative-difference and explicit step-mode readout idea, then adds dataloader calibration and spike encoders. This page reports a full ViT-B/16 ImageNet result.

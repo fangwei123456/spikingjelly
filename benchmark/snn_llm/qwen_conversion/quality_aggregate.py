@@ -21,12 +21,24 @@ SCHEMA_VERSION = 1
 CONTRACT_KIND = "qwen2-snn-paper-quality-aggregate"
 
 
-def _load_report(path: Path) -> Dict[str, object]:
-    with path.open("r", encoding="utf-8") as handle:
-        report = json.load(handle)
+def _load_report(path: Path) -> tuple[Dict[str, object], str]:
+    payload = path.read_bytes()
+    report = json.loads(payload)
+    if not isinstance(report, dict):
+        raise ValueError(f"Input {path} must contain a JSON object.")
     if report.get("kind") != "qwen2-snn-paper-quality":
         raise ValueError(f"Input {path} is not a Qwen paper-quality report.")
-    return report
+    return report, hashlib.sha256(payload).hexdigest()
+
+
+def _perplexity(nll: float, token_count: int) -> float:
+    try:
+        value = math.exp(nll / token_count)
+    except OverflowError as exc:
+        raise ValueError("Aggregated perplexity is not finite.") from exc
+    if not math.isfinite(value):
+        raise ValueError("Aggregated perplexity is not finite.")
+    return value
 
 
 def _precision_config_identity(config: Mapping[str, object]) -> Dict[str, object]:
@@ -126,12 +138,15 @@ def _aggregate_ppl(reports: List[Mapping[str, object]]) -> Dict[str, object]:
         math.isfinite(value) for value in (dense_nll, snn_nll)
     ):
         raise ValueError("Aggregated PPL inputs must be finite and non-empty.")
-    dense_ppl = math.exp(dense_nll / token_count)
-    snn_ppl = math.exp(snn_nll / token_count)
+    dense_ppl = _perplexity(dense_nll, token_count)
+    snn_ppl = _perplexity(snn_nll, token_count)
+    relative_degradation = snn_ppl / dense_ppl - 1.0
+    if not math.isfinite(relative_degradation):
+        raise ValueError("Aggregated perplexity degradation is not finite.")
     return {
         "dense_ppl": dense_ppl,
         "snn_ppl": snn_ppl,
-        "relative_degradation": snn_ppl / dense_ppl - 1.0,
+        "relative_degradation": relative_degradation,
         "dense_nll": dense_nll,
         "snn_nll": snn_nll,
         "token_count": token_count,
@@ -194,10 +209,9 @@ def _aggregate_tasks(reports: List[Mapping[str, object]]) -> Dict[str, object]:
     }
 
 
-def aggregate(paths: List[Path]) -> Dict[str, object]:
-    if not paths:
-        raise ValueError("At least one input report is required.")
-    reports = [_load_report(path) for path in paths]
+def _aggregate_loaded(
+    paths: List[Path], reports: List[Dict[str, object]], digests: List[str]
+) -> Dict[str, object]:
     identity = _identity(reports[0])
     if any(_identity(report) != identity for report in reports[1:]):
         raise ValueError(
@@ -210,11 +224,8 @@ def aggregate(paths: List[Path]) -> Dict[str, object]:
         "kind": CONTRACT_KIND,
         "identity": identity,
         "source_reports": [
-            {
-                "path": str(path.resolve()),
-                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-            }
-            for path in paths
+            {"path": str(path.resolve()), "sha256": digest}
+            for path, digest in zip(paths, digests, strict=True)
         ],
         "quality": {
             "wikitext": _aggregate_ppl(reports),
@@ -229,6 +240,20 @@ def aggregate(paths: List[Path]) -> Dict[str, object]:
     _validate_quality(report)
     json.dumps(report, allow_nan=False)
     return report
+
+
+def aggregate(paths: List[Path]) -> Dict[str, object]:
+    if not paths:
+        raise ValueError("At least one input report is required.")
+    loaded = [_load_report(path) for path in paths]
+    reports = [report for report, _digest in loaded]
+    digests = [digest for _report, digest in loaded]
+    try:
+        return _aggregate_loaded(paths, reports, digests)
+    except (AttributeError, IndexError, KeyError, TypeError) as exc:
+        raise ValueError(
+            "Input report is missing or malformed required fields."
+        ) from exc
 
 
 def main(argv: Optional[List[str]] = None) -> int:

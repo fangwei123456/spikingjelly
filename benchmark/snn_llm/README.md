@@ -46,7 +46,9 @@ datasets, and downloaded model files belong under the ignored
 `benchmark/output/` directory. Runner output in a disposable worktree or on a
 remote host is transient. After acceptance, copy only the reports that must be
 retained to the source worktree archive at
-`/Users/allenyolk/CodeRepo/spikingjelly-dev/benchmark/output/snn-llm/archive/`.
+`$SOURCE_WORKTREE/benchmark/output/snn-llm/archive/`, where
+`$SOURCE_WORKTREE` is the durable source checkout rather than a disposable
+worktree.
 They must not be committed to Git. Published documentation contains only
 curated, reproducible summaries.
 

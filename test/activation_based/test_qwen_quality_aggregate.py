@@ -206,3 +206,23 @@ def test_quality_aggregate_rejects_task_batch_payload_config_mismatch(tmp_path):
 
     with pytest.raises(ValueError, match="payload and configuration"):
         runner.aggregate(paths)
+
+
+def test_quality_aggregate_rejects_malformed_report_with_clear_error(tmp_path):
+    path = tmp_path / "malformed.json"
+    path.write_text(json.dumps({"kind": "qwen2-snn-paper-quality"}))
+
+    with pytest.raises(ValueError, match="missing or malformed"):
+        runner.aggregate([path])
+
+
+def test_quality_aggregate_rejects_perplexity_overflow(tmp_path):
+    paths = _write_reports(tmp_path)
+    for path in paths[:2]:
+        report = json.loads(path.read_text())
+        report["quality"]["wikitext"]["dense_nll"] = 100_000.0
+        report["quality"]["wikitext"]["snn_nll"] = 100_000.0
+        path.write_text(json.dumps(report))
+
+    with pytest.raises(ValueError, match="perplexity is not finite"):
+        runner.aggregate(paths)

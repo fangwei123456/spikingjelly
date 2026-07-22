@@ -309,6 +309,7 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         calibration_levels=args.calibration_levels,
         calibration_quantile=args.calibration_quantile,
         calibration_reservoir_size=args.calibration_reservoir_size,
+        calibration_seed=20260719,
     )
     input_ids, attention_mask = _encode(tokenizer, [FIXED_PROMPTS[2]], args.device)
     input_ids = input_ids[:, :PREFILL_LENGTH]

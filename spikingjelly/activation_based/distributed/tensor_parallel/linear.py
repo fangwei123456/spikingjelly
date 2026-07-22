@@ -66,11 +66,10 @@ def _install_tdlinear_ann_forward(
         if not isinstance(desired_input_placement, Replicate):
             distributed_input = distributed_input.redistribute(
                 placements=(desired_input_placement,),
-                async_op=True,
             )
         output = F.linear(distributed_input, self.weight, self.bias)
         if output.placements != (Replicate(),):
-            output = output.redistribute(placements=(Replicate(),), async_op=True)
+            output = output.redistribute(placements=(Replicate(),))
         return output.to_local()
 
     module.ann_forward = MethodType(ann_forward, module)

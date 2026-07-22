@@ -24,6 +24,7 @@ HIDDEN_SIZE = 16
 BATCH_SIZE = 2
 SEQUENCE_LENGTH = 16
 LEARNING_RATE = 1e-2
+GIT_TIMEOUT_SECONDS = 30
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _SOURCES_PATH = _SCRIPT_DIR / "sources.json"
@@ -57,6 +58,7 @@ def _run_git(repo_root: Path, *args: str) -> Optional[str]:
         capture_output=True,
         text=True,
         check=False,
+        timeout=GIT_TIMEOUT_SECONDS,
     )
     if completed.returncode != 0:
         return None

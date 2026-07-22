@@ -320,6 +320,8 @@ def _load_gpt2(
         local_files_only=True,
     )
     if tokenizer.pad_token_id is None:
+        if tokenizer.eos_token is None:
+            raise ValueError("Tokenizer requires a pad token or EOS token.")
         tokenizer.pad_token = tokenizer.eos_token
     model = transformers.AutoModelForCausalLM.from_pretrained(
         str(paths.root),

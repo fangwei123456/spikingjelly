@@ -7,7 +7,7 @@ English version: :doc:`../en/ann2snn_transformer`
 
 本页介绍 ``spikingjelly.activation_based.ann2snn`` 中面向 Transformer 的 ANN2SNN 转换路径，包括 ``TransformerTDEquivalentRecipe`` 基线、基于 Spatio-Temporal Approximation (STA) [#sta]_ 的 ``STATransformerRecipe``、用于 SpikeZIP-compatible QANN 的 ``SpikeZIPTFQANNRecipe`` [#spikezip]_，以及基于校准的 ``Qwen2SNNRecipe``。如果要做经典 CNN 上的 ReLU-to-IFNode rate coding 转换，请阅读 :doc:`ann2snn`。
 
-本教程按从简单到复杂的顺序组织三条 Transformer 转换路径：
+本教程按从简单到复杂的顺序组织四条 Transformer 转换路径：
 
 * **Path 1: TransformerTDEquivalentRecipe 基线**。这是最直接的 TD-equivalent operator replacement 路径，用 BERT SST-2 说明语言分类模型在 embedding 输出之后的转换边界。
 * **Path 2: Spatio-Temporal Approximation (STA) Transformer 转换**。这是 ``STATransformerRecipe`` 的模型级增强路径，沿用累计差分和显式 step-mode 读出思想，并进一步加入 dataloader 校准和 spike encoder；本页在 ViT-B/16 ImageNet 上展示完整结果。

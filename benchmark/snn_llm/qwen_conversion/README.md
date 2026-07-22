@@ -10,6 +10,9 @@ revisions are pinned in `artifacts.json`. Download Hugging Face artifacts on a
 machine with network access, using the configured mirror when needed, and pass
 their local paths explicitly.
 
+Install the pinned model and evaluation dependencies into the active project
+environment with `uv pip install ".[qwen]" --group llm-benchmark`.
+
 ## Correctness
 
 `scaleout_smoke.py` compares dense, exact temporal, and signed-IF execution. It
@@ -71,7 +74,9 @@ Generated reports, calibration artifacts, logs, checkpoints, profiler traces,
 and downloaded model files must remain under the ignored `benchmark/output/`
 tree. Command output is transient; accepted reports that need durable local
 retention must be copied to the source worktree archive at
-`/Users/allenyolk/CodeRepo/spikingjelly-dev/benchmark/output/snn-llm/archive/`.
+`$SOURCE_WORKTREE/benchmark/output/snn-llm/archive/`, where
+`$SOURCE_WORKTREE` is the durable source checkout rather than a disposable
+worktree.
 They must not be committed to Git.
 
 The reports bind results to the runner, model files, artifact lock,

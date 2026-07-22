@@ -31,7 +31,6 @@ try:
     from .dense_baseline import (
         DEFAULT_MAX_SAMPLES,
         FIXED_PROMPTS,
-        MAX_LENGTH,
         REPORT_FILENAME,
         _import_huggingface,
         build_environment,
@@ -47,7 +46,6 @@ except ImportError:  # pragma: no cover - script entry path
     from dense_baseline import (
         DEFAULT_MAX_SAMPLES,
         FIXED_PROMPTS,
-        MAX_LENGTH,
         REPORT_FILENAME,
         _import_huggingface,
         build_environment,
@@ -105,6 +103,32 @@ def _cache_layer_summaries(cache: object) -> List[Dict[str, Any]]:
             }
         )
     return summaries
+
+
+def _snapshot_cache_tensors(cache: object) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+    layers = getattr(cache, "layers", None)
+    if layers is None:
+        raise TypeError("Cache object does not expose a layers attribute.")
+    snapshots = []
+    for layer in layers:
+        keys = getattr(layer, "keys", None)
+        values = getattr(layer, "values", None)
+        if not isinstance(keys, torch.Tensor) or not isinstance(values, torch.Tensor):
+            raise TypeError("Cache layer must expose tensor .keys and .values.")
+        snapshots.append((keys.detach().clone(), values.detach().clone()))
+    return snapshots
+
+
+def _cache_matches_snapshot(
+    cache: object, snapshots: List[Tuple[torch.Tensor, torch.Tensor]]
+) -> bool:
+    layers = getattr(cache, "layers", None)
+    if layers is None or len(layers) != len(snapshots):
+        return False
+    return all(
+        torch.equal(layer.keys, keys) and torch.equal(layer.values, values)
+        for layer, (keys, values) in zip(layers, snapshots, strict=True)
+    )
 
 
 def _clone_cache(cache: object) -> object:
@@ -366,6 +390,7 @@ def compute_scenarios(
 
     prefill_logits, prefill_cache = _full_forward(model, prefill_ids, prefill_mask)
     prefill_cache_len_before = _cache_seq_length(prefill_cache)
+    prefill_cache_snapshot = _snapshot_cache_tensors(prefill_cache)
     branch_cache = _clone_cache(prefill_cache)
     branch_decoded = _decode_step(
         model,
@@ -375,7 +400,10 @@ def compute_scenarios(
     )
     del branch_decoded
     prefill_cache_len_after = _cache_seq_length(prefill_cache)
-    clone_independent = prefill_cache_len_before == prefill_cache_len_after
+    clone_independent = (
+        prefill_cache_len_before == prefill_cache_len_after
+        and _cache_matches_snapshot(prefill_cache, prefill_cache_snapshot)
+    )
     if not clone_independent:
         raise ValueError("Cache clone is not independent from the source cache.")
 

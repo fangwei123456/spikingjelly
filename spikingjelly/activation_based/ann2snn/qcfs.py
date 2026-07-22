@@ -172,12 +172,11 @@ class SignedQCFSSequenceEncoder(nn.Module):
         desired = torch.round(value / scale).clamp(0, self.time_steps)
         mismatch = spikes.sum(0).ne(desired)
         if not self.collect_statistics:
-            return (
-                self._replay_mismatches(
+            if mismatch.any():
+                spikes = self._replay_mismatches(
                     node, spikes, desired, mismatch, scale, verify=False
-                ),
-                0,
-            )
+                )
+            return spikes, 0
         corrected = int(mismatch.count_nonzero().detach().cpu())
         if corrected:
             spikes = self._replay_mismatches(
@@ -207,7 +206,8 @@ class SignedQCFSSequenceEncoder(nn.Module):
         :type metric_mask: Optional[torch.Tensor]
         :return: 形状 ``[T, *value.shape]`` 的 signed spike sequence。
         :rtype: torch.Tensor
-        :raises ValueError: 输入不是浮点张量或通道数与 scale 不匹配。
+        :raises ValueError: 输入不是至少一维的浮点张量、通道数与 scale 不匹配，
+            或统计 mask 的形状无效或未选择任何元素。
 
         ----
 
@@ -227,11 +227,14 @@ class SignedQCFSSequenceEncoder(nn.Module):
         :type metric_mask: Optional[torch.Tensor]
         :return: Signed spike sequence with shape ``[T, *value.shape]``.
         :rtype: torch.Tensor
-        :raises ValueError: If the input is not floating point or its channel count
-            does not match the scale.
+        :raises ValueError: If the input is not a floating-point tensor with at
+            least one dimension, its channel count does not match the scale, or
+            the statistics mask has an invalid shape or selects no elements.
         """
         if not torch.is_floating_point(value):
             raise ValueError("Signed QCFS encoding requires a floating-point tensor.")
+        if value.dim() == 0:
+            raise ValueError("Signed QCFS encoding requires at least one dimension.")
         channel_dim = self.channel_dim % value.dim()
         if value.shape[channel_dim] != self.positive_neuron.v_threshold.numel():
             raise ValueError("Input channel size does not match the QCFS scale.")
@@ -252,10 +255,21 @@ class SignedQCFSSequenceEncoder(nn.Module):
             reference = value
             if metric_mask is not None:
                 mask = metric_mask.to(device=value.device, dtype=torch.bool)
-                positive_metric = positive_metric[:, mask]
-                negative_metric = negative_metric[:, mask]
-                reconstructed = reconstructed[mask]
-                reference = reference[mask]
+                expected_shape = (
+                    value.shape[:channel_dim] + value.shape[channel_dim + 1 :]
+                )
+                if mask.shape != expected_shape:
+                    raise ValueError(
+                        "metric_mask shape must match value dimensions excluding "
+                        f"channel_dim: expected {tuple(expected_shape)}, got {tuple(mask.shape)}."
+                    )
+                if not mask.any():
+                    raise ValueError("metric_mask must select at least one element.")
+                expanded_mask = mask.unsqueeze(channel_dim).expand(value.shape)
+                positive_metric = positive_metric[:, expanded_mask]
+                negative_metric = negative_metric[:, expanded_mask]
+                reconstructed = reconstructed[expanded_mask]
+                reference = reference[expanded_mask]
             self.positive_spike_rate = float(positive_metric.mean().cpu())
             self.negative_spike_rate = float(negative_metric.mean().cpu())
             self.positive_spike_count = int(positive_metric.count_nonzero().cpu())
@@ -292,7 +306,7 @@ class SignedQCFSSequenceEncoder(nn.Module):
         :type value: torch.Tensor
         :return: 与 ``encode(value).sum(0)`` 等价的 QCFS 重建值。
         :rtype: torch.Tensor
-        :raises ValueError: 输入不是浮点张量或通道数与 scale 不匹配。
+        :raises ValueError: 输入不是至少一维的浮点张量，或通道数与 scale 不匹配。
 
         ----
 
@@ -312,11 +326,15 @@ class SignedQCFSSequenceEncoder(nn.Module):
         :type value: torch.Tensor
         :return: QCFS reconstruction equivalent to ``encode(value).sum(0)``.
         :rtype: torch.Tensor
-        :raises ValueError: If the input is not floating point or its channel
-            count does not match the scale.
+        :raises ValueError: If the input is not a floating-point tensor with at
+            least one dimension or its channel count does not match the scale.
         """
         if not torch.is_floating_point(value):
             raise ValueError("Signed QCFS reconstruction requires floating point.")
+        if value.dim() == 0:
+            raise ValueError(
+                "Signed QCFS reconstruction requires at least one dimension."
+            )
         channel_dim = self.channel_dim % value.dim()
         scale = self.positive_neuron.v_threshold.to(value)
         if value.shape[channel_dim] != scale.numel():

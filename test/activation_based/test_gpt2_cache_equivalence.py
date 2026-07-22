@@ -109,6 +109,25 @@ def test_cache_clone_uses_deepcopy_and_does_not_alias_tensors():
     assert clone["tensors"][0][0].item() == 0.0
 
 
+def test_cache_snapshot_detects_same_shape_tensor_mutation():
+    from benchmark.snn_llm.gpt2_conversion.cache_equivalence import (
+        _cache_matches_snapshot,
+        _snapshot_cache_tensors,
+    )
+
+    class _Layer:
+        def __init__(self) -> None:
+            self.keys = torch.zeros(2, 1, 3, 2)
+            self.values = torch.ones(2, 1, 3, 2)
+
+    cache = type("_Cache", (), {"layers": [_Layer()]})()
+    snapshot = _snapshot_cache_tensors(cache)
+
+    cache.layers[0].keys.add_(1.0)
+
+    assert _cache_matches_snapshot(cache, snapshot) is False
+
+
 def test_cache_reorder_supports_dynamic_cache_and_falls_back_to_batch_select():
     from benchmark.snn_llm.gpt2_conversion.cache_equivalence import _reorder_cache
 

@@ -204,6 +204,7 @@ def test_load_calibration_requires_matching_configuration(tmp_path):
         calibration_levels=16,
         calibration_quantile=1.0,
         calibration_reservoir_size=4096,
+        calibration_seed=20260719,
     )
 
     assert loaded.time_steps == 32
@@ -215,6 +216,16 @@ def test_load_calibration_requires_matching_configuration(tmp_path):
             calibration_levels=16,
             calibration_quantile=1.0,
             calibration_reservoir_size=4096,
+            calibration_seed=20260719,
+        )
+    with pytest.raises(ValueError, match="calibration_seed"):
+        runner._validate_calibration_config(
+            loaded,
+            time_steps=32,
+            calibration_levels=16,
+            calibration_quantile=1.0,
+            calibration_reservoir_size=4096,
+            calibration_seed=0,
         )
 
 

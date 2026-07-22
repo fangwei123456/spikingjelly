@@ -83,13 +83,24 @@ def _load_author_model(root: Path, require_wkv: bool):
             from torch.utils.cpp_extension import load as extension_load
 
             def load_from_spikegpt(*args, **kwargs):
-                kwargs["sources"] = [
+                positional = list(args)
+                if "sources" in kwargs:
+                    sources = kwargs["sources"]
+                elif len(positional) >= 2:
+                    sources = positional[1]
+                else:
+                    raise TypeError("SpikeGPT extension load requires sources.")
+                resolved_sources = [
                     str((root / source).resolve())
                     if not Path(source).is_absolute()
                     else source
-                    for source in kwargs["sources"]
+                    for source in sources
                 ]
-                return extension_load(*args, **kwargs)
+                if "sources" in kwargs:
+                    kwargs["sources"] = resolved_sources
+                else:
+                    positional[1] = resolved_sources
+                return extension_load(*positional, **kwargs)
 
             extension_patch = mock.patch(
                 "torch.utils.cpp_extension.load", side_effect=load_from_spikegpt

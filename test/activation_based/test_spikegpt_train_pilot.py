@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import numpy as np
 import torch
 
 from benchmark.snn_llm import _spikegpt_pilot as spikegpt_train_pilot
@@ -85,6 +86,18 @@ def test_checkpoint_accepts_only_the_declared_pilot_config(tmp_path):
             torch.device("cpu"),
             training_config={**config, "context_length": 32},
         )
+
+
+def test_numpy_rng_checkpoint_state_is_portable_and_exact():
+    np.random.seed(123)
+    state = spikegpt_train_smoke._rng_state()
+    expected = np.random.randint(0, 2**31, size=8)
+
+    assert state["numpy"]["keys"].dtype == torch.int64
+    spikegpt_train_smoke._restore_rng_state(state)
+    actual = np.random.randint(0, 2**31, size=8)
+
+    np.testing.assert_array_equal(actual, expected)
 
 
 def test_help_exposes_only_pilot_resource_and_resume_controls():

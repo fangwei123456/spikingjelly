@@ -6,6 +6,7 @@ import pytest
 import torch
 
 from benchmark.snn_llm import spikegpt_checkpoint_compare
+from benchmark.snn_llm._spikegpt_author import SPIKEGPT_REVISION
 from spikingjelly.activation_based import neuron
 
 
@@ -93,19 +94,19 @@ def test_artifact_hashes_are_enforced(monkeypatch, tmp_path):
     root, verified_tokenizer, revision = spikegpt_checkpoint_compare._verify_artifacts(
         source_root,
         checkpoint,
-        spikegpt_checkpoint_compare.SPIKEGPT_REVISION,
+        SPIKEGPT_REVISION,
     )
 
     assert root == source_root.resolve()
     assert verified_tokenizer == tokenizer
-    assert revision == spikegpt_checkpoint_compare.SPIKEGPT_REVISION
+    assert revision == SPIKEGPT_REVISION
 
     checkpoint.write_bytes(b"tampered")
     with pytest.raises(RuntimeError, match="Checkpoint SHA-256 mismatch"):
         spikegpt_checkpoint_compare._verify_artifacts(
             source_root,
             checkpoint,
-            spikegpt_checkpoint_compare.SPIKEGPT_REVISION,
+            SPIKEGPT_REVISION,
         )
 
 

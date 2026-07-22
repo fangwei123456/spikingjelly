@@ -1,4 +1,3 @@
-from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest

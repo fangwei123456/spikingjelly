@@ -10,14 +10,13 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Tuple
+from typing import Dict, List, Mapping, Optional
 
 import torch
 from benchmark.snn_llm._reporting import write_report as _write_report
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.ann2snn import (
     ModuleConverter,
-    Qwen2SNNCalibration,
     Qwen2SNNConfig,
     Qwen2SNNRecipe,
     calibrate_qwen2_snn,
@@ -76,7 +75,8 @@ def _validate_report(report: Mapping[str, object]) -> None:
         value = float(metrics[name])
         if not math.isfinite(value) or value > limit:
             raise ValueError(f"Metric {name}={value!r} exceeds {limit!r}.")
-    if float(metrics["signed_top1_agreement"]) < 0.50:
+    top1_agreement = float(metrics["signed_top1_agreement"])
+    if not math.isfinite(top1_agreement) or top1_agreement < 0.50:
         raise ValueError("signed_top1_agreement is below 0.50.")
     conversion = report["conversion"]
     expected = _expected_structure(int(report["model"]["layer_count"]))

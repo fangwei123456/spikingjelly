@@ -314,8 +314,6 @@ def _rolling_ppl(
             break
         labels = input_ids.clone()
         labels[:, :-target_length] = -100
-        attention_mask = torch.ones_like(input_ids)
-        del attention_mask
         dense_value, dense_tokens = _chunked_nll(
             model=dense_model,
             input_ids=input_ids,
@@ -410,8 +408,8 @@ def _zero_shot(
         def enable_distributed_requests(self) -> None:
             if not torch_dist.is_initialized():
                 return
-            self._rank = torch_dist.get_rank()
-            self._world_size = torch_dist.get_world_size()
+            self.rank = torch_dist.get_rank()
+            self.world_size = torch_dist.get_world_size()
 
         def all_gather(self, tensor):
             if self.world_size <= 1:
@@ -635,6 +633,7 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
             calibration_levels=config.calibration_levels,
             calibration_quantile=config.calibration_quantile,
             calibration_reservoir_size=config.calibration_reservoir_size,
+            calibration_seed=config.calibration_seed,
         )
         calibration_origin = "reused"
     converted = ModuleConverter(Qwen2SNNRecipe(calibration, config)).convert(

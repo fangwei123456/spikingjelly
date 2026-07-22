@@ -84,6 +84,30 @@ def test_scaleout_report_write_does_not_clobber_competing_target(tmp_path, monke
     assert not tuple(tmp_path.glob(".report.json.*.tmp"))
 
 
+def test_scaleout_report_rejects_nonfinite_top1_agreement():
+    report = {
+        "metrics": {
+            "exact_logits_relative_l2": 0.0,
+            "exact_loss_delta": 0.0,
+            "signed_logits_relative_l2": 0.0,
+            "signed_loss_delta": 0.0,
+            "reset_replay_max_abs_error": 0.0,
+            "exact_cached_decode_max_relative_l2": 0.0,
+            "signed_cached_decode_max_relative_l2": 0.0,
+            "signed_top1_agreement": float("nan"),
+        },
+        "model": {"layer_count": 1},
+        "conversion": {
+            "structure": runner._expected_structure(1),
+            "temporal_layout": "[T,B,S,H]",
+            "execution_schedule": "layerwise_offline_multistep",
+        },
+    }
+
+    with pytest.raises(ValueError, match="top1"):
+        runner._validate_report(report)
+
+
 def test_scaleout_calibration_artifact_must_match_configuration(tmp_path):
     calibration = Qwen2SNNCalibration(
         input_scale=torch.ones(2),

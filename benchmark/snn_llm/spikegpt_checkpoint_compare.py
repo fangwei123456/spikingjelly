@@ -10,10 +10,7 @@ from pathlib import Path
 
 import torch
 
-from benchmark.snn_llm._spikegpt_author import (
-    SPIKEGPT_REVISION,
-    _verify_source,
-)
+from benchmark.snn_llm._spikegpt_author import _verify_source
 from spikingjelly.activation_based import neuron
 
 

@@ -97,12 +97,14 @@ def validate_calibration_config(
     calibration_levels: int,
     calibration_quantile: float,
     calibration_reservoir_size: int,
+    calibration_seed: int,
 ) -> None:
     expected = {
         "time_steps": time_steps,
         "calibration_levels": calibration_levels,
         "calibration_quantile": calibration_quantile,
         "calibration_reservoir_size": calibration_reservoir_size,
+        "calibration_seed": calibration_seed,
     }
     for name, value in expected.items():
         actual = getattr(calibration, name)

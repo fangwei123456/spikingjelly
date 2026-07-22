@@ -50,6 +50,39 @@ def test_signed_qcfs_sequence_encoder_supports_non_last_channel_dimension():
     torch.testing.assert_close(sequence.sum(0), expected, atol=0.0, rtol=0.0)
 
 
+def test_signed_qcfs_sequence_encoder_validates_rank_and_metric_mask_shape():
+    encoder = SignedQCFSSequenceEncoder(
+        scale=torch.tensor([0.25, 0.5, 1.0]),
+        time_steps=4,
+        channel_dim=1,
+    )
+
+    with pytest.raises(ValueError, match="at least one dimension"):
+        encoder.encode(torch.tensor(1.0))
+    with pytest.raises(ValueError, match="metric_mask shape"):
+        encoder.encode(torch.ones(2, 3, 4), metric_mask=torch.ones(2, 3))
+    with pytest.raises(ValueError, match="select at least one"):
+        encoder.encode(
+            torch.ones(2, 3, 4),
+            metric_mask=torch.zeros(2, 4, dtype=torch.bool),
+        )
+
+
+def test_signed_qcfs_metric_mask_supports_non_last_channel_dimension():
+    encoder = SignedQCFSSequenceEncoder(
+        scale=torch.tensor([0.25, 0.5, 1.0]),
+        time_steps=4,
+        channel_dim=1,
+    )
+    value = torch.ones(2, 3, 4)
+    mask = torch.tensor([[True, False, True, False], [False, True, False, True]])
+
+    sequence = encoder.encode(value, metric_mask=mask)
+
+    assert sequence.shape == (4, 2, 3, 4)
+    assert encoder.spike_value_count == 4 * int(mask.sum()) * 3
+
+
 def test_count_domain_reconstruction_equals_multistep_temporal_sum():
     encoder = SignedQCFSSequenceEncoder(
         torch.tensor([0.25, 0.5, 1.0]),

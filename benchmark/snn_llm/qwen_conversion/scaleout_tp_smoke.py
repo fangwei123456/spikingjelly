@@ -257,6 +257,7 @@ def _run(args: argparse.Namespace) -> tuple[Dict[str, object], int]:
         calibration_levels=args.calibration_levels,
         calibration_quantile=args.calibration_quantile,
         calibration_reservoir_size=args.calibration_reservoir_size,
+        calibration_seed=20260719,
     )
     config = Qwen2SNNConfig(
         time_steps=args.time_steps,

@@ -12,7 +12,6 @@ import numpy as np
 import torch
 
 from benchmark.snn_llm._spikegpt_author import (
-    SPIKEGPT_REVISION,
     _load_author_model,
     _verify_source,
     make_current_lif,
@@ -124,7 +123,7 @@ def _rng_state() -> dict:
         "python": random.getstate(),
         "numpy": {
             "bit_generator": numpy_state[0],
-            "keys": torch.from_numpy(numpy_state[1].copy()),
+            "keys": torch.from_numpy(numpy_state[1].astype(np.int64, copy=True)),
             "position": numpy_state[2],
             "has_gauss": numpy_state[3],
             "cached_gaussian": numpy_state[4],
@@ -140,7 +139,7 @@ def _restore_rng_state(state: dict) -> None:
     np.random.set_state(
         (
             numpy_state["bit_generator"],
-            numpy_state["keys"].cpu().numpy(),
+            numpy_state["keys"].cpu().numpy().astype(np.uint32, copy=False),
             numpy_state["position"],
             numpy_state["has_gauss"],
             numpy_state["cached_gaussian"],
