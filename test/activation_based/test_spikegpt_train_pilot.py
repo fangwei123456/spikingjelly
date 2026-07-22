@@ -2,12 +2,14 @@ import math
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import numpy as np
 import torch
 
 from benchmark.snn_llm import _spikegpt_pilot as spikegpt_train_pilot
+from benchmark.snn_llm import _spikegpt_author
 from benchmark.snn_llm import _spikegpt_training as spikegpt_train_smoke
 
 
@@ -180,6 +182,34 @@ def test_training_direction_compares_equal_start_and_end_windows():
     assert start_bpc == pytest.approx(3.5 / math.log(2.0))
     assert end_bpc == pytest.approx(1.5 / math.log(2.0))
     assert flat is False
+
+
+def test_training_direction_rejects_nonpositive_window():
+    with pytest.raises(ValueError, match="window size must be positive"):
+        spikegpt_train_pilot._training_direction([1.0, 0.5], window_size=0)
+
+
+def test_wkv_instrumentation_does_not_stack_wrappers():
+    calls = []
+    author_model = SimpleNamespace(RUN_CUDA=lambda value: calls.append(value) or value)
+
+    _spikegpt_author._instrument_wkv(author_model, require_wkv=True)
+    _spikegpt_author._instrument_wkv(author_model, require_wkv=True)
+
+    assert author_model.RUN_CUDA(7) == 7
+    assert calls == [7]
+    assert author_model._comparison_wkv_calls == 1
+
+
+def test_git_head_timeout_is_treated_as_unavailable(monkeypatch, tmp_path):
+    (tmp_path / ".git").mkdir()
+
+    def timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+
+    monkeypatch.setattr(_spikegpt_author.subprocess, "run", timeout)
+
+    assert _spikegpt_author._git_head(tmp_path) is None
 
 
 def test_pilot_config_fingerprints_full_validation_protocol():

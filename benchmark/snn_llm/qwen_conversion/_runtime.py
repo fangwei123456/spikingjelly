@@ -163,7 +163,9 @@ def load_model(model_root: Path, device: str):
         raise ImportError("Qwen scale-out requires the transformers package.") from exc
     required = ("config.json", "tokenizer.json", "tokenizer_config.json")
     missing = [name for name in required if not (model_root / name).is_file()]
-    if missing or not tuple(model_root.glob("*.safetensors")):
+    if not tuple(model_root.glob("*.safetensors")):
+        missing.append("*.safetensors")
+    if missing:
         raise FileNotFoundError(
             f"Incomplete local Qwen artifact {model_root}: missing {missing!r}."
         )

@@ -8,6 +8,8 @@ PPL benchmark. All of those are explicit ``explicitly_unsupported_now`` items.
 
 from .conversion_contract import (
     CONTRACT_SCHEMA_VERSION,
+    DEFAULT_MODEL_NAME,
+    EXPECTED_REVISION,
     GPT2ModelPaths,
     REQUIRED_MODEL_FILES,
     REQUIRED_TOKENIZER_FILES,
@@ -17,8 +19,6 @@ from .conversion_contract import (
 from .dense_baseline import (
     BASELINE_SCHEMA_VERSION,
     DEFAULT_MAX_SAMPLES,
-    DEFAULT_MODEL_NAME,
-    EXPECTED_REVISION,
     FIXED_PROMPTS,
     MAX_LENGTH,
     build_baseline_report,

@@ -365,23 +365,19 @@ def compute_scenarios(
         )
     del segmented_outputs
 
-    if decode_steps > 0:
-        seg_decode_cache = _clone_cache(segmented_cache)
-        seg_step_logits: List[torch.Tensor] = []
-        for step in range(decode_steps):
-            step_input = decode_ids[:, step : step + 1]
-            step_mask = decode_mask[:, : prefill_length + step + 1]
-            seg_step_logits.append(
-                _decode_step(model, step_input, step_mask, seg_decode_cache)[:, 0]
-            )
-        seg_full = torch.stack(seg_step_logits, dim=1)
-        seg_max, seg_mean = _abs_error(
-            seg_full,
-            full_logits[:, prefill_length : prefill_length + decode_steps],
+    seg_decode_cache = _clone_cache(segmented_cache)
+    seg_step_logits: List[torch.Tensor] = []
+    for step in range(decode_steps):
+        step_input = decode_ids[:, step : step + 1]
+        step_mask = decode_mask[:, : prefill_length + step + 1]
+        seg_step_logits.append(
+            _decode_step(model, step_input, step_mask, seg_decode_cache)[:, 0]
         )
-    else:
-        seg_max, seg_mean = 0.0, 0.0
-        seg_decode_cache = segmented_cache
+    seg_full = torch.stack(seg_step_logits, dim=1)
+    seg_max, seg_mean = _abs_error(
+        seg_full,
+        full_logits[:, prefill_length : prefill_length + decode_steps],
+    )
     segmented_decode_final_seq = _cache_seq_length(seg_decode_cache)
     segmented_compare = {
         "max": seg_max,

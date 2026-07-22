@@ -226,3 +226,14 @@ def test_quality_aggregate_rejects_perplexity_overflow(tmp_path):
 
     with pytest.raises(ValueError, match="perplexity is not finite"):
         runner.aggregate(paths)
+
+
+def test_quality_aggregate_rejects_negative_nll(tmp_path):
+    paths = _write_reports(tmp_path)
+    for path in paths[:2]:
+        report = json.loads(path.read_text())
+        report["quality"]["wikitext"]["dense_nll"] = -1.0
+        path.write_text(json.dumps(report))
+
+    with pytest.raises(ValueError, match="non-negative"):
+        runner.aggregate(paths)

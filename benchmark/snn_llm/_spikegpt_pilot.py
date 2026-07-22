@@ -44,6 +44,8 @@ def _bpc_from_nll(nll: float) -> float:
 def _training_direction(
     losses: list[float], window_size: int
 ) -> tuple[bool, float, float]:
+    if window_size <= 0:
+        raise ValueError("Training direction window size must be positive.")
     if len(losses) < window_size * 2:
         raise ValueError("Training direction requires two complete windows.")
     start_nll = sum(losses[:window_size]) / window_size

@@ -465,6 +465,31 @@ def test_compute_baseline_reports_loss_in_range(tmp_path: Path, monkeypatch):
     assert _FakeModel.kwargs["local_files_only"] is True
 
 
+def test_compute_baseline_reports_perplexity_overflow_as_value_error(
+    tmp_path: Path, monkeypatch
+):
+    baseline = _import_baseline_module()
+    _populate_model_root(tmp_path)
+    paths = baseline.validate_model_root(tmp_path)
+    monkeypatch.setattr(
+        baseline,
+        "_import_huggingface",
+        lambda loader: _FakeTransformers,
+    )
+    monkeypatch.setattr(
+        baseline.torch.nn.functional,
+        "cross_entropy",
+        lambda *args, **kwargs: baseline.torch.tensor(1_000.0),
+    )
+
+    with pytest.raises(ValueError, match="perplexity is not finite"):
+        baseline.compute_baseline(
+            paths=paths,
+            device="cpu",
+            max_samples=baseline.DEFAULT_MAX_SAMPLES,
+        )
+
+
 # --------------------------------------------------------------------------- #
 # Slice 4: CLI surface and end-to-end runner behaviour.
 # --------------------------------------------------------------------------- #

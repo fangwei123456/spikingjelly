@@ -134,3 +134,10 @@ def test_current_inference_states_are_independent():
     assert all(
         left is not right for left, right in zip(first_ffn_lifs, second_ffn_lifs)
     )
+
+
+def test_spike_rates_reject_missing_hook_observations(monkeypatch):
+    monkeypatch.setattr(spikegpt_checkpoint_compare, "N_LAYER", 1)
+
+    with pytest.raises(RuntimeError, match="missing spike observations"):
+        spikegpt_checkpoint_compare._spike_rates([[None, torch.tensor(1.0)]], [[0, 1]])

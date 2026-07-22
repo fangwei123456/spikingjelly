@@ -192,6 +192,12 @@ def _spike_hooks(attention_lifs, ffn_lifs):
 
 
 def _spike_rates(spike_sums, element_counts) -> list[dict]:
+    if any(
+        spike_sums[layer_id][kind] is None or element_counts[layer_id][kind] <= 0
+        for layer_id in range(N_LAYER)
+        for kind in range(2)
+    ):
+        raise RuntimeError("Spike hooks are missing spike observations.")
     return [
         {
             "layer": layer_id,

@@ -235,7 +235,12 @@ def compute_baseline(
         raise ValueError(f"Dense baseline loss is not finite: {loss_value!r}.")
 
     parameter_count = sum(parameter.numel() for parameter in model.parameters())
-    perplexity = math.exp(loss_value)
+    try:
+        perplexity = math.exp(loss_value)
+    except OverflowError as exc:
+        raise ValueError(
+            f"Dense baseline perplexity is not finite for loss {loss_value!r}."
+        ) from exc
     if not math.isfinite(perplexity):
         raise ValueError(f"Dense baseline perplexity is not finite: {perplexity!r}.")
 

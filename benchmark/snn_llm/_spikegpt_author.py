@@ -12,6 +12,7 @@ from spikingjelly.activation_based import neuron, surrogate
 
 
 SPIKEGPT_REVISION = "029f86f0536f2b2451524038fc9890cc76c2429e"
+_GIT_TIMEOUT_SECONDS = 30
 
 
 def make_current_lif(backend: str) -> neuron.LIFNode:
@@ -31,13 +32,17 @@ def make_current_lif(backend: str) -> neuron.LIFNode:
 def _git_head(root: Path) -> str | None:
     if not (root / ".git").exists():
         return None
-    completed = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_GIT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return None
     if completed.returncode != 0:
         return None
     return completed.stdout.strip()
@@ -62,6 +67,27 @@ def _verify_source(root: Path, declared_revision: str | None) -> str:
             f"Declared revision {revision} does not match Git HEAD {detected_revision}."
         )
     return revision
+
+
+def _instrument_wkv(author_model, require_wkv: bool) -> None:
+    original = getattr(
+        author_model, "_spikingjelly_original_run_cuda", author_model.RUN_CUDA
+    )
+    author_model._spikingjelly_original_run_cuda = original
+    author_model._comparison_wkv_calls = 0
+    if require_wkv:
+
+        def _tracked_wkv(*args, **kwargs):
+            author_model._comparison_wkv_calls += 1
+            return original(*args, **kwargs)
+
+        author_model.RUN_CUDA = _tracked_wkv
+    else:
+
+        def _unexpected_wkv(*args, **kwargs):
+            raise RuntimeError("The layer-0 comparison unexpectedly called WKV.")
+
+        author_model.RUN_CUDA = _unexpected_wkv
 
 
 def _load_author_model(root: Path, require_wkv: bool):
@@ -119,19 +145,5 @@ def _load_author_model(root: Path, require_wkv: bool):
             f"Imported unexpected SpikeGPT model: {author_model.__file__}"
         )
 
-    author_model._comparison_wkv_calls = 0
-    if require_wkv:
-        run_cuda = author_model.RUN_CUDA
-
-        def _tracked_wkv(*args, **kwargs):
-            author_model._comparison_wkv_calls += 1
-            return run_cuda(*args, **kwargs)
-
-        author_model.RUN_CUDA = _tracked_wkv
-    else:
-
-        def _unexpected_wkv(*args, **kwargs):
-            raise RuntimeError("The layer-0 comparison unexpectedly called WKV.")
-
-        author_model.RUN_CUDA = _unexpected_wkv
+    _instrument_wkv(author_model, require_wkv)
     return author_model

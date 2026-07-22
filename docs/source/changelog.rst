@@ -44,8 +44,9 @@ Module: ``spikingjelly.activation_based.ann2snn``.
 - Fixed BF16 signed QCFS boundary replay at large time-step counts by using
   exact threshold pulses through the activation-aware IF neurons.
 - Fixed ``SignedQCFSSequenceEncoder`` statistics masks for non-last channel
-  dimensions, rejected invalid scalar or empty-mask inputs, and skipped
-  boundary replay when the initial spike counts already match QCFS counts.
+  dimensions and boundary-correction fractions, rejected invalid scalar or
+  empty-mask inputs, and skipped boundary replay when the initial spike counts
+  already match QCFS counts.
 - Fixed converted Qwen2 inference to honor explicit and left-padding-aware
   rotary position IDs, reject inconsistent cache use, and require all
   calibration metadata to match the conversion configuration.

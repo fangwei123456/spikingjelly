@@ -159,7 +159,7 @@ class SignedQCFSSequenceEncoder(nn.Module):
 
     def _encode_nonnegative(
         self, node: neuron.ActivationAwareIFNode, value: torch.Tensor
-    ) -> tuple[torch.Tensor, int]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         scale = node.v_threshold.to(device=value.device, dtype=value.dtype)
         shape = [1] * value.dim()
         shape[self.channel_dim % value.dim()] = scale.numel()
@@ -176,13 +176,12 @@ class SignedQCFSSequenceEncoder(nn.Module):
                 spikes = self._replay_mismatches(
                     node, spikes, desired, mismatch, scale, verify=False
                 )
-            return spikes, 0
-        corrected = int(mismatch.count_nonzero().detach().cpu())
-        if corrected:
+            return spikes, mismatch
+        if mismatch.any():
             spikes = self._replay_mismatches(
                 node, spikes, desired, mismatch, scale, verify=True
             )
-        return spikes, corrected
+        return spikes, mismatch
 
     def encode(
         self, value: torch.Tensor, metric_mask: Optional[torch.Tensor] = None
@@ -197,8 +196,8 @@ class SignedQCFSSequenceEncoder(nn.Module):
         * **中文**
 
         将浮点激活编码为显式 signed QCFS 脉冲序列。输入通道维必须与逐通道
-        scale 对齐，输出第 0 维为时间维，形状 ``[T, *value.shape]``。mask 仅影响
-        统计，不改变编码结果。
+        scale 对齐，输出第 0 维为时间维，形状 ``[T, *value.shape]``。mask 统一过滤
+        所有逐元素统计（包括边界修正比例），但不改变编码结果。
 
         :param value: 浮点激活张量。
         :type value: torch.Tensor
@@ -218,7 +217,8 @@ class SignedQCFSSequenceEncoder(nn.Module):
         Encode a floating-point activation as an explicit signed QCFS spike sequence.
         The input channel dimension must match the per-channel scale. The leading
         output dimension is time, producing shape ``[T, *value.shape]``. The mask
-        affects statistics only, not encoding.
+        filters all element-wise statistics, including the boundary-correction
+        fraction, but does not change the encoded sequence.
 
         :param value: Floating-point activation tensor.
         :type value: torch.Tensor
@@ -238,10 +238,10 @@ class SignedQCFSSequenceEncoder(nn.Module):
         channel_dim = self.channel_dim % value.dim()
         if value.shape[channel_dim] != self.positive_neuron.v_threshold.numel():
             raise ValueError("Input channel size does not match the QCFS scale.")
-        positive_spikes, positive_corrections = self._encode_nonnegative(
+        positive_spikes, positive_correction_mask = self._encode_nonnegative(
             self.positive_neuron, F.relu(value)
         )
-        negative_spikes, negative_corrections = self._encode_nonnegative(
+        negative_spikes, negative_correction_mask = self._encode_nonnegative(
             self.negative_neuron, F.relu(-value)
         )
         scale = self.positive_neuron.v_threshold.to(value)
@@ -253,6 +253,7 @@ class SignedQCFSSequenceEncoder(nn.Module):
             negative_metric = negative_spikes.detach()
             reconstructed = sequence.sum(0)
             reference = value
+            metric_element_count = value.numel()
             if metric_mask is not None:
                 mask = metric_mask.to(device=value.device, dtype=torch.bool)
                 expected_shape = (
@@ -268,16 +269,20 @@ class SignedQCFSSequenceEncoder(nn.Module):
                 expanded_mask = mask.unsqueeze(channel_dim).expand(value.shape)
                 positive_metric = positive_metric[:, expanded_mask]
                 negative_metric = negative_metric[:, expanded_mask]
+                positive_correction_mask = positive_correction_mask[expanded_mask]
+                negative_correction_mask = negative_correction_mask[expanded_mask]
                 reconstructed = reconstructed[expanded_mask]
                 reference = reference[expanded_mask]
+                metric_element_count = int(expanded_mask.count_nonzero())
             self.positive_spike_rate = float(positive_metric.mean().cpu())
             self.negative_spike_rate = float(negative_metric.mean().cpu())
             self.positive_spike_count = int(positive_metric.count_nonzero().cpu())
             self.negative_spike_count = int(negative_metric.count_nonzero().cpu())
             self.spike_value_count = int(positive_metric.numel())
             self.boundary_correction_fraction = (
-                positive_corrections + negative_corrections
-            ) / (2 * value.numel())
+                int(positive_correction_mask.count_nonzero())
+                + int(negative_correction_mask.count_nonzero())
+            ) / (2 * metric_element_count)
             denominator = torch.linalg.vector_norm(reference.float()).clamp_min(1e-12)
             relative_l2 = (
                 torch.linalg.vector_norm((reconstructed - reference).float())

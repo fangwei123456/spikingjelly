@@ -557,8 +557,11 @@ def _save_calibration(path: Path, calibration: Qwen2SNNCalibration) -> str:
     if path.exists():
         raise FileExistsError(f"Refusing to overwrite {path}.")
     temporary = path.with_name(f".{path.name}.tmp")
-    torch.save(calibration.state_dict(), temporary)
-    temporary.replace(path)
+    try:
+        torch.save(calibration.state_dict(), temporary)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 

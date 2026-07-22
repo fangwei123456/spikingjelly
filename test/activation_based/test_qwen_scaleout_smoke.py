@@ -1,4 +1,6 @@
 import json
+import sys
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -55,6 +57,13 @@ def test_scaleout_invalid_levels_fail_before_cuda_or_model_loading(tmp_path, cap
 
     assert exit_code == 2
     assert "must not exceed" in capsys.readouterr().err
+
+
+def test_load_model_reports_missing_safetensors(monkeypatch, tmp_path):
+    monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace())
+
+    with pytest.raises(FileNotFoundError, match=r"\*\.safetensors"):
+        runner._load_model(tmp_path, "cpu")
 
 
 def test_scaleout_report_write_is_atomic_and_refuses_overwrite(tmp_path):

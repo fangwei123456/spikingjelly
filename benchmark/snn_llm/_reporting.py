@@ -19,7 +19,12 @@ def write_report(output_dir: Path, report: Mapping[str, object]) -> Path:
     )
     temporary = Path(temporary_name)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        try:
+            handle = os.fdopen(descriptor, "w", encoding="utf-8")
+        except BaseException:
+            os.close(descriptor)
+            raise
+        with handle:
             json.dump(report, handle, allow_nan=False, indent=2, sort_keys=True)
             handle.write("\n")
             handle.flush()

@@ -229,6 +229,22 @@ def test_load_calibration_requires_matching_configuration(tmp_path):
         )
 
 
+def test_save_calibration_removes_temporary_file_on_failure(monkeypatch, tmp_path):
+    target = tmp_path / "calibration.pt"
+    calibration = SimpleNamespace(state_dict=lambda: {"scale": torch.ones(1)})
+
+    def fail_after_write(_state, path):
+        path.write_bytes(b"partial")
+        raise OSError("save failed")
+
+    monkeypatch.setattr(runner.torch, "save", fail_after_write)
+
+    with pytest.raises(OSError, match="save failed"):
+        runner._save_calibration(target, calibration)
+    assert not target.exists()
+    assert not (tmp_path / ".calibration.pt.tmp").exists()
+
+
 def test_full_evaluation_requires_full_test_ppl_and_all_tasks():
     assert runner._is_full_evaluation(
         split="test", max_ppl_windows=None, run_tasks=True, task_limit=None

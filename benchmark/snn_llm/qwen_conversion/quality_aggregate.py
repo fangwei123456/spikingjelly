@@ -32,6 +32,10 @@ def _load_report(path: Path) -> tuple[Dict[str, object], str]:
 
 
 def _perplexity(nll: float, token_count: int) -> float:
+    if token_count <= 0 or not math.isfinite(nll) or nll < 0:
+        raise ValueError(
+            "Aggregated perplexity inputs must be finite and non-negative."
+        )
     try:
         value = math.exp(nll / token_count)
     except OverflowError as exc:
@@ -135,9 +139,11 @@ def _aggregate_ppl(reports: List[Mapping[str, object]]) -> Dict[str, object]:
     dense_nll = sum(float(record["dense_nll"]) for record in records)
     snn_nll = sum(float(record["snn_nll"]) for record in records)
     if token_count <= 0 or not all(
-        math.isfinite(value) for value in (dense_nll, snn_nll)
+        math.isfinite(value) and value >= 0 for value in (dense_nll, snn_nll)
     ):
-        raise ValueError("Aggregated PPL inputs must be finite and non-empty.")
+        raise ValueError(
+            "Aggregated PPL inputs must be finite, non-negative, and non-empty."
+        )
     dense_ppl = _perplexity(dense_nll, token_count)
     snn_ppl = _perplexity(snn_nll, token_count)
     relative_degradation = snn_ppl / dense_ppl - 1.0

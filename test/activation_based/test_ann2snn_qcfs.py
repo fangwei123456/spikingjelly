@@ -83,6 +83,18 @@ def test_signed_qcfs_metric_mask_supports_non_last_channel_dimension():
     assert encoder.spike_value_count == 4 * int(mask.sum()) * 3
 
 
+def test_signed_qcfs_metric_mask_filters_boundary_corrections():
+    value = torch.tensor([0.5, 0.125, 1.5, 0.375]).reshape(1, 4, 1)
+    encoder = SignedQCFSSequenceEncoder(torch.tensor([1.0]), time_steps=4)
+
+    encoder.encode(
+        value,
+        metric_mask=torch.tensor([[False, True, True, True]]),
+    )
+
+    assert encoder.boundary_correction_fraction == 0.0
+
+
 def test_count_domain_reconstruction_equals_multistep_temporal_sum():
     encoder = SignedQCFSSequenceEncoder(
         torch.tensor([0.25, 0.5, 1.0]),
