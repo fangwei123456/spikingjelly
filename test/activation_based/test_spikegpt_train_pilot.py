@@ -201,13 +201,20 @@ def test_wkv_instrumentation_does_not_stack_wrappers():
     assert author_model._comparison_wkv_calls == 1
 
 
-def test_git_head_timeout_is_treated_as_unavailable(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "error",
+    (
+        subprocess.TimeoutExpired(["git"], 30),
+        OSError("git is unavailable"),
+    ),
+)
+def test_git_head_failure_is_treated_as_unavailable(monkeypatch, tmp_path, error):
     (tmp_path / ".git").mkdir()
 
-    def timeout(*args, **kwargs):
-        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+    def fail(*args, **kwargs):
+        raise error
 
-    monkeypatch.setattr(_spikegpt_author.subprocess, "run", timeout)
+    monkeypatch.setattr(_spikegpt_author.subprocess, "run", fail)
 
     assert _spikegpt_author._git_head(tmp_path) is None
 

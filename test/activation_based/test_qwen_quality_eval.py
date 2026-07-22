@@ -146,6 +146,41 @@ def test_quality_rejects_nonpositive_task_batch_before_cuda(
     assert "task-batch-size must be positive" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("max_windows", ("0", "-1"))
+def test_quality_rejects_nonpositive_ppl_window_limit_before_cuda(
+    tmp_path, capsys, max_windows
+):
+    exit_code = runner.main(
+        [
+            "--model-key",
+            "0.5b",
+            "--model-root",
+            str(tmp_path / "model"),
+            "--output-dir",
+            str(tmp_path / "output"),
+            "--hf-cache",
+            str(tmp_path / "cache"),
+            "--device",
+            "cuda",
+            "--worktree-revision",
+            "revision",
+            "--time-steps",
+            "32",
+            "--calibration-levels",
+            "16",
+            "--calibration-quantile",
+            "1.0",
+            "--wikitext-split",
+            "validation",
+            "--max-ppl-windows",
+            max_windows,
+        ]
+    )
+
+    assert exit_code == 2
+    assert "max-ppl-windows must be positive" in capsys.readouterr().err
+
+
 def test_distributed_quality_is_task_only_and_requires_gseries_guard(monkeypatch):
     args = SimpleNamespace(
         skip_ppl=False,

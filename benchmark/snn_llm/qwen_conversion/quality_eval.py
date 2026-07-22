@@ -819,6 +819,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             raise ValueError("calibration-levels must not exceed time-steps.")
         if args.calibration_windows <= 0:
             raise ValueError("calibration-windows must be positive.")
+        if args.max_ppl_windows is not None and args.max_ppl_windows <= 0:
+            raise ValueError("max-ppl-windows must be positive.")
         if args.wikitext_split != "test" and args.run_tasks:
             raise ValueError("Zero-shot tasks are only allowed with the test split.")
         if args.task_limit is not None and not args.run_tasks:

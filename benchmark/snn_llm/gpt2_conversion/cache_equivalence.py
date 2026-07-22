@@ -638,7 +638,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             metrics=metrics,
             environment=build_environment(args.device),
         )
-        target = _write_report(args.output_dir, report)
     except ImportError as exc:
         _emit(str(exc))
         return 5
@@ -648,6 +647,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     except (TypeError, ValueError, RuntimeError) as exc:
         _emit(str(exc))
         return 7
+
+    try:
+        target = _write_report(args.output_dir, report)
+    except (OSError, SystemExit, TypeError, ValueError) as exc:
+        _emit(f"Failed to write report to {args.output_dir}: {exc}")
+        return 8
 
     sys.stdout.write(f"report_path={target.resolve()}\n")
     return 0

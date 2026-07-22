@@ -47,6 +47,22 @@ def test_git_probe_has_a_timeout(monkeypatch, tmp_path):
     assert smoke._run_git(tmp_path, "rev-parse", "HEAD") == "revision"
 
 
+@pytest.mark.parametrize(
+    "error",
+    (
+        subprocess.TimeoutExpired(["git"], smoke.GIT_TIMEOUT_SECONDS),
+        OSError("git is unavailable"),
+    ),
+)
+def test_git_probe_failure_is_treated_as_unavailable(monkeypatch, tmp_path, error):
+    def fail(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(smoke.subprocess, "run", fail)
+
+    assert smoke._run_git(tmp_path, "rev-parse", "HEAD") is None
+
+
 def _smoke_command(output_dir: Path, *extra_args: str, device: str = "cpu"):
     return [
         sys.executable,
@@ -237,7 +253,14 @@ def test_concurrent_smokes_publish_exactly_one_manifest(tmp_path: Path):
         for _ in range(2)
     ]
 
-    results = [process.communicate(timeout=30) for process in processes]
+    try:
+        results = [process.communicate(timeout=30) for process in processes]
+    finally:
+        for process in processes:
+            if process.poll() is None:
+                process.kill()
+        for process in processes:
+            process.wait()
 
     assert sum(process.returncode == 0 for process in processes) == 1
     failed_index = next(

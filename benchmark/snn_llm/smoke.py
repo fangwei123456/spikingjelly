@@ -52,14 +52,17 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _run_git(repo_root: Path, *args: str) -> Optional[str]:
-    completed = subprocess.run(
-        ["git", *args],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=GIT_TIMEOUT_SECONDS,
-    )
+    try:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
     if completed.returncode != 0:
         return None
     return completed.stdout.strip()

@@ -41,7 +41,7 @@ def _git_head(root: Path) -> str | None:
             check=False,
             timeout=_GIT_TIMEOUT_SECONDS,
         )
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, OSError):
         return None
     if completed.returncode != 0:
         return None

@@ -442,6 +442,50 @@ def test_report_overwrite_is_rejected(tmp_path: Path):
     assert target.read_bytes() == original
 
 
+def test_report_write_failure_is_not_reported_as_model_load_failure(
+    monkeypatch, tmp_path: Path, capsys
+):
+    from benchmark.snn_llm.gpt2_conversion import cache_equivalence as runner
+
+    root = tmp_path / "model"
+    _populate_model_root(root)
+    output_dir = tmp_path / "report"
+    monkeypatch.setattr(
+        runner, "_load_gpt2", lambda *args, **kwargs: (object(), object())
+    )
+    monkeypatch.setattr(
+        runner,
+        "_encode_inputs",
+        lambda *args, **kwargs: (torch.ones(1, 24), torch.ones(1, 24)),
+    )
+    monkeypatch.setattr(runner, "compute_scenarios", lambda **kwargs: ({}, {}))
+    monkeypatch.setattr(runner, "build_environment", lambda device: {})
+
+    def fail_write(*args, **kwargs):
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr(runner, "_write_report", fail_write)
+
+    result = runner.main(
+        [
+            "--model-root",
+            str(root),
+            "--output-dir",
+            str(output_dir),
+            "--device",
+            "cpu",
+            "--source-revision",
+            _REVISION,
+        ]
+    )
+
+    assert result == 8
+    error = capsys.readouterr().err
+    assert "Failed to write report" in error
+    assert "disk unavailable" in error
+    assert "Failed to load GPT-2" not in error
+
+
 def test_cuda_request_without_cuda_fails_without_report(
     monkeypatch, tmp_path: Path, capsys
 ):

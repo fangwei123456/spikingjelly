@@ -272,7 +272,7 @@ def _run(args: argparse.Namespace) -> tuple[Dict[str, object], int]:
     if args.precision == "fp32":
         converted.float()
     input_ids, attention_mask = _encode(tokenizer, [FIXED_PROMPTS[2]], device)
-    autocast_context = precision.autocast_context
+    autocast_context = precision.policy.autocast_context
     reference_signed = _model_output(
         converted, input_ids, attention_mask, autocast_context, "signed_if"
     )

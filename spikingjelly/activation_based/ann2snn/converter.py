@@ -14,7 +14,7 @@ from spikingjelly.activation_based.ann2snn.recipes import (
 )
 
 
-_FX_TRACE_LOCK = threading.Lock()
+_FX_TRACE_LOCK = threading.RLock()
 
 
 def _symbolic_trace(root: nn.Module) -> fx.GraphModule:
