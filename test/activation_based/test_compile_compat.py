@@ -387,6 +387,8 @@ def test_triton_last_state_matches_full_voltage_sequence(
     assert torch.allclose(spike_full, spike_last, atol=atol, rtol=rtol)
     assert torch.allclose(full_node.v, last_node.v, atol=atol, rtol=rtol)
     assert torch.allclose(x_full.grad, x_last.grad, atol=atol, rtol=rtol)
+    full_node.detach()
+    last_node.detach()
 
 
 @pytest.mark.parametrize("kind", ["lif", "if"])

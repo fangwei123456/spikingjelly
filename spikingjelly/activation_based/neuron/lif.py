@@ -551,7 +551,7 @@ class LIFNode(BaseNode):
                 )
                 if self.store_v_seq:
                     self.v_seq = v_out
-                    self.v = v_out[-1]
+                    self.v = v_out[-1].clone()
                 else:
                     self.v = v_out
                 return spike_seq

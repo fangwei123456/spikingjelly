@@ -1272,11 +1272,11 @@ def multistep_lif(
     :type detach_reset: bool
     :param surrogate_function: Surrogate gradient function
     :type surrogate_function: ``surrogate.SurrogateFunctionBase``
-    :param store_v_seq: Whether to return the full membrane-potential sequence. If
-        ``False``, the second output contains only the final membrane potential.
+    :param store_v_seq: 是否返回完整的膜电位序列，默认为 ``True``。设置为 ``False`` 时，
+        第二个输出仅包含最终膜电位，其形状与 ``v_init`` 相同。
     :type store_v_seq: bool
-    :return: Tuple of ``(spike_seq, v_seq)`` when ``store_v_seq=True`` or
-        ``(spike_seq, v_last)`` otherwise
+    :return: 当 ``store_v_seq=True`` 时返回 ``(spike_seq, v_seq)``，否则返回
+        ``(spike_seq, v_last)``，其中 ``v_last`` 的形状与 ``v_init`` 相同。
     :rtype: tuple[torch.Tensor, torch.Tensor]
 
     ----
@@ -1303,11 +1303,13 @@ def multistep_lif(
     :type v_reset: Optional[float]
     :type detach_reset: bool
     :type surrogate_function: ``surrogate.SurrogateFunctionBase``
-    :param store_v_seq: Whether to return the full membrane-potential sequence. If
-        ``False``, the second output contains only the final membrane potential.
+    :param store_v_seq: Whether to return the full membrane-potential sequence.
+        Defaults to ``True``. If ``False``, the second output contains only the
+        final membrane potential and has the same shape as ``v_init``.
     :type store_v_seq: bool
     :return: Tuple of ``(spike_seq, v_seq)`` when ``store_v_seq=True`` or
-        ``(spike_seq, v_last)`` otherwise
+        ``(spike_seq, v_last)`` otherwise, where ``v_last`` has the same shape as
+        ``v_init``
     :rtype: tuple[torch.Tensor, torch.Tensor]
     """
     soft_reset = v_reset is None
