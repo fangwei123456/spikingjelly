@@ -2,6 +2,7 @@ import argparse
 import json
 import time
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import torch
 import torch.nn as torch_nn
@@ -29,6 +30,10 @@ class BenchResult:
     samples_per_sec: float
     peak_allocated_mb: float
     peak_reserved_mb: float
+    inference_ms: float
+    inference_samples_per_sec: float
+    inference_peak_allocated_mb: float
+    inference_peak_reserved_mb: float
     conversion_report: dict
 
 
@@ -103,8 +108,8 @@ class DeepFCSNN(torch_nn.Module):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Benchmark SpikingJelly deep FC SNN training under fp32, bf16, "
-            "fp8-torchao, and fp8-te."
+            "Benchmark SpikingJelly deep FC SNN training and inference under fp32, "
+            "fp16, bf16, fp8-torchao, and fp8-te."
         )
     )
     parser.add_argument(
@@ -128,6 +133,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--warmup", type=int, default=10)
     parser.add_argument("--steps", type=int, default=50)
+    parser.add_argument("--inference-steps", type=int, default=100)
     parser.add_argument("--seed", type=int, default=20260531)
     parser.add_argument(
         "--backend",
@@ -138,12 +144,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--precisions",
         nargs="+",
-        default=["fp32", "bf16", "fp8-torchao"],
-        choices=("fp32", "bf16", "fp8-torchao", "fp8-te"),
+        default=["fp32", "fp16", "bf16", "fp8-torchao", "fp8-te"],
+        choices=("fp32", "fp16", "bf16", "fp8-torchao", "fp8-te"),
         help="Precision modes to benchmark.",
     )
     parser.add_argument(
         "--json", action="store_true", help="Print the full benchmark report as JSON."
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Optional path for the full JSON benchmark report.",
     )
     return parser.parse_args()
 
@@ -280,6 +291,35 @@ def run_training_step(
     }
 
 
+def run_inference_step(
+    model: torch_nn.Module,
+    artifacts,
+    x_seq: torch.Tensor,
+    device: torch.device,
+) -> float:
+    functional.reset_net(model)
+    if device.type == "cuda":
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        start.record()
+        with torch.inference_mode(), artifacts.autocast_context():
+            output = model(x_seq)
+        end.record()
+        sync_if_needed(device)
+        if not torch.isfinite(output).all():
+            raise RuntimeError("Inference produced non-finite output.")
+        return _event_elapsed_ms(start, end)
+
+    def forward_section():
+        with torch.inference_mode(), artifacts.autocast_context():
+            return model(x_seq)
+
+    inference_ms, output = _time_cpu_section(forward_section)
+    if not torch.isfinite(output).all():
+        raise RuntimeError("Inference produced non-finite output.")
+    return inference_ms
+
+
 def benchmark_one_precision(
     args: argparse.Namespace,
     precision: str,
@@ -335,6 +375,31 @@ def benchmark_one_precision(
         peak_allocated_mb = torch.cuda.max_memory_allocated(device) / 1024 / 1024
         peak_reserved_mb = torch.cuda.max_memory_reserved(device) / 1024 / 1024
 
+    model.eval()
+    for _ in range(args.warmup):
+        run_inference_step(model, artifacts, x_seq, device)
+    sync_if_needed(device)
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats(device)
+
+    inference_ms = 0.0
+    inference_wall_start = time.perf_counter()
+    for _ in range(args.inference_steps):
+        inference_ms += run_inference_step(model, artifacts, x_seq, device)
+    sync_if_needed(device)
+    inference_wall_elapsed = time.perf_counter() - inference_wall_start
+
+    inference_peak_allocated_mb = float("nan")
+    inference_peak_reserved_mb = float("nan")
+    if device.type == "cuda":
+        inference_peak_allocated_mb = (
+            torch.cuda.max_memory_allocated(device) / 1024 / 1024
+        )
+        inference_peak_reserved_mb = (
+            torch.cuda.max_memory_reserved(device) / 1024 / 1024
+        )
+
     return BenchResult(
         precision=precision,
         batch_size=args.batch_size,
@@ -347,6 +412,11 @@ def benchmark_one_precision(
         samples_per_sec=(args.batch_size * args.steps) / wall_elapsed,
         peak_allocated_mb=peak_allocated_mb,
         peak_reserved_mb=peak_reserved_mb,
+        inference_ms=inference_ms / args.inference_steps,
+        inference_samples_per_sec=(args.batch_size * args.inference_steps)
+        / inference_wall_elapsed,
+        inference_peak_allocated_mb=inference_peak_allocated_mb,
+        inference_peak_reserved_mb=inference_peak_reserved_mb,
         conversion_report=artifacts.policy.conversion_report(),
     )
 
@@ -354,8 +424,9 @@ def benchmark_one_precision(
 def print_table(results: list[BenchResult]) -> None:
     print(
         f"{'precision':<14s} {'forward_ms':>12s} {'backward_ms':>12s} "
-        f"{'optim_ms':>10s} {'step_ms':>12s} {'samples/s':>12s} "
-        f"{'peak_alloc_MB':>14s} {'peak_resv_MB':>14s}"
+        f"{'optim_ms':>10s} {'step_ms':>12s} {'train_s/s':>12s} "
+        f"{'train_alloc_MB':>14s} {'infer_ms':>10s} {'infer_s/s':>12s} "
+        f"{'infer_alloc_MB':>14s}"
     )
     for result in results:
         print(
@@ -366,7 +437,9 @@ def print_table(results: list[BenchResult]) -> None:
             f"{result.total_step_ms:12.3f} "
             f"{result.samples_per_sec:12.1f} "
             f"{result.peak_allocated_mb:14.1f} "
-            f"{result.peak_reserved_mb:14.1f}"
+            f"{result.inference_ms:10.3f} "
+            f"{result.inference_samples_per_sec:12.1f} "
+            f"{result.inference_peak_allocated_mb:14.1f}"
         )
 
 
@@ -403,25 +476,30 @@ def main() -> None:
 
     print_table(results)
 
+    payload = {
+        "device": str(device),
+        "time_steps": args.time_steps,
+        "batch_size": args.batch_size,
+        "input_dim": args.input_dim,
+        "hidden_dim": args.hidden_dim,
+        "num_classes": args.num_classes,
+        "depth": args.depth,
+        "attention_every": args.attention_every,
+        "num_heads": args.num_heads,
+        "tau": args.tau,
+        "lr": args.lr,
+        "momentum": args.momentum,
+        "warmup": args.warmup,
+        "steps": args.steps,
+        "inference_steps": args.inference_steps,
+        "backend": args.backend,
+        "results": [asdict(result) for result in results],
+    }
+    if args.output is not None:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(payload, indent=2) + "\n")
+
     if args.json:
-        payload = {
-            "device": str(device),
-            "time_steps": args.time_steps,
-            "batch_size": args.batch_size,
-            "input_dim": args.input_dim,
-            "hidden_dim": args.hidden_dim,
-            "num_classes": args.num_classes,
-            "depth": args.depth,
-            "attention_every": args.attention_every,
-            "num_heads": args.num_heads,
-            "tau": args.tau,
-            "lr": args.lr,
-            "momentum": args.momentum,
-            "warmup": args.warmup,
-            "steps": args.steps,
-            "backend": args.backend,
-            "results": [asdict(result) for result in results],
-        }
         print(json.dumps(payload, indent=2))
 
 
