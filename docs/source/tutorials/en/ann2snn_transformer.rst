@@ -474,16 +474,273 @@ stack with TD RMSNorm, TD linear, TD SiLU/product, TD SDPA, and
 ``ActivationAwareIFNode`` implementations.
 
 The converted SNN uses the explicit temporal layout ``[T,B,S,H]`` and executes
-``layerwise_offline_multistep``: each signed encoder produces a complete T-step
-sequence, and the next stage consumes its temporal aggregate. Consequently the
-schedule is closer to :math:`L T` work than online T-step inference. It does not
-offer a single-step Qwen execution claim. Call ``functional.reset_net(model)``
-before independent prompts; KV-cache continuation remains explicit through
-``past_key_values``.
+``layerwise_offline_multistep``. Consequently the schedule is closer to
+:math:`L T` work than online T-step inference. It does not offer a single-step
+Qwen execution claim. Call ``functional.reset_net(model)`` before independent
+prompts; KV-cache continuation remains explicit through ``past_key_values``.
 
 The public Qwen2 path deliberately exposes only the real ``signed_if`` temporal
 execution (plus ``exact_td`` for equivalence checks). It does not replace the
 spike sequence with a count-domain shortcut during quality evaluation.
+
+What conversion produces
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Conversion does not change the Qwen2 token embedding, decoder depth, hidden
+size, GQA head layout, LM-head weights and dimensions, or existing weight
+tying, and it does not train new weights. It freezes all parameters and replaces
+RMSNorm, linear, SiLU/SwiGLU product, and SDPA operations in every decoder block
+with the TD implementations introduced earlier. The Qwen2 recipe adds signed
+QCFS encoding boundaries between those TD operators:
+
+The LM-head module is also represented by a ``TDLinear`` copy, but the final
+forward uses its preserved weight after summing over T to compute logits. The
+weight values, dimensions, and embedding-tying relationship remain unchanged.
+
+.. code-block:: text
+
+    token ids
+        |
+        v
+    embedding [B,S,H]
+        |
+        v
+    input SignedQCFSSequenceEncoder
+        |
+        v
+    [T,B,S,H]
+        |
+        +------------------------------------------------------+
+        | L x converted decoder block                          |
+        |                                                      |
+        | TD RMSNorm -> TD Q/K/V projections                   |
+        |             -> RoPE on Q/K; V unchanged              |
+        |             -> Q/K/V signed QCFS re-encoding         |
+        |             -> TD SDPA -> TD output projection       |
+        |             -> residual                              |
+        |             -> TD RMSNorm                            |
+        |             -> TD gate/up -> TD SiLU/product         |
+        |             -> MLP signed QCFS re-encoding           |
+        |             -> TD down projection -> residual        |
+        +------------------------------------------------------+
+        |
+        v
+    final TD RMSNorm [T,B,S,H]
+        |
+        v
+    sum over T -> LM head -> logits [B,S,V]
+
+A converted model with :math:`L` decoder blocks contains :math:`4L+1` signed
+encoders: one after the embedding and four per block for Q, K, V, and the MLP
+intermediate activation. Each signed encoder owns a positive and a negative
+``ActivationAwareIFNode``, giving :math:`8L+2` IFNode module instances in
+total. Each instance operates elementwise over its input tensor and represents
+a population that shares per-channel thresholds, not one scalar neuron.
+
+This is a hybrid explicit multi-step model. Binary firing occurs inside the
+signed encoders. TD RMSNorm, linear, SiLU/product, and attention propagate
+floating-point temporal differences, whose elements may be negative and are not
+all ``0/1`` spikes. Here, “Qwen SNN” specifically means that selected activation
+boundaries use real IF dynamics and spike-count representations while TD
+operators preserve Transformer semantics; it does not mean that every Qwen
+operation has become a binary event.
+
+The converted model is read-only and inference-only: call ``eval()`` and run it
+inside ``torch.no_grad()`` or ``torch.inference_mode()``. Its ``forward()``
+raises an error in training mode or while autograd is enabled.
+
+Signed QCFS encoders and IF neurons
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``SignedQCFSSequenceEncoder`` is the encoding rule and its execution container;
+its pair of ``ActivationAwareIFNode`` modules actually runs the membrane
+dynamics. Given a static signed activation :math:`x`, the encoder first splits
+it into
+
+.. math::
+
+    x^+ = \operatorname{ReLU}(x), \qquad
+    x^- = \operatorname{ReLU}(-x).
+
+The positive and negative IF neurons receive length-:math:`T` constant-current
+sequences:
+
+.. math::
+
+    I_t^+ = \frac{x^+}{T}, \qquad
+    I_t^- = \frac{x^-}{T}, \qquad 0 \leq t < T.
+
+Thus the caller passes a static activation to ``encode(x)`` once, but each IF
+neuron sees T copies of :math:`x/T`, not :math:`x` at step 0 followed by zeros.
+Each IF uses a per-channel threshold :math:`s`, offset :math:`s/2`, non-leaky
+integration, and soft reset:
+
+.. math::
+
+    H_t = V_{t-1} + I_t,
+
+.. math::
+
+    S_t = \Theta(H_t + s/2 - s),
+
+.. math::
+
+    V_t = H_t - S_t s.
+
+The :math:`s/2` offset makes the total spike count implement rounding. Soft
+reset subtracts the threshold instead of zeroing the membrane, thereby
+preserving the residual after that subtraction. The two binary IF outputs are
+scaled by :math:`s` and subtracted:
+
+.. math::
+
+    Y_t = (S_t^+ - S_t^-)s.
+
+The encoder therefore returns an explicit ``[T,...]`` sequence whose elements
+belong to :math:`\{-s,0,s\}` and whose temporal sum satisfies
+
+.. math::
+
+    \sum_{t=0}^{T-1}Y_t
+    =
+    \operatorname{clamp}\left(
+        \operatorname{round}\left(\frac{x}{s}\right), -T, T
+    \right)s.
+
+The implementation also corrects rare count mismatches caused by BF16
+accumulation and round-to-even boundaries, so the observed temporal sum follows
+this expression. That correction does not change the normal use of
+:math:`x/T` constant current.
+
+Who consumes the T dimension
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A QCFS encoder only promises an output shaped ``[T,...]``. The downstream
+module decides whether and when to sum over T. The converted Qwen2 model has
+three consumption patterns:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 26 34 40
+
+   * - Downstream position
+     - How it consumes the input
+     - Output
+   * - TD operators and residuals
+     - Consume all T steps; a TD operator may use cumulative states internally
+     - Still ``[T,...]``
+   * - Next signed QCFS boundary
+     - Recover the aggregate with ``sequence.sum(0)``, then re-encode it
+     - A new ``[T,...]`` spike sequence
+   * - KV cache or final LM head
+     - Sum over T before caching or computing logits
+     - A floating-point tensor without T
+
+Do not confuse the ``cumsum`` used internally by a TD operator with
+``sum(dim=0)`` at a QCFS boundary. The former still returns T temporal
+differences. The latter actually collapses the temporal dimension and starts a
+new signed spike-count encoding.
+
+Decoder-block boundaries do not automatically collapse T either. The TD down
+projection and residual at the end of one block produce a full
+``[T,B,S,H]`` sequence, which enters the next block unchanged. Q, K, and V are
+summed and re-encoded at their encoding boundaries inside that next block.
+Similarly, attention output retains T until the MLP-intermediate signed encoder
+sums and re-encodes it. The model is therefore not an online pipeline in which
+one spike travels from the embedding through every layer. It repeatedly
+propagates T steps through a group of TD operators, aggregates them, and
+re-encodes the result.
+
+``exact_td`` versus ``signed_if``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Both execution modes use the same TD decoder, but they take different actions
+at each encoding boundary:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 34 18 28
+
+   * - Mode
+     - Sequence produced at the boundary
+     - Runs IF neurons
+     - Numerical meaning
+   * - ``exact_td``
+     - ``[x, 0, ..., 0]``
+     - No
+     - Preserves floating-point :math:`x` for TD equivalence checks
+   * - ``signed_if``
+     - Signed spikes after the positive and negative IF neurons receive ``ReLU(x)/T`` and ``ReLU(-x)/T``
+     - Yes
+     - Reconstructs a quantized and clipped :math:`x`
+
+The ``exact_td`` branch does not call ``SignedQCFSSequenceEncoder`` or its IF
+neurons. Those modules still exist on the model object, but that forward pass
+bypasses them. Consequently only floating-point and operator-implementation
+differences should remain between ``exact_td`` and dense Qwen, while
+``signed_if`` additionally incurs rounding and saturation error at every
+encoding boundary.
+
+The public recipe currently has no third mode that sends ``[x,0,...,0]`` into
+an IF neuron and continues running it for T steps. For the current non-leaky,
+soft-reset IF with at most one spike per step, that front-loaded input can
+produce the same total spike count as constant :math:`x/T` input in ideal
+arithmetic. Its spike times differ, and it needs the same round-to-even boundary
+handling. It remains a quantized, T-limited IF path and is not equivalent to
+``exact_td``, which bypasses neurons.
+
+T, calibration levels, and quantization error
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Qwen2 calibration estimates an absolute activation bound :math:`R` for each
+channel. When ``calibration_quantile < 1``, :math:`R` is that quantile;
+otherwise it is the maximum. The per-channel QCFS step is
+
+.. math::
+
+    s = \frac{R}{\text{calibration\_levels}},
+
+where this simplified expression assumes :math:`R \geq 10^{-6}`; the
+implementation applies ``clamp_min(1e-6)`` to prevent a zero scale. T controls
+how many spikes a binary IF can emit in one encoding window. Therefore
+
+.. math::
+
+    \text{rounding error} \leq \frac{s}{2}
+    \quad \text{when } |x| \leq Ts, \qquad
+    |x|_{\max} = Ts.
+
+The configuration requires
+``0 < calibration_levels <= time_steps``. This makes :math:`Ts` cover at least
+the calibrated bound :math:`R`; if T were smaller than levels, even :math:`R`
+itself would be clipped.
+
+With fixed ``calibration_levels``, increasing T does not reduce the spacing
+:math:`s` between adjacent representable values. It expands the dynamic range
+and reduces the chance of clipping an activation to :math:`\pm Ts`. Once
+clipping occurs, total error can be much larger than :math:`s/2`. For example,
+this tutorial uses ``T=160``, ``levels=16``, and ``quantile=0.999``:
+
+.. math::
+
+    s = R_{0.999}/16, \qquad Ts = 10R_{0.999}.
+
+Compared with ``T=16``, ``T=160`` has the same nominal rounding resolution but
+expands the representable range from :math:`\pm R_{0.999}` to approximately
+:math:`\pm 10R_{0.999}`. This design provides headroom for tail activations
+outside the calibration sample and distribution shifts in Q/K/V, SwiGLU, and
+repeated re-encoding. It is intended to trade more multi-step computation and
+memory for less saturation error. Increasing ``calibration_levels`` alone
+reduces both :math:`s` and :math:`Ts`; retaining the current dynamic range while
+refining the spacing also requires increasing T proportionally, or using
+another scale/range design.
+
+This differs from conversion paths earlier in the tutorial that tie their
+threshold calibration directly to ``time_steps``. The Qwen2 recipe separates
+``time_steps`` from ``calibration_levels``. Read T as count capacity and levels
+as resolution within the calibrated range. The final configurations are
+empirical quality/cost operating points, not evidence that their T values are
+theoretically optimal.
 
 Minimal calibration and inference
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

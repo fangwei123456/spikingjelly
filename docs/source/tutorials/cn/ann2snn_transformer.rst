@@ -474,14 +474,243 @@ SpikingJelly 的 TD RMSNorm、TD linear、TD SiLU/product、TD SDPA 和基于
 ``ActivationAwareIFNode`` 的 ``SignedQCFSSequenceEncoder`` 替换完整 decoder。
 
 转换后的 SNN 显式使用 ``[T,B,S,H]`` 时间布局，并按照
-``layerwise_offline_multistep`` 调度：每个 signed encoder 先生成完整 T 步序列，
-下一阶段再消费其时间聚合值。因此总调度更接近 :math:`L T`，而不是在线 T 步
-推理；本路径不声称支持 Qwen single-step。独立 prompt 前应调用
+``layerwise_offline_multistep`` 调度。因此总调度更接近 :math:`L T`，而不是在线
+T 步推理；本路径不声称支持 Qwen single-step。独立 prompt 前应调用
 ``functional.reset_net(model)``，KV cache continuation 通过 ``past_key_values``
 显式传递。
 
 公共 Qwen2 路径只提供真实的 ``signed_if`` 时间序列执行（以及用于等价性检查的
 ``exact_td``），质量评测不会用 count-domain 快路径替代脉冲序列。
+
+转换后得到什么模型
+^^^^^^^^^^^^^^^^^^^^
+
+转换不会改变 Qwen2 的 token embedding、decoder 层数、hidden size、GQA head
+布局、LM head 的权重与维度或原有的权重共享关系，也不会训练新的权重。它冻结
+全部参数，并把每个 decoder block 中的 RMSNorm、linear、SiLU/SwiGLU product
+和 SDPA 换成前文介绍的 TD 实现。在这些 TD 算子之间，Qwen2 recipe 新增
+signed QCFS 编码边界：
+
+LM head 的模块表示也会复制为 ``TDLinear``，但最终 forward 在沿 T 求和后使用其
+保留的权重计算 logits；权重数值、维度以及与 embedding 的共享关系不变。
+
+.. code-block:: text
+
+    token ids
+        |
+        v
+    embedding [B,S,H]
+        |
+        v
+    input SignedQCFSSequenceEncoder
+        |
+        v
+    [T,B,S,H]
+        |
+        +------------------------------------------------------+
+        | L x converted decoder block                          |
+        |                                                      |
+        | TD RMSNorm -> TD Q/K/V projections                   |
+        |             -> RoPE on Q/K; V unchanged              |
+        |             -> Q/K/V signed QCFS re-encoding         |
+        |             -> TD SDPA -> TD output projection       |
+        |             -> residual                              |
+        |             -> TD RMSNorm                            |
+        |             -> TD gate/up -> TD SiLU/product         |
+        |             -> MLP signed QCFS re-encoding           |
+        |             -> TD down projection -> residual        |
+        +------------------------------------------------------+
+        |
+        v
+    final TD RMSNorm [T,B,S,H]
+        |
+        v
+    sum over T -> LM head -> logits [B,S,V]
+
+一个有 :math:`L` 个 decoder block 的转换模型包含 :math:`4L+1` 个 signed
+encoder：embedding 后 1 个，每个 block 内 Q、K、V 和 MLP 中间激活各 1 个。
+每个 signed encoder 又包含一对正、负
+``ActivationAwareIFNode``，所以共有 :math:`8L+2` 个 IFNode 模块实例。每个
+实例在整个输入张量上逐元素运行，表示一组共享逐通道阈值的神经元，而不是单个
+标量神经元。
+
+这是一种混合的显式多步模型。真正的二值发放发生在 signed encoder 内；TD
+RMSNorm、linear、SiLU/product 和 attention 传播的是浮点 temporal difference，
+其元素可以为负，并不都是 ``0/1`` 脉冲。这里的“Qwen SNN”具体指在选定激活
+边界使用真实 IF 动力学和 spike-count 表示，同时用 TD 算子保持 Transformer
+运算语义，而不是把 Qwen 的所有运算都变成二值事件。
+
+产物模型只支持只读推理：必须先调用 ``eval()``，并在 ``torch.no_grad()`` 或
+``torch.inference_mode()`` 中执行。training mode 或启用 autograd 时，
+``forward()`` 会直接报错。
+
+Signed QCFS encoder 与 IF 神经元
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``SignedQCFSSequenceEncoder`` 是编码规则及其执行容器，内部的一对
+``ActivationAwareIFNode`` 才是实际运行膜电位动力学的模块。给定静态 signed
+激活 :math:`x`，encoder 先拆成
+
+.. math::
+
+    x^+ = \operatorname{ReLU}(x), \qquad
+    x^- = \operatorname{ReLU}(-x).
+
+正、负 IF 分别接收长度为 :math:`T` 的恒定电流序列：
+
+.. math::
+
+    I_t^+ = \frac{x^+}{T}, \qquad
+    I_t^- = \frac{x^-}{T}, \qquad 0 \leq t < T.
+
+也就是说，调用者只向 ``encode(x)`` 传入一次静态激活，但 IF 神经元看到的是
+T 个 :math:`x/T`，而不是第 0 步收到 :math:`x`、其余步收到 0。每个 IF 使用
+逐通道阈值 :math:`s`、偏移 :math:`s/2`、无泄漏积分和 soft reset：
+
+.. math::
+
+    H_t = V_{t-1} + I_t,
+
+.. math::
+
+    S_t = \Theta(H_t + s/2 - s),
+
+.. math::
+
+    V_t = H_t - S_t s.
+
+偏移 :math:`s/2` 使总脉冲计数对应舍入，而 soft reset 从膜电位减去阈值而不是
+清零，从而保留减去阈值后的余量。两个 IF 的二值输出按 :math:`s` 缩放并相减：
+
+.. math::
+
+    Y_t = (S_t^+ - S_t^-)s.
+
+因此 encoder 的接口输出是显式序列 ``[T,...]``，每个元素属于
+:math:`\{-s,0,s\}`，其时间和满足
+
+.. math::
+
+    \sum_{t=0}^{T-1}Y_t
+    =
+    \operatorname{clamp}\left(
+        \operatorname{round}\left(\frac{x}{s}\right), -T, T
+    \right)s.
+
+实现还会校正 BF16 累积和 round-to-even 边界处偶发的计数不一致，使实际时间和
+遵守上式。这个修正不改变常规输入使用 :math:`x/T` 恒定电流的事实。
+
+T 维由谁消费
+^^^^^^^^^^^^^^
+
+QCFS encoder 只承诺产生 ``[T,...]``；是否以及何时沿 T 求和，由下游模块决定。
+当前 Qwen2 产物模型有三种消费方式：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 26 34 40
+
+   * - 下游位置
+     - 如何消费输入
+     - 输出
+   * - TD 算子和 residual
+     - 消费完整 T 步；TD 算子可在内部使用累计状态
+     - 仍为 ``[T,...]``
+   * - 下一个 signed QCFS 边界
+     - 先用 ``sequence.sum(0)`` 恢复聚合激活，再重新编码
+     - 一条新的 ``[T,...]`` 脉冲序列
+   * - KV cache 或最终 LM head
+     - 沿 T 求和后缓存或计算 logits
+     - 不再含 T 维的浮点张量
+
+不要把 TD 算子内部为执行算子而计算的 ``cumsum`` 与 QCFS 边界的
+``sum(dim=0)`` 混淆：前者仍返回 T 个 temporal difference，后者真正折叠时间
+维，然后启动一次新的 signed spike-count 编码。
+
+decoder block 之间也不会自动折叠 T。一个 block 的 TD down projection 与
+residual 输出完整 ``[T,B,S,H]``，并原样进入下一个 block；到下一 block 的
+Q/K/V 编码边界时才分别求和并重新编码。类似地，一个 block 内 attention 输出
+保持 T，直到 MLP 中间激活的 signed encoder 才再次求和并重新编码。因此该模型
+不是一条脉冲从 embedding 在线穿过全部层的流水线，而是“带 T 传播若干 TD
+算子，再聚合和重新编码”的逐层离线调度。
+
+``exact_td`` 与 ``signed_if``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+两个 execution mode 使用相同的 TD decoder，但在每个编码边界采取不同操作：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 34 18 28
+
+   * - mode
+     - 边界产生的序列
+     - 是否执行 IF
+     - 数值含义
+   * - ``exact_td``
+     - ``[x, 0, ..., 0]``
+     - 否
+     - 保留浮点 :math:`x`，用于 TD 等价性检查
+   * - ``signed_if``
+     - 正、负 IF 分别接收 ``ReLU(x)/T`` 与 ``ReLU(-x)/T`` 后产生的 signed spikes
+     - 是
+     - 重建为量化并裁剪后的 :math:`x`
+
+``exact_td`` 分支不会调用 ``SignedQCFSSequenceEncoder`` 或其中的 IF 神经元；
+模型对象虽然仍持有这些模块，但该次 forward 会绕过它们。因此 ``exact_td`` 与
+dense Qwen 之间只应剩下浮点和算子实现误差，而 ``signed_if`` 还包含每个编码
+边界的舍入和饱和误差。
+
+当前公共 recipe 没有“把 ``[x,0,...,0]`` 送入 IF 并继续运行 T 步”的第三种
+模式。对于当前无泄漏、soft-reset、每步至多发放一次的 IF，这种 front-loaded
+输入在理想算术下可以得到与恒定 :math:`x/T` 输入相同的总脉冲计数，但发放时刻
+不同，也需要相同的 round-to-even 边界处理。它仍然是量化并受 T 限幅的 IF
+路径，不能等同于不经过神经元的 ``exact_td``。
+
+T、校准 levels 与量化误差
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Qwen2 校准会为每个通道估计绝对激活边界 :math:`R`。当
+``calibration_quantile < 1`` 时，:math:`R` 是指定分位数；否则是最大值。
+逐通道 QCFS 步长由
+
+.. math::
+
+    s = \frac{R}{\text{calibration\_levels}}
+
+决定。为简化公式，这里假设 :math:`R \geq 10^{-6}`；实现会先用
+``clamp_min(1e-6)`` 防止零 scale。T 决定一个二值 IF 在一次编码窗口中最多
+发放多少个脉冲。于是
+
+.. math::
+
+    \text{rounding error} \leq \frac{s}{2}
+    \quad \text{when } |x| \leq Ts, \qquad
+    |x|_{\max} = Ts.
+
+配置要求 ``0 < calibration_levels <= time_steps``。这样 :math:`Ts` 至少覆盖
+校准边界 :math:`R`；若 T 小于 levels，连 :math:`R` 本身都会被截断。
+
+因此在 ``calibration_levels`` 固定时，增大 T 不会让相邻可表示值之间的间隔
+:math:`s` 变小；它扩大的是动态范围，并降低激活被裁剪到 :math:`\pm Ts` 的
+概率。发生裁剪时，总误差可以远大于 :math:`s/2`。例如教程示例使用
+``T=160``、``levels=16``、``quantile=0.999``，此时
+
+.. math::
+
+    s = R_{0.999}/16, \qquad Ts = 10R_{0.999}.
+
+与 ``T=16`` 相比，``T=160`` 的标称舍入精度相同，但可表示范围从
+:math:`\pm R_{0.999}` 扩大到约 :math:`\pm 10R_{0.999}`。这个设计为校准样本
+之外的尾部激活，以及 Q/K/V、SwiGLU 和多次重新编码中的分布偏移预留裕量，意在
+用更高的多步计算和显存成本减少饱和误差。若只增大
+``calibration_levels``，:math:`s` 与 :math:`Ts` 会同时缩小；若要保持当前
+动态范围并细化量化间隔，还必须按比例增大 T，或采用其他 scale/range 设计。
+
+这一点与前文某些把阈值直接绑定到 ``time_steps`` 的转换路径不同：Qwen2 recipe
+显式分离 ``time_steps`` 和 ``calibration_levels``。阅读后文结果表时，应把 T
+理解为计数容量，把 levels 理解为校准范围内的分辨率；最终配置是质量与成本的
+实验工作点，并不证明该 T 是理论最优值。
 
 最小校准与推理示例
 ^^^^^^^^^^^^^^^^^^^^
