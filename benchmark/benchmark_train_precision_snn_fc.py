@@ -10,6 +10,7 @@ import torch.nn.functional as F
 
 from spikingjelly.activation_based import functional, layer, neuron, surrogate
 from spikingjelly.activation_based.precision import (
+    PrecisionArtifacts,
     PrecisionConfig,
     prepare_model_for_precision,
 )
@@ -229,9 +230,19 @@ def validate_precision_shape_constraints(args: argparse.Namespace) -> None:
         )
 
 
+def _step_optimizer(
+    artifacts: PrecisionArtifacts, optimizer: torch.optim.Optimizer
+) -> None:
+    if artifacts.scaler is None:
+        optimizer.step()
+    else:
+        artifacts.scaler.step(optimizer)
+        artifacts.scaler.update()
+
+
 def run_training_step(
     model: torch_nn.Module,
-    artifacts,
+    artifacts: PrecisionArtifacts,
     optimizer: torch.optim.Optimizer,
     criterion: torch_nn.Module,
     x_seq: torch.Tensor,
@@ -253,7 +264,7 @@ def run_training_step(
         artifacts.backward(loss, optimizer, step_optimizer=False)
         cuda_events["backward_end"].record()
         cuda_events["optimizer_start"].record()
-        optimizer.step()
+        _step_optimizer(artifacts, optimizer)
         cuda_events["optimizer_end"].record()
         cuda_events["step_end"].record()
         sync_if_needed(device)
@@ -281,7 +292,7 @@ def run_training_step(
     backward_ms, _ = _time_cpu_section(
         lambda: artifacts.backward(loss, optimizer, step_optimizer=False)
     )
-    optimizer_ms, _ = _time_cpu_section(optimizer.step)
+    optimizer_ms, _ = _time_cpu_section(lambda: _step_optimizer(artifacts, optimizer))
     _ = logits
     return {
         "forward_ms": forward_ms,
@@ -293,7 +304,7 @@ def run_training_step(
 
 def run_inference_step(
     model: torch_nn.Module,
-    artifacts,
+    artifacts: PrecisionArtifacts,
     x_seq: torch.Tensor,
     device: torch.device,
 ) -> float:
@@ -375,6 +386,9 @@ def benchmark_one_precision(
         peak_allocated_mb = torch.cuda.max_memory_allocated(device) / 1024 / 1024
         peak_reserved_mb = torch.cuda.max_memory_reserved(device) / 1024 / 1024
 
+    optimizer.zero_grad(set_to_none=True)
+    optimizer.state.clear()
+    artifacts.scaler = None
     model.eval()
     for _ in range(args.warmup):
         run_inference_step(model, artifacts, x_seq, device)
