@@ -102,6 +102,13 @@ Module: `spikingjelly.activation_based.triton_kernel.neuron_kernel`.
 
 ### Bug Fixes
 
+#### CUDA Neuron Kernels
+
+Module: `spikingjelly.activation_based.cuda_kernel.neuron_kernel`.
+
+- Removed RST docstring fragments from the generated FP32 IF forward/backward
+  and LIF forward CUDA source so that CuPy can compile these kernels.
+
 #### ANN-to-SNN Conversion
 
 Module: `spikingjelly.activation_based.ann2snn`.
