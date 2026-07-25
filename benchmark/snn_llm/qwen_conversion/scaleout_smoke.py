@@ -31,9 +31,10 @@ from benchmark.snn_llm.qwen_conversion._runtime import (
     FIXED_PROMPTS,
     build_environment,
     cached_decode as _cached_decode,
+    conversion_summary as _conversion_summary,
     encode as _encode,
     hash_files as _hash_files,
-    load_calibration_artifact as _load_calibration_artifact,
+    load_calibration as _load_calibration,
     load_lock as _load_lock,
     load_model as _load_model,
     relative_l2 as _relative_l2,
@@ -142,7 +143,7 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         calibration_origin = "fixed_prompt_smoke"
         calibration_sha256 = None
     else:
-        calibration, calibration_sha256 = _load_calibration_artifact(
+        calibration, calibration_sha256 = _load_calibration(
             args.calibration_artifact, config
         )
         calibration_origin = "reused_artifact"
@@ -200,7 +201,7 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         "exact_cached_decode_max_relative_l2": exact_cache["max_relative_l2"],
         "signed_cached_decode_max_relative_l2": signed_cache["max_relative_l2"],
     }
-    structure = converted.structure_summary()
+    conversion = _conversion_summary(converted)
     report = {
         "schema_version": SCHEMA_VERSION,
         "kind": CONTRACT_KIND,
@@ -231,14 +232,11 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         },
         "precision": precision.describe(),
         "conversion": {
+            **conversion,
             "parameter_count_before": parameter_count,
             "parameter_count_after": sum(
                 value.numel() for value in converted.parameters()
             ),
-            "temporal_layout": converted.temporal_layout,
-            "execution_schedule": converted.execution_schedule,
-            "online_inference": converted.online_inference,
-            "structure": structure,
             "encoder_statistics": converted.encoder_statistics(),
             "calibration_origin": calibration_origin,
             "calibration_sha256": calibration_sha256,

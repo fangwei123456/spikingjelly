@@ -66,6 +66,103 @@ def validate_rate_coding_mode(mode: Union[str, float]) -> None:
         raise NotImplementedError(err_msg)
 
 
+def _extract_batch_input(data, _inside_input=False):
+    if isinstance(data, torch.Tensor):
+        return data
+    if isinstance(data, (list, tuple)):
+        if not data:
+            raise ValueError("Batch data is an empty list or tuple.")
+        if len(data) == 1:
+            return _extract_batch_input(data[0], _inside_input=_inside_input)
+        if not _inside_input:
+            return _extract_batch_input(
+                data[0], _inside_input=not isinstance(data[0], dict)
+            )
+        return data
+    if isinstance(data, dict):
+        if not data:
+            raise ValueError("Batch data is an empty dictionary.")
+        if _inside_input:
+            return data
+        for key in (
+            "input",
+            "image",
+            "images",
+            "img",
+            "x",
+            "data",
+            "pixel_values",
+        ):
+            if key in data:
+                return _extract_batch_input(data[key], _inside_input=True)
+        if len(data) != 1:
+            raise ValueError(
+                "Batch dictionaries with multiple fields must contain one "
+                "of 'input', 'image', 'images', 'img', 'x', 'data', or "
+                "'pixel_values'."
+            )
+        return _extract_batch_input(next(iter(data.values())), _inside_input=True)
+    return data
+
+
+def _fuse_conv_bn(
+    fx_model: torch.fx.GraphModule, fuse_flag: bool = True
+) -> torch.fx.GraphModule:
+    if not fuse_flag:
+        return fx_model
+
+    def matches_module_pattern(
+        pattern: Iterable[Type], node: fx.Node, modules: Dict[str, Any]
+    ) -> bool:
+        if len(node.args) == 0:
+            return False
+        nodes: Tuple[Any, fx.Node] = (node.args[0], node)
+        for expected_type, current_node in zip(pattern, nodes):
+            if not isinstance(current_node, fx.Node):
+                return False
+            if current_node.op != "call_module":
+                return False
+            if not isinstance(current_node.target, str):
+                return False
+            if current_node.target not in modules:
+                return False
+            if not isinstance(modules[current_node.target], expected_type):
+                return False
+        return True
+
+    def replace_node_module(
+        node: fx.Node, modules: Dict[str, Any], new_module: torch.nn.Module
+    ):
+        if not isinstance(node.target, str):
+            raise ValueError("FX module replacement requires a string target.")
+        parent_path, _, child_name = node.target.rpartition(".")
+        modules[node.target] = new_module
+        parent = fx_model.get_submodule(parent_path) if parent_path else fx_model
+        setattr(parent, child_name, new_module)
+
+    patterns = [
+        (nn.Conv1d, nn.BatchNorm1d),
+        (nn.Conv2d, nn.BatchNorm2d),
+        (nn.Conv3d, nn.BatchNorm3d),
+    ]
+    modules = dict(fx_model.named_modules())
+    for pattern in patterns:
+        for node in list(fx_model.graph.nodes):
+            if matches_module_pattern(pattern, node, modules):
+                if len(node.args[0].users) > 1:
+                    continue
+                conv = modules[node.args[0].target]
+                bn = modules[node.target]
+                fused_conv = fuse_conv_bn_eval(conv, bn)
+                replace_node_module(node.args[0], modules, fused_conv)
+                node.replace_all_uses_with(node.args[0])
+                fx_model.graph.erase_node(node)
+    fx_model.graph.lint()
+    fx_model.delete_all_unused_submodules()
+    fx_model.recompile()
+    return fx_model
+
+
 class ChannelVoltageHook(nn.Module):
     def __init__(
         self,
@@ -518,7 +615,7 @@ class RateCodingRecipe(ConversionRecipe):
     def after_trace(
         self, converter: "Converter", fx_model: fx.GraphModule
     ) -> fx.GraphModule:
-        return self._fuse(fx_model, fuse_flag=self.fuse_flag).to(converter.device)
+        return _fuse_conv_bn(fx_model, fuse_flag=self.fuse_flag).to(converter.device)
 
     def insert_observers(
         self, converter: "Converter", fx_model: fx.GraphModule
@@ -530,7 +627,7 @@ class RateCodingRecipe(ConversionRecipe):
     ) -> fx.GraphModule:
         with torch.no_grad():
             for _, data in enumerate(tqdm(self.dataloader)):
-                imgs = self._extract_batch_input(data)
+                imgs = _extract_batch_input(data)
                 if isinstance(imgs, torch.Tensor):
                     imgs = imgs.to(device=converter.device)
                 else:
@@ -594,113 +691,8 @@ class RateCodingRecipe(ConversionRecipe):
         )
         return fx_model.to(converter.device)
 
-    @staticmethod
-    def _extract_batch_input(data, _inside_input=False):
-        if isinstance(data, torch.Tensor):
-            return data
-        if isinstance(data, (list, tuple)):
-            if not data:
-                raise ValueError("Batch data is an empty list or tuple.")
-            if len(data) == 1:
-                return RateCodingRecipe._extract_batch_input(
-                    data[0], _inside_input=_inside_input
-                )
-            if not _inside_input:
-                return RateCodingRecipe._extract_batch_input(
-                    data[0], _inside_input=not isinstance(data[0], dict)
-                )
-            return data
-        if isinstance(data, dict):
-            if not data:
-                raise ValueError("Batch data is an empty dictionary.")
-            if _inside_input:
-                return data
-            for key in (
-                "input",
-                "image",
-                "images",
-                "img",
-                "x",
-                "data",
-                "pixel_values",
-            ):
-                if key in data:
-                    return RateCodingRecipe._extract_batch_input(
-                        data[key], _inside_input=True
-                    )
-            if len(data) != 1:
-                raise ValueError(
-                    "Batch dictionaries with multiple fields must contain one "
-                    "of 'input', 'image', 'images', 'img', 'x', 'data', or "
-                    "'pixel_values'."
-                )
-            return RateCodingRecipe._extract_batch_input(
-                next(iter(data.values())), _inside_input=True
-            )
-        return data
-
     def _check_mode(self):
         validate_rate_coding_mode(self.mode)
-
-    @staticmethod
-    def _fuse(
-        fx_model: torch.fx.GraphModule, fuse_flag: bool = True
-    ) -> torch.fx.GraphModule:
-        if not fuse_flag:
-            return fx_model
-
-        def matches_module_pattern(
-            pattern: Iterable[Type], node: fx.Node, modules: Dict[str, Any]
-        ) -> bool:
-            if len(node.args) == 0:
-                return False
-            nodes: Tuple[Any, fx.Node] = (node.args[0], node)
-            for expected_type, current_node in zip(pattern, nodes):
-                if not isinstance(current_node, fx.Node):
-                    return False
-                if current_node.op != "call_module":
-                    return False
-                if not isinstance(current_node.target, str):
-                    return False
-                if current_node.target not in modules:
-                    return False
-                if not isinstance(modules[current_node.target], expected_type):
-                    return False
-            return True
-
-        def replace_node_module(
-            node: fx.Node, modules: Dict[str, Any], new_module: torch.nn.Module
-        ):
-            if not isinstance(node.target, str):
-                raise ValueError("FX module replacement requires a string target.")
-            parent_path, _, child_name = node.target.rpartition(".")
-            modules[node.target] = new_module
-            parent = fx_model.get_submodule(parent_path) if parent_path else fx_model
-            setattr(parent, child_name, new_module)
-
-        patterns = [
-            (nn.Conv1d, nn.BatchNorm1d),
-            (nn.Conv2d, nn.BatchNorm2d),
-            (nn.Conv3d, nn.BatchNorm3d),
-        ]
-
-        modules = dict(fx_model.named_modules())
-
-        for pattern in patterns:
-            for node in list(fx_model.graph.nodes):
-                if matches_module_pattern(pattern, node, modules):
-                    if len(node.args[0].users) > 1:
-                        continue
-                    conv = modules[node.args[0].target]
-                    bn = modules[node.target]
-                    fused_conv = fuse_conv_bn_eval(conv, bn)
-                    replace_node_module(node.args[0], modules, fused_conv)
-                    node.replace_all_uses_with(node.args[0])
-                    fx_model.graph.erase_node(node)
-        fx_model.graph.lint()
-        fx_model.delete_all_unused_submodules()
-        fx_model.recompile()
-        return fx_model
 
     def _set_voltagehook(self, fx_model: torch.fx.GraphModule) -> torch.fx.GraphModule:
         if self.channel_wise:

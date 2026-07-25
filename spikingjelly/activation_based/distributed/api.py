@@ -5,8 +5,8 @@ from typing import Mapping, Optional, Sequence, Union
 import torch.nn as nn
 
 from .adapters import resolve_adapter
+from .adapters.base import build_distributed_runtime
 from .analysis import SNNDistributedAnalysis, analyze_snn_distributed_capability
-from .execution import build_eager_config, configure_snn_distributed
 from .planner import (
     DistributedFeatureSet,
     SNN_DISTRIBUTED_PREFERENCES,
@@ -217,12 +217,6 @@ def plan(
             notes.append(
                 "Zero optimizer was disabled by DistributedFeatureSet; planner fell back to optimizer_strategy='none'."
             )
-    mesh_shape = resolved_topology.mesh_shape
-    pp_microbatches = recommendation.pp_microbatches
-    pp_schedule = recommendation.pp_schedule
-    pp_virtual_stages = recommendation.pp_virtual_stages
-    pp_layout = recommendation.pp_layout
-    pp_delay_wgrad = recommendation.pp_delay_wgrad
     return SNNDistributedPlan(
         mode=selected_mode,
         objective=objective,
@@ -236,14 +230,14 @@ def plan(
         notes=tuple(notes),
         tensor_parallel_roots=analysis.tensor_parallel_roots,
         tensor_parallel_plan=tensor_parallel_plan,
-        mesh_shape=mesh_shape,
+        mesh_shape=resolved_topology.mesh_shape,
         tp_mesh_dim=tp_mesh_dim,
         dp_mesh_dim=dp_mesh_dim,
-        pp_microbatches=pp_microbatches,
-        pp_schedule=pp_schedule,
-        pp_virtual_stages=pp_virtual_stages,
-        pp_layout=pp_layout,
-        pp_delay_wgrad=pp_delay_wgrad,
+        pp_microbatches=recommendation.pp_microbatches,
+        pp_schedule=recommendation.pp_schedule,
+        pp_virtual_stages=recommendation.pp_virtual_stages,
+        pp_layout=recommendation.pp_layout,
+        pp_delay_wgrad=recommendation.pp_delay_wgrad,
         experimental_features=features,
     )
 
@@ -313,24 +307,10 @@ def apply(
             device_type=device_type,
             device_mesh=device_mesh,
         )
-    config = build_eager_config(
-        mode=plan.mode,
+    return build_distributed_runtime(
+        model,
+        plan,
         device_type=device_type,
-        mesh_shape=plan.mesh_shape or topology.mesh_shape,
         device_mesh=device_mesh,
-        tp_mesh_dim=plan.tp_mesh_dim,
-        dp_mesh_dim=plan.dp_mesh_dim,
         tensor_parallel_roots=plan.tensor_parallel_roots,
-        tensor_parallel_plan=plan.tensor_parallel_plan,
-        auto_tensor_parallel=(
-            plan.mode in ("tp", "fsdp2_tp") and plan.tensor_parallel_plan is None
-        ),
-    )
-    configured_model, mesh, analysis = configure_snn_distributed(model, config)
-    return SNNDistributedRuntime(
-        kind="eager",
-        model=configured_model,
-        mesh=mesh,
-        analysis=analysis,
-        plan=plan,
     )

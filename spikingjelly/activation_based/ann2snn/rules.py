@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Dict, Iterator, Protocol, Tuple
 import torch.nn as nn
 from torch import fx
 
-from spikingjelly.activation_based import neuron
 from spikingjelly.activation_based.ann2snn.modules import VoltageHook, VoltageScaler
 
 if TYPE_CHECKING:
@@ -13,6 +12,14 @@ if TYPE_CHECKING:
         NeuronFactory,
     )
     from spikingjelly.activation_based.ann2snn.threshold import ThresholdOptimizer
+
+
+def _matches_relu(node: fx.Node, modules: Dict[str, nn.Module]) -> bool:
+    return (
+        node.op == "call_module"
+        and isinstance(node.target, str)
+        and type(modules.get(node.target)) is nn.ReLU
+    )
 
 
 class ActivationRule(Protocol):
@@ -270,9 +277,7 @@ class ReLURule:
     """
 
     def match(self, node: fx.Node, modules: Dict[str, nn.Module]) -> bool:
-        if node.op != "call_module":
-            return False
-        return type(modules.get(node.target)) is nn.ReLU
+        return _matches_relu(node, modules)
 
     def insert_hooks(
         self,

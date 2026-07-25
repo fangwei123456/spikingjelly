@@ -278,7 +278,11 @@ def test_apply_passes_explicit_tensor_parallel_plan_and_disables_auto_plan(
         captured["config"] = config
         return candidate, object(), analysis
 
-    monkeypatch.setattr(distributed_api, "configure_snn_distributed", fake_configure)
+    monkeypatch.setattr(
+        distributed_adapter_base,
+        "configure_snn_distributed",
+        fake_configure,
+    )
     runtime = distributed_api.apply(
         model=model,
         plan=distributed_plan,

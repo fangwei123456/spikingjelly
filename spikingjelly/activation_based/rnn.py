@@ -77,17 +77,16 @@ def directional_rnn_cell_forward(
 
     :raises ValueError: Callers are expected to provide ``states`` with rank 2 or 3
     """
+    if states.dim() not in (2, 3):
+        raise ValueError(f"states must be 2D or 3D, but got shape {states.shape}")
+
     T = x.shape[0]
     ss = states
-
+    single_state = states.dim() == 2
     output = []
     for t in range(T):
         ss = cell(x[t], ss)
-        if states.dim() == 2:
-            output.append(ss)
-        elif states.dim() == 3:
-            output.append(ss[0])
-            # 当RNN cell具有多个隐藏状态时，通常第0个隐藏状态是其输出
+        output.append(ss if single_state else ss[0])
     return torch.stack(output), ss
 
 
@@ -175,26 +174,26 @@ def bidirectional_rnn_cell_forward(
         ``states`` and ``states_reverse``, respectively
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     """
+    if states.dim() not in (2, 3) or states_reverse.dim() != states.dim():
+        raise ValueError(
+            "states and states_reverse must have the same rank, either 2D or 3D"
+        )
+
     T = x.shape[0]
     ss = states
     ss_r = states_reverse
+    single_state = states.dim() == 2
     output = []
     output_r = []
     for t in range(T):
         ss = cell(x[t], ss)
         ss_r = cell_reverse(x[T - t - 1], ss_r)
-        if states.dim() == 2:
-            output.append(ss)
-            output_r.append(ss_r)
-        elif states.dim() == 3:
-            output.append(ss[0])
-            output_r.append(ss_r[0])
-            # 当RNN cell具有多个隐藏状态时，通常第0个隐藏状态是其输出
+        output.append(ss if single_state else ss[0])
+        output_r.append(ss_r if single_state else ss_r[0])
 
-    ret = []
-    for t in range(T):
-        ret.append(torch.cat((output[t], output_r[T - t - 1]), dim=-1))
-    return torch.stack(ret), ss, ss_r
+    output = torch.stack(output)
+    output_r = torch.stack(output_r).flip(0)
+    return torch.cat((output, output_r), dim=-1), ss, ss_r
 
 
 class SpikingRNNCellBase(nn.Module):
@@ -493,54 +492,26 @@ class SpikingRNNBase(nn.Module):
             else, return a single stacking RNN
         :rtype: nn.Sequential | tuple[nn.Sequential, nn.Sequential]
         """
-        if self.bidirectional:
-            cells = []
-            cells_reverse = []
-            cells.append(
-                self.base_cell()(
-                    self.input_size, self.hidden_size, self.bias, *args, **kwargs
-                )
-            )
-            cells_reverse.append(
-                self.base_cell()(
-                    self.input_size, self.hidden_size, self.bias, *args, **kwargs
-                )
-            )
-            for i in range(self.num_layers - 1):
-                cells.append(
-                    self.base_cell()(
-                        self.hidden_size * 2,
-                        self.hidden_size,
-                        self.bias,
-                        *args,
-                        **kwargs,
-                    )
-                )
-                cells_reverse.append(
-                    self.base_cell()(
-                        self.hidden_size * 2,
-                        self.hidden_size,
-                        self.bias,
-                        *args,
-                        **kwargs,
-                    )
-                )
-            return nn.Sequential(*cells), nn.Sequential(*cells_reverse)
+        cell_type = self.base_cell()
+        recurrent_input_size = self.hidden_size * (2 if self.bidirectional else 1)
+        input_sizes = [self.input_size] + [recurrent_input_size] * (self.num_layers - 1)
 
-        else:
-            cells = []
-            cells.append(
-                self.base_cell()(
-                    self.input_size, self.hidden_size, self.bias, *args, **kwargs
-                )
+        cells = nn.Sequential(
+            *(
+                cell_type(input_size, self.hidden_size, self.bias, *args, **kwargs)
+                for input_size in input_sizes
             )
-            for i in range(self.num_layers - 1):
-                cells.append(
-                    self.base_cell()(
-                        self.hidden_size, self.hidden_size, self.bias, *args, **kwargs
-                    )
-                )
-            return nn.Sequential(*cells)
+        )
+        if not self.bidirectional:
+            return cells
+
+        cells_reverse = nn.Sequential(
+            *(
+                cell_type(input_size, self.hidden_size, self.bias, *args, **kwargs)
+                for input_size in input_sizes
+            )
+        )
+        return cells, cells_reverse
 
     @staticmethod
     def base_cell():
@@ -662,145 +633,96 @@ class SpikingRNNBase(nn.Module):
         :raises TypeError: If ``states`` is neither ``None``, ``torch.Tensor`` nor ``tuple``
         :raises ValueError: If the layer/direction dimension of ``states`` does not match this RNN configuration
         """
-        # x.shape=[T, batch_size, input_size]
-        # states states_num 个 [num_layers * num_directions, batch, hidden_size]
         batch_size = x.shape[1]
+        state_count = self.states_num()
+        directions = 2 if self.bidirectional else 1
+        layer_state_count = self.num_layers * directions
 
-        if isinstance(states, tuple):
-            # states非None且为tuple，则合并成tensor
-            states_list = torch.stack(states)
-            # shape = [self.states_num(), self.num_layers * 2, batch_size, self.hidden_size]
-        elif isinstance(states, torch.Tensor):
-            if states.dim() == 3:
-                states_list = states
-            else:
-                raise TypeError
-        elif states is None:
-            if self.bidirectional:
-                states_list = torch.zeros(
-                    size=[
-                        self.states_num(),
-                        self.num_layers * 2,
-                        x.shape[1],
-                        self.hidden_size,
-                    ],
-                    dtype=x.dtype,
-                    device=x.device,
-                ).squeeze(0)
-            else:
-                states_list = torch.zeros(
-                    size=[
-                        self.states_num(),
-                        self.num_layers,
-                        x.shape[1],
-                        self.hidden_size,
-                    ],
-                    dtype=x.dtype,
-                    device=x.device,
-                ).squeeze(0)
-
+        if states is None:
+            states_tensor = x.new_zeros(
+                state_count, layer_state_count, batch_size, self.hidden_size
+            )
+        elif isinstance(states, tuple):
+            states_tensor = torch.stack(states)
+        elif isinstance(states, torch.Tensor) and states.dim() == 3:
+            states_tensor = states.unsqueeze(0)
         else:
             raise TypeError
 
-        # print(states_list.shape) [state_num num_direction*num_layer, B, H] or [num_direction*num_layer, B, H]
+        if (
+            states_tensor.dim() != 4
+            or states_tensor.shape[0] != state_count
+            or states_tensor.shape[1] != layer_state_count
+        ):
+            raise ValueError
 
-        if self.bidirectional:
-            # 判断 num_direction*num_layers 是否符合要求，否则 new_states_list 会存在额外的0矩阵
-            if (
-                states_list.dim() == 4 and states_list.shape[1] != 2 * self.num_layers
-            ) or (
-                states_list.dim() == 3 and states_list.shape[0] != 2 * self.num_layers
-            ):
-                raise ValueError
-            # y 表示第i层的输出。初始化时，y即为输入
-            y = x.clone()
-            if self.training and self.dropout_p > 0 and self.invariant_dropout_mask:
-                mask = F.dropout(
-                    torch.ones(
-                        size=[self.num_layers - 1, batch_size, self.hidden_size * 2]
-                    ),
-                    p=self.dropout_p,
-                    training=True,
-                    inplace=True,
-                ).to(x)
-            for i in range(self.num_layers):
-                # 第i层神经元的起始状态从输入states_list获取
-                new_states_list = torch.zeros_like(states_list.data)
-                if self.states_num() == 1:
-                    cell_init_states = states_list[i]
-                    cell_init_states_reverse = states_list[i + self.num_layers]
-                else:
-                    cell_init_states = states_list[:, i]
-                    cell_init_states_reverse = states_list[:, i + self.num_layers]
+        invariant_masks = None
+        if (
+            self.training
+            and self.dropout_p > 0
+            and self.invariant_dropout_mask
+            and self.num_layers > 1
+        ):
+            invariant_masks = F.dropout(
+                x.new_ones(
+                    self.num_layers - 1,
+                    batch_size,
+                    self.hidden_size * directions,
+                ),
+                p=self.dropout_p,
+                training=True,
+            )
 
-                if self.training and self.dropout_p > 0:
-                    if i > 1:
-                        if self.invariant_dropout_mask:
-                            y = y * mask[i - 1]
-                        else:
-                            y = F.dropout(y, p=self.dropout_p, training=True)
-                y, ss, ss_r = bidirectional_rnn_cell_forward(
-                    self.cells[i],
-                    self.cells_reverse[i],
+        y = x
+        output_states = torch.empty_like(states_tensor)
+        for layer_index in range(self.num_layers):
+            cell_states = states_tensor[:, layer_index]
+            if state_count == 1:
+                cell_states = cell_states[0]
+
+            if self.bidirectional:
+                reverse_index = layer_index + self.num_layers
+                reverse_states = states_tensor[:, reverse_index]
+                if state_count == 1:
+                    reverse_states = reverse_states[0]
+                y, final_states, final_reverse_states = bidirectional_rnn_cell_forward(
+                    self.cells[layer_index],
+                    self.cells_reverse[layer_index],
                     y,
-                    cell_init_states,
-                    cell_init_states_reverse,
+                    cell_states,
+                    reverse_states,
                 )
-                # 更新states_list[i]
-                if self.states_num() == 1:
-                    new_states_list[i] = ss
-                    new_states_list[i + self.num_layers] = ss_r
-                else:
-                    new_states_list[:, i] = torch.stack(ss)
-                    new_states_list[:, i + self.num_layers] = torch.stack(ss_r)
-                states_list = new_states_list.clone()
-            if self.states_num() == 1:
-                return y, new_states_list
+                if state_count > 1 and isinstance(final_reverse_states, (tuple, list)):
+                    final_reverse_states = torch.stack(final_reverse_states)
+                output_states[:, reverse_index] = (
+                    final_reverse_states.unsqueeze(0)
+                    if state_count == 1
+                    else final_reverse_states
+                )
             else:
-                return y, tuple(new_states_list)
+                y, final_states = directional_rnn_cell_forward(
+                    self.cells[layer_index], y, cell_states
+                )
 
-        else:
-            # 判断 num_direction*num_layers 是否符合要求，否则 new_states_list 会存在额外的0矩阵
-            if (states_list.dim() == 4 and states_list.shape[1] != self.num_layers) or (
-                states_list.dim() == 3 and states_list.shape[0] != self.num_layers
+            if state_count > 1 and isinstance(final_states, (tuple, list)):
+                final_states = torch.stack(final_states)
+            output_states[:, layer_index] = (
+                final_states.unsqueeze(0) if state_count == 1 else final_states
+            )
+
+            if (
+                self.training
+                and self.dropout_p > 0
+                and layer_index < self.num_layers - 1
             ):
-                raise ValueError
-            # y 表示第i层的输出。初始化时，y即为输入
-            y = x.clone()
-            if self.training and self.dropout_p > 0 and self.invariant_dropout_mask:
-                mask = F.dropout(
-                    torch.ones(
-                        size=[self.num_layers - 1, batch_size, self.hidden_size * 2]
-                    ),
-                    p=self.dropout_p,
-                    training=True,
-                    inplace=True,
-                ).to(x)
-            for i in range(self.num_layers):
-                # 第i层神经元的起始状态从输入states_list获取
-                new_states_list = torch.zeros_like(states_list.data)
-                if self.states_num() == 1:
-                    cell_init_states = states_list[i]
+                if invariant_masks is None:
+                    y = F.dropout(y, p=self.dropout_p, training=True)
                 else:
-                    cell_init_states = states_list[:, i]
+                    y = y * invariant_masks[layer_index]
 
-                if self.training and self.dropout_p > 0:
-                    if i > 1:
-                        if self.invariant_dropout_mask:
-                            y = y * mask[i - 1]
-                        else:
-                            y = F.dropout(y, p=self.dropout_p, training=True)
-                y, ss = directional_rnn_cell_forward(self.cells[i], y, cell_init_states)
-                # 更新states_list[i]
-                if self.states_num() == 1:
-                    new_states_list[i] = ss
-                else:
-                    new_states_list[:, i] = torch.stack(ss)
-                states_list = new_states_list.clone()
-            if self.states_num() == 1:
-                return y, new_states_list
-            else:
-                return y, tuple(new_states_list)
+        if state_count == 1:
+            return y, output_states[0]
+        return y, tuple(output_states)
 
 
 class SpikingLSTMCell(SpikingRNNCellBase):

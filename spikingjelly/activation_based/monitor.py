@@ -50,12 +50,22 @@ class BaseMonitor:
         if isinstance(i, int):
             return self.records[i]
         elif isinstance(i, str):
-            y = []
-            for index in self.name_records_index[i]:
-                y.append(self.records[index])
-            return y
+            return [self.records[index] for index in self.name_records_index[i]]
         else:
             raise ValueError(i)
+
+    def _monitor_modules(self, net, instance):
+        if instance is None:
+            instance = type(net)
+        for name, module in net.named_modules():
+            if isinstance(module, instance):
+                self.monitored_layers.append(name)
+                self.name_records_index[name] = []
+                yield name, module
+
+    def _record(self, name, value):
+        self.name_records_index[name].append(len(self.records))
+        self.records.append(value)
 
     def clear_recorded_data(self):
         self.records.clear()
@@ -74,6 +84,7 @@ class BaseMonitor:
     def remove_hooks(self):
         for hook in self.hooks:
             hook.remove()
+        self.hooks.clear()
 
     def __del__(self):
         self.disable()
@@ -177,19 +188,16 @@ class OutputMonitor(BaseMonitor):
         """
         super().__init__()
         self.function_on_output = function_on_output
-        if instance is None:
-            instance = type(net)
-        for name, m in net.named_modules():
-            if isinstance(m, instance):
-                self.monitored_layers.append(name)
-                self.name_records_index[name] = []
-                self.hooks.append(m.register_forward_hook(self.create_hook(name)))
+        for name, module in self._monitor_modules(net, instance):
+            self.hooks.append(module.register_forward_hook(self.create_hook(name)))
 
     def create_hook(self, name):
-        def hook(m, x, y):
+        def hook(module, inputs, output):
             if self.is_enable():
-                self.name_records_index[name].append(self.records.__len__())
-                self.records.append(self.function_on_output(_unpack_len1_tuple(y)))
+                self._record(
+                    name,
+                    self.function_on_output(_unpack_len1_tuple(output)),
+                )
 
         return hook
 
@@ -295,19 +303,16 @@ class InputMonitor(BaseMonitor):
         """
         super().__init__()
         self.function_on_input = function_on_input
-        if instance is None:
-            instance = type(net)
-        for name, m in net.named_modules():
-            if isinstance(m, instance):
-                self.monitored_layers.append(name)
-                self.name_records_index[name] = []
-                self.hooks.append(m.register_forward_hook(self.create_hook(name)))
+        for name, module in self._monitor_modules(net, instance):
+            self.hooks.append(module.register_forward_hook(self.create_hook(name)))
 
     def create_hook(self, name):
-        def hook(m, x, y):
+        def hook(module, inputs, output):
             if self.is_enable():
-                self.name_records_index[name].append(self.records.__len__())
-                self.records.append(self.function_on_input(_unpack_len1_tuple(x)))
+                self._record(
+                    name,
+                    self.function_on_input(_unpack_len1_tuple(inputs)),
+                )
 
         return hook
 
@@ -433,26 +438,20 @@ class AttributeMonitor(BaseMonitor):
         super().__init__()
         self.attribute_name = attribute_name
         self.function_on_attribute = function_on_attribute
-        if instance is None:
-            instance = type(net)
-
-        for name, m in net.named_modules():
-            if isinstance(m, instance):
-                self.monitored_layers.append(name)
-                self.name_records_index[name] = []
-                if pre_forward:
-                    self.hooks.append(
-                        m.register_forward_pre_hook(self.create_hook(name))
-                    )
-                else:
-                    self.hooks.append(m.register_forward_hook(self.create_hook(name)))
+        for name, module in self._monitor_modules(net, instance):
+            if pre_forward:
+                self.hooks.append(
+                    module.register_forward_pre_hook(self.create_hook(name))
+                )
+            else:
+                self.hooks.append(module.register_forward_hook(self.create_hook(name)))
 
     def create_hook(self, name):
-        def hook(m, x, y):
+        def hook(module, *args):
             if self.is_enable():
-                self.name_records_index[name].append(self.records.__len__())
-                self.records.append(
-                    self.function_on_attribute(m.__getattr__(self.attribute_name))
+                self._record(
+                    name,
+                    self.function_on_attribute(getattr(module, self.attribute_name)),
                 )
 
         return hook
@@ -568,26 +567,17 @@ class GradInputMonitor(BaseMonitor):
         """
         super().__init__()
         self.function_on_grad_input = function_on_grad_input
-        if instance is None:
-            instance = type(net)
-
-        for name, m in net.named_modules():
-            if isinstance(m, instance):
-                self.monitored_layers.append(name)
-                self.name_records_index[name] = []
-                if torch.__version__ >= torch.torch_version.TorchVersion("1.8.0"):
-                    self.hooks.append(
-                        m.register_full_backward_hook(self.create_hook(name))
-                    )
-                else:
-                    self.hooks.append(m.register_backward_hook(self.create_hook(name)))
+        for name, module in self._monitor_modules(net, instance):
+            self.hooks.append(
+                module.register_full_backward_hook(self.create_hook(name))
+            )
 
     def create_hook(self, name):
-        def hook(m, grad_input, grad_output):
+        def hook(module, grad_input, grad_output):
             if self.is_enable():
-                self.name_records_index[name].append(self.records.__len__())
-                self.records.append(
-                    self.function_on_grad_input(_unpack_len1_tuple(grad_input))
+                self._record(
+                    name,
+                    self.function_on_grad_input(_unpack_len1_tuple(grad_input)),
                 )
 
         return hook
@@ -706,25 +696,17 @@ class GradOutputMonitor(BaseMonitor):
         """
         super().__init__()
         self.function_on_grad_output = function_on_grad_output
-        if instance is None:
-            instance = type(net)
-        for name, m in net.named_modules():
-            if isinstance(m, instance):
-                self.monitored_layers.append(name)
-                self.name_records_index[name] = []
-                if torch.__version__ >= torch.torch_version.TorchVersion("1.8.0"):
-                    self.hooks.append(
-                        m.register_full_backward_hook(self.create_hook(name))
-                    )
-                else:
-                    self.hooks.append(m.register_backward_hook(self.create_hook(name)))
+        for name, module in self._monitor_modules(net, instance):
+            self.hooks.append(
+                module.register_full_backward_hook(self.create_hook(name))
+            )
 
     def create_hook(self, name):
-        def hook(m, grad_input, grad_output):
+        def hook(module, grad_input, grad_output):
             if self.is_enable():
-                self.name_records_index[name].append(self.records.__len__())
-                self.records.append(
-                    self.function_on_grad_output(_unpack_len1_tuple(grad_output))
+                self._record(
+                    name,
+                    self.function_on_grad_output(_unpack_len1_tuple(grad_output)),
                 )
 
         return hook

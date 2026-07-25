@@ -745,6 +745,21 @@ def test_neuromc_base_counter_unknown_op_returns_zero():
     assert value == 0
 
 
+def test_neuromc_base_counter_reset_clears_all_aggregates():
+    counter = NeuroMCBaseCounter()
+    counter.records["Global"]["op"] = 1
+    counter.stage_records["forward"] = 2
+    counter.op_records["aten.add"] = 3
+    counter.stage_op_records["forward"]["aten.add"] = 4
+
+    counter.reset()
+
+    assert counter.get_counts() == {}
+    assert counter.get_stage_counts() == {}
+    assert counter.get_op_counts() == {}
+    assert counter.get_stage_op_counts() == {}
+
+
 def test_neuromc_spike_nnz_empty_tensor_returns_none():
     x = torch.empty(0)
     assert _is_spike(x) is False

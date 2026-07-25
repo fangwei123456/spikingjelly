@@ -113,6 +113,13 @@ Module: `spikingjelly.activation_based.ann2snn`.
 - Fixed FX conversion on PyTorch 2.6 and 2.7 for dynamic `torch.reshape`
   calls and forward signatures containing PEP 604 union annotations.
 
+#### Recurrent Networks
+
+Module: `spikingjelly.activation_based.rnn`.
+
+- Fixed stacked spiking RNNs discarding earlier layers' final states and
+  skipping dropout between the first two recurrent layers.
+
 #### Triton Neuron Kernels
 
 Module: `spikingjelly.activation_based.triton_kernel.neuron_kernel`.

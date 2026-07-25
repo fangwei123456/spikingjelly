@@ -10,14 +10,14 @@ from benchmark.snn_llm.qwen_conversion import scaleout_efficiency as runner
 class _FakeModel(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.collect_statistics = True
         self.grad_enabled = []
-
-    def set_collect_statistics(self, enabled):
-        self.collect_statistics = enabled
+        self.encoder = SimpleNamespace(collect_statistics=True)
 
     def reset(self):
         pass
+
+    def set_collect_statistics(self, enabled):
+        self.encoder.collect_statistics = enabled
 
     def forward(self, input_ids, attention_mask, **kwargs):
         del attention_mask, kwargs
@@ -31,7 +31,7 @@ def test_statistics_are_disabled_before_timing():
     model = _FakeModel()
     runner._prepare_benchmark_model(model)
 
-    assert model.collect_statistics is False
+    assert model.encoder.collect_statistics is False
     assert model.training is False
 
 

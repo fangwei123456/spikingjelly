@@ -53,7 +53,11 @@ from spikingjelly.activation_based.ann2snn.operators import (
 from spikingjelly.activation_based.ann2snn.recipes.local_threshold_balancing import (
     LocalThresholdBalancingHook,
 )
-from spikingjelly.activation_based.ann2snn.recipes.rate_coding import ChannelVoltageHook
+from spikingjelly.activation_based.ann2snn.recipes.rate_coding import (
+    ChannelVoltageHook,
+    _extract_batch_input,
+    _fuse_conv_bn,
+)
 
 
 class SimpleCNN(nn.Module):
@@ -1521,15 +1525,13 @@ raise SystemExit(1)
         imgs = torch.randn(2, 1, 28, 28)
         labels = torch.zeros(2, dtype=torch.long)
 
-        extracted = RateCodingRecipe._extract_batch_input(
-            {"labels": labels, "images": imgs}
-        )
+        extracted = _extract_batch_input({"labels": labels, "images": imgs})
 
         assert extracted is imgs
 
     def test_ambiguous_multi_key_dict_dataloader_raises(self):
         with pytest.raises(ValueError, match="multiple fields"):
-            RateCodingRecipe._extract_batch_input(
+            _extract_batch_input(
                 {
                     "labels": torch.zeros(2, dtype=torch.long),
                     "metadata": ["sample-0", "sample-1"],
@@ -1539,16 +1541,14 @@ raise SystemExit(1)
     def test_nested_dataloader_extracts_tensor(self):
         imgs = torch.randn(2, 1, 28, 28)
 
-        extracted = RateCodingRecipe._extract_batch_input(({"input": imgs},))
+        extracted = _extract_batch_input(({"input": imgs},))
 
         assert extracted is imgs
 
     def test_nested_dict_dataloader_extracts_tensor(self):
         imgs = torch.randn(2, 1, 28, 28)
 
-        extracted = RateCodingRecipe._extract_batch_input(
-            {"labels": torch.zeros(2), "images": (imgs,)}
-        )
+        extracted = _extract_batch_input({"labels": torch.zeros(2), "images": (imgs,)})
 
         assert extracted is imgs
 
@@ -1628,11 +1628,11 @@ raise SystemExit(1)
 
     def test_extract_batch_input_rejects_empty_sequence(self):
         with pytest.raises(ValueError, match="empty list or tuple"):
-            RateCodingRecipe._extract_batch_input([])
+            _extract_batch_input([])
 
     def test_extract_batch_input_rejects_empty_dict(self):
         with pytest.raises(ValueError, match="empty dictionary"):
-            RateCodingRecipe._extract_batch_input({})
+            _extract_batch_input({})
 
 
 class TestConverterTDOperatorReplacement:
@@ -2047,9 +2047,9 @@ class TestFuse:
     def test_fuse_module_replacement_does_not_depend_on_asserts(self):
         code = """
 import inspect
-from spikingjelly.activation_based.ann2snn import RateCodingRecipe
+from spikingjelly.activation_based.ann2snn.recipes.rate_coding import _fuse_conv_bn
 
-source = inspect.getsource(RateCodingRecipe._fuse)
+source = inspect.getsource(_fuse_conv_bn)
 raise SystemExit(int("assert isinstance(node.target, str)" in source))
 """
         result = subprocess.run(
@@ -2068,7 +2068,7 @@ raise SystemExit(int("assert isinstance(node.target, str)" in source))
         x = torch.randn(2, 1, 28, 28)
         expected = fx_model(x)
 
-        fused = RateCodingRecipe._fuse(fx_model, fuse_flag=True)
+        fused = _fuse_conv_bn(fx_model, fuse_flag=True)
         result = fused(x)
 
         assert torch.allclose(result, expected, atol=1e-5, rtol=1e-5)
@@ -2081,7 +2081,7 @@ raise SystemExit(int("assert isinstance(node.target, str)" in source))
         x = torch.randn(2, 1, 28, 28)
         expected = fx_model(x)
 
-        fused = RateCodingRecipe._fuse(fx_model, fuse_flag=True)
+        fused = _fuse_conv_bn(fx_model, fuse_flag=True)
         result = fused(x)
 
         assert torch.allclose(result, expected, atol=1e-5, rtol=1e-5)
@@ -2094,7 +2094,7 @@ raise SystemExit(int("assert isinstance(node.target, str)" in source))
         x = torch.randn(2, 1, 28, 28)
         expected = fx_model(x)
 
-        fused = RateCodingRecipe._fuse(fx_model, fuse_flag=True)
+        fused = _fuse_conv_bn(fx_model, fuse_flag=True)
         result = fused(x)
 
         assert torch.allclose(result, expected, atol=1e-5, rtol=1e-5)
@@ -2656,20 +2656,20 @@ class TestRuleBasedConversion:
 
 class TestLocalThresholdBalancingRecipe:
     def test_hook_channelwise_threshold_for_matrix_and_image(self):
-        matrix_hook = LocalThresholdBalancingHook(mode="Max", channel_dim=1)
+        matrix_hook = LocalThresholdBalancingHook(channel_dim=1)
         matrix_hook(torch.tensor([[1.0, 2.0, 3.0], [4.0, 1.0, 2.0]]))
-        assert matrix_hook.scale.shape == (3,)
-        assert torch.allclose(matrix_hook.scale, torch.tensor([5.0, 3.0, 5.0]))
+        assert matrix_hook.threshold.shape == (3,)
+        assert torch.allclose(matrix_hook.threshold, torch.tensor([5.0, 3.0, 5.0]))
 
-        image_hook = LocalThresholdBalancingHook(mode="Max", channel_dim=1)
+        image_hook = LocalThresholdBalancingHook(channel_dim=1)
         image_hook(torch.ones(2, 4, 3, 3))
-        assert image_hook.scale.shape == (4,)
-        assert torch.isfinite(image_hook.scale).all()
-        assert (image_hook.scale > 0).all()
+        assert image_hook.threshold.shape == (4,)
+        assert torch.isfinite(image_hook.threshold).all()
+        assert (image_hook.threshold > 0).all()
 
     def test_hook_updates_threshold_and_clips_forward_activation(self):
         x = torch.tensor([[0.0, 2.0], [4.0, 6.0]])
-        hook = LocalThresholdBalancingHook(mode="Max", channel_dim=1)
+        hook = LocalThresholdBalancingHook(channel_dim=1)
         y = hook(x)
         assert torch.allclose(hook.compute_threshold(), torch.tensor([4.0, 8.0]))
         assert torch.allclose(y, x)

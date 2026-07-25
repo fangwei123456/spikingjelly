@@ -11,10 +11,11 @@ from tqdm import tqdm
 
 from spikingjelly.activation_based import neuron
 from spikingjelly.activation_based.ann2snn.modules import ChannelVoltageScaler
-from spikingjelly.activation_based.ann2snn.rules import ReLURule
+from spikingjelly.activation_based.ann2snn.rules import _matches_relu
 from spikingjelly.activation_based.ann2snn.recipes.base import ConversionRecipe
 from spikingjelly.activation_based.ann2snn.recipes.rate_coding import (
-    RateCodingRecipe,
+    _extract_batch_input,
+    _fuse_conv_bn,
     validate_rate_coding_mode,
 )
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
@@ -33,19 +34,12 @@ __all__ = ["LocalThresholdBalancingRecipe"]
 class LocalThresholdBalancingHook(nn.Module):
     def __init__(
         self,
-        mode: Union[str, float] = "99.9%",
         channel_dim: int = 1,
-        threshold_candidates: Tuple[float, ...] = (0.5, 0.75, 1.0, 1.25, 1.5),
-        time_steps: int = 64,
         eps: float = 1e-6,
     ) -> None:
         super().__init__()
-        self.mode = mode
         self.channel_dim = channel_dim
-        self.threshold_candidates = tuple(float(v) for v in threshold_candidates)
-        self.time_steps = int(time_steps)
         self.eps = float(eps)
-        self.register_buffer("scale", torch.empty(0))
         self.register_buffer("threshold", torch.empty(0))
 
     @staticmethod
@@ -88,7 +82,6 @@ class LocalThresholdBalancingHook(nn.Module):
         threshold = threshold + 2.0 * overflow.mean(dim=reduce_dims)
         threshold = torch.clamp(threshold, min=self.eps)
         self.threshold = threshold.detach()
-        self.scale = self.threshold
 
         clipped_threshold = self._channel_view(
             threshold.to(device=x.device, dtype=x.dtype), x, channel_dim
@@ -96,30 +89,25 @@ class LocalThresholdBalancingHook(nn.Module):
         return torch.minimum(x_nonnegative, clipped_threshold)
 
     def compute_threshold(self) -> torch.Tensor:
-        if self.threshold.numel() > 0:
-            threshold = self.threshold
-        elif self.scale.numel() > 0:
-            threshold = self.scale
-        else:
+        if self.threshold.numel() == 0:
             raise ValueError("No calibration activations have been recorded.")
-        if not torch.isfinite(threshold).all() or (threshold <= 0).any():
+        if not torch.isfinite(self.threshold).all() or (self.threshold <= 0).any():
             raise ValueError("Balanced thresholds must be finite positive values.")
-        return threshold.detach()
+        return self.threshold.detach()
 
 
 class LocalThresholdBalancingReLURule:
-    def __init__(self, channel_dim: int = 1) -> None:
+    def __init__(self, channel_dim: int = 1, eps: float = 1e-6) -> None:
         self.channel_dim = channel_dim
-        self.relu_rule = ReLURule()
+        self.eps = eps
 
     def match(self, node: fx.Node, modules: Dict[str, nn.Module]) -> bool:
-        return self.relu_rule.match(node, modules)
+        return _matches_relu(node, modules)
 
     def insert_hooks(
         self,
         fx_model: fx.GraphModule,
         node: fx.Node,
-        hook_factory: "LocalThresholdBalancingHookFactory",
         hook_counts_per_prefix: Dict[str, int],
     ) -> fx.Node:
         if not isinstance(node.target, str):
@@ -140,7 +128,13 @@ class LocalThresholdBalancingReLURule:
                 and isinstance(modules.get(user.target), nn.MaxPool2d)
             ):
                 hook_input = user
-        fx_model.add_submodule(target=target, m=hook_factory.create())
+        fx_model.add_submodule(
+            target=target,
+            m=LocalThresholdBalancingHook(
+                channel_dim=self.channel_dim,
+                eps=self.eps,
+            ),
+        )
         with fx_model.graph.inserting_after(n=hook_input):
             hook_node = fx_model.graph.call_module(target, args=(hook_input,))
         for user in list(hook_input.users):
@@ -248,31 +242,6 @@ class LocalThresholdBalancingReLURule:
         fx_model.graph.erase_node(activation_node)
 
 
-class LocalThresholdBalancingHookFactory:
-    def __init__(
-        self,
-        mode: Union[str, float],
-        channel_dim: int,
-        threshold_candidates: Tuple[float, ...],
-        time_steps: int,
-        eps: float,
-    ) -> None:
-        self.mode = mode
-        self.channel_dim = channel_dim
-        self.threshold_candidates = threshold_candidates
-        self.time_steps = time_steps
-        self.eps = eps
-
-    def create(self) -> LocalThresholdBalancingHook:
-        return LocalThresholdBalancingHook(
-            mode=self.mode,
-            channel_dim=self.channel_dim,
-            threshold_candidates=self.threshold_candidates,
-            time_steps=self.time_steps,
-            eps=self.eps,
-        )
-
-
 class LocalThresholdBalancingRecipe(ConversionRecipe):
     def __init__(
         self,
@@ -358,7 +327,10 @@ class LocalThresholdBalancingRecipe(ConversionRecipe):
         self.threshold_candidates = tuple(float(v) for v in threshold_candidates)
         self.fuse_flag = fuse_flag
         self.eps = eps
-        self.rule = LocalThresholdBalancingReLURule(channel_dim=channel_dim)
+        self.rule = LocalThresholdBalancingReLURule(
+            channel_dim=channel_dim,
+            eps=eps,
+        )
 
     def validate(self, converter: "Converter") -> None:
         if self.dataloader is None:
@@ -384,20 +356,11 @@ class LocalThresholdBalancingRecipe(ConversionRecipe):
     def after_trace(
         self, converter: "Converter", fx_model: fx.GraphModule
     ) -> fx.GraphModule:
-        return RateCodingRecipe._fuse(fx_model, fuse_flag=self.fuse_flag).to(
-            converter.device
-        )
+        return _fuse_conv_bn(fx_model, fuse_flag=self.fuse_flag).to(converter.device)
 
     def insert_observers(
         self, converter: "Converter", fx_model: fx.GraphModule
     ) -> fx.GraphModule:
-        hook_factory = LocalThresholdBalancingHookFactory(
-            mode=self.mode,
-            channel_dim=self.channel_dim,
-            threshold_candidates=self.threshold_candidates,
-            time_steps=self.time_steps,
-            eps=self.eps,
-        )
         hook_counts_per_prefix: Dict[str, int] = {}
         modules = dict(fx_model.named_modules())
         for node in list(fx_model.graph.nodes):
@@ -406,9 +369,7 @@ class LocalThresholdBalancingRecipe(ConversionRecipe):
             if node.target not in modules:
                 continue
             if self.rule.match(node, modules):
-                self.rule.insert_hooks(
-                    fx_model, node, hook_factory, hook_counts_per_prefix
-                )
+                self.rule.insert_hooks(fx_model, node, hook_counts_per_prefix)
                 modules = dict(fx_model.named_modules())
         fx_model.graph.lint()
         fx_model.recompile()
@@ -450,7 +411,7 @@ class LocalThresholdBalancingRecipe(ConversionRecipe):
 
     @staticmethod
     def _move_batch_to_device(data, device: torch.device):
-        imgs = RateCodingRecipe._extract_batch_input(data)
+        imgs = _extract_batch_input(data)
         if isinstance(imgs, torch.Tensor):
             return imgs.to(device=device)
         if isinstance(imgs, (list, tuple, dict)):

@@ -138,7 +138,7 @@ def test_scaleout_calibration_artifact_must_match_configuration(tmp_path):
     path = tmp_path / "calibration.pt"
     torch.save(calibration.state_dict(), path)
 
-    loaded, digest = runner._load_calibration_artifact(
+    loaded, digest = runner._load_calibration(
         path,
         Qwen2SNNConfig(
             time_steps=160,
@@ -150,7 +150,7 @@ def test_scaleout_calibration_artifact_must_match_configuration(tmp_path):
     assert loaded.valid_token_count == 512
     assert len(digest) == 64
     with pytest.raises(ValueError, match="time_steps"):
-        runner._load_calibration_artifact(
+        runner._load_calibration(
             path,
             Qwen2SNNConfig(
                 time_steps=128,

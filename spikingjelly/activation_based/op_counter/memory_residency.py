@@ -6,9 +6,8 @@ from typing import Any, Callable
 import torch
 import torch.nn as nn
 from torch.overrides import resolve_name
-from torch.utils._pytree import tree_flatten
 
-from .base import BaseCounter
+from .base import BaseCounter, _collect_tensors, _infer_stage, _tensor_bits
 
 aten = torch.ops.aten
 
@@ -24,45 +23,6 @@ _DEFAULT_CAPACITY_BITS = {
     "sram": float(38 * 1024 * 1024 * 8),
     "dram": float("inf"),
 }
-
-_OPTIMIZER_HINTS = (
-    "add_.",
-    "sub_.",
-    "mul_.",
-    "div_.",
-    "addcmul",
-    "addcdiv",
-    "lerp_",
-    "copy_",
-)
-
-
-def _tensor_bits(x: Any) -> int:
-    if not torch.is_tensor(x):
-        return 0
-    return int(x.numel() * x.element_size() * 8)
-
-
-def _collect_tensors(tree: Any) -> list[torch.Tensor]:
-    flat, _ = tree_flatten(tree)
-    return [x for x in flat if torch.is_tensor(x)]
-
-
-def _infer_stage(func, args, kwargs, out) -> str:
-    op_name = resolve_name(func)
-    if "backward" in op_name:
-        return "backward"
-
-    if torch.is_grad_enabled():
-        return "forward"
-
-    tensors = _collect_tensors((args, kwargs, out))
-    has_grad_tensor = any(t.requires_grad for t in tensors)
-    is_optimizer_like = any(hint in op_name for hint in _OPTIMIZER_HINTS)
-    if has_grad_tensor and is_optimizer_like:
-        return "optimizer"
-
-    return "forward"
 
 
 def _access_mm(args, kwargs, out):

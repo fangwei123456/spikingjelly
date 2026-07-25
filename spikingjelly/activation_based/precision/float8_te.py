@@ -9,7 +9,7 @@ import torch.nn as nn
 
 from .. import layer
 from .capability import build_capability_report, validate_capability
-from .float8_base import wrap_float8_linear_module
+from .float8_base import _Float8StepModule, wrap_float8_linear_module
 from .float8_conv import (
     is_supported_pointwise_conv1d,
     make_linear_from_pointwise_conv1d,
@@ -210,37 +210,21 @@ def _make_te_layer_norm_mlp(
     return converted
 
 
-class _Float8TEPatternModule(nn.Module):
+class _Float8TEPatternModule(_Float8StepModule):
     def __init__(
         self,
         wrapped: nn.Module,
         state_key_map: dict[str, str],
         step_mode: str = "s",
     ):
-        super().__init__()
-        self.wrapped = wrapped
+        super().__init__(wrapped, step_mode)
         self._state_key_map = state_key_map
-        self.step_mode = step_mode
-
-    def set_step_mode(self, step_mode: str):
-        self.step_mode = step_mode
 
     def _unwrap_output(self, output):
         return output[0] if isinstance(output, tuple) else output
 
     def forward(self, x):
         return self._unwrap_output(self.wrapped(x))
-
-    def __getattr__(self, name: str):
-        try:
-            return super().__getattr__(name)
-        except AttributeError:
-            wrapped = self.__dict__.get("_modules", {}).get("wrapped")
-            if wrapped is None:
-                raise AttributeError(
-                    f"'{type(self).__name__}' object has no attribute '{name}'"
-                ) from None
-            return getattr(wrapped, name)
 
     def state_dict(self, destination=None, prefix="", keep_vars=False):
         if destination is None:
