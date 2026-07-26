@@ -108,12 +108,7 @@ from spikingjelly.activation_based.distributed.tensor_parallel.state import (
 )
 
 try:
-    from torch.distributed._tensor import DeviceMesh, init_device_mesh
-
-    try:
-        from torch.distributed._tensor import DTensor
-    except ImportError:
-        DTensor = None
+    from torch.distributed._tensor import DTensor, DeviceMesh, init_device_mesh
 
     DTENSOR_AVAILABLE = True
 except ImportError:

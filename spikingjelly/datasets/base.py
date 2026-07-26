@@ -119,7 +119,7 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         * 如果处理后的文件不存在，则创建它们。
         * 为 :class:`torchvision.datasets.DatasetFolder` 提供加载器函数。
 
-        子类应实现抽象方法 :meth:`build_impl`、:meth:`get_loader` 和属性 :attr:`processed_root`。
+        子类应实现 :meth:`build_impl`、:meth:`get_loader` 和属性 :attr:`processed_root`。
 
         :param cfg: 数据集配置
         :type cfg: NeuromorphicDatasetConfig
@@ -146,8 +146,8 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         * Creating processed files if they do not already exist.
         * Providing a loader function for :class:`torchvision.datasets.DatasetFolder`.
 
-        Subclasses should implement the abstract methods :meth:`build_impl`,
-        :meth:`get_loader` and property :attr:`processed_root`.
+        Subclasses should implement :meth:`build_impl`, :meth:`get_loader` and
+        property :attr:`processed_root`.
 
         :param cfg: dataset configuration.
         :type cfg: NeuromorphicDatasetConfig
@@ -232,7 +232,6 @@ class NeuromorphicDatasetBuilder(abc.ABC):
             self.build_impl()
         return self.processed_root, self.get_loader()
 
-    @abc.abstractmethod
     def build_impl(self) -> None:
         r"""
         **API Language** - :ref:`中文 <NeuromorphicDatasetBuilder.build_impl-cn>` | :ref:`English <NeuromorphicDatasetBuilder.build_impl-en>`
@@ -262,7 +261,7 @@ class NeuromorphicDatasetBuilder(abc.ABC):
 
         Subclasses must implement this method.
         """
-        pass
+        raise NotImplementedError
 
     @abc.abstractmethod
     def get_loader(self) -> Callable:
@@ -297,6 +296,37 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         :rtype: Callable
         """
         pass
+
+    def _run_preprocess_tasks(self, process: Callable, tasks) -> None:
+        start = time.time()
+        with ThreadPoolExecutor(
+            max_workers=configure.max_threads_number_for_datasets_preprocess
+        ) as executor:
+            print(
+                "Start ThreadPoolExecutor with max workers = "
+                f"[{executor._max_workers}]."
+            )
+            futures = [executor.submit(process, *task_args) for task_args in tasks]
+            for future in futures:
+                future.result()
+        print(f"Used time = [{round(time.time() - start, 2)}s].")
+
+    def _build_from_event_files(self, process: Callable) -> None:
+        utils.create_same_directory_structure(self.raw_root, self.processed_root)
+
+        def tasks():
+            for event_root, _, event_files in os.walk(self.raw_root):
+                event_root = Path(event_root)
+                output_dir = self.processed_root / event_root.relative_to(self.raw_root)
+                for event_file in event_files:
+                    events_file = event_root / event_file
+                    print(
+                        f"Start to integrate [{events_file}] to frames "
+                        f"and save to [{output_dir}]."
+                    )
+                    yield events_file, output_dir
+
+        self._run_preprocess_tasks(process, tasks())
 
 
 class EventBuilder(NeuromorphicDatasetBuilder):
@@ -342,9 +372,6 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         """
         super().__init__(cfg, raw_root)
 
-    def build_impl(self) -> None:
-        pass
-
     def build(self) -> Tuple[Path, Callable]:
         r"""
         **API Language** - :ref:`中文 <EventBuilder.build-cn>` | :ref:`English <EventBuilder.build-en>`
@@ -385,6 +412,8 @@ class EventBuilder(NeuromorphicDatasetBuilder):
 
 
 class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
+    _event_loader = staticmethod(np.load)
+
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
         r"""
         **API Language** - :ref:`中文 <FrameFixedNumberBuilder.__init__-cn>` | :ref:`English <FrameFixedNumberBuilder.__init__-en>`
@@ -435,45 +464,19 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
         self.H, self.W = H, W
 
     def build_impl(self) -> None:
-        # create the same directory structure
-        utils.create_same_directory_structure(self.raw_root, self.processed_root)
+        def process(events_file, output_dir):
+            utils.integrate_events_file_to_frames_file_by_fixed_frames_number(
+                self._event_loader,
+                events_file,
+                output_dir,
+                self.cfg.split_by,
+                self.cfg.frames_number,
+                self.H,
+                self.W,
+                True,
+            )
 
-        # use multi-thread to accelerate
-        t_ckp = time.time()
-        with ThreadPoolExecutor(
-            max_workers=configure.max_threads_number_for_datasets_preprocess
-        ) as tpe:
-            futures = []
-            print(f"Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].")
-            for e_root, e_dirs, e_files in os.walk(self.raw_root):
-                #! Path.walk is not available until Python 3.12
-                e_root = Path(e_root)
-                if len(e_files) <= 0:
-                    continue
-                output_dir = self.processed_root / e_root.relative_to(self.raw_root)
-                for e_file in e_files:
-                    events_np_file = e_root / e_file
-                    print(
-                        f"Start to integrate [{events_np_file}] to frames "
-                        f"and save to [{output_dir}]."
-                    )
-                    futures.append(
-                        tpe.submit(
-                            utils.integrate_events_file_to_frames_file_by_fixed_frames_number,
-                            np.load,
-                            events_np_file,
-                            output_dir,
-                            self.cfg.split_by,
-                            self.cfg.frames_number,
-                            self.H,
-                            self.W,
-                            True,
-                        )
-                    )
-            for future in futures:
-                future.result()
-
-        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
+        self._build_from_event_files(process)
 
     @property
     def processed_root(self) -> Path:
@@ -487,6 +490,8 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
 
 
 class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
+    _event_loader = staticmethod(np.load)
+
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
         r"""
         **API Language** - :ref:`中文 <FrameFixedDurationBuilder.__init__-cn>` | :ref:`English <FrameFixedDurationBuilder.__init__-en>`
@@ -536,44 +541,18 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
         self.H, self.W = H, W
 
     def build_impl(self) -> None:
-        # create the same directory structure
-        utils.create_same_directory_structure(self.raw_root, self.processed_root)
+        def process(events_file, output_dir):
+            utils.integrate_events_file_to_frames_file_by_fixed_duration(
+                self._event_loader,
+                events_file,
+                output_dir,
+                self.cfg.duration,
+                self.H,
+                self.W,
+                True,
+            )
 
-        # use multi-thread to accelerate
-        t_ckp = time.time()
-        with ThreadPoolExecutor(
-            max_workers=configure.max_threads_number_for_datasets_preprocess
-        ) as tpe:
-            futures = []
-            print(f"Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].")
-            for e_root, e_dirs, e_files in os.walk(self.raw_root):
-                #! Path.walk is not available until Python 3.12
-                e_root = Path(e_root)
-                if len(e_files) <= 0:
-                    continue
-                output_dir = self.processed_root / e_root.relative_to(self.raw_root)
-                for e_file in e_files:
-                    events_np_file = e_root / e_file
-                    print(
-                        f"Start to integrate [{events_np_file}] to frames "
-                        f"and save to [{output_dir}]."
-                    )
-                    futures.append(
-                        tpe.submit(
-                            utils.integrate_events_file_to_frames_file_by_fixed_duration,
-                            np.load,
-                            events_np_file,
-                            output_dir,
-                            self.cfg.duration,
-                            self.H,
-                            self.W,
-                            True,
-                        )
-                    )
-            for future in futures:
-                future.result()
-
-        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
+        self._build_from_event_files(process)
 
     @property
     def processed_root(self) -> Path:
@@ -584,6 +563,8 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
 
 
 class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
+    _event_loader = staticmethod(np.load)
+
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
         r"""
         **API Language** - :ref:`中文 <FrameCustomIntegrateBuilder.__init__-cn>` | :ref:`English <FrameCustomIntegrateBuilder.__init__-en>`
@@ -635,41 +616,13 @@ class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
         self.H, self.W = H, W
 
     def build_impl(self) -> None:
-        # create the same directory structure
-        utils.create_same_directory_structure(self.raw_root, self.processed_root)
-        # use multi-thread to accelerate
-        t_ckp = time.time()
-        with ThreadPoolExecutor(
-            max_workers=configure.max_threads_number_for_datasets_preprocess
-        ) as tpe:
-            futures = []
-            print(f"Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].")
-            for e_root, e_dirs, e_files in os.walk(self.raw_root):
-                #! Path.walk is not available until Python 3.12
-                e_root = Path(e_root)
-                if len(e_files) <= 0:
-                    continue
-                output_dir = self.processed_root / e_root.relative_to(self.raw_root)
-                for e_file in e_files:
-                    events_np_file: Path = e_root / e_file
-                    print(
-                        f"Start to integrate [{events_np_file}] to frames "
-                        f"and save to [{output_dir}]."
-                    )
-                    futures.append(
-                        tpe.submit(
-                            utils.save_frames_to_npz_and_print,
-                            output_dir / events_np_file.name,
-                            self.cfg.custom_integrate_function(
-                                np.load(events_np_file), self.H, self.W
-                            ),
-                        )
-                    )
+        def process(events_file, output_dir):
+            frames = self.cfg.custom_integrate_function(
+                self._event_loader(events_file), self.H, self.W
+            )
+            utils.save_frames_to_npz_and_print(output_dir / events_file.name, frames)
 
-            for future in futures:
-                future.result()
-
-        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
+        self._build_from_event_files(process)
 
     @property
     def processed_root(self) -> Path:

@@ -311,6 +311,8 @@ def test_hg_node_multi_step_and_validation():
     with pytest.raises(ValueError):
         neuron.HGNode(tables=[table0, table1], gate_thresholds=[1.0, 2.0])
     with pytest.raises(ValueError):
+        neuron.HGNode(tables=[table0, table1], gate_thresholds=[float("nan")])
+    with pytest.raises(ValueError):
         neuron.HGNode(tables=[table0, table1, table0], gate_thresholds=[1.0, 0.0])
 
 

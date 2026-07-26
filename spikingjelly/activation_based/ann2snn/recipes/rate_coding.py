@@ -245,28 +245,6 @@ class ChannelVoltageHook(nn.Module):
         return self.scale.detach()
 
 
-class ChannelVoltageHookFactory:
-    def __init__(
-        self,
-        mode: Union[str, float],
-        momentum: float,
-        channel_dim: int,
-        eps: float,
-    ) -> None:
-        self.mode = mode
-        self.momentum = momentum
-        self.channel_dim = channel_dim
-        self.eps = eps
-
-    def create(self) -> ChannelVoltageHook:
-        return ChannelVoltageHook(
-            mode=self.mode,
-            momentum=self.momentum,
-            channel_dim=self.channel_dim,
-            eps=self.eps,
-        )
-
-
 class ChannelWiseRateCodingReLURule:
     def __init__(
         self,
@@ -286,7 +264,7 @@ class ChannelWiseRateCodingReLURule:
         self,
         fx_model: fx.GraphModule,
         node: fx.Node,
-        hook_factory: ChannelVoltageHookFactory,
+        hook: ChannelVoltageHook,
         hook_counts_per_prefix: Dict[str, int],
     ) -> fx.Node:
         if not isinstance(node.target, str):
@@ -313,7 +291,7 @@ class ChannelWiseRateCodingReLURule:
             ):
                 hook_input = user
 
-        fx_model.add_submodule(target=target, m=hook_factory.create())
+        fx_model.add_submodule(target=target, m=hook)
         with fx_model.graph.inserting_after(n=hook_input):
             hook_node = fx_model.graph.call_module(target, args=(hook_input,))
         for user in list(hook_input.users):
@@ -695,14 +673,7 @@ class RateCodingRecipe(ConversionRecipe):
         validate_rate_coding_mode(self.mode)
 
     def _set_voltagehook(self, fx_model: torch.fx.GraphModule) -> torch.fx.GraphModule:
-        if self.channel_wise:
-            hook_factory = ChannelVoltageHookFactory(
-                mode=self.mode,
-                momentum=self.momentum,
-                channel_dim=self.channel_dim,
-                eps=self.eps,
-            )
-        else:
+        if not self.channel_wise:
             hook_factory = HookFactory(mode=self.mode, momentum=self.momentum)
         hook_counts_per_prefix: Dict[str, int] = {}
         modules = dict(fx_model.named_modules())
@@ -714,9 +685,21 @@ class RateCodingRecipe(ConversionRecipe):
                 continue
             for rule in self.rules:
                 if rule.match(node, modules):
-                    rule.insert_hooks(
-                        fx_model, node, hook_factory, hook_counts_per_prefix
-                    )
+                    if self.channel_wise:
+                        hook = ChannelVoltageHook(
+                            mode=self.mode,
+                            momentum=self.momentum,
+                            channel_dim=self.channel_dim,
+                            eps=self.eps,
+                        )
+                        rule.insert_hooks(fx_model, node, hook, hook_counts_per_prefix)
+                    else:
+                        rule.insert_hooks(
+                            fx_model,
+                            node,
+                            hook_factory,
+                            hook_counts_per_prefix,
+                        )
                     modules = dict(fx_model.named_modules())
                     break
 

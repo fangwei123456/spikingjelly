@@ -1,9 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import prod
 from numbers import Integral
 from types import MappingProxyType
 from typing import Mapping, Tuple
+
+
+def _mapping_integer(value, name: str) -> int:
+    if isinstance(value, bool):
+        raise TypeError(f"{name} must be an integer, but got bool.")
+    if isinstance(value, Integral):
+        return int(value)
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    raise TypeError(f"{name} must be an integer, but got {type(value).__name__}.")
 
 
 @dataclass(frozen=True)
@@ -24,7 +35,6 @@ class SNNDistributedTopology:
             raise ValueError(f"world_size must be positive, but got {self.world_size}.")
         if not self.dims:
             raise ValueError("dims must not be empty.")
-        volume = 1
         for name, size in frozen_dims.items():
             if not isinstance(name, str):
                 raise TypeError(
@@ -40,7 +50,7 @@ class SNNDistributedTopology:
                 raise ValueError(
                     f"Topology dimension '{name}' must be positive, but got {size}."
                 )
-            volume *= size
+        volume = prod(frozen_dims.values())
         if volume != self.world_size:
             raise ValueError(
                 f"Topology dims {dict(frozen_dims)} multiply to {volume}, but world_size={self.world_size}."
@@ -65,41 +75,13 @@ class SNNDistributedTopology:
         *,
         world_size: int | None = None,
     ) -> "SNNDistributedTopology":
-        normalized_dims = {}
-        for key, value in dims.items():
-            if isinstance(value, bool):
-                raise TypeError(
-                    f"Topology dimension '{key}' must be an integer, but got bool."
-                )
-            if isinstance(value, Integral):
-                normalized_dims[key] = int(value)
-                continue
-            if isinstance(value, float) and value.is_integer():
-                normalized_dims[key] = int(value)
-                continue
-            if isinstance(value, float):
-                raise TypeError(
-                    f"Topology dimension '{key}' must be an integer, but got float."
-                )
-            raise TypeError(
-                f"Topology dimension '{key}' must be an integer, but got {type(value).__name__}."
-            )
-        if world_size is None:
-            volume = 1
-            for size in normalized_dims.values():
-                volume *= size
-            world_size = volume
-        else:
-            if isinstance(world_size, bool):
-                raise TypeError("world_size must be an integer, but got bool.")
-            if isinstance(world_size, Integral):
-                world_size = int(world_size)
-            elif isinstance(world_size, float) and world_size.is_integer():
-                world_size = int(world_size)
-            elif isinstance(world_size, float):
-                raise TypeError("world_size must be an integer, but got float.")
-            else:
-                raise TypeError(
-                    f"world_size must be an integer, but got {type(world_size).__name__}."
-                )
-        return cls(world_size=int(world_size), dims=normalized_dims)
+        normalized_dims = {
+            key: _mapping_integer(value, f"Topology dimension '{key}'")
+            for key, value in dims.items()
+        }
+        world_size = (
+            prod(normalized_dims.values())
+            if world_size is None
+            else _mapping_integer(world_size, "world_size")
+        )
+        return cls(world_size=world_size, dims=normalized_dims)

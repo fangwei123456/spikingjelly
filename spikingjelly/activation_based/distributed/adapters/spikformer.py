@@ -54,9 +54,9 @@ class SpikformerAdapter:
             raise NotImplementedError(
                 "Pipeline parallelism ('pp') is not supported by SpikformerAdapter.apply()."
             )
-        enable_spikformer_tp = plan.mode in ("tp", "fsdp2_tp")
+        tensor_parallel = plan.mode in ("tp", "fsdp2_tp")
         enable_experimental_tp = (
-            enable_spikformer_tp
+            tensor_parallel
             and plan.experimental_features.allow_experimental_spikformer_tp
         )
         policy = build_spikformer_eager_policy(model)
@@ -66,7 +66,7 @@ class SpikformerAdapter:
             device_type=device_type,
             device_mesh=device_mesh,
             policy=policy,
-            enable_linear_tensor_parallel=enable_spikformer_tp,
+            enable_linear_tensor_parallel=tensor_parallel,
             enable_spikformer_tensor_parallel=enable_experimental_tp,
             enable_spikformer_patch_stem_tensor_parallel=enable_experimental_tp,
         )

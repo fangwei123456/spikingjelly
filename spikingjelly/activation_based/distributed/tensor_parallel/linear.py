@@ -240,27 +240,21 @@ def auto_build_tensor_parallel_plan(
         raise ValueError("No Linear-like modules were found for tensor parallelism.")
 
     plan: Dict[str, ParallelStyle] = {}
-    if len(candidate_names) == 1:
-        candidate = named_modules[candidate_names[0]]
-        plan[candidate_names[0]] = (
-            _TDLinearColwiseReplicated()
-            if isinstance(candidate, TDLinear)
-            else _make_colwise_parallel(local_output=False)
-        )
-        return plan
-
-    for name in candidate_names[:-1]:
-        plan[name] = (
-            _TDLinearColwiseReplicated()
-            if isinstance(named_modules[name], TDLinear)
-            else _make_colwise_parallel(local_output=True)
-        )
-    last_name = candidate_names[-1]
-    plan[last_name] = (
-        _TDLinearRowwiseReplicated()
-        if isinstance(named_modules[last_name], TDLinear)
-        else RowwiseParallel()
-    )
+    for index, name in enumerate(candidate_names):
+        candidate = named_modules[name]
+        rowwise = len(candidate_names) > 1 and index == len(candidate_names) - 1
+        if isinstance(candidate, TDLinear):
+            plan[name] = (
+                _TDLinearRowwiseReplicated()
+                if rowwise
+                else _TDLinearColwiseReplicated()
+            )
+        else:
+            plan[name] = (
+                RowwiseParallel()
+                if rowwise
+                else _make_colwise_parallel(local_output=len(candidate_names) > 1)
+            )
     return plan
 
 
@@ -270,41 +264,32 @@ def wrap_tp_memory_modules(
     process_group,
 ):
     named_modules = dict(module.named_modules())
-    wrapped: set[str] = set()
     for module_name, style in tensor_parallel_plan.items():
         if not _is_colwise_local_style(style):
             continue
-        if module_name not in named_modules:
+        source = named_modules.get(module_name)
+        if not isinstance(source, LinearLike):
             continue
-        source = named_modules[module_name]
-        if isinstance(source, LinearLike):
-            parent_name, _, child_name = module_name.rpartition(".")
-            parent = module if not parent_name else named_modules[parent_name]
-            if not isinstance(parent, (nn.Sequential, nn.ModuleList)):
-                continue
-            if not child_name.isdigit():
-                continue
-            child_index = int(child_name)
-            next_index = child_index + 1
-            while next_index < len(parent):
-                next_module = parent[next_index]
-                if isinstance(next_module, _STATELESS_TP_MEMORY_LOOKAHEAD):
-                    next_index += 1
-                    continue
-                next_name = (
-                    f"{parent_name}.{next_index}" if parent_name else str(next_index)
-                )
-                if next_name in wrapped:
-                    break
-                if isinstance(next_module, base.MemoryModule):
-                    parent[next_index] = make_tensor_shard_memory_module(
-                        next_module,
-                        shard_dim=-1,
-                        logical_dim_size=source.out_features,
-                        process_group=process_group,
-                    )
-                    wrapped.add(next_name)
-                break
+        parent_name, _, child_name = module_name.rpartition(".")
+        parent = module if not parent_name else named_modules[parent_name]
+        if not isinstance(parent, (nn.Sequential, nn.ModuleList)):
+            continue
+        if not child_name.isdigit():
+            continue
+        next_index = int(child_name) + 1
+        while next_index < len(parent) and isinstance(
+            parent[next_index], _STATELESS_TP_MEMORY_LOOKAHEAD
+        ):
+            next_index += 1
+        if next_index < len(parent) and isinstance(
+            parent[next_index], base.MemoryModule
+        ):
+            parent[next_index] = make_tensor_shard_memory_module(
+                parent[next_index],
+                shard_dim=-1,
+                logical_dim_size=source.out_features,
+                process_group=process_group,
+            )
     return module
 
 

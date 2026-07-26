@@ -4,7 +4,6 @@ torchvision
 einops
 matplotlib
 packaging
-pydantic
 requests
 scipy
 tensorboard

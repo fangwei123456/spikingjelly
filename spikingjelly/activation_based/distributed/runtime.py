@@ -56,16 +56,9 @@ class SNNDistributedRuntime:
                         for idx, size in enumerate(dims)
                     }
                     topology = SNNDistributedTopology.from_mapping(mapping)
-        dp_mesh_dim = (
-            topology.ordered_dim_names.index("dp")
-            if "dp" in topology.ordered_dim_names
-            else None
-        )
-        tp_mesh_dim = (
-            topology.ordered_dim_names.index("tp")
-            if "tp" in topology.ordered_dim_names
-            else 0
-        )
+        dim_names = topology.ordered_dim_names
+        dp_mesh_dim = dim_names.index("dp") if "dp" in dim_names else None
+        tp_mesh_dim = dim_names.index("tp") if "tp" in dim_names else 0
         plan = SNNDistributedPlan(
             mode=mode,
             objective="legacy",
@@ -97,23 +90,14 @@ class SNNDistributedRuntime:
         if ndim <= 0:
             return tuple()
         if ndim == 1:
-            if mode == "tp":
-                return ("tp",)
-            if mode == "pp":
-                return ("pp",)
-            return ("dp",)
-        if mode == "fsdp2_tp" and ndim >= 2:
-            names = ["dp", "tp"]
-            names.extend(f"dim{idx}" for idx in range(2, ndim))
-            return tuple(names)
-        if mode == "pp":
-            names = ["pp", "vpp"]
-            names.extend(f"dim{idx}" for idx in range(2, ndim))
-            return tuple(names[:ndim])
-        preferred = ("dp", "tp", "pp", "vpp")
-        names = list(preferred[:ndim])
-        names.extend(f"dim{idx}" for idx in range(len(names), ndim))
-        return tuple(names[:ndim])
+            return ({"tp": "tp", "pp": "pp"}.get(mode, "dp"),)
+        if mode == "fsdp2_tp":
+            names = ("dp", "tp")
+        elif mode == "pp":
+            names = ("pp", "vpp")
+        else:
+            names = ("dp", "tp", "pp", "vpp")[:ndim]
+        return names + tuple(f"dim{idx}" for idx in range(len(names), ndim))
 
     def build_optimizer(
         self,

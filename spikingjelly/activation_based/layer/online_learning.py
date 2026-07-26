@@ -43,6 +43,22 @@ class ReplaceforGrad(torch.autograd.Function):
         return (grad, grad)
 
 
+def _grad_with_trace(module: nn.Module, x):
+    spike, trace = x
+    with torch.no_grad():
+        out = module(spike)
+    out_for_grad = module(ReplaceforGrad.apply(spike, trace))
+    return ReplaceforGrad.apply(out_for_grad, out)
+
+
+def _apply_to_spike_and_trace(module: nn.Module, x):
+    spike, trace = x
+    spike = module(spike)
+    with torch.no_grad():
+        trace = module(trace)
+    return [spike, trace]
+
+
 class GradwithTrace(nn.Module):
     def __init__(self, module):
         r"""
@@ -103,18 +119,7 @@ class GradwithTrace(nn.Module):
         :return: Wrapped-module output with forward value from ``spike`` and backward gradient from ``trace``
         :rtype: torch.Tensor
         """
-        # x: [spike, trace], defined in OTTTLIFNode in neuron.py
-        spike, trace = x[0], x[1]
-
-        with torch.no_grad():
-            out = self.module(spike).detach()
-
-        in_for_grad = ReplaceforGrad.apply(spike, trace)
-        out_for_grad = self.module(in_for_grad)
-
-        x = ReplaceforGrad.apply(out_for_grad, out)
-
-        return x
+        return _grad_with_trace(self.module, x)
 
 
 class SpikeTraceOp(nn.Module):
@@ -175,16 +180,7 @@ class SpikeTraceOp(nn.Module):
         :return: ``[spike, trace]`` after applying the same operator to both
         :rtype: list[torch.Tensor]
         """
-        # x: [spike, trace], defined in OTTTLIFNode in neuron.py
-        spike, trace = x[0], x[1]
-
-        spike = self.module(spike)
-        with torch.no_grad():
-            trace = self.module(trace)
-
-        x = [spike, trace]
-
-        return x
+        return _apply_to_spike_and_trace(self.module, x)
 
 
 class OTTTSequential(nn.Sequential):
@@ -248,12 +244,11 @@ class OTTTSequential(nn.Sequential):
         :rtype: Union[torch.Tensor, list[torch.Tensor]]
         """
         for module in self:
-            if not isinstance(input, list):
-                input = module(input)
-            else:
-                if len(list(module.parameters())) > 0:  # e.g., Conv2d, Linear, etc.
-                    module = GradwithTrace(module)
-                else:  # e.g., Dropout, AvgPool, etc.
-                    module = SpikeTraceOp(module)
-                input = module(input)
+            if isinstance(input, list):
+                if next(module.parameters(), None) is None:
+                    input = _apply_to_spike_and_trace(module, input)
+                else:
+                    input = _grad_with_trace(module, input)
+                continue
+            input = module(input)
         return input

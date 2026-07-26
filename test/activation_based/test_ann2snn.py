@@ -744,6 +744,12 @@ class TestVoltageHook:
             atol=1e-6,
             rtol=1e-6,
         )
+        assert torch.allclose(
+            _safe_quantile(x, 0.75, dim=1),
+            torch.quantile(x, 0.75, dim=1),
+            atol=1e-6,
+            rtol=1e-6,
+        )
 
     def test_percentile_mode_supports_half_precision(self):
         hook = VoltageHook(mode="50%")

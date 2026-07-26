@@ -138,91 +138,68 @@ class GatedLIFNode(base.MemoryModule):
         self.T = T
         self.register_memory("v", 0.0)
         self.register_memory("u", 0.0)
-        self.channel_wise = inplane is not None
-        if self.channel_wise:  # channel-wise learnable params
-            self.alpha, self.beta, self.gamma = [
-                nn.Parameter(
-                    torch.tensor(
-                        0.2 * (np.random.rand(inplane) - 0.5), dtype=torch.float
-                    )
+        param_shape = () if inplane is None else (inplane,)
+        random_shape = () if inplane is None else (inplane,)
+        self.alpha, self.beta, self.gamma = [
+            nn.Parameter(
+                torch.tensor(
+                    0.2 * (np.random.rand(*random_shape) - 0.5),
+                    dtype=torch.float,
                 )
-                for i in range(3)
-            ]
-            self.tau = nn.Parameter(
-                -math.log(1 / init_tau - 1) * torch.ones(inplane, dtype=torch.float)
             )
-            self.v_threshold = nn.Parameter(
-                -math.log(1 / init_v_threshold - 1)
-                * torch.ones(inplane, dtype=torch.float)
+            for _ in range(3)
+        ]
+        init_linear_decay = (
+            init_v_threshold / (T * 2)
+            if init_linear_decay is None
+            else init_linear_decay
+        )
+        init_v_subreset = (
+            init_v_threshold if init_v_subreset is None else init_v_subreset
+        )
+        self.tau = nn.Parameter(
+            torch.full(param_shape, -math.log(1 / init_tau - 1), dtype=torch.float)
+        )
+        self.v_threshold = nn.Parameter(
+            torch.full(
+                param_shape,
+                -math.log(1 / init_v_threshold - 1),
+                dtype=torch.float,
             )
-            init_linear_decay = (
-                init_v_threshold / (T * 2)
-                if init_linear_decay is None
-                else init_linear_decay
+        )
+        self.linear_decay = nn.Parameter(
+            torch.full(
+                param_shape,
+                -math.log(1 / init_linear_decay - 1),
+                dtype=torch.float,
             )
-            self.linear_decay = nn.Parameter(
-                -math.log(1 / init_linear_decay - 1)
-                * torch.ones(inplane, dtype=torch.float)
+        )
+        self.v_subreset = nn.Parameter(
+            torch.full(
+                param_shape,
+                -math.log(1 / init_v_subreset - 1),
+                dtype=torch.float,
             )
-            init_v_subreset = (
-                init_v_threshold if init_v_subreset is None else init_v_subreset
+        )
+        self.conduct = nn.Parameter(
+            torch.full(
+                (T, *param_shape),
+                -math.log(1 / init_conduct - 1),
+                dtype=torch.float,
             )
-            self.v_subreset = nn.Parameter(
-                -math.log(1 / init_v_subreset - 1)
-                * torch.ones(inplane, dtype=torch.float)
-            )
-            self.conduct = nn.Parameter(
-                -math.log(1 / init_conduct - 1)
-                * torch.ones((T, inplane), dtype=torch.float)
-            )
-
-        else:  # layer-wise learnable params
-            self.alpha, self.beta, self.gamma = [
-                nn.Parameter(
-                    torch.tensor(0.2 * (np.random.rand() - 0.5), dtype=torch.float)
-                )
-                for i in range(3)
-            ]
-            self.tau = nn.Parameter(
-                torch.tensor(-math.log(1 / init_tau - 1), dtype=torch.float)
-            )
-            self.v_threshold = nn.Parameter(
-                torch.tensor(-math.log(1 / init_v_threshold - 1), dtype=torch.float)
-            )
-            init_linear_decay = (
-                init_v_threshold / (T * 2)
-                if init_linear_decay is None
-                else init_linear_decay
-            )
-            self.linear_decay = nn.Parameter(
-                torch.tensor(-math.log(1 / init_linear_decay - 1), dtype=torch.float)
-            )
-            init_v_subreset = (
-                init_v_threshold if init_v_subreset is None else init_v_subreset
-            )
-            self.v_subreset = nn.Parameter(
-                torch.tensor(-math.log(1 / init_v_subreset - 1), dtype=torch.float)
-            )
-            self.conduct = nn.Parameter(
-                -math.log(1 / init_conduct - 1) * torch.ones(T, dtype=torch.float)
-            )
+        )
 
     @property
     def supported_backends(self):
         return ("torch",)
 
     def extra_repr(self):
-        with torch.no_grad():
-            tau = self.tau
-            v_subreset = self.v_subreset
-            linear_decay = self.linear_decay
-            conduct = self.conduct
         return (
             super().extra_repr()
-            + f", tau={tau}"
-            + f", v_subreset={v_subreset}"
-            + f", linear_decay={linear_decay}"
-            + f", conduct={conduct}"
+            + f", tau={self.tau}"
+            + f", v_subreset={self.v_subreset}"
+            + f", linear_decay={self.linear_decay}"
+            + f", conduct={self.conduct}"
         )
 
     def neuronal_charge(
@@ -522,24 +499,16 @@ class KLIFNode(BaseNode):
             spike_d = spike
 
         if self.scale_reset:
-            if self.v_reset is None:
-                # soft reset
-                self.v = (
-                    self.apply_soft_reset(self.v, spike_d, self.v_threshold) / self.k
-                )
-
-            else:
-                # hard reset
-                self.v = self.apply_hard_reset(self.v / self.k, spike_d, self.v_reset)
-
+            v = self.v / self.k
+            v_threshold = self.v_threshold / self.k
         else:
-            if self.v_reset is None:
-                # soft reset
-                self.v = self.apply_soft_reset(self.v, spike_d, self.v_threshold)
+            v = self.v
+            v_threshold = self.v_threshold
 
-            else:
-                # hard reset
-                self.v = self.apply_hard_reset(self.v, spike_d, self.v_reset)
+        if self.v_reset is None:
+            self.v = self.apply_soft_reset(v, spike_d, v_threshold)
+        else:
+            self.v = self.apply_hard_reset(v, spike_d, self.v_reset)
 
 
 class CUBALIFNode(BaseNode):
@@ -593,20 +562,10 @@ class CUBALIFNode(BaseNode):
         self.neuronal_reset(spike)
         return spike
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
-        T = x_seq.shape[0]
-        spike_seq = []
-
-        for t in range(T):
-            spike = self.single_step_forward(x_seq[t])
-            spike_seq.append(spike)
-
-        return torch.stack(spike_seq)
-
     def c_float_to_tensor(self, c: torch.Tensor):
         if isinstance(self.c, float):
             c_init = self.c
-            self.c = torch.full_like(c.data, fill_value=c_init)
+            self.c = torch.full_like(c, fill_value=c_init)
 
 
 class LIAFNode(LIFNode):
@@ -678,10 +637,7 @@ class LIAFNode(LIFNode):
 
     def single_step_forward(self, x: torch.Tensor):
         self.neuronal_charge(x)
-        if self.threshold_related:
-            y = self.act(self.v - self.v_threshold)
-        else:
-            y = self.act(self.v)
+        y = self.act(self.v - self.v_threshold if self.threshold_related else self.v)
         spike = self.neuronal_fire()
         self.neuronal_reset(spike)
         return y

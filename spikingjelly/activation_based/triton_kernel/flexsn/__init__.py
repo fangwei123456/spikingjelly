@@ -5,7 +5,7 @@ try:
     from . import template as template
     from . import wrapper as wrapper
     from . import custom_ops as custom_ops
-except Exception as e:
+except ImportError as e:
     import logging
 
     logging.info(f"spikingjelly.activation_based.triton_kernel.flexsn: {e}")

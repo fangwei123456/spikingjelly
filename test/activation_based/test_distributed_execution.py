@@ -158,7 +158,7 @@ def test_configure_snn_distributed_uses_current_cuda_device_for_ddp(monkeypatch)
         ToyDistributedSNN(),
         SNNDistributedConfig(
             device_type="cuda",
-            device_mesh=SimpleNamespace(ndim=1),
+            device_mesh=SimpleNamespace(mesh=torch.zeros(1)),
             enable_data_parallel=True,
             auto_tensor_parallel=False,
         ),
@@ -174,7 +174,7 @@ def test_configure_snn_distributed_warns_when_device_mesh_overrides_mesh_shape()
             ToyDistributedSNN(),
             SNNDistributedConfig(
                 device_type="cpu",
-                device_mesh=SimpleNamespace(ndim=1),
+                device_mesh=SimpleNamespace(mesh=torch.zeros(1)),
                 mesh_shape=(2, 2),
                 auto_tensor_parallel=False,
                 enable_data_parallel=False,
@@ -182,7 +182,7 @@ def test_configure_snn_distributed_warns_when_device_mesh_overrides_mesh_shape()
             ),
         )
 
-    assert mesh.ndim == 1
+    assert mesh.mesh.ndim == 1
 
 
 def test_configure_snn_distributed_rejects_dp_tp_before_mesh_build(monkeypatch):

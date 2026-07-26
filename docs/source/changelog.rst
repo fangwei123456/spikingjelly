@@ -113,6 +113,17 @@ Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
 Bug Fixes
 ~~~~~~~~~
 
+Activation-Based Sequence Forwarding
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.functional``,
+``spikingjelly.activation_based.layer``.
+
+- Fixed ``TLastMultiStepContainer`` to advance stateful modules one time step at
+  a time instead of using stateless sequence-to-ANN vectorization.
+- Fixed sequence-to-ANN forwarding to preserve tuple outputs, including pooling
+  indices.
+
 ANN-to-SNN Conversion
 ^^^^^^^^^^^^^^^^^^^^^
 
@@ -132,6 +143,14 @@ Module: ``spikingjelly.activation_based.rnn``.
 
 - Fixed stacked spiking RNNs discarding earlier layers' final states and
   skipping dropout between the first two recurrent layers.
+
+Timing-Based Neurons
+^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.timing_based.neuron``.
+
+- Fixed ``Tempotron`` maximum-voltage and spike-time outputs dropping the batch
+  or output-feature dimension when either size is one.
 
 Triton Neuron Kernels
 ^^^^^^^^^^^^^^^^^^^^^
