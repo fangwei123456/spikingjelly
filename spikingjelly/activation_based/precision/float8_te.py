@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager, nullcontext
 import importlib
-import warnings
 
 import torch
 import torch.nn as nn
@@ -429,15 +428,10 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
     def __init__(
         self,
         device_type: str = "cuda",
-        strict: str = "warn",
         fp8_recipe: str = "auto",
     ):
         super().__init__()
         self.device_type = device_type
-        # Strictness is consumed by api.prepare_model_for_precision() when it
-        # decides whether capability failures fall back to fp32. The policy
-        # stores it only for diagnostics in describe().
-        self.strict = strict
         self.fp8_recipe = fp8_recipe
         self._resolved_recipe_name: str | None = None
         self._resolved_recipe = None
@@ -449,7 +443,6 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
             "name": self.name,
             "backend": "transformer-engine",
             "device_type": self.device_type,
-            "strict": self.strict,
             "fp8_recipe": self.fp8_recipe,
             "resolved_fp8_recipe": self._resolved_recipe_name,
             "autocast": True,
@@ -560,63 +553,7 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
         recipe = (
             self._resolved_recipe if self._recipe_resolved else self._resolve_recipe(te)
         )
-        autocast = getattr(te, "autocast", None)
-        if autocast is not None:
-            if recipe is None:
-                try:
-                    return autocast(enabled=True, device=self.device_type)
-                except TypeError:
-                    return autocast(enabled=True)
-            try:
-                return autocast(
-                    enabled=True,
-                    recipe=recipe,
-                    device=self.device_type,
-                )
-            except TypeError:
-                return autocast(enabled=True, recipe=recipe)
-        fp8_autocast = getattr(te, "fp8_autocast", None)
-        if fp8_autocast is not None:
-            warnings.warn(
-                "transformer_engine.pytorch.fp8_autocast is deprecated; "
-                "falling back because te.autocast is unavailable.",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-            if recipe is None:
-                try:
-                    return fp8_autocast(enabled=True, device=self.device_type)
-                except TypeError:
-                    return fp8_autocast(enabled=True)
-            try:
-                return fp8_autocast(
-                    enabled=True,
-                    fp8_recipe=recipe,
-                    device=self.device_type,
-                )
-            except TypeError:
-                try:
-                    return fp8_autocast(enabled=True, fp8_recipe=recipe)
-                except TypeError:
-                    try:
-                        return fp8_autocast(
-                            enabled=True,
-                            recipe=recipe,
-                            device=self.device_type,
-                        )
-                    except TypeError:
-                        try:
-                            return fp8_autocast(enabled=True, recipe=recipe)
-                        except TypeError:
-                            warnings.warn(
-                                "transformer_engine.pytorch.fp8_autocast does not "
-                                "accept an FP8 recipe argument; using its default "
-                                "recipe.",
-                                RuntimeWarning,
-                                stacklevel=2,
-                            )
-                            return fp8_autocast(enabled=True)
-        return nullcontext()
+        return te.autocast(enabled=True, recipe=recipe)
 
     def _convert_modules(self, model, report):
         te = _import_te_pytorch()

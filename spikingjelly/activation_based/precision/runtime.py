@@ -5,11 +5,11 @@ from .config import PrecisionConfig
 from .policy import BF16Policy, FP16Policy, FP32Policy
 
 
-def normalize_precision_mode(config: PrecisionConfig | str | dict | object) -> str:
+def normalize_precision_mode(config: PrecisionConfig | str | dict | None) -> str:
     return PrecisionConfig.from_any(config).mode.lower()
 
 
-def resolve_precision_policy(config: PrecisionConfig | str | dict | object):
+def resolve_precision_policy(config: PrecisionConfig | str | dict | None):
     cfg = PrecisionConfig.from_any(config)
     mode = cfg.mode.lower()
     device = cfg.device or "cuda"
@@ -24,17 +24,12 @@ def resolve_precision_policy(config: PrecisionConfig | str | dict | object):
     if mode == "fp8-torchao":
         from .float8_torchao import Float8TorchAOPolicy
 
-        return Float8TorchAOPolicy(
-            device_type=device_type,
-            strict=cfg.strictness,
-            fp8_recipe=cfg.fp8_recipe,
-        )
+        return Float8TorchAOPolicy(device_type=device_type)
     if mode == "fp8-te":
         from .float8_te import Float8TransformerEnginePolicy
 
         return Float8TransformerEnginePolicy(
             device_type=device_type,
-            strict=cfg.strictness,
             fp8_recipe=cfg.fp8_recipe,
         )
 

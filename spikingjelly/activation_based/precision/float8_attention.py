@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import inspect
 import math
-import warnings
 
 import torch
 import torch.nn as nn
@@ -71,68 +69,16 @@ class TransformerEngineDotProductAttentionAdapter(nn.Module):
         super().__init__()
         te = _import_te_pytorch()
         DotProductAttention = te.DotProductAttention
-        try:
-            self.wrapped = DotProductAttention(
-                num_attention_heads=num_attention_heads,
-                kv_channels=head_dim,
-                attention_dropout=attention_dropout,
-                attn_mask_type="no_mask",
-            )
-        except TypeError:
-            self.wrapped = DotProductAttention(
-                num_attention_heads,
-                head_dim,
-                attention_dropout=attention_dropout,
-            )
-            try:
-                self.wrapped.attn_mask_type = "no_mask"
-            except AttributeError:
-                warnings.warn(
-                    "fp8-te SDPA adapter could not force "
-                    "attn_mask_type='no_mask' on the legacy TE "
-                    "DotProductAttention; downstream behavior may diverge "
-                    "from the v1 contract.",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
+        self.wrapped = DotProductAttention(
+            num_attention_heads=num_attention_heads,
+            kv_channels=head_dim,
+            attention_dropout=attention_dropout,
+            attn_mask_type="no_mask",
+            qkv_format="bshd",
+        )
         self.num_attention_heads = num_attention_heads
         self.head_dim = head_dim
         self.attention_dropout = attention_dropout
-        self.qkv_layout = "bshd"
-        self._te_forward_kwargs = self._resolve_forward_kwargs()
-
-    def _resolve_forward_kwargs(self) -> dict:
-        full_kwargs = {
-            "attention_mask": None,
-            "qkv_format": self.qkv_layout,
-            "attn_mask_type": "no_mask",
-        }
-        try:
-            signature = inspect.signature(self.wrapped.forward)
-        except (TypeError, ValueError):
-            return full_kwargs
-        parameters = signature.parameters
-        accepts_var_kwargs = any(
-            parameter.kind is inspect.Parameter.VAR_KEYWORD
-            for parameter in parameters.values()
-        )
-        if accepts_var_kwargs or {
-            "attention_mask",
-            "qkv_format",
-            "attn_mask_type",
-        }.issubset(parameters):
-            return full_kwargs
-        if "qkv_format" in parameters:
-            return {"qkv_format": self.qkv_layout}
-        warnings.warn(
-            "fp8-te SDPA adapter v1 could not detect "
-            "qkv_format/attention_mask/attn_mask_type on the wrapped TE "
-            "DotProductAttention.forward; the adapter will rely on TE "
-            "defaults, which may break the v1 contract.",
-            RuntimeWarning,
-            stacklevel=2,
-        )
-        return {}
 
     def forward(
         self,
@@ -207,7 +153,7 @@ class TransformerEngineDotProductAttentionAdapter(nn.Module):
         q = query.transpose(1, 2).contiguous()
         k = key.transpose(1, 2).contiguous()
         v = value.transpose(1, 2).contiguous()
-        output = self._call_te_attention(q, k, v)
+        output = self.wrapped(q, k, v)
         if isinstance(output, tuple):
             output = output[0]
         expected_shape = (
@@ -229,11 +175,6 @@ class TransformerEngineDotProductAttentionAdapter(nn.Module):
                 f"{expected_shape[:2] + (expected_shape[2] * expected_shape[3],)}."
             )
         return output.transpose(1, 2).contiguous()
-
-    def _call_te_attention(
-        self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor
-    ) -> torch.Tensor | tuple:
-        return self.wrapped(query, key, value, **self._te_forward_kwargs)
 
 
 __all__ = ["TransformerEngineDotProductAttentionAdapter"]

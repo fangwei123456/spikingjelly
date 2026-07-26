@@ -277,8 +277,9 @@ def bool_spike_to_float(
             spike[:, i] = spike_b % 2
             spike_b = spike_b >> 1
 
+    spike = spike.flatten()
     if s_padding != 0 and s_padding != 8:
-        spike = spike[0 : spike.numel() - s_padding]
+        spike = spike[:-s_padding]
     return spike.reshape(s_shape)
 
 
@@ -290,43 +291,41 @@ def tensor_key(x: torch.Tensor):
 class BoolTensorCache:
     def __init__(self):
         super().__init__()
-        self.cache_dict = {}
-        self.cache_refcount_dict = {}
+        self.cache = {}
         self.lock = threading.Lock()
 
     def store_bool(self, spike: Union[torch.FloatTensor, torch.HalfTensor]):
         tk = tensor_key(spike)
 
-        self.lock.acquire()
-        if tk not in self.cache_dict:
-            if configure.save_bool_spike_level == 0:
-                self.cache_dict[tk] = (spike.bool(), spike.dtype)
+        with self.lock:
+            entry = self.cache.get(tk)
+            if entry is not None:
+                payload, refcount = entry
+                self.cache[tk] = payload, refcount + 1
+            elif configure.save_bool_spike_level == 0:
+                self.cache[tk] = (spike.bool(), spike.dtype), 1
             elif configure.save_bool_spike_level == 1:
-                self.cache_dict[tk] = float_spike_to_bool(spike)
+                self.cache[tk] = float_spike_to_bool(spike), 1
             else:
                 raise NotImplementedError
-            self.cache_refcount_dict[tk] = 1
-        else:
-            self.cache_refcount_dict[tk] += 1
-        self.lock.release()
 
         return tk
 
     def get_float(self, tk, spike_shape: torch.Size):
+        with self.lock:
+            payload, refcount = self.cache[tk]
+            if refcount == 1:
+                del self.cache[tk]
+            else:
+                self.cache[tk] = payload, refcount - 1
+
         if configure.save_bool_spike_level == 0:
-            spike, s_dtype = self.cache_dict[tk]
+            spike, s_dtype = payload
             spike = spike.to(s_dtype)
         elif configure.save_bool_spike_level == 1:
-            spike = bool_spike_to_float(*self.cache_dict[tk])
+            spike = bool_spike_to_float(*payload)
         else:
             raise NotImplementedError
-
-        self.lock.acquire()
-        self.cache_refcount_dict[tk] -= 1
-        if self.cache_refcount_dict[tk] == 0:
-            del self.cache_refcount_dict[tk]
-            del self.cache_dict[tk]
-        self.lock.release()
 
         return spike.view(spike_shape)
 

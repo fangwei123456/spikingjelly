@@ -480,41 +480,6 @@ class LIFNode(BaseNode):
             if self.backend == "torch":
                 return super().multi_step_forward(x_seq)
             elif self.backend == "cupy":
-                hard_reset = self.v_reset is not None
-                if x_seq.dtype == torch.float:
-                    dtype = "float"
-                elif x_seq.dtype == torch.half:
-                    dtype = "half2"
-                else:
-                    raise NotImplementedError(x_seq.dtype)
-
-                if (
-                    self.forward_kernel is None
-                    or not self.forward_kernel.check_attributes(
-                        hard_reset=hard_reset, dtype=dtype, decay_input=self.decay_input
-                    )
-                ):
-                    self.forward_kernel = ac_neuron_kernel.LIFNodeFPTTKernel(
-                        decay_input=self.decay_input, hard_reset=hard_reset, dtype=dtype
-                    )
-                if (
-                    self.backward_kernel is None
-                    or not self.backward_kernel.check_attributes(
-                        surrogate_function=self.surrogate_function.cuda_codes,
-                        hard_reset=hard_reset,
-                        detach_reset=self.detach_reset,
-                        dtype=dtype,
-                        decay_input=self.decay_input,
-                    )
-                ):
-                    self.backward_kernel = ac_neuron_kernel.LIFNodeBPTTKernel(
-                        decay_input=self.decay_input,
-                        surrogate_function=self.surrogate_function.cuda_codes,
-                        hard_reset=hard_reset,
-                        detach_reset=self.detach_reset,
-                        dtype=dtype,
-                    )
-
                 self.v_float_to_tensor(x_seq[0])
                 spike_seq, v_seq = ac_neuron_kernel.multistep_lif(
                     x_seq=x_seq.flatten(1),
@@ -525,8 +490,6 @@ class LIFNode(BaseNode):
                     v_reset=self.v_reset,
                     detach_reset=self.detach_reset,
                     surrogate_function=self.surrogate_function,
-                    forward_kernel=self.forward_kernel,
-                    backward_kernel=self.backward_kernel,
                 )
                 spike_seq = spike_seq.reshape(x_seq.shape)
                 v_seq = v_seq.reshape(x_seq.shape)
@@ -675,7 +638,6 @@ class LIFNode(BaseNode):
                 self.v_reset,
                 self.detach_reset,
                 self._surrogate_inductor_cache_key(),
-                self._inductor_runtime_cache_key(x_seq, v_init),
             ),
             self._build_inductor_multi_step_graph(),
         )

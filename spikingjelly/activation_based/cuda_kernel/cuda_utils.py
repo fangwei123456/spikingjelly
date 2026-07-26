@@ -4,7 +4,6 @@ import os
 import threading
 import time
 import weakref
-from collections import OrderedDict
 from typing import Any, Callable, Union
 
 import numpy as np
@@ -42,25 +41,14 @@ def use_cupy_custom_op() -> bool:
 
 _PYOBJ_LOCK = threading.Lock()
 _PYOBJ_NEXT_ID = 0
-_PYOBJ_ID_TO_REF: dict[int, Any] = {}
-_PYOBJ_ID_TO_KEY: dict[int, str] = {}
-_PYOBJ_KEY_TO_ID: dict[str, int] = {}
-_PYOBJ_STRONG_REF_MAX = max(1, int(os.getenv("SJ_PYOBJ_STRONG_REF_MAX", "4096")))
-_PYOBJ_STRONG_IDS: OrderedDict[int, None] = OrderedDict()
-
-
-def _entry_to_object(entry: Any) -> Any:
-    if isinstance(entry, weakref.ReferenceType):
-        return entry()
-    return entry
+_PYOBJ_ID_TO_ENTRY: dict[int, tuple[int, weakref.ReferenceType]] = {}
+_PYOBJ_OBJECT_ID_TO_ID: dict[int, int] = {}
 
 
 def _drop_python_object_locked(obj_id: int) -> None:
-    _PYOBJ_STRONG_IDS.pop(obj_id, None)
-    _PYOBJ_ID_TO_REF.pop(obj_id, None)
-    key = _PYOBJ_ID_TO_KEY.pop(obj_id, None)
-    if key is not None and _PYOBJ_KEY_TO_ID.get(key) == obj_id:
-        _PYOBJ_KEY_TO_ID.pop(key, None)
+    entry = _PYOBJ_ID_TO_ENTRY.pop(obj_id, None)
+    if entry is not None and _PYOBJ_OBJECT_ID_TO_ID.get(entry[0]) == obj_id:
+        _PYOBJ_OBJECT_ID_TO_ID.pop(entry[0], None)
 
 
 def _on_python_object_finalize(obj_id: int) -> None:
@@ -68,140 +56,35 @@ def _on_python_object_finalize(obj_id: int) -> None:
         _drop_python_object_locked(obj_id)
 
 
-def register_python_object(obj: Any, key: str) -> int:
+def register_python_object(obj: Any) -> int:
     global _PYOBJ_NEXT_ID
     with _PYOBJ_LOCK:
-        actual_key = key
-        obj_id = _PYOBJ_KEY_TO_ID.get(actual_key)
+        object_id = id(obj)
+        obj_id = _PYOBJ_OBJECT_ID_TO_ID.get(object_id)
         if obj_id is not None:
-            entry = _PYOBJ_ID_TO_REF.get(obj_id)
-            existing_obj = _entry_to_object(entry)
-            if existing_obj is obj:
-                if not isinstance(entry, weakref.ReferenceType):
-                    _PYOBJ_STRONG_IDS.move_to_end(obj_id, last=True)
+            entry = _PYOBJ_ID_TO_ENTRY.get(obj_id)
+            if entry is not None and entry[1]() is obj:
                 return obj_id
-            if existing_obj is not None:
-                actual_key = f"{key}::objid={id(obj)}"
-                obj_id = _PYOBJ_KEY_TO_ID.get(actual_key)
-                if obj_id is not None:
-                    entry = _PYOBJ_ID_TO_REF.get(obj_id)
-                    existing_obj = _entry_to_object(entry)
-                    if existing_obj is obj:
-                        if not isinstance(entry, weakref.ReferenceType):
-                            _PYOBJ_STRONG_IDS.move_to_end(obj_id, last=True)
-                        return obj_id
-                    if existing_obj is None:
-                        _drop_python_object_locked(obj_id)
-            else:
-                _drop_python_object_locked(obj_id)
+            _drop_python_object_locked(obj_id)
 
         obj_id = _PYOBJ_NEXT_ID
         _PYOBJ_NEXT_ID += 1
-        _PYOBJ_KEY_TO_ID[actual_key] = obj_id
-        _PYOBJ_ID_TO_KEY[obj_id] = actual_key
-
-        try:
-            _PYOBJ_ID_TO_REF[obj_id] = weakref.ref(
-                obj, lambda _ref, _id=obj_id: _on_python_object_finalize(_id)
-            )
-        except TypeError:
-            # Fallback for objects that do not support weak references.
-            _PYOBJ_ID_TO_REF[obj_id] = obj
-            _PYOBJ_STRONG_IDS[obj_id] = None
-            while len(_PYOBJ_STRONG_IDS) > _PYOBJ_STRONG_REF_MAX:
-                stale_id, _ = _PYOBJ_STRONG_IDS.popitem(last=False)
-                _drop_python_object_locked(stale_id)
+        _PYOBJ_OBJECT_ID_TO_ID[object_id] = obj_id
+        _PYOBJ_ID_TO_ENTRY[obj_id] = (
+            object_id,
+            weakref.ref(obj, lambda _ref, _id=obj_id: _on_python_object_finalize(_id)),
+        )
     return obj_id
 
 
 def resolve_python_object(obj_id: int) -> Any:
     with _PYOBJ_LOCK:
-        entry = _PYOBJ_ID_TO_REF.get(obj_id)
-        obj = _entry_to_object(entry)
+        entry = _PYOBJ_ID_TO_ENTRY.get(obj_id)
+        obj = None if entry is None else entry[1]()
         if obj is None:
             _drop_python_object_locked(obj_id)
             raise RuntimeError(f"Unknown python object id={obj_id}.")
         return obj
-
-
-def python_object_registry_key(obj: Any) -> str:
-    def _sort_key_token(v: Any) -> tuple[str, str, str]:
-        cls = v.__class__
-        return (cls.__module__, cls.__qualname__, repr(v))
-
-    def _norm(v: Any) -> Any:
-        if isinstance(v, (bool, int, float, str, type(None))):
-            return v
-        if isinstance(v, tuple):
-            return tuple(_norm(x) for x in v)
-        if isinstance(v, list):
-            return tuple(_norm(x) for x in v)
-        if isinstance(v, dict):
-            return tuple(
-                sorted(
-                    ((_sort_key_token(k), _norm(val)) for k, val in v.items()),
-                    key=lambda item: item[0],
-                )
-            )
-        if isinstance(v, torch.Tensor):
-            if getattr(v, "is_meta", False):
-                tensor_identity = ("meta_id", id(v))
-            else:
-                try:
-                    tensor_identity = ("data_ptr", int(v.data_ptr()))
-                except Exception:
-                    tensor_identity = ("fallback_id", id(v))
-            return (
-                "tensor",
-                tuple(v.shape),
-                str(v.dtype),
-                bool(v.requires_grad),
-                str(v.device),
-                tensor_identity,
-            )
-        obj_state = getattr(v, "__dict__", None)
-        if isinstance(obj_state, dict):
-            return (
-                "obj",
-                v.__class__.__module__,
-                v.__class__.__qualname__,
-                tuple(
-                    sorted(
-                        (
-                            (_sort_key_token(k), _norm(val))
-                            for k, val in obj_state.items()
-                        ),
-                        key=lambda item: item[0],
-                    )
-                ),
-            )
-        return ("obj", v.__class__.__module__, v.__class__.__qualname__, id(v))
-
-    cls = obj.__class__
-    key_parts: list[Any] = [cls.__module__, cls.__qualname__]
-    kernel_name = getattr(obj, "kernel_name", None)
-    full_codes = getattr(obj, "full_codes", None)
-    if isinstance(kernel_name, str):
-        key_parts.append(("kernel_name", kernel_name))
-    if isinstance(full_codes, str):
-        key_parts.append(("full_codes", full_codes))
-    if len(key_parts) == 2:
-        state = getattr(obj, "__dict__", None)
-        if isinstance(state, dict):
-            key_parts.append(
-                (
-                    "state",
-                    tuple(
-                        sorted(
-                            ((_sort_key_token(k), _norm(v)) for k, v in state.items()),
-                            key=lambda item: item[0],
-                        )
-                    ),
-                )
-            )
-        else:
-            key_parts.append(("id", id(obj)))
-    return repr(tuple(key_parts))
 
 
 def cpu_timer(f: Callable, *args, **kwargs):

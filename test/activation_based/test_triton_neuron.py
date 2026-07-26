@@ -389,52 +389,52 @@ def test_fp8_backward_capability_uses_backward_probe(monkeypatch):
     assert calls == {"forward": 0, "backward": 1}
 
 
-def test_prepare_triton_neuron_forward_plan_rejects_cpu_device():
+def test_prepare_triton_neuron_execution_plan_rejects_cpu_device():
     with pytest.raises(RuntimeError, match="CUDA device"):
-        neuron_triton_utils.prepare_triton_neuron_forward_plan(
+        neuron_triton_utils.prepare_triton_neuron_execution_plan(
             neuron_type="lif",
             device="cpu",
             storage_dtype=torch.float32,
-            compute_dtype="fp32",
+            forward_compute_dtype="fp32",
         )
 
 
-def test_prepare_triton_neuron_forward_plan_rejects_invalid_options():
+def test_prepare_triton_neuron_execution_plan_rejects_invalid_options():
     with pytest.raises(ValueError, match="neuron_type"):
-        neuron_triton_utils.prepare_triton_neuron_forward_plan(
+        neuron_triton_utils.prepare_triton_neuron_execution_plan(
             neuron_type="bad",
             device="cpu",
             storage_dtype=torch.float32,
         )
     with pytest.raises(ValueError, match="storage dtype"):
-        neuron_triton_utils.prepare_triton_neuron_forward_plan(
+        neuron_triton_utils.prepare_triton_neuron_execution_plan(
             neuron_type="lif",
             device="cpu",
             storage_dtype=torch.int32,
         )
     with pytest.raises(ValueError, match="compute_dtype"):
-        neuron_triton_utils.prepare_triton_neuron_forward_plan(
+        neuron_triton_utils.prepare_triton_neuron_execution_plan(
             neuron_type="lif",
             device="cpu",
             storage_dtype=torch.float32,
-            compute_dtype="bad",
+            forward_compute_dtype="bad",
         )
     with pytest.raises(ValueError, match="requires an FP8 storage_dtype"):
-        neuron_triton_utils.prepare_triton_neuron_forward_plan(
+        neuron_triton_utils.prepare_triton_neuron_execution_plan(
             neuron_type="lif",
             device="cpu",
             storage_dtype=torch.float32,
-            compute_dtype="fp8",
+            forward_compute_dtype="fp8",
         )
     with pytest.raises(ValueError, match="backward_compute_dtype"):
-        neuron_triton_utils.prepare_triton_neuron_forward_plan(
+        neuron_triton_utils.prepare_triton_neuron_execution_plan(
             neuron_type="lif",
             device="cpu",
             storage_dtype=torch.float32,
             backward_compute_dtype="bad",
         )
     with pytest.raises(ValueError, match="backward_compute_dtype='fp8'"):
-        neuron_triton_utils.prepare_triton_neuron_forward_plan(
+        neuron_triton_utils.prepare_triton_neuron_execution_plan(
             neuron_type="lif",
             device="cpu",
             storage_dtype=torch.float32,
@@ -442,7 +442,7 @@ def test_prepare_triton_neuron_forward_plan_rejects_invalid_options():
         )
 
 
-def test_triton_neuron_forward_plan_matches_config():
+def test_triton_neuron_execution_plan_matches_config():
     plan = neuron_triton_utils.TritonNeuronExecutionPlan(
         neuron_type="lif",
         device=torch.device("cuda", 0),
@@ -463,7 +463,7 @@ def test_triton_neuron_forward_plan_matches_config():
         neuron_type="lif",
         device=torch.device("cuda", 0),
         storage_dtype="fp32",
-        compute_dtype=torch.float32,
+        forward_compute_dtype=torch.float32,
         backward_compute_dtype="fp32",
         spike_dtype=torch.float32,
         save_intermediates=True,
@@ -472,7 +472,7 @@ def test_triton_neuron_forward_plan_matches_config():
         neuron_type="if",
         device=torch.device("cuda", 0),
         storage_dtype="fp32",
-        compute_dtype=torch.float32,
+        forward_compute_dtype=torch.float32,
         backward_compute_dtype="fp32",
         spike_dtype=torch.float32,
         save_intermediates=True,
@@ -481,7 +481,7 @@ def test_triton_neuron_forward_plan_matches_config():
         neuron_type="lif",
         device=torch.device("cuda", 1),
         storage_dtype="fp32",
-        compute_dtype=torch.float32,
+        forward_compute_dtype=torch.float32,
         backward_compute_dtype="fp32",
         spike_dtype=torch.float32,
         save_intermediates=True,
@@ -490,7 +490,7 @@ def test_triton_neuron_forward_plan_matches_config():
         neuron_type="lif",
         device=torch.device("cuda", 0),
         storage_dtype=torch.float16,
-        compute_dtype=torch.float32,
+        forward_compute_dtype=torch.float32,
         backward_compute_dtype="fp32",
         spike_dtype=torch.float32,
         save_intermediates=True,
@@ -499,7 +499,7 @@ def test_triton_neuron_forward_plan_matches_config():
         neuron_type="lif",
         device=torch.device("cuda", 0),
         storage_dtype="fp32",
-        compute_dtype="fp16",
+        forward_compute_dtype="fp16",
         backward_compute_dtype="fp32",
         spike_dtype=torch.float32,
         save_intermediates=True,
@@ -508,7 +508,7 @@ def test_triton_neuron_forward_plan_matches_config():
         neuron_type="lif",
         device=torch.device("cuda", 0),
         storage_dtype="fp32",
-        compute_dtype=torch.float32,
+        forward_compute_dtype=torch.float32,
         backward_compute_dtype="fp16",
         spike_dtype=torch.float32,
         save_intermediates=True,
@@ -517,7 +517,7 @@ def test_triton_neuron_forward_plan_matches_config():
         neuron_type="lif",
         device=torch.device("cuda", 0),
         storage_dtype="fp32",
-        compute_dtype=torch.float32,
+        forward_compute_dtype=torch.float32,
         backward_compute_dtype="fp32",
         spike_dtype=torch.float16,
         save_intermediates=True,
@@ -526,7 +526,7 @@ def test_triton_neuron_forward_plan_matches_config():
         neuron_type="lif",
         device=torch.device("cuda", 0),
         storage_dtype="fp32",
-        compute_dtype=torch.float32,
+        forward_compute_dtype=torch.float32,
         backward_compute_dtype="fp32",
         spike_dtype=torch.float32,
         save_intermediates=False,
@@ -535,7 +535,7 @@ def test_triton_neuron_forward_plan_matches_config():
         neuron_type="lif",
         device="invalid-device",
         storage_dtype=torch.float32,
-        compute_dtype="fp32",
+        forward_compute_dtype="fp32",
         spike_dtype=torch.float32,
         save_intermediates=True,
     )
@@ -939,11 +939,11 @@ def test_mixed_precision_float32_matches_torch_eval(
         original_loop_mode = kernel_module.LAST_FORWARD_LOOP_MODE
         try:
             kernel_module.LAST_FORWARD_LOOP_MODE = None
-            plan = neuron_triton_utils.prepare_triton_neuron_forward_plan(
+            plan = neuron_triton_utils.prepare_triton_neuron_execution_plan(
                 neuron_type=kind,
                 device=x.device,
                 storage_dtype=torch.float32,
-                compute_dtype="fp32",
+                forward_compute_dtype="fp32",
                 spike_dtype=torch.float32,
                 save_intermediates=True,
             )
@@ -994,11 +994,11 @@ def test_mixed_precision_forward_with_plan_skips_repeated_preflight(kind, monkey
     x = torch.randn(8, 4, device="cuda", dtype=torch.float32)
     v_init = torch.zeros_like(x[0])
     r_tau = torch.tensor(0.5, device=x.device, dtype=torch.float32)
-    plan = neuron_triton_utils.prepare_triton_neuron_forward_plan(
+    plan = neuron_triton_utils.prepare_triton_neuron_execution_plan(
         neuron_type=kind,
         device=x.device,
         storage_dtype=torch.float32,
-        compute_dtype="fp32",
+        forward_compute_dtype="fp32",
         spike_dtype=torch.float32,
         save_intermediates=True,
     )
@@ -1058,11 +1058,11 @@ def test_mixed_precision_rejects_v_init_shape_mismatch(kind, use_plan):
     r_tau = torch.tensor(0.5, device=x.device, dtype=torch.float32)
     plan = None
     if use_plan:
-        plan = neuron_triton_utils.prepare_triton_neuron_forward_plan(
+        plan = neuron_triton_utils.prepare_triton_neuron_execution_plan(
             neuron_type=kind,
             device=x.device,
             storage_dtype=torch.float32,
-            compute_dtype="fp32",
+            forward_compute_dtype="fp32",
             spike_dtype=torch.float32,
             save_intermediates=True,
         )
@@ -1099,11 +1099,11 @@ def test_mixed_precision_backward_with_plan_skips_repeated_preflight(kind, monke
     x = torch.randn(8, 4, device="cuda", dtype=torch.float32)
     v_init = torch.zeros_like(x[0])
     r_tau = torch.tensor(0.5, device=x.device, dtype=torch.float32)
-    plan = neuron_triton_utils.prepare_triton_neuron_forward_plan(
+    plan = neuron_triton_utils.prepare_triton_neuron_execution_plan(
         neuron_type=kind,
         device=x.device,
         storage_dtype=torch.float32,
-        compute_dtype="fp32",
+        forward_compute_dtype="fp32",
         backward_compute_dtype="fp32",
         spike_dtype=torch.float32,
         save_intermediates=True,
@@ -1178,11 +1178,11 @@ def test_mixed_precision_autograd_with_plan_matches_safe_wrapper(kind, v_reset):
     x_plan = x.clone().requires_grad_()
     v_safe = v_init.clone().requires_grad_()
     v_plan = v_init.clone().requires_grad_()
-    plan = neuron_triton_utils.prepare_triton_neuron_forward_plan(
+    plan = neuron_triton_utils.prepare_triton_neuron_execution_plan(
         neuron_type=kind,
         device=x.device,
         storage_dtype=torch.float32,
-        compute_dtype="fp32",
+        forward_compute_dtype="fp32",
         backward_compute_dtype="fp32",
         spike_dtype=torch.float32,
         save_intermediates=True,
@@ -1276,11 +1276,11 @@ def test_mixed_precision_fp8_storage_matches_quantized_reference(
     )
     v_init = torch.zeros_like(x[0])
     r_tau = torch.tensor(0.5, device=x.device, dtype=torch.float32)
-    plan = neuron_triton_utils.prepare_triton_neuron_forward_plan(
+    plan = neuron_triton_utils.prepare_triton_neuron_execution_plan(
         neuron_type=kind,
         device=x.device,
         storage_dtype=storage_dtype,
-        compute_dtype="fp32",
+        forward_compute_dtype="fp32",
         spike_dtype=torch.float32,
         save_intermediates=True,
     )

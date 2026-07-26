@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 import sys
 import types
 
@@ -41,54 +40,27 @@ def test_precision_config_instance_with_none_device_uses_default_device():
     assert cfg.device == "cuda:0"
 
 
-def test_precision_config_from_dict_aliases_precision_key():
-    cfg = PrecisionConfig.from_any({"precision": "fp16", "device": "cuda:0"})
+def test_precision_config_from_dict():
+    cfg = PrecisionConfig.from_any({"mode": "fp16", "device": "cuda:0"})
     assert cfg.mode == "fp16"
     assert cfg.device == "cuda:0"
 
 
-def test_precision_config_from_dict_supports_precision_aliases():
+def test_precision_config_from_dict_rejects_unknown_fields():
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        PrecisionConfig.from_any({"precision": "fp16"})
+
+
+def test_precision_config_from_dict_supports_current_fields():
     cfg = PrecisionConfig.from_any(
         {
-            "precision": "fp8-torchao",
-            "precision_strict": "strict",
-            "fp8_report": False,
+            "mode": "fp8-torchao",
+            "strictness": "strict",
             "device": "cuda:0",
         }
     )
     assert cfg.mode == "fp8-torchao"
     assert cfg.strictness == "strict"
-    assert cfg.report is False
-
-
-def test_precision_config_from_object_with_precision_fields():
-    obj = SimpleNamespace(
-        precision="fp8-torchao",
-        precision_strict="strict",
-        fp8_recipe="auto",
-        fp8_report=False,
-        device="cuda:0",
-    )
-    cfg = PrecisionConfig.from_any(obj)
-    assert cfg.mode == "fp8-torchao"
-    assert cfg.strictness == "strict"
-    assert cfg.report is False
-
-
-def test_precision_config_from_object_with_none_device_uses_default_device():
-    obj = SimpleNamespace(
-        precision="fp16",
-        device=None,
-    )
-    cfg = PrecisionConfig.from_any(obj, default_device="cuda:0")
-    assert cfg.mode == "fp16"
-    assert cfg.device == "cuda:0"
-
-
-def test_precision_config_from_legacy_amp_like_object():
-    obj = SimpleNamespace(disable_amp=False, device="cuda:0")
-    cfg = PrecisionConfig.from_any(obj)
-    assert cfg.mode == "fp16"
 
 
 def test_precision_config_from_unknown_object_raises():
@@ -420,56 +392,6 @@ def test_precision_artifacts_autocast_context_resolves_fake_te_recipe(monkeypatc
     )
     with artifacts.autocast_context():
         pass
-    assert isinstance(state["recipe"], FakeDelayedScaling)
-
-
-def test_precision_artifacts_fp8_autocast_context_passes_legacy_recipe(monkeypatch):
-    fake_te = types.ModuleType("transformer_engine.pytorch")
-    fake_recipe_module = types.ModuleType("transformer_engine.common.recipe")
-    state = {"recipe": None}
-
-    class FakeDelayedScaling:
-        pass
-
-    class FakeContext:
-        def __enter__(self):
-            return None
-
-        def __exit__(self, exc_type, exc, tb):
-            return None
-
-    def fp8_autocast(enabled=True, fp8_recipe=None):
-        state["recipe"] = fp8_recipe
-        return FakeContext()
-
-    fake_recipe_module.DelayedScaling = FakeDelayedScaling
-    fake_te.fp8_autocast = fp8_autocast
-    fake_root = types.ModuleType("transformer_engine")
-    fake_common = types.ModuleType("transformer_engine.common")
-    fake_common.recipe = fake_recipe_module
-    fake_root.pytorch = fake_te
-    fake_root.common = fake_common
-    monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
-    monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", fake_te)
-    monkeypatch.setitem(sys.modules, "transformer_engine.common", fake_common)
-    monkeypatch.setitem(
-        sys.modules,
-        "transformer_engine.common.recipe",
-        fake_recipe_module,
-    )
-
-    policy = resolve_precision_policy(
-        PrecisionConfig(mode="fp8-te", fp8_recipe="delayed")
-    )
-    artifacts = PrecisionArtifacts(
-        requested_config=PrecisionConfig(mode="fp8-te", fp8_recipe="delayed"),
-        effective_config=PrecisionConfig(mode="fp8-te", fp8_recipe="delayed"),
-        policy=policy,
-        model=torch.nn.Linear(4, 4),
-    )
-    with pytest.warns(RuntimeWarning, match="fp8_autocast"):
-        with artifacts.autocast_context():
-            pass
     assert isinstance(state["recipe"], FakeDelayedScaling)
 
 

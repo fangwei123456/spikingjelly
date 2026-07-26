@@ -166,11 +166,6 @@ class Trainer:
         if not enabled:
             return model
 
-        if not hasattr(torch, "compile"):
-            raise RuntimeError(
-                "torch.compile is not available in the current PyTorch version."
-            )
-
         compile_kwargs = {"backend": args.compile_backend}
         if args.compile_mode is not None:
             compile_kwargs["mode"] = args.compile_mode
@@ -187,27 +182,7 @@ class Trainer:
             if compile_options:
                 compile_kwargs["options"] = compile_options
 
-        try:
-            return torch.compile(model, **compile_kwargs)
-        except RuntimeError as e:
-            compile_options = compile_kwargs.get("options")
-            error_text = str(e).lower()
-            retryable_option_error = (
-                "options" in error_text
-                or "cudagraph" in error_text
-                or "config" in error_text
-            )
-            if not compile_options or not retryable_option_error:
-                raise
-            warnings.warn(
-                "torch.compile failed with backend options "
-                f"{compile_options!r}; retrying without options. "
-                f"Original error: {e}",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-            compile_kwargs.pop("options", None)
-            return torch.compile(model, **compile_kwargs)
+        return torch.compile(model, **compile_kwargs)
 
     def get_eval_model(self, args, train_model, model_without_ddp):
         if args.compile and not args.compile_eval:
@@ -360,8 +335,6 @@ class Trainer:
 
         print("Loading training data")
         st = time.time()
-        auto_augment_policy = getattr(args, "auto_augment", None)
-        random_erase_prob = getattr(args, "random_erase", 0.0)
         dataset = torchvision.datasets.CIFAR10(
             root=args.data_path,
             train=True,
@@ -370,8 +343,8 @@ class Trainer:
                 mean=(0.4914, 0.4822, 0.4465),
                 std=(0.2023, 0.1994, 0.2010),
                 interpolation=interpolation,
-                auto_augment_policy=auto_augment_policy,
-                random_erase_prob=random_erase_prob,
+                auto_augment_policy=args.auto_augment,
+                random_erase_prob=args.random_erase,
             ),
         )
 
@@ -397,7 +370,7 @@ class Trainer:
         loader_g.manual_seed(args.seed)
 
         if args.distributed:
-            if hasattr(args, "ra_sampler") and args.ra_sampler:
+            if args.ra_sampler:
                 train_sampler = RASampler(
                     dataset, shuffle=True, repetitions=args.ra_reps, seed=args.seed
                 )
@@ -434,15 +407,13 @@ class Trainer:
             print(f"Loading dataset_train from {cache_path}")
             dataset, _ = torch.load(cache_path)
         else:
-            auto_augment_policy = getattr(args, "auto_augment", None)
-            random_erase_prob = getattr(args, "random_erase", 0.0)
             dataset = torchvision.datasets.ImageFolder(
                 traindir,
                 presets.ClassificationPresetTrain(
                     crop_size=train_crop_size,
                     interpolation=interpolation,
-                    auto_augment_policy=auto_augment_policy,
-                    random_erase_prob=random_erase_prob,
+                    auto_augment_policy=args.auto_augment,
+                    random_erase_prob=args.random_erase,
                 ),
             )
             if args.cache_dataset:
@@ -458,22 +429,21 @@ class Trainer:
             print(f"Loading dataset_test from {cache_path}")
             dataset_test, _ = torch.load(cache_path)
         else:
-            if not args.prototype:
-                preprocessing = presets.ClassificationPresetEval(
+            if args.prototype and args.weights:
+                weights = prototype.models.get_weight(args.weights)
+                preprocessing = weights.transforms()
+            elif args.prototype:
+                preprocessing = prototype.transforms.ImageNetEval(
                     crop_size=val_crop_size,
                     resize_size=val_resize_size,
                     interpolation=interpolation,
                 )
             else:
-                if args.weights:
-                    weights = prototype.models.get_weight(args.weights)
-                    preprocessing = weights.transforms()
-                else:
-                    preprocessing = prototype.transforms.ImageNetEval(
-                        crop_size=val_crop_size,
-                        resize_size=val_resize_size,
-                        interpolation=interpolation,
-                    )
+                preprocessing = presets.ClassificationPresetEval(
+                    crop_size=val_crop_size,
+                    resize_size=val_resize_size,
+                    interpolation=interpolation,
+                )
 
             dataset_test = torchvision.datasets.ImageFolder(
                 valdir,
@@ -489,7 +459,7 @@ class Trainer:
         loader_g.manual_seed(args.seed)
 
         if args.distributed:
-            if hasattr(args, "ra_sampler") and args.ra_sampler:
+            if args.ra_sampler:
                 train_sampler = RASampler(
                     dataset, shuffle=True, repetitions=args.ra_reps, seed=args.seed
                 )
@@ -628,14 +598,6 @@ class Trainer:
         num_classes = len(dataset.classes)
         mixup_transforms = []
         if args.mixup_alpha > 0.0:
-            if torch.__version__ >= torch.torch_version.TorchVersion("1.10.0"):
-                pass
-            else:
-                # TODO implement a CrossEntropyLoss to support for probabilities for each class.
-                raise NotImplementedError(
-                    "CrossEntropyLoss in pytorch < 1.11.0 does not support for probabilities for each class."
-                    "Set mixup_alpha=0. to avoid such a problem or update your pytorch."
-                )
             mixup_transforms.append(
                 transforms.RandomMixup(num_classes, p=1.0, alpha=args.mixup_alpha)
             )

@@ -23,8 +23,6 @@ __all__ = [
     "SpikeSimCounter",
     "SpikeSimEnergyReport",
     "SpikeSimEnergyProfiler",
-    "SpikeSimEventEnergyReport",
-    "SpikeSimEventEnergyProfiler",
     "estimate_spikesim_event_energy",
 ]
 
@@ -313,10 +311,6 @@ class SpikeSimEnergyProfiler:
         }
 
 
-SpikeSimEventEnergyReport = SpikeSimEnergyReport
-SpikeSimEventEnergyProfiler = SpikeSimEnergyProfiler
-
-
 def estimate_spikesim_event_energy(
     model: nn.Module,
     inputs,
@@ -324,7 +318,7 @@ def estimate_spikesim_event_energy(
     config: SpikeSimEnergyConfig | None = None,
     strict: bool = False,
     verbose: bool = False,
-) -> SpikeSimEventEnergyReport:
+) -> SpikeSimEnergyReport:
     r"""
     .. rubric:: API Language
 
@@ -363,8 +357,8 @@ def estimate_spikesim_event_energy(
     :param strict: whether to raise immediately on unsupported behaviors
     :param verbose: whether to print per-stage runtime statistics
     """
-    cfg = (config or SpikeSimEnergyConfig()).copy()
-    cfg.validate()
+    profiler = SpikeSimEnergyProfiler(config=config, strict=strict, verbose=verbose)
+    cfg = profiler.config
     training_message = (
         "SpikeSim energy only covers forward inference; call model.eval() before "
         "profiling."
@@ -386,7 +380,7 @@ def estimate_spikesim_event_energy(
             if strict:
                 raise ValueError(message)
             neuron_warnings.append(message)
-    with SpikeSimEnergyProfiler(config=cfg, strict=strict, verbose=verbose) as profiler:
+    with profiler:
         profiler.add_warnings(neuron_warnings)
         with torch.no_grad():
             _ = _call_model(model, inputs)

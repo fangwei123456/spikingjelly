@@ -161,8 +161,6 @@ def plan(
     features = features or DistributedFeatureSet()
     resolved_model_family = model_family or "generic"
     dim_names = resolved_topology.ordered_dim_names
-    tp_mesh_dim = dim_names.index("tp") if "tp" in dim_names else 0
-    dp_mesh_dim = dim_names.index("dp") if "dp" in dim_names else None
     recommendation = recommend_snn_distributed_strategy(
         model=resolved_model_family,
         world_size=resolved_topology.world_size,
@@ -220,9 +218,6 @@ def plan(
         notes=tuple(notes),
         tensor_parallel_roots=analysis.tensor_parallel_roots,
         tensor_parallel_plan=tensor_parallel_plan,
-        mesh_shape=resolved_topology.mesh_shape,
-        tp_mesh_dim=tp_mesh_dim,
-        dp_mesh_dim=dp_mesh_dim,
         experimental_features=features,
     )
 

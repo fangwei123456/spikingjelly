@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from torch.overrides import resolve_name
 
-from .base import BaseCounter, _collect_tensors, _infer_stage, _tensor_bits
+from .base import BaseCounter, _collect_tensors, _tensor_bits
 
 aten = torch.ops.aten
 
@@ -554,21 +554,6 @@ class MemoryResidencyCounter(BaseCounter):
             self.rules.update(extra_rules)
         self.ignore_modules = list(extra_ignore_modules or [])
         self.simulator = MemoryResidencySimulator(config, capacity_bits=capacity_bits)
-        self.level_records: dict[str, int] = defaultdict(int)
-        self.level_rw_records: dict[str, dict[str, int]] = defaultdict(
-            lambda: defaultdict(int)
-        )
-        self.stage_level_records: dict[str, dict[str, int]] = defaultdict(
-            lambda: defaultdict(int)
-        )
-        self.op_level_records: dict[str, dict[str, int]] = defaultdict(
-            lambda: defaultdict(int)
-        )
-        self.stage_records: dict[str, int] = defaultdict(int)
-        self.op_records: dict[str, int] = defaultdict(int)
-        self.stage_op_records: dict[str, dict[str, int]] = defaultdict(
-            lambda: defaultdict(int)
-        )
 
     def reset(self):
         r"""
@@ -595,13 +580,6 @@ class MemoryResidencyCounter(BaseCounter):
         Reset all recorded states of the counter and the underlying simulator.
         """
         self.records.clear()
-        self.level_records.clear()
-        self.level_rw_records.clear()
-        self.stage_level_records.clear()
-        self.op_level_records.clear()
-        self.stage_records.clear()
-        self.op_records.clear()
-        self.stage_op_records.clear()
         self.simulator.reset()
 
     def count(
@@ -672,8 +650,6 @@ class MemoryResidencyCounter(BaseCounter):
         if rule is None:
             return 0
         op_name = resolve_name(func)
-        stage = _infer_stage(func, args, kwargs, out)
-        before_level_rw = self.simulator.get_level_rw_bits()
         read_tensors, write_tensors = rule(args, kwargs, out)
 
         total_bits = 0
@@ -685,33 +661,6 @@ class MemoryResidencyCounter(BaseCounter):
             bits = _tensor_bits(tensor)
             total_bits += bits
             self.simulator.on_tensor_write(tensor, op_name)
-
-        after_level_rw = self.simulator.get_level_rw_bits()
-        all_levels = set(before_level_rw.keys()) | set(after_level_rw.keys())
-        for level in all_levels:
-            old_info = before_level_rw.get(level, {})
-            new_info = after_level_rw.get(level, {})
-            delta_read = int(
-                new_info.get("read_bits", 0) - old_info.get("read_bits", 0)
-            )
-            delta_write = int(
-                new_info.get("write_bits", 0) - old_info.get("write_bits", 0)
-            )
-            delta_total = int(
-                new_info.get("total_bits", 0) - old_info.get("total_bits", 0)
-            )
-            if delta_total == 0 and delta_read == 0 and delta_write == 0:
-                continue
-            self.level_records[level] += delta_total
-            self.level_rw_records[level]["read_bits"] += delta_read
-            self.level_rw_records[level]["write_bits"] += delta_write
-            self.level_rw_records[level]["total_bits"] += delta_total
-            self.stage_level_records[stage][level] += delta_total
-            self.op_level_records[op_name][level] += delta_total
-
-        self.stage_records[stage] += total_bits
-        self.op_records[op_name] += total_bits
-        self.stage_op_records[stage][op_name] += total_bits
         return total_bits
 
     def get_level_bits(self) -> dict[str, int]:
@@ -739,7 +688,10 @@ class MemoryResidencyCounter(BaseCounter):
         :return: total access bits per memory level
         :rtype: dict[str, int]
         """
-        return dict(self.level_records)
+        return {
+            level: values["total_bits"]
+            for level, values in self.simulator.get_level_rw_bits().items()
+        }
 
     def get_level_rw_bits(self) -> dict[str, dict[str, int]]:
         r"""
@@ -766,7 +718,7 @@ class MemoryResidencyCounter(BaseCounter):
         :return: per-level read/write bit breakdown
         :rtype: dict[str, dict[str, int]]
         """
-        return {k: dict(v) for k, v in self.level_rw_records.items()}
+        return self.simulator.get_level_rw_bits()
 
     def get_op_level_bits(self) -> dict[str, dict[str, int]]:
         r"""
@@ -793,34 +745,10 @@ class MemoryResidencyCounter(BaseCounter):
         :return: per-operation level access bits
         :rtype: dict[str, dict[str, int]]
         """
-        return {k: dict(v) for k, v in self.op_level_records.items()}
-
-    def get_stage_level_bits(self) -> dict[str, dict[str, int]]:
-        r"""
-        .. rubric:: API Language
-
-        :ref:`中文 <MemoryResidencyCounter.get_stage_level_bits-cn>` |
-        :ref:`English <MemoryResidencyCounter.get_stage_level_bits-en>`
-
-        ----
-
-        .. _MemoryResidencyCounter.get_stage_level_bits-cn:
-
-        * **中文**
-
-        :return: 按阶段（forward/backward/optimizer）聚合的各层级访问比特数
-        :rtype: dict[str, dict[str, int]]
-
-        ----
-
-        .. _MemoryResidencyCounter.get_stage_level_bits-en:
-
-        * **English**
-
-        :return: per-stage level access bits
-        :rtype: dict[str, dict[str, int]]
-        """
-        return {k: dict(v) for k, v in self.stage_level_records.items()}
+        return {
+            op: {level: values["total_bits"] for level, values in levels.items()}
+            for op, levels in self.simulator.get_op_level_rw_bits().items()
+        }
 
     def get_move_bits_by_edge(self) -> dict[str, int]:
         r"""

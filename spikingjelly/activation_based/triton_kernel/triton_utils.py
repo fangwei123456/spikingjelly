@@ -193,9 +193,8 @@ def normalize_triton_storage_dtype(storage_dtype: str | torch.dtype) -> torch.dt
 
 
 def is_fp8_dtype(dtype: torch.dtype) -> bool:
-    return (
-        (hasattr(torch, "float8_e4m3fn") and dtype == torch.float8_e4m3fn)
-        or (hasattr(torch, "float8_e5m2") and dtype == torch.float8_e5m2)
+    return (hasattr(torch, "float8_e4m3fn") and dtype == torch.float8_e4m3fn) or (
+        hasattr(torch, "float8_e5m2") and dtype == torch.float8_e5m2
     )
 
 
@@ -252,9 +251,7 @@ def triton_compute_dtype_name_to_neuron_dtype_id(
     raise ValueError(f"Unsupported Triton compute dtype name: {compute_dtype_name!r}.")
 
 
-def triton_neuron_compute_dtype_id_to_tl_dtype(
-    dtype_id: int, storage_dtype_id: int
-):
+def triton_neuron_compute_dtype_id_to_tl_dtype(dtype_id: int, storage_dtype_id: int):
     if dtype_id == TRITON_NEURON_DTYPE_FP32:
         if torch.float32 not in type_dict:
             raise ValueError("Triton fp32 compute dtype is unavailable.")
@@ -270,9 +267,7 @@ def triton_neuron_compute_dtype_id_to_tl_dtype(
     if dtype_id == TRITON_NEURON_DTYPE_FP8_E4M3FN:
         if storage_dtype_id != TRITON_NEURON_DTYPE_FP8_E4M3FN:
             raise ValueError("FP8 E4M3 compute requires E4M3 storage dtype.")
-        tl_dtype = getattr(tl, "float8e4m3fn", None) or getattr(
-            tl, "float8e4nv", None
-        )
+        tl_dtype = getattr(tl, "float8e4m3fn", None) or getattr(tl, "float8e4nv", None)
         if tl_dtype is None:
             raise ValueError("Triton float8e4m3fn/float8e4nv dtype is unavailable.")
         return tl_dtype
@@ -314,9 +309,7 @@ def resolve_triton_compute_dtype(
                 tl, "float8e4nv", None
             )
             if tl_dtype is None:
-                raise ValueError(
-                    "Triton float8e4m3fn/float8e4nv dtype is unavailable."
-                )
+                raise ValueError("Triton float8e4m3fn/float8e4nv dtype is unavailable.")
             return tl_dtype
         if hasattr(torch, "float8_e5m2") and storage_dtype == torch.float8_e5m2:
             tl_dtype = getattr(tl, "float8e5m2", None) or getattr(tl, "float8e5", None)

@@ -315,12 +315,9 @@ def _benchmark_args(**overrides):
             "cifar10dvs_vgg",
             None,
             {
+                "mode": "dp",
                 "mesh_shape": (4,),
-                "enable_data_parallel": True,
-                "enable_fsdp2": False,
-                "auto_tensor_parallel": False,
                 "tensor_parallel_roots": None,
-                "experimental_conv_tensor_parallel": False,
                 "conv_tensor_parallel_roots": None,
                 "fsdp_shard_roots": None,
                 "fsdp_shard_module_root": True,
@@ -333,13 +330,11 @@ def _benchmark_args(**overrides):
             "cifar10dvs_vgg",
             None,
             {
+                "mode": "tp",
                 "mesh_shape": (4,),
-                "enable_data_parallel": False,
-                "enable_fsdp2": False,
                 "auto_tensor_parallel": True,
-                "tensor_parallel_roots": ["classifier"],
-                "experimental_conv_tensor_parallel": True,
-                "conv_tensor_parallel_roots": ["features"],
+                "tensor_parallel_roots": ("classifier",),
+                "conv_tensor_parallel_roots": ("features",),
                 "fsdp_shard_roots": None,
                 "fsdp_shard_module_root": True,
                 "tp_mesh_dim": 0,
@@ -351,15 +346,12 @@ def _benchmark_args(**overrides):
             "spikformer_ti",
             None,
             {
+                "mode": "tp",
                 "mesh_shape": (4,),
-                "enable_data_parallel": False,
-                "enable_fsdp2": False,
                 "auto_tensor_parallel": True,
-                "tensor_parallel_roots": ["head"],
-                "experimental_spikformer_tensor_parallel": True,
-                "spikformer_tensor_parallel_roots": ["blocks"],
-                "experimental_spikformer_patch_stem_tensor_parallel": True,
-                "spikformer_patch_stem_tensor_parallel_roots": ["patch_embed"],
+                "tensor_parallel_roots": ("head",),
+                "spikformer_tensor_parallel_roots": ("blocks",),
+                "spikformer_patch_stem_tensor_parallel_roots": ("patch_embed",),
                 "fsdp_shard_roots": None,
                 "fsdp_shard_module_root": True,
                 "tp_mesh_dim": 0,
@@ -371,14 +363,11 @@ def _benchmark_args(**overrides):
             "cifar10dvs_vgg",
             None,
             {
+                "mode": "fsdp2",
                 "mesh_shape": (4,),
-                "enable_data_parallel": False,
-                "enable_fsdp2": True,
-                "auto_tensor_parallel": False,
                 "tensor_parallel_roots": None,
-                "experimental_conv_tensor_parallel": False,
                 "conv_tensor_parallel_roots": None,
-                "fsdp_shard_roots": ["features", "classifier"],
+                "fsdp_shard_roots": ("features", "classifier"),
                 "fsdp_shard_module_root": True,
                 "tp_mesh_dim": 0,
                 "dp_mesh_dim": 0,
@@ -389,14 +378,12 @@ def _benchmark_args(**overrides):
             "cifar10dvs_vgg",
             [2, 2],
             {
+                "mode": "fsdp2_tp",
                 "mesh_shape": (2, 2),
-                "enable_data_parallel": False,
-                "enable_fsdp2": True,
                 "auto_tensor_parallel": True,
-                "tensor_parallel_roots": ["classifier"],
-                "experimental_conv_tensor_parallel": True,
-                "conv_tensor_parallel_roots": ["features"],
-                "fsdp_shard_roots": ["features"],
+                "tensor_parallel_roots": ("classifier",),
+                "conv_tensor_parallel_roots": ("features",),
+                "fsdp_shard_roots": ("features",),
                 "fsdp_shard_module_root": False,
                 "tp_mesh_dim": 1,
                 "dp_mesh_dim": 0,
@@ -407,15 +394,12 @@ def _benchmark_args(**overrides):
             "spikformer_ti",
             [2, 2],
             {
+                "mode": "fsdp2_tp",
                 "mesh_shape": (2, 2),
-                "enable_data_parallel": False,
-                "enable_fsdp2": True,
                 "auto_tensor_parallel": True,
-                "tensor_parallel_roots": ["head"],
-                "experimental_spikformer_tensor_parallel": True,
-                "spikformer_tensor_parallel_roots": ["blocks"],
-                "experimental_spikformer_patch_stem_tensor_parallel": True,
-                "spikformer_patch_stem_tensor_parallel_roots": ["patch_embed"],
+                "tensor_parallel_roots": ("head",),
+                "spikformer_tensor_parallel_roots": ("blocks",),
+                "spikformer_patch_stem_tensor_parallel_roots": ("patch_embed",),
                 "fsdp_shard_module_root": False,
                 "tp_mesh_dim": 1,
                 "dp_mesh_dim": 0,
@@ -443,17 +427,17 @@ def test_build_model_config_matrix(
         assert getattr(config, field) == value
     if mode == "fsdp2_tp" and model_name.startswith("spikformer"):
         num_blocks = len(captured["model"].blocks)
-        assert config.fsdp_shard_roots == ["patch_embed"] + [
+        assert config.fsdp_shard_roots == ("patch_embed",) + tuple(
             f"blocks.{i}" for i in range(num_blocks)
-        ]
+        )
 
 
-def test_eager_policy_for_model_rejects_unknown_model_name():
-    with pytest.raises(ValueError, match="No eager policy registered"):
-        bench._eager_policy_for_model("unknown_model", object())
+def test_eager_config_for_model_rejects_unknown_model_name():
+    with pytest.raises(ValueError, match="No eager configuration registered"):
+        bench._eager_config_for_model("unknown_model", object(), "tp")
 
 
-def test_build_model_dp_does_not_resolve_eager_policy(
+def test_build_model_dp_does_not_resolve_model_config(
     monkeypatch: pytest.MonkeyPatch,
 ):
     captured = {}
@@ -462,48 +446,48 @@ def test_build_model_dp_does_not_resolve_eager_policy(
         captured["config"] = config
         return model, None, None
 
-    def _unexpected_policy(*_args, **_kwargs):
-        raise AssertionError("dp mode must not resolve eager policy")
+    def _unexpected_model_config(*_args, **_kwargs):
+        raise AssertionError("dp mode must not resolve model-specific config")
 
     monkeypatch.setattr(bench, "configure_snn_distributed", _fake_configure)
-    monkeypatch.setattr(bench, "_eager_policy_for_model", _unexpected_policy)
+    monkeypatch.setattr(bench, "_eager_config_for_model", _unexpected_model_config)
     args = _benchmark_args(mode="dp", model="cifar10dvs_vgg")
 
     bench.build_model(args, torch.device("cpu"), world_size=1, batch_size_per_rank=1)
 
-    assert captured["config"].enable_data_parallel is True
+    assert captured["config"].mode == "dp"
 
 
-def test_build_model_fsdp2_disables_auto_tensor_parallel(
+def test_build_model_keeps_fsdp_roots_when_memopt_runs_after_tp(
     monkeypatch: pytest.MonkeyPatch,
 ):
     captured = {}
 
     def _fake_configure(model, config):
-        captured["config"] = config
-        return model, None, None
+        captured["tp_config"] = config
+        return model, object(), None
+
+    def _fake_fsdp(model, **kwargs):
+        captured["fsdp"] = kwargs
+        return model
 
     monkeypatch.setattr(bench, "configure_snn_distributed", _fake_configure)
-    args = SimpleNamespace(
-        model="cifar10dvs_vgg",
-        mode="fsdp2",
-        memopt_level=0,
-        backend="torch",
-        T=4,
-        image_size=224,
-        num_classes=1000,
-        mesh_shape=None,
-        tp_mesh_dim=0,
-        dp_mesh_dim=None,
-        pp_microbatches=None,
-        pp_schedule="auto",
-        pp_virtual_stages=1,
-        pp_layout=None,
-        pp_delay_wgrad=False,
-        memopt_compress_x=False,
+    monkeypatch.setattr(
+        bench, "maybe_apply_memopt", lambda args, model, sample: (model, 0.0)
     )
-    bench.build_model(args, torch.device("cpu"), 1, 2)
-    assert captured["config"].auto_tensor_parallel is False
+    monkeypatch.setattr(bench, "apply_snn_fsdp2", _fake_fsdp)
+
+    args = _benchmark_args(
+        mode="fsdp2_tp",
+        model="cifar10dvs_vgg",
+        mesh_shape=[2, 2],
+        memopt_level=1,
+    )
+    bench.build_model(args, torch.device("cpu"), world_size=4, batch_size_per_rank=1)
+
+    assert captured["tp_config"].mode == "tp"
+    assert captured["fsdp"]["shard_roots"] == ("features",)
+    assert captured["fsdp"]["shard_module_root"] is False
 
 
 def test_make_synthetic_batch_uses_requested_batch_size():

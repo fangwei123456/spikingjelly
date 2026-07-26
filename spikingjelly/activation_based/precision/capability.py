@@ -40,12 +40,7 @@ def _transformer_engine_fp8_status() -> tuple[
             {},
         )
 
-    if hasattr(te, "autocast"):
-        autocast_api = "autocast"
-    elif hasattr(te, "fp8_autocast"):
-        autocast_api = "fp8_autocast"
-    else:
-        autocast_api = None
+    autocast_api = "autocast" if hasattr(te, "autocast") else None
 
     recipe_availability = {
         "auto": True,
@@ -187,7 +182,7 @@ def _assess_fp8_te(
             te_fp8_unavailable_reason or "Transformer Engine FP8 is unavailable"
         )
     else:
-        execution_note = "runtime execution still requires validation with Transformer Engine fp8_autocast"
+        execution_note = "runtime execution still requires validation with Transformer Engine autocast"
     return can_convert, can_execute, execution_note
 
 
@@ -353,8 +348,7 @@ def _validate_fp8_te(report: dict[str, Any]) -> None:
         )
     if not report.get("te_autocast_api"):
         raise RuntimeError(
-            "precision='fp8-te' requires transformer_engine.pytorch.autocast "
-            "or transformer_engine.pytorch.fp8_autocast."
+            "precision='fp8-te' requires transformer_engine.pytorch.autocast."
         )
 
 

@@ -199,9 +199,6 @@ class BaseNode(base.MemoryModule):
 
         self.store_v_seq = store_v_seq
 
-        # used in lava_exchange
-        self.lava_s_cale = 1 << 6
-
         # used for cupy backend
         self.forward_kernel = None
         self.backward_kernel = None
@@ -380,43 +377,20 @@ class BaseNode(base.MemoryModule):
         compiled = self._inductor_compiled_graphs.get(cache_key)
         if compiled is not None:
             return compiled
-        if not hasattr(torch, "compile"):
-            raise RuntimeError(
-                f"{self._get_name()} backend='inductor' requires torch.compile."
-            )
-        compile_kwargs = {"backend": "inductor"}
-        try:
-            compiled = torch.compile(
-                fn,
-                **compile_kwargs,
-                options={
-                    "triton.cudagraphs": False,
-                    "triton.cudagraph_trees": False,
-                },
-            )
-        except TypeError:
-            compiled = torch.compile(fn, **compile_kwargs)
+        compiled = torch.compile(
+            fn,
+            backend="inductor",
+            options={
+                "triton.cudagraphs": False,
+                "triton.cudagraph_trees": False,
+            },
+        )
         self._inductor_compiled_graphs[cache_key] = compiled
         return compiled
 
     @staticmethod
     def _canonicalize_inductor_tensor(tensor: torch.Tensor) -> torch.Tensor:
         return tensor.contiguous()
-
-    @staticmethod
-    def _inductor_tensor_signature(tensor: torch.Tensor):
-        return (
-            tuple(tensor.shape),
-            tensor.ndim,
-            str(tensor.dtype),
-            tensor.device.type,
-            tensor.device.index,
-            tensor.is_contiguous(),
-            bool(tensor.requires_grad),
-        )
-
-    def _inductor_runtime_cache_key(self, *tensors: torch.Tensor):
-        return tuple(self._inductor_tensor_signature(t) for t in tensors)
 
     def _surrogate_inductor_cache_key(self):
         sg = self.surrogate_function

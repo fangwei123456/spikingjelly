@@ -1,9 +1,7 @@
 import math
 
 import torch
-import torch.distributed as dist
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .. import base
 
@@ -100,9 +98,9 @@ class DSRIFNode(base.MemoryModule):
             DSR-IF only supports the ``'torch'`` backend
         :type backend: str
         """
-        assert isinstance(T, int) and T is not None
+        assert isinstance(T, int)
         assert isinstance(v_threshold, float) and v_threshold >= v_threshold_lower_bound
-        assert isinstance(alpha, float) and alpha > 0.0 and alpha <= 1.0
+        assert isinstance(alpha, float) and 0.0 < alpha <= 1.0
         assert (
             isinstance(v_threshold_lower_bound, float) and v_threshold_lower_bound > 0.0
         )
@@ -125,26 +123,17 @@ class DSRIFNode(base.MemoryModule):
         return "torch"
 
     def extra_repr(self):
-        with torch.no_grad():
-            T = self.T
-            v_threshold = self.v_threshold
-            alpha = self.alpha
-            v_threshold_lower_bound = self.v_threshold_lower_bound
-            v_threshold_grad_scaling = self.v_threshold_grad_scaling
         return (
-            f", T={T}"
-            + f", init_vth={v_threshold}"
-            + f", alpha={alpha}"
-            + f", vth_bound={v_threshold_lower_bound}"
-            + f", vth_g_scale={v_threshold_grad_scaling}"
+            f", T={self.T}"
+            + f", init_vth={self.v_threshold}"
+            + f", alpha={self.alpha}"
+            + f", vth_bound={self.v_threshold_lower_bound}"
+            + f", vth_g_scale={self.v_threshold_grad_scaling}"
         )
 
     def multi_step_forward(self, x_seq: torch.Tensor):
         with torch.no_grad():
-            self.v_threshold.copy_(
-                F.relu(self.v_threshold - self.v_threshold_lower_bound)
-                + self.v_threshold_lower_bound
-            )
+            self.v_threshold.clamp_(min=self.v_threshold_lower_bound)
         iffunc = self.DSRIFFunction.apply
         y_seq = iffunc(
             x_seq, self.T, self.v_threshold, self.alpha, self.v_threshold_grad_scaling
@@ -197,14 +186,6 @@ class DSRIFNode(base.MemoryModule):
                 v_threshold_grad = (
                     torch.sum(v_threshold_grad) * v_threshold_grad_scaling
                 )
-                if v_threshold_grad.is_cuda and torch.cuda.device_count() != 1:
-                    try:
-                        dist.all_reduce(v_threshold_grad, op=dist.ReduceOp.SUM)
-                    except Exception:
-                        raise RuntimeWarning(
-                            "Something wrong with the `all_reduce` operation when summing up the gradient of v_threshold from multiple gpus. Better check the gpu status and try DistributedDataParallel."
-                        )
-
                 return input_grad, None, v_threshold_grad, None, None
 
 
@@ -311,9 +292,9 @@ class DSRLIFNode(base.MemoryModule):
             DSR-LIF only supports the ``'torch'`` backend
         :type backend: str
         """
-        assert isinstance(T, int) and T is not None
+        assert isinstance(T, int)
         assert isinstance(v_threshold, float) and v_threshold >= v_threshold_lower_bound
-        assert isinstance(alpha, float) and alpha > 0.0 and alpha <= 1.0
+        assert isinstance(alpha, float) and 0.0 < alpha <= 1.0
         assert (
             isinstance(v_threshold_lower_bound, float) and v_threshold_lower_bound > 0.0
         )
@@ -338,30 +319,19 @@ class DSRLIFNode(base.MemoryModule):
         return "torch"
 
     def extra_repr(self):
-        with torch.no_grad():
-            T = self.T
-            v_threshold = self.v_threshold
-            tau = self.tau
-            delta_t = self.delta_t
-            alpha = self.alpha
-            v_threshold_lower_bound = self.v_threshold_lower_bound
-            v_threshold_grad_scaling = self.v_threshold_grad_scaling
         return (
-            f", T={T}"
-            + f", init_vth={v_threshold}"
-            + f", tau={tau}"
-            + f", dt={delta_t}"
-            + f", alpha={alpha}"
-            + f", vth_bound={v_threshold_lower_bound}"
-            + f", vth_g_scale={v_threshold_grad_scaling}"
+            f", T={self.T}"
+            + f", init_vth={self.v_threshold}"
+            + f", tau={self.tau}"
+            + f", dt={self.delta_t}"
+            + f", alpha={self.alpha}"
+            + f", vth_bound={self.v_threshold_lower_bound}"
+            + f", vth_g_scale={self.v_threshold_grad_scaling}"
         )
 
     def multi_step_forward(self, x_seq: torch.Tensor):
         with torch.no_grad():
-            self.v_threshold.copy_(
-                F.relu(self.v_threshold - self.v_threshold_lower_bound)
-                + self.v_threshold_lower_bound
-            )
+            self.v_threshold.clamp_(min=self.v_threshold_lower_bound)
         liffunc = self.DSRLIFFunction.apply
         y_seq = liffunc(
             x_seq,
@@ -447,12 +417,4 @@ class DSRLIFNode(base.MemoryModule):
             v_threshold_grad = (
                 torch.sum(v_threshold_grad) * delta_t * v_threshold_grad_scaling
             )
-            if v_threshold_grad.is_cuda and torch.cuda.device_count() != 1:
-                try:
-                    dist.all_reduce(v_threshold_grad, op=dist.ReduceOp.SUM)
-                except Exception:
-                    raise RuntimeWarning(
-                        "Something wrong with the `all_reduce` operation when summing up the gradient of v_threshold from multiple gpus. Better check the gpu status and try DistributedDataParallel."
-                    )
-
             return input_grad, None, v_threshold_grad, None, None, None, None

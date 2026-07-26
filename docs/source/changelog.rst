@@ -223,6 +223,17 @@ Module: ``spikingjelly.activation_based.distributed``.
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+ANN-to-SNN Conversion
+^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.ann2snn``.
+
+- Removed the generic ``HookFactory``, ``ReLURule``, and ``ThresholdOptimizer``
+  extension points and the corresponding ``RateCodingRecipe`` constructor
+  arguments. Custom graph conversion behavior should be implemented as an
+  ``FXConversionRecipe``; ``NeuronFactory`` remains available for configuring
+  neuron construction.
+
 Distributed Training
 ^^^^^^^^^^^^^^^^^^^^
 
@@ -232,6 +243,43 @@ Module: ``spikingjelly.activation_based.distributed``.
   ``make_tensor_shard_memory_module()`` factory. Tensor-parallel stateful modules
   now keep their concrete module type and original state-dict paths instead of
   adding an ``inner`` module namespace.
+- Removed the ``spikingjelly.activation_based.distributed.dtensor`` compatibility
+  facade. Import the high-level Analyze -> Plan -> Apply APIs from
+  ``spikingjelly.activation_based.distributed`` and low-level utilities from their
+  ``data_parallel``, ``pipeline``, or ``tensor_parallel`` modules.
+- Replaced the ``SNNDistributedConfig`` enable/experimental flags with the
+  explicit ``mode`` values ``none``, ``dp``, ``tp``, ``fsdp2``, and ``fsdp2_tp``.
+  Model-specific tensor-parallel and FSDP roots are now passed directly through
+  the corresponding root fields.
+- Removed ``build_eager_config()``, ``SNNDistributedRuntime.from_legacy()``, and the
+  ``build_cifar10dvs_vgg_eager_policy()`` and
+  ``build_spikformer_eager_policy()`` helpers. Use
+  ``configure_snn_distributed()`` for manual eager configuration or the Analyze
+  -> Plan -> Apply workflow.
+
+Operation Counting
+^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.op_counter``.
+
+- Removed the redundant ``SpikeSimEventEnergyProfiler`` and
+  ``SpikeSimEventEnergyReport`` aliases. Use ``SpikeSimEnergyProfiler`` and
+  ``SpikeSimEnergyReport``.
+
+Precision
+^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.precision``.
+
+- ``PrecisionConfig.from_any()`` now accepts only ``None``, ``PrecisionConfig``, a
+  precision-mode string, or a dictionary using the current ``mode``,
+  ``strictness``, ``fp8_recipe``, and ``device`` fields. Replace the legacy
+  ``precision``, ``precision_strict``, and ``fp8_report`` aliases and attribute-style
+  configuration objects with these explicit inputs.
+- ``Float8TorchAOPolicy`` no longer accepts ``strict`` or ``fp8_recipe``, and
+  ``Float8TransformerEnginePolicy`` no longer accepts ``strict``. Pass these
+  settings through ``PrecisionConfig`` and ``prepare_model_for_precision()``;
+  ``Float8TransformerEnginePolicy`` retains its effective ``fp8_recipe`` argument.
 
 2.0.0.dev0 - 2026-07-09
 -----------------------

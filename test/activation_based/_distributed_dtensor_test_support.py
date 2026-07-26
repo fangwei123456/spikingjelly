@@ -28,7 +28,6 @@ from spikingjelly.activation_based.distributed import (
     SNNDistributedRuntime,
     SNNDistributedTopology,
     TENSOR_PARALLEL_AVAILABLE,
-    TensorShardMemoryModule,
     ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE,
     make_tensor_shard_memory_module,
     analyze,
@@ -41,11 +40,8 @@ from spikingjelly.activation_based.distributed import (
     recommend_snn_distributed_strategy,
     resolve_tensor_parallel_group_size,
 )
-from spikingjelly.activation_based.distributed import dtensor as distributed_dtensor
 from spikingjelly.activation_based.distributed import api as distributed_api
 from spikingjelly.activation_based.distributed.adapters import (
-    build_cifar10dvs_vgg_eager_policy,
-    build_spikformer_eager_policy,
     list_adapters,
     resolve_adapter,
 )
@@ -53,15 +49,11 @@ from spikingjelly.activation_based.distributed.analysis import (
     SNNDistributedAnalysis as CanonicalSNNDistributedAnalysis,
     analyze_snn_distributed_capability,
 )
-from spikingjelly.activation_based.distributed.config import (
-    EagerParallelPolicy,
-    SNNDistributedConfig,
-)
+from spikingjelly.activation_based.distributed.config import SNNDistributedConfig
 from spikingjelly.activation_based.distributed.data_parallel import (
     materialize_dtensor_output,
 )
 from spikingjelly.activation_based.distributed.execution import (
-    build_eager_config,
     configure_snn_distributed,
 )
 from spikingjelly.activation_based.distributed.fsdp import apply_snn_fsdp2

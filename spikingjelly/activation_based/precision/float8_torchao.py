@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import warnings
-
 import torch
 import torch.nn as nn
 
@@ -13,15 +11,6 @@ from .float8_conv import (
     wrap_float8_pointwise_conv1d_module,
 )
 from .policy import PrecisionPolicy
-
-
-def _torchao_available() -> bool:
-    try:
-        import torchao  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
 
 
 def _replace_child(module: nn.Module, child_name: str, wrapped: nn.Module) -> None:
@@ -90,13 +79,9 @@ class Float8TorchAOPolicy(PrecisionPolicy):
     def __init__(
         self,
         device_type: str = "cuda",
-        strict: str = "warn",
-        fp8_recipe: str = "auto",
     ):
         super().__init__()
         self.device_type = device_type
-        self.strict = strict
-        self.fp8_recipe = fp8_recipe
         self.float8_linear_config = None
 
     def describe(self) -> dict:
@@ -104,8 +89,6 @@ class Float8TorchAOPolicy(PrecisionPolicy):
             "name": self.name,
             "backend": "torchao",
             "device_type": self.device_type,
-            "strict": self.strict,
-            "fp8_recipe": self.fp8_recipe,
             "float8_linear_config": (
                 type(self.float8_linear_config).__name__
                 if self.float8_linear_config is not None
@@ -117,30 +100,9 @@ class Float8TorchAOPolicy(PrecisionPolicy):
 
     def check_capability(self, model, device) -> None:
         super().check_capability(model, device)
-        self._ensure_torchao_available()
-        self._configure_float8()
-        self._ensure_cuda_device(device)
-        self._ensure_model_on_device(model, device)
-
-    def _ensure_torchao_available(self) -> None:
-        if not _torchao_available():
-            raise RuntimeError(
-                "precision='fp8-torchao' requires torchao, but torchao is not installed."
-            )
-
-    def _configure_float8(self) -> None:
         from torchao.float8 import Float8LinearConfig
 
-        if self.fp8_recipe != "auto":
-            warnings.warn(
-                "fp8_recipe is currently ignored by the torchao backend "
-                "and only kept for future extension.",
-                RuntimeWarning,
-                stacklevel=2,
-            )
         self.float8_linear_config = Float8LinearConfig()
-
-    def _ensure_cuda_device(self, device) -> None:
         if self.device_type != "cuda":
             raise RuntimeError(
                 "precision='fp8-torchao' is only supported on CUDA in the current stage."
@@ -149,8 +111,6 @@ class Float8TorchAOPolicy(PrecisionPolicy):
             raise RuntimeError(
                 "precision='fp8-torchao' requires a CUDA device in the current stage."
             )
-
-    def _ensure_model_on_device(self, model, device) -> None:
         model_devices = {p.device for p in model.parameters()}
         target_device = torch.device(device)
         if target_device.type == "cuda" and target_device.index is None:

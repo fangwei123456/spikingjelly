@@ -1,10 +1,9 @@
 import math
-from typing import Optional, Type, Union
+from typing import Optional, Type
 
 import torch.nn as nn
 
 from spikingjelly.activation_based import neuron
-from spikingjelly.activation_based.ann2snn.modules import VoltageHook
 
 
 class NeuronFactory:
@@ -139,105 +138,3 @@ class NeuronFactory:
             v_reset=self.v_reset,
             **self.neuron_kwargs,
         )
-
-
-class HookFactory:
-    def __init__(self, mode: Union[str, float] = "Max", momentum: float = 0.1):
-        """
-        **API Language** - :ref:`中文 <HookFactory.__init__-cn>` | :ref:`English <HookFactory.__init__-en>`
-
-        ----
-
-        .. _HookFactory.__init__-cn:
-
-        * **中文**
-
-        用于创建校准阶段使用的 :class:`VoltageHook` 实例。每个匹配到的激活节点会获得
-        独立的 hook 实例。
-
-        :param mode: 校准模式，传递给 :class:`VoltageHook`。``"Max"`` 记录激活最大值；
-            ``"99.9%"`` 记录 99.9 分位点；``(0, 1]`` 区间的 float 表示
-            ``max * mode``。
-        :type mode: str, float
-        :param momentum: :class:`VoltageHook` 的 EMA 动量。
-        :type momentum: float
-
-        ----
-
-        .. _HookFactory.__init__-en:
-
-        * **English**
-
-        Factory that creates :class:`VoltageHook` instances used during
-        calibration. Each matched activation node receives an independent hook
-        instance.
-
-        :param mode: Calibration mode forwarded to :class:`VoltageHook`.
-            ``"Max"`` records the maximum activation; ``"99.9%"`` records the
-            99.9-th percentile; a float in ``(0, 1]`` records ``max * mode``.
-        :type mode: str, float
-        :param momentum: EMA momentum for :class:`VoltageHook`.
-        :type momentum: float
-        """
-        if isinstance(mode, str):
-            if not mode:
-                raise ValueError("mode must be 'Max', a percentile string, or a float.")
-            if mode[-1] == "%":
-                try:
-                    percentile = float(mode[:-1])
-                except ValueError as exc:
-                    raise ValueError(
-                        "mode percentile string must contain a numeric value."
-                    ) from exc
-                if not (0.0 <= percentile <= 100.0):
-                    raise ValueError(
-                        f"mode percentile must lie in [0, 100], got {mode!r}."
-                    )
-            elif mode.lower() != "max":
-                raise ValueError(
-                    f"mode string must be 'Max' or a percentile string, got {mode!r}."
-                )
-        elif isinstance(mode, (int, float)) and not isinstance(mode, bool):
-            if not math.isfinite(float(mode)) or not (0.0 < float(mode) <= 1.0):
-                raise ValueError(f"mode float must lie in (0, 1], got {mode!r}.")
-        else:
-            raise TypeError(
-                "mode must be a string or a float in (0, 1], "
-                f"got {type(mode).__name__}."
-            )
-        if not isinstance(momentum, (int, float)) or isinstance(momentum, bool):
-            raise TypeError(
-                f"momentum must be a real number, got {type(momentum).__name__}."
-            )
-        if not math.isfinite(float(momentum)) or not (0.0 <= float(momentum) <= 1.0):
-            raise ValueError(f"momentum must lie in [0, 1], got {momentum!r}.")
-        self.mode = mode
-        self.momentum = momentum
-
-    def create(self) -> VoltageHook:
-        r"""
-        **API Language** - :ref:`中文 <HookFactory.create-cn>` | :ref:`English <HookFactory.create-en>`
-
-        ----
-
-        .. _HookFactory.create-cn:
-
-        * **中文**
-
-        创建一个新的 :class:`VoltageHook` 实例。
-
-        :return: 配置完成的 :class:`VoltageHook`。
-        :rtype: VoltageHook
-
-        ----
-
-        .. _HookFactory.create-en:
-
-        * **English**
-
-        Create a new :class:`VoltageHook` instance.
-
-        :return: A configured :class:`VoltageHook`.
-        :rtype: VoltageHook
-        """
-        return VoltageHook(momentum=self.momentum, mode=self.mode)

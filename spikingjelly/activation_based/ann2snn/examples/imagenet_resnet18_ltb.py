@@ -40,13 +40,6 @@ def parse_args():
         default=["ann", "robust", "ltb"],
     )
     parser.add_argument("--output", required=True)
-    parser.add_argument("--ltb-mode", default="99.9%")
-    parser.add_argument(
-        "--threshold-candidates",
-        type=float,
-        nargs="+",
-        default=[0.5, 0.75, 1.0, 1.25, 1.5],
-    )
     return parser.parse_args()
 
 
@@ -246,9 +239,6 @@ def main():
             ann = make_model(weights)
             recipe = ann2snn.LocalThresholdBalancingRecipe(
                 dataloader=calib_loader,
-                time_steps=t,
-                mode=args.ltb_mode,
-                threshold_candidates=tuple(args.threshold_candidates),
                 fuse_flag=True,
             )
             start = time.time()

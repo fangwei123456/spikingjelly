@@ -5,7 +5,8 @@ from typing import Optional, Protocol, runtime_checkable
 import torch.nn as nn
 
 from ..analysis import SNNDistributedAnalysis
-from ..execution import build_eager_config, configure_snn_distributed
+from ..config import SNNDistributedConfig
+from ..execution import configure_snn_distributed
 from ..planner import SNNDistributedPlan
 from ..runtime import SNNDistributedRuntime
 
@@ -23,22 +24,22 @@ def build_distributed_runtime(
             "Pipeline plans require the pipeline-specific runtime builder, "
             "not build_distributed_runtime()."
         )
-    config = build_eager_config(
-        mode=plan.mode,
-        device_type=device_type,
-        mesh_shape=plan.mesh_shape or plan.topology.mesh_shape,
-        device_mesh=device_mesh,
-        tp_mesh_dim=plan.tp_mesh_dim,
-        dp_mesh_dim=plan.dp_mesh_dim,
-        tensor_parallel_plan=plan.tensor_parallel_plan,
-        auto_tensor_parallel=(
+    config_kwargs = {
+        "mode": plan.mode,
+        "device_type": device_type,
+        "mesh_shape": plan.mesh_shape,
+        "device_mesh": device_mesh,
+        "tp_mesh_dim": plan.tp_mesh_dim,
+        "dp_mesh_dim": plan.dp_mesh_dim,
+        "tensor_parallel_plan": plan.tensor_parallel_plan,
+        "auto_tensor_parallel": (
             plan.mode in ("tp", "fsdp2_tp") and plan.tensor_parallel_plan is None
         ),
-        **config_overrides,
-    )
+    }
+    config_kwargs.update(config_overrides)
+    config = SNNDistributedConfig(**config_kwargs)
     configured_model, mesh, analysis = configure_snn_distributed(model, config)
     return SNNDistributedRuntime(
-        kind="eager",
         model=configured_model,
         mesh=mesh,
         analysis=analysis,

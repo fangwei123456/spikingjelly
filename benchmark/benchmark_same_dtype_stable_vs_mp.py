@@ -24,8 +24,8 @@ from spikingjelly.activation_based.triton_kernel.neuron_kernel.plif import (
     multistep_plif_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.utils import (
-    TritonNeuronForwardPlan,
-    prepare_triton_neuron_forward_plan,
+    TritonNeuronExecutionPlan,
+    prepare_triton_neuron_execution_plan,
 )
 
 
@@ -62,7 +62,7 @@ def _mp_call(
     v: torch.Tensor,
     neuron_type: str,
     r_tau: torch.Tensor,
-    plan: TritonNeuronForwardPlan,
+    plan: TritonNeuronExecutionPlan,
 ) -> tuple[torch.Tensor, ...]:
     if neuron_type == "if":
         return integrate_and_fire.multistep_if_mp_with_plan(
@@ -179,16 +179,14 @@ def main() -> None:
                 x = torch.randn(T, N, device=device, dtype=torch.float32).to(dtype)
                 r_tau = torch.tensor(_R_TAU, device=device, dtype=dtype)
                 plans = {
-                    process: prepare_triton_neuron_forward_plan(
+                    process: prepare_triton_neuron_execution_plan(
                         neuron_type=neuron_type,
                         device=device,
                         storage_dtype=dtype,
-                        compute_dtype=compute_dtype,
+                        forward_compute_dtype=compute_dtype,
                         backward_compute_dtype=compute_dtype,
                         spike_dtype=dtype,
-                        save_intermediates=(
-                            process == "training_forward_backward"
-                        ),
+                        save_intermediates=(process == "training_forward_backward"),
                     )
                     for process in (
                         "inference_forward",

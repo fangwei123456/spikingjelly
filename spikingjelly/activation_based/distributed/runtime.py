@@ -15,89 +15,15 @@ from .analysis import SNNDistributedAnalysis
 from .metrics import PreparedModelOutput, prepare_classification_output
 from .mesh import resolve_data_parallel_partition
 from .optimizer import build_snn_optimizer
-from .pipeline.runtime import SNNPipelineRuntime
-from .planner import DistributedFeatureSet, SNNDistributedPlan
-from .topology import SNNDistributedTopology
+from .planner import SNNDistributedPlan
 
 
 @dataclass
 class SNNDistributedRuntime:
-    kind: str
     model: nn.Module
     mesh: Optional[object]
     analysis: Optional[SNNDistributedAnalysis]
-    plan: Optional[SNNDistributedPlan] = None
-    mode: str = "none"
-    pipeline_runtime: Optional[SNNPipelineRuntime] = None
-
-    @classmethod
-    def from_legacy(
-        cls,
-        *,
-        kind: str,
-        model: nn.Module,
-        mesh: Optional[object],
-        analysis: Optional[SNNDistributedAnalysis],
-        mode: str,
-        pipeline_runtime: Optional[SNNPipelineRuntime] = None,
-    ) -> "SNNDistributedRuntime":
-        topology = SNNDistributedTopology.from_mapping({"dp": 1})
-        if mesh is not None:
-            mesh_shape = getattr(mesh, "shape", None)
-            if mesh_shape is None:
-                mesh_tensor = getattr(mesh, "mesh", None)
-                mesh_shape = getattr(mesh_tensor, "shape", None)
-            if mesh_shape is not None:
-                dims = tuple(int(size) for size in mesh_shape)
-                if dims:
-                    dim_names = cls._legacy_mode_dim_names(mode=mode, ndim=len(dims))
-                    mapping = {
-                        dim_names[idx] if idx < len(dim_names) else f"dim{idx}": size
-                        for idx, size in enumerate(dims)
-                    }
-                    topology = SNNDistributedTopology.from_mapping(mapping)
-        dim_names = topology.ordered_dim_names
-        dp_mesh_dim = dim_names.index("dp") if "dp" in dim_names else None
-        tp_mesh_dim = dim_names.index("tp") if "tp" in dim_names else 0
-        plan = SNNDistributedPlan(
-            mode=mode,
-            objective="legacy",
-            topology=topology,
-            model_family="legacy",
-            backend="legacy",
-            batch_size=0,
-            optimizer_strategy="none",
-            memopt_level=0,
-            rationale=(),
-            notes=("Constructed from legacy runtime bridge.",),
-            mesh_shape=topology.mesh_shape,
-            tp_mesh_dim=tp_mesh_dim,
-            dp_mesh_dim=dp_mesh_dim,
-            experimental_features=DistributedFeatureSet(),
-        )
-        return cls(
-            kind=kind,
-            model=model,
-            mesh=mesh,
-            analysis=analysis,
-            plan=plan,
-            mode=mode,
-            pipeline_runtime=pipeline_runtime,
-        )
-
-    @staticmethod
-    def _legacy_mode_dim_names(*, mode: str, ndim: int) -> Tuple[str, ...]:
-        if ndim <= 0:
-            return tuple()
-        if ndim == 1:
-            return ({"tp": "tp", "pp": "pp"}.get(mode, "dp"),)
-        if mode == "fsdp2_tp":
-            names = ("dp", "tp")
-        elif mode == "pp":
-            names = ("pp", "vpp")
-        else:
-            names = ("dp", "tp", "pp", "vpp")[:ndim]
-        return names + tuple(f"dim{idx}" for idx in range(len(names), ndim))
+    plan: SNNDistributedPlan
 
     def build_optimizer(
         self,
@@ -106,20 +32,13 @@ class SNNDistributedRuntime:
         weight_decay: float = 0.0,
         **kwargs,
     ):
-        target = self.model
-        if self.kind == "pipeline" and self.pipeline_runtime is not None:
-            target = self.pipeline_runtime.stage_module
-        mode = self.plan.mode if self.plan is not None else self.mode
-        optimizer_strategy = (
-            self.plan.optimizer_strategy if self.plan is not None else "none"
-        )
         return build_snn_optimizer(
-            target,
-            mode=mode,
+            self.model,
+            mode=self.plan.mode,
             optimizer_cls=optimizer_cls,
             lr=lr,
             weight_decay=weight_decay,
-            optimizer_sharding=optimizer_strategy,
+            optimizer_sharding=self.plan.optimizer_strategy,
             **kwargs,
         )
 
@@ -143,10 +62,7 @@ class SNNDistributedRuntime:
 
         Reset all stateful modules in the model (e.g. neuron membrane potentials).
         """
-        target = self.model
-        if self.kind == "pipeline" and self.pipeline_runtime is not None:
-            target = self.pipeline_runtime.stage_module
-        functional.reset_net(target)
+        functional.reset_net(self.model)
 
     @staticmethod
     def reduce_classification_output(
@@ -182,20 +98,14 @@ class SNNDistributedRuntime:
         images: torch.Tensor,
         labels: torch.Tensor,
     ):
-        if self.kind == "pipeline" and self.pipeline_runtime is not None:
-            raise NotImplementedError(
-                "SNNDistributedRuntime.forward_loss() does not execute pipeline runtimes. "
-                "Use pipeline_runtime.schedule.step(...) via the dedicated pipeline path instead."
-            )
-        target = self.model
         try:
-            param = next(target.parameters())
+            param = next(self.model.parameters())
             dtype = param.dtype
             device = param.device
         except StopIteration:
             dtype = torch.float32
             device = torch.device("cpu")
-        outputs = target(images.to(device=device, dtype=dtype))
+        outputs = self.model(images.to(device=device, dtype=dtype))
         outputs, labels = self.prepare_classification_output(outputs, labels)
         loss = criterion(outputs, labels)
         return outputs, labels, loss
@@ -212,29 +122,18 @@ class SNNDistributedRuntime:
     ) -> DataLoader:
         sampler = None
         if dist.is_initialized():
-            if self.kind == "pipeline":
+            replicas, rank = resolve_data_parallel_partition(
+                self.mesh,
+                dp_mesh_dim=self.plan.dp_mesh_dim,
+                sharded_by_data_parallel=self.plan.mode in ("dp", "fsdp2", "fsdp2_tp"),
+            )
+            if replicas > 1:
                 sampler = DistributedSampler(
-                    dataset, num_replicas=1, rank=0, shuffle=shuffle
+                    dataset,
+                    num_replicas=replicas,
+                    rank=rank,
+                    shuffle=shuffle,
                 )
-            else:
-                dp_mesh_dim = self.plan.dp_mesh_dim if self.plan is not None else None
-                sharded = (
-                    self.plan.mode in ("dp", "fsdp2", "fsdp2_tp")
-                    if self.plan is not None
-                    else self.mode in ("dp", "fsdp2", "fsdp2_tp")
-                )
-                replicas, rank = resolve_data_parallel_partition(
-                    self.mesh,
-                    dp_mesh_dim=dp_mesh_dim,
-                    sharded_by_data_parallel=sharded,
-                )
-                if replicas > 1:
-                    sampler = DistributedSampler(
-                        dataset,
-                        num_replicas=replicas,
-                        rank=rank,
-                        shuffle=shuffle,
-                    )
         return DataLoader(
             dataset,
             batch_size=batch_size,

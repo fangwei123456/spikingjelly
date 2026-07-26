@@ -1007,23 +1007,14 @@ def test_neuromc_exact_sgd_optimizer_counts_mixed_param_groups():
     assert len(fragments) == 2
 
 
-def test_neuromc_memory_residency_legacy_memory_config_alias():
+def test_neuromc_memory_residency_accepts_config():
     cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1()
-    with pytest.deprecated_call():
-        counter = NeuroMCMemoryResidencyCounter(memory_config=cfg)
+    counter = NeuroMCMemoryResidencyCounter(config=cfg)
     assert isinstance(counter, MemoryResidencyCounter)
 
 
-def test_neuromc_memory_residency_legacy_memory_config_positional_alias():
+def test_neuromc_like_v1_config_validates():
     cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1()
-    with pytest.deprecated_call():
-        counter = NeuroMCMemoryResidencyCounter(cfg)
-    assert isinstance(counter, MemoryResidencyCounter)
-
-
-def test_neuromc_like_v1_legacy_memory_model_is_ignored():
-    with pytest.deprecated_call():
-        cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1(memory_model="weighted")
     cfg.validate()
 
 

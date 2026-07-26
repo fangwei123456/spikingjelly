@@ -1,14 +1,21 @@
+import gc
 import os
 
 import pytest
 import torch
+from spikingjelly import configure
 from spikingjelly.activation_based import surrogate
 from spikingjelly.activation_based.cuda_kernel import (
     multistep_eif_ptt,
     multistep_izhikevich_ptt,
     multistep_qif_ptt,
 )
+from spikingjelly.activation_based.cuda_kernel.cuda_utils import (
+    register_python_object,
+    resolve_python_object,
+)
 from spikingjelly.activation_based.cuda_kernel.spike_op import spike_linear
+from spikingjelly.activation_based.cuda_kernel.tensor_cache import BoolTensorCache
 
 
 def _require_cuda():
@@ -26,6 +33,38 @@ def _maybe_skip_custom_op_unavailable():
         for name in ("custom_op", "register_fake", "register_autograd")
     ):
         pytest.skip("torch.library custom_op/register_autograd are unavailable.")
+
+
+def test_python_object_registry_uses_identity_and_releases_objects():
+    class Kernel:
+        pass
+
+    first = Kernel()
+    second = Kernel()
+    first_id = register_python_object(first)
+
+    assert register_python_object(first) == first_id
+    assert register_python_object(second) != first_id
+    assert resolve_python_object(first_id) is first
+
+    del first
+    gc.collect()
+    with pytest.raises(RuntimeError, match="Unknown python object"):
+        resolve_python_object(first_id)
+
+
+@pytest.mark.parametrize("level", [0, 1])
+def test_bool_tensor_cache_balances_repeated_stores(level, monkeypatch):
+    monkeypatch.setattr(configure, "save_bool_spike_level", level)
+    spike = (torch.arange(17) % 3 == 0).float()
+    cache = BoolTensorCache()
+
+    first_key = cache.store_bool(spike)
+    second_key = cache.store_bool(spike)
+
+    assert first_key == second_key
+    assert torch.equal(cache.get_float(first_key, spike.shape), spike)
+    assert torch.equal(cache.get_float(second_key, spike.shape), spike)
 
 
 def test_spike_linear_backward_no_bias_cuda():

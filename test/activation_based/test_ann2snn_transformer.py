@@ -833,12 +833,13 @@ def test_spikezip_stbif_single_step_matches_multi_step():
     assert torch.allclose(y_seq.sum(dim=0), quantizer(x_seq[0]))
 
 
-def test_spikezip_stbif_state_tracks_input_dtype():
+def test_spikezip_stbif_state_follows_module_dtype():
     quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
     neuron = STBIFNeuron.from_quantizer(quantizer)
     x = torch.randn(2, 3, dtype=torch.float32)
     neuron(x)
 
+    neuron.to(torch.float64)
     y = neuron(x.to(torch.float64))
 
     assert y.dtype == torch.float64

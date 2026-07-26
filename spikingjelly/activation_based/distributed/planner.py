@@ -60,7 +60,6 @@ SNN_DISTRIBUTED_PREFERENCES = ("speed", "memory", "capacity")
 class DistributedFeatureSet:
     allow_experimental_conv_tp: bool = False
     allow_experimental_spikformer_tp: bool = False
-    allow_pipeline: bool = True
     allow_zero_optimizer: bool = True
 
 
@@ -78,14 +77,6 @@ class SNNDistributedPlan:
     notes: Tuple[str, ...]
     tensor_parallel_roots: Optional[Tuple[str, ...]] = None
     tensor_parallel_plan: Optional[Mapping[str, TensorParallelStyle]] = None
-    mesh_shape: Optional[Tuple[int, ...]] = None
-    tp_mesh_dim: int = 0
-    dp_mesh_dim: Optional[int] = None
-    pp_microbatches: Optional[int] = None
-    pp_schedule: str = "1f1b"
-    pp_virtual_stages: int = 1
-    pp_layout: Optional[Tuple[int, ...]] = None
-    pp_delay_wgrad: bool = False
     experimental_features: DistributedFeatureSet = DistributedFeatureSet()
 
     def __post_init__(self) -> None:
@@ -95,6 +86,20 @@ class SNNDistributedPlan:
                 "tensor_parallel_plan",
                 MappingProxyType(dict(self.tensor_parallel_plan)),
             )
+
+    @property
+    def mesh_shape(self) -> Tuple[int, ...]:
+        return self.topology.mesh_shape
+
+    @property
+    def tp_mesh_dim(self) -> int:
+        names = self.topology.ordered_dim_names
+        return names.index("tp") if "tp" in names else 0
+
+    @property
+    def dp_mesh_dim(self) -> Optional[int]:
+        names = self.topology.ordered_dim_names
+        return names.index("dp") if "dp" in names else None
 
 
 SNNDistributedPlan.__init__.__doc__ = r"""Initialize an immutable SNN distributed execution plan.
@@ -140,22 +145,6 @@ SNNDistributedPlan.__init__.__doc__ = r"""Initialize an immutable SNN distribute
 :param tensor_parallel_plan: 可选的模块路径到 TP style mapping；构造时复制为
     只读 mapping。
 :type tensor_parallel_plan: Mapping[str, TensorParallelStyle] or None
-:param mesh_shape: 可选的 device mesh shape。
-:type mesh_shape: tuple[int, ...] or None
-:param tp_mesh_dim: tensor-parallel mesh 维度。
-:type tp_mesh_dim: int
-:param dp_mesh_dim: 可选的 data-parallel mesh 维度。
-:type dp_mesh_dim: int or None
-:param pp_microbatches: 可选的 pipeline microbatch 数量。
-:type pp_microbatches: int or None
-:param pp_schedule: pipeline 调度名称。
-:type pp_schedule: str
-:param pp_virtual_stages: virtual pipeline stage 数量。
-:type pp_virtual_stages: int
-:param pp_layout: 可选的 pipeline stage 布局。
-:type pp_layout: tuple[int, ...] or None
-:param pp_delay_wgrad: 是否延迟计算 pipeline weight gradient。
-:type pp_delay_wgrad: bool
 :param experimental_features: 可选分布式行为的功能开关。
 :type experimental_features: DistributedFeatureSet
 
@@ -195,22 +184,6 @@ SNNDistributedPlan.__init__.__doc__ = r"""Initialize an immutable SNN distribute
 :type tensor_parallel_roots: tuple[str, ...] or None
 :param tensor_parallel_plan: Optional explicit module-path to TP-style mapping.
 :type tensor_parallel_plan: Mapping[str, TensorParallelStyle] or None
-:param mesh_shape: Optional device-mesh shape.
-:type mesh_shape: tuple[int, ...] or None
-:param tp_mesh_dim: Tensor-parallel mesh dimension.
-:type tp_mesh_dim: int
-:param dp_mesh_dim: Optional data-parallel mesh dimension.
-:type dp_mesh_dim: int or None
-:param pp_microbatches: Optional pipeline microbatch count.
-:type pp_microbatches: int or None
-:param pp_schedule: Pipeline schedule name.
-:type pp_schedule: str
-:param pp_virtual_stages: Number of virtual pipeline stages.
-:type pp_virtual_stages: int
-:param pp_layout: Optional pipeline-stage layout.
-:type pp_layout: tuple[int, ...] or None
-:param pp_delay_wgrad: Whether pipeline weight-gradient computation is delayed.
-:type pp_delay_wgrad: bool
 :param experimental_features: Feature gates for optional distributed behavior.
 :type experimental_features: DistributedFeatureSet
 """

@@ -17,6 +17,7 @@ import torch.distributed as dist
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.distributed import (
     PIPELINING_AVAILABLE,
+    SNNDistributedConfig,
     SNN_DISTRIBUTED_PREFERENCES,
     ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE,
     apply_pipeline_stage_memopt,
@@ -29,12 +30,7 @@ from spikingjelly.activation_based.distributed import (
     reset_tp_communication_debug_stats,
     resolve_data_parallel_partition,
 )
-from spikingjelly.activation_based.distributed.adapters import (
-    build_cifar10dvs_vgg_eager_policy,
-    build_spikformer_eager_policy,
-)
 from spikingjelly.activation_based.distributed.execution import (
-    build_eager_config,
     configure_snn_distributed,
 )
 from spikingjelly.activation_based.distributed.fsdp import apply_snn_fsdp2
@@ -686,14 +682,41 @@ def _make_synthetic_batch(
     )
 
 
-def _eager_policy_for_model(model_name: str, model):
+def _eager_config_for_model(model_name: str, model, mode: str, **kwargs):
+    tensor_parallel = mode in ("tp", "fsdp2_tp")
     if model_name == "cifar10dvs_vgg":
-        return build_cifar10dvs_vgg_eager_policy()
-    if model_name.startswith("spikformer"):
-        return build_spikformer_eager_policy(model)
-    raise ValueError(
-        f"No eager policy registered for model '{model_name}'. "
-        "Expected one of: 'cifar10dvs_vgg', 'spikformer_ti', 'spikformer_s'."
+        linear_roots = ("classifier",)
+        conv_roots = ("features",)
+        block_roots = ("features",)
+    elif model_name.startswith("spikformer"):
+        linear_roots = ("head",)
+        conv_roots = None
+        block_roots = ("patch_embed",) + tuple(
+            f"blocks.{i}" for i in range(len(model.blocks))
+        )
+    else:
+        raise ValueError(
+            f"No eager configuration registered for model '{model_name}'. "
+            "Expected one of: 'cifar10dvs_vgg', 'spikformer_ti', 'spikformer_s'."
+        )
+    fsdp_roots = None
+    if mode == "fsdp2":
+        fsdp_roots = block_roots + (linear_roots[0],)
+    elif mode == "fsdp2_tp":
+        fsdp_roots = block_roots
+    return SNNDistributedConfig(
+        mode=mode,
+        tensor_parallel_roots=linear_roots if tensor_parallel else None,
+        conv_tensor_parallel_roots=conv_roots if tensor_parallel else None,
+        spikformer_tensor_parallel_roots=("blocks",)
+        if tensor_parallel and model_name.startswith("spikformer")
+        else None,
+        spikformer_patch_stem_tensor_parallel_roots=("patch_embed",)
+        if tensor_parallel and model_name.startswith("spikformer")
+        else None,
+        fsdp_shard_roots=fsdp_roots,
+        fsdp_shard_module_root=mode != "fsdp2_tp",
+        **kwargs,
     )
 
 
@@ -855,7 +878,7 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
         return runtime, None, optimize_ms
     mesh_shape = tuple(args.mesh_shape) if args.mesh_shape else None
     if args.mode == "dp":
-        config = build_eager_config(
+        config = SNNDistributedConfig(
             mode="dp",
             device_type=device.type,
             mesh_shape=mesh_shape or (world_size,),
@@ -864,12 +887,12 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
         model, mesh, _ = configure_snn_distributed(model, config)
         return model, mesh, optimize_ms
     if args.mode == "tp":
-        eager_policy = _eager_policy_for_model(args.model, model)
-        config = build_eager_config(
+        config = _eager_config_for_model(
+            args.model,
+            model,
             mode="tp",
             device_type=device.type,
             mesh_shape=mesh_shape or (world_size,),
-            policy=eager_policy,
             tp_mesh_dim=args.tp_mesh_dim,
             dp_mesh_dim=args.dp_mesh_dim,
         )
@@ -878,12 +901,12 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
             model, optimize_ms = maybe_apply_memopt(args, model, sample_input)
         return model, mesh, optimize_ms
     if args.mode == "fsdp2":
-        eager_policy = _eager_policy_for_model(args.model, model)
-        config = build_eager_config(
+        config = _eager_config_for_model(
+            args.model,
+            model,
             mode="fsdp2",
             device_type=device.type,
             mesh_shape=mesh_shape or (world_size,),
-            policy=eager_policy,
             dp_mesh_dim=args.dp_mesh_dim if args.dp_mesh_dim is not None else 0,
         )
         model, mesh, _ = configure_snn_distributed(model, config)
@@ -899,13 +922,22 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
             else 1
         )
         dp_mesh_dim = args.dp_mesh_dim if args.dp_mesh_dim is not None else 0
-        eager_policy = _eager_policy_for_model(args.model, model)
         if defer_memopt_until_after_tp:
-            tp_config = build_eager_config(
+            fsdp_config = _eager_config_for_model(
+                args.model,
+                model,
+                mode="fsdp2_tp",
+                device_type=device.type,
+                mesh_shape=mesh_shape,
+                tp_mesh_dim=tp_mesh_dim,
+                dp_mesh_dim=dp_mesh_dim,
+            )
+            tp_config = _eager_config_for_model(
+                args.model,
+                model,
                 mode="tp",
                 device_type=device.type,
                 mesh_shape=mesh_shape,
-                policy=eager_policy,
                 tp_mesh_dim=tp_mesh_dim,
                 dp_mesh_dim=dp_mesh_dim,
             )
@@ -915,15 +947,16 @@ def build_model(args, device, world_size, batch_size_per_rank: int):
                 model,
                 device_mesh=mesh,
                 dp_mesh_dim=dp_mesh_dim,
-                shard_roots=eager_policy.fsdp2_tp_shard_roots,
-                shard_module_root=eager_policy.fsdp2_tp_shard_module_root,
+                shard_roots=fsdp_config.fsdp_shard_roots,
+                shard_module_root=fsdp_config.fsdp_shard_module_root,
             )
             return model, mesh, optimize_ms
-        config = build_eager_config(
+        config = _eager_config_for_model(
+            args.model,
+            model,
             mode="fsdp2_tp",
             device_type=device.type,
             mesh_shape=mesh_shape,
-            policy=eager_policy,
             tp_mesh_dim=tp_mesh_dim,
             dp_mesh_dim=dp_mesh_dim,
         )

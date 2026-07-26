@@ -72,12 +72,9 @@ API 组织方式
     apply(...) -> api.py selects an adapter when a model family needs one
         |
         v
-    build_eager_config(...) -> execution.py assembles SNNDistributedConfig
-        |
-        v
     configure_snn_distributed(...) -> TP, FSDP2, or DDP modules are applied
 
-模型 adapter 只提供模型族 policy，例如 classifier roots、Conv/BN roots、Spikformer roots 和 FSDP shard roots。共享 eager config builder 是唯一把 ``mode + topology + policy + feature flags`` 展开成 ``SNNDistributedConfig`` 的位置。
+模型 adapter 向 ``SNNDistributedConfig`` 补充模型族所需的 roots，然后调用共享执行路径。
 
 Pipeline parallelism 被单独处理，因为它需要 ``example_input`` 来构造 stage 并测量 cost。pipeline 模块负责 stage partition、schedule selection、microbatch reset 和可选 stage-level memory optimization。
 
@@ -194,11 +191,11 @@ Pipeline parallelism 被单独处理，因为它需要 ``example_input`` 来构�
 手工配置
 --------
 
-高级用户仍可绕过 planner，通过 ``distributed.dtensor`` 兼容低层入口直接调用。这个路径适合需要精确控制 TP/FSDP roots 或手工 2D mesh 维度的场景。
+高级用户仍可绕过 planner，直接调用低层入口。这个路径适合需要精确控制 TP/FSDP roots 或手工 2D mesh 维度的场景。
 
 .. code:: python
 
-    from spikingjelly.activation_based.distributed.dtensor import (
+    from spikingjelly.activation_based.distributed import (
         SNNDistributedConfig,
         configure_snn_distributed,
     )
@@ -206,21 +203,20 @@ Pipeline parallelism 被单独处理，因为它需要 ``example_input`` 来构�
     model, mesh, analysis = configure_snn_distributed(
         model,
         SNNDistributedConfig(
+            mode="fsdp2_tp",
             device_type="cuda",
             mesh_shape=(2, 2),
-            enable_fsdp2=True,
             fsdp_shard_roots=["features"],
             fsdp_shard_module_root=False,
             tensor_parallel_roots=["classifier"],
             auto_tensor_parallel=True,
-            experimental_conv_tensor_parallel=True,
             conv_tensor_parallel_roots=["features"],
             dp_mesh_dim=0,
             tp_mesh_dim=1,
         ),
     )
 
-低层路径会保持兼容，但除非需要直接控制 roots 或 mesh 维度，多数用户应优先使用 ``analyze`` / ``plan`` / ``apply``。
+除非需要直接控制 roots 或 mesh 维度，多数用户应优先使用 ``analyze`` / ``plan`` / ``apply``。
 
 流水线并行
 --------------------
