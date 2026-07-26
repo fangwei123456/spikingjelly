@@ -1277,6 +1277,10 @@ def test_spikezip_qann_recipe_converts_tiny_vit_classifier():
 
     assert converted.time_steps == 32
     assert converted.model_family == "vit"
+    assert converted.patch_embed.bias_steps == 8
+    assert converted.head.bias_steps == 8
+    assert converted.attn.qkv.bias_steps == 1
+    assert converted.attn.proj.bias_steps == 1
     x_seq = _first_real_then_zero_sequence(images, converted.time_steps)
     functional.set_step_mode(converted, "m")
     sequence = converted(x_seq)
@@ -1764,7 +1768,7 @@ class TinyTensorOpAdapterModel(nn.Module):
 class TinyFunctionalTensorOpAdapterModel(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = torch.unsqueeze(x, dim=1)
-        x = torch.transpose(input=x, dim0=2, dim1=3)
+        x = torch.transpose(x, 2, dim1=3)
         x = torch.flatten(input=x, start_dim=2)
         return torch.mean(input=x, dim=1)
 

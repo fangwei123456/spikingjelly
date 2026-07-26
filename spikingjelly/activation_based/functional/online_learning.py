@@ -26,12 +26,12 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     * **中文**
 
     初始化 :func:`fptt_online_training` 使用的 ``w_ra`` 列表。返回列表中的元素顺序与
-    ``optimizer.param_groups`` 中参数的遍历顺序一致，列表元素是各参数当前值的 detached tensor。
+    ``optimizer.param_groups`` 中参数的遍历顺序一致，列表元素是各参数当前值的独立 detached snapshot。
 
     :param optimizer: 网络使用的优化器
     :type optimizer: torch.optim.Optimizer
 
-    :return: 与优化器参数顺序对齐的运行平均列表，列表元素为各参数当前值的 detached tensor
+    :return: 与优化器参数顺序对齐的运行平均列表，列表元素为各参数当前值的独立 detached snapshot
     :rtype: list[torch.Tensor]
 
     ----
@@ -42,17 +42,19 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
 
     Initialize the ``w_ra`` list used by :func:`fptt_online_training`. The
     returned list follows the traversal order of parameters in
-    ``optimizer.param_groups`` and stores a detached tensor for each parameter's
-    current value.
+    ``optimizer.param_groups`` and stores an independent detached snapshot of
+    each parameter's current value.
 
     :param optimizer: the optimizer for the network
     :type optimizer: torch.optim.Optimizer
 
     :return: a list aligned with optimizer parameter order whose elements are
-        detached tensors containing the current parameter values
+        independent detached snapshots of the current parameter values
     :rtype: list[torch.Tensor]
     """
-    return [w.detach() for group in optimizer.param_groups for w in group["params"]]
+    return [
+        w.detach().clone() for group in optimizer.param_groups for w in group["params"]
+    ]
 
 
 def fptt_online_training(

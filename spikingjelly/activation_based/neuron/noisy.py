@@ -270,8 +270,8 @@ class NoisyBaseNode(nn.Module, base.MultiStepModule):
     def init_tensor(self, data: torch.Tensor):
         self.v = torch.full_like(data, fill_value=self.v_reset)
 
-    def _after_spike(self, x_seq: torch.Tensor, t: int, spike: torch.Tensor):
-        pass
+    def _after_spike(self, t: int, spike: torch.Tensor):
+        return None
 
     def forward(self, x_seq: torch.Tensor):
         self.init_tensor(x_seq[0])
@@ -280,8 +280,11 @@ class NoisyBaseNode(nn.Module, base.MultiStepModule):
             if self.cn_v is None or self.cn_s is None:
                 self.noise_step += 1
 
+        recurrent = None
         for t in range(self.T):
             x = x_seq[t]
+            if recurrent is not None:
+                x = x + recurrent
             if self.is_training:
                 noise_v = (
                     self.eps_v_seq[self.noise_step][t].to(x_seq.device)
@@ -300,7 +303,7 @@ class NoisyBaseNode(nn.Module, base.MultiStepModule):
                 )
                 spike = spike + self.sigma_s * noise_s
             y.append(spike)
-            self._after_spike(x_seq, t, spike)
+            recurrent = self._after_spike(t, spike)
 
         return torch.stack(y)
 
@@ -398,12 +401,12 @@ class NoisyILCBaseNode(NoisyBaseNode):
         )
         self.conn = nn.Conv1d(act_dim, num_node, dec_pop_dim, groups=act_dim)
 
-    def _after_spike(self, x_seq: torch.Tensor, t: int, spike: torch.Tensor):
-        if t + 1 < self.T:
-            recurrent = self.conn(spike.view(-1, self.act_dim, self.dec_pop_dim)).view(
-                -1, self.num_node
-            )
-            x_seq[t + 1] = x_seq[t + 1] + recurrent
+    def _after_spike(self, t: int, spike: torch.Tensor):
+        if t + 1 == self.T:
+            return None
+        return self.conn(spike.view(-1, self.act_dim, self.dec_pop_dim)).view(
+            -1, self.num_node
+        )
 
 
 class NoisyILCCUBALIFNode(NoisyILCBaseNode):

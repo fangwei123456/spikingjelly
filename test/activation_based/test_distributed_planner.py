@@ -66,6 +66,35 @@ def test_plan_allows_explicit_mode_override_for_advanced_users():
     assert distributed_plan.topology.mesh_shape == (2,)
 
 
+def test_plan_reduces_incompatible_hybrid_recommendation():
+    analysis = analyze(ToyDistributedSNN(), roots=["features"])
+
+    distributed_plan = plan(
+        analysis=analysis,
+        objective="memory",
+        topology={"dp": 4},
+        backend="nccl",
+        batch_size=4,
+    )
+
+    assert distributed_plan.mode == "fsdp2"
+    assert any("was reduced to 'fsdp2'" in note for note in distributed_plan.notes)
+
+
+def test_plan_rejects_explicit_hybrid_mode_without_hybrid_topology():
+    analysis = analyze(ToyDistributedSNN(), roots=["features"])
+
+    with pytest.raises(ValueError, match="requires both 'dp' and 'tp'"):
+        plan(
+            analysis=analysis,
+            objective="memory",
+            topology={"dp": 4},
+            backend="nccl",
+            batch_size=4,
+            mode="fsdp2_tp",
+        )
+
+
 def test_plan_carries_an_immutable_explicit_tensor_parallel_plan():
     model = nn.Sequential(TDLinear(4, 6, bias=False))
     analysis = analyze(model)

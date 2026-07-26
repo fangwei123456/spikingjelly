@@ -45,7 +45,7 @@ def test_mpbn_threshold_reparameterization_preserves_eval_result(shape, learnabl
     node.eval()
     folded = copy.deepcopy(node)
     folded.re_parameterize_v_threshold(normalize_residual=True)
-    x = torch.randn(*shape)
+    x = torch.randn(*shape, requires_grad=True)
     functional.reset_net(node)
     functional.reset_net(folded)
 
@@ -54,3 +54,5 @@ def test_mpbn_threshold_reparameterization_preserves_eval_result(shape, learnabl
 
     assert torch.equal(actual, expected)
     assert torch.allclose(folded.v, node.v, atol=1e-5, rtol=1e-5)
+    actual.sum().backward()
+    assert torch.isfinite(x.grad).all()

@@ -88,7 +88,7 @@ def test_shd_builder_reuses_common_split_and_thread_lifecycle(tmp_path, monkeypa
     raw_root = root / "events"
     raw_root.mkdir(parents=True)
     with h5py.File(raw_root / "shd_train.h5", "w") as h5_file:
-        h5_file.create_dataset("labels", data=np.array([0, 1]))
+        h5_file.create_dataset("labels", data=np.array([1, 0]))
 
     def integrate(
         h5_file,
@@ -118,8 +118,6 @@ def test_shd_builder_reuses_common_split_and_thread_lifecycle(tmp_path, monkeypa
         n_classes=2,
     ).build()
 
-    for sample_index in (0, 1):
-        frames = loader(
-            processed_root / "train" / str(sample_index) / f"{sample_index}.npz"
-        )
+    for sample_index, label in enumerate((1, 0)):
+        frames = loader(processed_root / "train" / str(label) / f"{sample_index}.npz")
         assert np.array_equal(frames, np.full((2, 4), sample_index))

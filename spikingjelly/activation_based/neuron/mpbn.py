@@ -221,7 +221,7 @@ class MPBNBaseNode(BaseNode):
             normalized_residual = (self.v[mask] - mu[mask]) / sigma[mask] * gamma[
                 mask
             ] + beta[mask]
-            self.v.masked_scatter_(mask, normalized_residual)
+            self.v = self.v.masked_scatter(mask, normalized_residual)
         return spike
 
     def single_step_forward(self, x: torch.Tensor):

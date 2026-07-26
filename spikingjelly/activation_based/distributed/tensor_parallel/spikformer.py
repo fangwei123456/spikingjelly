@@ -117,7 +117,9 @@ def _convert_stem(module: nn.Module, process_group, mode: str):
         conv = next(iter(stage.conv_bn.block.children()))
         converted = _convert_leading_conv2d_bn(stage.conv_bn.block, process_group, mode)
         if converted is None:
-            return False
+            raise ValueError(
+                "Spikformer patch-stem stage must start with Conv2d and BatchNorm2d."
+            )
         stage.conv_bn.block = converted
         if mode == "colwise":
             stage.neuron = make_tensor_shard_memory_module(
@@ -126,14 +128,15 @@ def _convert_stem(module: nn.Module, process_group, mode: str):
                 logical_dim_size=conv.out_channels,
                 process_group=process_group,
             )
-        return True
+        return
 
     container = _find_descendant(module, layer.SeqToANNContainer)
     converted = _convert_leading_conv2d_bn(container, process_group, mode)
     if converted is None:
-        return False
+        raise ValueError(
+            "Spikformer patch-stem stage must start with Conv2d and BatchNorm2d."
+        )
     _overwrite_sequential_children(container, converted)
-    return True
 
 
 def parallelize_spikformer_blocks(

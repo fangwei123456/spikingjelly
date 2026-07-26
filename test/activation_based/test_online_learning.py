@@ -4,6 +4,7 @@ import torch.nn as nn
 
 from spikingjelly.activation_based.functional.online_learning import (
     fptt_online_training,
+    fptt_online_training_init_w_ra,
 )
 from spikingjelly.activation_based.layer.online_learning import (
     GradwithTrace,
@@ -82,3 +83,18 @@ def test_fptt_does_not_silently_skip_parameters_missing_from_w_ra():
             alpha=0.1,
             w_ra=[],
         )
+
+
+def test_fptt_running_average_starts_from_independent_parameter_snapshots():
+    model = nn.Linear(2, 1)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    snapshots = fptt_online_training_init_w_ra(optimizer)
+    original = [snapshot.clone() for snapshot in snapshots]
+
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.add_(1.0)
+
+    for snapshot, expected, parameter in zip(snapshots, original, model.parameters()):
+        assert snapshot.data_ptr() != parameter.data_ptr()
+        torch.testing.assert_close(snapshot, expected)

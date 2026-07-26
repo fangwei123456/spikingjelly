@@ -45,6 +45,26 @@ def test_zero_recurrent_connection_reduces_ilc_node_to_cubalif_node():
     torch.testing.assert_close(ilc(x.clone()), plain(x.clone()))
 
 
+def test_ilc_recurrence_does_not_modify_input_sequence():
+    node = NoisyILCCUBALIFNode(
+        act_dim=1,
+        dec_pop_dim=1,
+        c_decay=0.0,
+        v_decay=0.0,
+        is_training=False,
+        T=2,
+        v_threshold=0.5,
+    )
+    with torch.no_grad():
+        node.conn.weight.fill_(2.0)
+        node.conn.bias.zero_()
+    x = torch.tensor([[[1.0]], [[0.0]]])
+    original = x.clone()
+
+    torch.testing.assert_close(node(x), torch.ones_like(x))
+    assert torch.equal(x, original)
+
+
 def test_nonspiking_max_abs_decode_selects_the_largest_magnitude_membrane():
     node = NoisyNonSpikingIFNode(
         num_node=1, is_training=False, T=3, decode="max-abs-mem"

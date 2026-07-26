@@ -634,7 +634,7 @@ def _spikezip_vit_forward_features(self: nn.Module, x: torch.Tensor) -> torch.Te
     if hasattr(self, "blocks"):
         hidden = self.norm(self.blocks(hidden))
     elif hasattr(self, "attn"):
-        hidden = self.norm(hidden + self.attn(self.norm(hidden)))
+        hidden = self.norm(hidden + self.attn(self.attn_norm(hidden)))
     else:
         raise ValueError("SpikeZIP ViT model expects blocks or attn.")
     return hidden.select(token_dim, 0)
@@ -656,6 +656,8 @@ def _patch_spikezip_vit_forward(model: nn.Module) -> None:
         raise ValueError("SpikeZIP ViT model expects top-level blocks or attn.")
 
     model._spikezip_t = 0
+    if hasattr(model, "attn"):
+        model.attn_norm = copy.deepcopy(model.norm)
     original_reset = getattr(model, "reset", None)
 
     def _spikezip_vit_reset(self: nn.Module) -> None:
@@ -767,8 +769,7 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
     def convert_module(self, converter: "ModuleConverter", ann: nn.Module) -> nn.Module:
         model = copy.deepcopy(ann).eval()
         global_level = self._level_from_model(model)
-        bias_steps = 1 if self.model_family == "vit" else None
-        self._replace_weight(model, global_level, bias_steps)
+        self._replace_weight(model, global_level)
         model.ann2snn_recipe = "spikezip_tf_qann"
         model.time_steps = self.time_steps
         model.model_family = self.model_family
@@ -780,7 +781,6 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
         self,
         model: nn.Module,
         global_level: int,
-        bias_steps: Optional[int],
     ) -> None:
         for name, child in list(model.named_children()):
             replacement = None
@@ -797,17 +797,9 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
             elif isinstance(child, nn.Embedding):
                 replacement = SpikeZIPEmbedding(child)
             elif isinstance(child, nn.Conv2d):
-                replacement = SpikeZIPConv2d(
-                    child,
-                    global_level,
-                    bias_steps=bias_steps,
-                )
+                replacement = SpikeZIPConv2d(child, global_level)
             elif isinstance(child, nn.Linear):
-                replacement = SpikeZIPLinear(
-                    child,
-                    global_level,
-                    bias_steps=bias_steps,
-                )
+                replacement = SpikeZIPLinear(child, global_level)
             elif isinstance(child, nn.LayerNorm):
                 replacement = SpikeZIPLayerNorm(child)
             elif self._is_quantizer(child):
@@ -816,7 +808,7 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
                 replacement = nn.Identity()
 
             if replacement is None:
-                self._replace_weight(child, global_level, bias_steps)
+                self._replace_weight(child, global_level)
             else:
                 setattr(model, name, replacement)
 

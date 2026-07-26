@@ -130,6 +130,10 @@ def test_invalid_ret_type():
         ({"in_features": 0, "out_features": 1, "T": 10}, "must be positive"),
         ({"in_features": 1, "out_features": 1, "T": 0}, "must be positive"),
         ({"in_features": 1, "out_features": 1, "T": 10, "tau": 0}, "must be positive"),
+        (
+            {"in_features": 1, "out_features": 1, "T": 10, "tau": 4, "tau_s": 4},
+            "must be positive and different",
+        ),
     ],
 )
 def test_constructor_rejects_invalid_configuration(kwargs, message):
@@ -142,3 +146,9 @@ def test_input_shape_mismatch():
 
     with pytest.raises(RuntimeError):
         neuron(torch.rand(1, 3), ret_type="v")
+
+
+def test_psp_kernel_is_finite_for_large_negative_times():
+    kernel = Tempotron._psp_kernel(torch.tensor([-1e6, -1.0, 0.0]), 15.0, 3.75)
+
+    assert torch.equal(kernel, torch.zeros_like(kernel))

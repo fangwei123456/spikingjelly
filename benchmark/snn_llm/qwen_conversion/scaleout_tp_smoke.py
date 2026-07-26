@@ -34,6 +34,7 @@ from benchmark.snn_llm.qwen_conversion._runtime import (
     FIXED_PROMPTS,
     build_environment,
     cached_decode as _cached_decode,
+    conversion_summary as _conversion_summary,
     encode as _encode,
     hash_files as _hash_files,
     load_calibration as _load_calibration,
@@ -361,9 +362,7 @@ def _run(args: argparse.Namespace) -> tuple[Dict[str, object], int]:
             "rowwise_compute_speedup_claimed": False,
         },
         "conversion": {
-            "temporal_layout": "[T,B,S,H]",
-            "execution_schedule": "layerwise_offline_multistep",
-            "online_inference": False,
+            **_conversion_summary(runtime.model),
             "calibration_sha256": calibration_sha256,
         },
         "ranks": gathered,

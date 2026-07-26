@@ -7,7 +7,7 @@ from types import MappingProxyType
 from typing import Mapping, Tuple
 
 
-def _mapping_integer(value, name: str) -> int:
+def _as_integer(value, name: str) -> int:
     if isinstance(value, bool):
         raise TypeError(f"{name} must be an integer, but got bool.")
     if isinstance(value, Integral):
@@ -76,12 +76,12 @@ class SNNDistributedTopology:
         world_size: int | None = None,
     ) -> "SNNDistributedTopology":
         normalized_dims = {
-            key: _mapping_integer(value, f"Topology dimension '{key}'")
+            key: _as_integer(value, f"Topology dimension '{key}'")
             for key, value in dims.items()
         }
         world_size = (
             prod(normalized_dims.values())
             if world_size is None
-            else _mapping_integer(world_size, "world_size")
+            else _as_integer(world_size, "world_size")
         )
         return cls(world_size=world_size, dims=normalized_dims)

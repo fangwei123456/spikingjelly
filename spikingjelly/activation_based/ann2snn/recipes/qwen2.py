@@ -462,10 +462,6 @@ class _Qwen2Cache:
             None
         ] * layer_count
 
-    def get(self, index: int):
-        entry = self.entries[index]
-        return (None, None) if entry is None else entry
-
     def append(self, index: int, key: torch.Tensor, value: torch.Tensor) -> None:
         entry = self.entries[index]
         if entry is not None:

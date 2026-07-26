@@ -20,7 +20,10 @@ __all__ = [
 
 def _check_step_mode(block: nn.Sequential):
     for m in block:
-        assert not hasattr(m, "step_mode") or m.step_mode == "s"
+        if getattr(m, "step_mode", "s") != "s":
+            raise ValueError(
+                f"{type(m).__name__}.step_mode must be 's' inside this container."
+            )
 
 
 class MultiStepContainer(nn.Sequential, base.MultiStepModule):

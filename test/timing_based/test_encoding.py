@@ -181,7 +181,7 @@ def test_encode_rejects_invalid_input_shape():
         x_max=torch.ones(2),
     )
 
-    with pytest.raises(AssertionError, match="must be 3-dimensional"):
+    with pytest.raises(AssertionError, match="must have shape"):
         encoder.encode(torch.rand(2, 5))
-    with pytest.raises(AssertionError, match="must be 3-dimensional"):
+    with pytest.raises(AssertionError, match=r"shape \[batch_size, 2, samples_count\]"):
         encoder.encode(torch.rand(4, 3, 10))

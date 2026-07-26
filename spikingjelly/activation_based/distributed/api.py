@@ -173,8 +173,13 @@ def plan(
     notes = list(analysis.notes)
     selected_mode = mode or recommendation.mode
     if selected_mode == "fsdp2_tp" and not {"dp", "tp"} <= set(dim_names):
-        raise ValueError(
-            "Hybrid 'fsdp2_tp' mode requires both 'dp' and 'tp' dimensions in the topology."
+        if mode is not None:
+            raise ValueError(
+                "Hybrid 'fsdp2_tp' mode requires both 'dp' and 'tp' dimensions in the topology."
+            )
+        selected_mode = "tp" if "tp" in dim_names else "fsdp2"
+        notes.append(
+            f"Recommended 'fsdp2_tp' was reduced to '{selected_mode}' for topology dimensions {dim_names}."
         )
     if (
         selected_mode in ("tp", "fsdp2_tp")

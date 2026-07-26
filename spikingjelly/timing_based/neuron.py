@@ -41,7 +41,7 @@ class Tempotron(nn.Module):
         :type tau_s: float
         :param v_threshold: 发放阈值
         :type v_threshold: float
-        :raises ValueError: 数量、时间常数或阈值非正
+        :raises ValueError: 数量、时间常数或阈值非正，或两个时间常数相等
 
         ----
 
@@ -65,13 +65,16 @@ class Tempotron(nn.Module):
         :type tau_s: float
         :param v_threshold: Firing threshold
         :type v_threshold: float
-        :raises ValueError: If a size, time constant, or threshold is not positive
+        :raises ValueError: If a size, time constant, or threshold is not positive,
+            or if the two time constants are equal
         """
         super().__init__()
         if in_features <= 0 or out_features <= 0 or T <= 0:
             raise ValueError("in_features, out_features, and T must be positive.")
-        if tau <= 0 or tau_s <= 0 or v_threshold <= 0:
-            raise ValueError("tau, tau_s, and v_threshold must be positive.")
+        if tau <= 0 or tau_s <= 0 or v_threshold <= 0 or tau == tau_s:
+            raise ValueError(
+                "tau and tau_s must be positive and different; v_threshold must be positive."
+            )
 
         self.in_features = in_features
         self.out_features = out_features
@@ -88,7 +91,8 @@ class Tempotron(nn.Module):
 
     @staticmethod
     def _psp_kernel(t: torch.Tensor, tau: float, tau_s: float) -> torch.Tensor:
-        return (torch.exp(-t / tau) - torch.exp(-t / tau_s)) * (t >= 0).float()
+        t = t.clamp_min(0)
+        return torch.exp(-t / tau) - torch.exp(-t / tau_s)
 
     def mse_loss(self, v_max: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
         r"""

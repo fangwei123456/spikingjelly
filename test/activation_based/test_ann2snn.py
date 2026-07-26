@@ -264,6 +264,15 @@ class DropoutCoreMLP(nn.Module):
         return self.fc(self.dropout(x))
 
 
+class Dropout2dNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.dropout = nn.Dropout2d(p=0.25)
+
+    def forward(self, x):
+        return self.dropout(x)
+
+
 class ConvTransformerEquivalentNet(nn.Module):
     def __init__(self):
         super().__init__()
@@ -1173,6 +1182,25 @@ class TestConverterRecipes:
                 dataloader=[torch.rand(2, 4)],
                 fuse_flag=False,
             ).convert(model)
+
+    def test_rate_coding_constructs_dropout_adapter_state(self):
+        converted = _rate_converter(
+            dataloader=[torch.rand(2, 4)],
+            fuse_flag=False,
+        ).convert(DropoutCoreMLP().eval())
+
+        assert isinstance(converted.dropout, layer.Dropout)
+        assert converted.dropout.mask is None
+        functional.set_step_mode(converted, "m")
+        assert converted(torch.ones(3, 2, 4)).shape == (3, 2, 4)
+
+    def test_rate_coding_preserves_dropout2d_type(self):
+        converted = _rate_converter(
+            dataloader=[torch.rand(2, 3, 4, 4)],
+            fuse_flag=False,
+        ).convert(Dropout2dNet().eval())
+
+        assert isinstance(converted.dropout, layer.Dropout2d)
 
     def test_rate_coding_recipe_sets_eval_before_tracing(self):
         model = FunctionalDropoutCoreMLP()

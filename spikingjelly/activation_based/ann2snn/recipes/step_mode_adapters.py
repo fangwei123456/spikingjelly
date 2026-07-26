@@ -272,6 +272,10 @@ def _make_step_module(module: nn.Module) -> nn.Module:
                 "inplace=True because its step-mode equivalent does not expose that "
                 "parameter."
             )
+        replacement_type = (
+            layer.Dropout2d if isinstance(module, nn.Dropout2d) else layer.Dropout
+        )
+        return replacement_type(p=module.p).train(module.training)
     for source_type, step_type in _STEP_MODULE_TYPES:
         if isinstance(module, source_type):
             replacement = copy.deepcopy(module)
@@ -445,7 +449,7 @@ def _make_tensor_rewrite(
             (tensor,),
         )
     if target in ("transpose", torch.transpose):
-        dim0 = args[1] if len(args) > 2 else kwargs["dim0"]
+        dim0 = args[1] if len(args) > 1 else kwargs["dim0"]
         dim1 = args[2] if len(args) > 2 else kwargs["dim1"]
         _check_literal_dim(dim0, context)
         _check_literal_dim(dim1, context)

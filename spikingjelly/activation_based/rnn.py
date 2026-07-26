@@ -647,14 +647,20 @@ class SpikingRNNBase(nn.Module):
         elif isinstance(states, torch.Tensor) and states.dim() == 3:
             states_tensor = states.unsqueeze(0)
         else:
-            raise TypeError
+            raise TypeError(
+                "states must be None, a 3-D torch.Tensor, or a tuple of tensors, "
+                f"but got {type(states).__name__}."
+            )
 
         if (
             states_tensor.dim() != 4
             or states_tensor.shape[0] != state_count
             or states_tensor.shape[1] != layer_state_count
         ):
-            raise ValueError
+            raise ValueError(
+                f"states must have shape [{state_count}, {layer_state_count}, "
+                f"batch_size, hidden_size], but got {tuple(states_tensor.shape)}."
+            )
 
         invariant_masks = None
         if (

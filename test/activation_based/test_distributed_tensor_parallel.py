@@ -812,3 +812,18 @@ def test_spikformer_patch_stem_tp_helper_rejects_unpaired_isolated_root():
                     ],
                 ),
             )
+
+
+def test_spikformer_patch_stem_tp_helper_rejects_non_stem_stage():
+    with single_rank_process_group():
+        with pytest.raises(ValueError, match="must start with Conv2d and BatchNorm2d"):
+            configure_snn_distributed(
+                nn.Sequential(nn.Identity(), nn.Identity()),
+                SNNDistributedConfig(
+                    mode="tp",
+                    device_type="cpu",
+                    mesh_shape=(1,),
+                    auto_tensor_parallel=False,
+                    spikformer_patch_stem_tensor_parallel_roots=["0"],
+                ),
+            )

@@ -92,7 +92,8 @@ class GaussianTuning:
 
         :param x: 输入张量，形状为 ``[batch_size, n, samples_count]``
         :type x: torch.Tensor
-        :param max_spike_time: 最大脉冲时间；达到该值的神经元以 ``-1`` 表示不发放
+        :param max_spike_time: 最大脉冲时间；达到该值的神经元以 ``-1`` 表示不发放。
+            传入 ``0`` 时沿用历史行为，使用 ``100``
         :type max_spike_time: int
         :return: 形状为 ``[batch_size, n, samples_count, m]`` 的脉冲时间
         :rtype: torch.Tensor
@@ -107,7 +108,8 @@ class GaussianTuning:
         :param x: Input tensor with shape ``[batch_size, n, samples_count]``
         :type x: torch.Tensor
         :param max_spike_time: Maximum spike time; neurons reaching it are marked
-            inactive with ``-1``
+            inactive with ``-1``. Passing ``0`` preserves the historical
+            fallback to ``100``
         :type max_spike_time: int
         :return: Spike times with shape ``[batch_size, n, samples_count, m]``
         :rtype: torch.Tensor
@@ -116,9 +118,8 @@ class GaussianTuning:
         """
         if x.dim() != 3 or x.shape[1] != self.n:
             raise AssertionError(
-                "Input tensor x must be 3-dimensional "
-                "(batch_size, n, samples_count). "
-                f"Got shape: {x.shape}."
+                f"x must have shape [batch_size, {self.n}, samples_count], "
+                f"but got {tuple(x.shape)}."
             )
         max_spike_time = max_spike_time or 100
         batch_size, _, samples_count = x.shape

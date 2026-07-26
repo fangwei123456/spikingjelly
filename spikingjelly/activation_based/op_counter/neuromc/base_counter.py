@@ -99,7 +99,7 @@ class NeuroMCBaseCounter(BaseCounter):
         r"""
         **API Language** - 中文 | English
 
-        **中文：** 清空通用计数以及 NeuroMC 的阶段和算子聚合计数。
+        **中文:** 清空通用计数以及 NeuroMC 的阶段和算子聚合计数。
 
         **English:** Clear generic counts and all NeuroMC stage/op aggregates.
         """
