@@ -124,6 +124,14 @@ Module: ``spikingjelly.activation_based.functional``,
 - Fixed sequence-to-ANN forwarding to preserve tuple outputs, including pooling
   indices.
 
+CUDA Neuron Kernels
+^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.cuda_kernel.neuron_kernel``.
+
+- Removed RST docstring fragments from the generated FP32 IF forward/backward
+  and LIF forward CUDA source so that CuPy can compile these kernels.
+
 ANN-to-SNN Conversion
 ^^^^^^^^^^^^^^^^^^^^^
 

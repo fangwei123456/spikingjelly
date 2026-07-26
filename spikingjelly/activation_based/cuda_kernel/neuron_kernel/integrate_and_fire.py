@@ -65,17 +65,6 @@ def create_fptt_kernel(hard_reset: bool, dtype: str):
         void {kernel_name}(const float* x_seq, float* v_v_seq, float* h_seq, float* spike_seq,
         const float & v_threshold, {"const float & v_reset," if hard_reset else ""}
         const int & neuron_num, const int & numel)
-
-        ----
-
-        .. _create_fptt_kernel-en:
-
-        * **English**
-
-        Create forward-pass CUDA kernel
-
-        :return: None
-        :rtype: None
         """
 
         code += r"""
@@ -231,17 +220,6 @@ def create_bptt_kernel(
         float* grad_x_seq, float* grad_v_init,
         const float & v_threshold, {"const float & v_reset," if hard_reset else ""}
         const int & neuron_num, const int & numel)
-
-        ----
-
-        .. _create_bptt_kernel-en:
-
-        * **English**
-
-        Create backward-pass CUDA kernel
-
-        :return: None
-        :rtype: None
         """
 
         code += r"""
