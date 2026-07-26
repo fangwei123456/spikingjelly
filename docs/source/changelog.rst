@@ -18,6 +18,35 @@ Unreleased
 Features
 ~~~~~~~~
 
+Functional State Transitions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.functional``.
+
+- Added explicit Torch functional state-transition helpers for IF, LIF, and
+  ParametricLIF neurons, including charge, fire, reset, single-step, and
+  multi-step functions. These functions receive tensor state explicitly and do
+  not read ``MemoryModule`` memory or dispatch on module ``training/eval``.
+- Added named CuPy, Triton, and Inductor functional interfaces for IF, LIF, and
+  ParametricLIF neurons, including the existing single-step CuPy paths for IF and
+  LIF. Backend selection remains owned by modules; the Inductor path uses a
+  bounded process-local cache.
+- Added functional state transitions for stateful layers, encoders, PSN/GLIF
+  neurons, SpikeZIP and ANN-to-SNN recipe components. Existing modules keep
+  their public memory, reset, detach, step-mode, backend, and output semantics.
+- Added tensor-only functional learning helpers for linear/Conv1d/Conv2d STDP,
+  linear mSTDP, linear mSTDP-ET, and reward modulation. Existing learner helpers
+  keep their public signatures, while learners own state materialization,
+  monitor consumption, reward detach, and gradient accumulation.
+- Added public functional helpers for additional neuron state transitions,
+  including QIF/EIF, adaptive and Izhikevich models, CUBA-LIF, KLIF, LIAF, MPBN,
+  and online-learning traces. QIF, EIF, and Izhikevich expose their existing
+  CuPy multi-step paths, while activation-aware IF exposes its Triton inference
+  path. Hookable Node classes retain their existing execution paths.
+- Added FlexSN custom-op registry diagnostics for entry, owner-reference, and
+  active-reference counts, with regression coverage for handle retain/release
+  and finalizer cleanup.
+
 ANN-to-SNN Conversion
 ^^^^^^^^^^^^^^^^^^^^^
 
@@ -157,6 +186,16 @@ Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
 
 Improvements
 ~~~~~~~~~~~~
+
+Neuron Backend Caches
+^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.neuron``.
+
+- Moved standard IF/LIF/ParametricLIF Inductor compiled-graph ownership from
+  individual neuron instances to a bounded, PID-aware neuron backend cache.
+  Equivalent modules can now share compiled callables without serializing cache
+  entries through module deepcopy or pickle.
 
 Triton IF/LIF Memory Optimisation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

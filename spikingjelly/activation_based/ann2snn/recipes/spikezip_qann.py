@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Optional
 import torch
 import torch.nn as nn
 
-from spikingjelly.activation_based import base
+from spikingjelly.activation_based import base, functional
 from spikingjelly.activation_based.ann2snn.operators import (
     TDConv2d,
     TDLayerNorm,
@@ -69,12 +69,15 @@ class SpikeZIPLinear(TDLinear):
         self.is_work = False
 
     def _release_bias(self, y: torch.Tensor) -> torch.Tensor:
-        if self.spikezip_bias is not None:
-            if self.realize_time > 0:
-                self.realize_time -= 1
-                self.is_work = True
-                bias = self.spikezip_bias.to(device=y.device, dtype=y.dtype)
-                y = y + bias / self.bias_steps
+        y, self.realize_time, released = functional.spikezip_release_bias_single_step(
+            y,
+            self.spikezip_bias,
+            self.realize_time,
+            self.bias_steps,
+            (self.out_features,),
+        )
+        if released:
+            self.is_work = True
         return y
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -85,15 +88,16 @@ class SpikeZIPLinear(TDLinear):
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         y_seq = super().multi_step_forward(x_seq)
         active = bool((x_seq != 0).any())
-        bias_steps = min(x_seq.shape[0], self.realize_time)
-        if self.spikezip_bias is not None and bias_steps > 0:
-            bias = self.spikezip_bias.to(device=x_seq.device, dtype=x_seq.dtype)
-            view_shape = (1,) * (y_seq.dim() - 1) + (bias.numel(),)
-            y_seq[:bias_steps] = (
-                y_seq[:bias_steps] + bias.view(view_shape) / self.bias_steps
-            )
-            self.realize_time -= bias_steps
-        self.is_work = active or bias_steps > 0
+        scheduled_bias_steps = min(x_seq.shape[0], self.realize_time)
+        view_shape = (1,) * (y_seq.dim() - 1) + (self.out_features,)
+        y_seq, self.realize_time, _ = functional.spikezip_release_bias_multi_step(
+            y_seq,
+            self.spikezip_bias,
+            self.realize_time,
+            self.bias_steps,
+            view_shape,
+        )
+        self.is_work = active or scheduled_bias_steps > 0
         return y_seq
 
 
@@ -137,12 +141,15 @@ class SpikeZIPConv2d(TDConv2d):
         self.is_work = False
 
     def _release_bias(self, y: torch.Tensor) -> torch.Tensor:
-        if self.spikezip_bias is not None:
-            if self.realize_time > 0:
-                self.realize_time -= 1
-                self.is_work = True
-                bias = self.spikezip_bias.to(device=y.device, dtype=y.dtype)
-                y = y + bias.view(1, -1, 1, 1) / self.bias_steps
+        y, self.realize_time, released = functional.spikezip_release_bias_single_step(
+            y,
+            self.spikezip_bias,
+            self.realize_time,
+            self.bias_steps,
+            (1, self.out_channels, 1, 1),
+        )
+        if released:
+            self.is_work = True
         return y
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -153,14 +160,15 @@ class SpikeZIPConv2d(TDConv2d):
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         y_seq = super().multi_step_forward(x_seq)
         active = bool((x_seq != 0).any())
-        bias_steps = min(x_seq.shape[0], self.realize_time)
-        if self.spikezip_bias is not None and bias_steps > 0:
-            bias = self.spikezip_bias.to(device=x_seq.device, dtype=x_seq.dtype)
-            y_seq[:bias_steps] = (
-                y_seq[:bias_steps] + bias.view(1, 1, -1, 1, 1) / self.bias_steps
-            )
-            self.realize_time -= bias_steps
-        self.is_work = active or bias_steps > 0
+        scheduled_bias_steps = min(x_seq.shape[0], self.realize_time)
+        y_seq, self.realize_time, _ = functional.spikezip_release_bias_multi_step(
+            y_seq,
+            self.spikezip_bias,
+            self.realize_time,
+            self.bias_steps,
+            (1, 1, self.out_channels, 1, 1),
+        )
+        self.is_work = active or scheduled_bias_steps > 0
         return y_seq
 
 
@@ -175,29 +183,20 @@ class SpikeZIPEmbedding(base.MemoryModule):
         self.t = 0
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.t == 0:
-            y = self.embedding(x)
-            self.t += 1
-            return y
-        return torch.zeros(
-            *x.shape,
+        y, self.t = functional.spikezip_embedding_single_step(
+            x,
+            self.t,
+            self.embedding,
             self.embedding.embedding_dim,
-            device=x.device,
-            dtype=self.embedding.weight.dtype,
+            self.embedding.weight.dtype,
         )
+        return y
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
-        if x_seq.shape[0] == 0:
-            raise ValueError("SpikeZIPEmbedding expects a non-empty sequence.")
-        y0 = self.embedding(x_seq[0])
-        y_seq = torch.zeros(
-            x_seq.shape[0],
-            *y0.shape,
-            device=y0.device,
-            dtype=y0.dtype,
+        y_seq, self.t = functional.spikezip_embedding_multi_step(
+            x_seq,
+            self.embedding,
         )
-        y_seq[0] = y0
-        self.t = x_seq.shape[0]
         return y_seq
 
 
@@ -218,31 +217,6 @@ class SpikeZIPLayerNorm(TDLayerNorm):
 class SpikeZIPSoftmax(TDSoftmax):
     def __init__(self, dim: int = -1) -> None:
         super().__init__(dim=dim, step_mode="s")
-
-
-def _spikezip_matmul_delta(a_t, b_t, a_sum, b_sum, transpose_b: bool = False):
-    b_t_arg = b_t.transpose(-2, -1) if transpose_b else b_t
-    b_sum_arg = b_sum.transpose(-2, -1) if transpose_b else b_sum
-    return a_sum @ b_t_arg + a_t @ b_sum_arg - a_t @ b_t_arg
-
-
-def _temporal_difference(y_cum: torch.Tensor) -> torch.Tensor:
-    y_seq = torch.empty_like(y_cum)
-    y_seq[0] = y_cum[0]
-    y_seq[1:] = y_cum[1:] - y_cum[:-1]
-    return y_seq
-
-
-def _spikezip_matmul_sequence_delta(
-    a_seq: torch.Tensor,
-    b_seq: torch.Tensor,
-    transpose_b: bool = False,
-) -> torch.Tensor:
-    a_cum = a_seq.cumsum(dim=0)
-    b_cum = b_seq.cumsum(dim=0)
-    if transpose_b:
-        b_cum = b_cum.transpose(-2, -1)
-    return _temporal_difference(a_cum @ b_cum)
 
 
 def _step_modes(module: nn.Module) -> dict[nn.Module, str]:
@@ -348,14 +322,16 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
 
         q_sum = self.transpose_for_scores(self.query_if.accumulated)
         k_sum = self.transpose_for_scores(self.key_if.accumulated)
-        scores = _spikezip_matmul_delta(query_layer, key_layer, q_sum, k_sum, True)
+        scores = functional.spikezip_matmul_delta(
+            query_layer, key_layer, q_sum, k_sum, True
+        )
         scores = scores / math.sqrt(self.attention_head_size)
         if attention_mask is not None and self.t == 0:
             scores = scores + attention_mask
         attention_probs = self.softmax(scores)
         attention_probs = self.dropout(attention_probs)
         attention_probs = self.attn_if(attention_probs)
-        context = _spikezip_matmul_delta(
+        context = functional.spikezip_matmul_delta(
             attention_probs,
             value_layer,
             self.attn_if.accumulated,
@@ -398,7 +374,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
             value_layer = self.transpose_sequence_for_scores(
                 self.value_if(self.value(hidden_states))
             )
-            scores = _spikezip_matmul_sequence_delta(
+            scores = functional.spikezip_matmul_sequence_delta(
                 query_layer,
                 key_layer,
                 transpose_b=True,
@@ -410,7 +386,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
             attention_probs = self.softmax(scores)
             attention_probs = self.dropout(attention_probs)
             attention_probs = self.attn_if(attention_probs)
-            context_seq = _spikezip_matmul_sequence_delta(
+            context_seq = functional.spikezip_matmul_sequence_delta(
                 attention_probs,
                 value_layer,
             )
@@ -483,7 +459,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
         query = query * self.scale
         q_sum = self.q_if.accumulated * self.scale
         k_sum = self.k_if.accumulated
-        attention = _spikezip_matmul_delta(query, key, q_sum, k_sum, True)
+        attention = functional.spikezip_matmul_delta(query, key, q_sum, k_sum, True)
 
         if self.is_softmax:
             attention = self.softmax(attention)
@@ -494,7 +470,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
             attention_sum = self.attn_if.accumulated / seq_len
 
         attention = self.attn_drop(attention)
-        context = _spikezip_matmul_delta(
+        context = functional.spikezip_matmul_delta(
             attention,
             value,
             attention_sum,
@@ -527,7 +503,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
             key = self.k_if(key)
             value = self.v_if(value)
 
-            attention = _spikezip_matmul_sequence_delta(
+            attention = functional.spikezip_matmul_sequence_delta(
                 query * self.scale,
                 key,
                 transpose_b=True,
@@ -541,7 +517,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
                 attention_for_context = attention
 
             attention_for_context = self.attn_drop(attention_for_context)
-            context = _spikezip_matmul_sequence_delta(
+            context = functional.spikezip_matmul_sequence_delta(
                 attention_for_context,
                 value,
             )
@@ -627,22 +603,12 @@ def _spikezip_vit_token_sequence(
     time_steps: int,
     batch_size: int,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    cls = model.cls_token.expand(batch_size, -1, -1)
-    cls_seq = torch.zeros(
+    return functional.spikezip_vit_token_sequence(
+        model.cls_token,
+        model.pos_embed,
         time_steps,
-        *cls.shape,
-        device=cls.device,
-        dtype=cls.dtype,
+        batch_size,
     )
-    pos_seq = torch.zeros(
-        time_steps,
-        *model.pos_embed.shape,
-        device=model.pos_embed.device,
-        dtype=model.pos_embed.dtype,
-    )
-    cls_seq[0] = cls
-    pos_seq[0] = model.pos_embed
-    return cls_seq, pos_seq
 
 
 def _spikezip_vit_single_tokens(
@@ -650,18 +616,12 @@ def _spikezip_vit_single_tokens(
     batch_size: int,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     t = getattr(model, "_spikezip_t", 0)
-    if t == 0:
-        cls = model.cls_token.expand(batch_size, -1, -1)
-        pos = model.pos_embed
-    else:
-        cls = torch.zeros(
-            batch_size,
-            *model.cls_token.shape[1:],
-            device=model.cls_token.device,
-            dtype=model.cls_token.dtype,
-        )
-        pos = torch.zeros_like(model.pos_embed)
-    model._spikezip_t = t + 1
+    cls, pos, model._spikezip_t = functional.spikezip_vit_single_tokens(
+        model.cls_token,
+        model.pos_embed,
+        batch_size,
+        t,
+    )
     return cls, pos
 
 

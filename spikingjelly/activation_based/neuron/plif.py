@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 
 from .. import surrogate
+from . import inductor_cache
 from .base_node import BaseNode
 
 try:
@@ -186,59 +187,33 @@ class ParametricLIFNode(BaseNode):
             else:
                 self.v = self.v - (self.v - self.v_reset) * self.w.sigmoid() + x
 
-    def _build_inductor_multi_step_graph(self):
-        store_v_seq = self.store_v_seq
-        soft_reset = self.v_reset is None
-        v_reset = 0.0 if soft_reset else self.v_reset
-        surrogate_fn = self.surrogate_function
-        v_threshold = self.v_threshold
-        detach_reset = self.detach_reset
-        decay_input = self.decay_input
-
-        def _graph(
-            x_seq: torch.Tensor, v_init: torch.Tensor, reciprocal_tau: torch.Tensor
-        ):
-            v = v_init
-            spike_seq = torch.empty_like(x_seq)
-            if store_v_seq:
-                v_seq = torch.empty_like(x_seq)
-            for t in range(x_seq.shape[0]):
-                if decay_input:
-                    v = v + (x_seq[t] - (v - v_reset)) * reciprocal_tau
-                else:
-                    v = v - (v - v_reset) * reciprocal_tau + x_seq[t]
-                spike = surrogate_fn(v - v_threshold)
-                spike_d = spike.detach() if detach_reset else spike
-                if soft_reset:
-                    v = v - spike_d * v_threshold
-                else:
-                    v = v_reset * spike_d + (1.0 - spike_d) * v
-                spike_seq[t] = spike
-                if store_v_seq:
-                    v_seq[t] = v
-            if store_v_seq:
-                return spike_seq, v, v_seq
-            return spike_seq, v
-
-        return _graph
-
     def _inductor_multi_step_forward(self, x_seq: torch.Tensor):
         self.v_float_to_tensor(x_seq[0])
         x_seq = self._canonicalize_inductor_tensor(x_seq)
         v_init = self._canonicalize_inductor_tensor(self.v)
         reciprocal_tau = self._canonicalize_inductor_tensor(self.w.sigmoid().to(x_seq))
+        surrogate_key = self._surrogate_inductor_cache_key()
         graph = self._compile_inductor_graph(
-            (
+            None
+            if surrogate_key is None
+            else (
                 "plif",
                 self.store_v_seq,
                 self.decay_input,
                 self.v_threshold,
                 self.v_reset,
                 self.detach_reset,
-                self._surrogate_inductor_cache_key(),
+                surrogate_key,
                 self._inductor_runtime_cache_key(x_seq, v_init, reciprocal_tau),
             ),
-            self._build_inductor_multi_step_graph(),
+            inductor_cache._build_plif_multi_step_graph(
+                self.decay_input,
+                self.v_threshold,
+                self.v_reset,
+                self.surrogate_function,
+                self.detach_reset,
+                self.store_v_seq,
+            ),
         )
         out = graph(x_seq, v_init, reciprocal_tau)
         if self.store_v_seq:

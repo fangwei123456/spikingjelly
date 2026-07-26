@@ -1,12 +1,35 @@
 from typing import Callable, Union
 
-import math
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from . import neuron, monitor, base
+from .functional import learning as functional_learning
+
+
+def _materialize_trace(trace, reference: torch.Tensor) -> torch.Tensor:
+    if isinstance(trace, torch.Tensor):
+        return trace
+    return torch.full_like(reference, 0.0 if trace is None else trace)
+
+
+def _padded_conv_input(conv: Union[nn.Conv1d, nn.Conv2d], x: torch.Tensor):
+    if not any(conv.padding):
+        return x
+    if conv.padding_mode != "zeros":
+        return F.pad(x, conv._reversed_padding_repeated_twice, mode=conv.padding_mode)
+    if isinstance(conv, nn.Conv1d):
+        return F.pad(x, (conv.padding[0], conv.padding[0]))
+    return F.pad(
+        x,
+        (
+            conv.padding[1],
+            conv.padding[1],
+            conv.padding[0],
+            conv.padding[0],
+        ),
+    )
 
 
 def stdp_linear_single_step(
@@ -83,26 +106,17 @@ def stdp_linear_single_step(
     :return: ``(trace_pre, trace_post, delta_w)``, where ``delta_w`` has the same shape as ``fc.weight``
     :rtype: tuple[Union[float, torch.Tensor], Union[float, torch.Tensor], torch.Tensor]
     """
-    if trace_pre is None:
-        trace_pre = 0.0
-
-    if trace_post is None:
-        trace_post = 0.0
-
-    weight = fc.weight.data
-    trace_pre = trace_pre - trace_pre / tau_pre + in_spike  # shape = [batch_size, N_in]
-    trace_post = (
-        trace_post - trace_post / tau_post + out_spike
-    )  # shape = [batch_size, N_out]
-
-    # [batch_size, N_out, N_in] -> [N_out, N_in]
-    delta_w_pre = -f_pre(weight) * (
-        trace_post.unsqueeze(2) * in_spike.unsqueeze(1)
-    ).sum(0)
-    delta_w_post = f_post(weight) * (
-        trace_pre.unsqueeze(1) * out_spike.unsqueeze(2)
-    ).sum(0)
-    return trace_pre, trace_post, delta_w_pre + delta_w_post
+    return functional_learning.stdp_linear_single_step(
+        fc.weight.data,
+        in_spike,
+        out_spike,
+        _materialize_trace(trace_pre, in_spike),
+        _materialize_trace(trace_post, out_spike),
+        tau_pre,
+        tau_post,
+        f_pre,
+        f_post,
+    )
 
 
 def mstdp_linear_single_step(
@@ -180,25 +194,17 @@ def mstdp_linear_single_step(
         shape ``[batch_size, out_features, in_features]``
     :rtype: tuple[Union[float, torch.Tensor], Union[float, torch.Tensor], torch.Tensor]
     """
-    if trace_pre is None:
-        trace_pre = 0.0
-
-    if trace_post is None:
-        trace_post = 0.0
-
-    weight = fc.weight.data
-    trace_pre = (
-        trace_pre * math.exp(-1 / tau_pre) + in_spike
-    )  # shape = [batch_size, C_in]
-    trace_post = (
-        trace_post * math.exp(-1 / tau_post) + out_spike
-    )  # shape = [batch_size, C_out]
-
-    # [batch_size, N_out, N_in]
-    eligibility = f_post(weight) * (
-        trace_pre.unsqueeze(1) * out_spike.unsqueeze(2)
-    ) - f_pre(weight) * (trace_post.unsqueeze(2) * in_spike.unsqueeze(1))
-    return trace_pre, trace_post, eligibility
+    return functional_learning.mstdp_linear_single_step(
+        fc.weight.data,
+        in_spike,
+        out_spike,
+        _materialize_trace(trace_pre, in_spike),
+        _materialize_trace(trace_post, out_spike),
+        tau_pre,
+        tau_post,
+        f_pre,
+        f_post,
+    )
 
 
 def mstdpet_linear_single_step(
@@ -280,20 +286,17 @@ def mstdpet_linear_single_step(
         the same shape as ``fc.weight``
     :rtype: tuple[Union[float, torch.Tensor], Union[float, torch.Tensor], torch.Tensor]
     """
-    if trace_pre is None:
-        trace_pre = 0.0
-
-    if trace_post is None:
-        trace_post = 0.0
-
-    weight = fc.weight.data
-    trace_pre = trace_pre * math.exp(-1 / tau_pre) + in_spike
-    trace_post = trace_post * math.exp(-1 / tau_post) + out_spike
-
-    eligibility = f_post(weight) * torch.outer(out_spike, trace_pre) - f_pre(
-        weight
-    ) * torch.outer(trace_post, in_spike)
-    return trace_pre, trace_post, eligibility
+    return functional_learning.mstdpet_linear_single_step(
+        fc.weight.data,
+        in_spike,
+        out_spike,
+        _materialize_trace(trace_pre, in_spike),
+        _materialize_trace(trace_post, out_spike),
+        tau_pre,
+        tau_post,
+        f_pre,
+        f_post,
+    )
 
 
 def stdp_conv2d_single_step(
@@ -376,72 +379,25 @@ def stdp_conv2d_single_step(
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises NotImplementedError: Raised when ``conv.dilation != (1, 1)`` or ``conv.groups != 1``
     """
-    if conv.dilation != (1, 1):
-        raise NotImplementedError(
-            "STDP with dilation != 1 for Conv2d has not been implemented!"
-        )
-    if conv.groups != 1:
-        raise NotImplementedError(
-            "STDP with groups != 1 for Conv2d has not been implemented!"
-        )
-
-    stride_h = conv.stride[0]
-    stride_w = conv.stride[1]
-
-    if conv.padding == (0, 0):
-        pass
-    else:
-        pH = conv.padding[0]
-        pW = conv.padding[1]
-        if conv.padding_mode != "zeros":
-            in_spike = F.pad(
-                in_spike, conv._reversed_padding_repeated_twice, mode=conv.padding_mode
-            )
-        else:
-            in_spike = F.pad(in_spike, pad=(pW, pW, pH, pH))
-
-    if trace_pre is None:
-        trace_pre = torch.zeros_like(
-            in_spike, device=in_spike.device, dtype=in_spike.dtype
-        )
-
-    if trace_post is None:
-        trace_post = torch.zeros_like(
-            out_spike, device=in_spike.device, dtype=in_spike.dtype
-        )
-
-    trace_pre = trace_pre - trace_pre / tau_pre + in_spike
-    trace_post = trace_post - trace_post / tau_post + out_spike
-
-    delta_w = torch.zeros_like(conv.weight.data)
-    for h in range(conv.weight.shape[2]):
-        for w in range(conv.weight.shape[3]):
-            h_end = in_spike.shape[2] - conv.weight.shape[2] + 1 + h
-            w_end = in_spike.shape[3] - conv.weight.shape[3] + 1 + w
-
-            pre_spike = in_spike[
-                :, :, h:h_end:stride_h, w:w_end:stride_w
-            ]  # shape = [batch_size, C_in, h_out, w_out]
-            post_spike = out_spike  # shape = [batch_size, C_out, h_out, h_out]
-            weight = conv.weight.data[:, :, h, w]  # shape = [batch_size_out, C_in]
-
-            tr_pre = trace_pre[
-                :, :, h:h_end:stride_h, w:w_end:stride_w
-            ]  # shape = [batch_size, C_in, h_out, w_out]
-            tr_post = trace_post  # shape = [batch_size, C_out, h_out, w_out]
-
-            delta_w_pre = -(
-                f_pre(weight)
-                * (tr_post.unsqueeze(2) * pre_spike.unsqueeze(1))
-                .permute([1, 2, 0, 3, 4])
-                .sum(dim=[2, 3, 4])
-            )
-            delta_w_post = f_post(weight) * (
-                tr_pre.unsqueeze(1) * post_spike.unsqueeze(2)
-            ).permute([1, 2, 0, 3, 4]).sum(dim=[2, 3, 4])
-            delta_w[:, :, h, w] += delta_w_pre + delta_w_post
-
-    return trace_pre, trace_post, delta_w
+    return functional_learning.stdp_conv2d_single_step(
+        conv.weight.data,
+        in_spike,
+        out_spike,
+        torch.zeros_like(_padded_conv_input(conv, in_spike))
+        if trace_pre is None
+        else trace_pre,
+        torch.zeros_like(out_spike) if trace_post is None else trace_post,
+        tau_pre,
+        tau_post,
+        conv.stride,
+        conv.padding,
+        conv.padding_mode,
+        conv._reversed_padding_repeated_twice,
+        conv.dilation,
+        conv.groups,
+        f_pre,
+        f_post,
+    )
 
 
 def stdp_conv1d_single_step(
@@ -524,65 +480,25 @@ def stdp_conv1d_single_step(
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises NotImplementedError: Raised when ``conv.dilation != (1,)`` or ``conv.groups != 1``
     """
-    if conv.dilation != (1,):
-        raise NotImplementedError(
-            "STDP with dilation != 1 for Conv1d has not been implemented!"
-        )
-    if conv.groups != 1:
-        raise NotImplementedError(
-            "STDP with groups != 1 for Conv1d has not been implemented!"
-        )
-
-    stride_l = conv.stride[0]
-
-    if conv.padding == (0,):
-        pass
-    else:
-        pL = conv.padding[0]
-        if conv.padding_mode != "zeros":
-            in_spike = F.pad(
-                in_spike, conv._reversed_padding_repeated_twice, mode=conv.padding_mode
-            )
-        else:
-            in_spike = F.pad(in_spike, pad=(pL, pL))
-
-    if trace_pre is None:
-        trace_pre = torch.zeros_like(
-            in_spike, device=in_spike.device, dtype=in_spike.dtype
-        )
-
-    if trace_post is None:
-        trace_post = torch.zeros_like(
-            out_spike, device=in_spike.device, dtype=in_spike.dtype
-        )
-
-    trace_pre = trace_pre - trace_pre / tau_pre + in_spike
-    trace_post = trace_post - trace_post / tau_post + out_spike
-
-    delta_w = torch.zeros_like(conv.weight.data)
-    for l in range(conv.weight.shape[2]):
-        l_end = in_spike.shape[2] - conv.weight.shape[2] + 1 + l
-        pre_spike = in_spike[
-            :, :, l:l_end:stride_l
-        ]  # shape = [batch_size, C_in, l_out]
-        post_spike = out_spike  # shape = [batch_size, C_out, l_out]
-        weight = conv.weight.data[:, :, l]  # shape = [batch_size_out, C_in]
-
-        tr_pre = trace_pre[:, :, l:l_end:stride_l]  # shape = [batch_size, C_in, l_out]
-        tr_post = trace_post  # shape = [batch_size, C_out, l_out]
-
-        delta_w_pre = -(
-            f_pre(weight)
-            * (tr_post.unsqueeze(2) * pre_spike.unsqueeze(1))
-            .permute([1, 2, 0, 3])
-            .sum(dim=[2, 3])
-        )
-        delta_w_post = f_post(weight) * (
-            tr_pre.unsqueeze(1) * post_spike.unsqueeze(2)
-        ).permute([1, 2, 0, 3]).sum(dim=[2, 3])
-        delta_w[:, :, l] += delta_w_pre + delta_w_post
-
-    return trace_pre, trace_post, delta_w
+    return functional_learning.stdp_conv1d_single_step(
+        conv.weight.data,
+        in_spike,
+        out_spike,
+        torch.zeros_like(_padded_conv_input(conv, in_spike))
+        if trace_pre is None
+        else trace_pre,
+        torch.zeros_like(out_spike) if trace_post is None else trace_post,
+        tau_pre,
+        tau_post,
+        conv.stride,
+        conv.padding,
+        conv.padding_mode,
+        conv._reversed_padding_repeated_twice,
+        conv.dilation,
+        conv.groups,
+        f_pre,
+        f_post,
+    )
 
 
 def stdp_multi_step(
@@ -665,34 +581,81 @@ def stdp_multi_step(
     :return: ``(trace_pre, trace_post, delta_w)``, where ``delta_w`` has the same shape as ``layer.weight``
     :rtype: tuple[Union[float, torch.Tensor], Union[float, torch.Tensor], torch.Tensor]
     """
-    weight = layer.weight.data
-    delta_w = torch.zeros_like(weight)
-    T = in_spike.shape[0]
-
     if isinstance(layer, nn.Linear):
-        stdp_single_step = stdp_linear_single_step
+        trace_pre = _materialize_trace(trace_pre, in_spike[0])
+        trace_post = _materialize_trace(trace_post, out_spike[0])
+        stdp_single_step = lambda in_t, out_t, trace_pre_t, trace_post_t: (
+            functional_learning.stdp_linear_single_step(
+                layer.weight.data,
+                in_t,
+                out_t,
+                trace_pre_t,
+                trace_post_t,
+                tau_pre,
+                tau_post,
+                f_pre,
+                f_post,
+            )
+        )
 
     elif isinstance(layer, nn.Conv1d):
-        stdp_single_step = stdp_conv1d_single_step
+        if trace_pre is None:
+            trace_pre = torch.zeros_like(_padded_conv_input(layer, in_spike[0]))
+        if trace_post is None:
+            trace_post = torch.zeros_like(out_spike[0])
+        stdp_single_step = lambda in_t, out_t, trace_pre_t, trace_post_t: (
+            functional_learning.stdp_conv1d_single_step(
+                layer.weight.data,
+                in_t,
+                out_t,
+                trace_pre_t,
+                trace_post_t,
+                tau_pre,
+                tau_post,
+                layer.stride,
+                layer.padding,
+                layer.padding_mode,
+                layer._reversed_padding_repeated_twice,
+                layer.dilation,
+                layer.groups,
+                f_pre,
+                f_post,
+            )
+        )
 
     elif isinstance(layer, nn.Conv2d):
-        stdp_single_step = stdp_conv2d_single_step
-
-    for t in range(T):
-        trace_pre, trace_post, dw = stdp_single_step(
-            layer,
-            in_spike[t],
-            out_spike[t],
-            trace_pre,
-            trace_post,
-            tau_pre,
-            tau_post,
-            f_pre,
-            f_post,
+        if trace_pre is None:
+            trace_pre = torch.zeros_like(_padded_conv_input(layer, in_spike[0]))
+        if trace_post is None:
+            trace_post = torch.zeros_like(out_spike[0])
+        stdp_single_step = lambda in_t, out_t, trace_pre_t, trace_post_t: (
+            functional_learning.stdp_conv2d_single_step(
+                layer.weight.data,
+                in_t,
+                out_t,
+                trace_pre_t,
+                trace_post_t,
+                tau_pre,
+                tau_post,
+                layer.stride,
+                layer.padding,
+                layer.padding_mode,
+                layer._reversed_padding_repeated_twice,
+                layer.dilation,
+                layer.groups,
+                f_pre,
+                f_post,
+            )
         )
-        delta_w += dw
 
-    return trace_pre, trace_post, delta_w
+    return functional_learning.stdp_multi_step(
+        layer.weight.data,
+        in_spike,
+        out_spike,
+        trace_pre,
+        trace_post,
+        stdp_single_step,
+    )
 
 
 class STDPLearner(base.MemoryModule):
@@ -1200,16 +1163,13 @@ class MSTDPLearner(base.MemoryModule):
             raise ValueError(self.step_mode)
 
         for _ in range(length):
-            if not hasattr(self, "eligibility"):
+            if not isinstance(getattr(self, "eligibility", None), torch.Tensor):
                 self.eligibility = torch.zeros(
                     self.batch_size,
                     *self.synapse.weight.shape,
                     device=self.synapse.weight.device,
                 )
-
-            dw = (reward.view(-1, 1, 1) * self.eligibility).sum(
-                0
-            )  # [batch_size, N_out, N_in] -> [N_out, N_in]
+            dw = functional_learning.mstdp_reward_delta(reward, self.eligibility)
 
             if scale != 1.0:
                 dw *= scale
@@ -1488,20 +1448,16 @@ class MSTDPETLearner(base.MemoryModule):
             raise ValueError(self.step_mode)
 
         for _ in range(length):
-            if not hasattr(self, "eligibility"):
-                self.eligibility = torch.zeros(
-                    *self.synapse.weight.shape, device=self.synapse.weight.device
-                )
-
-            if self.trace_e is None:
-                self.trace_e = 0.0
-
-            self.trace_e = (
-                self.trace_e * math.exp(-1 / self.tau_trace)
-                + self.eligibility / self.tau_trace
+            if not isinstance(getattr(self, "eligibility", None), torch.Tensor):
+                self.eligibility = torch.zeros_like(self.synapse.weight)
+            if not isinstance(self.trace_e, torch.Tensor):
+                self.trace_e = torch.zeros_like(self.synapse.weight)
+            dw, self.trace_e = functional_learning.mstdpet_reward_delta(
+                reward,
+                self.eligibility,
+                self.trace_e,
+                self.tau_trace,
             )
-
-            dw = reward * self.trace_e
 
             if scale != 1.0:
                 dw *= scale

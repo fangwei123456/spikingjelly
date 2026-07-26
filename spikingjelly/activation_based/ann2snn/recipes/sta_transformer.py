@@ -3,14 +3,14 @@ from __future__ import annotations
 import copy
 import math
 import operator
-from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple
+from typing import Any, Dict, Iterable, List, Optional, TYPE_CHECKING, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import fx
 from tqdm import tqdm
-from spikingjelly.activation_based import base
+from spikingjelly.activation_based import base, functional
 
 from spikingjelly.activation_based.ann2snn.operators import (
     TDConv2d,
@@ -329,10 +329,9 @@ class _STASpikeEncoder(base.MemoryModule):
             or self.mem.dtype != x.dtype
         ):
             self.mem = torch.zeros_like(x)
-        self.mem = self.mem + x
-        spike_count = torch.trunc(self.mem / threshold)
-        spike = spike_count * threshold
-        self.mem = self.mem - spike
+        spike, self.mem = functional.sta_spike_encoder_single_step(
+            x, self.mem, threshold
+        )
         return spike
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
@@ -638,24 +637,13 @@ class _STAConstant(base.MemoryModule):
         self.step_mode = step_mode
 
     def single_step_forward(self) -> torch.Tensor:
-        if self.t == 0:
-            output = self.value
-        else:
-            output = torch.zeros_like(self.value)
-        self.t += 1
+        output, self.t = functional.sta_constant_single_step(self.value, self.t)
         return output
 
     def multi_step_forward(self) -> torch.Tensor:
-        if self.t == 0:
-            zeros = torch.zeros_like(self.value).expand(
-                self.time_steps - 1, *self.value.shape
-            )
-            output = torch.cat((self.value.unsqueeze(0), zeros), dim=0)
-        else:
-            output = torch.zeros_like(self.value).expand(
-                self.time_steps, *self.value.shape
-            )
-        self.t += self.time_steps
+        output, self.t = functional.sta_constant_multi_step(
+            self.value, self.t, self.time_steps
+        )
         return output
 
 

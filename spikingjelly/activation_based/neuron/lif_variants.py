@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .. import base, surrogate
+from .. import base, functional, surrogate
 from .base_node import BaseNode
 from .lif import LIFNode
 
@@ -250,20 +250,23 @@ class GatedLIFNode(base.MemoryModule):
         )
 
     def multi_step_forward(self, x_seq: torch.Tensor):
-        alpha, beta, gamma = (
-            self.alpha.view(1, -1, 1, 1).sigmoid(),
-            self.beta.view(1, -1, 1, 1).sigmoid(),
-            self.gamma.view(1, -1, 1, 1).sigmoid(),
+        if not isinstance(self.v, torch.Tensor):
+            self.v = torch.full_like(x_seq[0], self.v)
+        spike_seq, self.u, self.v = functional.gated_lif_multi_step(
+            x_seq,
+            self.v,
+            self.T,
+            self.alpha,
+            self.beta,
+            self.gamma,
+            self.tau,
+            self.v_threshold,
+            self.linear_decay,
+            self.v_subreset,
+            self.conduct,
+            self.surrogate_function,
         )
-        y_seq = []
-        spike = torch.zeros(x_seq.shape[1:], device=x_seq.device)
-        for t in range(self.T):
-            self.neuronal_charge(x_seq[t], alpha, beta, t)
-            self.neuronal_reset(spike, alpha, gamma)
-            spike = self.neuronal_fire()
-            self.v = self.u
-            y_seq.append(spike)
-        return torch.stack(y_seq)
+        return spike_seq
 
 
 class KLIFNode(BaseNode):

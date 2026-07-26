@@ -59,7 +59,6 @@ from spikingjelly.activation_based.ann2snn.recipes.spikezip_qann import (
     SpikeZIPRobertaSelfAttention,
     SpikeZIPSoftmax,
     SpikeZIPViTSelfAttention,
-    _spikezip_matmul_delta,
 )
 from spikingjelly.activation_based.neuron import STBIFNeuron
 
@@ -1138,7 +1137,7 @@ def test_spikezip_softmax_layernorm_and_matmul_match_qann_ops():
     b = torch.randn(2, 4, 5)
     a_pre = torch.randn(2, 3, 4)
     b_pre = torch.randn(2, 4, 5)
-    delta = _spikezip_matmul_delta(a, b, a_pre + a, b_pre + b)
+    delta = functional.spikezip_matmul_delta(a, b, a_pre + a, b_pre + b)
     expected = torch.matmul(a_pre + a, b_pre + b) - torch.matmul(a_pre, b_pre)
     assert torch.allclose(delta, expected, atol=1e-6, rtol=1e-6)
 

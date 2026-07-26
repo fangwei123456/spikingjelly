@@ -311,9 +311,15 @@ class NeuNorm(base.MemoryModule):
         nn.init.kaiming_uniform_(self.w, a=math.sqrt(5))
 
     def single_step_forward(self, in_spikes: Tensor):
-        self.x = self.k0 * self.x + self.k1 * in_spikes.sum(dim=1, keepdim=True)
-        # x.shape = [batch_size, 1, height, width]
-        return in_spikes - self.w * self.x
+        if isinstance(self.x, float):
+            x_init = self.x
+            self.x = torch.zeros_like(in_spikes.sum(dim=1, keepdim=True).data)
+            if x_init != 0.0:
+                torch.fill_(self.x, x_init)
+        out, self.x = functional.neunorm_single_step(
+            in_spikes, self.x, self.w, self.k0, self.k1
+        )
+        return out
 
     def extra_repr(self) -> str:
         return f"shape={self.w.shape}"
@@ -723,13 +729,11 @@ class _BatchNormThroughTimeBase(base.MemoryModule):
         self.register_memory("t", -1)
 
     def single_step_forward(self, x: torch.Tensor):
-        self.t = self.t + 1
-        f = self.bn_list[self.t]
-        original_track_running_stats = f.track_running_stats
-        if in_gc_1st_forward():
-            f.track_running_stats = False
-        out = f(x)
-        f.track_running_stats = original_track_running_stats
+        t = self.t
+        self.t = t + 1
+        out, _ = functional.batch_norm_through_time_single_step(
+            x, t, self.bn_list, disable_running_stats=in_gc_1st_forward()
+        )
         return out
 
 

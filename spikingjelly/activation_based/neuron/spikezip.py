@@ -3,7 +3,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from .. import base
+from .. import base, functional
 
 __all__ = ["STBIFNeuron"]
 
@@ -117,9 +117,9 @@ class STBIFNeuron(base.MemoryModule):
         self.register_buffer(
             "pos_max",
             _as_scalar_tensor(
-                (
-                    self.level // 2 - 1 if self.sym else self.level - 1
-                ) if pos_max is None else pos_max
+                (self.level // 2 - 1 if self.sym else self.level - 1)
+                if pos_max is None
+                else pos_max
             ).float(),
         )
         self.register_buffer(
@@ -176,22 +176,14 @@ class STBIFNeuron(base.MemoryModule):
         q_threshold = self.q_threshold.to(device=x.device, dtype=x.dtype)
         normalized = x / q_threshold
         self._init_state(normalized)
-
-        self.q = self.q + normalized.detach()
-        self.acc_q = torch.round(self.acc_q)
         pos_max = self.pos_max.to(device=x.device, dtype=x.dtype)
         neg_min = self.neg_min.to(device=x.device, dtype=x.dtype)
-        spike_position = (self.q - 1 >= 0) & (self.acc_q < pos_max)
-        neg_spike_position = (self.q < 0) & (self.acc_q > neg_min)
-
-        self.cur_output.zero_()
-        self.cur_output[spike_position] = 1
-        self.cur_output[neg_spike_position] = -1
-        self.acc_q = self.acc_q + self.cur_output
-        self.q[spike_position] = self.q[spike_position] - 1
-        self.q[neg_spike_position] = self.q[neg_spike_position] + 1
-        self.is_work = bool((normalized != 0).any() | (self.cur_output != 0).any())
-        return self.cur_output * q_threshold
+        out, self.q, self.acc_q, self.cur_output, self.is_work = (
+            functional.stbif_single_step(
+                x, self.q, self.acc_q, q_threshold, pos_max, neg_min
+            )
+        )
+        return out
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         if x_seq.device.type == "cuda" and self.backend == "triton":
@@ -203,26 +195,11 @@ class STBIFNeuron(base.MemoryModule):
         pos_max = self.pos_max.to(device=x_seq.device, dtype=x_seq.dtype)
         neg_min = self.neg_min.to(device=x_seq.device, dtype=x_seq.dtype)
         self._init_state(x_seq[0])
-        q = self.q
-        acc_q = self.acc_q
-        out_seq = torch.empty_like(x_seq)
-        for t in range(x_seq.shape[0]):
-            normalized = (x_seq[t] / q_threshold).detach()
-            q = q + normalized
-            acc_q = torch.round(acc_q)
-            spike_position = (q - 1 >= 0) & (acc_q < pos_max)
-            neg_spike_position = (q < 0) & (acc_q > neg_min)
-            cur_output = spike_position.to(x_seq.dtype) - neg_spike_position.to(
-                x_seq.dtype
+        out_seq, self.q, self.acc_q, self.cur_output, self.is_work = (
+            functional.stbif_multi_step_torch(
+                x_seq, self.q, self.acc_q, q_threshold, pos_max, neg_min
             )
-            acc_q = acc_q + cur_output
-            q = torch.where(spike_position, q - 1, q)
-            q = torch.where(neg_spike_position, q + 1, q)
-            out_seq[t] = cur_output * q_threshold
-        self.q = q
-        self.acc_q = acc_q
-        self.cur_output = cur_output
-        self.is_work = bool((x_seq != 0).any() | (out_seq != 0).any())
+        )
         return out_seq
 
     def _multi_step_forward_triton(self, x_seq: torch.Tensor) -> torch.Tensor:
