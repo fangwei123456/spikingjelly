@@ -20,13 +20,6 @@ __all__ = [
 ]
 
 
-def _temporal_difference(y_cum: torch.Tensor) -> torch.Tensor:
-    y_seq = torch.empty_like(y_cum)
-    y_seq[0] = y_cum[0]
-    y_seq[1:] = y_cum[1:] - y_cum[:-1]
-    return y_seq
-
-
 def spikezip_release_bias_single_step(
     y: torch.Tensor,
     bias: torch.Tensor | None,
@@ -419,7 +412,11 @@ def spikezip_matmul_sequence_delta(
     b_cum = b_seq.cumsum(dim=0)
     if transpose_b:
         b_cum = b_cum.transpose(-2, -1)
-    return _temporal_difference(a_cum @ b_cum)
+    y_cum = a_cum @ b_cum
+    y_seq = torch.empty_like(y_cum)
+    y_seq[0] = y_cum[0]
+    y_seq[1:] = y_cum[1:] - y_cum[:-1]
+    return y_seq
 
 
 def spikezip_vit_single_tokens(

@@ -1554,42 +1554,6 @@ def _reset(
     return hard_reset(v, spike, v_reset, detach_reset)
 
 
-def _canonicalize_inductor_tensor(tensor: torch.Tensor) -> torch.Tensor:
-    return tensor.contiguous()
-
-
-def _inductor_tensor_signature(tensor: torch.Tensor) -> tuple[Any, ...]:
-    return (
-        tuple(tensor.shape),
-        tensor.ndim,
-        str(tensor.dtype),
-        tensor.device.type,
-        tensor.device.index,
-        tensor.is_contiguous(),
-        bool(tensor.requires_grad),
-    )
-
-
-def _inductor_runtime_cache_key(*tensors: torch.Tensor) -> tuple[Any, ...]:
-    return tuple(_inductor_tensor_signature(tensor) for tensor in tensors)
-
-
-def _surrogate_inductor_cache_key(
-    surrogate_function: SurrogateFunction,
-) -> tuple[Any, ...] | None:
-    from spikingjelly.activation_based.neuron import inductor_cache
-
-    return inductor_cache.surrogate_key(surrogate_function)
-
-
-def _compile_inductor_graph(
-    cache_key: tuple[Any, ...] | None, fn: Callable
-) -> Callable:
-    from spikingjelly.activation_based.neuron import inductor_cache
-
-    return inductor_cache.compile_graph(cache_key, fn)
-
-
 def _normalise_inductor_multi_step_output(
     out: tuple[torch.Tensor, ...],
     store_v_seq: bool,
@@ -2120,10 +2084,10 @@ def if_multi_step_inductor(
     """
     from ..neuron import inductor_cache
 
-    x_seq = _canonicalize_inductor_tensor(x_seq)
-    v = _canonicalize_inductor_tensor(v)
-    surrogate_key = _surrogate_inductor_cache_key(surrogate_function)
-    graph = _compile_inductor_graph(
+    x_seq = inductor_cache.canonicalize_tensor(x_seq)
+    v = inductor_cache.canonicalize_tensor(v)
+    surrogate_key = inductor_cache.surrogate_key(surrogate_function)
+    graph = inductor_cache.compile_graph(
         None
         if surrogate_key is None
         else (
@@ -2133,7 +2097,7 @@ def if_multi_step_inductor(
             v_reset,
             detach_reset,
             surrogate_key,
-            _inductor_runtime_cache_key(x_seq, v),
+            inductor_cache.runtime_key(x_seq, v),
         ),
         inductor_cache._build_if_multi_step_graph(
             v_threshold,
@@ -2582,10 +2546,10 @@ def lif_multi_step_inductor(
     """
     from ..neuron import inductor_cache
 
-    x_seq = _canonicalize_inductor_tensor(x_seq)
-    v = _canonicalize_inductor_tensor(v)
-    surrogate_key = _surrogate_inductor_cache_key(surrogate_function)
-    graph = _compile_inductor_graph(
+    x_seq = inductor_cache.canonicalize_tensor(x_seq)
+    v = inductor_cache.canonicalize_tensor(v)
+    surrogate_key = inductor_cache.surrogate_key(surrogate_function)
+    graph = inductor_cache.compile_graph(
         None
         if surrogate_key is None
         else (
@@ -2597,7 +2561,7 @@ def lif_multi_step_inductor(
             v_reset,
             detach_reset,
             surrogate_key,
-            _inductor_runtime_cache_key(x_seq, v),
+            inductor_cache.runtime_key(x_seq, v),
         ),
         inductor_cache._build_lif_multi_step_graph(
             tau,
@@ -2863,11 +2827,11 @@ def plif_multi_step_inductor(
     """
     from ..neuron import inductor_cache
 
-    x_seq = _canonicalize_inductor_tensor(x_seq)
-    v = _canonicalize_inductor_tensor(v)
-    reciprocal_tau = _canonicalize_inductor_tensor(w.sigmoid().to(x_seq))
-    surrogate_key = _surrogate_inductor_cache_key(surrogate_function)
-    graph = _compile_inductor_graph(
+    x_seq = inductor_cache.canonicalize_tensor(x_seq)
+    v = inductor_cache.canonicalize_tensor(v)
+    reciprocal_tau = inductor_cache.canonicalize_tensor(w.sigmoid().to(x_seq))
+    surrogate_key = inductor_cache.surrogate_key(surrogate_function)
+    graph = inductor_cache.compile_graph(
         None
         if surrogate_key is None
         else (
@@ -2878,7 +2842,7 @@ def plif_multi_step_inductor(
             v_reset,
             detach_reset,
             surrogate_key,
-            _inductor_runtime_cache_key(x_seq, v, reciprocal_tau),
+            inductor_cache.runtime_key(x_seq, v, reciprocal_tau),
         ),
         inductor_cache._build_plif_multi_step_graph(
             decay_input,
@@ -4300,7 +4264,7 @@ def _stbif_step(
     q_threshold: torch.Tensor,
     pos_max: torch.Tensor,
     neg_min: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     normalized = x / q_threshold
     q_next = q + normalized.detach()
     acc_q_next = torch.round(acc_q)
@@ -4310,13 +4274,7 @@ def _stbif_step(
     acc_q_next = acc_q_next + cur_output_next
     q_next = torch.where(spike_position, q_next - 1, q_next)
     q_next = torch.where(neg_spike_position, q_next + 1, q_next)
-    return (
-        cur_output_next * q_threshold,
-        q_next,
-        acc_q_next,
-        cur_output_next,
-        normalized,
-    )
+    return cur_output_next * q_threshold, q_next, acc_q_next, cur_output_next
 
 
 def stbif_single_step(
@@ -4397,10 +4355,10 @@ def stbif_single_step(
     :return: ``(out, q_next, acc_q_next, cur_output_next, is_work)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, bool]
     """
-    out, q_next, acc_q_next, cur_output_next, normalized = _stbif_step(
+    out, q_next, acc_q_next, cur_output_next = _stbif_step(
         x, q, acc_q, q_threshold, pos_max, neg_min
     )
-    is_work = bool((normalized != 0).any() | (cur_output_next != 0).any())
+    is_work = bool((x != 0).any() | (out != 0).any())
     return out, q_next, acc_q_next, cur_output_next, is_work
 
 
@@ -4476,7 +4434,7 @@ def stbif_multi_step_torch(
     cur_output_next = torch.zeros_like(x_seq[0])
     out_seq = torch.empty_like(x_seq)
     for t in range(x_seq.shape[0]):
-        out_seq[t], q_next, acc_q_next, cur_output_next, _ = _stbif_step(
+        out_seq[t], q_next, acc_q_next, cur_output_next = _stbif_step(
             x_seq[t], q_next, acc_q_next, q_threshold, pos_max, neg_min
         )
     is_work = bool((x_seq != 0).any() | (out_seq != 0).any())

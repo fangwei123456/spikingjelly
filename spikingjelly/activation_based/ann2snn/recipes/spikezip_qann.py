@@ -598,19 +598,6 @@ def _spikezip_vit_patch_embed(model: nn.Module, x: torch.Tensor) -> torch.Tensor
     return x
 
 
-def _spikezip_vit_token_sequence(
-    model: nn.Module,
-    time_steps: int,
-    batch_size: int,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    return functional.spikezip_vit_token_sequence(
-        model.cls_token,
-        model.pos_embed,
-        time_steps,
-        batch_size,
-    )
-
-
 def _spikezip_vit_single_tokens(
     model: nn.Module,
     batch_size: int,
@@ -644,8 +631,9 @@ def _spikezip_vit_forward_features(self: nn.Module, x: torch.Tensor) -> torch.Te
         raise ValueError("SpikeZIP ViT model expects blocks or attn.")
     if x.dim() == 5:
         hidden = _spikezip_vit_patch_embed(self, x)
-        cls_seq, pos_seq = _spikezip_vit_token_sequence(
-            self,
+        cls_seq, pos_seq = functional.spikezip_vit_token_sequence(
+            self.cls_token,
+            self.pos_embed,
             hidden.shape[0],
             hidden.shape[1],
         )

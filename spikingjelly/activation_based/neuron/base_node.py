@@ -386,28 +386,6 @@ class BaseNode(base.MemoryModule):
                 ) from exc
             raise
 
-    @staticmethod
-    def _canonicalize_inductor_tensor(tensor: torch.Tensor) -> torch.Tensor:
-        return tensor.contiguous()
-
-    @staticmethod
-    def _inductor_tensor_signature(tensor: torch.Tensor):
-        return (
-            tuple(tensor.shape),
-            tensor.ndim,
-            str(tensor.dtype),
-            tensor.device.type,
-            tensor.device.index,
-            tensor.is_contiguous(),
-            bool(tensor.requires_grad),
-        )
-
-    def _inductor_runtime_cache_key(self, *tensors: torch.Tensor):
-        return tuple(self._inductor_tensor_signature(t) for t in tensors)
-
-    def _surrogate_inductor_cache_key(self):
-        return inductor_cache.surrogate_key(self.surrogate_function)
-
 
 class NonSpikingBaseNode(nn.Module, base.MultiStepModule):
     def __init__(self, decode: Optional[str] = None):

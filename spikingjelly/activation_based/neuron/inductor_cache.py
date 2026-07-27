@@ -65,6 +65,17 @@ def surrogate_key(surrogate_function: Callable) -> tuple[Any, ...] | None:
     )
 
 
+def canonicalize_tensor(tensor: torch.Tensor) -> torch.Tensor:
+    return tensor.contiguous()
+
+
+def runtime_key(*tensors: torch.Tensor) -> tuple[Any, ...]:
+    return tuple(
+        (tuple(tensor.shape), tensor.dtype, tensor.device, tensor.requires_grad)
+        for tensor in tensors
+    )
+
+
 def surrogate_callable(surrogate_function: Callable) -> Callable:
     surrogate_type = type(surrogate_function)
     if (

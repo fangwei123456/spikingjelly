@@ -651,14 +651,13 @@ def stdp_multi_step(
             )
         )
 
-    return functional_learning.stdp_multi_step(
-        layer.weight.data,
-        in_spike,
-        out_spike,
-        trace_pre,
-        trace_post,
-        stdp_single_step,
-    )
+    delta_w = torch.zeros_like(layer.weight)
+    for t in range(in_spike.shape[0]):
+        trace_pre, trace_post, dw = stdp_single_step(
+            in_spike[t], out_spike[t], trace_pre, trace_post
+        )
+        delta_w += dw
+    return trace_pre, trace_post, delta_w
 
 
 class STDPLearner(base.MemoryModule):

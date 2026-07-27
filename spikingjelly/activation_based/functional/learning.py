@@ -13,7 +13,6 @@ __all__ = [
     "mstdpet_linear_single_step",
     "stdp_conv1d_single_step",
     "stdp_conv2d_single_step",
-    "stdp_multi_step",
     "mstdp_reward_delta",
     "mstdpet_reward_delta",
 ]
@@ -581,84 +580,6 @@ def stdp_conv1d_single_step(
             tr_pre.unsqueeze(1) * out_spike.unsqueeze(2)
         ).permute([1, 2, 0, 3]).sum(dim=[2, 3])
         delta_w[:, :, l] += delta_w_pre + delta_w_post
-    return trace_pre, trace_post, delta_w
-
-
-def stdp_multi_step(
-    weight: torch.Tensor,
-    in_spike: torch.Tensor,
-    out_spike: torch.Tensor,
-    trace_pre: torch.Tensor,
-    trace_post: torch.Tensor,
-    single_step: Callable[
-        [torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
-        tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-    ],
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    r"""
-    **API Language** - :ref:`中文 <functional_stdp_multi_step-cn>` | :ref:`English <functional_stdp_multi_step-en>`
-
-    ----
-
-    .. _functional_stdp_multi_step-cn:
-
-    * **中文**
-
-    在第 0 维时间序列上重复调用调用方已选择的 STDP 单步 tensor 函数，并累计
-    ``delta_w``。函数不决定 synapse 类型、``step_mode`` 或 ``training/eval``。
-
-    :param weight: 用于确定 ``delta_w`` 形状的权重 tensor
-    :type weight: torch.Tensor
-    :param in_spike: 输入脉冲序列，第 0 维为时间
-    :type in_spike: torch.Tensor
-    :param out_spike: 输出脉冲序列，第 0 维为时间
-    :type out_spike: torch.Tensor
-    :param trace_pre: 初始 pre trace
-    :type trace_pre: torch.Tensor
-    :param trace_post: 初始 post trace
-    :type trace_post: torch.Tensor
-    :param single_step: 已由调用方选择的单步 tensor 函数，依次接收
-        ``(in_spike_t, out_spike_t, trace_pre, trace_post)``，返回
-        ``(trace_pre_next, trace_post_next, delta_w)``；权重和算子参数应由 closure
-        或 ``functools.partial`` 绑定
-    :type single_step: Callable[[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
-    :return: ``(trace_pre_next, trace_post_next, delta_w)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-
-    ----
-
-    .. _functional_stdp_multi_step-en:
-
-    * **English**
-
-    Repeatedly call the caller-selected tensor-only STDP single-step function
-    along the time dimension 0 and accumulate ``delta_w``. The function does not
-    decide synapse type, ``step_mode`` or ``training/eval``.
-
-    :param weight: Weight tensor used to determine the shape of ``delta_w``
-    :type weight: torch.Tensor
-    :param in_spike: Input spike sequence with time on dimension 0
-    :type in_spike: torch.Tensor
-    :param out_spike: Output spike sequence with time on dimension 0
-    :type out_spike: torch.Tensor
-    :param trace_pre: Materialized initial pre-synaptic trace tensor
-    :type trace_pre: torch.Tensor
-    :param trace_post: Materialized initial post-synaptic trace tensor
-    :type trace_post: torch.Tensor
-    :param single_step: Caller-selected tensor-only function that accepts
-        ``(in_spike_t, out_spike_t, trace_pre, trace_post)`` and returns
-        ``(trace_pre_next, trace_post_next, delta_w)``. Bind weight and
-        operator-specific arguments with a closure or ``functools.partial``
-    :type single_step: Callable[[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
-    :return: ``(trace_pre_next, trace_post_next, delta_w)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    """
-    delta_w = torch.zeros_like(weight)
-    for t in range(in_spike.shape[0]):
-        trace_pre, trace_post, dw = single_step(
-            in_spike[t], out_spike[t], trace_pre, trace_post
-        )
-        delta_w += dw
     return trace_pre, trace_post, delta_w
 
 
