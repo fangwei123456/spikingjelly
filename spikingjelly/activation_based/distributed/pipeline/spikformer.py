@@ -68,6 +68,7 @@ def _build_spikformer_pipeline_module(
     num_logical_stages: int,
     example_input: torch.Tensor,
     layout_counts: Optional[Sequence[int]] = None,
+    group=None,
 ) -> _PipelineSequentialModule:
     if num_logical_stages < 2:
         raise ValueError("Spikformer pipeline parallel requires at least 2 stages.")
@@ -102,11 +103,17 @@ def _build_spikformer_pipeline_module(
     head_input = _SpikformerPipelineStage._pool_features(current)
     _, head_cost = _measure_module_cost(module.head, head_input)
     unit_costs.append(head_cost)
-    block_counts = (
-        list(layout_counts)
-        if layout_counts is not None
-        else _partition_costs_contiguously(unit_costs, num_logical_stages)
-    )
+    if layout_counts is None:
+        block_counts = _partition_costs_contiguously(unit_costs, num_logical_stages)
+        if dist.is_initialized():
+            counts = torch.tensor(
+                block_counts, device=example_input.device, dtype=torch.int64
+            )
+            src = dist.get_global_rank(group, 0) if group is not None else 0
+            dist.broadcast(counts, src=src, group=group)
+            block_counts = counts.tolist()
+    else:
+        block_counts = list(layout_counts)
     first_active_stage_idx = next(
         (idx for idx, count in enumerate(block_counts) if count > 0), None
     )
@@ -166,6 +173,7 @@ def configure_spikformer_pipeline(
         num_logical_stages=logical_num_stages,
         example_input=example_input,
         layout_counts=layout_counts,
+        group=group,
     )
     return _build_snn_pipeline_runtime(
         pipeline_module=pipeline_module,

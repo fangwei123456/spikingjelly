@@ -57,11 +57,14 @@ class BaseMonitor:
     def _monitor_modules(self, net, instance):
         if instance is None:
             instance = type(net)
-        for name, module in net.named_modules():
-            if isinstance(module, instance):
-                self.monitored_layers.append(name)
-                self.name_records_index[name] = []
-                yield name, module
+        modules = [
+            (name, module)
+            for name, module in net.named_modules()
+            if isinstance(module, instance)
+        ]
+        self.monitored_layers.extend(name for name, _ in modules)
+        self.name_records_index.update((name, []) for name, _ in modules)
+        return modules
 
     def _record(self, name, value):
         self.name_records_index[name].append(len(self.records))

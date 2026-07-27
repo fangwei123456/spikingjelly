@@ -307,7 +307,6 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = 0.125
-        self._backend = backend
 
         self.qkv_conv_bn = SeqToANNContainer(
             nn.Conv1d(dim, dim * 3, kernel_size=1, stride=1, bias=False),
@@ -328,21 +327,6 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         self.proj_lif = neuron.LIFNode(
             tau=2.0, detach_reset=True, step_mode="m", backend=backend
         )
-
-    @property
-    def backend(self):
-        """
-        一旦设置，本模块中所有神经元的后端都会被同样地设置。
-
-        Once set, the backend of all the neurons in this module will also be changed.
-        """
-        return self._backend
-
-    @backend.setter
-    def backend(self, value: str):
-        self._backend = value
-        for module in (self.qkv_lif, self.attn_lif, self.proj_lif):
-            module.backend = value
 
     @staticmethod
     def _ssa_kernel_torch(qkv, scale):  # TODO: add triton implementation
@@ -385,7 +369,10 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         return x_seq
 
     def extra_repr(self):
-        return f"dim={self.dim}, num_heads={self.num_heads}, backend={self.backend}"
+        return (
+            f"dim={self.dim}, num_heads={self.num_heads}, "
+            f"backend={self.qkv_lif.backend}"
+        )
 
 
 class QKAttention(nn.Module, base.MultiStepModule):
@@ -469,7 +456,6 @@ class QKAttention(nn.Module, base.MultiStepModule):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self._qka_type = qka_type
-        self._backend = backend
 
         self.qk_conv_bn = SeqToANNContainer(
             nn.Conv1d(dim, dim * 2, kernel_size=1, stride=1, bias=False),
@@ -491,21 +477,6 @@ class QKAttention(nn.Module, base.MultiStepModule):
         self.proj_lif = neuron.LIFNode(
             tau=2.0, detach_reset=True, step_mode="m", backend=backend
         )
-
-    @property
-    def backend(self):
-        """
-        一旦设置，本模块中所有神经元的后端都会被同样地设置。
-
-        Once set, the backend of all the neurons in this module will also be changed.
-        """
-        return self._backend
-
-    @backend.setter
-    def backend(self, value: str):
-        self._backend = value
-        for module in (self.qk_lif, self.attn_lif, self.proj_lif):
-            module.backend = value
 
     @property
     def qka_type(self):
@@ -556,7 +527,7 @@ class QKAttention(nn.Module, base.MultiStepModule):
     def extra_repr(self):
         return (
             f"dim={self.dim}, num_heads={self.num_heads}, "
-            f"qka_type={self.qka_type}, backend={self.backend}"
+            f"qka_type={self.qka_type}, backend={self.qk_lif.backend}"
         )
 
 

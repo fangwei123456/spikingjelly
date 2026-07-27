@@ -555,6 +555,7 @@ def integrate_events_segment_to_frame(
     :return: a single two-channel frame
     :rtype: np.ndarray
     """
+    # Indexed ``+=`` can lose repeated positions; bincount accumulates every event.
     x = x[j_l:j_r].astype(int)  # avoid overflow
     y = y[j_l:j_r].astype(int)
     p = p[j_l:j_r] != 0

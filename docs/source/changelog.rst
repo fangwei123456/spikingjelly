@@ -23,210 +23,102 @@ ANN-to-SNN Conversion
 
 Module: ``spikingjelly.activation_based.ann2snn``.
 
-- Added temporal-difference ``TDRMSNorm`` and ``TDSiLU`` operators with single-step,
-  multi-step, reset, and autograd support. Their floating-point differential
-  outputs preserve cumulative RMSNorm / SiLU semantics and are not binary or
-  fully spike-driven operators.
-- Extended ``TransformerTDEquivalentRecipe`` to convert ``torch.nn.RMSNorm``,
-  ``torch.nn.SiLU``, and functional SiLU calls while preserving source parameters,
-  dtype, device, training mode, and gradient requirements.
+- Added temporal-difference RMSNorm and SiLU operators and conversion support in
+  ``TransformerTDEquivalentRecipe``.
 - Added public ``Qwen2SNNConfig``, ``Qwen2SNNCalibration``, ``Qwen2SNNModel``, and
-  ``Qwen2SNNRecipe``
-  APIs for calibration-driven Qwen2 causal-LM conversion through
-  ``ModuleConverter``. The converted model uses current SpikingJelly TD operators
-  and signed activation-aware IF neurons, retains an explicit ``[T,B,S,H]``
-  multi-step layout, and supports resettable KV-cache inference. This is an
-  offline layerwise schedule rather than online SNN inference.
-- Added ``SignedQCFSSequenceEncoder`` with Torch/Triton activation-aware IF
-  backends and a temporal-sum reconstruction method for diagnostic parity
-  checks. Qwen quality evaluation continues to execute the explicit multi-step
-  spike sequence.
-- Fixed BF16 signed QCFS boundary replay at large time-step counts by using
-  exact threshold pulses through the activation-aware IF neurons.
-- Fixed ``SignedQCFSSequenceEncoder`` statistics masks for non-last channel
-  dimensions and boundary-correction fractions, rejected invalid scalar or
-  empty-mask inputs, and skipped boundary replay when the initial spike counts
-  already match QCFS counts.
-- Fixed converted Qwen2 inference to honor explicit and left-padding-aware
-  rotary position IDs, reject inconsistent cache use, and require all
-  calibration metadata to match the conversion configuration.
-- Added revision-pinned Qwen2.5 Base 0.5B-3B correctness, quality, efficiency,
-  and tensor-parallel evaluation tools for the experimental offline multi-step
-  path. Their results are not guaranteed latency or energy improvements.
+  ``Qwen2SNNRecipe`` for calibration-driven, offline layerwise Qwen2 conversion
+  with an explicit ``[T, B, S, H]`` layout and resettable KV cache.
+- Added ``SignedQCFSSequenceEncoder`` and revision-pinned Qwen2.5 correctness,
+  quality, efficiency, and tensor-parallel evaluation tools. These experimental
+  workflows do not claim latency or energy improvements.
 
 Precision
 ^^^^^^^^^
 
 Module: ``spikingjelly.activation_based.precision``.
 
-- Added optional Transformer Engine FP8 backend support via
-  ``PrecisionConfig(mode="fp8-te")``, including guarded fallback behavior for
-  missing Transformer Engine, unsupported recipes, and non-FP8-capable devices.
-
-- Added FP8 optional dependency extras for ``fp8-te`` and ``fp8-torchao``.
-
-- Added Transformer Engine adapters for Linear, pointwise Conv1d,
-  LayerNorm, exact LayerNormLinear / LayerNormMLP fusion patterns, and SDPA
-  argument validation.
-
-- Added Transformer Engine SDPA output-layout compatibility for both
-  ``[B, S, H, D]`` and flattened ``[B, S, H * D]`` results, and scoped FP8
-  autocast to the configured indexed CUDA device.
-
-- Improved Transformer Engine capability failures to preserve the underlying
-  import or runtime error instead of reporting every import failure as a
-  missing installation.
-
-- Added precision conversion reports with pointwise Conv1d, LayerNorm,
-  fused-pattern metadata, and shared-module identity preservation for
-  Transformer Engine fused precision patterns.
+- Added optional Transformer Engine FP8 support through
+  ``PrecisionConfig(mode="fp8-te")``, including Linear, pointwise Conv1d,
+  LayerNorm, fused LayerNorm patterns, and SDPA adapters.
+- Added ``fp8-te`` and ``fp8-torchao`` extras, capability diagnostics, and conversion
+  reports.
 
 Triton Neuron Kernels
 ^^^^^^^^^^^^^^^^^^^^^
 
 Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
 
-- Added a CUDA multi-step inference-only Triton backend for
-  ``ActivationAwareIFNode``, including scalar or channel-wise thresholds and
-  membrane offsets, soft or hard reset, compact final-state storage, and FP32 /
-  BF16 execution. Training and autograd remain unsupported for this backend.
-
-- Added experimental mixed-precision Triton forward and backward paths for
-  multi-step IF, LIF, and ParametricLIF neurons, including FP8 storage
-  experiments with configurable forward and backward compute dtypes.
-
-- Added FP8 Triton neuron capability probes and a reusable execution plan for
-  repeated mixed-precision neuron launches. Capability reports distinguish
-  FP32, FP16, BF16, and FP8 compute probes for each FP8 storage format.
-
-- Added an FP8 Triton neuron benchmark harness for IF, LIF, and ParametricLIF
-  accuracy, backward-gradient, prepared-plan overhead, FP16/BF16 comparisons,
-  timing quartiles, and allocated/reserved CUDA memory measurements.
-
-- Validated FP8 training and inference on RTX 5090 with PyTorch 2.7.1 / Triton
-  3.3.1 and PyTorch 2.11 / Triton 3.6. Triton IF, LIF, and ParametricLIF
-  kernels experimentally support FP8 storage and FP8 forward/backward compute;
-  reduction buffers remain FP32, numerical accuracy is bounded by the hardware
-  tests, and the measurements do not show a universal speed or peak-memory
-  advantage over BF16.
+- Added a multi-step, inference-only Triton backend for
+  ``ActivationAwareIFNode`` with FP32 and BF16 execution.
+- Added experimental mixed-precision and FP8 IF, LIF, and ParametricLIF kernels,
+  capability probes, execution plans, and benchmarks. FP8 does not
+  consistently outperform BF16 in the measured workloads.
 
 Bug Fixes
 ~~~~~~~~~
-
-Activation-Based Sequence Forwarding
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Module: ``spikingjelly.activation_based.functional``,
-``spikingjelly.activation_based.layer``.
-
-- Fixed ``TLastMultiStepContainer`` to advance stateful modules one time step at
-  a time instead of using stateless sequence-to-ANN vectorization.
-- Fixed sequence-to-ANN forwarding to preserve tuple outputs, including pooling
-  indices.
-
-CUDA Neuron Kernels
-^^^^^^^^^^^^^^^^^^^
-
-Module: ``spikingjelly.activation_based.cuda_kernel.neuron_kernel``.
-
-- Removed RST docstring fragments from the generated FP32 IF forward/backward
-  and LIF forward CUDA source so that CuPy can compile these kernels.
 
 ANN-to-SNN Conversion
 ^^^^^^^^^^^^^^^^^^^^^
 
 Module: ``spikingjelly.activation_based.ann2snn``.
 
-- Fixed multi-step TD operators retaining the complete cumulative-sequence
-  storage through their final-step state views. TD state now owns compact
-  final-step storage, substantially reducing inference memory without changing
-  continuation or gradient semantics.
+- Fixed TD operators retaining full cumulative sequences instead of compact
+  final-step state.
 - Fixed FX conversion on PyTorch 2.6 and 2.7 for dynamic ``torch.reshape``
   calls and forward signatures containing PEP 604 union annotations.
+- Fixed signed QCFS boundary replay and statistics for non-last channel
+  dimensions.
+- Fixed converted Qwen2 position IDs, cache validation, and calibration
+  metadata checks.
+
+Activation-Based Sequence Forwarding
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Modules: ``spikingjelly.activation_based.functional``,
+``spikingjelly.activation_based.layer``.
+
+- Fixed time-last containers advancing stateful modules through stateless
+  vectorization and preserved tuple outputs from sequence-to-ANN forwarding.
+
+CUDA Neuron Kernels
+^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.cuda_kernel.neuron_kernel``.
+
+- Fixed generated FP32 IF/LIF CUDA source containing invalid RST fragments.
+
+Learning
+^^^^^^^^
+
+Module: ``spikingjelly.activation_based.learning``.
+
+- Fixed STDP learners retaining network or reward autograd graphs across
+  iterations.
 
 Recurrent Networks
 ^^^^^^^^^^^^^^^^^^
 
 Module: ``spikingjelly.activation_based.rnn``.
 
-- Fixed stacked spiking RNNs discarding earlier layers' final states and
-  skipping dropout between the first two recurrent layers.
-
-Timing-Based Neurons
-^^^^^^^^^^^^^^^^^^^^
-
-Module: ``spikingjelly.timing_based.neuron``.
-
-- Fixed ``Tempotron`` maximum-voltage and spike-time outputs dropping the batch
-  or output-feature dimension when either size is one.
+- Fixed stacked spiking RNN final states and dropout placement.
 
 Triton Neuron Kernels
 ^^^^^^^^^^^^^^^^^^^^^
 
 Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
 
-- Fixed corrupted IF, LIF, and ParametricLIF input and parameter gradients when
-  stable multi-step Triton kernels receive non-contiguous upstream gradients.
+- Fixed gradients for non-contiguous upstream tensors in stable multi-step
+  IF/LIF/ParametricLIF kernels.
 
-- Fixed ``STDPLearner``, ``MSTDPLearner``, and ``MSTDPETLearner`` retaining the
-  autograd graph of the network's forward pass, which caused unbounded
-  memory growth (and eventual OOM) when models and learners were recreated
-  in a loop, e.g. during hyperparameter search (#576). Spikes recorded by
-  the learners' monitors are now detached, so ``step()`` no longer needs to
-  be wrapped in ``torch.no_grad()``.
+Timing-Based Neurons
+^^^^^^^^^^^^^^^^^^^^
 
-- Fixed ``MSTDPLearner.step()`` and ``MSTDPETLearner.step()`` retaining the
-  autograd graph of a graph-connected ``reward`` (e.g. the output of a critic
-  network), which leaked the forward pass's graph into ``weight.grad`` and the
-  returned ``delta_w`` and accumulated memory across training iterations — the
-  reward-side counterpart of #576. The reward is now detached inside
-  ``step()``.
+Module: ``spikingjelly.timing_based.neuron``.
+
+- Fixed ``Tempotron`` outputs when batch or output-feature size is one.
 
 Improvements
 ~~~~~~~~~~~~
-
-Triton IF/LIF Memory Optimisation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
-
-- Reduced memory usage for standard Triton IF and LIF neurons with
-  ``store_v_seq=False`` by retaining only the final membrane potential instead of
-  materialising the full voltage sequence.
-
-Distributed Training
-^^^^^^^^^^^^^^^^^^^^
-
-Module: ``spikingjelly.activation_based.distributed``.
-
-- Refactored the distributed SNN helpers around an Analyze -> Plan -> Apply
-  workflow, with model capability analysis, structured execution plans, and
-  runtime summaries for data parallel, tensor parallel, FSDP2, FSDP2+TP, and
-  pipeline configurations.
-
-- Added immutable explicit tensor-parallel plans to the Analyze -> Plan -> Apply
-  workflow and replicated-activation colwise/rowwise DTensor styles for
-  ``TDLinear``, allowing converted temporal models to shard parameters without
-  changing their existing TD state and activation semantics.
-- Made replicated-activation ``TDLinear`` redistribution complete before its
-  result is consumed, avoiding unresolved asynchronous DTensor collectives.
-
-- Reorganized eager distributed configuration, model-specific policies for
-  ``CIFAR10DVSVGG`` and Spikformer, and compatibility exports while keeping the
-  low-level ``SNNDistributedConfig`` path available for manual mesh and root
-  selection.
-
-- Split the distributed implementation into focused tensor-parallel, FSDP2,
-  pipeline-partitioning, pipeline-runtime, mesh, optimizer, and metrics helpers
-  for DTensor-based SNN experiments.
-
-- Updated the distributed benchmark and English/Chinese tutorials with the
-  current distributed strategy results, pipeline-parallel setup, and
-  troubleshooting notes.
-
-- Updated the distributed benchmark result schema around current latency,
-  throughput, peak-memory, and tensor-parallel debug fields; legacy
-  FSDP2-specific communication counter keys are no longer emitted.
 
 Timing-Based Models
 ^^^^^^^^^^^^^^^^^^^
@@ -234,15 +126,32 @@ Timing-Based Models
 Modules: ``spikingjelly.timing_based.encoding``,
 ``spikingjelly.timing_based.neuron``.
 
-- Simplified ``GaussianTuning`` and ``Tempotron`` to use direct PyTorch tensor
-  operations and explicit input validation instead of internal Pydantic and
-  einops models.
+- Simplified ``GaussianTuning`` and ``Tempotron`` to direct PyTorch operations.
+
+Distributed Training
+^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.distributed``.
+
+- Added Analyze -> Plan -> Apply configuration for data parallel, tensor
+  parallel, FSDP2, FSDP2+TP, and pipeline execution.
+- Added explicit tensor-parallel plans and replicated-activation DTensor styles
+  for ``TDLinear``.
+- Updated distributed benchmarks, result fields, and tutorials.
+
+Triton IF/LIF Memory Optimisation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
+
+- Reduced memory usage with ``store_v_seq=False`` by retaining only the final
+  membrane potential.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-ANN-to-SNN Conversion
-^^^^^^^^^^^^^^^^^^^^^
+ANN-to-SNN API Changes
+^^^^^^^^^^^^^^^^^^^^^^
 
 Module: ``spikingjelly.activation_based.ann2snn``.
 
@@ -252,8 +161,8 @@ Module: ``spikingjelly.activation_based.ann2snn``.
   should be implemented as an ``FXConversionRecipe``; ``NeuronFactory`` remains
   available for configuring neuron construction.
 
-Distributed Training
-^^^^^^^^^^^^^^^^^^^^
+Distributed API Changes
+^^^^^^^^^^^^^^^^^^^^^^^
 
 Module: ``spikingjelly.activation_based.distributed``.
 
@@ -275,8 +184,8 @@ Module: ``spikingjelly.activation_based.distributed``.
   ``configure_snn_distributed()`` for manual eager configuration or the Analyze
   -> Plan -> Apply workflow.
 
-Operation Counting
-^^^^^^^^^^^^^^^^^^
+Operation-Counting API Changes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Module: ``spikingjelly.activation_based.op_counter``.
 
@@ -284,8 +193,8 @@ Module: ``spikingjelly.activation_based.op_counter``.
   ``SpikeSimEventEnergyReport`` aliases. Use ``SpikeSimEnergyProfiler`` and
   ``SpikeSimEnergyReport``.
 
-Precision
-^^^^^^^^^
+Precision API Changes
+^^^^^^^^^^^^^^^^^^^^^
 
 Module: ``spikingjelly.activation_based.precision``.
 
@@ -299,8 +208,8 @@ Module: ``spikingjelly.activation_based.precision``.
   settings through ``PrecisionConfig`` and ``prepare_model_for_precision()``;
   ``Float8TransformerEnginePolicy`` retains its effective ``fp8_recipe`` argument.
 
-Triton Utilities
-^^^^^^^^^^^^^^^^
+Triton Utility Changes
+^^^^^^^^^^^^^^^^^^^^^^
 
 Module: ``spikingjelly.activation_based.triton_kernel.triton_utils``.
 

@@ -59,7 +59,8 @@ class FXFriendlyBertSelfAttention(nn.Module):
 
     def transpose_for_scores(self, x: torch.Tensor) -> torch.Tensor:
         x = x.view(
-            *x.size()[:-1],
+            x.shape[0],
+            x.shape[1],
             self.num_attention_heads,
             self.attention_head_size,
         )
@@ -80,7 +81,8 @@ class FXFriendlyBertSelfAttention(nn.Module):
         attention_probs = self.dropout(attention_probs)
         context_layer = torch.matmul(attention_probs, value_layer)
         context_layer = context_layer.permute(0, 2, 1, 3).reshape(
-            *hidden_states.size()[:-1],
+            hidden_states.shape[0],
+            hidden_states.shape[1],
             self.all_head_size,
         )
         return context_layer

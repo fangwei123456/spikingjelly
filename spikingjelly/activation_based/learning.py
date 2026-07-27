@@ -9,14 +9,7 @@ import torch.nn.functional as F
 from . import neuron, monitor, base
 
 
-def _create_spike_monitors(synapse, sn):
-    return (
-        monitor.InputMonitor(synapse, function_on_input=torch.Tensor.detach),
-        monitor.OutputMonitor(sn, function_on_output=torch.Tensor.detach),
-    )
-
-
-def _write_weight_gradient(synapse, delta_w):
+def _accumulate_weight_gradient(synapse, delta_w):
     if synapse.weight.grad is None:
         synapse.weight.grad = -delta_w
     else:
@@ -789,10 +782,12 @@ class STDPLearner(base.MemoryModule):
         self.f_pre = f_pre
         self.f_post = f_post
         self.synapse = synapse
-        (
-            self.in_spike_monitor,
-            self.out_spike_monitor,
-        ) = _create_spike_monitors(synapse, sn)
+        self.in_spike_monitor = monitor.InputMonitor(
+            synapse, function_on_input=torch.Tensor.detach
+        )
+        self.out_spike_monitor = monitor.OutputMonitor(
+            sn, function_on_output=torch.Tensor.detach
+        )
 
         self.register_memory("trace_pre", None)
         self.register_memory("trace_post", None)
@@ -956,7 +951,7 @@ class STDPLearner(base.MemoryModule):
             delta_w = dw if (delta_w is None) else (delta_w + dw)
 
         if on_grad:
-            _write_weight_gradient(self.synapse, delta_w)
+            _accumulate_weight_gradient(self.synapse, delta_w)
         else:
             return delta_w
 
@@ -1041,10 +1036,12 @@ class MSTDPLearner(base.MemoryModule):
         self.f_pre = f_pre
         self.f_post = f_post
         self.synapse = synapse
-        (
-            self.in_spike_monitor,
-            self.out_spike_monitor,
-        ) = _create_spike_monitors(synapse, sn)
+        self.in_spike_monitor = monitor.InputMonitor(
+            synapse, function_on_input=torch.Tensor.detach
+        )
+        self.out_spike_monitor = monitor.OutputMonitor(
+            sn, function_on_output=torch.Tensor.detach
+        )
 
         self.register_memory("trace_pre", None)
         self.register_memory("trace_post", None)
@@ -1235,7 +1232,7 @@ class MSTDPLearner(base.MemoryModule):
             )
 
         if on_grad:
-            _write_weight_gradient(self.synapse, delta_w)
+            _accumulate_weight_gradient(self.synapse, delta_w)
         else:
             return delta_w
 
@@ -1320,10 +1317,12 @@ class MSTDPETLearner(base.MemoryModule):
         self.f_pre = f_pre
         self.f_post = f_post
         self.synapse = synapse
-        (
-            self.in_spike_monitor,
-            self.out_spike_monitor,
-        ) = _create_spike_monitors(synapse, sn)
+        self.in_spike_monitor = monitor.InputMonitor(
+            synapse, function_on_input=torch.Tensor.detach
+        )
+        self.out_spike_monitor = monitor.OutputMonitor(
+            sn, function_on_output=torch.Tensor.detach
+        )
 
         self.register_memory("trace_pre", None)
         self.register_memory("trace_post", None)
@@ -1521,6 +1520,6 @@ class MSTDPETLearner(base.MemoryModule):
             )
 
         if on_grad:
-            _write_weight_gradient(self.synapse, delta_w)
+            _accumulate_weight_gradient(self.synapse, delta_w)
         else:
             return delta_w
