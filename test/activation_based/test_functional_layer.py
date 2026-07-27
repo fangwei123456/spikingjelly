@@ -365,9 +365,17 @@ def test_batch_norm_through_time_single_step_restores_track_running_stats_on_err
     assert bn.track_running_stats is True
 
 
-def test_batch_norm_through_time_module_updates_time_state():
-    x = torch.randn(2, 3)
-    module = layer.BatchNormThroughTime1d(T=2, num_features=3).eval()
+@pytest.mark.parametrize(
+    ("module_type", "input_shape"),
+    [
+        (layer.BatchNormThroughTime1d, (2, 3)),
+        (layer.BatchNormThroughTime2d, (2, 3, 4, 4)),
+        (layer.BatchNormThroughTime3d, (2, 3, 3, 3, 3)),
+    ],
+)
+def test_batch_norm_through_time_module_updates_time_state(module_type, input_shape):
+    x = torch.randn(input_shape)
+    module = module_type(T=2, num_features=3).eval()
     expected = module.bn_list[0](x)
 
     out = module(x)

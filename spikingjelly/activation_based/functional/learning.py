@@ -42,8 +42,8 @@ def stdp_linear_single_step(
 
     * **中文**
 
-    对 linear 权重执行单步 STDP tensor 更新，返回 ``trace_pre``、
-    ``trace_post`` 和 ``delta_w``。函数接收 raw ``weight``，不读取 module、
+    对 linear 权重执行单步 STDP tensor 更新，返回 ``delta_w`` 和更新后的
+    ``trace_pre``、``trace_post``。函数接收 raw ``weight``，不读取 module、
     monitor、``MemoryModule`` memory、``step_mode`` 或 ``training/eval``。
 
     :param weight: linear 权重，形状 ``[out_features, in_features]``
@@ -64,7 +64,7 @@ def stdp_linear_single_step(
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: post 分支权重调制函数
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(trace_pre_next, trace_post_next, delta_w)``
+    :return: ``(delta_w, trace_pre_next, trace_post_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
     ----
@@ -73,10 +73,10 @@ def stdp_linear_single_step(
 
     * **English**
 
-    Run one tensor-only STDP update for a linear weight and return
-    ``trace_pre``, ``trace_post`` and ``delta_w``. The function receives raw
-    ``weight`` and does not read modules, monitors, ``MemoryModule`` memory,
-    ``step_mode`` or ``training/eval``.
+    Run one tensor-only STDP update for a linear weight and return ``delta_w``
+    followed by the updated ``trace_pre`` and ``trace_post``. The function
+    receives raw ``weight`` and does not read modules, monitors, ``MemoryModule``
+    memory, ``step_mode`` or ``training/eval``.
 
     :param weight: Linear weight shaped ``[out_features, in_features]``
     :type weight: torch.Tensor
@@ -96,7 +96,7 @@ def stdp_linear_single_step(
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: Weight modulation function for the post branch
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(trace_pre_next, trace_post_next, delta_w)``
+    :return: ``(delta_w, trace_pre_next, trace_post_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     """
     trace_pre = trace_pre - trace_pre / tau_pre + in_spike
@@ -107,7 +107,7 @@ def stdp_linear_single_step(
     delta_w_post = f_post(weight) * (
         trace_pre.unsqueeze(1) * out_spike.unsqueeze(2)
     ).sum(0)
-    return trace_pre, trace_post, delta_w_pre + delta_w_post
+    return delta_w_pre + delta_w_post, trace_pre, trace_post
 
 
 def mstdp_linear_single_step(
@@ -130,8 +130,8 @@ def mstdp_linear_single_step(
 
     * **中文**
 
-    对 linear 权重执行单步 mSTDP eligibility tensor 计算，返回更新后的
-    ``trace_pre``、``trace_post`` 和每样本 eligibility。函数不读取 module、
+    对 linear 权重执行单步 mSTDP eligibility tensor 计算，返回每样本 eligibility
+    和更新后的 ``trace_pre``、``trace_post``。函数不读取 module、
     monitor、``MemoryModule`` memory、``step_mode`` 或 ``training/eval``。
 
     :param weight: linear 权重，形状 ``[out_features, in_features]``
@@ -152,7 +152,7 @@ def mstdp_linear_single_step(
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: post 分支的权重调制函数
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(trace_pre_next, trace_post_next, eligibility)``
+    :return: ``(eligibility, trace_pre_next, trace_post_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
     ----
@@ -162,8 +162,8 @@ def mstdp_linear_single_step(
     * **English**
 
     Run one tensor-only mSTDP eligibility computation for a linear weight and
-    return updated traces plus per-sample eligibility. The function does not
-    read modules, monitors, ``MemoryModule`` memory, ``step_mode`` or
+    return per-sample eligibility followed by the updated traces. The function
+    does not read modules, monitors, ``MemoryModule`` memory, ``step_mode`` or
     ``training/eval``.
 
     :param weight: Linear weight shaped ``[out_features, in_features]``
@@ -184,7 +184,7 @@ def mstdp_linear_single_step(
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: Weight modulation function for the post branch
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(trace_pre_next, trace_post_next, eligibility)``
+    :return: ``(eligibility, trace_pre_next, trace_post_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     """
     trace_pre = trace_pre * math.exp(-1 / tau_pre) + in_spike
@@ -192,7 +192,7 @@ def mstdp_linear_single_step(
     eligibility = f_post(weight) * (
         trace_pre.unsqueeze(1) * out_spike.unsqueeze(2)
     ) - f_pre(weight) * (trace_post.unsqueeze(2) * in_spike.unsqueeze(1))
-    return trace_pre, trace_post, eligibility
+    return eligibility, trace_pre, trace_post
 
 
 def mstdpet_linear_single_step(
@@ -237,7 +237,7 @@ def mstdpet_linear_single_step(
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: post 分支的权重调制函数
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(trace_pre_next, trace_post_next, eligibility)``
+    :return: ``(eligibility, trace_pre_next, trace_post_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
     ----
@@ -268,7 +268,7 @@ def mstdpet_linear_single_step(
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: Weight modulation function for the post branch
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(trace_pre_next, trace_post_next, eligibility)``
+    :return: ``(eligibility, trace_pre_next, trace_post_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     """
     trace_pre = trace_pre * math.exp(-1 / tau_pre) + in_spike
@@ -276,7 +276,7 @@ def mstdpet_linear_single_step(
     eligibility = f_post(weight) * torch.outer(out_spike, trace_pre) - f_pre(
         weight
     ) * torch.outer(trace_post, in_spike)
-    return trace_pre, trace_post, eligibility
+    return eligibility, trace_pre, trace_post
 
 
 def stdp_conv2d_single_step(
@@ -340,7 +340,7 @@ def stdp_conv2d_single_step(
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: post 分支权重调制函数
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(trace_pre_next, trace_post_next, delta_w)``
+    :return: ``(delta_w, trace_pre_next, trace_post_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises NotImplementedError: 当 dilation 或 groups 不受支持时抛出
 
@@ -386,7 +386,7 @@ def stdp_conv2d_single_step(
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: Weight modulation function for the post branch
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(trace_pre_next, trace_post_next, delta_w)``
+    :return: ``(delta_w, trace_pre_next, trace_post_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises NotImplementedError: If dilation or groups is unsupported
     """
@@ -429,7 +429,7 @@ def stdp_conv2d_single_step(
                 tr_pre.unsqueeze(1) * out_spike.unsqueeze(2)
             ).permute([1, 2, 0, 3, 4]).sum(dim=[2, 3, 4])
             delta_w[:, :, h, w] += delta_w_pre + delta_w_post
-    return trace_pre, trace_post, delta_w
+    return delta_w, trace_pre, trace_post
 
 
 def stdp_conv1d_single_step(
@@ -493,7 +493,7 @@ def stdp_conv1d_single_step(
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: post 分支权重调制函数
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(trace_pre_next, trace_post_next, delta_w)``
+    :return: ``(delta_w, trace_pre_next, trace_post_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises NotImplementedError: 当 dilation 或 groups 不受支持时抛出
 
@@ -539,7 +539,7 @@ def stdp_conv1d_single_step(
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: Weight modulation function for the post branch
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(trace_pre_next, trace_post_next, delta_w)``
+    :return: ``(delta_w, trace_pre_next, trace_post_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises NotImplementedError: If dilation or groups is unsupported
     """
@@ -580,7 +580,7 @@ def stdp_conv1d_single_step(
             tr_pre.unsqueeze(1) * out_spike.unsqueeze(2)
         ).permute([1, 2, 0, 3]).sum(dim=[2, 3])
         delta_w[:, :, l] += delta_w_pre + delta_w_post
-    return trace_pre, trace_post, delta_w
+    return delta_w, trace_pre, trace_post
 
 
 def mstdp_reward_delta(

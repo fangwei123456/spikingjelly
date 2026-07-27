@@ -206,6 +206,9 @@ class BaseNode(base.MemoryModule):
         self.forward_kernel = None
         self.backward_kernel = None
 
+        # Kept empty for compatibility; compiled graphs live in inductor_cache.
+        self._inductor_compiled_graphs = {}
+
     @property
     def store_v_seq(self):
         return self._store_v_seq

@@ -286,7 +286,7 @@ def test_functional_learning_linear_helpers_match_legacy_helpers():
     expected = learning.stdp_linear_single_step(
         fc, in_spike, out_spike, None, None, 2.0, 3.0, f_weight, f_weight
     )
-    actual = functional.stdp_linear_single_step(
+    delta_w, trace_pre, trace_post = functional.stdp_linear_single_step(
         fc.weight.data,
         in_spike,
         out_spike,
@@ -297,13 +297,14 @@ def test_functional_learning_linear_helpers_match_legacy_helpers():
         f_weight,
         f_weight,
     )
+    actual = trace_pre, trace_post, delta_w
     for a, b in zip(actual, expected, strict=True):
         assert torch.allclose(a, b)
 
     expected = learning.mstdp_linear_single_step(
         fc, in_spike, out_spike, None, None, 2.0, 3.0, f_weight, f_weight
     )
-    actual = functional.mstdp_linear_single_step(
+    eligibility, trace_pre, trace_post = functional.mstdp_linear_single_step(
         fc.weight.data,
         in_spike,
         out_spike,
@@ -314,13 +315,14 @@ def test_functional_learning_linear_helpers_match_legacy_helpers():
         f_weight,
         f_weight,
     )
+    actual = trace_pre, trace_post, eligibility
     for a, b in zip(actual, expected, strict=True):
         assert torch.allclose(a, b)
 
     expected = learning.mstdpet_linear_single_step(
         fc, in_spike[0], out_spike[0], None, None, 2.0, 3.0, 5.0, f_weight, f_weight
     )
-    actual = functional.mstdpet_linear_single_step(
+    eligibility, trace_pre, trace_post = functional.mstdpet_linear_single_step(
         fc.weight.data,
         in_spike[0],
         out_spike[0],
@@ -331,6 +333,7 @@ def test_functional_learning_linear_helpers_match_legacy_helpers():
         f_weight,
         f_weight,
     )
+    actual = trace_pre, trace_post, eligibility
     for a, b in zip(actual, expected, strict=True):
         assert torch.allclose(a, b)
 
@@ -342,7 +345,7 @@ def test_functional_learning_conv_helpers_match_legacy_helpers():
     expected1 = learning.stdp_conv1d_single_step(
         conv1, in_spike1, out_spike1, None, None, 2.0, 3.0, f_weight, f_weight
     )
-    actual1 = functional.stdp_conv1d_single_step(
+    delta_w1, trace_pre1, trace_post1 = functional.stdp_conv1d_single_step(
         conv1.weight.data,
         in_spike1,
         out_spike1,
@@ -359,6 +362,7 @@ def test_functional_learning_conv_helpers_match_legacy_helpers():
         f_weight,
         f_weight,
     )
+    actual1 = trace_pre1, trace_post1, delta_w1
     for a, b in zip(actual1, expected1, strict=True):
         assert torch.allclose(a, b)
 
@@ -368,7 +372,7 @@ def test_functional_learning_conv_helpers_match_legacy_helpers():
     expected2 = learning.stdp_conv2d_single_step(
         conv2, in_spike2, out_spike2, None, None, 2.0, 3.0, f_weight, f_weight
     )
-    actual2 = functional.stdp_conv2d_single_step(
+    delta_w2, trace_pre2, trace_post2 = functional.stdp_conv2d_single_step(
         conv2.weight.data,
         in_spike2,
         out_spike2,
@@ -385,6 +389,7 @@ def test_functional_learning_conv_helpers_match_legacy_helpers():
         f_weight,
         f_weight,
     )
+    actual2 = trace_pre2, trace_post2, delta_w2
     for a, b in zip(actual2, expected2, strict=True):
         assert torch.allclose(a, b)
 

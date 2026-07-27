@@ -2084,8 +2084,8 @@ def if_multi_step_inductor(
     """
     from ..neuron import inductor_cache
 
-    x_seq = inductor_cache.canonicalize_tensor(x_seq)
-    v = inductor_cache.canonicalize_tensor(v)
+    x_seq = x_seq.contiguous()
+    v = v.contiguous()
     surrogate_key = inductor_cache.surrogate_key(surrogate_function)
     graph = inductor_cache.compile_graph(
         None
@@ -2546,8 +2546,8 @@ def lif_multi_step_inductor(
     """
     from ..neuron import inductor_cache
 
-    x_seq = inductor_cache.canonicalize_tensor(x_seq)
-    v = inductor_cache.canonicalize_tensor(v)
+    x_seq = x_seq.contiguous()
+    v = v.contiguous()
     surrogate_key = inductor_cache.surrogate_key(surrogate_function)
     graph = inductor_cache.compile_graph(
         None
@@ -2827,9 +2827,9 @@ def plif_multi_step_inductor(
     """
     from ..neuron import inductor_cache
 
-    x_seq = inductor_cache.canonicalize_tensor(x_seq)
-    v = inductor_cache.canonicalize_tensor(v)
-    reciprocal_tau = inductor_cache.canonicalize_tensor(w.sigmoid().to(x_seq))
+    x_seq = x_seq.contiguous()
+    v = v.contiguous()
+    reciprocal_tau = w.sigmoid().to(x_seq).contiguous()
     surrogate_key = inductor_cache.surrogate_key(surrogate_function)
     graph = inductor_cache.compile_graph(
         None

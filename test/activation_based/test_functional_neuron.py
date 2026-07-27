@@ -143,6 +143,71 @@ def test_lif_single_step_matches_module_torch_training(
     _assert_close(v_func.grad, v_module.grad)
 
 
+@pytest.mark.parametrize(
+    ("node_type", "node_kwargs"),
+    [
+        (
+            neuron.SimpleIFNode,
+            {"v_threshold": 0.7, "v_reset": 0.2},
+        ),
+        (
+            neuron.SimpleLIFNode,
+            {
+                "tau": 2.5,
+                "decay_input": True,
+                "v_threshold": 0.7,
+                "v_reset": 0.2,
+            },
+        ),
+        (
+            neuron.HalfThresholdIFNode,
+            {"v_threshold": 0.7},
+        ),
+    ],
+)
+def test_hookable_node_standard_transition_matches_functional(node_type, node_kwargs):
+    module = node_type(
+        **node_kwargs,
+        surrogate_function=_make_surrogate(),
+        detach_reset=False,
+    ).train()
+    x_module = torch.randn(2, 3, requires_grad=True)
+    v_module = torch.randn(2, 3, requires_grad=True)
+    module.v = v_module
+
+    spike_module = module(x_module)
+    (spike_module.sum() + module.v.sum()).backward()
+
+    x_functional = x_module.detach().clone().requires_grad_()
+    v_functional = v_module.detach().clone().requires_grad_()
+    if isinstance(module, neuron.SimpleLIFNode):
+        spike_functional, v_next = functional.lif_single_step(
+            x_functional,
+            v_functional,
+            module.tau,
+            module.decay_input,
+            module.v_threshold,
+            module.v_reset,
+            module.surrogate_function,
+            module.detach_reset,
+        )
+    else:
+        spike_functional, v_next = functional.if_single_step(
+            x_functional,
+            v_functional,
+            module.v_threshold,
+            module.v_reset,
+            module.surrogate_function,
+            module.detach_reset,
+        )
+    (spike_functional.sum() + v_next.sum()).backward()
+
+    _assert_close(spike_functional, spike_module)
+    _assert_close(v_next, module.v)
+    _assert_close(x_functional.grad, x_module.grad)
+    _assert_close(v_functional.grad, v_module.grad)
+
+
 @pytest.mark.parametrize("v_reset", [0.0, None])
 @pytest.mark.parametrize("decay_input", [False, True])
 @pytest.mark.parametrize("detach_reset", [False, True])

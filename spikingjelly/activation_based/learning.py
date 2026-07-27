@@ -106,7 +106,7 @@ def stdp_linear_single_step(
     :return: ``(trace_pre, trace_post, delta_w)``, where ``delta_w`` has the same shape as ``fc.weight``
     :rtype: tuple[Union[float, torch.Tensor], Union[float, torch.Tensor], torch.Tensor]
     """
-    return functional_learning.stdp_linear_single_step(
+    delta_w, trace_pre, trace_post = functional_learning.stdp_linear_single_step(
         fc.weight.data,
         in_spike,
         out_spike,
@@ -117,6 +117,7 @@ def stdp_linear_single_step(
         f_pre,
         f_post,
     )
+    return trace_pre, trace_post, delta_w
 
 
 def mstdp_linear_single_step(
@@ -194,7 +195,7 @@ def mstdp_linear_single_step(
         shape ``[batch_size, out_features, in_features]``
     :rtype: tuple[Union[float, torch.Tensor], Union[float, torch.Tensor], torch.Tensor]
     """
-    return functional_learning.mstdp_linear_single_step(
+    eligibility, trace_pre, trace_post = functional_learning.mstdp_linear_single_step(
         fc.weight.data,
         in_spike,
         out_spike,
@@ -205,6 +206,7 @@ def mstdp_linear_single_step(
         f_pre,
         f_post,
     )
+    return trace_pre, trace_post, eligibility
 
 
 def mstdpet_linear_single_step(
@@ -286,7 +288,7 @@ def mstdpet_linear_single_step(
         the same shape as ``fc.weight``
     :rtype: tuple[Union[float, torch.Tensor], Union[float, torch.Tensor], torch.Tensor]
     """
-    return functional_learning.mstdpet_linear_single_step(
+    eligibility, trace_pre, trace_post = functional_learning.mstdpet_linear_single_step(
         fc.weight.data,
         in_spike,
         out_spike,
@@ -297,6 +299,7 @@ def mstdpet_linear_single_step(
         f_pre,
         f_post,
     )
+    return trace_pre, trace_post, eligibility
 
 
 def stdp_conv2d_single_step(
@@ -379,7 +382,7 @@ def stdp_conv2d_single_step(
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises NotImplementedError: Raised when ``conv.dilation != (1, 1)`` or ``conv.groups != 1``
     """
-    return functional_learning.stdp_conv2d_single_step(
+    delta_w, trace_pre, trace_post = functional_learning.stdp_conv2d_single_step(
         conv.weight.data,
         in_spike,
         out_spike,
@@ -398,6 +401,7 @@ def stdp_conv2d_single_step(
         f_pre,
         f_post,
     )
+    return trace_pre, trace_post, delta_w
 
 
 def stdp_conv1d_single_step(
@@ -480,7 +484,7 @@ def stdp_conv1d_single_step(
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises NotImplementedError: Raised when ``conv.dilation != (1,)`` or ``conv.groups != 1``
     """
-    return functional_learning.stdp_conv1d_single_step(
+    delta_w, trace_pre, trace_post = functional_learning.stdp_conv1d_single_step(
         conv.weight.data,
         in_spike,
         out_spike,
@@ -499,6 +503,7 @@ def stdp_conv1d_single_step(
         f_pre,
         f_post,
     )
+    return trace_pre, trace_post, delta_w
 
 
 def stdp_multi_step(
@@ -653,7 +658,7 @@ def stdp_multi_step(
 
     delta_w = torch.zeros_like(layer.weight)
     for t in range(in_spike.shape[0]):
-        trace_pre, trace_post, dw = stdp_single_step(
+        dw, trace_pre, trace_post = stdp_single_step(
             in_spike[t], out_spike[t], trace_pre, trace_post
         )
         delta_w += dw
@@ -1165,7 +1170,7 @@ class MSTDPLearner(base.MemoryModule):
             raise ValueError(self.step_mode)
 
         for _ in range(length):
-            if not isinstance(getattr(self, "eligibility", None), torch.Tensor):
+            if not hasattr(self, "eligibility"):
                 self.eligibility = torch.zeros(
                     self.batch_size,
                     *self.synapse.weight.shape,
@@ -1450,9 +1455,9 @@ class MSTDPETLearner(base.MemoryModule):
             raise ValueError(self.step_mode)
 
         for _ in range(length):
-            if not isinstance(getattr(self, "eligibility", None), torch.Tensor):
+            if not hasattr(self, "eligibility"):
                 self.eligibility = torch.zeros_like(self.synapse.weight)
-            if not isinstance(self.trace_e, torch.Tensor):
+            if self.trace_e is None:
                 self.trace_e = torch.zeros_like(self.synapse.weight)
             dw, self.trace_e = functional_learning.mstdpet_reward_delta(
                 reward,

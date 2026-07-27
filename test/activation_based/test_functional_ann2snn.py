@@ -149,7 +149,7 @@ def test_spikezip_embedding_helpers_match_module_state():
     assert module.t == t
 
 
-def test_spikezip_bias_free_multi_step_preserves_scheduled_work_state():
+def test_spikezip_bias_free_multi_step_is_idle_without_input():
     linear = SpikeZIPLinear(
         torch.nn.Linear(3, 2, bias=False),
         level=4,
@@ -158,7 +158,7 @@ def test_spikezip_bias_free_multi_step_preserves_scheduled_work_state():
     )
     linear_out = linear(torch.zeros(2, 1, 3))
     assert torch.equal(linear_out, torch.zeros_like(linear_out))
-    assert linear.is_work
+    assert not linear.is_work
     assert linear.realize_time == 3
 
     conv = SpikeZIPConv2d(
@@ -169,7 +169,7 @@ def test_spikezip_bias_free_multi_step_preserves_scheduled_work_state():
     )
     conv_out = conv(torch.zeros(2, 1, 2, 4, 4))
     assert torch.equal(conv_out, torch.zeros_like(conv_out))
-    assert conv.is_work
+    assert not conv.is_work
     assert conv.realize_time == 3
 
 

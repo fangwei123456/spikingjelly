@@ -88,16 +88,17 @@ class SpikeZIPLinear(TDLinear):
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         y_seq = super().multi_step_forward(x_seq)
         active = bool((x_seq != 0).any())
-        scheduled_bias_steps = min(x_seq.shape[0], self.realize_time)
         view_shape = (1,) * (y_seq.dim() - 1) + (self.out_features,)
-        y_seq, self.realize_time, _ = functional.spikezip_release_bias_multi_step(
-            y_seq,
-            self.spikezip_bias,
-            self.realize_time,
-            self.bias_steps,
-            view_shape,
+        y_seq, self.realize_time, released_steps = (
+            functional.spikezip_release_bias_multi_step(
+                y_seq,
+                self.spikezip_bias,
+                self.realize_time,
+                self.bias_steps,
+                view_shape,
+            )
         )
-        self.is_work = active or scheduled_bias_steps > 0
+        self.is_work = active or released_steps > 0
         return y_seq
 
 
@@ -160,15 +161,16 @@ class SpikeZIPConv2d(TDConv2d):
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         y_seq = super().multi_step_forward(x_seq)
         active = bool((x_seq != 0).any())
-        scheduled_bias_steps = min(x_seq.shape[0], self.realize_time)
-        y_seq, self.realize_time, _ = functional.spikezip_release_bias_multi_step(
-            y_seq,
-            self.spikezip_bias,
-            self.realize_time,
-            self.bias_steps,
-            (1, 1, self.out_channels, 1, 1),
+        y_seq, self.realize_time, released_steps = (
+            functional.spikezip_release_bias_multi_step(
+                y_seq,
+                self.spikezip_bias,
+                self.realize_time,
+                self.bias_steps,
+                (1, 1, self.out_channels, 1, 1),
+            )
         )
-        self.is_work = active or scheduled_bias_steps > 0
+        self.is_work = active or released_steps > 0
         return y_seq
 
 
@@ -598,24 +600,15 @@ def _spikezip_vit_patch_embed(model: nn.Module, x: torch.Tensor) -> torch.Tensor
     return x
 
 
-def _spikezip_vit_single_tokens(
-    model: nn.Module,
-    batch_size: int,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    t = getattr(model, "_spikezip_t", 0)
-    cls, pos, model._spikezip_t = functional.spikezip_vit_single_tokens(
-        model.cls_token,
-        model.pos_embed,
-        batch_size,
-        t,
-    )
-    return cls, pos
-
-
 def _spikezip_vit_forward_features(self: nn.Module, x: torch.Tensor) -> torch.Tensor:
     if x.dim() == 4:
         hidden = _spikezip_vit_patch_embed(self, x)
-        cls, pos = _spikezip_vit_single_tokens(self, hidden.shape[0])
+        cls, pos, self._spikezip_t = functional.spikezip_vit_single_tokens(
+            self.cls_token,
+            self.pos_embed,
+            hidden.shape[0],
+            getattr(self, "_spikezip_t", 0),
+        )
         hidden = torch.cat((cls, hidden), dim=1)
         pos_drop = getattr(self, "pos_drop", None)
         hidden = hidden + pos

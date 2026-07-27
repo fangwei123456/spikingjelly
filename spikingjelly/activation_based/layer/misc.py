@@ -172,10 +172,7 @@ class SynapseFilter(base.MemoryModule):
 
     def single_step_forward(self, x: Tensor):
         if isinstance(self.out_i, float):
-            out_i_init = self.out_i
-            self.out_i = torch.zeros_like(x.data)
-            if out_i_init != 0.0:
-                torch.fill_(self.out_i, out_i_init)
+            self.out_i = torch.full_like(x, self.out_i)
 
         if self.learnable:
             self.out_i = functional.synapse_filter_single_step(

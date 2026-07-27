@@ -312,10 +312,7 @@ class NeuNorm(base.MemoryModule):
 
     def single_step_forward(self, in_spikes: Tensor):
         if isinstance(self.x, float):
-            x_init = self.x
-            self.x = torch.zeros_like(in_spikes.sum(dim=1, keepdim=True).data)
-            if x_init != 0.0:
-                torch.fill_(self.x, x_init)
+            self.x = torch.full_like(in_spikes[:, :1], self.x)
         out, self.x = functional.neunorm_single_step(
             in_spikes, self.x, self.w, self.k0, self.k1
         )

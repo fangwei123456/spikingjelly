@@ -43,8 +43,8 @@ def test_inductor_cache_reuses_same_config_across_modules(monkeypatch):
     assert len(compile_calls) == 1
     assert inductor_cache.info()["entries"] == 1
     assert torch.equal(y0, y1)
-    assert not hasattr(node0, "_inductor_compiled_graphs")
-    assert not hasattr(node1, "_inductor_compiled_graphs")
+    assert node0._inductor_compiled_graphs == {}
+    assert node1._inductor_compiled_graphs == {}
 
     inductor_cache.clear()
 
@@ -109,8 +109,8 @@ def test_inductor_cache_is_not_serialized_with_node(monkeypatch):
     copied = copy.deepcopy(node)
     restored = pickle.loads(pickle.dumps(node))
 
-    assert not hasattr(copied, "_inductor_compiled_graphs")
-    assert not hasattr(restored, "_inductor_compiled_graphs")
+    assert copied._inductor_compiled_graphs == {}
+    assert restored._inductor_compiled_graphs == {}
     assert inductor_cache.info()["entries"] == 1
 
     inductor_cache.clear()
