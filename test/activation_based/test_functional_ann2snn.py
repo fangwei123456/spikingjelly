@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from spikingjelly.activation_based import functional
@@ -74,6 +75,9 @@ def test_sta_constant_single_and_multi_step_match_module():
     assert module.t == 4
     assert torch.equal(module(), seq1)
     assert module.t == 8
+
+    with pytest.raises(ValueError, match="time_steps must be positive"):
+        functional.sta_constant_multi_step(value, 0, 0)
 
 
 def test_spikezip_bias_release_helpers_update_explicit_state():

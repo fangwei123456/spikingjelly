@@ -15,13 +15,20 @@ _COMPILED_GRAPHS: OrderedDict[tuple[Any, ...], Callable] = OrderedDict()
 _CACHE_LOCK = threading.RLock()
 
 
-def _reset_if_forked() -> None:
+def _reset_after_fork() -> None:
     global _CACHE_LOCK, _CACHE_PID
-    pid = os.getpid()
-    if pid != _CACHE_PID:
-        _CACHE_LOCK = threading.RLock()
-        _COMPILED_GRAPHS.clear()
-        _CACHE_PID = pid
+    _CACHE_LOCK = threading.RLock()
+    _COMPILED_GRAPHS.clear()
+    _CACHE_PID = os.getpid()
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_after_fork)
+
+
+def _reset_if_forked() -> None:
+    if os.getpid() != _CACHE_PID:
+        _reset_after_fork()
 
 
 def clear() -> None:

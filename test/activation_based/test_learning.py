@@ -412,6 +412,26 @@ def test_functional_learning_reward_helpers_use_explicit_tensor_state():
     assert torch.allclose(dw, 0.25 * expected_trace)
 
 
+def test_stdp_multi_step_preserves_empty_sequence_state():
+    synapse = layer.Linear(3, 4)
+    trace_pre = torch.randn(2, 3)
+    trace_post = torch.randn(2, 4)
+
+    trace_pre_next, trace_post_next, delta_w = learning.stdp_multi_step(
+        synapse,
+        torch.empty(0, 2, 3),
+        torch.empty(0, 2, 4),
+        trace_pre,
+        trace_post,
+        tau_pre=2.0,
+        tau_post=3.0,
+    )
+
+    assert trace_pre_next is trace_pre
+    assert trace_post_next is trace_post
+    assert torch.equal(delta_w, torch.zeros_like(synapse.weight))
+
+
 if __name__ == "__main__":
     test_stdp_learner_records_are_detached()
     test_stdp_learner_step_does_not_retain_graph()
@@ -424,4 +444,5 @@ if __name__ == "__main__":
     test_functional_learning_linear_helpers_match_legacy_helpers()
     test_functional_learning_conv_helpers_match_legacy_helpers()
     test_functional_learning_reward_helpers_use_explicit_tensor_state()
+    test_stdp_multi_step_preserves_empty_sequence_state()
     print("Done!")

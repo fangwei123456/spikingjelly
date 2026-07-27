@@ -1447,6 +1447,28 @@ def test_stbif_multi_step_torch_matches_reference_and_module():
     assert module.is_work is is_work
 
 
+def test_stbif_multi_step_torch_synchronizes_work_flag_once(monkeypatch):
+    original_bool = torch.Tensor.__bool__
+    bool_calls = []
+
+    def counted_bool(value):
+        bool_calls.append(value)
+        return original_bool(value)
+
+    monkeypatch.setattr(torch.Tensor, "__bool__", counted_bool)
+    x_seq = torch.randn(4, 2, 3)
+    functional.stbif_multi_step_torch(
+        x_seq,
+        torch.zeros_like(x_seq[0]),
+        torch.zeros_like(x_seq[0]),
+        torch.tensor(0.25),
+        torch.tensor(1.0),
+        torch.tensor(-2.0),
+    )
+
+    assert len(bool_calls) == 1
+
+
 @pytest.mark.parametrize(
     ("module_factory", "functional_call"),
     [

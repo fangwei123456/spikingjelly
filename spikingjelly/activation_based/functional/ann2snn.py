@@ -510,7 +510,7 @@ def spikezip_vit_token_sequence(
     :type cls_token: torch.Tensor
     :param pos_embed: ViT position embedding 参数
     :type pos_embed: torch.Tensor
-    :param time_steps: 输出时间步数
+    :param time_steps: 输出时间步数，必须大于零
     :type time_steps: int
     :param batch_size: batch 大小
     :type batch_size: int
@@ -687,6 +687,7 @@ def sta_constant_multi_step(
     :type time_steps: int
     :return: ``(output_seq, t_next)``
     :rtype: Tuple[torch.Tensor, int]
+    :raises ValueError: ``time_steps`` 不大于零时抛出
 
     ----
 
@@ -703,11 +704,15 @@ def sta_constant_multi_step(
     :type value: torch.Tensor
     :param t: Current time index
     :type t: int
-    :param time_steps: Number of output time steps
+    :param time_steps: Number of output time steps; must be positive
     :type time_steps: int
     :return: ``(output_seq, t_next)``
     :rtype: Tuple[torch.Tensor, int]
+    :raises ValueError: If ``time_steps`` is not positive
     """
+    if time_steps <= 0:
+        raise ValueError("time_steps must be positive")
+
     if t == 0:
         zeros = torch.zeros_like(value).expand(time_steps - 1, *value.shape)
         output = torch.cat((value.unsqueeze(0), zeros), dim=0)

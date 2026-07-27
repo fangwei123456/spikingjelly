@@ -82,6 +82,18 @@ def test_inductor_cache_clears_after_pid_change(monkeypatch):
     inductor_cache.clear()
 
 
+def test_inductor_cache_reset_after_fork_replaces_lock(monkeypatch):
+    inductor_cache.clear()
+    monkeypatch.setattr(inductor_cache.torch, "compile", lambda fn, **_kwargs: fn)
+    inductor_cache.compile_graph(("op",), lambda x: x)
+    old_lock = inductor_cache._CACHE_LOCK
+
+    inductor_cache._reset_after_fork()
+
+    assert inductor_cache._CACHE_LOCK is not old_lock
+    assert inductor_cache.info()["entries"] == 0
+
+
 def test_inductor_cache_is_not_serialized_with_node(monkeypatch):
     inductor_cache.clear()
 
@@ -164,6 +176,7 @@ def test_inductor_cache_does_not_share_custom_surrogate_closures(monkeypatch):
     assert torch.equal(spike0_again, spike0)
     assert len(compile_calls) == 2
     assert inductor_cache.info()["entries"] == 2
+    inductor_cache.clear()
 
 
 def test_inductor_cache_does_not_retain_builtin_surrogate_module(monkeypatch):

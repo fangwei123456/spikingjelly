@@ -283,9 +283,14 @@ def test_references() -> dict[str, list[str]]:
     if not TEST_ROOT.exists():
         return refs
     for file in sorted(TEST_ROOT.rglob("test_*.py")):
-        text = file.read_text()
+        tree = ast.parse(file.read_text(), filename=str(file))
+        identifiers = {
+            node.id if isinstance(node, ast.Name) else node.attr
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.Name, ast.Attribute))
+        }
         for class_name in CLASSIFICATION_BY_NAME:
-            if class_name in text:
+            if class_name in identifiers:
                 refs.setdefault(class_name, []).append(str(file.relative_to(REPO_ROOT)))
     return refs
 

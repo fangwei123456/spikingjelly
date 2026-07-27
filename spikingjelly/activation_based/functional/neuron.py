@@ -4293,6 +4293,32 @@ def gated_lif_multi_step(
     return torch.stack(spike_seq), u, v
 
 
+def _stbif_step(
+    x: torch.Tensor,
+    q: torch.Tensor,
+    acc_q: torch.Tensor,
+    q_threshold: torch.Tensor,
+    pos_max: torch.Tensor,
+    neg_min: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    normalized = x / q_threshold
+    q_next = q + normalized.detach()
+    acc_q_next = torch.round(acc_q)
+    spike_position = (q_next - 1 >= 0) & (acc_q_next < pos_max)
+    neg_spike_position = (q_next < 0) & (acc_q_next > neg_min)
+    cur_output_next = spike_position.to(x.dtype) - neg_spike_position.to(x.dtype)
+    acc_q_next = acc_q_next + cur_output_next
+    q_next = torch.where(spike_position, q_next - 1, q_next)
+    q_next = torch.where(neg_spike_position, q_next + 1, q_next)
+    return (
+        cur_output_next * q_threshold,
+        q_next,
+        acc_q_next,
+        cur_output_next,
+        normalized,
+    )
+
+
 def stbif_single_step(
     x: torch.Tensor,
     q: torch.Tensor,
@@ -4371,17 +4397,11 @@ def stbif_single_step(
     :return: ``(out, q_next, acc_q_next, cur_output_next, is_work)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, bool]
     """
-    normalized = x / q_threshold
-    q_next = q + normalized.detach()
-    acc_q_next = torch.round(acc_q)
-    spike_position = (q_next - 1 >= 0) & (acc_q_next < pos_max)
-    neg_spike_position = (q_next < 0) & (acc_q_next > neg_min)
-    cur_output_next = spike_position.to(x.dtype) - neg_spike_position.to(x.dtype)
-    acc_q_next = acc_q_next + cur_output_next
-    q_next = torch.where(spike_position, q_next - 1, q_next)
-    q_next = torch.where(neg_spike_position, q_next + 1, q_next)
+    out, q_next, acc_q_next, cur_output_next, normalized = _stbif_step(
+        x, q, acc_q, q_threshold, pos_max, neg_min
+    )
     is_work = bool((normalized != 0).any() | (cur_output_next != 0).any())
-    return cur_output_next * q_threshold, q_next, acc_q_next, cur_output_next, is_work
+    return out, q_next, acc_q_next, cur_output_next, is_work
 
 
 def stbif_multi_step_torch(
@@ -4456,13 +4476,7 @@ def stbif_multi_step_torch(
     cur_output_next = torch.zeros_like(x_seq[0])
     out_seq = torch.empty_like(x_seq)
     for t in range(x_seq.shape[0]):
-        (
-            out_seq[t],
-            q_next,
-            acc_q_next,
-            cur_output_next,
-            _,
-        ) = stbif_single_step(
+        out_seq[t], q_next, acc_q_next, cur_output_next, _ = _stbif_step(
             x_seq[t], q_next, acc_q_next, q_threshold, pos_max, neg_min
         )
     is_work = bool((x_seq != 0).any() | (out_seq != 0).any())

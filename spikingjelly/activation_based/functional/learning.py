@@ -149,6 +149,10 @@ def mstdp_linear_single_step(
     :type tau_pre: float
     :param tau_post: post trace 时间常数
     :type tau_post: float
+    :param f_pre: pre 分支的权重调制函数
+    :type f_pre: Callable[[torch.Tensor], torch.Tensor]
+    :param f_post: post 分支的权重调制函数
+    :type f_post: Callable[[torch.Tensor], torch.Tensor]
     :return: ``(trace_pre_next, trace_post_next, eligibility)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
@@ -230,6 +234,10 @@ def mstdpet_linear_single_step(
     :type tau_pre: float
     :param tau_post: post trace 时间常数
     :type tau_post: float
+    :param f_pre: pre 分支的权重调制函数
+    :type f_pre: Callable[[torch.Tensor], torch.Tensor]
+    :param f_post: post 分支的权重调制函数
+    :type f_post: Callable[[torch.Tensor], torch.Tensor]
     :return: ``(trace_pre_next, trace_post_next, eligibility)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
@@ -308,7 +316,8 @@ def stdp_conv2d_single_step(
     :type in_spike: torch.Tensor
     :param out_spike: 输出脉冲，形状 ``[N, C_out, H_out, W_out]``
     :type out_spike: torch.Tensor
-    :param trace_pre: 已物化的 pre trace tensor
+    :param trace_pre: 已物化的 pre trace tensor；存在 padding 时，其空间维必须与
+        padding 后的 ``in_spike`` 一致
     :type trace_pre: torch.Tensor
     :param trace_post: 已物化的 post trace tensor
     :type trace_post: torch.Tensor
@@ -353,7 +362,8 @@ def stdp_conv2d_single_step(
     :type in_spike: torch.Tensor
     :param out_spike: Output spikes shaped ``[N, C_out, H_out, W_out]``
     :type out_spike: torch.Tensor
-    :param trace_pre: Materialized pre-synaptic trace tensor
+    :param trace_pre: Materialized pre-synaptic trace tensor. With non-zero
+        padding, its spatial dimensions must match the padded ``in_spike``
     :type trace_pre: torch.Tensor
     :param trace_post: Materialized post-synaptic trace tensor
     :type trace_post: torch.Tensor
@@ -459,7 +469,8 @@ def stdp_conv1d_single_step(
     :type in_spike: torch.Tensor
     :param out_spike: 输出脉冲，形状 ``[N, C_out, L_out]``
     :type out_spike: torch.Tensor
-    :param trace_pre: 已物化的 pre trace tensor
+    :param trace_pre: 已物化的 pre trace tensor；存在 padding 时，其长度必须与
+        padding 后的 ``in_spike`` 一致
     :type trace_pre: torch.Tensor
     :param trace_post: 已物化的 post trace tensor
     :type trace_post: torch.Tensor
@@ -504,7 +515,8 @@ def stdp_conv1d_single_step(
     :type in_spike: torch.Tensor
     :param out_spike: Output spikes shaped ``[N, C_out, L_out]``
     :type out_spike: torch.Tensor
-    :param trace_pre: Materialized pre-synaptic trace tensor
+    :param trace_pre: Materialized pre-synaptic trace tensor. With non-zero
+        padding, its length must match the padded ``in_spike``
     :type trace_pre: torch.Tensor
     :param trace_post: Materialized post-synaptic trace tensor
     :type trace_post: torch.Tensor
@@ -579,7 +591,8 @@ def stdp_multi_step(
     trace_pre: torch.Tensor,
     trace_post: torch.Tensor,
     single_step: Callable[
-        [torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], tuple
+        [torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        tuple[torch.Tensor, torch.Tensor, torch.Tensor],
     ],
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
@@ -604,8 +617,11 @@ def stdp_multi_step(
     :type trace_pre: torch.Tensor
     :param trace_post: 初始 post trace
     :type trace_post: torch.Tensor
-    :param single_step: 已由调用方选择的单步 tensor 函数
-    :type single_step: Callable
+    :param single_step: 已由调用方选择的单步 tensor 函数，依次接收
+        ``(in_spike_t, out_spike_t, trace_pre, trace_post)``，返回
+        ``(trace_pre_next, trace_post_next, delta_w)``；权重和算子参数应由 closure
+        或 ``functools.partial`` 绑定
+    :type single_step: Callable[[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
     :return: ``(trace_pre_next, trace_post_next, delta_w)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
@@ -629,8 +645,11 @@ def stdp_multi_step(
     :type trace_pre: torch.Tensor
     :param trace_post: Materialized initial post-synaptic trace tensor
     :type trace_post: torch.Tensor
-    :param single_step: Caller-selected tensor-only single-step function
-    :type single_step: Callable
+    :param single_step: Caller-selected tensor-only function that accepts
+        ``(in_spike_t, out_spike_t, trace_pre, trace_post)`` and returns
+        ``(trace_pre_next, trace_post_next, delta_w)``. Bind weight and
+        operator-specific arguments with a closure or ``functools.partial``
+    :type single_step: Callable[[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
     :return: ``(trace_pre_next, trace_post_next, delta_w)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     """

@@ -581,6 +581,9 @@ def stdp_multi_step(
     :return: ``(trace_pre, trace_post, delta_w)``, where ``delta_w`` has the same shape as ``layer.weight``
     :rtype: tuple[Union[float, torch.Tensor], Union[float, torch.Tensor], torch.Tensor]
     """
+    if in_spike.shape[0] == 0:
+        return trace_pre, trace_post, torch.zeros_like(layer.weight)
+
     if isinstance(layer, nn.Linear):
         trace_pre = _materialize_trace(trace_pre, in_spike[0])
         trace_post = _materialize_trace(trace_post, out_spike[0])
