@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 
 from .. import base, surrogate
-from . import inductor_cache
 
 __all__ = ["BaseNode", "NonSpikingBaseNode", "SimpleBaseNode"]
 
@@ -375,16 +374,6 @@ class BaseNode(base.MemoryModule):
                 )
             elif self.v.dtype != x.dtype or self.v.device != x.device:
                 self.v = self.v.to(dtype=x.dtype, device=x.device)
-
-    def _compile_inductor_graph(self, cache_key, fn):
-        try:
-            return inductor_cache.compile_graph(cache_key, fn)
-        except RuntimeError as exc:
-            if str(exc) == "backend='inductor' requires torch.compile.":
-                raise RuntimeError(
-                    f"{self._get_name()} backend='inductor' requires torch.compile."
-                ) from exc
-            raise
 
 
 class NonSpikingBaseNode(nn.Module, base.MultiStepModule):

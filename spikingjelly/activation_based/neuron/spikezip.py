@@ -178,11 +178,12 @@ class STBIFNeuron(base.MemoryModule):
         self._init_state(normalized)
         pos_max = self.pos_max.to(device=x.device, dtype=x.dtype)
         neg_min = self.neg_min.to(device=x.device, dtype=x.dtype)
-        out, self.q, self.acc_q, self.cur_output, self.is_work = (
+        out, self.q, self.acc_q, cur_output, self.is_work = (
             functional.stbif_single_step(
                 x, self.q, self.acc_q, q_threshold, pos_max, neg_min
             )
         )
+        self.cur_output.copy_(cur_output)
         return out
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:

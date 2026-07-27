@@ -9,6 +9,7 @@ import pytest
 import torch
 
 from spikingjelly.activation_based import functional, neuron, surrogate
+from spikingjelly.activation_based.neuron import inductor_cache
 from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
     integrate_and_fire as triton_if_kernel,
 )
@@ -212,7 +213,7 @@ def test_standard_inductor_backend_cache_key_tracks_threshold_changes(
         captured_keys.append(cache_key)
         return fn
 
-    monkeypatch.setattr(node, "_compile_inductor_graph", _fake_compile)
+    monkeypatch.setattr(inductor_cache, "compile_graph", _fake_compile)
     x = torch.randn(4, 2, 8)
 
     functional.reset_net(node)
@@ -233,7 +234,7 @@ def test_lif_inductor_backend_cache_key_tracks_tau_changes(monkeypatch):
         captured_keys.append(cache_key)
         return fn
 
-    monkeypatch.setattr(node, "_compile_inductor_graph", _fake_compile)
+    monkeypatch.setattr(inductor_cache, "compile_graph", _fake_compile)
     x = torch.randn(4, 2, 8)
 
     functional.reset_net(node)
@@ -264,7 +265,7 @@ def test_standard_inductor_backend_cache_key_tracks_cuda_device_changes(
         captured_keys.append(cache_key)
         return fn
 
-    monkeypatch.setattr(node, "_compile_inductor_graph", _fake_compile)
+    monkeypatch.setattr(inductor_cache, "compile_graph", _fake_compile)
     x0 = torch.randn(4, 2, 8, device="cuda:0")
     x1 = torch.randn(4, 2, 8, device="cuda:1")
 
@@ -289,7 +290,7 @@ def test_standard_inductor_backend_cache_key_tracks_runtime_shape_changes(
         captured_keys.append(cache_key)
         return fn
 
-    monkeypatch.setattr(node, "_compile_inductor_graph", _fake_compile)
+    monkeypatch.setattr(inductor_cache, "compile_graph", _fake_compile)
     x3 = torch.randn(4, 2, 8)
     x4 = torch.randn(4, 2, 2, 4)
 

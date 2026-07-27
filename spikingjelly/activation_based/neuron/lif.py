@@ -632,7 +632,7 @@ class LIFNode(BaseNode):
         x_seq = inductor_cache.canonicalize_tensor(x_seq)
         v_init = inductor_cache.canonicalize_tensor(self.v)
         surrogate_key = inductor_cache.surrogate_key(self.surrogate_function)
-        graph = self._compile_inductor_graph(
+        graph = inductor_cache.compile_graph(
             None
             if surrogate_key is None
             else (

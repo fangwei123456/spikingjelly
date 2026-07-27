@@ -1394,6 +1394,16 @@ def test_stbif_single_step_matches_reference_and_does_not_mutate_state():
     _assert_close(acc_q, acc_before)
 
 
+def test_stbif_single_step_preserves_cur_output_identity():
+    module = neuron.STBIFNeuron(q_threshold=0.25, level=4, sym=True)
+    module(torch.tensor([0.5, -0.25]))
+    cur_output = module.cur_output
+
+    module(torch.tensor([0.0, 0.25]))
+
+    assert module.cur_output is cur_output
+
+
 def test_stbif_multi_step_torch_matches_reference_and_module():
     x_seq = torch.tensor(
         [
