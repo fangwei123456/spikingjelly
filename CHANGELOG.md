@@ -208,17 +208,26 @@ Module: `spikingjelly.activation_based.distributed`.
   throughput, peak-memory, and tensor-parallel debug fields; legacy
   FSDP2-specific communication counter keys are no longer emitted.
 
+#### Timing-Based Models
+
+Modules: `spikingjelly.timing_based.encoding`,
+`spikingjelly.timing_based.neuron`.
+
+- Simplified `GaussianTuning` and `Tempotron` to use direct PyTorch tensor
+  operations and explicit input validation instead of internal Pydantic and
+  einops models.
+
 ### Breaking Changes and Notices
 
 #### ANN-to-SNN Conversion
 
 Module: `spikingjelly.activation_based.ann2snn`.
 
-- Removed the generic `HookFactory`, `ReLURule`, and `ThresholdOptimizer`
-  extension points and the corresponding `RateCodingRecipe` constructor
-  arguments. Custom graph conversion behavior should be implemented as an
-  `FXConversionRecipe`; `NeuronFactory` remains available for configuring
-  neuron construction.
+- Removed the generic `ActivationRule`, `HookFactory`, `ReLURule`, and
+  `ThresholdOptimizer` extension points and the corresponding
+  `RateCodingRecipe` constructor arguments. Custom graph conversion behavior
+  should be implemented as an `FXConversionRecipe`; `NeuronFactory` remains
+  available for configuring neuron construction.
 
 #### Distributed Training
 
@@ -263,6 +272,20 @@ Module: `spikingjelly.activation_based.precision`.
   `Float8TransformerEnginePolicy` no longer accepts `strict`. Pass these
   settings through `PrecisionConfig` and `prepare_model_for_precision()`;
   `Float8TransformerEnginePolicy` retains its effective `fp8_recipe` argument.
+
+#### Triton Utilities
+
+Module: `spikingjelly.activation_based.triton_kernel.triton_utils`.
+
+- Removed the documented `ensure_cleanup_tmp_python_files()` decorator. Callers
+  that create temporary Python files should own their lifecycle with
+  `tempfile` context managers.
+
+#### Dependencies
+
+- Removed Pydantic from SpikingJelly's runtime and documentation dependencies
+  after replacing its internal timing-based validation. Projects that use
+  Pydantic directly must declare it as their own dependency.
 
 ## 2.0.0.dev0 - 2026-07-09
 

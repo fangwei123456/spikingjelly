@@ -139,11 +139,10 @@ class GatedLIFNode(base.MemoryModule):
         self.register_memory("v", 0.0)
         self.register_memory("u", 0.0)
         param_shape = () if inplane is None else (inplane,)
-        random_shape = () if inplane is None else (inplane,)
         self.alpha, self.beta, self.gamma = [
             nn.Parameter(
                 torch.tensor(
-                    0.2 * (np.random.rand(*random_shape) - 0.5),
+                    0.2 * (np.random.rand(*param_shape) - 0.5),
                     dtype=torch.float,
                 )
             )

@@ -6,8 +6,7 @@ from typing import Any, Callable
 import torch.nn as nn
 from torch.overrides import resolve_name
 
-from ..base import BaseCounter
-from .utils import _infer_stage
+from ..base import BaseCounter, _infer_stage
 
 __all__ = ["NeuroMCBaseCounter"]
 

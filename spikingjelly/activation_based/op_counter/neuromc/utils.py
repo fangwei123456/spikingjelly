@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import torch
 
-from ..base import _infer_stage, _tensor_bits
-
 __all__ = [
     "_add_nested",
     "_diff_simple_dict",
@@ -11,8 +9,6 @@ __all__ = [
     "_prod",
     "_is_spike",
     "_spike_nnz",
-    "_tensor_bits",
-    "_infer_stage",
 ]
 
 

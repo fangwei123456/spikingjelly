@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from . import base, neuron, surrogate
 
 _hw_bits = 12
-_LAVA_NEURON_SCALE = 1 << 6
 
 
 def step_quantize_forward(x: torch.Tensor, step: float):
@@ -812,7 +811,7 @@ try:
                 "voltage_decay": 0.0,
                 "tau_grad": 1,
                 "scale_grad": 1,
-                "scale": _LAVA_NEURON_SCALE,
+                "scale": sj_ms_neuron.lava_s_cale,
                 "norm": None,
                 "dropout": None,
                 "shared_param": True,
@@ -832,7 +831,7 @@ try:
                 "voltage_decay": 1.0 / sj_ms_neuron.tau,
                 "tau_grad": 1,
                 "scale_grad": 1,
-                "scale": _LAVA_NEURON_SCALE,
+                "scale": sj_ms_neuron.lava_s_cale,
                 "norm": None,
                 "dropout": None,
                 "shared_param": True,
@@ -1241,7 +1240,7 @@ try:
                         current_decay=1.0,
                         voltage_decay=0.0,
                         v_threshold=neu.v_threshold,
-                        scale=_LAVA_NEURON_SCALE,
+                        scale=neu.lava_s_cale,
                     )
 
                 elif isinstance(neu, neuron.LIFNode):
@@ -1253,7 +1252,7 @@ try:
                         current_decay=1.0,
                         voltage_decay=1.0 / neu.tau,
                         v_threshold=neu.v_threshold,
-                        scale=_LAVA_NEURON_SCALE,
+                        scale=neu.lava_s_cale,
                     )
                 else:
                     assert isinstance(neu, CubaLIFNode)
