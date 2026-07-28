@@ -3,8 +3,7 @@ from typing import Optional
 
 import torch
 
-from .. import surrogate
-from . import inductor_cache
+from .. import functional, surrogate
 from .base_node import BaseNode, NonSpikingBaseNode, SimpleBaseNode
 
 try:
@@ -592,38 +591,19 @@ class LIFNode(BaseNode):
 
     def _inductor_multi_step_forward(self, x_seq: torch.Tensor):
         self.v_float_to_tensor(x_seq[0])
-        x_seq = x_seq.contiguous()
-        v_init = self.v.contiguous()
-        surrogate_key = inductor_cache.surrogate_key(self.surrogate_function)
-        graph = inductor_cache.compile_graph(
-            None
-            if surrogate_key is None
-            else (
-                "lif",
-                self.store_v_seq,
-                self.decay_input,
-                self.tau,
-                self.v_threshold,
-                self.v_reset,
-                self.detach_reset,
-                surrogate_key,
-                inductor_cache.runtime_key(x_seq, v_init),
-            ),
-            inductor_cache._build_lif_multi_step_graph(
-                self.tau,
-                self.decay_input,
-                self.v_threshold,
-                self.v_reset,
-                self.surrogate_function,
-                self.detach_reset,
-                self.store_v_seq,
-            ),
+        spike_seq, self.v, v_seq = functional.lif_multi_step_inductor(
+            x_seq,
+            self.v,
+            self.tau,
+            self.decay_input,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+            self.store_v_seq,
         )
-        out = graph(x_seq, v_init)
         if self.store_v_seq:
-            spike_seq, self.v, self.v_seq = out
-        else:
-            spike_seq, self.v = out
+            self.v_seq = v_seq
         return spike_seq
 
 

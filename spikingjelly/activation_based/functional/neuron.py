@@ -1971,7 +1971,7 @@ def if_multi_step_inductor(
         None
         if surrogate_key is None
         else (
-            "functional_if",
+            "if",
             store_v_seq,
             v_threshold,
             v_reset,
@@ -2433,7 +2433,7 @@ def lif_multi_step_inductor(
         None
         if surrogate_key is None
         else (
-            "functional_lif",
+            "lif",
             store_v_seq,
             decay_input,
             tau,
@@ -2715,7 +2715,7 @@ def plif_multi_step_inductor(
         None
         if surrogate_key is None
         else (
-            "functional_plif",
+            "plif",
             store_v_seq,
             decay_input,
             v_threshold,

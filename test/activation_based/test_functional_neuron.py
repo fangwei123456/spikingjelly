@@ -794,6 +794,15 @@ def test_mpbn_fire_matches_module_residual_paths():
     v4_module = v4.detach().clone().requires_grad_()
     module4.v = v4_module
     module4.v_threshold = torch.tensor([0.1, 0.2, 0.3])
+    module4.fold_bn = True
+    module4.gamma = torch.tensor([1.1, 0.9, 1.2])
+    module4.mu = torch.tensor([0.0, -0.1, 0.2])
+    module4.beta = torch.tensor([0.3, -0.2, 0.1])
+    module4.sigma2 = torch.tensor([1.0, 1.2, 0.8])
+    module4.eps = 1e-5
+    effective_threshold = (module4.v_threshold - module4.beta) * torch.sqrt(
+        module4.sigma2 + module4.eps
+    ) / module4.gamma + module4.mu
     spike_module4 = module4.neuronal_fire()
     loss_module4 = spike_module4.sum() + module4.v.sum()
     loss_module4.backward()
@@ -801,7 +810,7 @@ def test_mpbn_fire_matches_module_residual_paths():
     v4_func = v4.detach().clone().requires_grad_()
     spike_func4, v4_next = functional.mpbn_fire(
         v4_func,
-        module4.v_threshold,
+        effective_threshold,
         module4.surrogate_function,
     )
     loss_func4 = spike_func4.sum() + v4_next.sum()

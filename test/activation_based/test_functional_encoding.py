@@ -73,13 +73,24 @@ def test_latency_encoder_materializes_spike_once_then_ignores_later_input():
     assert encoder.t == 2
 
 
-def test_latency_encoder_single_step_encode_delegates_to_functional_encoding():
+def test_latency_encoder_single_step_encode_delegates_to_functional_encoding(
+    monkeypatch,
+):
     x = torch.tensor([0.0, 0.5, 1.0])
     encoder = encoding.LatencyEncoder(T=4, enc_function="log")
+    expected = torch.randn(4, 3)
+    calls = []
+
+    def latency_encode(x_arg, T, enc_function, alpha):
+        calls.append((x_arg, T, enc_function, alpha))
+        return expected
+
+    monkeypatch.setattr(functional, "latency_encode", latency_encode)
 
     encoder.single_step_encode(x)
 
-    _assert_close(encoder.spike, functional.latency_encode(x, 4, "log", encoder.alpha))
+    assert encoder.spike is expected
+    assert calls == [(x, 4, "log", encoder.alpha)]
 
 
 def test_latency_encoder_uses_its_alpha_state():
@@ -127,13 +138,24 @@ def test_weighted_phase_encode_does_not_mutate_input():
     assert torch.equal(x, x_before)
 
 
-def test_weighted_phase_encoder_single_step_encode_delegates_to_functional_encoding():
+def test_weighted_phase_encoder_single_step_encode_delegates_to_functional_encoding(
+    monkeypatch,
+):
     x = torch.tensor([0.25, 0.5])
     encoder = encoding.WeightedPhaseEncoder(K=3)
+    expected = torch.randn(3, 2)
+    calls = []
+
+    def weighted_phase_encode(x_arg, T):
+        calls.append((x_arg, T))
+        return expected
+
+    monkeypatch.setattr(functional, "weighted_phase_encode", weighted_phase_encode)
 
     encoder.single_step_encode(x)
 
-    _assert_close(encoder.spike, functional.weighted_phase_encode(x, 3))
+    assert encoder.spike is expected
+    assert calls == [(x, 3)]
 
 
 def test_stateful_encoder_top_level_exports():

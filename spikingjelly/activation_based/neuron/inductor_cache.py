@@ -55,9 +55,7 @@ def surrogate_key(surrogate_function: Callable) -> tuple[Any, ...] | None:
         return None
     surrogate_type = type(surrogate_function)
     if surrogate_type.__module__ != "spikingjelly.activation_based.surrogate":
-        # The cached graph retains this instance until the key is evicted, so
-        # Python cannot reuse its id while the entry is live.
-        return ("surrogate_instance", id(surrogate_function))
+        return None
     params = tuple(sorted(getattr(surrogate_function, "_sg_params", {}).items()))
     return (
         surrogate_type.__module__,

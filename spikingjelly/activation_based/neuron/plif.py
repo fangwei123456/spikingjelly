@@ -5,8 +5,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from .. import surrogate
-from . import inductor_cache
+from .. import functional, surrogate
 from .base_node import BaseNode
 
 try:
@@ -189,37 +188,19 @@ class ParametricLIFNode(BaseNode):
 
     def _inductor_multi_step_forward(self, x_seq: torch.Tensor):
         self.v_float_to_tensor(x_seq[0])
-        x_seq = x_seq.contiguous()
-        v_init = self.v.contiguous()
-        reciprocal_tau = self.w.sigmoid().to(x_seq).contiguous()
-        surrogate_key = inductor_cache.surrogate_key(self.surrogate_function)
-        graph = inductor_cache.compile_graph(
-            None
-            if surrogate_key is None
-            else (
-                "plif",
-                self.store_v_seq,
-                self.decay_input,
-                self.v_threshold,
-                self.v_reset,
-                self.detach_reset,
-                surrogate_key,
-                inductor_cache.runtime_key(x_seq, v_init, reciprocal_tau),
-            ),
-            inductor_cache._build_plif_multi_step_graph(
-                self.decay_input,
-                self.v_threshold,
-                self.v_reset,
-                self.surrogate_function,
-                self.detach_reset,
-                self.store_v_seq,
-            ),
+        spike_seq, self.v, v_seq = functional.plif_multi_step_inductor(
+            x_seq,
+            self.v,
+            self.w,
+            self.decay_input,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+            self.store_v_seq,
         )
-        out = graph(x_seq, v_init, reciprocal_tau)
         if self.store_v_seq:
-            spike_seq, self.v, self.v_seq = out
-        else:
-            spike_seq, self.v = out
+            self.v_seq = v_seq
         return spike_seq
 
     def multi_step_forward(self, x_seq: torch.Tensor):

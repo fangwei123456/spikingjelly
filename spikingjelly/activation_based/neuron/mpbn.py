@@ -3,7 +3,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from .. import functional, surrogate
+from .. import surrogate
 from .base_node import BaseNode
 from .lif import LIFNode
 
@@ -195,6 +195,8 @@ class MPBNBaseNode(BaseNode):
             raise NotImplementedError(
                 f"Only 2D and 4D tensors are supported, but got {self.v.ndim}D tensors."
             )
+
+        feature_shape = (1, -1) if self.v.ndim == 2 else (1, -1, 1, 1)
         if self.fold_bn and not self.learnable_vth:
             threshold = (self.v_threshold - self.beta) * torch.sqrt(
                 self.sigma2 + self.eps
@@ -203,20 +205,23 @@ class MPBNBaseNode(BaseNode):
             threshold = torch.exp(self.a)
         else:
             threshold = self.v_threshold
-        threshold = torch.as_tensor(
-            threshold, device=self.v.device, dtype=self.v.dtype
-        ).expand(self.v.shape[1])
-        spike, self.v = functional.mpbn_fire(
-            self.v,
-            threshold,
-            self.surrogate_function,
-            self.normalize_residual,
-            self.gamma,
-            self.mu,
-            self.beta,
-            self.sigma2,
-            self.eps,
-        )
+        if self.fold_bn or self.learnable_vth:
+            threshold = threshold.view(feature_shape)
+        diff = self.v - threshold
+        spike = self.surrogate_function(diff)
+
+        if self.normalize_residual:
+            mask = diff <= 0
+            gamma = self.gamma.view(feature_shape).expand_as(mask)
+            mu = self.mu.view(feature_shape).expand_as(mask)
+            beta = self.beta.view(feature_shape).expand_as(mask)
+            sigma = (
+                torch.sqrt(self.sigma2 + self.eps).view(feature_shape).expand_as(mask)
+            )
+            normalized_residual = (self.v[mask] - mu[mask]) / sigma[mask] * gamma[
+                mask
+            ] + beta[mask]
+            self.v = self.v.masked_scatter(mask, normalized_residual)
         return spike
 
     def single_step_forward(self, x: torch.Tensor):

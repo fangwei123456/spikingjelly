@@ -22,7 +22,7 @@ def _make_node() -> neuron.IFNode:
     ).train()
 
 
-def test_inductor_cache_reuses_same_config_across_modules(monkeypatch):
+def test_inductor_cache_reuses_same_config_across_modules_and_function(monkeypatch):
     inductor_cache.clear()
     compile_calls = []
 
@@ -38,10 +38,20 @@ def test_inductor_cache_reuses_same_config_across_modules(monkeypatch):
     functional.reset_net(node0)
     functional.reset_net(node1)
     y0 = node0(x)
+    y_function, _, _ = functional.if_multi_step_inductor(
+        x,
+        torch.zeros_like(x[0]),
+        node0.v_threshold,
+        node0.v_reset,
+        surrogate.Sigmoid(alpha=4.0),
+        node0.detach_reset,
+        node0.store_v_seq,
+    )
     y1 = node1(x)
 
     assert len(compile_calls) == 1
     assert inductor_cache.info()["entries"] == 1
+    assert torch.equal(y0, y_function)
     assert torch.equal(y0, y1)
     assert node0._inductor_compiled_graphs == {}
     assert node1._inductor_compiled_graphs == {}
@@ -174,8 +184,8 @@ def test_inductor_cache_does_not_share_custom_surrogate_closures(monkeypatch):
     assert torch.equal(spike0, torch.ones_like(spike0))
     assert torch.equal(spike1, torch.full_like(spike1, 2.0))
     assert torch.equal(spike0_again, spike0)
-    assert len(compile_calls) == 2
-    assert inductor_cache.info()["entries"] == 2
+    assert len(compile_calls) == 3
+    assert inductor_cache.info()["entries"] == 0
     inductor_cache.clear()
 
 
@@ -198,7 +208,7 @@ def test_inductor_cache_does_not_retain_builtin_surrogate_module(monkeypatch):
     inductor_cache.clear()
 
 
-def test_inductor_cache_bounds_custom_surrogate_instances(monkeypatch):
+def test_inductor_cache_does_not_retain_custom_surrogate_instances(monkeypatch):
     class ScaledSurrogate(torch.nn.Module):
         def __init__(self, scale):
             super().__init__()
@@ -209,22 +219,16 @@ def test_inductor_cache_bounds_custom_surrogate_instances(monkeypatch):
 
     inductor_cache.clear()
     monkeypatch.setattr(inductor_cache.torch, "compile", lambda fn, **_kwargs: fn)
-    max_entries = inductor_cache.info()["max_entries"]
     references = []
     x_seq = torch.zeros(1, 1)
     v = torch.zeros(1)
 
-    for i in range(max_entries + 3):
+    for i in range(3):
         surrogate = ScaledSurrogate(float(i))
         references.append(weakref.ref(surrogate))
         functional.if_multi_step_inductor(x_seq, v, 1.0, 0.0, surrogate)
 
     del surrogate
     gc.collect()
-    assert inductor_cache.info()["entries"] == max_entries
-    assert all(reference() is None for reference in references[:3])
-    assert all(reference() is not None for reference in references[3:])
-
-    inductor_cache.clear()
-    gc.collect()
+    assert inductor_cache.info()["entries"] == 0
     assert all(reference() is None for reference in references)

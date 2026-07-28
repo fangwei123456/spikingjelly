@@ -5,7 +5,6 @@ from typing import Optional, Tuple, Union
 import torch
 
 from .. import base, functional, surrogate
-from . import inductor_cache
 from .base_node import BaseNode, NonSpikingBaseNode, SimpleBaseNode
 
 try:
@@ -304,34 +303,17 @@ class IFNode(BaseNode):
 
     def _inductor_multi_step_forward(self, x_seq: torch.Tensor):
         self.v_float_to_tensor(x_seq[0])
-        x_seq = x_seq.contiguous()
-        v_init = self.v.contiguous()
-        surrogate_key = inductor_cache.surrogate_key(self.surrogate_function)
-        graph = inductor_cache.compile_graph(
-            None
-            if surrogate_key is None
-            else (
-                "if",
-                self.store_v_seq,
-                self.v_threshold,
-                self.v_reset,
-                self.detach_reset,
-                surrogate_key,
-                inductor_cache.runtime_key(x_seq, v_init),
-            ),
-            inductor_cache._build_if_multi_step_graph(
-                self.v_threshold,
-                self.v_reset,
-                self.surrogate_function,
-                self.detach_reset,
-                self.store_v_seq,
-            ),
+        spike_seq, self.v, v_seq = functional.if_multi_step_inductor(
+            x_seq,
+            self.v,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+            self.store_v_seq,
         )
-        out = graph(x_seq, v_init)
         if self.store_v_seq:
-            spike_seq, self.v, self.v_seq = out
-        else:
-            spike_seq, self.v = out
+            self.v_seq = v_seq
         return spike_seq
 
     def multi_step_forward(self, x_seq: torch.Tensor):
