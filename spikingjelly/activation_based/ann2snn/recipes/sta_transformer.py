@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import copy
 import math
 import operator
-from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple
+from typing import Any, Dict, Iterable, List, Optional, TYPE_CHECKING, Tuple
 
 import torch
 import torch.nn as nn
@@ -13,11 +12,8 @@ from tqdm import tqdm
 from spikingjelly.activation_based import base
 
 from spikingjelly.activation_based.ann2snn.operators import (
-    TDConv2d,
-    TDGELU,
-    TDLayerNorm,
-    TDLinear,
     TDMultiheadAttention,
+    _td_module_from_ann,
 )
 from spikingjelly.activation_based.ann2snn.recipes.base import ConversionRecipe
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
@@ -45,13 +41,6 @@ _STATIC_TENSOR_KWARGS = frozenset(
         "padding_mask",
     }
 )
-
-
-def _clone_parameter(parameter: nn.Parameter) -> nn.Parameter:
-    return nn.Parameter(
-        parameter.detach().clone(),
-        requires_grad=parameter.requires_grad,
-    )
 
 
 def _make_td_multihead_attention(source: nn.MultiheadAttention) -> TDMultiheadAttention:
@@ -101,6 +90,7 @@ def _make_td_multihead_attention(source: nn.MultiheadAttention) -> TDMultiheadAt
     replacement.out_proj.weight.requires_grad = source.out_proj.weight.requires_grad
     if source.out_proj.bias is not None:
         replacement.out_proj.bias.requires_grad = source.out_proj.bias.requires_grad
+    replacement.train(source.training)
     return replacement
 
 
@@ -194,112 +184,6 @@ class _STAThresholdObserver:
         return self.threshold.detach()
 
 
-class _STATimeStepMixin:
-    def _reset_sta_state(self) -> None:
-        self.t = 0
-
-
-class _STASpikeMixin(_STATimeStepMixin):
-    def _reset_sta_state(self) -> None:
-        super()._reset_sta_state()
-        self.mem = None
-
-    @staticmethod
-    def _broadcast_threshold(
-        threshold: torch.Tensor, output: torch.Tensor, channel_dim: int
-    ) -> torch.Tensor:
-        return _broadcast_channel_vector(threshold, output, channel_dim)
-
-    def _spike(self, analog: torch.Tensor, channel_dim: int) -> torch.Tensor:
-        threshold = self._broadcast_threshold(self.v_threshold, analog, channel_dim)
-        if (
-            self.mem is None
-            or self.mem.shape != analog.shape
-            or self.mem.device != analog.device
-            or self.mem.dtype != analog.dtype
-        ):
-            self.mem = torch.zeros_like(analog)
-        self.mem = self.mem + analog
-        spike_count = torch.trunc(self.mem / threshold)
-        spike = spike_count * threshold
-        self.mem = self.mem - spike
-        return spike
-
-
-class _STASpikeLinear(nn.Module, _STASpikeMixin):
-    def __init__(self, source: nn.Linear, threshold: torch.Tensor) -> None:
-        super().__init__()
-        self.in_features = source.in_features
-        self.out_features = source.out_features
-        self.weight = _clone_parameter(source.weight)
-        if source.bias is None:
-            self.register_parameter("bias", None)
-        else:
-            self.bias = _clone_parameter(source.bias)
-        self.register_buffer("v_threshold", threshold.detach().clone())
-        self.mem: Optional[torch.Tensor] = None
-        self.t = 0
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        bias = self.bias if self.t == 0 else None
-        self.t += 1
-        return self._spike(F.linear(x, self.weight, bias), channel_dim=-1)
-
-
-class _STASpikeConv2d(nn.Module, _STASpikeMixin):
-    def __init__(self, source: nn.Conv2d, threshold: torch.Tensor) -> None:
-        super().__init__()
-        self.in_channels = source.in_channels
-        self.out_channels = source.out_channels
-        self.kernel_size = source.kernel_size
-        self.stride = source.stride
-        self.padding = source.padding
-        self.dilation = source.dilation
-        self.groups = source.groups
-        self.padding_mode = source.padding_mode
-        self._sta_reversed_padding_repeated_twice = tuple(
-            source._reversed_padding_repeated_twice
-        )
-        self.weight = _clone_parameter(source.weight)
-        if source.bias is None:
-            self.register_parameter("bias", None)
-        else:
-            self.bias = _clone_parameter(source.bias)
-        self.register_buffer("v_threshold", threshold.detach().clone())
-        self.mem: Optional[torch.Tensor] = None
-        self.t = 0
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        bias = self.bias if self.t == 0 else None
-        self.t += 1
-        if self.padding_mode != "zeros":
-            x = F.pad(
-                x,
-                self._sta_reversed_padding_repeated_twice,
-                mode=self.padding_mode,
-            )
-            analog = F.conv2d(
-                x,
-                self.weight,
-                bias,
-                self.stride,
-                (0, 0),
-                self.dilation,
-                self.groups,
-            )
-        else:
-            analog = F.conv2d(
-                x,
-                self.weight,
-                bias,
-                self.stride,
-                self.padding,
-                self.dilation,
-                self.groups,
-            )
-        return self._spike(analog, channel_dim=1)
-
-
 class _STASpikeEncoder(base.MemoryModule):
     def __init__(
         self,
@@ -353,270 +237,6 @@ class _STASpikeEncoder(base.MemoryModule):
 
     def extra_repr(self) -> str:
         return f"channel_dim={self.channel_dim}, step_mode={self.step_mode}"
-
-
-class _STAAnalogLinear(nn.Module, _STATimeStepMixin):
-    def __init__(self, source: nn.Linear) -> None:
-        super().__init__()
-        self.in_features = source.in_features
-        self.out_features = source.out_features
-        self.weight = _clone_parameter(source.weight)
-        if source.bias is None:
-            self.register_parameter("bias", None)
-        else:
-            self.bias = _clone_parameter(source.bias)
-        self.t = 0
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        bias = self.bias if self.t == 0 else None
-        self.t += 1
-        return F.linear(x, self.weight, bias)
-
-
-class _STAAnalogConv2d(nn.Module, _STATimeStepMixin):
-    def __init__(self, source: nn.Conv2d) -> None:
-        super().__init__()
-        self.in_channels = source.in_channels
-        self.out_channels = source.out_channels
-        self.kernel_size = source.kernel_size
-        self.stride = source.stride
-        self.padding = source.padding
-        self.dilation = source.dilation
-        self.groups = source.groups
-        self.padding_mode = source.padding_mode
-        self._sta_reversed_padding_repeated_twice = tuple(
-            source._reversed_padding_repeated_twice
-        )
-        self.weight = _clone_parameter(source.weight)
-        if source.bias is None:
-            self.register_parameter("bias", None)
-        else:
-            self.bias = _clone_parameter(source.bias)
-        self.t = 0
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        bias = self.bias if self.t == 0 else None
-        self.t += 1
-        if self.padding_mode != "zeros":
-            x = F.pad(
-                x,
-                self._sta_reversed_padding_repeated_twice,
-                mode=self.padding_mode,
-            )
-            return F.conv2d(
-                x,
-                self.weight,
-                bias,
-                self.stride,
-                (0, 0),
-                self.dilation,
-                self.groups,
-            )
-        return F.conv2d(
-            x,
-            self.weight,
-            bias,
-            self.stride,
-            self.padding,
-            self.dilation,
-            self.groups,
-        )
-
-
-class _STAOnlineLayerNorm(nn.Module):
-    def __init__(
-        self,
-        source: nn.LayerNorm,
-        encoder_threshold: Optional[torch.Tensor] = None,
-    ) -> None:
-        super().__init__()
-        self.normalized_shape = source.normalized_shape
-        self.eps = source.eps
-        self.elementwise_affine = source.elementwise_affine
-        if source.weight is None:
-            self.register_parameter("weight", None)
-        else:
-            self.weight = _clone_parameter(source.weight)
-        if source.bias is None:
-            self.register_parameter("bias", None)
-        else:
-            self.bias = _clone_parameter(source.bias)
-        self.mem: Optional[torch.Tensor] = None
-        self.prev_output: Optional[torch.Tensor] = None
-        self.encoder = (
-            None
-            if encoder_threshold is None
-            else _STASpikeEncoder(encoder_threshold, channel_dim=-1, step_mode="s")
-        )
-
-    def _reset_sta_state(self) -> None:
-        self.mem = None
-        self.prev_output = None
-        if self.encoder is not None:
-            self.encoder._reset_sta_state()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if (
-            self.mem is None
-            or self.mem.shape != x.shape
-            or self.mem.device != x.device
-            or self.mem.dtype != x.dtype
-        ):
-            self.mem = torch.zeros_like(x)
-            self.prev_output = torch.zeros_like(x)
-        self.mem = self.mem + x
-        output = F.layer_norm(
-            self.mem,
-            self.normalized_shape,
-            self.weight,
-            self.bias,
-            self.eps,
-        )
-        delta = output - self.prev_output
-        self.prev_output = output
-        if self.encoder is not None:
-            delta = self.encoder(delta)
-        return delta
-
-
-class _STAOnlineGELU(nn.Module):
-    def __init__(
-        self,
-        source: nn.GELU,
-        encoder_threshold: Optional[torch.Tensor] = None,
-    ) -> None:
-        super().__init__()
-        self.approximate = getattr(source, "approximate", "none")
-        self.mem: Optional[torch.Tensor] = None
-        self.prev_output: Optional[torch.Tensor] = None
-        self.encoder = (
-            None
-            if encoder_threshold is None
-            else _STASpikeEncoder(encoder_threshold, channel_dim=-1, step_mode="s")
-        )
-
-    def _reset_sta_state(self) -> None:
-        self.mem = None
-        self.prev_output = None
-        if self.encoder is not None:
-            self.encoder._reset_sta_state()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if (
-            self.mem is None
-            or self.mem.shape != x.shape
-            or self.mem.device != x.device
-            or self.mem.dtype != x.dtype
-        ):
-            self.mem = torch.zeros_like(x)
-            self.prev_output = torch.zeros_like(x)
-        self.mem = self.mem + x
-        output = F.gelu(self.mem, approximate=self.approximate)
-        delta = output - self.prev_output
-        self.prev_output = output
-        if self.encoder is not None:
-            delta = self.encoder(delta)
-        return delta
-
-
-class _STAOnlineMultiheadAttention(nn.Module):
-    def __init__(
-        self,
-        source: nn.MultiheadAttention,
-        encoder_threshold: Optional[torch.Tensor] = None,
-    ) -> None:
-        super().__init__()
-        # MultiheadAttention carries fused projection parameters and option
-        # fields; deepcopy preserves that full internal layout.
-        self.attn = copy.deepcopy(source)
-        self.q_mem: Optional[torch.Tensor] = None
-        self.k_mem: Optional[torch.Tensor] = None
-        self.v_mem: Optional[torch.Tensor] = None
-        self.prev_output: Optional[torch.Tensor] = None
-        self.prev_weights: Optional[torch.Tensor] = None
-        self.encoder = (
-            None
-            if encoder_threshold is None
-            else _STASpikeEncoder(encoder_threshold, channel_dim=-1, step_mode="s")
-        )
-
-    def _reset_sta_state(self) -> None:
-        self.q_mem = None
-        self.k_mem = None
-        self.v_mem = None
-        self.prev_output = None
-        self.prev_weights = None
-        if self.encoder is not None:
-            self.encoder._reset_sta_state()
-
-    def forward(
-        self,
-        query: torch.Tensor,
-        key: torch.Tensor,
-        value: torch.Tensor,
-        key_padding_mask: Optional[torch.Tensor] = None,
-        need_weights: bool = True,
-        attn_mask: Optional[torch.Tensor] = None,
-        average_attn_weights: bool = True,
-        is_causal: bool = False,
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        if (
-            self.q_mem is None
-            or self.k_mem is None
-            or self.v_mem is None
-            or self.q_mem.shape != query.shape
-            or self.k_mem.shape != key.shape
-            or self.v_mem.shape != value.shape
-            or self.q_mem.device != query.device
-            or self.k_mem.device != key.device
-            or self.v_mem.device != value.device
-            or self.q_mem.dtype != query.dtype
-            or self.k_mem.dtype != key.dtype
-            or self.v_mem.dtype != value.dtype
-        ):
-            self.q_mem = torch.zeros_like(query)
-            self.k_mem = torch.zeros_like(key)
-            self.v_mem = torch.zeros_like(value)
-            self.prev_output = None
-            self.prev_weights = None
-        self.q_mem = self.q_mem + query
-        self.k_mem = self.k_mem + key
-        self.v_mem = self.v_mem + value
-        output, weights = self.attn(
-            self.q_mem,
-            self.k_mem,
-            self.v_mem,
-            key_padding_mask=key_padding_mask,
-            need_weights=need_weights,
-            attn_mask=attn_mask,
-            average_attn_weights=average_attn_weights,
-            is_causal=is_causal,
-        )
-        if (
-            self.prev_output is None
-            or self.prev_output.shape != output.shape
-            or self.prev_output.device != output.device
-            or self.prev_output.dtype != output.dtype
-        ):
-            self.prev_output = torch.zeros_like(output)
-        delta = output - self.prev_output
-        self.prev_output = output
-        if self.encoder is not None:
-            delta = self.encoder(delta)
-        if weights is None:
-            weights_delta = None
-            self.prev_weights = None
-        else:
-            if (
-                self.prev_weights is None
-                or self.prev_weights.shape != weights.shape
-                or self.prev_weights.device != weights.device
-                or self.prev_weights.dtype != weights.dtype
-            ):
-                self.prev_weights = torch.zeros_like(weights)
-            weights_delta = weights - self.prev_weights
-            self.prev_weights = weights
-        return delta, weights_delta
 
 
 class _STAConstant(base.MemoryModule):
@@ -943,35 +563,24 @@ class STATransformerRecipe(ConversionRecipe):
             if isinstance(module, nn.Linear):
                 if not self._should_spike_linear(node.target):
                     continue
-                observer = _STAThresholdObserver(
-                    self.time_steps,
-                    channel_dim=-1,
-                    mode=self.threshold_mode,
-                    momentum=self.momentum,
-                    eps=self.eps,
-                )
+                channel_dim = -1
             elif isinstance(module, nn.Conv2d):
                 if not self.spike_conv2d:
                     continue
-                observer = _STAThresholdObserver(
-                    self.time_steps,
-                    channel_dim=1,
-                    mode=self.threshold_mode,
-                    momentum=self.momentum,
-                    eps=self.eps,
-                )
+                channel_dim = 1
             elif self.mode == "spiking_encoder" and isinstance(
                 module, (nn.LayerNorm, nn.GELU, nn.MultiheadAttention)
             ):
-                observer = _STAThresholdObserver(
-                    self.time_steps,
-                    channel_dim=-1,
-                    mode=self.threshold_mode,
-                    momentum=self.momentum,
-                    eps=self.eps,
-                )
+                channel_dim = -1
             else:
                 continue
+            observer = _STAThresholdObserver(
+                self.time_steps,
+                channel_dim=channel_dim,
+                mode=self.threshold_mode,
+                momentum=self.momentum,
+                eps=self.eps,
+            )
             self._observers[node.target] = observer
             handle = module.register_forward_hook(
                 lambda _module, _inputs, output, obs=observer: obs(output)
@@ -1014,13 +623,9 @@ class STATransformerRecipe(ConversionRecipe):
             if node.op != "call_module" or not isinstance(node.target, str):
                 continue
             module = modules.get(node.target)
-            if isinstance(module, nn.Linear):
-                replacement = self._make_td_linear(module)
-            elif isinstance(module, nn.Conv2d):
-                replacement = self._make_td_conv2d(module)
-            else:
+            if not isinstance(module, (nn.Linear, nn.Conv2d)):
                 continue
-            replacement.train(module.training)
+            replacement = _td_module_from_ann(module)
             self._replace_submodule(fx_model, node.target, replacement)
             modules[node.target] = replacement
 
@@ -1034,11 +639,11 @@ class STATransformerRecipe(ConversionRecipe):
             if isinstance(module, nn.LayerNorm):
                 observer = self._observers.get(node.target)
                 threshold = self._compute_scaled_threshold(observer)
-                replacement = self._make_td_layer_norm(module)
+                replacement = _td_module_from_ann(module)
             elif isinstance(module, nn.GELU):
                 observer = self._observers.get(node.target)
                 threshold = self._compute_scaled_threshold(observer)
-                replacement = self._make_td_gelu(module)
+                replacement = _td_module_from_ann(module)
             elif isinstance(module, nn.MultiheadAttention):
                 self._validate_sequence_mha_node(node)
                 observer = self._observers.get(node.target)
@@ -1046,7 +651,6 @@ class STATransformerRecipe(ConversionRecipe):
                 replacement = _make_td_multihead_attention(module)
             else:
                 continue
-            replacement.train(module.training)
             self._replace_submodule(fx_model, node.target, replacement)
             modules[node.target] = replacement
             if threshold is not None:
@@ -1069,71 +673,6 @@ class STATransformerRecipe(ConversionRecipe):
     def finalize(self, converter: "Converter", fx_model: fx.GraphModule) -> nn.Module:
         object.__setattr__(fx_model, "time_steps", self.time_steps)
         return fx_model
-
-    @staticmethod
-    def _make_td_linear(module: nn.Linear) -> TDLinear:
-        replacement = TDLinear(
-            module.in_features,
-            module.out_features,
-            bias=module.bias is not None,
-            device=module.weight.device,
-            dtype=module.weight.dtype,
-        )
-        with torch.no_grad():
-            replacement.weight.copy_(module.weight)
-            if module.bias is not None:
-                replacement.bias.copy_(module.bias)
-        replacement.weight.requires_grad = module.weight.requires_grad
-        if module.bias is not None:
-            replacement.bias.requires_grad = module.bias.requires_grad
-        return replacement
-
-    @staticmethod
-    def _make_td_conv2d(module: nn.Conv2d) -> TDConv2d:
-        replacement = TDConv2d(
-            module.in_channels,
-            module.out_channels,
-            module.kernel_size,
-            stride=module.stride,
-            padding=module.padding,
-            dilation=module.dilation,
-            groups=module.groups,
-            bias=module.bias is not None,
-            padding_mode=module.padding_mode,
-            device=module.weight.device,
-            dtype=module.weight.dtype,
-        )
-        with torch.no_grad():
-            replacement.weight.copy_(module.weight)
-            if module.bias is not None:
-                replacement.bias.copy_(module.bias)
-        replacement.weight.requires_grad = module.weight.requires_grad
-        if module.bias is not None:
-            replacement.bias.requires_grad = module.bias.requires_grad
-        return replacement
-
-    @staticmethod
-    def _make_td_layer_norm(module: nn.LayerNorm) -> TDLayerNorm:
-        replacement = TDLayerNorm(
-            module.normalized_shape,
-            eps=module.eps,
-            elementwise_affine=module.elementwise_affine,
-            bias=module.bias is not None,
-            device=module.weight.device if module.weight is not None else None,
-            dtype=module.weight.dtype if module.weight is not None else None,
-        )
-        with torch.no_grad():
-            if module.weight is not None:
-                replacement.weight.copy_(module.weight)
-                replacement.weight.requires_grad = module.weight.requires_grad
-            if module.bias is not None:
-                replacement.bias.copy_(module.bias)
-                replacement.bias.requires_grad = module.bias.requires_grad
-        return replacement
-
-    @staticmethod
-    def _make_td_gelu(module: nn.GELU) -> TDGELU:
-        return TDGELU(approximate=getattr(module, "approximate", "none"))
 
     @staticmethod
     def _mha_need_weights_argument(node: fx.Node):
@@ -1357,7 +896,6 @@ class STATransformerRecipe(ConversionRecipe):
                 module,
                 (
                     nn.MultiheadAttention,
-                    _STAOnlineMultiheadAttention,
                     TDMultiheadAttention,
                 ),
             ):

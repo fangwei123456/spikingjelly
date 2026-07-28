@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, List, Mapping, Optional, Tuple, Union
 
@@ -60,7 +60,6 @@ SNN_DISTRIBUTED_PREFERENCES = ("speed", "memory", "capacity")
 class DistributedFeatureSet:
     allow_experimental_conv_tp: bool = False
     allow_experimental_spikformer_tp: bool = False
-    allow_pipeline: bool = True
     allow_zero_optimizer: bool = True
 
 
@@ -78,14 +77,6 @@ class SNNDistributedPlan:
     notes: Tuple[str, ...]
     tensor_parallel_roots: Optional[Tuple[str, ...]] = None
     tensor_parallel_plan: Optional[Mapping[str, TensorParallelStyle]] = None
-    mesh_shape: Optional[Tuple[int, ...]] = None
-    tp_mesh_dim: int = 0
-    dp_mesh_dim: Optional[int] = None
-    pp_microbatches: Optional[int] = None
-    pp_schedule: str = "1f1b"
-    pp_virtual_stages: int = 1
-    pp_layout: Optional[Tuple[int, ...]] = None
-    pp_delay_wgrad: bool = False
     experimental_features: DistributedFeatureSet = DistributedFeatureSet()
 
     def __post_init__(self) -> None:
@@ -95,6 +86,20 @@ class SNNDistributedPlan:
                 "tensor_parallel_plan",
                 MappingProxyType(dict(self.tensor_parallel_plan)),
             )
+
+    @property
+    def mesh_shape(self) -> Tuple[int, ...]:
+        return self.topology.mesh_shape
+
+    @property
+    def tp_mesh_dim(self) -> int:
+        names = self.topology.ordered_dim_names
+        return names.index("tp") if "tp" in names else 0
+
+    @property
+    def dp_mesh_dim(self) -> Optional[int]:
+        names = self.topology.ordered_dim_names
+        return names.index("dp") if "dp" in names else None
 
 
 SNNDistributedPlan.__init__.__doc__ = r"""Initialize an immutable SNN distributed execution plan.
@@ -140,22 +145,6 @@ SNNDistributedPlan.__init__.__doc__ = r"""Initialize an immutable SNN distribute
 :param tensor_parallel_plan: 可选的模块路径到 TP style mapping；构造时复制为
     只读 mapping。
 :type tensor_parallel_plan: Mapping[str, TensorParallelStyle] or None
-:param mesh_shape: 可选的 device mesh shape。
-:type mesh_shape: tuple[int, ...] or None
-:param tp_mesh_dim: tensor-parallel mesh 维度。
-:type tp_mesh_dim: int
-:param dp_mesh_dim: 可选的 data-parallel mesh 维度。
-:type dp_mesh_dim: int or None
-:param pp_microbatches: 可选的 pipeline microbatch 数量。
-:type pp_microbatches: int or None
-:param pp_schedule: pipeline 调度名称。
-:type pp_schedule: str
-:param pp_virtual_stages: virtual pipeline stage 数量。
-:type pp_virtual_stages: int
-:param pp_layout: 可选的 pipeline stage 布局。
-:type pp_layout: tuple[int, ...] or None
-:param pp_delay_wgrad: 是否延迟计算 pipeline weight gradient。
-:type pp_delay_wgrad: bool
 :param experimental_features: 可选分布式行为的功能开关。
 :type experimental_features: DistributedFeatureSet
 
@@ -195,22 +184,6 @@ SNNDistributedPlan.__init__.__doc__ = r"""Initialize an immutable SNN distribute
 :type tensor_parallel_roots: tuple[str, ...] or None
 :param tensor_parallel_plan: Optional explicit module-path to TP-style mapping.
 :type tensor_parallel_plan: Mapping[str, TensorParallelStyle] or None
-:param mesh_shape: Optional device-mesh shape.
-:type mesh_shape: tuple[int, ...] or None
-:param tp_mesh_dim: Tensor-parallel mesh dimension.
-:type tp_mesh_dim: int
-:param dp_mesh_dim: Optional data-parallel mesh dimension.
-:type dp_mesh_dim: int or None
-:param pp_microbatches: Optional pipeline microbatch count.
-:type pp_microbatches: int or None
-:param pp_schedule: Pipeline schedule name.
-:type pp_schedule: str
-:param pp_virtual_stages: Number of virtual pipeline stages.
-:type pp_virtual_stages: int
-:param pp_layout: Optional pipeline-stage layout.
-:type pp_layout: tuple[int, ...] or None
-:param pp_delay_wgrad: Whether pipeline weight-gradient computation is delayed.
-:type pp_delay_wgrad: bool
 :param experimental_features: Feature gates for optional distributed behavior.
 :type experimental_features: DistributedFeatureSet
 """
@@ -385,29 +358,24 @@ def recommend_snn_distributed_strategy(
         f"prefer='{prefer}' with model='{model_family}', world_size={world_size}, backend='{backend}'."
     ]
 
-    if world_size <= 1:
-        if prefer == "speed":
-            rationale.append(
-                "Single-rank run keeps the simplest local path with no distributed overhead."
-            )
-            return SNNDistributedRecommendation(
-                prefer=prefer,
-                model=model,
-                world_size=world_size,
-                mode="none",
-                rationale=tuple(rationale),
-            )
-        rationale.append(
-            "Single-rank run falls back to local training and uses memopt for memory savings."
-        )
+    def result(mode: str, **kwargs) -> SNNDistributedRecommendation:
         return SNNDistributedRecommendation(
             prefer=prefer,
             model=model,
             world_size=world_size,
-            mode="none",
-            memopt_level=1,
+            mode=mode,
             rationale=tuple(rationale),
+            **kwargs,
         )
+
+    if world_size <= 1:
+        local_speed = prefer == "speed"
+        rationale.append(
+            "Single-rank run keeps the simplest local path with no distributed overhead."
+            if local_speed
+            else "Single-rank run falls back to local training and uses memopt for memory savings."
+        )
+        return result("none", memopt_level=0 if local_speed else 1)
 
     if prefer == "speed":
         if model_family == "cifar10dvs_vgg" and fsdp_available and tp_available:
@@ -416,27 +384,19 @@ def recommend_snn_distributed_strategy(
                 rationale.append(
                     "Use fsdp2_tp on multi-GPU CIFAR10DVSVGG because current inductor benchmarks show the best global throughput there."
                 )
-                return SNNDistributedRecommendation(
-                    prefer=prefer,
-                    model=model,
-                    world_size=world_size,
-                    mode="fsdp2_tp",
+                return result(
+                    "fsdp2_tp",
                     mesh_shape=mesh_shape,
                     tp_mesh_dim=1,
                     dp_mesh_dim=0,
-                    rationale=tuple(rationale),
                 )
         rationale.append(
             "Use data parallel training for the simplest throughput-oriented path, enabling ZeRO optimizer state sharding when available."
         )
-        return SNNDistributedRecommendation(
-            prefer=prefer,
-            model=model,
-            world_size=world_size,
-            mode="dp",
+        return result(
+            "dp",
             optimizer_sharding="zero" if zero_available else "none",
             dp_mesh_dim=0,
-            rationale=tuple(rationale),
         )
 
     if prefer == "memory":
@@ -445,55 +405,35 @@ def recommend_snn_distributed_strategy(
             rationale.append(
                 "Combine FSDP2 and TP to shard both parameters and activations, and enable memopt level 1 for the strongest memory reduction."
             )
-            return SNNDistributedRecommendation(
-                prefer=prefer,
-                model=model,
-                world_size=world_size,
-                mode="fsdp2_tp",
+            return result(
+                "fsdp2_tp",
                 memopt_level=1,
                 mesh_shape=mesh_shape,
                 tp_mesh_dim=1,
                 dp_mesh_dim=0,
-                rationale=tuple(rationale),
             )
         if tp_available:
             rationale.append(
                 "Use tensor parallel with memopt level 1 when two-dimensional FSDP2+TP is unavailable."
             )
-            return SNNDistributedRecommendation(
-                prefer=prefer,
-                model=model,
-                world_size=world_size,
-                mode="tp",
+            return result(
+                "tp",
                 memopt_level=1,
                 mesh_shape=(world_size,),
-                rationale=tuple(rationale),
             )
         if fsdp_available:
             rationale.append(
                 "Fall back to FSDP2 with memopt level 1 when TP is unavailable."
             )
-            return SNNDistributedRecommendation(
-                prefer=prefer,
-                model=model,
-                world_size=world_size,
-                mode="fsdp2",
-                memopt_level=1,
-                dp_mesh_dim=0,
-                rationale=tuple(rationale),
-            )
+            return result("fsdp2", memopt_level=1, dp_mesh_dim=0)
         rationale.append(
             "Fall back to DP + memopt level 1 because TP/FSDP2 are unavailable."
         )
-        return SNNDistributedRecommendation(
-            prefer=prefer,
-            model=model,
-            world_size=world_size,
-            mode="dp",
+        return result(
+            "dp",
             optimizer_sharding="zero" if zero_available else "none",
             memopt_level=1,
             dp_mesh_dim=0,
-            rationale=tuple(rationale),
         )
 
     if pipeline_available:
@@ -510,15 +450,11 @@ def recommend_snn_distributed_strategy(
         else:
             logical_stages = world_size * pp_virtual_stages
             pp_schedule = "interleaved" if pp_virtual_stages > 1 else "1f1b"
-            pp_delay_wgrad = False
             rationale.append(
                 "Use pipeline parallelism with memopt level 1 when capacity is the priority; prefer the more stable interleaved schedule by default when multiple virtual stages are available."
             )
-            return SNNDistributedRecommendation(
-                prefer=prefer,
-                model=model,
-                world_size=world_size,
-                mode="pp",
+            return result(
+                "pp",
                 memopt_level=1,
                 pp_microbatches=recommended_pipeline_microbatches(
                     batch_size, logical_stages
@@ -526,9 +462,6 @@ def recommend_snn_distributed_strategy(
                 pp_memopt_stage_budget_ratio=0.5,
                 pp_schedule=pp_schedule,
                 pp_virtual_stages=pp_virtual_stages,
-                pp_layout=None,
-                pp_delay_wgrad=pp_delay_wgrad,
-                rationale=tuple(rationale),
             )
 
     if pipeline_available:
@@ -550,21 +483,8 @@ def recommend_snn_distributed_strategy(
         fsdp2_available=fsdp_available,
         tensor_parallel_available=tp_available,
     )
-    return SNNDistributedRecommendation(
+    return replace(
+        fallback,
         prefer=prefer,
-        model=model,
-        world_size=world_size,
-        mode=fallback.mode,
-        optimizer_sharding=fallback.optimizer_sharding,
-        memopt_level=fallback.memopt_level,
-        mesh_shape=fallback.mesh_shape,
-        tp_mesh_dim=fallback.tp_mesh_dim,
-        dp_mesh_dim=fallback.dp_mesh_dim,
-        pp_microbatches=fallback.pp_microbatches,
-        pp_memopt_stage_budget_ratio=fallback.pp_memopt_stage_budget_ratio,
-        pp_schedule=fallback.pp_schedule,
-        pp_virtual_stages=fallback.pp_virtual_stages,
-        pp_layout=fallback.pp_layout,
-        pp_delay_wgrad=fallback.pp_delay_wgrad,
         rationale=tuple(rationale + list(fallback.rationale[1:])),
     )

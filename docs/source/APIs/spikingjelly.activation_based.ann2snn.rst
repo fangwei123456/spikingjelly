@@ -13,8 +13,8 @@ paths:
   FX tracing.
 
 Most users start by choosing a converter, then a conversion recipe. Lower-level
-operators, rules, factories, threshold utilities, and helper functions are
-documented after the public conversion APIs.
+operators, factories, and helper functions are documented after the public
+conversion APIs.
 
 Converters
 ++++++++++
@@ -61,31 +61,13 @@ historical name ``ConversionRecipe`` is a compatibility alias for
    :undoc-members:
    :show-inheritance:
 
-Rate-Coding Rules, Factories, and Thresholds
-++++++++++++++++++++++++++++++++++++++++++++
+Rate-Coding Factory
++++++++++++++++++++
 
-These modules support the ReLU-to-spiking-neuron path used by rate-coding
-recipes, primarily ``RateCodingRecipe`` and ``LocalThresholdBalancingRecipe``.
-``ActivationRule`` / ``ReLURule`` match FX activation nodes, insert calibration
-hooks, and replace calibrated activations with spiking-neuron subgraphs.
-``HookFactory``, ``NeuronFactory``, and ``ThresholdOptimizer`` are the matching
-calibration and construction utilities.
-
-Transformer TD-equivalent, STA Transformer, and SpikeZIP conversions do not use
-this graph-rule interface. They implement their own recipe-specific operator or
-module replacement logic.
-
-.. automodule:: spikingjelly.activation_based.ann2snn.rules
-   :members:
-   :undoc-members:
-   :show-inheritance:
+``NeuronFactory`` customizes the neuron created by ``RateCodingRecipe``. The
+recipe itself owns ReLU matching, calibration, and graph replacement.
 
 .. automodule:: spikingjelly.activation_based.ann2snn.factories
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: spikingjelly.activation_based.ann2snn.threshold
    :members:
    :undoc-members:
    :show-inheritance:

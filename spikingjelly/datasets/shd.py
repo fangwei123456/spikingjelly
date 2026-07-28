@@ -3,18 +3,19 @@ import os
 from pathlib import Path
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
-import time
 import math
 
 import h5py
 import numpy as np
 from torchvision.datasets.utils import extract_archive
 
-from .. import configure
 from . import utils
-from .base import NeuromorphicDatasetFolder
-from .base import NeuromorphicDatasetBuilder
-from .base import NeuromorphicDatasetConfig
+from .base import (
+    EventBuilder,
+    NeuromorphicDatasetBuilder,
+    NeuromorphicDatasetConfig,
+    NeuromorphicDatasetFolder,
+)
 
 
 __all__ = [
@@ -149,22 +150,12 @@ def _integrate_events_file_to_frames_file_by_fixed_duration(
     return frames.shape[0]
 
 
-class NullBuilder(NeuromorphicDatasetBuilder):
-    def build_impl(self) -> None:
-        pass
-
-    def build(self) -> Tuple[Path, Callable]:
-        return self.processed_root, self.get_loader()
-
-    @property
-    def processed_root(self) -> Path:
-        return self.raw_root
-
+class NullBuilder(EventBuilder):
     def get_loader(self) -> Callable:
         return lambda x: x
 
 
-class SHDFrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
+class _SHDFrameBuilder(NeuromorphicDatasetBuilder):
     def __init__(
         self,
         cfg: NeuromorphicDatasetConfig,
@@ -180,7 +171,7 @@ class SHDFrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
         self.splits = splits
         self.n_classes = n_classes
 
-    def build_impl(self):
+    def _build_samples(self, process: Callable) -> None:
         for split in self.splits:
             processed_root = self.processed_root / split
             processed_root.mkdir()
@@ -190,38 +181,38 @@ class SHDFrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
                 processed_class_root.mkdir()
                 print(f"Mkdir [{processed_class_root}]")
 
-            t_ckp = time.time()
-            with ThreadPoolExecutor(
-                max_workers=configure.max_threads_number_for_datasets_preprocess
-            ) as tpe:
-                futures = []
-                print(
-                    f"Start ThreadPoolExecutor with max workers = [{tpe._max_workers}]."
-                )
+            with h5py.File(
+                self.raw_root / f"{self.dataset_name}_{split}.h5"
+            ) as h5_file:
 
-                h5_file = h5py.File(self.raw_root / f"{self.dataset_name}_{split}.h5")
-                for i in range(len(h5_file["labels"])):
-                    print(
-                        f"Start to integrate [{i}]-th {split} sample to frames and "
-                        f"save to [{processed_root}]."
-                    )
-                    futures.append(
-                        tpe.submit(
-                            _integrate_events_file_to_frames_file_by_fixed_frames_number,
-                            h5_file,
-                            i,
-                            processed_root,
-                            self.cfg.split_by,
-                            self.cfg.frames_number,
-                            self.W,
-                            True,
+                def tasks():
+                    for i in range(len(h5_file["labels"])):
+                        print(
+                            f"Start to integrate [{i}]-th {split} sample to "
+                            f"frames and save to [{processed_root}]."
                         )
-                    )
+                        yield h5_file, i, processed_root
 
-                for future in futures:
-                    future.result()
+                self._run_preprocess_tasks(process, tasks())
 
-        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
+    def get_loader(self):
+        return utils.load_npz_frames
+
+
+class SHDFrameFixedNumberBuilder(_SHDFrameBuilder):
+    def build_impl(self):
+        def process(h5_file, sample_index, processed_root):
+            _integrate_events_file_to_frames_file_by_fixed_frames_number(
+                h5_file,
+                sample_index,
+                processed_root,
+                self.cfg.split_by,
+                self.cfg.frames_number,
+                self.W,
+                True,
+            )
+
+        self._build_samples(process)
 
     @property
     def processed_root(self) -> Path:
@@ -230,131 +221,34 @@ class SHDFrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
             / f"frames_number_{self.cfg.frames_number}_split_by_{self.cfg.split_by}"
         )
 
-    def get_loader(self):
-        return utils.load_npz_frames
 
-
-class SHDFrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
-    def __init__(
-        self,
-        cfg: NeuromorphicDatasetConfig,
-        raw_root: Path,
-        W: int,
-        dataset_name: str = "shd",
-        splits: Tuple[str] = ("train", "test"),
-        n_classes: int = SHD_N_CLASSES,
-    ):
-        super().__init__(cfg, raw_root)
-        self.W = W
-        self.dataset_name = dataset_name
-        self.splits = splits
-        self.n_classes = n_classes
-
+class SHDFrameFixedDurationBuilder(_SHDFrameBuilder):
     def build_impl(self):
-        for split in self.splits:
-            processed_root = self.processed_root / split
-            processed_root.mkdir()
-            print(f"Mkdir [{processed_root}]")
-            for i in range(self.n_classes):
-                processed_class_root = processed_root / str(i)
-                processed_class_root.mkdir()
-                print(f"Mkdir [{processed_class_root}]")
+        def process(h5_file, sample_index, processed_root):
+            _integrate_events_file_to_frames_file_by_fixed_duration(
+                h5_file,
+                sample_index,
+                processed_root,
+                self.cfg.duration,
+                self.W,
+                True,
+            )
 
-            t_ckp = time.time()
-            with ThreadPoolExecutor(
-                max_workers=configure.max_threads_number_for_datasets_preprocess
-            ) as tpe:
-                futures = []
-                print(
-                    f"Start ThreadPoolExecutor with max workers = [{tpe._max_workers}]."
-                )
-
-                h5_file = h5py.File(self.raw_root / f"{self.dataset_name}_{split}.h5")
-                for i in range(len(h5_file["labels"])):
-                    print(
-                        f"Start to integrate [{i}]-th {split} sample to frames and "
-                        f"save to [{processed_root}]."
-                    )
-                    futures.append(
-                        tpe.submit(
-                            _integrate_events_file_to_frames_file_by_fixed_duration,
-                            h5_file,
-                            i,
-                            processed_root,
-                            self.cfg.duration,
-                            self.W,
-                            True,
-                        )
-                    )
-
-                for future in futures:
-                    future.result()
-
-        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
+        self._build_samples(process)
 
     @property
     def processed_root(self) -> Path:
         return self.cfg.root / f"duration_{self.cfg.duration}"
 
-    def get_loader(self):
-        return utils.load_npz_frames
 
-
-class SHDFrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
-    def __init__(
-        self,
-        cfg: NeuromorphicDatasetConfig,
-        raw_root: Path,
-        W: int,
-        dataset_name: str = "shd",
-        splits: Tuple[str] = ("train", "test"),
-        n_classes: int = SHD_N_CLASSES,
-    ):
-        super().__init__(cfg, raw_root)
-        self.W = W
-        self.dataset_name = dataset_name
-        self.splits = splits
-        self.n_classes = n_classes
-
+class SHDFrameCustomIntegrateBuilder(_SHDFrameBuilder):
     def build_impl(self):
-        for split in self.splits:
-            processed_root = self.processed_root / split
-            processed_root.mkdir()
-            print(f"Mkdir [{processed_root}]")
-            for i in range(self.n_classes):
-                processed_class_root = processed_root / str(i)
-                processed_class_root.mkdir()
-                print(f"Mkdir [{processed_class_root}]")
+        def process(h5_file, sample_index, processed_root):
+            self.cfg.custom_integrate_function(
+                h5_file, sample_index, processed_root, self.W
+            )
 
-            t_ckp = time.time()
-            with ThreadPoolExecutor(
-                max_workers=configure.max_threads_number_for_datasets_preprocess
-            ) as tpe:
-                futures = []
-                print(
-                    f"Start ThreadPoolExecutor with max workers = [{tpe._max_workers}]."
-                )
-
-                h5_file = h5py.File(self.raw_root / f"{self.dataset_name}_{split}.h5")
-                for i in range(len(h5_file["labels"])):
-                    print(
-                        f"Start to integrate [{i}]-th {split} sample to frames and "
-                        f"save to [{processed_root}]."
-                    )
-                    futures.append(
-                        tpe.submit(
-                            self.cfg.custom_integrate_function,
-                            h5_file,
-                            i,
-                            processed_root,
-                            self.W,
-                        )
-                    )
-
-                for future in futures:
-                    future.result()
-
-        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
+        self._build_samples(process)
 
     @property
     def processed_root(self) -> Path:
@@ -362,9 +256,6 @@ class SHDFrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
         if name is None:
             name = self.cfg.custom_integrate_function.__name__
         return self.cfg.root / name
-
-    def get_loader(self):
-        return utils.load_npz_frames
 
 
 class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):

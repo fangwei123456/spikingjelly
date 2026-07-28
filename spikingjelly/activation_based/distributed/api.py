@@ -5,8 +5,9 @@ from typing import Mapping, Optional, Sequence, Union
 import torch.nn as nn
 
 from .adapters import resolve_adapter
+from .adapters.base import build_distributed_runtime
 from .analysis import SNNDistributedAnalysis, analyze_snn_distributed_capability
-from .execution import build_eager_config, configure_snn_distributed
+from .data_parallel import unwrap_parallel_module
 from .planner import (
     DistributedFeatureSet,
     SNN_DISTRIBUTED_PREFERENCES,
@@ -159,16 +160,7 @@ def plan(
     )
     features = features or DistributedFeatureSet()
     resolved_model_family = model_family or "generic"
-    tp_mesh_dim = (
-        resolved_topology.ordered_dim_names.index("tp")
-        if "tp" in resolved_topology.ordered_dim_names
-        else 0
-    )
-    dp_mesh_dim = (
-        resolved_topology.ordered_dim_names.index("dp")
-        if "dp" in resolved_topology.ordered_dim_names
-        else None
-    )
+    dim_names = resolved_topology.ordered_dim_names
     recommendation = recommend_snn_distributed_strategy(
         model=resolved_model_family,
         world_size=resolved_topology.world_size,
@@ -180,14 +172,15 @@ def plan(
     mode = _normalize_mode(mode)
     notes = list(analysis.notes)
     selected_mode = mode or recommendation.mode
-    if selected_mode == "fsdp2_tp":
-        if (
-            "dp" not in resolved_topology.ordered_dim_names
-            or "tp" not in resolved_topology.ordered_dim_names
-        ):
+    if selected_mode == "fsdp2_tp" and not {"dp", "tp"} <= set(dim_names):
+        if mode is not None:
             raise ValueError(
                 "Hybrid 'fsdp2_tp' mode requires both 'dp' and 'tp' dimensions in the topology."
             )
+        selected_mode = "tp" if "tp" in dim_names else "fsdp2"
+        notes.append(
+            f"Recommended 'fsdp2_tp' was reduced to '{selected_mode}' for topology dimensions {dim_names}."
+        )
     if (
         selected_mode in ("tp", "fsdp2_tp")
         and not analysis.tensor_parallel_candidate_names
@@ -217,12 +210,6 @@ def plan(
             notes.append(
                 "Zero optimizer was disabled by DistributedFeatureSet; planner fell back to optimizer_strategy='none'."
             )
-    mesh_shape = resolved_topology.mesh_shape
-    pp_microbatches = recommendation.pp_microbatches
-    pp_schedule = recommendation.pp_schedule
-    pp_virtual_stages = recommendation.pp_virtual_stages
-    pp_layout = recommendation.pp_layout
-    pp_delay_wgrad = recommendation.pp_delay_wgrad
     return SNNDistributedPlan(
         mode=selected_mode,
         objective=objective,
@@ -236,14 +223,6 @@ def plan(
         notes=tuple(notes),
         tensor_parallel_roots=analysis.tensor_parallel_roots,
         tensor_parallel_plan=tensor_parallel_plan,
-        mesh_shape=mesh_shape,
-        tp_mesh_dim=tp_mesh_dim,
-        dp_mesh_dim=dp_mesh_dim,
-        pp_microbatches=pp_microbatches,
-        pp_schedule=pp_schedule,
-        pp_virtual_stages=pp_virtual_stages,
-        pp_layout=pp_layout,
-        pp_delay_wgrad=pp_delay_wgrad,
         experimental_features=features,
     )
 
@@ -272,9 +251,7 @@ def apply(
     :return: Runtime wrapper for the configured model.
     :rtype: SNNDistributedRuntime
     """
-    wrapped = getattr(model, "module", None)
-    if isinstance(wrapped, nn.Module):
-        model = wrapped
+    model = unwrap_parallel_module(model)
 
     topology = (
         plan.topology
@@ -282,16 +259,8 @@ def apply(
         else SNNDistributedTopology.from_mapping(plan.topology)
     )
     if device_mesh is not None:
-        mesh_tensor = getattr(device_mesh, "mesh", None)
-        mesh_volume = None
-        if mesh_tensor is not None:
-            mesh_volume = int(mesh_tensor.numel())
-        elif hasattr(device_mesh, "size"):
-            try:
-                mesh_volume = int(device_mesh.size())
-            except TypeError:
-                mesh_volume = None
-        if mesh_volume is not None and mesh_volume != topology.world_size:
+        mesh_volume = int(device_mesh.mesh.numel())
+        if mesh_volume != topology.world_size:
             raise ValueError(
                 f"device_mesh spans {mesh_volume} ranks, but plan.topology.world_size={topology.world_size}."
             )
@@ -313,24 +282,10 @@ def apply(
             device_type=device_type,
             device_mesh=device_mesh,
         )
-    config = build_eager_config(
-        mode=plan.mode,
+    return build_distributed_runtime(
+        model,
+        plan,
         device_type=device_type,
-        mesh_shape=plan.mesh_shape or topology.mesh_shape,
         device_mesh=device_mesh,
-        tp_mesh_dim=plan.tp_mesh_dim,
-        dp_mesh_dim=plan.dp_mesh_dim,
         tensor_parallel_roots=plan.tensor_parallel_roots,
-        tensor_parallel_plan=plan.tensor_parallel_plan,
-        auto_tensor_parallel=(
-            plan.mode in ("tp", "fsdp2_tp") and plan.tensor_parallel_plan is None
-        ),
-    )
-    configured_model, mesh, analysis = configure_snn_distributed(model, config)
-    return SNNDistributedRuntime(
-        kind="eager",
-        model=configured_model,
-        mesh=mesh,
-        analysis=analysis,
-        plan=plan,
     )

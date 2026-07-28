@@ -37,19 +37,8 @@ from spikingjelly.activation_based.ann2snn.operators import (
 )
 from spikingjelly.activation_based.ann2snn.recipes.sta_transformer import (
     _STATIC_TENSOR_KWARGS,
-    _STAAnalogLinear,
     _STAConstant,
-    _STAOnlineGELU,
-    _STAOnlineLayerNorm,
-    _STAOnlineMultiheadAttention,
     _STASpikeEncoder,
-)
-from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
-    _StatelessCat,
-    _StatelessExpand,
-    _StatelessReshape,
-    _StatelessSize,
-    _StatelessTensorOp,
 )
 from spikingjelly.activation_based.ann2snn.recipes.spikezip_qann import (
     SpikeZIPEmbedding,
@@ -71,16 +60,6 @@ def _first_real_then_zero_sequence(x: torch.Tensor, time_steps: int) -> torch.Te
     steps = [x]
     steps.extend(torch.zeros_like(x) for _ in range(time_steps - 1))
     return torch.stack(steps, dim=0)
-
-
-def _run_online_steps(module: nn.Module, x_seq: torch.Tensor):
-    reset = getattr(module, "_reset_sta_state", None)
-    if reset is not None:
-        reset()
-    outputs = []
-    for x in x_seq:
-        outputs.append(module(x))
-    return torch.stack(outputs, dim=0)
 
 
 def _sequence_value(value, time_steps: int, preserve_tensor: bool = False):
@@ -241,71 +220,6 @@ def _measure_min_forward_seconds(
             module(x)
             elapsed.append(time.perf_counter() - start)
     return min(elapsed)
-
-
-def _copy_linear_to_td(source: nn.Linear, target: TDLinear) -> None:
-    with torch.no_grad():
-        target.weight.copy_(source.weight)
-        if source.bias is None:
-            assert target.bias is None
-        else:
-            target.bias.copy_(source.bias)
-
-
-def _copy_layer_norm_to_td(source: nn.LayerNorm, target: TDLayerNorm) -> None:
-    with torch.no_grad():
-        if source.weight is None:
-            assert target.weight is None
-        else:
-            target.weight.copy_(source.weight)
-        if source.bias is None:
-            assert target.bias is None
-        else:
-            target.bias.copy_(source.bias)
-
-
-def _copy_mha_to_td(
-    source: nn.MultiheadAttention, target: TDMultiheadAttention
-) -> None:
-    with torch.no_grad():
-        q_weight, k_weight, v_weight = source.in_proj_weight.chunk(3, dim=0)
-        target.q_proj.weight.copy_(q_weight)
-        target.k_proj.weight.copy_(k_weight)
-        target.v_proj.weight.copy_(v_weight)
-        if source.in_proj_bias is None:
-            assert target.q_proj.bias is None
-            assert target.k_proj.bias is None
-            assert target.v_proj.bias is None
-        else:
-            q_bias, k_bias, v_bias = source.in_proj_bias.chunk(3, dim=0)
-            target.q_proj.bias.copy_(q_bias)
-            target.k_proj.bias.copy_(k_bias)
-            target.v_proj.bias.copy_(v_bias)
-        target.out_proj.weight.copy_(source.out_proj.weight)
-        if source.out_proj.bias is None:
-            assert target.out_proj.bias is None
-        else:
-            target.out_proj.bias.copy_(source.out_proj.bias)
-
-
-def test_sta_sequence_linear_matches_online_linear():
-    torch.manual_seed(71)
-    source = nn.Linear(5, 7).eval()
-    online = _STAAnalogLinear(source).eval()
-    sequence = TDLinear(5, 7).eval()
-    _copy_linear_to_td(source, sequence)
-    x_seq = _first_real_then_zero_sequence(torch.randn(3, 5), time_steps=6)
-
-    online_seq = _run_online_steps(online, x_seq)
-    sequence_seq = sequence(x_seq)
-
-    assert torch.allclose(sequence_seq, online_seq, atol=1e-6, rtol=1e-6)
-    assert torch.allclose(
-        sequence_seq.cumsum(dim=0),
-        online_seq.cumsum(dim=0),
-        atol=1e-6,
-        rtol=1e-6,
-    )
 
 
 class _TinyBertSelfAttention(nn.Module):
@@ -919,12 +833,13 @@ def test_spikezip_stbif_single_step_matches_multi_step():
     assert torch.allclose(y_seq.sum(dim=0), quantizer(x_seq[0]))
 
 
-def test_spikezip_stbif_state_tracks_input_dtype():
+def test_spikezip_stbif_state_follows_module_dtype():
     quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
     neuron = STBIFNeuron.from_quantizer(quantizer)
     x = torch.randn(2, 3, dtype=torch.float32)
     neuron(x)
 
+    neuron.to(torch.float64)
     y = neuron(x.to(torch.float64))
 
     assert y.dtype == torch.float64
@@ -1339,6 +1254,18 @@ def test_spikezip_qann_recipe_uses_global_level_for_nested_linear_bias():
     assert converted.head[0].bias_steps == 8
 
 
+def test_spikezip_qann_recipe_does_not_reuse_level_between_conversions():
+    recipe = SpikeZIPTFQANNRecipe(time_steps=32, model_family="roberta")
+    converter = ModuleConverter(recipe=recipe)
+
+    quantized = converter.convert(_TinySpikeZIPNestedLinearQANNClassifier().eval())
+    unquantized = converter.convert(nn.Sequential(nn.Linear(4, 3)).eval())
+
+    assert quantized.head[0].bias_steps == 8
+    assert isinstance(unquantized[0], SpikeZIPLinear)
+    assert unquantized[0].bias_steps == 32
+
+
 def test_spikezip_qann_recipe_converts_tiny_vit_classifier():
     torch.manual_seed(275)
     qann = _TinySpikeZIPViTQANNClassifier().eval()
@@ -1350,6 +1277,10 @@ def test_spikezip_qann_recipe_converts_tiny_vit_classifier():
 
     assert converted.time_steps == 32
     assert converted.model_family == "vit"
+    assert converted.patch_embed.bias_steps == 8
+    assert converted.head.bias_steps == 8
+    assert converted.attn.qkv.bias_steps == 1
+    assert converted.attn.proj.bias_steps == 1
     x_seq = _first_real_then_zero_sequence(images, converted.time_steps)
     functional.set_step_mode(converted, "m")
     sequence = converted(x_seq)
@@ -1469,77 +1400,6 @@ def test_spikezip_qann_recipe_rejects_unsupported_options():
         SpikeZIPTFQANNRecipe(strict=False).validate(None)
 
 
-def test_sta_sequence_layer_norm_matches_online_layer_norm():
-    torch.manual_seed(72)
-    source = nn.LayerNorm(5).eval()
-    online = _STAOnlineLayerNorm(source).eval()
-    sequence = TDLayerNorm(5).eval()
-    _copy_layer_norm_to_td(source, sequence)
-    x_seq = _first_real_then_zero_sequence(torch.randn(3, 4, 5), time_steps=6)
-
-    online_seq = _run_online_steps(online, x_seq)
-    sequence_seq = sequence(x_seq)
-
-    assert torch.allclose(sequence_seq, online_seq, atol=1e-6, rtol=1e-6)
-    assert torch.allclose(
-        sequence_seq.cumsum(dim=0),
-        online_seq.cumsum(dim=0),
-        atol=1e-6,
-        rtol=1e-6,
-    )
-
-
-def test_sta_sequence_gelu_matches_online_gelu():
-    torch.manual_seed(73)
-    source = nn.GELU(approximate="tanh").eval()
-    online = _STAOnlineGELU(source).eval()
-    sequence = TDGELU(approximate="tanh").eval()
-    x_seq = _first_real_then_zero_sequence(torch.randn(3, 4, 5), time_steps=6)
-
-    online_seq = _run_online_steps(online, x_seq)
-    sequence_seq = sequence(x_seq)
-
-    assert torch.allclose(sequence_seq, online_seq, atol=1e-6, rtol=1e-6)
-    assert torch.allclose(
-        sequence_seq.cumsum(dim=0),
-        online_seq.cumsum(dim=0),
-        atol=1e-6,
-        rtol=1e-6,
-    )
-
-
-def test_sta_sequence_mha_matches_online_mha():
-    torch.manual_seed(74)
-    source = nn.MultiheadAttention(
-        embed_dim=8,
-        num_heads=2,
-        dropout=0.0,
-        batch_first=True,
-    ).eval()
-    online = _STAOnlineMultiheadAttention(source).eval()
-    sequence = TDMultiheadAttention(embed_dim=8, num_heads=2).eval()
-    _copy_mha_to_td(source, sequence)
-    x_seq = _first_real_then_zero_sequence(torch.randn(2, 4, 8), time_steps=5)
-
-    online_outputs = []
-    online._reset_sta_state()
-    for x in x_seq:
-        y, weights = online(x, x, x, need_weights=False)
-        assert weights is None
-        online_outputs.append(y)
-    online_seq = torch.stack(online_outputs, dim=0)
-    sequence_seq, sequence_weights = sequence(x_seq, x_seq, x_seq, need_weights=False)
-
-    assert sequence_weights is None
-    assert torch.allclose(sequence_seq, online_seq, atol=1e-6, rtol=1e-6)
-    assert torch.allclose(
-        sequence_seq.cumsum(dim=0),
-        online_seq.cumsum(dim=0),
-        atol=1e-6,
-        rtol=1e-6,
-    )
-
-
 def test_sta_sequence_spike_encoder_clamps_zero_threshold():
     encoder = _STASpikeEncoder(torch.zeros(3), channel_dim=-1, step_mode="m")
     x_seq = torch.zeros(4, 2, 3)
@@ -1564,14 +1424,14 @@ class TinyUnsupportedSequenceOpClassifier(nn.Module):
         return x.permute(1, 0, 2)
 
 
-class TinyInvalidPermuteClassifier(nn.Module):
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x.permute(0, 1, 1)
-
-
 class TinyUnsafeReshapeClassifier(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x.reshape(x.shape[0] * 2, -1)
+
+
+class TinyBatchCatClassifier(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.cat((x, x), dim=-3)
 
 
 class TinyUnsafeGetItemClassifier(nn.Module):
@@ -1908,7 +1768,7 @@ class TinyTensorOpAdapterModel(nn.Module):
 class TinyFunctionalTensorOpAdapterModel(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = torch.unsqueeze(x, dim=1)
-        x = torch.transpose(input=x, dim0=2, dim1=3)
+        x = torch.transpose(x, 2, dim1=3)
         x = torch.flatten(input=x, start_dim=2)
         return torch.mean(input=x, dim=1)
 
@@ -2462,13 +2322,7 @@ def test_sta_transformer_recipe_tensor_ops_single_loop_match_multistep():
         TinyTensorOpAdapterModel().eval()
     )
     x = torch.randn(2, 3, 4)
-    op_names = {
-        module.op_name
-        for module in converted.modules()
-        if isinstance(module, _StatelessTensorOp)
-    }
 
-    assert {"mean", "flatten", "transpose", "unsqueeze"}.issubset(op_names)
     assert torch.allclose(
         _run_converted_multistep(converted, x),
         _run_converted_step_loop(converted, x),
@@ -2708,18 +2562,6 @@ def test_sta_transformer_recipe_rejects_unsupported_method():
         ).convert(model)
 
 
-def test_sta_transformer_recipe_rejects_invalid_permute_dims():
-    model = TinyInvalidPermuteClassifier().eval()
-
-    with pytest.raises(ValueError, match="permutation"):
-        Converter(
-            recipe=STATransformerRecipe(
-                time_steps=4,
-                mode="equivalent",
-            )
-        ).convert(model)
-
-
 def test_sta_transformer_recipe_rejects_unsafe_reshape_multistep():
     model = TinyUnsafeReshapeClassifier().eval()
     converted = Converter(
@@ -2729,6 +2571,16 @@ def test_sta_transformer_recipe_rejects_unsafe_reshape_multistep():
     functional.reset_net(converted)
 
     with pytest.raises(ValueError, match="preserve the original batch"):
+        converted(_first_real_then_zero_sequence(torch.randn(2, 4, 4), 4))
+
+
+def test_sta_transformer_recipe_rejects_batch_cat_multistep():
+    converted = Converter(
+        recipe=STATransformerRecipe(time_steps=4, mode="equivalent")
+    ).convert(TinyBatchCatClassifier().eval())
+    functional.set_step_mode(converted, "m")
+
+    with pytest.raises(ValueError, match="batch dimension"):
         converted(_first_real_then_zero_sequence(torch.randn(2, 4, 4), 4))
 
 
@@ -2819,92 +2671,6 @@ def test_sta_transformer_recipe_torch_reshape_matches_step_modes():
     y_multi = _run_converted_multistep(converted, x).sum(dim=0)
 
     assert torch.allclose(y_single, y_multi)
-
-
-def test_sta_transformer_recipe_rejects_static_expand_multistep():
-    expand = _StatelessExpand(step_mode="m")
-
-    with pytest.raises(ValueError, match="time-distributed"):
-        expand(torch.zeros(1, 1, 4), 2, -1, -1)
-
-
-def test_sta_transformer_recipe_reshape_accepts_tuple_size():
-    reshape = _StatelessReshape(step_mode="m")
-    x_seq = torch.randn(3, 2, 4)
-
-    assert torch.equal(
-        reshape(x_seq, (2, 2, 2)),
-        x_seq.reshape(3, 2, 2, 2),
-    )
-
-
-def test_sta_transformer_recipe_reshape_accepts_inferred_batch_size():
-    reshape = _StatelessReshape(step_mode="m")
-    x_seq = torch.randn(3, 2, 4)
-
-    assert torch.equal(
-        reshape(x_seq, -1, 2, 2),
-        x_seq.reshape(3, 2, 2, 2),
-    )
-
-
-def test_sta_transformer_recipe_reshape_rejects_only_inferred_size():
-    reshape = _StatelessReshape(step_mode="m")
-    x_seq = torch.randn(3, 2, 4)
-
-    with pytest.raises(ValueError, match="preserve the original batch"):
-        reshape(x_seq, -1)
-
-
-def test_sta_transformer_recipe_expand_accepts_tuple_size():
-    expand = _StatelessExpand(step_mode="m")
-    x_seq = torch.randn(3, 2, 1, 4)
-
-    assert torch.equal(
-        expand(x_seq, (2, 5, 4)),
-        x_seq.expand(3, 2, 5, 4),
-    )
-
-
-def test_sta_transformer_recipe_expand_rejects_batch_change_multistep():
-    expand = _StatelessExpand(step_mode="m")
-    x_seq = torch.randn(3, 2, 4)
-
-    with pytest.raises(ValueError, match="preserves the original batch"):
-        expand(x_seq, 3, 4)
-
-
-def test_sta_transformer_recipe_expand_accepts_singleton_batch_broadcast():
-    expand = _StatelessExpand(step_mode="m")
-    x_seq = torch.randn(3, 1, 4)
-
-    assert torch.equal(expand(x_seq, 2, 4), x_seq.expand(3, 2, 4))
-
-
-def test_sta_transformer_recipe_size_accepts_ann_dims_multistep():
-    size = _StatelessSize(step_mode="m")
-    x_seq = torch.randn(3, 2, 4, 5)
-
-    assert size(x_seq) == torch.Size([2, 4, 5])
-    assert size(x_seq, 0) == 2
-    assert size(x_seq, -1) == 5
-
-
-def test_sta_transformer_recipe_cat_negative_dim_matches_multistep():
-    cat = _StatelessCat(dim=-1, step_mode="m")
-    a = torch.randn(3, 2, 4, 5)
-    b = torch.randn(3, 2, 4, 6)
-
-    assert torch.equal(cat(a, b), torch.cat([a, b], dim=-1))
-
-
-def test_sta_transformer_recipe_cat_rejects_negative_batch_dim_multistep():
-    cat = _StatelessCat(dim=-3, step_mode="m")
-    a = torch.randn(3, 2, 4, 5)
-    b = torch.randn(3, 2, 4, 5)
-
-    with pytest.raises(ValueError, match="batch dimension"):
-        cat(a, b)
 
 
 def test_sta_transformer_constant_multistep_continues_state():

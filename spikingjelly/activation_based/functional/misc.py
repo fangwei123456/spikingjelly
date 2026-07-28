@@ -163,11 +163,11 @@ def redundant_one_hot(labels: Tensor, num_classes: int, n: int):
                 [0., 0., 1., 1., 0., 0.],
                 [1., 1., 0., 0., 0., 0.]])
     """
-    redundant_classes = num_classes * n
-    codes = torch.zeros(size=[labels.shape[0], redundant_classes], device=labels.device)
-    for i in range(n):
-        codes += F.one_hot(labels * n + i, redundant_classes)
-    return codes
+    return (
+        F.one_hot(labels, num_classes)
+        .repeat_interleave(n, dim=-1)
+        .to(torch.get_default_dtype())
+    )
 
 
 def first_spike_index(spikes: Tensor):
@@ -231,9 +231,7 @@ def first_spike_index(spikes: Tensor):
          [ True, False, False, False, False, False, False, False],
          [False, False, False,  True, False, False, False, False]]])
     """
-    with torch.no_grad():
-        # 在时间维度上，2次cumsum后，元素为1的位置，即为首次发放脉冲的位置
-        return spikes.cumsum(dim=-1).cumsum(dim=-1) == 1
+    return (spikes != 0) & (spikes.cumsum(dim=-1) == 1)
 
 
 def kaiming_normal_conv_linear_weight(net: nn.Module):
@@ -359,6 +357,8 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
                 [1., 1.],
                 [0., 0.]])
     """
-    # x_seq.shape = [T, *]
-    y = torch.zeros_like(x_seq[0:delay_steps].data)
-    return torch.cat((y, x_seq[0 : x_seq.shape[0] - delay_steps]), 0)
+    if delay_steps == 0:
+        return x_seq
+    if delay_steps >= x_seq.shape[0]:
+        return torch.zeros_like(x_seq)
+    return torch.cat((torch.zeros_like(x_seq[:delay_steps]), x_seq[:-delay_steps]))

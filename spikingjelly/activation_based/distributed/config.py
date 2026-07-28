@@ -20,7 +20,7 @@ class SNNDistributedConfig:
 
     * **中文**
 
-    SNN 分布式训练配置。包含数据/张量/流水线并行设置。
+    SNN eager 分布式训练配置。
 
     ----
 
@@ -28,24 +28,20 @@ class SNNDistributedConfig:
 
     * **English**
 
-    SNN distributed training configuration.
+    SNN eager distributed training configuration.
     """
 
+    mode: str = "none"
     device_type: str = "cuda"
     mesh_shape: Optional[Tuple[int, ...]] = None
     device_mesh: Optional["DeviceMesh"] = None
     tp_mesh_dim: int = 0
     dp_mesh_dim: Optional[int] = None
-    enable_data_parallel: bool = False
-    enable_fsdp2: bool = False
     tensor_parallel_roots: Optional[Sequence[str]] = None
     tensor_parallel_plan: Optional[Mapping[str, Union[str, Any]]] = None
     auto_tensor_parallel: bool = True
-    experimental_conv_tensor_parallel: bool = False
     conv_tensor_parallel_roots: Optional[Sequence[str]] = None
-    experimental_spikformer_tensor_parallel: bool = False
     spikformer_tensor_parallel_roots: Optional[Sequence[str]] = None
-    experimental_spikformer_patch_stem_tensor_parallel: bool = False
     spikformer_patch_stem_tensor_parallel_roots: Optional[Sequence[str]] = None
     broadcast_buffers: bool = False
     find_unused_parameters: bool = False
@@ -57,13 +53,24 @@ class SNNDistributedConfig:
     fsdp_reduce_dtype: Optional[torch.dtype] = None
     fsdp_output_dtype: Optional[torch.dtype] = None
 
+    def __post_init__(self) -> None:
+        self.mode = self.mode.lower()
+        valid_modes = ("none", "dp", "tp", "fsdp2", "fsdp2_tp")
+        if self.mode not in valid_modes:
+            raise ValueError(
+                f"Unsupported mode={self.mode!r}; expected one of {valid_modes}."
+            )
+
 
 SNNDistributedConfig.__init__.__doc__ = r"""Initialize SNN distributed training configuration.
 
 .. admonition:: Chinese
 
-    初始化 SNN 分布式训练配置，包括 mesh、数据并行、张量并行和 FSDP2 设置。
+    初始化 SNN eager 分布式训练配置，包括执行模式、mesh 和并行根路径。
 
+:param mode: Eager distributed mode: ``none``, ``dp``, ``tp``, ``fsdp2``, or
+    ``fsdp2_tp``.
+:type mode: str
 :param device_type: Device type used by distributed mesh construction.
 :type device_type: str
 :param mesh_shape: Optional logical mesh shape.
@@ -74,26 +81,16 @@ SNNDistributedConfig.__init__.__doc__ = r"""Initialize SNN distributed training 
 :type tp_mesh_dim: int
 :param dp_mesh_dim: Data-parallel mesh dimension.
 :type dp_mesh_dim: int or None
-:param enable_data_parallel: Whether to wrap the model with data parallelism.
-:type enable_data_parallel: bool
-:param enable_fsdp2: Whether to apply FSDP2 sharding.
-:type enable_fsdp2: bool
 :param tensor_parallel_roots: Optional roots for linear tensor parallelism.
 :type tensor_parallel_roots: sequence[str] or None
 :param tensor_parallel_plan: Explicit tensor-parallel plan mapping module names to styles.
 :type tensor_parallel_plan: mapping[str, str or Any] or None
 :param auto_tensor_parallel: Whether to build a linear tensor-parallel plan automatically.
 :type auto_tensor_parallel: bool
-:param experimental_conv_tensor_parallel: Whether to enable experimental convolution TP.
-:type experimental_conv_tensor_parallel: bool
 :param conv_tensor_parallel_roots: Optional roots for convolution TP.
 :type conv_tensor_parallel_roots: sequence[str] or None
-:param experimental_spikformer_tensor_parallel: Whether to enable experimental Spikformer block TP.
-:type experimental_spikformer_tensor_parallel: bool
 :param spikformer_tensor_parallel_roots: Optional Spikformer block TP roots.
 :type spikformer_tensor_parallel_roots: sequence[str] or None
-:param experimental_spikformer_patch_stem_tensor_parallel: Whether to enable experimental Spikformer patch-stem TP.
-:type experimental_spikformer_patch_stem_tensor_parallel: bool
 :param spikformer_patch_stem_tensor_parallel_roots: Optional Spikformer patch-stem TP roots.
 :type spikformer_patch_stem_tensor_parallel_roots: sequence[str] or None
 :param broadcast_buffers: Whether data-parallel wrappers broadcast buffers.
@@ -115,15 +112,3 @@ SNNDistributedConfig.__init__.__doc__ = r"""Initialize SNN distributed training 
 :param fsdp_output_dtype: Optional FSDP2 output dtype policy.
 :type fsdp_output_dtype: torch.dtype or None
 """
-
-
-@dataclass(frozen=True)
-class EagerParallelPolicy:
-    linear_tensor_parallel_roots: Tuple[str, ...] = ()
-    conv_tensor_parallel_roots: Tuple[str, ...] = ()
-    spikformer_tensor_parallel_roots: Tuple[str, ...] = ()
-    spikformer_patch_stem_tensor_parallel_roots: Tuple[str, ...] = ()
-    fsdp_shard_roots: Tuple[str, ...] = ()
-    fsdp2_tp_shard_roots: Optional[Tuple[str, ...]] = None
-    fsdp_shard_module_root: bool = True
-    fsdp2_tp_shard_module_root: bool = False

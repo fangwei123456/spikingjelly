@@ -282,10 +282,10 @@ def _measure_module_cost(module: nn.Module, input_value: Any) -> Tuple[Any, floa
     return output_value, total_cost
 
 
-def _example_microbatch_args(
+def _example_microbatch(
     example_input: torch.Tensor,
     n_microbatches: int,
-) -> Tuple[torch.Tensor]:
+) -> torch.Tensor:
     if n_microbatches <= 0:
         raise ValueError(f"n_microbatches must be positive, but got {n_microbatches}.")
     batch_size = example_input.shape[0]
@@ -296,7 +296,7 @@ def _example_microbatch_args(
             f"example_input batch size ({batch_size}) must be >= n_microbatches ({n_microbatches})."
         )
     microbatch_size = max(1, batch_size // n_microbatches)
-    return (example_input[:microbatch_size].contiguous(),)
+    return example_input[:microbatch_size].contiguous()
 
 
 def snn_sequence_cross_entropy(
@@ -409,9 +409,7 @@ def _build_snn_pipeline_runtime(
     else:
         stage_module = _PipelineSequentialModule(stage_modules)
     pipeline_module = pipeline_module.to(device)
-    microbatch_input = _example_microbatch_args(example_input, n_microbatches)[0].to(
-        device
-    )
+    microbatch_input = _example_microbatch(example_input, n_microbatches).to(device)
     stage_inputs: list[Any] = []
     stage_outputs: list[Any] = []
     pipeline_reset_modules = _collect_resettable_modules(pipeline_module)

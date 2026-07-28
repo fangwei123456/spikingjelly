@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 import gc
 import hashlib
 import math
@@ -38,7 +39,6 @@ from benchmark.snn_llm.qwen_conversion._runtime import (
     load_lock as _load_lock,
     load_model as _load_model,
     relative_l2 as _relative_l2,
-    validate_calibration_config as _validate_calibration_config,
 )
 
 
@@ -143,9 +143,9 @@ def _measurement_label(snapshot: Mapping[str, object]) -> str:
 
 def _prepare_benchmark_model(model) -> None:
     model.eval()
-    setter = getattr(model, "set_collect_statistics", None)
-    if callable(setter):
-        setter(False)
+    set_collect_statistics = getattr(model, "set_collect_statistics", None)
+    if callable(set_collect_statistics):
+        set_collect_statistics(False)
 
 
 def _percentile90(values: List[float]) -> float:
@@ -302,14 +302,15 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
             mode="bf16", strictness="strict", report=True, device=args.device
         ),
     )
-    calibration, calibration_sha256 = _load_calibration(args.calibration_artifact)
-    _validate_calibration_config(
-        calibration,
+    config = Qwen2SNNConfig(
         time_steps=args.time_steps,
         calibration_levels=args.calibration_levels,
         calibration_quantile=args.calibration_quantile,
         calibration_reservoir_size=args.calibration_reservoir_size,
         calibration_seed=20260719,
+    )
+    calibration, calibration_sha256 = _load_calibration(
+        args.calibration_artifact, config
     )
     input_ids, attention_mask = _encode(tokenizer, [FIXED_PROMPTS[2]], args.device)
     input_ids = input_ids[:, :PREFILL_LENGTH]
@@ -331,16 +332,9 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
     backend_results = {}
     evidence = {}
     for backend in ("torch", "triton"):
-        config = Qwen2SNNConfig(
-            time_steps=args.time_steps,
-            calibration_levels=args.calibration_levels,
-            calibration_quantile=args.calibration_quantile,
-            calibration_reservoir_size=args.calibration_reservoir_size,
-            neuron_backend=backend,
-        )
-        converted = ModuleConverter(Qwen2SNNRecipe(calibration, config)).convert(
-            precision.model
-        )
+        converted = ModuleConverter(
+            Qwen2SNNRecipe(calibration, replace(config, neuron_backend=backend))
+        ).convert(precision.model)
         prefill, backend_evidence = _benchmark_prefill(
             model=converted,
             input_ids=input_ids,

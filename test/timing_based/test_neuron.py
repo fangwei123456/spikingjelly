@@ -1,122 +1,154 @@
-import random
-
 import pytest
 import torch
+import torch.nn.functional as F
 
-from spikingjelly.timing_based.neuron import Tempotron as NewTempotron
-from spikingjelly.timing_based.orig_neuron import Tempotron as OriginalTempotron
+from spikingjelly.timing_based.neuron import Tempotron
 
 
-def generate_test_cases(num_random_cases: int = 10) -> list:
-    fixed_cases = [
-        # (in_features, out_features, T, batch_size)
-        (4, 3, 50, 1),
-        (8, 5, 100, 4),
-        (16, 10, 75, 8),
-        (10, 8, 60, 2),
-    ]
-    random_cases = [
+def _reference_voltage(neuron: Tempotron, in_spikes: torch.Tensor) -> torch.Tensor:
+    voltage = []
+    for time_step in range(neuron.T):
+        delta = time_step - in_spikes
+        active = (delta >= 0) & (in_spikes >= 0)
+        psp = torch.where(
+            active,
+            torch.exp(-delta / neuron.tau) - torch.exp(-delta / neuron.tau_s),
+            0.0,
+        )
+        voltage.append(
+            F.linear(
+                neuron.v0 * psp,
+                neuron.model.summation_layer.weight,
+            )
+        )
+    return torch.stack(voltage, dim=-1)
+
+
+@pytest.mark.parametrize(
+    ("in_features", "out_features", "T", "batch_size", "dtype"),
+    [
+        (4, 3, 50, 1, torch.float32),
+        (8, 5, 20, 4, torch.float32),
+        (1, 1, 10, 2, torch.float32),
+        (3, 7, 101, 5, torch.float64),
+        (11, 2, 7, 3, torch.float64),
+    ],
+)
+def test_voltage_trace_matches_reference(
+    in_features, out_features, T, batch_size, dtype
+):
+    torch.manual_seed(0)
+    neuron = Tempotron(in_features, out_features, T).to(dtype)
+    in_spikes = torch.rand(batch_size, in_features, dtype=dtype) * (T + 4) - 2
+
+    actual = neuron(in_spikes, ret_type="v")
+
+    torch.testing.assert_close(actual, _reference_voltage(neuron, in_spikes))
+
+
+def test_voltage_views_are_consistent():
+    torch.manual_seed(1)
+    neuron = Tempotron(4, 3, 20)
+    in_spikes = torch.rand(2, 4) * 20
+
+    voltage = neuron(in_spikes, ret_type="v")
+    v_max = neuron(in_spikes, ret_type="v_max")
+
+    torch.testing.assert_close(v_max, voltage.max(dim=2).values)
+
+
+@pytest.mark.parametrize(("batch_size", "out_features"), [(1, 1), (4, 1), (1, 3)])
+def test_max_voltage_preserves_batch_and_output_dimensions(batch_size, out_features):
+    neuron = Tempotron(2, out_features, 10)
+
+    v_max = neuron(torch.rand(batch_size, 2) * 10, ret_type="v_max")
+
+    assert v_max.shape == (batch_size, out_features)
+
+
+def test_spike_times_match_reference_interpretation():
+    torch.manual_seed(2)
+    neuron = Tempotron(3, 2, 12)
+    in_spikes = torch.rand(2, 3) * 12
+    voltage = neuron(in_spikes, ret_type="v")
+    times = torch.arange(12, dtype=voltage.dtype).view(1, 1, 12)
+    hard_index = voltage.argmax(dim=2)
+    soft_index = (F.softmax(voltage * 12, dim=2) * times).sum(dim=2)
+    sign = (voltage.max(dim=2).values >= neuron.v_threshold).to(voltage.dtype) * 2 - 1
+    expected = soft_index * sign + (hard_index * sign - soft_index * sign).detach()
+
+    actual = neuron(in_spikes, ret_type="spikes")
+
+    torch.testing.assert_close(actual, expected)
+
+
+def test_single_output_spike_times_keep_output_dimension():
+    neuron = Tempotron(1, 1, 10)
+
+    assert neuron(torch.rand(4, 1) * 10, ret_type="spikes").shape == (4, 1)
+
+
+def test_spike_times_keep_soft_gradient():
+    neuron = Tempotron(3, 2, 12)
+    in_spikes = torch.tensor([[1.0, 4.0, 7.0], [2.0, 5.0, 8.0]])
+
+    neuron(in_spikes, ret_type="spikes").sum().backward()
+
+    grad = neuron.model.summation_layer.weight.grad
+    assert grad is not None
+    assert torch.isfinite(grad).all()
+    assert torch.count_nonzero(grad)
+
+
+def test_mse_loss_uses_only_misclassified_outputs():
+    neuron = Tempotron(2, 3, 10, v_threshold=1.0)
+    v_max = torch.tensor([[1.5, 0.5, 0.5], [0.5, 1.2, 1.4]])
+    labels = torch.tensor([0, 1])
+
+    loss = neuron.mse_loss(v_max, labels)
+
+    expected = (0.4**2) / 2
+    assert loss.item() == pytest.approx(expected)
+
+
+def test_state_dict_preserves_tempotron_parameter_name():
+    neuron = Tempotron(2, 3, 10)
+
+    assert set(neuron.state_dict()) == {"model.summation_layer.weight"}
+
+
+def test_invalid_ret_type():
+    neuron = Tempotron(1, 1, 10)
+
+    with pytest.raises(ValueError, match="Invalid out_voltage_type"):
+        neuron(torch.tensor([[1.0]]), ret_type="invalid")
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"in_features": 0, "out_features": 1, "T": 10}, "must be positive"),
+        ({"in_features": 1, "out_features": 1, "T": 0}, "must be positive"),
+        ({"in_features": 1, "out_features": 1, "T": 10, "tau": 0}, "must be positive"),
         (
-            random.randint(1, 20),
-            random.randint(1, 10),
-            random.choice([50, 75, 100]),
-            random.choice([1, 2, 4]),
-        )
-        for _ in range(num_random_cases)
-    ]
-    return fixed_cases + random_cases
+            {"in_features": 1, "out_features": 1, "T": 10, "tau": 4, "tau_s": 4},
+            "must be positive and different",
+        ),
+    ],
+)
+def test_constructor_rejects_invalid_configuration(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        Tempotron(**kwargs)
 
 
-REGRESSION_TEST_CASES = generate_test_cases(20)
+def test_input_shape_mismatch():
+    neuron = Tempotron(5, 1, 10)
+
+    with pytest.raises(RuntimeError):
+        neuron(torch.rand(1, 3), ret_type="v")
 
 
-@pytest.fixture
-def setup_neurons(request):
-    in_features, out_features, T, _ = request.param
+def test_psp_kernel_is_finite_for_large_negative_times():
+    kernel = Tempotron._psp_kernel(torch.tensor([-1e6, -1.0, 0.0]), 15.0, 3.75)
 
-    original_neuron = OriginalTempotron(
-        in_features=in_features,
-        out_features=out_features,
-        T=T,
-    )
-    new_neuron = NewTempotron(in_features=in_features, out_features=out_features, T=T)
-
-    # Fully Connected Layer Weights need to be initialized the same
-    new_neuron.model.summation_layer.weight.data = (
-        original_neuron.fc.weight.data.clone()
-    )
-
-    return original_neuron, new_neuron
-
-
-class TestRegression:
-    @pytest.mark.parametrize("setup_neurons", REGRESSION_TEST_CASES, indirect=True)
-    def test_output_voltage_trace(self, setup_neurons):
-        original_neuron, new_neuron = setup_neurons
-        in_features = original_neuron.fc.in_features
-        T = original_neuron.T
-        _, _, _, batch_size = REGRESSION_TEST_CASES[0]
-
-        input_spikes = (torch.rand(batch_size, in_features) * (T + 20)) - 10
-
-        original_output = original_neuron(input_spikes, ret_type="v")
-        new_output = new_neuron(input_spikes, ret_type="v")
-
-        assert torch.allclose(original_output, new_output, atol=1e-6)
-
-    @pytest.mark.parametrize("setup_neurons", REGRESSION_TEST_CASES, indirect=True)
-    def test_output_max_voltage(self, setup_neurons):
-        original_neuron, new_neuron = setup_neurons
-        in_features = original_neuron.fc.in_features
-        T = original_neuron.T
-        _, _, _, batch_size = REGRESSION_TEST_CASES[0]
-
-        input_spikes = torch.rand(batch_size, in_features) * T
-
-        original_output = original_neuron(input_spikes, ret_type="v_max")
-        new_output = new_neuron(input_spikes, ret_type="v_max")
-
-        assert torch.allclose(original_output, new_output, atol=1e-6)
-
-    @pytest.mark.parametrize("setup_neurons", REGRESSION_TEST_CASES, indirect=True)
-    def test_output_spikes(self, setup_neurons):
-        original_neuron, new_neuron = setup_neurons
-        in_features = original_neuron.fc.in_features
-        T = original_neuron.T
-        _, _, _, batch_size = REGRESSION_TEST_CASES[0]
-        input_spikes = torch.rand(batch_size, in_features) * T
-
-        original_output = original_neuron(input_spikes, ret_type="spikes")
-        new_output = new_neuron(input_spikes, ret_type="spikes")
-
-        assert torch.allclose(original_output, new_output, atol=1e-4)
-
-    @pytest.mark.parametrize("setup_neurons", REGRESSION_TEST_CASES, indirect=True)
-    def test_mse_loss(self, setup_neurons):
-        original_neuron, new_neuron = setup_neurons
-        out_features = original_neuron.fc.out_features
-        _, _, _, batch_size = REGRESSION_TEST_CASES[0]
-
-        v_max = torch.rand(batch_size, out_features) * 2.0
-        labels = torch.randint(0, out_features, (batch_size,))
-        v_threshold = original_neuron.v_threshold
-
-        original_loss = original_neuron.mse_loss(
-            v_max, v_threshold, labels, out_features
-        )
-        new_loss = new_neuron.mse_loss(v_max, labels)
-
-        assert torch.allclose(original_loss, new_loss, atol=1e-6)
-
-
-class TestValidation:
-    def test_invalid_ret_type(self):
-        neuron = NewTempotron(1, 1, 100)
-        with pytest.raises(ValueError, match="Invalid out_voltage_type"):
-            neuron(torch.tensor([[10.0]]), ret_type="invalid_string")
-
-    def test_input_shape_mismatch(self):
-        neuron = NewTempotron(in_features=5, out_features=1, T=100)
-        wrong_input = torch.rand(1, 3) * 100
-        with pytest.raises(RuntimeError):
-            neuron(wrong_input, ret_type="v")
+    assert torch.equal(kernel, torch.zeros_like(kernel))

@@ -5,8 +5,6 @@ from typing import (
     Any,
     Dict,
     Iterable,
-    Iterator,
-    List,
     Optional,
     TYPE_CHECKING,
     Tuple,
@@ -22,13 +20,13 @@ from torch.nn.utils.fusion import fuse_conv_bn_eval
 from tqdm import tqdm
 
 from spikingjelly.activation_based import neuron
-from spikingjelly.activation_based.ann2snn.factories import HookFactory, NeuronFactory
+from spikingjelly.activation_based.ann2snn.factories import NeuronFactory
 from spikingjelly.activation_based.ann2snn.modules import (
     ChannelVoltageScaler,
+    VoltageHook,
+    VoltageScaler,
     _safe_quantile,
 )
-from spikingjelly.activation_based.ann2snn.rules import ActivationRule, ReLURule
-from spikingjelly.activation_based.ann2snn.threshold import ThresholdOptimizer
 from spikingjelly.activation_based.ann2snn.recipes.base import ConversionRecipe
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
     _RATE_CODING_SAFE_MODULE_TYPES,
@@ -41,6 +39,26 @@ if TYPE_CHECKING:
 
 
 __all__ = ["RateCodingRecipe"]
+
+
+def _matches_relu(node: fx.Node, modules: Dict[str, nn.Module]) -> bool:
+    return (
+        node.op == "call_module"
+        and isinstance(node.target, str)
+        and type(modules.get(node.target)) is nn.ReLU
+    )
+
+
+def _add_module_and_node(
+    fx_model: fx.GraphModule,
+    target: str,
+    after: fx.Node,
+    module: nn.Module,
+    args: Tuple,
+) -> fx.Node:
+    fx_model.add_submodule(target=target, m=module)
+    with fx_model.graph.inserting_after(after):
+        return fx_model.graph.call_module(target, args=args)
 
 
 def validate_rate_coding_mode(mode: Union[str, float]) -> None:
@@ -64,6 +82,103 @@ def validate_rate_coding_mode(mode: Union[str, float]) -> None:
             raise NotImplementedError(err_msg)
     else:
         raise NotImplementedError(err_msg)
+
+
+def _extract_batch_input(data, _inside_input=False):
+    if isinstance(data, torch.Tensor):
+        return data
+    if isinstance(data, (list, tuple)):
+        if not data:
+            raise ValueError("Batch data is an empty list or tuple.")
+        if len(data) == 1:
+            return _extract_batch_input(data[0], _inside_input=_inside_input)
+        if not _inside_input:
+            return _extract_batch_input(
+                data[0], _inside_input=not isinstance(data[0], dict)
+            )
+        return data
+    if isinstance(data, dict):
+        if not data:
+            raise ValueError("Batch data is an empty dictionary.")
+        if _inside_input:
+            return data
+        for key in (
+            "input",
+            "image",
+            "images",
+            "img",
+            "x",
+            "data",
+            "pixel_values",
+        ):
+            if key in data:
+                return _extract_batch_input(data[key], _inside_input=True)
+        if len(data) != 1:
+            raise ValueError(
+                "Batch dictionaries with multiple fields must contain one "
+                "of 'input', 'image', 'images', 'img', 'x', 'data', or "
+                "'pixel_values'."
+            )
+        return _extract_batch_input(next(iter(data.values())), _inside_input=True)
+    return data
+
+
+def _fuse_conv_bn(
+    fx_model: torch.fx.GraphModule, fuse_flag: bool = True
+) -> torch.fx.GraphModule:
+    if not fuse_flag:
+        return fx_model
+
+    def matches_module_pattern(
+        pattern: Iterable[Type], node: fx.Node, modules: Dict[str, Any]
+    ) -> bool:
+        if len(node.args) == 0:
+            return False
+        nodes: Tuple[Any, fx.Node] = (node.args[0], node)
+        for expected_type, current_node in zip(pattern, nodes):
+            if not isinstance(current_node, fx.Node):
+                return False
+            if current_node.op != "call_module":
+                return False
+            if not isinstance(current_node.target, str):
+                return False
+            if current_node.target not in modules:
+                return False
+            if not isinstance(modules[current_node.target], expected_type):
+                return False
+        return True
+
+    def replace_node_module(
+        node: fx.Node, modules: Dict[str, Any], new_module: torch.nn.Module
+    ):
+        if not isinstance(node.target, str):
+            raise ValueError("FX module replacement requires a string target.")
+        parent_path, _, child_name = node.target.rpartition(".")
+        modules[node.target] = new_module
+        parent = fx_model.get_submodule(parent_path) if parent_path else fx_model
+        setattr(parent, child_name, new_module)
+
+    patterns = [
+        (nn.Conv1d, nn.BatchNorm1d),
+        (nn.Conv2d, nn.BatchNorm2d),
+        (nn.Conv3d, nn.BatchNorm3d),
+    ]
+    modules = dict(fx_model.named_modules())
+    for pattern in patterns:
+        for node in list(fx_model.graph.nodes):
+            if matches_module_pattern(pattern, node, modules):
+                if len(node.args[0].users) > 1:
+                    continue
+                conv = modules[node.args[0].target]
+                bn = modules[node.target]
+                fused_conv = fuse_conv_bn_eval(conv, bn)
+                replace_node_module(node.args[0], modules, fused_conv)
+                node.replace_all_uses_with(node.args[0])
+                fx_model.graph.erase_node(node)
+    fx_model.graph.lint()
+    fx_model.delete_all_unused_submodules()
+    fx_model.recompile()
+    return fx_model
 
 
 class ChannelVoltageHook(nn.Module):
@@ -148,205 +263,6 @@ class ChannelVoltageHook(nn.Module):
         return self.scale.detach()
 
 
-class ChannelVoltageHookFactory:
-    def __init__(
-        self,
-        mode: Union[str, float],
-        momentum: float,
-        channel_dim: int,
-        eps: float,
-    ) -> None:
-        self.mode = mode
-        self.momentum = momentum
-        self.channel_dim = channel_dim
-        self.eps = eps
-
-    def create(self) -> ChannelVoltageHook:
-        return ChannelVoltageHook(
-            mode=self.mode,
-            momentum=self.momentum,
-            channel_dim=self.channel_dim,
-            eps=self.eps,
-        )
-
-
-class ChannelWiseRateCodingReLURule:
-    def __init__(
-        self,
-        channel_dim: int = 1,
-        pre_spike_maxpool: bool = False,
-        half_threshold: bool = False,
-    ) -> None:
-        self.channel_dim = channel_dim
-        self.pre_spike_maxpool = pre_spike_maxpool
-        self.half_threshold = half_threshold
-        self.relu_rule = ReLURule()
-
-    def match(self, node: fx.Node, modules: Dict[str, nn.Module]) -> bool:
-        return self.relu_rule.match(node, modules)
-
-    def insert_hooks(
-        self,
-        fx_model: fx.GraphModule,
-        node: fx.Node,
-        hook_factory: ChannelVoltageHookFactory,
-        hook_counts_per_prefix: Dict[str, int],
-    ) -> fx.Node:
-        if not isinstance(node.target, str):
-            raise TypeError("node.target must be a module path string.")
-        parent, _, _ = node.target.rpartition(".")
-        key = parent or "__FIRST_LEVEL_OF_MODULE__"
-        counter = hook_counts_per_prefix.get(key, 0)
-        hook_counts_per_prefix[key] = counter + 1
-        target = (
-            f"{parent}.channel_voltage_hook_{counter}"
-            if parent
-            else f"channel_voltage_hook_{counter}"
-        )
-
-        modules = dict(fx_model.named_modules())
-        hook_input = node
-        users = list(node.users)
-        if self.pre_spike_maxpool and len(users) == 1:
-            user = users[0]
-            if (
-                user.op == "call_module"
-                and isinstance(user.target, str)
-                and isinstance(modules.get(user.target), nn.MaxPool2d)
-            ):
-                hook_input = user
-
-        fx_model.add_submodule(target=target, m=hook_factory.create())
-        with fx_model.graph.inserting_after(n=hook_input):
-            hook_node = fx_model.graph.call_module(target, args=(hook_input,))
-        for user in list(hook_input.users):
-            if user is not hook_node:
-                user.replace_input_with(hook_input, hook_node)
-        return hook_node
-
-    def find_replacements(
-        self, fx_model: fx.GraphModule, modules: Dict[str, nn.Module]
-    ) -> Iterator[Tuple[fx.Node, fx.Node]]:
-        for hook_node in fx_model.graph.nodes:
-            if hook_node.op != "call_module":
-                continue
-            if not isinstance(modules.get(hook_node.target), ChannelVoltageHook):
-                continue
-            if len(hook_node.args) == 0 or not isinstance(hook_node.args[0], fx.Node):
-                continue
-            hook_input_node = hook_node.args[0]
-            if hook_input_node.op != "call_module":
-                continue
-            if hook_input_node.target not in modules:
-                continue
-            if self.match(hook_input_node, modules):
-                yield hook_input_node, hook_node
-                continue
-            if not isinstance(modules.get(hook_input_node.target), nn.MaxPool2d):
-                continue
-            if len(hook_input_node.args) == 0 or not isinstance(
-                hook_input_node.args[0], fx.Node
-            ):
-                continue
-            activation_node = hook_input_node.args[0]
-            if (
-                activation_node.op == "call_module"
-                and activation_node.target in modules
-                and self.match(activation_node, modules)
-            ):
-                yield activation_node, hook_node
-
-    def replace_with_neurons(
-        self,
-        fx_model: fx.GraphModule,
-        activation_node: fx.Node,
-        hook_node: fx.Node,
-        neuron_factory: "NeuronFactory",
-        threshold_optimizer: "ThresholdOptimizer",
-    ) -> None:
-        if len(activation_node.args) != 1:
-            raise ValueError(
-                f"The activation node {activation_node.target!r} must have exactly "
-                f"1 argument, but got {len(activation_node.args)}."
-            )
-        if not isinstance(hook_node.target, str):
-            raise TypeError("hook_node.target must be a module path string.")
-        hook = fx_model.get_submodule(hook_node.target)
-        if not isinstance(hook, ChannelVoltageHook):
-            raise TypeError("hook_node must target a ChannelVoltageHook module.")
-        if len(hook_node.args) != 1 or not isinstance(hook_node.args[0], fx.Node):
-            raise ValueError("hook_node must have exactly one FX node input.")
-        hook_input_node = hook_node.args[0]
-        pre_spike_maxpool = False
-        if hook_input_node is not activation_node:
-            if not (
-                hook_input_node.op == "call_module"
-                and isinstance(hook_input_node.target, str)
-                and isinstance(
-                    fx_model.get_submodule(hook_input_node.target), nn.MaxPool2d
-                )
-            ):
-                raise TypeError(
-                    "Channel-wise RateCodingRecipe only supports hooks after "
-                    "ReLU or after ReLU -> MaxPool2d."
-                )
-            pre_spike_maxpool = True
-            hook_input_node.replace_input_with(activation_node, activation_node.args[0])
-
-        threshold = hook.compute_threshold()
-        hook_parent, _, hook_leaf = hook_node.target.rpartition(".")
-        spike_leaf = hook_leaf.replace("channel_voltage_hook_", "channel_spiking_")
-        prefix = f"{hook_parent}.{spike_leaf}" if hook_parent else spike_leaf
-
-        target0 = f"{prefix}.scaler0"
-        target1 = f"{prefix}.if_node"
-        target2 = f"{prefix}.scaler1"
-        if self.half_threshold:
-            neuron_threshold = 1.0
-            m1 = neuron.HalfThresholdIFNode()
-        else:
-            m1 = neuron_factory.create(scale=1.0)
-            neuron_threshold = getattr(m1, "v_threshold", 1.0)
-            if hasattr(neuron_threshold, "item"):
-                if (
-                    not hasattr(neuron_threshold, "numel")
-                    or neuron_threshold.numel() == 1
-                ):
-                    neuron_threshold = neuron_threshold.item()
-            if not isinstance(neuron_threshold, (int, float)):
-                raise ValueError(
-                    "Channel-wise RateCodingRecipe requires a scalar neuron threshold."
-                )
-            if not (neuron_threshold > 0.0) or not math.isfinite(neuron_threshold):
-                raise ValueError(
-                    "Channel-wise RateCodingRecipe requires a finite positive "
-                    f"neuron threshold, got {neuron_threshold}."
-                )
-        m0 = ChannelVoltageScaler(
-            neuron_threshold / threshold, channel_dim=self.channel_dim
-        )
-        m2 = ChannelVoltageScaler(threshold, channel_dim=self.channel_dim)
-
-        fx_model.add_submodule(target=target0, m=m0)
-        with fx_model.graph.inserting_after(n=hook_node):
-            spike_input_args = (
-                (hook_input_node,) if pre_spike_maxpool else activation_node.args
-            )
-            node0 = fx_model.graph.call_module(target0, args=spike_input_args)
-        fx_model.add_submodule(target=target1, m=m1)
-        with fx_model.graph.inserting_after(n=node0):
-            node1 = fx_model.graph.call_module(target1, args=(node0,))
-        fx_model.add_submodule(target=target2, m=m2)
-        with fx_model.graph.inserting_after(n=node1):
-            node2 = fx_model.graph.call_module(target2, args=(node1,))
-
-        hook_node.replace_all_uses_with(node2)
-        fx_model.graph.erase_node(hook_node)
-        if not pre_spike_maxpool:
-            activation_node.replace_all_uses_with(node2)
-        fx_model.graph.erase_node(activation_node)
-
-
 class RateCodingRecipe(ConversionRecipe):
     def __init__(
         self,
@@ -359,9 +275,7 @@ class RateCodingRecipe(ConversionRecipe):
         pre_spike_maxpool: bool = False,
         half_threshold: bool = False,
         eps: float = 1e-6,
-        rules: Optional[List[ActivationRule]] = None,
         neuron_factory: Optional[NeuronFactory] = None,
-        threshold_optimizer: Optional[ThresholdOptimizer] = None,
     ) -> None:
         r"""
         **API Language** - :ref:`中文 <RateCodingRecipe.__init__-cn>` | :ref:`English <RateCodingRecipe.__init__-en>`
@@ -400,12 +314,8 @@ class RateCodingRecipe(ConversionRecipe):
         :type half_threshold: bool
         :param eps: ``channel_wise=True`` 时的阈值数值下界。
         :type eps: float
-        :param rules: 激活转换规则。默认 ``[ReLURule()]``。
-        :type rules: Optional[List[ActivationRule]]
         :param neuron_factory: 脉冲神经元工厂。
         :type neuron_factory: Optional[NeuronFactory]
-        :param threshold_optimizer: 阈值优化器。
-        :type threshold_optimizer: Optional[ThresholdOptimizer]
 
         ----
 
@@ -445,12 +355,8 @@ class RateCodingRecipe(ConversionRecipe):
         :type half_threshold: bool
         :param eps: Numeric lower bound for thresholds when ``channel_wise=True``.
         :type eps: float
-        :param rules: Activation conversion rules. Defaults to ``[ReLURule()]``.
-        :type rules: Optional[List[ActivationRule]]
         :param neuron_factory: Spiking-neuron factory.
         :type neuron_factory: Optional[NeuronFactory]
-        :param threshold_optimizer: Threshold optimizer.
-        :type threshold_optimizer: Optional[ThresholdOptimizer]
         """
         self.dataloader = dataloader
         self.mode = mode
@@ -461,36 +367,13 @@ class RateCodingRecipe(ConversionRecipe):
         self.pre_spike_maxpool = pre_spike_maxpool
         self.half_threshold = half_threshold
         self.eps = eps
-        if channel_wise and rules is not None:
-            raise ValueError(
-                "RateCodingRecipe(channel_wise=True) does not support custom rules."
-            )
-        if channel_wise and threshold_optimizer is not None:
-            raise ValueError(
-                "RateCodingRecipe(channel_wise=True) does not support custom "
-                "threshold_optimizer."
-            )
         if channel_wise and half_threshold and neuron_factory is not None:
             raise ValueError(
                 "RateCodingRecipe(channel_wise=True, half_threshold=True) does not "
                 "support custom neuron_factory."
             )
-        self.rules = (
-            [
-                ChannelWiseRateCodingReLURule(
-                    channel_dim, pre_spike_maxpool, half_threshold
-                )
-            ]
-            if channel_wise
-            else (rules if rules is not None else [ReLURule()])
-        )
         self.neuron_factory = (
             neuron_factory if neuron_factory is not None else NeuronFactory()
-        )
-        self.threshold_optimizer = (
-            threshold_optimizer
-            if threshold_optimizer is not None
-            else ThresholdOptimizer()
         )
 
     def validate(self, converter: "Converter") -> None:
@@ -499,7 +382,14 @@ class RateCodingRecipe(ConversionRecipe):
                 "RateCodingRecipe requires a dataloader. "
                 "Pass dataloader to RateCodingRecipe."
             )
-        self._check_mode()
+        validate_rate_coding_mode(self.mode)
+        if (
+            not isinstance(self.momentum, (int, float))
+            or isinstance(self.momentum, bool)
+            or not math.isfinite(float(self.momentum))
+            or not 0.0 <= self.momentum <= 1.0
+        ):
+            raise ValueError("momentum must be a finite number in [0, 1].")
         if not isinstance(self.channel_wise, bool):
             raise ValueError("channel_wise must be bool.")
         if not isinstance(self.channel_dim, int):
@@ -518,7 +408,7 @@ class RateCodingRecipe(ConversionRecipe):
     def after_trace(
         self, converter: "Converter", fx_model: fx.GraphModule
     ) -> fx.GraphModule:
-        return self._fuse(fx_model, fuse_flag=self.fuse_flag).to(converter.device)
+        return _fuse_conv_bn(fx_model, fuse_flag=self.fuse_flag).to(converter.device)
 
     def insert_observers(
         self, converter: "Converter", fx_model: fx.GraphModule
@@ -530,7 +420,7 @@ class RateCodingRecipe(ConversionRecipe):
     ) -> fx.GraphModule:
         with torch.no_grad():
             for _, data in enumerate(tqdm(self.dataloader)):
-                imgs = self._extract_batch_input(data)
+                imgs = _extract_batch_input(data)
                 if isinstance(imgs, torch.Tensor):
                     imgs = imgs.to(device=converter.device)
                 else:
@@ -594,139 +484,49 @@ class RateCodingRecipe(ConversionRecipe):
         )
         return fx_model.to(converter.device)
 
-    @staticmethod
-    def _extract_batch_input(data, _inside_input=False):
-        if isinstance(data, torch.Tensor):
-            return data
-        if isinstance(data, (list, tuple)):
-            if not data:
-                raise ValueError("Batch data is an empty list or tuple.")
-            if len(data) == 1:
-                return RateCodingRecipe._extract_batch_input(
-                    data[0], _inside_input=_inside_input
-                )
-            if not _inside_input:
-                return RateCodingRecipe._extract_batch_input(
-                    data[0], _inside_input=not isinstance(data[0], dict)
-                )
-            return data
-        if isinstance(data, dict):
-            if not data:
-                raise ValueError("Batch data is an empty dictionary.")
-            if _inside_input:
-                return data
-            for key in (
-                "input",
-                "image",
-                "images",
-                "img",
-                "x",
-                "data",
-                "pixel_values",
-            ):
-                if key in data:
-                    return RateCodingRecipe._extract_batch_input(
-                        data[key], _inside_input=True
-                    )
-            if len(data) != 1:
-                raise ValueError(
-                    "Batch dictionaries with multiple fields must contain one "
-                    "of 'input', 'image', 'images', 'img', 'x', 'data', or "
-                    "'pixel_values'."
-                )
-            return RateCodingRecipe._extract_batch_input(
-                next(iter(data.values())), _inside_input=True
-            )
-        return data
-
-    def _check_mode(self):
-        validate_rate_coding_mode(self.mode)
-
-    @staticmethod
-    def _fuse(
-        fx_model: torch.fx.GraphModule, fuse_flag: bool = True
-    ) -> torch.fx.GraphModule:
-        if not fuse_flag:
-            return fx_model
-
-        def matches_module_pattern(
-            pattern: Iterable[Type], node: fx.Node, modules: Dict[str, Any]
-        ) -> bool:
-            if len(node.args) == 0:
-                return False
-            nodes: Tuple[Any, fx.Node] = (node.args[0], node)
-            for expected_type, current_node in zip(pattern, nodes):
-                if not isinstance(current_node, fx.Node):
-                    return False
-                if current_node.op != "call_module":
-                    return False
-                if not isinstance(current_node.target, str):
-                    return False
-                if current_node.target not in modules:
-                    return False
-                if not isinstance(modules[current_node.target], expected_type):
-                    return False
-            return True
-
-        def replace_node_module(
-            node: fx.Node, modules: Dict[str, Any], new_module: torch.nn.Module
-        ):
-            if not isinstance(node.target, str):
-                raise ValueError("FX module replacement requires a string target.")
-            parent_path, _, child_name = node.target.rpartition(".")
-            modules[node.target] = new_module
-            parent = fx_model.get_submodule(parent_path) if parent_path else fx_model
-            setattr(parent, child_name, new_module)
-
-        patterns = [
-            (nn.Conv1d, nn.BatchNorm1d),
-            (nn.Conv2d, nn.BatchNorm2d),
-            (nn.Conv3d, nn.BatchNorm3d),
-        ]
-
-        modules = dict(fx_model.named_modules())
-
-        for pattern in patterns:
-            for node in list(fx_model.graph.nodes):
-                if matches_module_pattern(pattern, node, modules):
-                    if len(node.args[0].users) > 1:
-                        continue
-                    conv = modules[node.args[0].target]
-                    bn = modules[node.target]
-                    fused_conv = fuse_conv_bn_eval(conv, bn)
-                    replace_node_module(node.args[0], modules, fused_conv)
-                    node.replace_all_uses_with(node.args[0])
-                    fx_model.graph.erase_node(node)
-        fx_model.graph.lint()
-        fx_model.delete_all_unused_submodules()
-        fx_model.recompile()
-        return fx_model
-
     def _set_voltagehook(self, fx_model: torch.fx.GraphModule) -> torch.fx.GraphModule:
-        if self.channel_wise:
-            hook_factory = ChannelVoltageHookFactory(
-                mode=self.mode,
-                momentum=self.momentum,
-                channel_dim=self.channel_dim,
-                eps=self.eps,
-            )
-        else:
-            hook_factory = HookFactory(mode=self.mode, momentum=self.momentum)
         hook_counts_per_prefix: Dict[str, int] = {}
         modules = dict(fx_model.named_modules())
 
         for node in list(fx_model.graph.nodes):
-            if node.op != "call_module":
+            if not _matches_relu(node, modules):
                 continue
-            if node.target not in modules:
-                continue
-            for rule in self.rules:
-                if rule.match(node, modules):
-                    rule.insert_hooks(
-                        fx_model, node, hook_factory, hook_counts_per_prefix
-                    )
-                    modules = dict(fx_model.named_modules())
-                    break
+            parent = node.target.rpartition(".")[0]
+            key = parent or "__FIRST_LEVEL_OF_MODULE__"
+            counter = hook_counts_per_prefix.get(key, 0)
+            hook_counts_per_prefix[key] = counter + 1
+            if self.channel_wise:
+                leaf = f"channel_voltage_hook_{counter}"
+                hook = ChannelVoltageHook(
+                    mode=self.mode,
+                    momentum=self.momentum,
+                    channel_dim=self.channel_dim,
+                    eps=self.eps,
+                )
+            else:
+                leaf = f"voltage_hook_{counter}"
+                hook = VoltageHook(momentum=self.momentum, mode=self.mode)
+            target = f"{parent}.{leaf}" if parent else leaf
+
+            hook_input = node
+            users = list(node.users)
+            if self.channel_wise and self.pre_spike_maxpool and len(users) == 1:
+                user = users[0]
+                if (
+                    user.op == "call_module"
+                    and isinstance(user.target, str)
+                    and isinstance(modules.get(user.target), nn.MaxPool2d)
+                ):
+                    hook_input = user
+
+            hook_node = _add_module_and_node(
+                fx_model, target, hook_input, hook, (hook_input,)
+            )
+            if self.channel_wise:
+                for user in list(hook_input.users):
+                    if user is not hook_node:
+                        user.replace_input_with(hook_input, hook_node)
+            modules[target] = hook
 
         fx_model.graph.lint()
         fx_model.recompile()
@@ -735,28 +535,155 @@ class RateCodingRecipe(ConversionRecipe):
     def _replace_by_neurons(
         self, fx_model: torch.fx.GraphModule
     ) -> torch.fx.GraphModule:
-        replaced_hooks = set()
-        replaced_activations = set()
-        for rule in self.rules:
-            modules = dict(fx_model.named_modules())
-            replacements = list(rule.find_replacements(fx_model, modules))
-            for activation_node, hook_node in replacements:
-                if (
-                    hook_node in replaced_hooks
-                    or activation_node in replaced_activations
+        modules = dict(fx_model.named_modules())
+        for hook_node in list(fx_model.graph.nodes):
+            if hook_node.op != "call_module" or not hook_node.args:
+                continue
+            hook = modules.get(hook_node.target)
+            hook_input = hook_node.args[0]
+            if not isinstance(hook_input, fx.Node):
+                continue
+            if self.channel_wise:
+                if not isinstance(hook, ChannelVoltageHook):
+                    continue
+                activation_node = hook_input
+                if not _matches_relu(activation_node, modules):
+                    if (
+                        not isinstance(modules.get(hook_input.target), nn.MaxPool2d)
+                        or not hook_input.args
+                        or not isinstance(hook_input.args[0], fx.Node)
+                    ):
+                        continue
+                    activation_node = hook_input.args[0]
+                    if not _matches_relu(activation_node, modules):
+                        continue
+                self._replace_channelwise(fx_model, activation_node, hook_node, hook)
+            else:
+                if not isinstance(hook, VoltageHook) or not _matches_relu(
+                    hook_input, modules
                 ):
                     continue
-                replaced_hooks.add(hook_node)
-                replaced_activations.add(activation_node)
-                rule.replace_with_neurons(
-                    fx_model,
-                    activation_node,
-                    hook_node,
-                    self.neuron_factory,
-                    self.threshold_optimizer,
-                )
+                self._replace_layerwise(fx_model, hook_input, hook_node, hook)
 
         fx_model.graph.lint()
         fx_model.delete_all_unused_submodules()
         fx_model.recompile()
         return fx_model
+
+    def _replace_layerwise(
+        self,
+        fx_model: fx.GraphModule,
+        activation_node: fx.Node,
+        hook_node: fx.Node,
+        hook: VoltageHook,
+    ) -> None:
+        scale = float(hook.scale.item())
+        if not scale > 0.0 or not math.isfinite(scale):
+            raise ValueError(
+                f"Threshold must be a finite positive number, got {scale} "
+                f"for hook {hook_node.target!r}."
+            )
+        hook_parent, _, hook_leaf = hook_node.target.rpartition(".")
+        spike_leaf = hook_leaf.replace("voltage_hook_", "spiking_")
+        prefix = f"{hook_parent}.{spike_leaf}" if hook_parent else spike_leaf
+
+        spiking_neuron = self.neuron_factory.create(scale=scale)
+        neuron_threshold = getattr(spiking_neuron, "v_threshold", 1.0)
+        if hasattr(neuron_threshold, "item"):
+            if not hasattr(neuron_threshold, "numel") or neuron_threshold.numel() == 1:
+                neuron_threshold = neuron_threshold.item()
+        node0 = _add_module_and_node(
+            fx_model,
+            f"{prefix}.scaler0",
+            hook_node,
+            VoltageScaler(neuron_threshold / scale),
+            activation_node.args,
+        )
+        node1 = _add_module_and_node(
+            fx_model,
+            f"{prefix}.if_node",
+            node0,
+            spiking_neuron,
+            (node0,),
+        )
+        node2 = _add_module_and_node(
+            fx_model,
+            f"{prefix}.scaler1",
+            node1,
+            VoltageScaler(scale),
+            (node1,),
+        )
+
+        hook_node.replace_all_uses_with(node2)
+        activation_node.replace_all_uses_with(node2)
+        fx_model.graph.erase_node(hook_node)
+        fx_model.graph.erase_node(activation_node)
+
+    def _replace_channelwise(
+        self,
+        fx_model: fx.GraphModule,
+        activation_node: fx.Node,
+        hook_node: fx.Node,
+        hook: ChannelVoltageHook,
+    ) -> None:
+        hook_input = hook_node.args[0]
+        pre_spike_maxpool = hook_input is not activation_node
+        if pre_spike_maxpool:
+            hook_input.replace_input_with(activation_node, activation_node.args[0])
+
+        threshold = hook.compute_threshold()
+        hook_parent, _, hook_leaf = hook_node.target.rpartition(".")
+        spike_leaf = hook_leaf.replace("channel_voltage_hook_", "channel_spiking_")
+        prefix = f"{hook_parent}.{spike_leaf}" if hook_parent else spike_leaf
+
+        if self.half_threshold:
+            neuron_threshold = 1.0
+            spiking_neuron = neuron.HalfThresholdIFNode()
+        else:
+            spiking_neuron = self.neuron_factory.create(scale=1.0)
+            neuron_threshold = getattr(spiking_neuron, "v_threshold", 1.0)
+            if hasattr(neuron_threshold, "item"):
+                if (
+                    not hasattr(neuron_threshold, "numel")
+                    or neuron_threshold.numel() == 1
+                ):
+                    neuron_threshold = neuron_threshold.item()
+            if not isinstance(neuron_threshold, (int, float)):
+                raise ValueError(
+                    "Channel-wise RateCodingRecipe requires a scalar neuron threshold."
+                )
+            if not neuron_threshold > 0.0 or not math.isfinite(neuron_threshold):
+                raise ValueError(
+                    "Channel-wise RateCodingRecipe requires a finite positive "
+                    f"neuron threshold, got {neuron_threshold}."
+                )
+
+        node0 = _add_module_and_node(
+            fx_model,
+            f"{prefix}.scaler0",
+            hook_node,
+            ChannelVoltageScaler(
+                neuron_threshold / threshold, channel_dim=self.channel_dim
+            ),
+            (hook_input,) if pre_spike_maxpool else activation_node.args,
+        )
+        node1 = _add_module_and_node(
+            fx_model,
+            f"{prefix}.if_node",
+            node0,
+            spiking_neuron,
+            (node0,),
+        )
+        node2 = _add_module_and_node(
+            fx_model,
+            f"{prefix}.scaler1",
+            node1,
+            ChannelVoltageScaler(threshold, channel_dim=self.channel_dim),
+            (node1,),
+        )
+
+        hook_node.replace_all_uses_with(node2)
+        fx_model.graph.erase_node(hook_node)
+        if not pre_spike_maxpool:
+            activation_node.replace_all_uses_with(node2)
+        fx_model.graph.erase_node(activation_node)

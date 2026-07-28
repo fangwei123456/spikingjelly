@@ -14,10 +14,10 @@ from ..triton_utils import (
     wrap_triton,
 )
 from .utils import (
-    TritonNeuronForwardPlan,
+    TritonNeuronExecutionPlan,
     _check_mp_cuda_inputs,
     _check_plan_inputs,
-    prepare_triton_neuron_forward_plan,
+    prepare_triton_neuron_execution_plan,
 )
 
 try:
@@ -959,7 +959,7 @@ def _multistep_lif_mp_forward_fake(
 def multistep_lif_mp_with_plan(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
-    plan: TritonNeuronForwardPlan,
+    plan: TritonNeuronExecutionPlan,
     *,
     decay_input: bool,
     tau: float,
@@ -1040,11 +1040,11 @@ def multistep_lif_mp(
         mantissa bits, and may produce incorrect spike patterns. Use it only for
         experiments, not for accuracy-critical inference.
     """
-    plan = prepare_triton_neuron_forward_plan(
+    plan = prepare_triton_neuron_execution_plan(
         neuron_type="lif",
         device=x_seq.device,
         storage_dtype=storage_dtype,
-        compute_dtype=compute_dtype,
+        forward_compute_dtype=compute_dtype,
         backward_compute_dtype=backward_compute_dtype,
         spike_dtype=spike_dtype,
         save_intermediates=save_intermediates,

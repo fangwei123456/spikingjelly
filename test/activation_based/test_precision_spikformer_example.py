@@ -153,8 +153,10 @@ def test_spikformer_precision_tools_fp8_torchao_smoke():
 
 
 @pytest.mark.skipif(
-    not HAS_TORCHAO or torch.cuda.device_count() < 2,
-    reason="This fp8-torchao device mismatch test requires torchao and at least 2 CUDA devices.",
+    not HAS_TORCHAO
+    or torch.cuda.device_count() < 2
+    or torch.cuda.get_device_capability(1) < (8, 9),
+    reason="This fp8-torchao device mismatch test requires torchao and an FP8-capable target CUDA device.",
 )
 def test_fp8_torchao_rejects_model_on_different_cuda_device():
     model = torch.nn.Sequential(

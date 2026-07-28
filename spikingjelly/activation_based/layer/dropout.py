@@ -95,25 +95,20 @@ class Dropout(base.MemoryModule):
         return f"p={self.p}"
 
     def create_mask(self, x: Tensor):
-        self.mask = F.dropout(torch.ones_like(x.data), self.p, training=True)
+        self.mask = F.dropout(torch.ones_like(x), self.p, training=True)
+
+    def _forward(self, x: Tensor, mask_input: Tensor):
+        if not self.training:
+            return x
+        if self.mask is None:
+            self.create_mask(mask_input)
+        return x * self.mask
 
     def single_step_forward(self, x: Tensor):
-        if self.training:
-            if self.mask is None:
-                self.create_mask(x)
-
-            return x * self.mask
-        else:
-            return x
+        return self._forward(x, x)
 
     def multi_step_forward(self, x_seq: Tensor):
-        if self.training:
-            if self.mask is None:
-                self.create_mask(x_seq[0])
-
-            return x_seq * self.mask
-        else:
-            return x_seq
+        return self._forward(x_seq, x_seq[0])
 
 
 class Dropout2d(Dropout):
@@ -159,7 +154,7 @@ class Dropout2d(Dropout):
         super().__init__(p, step_mode)
 
     def create_mask(self, x: Tensor):
-        self.mask = F.dropout2d(torch.ones_like(x.data), self.p, training=True)
+        self.mask = F.dropout2d(torch.ones_like(x), self.p, training=True)
 
 
 class DropConnectLinear(base.MemoryModule):
@@ -344,65 +339,46 @@ class DropConnectLinear(base.MemoryModule):
     def drop(self, batch_size: int):
         mask_w = (
             torch.rand_like(
-                self.weight.unsqueeze(0).repeat([batch_size] + [1] * self.weight.dim())
+                self.weight.unsqueeze(0).expand(batch_size, *self.weight.shape)
             )
             > self.p
         )
-        # self.dropped_w = mask_w.to(self.weight) * self.weight  # shape = [batch_size, out_features, in_features]
         self.dropped_w = self.weight * mask_w
 
         if self.bias is not None:
             mask_b = (
                 torch.rand_like(
-                    self.bias.unsqueeze(0).repeat([batch_size] + [1] * self.bias.dim())
+                    self.bias.unsqueeze(0).expand(batch_size, *self.bias.shape)
                 )
                 > self.p
             )
-            # self.dropped_b = mask_b.to(self.bias) * self.bias
             self.dropped_b = self.bias * mask_b
 
     def single_step_forward(self, input: Tensor) -> Tensor:
         if self.training:
-            if self.invariant:
-                if self.dropped_w is None:
-                    self.drop(input.shape[0])
-            else:
+            if not self.invariant or self.dropped_w is None:
                 self.drop(input.shape[0])
-            if self.bias is None:
-                ret = torch.bmm(self.dropped_w, input.unsqueeze(-1)).squeeze(-1)
-            else:
-                ret = (
-                    torch.bmm(self.dropped_w, input.unsqueeze(-1)).squeeze(-1)
-                    + self.dropped_b
-                )
-            if self.activation is None:
-                return ret
-            else:
-                return self.activation(ret)
-        else:
-            mu = (1 - self.p) * F.linear(
-                input, self.weight, self.bias
-            )  # shape = [batch_size, out_features]
-            if self.bias is None:
-                sigma2 = (
-                    self.p
-                    * (1 - self.p)
-                    * F.linear(input.square(), self.weight.square())
-                )
-            else:
-                sigma2 = (
-                    self.p
-                    * (1 - self.p)
-                    * F.linear(input.square(), self.weight.square(), self.bias.square())
-                )
-            dis = torch.distributions.normal.Normal(mu, sigma2.sqrt())
-            samples = dis.sample(torch.Size([self.samples_num]))
+            ret = torch.bmm(self.dropped_w, input.unsqueeze(-1)).squeeze(-1)
+            if self.bias is not None:
+                ret = ret + self.dropped_b
+            return ret if self.activation is None else self.activation(ret)
 
-            if self.activation is None:
-                ret = samples
-            else:
-                ret = self.activation(samples)
-            return ret.mean(dim=0)
+        mu = (1 - self.p) * F.linear(input, self.weight, self.bias)
+        sigma2 = (
+            self.p
+            * (1 - self.p)
+            * F.linear(
+                input.square(),
+                self.weight.square(),
+                None if self.bias is None else self.bias.square(),
+            )
+        )
+        samples = torch.distributions.normal.Normal(mu, sigma2.sqrt()).sample(
+            torch.Size([self.samples_num])
+        )
+        if self.activation is not None:
+            samples = self.activation(samples)
+        return samples.mean(dim=0)
 
     def extra_repr(self) -> str:
         return f"in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, p={self.p}, invariant={self.invariant}"

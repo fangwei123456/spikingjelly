@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from dataclasses import dataclass, field
 
 __all__ = ["MemoryInstanceSpec", "MemoryHierarchyConfig"]
@@ -161,13 +160,7 @@ class MemoryHierarchyConfig:
     zero_sram_high_directions: bool = True
 
     @classmethod
-    def neuromc_like_v1(cls, memory_model: str | None = None):
-        if memory_model is not None:
-            warnings.warn(
-                "memory_model is deprecated and ignored by exact NeuroMC v2.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
+    def neuromc_like_v1(cls):
         return cls(
             preset_name="neuromc_like_v1",
             technology_nm=32,

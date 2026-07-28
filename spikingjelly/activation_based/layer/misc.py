@@ -160,31 +160,11 @@ class SynapseFilter(base.MemoryModule):
 
         return f"tau={tau}, learnable={self.learnable}, step_mode={self.step_mode}"
 
-    @staticmethod
-    def js_single_step_forward_learnable(
-        x: torch.Tensor, w: torch.Tensor, out_i: torch.Tensor
-    ):
-        inv_tau = w.sigmoid()
-        out_i = out_i - (1.0 - x) * out_i * inv_tau + x
-        return out_i
-
-    @staticmethod
-    def js_single_step_forward(x: torch.Tensor, tau: float, out_i: torch.Tensor):
-        inv_tau = 1.0 / tau
-        out_i = out_i - (1.0 - x) * out_i * inv_tau + x
-        return out_i
-
     def single_step_forward(self, x: Tensor):
         if isinstance(self.out_i, float):
-            out_i_init = self.out_i
-            self.out_i = torch.zeros_like(x.data)
-            if out_i_init != 0.0:
-                torch.fill_(self.out_i, out_i_init)
-
-        if self.learnable:
-            self.out_i = self.js_single_step_forward_learnable(x, self.w, self.out_i)
-        else:
-            self.out_i = self.js_single_step_forward(x, self.tau, self.out_i)
+            self.out_i = torch.full_like(x, self.out_i)
+        inv_tau = self.w.sigmoid() if self.learnable else 1.0 / self.tau
+        self.out_i = self.out_i - (1.0 - x) * self.out_i * inv_tau + x
         return self.out_i
 
 
@@ -369,10 +349,9 @@ class Delay(base.MemoryModule):
 
     def single_step_forward(self, x: torch.Tensor):
         self.queue.append(x)
-        if self.queue.__len__() > self.delay_steps:
+        if len(self.queue) > self.delay_steps:
             return self.queue.pop(0)
-        else:
-            return torch.zeros_like(x)
+        return torch.zeros_like(x)
 
     def multi_step_forward(self, x_seq: torch.Tensor):
         return functional.delay(x_seq, self.delay_steps)

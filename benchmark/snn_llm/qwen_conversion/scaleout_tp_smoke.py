@@ -34,6 +34,7 @@ from benchmark.snn_llm.qwen_conversion._runtime import (
     FIXED_PROMPTS,
     build_environment,
     cached_decode as _cached_decode,
+    conversion_summary as _conversion_summary,
     encode as _encode,
     hash_files as _hash_files,
     load_calibration as _load_calibration,
@@ -41,7 +42,6 @@ from benchmark.snn_llm.qwen_conversion._runtime import (
     load_model as _load_model,
     relative_l2 as _relative_l2,
     shifted_loss as _loss,
-    validate_calibration_config as _validate_calibration_config,
 )
 
 
@@ -250,21 +250,16 @@ def _run(args: argparse.Namespace) -> tuple[Dict[str, object], int]:
             mode=args.precision, strictness="strict", report=True, device="cuda"
         ),
     )
-    calibration, calibration_sha256 = _load_calibration(args.calibration_artifact)
-    _validate_calibration_config(
-        calibration,
-        time_steps=args.time_steps,
-        calibration_levels=args.calibration_levels,
-        calibration_quantile=args.calibration_quantile,
-        calibration_reservoir_size=args.calibration_reservoir_size,
-        calibration_seed=20260719,
-    )
     config = Qwen2SNNConfig(
         time_steps=args.time_steps,
         calibration_levels=args.calibration_levels,
         calibration_quantile=args.calibration_quantile,
         calibration_reservoir_size=args.calibration_reservoir_size,
+        calibration_seed=20260719,
         neuron_backend="triton",
+    )
+    calibration, calibration_sha256 = _load_calibration(
+        args.calibration_artifact, config
     )
     converted = ModuleConverter(Qwen2SNNRecipe(calibration, config)).convert(
         precision.model
@@ -367,9 +362,7 @@ def _run(args: argparse.Namespace) -> tuple[Dict[str, object], int]:
             "rowwise_compute_speedup_claimed": False,
         },
         "conversion": {
-            "temporal_layout": runtime.model.temporal_layout,
-            "execution_schedule": runtime.model.execution_schedule,
-            "online_inference": runtime.model.online_inference,
+            **_conversion_summary(runtime.model),
             "calibration_sha256": calibration_sha256,
         },
         "ranks": gathered,

@@ -29,7 +29,6 @@ dependencies = [
     "matplotlib",
     "numpy",
     "packaging",
-    "pydantic",
     "requests",
     "SciencePlots",
     "scipy",

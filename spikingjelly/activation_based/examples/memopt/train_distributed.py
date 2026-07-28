@@ -9,6 +9,7 @@ import torch.nn as nn
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.distributed import (
     PIPELINING_AVAILABLE,
+    SNNDistributedConfig,
     SNN_DISTRIBUTED_PREFERENCES,
     ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE,
     apply_pipeline_stage_memopt,
@@ -18,14 +19,10 @@ from spikingjelly.activation_based.distributed import (
     recommended_pipeline_microbatches,
     resolve_tensor_parallel_group_size,
 )
-from spikingjelly.activation_based.distributed.adapters import (
-    build_cifar10dvs_vgg_eager_policy,
-)
 from spikingjelly.activation_based.distributed.data_parallel import (
     materialize_dtensor_output,
 )
 from spikingjelly.activation_based.distributed.execution import (
-    build_eager_config,
     configure_snn_distributed,
 )
 from spikingjelly.activation_based.distributed.pipeline import (
@@ -285,10 +282,8 @@ def build_model(args, runtime: DistributedRuntime):
         return pipeline_runtime, None, None
 
     mesh_shape = tuple(args.mesh_shape) if args.mesh_shape else None
-    eager_policy = build_cifar10dvs_vgg_eager_policy()
-
     if args.distributed_mode == "dp":
-        config = build_eager_config(
+        config = SNNDistributedConfig(
             mode="dp",
             device_type=runtime.device.type,
             mesh_shape=mesh_shape or (runtime.world_size,),
@@ -305,13 +300,15 @@ def build_model(args, runtime: DistributedRuntime):
         auto_tensor_parallel = not args.disable_classifier_tp
         return configure_snn_distributed(
             model,
-            build_eager_config(
+            SNNDistributedConfig(
                 mode="tp",
                 device_type=runtime.device.type,
                 mesh_shape=mesh_shape or (runtime.world_size,),
-                policy=eager_policy,
-                enable_linear_tensor_parallel=auto_tensor_parallel,
-                enable_conv_tensor_parallel=not args.disable_conv_tp,
+                tensor_parallel_roots=("classifier",) if auto_tensor_parallel else None,
+                auto_tensor_parallel=auto_tensor_parallel,
+                conv_tensor_parallel_roots=("features",)
+                if not args.disable_conv_tp
+                else None,
                 tp_mesh_dim=args.tp_mesh_dim,
                 dp_mesh_dim=args.dp_mesh_dim,
             ),
@@ -320,11 +317,11 @@ def build_model(args, runtime: DistributedRuntime):
     if args.distributed_mode == "fsdp2":
         return configure_snn_distributed(
             model,
-            build_eager_config(
+            SNNDistributedConfig(
                 mode="fsdp2",
                 device_type=runtime.device.type,
                 mesh_shape=mesh_shape or (runtime.world_size,),
-                policy=eager_policy,
+                fsdp_shard_roots=("features", "classifier"),
                 dp_mesh_dim=args.dp_mesh_dim if args.dp_mesh_dim is not None else 0,
             ),
         )
@@ -348,13 +345,17 @@ def build_model(args, runtime: DistributedRuntime):
         auto_tensor_parallel = not args.disable_classifier_tp
         return configure_snn_distributed(
             model,
-            build_eager_config(
+            SNNDistributedConfig(
                 mode="fsdp2_tp",
                 device_type=runtime.device.type,
                 mesh_shape=mesh_shape,
-                policy=eager_policy,
-                enable_linear_tensor_parallel=auto_tensor_parallel,
-                enable_conv_tensor_parallel=not args.disable_conv_tp,
+                tensor_parallel_roots=("classifier",) if auto_tensor_parallel else None,
+                auto_tensor_parallel=auto_tensor_parallel,
+                conv_tensor_parallel_roots=("features",)
+                if not args.disable_conv_tp
+                else None,
+                fsdp_shard_roots=("features",),
+                fsdp_shard_module_root=False,
                 tp_mesh_dim=tp_mesh_dim,
                 dp_mesh_dim=dp_mesh_dim,
             ),

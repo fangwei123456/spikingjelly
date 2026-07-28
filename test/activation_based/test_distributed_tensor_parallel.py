@@ -2,6 +2,7 @@
 import pickle
 from typing import NamedTuple
 
+import torch.distributed as dist
 import spikingjelly.activation_based.distributed.tensor_parallel.linear as tp_linear
 from spikingjelly.activation_based import base
 from spikingjelly.activation_based.distributed.tensor_parallel.state import (
@@ -29,17 +30,17 @@ class _ResetCountingMemoryModule(base.MemoryModule):
 def test_tp_communication_debug_stats_recorded_for_rowwise_conv(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    conv = distributed_dtensor.ChannelShardConv1d(
+    conv = ChannelShardConv1d(
         nn.Conv1d(4, 6, kernel_size=1, bias=True),
         process_group=None,
         mode="rowwise",
     )
     x = torch.randn(2, 4, 8)
-    distributed_dtensor.reset_tp_communication_debug_stats()
-    distributed_dtensor.enable_tp_communication_debug(True)
+    reset_tp_communication_debug_stats()
+    enable_tp_communication_debug(True)
     try:
         conv(x)
-        stats = distributed_dtensor.get_tp_communication_debug_stats()
+        stats = get_tp_communication_debug_stats()
         assert stats["all_reduce_calls"] == 0
         assert stats["all_reduce_bytes"] == 0
 
@@ -51,17 +52,17 @@ def test_tp_communication_debug_stats_recorded_for_rowwise_conv(
             calls["count"] += 1
             return tensor
 
-        monkeypatch.setattr(distributed_dtensor.dist, "is_available", lambda: True)
-        monkeypatch.setattr(distributed_dtensor.dist, "is_initialized", lambda: True)
-        monkeypatch.setattr(distributed_dtensor.dist, "all_reduce", _fake_all_reduce)
+        monkeypatch.setattr(dist, "is_available", lambda: True)
+        monkeypatch.setattr(dist, "is_initialized", lambda: True)
+        monkeypatch.setattr(dist, "all_reduce", _fake_all_reduce)
         conv(x)
-        stats = distributed_dtensor.get_tp_communication_debug_stats()
+        stats = get_tp_communication_debug_stats()
         assert calls["count"] == 1
         assert stats["all_reduce_calls"] == 1
         assert stats["all_reduce_bytes"] > 0
     finally:
-        distributed_dtensor.enable_tp_communication_debug(False)
-        distributed_dtensor.reset_tp_communication_debug_stats()
+        enable_tp_communication_debug(False)
+        reset_tp_communication_debug_stats()
 
 
 def test_make_colwise_parallel_rejects_unavailable_local_output(monkeypatch):
@@ -102,7 +103,7 @@ def test_tdlinear_replicated_tp_styles_preserve_multistep_output_single_rank():
                     "0": "td_colwise_replicated",
                     "1": "td_rowwise_replicated",
                 },
-                enable_data_parallel=False,
+                mode="tp",
             ),
         )
         distributed_input = x.detach().clone().requires_grad_(True)
@@ -330,17 +331,6 @@ def test_tensor_shard_memory_module_keeps_source_state_dict_paths():
     module.load_state_dict(source.state_dict(), strict=True)
 
 
-def test_tensor_shard_memory_module_legacy_alias_points_to_factory():
-    source = neuron.IFNode(step_mode="s")
-    with pytest.warns(DeprecationWarning, match="TensorShardMemoryModule"):
-        module = TensorShardMemoryModule(source, -1, 4, None)
-
-    assert distributed_dtensor.TensorShardMemoryModule is TensorShardMemoryModule
-    assert module is not source
-    assert type(module) is type(source)
-    assert _has_tensor_shard_input_validator(module)
-
-
 def test_tensor_shard_memory_module_compiles_for_valid_input():
     module = make_tensor_shard_memory_module(neuron.IFNode(step_mode="s"), -1, 4, None)
     compiled = torch.compile(module, backend="eager", fullgraph=True)
@@ -362,9 +352,9 @@ def test_channel_shard_conv2d_colwise_all_reduces_input_gradient(monkeypatch):
         tensor.mul_(2)
         return tensor
 
-    monkeypatch.setattr(distributed_dtensor.dist, "is_available", lambda: True)
-    monkeypatch.setattr(distributed_dtensor.dist, "is_initialized", lambda: True)
-    monkeypatch.setattr(distributed_dtensor.dist, "all_reduce", _fake_all_reduce)
+    monkeypatch.setattr(dist, "is_available", lambda: True)
+    monkeypatch.setattr(dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(dist, "all_reduce", _fake_all_reduce)
 
     wrapped(x).sum().backward()
     torch.nn.functional.conv2d(
@@ -390,9 +380,9 @@ def test_colwise_backward_all_reduce_contiguous_grad(monkeypatch):
         assert tensor.is_contiguous()
         return tensor
 
-    monkeypatch.setattr(distributed_dtensor.dist, "is_available", lambda: True)
-    monkeypatch.setattr(distributed_dtensor.dist, "is_initialized", lambda: True)
-    monkeypatch.setattr(distributed_dtensor.dist, "all_reduce", _fake_all_reduce)
+    monkeypatch.setattr(dist, "is_available", lambda: True)
+    monkeypatch.setattr(dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(dist, "all_reduce", _fake_all_reduce)
 
     y = _ColwiseBackwardAllReduce.apply(x, None, 2)
     y.backward(non_contiguous_grad)
@@ -415,9 +405,9 @@ def test_channel_shard_conv1d_colwise_all_reduces_input_gradient(monkeypatch):
         tensor.mul_(2)
         return tensor
 
-    monkeypatch.setattr(distributed_dtensor.dist, "is_available", lambda: True)
-    monkeypatch.setattr(distributed_dtensor.dist, "is_initialized", lambda: True)
-    monkeypatch.setattr(distributed_dtensor.dist, "all_reduce", _fake_all_reduce)
+    monkeypatch.setattr(dist, "is_available", lambda: True)
+    monkeypatch.setattr(dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(dist, "all_reduce", _fake_all_reduce)
 
     wrapped(x).sum().backward()
     torch.nn.functional.conv1d(
@@ -503,11 +493,11 @@ def test_auto_tensor_parallel_plan_and_forward_match_single_rank():
         reference = baseline(x)
 
         config = SNNDistributedConfig(
+            mode="tp",
             device_type="cpu",
             mesh_shape=(1,),
             tensor_parallel_roots=["features"],
             auto_tensor_parallel=True,
-            enable_data_parallel=False,
         )
         distributed_model, mesh, analysis = configure_snn_distributed(candidate, config)
 
@@ -571,13 +561,12 @@ def test_configure_snn_distributed_supports_experimental_conv_tp_on_real_snn():
         reference = baseline(x)
 
         config = SNNDistributedConfig(
+            mode="tp",
             device_type="cpu",
             mesh_shape=(1,),
             auto_tensor_parallel=True,
             tensor_parallel_roots=["classifier"],
-            experimental_conv_tensor_parallel=True,
             conv_tensor_parallel_roots=["features"],
-            enable_data_parallel=False,
         )
         distributed_model, _, _ = configure_snn_distributed(candidate, config)
 
@@ -608,13 +597,12 @@ def test_cifar10dvs_vgg_tp_helper_after_memopt_level2_single_rank():
         distributed_model, _, _ = configure_snn_distributed(
             candidate,
             SNNDistributedConfig(
+                mode="tp",
                 device_type="cpu",
                 mesh_shape=(1,),
                 tensor_parallel_roots=["classifier"],
                 auto_tensor_parallel=True,
-                experimental_conv_tensor_parallel=True,
                 conv_tensor_parallel_roots=["features"],
-                enable_data_parallel=False,
             ),
         )
         _reset_net(baseline)
@@ -642,15 +630,13 @@ def test_spikformer_tp_helper_after_memopt_level2_single_rank():
         distributed_model, _, _ = configure_snn_distributed(
             candidate,
             SNNDistributedConfig(
+                mode="tp",
                 device_type="cpu",
                 mesh_shape=(1,),
                 tensor_parallel_roots=["head"],
                 auto_tensor_parallel=True,
-                experimental_spikformer_tensor_parallel=True,
                 spikformer_tensor_parallel_roots=["blocks"],
-                experimental_spikformer_patch_stem_tensor_parallel=True,
                 spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
-                enable_data_parallel=False,
             ),
         )
         _reset_net(baseline)
@@ -680,15 +666,13 @@ def test_spikformer_head_tp_helper_single_rank():
         distributed_model, mesh, analysis = configure_snn_distributed(
             candidate,
             SNNDistributedConfig(
+                mode="tp",
                 device_type="cpu",
                 mesh_shape=(1,),
                 tensor_parallel_roots=["head"],
                 auto_tensor_parallel=True,
-                experimental_spikformer_tensor_parallel=True,
                 spikformer_tensor_parallel_roots=["blocks"],
-                experimental_spikformer_patch_stem_tensor_parallel=True,
                 spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
-                enable_data_parallel=False,
             ),
         )
         x = torch.randn(2, 3, 64, 64)
@@ -741,15 +725,13 @@ def test_spikformer_patch_stem_tp_helper_handles_patch_embed_root():
         distributed_model, _, _ = configure_snn_distributed(
             candidate,
             SNNDistributedConfig(
+                mode="tp",
                 device_type="cpu",
                 mesh_shape=(1,),
                 tensor_parallel_roots=["head"],
                 auto_tensor_parallel=True,
-                experimental_spikformer_tensor_parallel=True,
                 spikformer_tensor_parallel_roots=["blocks"],
-                experimental_spikformer_patch_stem_tensor_parallel=True,
                 spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
-                enable_data_parallel=False,
             ),
         )
         assert (
@@ -771,12 +753,11 @@ def test_spikformer_patch_stem_tp_helper_handles_single_stage_root_colwise():
         distributed_model, _, _ = configure_snn_distributed(
             candidate,
             SNNDistributedConfig(
+                mode="tp",
                 device_type="cpu",
                 mesh_shape=(1,),
                 auto_tensor_parallel=False,
-                experimental_spikformer_patch_stem_tensor_parallel=True,
                 spikformer_patch_stem_tensor_parallel_roots=["patch_embed.stages.0"],
-                enable_data_parallel=False,
             ),
         )
         shard_conv = distributed_model.patch_embed.stages[0].conv_bn.block[0]
@@ -801,12 +782,11 @@ def test_spikformer_patch_stem_tp_helper_handles_seq_to_ann_root():
         distributed_model, _, _ = configure_snn_distributed(
             module,
             SNNDistributedConfig(
+                mode="tp",
                 device_type="cpu",
                 mesh_shape=(1,),
                 auto_tensor_parallel=False,
-                experimental_spikformer_patch_stem_tensor_parallel=True,
                 spikformer_patch_stem_tensor_parallel_roots=["0"],
-                enable_data_parallel=False,
             ),
         )
 
@@ -823,13 +803,27 @@ def test_spikformer_patch_stem_tp_helper_rejects_unpaired_isolated_root():
             configure_snn_distributed(
                 candidate,
                 SNNDistributedConfig(
+                    mode="tp",
                     device_type="cpu",
                     mesh_shape=(1,),
                     auto_tensor_parallel=False,
-                    experimental_spikformer_patch_stem_tensor_parallel=True,
                     spikformer_patch_stem_tensor_parallel_roots=[
                         "patch_embed.stages.3"
                     ],
-                    enable_data_parallel=False,
+                ),
+            )
+
+
+def test_spikformer_patch_stem_tp_helper_rejects_non_stem_stage():
+    with single_rank_process_group():
+        with pytest.raises(ValueError, match="must start with Conv2d and BatchNorm2d"):
+            configure_snn_distributed(
+                nn.Sequential(nn.Identity(), nn.Identity()),
+                SNNDistributedConfig(
+                    mode="tp",
+                    device_type="cpu",
+                    mesh_shape=(1,),
+                    auto_tensor_parallel=False,
+                    spikformer_patch_stem_tensor_parallel_roots=["0"],
                 ),
             )

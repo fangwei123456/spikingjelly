@@ -26,15 +26,13 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     * **中文**
 
     初始化 :func:`fptt_online_training` 使用的 ``w_ra`` 列表。返回列表中的元素顺序与
-    ``optimizer.param_groups`` 中参数的遍历顺序一致，列表元素是各参数当前的 ``w.data``。
+    ``optimizer.param_groups`` 中参数的遍历顺序一致，列表元素是各参数当前值的独立 detached snapshot。
 
     :param optimizer: 网络使用的优化器
     :type optimizer: torch.optim.Optimizer
 
-    :return: 与优化器参数顺序对齐的运行平均列表，列表元素为各参数当前的 ``w.data``
+    :return: 与优化器参数顺序对齐的运行平均列表，列表元素为各参数当前值的独立 detached snapshot
     :rtype: list[torch.Tensor]
-
-    :raises Exception: 若优化器参数组中存在不可访问 ``.data`` 的对象，则底层异常会原样向上传播
 
     ----
 
@@ -44,24 +42,19 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
 
     Initialize the ``w_ra`` list used by :func:`fptt_online_training`. The
     returned list follows the traversal order of parameters in
-    ``optimizer.param_groups`` and stores the current ``w.data`` of each
-    parameter.
+    ``optimizer.param_groups`` and stores an independent detached snapshot of
+    each parameter's current value.
 
     :param optimizer: the optimizer for the network
     :type optimizer: torch.optim.Optimizer
 
     :return: a list aligned with optimizer parameter order whose elements are
-        the current ``w.data`` tensors
+        independent detached snapshots of the current parameter values
     :rtype: list[torch.Tensor]
-
-    :raises Exception: Any exception raised while accessing ``.data`` of optimizer parameters is propagated unchanged
     """
-    w_ra = []
-    for item in optimizer.param_groups:
-        for w in item["params"]:
-            w_ra.append(w.data)
-
-    return w_ra
+    return [
+        w.detach().clone() for group in optimizer.param_groups for w in group["params"]
+    ]
 
 
 def fptt_online_training(
@@ -113,7 +106,7 @@ def fptt_online_training(
     :type w_ra: list[torch.Tensor]
 
 
-    :raises IndexError: 若 ``target_seq`` 的时间长度小于 ``x_seq``，按时间步索引目标时会抛出异常
+    :raises IndexError: 若 ``target_seq`` 短于 ``x_seq``，或 ``w_ra`` 短于优化器参数列表
     :raises Exception: 任何模型前向、损失计算、反向传播或优化器更新异常都会原样向上传播
 
     ----
@@ -158,7 +151,8 @@ def fptt_online_training(
     :type w_ra: list[torch.Tensor]
 
 
-    :raises IndexError: Raised when ``target_seq`` is shorter than ``x_seq`` along the time dimension
+    :raises IndexError: Raised when ``target_seq`` is shorter than ``x_seq`` or
+        ``w_ra`` is shorter than the optimizer parameter list
     :raises Exception: Any exception raised during model forward, loss computation, backward pass, or optimizer update is propagated unchanged
 
     ----
@@ -193,66 +187,49 @@ def fptt_online_training(
             )
             functional.reset_net(net)
     """
-    T = x_seq.shape[0]
+    parameters = [
+        parameter for group in optimizer.param_groups for parameter in group["params"]
+    ]
+    previous_gradients = [0.0] * len(parameters)
+    memory_modules = tuple(
+        module for module in model.modules() if isinstance(module, base.MemoryModule)
+    )
 
-    grad__l_t_last__to__w_t = []
-
-    for item in optimizer.param_groups:
-        for w in item["params"]:
-            grad__l_t_last__to__w_t.append(0.0)
-
-    for t in range(T):
+    for t, x_t in enumerate(x_seq):
+        target_t = target_seq[t]
         optimizer.zero_grad()
 
-        y_t = model(x_seq[t])
-        loss_t = f_loss_t(y_t, target_seq[t])
-        loss_reg = 0.0
-        i = 0
-        for item in optimizer.param_groups:
-            for w in item["params"]:
-                loss_reg = loss_reg + F.mse_loss(
-                    w, w_ra[i] + grad__l_t_last__to__w_t[i] / (2.0 * alpha)
-                )
-                i += 1
-
-        loss_reg = loss_reg * (alpha / 2.0)
-
-        loss = loss_t + loss_reg
+        y_t = model(x_t)
+        loss = f_loss_t(y_t, target_t)
+        loss += (alpha / 2.0) * sum(
+            F.mse_loss(
+                parameter,
+                w_ra[i] + previous_gradients[i] / (2.0 * alpha),
+            )
+            for i, parameter in enumerate(parameters)
+        )
         loss.backward()
 
-        # update params
         optimizer.step()
         detach_net(model)
 
-        # store hidden states
-        states = []
-        i = 0
-        for m in model.modules():
-            if isinstance(m, base.MemoryModule):
-                states.append(copy.deepcopy(m._memories))
-                i += 1
+        states = [copy.deepcopy(module._memories) for module in memory_modules]
 
-        # update w_ra
         optimizer.zero_grad()
-        if t < T - 1:
-            y_t = model(x_seq[t])
-            loss_t = f_loss_t(y_t, target_seq[t])
+        if t < x_seq.shape[0] - 1:
+            y_t = model(x_t)
+            loss_t = f_loss_t(y_t, target_t)
             loss_t.backward()
             with torch.no_grad():
-                i = 0
-                for item in optimizer.param_groups:
-                    for w in item["params"]:
-                        grad__l_t_last__to__w_t[i] = w.grad
-                        w_ra[i] = (w_ra[i] + w) / 2.0 - w.grad / (2.0 * alpha)
-                        i += 1
+                for i, parameter in enumerate(parameters):
+                    previous_gradients[i] = parameter.grad
+                    w_ra[i] = (w_ra[i] + parameter) / 2.0 - parameter.grad / (
+                        2.0 * alpha
+                    )
         optimizer.zero_grad()
 
-        # recover hidden states
-        i = 0
-        for m in model.modules():
-            if isinstance(m, base.MemoryModule):
-                m._memories = states[i]
-                i += 1
+        for module, state in zip(memory_modules, states):
+            module._memories = state
 
 
 def ottt_online_training(
@@ -382,36 +359,32 @@ def ottt_online_training(
             functional.reset_net(net)
     """
 
-    # input x_seq/target_seq: [B, T, ...]
-    # transpose to [T, B, ...]
     x_seq = x_seq.transpose(0, 1)
     target_seq = target_seq.transpose(0, 1)
-    T = x_seq.shape[0]
 
     batch_loss = 0.0
     y_all = []
     if not online:
         optimizer.zero_grad()
-    for t in range(T):
+    for t, x_t in enumerate(x_seq):
+        target_t = target_seq[t]
         if online:
             optimizer.zero_grad()
 
-        y_t = model(x_seq[t])
-        loss = f_loss_t(y_t, target_seq[t].contiguous())
+        y_t = model(x_t)
+        loss = f_loss_t(y_t, target_t.contiguous())
 
         loss.backward()
 
-        # update params
         if online:
             optimizer.step()
 
-        batch_loss += loss.data
+        batch_loss += loss.detach()
         y_all.append(y_t.detach())
 
     if not online:
         optimizer.step()
 
-    # y_all: [B, T, ...]
     y_all = torch.stack(y_all, dim=1)
 
     return batch_loss, y_all

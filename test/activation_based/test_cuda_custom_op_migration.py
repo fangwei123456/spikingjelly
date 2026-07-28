@@ -1,14 +1,58 @@
+import gc
 import os
 
 import pytest
 import torch
+from spikingjelly import configure
 from spikingjelly.activation_based import surrogate
 from spikingjelly.activation_based.cuda_kernel import (
     multistep_eif_ptt,
     multistep_izhikevich_ptt,
     multistep_qif_ptt,
 )
+from spikingjelly.activation_based.cuda_kernel.cuda_utils import (
+    register_python_object,
+    resolve_python_object,
+)
+from spikingjelly.activation_based.cuda_kernel.neuron_kernel import (
+    integrate_and_fire as if_kernel,
+)
+from spikingjelly.activation_based.cuda_kernel.neuron_kernel import lif as lif_kernel
 from spikingjelly.activation_based.cuda_kernel.spike_op import spike_linear
+from spikingjelly.activation_based.cuda_kernel.tensor_cache import BoolTensorCache
+
+
+def test_generated_ptt_cuda_source_has_no_rst_docstrings(monkeypatch):
+    captured_codes = []
+
+    class CupyStub:
+        @staticmethod
+        def RawKernel(code, kernel_name, **kwargs):
+            captured_codes.append(code)
+            return kernel_name
+
+    monkeypatch.setattr(if_kernel, "cupy", CupyStub)
+    monkeypatch.setattr(lif_kernel, "cupy", CupyStub)
+
+    if_kernel.create_fptt_kernel(hard_reset=True, dtype="fp32")
+    if_kernel.create_bptt_kernel(
+        lambda **kwargs: "const float grad_s_to_h = 0.0f;",
+        hard_reset=True,
+        detach_reset=True,
+        dtype="fp32",
+    )
+    lif_kernel.create_fptt_kernel(
+        decay_input=True,
+        hard_reset=True,
+        dtype="fp32",
+    )
+
+    assert len(captured_codes) == 3
+    for code in captured_codes:
+        for line in code.splitlines():
+            stripped_line = line.strip()
+            assert stripped_line != "----"
+            assert not stripped_line.startswith((".. ", "* **", ":return:", ":rtype:"))
 
 
 def _require_cuda():
@@ -26,6 +70,38 @@ def _maybe_skip_custom_op_unavailable():
         for name in ("custom_op", "register_fake", "register_autograd")
     ):
         pytest.skip("torch.library custom_op/register_autograd are unavailable.")
+
+
+def test_python_object_registry_uses_identity_and_releases_objects():
+    class Kernel:
+        pass
+
+    first = Kernel()
+    second = Kernel()
+    first_id = register_python_object(first)
+
+    assert register_python_object(first) == first_id
+    assert register_python_object(second) != first_id
+    assert resolve_python_object(first_id) is first
+
+    del first
+    gc.collect()
+    with pytest.raises(RuntimeError, match="Unknown python object"):
+        resolve_python_object(first_id)
+
+
+@pytest.mark.parametrize("level", [0, 1])
+def test_bool_tensor_cache_balances_repeated_stores(level, monkeypatch):
+    monkeypatch.setattr(configure, "save_bool_spike_level", level)
+    spike = (torch.arange(17) % 3 == 0).float()
+    cache = BoolTensorCache()
+
+    first_key = cache.store_bool(spike)
+    second_key = cache.store_bool(spike)
+
+    assert first_key == second_key
+    assert torch.equal(cache.get_float(first_key, spike.shape), spike)
+    assert torch.equal(cache.get_float(second_key, spike.shape), spike)
 
 
 def test_spike_linear_backward_no_bias_cuda():

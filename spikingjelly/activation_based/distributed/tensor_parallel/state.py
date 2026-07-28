@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import warnings
 from dataclasses import dataclass
 from typing import Any, Optional, Tuple
 
@@ -165,24 +164,3 @@ def make_tensor_shard_memory_module(
     module.register_forward_pre_hook(validator, prepend=True, with_kwargs=True)
     setattr(module, _TENSOR_SHARD_VALIDATOR_ATTR, validator)
     return module
-
-
-def TensorShardMemoryModule(
-    source: base.MemoryModule,
-    shard_dim: int,
-    logical_dim_size: Optional[int] = None,
-    process_group: Optional[Any] = None,
-) -> base.MemoryModule:
-    """Deprecated callable alias for :func:`make_tensor_shard_memory_module`."""
-    warnings.warn(
-        "TensorShardMemoryModule is deprecated and will be removed in a future "
-        "version. Use make_tensor_shard_memory_module instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return make_tensor_shard_memory_module(
-        source=source,
-        shard_dim=shard_dim,
-        logical_dim_size=logical_dim_size,
-        process_group=process_group,
-    )

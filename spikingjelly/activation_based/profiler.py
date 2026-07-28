@@ -447,17 +447,23 @@ class HookProfiler(BaseProfiler):
         self._register_hooks()
         return self
 
-    def __exit__(self, *args):
-        self.close()
-        return super().__exit__(*args)
-
     def _remove_hooks(self):
         for handle in self.hooks:
             handle.remove()
-        self.hooks = []
+        self.hooks.clear()
 
     def close(self):
         self._remove_hooks()
+
+    def _selected_modules(self):
+        for model, model_name, mode in zip(
+            self.models, self.model_names, self.search_mode
+        ):
+            for name, module in self._get_module_iterator(mode, model):
+                if isinstance(module, self.instances):
+                    module_name = f"{model_name}'s {name}"
+                    self.module_obj[module_name] = module
+                    yield module_name, module
 
     def _get_module_iterator(self, mode: str, model: nn.Module):
         """Get iterator for modules based on search mode."""
@@ -662,20 +668,19 @@ class LayerWiseMemoryProfiler(HookProfiler):
 
             return backward_post_hook
 
-        for i, model in enumerate(self.models):
-            for name, m in self._get_module_iterator(self.search_mode[i], model):
-                if isinstance(m, self.instances):
-                    mname = f"{self.model_names[i]}'s {name}"
-                    self.module_obj[mname] = m
-                    h1 = m.register_forward_pre_hook(pre_hook_generator(mname))
-                    h2 = m.register_forward_hook(post_hook_generator(mname))
-                    h3 = m.register_full_backward_pre_hook(
-                        backward_pre_hook_generator(mname)
-                    )
-                    h4 = m.register_full_backward_hook(
-                        backward_post_hook_generator(mname)
-                    )
-                    self.hooks += [h1, h2, h3, h4]
+        for name, module in self._selected_modules():
+            self.hooks.extend(
+                (
+                    module.register_forward_pre_hook(pre_hook_generator(name)),
+                    module.register_forward_hook(post_hook_generator(name)),
+                    module.register_full_backward_pre_hook(
+                        backward_pre_hook_generator(name)
+                    ),
+                    module.register_full_backward_hook(
+                        backward_post_hook_generator(name)
+                    ),
+                )
+            )
 
     def export(
         self,
@@ -947,15 +952,14 @@ class LayerWiseFPCUDATimeProfiler(HookProfiler):
 
             return post_hook
 
-        for i, model in enumerate(self.models):
-            for name, m in self._get_module_iterator(self.search_mode[i], model):
-                if isinstance(m, self.instances):
-                    mname = f"{self.model_names[i]}'s {name}"
-                    self.module_obj[mname] = m
-                    pre_handle = m.register_forward_pre_hook(pre_hook_generator(mname))
-                    post_handle = m.register_forward_hook(post_hook_generator(mname))
-                    self.start_events[mname] = None
-                    self.hooks += [pre_handle, post_handle]
+        for name, module in self._selected_modules():
+            self.start_events[name] = None
+            self.hooks.extend(
+                (
+                    module.register_forward_pre_hook(pre_hook_generator(name)),
+                    module.register_forward_hook(post_hook_generator(name)),
+                )
+            )
 
     def export(self, output: bool = True, *args, **kwargs):
         r"""
@@ -1146,19 +1150,14 @@ class LayerWiseBPCUDATimeProfiler(HookProfiler):
 
             return post_hook
 
-        for i, model in enumerate(self.models):
-            for name, m in self._get_module_iterator(self.search_mode[i], model):
-                if isinstance(m, self.instances):
-                    mname = f"{self.model_names[i]}'s {name}"
-                    self.module_obj[mname] = m
-                    h_pre = m.register_full_backward_pre_hook(
-                        bp_pre_hook_generator(mname)
-                    )
-                    h_post = m.register_full_backward_hook(
-                        bp_post_hook_generator(mname)
-                    )
-                    self.start_events[mname] = None
-                    self.hooks += [h_pre, h_post]
+        for name, module in self._selected_modules():
+            self.start_events[name] = None
+            self.hooks.extend(
+                (
+                    module.register_full_backward_pre_hook(bp_pre_hook_generator(name)),
+                    module.register_full_backward_hook(bp_post_hook_generator(name)),
+                )
+            )
 
     def export(self, output: bool = True, *args, **kwargs):
         r"""

@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Dict, Optional
 
 from .base import SNNDistributedAdapter, infer_model_family
-from .cifar10dvs_vgg import CIFAR10DVSVGGAdapter, build_cifar10dvs_vgg_eager_policy
-from .spikformer import SpikformerAdapter, build_spikformer_eager_policy
+from .cifar10dvs_vgg import CIFAR10DVSVGGAdapter
+from .spikformer import SpikformerAdapter
 
 _ADAPTER_REGISTRY: Dict[str, SNNDistributedAdapter] = {
     "cifar10dvs_vgg": CIFAR10DVSVGGAdapter(),
@@ -15,8 +15,6 @@ __all__ = (
     "CIFAR10DVSVGGAdapter",
     "SNNDistributedAdapter",
     "SpikformerAdapter",
-    "build_cifar10dvs_vgg_eager_policy",
-    "build_spikformer_eager_policy",
     "get_adapter",
     "infer_model_family",
     "list_adapters",

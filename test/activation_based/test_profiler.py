@@ -5,6 +5,7 @@ import torch.optim as optim
 from spikingjelly.activation_based import functional, layer, neuron
 from spikingjelly.activation_based.profiler import (
     CategoryMemoryProfiler,
+    HookProfiler,
     LayerWiseFPCUDATimeProfiler,
     LayerWiseMemoryProfiler,
 )
@@ -24,6 +25,49 @@ def _create_test_model():
     )
     functional.set_step_mode(net, "m")
     return net
+
+
+class RecordingHookProfiler(HookProfiler):
+    def __init__(self, model, log_path):
+        super().__init__(
+            (model,),
+            model_names=("model",),
+            search_mode=("direct_children",),
+            instances=(nn.Linear,),
+            log_path=log_path,
+        )
+        self.close_calls = 0
+        self.calls = []
+
+    def _register_hooks(self):
+        for name, module in self._selected_modules():
+            self.hooks.append(
+                module.register_forward_hook(
+                    lambda module, inputs, output, name=name: self.calls.append(name)
+                )
+            )
+
+    def export(self):
+        return self.calls
+
+    def close(self):
+        self.close_calls += 1
+        super().close()
+
+
+def test_hook_profiler_context_owns_hooks_once(tmp_path):
+    net = nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 1))
+    profiler = RecordingHookProfiler(net, tmp_path / "prof.txt")
+
+    with profiler:
+        net(torch.ones(1, 2))
+        assert profiler.calls == ["model's 0", "model's 2"]
+        assert len(profiler.hooks) == 2
+
+    assert profiler.close_calls == 1
+    assert profiler.hooks == []
+    net(torch.ones(1, 2))
+    assert profiler.calls == ["model's 0", "model's 2"]
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

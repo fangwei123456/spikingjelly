@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from einops import rearrange
 
 from .. import base, neuron
 from .container import SeqToANNContainer
@@ -14,6 +13,49 @@ __all__ = [
     "TokenQKAttention",
     "ChannelQKAttention",
 ]
+
+
+class _AxisAttention(nn.Module):
+    def __init__(self, in_planes, ratio, channel_axis=False):
+        super().__init__()
+        self.channel_axis = channel_axis
+        self.avg_pool = nn.AdaptiveAvgPool3d(1)
+        self.max_pool = nn.AdaptiveMaxPool3d(1)
+        self.sharedMLP = nn.Sequential(
+            nn.Conv3d(in_planes, in_planes // ratio, 1, bias=False),
+            nn.ReLU(),
+            nn.Conv3d(in_planes // ratio, in_planes, 1, bias=False),
+        )
+
+    def forward(self, x):
+        if self.channel_axis:
+            x = x.transpose(1, 2)
+        score = torch.sigmoid(
+            self.sharedMLP(self.avg_pool(x)) + self.sharedMLP(self.max_pool(x))
+        )
+        return score.transpose(1, 2) if self.channel_axis else score
+
+
+class _SpatialAttention(nn.Module):
+    def __init__(self, kernel_size):
+        super().__init__()
+        self.conv = nn.Conv2d(
+            2,
+            1,
+            kernel_size,
+            padding=3 if kernel_size == 7 else 1,
+            bias=False,
+        )
+
+    def forward(self, x):
+        x = x.flatten(1, 2)
+        score = self.conv(
+            torch.cat(
+                (x.mean(dim=1, keepdim=True), x.max(dim=1, keepdim=True).values),
+                dim=1,
+            )
+        )
+        return torch.sigmoid(score).unsqueeze(1)
 
 
 class TemporalWiseAttention(nn.Module, base.MultiStepModule):
@@ -74,13 +116,10 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
         self.step_mode = "m"
         assert dimension == 4 or dimension == 2, "dimension must be 4 or 2"
 
-        self.dimension = dimension
-
-        # Sequence
-        if self.dimension == 2:
+        if dimension == 2:
             self.avg_pool = nn.AdaptiveAvgPool1d(1)
             self.max_pool = nn.AdaptiveMaxPool1d(1)
-        elif self.dimension == 4:
+        else:
             self.avg_pool = nn.AdaptiveAvgPool3d(1)
             self.max_pool = nn.AdaptiveMaxPool3d(1)
 
@@ -93,8 +132,6 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
             nn.Linear(T // reduction, T, bias=False),
         )
 
-        self.sigmoid = nn.Sigmoid()
-
     def forward(self, x_seq: torch.Tensor):
         assert x_seq.dim() == 3 or x_seq.dim() == 5, ValueError(
             f"expected 3D or 5D input with shape [T, N, M] or [T, N, C, H, W], but got input with shape {x_seq.shape}"
@@ -106,13 +143,9 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
         maxout = self.sharedMLP(
             self.max_pool(x_seq).view([x_seq.shape[0], x_seq.shape[1]])
         )
-        scores = self.sigmoid(avgout + maxout)
-        if self.dimension == 2:
-            y_seq = x_seq * scores[:, :, None]
-        elif self.dimension == 4:
-            y_seq = x_seq * scores[:, :, None, None, None]
-        y_seq = y_seq.transpose(0, 1)
-        return y_seq
+        scores = torch.sigmoid(avgout + maxout)
+        scores = scores.view(*scores.shape, *((1,) * (x_seq.ndim - 2)))
+        return (x_seq * scores).transpose(0, 1)
 
 
 class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
@@ -192,65 +225,10 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
         assert T >= reduction_t, "reduction_t cannot be greater than T"
         assert C >= reduction_c, "reduction_c cannot be greater than C"
 
-        # Attention
-        class TimeAttention(nn.Module):
-            def __init__(self, in_planes, ratio=16):
-                super(TimeAttention, self).__init__()
-                self.avg_pool = nn.AdaptiveAvgPool3d(1)
-                self.max_pool = nn.AdaptiveMaxPool3d(1)
-                self.sharedMLP = nn.Sequential(
-                    nn.Conv3d(in_planes, in_planes // ratio, 1, bias=False),
-                    nn.ReLU(),
-                    nn.Conv3d(in_planes // ratio, in_planes, 1, bias=False),
-                )
-                self.sigmoid = nn.Sigmoid()
-
-            def forward(self, x):
-                avgout = self.sharedMLP(self.avg_pool(x))
-                maxout = self.sharedMLP(self.max_pool(x))
-                return self.sigmoid(avgout + maxout)
-
-        class ChannelAttention(nn.Module):
-            def __init__(self, in_planes, ratio=16):
-                super(ChannelAttention, self).__init__()
-                self.avg_pool = nn.AdaptiveAvgPool3d(1)
-                self.max_pool = nn.AdaptiveMaxPool3d(1)
-                self.sharedMLP = nn.Sequential(
-                    nn.Conv3d(in_planes, in_planes // ratio, 1, bias=False),
-                    nn.ReLU(),
-                    nn.Conv3d(in_planes // ratio, in_planes, 1, bias=False),
-                )
-                self.sigmoid = nn.Sigmoid()
-
-            def forward(self, x):
-                x = rearrange(x, "b f c h w -> b c f h w")
-                avgout = self.sharedMLP(self.avg_pool(x))
-                maxout = self.sharedMLP(self.max_pool(x))
-                out = self.sigmoid(avgout + maxout)
-                out = rearrange(out, "b c f h w -> b f c h w")
-                return out
-
-        class SpatialAttention(nn.Module):
-            def __init__(self, kernel_size=3):
-                super(SpatialAttention, self).__init__()
-                assert kernel_size in (3, 7), "kernel size must be 3 or 7"
-                padding = 3 if kernel_size == 7 else 1
-                self.conv = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
-                self.sigmoid = nn.Sigmoid()
-
-            def forward(self, x):
-                x = rearrange(x, "b f c h w -> b (f c) h w")
-                avgout = torch.mean(x, dim=1, keepdim=True)
-                maxout, _ = torch.max(x, dim=1, keepdim=True)
-                x = torch.cat([avgout, maxout], dim=1)
-                x = self.conv(x)
-                x = x.unsqueeze(1)
-                return self.sigmoid(x)
-
-        self.ta = TimeAttention(T, reduction_t)
-        self.ca = ChannelAttention(C, reduction_c)
-        self.sa = SpatialAttention(kernel_size)
-        self.sigmoid = nn.Sigmoid()
+        assert kernel_size in (3, 7), "kernel size must be 3 or 7"
+        self.ta = _AxisAttention(T, reduction_t)
+        self.ca = _AxisAttention(C, reduction_c, channel_axis=True)
+        self.sa = _SpatialAttention(kernel_size)
         self.relu = nn.ReLU()
 
     def forward(self, x: torch.Tensor):
@@ -261,9 +239,7 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
         out = self.ta(x) * x
         out = self.ca(out) * out
         out = self.sa(out) * out
-        out = self.relu(out)
-        out = out.transpose(0, 1)
-        return out
+        return self.relu(out).transpose(0, 1)
 
 
 class SpikingSelfAttention(nn.Module, base.MultiStepModule):
@@ -331,7 +307,6 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = 0.125
-        self._backend = backend
 
         self.qkv_conv_bn = SeqToANNContainer(
             nn.Conv1d(dim, dim * 3, kernel_size=1, stride=1, bias=False),
@@ -358,13 +333,12 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         """
         一旦设置，本模块中所有神经元的后端都会被同样地设置。
 
-        Once set, the backend of all the neurons in this module will also be changed.
+        Once set, the backend of all neurons in this module is changed together.
         """
-        return self._backend
+        return self.qkv_lif.backend
 
     @backend.setter
     def backend(self, value: str):
-        self._backend = value
         self.qkv_lif.backend = value
         self.attn_lif.backend = value
         self.proj_lif.backend = value
@@ -494,7 +468,6 @@ class QKAttention(nn.Module, base.MultiStepModule):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self._qka_type = qka_type
-        self._backend = backend
 
         self.qk_conv_bn = SeqToANNContainer(
             nn.Conv1d(dim, dim * 2, kernel_size=1, stride=1, bias=False),
@@ -522,13 +495,12 @@ class QKAttention(nn.Module, base.MultiStepModule):
         """
         一旦设置，本模块中所有神经元的后端都会被同样地设置。
 
-        Once set, the backend of all the neurons in this module will also be changed.
+        Once set, the backend of all neurons in this module is changed together.
         """
-        return self._backend
+        return self.qk_lif.backend
 
     @backend.setter
     def backend(self, value: str):
-        self._backend = value
         self.qk_lif.backend = value
         self.attn_lif.backend = value
         self.proj_lif.backend = value

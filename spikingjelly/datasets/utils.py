@@ -1,4 +1,3 @@
-import logging
 import math
 import os
 import shutil
@@ -15,31 +14,6 @@ from matplotlib import pyplot as plt
 from torchvision import transforms
 
 from .. import configure
-
-try:
-    import cupy
-
-    from ..activation_based.cuda_kernel import cuda_utils
-
-    padded_sequence_mask_kernel_code = r"""
-    extern "C" __global__
-            void padded_sequence_mask_kernel(const int* sequence_len, bool *mask, const int &T, const int &N)
-            {
-                const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                if (index < N)
-                {
-                    for(int i=0; i < sequence_len[index]; i++)
-                    {
-                        mask[i * N + index] = true;
-                    }
-                }
-            }
-    """
-except BaseException as e:
-    logging.info(f"spikingjelly.dataset.__init__: {e}")
-    cupy = None
-    cuda_utils = None
-    pass
 
 
 __all__ = [
@@ -581,56 +555,12 @@ def integrate_events_segment_to_frame(
     :return: a single two-channel frame
     :rtype: np.ndarray
     """
-    # 累计脉冲需要用bitcount而不能直接相加，原因可参考下面的示例代码，以及
-    # https://stackoverflow.com/questions/15973827/handling-of-duplicate-indices-in-numpy-assignments
-    # We must use ``bincount`` rather than simply ``+``. See the following reference:
-    # https://stackoverflow.com/questions/15973827/handling-of-duplicate-indices-in-numpy-assignments
-
-    # Here is an example:
-
-    # height = 3
-    # width = 3
-    # frames = np.zeros(shape=[2, height, width])
-    # events = {
-    #     'x': np.asarray([1, 2, 1, 1]),
-    #     'y': np.asarray([1, 1, 1, 2]),
-    #     'p': np.asarray([0, 1, 0, 1])
-    # }
-    #
-    # frames[0, events['y'], events['x']] += (1 - events['p'])
-    # frames[1, events['y'], events['x']] += events['p']
-    # print('wrong accumulation\n', frames)
-    #
-    # frames = np.zeros(shape=[2, height, width])
-    # for i in range(events['p'].__len__()):
-    #     frames[events['p'][i], events['y'][i], events['x'][i]] += 1
-    # print('correct accumulation\n', frames)
-    #
-    # frames = np.zeros(shape=[2, height, width])
-    # frames = frames.reshape(2, -1)
-    #
-    # mask = [events['p'] == 0]
-    # mask.append(np.logical_not(mask[0]))
-    # for i in range(2):
-    #     position = events['y'][mask[i]] * width + events['x'][mask[i]]
-    #     events_number_per_pos = np.bincount(position)
-    #     idx = np.arange(events_number_per_pos.size)
-    #     frames[i][idx] += events_number_per_pos
-    # frames = frames.reshape(2, height, width)
-    # print('correct accumulation by bincount\n', frames)
-
-    frame = np.zeros(shape=[2, H * W])
+    # Indexed ``+=`` can lose repeated positions; bincount accumulates every event.
     x = x[j_l:j_r].astype(int)  # avoid overflow
     y = y[j_l:j_r].astype(int)
-    p = p[j_l:j_r]
-    mask = []
-    mask.append(p == 0)
-    mask.append(np.logical_not(mask[0]))
-    for c in range(2):
-        position = y[mask[c]] * W + x[mask[c]]
-        events_number_per_pos = np.bincount(position)
-        frame[c][np.arange(events_number_per_pos.size)] += events_number_per_pos
-    return frame.reshape((2, H, W))
+    p = p[j_l:j_r] != 0
+    position = p.astype(int) * H * W + y * W + x
+    return np.bincount(position, minlength=2 * H * W).reshape(2, H, W).astype(float)
 
 
 def cal_fixed_frames_number_segment_index(
@@ -1202,29 +1132,32 @@ def split_to_train_test_set(
         :class:`torch.utils.data.Subset` instances built from ``origin_dataset``
     :rtype: tuple[torch.utils.data.Subset, torch.utils.data.Subset]
     """
-    label_idx = []
-    for i in range(num_classes):
-        label_idx.append([])
+    label_idx = [[] for _ in range(num_classes)]
 
     for i, item in enumerate(tqdm.tqdm(origin_dataset)):
-        y = item[1]
-        if isinstance(y, np.ndarray) or isinstance(y, torch.Tensor):
-            y = y.item()
-        label_idx[y].append(i)
-    train_idx = []
-    test_idx = []
-    if random_split:
-        for i in range(num_classes):
-            np.random.shuffle(label_idx[i])
-
-    for i in range(num_classes):
-        pos = math.ceil(label_idx[i].__len__() * train_ratio)
-        train_idx.extend(label_idx[i][0:pos])
-        test_idx.extend(label_idx[i][pos : label_idx[i].__len__()])
-
+        label_idx[_class_index(item)].append(i)
+    train_idx, test_idx = _split_class_indices(label_idx, train_ratio, random_split)
     return torch.utils.data.Subset(origin_dataset, train_idx), torch.utils.data.Subset(
         origin_dataset, test_idx
     )
+
+
+def _class_index(item):
+    label = item[1]
+    return label.item() if isinstance(label, (np.ndarray, torch.Tensor)) else label
+
+
+def _split_class_indices(label_idx, train_ratio, random_split):
+    train_idx = []
+    test_idx = []
+    if random_split:
+        for indices in label_idx:
+            np.random.shuffle(indices)
+    for indices in label_idx:
+        pos = math.ceil(len(indices) * train_ratio)
+        train_idx.extend(indices[:pos])
+        test_idx.extend(indices[pos:])
+    return train_idx, test_idx
 
 
 def fast_split_to_train_test_set(
@@ -1295,34 +1228,20 @@ def fast_split_to_train_test_set(
     label_idx = [[] for _ in range(num_classes)]
 
     def process_batch(start_idx, end_idx):
-        for i in range(start_idx, end_idx):
-            item = origin_dataset[i]
-            y = item[1]
-            if isinstance(y, np.ndarray) or isinstance(y, torch.Tensor):
-                y = y.item()
-            label_idx[y].append(i)
+        return [(i, _class_index(origin_dataset[i])) for i in range(start_idx, end_idx)]
 
     num_samples = len(origin_dataset)
     with ThreadPoolExecutor() as executor:
-        futures = []
-        for start_idx in range(0, num_samples, batch_size):
-            end_idx = min(start_idx + batch_size, num_samples)
-            futures.append(executor.submit(process_batch, start_idx, end_idx))
-
+        batches = (
+            (start, min(start + batch_size, num_samples))
+            for start in range(0, num_samples, batch_size)
+        )
+        futures = [executor.submit(process_batch, *batch) for batch in batches]
         for future in tqdm.tqdm(futures, desc="Processing batches"):
-            future.result()
+            for i, label in future.result():
+                label_idx[label].append(i)
 
-    train_idx = []
-    test_idx = []
-    if random_split:
-        for i in range(num_classes):
-            np.random.shuffle(label_idx[i])
-
-    for i in range(num_classes):
-        pos = math.ceil(len(label_idx[i]) * train_ratio)
-        train_idx.extend(label_idx[i][:pos])
-        test_idx.extend(label_idx[i][pos:])
-
+    train_idx, test_idx = _split_class_indices(label_idx, train_ratio, random_split)
     return torch.utils.data.Subset(origin_dataset, train_idx), torch.utils.data.Subset(
         origin_dataset, test_idx
     )
@@ -1432,8 +1351,7 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
     * **中文**
 
     根据每个样本的有效序列长度生成形状为 ``[T, N]`` 的布尔掩码。若 ``T`` 为 ``None``，
-    则使用 ``sequence_len`` 中的最大值。若 ``sequence_len`` 位于 CUDA 且可用 ``cupy``，
-    则调用自定义 CuPy kernel；否则使用 PyTorch 广播计算。
+    则使用 ``sequence_len`` 中的最大值。掩码通过 PyTorch 广播生成。
 
     :param sequence_len: 形状为 ``[N]`` 的张量，包含每个 batch 元素的序列长度
     :type sequence_len: torch.Tensor
@@ -1452,9 +1370,7 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
 
     Generate a bool mask with shape ``[T, N]`` from the valid sequence length of
     each sample. If ``T`` is ``None``, the maximum element in ``sequence_len``
-    will be used. When ``sequence_len`` is on CUDA and ``cupy`` is available,
-    this function uses the custom CuPy kernel; otherwise it falls back to
-    PyTorch broadcasting.
+    will be used. The mask is generated with PyTorch broadcasting.
 
     :param sequence_len: a tensor ``shape = [N]`` that contains sequence lengths
         of each batch element
@@ -1497,35 +1413,7 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
     """
     if T is None:
         T = sequence_len.max().item()
-    N = sequence_len.numel()
-    device_id = sequence_len.get_device()
-
-    if device_id >= 0 and cupy is not None:
-        mask = torch.zeros([T, N], dtype=bool, device=sequence_len.device)
-        with cuda_utils.DeviceEnvironment(device_id):
-            blocks = cuda_utils.cal_blocks(N)
-            T = cupy.asarray(T)
-            N = cupy.asarray(N)
-            sequence_len, mask, T, N = cuda_utils.get_contiguous(
-                sequence_len.to(torch.int), mask, T, N
-            )
-            kernel_args = [sequence_len, mask, T, N]
-            kernel = cupy.RawKernel(
-                padded_sequence_mask_kernel_code,
-                "padded_sequence_mask_kernel",
-                options=configure.cuda_compiler_options,
-                backend=configure.cuda_compiler_backend,
-            )
-            kernel(
-                (blocks,),
-                (configure.cuda_threads,),
-                cuda_utils.wrap_args_to_raw_kernel(device_id, *kernel_args),
-            )
-        return mask
-
-    else:
-        t_seq = torch.arange(0, T).unsqueeze(1).repeat(1, N).to(sequence_len)  # [T, N]
-        return t_seq < sequence_len.unsqueeze(0).repeat(T, 1)
+    return torch.arange(T, device=sequence_len.device)[:, None] < sequence_len[None, :]
 
 
 def create_sub_dataset(

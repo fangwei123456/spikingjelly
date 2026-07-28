@@ -9,104 +9,6 @@ from spikingjelly.activation_based.distributed.adapters import (
 from test.activation_based._distributed_dtensor_test_support import *
 
 
-def test_build_eager_config_expands_hybrid_policy():
-    config = build_eager_config(
-        mode="fsdp2_tp",
-        device_type="cpu",
-        mesh_shape=(2, 2),
-        tp_mesh_dim=1,
-        dp_mesh_dim=0,
-        policy=EagerParallelPolicy(
-            linear_tensor_parallel_roots=("classifier",),
-            conv_tensor_parallel_roots=("features",),
-            fsdp_shard_roots=("features", "classifier"),
-            fsdp2_tp_shard_roots=("features",),
-            fsdp2_tp_shard_module_root=False,
-        ),
-    )
-
-    assert config.enable_fsdp2 is True
-    assert config.enable_data_parallel is False
-    assert config.auto_tensor_parallel is True
-    assert config.tensor_parallel_roots == ["classifier"]
-    assert config.experimental_conv_tensor_parallel is True
-    assert config.conv_tensor_parallel_roots == ["features"]
-    assert config.fsdp_shard_roots == ["features"]
-    assert config.fsdp_shard_module_root is False
-    assert config.tp_mesh_dim == 1
-    assert config.dp_mesh_dim == 0
-
-
-def test_build_eager_config_fsdp2_tp_falls_back_to_root_shard_flag():
-    config = build_eager_config(
-        mode="fsdp2_tp",
-        device_type="cpu",
-        mesh_shape=(1, 1),
-        tp_mesh_dim=1,
-        dp_mesh_dim=0,
-        policy=EagerParallelPolicy(
-            linear_tensor_parallel_roots=("classifier",),
-            fsdp_shard_roots=("features", "classifier"),
-            fsdp_shard_module_root=True,
-        ),
-    )
-
-    assert config.fsdp_shard_roots == ["features", "classifier"]
-    assert config.fsdp_shard_module_root is True
-
-
-def test_build_eager_config_fsdp2_tp_respects_explicit_empty_shard_roots():
-    config = build_eager_config(
-        mode="fsdp2_tp",
-        device_type="cpu",
-        mesh_shape=(1, 1),
-        tp_mesh_dim=1,
-        dp_mesh_dim=0,
-        policy=EagerParallelPolicy(
-            linear_tensor_parallel_roots=("classifier",),
-            fsdp_shard_roots=("features", "classifier"),
-            fsdp2_tp_shard_roots=(),
-            fsdp_shard_module_root=True,
-            fsdp2_tp_shard_module_root=False,
-        ),
-    )
-
-    assert config.fsdp_shard_roots is None
-    assert config.fsdp_shard_module_root is False
-
-
-def test_build_eager_config_allows_disabling_linear_tp_only():
-    config = build_eager_config(
-        mode="tp",
-        device_type="cpu",
-        mesh_shape=(4,),
-        policy=EagerParallelPolicy(
-            linear_tensor_parallel_roots=("classifier",),
-            conv_tensor_parallel_roots=("features",),
-        ),
-        enable_linear_tensor_parallel=False,
-    )
-
-    assert config.auto_tensor_parallel is False
-    assert config.tensor_parallel_roots is None
-    assert config.experimental_conv_tensor_parallel is True
-    assert config.conv_tensor_parallel_roots == ["features"]
-
-
-def test_build_eager_config_disabling_linear_tp_overrides_explicit_auto_tp():
-    config = build_eager_config(
-        mode="tp",
-        device_type="cpu",
-        mesh_shape=(4,),
-        policy=EagerParallelPolicy(linear_tensor_parallel_roots=("classifier",)),
-        enable_linear_tensor_parallel=False,
-        auto_tensor_parallel=True,
-    )
-
-    assert config.auto_tensor_parallel is False
-    assert config.tensor_parallel_roots is None
-
-
 def test_configure_snn_distributed_conv_only_tp_does_not_build_linear_plan(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -124,12 +26,11 @@ def test_configure_snn_distributed_conv_only_tp_does_not_build_linear_plan(
         configured_model, mesh, _ = configure_snn_distributed(
             model,
             SNNDistributedConfig(
+                mode="tp",
                 device_type="cpu",
                 mesh_shape=(1,),
                 auto_tensor_parallel=False,
-                experimental_conv_tensor_parallel=True,
                 conv_tensor_parallel_roots=["features"],
-                enable_data_parallel=False,
             ),
         )
 
@@ -157,9 +58,9 @@ def test_configure_snn_distributed_uses_current_cuda_device_for_ddp(monkeypatch)
     module, _, _ = configure_snn_distributed(
         ToyDistributedSNN(),
         SNNDistributedConfig(
+            mode="dp",
             device_type="cuda",
-            device_mesh=SimpleNamespace(ndim=1),
-            enable_data_parallel=True,
+            device_mesh=SimpleNamespace(mesh=torch.zeros(1)),
             auto_tensor_parallel=False,
         ),
     )
@@ -174,35 +75,13 @@ def test_configure_snn_distributed_warns_when_device_mesh_overrides_mesh_shape()
             ToyDistributedSNN(),
             SNNDistributedConfig(
                 device_type="cpu",
-                device_mesh=SimpleNamespace(ndim=1),
+                device_mesh=SimpleNamespace(mesh=torch.zeros(1)),
                 mesh_shape=(2, 2),
                 auto_tensor_parallel=False,
-                enable_data_parallel=False,
-                enable_fsdp2=False,
             ),
         )
 
-    assert mesh.ndim == 1
-
-
-def test_configure_snn_distributed_rejects_dp_tp_before_mesh_build(monkeypatch):
-    import spikingjelly.activation_based.distributed.execution as execution
-
-    def _unexpected_build_device_mesh(*args, **kwargs):
-        raise AssertionError("mesh should not be built before DP + TP rejection")
-
-    monkeypatch.setattr(execution, "build_device_mesh", _unexpected_build_device_mesh)
-
-    with pytest.raises(NotImplementedError, match="DDP-style data parallelism"):
-        configure_snn_distributed(
-            ToyDistributedSNN(),
-            SNNDistributedConfig(
-                device_type="cpu",
-                mesh_shape=(1,),
-                enable_data_parallel=True,
-                auto_tensor_parallel=True,
-            ),
-        )
+    assert mesh.mesh.ndim == 1
 
 
 def test_analyze_snn_distributed_capability_deduplicates_overlapping_roots():
@@ -253,7 +132,6 @@ def test_apply_returns_unified_runtime_single_rank():
         )
         runtime = apply(model=model, plan=distributed_plan, device_type="cpu")
         assert isinstance(runtime, SNNDistributedRuntime)
-        assert runtime.kind == "eager"
         assert runtime.mesh is None  # mode is "none", no parallel strategy active
         assert runtime.plan.mode == distributed_plan.mode
 
@@ -278,7 +156,11 @@ def test_apply_passes_explicit_tensor_parallel_plan_and_disables_auto_plan(
         captured["config"] = config
         return candidate, object(), analysis
 
-    monkeypatch.setattr(distributed_api, "configure_snn_distributed", fake_configure)
+    monkeypatch.setattr(
+        distributed_adapter_base,
+        "configure_snn_distributed",
+        fake_configure,
+    )
     runtime = distributed_api.apply(
         model=model,
         plan=distributed_plan,
@@ -292,43 +174,6 @@ def test_apply_passes_explicit_tensor_parallel_plan_and_disables_auto_plan(
     assert runtime.model is model
 
 
-def test_adapter_runtime_passes_explicit_tp_plan_and_disables_auto(monkeypatch):
-    model = nn.Sequential(TDLinear(4, 6, bias=False))
-    analysis = analyze(model)
-    distributed_plan = plan(
-        analysis=analysis,
-        objective="capacity",
-        topology={"tp": 1},
-        backend="gloo",
-        batch_size=1,
-        mode="tp",
-        tensor_parallel_plan={"0": "td_colwise_replicated"},
-    )
-    captured = {}
-
-    def fake_build_eager_config(**kwargs):
-        captured.update(kwargs)
-        return SimpleNamespace()
-
-    monkeypatch.setattr(
-        distributed_adapter_base, "build_eager_config", fake_build_eager_config
-    )
-    monkeypatch.setattr(
-        distributed_adapter_base,
-        "configure_snn_distributed",
-        lambda candidate, config: (candidate, object(), analysis),
-    )
-
-    distributed_adapter_base.build_distributed_runtime(
-        model,
-        distributed_plan,
-        device_type="cpu",
-    )
-
-    assert dict(captured["tensor_parallel_plan"]) == {"0": "td_colwise_replicated"}
-    assert captured["auto_tensor_parallel"] is False
-
-
 def test_configure_snn_distributed_mesh_shape_alone_without_strategy_returns_none_mesh():
     """mesh_shape alone doesn't trigger mesh creation — a parallel strategy must also be enabled."""
     with single_rank_process_group():
@@ -339,13 +184,11 @@ def test_configure_snn_distributed_mesh_shape_alone_without_strategy_returns_non
                 device_type="cpu",
                 mesh_shape=(1,),
                 auto_tensor_parallel=False,
-                enable_data_parallel=False,
-                enable_fsdp2=False,
             ),
         )
         assert configured_model is model
         assert mesh is None
-        assert isinstance(analysis, distributed_dtensor.SNNDistributedAnalysis)
+        assert isinstance(analysis, CanonicalSNNDistributedAnalysis)
 
 
 def test_configure_snn_distributed_noop_does_not_require_device_mesh():
@@ -356,13 +199,11 @@ def test_configure_snn_distributed_noop_does_not_require_device_mesh():
             device_type="cpu",
             mesh_shape=None,
             auto_tensor_parallel=False,
-            enable_data_parallel=False,
-            enable_fsdp2=False,
         ),
     )
     assert configured_model is model
     assert mesh is None
-    assert isinstance(analysis, distributed_dtensor.SNNDistributedAnalysis)
+    assert isinstance(analysis, CanonicalSNNDistributedAnalysis)
 
 
 def test_apply_rejects_device_mesh_world_size_mismatch():
@@ -412,10 +253,10 @@ def test_configure_snn_distributed_supports_data_parallel_only():
     with single_rank_process_group():
         model = ToyDistributedSNN()
         config = SNNDistributedConfig(
+            mode="dp",
             device_type="cpu",
             mesh_shape=(1,),
             auto_tensor_parallel=False,
-            enable_data_parallel=True,
             dp_mesh_dim=0,
         )
         distributed_model, mesh, _ = configure_snn_distributed(model, config)
@@ -429,48 +270,14 @@ def test_configure_snn_distributed_supports_data_parallel_only():
         assert y.shape == (3, 2, 4)
 
 
-def test_configure_snn_distributed_rejects_ddp_plus_tp():
-    with single_rank_process_group():
-        model = ToyDistributedSNN()
-        config = SNNDistributedConfig(
-            device_type="cpu",
-            mesh_shape=(1, 1),
-            tensor_parallel_roots=["features"],
-            auto_tensor_parallel=True,
-            enable_data_parallel=True,
-            tp_mesh_dim=1,
-            dp_mesh_dim=0,
-        )
-        with pytest.raises(NotImplementedError, match="FSDP2 \\+ TP"):
-            configure_snn_distributed(model, config)
-
-
-def test_configure_snn_distributed_rejects_ddp_plus_experimental_conv_tp():
-    with single_rank_process_group():
-        model = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
-        config = SNNDistributedConfig(
-            device_type="cpu",
-            mesh_shape=(1, 1),
-            auto_tensor_parallel=False,
-            experimental_conv_tensor_parallel=True,
-            conv_tensor_parallel_roots=["features"],
-            enable_data_parallel=True,
-            tp_mesh_dim=1,
-            dp_mesh_dim=0,
-        )
-        with pytest.raises(NotImplementedError, match="FSDP2 \\+ TP"):
-            configure_snn_distributed(model, config)
-        assert "ChannelShardConv2d" not in type(model.features[0].proj_bn[-2]).__name__
-
-
 def test_configure_snn_distributed_requires_dp_mesh_dim_for_multidim_data_parallel():
     with single_rank_process_group():
         model = ToyDistributedSNN()
         config = SNNDistributedConfig(
+            mode="dp",
             device_type="cpu",
             mesh_shape=(1, 1),
             auto_tensor_parallel=False,
-            enable_data_parallel=True,
             dp_mesh_dim=None,
         )
         with pytest.raises(ValueError, match="dp_mesh_dim must be specified"):
@@ -481,10 +288,10 @@ def test_configure_snn_distributed_requires_dp_mesh_dim_for_multidim_fsdp2():
     with single_rank_process_group():
         model = ToyDistributedSNN()
         config = SNNDistributedConfig(
+            mode="fsdp2",
             device_type="cpu",
             mesh_shape=(1, 1),
             auto_tensor_parallel=False,
-            enable_fsdp2=True,
             dp_mesh_dim=None,
         )
         with pytest.raises(ValueError, match="dp_mesh_dim must be specified"):
@@ -498,6 +305,7 @@ def test_configure_snn_distributed_rejects_out_of_range_mesh_dims():
             configure_snn_distributed(
                 model,
                 SNNDistributedConfig(
+                    mode="tp",
                     device_type="cpu",
                     mesh_shape=(1, 1),
                     tensor_parallel_roots=["features"],
@@ -510,10 +318,10 @@ def test_configure_snn_distributed_rejects_out_of_range_mesh_dims():
             configure_snn_distributed(
                 model,
                 SNNDistributedConfig(
+                    mode="dp",
                     device_type="cpu",
                     mesh_shape=(1, 1),
                     auto_tensor_parallel=False,
-                    enable_data_parallel=True,
                     tp_mesh_dim=1,
                     dp_mesh_dim=2,
                 ),
@@ -527,9 +335,9 @@ def test_configure_snn_distributed_rejects_overlapping_tp_and_dp_mesh_dims():
             configure_snn_distributed(
                 model,
                 SNNDistributedConfig(
+                    mode="fsdp2_tp",
                     device_type="cpu",
                     mesh_shape=(1, 1),
-                    enable_fsdp2=True,
                     tensor_parallel_roots=["features"],
                     auto_tensor_parallel=True,
                     tp_mesh_dim=1,
@@ -544,10 +352,10 @@ def test_configure_snn_distributed_allows_same_dim_for_data_parallel_only():
         distributed_model, mesh, _ = configure_snn_distributed(
             model,
             SNNDistributedConfig(
+                mode="dp",
                 device_type="cpu",
                 mesh_shape=(1,),
                 auto_tensor_parallel=False,
-                enable_data_parallel=True,
                 tp_mesh_dim=0,
                 dp_mesh_dim=0,
             ),
@@ -563,13 +371,12 @@ def test_high_level_cifar10dvs_vgg_helper():
         _distributed_model, mesh, analysis = configure_snn_distributed(
             model,
             SNNDistributedConfig(
+                mode="tp",
                 device_type="cpu",
                 mesh_shape=(1,),
                 tensor_parallel_roots=["classifier"],
                 auto_tensor_parallel=True,
-                experimental_conv_tensor_parallel=True,
                 conv_tensor_parallel_roots=["features"],
-                enable_data_parallel=False,
             ),
         )
         assert mesh.ndim == 1
@@ -593,7 +400,7 @@ def test_cifar10dvs_vgg_fsdp2_single_rank_smoke():
         runtime = apply(model=candidate, plan=distributed_plan, device_type="cpu")
         assert runtime.mesh is not None
         assert runtime.analysis is not None
-        assert runtime.analysis.tensor_parallel_roots == ("classifier",)
+        assert runtime.plan is distributed_plan
 
 
 def test_cifar10dvs_vgg_fsdp2_tp_helper_single_rank():
@@ -604,14 +411,13 @@ def test_cifar10dvs_vgg_fsdp2_tp_helper_single_rank():
         distributed_model, mesh, _ = configure_snn_distributed(
             candidate,
             SNNDistributedConfig(
+                mode="fsdp2_tp",
                 device_type="cpu",
                 mesh_shape=(1, 1),
-                enable_fsdp2=True,
                 fsdp_shard_roots=["features"],
                 fsdp_shard_module_root=False,
                 tensor_parallel_roots=["classifier"],
                 auto_tensor_parallel=True,
-                experimental_conv_tensor_parallel=True,
                 conv_tensor_parallel_roots=["features"],
                 tp_mesh_dim=1,
                 dp_mesh_dim=0,

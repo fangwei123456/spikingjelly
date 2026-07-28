@@ -7,7 +7,6 @@ h5py
 matplotlib
 numpy
 packaging
-pydantic
 requests
 SciencePlots
 scipy

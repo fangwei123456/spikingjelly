@@ -55,9 +55,9 @@ def _surrogate_registry_key(
     )
 
 
-def resolve_sg_cupy_id_and_key(
+def resolve_sg_cupy_id(
     surrogate_function: surrogate.SurrogateFunctionBase,
-) -> tuple[int, str]:
+) -> int:
     if not hasattr(surrogate_function, "cuda_codes"):
         raise TypeError(
             "CuPy backend requires surrogate_function.cuda_codes for custom_op path."
@@ -79,7 +79,7 @@ def resolve_sg_cupy_id_and_key(
             _SURROGATE_CUPY_NEXT_ID += 1
             _SURROGATE_CUPY_KEY_TO_ID[sg_key] = sg_id
             _SURROGATE_CUPY_ID_TO_CODES[sg_id] = sg_codes
-    return sg_id, sg_key
+    return sg_id
 
 
 def _dtype_to_cupy_kernel_dtype(dtype: torch.dtype) -> str:

@@ -9,6 +9,13 @@ import torch.nn.functional as F
 from . import neuron, monitor, base
 
 
+def _accumulate_weight_gradient(synapse, delta_w):
+    if synapse.weight.grad is None:
+        synapse.weight.grad = -delta_w
+    else:
+        synapse.weight.grad = synapse.weight.grad - delta_w
+
+
 def stdp_linear_single_step(
     fc: nn.Linear,
     in_spike: torch.Tensor,
@@ -775,13 +782,11 @@ class STDPLearner(base.MemoryModule):
         self.f_pre = f_pre
         self.f_post = f_post
         self.synapse = synapse
-        # detach recorded spikes so the learner never builds or retains the
-        # autograd graph of the network's forward pass (#576)
         self.in_spike_monitor = monitor.InputMonitor(
-            synapse, function_on_input=lambda x: x.detach()
+            synapse, function_on_input=torch.Tensor.detach
         )
         self.out_spike_monitor = monitor.OutputMonitor(
-            sn, function_on_output=lambda x: x.detach()
+            sn, function_on_output=torch.Tensor.detach
         )
 
         self.register_memory("trace_pre", None)
@@ -905,7 +910,7 @@ class STDPLearner(base.MemoryModule):
         :raises NotImplementedError: Raised when the current ``step_mode`` / synapse-type combination is unsupported
         :raises ValueError: Raised when ``self.step_mode`` is neither ``'s'`` nor ``'m'``
         """
-        length = self.in_spike_monitor.records.__len__()
+        length = len(self.in_spike_monitor.records)
         delta_w = None
 
         if self.step_mode == "s":
@@ -946,10 +951,7 @@ class STDPLearner(base.MemoryModule):
             delta_w = dw if (delta_w is None) else (delta_w + dw)
 
         if on_grad:
-            if self.synapse.weight.grad is None:
-                self.synapse.weight.grad = -delta_w
-            else:
-                self.synapse.weight.grad = self.synapse.weight.grad - delta_w
+            _accumulate_weight_gradient(self.synapse, delta_w)
         else:
             return delta_w
 
@@ -1034,13 +1036,11 @@ class MSTDPLearner(base.MemoryModule):
         self.f_pre = f_pre
         self.f_post = f_post
         self.synapse = synapse
-        # detach recorded spikes so the learner never builds or retains the
-        # autograd graph of the network's forward pass (#576)
         self.in_spike_monitor = monitor.InputMonitor(
-            synapse, function_on_input=lambda x: x.detach()
+            synapse, function_on_input=torch.Tensor.detach
         )
         self.out_spike_monitor = monitor.OutputMonitor(
-            sn, function_on_output=lambda x: x.detach()
+            sn, function_on_output=torch.Tensor.detach
         )
 
         self.register_memory("trace_pre", None)
@@ -1177,7 +1177,7 @@ class MSTDPLearner(base.MemoryModule):
         if isinstance(reward, torch.Tensor):
             reward = reward.detach()
 
-        length = self.in_spike_monitor.records.__len__()
+        length = len(self.in_spike_monitor.records)
         delta_w = None
 
         if self.step_mode == "s":
@@ -1232,10 +1232,7 @@ class MSTDPLearner(base.MemoryModule):
             )
 
         if on_grad:
-            if self.synapse.weight.grad is None:
-                self.synapse.weight.grad = -delta_w
-            else:
-                self.synapse.weight.grad = self.synapse.weight.grad - delta_w
+            _accumulate_weight_gradient(self.synapse, delta_w)
         else:
             return delta_w
 
@@ -1320,13 +1317,11 @@ class MSTDPETLearner(base.MemoryModule):
         self.f_pre = f_pre
         self.f_post = f_post
         self.synapse = synapse
-        # detach recorded spikes so the learner never builds or retains the
-        # autograd graph of the network's forward pass (#576)
         self.in_spike_monitor = monitor.InputMonitor(
-            synapse, function_on_input=lambda x: x.detach()
+            synapse, function_on_input=torch.Tensor.detach
         )
         self.out_spike_monitor = monitor.OutputMonitor(
-            sn, function_on_output=lambda x: x.detach()
+            sn, function_on_output=torch.Tensor.detach
         )
 
         self.register_memory("trace_pre", None)
@@ -1465,7 +1460,7 @@ class MSTDPETLearner(base.MemoryModule):
         if isinstance(reward, torch.Tensor):
             reward = reward.detach()
 
-        length = self.in_spike_monitor.records.__len__()
+        length = len(self.in_spike_monitor.records)
         delta_w = None
 
         if self.step_mode == "s":
@@ -1525,9 +1520,6 @@ class MSTDPETLearner(base.MemoryModule):
             )
 
         if on_grad:
-            if self.synapse.weight.grad is None:
-                self.synapse.weight.grad = -delta_w
-            else:
-                self.synapse.weight.grad = self.synapse.weight.grad - delta_w
+            _accumulate_weight_gradient(self.synapse, delta_w)
         else:
             return delta_w

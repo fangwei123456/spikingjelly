@@ -14,7 +14,7 @@ from .common import (
     cupy,
     math,
     prepare_forward_meta,
-    resolve_sg_cupy_id_and_key,
+    resolve_sg_cupy_id,
     scalar_to_cupy,
     surrogate,
 )
@@ -336,12 +336,9 @@ def multistep_lif(
     v_reset: Optional[float],
     detach_reset: bool,
     surrogate_function: surrogate.SurrogateFunctionBase,
-    forward_kernel: Optional[LIFNodeFPTTKernel] = None,
-    backward_kernel: Optional[LIFNodeBPTTKernel] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     decay = 1.0 / tau
-    del forward_kernel, backward_kernel
-    sg_cupy_id, _ = resolve_sg_cupy_id_and_key(surrogate_function)
+    sg_cupy_id = resolve_sg_cupy_id(surrogate_function)
     soft_reset = v_reset is None
     v_reset_value = 0.0 if v_reset is None else float(v_reset)
     s_seq, v_seq, _ = cupy_multistep_lif_forward(

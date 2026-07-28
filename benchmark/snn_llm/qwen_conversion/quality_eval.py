@@ -40,11 +40,11 @@ from benchmark.snn_llm.qwen_conversion._quality import (
 from benchmark.snn_llm.qwen_conversion._runtime import (
     ARTIFACT_LOCK,
     build_environment,
+    conversion_summary as _conversion_summary,
     hash_files as _hash_files,
     load_calibration as _load_calibration,
     load_lock as _load_lock,
     load_model as _load_model,
-    validate_calibration_config as _validate_calibration_config,
 )
 
 
@@ -495,7 +495,7 @@ def _zero_shot(
 
 
 def _encoder_summary(converted) -> Dict[str, object]:
-    records = list(converted.encoder_statistics())
+    records = converted.encoder_statistics()
     if not records:
         raise RuntimeError("Converted Qwen reported no signed encoders.")
     return {
@@ -629,15 +629,7 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         calibration_origin = "generated"
     else:
         calibration_path = args.calibration_artifact
-        calibration, calibration_sha256 = _load_calibration(calibration_path)
-        _validate_calibration_config(
-            calibration,
-            time_steps=config.time_steps,
-            calibration_levels=config.calibration_levels,
-            calibration_quantile=config.calibration_quantile,
-            calibration_reservoir_size=config.calibration_reservoir_size,
-            calibration_seed=config.calibration_seed,
-        )
+        calibration, calibration_sha256 = _load_calibration(calibration_path, config)
         calibration_origin = "reused"
     converted = ModuleConverter(Qwen2SNNRecipe(calibration, config)).convert(
         precision.model
@@ -732,10 +724,7 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         },
         "precision": precision.describe(),
         "conversion": {
-            "temporal_layout": converted.temporal_layout,
-            "execution_schedule": converted.execution_schedule,
-            "online_inference": converted.online_inference,
-            "structure": converted.structure_summary(),
+            **_conversion_summary(converted),
             "calibration_path": str(calibration_path.resolve()),
             "calibration_sha256": calibration_sha256,
             "calibration_origin": calibration_origin,

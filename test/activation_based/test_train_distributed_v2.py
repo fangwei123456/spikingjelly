@@ -1,9 +1,16 @@
 import pytest
 import torch
 import torch.nn as nn
+from types import SimpleNamespace
+
 from spikingjelly.activation_based import distributed as sjdist
 from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
 from torch.utils.data import TensorDataset
+from test.activation_based._distributed_dtensor_test_support import (
+    _load_train_distributed_module,
+    _train_args,
+    _train_runtime,
+)
 from test.activation_based._distributed_test_utils import single_rank_process_group
 
 
@@ -78,18 +85,6 @@ def test_new_distributed_api_supports_manual_training_loop_single_rank():
         assert not torch.equal(first_param_before, first_param_after)
 
 
-# ruff: noqa: F401,F403,F405
-from test.activation_based.test_distributed_dtensor import *
-from test.activation_based.test_distributed_dtensor import (
-    _ToyNonCallableReset,
-    _ToyResetCounter,
-    _load_train_distributed_module,
-    _reset_net,
-    _train_args,
-    _train_runtime,
-)
-
-
 @pytest.mark.parametrize(
     ("mode", "mesh_shape", "overrides", "expected"),
     (
@@ -98,12 +93,9 @@ from test.activation_based.test_distributed_dtensor import (
             None,
             {},
             {
+                "mode": "dp",
                 "mesh_shape": (4,),
-                "enable_data_parallel": True,
-                "enable_fsdp2": False,
-                "auto_tensor_parallel": False,
                 "tensor_parallel_roots": None,
-                "experimental_conv_tensor_parallel": False,
                 "conv_tensor_parallel_roots": None,
                 "fsdp_shard_roots": None,
                 "fsdp_shard_module_root": True,
@@ -116,13 +108,11 @@ from test.activation_based.test_distributed_dtensor import (
             None,
             {},
             {
+                "mode": "tp",
                 "mesh_shape": (4,),
-                "enable_data_parallel": False,
-                "enable_fsdp2": False,
                 "auto_tensor_parallel": True,
-                "tensor_parallel_roots": ["classifier"],
-                "experimental_conv_tensor_parallel": True,
-                "conv_tensor_parallel_roots": ["features"],
+                "tensor_parallel_roots": ("classifier",),
+                "conv_tensor_parallel_roots": ("features",),
                 "fsdp_shard_roots": None,
                 "fsdp_shard_module_root": True,
                 "tp_mesh_dim": 0,
@@ -134,13 +124,11 @@ from test.activation_based.test_distributed_dtensor import (
             [4],
             {"disable_classifier_tp": True},
             {
+                "mode": "tp",
                 "mesh_shape": (4,),
-                "enable_data_parallel": False,
-                "enable_fsdp2": False,
                 "auto_tensor_parallel": False,
                 "tensor_parallel_roots": None,
-                "experimental_conv_tensor_parallel": True,
-                "conv_tensor_parallel_roots": ["features"],
+                "conv_tensor_parallel_roots": ("features",),
                 "fsdp_shard_roots": None,
                 "fsdp_shard_module_root": True,
                 "tp_mesh_dim": 0,
@@ -152,14 +140,11 @@ from test.activation_based.test_distributed_dtensor import (
             None,
             {},
             {
+                "mode": "fsdp2",
                 "mesh_shape": (4,),
-                "enable_data_parallel": False,
-                "enable_fsdp2": True,
-                "auto_tensor_parallel": False,
                 "tensor_parallel_roots": None,
-                "experimental_conv_tensor_parallel": False,
                 "conv_tensor_parallel_roots": None,
-                "fsdp_shard_roots": ["features", "classifier"],
+                "fsdp_shard_roots": ("features", "classifier"),
                 "fsdp_shard_module_root": True,
                 "tp_mesh_dim": 0,
                 "dp_mesh_dim": 0,
@@ -170,14 +155,12 @@ from test.activation_based.test_distributed_dtensor import (
             [2, 2],
             {},
             {
+                "mode": "fsdp2_tp",
                 "mesh_shape": (2, 2),
-                "enable_data_parallel": False,
-                "enable_fsdp2": True,
                 "auto_tensor_parallel": True,
-                "tensor_parallel_roots": ["classifier"],
-                "experimental_conv_tensor_parallel": True,
-                "conv_tensor_parallel_roots": ["features"],
-                "fsdp_shard_roots": ["features"],
+                "tensor_parallel_roots": ("classifier",),
+                "conv_tensor_parallel_roots": ("features",),
+                "fsdp_shard_roots": ("features",),
                 "fsdp_shard_module_root": False,
                 "tp_mesh_dim": 1,
                 "dp_mesh_dim": 0,
@@ -188,14 +171,12 @@ from test.activation_based.test_distributed_dtensor import (
             [2, 2],
             {"disable_conv_tp": True, "tp_mesh_dim": 1, "dp_mesh_dim": 0},
             {
+                "mode": "fsdp2_tp",
                 "mesh_shape": (2, 2),
-                "enable_data_parallel": False,
-                "enable_fsdp2": True,
                 "auto_tensor_parallel": True,
-                "tensor_parallel_roots": ["classifier"],
-                "experimental_conv_tensor_parallel": False,
+                "tensor_parallel_roots": ("classifier",),
                 "conv_tensor_parallel_roots": None,
-                "fsdp_shard_roots": ["features"],
+                "fsdp_shard_roots": ("features",),
                 "fsdp_shard_module_root": False,
                 "tp_mesh_dim": 1,
                 "dp_mesh_dim": 0,
@@ -225,6 +206,7 @@ def test_train_distributed_build_model_config_matrix(
     assert config.device_type == "cpu"
     for field, value in expected.items():
         assert getattr(config, field) == value
+
 
 def test_train_distributed_build_model_rejects_tp_without_targets():
     train_distributed = _load_train_distributed_module()
@@ -260,6 +242,7 @@ def test_train_distributed_build_model_rejects_tp_without_targets():
     ):
         train_distributed.build_model(args, runtime)
 
+
 def test_train_distributed_build_model_requires_2d_mesh_for_fsdp2_tp():
     train_distributed = _load_train_distributed_module()
     runtime = train_distributed.DistributedRuntime(
@@ -292,6 +275,7 @@ def test_train_distributed_build_model_requires_2d_mesh_for_fsdp2_tp():
     with pytest.raises(ValueError, match="requires an explicit 2D mesh"):
         train_distributed.build_model(args, runtime)
 
+
 def test_train_distributed_reduce_classification_output_keeps_batch_major_logits():
     train_distributed = _load_train_distributed_module()
     logits = torch.randn(4, 10)
@@ -303,6 +287,7 @@ def test_train_distributed_reduce_classification_output_keeps_batch_major_logits
     assert torch.equal(reduced_labels, labels)
     assert reduced_logits.shape == logits.shape
     assert reduced_labels.shape == labels.shape
+
 
 def test_train_distributed_reduce_classification_output_reduces_time_major_logits():
     train_distributed = _load_train_distributed_module()
@@ -316,6 +301,7 @@ def test_train_distributed_reduce_classification_output_reduces_time_major_logit
     assert reduced_logits.shape == (4, 10)
     assert reduced_labels.shape == (4,)
 
+
 def test_train_distributed_prepare_classification_output_matches_reduce_for_local_tensor():
     train_distributed = _load_train_distributed_module()
     logits = torch.randn(5, 4, 10)
@@ -325,6 +311,7 @@ def test_train_distributed_prepare_classification_output_matches_reduce_for_loca
     )
     torch.testing.assert_close(prepared_logits, logits.mean(dim=0))
     assert torch.equal(prepared_labels, torch.tensor([0, 1, 2, 3]))
+
 
 def test_train_distributed_forward_loss_uses_normalized_singleton_labels():
     train_distributed = _load_train_distributed_module()
@@ -342,6 +329,7 @@ def test_train_distributed_forward_loss_uses_normalized_singleton_labels():
     assert torch.equal(normalized_labels, torch.tensor([1, 3]))
     assert torch.is_tensor(loss)
 
+
 def test_train_distributed_reduce_classification_output_normalizes_singleton_labels():
     train_distributed = _load_train_distributed_module()
     logits = torch.randn(2, 4)
@@ -351,6 +339,7 @@ def test_train_distributed_reduce_classification_output_normalizes_singleton_lab
     )
     torch.testing.assert_close(reduced_logits, logits)
     assert torch.equal(reduced_labels, torch.tensor([1, 3]))
+
 
 def test_train_distributed_build_data_uses_shared_sampler_for_pipeline(monkeypatch):
     train_distributed = _load_train_distributed_module()
@@ -388,6 +377,7 @@ def test_train_distributed_build_data_uses_shared_sampler_for_pipeline(monkeypat
     assert train_loader.sampler.rank == train_sampler.rank
     assert val_loader.sampler.num_replicas == train_sampler.num_replicas
     assert val_loader.sampler.rank == train_sampler.rank
+
 
 def test_train_distributed_setup_runtime_normalizes_local_auto(monkeypatch):
     train_distributed = _load_train_distributed_module()

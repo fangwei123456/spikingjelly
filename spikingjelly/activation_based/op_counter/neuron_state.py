@@ -7,11 +7,10 @@ from typing import Any, Callable
 import torch
 import torch.nn as nn
 from torch.overrides import resolve_name
-from torch.utils._pytree import tree_flatten
 
 from ..neuron.base_node import BaseNode
 from ._sparse_memory import active_element_count, dense_bytes, is_sparse_access_tensor
-from .base import BaseCounter
+from .base import BaseCounter, _collect_tensors
 
 __all__ = ["NeuronStateCounter"]
 
@@ -103,11 +102,6 @@ _STATE_COPY_OPS = {
     aten.copy_.default,
     aten._to_copy.default,
 }
-
-
-def _collect_tensors(tree: Any) -> list[torch.Tensor]:
-    flat, _ = tree_flatten(tree)
-    return [x for x in flat if torch.is_tensor(x)]
 
 
 def _storage_key(x: torch.Tensor) -> tuple[Any, ...]:

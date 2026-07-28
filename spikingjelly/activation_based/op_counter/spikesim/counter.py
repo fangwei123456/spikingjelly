@@ -46,9 +46,6 @@ class _StageStats:
     dense_row_count_by_tile: list[int] | None = None
     dense_output_tile_site_count: int = 0
 
-    def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
 
 @dataclass
 class _StageMetadata:
@@ -67,9 +64,6 @@ class _StageMetadata:
     event_driven_calls: int = 0
     dense_fallback_calls: int = 0
     shape_mismatch_detected: bool = False
-
-    def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
 
 
 class SpikeSimCounter(BaseCounter):
@@ -191,9 +185,6 @@ class SpikeSimCounter(BaseCounter):
                 parent_names=parent_names,
             )
         )
-
-    def has_rule(self, func) -> bool:
-        return func in self.rules
 
     def _warn_or_raise(self, key: str, message: str) -> None:
         if key in self._warning_keys:
@@ -494,9 +485,9 @@ class SpikeSimCounter(BaseCounter):
         return (not conv.training) and (not torch.is_grad_enabled())
 
     def get_stage_stats(self) -> dict[str, dict[str, Any]]:
-        return {stage: stats.as_dict() for stage, stats in self.stage_stats.items()}
+        return {stage: asdict(stats) for stage, stats in self.stage_stats.items()}
 
     def get_stage_metadata(self) -> dict[str, dict[str, Any]]:
         return {
-            stage: metadata.as_dict() for stage, metadata in self.stage_metadata.items()
+            stage: asdict(metadata) for stage, metadata in self.stage_metadata.items()
         }

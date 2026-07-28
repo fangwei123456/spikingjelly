@@ -12,7 +12,6 @@ except BaseException as e:
 
 from ... import surrogate
 from ..cuda_utils import register_python_object
-from .helpers import sg_registry_key as _sg_registry_key
 
 __all__ = [
     "_decode_v_reset",
@@ -58,7 +57,7 @@ def _sg_obj_id(sg) -> int:
     :return: A unique integer ID for the surrogate function
     :rtype: int
     """
-    return register_python_object(sg, _sg_registry_key(sg))
+    return register_python_object(sg)
 
 
 class _CapturedAutogradCtx:

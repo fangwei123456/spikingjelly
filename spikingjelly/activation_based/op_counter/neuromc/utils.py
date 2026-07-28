@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
-
 import torch
-from torch.overrides import resolve_name
-from torch.utils._pytree import tree_flatten
 
 __all__ = [
     "_add_nested",
@@ -13,21 +9,7 @@ __all__ = [
     "_prod",
     "_is_spike",
     "_spike_nnz",
-    "_tensor_bits",
-    "_infer_stage",
 ]
-
-
-_OPTIMIZER_HINTS = (
-    "add_.",
-    "sub_.",
-    "mul_.",
-    "div_.",
-    "addcmul",
-    "addcdiv",
-    "lerp_",
-    "copy_",
-)
 
 
 def _prod(dims) -> int:
@@ -129,51 +111,3 @@ def _spike_nnz(x: torch.Tensor | None) -> int | None:
     if not is_binary:
         return None
     return int(x.count_nonzero().item())
-
-
-def _tensor_bits(x: Any) -> int:
-    """Compute the total number of bits used by a tensor.
-    :param x: Input (typically a tensor, otherwise returns 0)
-    :type x: Any
-    :return: Total bits (``numel * element_size * 8``) or 0 if not a tensor
-    :rtype: int
-    """
-    if not torch.is_tensor(x):
-        return 0
-    return int(x.numel() * x.element_size() * 8)
-
-
-def _collect_tensors(tree: Any) -> list[torch.Tensor]:
-    flat, _ = tree_flatten(tree)
-    return [x for x in flat if torch.is_tensor(x)]
-
-
-def _infer_stage(func, args, kwargs, out) -> str:
-    """Infer the execution stage (forward/backward/optimizer) from a function call.
-    Uses the operation name and gradient state to determine the stage.
-
-    :param func: The ATen or custom function being called
-    :type func: Callable
-    :param args: Positional arguments to the function
-    :type args: tuple
-    :param kwargs: Keyword arguments to the function
-    :type kwargs: dict
-    :param out: Output of the function
-    :type out: Any
-    :return: Stage name: ``\"forward\"``, ``\"backward\"``, or ``\"optimizer\"``
-    :rtype: str
-    """
-    op_name = resolve_name(func)
-    if "backward" in op_name:
-        return "backward"
-
-    if torch.is_grad_enabled():
-        return "forward"
-
-    tensors = _collect_tensors((args, kwargs, out))
-    has_grad_tensor = any(t.requires_grad for t in tensors)
-    is_optimizer_like = any(hint in op_name for hint in _OPTIMIZER_HINTS)
-    if has_grad_tensor and is_optimizer_like:
-        return "optimizer"
-
-    return "forward"

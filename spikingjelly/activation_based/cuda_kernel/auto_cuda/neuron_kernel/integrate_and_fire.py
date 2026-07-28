@@ -14,7 +14,7 @@ from .common import (
     scalar_to_cupy,
     prepare_forward_meta,
     _surrogate_cuda_codes_from_id,
-    resolve_sg_cupy_id_and_key,
+    resolve_sg_cupy_id,
     NeuronBPTTKernel,
     NeuronFPTTKernel,
 )
@@ -245,11 +245,8 @@ def multistep_if(
     v_reset: Optional[float],
     detach_reset: bool,
     surrogate_function: surrogate.SurrogateFunctionBase,
-    forward_kernel: Optional[IFNodeFPTTKernel] = None,
-    backward_kernel: Optional[IFNodeBPTTKernel] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    del forward_kernel, backward_kernel
-    sg_cupy_id, _ = resolve_sg_cupy_id_and_key(surrogate_function)
+    sg_cupy_id = resolve_sg_cupy_id(surrogate_function)
     soft_reset = v_reset is None
     v_reset_value = 0.0 if v_reset is None else float(v_reset)
     s_seq, v_seq, _ = cupy_multistep_if_forward(

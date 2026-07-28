@@ -8,7 +8,94 @@ from .lif import LIFNode
 __all__ = ["OTTTLIFNode", "SLTTLIFNode"]
 
 
-class OTTTLIFNode(LIFNode):
+class _OnlineLIFNode(LIFNode):
+    def reset(self):
+        super().reset()
+        if hasattr(self, "v"):
+            del self.v
+        if hasattr(self, "trace"):
+            del self.trace
+
+    @property
+    def supported_backends(self):
+        return "torch"
+
+    def neuronal_charge(self, x: torch.Tensor):
+        self.v = self.v.detach()
+        reset0 = self.v_reset is None or self.v_reset == 0.0
+        if self.decay_input:
+            if reset0:
+                self.v = self.neuronal_charge_decay_input_reset0(x, self.v, self.tau)
+            else:
+                self.v = self.neuronal_charge_decay_input(
+                    x, self.v, self.v_reset, self.tau
+                )
+        elif reset0:
+            self.v = self.neuronal_charge_no_decay_input_reset0(x, self.v, self.tau)
+        else:
+            self.v = self.neuronal_charge_no_decay_input(
+                x, self.v, self.v_reset, self.tau
+            )
+
+    def _training_output(self, spike: torch.Tensor):
+        return spike
+
+    def single_step_forward(self, x: torch.Tensor):
+        r"""
+        **API Language** - :ref:`中文 <OnlineLIFNode.single_step_forward-cn>` | :ref:`English <OnlineLIFNode.single_step_forward-en>`
+
+        ----
+
+        .. _OnlineLIFNode.single_step_forward-cn:
+
+        * **中文**
+
+        执行一个时间步。训练模式下，SLTT 返回脉冲，OTTT 返回
+        ``[spike, trace]``；推理模式下二者均返回脉冲。
+
+        :param x: 当前时间步的输入
+        :type x: torch.Tensor
+        :return: 当前脉冲，或 OTTT 训练使用的 ``[spike, trace]``
+        :rtype: Union[torch.Tensor, list[torch.Tensor]]
+
+        ----
+
+        .. _OnlineLIFNode.single_step_forward-en:
+
+        * **English**
+
+        Run one time step. In training mode SLTT returns the spike and
+        OTTT returns ``[spike, trace]``; both return the spike in evaluation mode.
+
+        :param x: input at the current time step
+        :type x: torch.Tensor
+        :return: current spike, or ``[spike, trace]`` for OTTT training
+        :rtype: Union[torch.Tensor, list[torch.Tensor]]
+        """
+        if not hasattr(self, "v"):
+            self.register_buffer(
+                "v",
+                torch.full_like(x, 0.0 if self.v_reset is None else self.v_reset),
+            )
+
+        if not self.training:
+            spike, self.v = self._eval_single_step_forward(
+                x,
+                self.v,
+                self.v_threshold,
+                self.v_reset,
+                self.tau,
+                self.decay_input,
+            )
+            return spike
+
+        self.neuronal_charge(x)
+        spike = self.neuronal_fire()
+        self.neuronal_reset(spike)
+        return self._training_output(spike)
+
+
+class OTTTLIFNode(_OnlineLIFNode):
     def __init__(
         self,
         tau: float = 2.0,
@@ -62,7 +149,7 @@ class OTTTLIFNode(LIFNode):
         :param step_mode: 步进模式。为了保证神经元的显存占用较小，仅支持 ``'s'`` （单步）
         :type step_mode: str
 
-        :param backend: 使用的后端。当前实现仅支持 ``'torch'``，其他取值会在前向传播时触发
+        :param backend: 使用的后端。当前实现仅支持 ``'torch'``，其他取值会触发
             ``ValueError``
         :type backend: str
 
@@ -118,7 +205,7 @@ class OTTTLIFNode(LIFNode):
 
         :param backend: backend for this neuron layer. The current
             implementation only supports ``'torch'``; other values raise
-            ``ValueError`` during forward
+            ``ValueError``
         :type backend: str
 
         :param store_v_seq: retained for interface consistency with
@@ -149,115 +236,20 @@ class OTTTLIFNode(LIFNode):
         """
         self._memories.pop("v")
 
-    def reset(self):
-        super().reset()
-        if hasattr(self, "v"):
-            del self.v
-        if hasattr(self, "trace"):
-            del self.trace
-
-    @property
-    def supported_backends(self):
-        if self.step_mode == "s":
-            return "torch"
-        else:
-            raise ValueError(self.step_mode)
-
-    def neuronal_charge(self, x: torch.Tensor):
-        self.v = self.v.detach()
-
-        if self.decay_input:
-            if self.v_reset is None or self.v_reset == 0.0:
-                self.v = self.neuronal_charge_decay_input_reset0(x, self.v, self.tau)
-            else:
-                self.v = self.neuronal_charge_decay_input(
-                    x, self.v, self.v_reset, self.tau
-                )
-
-        else:
-            if self.v_reset is None or self.v_reset == 0.0:
-                self.v = self.neuronal_charge_no_decay_input_reset0(x, self.v, self.tau)
-            else:
-                self.v = self.neuronal_charge_no_decay_input(
-                    x, self.v, self.v_reset, self.tau
-                )
-
     @staticmethod
     def track_trace(spike: torch.Tensor, trace: torch.Tensor, tau: float):
         with torch.no_grad():
             trace = trace * (1.0 - 1.0 / tau) + spike
         return trace
 
-    def single_step_forward(self, x: torch.Tensor):
-        r"""
-        **API Language** - :ref:`中文 <OTTTLIFNode.single_step_forward-cn>` | :ref:`English <OTTTLIFNode.single_step_forward-en>`
-
-        ----
-
-        .. _OTTTLIFNode.single_step_forward-cn:
-
-        * **中文**
-
-        训练时，输出脉冲和迹；推理时，输出脉冲。
-
-        训练时需要将后续参数模块用layer.py中定义的GradwithTrace进行包装，根据迹计算梯度。
-
-        :param x: 当前时间步的输入张量
-        :type x: torch.Tensor
-
-        :return: 训练模式下返回 ``[spike, trace]``，推理模式下仅返回 ``spike``
-        :rtype: Union[list[torch.Tensor], torch.Tensor]
-
-        ----
-
-        .. _OTTTLIFNode.single_step_forward-en:
-
-        * **English**
-
-        Output spike and trace during training; output spike during inference.
-
-        During training, successive parametric modules shoule be wrapped by GradwithTrace defined in layer.py, to calculate gradients with traces.
-
-        :param x: input tensor at the current time step
-        :type x: torch.Tensor
-
-        :return: ``[spike, trace]`` in training mode, and ``spike`` in eval mode
-        :rtype: Union[list[torch.Tensor], torch.Tensor]
-        """
-
-        if not hasattr(self, "v"):
-            if self.v_reset is None:
-                self.register_buffer("v", torch.zeros_like(x))
-            else:
-                self.register_buffer("v", torch.ones_like(x) * self.v_reset)
-
-        if self.training:
-            if not hasattr(self, "trace"):
-                self.register_buffer("trace", torch.zeros_like(x))
-
-            if self.backend == "torch":
-                self.neuronal_charge(x)
-                spike = self.neuronal_fire()
-                self.neuronal_reset(spike)
-
-                self.trace = self.track_trace(spike, self.trace, self.tau)
-
-                return [spike, self.trace]
-            else:
-                raise ValueError(self.backend)
-        else:
-            spike, self.v = self._eval_single_step_forward(
-                x,
-                self.v,
-                self.v_threshold,
-                self.v_reset,
-                self.tau,
-                self.decay_input,
-            )
-            return spike
+    def _training_output(self, spike: torch.Tensor):
+        if not hasattr(self, "trace"):
+            self.register_buffer("trace", torch.zeros_like(spike))
+        self.trace = self.track_trace(spike, self.trace, self.tau)
+        return [spike, self.trace]
 
 
-class SLTTLIFNode(LIFNode):
+class SLTTLIFNode(_OnlineLIFNode):
     def __init__(
         self,
         tau: float = 2.0,
@@ -312,7 +304,7 @@ class SLTTLIFNode(LIFNode):
         :param step_mode: 步进模式。为了保证神经元的显存占用较小，仅支持 ``'s'`` （单步）
         :type step_mode: str
 
-        :param backend: 使用的后端。当前实现仅支持 ``'torch'``，其他取值会在前向传播时触发
+        :param backend: 使用的后端。当前实现仅支持 ``'torch'``，其他取值会触发
             ``ValueError``
         :type backend: str
 
@@ -368,7 +360,7 @@ class SLTTLIFNode(LIFNode):
 
         :param backend: backend for this neuron layer. The current
             implementation only supports ``'torch'``; other values raise
-            ``ValueError`` during forward
+            ``ValueError``
         :type backend: str
 
         :param store_v_seq: retained for interface consistency with
@@ -391,92 +383,3 @@ class SLTTLIFNode(LIFNode):
             "Please use single-step mode to enable memory-efficient training."
         )
         self._memories.pop("v")
-
-    def reset(self):
-        super().reset()
-        if hasattr(self, "v"):
-            del self.v
-
-    @property
-    def supported_backends(self):
-        if self.step_mode == "s":
-            return "torch"
-        else:
-            raise ValueError(self.step_mode)
-
-    def neuronal_charge(self, x: torch.Tensor):
-        self.v = self.v.detach()
-
-        if self.decay_input:
-            if self.v_reset is None or self.v_reset == 0.0:
-                self.v = self.neuronal_charge_decay_input_reset0(x, self.v, self.tau)
-            else:
-                self.v = self.neuronal_charge_decay_input(
-                    x, self.v, self.v_reset, self.tau
-                )
-
-        else:
-            if self.v_reset is None or self.v_reset == 0.0:
-                self.v = self.neuronal_charge_no_decay_input_reset0(x, self.v, self.tau)
-            else:
-                self.v = self.neuronal_charge_no_decay_input(
-                    x, self.v, self.v_reset, self.tau
-                )
-
-    def single_step_forward(self, x: torch.Tensor):
-        r"""
-        **API Language** - :ref:`中文 <SLTTLIFNode.single_step_forward-cn>` | :ref:`English <SLTTLIFNode.single_step_forward-en>`
-
-        ----
-
-        .. _SLTTLIFNode.single_step_forward-cn:
-
-        * **中文**
-
-        执行单步前向传播并返回当前时间步的输出脉冲。
-
-        :param x: 当前时间步的输入张量
-        :type x: torch.Tensor
-
-        :return: 当前时间步的输出脉冲
-        :rtype: torch.Tensor
-
-        ----
-
-        .. _SLTTLIFNode.single_step_forward-en:
-
-        * **English**
-
-        Run single-step forward propagation and return the output spike at the
-        current time step.
-
-        :param x: input tensor at the current time step
-        :type x: torch.Tensor
-
-        :return: output spike at the current time step
-        :rtype: torch.Tensor
-        """
-        if not hasattr(self, "v"):
-            if self.v_reset is None:
-                self.register_buffer("v", torch.zeros_like(x))
-            else:
-                self.register_buffer("v", torch.ones_like(x) * self.v_reset)
-
-        if self.training:
-            if self.backend == "torch":
-                self.neuronal_charge(x)
-                spike = self.neuronal_fire()
-                self.neuronal_reset(spike)
-                return spike
-            else:
-                raise ValueError(self.backend)
-        else:
-            spike, self.v = self._eval_single_step_forward(
-                x,
-                self.v,
-                self.v_threshold,
-                self.v_reset,
-                self.tau,
-                self.decay_input,
-            )
-            return spike

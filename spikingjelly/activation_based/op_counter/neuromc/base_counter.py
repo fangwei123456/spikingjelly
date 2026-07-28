@@ -6,8 +6,7 @@ from typing import Any, Callable
 import torch.nn as nn
 from torch.overrides import resolve_name
 
-from ..base import BaseCounter
-from .utils import _infer_stage
+from ..base import BaseCounter, _infer_stage
 
 __all__ = ["NeuroMCBaseCounter"]
 
@@ -57,15 +56,9 @@ class NeuroMCBaseCounter(BaseCounter):
         :param extra_ignore_modules: Additional module types to ignore during counting
         :type extra_ignore_modules: list[nn.Module] | None
         """
-        if extra_rules is None:
-            extra_rules = {}
-        if extra_ignore_modules is None:
-            extra_ignore_modules = []
-        self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
-        self.rules: dict[Any, Callable] = {}
-        self.rules.update(extra_rules)
-        self.ignore_modules: list[nn.Module] = []
-        self.ignore_modules.extend(extra_ignore_modules)
+        super().__init__()
+        self.rules.update(extra_rules or {})
+        self.ignore_modules.extend(extra_ignore_modules or [])
         self.stage_records: dict[str, int] = defaultdict(int)
         self.op_records: dict[str, int] = defaultdict(int)
         self.stage_op_records: dict[str, dict[str, int]] = defaultdict(
@@ -100,3 +93,16 @@ class NeuroMCBaseCounter(BaseCounter):
 
     def get_stage_op_counts(self) -> dict[str, dict[str, int]]:
         return {k: dict(v) for k, v in self.stage_op_records.items()}
+
+    def reset(self) -> None:
+        r"""
+        **API Language** - 中文 | English
+
+        **中文:** 清空通用计数以及 NeuroMC 的阶段和算子聚合计数。
+
+        **English:** Clear generic counts and all NeuroMC stage/op aggregates.
+        """
+        super().reset()
+        self.stage_records.clear()
+        self.op_records.clear()
+        self.stage_op_records.clear()

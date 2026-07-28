@@ -1,4 +1,4 @@
-"""Tests for functional.net_config reset cache semantics."""
+"""Tests for activation-based functional helpers."""
 
 import gc
 import logging
@@ -8,12 +8,16 @@ import pytest
 import torch
 import torch.nn as nn
 
-from spikingjelly.activation_based import base, neuron
+from spikingjelly.activation_based import base, layer, neuron
 from spikingjelly.activation_based.functional import (
     collect_reset_modules,
     invalidate_reset_cache,
+    multi_step_forward,
     reset_collected_modules,
     reset_net,
+    seq_to_ann_forward,
+    t_last_multi_step_forward,
+    t_last_seq_to_ann_forward,
 )
 from spikingjelly.activation_based.functional.net_config import _RESET_MODULE_CACHE
 
@@ -391,3 +395,97 @@ def test_reset_net_cached_modules_follow_memorymodule_reset_semantics():
         assert net[0].state == 0.0
     finally:
         invalidate_reset_cache(net)
+
+
+def test_multi_step_forward_supports_both_time_axes_and_module_lists():
+    modules = [nn.Linear(4, 3), nn.ReLU()]
+    x_seq = torch.randn(5, 2, 4)
+    expected = torch.stack([modules[1](modules[0](x)) for x in x_seq])
+
+    assert torch.equal(multi_step_forward(x_seq, modules), expected)
+    assert torch.equal(
+        t_last_multi_step_forward(x_seq.movedim(0, -1), modules),
+        expected.movedim(0, -1),
+    )
+
+
+def test_t_last_multi_step_forward_preserves_contiguous_output_layout():
+    x_seq = torch.randn(2, 4, 5)
+    expected = torch.stack([x_seq[..., t] for t in range(x_seq.shape[-1])], dim=-1)
+    actual = t_last_multi_step_forward(x_seq, nn.Identity())
+
+    assert torch.equal(actual, expected)
+    assert actual.stride() == expected.stride()
+
+
+def test_t_last_multi_step_container_preserves_stateful_execution():
+    class RunningSum(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.total = 0
+
+        def forward(self, x):
+            self.total = self.total + x
+            return self.total
+
+    x_seq = torch.tensor([[1.0, 2.0, 3.0]])
+    container = layer.TLastMultiStepContainer(RunningSum())
+
+    assert torch.equal(container(x_seq), torch.tensor([[1.0, 3.0, 6.0]]))
+
+
+def test_seq_to_ann_forward_supports_both_time_axes_and_module_lists():
+    modules = [nn.Linear(4, 3), nn.ReLU()]
+    x_seq = torch.randn(5, 2, 4)
+    expected = torch.stack([modules[1](modules[0](x)) for x in x_seq])
+
+    torch.testing.assert_close(seq_to_ann_forward(x_seq, modules), expected)
+    torch.testing.assert_close(
+        t_last_seq_to_ann_forward(x_seq.movedim(0, -1), modules),
+        expected.movedim(0, -1),
+    )
+
+
+def test_seq_to_ann_forward_restores_tuple_outputs():
+    x_seq = torch.randn(3, 2, 1, 4, 4)
+    pool = nn.MaxPool2d(2, return_indices=True)
+    expected = pool(x_seq.flatten(0, 1))
+    values, indices = seq_to_ann_forward(x_seq, pool)
+
+    assert torch.equal(values.flatten(0, 1), expected[0])
+    assert torch.equal(indices.flatten(0, 1), expected[1])
+
+
+def test_t_last_seq_to_ann_forward_preserves_vmap_output_layout():
+    def stateless_module(x):
+        return x.square(), x + 1
+
+    x_seq = torch.randn(2, 3, 5)
+    expected = torch.vmap(stateless_module, in_dims=-1, out_dims=-1)(x_seq)
+    actual = t_last_seq_to_ann_forward(x_seq, stateless_module)
+
+    for actual_item, expected_item in zip(actual, expected):
+        assert torch.equal(actual_item, expected_item)
+        assert actual_item.stride() == expected_item.stride()
+
+
+def test_t_last_seq_to_ann_forward_calls_sequential_container():
+    calls = []
+    modules = nn.Sequential(nn.Identity())
+    modules.register_forward_hook(lambda *args: calls.append(None))
+
+    x_seq = torch.randn(2, 3, 5)
+    actual = t_last_seq_to_ann_forward(x_seq, modules)
+
+    assert torch.equal(actual, x_seq)
+    assert calls == [None]
+
+
+def test_multistep_max_pool_wrapper_restores_tuple_outputs():
+    x_seq = torch.randn(3, 2, 1, 4, 4)
+    wrapper = layer.MaxPool2d(2, return_indices=True, step_mode="m")
+    expected = nn.MaxPool2d(2, return_indices=True)(x_seq.flatten(0, 1))
+    values, indices = wrapper(x_seq)
+
+    assert torch.equal(values.flatten(0, 1), expected[0])
+    assert torch.equal(indices.flatten(0, 1), expected[1])

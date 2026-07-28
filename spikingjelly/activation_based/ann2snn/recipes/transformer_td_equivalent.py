@@ -10,16 +10,14 @@ from torch import fx
 
 from spikingjelly.activation_based.ann2snn.operators import (
     SNNMatrixOperator,
-    TDConv2d,
     TDGELU,
-    TDLayerNorm,
-    TDLinear,
     TDModule,
     TDRMSNorm,
     TDSiLU,
     TDMultiheadAttention,
     TDScaledDotProductAttention,
     TDSoftmax,
+    _td_module_from_ann,
 )
 from spikingjelly.activation_based.ann2snn.recipes.base import ConversionRecipe
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
@@ -346,63 +344,8 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
         if isinstance(module, TDModule):
             return None
 
-        if isinstance(module, nn.Linear):
-            td_module = TDLinear(
-                module.in_features,
-                module.out_features,
-                bias=module.bias is not None,
-                device=module.weight.device,
-                dtype=module.weight.dtype,
-            )
-            with torch.no_grad():
-                td_module.weight.copy_(module.weight)
-                if module.bias is not None:
-                    td_module.bias.copy_(module.bias)
-            td_module.weight.requires_grad = module.weight.requires_grad
-            if module.bias is not None:
-                td_module.bias.requires_grad = module.bias.requires_grad
-            td_module.train(module.training)
-            return td_module
-
-        if isinstance(module, nn.Conv2d):
-            td_module = TDConv2d(
-                module.in_channels,
-                module.out_channels,
-                module.kernel_size,
-                stride=module.stride,
-                padding=module.padding,
-                dilation=module.dilation,
-                groups=module.groups,
-                bias=module.bias is not None,
-                padding_mode=module.padding_mode,
-                device=module.weight.device,
-                dtype=module.weight.dtype,
-            )
-            with torch.no_grad():
-                td_module.weight.copy_(module.weight)
-                if module.bias is not None:
-                    td_module.bias.copy_(module.bias)
-            td_module.weight.requires_grad = module.weight.requires_grad
-            if module.bias is not None:
-                td_module.bias.requires_grad = module.bias.requires_grad
-            td_module.train(module.training)
-            return td_module
-
-        if isinstance(module, nn.LayerNorm):
-            td_module = TDLayerNorm(
-                module.normalized_shape,
-                eps=module.eps,
-                elementwise_affine=module.elementwise_affine,
-                bias=module.bias is not None,
-                device=(module.weight.device if module.weight is not None else None),
-                dtype=(module.weight.dtype if module.weight is not None else None),
-            )
-            with torch.no_grad():
-                if module.weight is not None:
-                    td_module.weight.copy_(module.weight)
-                if module.bias is not None:
-                    td_module.bias.copy_(module.bias)
-            td_module.train(module.training)
+        td_module = _td_module_from_ann(module)
+        if td_module is not None:
             return td_module
 
         if isinstance(module, nn.RMSNorm):
@@ -418,11 +361,6 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
                     td_module.weight.copy_(module.weight)
             if module.weight is not None:
                 td_module.weight.requires_grad = module.weight.requires_grad
-            td_module.train(module.training)
-            return td_module
-
-        if isinstance(module, nn.GELU):
-            td_module = TDGELU(approximate=getattr(module, "approximate", "none"))
             td_module.train(module.training)
             return td_module
 
