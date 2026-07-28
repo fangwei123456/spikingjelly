@@ -1,11 +1,21 @@
-import math
-from abc import abstractmethod
-
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
 from . import functional
+import math
 from . import base, neuron, surrogate
+from abc import abstractmethod
+
+
+def _population_parameters(obs_dim, pop_dim, mean_range, std):
+    mean = torch.linspace(mean_range[0], mean_range[1], pop_dim)
+    mean = mean.expand(1, obs_dim, pop_dim).clone()
+    return nn.Parameter(mean), nn.Parameter(torch.full_like(mean, std))
+
+
+def _population_activity(obs, obs_dim, mean, std):
+    obs = obs.view(-1, obs_dim, 1)
+    return torch.exp(-0.5 * ((obs - mean) / std).square()).flatten(1)
 
 
 class StatelessEncoder(nn.Module, base.StepModule):
@@ -169,9 +179,9 @@ class StatefulEncoder(base.MemoryModule):
         if self.spike is None:
             self.single_step_encode(x)
 
-        out = self.spike[self.t]
+        t = self.t
         self.t = (self.t + 1) % self.T
-        return out
+        return self.spike[t]
 
     @abstractmethod
     def single_step_encode(self, x: torch.Tensor):
@@ -429,9 +439,16 @@ class LatencyEncoder(StatefulEncoder):
         :param x: input data, which should be in the range ``[0, 1]``
         :type x: torch.Tensor
         """
-        self.spike = functional.latency_encode(
-            x, self.T, self.enc_function, getattr(self, "alpha", None)
-        )
+        if self.enc_function == "log":
+            t_f = (self.T - 1.0 - torch.log(self.alpha * x + 1.0)).round().long()
+        else:
+            t_f = ((self.T - 1.0) * (1.0 - x)).round().long()
+
+        self.spike = F.one_hot(t_f, num_classes=self.T).to(x)
+        # [*, T] -> [T, *]
+        d_seq = list(range(self.spike.ndim - 1))
+        d_seq.insert(0, self.spike.ndim - 1)
+        self.spike = self.spike.permute(d_seq)
 
 
 class PoissonEncoder(StatelessEncoder):
@@ -618,7 +635,16 @@ class WeightedPhaseEncoder(StatefulEncoder):
         :type x: torch.Tensor
         :raises AssertionError: if ``x`` is not in the range ``[0, 1 - 2^{-T}]``
         """
-        self.spike = functional.weighted_phase_encode(x, self.T)
+        assert (x >= 0).all() and (x <= 1 - 2 ** (-self.T)).all()
+        inputs = x.clone()
+        self.spike = torch.empty(
+            (self.T,) + x.shape, device=x.device
+        )  # Encoding to [T, batch_size, *]
+        w = 0.5
+        for i in range(self.T):
+            self.spike[i] = inputs >= w
+            inputs -= w * self.spike[i]
+            w *= 0.5
 
 
 class PopSpikeEncoderDeterministic(nn.Module):
@@ -679,15 +705,7 @@ class PopSpikeEncoderDeterministic(nn.Module):
         self.encoder_neuron_num = obs_dim * pop_dim
         self.spike_ts = spike_ts
 
-        # Compute evenly distributed mean and variance
-        tmp_mean = torch.zeros(1, obs_dim, pop_dim)
-        delta_mean = (mean_range[1] - mean_range[0]) / (pop_dim - 1)
-        for num in range(pop_dim):
-            tmp_mean[0, :, num] = mean_range[0] + delta_mean * num
-        tmp_std = torch.zeros(1, obs_dim, pop_dim) + std
-
-        self.mean = nn.Parameter(tmp_mean)
-        self.std = nn.Parameter(tmp_std)
+        self.mean, self.std = _population_parameters(obs_dim, pop_dim, mean_range, std)
 
         self.neurons = neuron.IFNode(
             v_threshold=0.999,
@@ -730,15 +748,8 @@ class PopSpikeEncoderDeterministic(nn.Module):
         :return: encoded spike sequence with shape ``[spike_ts, batch_size, obs_dim * pop_dim]``
         :rtype: torch.Tensor
         """
-        obs = obs.view(-1, self.obs_dim, 1)
-
-        # Receptive Field of encoder population has Gaussian Shape
-        pop_act = torch.exp(
-            -(1.0 / 2.0) * (obs - self.mean).pow(2) / self.std.pow(2)
-        ).view(-1, self.encoder_neuron_num)
-        pop_act = pop_act.unsqueeze(0).repeat(self.spike_ts, 1, 1)
-
-        return self.neurons(pop_act)
+        pop_act = _population_activity(obs, self.obs_dim, self.mean, self.std)
+        return self.neurons(pop_act.unsqueeze(0).repeat(self.spike_ts, 1, 1))
 
 
 class PopSpikeEncoderRandom(nn.Module):
@@ -799,15 +810,7 @@ class PopSpikeEncoderRandom(nn.Module):
         self.encoder_neuron_num = obs_dim * pop_dim
         self.spike_ts = spike_ts
 
-        # Compute evenly distributed mean and variance
-        tmp_mean = torch.zeros(1, obs_dim, pop_dim)
-        delta_mean = (mean_range[1] - mean_range[0]) / (pop_dim - 1)
-        for num in range(pop_dim):
-            tmp_mean[0, :, num] = mean_range[0] + delta_mean * num
-        tmp_std = torch.zeros(1, obs_dim, pop_dim) + std
-
-        self.mean = nn.Parameter(tmp_mean)
-        self.std = nn.Parameter(tmp_std)
+        self.mean, self.std = _population_parameters(obs_dim, pop_dim, mean_range, std)
 
         self.pseudo_spike = surrogate.poisson_pass.apply
 
@@ -842,22 +845,10 @@ class PopSpikeEncoderRandom(nn.Module):
         :return: random spike sequence with shape ``[spike_ts, batch_size, obs_dim * pop_dim]``
         :rtype: torch.Tensor
         """
-        obs = obs.view(-1, self.obs_dim, 1)
-        batch_size = obs.shape[0]
-
-        # Receptive Field of encoder population has Gaussian Shape
-        pop_act = torch.exp(
-            -(1.0 / 2.0) * (obs - self.mean).pow(2) / self.std.pow(2)
-        ).view(-1, self.encoder_neuron_num)
-        pop_spikes = torch.zeros(
-            self.spike_ts, batch_size, self.encoder_neuron_num, device=obs.device
+        pop_act = _population_activity(obs, self.obs_dim, self.mean, self.std)
+        return self.pseudo_spike(
+            pop_act.unsqueeze(0).expand(self.spike_ts, *pop_act.shape)
         )
-
-        # Generate Random Spike Trains
-        for step in range(self.spike_ts):
-            pop_spikes[step, :, :] = self.pseudo_spike(pop_act)
-
-        return pop_spikes
 
 
 class PopEncoder(nn.Module):
@@ -917,15 +908,7 @@ class PopEncoder(nn.Module):
         self.encoder_neuron_num = obs_dim * pop_dim
         self.spike_ts = spike_ts
 
-        # Compute evenly distributed mean and variance
-        tmp_mean = torch.zeros(1, obs_dim, pop_dim)
-        delta_mean = (mean_range[1] - mean_range[0]) / (pop_dim - 1)
-        for num in range(pop_dim):
-            tmp_mean[0, :, num] = mean_range[0] + delta_mean * num
-        tmp_std = torch.zeros(1, obs_dim, pop_dim) + std
-
-        self.mean = nn.Parameter(tmp_mean)
-        self.std = nn.Parameter(tmp_std)
+        self.mean, self.std = _population_parameters(obs_dim, pop_dim, mean_range, std)
 
     def forward(self, obs):
         r"""
@@ -958,19 +941,5 @@ class PopEncoder(nn.Module):
         :return: encoded input sequence with shape ``[spike_ts, batch_size, obs_dim * pop_dim]``
         :rtype: torch.Tensor
         """
-        obs = obs.view(-1, self.obs_dim, 1)
-        batch_size = obs.shape[0]
-
-        # Receptive Field of encoder population has Gaussian Shape
-        pop_act = torch.exp(
-            -(1.0 / 2.0) * (obs - self.mean).pow(2) / self.std.pow(2)
-        ).view(-1, self.encoder_neuron_num)
-        pop_inputs = torch.zeros(
-            self.spike_ts, batch_size, self.encoder_neuron_num, device=obs.device
-        )
-
-        # Generate Input Trains
-        for step in range(self.spike_ts):
-            pop_inputs[step, :, :] = pop_act
-
-        return pop_inputs
+        pop_act = _population_activity(obs, self.obs_dim, self.mean, self.std)
+        return pop_act.unsqueeze(0).repeat(self.spike_ts, 1, 1)

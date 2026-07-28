@@ -745,6 +745,21 @@ def test_neuromc_base_counter_unknown_op_returns_zero():
     assert value == 0
 
 
+def test_neuromc_base_counter_reset_clears_all_aggregates():
+    counter = NeuroMCBaseCounter()
+    counter.records["Global"]["op"] = 1
+    counter.stage_records["forward"] = 2
+    counter.op_records["aten.add"] = 3
+    counter.stage_op_records["forward"]["aten.add"] = 4
+
+    counter.reset()
+
+    assert counter.get_counts() == {}
+    assert counter.get_stage_counts() == {}
+    assert counter.get_op_counts() == {}
+    assert counter.get_stage_op_counts() == {}
+
+
 def test_neuromc_spike_nnz_empty_tensor_returns_none():
     x = torch.empty(0)
     assert _is_spike(x) is False
@@ -992,23 +1007,14 @@ def test_neuromc_exact_sgd_optimizer_counts_mixed_param_groups():
     assert len(fragments) == 2
 
 
-def test_neuromc_memory_residency_legacy_memory_config_alias():
+def test_neuromc_memory_residency_accepts_config():
     cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1()
-    with pytest.deprecated_call():
-        counter = NeuroMCMemoryResidencyCounter(memory_config=cfg)
+    counter = NeuroMCMemoryResidencyCounter(config=cfg)
     assert isinstance(counter, MemoryResidencyCounter)
 
 
-def test_neuromc_memory_residency_legacy_memory_config_positional_alias():
+def test_neuromc_like_v1_config_validates():
     cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1()
-    with pytest.deprecated_call():
-        counter = NeuroMCMemoryResidencyCounter(cfg)
-    assert isinstance(counter, MemoryResidencyCounter)
-
-
-def test_neuromc_like_v1_legacy_memory_model_is_ignored():
-    with pytest.deprecated_call():
-        cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1(memory_model="weighted")
     cfg.validate()
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Dict, Iterable, Mapping, Optional, Sequence, Tuple
@@ -14,6 +15,7 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDRMSNorm,
     TDScaledDotProductAttention,
     TDSiLU,
+    _td_module_from_ann,
 )
 from spikingjelly.activation_based.ann2snn.qcfs import SignedQCFSSequenceEncoder
 
@@ -29,6 +31,8 @@ __all__ = [
     "Qwen2SNNRecipe",
     "calibrate_qwen2_snn",
 ]
+
+_QWEN2_SCALE_NAMES = ("query", "key", "value", "mlp")
 
 
 @dataclass(frozen=True)
@@ -239,8 +243,7 @@ class Qwen2SNNCalibration:
         indices = sorted(layers)
         if indices != list(range(len(indices))):
             raise ValueError("Calibration layer indices must be contiguous from zero.")
-        required = {"query", "key", "value", "mlp"}
-        if any(set(layers[index]) != required for index in indices):
+        if any(set(layers[index]) != set(_QWEN2_SCALE_NAMES) for index in indices):
             raise ValueError(
                 "Each calibration layer requires query/key/value/mlp scales."
             )
@@ -373,7 +376,7 @@ def _qwen_layers(model: nn.Module) -> Sequence[nn.Module]:
     return layers
 
 
-def _validate_qwen2(model: nn.Module) -> None:
+def _validate_qwen2(model: nn.Module) -> Sequence[nn.Module]:
     config = getattr(model, "config", None)
     if config is None or getattr(config, "model_type", None) != "qwen2":
         raise TypeError("Qwen2SNNRecipe requires a Hugging Face Qwen2 causal LM.")
@@ -385,8 +388,10 @@ def _validate_qwen2(model: nn.Module) -> None:
         raise ValueError("Qwen2SNNRecipe requires hidden_act='silu'.")
     if model.training:
         raise ValueError("Qwen2SNNRecipe is inference-only; call model.eval().")
-    if len(_qwen_layers(model)) != int(config.num_hidden_layers):
+    layers = _qwen_layers(model)
+    if len(layers) != int(config.num_hidden_layers):
         raise ValueError("Qwen2 config and concrete decoder layer count disagree.")
+    return layers
 
 
 def _rotary(
@@ -396,9 +401,20 @@ def _rotary(
         half = value.shape[-1] // 2
         return torch.cat((-value[..., half:], value[..., :half]), dim=-1)
 
-    cos = cos.unsqueeze(0).unsqueeze(2)
-    sin = sin.unsqueeze(0).unsqueeze(2)
+    cos = cos.unsqueeze(-3)
+    sin = sin.unsqueeze(-3)
+    while cos.dim() < query.dim():
+        cos = cos.unsqueeze(0)
+        sin = sin.unsqueeze(0)
     return query * cos + rotate_half(query) * sin, key * cos + rotate_half(key) * sin
+
+
+def _split_heads(value: torch.Tensor, heads: int, head_dim: int) -> torch.Tensor:
+    return value.view(*value.shape[:-1], heads, head_dim).transpose(-3, -2)
+
+
+def _merge_heads(value: torch.Tensor) -> torch.Tensor:
+    return value.transpose(-3, -2).flatten(-2)
 
 
 def _repeat_kv(value: torch.Tensor, groups: int) -> torch.Tensor:
@@ -423,44 +439,17 @@ def _causal_mask(
     return (key <= query)[None, None] & mask[:, None, None, :].to(torch.bool)
 
 
-def _copy_linear(source: nn.Linear) -> TDLinear:
-    target = TDLinear(
-        source.in_features,
-        source.out_features,
-        bias=source.bias is not None,
-        device=source.weight.device,
-        dtype=source.weight.dtype,
-    )
-    with torch.no_grad():
-        target.weight.copy_(source.weight)
-        if source.bias is not None:
-            target.bias.copy_(source.bias)
-    target.weight.requires_grad = source.weight.requires_grad
-    if source.bias is not None:
-        target.bias.requires_grad = source.bias.requires_grad
-    return target.train(source.training)
-
-
-def _copy_embedding(source: nn.Embedding) -> nn.Embedding:
-    target = nn.Embedding(
-        source.num_embeddings,
-        source.embedding_dim,
-        padding_idx=source.padding_idx,
-        device=source.weight.device,
-        dtype=source.weight.dtype,
-    )
-    with torch.no_grad():
-        target.weight.copy_(source.weight)
-    target.weight.requires_grad = source.weight.requires_grad
-    return target.train(source.training)
-
-
 def _copy_norm(source: nn.Module) -> TDRMSNorm:
     weight = getattr(source, "weight", None)
     if not isinstance(weight, torch.Tensor):
         raise TypeError("Qwen2 RMSNorm must expose tensor weight.")
     eps = getattr(source, "variance_epsilon", getattr(source, "eps", None))
-    target = TDRMSNorm(weight.shape, eps=eps, device=weight.device, dtype=weight.dtype)
+    target = TDRMSNorm(
+        weight.shape,
+        eps=eps,
+        device=weight.device,
+        dtype=weight.dtype,
+    )
     with torch.no_grad():
         target.weight.copy_(weight)
     target.weight.requires_grad = weight.requires_grad
@@ -469,35 +458,30 @@ def _copy_norm(source: nn.Module) -> TDRMSNorm:
 
 class _Qwen2Cache:
     def __init__(self, layer_count: int) -> None:
-        self.keys: list[Optional[torch.Tensor]] = [None] * layer_count
-        self.values: list[Optional[torch.Tensor]] = [None] * layer_count
-
-    def get(self, index: int):
-        return self.keys[index], self.values[index]
+        self.entries: list[Optional[Tuple[torch.Tensor, torch.Tensor]]] = [
+            None
+        ] * layer_count
 
     def append(self, index: int, key: torch.Tensor, value: torch.Tensor) -> None:
-        old_key, old_value = self.get(index)
-        if old_key is not None:
-            key = torch.cat((old_key, key), dim=2)
-            value = torch.cat((old_value, value), dim=2)
-        self.keys[index] = key.detach()
-        self.values[index] = value.detach()
+        entry = self.entries[index]
+        if entry is not None:
+            key = torch.cat((entry[0], key), dim=2)
+            value = torch.cat((entry[1], value), dim=2)
+        self.entries[index] = key.detach(), value.detach()
 
     def get_seq_length(self) -> int:
-        return 0 if self.keys[0] is None else int(self.keys[0].shape[2])
+        entry = self.entries[0]
+        return 0 if entry is None else int(entry[0].shape[2])
 
     def reorder_cache(self, indices: torch.Tensor) -> None:
-        self.keys = [None if value is None else value[indices] for value in self.keys]
-        self.values = [
-            None if value is None else value[indices] for value in self.values
+        self.entries = [
+            None if entry is None else (entry[0][indices], entry[1][indices])
+            for entry in self.entries
         ]
 
     def storage_summary(self) -> Dict[str, object]:
         tensors = [
-            value
-            for pair in zip(self.keys, self.values, strict=True)
-            for value in pair
-            if value is not None
+            value for entry in self.entries if entry is not None for value in entry
         ]
         logical_bytes = sum(value.numel() * value.element_size() for value in tensors)
         storages: Dict[tuple[str, int], int] = {}
@@ -509,10 +493,10 @@ class _Qwen2Cache:
         return {
             "per_layer_key_value_shape": [
                 {
-                    "key": None if key is None else list(key.shape),
-                    "value": None if value is None else list(value.shape),
+                    "key": None if entry is None else list(entry[0].shape),
+                    "value": None if entry is None else list(entry[1].shape),
                 }
-                for key, value in zip(self.keys, self.values, strict=True)
+                for entry in self.entries
             ],
             "stored_cache_logical_bytes": logical_bytes,
             "stored_cache_unique_storage_bytes": sum(storages.values()),
@@ -530,41 +514,41 @@ class _Qwen2Decoder(nn.Module):
     def __init__(
         self,
         source: nn.Module,
-        config: object,
         scales: Mapping[str, torch.Tensor],
-        conversion: Qwen2SNNConfig,
+        time_steps: int,
+        neuron_backend: str,
         index: int,
     ) -> None:
         super().__init__()
         attention = source.self_attn
         mlp = source.mlp
         self.index = index
-        self.time_steps = conversion.time_steps
-        self.heads = int(config.num_attention_heads)
-        self.kv_heads = int(config.num_key_value_heads)
+        self.time_steps = time_steps
+        self.heads = int(attention.config.num_attention_heads)
+        self.kv_heads = int(attention.config.num_key_value_heads)
         self.head_dim = int(attention.head_dim)
         self.kv_groups = int(attention.num_key_value_groups)
         self.input_layernorm = _copy_norm(source.input_layernorm)
         self.post_attention_layernorm = _copy_norm(source.post_attention_layernorm)
-        self.q_proj = _copy_linear(attention.q_proj)
-        self.k_proj = _copy_linear(attention.k_proj)
-        self.v_proj = _copy_linear(attention.v_proj)
-        self.o_proj = _copy_linear(attention.o_proj)
+        self.q_proj = _td_module_from_ann(attention.q_proj)
+        self.k_proj = _td_module_from_ann(attention.k_proj)
+        self.v_proj = _td_module_from_ann(attention.v_proj)
+        self.o_proj = _td_module_from_ann(attention.o_proj)
         self.sdpa = TDScaledDotProductAttention(scale=float(attention.scaling))
-        self.gate_proj = _copy_linear(mlp.gate_proj)
-        self.up_proj = _copy_linear(mlp.up_proj)
-        self.down_proj = _copy_linear(mlp.down_proj)
+        self.gate_proj = _td_module_from_ann(mlp.gate_proj)
+        self.up_proj = _td_module_from_ann(mlp.up_proj)
+        self.down_proj = _td_module_from_ann(mlp.down_proj)
         self.act = TDSiLU()
         self.product = SNNElementWiseProduct()
         self.encoders = nn.ModuleDict(
             {
                 name: SignedQCFSSequenceEncoder(
-                    scale,
-                    conversion.time_steps,
-                    neuron_backend=conversion.neuron_backend,
+                    scales[name],
+                    time_steps,
+                    neuron_backend=neuron_backend,
                     name=f"layer.{index}.{name}",
                 )
-                for name, scale in scales.items()
+                for name in _QWEN2_SCALE_NAMES
             }
         )
 
@@ -574,82 +558,30 @@ class _Qwen2Decoder(nn.Module):
         dense = sequence.sum(0)
         if mode == "exact_td":
             return _exact_sequence(dense, self.time_steps)
-        if mode != "signed_if":
-            raise ValueError(f"Unsupported encoding_mode={mode!r}.")
         return self.encoders[name].encode(dense, mask)
 
-    def forward(
+    def _attend(
         self,
-        hidden: torch.Tensor,
-        *,
-        cos: torch.Tensor,
-        sin: torch.Tensor,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
         attention_mask: torch.Tensor,
-        value_mask: torch.Tensor,
-        encoding_mode: str,
         cache: Optional[_Qwen2Cache],
     ) -> torch.Tensor:
-        residual = hidden
-        normalized = self.input_layernorm(hidden)
-        time, batch, sequence, _ = normalized.shape
-        query = (
-            self.q_proj(normalized)
-            .view(time, batch, sequence, self.heads, self.head_dim)
-            .transpose(2, 3)
-        )
-        key = (
-            self.k_proj(normalized)
-            .view(time, batch, sequence, self.kv_heads, self.head_dim)
-            .transpose(2, 3)
-        )
-        value = (
-            self.v_proj(normalized)
-            .view(time, batch, sequence, self.kv_heads, self.head_dim)
-            .transpose(2, 3)
-        )
-        query, key = _rotary(query, key, cos, sin)
-        query = (
-            self._encode(
-                "query",
-                query.transpose(2, 3).reshape(time, batch, sequence, -1),
-                encoding_mode,
-                value_mask,
-            )
-            .view(time, batch, sequence, self.heads, self.head_dim)
-            .transpose(2, 3)
-        )
-        key = (
-            self._encode(
-                "key",
-                key.transpose(2, 3).reshape(time, batch, sequence, -1),
-                encoding_mode,
-                value_mask,
-            )
-            .view(time, batch, sequence, self.kv_heads, self.head_dim)
-            .transpose(2, 3)
-        )
-        value = (
-            self._encode(
-                "value",
-                value.transpose(2, 3).reshape(time, batch, sequence, -1),
-                encoding_mode,
-                value_mask,
-            )
-            .view(time, batch, sequence, self.kv_heads, self.head_dim)
-            .transpose(2, 3)
-        )
-        past_key = past_value = None
+        past = None
         if cache is not None:
-            past_key, past_value = cache.get(self.index)
+            past = cache.entries[self.index]
             cache.append(self.index, key.sum(0), value.sum(0))
+
         query_dtype = query.dtype
         with torch.amp.autocast(query.device.type, enabled=False):
             query = query.float()
             key = _repeat_kv(key.float(), self.kv_groups)
             value = _repeat_kv(value.float(), self.kv_groups)
-            if past_key is None:
+            if past is None:
                 attended = self.sdpa(query, key, value, attention_mask)
             else:
+                past_key, past_value = past
                 past_key = past_key.float().repeat_interleave(self.kv_groups, dim=1)
                 past_value = past_value.float().repeat_interleave(self.kv_groups, dim=1)
                 zero_key = torch.zeros_like(past_key)
@@ -667,12 +599,44 @@ class _Qwen2Decoder(nn.Module):
                             ),
                             attention_mask,
                         )
-                        for step in range(time)
+                        for step in range(query.shape[0])
                     ]
                 )
-        attended = (
-            attended.to(query_dtype).transpose(2, 3).reshape(time, batch, sequence, -1)
+        return _merge_heads(attended.to(query_dtype))
+
+    def forward(
+        self,
+        hidden: torch.Tensor,
+        *,
+        cos: torch.Tensor,
+        sin: torch.Tensor,
+        attention_mask: torch.Tensor,
+        value_mask: torch.Tensor,
+        encoding_mode: str,
+        cache: Optional[_Qwen2Cache],
+    ) -> torch.Tensor:
+        residual = hidden
+        normalized = self.input_layernorm(hidden)
+        query = _split_heads(self.q_proj(normalized), self.heads, self.head_dim)
+        key = _split_heads(self.k_proj(normalized), self.kv_heads, self.head_dim)
+        value = _split_heads(self.v_proj(normalized), self.kv_heads, self.head_dim)
+        query, key = _rotary(query, key, cos, sin)
+        query = _split_heads(
+            self._encode("query", _merge_heads(query), encoding_mode, value_mask),
+            self.heads,
+            self.head_dim,
         )
+        key = _split_heads(
+            self._encode("key", _merge_heads(key), encoding_mode, value_mask),
+            self.kv_heads,
+            self.head_dim,
+        )
+        value = _split_heads(
+            self._encode("value", _merge_heads(value), encoding_mode, value_mask),
+            self.kv_heads,
+            self.head_dim,
+        )
+        attended = self._attend(query, key, value, attention_mask, cache)
         hidden = residual + self.o_proj(attended)
         residual = hidden
         normalized = self.post_attention_layernorm(hidden)
@@ -740,22 +704,22 @@ class Qwen2SNNModel(nn.Module):
         inner = source.model
         self.config = source.config
         self.time_steps = conversion.time_steps
-        self.embed_tokens = _copy_embedding(inner.embed_tokens)
+        self.embed_tokens = copy.deepcopy(inner.embed_tokens)
         self.rotary_emb = inner.rotary_emb
         self.layers = nn.ModuleList(
             [
                 _Qwen2Decoder(
                     layer,
-                    self.config,
                     calibration.layer_scales[index],
-                    conversion,
+                    conversion.time_steps,
+                    conversion.neuron_backend,
                     index,
                 )
                 for index, layer in enumerate(inner.layers)
             ]
         )
         self.norm = _copy_norm(inner.norm)
-        self.lm_head = _copy_linear(source.lm_head)
+        self.lm_head = _td_module_from_ann(source.lm_head)
         for parameter in self.parameters():
             parameter.requires_grad_(False)
         if bool(getattr(self.config, "tie_word_embeddings", False)):
@@ -781,10 +745,10 @@ class Qwen2SNNModel(nn.Module):
         :return: Tuple of encoders.
         :rtype: Tuple[SignedQCFSSequenceEncoder, ...]
         """
-        result = [self.input_encoder]
+        encoders = [self.input_encoder]
         for layer in self.layers:
-            result.extend(layer.encoders.values())
-        return tuple(result)
+            encoders.extend(layer.encoders.values())
+        return tuple(encoders)
 
     def set_collect_statistics(self, enabled: bool) -> None:
         r"""
@@ -814,8 +778,7 @@ class Qwen2SNNModel(nn.Module):
         :return: 与 :meth:`signed_encoders` 顺序一致的统计元组。
         :rtype: Tuple[Dict[str, object], ...]
 
-        **English:** Return statistics from the most recent execution of every signed
-        encoder.
+        **English:** Return the latest statistics from every signed encoder.
 
         :return: Statistics ordered like :meth:`signed_encoders`.
         :rtype: Tuple[Dict[str, object], ...]
@@ -826,14 +789,13 @@ class Qwen2SNNModel(nn.Module):
         r"""
         **API Language** - 中文 | English
 
-        **中文：** 返回 decoder、TD operator、signed encoder、神经元 backend 和
-        tied embedding 的结构计数。
+        **中文：** 返回转换模型的 TD operator、encoder、backend 和 tied
+        embedding 结构计数。
 
         :return: 机器可读的转换结构摘要。
         :rtype: Dict[str, object]
 
-        **English:** Return decoder, TD-operator, signed-encoder, neuron-backend, and
-        tied-embedding structure counts.
+        **English:** Return TD-operator, encoder, backend, and tied-embedding counts.
 
         :return: Machine-readable converted-structure summary.
         :rtype: Dict[str, object]
@@ -842,14 +804,16 @@ class Qwen2SNNModel(nn.Module):
         encoders = self.signed_encoders()
         return {
             "converted_decoder_count": len(self.layers),
-            "td_rms_norm_count": sum(isinstance(value, TDRMSNorm) for value in modules),
-            "td_linear_count": sum(isinstance(value, TDLinear) for value in modules),
-            "td_silu_count": sum(isinstance(value, TDSiLU) for value in modules),
+            "td_rms_norm_count": sum(
+                isinstance(module, TDRMSNorm) for module in modules
+            ),
+            "td_linear_count": sum(isinstance(module, TDLinear) for module in modules),
+            "td_silu_count": sum(isinstance(module, TDSiLU) for module in modules),
             "td_elementwise_product_count": sum(
-                isinstance(value, SNNElementWiseProduct) for value in modules
+                isinstance(module, SNNElementWiseProduct) for module in modules
             ),
             "td_sdpa_count": sum(
-                isinstance(value, TDScaledDotProductAttention) for value in modules
+                isinstance(module, TDScaledDotProductAttention) for module in modules
             ),
             "signed_if_encoder_count": len(encoders),
             "activation_aware_if_node_count": 2 * len(encoders),
@@ -859,8 +823,9 @@ class Qwen2SNNModel(nn.Module):
             "activation_aware_if_step_modes": sorted(
                 {encoder.positive_neuron.step_mode for encoder in encoders}
             ),
-            "lm_head_tied_to_embedding": self.lm_head.weight
-            is self.embed_tokens.weight,
+            "lm_head_tied_to_embedding": (
+                self.lm_head.weight is self.embed_tokens.weight
+            ),
         }
 
     @property
@@ -868,7 +833,7 @@ class Qwen2SNNModel(nn.Module):
         r"""
         **API Language** - 中文 | English
 
-        **中文：** 返回 input embedding 参数所在设备。
+        **中文：** 返回输入 embedding 参数所在设备。
 
         :return: 模型设备。
         :rtype: torch.device
@@ -884,12 +849,12 @@ class Qwen2SNNModel(nn.Module):
         r"""
         **API Language** - 中文 | English
 
-        **中文：** 返回 Hugging Face 兼容的 token embedding 模块。
+        **中文：** 返回 Hugging Face 兼容的 token embedding。
 
         :return: 输入 embedding。
         :rtype: torch.nn.Embedding
 
-        **English:** Return the Hugging Face-compatible token embedding module.
+        **English:** Return the Hugging Face-compatible token embedding.
 
         :return: Input embedding.
         :rtype: torch.nn.Embedding
@@ -900,13 +865,12 @@ class Qwen2SNNModel(nn.Module):
         r"""
         **API Language** - 中文 | English
 
-        **中文：** 返回 Hugging Face 兼容的 tied 或 untied TDLinear LM head。
+        **中文：** 返回 Hugging Face 兼容的 LM head。
 
         :return: 输出 LM head。
         :rtype: TDLinear
 
-        **English:** Return the Hugging Face-compatible tied or untied TDLinear LM
-        head.
+        **English:** Return the Hugging Face-compatible LM head.
 
         :return: Output LM head.
         :rtype: TDLinear
@@ -917,12 +881,10 @@ class Qwen2SNNModel(nn.Module):
         r"""
         **API Language** - 中文 | English
 
-        **中文：** 当 Qwen2 config 要求 tied embeddings 时，将 LM head weight
-        重新绑定到 input embedding。该方法兼容 Hugging Face evaluator。
+        **中文：** 当 Qwen2 配置要求 tied embeddings 时重新绑定 LM head。
 
-        **English:** Rebind the LM-head weight to the input embedding when requested
-        by the Qwen2 configuration. This method provides Hugging Face evaluator
-        compatibility.
+        **English:** Rebind the LM head when the Qwen2 configuration requests tied
+        embeddings.
         """
         if bool(getattr(self.config, "tie_word_embeddings", False)):
             self.lm_head.weight = self.embed_tokens.weight
@@ -938,20 +900,15 @@ class Qwen2SNNModel(nn.Module):
         **_: object,
     ) -> torch.Tensor:
         r"""
-        **API Language** - :ref:`中文 <Qwen2SNNModel.generate-cn>` | :ref:`English <Qwen2SNNModel.generate-en>`
+        **API Language** - 中文 | English
 
-        ----
-
-        .. _Qwen2SNNModel.generate-cn:
-
-        * **中文**
-
-        使用 KV cache 执行确定性 greedy 解码。每个 token chunk 前重置神经元状态，
-        但保留累计 KV cache；方法内部启用 :func:`torch.inference_mode`。
+        **中文：** 使用 KV cache 执行确定性 greedy 解码。每个 token chunk 前
+        重置神经元状态，但保留累计 KV cache；方法内部启用
+        :func:`torch.inference_mode`。
 
         :param input_ids: 输入 token，形状 ``[B,S]``。
         :type input_ids: torch.Tensor
-        :param attention_mask: 可选的 ``[B,S]`` attention mask。
+        :param attention_mask: 可选 attention mask，形状 ``[B,S]``。
         :type attention_mask: Optional[torch.Tensor]
         :param max_new_tokens: 非负的新 token 数。
         :type max_new_tokens: int
@@ -963,19 +920,13 @@ class Qwen2SNNModel(nn.Module):
         :rtype: torch.Tensor
         :raises ValueError: 请求 sampling、beam search 或负 token 数。
 
-        ----
-
-        .. _Qwen2SNNModel.generate-en:
-
-        * **English**
-
-        Perform deterministic greedy decoding with a KV cache. Neuron state is reset
-        before each token chunk while the accumulated KV cache is retained. The method
-        enables :func:`torch.inference_mode` internally.
+        **English:** Perform deterministic greedy decoding with a KV cache. Neuron
+        state is reset before every token chunk while the accumulated KV cache is
+        retained. The method enables :func:`torch.inference_mode` internally.
 
         :param input_ids: Input tokens with shape ``[B,S]``.
         :type input_ids: torch.Tensor
-        :param attention_mask: Optional ``[B,S]`` attention mask.
+        :param attention_mask: Optional attention mask with shape ``[B,S]``.
         :type attention_mask: Optional[torch.Tensor]
         :param max_new_tokens: Non-negative number of new tokens.
         :type max_new_tokens: int
@@ -1097,6 +1048,8 @@ class Qwen2SNNModel(nn.Module):
                 "Converted Qwen2 SNN does not support autograd; use inference_mode()."
             )
         encoding_mode = encoding_mode or "signed_if"
+        if encoding_mode not in ("signed_if", "exact_td"):
+            raise ValueError(f"Unsupported encoding_mode={encoding_mode!r}.")
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
         if past_key_values is not None and not use_cache:
@@ -1117,10 +1070,8 @@ class Qwen2SNNModel(nn.Module):
         value_mask = attention_mask[:, -input_ids.shape[1] :]
         if encoding_mode == "exact_td":
             hidden = _exact_sequence(embeddings, self.time_steps)
-        elif encoding_mode == "signed_if":
-            hidden = self.input_encoder.encode(embeddings, value_mask)
         else:
-            raise ValueError(f"Unsupported encoding_mode={encoding_mode!r}.")
+            hidden = self.input_encoder.encode(embeddings, value_mask)
         for layer in self.layers:
             hidden = layer(
                 hidden,
@@ -1129,7 +1080,7 @@ class Qwen2SNNModel(nn.Module):
                 attention_mask=causal,
                 value_mask=value_mask,
                 encoding_mode=encoding_mode,
-                cache=past_key_values if use_cache else None,
+                cache=past_key_values,
             )
         hidden = self.norm(hidden)
         with torch.amp.autocast(hidden.device.type, enabled=False):
@@ -1171,7 +1122,6 @@ def calibrate_qwen2_snn(
     :raises TypeError: 模型不是受支持的 Qwen2 causal LM，或 batch 缺少张量字段。
     :raises ValueError: 模型配置不受支持、模型不在 evaluation mode、校准数据为空
         或无法产生有限正 scale。
-    :raises RuntimeError: hook 执行时没有活动的 attention mask。
 
     ----
 
@@ -1196,10 +1146,8 @@ def calibrate_qwen2_snn(
     :raises ValueError: If the model configuration is unsupported, the model is not
         in evaluation mode, calibration data is empty, or no finite positive scale
         can be produced.
-    :raises RuntimeError: If a hook executes without an active attention mask.
     """
-    _validate_qwen2(model)
-    layers = list(_qwen_layers(model))
+    layers = list(_validate_qwen2(model))
     input_observer = _ChannelObserver(
         config.calibration_quantile,
         config.calibration_reservoir_size,
@@ -1212,67 +1160,35 @@ def calibrate_qwen2_snn(
                 config.calibration_reservoir_size,
                 config.calibration_seed,
             )
-            for name in ("query", "key", "value", "mlp")
+            for name in _QWEN2_SCALE_NAMES
         }
         for _ in layers
     ]
-    active_mask: Optional[torch.Tensor] = None
+    active_mask: torch.Tensor
     handles = []
 
     def capture_embedding(_module, _inputs, output):
-        if active_mask is None:
-            raise RuntimeError("Calibration mask is not active.")
         input_observer.update(output, active_mask)
 
     handles.append(model.model.embed_tokens.register_forward_hook(capture_embedding))
     for index, layer in enumerate(layers):
 
-        def capture_attention(module, inputs, kwargs, layer_index=index):
-            if active_mask is None:
-                raise RuntimeError("Calibration mask is not active.")
-            hidden = inputs[0] if inputs else kwargs["hidden_states"]
-            position_embeddings = kwargs.get("position_embeddings")
-            if position_embeddings is None and len(inputs) > 1:
-                position_embeddings = inputs[1]
-            batch, sequence, _ = hidden.shape
+        def capture_attention(module, _inputs, kwargs, layer_index=index):
+            hidden = kwargs["hidden_states"]
             head_dim = int(module.head_dim)
             heads = int(module.config.num_attention_heads)
             kv_heads = int(module.config.num_key_value_heads)
-            query = (
-                module.q_proj(hidden)
-                .view(batch, sequence, heads, head_dim)
-                .transpose(1, 2)
-            )
-            key = (
-                module.k_proj(hidden)
-                .view(batch, sequence, kv_heads, head_dim)
-                .transpose(1, 2)
-            )
-            value = (
-                module.v_proj(hidden)
-                .view(batch, sequence, kv_heads, head_dim)
-                .transpose(1, 2)
-            )
-            cos, sin = position_embeddings
-            half = query.shape[-1] // 2
-            rotate_query = torch.cat((-query[..., half:], query[..., :half]), -1)
-            rotate_key = torch.cat((-key[..., half:], key[..., :half]), -1)
-            query = query * cos.unsqueeze(1) + rotate_query * sin.unsqueeze(1)
-            key = key * cos.unsqueeze(1) + rotate_key * sin.unsqueeze(1)
+            query = _split_heads(module.q_proj(hidden), heads, head_dim)
+            key = _split_heads(module.k_proj(hidden), kv_heads, head_dim)
+            value = _split_heads(module.v_proj(hidden), kv_heads, head_dim)
+            cos, sin = kwargs["position_embeddings"]
+            query, key = _rotary(query, key, cos, sin)
             observers = layer_observers[layer_index]
-            observers["query"].update(
-                query.transpose(1, 2).reshape(batch, sequence, -1), active_mask
-            )
-            observers["key"].update(
-                key.transpose(1, 2).reshape(batch, sequence, -1), active_mask
-            )
-            observers["value"].update(
-                value.transpose(1, 2).reshape(batch, sequence, -1), active_mask
-            )
+            observers["query"].update(_merge_heads(query), active_mask)
+            observers["key"].update(_merge_heads(key), active_mask)
+            observers["value"].update(_merge_heads(value), active_mask)
 
         def capture_mlp(module, inputs, layer_index=index):
-            if active_mask is None:
-                raise RuntimeError("Calibration mask is not active.")
             hidden = inputs[0]
             intermediate = module.act_fn(module.gate_proj(hidden)) * module.up_proj(
                 hidden
@@ -1367,32 +1283,20 @@ class Qwen2SNNRecipe(ModuleConversionRecipe):
 
     def validate(self, converter: "ModuleConverter") -> None:
         r"""
-        **API Language** - :ref:`中文 <Qwen2SNNRecipe.validate-cn>` | :ref:`English <Qwen2SNNRecipe.validate-en>`
+        **API Language** - 中文 | English
 
-        ----
-
-        .. _Qwen2SNNRecipe.validate-cn:
-
-        * **中文**
-
-        校验校准产物与转换配置的时间步、量化等级、分位点和采样参数一致。
+        **中文：** 校验校准产物与转换配置的时间、量化和采样参数一致。
 
         :param converter: 执行此 recipe 的 module converter。
         :type converter: ModuleConverter
         :raises ValueError: 校准产物与配置不一致。
 
-        ----
-
-        .. _Qwen2SNNRecipe.validate-en:
-
-        * **English**
-
-        Validate that the calibration artifact matches the temporal, quantization,
-        quantile, and sampling settings in the conversion configuration.
+        **English:** Validate that calibration metadata matches the conversion
+        configuration.
 
         :param converter: Module converter executing this recipe.
         :type converter: ModuleConverter
-        :raises ValueError: If the calibration artifact and configuration differ.
+        :raises ValueError: If calibration metadata and configuration differ.
         """
         del converter
         for name in (
@@ -1448,7 +1352,6 @@ class Qwen2SNNRecipe(ModuleConversionRecipe):
             is unsupported.
         """
         del converter
-        _validate_qwen2(ann)
-        if len(_qwen_layers(ann)) != len(self.calibration.layer_scales):
+        if len(_validate_qwen2(ann)) != len(self.calibration.layer_scales):
             raise ValueError("Calibration layer count does not match Qwen2 model.")
         return Qwen2SNNModel(ann, self.calibration, self.config).eval()

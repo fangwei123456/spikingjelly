@@ -301,8 +301,7 @@ def clamp_backward(
     :return: the masked gradient
     :rtype: torch.Tensor
     """
-    mask = (x >= min_value).to(x) * (x <= max_value).to(x)
-    return grad_output * mask
+    return grad_output * ((x >= min_value) & (x <= max_value))
 
 
 class clamp_atgf(torch.autograd.Function):
@@ -474,7 +473,7 @@ def step_quantize_forward(x: torch.Tensor, step: float):
     :return: the quantized tensor
     :rtype: torch.Tensor
     """
-    return torch.round_(x / step) * step
+    return torch.round(x / step) * step
 
 
 class step_quantize_atgf(torch.autograd.Function):
@@ -622,10 +621,8 @@ def k_bit_quantize_forward(x: torch.Tensor, k: int):
     :return: the quantized tensor
     :rtype: torch.Tensor
     """
-    c = float(1 << k) - 1.0
-    x = x * c
-    torch.round_(x)
-    return x / c
+    levels = float(1 << k) - 1.0
+    return torch.round(x * levels) / levels
 
 
 class k_bit_quantize_atgf(torch.autograd.Function):

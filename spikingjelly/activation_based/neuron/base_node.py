@@ -199,7 +199,7 @@ class BaseNode(base.MemoryModule):
 
         self.store_v_seq = store_v_seq
 
-        # used in lava_exchange
+        # Lava conversion reads this instance value so callers can tune its scale.
         self.lava_s_cale = 1 << 6
 
         # used for cupy backend

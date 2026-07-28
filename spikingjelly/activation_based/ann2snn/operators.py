@@ -2835,3 +2835,51 @@ class TDMultiheadAttention(TDModule):
             f"embed_dim={self.embed_dim}, num_heads={self.num_heads}, "
             f"dropout={self.dropout}, batch_first={self.batch_first}"
         )
+
+
+def _td_module_from_ann(module: nn.Module) -> Optional[nn.Module]:
+    if isinstance(module, nn.Linear):
+        replacement = TDLinear(
+            module.in_features,
+            module.out_features,
+            bias=module.bias is not None,
+            device=module.weight.device,
+            dtype=module.weight.dtype,
+        )
+    elif isinstance(module, nn.Conv2d):
+        replacement = TDConv2d(
+            module.in_channels,
+            module.out_channels,
+            module.kernel_size,
+            stride=module.stride,
+            padding=module.padding,
+            dilation=module.dilation,
+            groups=module.groups,
+            bias=module.bias is not None,
+            padding_mode=module.padding_mode,
+            device=module.weight.device,
+            dtype=module.weight.dtype,
+        )
+    elif isinstance(module, nn.LayerNorm):
+        replacement = TDLayerNorm(
+            module.normalized_shape,
+            eps=module.eps,
+            elementwise_affine=module.elementwise_affine,
+            bias=module.bias is not None,
+            device=module.weight.device if module.weight is not None else None,
+            dtype=module.weight.dtype if module.weight is not None else None,
+        )
+    elif isinstance(module, nn.GELU):
+        replacement = TDGELU(approximate=getattr(module, "approximate", "none"))
+    else:
+        return None
+
+    source_parameters = dict(module.named_parameters())
+    replacement_parameters = dict(replacement.named_parameters())
+    with torch.no_grad():
+        for name, replacement_parameter in replacement_parameters.items():
+            source_parameter = source_parameters[name]
+            replacement_parameter.copy_(source_parameter)
+            replacement_parameter.requires_grad = source_parameter.requires_grad
+    replacement.train(module.training)
+    return replacement

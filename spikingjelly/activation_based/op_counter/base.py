@@ -23,6 +23,44 @@ __all__ = [
 ]
 
 
+_OPTIMIZER_HINTS = (
+    "add_.",
+    "sub_.",
+    "mul_.",
+    "div_.",
+    "addcmul",
+    "addcdiv",
+    "lerp_",
+    "copy_",
+)
+
+
+def _tensor_bits(x: Any) -> int:
+    if not torch.is_tensor(x):
+        return 0
+    return int(x.numel() * x.element_size() * 8)
+
+
+def _collect_tensors(tree: Any) -> list[torch.Tensor]:
+    flat, _ = tree_flatten(tree)
+    return [x for x in flat if torch.is_tensor(x)]
+
+
+def _infer_stage(func, args, kwargs, out) -> str:
+    op_name = resolve_name(func)
+    if "backward" in op_name:
+        return "backward"
+    if torch.is_grad_enabled():
+        return "forward"
+
+    tensors = _collect_tensors((args, kwargs, out))
+    if any(t.requires_grad for t in tensors) and any(
+        hint in op_name for hint in _OPTIMIZER_HINTS
+    ):
+        return "optimizer"
+    return "forward"
+
+
 def is_binary_tensor(x: torch.Tensor) -> bool:
     r"""
     **API Language** - :ref:`中文 <is_binary_tensor-cn>` | :ref:`English <is_binary_tensor-en>`

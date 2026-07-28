@@ -47,6 +47,7 @@ def _build_cifar10dvs_vgg_pipeline_module(
     num_logical_stages: int,
     example_input: torch.Tensor,
     layout_counts: Optional[Sequence[int]] = None,
+    group=None,
 ) -> _PipelineSequentialModule:
     if num_logical_stages < 2:
         raise ValueError("CIFAR10DVSVGG pipeline parallel requires at least 2 stages.")
@@ -64,11 +65,19 @@ def _build_cifar10dvs_vgg_pipeline_module(
     classifier_input = torch.flatten(current, 2)
     _, classifier_cost = _measure_module_cost(module.classifier, classifier_input)
     unit_costs = [*feature_costs, classifier_cost]
-    stage_unit_counts = (
-        list(layout_counts)
-        if layout_counts is not None
-        else _partition_costs_contiguously(unit_costs, num_logical_stages)
-    )
+    if layout_counts is None:
+        stage_unit_counts = _partition_costs_contiguously(
+            unit_costs, num_logical_stages
+        )
+        if dist.is_initialized():
+            counts = torch.tensor(
+                stage_unit_counts, device=example_input.device, dtype=torch.int64
+            )
+            src = dist.get_global_rank(group, 0) if group is not None else 0
+            dist.broadcast(counts, src=src, group=group)
+            stage_unit_counts = counts.tolist()
+    else:
+        stage_unit_counts = list(layout_counts)
     first_active_stage_idx = next(
         (idx for idx, count in enumerate(stage_unit_counts) if count > 0), None
     )
@@ -122,6 +131,7 @@ def configure_cifar10dvs_vgg_pipeline(
         num_logical_stages=logical_num_stages,
         example_input=example_input,
         layout_counts=layout_counts,
+        group=group,
     )
     return _build_snn_pipeline_runtime(
         pipeline_module=pipeline_module,

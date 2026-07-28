@@ -763,7 +763,7 @@ def test_mpbn_fire_matches_module_residual_paths():
     v = torch.randn(2, 3)
     module = neuron.MPBNLIFNode(tau=2.5, out_features=3, mpbn=False, backend="torch")
     module.v = v.detach().clone()
-    module.vth = torch.tensor([0.1, 0.2, 0.3])
+    module.v_threshold = torch.tensor([0.1, 0.2, 0.3])
     module.gamma = torch.tensor([1.1, 0.9, 1.2])
     module.mu = torch.tensor([0.0, -0.1, 0.2])
     module.beta = torch.tensor([0.3, -0.2, 0.1])
@@ -776,7 +776,7 @@ def test_mpbn_fire_matches_module_residual_paths():
     v_func = v.detach().clone()
     spike_func, v_next = functional.mpbn_fire(
         v_func,
-        module.vth,
+        module.v_threshold,
         module.surrogate_function,
         normalize_residual=True,
         gamma=module.gamma,
@@ -793,7 +793,7 @@ def test_mpbn_fire_matches_module_residual_paths():
     module4 = neuron.MPBNLIFNode(tau=2.5, out_channels=3, mpbn=False, backend="torch")
     v4_module = v4.detach().clone().requires_grad_()
     module4.v = v4_module
-    module4.vth = torch.tensor([0.1, 0.2, 0.3])
+    module4.v_threshold = torch.tensor([0.1, 0.2, 0.3])
     spike_module4 = module4.neuronal_fire()
     loss_module4 = spike_module4.sum() + module4.v.sum()
     loss_module4.backward()
@@ -801,7 +801,7 @@ def test_mpbn_fire_matches_module_residual_paths():
     v4_func = v4.detach().clone().requires_grad_()
     spike_func4, v4_next = functional.mpbn_fire(
         v4_func,
-        module4.vth,
+        module4.v_threshold,
         module4.surrogate_function,
     )
     loss_func4 = spike_func4.sum() + v4_next.sum()

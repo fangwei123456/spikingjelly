@@ -270,40 +270,40 @@ class NoisyBaseNode(nn.Module, base.MultiStepModule):
     def init_tensor(self, data: torch.Tensor):
         self.v = torch.full_like(data, fill_value=self.v_reset)
 
+    def _after_spike(self, t: int, spike: torch.Tensor):
+        return None
+
     def forward(self, x_seq: torch.Tensor):
-        self.init_tensor(x_seq[0].data)
-
+        self.init_tensor(x_seq[0])
         y = []
-
         if self.is_training:
             if self.cn_v is None or self.cn_s is None:
                 self.noise_step += 1
 
-            for t in range(self.T):
-                if self.cn_v is None:
-                    self.neuronal_charge(
-                        x_seq[t]
-                        + self.sigma_v
-                        * self.eps_v_seq[self.noise_step][t].to(x_seq.device)
-                    )
-                else:
-                    self.neuronal_charge(x_seq[t] + self.sigma_v * self.cn_v[:, t])
-                spike = self.neuronal_fire()
-                self.neuronal_reset(spike)
-                if self.cn_s is None:
-                    spike = spike + self.sigma_s * self.eps_s_seq[self.noise_step][
-                        t
-                    ].to(x_seq.device)
-                else:
-                    spike = spike + self.sigma_s * self.cn_s[:, t]
-                y.append(spike)
-
-        else:
-            for t in range(self.T):
-                self.neuronal_charge(x_seq[t])
-                spike = self.neuronal_fire()
-                self.neuronal_reset(spike)
-                y.append(spike)
+        recurrent = None
+        for t in range(self.T):
+            x = x_seq[t]
+            if recurrent is not None:
+                x = x + recurrent
+            if self.is_training:
+                noise_v = (
+                    self.eps_v_seq[self.noise_step][t].to(x_seq.device)
+                    if self.cn_v is None
+                    else self.cn_v[:, t]
+                )
+                x = x + self.sigma_v * noise_v
+            self.neuronal_charge(x)
+            spike = self.neuronal_fire()
+            self.neuronal_reset(spike)
+            if self.is_training:
+                noise_s = (
+                    self.eps_s_seq[self.noise_step][t].to(x_seq.device)
+                    if self.cn_s is None
+                    else self.cn_s[:, t]
+                )
+                spike = spike + self.sigma_s * noise_s
+            y.append(spike)
+            recurrent = self._after_spike(t, spike)
 
         return torch.stack(y)
 
@@ -373,7 +373,7 @@ class NoisyCUBALIFNode(NoisyBaseNode):
         self.v = torch.full_like(data, fill_value=self.v_reset)
 
 
-class NoisyILCBaseNode(nn.Module, base.MultiStepModule):
+class NoisyILCBaseNode(NoisyBaseNode):
     def __init__(
         self,
         act_dim,
@@ -386,121 +386,27 @@ class NoisyILCBaseNode(nn.Module, base.MultiStepModule):
         v_reset: Optional[float] = 0.0,
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(),
     ):
-        assert isinstance(v_reset, float) or v_reset is None
-        assert isinstance(v_threshold, float)
-        super().__init__()
-
         self.act_dim = act_dim
-        self.num_node = act_dim * dec_pop_dim
         self.dec_pop_dim = dec_pop_dim
+        num_node = act_dim * dec_pop_dim
+        super().__init__(
+            num_node,
+            is_training,
+            T,
+            sigma_init,
+            beta,
+            v_threshold,
+            v_reset,
+            surrogate_function,
+        )
+        self.conn = nn.Conv1d(act_dim, num_node, dec_pop_dim, groups=act_dim)
 
-        self.conn = nn.Conv1d(act_dim, self.num_node, dec_pop_dim, groups=act_dim)
-
-        self.is_training = is_training
-        self.T = T
-        self.beta = beta
-
-        self.sigma_v = sigma_init / math.sqrt(self.num_node)
-        self.cn_v = None
-
-        self.sigma_s = sigma_init / math.sqrt(self.num_node)
-        self.cn_s = None
-
-        self.v_threshold = v_threshold
-        self.v_reset = v_reset
-
-        self.surrogate_function = surrogate_function
-
-    @abstractmethod
-    def neuronal_charge(self, x: torch.Tensor):
-        raise NotImplementedError
-
-    def neuronal_fire(self):
-        return self.surrogate_function(self.v - self.v_threshold)
-
-    def neuronal_reset(self, spike):
-        if self.v_reset is None:
-            self.v = self.v - spike * self.v_threshold
-        else:
-            self.v = (1.0 - spike) * self.v + spike * self.v_reset
-
-    def init_tensor(self, data: torch.Tensor):
-        self.v = torch.full_like(data, fill_value=self.v_reset)
-
-    def forward(self, x_seq: torch.Tensor):
-        self.init_tensor(x_seq[0].data)
-
-        y = []
-
-        if self.is_training:
-            if self.cn_v is None or self.cn_s is None:
-                self.noise_step += 1
-
-            for t in range(self.T):
-                if self.cn_v is None:
-                    self.neuronal_charge(
-                        x_seq[t]
-                        + self.sigma_v
-                        * self.eps_v_seq[self.noise_step][t].to(x_seq.device)
-                    )
-                else:
-                    self.neuronal_charge(x_seq[t] + self.sigma_v * self.cn_v[:, t])
-                spike = self.neuronal_fire()
-                self.neuronal_reset(spike)
-                if self.cn_s is None:
-                    spike = spike + self.sigma_s * self.eps_s_seq[self.noise_step][
-                        t
-                    ].to(x_seq.device)
-                else:
-                    spike = spike + self.sigma_s * self.cn_s[:, t]
-                y.append(spike)
-
-                if t < self.T - 1:
-                    x_seq[t + 1] = x_seq[t + 1] + self.conn(
-                        spike.view(-1, self.act_dim, self.dec_pop_dim)
-                    ).view(-1, self.num_node)
-
-        else:
-            for t in range(self.T):
-                self.neuronal_charge(x_seq[t])
-                spike = self.neuronal_fire()
-                self.neuronal_reset(spike)
-                y.append(spike)
-
-                if t < self.T - 1:
-                    x_seq[t + 1] = x_seq[t + 1] + self.conn(
-                        spike.view(-1, self.act_dim, self.dec_pop_dim)
-                    ).view(-1, self.num_node)
-
-        return torch.stack(y)
-
-    def reset_noise(self, num_rl_step):
-        eps_shape = [self.num_node, num_rl_step * self.T]
-        per_order = [1, 2, 0]
-        # (nodes, steps * T) -> (nodes, steps, T) -> (steps, T, nodes)
-        self.eps_v_seq = torch.FloatTensor(
-            powerlaw_psd_gaussian(self.beta, eps_shape).reshape(
-                self.num_node, num_rl_step, self.T
-            )
-        ).permute(per_order)
-        self.eps_s_seq = torch.FloatTensor(
-            powerlaw_psd_gaussian(self.beta, eps_shape).reshape(
-                self.num_node, num_rl_step, self.T
-            )
-        ).permute(per_order)
-        self.noise_step = -1
-
-    def get_colored_noise(self):
-        cn = [self.eps_v_seq[self.noise_step], self.eps_s_seq[self.noise_step]]
-        return torch.cat(cn, dim=1)
-
-    def load_colored_noise(self, cn):
-        self.cn_v = cn[:, :, : self.num_node]
-        self.cn_s = cn[:, :, self.num_node :]
-
-    def cancel_load(self):
-        self.cn_v = None
-        self.cn_s = None
+    def _after_spike(self, t: int, spike: torch.Tensor):
+        if t + 1 == self.T:
+            return None
+        return self.conn(spike.view(-1, self.act_dim, self.dec_pop_dim)).view(
+            -1, self.num_node
+        )
 
 
 class NoisyILCCUBALIFNode(NoisyILCBaseNode):
@@ -560,8 +466,13 @@ class NoisyNonSpikingBaseNode(nn.Module, base.MultiStepModule):
         self.beta = beta
         self.decode = decode
 
-        self.sigma = nn.Parameter(torch.FloatTensor(num_node))
-        self.sigma.data.fill_(sigma_init / math.sqrt(num_node))
+        self.sigma = nn.Parameter(
+            torch.full(
+                (num_node,),
+                sigma_init / math.sqrt(num_node),
+                dtype=torch.float,
+            )
+        )
         self.cn = None
 
     @abstractmethod
@@ -572,48 +483,38 @@ class NoisyNonSpikingBaseNode(nn.Module, base.MultiStepModule):
         self.v = torch.full_like(data, fill_value=0.0)
 
     def forward(self, x_seq: torch.Tensor):
-        self.init_tensor(x_seq[0].data)
-
+        self.init_tensor(x_seq[0])
         v_seq = []
-
         if self.is_training:
             if self.cn is None:
                 self.noise_step += 1
 
-            for t in range(self.T):
-                if self.cn is None:
-                    self.neuronal_charge(
-                        x_seq[t]
-                        + self.sigma.mul(
-                            self.eps_seq[self.noise_step][t].to(x_seq.device)
-                        )
-                    )
-                else:
-                    self.neuronal_charge(
-                        x_seq[t] + self.sigma.mul(self.cn[:, t].to(x_seq.device))
-                    )
-                v_seq.append(self.v)
+        for t in range(self.T):
+            x = x_seq[t]
+            if self.is_training:
+                noise = (
+                    self.eps_seq[self.noise_step][t]
+                    if self.cn is None
+                    else self.cn[:, t]
+                ).to(x_seq.device)
+                x = x + self.sigma * noise
+            self.neuronal_charge(x)
+            v_seq.append(self.v)
 
-        else:
-            for t in range(self.T):
-                self.neuronal_charge(x_seq[t])
-                v_seq.append(self.v)
+        if self.decode not in {"max-mem", "max-abs-mem", "mean-mem", "last-me"}:
+            return v_seq
 
+        v_stack = torch.stack(v_seq)
         if self.decode == "max-mem":
-            mem = torch.max(torch.stack(v_seq, 0), 0).values
+            mem = v_stack.max(0).values
         elif self.decode == "max-abs-mem":
-            v_stack = torch.stack(v_seq, 0)
-            max_mem = torch.max(v_stack, 0).values
-            min_mem = torch.min(v_stack, 0).values
-            mem = max_mem * (max_mem.abs() > min_mem.abs()) + min_mem * (
-                max_mem.abs() <= min_mem.abs()
-            )
+            max_mem = v_stack.max(0).values
+            min_mem = v_stack.min(0).values
+            mem = torch.where(max_mem.abs() > min_mem.abs(), max_mem, min_mem)
         elif self.decode == "mean-mem":
-            mem = torch.mean(torch.stack(v_seq, 0), 0)
+            mem = v_stack.mean(0)
         elif self.decode == "last-me":
             mem = v_seq[-1]
-        else:
-            mem = v_seq
         return mem
 
     def reset_noise(self, num_rl_step):

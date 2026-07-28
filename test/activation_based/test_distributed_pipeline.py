@@ -1,5 +1,8 @@
 # ruff: noqa: F401,F403,F405
-from spikingjelly.activation_based.distributed.pipeline import runtime as pipeline_runtime
+from spikingjelly.activation_based.distributed.pipeline import memopt as pipeline_memopt
+from spikingjelly.activation_based.distributed.pipeline import (
+    runtime as pipeline_runtime,
+)
 from spikingjelly.activation_based.distributed.pipeline.runtime import (
     _build_snn_pipeline_runtime,
 )
@@ -163,6 +166,34 @@ def test_recommend_pipeline_memopt_stages_prefers_heavy_stages():
 def test_recommend_pipeline_memopt_stages_rejects_nan_ratio():
     with pytest.raises(ValueError, match="finite number"):
         recommend_pipeline_memopt_stages((1.0, 2.0), stage_budget_ratio=float("nan"))
+
+
+def test_pipeline_memopt_uses_rank_zero_stage_selection(monkeypatch):
+    runtime = SNNPipelineRuntime(
+        schedule=None,
+        stage_module=nn.Identity(),
+        stage_modules=(),
+        local_stage_indices=(),
+        stage_index=0,
+        num_stages=2,
+        device=torch.device("cpu"),
+        n_microbatches=1,
+        model_family="cifar10dvs_vgg",
+        split_points=("stages.1",),
+        stage_costs=(10.0, 1.0),
+    )
+
+    monkeypatch.setattr(pipeline_memopt.dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(
+        pipeline_memopt.dist,
+        "broadcast",
+        lambda selected, **_kwargs: selected.fill_(1),
+    )
+
+    runtime, _, applied = apply_pipeline_stage_memopt(runtime, memopt_level=1)
+
+    assert applied is False
+    assert runtime.memopt_selected_stage_indices == (1,)
 
 
 def test_apply_pipeline_stage_memopt_only_wraps_selected_heavy_stage():

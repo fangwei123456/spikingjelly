@@ -13,12 +13,28 @@ __all__ = [
 ]
 
 
+def _apply_modules(x, modules):
+    if isinstance(modules, (list, tuple)):
+        for module in modules:
+            x = module(x)
+        return x
+    return modules(x)
+
+
+def _multi_step_forward(x_seq, single_step_module, time_dim):
+    y_seq = [
+        _apply_modules(x_seq.select(time_dim, t), single_step_module)
+        for t in range(x_seq.shape[time_dim])
+    ]
+    return torch.stack(y_seq, dim=time_dim)
+
+
 def multi_step_forward(
     x_seq: Tensor,
     single_step_module: Union[
         nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable
     ],
-):
+) -> Tensor:
     """
     **API Language** - :ref:`中文 <multi_step_forward-cn>` | :ref:`English <multi_step_forward-en>`
 
@@ -64,18 +80,7 @@ def multi_step_forward(
 
     :raises Exception: Any exception raised by an underlying module at any time step is propagated unchanged
     """
-    y_seq = []
-    if isinstance(single_step_module, (list, tuple, nn.Sequential)):
-        for t in range(x_seq.shape[0]):
-            x_seq_t = x_seq[t]
-            for m in single_step_module:
-                x_seq_t = m(x_seq_t)
-            y_seq.append(x_seq_t)
-    else:
-        for t in range(x_seq.shape[0]):
-            y_seq.append(single_step_module(x_seq[t]))
-
-    return torch.stack(y_seq)
+    return _multi_step_forward(x_seq, single_step_module, 0)
 
 
 def t_last_multi_step_forward(
@@ -83,7 +88,7 @@ def t_last_multi_step_forward(
     single_step_module: Union[
         nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable
     ],
-):
+) -> Tensor:
     """
     **API Language** - :ref:`中文 <t_last_multi_step_forward-cn>` | :ref:`English <t_last_multi_step_forward-en>`
 
@@ -132,23 +137,12 @@ def t_last_multi_step_forward(
 
     :raises Exception: Any exception raised by an underlying module at any time step is propagated unchanged
     """
-    y_seq = []
-    if isinstance(single_step_module, (list, tuple, nn.Sequential)):
-        for t in range(x_seq.shape[-1]):
-            x_seq_t = x_seq[..., t]
-            for m in single_step_module:
-                x_seq_t = m(x_seq_t)
-            y_seq.append(x_seq_t)
-    else:
-        for t in range(x_seq.shape[-1]):
-            y_seq.append(single_step_module(x_seq[..., t]))
-
-    return torch.stack(y_seq, dim=-1)
+    return _multi_step_forward(x_seq, single_step_module, -1)
 
 
 def chunk_multi_step_forward(
     split_size: int, x_seq: Tensor, multi_step_module: nn.Module
-):
+) -> Tensor:
     """
     **API Language** - :ref:`中文 <chunk_multi_step_forward-cn>` | :ref:`English <chunk_multi_step_forward-en>`
 
@@ -234,7 +228,7 @@ def chunk_multi_step_forward(
 def seq_to_ann_forward(
     x_seq: Tensor,
     stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable],
-):
+) -> Union[Tensor, tuple[Tensor, ...]]:
     """
     **API Language** - :ref:`中文 <seq_to_ann_forward-cn>` | :ref:`English <seq_to_ann_forward-en>`
 
@@ -253,8 +247,9 @@ def seq_to_ann_forward(
     :param stateless_module: 单个或多个无状态网络层
     :type stateless_module: Union[torch.nn.Module, list, tuple, torch.nn.Sequential, Callable]
 
-    :return: ``shape=[T, batch_size, ...]`` 的输出tensor
-    :rtype: torch.Tensor
+    :return: ``shape=[T, batch_size, ...]`` 的输出tensor；若底层模块返回
+        tensor tuple，则分别恢复每个 tensor 的时间维和批量维
+    :rtype: Union[torch.Tensor, tuple[torch.Tensor, ...]]
 
     :raises Exception: 任何底层无状态模块在前向传播时抛出的异常都会原样向上传播
 
@@ -275,26 +270,24 @@ def seq_to_ann_forward(
     :param stateless_module: one or many stateless modules
     :type stateless_module: Union[torch.nn.Module, list, tuple, torch.nn.Sequential, Callable]
 
-    :return: the output tensor with ``shape=[T, batch_size, ...]``
-    :rtype: torch.Tensor
+    :return: the output tensor with ``shape=[T, batch_size, ...]``; if the
+        underlying module returns a tuple of tensors, each tensor has its time
+        and batch dimensions restored
+    :rtype: Union[torch.Tensor, tuple[torch.Tensor, ...]]
 
     :raises Exception: Any exception raised by an underlying stateless module is propagated unchanged
     """
-    y_shape = [x_seq.shape[0], x_seq.shape[1]]
-    y = x_seq.flatten(0, 1)
-    if isinstance(stateless_module, (list, tuple, nn.Sequential)):
-        for m in stateless_module:
-            y = m(y)
-    else:
-        y = stateless_module(y)
-    y_shape.extend(y.shape[1:])
-    return y.view(y_shape)
+    time_steps, batch_size = x_seq.shape[:2]
+    y = _apply_modules(x_seq.flatten(0, 1), stateless_module)
+    if isinstance(y, tuple):
+        return tuple(item.unflatten(0, (time_steps, batch_size)) for item in y)
+    return y.unflatten(0, (time_steps, batch_size))
 
 
 def t_last_seq_to_ann_forward(
     x_seq: Tensor,
     stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable],
-):
+) -> Union[Tensor, tuple[Tensor, ...]]:
     """
     **API Language** - :ref:`中文 <t_last_seq_to_ann_forward-cn>` | :ref:`English <t_last_seq_to_ann_forward-en>`
 
@@ -309,11 +302,8 @@ def t_last_seq_to_ann_forward(
     .. note::
         SpikingJelly中默认序列数据形状为 ``shape=[T, batch_size, ...]``。
         但此函数是用于另一种格式，即 ``shape=[batch_size, ..., T]``。
-        当 ``torch.vmap`` 可用时，此函数会直接调用
-        ``torch.vmap(stateless_module, in_dims=-1, out_dims=-1)`` 并行地对时间维执行前向传播。
-        因此此路径要求 ``stateless_module`` 是可直接调用的对象，例如 ``nn.Module`` 或
-        ``nn.Sequential``。普通的 ``list`` 或 ``tuple`` 仅在 ``torch.vmap`` 不可用、退化到
-        :func:`t_last_multi_step_forward` 时才可用。
+        此函数使用 ``torch.vmap`` 沿最后一维执行单步前向传播。``list`` 和
+        ``tuple`` 中的模块会被逐项调用；``nn.Sequential`` 作为容器调用。
 
     .. note::
         不能用于BN层，因为BN层的running mean/var是输入依赖的。
@@ -325,11 +315,11 @@ def t_last_seq_to_ann_forward(
     :param stateless_module: 单个或多个无状态网络层
     :type stateless_module: Union[torch.nn.Module, list, tuple, torch.nn.Sequential, Callable]
 
-    :return: ``shape=[batch_size, ..., T]`` 的输出tensor
-    :rtype: torch.Tensor
+    :return: ``shape=[batch_size, ..., T]`` 的输出tensor；若底层模块返回
+        tensor tuple，则分别恢复每个 tensor 的时间维
+    :rtype: Union[torch.Tensor, tuple[torch.Tensor, ...]]
 
-    :raises TypeError: 当 ``torch.vmap`` 可用但 ``stateless_module`` 不是可直接调用对象时，``torch.vmap`` 路径可能抛出类型错误
-    :raises Exception: 任何底层无状态模块在 ``vmap`` 或 fallback 路径中抛出的异常都会原样向上传播
+    :raises Exception: 任何底层无状态模块在前向传播时抛出的异常都会原样向上传播
 
     ----
 
@@ -344,14 +334,10 @@ def t_last_seq_to_ann_forward(
 
         The default shape of sequence data in SpikingJelly is
         ``shape=[T, batch_size, ...]``. However, this function is used for the
-        other data format where ``shape=[batch_size, ..., T]``. When
-        ``torch.vmap`` is available, this function calls
-        ``torch.vmap(stateless_module, in_dims=-1, out_dims=-1)`` to apply the
-        forward pass over the time dimension in parallel. Therefore, this path
-        requires ``stateless_module`` to be directly callable, e.g.
-        ``nn.Module`` or ``nn.Sequential``. Plain ``list`` and ``tuple`` inputs
-        only work on the fallback path that uses
-        :func:`t_last_multi_step_forward` when ``torch.vmap`` is unavailable.
+        other data format where ``shape=[batch_size, ..., T]``. This function
+        uses ``torch.vmap`` to apply the single-step forward pass over the last
+        dimension. Modules in a ``list`` or ``tuple`` are called in order, while
+        an ``nn.Sequential`` is called as a container.
 
     .. admonition:: Note
         :class: note
@@ -367,14 +353,13 @@ def t_last_seq_to_ann_forward(
     :param stateless_module: one or many stateless modules
     :type stateless_module: Union[torch.nn.Module, list, tuple, torch.nn.Sequential, Callable]
 
-    :return: the output tensor with ``shape=[batch_size, ..., T]``
-    :rtype: torch.Tensor
+    :return: the output tensor with ``shape=[batch_size, ..., T]``; if the
+        underlying module returns a tuple of tensors, each tensor has its time
+        dimension restored
+    :rtype: Union[torch.Tensor, tuple[torch.Tensor, ...]]
 
-    :raises TypeError: When ``torch.vmap`` is available, the vmap path may raise a type error if ``stateless_module`` is not directly callable
-    :raises Exception: Any exception raised by an underlying stateless module on either the vmap or fallback path is propagated unchanged
+    :raises Exception: Any exception raised by an underlying stateless module is propagated unchanged
     """
-    if hasattr(torch, "vmap"):
-        vmap_f = torch.vmap(stateless_module, in_dims=-1, out_dims=-1)
-        return vmap_f(x_seq)
-    else:
-        return t_last_multi_step_forward(x_seq, stateless_module)
+    return torch.vmap(
+        lambda x: _apply_modules(x, stateless_module), in_dims=-1, out_dims=-1
+    )(x_seq)

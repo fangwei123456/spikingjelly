@@ -12,7 +12,7 @@ def test_plan_returns_structured_plan_from_analysis():
         backend="inductor",
         batch_size=8,
         model_family="toy_snn",
-        features=DistributedFeatureSet(allow_pipeline=False),
+        features=DistributedFeatureSet(),
     )
     assert isinstance(distributed_plan, SNNDistributedPlan)
     assert distributed_plan.objective == "speed"
@@ -66,6 +66,35 @@ def test_plan_allows_explicit_mode_override_for_advanced_users():
     assert distributed_plan.topology.mesh_shape == (2,)
 
 
+def test_plan_reduces_incompatible_hybrid_recommendation():
+    analysis = analyze(ToyDistributedSNN(), roots=["features"])
+
+    distributed_plan = plan(
+        analysis=analysis,
+        objective="memory",
+        topology={"dp": 4},
+        backend="nccl",
+        batch_size=4,
+    )
+
+    assert distributed_plan.mode == "fsdp2"
+    assert any("was reduced to 'fsdp2'" in note for note in distributed_plan.notes)
+
+
+def test_plan_rejects_explicit_hybrid_mode_without_hybrid_topology():
+    analysis = analyze(ToyDistributedSNN(), roots=["features"])
+
+    with pytest.raises(ValueError, match="requires both 'dp' and 'tp'"):
+        plan(
+            analysis=analysis,
+            objective="memory",
+            topology={"dp": 4},
+            backend="nccl",
+            batch_size=4,
+            mode="fsdp2_tp",
+        )
+
+
 def test_plan_carries_an_immutable_explicit_tensor_parallel_plan():
     model = nn.Sequential(TDLinear(4, 6, bias=False))
     analysis = analyze(model)
@@ -115,7 +144,7 @@ def test_plan_rejects_pipeline_when_feature_flag_disables_it():
             backend="inductor",
             batch_size=8,
             mode="pp",
-            features=DistributedFeatureSet(allow_pipeline=False),
+            features=DistributedFeatureSet(),
         )
 
 
@@ -211,9 +240,9 @@ def test_recommend_snn_distributed_strategy_capacity_falls_back_when_batch_too_s
 
 def test_recommended_pipeline_microbatches_rejects_too_small_batch():
     with pytest.raises(ValueError, match=r"batch_size .* must be >= num_stages"):
-        distributed_dtensor.recommended_pipeline_microbatches(2, 4)
+        recommended_pipeline_microbatches(2, 4)
 
 
 def test_recommended_pipeline_microbatches_rejects_uneven_fallback():
     with pytest.raises(ValueError, match="must be divisible"):
-        distributed_dtensor.recommended_pipeline_microbatches(37, 8)
+        recommended_pipeline_microbatches(37, 8)

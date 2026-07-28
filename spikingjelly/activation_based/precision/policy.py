@@ -5,7 +5,7 @@ from contextlib import nullcontext
 import torch
 
 from .capability import build_capability_report, validate_capability
-from .convert import convert_model_for_precision
+from .convert import ConversionReport, convert_model_for_precision
 
 
 class PrecisionPolicy:
@@ -49,21 +49,8 @@ class PrecisionPolicy:
         return self._capability_report or {"requested_mode": self.name}
 
     def conversion_report(self) -> dict:
-        if self._conversion_report is None:
-            return {
-                "total_modules": 0,
-                "convertible_linear": 0,
-                "convertible_torch_linear": 0,
-                "convertible_pointwise_conv1d": 0,
-                "convertible_layer_norm": 0,
-                "convertible_modules": [],
-                "converted_modules": [],
-                "converted_patterns": [],
-                "skipped_modules": [],
-                "high_precision_modules": [],
-                "unsupported_modules": [],
-            }
-        return self._conversion_report.to_dict()
+        report = self._conversion_report or ConversionReport()
+        return report.to_dict()
 
 
 class FP32Policy(PrecisionPolicy):

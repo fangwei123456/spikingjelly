@@ -9,7 +9,7 @@ English version: :doc:`../en/distributed_training`
 本教程介绍 ``spikingjelly.activation_based.distributed`` 中的分布式训练工具。它提供两类入口：
 
 * 面向多数用户的高层 **Analyze -> Plan -> Apply** 工作流；
-* 面向高级用户的低层 ``SNNDistributedConfig`` 路径，用于手工控制 mesh 维度、tensor-parallel roots、FSDP roots 或 pipeline 参数。
+* 面向高级用户的低层 ``SNNDistributedConfig`` 路径，用于手工控制 mesh 维度、tensor-parallel roots 或 FSDP roots。
 
 运行示例前，需要了解几个最小 PyTorch 分布式概念。``torchrun`` 会为每个 rank 启动一个进程，``world_size`` 是参与训练的 rank 数，``init_process_group`` 会创建 DeviceMesh、DTensor、DDP、FSDP2 和 pipeline schedule 使用的进程组。
 
@@ -72,12 +72,9 @@ API 组织方式
     apply(...) -> api.py selects an adapter when a model family needs one
         |
         v
-    build_eager_config(...) -> execution.py assembles SNNDistributedConfig
-        |
-        v
     configure_snn_distributed(...) -> TP, FSDP2, or DDP modules are applied
 
-模型 adapter 只提供模型族 policy，例如 classifier roots、Conv/BN roots、Spikformer roots 和 FSDP shard roots。共享 eager config builder 是唯一把 ``mode + topology + policy + feature flags`` 展开成 ``SNNDistributedConfig`` 的位置。
+模型 adapter 向 ``SNNDistributedConfig`` 补充模型族所需的 roots，然后调用共享执行路径。
 
 Pipeline parallelism 被单独处理，因为它需要 ``example_input`` 来构造 stage 并测量 cost。pipeline 模块负责 stage partition、schedule selection、microbatch reset 和可选 stage-level memory optimization。
 
@@ -194,11 +191,11 @@ Pipeline parallelism 被单独处理，因为它需要 ``example_input`` 来构�
 手工配置
 --------
 
-高级用户仍可绕过 planner，通过 ``distributed.dtensor`` 兼容低层入口直接调用。这个路径适合需要精确控制 TP/FSDP roots 或手工 2D mesh 维度的场景。
+高级用户仍可绕过 planner，直接调用低层入口。这个路径适合需要精确控制 TP/FSDP roots 或手工 2D mesh 维度的场景。
 
 .. code:: python
 
-    from spikingjelly.activation_based.distributed.dtensor import (
+    from spikingjelly.activation_based.distributed import (
         SNNDistributedConfig,
         configure_snn_distributed,
     )
@@ -206,21 +203,20 @@ Pipeline parallelism 被单独处理，因为它需要 ``example_input`` 来构�
     model, mesh, analysis = configure_snn_distributed(
         model,
         SNNDistributedConfig(
+            mode="fsdp2_tp",
             device_type="cuda",
             mesh_shape=(2, 2),
-            enable_fsdp2=True,
             fsdp_shard_roots=["features"],
             fsdp_shard_module_root=False,
             tensor_parallel_roots=["classifier"],
             auto_tensor_parallel=True,
-            experimental_conv_tensor_parallel=True,
             conv_tensor_parallel_roots=["features"],
             dp_mesh_dim=0,
             tp_mesh_dim=1,
         ),
     )
 
-低层路径会保持兼容，但除非需要直接控制 roots 或 mesh 维度，多数用户应优先使用 ``analyze`` / ``plan`` / ``apply``。
+除非需要直接控制 roots 或 mesh 维度，多数用户应优先使用 ``analyze`` / ``plan`` / ``apply``。
 
 流水线并行
 --------------------
@@ -236,7 +232,7 @@ Pipeline parallelism 使用专用 builder，因为它需要 ``example_input`` �
 
 * **吞吐优先，显存压力不大**：先用 ``dp`` 做直接 weak scaling。如果优化器状态可能成为瓶颈，可以尝试 ``dp + zero``，但收益和 workload 强相关，需要实测。
 * **单卡显存优先，尤其是 Transformer 型 SNN**：activation 和神经元状态显存占主导时，优先尝试 ``tp``。如果还需要 FSDP2 风格的分片，再尝试 ``fsdp2_tp``，并显式使用 2D mesh，例如 ``--mesh-shape 2 2``。
-* **pipeline 实验或 stage 级显存压力**：通过专用 pipeline runtime 使用 ``pp``。当前 CIFAR10DVSVGG benchmark 中，``gpipe`` 是吞吐优先的 PP 默认调度，``1f1b`` 是显存优先的 PP 默认调度。
+* **pipeline 实验或 stage 级显存压力**：通过专用 pipeline runtime 使用 ``pp``。当前 CIFAR10DVSVGG benchmark 的吞吐优先结果使用 ``gpipe``，显存优先结果使用 ``1f1b``；``auto`` 会根据 virtual stage 配置选择调度。
 * **只想要最简单的分布式训练入口**：从 ``dp`` 开始。只有当模型规模或显存曲线确实需要时，再迁移到 ``fsdp2``、``tp``、``fsdp2_tp`` 或 ``pp``。
 
 ``hybrid``（``DDP + TP``）显式不支持，因为 DDP 状态同步会混合普通 ``Tensor`` 参数和 ``DTensor`` 参数。请使用 ``fsdp2_tp``。

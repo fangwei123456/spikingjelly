@@ -1,24 +1,6 @@
 import torch
 
 
-def sg_registry_key(sg) -> str:
-    params = getattr(sg, "_sg_params", {})
-    spiking = bool(getattr(sg, "spiking", True))
-    if isinstance(params, dict):
-        params = tuple(sorted(params.items()))
-    elif params is None:
-        params = ()
-    return repr(
-        (
-            sg.__class__.__module__,
-            sg.__class__.__qualname__,
-            spiking,
-            params,
-            id(sg),
-        )
-    )
-
-
 def replay_and_grad(op, tensor_args, static_args, grad_outputs):
     replay_inputs = []
     grad_inputs = []

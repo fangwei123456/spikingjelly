@@ -29,15 +29,7 @@ def collect_reset_modules(net: nn.Module) -> tuple[nn.Module, ...]:
 
 def _supports_reset_cache_key(net: nn.Module) -> bool:
     net_type = type(net)
-    if net_type.__eq__ is not object.__eq__:
-        return False
-    if net_type.__hash__ is not object.__hash__:
-        return False
-    try:
-        ref(net)
-    except TypeError:
-        return False
-    return True
+    return net_type.__eq__ is object.__eq__ and net_type.__hash__ is object.__hash__
 
 
 def _resolve_cached_reset_modules(
@@ -158,10 +150,7 @@ def reset_net(net: nn.Module):
         return
     modules = collect_reset_modules(net)
     if _supports_reset_cache_key(net):
-        try:
-            _RESET_MODULE_CACHE[net] = tuple(ref(module) for module in modules)
-        except TypeError:
-            pass
+        _RESET_MODULE_CACHE[net] = tuple(ref(module) for module in modules)
     reset_collected_modules(modules)
 
 
@@ -242,31 +231,18 @@ def set_step_mode(net: nn.Module, step_mode: str):
     )
     # step_mode of sub-modules in keep_step_mode_instance will not be changed
 
-    keep_step_mode_containers = []
-    for m in net.modules():
-        if isinstance(m, keep_step_mode_instance):
-            keep_step_mode_containers.append(m)
-
-    for m in net.modules():
+    modules = [net]
+    while modules:
+        m = modules.pop()
         if hasattr(m, "step_mode"):
-            is_contained = False
-            for container in keep_step_mode_containers:
-                if (
-                    not isinstance(m, keep_step_mode_instance)
-                    and m in container.modules()
-                ):
-                    is_contained = True
-                    break
-            if is_contained:
-                # this function should not change step_mode of submodules in keep_step_mode_containers
-                pass
-            else:
-                if not isinstance(m, (base.StepModule)):
-                    logging.warning(
-                        f"Trying to set the step mode for {m}, which is not spikingjelly.activation_based"
-                        f".base.StepModule"
-                    )
-                m.step_mode = step_mode
+            if not isinstance(m, base.StepModule):
+                logging.warning(
+                    f"Trying to set the step mode for {m}, which is not spikingjelly.activation_based"
+                    f".base.StepModule"
+                )
+            m.step_mode = step_mode
+        if not isinstance(m, keep_step_mode_instance):
+            modules.extend(reversed(tuple(m.children())))
 
 
 def set_backend(
@@ -333,18 +309,18 @@ def set_backend(
     """
     instance = (nn.Module,) if instance is None else instance
     for m in net.modules():
-        if isinstance(m, instance):
-            if hasattr(m, "backend"):
-                if not isinstance(m, base.MemoryModule):
-                    logging.warning(
-                        f"Trying to set the backend for {m}, which is not spikingjelly.activation_based.base.MemoryModule"
-                    )
-                if backend in m.supported_backends:
-                    m.backend = backend
-                else:
-                    logging.warning(
-                        f"{m} does not supports for backend={backend}. It will still use backend={m.backend}."
-                    )
+        if not isinstance(m, instance) or not hasattr(m, "backend"):
+            continue
+        if not isinstance(m, base.MemoryModule):
+            logging.warning(
+                f"Trying to set the backend for {m}, which is not spikingjelly.activation_based.base.MemoryModule"
+            )
+        if backend in m.supported_backends:
+            m.backend = backend
+        else:
+            logging.warning(
+                f"{m} does not supports for backend={backend}. It will still use backend={m.backend}."
+            )
 
 
 def detach_net(net: nn.Module):

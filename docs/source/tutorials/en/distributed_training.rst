@@ -12,7 +12,7 @@ points:
 
 * a high-level **Analyze -> Plan -> Apply** workflow for most users;
 * the lower-level ``SNNDistributedConfig`` path for users who need exact mesh
-  dimensions, tensor-parallel roots, FSDP roots, or pipeline controls.
+  dimensions, tensor-parallel roots, or FSDP roots.
 
 Before running the examples, you should know a few PyTorch distributed terms.
 ``torchrun`` starts one process per rank, ``world_size`` is the number of
@@ -90,15 +90,10 @@ split into focused modules:
     apply(...) -> api.py selects an adapter when a model family needs one
         |
         v
-    build_eager_config(...) -> execution.py assembles SNNDistributedConfig
-        |
-        v
     configure_snn_distributed(...) -> TP, FSDP2, or DDP modules are applied
 
-Model adapters only provide model-family policy such as classifier roots,
-Conv/BN roots, Spikformer roots, and FSDP shard roots. The shared eager config
-builder is the single place that expands ``mode + topology + policy + feature
-flags`` into ``SNNDistributedConfig``.
+Model adapters add the model-family roots needed by
+``SNNDistributedConfig`` and then call the shared execution path.
 
 Pipeline parallelism is intentionally separate because it requires an
 ``example_input`` for stage construction and cost measurement. The pipeline
@@ -222,13 +217,12 @@ The current high-level intents are:
 Manual Configuration
 --------------------
 
-Advanced users can still bypass the planner and call the compatibility
-low-level entry through ``distributed.dtensor``. This path is useful when you
-need exact TP/FSDP roots or manual 2D mesh dimensions.
+Advanced users can bypass the planner and call the low-level entry directly
+when they need exact TP/FSDP roots or manual 2D mesh dimensions.
 
 .. code:: python
 
-    from spikingjelly.activation_based.distributed.dtensor import (
+    from spikingjelly.activation_based.distributed import (
         SNNDistributedConfig,
         configure_snn_distributed,
     )
@@ -236,21 +230,20 @@ need exact TP/FSDP roots or manual 2D mesh dimensions.
     model, mesh, analysis = configure_snn_distributed(
         model,
         SNNDistributedConfig(
+            mode="fsdp2_tp",
             device_type="cuda",
             mesh_shape=(2, 2),
-            enable_fsdp2=True,
             fsdp_shard_roots=["features"],
             fsdp_shard_module_root=False,
             tensor_parallel_roots=["classifier"],
             auto_tensor_parallel=True,
-            experimental_conv_tensor_parallel=True,
             conv_tensor_parallel_roots=["features"],
             dp_mesh_dim=0,
             tp_mesh_dim=1,
         ),
     )
 
-This low-level path is stable for compatibility, but most users should prefer
+Most users should prefer
 ``analyze`` / ``plan`` / ``apply`` unless they need direct control over roots or
 mesh dimensions.
 
@@ -280,8 +273,9 @@ If you already know your main objective, the following rules of thumb work well:
   ``--mesh-shape 2 2``.
 * **Pipeline experiments or stage-level memory pressure**: use ``pp`` through
   the dedicated pipeline runtime. In the current CIFAR10DVSVGG benchmark,
-  ``gpipe`` is the best PP throughput default, while ``1f1b`` is the best PP
-  memory default.
+  the throughput-oriented result uses ``gpipe``, while the memory-oriented
+  result uses ``1f1b``. ``auto`` chooses a schedule from the virtual-stage
+  configuration.
 * **Simplest distributed entry point**: begin with ``dp``. Move to
   ``fsdp2``, ``tp``, ``fsdp2_tp``, or ``pp`` only when the model size or memory
   profile justifies the extra machinery.

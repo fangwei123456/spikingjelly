@@ -304,6 +304,48 @@ def test_standard_inductor_backend_cache_key_tracks_runtime_shape_changes(
 
 
 @pytest.mark.parametrize("kind", ["lif", "if", "plif"])
+def test_standard_inductor_backend_handles_shape_and_config_changes(kind):
+    _require_cuda_triton_compile()
+    torch_node = _build_node(kind, "torch", _make_surrogate("Sigmoid")).cuda().train()
+    inductor_node = (
+        _build_node(kind, "inductor", _make_surrogate("Sigmoid")).cuda().train()
+    )
+    inductor_node.load_state_dict(torch_node.state_dict(), strict=True)
+
+    for shape in ((4, 2, 8), (4, 2, 2, 4)):
+        x = torch.randn(*shape, device="cuda")
+        functional.reset_net(torch_node)
+        functional.reset_net(inductor_node)
+        assert torch.allclose(torch_node(x), inductor_node(x), atol=1e-5, rtol=1e-4)
+
+    torch_node.v_threshold = inductor_node.v_threshold = 1.5
+    if kind == "lif":
+        torch_node.tau = inductor_node.tau = 3.0
+    x = torch.randn(4, 2, 2, 4, device="cuda")
+    functional.reset_net(torch_node)
+    functional.reset_net(inductor_node)
+    assert torch.allclose(torch_node(x), inductor_node(x), atol=1e-5, rtol=1e-4)
+
+
+def test_standard_inductor_backend_handles_cuda_device_changes():
+    _require_cuda_triton_compile()
+    if torch.cuda.device_count() < 2:
+        pytest.skip("At least 2 CUDA devices are required.")
+
+    torch_node = _build_node("if", "torch", _make_surrogate("Sigmoid")).to("cuda:0")
+    inductor_node = _build_node("if", "inductor", _make_surrogate("Sigmoid")).to(
+        "cuda:0"
+    )
+    for device in ("cuda:0", "cuda:1"):
+        torch_node.to(device)
+        inductor_node.to(device)
+        x = torch.randn(4, 2, 8, device=device)
+        functional.reset_net(torch_node)
+        functional.reset_net(inductor_node)
+        assert torch.allclose(torch_node(x), inductor_node(x), atol=1e-5, rtol=1e-4)
+
+
+@pytest.mark.parametrize("kind", ["lif", "if", "plif"])
 @pytest.mark.parametrize("sg_name", ["Sigmoid", "ATan"])
 def test_triton_vs_torch_forward_backward_consistency(kind, sg_name):
     _require_cuda_triton_compile()

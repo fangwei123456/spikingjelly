@@ -14,7 +14,7 @@ from .common import (
     cupy,
     math,
     prepare_forward_meta,
-    resolve_sg_cupy_id_and_key,
+    resolve_sg_cupy_id,
     scalar_to_cupy,
     surrogate,
 )
@@ -505,8 +505,6 @@ def multistep_plif(
     v_reset: Optional[float],
     detach_reset: bool,
     surrogate_function: surrogate.SurrogateFunctionBase,
-    forward_kernel: Optional[ParametricLIFNodeFPTTKernel] = None,
-    backward_kernel: Optional[ParametricLIFNodeBPTTKernel] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     r"""
     **API Language** - :ref:`中文 <multistep_plif-cn>` | :ref:`English <multistep_plif-en>`
@@ -546,12 +544,6 @@ def multistep_plif(
 
     :param surrogate_function: 反向传播使用的替代梯度函数
     :type surrogate_function: surrogate.SurrogateFunctionBase
-
-    :param forward_kernel: 可选，复用前向 CUDA kernel 实例
-    :type forward_kernel: Optional[ParametricLIFNodeFPTTKernel]
-
-    :param backward_kernel: 可选，复用反向 CUDA kernel 实例
-    :type backward_kernel: Optional[ParametricLIFNodeBPTTKernel]
 
     :return: ``(s_seq, v_seq)``，分别为脉冲序列与每步膜电位
     :rtype: tuple[torch.Tensor, torch.Tensor]
@@ -595,17 +587,10 @@ def multistep_plif(
     :param surrogate_function: Surrogate gradient function used in backward
     :type surrogate_function: surrogate.SurrogateFunctionBase
 
-    :param forward_kernel: Optional pre-built forward CUDA kernel instance
-    :type forward_kernel: Optional[ParametricLIFNodeFPTTKernel]
-
-    :param backward_kernel: Optional pre-built backward CUDA kernel instance
-    :type backward_kernel: Optional[ParametricLIFNodeBPTTKernel]
-
     :return: ``(s_seq, v_seq)``, spike sequence and per-step membrane potential sequence
     :rtype: tuple[torch.Tensor, torch.Tensor]
     """
-    del forward_kernel, backward_kernel
-    sg_cupy_id, _ = resolve_sg_cupy_id_and_key(surrogate_function)
+    sg_cupy_id = resolve_sg_cupy_id(surrogate_function)
     soft_reset = v_reset is None
     v_reset_value = 0.0 if v_reset is None else float(v_reset)
     s_seq, v_seq, _ = cupy_multistep_plif_forward(

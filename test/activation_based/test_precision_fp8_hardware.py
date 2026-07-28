@@ -511,11 +511,11 @@ def test_fp8_te_conversion_surfaces_match_fp32_on_hardware(model, x):
 
 def test_fp8_te_attention_adapter_propagates_gradients_and_runs_inference():
     device = _cuda_device_or_skip("fp8-te")
+    _require_backend_capability(torch.nn.Identity(), device, "fp8-te")
     adapter = TransformerEngineDotProductAttentionAdapter(
         num_attention_heads=4,
         head_dim=16,
     ).to(device)
-    _require_backend_capability(adapter, device, "fp8-te")
     policy = Float8TransformerEnginePolicy(fp8_recipe="auto")
     try:
         policy.check_capability(adapter, device)

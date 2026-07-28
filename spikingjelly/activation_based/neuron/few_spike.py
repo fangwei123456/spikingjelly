@@ -46,7 +46,7 @@ def _check_table_length(name: str, table: "FewSpikeTable", K: int):
 
 
 def _table_tensor_to_reference(tensor: torch.Tensor, reference: torch.Tensor):
-    return tensor.to(device=reference.device, dtype=reference.dtype).detach().clone()
+    return tensor.to(device=reference.device, dtype=reference.dtype).clone()
 
 
 class FewSpikeTable:
@@ -199,35 +199,22 @@ class FewSpikeNode(nn.Module, base.StepModule):
     def K(self) -> int:
         return self.theta.numel()
 
-    def _check_input(self, x: torch.Tensor, name: str):
+    @staticmethod
+    def _check_input(x: torch.Tensor, name: str):
         if not isinstance(x, torch.Tensor):
             raise TypeError(f"{name} must be a torch.Tensor.")
         if not torch.is_floating_point(x):
             raise TypeError(f"{name} must be a floating point tensor.")
 
-    def _check_multi_step_input(self, x_seq: torch.Tensor):
-        self._check_input(x_seq, "x_seq")
-        if x_seq.dim() < 1:
-            raise ValueError(
-                "x_seq must have at least one dimension and shape [K, ...]."
-            )
-        if x_seq.shape[0] != self.K:
-            raise ValueError(
-                f"x_seq.shape[0] must equal K={self.K}, but got {x_seq.shape[0]}."
-            )
-
-    def _run_table(
-        self,
-        gate: torch.Tensor,
-        theta: torch.Tensor,
-        h: torch.Tensor,
-        d: torch.Tensor,
-        return_sequence: bool,
+    def _forward_from_gate(
+        self, gate: torch.Tensor, return_sequence: bool
     ) -> torch.Tensor:
         v = gate
         y_seq = []
         y = torch.zeros_like(gate) if not return_sequence else None
-        for theta_k, h_k, d_k in zip(theta.unbind(0), h.unbind(0), d.unbind(0)):
+        for theta_k, h_k, d_k in zip(
+            self.theta.unbind(0), self.h.unbind(0), self.d.unbind(0)
+        ):
             z = self.surrogate_function(v - theta_k)
             weighted_spike = d_k * z
             if return_sequence:
@@ -238,11 +225,6 @@ class FewSpikeNode(nn.Module, base.StepModule):
         if return_sequence:
             return torch.stack(y_seq, dim=0)
         return y
-
-    def _forward_from_gate(
-        self, gate: torch.Tensor, return_sequence: bool
-    ) -> torch.Tensor:
-        return self._run_table(gate, self.theta, self.h, self.d, return_sequence)
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         r"""
@@ -321,16 +303,17 @@ class FewSpikeNode(nn.Module, base.StepModule):
         :raises TypeError: Raised when ``x_seq`` is not a floating point tensor.
         :raises ValueError: Raised when ``x_seq.shape[0] != K``.
         """
-        self._check_multi_step_input(x_seq)
+        self._check_input(x_seq, "x_seq")
+        if x_seq.shape[0] != self.K:
+            raise ValueError(
+                f"x_seq.shape[0] must equal K={self.K}, but got {x_seq.shape[0]}."
+            )
         return self._forward_from_gate(x_seq.sum(dim=0), return_sequence=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.step_mode == "s":
             return self.single_step_forward(x)
-        elif self.step_mode == "m":
-            return self.multi_step_forward(x)
-        else:
-            raise ValueError(self.step_mode)
+        return self.multi_step_forward(x)
 
     def extra_repr(self) -> str:
         return f"K={self.K}, step_mode={self.step_mode}"
@@ -573,22 +556,22 @@ class HGNode(FewSpikeNode):
         for i, table in enumerate(tables[1:], start=1):
             _check_table_length(f"tables[{i}]", table, K)
 
-        if len(tables) == 1 and torch.as_tensor(gate_thresholds).numel() == 0:
-            thresholds = torch.empty(
-                0,
-                dtype=tables[0].theta.dtype,
-                device=tables[0].theta.device,
-            )
-        else:
-            thresholds = _as_float_1d_tensor("gate_thresholds", gate_thresholds).to(
-                device=tables[0].theta.device,
-                dtype=tables[0].theta.dtype,
-            )
+        thresholds = torch.as_tensor(gate_thresholds)
+        if thresholds.dim() != 1:
+            raise ValueError("gate_thresholds must be a 1-D tensor or sequence.")
+        if torch.is_complex(thresholds):
+            raise TypeError("gate_thresholds must be real-valued.")
+        thresholds = thresholds.to(
+            device=tables[0].theta.device,
+            dtype=tables[0].theta.dtype,
+        )
         if thresholds.numel() != len(tables) - 1:
             raise ValueError(
                 "gate_thresholds must have length len(tables) - 1, but got "
                 f"{thresholds.numel()} for {len(tables)} tables."
             )
+        if not torch.isfinite(thresholds).all():
+            raise ValueError("gate_thresholds must contain only finite values.")
         if thresholds.numel() > 1 and not torch.all(thresholds[1:] > thresholds[:-1]):
             raise ValueError("gate_thresholds must be strictly increasing.")
 

@@ -35,8 +35,8 @@ from spikingjelly.activation_based.triton_kernel.neuron_kernel.plif import (
     multistep_plif_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.utils import (
-    TritonNeuronForwardPlan,
-    prepare_triton_neuron_forward_plan,
+    TritonNeuronExecutionPlan,
+    prepare_triton_neuron_execution_plan,
 )
 from spikingjelly.activation_based.triton_kernel.triton_utils import (
     normalize_triton_compute_dtype_name,
@@ -248,12 +248,12 @@ def _prepare_variant_plan(
     storage_dtype: torch.dtype,
     compute_dtype: str,
     backward_compute_dtype: str = "fp32",
-) -> TritonNeuronForwardPlan:
-    return prepare_triton_neuron_forward_plan(
+) -> TritonNeuronExecutionPlan:
+    return prepare_triton_neuron_execution_plan(
         neuron_type=neuron_type,
         device=x.device,
         storage_dtype=storage_dtype,
-        compute_dtype=compute_dtype,
+        forward_compute_dtype=compute_dtype,
         backward_compute_dtype=backward_compute_dtype,
         spike_dtype=torch.float32,
         save_intermediates=True,
@@ -263,7 +263,7 @@ def _prepare_variant_plan(
 def _call_mixed_precision_variant_with_plan(
     x: torch.Tensor,
     *,
-    plan: TritonNeuronForwardPlan,
+    plan: TritonNeuronExecutionPlan,
     neuron_type: str,
     r_tau: float,
     v_threshold: float,
@@ -522,12 +522,9 @@ def _compare_plan_overhead(
                 else None
             ),
         }
-        finite = (
-            grads["x"] is not None and torch.isfinite(grads["x"]).all().item()
-        )
+        finite = grads["x"] is not None and torch.isfinite(grads["x"]).all().item()
         finite = finite and (
-            grads["v_init"] is not None
-            and torch.isfinite(grads["v_init"]).all().item()
+            grads["v_init"] is not None and torch.isfinite(grads["v_init"]).all().item()
         )
         if neuron_type == "plif":
             finite = finite and (
@@ -595,9 +592,7 @@ def _compare_plan_overhead(
     result.update(grad_metrics)
     # Backward-compatible field names kept for existing result parsers.
     result["grad_x_max_abs_error"] = grad_metrics.get("safe_vs_plan_x_max_abs_error")
-    result["grad_x_mean_abs_error"] = grad_metrics.get(
-        "safe_vs_plan_x_mean_abs_error"
-    )
+    result["grad_x_mean_abs_error"] = grad_metrics.get("safe_vs_plan_x_mean_abs_error")
     return result
 
 
@@ -809,33 +804,45 @@ def main() -> None:
                         "variants": [],
                     }
                     if neuron_type == "if":
-                        triton_ref = neuron.IFNode(
-                            v_threshold=1.0,
-                            v_reset=v_reset,
-                            step_mode="m",
-                            backend="triton",
-                            store_v_seq=True,
-                        ).to(device).eval()
+                        triton_ref = (
+                            neuron.IFNode(
+                                v_threshold=1.0,
+                                v_reset=v_reset,
+                                step_mode="m",
+                                backend="triton",
+                                store_v_seq=True,
+                            )
+                            .to(device)
+                            .eval()
+                        )
                     elif neuron_type == "lif":
-                        triton_ref = neuron.LIFNode(
-                            tau=1.0 / r_tau,
-                            v_threshold=1.0,
-                            v_reset=v_reset,
-                            decay_input=bool(decay_input),
-                            step_mode="m",
-                            backend="triton",
-                            store_v_seq=True,
-                        ).to(device).eval()
+                        triton_ref = (
+                            neuron.LIFNode(
+                                tau=1.0 / r_tau,
+                                v_threshold=1.0,
+                                v_reset=v_reset,
+                                decay_input=bool(decay_input),
+                                step_mode="m",
+                                backend="triton",
+                                store_v_seq=True,
+                            )
+                            .to(device)
+                            .eval()
+                        )
                     else:
-                        triton_ref = neuron.ParametricLIFNode(
-                            init_tau=1.0 / r_tau,
-                            v_threshold=1.0,
-                            v_reset=v_reset,
-                            decay_input=bool(decay_input),
-                            step_mode="m",
-                            backend="triton",
-                            store_v_seq=True,
-                        ).to(device).eval()
+                        triton_ref = (
+                            neuron.ParametricLIFNode(
+                                init_tau=1.0 / r_tau,
+                                v_threshold=1.0,
+                                v_reset=v_reset,
+                                decay_input=bool(decay_input),
+                                step_mode="m",
+                                backend="triton",
+                                store_v_seq=True,
+                            )
+                            .to(device)
+                            .eval()
+                        )
                     with torch.no_grad():
                         out_s = triton_ref(x)
                     case_result["triton_fp32_reference"] = _metrics(
@@ -862,9 +869,7 @@ def main() -> None:
                                     "neuron_type": neuron_type,
                                     "storage_dtype": dtype_name,
                                     "compute_dtype": compute_dtype,
-                                    "backward_compute_dtype": (
-                                        backward_compute_dtype
-                                    ),
+                                    "backward_compute_dtype": (backward_compute_dtype),
                                 }
                             )
                             if out is not None:

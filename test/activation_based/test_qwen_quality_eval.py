@@ -8,7 +8,10 @@ import torch
 import torch.nn as nn
 
 from benchmark.snn_llm.qwen_conversion import quality_eval as runner
-from spikingjelly.activation_based.ann2snn import Qwen2SNNCalibration
+from spikingjelly.activation_based.ann2snn import (
+    Qwen2SNNCalibration,
+    Qwen2SNNConfig,
+)
 
 
 def test_distributed_task_timeout_allows_imbalanced_long_tasks():
@@ -232,35 +235,19 @@ def test_load_calibration_requires_matching_configuration(tmp_path):
     path = tmp_path / "calibration.pt"
     torch.save(calibration.state_dict(), path)
 
-    loaded, digest = runner._load_calibration(path)
-    runner._validate_calibration_config(
-        loaded,
-        time_steps=32,
-        calibration_levels=16,
-        calibration_quantile=1.0,
-        calibration_reservoir_size=4096,
-        calibration_seed=20260719,
-    )
+    loaded, digest = runner._load_calibration(path, Qwen2SNNConfig())
 
     assert loaded.time_steps == 32
     assert len(digest) == 64
     with pytest.raises(ValueError, match="time_steps"):
-        runner._validate_calibration_config(
-            loaded,
-            time_steps=64,
-            calibration_levels=16,
-            calibration_quantile=1.0,
-            calibration_reservoir_size=4096,
-            calibration_seed=20260719,
+        runner._load_calibration(
+            path,
+            Qwen2SNNConfig(time_steps=64),
         )
     with pytest.raises(ValueError, match="calibration_seed"):
-        runner._validate_calibration_config(
-            loaded,
-            time_steps=32,
-            calibration_levels=16,
-            calibration_quantile=1.0,
-            calibration_reservoir_size=4096,
-            calibration_seed=0,
+        runner._load_calibration(
+            path,
+            Qwen2SNNConfig(calibration_seed=0),
         )
 
 
@@ -310,26 +297,27 @@ def test_full_evaluation_requires_full_test_ppl_and_all_tasks():
 
 
 def test_encoder_summary_reports_worst_layer_and_finite_rates():
-    class FakeConverted:
-        def encoder_statistics(self):
-            return (
-                {
-                    "name": "input",
-                    "local_relative_l2": 0.1,
-                    "positive_spike_rate": 0.2,
-                    "negative_spike_rate": 0.3,
-                    "boundary_correction_fraction": 0.01,
-                },
-                {
-                    "name": "layer.0.query",
-                    "local_relative_l2": 0.4,
-                    "positive_spike_rate": 0.4,
-                    "negative_spike_rate": 0.5,
-                    "boundary_correction_fraction": 0.02,
-                },
-            )
+    records = (
+        {
+            "name": "input",
+            "local_relative_l2": 0.1,
+            "positive_spike_rate": 0.2,
+            "negative_spike_rate": 0.3,
+            "boundary_correction_fraction": 0.01,
+        },
+        {
+            "name": "layer.0.query",
+            "local_relative_l2": 0.4,
+            "positive_spike_rate": 0.4,
+            "negative_spike_rate": 0.5,
+            "boundary_correction_fraction": 0.02,
+        },
+    )
+    converted = SimpleNamespace(
+        encoder_statistics=lambda: records,
+    )
 
-    summary = runner._encoder_summary(FakeConverted())
+    summary = runner._encoder_summary(converted)
 
     assert summary["count"] == 2
     assert summary["worst_local_encoder"] == "layer.0.query"
@@ -338,33 +326,33 @@ def test_encoder_summary_reports_worst_layer_and_finite_rates():
 
 
 def test_statistics_probe_disables_collection_before_quality():
+    encoder = SimpleNamespace(
+        collect_statistics=False,
+        statistics=lambda: {
+            "name": "probe",
+            "local_relative_l2": 0.1,
+            "positive_spike_rate": 0.2,
+            "negative_spike_rate": 0.3,
+            "boundary_correction_fraction": 0.0,
+        },
+    )
+
     class FakeConverted(nn.Module):
         def __init__(self):
             super().__init__()
-            self.collection_states = []
             self.forward_collection_state = None
-            self.collect_statistics = True
 
         def set_collect_statistics(self, enabled):
-            self.collect_statistics = enabled
-            self.collection_states.append(enabled)
+            encoder.collect_statistics = enabled
+
+        def encoder_statistics(self):
+            return (encoder.statistics(),)
 
         def forward(self, input_ids, attention_mask, encoding_mode):
             assert input_ids.shape == attention_mask.shape
             assert encoding_mode == "signed_if"
-            self.forward_collection_state = self.collect_statistics
+            self.forward_collection_state = encoder.collect_statistics
             return SimpleNamespace(logits=torch.zeros(*input_ids.shape, 2))
-
-        def encoder_statistics(self):
-            return (
-                {
-                    "name": "probe",
-                    "local_relative_l2": 0.1,
-                    "positive_spike_rate": 0.2,
-                    "negative_spike_rate": 0.3,
-                    "boundary_correction_fraction": 0.0,
-                },
-            )
 
     def tokenizer(_text, **_kwargs):
         return {
@@ -381,8 +369,7 @@ def test_statistics_probe_disables_collection_before_quality():
     )
 
     assert converted.forward_collection_state is True
-    assert converted.collection_states == [True, False]
-    assert converted.collect_statistics is False
+    assert encoder.collect_statistics is False
     assert summary["worst_local_encoder"] == "probe"
 
 

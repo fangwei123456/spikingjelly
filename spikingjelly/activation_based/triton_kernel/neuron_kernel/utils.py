@@ -43,21 +43,13 @@ class TritonNeuronExecutionPlan:
     spike_dtype_id: int
     save_intermediates: bool
 
-    @property
-    def compute_dtype_name(self) -> str:
-        return self.forward_compute_dtype_name
-
-    @property
-    def compute_tl_dtype(self) -> Any:
-        return self.forward_compute_tl_dtype
-
     def matches(
         self,
         *,
         neuron_type: str,
         device: torch.device | str | int,
         storage_dtype: torch.dtype | str,
-        compute_dtype: str | torch.dtype,
+        forward_compute_dtype: str | torch.dtype,
         backward_compute_dtype: str | torch.dtype = "fp32",
         spike_dtype: torch.dtype,
         save_intermediates: bool,
@@ -65,7 +57,9 @@ class TritonNeuronExecutionPlan:
         try:
             device = _normalize_plan_device(device)
             storage_dtype = normalize_triton_storage_dtype(storage_dtype)
-            compute_dtype_name = normalize_triton_compute_dtype_name(compute_dtype)
+            forward_compute_dtype_name = normalize_triton_compute_dtype_name(
+                forward_compute_dtype
+            )
             backward_compute_dtype_name = normalize_triton_compute_dtype_name(
                 backward_compute_dtype
             )
@@ -75,14 +69,11 @@ class TritonNeuronExecutionPlan:
             self.neuron_type == neuron_type
             and self.device == device
             and self.storage_dtype == storage_dtype
-            and self.forward_compute_dtype_name == compute_dtype_name
+            and self.forward_compute_dtype_name == forward_compute_dtype_name
             and self.backward_compute_dtype_name == backward_compute_dtype_name
             and self.spike_dtype == spike_dtype
             and self.save_intermediates == save_intermediates
         )
-
-
-TritonNeuronForwardPlan = TritonNeuronExecutionPlan
 
 
 def _validate_mp_options(
@@ -243,27 +234,6 @@ def prepare_triton_neuron_execution_plan(
             backward_compute_dtype_name, storage_dtype
         ),
         spike_dtype_id=torch_dtype_to_triton_neuron_dtype_id(spike_dtype),
-        save_intermediates=save_intermediates,
-    )
-
-
-def prepare_triton_neuron_forward_plan(
-    *,
-    neuron_type: str,
-    device,
-    storage_dtype,
-    compute_dtype="fp32",
-    backward_compute_dtype="fp32",
-    spike_dtype: torch.dtype = torch.float32,
-    save_intermediates: bool = True,
-) -> TritonNeuronForwardPlan:
-    return prepare_triton_neuron_execution_plan(
-        neuron_type=neuron_type,
-        device=device,
-        storage_dtype=storage_dtype,
-        forward_compute_dtype=compute_dtype,
-        backward_compute_dtype=backward_compute_dtype,
-        spike_dtype=spike_dtype,
         save_intermediates=save_intermediates,
     )
 

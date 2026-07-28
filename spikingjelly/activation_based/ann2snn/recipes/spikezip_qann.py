@@ -61,12 +61,8 @@ class SpikeZIPLinear(TDLinear):
         self.bias_steps = self.level if bias_steps is None else int(bias_steps)
         if self.bias_steps <= 0:
             raise ValueError("bias_steps must be positive.")
-        self.reset()
-
-    def reset(self) -> None:
-        super().reset()
-        self.realize_time = self.bias_steps
-        self.is_work = False
+        self.register_memory("realize_time", self.bias_steps)
+        self.register_memory("is_work", False)
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         y = super().single_step_forward(x)
@@ -130,12 +126,8 @@ class SpikeZIPConv2d(TDConv2d):
         self.bias_steps = self.level if bias_steps is None else int(bias_steps)
         if self.bias_steps <= 0:
             raise ValueError("bias_steps must be positive.")
-        self.reset()
-
-    def reset(self) -> None:
-        super().reset()
-        self.realize_time = self.bias_steps
-        self.is_work = False
+        self.register_memory("realize_time", self.bias_steps)
+        self.register_memory("is_work", False)
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         y = super().single_step_forward(x)
@@ -171,10 +163,7 @@ class SpikeZIPEmbedding(base.MemoryModule):
         super().__init__()
         self.embedding = embedding
         self.step_mode = "s"
-        self.reset()
-
-    def reset(self) -> None:
-        self.t = 0
+        self.register_memory("t", 0)
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.t == 0:
@@ -220,19 +209,6 @@ class SpikeZIPLayerNorm(TDLayerNorm):
 class SpikeZIPSoftmax(TDSoftmax):
     def __init__(self, dim: int = -1) -> None:
         super().__init__(dim=dim, step_mode="s")
-
-
-def _step_modes(module: nn.Module) -> dict[nn.Module, str]:
-    return {
-        child: child.step_mode
-        for child in module.modules()
-        if child is not module and hasattr(child, "step_mode")
-    }
-
-
-def _restore_step_modes(step_modes: dict[nn.Module, str]) -> None:
-    for module, step_mode in step_modes.items():
-        module.step_mode = step_mode
 
 
 class SpikeZIPRobertaSelfAttention(base.MemoryModule):
@@ -287,15 +263,23 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
 
     def transpose_for_scores(self, x: torch.Tensor) -> torch.Tensor:
         shape = (*x.size()[:-1], self.num_attention_heads, self.attention_head_size)
-        return x.view(shape).permute(0, 2, 1, 3)
+        return x.view(shape).transpose(-3, -2)
 
-    def transpose_sequence_for_scores(self, x_seq: torch.Tensor) -> torch.Tensor:
-        shape = (
-            *x_seq.size()[:-1],
-            self.num_attention_heads,
-            self.attention_head_size,
-        )
-        return x_seq.view(shape).permute(0, 1, 3, 2, 4)
+    def _validate_inputs(
+        self,
+        head_mask: Optional[torch.Tensor],
+        encoder_hidden_states: Optional[torch.Tensor],
+        encoder_attention_mask: Optional[torch.Tensor],
+        past_key_value,
+    ) -> None:
+        if encoder_hidden_states is not None or encoder_attention_mask is not None:
+            raise ValueError(
+                "SpikeZIPTFQANNRecipe v1 does not support cross-attention."
+            )
+        if past_key_value is not None or self.is_decoder:
+            raise ValueError("SpikeZIPTFQANNRecipe v1 does not support decoder cache.")
+        if head_mask is not None:
+            raise ValueError("SpikeZIPTFQANNRecipe v1 does not support head_mask.")
 
     def single_step_forward(
         self,
@@ -307,14 +291,12 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
         past_key_value=None,
         output_attentions: bool = False,
     ):
-        if encoder_hidden_states is not None or encoder_attention_mask is not None:
-            raise ValueError(
-                "SpikeZIPTFQANNRecipe v1 does not support cross-attention."
-            )
-        if past_key_value is not None or self.is_decoder:
-            raise ValueError("SpikeZIPTFQANNRecipe v1 does not support decoder cache.")
-        if head_mask is not None:
-            raise ValueError("SpikeZIPTFQANNRecipe v1 does not support head_mask.")
+        self._validate_inputs(
+            head_mask,
+            encoder_hidden_states,
+            encoder_attention_mask,
+            past_key_value,
+        )
         query_layer = self.transpose_for_scores(
             self.query_if(self.query(hidden_states))
         )
@@ -341,7 +323,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
             self.transpose_for_scores(self.value_if.accumulated),
         )
         context = self.after_attn_if(context)
-        context = context.permute(0, 2, 1, 3).contiguous()
+        context = context.transpose(-3, -2).contiguous()
         context = context.view(*context.size()[:-2], self.all_head_size)
         self.t += 1
         return (context, attention_probs) if output_attentions else (context,)
@@ -356,25 +338,25 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
         past_key_value=None,
         output_attentions: bool = False,
     ):
-        if encoder_hidden_states is not None or encoder_attention_mask is not None:
-            raise ValueError(
-                "SpikeZIPTFQANNRecipe v1 does not support cross-attention."
-            )
-        if past_key_value is not None or self.is_decoder:
-            raise ValueError("SpikeZIPTFQANNRecipe v1 does not support decoder cache.")
-        if head_mask is not None:
-            raise ValueError("SpikeZIPTFQANNRecipe v1 does not support head_mask.")
-        previous_step_modes = _step_modes(self)
+        self._validate_inputs(
+            head_mask,
+            encoder_hidden_states,
+            encoder_attention_mask,
+            past_key_value,
+        )
+        step_modes = {
+            module: module.step_mode
+            for module in self.modules()
+            if module is not self and hasattr(module, "step_mode")
+        }
         try:
-            for module in previous_step_modes:
+            for module in step_modes:
                 module.step_mode = "m"
-            query_layer = self.transpose_sequence_for_scores(
+            query_layer = self.transpose_for_scores(
                 self.query_if(self.query(hidden_states))
             )
-            key_layer = self.transpose_sequence_for_scores(
-                self.key_if(self.key(hidden_states))
-            )
-            value_layer = self.transpose_sequence_for_scores(
+            key_layer = self.transpose_for_scores(self.key_if(self.key(hidden_states)))
+            value_layer = self.transpose_for_scores(
                 self.value_if(self.value(hidden_states))
             )
             scores = functional.spikezip_matmul_sequence_delta(
@@ -394,7 +376,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
                 value_layer,
             )
             context_seq = self.after_attn_if(context_seq)
-            context_seq = context_seq.permute(0, 1, 3, 2, 4).contiguous()
+            context_seq = context_seq.transpose(-3, -2).contiguous()
             context_seq = context_seq.view(
                 *context_seq.size()[:-2],
                 self.all_head_size,
@@ -403,7 +385,8 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
                 return context_seq, attention_probs
             return (context_seq,)
         finally:
-            _restore_step_modes(previous_step_modes)
+            for module, step_mode in step_modes.items():
+                module.step_mode = step_mode
 
 
 class SpikeZIPViTSelfAttention(base.MemoryModule):
@@ -443,17 +426,15 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
         for module in modules:
             module.reset()
 
+    def _split_qkv(
+        self, x: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        qkv = self.qkv(x).reshape(*x.shape[:-1], 3, self.num_heads, self.head_dim)
+        return qkv.movedim(-3, 0).transpose(-3, -2).unbind(0)
+
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         batch_size, seq_len, channels = x.shape
-        qkv = self.qkv(x).reshape(
-            batch_size,
-            seq_len,
-            3,
-            self.num_heads,
-            self.head_dim,
-        )
-        qkv = qkv.permute(2, 0, 3, 1, 4)
-        query, key, value = qkv.unbind(0)
+        query, key, value = self._split_qkv(x)
 
         query = self.q_if(query)
         key = self.k_if(key)
@@ -480,27 +461,22 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
             self.v_if.accumulated,
         )
         context = self.after_attn_if(context)
-        context = context.transpose(1, 2).reshape(batch_size, seq_len, channels)
+        context = context.transpose(-3, -2).reshape(batch_size, seq_len, channels)
         context = self.proj(context)
         context = self.proj_drop(context)
         return self.proj_if(context)
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
-        previous_step_modes = _step_modes(self)
+        step_modes = {
+            module: module.step_mode
+            for module in self.modules()
+            if module is not self and hasattr(module, "step_mode")
+        }
         try:
-            for module in previous_step_modes:
+            for module in step_modes:
                 module.step_mode = "m"
-            batch_size, seq_len, channels = x_seq.shape[1:]
-            qkv = self.qkv(x_seq).reshape(
-                x_seq.shape[0],
-                batch_size,
-                seq_len,
-                3,
-                self.num_heads,
-                self.head_dim,
-            )
-            qkv = qkv.permute(3, 0, 1, 4, 2, 5)
-            query, key, value = qkv.unbind(0)
+            seq_len = x_seq.shape[-2]
+            query, key, value = self._split_qkv(x_seq)
 
             query = self.q_if(query)
             key = self.k_if(key)
@@ -514,28 +490,22 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
             if self.is_softmax:
                 attention = self.softmax(attention)
                 attention = self.attn_if(attention)
-                attention_for_context = attention
             else:
                 attention = self.attn_if(attention) / seq_len
-                attention_for_context = attention
 
-            attention_for_context = self.attn_drop(attention_for_context)
+            attention = self.attn_drop(attention)
             context = functional.spikezip_matmul_sequence_delta(
-                attention_for_context,
+                attention,
                 value,
             )
             context = self.after_attn_if(context)
-            context = context.transpose(2, 3).reshape(
-                x_seq.shape[0],
-                batch_size,
-                seq_len,
-                channels,
-            )
+            context = context.transpose(-3, -2).reshape(x_seq.shape)
             context = self.proj(context)
             context = self.proj_drop(context)
             return self.proj_if(context)
         finally:
-            _restore_step_modes(previous_step_modes)
+            for module, step_mode in step_modes.items():
+                module.step_mode = step_mode
 
 
 def _is_roberta_qattention(module: nn.Module) -> bool:
@@ -602,65 +572,56 @@ def _spikezip_vit_patch_embed(model: nn.Module, x: torch.Tensor) -> torch.Tensor
 
 
 def _spikezip_vit_forward_features(self: nn.Module, x: torch.Tensor) -> torch.Tensor:
-    if x.dim() == 4:
-        hidden = _spikezip_vit_patch_embed(self, x)
-        t = getattr(self, "_spikezip_t", 0)
-        if t == 0:
-            cls = self.cls_token.expand(hidden.shape[0], -1, -1)
-            pos = self.pos_embed
-        else:
-            cls = torch.zeros(
-                hidden.shape[0],
-                *self.cls_token.shape[1:],
-                device=self.cls_token.device,
-                dtype=self.cls_token.dtype,
-            )
-            pos = torch.zeros_like(self.pos_embed)
-        self._spikezip_t = t + 1
-        hidden = torch.cat((cls, hidden), dim=1)
-        pos_drop = getattr(self, "pos_drop", None)
-        hidden = hidden + pos
-        if pos_drop is not None:
-            hidden = pos_drop(hidden)
-        if hasattr(self, "blocks"):
-            hidden = self.blocks(hidden)
-            hidden = self.norm(hidden)
-            return hidden[:, 0]
-        if hasattr(self, "attn"):
-            hidden = hidden + self.attn(self.norm(hidden))
-            return self.norm(hidden)[:, 0]
-        raise ValueError("SpikeZIP ViT model expects blocks or attn.")
+    if x.dim() not in (4, 5):
+        raise ValueError("SpikeZIP ViT forward expects [B,C,H,W] or [T,B,C,H,W].")
+
+    hidden = _spikezip_vit_patch_embed(self, x)
     if x.dim() == 5:
-        hidden = _spikezip_vit_patch_embed(self, x)
-        cls = self.cls_token.expand(hidden.shape[1], -1, -1)
-        cls_seq = torch.zeros(
-            hidden.shape[0],
+        time_steps, batch_size = hidden.shape[:2]
+        cls = self.cls_token.expand(batch_size, -1, -1)
+        cls_input = torch.zeros(
+            time_steps,
             *cls.shape,
             device=cls.device,
             dtype=cls.dtype,
         )
-        pos_seq = torch.zeros(
-            hidden.shape[0],
+        pos_input = torch.zeros(
+            time_steps,
             *self.pos_embed.shape,
             device=self.pos_embed.device,
             dtype=self.pos_embed.dtype,
         )
-        cls_seq[0] = cls
-        pos_seq[0] = self.pos_embed
-        hidden = torch.cat((cls_seq, hidden), dim=2)
-        pos_drop = getattr(self, "pos_drop", None)
-        hidden = hidden + pos_seq
-        if pos_drop is not None:
-            hidden = pos_drop(hidden)
-        if hasattr(self, "blocks"):
-            hidden = self.blocks(hidden)
-            hidden = self.norm(hidden)
-            return hidden[:, :, 0]
-        if hasattr(self, "attn"):
-            hidden = hidden + self.attn(self.norm(hidden))
-            return self.norm(hidden)[:, :, 0]
+        cls_input[0] = cls
+        pos_input[0] = self.pos_embed
+        token_dim = 2
+    else:
+        batch_size = hidden.shape[0]
+        if self._spikezip_t == 0:
+            cls_input = self.cls_token.expand(batch_size, -1, -1)
+            pos_input = self.pos_embed
+        else:
+            cls_input = torch.zeros(
+                batch_size,
+                *self.cls_token.shape[1:],
+                device=self.cls_token.device,
+                dtype=self.cls_token.dtype,
+            )
+            pos_input = torch.zeros_like(self.pos_embed)
+        self._spikezip_t += 1
+        token_dim = 1
+
+    hidden = torch.cat((cls_input, hidden), dim=token_dim)
+    hidden = hidden + pos_input
+    pos_drop = getattr(self, "pos_drop", None)
+    if pos_drop is not None:
+        hidden = pos_drop(hidden)
+    if hasattr(self, "blocks"):
+        hidden = self.norm(self.blocks(hidden))
+    elif hasattr(self, "attn"):
+        hidden = self.norm(hidden + self.attn(self.attn_norm(hidden)))
+    else:
         raise ValueError("SpikeZIP ViT model expects blocks or attn.")
-    raise ValueError("SpikeZIP ViT forward expects [B,C,H,W] or [T,B,C,H,W].")
+    return hidden.select(token_dim, 0)
 
 
 def _spikezip_vit_forward(self: nn.Module, x: torch.Tensor) -> torch.Tensor:
@@ -673,7 +634,14 @@ def _patch_spikezip_vit_forward(model: nn.Module) -> None:
         for name in ("patch_embed", "cls_token", "pos_embed", "head")
     ):
         return
+    if not hasattr(model, "norm"):
+        raise ValueError("SpikeZIP ViT model expects a top-level norm module.")
+    if not (hasattr(model, "blocks") or hasattr(model, "attn")):
+        raise ValueError("SpikeZIP ViT model expects top-level blocks or attn.")
+
     model._spikezip_t = 0
+    if hasattr(model, "attn"):
+        model.attn_norm = copy.deepcopy(model.norm)
     original_reset = getattr(model, "reset", None)
 
     def _spikezip_vit_reset(self: nn.Module) -> None:
@@ -684,19 +652,6 @@ def _patch_spikezip_vit_forward(model: nn.Module) -> None:
     model.reset = types.MethodType(_spikezip_vit_reset, model)
     model.forward_features = types.MethodType(_spikezip_vit_forward_features, model)
     model.forward = types.MethodType(_spikezip_vit_forward, model)
-
-
-def _validate_spikezip_vit_model(model: nn.Module) -> None:
-    has_top_level_vit = all(
-        hasattr(model, name)
-        for name in ("patch_embed", "cls_token", "pos_embed", "head")
-    )
-    if not has_top_level_vit:
-        return
-    if not hasattr(model, "norm"):
-        raise ValueError("SpikeZIP ViT model expects a top-level norm module.")
-    if not (hasattr(model, "blocks") or hasattr(model, "attn")):
-        raise ValueError("SpikeZIP ViT model expects top-level blocks or attn.")
 
 
 class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
@@ -797,17 +752,20 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
 
     def convert_module(self, converter: "ModuleConverter", ann: nn.Module) -> nn.Module:
         model = copy.deepcopy(ann).eval()
-        self._global_level = self._level_from_model(model)
-        self._replace_weight(model)
+        global_level = self._level_from_model(model)
+        self._replace_weight(model, global_level)
         model.ann2snn_recipe = "spikezip_tf_qann"
         model.time_steps = self.time_steps
         model.model_family = self.model_family
         if self.model_family == "vit":
-            _validate_spikezip_vit_model(model)
             _patch_spikezip_vit_forward(model)
         return model
 
-    def _replace_weight(self, model: nn.Module) -> None:
+    def _replace_weight(
+        self,
+        model: nn.Module,
+        global_level: int,
+    ) -> None:
         for name, child in list(model.named_children()):
             replacement = None
             if self.model_family == "roberta" and _is_roberta_qattention(child):
@@ -823,17 +781,9 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
             elif isinstance(child, nn.Embedding):
                 replacement = SpikeZIPEmbedding(child)
             elif isinstance(child, nn.Conv2d):
-                replacement = SpikeZIPConv2d(
-                    child,
-                    self._level_from_model(model),
-                    bias_steps=1 if self.model_family == "vit" else None,
-                )
+                replacement = SpikeZIPConv2d(child, global_level)
             elif isinstance(child, nn.Linear):
-                replacement = SpikeZIPLinear(
-                    child,
-                    self._level_from_model(model),
-                    bias_steps=1 if self.model_family == "vit" else None,
-                )
+                replacement = SpikeZIPLinear(child, global_level)
             elif isinstance(child, nn.LayerNorm):
                 replacement = SpikeZIPLayerNorm(child)
             elif self._is_quantizer(child):
@@ -842,7 +792,7 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
                 replacement = nn.Identity()
 
             if replacement is None:
-                self._replace_weight(child)
+                self._replace_weight(child, global_level)
             else:
                 setattr(model, name, replacement)
 
@@ -876,4 +826,4 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
             if hasattr(child, "level"):
                 return int(child.level)
             return int(float(child.pos_max) - float(child.neg_min) + 1)
-        return getattr(self, "_global_level", self.time_steps)
+        return self.time_steps

@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 
 from .. import layer
+from .float8_base import _Float8StepModule
 
 
 def is_supported_pointwise_conv1d(module: nn.Module) -> bool:
@@ -34,11 +35,9 @@ def make_linear_from_pointwise_conv1d(conv: nn.Conv1d) -> nn.Linear:
     return linear
 
 
-class Float8PointwiseConv1dStepModule(nn.Module):
+class Float8PointwiseConv1dStepModule(_Float8StepModule):
     def __init__(self, wrapped: nn.Module, original: nn.Conv1d, step_mode: str = "s"):
-        super().__init__()
-        self.wrapped = wrapped
-        self.step_mode = step_mode
+        super().__init__(wrapped, step_mode)
         self.in_channels = original.in_channels
         self.out_channels = original.out_channels
         self.kernel_size = original.kernel_size
@@ -56,9 +55,6 @@ class Float8PointwiseConv1dStepModule(nn.Module):
     @property
     def bias(self):
         return getattr(self.wrapped, "bias", None)
-
-    def set_step_mode(self, step_mode: str):
-        self.step_mode = step_mode
 
     def _forward_single_step(self, x: torch.Tensor) -> torch.Tensor:
         if x.dim() != 3:
@@ -80,28 +76,15 @@ class Float8PointwiseConv1dStepModule(nn.Module):
             return y.permute(0, 1, 3, 2).contiguous()
         raise ValueError(f"Unsupported step_mode {self.step_mode!r}.")
 
-    def __getattr__(self, name: str):
-        try:
-            return super().__getattr__(name)
-        except AttributeError:
-            wrapped = self.__dict__.get("_modules", {}).get("wrapped")
-            if wrapped is None:
-                raise AttributeError(
-                    f"'{type(self).__name__}' object has no attribute '{name}'"
-                ) from None
-            return getattr(wrapped, name)
-
     def state_dict(self, destination=None, prefix="", keep_vars=False):
-        destination = self.wrapped.state_dict(
-            destination=destination, prefix=prefix, keep_vars=keep_vars
-        )
+        destination = super().state_dict(destination, prefix, keep_vars)
         key = prefix + "weight"
         if key in destination and destination[key].dim() == 2:
             destination[key] = destination[key].unsqueeze(-1)
         return destination
 
     def _save_to_state_dict(self, destination, prefix, keep_vars):
-        self.wrapped._save_to_state_dict(destination, prefix, keep_vars)
+        super()._save_to_state_dict(destination, prefix, keep_vars)
         key = prefix + "weight"
         if key in destination and destination[key].dim() == 2:
             destination[key] = destination[key].unsqueeze(-1)
@@ -116,15 +99,18 @@ class Float8PointwiseConv1dStepModule(nn.Module):
         unexpected_keys,
         error_msgs,
     ):
-        wrapped_prefix = prefix + "wrapped."
-        for suffix in self.wrapped.state_dict().keys():
-            key = prefix + suffix
-            if key not in state_dict:
-                continue
-            value = state_dict.pop(key)
-            if suffix == "weight" and value.dim() == 3:
-                value = value.squeeze(-1)
-            state_dict[wrapped_prefix + suffix] = value
+        weight_key = prefix + "weight"
+        if weight_key in state_dict and state_dict[weight_key].dim() == 3:
+            state_dict[weight_key] = state_dict[weight_key].squeeze(-1)
+        super()._load_from_state_dict(
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
 
 
 def wrap_float8_pointwise_conv1d_module(

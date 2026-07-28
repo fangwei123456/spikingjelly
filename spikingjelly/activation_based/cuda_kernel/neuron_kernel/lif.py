@@ -69,6 +69,7 @@ def create_fptt_kernel(
         const float & v_threshold, {"const float & v_reset," if hard_reset else ""}
         const int & neuron_num, const int & numel)
         """
+
         code += r"""
         {
         const int index = blockIdx.x * blockDim.x + threadIdx.x;

@@ -61,57 +61,38 @@ def load_lock() -> Dict[str, object]:
     return lock
 
 
-def load_calibration_artifact(
+def load_calibration(
     path: Path, config: Qwen2SNNConfig
 ) -> tuple[Qwen2SNNCalibration, str]:
-    calibration, digest = load_calibration(path)
-    expected = {
-        "time_steps": config.time_steps,
-        "calibration_levels": config.calibration_levels,
-        "calibration_quantile": config.calibration_quantile,
-        "calibration_reservoir_size": config.calibration_reservoir_size,
-        "calibration_seed": config.calibration_seed,
-    }
-    for name, value in expected.items():
-        if getattr(calibration, name) != value:
-            raise ValueError(
-                f"Calibration {name} does not match correctness configuration."
-            )
-    return calibration, digest
-
-
-def load_calibration(path: Path) -> tuple[Qwen2SNNCalibration, str]:
     if not path.is_file():
         raise FileNotFoundError(f"Calibration artifact does not exist: {path}.")
     state = torch.load(path, map_location="cpu", weights_only=True)
     if not isinstance(state, Mapping):
         raise ValueError("Calibration artifact must contain a mapping.")
     calibration = Qwen2SNNCalibration.from_state_dict(state)
-    return calibration, hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def validate_calibration_config(
-    calibration: Qwen2SNNCalibration,
-    *,
-    time_steps: int,
-    calibration_levels: int,
-    calibration_quantile: float,
-    calibration_reservoir_size: int,
-    calibration_seed: int,
-) -> None:
-    expected = {
-        "time_steps": time_steps,
-        "calibration_levels": calibration_levels,
-        "calibration_quantile": calibration_quantile,
-        "calibration_reservoir_size": calibration_reservoir_size,
-        "calibration_seed": calibration_seed,
-    }
-    for name, value in expected.items():
+    for name in (
+        "time_steps",
+        "calibration_levels",
+        "calibration_quantile",
+        "calibration_reservoir_size",
+        "calibration_seed",
+    ):
         actual = getattr(calibration, name)
+        value = getattr(config, name)
         if actual != value:
             raise ValueError(
                 f"Calibration {name}={actual!r} does not match requested {value!r}."
             )
+    return calibration, hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def conversion_summary(model) -> Dict[str, object]:
+    return {
+        "temporal_layout": model.temporal_layout,
+        "execution_schedule": model.execution_schedule,
+        "online_inference": model.online_inference,
+        "structure": model.structure_summary(),
+    }
 
 
 def relative_l2(actual: torch.Tensor, reference: torch.Tensor) -> float:
@@ -241,7 +222,7 @@ def cached_decode(
         token = cached.logits[:, -1].argmax(-1, keepdim=True)
         tokens.append(int(token.item()))
         generated = torch.cat((generated, token), dim=1)
-    if cache is not None and hasattr(cache, "storage_summary"):
+    if cache is not None:
         cache_summary = cache.storage_summary()
     return {
         "max_relative_l2": max(errors),

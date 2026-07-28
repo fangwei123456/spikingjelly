@@ -42,8 +42,8 @@ from spikingjelly.activation_based.triton_kernel.neuron_kernel.plif import (
     multistep_plif_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.utils import (
-    TritonNeuronForwardPlan,
-    prepare_triton_neuron_forward_plan,
+    TritonNeuronExecutionPlan,
+    prepare_triton_neuron_execution_plan,
 )
 from spikingjelly.activation_based.triton_kernel.triton_utils import (
     normalize_triton_compute_dtype_name,
@@ -154,12 +154,12 @@ def _prepare_mp_plan(
     compute_dtype: str,
     backward_compute_dtype: str,
     save_intermediates: bool,
-) -> TritonNeuronForwardPlan:
-    return prepare_triton_neuron_forward_plan(
+) -> TritonNeuronExecutionPlan:
+    return prepare_triton_neuron_execution_plan(
         neuron_type=neuron_type,
         device=device,
         storage_dtype=storage_dtype,
-        compute_dtype=compute_dtype,
+        forward_compute_dtype=compute_dtype,
         backward_compute_dtype=backward_compute_dtype,
         spike_dtype=torch.float32,
         save_intermediates=save_intermediates,
@@ -172,7 +172,7 @@ def _call_mp_with_plan(
     neuron_type: str,
     v_init: torch.Tensor,
     r_tau_tensor: torch.Tensor | None,
-    plan: TritonNeuronForwardPlan,
+    plan: TritonNeuronExecutionPlan,
 ) -> tuple[torch.Tensor, ...]:
     if neuron_type == "if":
         return multistep_if_mp_with_plan(
@@ -314,7 +314,7 @@ def _benchmark_inference(
     repeats: int,
     warmup: int,
     variant_kind: str,
-    plan: TritonNeuronForwardPlan | None,
+    plan: TritonNeuronExecutionPlan | None,
     storage_dtype: torch.dtype | None,
     compute_dtype: str | None,
     backward_compute_dtype: str,
@@ -369,7 +369,7 @@ def _benchmark_training(
     repeats: int,
     warmup: int,
     variant_kind: str,
-    plan: TritonNeuronForwardPlan | None,
+    plan: TritonNeuronExecutionPlan | None,
     storage_dtype: torch.dtype | None,
     compute_dtype: str | None,
     backward_compute_dtype: str,

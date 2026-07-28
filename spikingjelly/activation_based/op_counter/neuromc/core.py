@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import warnings
 from collections import defaultdict, deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -285,15 +284,11 @@ class _TraceTensor:
     shape: tuple[int, ...]
     dtype: torch.dtype
     requires_grad: bool
-    numel_value: int
     is_spike: bool
 
     @property
     def ndim(self) -> int:
         return len(self.shape)
-
-    def numel(self) -> int:
-        return self.numel_value
 
 
 @dataclass
@@ -361,7 +356,7 @@ def _module_overlap_signature(fragment: _Fragment) -> tuple[Any, ...]:
 
 def _tensor_numel(x: Any) -> int:
     if isinstance(x, _TraceTensor):
-        return x.numel_value
+        return _prod(x.shape)
     if not torch.is_tensor(x):
         return 0
     return int(x.numel())
@@ -398,7 +393,6 @@ def _snapshot_trace_value(value: Any) -> Any:
             shape=tuple(int(v) for v in value.shape),
             dtype=value.dtype,
             requires_grad=bool(value.requires_grad),
-            numel_value=int(value.numel()),
             is_spike=_is_spike(value),
         )
     if isinstance(value, tuple):
@@ -438,14 +432,6 @@ def _optimizer_param_count(fragment: _Fragment) -> int:
     return fragment.loop_dims["K"] + (
         fragment.loop_dims["FX"] * fragment.loop_dims["FY"] * fragment.loop_dims["C"]
     )
-
-
-def _resolve_loss_fn(loss_fn: Callable | None):
-    if loss_fn is None:
-        return None
-    if isinstance(loss_fn, nn.Module):
-        return loss_fn
-    return loss_fn
 
 
 def _call_model(model: nn.Module, inputs):
@@ -2162,10 +2148,6 @@ def estimate_neuromc_runtime_energy(
     loss_fn: Callable | None = None,
     optimizer: torch.optim.Optimizer | None = None,
     core_type: str = "fp_soma",
-    op_cost_pj: dict[str, float] | None = None,
-    memory_cost_pj_per_bit: dict[str, float] | None = None,
-    memory_level_weights: dict[str, float] | None = None,
-    memory_model: str | None = None,
     memory_config: MemoryHierarchyConfig | None = None,
     strict: bool = False,
     verbose: bool = False,
@@ -2194,14 +2176,6 @@ def estimate_neuromc_runtime_energy(
     :type optimizer: torch.optim.Optimizer | None
     :param core_type: Type of compute core (e.g., ``\"fp_soma\"``)
     :type core_type: str
-    :param op_cost_pj: (Deprecated) Ignored
-    :type op_cost_pj: dict[str, float] | None
-    :param memory_cost_pj_per_bit: (Deprecated) Ignored
-    :type memory_cost_pj_per_bit: dict[str, float] | None
-    :param memory_level_weights: (Deprecated) Ignored
-    :type memory_level_weights: dict[str, float] | None
-    :param memory_model: (Deprecated) Ignored
-    :type memory_model: str | None
     :param memory_config: Memory hierarchy configuration. If ``None``, uses the default config
     :type memory_config: MemoryHierarchyConfig | None
     :param strict: If ``True``, raise on unknown operations instead of warning
@@ -2231,10 +2205,6 @@ def estimate_neuromc_runtime_energy(
     :param loss_fn: Loss function for the backward pass
     :param optimizer: Optimizer for training-stage profiling
     :param core_type: Type of compute core (e.g., ``\"fp_soma\"``)
-    :param op_cost_pj: (Deprecated) Ignored
-    :param memory_cost_pj_per_bit: (Deprecated) Ignored
-    :param memory_level_weights: (Deprecated) Ignored
-    :param memory_model: (Deprecated) Ignored
     :param memory_config: Memory hierarchy configuration. If ``None``, uses the default config
     :param strict: If ``True``, raise on unknown operations instead of warning
     :param verbose: If ``True``, print progress information during profiling
@@ -2245,10 +2215,6 @@ def estimate_neuromc_runtime_energy(
     :type loss_fn: Callable | None
     :type optimizer: torch.optim.Optimizer | None
     :type core_type: str
-    :type op_cost_pj: dict[str, float] | None
-    :type memory_cost_pj_per_bit: dict[str, float] | None
-    :type memory_level_weights: dict[str, float] | None
-    :type memory_model: str | None
     :type memory_config: MemoryHierarchyConfig | None
     :type strict: bool
     :type verbose: bool
@@ -2256,19 +2222,6 @@ def estimate_neuromc_runtime_energy(
     :return: Energy profiling report
     :rtype: NeuroMCRuntimeEnergyReport
     """
-    if (
-        op_cost_pj is not None
-        or memory_cost_pj_per_bit is not None
-        or memory_level_weights is not None
-        or memory_model is not None
-    ):
-        warnings.warn(
-            "Legacy kwargs (op_cost_pj, memory_cost_pj_per_bit, "
-            "memory_level_weights, memory_model) are deprecated and ignored "
-            "by exact NeuroMC runtime profiling.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
     profiler = NeuroMCEnergyProfiler(
         core_type=core_type,
         memory_config=(memory_config or MemoryHierarchyConfig.neuromc_like_v1()).copy(),
@@ -2278,18 +2231,17 @@ def estimate_neuromc_runtime_energy(
     )
     profiler.bind_model(model)
     profiler.bind_optimizer(optimizer)
-    resolved_loss_fn = _resolve_loss_fn(loss_fn)
     _clear_existing_grads(model, optimizer)
 
     with profiler:
         with profiler.stage("forward"):
             output = _call_model(model, inputs)
         loss = None
-        if resolved_loss_fn is not None:
+        if loss_fn is not None:
             with profiler.suspend():
                 if target is None:
                     raise ValueError("target is required when loss_fn is provided")
-                loss = resolved_loss_fn(output, target)
+                loss = loss_fn(output, target)
         if loss is not None:
             with profiler.stage("backward"):
                 loss.backward()

@@ -5,3 +5,4 @@ spikingjelly.activation_based.lava_exchange module
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: quantize_8bit

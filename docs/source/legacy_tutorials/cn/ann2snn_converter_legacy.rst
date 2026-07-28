@@ -409,73 +409,13 @@ snn_model的类型为 ``GraphModule`` ，参见 `GraphModule <https://pytorch.or
     call_module  network_15      network.15      (snn_tailor_3_3,)  {}
     output       output          output          (network_15,)      {}
 
-自定义转换规则
-^^^^^^^^^^^^^^
+率编码实现
+^^^^^^^^^^
 
-默认情况下，``Converter`` 使用 ``ReLURule`` 将 ``nn.ReLU`` 模块替换为
-``VoltageScaler(1 / s) -> IFNode -> VoltageScaler(s)``。其中校准尺度 ``s``
-由 ``ThresholdOptimizer`` 基于 ``VoltageHook`` 计算得到。
-
-高级用户可以向 ``Converter`` 显式传入以下扩展点：
-
-* ``rules`` 负责匹配 FX 计算图节点、插入校准 hook、查找完成校准的
-  activation-hook 节点对，并把它们替换为 SNN 子图。
-* ``NeuronFactory`` 负责创建替换时使用的神经元。默认工厂创建
-  ``IFNode(v_threshold=1.0, v_reset=None)``。
-* ``ThresholdOptimizer`` 负责从已校准的 ``VoltageHook`` 计算有限正标量阈值。
-
-下面的最小规则只演示协议形状，不表示新的转换算法。它匹配 ``nn.Identity``，
-并将完成校准的 identity 节点替换为另一个 ``nn.Identity`` 模块：
-
-.. code-block:: python
-
-    import torch
-    import torch.nn as nn
-
-    from spikingjelly.activation_based import ann2snn
-    from spikingjelly.activation_based.ann2snn.modules import VoltageHook
-
-
-    class IdentityRule:
-        def match(self, node, modules):
-            return node.op == 'call_module' and type(modules[node.target]) is nn.Identity
-
-        def insert_hooks(self, fx_model, node, hook_factory, hook_counts_per_prefix):
-            target = f'{node.target}_voltage_hook'
-            fx_model.add_submodule(target, hook_factory.create())
-            with fx_model.graph.inserting_after(node):
-                return fx_model.graph.call_module(target, args=(node,))
-
-        def find_replacements(self, fx_model, modules):
-            for hook_node in fx_model.graph.nodes:
-                if hook_node.op == 'call_module' and isinstance(
-                    modules.get(hook_node.target), VoltageHook
-                ):
-                    yield hook_node.args[0], hook_node
-
-        def replace_with_neurons(
-            self, fx_model, activation_node, hook_node, neuron_factory, threshold_optimizer
-        ):
-            hook = fx_model.get_submodule(hook_node.target)
-            threshold = threshold_optimizer.compute_threshold(hook)
-            # IdentityRule 不使用脉冲阈值，但真实规则应将该标量接入替换子图。
-            target = f'{activation_node.target}_spiking_identity'
-            fx_model.add_submodule(target, nn.Identity())
-            with fx_model.graph.inserting_after(hook_node):
-                new_node = fx_model.graph.call_module(target, args=activation_node.args)
-            hook_node.replace_all_uses_with(new_node)
-            activation_node.replace_all_uses_with(new_node)
-            fx_model.graph.erase_node(hook_node)
-            fx_model.graph.erase_node(activation_node)
-
-
-    converter = ann2snn.Converter(
-        dataloader=[torch.randn(2, 4)],
-        rules=[IdentityRule()],
-    )
-
-当前内置 ``ReLURule`` 路径只对标量阈值有明确语义。Per-channel 或张量阈值还需要先定义
-shape、broadcast 和 ``VoltageScaler`` 语义，不属于当前转换路径。
+``Converter`` 直接匹配类型严格为 ``nn.ReLU`` 的模块，使用 ``VoltageHook``
+完成校准，然后将每个激活替换为
+``VoltageScaler(1 / s) -> IFNode -> VoltageScaler(s)``。``NeuronFactory``
+是唯一保留的构造选项。不同激活或不同转换算法应实现为独立 recipe。
 
 不同转换模式的对比
 ^^^^^^^^^^^^^^^^^^^^^^^^

@@ -1078,33 +1078,6 @@ def test_transformer_engine_sdpa_adapter_rejects_dropout_mismatch(monkeypatch):
         adapter(query, key, value, dropout_p=0.0)
 
 
-def test_transformer_engine_sdpa_adapter_legacy_attention_sets_no_mask(monkeypatch):
-    fake_te = types.ModuleType("transformer_engine.pytorch")
-
-    class FakeLegacyDotProductAttention(torch.nn.Module):
-        def __init__(self, num_attention_heads, head_dim, attention_dropout=0.0):
-            super().__init__()
-            self.num_attention_heads = num_attention_heads
-            self.head_dim = head_dim
-            self.attention_dropout = attention_dropout
-
-        def forward(self, query, key, value):
-            return query
-
-    fake_te.DotProductAttention = FakeLegacyDotProductAttention
-    fake_root = types.ModuleType("transformer_engine")
-    fake_root.pytorch = fake_te
-    monkeypatch.setitem(sys.modules, "transformer_engine", fake_root)
-    monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", fake_te)
-
-    with pytest.warns(RuntimeWarning, match="qkv_format"):
-        adapter = TransformerEngineDotProductAttentionAdapter(
-            num_attention_heads=2,
-            head_dim=4,
-        )
-    assert adapter.wrapped.attn_mask_type == "no_mask"
-
-
 def test_transformer_engine_sdpa_adapter_allows_zero_dropout_in_eval(monkeypatch):
     _install_fake_te(monkeypatch)
     adapter = TransformerEngineDotProductAttentionAdapter(

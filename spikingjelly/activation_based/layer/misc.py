@@ -160,28 +160,11 @@ class SynapseFilter(base.MemoryModule):
 
         return f"tau={tau}, learnable={self.learnable}, step_mode={self.step_mode}"
 
-    @staticmethod
-    def js_single_step_forward_learnable(
-        x: torch.Tensor, w: torch.Tensor, out_i: torch.Tensor
-    ):
-        return functional.synapse_filter_single_step(x, out_i, w.sigmoid())
-
-    @staticmethod
-    def js_single_step_forward(x: torch.Tensor, tau: float, out_i: torch.Tensor):
-        return functional.synapse_filter_single_step(x, out_i, 1.0 / tau)
-
     def single_step_forward(self, x: Tensor):
         if isinstance(self.out_i, float):
             self.out_i = torch.full_like(x, self.out_i)
-
-        if self.learnable:
-            self.out_i = functional.synapse_filter_single_step(
-                x, self.out_i, self.w.sigmoid()
-            )
-        else:
-            self.out_i = functional.synapse_filter_single_step(
-                x, self.out_i, 1.0 / self.tau
-            )
+        inv_tau = self.w.sigmoid() if self.learnable else 1.0 / self.tau
+        self.out_i = functional.synapse_filter_single_step(x, self.out_i, inv_tau)
         return self.out_i
 
 

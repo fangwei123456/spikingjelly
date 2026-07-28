@@ -164,6 +164,9 @@ def quantize_8b(x, scale, descale=False):
         return step_quantize(x, step=2 / scale).clamp(-256 / scale, 255 / scale) * scale
 
 
+quantize_8bit = quantize_8b
+
+
 def right_shift_to_zero(x: torch.Tensor, bits: int):
     r"""
     **API Language** - :ref:`中文 <right_shift_to_zero-cn>` | :ref:`English <right_shift_to_zero-en>`
@@ -784,64 +787,6 @@ try:
             spike = spike.squeeze(1)
 
         return spike, v
-
-    # ----------------------------------------
-    # quantize function
-
-    class _step_quantize(torch.autograd.Function):
-        @staticmethod
-        def forward(ctx, x, step):
-            return torch.round(x / step) * step
-
-        @staticmethod
-        def backward(ctx, grad_output):
-            return grad_output, None
-
-    def step_quantize(x: torch.Tensor, step: float = 1.0):
-        """
-        :param x: the input tensor
-        :type x: torch.Tensor
-        :param step: the quantize step
-        :type step: float
-        :return: quantized tensor
-        :rtype: torch.Tensor
-
-        The step quantize function. Here is an example:
-
-        .. code-block:: python
-
-            # plt.style.use(['science', 'muted', 'grid'])
-            fig = plt.figure(dpi=200, figsize=(6, 4))
-            x = torch.arange(-4, 4, 0.001)
-            plt.plot(
-                x, lava_exchange.step_quantize(x, 2.0), label="quantize(x, step=2)"
-            )
-            plt.plot(x, x, label="y=x", ls="-.")
-            plt.legend()
-            plt.grid(ls="--")
-            plt.title("step quantize")
-            plt.xlabel("Input")
-            plt.ylabel("Output")
-            plt.savefig(
-                "./docs/source/_static/API/activation_based/lava_exchange/step_quantize.svg"
-            )
-            plt.savefig(
-                "./docs/source/_static/API/activation_based/lava_exchange/step_quantize.pdf"
-            )
-
-        .. image:: ../_static/API/activation_based/lava_exchange/step_quantize.*
-            :width: 100%
-        """
-        return _step_quantize.apply(x, step)
-
-    def quantize_8bit(x: torch.Tensor, scale, descale=False):
-        if descale:
-            return (
-                step_quantize(x, 2.0 / scale).clamp(-256.0 / scale, 255.0 / scale)
-                * scale
-            )
-        else:
-            return step_quantize(x, 2.0 / scale).clamp(-256.0 / scale, 255.0 / scale)
 
     # ----------------------------------------
     # convert function

@@ -6,6 +6,20 @@ from spikingjelly.activation_based.distributed.pipeline.runtime import (
 )
 
 
+def _runtime(model=None, *, mode="none", topology=None):
+    model = model or ToyDistributedSNN()
+    analysis = analyze(model)
+    runtime_plan = plan(
+        analysis=analysis,
+        objective="speed",
+        topology=topology or {"dp": 1},
+        backend="gloo",
+        batch_size=2,
+        mode=mode,
+    )
+    return SNNDistributedRuntime(model, None, analysis, runtime_plan)
+
+
 def test_collect_reset_modules_and_reset_collected_modules():
     net = nn.Sequential(_ToyResetCounter(), nn.ReLU(), _ToyResetCounter())
     modules = collect_reset_modules(net)
@@ -81,16 +95,9 @@ def test_prepare_metrics_classification_output_preserves_target_device():
     assert prepared.target.device == prepared.logits.device
 
 
-def test_runtime_from_legacy_supports_eager_primitives():
+def test_runtime_supports_eager_primitives():
     model = ToyDistributedSNN()
-    runtime = SNNDistributedRuntime.from_legacy(
-        kind="eager",
-        model=model,
-        mesh=None,
-        analysis=None,
-        mode="none",
-    )
-    assert runtime.plan is not None
+    runtime = _runtime(model)
     assert runtime.plan.mode == "none"
     optimizer = runtime.build_optimizer(
         optimizer_cls=torch.optim.SGD,
@@ -111,74 +118,18 @@ def test_runtime_from_legacy_supports_eager_primitives():
     assert torch.is_tensor(loss)
 
 
-def test_runtime_from_legacy_preserves_mesh_shape_metadata():
-    fake_mesh = SimpleNamespace(shape=(2, 2))
-    runtime = SNNDistributedRuntime.from_legacy(
-        kind="eager",
-        model=ToyDistributedSNN(),
-        mesh=fake_mesh,
-        analysis=None,
-        mode="fsdp2_tp",
-    )
-    assert runtime.plan is not None
+def test_runtime_plan_preserves_mesh_shape_metadata():
+    runtime = _runtime(mode="fsdp2_tp", topology={"dp": 2, "tp": 2})
     assert runtime.plan.topology.mesh_shape == (2, 2)
 
 
-def test_runtime_from_legacy_uses_mode_for_single_axis_topology():
-    fake_mesh = SimpleNamespace(shape=(2,))
-    runtime = SNNDistributedRuntime.from_legacy(
-        kind="eager",
-        model=ToyDistributedSNN(),
-        mesh=fake_mesh,
-        analysis=None,
-        mode="tp",
-    )
-    assert runtime.plan is not None
+def test_runtime_plan_uses_named_single_axis_topology():
+    runtime = _runtime(mode="tp", topology={"tp": 2})
     assert runtime.plan.topology.dims == {"tp": 2}
 
 
-def test_runtime_reset_state_uses_pipeline_stage_when_available():
-    stage = _ToyResetCounter()
-    pipeline_wrapper = SimpleNamespace(stage_module=stage)
-    runtime = SNNDistributedRuntime.from_legacy(
-        kind="pipeline",
-        model=nn.Identity(),
-        mesh=None,
-        analysis=None,
-        mode="pp",
-        pipeline_runtime=pipeline_wrapper,
-    )
-    runtime.reset_state()
-    assert stage.reset_calls == 1
-
-
-def test_runtime_forward_loss_rejects_pipeline_runtime():
-    stage = nn.Linear(3, 2)
-    model = nn.Linear(5, 4)
-    runtime = SNNDistributedRuntime.from_legacy(
-        kind="pipeline",
-        model=model,
-        mesh=None,
-        analysis=None,
-        mode="pp",
-        pipeline_runtime=SimpleNamespace(stage_module=stage),
-    )
-    criterion = nn.CrossEntropyLoss()
-    x = torch.randn(4, 3)
-    y = torch.tensor([0, 1, 0, 1])
-    with pytest.raises(NotImplementedError, match="does not execute pipeline runtimes"):
-        runtime.forward_loss(criterion, x, y)
-
-
 def test_runtime_prepare_classification_output_can_return_metadata():
-    model = ToyDistributedSNN()
-    runtime = SNNDistributedRuntime.from_legacy(
-        kind="eager",
-        model=model,
-        mesh=None,
-        analysis=None,
-        mode="none",
-    )
+    runtime = _runtime()
     logits = torch.randn(5, 2, 4)
     labels = torch.tensor([0, 1])
     prepared = runtime.prepare_classification_output(
@@ -191,15 +142,8 @@ def test_runtime_prepare_classification_output_can_return_metadata():
     assert prepared.target.shape == (2,)
 
 
-def test_runtime_prepare_dataloader_tolerates_missing_plan():
-    runtime = SNNDistributedRuntime(
-        kind="eager",
-        model=nn.Identity(),
-        mesh=None,
-        analysis=None,
-        plan=None,
-        mode="none",
-    )
+def test_runtime_prepare_dataloader_without_distributed_sampler():
+    runtime = _runtime(nn.Identity())
     loader = runtime.prepare_dataloader(
         dataset=TensorDataset(torch.randn(2, 3), torch.tensor([0, 1])),
         batch_size=1,
@@ -228,8 +172,8 @@ def test_build_snn_optimizer_supports_zero_for_dp():
         config = SNNDistributedConfig(
             device_type="cpu",
             mesh_shape=(1,),
+            mode="dp",
             auto_tensor_parallel=False,
-            enable_data_parallel=True,
             dp_mesh_dim=0,
         )
         distributed_model, _, _ = configure_snn_distributed(model, config)

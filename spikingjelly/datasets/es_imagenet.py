@@ -2,15 +2,17 @@ import os
 from pathlib import Path
 import time
 from typing import Callable, Optional, Tuple, Union
-from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
 from . import utils
-from .base import NeuromorphicDatasetFolder
-from .base import NeuromorphicDatasetBuilder
-from .base import NeuromorphicDatasetConfig
-from .. import configure
+from .base import (
+    EventBuilder,
+    FrameCustomIntegrateBuilder,
+    FrameFixedDurationBuilder,
+    FrameFixedNumberBuilder,
+    NeuromorphicDatasetFolder,
+)
 
 
 __all__ = ["ESImageNet"]
@@ -28,182 +30,21 @@ def _load_events(fname: Union[str, Path]):
     return {"x": events[:, 1], "y": events[:, 0], "t": events[:, 2], "p": events[:, 3]}
 
 
-class ESImageNetEventBuilder(NeuromorphicDatasetBuilder):
-    def build_impl(self) -> None:
-        pass
-
-    def build(self) -> Tuple[Path, Callable]:
-        return self.processed_root, self.get_loader()
-
-    @property
-    def processed_root(self) -> Path:
-        return self.raw_root
-
+class ESImageNetEventBuilder(EventBuilder):
     def get_loader(self) -> Callable:
         return _load_events
 
 
-class ESImageNetFrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
-    def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
-        super().__init__(cfg, raw_root)
-        self.H, self.W = H, W
-
-    def build_impl(self) -> None:
-        # create the same directory structure
-        utils.create_same_directory_structure(self.raw_root, self.processed_root)
-
-        # use multi-thread to accelerate
-        t_ckp = time.time()
-        with ThreadPoolExecutor(
-            max_workers=configure.max_threads_number_for_datasets_preprocess
-        ) as tpe:
-            futures = []
-            print(f"Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].")
-            for e_root, e_dirs, e_files in os.walk(self.raw_root):
-                #! Path.walk is not available until Python 3.12
-                e_root = Path(e_root)
-                if len(e_files) <= 0:
-                    continue
-                output_dir = self.processed_root / e_root.relative_to(self.raw_root)
-                for e_file in e_files:
-                    events_np_file = e_root / e_file
-                    print(
-                        f"Start to integrate [{events_np_file}] to frames "
-                        f"and save to [{output_dir}]."
-                    )
-                    futures.append(
-                        tpe.submit(
-                            utils.integrate_events_file_to_frames_file_by_fixed_frames_number,
-                            _load_events,
-                            events_np_file,
-                            output_dir,
-                            self.cfg.split_by,
-                            self.cfg.frames_number,
-                            self.H,
-                            self.W,
-                            True,
-                        )
-                    )
-            for future in futures:
-                future.result()
-
-        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
-
-    @property
-    def processed_root(self) -> Path:
-        return (
-            self.cfg.root
-            / f"frames_number_{self.cfg.frames_number}_split_by_{self.cfg.split_by}"
-        )
-
-    def get_loader(self) -> Callable:
-        return utils.load_npz_frames
+class ESImageNetFrameFixedNumberBuilder(FrameFixedNumberBuilder):
+    _event_loader = staticmethod(_load_events)
 
 
-class ESImageNetFrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
-    def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
-        super().__init__(cfg, raw_root)
-        self.H, self.W = H, W
-
-    def build_impl(self) -> None:
-        # create the same directory structure
-        utils.create_same_directory_structure(self.raw_root, self.processed_root)
-
-        # use multi-thread to accelerate
-        t_ckp = time.time()
-        with ThreadPoolExecutor(
-            max_workers=configure.max_threads_number_for_datasets_preprocess
-        ) as tpe:
-            futures = []
-            print(f"Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].")
-            for e_root, e_dirs, e_files in os.walk(self.raw_root):
-                #! Path.walk is not available until Python 3.12
-                e_root = Path(e_root)
-                if len(e_files) <= 0:
-                    continue
-                output_dir = self.processed_root / e_root.relative_to(self.raw_root)
-                for e_file in e_files:
-                    events_np_file = e_root / e_file
-                    print(
-                        f"Start to integrate [{events_np_file}] to frames "
-                        f"and save to [{output_dir}]."
-                    )
-                    futures.append(
-                        tpe.submit(
-                            utils.integrate_events_file_to_frames_file_by_fixed_duration,
-                            _load_events,
-                            events_np_file,
-                            output_dir,
-                            self.cfg.duration,
-                            self.H,
-                            self.W,
-                            True,
-                        )
-                    )
-            for future in futures:
-                future.result()
-
-        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
-
-    @property
-    def processed_root(self) -> Path:
-        return self.cfg.root / f"duration_{self.cfg.duration}"
-
-    def get_loader(self) -> Callable:
-        return utils.load_npz_frames
+class ESImageNetFrameFixedDurationBuilder(FrameFixedDurationBuilder):
+    _event_loader = staticmethod(_load_events)
 
 
-class ESImageNetFrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
-    def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
-        super().__init__(cfg, raw_root)
-        self.H, self.W = H, W
-
-    def build_impl(self) -> None:
-        # create the same directory structure
-        utils.create_same_directory_structure(self.raw_root, self.processed_root)
-        # use multi-thread to accelerate
-        t_ckp = time.time()
-        with ThreadPoolExecutor(
-            max_workers=configure.max_threads_number_for_datasets_preprocess
-        ) as tpe:
-            futures = []
-            print(f"Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].")
-            for e_root, e_dirs, e_files in os.walk(self.raw_root):
-                #! Path.walk is not available until Python 3.12
-                e_root = Path(e_root)
-                if len(e_files) <= 0:
-                    continue
-                output_dir = self.processed_root / e_root.relative_to(self.raw_root)
-                for e_file in e_files:
-                    events_np_file: Path = e_root / e_file
-                    print(
-                        f"Start to integrate [{events_np_file}] to frames "
-                        f"and save to [{output_dir}]."
-                    )
-                    futures.append(
-                        tpe.submit(
-                            utils.save_frames_to_npz_and_print,
-                            output_dir / events_np_file.name,
-                            self.cfg.custom_integrate_function(
-                                _load_events(events_np_file), self.H, self.W
-                            ),
-                        )
-                    )
-
-            for future in futures:
-                future.result()
-
-        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
-
-    @property
-    def processed_root(self) -> Path:
-        custom_dir_name = self.cfg.custom_integrated_frames_dir_name
-        if custom_dir_name is None:
-            custom_dir_name = self.cfg.custom_integrate_function.__name__
-        return self.cfg.root / custom_dir_name
-
-    def get_loader(self) -> Callable:
-        return utils.load_npz_frames
+class ESImageNetFrameCustomIntegrateBuilder(FrameCustomIntegrateBuilder):
+    _event_loader = staticmethod(_load_events)
 
 
 class ESImageNet(NeuromorphicDatasetFolder):

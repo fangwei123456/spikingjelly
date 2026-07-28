@@ -7,8 +7,6 @@ import contextlib
 import functools
 import logging
 import os
-import tempfile
-import threading
 from typing import Callable
 
 import torch
@@ -195,9 +193,8 @@ def normalize_triton_storage_dtype(storage_dtype: str | torch.dtype) -> torch.dt
 
 
 def is_fp8_dtype(dtype: torch.dtype) -> bool:
-    return (
-        (hasattr(torch, "float8_e4m3fn") and dtype == torch.float8_e4m3fn)
-        or (hasattr(torch, "float8_e5m2") and dtype == torch.float8_e5m2)
+    return (hasattr(torch, "float8_e4m3fn") and dtype == torch.float8_e4m3fn) or (
+        hasattr(torch, "float8_e5m2") and dtype == torch.float8_e5m2
     )
 
 
@@ -254,9 +251,7 @@ def triton_compute_dtype_name_to_neuron_dtype_id(
     raise ValueError(f"Unsupported Triton compute dtype name: {compute_dtype_name!r}.")
 
 
-def triton_neuron_compute_dtype_id_to_tl_dtype(
-    dtype_id: int, storage_dtype_id: int
-):
+def triton_neuron_compute_dtype_id_to_tl_dtype(dtype_id: int, storage_dtype_id: int):
     if dtype_id == TRITON_NEURON_DTYPE_FP32:
         if torch.float32 not in type_dict:
             raise ValueError("Triton fp32 compute dtype is unavailable.")
@@ -272,9 +267,7 @@ def triton_neuron_compute_dtype_id_to_tl_dtype(
     if dtype_id == TRITON_NEURON_DTYPE_FP8_E4M3FN:
         if storage_dtype_id != TRITON_NEURON_DTYPE_FP8_E4M3FN:
             raise ValueError("FP8 E4M3 compute requires E4M3 storage dtype.")
-        tl_dtype = getattr(tl, "float8e4m3fn", None) or getattr(
-            tl, "float8e4nv", None
-        )
+        tl_dtype = getattr(tl, "float8e4m3fn", None) or getattr(tl, "float8e4nv", None)
         if tl_dtype is None:
             raise ValueError("Triton float8e4m3fn/float8e4nv dtype is unavailable.")
         return tl_dtype
@@ -316,9 +309,7 @@ def resolve_triton_compute_dtype(
                 tl, "float8e4nv", None
             )
             if tl_dtype is None:
-                raise ValueError(
-                    "Triton float8e4m3fn/float8e4nv dtype is unavailable."
-                )
+                raise ValueError("Triton float8e4m3fn/float8e4nv dtype is unavailable.")
             return tl_dtype
         if hasattr(torch, "float8_e5m2") and storage_dtype == torch.float8_e5m2:
             tl_dtype = getattr(tl, "float8e5m2", None) or getattr(tl, "float8e5", None)
@@ -433,50 +424,6 @@ def use_static_range_for_triton_neuron_kernel(T: int) -> bool:
     if threshold is None:
         return True
     return T <= threshold
-
-
-_TMP_PY_LOCK = threading.Lock()
-_TMP_PY_TRACKER = threading.local()
-
-
-def ensure_cleanup_tmp_python_files(f: Callable) -> Callable:
-    """Remove temporary python files returned or created by a wrapped function."""
-
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        with _TMP_PY_LOCK:
-            tmp_paths = []
-            _TMP_PY_TRACKER.paths = tmp_paths
-            original_named_temporary_file = tempfile.NamedTemporaryFile
-
-            def tracking_named_temporary_file(*ntf_args, **ntf_kwargs):
-                tmp = original_named_temporary_file(*ntf_args, **ntf_kwargs)
-                tmp_name = getattr(tmp, "name", None)
-                if isinstance(tmp_name, str) and tmp_name.endswith(".py"):
-                    thread_paths = getattr(_TMP_PY_TRACKER, "paths", None)
-                    if thread_paths is not None:
-                        thread_paths.append(tmp_name)
-                return tmp
-
-            tempfile.NamedTemporaryFile = tracking_named_temporary_file
-            try:
-                result = f(*args, **kwargs)
-                if isinstance(result, str) and result.endswith(".py"):
-                    tmp_paths.append(result)
-                elif isinstance(result, tempfile._TemporaryFileWrapper):
-                    tmp_paths.append(result.name)
-                return result
-            finally:
-                tempfile.NamedTemporaryFile = original_named_temporary_file
-                for path in tmp_paths:
-                    try:
-                        if path and os.path.exists(path):
-                            os.remove(path)
-                    except OSError:
-                        pass
-                _TMP_PY_TRACKER.paths = []
-
-    return wrapper
 
 
 @functools.lru_cache(maxsize=None)

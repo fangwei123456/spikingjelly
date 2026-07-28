@@ -9,7 +9,6 @@ class PrecisionConfig:
     mode: str = "fp32"
     strictness: str = "warn"
     fp8_recipe: str = "auto"
-    report: bool = True
     device: str | None = None
 
     def __post_init__(self):
@@ -23,7 +22,7 @@ class PrecisionConfig:
     @classmethod
     def from_any(
         cls,
-        config: "PrecisionConfig | str | dict",
+        config: "PrecisionConfig | str | dict | None",
         default_device: str | None = None,
     ) -> "PrecisionConfig":
         if config is None:
@@ -40,44 +39,8 @@ class PrecisionConfig:
                 data["device"] = default_device
             elif data["device"] is not None:
                 data["device"] = str(data["device"])
-            if "precision" in data and "mode" not in data:
-                data["mode"] = data.pop("precision")
-            if "precision_strict" in data and "strictness" not in data:
-                data["strictness"] = data.pop("precision_strict")
-            if "fp8_report" in data and "report" not in data:
-                data["report"] = data.pop("fp8_report")
-            valid_fields = {f.name for f in dataclasses.fields(cls)}
-            filtered_data = {k: v for k, v in data.items() if k in valid_fields}
-            return cls(**filtered_data)
-
-        precision = getattr(config, "precision", None)
-        if isinstance(precision, str):
-            device_attr = getattr(config, "device", None)
-            device_value = device_attr if device_attr is not None else default_device
-            return cls(
-                mode=precision.lower(),
-                strictness=getattr(config, "precision_strict", "warn"),
-                fp8_recipe=getattr(config, "fp8_recipe", "auto"),
-                report=getattr(config, "fp8_report", True),
-                device=str(device_value) if device_value is not None else None,
-            )
-
-        has_amp = hasattr(config, "disable_amp")
-        has_dev = hasattr(config, "device")
-        if has_amp and has_dev:
-            device_attr = getattr(config, "device", None)
-            device_value = device_attr if device_attr is not None else default_device
-            if getattr(config, "disable_amp", False):
-                mode = "fp32"
-            else:
-                device = str(device_value or "cpu")
-                mode = "fp16" if device.startswith("cuda") else "fp32"
-            return cls(
-                mode=mode,
-                device=str(device_value) if device_value is not None else None,
-            )
+            return cls(**data)
 
         raise TypeError(
-            "PrecisionConfig.from_any() expects a PrecisionConfig, str, dict, or an object "
-            "with precision/disable_amp/device-style attributes."
+            "PrecisionConfig.from_any() expects None, a PrecisionConfig, str, or dict."
         )

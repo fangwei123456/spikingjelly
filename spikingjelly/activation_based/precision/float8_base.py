@@ -6,31 +6,14 @@ import torch.nn as nn
 from .. import functional, layer
 
 
-class Float8LinearStepModule(nn.Module):
-    def __init__(self, wrapped: nn.Module, step_mode: str = "s"):
-        """
-        Step-mode wrapper around a float8 linear module.
-
-        Note:
-            `_load_from_state_dict` rewrites the provided state_dict keys in place
-            from `prefix + key` to `prefix + "wrapped." + key` so that PyTorch's
-            recursive loading can populate the registered `wrapped` child module.
-            Callers that intend to reuse the same state dict object elsewhere should
-            clone or copy it first.
-        """
+class _Float8StepModule(nn.Module):
+    def __init__(self, wrapped: nn.Module, step_mode: str):
         super().__init__()
         self.wrapped = wrapped
         self.step_mode = step_mode
 
     def set_step_mode(self, step_mode: str):
         self.step_mode = step_mode
-
-    def forward(self, x: torch.Tensor):
-        if self.step_mode == "s":
-            return self.wrapped(x)
-        if self.step_mode == "m":
-            return functional.seq_to_ann_forward(x, self.wrapped)
-        raise ValueError(f"Unsupported step_mode {self.step_mode!r}.")
 
     def __getattr__(self, name: str):
         try:
@@ -72,6 +55,28 @@ class Float8LinearStepModule(nn.Module):
             suffix = k[len(prefix) :]
             if suffix in wrapped_keys:
                 state_dict[wrapped_prefix + suffix] = state_dict.pop(k)
+
+
+class Float8LinearStepModule(_Float8StepModule):
+    def __init__(self, wrapped: nn.Module, step_mode: str = "s"):
+        """
+        Step-mode wrapper around a float8 linear module.
+
+        Note:
+            `_load_from_state_dict` rewrites the provided state_dict keys in place
+            from `prefix + key` to `prefix + "wrapped." + key` so that PyTorch's
+            recursive loading can populate the registered `wrapped` child module.
+            Callers that intend to reuse the same state dict object elsewhere should
+            clone or copy it first.
+        """
+        super().__init__(wrapped, step_mode)
+
+    def forward(self, x: torch.Tensor):
+        if self.step_mode == "s":
+            return self.wrapped(x)
+        if self.step_mode == "m":
+            return functional.seq_to_ann_forward(x, self.wrapped)
+        raise ValueError(f"Unsupported step_mode {self.step_mode!r}.")
 
 
 def wrap_float8_linear_module(original: nn.Module, converted: nn.Module) -> nn.Module:
