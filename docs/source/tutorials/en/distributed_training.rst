@@ -12,7 +12,7 @@ points:
 
 * a high-level **Analyze -> Plan -> Apply** workflow for most users;
 * the lower-level ``SNNDistributedConfig`` path for users who need exact mesh
-  dimensions, tensor-parallel roots, FSDP roots, or pipeline controls.
+  dimensions, tensor-parallel roots, or FSDP roots.
 
 Before running the examples, you should know a few PyTorch distributed terms.
 ``torchrun`` starts one process per rank, ``world_size`` is the number of
@@ -273,8 +273,9 @@ If you already know your main objective, the following rules of thumb work well:
   ``--mesh-shape 2 2``.
 * **Pipeline experiments or stage-level memory pressure**: use ``pp`` through
   the dedicated pipeline runtime. In the current CIFAR10DVSVGG benchmark,
-  ``gpipe`` is the best PP throughput default, while ``1f1b`` is the best PP
-  memory default.
+  the throughput-oriented result uses ``gpipe``, while the memory-oriented
+  result uses ``1f1b``. ``auto`` chooses a schedule from the virtual-stage
+  configuration.
 * **Simplest distributed entry point**: begin with ``dp``. Move to
   ``fsdp2``, ``tp``, ``fsdp2_tp``, or ``pp`` only when the model size or memory
   profile justifies the extra machinery.

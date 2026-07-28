@@ -9,7 +9,7 @@ English version: :doc:`../en/distributed_training`
 本教程介绍 ``spikingjelly.activation_based.distributed`` 中的分布式训练工具。它提供两类入口：
 
 * 面向多数用户的高层 **Analyze -> Plan -> Apply** 工作流；
-* 面向高级用户的低层 ``SNNDistributedConfig`` 路径，用于手工控制 mesh 维度、tensor-parallel roots、FSDP roots 或 pipeline 参数。
+* 面向高级用户的低层 ``SNNDistributedConfig`` 路径，用于手工控制 mesh 维度、tensor-parallel roots 或 FSDP roots。
 
 运行示例前，需要了解几个最小 PyTorch 分布式概念。``torchrun`` 会为每个 rank 启动一个进程，``world_size`` 是参与训练的 rank 数，``init_process_group`` 会创建 DeviceMesh、DTensor、DDP、FSDP2 和 pipeline schedule 使用的进程组。
 
@@ -232,7 +232,7 @@ Pipeline parallelism 使用专用 builder，因为它需要 ``example_input`` �
 
 * **吞吐优先，显存压力不大**：先用 ``dp`` 做直接 weak scaling。如果优化器状态可能成为瓶颈，可以尝试 ``dp + zero``，但收益和 workload 强相关，需要实测。
 * **单卡显存优先，尤其是 Transformer 型 SNN**：activation 和神经元状态显存占主导时，优先尝试 ``tp``。如果还需要 FSDP2 风格的分片，再尝试 ``fsdp2_tp``，并显式使用 2D mesh，例如 ``--mesh-shape 2 2``。
-* **pipeline 实验或 stage 级显存压力**：通过专用 pipeline runtime 使用 ``pp``。当前 CIFAR10DVSVGG benchmark 中，``gpipe`` 是吞吐优先的 PP 默认调度，``1f1b`` 是显存优先的 PP 默认调度。
+* **pipeline 实验或 stage 级显存压力**：通过专用 pipeline runtime 使用 ``pp``。当前 CIFAR10DVSVGG benchmark 的吞吐优先结果使用 ``gpipe``，显存优先结果使用 ``1f1b``；``auto`` 会根据 virtual stage 配置选择调度。
 * **只想要最简单的分布式训练入口**：从 ``dp`` 开始。只有当模型规模或显存曲线确实需要时，再迁移到 ``fsdp2``、``tp``、``fsdp2_tp`` 或 ``pp``。
 
 ``hybrid``（``DDP + TP``）显式不支持，因为 DDP 状态同步会混合普通 ``Tensor`` 参数和 ``DTensor`` 参数。请使用 ``fsdp2_tp``。

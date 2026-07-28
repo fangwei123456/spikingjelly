@@ -13,8 +13,8 @@ paths:
   FX tracing.
 
 Most users start by choosing a converter, then a conversion recipe. Lower-level
-operators, rules, factories, threshold utilities, and helper functions are
-documented after the public conversion APIs.
+operators, factories, and helper functions are documented after the public
+conversion APIs.
 
 Converters
 ++++++++++

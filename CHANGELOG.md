@@ -19,7 +19,7 @@ Module: `spikingjelly.activation_based.ann2snn`.
   `TransformerTDEquivalentRecipe`.
 - Added public `Qwen2SNNConfig`, `Qwen2SNNCalibration`, `Qwen2SNNModel`, and
   `Qwen2SNNRecipe` for calibration-driven, offline layerwise Qwen2 conversion
-  with an explicit `[T, B, S, H]` layout and resettable KV cache.
+  with an explicit `[T, B, S, H]` layout and explicit KV-cache continuation.
 - Added `SignedQCFSSequenceEncoder` and revision-pinned Qwen2.5 correctness,
   quality, efficiency, and tensor-parallel evaluation tools. These experimental
   workflows do not claim latency or energy improvements.
@@ -113,7 +113,7 @@ Modules: `spikingjelly.timing_based.encoding`,
 Module: `spikingjelly.activation_based.distributed`.
 
 - Added Analyze -> Plan -> Apply configuration for data parallel, tensor
-  parallel, FSDP2, FSDP2+TP, and pipeline execution.
+  parallel, FSDP2, and FSDP2+TP. Pipeline execution uses dedicated builders.
 - Added explicit tensor-parallel plans and replicated-activation DTensor styles
   for `TDLinear`.
 - Updated distributed benchmarks, result fields, and tutorials.
@@ -166,6 +166,9 @@ Module: `spikingjelly.activation_based.op_counter`.
 - Removed the redundant `SpikeSimEventEnergyProfiler` and
   `SpikeSimEventEnergyReport` aliases. Use `SpikeSimEnergyProfiler` and
   `SpikeSimEnergyReport`.
+- Removed stage-level aggregation and
+  `MemoryResidencyCounter.get_stage_level_bits()`. Use the level- and
+  operation-level residency methods for current measurements.
 
 #### Precision API Changes
 

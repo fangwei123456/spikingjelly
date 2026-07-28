@@ -3,6 +3,9 @@ import math
 import time
 from typing import Sequence, Tuple
 
+import torch
+import torch.distributed as dist
+
 from spikingjelly.activation_based.distributed.pipeline.runtime import (
     SNNPipelineRuntime,
 )
@@ -99,6 +102,13 @@ def apply_pipeline_stage_memopt(
         runtime.stage_costs,
         stage_budget_ratio=stage_budget_ratio,
     )
+    if dist.is_initialized():
+        selected_tensor = torch.tensor(
+            selected, device=runtime.device, dtype=torch.int64
+        )
+        src = dist.get_global_rank(runtime.group, 0) if runtime.group is not None else 0
+        dist.broadcast(selected_tensor, src=src, group=runtime.group)
+        selected = tuple(selected_tensor.tolist())
     runtime.memopt_selected_stage_indices = selected
     local_selected_pairs = [
         (
