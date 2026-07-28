@@ -23,7 +23,7 @@ def test_spikezip_bias_updates_explicit_state():
 
     y_seq = torch.randn(5, 2, 3)
     original = y_seq.clone()
-    y_seq_next, remaining_steps, released_steps = functional.spikezip_bias_scan(
+    y_seq_next, remaining_steps, released_steps = functional.spikezip_bias_multi_step(
         y_seq,
         bias.view(1, 1, 3),
         remaining_steps=3,

@@ -105,7 +105,7 @@ class SpikeZIPLinear(TDLinear):
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         y_seq = super().multi_step_forward(x_seq)
         active = bool((x_seq != 0).any())
-        y_seq, self.realize_time, released_steps = functional.spikezip_bias_scan(
+        y_seq, self.realize_time, released_steps = functional.spikezip_bias_multi_step(
             y_seq,
             None
             if self.spikezip_bias is None
@@ -171,7 +171,7 @@ class SpikeZIPConv2d(TDConv2d):
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         y_seq = super().multi_step_forward(x_seq)
         active = bool((x_seq != 0).any())
-        y_seq, self.realize_time, released_steps = functional.spikezip_bias_scan(
+        y_seq, self.realize_time, released_steps = functional.spikezip_bias_multi_step(
             y_seq,
             None
             if self.spikezip_bias is None

@@ -345,7 +345,7 @@ def _stbif_reference(x, q, acc_q, threshold, pos_max, neg_min):
     return current * threshold, q_next, acc_q_next, current, is_work
 
 
-def test_stbif_step_and_scan_match_reference():
+def test_stbif_step_and_multi_step_match_reference():
     x_seq = torch.randn(4, 2, 3)
     threshold = torch.tensor(0.25)
     pos_max = torch.tensor(1.0)
@@ -353,7 +353,9 @@ def test_stbif_step_and_scan_match_reference():
     q = torch.full_like(x_seq[0], 0.5)
     acc_q = torch.zeros_like(q)
 
-    scan = functional.stbif_scan_torch(x_seq, q, acc_q, threshold, pos_max, neg_min)
+    multi_step = functional.stbif_multi_step_torch(
+        x_seq, q, acc_q, threshold, pos_max, neg_min
+    )
     expected_spikes = []
     q_ref = q
     acc_q_ref = acc_q
@@ -368,17 +370,17 @@ def test_stbif_step_and_scan_match_reference():
         q_ref, acc_q_ref, current_ref = step[1:4]
         is_work_ref = is_work_ref or step[4]
 
-    _assert_close(scan[0], torch.stack(expected_spikes))
-    _assert_close(scan[1], q_ref)
-    _assert_close(scan[2], acc_q_ref)
-    _assert_close(scan[3], current_ref)
-    assert scan[4] is is_work_ref
+    _assert_close(multi_step[0], torch.stack(expected_spikes))
+    _assert_close(multi_step[1], q_ref)
+    _assert_close(multi_step[2], acc_q_ref)
+    _assert_close(multi_step[3], current_ref)
+    assert multi_step[4] is is_work_ref
 
 
-def test_scan_names_identify_independent_sequence_paths():
+def test_multi_step_names_identify_independent_sequence_paths():
     backend_suffixes = ("_cupy", "_triton", "_inductor", "_torch")
     for name in functional_neuron.__all__:
-        if "_scan" in name and name != "gated_lif_scan":
+        if "_multi_step" in name and name != "gated_lif_multi_step":
             assert name.endswith(backend_suffixes), name
 
 

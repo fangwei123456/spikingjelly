@@ -228,7 +228,7 @@ class GatedLIFNode(base.MemoryModule):
     def multi_step_forward(self, x_seq: torch.Tensor):
         if not isinstance(self.v, torch.Tensor):
             self.v = torch.full_like(x_seq[0], self.v)
-        spike_seq, self.u, self.v = functional.gated_lif_scan(
+        spike_seq, self.u, self.v = functional.gated_lif_multi_step(
             x_seq,
             self.v,
             self.T,

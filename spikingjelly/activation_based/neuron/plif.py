@@ -188,7 +188,7 @@ class ParametricLIFNode(BaseNode):
 
     def _inductor_multi_step_forward(self, x_seq: torch.Tensor):
         self.v_float_to_tensor(x_seq[0])
-        spike_seq, self.v, v_seq = functional.plif_scan_inductor(
+        spike_seq, self.v, v_seq = functional.plif_multi_step_inductor(
             x_seq,
             self.v,
             self.w,

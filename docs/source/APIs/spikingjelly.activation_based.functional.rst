@@ -87,14 +87,14 @@ Neuron State Updates
 ++++++++++++++++++++
 
 这些函数显式接收并返回神经元状态。``*_step`` 表示一个时间步的完整更新；
-``*_scan`` 表示具有独立实现的时间序列更新，而不是对 ``*_step`` 的 Python
+``*_multi_step`` 表示具有独立实现的时间序列更新，而不是对 ``*_step`` 的 Python
 循环包装。backend 仍由 ``MemoryModule`` 选择，因此 backend 专用函数在名称中
 标出 ``cupy``、``triton`` 或 ``inductor``。
 
 ----
 
 These functions receive and return neuron states explicitly. ``*_step`` denotes
-one complete time-step update. ``*_scan`` denotes an independently implemented
+one complete time-step update. ``*_multi_step`` denotes an independently implemented
 sequence update, not a Python-loop wrapper around ``*_step``. Backend selection
 remains a ``MemoryModule`` responsibility, so backend-specific functions identify
 ``cupy``, ``triton``, or ``inductor`` in their names.
@@ -125,39 +125,39 @@ remains a ``MemoryModule`` responsibility, so backend-specific functions identif
      - One SlidingPSN queue update.
    * - :func:`stbif_step <spikingjelly.activation_based.functional.neuron.stbif_step>`
      - One SpikeZIP STBIF state update.
-   * - :func:`if_scan_inductor <spikingjelly.activation_based.functional.neuron.if_scan_inductor>`
+   * - :func:`if_multi_step_inductor <spikingjelly.activation_based.functional.neuron.if_multi_step_inductor>`
      - IF sequence update compiled by Inductor.
-   * - :func:`lif_scan_inductor <spikingjelly.activation_based.functional.neuron.lif_scan_inductor>`
+   * - :func:`lif_multi_step_inductor <spikingjelly.activation_based.functional.neuron.lif_multi_step_inductor>`
      - LIF sequence update compiled by Inductor.
-   * - :func:`plif_scan_inductor <spikingjelly.activation_based.functional.neuron.plif_scan_inductor>`
+   * - :func:`plif_multi_step_inductor <spikingjelly.activation_based.functional.neuron.plif_multi_step_inductor>`
      - ParametricLIF sequence update compiled by Inductor.
    * - :func:`if_step_cupy <spikingjelly.activation_based.functional.neuron.if_step_cupy>`
      - One IF update with caller-selected CuPy kernels.
    * - :func:`lif_step_cupy <spikingjelly.activation_based.functional.neuron.lif_step_cupy>`
      - One LIF update with caller-selected CuPy kernels.
-   * - :func:`if_scan_cupy <spikingjelly.activation_based.functional.neuron.if_scan_cupy>`
+   * - :func:`if_multi_step_cupy <spikingjelly.activation_based.functional.neuron.if_multi_step_cupy>`
      - IF sequence update with CuPy.
-   * - :func:`lif_scan_cupy <spikingjelly.activation_based.functional.neuron.lif_scan_cupy>`
+   * - :func:`lif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.lif_multi_step_cupy>`
      - LIF sequence update with CuPy.
-   * - :func:`plif_scan_cupy <spikingjelly.activation_based.functional.neuron.plif_scan_cupy>`
+   * - :func:`plif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.plif_multi_step_cupy>`
      - ParametricLIF sequence update with CuPy.
-   * - :func:`qif_scan_cupy <spikingjelly.activation_based.functional.neuron.qif_scan_cupy>`
+   * - :func:`qif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.qif_multi_step_cupy>`
      - QIF sequence update with CuPy.
-   * - :func:`eif_scan_cupy <spikingjelly.activation_based.functional.neuron.eif_scan_cupy>`
+   * - :func:`eif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.eif_multi_step_cupy>`
      - EIF sequence update with CuPy.
-   * - :func:`izhikevich_scan_cupy <spikingjelly.activation_based.functional.neuron.izhikevich_scan_cupy>`
+   * - :func:`izhikevich_multi_step_cupy <spikingjelly.activation_based.functional.neuron.izhikevich_multi_step_cupy>`
      - Izhikevich sequence update with CuPy.
-   * - :func:`if_scan_triton <spikingjelly.activation_based.functional.neuron.if_scan_triton>`
+   * - :func:`if_multi_step_triton <spikingjelly.activation_based.functional.neuron.if_multi_step_triton>`
      - IF sequence update with Triton.
-   * - :func:`lif_scan_triton <spikingjelly.activation_based.functional.neuron.lif_scan_triton>`
+   * - :func:`lif_multi_step_triton <spikingjelly.activation_based.functional.neuron.lif_multi_step_triton>`
      - LIF sequence update with Triton.
-   * - :func:`plif_scan_triton <spikingjelly.activation_based.functional.neuron.plif_scan_triton>`
+   * - :func:`plif_multi_step_triton <spikingjelly.activation_based.functional.neuron.plif_multi_step_triton>`
      - ParametricLIF sequence update with Triton.
-   * - :func:`activation_aware_if_scan_triton <spikingjelly.activation_based.functional.neuron.activation_aware_if_scan_triton>`
+   * - :func:`activation_aware_if_multi_step_triton <spikingjelly.activation_based.functional.neuron.activation_aware_if_multi_step_triton>`
      - ActivationAwareIF sequence update with Triton.
-   * - :func:`gated_lif_scan <spikingjelly.activation_based.functional.neuron.gated_lif_scan>`
+   * - :func:`gated_lif_multi_step <spikingjelly.activation_based.functional.neuron.gated_lif_multi_step>`
      - Native GatedLIF sequence update.
-   * - :func:`stbif_scan_torch <spikingjelly.activation_based.functional.neuron.stbif_scan_torch>`
+   * - :func:`stbif_multi_step_torch <spikingjelly.activation_based.functional.neuron.stbif_multi_step_torch>`
      - Native Torch SpikeZIP STBIF sequence update.
 
 .. toctree::
@@ -205,7 +205,7 @@ operators do not duplicate their replaceable ``ann_forward``.
 
    * - :func:`spikezip_bias_step <spikingjelly.activation_based.functional.ann2snn.spikezip_bias_step>`
      - One SpikeZIP bias release-state update.
-   * - :func:`spikezip_bias_scan <spikingjelly.activation_based.functional.ann2snn.spikezip_bias_scan>`
+   * - :func:`spikezip_bias_multi_step <spikingjelly.activation_based.functional.ann2snn.spikezip_bias_multi_step>`
      - Native sequence update of SpikeZIP bias release state.
 
 .. toctree::

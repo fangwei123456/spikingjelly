@@ -38,7 +38,7 @@ def test_inductor_cache_reuses_same_config_across_modules_and_function(monkeypat
     functional.reset_net(node0)
     functional.reset_net(node1)
     y0 = node0(x)
-    y_function, _, _ = functional.if_scan_inductor(
+    y_function, _, _ = functional.if_multi_step_inductor(
         x,
         torch.zeros_like(x[0]),
         node0.v_threshold,
@@ -175,9 +175,9 @@ def test_inductor_cache_does_not_share_custom_surrogate_closures(monkeypatch):
     surrogate0 = ScaledSurrogate(1.0)
     surrogate1 = ScaledSurrogate(2.0)
 
-    spike0, _, _ = functional.if_scan_inductor(x_seq, v, 1.0, 0.0, surrogate0)
-    spike1, _, _ = functional.if_scan_inductor(x_seq, v, 1.0, 0.0, surrogate1)
-    spike0_again, _, _ = functional.if_scan_inductor(
+    spike0, _, _ = functional.if_multi_step_inductor(x_seq, v, 1.0, 0.0, surrogate0)
+    spike1, _, _ = functional.if_multi_step_inductor(x_seq, v, 1.0, 0.0, surrogate1)
+    spike0_again, _, _ = functional.if_multi_step_inductor(
         x_seq, v, 1.0, 0.0, surrogate0
     )
 
@@ -226,7 +226,7 @@ def test_inductor_cache_does_not_retain_custom_surrogate_instances(monkeypatch):
     for i in range(3):
         surrogate = ScaledSurrogate(float(i))
         references.append(weakref.ref(surrogate))
-        functional.if_scan_inductor(x_seq, v, 1.0, 0.0, surrogate)
+        functional.if_multi_step_inductor(x_seq, v, 1.0, 0.0, surrogate)
 
     del surrogate
     gc.collect()

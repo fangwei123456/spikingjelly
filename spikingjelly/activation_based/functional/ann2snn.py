@@ -5,7 +5,7 @@ import torch
 
 __all__ = [
     "spikezip_bias_step",
-    "spikezip_bias_scan",
+    "spikezip_bias_multi_step",
 ]
 
 
@@ -78,18 +78,18 @@ def spikezip_bias_step(
     )
 
 
-def spikezip_bias_scan(
+def spikezip_bias_multi_step(
     y_seq: torch.Tensor,
     bias: torch.Tensor | None,
     remaining_steps: int,
     bias_steps: int,
 ) -> tuple[torch.Tensor, int, int]:
     r"""
-    **API Language** - :ref:`中文 <spikezip_bias_scan-cn>` | :ref:`English <spikezip_bias_scan-en>`
+    **API Language** - :ref:`中文 <spikezip_bias_multi_step-cn>` | :ref:`English <spikezip_bias_multi_step-en>`
 
     ----
 
-    .. _spikezip_bias_scan-cn:
+    .. _spikezip_bias_multi_step-cn:
 
     * **中文**
 
@@ -113,7 +113,7 @@ def spikezip_bias_scan(
 
     ----
 
-    .. _spikezip_bias_scan-en:
+    .. _spikezip_bias_multi_step-en:
 
     * **English**
 

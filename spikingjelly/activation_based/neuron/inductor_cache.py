@@ -89,7 +89,7 @@ def surrogate_callable(surrogate_function: Callable) -> Callable:
     return call
 
 
-def _build_if_scan(
+def _build_if_multi_step(
     v_threshold: float,
     v_reset: float | None,
     surrogate_function: Callable,
@@ -123,7 +123,7 @@ def _build_if_scan(
     return _graph
 
 
-def _build_lif_scan(
+def _build_lif_multi_step(
     tau: float,
     decay_input: bool,
     v_threshold: float,
@@ -162,7 +162,7 @@ def _build_lif_scan(
     return _graph
 
 
-def _build_plif_scan(
+def _build_plif_multi_step(
     decay_input: bool,
     v_threshold: float,
     v_reset: float | None,

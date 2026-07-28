@@ -27,10 +27,10 @@ Module: ``spikingjelly.activation_based.functional``.
   including neurons, delay and synaptic filters, learning traces, and SpikeZIP
   bias release. Existing modules retain their public state, lifecycle, backend
   selection, and output behavior.
-- State-update APIs use ``*_step`` for one complete update and ``*_scan`` only for
+- State-update APIs use ``*_step`` for one complete update and ``*_multi_step`` only for
   independently implemented sequence paths. Supported CuPy, Triton, and
   Inductor paths identify their backend in the function name.
-- The Inductor neuron scan is the single source of its state-update equation
+- The Inductor neuron multi-step implementation is the single source of its state-update equation
   and shares a bounded process-local compiled-graph cache.
 - Hookable Node classes retain their existing execution paths; their standard
   transitions are also available as independent functional APIs.

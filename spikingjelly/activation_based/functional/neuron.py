@@ -1,6 +1,6 @@
 """Explicit neuron updates.
 
-``*_step`` consumes one time step. ``*_scan`` consumes a time-major sequence
+``*_step`` consumes one time step. ``*_multi_step`` consumes a time-major sequence
 and is exposed only when the sequence path has its own implementation rather
 than being a Python loop over ``*_step``.
 """
@@ -22,26 +22,26 @@ __all__ = [
     "izhikevich_step",
     "klif_step",
     "cuba_lif_step",
-    "if_scan_inductor",
-    "lif_scan_inductor",
-    "plif_scan_inductor",
+    "if_multi_step_inductor",
+    "lif_multi_step_inductor",
+    "plif_multi_step_inductor",
     "if_step_cupy",
     "lif_step_cupy",
-    "if_scan_cupy",
-    "lif_scan_cupy",
-    "plif_scan_cupy",
-    "qif_scan_cupy",
-    "eif_scan_cupy",
-    "izhikevich_scan_cupy",
-    "if_scan_triton",
-    "lif_scan_triton",
-    "plif_scan_triton",
+    "if_multi_step_cupy",
+    "lif_multi_step_cupy",
+    "plif_multi_step_cupy",
+    "qif_multi_step_cupy",
+    "eif_multi_step_cupy",
+    "izhikevich_multi_step_cupy",
+    "if_multi_step_triton",
+    "lif_multi_step_triton",
+    "plif_multi_step_triton",
     "sliding_psn_step",
-    "gated_lif_scan",
+    "gated_lif_multi_step",
     "stbif_step",
-    "stbif_scan_torch",
+    "stbif_multi_step_torch",
     "activation_aware_if_step",
-    "activation_aware_if_scan_triton",
+    "activation_aware_if_multi_step_triton",
 ]
 
 
@@ -168,7 +168,7 @@ def _reset(
     return spike_d * v_reset + (1.0 - spike_d) * v
 
 
-def _normalize_scan_output(
+def _normalize_multi_step_output(
     out: tuple[torch.Tensor, ...],
     store_v_seq: bool,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
@@ -503,7 +503,7 @@ def activation_aware_if_step(
     return spike, v_next
 
 
-def activation_aware_if_scan_triton(
+def activation_aware_if_multi_step_triton(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     v_threshold: torch.Tensor,
@@ -514,11 +514,11 @@ def activation_aware_if_scan_triton(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <activation_aware_if_scan_triton-cn>` | :ref:`English <activation_aware_if_scan_triton-en>`
+    **API Language** - :ref:`中文 <activation_aware_if_multi_step_triton-cn>` | :ref:`English <activation_aware_if_multi_step_triton-en>`
 
     ----
 
-    .. _activation_aware_if_scan_triton-cn:
+    .. _activation_aware_if_multi_step_triton-cn:
 
     * **中文**
 
@@ -550,7 +550,7 @@ def activation_aware_if_scan_triton(
 
     ----
 
-    .. _activation_aware_if_scan_triton-en:
+    .. _activation_aware_if_multi_step_triton-en:
 
     * **English**
 
@@ -588,11 +588,11 @@ def activation_aware_if_scan_triton(
         )
     except (ImportError, RuntimeError) as exc:
         raise ImportError(
-            "activation_aware_if_scan_triton requires the Triton backend."
+            "activation_aware_if_multi_step_triton requires the Triton backend."
         ) from exc
     if activation_aware_if is None:
         raise ImportError(
-            "activation_aware_if_scan_triton requires the Triton backend."
+            "activation_aware_if_multi_step_triton requires the Triton backend."
         )
 
     spike_seq, v_out = activation_aware_if._multistep_activation_aware_if(
@@ -610,7 +610,7 @@ def activation_aware_if_scan_triton(
     return spike_seq, v_out, None
 
 
-def if_scan_inductor(
+def if_multi_step_inductor(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     v_threshold: float,
@@ -620,11 +620,11 @@ def if_scan_inductor(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <if_scan_inductor-cn>` | :ref:`English <if_scan_inductor-en>`
+    **API Language** - :ref:`中文 <if_multi_step_inductor-cn>` | :ref:`English <if_multi_step_inductor-en>`
 
     ----
 
-    .. _if_scan_inductor-cn:
+    .. _if_multi_step_inductor-cn:
 
     * **中文**
 
@@ -651,7 +651,7 @@ def if_scan_inductor(
 
     ----
 
-    .. _if_scan_inductor-en:
+    .. _if_multi_step_inductor-en:
 
     * **English**
 
@@ -694,7 +694,7 @@ def if_scan_inductor(
             surrogate_key,
             inductor_cache.runtime_key(x_seq, v),
         ),
-        inductor_cache._build_if_scan(
+        inductor_cache._build_if_multi_step(
             v_threshold,
             v_reset,
             surrogate_function,
@@ -702,7 +702,7 @@ def if_scan_inductor(
             store_v_seq,
         ),
     )
-    return _normalize_scan_output(graph(x_seq, v), store_v_seq)
+    return _normalize_multi_step_output(graph(x_seq, v), store_v_seq)
 
 
 def lif_step(
@@ -784,7 +784,7 @@ def lif_step(
     return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
-def lif_scan_inductor(
+def lif_multi_step_inductor(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     tau: float,
@@ -796,11 +796,11 @@ def lif_scan_inductor(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <lif_scan_inductor-cn>` | :ref:`English <lif_scan_inductor-en>`
+    **API Language** - :ref:`中文 <lif_multi_step_inductor-cn>` | :ref:`English <lif_multi_step_inductor-en>`
 
     ----
 
-    .. _lif_scan_inductor-cn:
+    .. _lif_multi_step_inductor-cn:
 
     * **中文**
 
@@ -831,7 +831,7 @@ def lif_scan_inductor(
 
     ----
 
-    .. _lif_scan_inductor-en:
+    .. _lif_multi_step_inductor-en:
 
     * **English**
 
@@ -880,7 +880,7 @@ def lif_scan_inductor(
             surrogate_key,
             inductor_cache.runtime_key(x_seq, v),
         ),
-        inductor_cache._build_lif_scan(
+        inductor_cache._build_lif_multi_step(
             tau,
             decay_input,
             v_threshold,
@@ -890,7 +890,7 @@ def lif_scan_inductor(
             store_v_seq,
         ),
     )
-    return _normalize_scan_output(graph(x_seq, v), store_v_seq)
+    return _normalize_multi_step_output(graph(x_seq, v), store_v_seq)
 
 
 def plif_step(
@@ -972,7 +972,7 @@ def plif_step(
     return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
-def plif_scan_inductor(
+def plif_multi_step_inductor(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     w: torch.Tensor,
@@ -984,11 +984,11 @@ def plif_scan_inductor(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <plif_scan_inductor-cn>` | :ref:`English <plif_scan_inductor-en>`
+    **API Language** - :ref:`中文 <plif_multi_step_inductor-cn>` | :ref:`English <plif_multi_step_inductor-en>`
 
     ----
 
-    .. _plif_scan_inductor-cn:
+    .. _plif_multi_step_inductor-cn:
 
     * **中文**
 
@@ -1019,7 +1019,7 @@ def plif_scan_inductor(
 
     ----
 
-    .. _plif_scan_inductor-en:
+    .. _plif_multi_step_inductor-en:
 
     * **English**
 
@@ -1068,7 +1068,7 @@ def plif_scan_inductor(
             surrogate_key,
             inductor_cache.runtime_key(x_seq, v, reciprocal_tau),
         ),
-        inductor_cache._build_plif_scan(
+        inductor_cache._build_plif_multi_step(
             decay_input,
             v_threshold,
             v_reset,
@@ -1077,7 +1077,7 @@ def plif_scan_inductor(
             store_v_seq,
         ),
     )
-    return _normalize_scan_output(graph(x_seq, v, reciprocal_tau), store_v_seq)
+    return _normalize_multi_step_output(graph(x_seq, v, reciprocal_tau), store_v_seq)
 
 
 def izhikevich_step(
@@ -1518,7 +1518,7 @@ def lif_step_cupy(
     return spike.reshape_as(x), v_next.reshape_as(v)
 
 
-def if_scan_cupy(
+def if_multi_step_cupy(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     v_threshold: float,
@@ -1528,11 +1528,11 @@ def if_scan_cupy(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <if_scan_cupy-cn>` | :ref:`English <if_scan_cupy-en>`
+    **API Language** - :ref:`中文 <if_multi_step_cupy-cn>` | :ref:`English <if_multi_step_cupy-en>`
 
     ----
 
-    .. _if_scan_cupy-cn:
+    .. _if_multi_step_cupy-cn:
 
     * **中文**
 
@@ -1557,7 +1557,7 @@ def if_scan_cupy(
 
     ----
 
-    .. _if_scan_cupy-en:
+    .. _if_multi_step_cupy-en:
 
     * **English**
 
@@ -1596,7 +1596,7 @@ def if_scan_cupy(
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
-def lif_scan_cupy(
+def lif_multi_step_cupy(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     tau: float,
@@ -1608,11 +1608,11 @@ def lif_scan_cupy(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <lif_scan_cupy-cn>` | :ref:`English <lif_scan_cupy-en>`
+    **API Language** - :ref:`中文 <lif_multi_step_cupy-cn>` | :ref:`English <lif_multi_step_cupy-en>`
 
     ----
 
-    .. _lif_scan_cupy-cn:
+    .. _lif_multi_step_cupy-cn:
 
     * **中文**
 
@@ -1641,7 +1641,7 @@ def lif_scan_cupy(
 
     ----
 
-    .. _lif_scan_cupy-en:
+    .. _lif_multi_step_cupy-en:
 
     * **English**
 
@@ -1686,7 +1686,7 @@ def lif_scan_cupy(
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
-def plif_scan_cupy(
+def plif_multi_step_cupy(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     w: torch.Tensor,
@@ -1698,11 +1698,11 @@ def plif_scan_cupy(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <plif_scan_cupy-cn>` | :ref:`English <plif_scan_cupy-en>`
+    **API Language** - :ref:`中文 <plif_multi_step_cupy-cn>` | :ref:`English <plif_multi_step_cupy-en>`
 
     ----
 
-    .. _plif_scan_cupy-cn:
+    .. _plif_multi_step_cupy-cn:
 
     * **中文**
 
@@ -1731,7 +1731,7 @@ def plif_scan_cupy(
 
     ----
 
-    .. _plif_scan_cupy-en:
+    .. _plif_multi_step_cupy-en:
 
     * **English**
 
@@ -1776,7 +1776,7 @@ def plif_scan_cupy(
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
-def qif_scan_cupy(
+def qif_multi_step_cupy(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     tau: float,
@@ -1790,11 +1790,11 @@ def qif_scan_cupy(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <qif_scan_cupy-cn>` | :ref:`English <qif_scan_cupy-en>`
+    **API Language** - :ref:`中文 <qif_multi_step_cupy-cn>` | :ref:`English <qif_multi_step_cupy-en>`
 
     ----
 
-    .. _qif_scan_cupy-cn:
+    .. _qif_multi_step_cupy-cn:
 
     * **中文**
 
@@ -1828,7 +1828,7 @@ def qif_scan_cupy(
 
     ----
 
-    .. _qif_scan_cupy-en:
+    .. _qif_multi_step_cupy-en:
 
     * **English**
 
@@ -1880,7 +1880,7 @@ def qif_scan_cupy(
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
-def eif_scan_cupy(
+def eif_multi_step_cupy(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     tau: float,
@@ -1894,11 +1894,11 @@ def eif_scan_cupy(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <eif_scan_cupy-cn>` | :ref:`English <eif_scan_cupy-en>`
+    **API Language** - :ref:`中文 <eif_multi_step_cupy-cn>` | :ref:`English <eif_multi_step_cupy-en>`
 
     ----
 
-    .. _eif_scan_cupy-cn:
+    .. _eif_multi_step_cupy-cn:
 
     * **中文**
 
@@ -1932,7 +1932,7 @@ def eif_scan_cupy(
 
     ----
 
-    .. _eif_scan_cupy-en:
+    .. _eif_multi_step_cupy-en:
 
     * **English**
 
@@ -1984,7 +1984,7 @@ def eif_scan_cupy(
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
-def izhikevich_scan_cupy(
+def izhikevich_multi_step_cupy(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     w: torch.Tensor,
@@ -2008,11 +2008,11 @@ def izhikevich_scan_cupy(
     Optional[torch.Tensor],
 ]:
     r"""
-    **API Language** - :ref:`中文 <izhikevich_scan_cupy-cn>` | :ref:`English <izhikevich_scan_cupy-en>`
+    **API Language** - :ref:`中文 <izhikevich_multi_step_cupy-cn>` | :ref:`English <izhikevich_multi_step_cupy-en>`
 
     ----
 
-    .. _izhikevich_scan_cupy-cn:
+    .. _izhikevich_multi_step_cupy-cn:
 
     * **中文**
 
@@ -2054,7 +2054,7 @@ def izhikevich_scan_cupy(
 
     ----
 
-    .. _izhikevich_scan_cupy-en:
+    .. _izhikevich_multi_step_cupy-en:
 
     * **English**
 
@@ -2125,7 +2125,7 @@ def izhikevich_scan_cupy(
     )
 
 
-def if_scan_triton(
+def if_multi_step_triton(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     v_threshold: float,
@@ -2135,11 +2135,11 @@ def if_scan_triton(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <if_scan_triton-cn>` | :ref:`English <if_scan_triton-en>`
+    **API Language** - :ref:`中文 <if_multi_step_triton-cn>` | :ref:`English <if_multi_step_triton-en>`
 
     ----
 
-    .. _if_scan_triton-cn:
+    .. _if_multi_step_triton-cn:
 
     * **中文**
 
@@ -2164,7 +2164,7 @@ def if_scan_triton(
 
     ----
 
-    .. _if_scan_triton-en:
+    .. _if_multi_step_triton-en:
 
     * **English**
 
@@ -2204,7 +2204,7 @@ def if_scan_triton(
     return spike_seq, voltage, None
 
 
-def lif_scan_triton(
+def lif_multi_step_triton(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     tau: float,
@@ -2216,11 +2216,11 @@ def lif_scan_triton(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <lif_scan_triton-cn>` | :ref:`English <lif_scan_triton-en>`
+    **API Language** - :ref:`中文 <lif_multi_step_triton-cn>` | :ref:`English <lif_multi_step_triton-en>`
 
     ----
 
-    .. _lif_scan_triton-cn:
+    .. _lif_multi_step_triton-cn:
 
     * **中文**
 
@@ -2249,7 +2249,7 @@ def lif_scan_triton(
 
     ----
 
-    .. _lif_scan_triton-en:
+    .. _lif_multi_step_triton-en:
 
     * **English**
 
@@ -2295,7 +2295,7 @@ def lif_scan_triton(
     return spike_seq, voltage, None
 
 
-def plif_scan_triton(
+def plif_multi_step_triton(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     w: torch.Tensor,
@@ -2307,11 +2307,11 @@ def plif_scan_triton(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <plif_scan_triton-cn>` | :ref:`English <plif_scan_triton-en>`
+    **API Language** - :ref:`中文 <plif_multi_step_triton-cn>` | :ref:`English <plif_multi_step_triton-en>`
 
     ----
 
-    .. _plif_scan_triton-cn:
+    .. _plif_multi_step_triton-cn:
 
     * **中文**
 
@@ -2340,7 +2340,7 @@ def plif_scan_triton(
 
     ----
 
-    .. _plif_scan_triton-en:
+    .. _plif_multi_step_triton-en:
 
     * **English**
 
@@ -2465,7 +2465,7 @@ def sliding_psn_step(
     return spike.view(x.shape), queue_next
 
 
-def gated_lif_scan(
+def gated_lif_multi_step(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     time_steps: int,
@@ -2480,11 +2480,11 @@ def gated_lif_scan(
     surrogate_function: SurrogateFunction,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <gated_lif_scan-cn>` | :ref:`English <gated_lif_scan-en>`
+    **API Language** - :ref:`中文 <gated_lif_multi_step-cn>` | :ref:`English <gated_lif_multi_step-en>`
 
     ----
 
-    .. _gated_lif_scan-cn:
+    .. _gated_lif_multi_step-cn:
 
     * **中文**
 
@@ -2527,7 +2527,7 @@ def gated_lif_scan(
 
     ----
 
-    .. _gated_lif_scan-en:
+    .. _gated_lif_multi_step-en:
 
     * **English**
 
@@ -2706,7 +2706,7 @@ def stbif_step(
     return out, q_next, acc_q_next, cur_output_next, is_work
 
 
-def stbif_scan_torch(
+def stbif_multi_step_torch(
     x_seq: torch.Tensor,
     q: torch.Tensor,
     acc_q: torch.Tensor,
@@ -2715,11 +2715,11 @@ def stbif_scan_torch(
     neg_min: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, bool]:
     r"""
-    **API Language** - :ref:`中文 <stbif_scan_torch-cn>` | :ref:`English <stbif_scan_torch-en>`
+    **API Language** - :ref:`中文 <stbif_multi_step_torch-cn>` | :ref:`English <stbif_multi_step_torch-en>`
 
     ----
 
-    .. _stbif_scan_torch-cn:
+    .. _stbif_multi_step_torch-cn:
 
     * **中文**
 
@@ -2745,7 +2745,7 @@ def stbif_scan_torch(
 
     ----
 
-    .. _stbif_scan_torch-en:
+    .. _stbif_multi_step_torch-en:
 
     * **English**
 
