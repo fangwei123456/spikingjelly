@@ -104,6 +104,10 @@ class Conv1d(nn.Conv1d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 4:
+            raise ValueError(
+                f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -165,6 +169,10 @@ class Conv2d(nn.Conv2d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 5:
+            raise ValueError(
+                f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -226,6 +234,11 @@ class Conv3d(nn.Conv3d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 6:
+            raise ValueError(
+                "expected x with shape [T, N, C, D, H, W], "
+                f"but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -338,6 +351,10 @@ class ConvTranspose1d(nn.ConvTranspose1d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 4:
+            raise ValueError(
+                f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -401,6 +418,10 @@ class ConvTranspose2d(nn.ConvTranspose2d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 5:
+            raise ValueError(
+                f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -464,6 +485,11 @@ class ConvTranspose3d(nn.ConvTranspose3d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 6:
+            raise ValueError(
+                "expected x with shape [T, N, C, D, H, W], "
+                f"but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -560,6 +586,10 @@ class MaxPool1d(nn.MaxPool1d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 4:
+            raise ValueError(
+                f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -610,6 +640,10 @@ class MaxPool2d(nn.MaxPool2d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 5:
+            raise ValueError(
+                f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -660,6 +694,11 @@ class MaxPool3d(nn.MaxPool3d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 6:
+            raise ValueError(
+                "expected x with shape [T, N, C, D, H, W], "
+                f"but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -707,6 +746,10 @@ class AvgPool1d(nn.AvgPool1d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 4:
+            raise ValueError(
+                f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -757,6 +800,10 @@ class AvgPool2d(nn.AvgPool2d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 5:
+            raise ValueError(
+                f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -807,6 +854,11 @@ class AvgPool3d(nn.AvgPool3d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 6:
+            raise ValueError(
+                "expected x with shape [T, N, C, D, H, W], "
+                f"but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -846,6 +898,10 @@ class AdaptiveAvgPool1d(nn.AdaptiveAvgPool1d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 4:
+            raise ValueError(
+                f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -885,6 +941,10 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 5:
+            raise ValueError(
+                f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -924,6 +984,11 @@ class AdaptiveAvgPool3d(nn.AdaptiveAvgPool3d, base.StepModule):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return super().forward(x)
+        if x.dim() != 6:
+            raise ValueError(
+                "expected x with shape [T, N, C, D, H, W], "
+                f"but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, (super().forward,))
 
 
@@ -1092,6 +1157,10 @@ class WSConv2d(Conv2d):
     def forward(self, x: Tensor):
         if self.step_mode == "s":
             return self._forward(x)
+        if x.dim() != 5:
+            raise ValueError(
+                f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
+            )
         return functional.seq_to_ann_forward(x, self._forward)
 
 

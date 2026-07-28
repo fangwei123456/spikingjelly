@@ -220,6 +220,18 @@ Module: ``spikingjelly.activation_based.triton_kernel.triton_utils``.
   that create temporary Python files should own their lifecycle with
   ``tempfile`` context managers.
 
+Triton Neuron Kernel API Changes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
+
+- Replaced ``TritonNeuronForwardPlan`` and
+  ``prepare_triton_neuron_forward_plan()`` with ``TritonNeuronExecutionPlan`` and
+  ``prepare_triton_neuron_execution_plan()``. The ``compute_dtype`` argument and
+  related fields are now named ``forward_compute_dtype``,
+  ``forward_compute_dtype_name``, and ``forward_compute_tl_dtype`` to distinguish
+  forward and backward execution.
+
 Dependencies
 ^^^^^^^^^^^^
 

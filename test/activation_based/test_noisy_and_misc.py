@@ -1,6 +1,7 @@
+import pytest
 import torch
 
-from spikingjelly.activation_based import quantize
+from spikingjelly.activation_based import functional, layer, quantize
 from spikingjelly.activation_based.functional.misc import (
     delay,
     first_spike_index,
@@ -133,13 +134,41 @@ def test_dropout_reuses_one_mask_across_time_until_reset():
 
 
 def test_step_mode_container_constructs_and_flattens_stateless_sequences():
-    container = StepModeContainer(False, "m", torch.nn.Linear(3, 2))
+    inner = StepModeContainer(False, "s", torch.nn.Linear(3, 2))
+    container = StepModeContainer(False, "s", inner)
+    functional.set_step_mode(container, "m")
     x = torch.randn(4, 5, 3)
 
+    assert inner.step_mode == "s"
     torch.testing.assert_close(
         container(x),
-        container[0](x.flatten(0, 1)).view(4, 5, 2),
+        inner[0](x.flatten(0, 1)).view(4, 5, 2),
     )
+
+
+def test_fixed_rank_wrappers_reject_single_step_inputs_in_multi_step_mode():
+    wrappers = [
+        (layer.Conv1d(2, 2, 1, step_mode="m"), (2, 2, 4)),
+        (layer.Conv2d(2, 2, 1, step_mode="m"), (2, 2, 4, 4)),
+        (layer.Conv3d(2, 2, 1, step_mode="m"), (2, 2, 4, 4, 4)),
+        (layer.ConvTranspose1d(2, 2, 1, step_mode="m"), (2, 2, 4)),
+        (layer.ConvTranspose2d(2, 2, 1, step_mode="m"), (2, 2, 4, 4)),
+        (layer.ConvTranspose3d(2, 2, 1, step_mode="m"), (2, 2, 4, 4, 4)),
+        (layer.MaxPool1d(1, step_mode="m"), (2, 2, 4)),
+        (layer.MaxPool2d(1, step_mode="m"), (2, 2, 4, 4)),
+        (layer.MaxPool3d(1, step_mode="m"), (2, 2, 4, 4, 4)),
+        (layer.AvgPool1d(1, step_mode="m"), (2, 2, 4)),
+        (layer.AvgPool2d(1, step_mode="m"), (2, 2, 4, 4)),
+        (layer.AvgPool3d(1, step_mode="m"), (2, 2, 4, 4, 4)),
+        (layer.AdaptiveAvgPool1d(1, step_mode="m"), (2, 2, 4)),
+        (layer.AdaptiveAvgPool2d(1, step_mode="m"), (2, 2, 4, 4)),
+        (layer.AdaptiveAvgPool3d(1, step_mode="m"), (2, 2, 4, 4, 4)),
+        (layer.WSConv2d(2, 2, 1, step_mode="m"), (2, 2, 4, 4)),
+    ]
+
+    for wrapper, shape in wrappers:
+        with pytest.raises(ValueError, match=r"expected x with shape \[T, N, C"):
+            wrapper(torch.randn(shape))
 
 
 def test_quantizers_keep_their_straight_through_gradients():
