@@ -23,11 +23,15 @@ Functional State Transitions
 
 Module: ``spikingjelly.activation_based.functional``.
 
-- Added explicit tensor-state APIs for stateful neurons, layers, encoders,
-  learning rules, and ANN-to-SNN components. Existing modules retain their
-  public state, lifecycle, backend selection, and output behavior.
-- Added named Torch, CuPy, Triton, and Inductor paths for supported neuron
-  transitions. The Inductor path shares a bounded process-local cache.
+- Added explicit tensor-state APIs for modules with state-update semantics,
+  including neurons, delay and synaptic filters, learning traces, and SpikeZIP
+  bias release. Existing modules retain their public state, lifecycle, backend
+  selection, and output behavior.
+- State-update APIs use ``*_step`` for one complete update and ``*_scan`` only for
+  independently implemented sequence paths. Supported CuPy, Triton, and
+  Inductor paths identify their backend in the function name.
+- The Inductor neuron scan is the single source of its state-update equation
+  and shares a bounded process-local compiled-graph cache.
 - Hookable Node classes retain their existing execution paths; their standard
   transitions are also available as independent functional APIs.
 - Added FlexSN custom-op registry diagnostics for entry, owner-reference, and

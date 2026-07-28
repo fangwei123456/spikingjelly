@@ -1,14 +1,14 @@
-Neuron State Transition Functions
-++++++++++++++++++++++++++++++++++++++++
+Neuron State Updates
+++++++++++++++++++++
 
-这些函数显式接收并返回神经元状态，不读取 ``MemoryModule`` 的隐式 memory，
-也不负责 ``training/eval`` 或 backend dispatch。
+``*_step`` 表示一次完整状态更新。``*_scan`` 仅表示具有独立序列实现的路径；
+backend 专用路径在函数名中标明 backend。
 
 ----
 
-These functions receive and return neuron states explicitly. They do not read
-implicit ``MemoryModule`` memory and do not handle ``training/eval`` or backend
-dispatch.
+``*_step`` denotes one complete state update. ``*_scan`` is reserved for an
+independently implemented sequence path, with backend-specific paths naming the
+backend explicitly.
 
 .. automodule:: spikingjelly.activation_based.functional.neuron
    :members:

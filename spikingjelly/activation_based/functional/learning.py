@@ -8,12 +8,12 @@ import torch.nn.functional as F
 
 
 __all__ = [
-    "stdp_linear_single_step",
-    "mstdp_linear_single_step",
-    "mstdpet_linear_single_step",
-    "stdp_conv1d_single_step",
-    "stdp_conv2d_single_step",
-    "mstdpet_reward_delta",
+    "stdp_linear_step",
+    "mstdp_linear_step",
+    "mstdpet_linear_step",
+    "stdp_conv1d_step",
+    "stdp_conv2d_step",
+    "mstdpet_reward_step",
 ]
 
 
@@ -21,7 +21,7 @@ def _identity(x: torch.Tensor) -> torch.Tensor:
     return x
 
 
-def stdp_linear_single_step(
+def stdp_linear_step(
     weight: torch.Tensor,
     in_spike: torch.Tensor,
     out_spike: torch.Tensor,
@@ -33,11 +33,11 @@ def stdp_linear_single_step(
     f_post: Callable[[torch.Tensor], torch.Tensor] = _identity,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <functional_stdp_linear_single_step-cn>` | :ref:`English <functional_stdp_linear_single_step-en>`
+    **API Language** - :ref:`中文 <functional_stdp_linear_step-cn>` | :ref:`English <functional_stdp_linear_step-en>`
 
     ----
 
-    .. _functional_stdp_linear_single_step-cn:
+    .. _functional_stdp_linear_step-cn:
 
     * **中文**
 
@@ -68,7 +68,7 @@ def stdp_linear_single_step(
 
     ----
 
-    .. _functional_stdp_linear_single_step-en:
+    .. _functional_stdp_linear_step-en:
 
     * **English**
 
@@ -109,7 +109,7 @@ def stdp_linear_single_step(
     return delta_w_pre + delta_w_post, trace_pre, trace_post
 
 
-def mstdp_linear_single_step(
+def mstdp_linear_step(
     weight: torch.Tensor,
     in_spike: torch.Tensor,
     out_spike: torch.Tensor,
@@ -121,11 +121,11 @@ def mstdp_linear_single_step(
     f_post: Callable[[torch.Tensor], torch.Tensor] = _identity,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <functional_mstdp_linear_single_step-cn>` | :ref:`English <functional_mstdp_linear_single_step-en>`
+    **API Language** - :ref:`中文 <functional_mstdp_linear_step-cn>` | :ref:`English <functional_mstdp_linear_step-en>`
 
     ----
 
-    .. _functional_mstdp_linear_single_step-cn:
+    .. _functional_mstdp_linear_step-cn:
 
     * **中文**
 
@@ -156,7 +156,7 @@ def mstdp_linear_single_step(
 
     ----
 
-    .. _functional_mstdp_linear_single_step-en:
+    .. _functional_mstdp_linear_step-en:
 
     * **English**
 
@@ -194,7 +194,7 @@ def mstdp_linear_single_step(
     return eligibility, trace_pre, trace_post
 
 
-def mstdpet_linear_single_step(
+def mstdpet_linear_step(
     weight: torch.Tensor,
     in_spike: torch.Tensor,
     out_spike: torch.Tensor,
@@ -206,17 +206,17 @@ def mstdpet_linear_single_step(
     f_post: Callable[[torch.Tensor], torch.Tensor] = _identity,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <functional_mstdpet_linear_single_step-cn>` | :ref:`English <functional_mstdpet_linear_single_step-en>`
+    **API Language** - :ref:`中文 <functional_mstdpet_linear_step-cn>` | :ref:`English <functional_mstdpet_linear_step-en>`
 
     ----
 
-    .. _functional_mstdpet_linear_single_step-cn:
+    .. _functional_mstdpet_linear_step-cn:
 
     * **中文**
 
     对 linear 权重执行单步 mSTDP-ET eligibility tensor 计算。该函数只计算
     eligibility；``trace_e`` 衰减和 reward 调制由
-    :func:`mstdpet_reward_delta` 处理。
+    :func:`mstdpet_reward_step` 处理。
 
     :param weight: linear 权重，形状 ``[out_features, in_features]``
     :type weight: torch.Tensor
@@ -241,13 +241,13 @@ def mstdpet_linear_single_step(
 
     ----
 
-    .. _functional_mstdpet_linear_single_step-en:
+    .. _functional_mstdpet_linear_step-en:
 
     * **English**
 
     Run one tensor-only mSTDP-ET eligibility computation for a linear weight.
     This function only computes eligibility; ``trace_e`` decay and reward
-    modulation are handled by :func:`mstdpet_reward_delta`.
+    modulation are handled by :func:`mstdpet_reward_step`.
 
     :param weight: Linear weight shaped ``[out_features, in_features]``
     :type weight: torch.Tensor
@@ -278,7 +278,7 @@ def mstdpet_linear_single_step(
     return eligibility, trace_pre, trace_post
 
 
-def stdp_conv2d_single_step(
+def stdp_conv2d_step(
     weight: torch.Tensor,
     in_spike: torch.Tensor,
     out_spike: torch.Tensor,
@@ -296,11 +296,11 @@ def stdp_conv2d_single_step(
     f_post: Callable[[torch.Tensor], torch.Tensor] = _identity,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <functional_stdp_conv2d_single_step-cn>` | :ref:`English <functional_stdp_conv2d_single_step-en>`
+    **API Language** - :ref:`中文 <functional_stdp_conv2d_step-cn>` | :ref:`English <functional_stdp_conv2d_step-en>`
 
     ----
 
-    .. _functional_stdp_conv2d_single_step-cn:
+    .. _functional_stdp_conv2d_step-cn:
 
     * **中文**
 
@@ -345,7 +345,7 @@ def stdp_conv2d_single_step(
 
     ----
 
-    .. _functional_stdp_conv2d_single_step-en:
+    .. _functional_stdp_conv2d_step-en:
 
     * **English**
 
@@ -431,7 +431,7 @@ def stdp_conv2d_single_step(
     return delta_w, trace_pre, trace_post
 
 
-def stdp_conv1d_single_step(
+def stdp_conv1d_step(
     weight: torch.Tensor,
     in_spike: torch.Tensor,
     out_spike: torch.Tensor,
@@ -449,11 +449,11 @@ def stdp_conv1d_single_step(
     f_post: Callable[[torch.Tensor], torch.Tensor] = _identity,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <functional_stdp_conv1d_single_step-cn>` | :ref:`English <functional_stdp_conv1d_single_step-en>`
+    **API Language** - :ref:`中文 <functional_stdp_conv1d_step-cn>` | :ref:`English <functional_stdp_conv1d_step-en>`
 
     ----
 
-    .. _functional_stdp_conv1d_single_step-cn:
+    .. _functional_stdp_conv1d_step-cn:
 
     * **中文**
 
@@ -498,7 +498,7 @@ def stdp_conv1d_single_step(
 
     ----
 
-    .. _functional_stdp_conv1d_single_step-en:
+    .. _functional_stdp_conv1d_step-en:
 
     * **English**
 
@@ -582,18 +582,18 @@ def stdp_conv1d_single_step(
     return delta_w, trace_pre, trace_post
 
 
-def mstdpet_reward_delta(
+def mstdpet_reward_step(
     reward: torch.Tensor | float,
     eligibility: torch.Tensor,
     trace_e: torch.Tensor,
     tau_trace: float,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <functional_mstdpet_reward_delta-cn>` | :ref:`English <functional_mstdpet_reward_delta-en>`
+    **API Language** - :ref:`中文 <functional_mstdpet_reward_step-cn>` | :ref:`English <functional_mstdpet_reward_step-en>`
 
     ----
 
-    .. _functional_mstdpet_reward_delta-cn:
+    .. _functional_mstdpet_reward_step-cn:
 
     * **中文**
 
@@ -614,7 +614,7 @@ def mstdpet_reward_delta(
 
     ----
 
-    .. _functional_mstdpet_reward_delta-en:
+    .. _functional_mstdpet_reward_step-en:
 
     * **English**
 

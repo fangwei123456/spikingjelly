@@ -286,7 +286,7 @@ def test_functional_learning_linear_helpers_match_legacy_helpers():
     expected = learning.stdp_linear_single_step(
         fc, in_spike, out_spike, None, None, 2.0, 3.0, f_weight, f_weight
     )
-    delta_w, trace_pre, trace_post = functional.stdp_linear_single_step(
+    delta_w, trace_pre, trace_post = functional.stdp_linear_step(
         fc.weight.data,
         in_spike,
         out_spike,
@@ -304,7 +304,7 @@ def test_functional_learning_linear_helpers_match_legacy_helpers():
     expected = learning.mstdp_linear_single_step(
         fc, in_spike, out_spike, None, None, 2.0, 3.0, f_weight, f_weight
     )
-    eligibility, trace_pre, trace_post = functional.mstdp_linear_single_step(
+    eligibility, trace_pre, trace_post = functional.mstdp_linear_step(
         fc.weight.data,
         in_spike,
         out_spike,
@@ -322,7 +322,7 @@ def test_functional_learning_linear_helpers_match_legacy_helpers():
     expected = learning.mstdpet_linear_single_step(
         fc, in_spike[0], out_spike[0], None, None, 2.0, 3.0, 5.0, f_weight, f_weight
     )
-    eligibility, trace_pre, trace_post = functional.mstdpet_linear_single_step(
+    eligibility, trace_pre, trace_post = functional.mstdpet_linear_step(
         fc.weight.data,
         in_spike[0],
         out_spike[0],
@@ -345,7 +345,7 @@ def test_functional_learning_conv_helpers_match_legacy_helpers():
     expected1 = learning.stdp_conv1d_single_step(
         conv1, in_spike1, out_spike1, None, None, 2.0, 3.0, f_weight, f_weight
     )
-    delta_w1, trace_pre1, trace_post1 = functional.stdp_conv1d_single_step(
+    delta_w1, trace_pre1, trace_post1 = functional.stdp_conv1d_step(
         conv1.weight.data,
         in_spike1,
         out_spike1,
@@ -372,7 +372,7 @@ def test_functional_learning_conv_helpers_match_legacy_helpers():
     expected2 = learning.stdp_conv2d_single_step(
         conv2, in_spike2, out_spike2, None, None, 2.0, 3.0, f_weight, f_weight
     )
-    delta_w2, trace_pre2, trace_post2 = functional.stdp_conv2d_single_step(
+    delta_w2, trace_pre2, trace_post2 = functional.stdp_conv2d_step(
         conv2.weight.data,
         in_spike2,
         out_spike2,
@@ -394,10 +394,10 @@ def test_functional_learning_conv_helpers_match_legacy_helpers():
         assert torch.allclose(a, b)
 
 
-def test_mstdpet_reward_delta_uses_explicit_tensor_state():
+def test_mstdpet_reward_step_uses_explicit_tensor_state():
     eligibility = torch.arange(6, dtype=torch.float32).view(3, 2)
     trace_e = torch.ones(3, 2)
-    dw, trace_e_next = functional.mstdpet_reward_delta(
+    dw, trace_e_next = functional.mstdpet_reward_step(
         0.25,
         eligibility,
         trace_e,
@@ -439,6 +439,6 @@ if __name__ == "__main__":
     test_mstdp_learners_free_tensors_with_graph_connected_reward()
     test_functional_learning_linear_helpers_match_legacy_helpers()
     test_functional_learning_conv_helpers_match_legacy_helpers()
-    test_mstdpet_reward_delta_uses_explicit_tensor_state()
+    test_mstdpet_reward_step_uses_explicit_tensor_state()
     test_stdp_multi_step_preserves_empty_sequence_state()
     print("Done!")

@@ -1,5 +1,4 @@
 from .ann2snn import *
-from .encoding import *
 from .forward import *
 from .layer import *
 from .learning import *

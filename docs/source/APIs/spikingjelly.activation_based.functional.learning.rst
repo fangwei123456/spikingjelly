@@ -1,5 +1,5 @@
-Learning Functional State Transition Functions
-++++++++++++++++++++++++++++++++++++++++++++++
+Learning State Updates
+++++++++++++++++++++++
 
 这些函数显式接收 STDP/mSTDP/mSTDP-ET 的局部状态和 raw tensor 参数，不读取
 ``MemoryModule`` 的隐式 memory、monitor 缓存，也不负责 ``step_mode``、

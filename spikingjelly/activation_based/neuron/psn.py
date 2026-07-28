@@ -258,21 +258,29 @@ class MaskedPSN(base.MemoryModule):
                 "The masked PSN can not work in single-step mode when k < 1!"
             )
 
-        queue = functional.masked_psn_advance_queue(x, tuple(self.queue), self.k)
-        self.queue[:] = queue
-        spike, self.time_step = functional.masked_psn_single_step_from_queue(
-            x.shape,
-            queue,
+        self.queue.append(x.flatten())
+        if self.queue.__len__() > self.k:
+            self.queue.pop(0)
+
+        if self.time_step + 1 > self.T:
+            raise OverflowError(
+                f"The MaskedPSN(T={self.T}) has run {self.time_step + 1} time-steps!"
+            )
+
+        weight = self.masked_weight()[
             self.time_step,
-            self.T,
-            self.lambda_,
-            self.mask0,
-            self.mask1,
-            self.weight,
-            self.bias,
-            self.surrogate_function,
-        )
-        return spike
+            self.time_step + 1 - self.queue.__len__() : self.time_step + 1,
+        ]
+        x_seq = torch.stack(self.queue)
+
+        for i in range(x.dim()):
+            weight = weight.unsqueeze(-1)
+
+        h = torch.sum(weight * x_seq, 0)
+        spike = self.surrogate_function(h + self.bias[self.time_step])
+
+        self.time_step += 1
+        return spike.view(x.shape)
 
     def multi_step_forward(self, x_seq: torch.Tensor):
         # x_seq.shape = [T, N, *]
@@ -416,7 +424,7 @@ class SlidingPSN(base.MemoryModule):
         return weight
 
     def single_step_forward(self, x: torch.Tensor):
-        spike, queue = functional.sliding_psn_single_step(
+        spike, queue = functional.sliding_psn_step(
             x, tuple(self.queue), self.weight, self.bias, self.surrogate_function
         )
         self.queue[:] = queue

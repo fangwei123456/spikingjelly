@@ -35,6 +35,32 @@ __all__ = [
 ]
 
 
+def _matmul_delta(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    a_sum: torch.Tensor,
+    b_sum: torch.Tensor,
+    transpose_b: bool = False,
+) -> torch.Tensor:
+    if transpose_b:
+        b = b.transpose(-1, -2)
+        b_sum = b_sum.transpose(-1, -2)
+    return a_sum @ b + a @ b_sum - a @ b
+
+
+def _matmul_sequence_delta(
+    a_seq: torch.Tensor,
+    b_seq: torch.Tensor,
+    transpose_b: bool = False,
+) -> torch.Tensor:
+    a_sum = a_seq.cumsum(0)
+    b_sum = b_seq.cumsum(0)
+    if transpose_b:
+        b_sum = b_sum.transpose(-1, -2)
+    product_sum = a_sum @ b_sum
+    return torch.diff(product_sum, dim=0, prepend=torch.zeros_like(product_sum[:1]))
+
+
 class SpikeZIPLinear(TDLinear):
     def __init__(
         self,
@@ -67,12 +93,11 @@ class SpikeZIPLinear(TDLinear):
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         y = super().single_step_forward(x)
         self.is_work = not bool((x == 0).all())
-        y, self.realize_time, released = functional.spikezip_release_bias_single_step(
+        y, self.realize_time, released = functional.spikezip_bias_step(
             y,
             self.spikezip_bias,
             self.realize_time,
             self.bias_steps,
-            (self.out_features,),
         )
         self.is_work = self.is_work or released
         return y
@@ -80,15 +105,15 @@ class SpikeZIPLinear(TDLinear):
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         y_seq = super().multi_step_forward(x_seq)
         active = bool((x_seq != 0).any())
-        view_shape = (1,) * (y_seq.dim() - 1) + (self.out_features,)
-        y_seq, self.realize_time, released_steps = (
-            functional.spikezip_release_bias_multi_step(
-                y_seq,
-                self.spikezip_bias,
-                self.realize_time,
-                self.bias_steps,
-                view_shape,
-            )
+        y_seq, self.realize_time, released_steps = functional.spikezip_bias_scan(
+            y_seq,
+            None
+            if self.spikezip_bias is None
+            else self.spikezip_bias.view(
+                (1,) * (y_seq.dim() - 2) + (self.out_features,)
+            ),
+            self.realize_time,
+            self.bias_steps,
         )
         self.is_work = active or released_steps > 0
         return y_seq
@@ -132,12 +157,13 @@ class SpikeZIPConv2d(TDConv2d):
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         y = super().single_step_forward(x)
         self.is_work = not bool((x == 0).all())
-        y, self.realize_time, released = functional.spikezip_release_bias_single_step(
+        y, self.realize_time, released = functional.spikezip_bias_step(
             y,
-            self.spikezip_bias,
+            None
+            if self.spikezip_bias is None
+            else self.spikezip_bias.view(1, self.out_channels, 1, 1),
             self.realize_time,
             self.bias_steps,
-            (1, self.out_channels, 1, 1),
         )
         self.is_work = self.is_work or released
         return y
@@ -145,14 +171,13 @@ class SpikeZIPConv2d(TDConv2d):
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         y_seq = super().multi_step_forward(x_seq)
         active = bool((x_seq != 0).any())
-        y_seq, self.realize_time, released_steps = (
-            functional.spikezip_release_bias_multi_step(
-                y_seq,
-                self.spikezip_bias,
-                self.realize_time,
-                self.bias_steps,
-                (1, 1, self.out_channels, 1, 1),
-            )
+        y_seq, self.realize_time, released_steps = functional.spikezip_bias_scan(
+            y_seq,
+            None
+            if self.spikezip_bias is None
+            else self.spikezip_bias.view(1, 1, self.out_channels, 1, 1),
+            self.realize_time,
+            self.bias_steps,
         )
         self.is_work = active or released_steps > 0
         return y_seq
@@ -307,16 +332,14 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
 
         q_sum = self.transpose_for_scores(self.query_if.accumulated)
         k_sum = self.transpose_for_scores(self.key_if.accumulated)
-        scores = functional.spikezip_matmul_delta(
-            query_layer, key_layer, q_sum, k_sum, True
-        )
+        scores = _matmul_delta(query_layer, key_layer, q_sum, k_sum, True)
         scores = scores / math.sqrt(self.attention_head_size)
         if attention_mask is not None and self.t == 0:
             scores = scores + attention_mask
         attention_probs = self.softmax(scores)
         attention_probs = self.dropout(attention_probs)
         attention_probs = self.attn_if(attention_probs)
-        context = functional.spikezip_matmul_delta(
+        context = _matmul_delta(
             attention_probs,
             value_layer,
             self.attn_if.accumulated,
@@ -359,7 +382,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
             value_layer = self.transpose_for_scores(
                 self.value_if(self.value(hidden_states))
             )
-            scores = functional.spikezip_matmul_sequence_delta(
+            scores = _matmul_sequence_delta(
                 query_layer,
                 key_layer,
                 transpose_b=True,
@@ -371,7 +394,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
             attention_probs = self.softmax(scores)
             attention_probs = self.dropout(attention_probs)
             attention_probs = self.attn_if(attention_probs)
-            context_seq = functional.spikezip_matmul_sequence_delta(
+            context_seq = _matmul_sequence_delta(
                 attention_probs,
                 value_layer,
             )
@@ -443,7 +466,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
         query = query * self.scale
         q_sum = self.q_if.accumulated * self.scale
         k_sum = self.k_if.accumulated
-        attention = functional.spikezip_matmul_delta(query, key, q_sum, k_sum, True)
+        attention = _matmul_delta(query, key, q_sum, k_sum, True)
 
         if self.is_softmax:
             attention = self.softmax(attention)
@@ -454,7 +477,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
             attention_sum = self.attn_if.accumulated / seq_len
 
         attention = self.attn_drop(attention)
-        context = functional.spikezip_matmul_delta(
+        context = _matmul_delta(
             attention,
             value,
             attention_sum,
@@ -482,7 +505,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
             key = self.k_if(key)
             value = self.v_if(value)
 
-            attention = functional.spikezip_matmul_sequence_delta(
+            attention = _matmul_sequence_delta(
                 query * self.scale,
                 key,
                 transpose_b=True,
@@ -494,7 +517,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
                 attention = self.attn_if(attention) / seq_len
 
             attention = self.attn_drop(attention)
-            context = functional.spikezip_matmul_sequence_delta(
+            context = _matmul_sequence_delta(
                 attention,
                 value,
             )

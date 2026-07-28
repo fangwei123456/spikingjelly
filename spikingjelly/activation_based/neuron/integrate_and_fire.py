@@ -303,7 +303,7 @@ class IFNode(BaseNode):
 
     def _inductor_multi_step_forward(self, x_seq: torch.Tensor):
         self.v_float_to_tensor(x_seq[0])
-        spike_seq, self.v, v_seq = functional.if_multi_step_inductor(
+        spike_seq, self.v, v_seq = functional.if_scan_inductor(
             x_seq,
             self.v,
             self.v_threshold,
@@ -1041,7 +1041,7 @@ class ActivationAwareIFNode(base.MemoryModule):
         self.v_float_to_tensor(x)
         threshold = self._broadcast_parameter(self.v_threshold, x, "v_threshold")
         offset = self._broadcast_parameter(self.v_offset, x, "v_offset")
-        spike, self.v = functional.activation_aware_if_single_step(
+        spike, self.v = functional.activation_aware_if_step(
             x,
             self.v,
             threshold,
@@ -1113,7 +1113,7 @@ class ActivationAwareIFNode(base.MemoryModule):
             channel_size = 1
             inner_size = x_seq[0].numel()
 
-        spike_seq, self.v, v_seq = functional.activation_aware_if_multi_step_triton(
+        spike_seq, self.v, v_seq = functional.activation_aware_if_scan_triton(
             x_seq,
             self.v,
             threshold,
@@ -1182,22 +1182,16 @@ class ActivationAwareIFNode(base.MemoryModule):
             )
         if self.backend == "triton":
             return self._triton_multi_step_forward(x_seq)
-        self.v_float_to_tensor(x_seq[0])
-        threshold = self._broadcast_parameter(self.v_threshold, x_seq[0], "v_threshold")
-        offset = self._broadcast_parameter(self.v_offset, x_seq[0], "v_offset")
-        spike_seq, self.v, v_seq = functional.activation_aware_if_multi_step(
-            x_seq,
-            self.v,
-            threshold,
-            offset,
-            self.v_reset,
-            self.surrogate_function,
-            self.detach_reset,
-            self.store_v_seq,
-        )
-        if self.store_v_seq:
-            self.v_seq = v_seq
-        return spike_seq
+        if not self.store_v_seq:
+            return super().multi_step_forward(x_seq)
+
+        spike_seq = []
+        v_seq = []
+        for x in x_seq:
+            spike_seq.append(self.single_step_forward(x))
+            v_seq.append(self.v)
+        self.v_seq = torch.stack(v_seq)
+        return torch.stack(spike_seq)
 
     def extra_repr(self):
         return (

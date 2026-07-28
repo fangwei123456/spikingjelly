@@ -73,12 +73,9 @@ def runtime_key(*tensors: torch.Tensor) -> tuple[Any, ...]:
 
 
 def surrogate_callable(surrogate_function: Callable) -> Callable:
-    surrogate_type = type(surrogate_function)
-    if (
-        surrogate_key(surrogate_function) is None
-        or surrogate_type.__module__ != "spikingjelly.activation_based.surrogate"
-    ):
+    if surrogate_key(surrogate_function) is None:
         return surrogate_function
+    surrogate_type = type(surrogate_function)
     fn = (
         surrogate_type.spiking_function
         if surrogate_function.spiking
@@ -92,7 +89,7 @@ def surrogate_callable(surrogate_function: Callable) -> Callable:
     return call
 
 
-def _build_if_multi_step_graph(
+def _build_if_scan(
     v_threshold: float,
     v_reset: float | None,
     surrogate_function: Callable,
@@ -126,7 +123,7 @@ def _build_if_multi_step_graph(
     return _graph
 
 
-def _build_lif_multi_step_graph(
+def _build_lif_scan(
     tau: float,
     decay_input: bool,
     v_threshold: float,
@@ -165,7 +162,7 @@ def _build_lif_multi_step_graph(
     return _graph
 
 
-def _build_plif_multi_step_graph(
+def _build_plif_scan(
     decay_input: bool,
     v_threshold: float,
     v_reset: float | None,

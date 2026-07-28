@@ -814,7 +814,7 @@ def test_spikezip_stbif_infers_level_from_quantizer_bounds():
     assert neuron.level == 8
 
 
-def test_spikezip_stbif_single_step_matches_multi_step():
+def test_spikezip_stbif_step_matches_multi_step():
     quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
     neuron = STBIFNeuron.from_quantizer(quantizer)
     x_seq = _first_real_then_zero_sequence(
@@ -1036,7 +1036,7 @@ def test_spikezip_conv2d_is_tdconv2d_with_distributed_bias():
     assert torch.allclose(spike_seq, loop_seq, atol=1e-6, rtol=1e-6)
 
 
-def test_spikezip_softmax_layernorm_and_matmul_match_qann_ops():
+def test_spikezip_softmax_and_layernorm_match_qann_ops():
     torch.manual_seed(270)
     x = torch.randn(2, 4, 8)
     x_steps = [x] + [torch.zeros_like(x) for _ in range(15)]
@@ -1048,15 +1048,6 @@ def test_spikezip_softmax_layernorm_and_matmul_match_qann_ops():
     spike_ln = SpikeZIPLayerNorm(source_ln)
     ln_acc = sum(spike_ln(step) for step in x_steps)
     assert torch.allclose(ln_acc, source_ln(x), atol=1e-6, rtol=1e-6)
-
-    a = torch.randn(2, 3, 4)
-    b = torch.randn(2, 4, 5)
-    a_pre = torch.randn(2, 3, 4)
-    b_pre = torch.randn(2, 4, 5)
-    delta = functional.spikezip_matmul_delta(a, b, a_pre + a, b_pre + b)
-    expected = torch.matmul(a_pre + a, b_pre + b) - torch.matmul(a_pre, b_pre)
-    assert torch.allclose(delta, expected, atol=1e-6, rtol=1e-6)
-
 
 def test_spikezip_softmax_layernorm_single_step_matches_multi_step_td():
     torch.manual_seed(278)

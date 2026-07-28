@@ -9,7 +9,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import fx
 from tqdm import tqdm
-from spikingjelly.activation_based import base, functional
+
+from spikingjelly.activation_based import base
 
 from spikingjelly.activation_based.ann2snn.operators import (
     TDMultiheadAttention,
@@ -213,9 +214,10 @@ class _STASpikeEncoder(base.MemoryModule):
             or self.mem.dtype != x.dtype
         ):
             self.mem = torch.zeros_like(x)
-        spike, self.mem = functional.sta_spike_encoder_single_step(
-            x, self.mem, threshold
-        )
+        self.mem = self.mem + x
+        spike_count = torch.trunc(self.mem / threshold)
+        spike = spike_count * threshold
+        self.mem = self.mem - spike
         return spike
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:

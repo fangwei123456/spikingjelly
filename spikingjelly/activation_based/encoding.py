@@ -3,6 +3,7 @@ from abc import abstractmethod
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from . import base, functional, neuron, surrogate
 
@@ -439,9 +440,16 @@ class LatencyEncoder(StatefulEncoder):
         :param x: input data, which should be in the range ``[0, 1]``
         :type x: torch.Tensor
         """
-        self.spike = functional.latency_encode(
-            x, self.T, self.enc_function, getattr(self, "alpha", None)
-        )
+        if self.enc_function == "log":
+            t_f = (self.T - 1.0 - torch.log(self.alpha * x + 1.0)).round().long()
+        else:
+            t_f = ((self.T - 1.0) * (1.0 - x)).round().long()
+
+        self.spike = F.one_hot(t_f, num_classes=self.T).to(x)
+        # [*, T] -> [T, *]
+        d_seq = list(range(self.spike.ndim - 1))
+        d_seq.insert(0, self.spike.ndim - 1)
+        self.spike = self.spike.permute(d_seq)
 
 
 class PoissonEncoder(StatelessEncoder):
@@ -628,7 +636,16 @@ class WeightedPhaseEncoder(StatefulEncoder):
         :type x: torch.Tensor
         :raises AssertionError: if ``x`` is not in the range ``[0, 1 - 2^{-T}]``
         """
-        self.spike = functional.weighted_phase_encode(x, self.T)
+        assert (x >= 0).all() and (x <= 1 - 2 ** (-self.T)).all()
+        inputs = x.clone()
+        self.spike = torch.empty(
+            (self.T,) + x.shape, device=x.device
+        )  # Encoding to [T, batch_size, *]
+        w = 0.5
+        for i in range(self.T):
+            self.spike[i] = inputs >= w
+            inputs -= w * self.spike[i]
+            w *= 0.5
 
 
 class PopSpikeEncoderDeterministic(nn.Module):

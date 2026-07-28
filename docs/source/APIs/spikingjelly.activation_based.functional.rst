@@ -83,116 +83,90 @@ SpikingJelly's **forward functions** provide multi-step forward propagation logi
 
    forward <spikingjelly.activation_based.functional.forward>
 
-Neuron State Transition Functions
-++++++++++++++++++++++++++++++++++++++++
+Neuron State Updates
+++++++++++++++++++++
 
-这些函数显式接收并返回神经元状态，不读取 ``MemoryModule`` 的隐式 memory，
-也不负责 ``training/eval`` 或 backend dispatch。
+这些函数显式接收并返回神经元状态。``*_step`` 表示一个时间步的完整更新；
+``*_scan`` 表示具有独立实现的时间序列更新，而不是对 ``*_step`` 的 Python
+循环包装。backend 仍由 ``MemoryModule`` 选择，因此 backend 专用函数在名称中
+标出 ``cupy``、``triton`` 或 ``inductor``。
 
 ----
 
-These functions receive and return neuron states explicitly. They do not read
-implicit ``MemoryModule`` memory and do not handle ``training/eval`` or backend
-dispatch.
+These functions receive and return neuron states explicitly. ``*_step`` denotes
+one complete time-step update. ``*_scan`` denotes an independently implemented
+sequence update, not a Python-loop wrapper around ``*_step``. Backend selection
+remains a ``MemoryModule`` responsibility, so backend-specific functions identify
+``cupy``, ``triton``, or ``inductor`` in their names.
 
 .. list-table::
 
-   * - :func:`neuron_fire <spikingjelly.activation_based.functional.neuron.neuron_fire>`
-     - Compute spikes from membrane voltage.
-   * - :func:`hard_reset <spikingjelly.activation_based.functional.neuron.hard_reset>`
-     - Apply hard reset to membrane voltage.
-   * - :func:`soft_reset <spikingjelly.activation_based.functional.neuron.soft_reset>`
-     - Apply soft reset to membrane voltage.
-   * - :func:`if_single_step <spikingjelly.activation_based.functional.neuron.if_single_step>`
-     - Single-step IF state transition.
-   * - :func:`if_multi_step <spikingjelly.activation_based.functional.neuron.if_multi_step>`
-     - Multi-step IF state transition.
-   * - :func:`if_multi_step_inductor <spikingjelly.activation_based.functional.neuron.if_multi_step_inductor>`
-     - Multi-step IF state transition for the Inductor backend.
-   * - :func:`if_single_step_cupy <spikingjelly.activation_based.functional.neuron.if_single_step_cupy>`
-     - Single-step IF state transition for caller-selected CuPy kernels.
-   * - :func:`if_multi_step_cupy <spikingjelly.activation_based.functional.neuron.if_multi_step_cupy>`
-     - Multi-step IF state transition for the CuPy backend.
-   * - :func:`lif_single_step <spikingjelly.activation_based.functional.neuron.lif_single_step>`
-     - Single-step LIF state transition.
-   * - :func:`lif_multi_step <spikingjelly.activation_based.functional.neuron.lif_multi_step>`
-     - Multi-step LIF state transition.
-   * - :func:`lif_multi_step_inductor <spikingjelly.activation_based.functional.neuron.lif_multi_step_inductor>`
-     - Multi-step LIF state transition for the Inductor backend.
-   * - :func:`lif_single_step_cupy <spikingjelly.activation_based.functional.neuron.lif_single_step_cupy>`
-     - Single-step LIF state transition for caller-selected CuPy kernels.
-   * - :func:`lif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.lif_multi_step_cupy>`
-     - Multi-step LIF state transition for the CuPy backend.
-   * - :func:`lif_single_step_with_pre_spike_mean <spikingjelly.activation_based.functional.neuron.lif_single_step_with_pre_spike_mean>`
-     - Single-step LIF transition with pre-spike membrane mean observation.
-   * - :func:`lif_multi_step_with_pre_spike_mean <spikingjelly.activation_based.functional.neuron.lif_multi_step_with_pre_spike_mean>`
-     - Multi-step LIF transition with optional pre-spike membrane mean sequence.
-   * - :func:`plif_single_step <spikingjelly.activation_based.functional.neuron.plif_single_step>`
-     - Single-step ParametricLIF state transition.
-   * - :func:`plif_multi_step <spikingjelly.activation_based.functional.neuron.plif_multi_step>`
-     - Multi-step ParametricLIF state transition.
-   * - :func:`plif_multi_step_inductor <spikingjelly.activation_based.functional.neuron.plif_multi_step_inductor>`
-     - Multi-step ParametricLIF state transition for the Inductor backend.
-   * - :func:`plif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.plif_multi_step_cupy>`
-     - Multi-step ParametricLIF state transition for the CuPy backend.
-   * - :func:`qif_charge <spikingjelly.activation_based.functional.neuron.qif_charge>`
-     - QIF charge equation.
-   * - :func:`eif_charge <spikingjelly.activation_based.functional.neuron.eif_charge>`
-     - EIF charge equation.
-   * - :func:`qif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.qif_multi_step_cupy>`
-     - Multi-step QIF state transition for the CuPy backend.
-   * - :func:`eif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.eif_multi_step_cupy>`
-     - Multi-step EIF state transition for the CuPy backend.
-   * - :func:`adaptive_current_update <spikingjelly.activation_based.functional.neuron.adaptive_current_update>`
-     - Adaptation-current update equation.
-   * - :func:`adaptive_reset <spikingjelly.activation_based.functional.neuron.adaptive_reset>`
-     - Reset equation for neurons with adaptation current.
-   * - :func:`izhikevich_charge <spikingjelly.activation_based.functional.neuron.izhikevich_charge>`
-     - Izhikevich charge equation.
-   * - :func:`izhikevich_multi_step_cupy <spikingjelly.activation_based.functional.neuron.izhikevich_multi_step_cupy>`
-     - Multi-step Izhikevich state transition for the CuPy backend.
-   * - :func:`klif_charge <spikingjelly.activation_based.functional.neuron.klif_charge>`
-     - KLIF charge equation.
-   * - :func:`klif_reset <spikingjelly.activation_based.functional.neuron.klif_reset>`
-     - KLIF reset equation.
-   * - :func:`cuba_lif_charge <spikingjelly.activation_based.functional.neuron.cuba_lif_charge>`
-     - CUBA-LIF current and membrane charge equation.
-   * - :func:`lava_cuba_lif_charge <spikingjelly.activation_based.functional.neuron.lava_cuba_lif_charge>`
-     - Lava-compatible quantized CUBA-LIF charge equation.
-   * - :func:`lava_cuba_lif_single_step <spikingjelly.activation_based.functional.neuron.lava_cuba_lif_single_step>`
-     - Single-step Lava-compatible CUBA-LIF state transition.
-   * - :func:`lava_cuba_lif_multi_step <spikingjelly.activation_based.functional.neuron.lava_cuba_lif_multi_step>`
-     - Multi-step Lava-compatible CUBA-LIF state transition.
-   * - :func:`mpbn_fire <spikingjelly.activation_based.functional.neuron.mpbn_fire>`
-     - MPBN firing and residual-normalization path.
-   * - :func:`ottt_trace_update <spikingjelly.activation_based.functional.neuron.ottt_trace_update>`
-     - OTTT trace update under ``torch.no_grad()``.
-   * - :func:`activation_aware_if_single_step <spikingjelly.activation_based.functional.neuron.activation_aware_if_single_step>`
-     - Single-step ActivationAwareIF state transition.
-   * - :func:`activation_aware_if_multi_step <spikingjelly.activation_based.functional.neuron.activation_aware_if_multi_step>`
-     - Multi-step ActivationAwareIF state transition.
-   * - :func:`activation_aware_if_multi_step_triton <spikingjelly.activation_based.functional.neuron.activation_aware_if_multi_step_triton>`
-     - Multi-step ActivationAwareIF state transition for the Triton backend.
-   * - :func:`masked_psn_advance_queue <spikingjelly.activation_based.functional.neuron.masked_psn_advance_queue>`
-     - Single-step MaskedPSN queue advancement.
-   * - :func:`masked_psn_single_step_from_queue <spikingjelly.activation_based.functional.neuron.masked_psn_single_step_from_queue>`
-     - Single-step MaskedPSN spike computation from an already advanced queue.
-   * - :func:`sliding_psn_single_step <spikingjelly.activation_based.functional.neuron.sliding_psn_single_step>`
-     - Single-step SlidingPSN queue state transition.
-   * - :func:`gated_lif_multi_step <spikingjelly.activation_based.functional.neuron.gated_lif_multi_step>`
-     - Multi-step GatedLIF state transition.
-   * - :func:`stbif_single_step <spikingjelly.activation_based.functional.neuron.stbif_single_step>`
-     - Single-step SpikeZIP STBIF state transition.
-   * - :func:`stbif_multi_step_torch <spikingjelly.activation_based.functional.neuron.stbif_multi_step_torch>`
-     - Torch multi-step SpikeZIP STBIF state transition.
+   * - :func:`if_step <spikingjelly.activation_based.functional.neuron.if_step>`
+     - One IF state update.
+   * - :func:`qif_step <spikingjelly.activation_based.functional.neuron.qif_step>`
+     - One QIF state update.
+   * - :func:`eif_step <spikingjelly.activation_based.functional.neuron.eif_step>`
+     - One EIF state update.
+   * - :func:`lif_step <spikingjelly.activation_based.functional.neuron.lif_step>`
+     - One LIF state update.
+   * - :func:`plif_step <spikingjelly.activation_based.functional.neuron.plif_step>`
+     - One ParametricLIF state update.
+   * - :func:`izhikevich_step <spikingjelly.activation_based.functional.neuron.izhikevich_step>`
+     - One Izhikevich voltage and adaptation-current update.
+   * - :func:`klif_step <spikingjelly.activation_based.functional.neuron.klif_step>`
+     - One KLIF state update.
+   * - :func:`cuba_lif_step <spikingjelly.activation_based.functional.neuron.cuba_lif_step>`
+     - One current-based LIF state update.
+   * - :func:`lava_cuba_lif_step <spikingjelly.activation_based.functional.neuron.lava_cuba_lif_step>`
+     - One Lava-compatible quantized CUBA-LIF state update.
+   * - :func:`activation_aware_if_step <spikingjelly.activation_based.functional.neuron.activation_aware_if_step>`
+     - One ActivationAwareIF state update.
+   * - :func:`sliding_psn_step <spikingjelly.activation_based.functional.neuron.sliding_psn_step>`
+     - One SlidingPSN queue update.
+   * - :func:`stbif_step <spikingjelly.activation_based.functional.neuron.stbif_step>`
+     - One SpikeZIP STBIF state update.
+   * - :func:`if_scan_inductor <spikingjelly.activation_based.functional.neuron.if_scan_inductor>`
+     - IF sequence update compiled by Inductor.
+   * - :func:`lif_scan_inductor <spikingjelly.activation_based.functional.neuron.lif_scan_inductor>`
+     - LIF sequence update compiled by Inductor.
+   * - :func:`plif_scan_inductor <spikingjelly.activation_based.functional.neuron.plif_scan_inductor>`
+     - ParametricLIF sequence update compiled by Inductor.
+   * - :func:`if_step_cupy <spikingjelly.activation_based.functional.neuron.if_step_cupy>`
+     - One IF update with caller-selected CuPy kernels.
+   * - :func:`lif_step_cupy <spikingjelly.activation_based.functional.neuron.lif_step_cupy>`
+     - One LIF update with caller-selected CuPy kernels.
+   * - :func:`if_scan_cupy <spikingjelly.activation_based.functional.neuron.if_scan_cupy>`
+     - IF sequence update with CuPy.
+   * - :func:`lif_scan_cupy <spikingjelly.activation_based.functional.neuron.lif_scan_cupy>`
+     - LIF sequence update with CuPy.
+   * - :func:`plif_scan_cupy <spikingjelly.activation_based.functional.neuron.plif_scan_cupy>`
+     - ParametricLIF sequence update with CuPy.
+   * - :func:`qif_scan_cupy <spikingjelly.activation_based.functional.neuron.qif_scan_cupy>`
+     - QIF sequence update with CuPy.
+   * - :func:`eif_scan_cupy <spikingjelly.activation_based.functional.neuron.eif_scan_cupy>`
+     - EIF sequence update with CuPy.
+   * - :func:`izhikevich_scan_cupy <spikingjelly.activation_based.functional.neuron.izhikevich_scan_cupy>`
+     - Izhikevich sequence update with CuPy.
+   * - :func:`if_scan_triton <spikingjelly.activation_based.functional.neuron.if_scan_triton>`
+     - IF sequence update with Triton.
+   * - :func:`lif_scan_triton <spikingjelly.activation_based.functional.neuron.lif_scan_triton>`
+     - LIF sequence update with Triton.
+   * - :func:`plif_scan_triton <spikingjelly.activation_based.functional.neuron.plif_scan_triton>`
+     - ParametricLIF sequence update with Triton.
+   * - :func:`activation_aware_if_scan_triton <spikingjelly.activation_based.functional.neuron.activation_aware_if_scan_triton>`
+     - ActivationAwareIF sequence update with Triton.
+   * - :func:`gated_lif_scan <spikingjelly.activation_based.functional.neuron.gated_lif_scan>`
+     - Native GatedLIF sequence update.
+   * - :func:`stbif_scan_torch <spikingjelly.activation_based.functional.neuron.stbif_scan_torch>`
+     - Native Torch SpikeZIP STBIF sequence update.
 
 .. toctree::
    :hidden:
 
    neuron <spikingjelly.activation_based.functional.neuron>
 
-Stateful Layer State Transition Functions
-+++++++++++++++++++++++++++++++++++++++++
+Stateful Layer Updates
+++++++++++++++++++++++
 
 这些函数显式接收并返回 stateful layer 的局部状态，不读取 ``MemoryModule`` 的隐式
 memory。
@@ -204,66 +178,35 @@ They do not read implicit ``MemoryModule`` memory.
 
 .. list-table::
 
-   * - :func:`delay_single_step <spikingjelly.activation_based.functional.layer.delay_single_step>`
-     - Single-step Delay queue state transition.
-   * - :func:`neunorm_single_step <spikingjelly.activation_based.functional.layer.neunorm_single_step>`
-     - Single-step NeuNorm state transition.
-   * - :func:`synapse_filter_single_step <spikingjelly.activation_based.functional.layer.synapse_filter_single_step>`
-     - Single-step SynapseFilter state transition.
+   * - :func:`delay_step <spikingjelly.activation_based.functional.layer.delay_step>`
+     - One Delay queue update.
+   * - :func:`synapse_filter_step <spikingjelly.activation_based.functional.layer.synapse_filter_step>`
+     - One SynapseFilter state update.
 
 .. toctree::
    :hidden:
 
    layer <spikingjelly.activation_based.functional.layer>
 
-Encoder Functions
-+++++++++++++++++
+ANN-to-SNN State Updates
+++++++++++++++++++++++++
 
-这些函数实现可独立复用的编码公式，不读取 ``MemoryModule`` 的隐式 memory。
-
-----
-
-These functions implement independently reusable encoding formulas without
-reading implicit ``MemoryModule`` memory.
-
-.. list-table::
-
-   * - :func:`latency_encode <spikingjelly.activation_based.functional.encoding.latency_encode>`
-     - Stateless LatencyEncoder spike-sequence generation.
-   * - :func:`weighted_phase_encode <spikingjelly.activation_based.functional.encoding.weighted_phase_encode>`
-     - Stateless WeightedPhaseEncoder spike-sequence generation.
-
-.. toctree::
-   :hidden:
-
-   encoding <spikingjelly.activation_based.functional.encoding>
-
-ANN-to-SNN Functional Helpers
-+++++++++++++++++++++++++++++
-
-这些函数实现 STA 和 SpikeZIP 中可独立复用的状态转移或数值规则。TD operator
-本身是围绕可替换 ``ann_forward`` 的状态适配器，不为其 ANN 数值路径提供冗余的
-函数式包装。
+这里只公开 SpikeZIP bias 的剩余释放步数更新。STA 编码和 attention matmul
+属于各 recipe 的局部数值过程，不作为通用状态接口；TD operator 也不重复包装其
+``ann_forward``。
 
 ----
 
-These functions implement independently reusable state transitions or numeric
-rules in STA and SpikeZIP. TD operators are state adapters around a replaceable
-``ann_forward`` and therefore do not expose redundant functional wrappers for
-their ANN numeric paths.
+Only SpikeZIP bias release-state updates are public here. STA encoding and
+attention matmul remain local numeric operations of their recipes, while TD
+operators do not duplicate their replaceable ``ann_forward``.
 
 .. list-table::
 
-   * - :func:`spikezip_matmul_delta <spikingjelly.activation_based.functional.ann2snn.spikezip_matmul_delta>`
-     - SpikeZIP attention single-step matmul delta.
-   * - :func:`spikezip_matmul_sequence_delta <spikingjelly.activation_based.functional.ann2snn.spikezip_matmul_sequence_delta>`
-     - SpikeZIP attention multi-step matmul delta.
-   * - :func:`spikezip_release_bias_single_step <spikingjelly.activation_based.functional.ann2snn.spikezip_release_bias_single_step>`
-     - SpikeZIP bias single-step release.
-   * - :func:`spikezip_release_bias_multi_step <spikingjelly.activation_based.functional.ann2snn.spikezip_release_bias_multi_step>`
-     - SpikeZIP bias multi-step release.
-   * - :func:`sta_spike_encoder_single_step <spikingjelly.activation_based.functional.ann2snn.sta_spike_encoder_single_step>`
-     - Single-step STA spike encoder residual-state transition.
+   * - :func:`spikezip_bias_step <spikingjelly.activation_based.functional.ann2snn.spikezip_bias_step>`
+     - One SpikeZIP bias release-state update.
+   * - :func:`spikezip_bias_scan <spikingjelly.activation_based.functional.ann2snn.spikezip_bias_scan>`
+     - Native sequence update of SpikeZIP bias release state.
 
 .. toctree::
    :hidden:
@@ -308,19 +251,17 @@ memory, and do not manage ``step_mode``, ``training/eval``, or gradient writes.
 
 .. list-table::
 
-   * - :func:`stdp_linear_single_step <spikingjelly.activation_based.functional.learning.stdp_linear_single_step>`
+   * - :func:`stdp_linear_step <spikingjelly.activation_based.functional.learning.stdp_linear_step>`
      - Tensor-only linear STDP single-step update.
-   * - :func:`stdp_conv1d_single_step <spikingjelly.activation_based.functional.learning.stdp_conv1d_single_step>`
+   * - :func:`stdp_conv1d_step <spikingjelly.activation_based.functional.learning.stdp_conv1d_step>`
      - Tensor-only Conv1d STDP single-step update.
-   * - :func:`stdp_conv2d_single_step <spikingjelly.activation_based.functional.learning.stdp_conv2d_single_step>`
+   * - :func:`stdp_conv2d_step <spikingjelly.activation_based.functional.learning.stdp_conv2d_step>`
      - Tensor-only Conv2d STDP single-step update.
-   * - :func:`stdp_multi_step <spikingjelly.activation_based.functional.learning.stdp_multi_step>`
-     - Multi-step STDP loop over a selected single-step tensor rule.
-   * - :func:`mstdp_linear_single_step <spikingjelly.activation_based.functional.learning.mstdp_linear_single_step>`
+   * - :func:`mstdp_linear_step <spikingjelly.activation_based.functional.learning.mstdp_linear_step>`
      - Tensor-only linear mSTDP eligibility update.
-   * - :func:`mstdpet_linear_single_step <spikingjelly.activation_based.functional.learning.mstdpet_linear_single_step>`
+   * - :func:`mstdpet_linear_step <spikingjelly.activation_based.functional.learning.mstdpet_linear_step>`
      - Tensor-only linear mSTDP-ET eligibility update.
-   * - :func:`mstdpet_reward_delta <spikingjelly.activation_based.functional.learning.mstdpet_reward_delta>`
+   * - :func:`mstdpet_reward_step <spikingjelly.activation_based.functional.learning.mstdpet_reward_step>`
      - Eligibility-trace decay and reward modulation for mSTDP-ET.
 
 .. toctree::

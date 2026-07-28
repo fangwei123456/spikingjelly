@@ -311,12 +311,9 @@ class NeuNorm(base.MemoryModule):
         nn.init.kaiming_uniform_(self.w, a=math.sqrt(5))
 
     def single_step_forward(self, in_spikes: Tensor):
-        if isinstance(self.x, float):
-            self.x = torch.full_like(in_spikes[:, :1], self.x)
-        out, self.x = functional.neunorm_single_step(
-            in_spikes, self.x, self.w, self.k0, self.k1
-        )
-        return out
+        self.x = self.k0 * self.x + self.k1 * in_spikes.sum(dim=1, keepdim=True)
+        # x.shape = [batch_size, 1, height, width]
+        return in_spikes - self.w * self.x
 
     def extra_repr(self) -> str:
         return f"shape={self.w.shape}"

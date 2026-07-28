@@ -1,3 +1,10 @@
+"""Explicit neuron updates.
+
+``*_step`` consumes one time step. ``*_scan`` consumes a time-major sequence
+and is exposed only when the sequence path has its own implementation rather
+than being a Python loop over ``*_step``.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Callable, Optional
@@ -6,1010 +13,42 @@ import torch
 
 
 __all__ = [
-    "neuron_fire",
-    "hard_reset",
-    "soft_reset",
-    "if_charge",
-    "lif_charge",
-    "plif_charge",
-    "qif_charge",
-    "eif_charge",
-    "adaptive_current_update",
-    "adaptive_reset",
-    "izhikevich_charge",
-    "klif_charge",
-    "klif_reset",
-    "cuba_lif_charge",
-    "lava_cuba_lif_charge",
-    "lava_cuba_lif_single_step",
-    "lava_cuba_lif_multi_step",
-    "mpbn_fire",
-    "ottt_trace_update",
-    "if_single_step",
-    "if_multi_step",
-    "lif_single_step",
-    "lif_multi_step",
-    "lif_single_step_with_pre_spike_mean",
-    "lif_multi_step_with_pre_spike_mean",
-    "plif_single_step",
-    "plif_multi_step",
-    "if_multi_step_inductor",
-    "lif_multi_step_inductor",
-    "plif_multi_step_inductor",
-    "if_single_step_cupy",
-    "lif_single_step_cupy",
-    "if_multi_step_cupy",
-    "lif_multi_step_cupy",
-    "plif_multi_step_cupy",
-    "qif_multi_step_cupy",
-    "eif_multi_step_cupy",
-    "izhikevich_multi_step_cupy",
-    "if_multi_step_triton",
-    "lif_multi_step_triton",
-    "plif_multi_step_triton",
-    "masked_psn_advance_queue",
-    "masked_psn_single_step_from_queue",
-    "sliding_psn_single_step",
-    "gated_lif_multi_step",
-    "stbif_single_step",
-    "stbif_multi_step_torch",
-    "activation_aware_if_single_step",
-    "activation_aware_if_multi_step",
-    "activation_aware_if_multi_step_triton",
+    "lava_cuba_lif_step",
+    "if_step",
+    "qif_step",
+    "eif_step",
+    "lif_step",
+    "plif_step",
+    "izhikevich_step",
+    "klif_step",
+    "cuba_lif_step",
+    "if_scan_inductor",
+    "lif_scan_inductor",
+    "plif_scan_inductor",
+    "if_step_cupy",
+    "lif_step_cupy",
+    "if_scan_cupy",
+    "lif_scan_cupy",
+    "plif_scan_cupy",
+    "qif_scan_cupy",
+    "eif_scan_cupy",
+    "izhikevich_scan_cupy",
+    "if_scan_triton",
+    "lif_scan_triton",
+    "plif_scan_triton",
+    "sliding_psn_step",
+    "gated_lif_scan",
+    "stbif_step",
+    "stbif_scan_torch",
+    "activation_aware_if_step",
+    "activation_aware_if_scan_triton",
 ]
 
 
 SurrogateFunction = Callable[[torch.Tensor], torch.Tensor]
 
 
-def neuron_fire(
-    v: torch.Tensor,
-    v_threshold: float,
-    surrogate_function: SurrogateFunction,
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <neuron_fire-cn>` | :ref:`English <neuron_fire-en>`
-
-    ----
-
-    .. _neuron_fire-cn:
-
-    * **中文**
-
-    根据膜电位和阈值计算脉冲。该函数不读取 module 状态，也不判断
-    ``training/eval``；调用者必须传入当前执行路径使用的替代函数。
-
-    :param v: 已物化的膜电位张量，shape、dtype 和 device 与当前输入一致
-    :type v: torch.Tensor
-    :param v_threshold: 脉冲阈值
-    :type v_threshold: float
-    :param surrogate_function: 作用于 ``v - v_threshold`` 的替代函数
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :return: 脉冲张量
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _neuron_fire-en:
-
-    * **English**
-
-    Compute spikes from membrane voltage and threshold. This function does not read
-    module state or inspect ``training/eval``; the caller must pass the surrogate
-    function for the selected execution path.
-
-    :param v: Materialized membrane voltage tensor with the same shape, dtype, and
-        device as the current input
-    :type v: torch.Tensor
-    :param v_threshold: Spike threshold
-    :type v_threshold: float
-    :param surrogate_function: Surrogate function applied to ``v - v_threshold``
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :return: Spike tensor
-    :rtype: torch.Tensor
-    """
-    return surrogate_function(v - v_threshold)
-
-
-def hard_reset(
-    v: torch.Tensor,
-    spike: torch.Tensor,
-    v_reset: float,
-    detach_reset: bool = False,
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <hard_reset-cn>` | :ref:`English <hard_reset-en>`
-
-    ----
-
-    .. _hard_reset-cn:
-
-    * **中文**
-
-    执行硬重置：发放脉冲的位置置为 ``v_reset``，其余位置保持当前膜电位。
-    该函数不原地修改 ``v`` 或 ``spike``。
-
-    :param v: 当前膜电位
-    :type v: torch.Tensor
-    :param spike: 当前脉冲
-    :type spike: torch.Tensor
-    :param v_reset: 重置电压
-    :type v_reset: float
-    :param detach_reset: 是否在重置分支中分离 ``spike`` 的计算图
-    :type detach_reset: bool
-    :return: 重置后的膜电位
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _hard_reset-en:
-
-    * **English**
-
-    Apply hard reset: positions that fired are set to ``v_reset`` and other
-    positions keep the current membrane voltage. This function does not mutate
-    ``v`` or ``spike`` in place.
-
-    :param v: Current membrane voltage
-    :type v: torch.Tensor
-    :param spike: Current spike tensor
-    :type spike: torch.Tensor
-    :param v_reset: Reset voltage
-    :type v_reset: float
-    :param detach_reset: Whether to detach ``spike`` in the reset branch
-    :type detach_reset: bool
-    :return: Membrane voltage after reset
-    :rtype: torch.Tensor
-    """
-    spike_d = spike.detach() if detach_reset else spike
-    return v_reset * spike_d + (1.0 - spike_d) * v
-
-
-def soft_reset(
-    v: torch.Tensor,
-    spike: torch.Tensor,
-    v_threshold: float,
-    detach_reset: bool = False,
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <soft_reset-cn>` | :ref:`English <soft_reset-en>`
-
-    ----
-
-    .. _soft_reset-cn:
-
-    * **中文**
-
-    执行软重置：发放脉冲的位置从当前膜电位中减去 ``v_threshold``。
-    该函数不原地修改 ``v`` 或 ``spike``。
-
-    :param v: 当前膜电位
-    :type v: torch.Tensor
-    :param spike: 当前脉冲
-    :type spike: torch.Tensor
-    :param v_threshold: 脉冲阈值
-    :type v_threshold: float
-    :param detach_reset: 是否在重置分支中分离 ``spike`` 的计算图
-    :type detach_reset: bool
-    :return: 重置后的膜电位
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _soft_reset-en:
-
-    * **English**
-
-    Apply soft reset by subtracting ``v_threshold`` from the current membrane
-    voltage where spikes fired. This function does not mutate ``v`` or ``spike``.
-
-    :param v: Current membrane voltage
-    :type v: torch.Tensor
-    :param spike: Current spike tensor
-    :type spike: torch.Tensor
-    :param v_threshold: Spike threshold
-    :type v_threshold: float
-    :param detach_reset: Whether to detach ``spike`` in the reset branch
-    :type detach_reset: bool
-    :return: Membrane voltage after reset
-    :rtype: torch.Tensor
-    """
-    spike_d = spike.detach() if detach_reset else spike
-    return v - spike_d * v_threshold
-
-
-def if_charge(x: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <if_charge-cn>` | :ref:`English <if_charge-en>`
-
-    ----
-
-    .. _if_charge-cn:
-
-    * **中文**
-
-    IF 神经元充电：``v + x``。输入 ``v`` 必须是已物化的 tensor state。
-
-    :param x: 当前输入张量
-    :type x: torch.Tensor
-    :param v: 当前膜电位张量
-    :type v: torch.Tensor
-    :return: 充电后的膜电位
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _if_charge-en:
-
-    * **English**
-
-    IF neuron charge: ``v + x``. The input ``v`` must be a materialized tensor
-    state.
-
-    :param x: Current input tensor
-    :type x: torch.Tensor
-    :param v: Current membrane voltage tensor
-    :type v: torch.Tensor
-    :return: Membrane voltage after charge
-    :rtype: torch.Tensor
-    """
-    return v + x
-
-
-def lif_charge(
-    x: torch.Tensor,
-    v: torch.Tensor,
-    tau: float,
-    decay_input: bool,
-    v_reset: Optional[float],
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <lif_charge-cn>` | :ref:`English <lif_charge-en>`
-
-    ----
-
-    .. _lif_charge-cn:
-
-    * **中文**
-
-    LIF 神经元充电。``v_reset is None`` 时按现有实现使用 ``0.0`` 作为充电方程中的
-    reset 参照值；函数不管理 soft/hard reset 分支。
-
-    :param x: 当前输入张量
-    :type x: torch.Tensor
-    :param v: 当前膜电位张量
-    :type v: torch.Tensor
-    :param tau: 膜电位时间常数，必须与 module 路径使用的值一致
-    :type tau: float
-    :param decay_input: 输入是否参与衰减
-    :type decay_input: bool
-    :param v_reset: 重置电压；``None`` 表示 soft reset
-    :type v_reset: Optional[float]
-    :return: 充电后的膜电位
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _lif_charge-en:
-
-    * **English**
-
-    LIF neuron charge. When ``v_reset is None``, the existing implementation uses
-    ``0.0`` as the reset reference in the charge equation; this function does not
-    manage the soft/hard reset branch.
-
-    :param x: Current input tensor
-    :type x: torch.Tensor
-    :param v: Current membrane voltage tensor
-    :type v: torch.Tensor
-    :param tau: Membrane time constant, matching the module path
-    :type tau: float
-    :param decay_input: Whether the input participates in decay
-    :type decay_input: bool
-    :param v_reset: Reset voltage; ``None`` means soft reset
-    :type v_reset: Optional[float]
-    :return: Membrane voltage after charge
-    :rtype: torch.Tensor
-    """
-    v_reset_value = 0.0 if v_reset is None else v_reset
-    if decay_input:
-        return v + (x - (v - v_reset_value)) / tau
-    return v - (v - v_reset_value) / tau + x
-
-
-def plif_charge(
-    x: torch.Tensor,
-    v: torch.Tensor,
-    w: torch.Tensor,
-    decay_input: bool,
-    v_reset: Optional[float],
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <plif_charge-cn>` | :ref:`English <plif_charge-en>`
-
-    ----
-
-    .. _plif_charge-cn:
-
-    * **中文**
-
-    PLIF 神经元充电，其中 ``w.sigmoid()`` 为可学习的 ``1 / tau``。
-
-    :param x: 当前输入张量
-    :type x: torch.Tensor
-    :param v: 当前膜电位张量
-    :type v: torch.Tensor
-    :param w: PLIF 的可学习参数
-    :type w: torch.Tensor
-    :param decay_input: 输入是否参与衰减
-    :type decay_input: bool
-    :param v_reset: 重置电压；``None`` 表示 soft reset
-    :type v_reset: Optional[float]
-    :return: 充电后的膜电位
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _plif_charge-en:
-
-    * **English**
-
-    PLIF neuron charge where ``w.sigmoid()`` is the learnable ``1 / tau``.
-
-    :param x: Current input tensor
-    :type x: torch.Tensor
-    :param v: Current membrane voltage tensor
-    :type v: torch.Tensor
-    :param w: Learnable PLIF parameter
-    :type w: torch.Tensor
-    :param decay_input: Whether the input participates in decay
-    :type decay_input: bool
-    :param v_reset: Reset voltage; ``None`` means soft reset
-    :type v_reset: Optional[float]
-    :return: Membrane voltage after charge
-    :rtype: torch.Tensor
-    """
-    reciprocal_tau = w.sigmoid()
-    v_reset_value = 0.0 if v_reset is None else v_reset
-    if decay_input:
-        return v + (x - (v - v_reset_value)) * reciprocal_tau
-    return v - (v - v_reset_value) * reciprocal_tau + x
-
-
-def qif_charge(
-    x: torch.Tensor,
-    v: torch.Tensor,
-    tau: float,
-    a0: float,
-    v_rest: float,
-    v_c: float,
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <qif_charge-cn>` | :ref:`English <qif_charge-en>`
-
-    ----
-
-    .. _qif_charge-cn:
-
-    * **中文**
-
-    QIF 神经元充电公式：
-    ``v + (x + a0 * (v - v_rest) * (v - v_c)) / tau``。函数只接收显式
-    tensor state，不读取 ``MemoryModule`` memory，不负责 fire/reset、
-    ``training/eval`` 或 backend dispatch。
-
-    :param x: 当前输入张量
-    :type x: torch.Tensor
-    :param v: 当前膜电位
-    :type v: torch.Tensor
-    :param tau: 时间常数
-    :type tau: float
-    :param a0: 二次项系数
-    :type a0: float
-    :param v_rest: 静息电位
-    :type v_rest: float
-    :param v_c: 临界电位参数
-    :type v_c: float
-    :return: 充电后的膜电位
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _qif_charge-en:
-
-    * **English**
-
-    QIF neuron charge equation:
-    ``v + (x + a0 * (v - v_rest) * (v - v_c)) / tau``. The function receives
-    explicit tensor state only and does not read ``MemoryModule`` memory or
-    manage fire/reset, ``training/eval``, or backend dispatch.
-
-    :param x: Current input tensor
-    :type x: torch.Tensor
-    :param v: Current membrane voltage
-    :type v: torch.Tensor
-    :param tau: Time constant
-    :type tau: float
-    :param a0: Quadratic-term coefficient
-    :type a0: float
-    :param v_rest: Resting voltage
-    :type v_rest: float
-    :param v_c: Critical-voltage parameter
-    :type v_c: float
-    :return: Charged membrane voltage
-    :rtype: torch.Tensor
-    """
-    return v + (x + a0 * (v - v_rest) * (v - v_c)) / tau
-
-
-def eif_charge(
-    x: torch.Tensor,
-    v: torch.Tensor,
-    tau: float,
-    v_rest: float,
-    delta_t: float,
-    theta_rh: float,
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <eif_charge-cn>` | :ref:`English <eif_charge-en>`
-
-    ----
-
-    .. _eif_charge-cn:
-
-    * **中文**
-
-    EIF 神经元充电公式：
-    ``v + (x + v_rest - v + delta_t * exp((v - theta_rh) / delta_t)) / tau``。
-    函数只接收显式 tensor state，不读取 ``MemoryModule`` memory，不负责
-    fire/reset、``training/eval`` 或 backend dispatch。
-
-    :param x: 当前输入张量
-    :type x: torch.Tensor
-    :param v: 当前膜电位
-    :type v: torch.Tensor
-    :param tau: 时间常数
-    :type tau: float
-    :param v_rest: 静息电位
-    :type v_rest: float
-    :param delta_t: 指数项尺度
-    :type delta_t: float
-    :param theta_rh: rheobase 阈值
-    :type theta_rh: float
-    :return: 充电后的膜电位
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _eif_charge-en:
-
-    * **English**
-
-    EIF neuron charge equation:
-    ``v + (x + v_rest - v + delta_t * exp((v - theta_rh) / delta_t)) / tau``.
-    The function receives explicit tensor state only and does not read
-    ``MemoryModule`` memory or manage fire/reset, ``training/eval``, or backend
-    dispatch.
-
-    :param x: Current input tensor
-    :type x: torch.Tensor
-    :param v: Current membrane voltage
-    :type v: torch.Tensor
-    :param tau: Time constant
-    :type tau: float
-    :param v_rest: Resting voltage
-    :type v_rest: float
-    :param delta_t: Exponential-term scale
-    :type delta_t: float
-    :param theta_rh: Rheobase threshold
-    :type theta_rh: float
-    :return: Charged membrane voltage
-    :rtype: torch.Tensor
-    """
-    return v + (x + v_rest - v + delta_t * torch.exp((v - theta_rh) / delta_t)) / tau
-
-
-def adaptive_current_update(
-    w: torch.Tensor,
-    v: torch.Tensor,
-    tau_w: float,
-    a: float,
-    v_rest: float,
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <adaptive_current_update-cn>` | :ref:`English <adaptive_current_update-en>`
-
-    ----
-
-    .. _adaptive_current_update-cn:
-
-    * **中文**
-
-    更新适应性电流：``w + (a * (v - v_rest) - w) / tau_w``。函数不读取
-    ``MemoryModule`` memory，不负责 charge、fire/reset、``training/eval`` 或
-    backend dispatch。
-
-    :param w: 当前适应性电流
-    :type w: torch.Tensor
-    :param v: 当前膜电位
-    :type v: torch.Tensor
-    :param tau_w: 适应性电流时间常数
-    :type tau_w: float
-    :param a: 阈下耦合参数
-    :type a: float
-    :param v_rest: 静息电位
-    :type v_rest: float
-    :return: 更新后的适应性电流
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _adaptive_current_update-en:
-
-    * **English**
-
-    Update adaptation current as ``w + (a * (v - v_rest) - w) / tau_w``. The
-    function does not read ``MemoryModule`` memory and does not manage charge,
-    fire/reset, ``training/eval``, or backend dispatch.
-
-    :param w: Current adaptation current
-    :type w: torch.Tensor
-    :param v: Current membrane voltage
-    :type v: torch.Tensor
-    :param tau_w: Adaptation-current time constant
-    :type tau_w: float
-    :param a: Subthreshold coupling parameter
-    :type a: float
-    :param v_rest: Resting voltage
-    :type v_rest: float
-    :return: Updated adaptation current
-    :rtype: torch.Tensor
-    """
-    return w + (a * (v - v_rest) - w) / tau_w
-
-
-def adaptive_reset(
-    v: torch.Tensor,
-    w: torch.Tensor,
-    spike: torch.Tensor,
-    v_threshold: float,
-    v_reset: Optional[float],
-    b: float,
-    detach_reset: bool = False,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    r"""
-    **API Language** - :ref:`中文 <adaptive_reset-cn>` | :ref:`English <adaptive_reset-en>`
-
-    ----
-
-    .. _adaptive_reset-cn:
-
-    * **中文**
-
-    执行带适应电流的 reset。``v_reset is None`` 时使用 soft reset，否则使用 hard
-    reset；``w`` 总是加上 ``b * spike``。函数不读取或写入 ``MemoryModule`` memory。
-
-    :param v: 当前膜电位
-    :type v: torch.Tensor
-    :param w: 当前适应性电流
-    :type w: torch.Tensor
-    :param spike: 当前脉冲
-    :type spike: torch.Tensor
-    :param v_threshold: soft reset 使用的阈值
-    :type v_threshold: float
-    :param v_reset: hard reset 使用的重置电位；``None`` 表示 soft reset
-    :type v_reset: Optional[float]
-    :param b: 脉冲触发的适应电流增量
-    :type b: float
-    :param detach_reset: 是否在膜电位 reset 分支中 detach spike
-    :type detach_reset: bool
-    :return: ``(v_next, w_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor]
-
-    ----
-
-    .. _adaptive_reset-en:
-
-    * **English**
-
-    Apply reset with adaptation current. ``v_reset is None`` selects soft reset;
-    otherwise hard reset is used. ``w`` always receives ``b * spike``. The
-    function does not read or write ``MemoryModule`` memory.
-
-    :param v: Current membrane voltage
-    :type v: torch.Tensor
-    :param w: Current adaptation current
-    :type w: torch.Tensor
-    :param spike: Current spike tensor
-    :type spike: torch.Tensor
-    :param v_threshold: Threshold used by soft reset
-    :type v_threshold: float
-    :param v_reset: Hard-reset voltage; ``None`` selects soft reset
-    :type v_reset: Optional[float]
-    :param b: Spike-triggered adaptation increment
-    :type b: float
-    :param detach_reset: Whether to detach spike in the voltage-reset branch
-    :type detach_reset: bool
-    :return: ``(v_next, w_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor]
-    """
-    spike_d = spike.detach() if detach_reset else spike
-    if v_reset is None:
-        v_next = v - spike_d * v_threshold
-    else:
-        v_next = (1.0 - spike_d) * v + spike * v_reset
-    return v_next, w + b * spike
-
-
-def izhikevich_charge(
-    x: torch.Tensor,
-    v: torch.Tensor,
-    w: torch.Tensor,
-    tau: float,
-    a0: float,
-    v_rest: float,
-    v_c: float,
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <izhikevich_charge-cn>` | :ref:`English <izhikevich_charge-en>`
-
-    ----
-
-    .. _izhikevich_charge-cn:
-
-    * **中文**
-
-    Izhikevich 神经元充电公式：
-    ``v + (x + a0 * (v - v_rest) * (v - v_c) - w) / tau``。函数只接收显式
-    tensor state，不读取 ``MemoryModule`` memory，不负责适应电流更新、fire/reset、
-    ``training/eval`` 或 backend dispatch。
-
-    :param x: 当前输入张量
-    :type x: torch.Tensor
-    :param v: 当前膜电位
-    :type v: torch.Tensor
-    :param w: 当前适应性电流
-    :type w: torch.Tensor
-    :param tau: 膜电位时间常数
-    :type tau: float
-    :param a0: 二次项系数
-    :type a0: float
-    :param v_rest: 静息电位
-    :type v_rest: float
-    :param v_c: 临界电位参数
-    :type v_c: float
-    :return: 充电后的膜电位
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _izhikevich_charge-en:
-
-    * **English**
-
-    Izhikevich neuron charge equation:
-    ``v + (x + a0 * (v - v_rest) * (v - v_c) - w) / tau``. The function receives
-    explicit tensor state only and does not read ``MemoryModule`` memory or
-    manage adaptation-current update, fire/reset, ``training/eval``, or backend
-    dispatch.
-
-    :param x: Current input tensor
-    :type x: torch.Tensor
-    :param v: Current membrane voltage
-    :type v: torch.Tensor
-    :param w: Current adaptation current
-    :type w: torch.Tensor
-    :param tau: Membrane-voltage time constant
-    :type tau: float
-    :param a0: Quadratic-term coefficient
-    :type a0: float
-    :param v_rest: Resting voltage
-    :type v_rest: float
-    :param v_c: Critical-voltage parameter
-    :type v_c: float
-    :return: Charged membrane voltage
-    :rtype: torch.Tensor
-    """
-    return v + (x + a0 * (v - v_rest) * (v - v_c) - w) / tau
-
-
-def klif_charge(
-    x: torch.Tensor,
-    v: torch.Tensor,
-    k: torch.Tensor,
-    tau: float,
-    decay_input: bool,
-    v_reset: Optional[float],
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <klif_charge-cn>` | :ref:`English <klif_charge-en>`
-
-    ----
-
-    .. _klif_charge-cn:
-
-    * **中文**
-
-    KLIF 神经元 charge 和 ``relu(k * h)`` 变换。``v_reset is None`` 时 charge 公式
-    中使用 ``0.0``。函数不读取 ``MemoryModule`` memory，不负责 fire/reset、
-    ``training/eval`` 或 backend dispatch，且不原地修改输入。
-
-    :param x: 当前输入张量
-    :type x: torch.Tensor
-    :param v: 当前膜电位
-    :type v: torch.Tensor
-    :param k: KLIF 可学习缩放参数
-    :type k: torch.Tensor
-    :param tau: 时间常数
-    :type tau: float
-    :param decay_input: 输入是否参与衰减
-    :type decay_input: bool
-    :param v_reset: 重置电位；``None`` 表示 soft reset
-    :type v_reset: Optional[float]
-    :return: charge 后的膜电位
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _klif_charge-en:
-
-    * **English**
-
-    Run KLIF charge followed by ``relu(k * h)``. When ``v_reset is None``, the
-    charge equation uses ``0.0``. The function does not read ``MemoryModule``
-    memory and does not manage fire/reset, ``training/eval``, or backend
-    dispatch, and it does not mutate inputs in place.
-
-    :param x: Current input tensor
-    :type x: torch.Tensor
-    :param v: Current membrane voltage
-    :type v: torch.Tensor
-    :param k: Learnable KLIF scale
-    :type k: torch.Tensor
-    :param tau: Time constant
-    :type tau: float
-    :param decay_input: Whether the input participates in decay
-    :type decay_input: bool
-    :param v_reset: Reset voltage; ``None`` means soft reset
-    :type v_reset: Optional[float]
-    :return: Charged membrane voltage
-    :rtype: torch.Tensor
-    """
-    v_reset_value = 0.0 if v_reset is None else v_reset
-    if decay_input:
-        h = v + (x - (v - v_reset_value)) / tau
-    else:
-        h = v - (v - v_reset_value) / tau + x
-    return torch.relu(k * h)
-
-
-def klif_reset(
-    v: torch.Tensor,
-    spike: torch.Tensor,
-    k: torch.Tensor,
-    v_threshold: float,
-    v_reset: Optional[float],
-    scale_reset: bool,
-    detach_reset: bool = False,
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <klif_reset-cn>` | :ref:`English <klif_reset-en>`
-
-    ----
-
-    .. _klif_reset-cn:
-
-    * **中文**
-
-    执行 KLIF reset。``scale_reset=True`` 时在 reset 后按既有 KLIF 语义除以
-    ``k`` 或先对 ``v / k`` 执行 hard reset；否则使用普通 hard/soft reset。
-    函数不读取或写入 ``MemoryModule`` memory。
-
-    :param v: 当前膜电位张量
-    :type v: torch.Tensor
-    :param spike: 当前脉冲张量
-    :type spike: torch.Tensor
-    :param k: KLIF 缩放参数
-    :type k: torch.Tensor
-    :param v_threshold: 脉冲阈值
-    :type v_threshold: float
-    :param v_reset: reset 电压；``None`` 表示 soft reset
-    :type v_reset: Optional[float]
-    :param scale_reset: 是否使用 KLIF 的缩放 reset 语义
-    :type scale_reset: bool
-    :param detach_reset: 是否在 reset 分支中分离 ``spike`` 的计算图
-    :type detach_reset: bool
-    :return: reset 后的膜电位
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _klif_reset-en:
-
-    * **English**
-
-    Apply KLIF reset. With ``scale_reset=True``, it follows existing KLIF
-    semantics by dividing the reset result by ``k`` or applying hard reset to
-    ``v / k`` first; otherwise it uses regular hard/soft reset. The function
-    does not read or write ``MemoryModule`` memory.
-
-    :param v: Current membrane voltage tensor
-    :type v: torch.Tensor
-    :param spike: Current spike tensor
-    :type spike: torch.Tensor
-    :param k: KLIF scaling parameter
-    :type k: torch.Tensor
-    :param v_threshold: Spike threshold
-    :type v_threshold: float
-    :param v_reset: Reset voltage; ``None`` indicates soft reset
-    :type v_reset: Optional[float]
-    :param scale_reset: Whether to use KLIF scaled-reset semantics
-    :type scale_reset: bool
-    :param detach_reset: Whether to detach ``spike`` in the reset branch
-    :type detach_reset: bool
-    :return: Membrane voltage after reset
-    :rtype: torch.Tensor
-    """
-    spike_d = spike.detach() if detach_reset else spike
-    if scale_reset:
-        if v_reset is None:
-            return soft_reset(v, spike_d, v_threshold, False) / k
-        return hard_reset(v / k, spike_d, v_reset, False)
-    if v_reset is None:
-        return soft_reset(v, spike_d, v_threshold, False)
-    return hard_reset(v, spike_d, v_reset, False)
-
-
-def cuba_lif_charge(
-    x: torch.Tensor,
-    c: torch.Tensor,
-    v: torch.Tensor,
-    c_decay: float,
-    v_decay: float,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    r"""
-    **API Language** - :ref:`中文 <cuba_lif_charge-cn>` | :ref:`English <cuba_lif_charge-en>`
-
-    ----
-
-    .. _cuba_lif_charge-cn:
-
-    * **中文**
-
-    CUBA-LIF charge：先更新输入电流 ``c_next = c * c_decay + x``，再更新膜电位
-    ``v_next = v * v_decay + c_next``。函数不读取 ``MemoryModule`` memory，不负责
-    fire/reset。
-
-    :param x: 当前输入张量
-    :type x: torch.Tensor
-    :param c: 当前输入电流张量
-    :type c: torch.Tensor
-    :param v: 当前膜电位张量
-    :type v: torch.Tensor
-    :param c_decay: 输入电流衰减系数
-    :type c_decay: float
-    :param v_decay: 膜电位衰减系数
-    :type v_decay: float
-    :return: ``(c_next, v_next)``
-    :rtype: tuple[torch.Tensor, torch.Tensor]
-
-    ----
-
-    .. _cuba_lif_charge-en:
-
-    * **English**
-
-    CUBA-LIF charge: first update current ``c_next = c * c_decay + x``, then
-    membrane potential ``v_next = v * v_decay + c_next``. The function does not
-    read ``MemoryModule`` memory and does not manage fire/reset.
-
-    :param x: Current input tensor
-    :type x: torch.Tensor
-    :param c: Current input-current tensor
-    :type c: torch.Tensor
-    :param v: Current membrane voltage tensor
-    :type v: torch.Tensor
-    :param c_decay: Input-current decay factor
-    :type c_decay: float
-    :param v_decay: Membrane-voltage decay factor
-    :type v_decay: float
-    :return: ``(c_next, v_next)``
-    :rtype: tuple[torch.Tensor, torch.Tensor]
-    """
-    c_next = c * c_decay + x
-    return c_next, v * v_decay + c_next
-
-
-def lava_cuba_lif_charge(
-    x: torch.Tensor,
-    current_state: torch.Tensor,
-    voltage_state: torch.Tensor,
-    current_decay: torch.Tensor,
-    voltage_decay: torch.Tensor,
-    s_scale: float,
-    norm: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    r"""
-    **API Language** - :ref:`中文 <lava_cuba_lif_charge-cn>` | :ref:`English <lava_cuba_lif_charge-en>`
-
-    ----
-
-    .. _lava_cuba_lif_charge-cn:
-
-    * **中文**
-
-    执行 ``lava_exchange.CubaLIFNode`` 的量化 charge 路径：先用
-    ``LeakyIntegratorStep`` 更新电流，再可选调用调用方已经选定的 ``norm``，最后用
-    同一量化积分器更新膜电位。函数不读取 ``MemoryModule`` memory，不判断
-    ``training/eval``，也不负责 fire/reset。
-
-    :param x: 当前输入张量
-    :type x: torch.Tensor
-    :param current_state: 当前电流状态张量
-    :type current_state: torch.Tensor
-    :param voltage_state: 当前电压状态张量
-    :type voltage_state: torch.Tensor
-    :param current_decay: 已由 module 持有的电流衰减 tensor
-    :type current_decay: torch.Tensor
-    :param voltage_decay: 已由 module 持有的电压衰减 tensor
-    :type voltage_decay: torch.Tensor
-    :param s_scale: Lava 突触缩放因子
-    :type s_scale: float
-    :param norm: 可选归一化 callable；其参数、buffer 和训练状态由调用方拥有
-    :type norm: Optional[Callable[[torch.Tensor], torch.Tensor]]
-    :return: ``(current_next, voltage_next)``
-    :rtype: tuple[torch.Tensor, torch.Tensor]
-
-    ----
-
-    .. _lava_cuba_lif_charge-en:
-
-    * **English**
-
-    Run the quantized charge path of ``lava_exchange.CubaLIFNode``: update the
-    current through ``LeakyIntegratorStep``, optionally call the already selected
-    ``norm`` callable, then update the membrane voltage through the same
-    quantized integrator. The function does not read ``MemoryModule`` memory,
-    inspect ``training/eval``, or manage fire/reset.
-
-    :param x: Current input tensor
-    :type x: torch.Tensor
-    :param current_state: Current current-state tensor
-    :type current_state: torch.Tensor
-    :param voltage_state: Current voltage-state tensor
-    :type voltage_state: torch.Tensor
-    :param current_decay: Current-decay tensor owned by the caller module
-    :type current_decay: torch.Tensor
-    :param voltage_decay: Voltage-decay tensor owned by the caller module
-    :type voltage_decay: torch.Tensor
-    :param s_scale: Lava synaptic scale
-    :type s_scale: float
-    :param norm: Optional normalization callable; its parameters, buffers, and
-        training state are owned by the caller
-    :type norm: Optional[Callable[[torch.Tensor], torch.Tensor]]
-    :return: ``(current_next, voltage_next)``
-    :rtype: tuple[torch.Tensor, torch.Tensor]
-    """
-    from ..lava_exchange import LeakyIntegratorStep, step_quantize
-
-    current_next = LeakyIntegratorStep.apply(
-        x,
-        step_quantize(current_decay),
-        current_state.contiguous(),
-        s_scale,
-    )
-    if norm is not None:
-        current_next = norm(current_next)
-    voltage_next = LeakyIntegratorStep.apply(
-        current_next,
-        step_quantize(voltage_decay),
-        voltage_state.contiguous(),
-        s_scale,
-    )
-    return current_next, voltage_next
-
-
-def lava_cuba_lif_single_step(
+def lava_cuba_lif_step(
     x: torch.Tensor,
     current_state: torch.Tensor,
     voltage_state: torch.Tensor,
@@ -1021,20 +60,19 @@ def lava_cuba_lif_single_step(
     v_reset: float,
     surrogate_function: SurrogateFunction,
     detach_reset: bool = False,
-    norm: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <lava_cuba_lif_single_step-cn>` | :ref:`English <lava_cuba_lif_single_step-en>`
+    **API Language** - :ref:`中文 <lava_cuba_lif_step-cn>` | :ref:`English <lava_cuba_lif_step-en>`
 
     ----
 
-    .. _lava_cuba_lif_single_step-cn:
+    .. _lava_cuba_lif_step-cn:
 
     * **中文**
 
-    执行 ``lava_exchange.CubaLIFNode`` 已选 Torch 路径的一次状态转移，返回脉冲、
-    下一电流状态和 reset 后的下一电压状态。函数不物化 state，不读取 module，也不
-    判断 ``training/eval``。
+    执行 ``lava_exchange.CubaLIFNode`` 不含可选 norm 的 Torch 路径的一次状态
+    更新，返回脉冲、下一电流状态和 reset 后的下一电压状态。函数不物化 state，
+    不读取 module，也不判断 ``training/eval``。
 
     :param x: 当前输入张量
     :type x: torch.Tensor
@@ -1058,18 +96,16 @@ def lava_cuba_lif_single_step(
     :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
     :param detach_reset: 是否在 reset 分支中分离 ``spike`` 的计算图
     :type detach_reset: bool
-    :param norm: 可选归一化 callable；其生命周期由调用方管理
-    :type norm: Optional[Callable[[torch.Tensor], torch.Tensor]]
     :return: ``(spike, current_next, voltage_next)``
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
     ----
 
-    .. _lava_cuba_lif_single_step-en:
+    .. _lava_cuba_lif_step-en:
 
     * **English**
 
-    Run one state transition for the selected Torch path of
+    Run one state update for the norm-free Torch path of
     ``lava_exchange.CubaLIFNode`` and return spikes, next current state, and
     reset next voltage state. The function does not materialize state, read a
     module, or inspect ``training/eval``.
@@ -1096,330 +132,27 @@ def lava_cuba_lif_single_step(
     :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
     :param detach_reset: Whether to detach ``spike`` in the reset branch
     :type detach_reset: bool
-    :param norm: Optional normalization callable; its lifecycle is managed by the
-        caller
-    :type norm: Optional[Callable[[torch.Tensor], torch.Tensor]]
     :return: ``(spike, current_next, voltage_next)``
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     """
-    current_next, voltage_charged = lava_cuba_lif_charge(
+    from ..lava_exchange import LeakyIntegratorStep, step_quantize
+
+    current_next = LeakyIntegratorStep.apply(
         x,
-        current_state,
-        voltage_state,
-        current_decay,
-        voltage_decay,
+        step_quantize(current_decay),
+        current_state.contiguous(),
         s_scale,
-        norm,
+    )
+    voltage_charged = LeakyIntegratorStep.apply(
+        current_next,
+        step_quantize(voltage_decay),
+        voltage_state.contiguous(),
+        s_scale,
     )
     spike = surrogate_function(voltage_charged - (v_threshold + v_threshold_eps))
-    voltage_next = hard_reset(voltage_charged, spike, v_reset, detach_reset)
+    spike_d = spike.detach() if detach_reset else spike
+    voltage_next = spike_d * v_reset + (1.0 - spike_d) * voltage_charged
     return spike, current_next, voltage_next
-
-
-def lava_cuba_lif_multi_step(
-    x_seq: torch.Tensor,
-    current_state: torch.Tensor,
-    voltage_state: torch.Tensor,
-    current_decay: torch.Tensor,
-    voltage_decay: torch.Tensor,
-    s_scale: float,
-    v_threshold: float,
-    v_threshold_eps: float,
-    v_reset: float,
-    surrogate_function: SurrogateFunction,
-    detach_reset: bool = False,
-    store_i_seq: bool = False,
-    store_v_seq: bool = False,
-    norm: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
-) -> tuple[
-    torch.Tensor,
-    torch.Tensor,
-    torch.Tensor,
-    Optional[torch.Tensor],
-    Optional[torch.Tensor],
-]:
-    r"""
-    **API Language** - :ref:`中文 <lava_cuba_lif_multi_step-cn>` | :ref:`English <lava_cuba_lif_multi_step-en>`
-
-    ----
-
-    .. _lava_cuba_lif_multi_step-cn:
-
-    * **中文**
-
-    对 ``lava_exchange.CubaLIFNode`` 已选 Torch 路径执行多步状态转移。函数返回固定
-    arity：脉冲序列、最终电流状态、最终电压状态、可选电流序列和可选电压序列。
-    ``store_i_seq``/``store_v_seq`` 只控制是否返回辅助轨迹，不改变返回项数量。
-
-    :param x_seq: 输入序列，时间维为第 0 维
-    :type x_seq: torch.Tensor
-    :param current_state: 初始电流状态张量
-    :type current_state: torch.Tensor
-    :param voltage_state: 初始电压状态张量
-    :type voltage_state: torch.Tensor
-    :param current_decay: 电流衰减 tensor
-    :type current_decay: torch.Tensor
-    :param voltage_decay: 电压衰减 tensor
-    :type voltage_decay: torch.Tensor
-    :param s_scale: Lava 突触缩放因子
-    :type s_scale: float
-    :param v_threshold: 脉冲阈值
-    :type v_threshold: float
-    :param v_threshold_eps: Lava 阈值近似 epsilon
-    :type v_threshold_eps: float
-    :param v_reset: hard reset 电压
-    :type v_reset: float
-    :param surrogate_function: 已选定替代函数
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :param detach_reset: 是否在 reset 分支中分离 ``spike`` 的计算图
-    :type detach_reset: bool
-    :param store_i_seq: 是否返回每步电流状态序列
-    :type store_i_seq: bool
-    :param store_v_seq: 是否返回每步 reset 后电压状态序列
-    :type store_v_seq: bool
-    :param norm: 可选归一化 callable；其生命周期由调用方管理
-    :type norm: Optional[Callable[[torch.Tensor], torch.Tensor]]
-    :return: ``(spike_seq, current_next, voltage_next, current_seq, voltage_seq)``
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]
-
-    ----
-
-    .. _lava_cuba_lif_multi_step-en:
-
-    * **English**
-
-    Run multi-step state transitions for the selected Torch path of
-    ``lava_exchange.CubaLIFNode``. The function returns a fixed arity: spike
-    sequence, final current state, final voltage state, optional current
-    sequence, and optional voltage sequence. ``store_i_seq``/``store_v_seq`` only
-    control auxiliary traces and do not change the tuple arity.
-
-    :param x_seq: Input sequence with time as dimension 0
-    :type x_seq: torch.Tensor
-    :param current_state: Initial current-state tensor
-    :type current_state: torch.Tensor
-    :param voltage_state: Initial voltage-state tensor
-    :type voltage_state: torch.Tensor
-    :param current_decay: Current-decay tensor
-    :type current_decay: torch.Tensor
-    :param voltage_decay: Voltage-decay tensor
-    :type voltage_decay: torch.Tensor
-    :param s_scale: Lava synaptic scale
-    :type s_scale: float
-    :param v_threshold: Spike threshold
-    :type v_threshold: float
-    :param v_threshold_eps: Lava threshold approximation epsilon
-    :type v_threshold_eps: float
-    :param v_reset: Hard-reset voltage
-    :type v_reset: float
-    :param surrogate_function: Selected surrogate function
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :param detach_reset: Whether to detach ``spike`` in the reset branch
-    :type detach_reset: bool
-    :param store_i_seq: Whether to return the per-step current-state sequence
-    :type store_i_seq: bool
-    :param store_v_seq: Whether to return the per-step reset voltage-state sequence
-    :type store_v_seq: bool
-    :param norm: Optional normalization callable; its lifecycle is managed by the
-        caller
-    :type norm: Optional[Callable[[torch.Tensor], torch.Tensor]]
-    :return: ``(spike_seq, current_next, voltage_next, current_seq, voltage_seq)``
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]
-    """
-    current = current_state
-    voltage = voltage_state
-    spikes = []
-    current_trace = [] if store_i_seq else None
-    voltage_trace = [] if store_v_seq else None
-    for x in x_seq:
-        spike, current, voltage = lava_cuba_lif_single_step(
-            x,
-            current,
-            voltage,
-            current_decay,
-            voltage_decay,
-            s_scale,
-            v_threshold,
-            v_threshold_eps,
-            v_reset,
-            surrogate_function,
-            detach_reset,
-            norm,
-        )
-        spikes.append(spike)
-        if current_trace is not None:
-            current_trace.append(current)
-        if voltage_trace is not None:
-            voltage_trace.append(voltage)
-
-    return (
-        torch.stack(spikes),
-        current,
-        voltage,
-        torch.stack(current_trace) if current_trace is not None else None,
-        torch.stack(voltage_trace) if voltage_trace is not None else None,
-    )
-
-
-def mpbn_fire(
-    v: torch.Tensor,
-    v_threshold: torch.Tensor,
-    surrogate_function: SurrogateFunction,
-    normalize_residual: bool = False,
-    gamma: torch.Tensor | None = None,
-    mu: torch.Tensor | None = None,
-    beta: torch.Tensor | None = None,
-    sigma2: torch.Tensor | None = None,
-    eps: float | None = None,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    r"""
-    **API Language** - :ref:`中文 <mpbn_fire-cn>` | :ref:`English <mpbn_fire-en>`
-
-    ----
-
-    .. _mpbn_fire-cn:
-
-    * **中文**
-
-    执行 MPBN 神经元的放电计算，并在 ``normalize_residual=True`` 时对未放电位置
-    的残余膜电位执行 BN 反变换。调用方必须传入已经由 module 选择好的有效阈值
-    ``v_threshold`` 和 BN 参数；本函数不判断 ``training/eval``、不更新 running
-    stats，也不读取 ``MemoryModule`` memory。
-
-    :param v: 当前膜电位，支持 2D ``[N, C]`` 或 4D ``[N, C, H, W]``
-    :type v: torch.Tensor
-    :param v_threshold: 每通道有效阈值，形状 ``[C]``
-    :type v_threshold: torch.Tensor
-    :param surrogate_function: 已选定替代函数
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :param normalize_residual: 是否归一化未放电残余
-    :type normalize_residual: bool
-    :param gamma: BatchNorm 缩放参数
-    :type gamma: torch.Tensor or None
-    :param mu: BatchNorm 均值
-    :type mu: torch.Tensor or None
-    :param beta: BatchNorm 偏置
-    :type beta: torch.Tensor or None
-    :param sigma2: BatchNorm 方差
-    :type sigma2: torch.Tensor or None
-    :param eps: BatchNorm epsilon
-    :type eps: float or None
-    :return: ``(spike, v_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor]
-    :raises NotImplementedError: 当 ``v`` 不是 2D 或 4D 时抛出
-    :raises ValueError: 当启用 residual normalization 但缺少 BN 参数时抛出
-
-    ----
-
-    .. _mpbn_fire-en:
-
-    * **English**
-
-    Run MPBN firing and, when ``normalize_residual=True``, apply the BN inverse
-    transform to membrane residuals that did not fire. The caller must pass the
-    effective ``v_threshold`` and BN parameters already selected by the module.
-    This function does not inspect ``training/eval``, update running stats, or
-    read ``MemoryModule`` memory.
-
-    :param v: Current 2D ``[N, C]`` or 4D ``[N, C, H, W]`` membrane voltage
-    :type v: torch.Tensor
-    :param v_threshold: Effective per-channel threshold shaped ``[C]``
-    :type v_threshold: torch.Tensor
-    :param surrogate_function: Selected surrogate function
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :param normalize_residual: Whether to normalize non-firing residuals
-    :type normalize_residual: bool
-    :param gamma: Batch-normalization scale
-    :type gamma: torch.Tensor or None
-    :param mu: Batch-normalization mean
-    :type mu: torch.Tensor or None
-    :param beta: Batch-normalization bias
-    :type beta: torch.Tensor or None
-    :param sigma2: Batch-normalization variance
-    :type sigma2: torch.Tensor or None
-    :param eps: Batch-normalization epsilon
-    :type eps: float or None
-    :return: ``(spike, v_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor]
-    :raises NotImplementedError: If ``v`` is neither 2D nor 4D
-    :raises ValueError: If residual normalization is enabled without BN parameters
-    """
-    if v.ndim == 2:
-        view_shape = (1, v_threshold.shape[0])
-    elif v.ndim == 4:
-        view_shape = (1, v_threshold.shape[0], 1, 1)
-    else:
-        raise NotImplementedError(
-            f"Only 2D and 4D tensors are supported, but got {v.ndim}D tensors."
-        )
-
-    diff = v - v_threshold.view(view_shape)
-    spike = surrogate_function(diff)
-    if not normalize_residual:
-        return spike, v
-
-    if gamma is None or mu is None or beta is None or sigma2 is None or eps is None:
-        raise ValueError("BN parameters are required when normalize_residual=True.")
-
-    mask = diff <= 0
-    gamma_expanded = gamma.view(view_shape).expand_as(mask)
-    mu_expanded = mu.view(view_shape).expand_as(mask)
-    beta_expanded = beta.view(view_shape).expand_as(mask)
-    sigma_expanded = torch.sqrt(sigma2 + eps).view(view_shape).expand_as(mask)
-    normalized_residual = (v[mask] - mu_expanded[mask]) / sigma_expanded[
-        mask
-    ] * gamma_expanded[mask] + beta_expanded[mask]
-    v_next = v.clone()
-    v_next.masked_scatter_(mask, normalized_residual)
-    return spike, v_next
-
-
-def ottt_trace_update(
-    spike: torch.Tensor,
-    trace: torch.Tensor,
-    tau: float,
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <ottt_trace_update-cn>` | :ref:`English <ottt_trace_update-en>`
-
-    ----
-
-    .. _ottt_trace_update-cn:
-
-    * **中文**
-
-    更新 OTTT trace：``trace * (1 - 1 / tau) + spike``。函数在
-    ``torch.no_grad()`` 下执行，保持现有 ``OTTTLIFNode.track_trace`` 语义。
-
-    :param spike: 当前脉冲张量
-    :type spike: torch.Tensor
-    :param trace: 当前 trace 张量
-    :type trace: torch.Tensor
-    :param tau: trace 衰减时间常数
-    :type tau: float
-    :return: 更新后的 trace
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _ottt_trace_update-en:
-
-    * **English**
-
-    Update OTTT trace as ``trace * (1 - 1 / tau) + spike`` under
-    ``torch.no_grad()``, matching existing ``OTTTLIFNode.track_trace`` semantics.
-
-    :param spike: Current spike tensor
-    :type spike: torch.Tensor
-    :param trace: Current trace tensor
-    :type trace: torch.Tensor
-    :param tau: Trace decay time constant
-    :type tau: float
-    :return: Updated trace
-    :rtype: torch.Tensor
-    """
-    with torch.no_grad():
-        return trace * (1.0 - 1.0 / tau) + spike
 
 
 def _reset(
@@ -1429,12 +162,13 @@ def _reset(
     v_reset: Optional[float],
     detach_reset: bool,
 ) -> torch.Tensor:
+    spike_d = spike.detach() if detach_reset else spike
     if v_reset is None:
-        return soft_reset(v, spike, v_threshold, detach_reset)
-    return hard_reset(v, spike, v_reset, detach_reset)
+        return v - spike_d * v_threshold
+    return spike_d * v_reset + (1.0 - spike_d) * v
 
 
-def _normalise_inductor_multi_step_output(
+def _normalize_scan_output(
     out: tuple[torch.Tensor, ...],
     store_v_seq: bool,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
@@ -1445,7 +179,7 @@ def _normalise_inductor_multi_step_output(
     return spike_seq, v_next, None
 
 
-def if_single_step(
+def if_step(
     x: torch.Tensor,
     v: torch.Tensor,
     v_threshold: float,
@@ -1454,11 +188,11 @@ def if_single_step(
     detach_reset: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <if_single_step-cn>` | :ref:`English <if_single_step-en>`
+    **API Language** - :ref:`中文 <if_step-cn>` | :ref:`English <if_step-en>`
 
     ----
 
-    .. _if_single_step-cn:
+    .. _if_step-cn:
 
     * **中文**
 
@@ -1483,7 +217,7 @@ def if_single_step(
 
     ----
 
-    .. _if_single_step-en:
+    .. _if_step-en:
 
     * **English**
 
@@ -1507,94 +241,178 @@ def if_single_step(
     :return: ``(spike, v_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
     """
-    v_charged = if_charge(x, v)
-    spike = neuron_fire(v_charged, v_threshold, surrogate_function)
+    v_charged = v + x
+    spike = surrogate_function(v_charged - v_threshold)
     return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
-def if_multi_step(
-    x_seq: torch.Tensor,
+def qif_step(
+    x: torch.Tensor,
     v: torch.Tensor,
+    tau: float,
+    a0: float,
+    v_rest: float,
+    v_c: float,
     v_threshold: float,
     v_reset: Optional[float],
     surrogate_function: SurrogateFunction,
     detach_reset: bool = False,
-    store_v_seq: bool = False,
-) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <if_multi_step-cn>` | :ref:`English <if_multi_step-en>`
+    **API Language** - :ref:`中文 <qif_step-cn>` | :ref:`English <qif_step-en>`
 
     ----
 
-    .. _if_multi_step-cn:
+    .. _qif_step-cn:
 
     * **中文**
 
-    执行 IF 多步状态转移，输入序列第 0 维为时间维。返回固定结构
-    ``(spike_seq, v_next, v_seq_or_none)``；``store_v_seq=False`` 时第三项为
-    ``None``。返回的 ``v_next`` 和 ``v_seq`` 不 alias 输入 ``v``。
+    执行 QIF 神经元的一次显式状态更新。
 
-    :param x_seq: 输入序列张量，shape 通常为 ``[T, N, *]``
-    :type x_seq: torch.Tensor
-    :param v: 已物化的初始膜电位 tensor state
+    :param x: 当前输入张量，shape 为 ``[N, *]``
+    :type x: torch.Tensor
+    :param v: 当前膜电位，shape、dtype 和 device 与 ``x`` 兼容
     :type v: torch.Tensor
-    :param v_threshold: 脉冲阈值
+    :param tau: 膜电位时间常数
+    :type tau: float
+    :param a0: 二次项系数
+    :type a0: float
+    :param v_rest: 静息电位
+    :type v_rest: float
+    :param v_c: 临界电位
+    :type v_c: float
+    :param v_threshold: 放电阈值
     :type v_threshold: float
-    :param v_reset: 重置电压；``None`` 表示 soft reset
+    :param v_reset: 重置电位；``None`` 表示 soft reset
     :type v_reset: Optional[float]
-    :param surrogate_function: 当前执行路径使用的替代函数
+    :param surrogate_function: 替代梯度函数
     :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
     :param detach_reset: 是否分离 reset 分支中的 spike
     :type detach_reset: bool
-    :param store_v_seq: 是否返回各时间步 reset 后的膜电位序列
-    :type store_v_seq: bool
-    :return: ``(spike_seq, v_next, v_seq_or_none)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :return: ``(spike, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
 
     ----
 
-    .. _if_multi_step-en:
+    .. _qif_step-en:
 
     * **English**
 
-    Run IF multi-step state transition with the time dimension at axis 0. The
-    return structure is fixed as ``(spike_seq, v_next, v_seq_or_none)``; the third
-    item is ``None`` when ``store_v_seq=False``. Returned ``v_next`` and ``v_seq``
-    do not alias the input ``v``.
+    Run one explicit QIF neuron state update.
 
-    :param x_seq: Input sequence tensor, conventionally shaped ``[T, N, *]``
-    :type x_seq: torch.Tensor
-    :param v: Materialized initial membrane-voltage tensor state
+    :param x: Current input tensor shaped ``[N, *]``
+    :type x: torch.Tensor
+    :param v: Current voltage compatible with ``x`` in shape, dtype, and device
     :type v: torch.Tensor
-    :param v_threshold: Spike threshold
+    :param tau: Membrane time constant
+    :type tau: float
+    :param a0: Quadratic coefficient
+    :type a0: float
+    :param v_rest: Resting voltage
+    :type v_rest: float
+    :param v_c: Critical voltage
+    :type v_c: float
+    :param v_threshold: Firing threshold
     :type v_threshold: float
     :param v_reset: Reset voltage; ``None`` means soft reset
     :type v_reset: Optional[float]
-    :param surrogate_function: Surrogate function for the selected execution path
+    :param surrogate_function: Surrogate-gradient function
     :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
     :param detach_reset: Whether to detach spike in the reset branch
     :type detach_reset: bool
-    :param store_v_seq: Whether to return the post-reset membrane voltage sequence
-    :type store_v_seq: bool
-    :return: ``(spike_seq, v_next, v_seq_or_none)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :return: ``(spike, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
     """
-    spike_seq = []
-    v_seq = []
-    for t in range(x_seq.shape[0]):
-        spike, v = if_single_step(
-            x_seq[t], v, v_threshold, v_reset, surrogate_function, detach_reset
-        )
-        spike_seq.append(spike)
-        if store_v_seq:
-            v_seq.append(v)
-    stacked_spike_seq = torch.stack(spike_seq)
-    if store_v_seq:
-        return stacked_spike_seq, v, torch.stack(v_seq)
-    return stacked_spike_seq, v, None
+    v_charged = v + (x + a0 * (v - v_rest) * (v - v_c)) / tau
+    spike = surrogate_function(v_charged - v_threshold)
+    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
-def activation_aware_if_single_step(
+def eif_step(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    tau: float,
+    delta_t: float,
+    theta_rh: float,
+    v_rest: float,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <eif_step-cn>` | :ref:`English <eif_step-en>`
+
+    ----
+
+    .. _eif_step-cn:
+
+    * **中文**
+
+    执行 EIF 神经元的一次显式状态更新。
+
+    :param x: 当前输入张量，shape 为 ``[N, *]``
+    :type x: torch.Tensor
+    :param v: 当前膜电位，shape、dtype 和 device 与 ``x`` 兼容
+    :type v: torch.Tensor
+    :param tau: 膜电位时间常数
+    :type tau: float
+    :param delta_t: 指数项陡峭度
+    :type delta_t: float
+    :param theta_rh: 基强度阈值
+    :type theta_rh: float
+    :param v_rest: 静息电位
+    :type v_rest: float
+    :param v_threshold: 放电阈值
+    :type v_threshold: float
+    :param v_reset: 重置电位；``None`` 表示 soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: 替代梯度函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否分离 reset 分支中的 spike
+    :type detach_reset: bool
+    :return: ``(spike, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+
+    ----
+
+    .. _eif_step-en:
+
+    * **English**
+
+    Run one explicit EIF neuron state update.
+
+    :param x: Current input tensor shaped ``[N, *]``
+    :type x: torch.Tensor
+    :param v: Current voltage compatible with ``x`` in shape, dtype, and device
+    :type v: torch.Tensor
+    :param tau: Membrane time constant
+    :type tau: float
+    :param delta_t: Exponential sharpness
+    :type delta_t: float
+    :param theta_rh: Rheobase threshold
+    :type theta_rh: float
+    :param v_rest: Resting voltage
+    :type v_rest: float
+    :param v_threshold: Firing threshold
+    :type v_threshold: float
+    :param v_reset: Reset voltage; ``None`` means soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: Surrogate-gradient function
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach spike in the reset branch
+    :type detach_reset: bool
+    :return: ``(spike, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    """
+    v_charged = (
+        v + (x + v_rest - v + delta_t * torch.exp((v - theta_rh) / delta_t)) / tau
+    )
+    spike = surrogate_function(v_charged - v_threshold)
+    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+
+
+def activation_aware_if_step(
     x: torch.Tensor,
     v: torch.Tensor,
     v_threshold: torch.Tensor,
@@ -1604,11 +422,11 @@ def activation_aware_if_single_step(
     detach_reset: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <activation_aware_if_single_step-cn>` | :ref:`English <activation_aware_if_single_step-en>`
+    **API Language** - :ref:`中文 <activation_aware_if_step-cn>` | :ref:`English <activation_aware_if_step-en>`
 
     ----
 
-    .. _activation_aware_if_single_step-cn:
+    .. _activation_aware_if_step-cn:
 
     * **中文**
 
@@ -1641,7 +459,7 @@ def activation_aware_if_single_step(
 
     ----
 
-    .. _activation_aware_if_single_step-en:
+    .. _activation_aware_if_step-en:
 
     * **English**
 
@@ -1685,110 +503,7 @@ def activation_aware_if_single_step(
     return spike, v_next
 
 
-def activation_aware_if_multi_step(
-    x_seq: torch.Tensor,
-    v: torch.Tensor,
-    v_threshold: torch.Tensor,
-    v_offset: torch.Tensor,
-    v_reset: Optional[float],
-    surrogate_function: SurrogateFunction,
-    detach_reset: bool = False,
-    store_v_seq: bool = False,
-) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
-    r"""
-    **API Language** - :ref:`中文 <activation_aware_if_multi_step-cn>` | :ref:`English <activation_aware_if_multi_step-en>`
-
-    ----
-
-    .. _activation_aware_if_multi_step-cn:
-
-    * **中文**
-
-    执行一条已确定 Torch 路径上的 activation-aware IF 多步状态转移。函数逐时间步
-    调用 :func:`activation_aware_if_single_step`，返回
-    ``(spike_seq, v_next, v_seq_or_none)``。``v_threshold`` 和 ``v_offset`` 必须已
-    按单个时间步输入 ``x_seq[0]`` 广播完成。
-
-    函数不读取或写入 ``MemoryModule`` memory，不负责 ``training/eval``、
-    ``step_mode``、backend dispatch、输入合法性检查或 channel-wise 参数广播。
-
-    :param x_seq: 输入序列，shape 为 ``[T, N, *]``
-    :type x_seq: torch.Tensor
-    :param v: 已物化的初始膜电位 tensor state，shape 与 ``x_seq[0]`` 相同
-    :type v: torch.Tensor
-    :param v_threshold: 已广播的发放阈值
-    :type v_threshold: torch.Tensor
-    :param v_offset: 已广播的膜电位偏移
-    :type v_offset: torch.Tensor
-    :param v_reset: 硬复位电压；``None`` 表示 soft reset
-    :type v_reset: Optional[float]
-    :param surrogate_function: 当前执行路径使用的替代函数
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :param detach_reset: 是否分离 reset 分支中的 spike
-    :type detach_reset: bool
-    :param store_v_seq: 是否返回每个时间步 reset 后的膜电位序列
-    :type store_v_seq: bool
-    :return: ``(spike_seq, v_next, v_seq_or_none)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
-
-    ----
-
-    .. _activation_aware_if_multi_step-en:
-
-    * **English**
-
-    Run an activation-aware IF multi-step state transition on an already selected
-    Torch path. The function calls
-    :func:`activation_aware_if_single_step` over time and returns
-    ``(spike_seq, v_next, v_seq_or_none)``. ``v_threshold`` and ``v_offset`` must
-    already be broadcast for a single time-step input ``x_seq[0]``.
-
-    The function does not read or write ``MemoryModule`` memory and does not
-    manage ``training/eval``, ``step_mode``, backend dispatch, input validation,
-    or channel-wise parameter broadcasting.
-
-    :param x_seq: Input sequence shaped ``[T, N, *]``
-    :type x_seq: torch.Tensor
-    :param v: Materialized initial membrane-voltage tensor state with the same
-        shape as ``x_seq[0]``
-    :type v: torch.Tensor
-    :param v_threshold: Broadcast threshold
-    :type v_threshold: torch.Tensor
-    :param v_offset: Broadcast membrane offset
-    :type v_offset: torch.Tensor
-    :param v_reset: Hard-reset voltage; ``None`` means soft reset
-    :type v_reset: Optional[float]
-    :param surrogate_function: Surrogate function for the selected execution path
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :param detach_reset: Whether to detach spike in the reset branch
-    :type detach_reset: bool
-    :param store_v_seq: Whether to return the post-reset membrane voltage sequence
-    :type store_v_seq: bool
-    :return: ``(spike_seq, v_next, v_seq_or_none)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
-    """
-    spike_seq = []
-    v_seq = []
-    for x in x_seq:
-        spike, v = activation_aware_if_single_step(
-            x,
-            v,
-            v_threshold,
-            v_offset,
-            v_reset,
-            surrogate_function,
-            detach_reset,
-        )
-        spike_seq.append(spike)
-        if store_v_seq:
-            v_seq.append(v)
-    stacked_spike_seq = torch.stack(spike_seq)
-    if store_v_seq:
-        return stacked_spike_seq, v, torch.stack(v_seq)
-    return stacked_spike_seq, v, None
-
-
-def activation_aware_if_multi_step_triton(
+def activation_aware_if_scan_triton(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     v_threshold: torch.Tensor,
@@ -1799,11 +514,11 @@ def activation_aware_if_multi_step_triton(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <activation_aware_if_multi_step_triton-cn>` | :ref:`English <activation_aware_if_multi_step_triton-en>`
+    **API Language** - :ref:`中文 <activation_aware_if_scan_triton-cn>` | :ref:`English <activation_aware_if_scan_triton-en>`
 
     ----
 
-    .. _activation_aware_if_multi_step_triton-cn:
+    .. _activation_aware_if_scan_triton-cn:
 
     * **中文**
 
@@ -1835,7 +550,7 @@ def activation_aware_if_multi_step_triton(
 
     ----
 
-    .. _activation_aware_if_multi_step_triton-en:
+    .. _activation_aware_if_scan_triton-en:
 
     * **English**
 
@@ -1873,11 +588,11 @@ def activation_aware_if_multi_step_triton(
         )
     except (ImportError, RuntimeError) as exc:
         raise ImportError(
-            "activation_aware_if_multi_step_triton requires the Triton backend."
+            "activation_aware_if_scan_triton requires the Triton backend."
         ) from exc
     if activation_aware_if is None:
         raise ImportError(
-            "activation_aware_if_multi_step_triton requires the Triton backend."
+            "activation_aware_if_scan_triton requires the Triton backend."
         )
 
     spike_seq, v_out = activation_aware_if._multistep_activation_aware_if(
@@ -1895,7 +610,7 @@ def activation_aware_if_multi_step_triton(
     return spike_seq, v_out, None
 
 
-def if_multi_step_inductor(
+def if_scan_inductor(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     v_threshold: float,
@@ -1905,11 +620,11 @@ def if_multi_step_inductor(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <if_multi_step_inductor-cn>` | :ref:`English <if_multi_step_inductor-en>`
+    **API Language** - :ref:`中文 <if_scan_inductor-cn>` | :ref:`English <if_scan_inductor-en>`
 
     ----
 
-    .. _if_multi_step_inductor-cn:
+    .. _if_scan_inductor-cn:
 
     * **中文**
 
@@ -1936,7 +651,7 @@ def if_multi_step_inductor(
 
     ----
 
-    .. _if_multi_step_inductor-en:
+    .. _if_scan_inductor-en:
 
     * **English**
 
@@ -1979,7 +694,7 @@ def if_multi_step_inductor(
             surrogate_key,
             inductor_cache.runtime_key(x_seq, v),
         ),
-        inductor_cache._build_if_multi_step_graph(
+        inductor_cache._build_if_scan(
             v_threshold,
             v_reset,
             surrogate_function,
@@ -1987,10 +702,10 @@ def if_multi_step_inductor(
             store_v_seq,
         ),
     )
-    return _normalise_inductor_multi_step_output(graph(x_seq, v), store_v_seq)
+    return _normalize_scan_output(graph(x_seq, v), store_v_seq)
 
 
-def lif_single_step(
+def lif_step(
     x: torch.Tensor,
     v: torch.Tensor,
     tau: float,
@@ -2001,11 +716,11 @@ def lif_single_step(
     detach_reset: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <lif_single_step-cn>` | :ref:`English <lif_single_step-en>`
+    **API Language** - :ref:`中文 <lif_step-cn>` | :ref:`English <lif_step-en>`
 
     ----
 
-    .. _lif_single_step-cn:
+    .. _lif_step-cn:
 
     * **中文**
 
@@ -2033,7 +748,7 @@ def lif_single_step(
 
     ----
 
-    .. _lif_single_step-en:
+    .. _lif_step-en:
 
     * **English**
 
@@ -2060,12 +775,16 @@ def lif_single_step(
     :return: ``(spike, v_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
     """
-    v_charged = lif_charge(x, v, tau, decay_input, v_reset)
-    spike = neuron_fire(v_charged, v_threshold, surrogate_function)
+    v_reset_value = 0.0 if v_reset is None else v_reset
+    if decay_input:
+        v_charged = v + (x - (v - v_reset_value)) / tau
+    else:
+        v_charged = v - (v - v_reset_value) / tau + x
+    spike = surrogate_function(v_charged - v_threshold)
     return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
-def lif_multi_step(
+def lif_scan_inductor(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     tau: float,
@@ -2077,293 +796,11 @@ def lif_multi_step(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <lif_multi_step-cn>` | :ref:`English <lif_multi_step-en>`
+    **API Language** - :ref:`中文 <lif_scan_inductor-cn>` | :ref:`English <lif_scan_inductor-en>`
 
     ----
 
-    .. _lif_multi_step-cn:
-
-    * **中文**
-
-    执行 LIF 多步状态转移，返回固定结构
-    ``(spike_seq, v_next, v_seq_or_none)``。``store_v_seq=False`` 时第三项为
-    ``None``。
-
-    :param x_seq: 输入序列张量，shape 通常为 ``[T, N, *]``
-    :type x_seq: torch.Tensor
-    :param v: 已物化的初始膜电位 tensor state
-    :type v: torch.Tensor
-    :param tau: 膜电位时间常数
-    :type tau: float
-    :param decay_input: 输入是否参与衰减
-    :type decay_input: bool
-    :param v_threshold: 脉冲阈值
-    :type v_threshold: float
-    :param v_reset: 重置电压；``None`` 表示 soft reset
-    :type v_reset: Optional[float]
-    :param surrogate_function: 当前执行路径使用的替代函数
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :param detach_reset: 是否分离 reset 分支中的 spike
-    :type detach_reset: bool
-    :param store_v_seq: 是否返回各时间步 reset 后的膜电位序列
-    :type store_v_seq: bool
-    :return: ``(spike_seq, v_next, v_seq_or_none)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
-
-    ----
-
-    .. _lif_multi_step-en:
-
-    * **English**
-
-    Run LIF multi-step state transition and return the fixed structure
-    ``(spike_seq, v_next, v_seq_or_none)``. The third item is ``None`` when
-    ``store_v_seq=False``.
-
-    :param x_seq: Input sequence tensor, conventionally shaped ``[T, N, *]``
-    :type x_seq: torch.Tensor
-    :param v: Materialized initial membrane-voltage tensor state
-    :type v: torch.Tensor
-    :param tau: Membrane time constant
-    :type tau: float
-    :param decay_input: Whether the input participates in decay
-    :type decay_input: bool
-    :param v_threshold: Spike threshold
-    :type v_threshold: float
-    :param v_reset: Reset voltage; ``None`` means soft reset
-    :type v_reset: Optional[float]
-    :param surrogate_function: Surrogate function for the selected execution path
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :param detach_reset: Whether to detach spike in the reset branch
-    :type detach_reset: bool
-    :param store_v_seq: Whether to return the post-reset membrane voltage sequence
-    :type store_v_seq: bool
-    :return: ``(spike_seq, v_next, v_seq_or_none)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
-    """
-    spike_seq = []
-    v_seq = []
-    for t in range(x_seq.shape[0]):
-        spike, v = lif_single_step(
-            x_seq[t],
-            v,
-            tau,
-            decay_input,
-            v_threshold,
-            v_reset,
-            surrogate_function,
-            detach_reset,
-        )
-        spike_seq.append(spike)
-        if store_v_seq:
-            v_seq.append(v)
-    stacked_spike_seq = torch.stack(spike_seq)
-    if store_v_seq:
-        return stacked_spike_seq, v, torch.stack(v_seq)
-    return stacked_spike_seq, v, None
-
-
-def lif_single_step_with_pre_spike_mean(
-    x: torch.Tensor,
-    v: torch.Tensor,
-    tau: float,
-    decay_input: bool,
-    v_threshold: float,
-    v_reset: Optional[float],
-    surrogate_function: SurrogateFunction,
-    detach_reset: bool = False,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    r"""
-    **API Language** - :ref:`中文 <lif_single_step_with_pre_spike_mean-cn>` | :ref:`English <lif_single_step_with_pre_spike_mean-en>`
-
-    ----
-
-    .. _lif_single_step_with_pre_spike_mean-cn:
-
-    * **中文**
-
-    执行 LIF 单步状态转移，并额外返回 charge 后、fire 前的
-    ``(v_charged - v_threshold).mean()``。该函数覆盖
-    ``spike_dhs.save_v_LIFNode`` 的观测路径；不读取 module memory，不判断
-    ``training/eval``。
-
-    :param x: 当前输入张量
-    :type x: torch.Tensor
-    :param v: 已物化的当前膜电位 tensor state
-    :type v: torch.Tensor
-    :param tau: 膜电位时间常数
-    :type tau: float
-    :param decay_input: 输入是否参与衰减
-    :type decay_input: bool
-    :param v_threshold: 脉冲阈值
-    :type v_threshold: float
-    :param v_reset: reset 电压；``None`` 表示 soft reset
-    :type v_reset: Optional[float]
-    :param surrogate_function: 当前执行路径使用的替代函数
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :param detach_reset: 是否分离 reset 分支中的 spike
-    :type detach_reset: bool
-    :return: ``(spike, v_next, pre_spike_mean)``
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-
-    ----
-
-    .. _lif_single_step_with_pre_spike_mean-en:
-
-    * **English**
-
-    Run one LIF state transition and additionally return
-    ``(v_charged - v_threshold).mean()`` between charge and fire. This function
-    covers the observation path of ``spike_dhs.save_v_LIFNode``; it does not read
-    module memory or inspect ``training/eval``.
-
-    :param x: Current input tensor
-    :type x: torch.Tensor
-    :param v: Materialized current membrane-voltage tensor state
-    :type v: torch.Tensor
-    :param tau: Membrane time constant
-    :type tau: float
-    :param decay_input: Whether the input participates in decay
-    :type decay_input: bool
-    :param v_threshold: Spike threshold
-    :type v_threshold: float
-    :param v_reset: Reset voltage; ``None`` means soft reset
-    :type v_reset: Optional[float]
-    :param surrogate_function: Surrogate function for the selected execution path
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :param detach_reset: Whether to detach spike in the reset branch
-    :type detach_reset: bool
-    :return: ``(spike, v_next, pre_spike_mean)``
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    """
-    v_charged = lif_charge(x, v, tau, decay_input, v_reset)
-    pre_spike_mean = (v_charged - v_threshold).mean()
-    spike = neuron_fire(v_charged, v_threshold, surrogate_function)
-    return (
-        spike,
-        _reset(v_charged, spike, v_threshold, v_reset, detach_reset),
-        pre_spike_mean,
-    )
-
-
-def lif_multi_step_with_pre_spike_mean(
-    x_seq: torch.Tensor,
-    v: torch.Tensor,
-    tau: float,
-    decay_input: bool,
-    v_threshold: float,
-    v_reset: Optional[float],
-    surrogate_function: SurrogateFunction,
-    detach_reset: bool = False,
-    store_pre_spike_mean_seq: bool = False,
-) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
-    r"""
-    **API Language** - :ref:`中文 <lif_multi_step_with_pre_spike_mean-cn>` | :ref:`English <lif_multi_step_with_pre_spike_mean-en>`
-
-    ----
-
-    .. _lif_multi_step_with_pre_spike_mean-cn:
-
-    * **中文**
-
-    执行 LIF 多步状态转移，并可选返回每步 charge 后、fire 前的
-    ``(v_charged - v_threshold).mean()`` 序列。返回 arity 固定为
-    ``(spike_seq, v_next, pre_spike_mean_seq_or_none)``。
-
-    :param x_seq: 输入序列张量，时间维为第 0 维
-    :type x_seq: torch.Tensor
-    :param v: 已物化的初始膜电位 tensor state
-    :type v: torch.Tensor
-    :param tau: 膜电位时间常数
-    :type tau: float
-    :param decay_input: 输入是否参与衰减
-    :type decay_input: bool
-    :param v_threshold: 脉冲阈值
-    :type v_threshold: float
-    :param v_reset: reset 电压；``None`` 表示 soft reset
-    :type v_reset: Optional[float]
-    :param surrogate_function: 当前执行路径使用的替代函数
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :param detach_reset: 是否分离 reset 分支中的 spike
-    :type detach_reset: bool
-    :param store_pre_spike_mean_seq: 是否返回每步 pre-spike mean 序列
-    :type store_pre_spike_mean_seq: bool
-    :return: ``(spike_seq, v_next, pre_spike_mean_seq_or_none)``
-    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
-
-    ----
-
-    .. _lif_multi_step_with_pre_spike_mean-en:
-
-    * **English**
-
-    Run multi-step LIF transitions and optionally return the per-step
-    ``(v_charged - v_threshold).mean()`` sequence between charge and fire. The
-    return arity is fixed as
-    ``(spike_seq, v_next, pre_spike_mean_seq_or_none)``.
-
-    :param x_seq: Input sequence tensor with time as dimension 0
-    :type x_seq: torch.Tensor
-    :param v: Materialized initial membrane-voltage tensor state
-    :type v: torch.Tensor
-    :param tau: Membrane time constant
-    :type tau: float
-    :param decay_input: Whether the input participates in decay
-    :type decay_input: bool
-    :param v_threshold: Spike threshold
-    :type v_threshold: float
-    :param v_reset: Reset voltage; ``None`` means soft reset
-    :type v_reset: Optional[float]
-    :param surrogate_function: Surrogate function for the selected execution path
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :param detach_reset: Whether to detach spike in the reset branch
-    :type detach_reset: bool
-    :param store_pre_spike_mean_seq: Whether to return the per-step pre-spike
-        mean sequence
-    :type store_pre_spike_mean_seq: bool
-    :return: ``(spike_seq, v_next, pre_spike_mean_seq_or_none)``
-    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
-    """
-    spike_seq = []
-    pre_spike_mean_seq = [] if store_pre_spike_mean_seq else None
-    for x in x_seq:
-        spike, v, pre_spike_mean = lif_single_step_with_pre_spike_mean(
-            x,
-            v,
-            tau,
-            decay_input,
-            v_threshold,
-            v_reset,
-            surrogate_function,
-            detach_reset,
-        )
-        spike_seq.append(spike)
-        if pre_spike_mean_seq is not None:
-            pre_spike_mean_seq.append(pre_spike_mean)
-    return (
-        torch.stack(spike_seq),
-        v,
-        torch.stack(pre_spike_mean_seq) if pre_spike_mean_seq is not None else None,
-    )
-
-
-def lif_multi_step_inductor(
-    x_seq: torch.Tensor,
-    v: torch.Tensor,
-    tau: float,
-    decay_input: bool,
-    v_threshold: float,
-    v_reset: Optional[float],
-    surrogate_function: SurrogateFunction,
-    detach_reset: bool = False,
-    store_v_seq: bool = False,
-) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
-    r"""
-    **API Language** - :ref:`中文 <lif_multi_step_inductor-cn>` | :ref:`English <lif_multi_step_inductor-en>`
-
-    ----
-
-    .. _lif_multi_step_inductor-cn:
+    .. _lif_scan_inductor-cn:
 
     * **中文**
 
@@ -2394,7 +831,7 @@ def lif_multi_step_inductor(
 
     ----
 
-    .. _lif_multi_step_inductor-en:
+    .. _lif_scan_inductor-en:
 
     * **English**
 
@@ -2443,7 +880,7 @@ def lif_multi_step_inductor(
             surrogate_key,
             inductor_cache.runtime_key(x_seq, v),
         ),
-        inductor_cache._build_lif_multi_step_graph(
+        inductor_cache._build_lif_scan(
             tau,
             decay_input,
             v_threshold,
@@ -2453,10 +890,10 @@ def lif_multi_step_inductor(
             store_v_seq,
         ),
     )
-    return _normalise_inductor_multi_step_output(graph(x_seq, v), store_v_seq)
+    return _normalize_scan_output(graph(x_seq, v), store_v_seq)
 
 
-def plif_single_step(
+def plif_step(
     x: torch.Tensor,
     v: torch.Tensor,
     w: torch.Tensor,
@@ -2467,11 +904,11 @@ def plif_single_step(
     detach_reset: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <plif_single_step-cn>` | :ref:`English <plif_single_step-en>`
+    **API Language** - :ref:`中文 <plif_step-cn>` | :ref:`English <plif_step-en>`
 
     ----
 
-    .. _plif_single_step-cn:
+    .. _plif_step-cn:
 
     * **中文**
 
@@ -2499,7 +936,7 @@ def plif_single_step(
 
     ----
 
-    .. _plif_single_step-en:
+    .. _plif_step-en:
 
     * **English**
 
@@ -2525,12 +962,17 @@ def plif_single_step(
     :return: ``(spike, v_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
     """
-    v_charged = plif_charge(x, v, w, decay_input, v_reset)
-    spike = neuron_fire(v_charged, v_threshold, surrogate_function)
+    reciprocal_tau = w.sigmoid()
+    v_reset_value = 0.0 if v_reset is None else v_reset
+    if decay_input:
+        v_charged = v + (x - (v - v_reset_value)) * reciprocal_tau
+    else:
+        v_charged = v - (v - v_reset_value) * reciprocal_tau + x
+    spike = surrogate_function(v_charged - v_threshold)
     return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
-def plif_multi_step(
+def plif_scan_inductor(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     w: torch.Tensor,
@@ -2542,109 +984,11 @@ def plif_multi_step(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <plif_multi_step-cn>` | :ref:`English <plif_multi_step-en>`
+    **API Language** - :ref:`中文 <plif_scan_inductor-cn>` | :ref:`English <plif_scan_inductor-en>`
 
     ----
 
-    .. _plif_multi_step-cn:
-
-    * **中文**
-
-    执行 PLIF 多步状态转移，返回固定结构
-    ``(spike_seq, v_next, v_seq_or_none)``。``store_v_seq=False`` 时第三项为
-    ``None``。
-
-    :param x_seq: 输入序列张量，shape 通常为 ``[T, N, *]``
-    :type x_seq: torch.Tensor
-    :param v: 已物化的初始膜电位 tensor state
-    :type v: torch.Tensor
-    :param w: PLIF 的可学习参数
-    :type w: torch.Tensor
-    :param decay_input: 输入是否参与衰减
-    :type decay_input: bool
-    :param v_threshold: 脉冲阈值
-    :type v_threshold: float
-    :param v_reset: 重置电压；``None`` 表示 soft reset
-    :type v_reset: Optional[float]
-    :param surrogate_function: 当前执行路径使用的替代函数
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :param detach_reset: 是否分离 reset 分支中的 spike
-    :type detach_reset: bool
-    :param store_v_seq: 是否返回各时间步 reset 后的膜电位序列
-    :type store_v_seq: bool
-    :return: ``(spike_seq, v_next, v_seq_or_none)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
-
-    ----
-
-    .. _plif_multi_step-en:
-
-    * **English**
-
-    Run PLIF multi-step state transition and return the fixed structure
-    ``(spike_seq, v_next, v_seq_or_none)``. The third item is ``None`` when
-    ``store_v_seq=False``.
-
-    :param x_seq: Input sequence tensor, conventionally shaped ``[T, N, *]``
-    :type x_seq: torch.Tensor
-    :param v: Materialized initial membrane-voltage tensor state
-    :type v: torch.Tensor
-    :param w: Learnable PLIF parameter
-    :type w: torch.Tensor
-    :param decay_input: Whether the input participates in decay
-    :type decay_input: bool
-    :param v_threshold: Spike threshold
-    :type v_threshold: float
-    :param v_reset: Reset voltage; ``None`` means soft reset
-    :type v_reset: Optional[float]
-    :param surrogate_function: Surrogate function for the selected execution path
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :param detach_reset: Whether to detach spike in the reset branch
-    :type detach_reset: bool
-    :param store_v_seq: Whether to return the post-reset membrane voltage sequence
-    :type store_v_seq: bool
-    :return: ``(spike_seq, v_next, v_seq_or_none)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
-    """
-    spike_seq = []
-    v_seq = []
-    for t in range(x_seq.shape[0]):
-        spike, v = plif_single_step(
-            x_seq[t],
-            v,
-            w,
-            decay_input,
-            v_threshold,
-            v_reset,
-            surrogate_function,
-            detach_reset,
-        )
-        spike_seq.append(spike)
-        if store_v_seq:
-            v_seq.append(v)
-    stacked_spike_seq = torch.stack(spike_seq)
-    if store_v_seq:
-        return stacked_spike_seq, v, torch.stack(v_seq)
-    return stacked_spike_seq, v, None
-
-
-def plif_multi_step_inductor(
-    x_seq: torch.Tensor,
-    v: torch.Tensor,
-    w: torch.Tensor,
-    decay_input: bool,
-    v_threshold: float,
-    v_reset: Optional[float],
-    surrogate_function: SurrogateFunction,
-    detach_reset: bool = False,
-    store_v_seq: bool = False,
-) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
-    r"""
-    **API Language** - :ref:`中文 <plif_multi_step_inductor-cn>` | :ref:`English <plif_multi_step_inductor-en>`
-
-    ----
-
-    .. _plif_multi_step_inductor-cn:
+    .. _plif_scan_inductor-cn:
 
     * **中文**
 
@@ -2675,7 +1019,7 @@ def plif_multi_step_inductor(
 
     ----
 
-    .. _plif_multi_step_inductor-en:
+    .. _plif_scan_inductor-en:
 
     * **English**
 
@@ -2724,7 +1068,7 @@ def plif_multi_step_inductor(
             surrogate_key,
             inductor_cache.runtime_key(x_seq, v, reciprocal_tau),
         ),
-        inductor_cache._build_plif_multi_step_graph(
+        inductor_cache._build_plif_scan(
             decay_input,
             v_threshold,
             v_reset,
@@ -2733,12 +1077,292 @@ def plif_multi_step_inductor(
             store_v_seq,
         ),
     )
-    return _normalise_inductor_multi_step_output(
-        graph(x_seq, v, reciprocal_tau), store_v_seq
-    )
+    return _normalize_scan_output(graph(x_seq, v, reciprocal_tau), store_v_seq)
 
 
-def if_single_step_cupy(
+def izhikevich_step(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    w: torch.Tensor,
+    tau: float,
+    a0: float,
+    v_rest: float,
+    v_c: float,
+    tau_w: float,
+    a: float,
+    b: float,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <izhikevich_step-cn>` | :ref:`English <izhikevich_step-en>`
+
+    ----
+
+    .. _izhikevich_step-cn:
+
+    * **中文**
+
+    执行 Izhikevich 神经元的一次完整状态更新。
+
+    :param x: 当前输入张量，shape 为 ``[N, *]``
+    :type x: torch.Tensor
+    :param v: 当前膜电位
+    :type v: torch.Tensor
+    :param w: 当前适应电流
+    :type w: torch.Tensor
+    :param tau: 膜电位时间常数
+    :type tau: float
+    :param a0: 膜电位二次项系数
+    :type a0: float
+    :param v_rest: 静息电位
+    :type v_rest: float
+    :param v_c: 临界电位
+    :type v_c: float
+    :param tau_w: 适应电流时间常数
+    :type tau_w: float
+    :param a: 阈下耦合系数
+    :type a: float
+    :param b: 脉冲触发的适应电流增量
+    :type b: float
+    :param v_threshold: 放电阈值
+    :type v_threshold: float
+    :param v_reset: 重置电位；``None`` 表示 soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: 替代梯度函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否分离膜电位 reset 分支中的 spike
+    :type detach_reset: bool
+    :return: ``(spike, v_next, w_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+
+    ----
+
+    .. _izhikevich_step-en:
+
+    * **English**
+
+    Run one complete Izhikevich neuron state update.
+
+    :param x: Current input tensor shaped ``[N, *]``
+    :type x: torch.Tensor
+    :param v: Current membrane voltage
+    :type v: torch.Tensor
+    :param w: Current adaptation current
+    :type w: torch.Tensor
+    :param tau: Membrane time constant
+    :type tau: float
+    :param a0: Quadratic voltage coefficient
+    :type a0: float
+    :param v_rest: Resting voltage
+    :type v_rest: float
+    :param v_c: Critical voltage
+    :type v_c: float
+    :param tau_w: Adaptation-current time constant
+    :type tau_w: float
+    :param a: Subthreshold coupling coefficient
+    :type a: float
+    :param b: Spike-triggered adaptation increment
+    :type b: float
+    :param v_threshold: Firing threshold
+    :type v_threshold: float
+    :param v_reset: Reset voltage; ``None`` means soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: Surrogate-gradient function
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach spike in the voltage-reset branch
+    :type detach_reset: bool
+    :return: ``(spike, v_next, w_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    """
+    v_charged = v + (x + a0 * (v - v_rest) * (v - v_c) - w) / tau
+    w_next = w + (a * (v_charged - v_rest) - w) / tau_w
+    spike = surrogate_function(v_charged - v_threshold)
+    spike_d = spike.detach() if detach_reset else spike
+    if v_reset is None:
+        v_next = v_charged - spike_d * v_threshold
+    else:
+        v_next = (1.0 - spike_d) * v_charged + spike * v_reset
+    return spike, v_next, w_next + b * spike
+
+
+def klif_step(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    k: torch.Tensor,
+    tau: float,
+    decay_input: bool,
+    scale_reset: bool,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <klif_step-cn>` | :ref:`English <klif_step-en>`
+
+    ----
+
+    .. _klif_step-cn:
+
+    * **中文**
+
+    执行 KLIF 神经元的一次显式状态更新。
+
+    :param x: 当前输入张量，shape 为 ``[N, *]``
+    :type x: torch.Tensor
+    :param v: 当前膜电位
+    :type v: torch.Tensor
+    :param k: 可学习缩放参数
+    :type k: torch.Tensor
+    :param tau: 膜电位时间常数
+    :type tau: float
+    :param decay_input: 输入是否参与衰减
+    :type decay_input: bool
+    :param scale_reset: reset 是否在除以 ``k`` 后的电位域执行
+    :type scale_reset: bool
+    :param v_threshold: 放电阈值
+    :type v_threshold: float
+    :param v_reset: 重置电位；``None`` 表示 soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: 替代梯度函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否分离 reset 分支中的 spike
+    :type detach_reset: bool
+    :return: ``(spike, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+
+    ----
+
+    .. _klif_step-en:
+
+    * **English**
+
+    Run one explicit KLIF neuron state update.
+
+    :param x: Current input tensor shaped ``[N, *]``
+    :type x: torch.Tensor
+    :param v: Current membrane voltage
+    :type v: torch.Tensor
+    :param k: Learnable scaling parameter
+    :type k: torch.Tensor
+    :param tau: Membrane time constant
+    :type tau: float
+    :param decay_input: Whether the input participates in decay
+    :type decay_input: bool
+    :param scale_reset: Whether reset operates after dividing voltage by ``k``
+    :type scale_reset: bool
+    :param v_threshold: Firing threshold
+    :type v_threshold: float
+    :param v_reset: Reset voltage; ``None`` means soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: Surrogate-gradient function
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach spike in the reset branch
+    :type detach_reset: bool
+    :return: ``(spike, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    """
+    v_reset_value = 0.0 if v_reset is None else v_reset
+    if decay_input:
+        v_charged = v + (x - (v - v_reset_value)) / tau
+    else:
+        v_charged = v - (v - v_reset_value) / tau + x
+    v_charged = torch.relu(k * v_charged)
+    spike = surrogate_function(v_charged - v_threshold)
+    if scale_reset:
+        return spike, _reset(
+            v_charged / k,
+            spike,
+            v_threshold / k,
+            v_reset,
+            detach_reset,
+        )
+    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+
+
+def cuba_lif_step(
+    x: torch.Tensor,
+    current: torch.Tensor,
+    v: torch.Tensor,
+    current_decay: float,
+    voltage_decay: float,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <cuba_lif_step-cn>` | :ref:`English <cuba_lif_step-en>`
+
+    ----
+
+    .. _cuba_lif_step-cn:
+
+    * **中文**
+
+    执行 current-based LIF 神经元的一次显式状态更新。
+
+    :param x: 当前输入张量，shape 为 ``[N, *]``
+    :type x: torch.Tensor
+    :param current: 当前突触电流
+    :type current: torch.Tensor
+    :param v: 当前膜电位
+    :type v: torch.Tensor
+    :param current_decay: 突触电流衰减系数
+    :type current_decay: float
+    :param voltage_decay: 膜电位衰减系数
+    :type voltage_decay: float
+    :param v_threshold: 放电阈值
+    :type v_threshold: float
+    :param v_reset: 重置电位；``None`` 表示 soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: 替代梯度函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否分离 reset 分支中的 spike
+    :type detach_reset: bool
+    :return: ``(spike, current_next, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+
+    ----
+
+    .. _cuba_lif_step-en:
+
+    * **English**
+
+    Run one explicit current-based LIF neuron state update.
+
+    :param x: Current input tensor shaped ``[N, *]``
+    :type x: torch.Tensor
+    :param current: Current synaptic current
+    :type current: torch.Tensor
+    :param v: Current membrane voltage
+    :type v: torch.Tensor
+    :param current_decay: Synaptic-current decay
+    :type current_decay: float
+    :param voltage_decay: Membrane-voltage decay
+    :type voltage_decay: float
+    :param v_threshold: Firing threshold
+    :type v_threshold: float
+    :param v_reset: Reset voltage; ``None`` means soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: Surrogate-gradient function
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach spike in the reset branch
+    :type detach_reset: bool
+    :return: ``(spike, current_next, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    """
+    current_next = current * current_decay + x
+    v_charged = v * voltage_decay + current_next
+    spike = surrogate_function(v_charged - v_threshold)
+    v_next = _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return spike, current_next, v_next
+
+
+def if_step_cupy(
     x: torch.Tensor,
     v: torch.Tensor,
     v_threshold: float,
@@ -2747,11 +1371,11 @@ def if_single_step_cupy(
     backward_kernel: Any,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <if_single_step_cupy-cn>` | :ref:`English <if_single_step_cupy-en>`
+    **API Language** - :ref:`中文 <if_step_cupy-cn>` | :ref:`English <if_step_cupy-en>`
 
     ----
 
-    .. _if_single_step_cupy-cn:
+    .. _if_step_cupy-cn:
 
     * **中文**
 
@@ -2776,7 +1400,7 @@ def if_single_step_cupy(
 
     ----
 
-    .. _if_single_step_cupy-en:
+    .. _if_step_cupy-en:
 
     * **English**
 
@@ -2813,7 +1437,7 @@ def if_single_step_cupy(
     return spike.reshape_as(x), v_next.reshape_as(v)
 
 
-def lif_single_step_cupy(
+def lif_step_cupy(
     x: torch.Tensor,
     v: torch.Tensor,
     tau: float,
@@ -2823,11 +1447,11 @@ def lif_single_step_cupy(
     backward_kernel: Any,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <lif_single_step_cupy-cn>` | :ref:`English <lif_single_step_cupy-en>`
+    **API Language** - :ref:`中文 <lif_step_cupy-cn>` | :ref:`English <lif_step_cupy-en>`
 
     ----
 
-    .. _lif_single_step_cupy-cn:
+    .. _lif_step_cupy-cn:
 
     * **中文**
 
@@ -2854,7 +1478,7 @@ def lif_single_step_cupy(
 
     ----
 
-    .. _lif_single_step_cupy-en:
+    .. _lif_step_cupy-en:
 
     * **English**
 
@@ -2894,7 +1518,7 @@ def lif_single_step_cupy(
     return spike.reshape_as(x), v_next.reshape_as(v)
 
 
-def if_multi_step_cupy(
+def if_scan_cupy(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     v_threshold: float,
@@ -2904,11 +1528,11 @@ def if_multi_step_cupy(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <if_multi_step_cupy-cn>` | :ref:`English <if_multi_step_cupy-en>`
+    **API Language** - :ref:`中文 <if_scan_cupy-cn>` | :ref:`English <if_scan_cupy-en>`
 
     ----
 
-    .. _if_multi_step_cupy-cn:
+    .. _if_scan_cupy-cn:
 
     * **中文**
 
@@ -2933,7 +1557,7 @@ def if_multi_step_cupy(
 
     ----
 
-    .. _if_multi_step_cupy-en:
+    .. _if_scan_cupy-en:
 
     * **English**
 
@@ -2972,7 +1596,7 @@ def if_multi_step_cupy(
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
-def lif_multi_step_cupy(
+def lif_scan_cupy(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     tau: float,
@@ -2984,11 +1608,11 @@ def lif_multi_step_cupy(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <lif_multi_step_cupy-cn>` | :ref:`English <lif_multi_step_cupy-en>`
+    **API Language** - :ref:`中文 <lif_scan_cupy-cn>` | :ref:`English <lif_scan_cupy-en>`
 
     ----
 
-    .. _lif_multi_step_cupy-cn:
+    .. _lif_scan_cupy-cn:
 
     * **中文**
 
@@ -3017,7 +1641,7 @@ def lif_multi_step_cupy(
 
     ----
 
-    .. _lif_multi_step_cupy-en:
+    .. _lif_scan_cupy-en:
 
     * **English**
 
@@ -3062,7 +1686,7 @@ def lif_multi_step_cupy(
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
-def plif_multi_step_cupy(
+def plif_scan_cupy(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     w: torch.Tensor,
@@ -3074,11 +1698,11 @@ def plif_multi_step_cupy(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <plif_multi_step_cupy-cn>` | :ref:`English <plif_multi_step_cupy-en>`
+    **API Language** - :ref:`中文 <plif_scan_cupy-cn>` | :ref:`English <plif_scan_cupy-en>`
 
     ----
 
-    .. _plif_multi_step_cupy-cn:
+    .. _plif_scan_cupy-cn:
 
     * **中文**
 
@@ -3107,7 +1731,7 @@ def plif_multi_step_cupy(
 
     ----
 
-    .. _plif_multi_step_cupy-en:
+    .. _plif_scan_cupy-en:
 
     * **English**
 
@@ -3152,7 +1776,7 @@ def plif_multi_step_cupy(
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
-def qif_multi_step_cupy(
+def qif_scan_cupy(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     tau: float,
@@ -3166,11 +1790,11 @@ def qif_multi_step_cupy(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <qif_multi_step_cupy-cn>` | :ref:`English <qif_multi_step_cupy-en>`
+    **API Language** - :ref:`中文 <qif_scan_cupy-cn>` | :ref:`English <qif_scan_cupy-en>`
 
     ----
 
-    .. _qif_multi_step_cupy-cn:
+    .. _qif_scan_cupy-cn:
 
     * **中文**
 
@@ -3204,7 +1828,7 @@ def qif_multi_step_cupy(
 
     ----
 
-    .. _qif_multi_step_cupy-en:
+    .. _qif_scan_cupy-en:
 
     * **English**
 
@@ -3256,7 +1880,7 @@ def qif_multi_step_cupy(
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
-def eif_multi_step_cupy(
+def eif_scan_cupy(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     tau: float,
@@ -3270,11 +1894,11 @@ def eif_multi_step_cupy(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <eif_multi_step_cupy-cn>` | :ref:`English <eif_multi_step_cupy-en>`
+    **API Language** - :ref:`中文 <eif_scan_cupy-cn>` | :ref:`English <eif_scan_cupy-en>`
 
     ----
 
-    .. _eif_multi_step_cupy-cn:
+    .. _eif_scan_cupy-cn:
 
     * **中文**
 
@@ -3308,7 +1932,7 @@ def eif_multi_step_cupy(
 
     ----
 
-    .. _eif_multi_step_cupy-en:
+    .. _eif_scan_cupy-en:
 
     * **English**
 
@@ -3360,7 +1984,7 @@ def eif_multi_step_cupy(
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
-def izhikevich_multi_step_cupy(
+def izhikevich_scan_cupy(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     w: torch.Tensor,
@@ -3384,11 +2008,11 @@ def izhikevich_multi_step_cupy(
     Optional[torch.Tensor],
 ]:
     r"""
-    **API Language** - :ref:`中文 <izhikevich_multi_step_cupy-cn>` | :ref:`English <izhikevich_multi_step_cupy-en>`
+    **API Language** - :ref:`中文 <izhikevich_scan_cupy-cn>` | :ref:`English <izhikevich_scan_cupy-en>`
 
     ----
 
-    .. _izhikevich_multi_step_cupy-cn:
+    .. _izhikevich_scan_cupy-cn:
 
     * **中文**
 
@@ -3430,7 +2054,7 @@ def izhikevich_multi_step_cupy(
 
     ----
 
-    .. _izhikevich_multi_step_cupy-en:
+    .. _izhikevich_scan_cupy-en:
 
     * **English**
 
@@ -3501,7 +2125,7 @@ def izhikevich_multi_step_cupy(
     )
 
 
-def if_multi_step_triton(
+def if_scan_triton(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     v_threshold: float,
@@ -3511,11 +2135,11 @@ def if_multi_step_triton(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <if_multi_step_triton-cn>` | :ref:`English <if_multi_step_triton-en>`
+    **API Language** - :ref:`中文 <if_scan_triton-cn>` | :ref:`English <if_scan_triton-en>`
 
     ----
 
-    .. _if_multi_step_triton-cn:
+    .. _if_scan_triton-cn:
 
     * **中文**
 
@@ -3540,7 +2164,7 @@ def if_multi_step_triton(
 
     ----
 
-    .. _if_multi_step_triton-en:
+    .. _if_scan_triton-en:
 
     * **English**
 
@@ -3580,7 +2204,7 @@ def if_multi_step_triton(
     return spike_seq, voltage, None
 
 
-def lif_multi_step_triton(
+def lif_scan_triton(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     tau: float,
@@ -3592,11 +2216,11 @@ def lif_multi_step_triton(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <lif_multi_step_triton-cn>` | :ref:`English <lif_multi_step_triton-en>`
+    **API Language** - :ref:`中文 <lif_scan_triton-cn>` | :ref:`English <lif_scan_triton-en>`
 
     ----
 
-    .. _lif_multi_step_triton-cn:
+    .. _lif_scan_triton-cn:
 
     * **中文**
 
@@ -3625,7 +2249,7 @@ def lif_multi_step_triton(
 
     ----
 
-    .. _lif_multi_step_triton-en:
+    .. _lif_scan_triton-en:
 
     * **English**
 
@@ -3671,7 +2295,7 @@ def lif_multi_step_triton(
     return spike_seq, voltage, None
 
 
-def plif_multi_step_triton(
+def plif_scan_triton(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     w: torch.Tensor,
@@ -3683,11 +2307,11 @@ def plif_multi_step_triton(
     store_v_seq: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    **API Language** - :ref:`中文 <plif_multi_step_triton-cn>` | :ref:`English <plif_multi_step_triton-en>`
+    **API Language** - :ref:`中文 <plif_scan_triton-cn>` | :ref:`English <plif_scan_triton-en>`
 
     ----
 
-    .. _plif_multi_step_triton-cn:
+    .. _plif_scan_triton-cn:
 
     * **中文**
 
@@ -3716,7 +2340,7 @@ def plif_multi_step_triton(
 
     ----
 
-    .. _plif_multi_step_triton-en:
+    .. _plif_scan_triton-en:
 
     * **English**
 
@@ -3759,167 +2383,7 @@ def plif_multi_step_triton(
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
-def masked_psn_advance_queue(
-    x: torch.Tensor,
-    queue: tuple[torch.Tensor, ...],
-    k: int,
-) -> tuple[torch.Tensor, ...]:
-    r"""
-    **API Language** - :ref:`中文 <masked_psn_advance_queue-cn>` | :ref:`English <masked_psn_advance_queue-en>`
-
-    ----
-
-    .. _masked_psn_advance_queue-cn:
-
-    * **中文**
-
-    执行 ``MaskedPSN`` 单步路径中的 queue 推进：追加 ``x.flatten()``，当长度超过
-    ``k`` 时弹出最旧元素。函数不原地修改传入 queue。该步骤与 overflow 检查分离，
-    以允许 module 保持“先更新 queue，再抛 ``OverflowError``”的既有异常副作用。
-
-    :param x: 当前输入张量
-    :type x: torch.Tensor
-    :param queue: 旧 queue state，元素按旧到新排列
-    :type queue: tuple[torch.Tensor, ...]
-    :param k: queue 最大长度
-    :type k: int
-    :return: 推进后的 queue state
-    :rtype: tuple[torch.Tensor, ...]
-
-    ----
-
-    .. _masked_psn_advance_queue-en:
-
-    * **English**
-
-    Advance the queue in the ``MaskedPSN`` single-step path: append
-    ``x.flatten()`` and pop the oldest item when the length exceeds ``k``. The
-    function does not mutate the input queue. This step is separated from the
-    overflow check so the module can preserve its existing side effect of
-    updating the queue before raising ``OverflowError``.
-
-    :param x: Current input tensor
-    :type x: torch.Tensor
-    :param queue: Previous queue state ordered from oldest to newest
-    :type queue: tuple[torch.Tensor, ...]
-    :param k: Maximum queue length
-    :type k: int
-    :return: Advanced queue state
-    :rtype: tuple[torch.Tensor, ...]
-    """
-    queue_next = (*queue, x.flatten())
-    if len(queue_next) > k:
-        queue_next = queue_next[1:]
-    return queue_next
-
-
-def masked_psn_single_step_from_queue(
-    x_shape: torch.Size,
-    queue: tuple[torch.Tensor, ...],
-    time_step: int,
-    T: int,
-    lambda_: torch.Tensor,
-    mask0: torch.Tensor,
-    mask1: torch.Tensor,
-    weight: torch.Tensor,
-    bias: torch.Tensor,
-    surrogate_function: SurrogateFunction,
-) -> tuple[torch.Tensor, int]:
-    r"""
-    **API Language** - :ref:`中文 <masked_psn_single_step_from_queue-cn>` | :ref:`English <masked_psn_single_step_from_queue-en>`
-
-    ----
-
-    .. _masked_psn_single_step_from_queue-cn:
-
-    * **中文**
-
-    使用已经推进后的 ``MaskedPSN`` queue 和当前 ``time_step`` 计算单步脉冲，并返回
-    更新后的时间索引。函数不修改 queue，不读取 module memory，不判断
-    ``training/eval``。若 ``time_step + 1 > T``，按既有 module 语义抛
-    ``OverflowError``。
-
-    :param x_shape: 当前输入的原始 shape，用于恢复输出 shape
-    :type x_shape: torch.Size
-    :param queue: 已推进后的 queue state
-    :type queue: tuple[torch.Tensor, ...]
-    :param time_step: 当前 Python 时间索引
-    :type time_step: int
-    :param T: 最大时间步数
-    :type T: int
-    :param lambda_: progressive mask 系数
-    :type lambda_: torch.Tensor
-    :param mask0: 局部 mask
-    :type mask0: torch.Tensor
-    :param mask1: 全连接 mask
-    :type mask1: torch.Tensor
-    :param weight: ``MaskedPSN`` 权重，shape 为 ``[T, T]``
-    :type weight: torch.Tensor
-    :param bias: ``MaskedPSN`` bias，shape 为 ``[T, 1]``
-    :type bias: torch.Tensor
-    :param surrogate_function: 作用于膜电位的替代函数
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(spike, time_step_next)``
-    :rtype: tuple[torch.Tensor, int]
-    :raises OverflowError: 当 ``time_step + 1 > T`` 时抛出
-
-    ----
-
-    .. _masked_psn_single_step_from_queue-en:
-
-    * **English**
-
-    Compute one ``MaskedPSN`` spike from an already advanced queue and the current
-    ``time_step``, then return the updated time index. The function does not
-    mutate the queue, read module memory, or inspect ``training/eval``. It raises
-    ``OverflowError`` when ``time_step + 1 > T``, matching the existing module
-    semantics.
-
-    :param x_shape: Original current-input shape used to restore output shape
-    :type x_shape: torch.Size
-    :param queue: Already advanced queue state
-    :type queue: tuple[torch.Tensor, ...]
-    :param time_step: Current Python time index
-    :type time_step: int
-    :param T: Maximum number of time steps
-    :type T: int
-    :param lambda_: Progressive-mask coefficient
-    :type lambda_: torch.Tensor
-    :param mask0: Local mask
-    :type mask0: torch.Tensor
-    :param mask1: Dense mask
-    :type mask1: torch.Tensor
-    :param weight: ``MaskedPSN`` weight shaped ``[T, T]``
-    :type weight: torch.Tensor
-    :param bias: ``MaskedPSN`` bias shaped ``[T, 1]``
-    :type bias: torch.Tensor
-    :param surrogate_function: Surrogate function applied to membrane potential
-    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(spike, time_step_next)``
-    :rtype: tuple[torch.Tensor, int]
-    :raises OverflowError: Raised when ``time_step + 1 > T``
-    """
-    if time_step + 1 > T:
-        raise OverflowError(f"The MaskedPSN(T={T}) has run {time_step + 1} time-steps!")
-
-    if lambda_ >= 1.0:
-        masked_weight = weight * mask0
-    else:
-        masked_weight = (lambda_ * mask0 + (1.0 - lambda_) * mask1) * weight
-
-    weight_step = masked_weight[
-        time_step,
-        time_step + 1 - len(queue) : time_step + 1,
-    ]
-    x_seq = torch.stack(queue)
-    for _ in range(len(x_shape)):
-        weight_step = weight_step.unsqueeze(-1)
-    h = torch.sum(weight_step * x_seq, 0)
-    spike = surrogate_function(h + bias[time_step])
-    return spike.view(x_shape), time_step + 1
-
-
-def sliding_psn_single_step(
+def sliding_psn_step(
     x: torch.Tensor,
     queue: tuple[torch.Tensor, ...],
     weight: torch.Tensor,
@@ -3927,11 +2391,11 @@ def sliding_psn_single_step(
     surrogate_function: SurrogateFunction,
 ) -> tuple[torch.Tensor, tuple[torch.Tensor, ...]]:
     r"""
-    **API Language** - :ref:`中文 <sliding_psn_single_step-cn>` | :ref:`English <sliding_psn_single_step-en>`
+    **API Language** - :ref:`中文 <sliding_psn_step-cn>` | :ref:`English <sliding_psn_step-en>`
 
     ----
 
-    .. _sliding_psn_single_step-cn:
+    .. _sliding_psn_step-cn:
 
     * **中文**
 
@@ -3959,7 +2423,7 @@ def sliding_psn_single_step(
 
     ----
 
-    .. _sliding_psn_single_step-en:
+    .. _sliding_psn_step-en:
 
     * **English**
 
@@ -4001,7 +2465,7 @@ def sliding_psn_single_step(
     return spike.view(x.shape), queue_next
 
 
-def gated_lif_multi_step(
+def gated_lif_scan(
     x_seq: torch.Tensor,
     v: torch.Tensor,
     time_steps: int,
@@ -4016,11 +2480,11 @@ def gated_lif_multi_step(
     surrogate_function: SurrogateFunction,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <gated_lif_multi_step-cn>` | :ref:`English <gated_lif_multi_step-en>`
+    **API Language** - :ref:`中文 <gated_lif_scan-cn>` | :ref:`English <gated_lif_scan-en>`
 
     ----
 
-    .. _gated_lif_multi_step-cn:
+    .. _gated_lif_scan-cn:
 
     * **中文**
 
@@ -4063,7 +2527,7 @@ def gated_lif_multi_step(
 
     ----
 
-    .. _gated_lif_multi_step-en:
+    .. _gated_lif_scan-en:
 
     * **English**
 
@@ -4157,7 +2621,7 @@ def _stbif_step(
     return cur_output_next * q_threshold, q_next, acc_q_next, cur_output_next
 
 
-def stbif_single_step(
+def stbif_step(
     x: torch.Tensor,
     q: torch.Tensor,
     acc_q: torch.Tensor,
@@ -4166,11 +2630,11 @@ def stbif_single_step(
     neg_min: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, bool]:
     r"""
-    **API Language** - :ref:`中文 <stbif_single_step-cn>` | :ref:`English <stbif_single_step-en>`
+    **API Language** - :ref:`中文 <stbif_step-cn>` | :ref:`English <stbif_step-en>`
 
     ----
 
-    .. _stbif_single_step-cn:
+    .. _stbif_step-cn:
 
     * **中文**
 
@@ -4202,7 +2666,7 @@ def stbif_single_step(
 
     ----
 
-    .. _stbif_single_step-en:
+    .. _stbif_step-en:
 
     * **English**
 
@@ -4242,7 +2706,7 @@ def stbif_single_step(
     return out, q_next, acc_q_next, cur_output_next, is_work
 
 
-def stbif_multi_step_torch(
+def stbif_scan_torch(
     x_seq: torch.Tensor,
     q: torch.Tensor,
     acc_q: torch.Tensor,
@@ -4251,11 +2715,11 @@ def stbif_multi_step_torch(
     neg_min: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, bool]:
     r"""
-    **API Language** - :ref:`中文 <stbif_multi_step_torch-cn>` | :ref:`English <stbif_multi_step_torch-en>`
+    **API Language** - :ref:`中文 <stbif_scan_torch-cn>` | :ref:`English <stbif_scan_torch-en>`
 
     ----
 
-    .. _stbif_multi_step_torch-cn:
+    .. _stbif_scan_torch-cn:
 
     * **中文**
 
@@ -4281,7 +2745,7 @@ def stbif_multi_step_torch(
 
     ----
 
-    .. _stbif_multi_step_torch-en:
+    .. _stbif_scan_torch-en:
 
     * **English**
 

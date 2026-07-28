@@ -152,7 +152,7 @@ class STBIFNeuron(base.MemoryModule):
         pos_max = self.pos_max.to(dtype=x.dtype)
         neg_min = self.neg_min.to(dtype=x.dtype)
         out, self.q, self.acc_q, cur_output, self.is_work = (
-            functional.stbif_single_step(
+            functional.stbif_step(
                 x, self.q, self.acc_q, q_threshold, pos_max, neg_min
             )
         )
@@ -170,7 +170,7 @@ class STBIFNeuron(base.MemoryModule):
         neg_min = self.neg_min.to(dtype=x_seq.dtype)
         self._init_state(x_seq[0])
         out_seq, self.q, self.acc_q, self.cur_output, self.is_work = (
-            functional.stbif_multi_step_torch(
+            functional.stbif_scan_torch(
                 x_seq, self.q, self.acc_q, q_threshold, pos_max, neg_min
             )
         )
