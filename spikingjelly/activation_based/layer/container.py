@@ -270,9 +270,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
     def single_step_forward(self, x: Tensor):
         if self.y is None:
             self.y = torch.zeros_like(x.data)
-        self.y = functional.element_wise_recurrent_single_step(
-            x, self.y, self.element_wise_function, self.sub_module
-        )
+        self.y = self.sub_module(self.element_wise_function(self.y, x))
         return self.y
 
     def extra_repr(self) -> str:
@@ -407,9 +405,7 @@ class LinearRecurrentContainer(base.MemoryModule):
                 out_shape.extend(x.shape[1:-1])
                 out_shape.append(self.sub_module_out_features)
                 self.y = torch.zeros(out_shape).to(x)
-        self.y = functional.linear_recurrent_single_step(
-            x, self.y, self.rc, self.sub_module
-        )
+        self.y = self.sub_module(self.rc(torch.cat((x, self.y), dim=-1)))
         return self.y
 
     def extra_repr(self) -> str:

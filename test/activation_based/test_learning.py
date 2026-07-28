@@ -394,25 +394,16 @@ def test_functional_learning_conv_helpers_match_legacy_helpers():
         assert torch.allclose(a, b)
 
 
-def test_functional_learning_reward_helpers_use_explicit_tensor_state():
-    reward = torch.tensor([1.0, -0.5])
-    eligibility = torch.arange(12, dtype=torch.float32).view(2, 3, 2)
-    dw = functional.mstdp_reward_delta(reward, eligibility)
-    assert torch.allclose(dw, (reward.view(-1, 1, 1) * eligibility).sum(0))
-
-    zero_eligibility = torch.zeros_like(eligibility)
-    dw0 = functional.mstdp_reward_delta(reward, zero_eligibility)
-    assert torch.equal(dw0, torch.zeros(3, 2))
-
+def test_mstdpet_reward_delta_uses_explicit_tensor_state():
+    eligibility = torch.arange(6, dtype=torch.float32).view(3, 2)
     trace_e = torch.ones(3, 2)
-    eligibility_et = eligibility[0]
     dw, trace_e_next = functional.mstdpet_reward_delta(
         0.25,
-        eligibility_et,
+        eligibility,
         trace_e,
         tau_trace=2.0,
     )
-    expected_trace = trace_e * torch.exp(torch.tensor(-0.5)) + eligibility_et / 2.0
+    expected_trace = trace_e * torch.exp(torch.tensor(-0.5)) + eligibility / 2.0
     assert torch.allclose(trace_e_next, expected_trace)
     assert torch.allclose(dw, 0.25 * expected_trace)
 
@@ -448,6 +439,6 @@ if __name__ == "__main__":
     test_mstdp_learners_free_tensors_with_graph_connected_reward()
     test_functional_learning_linear_helpers_match_legacy_helpers()
     test_functional_learning_conv_helpers_match_legacy_helpers()
-    test_functional_learning_reward_helpers_use_explicit_tensor_state()
+    test_mstdpet_reward_delta_uses_explicit_tensor_state()
     test_stdp_multi_step_preserves_empty_sequence_state()
     print("Done!")

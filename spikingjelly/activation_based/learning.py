@@ -1176,7 +1176,7 @@ class MSTDPLearner(base.MemoryModule):
                     *self.synapse.weight.shape,
                     device=self.synapse.weight.device,
                 )
-            dw = functional_learning.mstdp_reward_delta(reward, self.eligibility)
+            dw = (reward.view(-1, 1, 1) * self.eligibility).sum(0)
 
             if scale != 1.0:
                 dw *= scale

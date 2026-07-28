@@ -163,12 +163,8 @@ dispatch.
      - Single-step Lava-compatible CUBA-LIF state transition.
    * - :func:`lava_cuba_lif_multi_step <spikingjelly.activation_based.functional.neuron.lava_cuba_lif_multi_step>`
      - Multi-step Lava-compatible CUBA-LIF state transition.
-   * - :func:`liaf_output <spikingjelly.activation_based.functional.neuron.liaf_output>`
-     - LIAF analog output equation.
    * - :func:`mpbn_fire <spikingjelly.activation_based.functional.neuron.mpbn_fire>`
      - MPBN firing and residual-normalization path.
-   * - :func:`online_lif_charge <spikingjelly.activation_based.functional.neuron.online_lif_charge>`
-     - LIF charge equation for OTTT/SLTT training paths with detached previous voltage.
    * - :func:`ottt_trace_update <spikingjelly.activation_based.functional.neuron.ottt_trace_update>`
      - OTTT trace update under ``torch.no_grad()``.
    * - :func:`activation_aware_if_single_step <spikingjelly.activation_based.functional.neuron.activation_aware_if_single_step>`
@@ -210,12 +206,6 @@ They do not read implicit ``MemoryModule`` memory.
 
    * - :func:`delay_single_step <spikingjelly.activation_based.functional.layer.delay_single_step>`
      - Single-step Delay queue state transition.
-   * - :func:`element_wise_recurrent_single_step <spikingjelly.activation_based.functional.layer.element_wise_recurrent_single_step>`
-     - Single-step ElementWiseRecurrentContainer state transition.
-   * - :func:`linear_recurrent_single_step <spikingjelly.activation_based.functional.layer.linear_recurrent_single_step>`
-     - Single-step LinearRecurrentContainer state transition.
-   * - :func:`batch_norm_through_time_single_step <spikingjelly.activation_based.functional.layer.batch_norm_through_time_single_step>`
-     - Single-step BatchNormThroughTime time-state transition.
    * - :func:`neunorm_single_step <spikingjelly.activation_based.functional.layer.neunorm_single_step>`
      - Single-step NeuNorm state transition.
    * - :func:`synapse_filter_single_step <spikingjelly.activation_based.functional.layer.synapse_filter_single_step>`
@@ -226,22 +216,20 @@ They do not read implicit ``MemoryModule`` memory.
 
    layer <spikingjelly.activation_based.functional.layer>
 
-Encoder State Transition Functions
-+++++++++++++++++++++++++++++++++++
+Encoder Functions
++++++++++++++++++
 
-这些函数显式接收并返回 encoder 的局部状态，不读取 ``MemoryModule`` 的隐式 memory。
+这些函数实现可独立复用的编码公式，不读取 ``MemoryModule`` 的隐式 memory。
 
 ----
 
-These functions receive and return local encoder state explicitly. They do not
-read implicit ``MemoryModule`` memory.
+These functions implement independently reusable encoding formulas without
+reading implicit ``MemoryModule`` memory.
 
 .. list-table::
 
    * - :func:`latency_encode <spikingjelly.activation_based.functional.encoding.latency_encode>`
      - Stateless LatencyEncoder spike-sequence generation.
-   * - :func:`stateful_encoder_single_step <spikingjelly.activation_based.functional.encoding.stateful_encoder_single_step>`
-     - Single-step StatefulEncoder time-state transition.
    * - :func:`weighted_phase_encode <spikingjelly.activation_based.functional.encoding.weighted_phase_encode>`
      - Stateless WeightedPhaseEncoder spike-sequence generation.
 
@@ -253,16 +241,16 @@ read implicit ``MemoryModule`` memory.
 ANN-to-SNN Functional Helpers
 +++++++++++++++++++++++++++++
 
-这些函数实现 STA 和 SpikeZIP 中具有独立状态转移语义的叶子运算。TD operator
+这些函数实现 STA 和 SpikeZIP 中可独立复用的状态转移或数值规则。TD operator
 本身是围绕可替换 ``ann_forward`` 的状态适配器，不为其 ANN 数值路径提供冗余的
 函数式包装。
 
 ----
 
-These functions implement leaf operations with independent state-transition
-semantics in STA and SpikeZIP. TD operators are state adapters around a
-replaceable ``ann_forward`` and therefore do not expose redundant functional
-wrappers for their ANN numeric paths.
+These functions implement independently reusable state transitions or numeric
+rules in STA and SpikeZIP. TD operators are state adapters around a replaceable
+``ann_forward`` and therefore do not expose redundant functional wrappers for
+their ANN numeric paths.
 
 .. list-table::
 
@@ -270,20 +258,12 @@ wrappers for their ANN numeric paths.
      - SpikeZIP attention single-step matmul delta.
    * - :func:`spikezip_matmul_sequence_delta <spikingjelly.activation_based.functional.ann2snn.spikezip_matmul_sequence_delta>`
      - SpikeZIP attention multi-step matmul delta.
-   * - :func:`spikezip_embedding_single_step <spikingjelly.activation_based.functional.ann2snn.spikezip_embedding_single_step>`
-     - SpikeZIP embedding single-step time-state transition.
-   * - :func:`spikezip_embedding_multi_step <spikingjelly.activation_based.functional.ann2snn.spikezip_embedding_multi_step>`
-     - SpikeZIP embedding multi-step time-state transition.
    * - :func:`spikezip_release_bias_single_step <spikingjelly.activation_based.functional.ann2snn.spikezip_release_bias_single_step>`
      - SpikeZIP bias single-step release.
    * - :func:`spikezip_release_bias_multi_step <spikingjelly.activation_based.functional.ann2snn.spikezip_release_bias_multi_step>`
      - SpikeZIP bias multi-step release.
    * - :func:`sta_spike_encoder_single_step <spikingjelly.activation_based.functional.ann2snn.sta_spike_encoder_single_step>`
      - Single-step STA spike encoder residual-state transition.
-   * - :func:`sta_constant_single_step <spikingjelly.activation_based.functional.ann2snn.sta_constant_single_step>`
-     - Single-step STA constant time-state transition.
-   * - :func:`sta_constant_multi_step <spikingjelly.activation_based.functional.ann2snn.sta_constant_multi_step>`
-     - Multi-step STA constant time-state transition.
 
 .. toctree::
    :hidden:
@@ -340,8 +320,6 @@ memory, and do not manage ``step_mode``, ``training/eval``, or gradient writes.
      - Tensor-only linear mSTDP eligibility update.
    * - :func:`mstdpet_linear_single_step <spikingjelly.activation_based.functional.learning.mstdpet_linear_single_step>`
      - Tensor-only linear mSTDP-ET eligibility update.
-   * - :func:`mstdp_reward_delta <spikingjelly.activation_based.functional.learning.mstdp_reward_delta>`
-     - Reward modulation for mSTDP eligibility.
    * - :func:`mstdpet_reward_delta <spikingjelly.activation_based.functional.learning.mstdpet_reward_delta>`
      - Eligibility-trace decay and reward modulation for mSTDP-ET.
 

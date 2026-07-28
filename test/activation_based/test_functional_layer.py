@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 
 from spikingjelly.activation_based import functional, layer
+from spikingjelly.activation_based.layer import bn as layer_bn
 from spikingjelly.activation_based.functional import (
     forward,
     layer as functional_layer,
@@ -105,7 +106,7 @@ def test_delay_multi_step_does_not_consume_single_step_queue():
     assert module.queue == [queued]
 
 
-def test_element_wise_recurrent_single_step_matches_module_and_gradients():
+def test_element_wise_recurrent_module_matches_reference_and_gradients():
     torch.manual_seed(11)
     x = torch.randn(2, 3, requires_grad=True)
     y = torch.randn(2, 3, requires_grad=True)
@@ -128,9 +129,7 @@ def test_element_wise_recurrent_single_step_matches_module_and_gradients():
 
     x_func = x.detach().clone().requires_grad_()
     y_func = y.detach().clone().requires_grad_()
-    out_func = functional.element_wise_recurrent_single_step(
-        x_func, y_func, element_wise_function, func_sub
-    )
+    out_func = func_sub(element_wise_function(y_func, x_func))
     out_func.sum().backward()
 
     _assert_close(out_func, out_module)
@@ -154,22 +153,8 @@ def test_element_wise_recurrent_module_materializes_none_state_before_functional
     _assert_close(module.y, x)
 
 
-def test_element_wise_recurrent_single_step_does_not_mutate_input_or_state():
-    x = torch.randn(2, 3)
-    y = torch.randn(2, 3)
-    x_before = x.clone()
-    y_before = y.clone()
-
-    functional.element_wise_recurrent_single_step(
-        x, y, lambda y_state, x_input: y_state + x_input, nn.Identity()
-    )
-
-    assert torch.equal(x, x_before)
-    assert torch.equal(y, y_before)
-
-
 @pytest.mark.parametrize("bias", [False, True])
-def test_linear_recurrent_single_step_matches_module_and_gradients(bias):
+def test_linear_recurrent_module_matches_reference_and_gradients(bias):
     torch.manual_seed(12)
     x = torch.randn(2, 3, requires_grad=True)
     y = torch.randn(2, 2, requires_grad=True)
@@ -189,9 +174,7 @@ def test_linear_recurrent_single_step_matches_module_and_gradients(bias):
     y_func = y.detach().clone().requires_grad_()
     recurrent_func = nn.Linear(5, 3, bias=bias)
     recurrent_func.load_state_dict(module.rc.state_dict())
-    out_func = functional.linear_recurrent_single_step(
-        x_func, y_func, recurrent_func, func_sub
-    )
+    out_func = func_sub(recurrent_func(torch.cat((x_func, y_func), dim=-1)))
     out_func.sum().backward()
 
     _assert_close(out_func, out_module)
@@ -215,23 +198,6 @@ def test_linear_recurrent_module_materializes_none_state_before_functional_updat
     _assert_close(out, x)
     assert module.y.shape == x.shape
     _assert_close(module.y, x)
-
-
-def test_linear_recurrent_single_step_does_not_mutate_input_or_state():
-    x = torch.randn(2, 3)
-    y = torch.randn(2, 2)
-    x_before = x.clone()
-    y_before = y.clone()
-
-    functional.linear_recurrent_single_step(
-        x,
-        y,
-        nn.Linear(5, 3),
-        nn.Identity(),
-    )
-
-    assert torch.equal(x, x_before)
-    assert torch.equal(y, y_before)
 
 
 def test_linear_recurrent_module_preserves_recurrent_module_hooks():
@@ -323,27 +289,30 @@ class _ScaleModule(nn.Module):
         return x * self.scale
 
 
-def test_batch_norm_through_time_single_step_selects_next_module_and_time():
+def test_batch_norm_through_time_selects_next_module_and_time():
     x = torch.randn(2, 3)
-    bn_modules = nn.ModuleList([_ScaleModule(2.0), _ScaleModule(3.0)])
+    module = layer.BatchNormThroughTime1d(T=2, num_features=3)
+    module.bn_list = nn.ModuleList([_ScaleModule(2.0), _ScaleModule(3.0)])
 
-    out0, t0 = functional.batch_norm_through_time_single_step(x, -1, bn_modules)
-    out1, t1 = functional.batch_norm_through_time_single_step(x, t0, bn_modules)
+    out0 = module(x)
+    out1 = module(x)
 
     _assert_close(out0, x * 2.0)
-    assert t0 == 0
     _assert_close(out1, x * 3.0)
-    assert t1 == 1
+    assert module.t == 1
 
 
-def test_batch_norm_through_time_single_step_preserves_existing_overflow_error():
+def test_batch_norm_through_time_preserves_existing_overflow_error():
+    module = layer.BatchNormThroughTime1d(T=2, num_features=3)
+    module.t = 1
+
     with pytest.raises(IndexError):
-        functional.batch_norm_through_time_single_step(
-            torch.randn(2, 3), 1, nn.ModuleList([nn.Identity(), nn.Identity()])
-        )
+        module(torch.randn(2, 3))
+
+    assert module.t == 2
 
 
-def test_batch_norm_through_time_single_step_restores_track_running_stats_on_error():
+def test_batch_norm_through_time_restores_track_running_stats_on_error(monkeypatch):
     class RaisingBN(nn.Module):
         def __init__(self):
             super().__init__()
@@ -352,17 +321,14 @@ def test_batch_norm_through_time_single_step_restores_track_running_stats_on_err
         def forward(self, x):
             raise RuntimeError("boom")
 
-    bn = RaisingBN()
+    module = layer.BatchNormThroughTime1d(T=1, num_features=3)
+    module.bn_list[0] = RaisingBN()
+    monkeypatch.setattr(layer_bn, "in_gc_1st_forward", lambda: True)
 
     with pytest.raises(RuntimeError, match="boom"):
-        functional.batch_norm_through_time_single_step(
-            torch.randn(2, 3),
-            -1,
-            nn.ModuleList([bn]),
-            disable_running_stats=True,
-        )
+        module(torch.randn(2, 3))
 
-    assert bn.track_running_stats is True
+    assert module.bn_list[0].track_running_stats is True
 
 
 @pytest.mark.parametrize(

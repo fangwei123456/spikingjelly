@@ -1079,6 +1079,7 @@ def test_spikezip_embedding_single_step_zero_shape_tracks_current_input():
 
     assert y.shape == (1, 2, 5)
     assert torch.count_nonzero(y) == 0
+    assert spike.t == 1
 
 
 def test_spikezip_recipe_infers_attention_level_from_quantizer_bounds():

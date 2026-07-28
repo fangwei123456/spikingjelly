@@ -13,7 +13,6 @@ __all__ = [
     "mstdpet_linear_single_step",
     "stdp_conv1d_single_step",
     "stdp_conv2d_single_step",
-    "mstdp_reward_delta",
     "mstdpet_reward_delta",
 ]
 
@@ -581,49 +580,6 @@ def stdp_conv1d_single_step(
         ).permute([1, 2, 0, 3]).sum(dim=[2, 3])
         delta_w[:, :, l] += delta_w_pre + delta_w_post
     return delta_w, trace_pre, trace_post
-
-
-def mstdp_reward_delta(
-    reward: torch.Tensor,
-    eligibility: torch.Tensor,
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <functional_mstdp_reward_delta-cn>` | :ref:`English <functional_mstdp_reward_delta-en>`
-
-    ----
-
-    .. _functional_mstdp_reward_delta-cn:
-
-    * **中文**
-
-    将 mSTDP reward 与当前已物化的 eligibility 相乘并在 batch 维求和。函数不执行
-    reward detach；detach 由 Learner 在调用前完成。
-
-    :param reward: 每个样本的 reward
-    :type reward: torch.Tensor
-    :param eligibility: 已物化的每样本 eligibility tensor
-    :type eligibility: torch.Tensor
-    :return: batch 维归约后的权重增量
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _functional_mstdp_reward_delta-en:
-
-    * **English**
-
-    Multiply mSTDP reward with current eligibility and reduce across the batch
-    dimension. Reward detach is owned by the learner before calling this
-    function.
-
-    :param reward: Reward for each sample
-    :type reward: torch.Tensor
-    :param eligibility: Materialized per-sample eligibility tensor
-    :type eligibility: torch.Tensor
-    :return: Weight increment reduced across the batch dimension
-    :rtype: torch.Tensor
-    """
-    return (reward.view(-1, 1, 1) * eligibility).sum(0)
 
 
 def mstdpet_reward_delta(

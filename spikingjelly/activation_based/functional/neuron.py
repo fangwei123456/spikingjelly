@@ -23,9 +23,7 @@ __all__ = [
     "lava_cuba_lif_charge",
     "lava_cuba_lif_single_step",
     "lava_cuba_lif_multi_step",
-    "liaf_output",
     "mpbn_fire",
-    "online_lif_charge",
     "ottt_trace_update",
     "if_single_step",
     "if_multi_step",
@@ -1263,62 +1261,6 @@ def lava_cuba_lif_multi_step(
     )
 
 
-def liaf_output(
-    v: torch.Tensor,
-    v_threshold: float,
-    act: Callable[[torch.Tensor], torch.Tensor],
-    threshold_related: bool,
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <liaf_output-cn>` | :ref:`English <liaf_output-en>`
-
-    ----
-
-    .. _liaf_output-cn:
-
-    * **中文**
-
-    计算 LIAF 的模拟输出。``threshold_related=True`` 时返回
-    ``act(v - v_threshold)``，否则返回 ``act(v)``。函数不读取 ``MemoryModule``
-    memory，不负责 charge、spike fire/reset、``training/eval`` 或 backend dispatch。
-
-    :param v: 当前膜电位张量
-    :type v: torch.Tensor
-    :param v_threshold: 脉冲阈值
-    :type v_threshold: float
-    :param act: 用于生成模拟输出的激活函数
-    :type act: Callable[[torch.Tensor], torch.Tensor]
-    :param threshold_related: 是否从膜电位中减去阈值后再调用 ``act``
-    :type threshold_related: bool
-    :return: LIAF 模拟输出
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _liaf_output-en:
-
-    * **English**
-
-    Compute LIAF analog output. When ``threshold_related=True``, return
-    ``act(v - v_threshold)``; otherwise return ``act(v)``. The function does not
-    read ``MemoryModule`` memory and does not manage charge, spike fire/reset,
-    ``training/eval``, or backend dispatch.
-
-    :param v: Current membrane voltage tensor
-    :type v: torch.Tensor
-    :param v_threshold: Spike threshold
-    :type v_threshold: float
-    :param act: Activation function used to produce analog output
-    :type act: Callable[[torch.Tensor], torch.Tensor]
-    :param threshold_related: Whether to subtract the threshold from ``v`` before
-        calling ``act``
-    :type threshold_related: bool
-    :return: LIAF analog output
-    :rtype: torch.Tensor
-    """
-    return act(v - v_threshold) if threshold_related else act(v)
-
-
 def mpbn_fire(
     v: torch.Tensor,
     v_threshold: torch.Tensor,
@@ -1430,68 +1372,6 @@ def mpbn_fire(
     v_next = v.clone()
     v_next.masked_scatter_(mask, normalized_residual)
     return spike, v_next
-
-
-def online_lif_charge(
-    x: torch.Tensor,
-    v: torch.Tensor,
-    tau: float,
-    decay_input: bool,
-    v_reset: Optional[float],
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <online_lif_charge-cn>` | :ref:`English <online_lif_charge-en>`
-
-    ----
-
-    .. _online_lif_charge-cn:
-
-    * **中文**
-
-    执行 OTTT/SLTT LIF training 路径使用的 charge：先 detach 上一膜电位 ``v``，
-    再按 LIF charge 公式更新。函数不判断 ``training/eval``，也不负责 fire/reset 或
-    backend dispatch。
-
-    :param x: 当前输入张量
-    :type x: torch.Tensor
-    :param v: 当前膜电位张量；函数会在内部使用 ``v.detach()``
-    :type v: torch.Tensor
-    :param tau: 膜电位时间常数
-    :type tau: float
-    :param decay_input: 是否对输入项应用衰减
-    :type decay_input: bool
-    :param v_reset: reset 参照电压；``None`` 表示 soft-reset 路径
-    :type v_reset: Optional[float]
-    :return: charge 后的膜电位
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _online_lif_charge-en:
-
-    * **English**
-
-    Run the charge used by OTTT/SLTT LIF training paths: detach the previous
-    membrane potential ``v`` first, then apply the LIF charge equation. The
-    function does not inspect ``training/eval`` and does not manage fire/reset
-    or backend dispatch.
-
-    :param x: Current input tensor
-    :type x: torch.Tensor
-    :param v: Current membrane voltage tensor; the function uses ``v.detach()``
-        internally
-    :type v: torch.Tensor
-    :param tau: Membrane time constant
-    :type tau: float
-    :param decay_input: Whether to decay the input term
-    :type decay_input: bool
-    :param v_reset: Reset reference voltage; ``None`` indicates the soft-reset
-        path
-    :type v_reset: Optional[float]
-    :return: Membrane voltage after charge
-    :rtype: torch.Tensor
-    """
-    return lif_charge(x, v.detach(), tau, decay_input, v_reset)
 
 
 def ottt_trace_update(

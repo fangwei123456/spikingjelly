@@ -633,7 +633,7 @@ def test_izhikevich_multi_step_cupy_normalizes_kernel_output(monkeypatch):
     _assert_close(w_seq, w_flat.reshape_as(x_seq))
 
 
-def test_klif_cuba_lif_and_liaf_helpers_match_modules():
+def test_klif_cuba_lif_and_liaf_charge_match_modules():
     torch.manual_seed(5)
     x = torch.randn(2, 3, requires_grad=True)
     v = torch.randn(2, 3, requires_grad=True)
@@ -749,12 +749,7 @@ def test_klif_cuba_lif_and_liaf_helpers_match_modules():
             decay_input=True,
             v_reset=0.0,
         )
-        y_func = functional.liaf_output(
-            v_charged,
-            v_threshold=0.7,
-            act=torch.tanh,
-            threshold_related=threshold_related,
-        )
+        y_func = torch.tanh(v_charged - 0.7 if threshold_related else v_charged)
         y_func.sum().backward()
 
         _assert_close(y_func, y_module)
@@ -817,44 +812,7 @@ def test_mpbn_fire_matches_module_residual_paths():
     _assert_close(v4_func.grad, v4_module.grad)
 
 
-def test_online_lif_charge_and_ottt_trace_update_match_nodes():
-    torch.manual_seed(7)
-    x = torch.randn(2, 3, requires_grad=True)
-    v = torch.randn(2, 3, requires_grad=True)
-
-    for cls in (neuron.OTTTLIFNode, neuron.SLTTLIFNode):
-        for decay_input in (False, True):
-            for v_reset in (None, 0.0, -0.2):
-                module = cls(
-                    tau=2.5,
-                    decay_input=decay_input,
-                    v_reset=v_reset,
-                    backend="torch",
-                ).train()
-                x_module = x.detach().clone().requires_grad_()
-                v_module = v.detach().clone().requires_grad_()
-                module.v = v_module
-                module.neuronal_charge(x_module)
-                loss_module = module.v.sum()
-                loss_module.backward()
-
-                x_func = x.detach().clone().requires_grad_()
-                v_func = v.detach().clone().requires_grad_()
-                v_next = functional.online_lif_charge(
-                    x_func,
-                    v_func,
-                    tau=2.5,
-                    decay_input=decay_input,
-                    v_reset=v_reset,
-                )
-                loss_func = v_next.sum()
-                loss_func.backward()
-
-                _assert_close(v_next, module.v)
-                _assert_close(x_func.grad, x_module.grad)
-                assert v_func.grad is None
-                assert v_module.grad is None
-
+def test_ottt_trace_update_matches_node():
     spike = torch.rand(2, 3, requires_grad=True)
     trace = torch.rand(2, 3, requires_grad=True)
     expected = neuron.OTTTLIFNode.track_trace(spike, trace, tau=2.5)

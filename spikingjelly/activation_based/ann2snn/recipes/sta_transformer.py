@@ -637,13 +637,21 @@ class _STAConstant(base.MemoryModule):
         self.step_mode = step_mode
 
     def single_step_forward(self) -> torch.Tensor:
-        output, self.t = functional.sta_constant_single_step(self.value, self.t)
+        output = self.value if self.t == 0 else torch.zeros_like(self.value)
+        self.t += 1
         return output
 
     def multi_step_forward(self) -> torch.Tensor:
-        output, self.t = functional.sta_constant_multi_step(
-            self.value, self.t, self.time_steps
-        )
+        if self.t == 0:
+            zeros = torch.zeros_like(self.value).expand(
+                self.time_steps - 1, *self.value.shape
+            )
+            output = torch.cat((self.value.unsqueeze(0), zeros), dim=0)
+        else:
+            output = torch.zeros_like(self.value).expand(
+                self.time_steps, *self.value.shape
+            )
+        self.t += self.time_steps
         return output
 
 

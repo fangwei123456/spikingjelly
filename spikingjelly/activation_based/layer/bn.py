@@ -726,12 +726,17 @@ class _BatchNormThroughTimeBase(base.MemoryModule):
         self.register_memory("t", -1)
 
     def single_step_forward(self, x: torch.Tensor):
-        t = self.t
-        self.t = t + 1
-        out, _ = functional.batch_norm_through_time_single_step(
-            x, t, self.bn_list, disable_running_stats=in_gc_1st_forward()
-        )
-        return out
+        self.t += 1
+        bn = self.bn_list[self.t]
+        if not in_gc_1st_forward():
+            return bn(x)
+
+        track_running_stats = bn.track_running_stats
+        bn.track_running_stats = False
+        try:
+            return bn(x)
+        finally:
+            bn.track_running_stats = track_running_stats
 
 
 class BatchNormThroughTime1d(_BatchNormThroughTimeBase):

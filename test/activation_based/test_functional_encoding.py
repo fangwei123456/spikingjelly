@@ -22,22 +22,6 @@ def _assert_close(actual, expected):
     assert torch.allclose(actual, expected, atol=1e-6, rtol=1e-6)
 
 
-def test_stateful_encoder_single_step_advances_wrapped_time_state():
-    spike = torch.arange(12).reshape(3, 2, 2)
-
-    out0, t0 = functional.stateful_encoder_single_step(spike, 0, 3)
-    out1, t1 = functional.stateful_encoder_single_step(spike, t0, 3)
-    out2, t2 = functional.stateful_encoder_single_step(spike, t1, 3)
-
-    _assert_close(out0, spike[0])
-    assert out0.data_ptr() == spike[0].data_ptr()
-    assert t0 == 1
-    _assert_close(out1, spike[1])
-    assert t1 == 2
-    _assert_close(out2, spike[2])
-    assert t2 == 0
-
-
 @pytest.mark.parametrize("enc_function", ["linear", "log"])
 def test_latency_encode_matches_existing_formula(enc_function):
     x = torch.tensor([[0.0, 0.5, 1.0]])
@@ -58,7 +42,7 @@ def test_latency_encode_rejects_unknown_encoding_function():
         functional.latency_encode(torch.rand(2, 3), 4, "unknown")
 
 
-def test_periodic_encoder_uses_functional_state_after_first_materialization():
+def test_periodic_encoder_advances_wrapped_time_state():
     spike = torch.randn(3, 2)
     encoder = encoding.PeriodicEncoder(spike)
 

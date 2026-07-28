@@ -9,7 +9,6 @@ import torch.nn.functional as F
 
 __all__ = [
     "latency_encode",
-    "stateful_encoder_single_step",
     "weighted_phase_encode",
 ]
 
@@ -83,60 +82,6 @@ def latency_encode(
     dims = list(range(spike.ndim - 1))
     dims.insert(0, spike.ndim - 1)
     return spike.permute(dims)
-
-
-def stateful_encoder_single_step(
-    spike: torch.Tensor,
-    t: int,
-    T: int,
-) -> tuple[torch.Tensor, int]:
-    r"""
-    **API Language** - :ref:`中文 <stateful_encoder_single_step-cn>` | :ref:`English <stateful_encoder_single_step-en>`
-
-    ----
-
-    .. _stateful_encoder_single_step-cn:
-
-    * **中文**
-
-    执行 ``StatefulEncoder`` 的单步显式状态推进。函数接收已生成的 spike sequence 和
-    当前 Python 时间索引 ``t``，返回 ``(spike[t], t_next)``，其中 ``t_next`` 按
-    ``T`` 循环。首次编码和 ``spike is None`` 的物化由 encoder module 负责。
-
-    :param spike: 已生成的脉冲序列，时间维位于第 0 维
-    :type spike: torch.Tensor
-    :param t: 当前时间索引
-    :type t: int
-    :param T: 编码周期，必须与当前 module 使用的周期一致
-    :type T: int
-    :return: ``(out_spike, t_next)``
-    :rtype: Tuple[torch.Tensor, int]
-
-    ----
-
-    .. _stateful_encoder_single_step-en:
-
-    * **English**
-
-    Run one explicit ``StatefulEncoder`` state advance. The function receives an
-    already generated spike sequence and the current Python time index ``t``,
-    then returns ``(spike[t], t_next)``, where ``t_next`` wraps by ``T``. Initial
-    encoding and ``spike is None`` materialization are owned by the encoder
-    module.
-
-    :param spike: Generated spike sequence with the time dimension at axis 0
-    :type spike: torch.Tensor
-    :param t: Current time index
-    :type t: int
-    :param T: Encoding period, matching the current module
-    :type T: int
-    :return: ``(out_spike, t_next)``
-    :rtype: Tuple[torch.Tensor, int]
-    """
-    t_next = t + 1
-    if t_next >= T:
-        t_next = 0
-    return spike[t], t_next
 
 
 def weighted_phase_encode(x: torch.Tensor, T: int) -> torch.Tensor:

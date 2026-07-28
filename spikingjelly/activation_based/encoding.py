@@ -169,9 +169,8 @@ class StatefulEncoder(base.MemoryModule):
         if self.spike is None:
             self.single_step_encode(x)
 
-        out, self.t = functional.stateful_encoder_single_step(
-            self.spike, self.t, self.T
-        )
+        out = self.spike[self.t]
+        self.t = (self.t + 1) % self.T
         return out
 
     @abstractmethod
