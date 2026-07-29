@@ -1,4 +1,3 @@
-from .ann2snn import *
 from .forward import *
 from .layer import *
 from .learning import *

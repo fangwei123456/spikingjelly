@@ -228,21 +228,35 @@ class GatedLIFNode(base.MemoryModule):
     def multi_step_forward(self, x_seq: torch.Tensor):
         if not isinstance(self.v, torch.Tensor):
             self.v = torch.full_like(x_seq[0], self.v)
-        spike_seq, self.u, self.v = functional.gated_lif_multi_step(
-            x_seq,
-            self.v,
-            self.T,
-            self.alpha,
-            self.beta,
-            self.gamma,
-            self.tau,
-            self.v_threshold,
-            self.linear_decay,
-            self.v_subreset,
-            self.conduct,
-            self.surrogate_function,
-        )
-        return spike_seq
+        alpha = self.alpha.view(1, -1, 1, 1).sigmoid()
+        beta = self.beta.view(1, -1, 1, 1).sigmoid()
+        gamma = self.gamma.view(1, -1, 1, 1).sigmoid()
+        tau = self.tau.view(1, -1, 1, 1).sigmoid()
+        v_threshold = self.v_threshold.view(1, -1, 1, 1).sigmoid()
+        linear_decay = self.linear_decay.view(1, -1, 1, 1).sigmoid()
+        v_subreset = self.v_subreset.view(1, -1, 1, 1).sigmoid()
+
+        spike = torch.zeros(x_seq.shape[1:], device=x_seq.device)
+        spike_seq = []
+        v = self.v
+        for t in range(self.T):
+            spike, v = functional.gated_lif_step(
+                x_seq[t],
+                v,
+                spike,
+                alpha,
+                beta,
+                gamma,
+                tau,
+                v_threshold,
+                linear_decay,
+                v_subreset,
+                self.conduct[t].view(1, -1, 1, 1).sigmoid(),
+                self.surrogate_function,
+            )
+            spike_seq.append(spike)
+        self.u = self.v = v
+        return torch.stack(spike_seq)
 
 
 class KLIFNode(BaseNode):

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Optional
 import torch
 import torch.nn as nn
 
-from spikingjelly.activation_based import base, functional
+from spikingjelly.activation_based import base
 from spikingjelly.activation_based.ann2snn.operators import (
     TDConv2d,
     TDLayerNorm,
@@ -90,32 +90,31 @@ class SpikeZIPLinear(TDLinear):
         self.register_memory("realize_time", self.bias_steps)
         self.register_memory("is_work", False)
 
+    def _release_bias(self, y: torch.Tensor) -> torch.Tensor:
+        if self.spikezip_bias is None or self.realize_time <= 0:
+            return y
+        self.realize_time -= 1
+        self.is_work = True
+        bias = self.spikezip_bias.to(device=y.device, dtype=y.dtype)
+        return y + bias / self.bias_steps
+
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         y = super().single_step_forward(x)
         self.is_work = not bool((x == 0).all())
-        y, self.realize_time, released = functional.spikezip_bias_step(
-            y,
-            self.spikezip_bias,
-            self.realize_time,
-            self.bias_steps,
-        )
-        self.is_work = self.is_work or released
-        return y
+        return self._release_bias(y)
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         y_seq = super().multi_step_forward(x_seq)
         active = bool((x_seq != 0).any())
-        y_seq, self.realize_time, released_steps = functional.spikezip_bias_multi_step(
-            y_seq,
-            None
-            if self.spikezip_bias is None
-            else self.spikezip_bias.view(
-                (1,) * (y_seq.dim() - 2) + (self.out_features,)
-            ),
-            self.realize_time,
-            self.bias_steps,
-        )
-        self.is_work = active or released_steps > 0
+        bias_steps = min(x_seq.shape[0], self.realize_time)
+        if self.spikezip_bias is not None and bias_steps > 0:
+            bias = self.spikezip_bias.to(device=x_seq.device, dtype=x_seq.dtype)
+            view_shape = (1,) * (y_seq.dim() - 1) + (bias.numel(),)
+            y_seq[:bias_steps] = (
+                y_seq[:bias_steps] + bias.view(view_shape) / self.bias_steps
+            )
+            self.realize_time -= bias_steps
+        self.is_work = active or bias_steps > 0
         return y_seq
 
 
@@ -154,32 +153,30 @@ class SpikeZIPConv2d(TDConv2d):
         self.register_memory("realize_time", self.bias_steps)
         self.register_memory("is_work", False)
 
+    def _release_bias(self, y: torch.Tensor) -> torch.Tensor:
+        if self.spikezip_bias is None or self.realize_time <= 0:
+            return y
+        self.realize_time -= 1
+        self.is_work = True
+        bias = self.spikezip_bias.to(device=y.device, dtype=y.dtype)
+        return y + bias.view(1, -1, 1, 1) / self.bias_steps
+
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         y = super().single_step_forward(x)
         self.is_work = not bool((x == 0).all())
-        y, self.realize_time, released = functional.spikezip_bias_step(
-            y,
-            None
-            if self.spikezip_bias is None
-            else self.spikezip_bias.view(1, self.out_channels, 1, 1),
-            self.realize_time,
-            self.bias_steps,
-        )
-        self.is_work = self.is_work or released
-        return y
+        return self._release_bias(y)
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         y_seq = super().multi_step_forward(x_seq)
         active = bool((x_seq != 0).any())
-        y_seq, self.realize_time, released_steps = functional.spikezip_bias_multi_step(
-            y_seq,
-            None
-            if self.spikezip_bias is None
-            else self.spikezip_bias.view(1, 1, self.out_channels, 1, 1),
-            self.realize_time,
-            self.bias_steps,
-        )
-        self.is_work = active or released_steps > 0
+        bias_steps = min(x_seq.shape[0], self.realize_time)
+        if self.spikezip_bias is not None and bias_steps > 0:
+            bias = self.spikezip_bias.to(device=x_seq.device, dtype=x_seq.dtype)
+            y_seq[:bias_steps] = (
+                y_seq[:bias_steps] + bias.view(1, 1, -1, 1, 1) / self.bias_steps
+            )
+            self.realize_time -= bias_steps
+        self.is_work = active or bias_steps > 0
         return y_seq
 
 

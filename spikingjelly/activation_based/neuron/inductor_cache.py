@@ -54,7 +54,11 @@ def surrogate_key(surrogate_function: Callable) -> tuple[Any, ...] | None:
     ):
         return None
     surrogate_type = type(surrogate_function)
-    if surrogate_type.__module__ != "spikingjelly.activation_based.surrogate":
+    if (
+        surrogate_type.__module__ != "spikingjelly.activation_based.surrogate"
+        or "spiking_function" not in surrogate_type.__dict__
+        or "primitive_function" not in surrogate_type.__dict__
+    ):
         return None
     params = tuple(sorted(getattr(surrogate_function, "_sg_params", {}).items()))
     return (

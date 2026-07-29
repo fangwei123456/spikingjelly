@@ -25,7 +25,7 @@ Module: ``spikingjelly.activation_based.functional``.
 
 - Added explicit tensor-state APIs for modules with state-update semantics,
   including neurons, delay and synaptic filters, learning traces, and SpikeZIP
-  bias release. Existing modules retain their public state, lifecycle, backend
+  STBIF updates. Existing modules retain their public state, lifecycle, backend
   selection, and output behavior.
 - State-update APIs use ``*_step`` for one complete update and ``*_multi_step`` only for
   independently implemented sequence paths. Supported CuPy, Triton, and

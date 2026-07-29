@@ -146,17 +146,17 @@ class STBIFNeuron(base.MemoryModule):
             self.q = torch.full_like(x, 0.5)
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
-        q_threshold = self.q_threshold.to(dtype=x.dtype)
-        normalized = x / q_threshold
-        self._init_state(normalized)
-        pos_max = self.pos_max.to(dtype=x.dtype)
-        neg_min = self.neg_min.to(dtype=x.dtype)
-        out, self.q, self.acc_q, cur_output, self.is_work = (
-            functional.stbif_step(
-                x, self.q, self.acc_q, q_threshold, pos_max, neg_min
-            )
+        self._init_state(x)
+        out, self.q, self.acc_q, cur_output = functional.stbif_step(
+            x,
+            self.q,
+            self.acc_q,
+            self.q_threshold,
+            self.pos_max,
+            self.neg_min,
         )
         self.cur_output.copy_(cur_output)
+        self.is_work = bool((x != 0).any() | (out != 0).any())
         return out
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
@@ -165,15 +165,19 @@ class STBIFNeuron(base.MemoryModule):
         return self._multi_step_forward_torch(x_seq)
 
     def _multi_step_forward_torch(self, x_seq: torch.Tensor) -> torch.Tensor:
-        q_threshold = self.q_threshold.to(dtype=x_seq.dtype)
-        pos_max = self.pos_max.to(dtype=x_seq.dtype)
-        neg_min = self.neg_min.to(dtype=x_seq.dtype)
         self._init_state(x_seq[0])
-        out_seq, self.q, self.acc_q, self.cur_output, self.is_work = (
-            functional.stbif_multi_step_torch(
-                x_seq, self.q, self.acc_q, q_threshold, pos_max, neg_min
+        out_seq = torch.empty_like(x_seq)
+        for t in range(x_seq.shape[0]):
+            out_seq[t], self.q, self.acc_q, cur_output = functional.stbif_step(
+                x_seq[t],
+                self.q,
+                self.acc_q,
+                self.q_threshold,
+                self.pos_max,
+                self.neg_min,
             )
-        )
+        self.cur_output.copy_(cur_output)
+        self.is_work = bool((x_seq != 0).any() | (out_seq != 0).any())
         return out_seq
 
     def _multi_step_forward_triton(self, x_seq: torch.Tensor) -> torch.Tensor:

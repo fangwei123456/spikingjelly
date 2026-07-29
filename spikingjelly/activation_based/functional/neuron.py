@@ -37,9 +37,8 @@ __all__ = [
     "lif_multi_step_triton",
     "plif_multi_step_triton",
     "sliding_psn_step",
-    "gated_lif_multi_step",
+    "gated_lif_step",
     "stbif_step",
-    "stbif_multi_step_torch",
     "activation_aware_if_step",
     "activation_aware_if_multi_step_triton",
 ]
@@ -134,6 +133,11 @@ def lava_cuba_lif_step(
     :type detach_reset: bool
     :return: ``(spike, current_next, voltage_next)``
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
     """
     from ..lava_exchange import LeakyIntegratorStep, step_quantize
 
@@ -240,6 +244,12 @@ def if_step(
     :type detach_reset: bool
     :return: ``(spike, v_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    .. seealso::
+
+       独立多步形式 / Independent multi-step forms:
+       :func:`if_multi_step_inductor`, :func:`if_multi_step_cupy`,
+       :func:`if_multi_step_triton`.
     """
     v_charged = v + x
     spike = surrogate_function(v_charged - v_threshold)
@@ -322,6 +332,11 @@ def qif_step(
     :type detach_reset: bool
     :return: ``(spike, v_next)``
     :rtype: tuple[torch.Tensor, torch.Tensor]
+
+    .. seealso::
+
+       独立多步形式 / Independent multi-step form:
+       :func:`qif_multi_step_cupy`.
     """
     v_charged = v + (x + a0 * (v - v_rest) * (v - v_c)) / tau
     spike = surrogate_function(v_charged - v_threshold)
@@ -404,6 +419,11 @@ def eif_step(
     :type detach_reset: bool
     :return: ``(spike, v_next)``
     :rtype: tuple[torch.Tensor, torch.Tensor]
+
+    .. seealso::
+
+       独立多步形式 / Independent multi-step form:
+       :func:`eif_multi_step_cupy`.
     """
     v_charged = (
         v + (x + v_rest - v + delta_t * torch.exp((v - theta_rh) / delta_t)) / tau
@@ -492,6 +512,11 @@ def activation_aware_if_step(
     :type detach_reset: bool
     :return: ``(spike, v_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    .. seealso::
+
+       独立多步形式 / Independent multi-step form:
+       :func:`activation_aware_if_multi_step_triton`.
     """
     h = v + x
     spike = surrogate_function(h + v_offset - v_threshold)
@@ -581,6 +606,10 @@ def activation_aware_if_multi_step_triton(
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
     :raises ImportError: If the Triton kernel is unavailable
+
+    .. seealso::
+
+       单步形式 / Single-step form: :func:`activation_aware_if_step`.
     """
     try:
         from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
@@ -676,6 +705,10 @@ def if_multi_step_inductor(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    .. seealso::
+
+       单步形式 / Single-step form: :func:`if_step`.
     """
     from ..neuron import inductor_cache
 
@@ -774,6 +807,12 @@ def lif_step(
     :type detach_reset: bool
     :return: ``(spike, v_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    .. seealso::
+
+       独立多步形式 / Independent multi-step forms:
+       :func:`lif_multi_step_inductor`, :func:`lif_multi_step_cupy`,
+       :func:`lif_multi_step_triton`.
     """
     v_reset_value = 0.0 if v_reset is None else v_reset
     if decay_input:
@@ -860,6 +899,10 @@ def lif_multi_step_inductor(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    .. seealso::
+
+       单步形式 / Single-step form: :func:`lif_step`.
     """
     from ..neuron import inductor_cache
 
@@ -961,6 +1004,12 @@ def plif_step(
     :type detach_reset: bool
     :return: ``(spike, v_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    .. seealso::
+
+       独立多步形式 / Independent multi-step forms:
+       :func:`plif_multi_step_inductor`, :func:`plif_multi_step_cupy`,
+       :func:`plif_multi_step_triton`.
     """
     reciprocal_tau = w.sigmoid()
     v_reset_value = 0.0 if v_reset is None else v_reset
@@ -1048,6 +1097,10 @@ def plif_multi_step_inductor(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    .. seealso::
+
+       单步形式 / Single-step form: :func:`plif_step`.
     """
     from ..neuron import inductor_cache
 
@@ -1176,6 +1229,11 @@ def izhikevich_step(
     :type detach_reset: bool
     :return: ``(spike, v_next, w_next)``
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+
+    .. seealso::
+
+       独立多步形式 / Independent multi-step form:
+       :func:`izhikevich_multi_step_cupy`.
     """
     v_charged = v + (x + a0 * (v - v_rest) * (v - v_c) - w) / tau
     w_next = w + (a * (v_charged - v_rest) - w) / tau_w
@@ -1264,6 +1322,11 @@ def klif_step(
     :type detach_reset: bool
     :return: ``(spike, v_next)``
     :rtype: tuple[torch.Tensor, torch.Tensor]
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
     """
     v_reset_value = 0.0 if v_reset is None else v_reset
     if decay_input:
@@ -1354,6 +1417,11 @@ def cuba_lif_step(
     :type detach_reset: bool
     :return: ``(spike, current_next, v_next)``
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
     """
     current_next = current * current_decay + x
     v_charged = v * voltage_decay + current_next
@@ -1423,6 +1491,11 @@ def if_step_cupy(
     :type backward_kernel: Any
     :return: ``(spike, v_next)``, both shaped like ``x``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    .. seealso::
+
+       独立多步形式 / Independent multi-step form:
+       :func:`if_multi_step_cupy`.
     """
     from ..cuda_kernel.auto_cuda import ss_neuron_kernel
 
@@ -1503,6 +1576,11 @@ def lif_step_cupy(
     :type backward_kernel: Any
     :return: ``(spike, v_next)``, both shaped like ``x``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    .. seealso::
+
+       独立多步形式 / Independent multi-step form:
+       :func:`lif_multi_step_cupy`.
     """
     from ..cuda_kernel.auto_cuda import ss_neuron_kernel
 
@@ -1580,6 +1658,11 @@ def if_multi_step_cupy(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    .. seealso::
+
+       单步状态方程 / Single-step state equation: :func:`if_step`.
+       CuPy 单步形式 / CuPy single-step form: :func:`if_step_cupy`.
     """
     from ..cuda_kernel.auto_cuda import neuron_kernel
 
@@ -1668,6 +1751,11 @@ def lif_multi_step_cupy(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    .. seealso::
+
+       单步状态方程 / Single-step state equation: :func:`lif_step`.
+       CuPy 单步形式 / CuPy single-step form: :func:`lif_step_cupy`.
     """
     from ..cuda_kernel.auto_cuda import neuron_kernel
 
@@ -1758,6 +1846,10 @@ def plif_multi_step_cupy(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    .. seealso::
+
+       单步状态方程 / Single-step state equation: :func:`plif_step`.
     """
     from ..cuda_kernel.auto_cuda import neuron_kernel
 
@@ -1860,6 +1952,10 @@ def qif_multi_step_cupy(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    .. seealso::
+
+       单步形式 / Single-step form: :func:`qif_step`.
     """
     from .. import cuda_kernel
 
@@ -1964,6 +2060,10 @@ def eif_multi_step_cupy(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    .. seealso::
+
+       单步形式 / Single-step form: :func:`eif_step`.
     """
     from .. import cuda_kernel
 
@@ -2094,6 +2194,10 @@ def izhikevich_multi_step_cupy(
     :type store_state_seq: bool
     :return: ``(spike_seq, v_next, w_next, v_seq_or_none, w_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]
+
+    .. seealso::
+
+       单步形式 / Single-step form: :func:`izhikevich_step`.
     """
     from .. import cuda_kernel
 
@@ -2187,6 +2291,10 @@ def if_multi_step_triton(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    .. seealso::
+
+       单步状态方程 / Single-step state equation: :func:`if_step`.
     """
     from ..triton_kernel import multistep_if
 
@@ -2276,6 +2384,10 @@ def lif_multi_step_triton(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    .. seealso::
+
+       单步状态方程 / Single-step state equation: :func:`lif_step`.
     """
     from ..triton_kernel import multistep_lif
 
@@ -2367,6 +2479,10 @@ def plif_multi_step_triton(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    .. seealso::
+
+       单步状态方程 / Single-step state equation: :func:`plif_step`.
     """
     from ..triton_kernel import multistep_plif
 
@@ -2452,6 +2568,11 @@ def sliding_psn_step(
     :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
     :return: ``(spike, queue_next)``
     :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, ...]]
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
     """
     k = weight.numel()
     queue_next = (*queue, x.flatten())
@@ -2465,10 +2586,10 @@ def sliding_psn_step(
     return spike.view(x.shape), queue_next
 
 
-def gated_lif_multi_step(
-    x_seq: torch.Tensor,
+def gated_lif_step(
+    x: torch.Tensor,
     v: torch.Tensor,
-    time_steps: int,
+    spike: torch.Tensor,
     alpha: torch.Tensor,
     beta: torch.Tensor,
     gamma: torch.Tensor,
@@ -2478,147 +2599,111 @@ def gated_lif_multi_step(
     v_subreset: torch.Tensor,
     conduct: torch.Tensor,
     surrogate_function: SurrogateFunction,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     r"""
-    **API Language** - :ref:`中文 <gated_lif_multi_step-cn>` | :ref:`English <gated_lif_multi_step-en>`
+    **API Language** - :ref:`中文 <gated_lif_step-cn>` | :ref:`English <gated_lif_step-en>`
 
     ----
 
-    .. _gated_lif_multi_step-cn:
+    .. _gated_lif_step-cn:
 
     * **中文**
 
-    执行 ``GatedLIFNode`` 的 Torch 多步显式状态转移。函数接收输入序列、
-    已物化的初始膜电位 ``v``、时间步数、门控参数和替代函数，返回
-    ``(spike_seq, u_next, v_next)``。``u`` 在现有 GLIF 动力学中每个时间步都会由
-    charge 公式覆盖，因此函数不接收旧 ``u``；它只返回最后一个时间步写回 module
-    memory 的 ``u_next``。
+    执行 ``GatedLIFNode`` 的单步显式状态转移。函数接收当前输入、膜电位和上一
+    时间步脉冲，以及已完成 sigmoid 和 shape 变换的参数，返回当前脉冲和下一膜
+    电位。``u`` 与 ``v`` 在该步结束时相同，因此只返回一份 next state。
 
     函数不读取或写入 ``MemoryModule`` memory，不负责 ``training/eval``、
     ``step_mode`` 或 backend dispatch。调用者必须传入当前 module 已选定执行路径的
     参数和替代函数。
 
-    :param x_seq: 输入序列，现有 ``GatedLIFNode`` 约定 shape 为 ``[T, N, C, H, W]``
-    :type x_seq: torch.Tensor
-    :param v: 已物化的初始膜电位，shape 可广播到 ``x_seq[0]``
+    本函数没有独立的多步形式；多步执行由调用者循环调用本函数。
+
+    :param x: 当前输入，现有 ``GatedLIFNode`` 约定 shape 为 ``[N, C, H, W]``
+    :type x: torch.Tensor
+    :param v: 当前膜电位，shape 可广播到 ``x``
     :type v: torch.Tensor
-    :param time_steps: 执行时间步数，保持既有 ``GatedLIFNode`` 的 ``self.T`` 语义
-    :type time_steps: int
-    :param alpha: 门控参数 ``alpha``，原始 parameter tensor
+    :param spike: 上一时间步脉冲，shape 与 ``x`` 相同
+    :type spike: torch.Tensor
+    :param alpha: sigmoid 后的门控参数 ``alpha``
     :type alpha: torch.Tensor
-    :param beta: 门控参数 ``beta``，原始 parameter tensor
+    :param beta: sigmoid 后的门控参数 ``beta``
     :type beta: torch.Tensor
-    :param gamma: 门控参数 ``gamma``，原始 parameter tensor
+    :param gamma: sigmoid 后的门控参数 ``gamma``
     :type gamma: torch.Tensor
-    :param tau: 膜电位衰减参数，原始 parameter tensor
+    :param tau: sigmoid 后的膜电位衰减参数
     :type tau: torch.Tensor
-    :param v_threshold: 阈值参数，原始 parameter tensor
+    :param v_threshold: sigmoid 后的阈值参数
     :type v_threshold: torch.Tensor
-    :param linear_decay: 线性衰减参数，原始 parameter tensor
+    :param linear_decay: sigmoid 后的线性衰减参数
     :type linear_decay: torch.Tensor
-    :param v_subreset: soft-reset 参数，原始 parameter tensor
+    :param v_subreset: sigmoid 后的 soft-reset 参数
     :type v_subreset: torch.Tensor
-    :param conduct: 电导参数，shape 为 ``[T]`` 或 ``[T, C]``
+    :param conduct: 当前时间步 sigmoid 后的电导参数
     :type conduct: torch.Tensor
-    :param surrogate_function: 作用于 ``u - sigmoid(v_threshold)`` 的替代函数
+    :param surrogate_function: 作用于 ``u - v_threshold`` 的替代函数
     :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(spike_seq, u_next, v_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(spike_next, v_next)``
+    :rtype: Tuple[torch.Tensor, torch.Tensor]
 
     ----
 
-    .. _gated_lif_multi_step-en:
+    .. _gated_lif_step-en:
 
     * **English**
 
-    Run the explicit Torch multi-step state transition for ``GatedLIFNode``. The
-    function receives an input sequence, materialized initial membrane voltage
-    ``v``, time-step count, gate parameters, and surrogate function, and returns
-    ``(spike_seq, u_next, v_next)``. Existing GLIF dynamics overwrite ``u`` in
-    the charge formula at every time step, so the function does not receive the
-    old ``u``; it only returns the final ``u_next`` that the module writes back
-    to memory.
+    Run one explicit state transition for ``GatedLIFNode``. The function receives
+    the current input, membrane voltage, previous spike, and parameters whose
+    sigmoid and shape transforms have already been applied. It returns the
+    current spike and next membrane voltage. ``u`` and ``v`` are equal at the end
+    of the step, so the next state is returned once.
 
     The function does not read or write ``MemoryModule`` memory and does not
     manage ``training/eval``, ``step_mode``, or backend dispatch. The caller must
     pass the parameters and surrogate function for the execution path already
     selected by the owning module.
 
-    :param x_seq: Input sequence. Existing ``GatedLIFNode`` expects shape
-        ``[T, N, C, H, W]``
-    :type x_seq: torch.Tensor
-    :param v: Materialized initial membrane voltage, broadcastable to
-        ``x_seq[0]``
+    This function has no independent multi-step form; callers implement
+    multi-step execution by looping over this function.
+
+    :param x: Current input. Existing ``GatedLIFNode`` expects shape
+        ``[N, C, H, W]``
+    :type x: torch.Tensor
+    :param v: Current membrane voltage, broadcastable to ``x``
     :type v: torch.Tensor
-    :param time_steps: Number of time steps to execute, preserving the existing
-        ``GatedLIFNode`` ``self.T`` semantics
-    :type time_steps: int
-    :param alpha: Raw ``alpha`` gate parameter tensor
+    :param spike: Previous time-step spike with the same shape as ``x``
+    :type spike: torch.Tensor
+    :param alpha: Sigmoid-transformed ``alpha`` gate parameter
     :type alpha: torch.Tensor
-    :param beta: Raw ``beta`` gate parameter tensor
+    :param beta: Sigmoid-transformed ``beta`` gate parameter
     :type beta: torch.Tensor
-    :param gamma: Raw ``gamma`` gate parameter tensor
+    :param gamma: Sigmoid-transformed ``gamma`` gate parameter
     :type gamma: torch.Tensor
-    :param tau: Raw membrane-decay parameter tensor
+    :param tau: Sigmoid-transformed membrane-decay parameter
     :type tau: torch.Tensor
-    :param v_threshold: Raw threshold parameter tensor
+    :param v_threshold: Sigmoid-transformed threshold parameter
     :type v_threshold: torch.Tensor
-    :param linear_decay: Raw linear-decay parameter tensor
+    :param linear_decay: Sigmoid-transformed linear-decay parameter
     :type linear_decay: torch.Tensor
-    :param v_subreset: Raw soft-reset parameter tensor
+    :param v_subreset: Sigmoid-transformed soft-reset parameter
     :type v_subreset: torch.Tensor
-    :param conduct: Conductance parameter shaped ``[T]`` or ``[T, C]``
+    :param conduct: Sigmoid-transformed conductance for the current time step
     :type conduct: torch.Tensor
     :param surrogate_function: Surrogate function applied to
-        ``u - sigmoid(v_threshold)``
+        ``u - v_threshold``
     :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(spike_seq, u_next, v_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(spike_next, v_next)``
+    :rtype: Tuple[torch.Tensor, torch.Tensor]
     """
-    alpha = alpha.view(1, -1, 1, 1).sigmoid()
-    beta = beta.view(1, -1, 1, 1).sigmoid()
-    gamma = gamma.view(1, -1, 1, 1).sigmoid()
-    tau = tau.view(1, -1, 1, 1).sigmoid()
-    v_threshold = v_threshold.view(1, -1, 1, 1).sigmoid()
-    linear_decay = linear_decay.view(1, -1, 1, 1).sigmoid()
-    v_subreset = v_subreset.view(1, -1, 1, 1).sigmoid()
-
-    spike = torch.zeros(x_seq.shape[1:], device=x_seq.device)
-    spike_seq = []
-    u = v
-    for t in range(time_steps):
-        conduct_t = conduct[t].view(1, -1, 1, 1).sigmoid()
-        input_current = x_seq[t] * (1 - beta * (1 - conduct_t))
-        u = ((1 - alpha * (1 - tau)) * v - (1 - alpha) * linear_decay) + input_current
-        u = (
-            u
-            - (1 - alpha * (1 - tau)) * v * gamma * spike
-            - (1 - gamma) * v_subreset * spike
-        )
-        spike = surrogate_function(u - v_threshold)
-        v = u
-        spike_seq.append(spike)
-    return torch.stack(spike_seq), u, v
-
-
-def _stbif_step(
-    x: torch.Tensor,
-    q: torch.Tensor,
-    acc_q: torch.Tensor,
-    q_threshold: torch.Tensor,
-    pos_max: torch.Tensor,
-    neg_min: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    normalized = x / q_threshold
-    q_next = q + normalized.detach()
-    acc_q_next = torch.round(acc_q)
-    spike_position = (q_next - 1 >= 0) & (acc_q_next < pos_max)
-    neg_spike_position = (q_next < 0) & (acc_q_next > neg_min)
-    cur_output_next = spike_position.to(x.dtype) - neg_spike_position.to(x.dtype)
-    acc_q_next = acc_q_next + cur_output_next
-    q_next = torch.where(spike_position, q_next - 1, q_next)
-    q_next = torch.where(neg_spike_position, q_next + 1, q_next)
-    return cur_output_next * q_threshold, q_next, acc_q_next, cur_output_next
+    input_current = x * (1 - beta * (1 - conduct))
+    v_next = ((1 - alpha * (1 - tau)) * v - (1 - alpha) * linear_decay) + input_current
+    v_next = (
+        v_next
+        - (1 - alpha * (1 - tau)) * v * gamma * spike
+        - (1 - gamma) * v_subreset * spike
+    )
+    spike_next = surrogate_function(v_next - v_threshold)
+    return spike_next, v_next
 
 
 def stbif_step(
@@ -2628,7 +2713,7 @@ def stbif_step(
     q_threshold: torch.Tensor,
     pos_max: torch.Tensor,
     neg_min: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, bool]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
     **API Language** - :ref:`中文 <stbif_step-cn>` | :ref:`English <stbif_step-en>`
 
@@ -2639,15 +2724,16 @@ def stbif_step(
     * **中文**
 
     执行 ``STBIFNeuron`` 的单步显式状态转移。函数接收当前输入 ``x``、已物化的
-    量化残差 ``q`` 和累计释放量 ``acc_q``，以及已转换到当前 device/dtype 的
-    ``q_threshold``、``pos_max``、``neg_min``，返回
-    ``(out, q_next, acc_q_next, cur_output_next, is_work)``。
+    量化残差 ``q`` 和累计释放量 ``acc_q``，以及量化尺度与边界 tensor，返回
+    ``(out, q_next, acc_q_next, cur_output_next)``。量化尺度和边界会在函数入口
+    转换到 ``x`` 的 device/dtype。
 
     该函数保持 SpikeZIP STBIF 的推理语义：输入先除以 ``q_threshold``，累加到
     ``q`` 时使用 ``detach``；``acc_q`` 在判断边界前执行 ``round``；输出
     ``cur_output_next * q_threshold``。函数不读取或写入 ``MemoryModule`` memory，
     不负责 ``training/eval``、``step_mode`` 或 backend dispatch，也不原地修改传入
-    state。
+    state。``is_work`` 是由输入和输出即时派生的 module 调度状态，不属于状态转移
+    方程的返回值。
 
     :param x: 当前输入张量
     :type x: torch.Tensor
@@ -2655,14 +2741,14 @@ def stbif_step(
     :type q: torch.Tensor
     :param acc_q: 当前累计释放量 state，shape 与 ``x`` 相同
     :type acc_q: torch.Tensor
-    :param q_threshold: 当前执行 dtype/device 上的量化 scale
+    :param q_threshold: 可广播到 ``x`` 的量化 scale tensor
     :type q_threshold: torch.Tensor
-    :param pos_max: 正向累计量化上界
+    :param pos_max: 可广播到 ``x`` 的正向累计量化上界 tensor
     :type pos_max: torch.Tensor
-    :param neg_min: 负向累计量化下界
+    :param neg_min: 可广播到 ``x`` 的负向累计量化下界 tensor
     :type neg_min: torch.Tensor
-    :return: ``(out, q_next, acc_q_next, cur_output_next, is_work)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, bool]
+    :return: ``(out, q_next, acc_q_next, cur_output_next)``
+    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
 
     ----
 
@@ -2673,15 +2759,18 @@ def stbif_step(
     Run one explicit state transition for ``STBIFNeuron``. The function receives
     current input ``x``, materialized quantized residual ``q`` and accumulated
     released quantity ``acc_q``, plus ``q_threshold``, ``pos_max``, and
-    ``neg_min`` already converted to the current device/dtype. It returns
-    ``(out, q_next, acc_q_next, cur_output_next, is_work)``.
+    ``neg_min`` tensors. It returns
+    ``(out, q_next, acc_q_next, cur_output_next)``. The scale and bounds are
+    converted to the device and dtype of ``x`` at function entry.
 
     This function preserves SpikeZIP STBIF inference semantics: the input is
     divided by ``q_threshold``; the addition into ``q`` uses ``detach``;
     ``acc_q`` is rounded before bound checks; and the output is
     ``cur_output_next * q_threshold``. The function does not read or write
     ``MemoryModule`` memory, does not manage ``training/eval``, ``step_mode``, or
-    backend dispatch, and does not mutate input states in place.
+    backend dispatch, and does not mutate input states in place. ``is_work`` is a
+    module scheduling state derived immediately from input and output, not part
+    of the state-transition return value.
 
     :param x: Current input tensor
     :type x: torch.Tensor
@@ -2690,96 +2779,34 @@ def stbif_step(
     :param acc_q: Current accumulated released-quantity state with the same
         shape as ``x``
     :type acc_q: torch.Tensor
-    :param q_threshold: Quantization scale on the current execution dtype/device
+    :param q_threshold: Quantization-scale tensor broadcastable to ``x``
     :type q_threshold: torch.Tensor
-    :param pos_max: Positive accumulated quantization bound
+    :param pos_max: Positive accumulated-quantization-bound tensor broadcastable
+        to ``x``
     :type pos_max: torch.Tensor
-    :param neg_min: Negative accumulated quantization bound
+    :param neg_min: Negative accumulated-quantization-bound tensor broadcastable
+        to ``x``
     :type neg_min: torch.Tensor
-    :return: ``(out, q_next, acc_q_next, cur_output_next, is_work)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, bool]
+    :return: ``(out, q_next, acc_q_next, cur_output_next)``
+    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+
+    .. note::
+
+       本函数没有独立 Torch 多步形式；Torch 多步执行由调用者逐步循环。
+       This function has no independent Torch multi-step form; callers iterate it
+       for Torch sequence execution.
     """
-    out, q_next, acc_q_next, cur_output_next = _stbif_step(
-        x, q, acc_q, q_threshold, pos_max, neg_min
-    )
-    is_work = bool((x != 0).any() | (out != 0).any())
-    return out, q_next, acc_q_next, cur_output_next, is_work
-
-
-def stbif_multi_step_torch(
-    x_seq: torch.Tensor,
-    q: torch.Tensor,
-    acc_q: torch.Tensor,
-    q_threshold: torch.Tensor,
-    pos_max: torch.Tensor,
-    neg_min: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, bool]:
-    r"""
-    **API Language** - :ref:`中文 <stbif_multi_step_torch-cn>` | :ref:`English <stbif_multi_step_torch-en>`
-
-    ----
-
-    .. _stbif_multi_step_torch-cn:
-
-    * **中文**
-
-    执行 ``STBIFNeuron`` 的 Torch 多步显式状态转移。函数接收输入序列、已物化
-    ``q``/``acc_q`` state 和边界参数，返回
-    ``(out_seq, q_next, acc_q_next, cur_output_next, is_work)``。该函数只描述
-    Torch 路径；Triton backend 的选择和调用仍由 module 管理。
-
-    :param x_seq: 输入序列，shape 为 ``[T, ...]``
-    :type x_seq: torch.Tensor
-    :param q: 初始量化残差 state，shape 与 ``x_seq[0]`` 相同
-    :type q: torch.Tensor
-    :param acc_q: 初始累计释放量 state，shape 与 ``x_seq[0]`` 相同
-    :type acc_q: torch.Tensor
-    :param q_threshold: 当前执行 dtype/device 上的量化 scale
-    :type q_threshold: torch.Tensor
-    :param pos_max: 正向累计量化上界
-    :type pos_max: torch.Tensor
-    :param neg_min: 负向累计量化下界
-    :type neg_min: torch.Tensor
-    :return: ``(out_seq, q_next, acc_q_next, cur_output_next, is_work)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, bool]
-
-    ----
-
-    .. _stbif_multi_step_torch-en:
-
-    * **English**
-
-    Run the explicit Torch multi-step state transition for ``STBIFNeuron``. The
-    function receives an input sequence, materialized ``q``/``acc_q`` states, and
-    bound parameters, and returns
-    ``(out_seq, q_next, acc_q_next, cur_output_next, is_work)``. This function
-    describes only the Torch path; selecting and calling the Triton backend
-    remains the module's responsibility.
-
-    :param x_seq: Input sequence shaped ``[T, ...]``
-    :type x_seq: torch.Tensor
-    :param q: Initial quantized residual state with the same shape as
-        ``x_seq[0]``
-    :type q: torch.Tensor
-    :param acc_q: Initial accumulated released-quantity state with the same shape
-        as ``x_seq[0]``
-    :type acc_q: torch.Tensor
-    :param q_threshold: Quantization scale on the current execution dtype/device
-    :type q_threshold: torch.Tensor
-    :param pos_max: Positive accumulated quantization bound
-    :type pos_max: torch.Tensor
-    :param neg_min: Negative accumulated quantization bound
-    :type neg_min: torch.Tensor
-    :return: ``(out_seq, q_next, acc_q_next, cur_output_next, is_work)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, bool]
-    """
-    q_next = q
-    acc_q_next = acc_q
-    cur_output_next = torch.zeros_like(x_seq[0])
-    out_seq = torch.empty_like(x_seq)
-    for t in range(x_seq.shape[0]):
-        out_seq[t], q_next, acc_q_next, cur_output_next = _stbif_step(
-            x_seq[t], q_next, acc_q_next, q_threshold, pos_max, neg_min
-        )
-    is_work = bool((x_seq != 0).any() | (out_seq != 0).any())
-    return out_seq, q_next, acc_q_next, cur_output_next, is_work
+    q_threshold = q_threshold.to(x)
+    pos_max = pos_max.to(x)
+    neg_min = neg_min.to(x)
+    normalized = x / q_threshold
+    q_next = q + normalized.detach()
+    acc_q_next = torch.round(acc_q)
+    spike_position = (q_next - 1 >= 0) & (acc_q_next < pos_max)
+    neg_spike_position = (q_next < 0) & (acc_q_next > neg_min)
+    cur_output_next = spike_position.to(x.dtype) - neg_spike_position.to(x.dtype)
+    acc_q_next = acc_q_next + cur_output_next
+    q_next = torch.where(spike_position, q_next - 1, q_next)
+    q_next = torch.where(neg_spike_position, q_next + 1, q_next)
+    out = cur_output_next * q_threshold
+    return out, q_next, acc_q_next, cur_output_next

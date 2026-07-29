@@ -332,6 +332,45 @@ def test_sliding_psn_step_matches_module():
         _assert_close(actual_state, expected_state)
 
 
+def test_gated_lif_step_matches_module_sequence():
+    x_seq = torch.randn(3, 2, 2, 3, 3)
+    module = neuron.GatedLIFNode(T=x_seq.shape[0], inplane=x_seq.shape[2])
+    v = torch.randn_like(x_seq[0])
+    module.v = v.clone()
+
+    alpha = module.alpha.view(1, -1, 1, 1).sigmoid()
+    beta = module.beta.view(1, -1, 1, 1).sigmoid()
+    gamma = module.gamma.view(1, -1, 1, 1).sigmoid()
+    tau = module.tau.view(1, -1, 1, 1).sigmoid()
+    v_threshold = module.v_threshold.view(1, -1, 1, 1).sigmoid()
+    linear_decay = module.linear_decay.view(1, -1, 1, 1).sigmoid()
+    v_subreset = module.v_subreset.view(1, -1, 1, 1).sigmoid()
+    spike = torch.zeros_like(v)
+    expected = []
+    for t, x in enumerate(x_seq):
+        spike, v = functional.gated_lif_step(
+            x,
+            v,
+            spike,
+            alpha,
+            beta,
+            gamma,
+            tau,
+            v_threshold,
+            linear_decay,
+            v_subreset,
+            module.conduct[t].view(1, -1, 1, 1).sigmoid(),
+            module.surrogate_function,
+        )
+        expected.append(spike)
+
+    actual = module(x_seq)
+
+    _assert_close(actual, torch.stack(expected))
+    _assert_close(module.u, v)
+    _assert_close(module.v, v)
+
+
 def _stbif_reference(x, q, acc_q, threshold, pos_max, neg_min):
     normalized = x / threshold
     q_next = q + normalized
@@ -341,46 +380,50 @@ def _stbif_reference(x, q, acc_q, threshold, pos_max, neg_min):
     acc_q_next = acc_q + current
     q_next = torch.where(positive, q_next - 1, q_next)
     q_next = torch.where(negative, q_next + 1, q_next)
-    is_work = bool((normalized != 0).any() | (current != 0).any())
-    return current * threshold, q_next, acc_q_next, current, is_work
+    return current * threshold, q_next, acc_q_next, current
 
 
-def test_stbif_step_and_multi_step_match_reference():
-    x_seq = torch.randn(4, 2, 3)
+def test_stbif_step_matches_reference_sequence():
+    x_seq = torch.randn(4, 2, 3, dtype=torch.float64)
     threshold = torch.tensor(0.25)
     pos_max = torch.tensor(1.0)
     neg_min = torch.tensor(-2.0)
     q = torch.full_like(x_seq[0], 0.5)
     acc_q = torch.zeros_like(q)
 
-    multi_step = functional.stbif_multi_step_torch(
-        x_seq, q, acc_q, threshold, pos_max, neg_min
-    )
-    expected_spikes = []
     q_ref = q
     acc_q_ref = acc_q
-    current_ref = None
-    is_work_ref = False
     for x in x_seq:
         step = functional.stbif_step(x, q_ref, acc_q_ref, threshold, pos_max, neg_min)
         reference = _stbif_reference(x, q_ref, acc_q_ref, threshold, pos_max, neg_min)
-        for actual, expected in zip(step[:4], reference[:4]):
+        for actual, expected in zip(step, reference):
             _assert_close(actual, expected)
-        expected_spikes.append(step[0])
-        q_ref, acc_q_ref, current_ref = step[1:4]
-        is_work_ref = is_work_ref or step[4]
+        q_ref, acc_q_ref = step[1:3]
 
-    _assert_close(multi_step[0], torch.stack(expected_spikes))
-    _assert_close(multi_step[1], q_ref)
-    _assert_close(multi_step[2], acc_q_ref)
-    _assert_close(multi_step[3], current_ref)
-    assert multi_step[4] is is_work_ref
+
+def test_stbif_module_derives_is_work():
+    module = neuron.STBIFNeuron(0.25, level=8, sym=True)
+    x = torch.zeros(2, 3)
+
+    module(x)
+    assert not module.is_work
+
+    module(torch.full_like(x, 0.25))
+    assert module.is_work
+
+    module.reset()
+    module.step_mode = "m"
+    module(torch.stack([x, x]))
+    assert not module.is_work
+
+    module(torch.stack([x, torch.full_like(x, 0.25)]))
+    assert module.is_work
 
 
 def test_multi_step_names_identify_independent_sequence_paths():
-    backend_suffixes = ("_cupy", "_triton", "_inductor", "_torch")
+    backend_suffixes = ("_cupy", "_triton", "_inductor")
     for name in functional_neuron.__all__:
-        if "_multi_step" in name and name != "gated_lif_multi_step":
+        if "_multi_step" in name:
             assert name.endswith(backend_suffixes), name
 
 

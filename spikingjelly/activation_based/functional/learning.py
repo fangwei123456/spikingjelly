@@ -4,7 +4,6 @@ import math
 from collections.abc import Callable
 
 import torch
-import torch.nn.functional as F
 
 
 __all__ = [
@@ -22,16 +21,16 @@ def _identity(x: torch.Tensor) -> torch.Tensor:
 
 
 def stdp_linear_step(
-    weight: torch.Tensor,
     in_spike: torch.Tensor,
     out_spike: torch.Tensor,
-    trace_pre: torch.Tensor,
-    trace_post: torch.Tensor,
+    trace: tuple[torch.Tensor, torch.Tensor],
+    weight: torch.Tensor,
+    *,
     tau_pre: float,
     tau_post: float,
     f_pre: Callable[[torch.Tensor], torch.Tensor] = _identity,
     f_post: Callable[[torch.Tensor], torch.Tensor] = _identity,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
     r"""
     **API Language** - :ref:`中文 <functional_stdp_linear_step-cn>` | :ref:`English <functional_stdp_linear_step-en>`
 
@@ -41,30 +40,35 @@ def stdp_linear_step(
 
     * **中文**
 
-    对 linear 权重执行单步 STDP tensor 更新，返回 ``delta_w`` 和更新后的
-    ``trace_pre``、``trace_post``。函数接收 raw ``weight``，不读取 module、
-    monitor、``MemoryModule`` memory、``step_mode`` 或 ``training/eval``。
+    执行全连接权重的单步 STDP 更新。``trace`` 是
+    ``(trace_pre, trace_post)``；函数先更新两个 trace，再用更新后的 trace
+    计算权重增量，返回 ``(delta_w, trace_next)``。输入状态不会被原地修改。
 
-    :param weight: linear 权重，形状 ``[out_features, in_features]``
-    :type weight: torch.Tensor
-    :param in_spike: 输入脉冲，形状 ``[batch_size, in_features]``
+    .. math::
+
+       tr_{pre}^{t+1} &= tr_{pre}^{t} - tr_{pre}^{t} / \tau_{pre} + s_{pre}^{t} \\
+       tr_{post}^{t+1} &= tr_{post}^{t} - tr_{post}^{t} / \tau_{post} + s_{post}^{t}
+
+    :param in_spike: 输入脉冲，形状 ``[N, in_features]``
     :type in_spike: torch.Tensor
-    :param out_spike: 输出脉冲，形状 ``[batch_size, out_features]``
+    :param out_spike: 输出脉冲，形状 ``[N, out_features]``
     :type out_spike: torch.Tensor
-    :param trace_pre: 已物化的 pre trace tensor
-    :type trace_pre: torch.Tensor
-    :param trace_post: 已物化的 post trace tensor
-    :type trace_post: torch.Tensor
-    :param tau_pre: pre trace 时间常数
+    :param trace: 当前 ``(trace_pre, trace_post)``，两者分别与 ``in_spike`` 和
+        ``out_spike`` 同形状、同 device，且 dtype 可参与对应计算
+    :type trace: Tuple[torch.Tensor, torch.Tensor]
+    :param weight: 权重，形状 ``[out_features, in_features]``
+    :type weight: torch.Tensor
+    :param tau_pre: pre-synaptic trace 时间常数
     :type tau_pre: float
-    :param tau_post: post trace 时间常数
+    :param tau_post: post-synaptic trace 时间常数
     :type tau_post: float
-    :param f_pre: pre 分支权重调制函数
+    :param f_pre: 作用于 pre 分支权重的调制函数
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
-    :param f_post: post 分支权重调制函数
+    :param f_post: 作用于 post 分支权重的调制函数
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(delta_w, trace_pre_next, trace_post_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(delta_w, (trace_pre_next, trace_post_next))``；``delta_w`` 与
+        ``weight`` 同形状
+    :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
 
     ----
 
@@ -72,32 +76,44 @@ def stdp_linear_step(
 
     * **English**
 
-    Run one tensor-only STDP update for a linear weight and return ``delta_w``
-    followed by the updated ``trace_pre`` and ``trace_post``. The function
-    receives raw ``weight`` and does not read modules, monitors, ``MemoryModule``
-    memory, ``step_mode`` or ``training/eval``.
+    Run one STDP update for a linear weight. ``trace`` is
+    ``(trace_pre, trace_post)``. The function updates both traces first, computes
+    the weight increment from the updated traces, and returns
+    ``(delta_w, trace_next)``. It does not mutate the input state in place.
 
-    :param weight: Linear weight shaped ``[out_features, in_features]``
-    :type weight: torch.Tensor
-    :param in_spike: Input spikes shaped ``[batch_size, in_features]``
+    .. math::
+
+       tr_{pre}^{t+1} &= tr_{pre}^{t} - tr_{pre}^{t} / \tau_{pre} + s_{pre}^{t} \\
+       tr_{post}^{t+1} &= tr_{post}^{t} - tr_{post}^{t} / \tau_{post} + s_{post}^{t}
+
+    :param in_spike: Input spikes shaped ``[N, in_features]``
     :type in_spike: torch.Tensor
-    :param out_spike: Output spikes shaped ``[batch_size, out_features]``
+    :param out_spike: Output spikes shaped ``[N, out_features]``
     :type out_spike: torch.Tensor
-    :param trace_pre: Materialized pre-synaptic trace tensor
-    :type trace_pre: torch.Tensor
-    :param trace_post: Materialized post-synaptic trace tensor
-    :type trace_post: torch.Tensor
-    :param tau_pre: Time constant of the pre trace
+    :param trace: Current ``(trace_pre, trace_post)``. The tensors have the same
+        shapes and devices as ``in_spike`` and ``out_spike``, respectively, and
+        dtypes compatible with the corresponding computations
+    :type trace: Tuple[torch.Tensor, torch.Tensor]
+    :param weight: Weight shaped ``[out_features, in_features]``
+    :type weight: torch.Tensor
+    :param tau_pre: Time constant of the pre-synaptic trace
     :type tau_pre: float
-    :param tau_post: Time constant of the post trace
+    :param tau_post: Time constant of the post-synaptic trace
     :type tau_post: float
     :param f_pre: Weight modulation function for the pre branch
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: Weight modulation function for the post branch
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(delta_w, trace_pre_next, trace_post_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(delta_w, (trace_pre_next, trace_post_next))``; ``delta_w`` has
+        the same shape as ``weight``
+    :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
     """
+    trace_pre, trace_post = trace
     trace_pre = trace_pre - trace_pre / tau_pre + in_spike
     trace_post = trace_post - trace_post / tau_post + out_spike
     delta_w_pre = -f_pre(weight) * (
@@ -106,20 +122,20 @@ def stdp_linear_step(
     delta_w_post = f_post(weight) * (
         trace_pre.unsqueeze(1) * out_spike.unsqueeze(2)
     ).sum(0)
-    return delta_w_pre + delta_w_post, trace_pre, trace_post
+    return delta_w_pre + delta_w_post, (trace_pre, trace_post)
 
 
 def mstdp_linear_step(
-    weight: torch.Tensor,
     in_spike: torch.Tensor,
     out_spike: torch.Tensor,
-    trace_pre: torch.Tensor,
-    trace_post: torch.Tensor,
+    trace: tuple[torch.Tensor, torch.Tensor],
+    weight: torch.Tensor,
+    *,
     tau_pre: float,
     tau_post: float,
     f_pre: Callable[[torch.Tensor], torch.Tensor] = _identity,
     f_post: Callable[[torch.Tensor], torch.Tensor] = _identity,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
     r"""
     **API Language** - :ref:`中文 <functional_mstdp_linear_step-cn>` | :ref:`English <functional_mstdp_linear_step-en>`
 
@@ -129,30 +145,30 @@ def mstdp_linear_step(
 
     * **中文**
 
-    对 linear 权重执行单步 mSTDP eligibility tensor 计算，返回每样本 eligibility
-    和更新后的 ``trace_pre``、``trace_post``。函数不读取 module、
-    monitor、``MemoryModule`` memory、``step_mode`` 或 ``training/eval``。
+    执行全连接权重的单步 mSTDP eligibility 计算。``trace`` 是
+    ``(trace_pre, trace_post)``。返回的 eligibility 保留 batch 维，供调用者
+    进一步施加 reward；本函数不接收或处理 reward。
 
-    :param weight: linear 权重，形状 ``[out_features, in_features]``
-    :type weight: torch.Tensor
-    :param in_spike: 输入脉冲，形状 ``[batch_size, in_features]``
+    :param in_spike: 输入脉冲，形状 ``[N, in_features]``
     :type in_spike: torch.Tensor
-    :param out_spike: 输出脉冲，形状 ``[batch_size, out_features]``
+    :param out_spike: 输出脉冲，形状 ``[N, out_features]``
     :type out_spike: torch.Tensor
-    :param trace_pre: pre trace
-    :type trace_pre: torch.Tensor
-    :param trace_post: post trace
-    :type trace_post: torch.Tensor
-    :param tau_pre: pre trace 时间常数
+    :param trace: 当前 ``(trace_pre, trace_post)``，两者分别与 ``in_spike`` 和
+        ``out_spike`` 同形状、同 device
+    :type trace: Tuple[torch.Tensor, torch.Tensor]
+    :param weight: 权重，形状 ``[out_features, in_features]``
+    :type weight: torch.Tensor
+    :param tau_pre: pre-synaptic trace 时间常数
     :type tau_pre: float
-    :param tau_post: post trace 时间常数
+    :param tau_post: post-synaptic trace 时间常数
     :type tau_post: float
-    :param f_pre: pre 分支的权重调制函数
+    :param f_pre: 作用于 pre 分支权重的调制函数
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
-    :param f_post: post 分支的权重调制函数
+    :param f_post: 作用于 post 分支权重的调制函数
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(eligibility, trace_pre_next, trace_post_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(eligibility, (trace_pre_next, trace_post_next))``；
+        ``eligibility`` 形状为 ``[N, out_features, in_features]``
+    :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
 
     ----
 
@@ -160,51 +176,57 @@ def mstdp_linear_step(
 
     * **English**
 
-    Run one tensor-only mSTDP eligibility computation for a linear weight and
-    return per-sample eligibility followed by the updated traces. The function
-    does not read modules, monitors, ``MemoryModule`` memory, ``step_mode`` or
-    ``training/eval``.
+    Compute one mSTDP eligibility step for a linear weight. ``trace`` is
+    ``(trace_pre, trace_post)``. The returned eligibility retains its batch
+    dimension for subsequent reward modulation; this function neither receives
+    nor applies a reward.
 
-    :param weight: Linear weight shaped ``[out_features, in_features]``
-    :type weight: torch.Tensor
-    :param in_spike: Input spikes shaped ``[batch_size, in_features]``
+    :param in_spike: Input spikes shaped ``[N, in_features]``
     :type in_spike: torch.Tensor
-    :param out_spike: Output spikes shaped ``[batch_size, out_features]``
+    :param out_spike: Output spikes shaped ``[N, out_features]``
     :type out_spike: torch.Tensor
-    :param trace_pre: Materialized pre-synaptic trace tensor
-    :type trace_pre: torch.Tensor
-    :param trace_post: Materialized post-synaptic trace tensor
-    :type trace_post: torch.Tensor
-    :param tau_pre: Time constant of the pre trace
+    :param trace: Current ``(trace_pre, trace_post)`` with the same shapes and
+        devices as ``in_spike`` and ``out_spike``, respectively
+    :type trace: Tuple[torch.Tensor, torch.Tensor]
+    :param weight: Weight shaped ``[out_features, in_features]``
+    :type weight: torch.Tensor
+    :param tau_pre: Time constant of the pre-synaptic trace
     :type tau_pre: float
-    :param tau_post: Time constant of the post trace
+    :param tau_post: Time constant of the post-synaptic trace
     :type tau_post: float
     :param f_pre: Weight modulation function for the pre branch
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: Weight modulation function for the post branch
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(eligibility, trace_pre_next, trace_post_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(eligibility, (trace_pre_next, trace_post_next))``;
+        ``eligibility`` is shaped ``[N, out_features, in_features]``
+    :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
     """
+    trace_pre, trace_post = trace
     trace_pre = trace_pre * math.exp(-1 / tau_pre) + in_spike
     trace_post = trace_post * math.exp(-1 / tau_post) + out_spike
     eligibility = f_post(weight) * (
         trace_pre.unsqueeze(1) * out_spike.unsqueeze(2)
     ) - f_pre(weight) * (trace_post.unsqueeze(2) * in_spike.unsqueeze(1))
-    return eligibility, trace_pre, trace_post
+    return eligibility, (trace_pre, trace_post)
 
 
 def mstdpet_linear_step(
-    weight: torch.Tensor,
     in_spike: torch.Tensor,
     out_spike: torch.Tensor,
-    trace_pre: torch.Tensor,
-    trace_post: torch.Tensor,
+    trace: tuple[torch.Tensor, torch.Tensor],
+    weight: torch.Tensor,
+    *,
     tau_pre: float,
     tau_post: float,
     f_pre: Callable[[torch.Tensor], torch.Tensor] = _identity,
     f_post: Callable[[torch.Tensor], torch.Tensor] = _identity,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
     r"""
     **API Language** - :ref:`中文 <functional_mstdpet_linear_step-cn>` | :ref:`English <functional_mstdpet_linear_step-en>`
 
@@ -214,30 +236,30 @@ def mstdpet_linear_step(
 
     * **中文**
 
-    对 linear 权重执行单步 mSTDP-ET eligibility tensor 计算。该函数只计算
-    eligibility；``trace_e`` 衰减和 reward 调制由
-    :func:`mstdpet_reward_step` 处理。
+    执行无 batch 维全连接脉冲的单步 mSTDP-ET eligibility 计算。``trace`` 是
+    ``(trace_pre, trace_post)``。本函数只更新神经元 trace 并计算 eligibility；
+    eligibility trace 的衰减与 reward 调制由 :func:`mstdpet_reward_step` 完成。
 
-    :param weight: linear 权重，形状 ``[out_features, in_features]``
-    :type weight: torch.Tensor
     :param in_spike: 输入脉冲，形状 ``[in_features]``
     :type in_spike: torch.Tensor
     :param out_spike: 输出脉冲，形状 ``[out_features]``
     :type out_spike: torch.Tensor
-    :param trace_pre: pre trace
-    :type trace_pre: torch.Tensor
-    :param trace_post: post trace
-    :type trace_post: torch.Tensor
-    :param tau_pre: pre trace 时间常数
+    :param trace: 当前 ``(trace_pre, trace_post)``，两者分别与 ``in_spike`` 和
+        ``out_spike`` 同形状、同 device
+    :type trace: Tuple[torch.Tensor, torch.Tensor]
+    :param weight: 权重，形状 ``[out_features, in_features]``
+    :type weight: torch.Tensor
+    :param tau_pre: pre-synaptic trace 时间常数
     :type tau_pre: float
-    :param tau_post: post trace 时间常数
+    :param tau_post: post-synaptic trace 时间常数
     :type tau_post: float
-    :param f_pre: pre 分支的权重调制函数
+    :param f_pre: 作用于 pre 分支权重的调制函数
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
-    :param f_post: post 分支的权重调制函数
+    :param f_post: 作用于 post 分支权重的调制函数
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(eligibility, trace_pre_next, trace_post_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(eligibility, (trace_pre_next, trace_post_next))``；
+        ``eligibility`` 与 ``weight`` 同形状
+    :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
 
     ----
 
@@ -245,56 +267,58 @@ def mstdpet_linear_step(
 
     * **English**
 
-    Run one tensor-only mSTDP-ET eligibility computation for a linear weight.
-    This function only computes eligibility; ``trace_e`` decay and reward
-    modulation are handled by :func:`mstdpet_reward_step`.
+    Compute one mSTDP-ET eligibility step for unbatched linear spikes. ``trace``
+    is ``(trace_pre, trace_post)``. This function only updates the neuronal
+    traces and computes eligibility. :func:`mstdpet_reward_step` handles
+    eligibility-trace decay and reward modulation.
 
-    :param weight: Linear weight shaped ``[out_features, in_features]``
-    :type weight: torch.Tensor
     :param in_spike: Input spikes shaped ``[in_features]``
     :type in_spike: torch.Tensor
     :param out_spike: Output spikes shaped ``[out_features]``
     :type out_spike: torch.Tensor
-    :param trace_pre: Materialized pre-synaptic trace tensor
-    :type trace_pre: torch.Tensor
-    :param trace_post: Materialized post-synaptic trace tensor
-    :type trace_post: torch.Tensor
-    :param tau_pre: Time constant of the pre trace
+    :param trace: Current ``(trace_pre, trace_post)`` with the same shapes and
+        devices as ``in_spike`` and ``out_spike``, respectively
+    :type trace: Tuple[torch.Tensor, torch.Tensor]
+    :param weight: Weight shaped ``[out_features, in_features]``
+    :type weight: torch.Tensor
+    :param tau_pre: Time constant of the pre-synaptic trace
     :type tau_pre: float
-    :param tau_post: Time constant of the post trace
+    :param tau_post: Time constant of the post-synaptic trace
     :type tau_post: float
     :param f_pre: Weight modulation function for the pre branch
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: Weight modulation function for the post branch
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(eligibility, trace_pre_next, trace_post_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(eligibility, (trace_pre_next, trace_post_next))``;
+        ``eligibility`` has the same shape as ``weight``
+    :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
     """
+    trace_pre, trace_post = trace
     trace_pre = trace_pre * math.exp(-1 / tau_pre) + in_spike
     trace_post = trace_post * math.exp(-1 / tau_post) + out_spike
     eligibility = f_post(weight) * torch.outer(out_spike, trace_pre) - f_pre(
         weight
     ) * torch.outer(trace_post, in_spike)
-    return eligibility, trace_pre, trace_post
+    return eligibility, (trace_pre, trace_post)
 
 
 def stdp_conv2d_step(
-    weight: torch.Tensor,
     in_spike: torch.Tensor,
     out_spike: torch.Tensor,
-    trace_pre: torch.Tensor,
-    trace_post: torch.Tensor,
+    trace: tuple[torch.Tensor, torch.Tensor],
+    weight: torch.Tensor,
+    *,
+    stride: tuple[int, int],
     tau_pre: float,
     tau_post: float,
-    stride: tuple[int, int],
-    padding: tuple[int, int],
-    padding_mode: str = "zeros",
-    reversed_padding_repeated_twice: tuple[int, ...] | list[int] | None = None,
-    dilation: tuple[int, int] = (1, 1),
-    groups: int = 1,
     f_pre: Callable[[torch.Tensor], torch.Tensor] = _identity,
     f_post: Callable[[torch.Tensor], torch.Tensor] = _identity,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
     r"""
     **API Language** - :ref:`中文 <functional_stdp_conv2d_step-cn>` | :ref:`English <functional_stdp_conv2d_step-en>`
 
@@ -304,44 +328,33 @@ def stdp_conv2d_step(
 
     * **中文**
 
-    对 Conv2d raw 参数执行单步 STDP tensor 更新。当前保持既有支持边界：只支持
-    ``dilation == (1, 1)`` 且 ``groups == 1``。函数不读取 module、
-    ``MemoryModule`` memory、``step_mode`` 或 ``training/eval``。
+    执行二维卷积权重的单步 STDP 更新。``trace`` 是
+    ``(trace_pre, trace_post)``。``in_spike`` 必须已经按突触层的 padding
+    规则展开；函数因此只表达 dilation 为 1、groups 为 1 的卷积 STDP 方程，
+    不读取 ``Conv2d`` module 或解释 padding mode。
 
-    :param weight: Conv2d 权重
-    :type weight: torch.Tensor
-    :param in_spike: 输入脉冲，形状 ``[N, C_in, H, W]``
+    :param in_spike: 已 padding 的输入脉冲，形状 ``[N, C_in, H_pad, W_pad]``
     :type in_spike: torch.Tensor
     :param out_spike: 输出脉冲，形状 ``[N, C_out, H_out, W_out]``
     :type out_spike: torch.Tensor
-    :param trace_pre: 已物化的 pre trace tensor；存在 padding 时，其空间维必须与
-        padding 后的 ``in_spike`` 一致
-    :type trace_pre: torch.Tensor
-    :param trace_post: 已物化的 post trace tensor
-    :type trace_post: torch.Tensor
-    :param tau_pre: pre trace 时间常数
-    :type tau_pre: float
-    :param tau_post: post trace 时间常数
-    :type tau_post: float
-    :param stride: 二维卷积步长
+    :param trace: 当前 ``(trace_pre, trace_post)``，两者分别与 ``in_spike`` 和
+        ``out_spike`` 同形状、同 device
+    :type trace: Tuple[torch.Tensor, torch.Tensor]
+    :param weight: 权重，形状 ``[C_out, C_in, K_h, K_w]``
+    :type weight: torch.Tensor
+    :param stride: 二维卷积步长 ``(stride_h, stride_w)``
     :type stride: Tuple[int, int]
-    :param padding: 二维卷积 padding
-    :type padding: Tuple[int, int]
-    :param padding_mode: padding 模式
-    :type padding_mode: str
-    :param reversed_padding_repeated_twice: 非零 padding 模式使用的展开 padding
-    :type reversed_padding_repeated_twice: Tuple[int, ...] or List[int] or None
-    :param dilation: 二维卷积 dilation
-    :type dilation: Tuple[int, int]
-    :param groups: 二维卷积分组数
-    :type groups: int
-    :param f_pre: pre 分支权重调制函数
+    :param tau_pre: pre-synaptic trace 时间常数
+    :type tau_pre: float
+    :param tau_post: post-synaptic trace 时间常数
+    :type tau_post: float
+    :param f_pre: 作用于 pre 分支权重的调制函数
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
-    :param f_post: post 分支权重调制函数
+    :param f_post: 作用于 post 分支权重的调制函数
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(delta_w, trace_pre_next, trace_post_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises NotImplementedError: 当 dilation 或 groups 不受支持时抛出
+    :return: ``(delta_w, (trace_pre_next, trace_post_next))``；``delta_w`` 与
+        ``weight`` 同形状
+    :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
 
     ----
 
@@ -349,68 +362,45 @@ def stdp_conv2d_step(
 
     * **English**
 
-    Run one tensor-only STDP update for raw Conv2d parameters. It preserves the
-    existing support boundary: only ``dilation == (1, 1)`` and ``groups == 1``
-    are supported. The function does not read modules, ``MemoryModule`` memory,
-    ``step_mode`` or ``training/eval``.
+    Run one STDP update for a 2D convolution weight. ``trace`` is
+    ``(trace_pre, trace_post)``. ``in_spike`` must already include the synaptic
+    layer's padding. The function consequently expresses only the convolutional
+    STDP equation for dilation 1 and one group; it neither reads a ``Conv2d``
+    module nor interprets a padding mode.
 
-    :param weight: Conv2d weight tensor
-    :type weight: torch.Tensor
-    :param in_spike: Input spikes shaped ``[N, C_in, H, W]``
+    :param in_spike: Padded input spikes shaped ``[N, C_in, H_pad, W_pad]``
     :type in_spike: torch.Tensor
     :param out_spike: Output spikes shaped ``[N, C_out, H_out, W_out]``
     :type out_spike: torch.Tensor
-    :param trace_pre: Materialized pre-synaptic trace tensor. With non-zero
-        padding, its spatial dimensions must match the padded ``in_spike``
-    :type trace_pre: torch.Tensor
-    :param trace_post: Materialized post-synaptic trace tensor
-    :type trace_post: torch.Tensor
-    :param tau_pre: Time constant of the pre trace
-    :type tau_pre: float
-    :param tau_post: Time constant of the post trace
-    :type tau_post: float
-    :param stride: Two-dimensional convolution stride
+    :param trace: Current ``(trace_pre, trace_post)`` with the same shapes and
+        devices as ``in_spike`` and ``out_spike``, respectively
+    :type trace: Tuple[torch.Tensor, torch.Tensor]
+    :param weight: Weight shaped ``[C_out, C_in, K_h, K_w]``
+    :type weight: torch.Tensor
+    :param stride: Convolution stride ``(stride_h, stride_w)``
     :type stride: Tuple[int, int]
-    :param padding: Two-dimensional convolution padding
-    :type padding: Tuple[int, int]
-    :param padding_mode: Padding mode
-    :type padding_mode: str
-    :param reversed_padding_repeated_twice: Expanded padding used by non-zero modes
-    :type reversed_padding_repeated_twice: Tuple[int, ...] or List[int] or None
-    :param dilation: Two-dimensional convolution dilation
-    :type dilation: Tuple[int, int]
-    :param groups: Number of convolution groups
-    :type groups: int
+    :param tau_pre: Time constant of the pre-synaptic trace
+    :type tau_pre: float
+    :param tau_post: Time constant of the post-synaptic trace
+    :type tau_post: float
     :param f_pre: Weight modulation function for the pre branch
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: Weight modulation function for the post branch
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(delta_w, trace_pre_next, trace_post_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises NotImplementedError: If dilation or groups is unsupported
+    :return: ``(delta_w, (trace_pre_next, trace_post_next))``; ``delta_w`` has
+        the same shape as ``weight``
+    :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
     """
-    if dilation != (1, 1):
-        raise NotImplementedError(
-            "STDP with dilation != 1 for Conv2d has not been implemented!"
-        )
-    if groups != 1:
-        raise NotImplementedError(
-            "STDP with groups != 1 for Conv2d has not been implemented!"
-        )
-
-    stride_h, stride_w = stride
-    if padding != (0, 0):
-        p_h, p_w = padding
-        if padding_mode != "zeros":
-            in_spike = F.pad(
-                in_spike, reversed_padding_repeated_twice, mode=padding_mode
-            )
-        else:
-            in_spike = F.pad(in_spike, pad=(p_w, p_w, p_h, p_h))
-
+    trace_pre, trace_post = trace
     trace_pre = trace_pre - trace_pre / tau_pre + in_spike
     trace_post = trace_post - trace_post / tau_post + out_spike
     delta_w = torch.zeros_like(weight)
+    stride_h, stride_w = stride
     for h in range(weight.shape[2]):
         for w in range(weight.shape[3]):
             h_end = in_spike.shape[2] - weight.shape[2] + 1 + h
@@ -428,26 +418,21 @@ def stdp_conv2d_step(
                 tr_pre.unsqueeze(1) * out_spike.unsqueeze(2)
             ).permute([1, 2, 0, 3, 4]).sum(dim=[2, 3, 4])
             delta_w[:, :, h, w] += delta_w_pre + delta_w_post
-    return delta_w, trace_pre, trace_post
+    return delta_w, (trace_pre, trace_post)
 
 
 def stdp_conv1d_step(
-    weight: torch.Tensor,
     in_spike: torch.Tensor,
     out_spike: torch.Tensor,
-    trace_pre: torch.Tensor,
-    trace_post: torch.Tensor,
+    trace: tuple[torch.Tensor, torch.Tensor],
+    weight: torch.Tensor,
+    *,
+    stride: tuple[int],
     tau_pre: float,
     tau_post: float,
-    stride: tuple[int],
-    padding: tuple[int],
-    padding_mode: str = "zeros",
-    reversed_padding_repeated_twice: tuple[int, ...] | list[int] | None = None,
-    dilation: tuple[int] = (1,),
-    groups: int = 1,
     f_pre: Callable[[torch.Tensor], torch.Tensor] = _identity,
     f_post: Callable[[torch.Tensor], torch.Tensor] = _identity,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
     r"""
     **API Language** - :ref:`中文 <functional_stdp_conv1d_step-cn>` | :ref:`English <functional_stdp_conv1d_step-en>`
 
@@ -457,44 +442,33 @@ def stdp_conv1d_step(
 
     * **中文**
 
-    对 Conv1d raw 参数执行单步 STDP tensor 更新。当前保持既有支持边界：只支持
-    ``dilation == (1,)`` 且 ``groups == 1``。函数不读取 module 或
-    ``MemoryModule`` memory，不管理 ``step_mode`` 或 ``training/eval``。
+    执行一维卷积权重的单步 STDP 更新。``trace`` 是
+    ``(trace_pre, trace_post)``。``in_spike`` 必须已经按突触层的 padding
+    规则展开；函数因此只表达 dilation 为 1、groups 为 1 的卷积 STDP 方程，
+    不读取 ``Conv1d`` module 或解释 padding mode。
 
-    :param weight: Conv1d 权重
-    :type weight: torch.Tensor
-    :param in_spike: 输入脉冲，形状 ``[N, C_in, L]``
+    :param in_spike: 已 padding 的输入脉冲，形状 ``[N, C_in, L_pad]``
     :type in_spike: torch.Tensor
     :param out_spike: 输出脉冲，形状 ``[N, C_out, L_out]``
     :type out_spike: torch.Tensor
-    :param trace_pre: 已物化的 pre trace tensor；存在 padding 时，其长度必须与
-        padding 后的 ``in_spike`` 一致
-    :type trace_pre: torch.Tensor
-    :param trace_post: 已物化的 post trace tensor
-    :type trace_post: torch.Tensor
-    :param tau_pre: pre trace 时间常数
-    :type tau_pre: float
-    :param tau_post: post trace 时间常数
-    :type tau_post: float
-    :param stride: 一维卷积步长
+    :param trace: 当前 ``(trace_pre, trace_post)``，两者分别与 ``in_spike`` 和
+        ``out_spike`` 同形状、同 device
+    :type trace: Tuple[torch.Tensor, torch.Tensor]
+    :param weight: 权重，形状 ``[C_out, C_in, K]``
+    :type weight: torch.Tensor
+    :param stride: 一维卷积步长 ``(stride,)``
     :type stride: Tuple[int]
-    :param padding: 一维卷积 padding
-    :type padding: Tuple[int]
-    :param padding_mode: padding 模式
-    :type padding_mode: str
-    :param reversed_padding_repeated_twice: 非零 padding 模式使用的展开 padding
-    :type reversed_padding_repeated_twice: Tuple[int, ...] or List[int] or None
-    :param dilation: 一维卷积 dilation
-    :type dilation: Tuple[int]
-    :param groups: 一维卷积分组数
-    :type groups: int
-    :param f_pre: pre 分支权重调制函数
+    :param tau_pre: pre-synaptic trace 时间常数
+    :type tau_pre: float
+    :param tau_post: post-synaptic trace 时间常数
+    :type tau_post: float
+    :param f_pre: 作用于 pre 分支权重的调制函数
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
-    :param f_post: post 分支权重调制函数
+    :param f_post: 作用于 post 分支权重的调制函数
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(delta_w, trace_pre_next, trace_post_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises NotImplementedError: 当 dilation 或 groups 不受支持时抛出
+    :return: ``(delta_w, (trace_pre_next, trace_post_next))``；``delta_w`` 与
+        ``weight`` 同形状
+    :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
 
     ----
 
@@ -502,68 +476,45 @@ def stdp_conv1d_step(
 
     * **English**
 
-    Run one tensor-only STDP update for raw Conv1d parameters. It preserves the
-    existing support boundary: only ``dilation == (1,)`` and ``groups == 1`` are
-    supported. The function does not read modules or ``MemoryModule`` memory and
-    does not manage ``step_mode`` or ``training/eval``.
+    Run one STDP update for a 1D convolution weight. ``trace`` is
+    ``(trace_pre, trace_post)``. ``in_spike`` must already include the synaptic
+    layer's padding. The function consequently expresses only the convolutional
+    STDP equation for dilation 1 and one group; it neither reads a ``Conv1d``
+    module nor interprets a padding mode.
 
-    :param weight: Conv1d weight tensor
-    :type weight: torch.Tensor
-    :param in_spike: Input spikes shaped ``[N, C_in, L]``
+    :param in_spike: Padded input spikes shaped ``[N, C_in, L_pad]``
     :type in_spike: torch.Tensor
     :param out_spike: Output spikes shaped ``[N, C_out, L_out]``
     :type out_spike: torch.Tensor
-    :param trace_pre: Materialized pre-synaptic trace tensor. With non-zero
-        padding, its length must match the padded ``in_spike``
-    :type trace_pre: torch.Tensor
-    :param trace_post: Materialized post-synaptic trace tensor
-    :type trace_post: torch.Tensor
-    :param tau_pre: Time constant of the pre trace
-    :type tau_pre: float
-    :param tau_post: Time constant of the post trace
-    :type tau_post: float
-    :param stride: One-dimensional convolution stride
+    :param trace: Current ``(trace_pre, trace_post)`` with the same shapes and
+        devices as ``in_spike`` and ``out_spike``, respectively
+    :type trace: Tuple[torch.Tensor, torch.Tensor]
+    :param weight: Weight shaped ``[C_out, C_in, K]``
+    :type weight: torch.Tensor
+    :param stride: Convolution stride ``(stride,)``
     :type stride: Tuple[int]
-    :param padding: One-dimensional convolution padding
-    :type padding: Tuple[int]
-    :param padding_mode: Padding mode
-    :type padding_mode: str
-    :param reversed_padding_repeated_twice: Expanded padding used by non-zero modes
-    :type reversed_padding_repeated_twice: Tuple[int, ...] or List[int] or None
-    :param dilation: One-dimensional convolution dilation
-    :type dilation: Tuple[int]
-    :param groups: Number of convolution groups
-    :type groups: int
+    :param tau_pre: Time constant of the pre-synaptic trace
+    :type tau_pre: float
+    :param tau_post: Time constant of the post-synaptic trace
+    :type tau_post: float
     :param f_pre: Weight modulation function for the pre branch
     :type f_pre: Callable[[torch.Tensor], torch.Tensor]
     :param f_post: Weight modulation function for the post branch
     :type f_post: Callable[[torch.Tensor], torch.Tensor]
-    :return: ``(delta_w, trace_pre_next, trace_post_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises NotImplementedError: If dilation or groups is unsupported
+    :return: ``(delta_w, (trace_pre_next, trace_post_next))``; ``delta_w`` has
+        the same shape as ``weight``
+    :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
     """
-    if dilation != (1,):
-        raise NotImplementedError(
-            "STDP with dilation != 1 for Conv1d has not been implemented!"
-        )
-    if groups != 1:
-        raise NotImplementedError(
-            "STDP with groups != 1 for Conv1d has not been implemented!"
-        )
-
-    stride_l = stride[0]
-    if padding != (0,):
-        p_l = padding[0]
-        if padding_mode != "zeros":
-            in_spike = F.pad(
-                in_spike, reversed_padding_repeated_twice, mode=padding_mode
-            )
-        else:
-            in_spike = F.pad(in_spike, pad=(p_l, p_l))
-
+    trace_pre, trace_post = trace
     trace_pre = trace_pre - trace_pre / tau_pre + in_spike
     trace_post = trace_post - trace_post / tau_post + out_spike
     delta_w = torch.zeros_like(weight)
+    stride_l = stride[0]
     for l in range(weight.shape[2]):
         l_end = in_spike.shape[2] - weight.shape[2] + 1 + l
         pre_spike = in_spike[:, :, l:l_end:stride_l]
@@ -579,13 +530,14 @@ def stdp_conv1d_step(
             tr_pre.unsqueeze(1) * out_spike.unsqueeze(2)
         ).permute([1, 2, 0, 3]).sum(dim=[2, 3])
         delta_w[:, :, l] += delta_w_pre + delta_w_post
-    return delta_w, trace_pre, trace_post
+    return delta_w, (trace_pre, trace_post)
 
 
 def mstdpet_reward_step(
     reward: torch.Tensor | float,
     eligibility: torch.Tensor,
     trace_e: torch.Tensor,
+    *,
     tau_trace: float,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     r"""
@@ -597,15 +549,18 @@ def mstdpet_reward_step(
 
     * **中文**
 
-    执行 mSTDP-ET reward 调制前的 eligibility trace 衰减：
-    ``trace_e = trace_e * exp(-1 / tau_trace) + eligibility / tau_trace``，
-    并返回 ``reward * trace_e``。
+    更新 mSTDP-ET eligibility trace，并用 reward 调制更新后的 trace。
 
-    :param reward: reward 调制信号
+    .. math::
+
+       tr_e^{t+1} &= tr_e^t \exp(-1 / \tau_{trace}) + e^t / \tau_{trace} \\
+       \Delta W^t &= r^t tr_e^{t+1}
+
+    :param reward: 标量或可与 ``trace_e`` 广播的 reward
     :type reward: torch.Tensor or float
-    :param eligibility: 已物化的 eligibility tensor
+    :param eligibility: 当前 eligibility，形状与 ``trace_e`` 相同或可广播
     :type eligibility: torch.Tensor
-    :param trace_e: 已物化的 eligibility trace tensor
+    :param trace_e: 当前 eligibility trace
     :type trace_e: torch.Tensor
     :param tau_trace: eligibility trace 时间常数
     :type tau_trace: float
@@ -618,20 +573,30 @@ def mstdpet_reward_step(
 
     * **English**
 
-    Apply the mSTDP-ET eligibility-trace decay before reward modulation:
-    ``trace_e = trace_e * exp(-1 / tau_trace) + eligibility / tau_trace``, then
-    return ``reward * trace_e``.
+    Update the mSTDP-ET eligibility trace and modulate the updated trace with the
+    reward.
 
-    :param reward: Reward modulation signal
+    .. math::
+
+       tr_e^{t+1} &= tr_e^t \exp(-1 / \tau_{trace}) + e^t / \tau_{trace} \\
+       \Delta W^t &= r^t tr_e^{t+1}
+
+    :param reward: Scalar reward or a tensor broadcastable with ``trace_e``
     :type reward: torch.Tensor or float
-    :param eligibility: Materialized eligibility tensor
+    :param eligibility: Current eligibility with the same shape as ``trace_e`` or
+        a broadcast-compatible shape
     :type eligibility: torch.Tensor
-    :param trace_e: Materialized eligibility-trace tensor
+    :param trace_e: Current eligibility trace
     :type trace_e: torch.Tensor
     :param tau_trace: Time constant of the eligibility trace
     :type tau_trace: float
     :return: ``(delta_w, trace_e_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
     """
     trace_e = trace_e * math.exp(-1 / tau_trace) + eligibility / tau_trace
     return reward * trace_e, trace_e

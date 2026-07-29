@@ -62,6 +62,11 @@ def delay_step(
         ``queue_next`` is the next state
     :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, ...]]
     :raises ValueError: If ``delay_steps`` is not a non-negative integer
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
     """
     if not isinstance(delay_steps, int) or delay_steps < 0:
         raise ValueError("delay_steps must be a non-negative integer")
@@ -122,5 +127,10 @@ def synapse_filter_step(
     :type reciprocal_tau: float | torch.Tensor
     :return: Next output current
     :rtype: torch.Tensor
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
     """
     return out_i - (1.0 - x) * out_i * reciprocal_tau + x

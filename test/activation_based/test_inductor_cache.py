@@ -146,11 +146,30 @@ def test_inductor_cache_compiles_same_key_once_across_threads(monkeypatch):
     for thread in threads:
         thread.start()
     for thread in threads:
-        thread.join()
+        thread.join(timeout=5)
 
+    assert all(not thread.is_alive() for thread in threads)
     assert len(compile_calls) == 1
     assert inductor_cache.info()["entries"] == 1
     inductor_cache.clear()
+
+
+def test_inductor_cache_uses_forward_only_surrogate_modules(monkeypatch):
+    inductor_cache.clear()
+    monkeypatch.setattr(inductor_cache.torch, "compile", lambda fn, **_kwargs: fn)
+    x_seq = torch.zeros(2, 1)
+    v = torch.zeros(1)
+
+    for surrogate_function in (
+        surrogate.DeterministicPass(spiking=False),
+        surrogate.PoissonPass(spiking=False),
+    ):
+        spike, _, _ = functional.if_multi_step_inductor(
+            x_seq, v, 1.0, 0.0, surrogate_function
+        )
+        assert spike.shape == x_seq.shape
+
+    assert inductor_cache.info()["entries"] == 0
 
 
 def test_inductor_cache_does_not_share_custom_surrogate_closures(monkeypatch):

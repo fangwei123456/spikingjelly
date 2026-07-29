@@ -123,6 +123,8 @@ remains a ``MemoryModule`` responsibility, so backend-specific functions identif
      - One ActivationAwareIF state update.
    * - :func:`sliding_psn_step <spikingjelly.activation_based.functional.neuron.sliding_psn_step>`
      - One SlidingPSN queue update.
+   * - :func:`gated_lif_step <spikingjelly.activation_based.functional.neuron.gated_lif_step>`
+     - One GatedLIF state update.
    * - :func:`stbif_step <spikingjelly.activation_based.functional.neuron.stbif_step>`
      - One SpikeZIP STBIF state update.
    * - :func:`if_multi_step_inductor <spikingjelly.activation_based.functional.neuron.if_multi_step_inductor>`
@@ -155,11 +157,6 @@ remains a ``MemoryModule`` responsibility, so backend-specific functions identif
      - ParametricLIF sequence update with Triton.
    * - :func:`activation_aware_if_multi_step_triton <spikingjelly.activation_based.functional.neuron.activation_aware_if_multi_step_triton>`
      - ActivationAwareIF sequence update with Triton.
-   * - :func:`gated_lif_multi_step <spikingjelly.activation_based.functional.neuron.gated_lif_multi_step>`
-     - Native GatedLIF sequence update.
-   * - :func:`stbif_multi_step_torch <spikingjelly.activation_based.functional.neuron.stbif_multi_step_torch>`
-     - Native Torch SpikeZIP STBIF sequence update.
-
 .. toctree::
    :hidden:
 
@@ -187,31 +184,6 @@ They do not read implicit ``MemoryModule`` memory.
    :hidden:
 
    layer <spikingjelly.activation_based.functional.layer>
-
-ANN-to-SNN State Updates
-++++++++++++++++++++++++
-
-这里只公开 SpikeZIP bias 的剩余释放步数更新。STA 编码和 attention matmul
-属于各 recipe 的局部数值过程，不作为通用状态接口；TD operator 也不重复包装其
-``ann_forward``。
-
-----
-
-Only SpikeZIP bias release-state updates are public here. STA encoding and
-attention matmul remain local numeric operations of their recipes, while TD
-operators do not duplicate their replaceable ``ann_forward``.
-
-.. list-table::
-
-   * - :func:`spikezip_bias_step <spikingjelly.activation_based.functional.ann2snn.spikezip_bias_step>`
-     - One SpikeZIP bias release-state update.
-   * - :func:`spikezip_bias_multi_step <spikingjelly.activation_based.functional.ann2snn.spikezip_bias_multi_step>`
-     - Native sequence update of SpikeZIP bias release state.
-
-.. toctree::
-   :hidden:
-
-   ann2snn <spikingjelly.activation_based.functional.ann2snn>
 
 Loss Functions
 +++++++++++++++
