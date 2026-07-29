@@ -164,7 +164,7 @@ class SynapseFilter(base.MemoryModule):
         if isinstance(self.out_i, float):
             self.out_i = torch.full_like(x, self.out_i)
         inv_tau = self.w.sigmoid() if self.learnable else 1.0 / self.tau
-        self.out_i = self.out_i - (1.0 - x) * self.out_i * inv_tau + x
+        self.out_i = functional.synapse_filter_step(x, self.out_i, inv_tau)
         return self.out_i
 
 
@@ -348,10 +348,11 @@ class Delay(base.MemoryModule):
         return self._delay_steps
 
     def single_step_forward(self, x: torch.Tensor):
-        self.queue.append(x)
-        if len(self.queue) > self.delay_steps:
-            return self.queue.pop(0)
-        return torch.zeros_like(x)
+        y, queue_next = functional.delay_step(
+            x, tuple(self.queue), self.delay_steps
+        )
+        self.queue[:] = queue_next
+        return y
 
     def multi_step_forward(self, x_seq: torch.Tensor):
         return functional.delay(x_seq, self.delay_steps)

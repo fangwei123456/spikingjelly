@@ -35,6 +35,32 @@ __all__ = [
 ]
 
 
+def _matmul_delta(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    a_sum: torch.Tensor,
+    b_sum: torch.Tensor,
+    transpose_b: bool = False,
+) -> torch.Tensor:
+    if transpose_b:
+        b = b.transpose(-1, -2)
+        b_sum = b_sum.transpose(-1, -2)
+    return a_sum @ b + a @ b_sum - a @ b
+
+
+def _matmul_sequence_delta(
+    a_seq: torch.Tensor,
+    b_seq: torch.Tensor,
+    transpose_b: bool = False,
+) -> torch.Tensor:
+    a_sum = a_seq.cumsum(0)
+    b_sum = b_seq.cumsum(0)
+    if transpose_b:
+        b_sum = b_sum.transpose(-1, -2)
+    product_sum = a_sum @ b_sum
+    return torch.diff(product_sum, dim=0, prepend=torch.zeros_like(product_sum[:1]))
+
+
 class SpikeZIPLinear(TDLinear):
     def __init__(
         self,
@@ -207,28 +233,6 @@ class SpikeZIPSoftmax(TDSoftmax):
         super().__init__(dim=dim, step_mode="s")
 
 
-def _spikezip_matmul_delta(a_t, b_t, a_sum, b_sum, transpose_b: bool = False):
-    b_t_arg = b_t.transpose(-2, -1) if transpose_b else b_t
-    b_sum_arg = b_sum.transpose(-2, -1) if transpose_b else b_sum
-    return a_sum @ b_t_arg + a_t @ b_sum_arg - a_t @ b_t_arg
-
-
-def _spikezip_matmul_sequence_delta(
-    a_seq: torch.Tensor,
-    b_seq: torch.Tensor,
-    transpose_b: bool = False,
-) -> torch.Tensor:
-    a_cum = a_seq.cumsum(dim=0)
-    b_cum = b_seq.cumsum(dim=0)
-    if transpose_b:
-        b_cum = b_cum.transpose(-2, -1)
-    y_cum = a_cum @ b_cum
-    y_seq = torch.empty_like(y_cum)
-    y_seq[0] = y_cum[0]
-    y_seq[1:] = y_cum[1:] - y_cum[:-1]
-    return y_seq
-
-
 class SpikeZIPRobertaSelfAttention(base.MemoryModule):
     def __init__(self, source: nn.Module, level: int) -> None:
         super().__init__()
@@ -325,14 +329,14 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
 
         q_sum = self.transpose_for_scores(self.query_if.accumulated)
         k_sum = self.transpose_for_scores(self.key_if.accumulated)
-        scores = _spikezip_matmul_delta(query_layer, key_layer, q_sum, k_sum, True)
+        scores = _matmul_delta(query_layer, key_layer, q_sum, k_sum, True)
         scores = scores / math.sqrt(self.attention_head_size)
         if attention_mask is not None and self.t == 0:
             scores = scores + attention_mask
         attention_probs = self.softmax(scores)
         attention_probs = self.dropout(attention_probs)
         attention_probs = self.attn_if(attention_probs)
-        context = _spikezip_matmul_delta(
+        context = _matmul_delta(
             attention_probs,
             value_layer,
             self.attn_if.accumulated,
@@ -375,7 +379,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
             value_layer = self.transpose_for_scores(
                 self.value_if(self.value(hidden_states))
             )
-            scores = _spikezip_matmul_sequence_delta(
+            scores = _matmul_sequence_delta(
                 query_layer,
                 key_layer,
                 transpose_b=True,
@@ -387,7 +391,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
             attention_probs = self.softmax(scores)
             attention_probs = self.dropout(attention_probs)
             attention_probs = self.attn_if(attention_probs)
-            context_seq = _spikezip_matmul_sequence_delta(
+            context_seq = _matmul_sequence_delta(
                 attention_probs,
                 value_layer,
             )
@@ -459,7 +463,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
         query = query * self.scale
         q_sum = self.q_if.accumulated * self.scale
         k_sum = self.k_if.accumulated
-        attention = _spikezip_matmul_delta(query, key, q_sum, k_sum, True)
+        attention = _matmul_delta(query, key, q_sum, k_sum, True)
 
         if self.is_softmax:
             attention = self.softmax(attention)
@@ -470,7 +474,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
             attention_sum = self.attn_if.accumulated / seq_len
 
         attention = self.attn_drop(attention)
-        context = _spikezip_matmul_delta(
+        context = _matmul_delta(
             attention,
             value,
             attention_sum,
@@ -498,7 +502,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
             key = self.k_if(key)
             value = self.v_if(value)
 
-            attention = _spikezip_matmul_sequence_delta(
+            attention = _matmul_sequence_delta(
                 query * self.scale,
                 key,
                 transpose_b=True,
@@ -510,7 +514,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
                 attention = self.attn_if(attention) / seq_len
 
             attention = self.attn_drop(attention)
-            context = _spikezip_matmul_sequence_delta(
+            context = _matmul_sequence_delta(
                 attention,
                 value,
             )

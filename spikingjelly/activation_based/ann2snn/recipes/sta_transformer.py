@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import fx
 from tqdm import tqdm
+
 from spikingjelly.activation_based import base
 
 from spikingjelly.activation_based.ann2snn.operators import (
@@ -258,10 +259,7 @@ class _STAConstant(base.MemoryModule):
         self.step_mode = step_mode
 
     def single_step_forward(self) -> torch.Tensor:
-        if self.t == 0:
-            output = self.value
-        else:
-            output = torch.zeros_like(self.value)
+        output = self.value if self.t == 0 else torch.zeros_like(self.value)
         self.t += 1
         return output
 

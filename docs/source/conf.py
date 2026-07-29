@@ -26,11 +26,19 @@ class _DocsBuildLogFilter(logging.Filter):
         ignored_prefixes = (
             "spikingjelly.activation_based.spike_op: try to use `torch.utils.cpp_extension.load_inline`",
             "If it is hanging, pleast try to delete torch_extensions cache directory.",
+            "NOTE: Redirects are currently not supported in MacOs.",
+            "Triton not available, find_triton_kernels = []",
         )
         return not message.startswith(ignored_prefixes)
 
 
-logging.getLogger().addFilter(_DocsBuildLogFilter())
+_docs_build_log_filter = _DocsBuildLogFilter()
+for _logger_name in (
+    "",
+    "torch.distributed.elastic.multiprocessing.redirects",
+    "torch._library.triton",
+):
+    logging.getLogger(_logger_name).addFilter(_docs_build_log_filter)
 
 # sys.path.insert(0, os.path.abspath('../../spikingjelly/'))
 sys.path.insert(0, os.path.abspath("../../"))
@@ -107,7 +115,7 @@ html_theme_options = {
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
-    "PyTorch": ("https://pytorch.org/docs/stable/", None),
+    "PyTorch": ("https://docs.pytorch.org/docs/stable/", None),
 }
 
 show_authors = True

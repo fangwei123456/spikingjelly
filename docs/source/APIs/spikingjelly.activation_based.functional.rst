@@ -83,6 +83,108 @@ SpikingJelly's **forward functions** provide multi-step forward propagation logi
 
    forward <spikingjelly.activation_based.functional.forward>
 
+Neuron State Updates
+++++++++++++++++++++
+
+这些函数显式接收并返回神经元状态。``*_step`` 表示一个时间步的完整更新；
+``*_multi_step`` 表示具有独立实现的时间序列更新，而不是对 ``*_step`` 的 Python
+循环包装。backend 仍由 ``MemoryModule`` 选择，因此 backend 专用函数在名称中
+标出 ``cupy``、``triton`` 或 ``inductor``。
+
+----
+
+These functions receive and return neuron states explicitly. ``*_step`` denotes
+one complete time-step update. ``*_multi_step`` denotes an independently implemented
+sequence update, not a Python-loop wrapper around ``*_step``. Backend selection
+remains a ``MemoryModule`` responsibility, so backend-specific functions identify
+``cupy``, ``triton``, or ``inductor`` in their names.
+
+.. list-table::
+
+   * - :func:`if_step <spikingjelly.activation_based.functional.neuron.if_step>`
+     - One IF state update.
+   * - :func:`qif_step <spikingjelly.activation_based.functional.neuron.qif_step>`
+     - One QIF state update.
+   * - :func:`eif_step <spikingjelly.activation_based.functional.neuron.eif_step>`
+     - One EIF state update.
+   * - :func:`lif_step <spikingjelly.activation_based.functional.neuron.lif_step>`
+     - One LIF state update.
+   * - :func:`plif_step <spikingjelly.activation_based.functional.neuron.plif_step>`
+     - One ParametricLIF state update.
+   * - :func:`izhikevich_step <spikingjelly.activation_based.functional.neuron.izhikevich_step>`
+     - One Izhikevich voltage and adaptation-current update.
+   * - :func:`klif_step <spikingjelly.activation_based.functional.neuron.klif_step>`
+     - One KLIF state update.
+   * - :func:`cuba_lif_step <spikingjelly.activation_based.functional.neuron.cuba_lif_step>`
+     - One current-based LIF state update.
+   * - :func:`lava_cuba_lif_step <spikingjelly.activation_based.functional.neuron.lava_cuba_lif_step>`
+     - One Lava-compatible quantized CUBA-LIF state update.
+   * - :func:`activation_aware_if_step <spikingjelly.activation_based.functional.neuron.activation_aware_if_step>`
+     - One ActivationAwareIF state update.
+   * - :func:`sliding_psn_step <spikingjelly.activation_based.functional.neuron.sliding_psn_step>`
+     - One SlidingPSN queue update.
+   * - :func:`gated_lif_step <spikingjelly.activation_based.functional.neuron.gated_lif_step>`
+     - One GatedLIF state update.
+   * - :func:`stbif_step <spikingjelly.activation_based.functional.neuron.stbif_step>`
+     - One SpikeZIP STBIF state update.
+   * - :func:`if_multi_step_inductor <spikingjelly.activation_based.functional.neuron.if_multi_step_inductor>`
+     - IF sequence update compiled by Inductor.
+   * - :func:`lif_multi_step_inductor <spikingjelly.activation_based.functional.neuron.lif_multi_step_inductor>`
+     - LIF sequence update compiled by Inductor.
+   * - :func:`plif_multi_step_inductor <spikingjelly.activation_based.functional.neuron.plif_multi_step_inductor>`
+     - ParametricLIF sequence update compiled by Inductor.
+   * - :func:`if_step_cupy <spikingjelly.activation_based.functional.neuron.if_step_cupy>`
+     - One IF update with caller-selected CuPy kernels.
+   * - :func:`lif_step_cupy <spikingjelly.activation_based.functional.neuron.lif_step_cupy>`
+     - One LIF update with caller-selected CuPy kernels.
+   * - :func:`if_multi_step_cupy <spikingjelly.activation_based.functional.neuron.if_multi_step_cupy>`
+     - IF sequence update with CuPy.
+   * - :func:`lif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.lif_multi_step_cupy>`
+     - LIF sequence update with CuPy.
+   * - :func:`plif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.plif_multi_step_cupy>`
+     - ParametricLIF sequence update with CuPy.
+   * - :func:`qif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.qif_multi_step_cupy>`
+     - QIF sequence update with CuPy.
+   * - :func:`eif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.eif_multi_step_cupy>`
+     - EIF sequence update with CuPy.
+   * - :func:`izhikevich_multi_step_cupy <spikingjelly.activation_based.functional.neuron.izhikevich_multi_step_cupy>`
+     - Izhikevich sequence update with CuPy.
+   * - :func:`if_multi_step_triton <spikingjelly.activation_based.functional.neuron.if_multi_step_triton>`
+     - IF sequence update with Triton.
+   * - :func:`lif_multi_step_triton <spikingjelly.activation_based.functional.neuron.lif_multi_step_triton>`
+     - LIF sequence update with Triton.
+   * - :func:`plif_multi_step_triton <spikingjelly.activation_based.functional.neuron.plif_multi_step_triton>`
+     - ParametricLIF sequence update with Triton.
+   * - :func:`activation_aware_if_multi_step_triton <spikingjelly.activation_based.functional.neuron.activation_aware_if_multi_step_triton>`
+     - ActivationAwareIF sequence update with Triton.
+.. toctree::
+   :hidden:
+
+   neuron <spikingjelly.activation_based.functional.neuron>
+
+Stateful Layer Updates
+++++++++++++++++++++++
+
+这些函数显式接收并返回 stateful layer 的局部状态，不读取 ``MemoryModule`` 的隐式
+memory。
+
+----
+
+These functions receive and return local state for stateful layers explicitly.
+They do not read implicit ``MemoryModule`` memory.
+
+.. list-table::
+
+   * - :func:`delay_step <spikingjelly.activation_based.functional.layer.delay_step>`
+     - One Delay queue update.
+   * - :func:`synapse_filter_step <spikingjelly.activation_based.functional.layer.synapse_filter_step>`
+     - One SynapseFilter state update.
+
+.. toctree::
+   :hidden:
+
+   layer <spikingjelly.activation_based.functional.layer>
+
 Loss Functions
 +++++++++++++++
 
@@ -105,6 +207,39 @@ Loss Functions
    :hidden:
 
    loss <spikingjelly.activation_based.functional.loss>
+
+Learning State Transition Functions
++++++++++++++++++++++++++++++++++++
+
+这些函数显式接收 STDP/mSTDP/mSTDP-ET 的 trace、eligibility、reward 和 raw
+权重 tensor，不读取 monitor、``MemoryModule`` memory，也不负责 ``step_mode``、
+``training/eval`` 或梯度写入。
+
+----
+
+These functions receive STDP/mSTDP/mSTDP-ET traces, eligibility, reward, and
+raw weight tensors explicitly. They do not read monitors or ``MemoryModule``
+memory, and do not manage ``step_mode``, ``training/eval``, or gradient writes.
+
+.. list-table::
+
+   * - :func:`stdp_linear_step <spikingjelly.activation_based.functional.learning.stdp_linear_step>`
+     - Tensor-only linear STDP single-step update.
+   * - :func:`stdp_conv1d_step <spikingjelly.activation_based.functional.learning.stdp_conv1d_step>`
+     - Tensor-only Conv1d STDP single-step update.
+   * - :func:`stdp_conv2d_step <spikingjelly.activation_based.functional.learning.stdp_conv2d_step>`
+     - Tensor-only Conv2d STDP single-step update.
+   * - :func:`mstdp_linear_step <spikingjelly.activation_based.functional.learning.mstdp_linear_step>`
+     - Tensor-only linear mSTDP eligibility update.
+   * - :func:`mstdpet_linear_step <spikingjelly.activation_based.functional.learning.mstdpet_linear_step>`
+     - Tensor-only linear mSTDP-ET eligibility update.
+   * - :func:`mstdpet_reward_step <spikingjelly.activation_based.functional.learning.mstdpet_reward_step>`
+     - Eligibility-trace decay and reward modulation for mSTDP-ET.
+
+.. toctree::
+   :hidden:
+
+   learning <spikingjelly.activation_based.functional.learning>
 
 Online Learning Pipelines
 +++++++++++++++++++++++++++++++

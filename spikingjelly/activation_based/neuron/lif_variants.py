@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .. import base, surrogate
+from .. import base, functional, surrogate
 from .base_node import BaseNode
 from .lif import LIFNode
 
@@ -226,20 +226,37 @@ class GatedLIFNode(base.MemoryModule):
         )
 
     def multi_step_forward(self, x_seq: torch.Tensor):
-        alpha, beta, gamma = (
-            self.alpha.view(1, -1, 1, 1).sigmoid(),
-            self.beta.view(1, -1, 1, 1).sigmoid(),
-            self.gamma.view(1, -1, 1, 1).sigmoid(),
-        )
-        y_seq = []
+        if not isinstance(self.v, torch.Tensor):
+            self.v = torch.full_like(x_seq[0], self.v)
+        alpha = self.alpha.view(1, -1, 1, 1).sigmoid()
+        beta = self.beta.view(1, -1, 1, 1).sigmoid()
+        gamma = self.gamma.view(1, -1, 1, 1).sigmoid()
+        tau = self.tau.view(1, -1, 1, 1).sigmoid()
+        v_threshold = self.v_threshold.view(1, -1, 1, 1).sigmoid()
+        linear_decay = self.linear_decay.view(1, -1, 1, 1).sigmoid()
+        v_subreset = self.v_subreset.view(1, -1, 1, 1).sigmoid()
+
         spike = torch.zeros(x_seq.shape[1:], device=x_seq.device)
+        spike_seq = []
+        v = self.v
         for t in range(self.T):
-            self.neuronal_charge(x_seq[t], alpha, beta, t)
-            self.neuronal_reset(spike, alpha, gamma)
-            spike = self.neuronal_fire()
-            self.v = self.u
-            y_seq.append(spike)
-        return torch.stack(y_seq)
+            spike, v = functional.gated_lif_step(
+                x_seq[t],
+                v,
+                spike,
+                alpha,
+                beta,
+                gamma,
+                tau,
+                v_threshold,
+                linear_decay,
+                v_subreset,
+                self.conduct[t].view(1, -1, 1, 1).sigmoid(),
+                self.surrogate_function,
+            )
+            spike_seq.append(spike)
+        self.u = self.v = v
+        return torch.stack(spike_seq)
 
 
 class KLIFNode(BaseNode):

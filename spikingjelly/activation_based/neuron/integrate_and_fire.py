@@ -4,7 +4,7 @@ from typing import Optional, Tuple, Union
 
 import torch
 
-from .. import base, surrogate
+from .. import base, functional, surrogate
 from .base_node import BaseNode, NonSpikingBaseNode, SimpleBaseNode
 
 try:
@@ -301,56 +301,19 @@ class IFNode(BaseNode):
         v = v - spike * v_threshold
         return spike, v
 
-    def _build_inductor_multi_step_graph(self):
-        store_v_seq = self.store_v_seq
-        soft_reset = self.v_reset is None
-        v_reset = 0.0 if soft_reset else self.v_reset
-        surrogate_fn = self.surrogate_function
-        v_threshold = self.v_threshold
-        detach_reset = self.detach_reset
-
-        def _graph(x_seq: torch.Tensor, v_init: torch.Tensor):
-            v = v_init
-            spike_seq = torch.empty_like(x_seq)
-            if store_v_seq:
-                v_seq = torch.empty_like(x_seq)
-            for t in range(x_seq.shape[0]):
-                v = v + x_seq[t]
-                spike = surrogate_fn(v - v_threshold)
-                spike_d = spike.detach() if detach_reset else spike
-                if soft_reset:
-                    v = v - spike_d * v_threshold
-                else:
-                    v = spike_d * v_reset + (1.0 - spike_d) * v
-                spike_seq[t] = spike
-                if store_v_seq:
-                    v_seq[t] = v
-            if store_v_seq:
-                return spike_seq, v, v_seq
-            return spike_seq, v
-
-        return _graph
-
     def _inductor_multi_step_forward(self, x_seq: torch.Tensor):
         self.v_float_to_tensor(x_seq[0])
-        x_seq = self._canonicalize_inductor_tensor(x_seq)
-        v_init = self._canonicalize_inductor_tensor(self.v)
-        graph = self._compile_inductor_graph(
-            (
-                "if",
-                self.store_v_seq,
-                self.v_threshold,
-                self.v_reset,
-                self.detach_reset,
-                self._surrogate_inductor_cache_key(),
-            ),
-            self._build_inductor_multi_step_graph(),
+        spike_seq, self.v, v_seq = functional.if_multi_step_inductor(
+            x_seq,
+            self.v,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+            self.store_v_seq,
         )
-        out = graph(x_seq, v_init)
         if self.store_v_seq:
-            spike_seq, self.v, self.v_seq = out
-        else:
-            spike_seq, self.v = out
+            self.v_seq = v_seq
         return spike_seq
 
     def multi_step_forward(self, x_seq: torch.Tensor):
@@ -1078,13 +1041,15 @@ class ActivationAwareIFNode(base.MemoryModule):
         self.v_float_to_tensor(x)
         threshold = self._broadcast_parameter(self.v_threshold, x, "v_threshold")
         offset = self._broadcast_parameter(self.v_offset, x, "v_offset")
-        h = self.v + x
-        spike = self.surrogate_function(h + offset - threshold)
-        spike_d = spike.detach() if self.detach_reset else spike
-        if self.v_reset is None:
-            self.v = h - spike_d * threshold
-        else:
-            self.v = spike_d * self.v_reset + (1.0 - spike_d) * h
+        spike, self.v = functional.activation_aware_if_step(
+            x,
+            self.v,
+            threshold,
+            offset,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+        )
         return spike
 
     def _triton_multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
@@ -1148,23 +1113,18 @@ class ActivationAwareIFNode(base.MemoryModule):
             channel_size = 1
             inner_size = x_seq[0].numel()
 
-        spike_seq, v_out = (
-            activation_aware_if_triton_kernel._multistep_activation_aware_if(
-                x_seq,
-                self.v,
-                threshold,
-                offset,
-                channel_size=channel_size,
-                inner_size=inner_size,
-                v_reset=self.v_reset,
-                store_v_seq=self.store_v_seq,
-            )
+        spike_seq, self.v, v_seq = functional.activation_aware_if_multi_step_triton(
+            x_seq,
+            self.v,
+            threshold,
+            offset,
+            channel_size,
+            inner_size,
+            self.v_reset,
+            self.store_v_seq,
         )
         if self.store_v_seq:
-            self.v_seq = v_out
-            self.v = v_out[-1].clone()
-        else:
-            self.v = v_out
+            self.v_seq = v_seq
         return spike_seq
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
@@ -1222,18 +1182,16 @@ class ActivationAwareIFNode(base.MemoryModule):
             )
         if self.backend == "triton":
             return self._triton_multi_step_forward(x_seq)
-        T = x_seq.shape[0]
-        y_seq = []
-        if self.store_v_seq:
-            v_seq = []
-        for t in range(T):
-            y = self.single_step_forward(x_seq[t])
-            y_seq.append(y)
-            if self.store_v_seq:
-                v_seq.append(self.v)
-        if self.store_v_seq:
-            self.v_seq = torch.stack(v_seq, dim=0)
-        return torch.stack(y_seq, dim=0)
+        if not self.store_v_seq:
+            return super().multi_step_forward(x_seq)
+
+        spike_seq = []
+        v_seq = []
+        for x in x_seq:
+            spike_seq.append(self.single_step_forward(x))
+            v_seq.append(self.v)
+        self.v_seq = torch.stack(v_seq)
+        return torch.stack(spike_seq)
 
     def extra_repr(self):
         return (

@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .. import surrogate, base
+from .. import base, functional, surrogate
 
 
 __all__ = ["PSN", "MaskedPSN", "SlidingPSN"]
@@ -424,19 +424,11 @@ class SlidingPSN(base.MemoryModule):
         return weight
 
     def single_step_forward(self, x: torch.Tensor):
-        self.queue.append(x.flatten())
-        if self.queue.__len__() > self.k:
-            self.queue.pop(0)
-
-        weight = self.weight[self.k - self.queue.__len__() : self.k]
-        x_seq = torch.stack(self.queue)
-
-        weight = weight.unsqueeze(-1)
-
-        h = torch.sum(weight * x_seq, 0)
-        spike = self.surrogate_function(h + self.bias)
-
-        return spike.view(x.shape)
+        spike, queue = functional.sliding_psn_step(
+            x, tuple(self.queue), self.weight, self.bias, self.surrogate_function
+        )
+        self.queue[:] = queue
+        return spike
 
     def multi_step_forward(self, x_seq: torch.Tensor):
         if self.backend == "gemm":

@@ -11,6 +11,24 @@ and the archived documentation linked from the project README.
 
 ### Features
 
+#### Functional State Transitions
+
+Module: `spikingjelly.activation_based.functional`.
+
+- Added explicit tensor-state APIs for modules with state-update semantics,
+  including neurons, delay and synaptic filters, learning traces, and SpikeZIP
+  STBIF updates. Existing modules retain their public state, lifecycle, backend
+  selection, and output behavior.
+- State-update APIs use `*_step` for one complete update and `*_multi_step` only for
+  independently implemented sequence paths. Supported CuPy, Triton, and
+  Inductor paths identify their backend in the function name.
+- The Inductor neuron multi-step implementation is the single source of its state-update equation
+  and shares a bounded process-local compiled-graph cache.
+- Hookable Node classes retain their existing execution paths; their standard
+  transitions are also available as independent functional APIs.
+- Added FlexSN custom-op registry diagnostics for entry, owner-reference, and
+  active-reference counts.
+
 #### ANN-to-SNN Conversion
 
 Module: `spikingjelly.activation_based.ann2snn`.
@@ -100,6 +118,15 @@ Module: `spikingjelly.timing_based.neuron`.
 - Fixed `Tempotron` outputs when batch or output-feature size is one.
 
 ### Improvements
+
+#### Neuron Backend Caches
+
+Module: `spikingjelly.activation_based.neuron`.
+
+- Moved standard IF/LIF/ParametricLIF Inductor compiled-graph ownership from
+  individual neuron instances to a bounded, PID-aware neuron backend cache.
+  Equivalent modules can now share compiled callables without serializing cache
+  entries through module deepcopy or pickle.
 
 #### Timing-Based Models
 

@@ -205,6 +205,8 @@ class BaseNode(base.MemoryModule):
         # used for cupy backend
         self.forward_kernel = None
         self.backward_kernel = None
+
+        # Kept empty for compatibility; compiled graphs live in inductor_cache.
         self._inductor_compiled_graphs = {}
 
     @property
@@ -375,46 +377,6 @@ class BaseNode(base.MemoryModule):
                 )
             elif self.v.dtype != x.dtype or self.v.device != x.device:
                 self.v = self.v.to(dtype=x.dtype, device=x.device)
-
-    def _compile_inductor_graph(self, cache_key, fn):
-        compiled = self._inductor_compiled_graphs.get(cache_key)
-        if compiled is not None:
-            return compiled
-        compiled = torch.compile(
-            fn,
-            backend="inductor",
-            options={
-                "triton.cudagraphs": False,
-                "triton.cudagraph_trees": False,
-            },
-        )
-        self._inductor_compiled_graphs[cache_key] = compiled
-        return compiled
-
-    @staticmethod
-    def _canonicalize_inductor_tensor(tensor: torch.Tensor) -> torch.Tensor:
-        return tensor.contiguous()
-
-    def _surrogate_inductor_cache_key(self):
-        sg = self.surrogate_function
-        params = tuple(sorted(getattr(sg, "_sg_params", {}).items()))
-        return (
-            type(sg).__module__,
-            type(sg).__qualname__,
-            getattr(sg, "spiking", None),
-            params,
-        )
-
-    def __getstate__(self):
-        state = super().__getstate__()
-        if "_inductor_compiled_graphs" in state:
-            state["_inductor_compiled_graphs"] = {}
-        return state
-
-    def __setstate__(self, state):
-        super().__setstate__(state)
-        if not hasattr(self, "_inductor_compiled_graphs"):
-            self._inductor_compiled_graphs = {}
 
 
 class NonSpikingBaseNode(nn.Module, base.MultiStepModule):

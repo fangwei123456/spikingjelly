@@ -1,5 +1,6 @@
 import gc
 
+import pytest
 import torch
 import torch.nn as nn
 
@@ -278,6 +279,169 @@ def test_mstdp_learners_free_tensors_with_graph_connected_reward():
     assert _count_alive_tensors() <= baseline + 5
 
 
+def test_functional_learning_linear_helpers_match_legacy_helpers():
+    fc = layer.Linear(4, 3, bias=False)
+    in_spike = (torch.rand(2, 4) > 0.5).float()
+    out_spike = (torch.rand(2, 3) > 0.5).float()
+
+    expected = learning.stdp_linear_single_step(
+        fc, in_spike, out_spike, None, None, 2.0, 3.0, f_weight, f_weight
+    )
+    delta_w, (trace_pre, trace_post) = functional.stdp_linear_step(
+        in_spike,
+        out_spike,
+        (torch.zeros_like(in_spike), torch.zeros_like(out_spike)),
+        fc.weight.data,
+        tau_pre=2.0,
+        tau_post=3.0,
+        f_pre=f_weight,
+        f_post=f_weight,
+    )
+    actual = trace_pre, trace_post, delta_w
+    for a, b in zip(actual, expected, strict=True):
+        assert torch.allclose(a, b)
+
+    expected = learning.mstdp_linear_single_step(
+        fc, in_spike, out_spike, None, None, 2.0, 3.0, f_weight, f_weight
+    )
+    eligibility, (trace_pre, trace_post) = functional.mstdp_linear_step(
+        in_spike,
+        out_spike,
+        (torch.zeros_like(in_spike), torch.zeros_like(out_spike)),
+        fc.weight.data,
+        tau_pre=2.0,
+        tau_post=3.0,
+        f_pre=f_weight,
+        f_post=f_weight,
+    )
+    actual = trace_pre, trace_post, eligibility
+    for a, b in zip(actual, expected, strict=True):
+        assert torch.allclose(a, b)
+
+    expected = learning.mstdpet_linear_single_step(
+        fc, in_spike[0], out_spike[0], None, None, 2.0, 3.0, 5.0, f_weight, f_weight
+    )
+    eligibility, (trace_pre, trace_post) = functional.mstdpet_linear_step(
+        in_spike[0],
+        out_spike[0],
+        (torch.zeros_like(in_spike[0]), torch.zeros_like(out_spike[0])),
+        fc.weight.data,
+        tau_pre=2.0,
+        tau_post=3.0,
+        f_pre=f_weight,
+        f_post=f_weight,
+    )
+    actual = trace_pre, trace_post, eligibility
+    for a, b in zip(actual, expected, strict=True):
+        assert torch.allclose(a, b)
+
+
+def test_functional_learning_conv_helpers_match_legacy_helpers():
+    conv1 = layer.Conv1d(2, 3, kernel_size=3, padding=1, bias=False)
+    in_spike1 = (torch.rand(2, 2, 5) > 0.5).float()
+    out_spike1 = (torch.rand(2, 3, 5) > 0.5).float()
+    expected1 = learning.stdp_conv1d_single_step(
+        conv1, in_spike1, out_spike1, None, None, 2.0, 3.0, f_weight, f_weight
+    )
+    padded_in_spike1 = nn.functional.pad(in_spike1, (1, 1))
+    delta_w1, (trace_pre1, trace_post1) = functional.stdp_conv1d_step(
+        padded_in_spike1,
+        out_spike1,
+        (torch.zeros_like(padded_in_spike1), torch.zeros_like(out_spike1)),
+        conv1.weight.data,
+        stride=conv1.stride,
+        tau_pre=2.0,
+        tau_post=3.0,
+        f_pre=f_weight,
+        f_post=f_weight,
+    )
+    actual1 = trace_pre1, trace_post1, delta_w1
+    for a, b in zip(actual1, expected1, strict=True):
+        assert torch.allclose(a, b)
+
+    conv2 = layer.Conv2d(2, 3, kernel_size=3, padding=1, bias=False)
+    in_spike2 = (torch.rand(2, 2, 5, 5) > 0.5).float()
+    out_spike2 = (torch.rand(2, 3, 5, 5) > 0.5).float()
+    expected2 = learning.stdp_conv2d_single_step(
+        conv2, in_spike2, out_spike2, None, None, 2.0, 3.0, f_weight, f_weight
+    )
+    padded_in_spike2 = nn.functional.pad(in_spike2, (1, 1, 1, 1))
+    delta_w2, (trace_pre2, trace_post2) = functional.stdp_conv2d_step(
+        padded_in_spike2,
+        out_spike2,
+        (torch.zeros_like(padded_in_spike2), torch.zeros_like(out_spike2)),
+        conv2.weight.data,
+        stride=conv2.stride,
+        tau_pre=2.0,
+        tau_post=3.0,
+        f_pre=f_weight,
+        f_post=f_weight,
+    )
+    actual2 = trace_pre2, trace_post2, delta_w2
+    for a, b in zip(actual2, expected2, strict=True):
+        assert torch.allclose(a, b)
+
+
+def test_stdp_conv_helpers_keep_supported_boundary():
+    conv1 = layer.Conv1d(2, 3, kernel_size=3, dilation=2, bias=False)
+    with pytest.raises(NotImplementedError, match="dilation"):
+        learning.stdp_conv1d_single_step(
+            conv1,
+            torch.zeros(1, 2, 5),
+            torch.zeros(1, 3, 1),
+            None,
+            None,
+            2.0,
+            3.0,
+        )
+
+    conv2 = layer.Conv2d(2, 4, kernel_size=3, groups=2, bias=False)
+    with pytest.raises(NotImplementedError, match="groups"):
+        learning.stdp_conv2d_single_step(
+            conv2,
+            torch.zeros(1, 2, 5, 5),
+            torch.zeros(1, 4, 3, 3),
+            None,
+            None,
+            2.0,
+            3.0,
+        )
+
+
+def test_mstdpet_reward_step_uses_explicit_tensor_state():
+    eligibility = torch.arange(6, dtype=torch.float32).view(3, 2)
+    trace_e = torch.ones(3, 2)
+    dw, trace_e_next = functional.mstdpet_reward_step(
+        0.25,
+        eligibility,
+        trace_e,
+        tau_trace=2.0,
+    )
+    expected_trace = trace_e * torch.exp(torch.tensor(-0.5)) + eligibility / 2.0
+    assert torch.allclose(trace_e_next, expected_trace)
+    assert torch.allclose(dw, 0.25 * expected_trace)
+
+
+def test_stdp_multi_step_preserves_empty_sequence_state():
+    synapse = layer.Linear(3, 4)
+    trace_pre = torch.randn(2, 3)
+    trace_post = torch.randn(2, 4)
+
+    trace_pre_next, trace_post_next, delta_w = learning.stdp_multi_step(
+        synapse,
+        torch.empty(0, 2, 3),
+        torch.empty(0, 2, 4),
+        trace_pre,
+        trace_post,
+        tau_pre=2.0,
+        tau_post=3.0,
+    )
+
+    assert trace_pre_next is trace_pre
+    assert trace_post_next is trace_post
+    assert torch.equal(delta_w, torch.zeros_like(synapse.weight))
+
+
 if __name__ == "__main__":
     test_stdp_learner_records_are_detached()
     test_stdp_learner_step_does_not_retain_graph()
@@ -287,4 +451,8 @@ if __name__ == "__main__":
     test_mstdp_learners_step_detaches_reward()
     test_mstdp_learners_return_detached_delta_w()
     test_mstdp_learners_free_tensors_with_graph_connected_reward()
+    test_functional_learning_linear_helpers_match_legacy_helpers()
+    test_functional_learning_conv_helpers_match_legacy_helpers()
+    test_mstdpet_reward_step_uses_explicit_tensor_state()
+    test_stdp_multi_step_preserves_empty_sequence_state()
     print("Done!")

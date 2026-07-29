@@ -1,10 +1,11 @@
+import math
+from abc import abstractmethod
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from . import functional
-import math
-from . import base, neuron, surrogate
-from abc import abstractmethod
+
+from . import base, functional, neuron, surrogate
 
 
 def _population_parameters(obs_dim, pop_dim, mean_range, std):
