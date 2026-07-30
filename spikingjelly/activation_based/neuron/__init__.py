@@ -1,6 +1,7 @@
 # core neurons
 from .base_node import *
 from .integrate_and_fire import *
+from .ilif import *
 from .lif import *
 from .plif import *
 from .psn import *

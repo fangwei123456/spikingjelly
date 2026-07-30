@@ -108,6 +108,15 @@ def test_count_domain_reconstruction_equals_multistep_temporal_sum():
     assert torch.equal(encoder.reconstruct(value), sequence.sum(0))
 
 
+def test_count_domain_reconstruction_uses_spike_count_surrogate_gradient():
+    encoder = SignedQCFSSequenceEncoder(torch.tensor([0.25]), time_steps=4)
+    value = torch.tensor([[0.75], [-0.75], [2.0]], requires_grad=True)
+
+    encoder.reconstruct(value).sum().backward()
+
+    torch.testing.assert_close(value.grad, torch.tensor([[1.0], [1.0], [0.0]]))
+
+
 def test_signed_qcfs_bfloat16_replays_large_time_step_counts_exactly():
     scale = torch.exp(torch.linspace(-8, 4, 17)).to(torch.bfloat16)
     counts = torch.arange(17, dtype=torch.bfloat16).reshape(1, 17) * 10
@@ -122,15 +131,6 @@ def test_signed_qcfs_bfloat16_replays_large_time_step_counts_exactly():
 
     expected = torch.round(value / scale).clamp(-160, 160) * scale
     torch.testing.assert_close(sequence.sum(0), expected, atol=0.0, rtol=0.0)
-
-
-def test_qwen2_snn_forward_rejects_autograd_before_computation():
-    model = Qwen2SNNModel.__new__(Qwen2SNNModel)
-    nn.Module.__init__(model)
-    model.eval()
-
-    with pytest.raises(RuntimeError, match="does not support autograd"):
-        model(torch.ones(1, 2, dtype=torch.long))
 
 
 def test_qwen2_snn_generate_owns_inference_mode():

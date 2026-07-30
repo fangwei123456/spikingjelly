@@ -577,6 +577,45 @@ def step_quantize(x: torch.Tensor, step: float):
     return step_quantize_atgf.apply(x, step)
 
 
+class multi_level_spike_count_atgf(torch.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        x: torch.Tensor,
+        max_spike_count: int,
+        grad_min: float,
+        grad_max: float,
+    ):
+        ctx.save_for_backward(x)
+        ctx.grad_min = grad_min
+        ctx.grad_max = grad_max
+        return torch.round(torch.clamp(x, 0, max_spike_count))
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor):
+        (x,) = ctx.saved_tensors
+        mask = (x >= ctx.grad_min) & (x <= ctx.grad_max)
+        return grad_output * mask.to(grad_output.dtype), None, None, None
+
+
+def multi_level_spike_count(
+    x: torch.Tensor,
+    max_spike_count: int,
+    grad_window=None,
+):
+    max_spike_count = int(max_spike_count)
+    if grad_window is None:
+        grad_min, grad_max = 0.0, float(max_spike_count)
+    else:
+        grad_min, grad_max = grad_window
+    return multi_level_spike_count_atgf.apply(
+        x,
+        max_spike_count,
+        grad_min,
+        grad_max,
+    )
+
+
 def k_bit_quantize_forward(x: torch.Tensor, k: int):
     r"""
     **API Language** - :ref:`中文 <k_bit_quantize_forward-cn>` | :ref:`English <k_bit_quantize_forward-en>`

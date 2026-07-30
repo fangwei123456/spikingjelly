@@ -69,7 +69,7 @@ def test_qwen2_calibration_round_trip_and_conversion_preserve_contract():
         torch.equal(restored.layer_scales[0][name], calibration.layer_scales[0][name])
         for name in restored.layer_scales[0]
     )
-    assert not any(parameter.requires_grad for parameter in converted.parameters())
+    assert any(parameter.requires_grad for parameter in converted.parameters())
     assert converted.lm_head.weight is converted.embed_tokens.weight
     assert converted.device == converted.embed_tokens.weight.device
     assert converted.get_input_embeddings() is converted.embed_tokens
@@ -198,6 +198,23 @@ def test_qwen2_signed_if_replays_after_reset():
 
     assert torch.isfinite(first).all()
     assert torch.equal(first, second)
+
+
+def test_qwen2_qcfs_sg_allows_autograd():
+    _, converted = _convert(_tiny_qwen2())
+    inputs = _inputs()
+
+    output = converted(**inputs, encoding_mode="qcfs_sg")
+    loss = output.logits.float().sum()
+    loss.backward()
+
+    gradients = [
+        parameter.grad
+        for parameter in converted.parameters()
+        if parameter.requires_grad and parameter.grad is not None
+    ]
+    assert gradients
+    assert all(torch.isfinite(gradient).all() for gradient in gradients)
 
 
 def test_qwen2_calibration_failure_does_not_leave_hooks_installed():
