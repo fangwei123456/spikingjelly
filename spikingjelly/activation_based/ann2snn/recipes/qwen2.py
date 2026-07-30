@@ -387,7 +387,7 @@ def _validate_qwen2(model: nn.Module) -> Sequence[nn.Module]:
     if getattr(config, "hidden_act", "silu") != "silu":
         raise ValueError("Qwen2SNNRecipe requires hidden_act='silu'.")
     if model.training:
-        raise ValueError("Qwen2SNNRecipe is inference-only; call model.eval().")
+        raise ValueError("Qwen2SNNRecipe requires evaluation-mode source; call eval().")
     layers = _qwen_layers(model)
     if len(layers) != int(config.num_hidden_layers):
         raise ValueError("Qwen2 config and concrete decoder layer count disagree.")
@@ -558,6 +558,11 @@ class _Qwen2Decoder(nn.Module):
         dense = sequence.sum(0)
         if mode == "exact_td":
             return _exact_sequence(dense, self.time_steps)
+        if mode == "qcfs_sg":
+            return _exact_sequence(
+                self.encoders[name].reconstruct(dense),
+                self.time_steps,
+            )
         return self.encoders[name].encode(dense, mask)
 
     def _attend(
@@ -667,11 +672,10 @@ class Qwen2SNNModel(nn.Module):
 
         * **中文**
 
-        Qwen2 的只读离线多步 SNN 推理模型。通常应通过
-        :class:`Qwen2SNNRecipe` 和 :class:`ModuleConverter` 创建。模型冻结全部
-        参数；``signed_if`` 路径在每个转换阶段显式构造 ``[T,B,S,H]`` 时间序列，
-        ``exact_td`` 仅供 TD 等价性验证。调用 :meth:`forward` 时必须处于
-        :func:`torch.inference_mode` 或 no-grad 上下文。
+        Qwen2 的离线多步 SNN 转换模型。通常应通过
+        :class:`Qwen2SNNRecipe` 和 :class:`ModuleConverter` 创建。``signed_if``
+        路径在每个转换阶段显式构造 ``[T,B,S,H]`` 时间序列，``qcfs_sg`` 使用
+        可微分的 QCFS 计数重建用于后训练，``exact_td`` 仅供 TD 等价性验证。
 
         :param source: 已进入 evaluation mode 的 Hugging Face Qwen2 causal LM。
         :type source: torch.nn.Module
@@ -686,12 +690,11 @@ class Qwen2SNNModel(nn.Module):
 
         * **English**
 
-        Read-only, offline multi-step SNN inference model for Qwen2. Normally create
-        it through :class:`Qwen2SNNRecipe` and :class:`ModuleConverter`. All
-        parameters are frozen. The ``signed_if`` path constructs an explicit
-        ``[T,B,S,H]`` sequence at every converted stage; ``exact_td`` is only for TD
-        equivalence checks. Call :meth:`forward` under :func:`torch.inference_mode`
-        or another no-grad context.
+        Offline multi-step SNN conversion model for Qwen2. Normally create it
+        through :class:`Qwen2SNNRecipe` and :class:`ModuleConverter`. The
+        ``signed_if`` path constructs an explicit ``[T,B,S,H]`` sequence at every
+        converted stage; ``qcfs_sg`` uses differentiable QCFS count reconstruction
+        for post-training; ``exact_td`` is only for TD equivalence checks.
 
         :param source: Evaluation-mode Hugging Face Qwen2 causal LM.
         :type source: torch.nn.Module
@@ -720,8 +723,6 @@ class Qwen2SNNModel(nn.Module):
         )
         self.norm = _copy_norm(inner.norm)
         self.lm_head = _td_module_from_ann(source.lm_head)
-        for parameter in self.parameters():
-            parameter.requires_grad_(False)
         if bool(getattr(self.config, "tie_word_embeddings", False)):
             self.lm_head.weight = self.embed_tokens.weight
         self.input_encoder = SignedQCFSSequenceEncoder(
@@ -991,7 +992,8 @@ class Qwen2SNNModel(nn.Module):
 
         执行 Qwen2 离线多步推理。``signed_if`` 使用真实 activation-aware IF
         时间序列；``exact_td`` 仅用于数值 reference。返回对象包含 ``logits`` 和
-        ``past_key_values``。
+        ``past_key_values``。``qcfs_sg`` 使用 QCFS 计数重建和多级脉冲计数
+        surrogate gradient，适合后训练；它不是严格二值多步脉冲 replay。
 
         :param input_ids: 输入 token，形状 ``[B,S]``。
         :type input_ids: torch.Tensor
@@ -1000,7 +1002,8 @@ class Qwen2SNNModel(nn.Module):
         :param position_ids: 可选 ``[B,S]`` RoPE 位置；省略时从 attention mask
             计算，以正确处理左 padding 和 cache continuation。
         :type position_ids: Optional[torch.Tensor]
-        :param encoding_mode: ``"signed_if"``（默认）或 ``"exact_td"``。
+        :param encoding_mode: ``"signed_if"``（默认）、``"qcfs_sg"`` 或
+            ``"exact_td"``。
         :type encoding_mode: Optional[str]
         :param past_key_values: 此模型上次返回的私有 cache 对象。
         :type past_key_values: Optional[_Qwen2Cache]
@@ -1008,7 +1011,7 @@ class Qwen2SNNModel(nn.Module):
         :type use_cache: bool
         :return: 含 ``logits`` 与 ``past_key_values`` 的 namespace。
         :rtype: types.SimpleNamespace
-        :raises RuntimeError: 模型处于 training mode 或启用了 autograd。
+        :raises RuntimeError: 保留给运行时错误。
         :raises ValueError: ``encoding_mode``、position shape 或 cache 参数组合无效。
 
         ----
@@ -1019,7 +1022,10 @@ class Qwen2SNNModel(nn.Module):
 
         Run offline multi-step Qwen2 inference. ``signed_if`` uses actual
         activation-aware IF temporal sequences; ``exact_td`` is only a numerical
-        reference. The result contains ``logits`` and ``past_key_values``.
+        reference. ``qcfs_sg`` uses QCFS count reconstruction with a multi-level
+        spike-count surrogate gradient for post-training; it is not strict binary
+        multi-step spike replay. The result contains ``logits`` and
+        ``past_key_values``.
 
         :param input_ids: Input tokens with shape ``[B,S]``.
         :type input_ids: torch.Tensor
@@ -1029,7 +1035,8 @@ class Qwen2SNNModel(nn.Module):
             are derived from the attention mask for left padding and cache
             continuation.
         :type position_ids: Optional[torch.Tensor]
-        :param encoding_mode: ``"signed_if"`` (default) or ``"exact_td"``.
+        :param encoding_mode: ``"signed_if"`` (default), ``"qcfs_sg"``, or
+            ``"exact_td"``.
         :type encoding_mode: Optional[str]
         :param past_key_values: Private cache object returned by a previous call.
         :type past_key_values: Optional[_Qwen2Cache]
@@ -1037,18 +1044,12 @@ class Qwen2SNNModel(nn.Module):
         :type use_cache: bool
         :return: Namespace containing ``logits`` and ``past_key_values``.
         :rtype: types.SimpleNamespace
-        :raises RuntimeError: If the model is training or autograd is enabled.
+        :raises RuntimeError: Reserved for runtime failures.
         :raises ValueError: If ``encoding_mode``, the position shape, or the cache
             argument combination is invalid.
         """
-        if self.training:
-            raise RuntimeError("Converted Qwen2 SNN is inference-only; call eval().")
-        if torch.is_grad_enabled():
-            raise RuntimeError(
-                "Converted Qwen2 SNN does not support autograd; use inference_mode()."
-            )
         encoding_mode = encoding_mode or "signed_if"
-        if encoding_mode not in ("signed_if", "exact_td"):
+        if encoding_mode not in ("signed_if", "qcfs_sg", "exact_td"):
             raise ValueError(f"Unsupported encoding_mode={encoding_mode!r}.")
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
@@ -1070,6 +1071,10 @@ class Qwen2SNNModel(nn.Module):
         value_mask = attention_mask[:, -input_ids.shape[1] :]
         if encoding_mode == "exact_td":
             hidden = _exact_sequence(embeddings, self.time_steps)
+        elif encoding_mode == "qcfs_sg":
+            hidden = _exact_sequence(
+                self.input_encoder.reconstruct(embeddings), self.time_steps
+            )
         else:
             hidden = self.input_encoder.encode(embeddings, value_mask)
         for layer in self.layers:
@@ -1321,7 +1326,7 @@ class Qwen2SNNRecipe(ModuleConversionRecipe):
 
         * **中文**
 
-        将受支持的 evaluation-mode Qwen2 causal LM 转换为只读离线多步 SNN。
+        将受支持的 evaluation-mode Qwen2 causal LM 转换为离线多步 SNN。
 
         :param converter: 执行此 recipe 的 module converter。
         :type converter: ModuleConverter
@@ -1338,8 +1343,8 @@ class Qwen2SNNRecipe(ModuleConversionRecipe):
 
         * **English**
 
-        Convert a supported evaluation-mode Qwen2 causal LM into a read-only,
-        offline multi-step SNN.
+        Convert a supported evaluation-mode Qwen2 causal LM into an offline
+        multi-step SNN.
 
         :param converter: Module converter executing this recipe.
         :type converter: ModuleConverter

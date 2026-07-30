@@ -185,6 +185,26 @@ def test_quantizers_keep_their_straight_through_gradients():
     torch.testing.assert_close(x.grad, torch.tensor([1.0, 2.0, 2.0, 1.0]))
 
 
+def test_multi_level_spike_count_quantizer_uses_windowed_gradient():
+    x = torch.tensor([[-0.25, 0.5, 4.25]], requires_grad=True)
+
+    y = quantize.multi_level_spike_count(x, max_spike_count=4)
+    y.sum().backward()
+
+    assert torch.equal(y.detach(), torch.tensor([[0.0, 0.0, 4.0]]))
+    torch.testing.assert_close(x.grad, torch.tensor([[0.0, 1.0, 0.0]]))
+
+    x.grad = None
+    y = quantize.multi_level_spike_count(
+        x,
+        max_spike_count=4,
+        grad_window=(-0.5, 4.5),
+    )
+    y.sum().backward()
+
+    torch.testing.assert_close(x.grad, torch.tensor([[1.0, 1.0, 1.0]]))
+
+
 def test_cubalif_inherited_multi_step_matches_repeated_single_steps():
     multi_step_node = CUBALIFNode()
     single_step_node = CUBALIFNode()

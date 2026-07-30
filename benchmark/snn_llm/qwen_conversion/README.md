@@ -87,8 +87,8 @@ are private benchmark contracts rather than public SpikingJelly APIs.
 
 - The converted model is an offline multistep SNN with explicit time; it is not
   online whole-model T-step inference.
-- The conversion model is frozen and inference-only. Direct SNN training is a
-  separate model and recipe.
+- These benchmark runners execute the converted model in inference mode. Direct
+  SNN training is outside this benchmark contract.
 - No runner downloads data or checkpoints, silently changes precision/backend,
   or falls back to CPU or one GPU.
 - The final supported conversion evidence covers Qwen2.5 Base 0.5B, 1.5B, and

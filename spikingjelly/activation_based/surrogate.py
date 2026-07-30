@@ -1,9 +1,11 @@
 import math
+import numbers
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from . import quantize
 from .cuda_kernel.auto_cuda import cfunction
 
 tab4_str = "\t\t\t\t"  # used for aligning code
@@ -3309,6 +3311,63 @@ class DeterministicPass(SurrogateFunctionBase):
     @staticmethod
     def backward(grad_output, x, alpha):
         return grad_output
+
+
+class MultiLevelSpikeCount(SurrogateFunctionBase):
+    def __init__(
+        self,
+        max_spike_count: int,
+        spiking: bool = True,
+        grad_window=None,
+    ):
+        r"""
+        Multi-level spike-count surrogate. In spiking mode, forward returns
+        ``round(clamp(x, 0, max_spike_count))`` and backward uses a rectangular
+        straight-through estimator. The default gradient window is
+        ``[0, max_spike_count]``.
+        """
+        if not isinstance(max_spike_count, numbers.Integral) or isinstance(
+            max_spike_count, bool
+        ):
+            raise TypeError("max_spike_count must be an integer.")
+        max_spike_count = int(max_spike_count)
+        if max_spike_count < 1:
+            raise ValueError("max_spike_count must be >= 1.")
+        if grad_window is None:
+            grad_min, grad_max = 0.0, float(max_spike_count)
+        else:
+            grad_min, grad_max = grad_window
+            if grad_min > grad_max:
+                raise ValueError("grad_window must satisfy grad_min <= grad_max.")
+        super().__init__(
+            spiking=spiking,
+            max_spike_count=max_spike_count,
+            grad_min=grad_min,
+            grad_max=grad_max,
+        )
+
+    @staticmethod
+    def spiking_function(
+        x: torch.Tensor,
+        max_spike_count: int,
+        grad_min: float,
+        grad_max: float,
+    ):
+        return quantize.multi_level_spike_count(
+            x,
+            max_spike_count,
+            (grad_min, grad_max),
+        )
+
+    @staticmethod
+    def primitive_function(
+        x: torch.Tensor,
+        max_spike_count: int,
+        grad_min: float,
+        grad_max: float,
+    ):
+        del grad_min, grad_max
+        return torch.clamp(x, 0, max_spike_count)
 
 
 class poisson_pass(torch.autograd.Function):

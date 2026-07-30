@@ -97,6 +97,15 @@ SpikeZIP Neuron Primitives
    :show-inheritance:
    :exclude-members: supported_backends, extra_repr
 
+Integer-Valued Training Neurons
+--------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.neuron.ilif
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :exclude-members: supported_backends, extra_repr
+
 Neurons with Inter-layer Connection
 --------------------------------------------------
 

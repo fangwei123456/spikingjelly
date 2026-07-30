@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from spikingjelly.activation_based import neuron, surrogate
+from spikingjelly.activation_based import neuron, quantize, surrogate
 
 __all__ = ["SignedQCFSSequenceEncoder"]
 
@@ -305,6 +305,7 @@ class SignedQCFSSequenceEncoder(nn.Module):
 
         直接计算 :meth:`encode` 所生成多步脉冲序列的时间和，不执行神经元时间
         循环。该方法使用完全相同的逐通道 scale、round-to-even 和计数裁剪规则，
+        并通过多级脉冲计数替代函数为后训练保留直通梯度。
         用于验证或加速只依赖时间聚合值的离线逐层推理；返回值本身不是脉冲序列。
 
         :param value: 浮点激活张量，通道维必须与 scale 对齐。
@@ -321,7 +322,8 @@ class SignedQCFSSequenceEncoder(nn.Module):
 
         Compute the temporal sum of the multi-step spike sequence produced by
         :meth:`encode` without running the neuron time loop. This method uses the
-        same per-channel scale, round-to-even operation, and count clipping. It
+        same per-channel scale, round-to-even operation, and count clipping, with
+        a multi-level spike-count surrogate gradient for post-training. It
         supports validation or acceleration of offline layerwise inference that
         depends only on temporal aggregates; the returned value is not itself a
         spike sequence.
@@ -347,8 +349,14 @@ class SignedQCFSSequenceEncoder(nn.Module):
         shape = [1] * value.dim()
         shape[channel_dim] = scale.numel()
         scale = scale.reshape(shape)
-        positive = torch.round(F.relu(value) / scale).clamp(0, self.time_steps)
-        negative = torch.round(F.relu(-value) / scale).clamp(0, self.time_steps)
+        positive = quantize.multi_level_spike_count(
+            F.relu(value) / scale,
+            self.time_steps,
+        )
+        negative = quantize.multi_level_spike_count(
+            F.relu(-value) / scale,
+            self.time_steps,
+        )
         return (positive - negative) * scale
 
     def forward(
