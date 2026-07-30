@@ -168,6 +168,13 @@ class ILIFNode(BaseNode):
         v_threshold = float(v_threshold)
         if not torch.isfinite(torch.tensor(v_threshold)) or v_threshold <= 0.0:
             raise ValueError("v_threshold must be finite positive.")
+        if not isinstance(max_spike_count, numbers.Integral) or isinstance(
+            max_spike_count, bool
+        ):
+            raise TypeError("max_spike_count must be an integer.")
+        max_spike_count = int(max_spike_count)
+        if max_spike_count < 1:
+            raise ValueError("max_spike_count must be >= 1.")
         if not isinstance(decay, numbers.Real):
             raise TypeError("decay must be a real number.")
         decay = float(decay)

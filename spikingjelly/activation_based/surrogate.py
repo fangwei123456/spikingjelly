@@ -1,4 +1,5 @@
 import math
+import numbers
 
 import torch
 import torch.nn as nn
@@ -3325,11 +3326,19 @@ class MultiLevelSpikeCount(SurrogateFunctionBase):
         straight-through estimator. The default gradient window is
         ``[0, max_spike_count]``.
         """
+        if not isinstance(max_spike_count, numbers.Integral) or isinstance(
+            max_spike_count, bool
+        ):
+            raise TypeError("max_spike_count must be an integer.")
         max_spike_count = int(max_spike_count)
+        if max_spike_count < 1:
+            raise ValueError("max_spike_count must be >= 1.")
         if grad_window is None:
             grad_min, grad_max = 0.0, float(max_spike_count)
         else:
             grad_min, grad_max = grad_window
+            if grad_min > grad_max:
+                raise ValueError("grad_window must satisfy grad_min <= grad_max.")
         super().__init__(
             spiking=spiking,
             max_spike_count=max_spike_count,

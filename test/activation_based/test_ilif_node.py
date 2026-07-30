@@ -1,6 +1,16 @@
+import pytest
 import torch
 
 from spikingjelly.activation_based import neuron, surrogate
+
+
+def test_ilif_rejects_invalid_max_spike_count():
+    for value in (0, -1):
+        with pytest.raises(ValueError):
+            neuron.ILIFNode(max_spike_count=value)
+    for value in (1.5, True):
+        with pytest.raises(TypeError):
+            neuron.ILIFNode(max_spike_count=value)
 
 
 def test_ilif_training_outputs_integer_counts_and_updates_voltage():
@@ -91,3 +101,14 @@ def test_multi_level_spike_count_supports_custom_gradient_window():
 
     assert torch.equal(y.detach(), torch.tensor([[0.0, 4.0, 4.0]]))
     torch.testing.assert_close(x.grad, torch.tensor([[1.0, 1.0, 0.0]]))
+
+
+def test_multi_level_spike_count_rejects_invalid_parameters():
+    for value in (0, -1):
+        with pytest.raises(ValueError):
+            surrogate.MultiLevelSpikeCount(value)
+    for value in (1.5, False):
+        with pytest.raises(TypeError):
+            surrogate.MultiLevelSpikeCount(value)
+    with pytest.raises(ValueError):
+        surrogate.MultiLevelSpikeCount(4, grad_window=(1.0, 0.0))
