@@ -1,5 +1,6 @@
 import logging
 import numbers
+from typing import Optional
 
 import torch
 
@@ -20,9 +21,7 @@ class ILIFNode(BaseNode):
         self,
         v_threshold: float = 1.0,
         decay: float = 0.25,
-        surrogate_function: surrogate.MultiLevelSpikeCount = surrogate.MultiLevelSpikeCount(
-            4
-        ),
+        surrogate_function: Optional[surrogate.MultiLevelSpikeCount] = None,
         detach_reset: bool = False,
         step_mode: str = "s",
         backend: str = "torch",
@@ -134,9 +133,10 @@ class ILIFNode(BaseNode):
         :type decay: float
         :param surrogate_function: 多级整数发放函数，必须是 ``spiking=True`` 的
             :class:`~spikingjelly.activation_based.surrogate.MultiLevelSpikeCount`。
-            ``max_spike_count`` 和矩形替代梯度区间均由该对象配置。默认为
-            ``MultiLevelSpikeCount(4)``，对应 :math:`D=4` 和梯度区间 ``[0, 4]``
-        :type surrogate_function: surrogate.MultiLevelSpikeCount
+            ``max_spike_count`` 和矩形替代梯度区间均由该对象配置。若为 ``None``，
+            则新建 ``MultiLevelSpikeCount(4)``，对应 :math:`D=4` 和梯度区间
+            ``[0, 4]``
+        :type surrogate_function: Optional[surrogate.MultiLevelSpikeCount]
         :param detach_reset: 是否在反向传播时分离 reset 中的发放值，默认为
             ``False``
         :type detach_reset: bool
@@ -276,9 +276,9 @@ class ILIFNode(BaseNode):
             :class:`~spikingjelly.activation_based.surrogate.MultiLevelSpikeCount`
             with ``spiking=True``. Its ``max_spike_count`` and rectangular
             surrogate-gradient window define the corresponding neuron settings.
-            The default is ``MultiLevelSpikeCount(4)``, giving :math:`D=4` and the
-            gradient window ``[0, 4]``
-        :type surrogate_function: surrogate.MultiLevelSpikeCount
+            If ``None``, a new ``MultiLevelSpikeCount(4)`` is created, giving
+            :math:`D=4` and the gradient window ``[0, 4]``
+        :type surrogate_function: Optional[surrogate.MultiLevelSpikeCount]
         :param detach_reset: Whether to detach the emitted value used by reset in
             backward; defaults to ``False``
         :type detach_reset: bool
@@ -306,7 +306,9 @@ class ILIFNode(BaseNode):
         decay = float(decay)
         if not torch.isfinite(torch.tensor(decay)) or decay < 0.0 or decay > 1.0:
             raise ValueError("decay must be finite and in [0, 1].")
-        if not isinstance(surrogate_function, surrogate.MultiLevelSpikeCount):
+        if surrogate_function is None:
+            surrogate_function = surrogate.MultiLevelSpikeCount(4)
+        elif not isinstance(surrogate_function, surrogate.MultiLevelSpikeCount):
             raise TypeError(
                 "surrogate_function must be a MultiLevelSpikeCount instance."
             )

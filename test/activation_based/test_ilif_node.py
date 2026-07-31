@@ -38,9 +38,11 @@ def test_ilif_training_outputs_integer_counts_and_updates_voltage():
 
 def test_ilif_uses_spike_count_surrogate():
     node = neuron.ILIFNode()
+    another_node = neuron.ILIFNode()
 
     assert isinstance(node.surrogate_function, surrogate.MultiLevelSpikeCount)
     assert node.surrogate_function.max_spike_count == 4
+    assert node.surrogate_function is not another_node.surrogate_function
 
 
 def test_ilif_decay_is_applied_during_charge():
