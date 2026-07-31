@@ -127,23 +127,27 @@ class ILIFNode(BaseNode):
             真正降低部署代价；以及在相同物理槽、总事件、延迟或能耗预算下的
             二值 IF/LIF 基线，而不只是令逻辑 :math:`T` 相同。
 
-        :param v_threshold: 神经元阈值电压，必须为有限正数
+        :param v_threshold: 神经元阈值电压，必须为有限正数，默认为 1.0
         :type v_threshold: float
         :param decay: 充电过程中历史膜电位的衰减 ``beta``，必须位于 ``[0, 1]``。
-            当 ``decay=1`` 时退化为无泄漏的整数 IF 形式
+            当 ``decay=1`` 时退化为无泄漏的整数 IF 形式，默认为 0.25
         :type decay: float
         :param surrogate_function: 多级整数发放函数，必须是 ``spiking=True`` 的
             :class:`~spikingjelly.activation_based.surrogate.MultiLevelSpikeCount`。
-            ``max_spike_count`` 和矩形替代梯度区间均由该对象配置
+            ``max_spike_count`` 和矩形替代梯度区间均由该对象配置。默认为
+            ``MultiLevelSpikeCount(4)``，对应 :math:`D=4` 和梯度区间 ``[0, 4]``
         :type surrogate_function: surrogate.MultiLevelSpikeCount
-        :param detach_reset: 是否在反向传播时分离 reset 中的发放值
+        :param detach_reset: 是否在反向传播时分离 reset 中的发放值，默认为
+            ``False``
         :type detach_reset: bool
-        :param step_mode: 步进模式，``"s"`` 为单步，``"m"`` 为多步
+        :param step_mode: 步进模式，``"s"`` 为单步，``"m"`` 为多步，默认为
+            ``"s"``
         :type step_mode: str
         :param backend: 后端名称。单步和多步模式均支持 ``"torch"`` 和
-            ``"triton"``
+            ``"triton"``，默认为 ``"torch"``
         :type backend: str
-        :param store_v_seq: 多步模式下是否保存每个输入步后的膜电位
+        :param store_v_seq: 多步模式下是否保存每个输入步后的膜电位，默认为
+            ``False``
         :type store_v_seq: bool
         :raises TypeError: 当 ``v_threshold`` 或 ``decay`` 不是实数，或
             ``surrogate_function`` 不是 ``MultiLevelSpikeCount`` 时
@@ -261,26 +265,30 @@ class ILIFNode(BaseNode):
             under the same physical-slot, event, latency, or energy budget rather
             than only the same logical :math:`T`.
 
-        :param v_threshold: Threshold voltage, which must be finite and positive
+        :param v_threshold: Threshold voltage, which must be finite and positive;
+            defaults to 1.0
         :type v_threshold: float
         :param decay: Historical membrane decay ``beta`` in charge, in ``[0, 1]``.
-            ``decay=1`` degenerates to a non-leaky integer IF form
+            ``decay=1`` degenerates to a non-leaky integer IF form; defaults to
+            0.25
         :type decay: float
         :param surrogate_function: Multi-level integer firing function. It must be a
             :class:`~spikingjelly.activation_based.surrogate.MultiLevelSpikeCount`
             with ``spiking=True``. Its ``max_spike_count`` and rectangular
-            surrogate-gradient window define the corresponding neuron settings
+            surrogate-gradient window define the corresponding neuron settings.
+            The default is ``MultiLevelSpikeCount(4)``, giving :math:`D=4` and the
+            gradient window ``[0, 4]``
         :type surrogate_function: surrogate.MultiLevelSpikeCount
         :param detach_reset: Whether to detach the emitted value used by reset in
-            backward
+            backward; defaults to ``False``
         :type detach_reset: bool
-        :param step_mode: Step mode, ``"s"`` or ``"m"``
+        :param step_mode: Step mode, ``"s"`` or ``"m"``; defaults to ``"s"``
         :type step_mode: str
         :param backend: Backend name. Both modes support ``"torch"`` and
-            ``"triton"``
+            ``"triton"``; defaults to ``"torch"``
         :type backend: str
         :param store_v_seq: Whether to store membrane voltage after each input
-            step in multi-step mode
+            step in multi-step mode; defaults to ``False``
         :type store_v_seq: bool
         :raises TypeError: If ``v_threshold`` or ``decay`` is not real, or
             ``surrogate_function`` is not ``MultiLevelSpikeCount``
