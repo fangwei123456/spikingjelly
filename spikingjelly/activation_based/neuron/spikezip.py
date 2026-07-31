@@ -42,7 +42,9 @@ class STBIFNeuron(base.MemoryModule):
         Torch 路径包含 ``detach``、``round`` 和离散状态更新；Triton 单步和
         多步 kernel 也没有实现 backward。因此不要把该神经元用于端到端
         梯度训练或微调。单步 Triton 路径仅接受 CUDA 输入；显式选择 Triton
-        后端时，CPU 输入会直接报错。
+        后端时，CPU 输入会直接报错。为保持 ``is_work`` 的 Python ``bool``
+        语义，每次单步 Triton 调用返回前都会同步 CUDA work flag；按时间步
+        循环处理序列时，应优先使用多步接口。
 
         :param q_threshold: QANN quantizer scale。
         :type q_threshold: float or torch.Tensor
@@ -81,7 +83,10 @@ class STBIFNeuron(base.MemoryModule):
         not implement backward either. Do not use this neuron for end-to-end
         gradient training or fine-tuning. The single-step Triton path accepts CUDA
         inputs only and raises an error for CPU input when Triton is selected
-        explicitly.
+        explicitly. To preserve the Python ``bool`` semantics of ``is_work``, each
+        single-step Triton call synchronizes its CUDA work flag before returning.
+        Prefer the multi-step interface when processing a sequence in a timestep
+        loop.
 
         :param q_threshold: QANN quantizer scale.
         :type q_threshold: float or torch.Tensor
