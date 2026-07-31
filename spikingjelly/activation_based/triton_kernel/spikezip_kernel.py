@@ -228,7 +228,8 @@ def single_step_stbif(
     :return: ``(out, q_next, acc_q_next, cur_output, is_work)``
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     :raises ValueError: 当 ``x``、``q`` 和 ``acc_q`` 的 shape、dtype 或 CUDA
-        device 不一致，或输入不在 CUDA 上时
+        device 不一致，输入不在 CUDA 上，或任一标量参数不是单元素张量时
+    :raises RuntimeError: 当任一输入需要 autograd 时
     :raises NotImplementedError: 当 dtype 不受 Triton 后端支持时
 
     ----
@@ -257,7 +258,9 @@ def single_step_stbif(
     :return: ``(out, q_next, acc_q_next, cur_output, is_work)``
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     :raises ValueError: If ``x``, ``q``, and ``acc_q`` differ in shape, dtype,
-        or CUDA device, or if the input is not on CUDA
+        or CUDA device, if the input is not on CUDA, or if a scalar parameter
+        does not contain exactly one element
+    :raises RuntimeError: If any input requires autograd
     :raises NotImplementedError: If the dtype is not supported by the Triton
         backend
     """
@@ -272,6 +275,11 @@ def single_step_stbif(
         or acc_q.device != x.device
     ):
         raise ValueError("x, q, and acc_q must have the same shape, dtype, and device.")
+    scalar_inputs = (q_threshold, pos_max, neg_min)
+    if any(value.numel() != 1 for value in scalar_inputs):
+        raise ValueError("q_threshold, pos_max, and neg_min must be scalar tensors.")
+    if any(value.requires_grad for value in (x, q, acc_q, *scalar_inputs)):
+        raise RuntimeError("single_step_stbif is inference-only and has no autograd.")
     x = x.contiguous()
     q = q.contiguous()
     acc_q = acc_q.contiguous()

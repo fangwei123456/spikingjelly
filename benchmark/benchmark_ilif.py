@@ -45,7 +45,6 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--T", type=int, default=32)
     parser.add_argument("--numel", type=int, default=1 << 18)
-    parser.add_argument("--step-mode", choices=("s", "m"), default="m")
     parser.add_argument(
         "--dtype", choices=("float32", "float16", "bfloat16"), default="float32"
     )
@@ -58,12 +57,17 @@ def main() -> None:
 
     dtype = getattr(torch, args.dtype)
     backward = args.mode == "train"
-    shape = (args.T, args.numel) if args.step_mode == "m" else (args.numel,)
-    x = torch.randn(shape, device="cuda", dtype=dtype, requires_grad=backward)
+    x = torch.randn(
+        args.T,
+        args.numel,
+        device="cuda",
+        dtype=dtype,
+        requires_grad=backward,
+    )
     results = {}
     for backend in ("torch", "triton"):
         node = neuron.ILIFNode(
-            step_mode=args.step_mode,
+            step_mode="m",
             backend=backend,
             store_v_seq=False,
         ).to(device="cuda", dtype=dtype)
@@ -84,8 +88,8 @@ def main() -> None:
     torch_ms, torch_memory = results["torch"]
     triton_ms, triton_memory = results["triton"]
     print(
-        f"mode={args.mode} step_mode={args.step_mode} dtype={args.dtype} "
-        f"T={args.T if args.step_mode == 'm' else 1} numel={args.numel} "
+        f"mode={args.mode} step_mode=m dtype={args.dtype} "
+        f"T={args.T} numel={args.numel} "
         f"torch={torch_ms:.3f}ms/{torch_memory:.1f}MiB "
         f"triton={triton_ms:.3f}ms/{triton_memory:.1f}MiB "
         f"speedup={torch_ms / triton_ms:.2f}x"

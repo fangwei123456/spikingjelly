@@ -6,6 +6,7 @@ import torch
 
 from .. import surrogate
 from .base_node import BaseNode
+from .lif import LIFNode
 
 try:
     from ..triton_kernel.neuron_kernel import ilif as triton_ilif_kernel
@@ -16,17 +17,17 @@ except BaseException as e:
 __all__ = ["ILIFNode"]
 
 
-class ILIFNode(BaseNode):
+class ILIFNode(LIFNode):
     def __init__(
         self,
+        tau: float = 4.0 / 3.0,
         v_threshold: float = 1.0,
-        decay: float = 0.25,
         surrogate_function: Optional[surrogate.MultiLevelSpikeCount] = None,
         detach_reset: bool = False,
         step_mode: str = "s",
         backend: str = "torch",
         store_v_seq: bool = False,
-    ):
+    ) -> None:
         r"""
         **API Language** - :ref:`中文 <ILIFNode.__init__-cn>` | :ref:`English <ILIFNode.__init__-en>`
 
@@ -47,7 +48,7 @@ class ILIFNode(BaseNode):
 
         .. math::
 
-            H[t] = \beta V[t - 1] + X[t]
+            H[t] = \left(1 - \frac{1}{\tau}\right) V[t - 1] + X[t]
 
         .. math::
 
@@ -57,10 +58,11 @@ class ILIFNode(BaseNode):
 
             V[t] = H[t] - C[t] V_{th}
 
-        其中 :math:`D` 为 ``surrogate_function.max_spike_count``，
-        :math:`\beta` 为 ``decay``。
-        ``decay`` 位于充电过程，其形式与 :class:`LIFNode` 在
-        ``decay_input=False`` 且 ``v_reset=None`` 时的 charge 方程一致。
+        其中 :math:`D` 为 ``surrogate_function.max_spike_count``。该充电过程
+        直接复用 :class:`LIFNode` 在 ``decay_input=False``、``v_reset=None``
+        时的实现；论文及作者代码中的衰减系数
+        :math:`\beta = 1 - 1 / \tau`。作者代码默认 :math:`\beta=0.25`，对应
+        本类默认的 :math:`\tau=4/3`。
         ``train()`` 和 ``eval()`` 的前向语义相同，均返回
         :math:`C[t] \in \{0, 1, \ldots, D\}`，输入和输出的逻辑时间步数相同。
 
@@ -69,7 +71,8 @@ class ILIFNode(BaseNode):
         ``surrogate_function`` 时修改该区间。调用 :meth:`reset` 会将保存的
         膜电位恢复为初始值。``step_mode="s"`` 接收 ``[N, *]``，而
         ``step_mode="m"`` 接收 ``[T, N, *]``；输出与输入的 shape、dtype 和
-        device 相同。Triton 后端要求输入为 CUDA FP32、FP16 或 BF16 张量。
+        device 相同。单步模式仅支持 Torch；多步 Triton 后端要求输入为 CUDA
+        FP32、FP16 或 BF16 张量。
 
         论文所称的 spike-driven inference 需要由部署端将每个整数计数
         展开为 :math:`D` 个二值槽，其中恰有 :math:`C[t]` 个单位事件：
@@ -126,11 +129,11 @@ class ILIFNode(BaseNode):
             真正降低部署代价；以及在相同物理槽、总事件、延迟或能耗预算下的
             二值 IF/LIF 基线，而不只是令逻辑 :math:`T` 相同。
 
+        :param tau: 膜电位时间常数，必须为有限且大于 1 的实数。论文作者代码
+            默认的衰减系数 0.25 对应 ``tau=4/3``
+        :type tau: float
         :param v_threshold: 神经元阈值电压，必须为有限正数，默认为 1.0
         :type v_threshold: float
-        :param decay: 充电过程中历史膜电位的衰减 ``beta``，必须位于 ``[0, 1]``。
-            当 ``decay=1`` 时退化为无泄漏的整数 IF 形式，默认为 0.25
-        :type decay: float
         :param surrogate_function: 多级整数发放函数，必须是 ``spiking=True`` 的
             :class:`~spikingjelly.activation_based.surrogate.MultiLevelSpikeCount`。
             ``max_spike_count`` 和矩形替代梯度区间均由该对象配置。未提供时会新建
@@ -143,15 +146,15 @@ class ILIFNode(BaseNode):
         :param step_mode: 步进模式，``"s"`` 为单步，``"m"`` 为多步，默认为
             ``"s"``
         :type step_mode: str
-        :param backend: 后端名称。单步和多步模式均支持 ``"torch"`` 和
-            ``"triton"``，默认为 ``"torch"``
+        :param backend: 后端名称。单步模式仅支持 ``"torch"``；多步模式支持
+            ``"torch"`` 和 ``"triton"``，默认为 ``"torch"``
         :type backend: str
         :param store_v_seq: 多步模式下是否保存每个输入步后的膜电位，默认为
             ``False``
         :type store_v_seq: bool
-        :raises TypeError: 当 ``v_threshold`` 或 ``decay`` 不是实数，或
+        :raises TypeError: 当 ``tau`` 或 ``v_threshold`` 不是实数，或
             ``surrogate_function`` 不是 ``MultiLevelSpikeCount`` 时
-        :raises ValueError: 当 ``v_threshold``、``decay``、``step_mode`` 或
+        :raises ValueError: 当 ``tau``、``v_threshold``、``step_mode`` 或
             ``backend`` 的取值无效，或 ``surrogate_function.spiking=False`` 时
 
         ----
@@ -173,7 +176,7 @@ class ILIFNode(BaseNode):
 
         .. math::
 
-            H[t] = \beta V[t - 1] + X[t]
+            H[t] = \left(1 - \frac{1}{\tau}\right) V[t - 1] + X[t]
 
         .. math::
 
@@ -183,10 +186,12 @@ class ILIFNode(BaseNode):
 
             V[t] = H[t] - C[t] V_{th}
 
-        Here :math:`D` is ``surrogate_function.max_spike_count`` and :math:`\beta`
-        is ``decay``. ``decay`` is applied during charging, matching the
-        :class:`LIFNode` charge equation when ``decay_input=False`` and
-        ``v_reset=None``. ``train()`` and ``eval()`` have the same forward semantics:
+        Here :math:`D` is ``surrogate_function.max_spike_count``. Charging directly
+        reuses the :class:`LIFNode` implementation with ``decay_input=False`` and
+        ``v_reset=None``. The decay factor used by the paper and its reference code
+        is :math:`\beta = 1 - 1 / \tau`; its default :math:`\beta=0.25` maps to this
+        class's default :math:`\tau=4/3`. ``train()`` and ``eval()`` have the same
+        forward semantics:
         both return :math:`C[t] \in \{0, 1, \ldots, D\}` and preserve the number of
         logical timesteps.
 
@@ -196,8 +201,8 @@ class ILIFNode(BaseNode):
         constructing ``surrogate_function``. Calling :meth:`reset` restores the
         stored membrane potential. ``step_mode="s"`` accepts ``[N, *]`` and
         ``step_mode="m"`` accepts ``[T, N, *]``. Output shape, dtype, and device
-        match the input. The Triton backend requires CUDA FP32, FP16, or BF16
-        tensors.
+        match the input. Single-step mode supports Torch only. The multi-step
+        Triton backend requires CUDA FP32, FP16, or BF16 tensors.
 
         The spike-driven inference described in the paper requires the deployment
         layer to expand each integer count into :math:`D` binary slots, exactly
@@ -265,13 +270,12 @@ class ILIFNode(BaseNode):
             under the same physical-slot, event, latency, or energy budget rather
             than only the same logical :math:`T`.
 
+        :param tau: Membrane time constant, which must be finite and greater than
+            1. The reference code's default decay factor 0.25 maps to ``tau=4/3``
+        :type tau: float
         :param v_threshold: Threshold voltage, which must be finite and positive;
             defaults to 1.0
         :type v_threshold: float
-        :param decay: Historical membrane decay ``beta`` in charge, in ``[0, 1]``.
-            ``decay=1`` degenerates to a non-leaky integer IF form; defaults to
-            0.25
-        :type decay: float
         :param surrogate_function: Multi-level integer firing function. It must be a
             :class:`~spikingjelly.activation_based.surrogate.MultiLevelSpikeCount`
             with ``spiking=True``. Its ``max_spike_count`` and rectangular
@@ -284,28 +288,29 @@ class ILIFNode(BaseNode):
         :type detach_reset: bool
         :param step_mode: Step mode, ``"s"`` or ``"m"``; defaults to ``"s"``
         :type step_mode: str
-        :param backend: Backend name. Both modes support ``"torch"`` and
-            ``"triton"``; defaults to ``"torch"``
+        :param backend: Backend name. Single-step mode supports ``"torch"`` only;
+            multi-step mode supports ``"torch"`` and ``"triton"``; defaults to
+            ``"torch"``
         :type backend: str
         :param store_v_seq: Whether to store membrane voltage after each input
             step in multi-step mode; defaults to ``False``
         :type store_v_seq: bool
-        :raises TypeError: If ``v_threshold`` or ``decay`` is not real, or
+        :raises TypeError: If ``tau`` or ``v_threshold`` is not real, or
             ``surrogate_function`` is not ``MultiLevelSpikeCount``
-        :raises ValueError: If ``v_threshold``, ``decay``, ``step_mode``, or
+        :raises ValueError: If ``tau``, ``v_threshold``, ``step_mode``, or
             ``backend`` has an invalid value, or if
             ``surrogate_function.spiking=False``
         """
+        if not isinstance(tau, numbers.Real):
+            raise TypeError("tau must be a real number.")
+        tau = float(tau)
+        if not torch.isfinite(torch.tensor(tau)) or tau <= 1.0:
+            raise ValueError("tau must be finite and greater than 1.")
         if not isinstance(v_threshold, numbers.Real):
             raise TypeError("v_threshold must be a real number.")
         v_threshold = float(v_threshold)
         if not torch.isfinite(torch.tensor(v_threshold)) or v_threshold <= 0.0:
             raise ValueError("v_threshold must be finite positive.")
-        if not isinstance(decay, numbers.Real):
-            raise TypeError("decay must be a real number.")
-        decay = float(decay)
-        if not torch.isfinite(torch.tensor(decay)) or decay < 0.0 or decay > 1.0:
-            raise ValueError("decay must be finite and in [0, 1].")
         if surrogate_function is None:
             surrogate_function = surrogate.MultiLevelSpikeCount(4)
         elif not isinstance(surrogate_function, surrogate.MultiLevelSpikeCount):
@@ -316,6 +321,8 @@ class ILIFNode(BaseNode):
             raise ValueError("surrogate_function.spiking must be True.")
 
         super().__init__(
+            tau=tau,
+            decay_input=False,
             v_threshold=v_threshold,
             v_reset=None,
             surrogate_function=surrogate_function,
@@ -324,51 +331,36 @@ class ILIFNode(BaseNode):
             backend=backend,
             store_v_seq=store_v_seq,
         )
-        self.decay = decay
 
     @property
-    def supported_backends(self):
-        if self.step_mode in ("s", "m"):
+    def supported_backends(self) -> tuple[str, ...]:
+        if self.step_mode == "s":
+            return ("torch",)
+        if self.step_mode == "m":
             return ("torch", "triton")
         raise ValueError(self.step_mode)
 
-    def neuronal_charge(self, x: torch.Tensor):
-        self.v = self.decay * self.v + x
-
-    def neuronal_fire(self):
+    def neuronal_fire(self) -> torch.Tensor:
         return self.surrogate_function(self.v / self.v_threshold)
 
-    def neuronal_reset(self, spike):
-        if self.detach_reset:
-            spike = spike.detach()
-        self.v = self.v - spike * self.v_threshold
-
-    def single_step_forward(self, x: torch.Tensor):
-        self.v_float_to_tensor(x)
-        if self.backend == "triton":
-            spike, self.v = triton_ilif_kernel.single_step_ilif(
-                x,
-                self.v,
-                self.decay,
-                self.v_threshold,
-                self.surrogate_function.max_spike_count,
-                self.surrogate_function.grad_min,
-                self.surrogate_function.grad_max,
-                self.detach_reset,
+    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.backend != "torch":
+            raise NotImplementedError(
+                f"ILIFNode single-step does not support backend={self.backend!r}."
             )
-            return spike
-        self.neuronal_charge(x)
-        spike = self.neuronal_fire()
-        self.neuronal_reset(spike)
-        return spike
+        return BaseNode.single_step_forward(self, x)
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         if self.backend == "triton":
+            if triton_ilif_kernel is None:
+                raise ImportError(
+                    "ILIFNode backend='triton' requires the optional Triton backend."
+                )
             self.v_float_to_tensor(x_seq[0])
-            spike_seq, v_out = triton_ilif_kernel.multistep_ilif(
+            spike_seq, v_out = triton_ilif_kernel._multistep_ilif(
                 x_seq,
                 self.v,
-                self.decay,
+                1.0 - 1.0 / self.tau,
                 self.v_threshold,
                 self.surrogate_function.max_spike_count,
                 self.surrogate_function.grad_min,
@@ -383,16 +375,4 @@ class ILIFNode(BaseNode):
                 self.v = v_out
             return spike_seq
 
-        spike_seq = []
-        if self.store_v_seq:
-            v_seq = []
-        for t in range(x_seq.shape[0]):
-            spike_seq.append(self.single_step_forward(x_seq[t]))
-            if self.store_v_seq:
-                v_seq.append(self.v)
-        if self.store_v_seq:
-            self.v_seq = torch.stack(v_seq)
-        return torch.stack(spike_seq)
-
-    def extra_repr(self):
-        return f"{super().extra_repr()}, decay={self.decay}"
+        return BaseNode.multi_step_forward(self, x_seq)

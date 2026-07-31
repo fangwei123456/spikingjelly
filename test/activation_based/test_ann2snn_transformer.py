@@ -930,10 +930,18 @@ def test_spikezip_stbif_triton_matches_torch(dtype, time_steps):
     not torch.cuda.is_available() or not _TRITON_AVAILABLE,
     reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
 )
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 def test_spikezip_stbif_single_step_triton_matches_torch(dtype):
+    if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
+        pytest.skip("CUDA device does not support bfloat16")
     quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
-    x_seq = torch.randn(8, 7, 13, device="cuda", dtype=dtype) * 0.2
+    normalized_levels = torch.tensor(
+        [-0.75, -0.25, 0.25, 0.75],
+        device="cuda",
+        dtype=dtype,
+    )
+    level_indices = torch.arange(8 * 7 * 13, device="cuda").reshape(8, 7, 13)
+    x_seq = normalized_levels[level_indices % normalized_levels.numel()] * 0.25
     torch_neuron = STBIFNeuron.from_quantizer(quantizer).cuda()
     triton_neuron = STBIFNeuron.from_quantizer(quantizer).cuda()
     triton_neuron.backend = "triton"
@@ -942,7 +950,11 @@ def test_spikezip_stbif_single_step_triton_matches_torch(dtype):
     triton_out = torch.stack([triton_neuron(x) for x in x_seq])
 
     assert torch.allclose(triton_out, torch_out, atol=1e-3, rtol=1e-3)
-    state_tol = 5e-3 if dtype == torch.float16 else 1e-6
+    state_tol = {
+        torch.float32: 1e-6,
+        torch.float16: 5e-3,
+        torch.bfloat16: 2e-2,
+    }[dtype]
     assert torch.allclose(
         triton_neuron.q, torch_neuron.q, atol=state_tol, rtol=state_tol
     )
@@ -998,6 +1010,35 @@ def test_spikezip_stbif_triton_rounds_half_to_even():
     torch.testing.assert_close(actual_multi[0][0], expected[0])
     for actual, reference in zip(actual_multi[1:4], expected[1:]):
         torch.testing.assert_close(actual, reference)
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
+    reason="CUDA and Triton are required",
+)
+def test_spikezip_stbif_single_step_triton_rejects_autograd():
+    x = torch.zeros(4, device="cuda", requires_grad=True)
+    state = torch.zeros_like(x, requires_grad=False)
+    scalar = torch.tensor(1.0, device="cuda")
+
+    with pytest.raises(RuntimeError, match="inference-only"):
+        functional.stbif_single_step_triton(
+            x,
+            state,
+            state,
+            scalar,
+            scalar,
+            -scalar,
+        )
+
+
+def test_spikezip_stbif_single_step_triton_rejects_cpu_input():
+    pytest.importorskip("triton")
+    node = STBIFNeuron(0.25, level=8, sym=True)
+    node.backend = "triton"
+
+    with pytest.raises(ValueError, match="requires CUDA"):
+        node(torch.zeros(4))
 
 
 def test_spikezip_linear_is_tdlinear_with_distributed_bias():

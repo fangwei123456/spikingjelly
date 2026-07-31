@@ -41,7 +41,8 @@ class STBIFNeuron(base.MemoryModule):
         该神经元仅用于推理阶段的 QANN-to-SNN 转换结果执行，不支持训练。
         Torch 路径包含 ``detach``、``round`` 和离散状态更新；Triton 单步和
         多步 kernel 也没有实现 backward。因此不要把该神经元用于端到端
-        梯度训练或微调。
+        梯度训练或微调。单步 Triton 路径仅接受 CUDA 输入；显式选择 Triton
+        后端时，CPU 输入会直接报错。
 
         :param q_threshold: QANN quantizer scale。
         :type q_threshold: float or torch.Tensor
@@ -78,7 +79,9 @@ class STBIFNeuron(base.MemoryModule):
         QANN-to-SNN models. The Torch paths contain ``detach``, ``round`` and
         discrete state updates; the Triton single-step and multi-step kernels do
         not implement backward either. Do not use this neuron for end-to-end
-        gradient training or fine-tuning.
+        gradient training or fine-tuning. The single-step Triton path accepts CUDA
+        inputs only and raises an error for CPU input when Triton is selected
+        explicitly.
 
         :param q_threshold: QANN quantizer scale.
         :type q_threshold: float or torch.Tensor
@@ -147,7 +150,9 @@ class STBIFNeuron(base.MemoryModule):
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         self._init_state(x)
-        if x.device.type == "cuda" and self.backend == "triton":
+        if self.backend == "triton":
+            if x.device.type != "cuda":
+                raise ValueError("STBIFNeuron single-step Triton requires CUDA input.")
             out, self.q, self.acc_q, cur_output, work_flag = (
                 functional.stbif_single_step_triton(
                     x,

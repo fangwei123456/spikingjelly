@@ -51,34 +51,6 @@ def _manual_activation_aware_if(
 class TestActivationAwareIFNode:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is unavailable")
     @pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16])
-    def test_triton_single_step_matches_torch_channelwise_inference(self, dtype):
-        if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
-            pytest.skip("CUDA device does not support bfloat16")
-        x = torch.rand(2, 3, 5, device="cuda", dtype=dtype) * 0.4
-        kwargs = {
-            "v_threshold": torch.linspace(0.7, 1.3, 5),
-            "v_offset": torch.linspace(-0.1, 0.1, 5),
-            "channel_dim": -1,
-            "surrogate_function": surrogate.DeterministicPass(),
-            "step_mode": "s",
-        }
-        reference = (
-            neuron.ActivationAwareIFNode(**kwargs, backend="torch").cuda().eval()
-        )
-        candidate = (
-            neuron.ActivationAwareIFNode(**kwargs, backend="triton").cuda().eval()
-        )
-
-        with torch.inference_mode():
-            expected = reference(x)
-            actual = candidate(x)
-
-        assert torch.equal(actual, expected)
-        atol = rtol = 1e-2 if dtype == torch.bfloat16 else 1e-6
-        torch.testing.assert_close(candidate.v, reference.v, atol=atol, rtol=rtol)
-
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is unavailable")
-    @pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16])
     def test_triton_multistep_matches_torch_channelwise_inference(self, dtype):
         if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
             pytest.skip("CUDA device does not support bfloat16")
@@ -477,11 +449,6 @@ class TestActivationAwareIFNode:
 
         assert node.supported_backends == ("torch", "triton")
 
-    def test_single_step_advertises_triton_backend(self):
-        node = neuron.ActivationAwareIFNode(step_mode="s")
-
-        assert node.supported_backends == ("torch", "triton")
-
     def test_multistep_triton_backend_is_cuda_only(self):
         pytest.importorskip("triton")
         node = neuron.ActivationAwareIFNode(
@@ -493,23 +460,16 @@ class TestActivationAwareIFNode:
         with pytest.raises(RuntimeError, match="CUDA"):
             node(torch.ones(2, 3))
 
-    def test_single_step_triton_backend_is_cuda_only(self):
-        pytest.importorskip("triton")
-        node = neuron.ActivationAwareIFNode(
-            surrogate_function=surrogate.DeterministicPass(),
-            step_mode="s",
-            backend="triton",
-        ).eval()
-
-        with pytest.raises(RuntimeError, match="CUDA"):
-            node(torch.ones(2, 3))
+    def test_single_step_rejects_triton_backend(self):
+        with pytest.raises(ValueError, match="step_mode='m'"):
+            neuron.ActivationAwareIFNode(step_mode="s", backend="triton")
 
     def test_step_mode_mutation_does_not_silently_fallback_from_triton(self):
         pytest.importorskip("triton")
         node = neuron.ActivationAwareIFNode(step_mode="m", backend="triton")
         node.step_mode = "s"
 
-        with pytest.raises(RuntimeError, match="CUDA"):
+        with pytest.raises(RuntimeError, match="single-step.*torch"):
             node(torch.ones(2, 3))
 
     def test_triton_backend_rejects_an_unavailable_kernel(self, monkeypatch):
