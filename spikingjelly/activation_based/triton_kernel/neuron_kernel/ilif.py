@@ -568,7 +568,7 @@ def multistep_ilif_forward_no_grad(
         x_seq,
         v_init,
         spike_seq,
-        v_out,
+        v_out,  # h_seq is not written when save_intermediates=False.
         v_out,
         decay=decay,
         v_threshold=v_threshold,

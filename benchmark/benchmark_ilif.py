@@ -54,6 +54,10 @@ def main() -> None:
     args = parser.parse_args()
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required.")
+    if args.T <= 0 or args.numel <= 0:
+        raise ValueError("--T and --numel must be positive.")
+    if args.warmup < 0 or args.repeat <= 0:
+        raise ValueError("--warmup must be non-negative and --repeat must be positive.")
 
     dtype = getattr(torch, args.dtype)
     backward = args.mode == "train"
