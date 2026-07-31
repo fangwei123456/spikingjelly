@@ -72,12 +72,8 @@ Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
 - Added experimental mixed-precision and FP8 IF, LIF, and ParametricLIF kernels,
   capability probes, execution plans, and benchmarks. FP8 does not
   consistently outperform BF16 in the measured workloads.
-- Added a multi-step Triton backend for ``ILIFNode``, with fused integer-count
-  forward and BPTT. Training and inference now share the same integer-valued
-  forward semantics. ``ILIFNode`` inherits the soft-reset, no-input-decay
-  ``LIFNode`` dynamics and uses the corresponding ``tau`` parameter. Its
-  ``MultiLevelSpikeCount`` surrogate configures the maximum count and rectangular
-  gradient window.
+- Added multi-step Triton training and inference for ``ILIFNode``. It reuses
+  ``LIFNode`` dynamics and configures integer firing through ``MultiLevelSpikeCount``.
 - Added an inference-only single-step Triton kernel for the SpikeZIP STBIF
   neuron, exposed through functional and neuron interfaces.
 

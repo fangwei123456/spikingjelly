@@ -1,11 +1,8 @@
 import logging
-import numbers
-from typing import Optional
 
 import torch
 
 from .. import surrogate
-from .base_node import BaseNode
 from .lif import LIFNode
 
 try:
@@ -22,7 +19,9 @@ class ILIFNode(LIFNode):
         self,
         tau: float = 4.0 / 3.0,
         v_threshold: float = 1.0,
-        surrogate_function: Optional[surrogate.MultiLevelSpikeCount] = None,
+        surrogate_function: surrogate.MultiLevelSpikeCount = surrogate.MultiLevelSpikeCount(
+            4
+        ),
         detach_reset: bool = False,
         step_mode: str = "s",
         backend: str = "torch",
@@ -60,19 +59,14 @@ class ILIFNode(LIFNode):
 
         其中 :math:`D` 为 ``surrogate_function.max_spike_count``。该充电过程
         直接复用 :class:`LIFNode` 在 ``decay_input=False``、``v_reset=None``
-        时的实现；论文及作者代码中的衰减系数
-        :math:`\beta = 1 - 1 / \tau`。作者代码默认 :math:`\beta=0.25`，对应
-        本类默认的 :math:`\tau=4/3`。
+        时的实现；论文及作者代码中的衰减系数 :math:`\beta = 1 - 1 / \tau`。
+        作者代码默认 :math:`\beta=0.25`，对应本类默认的 :math:`\tau=4/3`。
         ``train()`` 和 ``eval()`` 的前向语义相同，均返回
         :math:`C[t] \in \{0, 1, \ldots, D\}`，输入和输出的逻辑时间步数相同。
 
         需要梯度时使用矩形窗口直通估计；默认仅当
         :math:`H[t] / V_{th} \in [0, D]` 时传递梯度。可在构造
-        ``surrogate_function`` 时修改该区间。调用 :meth:`reset` 会将保存的
-        膜电位恢复为初始值。``step_mode="s"`` 接收 ``[N, *]``，而
-        ``step_mode="m"`` 接收 ``[T, N, *]``；输出与输入的 shape、dtype 和
-        device 相同。单步模式仅支持 Torch；多步 Triton 后端要求输入为 CUDA
-        FP32、FP16 或 BF16 张量。
+        ``surrogate_function`` 时修改该区间。
 
         论文所称的 spike-driven inference 需要由部署端将每个整数计数
         展开为 :math:`D` 个二值槽，其中恰有 :math:`C[t]` 个单位事件：
@@ -88,7 +82,7 @@ class ILIFNode(LIFNode):
             W C[t] = \sum_{d=1}^{D} W S[t, d].
 
         因此每个单位事件可触发一次权重累加（AC），无需执行整数激活与权重的
-        乘加（MAC）。其中 :math:`t` 是模型的逻辑时间步，:math:`d` 是部署端的
+        乘加（MAC）。其中 :math:`t` 是模型的逻辑时间步；而 :math:`d` 是部署端的
         unary/thermometer 事件槽，不参与神经元状态更新。:class:`ILIFNode`
         只输出整数计数，不负责二值脉冲展开和累加。
 
@@ -120,7 +114,7 @@ class ILIFNode(LIFNode):
             每个事件会使 bias 项随事件数变化。对上面的标量计数，结果是
             :math:`W C[t] + C[t] b / D`。这时应先做无 bias 的事件累加，再在
             逻辑时间步结束时加入一次 :math:`b`；归一化和非线性也应在累加完成后
-            执行一次。
+            执行一次。换言之，I-LIF 使用的标准流程是 ``I-LIF - weight - bin_sum`` 。
 
             同一逻辑时间步下，I-LIF 每个位置携带 :math:`D+1` 个幅值等级，并可
             触发最多 :math:`D` 个事件；它与每步最多一个事件的二值 IF/LIF
@@ -129,17 +123,16 @@ class ILIFNode(LIFNode):
             真正降低部署代价；以及在相同物理槽、总事件、延迟或能耗预算下的
             二值 IF/LIF 基线，而不只是令逻辑 :math:`T` 相同。
 
-        :param tau: 膜电位时间常数，必须为有限且大于 1 的实数。论文作者代码
-            默认的衰减系数 0.25 对应 ``tau=4/3``
+        :param tau: 膜电位时间常数。论文作者代码默认的衰减系数 0.25 对应
+            ``tau=4/3``
         :type tau: float
-        :param v_threshold: 神经元阈值电压，必须为有限正数，默认为 1.0
+        :param v_threshold: 神经元阈值电压，默认为 1.0
         :type v_threshold: float
         :param surrogate_function: 多级整数发放函数，必须是 ``spiking=True`` 的
             :class:`~spikingjelly.activation_based.surrogate.MultiLevelSpikeCount`。
-            ``max_spike_count`` 和矩形替代梯度区间均由该对象配置。未提供时会新建
-            ``MultiLevelSpikeCount(4)``。该实例对应 :math:`D=4` 和梯度区间
-            ``[0, 4]``
-        :type surrogate_function: Optional[surrogate.MultiLevelSpikeCount]
+            ``max_spike_count`` 和矩形替代梯度区间均由该对象配置。默认为
+            ``MultiLevelSpikeCount(4)``，对应 :math:`D=4` 和梯度区间 ``[0, 4]``
+        :type surrogate_function: surrogate.MultiLevelSpikeCount
         :param detach_reset: 是否在反向传播时分离 reset 中的发放值，默认为
             ``False``
         :type detach_reset: bool
@@ -152,10 +145,8 @@ class ILIFNode(LIFNode):
         :param store_v_seq: 多步模式下是否保存每个输入步后的膜电位，默认为
             ``False``
         :type store_v_seq: bool
-        :raises TypeError: 当 ``tau`` 或 ``v_threshold`` 不是实数，或
-            ``surrogate_function`` 不是 ``MultiLevelSpikeCount`` 时
-        :raises ValueError: 当 ``tau``、``v_threshold``、``step_mode`` 或
-            ``backend`` 的取值无效，或 ``surrogate_function.spiking=False`` 时
+        :raises ValueError: 当 ``surrogate_function`` 不是
+            ``MultiLevelSpikeCount`` 或 ``surrogate_function.spiking=False`` 时
 
         ----
 
@@ -198,11 +189,7 @@ class ILIFNode(LIFNode):
         When gradients are required, a rectangular straight-through estimator is
         used. By default, gradients pass where
         :math:`H[t] / V_{th} \in [0, D]`; this interval can be changed when
-        constructing ``surrogate_function``. Calling :meth:`reset` restores the
-        stored membrane potential. ``step_mode="s"`` accepts ``[N, *]`` and
-        ``step_mode="m"`` accepts ``[T, N, *]``. Output shape, dtype, and device
-        match the input. Single-step mode supports Torch only. The multi-step
-        Triton backend requires CUDA FP32, FP16, or BF16 tensors.
+        constructing ``surrogate_function``.
 
         The spike-driven inference described in the paper requires the deployment
         layer to expand each integer count into :math:`D` binary slots, exactly
@@ -259,6 +246,8 @@ class ILIFNode(LIFNode):
             accumulated with a bias-free weight operation, and :math:`b` should be
             added once at the end of the logical timestep. Normalization and
             nonlinear operations should likewise run once after accumulation.
+            In other words, the standard I-LIF flow is
+            ``I-LIF - weight - bin_sum``.
 
             At the same logical timestep count, I-LIF carries :math:`D+1`
             amplitude levels per position and may trigger up to :math:`D` events.
@@ -270,19 +259,18 @@ class ILIFNode(LIFNode):
             under the same physical-slot, event, latency, or energy budget rather
             than only the same logical :math:`T`.
 
-        :param tau: Membrane time constant, which must be finite and greater than
-            1. The reference code's default decay factor 0.25 maps to ``tau=4/3``
+        :param tau: Membrane time constant. The reference code's default decay
+            factor 0.25 maps to ``tau=4/3``
         :type tau: float
-        :param v_threshold: Threshold voltage, which must be finite and positive;
-            defaults to 1.0
+        :param v_threshold: Threshold voltage; defaults to 1.0
         :type v_threshold: float
         :param surrogate_function: Multi-level integer firing function. It must be a
             :class:`~spikingjelly.activation_based.surrogate.MultiLevelSpikeCount`
             with ``spiking=True``. Its ``max_spike_count`` and rectangular
             surrogate-gradient window define the corresponding neuron settings.
-            If ``None``, a new ``MultiLevelSpikeCount(4)`` is created, giving
-            :math:`D=4` and the gradient window ``[0, 4]``
-        :type surrogate_function: Optional[surrogate.MultiLevelSpikeCount]
+            Defaults to ``MultiLevelSpikeCount(4)``, giving :math:`D=4` and the
+            gradient window ``[0, 4]``
+        :type surrogate_function: surrogate.MultiLevelSpikeCount
         :param detach_reset: Whether to detach the emitted value used by reset in
             backward; defaults to ``False``
         :type detach_reset: bool
@@ -295,30 +283,16 @@ class ILIFNode(LIFNode):
         :param store_v_seq: Whether to store membrane voltage after each input
             step in multi-step mode; defaults to ``False``
         :type store_v_seq: bool
-        :raises TypeError: If ``tau`` or ``v_threshold`` is not real, or
-            ``surrogate_function`` is not ``MultiLevelSpikeCount``
-        :raises ValueError: If ``tau``, ``v_threshold``, ``step_mode``, or
-            ``backend`` has an invalid value, or if
-            ``surrogate_function.spiking=False``
+        :raises ValueError: If ``surrogate_function`` is not
+            ``MultiLevelSpikeCount`` or if ``surrogate_function.spiking=False``
         """
-        if not isinstance(tau, numbers.Real):
-            raise TypeError("tau must be a real number.")
-        tau = float(tau)
-        if not torch.isfinite(torch.tensor(tau)) or tau <= 1.0:
-            raise ValueError("tau must be finite and greater than 1.")
-        if not isinstance(v_threshold, numbers.Real):
-            raise TypeError("v_threshold must be a real number.")
-        v_threshold = float(v_threshold)
-        if not torch.isfinite(torch.tensor(v_threshold)) or v_threshold <= 0.0:
-            raise ValueError("v_threshold must be finite positive.")
-        if surrogate_function is None:
-            surrogate_function = surrogate.MultiLevelSpikeCount(4)
-        elif not isinstance(surrogate_function, surrogate.MultiLevelSpikeCount):
-            raise TypeError(
-                "surrogate_function must be a MultiLevelSpikeCount instance."
+        if (
+            not isinstance(surrogate_function, surrogate.MultiLevelSpikeCount)
+            or not surrogate_function.spiking
+        ):
+            raise ValueError(
+                "surrogate_function must be a spiking MultiLevelSpikeCount."
             )
-        if not surrogate_function.spiking:
-            raise ValueError("surrogate_function.spiking must be True.")
 
         super().__init__(
             tau=tau,
@@ -334,21 +308,17 @@ class ILIFNode(LIFNode):
 
     @property
     def supported_backends(self) -> tuple[str, ...]:
-        if self.step_mode == "s":
-            return ("torch",)
-        if self.step_mode == "m":
-            return ("torch", "triton")
-        raise ValueError(self.step_mode)
+        return ("torch",) if self.step_mode == "s" else ("torch", "triton")
 
     def neuronal_fire(self) -> torch.Tensor:
         return self.surrogate_function(self.v / self.v_threshold)
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.backend != "torch":
-            raise NotImplementedError(
-                f"ILIFNode single-step does not support backend={self.backend!r}."
-            )
-        return BaseNode.single_step_forward(self, x)
+        self.v_float_to_tensor(x)
+        self.neuronal_charge(x)
+        spike = self.neuronal_fire()
+        self.neuronal_reset(spike)
+        return spike
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         if self.backend == "triton":
@@ -375,4 +345,13 @@ class ILIFNode(LIFNode):
                 self.v = v_out
             return spike_seq
 
-        return BaseNode.multi_step_forward(self, x_seq)
+        spike_seq = []
+        if self.store_v_seq:
+            v_seq = []
+        for x in x_seq:
+            spike_seq.append(self.single_step_forward(x))
+            if self.store_v_seq:
+                v_seq.append(self.v)
+        if self.store_v_seq:
+            self.v_seq = torch.stack(v_seq)
+        return torch.stack(spike_seq)

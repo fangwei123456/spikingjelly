@@ -2848,8 +2848,7 @@ def stbif_single_step_triton(
     :type neg_min: torch.Tensor
     :return: ``(out, q_next, acc_q_next, cur_output, is_work)``
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises ValueError: 输入 shape、dtype、CUDA device 或标量参数不满足约束
-    :raises RuntimeError: 任一输入需要 autograd
+    :raises ValueError: 输入 shape、dtype、device 或标量参数不满足约束
     :raises NotImplementedError: dtype 不受 Triton 后端支持
 
     ----
@@ -2877,9 +2876,8 @@ def stbif_single_step_triton(
     :type neg_min: torch.Tensor
     :return: ``(out, q_next, acc_q_next, cur_output, is_work)``
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises ValueError: If the input shape, dtype, CUDA device, or scalar
+    :raises ValueError: If the input shape, dtype, device, or scalar
         parameter is invalid
-    :raises RuntimeError: If any input requires autograd
     :raises NotImplementedError: If the dtype is not supported by the Triton
         backend
     """

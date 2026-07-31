@@ -227,9 +227,8 @@ def single_step_stbif(
     :type neg_min: torch.Tensor
     :return: ``(out, q_next, acc_q_next, cur_output, is_work)``
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises ValueError: 当 ``x``、``q`` 和 ``acc_q`` 的 shape、dtype 或 CUDA
-        device 不一致，输入不在 CUDA 上，或任一标量参数不是单元素张量时
-    :raises RuntimeError: 当任一输入需要 autograd 时
+    :raises ValueError: 当 ``x``、``q`` 和 ``acc_q`` 的 shape、dtype 或 device
+        不一致，或任一标量参数不是单元素张量时
     :raises NotImplementedError: 当 dtype 不受 Triton 后端支持时
 
     ----
@@ -258,14 +257,10 @@ def single_step_stbif(
     :return: ``(out, q_next, acc_q_next, cur_output, is_work)``
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     :raises ValueError: If ``x``, ``q``, and ``acc_q`` differ in shape, dtype,
-        or CUDA device, if the input is not on CUDA, or if a scalar parameter
-        does not contain exactly one element
-    :raises RuntimeError: If any input requires autograd
+        or device, or if a scalar parameter does not contain exactly one element
     :raises NotImplementedError: If the dtype is not supported by the Triton
         backend
     """
-    if x.device.type != "cuda":
-        raise ValueError("single_step_stbif requires CUDA tensors.")
     if (
         q.shape != x.shape
         or acc_q.shape != x.shape
@@ -278,8 +273,6 @@ def single_step_stbif(
     scalar_inputs = (q_threshold, pos_max, neg_min)
     if any(value.numel() != 1 for value in scalar_inputs):
         raise ValueError("q_threshold, pos_max, and neg_min must be scalar tensors.")
-    if any(value.requires_grad for value in (x, q, acc_q, *scalar_inputs)):
-        raise RuntimeError("single_step_stbif is inference-only and has no autograd.")
     x = x.contiguous()
     q = q.contiguous()
     acc_q = acc_q.contiguous()
@@ -295,8 +288,11 @@ def single_step_stbif(
     q_final = torch.empty_like(q)
     acc_q_final = torch.empty_like(acc_q)
     cur_output = torch.empty_like(q)
-    work_flags = torch.empty(triton.cdiv(N, 256), device=x.device, dtype=torch.int32)
-    grid = (triton.cdiv(N, 256),)
+    block_n = 256
+    work_flags = torch.empty(
+        triton.cdiv(N, block_n), device=x.device, dtype=torch.int32
+    )
+    grid = (triton.cdiv(N, block_n),)
     with torch.cuda.device(x.device):
         wrap_triton(_single_step_stbif_kernel)[grid](
             x,
@@ -311,7 +307,7 @@ def single_step_stbif(
             cur_output,
             work_flags,
             N=N,
-            BLOCK_N=256,
+            BLOCK_N=block_n,
             dtype=type_dict[dtype],
         )
     return out, q_final, acc_q_final, cur_output, work_flags.max()
@@ -372,9 +368,9 @@ def multi_step_stbif(
 
     work_flags = torch.zeros(triton.cdiv(N, 32), device=x_seq.device, dtype=torch.int32)
 
-    q_threshold_value = float(q_threshold.detach().item())
-    pos_max_value = float(pos_max.detach().item())
-    neg_min_value = float(neg_min.detach().item())
+    q_threshold_value = float(q_threshold.to(x_seq).detach().item())
+    pos_max_value = float(pos_max.to(x_seq).detach().item())
+    neg_min_value = float(neg_min.to(x_seq).detach().item())
     with torch.cuda.device(x_seq.device):
         wrap_triton(_select_stbif_kernel(T))[grid](
             x_seq_flat,

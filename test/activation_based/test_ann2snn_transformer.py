@@ -917,7 +917,7 @@ def test_spikezip_stbif_triton_matches_torch(dtype, time_steps):
 
     assert torch.allclose(triton_seq, torch_seq, atol=1e-3, rtol=1e-3)
     assert torch.allclose(triton_neuron.q, torch_neuron.q, atol=1e-3, rtol=1e-3)
-    assert torch.allclose(triton_neuron.acc_q, torch_neuron.acc_q, atol=1e-3, rtol=1e-3)
+    assert torch.equal(triton_neuron.acc_q, torch_neuron.acc_q)
     assert torch.allclose(
         triton_neuron.cur_output,
         torch_neuron.cur_output,
@@ -958,7 +958,7 @@ def test_spikezip_stbif_single_step_triton_matches_torch(dtype):
     assert torch.allclose(
         triton_neuron.q, torch_neuron.q, atol=state_tol, rtol=state_tol
     )
-    assert torch.allclose(triton_neuron.acc_q, torch_neuron.acc_q, atol=1e-3, rtol=1e-3)
+    assert torch.equal(triton_neuron.acc_q, torch_neuron.acc_q)
     assert torch.allclose(
         triton_neuron.cur_output,
         torch_neuron.cur_output,
@@ -972,11 +972,14 @@ def test_spikezip_stbif_single_step_triton_matches_torch(dtype):
     not torch.cuda.is_available() or not _TRITON_AVAILABLE,
     reason="CUDA and Triton are required",
 )
-def test_spikezip_stbif_triton_rounds_half_to_even():
-    x = torch.zeros(6, device="cuda")
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+def test_spikezip_stbif_triton_rounds_half_to_even(dtype):
+    if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
+        pytest.skip("CUDA device does not support bfloat16")
+    x = torch.zeros(6, device="cuda", dtype=dtype)
     q = torch.full_like(x, 0.5)
-    acc_q = torch.tensor([0.5, 1.5, 2.5, -0.5, -1.5, -2.5], device="cuda")
-    q_threshold = torch.tensor(1.0, device="cuda")
+    acc_q = torch.tensor([0.5, 1.5, 2.5, -0.5, -1.5, -2.5], device="cuda", dtype=dtype)
+    q_threshold = torch.tensor(0.1, device="cuda")
     pos_max = torch.tensor(10.0, device="cuda")
     neg_min = torch.tensor(-10.0, device="cuda")
 
@@ -1010,35 +1013,6 @@ def test_spikezip_stbif_triton_rounds_half_to_even():
     torch.testing.assert_close(actual_multi[0][0], expected[0])
     for actual, reference in zip(actual_multi[1:4], expected[1:]):
         torch.testing.assert_close(actual, reference)
-
-
-@pytest.mark.skipif(
-    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
-    reason="CUDA and Triton are required",
-)
-def test_spikezip_stbif_single_step_triton_rejects_autograd():
-    x = torch.zeros(4, device="cuda", requires_grad=True)
-    state = torch.zeros_like(x, requires_grad=False)
-    scalar = torch.tensor(1.0, device="cuda")
-
-    with pytest.raises(RuntimeError, match="inference-only"):
-        functional.stbif_single_step_triton(
-            x,
-            state,
-            state,
-            scalar,
-            scalar,
-            -scalar,
-        )
-
-
-def test_spikezip_stbif_single_step_triton_rejects_cpu_input():
-    pytest.importorskip("triton")
-    node = STBIFNeuron(0.25, level=8, sym=True)
-    node.backend = "triton"
-
-    with pytest.raises(ValueError, match="requires CUDA"):
-        node(torch.zeros(4))
 
 
 def test_spikezip_linear_is_tdlinear_with_distributed_bias():
