@@ -133,8 +133,8 @@ class ILIFNode(BaseNode):
         :type decay: float
         :param surrogate_function: 多级整数发放函数，必须是 ``spiking=True`` 的
             :class:`~spikingjelly.activation_based.surrogate.MultiLevelSpikeCount`。
-            ``max_spike_count`` 和矩形替代梯度区间均由该对象配置。若为 ``None``，
-            则新建 ``MultiLevelSpikeCount(4)``，对应 :math:`D=4` 和梯度区间
+            ``max_spike_count`` 和矩形替代梯度区间均由该对象配置。未提供时会新建
+            ``MultiLevelSpikeCount(4)``。该实例对应 :math:`D=4` 和梯度区间
             ``[0, 4]``
         :type surrogate_function: Optional[surrogate.MultiLevelSpikeCount]
         :param detach_reset: 是否在反向传播时分离 reset 中的发放值，默认为
