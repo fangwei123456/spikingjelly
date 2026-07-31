@@ -72,6 +72,10 @@ Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
 - Added experimental mixed-precision and FP8 IF, LIF, and ParametricLIF kernels,
   capability probes, execution plans, and benchmarks. FP8 does not
   consistently outperform BF16 in the measured workloads.
+- Added multi-step Triton training and inference for ``ILIFNode``. It reuses
+  ``LIFNode`` dynamics and configures integer firing through ``MultiLevelSpikeCount``.
+- Added an inference-only single-step Triton kernel for the SpikeZIP STBIF
+  neuron, exposed through functional and neuron interfaces.
 
 Bug Fixes
 ~~~~~~~~~
@@ -87,6 +91,8 @@ Module: ``spikingjelly.activation_based.ann2snn``.
   calls and forward signatures containing PEP 604 union annotations.
 - Fixed signed QCFS boundary replay and statistics for non-last channel
   dimensions.
+- Fixed SpikeZIP STBIF Triton state rounding at exact half-integers to match
+  Torch ties-to-even semantics.
 - Fixed converted Qwen2 position IDs, cache validation, and calibration
   metadata checks.
 

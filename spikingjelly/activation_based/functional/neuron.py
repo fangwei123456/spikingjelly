@@ -36,6 +36,7 @@ __all__ = [
     "if_multi_step_triton",
     "lif_multi_step_triton",
     "plif_multi_step_triton",
+    "stbif_single_step_triton",
     "sliding_psn_step",
     "gated_lif_step",
     "stbif_step",
@@ -2810,3 +2811,83 @@ def stbif_step(
     q_next = torch.where(neg_spike_position, q_next + 1, q_next)
     out = cur_output_next * q_threshold
     return out, q_next, acc_q_next, cur_output_next
+
+
+def stbif_single_step_triton(
+    x: torch.Tensor,
+    q: torch.Tensor,
+    acc_q: torch.Tensor,
+    q_threshold: torch.Tensor,
+    pos_max: torch.Tensor,
+    neg_min: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <stbif_single_step_triton-cn>` | :ref:`English <stbif_single_step_triton-en>`
+
+    ----
+
+    .. _stbif_single_step_triton-cn:
+
+    * **中文**
+
+    使用专用 Triton kernel 执行 SpikeZIP STBIF 单步状态转移。``x``、``q``
+    和 ``acc_q`` 必须是相同 shape、dtype 和 device 的 CUDA FP32、FP16 或
+    BF16 张量；该离散推理接口不支持 autograd。
+
+    :param x: CUDA 单步输入
+    :type x: torch.Tensor
+    :param q: 与 ``x`` 同形状的量化残差状态
+    :type q: torch.Tensor
+    :param acc_q: 与 ``x`` 同形状的累计释放量状态
+    :type acc_q: torch.Tensor
+    :param q_threshold: 单元素量化尺度张量
+    :type q_threshold: torch.Tensor
+    :param pos_max: 单元素正向累计上界张量
+    :type pos_max: torch.Tensor
+    :param neg_min: 单元素负向累计下界张量
+    :type neg_min: torch.Tensor
+    :return: ``(out, q_next, acc_q_next, cur_output, is_work)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises ValueError: 输入 shape、dtype、device 或标量参数不满足约束
+    :raises NotImplementedError: dtype 不受 Triton 后端支持
+
+    ----
+
+    .. _stbif_single_step_triton-en:
+
+    * **English**
+
+    Run one SpikeZIP STBIF state transition with the dedicated Triton kernel.
+    ``x``, ``q``, and ``acc_q`` must be CUDA FP32, FP16, or BF16 tensors with
+    matching shape, dtype, and device. This discrete inference interface does
+    not support autograd.
+
+    :param x: Single-step CUDA input
+    :type x: torch.Tensor
+    :param q: Quantized-residual state with the same shape as ``x``
+    :type q: torch.Tensor
+    :param acc_q: Accumulated released-quantity state with the same shape as ``x``
+    :type acc_q: torch.Tensor
+    :param q_threshold: Scalar quantization-scale tensor
+    :type q_threshold: torch.Tensor
+    :param pos_max: Scalar positive accumulated bound
+    :type pos_max: torch.Tensor
+    :param neg_min: Scalar negative accumulated bound
+    :type neg_min: torch.Tensor
+    :return: ``(out, q_next, acc_q_next, cur_output, is_work)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises ValueError: If the input shape, dtype, device, or scalar
+        parameter is invalid
+    :raises NotImplementedError: If the dtype is not supported by the Triton
+        backend
+    """
+    from ..triton_kernel import spikezip_kernel
+
+    return spikezip_kernel.single_step_stbif(
+        x,
+        q,
+        acc_q,
+        q_threshold,
+        pos_max,
+        neg_min,
+    )
