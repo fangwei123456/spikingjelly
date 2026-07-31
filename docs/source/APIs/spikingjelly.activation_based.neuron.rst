@@ -218,7 +218,7 @@ Integer-Valued Training Neurons
 .. list-table::
 
    * - :class:`ILIFNode <spikingjelly.activation_based.neuron.ilif.ILIFNode>`
-     - I-LIF neuron with integer-valued training and strictly binary spike inference.
+     - I-LIF neuron with integer-valued training and inference.
 
 Neurons with Inter-layer Connection
 --------------------------------------------------

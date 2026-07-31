@@ -74,8 +74,8 @@ Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
   consistently outperform BF16 in the measured workloads.
 - Added a multi-step Triton backend for ``ILIFNode``, with fused integer-count
   forward and BPTT. Training and inference now share the same integer-valued
-  forward semantics, and its fixed rectangular STE supports a configurable
-  ``grad_window``.
+  forward semantics. ``ILIFNode`` exposes its ``MultiLevelSpikeCount`` surrogate,
+  which configures the maximum count and rectangular gradient window.
 - Added dedicated single-step Triton kernels for IF, LIF, ParametricLIF, I-LIF,
   ActivationAwareIF, and SpikeZIP STBIF neurons, exposed through functional and
   neuron interfaces. Single-step execution no longer enters multi-step kernels.

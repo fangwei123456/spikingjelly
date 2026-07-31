@@ -11,13 +11,13 @@ def _assert_close(actual: torch.Tensor, expected: torch.Tensor):
         torch.testing.assert_close(actual, expected, atol=2e-2, rtol=2e-2)
 
 
-def test_ilif_rejects_invalid_max_spike_count():
-    for value in (0, -1):
-        with pytest.raises(ValueError):
-            neuron.ILIFNode(max_spike_count=value)
-    for value in (1.5, True):
-        with pytest.raises(TypeError):
-            neuron.ILIFNode(max_spike_count=value)
+def test_ilif_rejects_incompatible_surrogate():
+    with pytest.raises(TypeError):
+        neuron.ILIFNode(surrogate_function=surrogate.Sigmoid())
+    with pytest.raises(ValueError):
+        neuron.ILIFNode(
+            surrogate_function=surrogate.MultiLevelSpikeCount(4, spiking=False)
+        )
 
 
 def test_ilif_exposes_triton_for_both_step_modes():
@@ -26,7 +26,7 @@ def test_ilif_exposes_triton_for_both_step_modes():
 
 
 def test_ilif_training_outputs_integer_counts_and_updates_voltage():
-    node = neuron.ILIFNode(v_threshold=1.0, max_spike_count=4, decay=0.25)
+    node = neuron.ILIFNode(v_threshold=1.0, decay=0.25)
     x = torch.tensor([[3.2, 0.4, 5.8]])
 
     y = node(x)
@@ -37,14 +37,14 @@ def test_ilif_training_outputs_integer_counts_and_updates_voltage():
 
 
 def test_ilif_uses_spike_count_surrogate():
-    node = neuron.ILIFNode(max_spike_count=4)
+    node = neuron.ILIFNode()
 
     assert isinstance(node.surrogate_function, surrogate.MultiLevelSpikeCount)
     assert node.surrogate_function.max_spike_count == 4
 
 
 def test_ilif_decay_is_applied_during_charge():
-    node = neuron.ILIFNode(v_threshold=1.0, max_spike_count=4, decay=0.25)
+    node = neuron.ILIFNode(v_threshold=1.0, decay=0.25)
 
     node(torch.tensor([[3.2]]))
     y = node(torch.tensor([[0.0]]))
@@ -54,7 +54,7 @@ def test_ilif_decay_is_applied_during_charge():
 
 
 def test_ilif_eval_returns_integer_counts():
-    node = neuron.ILIFNode(v_threshold=1.0, max_spike_count=4, decay=0.25).eval()
+    node = neuron.ILIFNode(v_threshold=1.0, decay=0.25).eval()
 
     y = node(torch.tensor([[3.2, 5.8]]))
 
@@ -65,14 +65,12 @@ def test_ilif_eval_returns_integer_counts():
 def test_ilif_train_and_eval_have_identical_forward_semantics():
     train_node = neuron.ILIFNode(
         v_threshold=0.5,
-        max_spike_count=4,
         decay=0.25,
         step_mode="m",
         store_v_seq=True,
     )
     eval_node = neuron.ILIFNode(
         v_threshold=0.5,
-        max_spike_count=4,
         decay=0.25,
         step_mode="m",
         store_v_seq=True,
@@ -94,7 +92,6 @@ def test_ilif_train_and_eval_have_identical_forward_semantics():
 def test_ilif_multistep_eval_preserves_sequence_length():
     node = neuron.ILIFNode(
         v_threshold=1.0,
-        max_spike_count=4,
         decay=0.25,
         step_mode="m",
         store_v_seq=True,
@@ -109,7 +106,7 @@ def test_ilif_multistep_eval_preserves_sequence_length():
 
 
 def test_ilif_training_straight_through_gradient_is_windowed():
-    node = neuron.ILIFNode(v_threshold=1.0, max_spike_count=4, decay=0.0)
+    node = neuron.ILIFNode(v_threshold=1.0, decay=0.0)
     x = torch.tensor([[-0.5, 0.5, 4.5]], requires_grad=True)
 
     y = node(x)
@@ -121,9 +118,11 @@ def test_ilif_training_straight_through_gradient_is_windowed():
 
 def test_ilif_supports_custom_gradient_window():
     node = neuron.ILIFNode(
-        max_spike_count=4,
         decay=0.0,
-        grad_window=(-0.5, 4.5),
+        surrogate_function=surrogate.MultiLevelSpikeCount(
+            4,
+            grad_window=(-0.5, 4.5),
+        ),
     )
     x = torch.tensor([[-0.25, 4.25, 4.75]], requires_grad=True)
 
@@ -143,7 +142,6 @@ def test_ilif_single_step_triton_matches_torch_training(detach_reset, dtype):
         pytest.skip("BF16 requires compute capability >= 8.")
     kwargs = {
         "v_threshold": 0.5,
-        "max_spike_count": 4,
         "decay": 0.25,
         "detach_reset": detach_reset,
         "step_mode": "s",
@@ -180,7 +178,6 @@ def test_ilif_single_step_triton_matches_torch_training(detach_reset, dtype):
 def test_ilif_single_step_triton_rounds_half_to_even():
     pytest.importorskip("triton")
     node = neuron.ILIFNode(
-        max_spike_count=4,
         decay=0.0,
         step_mode="s",
         backend="triton",
@@ -202,7 +199,6 @@ def test_ilif_single_step_functional_triton_interface():
     v = torch.randn_like(x)
     torch_node = neuron.ILIFNode(
         decay=0.25,
-        max_spike_count=4,
         backend="torch",
     ).cuda()
     torch_node.eval()
@@ -234,7 +230,6 @@ def test_ilif_triton_matches_torch_training(store_v_seq, detach_reset, decay, dt
         pytest.skip("BF16 requires compute capability >= 8.")
     torch_node = neuron.ILIFNode(
         v_threshold=0.5,
-        max_spike_count=4,
         decay=decay,
         detach_reset=detach_reset,
         step_mode="m",
@@ -243,7 +238,6 @@ def test_ilif_triton_matches_torch_training(store_v_seq, detach_reset, decay, dt
     ).to(device="cuda", dtype=dtype)
     triton_node = neuron.ILIFNode(
         v_threshold=0.5,
-        max_spike_count=4,
         decay=decay,
         detach_reset=detach_reset,
         step_mode="m",
@@ -328,7 +322,6 @@ def test_ilif_triton_matches_torch_eval(store_v_seq, decay, dtype):
 def test_ilif_triton_rounds_half_to_even():
     pytest.importorskip("triton")
     node = neuron.ILIFNode(
-        max_spike_count=4,
         decay=0.0,
         step_mode="m",
         backend="triton",
@@ -349,14 +342,24 @@ def test_ilif_triton_rounds_half_to_even():
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_ilif_triton_matches_custom_gradient_window():
     pytest.importorskip("triton")
-    kwargs = dict(
-        max_spike_count=4,
+    torch_node = neuron.ILIFNode(
         decay=0.25,
-        grad_window=(-0.5, 4.5),
+        surrogate_function=surrogate.MultiLevelSpikeCount(
+            4,
+            grad_window=(-0.5, 4.5),
+        ),
         step_mode="m",
-    )
-    torch_node = neuron.ILIFNode(backend="torch", **kwargs).cuda()
-    triton_node = neuron.ILIFNode(backend="triton", **kwargs).cuda()
+        backend="torch",
+    ).cuda()
+    triton_node = neuron.ILIFNode(
+        decay=0.25,
+        surrogate_function=surrogate.MultiLevelSpikeCount(
+            4,
+            grad_window=(-0.5, 4.5),
+        ),
+        step_mode="m",
+        backend="triton",
+    ).cuda()
     x = torch.tensor(
         [[[-0.25, 4.25, 4.75]], [[0.0, 0.0, 0.0]]],
         device="cuda",
