@@ -230,7 +230,7 @@ class IFNode(BaseNode):
     @property
     def supported_backends(self):
         if self.step_mode == "s":
-            return ("torch", "cupy")
+            return ("torch", "cupy", "triton")
         elif self.step_mode == "m":
             return ("torch", "cupy", "triton", "inductor")
         else:
@@ -415,6 +415,18 @@ class IFNode(BaseNode):
             return spike_seq
 
     def single_step_forward(self, x: torch.Tensor):
+        if self.backend == "triton":
+            self.v_float_to_tensor(x)
+            spike, self.v = triton_kernel.single_step_if(
+                x,
+                self.v,
+                self.v_threshold,
+                self.v_reset,
+                self.detach_reset,
+                self.surrogate_function,
+            )
+            return spike
+
         if self.training:
             if self.backend == "torch":
                 return super().single_step_forward(x)
@@ -650,8 +662,8 @@ class ActivationAwareIFNode(base.MemoryModule):
         ``v_offset``。当 ``v_threshold`` 或 ``v_offset`` 为 1D 张量时，会沿
         ``channel_dim`` 广播到输入张量。
 
-        该类在单步模式下只支持 ``backend="torch"``；多步模式额外支持仅用于
-        CUDA 推理的 ``backend="triton"``。它不继承 :class:`BaseNode`，也不改变
+        该类在单步和多步模式下均支持 ``backend="torch"``，以及仅用于 CUDA
+        推理的 ``backend="triton"``。它不继承 :class:`BaseNode`，也不改变
         现有 :class:`IFNode` / :class:`BaseNode` 的标量 ``v_threshold`` 约定。
         它面向研究和转换 POC，不表示默认 ANN2SNN 路径支持多元素阈值。
 
@@ -693,10 +705,9 @@ class ActivationAwareIFNode(base.MemoryModule):
         :type detach_reset: bool
         :param step_mode: 步进模式，``"s"`` 为单步，``"m"`` 为多步。
         :type step_mode: str
-        :param backend: 后端名称。单步模式支持 ``"torch"``；多步模式支持
-            ``"torch"`` 和仅用于 CUDA 多步推理的 ``"triton"``。Triton 路径
-            要求模块处于 ``eval`` 模式，输入为 ``[T, N, *]`` 形状的 FP32 或
-            BF16 CUDA 张量。
+        :param backend: 后端名称。单步和多步模式均支持 ``"torch"``，以及仅用于
+            CUDA 推理的 ``"triton"``。Triton 路径要求模块处于 ``eval`` 模式，
+            输入为 FP32 或 BF16 CUDA 张量。
         :type backend: str
         :param store_v_seq: 多步模式下是否保存每个时间步的膜电位。
         :type store_v_seq: bool
@@ -717,9 +728,9 @@ class ActivationAwareIFNode(base.MemoryModule):
         ``v_threshold`` and membrane offset ``v_offset``. A 1D ``v_threshold`` or
         ``v_offset`` is broadcast to the input tensor along ``channel_dim``.
 
-        In single-step mode this class supports only ``backend="torch"``;
-        multi-step mode additionally supports ``backend="triton"`` for CUDA
-        inference only. It does not inherit from :class:`BaseNode` and does not
+        In both single-step and multi-step modes this class supports
+        ``backend="torch"`` and ``backend="triton"`` for CUDA inference only. It
+        does not inherit from :class:`BaseNode` and does not
         change the scalar ``v_threshold`` convention of existing :class:`IFNode`
         / :class:`BaseNode`. It is meant for research and conversion POCs, and
         does not imply that the default ANN2SNN path supports multi-element
@@ -767,11 +778,9 @@ class ActivationAwareIFNode(base.MemoryModule):
         :param step_mode: Step mode, ``"s"`` for single-step and ``"m"`` for
             multi-step.
         :type step_mode: str
-        :param backend: Backend name. Single-step mode supports ``"torch"``;
-            multi-step mode supports ``"torch"`` and CUDA-inference-only
-            ``"triton"``. The Triton path requires the module to be in
-            ``eval`` mode and an FP32 or BF16 CUDA input with shape
-            ``[T, N, *]``.
+        :param backend: Backend name. Both modes support ``"torch"`` and
+            CUDA-inference-only ``"triton"``. The Triton path requires the
+            module to be in ``eval`` mode and an FP32 or BF16 CUDA input.
         :type backend: str
         :param store_v_seq: Whether to store membrane voltage at each time step
             in multi-step mode.
@@ -786,10 +795,6 @@ class ActivationAwareIFNode(base.MemoryModule):
         super().__init__()
         if backend not in ("torch", "triton"):
             raise ValueError(f"Unsupported backend={backend!r}.")
-        if backend == "triton" and step_mode != "m":
-            raise ValueError(
-                "ActivationAwareIFNode backend='triton' requires step_mode='m'."
-            )
         if backend == "triton" and activation_aware_if_triton_kernel is None:
             raise RuntimeError(
                 "ActivationAwareIFNode Triton kernel is unavailable because its "
@@ -860,8 +865,8 @@ class ActivationAwareIFNode(base.MemoryModule):
 
         * **中文**
 
-        返回当前步进模式支持的后端。单步模式仅支持 ``"torch"``；多步模式支持
-        ``"torch"`` 和仅用于 CUDA 推理的 ``"triton"``。
+        返回当前步进模式支持的后端。单步和多步模式均支持 ``"torch"``，以及
+        仅用于 CUDA 推理的 ``"triton"``。
 
         :return: 当前步进模式支持的后端名称。
         :rtype: tuple[str, ...]
@@ -872,15 +877,14 @@ class ActivationAwareIFNode(base.MemoryModule):
 
         * **English**
 
-        Return the backends supported by the current step mode. Single-step
-        mode supports only ``"torch"``; multi-step mode supports ``"torch"``
-        and CUDA-inference-only ``"triton"``.
+        Return the backends supported by the current step mode. Both modes
+        support ``"torch"`` and CUDA-inference-only ``"triton"``.
 
         :return: Backend names supported by the current step mode.
         :rtype: tuple[str, ...]
         """
         if self.step_mode == "s":
-            return ("torch",)
+            return ("torch", "triton")
         if self.step_mode == "m":
             return ("torch", "triton")
         raise ValueError(self.step_mode)
@@ -1008,14 +1012,15 @@ class ActivationAwareIFNode(base.MemoryModule):
         * **中文**
 
         执行一个时间步的 activation-aware IF 前向，并将末步膜电位写回
-        ``self.v``。单步前向仅支持 ``backend="torch"``，不会从 Triton
-        隐式回退。
+        ``self.v``。``backend="triton"`` 使用专用单步 kernel，仅支持 CUDA
+        推理；后端不满足约束时不会隐式回退。
 
         :param x: 单步输入，形状为 ``[N, *]``。
         :type x: torch.Tensor
         :return: 与 ``x`` 形状和 dtype 相同的脉冲张量。
         :rtype: torch.Tensor
-        :raises RuntimeError: 当当前 backend 不是 ``"torch"`` 时抛出。
+        :raises RuntimeError: 当 Triton 后端用于 CPU、训练、求梯度、非脉冲
+            surrogate 或不支持的 dtype 时抛出。
 
         ----
 
@@ -1024,19 +1029,89 @@ class ActivationAwareIFNode(base.MemoryModule):
         * **English**
 
         Run one activation-aware IF time step and store the final membrane
-        voltage in ``self.v``. Single-step forward supports only
-        ``backend="torch"`` and never falls back implicitly from Triton.
+        voltage in ``self.v``. ``backend="triton"`` uses the dedicated
+        single-step kernel for CUDA inference only; invalid backend conditions
+        never fall back implicitly.
 
         :param x: Single-step input with shape ``[N, *]``.
         :type x: torch.Tensor
         :return: Spike tensor with the same shape and dtype as ``x``.
         :rtype: torch.Tensor
-        :raises RuntimeError: If the current backend is not ``"torch"``.
+        :raises RuntimeError: If Triton is used on CPU, during training, with
+            autograd, with a non-spiking surrogate, or with an unsupported dtype.
         """
+        if self.backend == "triton":
+            if activation_aware_if_triton_kernel is None:
+                raise RuntimeError(
+                    "ActivationAwareIFNode Triton kernel is unavailable because "
+                    "its module failed to import."
+                )
+            if x.device.type != "cuda":
+                raise RuntimeError(
+                    "ActivationAwareIFNode backend='triton' requires a CUDA tensor."
+                )
+            if self.training:
+                raise RuntimeError(
+                    "ActivationAwareIFNode backend='triton' supports inference "
+                    "only; call eval() before forward."
+                )
+            if x.dtype not in (torch.float32, torch.bfloat16):
+                raise RuntimeError(
+                    "ActivationAwareIFNode backend='triton' supports only float32 "
+                    f"and bfloat16, got {x.dtype}."
+                )
+            if not getattr(self.surrogate_function, "spiking", True):
+                raise RuntimeError(
+                    "ActivationAwareIFNode backend='triton' requires a spiking "
+                    "surrogate function."
+                )
+            self.v_float_to_tensor(x)
+            grad_tensors = (x, self.v, self.v_threshold, self.v_offset)
+            if torch.is_grad_enabled() and any(
+                value.requires_grad
+                for value in grad_tensors
+                if isinstance(value, torch.Tensor)
+            ):
+                raise RuntimeError(
+                    "ActivationAwareIFNode backend='triton' does not support autograd."
+                )
+
+            threshold = self.v_threshold.to(device=x.device, dtype=x.dtype)
+            offset = self.v_offset.to(device=x.device, dtype=x.dtype)
+            if threshold.dim() == 1 or offset.dim() == 1:
+                channel_dim = self._canonical_channel_dim(x)
+                channel_size = x.shape[channel_dim]
+                if threshold.dim() == 1 and threshold.numel() != channel_size:
+                    raise ValueError(
+                        f"v_threshold has length {threshold.numel()}, but input "
+                        f"shape {tuple(x.shape)} has {channel_size} channels at "
+                        f"channel_dim={self.channel_dim}."
+                    )
+                if offset.dim() == 1 and offset.numel() != channel_size:
+                    raise ValueError(
+                        f"v_offset has length {offset.numel()}, but input shape "
+                        f"{tuple(x.shape)} has {channel_size} channels at "
+                        f"channel_dim={self.channel_dim}."
+                    )
+                inner_size = 1
+                for size in x.shape[channel_dim + 1 :]:
+                    inner_size *= size
+            else:
+                channel_size = 1
+                inner_size = x.numel()
+            spike, self.v = functional.activation_aware_if_single_step_triton(
+                x,
+                self.v,
+                threshold,
+                offset,
+                channel_size,
+                inner_size,
+                self.v_reset,
+            )
+            return spike
         if self.backend != "torch":
             raise RuntimeError(
-                "ActivationAwareIFNode single-step forward supports only "
-                "backend='torch'; refusing implicit backend fallback."
+                f"Unsupported ActivationAwareIFNode backend {self.backend!r}."
             )
         self.v_float_to_tensor(x)
         threshold = self._broadcast_parameter(self.v_threshold, x, "v_threshold")

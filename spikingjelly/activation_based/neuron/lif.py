@@ -245,7 +245,7 @@ class LIFNode(BaseNode):
     @property
     def supported_backends(self):
         if self.step_mode == "s":
-            return ("torch", "cupy")
+            return ("torch", "cupy", "triton")
         elif self.step_mode == "m":
             return ("torch", "cupy", "triton", "inductor")
         else:
@@ -404,6 +404,20 @@ class LIFNode(BaseNode):
         return spike_seq, v
 
     def single_step_forward(self, x: torch.Tensor):
+        if self.backend == "triton":
+            self.v_float_to_tensor(x)
+            spike, self.v = triton_kernel.single_step_lif(
+                x,
+                self.v,
+                self.decay_input,
+                self.tau,
+                self.v_threshold,
+                self.v_reset,
+                self.detach_reset,
+                self.surrogate_function,
+            )
+            return spike
+
         if self.training:
             if self.backend == "torch":
                 return super().single_step_forward(x)

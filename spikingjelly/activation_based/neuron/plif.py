@@ -163,7 +163,7 @@ class ParametricLIFNode(BaseNode):
     @property
     def supported_backends(self):
         if self.step_mode == "s":
-            return ("torch",)
+            return ("torch", "triton")
         elif self.step_mode == "m":
             return ("torch", "cupy", "triton", "inductor")
         else:
@@ -202,6 +202,22 @@ class ParametricLIFNode(BaseNode):
         if self.store_v_seq:
             self.v_seq = v_seq
         return spike_seq
+
+    def single_step_forward(self, x: torch.Tensor):
+        if self.backend == "triton":
+            self.v_float_to_tensor(x)
+            spike, self.v = triton_kernel.single_step_plif(
+                x,
+                self.v,
+                self.w.sigmoid().to(x),
+                self.decay_input,
+                self.v_threshold,
+                self.v_reset,
+                self.detach_reset,
+                self.surrogate_function,
+            )
+            return spike
+        return super().single_step_forward(x)
 
     def multi_step_forward(self, x_seq: torch.Tensor):
         if self.backend == "inductor":

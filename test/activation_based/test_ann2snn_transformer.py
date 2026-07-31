@@ -16,6 +16,7 @@ except (ImportError, OSError):
     _TRITON_AVAILABLE = False
 
 from spikingjelly.activation_based import base, functional, neuron, surrogate
+from spikingjelly.activation_based.triton_kernel import spikezip_kernel
 from spikingjelly.activation_based.ann2snn import (
     Converter,
     ModuleConverter,
@@ -925,6 +926,80 @@ def test_spikezip_stbif_triton_matches_torch(dtype, time_steps):
     )
 
 
+@pytest.mark.skipif(
+    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
+    reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
+)
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
+def test_spikezip_stbif_single_step_triton_matches_torch(dtype):
+    quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
+    x_seq = torch.randn(8, 7, 13, device="cuda", dtype=dtype) * 0.2
+    torch_neuron = STBIFNeuron.from_quantizer(quantizer).cuda()
+    triton_neuron = STBIFNeuron.from_quantizer(quantizer).cuda()
+    triton_neuron.backend = "triton"
+
+    torch_out = torch.stack([torch_neuron(x) for x in x_seq])
+    triton_out = torch.stack([triton_neuron(x) for x in x_seq])
+
+    assert torch.allclose(triton_out, torch_out, atol=1e-3, rtol=1e-3)
+    state_tol = 5e-3 if dtype == torch.float16 else 1e-6
+    assert torch.allclose(
+        triton_neuron.q, torch_neuron.q, atol=state_tol, rtol=state_tol
+    )
+    assert torch.allclose(triton_neuron.acc_q, torch_neuron.acc_q, atol=1e-3, rtol=1e-3)
+    assert torch.allclose(
+        triton_neuron.cur_output,
+        torch_neuron.cur_output,
+        atol=1e-3,
+        rtol=1e-3,
+    )
+    assert triton_neuron.is_work == torch_neuron.is_work
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
+    reason="CUDA and Triton are required",
+)
+def test_spikezip_stbif_triton_rounds_half_to_even():
+    x = torch.zeros(6, device="cuda")
+    q = torch.full_like(x, 0.5)
+    acc_q = torch.tensor([0.5, 1.5, 2.5, -0.5, -1.5, -2.5], device="cuda")
+    q_threshold = torch.tensor(1.0, device="cuda")
+    pos_max = torch.tensor(10.0, device="cuda")
+    neg_min = torch.tensor(-10.0, device="cuda")
+
+    expected = functional.stbif_step(
+        x,
+        q,
+        acc_q,
+        q_threshold,
+        pos_max,
+        neg_min,
+    )
+    actual_single = functional.stbif_single_step_triton(
+        x,
+        q,
+        acc_q,
+        q_threshold,
+        pos_max,
+        neg_min,
+    )
+    actual_multi = spikezip_kernel.multi_step_stbif(
+        x.unsqueeze(0),
+        q,
+        acc_q,
+        q_threshold,
+        pos_max,
+        neg_min,
+    )
+
+    for actual, reference in zip(actual_single[:4], expected):
+        torch.testing.assert_close(actual, reference)
+    torch.testing.assert_close(actual_multi[0][0], expected[0])
+    for actual, reference in zip(actual_multi[1:4], expected[1:]):
+        torch.testing.assert_close(actual, reference)
+
+
 def test_spikezip_linear_is_tdlinear_with_distributed_bias():
     torch.manual_seed(276)
     source = nn.Linear(4, 3).eval()
@@ -1048,6 +1123,7 @@ def test_spikezip_softmax_and_layernorm_match_qann_ops():
     spike_ln = SpikeZIPLayerNorm(source_ln)
     ln_acc = sum(spike_ln(step) for step in x_steps)
     assert torch.allclose(ln_acc, source_ln(x), atol=1e-6, rtol=1e-6)
+
 
 def test_spikezip_softmax_layernorm_single_step_matches_multi_step_td():
     torch.manual_seed(278)

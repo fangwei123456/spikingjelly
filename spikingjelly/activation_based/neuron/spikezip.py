@@ -39,9 +39,9 @@ class STBIFNeuron(base.MemoryModule):
         round-to-nearest 的量化偏置。
 
         该神经元仅用于推理阶段的 QANN-to-SNN 转换结果执行，不支持训练。
-        ``single_step_forward`` 和 torch multi-step 路径包含 ``detach``、
-        ``round`` 和离散状态更新；Triton multi-step kernel 也没有实现
-        backward。因此不要把该神经元用于端到端梯度训练或微调。
+        Torch 路径包含 ``detach``、``round`` 和离散状态更新；Triton 单步和
+        多步 kernel 也没有实现 backward。因此不要把该神经元用于端到端
+        梯度训练或微调。
 
         :param q_threshold: QANN quantizer scale。
         :type q_threshold: float or torch.Tensor
@@ -75,10 +75,10 @@ class STBIFNeuron(base.MemoryModule):
         quantization.
 
         This neuron is inference-only and is intended for executing converted
-        QANN-to-SNN models. ``single_step_forward`` and the torch multi-step path
-        contain ``detach``, ``round`` and discrete state updates; the Triton
-        multi-step kernel also does not implement backward. Do not use this
-        neuron for end-to-end gradient training or fine-tuning.
+        QANN-to-SNN models. The Torch paths contain ``detach``, ``round`` and
+        discrete state updates; the Triton single-step and multi-step kernels do
+        not implement backward either. Do not use this neuron for end-to-end
+        gradient training or fine-tuning.
 
         :param q_threshold: QANN quantizer scale.
         :type q_threshold: float or torch.Tensor
@@ -147,6 +147,20 @@ class STBIFNeuron(base.MemoryModule):
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         self._init_state(x)
+        if x.device.type == "cuda" and self.backend == "triton":
+            out, self.q, self.acc_q, cur_output, work_flag = (
+                functional.stbif_single_step_triton(
+                    x,
+                    self.q,
+                    self.acc_q,
+                    self.q_threshold,
+                    self.pos_max,
+                    self.neg_min,
+                )
+            )
+            self.cur_output.copy_(cur_output)
+            self.is_work = bool(work_flag.item())
+            return out
         out, self.q, self.acc_q, cur_output = functional.stbif_step(
             x,
             self.q,

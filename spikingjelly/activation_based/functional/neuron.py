@@ -36,10 +36,16 @@ __all__ = [
     "if_multi_step_triton",
     "lif_multi_step_triton",
     "plif_multi_step_triton",
+    "if_single_step_triton",
+    "lif_single_step_triton",
+    "plif_single_step_triton",
+    "ilif_single_step_triton",
+    "stbif_single_step_triton",
     "sliding_psn_step",
     "gated_lif_step",
     "stbif_step",
     "activation_aware_if_step",
+    "activation_aware_if_single_step_triton",
     "activation_aware_if_multi_step_triton",
 ]
 
@@ -526,6 +532,130 @@ def activation_aware_if_step(
     else:
         v_next = spike_d * v_reset + (1.0 - spike_d) * h
     return spike, v_next
+
+
+def activation_aware_if_single_step_triton(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    v_threshold: torch.Tensor,
+    v_offset: torch.Tensor,
+    channel_size: int,
+    inner_size: int,
+    v_reset: Optional[float],
+) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <activation_aware_if_single_step_triton-cn>` | :ref:`English <activation_aware_if_single_step_triton-en>`
+
+    ----
+
+    .. _activation_aware_if_single_step_triton-cn:
+
+    * **中文**
+
+    使用专用 Triton kernel 执行 activation-aware IF 单步状态转移。仅支持
+    CUDA 推理和 FP32/BF16；``x`` 与 ``v`` 的 shape、dtype 和 device 必须一致。
+
+    :param x: CUDA 单步输入，shape 为 ``[N, *]``
+    :type x: torch.Tensor
+    :param v: 与 ``x`` 同形状的已物化膜电位
+    :type v: torch.Tensor
+    :param v_threshold: scalar 或逐通道阈值张量
+    :type v_threshold: torch.Tensor
+    :param v_offset: scalar 或逐通道偏移张量
+    :type v_offset: torch.Tensor
+    :param channel_size: 逐通道参数对应的通道数；scalar 参数时为 ``1``
+    :type channel_size: int
+    :param inner_size: 每个通道对应的连续元素数
+    :type inner_size: int
+    :param v_reset: 硬复位电压；``None`` 表示软复位
+    :type v_reset: Optional[float]
+    :return: ``(spike, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ImportError: Triton kernel 不可用
+    :raises ValueError: 输入 shape、dtype、device 或逐通道参数不满足约束
+    :raises NotImplementedError: 输入 dtype 不受支持
+    :raises RuntimeError: 当启用 autograd 且任一输入状态需要梯度
+
+    ----
+
+    .. _activation_aware_if_single_step_triton-en:
+
+    * **English**
+
+    Run one activation-aware IF state transition with the dedicated Triton
+    kernel. It supports CUDA inference with FP32 or BF16; ``x`` and ``v`` must
+    have matching shape, dtype, and device.
+
+    :param x: Single-step CUDA input shaped ``[N, *]``
+    :type x: torch.Tensor
+    :param v: Materialized membrane voltage with the same shape as ``x``
+    :type v: torch.Tensor
+    :param v_threshold: Scalar or channel-wise threshold tensor
+    :type v_threshold: torch.Tensor
+    :param v_offset: Scalar or channel-wise offset tensor
+    :type v_offset: torch.Tensor
+    :param channel_size: Channel count for channel-wise parameters, or ``1`` for
+        scalar parameters
+    :type channel_size: int
+    :param inner_size: Number of contiguous elements per channel
+    :type inner_size: int
+    :param v_reset: Hard-reset voltage; ``None`` means soft reset
+    :type v_reset: Optional[float]
+    :return: ``(spike, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ImportError: If the Triton kernel is unavailable
+    :raises ValueError: If input shape, dtype, device, or channel-wise parameters
+        violate the contract
+    :raises NotImplementedError: If the input dtype is unsupported
+    :raises RuntimeError: If autograd is enabled for any input state
+    """
+    if x.device.type != "cuda":
+        raise ValueError(
+            "activation_aware_if_single_step_triton requires CUDA tensors."
+        )
+    if v.shape != x.shape or v.dtype != x.dtype or v.device != x.device:
+        raise ValueError("x and v must have the same shape, dtype, and device.")
+    if x.dtype not in (torch.float32, torch.bfloat16):
+        raise NotImplementedError(x.dtype)
+    if channel_size < 1 or inner_size < 1 or x.numel() % (channel_size * inner_size):
+        raise ValueError("channel_size and inner_size do not match the input shape.")
+    for name, parameter in (
+        ("v_threshold", v_threshold),
+        ("v_offset", v_offset),
+    ):
+        if parameter.device != x.device or parameter.dtype != x.dtype:
+            raise ValueError(f"{name} must have the same dtype and device as x.")
+        if parameter.dim() > 1 or parameter.numel() not in (1, channel_size):
+            raise ValueError(
+                f"{name} must be scalar or contain channel_size={channel_size} values."
+            )
+    if torch.is_grad_enabled() and any(
+        tensor.requires_grad for tensor in (x, v, v_threshold, v_offset)
+    ):
+        raise RuntimeError(
+            "activation_aware_if_single_step_triton does not support autograd."
+        )
+    try:
+        from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
+            activation_aware_if,
+        )
+    except (ImportError, RuntimeError) as exc:
+        raise ImportError(
+            "activation_aware_if_single_step_triton requires the Triton backend."
+        ) from exc
+    if activation_aware_if is None:
+        raise ImportError(
+            "activation_aware_if_single_step_triton requires the Triton backend."
+        )
+    return activation_aware_if._single_step_activation_aware_if(
+        x,
+        v,
+        v_threshold,
+        v_offset,
+        channel_size=channel_size,
+        inner_size=inner_size,
+        v_reset=v_reset,
+    )
 
 
 def activation_aware_if_multi_step_triton(
@@ -2226,6 +2356,437 @@ def izhikevich_multi_step_cupy(
         w_seq[-1].clone(),
         v_seq if store_state_seq else None,
         w_seq if store_state_seq else None,
+    )
+
+
+def if_single_step_triton(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <if_single_step_triton-cn>` | :ref:`English <if_single_step_triton-en>`
+
+    ----
+
+    .. _if_single_step_triton-cn:
+
+    * **中文**
+
+    使用专用 Triton kernel 执行 IF 单步状态转移，不进行通用 backend 分发。
+    ``x`` 与 ``v`` 必须是相同 shape、dtype 和 device 的 CUDA FP32、FP16 或
+    BF16 张量。
+
+    :param x: CUDA 单步输入，shape 为 ``[N, *]``
+    :type x: torch.Tensor
+    :param v: 与 ``x`` 同形状的已物化膜电位
+    :type v: torch.Tensor
+    :param v_threshold: 脉冲阈值
+    :type v_threshold: float
+    :param v_reset: 重置电压；``None`` 表示 soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: 替代梯度函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否分离 reset 分支中的 spike
+    :type detach_reset: bool
+    :return: ``(spike, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: 输入 shape、dtype 或 CUDA device 不满足约束
+    :raises NotImplementedError: dtype 或替代函数不受 Triton 后端支持
+
+    ----
+
+    .. _if_single_step_triton-en:
+
+    * **English**
+
+    Run one IF state transition with the dedicated Triton kernel without generic
+    backend dispatch. ``x`` and ``v`` must be CUDA FP32, FP16, or BF16 tensors
+    with matching shape, dtype, and device.
+
+    :param x: Single-step CUDA input shaped ``[N, *]``
+    :type x: torch.Tensor
+    :param v: Materialized membrane voltage with the same shape as ``x``
+    :type v: torch.Tensor
+    :param v_threshold: Spike threshold
+    :type v_threshold: float
+    :param v_reset: Reset voltage; ``None`` means soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: Surrogate-gradient function
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach spike in the reset branch
+    :type detach_reset: bool
+    :return: ``(spike, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: If the input shape, dtype, or CUDA device is invalid
+    :raises NotImplementedError: If the dtype or surrogate function is not
+        supported by the Triton backend
+    """
+    from ..triton_kernel import single_step_if
+
+    return single_step_if(
+        x,
+        v,
+        v_threshold,
+        v_reset,
+        detach_reset,
+        surrogate_function,
+    )
+
+
+def lif_single_step_triton(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    tau: float,
+    decay_input: bool,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <lif_single_step_triton-cn>` | :ref:`English <lif_single_step_triton-en>`
+
+    ----
+
+    .. _lif_single_step_triton-cn:
+
+    * **中文**
+
+    使用专用 Triton kernel 执行 LIF 单步状态转移，不进行通用 backend 分发。
+    ``x`` 与 ``v`` 必须是相同 shape、dtype 和 device 的 CUDA FP32、FP16 或
+    BF16 张量。
+
+    :param x: CUDA 单步输入，shape 为 ``[N, *]``
+    :type x: torch.Tensor
+    :param v: 与 ``x`` 同形状的已物化膜电位
+    :type v: torch.Tensor
+    :param tau: 膜电位时间常数
+    :type tau: float
+    :param decay_input: 输入是否参与衰减
+    :type decay_input: bool
+    :param v_threshold: 脉冲阈值
+    :type v_threshold: float
+    :param v_reset: 重置电压；``None`` 表示 soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: 替代梯度函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否分离 reset 分支中的 spike
+    :type detach_reset: bool
+    :return: ``(spike, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: 输入 shape、dtype 或 CUDA device 不满足约束
+    :raises NotImplementedError: dtype 或替代函数不受 Triton 后端支持
+
+    ----
+
+    .. _lif_single_step_triton-en:
+
+    * **English**
+
+    Run one LIF state transition with the dedicated Triton kernel without
+    generic backend dispatch. ``x`` and ``v`` must be CUDA FP32, FP16, or BF16
+    tensors with matching shape, dtype, and device.
+
+    :param x: Single-step CUDA input shaped ``[N, *]``
+    :type x: torch.Tensor
+    :param v: Materialized membrane voltage with the same shape as ``x``
+    :type v: torch.Tensor
+    :param tau: Membrane time constant
+    :type tau: float
+    :param decay_input: Whether the input participates in decay
+    :type decay_input: bool
+    :param v_threshold: Spike threshold
+    :type v_threshold: float
+    :param v_reset: Reset voltage; ``None`` means soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: Surrogate-gradient function
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach spike in the reset branch
+    :type detach_reset: bool
+    :return: ``(spike, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: If the input shape, dtype, or CUDA device is invalid
+    :raises NotImplementedError: If the dtype or surrogate function is not
+        supported by the Triton backend
+    """
+    from ..triton_kernel import single_step_lif
+
+    return single_step_lif(
+        x,
+        v,
+        decay_input,
+        tau,
+        v_threshold,
+        v_reset,
+        detach_reset,
+        surrogate_function,
+    )
+
+
+def plif_single_step_triton(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    w: torch.Tensor,
+    decay_input: bool,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <plif_single_step_triton-cn>` | :ref:`English <plif_single_step_triton-en>`
+
+    ----
+
+    .. _plif_single_step_triton-cn:
+
+    * **中文**
+
+    使用专用 Triton kernel 执行 PLIF 单步状态转移。``w`` 与 torch/Inductor
+    接口语义一致，并且必须是单元素张量。``x`` 与 ``v`` 必须是相同 shape、
+    dtype 和 device 的 CUDA FP32、FP16 或 BF16 张量。
+
+    :param x: CUDA 单步输入，shape 为 ``[N, *]``
+    :type x: torch.Tensor
+    :param v: 与 ``x`` 同形状的已物化膜电位
+    :type v: torch.Tensor
+    :param w: PLIF 可学习参数
+    :type w: torch.Tensor
+    :param decay_input: 输入是否参与衰减
+    :type decay_input: bool
+    :param v_threshold: 脉冲阈值
+    :type v_threshold: float
+    :param v_reset: 重置电压；``None`` 表示 soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: 替代梯度函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否分离 reset 分支中的 spike
+    :type detach_reset: bool
+    :return: ``(spike, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: 输入 shape、dtype、CUDA device 或 ``w`` 不满足约束
+    :raises NotImplementedError: dtype 或替代函数不受 Triton 后端支持
+
+    ----
+
+    .. _plif_single_step_triton-en:
+
+    * **English**
+
+    Run one PLIF state transition with the dedicated Triton kernel. ``w`` has
+    the same semantics as in the torch and Inductor interfaces and must be a
+    scalar tensor. ``x`` and ``v`` must be CUDA FP32, FP16, or BF16 tensors with
+    matching shape, dtype, and device.
+
+    :param x: Single-step CUDA input shaped ``[N, *]``
+    :type x: torch.Tensor
+    :param v: Materialized membrane voltage with the same shape as ``x``
+    :type v: torch.Tensor
+    :param w: Learnable PLIF parameter
+    :type w: torch.Tensor
+    :param decay_input: Whether the input participates in decay
+    :type decay_input: bool
+    :param v_threshold: Spike threshold
+    :type v_threshold: float
+    :param v_reset: Reset voltage; ``None`` means soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: Surrogate-gradient function
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach spike in the reset branch
+    :type detach_reset: bool
+    :return: ``(spike, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: If input shape, dtype, CUDA device, or ``w`` is invalid
+    :raises NotImplementedError: If the dtype or surrogate function is not
+        supported by the Triton backend
+    """
+    from ..triton_kernel import single_step_plif
+
+    return single_step_plif(
+        x,
+        v,
+        w.sigmoid().to(x),
+        decay_input,
+        v_threshold,
+        v_reset,
+        detach_reset,
+        surrogate_function,
+    )
+
+
+def ilif_single_step_triton(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    decay: float,
+    v_threshold: float,
+    max_spike_count: int,
+    grad_min: float,
+    grad_max: float,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <ilif_single_step_triton-cn>` | :ref:`English <ilif_single_step_triton-en>`
+
+    ----
+
+    .. _ilif_single_step_triton-cn:
+
+    * **中文**
+
+    使用专用 Triton kernel 执行 I-LIF 单步状态转移。输出为
+    ``[0, max_spike_count]`` 内的整数计数，不是二值脉冲。``x`` 与 ``v``
+    必须是相同 shape、dtype 和 device 的 CUDA FP32、FP16 或 BF16 张量。
+
+    :param x: CUDA 单步输入，shape 为 ``[N, *]``
+    :type x: torch.Tensor
+    :param v: 与 ``x`` 同形状的已物化膜电位
+    :type v: torch.Tensor
+    :param decay: 膜电位衰减系数
+    :type decay: float
+    :param v_threshold: 发放阈值
+    :type v_threshold: float
+    :param max_spike_count: 每个元素的最大整数输出
+    :type max_spike_count: int
+    :param grad_min: 矩形替代梯度窗口下界
+    :type grad_min: float
+    :param grad_max: 矩形替代梯度窗口上界
+    :type grad_max: float
+    :param detach_reset: 是否在反向传播中分离复位项
+    :type detach_reset: bool
+    :return: ``(integer_count, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: 输入 shape、dtype 或 CUDA device 不满足约束
+    :raises NotImplementedError: dtype 不受 Triton 后端支持
+
+    ----
+
+    .. _ilif_single_step_triton-en:
+
+    * **English**
+
+    Run one I-LIF state transition with the dedicated Triton kernel. The output
+    is an integer count in ``[0, max_spike_count]``, not a binary spike. ``x``
+    and ``v`` must be CUDA FP32, FP16, or BF16 tensors with matching shape,
+    dtype, and device.
+
+    :param x: Single-step CUDA input shaped ``[N, *]``
+    :type x: torch.Tensor
+    :param v: Materialized membrane voltage with the same shape as ``x``
+    :type v: torch.Tensor
+    :param decay: Membrane-voltage decay factor
+    :type decay: float
+    :param v_threshold: Firing threshold
+    :type v_threshold: float
+    :param max_spike_count: Maximum integer output per element
+    :type max_spike_count: int
+    :param grad_min: Lower bound of the rectangular surrogate-gradient window
+    :type grad_min: float
+    :param grad_max: Upper bound of the rectangular surrogate-gradient window
+    :type grad_max: float
+    :param detach_reset: Whether to detach the reset term in backward
+    :type detach_reset: bool
+    :return: ``(integer_count, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: If the input shape, dtype, or CUDA device is invalid
+    :raises NotImplementedError: If the dtype is not supported by the Triton
+        backend
+    """
+    from ..triton_kernel.neuron_kernel import ilif
+
+    if ilif is None:
+        raise ImportError("ilif_single_step_triton requires the Triton backend.")
+    return ilif.single_step_ilif(
+        x,
+        v,
+        decay,
+        v_threshold,
+        max_spike_count,
+        grad_min,
+        grad_max,
+        detach_reset,
+    )
+
+
+def stbif_single_step_triton(
+    x: torch.Tensor,
+    q: torch.Tensor,
+    acc_q: torch.Tensor,
+    q_threshold: torch.Tensor,
+    pos_max: torch.Tensor,
+    neg_min: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <stbif_single_step_triton-cn>` | :ref:`English <stbif_single_step_triton-en>`
+
+    ----
+
+    .. _stbif_single_step_triton-cn:
+
+    * **中文**
+
+    使用专用 Triton kernel 执行 SpikeZIP STBIF 单步状态转移。``x``、``q``
+    和 ``acc_q`` 必须是相同 shape、dtype 和 device 的 CUDA FP32、FP16 或
+    BF16 张量；该离散推理接口不支持 autograd。
+
+    :param x: CUDA 单步输入
+    :type x: torch.Tensor
+    :param q: 与 ``x`` 同形状的量化残差状态
+    :type q: torch.Tensor
+    :param acc_q: 与 ``x`` 同形状的累计释放量状态
+    :type acc_q: torch.Tensor
+    :param q_threshold: 单元素量化尺度张量
+    :type q_threshold: torch.Tensor
+    :param pos_max: 单元素正向累计上界张量
+    :type pos_max: torch.Tensor
+    :param neg_min: 单元素负向累计下界张量
+    :type neg_min: torch.Tensor
+    :return: ``(out, q_next, acc_q_next, cur_output, is_work)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises ValueError: 输入 shape、dtype 或 CUDA device 不满足约束
+    :raises NotImplementedError: dtype 不受 Triton 后端支持
+
+    ----
+
+    .. _stbif_single_step_triton-en:
+
+    * **English**
+
+    Run one SpikeZIP STBIF state transition with the dedicated Triton kernel.
+    ``x``, ``q``, and ``acc_q`` must be CUDA FP32, FP16, or BF16 tensors with
+    matching shape, dtype, and device. This discrete inference interface does
+    not support autograd.
+
+    :param x: Single-step CUDA input
+    :type x: torch.Tensor
+    :param q: Quantized-residual state with the same shape as ``x``
+    :type q: torch.Tensor
+    :param acc_q: Accumulated released-quantity state with the same shape as ``x``
+    :type acc_q: torch.Tensor
+    :param q_threshold: Scalar quantization-scale tensor
+    :type q_threshold: torch.Tensor
+    :param pos_max: Scalar positive accumulated bound
+    :type pos_max: torch.Tensor
+    :param neg_min: Scalar negative accumulated bound
+    :type neg_min: torch.Tensor
+    :return: ``(out, q_next, acc_q_next, cur_output, is_work)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises ValueError: If the input shape, dtype, or CUDA device is invalid
+    :raises NotImplementedError: If the dtype is not supported by the Triton
+        backend
+    """
+    from ..triton_kernel import spikezip_kernel
+
+    return spikezip_kernel.single_step_stbif(
+        x,
+        q,
+        acc_q,
+        q_threshold,
+        pos_max,
+        neg_min,
     )
 
 

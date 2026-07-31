@@ -1,5 +1,5 @@
 try:
-    from . import activation_aware_if
+    from . import activation_aware_if, ilif
     from .integrate_and_fire import *
     from .lif import *
     from .plif import *
@@ -8,6 +8,7 @@ except BaseException as e:
 
     logging.info(f"spikingjelly.activation_based.triton_kernel.neuron_kernel: {e}")
     activation_aware_if = None
+    ilif = None
     integrate_and_fire = None
     lif = None
     plif = None
