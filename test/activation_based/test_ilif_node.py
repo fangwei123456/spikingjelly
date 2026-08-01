@@ -109,6 +109,30 @@ def test_temporal_bin_sum_pads_the_final_bin_only_in_eval_by_default(dtype, devi
         functional.set_step_mode(reducer, "s")
 
 
+@pytest.mark.parametrize(
+    "module_type",
+    [layer.SpikeCountToBinary, layer.TemporalBinSum],
+)
+def test_ilif_temporal_conversion_modules_require_nonzero_slots(module_type):
+    with pytest.raises(ValueError, match="num_slots must be >= 1"):
+        module_type(num_slots=0)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [float("nan"), float("inf"), 1.5, -1.0, 5.0],
+)
+@pytest.mark.parametrize(
+    "device",
+    ["cpu"] + (["cuda"] if torch.cuda.is_available() else []),
+)
+def test_spike_count_to_binary_rejects_silently_invalid_counts(value, device):
+    converter = layer.SpikeCountToBinary(num_slots=4, always_convert=True)
+
+    with pytest.raises(ValueError, match="finite integer-valued spike counts"):
+        converter(torch.tensor([[value]], device=device))
+
+
 def test_binary_slot_linear_path_matches_integer_forward_and_backward():
     torch.manual_seed(7)
     num_slots = 4

@@ -388,6 +388,7 @@ class SpikeCountToBinary(nn.Module, base.MultiStepModule):
         :param always_convert: 为 ``True`` 时始终展开；为 ``False`` 时仅在推理
             模式展开，默认为 ``False``
         :type always_convert: bool
+        :raises ValueError: 当 ``num_slots < 1`` 时抛出
 
         ----
 
@@ -415,8 +416,11 @@ class SpikeCountToBinary(nn.Module, base.MultiStepModule):
         :param always_convert: ``True`` to always expand, or ``False`` to expand
             only in evaluation mode; defaults to ``False``
         :type always_convert: bool
+        :raises ValueError: If ``num_slots < 1``
         """
         super().__init__()
+        if num_slots < 1:
+            raise ValueError("num_slots must be >= 1.")
         self.num_slots = num_slots
         self.always_convert = always_convert
         self.step_mode = "m"
@@ -437,6 +441,7 @@ class SpikeCountToBinary(nn.Module, base.MultiStepModule):
         :return: 转换激活时返回形状为 ``[T * num_slots, N, *]`` 的二值脉冲；
             否则原样返回 ``x_seq``。输出保持输入的 dtype 和 device
         :rtype: torch.Tensor
+        :raises ValueError: 转换激活且计数包含非有限值、非整数值或越界值时抛出
 
         ----
 
@@ -451,9 +456,23 @@ class SpikeCountToBinary(nn.Module, base.MultiStepModule):
             conversion is active; otherwise ``x_seq`` unchanged. The output keeps
             the input dtype and device
         :rtype: torch.Tensor
+        :raises ValueError: If active conversion receives non-finite,
+            non-integer-valued, or out-of-range counts
         """
         if not self.always_convert and self.training:
             return x_seq
+
+        valid_counts = (
+            torch.isfinite(x_seq)
+            .logical_and(x_seq.eq(x_seq.round()))
+            .logical_and(x_seq.ge(0))
+            .logical_and(x_seq.le(self.num_slots))
+        )
+        if not valid_counts.all().item():
+            raise ValueError(
+                "x_seq must contain finite integer-valued spike counts in "
+                "[0, num_slots]."
+            )
 
         counts = x_seq.unsqueeze(1)
         slots = torch.arange(self.num_slots, device=x_seq.device).view(
@@ -492,6 +511,7 @@ class TemporalBinSum(nn.Module, base.MultiStepModule):
         :param always_convert: 为 ``True`` 时始终聚合；为 ``False`` 时仅在推理
             模式聚合，默认为 ``False``
         :type always_convert: bool
+        :raises ValueError: 当 ``num_slots < 1`` 时抛出
 
         ----
 
@@ -516,8 +536,11 @@ class TemporalBinSum(nn.Module, base.MultiStepModule):
         :param always_convert: ``True`` to always reduce, or ``False`` to reduce
             only in evaluation mode; defaults to ``False``
         :type always_convert: bool
+        :raises ValueError: If ``num_slots < 1``
         """
         super().__init__()
+        if num_slots < 1:
+            raise ValueError("num_slots must be >= 1.")
         self.num_slots = num_slots
         self.always_convert = always_convert
         self.step_mode = "m"
