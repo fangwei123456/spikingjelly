@@ -119,18 +119,15 @@ def test_ilif_temporal_conversion_modules_require_nonzero_slots(module_type):
 
 
 @pytest.mark.parametrize(
-    "value",
-    [float("nan"), float("inf"), 1.5, -1.0, 5.0],
+    "module_type",
+    [layer.SpikeCountToBinary, layer.TemporalBinSum],
 )
-@pytest.mark.parametrize(
-    "device",
-    ["cpu"] + (["cuda"] if torch.cuda.is_available() else []),
-)
-def test_spike_count_to_binary_rejects_silently_invalid_counts(value, device):
-    converter = layer.SpikeCountToBinary(num_slots=4, always_convert=True)
+def test_ilif_temporal_conversion_modules_reject_silent_shape_errors(module_type):
+    module = module_type(num_slots=4, always_convert=True)
 
-    with pytest.raises(ValueError, match="finite integer-valued spike counts"):
-        converter(torch.tensor([[value]], device=device))
+    for x_seq in (torch.ones(2), torch.empty(0, 1)):
+        with pytest.raises(ValueError, match=r"shape \[T, N, \*\] with T > 0"):
+            module(x_seq)
 
 
 def test_binary_slot_linear_path_matches_integer_forward_and_backward():

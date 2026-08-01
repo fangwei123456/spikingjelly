@@ -435,13 +435,14 @@ class SpikeCountToBinary(nn.Module, base.MultiStepModule):
 
         * **中文**
 
-        :param x_seq: 形状为 ``[T, N, *]``、取值位于 ``[0, num_slots]`` 的
-            浮点整数值脉冲计数
+        :param x_seq: 形状为 ``[T, N, *]``、``T > 0`` 且取值位于
+            ``[0, num_slots]`` 的浮点整数值脉冲计数
         :type x_seq: torch.Tensor
         :return: 转换激活时返回形状为 ``[T * num_slots, N, *]`` 的二值脉冲；
             否则原样返回 ``x_seq``。输出保持输入的 dtype 和 device
         :rtype: torch.Tensor
-        :raises ValueError: 转换激活且计数包含非有限值、非整数值或越界值时抛出
+        :raises ValueError: 转换激活且 ``x_seq`` 不满足 ``[T, N, *]``、
+            ``T > 0`` 时抛出
 
         ----
 
@@ -450,29 +451,20 @@ class SpikeCountToBinary(nn.Module, base.MultiStepModule):
         * **English**
 
         :param x_seq: Floating-point integer-valued spike counts in
-            ``[0, num_slots]`` with shape ``[T, N, *]``
+            ``[0, num_slots]`` with shape ``[T, N, *]`` and ``T > 0``
         :type x_seq: torch.Tensor
         :return: Binary spikes with shape ``[T * num_slots, N, *]`` when
             conversion is active; otherwise ``x_seq`` unchanged. The output keeps
             the input dtype and device
         :rtype: torch.Tensor
-        :raises ValueError: If active conversion receives non-finite,
-            non-integer-valued, or out-of-range counts
+        :raises ValueError: If active conversion receives an input that does not
+            satisfy shape ``[T, N, *]`` and ``T > 0``
         """
         if not self.always_convert and self.training:
             return x_seq
 
-        valid_counts = (
-            torch.isfinite(x_seq)
-            .logical_and(x_seq.eq(x_seq.round()))
-            .logical_and(x_seq.ge(0))
-            .logical_and(x_seq.le(self.num_slots))
-        )
-        if not valid_counts.all().item():
-            raise ValueError(
-                "x_seq must contain finite integer-valued spike counts in "
-                "[0, num_slots]."
-            )
+        if x_seq.ndim < 2 or x_seq.shape[0] == 0:
+            raise ValueError("x_seq must have shape [T, N, *] with T > 0.")
 
         counts = x_seq.unsqueeze(1)
         slots = torch.arange(self.num_slots, device=x_seq.device).view(
@@ -555,12 +547,14 @@ class TemporalBinSum(nn.Module, base.MultiStepModule):
 
         * **中文**
 
-        :param x_seq: 形状为 ``[T, N, *]`` 的非空浮点物理事件槽序列
+        :param x_seq: 形状为 ``[T, N, *]``、``T > 0`` 的浮点物理事件槽序列
         :type x_seq: torch.Tensor
         :return: 聚合激活时返回形状为
             ``[ceil(T / num_slots), N, *]`` 的序列；否则原样返回 ``x_seq``。
             输出保持输入的 dtype 和 device
         :rtype: torch.Tensor
+        :raises ValueError: 聚合激活且 ``x_seq`` 不满足 ``[T, N, *]``、
+            ``T > 0`` 时抛出
 
         ----
 
@@ -568,16 +562,21 @@ class TemporalBinSum(nn.Module, base.MultiStepModule):
 
         * **English**
 
-        :param x_seq: Non-empty floating-point physical event-slot sequence with
-            shape ``[T, N, *]``
+        :param x_seq: Floating-point physical event-slot sequence with shape
+            ``[T, N, *]`` and ``T > 0``
         :type x_seq: torch.Tensor
         :return: A sequence with shape ``[ceil(T / num_slots), N, *]`` when
             aggregation is active; otherwise ``x_seq`` unchanged. The output keeps
             the input dtype and device
         :rtype: torch.Tensor
+        :raises ValueError: If active aggregation receives an input that does not
+            satisfy shape ``[T, N, *]`` and ``T > 0``
         """
         if not self.always_convert and self.training:
             return x_seq
+
+        if x_seq.ndim < 2 or x_seq.shape[0] == 0:
+            raise ValueError("x_seq must have shape [T, N, *] with T > 0.")
 
         remainder = x_seq.shape[0] % self.num_slots
         if remainder:
