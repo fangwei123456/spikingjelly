@@ -77,6 +77,15 @@ Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
 - Added an inference-only single-step Triton kernel for the SpikeZIP STBIF
   neuron, exposed through functional and neuron interfaces.
 
+Integer-Valued Spike Conversion
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.layer``.
+
+- Added ``SpikeCountToBinary`` and ``TemporalBinSum`` for multi-step I-LIF networks,
+  enabling integer-valued training and binary-event evaluation around bias-free
+  weight layers.
+
 Bug Fixes
 ~~~~~~~~~
 

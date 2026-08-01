@@ -1,7 +1,13 @@
 import pytest
 import torch
 
-from spikingjelly.activation_based import neuron, surrogate
+from spikingjelly.activation_based import (
+    functional,
+    layer,
+    neuron,
+    op_counter,
+    surrogate,
+)
 
 
 def _assert_close(actual: torch.Tensor, expected: torch.Tensor):
@@ -9,6 +15,301 @@ def _assert_close(actual: torch.Tensor, expected: torch.Tensor):
         torch.testing.assert_close(actual, expected)
     else:
         torch.testing.assert_close(actual, expected, atol=2e-2, rtol=2e-2)
+
+
+def test_spike_count_to_binary_expands_only_in_eval_by_default():
+    converter = layer.SpikeCountToBinary(num_slots=4)
+    counts = torch.tensor(
+        [
+            [[0.0, 2.0, 4.0]],
+            [[3.0, 1.0, 0.0]],
+        ]
+    )
+
+    assert converter.step_mode == "m"
+    assert converter.supported_step_mode() == ("m",)
+    assert converter(counts) is counts
+
+    converter.eval()
+    spikes = converter(counts)
+    expected = torch.tensor(
+        [
+            [[0.0, 1.0, 1.0]],
+            [[0.0, 1.0, 1.0]],
+            [[0.0, 0.0, 1.0]],
+            [[0.0, 0.0, 1.0]],
+            [[1.0, 1.0, 0.0]],
+            [[1.0, 0.0, 0.0]],
+            [[1.0, 0.0, 0.0]],
+            [[0.0, 0.0, 0.0]],
+        ]
+    )
+
+    assert torch.equal(spikes, expected)
+    functional.set_step_mode(converter, "m")
+    with pytest.raises(ValueError, match="step_mode can only be"):
+        functional.set_step_mode(converter, "s")
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [torch.float16, torch.bfloat16, torch.float32, torch.float64],
+)
+@pytest.mark.parametrize(
+    "device",
+    ["cpu"] + (["cuda"] if torch.cuda.is_available() else []),
+)
+def test_spike_count_to_binary_preserves_dtype_device_and_counts(dtype, device):
+    counts = torch.tensor([[[0.0, 1.0, 2.0, 3.0]]], dtype=dtype, device=device)
+    spikes = layer.SpikeCountToBinary(3, conversion_mode="always")(counts)
+
+    assert spikes.dtype == counts.dtype
+    assert spikes.device == counts.device
+    assert torch.all(spikes.eq(0).logical_or(spikes.eq(1)))
+    assert torch.equal(spikes.reshape(1, 3, 1, 4).sum(dim=1), counts)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [torch.float16, torch.bfloat16, torch.float32, torch.float64],
+)
+@pytest.mark.parametrize(
+    "device",
+    ["cpu"] + (["cuda"] if torch.cuda.is_available() else []),
+)
+def test_temporal_bin_sum_pads_the_final_bin_only_in_eval_by_default(dtype, device):
+    reducer = layer.TemporalBinSum(num_slots=4)
+    x_seq = torch.arange(10, dtype=dtype, device=device).reshape(5, 2).requires_grad_()
+
+    assert reducer.step_mode == "m"
+    assert reducer.supported_step_mode() == ("m",)
+    assert reducer(x_seq) is x_seq
+
+    reducer.eval()
+    output = reducer(x_seq)
+
+    assert output.dtype == x_seq.dtype
+    assert output.device == x_seq.device
+    torch.testing.assert_close(
+        output,
+        torch.tensor(
+            [
+                [12.0, 16.0],
+                [8.0, 9.0],
+            ],
+            dtype=dtype,
+            device=device,
+        ),
+    )
+    output.sum().backward()
+    torch.testing.assert_close(x_seq.grad, torch.ones_like(x_seq))
+
+    functional.set_step_mode(reducer, "m")
+    with pytest.raises(ValueError, match="step_mode can only be"):
+        functional.set_step_mode(reducer, "s")
+
+
+@pytest.mark.parametrize(
+    "module_type",
+    [layer.SpikeCountToBinary, layer.TemporalBinSum],
+)
+def test_ilif_temporal_conversion_modules_validate_their_configuration(module_type):
+    for num_slots in (1.5, False):
+        with pytest.raises(TypeError, match="num_slots must be an integer"):
+            module_type(num_slots=num_slots)
+    for num_slots in (0, -1):
+        with pytest.raises(ValueError, match="num_slots must be >= 1"):
+            module_type(num_slots=num_slots)
+    with pytest.raises(ValueError, match="conversion_mode"):
+        module_type(num_slots=4, conversion_mode="invalid")
+
+    module = module_type(num_slots=2, conversion_mode="always")
+    x_seq = torch.ones(2, 1)
+    assert module(x_seq) is not x_seq
+
+
+def test_spike_count_to_binary_rejects_invalid_active_inputs():
+    converter = layer.SpikeCountToBinary(num_slots=4, conversion_mode="always")
+
+    with pytest.raises(TypeError, match="floating-point"):
+        converter(torch.ones(2, 1, dtype=torch.int64))
+    for shape in ((), (2,)):
+        with pytest.raises(ValueError, match=r"\[T, N, \*\]"):
+            converter(torch.ones(shape))
+    with pytest.raises(ValueError, match="non-empty time dimension"):
+        converter(torch.empty(0, 1))
+
+    invalid_counts = [
+        (float("nan"), "finite"),
+        (float("inf"), "finite"),
+        (1.5, "integer-valued"),
+        (-1.0, r"\[0, num_slots\]"),
+        (5.0, r"\[0, num_slots\]"),
+    ]
+    for value, message in invalid_counts:
+        with pytest.raises(RuntimeError, match=message):
+            converter(torch.tensor([[value]]))
+
+
+def test_temporal_bin_sum_rejects_invalid_active_inputs():
+    reducer = layer.TemporalBinSum(num_slots=4, conversion_mode="always")
+
+    with pytest.raises(TypeError, match="floating-point"):
+        reducer(torch.ones(2, 1, dtype=torch.int64))
+    for shape in ((), (2,)):
+        with pytest.raises(ValueError, match=r"\[T, N, \*\]"):
+            reducer(torch.ones(shape))
+    with pytest.raises(ValueError, match="non-empty time dimension"):
+        reducer(torch.empty(0, 1))
+
+
+def test_binary_slot_linear_path_matches_integer_forward_and_backward():
+    torch.manual_seed(7)
+    num_slots = 4
+    integer_counts = torch.tensor(
+        [
+            [[0.0, 1.0, 2.0], [3.0, 4.0, 1.0]],
+            [[4.0, 2.0, 0.0], [1.0, 3.0, 2.0]],
+        ],
+        requires_grad=True,
+    )
+    spike_counts = integer_counts.detach().clone().requires_grad_()
+    integer_weight = layer.Linear(3, 5, bias=False, step_mode="m")
+    spike_weight = layer.Linear(3, 5, bias=False, step_mode="m")
+    spike_weight.load_state_dict(integer_weight.state_dict())
+    converter = layer.SpikeCountToBinary(num_slots, conversion_mode="always")
+    reducer = layer.TemporalBinSum(num_slots, conversion_mode="always")
+    upstream = torch.randn(2, 2, 5)
+
+    integer_output = integer_weight(integer_counts)
+    spike_output = reducer(spike_weight(converter(spike_counts)))
+
+    torch.testing.assert_close(spike_output, integer_output)
+    (integer_output * upstream).sum().backward()
+    (spike_output * upstream).sum().backward()
+    torch.testing.assert_close(spike_counts.grad, integer_counts.grad)
+    torch.testing.assert_close(spike_weight.weight.grad, integer_weight.weight.grad)
+
+
+def test_binary_slot_conv_path_matches_integer_forward_and_backward():
+    torch.manual_seed(11)
+    num_slots = 4
+    integer_counts = (
+        torch.randint(0, num_slots + 1, (3, 2, 2, 4, 4)).float().requires_grad_()
+    )
+    spike_counts = integer_counts.detach().clone().requires_grad_()
+    integer_weight = layer.Conv2d(
+        2,
+        3,
+        kernel_size=3,
+        padding=1,
+        bias=False,
+        step_mode="m",
+    )
+    spike_weight = layer.Conv2d(
+        2,
+        3,
+        kernel_size=3,
+        padding=1,
+        bias=False,
+        step_mode="m",
+    )
+    spike_weight.load_state_dict(integer_weight.state_dict())
+    converter = layer.SpikeCountToBinary(num_slots, conversion_mode="always")
+    reducer = layer.TemporalBinSum(num_slots, conversion_mode="always")
+    upstream = torch.randn(3, 2, 3, 4, 4)
+
+    integer_output = integer_weight(integer_counts)
+    spike_output = reducer(spike_weight(converter(spike_counts)))
+
+    torch.testing.assert_close(spike_output, integer_output)
+    (integer_output * upstream).sum().backward()
+    (spike_output * upstream).sum().backward()
+    torch.testing.assert_close(spike_counts.grad, integer_counts.grad)
+    torch.testing.assert_close(spike_weight.weight.grad, integer_weight.weight.grad)
+
+
+def test_binary_slot_path_preserves_ilif_bptt_gradients():
+    torch.manual_seed(13)
+    num_slots = 4
+    integer_node = neuron.ILIFNode(step_mode="m")
+    spike_node = neuron.ILIFNode(step_mode="m")
+    integer_weight = layer.Linear(3, 2, bias=False, step_mode="m")
+    spike_weight = layer.Linear(3, 2, bias=False, step_mode="m")
+    spike_weight.load_state_dict(integer_weight.state_dict())
+    converter = layer.SpikeCountToBinary(num_slots, conversion_mode="always")
+    reducer = layer.TemporalBinSum(num_slots, conversion_mode="always")
+    integer_input = torch.tensor(
+        [
+            [[0.2, 1.2, 2.2]],
+            [[1.1, 0.3, 3.2]],
+            [[0.4, 2.1, 0.2]],
+        ],
+        requires_grad=True,
+    )
+    spike_input = integer_input.detach().clone().requires_grad_()
+    upstream = torch.randn(3, 1, 2)
+
+    integer_output = integer_weight(integer_node(integer_input))
+    spike_output = reducer(spike_weight(converter(spike_node(spike_input))))
+
+    torch.testing.assert_close(spike_output, integer_output)
+    (integer_output * upstream).sum().backward()
+    (spike_output * upstream).sum().backward()
+    torch.testing.assert_close(spike_input.grad, integer_input.grad)
+    torch.testing.assert_close(spike_weight.weight.grad, integer_weight.weight.grad)
+
+
+def test_default_conversion_modules_enable_integer_training_and_binary_eval():
+    num_slots = 4
+    training_model = torch.nn.Sequential(
+        neuron.ILIFNode(step_mode="m"),
+        layer.SpikeCountToBinary(num_slots),
+        layer.Linear(3, 2, bias=False, step_mode="m"),
+        layer.TemporalBinSum(num_slots),
+    )
+    evaluation_model = torch.nn.Sequential(
+        neuron.ILIFNode(step_mode="m"),
+        layer.SpikeCountToBinary(num_slots),
+        layer.Linear(3, 2, bias=False, step_mode="m"),
+        layer.TemporalBinSum(num_slots),
+    ).eval()
+    evaluation_model.load_state_dict(training_model.state_dict())
+    x_seq = torch.tensor(
+        [
+            [[0.2, 1.2, 2.2]],
+            [[1.1, 0.3, 3.2]],
+            [[0.4, 2.1, 0.2]],
+        ]
+    )
+
+    training_output = training_model(x_seq)
+    evaluation_output = evaluation_model(x_seq)
+
+    assert training_output.shape == evaluation_output.shape == (3, 1, 2)
+    torch.testing.assert_close(evaluation_output, training_output)
+
+
+def test_binary_slot_weight_path_is_counted_as_synaptic_accumulation():
+    counts = torch.tensor(
+        [
+            [[0.0, 1.0, 2.0], [3.0, 4.0, 1.0]],
+            [[4.0, 2.0, 0.0], [1.0, 3.0, 2.0]],
+        ]
+    )
+    spikes = layer.SpikeCountToBinary(4, conversion_mode="always")(counts)
+    weight = layer.Linear(3, 5, bias=False, step_mode="m")
+    mac_counter = op_counter.MACCounter()
+    ac_counter = op_counter.ACCounter()
+    synop_counter = op_counter.SynOpCounter()
+
+    with op_counter.DispatchCounterMode([mac_counter, ac_counter, synop_counter]):
+        weight(spikes)
+
+    expected_synops = int(spikes.count_nonzero()) * weight.out_features
+    assert mac_counter.get_total() == 0
+    assert ac_counter.get_total() == expected_synops
+    assert synop_counter.get_total() == expected_synops
 
 
 def _safe_ilif_sequence(tau: float, dtype: torch.dtype):

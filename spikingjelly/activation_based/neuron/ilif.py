@@ -86,6 +86,12 @@ class ILIFNode(LIFNode):
         unary/thermometer 事件槽，不参与神经元状态更新。:class:`ILIFNode`
         只输出整数计数，不负责二值脉冲展开和累加。
 
+        :class:`~spikingjelly.activation_based.layer.misc.SpikeCountToBinary`
+        可以将整数计数展开到时间维，随后由无 bias 权重层处理二值事件；
+        :class:`~spikingjelly.activation_based.layer.misc.TemporalBinSum`
+        将权重层输出还原到逻辑时间维。两者默认在训练模式保持恒等映射、在
+        eval 模式执行转换，从而支持整数训练和二值脉冲推理。
+
         .. warning::
 
             I-LIF 不是传统的二值脉冲神经元。从数值上看，其发放函数是带 LIF
@@ -114,7 +120,11 @@ class ILIFNode(LIFNode):
             每个事件会使 bias 项随事件数变化。对上面的标量计数，结果是
             :math:`W C[t] + C[t] b / D`。这时应先做无 bias 的事件累加，再在
             逻辑时间步结束时加入一次 :math:`b`；归一化和非线性也应在累加完成后
-            执行一次。换言之，I-LIF 使用的标准流程是 ``I-LIF - weight - bin_sum`` 。
+            执行一次。使用 SpikingJelly 提供的转换层时，中间权重层必须设置
+            ``bias=False``；若需要 bias，应在
+            :class:`~spikingjelly.activation_based.layer.misc.TemporalBinSum`
+            之后单独加入。标准流程是
+            ``I-LIF - SpikeCountToBinary - bias-free weight - TemporalBinSum``。
 
             同一逻辑时间步下，I-LIF 每个位置携带 :math:`D+1` 个幅值等级，并可
             触发最多 :math:`D` 个事件；它与每步最多一个事件的二值 IF/LIF
@@ -212,6 +222,14 @@ class ILIFNode(LIFNode):
         :class:`ILIFNode` returns integer counts; it does not expand binary spikes
         or accumulate across them.
 
+        :class:`~spikingjelly.activation_based.layer.misc.SpikeCountToBinary`
+        expands the integer counts along the time dimension so that a bias-free
+        weight layer processes binary events. Then
+        :class:`~spikingjelly.activation_based.layer.misc.TemporalBinSum`
+        restores the logical time dimension. By default, both modules are identity
+        mappings in training mode and perform their conversions in evaluation mode,
+        enabling integer-valued training and binary-spike inference.
+
         .. warning::
 
             I-LIF is not a conventional binary spiking neuron. Numerically, its
@@ -245,9 +263,12 @@ class ILIFNode(LIFNode):
             :math:`W C[t] + C[t] b / D`. In that case, events should first be
             accumulated with a bias-free weight operation, and :math:`b` should be
             added once at the end of the logical timestep. Normalization and
-            nonlinear operations should likewise run once after accumulation.
-            In other words, the standard I-LIF flow is
-            ``I-LIF - weight - bin_sum``.
+            nonlinear operations should likewise run once after accumulation. When
+            using the SpikingJelly conversion layers, the intervening weight layer
+            must set ``bias=False``; add any required bias once after
+            :class:`~spikingjelly.activation_based.layer.misc.TemporalBinSum`. The
+            standard flow is
+            ``I-LIF - SpikeCountToBinary - bias-free weight - TemporalBinSum``.
 
             At the same logical timestep count, I-LIF carries :math:`D+1`
             amplitude levels per position and may trigger up to :math:`D` events.
