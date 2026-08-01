@@ -13,6 +13,8 @@ __all__ = [
     "PrintShapeModule",
     "VotingLayer",
     "Delay",
+    "SpikeCountToBinary",
+    "TemporalBinSum",
 ]
 
 
@@ -348,11 +350,236 @@ class Delay(base.MemoryModule):
         return self._delay_steps
 
     def single_step_forward(self, x: torch.Tensor):
-        y, queue_next = functional.delay_step(
-            x, tuple(self.queue), self.delay_steps
-        )
+        y, queue_next = functional.delay_step(x, tuple(self.queue), self.delay_steps)
         self.queue[:] = queue_next
         return y
 
     def multi_step_forward(self, x_seq: torch.Tensor):
         return functional.delay(x_seq, self.delay_steps)
+
+
+class SpikeCountToBinary(nn.Module, base.MultiStepModule):
+    def __init__(
+        self,
+        num_slots: int,
+        always_convert: bool = False,
+    ) -> None:
+        r"""
+        **API Language** - :ref:`中文 <SpikeCountToBinary.__init__-cn>` | :ref:`English <SpikeCountToBinary.__init__-en>`
+
+        ----
+
+        .. _SpikeCountToBinary.__init__-cn:
+
+        * **中文**
+
+        将每个非负整数脉冲计数展开为 ``num_slots`` 个二值事件槽。该模块仅支持
+        多步模式，时间维固定为第 0 维。默认训练模式返回原输入、推理模式执行
+        展开；设置 ``always_convert=True`` 后始终展开。
+
+        展开激活时使用硬二值前向和直通估计。每个事件槽对输入计数的代理导数为
+        ``1 / num_slots``，因此反向传播会把同一 bin 的槽梯度取平均。若展开后
+        使用同一个无偏置权重层并由 :class:`TemporalBinSum` 求和，则前向、输入
+        梯度和权重梯度均与直接对整数计数执行权重运算等价。偏置、归一化和
+        非线性应放在 :class:`TemporalBinSum` 之后。
+
+        :param num_slots: 每个逻辑时间步包含的二值事件槽数量
+        :type num_slots: int
+        :param always_convert: 为 ``True`` 时始终展开；为 ``False`` 时仅在推理
+            模式展开，默认为 ``False``
+        :type always_convert: bool
+        :raises ValueError: 当 ``num_slots < 1`` 时抛出
+
+        ----
+
+        .. _SpikeCountToBinary.__init__-en:
+
+        * **English**
+
+        Expand each non-negative integer spike count into ``num_slots`` binary
+        event slots. This module only supports multi-step mode and fixes the time
+        dimension at dimension 0. By default, training mode returns the input
+        unchanged and evaluation mode performs the expansion. Set
+        ``always_convert=True`` to always expand.
+
+        Active expansion uses hard binary values in forward and a straight-through
+        estimator whose surrogate derivative is ``1 / num_slots`` for each event
+        slot. Backward therefore averages the slot gradients in each bin. When the
+        same bias-free weight layer processes every slot and
+        :class:`TemporalBinSum` sums the results, the forward values, input
+        gradients, and weight gradients match a direct weight operation on the
+        integer counts. Bias, normalization, and nonlinear operations must follow
+        :class:`TemporalBinSum`.
+
+        :param num_slots: Number of binary event slots per logical timestep
+        :type num_slots: int
+        :param always_convert: ``True`` to always expand, or ``False`` to expand
+            only in evaluation mode; defaults to ``False``
+        :type always_convert: bool
+        :raises ValueError: If ``num_slots < 1``
+        """
+        super().__init__()
+        if num_slots < 1:
+            raise ValueError("num_slots must be >= 1.")
+        self.num_slots = num_slots
+        self.always_convert = always_convert
+        self.step_mode = "m"
+
+    def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        r"""
+        **API Language** - :ref:`中文 <SpikeCountToBinary.forward-cn>` | :ref:`English <SpikeCountToBinary.forward-en>`
+
+        ----
+
+        .. _SpikeCountToBinary.forward-cn:
+
+        * **中文**
+
+        :param x_seq: 形状为 ``[T, N, *]``、``T > 0`` 且取值位于
+            ``[0, num_slots]`` 的浮点整数值脉冲计数
+        :type x_seq: torch.Tensor
+        :return: 转换激活时返回形状为 ``[T * num_slots, N, *]`` 的二值脉冲；
+            否则原样返回 ``x_seq``。输出保持输入的 dtype 和 device
+        :rtype: torch.Tensor
+        :raises ValueError: 转换激活且 ``x_seq`` 不满足 ``[T, N, *]``、
+            ``T > 0`` 时抛出
+
+        ----
+
+        .. _SpikeCountToBinary.forward-en:
+
+        * **English**
+
+        :param x_seq: Floating-point integer-valued spike counts in
+            ``[0, num_slots]`` with shape ``[T, N, *]`` and ``T > 0``
+        :type x_seq: torch.Tensor
+        :return: Binary spikes with shape ``[T * num_slots, N, *]`` when
+            conversion is active; otherwise ``x_seq`` unchanged. The output keeps
+            the input dtype and device
+        :rtype: torch.Tensor
+        :raises ValueError: If active conversion receives an input that does not
+            satisfy shape ``[T, N, *]`` and ``T > 0``
+        """
+        if not self.always_convert and self.training:
+            return x_seq
+
+        if x_seq.ndim < 2 or x_seq.shape[0] == 0:
+            raise ValueError("x_seq must have shape [T, N, *] with T > 0.")
+
+        counts = x_seq.unsqueeze(1)
+        slots = torch.arange(self.num_slots, device=x_seq.device).view(
+            1, self.num_slots, *((1,) * (x_seq.ndim - 1))
+        )
+        hard_spikes = (slots < counts).to(x_seq.dtype)
+        proxy = counts / self.num_slots
+        return (hard_spikes + (proxy - proxy.detach())).flatten(0, 1)
+
+
+class TemporalBinSum(nn.Module, base.MultiStepModule):
+    def __init__(
+        self,
+        num_slots: int,
+        always_convert: bool = False,
+    ) -> None:
+        r"""
+        **API Language** - :ref:`中文 <TemporalBinSum.__init__-cn>` | :ref:`English <TemporalBinSum.__init__-en>`
+
+        ----
+
+        .. _TemporalBinSum.__init__-cn:
+
+        * **中文**
+
+        沿第 0 维将每 ``num_slots`` 个连续时间步求和。最后一个 bin 不完整时
+        在时间维末尾补零。该模块仅支持多步模式。默认训练模式返回原输入、
+        推理模式执行求和；设置 ``always_convert=True`` 后始终求和。
+
+        与 :class:`SpikeCountToBinary` 配对时，两者必须使用相同的
+        ``num_slots`` 和 ``always_convert``。展开与求和之间的权重层必须禁用
+        bias；归一化和非线性应在求和后执行一次。
+
+        :param num_slots: 每个输出逻辑时间步聚合的物理事件槽数量
+        :type num_slots: int
+        :param always_convert: 为 ``True`` 时始终聚合；为 ``False`` 时仅在推理
+            模式聚合，默认为 ``False``
+        :type always_convert: bool
+        :raises ValueError: 当 ``num_slots < 1`` 时抛出
+
+        ----
+
+        .. _TemporalBinSum.__init__-en:
+
+        * **English**
+
+        Sum each ``num_slots`` consecutive timesteps along dimension 0. An
+        incomplete final bin is zero-padded at the end of the time dimension.
+        This module only supports multi-step mode. By default, training mode
+        returns the input unchanged and evaluation mode performs the reduction.
+        Set ``always_convert=True`` to always reduce.
+
+        When paired with :class:`SpikeCountToBinary`, both modules must use the
+        same ``num_slots`` and ``always_convert``. The weight layer between
+        expansion and reduction must disable bias; normalization and nonlinear
+        operations must run once after the reduction.
+
+        :param num_slots: Number of physical event slots aggregated into each
+            output logical timestep
+        :type num_slots: int
+        :param always_convert: ``True`` to always reduce, or ``False`` to reduce
+            only in evaluation mode; defaults to ``False``
+        :type always_convert: bool
+        :raises ValueError: If ``num_slots < 1``
+        """
+        super().__init__()
+        if num_slots < 1:
+            raise ValueError("num_slots must be >= 1.")
+        self.num_slots = num_slots
+        self.always_convert = always_convert
+        self.step_mode = "m"
+
+    def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        r"""
+        **API Language** - :ref:`中文 <TemporalBinSum.forward-cn>` | :ref:`English <TemporalBinSum.forward-en>`
+
+        ----
+
+        .. _TemporalBinSum.forward-cn:
+
+        * **中文**
+
+        :param x_seq: 形状为 ``[T, N, *]``、``T > 0`` 的浮点物理事件槽序列
+        :type x_seq: torch.Tensor
+        :return: 聚合激活时返回形状为
+            ``[ceil(T / num_slots), N, *]`` 的序列；否则原样返回 ``x_seq``。
+            输出保持输入的 dtype 和 device
+        :rtype: torch.Tensor
+        :raises ValueError: 聚合激活且 ``x_seq`` 不满足 ``[T, N, *]``、
+            ``T > 0`` 时抛出
+
+        ----
+
+        .. _TemporalBinSum.forward-en:
+
+        * **English**
+
+        :param x_seq: Floating-point physical event-slot sequence with shape
+            ``[T, N, *]`` and ``T > 0``
+        :type x_seq: torch.Tensor
+        :return: A sequence with shape ``[ceil(T / num_slots), N, *]`` when
+            aggregation is active; otherwise ``x_seq`` unchanged. The output keeps
+            the input dtype and device
+        :rtype: torch.Tensor
+        :raises ValueError: If active aggregation receives an input that does not
+            satisfy shape ``[T, N, *]`` and ``T > 0``
+        """
+        if not self.always_convert and self.training:
+            return x_seq
+
+        if x_seq.ndim < 2 or x_seq.shape[0] == 0:
+            raise ValueError("x_seq must have shape [T, N, *] with T > 0.")
+
+        remainder = x_seq.shape[0] % self.num_slots
+        if remainder:
+            padding = x_seq.new_zeros((self.num_slots - remainder, *x_seq.shape[1:]))
+            x_seq = torch.cat((x_seq, padding))
+        return x_seq.reshape(-1, self.num_slots, *x_seq.shape[1:]).sum(dim=1)

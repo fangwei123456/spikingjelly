@@ -311,6 +311,60 @@ SpikingJelly's **online learning modules** provide auxiliary classes and operati
 
    online_learning <spikingjelly.activation_based.layer.online_learning>
 
+Integer-Valued Spike Conversion
+++++++++++++++++++++++++++++++++
+
+以下多步层将 I-LIF 的整数脉冲计数展开为二值事件槽，并在无 bias 权重运算后
+恢复逻辑时间维。默认配置在训练模式保持整数路径，在 eval 模式执行二值转换。
+
+----
+
+The following multi-step layers expand integer I-LIF spike counts into binary
+event slots and restore the logical time dimension after a bias-free weight
+operation. Their default configuration keeps the integer path during training
+and performs binary conversion in evaluation mode.
+
+.. list-table::
+
+   * - :class:`SpikeCountToBinary <spikingjelly.activation_based.layer.misc.SpikeCountToBinary>`
+     - Expand each integer spike count into consecutive binary event slots.
+   * - :class:`TemporalBinSum <spikingjelly.activation_based.layer.misc.TemporalBinSum>`
+     - Sum consecutive physical event slots back into logical timesteps.
+
+.. code-block:: python
+
+   import torch.nn as nn
+
+   from spikingjelly.activation_based import layer, neuron
+
+   num_slots = 4
+   block = nn.Sequential(
+       neuron.ILIFNode(step_mode="m"),
+       layer.SpikeCountToBinary(num_slots),
+       layer.Linear(16, 32, bias=False, step_mode="m"),
+       layer.TemporalBinSum(num_slots),
+   )
+
+.. warning::
+
+   ``SpikeCountToBinary`` 与 ``TemporalBinSum`` 必须使用相同的 ``num_slots``
+   和 ``always_convert``。连接 ``ILIFNode`` 时，``num_slots`` 不得小于
+   ``surrogate_function.max_spike_count``。两者之间的权重层必须禁用 bias；
+   bias、归一化和非线性应在 ``TemporalBinSum`` 之后执行一次。
+
+   Both modules must use the same ``num_slots`` and ``always_convert``. When
+   connected to ``ILIFNode``, ``num_slots`` must be no smaller than
+   ``surrogate_function.max_spike_count``. The intervening weight layer must
+   disable bias; apply bias, normalization, and nonlinear operations once after
+   ``TemporalBinSum``.
+
+   这些层提供二值事件语义和对应的运算计数，不会把稠密 PyTorch 权重算子替换为
+   稀疏硬件 kernel，也不单独构成延迟或能耗提升的证据。
+
+   These layers provide binary-event semantics and corresponding operation
+   accounting. They do not replace dense PyTorch weight operations with sparse
+   hardware kernels and do not by themselves demonstrate latency or energy gains.
+
 Miscellaneous
 +++++++++++++
 
