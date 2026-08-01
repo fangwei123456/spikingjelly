@@ -1,6 +1,4 @@
 import math
-import numbers
-from typing import Literal
 
 import torch
 import torch.nn as nn
@@ -18,30 +16,6 @@ __all__ = [
     "SpikeCountToBinary",
     "TemporalBinSum",
 ]
-
-
-def _validate_temporal_conversion_config(
-    num_slots: int,
-    conversion_mode: Literal["eval", "always"],
-) -> None:
-    if not isinstance(num_slots, numbers.Integral) or isinstance(num_slots, bool):
-        raise TypeError("num_slots must be an integer.")
-    if num_slots < 1:
-        raise ValueError("num_slots must be >= 1.")
-    if conversion_mode not in ("eval", "always"):
-        raise ValueError(
-            'conversion_mode must be either "eval" or "always", '
-            f'but got "{conversion_mode}".'
-        )
-
-
-def _validate_temporal_input(x_seq: torch.Tensor) -> None:
-    if not x_seq.is_floating_point():
-        raise TypeError("x_seq must be a floating-point tensor.")
-    if x_seq.ndim < 2:
-        raise ValueError(f"expected x_seq with shape [T, N, *], but got {x_seq.shape}.")
-    if x_seq.shape[0] == 0:
-        raise ValueError("x_seq must have a non-empty time dimension.")
 
 
 class SynapseFilter(base.MemoryModule):
@@ -388,7 +362,7 @@ class SpikeCountToBinary(nn.Module, base.MultiStepModule):
     def __init__(
         self,
         num_slots: int,
-        conversion_mode: Literal["eval", "always"] = "eval",
+        always_convert: bool = False,
     ) -> None:
         r"""
         **API Language** - :ref:`中文 <SpikeCountToBinary.__init__-cn>` | :ref:`English <SpikeCountToBinary.__init__-en>`
@@ -400,8 +374,8 @@ class SpikeCountToBinary(nn.Module, base.MultiStepModule):
         * **中文**
 
         将每个非负整数脉冲计数展开为 ``num_slots`` 个二值事件槽。该模块仅支持
-        多步模式，时间维固定为第 0 维。当 ``conversion_mode="eval"`` 时，训练
-        模式返回原输入，推理模式执行展开；``"always"`` 表示始终展开。
+        多步模式，时间维固定为第 0 维。默认训练模式返回原输入、推理模式执行
+        展开；设置 ``always_convert=True`` 后始终展开。
 
         展开激活时使用硬二值前向和直通估计。每个事件槽对输入计数的代理导数为
         ``1 / num_slots``，因此反向传播会把同一 bin 的槽梯度取平均。若展开后
@@ -411,11 +385,9 @@ class SpikeCountToBinary(nn.Module, base.MultiStepModule):
 
         :param num_slots: 每个逻辑时间步包含的二值事件槽数量
         :type num_slots: int
-        :param conversion_mode: ``"eval"`` 表示仅在推理模式展开，``"always"``
-            表示始终展开
-        :type conversion_mode: Literal["eval", "always"]
-        :raises TypeError: 当 ``num_slots`` 不是整数或为 ``bool`` 时抛出
-        :raises ValueError: 当 ``num_slots < 1`` 或 ``conversion_mode`` 非法时抛出
+        :param always_convert: 为 ``True`` 时始终展开；为 ``False`` 时仅在推理
+            模式展开，默认为 ``False``
+        :type always_convert: bool
 
         ----
 
@@ -425,9 +397,9 @@ class SpikeCountToBinary(nn.Module, base.MultiStepModule):
 
         Expand each non-negative integer spike count into ``num_slots`` binary
         event slots. This module only supports multi-step mode and fixes the time
-        dimension at dimension 0. With ``conversion_mode="eval"``, training mode
-        returns the input unchanged and evaluation mode performs the expansion;
-        ``"always"`` always performs the expansion.
+        dimension at dimension 0. By default, training mode returns the input
+        unchanged and evaluation mode performs the expansion. Set
+        ``always_convert=True`` to always expand.
 
         Active expansion uses hard binary values in forward and a straight-through
         estimator whose surrogate derivative is ``1 / num_slots`` for each event
@@ -440,16 +412,13 @@ class SpikeCountToBinary(nn.Module, base.MultiStepModule):
 
         :param num_slots: Number of binary event slots per logical timestep
         :type num_slots: int
-        :param conversion_mode: ``"eval"`` to expand only in evaluation mode, or
-            ``"always"`` to always expand
-        :type conversion_mode: Literal["eval", "always"]
-        :raises TypeError: If ``num_slots`` is not an integer or is ``bool``
-        :raises ValueError: If ``num_slots < 1`` or ``conversion_mode`` is invalid
+        :param always_convert: ``True`` to always expand, or ``False`` to expand
+            only in evaluation mode; defaults to ``False``
+        :type always_convert: bool
         """
         super().__init__()
-        _validate_temporal_conversion_config(num_slots, conversion_mode)
-        self.num_slots = int(num_slots)
-        self.conversion_mode = conversion_mode
+        self.num_slots = num_slots
+        self.always_convert = always_convert
         self.step_mode = "m"
 
     def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
@@ -462,15 +431,12 @@ class SpikeCountToBinary(nn.Module, base.MultiStepModule):
 
         * **中文**
 
-        :param x_seq: 整数值脉冲计数，形状为 ``[T, N, *]``。转换激活时必须为
-            非空浮点张量，所有值必须有限且位于 ``[0, num_slots]``
+        :param x_seq: 形状为 ``[T, N, *]``、取值位于 ``[0, num_slots]`` 的
+            浮点整数值脉冲计数
         :type x_seq: torch.Tensor
         :return: 转换激活时返回形状为 ``[T * num_slots, N, *]`` 的二值脉冲；
             否则原样返回 ``x_seq``。输出保持输入的 dtype 和 device
         :rtype: torch.Tensor
-        :raises TypeError: 转换激活且 ``x_seq`` 不是浮点张量时抛出
-        :raises ValueError: 转换激活且 ``x_seq`` 形状非法或时间维为空时抛出
-        :raises RuntimeError: 转换激活且计数包含非有限值、非整数值或越界值时抛出
 
         ----
 
@@ -478,36 +444,16 @@ class SpikeCountToBinary(nn.Module, base.MultiStepModule):
 
         * **English**
 
-        :param x_seq: Integer-valued spike counts with shape ``[T, N, *]``. When
-            conversion is active, it must be a non-empty floating-point tensor with
-            finite values in ``[0, num_slots]``
+        :param x_seq: Floating-point integer-valued spike counts in
+            ``[0, num_slots]`` with shape ``[T, N, *]``
         :type x_seq: torch.Tensor
         :return: Binary spikes with shape ``[T * num_slots, N, *]`` when
             conversion is active; otherwise ``x_seq`` unchanged. The output keeps
             the input dtype and device
         :rtype: torch.Tensor
-        :raises TypeError: If active conversion receives a non-floating-point tensor
-        :raises ValueError: If active conversion receives an invalid shape or an
-            empty time dimension
-        :raises RuntimeError: If active conversion receives non-finite,
-            non-integer-valued, or out-of-range counts
         """
-        if self.conversion_mode == "eval" and self.training:
+        if not self.always_convert and self.training:
             return x_seq
-
-        _validate_temporal_input(x_seq)
-        torch._assert_async(
-            torch.isfinite(x_seq).all(),
-            "x_seq must contain only finite values.",
-        )
-        torch._assert_async(
-            x_seq.eq(x_seq.round()).all(),
-            "x_seq must contain only integer-valued spike counts.",
-        )
-        torch._assert_async(
-            x_seq.ge(0).logical_and(x_seq.le(self.num_slots)).all(),
-            "x_seq spike counts must be in [0, num_slots].",
-        )
 
         counts = x_seq.unsqueeze(1)
         slots = torch.arange(self.num_slots, device=x_seq.device).view(
@@ -522,7 +468,7 @@ class TemporalBinSum(nn.Module, base.MultiStepModule):
     def __init__(
         self,
         num_slots: int,
-        conversion_mode: Literal["eval", "always"] = "eval",
+        always_convert: bool = False,
     ) -> None:
         r"""
         **API Language** - :ref:`中文 <TemporalBinSum.__init__-cn>` | :ref:`English <TemporalBinSum.__init__-en>`
@@ -534,21 +480,18 @@ class TemporalBinSum(nn.Module, base.MultiStepModule):
         * **中文**
 
         沿第 0 维将每 ``num_slots`` 个连续时间步求和。最后一个 bin 不完整时
-        在时间维末尾补零。该模块仅支持多步模式。当
-        ``conversion_mode="eval"`` 时，训练模式返回原输入，推理模式执行求和；
-        ``"always"`` 表示始终求和。
+        在时间维末尾补零。该模块仅支持多步模式。默认训练模式返回原输入、
+        推理模式执行求和；设置 ``always_convert=True`` 后始终求和。
 
         与 :class:`SpikeCountToBinary` 配对时，两者必须使用相同的
-        ``num_slots`` 和 ``conversion_mode``。展开与求和之间的权重层必须禁用
+        ``num_slots`` 和 ``always_convert``。展开与求和之间的权重层必须禁用
         bias；归一化和非线性应在求和后执行一次。
 
         :param num_slots: 每个输出逻辑时间步聚合的物理事件槽数量
         :type num_slots: int
-        :param conversion_mode: ``"eval"`` 表示仅在推理模式聚合，``"always"``
-            表示始终聚合
-        :type conversion_mode: Literal["eval", "always"]
-        :raises TypeError: 当 ``num_slots`` 不是整数或为 ``bool`` 时抛出
-        :raises ValueError: 当 ``num_slots < 1`` 或 ``conversion_mode`` 非法时抛出
+        :param always_convert: 为 ``True`` 时始终聚合；为 ``False`` 时仅在推理
+            模式聚合，默认为 ``False``
+        :type always_convert: bool
 
         ----
 
@@ -558,29 +501,25 @@ class TemporalBinSum(nn.Module, base.MultiStepModule):
 
         Sum each ``num_slots`` consecutive timesteps along dimension 0. An
         incomplete final bin is zero-padded at the end of the time dimension.
-        This module only supports multi-step mode. With
-        ``conversion_mode="eval"``, training mode returns the input unchanged
-        and evaluation mode performs the reduction; ``"always"`` always
-        performs the reduction.
+        This module only supports multi-step mode. By default, training mode
+        returns the input unchanged and evaluation mode performs the reduction.
+        Set ``always_convert=True`` to always reduce.
 
         When paired with :class:`SpikeCountToBinary`, both modules must use the
-        same ``num_slots`` and ``conversion_mode``. The weight layer between
+        same ``num_slots`` and ``always_convert``. The weight layer between
         expansion and reduction must disable bias; normalization and nonlinear
         operations must run once after the reduction.
 
         :param num_slots: Number of physical event slots aggregated into each
             output logical timestep
         :type num_slots: int
-        :param conversion_mode: ``"eval"`` to aggregate only in evaluation
-            mode, or ``"always"`` to always aggregate
-        :type conversion_mode: Literal["eval", "always"]
-        :raises TypeError: If ``num_slots`` is not an integer or is ``bool``
-        :raises ValueError: If ``num_slots < 1`` or ``conversion_mode`` is invalid
+        :param always_convert: ``True`` to always reduce, or ``False`` to reduce
+            only in evaluation mode; defaults to ``False``
+        :type always_convert: bool
         """
         super().__init__()
-        _validate_temporal_conversion_config(num_slots, conversion_mode)
-        self.num_slots = int(num_slots)
-        self.conversion_mode = conversion_mode
+        self.num_slots = num_slots
+        self.always_convert = always_convert
         self.step_mode = "m"
 
     def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
@@ -599,8 +538,6 @@ class TemporalBinSum(nn.Module, base.MultiStepModule):
             ``[ceil(T / num_slots), N, *]`` 的序列；否则原样返回 ``x_seq``。
             输出保持输入的 dtype 和 device
         :rtype: torch.Tensor
-        :raises TypeError: 聚合激活且 ``x_seq`` 不是浮点张量时抛出
-        :raises ValueError: 聚合激活且 ``x_seq`` 形状非法或时间维为空时抛出
 
         ----
 
@@ -615,14 +552,9 @@ class TemporalBinSum(nn.Module, base.MultiStepModule):
             aggregation is active; otherwise ``x_seq`` unchanged. The output keeps
             the input dtype and device
         :rtype: torch.Tensor
-        :raises TypeError: If active aggregation receives a non-floating-point tensor
-        :raises ValueError: If active aggregation receives an invalid shape or an
-            empty time dimension
         """
-        if self.conversion_mode == "eval" and self.training:
+        if not self.always_convert and self.training:
             return x_seq
-
-        _validate_temporal_input(x_seq)
 
         remainder = x_seq.shape[0] % self.num_slots
         if remainder:

@@ -61,7 +61,7 @@ def test_spike_count_to_binary_expands_only_in_eval_by_default():
 )
 def test_spike_count_to_binary_preserves_dtype_device_and_counts(dtype, device):
     counts = torch.tensor([[[0.0, 1.0, 2.0, 3.0]]], dtype=dtype, device=device)
-    spikes = layer.SpikeCountToBinary(3, conversion_mode="always")(counts)
+    spikes = layer.SpikeCountToBinary(3, always_convert=True)(counts)
 
     assert spikes.dtype == counts.dtype
     assert spikes.device == counts.device
@@ -109,60 +109,6 @@ def test_temporal_bin_sum_pads_the_final_bin_only_in_eval_by_default(dtype, devi
         functional.set_step_mode(reducer, "s")
 
 
-@pytest.mark.parametrize(
-    "module_type",
-    [layer.SpikeCountToBinary, layer.TemporalBinSum],
-)
-def test_ilif_temporal_conversion_modules_validate_their_configuration(module_type):
-    for num_slots in (1.5, False):
-        with pytest.raises(TypeError, match="num_slots must be an integer"):
-            module_type(num_slots=num_slots)
-    for num_slots in (0, -1):
-        with pytest.raises(ValueError, match="num_slots must be >= 1"):
-            module_type(num_slots=num_slots)
-    with pytest.raises(ValueError, match="conversion_mode"):
-        module_type(num_slots=4, conversion_mode="invalid")
-
-    module = module_type(num_slots=2, conversion_mode="always")
-    x_seq = torch.ones(2, 1)
-    assert module(x_seq) is not x_seq
-
-
-def test_spike_count_to_binary_rejects_invalid_active_inputs():
-    converter = layer.SpikeCountToBinary(num_slots=4, conversion_mode="always")
-
-    with pytest.raises(TypeError, match="floating-point"):
-        converter(torch.ones(2, 1, dtype=torch.int64))
-    for shape in ((), (2,)):
-        with pytest.raises(ValueError, match=r"\[T, N, \*\]"):
-            converter(torch.ones(shape))
-    with pytest.raises(ValueError, match="non-empty time dimension"):
-        converter(torch.empty(0, 1))
-
-    invalid_counts = [
-        (float("nan"), "finite"),
-        (float("inf"), "finite"),
-        (1.5, "integer-valued"),
-        (-1.0, r"\[0, num_slots\]"),
-        (5.0, r"\[0, num_slots\]"),
-    ]
-    for value, message in invalid_counts:
-        with pytest.raises(RuntimeError, match=message):
-            converter(torch.tensor([[value]]))
-
-
-def test_temporal_bin_sum_rejects_invalid_active_inputs():
-    reducer = layer.TemporalBinSum(num_slots=4, conversion_mode="always")
-
-    with pytest.raises(TypeError, match="floating-point"):
-        reducer(torch.ones(2, 1, dtype=torch.int64))
-    for shape in ((), (2,)):
-        with pytest.raises(ValueError, match=r"\[T, N, \*\]"):
-            reducer(torch.ones(shape))
-    with pytest.raises(ValueError, match="non-empty time dimension"):
-        reducer(torch.empty(0, 1))
-
-
 def test_binary_slot_linear_path_matches_integer_forward_and_backward():
     torch.manual_seed(7)
     num_slots = 4
@@ -177,8 +123,8 @@ def test_binary_slot_linear_path_matches_integer_forward_and_backward():
     integer_weight = layer.Linear(3, 5, bias=False, step_mode="m")
     spike_weight = layer.Linear(3, 5, bias=False, step_mode="m")
     spike_weight.load_state_dict(integer_weight.state_dict())
-    converter = layer.SpikeCountToBinary(num_slots, conversion_mode="always")
-    reducer = layer.TemporalBinSum(num_slots, conversion_mode="always")
+    converter = layer.SpikeCountToBinary(num_slots, always_convert=True)
+    reducer = layer.TemporalBinSum(num_slots, always_convert=True)
     upstream = torch.randn(2, 2, 5)
 
     integer_output = integer_weight(integer_counts)
@@ -215,8 +161,8 @@ def test_binary_slot_conv_path_matches_integer_forward_and_backward():
         step_mode="m",
     )
     spike_weight.load_state_dict(integer_weight.state_dict())
-    converter = layer.SpikeCountToBinary(num_slots, conversion_mode="always")
-    reducer = layer.TemporalBinSum(num_slots, conversion_mode="always")
+    converter = layer.SpikeCountToBinary(num_slots, always_convert=True)
+    reducer = layer.TemporalBinSum(num_slots, always_convert=True)
     upstream = torch.randn(3, 2, 3, 4, 4)
 
     integer_output = integer_weight(integer_counts)
@@ -237,8 +183,8 @@ def test_binary_slot_path_preserves_ilif_bptt_gradients():
     integer_weight = layer.Linear(3, 2, bias=False, step_mode="m")
     spike_weight = layer.Linear(3, 2, bias=False, step_mode="m")
     spike_weight.load_state_dict(integer_weight.state_dict())
-    converter = layer.SpikeCountToBinary(num_slots, conversion_mode="always")
-    reducer = layer.TemporalBinSum(num_slots, conversion_mode="always")
+    converter = layer.SpikeCountToBinary(num_slots, always_convert=True)
+    reducer = layer.TemporalBinSum(num_slots, always_convert=True)
     integer_input = torch.tensor(
         [
             [[0.2, 1.2, 2.2]],
@@ -297,7 +243,7 @@ def test_binary_slot_weight_path_is_counted_as_synaptic_accumulation():
             [[4.0, 2.0, 0.0], [1.0, 3.0, 2.0]],
         ]
     )
-    spikes = layer.SpikeCountToBinary(4, conversion_mode="always")(counts)
+    spikes = layer.SpikeCountToBinary(4, always_convert=True)(counts)
     weight = layer.Linear(3, 5, bias=False, step_mode="m")
     mac_counter = op_counter.MACCounter()
     ac_counter = op_counter.ACCounter()

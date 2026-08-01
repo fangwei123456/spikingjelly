@@ -348,12 +348,15 @@ and performs binary conversion in evaluation mode.
 .. warning::
 
    ``SpikeCountToBinary`` 与 ``TemporalBinSum`` 必须使用相同的 ``num_slots``
-   和 ``conversion_mode``。两者之间的权重层必须禁用 bias；bias、归一化和
-   非线性应在 ``TemporalBinSum`` 之后执行一次。
+   和 ``always_convert``。连接 ``ILIFNode`` 时，``num_slots`` 不得小于
+   ``surrogate_function.max_spike_count``。两者之间的权重层必须禁用 bias；
+   bias、归一化和非线性应在 ``TemporalBinSum`` 之后执行一次。
 
-   Both modules must use the same ``num_slots`` and ``conversion_mode``. The
-   intervening weight layer must disable bias; apply bias, normalization, and
-   nonlinear operations once after ``TemporalBinSum``.
+   Both modules must use the same ``num_slots`` and ``always_convert``. When
+   connected to ``ILIFNode``, ``num_slots`` must be no smaller than
+   ``surrogate_function.max_spike_count``. The intervening weight layer must
+   disable bias; apply bias, normalization, and nonlinear operations once after
+   ``TemporalBinSum``.
 
    这些层提供二值事件语义和对应的运算计数，不会把稠密 PyTorch 权重算子替换为
    稀疏硬件 kernel，也不单独构成延迟或能耗提升的证据。
