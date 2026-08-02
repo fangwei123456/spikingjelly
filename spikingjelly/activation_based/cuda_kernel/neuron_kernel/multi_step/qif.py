@@ -2,59 +2,23 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .... import configure
-from .. import cuda_utils, tensor_cache
-from ..cuda_utils import resolve_python_object
-from .common import (
+from ..... import configure
+from ... import cuda_utils, tensor_cache
+from ..surrogate_registry import (
+    _cuda_codes_callable,
+    _resolve_cuda_code_id,
+)
+from .runtime import (
     _CapturedAutogradCtx,
+    _capture_token,
     _decode_v_reset,
-    _resolve_sg_cuda_codes_fun,
+    _setup_capture_ctx,
     _surrogate_cuda_dtype,
-    _should_stash_capture_ctx,
-    _sg_obj_id,
-    _stash_capture_ctx,
-    _take_capture_ctx,
     cupy,
 )
 
 
-__all__ = ["create_fptt_kernel", "create_bptt_kernel", "multistep_qif_ptt"]
-
-
-def create_fptt_kernel(hard_reset: bool, dtype: str):
-    r"""
-    **API Language** - :ref:`中文 <create_fptt_kernel-cn>` | :ref:`English <create_fptt_kernel-en>`
-
-    ----
-
-    .. _create_fptt_kernel-cn:
-
-    * **中文**
-
-    创建前向传播CUDA kernel
-
-    :param hard_reset: Whether to use hard reset mode
-    :type hard_reset: bool
-    :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
-    :type dtype: str
-    :return: CUDA kernel object with generated code
-    :rtype: CKernel1D
-
-    ----
-
-    .. _create_fptt_kernel-en:
-
-    * **English**
-
-    Create forward-pass CUDA kernel
-
-    :param hard_reset: Whether to use hard reset mode
-    :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
-    :type hard_reset: bool
-    :type dtype: str
-    :return: CUDA kernel object with generated code
-    :rtype: CKernel1D
-    """
+def _create_fptt_kernel(hard_reset: bool, dtype: str):
     kernel_name = f"QIFNode_fptt_{'hard' if hard_reset else 'soft'}Reset_{dtype}"
 
     if dtype == "fp32":
@@ -171,50 +135,9 @@ def create_fptt_kernel(hard_reset: bool, dtype: str):
     )
 
 
-def create_bptt_kernel(
+def _create_bptt_kernel(
     sg_cuda_codes_fun, hard_reset: bool, detach_reset: bool, dtype: str
 ):
-    r"""
-    **API Language** - :ref:`中文 <create_bptt_kernel-cn>` | :ref:`English <create_bptt_kernel-en>`
-
-    ----
-
-    .. _create_bptt_kernel-cn:
-
-    * **中文**
-
-    创建反向传播CUDA kernel
-
-    :param sg_cuda_codes_fun: Callable with the ``cuda_codes(y, x, dtype)`` signature that generates surrogate gradient CUDA code
-    :type sg_cuda_codes_fun: ``Callable``
-    :param hard_reset: Whether to use hard reset mode
-    :type hard_reset: bool
-    :param detach_reset: Whether to detach the reset term in backward
-    :type detach_reset: bool
-    :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
-    :type dtype: str
-    :return: CUDA kernel object with generated code
-    :rtype: CKernel1D
-
-    ----
-
-    .. _create_bptt_kernel-en:
-
-    * **English**
-
-    Create backward-pass CUDA kernel
-
-    :param sg_cuda_codes_fun: Callable with the ``cuda_codes(y, x, dtype)`` signature that generates surrogate gradient CUDA code
-    :param hard_reset: Whether to use hard reset mode
-    :param detach_reset: Whether to detach the reset term in backward
-    :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
-    :type sg_cuda_codes_fun: ``Callable``
-    :type hard_reset: bool
-    :type detach_reset: bool
-    :type dtype: str
-    :return: CUDA kernel object with generated code
-    :rtype: CKernel1D
-    """
     kernel_name = f"QIFNode_bptt_{'hard' if hard_reset else 'soft'}Reset_{'detachReset' if detach_reset else ''}_{dtype}"
 
     surrogate_dtype = _surrogate_cuda_dtype(dtype)
@@ -269,7 +192,7 @@ def create_bptt_kernel(
             grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (1.0f + a0_over_tau * (2.0f * v_v_seq[t + neuron_num] + neg_sum_v_rest_v_c))) * grad_v_to_h;
             grad_x_seq[t] = grad_h * reciprocal_tau;
             }
-        grad_v_init[index] = grad_x_seq[index] * (1.0f + a0_over_tau * (2.0f * v_v_seq[index] + neg_sum_v_rest_v_c));
+        grad_v_init[index] = grad_h * (1.0f + a0_over_tau * (2.0f * v_v_seq[index] + neg_sum_v_rest_v_c));
         }
         }
         """
@@ -338,7 +261,7 @@ def create_bptt_kernel(
 
                 grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
             }
-        grad_v_init[index] = __hmul2(__hfma2(__hfma2(__float2half2_rn(2.0f), v_v_seq[index], neg_sum_v_rest_v_c_half2), a0_over_tau_half2, __float2half2_rn(1.0f)), grad_x_seq[index]);
+        grad_v_init[index] = __hmul2(__hfma2(__hfma2(__float2half2_rn(2.0f), v_v_seq[index], neg_sum_v_rest_v_c_half2), a0_over_tau_half2, __float2half2_rn(1.0f)), grad_h);
         }
         }
         """
@@ -501,7 +424,7 @@ def _qif_forward(
                 cp_numel,
             ]
 
-        kernel = create_fptt_kernel(hard_reset, dtype)
+        kernel = _create_fptt_kernel(hard_reset, dtype)
 
         kernel(
             (blocks,),
@@ -570,7 +493,7 @@ def _qif_backward(ctx, grad_spike_seq, grad_v_seq):
     else:
         raise NotImplementedError
 
-    kernel = create_bptt_kernel(
+    kernel = _create_bptt_kernel(
         ctx.sg_cuda_codes_fun, hard_reset, ctx.detach_reset, dtype
     )
 
@@ -713,9 +636,8 @@ def cupy_multistep_qif_forward(
     v_c: float,
     a0: float,
     detach_reset: bool,
-    sg_id: int,
+    surrogate_id: int,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    sg = resolve_python_object(sg_id)
     captured_ctx = _CapturedAutogradCtx()
     out = _qif_forward(
         captured_ctx,
@@ -728,15 +650,9 @@ def cupy_multistep_qif_forward(
         v_c,
         a0,
         detach_reset,
-        _resolve_sg_cuda_codes_fun(sg),
+        _cuda_codes_callable(surrogate_id, _surrogate_cuda_dtype(x_seq.dtype)),
     )
-    capture_id = (
-        _stash_capture_ctx(captured_ctx)
-        if _should_stash_capture_ctx((x_seq, v_init))
-        else -1
-    )
-    capture_token = torch.tensor(capture_id, device=x_seq.device, dtype=torch.int64)
-    return (*out, capture_token)
+    return (*out, _capture_token(captured_ctx, (x_seq, v_init), x_seq.device))
 
 
 @torch.library.register_fake("sj::cupy_multistep_qif_forward")
@@ -749,18 +665,6 @@ def _cupy_multistep_qif_forward_fake(*args):
     )
 
 
-def _setup_ctx(ctx, inputs, output):
-    capture_token = output[-1]
-    if capture_token.is_meta:
-        ctx.captured = None
-        return
-    capture_id = int(capture_token.item())
-    if capture_id < 0:
-        ctx.captured = None
-        return
-    ctx.captured = _take_capture_ctx(capture_id)
-
-
 def _bw(ctx, *grad_outputs):
     if ctx.captured is None:
         raise RuntimeError("Missing captured context for backward.")
@@ -769,11 +673,11 @@ def _bw(ctx, *grad_outputs):
 
 
 torch.library.register_autograd(
-    "sj::cupy_multistep_qif_forward", _bw, setup_context=_setup_ctx
+    "sj::cupy_multistep_qif_forward", _bw, setup_context=_setup_capture_ctx
 )
 
 
-def multistep_qif_ptt(
+def qif_multi_step(
     x_seq,
     v_init,
     tau,
@@ -785,73 +689,9 @@ def multistep_qif_ptt(
     detach_reset,
     surrogate_function,
 ):
-    """Multi-step QIF neuron forward pass via CuPy PTT custom op.
-
-    **API Language** - :ref:`中文 <multistep_qif_ptt-cn>` | :ref:`English <multistep_qif_ptt-en>`
-
-    ----
-
-    .. _multistep_qif_ptt-cn:
-
-    * **中文**
-
-    多步QIF神经元脉冲前向传播
-
-    :param x_seq: Input sequence, shape ``[T, N, *]``
-    :type x_seq: ``torch.Tensor``
-    :param v_init: Initial membrane potential
-    :type v_init: ``torch.Tensor``
-    :param tau: Membrane time constant
-    :type tau: float
-    :param v_threshold: Threshold voltage
-    :type v_threshold: float
-    :param v_reset: Reset voltage (``None`` for soft reset)
-    :type v_reset: Optional[float]
-    :param v_rest: Resting potential
-    :type v_rest: float
-    :param v_c: Cutoff voltage
-    :type v_c: float
-    :param a0: Reset value
-    :type a0: float
-    :param detach_reset: Whether to detach the reset term in backward
-    :type detach_reset: bool
-    :param surrogate_function: Surrogate gradient function
-    :type surrogate_function: ``surrogate.SurrogateFunctionBase``
-    :return: Tuple of (spike_seq, v_seq)
-    :rtype: Tuple[torch.Tensor, torch.Tensor]
-
-    ----
-
-    .. _multistep_qif_ptt-en:
-
-    * **English**
-
-    Multi-step QIF neuron spike forward
-
-    :param x_seq: Input sequence, shape ``[T, N, *]``
-    :param v_init: Initial membrane potential
-    :param tau: Membrane time constant
-    :param v_threshold: Threshold voltage
-    :param v_reset: Reset voltage (``None`` for soft reset)
-    :param v_rest: Resting potential
-    :param v_c: Cutoff voltage
-    :param a0: Reset value
-    :param detach_reset: Whether to detach the reset term in backward
-    :param surrogate_function: Surrogate gradient function
-    :type x_seq: ``torch.Tensor``
-    :type v_init: ``torch.Tensor``
-    :type tau: float
-    :type v_threshold: float
-    :type v_reset: Optional[float]
-    :type v_rest: float
-    :type v_c: float
-    :type a0: float
-    :type detach_reset: bool
-    :type surrogate_function: ``surrogate.SurrogateFunctionBase``
-    :return: Tuple of (spike_seq, v_seq)
-    :rtype: Tuple[torch.Tensor, torch.Tensor]
-    """
-    sg_id = _sg_obj_id(surrogate_function)
+    surrogate_id = _resolve_cuda_code_id(
+        surrogate_function, _surrogate_cuda_dtype(x_seq.dtype)
+    )
     v_reset_value = float("nan") if v_reset is None else float(v_reset)
     return cupy_multistep_qif_forward(
         x_seq,
@@ -863,5 +703,5 @@ def multistep_qif_ptt(
         v_c,
         a0,
         detach_reset,
-        sg_id,
+        surrogate_id,
     )[:-1]

@@ -1,14 +1,6 @@
 spikingjelly.activation\_based.cuda\_kernel package
 =====================================================
 
-Predefined Neuron Kernels
-------------------------------------------------------------------
-
-.. toctree::
-   :maxdepth: 1
-
-   neuron_kernel <spikingjelly.activation_based.cuda_kernel.neuron_kernel>
-
 CUDA Code Auto-generation
 ------------------------------------------------------------------
 
@@ -16,6 +8,14 @@ CUDA Code Auto-generation
    :maxdepth: 1
 
    auto_cuda <spikingjelly.activation_based.cuda_kernel.auto_cuda>
+
+CuPy Neuron Kernels
+------------------------------------------------------------------
+
+.. toctree::
+   :maxdepth: 1
+
+   neuron_kernel <spikingjelly.activation_based.cuda_kernel.neuron_kernel>
 
 1-bit Spike Operation (Experimental)
 --------------------------------------------

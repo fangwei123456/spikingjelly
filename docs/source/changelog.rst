@@ -114,13 +114,6 @@ Modules: ``spikingjelly.activation_based.functional``,
 - Fixed time-last containers advancing stateful modules through stateless
   vectorization and preserved tuple outputs from sequence-to-ANN forwarding.
 
-CUDA Neuron Kernels
-^^^^^^^^^^^^^^^^^^^
-
-Module: ``spikingjelly.activation_based.cuda_kernel.neuron_kernel``.
-
-- Fixed generated FP32 IF/LIF CUDA source containing invalid RST fragments.
-
 Learning
 ^^^^^^^^
 
@@ -153,6 +146,28 @@ Module: ``spikingjelly.timing_based.neuron``.
 
 Improvements
 ~~~~~~~~~~~~
+
+CuPy Neuron Backend
+^^^^^^^^^^^^^^^^^^^
+
+Modules: ``spikingjelly.activation_based.neuron``,
+``spikingjelly.activation_based.functional``,
+``spikingjelly.activation_based.cuda_kernel``.
+
+- Consolidated built-in CuPy execution while preserving the public functional
+  entry-point names and neuron behavior.
+- Removed ``neuron_cupy``, ``neuron_cupy_lite``, and old duplicated CuPy neuron
+  execution paths. Use functional APIs for built-in neurons.
+- Moved concrete CuPy neuron-kernel ownership from
+  ``auto_cuda.neuron_kernel`` to ``cuda_kernel.neuron_kernel``.
+- Organized concrete CuPy neuron kernels by execution role under
+  ``cuda_kernel.neuron_kernel.single_step`` and
+  ``cuda_kernel.neuron_kernel.multi_step``.
+- ``if_step_cupy`` and ``lif_step_cupy`` now accept the surrogate function and
+  reset options directly instead of caller-created kernel objects.
+- Custom-kernel extension imports move to
+  ``cuda_kernel.neuron_kernel.multi_step``.
+- ``auto_cuda`` now contains only CUDA code-generation machinery.
 
 Neuron Backend Caches
 ^^^^^^^^^^^^^^^^^^^^^

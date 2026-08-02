@@ -1,6 +1,5 @@
 import logging
 import math
-import threading
 from typing import Callable, Iterable
 
 import numpy as np
@@ -10,76 +9,15 @@ try:
     import cupy
 except BaseException as e:
     logging.info(
-        f"spikingjelly.activation_based.cuda_kernel.auto_cuda.neuronal_kernel: {e}"
+        f"spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step: {e}"
     )
     cupy = None
 
 
 from ..... import configure
-from .... import surrogate
 from ... import cuda_utils
-from .. import base, cfunction
-
-_SURROGATE_CUPY_REGISTRY_LOCK = threading.Lock()
-_SURROGATE_CUPY_NEXT_ID = 0
-_SURROGATE_CUPY_ID_TO_CODES: dict[int, Callable[[str, str, str], str]] = {}
-_SURROGATE_CUPY_KEY_TO_ID: dict[str, int] = {}
-
-
-def _normalize_sg_value(value):
-    if isinstance(value, torch.Tensor):
-        if value.numel() == 1:
-            return value.item()
-        return tuple(value.detach().cpu().reshape(-1).tolist())
-    if isinstance(value, (bool, int, float, str)):
-        return value
-    return repr(value)
-
-
-def _surrogate_registry_key(
-    surrogate_function: surrogate.SurrogateFunctionBase,
-) -> str:
-    param_items = ()
-    if hasattr(surrogate_function, "_sg_params"):
-        params = surrogate_function._sg_params
-        param_items = tuple(
-            sorted((k, _normalize_sg_value(v)) for k, v in params.items())
-        )
-    return repr(
-        (
-            surrogate_function.__class__.__module__,
-            surrogate_function.__class__.__qualname__,
-            _normalize_sg_value(getattr(surrogate_function, "spiking", True)),
-            param_items,
-        )
-    )
-
-
-def resolve_sg_cupy_id(
-    surrogate_function: surrogate.SurrogateFunctionBase,
-) -> int:
-    if not hasattr(surrogate_function, "cuda_codes"):
-        raise TypeError(
-            "CuPy backend requires surrogate_function.cuda_codes for custom_op path."
-        )
-
-    sg_codes = surrogate_function.cuda_codes
-    if not callable(sg_codes):
-        raise TypeError(
-            "surrogate_function.cuda_codes must be callable for CuPy custom_op path."
-        )
-
-    sg_key = _surrogate_registry_key(surrogate_function)
-
-    global _SURROGATE_CUPY_NEXT_ID
-    with _SURROGATE_CUPY_REGISTRY_LOCK:
-        sg_id = _SURROGATE_CUPY_KEY_TO_ID.get(sg_key)
-        if sg_id is None:
-            sg_id = _SURROGATE_CUPY_NEXT_ID
-            _SURROGATE_CUPY_NEXT_ID += 1
-            _SURROGATE_CUPY_KEY_TO_ID[sg_key] = sg_id
-            _SURROGATE_CUPY_ID_TO_CODES[sg_id] = sg_codes
-    return sg_id
+from ...auto_cuda import base as auto_cuda_base, cfunction
+from ..cuda_code import _neuronal_fire, _neuronal_hard_reset, _neuronal_soft_reset
 
 
 def _dtype_to_cupy_kernel_dtype(dtype: torch.dtype) -> str:
@@ -90,48 +28,7 @@ def _dtype_to_cupy_kernel_dtype(dtype: torch.dtype) -> str:
     raise NotImplementedError(dtype)
 
 
-def _surrogate_cuda_codes_from_id(sg_cupy_id: int) -> Callable[[str, str, str], str]:
-    sg_codes = _SURROGATE_CUPY_ID_TO_CODES.get(sg_cupy_id)
-    if sg_codes is None:
-        raise RuntimeError(
-            f"Unknown sg_cupy_id={sg_cupy_id} in custom_op backward. "
-            "This usually means surrogate registry was not initialized before execution."
-        )
-    return sg_codes
-
-
-def neuronal_hard_reset(
-    v_next: str, h: str, spike: str, v_reset: str, dtype: str = "float"
-):
-    if dtype == "float":
-        return f"{v_next} = {h} * (1.0f - {spike}) + {v_reset} * {spike};"
-    elif dtype == "half2":
-        return f"{v_next} = __hfma2({h}, __hsub2(__float2half2_rn(1.0f), {spike}), __hmul2(v_reset, {spike}));"
-    else:
-        raise NotImplementedError(dtype)
-
-
-def neuronal_soft_reset(
-    v_next: str, h: str, spike: str, v_th: str, dtype: str = "float"
-):
-    if dtype == "float":
-        return f"{v_next} = {h} - {v_th} * {spike};"
-    elif dtype == "half2":
-        return f"{v_next} = __hsub2({h}, __hmul2({v_th}, {spike}));"
-    else:
-        raise NotImplementedError(dtype)
-
-
-def neuronal_fire(spike: str, v: str, v_th: str, dtype: str = "float"):
-    if dtype == "float":
-        return cfunction.heaviside(y=spike, x=f"({v} - {v_th})", dtype=dtype)
-    elif dtype == "half2":
-        return cfunction.heaviside(y=spike, x=f"__hsub2({v}, {v_th})", dtype=dtype)
-    else:
-        raise NotImplementedError(dtype)
-
-
-class NeuronFPTTKernel(base.CKernel2D):
+class NeuronFPTTKernel(auto_cuda_base.CKernel2D):
     def __init__(self, hard_reset: bool, dtype: str):
         super().__init__(
             kernel_name=f"{self.__class__.__name__}_{dtype}_{'hard_reset' if hard_reset else 'soft_reset'}",
@@ -203,19 +100,19 @@ class NeuronFPTTKernel(base.CKernel2D):
 
     @property
     def core(self):
-        core_codes = base.CodeTyper(18)
+        core_codes = auto_cuda_base.CodeTyper(18)
 
         core_codes.append(self.neuronal_charge())
 
         core_codes.append(
-            neuronal_fire(
+            _neuronal_fire(
                 spike="spike_seq[t]", v="h_seq[t]", v_th="v_th", dtype=self.dtype
             )
         )
 
         if self.hard_reset:
             core_codes.append(
-                neuronal_hard_reset(
+                _neuronal_hard_reset(
                     v_next="v_v_seq[t + dt]",
                     h="h_seq[t]",
                     spike="spike_seq[t]",
@@ -225,7 +122,7 @@ class NeuronFPTTKernel(base.CKernel2D):
             )
         else:
             core_codes.append(
-                neuronal_soft_reset(
+                _neuronal_soft_reset(
                     v_next="v_v_seq[t + dt]",
                     h="h_seq[t]",
                     spike="spike_seq[t]",
@@ -238,7 +135,7 @@ class NeuronFPTTKernel(base.CKernel2D):
         return self._core
 
 
-class NeuronBPTTKernel(base.CKernel2D):
+class NeuronBPTTKernel(auto_cuda_base.CKernel2D):
     def __init__(
         self,
         surrogate_function: Callable,
@@ -265,7 +162,7 @@ class NeuronBPTTKernel(base.CKernel2D):
 
     @property
     def pre_core(self):
-        codes = base.CodeTyper(16)
+        codes = auto_cuda_base.CodeTyper(16)
         if self.dtype == "float":
             codes.append("float grad_h = 0.0f;")
         elif self.dtype == "half2":
@@ -278,7 +175,7 @@ class NeuronBPTTKernel(base.CKernel2D):
 
     @property
     def post_core(self):
-        codes = base.CodeTyper(16)
+        codes = auto_cuda_base.CodeTyper(16)
         codes.append(self.grad_h_next_to_v())
         codes.append(
             cfunction.mul(
@@ -395,7 +292,7 @@ class NeuronBPTTKernel(base.CKernel2D):
 
     @property
     def core(self):
-        core_codes = base.CodeTyper(18)
+        core_codes = auto_cuda_base.CodeTyper(18)
 
         core_codes.append(
             cfunction.sub(
@@ -427,7 +324,7 @@ class NeuronBPTTKernel(base.CKernel2D):
             )
 
             if not self.detach_reset:
-                with base.CodeBlock(core_codes):
+                with auto_cuda_base.CodeBlock(core_codes):
                     core_codes.append(
                         cfunction.sub(
                             z=f"{self.dtype} temp_var",
@@ -459,7 +356,7 @@ class NeuronBPTTKernel(base.CKernel2D):
             )
 
             if not self.detach_reset:
-                with base.CodeBlock(core_codes):
+                with auto_cuda_base.CodeBlock(core_codes):
                     core_codes.append(
                         cfunction.mul(
                             z=f"{self.dtype} temp_var",
@@ -489,7 +386,7 @@ class NeuronBPTTKernel(base.CKernel2D):
         core_codes.append(
             cfunction.mul(z="grad_h", x="grad_h", y="grad_v_to_h", dtype=self.dtype)
         )
-        with base.CodeBlock(core_codes):
+        with auto_cuda_base.CodeBlock(core_codes):
             core_codes.append(
                 cfunction.mul(
                     z=f"{self.dtype} temp_var",
@@ -514,14 +411,7 @@ class NeuronBPTTKernel(base.CKernel2D):
 
 
 def if_requires_grad(items: Iterable):
-    requires_grad = False
-    for item in items:
-        if isinstance(item, torch.Tensor):
-            if item.requires_grad:
-                requires_grad = True
-                break
-
-    return requires_grad
+    return any(isinstance(item, torch.Tensor) and item.requires_grad for item in items)
 
 
 _INT32_MAX = np.iinfo(np.int32).max
@@ -533,16 +423,6 @@ def _as_cupy_int32(value: int, name: str):
             f"{name}={value} exceeds int32 range required by CUDA kernel launch metadata."
         )
     return cupy.asarray(value, dtype=np.int32)
-
-
-def is_fake_or_meta_tensor(x) -> bool:
-    if not isinstance(x, torch.Tensor):
-        return False
-    if x.is_meta:
-        return True
-    if getattr(x, "fake_mode", None) is not None:
-        return True
-    return type(x).__name__ == "FakeTensor"
 
 
 def scalar_to_cupy(py_dict: dict, ref: str = "x_seq"):
@@ -587,7 +467,7 @@ def prepare_forward_meta(py_dict: dict, ref: str = "x_seq"):
 def new_tensors(news: tuple, py_dict: dict, ref: str = "x_seq"):
     ref = py_dict[ref]
     zero_shape = list(ref.shape)
-    zero_shape[0] *= news.__len__()
+    zero_shape[0] *= len(news)
     for i, item in enumerate(
         torch.split(
             torch.zeros(zero_shape, device=ref.device, dtype=ref.dtype), ref.shape[0]

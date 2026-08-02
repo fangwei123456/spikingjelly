@@ -1,16 +1,9 @@
 from typing import Optional
-import logging
 
 import torch
 
-from .. import surrogate
+from .. import functional, surrogate
 from .base_node import BaseNode
-
-try:
-    from .. import cuda_kernel
-except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.neuron: {e}")
-    cuda_kernel = None
 
 
 __all__ = ["QIFNode", "EIFNode"]
@@ -185,9 +178,9 @@ class QIFNode(BaseNode):
             return super().multi_step_forward(x_seq)
         elif self.backend == "cupy":
             self.v_float_to_tensor(x_seq[0])
-            spike_seq, v_seq = cuda_kernel.multistep_qif_ptt(
-                x_seq.flatten(1),
-                self.v.flatten(0),
+            spike_seq, self.v, v_seq = functional.qif_multi_step_cupy(
+                x_seq,
+                self.v,
                 self.tau,
                 self.v_threshold,
                 self.v_reset,
@@ -196,16 +189,10 @@ class QIFNode(BaseNode):
                 self.a0,
                 self.detach_reset,
                 self.surrogate_function,
+                self.store_v_seq,
             )
-
-            spike_seq = spike_seq.reshape(x_seq.shape)
-            v_seq = v_seq.reshape(x_seq.shape)
-
             if self.store_v_seq:
                 self.v_seq = v_seq
-
-            self.v = v_seq[-1].clone()
-
             return spike_seq
         else:
             raise ValueError(self.backend)
@@ -392,9 +379,9 @@ class EIFNode(BaseNode):
             return super().multi_step_forward(x_seq)
         elif self.backend == "cupy":
             self.v_float_to_tensor(x_seq[0])
-            spike_seq, v_seq = cuda_kernel.multistep_eif_ptt(
-                x_seq.flatten(1),
-                self.v.flatten(0),
+            spike_seq, self.v, v_seq = functional.eif_multi_step_cupy(
+                x_seq,
+                self.v,
                 self.tau,
                 self.v_threshold,
                 self.v_reset,
@@ -403,16 +390,10 @@ class EIFNode(BaseNode):
                 self.delta_T,
                 self.detach_reset,
                 self.surrogate_function,
+                self.store_v_seq,
             )
-
-            spike_seq = spike_seq.reshape(x_seq.shape)
-            v_seq = v_seq.reshape(x_seq.shape)
-
             if self.store_v_seq:
                 self.v_seq = v_seq
-
-            self.v = v_seq[-1].clone()
-
             return spike_seq
         else:
             raise ValueError(self.backend)

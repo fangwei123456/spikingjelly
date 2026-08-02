@@ -1,22 +1,24 @@
+import math
 from typing import Optional
 
 import torch
 import torch.nn.functional as F
 
-from .common import (
-    cfunction,
-    cupy,
-    cuda_utils,
-    configure,
-    math,
-    surrogate,
+from ..... import configure
+from .... import surrogate
+from ... import cuda_utils
+from ...auto_cuda import cfunction
+from .base import (
     _dtype_to_cupy_kernel_dtype,
-    scalar_to_cupy,
+    cupy,
     prepare_forward_meta,
-    _surrogate_cuda_codes_from_id,
-    resolve_sg_cupy_id,
+    scalar_to_cupy,
     NeuronBPTTKernel,
     NeuronFPTTKernel,
+)
+from ..surrogate_registry import (
+    _cuda_codes_callable,
+    _resolve_cuda_code_id,
 )
 
 
@@ -63,7 +65,7 @@ def _get_if_backward_kernel(
     kernel = _IF_BWD_KERNEL_CACHE.get(key)
     if kernel is None:
         kernel = IFNodeBPTTKernel(
-            surrogate_function=_surrogate_cuda_codes_from_id(sg_cupy_id),
+            surrogate_function=_cuda_codes_callable(sg_cupy_id, dtype),
             hard_reset=hard_reset,
             detach_reset=detach_reset,
             dtype=dtype,
@@ -238,7 +240,7 @@ torch.library.register_autograd(
 )
 
 
-def multistep_if(
+def if_multi_step(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     v_threshold: float,
@@ -246,7 +248,9 @@ def multistep_if(
     detach_reset: bool,
     surrogate_function: surrogate.SurrogateFunctionBase,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    sg_cupy_id = resolve_sg_cupy_id(surrogate_function)
+    sg_cupy_id = _resolve_cuda_code_id(
+        surrogate_function, _dtype_to_cupy_kernel_dtype(x_seq.dtype)
+    )
     soft_reset = v_reset is None
     v_reset_value = 0.0 if v_reset is None else float(v_reset)
     s_seq, v_seq, _ = cupy_multistep_if_forward(

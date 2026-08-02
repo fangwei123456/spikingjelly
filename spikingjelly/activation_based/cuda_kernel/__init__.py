@@ -7,7 +7,7 @@
 
 * **中文**
 
-CUDA kernel模块，提供GPU加速的神经元计算后端。
+CUDA kernel 模块，提供代码生成、CuPy 神经元内核、脉冲算子和运行工具。
 
 
 ----
@@ -16,27 +16,10 @@ CUDA kernel模块，提供GPU加速的神经元计算后端。
 
 * **English**
 
-CUDA kernel module providing GPU-accelerated neuron computation backends.
+CUDA kernel module providing code generation, CuPy neuron kernels, spike
+operations, and runtime utilities.
 """
 
-from . import auto_cuda  # noqa
-from .neuron_kernel import (
-    multistep_eif_ptt,
-    multistep_if_ptt,
-    multistep_izhikevich_ptt,
-    multistep_lif_ptt,
-    multistep_plif_ptt,
-    multistep_qif_ptt,
-    save_cuda_codes,
-)
+from . import auto_cuda, neuron_kernel
 
-__all__ = [
-    "auto_cuda",
-    "save_cuda_codes",
-    "multistep_if_ptt",
-    "multistep_lif_ptt",
-    "multistep_plif_ptt",
-    "multistep_qif_ptt",
-    "multistep_izhikevich_ptt",
-    "multistep_eif_ptt",
-]
+__all__ = ["auto_cuda", "neuron_kernel"]

@@ -1,22 +1,24 @@
+import math
 from typing import Callable, Optional
 
 import torch
 import torch.nn.functional as F
 
-from .common import (
+from ..... import configure
+from .... import surrogate
+from ... import cuda_utils
+from ...auto_cuda import cfunction
+from .base import (
+    _dtype_to_cupy_kernel_dtype,
+    cupy,
+    prepare_forward_meta,
+    scalar_to_cupy,
     NeuronBPTTKernel,
     NeuronFPTTKernel,
-    _dtype_to_cupy_kernel_dtype,
-    _surrogate_cuda_codes_from_id,
-    cfunction,
-    configure,
-    cuda_utils,
-    cupy,
-    math,
-    prepare_forward_meta,
-    resolve_sg_cupy_id,
-    scalar_to_cupy,
-    surrogate,
+)
+from ..surrogate_registry import (
+    _cuda_codes_callable,
+    _resolve_cuda_code_id,
 )
 
 
@@ -64,14 +66,12 @@ class LIFNodeFPTTKernel(NeuronFPTTKernel):
                 dtype=self.dtype,
             )
 
-        codes += cfunction.add(
+        return codes + cfunction.add(
             z="h_seq[t]",
             x="LIFNodeFPTTKernel_temp_var",
             y="v_v_seq[t]",
             dtype=self.dtype,
         )
-
-        return codes
 
 
 class LIFNodeBPTTKernel(NeuronBPTTKernel):
@@ -96,12 +96,11 @@ class LIFNodeBPTTKernel(NeuronBPTTKernel):
         )
 
     def grad_h_to_x(self) -> str:
-        if not self.decay_input:
-            return cfunction.constant(
-                y=f"const {self.dtype} grad_h_to_x", x=1.0, dtype=self.dtype
-            )
-        else:
+        if self.decay_input:
             return f"const {self.dtype} grad_h_to_x = decay;"
+        return cfunction.constant(
+            y=f"const {self.dtype} grad_h_to_x", x=1.0, dtype=self.dtype
+        )
 
 
 _LIF_FWD_KERNEL_CACHE = {}
@@ -134,7 +133,7 @@ def _get_lif_backward_kernel(
     if kernel is None:
         kernel = LIFNodeBPTTKernel(
             decay_input=decay_input,
-            surrogate_function=_surrogate_cuda_codes_from_id(sg_cupy_id),
+            surrogate_function=_cuda_codes_callable(sg_cupy_id, dtype),
             hard_reset=hard_reset,
             detach_reset=detach_reset,
             dtype=dtype,
@@ -327,7 +326,7 @@ torch.library.register_autograd(
 )
 
 
-def multistep_lif(
+def lif_multi_step(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     decay_input: bool,
@@ -338,7 +337,9 @@ def multistep_lif(
     surrogate_function: surrogate.SurrogateFunctionBase,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     decay = 1.0 / tau
-    sg_cupy_id = resolve_sg_cupy_id(surrogate_function)
+    sg_cupy_id = _resolve_cuda_code_id(
+        surrogate_function, _dtype_to_cupy_kernel_dtype(x_seq.dtype)
+    )
     soft_reset = v_reset is None
     v_reset_value = 0.0 if v_reset is None else float(v_reset)
     s_seq, v_seq, _ = cupy_multistep_lif_forward(

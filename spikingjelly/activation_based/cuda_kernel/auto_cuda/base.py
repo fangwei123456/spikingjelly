@@ -1,5 +1,8 @@
-import numpy as np
 import logging
+import sys
+
+import numpy as np
+import torch
 
 try:
     import cupy
@@ -7,12 +10,8 @@ except BaseException as e:
     logging.info(f"spikingjelly.activation_based.cuda_kernel.auto_cuda.base: {e}")
     cupy = None
 
-import torch
-import sys
-import logging
-
-from .. import cuda_utils
 from .... import configure
+from .. import cuda_utils
 
 
 def wrap_with_comment(code: str, comment: str):
