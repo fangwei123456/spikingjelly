@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from .triton_utils import (
+from ..triton_utils import (
     register_op,
     type_dict,
     use_static_range_for_triton_neuron_kernel,
@@ -16,9 +16,9 @@ try:
 except (ImportError, OSError) as e:
     import logging
 
-    from . import dummy
+    from .. import dummy
 
-    logging.info(f"spikingjelly.activation_based.triton_kernel.spikezip_kernel: {e}")
+    logging.info(f"spikingjelly.activation_based.triton_kernel.neuron_kernel.stbif: {e}")
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
     libdevice = dummy.DummyImport()

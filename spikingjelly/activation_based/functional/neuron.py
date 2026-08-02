@@ -2881,9 +2881,9 @@ def stbif_single_step_triton(
     :raises NotImplementedError: If the dtype is not supported by the Triton
         backend
     """
-    from ..triton_kernel import spikezip_kernel
+    from ..triton_kernel.neuron_kernel import stbif
 
-    return spikezip_kernel.single_step_stbif(
+    return stbif.single_step_stbif(
         x,
         q,
         acc_q,

@@ -193,13 +193,13 @@ class STBIFNeuron(base.MemoryModule):
         return out_seq
 
     def _multi_step_forward_triton(self, x_seq: torch.Tensor) -> torch.Tensor:
-        from spikingjelly.activation_based.triton_kernel import spikezip_kernel
+        from spikingjelly.activation_based.triton_kernel.neuron_kernel import stbif
 
         q_threshold = self.q_threshold.to(dtype=x_seq.dtype)
         pos_max = self.pos_max.to(dtype=x_seq.dtype)
         neg_min = self.neg_min.to(dtype=x_seq.dtype)
         self._init_state(x_seq[0])
-        out_seq, q, acc_q, cur_output, work_flag = spikezip_kernel.multi_step_stbif(
+        out_seq, q, acc_q, cur_output, work_flag = stbif.multi_step_stbif(
             x_seq,
             self.q,
             self.acc_q,

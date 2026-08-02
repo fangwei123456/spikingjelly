@@ -16,7 +16,7 @@ except (ImportError, OSError):
     _TRITON_AVAILABLE = False
 
 from spikingjelly.activation_based import base, functional, neuron, surrogate
-from spikingjelly.activation_based.triton_kernel import spikezip_kernel
+from spikingjelly.activation_based.triton_kernel.neuron_kernel import stbif
 from spikingjelly.activation_based.ann2snn import (
     Converter,
     ModuleConverter,
@@ -999,7 +999,7 @@ def test_spikezip_stbif_triton_rounds_half_to_even(dtype):
         pos_max,
         neg_min,
     )
-    actual_multi = spikezip_kernel.multi_step_stbif(
+    actual_multi = stbif.multi_step_stbif(
         x.unsqueeze(0),
         q,
         acc_q,
