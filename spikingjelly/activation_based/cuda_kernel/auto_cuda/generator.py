@@ -630,7 +630,7 @@ def gen_backward_codes(
     :param detach_reset: 是否在 reset 分支中截断梯度传播。
     :type detach_reset: bool
 
-    :param surrogate_fuction: 提供 ``cuda_code`` 接口的替代梯度对象，用于生成脉冲函数梯度代码。
+    :param surrogate_fuction: 提供 ``cuda_codes`` 接口的替代梯度对象，用于生成脉冲函数梯度代码。
     :type surrogate_fuction: object
 
     :return: ``(codes, kernel_name, input_bp_vars)``，分别为完整反向 CUDA 源码、kernel 名称和反向计算所依赖的输入变量名列表。
@@ -665,7 +665,7 @@ def gen_backward_codes(
     :param detach_reset: Whether gradients are detached through the reset branch.
     :type detach_reset: bool
 
-    :param surrogate_fuction: Surrogate-gradient object exposing a ``cuda_code`` method for spike-gradient code generation.
+    :param surrogate_fuction: Surrogate-gradient object exposing a ``cuda_codes`` method for spike-gradient code generation.
     :type surrogate_fuction: object
 
     :return: ``(codes, kernel_name, input_bp_vars)``, i.e., full backward CUDA source, generated kernel name, and list of input variable names required by backward computation.
@@ -889,7 +889,10 @@ def gen_backward_codes(
                 const int t = index + mem_offset;
                 const float over_th = h_seq[t] - v_threshold;
     """
-    head += surrogate_fuction.cuda_code(x="over_th", y="grad_s_to_h", dtype="fp32")
+    head += surrogate_fuction.cuda_codes(
+        y="const float grad_s_to_h", x="over_th", dtype="float"
+    )
+    head += "\n"
 
     head += "        "
     if detach_reset:

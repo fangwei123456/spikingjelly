@@ -91,12 +91,12 @@ backward_codes =
                 const int t = index + mem_offset;
                 const float over_th = h_seq[t] - v_threshold;
     
-            				// start: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // start: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
             				const float sg_ATan_M_PI_2__alpha__x = ((float) 1.57079632679489661923) * 2.0f * over_th;
             				const float grad_s_to_h = 2.0f / 2.0f / (1.0f + sg_ATan_M_PI_2__alpha__x * sg_ATan_M_PI_2__alpha__x);
             
-            				// end: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // end: spikingjelly.activation_based.surrogate.ATan.cuda_codes
                 const float grad_v_to_h = 1.0f - spike_seq[t];
 
 

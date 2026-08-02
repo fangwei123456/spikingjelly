@@ -19,7 +19,8 @@ __all__ = [
     "_CapturedAutogradCtx",
     "_stash_capture_ctx",
     "_take_capture_ctx",
-    "_resolve_sg_cuda_code_fun",
+    "_surrogate_cuda_dtype",
+    "_resolve_sg_cuda_codes_fun",
     "save_cuda_codes",
     "multistep_if_ptt",
     "multistep_lif_ptt",
@@ -130,23 +131,23 @@ def _take_capture_ctx(capture_id: int) -> _CapturedAutogradCtx:
     return captured_ctx
 
 
-def _resolve_sg_cuda_code_fun(sg):
-    """
-    Resolve the ``cuda_code`` function from a surrogate gradient object.
+def _surrogate_cuda_dtype(dtype: str) -> str:
+    if dtype == "fp32":
+        return "float"
+    if dtype == "fp16":
+        return "half2"
+    raise NotImplementedError(dtype)
 
-    :param sg: The surrogate gradient function object
-    :type sg: ``surrogate.SurrogateFunctionBase``
-    :return: The ``cuda_code`` callable of the surrogate function
-    :rtype: Callable
-    :raises RuntimeError: If the surrogate function does not implement ``cuda_code``
-    """
-    sg_cuda_code_fun = getattr(sg, "cuda_code", None)
-    if sg_cuda_code_fun is None:
+
+def _resolve_sg_cuda_codes_fun(sg):
+    """Resolve the ``cuda_codes`` function from a surrogate gradient object."""
+    sg_cuda_codes_fun = getattr(sg, "cuda_codes", None)
+    if sg_cuda_codes_fun is None or not callable(sg_cuda_codes_fun):
         raise RuntimeError(
-            "The surrogate_function must have cuda_code function!"
+            "The surrogate_function must have a callable cuda_codes function. "
             "Please check the implementation of surrogate function."
         )
-    return sg_cuda_code_fun
+    return sg_cuda_codes_fun
 
 
 def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
@@ -233,7 +234,7 @@ def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
                                         f"\n// {name} bptt {sg.__name__}, decay_input={decay_input}, hard_reset={hard_reset}, dtype={dtype}, detach_reset={detach_reset}\n"
                                     )
                                     bp_codes = create_bptt_kernel(
-                                        sg().cuda_code,
+                                        sg().cuda_codes,
                                         decay_input,
                                         hard_reset,
                                         detach_reset,
@@ -251,7 +252,7 @@ def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
                                     f"\n// {name} bptt {sg.__name__}, hard_reset={hard_reset}, dtype={dtype}, detach_reset={detach_reset}\n"
                                 )
                                 bp_codes = create_bptt_kernel(
-                                    sg().cuda_code,
+                                    sg().cuda_codes,
                                     hard_reset,
                                     detach_reset,
                                     dtype,

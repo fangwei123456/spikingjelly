@@ -54,12 +54,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // start: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
             				const float sg_ATan_M_PI_2__alpha__x = ((float) 1.57079632679489661923) * 2.0f * over_th;
             				const float grad_s_to_h = 2.0f / 2.0f / (1.0f + sg_ATan_M_PI_2__alpha__x * sg_ATan_M_PI_2__alpha__x);
             
-            				// end: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // end: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
                     const float grad_v_to_h = 1.0f - spike_seq[t];
                     
@@ -90,12 +90,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // start: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
             				const float sg_ATan_M_PI_2__alpha__x = ((float) 1.57079632679489661923) * 2.0f * over_th;
             				const float grad_s_to_h = 2.0f / 2.0f / (1.0f + sg_ATan_M_PI_2__alpha__x * sg_ATan_M_PI_2__alpha__x);
             
-            				// end: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // end: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
                     const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
                     // const float grad_v_to_h = fmaf(grad_s_to_h, v_reset - h_seq[t], 1.0f - spike_seq[t]);
@@ -164,13 +164,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // start: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
             				const half2 sg_ATan_alpha =  __float2half2_rn(2.0f);
             				const half2 sg_ATan_M_PI_2__alpha__x = __hmul2(__hmul2(__float2half2_rn((float) 1.57079632679489661923), sg_ATan_alpha), over_th);
             				const half2 grad_s_to_h = __h2div(__h2div(sg_ATan_alpha, __float2half2_rn(2.0f)), __hfma2(sg_ATan_M_PI_2__alpha__x, sg_ATan_M_PI_2__alpha__x, __float2half2_rn(1.0f)));
             
-            				// end: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // end: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
                     const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq[t]);
                     
@@ -206,13 +206,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // start: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
             				const half2 sg_ATan_alpha =  __float2half2_rn(2.0f);
             				const half2 sg_ATan_M_PI_2__alpha__x = __hmul2(__hmul2(__float2half2_rn((float) 1.57079632679489661923), sg_ATan_alpha), over_th);
             				const half2 grad_s_to_h = __h2div(__h2div(sg_ATan_alpha, __float2half2_rn(2.0f)), __hfma2(sg_ATan_M_PI_2__alpha__x, sg_ATan_M_PI_2__alpha__x, __float2half2_rn(1.0f)));
             
-            				// end: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // end: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
                     const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq[t]), grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq[t]));
                     
@@ -274,12 +274,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // start: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
             				const float sg_ATan_M_PI_2__alpha__x = ((float) 1.57079632679489661923) * 2.0f * over_th;
             				const float grad_s_to_h = 2.0f / 2.0f / (1.0f + sg_ATan_M_PI_2__alpha__x * sg_ATan_M_PI_2__alpha__x);
             
-            				// end: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // end: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
                     const float grad_v_to_h = 1.0f;
                     
@@ -310,12 +310,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // start: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
             				const float sg_ATan_M_PI_2__alpha__x = ((float) 1.57079632679489661923) * 2.0f * over_th;
             				const float grad_s_to_h = 2.0f / 2.0f / (1.0f + sg_ATan_M_PI_2__alpha__x * sg_ATan_M_PI_2__alpha__x);
             
-            				// end: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // end: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
                     const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
                     // const float grad_v_to_h = fmaf(-grad_s_to_h, v_threshold, 1.0f);
@@ -380,13 +380,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // start: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
             				const half2 sg_ATan_alpha =  __float2half2_rn(2.0f);
             				const half2 sg_ATan_M_PI_2__alpha__x = __hmul2(__hmul2(__float2half2_rn((float) 1.57079632679489661923), sg_ATan_alpha), over_th);
             				const half2 grad_s_to_h = __h2div(__h2div(sg_ATan_alpha, __float2half2_rn(2.0f)), __hfma2(sg_ATan_M_PI_2__alpha__x, sg_ATan_M_PI_2__alpha__x, __float2half2_rn(1.0f)));
             
-            				// end: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // end: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
                     const half2 grad_v_to_h = __float2half2_rn(1.0f);
                     
@@ -420,13 +420,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // start: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
             				const half2 sg_ATan_alpha =  __float2half2_rn(2.0f);
             				const half2 sg_ATan_M_PI_2__alpha__x = __hmul2(__hmul2(__float2half2_rn((float) 1.57079632679489661923), sg_ATan_alpha), over_th);
             				const half2 grad_s_to_h = __h2div(__h2div(sg_ATan_alpha, __float2half2_rn(2.0f)), __hfma2(sg_ATan_M_PI_2__alpha__x, sg_ATan_M_PI_2__alpha__x, __float2half2_rn(1.0f)));
             
-            				// end: spikingjelly.activation_based.surrogate.ATan.cuda_code
+                // end: spikingjelly.activation_based.surrogate.ATan.cuda_codes
         
                     const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), __hmul2(v_threshold_half2, grad_s_to_h));
                     
@@ -488,12 +488,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
             				const float sg_Sigmoid_sigmoid_ax = 1.0f / (1.0f + expf(- 4.0f * over_th));
             				const float grad_s_to_h = (1.0f - sg_Sigmoid_sigmoid_ax) * sg_Sigmoid_sigmoid_ax * 4.0f;
             
-            				// end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
                     const float grad_v_to_h = 1.0f - spike_seq[t];
                     
@@ -524,12 +524,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
             				const float sg_Sigmoid_sigmoid_ax = 1.0f / (1.0f + expf(- 4.0f * over_th));
             				const float grad_s_to_h = (1.0f - sg_Sigmoid_sigmoid_ax) * sg_Sigmoid_sigmoid_ax * 4.0f;
             
-            				// end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
                     const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
                     // const float grad_v_to_h = fmaf(grad_s_to_h, v_reset - h_seq[t], 1.0f - spike_seq[t]);
@@ -598,13 +598,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
             				const half2 sg_Sigmoid_alpha = __float2half2_rn(4.0f);
             				const half2 sg_Sigmoid_sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2(sg_Sigmoid_alpha, over_th))), __float2half2_rn(1.0f)));
             				const half2 grad_s_to_h = __hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), sg_Sigmoid_sigmoid_ax), sg_Sigmoid_sigmoid_ax), sg_Sigmoid_alpha);
             
-            				// end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
                     const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq[t]);
                     
@@ -640,13 +640,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
             				const half2 sg_Sigmoid_alpha = __float2half2_rn(4.0f);
             				const half2 sg_Sigmoid_sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2(sg_Sigmoid_alpha, over_th))), __float2half2_rn(1.0f)));
             				const half2 grad_s_to_h = __hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), sg_Sigmoid_sigmoid_ax), sg_Sigmoid_sigmoid_ax), sg_Sigmoid_alpha);
             
-            				// end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
                     const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq[t]), grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq[t]));
                     
@@ -708,12 +708,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
             				const float sg_Sigmoid_sigmoid_ax = 1.0f / (1.0f + expf(- 4.0f * over_th));
             				const float grad_s_to_h = (1.0f - sg_Sigmoid_sigmoid_ax) * sg_Sigmoid_sigmoid_ax * 4.0f;
             
-            				// end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
                     const float grad_v_to_h = 1.0f;
                     
@@ -744,12 +744,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
             				const float sg_Sigmoid_sigmoid_ax = 1.0f / (1.0f + expf(- 4.0f * over_th));
             				const float grad_s_to_h = (1.0f - sg_Sigmoid_sigmoid_ax) * sg_Sigmoid_sigmoid_ax * 4.0f;
             
-            				// end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
                     const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
                     // const float grad_v_to_h = fmaf(-grad_s_to_h, v_threshold, 1.0f);
@@ -814,13 +814,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
             				const half2 sg_Sigmoid_alpha = __float2half2_rn(4.0f);
             				const half2 sg_Sigmoid_sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2(sg_Sigmoid_alpha, over_th))), __float2half2_rn(1.0f)));
             				const half2 grad_s_to_h = __hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), sg_Sigmoid_sigmoid_ax), sg_Sigmoid_sigmoid_ax), sg_Sigmoid_alpha);
             
-            				// end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
                     const half2 grad_v_to_h = __float2half2_rn(1.0f);
                     
@@ -854,13 +854,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // start: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
             				const half2 sg_Sigmoid_alpha = __float2half2_rn(4.0f);
             				const half2 sg_Sigmoid_sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2(sg_Sigmoid_alpha, over_th))), __float2half2_rn(1.0f)));
             				const half2 grad_s_to_h = __hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), sg_Sigmoid_sigmoid_ax), sg_Sigmoid_sigmoid_ax), sg_Sigmoid_alpha);
             
-            				// end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_code
+                // end: spikingjelly.activation_based.surrogate.Sigmoid.cuda_codes
         
                     const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), __hmul2(v_threshold_half2, grad_s_to_h));
                     
@@ -922,7 +922,7 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
             				const float sg_PiecewiseLeakyReLU_x_abs = fabsf(over_th);
             float grad_s_to_h;
@@ -935,7 +935,7 @@
                 grad_s_to_h = 1.0f;
             }
             
-            				// end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
                     const float grad_v_to_h = 1.0f - spike_seq[t];
                     
@@ -966,7 +966,7 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
             				const float sg_PiecewiseLeakyReLU_x_abs = fabsf(over_th);
             float grad_s_to_h;
@@ -979,7 +979,7 @@
                 grad_s_to_h = 1.0f;
             }
             
-            				// end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
                     const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
                     // const float grad_v_to_h = fmaf(grad_s_to_h, v_reset - h_seq[t], 1.0f - spike_seq[t]);
@@ -1048,13 +1048,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
             				const half2 sg_PiecewiseLeakyReLU_x_abs = __habs2(over_th);
             				const half2 sg_PiecewiseLeakyReLU_x_abs_ge_w = __hge2(sg_PiecewiseLeakyReLU_x_abs, __float2half2_rn(1.0f));
             				half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  sg_PiecewiseLeakyReLU_x_abs_ge_w), __hmul2(__hsub2(__float2half2_rn(1.0f), sg_PiecewiseLeakyReLU_x_abs_ge_w), __float2half2_rn(1.0f)));
             
-            				// end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
                     const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq[t]);
                     
@@ -1090,13 +1090,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
             				const half2 sg_PiecewiseLeakyReLU_x_abs = __habs2(over_th);
             				const half2 sg_PiecewiseLeakyReLU_x_abs_ge_w = __hge2(sg_PiecewiseLeakyReLU_x_abs, __float2half2_rn(1.0f));
             				half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  sg_PiecewiseLeakyReLU_x_abs_ge_w), __hmul2(__hsub2(__float2half2_rn(1.0f), sg_PiecewiseLeakyReLU_x_abs_ge_w), __float2half2_rn(1.0f)));
             
-            				// end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
                     const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq[t]), grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq[t]));
                     
@@ -1158,7 +1158,7 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
             				const float sg_PiecewiseLeakyReLU_x_abs = fabsf(over_th);
             float grad_s_to_h;
@@ -1171,7 +1171,7 @@
                 grad_s_to_h = 1.0f;
             }
             
-            				// end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
                     const float grad_v_to_h = 1.0f;
                     
@@ -1202,7 +1202,7 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
             				const float sg_PiecewiseLeakyReLU_x_abs = fabsf(over_th);
             float grad_s_to_h;
@@ -1215,7 +1215,7 @@
                 grad_s_to_h = 1.0f;
             }
             
-            				// end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
                     const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
                     // const float grad_v_to_h = fmaf(-grad_s_to_h, v_threshold, 1.0f);
@@ -1280,13 +1280,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
             				const half2 sg_PiecewiseLeakyReLU_x_abs = __habs2(over_th);
             				const half2 sg_PiecewiseLeakyReLU_x_abs_ge_w = __hge2(sg_PiecewiseLeakyReLU_x_abs, __float2half2_rn(1.0f));
             				half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  sg_PiecewiseLeakyReLU_x_abs_ge_w), __hmul2(__hsub2(__float2half2_rn(1.0f), sg_PiecewiseLeakyReLU_x_abs_ge_w), __float2half2_rn(1.0f)));
             
-            				// end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
                     const half2 grad_v_to_h = __float2half2_rn(1.0f);
                     
@@ -1320,13 +1320,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
             				const half2 sg_PiecewiseLeakyReLU_x_abs = __habs2(over_th);
             				const half2 sg_PiecewiseLeakyReLU_x_abs_ge_w = __hge2(sg_PiecewiseLeakyReLU_x_abs, __float2half2_rn(1.0f));
             				half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  sg_PiecewiseLeakyReLU_x_abs_ge_w), __hmul2(__hsub2(__float2half2_rn(1.0f), sg_PiecewiseLeakyReLU_x_abs_ge_w), __float2half2_rn(1.0f)));
             
-            				// end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.PiecewiseLeakyReLU.cuda_codes
         
                     const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), __hmul2(v_threshold_half2, grad_s_to_h));
                     
@@ -1388,13 +1388,13 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // start: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
             				const float sg_S2NN_sigmoid_ax = 1.0f / (1.0f + expf(- 4.0f * over_th));
             				const float sg_S2NN_mask_l = (float)(over_th < 0.0f);
             				const float grad_s_to_h = (1.0f - sg_S2NN_sigmoid_ax) * sg_S2NN_sigmoid_ax * 4.0f * sg_S2NN_mask_l + 1.0f / (over_th + 1.0f) * (1.0f - sg_S2NN_mask_l);
             
-            				// end: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // end: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
                     const float grad_v_to_h = 1.0f - spike_seq[t];
                     
@@ -1425,13 +1425,13 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // start: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
             				const float sg_S2NN_sigmoid_ax = 1.0f / (1.0f + expf(- 4.0f * over_th));
             				const float sg_S2NN_mask_l = (float)(over_th < 0.0f);
             				const float grad_s_to_h = (1.0f - sg_S2NN_sigmoid_ax) * sg_S2NN_sigmoid_ax * 4.0f * sg_S2NN_mask_l + 1.0f / (over_th + 1.0f) * (1.0f - sg_S2NN_mask_l);
             
-            				// end: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // end: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
                     const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
                     // const float grad_v_to_h = fmaf(grad_s_to_h, v_reset - h_seq[t], 1.0f - spike_seq[t]);
@@ -1500,14 +1500,14 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // start: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
             				const half2 sg_S2NN_alpha = __float2half2_rn(4.0f);
             				const half2 sg_S2NN_sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2(sg_S2NN_alpha, over_th))), __float2half2_rn(1.0f)));
             				const half2 sg_S2NN_mask_l = __hlt2(over_th, __float2half2_rn(0.0f));
             				const half2 grad_s_to_h = __hadd2(__hmul2(__hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), sg_S2NN_sigmoid_ax), sg_S2NN_sigmoid_ax), sg_S2NN_alpha), sg_S2NN_mask_l), __hmul2(__h2div(__float2half2_rn(1.0f), __hadd2(over_th, __float2half2_rn(1.0f))), __hsub2(__float2half2_rn(1.0f), sg_S2NN_mask_l)));
             
-            				// end: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // end: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
                     const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq[t]);
                     
@@ -1543,14 +1543,14 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // start: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
             				const half2 sg_S2NN_alpha = __float2half2_rn(4.0f);
             				const half2 sg_S2NN_sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2(sg_S2NN_alpha, over_th))), __float2half2_rn(1.0f)));
             				const half2 sg_S2NN_mask_l = __hlt2(over_th, __float2half2_rn(0.0f));
             				const half2 grad_s_to_h = __hadd2(__hmul2(__hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), sg_S2NN_sigmoid_ax), sg_S2NN_sigmoid_ax), sg_S2NN_alpha), sg_S2NN_mask_l), __hmul2(__h2div(__float2half2_rn(1.0f), __hadd2(over_th, __float2half2_rn(1.0f))), __hsub2(__float2half2_rn(1.0f), sg_S2NN_mask_l)));
             
-            				// end: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // end: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
                     const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq[t]), grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq[t]));
                     
@@ -1612,13 +1612,13 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // start: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
             				const float sg_S2NN_sigmoid_ax = 1.0f / (1.0f + expf(- 4.0f * over_th));
             				const float sg_S2NN_mask_l = (float)(over_th < 0.0f);
             				const float grad_s_to_h = (1.0f - sg_S2NN_sigmoid_ax) * sg_S2NN_sigmoid_ax * 4.0f * sg_S2NN_mask_l + 1.0f / (over_th + 1.0f) * (1.0f - sg_S2NN_mask_l);
             
-            				// end: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // end: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
                     const float grad_v_to_h = 1.0f;
                     
@@ -1649,13 +1649,13 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // start: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
             				const float sg_S2NN_sigmoid_ax = 1.0f / (1.0f + expf(- 4.0f * over_th));
             				const float sg_S2NN_mask_l = (float)(over_th < 0.0f);
             				const float grad_s_to_h = (1.0f - sg_S2NN_sigmoid_ax) * sg_S2NN_sigmoid_ax * 4.0f * sg_S2NN_mask_l + 1.0f / (over_th + 1.0f) * (1.0f - sg_S2NN_mask_l);
             
-            				// end: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // end: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
                     const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
                     // const float grad_v_to_h = fmaf(-grad_s_to_h, v_threshold, 1.0f);
@@ -1720,14 +1720,14 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // start: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
             				const half2 sg_S2NN_alpha = __float2half2_rn(4.0f);
             				const half2 sg_S2NN_sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2(sg_S2NN_alpha, over_th))), __float2half2_rn(1.0f)));
             				const half2 sg_S2NN_mask_l = __hlt2(over_th, __float2half2_rn(0.0f));
             				const half2 grad_s_to_h = __hadd2(__hmul2(__hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), sg_S2NN_sigmoid_ax), sg_S2NN_sigmoid_ax), sg_S2NN_alpha), sg_S2NN_mask_l), __hmul2(__h2div(__float2half2_rn(1.0f), __hadd2(over_th, __float2half2_rn(1.0f))), __hsub2(__float2half2_rn(1.0f), sg_S2NN_mask_l)));
             
-            				// end: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // end: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
                     const half2 grad_v_to_h = __float2half2_rn(1.0f);
                     
@@ -1761,14 +1761,14 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // start: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
             				const half2 sg_S2NN_alpha = __float2half2_rn(4.0f);
             				const half2 sg_S2NN_sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2(sg_S2NN_alpha, over_th))), __float2half2_rn(1.0f)));
             				const half2 sg_S2NN_mask_l = __hlt2(over_th, __float2half2_rn(0.0f));
             				const half2 grad_s_to_h = __hadd2(__hmul2(__hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), sg_S2NN_sigmoid_ax), sg_S2NN_sigmoid_ax), sg_S2NN_alpha), sg_S2NN_mask_l), __hmul2(__h2div(__float2half2_rn(1.0f), __hadd2(over_th, __float2half2_rn(1.0f))), __hsub2(__float2half2_rn(1.0f), sg_S2NN_mask_l)));
             
-            				// end: spikingjelly.activation_based.surrogate.S2NN.cuda_code
+                // end: spikingjelly.activation_based.surrogate.S2NN.cuda_codes
         
                     const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), __hmul2(v_threshold_half2, grad_s_to_h));
                     
@@ -1830,12 +1830,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
             				const float sg_QPseudoSpike_base = 1.0f + 2.0f / (2.0f - 1.0f) * fabsf(over_th);
             				const float grad_s_to_h = powf(sg_QPseudoSpike_base, -2.0f);
             
-            				// end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
                     const float grad_v_to_h = 1.0f - spike_seq[t];
                     
@@ -1866,12 +1866,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
             				const float sg_QPseudoSpike_base = 1.0f + 2.0f / (2.0f - 1.0f) * fabsf(over_th);
             				const float grad_s_to_h = powf(sg_QPseudoSpike_base, -2.0f);
             
-            				// end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
                     const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
                     // const float grad_v_to_h = fmaf(grad_s_to_h, v_reset - h_seq[t], 1.0f - spike_seq[t]);
@@ -1940,13 +1940,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
             				const half2 sg_QPseudoSpike_alpha = __float2half2_rn(2.0f);
             				const half2 sg_QPseudoSpike_base = __hadd2(__float2half2_rn(1.0f), __h2div(__hmul2(__float2half2_rn(2.0f), __habs2(over_th)), __hsub2(sg_QPseudoSpike_alpha, __float2half2_rn(1.0f))));
             				const half2 grad_s_to_h = h2exp2(__hmul2(h2log2(sg_QPseudoSpike_base), __hneg2(sg_QPseudoSpike_alpha))); // Replace power with combination of log and exp, since CUDA has no power function for FP16.
             
-            				// end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
                     const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq[t]);
                     
@@ -1982,13 +1982,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
             				const half2 sg_QPseudoSpike_alpha = __float2half2_rn(2.0f);
             				const half2 sg_QPseudoSpike_base = __hadd2(__float2half2_rn(1.0f), __h2div(__hmul2(__float2half2_rn(2.0f), __habs2(over_th)), __hsub2(sg_QPseudoSpike_alpha, __float2half2_rn(1.0f))));
             				const half2 grad_s_to_h = h2exp2(__hmul2(h2log2(sg_QPseudoSpike_base), __hneg2(sg_QPseudoSpike_alpha))); // Replace power with combination of log and exp, since CUDA has no power function for FP16.
             
-            				// end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
                     const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq[t]), grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq[t]));
                     
@@ -2050,12 +2050,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
             				const float sg_QPseudoSpike_base = 1.0f + 2.0f / (2.0f - 1.0f) * fabsf(over_th);
             				const float grad_s_to_h = powf(sg_QPseudoSpike_base, -2.0f);
             
-            				// end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
                     const float grad_v_to_h = 1.0f;
                     
@@ -2086,12 +2086,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
             				const float sg_QPseudoSpike_base = 1.0f + 2.0f / (2.0f - 1.0f) * fabsf(over_th);
             				const float grad_s_to_h = powf(sg_QPseudoSpike_base, -2.0f);
             
-            				// end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
                     const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
                     // const float grad_v_to_h = fmaf(-grad_s_to_h, v_threshold, 1.0f);
@@ -2156,13 +2156,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
             				const half2 sg_QPseudoSpike_alpha = __float2half2_rn(2.0f);
             				const half2 sg_QPseudoSpike_base = __hadd2(__float2half2_rn(1.0f), __h2div(__hmul2(__float2half2_rn(2.0f), __habs2(over_th)), __hsub2(sg_QPseudoSpike_alpha, __float2half2_rn(1.0f))));
             				const half2 grad_s_to_h = h2exp2(__hmul2(h2log2(sg_QPseudoSpike_base), __hneg2(sg_QPseudoSpike_alpha))); // Replace power with combination of log and exp, since CUDA has no power function for FP16.
             
-            				// end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
                     const half2 grad_v_to_h = __float2half2_rn(1.0f);
                     
@@ -2196,13 +2196,13 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // start: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
             				const half2 sg_QPseudoSpike_alpha = __float2half2_rn(2.0f);
             				const half2 sg_QPseudoSpike_base = __hadd2(__float2half2_rn(1.0f), __h2div(__hmul2(__float2half2_rn(2.0f), __habs2(over_th)), __hsub2(sg_QPseudoSpike_alpha, __float2half2_rn(1.0f))));
             				const half2 grad_s_to_h = h2exp2(__hmul2(h2log2(sg_QPseudoSpike_base), __hneg2(sg_QPseudoSpike_alpha))); // Replace power with combination of log and exp, since CUDA has no power function for FP16.
             
-            				// end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_code
+                // end: spikingjelly.activation_based.surrogate.QPseudoSpike.cuda_codes
         
                     const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), __hmul2(v_threshold_half2, grad_s_to_h));
                     
@@ -2264,12 +2264,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
             				const float sg_LeakyKReLU_mask1 = (float) (over_th >= 0.0f);
             				const float grad_s_to_h = 0.0f * (1.0f - sg_LeakyKReLU_mask1) + 1.0f * sg_LeakyKReLU_mask1;
             
-            				// end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
                     const float grad_v_to_h = 1.0f - spike_seq[t];
                     
@@ -2300,12 +2300,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
             				const float sg_LeakyKReLU_mask1 = (float) (over_th >= 0.0f);
             				const float grad_s_to_h = 0.0f * (1.0f - sg_LeakyKReLU_mask1) + 1.0f * sg_LeakyKReLU_mask1;
             
-            				// end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
                     const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
                     // const float grad_v_to_h = fmaf(grad_s_to_h, v_reset - h_seq[t], 1.0f - spike_seq[t]);
@@ -2374,12 +2374,12 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
             				const half2 sg_LeakyKReLU_mask1 = __hgeu2(over_th, __float2half2_rn(0.0f));
             				const half2 grad_s_to_h = __hfma2(__float2half2_rn(1.0f), sg_LeakyKReLU_mask1, __hmul2(__float2half2_rn(0.0f), __hsub2(__float2half2_rn(1.0f), sg_LeakyKReLU_mask1)));
             
-            				// end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
                     const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq[t]);
                     
@@ -2415,12 +2415,12 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
             				const half2 sg_LeakyKReLU_mask1 = __hgeu2(over_th, __float2half2_rn(0.0f));
             				const half2 grad_s_to_h = __hfma2(__float2half2_rn(1.0f), sg_LeakyKReLU_mask1, __hmul2(__float2half2_rn(0.0f), __hsub2(__float2half2_rn(1.0f), sg_LeakyKReLU_mask1)));
             
-            				// end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
                     const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq[t]), grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq[t]));
                     
@@ -2482,12 +2482,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
             				const float sg_LeakyKReLU_mask1 = (float) (over_th >= 0.0f);
             				const float grad_s_to_h = 0.0f * (1.0f - sg_LeakyKReLU_mask1) + 1.0f * sg_LeakyKReLU_mask1;
             
-            				// end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
                     const float grad_v_to_h = 1.0f;
                     
@@ -2518,12 +2518,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
             				const float sg_LeakyKReLU_mask1 = (float) (over_th >= 0.0f);
             				const float grad_s_to_h = 0.0f * (1.0f - sg_LeakyKReLU_mask1) + 1.0f * sg_LeakyKReLU_mask1;
             
-            				// end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
                     const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
                     // const float grad_v_to_h = fmaf(-grad_s_to_h, v_threshold, 1.0f);
@@ -2588,12 +2588,12 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
             				const half2 sg_LeakyKReLU_mask1 = __hgeu2(over_th, __float2half2_rn(0.0f));
             				const half2 grad_s_to_h = __hfma2(__float2half2_rn(1.0f), sg_LeakyKReLU_mask1, __hmul2(__float2half2_rn(0.0f), __hsub2(__float2half2_rn(1.0f), sg_LeakyKReLU_mask1)));
             
-            				// end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
                     const half2 grad_v_to_h = __float2half2_rn(1.0f);
                     
@@ -2627,12 +2627,12 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // start: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
             				const half2 sg_LeakyKReLU_mask1 = __hgeu2(over_th, __float2half2_rn(0.0f));
             				const half2 grad_s_to_h = __hfma2(__float2half2_rn(1.0f), sg_LeakyKReLU_mask1, __hmul2(__float2half2_rn(0.0f), __hsub2(__float2half2_rn(1.0f), sg_LeakyKReLU_mask1)));
             
-            				// end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_code
+                // end: spikingjelly.activation_based.surrogate.LeakyKReLU.cuda_codes
         
                     const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), __hmul2(v_threshold_half2, grad_s_to_h));
                     
@@ -2694,12 +2694,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
             				const float sg_FakeNumericalGradient_sign = (float) (over_th >= 0.0f) * 2.0f - 1.0f;
             				const float grad_s_to_h = min(sg_FakeNumericalGradient_sign / over_th, 0.3f);
             
-            				// end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
                     const float grad_v_to_h = 1.0f - spike_seq[t];
                     
@@ -2730,12 +2730,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
             				const float sg_FakeNumericalGradient_sign = (float) (over_th >= 0.0f) * 2.0f - 1.0f;
             				const float grad_s_to_h = min(sg_FakeNumericalGradient_sign / over_th, 0.3f);
             
-            				// end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
                     const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
                     // const float grad_v_to_h = fmaf(grad_s_to_h, v_reset - h_seq[t], 1.0f - spike_seq[t]);
@@ -2804,7 +2804,7 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
             				const half2 sg_FakeNumericalGradient_sign = __hfma2(__hgeu2(over_th, __float2half2_rn(0.0f)), __float2half2_rn(2.0f), __float2half2_rn(-1.0f));
             #if (__CUDA_ARCH__ < 800)
@@ -2815,7 +2815,7 @@
             				const half2 grad_s_to_h = __hmin2(__h2div(sg_FakeNumericalGradient_sign, over_th), __float2half2_rn(0.3f));
             #endif
             
-            				// end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
                     const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq[t]);
                     
@@ -2851,7 +2851,7 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
             				const half2 sg_FakeNumericalGradient_sign = __hfma2(__hgeu2(over_th, __float2half2_rn(0.0f)), __float2half2_rn(2.0f), __float2half2_rn(-1.0f));
             #if (__CUDA_ARCH__ < 800)
@@ -2862,7 +2862,7 @@
             				const half2 grad_s_to_h = __hmin2(__h2div(sg_FakeNumericalGradient_sign, over_th), __float2half2_rn(0.3f));
             #endif
             
-            				// end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
                     const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq[t]), grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq[t]));
                     
@@ -2924,12 +2924,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
             				const float sg_FakeNumericalGradient_sign = (float) (over_th >= 0.0f) * 2.0f - 1.0f;
             				const float grad_s_to_h = min(sg_FakeNumericalGradient_sign / over_th, 0.3f);
             
-            				// end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
                     const float grad_v_to_h = 1.0f;
                     
@@ -2960,12 +2960,12 @@
                         const int t = index + mem_offset;
                         const float over_th = h_seq[t] - v_threshold;
             
-            				// start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
             				const float sg_FakeNumericalGradient_sign = (float) (over_th >= 0.0f) * 2.0f - 1.0f;
             				const float grad_s_to_h = min(sg_FakeNumericalGradient_sign / over_th, 0.3f);
             
-            				// end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
                     const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
                     // const float grad_v_to_h = fmaf(-grad_s_to_h, v_threshold, 1.0f);
@@ -3030,7 +3030,7 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
             				const half2 sg_FakeNumericalGradient_sign = __hfma2(__hgeu2(over_th, __float2half2_rn(0.0f)), __float2half2_rn(2.0f), __float2half2_rn(-1.0f));
             #if (__CUDA_ARCH__ < 800)
@@ -3041,7 +3041,7 @@
             				const half2 grad_s_to_h = __hmin2(__h2div(sg_FakeNumericalGradient_sign, over_th), __float2half2_rn(0.3f));
             #endif
             
-            				// end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
                     const half2 grad_v_to_h = __float2half2_rn(1.0f);
                     
@@ -3075,7 +3075,7 @@
                     const int t = index + mem_offset;
                     const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
             
-            				// start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // start: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
             				const half2 sg_FakeNumericalGradient_sign = __hfma2(__hgeu2(over_th, __float2half2_rn(0.0f)), __float2half2_rn(2.0f), __float2half2_rn(-1.0f));
             #if (__CUDA_ARCH__ < 800)
@@ -3086,7 +3086,7 @@
             				const half2 grad_s_to_h = __hmin2(__h2div(sg_FakeNumericalGradient_sign, over_th), __float2half2_rn(0.3f));
             #endif
             
-            				// end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_code
+                // end: spikingjelly.activation_based.surrogate.FakeNumericalGradient.cuda_codes
         
                     const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), __hmul2(v_threshold_half2, grad_s_to_h));
                     

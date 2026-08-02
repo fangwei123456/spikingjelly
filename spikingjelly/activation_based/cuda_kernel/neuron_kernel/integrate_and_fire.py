@@ -8,7 +8,8 @@ from ..cuda_utils import resolve_python_object
 from .common import (
     _CapturedAutogradCtx,
     _decode_v_reset,
-    _resolve_sg_cuda_code_fun,
+    _resolve_sg_cuda_codes_fun,
+    _surrogate_cuda_dtype,
     _should_stash_capture_ctx,
     _sg_obj_id,
     _stash_capture_ctx,
@@ -165,7 +166,7 @@ def create_fptt_kernel(hard_reset: bool, dtype: str):
 
 
 def create_bptt_kernel(
-    sg_cuda_code_fun, hard_reset: bool, detach_reset: bool, dtype: str
+    sg_cuda_codes_fun, hard_reset: bool, detach_reset: bool, dtype: str
 ):
     r"""
     **API Language** - :ref:`中文 <create_bptt_kernel-cn>` | :ref:`English <create_bptt_kernel-en>`
@@ -178,8 +179,8 @@ def create_bptt_kernel(
 
     创建反向传播CUDA kernel
 
-    :param sg_cuda_code_fun: Callable that generates surrogate gradient CUDA code
-    :type sg_cuda_code_fun: ``Callable``
+    :param sg_cuda_codes_fun: Callable with the ``cuda_codes(y, x, dtype)`` signature that generates surrogate gradient CUDA code
+    :type sg_cuda_codes_fun: ``Callable``
     :param hard_reset: Whether to use hard reset mode
     :type hard_reset: bool
     :param detach_reset: Whether to detach the reset term in backward
@@ -197,11 +198,11 @@ def create_bptt_kernel(
 
     Create backward-pass CUDA kernel
 
-    :param sg_cuda_code_fun: Callable that generates surrogate gradient CUDA code
+    :param sg_cuda_codes_fun: Callable with the ``cuda_codes(y, x, dtype)`` signature that generates surrogate gradient CUDA code
     :param hard_reset: Whether to use hard reset mode
     :param detach_reset: Whether to detach the reset term in backward
     :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
-    :type sg_cuda_code_fun: ``Callable``
+    :type sg_cuda_codes_fun: ``Callable``
     :type hard_reset: bool
     :type detach_reset: bool
     :type dtype: str
@@ -210,7 +211,10 @@ def create_bptt_kernel(
     """
     kernel_name = f"IFNode_bptt_{'hard' if hard_reset else 'soft'}Reset_{'detachReset' if detach_reset else ''}_{dtype}"
 
-    code_grad_s_to_h = sg_cuda_code_fun(x="over_th", y="grad_s_to_h", dtype=dtype)
+    surrogate_dtype = _surrogate_cuda_dtype(dtype)
+    code_grad_s_to_h = sg_cuda_codes_fun(
+        y=f"{surrogate_dtype} grad_s_to_h", x="over_th", dtype=surrogate_dtype
+    )
 
     if dtype == "fp32":
         code = rf"""
@@ -487,7 +491,7 @@ def _if_backward_impl(
     h_seq: torch.Tensor,
     spike_seq_saved: torch.Tensor,
     detach_reset: bool,
-    sg_cuda_code_fun,
+    sg_cuda_codes_fun,
 ):
     if use_pad:
         grad_spike_seq = F.pad(grad_spike_seq, (0, 1))
@@ -511,7 +515,7 @@ def _if_backward_impl(
     else:
         raise NotImplementedError
 
-    kernel = create_bptt_kernel(sg_cuda_code_fun, hard_reset, detach_reset, dtype)
+    kernel = create_bptt_kernel(sg_cuda_codes_fun, hard_reset, detach_reset, dtype)
 
     with cuda_utils.DeviceEnvironment(device):
         if hard_reset:
@@ -675,7 +679,7 @@ def _if_bw(ctx, grad_spike_seq, grad_v_seq, grad_capture_token):
         h_seq=h_seq,
         spike_seq_saved=spike_seq_saved,
         detach_reset=ctx.detach_reset,
-        sg_cuda_code_fun=_resolve_sg_cuda_code_fun(sg),
+        sg_cuda_codes_fun=_resolve_sg_cuda_codes_fun(sg),
     )
     return grad_x, grad_v_init, None, None, None, None
 

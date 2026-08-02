@@ -36,7 +36,7 @@ def test_generated_ptt_cuda_source_has_no_rst_docstrings(monkeypatch):
 
     if_kernel.create_fptt_kernel(hard_reset=True, dtype="fp32")
     if_kernel.create_bptt_kernel(
-        lambda **kwargs: "const float grad_s_to_h = 0.0f;",
+        surrogate.ATan().cuda_codes,
         hard_reset=True,
         detach_reset=True,
         dtype="fp32",
@@ -53,6 +53,29 @@ def test_generated_ptt_cuda_source_has_no_rst_docstrings(monkeypatch):
             stripped_line = line.strip()
             assert stripped_line != "----"
             assert not stripped_line.startswith((".. ", "* **", ":return:", ":rtype:"))
+
+
+@pytest.mark.parametrize(
+    "surrogate_factory",
+    [
+        surrogate.Sigmoid,
+        surrogate.ATan,
+        surrogate.PiecewiseLeakyReLU,
+        surrogate.S2NN,
+        surrogate.QPseudoSpike,
+        surrogate.LeakyKReLU,
+        surrogate.FakeNumericalGradient,
+        surrogate.LogTailedReLU,
+    ],
+)
+@pytest.mark.parametrize("dtype", ["float", "half2"])
+def test_surrogates_expose_only_cuda_codes(surrogate_factory, dtype):
+    sg = surrogate_factory()
+
+    assert not hasattr(sg, "cuda_code")
+    codes = sg.cuda_codes(y=f"{dtype} grad_s", x="over_th", dtype=dtype)
+
+    assert "grad_s" in codes
 
 
 def _require_cuda():

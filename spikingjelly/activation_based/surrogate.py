@@ -8,10 +8,6 @@ import torch.nn.functional as F
 from . import quantize
 from .cuda_kernel.auto_cuda import cfunction
 
-tab4_str = "\t\t\t\t"  # used for aligning code
-curly_bracket_l = "{"
-curly_bracket_r = "}"
-
 
 def heaviside(x: torch.Tensor):
     r"""
@@ -349,23 +345,50 @@ class SurrogateFunctionBase(nn.Module):
     def primitive_function(x, **kwargs):
         raise NotImplementedError
 
-    def cuda_code(self, x: str, y: str, dtype="fp32"):
-        raise NotImplementedError
-
-    def cuda_code_start_comments(self):
-        return f"// start: spikingjelly.activation_based.surrogate.{self._get_name()}.cuda_code"
-
-    def cuda_code_end_comments(self):
-        return f"// end: spikingjelly.activation_based.surrogate.{self._get_name()}.cuda_code"
-
     def forward(self, x: torch.Tensor):
         if self.spiking:
             return self.spiking_function(x, **self._sg_params)
         else:
             return self.primitive_function(x, **self._sg_params)
 
-    def cuda_codes(self, y: str, x: str, dtype: str):
-        # new version
+    def cuda_codes(self, y: str, x: str, dtype: str) -> str:
+        r"""
+        **API Language** - :ref:`中文 <SurrogateFunctionBase.cuda_codes-cn>` | :ref:`English <SurrogateFunctionBase.cuda_codes-en>`
+
+        ----
+
+        .. _SurrogateFunctionBase.cuda_codes-cn:
+
+        * **中文**
+
+        生成替代梯度的 CUDA 代码。``y`` 可以是输出变量名，也可以包含其 CUDA 类型声明；``dtype`` 必须为 ``"float"`` 或 ``"half2"``。
+
+        :param y: 输出变量名，可包含 CUDA 类型声明
+        :type y: str
+        :param x: 输入表达式
+        :type x: str
+        :param dtype: CUDA 数据类型，``"float"`` 对应 FP32，``"half2"`` 对应 FP16
+        :type dtype: str
+        :return: 替代梯度 CUDA 语句
+        :rtype: str
+
+        ----
+
+        .. _SurrogateFunctionBase.cuda_codes-en:
+
+        * **English**
+
+        Generate CUDA code for the surrogate gradient. ``y`` may be an output variable name or include its CUDA type declaration; ``dtype`` must be ``"float"`` or ``"half2"``.
+
+        :param y: output variable name, optionally including its CUDA type declaration
+        :type y: str
+        :param x: input expression
+        :type x: str
+        :param dtype: CUDA data type, ``"float"`` for FP32 or ``"half2"`` for FP16
+        :type dtype: str
+        :return: surrogate-gradient CUDA statements
+        :rtype: str
+        """
         raise NotImplementedError
 
 
@@ -900,31 +923,6 @@ class Sigmoid(SurrogateFunctionBase):
     def backward(grad_output, x, alpha):
         return sigmoid_backward(grad_output, x, alpha)[0]
 
-    def cuda_code(self, x: str, y: str, dtype="fp32") -> str:
-        sg_name = "sg_" + self._get_name()
-        alpha = str(self.alpha) + "f"
-        code = f"""
-            {tab4_str}{self.cuda_code_start_comments()}
-        """
-
-        if dtype == "fp32":
-            code += f"""
-            {tab4_str}const float {sg_name}_sigmoid_ax = 1.0f / (1.0f + expf(- {alpha} * {x}));
-            {tab4_str}const float {y} = (1.0f - {sg_name}_sigmoid_ax) * {sg_name}_sigmoid_ax * {alpha};
-            """
-        elif dtype == "fp16":
-            code += f"""
-            {tab4_str}const half2 {sg_name}_alpha = __float2half2_rn({alpha});
-            {tab4_str}const half2 {sg_name}_sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2({sg_name}_alpha, {x}))), __float2half2_rn(1.0f)));
-            {tab4_str}const half2 {y} = __hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), {sg_name}_sigmoid_ax), {sg_name}_sigmoid_ax), {sg_name}_alpha);
-            """
-        else:
-            raise NotImplementedError
-        code += f"""
-            {tab4_str}{self.cuda_code_end_comments()}
-        """
-        return code
-
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.sigmoid_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
 
@@ -1236,9 +1234,6 @@ class SuperSpike(SurrogateFunctionBase):
     def backward(grad_output, x, alpha):
         return super_spike_backward(grad_output, x, alpha)[0]
 
-    def cuda_code(self, x: str, y: str, dtype="fp32"):
-        raise NotImplementedError
-
     def cuda_codes(self, y: str, x: str, dtype: str):
         raise NotImplementedError
 
@@ -1406,30 +1401,6 @@ class ATan(SurrogateFunctionBase):
     @staticmethod
     def backward(grad_output, x, alpha):
         return atan_backward(grad_output, x, alpha)[0]
-
-    def cuda_code(self, x: str, y: str, dtype="fp32"):
-        sg_name = "sg_" + self._get_name()
-        alpha = str(self.alpha) + "f"
-        code = f"""
-            {tab4_str}{self.cuda_code_start_comments()}
-        """
-        if dtype == "fp32":
-            code += f"""
-            {tab4_str}const float {sg_name}_M_PI_2__alpha__x = ((float) 1.57079632679489661923) * {alpha} * {x};
-            {tab4_str}const float {y} = {alpha} / 2.0f / (1.0f + {sg_name}_M_PI_2__alpha__x * {sg_name}_M_PI_2__alpha__x);
-            """
-        elif dtype == "fp16":
-            code += f"""
-            {tab4_str}const half2 {sg_name}_alpha =  __float2half2_rn({alpha});
-            {tab4_str}const half2 {sg_name}_M_PI_2__alpha__x = __hmul2(__hmul2(__float2half2_rn((float) 1.57079632679489661923), {sg_name}_alpha), {x});
-            {tab4_str}const half2 {y} = __h2div(__h2div({sg_name}_alpha, __float2half2_rn(2.0f)), __hfma2({sg_name}_M_PI_2__alpha__x, {sg_name}_M_PI_2__alpha__x, __float2half2_rn(1.0f)));
-            """
-        else:
-            raise NotImplementedError
-        code += f"""
-            {tab4_str}{self.cuda_code_end_comments()}
-        """
-        return code
 
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.atan_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
@@ -2018,41 +1989,6 @@ class PiecewiseLeakyReLU(SurrogateFunctionBase):
                 + mask2 * (x / (2 * w) + 1 / 2)
             )
 
-    def cuda_code(self, x: str, y: str, dtype="fp32"):
-        sg_name = "sg_" + self._get_name()
-        w = str(self.w) + "f"
-        w_inv = str(1.0 / self.w) + "f"
-        c = str(self.c) + "f"
-        code = f"""
-            {tab4_str}{self.cuda_code_start_comments()}
-        """
-
-        if dtype == "fp32":
-            code += f"""
-            {tab4_str}const float {sg_name}_x_abs = fabsf({x});
-            float {y};
-            if ({sg_name}_x_abs > {w})
-            {curly_bracket_l}
-                {y} = {c};
-            {curly_bracket_r}
-            else
-            {curly_bracket_l}
-                {y} = {w_inv};
-            {curly_bracket_r}
-            """
-        elif dtype == "fp16":
-            code += f"""
-            {tab4_str}const half2 {sg_name}_x_abs = __habs2({x});
-            {tab4_str}const half2 {sg_name}_x_abs_ge_w = __hge2({sg_name}_x_abs, __float2half2_rn({w}));
-            {tab4_str}half2 {y} = __hadd2(__hmul2(__float2half2_rn({c}),  {sg_name}_x_abs_ge_w), __hmul2(__hsub2(__float2half2_rn(1.0f), {sg_name}_x_abs_ge_w), __float2half2_rn({w_inv})));
-            """
-        else:
-            raise NotImplementedError
-        code += f"""
-            {tab4_str}{self.cuda_code_end_comments()}
-        """
-        return code
-
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.piecewise_leaky_relu_backward(
             y=y, x=x, w=self.w, c=self.c, dtype=dtype
@@ -2338,34 +2274,6 @@ class S2NN(SurrogateFunctionBase):
         )
         # abs and 1e-5 are used to avoid nan
 
-    def cuda_code(self, x: str, y: str, dtype="fp32"):
-        sg_name = "sg_" + self._get_name()
-        alpha = str(self.alpha) + "f"
-        beta = str(self.beta) + "f"
-        code = f"""
-            {tab4_str}{self.cuda_code_start_comments()}
-        """
-
-        if dtype == "fp32":
-            code += f"""
-            {tab4_str}const float {sg_name}_sigmoid_ax = 1.0f / (1.0f + expf(- {alpha} * {x}));
-            {tab4_str}const float {sg_name}_mask_l = (float)({x} < 0.0f);
-            {tab4_str}const float {y} = (1.0f - {sg_name}_sigmoid_ax) * {sg_name}_sigmoid_ax * {alpha} * {sg_name}_mask_l + {beta} / ({x} + 1.0f) * (1.0f - {sg_name}_mask_l);
-            """
-        elif dtype == "fp16":
-            code += f"""
-            {tab4_str}const half2 {sg_name}_alpha = __float2half2_rn({alpha});
-            {tab4_str}const half2 {sg_name}_sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2({sg_name}_alpha, {x}))), __float2half2_rn(1.0f)));
-            {tab4_str}const half2 {sg_name}_mask_l = __hlt2({x}, __float2half2_rn(0.0f));
-            {tab4_str}const half2 {y} = __hadd2(__hmul2(__hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), {sg_name}_sigmoid_ax), {sg_name}_sigmoid_ax), {sg_name}_alpha), {sg_name}_mask_l), __hmul2(__h2div(__float2half2_rn({beta}), __hadd2({x}, __float2half2_rn(1.0f))), __hsub2(__float2half2_rn(1.0f), {sg_name}_mask_l)));
-            """
-        else:
-            raise NotImplementedError
-        code += f"""
-            {tab4_str}{self.cuda_code_end_comments()}
-        """
-        return code
-
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.s2nn_backward(
             y=y, x=x, alpha=self.alpha, beta=self.beta, dtype=dtype
@@ -2506,31 +2414,6 @@ class QPseudoSpike(SurrogateFunctionBase):
         return mask_nonnegative - mask_sign * (
             0.5 * ((1.0 + 2.0 / (alpha - 1.0) * x * mask_sign).pow_(1.0 - alpha))
         )
-
-    def cuda_code(self, x: str, y: str, dtype="fp32"):
-        sg_name = "sg_" + self._get_name()
-        alpha = str(self.alpha) + "f"
-        code = f"""
-            {tab4_str}{self.cuda_code_start_comments()}
-        """
-
-        if dtype == "fp32":
-            code += f"""
-            {tab4_str}const float {sg_name}_base = 1.0f + 2.0f / ({alpha} - 1.0f) * fabsf({x});
-            {tab4_str}const float {y} = powf({sg_name}_base, -{alpha});
-            """
-        elif dtype == "fp16":
-            code += f"""
-            {tab4_str}const half2 {sg_name}_alpha = __float2half2_rn({alpha});
-            {tab4_str}const half2 {sg_name}_base = __hadd2(__float2half2_rn(1.0f), __h2div(__hmul2(__float2half2_rn(2.0f), __habs2({x})), __hsub2({sg_name}_alpha, __float2half2_rn(1.0f))));
-            {tab4_str}const half2 {y} = h2exp2(__hmul2(h2log2({sg_name}_base), __hneg2({sg_name}_alpha))); // Replace power with combination of log and exp, since CUDA has no power function for FP16.
-            """
-        else:
-            raise NotImplementedError
-        code += f"""
-            {tab4_str}{self.cuda_code_end_comments()}
-        """
-        return code
 
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.q_pseudo_spike_backward(
@@ -2754,31 +2637,6 @@ class LeakyKReLU(SurrogateFunctionBase):
 
         return f(x, self.leak, self.k)
 
-    def cuda_code(self, x: str, y: str, dtype="fp32"):
-        sg_name = "sg_" + self._get_name()
-        leak = str(self.leak) + "f"
-        k = str(self.k) + "f"
-        code = f"""
-            {tab4_str}{self.cuda_code_start_comments()}
-        """
-
-        if dtype == "fp32":
-            code += f"""
-            {tab4_str}const float {sg_name}_mask1 = (float) ({x} >= 0.0f);
-            {tab4_str}const float {y} = {leak} * (1.0f - {sg_name}_mask1) + {k} * {sg_name}_mask1;
-            """
-        elif dtype == "fp16":
-            code += f"""
-            {tab4_str}const half2 {sg_name}_mask1 = __hgeu2({x}, __float2half2_rn(0.0f));
-            {tab4_str}const half2 {y} = __hfma2(__float2half2_rn({k}), {sg_name}_mask1, __hmul2(__float2half2_rn({leak}), __hsub2(__float2half2_rn(1.0f), {sg_name}_mask1)));
-            """
-        else:
-            raise NotImplementedError
-        code += f"""
-            {tab4_str}{self.cuda_code_end_comments()}
-        """
-        return code
-
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.leaky_k_relu_backward(
             y=y, x=x, leak=self.leak, k=self.k, dtype=dtype
@@ -2930,36 +2788,6 @@ class FakeNumericalGradient(SurrogateFunctionBase):
     @staticmethod
     def backward(grad_output, x, alpha):
         return fake_numerical_gradient_backward(grad_output, x, alpha)[0]
-
-    def cuda_code(self, x: str, y: str, dtype="fp32"):
-        sg_name = "sg_" + self._get_name()
-        alpha = str(self.alpha) + "f"
-        code = f"""
-            {tab4_str}{self.cuda_code_start_comments()}
-        """
-
-        if dtype == "fp32":
-            code += f"""
-            {tab4_str}const float {sg_name}_sign = (float) ({x} >= 0.0f) * 2.0f - 1.0f;
-            {tab4_str}const float {y} = min({sg_name}_sign / {x}, {alpha});
-            """
-        elif dtype == "fp16":
-            code += f"""
-            {tab4_str}const half2 {sg_name}_sign = __hfma2(__hgeu2({x}, __float2half2_rn(0.0f)), __float2half2_rn(2.0f), __float2half2_rn(-1.0f));
-            #if (__CUDA_ARCH__ < 800)
-            {tab4_str}const half2 {sg_name}_grad_x = __h2div({sg_name}_sign, {x});
-            {tab4_str}const half2 {sg_name}_grad_max = __float2half2_rn({alpha});
-            {tab4_str}const half2 {y} = make_half2({sg_name}_grad_x.x <= {sg_name}_grad_max.x ? {sg_name}_grad_x.x : {sg_name}_grad_max.x, {sg_name}_grad_x.y <= {sg_name}_grad_max.y ? {sg_name}_grad_x.y : {sg_name}_grad_max.y);
-            #else
-            {tab4_str}const half2 {y} = __hmin2(__h2div({sg_name}_sign, {x}), __float2half2_rn({alpha}));
-            #endif
-            """
-        else:
-            raise NotImplementedError
-        code += f"""
-            {tab4_str}{self.cuda_code_end_comments()}
-        """
-        return code
 
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.fake_numerical_gradient_backward(
@@ -3164,56 +2992,6 @@ class LogTailedReLU(SurrogateFunctionBase):
     @staticmethod
     def backward(grad_output, x, alpha):
         return log_tailed_relu_backward(grad_output, x, alpha)[0]
-
-    def cuda_code(self, x: str, y: str, dtype="fp32"):
-        sg_name = "sg_" + self._get_name()
-        alpha = str(self.alpha) + "f"
-        code = f"""
-            {tab4_str}{self.cuda_code_start_comments()}
-        """
-
-        if dtype == "fp32":
-            code += f"""
-            {tab4_str}float {y} = 0.0f;
-            {tab4_str}if({x} <= 0.0f)
-            {tab4_str}{curly_bracket_l}{y} = {alpha};{curly_bracket_r}
-            {tab4_str}else if({x} <= 1.0f)
-            {tab4_str}{curly_bracket_l}{y} = 1.0f;{curly_bracket_r}
-            {tab4_str}else
-            {tab4_str}{curly_bracket_l}{y} = 1.0f / {x};{curly_bracket_r}
-            """
-        elif dtype == "fp16":
-            code += f"""
-            {tab4_str}const half {sg_name}_alpha = __float2half_rn({alpha});
-
-            {tab4_str}half {sg_name}_{y}_low;
-            {tab4_str}const half {sg_name}_{x}_low = __low2half({x});
-            {tab4_str}if(__hle({sg_name}_{x}_low, __float2half_rn(0.0f)))
-            {tab4_str}{curly_bracket_l}{sg_name}_{y}_low = {sg_name}_alpha;{curly_bracket_r}
-            {tab4_str}else if(__hle({sg_name}_{x}_low, __float2half_rn(1.0f)))
-            {tab4_str}{curly_bracket_l}{sg_name}_{y}_low = __float2half_rn(1.0f);{curly_bracket_r}
-            {tab4_str}else
-            {tab4_str}{curly_bracket_l}{sg_name}_{y}_low = __hdiv(__float2half_rn(1.0f), {sg_name}_{x}_low);{curly_bracket_r}
-
-            {tab4_str}half {sg_name}_{y}_high;
-            {tab4_str}const half {sg_name}_{x}_high = __high2half({x});
-            {tab4_str}if(__hle({sg_name}_{x}_high, __float2half_rn(0.0f)))
-            {tab4_str}{curly_bracket_l}{sg_name}_{y}_high = {sg_name}_alpha;{curly_bracket_r}
-            {tab4_str}else if(__hle({sg_name}_{x}_high, __float2half_rn(1.0f)))
-            {tab4_str}{curly_bracket_l}{sg_name}_{y}_high = __float2half_rn(1.0f);{curly_bracket_r}
-            {tab4_str}else
-            {tab4_str}{curly_bracket_l}{sg_name}_{y}_high = __hdiv(__float2half_rn(1.0f), {sg_name}_{x}_high);{curly_bracket_r}
-
-
-            {tab4_str}const half2 {y} = __halves2half2({sg_name}_{y}_low, {sg_name}_{y}_high);
-
-            """
-        else:
-            raise NotImplementedError
-        code += f"""
-            {tab4_str}{self.cuda_code_end_comments()}
-        """
-        return code
 
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.log_tailed_relu_backward(
