@@ -37,6 +37,89 @@ def test_surrogates_expose_only_cuda_codes(surrogate_factory, dtype):
     assert "grad_s" in codes
 
 
+@pytest.mark.parametrize(
+    "surrogate_factory",
+    [
+        surrogate.Sigmoid,
+        surrogate.ATan,
+        surrogate.PiecewiseLeakyReLU,
+        surrogate.S2NN,
+        surrogate.QPseudoSpike,
+        surrogate.LeakyKReLU,
+        surrogate.FakeNumericalGradient,
+        surrogate.LogTailedReLU,
+    ],
+)
+@pytest.mark.parametrize(
+    ("dtype", "input_size"),
+    [("float", 1), ("half2", 2)],
+    ids=["float", "half2"],
+)
+def test_surrogate_cuda_codes_compile(surrogate_factory, dtype, input_size):
+    _require_cuda()
+    cupy = pytest.importorskip("cupy")
+
+    sg = surrogate_factory()
+    codes = sg.cuda_codes(y=f"{dtype} result", x="over_th", dtype=dtype)
+    source = f"""
+    #include <cuda_fp16.h>
+    extern "C" __global__ void generated(
+        const {dtype}* x, {dtype}* y
+    ) {{
+        const int index = threadIdx.x;
+        if (index == 0) {{
+            {dtype} over_th = x[index];
+            {codes}
+            y[index] = result;
+        }}
+    }}
+    """
+
+    kernel = cupy.RawKernel(source, "generated")
+    cupy_dtype = cupy.float32 if dtype == "float" else cupy.float16
+    x = cupy.asarray([0.25] * input_size, dtype=cupy_dtype)
+    y = cupy.empty_like(x)
+    kernel((1,), (1,), (x, y))
+    cupy.cuda.Stream.null.synchronize()
+
+
+@pytest.mark.parametrize("dtype", ["float", "half2"])
+def test_log_tailed_relu_cuda_codes_match_definition(dtype):
+    _require_cuda()
+    cupy = pytest.importorskip("cupy")
+
+    alpha = 0.25
+    values = [-0.5, 0.5, 1.0, 2.0, 4.0, -1.0]
+    expected = [alpha, 1.0, 1.0, 0.5, 0.25, alpha]
+    sg = surrogate.LogTailedReLU(alpha=alpha)
+    codes = sg.cuda_codes(y=f"{dtype} result", x="over_th", dtype=dtype)
+    source = f"""
+    #include <cuda_fp16.h>
+    extern "C" __global__ void generated(
+        const {dtype}* x, {dtype}* y
+    ) {{
+        const int index = blockIdx.x * blockDim.x + threadIdx.x;
+        {dtype} over_th = x[index];
+        {codes}
+        y[index] = result;
+    }}
+    """
+
+    kernel = cupy.RawKernel(source, "generated")
+    cupy_dtype = cupy.float32 if dtype == "float" else cupy.float16
+    x = cupy.asarray(values, dtype=cupy_dtype)
+    y = cupy.empty_like(x)
+    element_count = len(values) // (2 if dtype == "half2" else 1)
+    kernel((element_count,), (1,), (x, y))
+    cupy.cuda.Stream.null.synchronize()
+    cupy.testing.assert_allclose(
+        y,
+        cupy.asarray(expected, dtype=cupy_dtype),
+        rtol=1e-3,
+        atol=1e-3,
+    )
+
+
 @pytest.mark.parametrize("context_factory", [torch.no_grad, torch.inference_mode])
 def test_capture_token_skips_context_stash_without_grad(context_factory):
     from spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step import (

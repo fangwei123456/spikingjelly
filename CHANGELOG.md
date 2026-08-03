@@ -119,6 +119,17 @@ Module: `spikingjelly.activation_based.triton_kernel.neuron_kernel`.
 - Fixed gradients for non-contiguous upstream tensors in stable multi-step
   IF/LIF/ParametricLIF kernels.
 
+#### Surrogate CUDA Code Generation
+
+Module: `spikingjelly.activation_based.cuda_kernel.auto_cuda`.
+
+- Fixed `LogTailedReLU` `cuda_codes` for `dtype="half2"`: previously produced
+  non-compiling CUDA because `if_else_else` mixed scalar and vector half
+  intrinsics, `constant` rendered integer inputs as invalid C++ literals,
+  and the binary selector formula accumulated rather than selecting.
+  The half2 and float paths now compile and produce the documented
+  piecewise gradient.
+
 #### Timing-Based Neurons
 
 Module: `spikingjelly.timing_based.neuron`.

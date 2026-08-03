@@ -14,6 +14,7 @@ def float2half2(y: Optional[str], x: str):
 
 
 def constant(y: Optional[str], x: float, dtype: str):
+    x = float(x)
     if dtype == "float":
         codes = f"{x}f"
     elif dtype == "half2":
@@ -60,11 +61,15 @@ def if_else(z: Optional[str], x: str, y: str, mask: str, dtype: str):
 def if_else_else(
     w: Optional[str], x: str, y: str, z: str, mask_x: str, mask_y: str, dtype: str
 ):
-    # w = mask_x * x + mask_y * y + (1. - mask_x * mask_y) * z
+    # Caller-supplied mask_x and mask_y are binary {0, 1} selectors produced by
+    # greater_equal / greater_than. With mutually exclusive masks, the select
+    # form below picks exactly one of x, y, z.
     if dtype == "float":
-        codes = f"{mask_x} * {x} + {mask_y} * {y} + (1. - {mask_x} * {mask_y}) * {z}"
+        codes = f"{mask_x} * {x} + {mask_y} * {y} + (1.0f - {mask_x} - {mask_y}) * {z}"
+    elif dtype == "half2":
+        codes = f"__hadd2(__hadd2(__hmul2({mask_x}, {x}), __hmul2({mask_y}, {y})), __hmul2({z}, __hsub2(__hsub2(__float2half2_rn(1.0f), {mask_x}), {mask_y})))"
     else:
-        codes = f"__hadd2(__hadd2(__hmul2({mask_x}, {x}), __hmul2({mask_y}, {y})), __hmul2({z}, __hsub2(__float2half_rn(1.0f), __hmul2({mask_x}, {mask_y}))))"
+        raise NotImplementedError(dtype)
 
     return wrap_return_codes(w, codes)
 
@@ -388,14 +393,16 @@ def fake_numerical_gradient_backward(y: str, x: str, alpha: float, dtype: str):
 
 def log_tailed_relu_backward(y: str, x: str, alpha: float, dtype: str):
     alpha = constant(None, alpha, dtype)
+    mask_le0 = "log_tailed_relu_backward__mask_le0"
+    mask_gt1 = "log_tailed_relu_backward__mask_gt1"
     codes = greater_equal(
-        z=f"const {dtype} log_tailed_relu_backward__mask_le0",
+        z=f"const {dtype} {mask_le0}",
         x=constant(None, 0.0, dtype),
         y=x,
         dtype=dtype,
     )
     codes += greater_than(
-        z=f"const {dtype} log_tailed_relu_backward__mask_gt1",
+        z=f"const {dtype} {mask_gt1}",
         x=x,
         y=constant(None, 1, dtype),
         dtype=dtype,
@@ -405,8 +412,8 @@ def log_tailed_relu_backward(y: str, x: str, alpha: float, dtype: str):
         x=alpha,
         y=div(z=None, x=constant(None, 1.0, dtype), y=x, dtype=dtype),
         z=constant(None, 1.0, dtype),
-        mask_x=f"const {dtype} log_tailed_relu_backward__mask_le0",
-        mask_y=f"const {dtype} log_tailed_relu_backward__mask_gt1",
+        mask_x=mask_le0,
+        mask_y=mask_gt1,
         dtype=dtype,
     )
     return codes
