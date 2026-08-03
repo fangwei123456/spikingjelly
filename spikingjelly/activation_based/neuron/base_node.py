@@ -202,10 +202,6 @@ class BaseNode(base.MemoryModule):
         # Lava conversion reads this instance value so callers can tune its scale.
         self.lava_s_cale = 1 << 6
 
-        # used for cupy backend
-        self.forward_kernel = None
-        self.backward_kernel = None
-
         # Kept empty for compatibility; compiled graphs live in inductor_cache.
         self._inductor_compiled_graphs = {}
 

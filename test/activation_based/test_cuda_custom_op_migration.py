@@ -3,56 +3,15 @@ import os
 
 import pytest
 import torch
+
 from spikingjelly import configure
-from spikingjelly.activation_based import surrogate
-from spikingjelly.activation_based.cuda_kernel import (
-    multistep_eif_ptt,
-    multistep_izhikevich_ptt,
-    multistep_qif_ptt,
-)
+from spikingjelly.activation_based import functional, surrogate
 from spikingjelly.activation_based.cuda_kernel.cuda_utils import (
     register_python_object,
     resolve_python_object,
 )
-from spikingjelly.activation_based.cuda_kernel.neuron_kernel import (
-    integrate_and_fire as if_kernel,
-)
-from spikingjelly.activation_based.cuda_kernel.neuron_kernel import lif as lif_kernel
 from spikingjelly.activation_based.cuda_kernel.spike_op import spike_linear
 from spikingjelly.activation_based.cuda_kernel.tensor_cache import BoolTensorCache
-
-
-def test_generated_ptt_cuda_source_has_no_rst_docstrings(monkeypatch):
-    captured_codes = []
-
-    class CupyStub:
-        @staticmethod
-        def RawKernel(code, kernel_name, **kwargs):
-            captured_codes.append(code)
-            return kernel_name
-
-    monkeypatch.setattr(if_kernel, "cupy", CupyStub)
-    monkeypatch.setattr(lif_kernel, "cupy", CupyStub)
-
-    if_kernel.create_fptt_kernel(hard_reset=True, dtype="fp32")
-    if_kernel.create_bptt_kernel(
-        surrogate.ATan().cuda_codes,
-        hard_reset=True,
-        detach_reset=True,
-        dtype="fp32",
-    )
-    lif_kernel.create_fptt_kernel(
-        decay_input=True,
-        hard_reset=True,
-        dtype="fp32",
-    )
-
-    assert len(captured_codes) == 3
-    for code in captured_codes:
-        for line in code.splitlines():
-            stripped_line = line.strip()
-            assert stripped_line != "----"
-            assert not stripped_line.startswith((".. ", "* **", ":return:", ":rtype:"))
 
 
 @pytest.mark.parametrize(
@@ -76,6 +35,27 @@ def test_surrogates_expose_only_cuda_codes(surrogate_factory, dtype):
     codes = sg.cuda_codes(y=f"{dtype} grad_s", x="over_th", dtype=dtype)
 
     assert "grad_s" in codes
+
+
+@pytest.mark.parametrize("context_factory", [torch.no_grad, torch.inference_mode])
+def test_capture_token_skips_context_stash_without_grad(context_factory):
+    from spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step import (
+        runtime,
+    )
+
+    input_tensor = torch.ones(1, requires_grad=True)
+    captured_ctx = runtime._CapturedAutogradCtx()
+    with runtime._CAPTURE_CTX_LOCK:
+        before_ids = set(runtime._CAPTURE_CTX_BY_ID)
+
+    with context_factory():
+        token = runtime._capture_token(
+            captured_ctx, (input_tensor,), torch.device("cpu")
+        )
+
+    assert token.item() == -1
+    with runtime._CAPTURE_CTX_LOCK:
+        assert set(runtime._CAPTURE_CTX_BY_ID) == before_ids
 
 
 def _require_cuda():
@@ -144,77 +124,80 @@ def test_spike_linear_backward_no_bias_cuda():
     assert weight.grad is not None
 
 
-@pytest.mark.parametrize(
-    "kernel_fn,args_builder",
-    [
-        (
-            multistep_qif_ptt,
-            lambda sg: (
-                2.0,
-                1.0,
-                0.0,
-                0.0,
-                0.8,
-                1.0,
-                False,
-                sg,
-            ),
-        ),
-        (
-            multistep_eif_ptt,
-            lambda sg: (
-                2.0,
-                1.0,
-                0.0,
-                0.0,
-                -52.0,
-                2.0,
-                False,
-                sg,
-            ),
-        ),
-        (
-            multistep_izhikevich_ptt,
-            lambda sg: (
-                torch.zeros(64, device="cuda", requires_grad=True),
-                2.0,
-                1.0,
-                0.0,
-                -65.0,
-                0.02,
-                0.2,
-                30.0,
-                30.0,
-                1.0,
-                False,
-                sg,
-            ),
-        ),
-    ],
-)
-def test_multistep_ptt_wrappers_cuda_forward_backward(kernel_fn, args_builder):
+@pytest.mark.parametrize("kind", ["qif", "eif", "izhikevich"])
+def test_nonlinear_functional_cupy_forward_backward(kind):
     _require_cuda()
     _require_cupy()
     _maybe_skip_custom_op_unavailable()
 
     sg = surrogate.ATan()
-    x_seq = torch.randn(4, 64, device="cuda", requires_grad=True)
+    x_seq = (torch.randn(4, 64, device="cuda") * 0.2).requires_grad_(True)
     v_init = torch.zeros(64, device="cuda", requires_grad=True)
 
-    if kernel_fn is multistep_izhikevich_ptt:
-        args = args_builder(sg)
-        w_init = args[0]
-        other = args[1:]
-        spike_seq, v_seq, w_seq = kernel_fn(x_seq, v_init, w_init, *other)
-        loss = spike_seq.mean() + v_seq.mean() + w_seq.mean()
+    if kind == "qif":
+        spike_seq, v_next, v_seq = functional.qif_multi_step_cupy(
+            x_seq=x_seq,
+            v=v_init,
+            tau=2.5,
+            v_threshold=0.9,
+            v_reset=-0.3,
+            v_rest=-0.2,
+            v_c=0.4,
+            a0=0.6,
+            detach_reset=True,
+            surrogate_function=sg,
+            store_v_seq=True,
+        )
+    elif kind == "eif":
+        spike_seq, v_next, v_seq = functional.eif_multi_step_cupy(
+            x_seq=x_seq,
+            v=v_init,
+            tau=2.5,
+            v_threshold=0.9,
+            v_reset=-0.3,
+            v_rest=-0.2,
+            theta_rh=0.4,
+            delta_t=0.7,
+            detach_reset=True,
+            surrogate_function=sg,
+            store_v_seq=True,
+        )
     else:
-        spike_seq, v_seq = kernel_fn(x_seq, v_init, *args_builder(sg))
-        loss = spike_seq.mean() + v_seq.mean()
+        w_init = torch.zeros(64, device="cuda", requires_grad=True)
+        spike_seq, v_next, w_next, v_seq, w_seq = functional.izhikevich_multi_step_cupy(
+            x_seq=x_seq,
+            v=v_init,
+            w=w_init,
+            tau=2.5,
+            v_threshold=0.9,
+            v_reset=-0.3,
+            v_rest=-0.2,
+            a=0.1,
+            b=0.2,
+            tau_w=3.0,
+            v_c=0.4,
+            a0=0.6,
+            detach_reset=True,
+            surrogate_function=sg,
+            store_state_seq=True,
+        )
+        assert w_seq is not None
+        torch.testing.assert_close(w_next, w_seq[-1])
+
+    assert spike_seq.shape == x_seq.shape
+    assert v_seq is not None
+    torch.testing.assert_close(v_next, v_seq[-1])
+
+    loss = spike_seq.mean() + v_seq.mean()
+    if kind == "izhikevich":
+        loss = loss + w_seq.mean()
 
     loss.backward()
 
     assert x_seq.grad is not None
     assert v_init.grad is not None
+    if kind == "izhikevich":
+        assert w_init.grad is not None
 
 
 def test_disable_cupy_custom_op_env_fallback():

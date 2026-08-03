@@ -7,7 +7,7 @@ than being a Python loop over ``*_step``.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 import torch
 
@@ -1436,8 +1436,8 @@ def if_step_cupy(
     v: torch.Tensor,
     v_threshold: float,
     v_reset: Optional[float],
-    forward_kernel: Any,
-    backward_kernel: Any,
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     r"""
     **API Language** - :ref:`中文 <if_step_cupy-cn>` | :ref:`English <if_step_cupy-en>`
@@ -1448,9 +1448,9 @@ def if_step_cupy(
 
     * **中文**
 
-    使用调用方已选定的 CuPy kernel 执行 IF 单步状态转移。函数接受标准 shape
-    的 tensor，并在调用底层 kernel 时自行展平和恢复 shape；它不负责 backend
-    选择或 kernel 缓存。
+    使用 CuPy kernel 执行 IF 单步状态转移。输入必须是 CUDA 上的 ``float32``
+    或 ``float16`` 张量，替代梯度函数必须提供可调用的 ``cuda_codes`` 属性。
+    函数自行选择并缓存 kernel，并在调用底层 kernel 时展平和恢复 shape。
 
     :param x: 当前 CUDA 输入张量，shape 为 ``[N, *]``
     :type x: torch.Tensor
@@ -1460,12 +1460,14 @@ def if_step_cupy(
     :type v_threshold: float
     :param v_reset: 重置电压；``None`` 表示 soft reset
     :type v_reset: Optional[float]
-    :param forward_kernel: 调用方已创建的 IF CuPy forward kernel
-    :type forward_kernel: Any
-    :param backward_kernel: 调用方已创建的 IF CuPy backward kernel
-    :type backward_kernel: Any
+    :param surrogate_function: 替代梯度函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否分离 reset 分支中的 spike
+    :type detach_reset: bool
     :return: ``(spike, v_next)``，两者 shape 均与 ``x`` 相同
     :rtype: Tuple[torch.Tensor, torch.Tensor]
+    :raises TypeError: ``surrogate_function.cuda_codes`` 不可调用
+    :raises NotImplementedError: 输入 dtype 不受支持
 
     ----
 
@@ -1473,10 +1475,10 @@ def if_step_cupy(
 
     * **English**
 
-    Run one IF state transition with caller-selected CuPy kernels. The function
-    accepts tensors in their standard shape and handles flattening and shape
-    restoration around the low-level kernel. It does not select a backend or
-    cache kernels.
+    Run one IF state transition with CuPy kernels. Inputs must be CUDA
+    ``float32`` or ``float16`` tensors, and the surrogate function must expose
+    callable ``cuda_codes``. The function selects and caches kernels and handles
+    flattening and shape restoration around the low-level kernel.
 
     :param x: Current CUDA input tensor shaped ``[N, *]``
     :type x: torch.Tensor
@@ -1486,27 +1488,29 @@ def if_step_cupy(
     :type v_threshold: float
     :param v_reset: Reset voltage; ``None`` means soft reset
     :type v_reset: Optional[float]
-    :param forward_kernel: Caller-created IF CuPy forward kernel
-    :type forward_kernel: Any
-    :param backward_kernel: Caller-created IF CuPy backward kernel
-    :type backward_kernel: Any
+    :param surrogate_function: Surrogate-gradient function
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach spike in the reset branch
+    :type detach_reset: bool
     :return: ``(spike, v_next)``, both shaped like ``x``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
+    :raises TypeError: ``surrogate_function.cuda_codes`` is not callable
+    :raises NotImplementedError: The input dtype is unsupported
 
     .. seealso::
 
        独立多步形式 / Independent multi-step form:
        :func:`if_multi_step_cupy`.
     """
-    from ..cuda_kernel.auto_cuda import ss_neuron_kernel
+    from ..cuda_kernel.neuron_kernel.single_step.integrate_and_fire import if_step
 
-    spike, v_next = ss_neuron_kernel.ss_if_step(
+    spike, v_next = if_step(
         x.flatten(),
         v.flatten(),
         v_threshold,
         v_reset,
-        forward_kernel,
-        backward_kernel,
+        surrogate_function,
+        detach_reset,
     )
     return spike.reshape_as(x), v_next.reshape_as(v)
 
@@ -1515,10 +1519,11 @@ def lif_step_cupy(
     x: torch.Tensor,
     v: torch.Tensor,
     tau: float,
+    decay_input: bool,
     v_threshold: float,
     v_reset: Optional[float],
-    forward_kernel: Any,
-    backward_kernel: Any,
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     r"""
     **API Language** - :ref:`中文 <lif_step_cupy-cn>` | :ref:`English <lif_step_cupy-en>`
@@ -1529,9 +1534,9 @@ def lif_step_cupy(
 
     * **中文**
 
-    使用调用方已选定的 CuPy kernel 执行 LIF 单步状态转移。``forward_kernel``
-    已包含 ``decay_input`` 配置；函数接受标准 shape 的 tensor，并在调用底层
-    kernel 时自行展平和恢复 shape。
+    使用 CuPy kernel 执行 LIF 单步状态转移。输入必须是 CUDA 上的 ``float32``
+    或 ``float16`` 张量，替代梯度函数必须提供可调用的 ``cuda_codes`` 属性。
+    函数自行选择并缓存 kernel，并在调用底层 kernel 时展平和恢复 shape。
 
     :param x: 当前 CUDA 输入张量，shape 为 ``[N, *]``
     :type x: torch.Tensor
@@ -1539,16 +1544,20 @@ def lif_step_cupy(
     :type v: torch.Tensor
     :param tau: 膜电位时间常数
     :type tau: float
+    :param decay_input: 输入是否参与衰减
+    :type decay_input: bool
     :param v_threshold: 脉冲阈值
     :type v_threshold: float
     :param v_reset: 重置电压；``None`` 表示 soft reset
     :type v_reset: Optional[float]
-    :param forward_kernel: 调用方已创建的 LIF CuPy forward kernel
-    :type forward_kernel: Any
-    :param backward_kernel: 调用方已创建的 LIF CuPy backward kernel
-    :type backward_kernel: Any
+    :param surrogate_function: 替代梯度函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否分离 reset 分支中的 spike
+    :type detach_reset: bool
     :return: ``(spike, v_next)``，两者 shape 均与 ``x`` 相同
     :rtype: Tuple[torch.Tensor, torch.Tensor]
+    :raises TypeError: ``surrogate_function.cuda_codes`` 不可调用
+    :raises NotImplementedError: 输入 dtype 不受支持
 
     ----
 
@@ -1556,10 +1565,10 @@ def lif_step_cupy(
 
     * **English**
 
-    Run one LIF state transition with caller-selected CuPy kernels. The
-    ``forward_kernel`` already contains the ``decay_input`` configuration. The
-    function accepts tensors in their standard shape and handles flattening and
-    shape restoration around the low-level kernel.
+    Run one LIF state transition with CuPy kernels. Inputs must be CUDA
+    ``float32`` or ``float16`` tensors, and the surrogate function must expose
+    callable ``cuda_codes``. The function selects and caches kernels and handles
+    flattening and shape restoration around the low-level kernel.
 
     :param x: Current CUDA input tensor shaped ``[N, *]``
     :type x: torch.Tensor
@@ -1567,32 +1576,37 @@ def lif_step_cupy(
     :type v: torch.Tensor
     :param tau: Membrane time constant
     :type tau: float
+    :param decay_input: Whether the input participates in decay
+    :type decay_input: bool
     :param v_threshold: Spike threshold
     :type v_threshold: float
     :param v_reset: Reset voltage; ``None`` means soft reset
     :type v_reset: Optional[float]
-    :param forward_kernel: Caller-created LIF CuPy forward kernel
-    :type forward_kernel: Any
-    :param backward_kernel: Caller-created LIF CuPy backward kernel
-    :type backward_kernel: Any
+    :param surrogate_function: Surrogate-gradient function
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach spike in the reset branch
+    :type detach_reset: bool
     :return: ``(spike, v_next)``, both shaped like ``x``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
+    :raises TypeError: ``surrogate_function.cuda_codes`` is not callable
+    :raises NotImplementedError: The input dtype is unsupported
 
     .. seealso::
 
        独立多步形式 / Independent multi-step form:
        :func:`lif_multi_step_cupy`.
     """
-    from ..cuda_kernel.auto_cuda import ss_neuron_kernel
+    from ..cuda_kernel.neuron_kernel.single_step.lif import lif_step
 
-    spike, v_next = ss_neuron_kernel.ss_lif_step(
+    spike, v_next = lif_step(
         x.flatten(),
         v.flatten(),
         v_threshold,
         v_reset,
         1.0 / tau,
-        forward_kernel,
-        backward_kernel,
+        decay_input,
+        surrogate_function,
+        detach_reset,
     )
     return spike.reshape_as(x), v_next.reshape_as(v)
 
@@ -1615,11 +1629,14 @@ def if_multi_step_cupy(
 
     * **中文**
 
-    使用 CuPy kernel 执行 IF 多步状态转移，不进行通用 backend 分发。
+    使用 CuPy kernel 执行 IF 多步状态转移，不进行通用 backend 分发。输入必须是
+    CUDA 上的 ``float32`` 或 ``float16`` 张量，并且替代梯度函数必须提供可调用的
+    ``cuda_codes`` 属性。运行时需要安装 CuPy。
 
     :param x_seq: 输入序列，shape 为 ``[T, N, *]``
     :type x_seq: torch.Tensor
-    :param v: 已物化的初始膜电位
+    :param v: 与 ``x_seq`` device、dtype 相同的初始膜电位，shape 为
+        ``x_seq.shape[1:]``
     :type v: torch.Tensor
     :param v_threshold: 脉冲阈值
     :type v_threshold: float
@@ -1633,6 +1650,8 @@ def if_multi_step_cupy(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises TypeError: ``surrogate_function.cuda_codes`` 不可调用
+    :raises NotImplementedError: 输入 dtype 不受支持
 
     ----
 
@@ -1641,7 +1660,9 @@ def if_multi_step_cupy(
     * **English**
 
     Run an IF multi-step state transition with the CuPy kernel without generic
-    backend dispatch.
+    backend dispatch. Inputs must be CUDA ``float32`` or ``float16`` tensors,
+    and the surrogate function must expose callable ``cuda_codes``. CuPy is
+    required at runtime.
 
     :param x_seq: Input sequence shaped ``[T, N, *]``
     :type x_seq: torch.Tensor
@@ -1659,15 +1680,19 @@ def if_multi_step_cupy(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises TypeError: ``surrogate_function.cuda_codes`` is not callable
+    :raises NotImplementedError: The input dtype is unsupported
 
     .. seealso::
 
        单步状态方程 / Single-step state equation: :func:`if_step`.
        CuPy 单步形式 / CuPy single-step form: :func:`if_step_cupy`.
     """
-    from ..cuda_kernel.auto_cuda import neuron_kernel
+    from ..cuda_kernel.neuron_kernel.multi_step.integrate_and_fire import (
+        if_multi_step,
+    )
 
-    spike_seq, v_seq = neuron_kernel.multistep_if(
+    spike_seq, v_seq = if_multi_step(
         x_seq.flatten(1),
         v.flatten(),
         v_threshold,
@@ -1700,7 +1725,9 @@ def lif_multi_step_cupy(
 
     * **中文**
 
-    使用 CuPy kernel 执行 LIF 多步状态转移，不进行通用 backend 分发。
+    使用 CuPy kernel 执行 LIF 多步状态转移，不进行通用 backend 分发。输入必须是
+    CUDA 上的 ``float32`` 或 ``float16`` 张量，并且替代梯度函数必须提供可调用的
+    ``cuda_codes`` 属性。运行时需要安装 CuPy。
 
     :param x_seq: 输入序列，shape 为 ``[T, N, *]``
     :type x_seq: torch.Tensor
@@ -1722,6 +1749,8 @@ def lif_multi_step_cupy(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises TypeError: ``surrogate_function.cuda_codes`` 不可调用
+    :raises NotImplementedError: 输入 dtype 不受支持
 
     ----
 
@@ -1730,7 +1759,9 @@ def lif_multi_step_cupy(
     * **English**
 
     Run a LIF multi-step state transition with the CuPy kernel without generic
-    backend dispatch.
+    backend dispatch. Inputs must be CUDA ``float32`` or ``float16`` tensors,
+    and the surrogate function must expose callable ``cuda_codes``. CuPy is
+    required at runtime.
 
     :param x_seq: Input sequence shaped ``[T, N, *]``
     :type x_seq: torch.Tensor
@@ -1752,15 +1783,17 @@ def lif_multi_step_cupy(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises TypeError: ``surrogate_function.cuda_codes`` is not callable
+    :raises NotImplementedError: The input dtype is unsupported
 
     .. seealso::
 
        单步状态方程 / Single-step state equation: :func:`lif_step`.
        CuPy 单步形式 / CuPy single-step form: :func:`lif_step_cupy`.
     """
-    from ..cuda_kernel.auto_cuda import neuron_kernel
+    from ..cuda_kernel.neuron_kernel.multi_step.lif import lif_multi_step
 
-    spike_seq, v_seq = neuron_kernel.multistep_lif(
+    spike_seq, v_seq = lif_multi_step(
         x_seq.flatten(1),
         v.flatten(),
         decay_input,
@@ -1796,6 +1829,8 @@ def plif_multi_step_cupy(
     * **中文**
 
     使用 CuPy kernel 执行 PLIF 多步状态转移；``w`` 与 torch/Inductor 接口语义一致。
+    输入必须是 CUDA 上的 ``float32`` 或 ``float16`` 张量，并且替代梯度函数必须
+    提供可调用的 ``cuda_codes`` 属性。运行时需要安装 CuPy。
 
     :param x_seq: 输入序列，shape 为 ``[T, N, *]``
     :type x_seq: torch.Tensor
@@ -1817,6 +1852,8 @@ def plif_multi_step_cupy(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises TypeError: ``surrogate_function.cuda_codes`` 不可调用
+    :raises NotImplementedError: 输入 dtype 不受支持
 
     ----
 
@@ -1825,7 +1862,9 @@ def plif_multi_step_cupy(
     * **English**
 
     Run a PLIF multi-step state transition with the CuPy kernel. ``w`` has the
-    same semantics as in the torch and Inductor interfaces.
+    same semantics as in the torch and Inductor interfaces. Inputs must be CUDA
+    ``float32`` or ``float16`` tensors, and the surrogate function must expose
+    callable ``cuda_codes``. CuPy is required at runtime.
 
     :param x_seq: Input sequence shaped ``[T, N, *]``
     :type x_seq: torch.Tensor
@@ -1847,14 +1886,16 @@ def plif_multi_step_cupy(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises TypeError: ``surrogate_function.cuda_codes`` is not callable
+    :raises NotImplementedError: The input dtype is unsupported
 
     .. seealso::
 
        单步状态方程 / Single-step state equation: :func:`plif_step`.
     """
-    from ..cuda_kernel.auto_cuda import neuron_kernel
+    from ..cuda_kernel.neuron_kernel.multi_step.plif import plif_multi_step
 
-    spike_seq, v_seq = neuron_kernel.multistep_plif(
+    spike_seq, v_seq = plif_multi_step(
         x_seq.flatten(1),
         v.flatten(),
         w.sigmoid().to(x_seq),
@@ -1958,9 +1999,9 @@ def qif_multi_step_cupy(
 
        单步形式 / Single-step form: :func:`qif_step`.
     """
-    from .. import cuda_kernel
+    from ..cuda_kernel.neuron_kernel.multi_step.qif import qif_multi_step
 
-    spike_seq, v_seq = cuda_kernel.multistep_qif_ptt(
+    spike_seq, v_seq = qif_multi_step(
         x_seq.flatten(1),
         v.flatten(0),
         tau,
@@ -2066,9 +2107,9 @@ def eif_multi_step_cupy(
 
        单步形式 / Single-step form: :func:`eif_step`.
     """
-    from .. import cuda_kernel
+    from ..cuda_kernel.neuron_kernel.multi_step.eif import eif_multi_step
 
-    spike_seq, v_seq = cuda_kernel.multistep_eif_ptt(
+    spike_seq, v_seq = eif_multi_step(
         x_seq.flatten(1),
         v.flatten(0),
         tau,
@@ -2120,11 +2161,13 @@ def izhikevich_multi_step_cupy(
     使用已选定的 CuPy kernel 执行 Izhikevich 多步状态转移，显式接收和返回膜电位
     ``v`` 与适应变量 ``w``。
 
-    :param x_seq: CUDA 输入序列，shape 为 ``[T, N, *]``
+    :param x_seq: ``float32`` CUDA 输入序列，shape 为 ``[T, N, *]``
     :type x_seq: torch.Tensor
-    :param v: 已物化的初始膜电位
+    :param v: 与 ``x_seq`` 位于同一 CUDA device 的 ``float32`` 初始膜电位，
+        shape 为 ``x_seq.shape[1:]``
     :type v: torch.Tensor
-    :param w: 已物化的初始适应变量
+    :param w: 与 ``x_seq`` 位于同一 CUDA device 的 ``float32`` 初始适应变量，
+        shape 与 ``v`` 相同
     :type w: torch.Tensor
     :param tau: 膜电位时间常数
     :type tau: float
@@ -2136,13 +2179,13 @@ def izhikevich_multi_step_cupy(
     :type v_rest: float
     :param a: 适应变量的恢复系数
     :type a: float
-    :param b: 适应变量对膜电位的敏感系数
+    :param b: 脉冲触发的适应变量增量
     :type b: float
     :param tau_w: 适应变量时间常数
     :type tau_w: float
     :param v_c: 临界电位
     :type v_c: float
-    :param a0: reset 时适应变量的增量
+    :param a0: 膜电位动力学的二次项系数
     :type a0: float
     :param detach_reset: 是否分离 reset 分支中的 spike
     :type detach_reset: bool
@@ -2152,6 +2195,8 @@ def izhikevich_multi_step_cupy(
     :type store_state_seq: bool
     :return: ``(spike_seq, v_next, w_next, v_seq_or_none, w_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]
+    :raises NotImplementedError: 当输入 dtype 不是 ``float32`` 时抛出
+    :raises ValueError: 当输入 device 或 shape 不一致时抛出
 
     ----
 
@@ -2163,11 +2208,13 @@ def izhikevich_multi_step_cupy(
     CuPy kernel, explicitly receiving and returning membrane voltage ``v`` and
     adaptation state ``w``.
 
-    :param x_seq: CUDA input sequence shaped ``[T, N, *]``
+    :param x_seq: ``float32`` CUDA input sequence shaped ``[T, N, *]``
     :type x_seq: torch.Tensor
-    :param v: Materialized initial membrane voltage
+    :param v: ``float32`` initial membrane voltage on the same CUDA device as
+        ``x_seq``, shaped as ``x_seq.shape[1:]``
     :type v: torch.Tensor
-    :param w: Materialized initial adaptation state
+    :param w: ``float32`` initial adaptation state on the same CUDA device as
+        ``x_seq`` and with the same shape as ``v``
     :type w: torch.Tensor
     :param tau: Membrane time constant
     :type tau: float
@@ -2179,13 +2226,13 @@ def izhikevich_multi_step_cupy(
     :type v_rest: float
     :param a: Adaptation recovery coefficient
     :type a: float
-    :param b: Adaptation sensitivity to membrane voltage
+    :param b: Spike-triggered adaptation increment
     :type b: float
     :param tau_w: Adaptation time constant
     :type tau_w: float
     :param v_c: Critical voltage
     :type v_c: float
-    :param a0: Adaptation increment on reset
+    :param a0: Quadratic coefficient in the membrane-voltage dynamics
     :type a0: float
     :param detach_reset: Whether to detach spike in the reset branch
     :type detach_reset: bool
@@ -2195,14 +2242,41 @@ def izhikevich_multi_step_cupy(
     :type store_state_seq: bool
     :return: ``(spike_seq, v_next, w_next, v_seq_or_none, w_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]
+    :raises NotImplementedError: If the input dtype is not ``float32``
+    :raises ValueError: If the input devices or shapes are inconsistent
 
     .. seealso::
 
        单步形式 / Single-step form: :func:`izhikevich_step`.
     """
-    from .. import cuda_kernel
+    for name, tensor in (("x_seq", x_seq), ("v", v), ("w", w)):
+        if tensor.dtype != torch.float32:
+            raise NotImplementedError(
+                "izhikevich_multi_step_cupy requires float32 inputs, but "
+                f"{name} has dtype {tensor.dtype}."
+            )
+    if not x_seq.is_cuda:
+        raise ValueError("x_seq, v, and w must be CUDA tensors.")
+    if v.device != x_seq.device or w.device != x_seq.device:
+        raise ValueError("x_seq, v, and w must be on the same CUDA device.")
+    if x_seq.ndim < 2:
+        raise ValueError("x_seq must have at least 2 dimensions shaped [T, N, *].")
+    if v.shape != x_seq.shape[1:]:
+        raise ValueError(
+            "v must have shape x_seq.shape[1:] "
+            f"(={tuple(x_seq.shape[1:])}), got {tuple(v.shape)}."
+        )
+    if w.shape != v.shape:
+        raise ValueError(
+            f"w must have the same shape as v (={tuple(v.shape)}), "
+            f"got {tuple(w.shape)}."
+        )
 
-    spike_seq, v_seq, w_seq = cuda_kernel.multistep_izhikevich_ptt(
+    from ..cuda_kernel.neuron_kernel.multi_step.izhikevich import (
+        izhikevich_multi_step,
+    )
+
+    spike_seq, v_seq, w_seq = izhikevich_multi_step(
         x_seq.flatten(1),
         v.flatten(0),
         w.flatten(0),

@@ -19,6 +19,35 @@ except BaseException as e:
     cupy = None
 
 
+_INT32_MAX = np.iinfo(np.int32).max
+
+
+def _as_cupy_int32(value: int, name: str):
+    if not (-_INT32_MAX - 1 <= value <= _INT32_MAX):
+        raise OverflowError(
+            f"{name}={value} exceeds int32 range required by CUDA kernel launch metadata."
+        )
+    return cupy.asarray(value, dtype=np.int32)
+
+
+def _scalar_to_cupy(py_dict: dict, ref: str):
+    device = py_dict[ref].get_device()
+    dtype = py_dict[ref].dtype
+
+    with DeviceEnvironment(device):
+        for key, value in py_dict.items():
+            if isinstance(value, float):
+                if dtype == torch.float32:
+                    value = cupy.asarray(value, dtype=np.float32)
+                elif dtype == torch.float16:
+                    value = cupy.asarray([value, value], dtype=np.float16)
+                else:
+                    raise NotImplementedError(dtype)
+                py_dict[key] = value
+            elif isinstance(value, int):
+                py_dict[key] = _as_cupy_int32(value, key)
+
+
 try:
     _CUSTOM_OP_AVAILABLE = all(
         hasattr(torch.library, name)

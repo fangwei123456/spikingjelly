@@ -12,7 +12,7 @@ spikingjelly.activation_based.cuda_kernel.auto_cuda package
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel
+.. automodule:: spikingjelly.activation_based.cuda_kernel.auto_cuda.generator
    :members:
    :undoc-members:
    :show-inheritance:

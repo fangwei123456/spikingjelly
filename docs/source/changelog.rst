@@ -114,13 +114,6 @@ Modules: ``spikingjelly.activation_based.functional``,
 - Fixed time-last containers advancing stateful modules through stateless
   vectorization and preserved tuple outputs from sequence-to-ANN forwarding.
 
-CUDA Neuron Kernels
-^^^^^^^^^^^^^^^^^^^
-
-Module: ``spikingjelly.activation_based.cuda_kernel.neuron_kernel``.
-
-- Fixed generated FP32 IF/LIF CUDA source containing invalid RST fragments.
-
 Learning
 ^^^^^^^^
 
@@ -153,6 +146,19 @@ Module: ``spikingjelly.timing_based.neuron``.
 
 Improvements
 ~~~~~~~~~~~~
+
+CuPy Neuron Backend
+^^^^^^^^^^^^^^^^^^^
+
+Modules: ``spikingjelly.activation_based.neuron``,
+``spikingjelly.activation_based.functional``,
+``spikingjelly.activation_based.cuda_kernel``.
+
+- Consolidated built-in CuPy execution under functional APIs and
+  ``backend="cupy"`` dispatch; removed duplicate ``neuron_cupy`` and
+  ``neuron_cupy_lite`` paths.
+- Moved concrete kernels to ``cuda_kernel.neuron_kernel``, organized by
+  single-step and multi-step role; ``auto_cuda`` now contains only code generation.
 
 Neuron Backend Caches
 ^^^^^^^^^^^^^^^^^^^^^
@@ -200,6 +206,22 @@ Surrogate CUDA Code API Changes
 Module: ``spikingjelly.activation_based.surrogate``.
 
 - Removed the redundant ``SurrogateFunctionBase.cuda_code()`` interface. Implement and call ``cuda_codes(y, x, dtype)`` for surrogate-gradient CUDA code generation; ``dtype`` is ``"float"`` or ``"half2"``.
+
+CuPy Neuron Backend API Changes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Modules: ``spikingjelly.activation_based.functional`` and
+``spikingjelly.activation_based.cuda_kernel``.
+
+- Removed ``spikingjelly.activation_based.neuron_cupy`` and
+  ``spikingjelly.activation_based.neuron_cupy_lite``; use functional CuPy APIs or
+  neuron-node ``backend="cupy"`` dispatch.
+- Moved custom-kernel imports from
+  ``spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel`` to
+  ``spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step``.
+- ``if_step_cupy`` now takes ``(x, v, v_threshold, v_reset, surrogate_function, detach_reset=False)`` and
+  ``lif_step_cupy`` takes ``(x, v, tau, decay_input, v_threshold, v_reset, surrogate_function, detach_reset=False)``;
+  caller-created forward/backward kernels are no longer accepted.
 
 ANN-to-SNN API Changes
 ^^^^^^^^^^^^^^^^^^^^^^

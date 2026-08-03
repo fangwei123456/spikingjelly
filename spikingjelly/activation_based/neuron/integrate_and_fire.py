@@ -8,14 +8,6 @@ from .. import base, functional, surrogate
 from .base_node import BaseNode, NonSpikingBaseNode, SimpleBaseNode
 
 try:
-    from ..cuda_kernel.auto_cuda import neuron_kernel as ac_neuron_kernel
-    from ..cuda_kernel.auto_cuda import ss_neuron_kernel as ss_ac_neuron_kernel
-except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.neuron: {e}")
-    ac_neuron_kernel = None
-    ss_ac_neuron_kernel = None
-
-try:
     from .. import triton_kernel
     from ..triton_kernel.neuron_kernel import (
         activation_aware_if as activation_aware_if_triton_kernel,
@@ -324,19 +316,17 @@ class IFNode(BaseNode):
                 return super().multi_step_forward(x_seq)
             elif self.backend == "cupy":
                 self.v_float_to_tensor(x_seq[0])
-                spike_seq, v_seq = ac_neuron_kernel.multistep_if(
-                    x_seq=x_seq.flatten(1),
-                    v_init=self.v.flatten(0),
-                    v_threshold=self.v_threshold,
-                    v_reset=self.v_reset,
-                    detach_reset=self.detach_reset,
-                    surrogate_function=self.surrogate_function,
+                spike_seq, self.v, v_seq = functional.if_multi_step_cupy(
+                    x_seq,
+                    self.v,
+                    self.v_threshold,
+                    self.v_reset,
+                    self.surrogate_function,
+                    self.detach_reset,
+                    self.store_v_seq,
                 )
-                spike_seq = spike_seq.reshape(x_seq.shape)
-                v_seq = v_seq.reshape(x_seq.shape)
                 if self.store_v_seq:
                     self.v_seq = v_seq
-                self.v = v_seq[-1].clone()
                 return spike_seq
             elif self.backend == "triton":
                 self.v_float_to_tensor(x_seq[0])
@@ -383,21 +373,17 @@ class IFNode(BaseNode):
                     self.v = v_out
                 return spike_seq
             elif self.backend == "cupy":
-                spike_seq, v_seq = ac_neuron_kernel.multistep_if(
-                    x_seq=x_seq.flatten(1),
-                    v_init=self.v.flatten(0),
-                    v_threshold=self.v_threshold,
-                    v_reset=self.v_reset,
-                    detach_reset=self.detach_reset,
-                    surrogate_function=self.surrogate_function,
+                spike_seq, self.v, v_seq = functional.if_multi_step_cupy(
+                    x_seq,
+                    self.v,
+                    self.v_threshold,
+                    self.v_reset,
+                    self.surrogate_function,
+                    self.detach_reset,
+                    self.store_v_seq,
                 )
-                spike_seq = spike_seq.reshape(x_seq.shape)
-                v_seq = v_seq.reshape(x_seq.shape)
                 if self.store_v_seq:
                     self.v_seq = v_seq
-                    self.v = v_seq[-1]
-                else:
-                    self.v = v_seq[-1].clone()
                 return spike_seq
 
             # torch backend:
@@ -419,52 +405,15 @@ class IFNode(BaseNode):
             if self.backend == "torch":
                 return super().single_step_forward(x)
             elif self.backend == "cupy":
-                hard_reset = self.v_reset is not None
-                if x.dtype == torch.float:
-                    dtype = "float"
-                elif x.dtype == torch.half:
-                    dtype = "half2"
-                else:
-                    raise NotImplementedError(x.dtype)
-
-                if (
-                    self.forward_kernel is None
-                    or not self.forward_kernel.check_attributes(
-                        hard_reset=hard_reset, dtype=dtype
-                    )
-                ):
-                    self.forward_kernel = ss_ac_neuron_kernel.IFNodeFPKernel(
-                        hard_reset=hard_reset, dtype=dtype
-                    )
-
-                if (
-                    self.backward_kernel is None
-                    or not self.backward_kernel.check_attributes(
-                        surrogate_function=self.surrogate_function.cuda_codes,
-                        hard_reset=hard_reset,
-                        detach_reset=self.detach_reset,
-                        dtype=dtype,
-                    )
-                ):
-                    self.backward_kernel = ss_ac_neuron_kernel.IFNodeBPKernel(
-                        surrogate_function=self.surrogate_function.cuda_codes,
-                        hard_reset=hard_reset,
-                        detach_reset=self.detach_reset,
-                        dtype=dtype,
-                    )
-
                 self.v_float_to_tensor(x)
-                spike, v = ss_ac_neuron_kernel.ss_if_step(
-                    x.flatten(0),
-                    self.v.flatten(0),
+                spike, self.v = functional.if_step_cupy(
+                    x,
+                    self.v,
                     self.v_threshold,
                     self.v_reset,
-                    self.forward_kernel,
-                    self.backward_kernel,
+                    self.surrogate_function,
+                    self.detach_reset,
                 )
-                spike = spike.reshape(x.shape)
-                v = v.reshape(x.shape)
-                self.v = v
                 return spike
             else:
                 raise ValueError(self.backend)

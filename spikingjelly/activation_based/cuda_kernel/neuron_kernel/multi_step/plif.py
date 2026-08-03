@@ -1,22 +1,22 @@
+import math
 from typing import Callable, Optional
 
 import torch
 
-from .common import (
+from ..... import configure
+from .... import surrogate
+from ... import cuda_utils
+from ...auto_cuda import base as auto_cuda_base, cfunction
+from .base import (
+    _dtype_to_cupy_kernel_dtype,
+    cupy,
+    prepare_forward_meta,
     NeuronBPTTKernel,
     NeuronFPTTKernel,
-    _dtype_to_cupy_kernel_dtype,
-    _surrogate_cuda_codes_from_id,
-    base,
-    cfunction,
-    configure,
-    cuda_utils,
-    cupy,
-    math,
-    prepare_forward_meta,
-    resolve_sg_cupy_id,
-    scalar_to_cupy,
-    surrogate,
+)
+from ..surrogate_registry import (
+    _cuda_codes_callable,
+    _resolve_cuda_code_id,
 )
 
 
@@ -135,14 +135,14 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
 
     @property
     def pre_core(self):
-        codes = base.CodeTyper(16)
+        codes = auto_cuda_base.CodeTyper(16)
         codes.append("sdata[threadIdx.x] = 0.0f;")
         return super().pre_core + "\n" + codes.codes
 
     @property
     def core(self):
-        core_codes = base.CodeTyper(18)
-        with base.CodeBlock(core_codes):
+        core_codes = auto_cuda_base.CodeTyper(18)
+        with auto_cuda_base.CodeBlock(core_codes):
             if self.decay_input:
                 core_codes.append(
                     cfunction.sub(
@@ -276,7 +276,7 @@ def _get_plif_backward_kernel(
     if kernel is None:
         kernel = ParametricLIFNodeBPTTKernel(
             decay_input=decay_input,
-            surrogate_function=_surrogate_cuda_codes_from_id(sg_cupy_id),
+            surrogate_function=_cuda_codes_callable(sg_cupy_id, dtype),
             hard_reset=hard_reset,
             detach_reset=detach_reset,
             dtype=dtype,
@@ -440,7 +440,7 @@ def cupy_multistep_plif_backward(
         "grad_decay": torch.zeros_like(decay, dtype=torch.float),
         "v_v_seq": v_v_seq,
     }
-    scalar_to_cupy(py_dict, ref="grad_spike_seq")
+    cuda_utils._scalar_to_cupy(py_dict, ref="grad_spike_seq")
     if py_dict["v_reset"] is None:
         py_dict.pop("v_reset")
     backward_kernel((blocks,), (threads,), py_dict)
@@ -496,7 +496,7 @@ torch.library.register_autograd(
 )
 
 
-def multistep_plif(
+def plif_multi_step(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     decay: torch.Tensor,
@@ -506,91 +506,9 @@ def multistep_plif(
     detach_reset: bool,
     surrogate_function: surrogate.SurrogateFunctionBase,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    r"""
-    **API Language** - :ref:`中文 <multistep_plif-cn>` | :ref:`English <multistep_plif-en>`
-
-    ----
-
-    .. _multistep_plif-cn:
-
-    * **中文**
-
-    使用 CuPy 后端执行多步 Parametric LIF 神经元前向与反向计算，返回脉冲序列与膜电位序列。
-    该接口使用 ``torch.library`` 自定义算子路径执行。
-
-    ``decay`` 为可训练参数，通常满足 :math:`\tau = 1 / decay`。当 ``decay_input=True`` 时，充电项对输入衰减；
-    否则按标准 PLIF 形式更新膜电位。``v_reset=None`` 表示 soft reset，否则为 hard reset。
-
-    :param x_seq: 输入序列，shape 通常为 ``[T, N, *]``
-    :type x_seq: torch.Tensor
-
-    :param v_init: 初始膜电位，shape 通常为 ``[N, *]``
-    :type v_init: torch.Tensor
-
-    :param decay: 衰减参数张量（可训练）
-    :type decay: torch.Tensor
-
-    :param decay_input: 是否对输入项进行衰减
-    :type decay_input: bool
-
-    :param v_threshold: 放电阈值
-    :type v_threshold: float
-
-    :param v_reset: 重置电位。``None`` 表示 soft reset
-    :type v_reset: Optional[float]
-
-    :param detach_reset: 反向传播时是否截断 reset 分支梯度
-    :type detach_reset: bool
-
-    :param surrogate_function: 反向传播使用的替代梯度函数
-    :type surrogate_function: surrogate.SurrogateFunctionBase
-
-    :return: ``(s_seq, v_seq)``，分别为脉冲序列与每步膜电位
-    :rtype: tuple[torch.Tensor, torch.Tensor]
-
-    ----
-
-    .. _multistep_plif-en:
-
-    * **English**
-
-    Run multi-step Parametric LIF forward/backward computation with the CuPy backend and return
-    spike sequences and membrane potentials. This API executes via the ``torch.library``
-    custom-op path.
-
-    ``decay`` is a learnable decay parameter and is usually related to :math:`\tau` by
-    :math:`\tau = 1 / decay`. When ``decay_input=True``, the input term is decayed during charging;
-    otherwise the standard PLIF update rule is used. ``v_reset=None`` indicates soft reset, otherwise
-    hard reset is applied.
-
-    :param x_seq: Input sequence, typically with shape ``[T, N, *]``
-    :type x_seq: torch.Tensor
-
-    :param v_init: Initial membrane potential, typically with shape ``[N, *]``
-    :type v_init: torch.Tensor
-
-    :param decay: Decay parameter tensor (learnable)
-    :type decay: torch.Tensor
-
-    :param decay_input: Whether to decay the input term during charging
-    :type decay_input: bool
-
-    :param v_threshold: Firing threshold
-    :type v_threshold: float
-
-    :param v_reset: Reset potential. ``None`` means soft reset
-    :type v_reset: Optional[float]
-
-    :param detach_reset: Whether to detach reset-branch gradients in backward
-    :type detach_reset: bool
-
-    :param surrogate_function: Surrogate gradient function used in backward
-    :type surrogate_function: surrogate.SurrogateFunctionBase
-
-    :return: ``(s_seq, v_seq)``, spike sequence and per-step membrane potential sequence
-    :rtype: tuple[torch.Tensor, torch.Tensor]
-    """
-    sg_cupy_id = resolve_sg_cupy_id(surrogate_function)
+    sg_cupy_id = _resolve_cuda_code_id(
+        surrogate_function, _dtype_to_cupy_kernel_dtype(x_seq.dtype)
+    )
     soft_reset = v_reset is None
     v_reset_value = 0.0 if v_reset is None else float(v_reset)
     s_seq, v_seq, _ = cupy_multistep_plif_forward(

@@ -1,16 +1,9 @@
-import logging
 from typing import Optional
 
 import torch
 
-from .. import surrogate
+from .. import functional, surrogate
 from .base_node import BaseNode
-
-try:
-    from .. import cuda_kernel
-except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.neuron: {e}")
-    cuda_kernel = None
 
 
 __all__ = ["AdaptBaseNode", "IzhikevichNode"]
@@ -420,10 +413,10 @@ class IzhikevichNode(AdaptBaseNode):
         elif self.backend == "cupy":
             self.v_float_to_tensor(x_seq[0])
             self.w_float_to_tensor(x_seq[0])
-            spike_seq, v_seq, w_seq = cuda_kernel.multistep_izhikevich_ptt(
-                x_seq.flatten(1),
-                self.v.flatten(0),
-                self.w.flatten(0),
+            spike_seq, self.v, self.w, v_seq, _ = functional.izhikevich_multi_step_cupy(
+                x_seq,
+                self.v,
+                self.w,
                 self.tau,
                 self.v_threshold,
                 self.v_reset,
@@ -435,18 +428,10 @@ class IzhikevichNode(AdaptBaseNode):
                 self.a0,
                 self.detach_reset,
                 self.surrogate_function,
+                self.store_v_seq,
             )
-
-            spike_seq = spike_seq.reshape(x_seq.shape)
-            v_seq = v_seq.reshape(x_seq.shape)
-            w_seq = w_seq.reshape(x_seq.shape)
-
             if self.store_v_seq:
                 self.v_seq = v_seq
-
-            self.v = v_seq[-1].clone()
-            self.w = w_seq[-1].clone()
-
             return spike_seq
         else:
             raise ValueError(self.backend)

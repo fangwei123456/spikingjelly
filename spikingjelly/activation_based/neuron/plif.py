@@ -9,12 +9,6 @@ from .. import functional, surrogate
 from .base_node import BaseNode
 
 try:
-    from ..cuda_kernel.auto_cuda import neuron_kernel as ac_neuron_kernel
-except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.neuron: {e}")
-    ac_neuron_kernel = None
-
-try:
     from .. import triton_kernel
 except BaseException as e:
     logging.info(f"spikingjelly.activation_based.neuron: {e}")
@@ -210,21 +204,19 @@ class ParametricLIFNode(BaseNode):
             return super().multi_step_forward(x_seq)
         elif self.backend == "cupy":
             self.v_float_to_tensor(x_seq[0])
-            spike_seq, v_seq = ac_neuron_kernel.multistep_plif(
-                x_seq=x_seq.flatten(1),
-                v_init=self.v.flatten(0),
-                decay=self.w.sigmoid().to(x_seq),
-                decay_input=self.decay_input,
-                v_threshold=self.v_threshold,
-                v_reset=self.v_reset,
-                detach_reset=self.detach_reset,
-                surrogate_function=self.surrogate_function,
+            spike_seq, self.v, v_seq = functional.plif_multi_step_cupy(
+                x_seq,
+                self.v,
+                self.w,
+                self.decay_input,
+                self.v_threshold,
+                self.v_reset,
+                self.surrogate_function,
+                self.detach_reset,
+                self.store_v_seq,
             )
-            spike_seq = spike_seq.reshape(x_seq.shape)
-            v_seq = v_seq.reshape(x_seq.shape)
             if self.store_v_seq:
                 self.v_seq = v_seq
-            self.v = v_seq[-1].clone()
             return spike_seq
         elif self.backend == "triton":
             self.v_float_to_tensor(x_seq[0])
