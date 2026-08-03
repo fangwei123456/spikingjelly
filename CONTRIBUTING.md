@@ -69,6 +69,12 @@ Please format your code before committing.
 1. Make sure that [uv](https://docs.astral.sh/uv/getting-started/installation/) is installed.
 2. Run `uv format` at the project root.
 
+3. Run `uv run python tools/check_logging_policy.py` when changing production
+   diagnostics. Framework code must use the `spikingjelly` logger, must not
+   configure the root logger or create handlers, and must not use f-strings in
+   logging calls. Do not add logging to forward, time-step, dispatch, or kernel
+   hot paths.
+
 ### Pull Request Guidelines
 
 - Keep PRs focused on a single issue or feature.

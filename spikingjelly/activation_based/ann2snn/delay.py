@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 import warnings
 from typing import Dict, Iterable, List, Optional, Tuple, Union
 
@@ -13,6 +14,7 @@ from spikingjelly.activation_based.ann2snn.modules import (
     VoltageScaler,
 )
 from spikingjelly.activation_based.neuron.base_node import BaseNode
+from spikingjelly.logger import logger
 
 
 Scaler = Union[VoltageScaler, ChannelVoltageScaler]
@@ -212,8 +214,16 @@ def estimate_delay_start(
 
     paths = _find_scaler_neuron_scaler_paths(model)
     if not paths:
+        logger.info(
+            "ann2snn_delay_summary matched_paths=%s batches=%s delay_start=%s readout_clamped=%s",
+            0,
+            0,
+            0,
+            False,
+        )
         return 0
 
+    start_time = time.perf_counter()
     original_device = None
     try:
         original_device = next(model.parameters()).device
@@ -284,5 +294,23 @@ def estimate_delay_start(
             RuntimeWarning,
             stacklevel=2,
         )
-        return max(time_steps - _MIN_READOUT_STEPS - 1, 0)
-    return min(delay_start, time_steps - 1)
+        result = max(time_steps - _MIN_READOUT_STEPS - 1, 0)
+        logger.info(
+            "ann2snn_delay_summary matched_paths=%s batches=%s delay_start=%s readout_clamped=%s elapsed_ms=%.3f",
+            len(paths),
+            num_batches,
+            result,
+            True,
+            (time.perf_counter() - start_time) * 1000.0,
+        )
+        return result
+    result = min(delay_start, time_steps - 1)
+    logger.info(
+        "ann2snn_delay_summary matched_paths=%s batches=%s delay_start=%s readout_clamped=%s elapsed_ms=%.3f",
+        len(paths),
+        num_batches,
+        result,
+        False,
+        (time.perf_counter() - start_time) * 1000.0,
+    )
+    return result

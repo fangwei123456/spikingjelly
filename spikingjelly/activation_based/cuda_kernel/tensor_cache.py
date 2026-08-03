@@ -1,15 +1,15 @@
+from spikingjelly.logger import logger
 from typing import Union
 import torch
 import torch.nn.functional as F
 import threading
 from ... import configure
 from . import cuda_utils
-import logging
 
 try:
     import cupy
 except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.tensor_cache: {e}")
+    logger.debug("spikingjelly.activation_based.tensor_cache: %s", e)
     cupy = None
 
 

@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from spikingjelly.activation_based import functional
+from spikingjelly.logger import logger
 
 from .analysis import SNNDistributedAnalysis
 from .metrics import PreparedModelOutput, prepare_classification_output
@@ -121,6 +122,8 @@ class SNNDistributedRuntime:
         pin_memory: bool = True,
     ) -> DataLoader:
         sampler = None
+        replicas = 1
+        rank = 0
         if dist.is_initialized():
             replicas, rank = resolve_data_parallel_partition(
                 self.mesh,
@@ -134,7 +137,7 @@ class SNNDistributedRuntime:
                     rank=rank,
                     shuffle=shuffle,
                 )
-        return DataLoader(
+        data_loader = DataLoader(
             dataset,
             batch_size=batch_size,
             sampler=sampler,
@@ -143,3 +146,15 @@ class SNNDistributedRuntime:
             pin_memory=pin_memory,
             drop_last=drop_last,
         )
+        logger.info(
+            "distributed_dataloader_prepared dataset=%s batch_size=%s num_workers=%s sampler=%s replicas=%s rank=%s drop_last=%s pin_memory=%s",
+            type(dataset).__name__,
+            batch_size,
+            num_workers,
+            type(sampler).__name__ if sampler is not None else None,
+            replicas,
+            rank,
+            drop_last,
+            pin_memory,
+        )
+        return data_loader

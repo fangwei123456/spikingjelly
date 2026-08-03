@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import math
 import os
 import shutil
@@ -241,7 +242,7 @@ def save_every_frame_of_an_entire_DVS_dataset(
         pool.apply_async(save_as_pic, args=(frame, save_pic_to, str(i)))
     pool.close()
     pool.join()
-    print("complete!!!")
+    logger.info("complete!!!")
 
 
 def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> None:
@@ -291,7 +292,7 @@ def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> N
         for t in range(img_tensor.shape[0]):
             img_list.append(to_img(img_tensor[t]))
         img_list[0].save(save_gif_to, save_all=True, append_images=img_list[1:], loop=0)
-        print(f"Save frames to [{save_gif_to}].")
+        logger.info("Save frames to [%s].", save_gif_to)
 
 
 def load_aedat_v3(file_name: Union[str, Path]) -> dict:
@@ -835,7 +836,7 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(
         ),
     )
     if print_save:
-        print(f"Frames [{fname}] saved.")
+        logger.info("Frames [%s] saved.", fname)
 
 
 def integrate_events_by_fixed_duration(
@@ -993,7 +994,7 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     fname = os.path.join(output_dir, f"{fname}_{frames.shape[0]}.npz")
     np_savez(fname, frames=frames)
     if print_save:
-        print(f"Frames [{fname}] saved.")
+        logger.info("Frames [%s] saved.", fname)
     return frames.shape[0]
 
 
@@ -1027,7 +1028,7 @@ def save_frames_to_npz_and_print(fname: str, frames: np.ndarray):
     :type frames: np.ndarray
     """
     np_savez(fname, frames=frames)
-    print(f"Frames [{fname}] saved.")
+    logger.info("Frames [%s] saved.", fname)
 
 
 def create_same_directory_structure(
@@ -1070,7 +1071,7 @@ def create_same_directory_structure(
         if os.path.isdir(source_sub_dir):
             target_sub_dir = os.path.join(target_dir, sub_dir_name)
             os.mkdir(target_sub_dir)
-            print(f"Mkdir [{target_sub_dir}].")
+            logger.info("Mkdir [%s].", target_sub_dir)
             create_same_directory_structure(source_sub_dir, target_sub_dir)
 
 
@@ -1313,7 +1314,7 @@ def pad_sequence_collate(batch: list):
         )
 
         for i, (x_p, label, x_len) in enumerate(loader):
-            print(f"x_p.shape={x_p.shape}, label={label}, x_len={x_len}")
+            logger.info(f"x_p.shape={x_p.shape}, label={label}, x_len={x_len}")
             if i == 2:
                 break
 
@@ -1393,11 +1394,11 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
         x2 = torch.rand([3, 6])
         x3 = torch.rand([4, 6])
         x = torch.nn.utils.rnn.pad_sequence([x1, x2, x3])  # [T, N, *]
-        print("x.shape=", x.shape)
+        logger.info("x.shape=%s", x.shape)
         x_len = torch.as_tensor([x1.shape[0], x2.shape[0], x3.shape[0]])
         mask = padded_sequence_mask(x_len)
-        print("mask.shape=", mask.shape)
-        print("mask=\n", mask)
+        logger.info("mask.shape=%s", mask.shape)
+        logger.info("mask=\n%s", mask)
 
     Outputs:
 
@@ -1477,7 +1478,7 @@ def create_sub_dataset(
     """
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
-        print(f"Mkdir [{target_dir}].")
+        logger.info("Mkdir [%s].", target_dir)
     create_same_directory_structure(source_dir, target_dir)
 
     warnings_info = []
@@ -1505,9 +1506,12 @@ def create_sub_dataset(
                 else:
                     shutil.copyfile(source_file, target_file)
                     # print(f'copyfile {source_file} -> {target_file}')
-            print(
-                f"[{samples_number}] files in [{e_root}] have been copied to [{output_dir}]."
+            logger.info(
+                "[%s] files in [%s] have been copied to [%s].",
+                samples_number,
+                e_root,
+                output_dir,
             )
 
     for i in range(len(warnings_info)):
-        print(warnings_info[i])
+        logger.info(warnings_info[i])

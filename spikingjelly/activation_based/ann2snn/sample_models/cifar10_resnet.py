@@ -8,6 +8,9 @@ Reference:
     Deep Residual Learning for Image Recognition. arXiv:1512.03385
 """
 
+from spikingjelly.logger import logger
+
+
 import torch
 import torch.nn as nn
 
@@ -149,7 +152,7 @@ def ResNet152():
 def test():
     net = ResNet18()
     y = net(torch.randn(1, 3, 32, 32))
-    print(y.size())
+    logger.info("ResNet test output shape=%s", y.size())
 
 
 # test()

@@ -4,14 +4,17 @@ FlexSN Triton Kernel Templates.
 Insert a single-step kernel into a multi-step kernel template.
 """
 
+import logging
+
+from spikingjelly.logger import logger
+
+
 try:
     import triton
 except Exception as e:
-    import logging
-
     from .. import dummy
 
-    logging.info(f"spikingjelly.activation_based.triton_kernel.flexsn.template: {e}")
+    logger.debug("spikingjelly.activation_based.triton_kernel.flexsn.template: %s", e)
     triton = dummy.DummyImport()
 
 from ..torch2triton import compile_triton_code_str
@@ -247,14 +250,14 @@ def get_flexsn_inference_kernel(
     ).strip()
     kernel_name = f"flexsn_inference_kernel_{kernel_hash}"
 
-    if verbose:
-        print("=" * 40, core_name, "=" * 40)
-        print("Generated flexsn inference kernel:")
-        print("```")
-        print(kernel_str)
-        print("```\n")
-        print(info)
-        print("=" * 40, "=" * len(core_name), "=" * 40)
+    if verbose and logger.isEnabledFor(logging.DEBUG):
+        logger.debug("%s %s %s", "=" * 40, core_name, "=" * 40)
+        logger.debug("Generated flexsn inference kernel:")
+        logger.debug("```")
+        logger.debug(kernel_str)
+        logger.debug("```\n")
+        logger.debug(info)
+        logger.debug("%s %s %s", "=" * 40, "=" * len(core_name), "=" * 40)
 
     kernel_exe = compile_triton_code_str(kernel_str, kernel_name, verbose)
     return kernel_exe
@@ -358,14 +361,14 @@ def get_flexsn_inference_final_state_kernel(
     ).strip()
     kernel_name = f"flexsn_inference_final_state_kernel_{kernel_hash}"
 
-    if verbose:
-        print("=" * 40, core_name, "=" * 40)
-        print("Generated flexsn inference-final-state kernel:")
-        print("```")
-        print(kernel_str)
-        print("```\n")
-        print(info)
-        print("=" * 40, "=" * len(core_name), "=" * 40)
+    if verbose and logger.isEnabledFor(logging.DEBUG):
+        logger.debug("%s %s %s", "=" * 40, core_name, "=" * 40)
+        logger.debug("Generated flexsn inference-final-state kernel:")
+        logger.debug("```")
+        logger.debug(kernel_str)
+        logger.debug("```\n")
+        logger.debug(info)
+        logger.debug("%s %s %s", "=" * 40, "=" * len(core_name), "=" * 40)
 
     kernel_exe = compile_triton_code_str(kernel_str, kernel_name, verbose)
     return kernel_exe
@@ -466,14 +469,14 @@ def get_flexsn_forward_kernel(
     ).strip()
     kernel_name = f"flexsn_forward_kernel_{kernel_hash}"
 
-    if verbose:
-        print("=" * 40, core_name, "=" * 40)
-        print("Generating flexsn forward kernel:")
-        print("```")
-        print(kernel_str)
-        print("```")
-        print(info)
-        print("=" * 40, "=" * len(core_name), "=" * 40)
+    if verbose and logger.isEnabledFor(logging.DEBUG):
+        logger.debug("%s %s %s", "=" * 40, core_name, "=" * 40)
+        logger.debug("Generating flexsn forward kernel:")
+        logger.debug("```")
+        logger.debug(kernel_str)
+        logger.debug("```")
+        logger.debug(info)
+        logger.debug("%s %s %s", "=" * 40, "=" * len(core_name), "=" * 40)
 
     kernel_exe = compile_triton_code_str(kernel_str, kernel_name, verbose)
     return kernel_exe
@@ -611,14 +614,14 @@ def get_flexsn_backward_kernel(
     ).strip()
     kernel_name = f"flexsn_backward_kernel_{kernel_hash}"
 
-    if verbose:
-        print("=" * 40, core_name, "=" * 40)
-        print("Generated flexsn backward kernel:")
-        print("```")
-        print(kernel_str)
-        print("```\n")
-        print(info)
-        print("=" * 40, "=" * len(core_name), "=" * 40)
+    if verbose and logger.isEnabledFor(logging.DEBUG):
+        logger.debug("%s %s %s", "=" * 40, core_name, "=" * 40)
+        logger.debug("Generated flexsn backward kernel:")
+        logger.debug("```")
+        logger.debug(kernel_str)
+        logger.debug("```\n")
+        logger.debug(info)
+        logger.debug("%s %s %s", "=" * 40, "=" * len(core_name), "=" * 40)
 
     kernel_exe = compile_triton_code_str(kernel_str, kernel_name, verbose)
     return kernel_exe

@@ -1,5 +1,5 @@
+from spikingjelly.logger import logger
 import copy
-import logging
 from abc import abstractmethod
 from typing import Tuple, Generator, Optional, Callable, Any
 
@@ -9,13 +9,13 @@ import torch.nn as nn
 try:
     import cupy
 except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.base: {e}")
+    logger.debug("spikingjelly.activation_based.base: %s", e)
     cupy = None
 
 try:
     import triton
 except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.base: {e}")
+    logger.debug("spikingjelly.activation_based.base: %s", e)
     triton = None
 
 try:

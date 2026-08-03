@@ -1,6 +1,6 @@
+from spikingjelly.logger import logger
 import abc
 import torch
-import logging
 
 
 __all__ = [
@@ -18,13 +18,13 @@ except BaseException:
     triton = None
 
 if triton is not None:
-    logging.info(
+    logger.info(
         "spikingjelly.activation_based.triton_kernel.compress: "
         "Use Triton backend for bit spike compression"
     )
     from ..triton_kernel import bit_spike_compress, bit_spike_decompress
 else:
-    logging.info(
+    logger.info(
         "spikingjelly.activation_based.triton_kernel.compress: "
         "Use PyTorch backend for bit spike compression"
     )

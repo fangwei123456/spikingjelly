@@ -58,6 +58,8 @@ from typing import Dict, List, Optional
 
 import torch
 
+from spikingjelly.logger import logger
+
 from .info import FlexSNInfo
 from .wrapper import (
     flexsn_backward,
@@ -65,6 +67,7 @@ from .wrapper import (
     flexsn_inference,
     flexsn_inference_final_state,
 )
+
 
 __all__ = [
     "FlexSNKernelHandle",
@@ -1095,6 +1098,23 @@ torch.library.register_autograd(
     "sj::flexsn_inductor_training_final_state",
     _flexsn_training_final_state_backward,
     setup_context=_flexsn_training_final_state_setup_context,
+)
+
+logger.info(
+    "FlexSN custom operators registered: operators=%s fake_kernels=%s autograd_kernels=%s",
+    5,
+    5,
+    2,
+    extra={
+        "event": "operator_register_summary",
+        "backend": "triton",
+        "registration_kind": "torch.library",
+        "registered": 5,
+        "fake_registered": 5,
+        "autograd_registered": 2,
+        "failed": 0,
+        "fallback": 0,
+    },
 )
 
 

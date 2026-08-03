@@ -1,4 +1,6 @@
+import logging
 import threading
+import time
 import types
 import warnings
 from typing import Optional, Union
@@ -12,6 +14,7 @@ from spikingjelly.activation_based.ann2snn.recipes import (
     ModuleConversionRecipe,
     TransformerTDEquivalentRecipe,
 )
+from spikingjelly.logger import logger
 
 
 _FX_TRACE_LOCK = threading.RLock()
@@ -185,11 +188,14 @@ class FXConverter:
         """
         configured_device = self.device
         original_training_modes: dict[nn.Module, bool] = {}
+        start_time = time.perf_counter()
+        target_device = None
         try:
             original_training_modes = {
                 module: module.training for module in ann.modules()
             }
             self.device = self._resolve_device(ann)
+            target_device = self.device
             with torch.no_grad():
                 self.recipe.validate(self)
                 ann = self.recipe.before_trace(self, ann)
@@ -199,6 +205,15 @@ class FXConverter:
                 fx_model = self.recipe.calibrate(self, fx_model)
                 fx_model = self.recipe.replace(self, fx_model)
                 fx_model = self.recipe.finalize(self, fx_model)
+                if logger.isEnabledFor(logging.INFO):
+                    logger.info(
+                        "ann2snn_conversion_summary converter=%s recipe=%s device=%s modules=%s elapsed_ms=%.3f",
+                        type(self).__name__,
+                        type(self.recipe).__name__,
+                        target_device,
+                        sum(1 for _ in fx_model.modules()),
+                        (time.perf_counter() - start_time) * 1000.0,
+                    )
                 return fx_model
         finally:
             for module, training in original_training_modes.items():
@@ -310,11 +325,14 @@ class ModuleConverter:
         """
         configured_device = self.device
         original_training_modes: dict[nn.Module, bool] = {}
+        start_time = time.perf_counter()
+        target_device = None
         try:
             original_training_modes = {
                 module: module.training for module in ann.modules()
             }
             self.device = self._resolve_device(ann)
+            target_device = self.device
             with torch.no_grad():
                 self.recipe.validate(self)
                 converted = self.recipe.convert_module(self, ann)
@@ -324,7 +342,17 @@ class ModuleConverter:
                         "a torch.nn.Module, got "
                         f"{type(converted).__name__}."
                     )
-                return converted.to(self.device)
+                converted = converted.to(self.device)
+                if logger.isEnabledFor(logging.INFO):
+                    logger.info(
+                        "ann2snn_conversion_summary converter=%s recipe=%s device=%s modules=%s elapsed_ms=%.3f",
+                        type(self).__name__,
+                        type(self.recipe).__name__,
+                        target_device,
+                        sum(1 for _ in converted.modules()),
+                        (time.perf_counter() - start_time) * 1000.0,
+                    )
+                return converted
         finally:
             for module, training in original_training_modes.items():
                 module.training = training

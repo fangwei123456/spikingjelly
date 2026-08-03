@@ -1,7 +1,7 @@
+from spikingjelly.logger import logger
 import contextlib
 import copy
 import functools
-import logging
 import os
 from typing import Callable, List, Optional, Sequence, Tuple
 
@@ -41,7 +41,7 @@ try:
         lowerable_while_loop_scan_final_state as _flexsn_lowerable_while_loop_scan_final_state,
     )
 except (ImportError, AttributeError) as e:
-    logging.info(f"spikingjelly.activation_based.neuron.flexsn: {e}")
+    logger.debug("spikingjelly.activation_based.neuron.flexsn: %s", e)
     _flexsn_eager_scan = None
     _flexsn_eager_scan_final_state = None
     _flexsn_hop_scan = None
@@ -949,9 +949,10 @@ class FlexSN(base.MemoryModule):
                     build_training_kernels,
                 )
             except (ImportError, RuntimeError) as e:
-                logging.warning(
+                logger.warning(
                     "FlexSN: could not import inductor kernel builders (%s); "
-                    "falling back to eager_scan/flex_sn_scan for all paths." % e
+                    "falling back to eager_scan/flex_sn_scan for all paths.",
+                    e,
                 )
                 build_inference_kernel = None
                 build_inference_final_state_kernel = None
@@ -970,9 +971,10 @@ class FlexSN(base.MemoryModule):
                         )
                     )
                 except Exception as e:
-                    logging.warning(
+                    logger.warning(
                         "FlexSN: could not build inductor inference kernel (%s); "
-                        "inference falls back to eager_scan." % e
+                        "inference falls back to eager_scan.",
+                        e,
                     )
                     self._inductor_scan_kernel = None
                     self._inductor_scan_info = None
@@ -991,10 +993,11 @@ class FlexSN(base.MemoryModule):
                     # Triton/CUDA/driver compilation failures surface through
                     # several exception types; any failure here can safely fall
                     # back to the already-built regular inference path.
-                    logging.warning(
+                    logger.warning(
                         "FlexSN: could not build inductor inference-final-state kernel (%s: %s); "
-                        "store_state_seqs=False inference falls back to the regular inference kernel."
-                        % (type(e).__name__, e)
+                        "store_state_seqs=False inference falls back to the regular inference kernel.",
+                        type(e).__name__,
+                        e,
                     )
                     self._inductor_scan_final_state_kernel = None
                     self._inductor_scan_final_state_info = None
@@ -1012,9 +1015,10 @@ class FlexSN(base.MemoryModule):
                         requires_grad=requires_grad,
                     )
                 except Exception as e:
-                    logging.warning(
+                    logger.warning(
                         "FlexSN: could not build inductor training kernels (%s); "
-                        "training falls back to eager_scan." % e
+                        "training falls back to eager_scan.",
+                        e,
                     )
                     self._inductor_fwd_kernel = None
                     self._inductor_bwd_kernel = None
@@ -1075,10 +1079,12 @@ class FlexSN(base.MemoryModule):
                 try:
                     _warmup_inductor_inference_final_state_kernel(self)
                 except Exception as e:
-                    logging.warning(
+                    logger.warning(
                         "FlexSN: could not warm up inductor inference-final-state "
                         "kernel (%s: %s); falling back to the regular inference "
-                        "kernel for store_state_seqs=False." % (type(e).__name__, e)
+                        "kernel for store_state_seqs=False.",
+                        type(e).__name__,
+                        e,
                     )
                     self._inductor_scan_final_state_kernel = None
                     self._inductor_scan_final_state_info = None
@@ -1211,7 +1217,7 @@ class FlexSN(base.MemoryModule):
         if not _is_flexsn_triton_backend(value):
             base.check_backend_library(value)
         elif "_inductor_handle" in self.__dict__ and self._inductor_handle is None:
-            logging.warning(
+            logger.warning(
                 "Switching FlexSN.backend to %s without prebuilt Triton kernels; "
                 "this module will fall back to the HOP/eager path.",
                 value,

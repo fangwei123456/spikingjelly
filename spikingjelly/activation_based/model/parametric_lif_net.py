@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 from copy import deepcopy
 
 import torch
@@ -308,66 +309,66 @@ def test_models():
 
     x = torch.rand([2, 1, 28, 28])
     net = MNISTNet(16, neuron.IFNode, surrogate_function=surrogate.ATan())
-    print(net(x).shape)
+    logger.info(net(x).shape)
     functional.reset_net(net)
     functional.set_step_mode(net, "m")
     x = torch.rand([4, 2, 1, 28, 28])
-    print(net(x).shape)
+    logger.info(net(x).shape)
     functional.reset_net(net)
     del net
     del x
 
     x = torch.rand([2, 1, 28, 28])
     net = FashionMNISTNet(16, neuron.IFNode, surrogate_function=surrogate.ATan())
-    print(net(x).shape)
+    logger.info(net(x).shape)
     functional.reset_net(net)
     functional.set_step_mode(net, "m")
     x = torch.rand([4, 2, 1, 28, 28])
-    print(net(x).shape)
+    logger.info(net(x).shape)
     functional.reset_net(net)
     del net
     del x
 
     x = torch.rand([2, 2, 32, 32])
     net = NMNISTNet(16, neuron.IFNode, surrogate_function=surrogate.ATan())
-    print(net(x).shape)
+    logger.info(net(x).shape)
     functional.reset_net(net)
     functional.set_step_mode(net, "m")
     x = torch.rand([4, 2, 2, 32, 32])
-    print(net(x).shape)
+    logger.info(net(x).shape)
     functional.reset_net(net)
     del net
     del x
 
     x = torch.rand([2, 3, 32, 32])
     net = CIFAR10Net(16, neuron.IFNode, surrogate_function=surrogate.ATan())
-    print(net(x).shape)
+    logger.info(net(x).shape)
     functional.reset_net(net)
     functional.set_step_mode(net, "m")
     x = torch.rand([4, 2, 3, 32, 32])
-    print(net(x).shape)
+    logger.info(net(x).shape)
     functional.reset_net(net)
     del net
     del x
 
     x = torch.rand([2, 2, 128, 128])
     net = CIFAR10DVSNet(16, neuron.IFNode, surrogate_function=surrogate.ATan())
-    print(net(x).shape)
+    logger.info(net(x).shape)
     functional.reset_net(net)
     functional.set_step_mode(net, "m")
     x = torch.rand([4, 2, 2, 128, 128])
-    print(net(x).shape)
+    logger.info(net(x).shape)
     functional.reset_net(net)
     del net
     del x
 
     x = torch.rand([2, 2, 128, 128])
     net = DVSGestureNet(16, neuron.IFNode, surrogate_function=surrogate.ATan())
-    print(net(x).shape)
+    logger.info(net(x).shape)
     functional.reset_net(net)
     functional.set_step_mode(net, "m")
     x = torch.rand([4, 2, 2, 128, 128])
-    print(net(x).shape)
+    logger.info(net(x).shape)
     functional.reset_net(net)
     del net
     del x

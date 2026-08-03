@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import logging
 import os
 import random
 import sys
@@ -20,6 +21,7 @@ from torchvision.transforms.functional import InterpolationMode
 from .. import functional
 from .tv_ref_classify import presets, transforms, utils
 from .tv_ref_classify.sampler import RASampler
+from spikingjelly.logger import logger
 
 try:
     from torchvision import prototype
@@ -256,8 +258,12 @@ class Trainer:
             metric_logger.acc1.global_avg,
             metric_logger.acc5.global_avg,
         )
-        print(
-            f"Train: train_acc1={train_acc1:.3f}, train_acc5={train_acc5:.3f}, train_loss={train_loss:.6f}, samples/s={metric_logger.meters['img/s'].global_avg:.3f}"
+        logger.info(
+            "Train: train_acc1=%s, train_acc5=%s, train_loss=%s, samples/s=%s",
+            train_acc1,
+            train_acc5,
+            train_loss,
+            metric_logger.meters["img/s"].global_avg,
         )
         return train_loss, train_acc1, train_acc5
 
@@ -309,8 +315,12 @@ class Trainer:
             metric_logger.acc1.global_avg,
             metric_logger.acc5.global_avg,
         )
-        print(
-            f"Test: test_acc1={test_acc1:.3f}, test_acc5={test_acc5:.3f}, test_loss={test_loss:.6f}, samples/s={num_processed_samples / (time.time() - start_time):.3f}"
+        logger.info(
+            "Test: test_acc1=%s, test_acc5=%s, test_loss=%s, samples/s=%s",
+            test_acc1,
+            test_acc5,
+            test_loss,
+            num_processed_samples / (time.time() - start_time),
         )
         return test_loss, test_acc1, test_acc5
 
@@ -329,11 +339,14 @@ class Trainer:
 
     def load_CIFAR10(self, args):
         # Data loading code
-        print("Loading data")
+        log_progress = utils.is_main_process()
+        if log_progress:
+            logger.info("Loading data")
         train_crop_size = args.train_crop_size
         interpolation = InterpolationMode(args.interpolation)
 
-        print("Loading training data")
+        if log_progress:
+            logger.info("Loading training data")
         st = time.time()
         dataset = torchvision.datasets.CIFAR10(
             root=args.data_path,
@@ -348,9 +361,11 @@ class Trainer:
             ),
         )
 
-        print("Took", time.time() - st)
+        if log_progress:
+            logger.info("Took %s seconds", time.time() - st)
 
-        print("Loading validation data")
+        if log_progress:
+            logger.info("Loading validation data")
 
         dataset_test = torchvision.datasets.CIFAR10(
             root=args.data_path,
@@ -365,7 +380,8 @@ class Trainer:
             ),
         )
 
-        print("Creating data loaders")
+        if log_progress:
+            logger.info("Creating data loaders")
         loader_g = torch.Generator()
         loader_g.manual_seed(args.seed)
 
@@ -389,9 +405,11 @@ class Trainer:
 
     def load_ImageNet(self, args):
         # Data loading code
+        log_progress = utils.is_main_process()
         traindir = os.path.join(args.data_path, "train")
         valdir = os.path.join(args.data_path, "val")
-        print("Loading data")
+        if log_progress:
+            logger.info("Loading data")
         val_resize_size, val_crop_size, train_crop_size = (
             args.val_resize_size,
             args.val_crop_size,
@@ -399,12 +417,14 @@ class Trainer:
         )
         interpolation = InterpolationMode(args.interpolation)
 
-        print("Loading training data")
+        if log_progress:
+            logger.info("Loading training data")
         st = time.time()
         cache_path = self._get_cache_path(traindir)
         if args.cache_dataset and os.path.exists(cache_path):
             # Attention, as the transforms are also cached!
-            print(f"Loading dataset_train from {cache_path}")
+            if log_progress:
+                logger.info("Loading dataset_train from %s", cache_path)
             dataset, _ = torch.load(cache_path)
         else:
             dataset = torchvision.datasets.ImageFolder(
@@ -417,16 +437,20 @@ class Trainer:
                 ),
             )
             if args.cache_dataset:
-                print(f"Saving dataset_train to {cache_path}")
+                if log_progress:
+                    logger.info("Saving dataset_train to %s", cache_path)
                 utils.mkdir(os.path.dirname(cache_path))
                 utils.save_on_master((dataset, traindir), cache_path)
-        print("Took", time.time() - st)
+        if log_progress:
+            logger.info("Took %s seconds", time.time() - st)
 
-        print("Loading validation data")
+        if log_progress:
+            logger.info("Loading validation data")
         cache_path = self._get_cache_path(valdir)
         if args.cache_dataset and os.path.exists(cache_path):
             # Attention, as the transforms are also cached!
-            print(f"Loading dataset_test from {cache_path}")
+            if log_progress:
+                logger.info("Loading dataset_test from %s", cache_path)
             dataset_test, _ = torch.load(cache_path)
         else:
             if args.prototype and args.weights:
@@ -450,11 +474,13 @@ class Trainer:
                 preprocessing,
             )
             if args.cache_dataset:
-                print(f"Saving dataset_test to {cache_path}")
+                if log_progress:
+                    logger.info("Saving dataset_test to %s", cache_path)
                 utils.mkdir(os.path.dirname(cache_path))
                 utils.save_on_master((dataset_test, valdir), cache_path)
 
-        print("Creating data loaders")
+        if log_progress:
+            logger.info("Creating data loaders")
         loader_g = torch.Generator()
         loader_g.manual_seed(args.seed)
 
@@ -588,7 +614,8 @@ class Trainer:
             utils.mkdir(args.output_dir)
 
         utils.init_distributed_mode(args)
-        print(args)
+        if utils.is_main_process():
+            logger.info("Training arguments: %s", args)
 
         device = torch.device(args.device)
 
@@ -631,10 +658,14 @@ class Trainer:
             prefetch_factor=(args.prefetch_factor if args.workers > 0 else None),
         )
 
-        print("Creating model")
+        if utils.is_main_process():
+            logger.info("Creating model")
         model = self.load_model(args, num_classes)
         model.to(device)
-        print(model)
+        if utils.is_main_process():
+            logger.info("Model created: %s", type(model).__name__)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Model architecture:\n%s", model)
 
         if args.distributed and args.sync_bn:
             model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -686,8 +717,9 @@ class Trainer:
         pt_dir = os.path.join(args.output_dir, "pt", tb_dir)
         tb_dir = os.path.join(args.output_dir, tb_dir)
         if args.print_logdir:
-            print(tb_dir)
-            print(pt_dir)
+            if utils.is_main_process():
+                logger.info("TensorBoard log directory: %s", tb_dir)
+                logger.info("Checkpoint directory: %s", pt_dir)
             exit()
         if args.clean:
             if utils.is_main_process():
@@ -695,7 +727,7 @@ class Trainer:
                     os.remove(tb_dir)
                 if os.path.exists(pt_dir):
                     os.remove(pt_dir)
-                print(f"remove {tb_dir} and {pt_dir}.")
+                logger.info("remove %s and %s.", tb_dir, pt_dir)
 
         if utils.is_main_process():
             os.makedirs(tb_dir, exist_ok=args.resume is not None)
@@ -849,10 +881,17 @@ class Trainer:
 
                 if utils.is_main_process() and epoch > 0:
                     os.remove(os.path.join(pt_dir, f"checkpoint_{epoch - 1}.pth"))
-            print(
-                f"escape time={(datetime.datetime.now() + datetime.timedelta(seconds=(time.time() - start_time) * (args.epochs - epoch))).strftime('%Y-%m-%d %H:%M:%S')}\n"
-            )
-            print(args)
+            if utils.is_main_process() and logger.isEnabledFor(logging.INFO):
+                logger.info(
+                    "Estimated finish time: %s",
+                    (
+                        datetime.datetime.now()
+                        + datetime.timedelta(
+                            seconds=(time.time() - start_time) * (args.epochs - epoch)
+                        )
+                    ).strftime("%Y-%m-%d %H:%M:%S"),
+                )
+                logger.info("Training arguments: %s", args)
 
     def before_test_one_epoch(self, args, model, epoch):
         pass

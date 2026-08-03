@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 from typing import Optional, Tuple
 import errno
 import importlib.util
@@ -11,6 +12,7 @@ import sys
 import tempfile
 import threading
 import types
+import logging
 
 import torch
 import torch.fx as fx
@@ -23,8 +25,8 @@ except BaseException as e:
 
     from .. import dummy
 
-    logging.info(
-        f"spikingjelly.activation_based.triton_kernel.torch2triton.graph2triton: {e}"
+    logger.debug(
+        "spikingjelly.activation_based.triton_kernel.torch2triton.graph2triton: %s", e
     )
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
@@ -355,7 +357,7 @@ def generate_triton_code_str(
     Generate Triton code string
     """
     if verbose:
-        print(graph)
+        logger.debug("Generated Triton graph=%s", graph)
 
     inputs = []
     triton_code_lines = []
@@ -485,9 +487,9 @@ def compile_triton_code_str(
                 except FileNotFoundError:
                     pass
             raise
-    if verbose:
+    if verbose and logger.isEnabledFor(logging.DEBUG):
         action = "written to" if needs_write else "loaded from cache"
-        print(f"Triton code `{kernel_name}` {action} {fpath}")
+        logger.debug("Triton code `%s` %s %s", kernel_name, action, fpath)
 
     linecache.checkcache(str(fpath))
 

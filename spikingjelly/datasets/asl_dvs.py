@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import os
 from pathlib import Path
 from typing import Callable, Optional, Tuple, Union
@@ -27,7 +28,7 @@ def _read_mat_save_to_np(mat_file: Union[str, Path], np_file: Union[str, Path]):
         "p": events["pol"].squeeze(),
     }
     utils.np_savez(np_file, t=events["t"], x=events["x"], y=events["y"], p=events["p"])
-    print(f"Save [{mat_file}] to [{np_file}].")
+    logger.info("Save [%s] to [%s].", mat_file, np_file)
 
 
 class ASLDVS(NeuromorphicDatasetFolder):
@@ -168,12 +169,12 @@ class ASLDVS(NeuromorphicDatasetFolder):
 
     @classmethod
     def resource_url_md5(cls) -> list:
-        print(
+        logger.info(
             "The ICCV2019_DVS_dataset.zip is packed by dropbox. We find that the"
             "MD5 of this zip file can change. So, MD5 check will not be used for"
             "ASL-DVS dataset."
         )
-        print(
+        logger.info(
             "Update: The Dropbox link is expired now. You can download this dataset"
             "from the OpenI mirror manually by the following commands:\n"
             "----------\n"
@@ -199,20 +200,20 @@ class ASLDVS(NeuromorphicDatasetFolder):
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
         temp_ext_dir = download_root / "temp_ext"
         temp_ext_dir.mkdir()
-        print(f"Mkdir [{temp_ext_dir}].")
+        logger.info("Mkdir [%s].", temp_ext_dir)
         extract_archive(download_root / "ICCV2019_DVS_dataset.zip", temp_ext_dir)
 
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
             futures = []
             for zip_file in temp_ext_dir.iterdir():
                 if zip_file.suffix == ".zip":
-                    print(f"Extract [{zip_file}] to [{extract_root}].")
+                    logger.info("Extract [%s] to [%s].", zip_file, extract_root)
                     futures.append(tpe.submit(extract_archive, zip_file, extract_root))
             for future in futures:
                 future.result()
 
         shutil.rmtree(temp_ext_dir)
-        print(f"Rmtree [{temp_ext_dir}].")
+        logger.info("Rmtree [%s].", temp_ext_dir)
 
     @classmethod
     def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
@@ -228,15 +229,17 @@ class ASLDVS(NeuromorphicDatasetFolder):
                 mat_dir = extract_root / class_name
                 np_dir = raw_root / class_name
                 np_dir.mkdir()
-                print(f"Mkdir [{np_dir}].")
+                logger.info("Mkdir [%s].", np_dir)
                 for bin_file in os.listdir(mat_dir):
                     source_file = mat_dir / bin_file
                     target_file = np_dir / (os.path.splitext(bin_file)[0] + ".npz")
-                    print(f"Start to convert [{source_file}] to [{target_file}].")
+                    logger.info(
+                        "Start to convert [%s] to [%s].", source_file, target_file
+                    )
                     futures.append(
                         tpe.submit(_read_mat_save_to_np, source_file, target_file)
                     )
             for future in futures:
                 future.result()
 
-        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
+        logger.info("Used time = [%ss].", round(time.time() - t_ckp, 2))

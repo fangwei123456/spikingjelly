@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import logging
 import sys
 
@@ -7,7 +8,7 @@ import torch
 try:
     import cupy
 except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.cuda_kernel.auto_cuda.base: {e}")
+    logger.debug("spikingjelly.activation_based.cuda_kernel.auto_cuda.base: %s", e)
     cupy = None
 
 from .... import configure

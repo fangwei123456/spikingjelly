@@ -1,4 +1,4 @@
-import logging
+from spikingjelly.logger import logger
 import math
 from typing import Callable, Iterable
 
@@ -7,8 +7,8 @@ import torch
 try:
     import cupy
 except BaseException as e:
-    logging.info(
-        f"spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step: {e}"
+    logger.debug(
+        "spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step: %s", e
     )
     cupy = None
 

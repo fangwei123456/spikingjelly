@@ -3,9 +3,10 @@ https://github.com/AllenYolk/flash-snn/tree/main/flashsnn/utils
 https://github.com/fla-org/flash-linear-attention/blob/main/fla/utils.py
 """
 
+from spikingjelly.logger import logger
+
 import contextlib
 import functools
-import logging
 import os
 from typing import Callable
 
@@ -46,7 +47,7 @@ try:
             type_dict[torch.bfloat16] = tl.bfloat16
             type_str_dict[torch.bfloat16] = "tl.bfloat16"
         else:
-            logging.info("bfloat16 is not supported on this device.")
+            logger.debug("bfloat16 is not supported on this device.")
     if hasattr(torch, "float8_e4m3fn"):
         if hasattr(tl, "float8e4m3fn"):
             type_dict[torch.float8_e4m3fn] = tl.float8e4m3fn
@@ -68,9 +69,7 @@ try:
         type_dict[torch.float8_e5m2fnuz] = tl.float8e5b16
         type_str_dict[torch.float8_e5m2fnuz] = "tl.float8e5b16"
 except BaseException as e:
-    import logging
-
-    logging.info(f"spikingjelly.activation_based.triton_kernel.triton_utils: {e}")
+    logger.debug("spikingjelly.activation_based.triton_kernel.triton_utils: %s", e)
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
     type_dict = {}

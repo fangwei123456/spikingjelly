@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 import warnings
 from contextlib import AbstractContextManager
 from dataclasses import asdict, dataclass, replace
 from typing import TYPE_CHECKING, Iterable
 
 import torch
+
+from spikingjelly.logger import logger
 
 from .config import PrecisionConfig
 from .policy import FP32Policy
@@ -85,6 +89,7 @@ def prepare_model_for_precision(
         optimizer so the optimizer does not keep references to stale
         parameters.
     """
+    start_time = time.perf_counter()
     device = torch.device(device)
     requested = PrecisionConfig.from_any(config, default_device=str(device))
     policy = resolve_precision_policy(requested)
@@ -109,7 +114,7 @@ def prepare_model_for_precision(
     if fallback_reason is not None:
         effective = replace(requested, mode="fp32")
     scaler = policy.create_grad_scaler()
-    return PrecisionArtifacts(
+    artifacts = PrecisionArtifacts(
         requested_config=requested,
         effective_config=effective,
         policy=policy,
@@ -117,6 +122,21 @@ def prepare_model_for_precision(
         scaler=scaler,
         fallback_reason=fallback_reason,
     )
+    if logger.isEnabledFor(logging.INFO):
+        conversion_report = artifacts.policy.conversion_report()
+        logger.info(
+            "precision_prepare_summary requested_mode=%s effective_mode=%s device=%s fallback=%s fallback_reason=%s converted_modules=%s unsupported_modules=%s grad_scaler=%s elapsed_ms=%.3f",
+            requested.mode,
+            effective.mode,
+            device,
+            fallback_reason is not None,
+            fallback_reason,
+            len(conversion_report.get("converted_modules", ())),
+            len(conversion_report.get("unsupported_modules", ())),
+            scaler is not None,
+            (time.perf_counter() - start_time) * 1000.0,
+        )
+    return artifacts
 
 
 def save_precision_reports(artifacts: PrecisionArtifacts, output_dir: str) -> None:
@@ -127,12 +147,13 @@ def save_precision_reports(artifacts: PrecisionArtifacts, output_dir: str) -> No
         "effective_config": payload["effective_config"],
         "fallback_reason": payload["fallback_reason"],
     }
-    for filename, key in (
+    report_files = (
         ("precision_policy.json", "policy"),
         ("capability_report.json", "capability_report"),
         ("conversion_report.json", "conversion_report"),
         ("precision_runtime.json", "runtime_summary"),
-    ):
+    )
+    for filename, key in report_files:
         path = os.path.join(output_dir, filename)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(
@@ -141,3 +162,8 @@ def save_precision_reports(artifacts: PrecisionArtifacts, output_dir: str) -> No
                 indent=2,
                 sort_keys=True,
             )
+    logger.info(
+        "precision_reports_saved output_dir=%s files=%s",
+        output_dir,
+        tuple(filename for filename, _ in report_files),
+    )

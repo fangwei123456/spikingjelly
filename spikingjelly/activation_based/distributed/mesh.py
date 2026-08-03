@@ -6,6 +6,8 @@ from typing import Optional, Tuple
 import torch
 import torch.distributed as dist
 
+from spikingjelly.logger import logger
+
 try:
     from torch.distributed._tensor import DeviceMesh, init_device_mesh
 
@@ -66,6 +68,12 @@ def ensure_distributed_initialized(
         kwargs["device_id"] = torch.device("cuda", torch.cuda.current_device())
 
     dist.init_process_group(backend=backend, **kwargs)
+    logger.info(
+        "distributed_process_group_initialized backend=%s rank=%s world_size=%s",
+        backend,
+        dist.get_rank(),
+        dist.get_world_size(),
+    )
     return True
 
 
@@ -114,7 +122,17 @@ def build_device_mesh(
             f"mesh_shape={mesh_shape} uses {mesh_volume} ranks, but world_size={world_size}."
         )
 
-    return init_device_mesh(device_type, mesh_shape, mesh_dim_names=mesh_dim_names)
+    device_mesh = init_device_mesh(
+        device_type, mesh_shape, mesh_dim_names=mesh_dim_names
+    )
+    logger.info(
+        "distributed_device_mesh_created device_type=%s mesh_shape=%s mesh_dim_names=%s world_size=%s",
+        device_type,
+        mesh_shape,
+        mesh_dim_names,
+        world_size,
+    )
+    return device_mesh
 
 
 def _resolve_mesh_submesh(device_mesh: "DeviceMesh", mesh_dim: int) -> "DeviceMesh":
@@ -182,9 +200,7 @@ def resolve_data_parallel_partition(
         device_mesh.get_coordinate() if hasattr(device_mesh, "get_coordinate") else None
     )
     coordinate = (
-        tuple(int(v) for v in raw_coordinate)
-        if raw_coordinate is not None
-        else None
+        tuple(int(v) for v in raw_coordinate) if raw_coordinate is not None else None
     )
     if dp_mesh_dim is None:
         if len(mesh_shape) != 1:

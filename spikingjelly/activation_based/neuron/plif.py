@@ -1,4 +1,4 @@
-import logging
+from spikingjelly.logger import logger
 import math
 from typing import Optional
 
@@ -11,7 +11,7 @@ from .base_node import BaseNode
 try:
     from .. import triton_kernel
 except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.neuron: {e}")
+    logger.debug("spikingjelly.activation_based.neuron: %s", e)
     triton_kernel = None
 
 

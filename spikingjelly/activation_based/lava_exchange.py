@@ -7,6 +7,8 @@ import torch.nn.functional as F
 
 from . import base, neuron, surrogate
 
+from spikingjelly.logger import logger
+
 _hw_bits = 12
 
 
@@ -317,7 +319,11 @@ class BatchNorm2d(nn.Module):
             pre_hook_fx=self.pre_hook_fx,
         )
         bn.load_state_dict(self.state_dict())
-        print(self.state_dict())
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Exporting Slayer batch norm: num_features=%s",
+                self.num_features,
+            )
         return bn
 
     def forward(self, x: torch.Tensor):
@@ -949,7 +955,7 @@ try:
                 print("max error:", (y_nn - y_sl).abs().max())
         """
         check_instance(pool2d_nn, nn.AvgPool2d)
-        logging.warning(
+        logger.warning(
             "The lava slayer pool layer applies sum pooling, rather than average pooling. `avgpool2d_to_lava_synapse_pool` will return a sum pooling layer."
         )
 
@@ -1060,7 +1066,7 @@ try:
                 pre_hook_fx=None,
             )
 
-        logging.warning(
+        logger.warning(
             "The lava slayer pool layer applies sum pooling, rather than average pooling. `avgpool2d_to_lava_synapse_pool` will return a sum pooling layer."
         )
 
@@ -1351,5 +1357,5 @@ try:
 
 
 except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.lava_exchange: {e}")
+    logger.debug("spikingjelly.activation_based.lava_exchange: %s", e)
     slayer = None

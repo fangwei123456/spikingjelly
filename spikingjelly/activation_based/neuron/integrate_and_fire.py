@@ -1,4 +1,4 @@
-import logging
+from spikingjelly.logger import logger
 import numbers
 from typing import Optional, Tuple, Union
 
@@ -13,7 +13,7 @@ try:
         activation_aware_if as activation_aware_if_triton_kernel,
     )
 except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.neuron: {e}")
+    logger.debug("spikingjelly.activation_based.neuron: %s", e)
     triton_kernel = None
     activation_aware_if_triton_kernel = None
 

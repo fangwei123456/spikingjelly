@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 from typing import Callable, Optional, Tuple
 import os
 from pathlib import Path
@@ -105,7 +106,7 @@ def _integrate_events_file_to_frames_file_by_fixed_frames_number(
         ),
     )
     if print_save:
-        print(f"Frames [{fname}] saved.")
+        logger.info("Frames [%s] saved.", fname)
 
 
 def _integrate_events_by_fixed_duration(
@@ -146,7 +147,7 @@ def _integrate_events_file_to_frames_file_by_fixed_duration(
 
     utils.np_savez(fname, frames=frames)
     if print_save:
-        print(f"Frames [{fname}] saved.")
+        logger.info("Frames [%s] saved.", fname)
     return frames.shape[0]
 
 
@@ -175,11 +176,11 @@ class _SHDFrameBuilder(NeuromorphicDatasetBuilder):
         for split in self.splits:
             processed_root = self.processed_root / split
             processed_root.mkdir()
-            print(f"Mkdir [{processed_root}]")
+            logger.info("Mkdir [%s]", processed_root)
             for i in range(self.n_classes):
                 processed_class_root = processed_root / str(i)
                 processed_class_root.mkdir()
-                print(f"Mkdir [{processed_class_root}]")
+                logger.info("Mkdir [%s]", processed_class_root)
 
             with h5py.File(
                 self.raw_root / f"{self.dataset_name}_{split}.h5"
@@ -187,9 +188,11 @@ class _SHDFrameBuilder(NeuromorphicDatasetBuilder):
 
                 def tasks():
                     for i in range(len(h5_file["labels"])):
-                        print(
-                            f"Start to integrate [{i}]-th {split} sample to "
-                            f"frames and save to [{processed_root}]."
+                        logger.info(
+                            "Start to integrate [%s]-th %s sample to frames and save to [%s].",
+                            i,
+                            split,
+                            processed_root,
                         )
                         yield h5_file, i, processed_root
 
@@ -455,7 +458,7 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
             futures = []
             for zip_file in download_root.iterdir():
-                print(f"Extract [{zip_file}] to [{extract_root}].")
+                logger.info("Extract [%s] to [%s].", zip_file, extract_root)
                 futures.append(tpe.submit(extract_archive, zip_file, extract_root))
 
             for future in futures:
@@ -711,7 +714,7 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
             futures = []
             for zip_file in download_root.iterdir():
-                print(f"Extract [{zip_file}] to [{extract_root}].")
+                logger.info("Extract [%s] to [%s].", zip_file, extract_root)
                 futures.append(tpe.submit(extract_archive, zip_file, extract_root))
 
             for future in futures:

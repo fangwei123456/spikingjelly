@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import os
 from pathlib import Path
 import time
@@ -318,7 +319,7 @@ class ESImageNet(NeuromorphicDatasetFolder):
         import rarfile
 
         rar_file = download_root / "ES-imagenet-0.18.part01.rar"
-        print(f"Extract [{rar_file}] to [{extract_root}].")
+        logger.info("Extract [%s] to [%s].", rar_file, extract_root)
         rar_file = rarfile.RarFile(rar_file)
         rar_file.extractall(extract_root)
         rar_file.close()
@@ -329,12 +330,12 @@ class ESImageNet(NeuromorphicDatasetFolder):
         train_dir = raw_root / "train"
         source_train_dir = extract_root / "ES-imagenet-0.18" / "train"
         train_dir.mkdir()
-        print(f"Mkdir [{train_dir}].")
+        logger.info("Mkdir [%s].", train_dir)
         utils.create_same_directory_structure(source_train_dir, train_dir)
         for class_dir in os.listdir(source_train_dir):
             source_dir = source_train_dir / class_dir
             target_dir = train_dir / class_dir
-            print(f"Create soft links from [{source_dir}] to [{target_dir}].")
+            logger.info("Create soft links from [%s] to [%s].", source_dir, target_dir)
             for sample in os.listdir(source_dir):
                 source_file = source_dir / sample
                 target_file = target_dir / sample
@@ -346,7 +347,7 @@ class ESImageNet(NeuromorphicDatasetFolder):
         source_dir = extract_root / "ES-imagenet-0.18" / "val"
         target_dir = raw_root / "test"
         target_dir.mkdir()
-        print(f"Mkdir [{target_dir}].")
+        logger.info("Mkdir [%s].", target_dir)
         utils.create_same_directory_structure(source_train_dir, target_dir)
 
         for fname, label in zip(val_fname, val_label):
@@ -354,9 +355,10 @@ class ESImageNet(NeuromorphicDatasetFolder):
             target_file = target_dir / f"class{label}" / f"{fname}"
             target_file.symlink_to(source_file)
 
-        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
-        print(
-            f"Note that files in [{raw_root}] are soft links whose source files "
-            f"are in [{extract_root}]. If you want to use events, do not "
-            f"delete [{extract_root}]."
+        logger.info("Used time = [%ss].", round(time.time() - t_ckp, 2))
+        logger.info(
+            "Note that files in [%s] are soft links whose source files are in [%s]. If you want to use events, do not delete [%s].",
+            raw_root,
+            extract_root,
+            extract_root,
         )

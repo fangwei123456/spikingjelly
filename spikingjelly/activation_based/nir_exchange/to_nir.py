@@ -10,6 +10,7 @@ import nir
 import nirtorch
 
 from .. import layer, neuron
+from spikingjelly.logger import logger
 
 
 __all__ = ["export_to_nir"]
@@ -295,4 +296,12 @@ def export_to_nir(
 
     if save_path is not None:
         nir.write(save_path, graph)
+    logger.info(
+        "nir_export_summary model=%s device=%s dtype=%s dt=%s save_path=%s",
+        type(net).__name__,
+        example_input.device,
+        example_input.dtype,
+        dt,
+        save_path,
+    )
     return graph

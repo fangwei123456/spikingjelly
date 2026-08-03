@@ -1,6 +1,8 @@
 from __future__ import annotations
+from spikingjelly.logger import logger
 
 import math
+import logging
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -11,6 +13,7 @@ import torch.nn.functional as F
 
 from ..base import BaseCounter, is_binary_tensor
 from .config import SpikeSimEnergyConfig
+
 
 __all__ = ["SpikeSimCounter"]
 aten = torch.ops.aten
@@ -451,15 +454,19 @@ class SpikeSimCounter(BaseCounter):
             dilation=dilation,
             spike_like_input=spike_like_input,
         )
-        if self.verbose:
+        if self.verbose and logger.isEnabledFor(logging.DEBUG):
             mode = (
                 "event"
                 if self.config.activity_mode == "event" and spike_like_input
                 else "dense"
             )
-            print(
-                f"SpikeSimCounter: {scope} - aten.convolution.default "
-                f"[{mode}] x={tuple(x.shape)} w={tuple(w.shape)} out={tuple(out.shape)}"
+            logger.debug(
+                "SpikeSimCounter: %s - aten.convolution.default [%s] x=%s w=%s out=%s",
+                scope,
+                mode,
+                tuple(x.shape),
+                tuple(w.shape),
+                tuple(out.shape),
             )
         return dense_pe_cycles
 

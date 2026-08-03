@@ -6,6 +6,8 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 
+from spikingjelly.logger import logger
+
 try:
     from torch.distributed.optim import ZeroRedundancyOptimizer
 
@@ -67,7 +69,7 @@ def build_snn_optimizer(
             raise RuntimeError(
                 "torch.distributed.optim.ZeroRedundancyOptimizer is unavailable in the current PyTorch build."
             )
-        return ZeroRedundancyOptimizer(
+        optimizer = ZeroRedundancyOptimizer(
             module.parameters(),
             optimizer_class=optimizer_cls,
             lr=lr,
@@ -75,9 +77,19 @@ def build_snn_optimizer(
             **optimizer_kwargs,
         )
 
-    return optimizer_cls(
-        module.parameters(),
-        lr=lr,
-        weight_decay=weight_decay,
-        **optimizer_kwargs,
+    else:
+        optimizer = optimizer_cls(
+            module.parameters(),
+            lr=lr,
+            weight_decay=weight_decay,
+            **optimizer_kwargs,
+        )
+    logger.info(
+        "distributed_optimizer_created optimizer=%s mode=%s sharding=%s lr=%s weight_decay=%s",
+        type(optimizer).__name__,
+        mode,
+        optimizer_sharding,
+        lr,
+        weight_decay,
     )
+    return optimizer

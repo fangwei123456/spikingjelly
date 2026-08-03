@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import logging
 from collections import defaultdict
 from typing import Any, Callable, Optional
@@ -10,7 +11,6 @@ from torch.utils._python_dispatch import TorchDispatchMode
 from torch.utils._pytree import tree_flatten
 from torch.utils.module_tracker import ModuleTracker
 
-logger = logging.getLogger(__name__)
 _arrow = chr(0x2937)
 
 
@@ -497,7 +497,7 @@ class DispatchCounterMode(TorchDispatchMode):
             默认为 ``False``
         :type strict: bool
 
-        :param verbose: 如果为 ``True`` ，会在控制台打印每个被计数的操作及其计数值
+        :param verbose: 如果为 ``True``，会记录每个被计数操作及其计数值的 DEBUG 日志
         :type verbose: bool
 
         :return: 上下文管理器对象
@@ -528,7 +528,7 @@ class DispatchCounterMode(TorchDispatchMode):
             defined rules. Default to ``False``.
         :type strict: bool
 
-        :param verbose: if ``True``, prints each counted operation and its count to the console
+        :param verbose: if ``True``, emits DEBUG logs for each counted operation and its count
         :type verbose: bool
 
         :return: Context manager object
@@ -587,10 +587,12 @@ class DispatchCounterMode(TorchDispatchMode):
         active_modules = self.module_tracker.active_modules
         for am in active_modules:
             if isinstance(am, tuple(counter.ignore_modules)):  # inside a ignored module
-                if self.verbose:
-                    print(
-                        f"{_arrow} ignored by {counter.__class__.__name__} as it is "
-                        f"inside {am.__class__.__name__}"
+                if self.verbose and logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(
+                        "%s ignored by %s as it is inside %s",
+                        _arrow,
+                        counter.__class__.__name__,
+                        am.__class__.__name__,
                     )
                 return True
 
@@ -603,8 +605,8 @@ class DispatchCounterMode(TorchDispatchMode):
                     f"To disable this error, "
                     f"set strict=False when initializing {counter.__class__.__name__}."
                 )
-            if self.verbose:
-                print(f"{_arrow} not defined by {counter.__class__.__name__}")
+            if self.verbose and logger.isEnabledFor(logging.DEBUG):
+                logger.debug("%s not defined by %s", _arrow, counter.__class__.__name__)
             return True
 
         return False
@@ -616,8 +618,12 @@ class DispatchCounterMode(TorchDispatchMode):
         active_modules = set(self.module_tracker.active_modules)
         parent_names_snapshot = set(parent_names)
 
-        if self.verbose:
-            print(f"DispatchCounterMode: {parent_names} - {resolve_name(func)}")
+        if self.verbose and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "DispatchCounterMode: %s - %s",
+                parent_names,
+                resolve_name(func),
+            )
 
         for counter in self.counters:
             if self._should_skip(counter, func):
@@ -630,8 +636,8 @@ class DispatchCounterMode(TorchDispatchMode):
                 active_modules=active_modules,
                 parent_names=parent_names_snapshot,
             )
-            if self.verbose:
-                print(f"{_arrow} + {value} [{counter.__class__.__name__}]")
+            if self.verbose and logger.isEnabledFor(logging.DEBUG):
+                logger.debug("%s + %s [%s]", _arrow, value, counter.__class__.__name__)
             for parent in parent_names_snapshot:
                 counter.record(parent, func, value)  # add the count to every ancestor
             if hasattr(counter, "finalize_record"):
@@ -667,7 +673,7 @@ class FunctionCounterMode(TorchFunctionMode):
             默认为 ``False``
         :type strict: bool
 
-        :param verbose: 如果为 ``True``，会在控制台打印每个被计数的操作及其计数值
+        :param verbose: 如果为 ``True``，会记录每个被计数操作及其计数值的 DEBUG 日志
         :type verbose: bool
 
         :return: 上下文管理器对象
@@ -692,7 +698,7 @@ class FunctionCounterMode(TorchFunctionMode):
             if ``False``, skips operations without defined rules. Default to ``False``
         :type strict: bool
 
-        :param verbose: if ``True``, prints each counted operation and its count to the console
+        :param verbose: if ``True``, emits DEBUG logs for each counted operation and its count
         :type verbose: bool
 
         :return: Context manager object
@@ -723,22 +729,24 @@ class FunctionCounterMode(TorchFunctionMode):
                     f"To disable this error, "
                     f"set strict=False when initializing {counter.__class__.__name__}."
                 )
-            if self.verbose:
-                print(f"{_arrow} not defined by {counter.__class__.__name__}")
+            if self.verbose and logger.isEnabledFor(logging.DEBUG):
+                logger.debug("%s not defined by %s", _arrow, counter.__class__.__name__)
             return True
 
         active_modules = self.module_tracker.active_modules
         for am in active_modules:
             if isinstance(am, tuple(counter.ignore_modules)):  # inside a ignored module
-                if self.verbose:
-                    print(
-                        f"{_arrow} ignored by {counter.__class__.__name__} as it is "
-                        f"inside {am.__class__.__name__}"
+                if self.verbose and logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(
+                        "%s ignored by %s as it is inside %s",
+                        _arrow,
+                        counter.__class__.__name__,
+                        am.__class__.__name__,
                     )
                 return True
 
-        if self.verbose:
-            print(f"{_arrow} counted by {counter.__class__.__name__}")
+        if self.verbose and logger.isEnabledFor(logging.DEBUG):
+            logger.debug("%s counted by %s", _arrow, counter.__class__.__name__)
         return False
 
     def __torch_function__(self, func, types, args=(), kwargs=None):
@@ -748,8 +756,12 @@ class FunctionCounterMode(TorchFunctionMode):
         active_modules = set(self.module_tracker.active_modules)
         parent_names_snapshot = set(parent_names)
 
-        if self.verbose:
-            print(f"FunctionCounterMode: {parent_names} - {resolve_name(func)}")
+        if self.verbose and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "FunctionCounterMode: %s - %s",
+                parent_names,
+                resolve_name(func),
+            )
 
         for counter in self.counters:
             if self._should_skip(counter, func):
@@ -762,8 +774,8 @@ class FunctionCounterMode(TorchFunctionMode):
                 active_modules=active_modules,
                 parent_names=parent_names_snapshot,
             )
-            if self.verbose:
-                print(f"{_arrow} + {value}")
+            if self.verbose and logger.isEnabledFor(logging.DEBUG):
+                logger.debug("%s + %s", _arrow, value)
             for parent in parent_names_snapshot:
                 counter.record(parent, func, value)  # add the count to every ancestor
             if hasattr(counter, "finalize_record"):

@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import multiprocessing
 import shutil
 from concurrent.futures import ThreadPoolExecutor
@@ -136,7 +137,7 @@ class HARDVS(NeuromorphicDatasetFolder):
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
         temp_ext_dir = download_root / "temp_ext"
         temp_ext_dir.mkdir()
-        print(f"Mkdir [{temp_ext_dir}].")
+        logger.info("Mkdir [%s].", temp_ext_dir)
         extract_archive(download_root / "MINI_HARDVS_files.zip", temp_ext_dir)
 
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
@@ -145,22 +146,24 @@ class HARDVS(NeuromorphicDatasetFolder):
                 s = str(i).zfill(3)
                 zip_file = temp_ext_dir / "MINI_HARDVS_files" / f"action_{s}.zip"
                 target_dir = extract_root / f"action_{s}"
-                print(f"Extract [{zip_file}] to [{target_dir}].")
+                logger.info("Extract [%s] to [%s].", zip_file, target_dir)
                 futures.append(tpe.submit(extract_archive, zip_file, target_dir))
 
             for future in futures:
                 future.result()
 
         shutil.rmtree(temp_ext_dir)
-        print(f"Rmtree [{temp_ext_dir}].")
+        logger.info("Rmtree [%s].", temp_ext_dir)
 
         shutil.copy(download_root / "train_label.txt", extract_root / "train_label.txt")
         shutil.copy(download_root / "val_label.txt", extract_root / "val_label.txt")
         shutil.copy(download_root / "test_label.txt", extract_root / "test_label.txt")
-        print(
-            f"Copy [{download_root / 'train_label.txt'}], "
-            f"[{download_root / 'val_label.txt'}], "
-            f"[{download_root / 'test_label.txt'}] to [{extract_root}]."
+        logger.info(
+            "Copy [%s], [%s], [%s] to [%s].",
+            download_root / "train_label.txt",
+            download_root / "val_label.txt",
+            download_root / "test_label.txt",
+            extract_root,
         )
 
     @classmethod
@@ -168,11 +171,11 @@ class HARDVS(NeuromorphicDatasetFolder):
         for prefix in ("train", "val", "test"):
             target_dir = raw_root / prefix
             target_dir.mkdir()
-            print(f"Mkdir {target_dir}.")
+            logger.info("Mkdir %s.", target_dir)
             for i in range(1, 301):
                 class_dir = target_dir / f"action_{str(i).zfill(3)}"
                 class_dir.mkdir()
-                print(f"Mkdir {class_dir}.")
+                logger.info("Mkdir %s.", class_dir)
 
             with open(extract_root / f"{prefix}_label.txt") as txt_file:
                 for line in txt_file:

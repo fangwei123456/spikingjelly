@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import copy
 import functools
-import logging
 import traceback
 from typing import Any
 
 import torch
+
+from spikingjelly.logger import logger
 
 from .triton_utils import (
     is_fp8_dtype,
@@ -19,9 +20,7 @@ try:
     import triton
     import triton.language as tl
 except Exception as e:
-    logging.getLogger(__name__).info(
-        "Failed to import Triton for FP8 capability probe: %s", e
-    )
+    logger.debug("Failed to import Triton for FP8 capability probe: %s", e)
     triton = None
     tl = None
 
@@ -425,4 +424,11 @@ def triton_fp8_neuron_capability_report(
             }
         report["compute_dtypes"][compute_dtype] = compute_report
     report["dtypes"] = copy.deepcopy(report["compute_dtypes"]["fp32"])
+    logger.info(
+        "triton_fp8_capability_summary device=%s triton_available=%s cuda_available=%s compute_dtypes=%s",
+        device,
+        report["triton_available"],
+        report["cuda_available"],
+        tuple(report["compute_dtypes"]),
+    )
     return report

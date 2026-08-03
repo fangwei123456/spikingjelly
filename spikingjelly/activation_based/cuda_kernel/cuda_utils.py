@@ -1,5 +1,5 @@
+from spikingjelly.logger import logger
 import functools
-import logging
 import os
 import threading
 import time
@@ -15,7 +15,7 @@ from ... import configure
 try:
     import cupy
 except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.cuda_kernel.cuda_utils: {e}")
+    logger.debug("spikingjelly.activation_based.cuda_kernel.cuda_utils: %s", e)
     cupy = None
 
 

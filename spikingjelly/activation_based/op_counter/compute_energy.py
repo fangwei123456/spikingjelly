@@ -1,4 +1,5 @@
 from __future__ import annotations
+from spikingjelly.logger import logger
 
 import copy
 from dataclasses import dataclass, field
@@ -10,6 +11,7 @@ from .base import DispatchCounterMode
 from .flop import FlopCounter
 from .mac import MACCounter
 from .synop import SynOpCounter
+
 
 __all__ = [
     "ComputeEnergyCostConfig",
@@ -246,12 +248,14 @@ class ComputeEnergyProfiler:
             strict=False,
             verbose=self.config.verbose,
         )
+        self._summary_logged = False
 
     def __enter__(self):
         self.mac_counter.reset()
         self.ac_counter.reset()
         self.synop_counter.reset()
         self.flop_counter.reset()
+        self._summary_logged = False
         self._dispatch_mode.__enter__()
         return self
 
@@ -285,7 +289,7 @@ class ComputeEnergyProfiler:
         energy_ac_pj = ac * cost.e_ac_pj
         total_pj = energy_mac_pj + energy_ac_pj
 
-        return ComputeEnergyReport(
+        report = ComputeEnergyReport(
             energy_total_pj=total_pj,
             energy_mac_pj=energy_mac_pj,
             energy_ac_pj=energy_ac_pj,
@@ -301,6 +305,24 @@ class ComputeEnergyProfiler:
             },
             warnings=warnings_list,
         )
+        if not self._summary_logged:
+            logger.info(
+                "Operation counter completed: counter=%s total_operations=%s "
+                "unique_operators=%s warnings=%s",
+                type(self).__name__,
+                mac + ac + synop + flop,
+                matched_supported_ops,
+                len(warnings_list),
+                extra={
+                    "event": "op_counter_summary",
+                    "counter_type": type(self).__name__,
+                    "total_operations": mac + ac + synop + flop,
+                    "unique_operators": matched_supported_ops,
+                    "warnings": len(warnings_list),
+                },
+            )
+            self._summary_logged = True
+        return report
 
     def get_total(self) -> float:
         return self.get_report().energy_total_pj

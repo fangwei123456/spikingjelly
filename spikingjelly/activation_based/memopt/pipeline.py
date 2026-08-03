@@ -1,4 +1,5 @@
 import copy
+import logging
 import os
 import time
 from collections import defaultdict
@@ -16,6 +17,9 @@ from ..profiler import LayerWiseFPCUDATimeProfiler, LayerWiseMemoryProfiler
 from . import compress
 from .checkpointing import GCContainer, TCGCContainer
 from .compress import BitSpikeCompressor, NullSpikeCompressor
+
+from spikingjelly.logger import logger
+
 
 __all__ = [
     "MEMOPT_CHECKPOINT_BUDGETS",
@@ -1196,8 +1200,8 @@ def _unwrap_gc_container(block: GCContainer) -> nn.Module:
 
 
 def _cprint(verbose, *args, **kwargs):
-    if verbose:
-        print(*args, **kwargs)
+    if verbose and logger.isEnabledFor(logging.DEBUG):
+        logger.debug("%s", " ".join(str(arg) for arg in args))
 
 
 def _candidate_entries(results, max_candidates_per_round: Optional[int]):
@@ -1748,6 +1752,27 @@ def memory_optimization(
         1 for m in net.modules() if isinstance(m, TCGCContainer)
     )
     summary.recommendation = _build_memopt_recommendation(summary)
+    logger.info(
+        "Memory optimization completed: device=%s profile=%s requested_level=%s "
+        "applied_level=%s applied_steps=%s skipped_steps=%s",
+        summary.device,
+        summary.profile,
+        summary.requested_level,
+        summary.applied_level,
+        len(summary.applied_steps),
+        len(summary.skipped_steps),
+        extra={
+            "event": "memopt_profile_summary",
+            "device": summary.device,
+            "profile": summary.profile,
+            "requested_level": summary.requested_level,
+            "applied_level": summary.applied_level,
+            "applied_steps": len(summary.applied_steps),
+            "skipped_steps": len(summary.skipped_steps),
+            "gc_candidate_count": summary.gc_candidate_count,
+            "gc_selected_count": summary.gc_selected_count,
+        },
+    )
     if return_summary:
         return net, summary
     return net

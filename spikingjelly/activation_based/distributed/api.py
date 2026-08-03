@@ -4,6 +4,8 @@ from typing import Mapping, Optional, Sequence, Union
 
 import torch.nn as nn
 
+from spikingjelly.logger import logger
+
 from .adapters import resolve_adapter
 from .adapters.base import build_distributed_runtime
 from .analysis import SNNDistributedAnalysis, analyze_snn_distributed_capability
@@ -56,7 +58,15 @@ def analyze(
     :return: Structured distributed capability analysis.
     :rtype: SNNDistributedAnalysis
     """
-    return analyze_snn_distributed_capability(model, tensor_parallel_roots=roots)
+    analysis = analyze_snn_distributed_capability(model, tensor_parallel_roots=roots)
+    logger.info(
+        "distributed_analysis_summary memory_modules=%s tensor_parallel_candidates=%s unsupported_tensor_parallel=%s roots=%s",
+        len(analysis.memory_module_names),
+        len(analysis.tensor_parallel_candidate_names),
+        len(analysis.unsupported_tensor_parallel_names),
+        roots,
+    )
+    return analysis
 
 
 def plan(
@@ -210,7 +220,7 @@ def plan(
             notes.append(
                 "Zero optimizer was disabled by DistributedFeatureSet; planner fell back to optimizer_strategy='none'."
             )
-    return SNNDistributedPlan(
+    distributed_plan = SNNDistributedPlan(
         mode=selected_mode,
         objective=objective,
         topology=resolved_topology,
@@ -225,6 +235,18 @@ def plan(
         tensor_parallel_plan=tensor_parallel_plan,
         experimental_features=features,
     )
+    logger.info(
+        "distributed_plan_summary mode=%s objective=%s backend=%s world_size=%s mesh_shape=%s optimizer_strategy=%s memopt_level=%s tensor_parallel_plan=%s",
+        distributed_plan.mode,
+        distributed_plan.objective,
+        distributed_plan.backend,
+        distributed_plan.topology.world_size,
+        distributed_plan.topology.mesh_shape,
+        distributed_plan.optimizer_strategy,
+        distributed_plan.memopt_level,
+        distributed_plan.tensor_parallel_plan is not None,
+    )
+    return distributed_plan
 
 
 def apply(

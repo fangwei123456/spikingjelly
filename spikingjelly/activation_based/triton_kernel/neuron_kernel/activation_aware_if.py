@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import torch
 
 from ..triton_utils import (
@@ -10,13 +11,12 @@ try:
     import triton
     import triton.language as tl
 except BaseException as e:
-    import logging
-
     from .. import dummy
 
-    logging.info(
+    logger.debug(
         "spikingjelly.activation_based.triton_kernel.neuron_kernel."
-        f"activation_aware_if: {e}"
+        "activation_aware_if: %s",
+        e,
     )
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
