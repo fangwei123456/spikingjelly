@@ -133,20 +133,11 @@ Modules: `spikingjelly.activation_based.neuron`,
 `spikingjelly.activation_based.functional`,
 `spikingjelly.activation_based.cuda_kernel`.
 
-- Consolidated built-in CuPy execution while preserving the public functional
-  entry-point names and neuron behavior.
-- Removed `neuron_cupy`, `neuron_cupy_lite`, and old duplicated CuPy neuron
-  execution paths. Use functional APIs for built-in neurons.
-- Moved concrete CuPy neuron-kernel ownership from
-  `auto_cuda.neuron_kernel` to `cuda_kernel.neuron_kernel`.
-- Organized concrete CuPy neuron kernels by execution role under
-  `cuda_kernel.neuron_kernel.single_step` and
-  `cuda_kernel.neuron_kernel.multi_step`.
-- `if_step_cupy` and `lif_step_cupy` now accept the surrogate function and
-  reset options directly instead of caller-created kernel objects.
-- Custom-kernel extension imports move to
-  `cuda_kernel.neuron_kernel.multi_step`.
-- `auto_cuda` now contains only CUDA code-generation machinery.
+- Consolidated built-in CuPy execution under functional APIs and
+  `backend="cupy"` dispatch; removed duplicate `neuron_cupy` and
+  `neuron_cupy_lite` paths.
+- Moved concrete kernels to `cuda_kernel.neuron_kernel`, organized by
+  single-step and multi-step role; `auto_cuda` now contains only code generation.
 
 #### Neuron Backend Caches
 
@@ -194,23 +185,15 @@ Module: `spikingjelly.activation_based.surrogate`.
 Modules: `spikingjelly.activation_based.functional` and
 `spikingjelly.activation_based.cuda_kernel`.
 
-- Removed the `spikingjelly.activation_based.neuron_cupy` and
-  `spikingjelly.activation_based.neuron_cupy_lite` modules. Built-in CuPy
-  neurons now use the functional CuPy APIs and the neuron nodes' `backend="cupy"`
-  dispatch.
-- Moved custom neuron-kernel imports from
+- Removed `spikingjelly.activation_based.neuron_cupy` and
+  `spikingjelly.activation_based.neuron_cupy_lite`; use functional CuPy APIs or
+  neuron-node `backend="cupy"` dispatch.
+- Moved custom-kernel imports from
   `spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel` to
   `spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step`.
-  `auto_cuda` now exposes only code-generation utilities.
-- Changed `if_step_cupy` from
-  `(x, v, v_threshold, v_reset, forward_kernel, backward_kernel)` to
-  `(x, v, v_threshold, v_reset, surrogate_function, detach_reset=False)`.
-- Changed `lif_step_cupy` from
-  `(x, v, tau, v_threshold, v_reset, forward_kernel, backward_kernel)` to
-  `(x, v, tau, decay_input, v_threshold, v_reset, surrogate_function,
-  detach_reset=False)`. The new functions select and cache their kernels from
-  the surrogate function and reset options; caller-created kernel objects are
-  no longer accepted.
+- `if_step_cupy` now takes `(x, v, v_threshold, v_reset, surrogate_function, detach_reset=False)` and
+  `lif_step_cupy` takes `(x, v, tau, decay_input, v_threshold, v_reset, surrogate_function, detach_reset=False)`;
+  caller-created forward/backward kernels are no longer accepted.
 
 #### ANN-to-SNN API Changes
 
