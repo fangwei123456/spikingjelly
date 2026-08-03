@@ -12,7 +12,6 @@ from .base import (
     _dtype_to_cupy_kernel_dtype,
     cupy,
     prepare_forward_meta,
-    scalar_to_cupy,
     NeuronBPTTKernel,
     NeuronFPTTKernel,
 )
@@ -276,7 +275,7 @@ def cupy_multistep_lif_backward(
         "v_reset": None if soft_reset else v_reset,
         "decay": decay,
     }
-    scalar_to_cupy(py_dict, ref="grad_spike_seq")
+    cuda_utils._scalar_to_cupy(py_dict, ref="grad_spike_seq")
     if py_dict["v_reset"] is None:
         py_dict.pop("v_reset")
     backward_kernel((blocks,), (threads,), py_dict)

@@ -448,7 +448,6 @@ class LIFNode(BaseNode):
                 )
                 if self.store_v_seq:
                     self.v_seq = v_seq
-                    self.v = v_seq[-1]
                 return spike_seq
             elif self.backend == "triton":
                 self.v_float_to_tensor(x_seq[0])
@@ -512,7 +511,6 @@ class LIFNode(BaseNode):
                 )
                 if self.store_v_seq:
                     self.v_seq = v_seq
-                    self.v = v_seq[-1]
                 return spike_seq
 
             # torch backend:

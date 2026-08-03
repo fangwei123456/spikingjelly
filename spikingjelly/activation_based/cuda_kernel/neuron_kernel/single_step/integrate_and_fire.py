@@ -1,3 +1,4 @@
+import threading
 from typing import Optional
 
 import numpy as np
@@ -43,37 +44,37 @@ class IFNodeBPKernel(NeuronBPKernel):
 
 _IF_FWD_KERNEL_CACHE = {}
 _IF_BWD_KERNEL_CACHE = {}
+_IF_KERNEL_LOCK = threading.Lock()
 
 
-def _get_if_forward_kernel(
-    *, device: int, hard_reset: bool, dtype: str
-) -> IFNodeFPKernel:
-    key = (device, hard_reset, dtype)
-    kernel = _IF_FWD_KERNEL_CACHE.get(key)
-    if kernel is None:
-        kernel = IFNodeFPKernel(hard_reset=hard_reset, dtype=dtype)
-        _IF_FWD_KERNEL_CACHE[key] = kernel
+def _get_if_forward_kernel(*, hard_reset: bool, dtype: str) -> IFNodeFPKernel:
+    key = (hard_reset, dtype)
+    with _IF_KERNEL_LOCK:
+        kernel = _IF_FWD_KERNEL_CACHE.get(key)
+        if kernel is None:
+            kernel = IFNodeFPKernel(hard_reset=hard_reset, dtype=dtype)
+            _IF_FWD_KERNEL_CACHE[key] = kernel
     return kernel
 
 
 def _get_if_backward_kernel(
     *,
-    device: int,
     sg_cupy_id: int,
     hard_reset: bool,
     detach_reset: bool,
     dtype: str,
 ) -> IFNodeBPKernel:
-    key = (device, sg_cupy_id, hard_reset, detach_reset, dtype)
-    kernel = _IF_BWD_KERNEL_CACHE.get(key)
-    if kernel is None:
-        kernel = IFNodeBPKernel(
-            surrogate_cuda_codes=_cuda_codes(sg_cupy_id, dtype),
-            hard_reset=hard_reset,
-            detach_reset=detach_reset,
-            dtype=dtype,
-        )
-        _IF_BWD_KERNEL_CACHE[key] = kernel
+    key = (sg_cupy_id, hard_reset, detach_reset, dtype)
+    with _IF_KERNEL_LOCK:
+        kernel = _IF_BWD_KERNEL_CACHE.get(key)
+        if kernel is None:
+            kernel = IFNodeBPKernel(
+                surrogate_cuda_codes=_cuda_codes(sg_cupy_id, dtype),
+                hard_reset=hard_reset,
+                detach_reset=detach_reset,
+                dtype=dtype,
+            )
+            _IF_BWD_KERNEL_CACHE[key] = kernel
     return kernel
 
 
@@ -163,16 +164,14 @@ def if_step(
     surrogate_function: surrogate.SurrogateFunctionBase,
     detach_reset: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    dtype = "float" if x.dtype == torch.float32 else "half2"
     if x.dtype not in (torch.float32, torch.float16):
         raise NotImplementedError(x.dtype)
-    device = x.get_device()
+    if not x.is_cuda:
+        raise RuntimeError("if_step requires a CUDA tensor.")
+    dtype = "float" if x.dtype == torch.float32 else "half2"
     hard_reset = v_reset is not None
-    forward_kernel = _get_if_forward_kernel(
-        device=device, hard_reset=hard_reset, dtype=dtype
-    )
+    forward_kernel = _get_if_forward_kernel(hard_reset=hard_reset, dtype=dtype)
     backward_kernel = _get_if_backward_kernel(
-        device=device,
         sg_cupy_id=_resolve_cuda_code_id(surrogate_function, dtype),
         hard_reset=hard_reset,
         detach_reset=detach_reset,

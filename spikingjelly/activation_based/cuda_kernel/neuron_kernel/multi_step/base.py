@@ -2,7 +2,6 @@ import logging
 import math
 from typing import Callable, Iterable
 
-import numpy as np
 import torch
 
 try:
@@ -414,39 +413,9 @@ def if_requires_grad(items: Iterable):
     return any(isinstance(item, torch.Tensor) and item.requires_grad for item in items)
 
 
-_INT32_MAX = np.iinfo(np.int32).max
-
-
-def _as_cupy_int32(value: int, name: str):
-    if not (-_INT32_MAX - 1 <= value <= _INT32_MAX):
-        raise OverflowError(
-            f"{name}={value} exceeds int32 range required by CUDA kernel launch metadata."
-        )
-    return cupy.asarray(value, dtype=np.int32)
-
-
-def scalar_to_cupy(py_dict: dict, ref: str = "x_seq"):
-    device = py_dict[ref].get_device()
-    dtype = py_dict[ref].dtype
-
-    with cuda_utils.DeviceEnvironment(device):
-        for key, value in py_dict.items():
-            if isinstance(value, float):
-                if dtype == torch.float32:
-                    value = cupy.asarray(value, dtype=np.float32)
-                elif dtype == torch.float16:
-                    value = cupy.asarray([value, value], dtype=np.float16)
-                else:
-                    raise NotImplementedError(dtype)
-                py_dict[key] = value
-
-            elif isinstance(value, int):
-                py_dict[key] = _as_cupy_int32(value, key)
-
-
 def prepare_forward_meta(py_dict: dict, ref: str = "x_seq"):
     device = py_dict[ref].get_device()
-    scalar_to_cupy(py_dict, ref=ref)
+    cuda_utils._scalar_to_cupy(py_dict, ref=ref)
 
     numel = py_dict[ref].numel()
     N = py_dict[ref].shape[1]
@@ -458,8 +427,8 @@ def prepare_forward_meta(py_dict: dict, ref: str = "x_seq"):
     blocks = cuda_utils.cal_blocks(N)
 
     with cuda_utils.DeviceEnvironment(device):
-        py_dict["numel"] = _as_cupy_int32(numel, "numel")
-        py_dict["N"] = _as_cupy_int32(N, "N")
+        py_dict["numel"] = cuda_utils._as_cupy_int32(numel, "numel")
+        py_dict["N"] = cuda_utils._as_cupy_int32(N, "N")
 
     return blocks, threads, py_dict
 
@@ -546,7 +515,7 @@ class NeuronATGFBase:
         """
         device = py_dict["x_seq"].get_device()
         requires_grad = if_requires_grad(py_dict.values())
-        scalar_to_cupy(py_dict)
+        cuda_utils._scalar_to_cupy(py_dict, ref="x_seq")
 
         new_tensors(("h_seq", "spike_seq", "v_seq"), py_dict)
         py_dict["v_v_seq"] = torch.cat(
@@ -564,8 +533,8 @@ class NeuronATGFBase:
         blocks = cuda_utils.cal_blocks(N)
 
         with cuda_utils.DeviceEnvironment(device):
-            numel = _as_cupy_int32(numel, "numel")
-            N = _as_cupy_int32(N, "N")
+            numel = cuda_utils._as_cupy_int32(numel, "numel")
+            N = cuda_utils._as_cupy_int32(N, "N")
 
         py_dict["numel"] = numel
         py_dict["N"] = N

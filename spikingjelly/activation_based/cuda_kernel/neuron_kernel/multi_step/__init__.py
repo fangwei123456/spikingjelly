@@ -9,13 +9,13 @@ from .plif import (
 )
 
 __all__ = [
-    "NeuronFPTTKernel",
-    "NeuronBPTTKernel",
-    "NeuronATGFBase",
-    "IFNodeFPTTKernel",
     "IFNodeBPTTKernel",
-    "LIFNodeFPTTKernel",
+    "IFNodeFPTTKernel",
     "LIFNodeBPTTKernel",
-    "ParametricLIFNodeFPTTKernel",
+    "LIFNodeFPTTKernel",
+    "NeuronATGFBase",
+    "NeuronBPTTKernel",
+    "NeuronFPTTKernel",
     "ParametricLIFNodeBPTTKernel",
+    "ParametricLIFNodeFPTTKernel",
 ]

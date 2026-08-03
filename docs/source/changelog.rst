@@ -216,6 +216,30 @@ Module: ``spikingjelly.activation_based.surrogate``.
 
 - Removed the redundant ``SurrogateFunctionBase.cuda_code()`` interface. Implement and call ``cuda_codes(y, x, dtype)`` for surrogate-gradient CUDA code generation; ``dtype`` is ``"float"`` or ``"half2"``.
 
+CuPy Neuron Backend API Changes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Modules: ``spikingjelly.activation_based.functional`` and
+``spikingjelly.activation_based.cuda_kernel``.
+
+- Removed the ``spikingjelly.activation_based.neuron_cupy`` and
+  ``spikingjelly.activation_based.neuron_cupy_lite`` modules. Built-in CuPy
+  neurons now use the functional CuPy APIs and the neuron nodes' ``backend="cupy"``
+  dispatch.
+- Moved custom neuron-kernel imports from
+  ``spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel`` to
+  ``spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step``.
+  ``auto_cuda`` now exposes only code-generation utilities.
+- Changed ``if_step_cupy`` from
+  ``(x, v, v_threshold, v_reset, forward_kernel, backward_kernel)`` to
+  ``(x, v, v_threshold, v_reset, surrogate_function, detach_reset=False)``.
+- Changed ``lif_step_cupy`` from
+  ``(x, v, tau, v_threshold, v_reset, forward_kernel, backward_kernel)`` to
+  `(x, v, tau, decay_input, v_threshold, v_reset, surrogate_function,
+  detach_reset=False)`. The new functions select and cache their kernels from
+  the surrogate function and reset options; caller-created kernel objects are
+  no longer accepted.
+
 ANN-to-SNN API Changes
 ^^^^^^^^^^^^^^^^^^^^^^
 

@@ -2249,16 +2249,28 @@ def izhikevich_multi_step_cupy(
 
        单步形式 / Single-step form: :func:`izhikevich_step`.
     """
-    if any(tensor.dtype != torch.float32 for tensor in (x_seq, v, w)):
-        raise NotImplementedError(
-            "izhikevich_multi_step_cupy requires float32 x_seq, v, and w."
-        )
+    for name, tensor in (("x_seq", x_seq), ("v", v), ("w", w)):
+        if tensor.dtype != torch.float32:
+            raise NotImplementedError(
+                "izhikevich_multi_step_cupy requires float32 inputs, but "
+                f"{name} has dtype {tensor.dtype}."
+            )
     if not x_seq.is_cuda:
         raise ValueError("x_seq, v, and w must be CUDA tensors.")
     if v.device != x_seq.device or w.device != x_seq.device:
         raise ValueError("x_seq, v, and w must be on the same CUDA device.")
-    if x_seq.ndim < 2 or v.shape != x_seq.shape[1:] or w.shape != v.shape:
-        raise ValueError("v and w must have shape x_seq.shape[1:].")
+    if x_seq.ndim < 2:
+        raise ValueError("x_seq must have at least 2 dimensions shaped [T, N, *].")
+    if v.shape != x_seq.shape[1:]:
+        raise ValueError(
+            "v must have shape x_seq.shape[1:] "
+            f"(={tuple(x_seq.shape[1:])}), got {tuple(v.shape)}."
+        )
+    if w.shape != v.shape:
+        raise ValueError(
+            f"w must have the same shape as v (={tuple(v.shape)}), "
+            f"got {tuple(w.shape)}."
+        )
 
     from ..cuda_kernel.neuron_kernel.multi_step.izhikevich import (
         izhikevich_multi_step,

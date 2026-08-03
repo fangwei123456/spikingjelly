@@ -645,6 +645,7 @@ def cupy_multistep_eif_forward(
     delta_T: float,
     detach_reset: bool,
     surrogate_id: int,
+    capture_context: bool,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     captured_ctx = _CapturedAutogradCtx()
     out = _eif_forward(
@@ -660,7 +661,10 @@ def cupy_multistep_eif_forward(
         detach_reset,
         _cuda_codes_callable(surrogate_id, _surrogate_cuda_dtype(x_seq.dtype)),
     )
-    return (*out, _capture_token(captured_ctx, (x_seq, v_init), x_seq.device))
+    return (
+        *out,
+        _capture_token(captured_ctx, (x_seq, v_init), x_seq.device, capture_context),
+    )
 
 
 @torch.library.register_fake("sj::cupy_multistep_eif_forward")
@@ -677,7 +681,7 @@ def _bw(ctx, *grad_outputs):
     if ctx.captured is None:
         raise RuntimeError("Missing captured context for backward.")
     grads = _eif_backward(ctx.captured, *grad_outputs[:-1])
-    return grads[0], grads[1], None, None, None, None, None, None, None, None
+    return grads[0], grads[1], None, None, None, None, None, None, None, None, None
 
 
 torch.library.register_autograd(
@@ -701,6 +705,7 @@ def eif_multi_step(
         surrogate_function, _surrogate_cuda_dtype(x_seq.dtype)
     )
     v_reset_value = float("nan") if v_reset is None else float(v_reset)
+    capture_context = torch.is_grad_enabled()
     return cupy_multistep_eif_forward(
         x_seq,
         v_init,
@@ -712,4 +717,5 @@ def eif_multi_step(
         delta_T,
         detach_reset,
         surrogate_id,
+        capture_context,
     )[:-1]

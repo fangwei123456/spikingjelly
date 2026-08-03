@@ -41,13 +41,19 @@ def _stash_capture_ctx(captured_ctx: _CapturedAutogradCtx) -> int:
     return capture_id
 
 
-def _should_stash_capture_ctx(inputs) -> bool:
+def _should_stash_capture_ctx(inputs, capture_context: bool | None = None) -> bool:
+    if capture_context is None:
+        capture_context = torch.is_grad_enabled()
+    if not capture_context:
+        return False
     return any(isinstance(item, torch.Tensor) and item.requires_grad for item in inputs)
 
 
-def _capture_token(captured_ctx, inputs, device):
+def _capture_token(captured_ctx, inputs, device, capture_context: bool | None = None):
     capture_id = (
-        _stash_capture_ctx(captured_ctx) if _should_stash_capture_ctx(inputs) else -1
+        _stash_capture_ctx(captured_ctx)
+        if _should_stash_capture_ctx(inputs, capture_context)
+        else -1
     )
     return torch.tensor(capture_id, device=device, dtype=torch.int64)
 
@@ -61,6 +67,7 @@ def _take_capture_ctx(capture_id: int) -> _CapturedAutogradCtx:
 
 
 def _setup_capture_ctx(ctx, inputs, output):
+    del inputs
     capture_token = output[-1]
     if capture_token.is_meta:
         ctx.captured = None

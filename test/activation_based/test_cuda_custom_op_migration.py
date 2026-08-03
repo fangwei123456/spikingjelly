@@ -37,6 +37,27 @@ def test_surrogates_expose_only_cuda_codes(surrogate_factory, dtype):
     assert "grad_s" in codes
 
 
+@pytest.mark.parametrize("context_factory", [torch.no_grad, torch.inference_mode])
+def test_capture_token_skips_context_stash_without_grad(context_factory):
+    from spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step import (
+        runtime,
+    )
+
+    input_tensor = torch.ones(1, requires_grad=True)
+    captured_ctx = runtime._CapturedAutogradCtx()
+    with runtime._CAPTURE_CTX_LOCK:
+        before_ids = set(runtime._CAPTURE_CTX_BY_ID)
+
+    with context_factory():
+        token = runtime._capture_token(
+            captured_ctx, (input_tensor,), torch.device("cpu")
+        )
+
+    assert token.item() == -1
+    with runtime._CAPTURE_CTX_LOCK:
+        assert set(runtime._CAPTURE_CTX_BY_ID) == before_ids
+
+
 def _require_cuda():
     if not torch.cuda.is_available():
         pytest.skip("CUDA is required.")

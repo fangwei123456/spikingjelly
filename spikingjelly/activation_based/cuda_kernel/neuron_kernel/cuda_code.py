@@ -7,7 +7,7 @@ def _neuronal_hard_reset(
     if dtype == "float":
         return f"{v_next} = {h} * (1.0f - {spike}) + {v_reset} * {spike};"
     if dtype == "half2":
-        return f"{v_next} = __hfma2({h}, __hsub2(__float2half2_rn(1.0f), {spike}), __hmul2(v_reset, {spike}));"
+        return f"{v_next} = __hfma2({h}, __hsub2(__float2half2_rn(1.0f), {spike}), __hmul2({v_reset}, {spike}));"
     raise NotImplementedError(dtype)
 
 

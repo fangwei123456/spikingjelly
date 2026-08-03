@@ -1,3 +1,4 @@
+import threading
 from typing import Optional
 
 import numpy as np
@@ -107,48 +108,43 @@ class LIFNodeBPKernel(NeuronBPKernel):
 
 _LIF_FWD_KERNEL_CACHE = {}
 _LIF_BWD_KERNEL_CACHE = {}
+_LIF_KERNEL_LOCK = threading.Lock()
 
 
 def _get_lif_forward_kernel(
-    *, device: int, decay_input: bool, hard_reset: bool, dtype: str
+    *, decay_input: bool, hard_reset: bool, dtype: str
 ) -> LIFNodeFPKernel:
-    key = (device, decay_input, hard_reset, dtype)
-    kernel = _LIF_FWD_KERNEL_CACHE.get(key)
-    if kernel is None:
-        kernel = LIFNodeFPKernel(
-            decay_input=decay_input, hard_reset=hard_reset, dtype=dtype
-        )
-        _LIF_FWD_KERNEL_CACHE[key] = kernel
+    key = (decay_input, hard_reset, dtype)
+    with _LIF_KERNEL_LOCK:
+        kernel = _LIF_FWD_KERNEL_CACHE.get(key)
+        if kernel is None:
+            kernel = LIFNodeFPKernel(
+                decay_input=decay_input, hard_reset=hard_reset, dtype=dtype
+            )
+            _LIF_FWD_KERNEL_CACHE[key] = kernel
     return kernel
 
 
 def _get_lif_backward_kernel(
     *,
-    device: int,
     decay_input: bool,
     sg_cupy_id: int,
     hard_reset: bool,
     detach_reset: bool,
     dtype: str,
 ) -> LIFNodeBPKernel:
-    key = (
-        device,
-        decay_input,
-        sg_cupy_id,
-        hard_reset,
-        detach_reset,
-        dtype,
-    )
-    kernel = _LIF_BWD_KERNEL_CACHE.get(key)
-    if kernel is None:
-        kernel = LIFNodeBPKernel(
-            decay_input=decay_input,
-            surrogate_cuda_codes=_cuda_codes(sg_cupy_id, dtype),
-            hard_reset=hard_reset,
-            detach_reset=detach_reset,
-            dtype=dtype,
-        )
-        _LIF_BWD_KERNEL_CACHE[key] = kernel
+    key = (decay_input, sg_cupy_id, hard_reset, detach_reset, dtype)
+    with _LIF_KERNEL_LOCK:
+        kernel = _LIF_BWD_KERNEL_CACHE.get(key)
+        if kernel is None:
+            kernel = LIFNodeBPKernel(
+                decay_input=decay_input,
+                surrogate_cuda_codes=_cuda_codes(sg_cupy_id, dtype),
+                hard_reset=hard_reset,
+                detach_reset=detach_reset,
+                dtype=dtype,
+            )
+            _LIF_BWD_KERNEL_CACHE[key] = kernel
     return kernel
 
 
@@ -245,19 +241,18 @@ def lif_step(
     surrogate_function: surrogate.SurrogateFunctionBase,
     detach_reset: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    dtype = "float" if x.dtype == torch.float32 else "half2"
     if x.dtype not in (torch.float32, torch.float16):
         raise NotImplementedError(x.dtype)
-    device = x.get_device()
+    if not x.is_cuda:
+        raise RuntimeError("lif_step requires a CUDA tensor.")
+    dtype = "float" if x.dtype == torch.float32 else "half2"
     hard_reset = v_reset is not None
     forward_kernel = _get_lif_forward_kernel(
-        device=device,
         decay_input=decay_input,
         hard_reset=hard_reset,
         dtype=dtype,
     )
     backward_kernel = _get_lif_backward_kernel(
-        device=device,
         decay_input=decay_input,
         sg_cupy_id=_resolve_cuda_code_id(surrogate_function, dtype),
         hard_reset=hard_reset,

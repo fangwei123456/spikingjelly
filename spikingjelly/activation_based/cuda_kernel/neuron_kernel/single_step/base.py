@@ -1,7 +1,6 @@
 import logging
 import math
 
-import numpy as np
 import torch
 
 try:
@@ -16,25 +15,6 @@ from ..... import configure
 from ... import cuda_utils
 from ...auto_cuda import base as auto_cuda_base, cfunction
 from ..cuda_code import _neuronal_fire, _neuronal_hard_reset, _neuronal_soft_reset
-
-
-def scalar_to_cupy(py_dict: dict, ref: str = "x"):
-    device = py_dict[ref].get_device()
-    dtype = py_dict[ref].dtype
-
-    with cuda_utils.DeviceEnvironment(device):
-        for key, value in py_dict.items():
-            if isinstance(value, float):
-                if dtype == torch.float32:
-                    value = cupy.asarray(value, dtype=np.float32)
-                elif dtype == torch.float16:
-                    value = cupy.asarray([value, value], dtype=np.float16)
-                else:
-                    raise NotImplementedError(dtype)
-                py_dict[key] = value
-
-            elif isinstance(value, int):
-                py_dict[key] = cupy.asarray(value, dtype=np.int32)
 
 
 class NeuronFPKernel(auto_cuda_base.CKernel1D):
@@ -245,7 +225,7 @@ class NeuronBPKernel(auto_cuda_base.CKernel1D):
 
 def _prepare_forward(py_dict: dict):
     device = py_dict["x"].get_device()
-    scalar_to_cupy(py_dict)
+    cuda_utils._scalar_to_cupy(py_dict, ref="x")
 
     for name in ("h", "spike", "v_next"):
         py_dict[name] = torch.empty_like(py_dict["x"])
@@ -257,7 +237,7 @@ def _prepare_forward(py_dict: dict):
 
     blocks = cuda_utils.cal_blocks(numel)
     with cuda_utils.DeviceEnvironment(device):
-        py_dict["numel"] = cupy.asarray(numel, dtype=np.int32)
+        py_dict["numel"] = cuda_utils._as_cupy_int32(numel, "numel")
 
     return blocks, threads, py_dict
 
