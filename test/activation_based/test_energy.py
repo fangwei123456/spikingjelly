@@ -26,9 +26,7 @@ def test_energy_spike_input():
         extra_ignore_modules=[neuron.BaseNode, nn.modules.batchnorm._BatchNorm]
     )
 
-    with op_counter.DispatchCounterMode(
-        [mac_counter, ac_counter, synop_counter], verbose=True
-    ):
+    with op_counter.DispatchCounterMode([mac_counter, ac_counter, synop_counter]):
         _ = net(x)
 
     total_mac = mac_counter.get_total()
@@ -70,9 +68,7 @@ def test_energy_float_input():
         extra_ignore_modules=[neuron.BaseNode, nn.modules.batchnorm._BatchNorm]
     )
 
-    with op_counter.DispatchCounterMode(
-        [mac_counter, ac_counter, synop_counter], verbose=True
-    ):
+    with op_counter.DispatchCounterMode([mac_counter, ac_counter, synop_counter]):
         _ = net(x)
 
     total_mac = mac_counter.get_total()

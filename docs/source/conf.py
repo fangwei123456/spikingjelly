@@ -278,7 +278,8 @@ autodoc_mock_imports = [
     "lynpy",
     "sklearn",
     "h5py",
-    "triton",
+    # Project modules provide a Triton fallback; mocking it breaks
+    # torch.library's Triton type checks during autodoc imports.
     "cupy",
     "nir",
     "nirtorch",

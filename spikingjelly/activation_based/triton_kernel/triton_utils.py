@@ -21,7 +21,7 @@ try:
     from torch.library import triton_op
 
     _TRITON_OP_AVAILABLE = True
-except BaseException:
+except (ImportError, AttributeError):
     triton_op = dummy.DummyImport()
     _TRITON_OP_AVAILABLE = False
 
@@ -68,7 +68,7 @@ try:
     if hasattr(torch, "float8_e5m2fnuz") and hasattr(tl, "float8e5b16"):
         type_dict[torch.float8_e5m2fnuz] = tl.float8e5b16
         type_str_dict[torch.float8_e5m2fnuz] = "tl.float8e5b16"
-except BaseException as e:
+except (ImportError, AttributeError, OSError, RuntimeError) as e:
     logger.debug("spikingjelly.activation_based.triton_kernel.triton_utils: %s", e)
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()

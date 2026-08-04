@@ -1,5 +1,4 @@
 import copy
-import logging
 import os
 import time
 from collections import defaultdict
@@ -1199,11 +1198,6 @@ def _unwrap_gc_container(block: GCContainer) -> nn.Module:
         return nn.Sequential(*block)
 
 
-def _cprint(verbose, *args, **kwargs):
-    if verbose and logger.isEnabledFor(logging.DEBUG):
-        logger.debug("%s", " ".join(str(arg) for arg in args))
-
-
 def _candidate_entries(results, max_candidates_per_round: Optional[int]):
     if max_candidates_per_round is None:
         return results
@@ -1226,7 +1220,6 @@ def memory_optimization(
     dummy_input: Optional[tuple] = None,
     compress_x: Optional[bool] = None,
     level: Optional[int] = None,
-    verbose: bool = False,
     temporal_split_factor: int = 2,
     max_split_rounds: Optional[int] = None,
     max_candidates_per_round: Optional[int] = None,
@@ -1273,9 +1266,6 @@ def memory_optimization(
 
     :param level: 优化级别。若为 ``None`` 且指定 ``profile`` ，则使用预设推荐值
     :type level: Optional[int]
-
-    :param verbose: 是否打印优化过程日志
-    :type verbose: bool
 
     :param temporal_split_factor: 沿时间拆分检查点片段时所使用的倍增因子
     :type temporal_split_factor: int
@@ -1353,9 +1343,6 @@ def memory_optimization(
     :param level: optimization level. If ``None`` and ``profile`` is specified,
         the recommended preset level will be used
     :type level: Optional[int]
-
-    :param verbose: whether to print logs
-    :type verbose: bool
 
     :param temporal_split_factor: factor to increase the number of chunks when splitting GC segments temporally
     :type temporal_split_factor: int
@@ -1466,11 +1453,11 @@ def memory_optimization(
         ),
     )
     summary.applied_level = level
-    _cprint(verbose, f"Optimizing memory on device {device}")
+    logger.debug("Optimizing memory on device %s", device)
     peak_allocated = -1.0
 
     if level > 0:
-        _cprint(verbose, "Level 1: layer-wise GC with input spike compression")
+        logger.debug("Level 1: layer-wise GC with input spike compression")
         net, apply_summary = apply_gc(
             net,
             instance,
@@ -1498,13 +1485,13 @@ def memory_optimization(
 
     if level > 1:  # spatial split
         if _gc_container_count(net) == 0:
-            _cprint(verbose, "Level 2: no GCContainers found, skip spatial split")
+            logger.debug("Level 2: no GCContainers found, skip spatial split")
             summary.skipped_steps.append("level2:no_gccontainers")
         elif not _has_split_candidate(net, _can_spatially_split):
-            _cprint(verbose, "Level 2: no spatially splittable GCContainers, skip")
+            logger.debug("Level 2: no spatially splittable GCContainers, skip")
             summary.skipped_steps.append("level2:no_spatial_candidates")
         else:
-            _cprint(verbose, "Level 2: split GCContainers spatially")
+            logger.debug("Level 2: split GCContainers spatially")
             summary.applied_steps.append("level2_spatial_split")
             peak_allocated, _ = _train_peak_memory(
                 net,
@@ -1518,10 +1505,10 @@ def memory_optimization(
 
             while True:
                 if max_split_rounds is not None and split_rounds >= max_split_rounds:
-                    _cprint(verbose, "\tReached max_split_rounds for spatial split.")
+                    logger.debug("\tReached max_split_rounds for spatial split.")
                     break
                 if not _has_split_candidate(net, _can_spatially_split):
-                    _cprint(verbose, "\tNo spatially splittable GCContainers remain.")
+                    logger.debug("\tNo spatially splittable GCContainers remain.")
                     break
                 split_rounds += 1
                 results = _train_memory_profile(
@@ -1532,7 +1519,7 @@ def memory_optimization(
                     worker_warmup=warmup_in_profile_workers,
                 )
                 if not results:
-                    _cprint(verbose, "\tNo more GCContainers to split.")
+                    logger.debug("\tNo more GCContainers to split.")
                     break
                 filtered_results = [
                     row
@@ -1540,7 +1527,7 @@ def memory_optimization(
                     if row[0].split(" ")[-1] not in blocked_candidates
                 ]
                 if not filtered_results:
-                    _cprint(verbose, "\tNo eligible spatial split candidates remain.")
+                    logger.debug("\tNo eligible spatial split candidates remain.")
                     break
                 improved = False
                 for row in _candidate_entries(
@@ -1552,7 +1539,7 @@ def memory_optimization(
 
                     split_cb = _spatially_split_gc_container(cb, compress_x)
                     if split_cb is None:
-                        _cprint(verbose, f"\t{cb_name}: can't be spatially split")
+                        logger.debug("\t%s: can't be spatially split", cb_name)
                         blocked_candidates.add(cb_path)
                         continue
                     setattr(parent, child_name, split_cb)
@@ -1565,19 +1552,21 @@ def memory_optimization(
                         worker_warmup=warmup_in_profile_workers,
                     )
                     if new_peak_allocated >= peak_allocated:
-                        _cprint(
-                            verbose,
-                            f"\t{cb_name}: no reduction in memory, revert "
-                            f"({peak_allocated} -> {new_peak_allocated})",
+                        logger.debug(
+                            "\t%s: no reduction in memory, revert (%s -> %s)",
+                            cb_name,
+                            peak_allocated,
+                            new_peak_allocated,
                         )
                         setattr(parent, child_name, cb)
                         blocked_candidates.add(cb_path)
                         continue
 
-                    _cprint(
-                        verbose,
-                        f"\t{cb_name}: successfully split "
-                        f"({peak_allocated} -> {new_peak_allocated})",
+                    logger.debug(
+                        "\t%s: successfully split (%s -> %s)",
+                        cb_name,
+                        peak_allocated,
+                        new_peak_allocated,
                     )
                     peak_allocated = new_peak_allocated
                     summary.spatial_split_count += 1
@@ -1586,19 +1575,19 @@ def memory_optimization(
                     break
 
                 if not improved:
-                    _cprint(verbose, "\tNo spatial split candidate improved memory.")
+                    logger.debug("\tNo spatial split candidate improved memory.")
                     summary.skipped_steps.append("level2:no_improving_candidate")
                     break
 
     if level > 2:  # temporal split
         if _gc_container_count(net) == 0:
-            _cprint(verbose, "Level 3: no GCContainers found, skip temporal split")
+            logger.debug("Level 3: no GCContainers found, skip temporal split")
             summary.skipped_steps.append("level3:no_gccontainers")
         elif not _has_split_candidate(net, _can_temporally_split):
-            _cprint(verbose, "Level 3: no temporally splittable GCContainers, skip")
+            logger.debug("Level 3: no temporally splittable GCContainers, skip")
             summary.skipped_steps.append("level3:no_temporal_candidates")
         else:
-            _cprint(verbose, "Level 3: split GCContainers temporally")
+            logger.debug("Level 3: split GCContainers temporally")
             summary.applied_steps.append("level3_temporal_split")
             if peak_allocated < 0:
                 peak_allocated, _ = _train_peak_memory(
@@ -1613,10 +1602,10 @@ def memory_optimization(
 
             while True:
                 if max_split_rounds is not None and split_rounds >= max_split_rounds:
-                    _cprint(verbose, "\tReached max_split_rounds for temporal split.")
+                    logger.debug("\tReached max_split_rounds for temporal split.")
                     break
                 if not _has_split_candidate(net, _can_temporally_split):
-                    _cprint(verbose, "\tNo temporally splittable GCContainers remain.")
+                    logger.debug("\tNo temporally splittable GCContainers remain.")
                     break
                 split_rounds += 1
                 results = _train_memory_profile(
@@ -1627,7 +1616,7 @@ def memory_optimization(
                     worker_warmup=warmup_in_profile_workers,
                 )
                 if not results:
-                    _cprint(verbose, "\tNo more GCContainers to split.")
+                    logger.debug("\tNo more GCContainers to split.")
                     break
                 filtered_results = [
                     row
@@ -1635,7 +1624,7 @@ def memory_optimization(
                     if row[0].split(" ")[-1] not in blocked_candidates
                 ]
                 if not filtered_results:
-                    _cprint(verbose, "\tNo eligible temporal split candidates remain.")
+                    logger.debug("\tNo eligible temporal split candidates remain.")
                     break
                 improved = False
                 for row in _candidate_entries(
@@ -1647,7 +1636,7 @@ def memory_optimization(
 
                     split_cb = _temporally_split_gc_container(cb, temporal_split_factor)
                     if split_cb is None:
-                        _cprint(verbose, f"\t{cb_name}: can't be temporally split")
+                        logger.debug("\t%s: can't be temporally split", cb_name)
                         blocked_candidates.add(cb_path)
                         continue
                     setattr(parent, child_name, split_cb)
@@ -1660,19 +1649,21 @@ def memory_optimization(
                         worker_warmup=warmup_in_profile_workers,
                     )
                     if new_peak_allocated >= peak_allocated:
-                        _cprint(
-                            verbose,
-                            f"\t{cb_name}: no reduction in memory, revert "
-                            f"({peak_allocated} -> {new_peak_allocated})",
+                        logger.debug(
+                            "\t%s: no reduction in memory, revert (%s -> %s)",
+                            cb_name,
+                            peak_allocated,
+                            new_peak_allocated,
                         )
                         setattr(parent, child_name, cb)
                         blocked_candidates.add(cb_path)
                         continue
 
-                    _cprint(
-                        verbose,
-                        f"\t{cb_name}: successfully split "
-                        f"({peak_allocated} -> {new_peak_allocated})",
+                    logger.debug(
+                        "\t%s: successfully split (%s -> %s)",
+                        cb_name,
+                        peak_allocated,
+                        new_peak_allocated,
                     )
                     peak_allocated = new_peak_allocated
                     summary.temporal_split_count += 1
@@ -1681,13 +1672,13 @@ def memory_optimization(
                     break
 
                 if not improved:
-                    _cprint(verbose, "\tNo temporal split candidate improved memory.")
+                    logger.debug("\tNo temporal split candidate improved memory.")
                     summary.skipped_steps.append("level3:no_improving_candidate")
                     break
 
     if level > 3:
         if _gc_container_count(net) == 0:
-            _cprint(verbose, "Level 4: no GCContainers found, skip greedy unwrap")
+            logger.debug("Level 4: no GCContainers found, skip greedy unwrap")
             summary.skipped_steps.append("level4:no_gccontainers")
         else:
             if peak_allocated < 0:
@@ -1698,7 +1689,7 @@ def memory_optimization(
                     device,
                     worker_warmup=warmup_in_profile_workers,
                 )
-            _cprint(verbose, "Level 4: greedily disable GCContainers")
+            logger.debug("Level 4: greedily disable GCContainers")
             summary.applied_steps.append("level4_greedy_unwrap")
             results = _inference_time_profile(net, dummy_input, ctx, device)
 
@@ -1721,17 +1712,19 @@ def memory_optimization(
                     worker_warmup=warmup_in_profile_workers,
                 )
                 if new_peak_allocated > peak_allocated:
-                    _cprint(
-                        verbose,
-                        f"\t{cb_name}: keep GCContainer "
-                        f"({peak_allocated} -> {new_peak_allocated})",
+                    logger.debug(
+                        "\t%s: keep GCContainer (%s -> %s)",
+                        cb_name,
+                        peak_allocated,
+                        new_peak_allocated,
                     )
                     setattr(parent, child_name, cb)
                 else:
-                    _cprint(
-                        verbose,
-                        f"\t{cb_name}: disable GCContainer "
-                        f"({peak_allocated} -> {new_peak_allocated})",
+                    logger.debug(
+                        "\t%s: disable GCContainer (%s -> %s)",
+                        cb_name,
+                        peak_allocated,
+                        new_peak_allocated,
                     )
                     peak_allocated = new_peak_allocated  # update the peak memory
                     summary.unwrap_count += 1
@@ -1743,7 +1736,7 @@ def memory_optimization(
         _dummy_train_step(net, dummy_input, restore_bn=True)
 
     et = time.time()
-    _cprint(verbose, f"Total time: {et - st:.2f}s")
+    logger.debug("Total time: %.2fs", et - st)
     net = net.cpu()  # must return a model on CPU
     summary.gc_container_count = sum(
         1 for m in net.modules() if isinstance(m, GCContainer)

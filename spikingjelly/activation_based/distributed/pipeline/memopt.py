@@ -81,12 +81,13 @@ def apply_pipeline_stage_memopt(
     if memopt_level <= 0:
         runtime.memopt_selected_stage_indices = ()
         logger.info(
-            "distributed_pipeline_memopt_summary model_family=%s applied=%s memopt_level=%s selected_stage_indices=%s optimize_ms=%s",
+            "distributed_pipeline_memopt_summary model_family=%s applied=%s memopt_level=%s selected_stage_indices=%s optimize_ms=%s compress_x=%s",
             runtime.model_family,
             False,
             memopt_level,
             (),
             0.0,
+            compress_x,
         )
         return runtime, 0.0, False
 
@@ -130,12 +131,13 @@ def apply_pipeline_stage_memopt(
     ]
     if not local_selected_pairs:
         logger.info(
-            "distributed_pipeline_memopt_summary model_family=%s applied=%s memopt_level=%s selected_stage_indices=%s optimize_ms=%s",
+            "distributed_pipeline_memopt_summary model_family=%s applied=%s memopt_level=%s selected_stage_indices=%s optimize_ms=%s compress_x=%s",
             runtime.model_family,
             False,
             memopt_level,
             selected,
             0.0,
+            compress_x,
         )
         return runtime, 0.0, False
 
@@ -158,7 +160,6 @@ def apply_pipeline_stage_memopt(
             dummy_input=(stage_input_example,),
             compress_x=compress_x,
             level=memopt_level,
-            verbose=False,
         )
         if supports_plan_cache:
             optimize_kwargs["use_plan_cache"] = use_plan_cache

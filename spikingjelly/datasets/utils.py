@@ -789,7 +789,8 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(
     :param W: 帧宽度
     :type W: int
 
-    :param print_save: 若为 ``True``，则打印保存路径
+    :param print_save: 若为 ``True``，则通过 SpikingJelly logger 以 DEBUG 级别记录
+        保存路径；应用程序需配置包级 logger 才能看到该记录
     :type print_save: bool
 
 
@@ -825,7 +826,8 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(
     :param W: the width of frame
     :type W: int
 
-    :param print_save: If ``True``, this function will print saved files' paths.
+    :param print_save: If ``True``, log saved file paths at DEBUG level through the
+        SpikingJelly logger; applications must configure the package logger to see it.
     :type print_save: bool
     """
     fname = os.path.join(output_dir, os.path.basename(events_np_file))
@@ -836,7 +838,7 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(
         ),
     )
     if print_save:
-        logger.info("Frames [%s] saved.", fname)
+        logger.debug("Frames [%s] saved.", fname)
 
 
 def integrate_events_by_fixed_duration(
@@ -951,7 +953,8 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     :param W: 帧的宽度
     :type W: int
 
-    :param print_save: 如果 ``True``，此函数将打印保存的文件的路径。
+    :param print_save: 如果 ``True``，则通过 SpikingJelly logger 以 DEBUG 级别记录
+        保存路径；应用程序需配置包级 logger 才能看到该记录。
     :type print_save: bool
 
     :return: 帧的数量
@@ -983,7 +986,8 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     :param W: the weight of frame
     :type W: int
 
-    :param print_save: If ``True``, this function will print saved files' paths.
+    :param print_save: If ``True``, log saved file paths at DEBUG level through the
+        SpikingJelly logger; applications must configure the package logger to see it.
     :type print_save: bool
 
     :return: number of frames saved
@@ -994,7 +998,7 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     fname = os.path.join(output_dir, f"{fname}_{frames.shape[0]}.npz")
     np_savez(fname, frames=frames)
     if print_save:
-        logger.info("Frames [%s] saved.", fname)
+        logger.debug("Frames [%s] saved.", fname)
     return frames.shape[0]
 
 
@@ -1028,7 +1032,7 @@ def save_frames_to_npz_and_print(fname: str, frames: np.ndarray):
     :type frames: np.ndarray
     """
     np_savez(fname, frames=frames)
-    logger.info("Frames [%s] saved.", fname)
+    logger.debug("Frames [%s] saved.", fname)
 
 
 def create_same_directory_structure(
@@ -1071,7 +1075,7 @@ def create_same_directory_structure(
         if os.path.isdir(source_sub_dir):
             target_sub_dir = os.path.join(target_dir, sub_dir_name)
             os.mkdir(target_sub_dir)
-            logger.info("Mkdir [%s].", target_sub_dir)
+            logger.debug("Mkdir [%s].", target_sub_dir)
             create_same_directory_structure(source_sub_dir, target_sub_dir)
 
 
@@ -1294,6 +1298,9 @@ def pad_sequence_collate(batch: list):
 
     .. code-block:: python
 
+        from spikingjelly.logger import logger
+
+
         class VariableLengthDataset(torch.utils.data.Dataset):
             def __init__(self, n=1000):
                 super().__init__()
@@ -1314,7 +1321,7 @@ def pad_sequence_collate(batch: list):
         )
 
         for i, (x_p, label, x_len) in enumerate(loader):
-            logger.info(f"x_p.shape={x_p.shape}, label={label}, x_len={x_len}")
+            logger.info("x_p.shape=%s, label=%s, x_len=%s", x_p.shape, label, x_len)
             if i == 2:
                 break
 
@@ -1389,6 +1396,8 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
     * **代码示例 | Example**
 
     .. code-block:: python
+
+        from spikingjelly.logger import logger
 
         x1 = torch.rand([2, 6])
         x2 = torch.rand([3, 6])
@@ -1478,10 +1487,9 @@ def create_sub_dataset(
     """
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
-        logger.info("Mkdir [%s].", target_dir)
+        logger.debug("Mkdir [%s].", target_dir)
     create_same_directory_structure(source_dir, target_dir)
 
-    warnings_info = []
     for e_root, e_dirs, e_files in os.walk(source_dir, followlinks=True):
         if e_files.__len__() > 0:
             output_dir = os.path.join(target_dir, os.path.relpath(e_root, source_dir))
@@ -1490,8 +1498,10 @@ def create_sub_dataset(
             else:
                 samples_number = int(ratio * e_files.__len__())
             if samples_number == 0:
-                warnings_info.append(
-                    f"Warning: the samples number is 0 in [{output_dir}]."
+                logger.warning(
+                    "No samples selected from [%s] for output [%s].",
+                    e_root,
+                    output_dir,
                 )
             if randomly:
                 np.random.shuffle(e_files)
@@ -1506,12 +1516,9 @@ def create_sub_dataset(
                 else:
                     shutil.copyfile(source_file, target_file)
                     # print(f'copyfile {source_file} -> {target_file}')
-            logger.info(
+            logger.debug(
                 "[%s] files in [%s] have been copied to [%s].",
                 samples_number,
                 e_root,
                 output_dir,
             )
-
-    for i in range(len(warnings_info)):
-        logger.info(warnings_info[i])

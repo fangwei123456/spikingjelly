@@ -75,7 +75,6 @@ class SpikeSimCounter(BaseCounter):
         *,
         config: SpikeSimEnergyConfig,
         strict: bool,
-        verbose: bool,
     ):
         """
         **API Language** - :ref:`中文 <SpikeSimCounter-cn>` | :ref:`English <SpikeSimCounter-en>`
@@ -92,8 +91,6 @@ class SpikeSimCounter(BaseCounter):
         :type config: SpikeSimEnergyConfig
         :param strict: 严格模式开关
         :type strict: bool
-        :param verbose: 详细输出开关
-        :type verbose: bool
 
         ----
 
@@ -107,13 +104,11 @@ class SpikeSimCounter(BaseCounter):
         :type config: SpikeSimEnergyConfig
         :param strict: Whether to use strict mode
         :type strict: bool
-        :param verbose: Whether to produce verbose output
-        :type verbose: bool
+
         """
         super().__init__()
         self.config = config
         self.strict = strict
-        self.verbose = verbose
         self.stage_stats: dict[str, _StageStats] = defaultdict(_StageStats)
         self.stage_metadata: dict[str, _StageMetadata] = {}
         self.warnings: list[str] = []
@@ -454,7 +449,7 @@ class SpikeSimCounter(BaseCounter):
             dilation=dilation,
             spike_like_input=spike_like_input,
         )
-        if self.verbose and logger.isEnabledFor(logging.DEBUG):
+        if logger.isEnabledFor(logging.DEBUG):
             mode = (
                 "event"
                 if self.config.activity_mode == "event" and spike_like_input

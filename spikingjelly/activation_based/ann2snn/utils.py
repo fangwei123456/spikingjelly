@@ -142,6 +142,7 @@ def download_url(url: str, dst: str) -> int:
             )
             req.close()
             first_byte = 0
+            resumed = False
             pbar.reset(total=file_size)
             header = {**headers, "Range": f"bytes=0-{file_size - 1}"}
             req = requests.get(url, headers=header, stream=True, timeout=30)

@@ -8,19 +8,19 @@ import torch.nn as nn
 
 try:
     import cupy
-except BaseException as e:
-    logger.debug("spikingjelly.activation_based.base: %s", e)
+except (ImportError, OSError) as e:
+    logger.info("Optional CuPy backend unavailable: %s", e)
     cupy = None
 
 try:
     import triton
-except BaseException as e:
-    logger.debug("spikingjelly.activation_based.base: %s", e)
+except (ImportError, OSError) as e:
+    logger.info("Optional Triton backend unavailable: %s", e)
     triton = None
 
 try:
     import lava.lib.dl.slayer as slayer
-except BaseException:
+except (ImportError, OSError):
     slayer = None
 
 

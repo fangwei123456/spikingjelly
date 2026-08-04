@@ -231,7 +231,7 @@ def test_memory_optimization_level_0():
 
     # Test level 0 - should return original network
     optimized_net = memory_optimization(
-        net, (neuron.IFNode, neuron.LIFNode), dummy_input, level=0, verbose=True
+        net, (neuron.IFNode, neuron.LIFNode), dummy_input, level=0
     )
     assert optimized_net is net
 
@@ -247,7 +247,6 @@ def test_memory_optimization_level_1():
         (neuron.IFNode, neuron.LIFNode),
         dummy_input,
         level=1,
-        verbose=True,
     )
     print(optimized_net)
     gc_containers = [m for m in optimized_net.modules() if isinstance(m, GCContainer)]
@@ -264,7 +263,6 @@ def test_memory_optimization_missing_dummy_input():
             (neuron.IFNode, neuron.LIFNode),
             None,  # No dummy input
             level=2,
-            verbose=False,
         )
 
 
@@ -282,7 +280,6 @@ def test_memory_optimization_integration():
         dummy_input,
         level=4,
         compress_x=True,
-        verbose=True,
     )
     print(optimized_net)
 

@@ -7,7 +7,7 @@ import torch
 
 try:
     import cupy
-except BaseException as e:
+except (ImportError, OSError) as e:
     logger.debug("spikingjelly.activation_based.cuda_kernel.auto_cuda.base: %s", e)
     cupy = None
 

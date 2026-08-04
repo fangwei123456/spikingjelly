@@ -993,11 +993,17 @@ class FlexSN(base.MemoryModule):
                     # Triton/CUDA/driver compilation failures surface through
                     # several exception types; any failure here can safely fall
                     # back to the already-built regular inference path.
+                    fallback = (
+                        "the regular inference kernel"
+                        if self._inductor_scan_kernel is not None
+                        else "HOP/eager_scan"
+                    )
                     logger.warning(
                         "FlexSN: could not build inductor inference-final-state kernel (%s: %s); "
-                        "store_state_seqs=False inference falls back to the regular inference kernel.",
+                        "store_state_seqs=False inference falls back to %s.",
                         type(e).__name__,
                         e,
+                        fallback,
                     )
                     self._inductor_scan_final_state_kernel = None
                     self._inductor_scan_final_state_info = None
@@ -1079,12 +1085,17 @@ class FlexSN(base.MemoryModule):
                 try:
                     _warmup_inductor_inference_final_state_kernel(self)
                 except Exception as e:
+                    fallback = (
+                        "the regular inference kernel"
+                        if self._inductor_scan_kernel is not None
+                        else "HOP/eager_scan"
+                    )
                     logger.warning(
                         "FlexSN: could not warm up inductor inference-final-state "
-                        "kernel (%s: %s); falling back to the regular inference "
-                        "kernel for store_state_seqs=False.",
+                        "kernel (%s: %s); falling back to %s for store_state_seqs=False.",
                         type(e).__name__,
                         e,
+                        fallback,
                     )
                     self._inductor_scan_final_state_kernel = None
                     self._inductor_scan_final_state_info = None

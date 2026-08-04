@@ -199,6 +199,11 @@ Module: `spikingjelly.activation_based.triton_kernel.neuron_kernel`.
 
 ### Breaking Changes and Notices
 
+#### Logging-Controlled Diagnostics
+
+- Replaced diagnostic `verbose` controls with the package logger; configure
+  `spikingjelly.logger.logger` to control output.
+
 #### Surrogate CUDA Code API Changes
 
 Module: `spikingjelly.activation_based.surrogate`.

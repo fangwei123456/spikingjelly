@@ -53,10 +53,10 @@ def test_synop_ignore():
         extra_ignore_modules=[nn.Conv2d, neuron.BaseNode]
     )
 
-    with op_counter.DispatchCounterMode([counter_full], verbose=True):
+    with op_counter.DispatchCounterMode([counter_full]):
         net(x)
 
-    with op_counter.DispatchCounterMode([counter_no_conv], verbose=True):
+    with op_counter.DispatchCounterMode([counter_no_conv]):
         net(x)
 
     total_full = counter_full.get_total()

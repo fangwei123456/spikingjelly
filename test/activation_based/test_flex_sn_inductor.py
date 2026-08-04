@@ -1510,7 +1510,7 @@ def test_eager_scan_empty_sequence_validates_core_arity():
 def test_inference_final_state_template_handles_zero_states(monkeypatch):
     captured = {}
 
-    def fake_compile(kernel_str, kernel_name, verbose):
+    def fake_compile(kernel_str, kernel_name):
         compile(kernel_str, kernel_name, "exec")
         captured["kernel_str"] = kernel_str
         return object()

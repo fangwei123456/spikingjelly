@@ -1,4 +1,3 @@
-import logging
 from typing import Callable, Optional, Union
 
 import torch
@@ -319,11 +318,10 @@ class BatchNorm2d(nn.Module):
             pre_hook_fx=self.pre_hook_fx,
         )
         bn.load_state_dict(self.state_dict())
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
-                "Exporting Slayer batch norm: num_features=%s",
-                self.num_features,
-            )
+        logger.debug(
+            "Exporting Slayer batch norm: num_features=%s",
+            self.num_features,
+        )
         return bn
 
     def forward(self, x: torch.Tensor):
@@ -1356,6 +1354,6 @@ try:
             return lava_block
 
 
-except BaseException as e:
+except (ImportError, OSError) as e:
     logger.debug("spikingjelly.activation_based.lava_exchange: %s", e)
     slayer = None

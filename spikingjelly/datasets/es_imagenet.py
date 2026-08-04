@@ -350,7 +350,7 @@ class ESImageNet(NeuromorphicDatasetFolder):
         logger.info("Mkdir [%s].", target_dir)
         utils.create_same_directory_structure(source_train_dir, target_dir)
 
-        for fname, label in zip(val_fname, val_label):
+        for fname, label in zip(val_fname, val_label, strict=True):
             source_file = source_dir / fname
             target_file = target_dir / f"class{label}" / f"{fname}"
             target_file.symlink_to(source_file)

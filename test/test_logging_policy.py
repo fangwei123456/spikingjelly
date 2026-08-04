@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from spikingjelly import logger
+from spikingjelly.logger import logger
 from spikingjelly.activation_based.functional import net_config
 from spikingjelly.activation_based.op_counter.compute_energy import (
     ComputeEnergyProfiler,
@@ -16,7 +16,19 @@ from spikingjelly.activation_based.op_counter.compute_energy import (
 
 def test_package_logger_is_named_and_does_not_configure_root():
     assert logger.name == "spikingjelly"
-    assert isinstance(logger.handlers[-1], logging.NullHandler)
+    assert any(isinstance(handler, logging.NullHandler) for handler in logger.handlers)
+
+
+def test_package_does_not_reexport_logger_object():
+    import importlib
+    import types
+
+    import spikingjelly
+
+    logger_module = importlib.import_module("spikingjelly.logger")
+    assert isinstance(spikingjelly.logger, types.ModuleType)
+    assert spikingjelly.logger is logger_module
+    assert logger_module.logger is logger
 
 
 def test_import_does_not_change_root_configuration():
@@ -38,7 +50,8 @@ def snapshot():
 before = snapshot()
 import spikingjelly
 after = snapshot()
-assert before == after, (before, after)
+if before != after:
+    raise SystemExit(f"root logging configuration changed: {before!r} != {after!r}")
 """
     subprocess.run([sys.executable, "-c", script], check=True)
 
@@ -124,7 +137,9 @@ def test_metric_logger_formats_progress_with_logging_arguments(caplog):
 def test_policy_checker_rejects_nested_get_logger(tmp_path):
     import importlib.util
 
-    checker_path = Path("tools/check_logging_policy.py").resolve()
+    checker_path = (
+        Path(__file__).resolve().parent.parent / "tools/check_logging_policy.py"
+    )
     spec = importlib.util.spec_from_file_location(
         "logging_policy_checker", checker_path
     )
@@ -141,10 +156,78 @@ def test_policy_checker_rejects_nested_get_logger(tmp_path):
     assert any("logger must be imported" in violation for violation in violations)
 
 
+def test_policy_checker_rejects_standalone_get_logger(tmp_path):
+    import importlib.util
+
+    checker_path = (
+        Path(__file__).resolve().parent.parent / "tools/check_logging_policy.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "logging_policy_checker", checker_path
+    )
+    checker = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(checker)
+
+    source = tmp_path / "standalone_logger.py"
+    source.write_text(
+        "import logging\n"
+        'logging.getLogger("spikingjelly")\n'
+        'logger = logging.getLogger("wrong_name")\n',
+        encoding="utf-8",
+    )
+    violations = checker.check(tmp_path)
+    assert any("logger must be imported" in violation for violation in violations)
+    assert any("non-package logger name" in violation for violation in violations)
+
+
+def test_policy_checker_rejects_nested_null_handler(tmp_path):
+    import importlib.util
+
+    checker_path = (
+        Path(__file__).resolve().parent.parent / "tools/check_logging_policy.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "logging_policy_checker", checker_path
+    )
+    checker = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(checker)
+
+    package = tmp_path / "nested" / "__init__.py"
+    package.parent.mkdir()
+    package.write_text("import logging\nlogging.NullHandler()\n", encoding="utf-8")
+    violations = checker.check(tmp_path)
+    assert any("logging configuration call" in violation for violation in violations)
+
+
+def test_policy_checker_rejects_builtins_print(tmp_path):
+    import importlib.util
+
+    checker_path = (
+        Path(__file__).resolve().parent.parent / "tools/check_logging_policy.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "logging_policy_checker", checker_path
+    )
+    checker = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(checker)
+
+    source = tmp_path / "builtins_print.py"
+    source.write_text(
+        "import builtins\nbuiltins.print('not allowed')\n", encoding="utf-8"
+    )
+    violations = checker.check(tmp_path)
+    assert any("builtins.print" in violation for violation in violations)
+
+
 def test_policy_checker_rejects_eager_logging_formatting(tmp_path):
     import importlib.util
 
-    checker_path = Path("tools/check_logging_policy.py").resolve()
+    checker_path = (
+        Path(__file__).resolve().parent.parent / "tools/check_logging_policy.py"
+    )
     spec = importlib.util.spec_from_file_location(
         "logging_policy_checker", checker_path
     )

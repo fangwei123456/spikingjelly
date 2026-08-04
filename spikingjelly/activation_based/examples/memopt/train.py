@@ -23,7 +23,6 @@ class CIFAR10DVSLightningModule(ClassificationLightningModule):
             dummy_input=(torch.zeros(32, T, 2, 48, 48),),
             compress_x=compress_x,
             level=level,
-            verbose=True,
         )
         super().__init__(net, criterion, num_classes=10, y_with_T=True)
         self.T = T

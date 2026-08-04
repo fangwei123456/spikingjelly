@@ -5,7 +5,7 @@ try:
     from .integrate_and_fire import *
     from .lif import *
     from .plif import *
-except BaseException as e:
+except (ImportError, OSError) as e:
     logger.debug("spikingjelly.activation_based.triton_kernel.neuron_kernel: %s", e)
     activation_aware_if = None
     ilif = None

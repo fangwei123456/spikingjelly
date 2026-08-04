@@ -413,10 +413,21 @@ Once the preparation is done, call :func:`memory_optimization <spikingjelly.acti
         compress_x=True,
         level=4,
         temporal_split_factor=2,
-        verbose=True,
     )
 
 Refer to the :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` docs for argument details.
+
+Optimization progress is emitted as ``DEBUG`` records by the package logger. Enable it
+only when diagnosing an optimization run:
+
+.. code:: python
+
+    import logging
+
+    from spikingjelly.logger import logger
+
+    logging.basicConfig(level=logging.DEBUG)
+    logger.setLevel(logging.DEBUG)
 
 If you prefer a simpler, higher-level entry point, start from the ``profile`` argument instead:
 

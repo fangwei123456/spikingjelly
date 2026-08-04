@@ -15,11 +15,12 @@ from . import tensor_cache
 
 try:
     import cupy
-except BaseException as e:
+except (ImportError, OSError) as e:
     logger.debug("CUDA spike op dependency unavailable: %s", e)
     cupy = None
 
 
+cpp_wrapper_error = None
 try:
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(
@@ -56,9 +57,9 @@ try:
         functions=["cudnn_convolution_backward"],
         with_cuda=True,
     )
-except BaseException as e:
-    logger.warning("CUDA spike-op extension unavailable; using fallback path: %s", e)
+except (ImportError, OSError, RuntimeError) as e:
     cpp_wrapper = None
+    cpp_wrapper_error = e
 
 
 def _spike_conv_backward_common(
@@ -254,22 +255,37 @@ torch.library.register_autograd(
     setup_context=_setup_cupy_spike_convolution_context,
 )
 
-logger.info(
-    "CUDA spike operators registered: operators=%s fake_kernels=%s autograd_kernels=%s",
-    2,
-    2,
-    2,
-    extra={
-        "event": "operator_register_summary",
-        "backend": "cuda",
-        "registration_kind": "torch.library",
-        "registered": 2,
-        "fake_registered": 2,
-        "autograd_registered": 2,
-        "failed": 0 if cpp_wrapper is not None else 2,
-        "fallback": 0 if cpp_wrapper is not None else 1,
-    },
-)
+if cpp_wrapper is None:
+    logger.warning(
+        "CUDA spike operators registered: linear=ok convolution=backward_unavailable; "
+        "using the PyTorch fallback for supported operations. extension_error=%s",
+        cpp_wrapper_error,
+        extra={
+            "event": "operator_register_summary",
+            "backend": "cuda",
+            "registration_kind": "torch.library",
+            "registered": 2,
+            "fake_registered": 2,
+            "autograd_registered": 2,
+            "failed": 1,
+        },
+    )
+else:
+    logger.info(
+        "CUDA spike operators registered: operators=%s fake_kernels=%s autograd_kernels=%s",
+        2,
+        2,
+        2,
+        extra={
+            "event": "operator_register_summary",
+            "backend": "cuda",
+            "registration_kind": "torch.library",
+            "registered": 2,
+            "fake_registered": 2,
+            "autograd_registered": 2,
+            "failed": 0,
+        },
+    )
 
 
 def spike_linear(

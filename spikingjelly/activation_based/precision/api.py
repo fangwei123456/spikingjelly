@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
 import time
 import warnings
@@ -122,20 +121,19 @@ def prepare_model_for_precision(
         scaler=scaler,
         fallback_reason=fallback_reason,
     )
-    if logger.isEnabledFor(logging.INFO):
-        conversion_report = artifacts.policy.conversion_report()
-        logger.info(
-            "precision_prepare_summary requested_mode=%s effective_mode=%s device=%s fallback=%s fallback_reason=%s converted_modules=%s unsupported_modules=%s grad_scaler=%s elapsed_ms=%.3f",
-            requested.mode,
-            effective.mode,
-            device,
-            fallback_reason is not None,
-            fallback_reason,
-            len(conversion_report.get("converted_modules", ())),
-            len(conversion_report.get("unsupported_modules", ())),
-            scaler is not None,
-            (time.perf_counter() - start_time) * 1000.0,
-        )
+    conversion_report = artifacts.policy.conversion_report()
+    logger.info(
+        "precision_prepare_summary requested_mode=%s effective_mode=%s device=%s fallback=%s fallback_reason=%s converted_modules=%s unsupported_modules=%s grad_scaler=%s elapsed_ms=%.3f",
+        requested.mode,
+        effective.mode,
+        device,
+        fallback_reason is not None,
+        fallback_reason,
+        len(conversion_report.get("converted_modules", ())),
+        len(conversion_report.get("unsupported_modules", ())),
+        scaler is not None,
+        (time.perf_counter() - start_time) * 1000.0,
+    )
     return artifacts
 
 

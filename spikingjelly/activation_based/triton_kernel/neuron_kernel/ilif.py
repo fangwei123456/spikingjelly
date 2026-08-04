@@ -13,7 +13,7 @@ try:
     import triton
     import triton.language as tl
     from triton.language.extra import libdevice
-except BaseException as e:
+except (ImportError, OSError) as e:
     from .. import dummy
 
     logger.debug(

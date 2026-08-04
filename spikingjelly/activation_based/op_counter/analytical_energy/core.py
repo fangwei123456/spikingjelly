@@ -384,7 +384,6 @@ class LemaireEnergyProfiler:
                 self.addressing_counter,
             ],
             strict=self.config.strict,
-            verbose=False,
         )
         self._warnings: list[str] = []
         self._lemaire_tracker = _LemaireForwardTracker(

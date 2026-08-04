@@ -12,7 +12,7 @@ try:
     from ..triton_kernel.neuron_kernel import (
         activation_aware_if as activation_aware_if_triton_kernel,
     )
-except BaseException as e:
+except (ImportError, OSError) as e:
     logger.debug("spikingjelly.activation_based.neuron: %s", e)
     triton_kernel = None
     activation_aware_if_triton_kernel = None

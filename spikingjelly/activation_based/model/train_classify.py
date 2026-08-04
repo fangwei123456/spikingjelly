@@ -1,8 +1,8 @@
 import argparse
 import datetime
-import logging
 import os
 import random
+import shutil
 import sys
 import time
 import warnings
@@ -258,13 +258,14 @@ class Trainer:
             metric_logger.acc1.global_avg,
             metric_logger.acc5.global_avg,
         )
-        logger.info(
-            "Train: train_acc1=%s, train_acc5=%s, train_loss=%s, samples/s=%s",
-            train_acc1,
-            train_acc5,
-            train_loss,
-            metric_logger.meters["img/s"].global_avg,
-        )
+        if utils.is_main_process():
+            logger.info(
+                "Train: train_acc1=%s, train_acc5=%s, train_loss=%s, samples/s=%s",
+                train_acc1,
+                train_acc5,
+                train_loss,
+                metric_logger.meters["img/s"].global_avg,
+            )
         return train_loss, train_acc1, train_acc5
 
     def evaluate(self, args, model, criterion, data_loader, device, log_suffix=""):
@@ -315,13 +316,14 @@ class Trainer:
             metric_logger.acc1.global_avg,
             metric_logger.acc5.global_avg,
         )
-        logger.info(
-            "Test: test_acc1=%s, test_acc5=%s, test_loss=%s, samples/s=%s",
-            test_acc1,
-            test_acc5,
-            test_loss,
-            num_processed_samples / (time.time() - start_time),
-        )
+        if utils.is_main_process():
+            logger.info(
+                "Test: test_acc1=%s, test_acc5=%s, test_loss=%s, samples/s=%s",
+                test_acc1,
+                test_acc5,
+                test_loss,
+                num_processed_samples / (time.time() - start_time),
+            )
         return test_loss, test_acc1, test_acc5
 
     def _get_cache_path(self, filepath):
@@ -664,8 +666,7 @@ class Trainer:
         model.to(device)
         if utils.is_main_process():
             logger.info("Model created: %s", type(model).__name__)
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug("Model architecture:\n%s", model)
+            logger.debug("Model architecture:\n%s", model)
 
         if args.distributed and args.sync_bn:
             model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -724,9 +725,9 @@ class Trainer:
         if args.clean:
             if utils.is_main_process():
                 if os.path.exists(tb_dir):
-                    os.remove(tb_dir)
+                    shutil.rmtree(tb_dir)
                 if os.path.exists(pt_dir):
-                    os.remove(pt_dir)
+                    shutil.rmtree(pt_dir)
                 logger.info("remove %s and %s.", tb_dir, pt_dir)
 
         if utils.is_main_process():
@@ -881,7 +882,7 @@ class Trainer:
 
                 if utils.is_main_process() and epoch > 0:
                     os.remove(os.path.join(pt_dir, f"checkpoint_{epoch - 1}.pth"))
-            if utils.is_main_process() and logger.isEnabledFor(logging.INFO):
+            if utils.is_main_process():
                 logger.info(
                     "Estimated finish time: %s",
                     (
@@ -891,7 +892,6 @@ class Trainer:
                         )
                     ).strftime("%Y-%m-%d %H:%M:%S"),
                 )
-                logger.info("Training arguments: %s", args)
 
     def before_test_one_epoch(self, args, model, epoch):
         pass

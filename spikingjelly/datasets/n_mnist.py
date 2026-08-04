@@ -19,7 +19,7 @@ __all__ = ["NMNIST"]
 def _read_bin_save_to_np(bin_file: Union[str, Path], np_file: Union[str, Path]):
     events = utils.load_ATIS_bin(bin_file)
     utils.np_savez(np_file, t=events["t"], x=events["x"], y=events["y"], p=events["p"])
-    logger.info("Save [%s] to [%s].", bin_file, np_file)
+    logger.debug("Save [%s] to [%s].", bin_file, np_file)
 
 
 class NMNIST(NeuromorphicDatasetFolder):
@@ -235,7 +235,7 @@ class NMNIST(NeuromorphicDatasetFolder):
             futures = []
             for zip_file in os.listdir(download_root):
                 zip_file = download_root / zip_file
-                logger.info("Extract [%s] to [%s].", zip_file, extract_root)
+                logger.debug("Extract [%s] to [%s].", zip_file, extract_root)
                 futures.append(tpe.submit(extract_archive, zip_file, extract_root))
 
             for future in futures:
@@ -286,16 +286,16 @@ class NMNIST(NeuromorphicDatasetFolder):
                 source_dir = extract_root / train_test_dir
                 target_dir = raw_root / train_test_dir.lower()
                 target_dir.mkdir()
-                logger.info("Mkdir [%s].", target_dir)
+                logger.debug("Mkdir [%s].", target_dir)
                 for class_name in os.listdir(source_dir):
                     bin_dir = source_dir / class_name
                     np_dir = target_dir / class_name
                     np_dir.mkdir()
-                    logger.info("Mkdir [%s].", np_dir)
+                    logger.debug("Mkdir [%s].", np_dir)
                     for bin_file in os.listdir(bin_dir):
                         source_file = bin_dir / bin_file
                         target_file = np_dir / (os.path.splitext(bin_file)[0] + ".npz")
-                        logger.info(
+                        logger.debug(
                             "Start to convert [%s] to [%s].", source_file, target_file
                         )
                         futures.append(

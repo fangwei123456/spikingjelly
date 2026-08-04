@@ -5,7 +5,7 @@ import torch
 
 try:
     import triton
-except Exception as e:
+except (ImportError, OSError) as e:
     from .. import dummy
 
     logger.debug("spikingjelly.activation_based.triton_kernel.flexsn.wrapper: %s", e)

@@ -19,7 +19,7 @@ from .triton_utils import (
 try:
     import triton
     import triton.language as tl
-except Exception as e:
+except (ImportError, OSError) as e:
     logger.debug("Failed to import Triton for FP8 capability probe: %s", e)
     triton = None
     tl = None

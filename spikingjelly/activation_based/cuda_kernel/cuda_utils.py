@@ -14,7 +14,7 @@ from ... import configure
 
 try:
     import cupy
-except BaseException as e:
+except (ImportError, OSError) as e:
     logger.debug("spikingjelly.activation_based.cuda_kernel.cuda_utils: %s", e)
     cupy = None
 

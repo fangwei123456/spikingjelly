@@ -9,7 +9,7 @@ import torch
 
 try:
     import cupy
-except BaseException as e:
+except (ImportError, OSError) as e:
     logger.debug(
         "spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step: %s", e
     )

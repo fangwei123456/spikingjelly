@@ -78,7 +78,6 @@ English version: :doc:`../en/op_counter`
 
     with op_counter.DispatchCounterMode(
         [flop_counter, mem_counter],
-        verbose=False,
         strict=False,
     ):
         _ = model(x)
@@ -86,6 +85,18 @@ English version: :doc:`../en/op_counter`
     print("FLOPs:", flop_counter.get_total())
     print("Memory access (bytes):", mem_counter.get_total())
     print("Global FLOP record:", flop_counter.get_counts()["Global"])
+
+算子计数器的诊断信息以包级 logger 的 ``DEBUG`` 记录输出，包含逐算子的细节；
+大型模型开启后可能产生较高开销，因此仅在诊断计数过程时开启：
+
+.. code-block:: python
+
+    import logging
+
+    from spikingjelly.logger import logger
+
+    logging.basicConfig(level=logging.DEBUG)
+    logger.setLevel(logging.DEBUG)
 
 本教程中的示例统一使用 ``strict=False``，这样即使遇到不受支持的辅助算子，也不会立刻中断执行。
 如果你已经确认所选计数器完整覆盖了相关算子路径，并且希望在遇到 unsupported 算子时立即报错，再切换到 ``strict=True``。

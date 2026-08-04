@@ -728,7 +728,7 @@ try:
 
         1. 创建 ``lyngor.DLModel`` 并以 Pytorch 格式加载模型；
         2. 创建 ``lyngor.Builder`` 并以 APU 为目标执行离线编译；
-        3. 打印输出目录内容并返回主网络路径。
+        3. 记录编译产物路径并返回主网络路径。
 
         .. note::
             传入的 ``net`` 应已通过 :func:`to_lynxi_supported_modules` 转换为
@@ -765,7 +765,7 @@ try:
 
         1. Create a ``lyngor.DLModel`` and load the model in Pytorch format;
         2. Create a ``lyngor.Builder`` targeting the APU and run offline compilation;
-        3. Print the output directory contents and return the main network path.
+        3. Log the generated artifact path and return the main network path.
 
         .. note::
             The ``net`` passed in should have been converted to Lynxi-compatible
@@ -852,5 +852,5 @@ try:
         return lynpy.Model(dev_id=device_id, path=model_path)
 
 
-except BaseException as e:
+except (ImportError, OSError) as e:
     logger.debug("spikingjelly.activation_based.lynxi_exchange: %s", e)

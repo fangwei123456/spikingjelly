@@ -413,10 +413,20 @@ Step 3. 调用工具函数
         compress_x=True,
         level=4,
         temporal_split_factor=2,
-        verbose=True,
     )
 
 查询 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 的文档以获取参数说明。
+
+优化过程以包级 logger 的 ``DEBUG`` 记录输出。仅在需要诊断一次优化过程时开启：
+
+.. code:: python
+
+    import logging
+
+    from spikingjelly.logger import logger
+
+    logging.basicConfig(level=logging.DEBUG)
+    logger.setLevel(logging.DEBUG)
 
 如果用户更关注“少调参、快速拿到一个合理配置”，则推荐优先使用 ``profile`` 接口。例如：
 

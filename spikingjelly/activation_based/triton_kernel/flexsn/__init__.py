@@ -7,7 +7,7 @@ try:
     from . import template as template
     from . import wrapper as wrapper
     from . import custom_ops as custom_ops
-except Exception as e:
+except (ImportError, OSError, RuntimeError) as e:
     logger.debug("spikingjelly.activation_based.triton_kernel.flexsn: %s", e)
     info = None
     hop = None

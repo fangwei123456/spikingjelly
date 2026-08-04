@@ -887,10 +887,12 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         for file_name, url, md5 in resource_list:
             fpath = download_root / file_name
             if not check_integrity(fpath=fpath, md5=md5):
-                logger.info("The file [%s] does not exist or is corrupted.", fpath)
+                logger.warning(
+                    "The downloaded file [%s] is missing or corrupted.", fpath
+                )
                 if fpath.exists():
                     fpath.unlink()
-                    logger.info("Remove [%s]", fpath)
+                    logger.debug("Remove [%s]", fpath)
 
                 if cls.downloadable():
                     logger.info(
@@ -975,8 +977,9 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         # extract
         extract_root = self.cfg.root / "extract"
         if extract_root.exists():
-            logger.info(
-                "The directory [%s] for saving extracted files already exists.\nSpikingJelly will not check the data integrity of extracted files.\nIf extracted files are corrupted, please delete [%s] manually.",
+            logger.warning(
+                "The extracted directory [%s] already exists; SpikingJelly will "
+                "not check its integrity. Delete [%s] manually if it is corrupted.",
                 extract_root,
                 extract_root,
             )
@@ -987,7 +990,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
         # generate raw dataset in self.raw_root
         self.raw_root.mkdir(exist_ok=True)  # raw_root might be equal to extract_root
-        logger.info("Mkdir [%s].", self.raw_root)
+        logger.info("Raw dataset directory ready: [%s].", self.raw_root)
         logger.info(
             "Start to convert the extracted dataset from [%s] to raw dataset in [%s].",
             extract_root,

@@ -104,7 +104,6 @@ class SpikeSimEnergyProfiler:
         *,
         config: SpikeSimEnergyConfig | None = None,
         strict: bool = False,
-        verbose: bool = False,
     ):
         r"""
         .. rubric:: API Language
@@ -127,7 +126,6 @@ class SpikeSimEnergyProfiler:
 
         :param config: SpikeSim 能耗配置；默认使用 ``SpikeSimEnergyConfig()``
         :param strict: 是否在 unsupported 情况下直接抛异常
-        :param verbose: 是否打印逐 stage 的运行时统计信息
 
         ----
 
@@ -144,21 +142,18 @@ class SpikeSimEnergyProfiler:
 
         :param config: SpikeSim energy config; defaults to ``SpikeSimEnergyConfig()``
         :param strict: whether to raise immediately on unsupported behaviors
-        :param verbose: whether to print per-stage runtime statistics
+
         """
         self.config = (config or SpikeSimEnergyConfig()).copy()
         self.config.validate()
         self.strict = strict
-        self.verbose = verbose
         self._counter = SpikeSimCounter(
             config=self.config,
             strict=self.strict,
-            verbose=self.verbose,
         )
         self._dispatch_mode = DispatchCounterMode(
             [self._counter],
             strict=False,
-            verbose=self.verbose,
         )
         self._active = False
         self._warnings: list[str] = []
@@ -317,7 +312,6 @@ def estimate_spikesim_event_energy(
     *,
     config: SpikeSimEnergyConfig | None = None,
     strict: bool = False,
-    verbose: bool = False,
 ) -> SpikeSimEnergyReport:
     r"""
     .. rubric:: API Language
@@ -339,7 +333,6 @@ def estimate_spikesim_event_energy(
     :param inputs: 模型输入；若为 tuple/list 则按 ``model(*inputs)`` 调用
     :param config: SpikeSim 能耗配置
     :param strict: 是否在 unsupported 情况下直接抛异常
-    :param verbose: 是否打印逐 stage 的运行时统计信息
 
     ----
 
@@ -355,9 +348,9 @@ def estimate_spikesim_event_energy(
         ``model(*inputs)``
     :param config: SpikeSim energy config
     :param strict: whether to raise immediately on unsupported behaviors
-    :param verbose: whether to print per-stage runtime statistics
+
     """
-    profiler = SpikeSimEnergyProfiler(config=config, strict=strict, verbose=verbose)
+    profiler = SpikeSimEnergyProfiler(config=config, strict=strict)
     cfg = profiler.config
     training_message = (
         "SpikeSim energy only covers forward inference; call model.eval() before "

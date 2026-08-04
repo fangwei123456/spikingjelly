@@ -103,13 +103,12 @@ def configure_snn_distributed(
     needs_device_mesh = config.device_mesh is not None or config.mode != "none"
     if not needs_device_mesh:
         logger.info(
-            "distributed_configuration_summary mode=%s device_type=%s mesh_shape=%s tensor_parallel=%s fsdp2=%s data_parallel=%s memory_modules=%s tensor_parallel_candidates=%s",
+            "distributed_configuration_summary mode=%s device_type=%s mesh_shape=None "
+            "tensor_parallel=%s fsdp2=False data_parallel=False memory_modules=%s "
+            "tensor_parallel_candidates=%s",
             config.mode,
             config.device_type,
-            None,
             tensor_parallel,
-            False,
-            False,
             len(analysis.memory_module_names),
             len(analysis.tensor_parallel_candidate_names),
         )

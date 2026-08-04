@@ -534,7 +534,6 @@ def maybe_apply_memopt(args, model, sample_input):
         dummy_input=(sample_input,),
         compress_x=args.memopt_compress_x,
         level=args.memopt_level,
-        verbose=False,
     )
     model = model.to(sample_input.device)
     return model, (time.time() - start) * 1000.0

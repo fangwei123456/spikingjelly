@@ -8,7 +8,7 @@ from . import cuda_utils
 
 try:
     import cupy
-except BaseException as e:
+except (ImportError, OSError) as e:
     logger.debug("spikingjelly.activation_based.tensor_cache: %s", e)
     cupy = None
 

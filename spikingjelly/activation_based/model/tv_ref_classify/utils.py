@@ -367,7 +367,8 @@ class MetricLogger:
             end = time.time()
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        logger.info("%s Total time: %s", header, total_time_str)
+        if is_main_process():
+            logger.info("%s Total time: %s", header, total_time_str)
 
 
 class ExponentialMovingAverage(torch.optim.swa_utils.AveragedModel):

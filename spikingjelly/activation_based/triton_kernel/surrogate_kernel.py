@@ -6,7 +6,7 @@ from .. import surrogate
 try:
     import triton
     import triton.language as tl
-except BaseException as e:
+except (ImportError, OSError) as e:
     from . import dummy
 
     logger.debug("spikingjelly.activation_based.triton_kernel.surrogate_kernel: %s", e)

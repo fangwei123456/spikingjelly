@@ -742,8 +742,9 @@ class GPUMonitor(threading.Thread):
 
             在主线程的工作完成后一定要调用GPU监视器的 ``stop()`` 函数，否则主线程不会退出。
 
-        :param log_dir: 使用 ``tensorboard`` 保存GPU数据的文件夹. 若为None，则日志不会保存，而是
-            直接 ``print``
+        :param log_dir: 使用 ``tensorboard`` 保存 GPU 数据的文件夹。若为 ``None``，
+            则通过配置后的 SpikingJelly logger 以 INFO 级别记录采样结果；是否输出由
+            应用程序配置决定
         :type log_dir: Optional[str]
 
         :param gpu_ids: 监视的GPU，例如 ``(0, 1, 2, 3)``。默认为 ``(0, )``
@@ -769,8 +770,9 @@ class GPUMonitor(threading.Thread):
             Do not forget to call this module's ``stop()`` after the main thread
             finishes its job, otherwise the main thread will never stop!
 
-        :param log_dir: the directory for saving logs with tensorboard. If it is None,
-            this module will print logs
+        :param log_dir: the directory for saving logs with tensorboard. If it is
+            ``None``, samples are recorded through the configured SpikingJelly logger
+            at INFO level; applications control the handlers and output
         :type log_dir: Optional[str]
 
         :param gpu_ids: the id of GPUs to be monitored, e.g., ``(0, 1, 2, 3)``.

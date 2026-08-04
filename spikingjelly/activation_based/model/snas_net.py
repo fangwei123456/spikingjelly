@@ -383,8 +383,7 @@ class SNASNet(nn.Module):
                 self.con_mat,
             )
         else:
-            logger.info("not implemented")
-            exit()
+            raise ValueError(f"Unsupported celltype: {args.celltype!r}")
 
         self.downconv1 = nn.Sequential(
             nn.BatchNorm2d(
@@ -428,8 +427,7 @@ class SNASNet(nn.Module):
                 args, 256 * self.channel_ratio, 256 * self.channel_ratio, self.con_mat
             )
         else:
-            logger.info("not implemented")
-            exit()
+            raise ValueError(f"Unsupported celltype: {args.celltype!r}")
 
         self.last_act = nn.Sequential(
             nn.BatchNorm2d(

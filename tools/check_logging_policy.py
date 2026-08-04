@@ -9,6 +9,7 @@ from pathlib import Path
 
 EXCLUDED_PARTS = {"example", "examples", "test", "benchmark", "docs"}
 LOG_METHODS = {"debug", "info", "warning", "error", "exception", "critical"}
+DIAGNOSTIC_PRINT_FUNCTIONS = {"check_manual_grad", "check_cuda_grad"}
 
 
 def _is_production(path: Path) -> bool:
@@ -34,6 +35,26 @@ def _is_get_logger_call(node: ast.AST) -> bool:
     )
 
 
+def _is_package_logger_module(path: Path, root: Path) -> bool:
+    return path.resolve() == (root / "logger.py").resolve()
+
+
+def _is_allowed_diagnostic_print(
+    path: Path, node: ast.Call, parents: dict[ast.AST, ast.AST]
+) -> bool:
+    if path.name != "surrogate.py":
+        return False
+    current = parents.get(node)
+    while current is not None:
+        if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return (
+                current.name in DIAGNOSTIC_PRINT_FUNCTIONS
+                and path.parent.name == "activation_based"
+            )
+        current = parents.get(current)
+    return False
+
+
 def _is_eagerly_formatted_message(node: ast.AST) -> bool:
     return isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Mod))
 
@@ -49,17 +70,24 @@ def check(root: Path) -> list[str]:
             violations.append(f"{path}: syntax error: {exc}")
             continue
 
+        parents = {
+            child: parent
+            for parent in ast.walk(tree)
+            for child in ast.iter_child_nodes(parent)
+        }
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 func = node.func
                 if isinstance(func, ast.Name) and func.id in {"print", "pprint"}:
-                    violations.append(f"{path}:{node.lineno}: direct {func.id} call")
+                    if not _is_allowed_diagnostic_print(path, node, parents):
+                        violations.append(
+                            f"{path}:{node.lineno}: direct {func.id} call"
+                        )
                 elif (
                     isinstance(func, ast.Attribute)
-                    and isinstance(func.value, ast.Attribute)
-                    and isinstance(func.value.value, ast.Name)
-                    and func.value.value.id == "builtins"
-                    and func.value.attr == "print"
+                    and isinstance(func.value, ast.Name)
+                    and func.value.id == "builtins"
+                    and func.attr == "print"
                 ):
                     violations.append(
                         f"{path}:{node.lineno}: direct builtins.print call"
@@ -96,28 +124,21 @@ def check(root: Path) -> list[str]:
                         "NullHandler",
                     }
                 ):
-                    if func.attr != "NullHandler" or path.name not in {
-                        "__init__.py",
-                        "logger.py",
-                    }:
+                    if func.attr != "NullHandler" or not _is_package_logger_module(
+                        path, root
+                    ):
                         violations.append(
                             f"{path}:{node.lineno}: logging configuration call"
                         )
-                elif (
-                    isinstance(func, ast.Call)
-                    and isinstance(func.func, ast.Attribute)
-                    and isinstance(func.func.value, ast.Name)
-                    and func.func.value.id == "logging"
-                    and func.func.attr == "getLogger"
-                ):
-                    if path.name != "logger.py":
+                elif _is_get_logger_call(node):
+                    if not _is_package_logger_module(path, root):
                         violations.append(
                             f"{path}:{node.lineno}: logger must be imported from spikingjelly.logger"
                         )
                     if not (
-                        len(func.args) == 1
-                        and isinstance(func.args[0], ast.Constant)
-                        and func.args[0].value == "spikingjelly"
+                        len(node.args) == 1
+                        and isinstance(node.args[0], ast.Constant)
+                        and node.args[0].value == "spikingjelly"
                     ):
                         violations.append(
                             f"{path}:{node.lineno}: non-package logger name"

@@ -135,7 +135,6 @@ class ComputeEnergyConfig:
     """
 
     strict: bool = False
-    verbose: bool = False
     cost_config: ComputeEnergyCostConfig = field(
         default_factory=ComputeEnergyCostConfig
     )
@@ -246,7 +245,6 @@ class ComputeEnergyProfiler:
                 self.flop_counter,
             ],
             strict=False,
-            verbose=self.config.verbose,
         )
         self._summary_logged = False
 
@@ -270,13 +268,13 @@ class ComputeEnergyProfiler:
         cost = self.config.cost_config
 
         warnings_list: list[str] = []
-        matched_supported_ops = (
-            len(self.mac_counter.get_counts().get("Global", {}))
-            + len(self.ac_counter.get_counts().get("Global", {}))
-            + len(self.synop_counter.get_counts().get("Global", {}))
-            + len(self.flop_counter.get_counts().get("Global", {}))
+        matched_counter_rules = len(
+            set(self.mac_counter.get_counts().get("Global", {}))
+            | set(self.ac_counter.get_counts().get("Global", {}))
+            | set(self.synop_counter.get_counts().get("Global", {}))
+            | set(self.flop_counter.get_counts().get("Global", {}))
         )
-        if matched_supported_ops == 0:
+        if matched_counter_rules == 0:
             message = (
                 "ComputeEnergyProfiler did not match any supported operators. "
                 "The model may not contain supported operators for this estimator."
@@ -308,16 +306,16 @@ class ComputeEnergyProfiler:
         if not self._summary_logged:
             logger.info(
                 "Operation counter completed: counter=%s total_operations=%s "
-                "unique_operators=%s warnings=%s",
+                "matched_counter_rules=%s warnings=%s",
                 type(self).__name__,
                 mac + ac + synop + flop,
-                matched_supported_ops,
+                matched_counter_rules,
                 len(warnings_list),
                 extra={
                     "event": "op_counter_summary",
                     "counter_type": type(self).__name__,
                     "total_operations": mac + ac + synop + flop,
-                    "unique_operators": matched_supported_ops,
+                    "matched_counter_rules": matched_counter_rules,
                     "warnings": len(warnings_list),
                 },
             )

@@ -1,6 +1,5 @@
 from spikingjelly.logger import logger
 import math
-import logging
 
 import torch
 import torch.nn as nn
@@ -203,8 +202,7 @@ class PrintShapeModule(nn.Module):
         self.ext_str = ext_str
 
     def forward(self, x: Tensor):
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug("%s shape=%s", self.ext_str, x.shape)
+        logger.debug("%s shape=%s", self.ext_str, x.shape)
         return x
 
 

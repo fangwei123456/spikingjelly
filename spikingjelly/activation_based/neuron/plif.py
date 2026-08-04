@@ -10,7 +10,7 @@ from .base_node import BaseNode
 
 try:
     from .. import triton_kernel
-except BaseException as e:
+except (ImportError, OSError) as e:
     logger.debug("spikingjelly.activation_based.neuron: %s", e)
     triton_kernel = None
 
