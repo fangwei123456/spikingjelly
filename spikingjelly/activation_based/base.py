@@ -678,9 +678,11 @@ class MemoryModule(nn.Module, StepModule):
                 # Falls back to deepcopy when cur is a view tensor
                 # (detach_() raises RuntimeError on views).
                 try:
-                    cur.detach_().copy_(rv)
+                    cur.detach_()
                 except RuntimeError:
                     self._memories[key] = rv.detach().clone()
+                else:
+                    cur.copy_(rv)
             elif isinstance(cur, torch.Tensor) and isinstance(rv, (int, float)):
                 # Preserve Python-scalar sentinel semantics so the next forward
                 # can materialize a fresh tensor with the new runtime shape.
