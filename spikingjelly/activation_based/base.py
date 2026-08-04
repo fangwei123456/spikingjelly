@@ -10,18 +10,27 @@ try:
     import cupy
 except (ImportError, OSError) as e:
     logger.info("Optional CuPy backend unavailable: %s", e)
+    _CUPY_IMPORT_ERROR = e
     cupy = None
+else:
+    _CUPY_IMPORT_ERROR = None
 
 try:
     import triton
 except (ImportError, OSError) as e:
     logger.info("Optional Triton backend unavailable: %s", e)
+    _TRITON_IMPORT_ERROR = e
     triton = None
+else:
+    _TRITON_IMPORT_ERROR = None
 
 try:
     import lava.lib.dl.slayer as slayer
-except (ImportError, OSError):
+except (ImportError, OSError) as e:
+    _LAVA_IMPORT_ERROR = e
     slayer = None
+else:
+    _LAVA_IMPORT_ERROR = None
 
 
 def check_backend_library(backend: str):
@@ -59,22 +68,31 @@ def check_backend_library(backend: str):
         return
     elif backend == "cupy":
         if cupy is None:
-            raise ImportError(
+            error = ImportError(
                 "CuPy is not installed! "
                 'You can install it from "https://github.com/cupy/cupy".'
             )
+            if _CUPY_IMPORT_ERROR is not None:
+                raise error from _CUPY_IMPORT_ERROR
+            raise error
     elif backend == "triton":
         if triton is None:
-            raise ImportError(
+            error = ImportError(
                 "Triton is not installed! "
                 'You can install it from "https://github.com/openai/triton".'
             )
+            if _TRITON_IMPORT_ERROR is not None:
+                raise error from _TRITON_IMPORT_ERROR
+            raise error
     elif backend == "lava":
         if slayer is None:
-            raise ImportError(
+            error = ImportError(
                 "Lava-DL is not installed! You can install it from "
                 '"https://github.com/lava-nc/lava-dl". '
             )
+            if _LAVA_IMPORT_ERROR is not None:
+                raise error from _LAVA_IMPORT_ERROR
+            raise error
     else:
         pass
 

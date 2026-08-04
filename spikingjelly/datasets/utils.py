@@ -789,8 +789,8 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(
     :param W: 帧宽度
     :type W: int
 
-    :param print_save: 若为 ``True``，则通过 SpikingJelly logger 以 DEBUG 级别记录
-        保存路径；应用程序需配置包级 logger 才能看到该记录
+    :param print_save: 若为 ``True``, 则通过 SpikingJelly logger 以 DEBUG 级别记录
+        保存路径; 应用程序需配置包级 logger 才能看到该记录
     :type print_save: bool
 
 
@@ -953,8 +953,8 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     :param W: 帧的宽度
     :type W: int
 
-    :param print_save: 如果 ``True``，则通过 SpikingJelly logger 以 DEBUG 级别记录
-        保存路径；应用程序需配置包级 logger 才能看到该记录。
+    :param print_save: 如果 ``True``, 则通过 SpikingJelly logger 以 DEBUG 级别记录
+        保存路径; 应用程序需配置包级 logger 才能看到该记录。
     :type print_save: bool
 
     :return: 帧的数量
@@ -1516,9 +1516,11 @@ def create_sub_dataset(
                 else:
                     shutil.copyfile(source_file, target_file)
                     # print(f'copyfile {source_file} -> {target_file}')
+            operation = "linked" if use_soft_link else "copied"
             logger.debug(
-                "[%s] files in [%s] have been copied to [%s].",
+                "[%s] files in [%s] were %s to [%s].",
                 samples_number,
                 e_root,
+                operation,
                 output_dir,
             )
