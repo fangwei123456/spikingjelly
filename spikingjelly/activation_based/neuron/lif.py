@@ -1,4 +1,4 @@
-import logging
+from spikingjelly.logger import logger
 from typing import Optional
 
 import torch
@@ -8,8 +8,8 @@ from .base_node import BaseNode, NonSpikingBaseNode, SimpleBaseNode
 
 try:
     from .. import triton_kernel
-except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.neuron: {e}")
+except (ImportError, OSError) as e:
+    logger.debug("spikingjelly.activation_based.neuron: %s", e)
     triton_kernel = None
 
 

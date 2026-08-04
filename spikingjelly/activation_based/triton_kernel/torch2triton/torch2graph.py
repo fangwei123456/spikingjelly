@@ -110,6 +110,7 @@ def generate_inference_graph(fn: Callable, example_inputs: tuple) -> fx.Graph:
     :return: EN: Optimized forward FX graph. Chinese: 优化后的前向 FX 图。
     :rtype: torch.fx.Graph
     :raises ValueError: EN: Raised when the traced callable fails to produce a forward graph. Chinese: 当被追踪函数未能产生前向 FX 图时抛出。
+
     Chinese:
         为给定的 PyTorch 函数生成优化后的推理 FX 图。
     English:
@@ -180,6 +181,7 @@ def generate_forward_and_backward_graph(
     :return: EN: Optimized forward and backward FX graphs. Chinese: 优化后的前向与反向 FX 图。
     :rtype: Tuple[torch.fx.Graph, torch.fx.Graph]
     :raises ValueError: EN: Raised when ``requires_grad`` length mismatches ``example_inputs``, when the callable does not return a tensor/list/tuple, or when no differentiable output exists. Chinese: 当 ``requires_grad`` 长度与 ``example_inputs`` 不匹配、函数返回值不是张量/列表/元组、或不存在可求导输出时抛出。
+
     Chinese:
         为给定的 PyTorch 函数生成优化后的前向与反向 FX 图。
     English:

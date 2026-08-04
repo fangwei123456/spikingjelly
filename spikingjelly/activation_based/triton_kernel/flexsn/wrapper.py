@@ -1,15 +1,14 @@
+from spikingjelly.logger import logger
 from typing import Optional, Tuple
 
 import torch
 
 try:
     import triton
-except Exception as e:
-    import logging
-
+except (ImportError, OSError) as e:
     from .. import dummy
 
-    logging.info(f"spikingjelly.activation_based.triton_kernel.flexsn.wrapper: {e}")
+    logger.debug("spikingjelly.activation_based.triton_kernel.flexsn.wrapper: %s", e)
     triton = dummy.DummyImport()
 
 from ..triton_utils import type_dict

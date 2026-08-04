@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import torch
 
 from .. import surrogate
@@ -5,12 +6,10 @@ from .. import surrogate
 try:
     import triton
     import triton.language as tl
-except BaseException as e:
-    import logging
-
+except (ImportError, OSError) as e:
     from . import dummy
 
-    logging.info(f"spikingjelly.activation_based.triton_kernel.compress: {e}")
+    logger.debug("spikingjelly.activation_based.triton_kernel.surrogate_kernel: %s", e)
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
 

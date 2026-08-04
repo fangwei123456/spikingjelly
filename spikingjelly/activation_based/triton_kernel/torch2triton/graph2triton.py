@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 from typing import Optional, Tuple
 import errno
 import importlib.util
@@ -18,13 +19,11 @@ import torch.fx as fx
 try:
     import triton
     import triton.language as tl
-except BaseException as e:
-    import logging
-
+except (ImportError, OSError) as e:
     from .. import dummy
 
-    logging.info(
-        f"spikingjelly.activation_based.triton_kernel.torch2triton.graph2triton: {e}"
+    logger.debug(
+        "spikingjelly.activation_based.triton_kernel.torch2triton.graph2triton: %s", e
     )
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
@@ -325,7 +324,6 @@ INDENTATION = " " * 4  # four spaces
 def generate_triton_code_str(
     graph: fx.Graph,
     fn_name: str,
-    verbose: bool = False,
 ) -> Tuple[str, str]:
     """Given a fx.Graph, generate its corresponding Triton code string.
 
@@ -342,7 +340,6 @@ def generate_triton_code_str(
     Args:
         graph (fx.Graph)
         fn_name (str): name of the original PyTorch function. For generating the Triton kernel name.
-        verbose (bool, optional): Defaults to False.
     Returns:
         Tuple[str, str]: the generated Triton code string and the name of the Triton function.
 
@@ -354,8 +351,7 @@ def generate_triton_code_str(
 
     Generate Triton code string
     """
-    if verbose:
-        print(graph)
+    logger.debug("Generated Triton graph=%s", graph)
 
     inputs = []
     triton_code_lines = []
@@ -398,7 +394,6 @@ def generate_triton_code_str(
 def compile_triton_code_str(
     triton_code: str,
     kernel_name: str,
-    verbose: bool = False,
     name_space: Optional[dict] = None,
 ):
     """Compile a Triton code string into a runnable Triton JIT function.
@@ -420,8 +415,6 @@ def compile_triton_code_str(
     :type triton_code: str
     :param kernel_name: The name of the Triton function to extract.
     :type kernel_name: str
-    :param verbose: If ``True``, print whether the cached source was written or reused.
-    :type verbose: bool
     :param name_space: Optional globals injected before execution. When provided,
         it is updated with symbols defined by the compiled module.
     :type name_space: Optional[dict]
@@ -485,9 +478,8 @@ def compile_triton_code_str(
                 except FileNotFoundError:
                     pass
             raise
-    if verbose:
-        action = "written to" if needs_write else "loaded from cache"
-        print(f"Triton code `{kernel_name}` {action} {fpath}")
+    action = "written to" if needs_write else "loaded from cache"
+    logger.debug("Triton code `%s` %s %s", kernel_name, action, fpath)
 
     linecache.checkcache(str(fpath))
 

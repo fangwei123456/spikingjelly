@@ -1,4 +1,5 @@
 from __future__ import annotations
+from spikingjelly.logger import logger
 
 import copy
 from dataclasses import dataclass, field
@@ -10,6 +11,7 @@ from .base import DispatchCounterMode
 from .flop import FlopCounter
 from .mac import MACCounter
 from .synop import SynOpCounter
+
 
 __all__ = [
     "ComputeEnergyCostConfig",
@@ -133,7 +135,6 @@ class ComputeEnergyConfig:
     """
 
     strict: bool = False
-    verbose: bool = False
     cost_config: ComputeEnergyCostConfig = field(
         default_factory=ComputeEnergyCostConfig
     )
@@ -244,14 +245,15 @@ class ComputeEnergyProfiler:
                 self.flop_counter,
             ],
             strict=False,
-            verbose=self.config.verbose,
         )
+        self._summary_logged = False
 
     def __enter__(self):
         self.mac_counter.reset()
         self.ac_counter.reset()
         self.synop_counter.reset()
         self.flop_counter.reset()
+        self._summary_logged = False
         self._dispatch_mode.__enter__()
         return self
 
@@ -266,13 +268,13 @@ class ComputeEnergyProfiler:
         cost = self.config.cost_config
 
         warnings_list: list[str] = []
-        matched_supported_ops = (
-            len(self.mac_counter.get_counts().get("Global", {}))
-            + len(self.ac_counter.get_counts().get("Global", {}))
-            + len(self.synop_counter.get_counts().get("Global", {}))
-            + len(self.flop_counter.get_counts().get("Global", {}))
+        matched_counter_rules = len(
+            set(self.mac_counter.get_counts().get("Global", {}))
+            | set(self.ac_counter.get_counts().get("Global", {}))
+            | set(self.synop_counter.get_counts().get("Global", {}))
+            | set(self.flop_counter.get_counts().get("Global", {}))
         )
-        if matched_supported_ops == 0:
+        if matched_counter_rules == 0:
             message = (
                 "ComputeEnergyProfiler did not match any supported operators. "
                 "The model may not contain supported operators for this estimator."
@@ -285,7 +287,7 @@ class ComputeEnergyProfiler:
         energy_ac_pj = ac * cost.e_ac_pj
         total_pj = energy_mac_pj + energy_ac_pj
 
-        return ComputeEnergyReport(
+        report = ComputeEnergyReport(
             energy_total_pj=total_pj,
             energy_mac_pj=energy_mac_pj,
             energy_ac_pj=energy_ac_pj,
@@ -301,6 +303,24 @@ class ComputeEnergyProfiler:
             },
             warnings=warnings_list,
         )
+        if not self._summary_logged:
+            logger.info(
+                "Operation counter completed: counter=%s total_operations=%s "
+                "matched_counter_rules=%s warnings=%s",
+                type(self).__name__,
+                mac + ac + synop + flop,
+                matched_counter_rules,
+                len(warnings_list),
+                extra={
+                    "event": "op_counter_summary",
+                    "counter_type": type(self).__name__,
+                    "total_operations": mac + ac + synop + flop,
+                    "matched_counter_rules": matched_counter_rules,
+                    "warnings": len(warnings_list),
+                },
+            )
+            self._summary_logged = True
+        return report
 
     def get_total(self) -> float:
         return self.get_report().energy_total_pj

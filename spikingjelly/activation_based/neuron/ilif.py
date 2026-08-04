@@ -1,4 +1,4 @@
-import logging
+from spikingjelly.logger import logger
 
 import torch
 
@@ -7,8 +7,8 @@ from .lif import LIFNode
 
 try:
     from ..triton_kernel.neuron_kernel import ilif as triton_ilif_kernel
-except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.neuron.ilif: {e}")
+except (ImportError, OSError) as e:
+    logger.debug("spikingjelly.activation_based.neuron.ilif: %s", e)
     triton_ilif_kernel = None
 
 __all__ = ["ILIFNode"]

@@ -1,3 +1,5 @@
+from spikingjelly.logger import logger
+
 try:
     from . import info as info
     from . import hop as hop
@@ -5,10 +7,8 @@ try:
     from . import template as template
     from . import wrapper as wrapper
     from . import custom_ops as custom_ops
-except Exception as e:
-    import logging
-
-    logging.info(f"spikingjelly.activation_based.triton_kernel.flexsn: {e}")
+except (ImportError, OSError, RuntimeError) as e:
+    logger.debug("spikingjelly.activation_based.triton_kernel.flexsn: %s", e)
     info = None
     hop = None
     kernel = None

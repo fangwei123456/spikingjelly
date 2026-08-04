@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 from typing import Optional
 
 import torch
@@ -24,12 +25,12 @@ from .utils import (
 try:
     import triton
     import triton.language as tl
-except BaseException as e:
-    import logging
-
+except (ImportError, OSError) as e:
     from .. import dummy
 
-    logging.info(f"spikingjelly.activation_based.triton_kernel.neuron_kernel.plif: {e}")
+    logger.debug(
+        "spikingjelly.activation_based.triton_kernel.neuron_kernel.plif: %s", e
+    )
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
 

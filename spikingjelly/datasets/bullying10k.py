@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import multiprocessing
 import os
 from pathlib import Path
@@ -42,7 +43,7 @@ def _convert_npy_to_npz(src_path: Path, dst_dir: Path, label: int):
     p = np.array([d[3] for d in original_data])
     target_file_path = dst_dir / str(label) / f"{src_path.stem}.npz"
     utils.np_savez(target_file_path, t=t, x=x, y=y, p=p)
-    print(f"[{target_file_path}] saved.")
+    logger.info("[%s] saved.", target_file_path)
 
 
 class Bullying10kClassification(NeuromorphicDatasetFolder):
@@ -246,7 +247,7 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
                     shutil.copy(src_file, dst_file)
                 else:
                     zip_file = download_root / file_name
-                    print(f"Extract [{zip_file}] to [{extract_root}].")
+                    logger.info("Extract [%s] to [%s].", zip_file, extract_root)
                     futures.append(tpe.submit(extract_archive, zip_file, extract_root))
 
             for future in futures:
@@ -258,13 +259,14 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
         test_dir = raw_root / "test"
         train_dir.mkdir()
         test_dir.mkdir()
-        print(f"Mkdir [{train_dir}] and [{test_dir}].")
+        logger.info("Mkdir [%s] and [%s].", train_dir, test_dir)
         for label in range(10):
             (train_dir / str(label)).mkdir()
             (test_dir / str(label)).mkdir()
-        print(
-            f"Mkdir {os.listdir(train_dir)} in [{train_dir}] "
-            f"and {os.listdir(test_dir)} in [{test_dir}]."
+        logger.info(
+            "Created dataset class directories in train=%s and test=%s.",
+            train_dir,
+            test_dir,
         )
 
         all_files_labels = []
@@ -284,9 +286,9 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
                     )
         num_files = len(all_files_labels)
         all_files_labels = np.array(all_files_labels)
-        print(f"Found {num_files} files in total.")
+        logger.info("Found %s files in total.", num_files)
 
-        print(
+        logger.info(
             "Use the same way to split training / validation sets as the original work: "
             "https://github.com/Brain-Cog-Lab/Bullying10K/blob/main/Bullying10k.py"
         )
@@ -294,9 +296,10 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
         test_loc[range(0, num_files, 5)] = 1
         train_files_labels = all_files_labels[~test_loc]
         test_files_labels = all_files_labels[test_loc]
-        print(
-            f"Training set: {len(train_files_labels)} files. "
-            f"Test set: {len(test_files_labels)} files."
+        logger.info(
+            "Training set: %s files. Test set: %s files.",
+            len(train_files_labels),
+            len(test_files_labels),
         )
 
         t_ckp = time.time()
@@ -307,8 +310,9 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
             )
         ) as tpe:
             futures = []
-            print(
-                f"Start the ThreadPoolExecutor with max workers = [{tpe._max_workers}]."
+            logger.info(
+                "Start the ThreadPoolExecutor with max workers = [%s].",
+                tpe._max_workers,
             )
             for fpath, label in train_files_labels:
                 futures.append(tpe.submit(_convert_npy_to_npz, fpath, train_dir, label))
@@ -316,12 +320,12 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
                 futures.append(tpe.submit(_convert_npy_to_npz, fpath, test_dir, label))
             for future in futures:
                 future.result()
-        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
-        print(
-            f"All npy files have been converted into npz files "
-            f"and into [{train_dir, test_dir}]."
+        logger.info("Used time = [%ss].", round(time.time() - t_ckp, 2))
+        logger.info(
+            "All npy files have been converted into npz files and into [%s].",
+            {train_dir, test_dir},
         )
 
         # remove the extracted files, since they're too large
-        print(f"Remove the directory [{extract_root}].")
+        logger.info("Remove the directory [%s].", extract_root)
         shutil.rmtree(extract_root)

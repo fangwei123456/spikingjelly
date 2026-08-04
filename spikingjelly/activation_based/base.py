@@ -1,5 +1,5 @@
+from spikingjelly.logger import logger
 import copy
-import logging
 from abc import abstractmethod
 from typing import Tuple, Generator, Optional, Callable, Any
 
@@ -8,20 +8,29 @@ import torch.nn as nn
 
 try:
     import cupy
-except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.base: {e}")
+except (ImportError, OSError) as e:
+    logger.info("Optional CuPy backend unavailable: %s", e)
+    _CUPY_IMPORT_ERROR = e
     cupy = None
+else:
+    _CUPY_IMPORT_ERROR = None
 
 try:
     import triton
-except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.base: {e}")
+except (ImportError, OSError) as e:
+    logger.info("Optional Triton backend unavailable: %s", e)
+    _TRITON_IMPORT_ERROR = e
     triton = None
+else:
+    _TRITON_IMPORT_ERROR = None
 
 try:
     import lava.lib.dl.slayer as slayer
-except BaseException:
+except (ImportError, OSError) as e:
+    _LAVA_IMPORT_ERROR = e
     slayer = None
+else:
+    _LAVA_IMPORT_ERROR = None
 
 
 def check_backend_library(backend: str):
@@ -59,22 +68,31 @@ def check_backend_library(backend: str):
         return
     elif backend == "cupy":
         if cupy is None:
-            raise ImportError(
+            error = ImportError(
                 "CuPy is not installed! "
                 'You can install it from "https://github.com/cupy/cupy".'
             )
+            if _CUPY_IMPORT_ERROR is not None:
+                raise error from _CUPY_IMPORT_ERROR
+            raise error
     elif backend == "triton":
         if triton is None:
-            raise ImportError(
+            error = ImportError(
                 "Triton is not installed! "
                 'You can install it from "https://github.com/openai/triton".'
             )
+            if _TRITON_IMPORT_ERROR is not None:
+                raise error from _TRITON_IMPORT_ERROR
+            raise error
     elif backend == "lava":
         if slayer is None:
-            raise ImportError(
+            error = ImportError(
                 "Lava-DL is not installed! You can install it from "
                 '"https://github.com/lava-nc/lava-dl". '
             )
+            if _LAVA_IMPORT_ERROR is not None:
+                raise error from _LAVA_IMPORT_ERROR
+            raise error
     else:
         pass
 
@@ -660,9 +678,11 @@ class MemoryModule(nn.Module, StepModule):
                 # Falls back to deepcopy when cur is a view tensor
                 # (detach_() raises RuntimeError on views).
                 try:
-                    cur.detach_().copy_(rv)
+                    cur.detach_()
                 except RuntimeError:
                     self._memories[key] = rv.detach().clone()
+                else:
+                    cur.copy_(rv)
             elif isinstance(cur, torch.Tensor) and isinstance(rv, (int, float)):
                 # Preserve Python-scalar sentinel semantics so the next forward
                 # can materialize a fresh tensor with the new runtime shape.

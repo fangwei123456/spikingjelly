@@ -124,9 +124,9 @@ def test_mac_ignore():
         extra_ignore_modules=[nn.BatchNorm2d, neuron.BaseNode]
     )
 
-    with op_counter.DispatchCounterMode([counter_full], verbose=True):
+    with op_counter.DispatchCounterMode([counter_full]):
         net(x)
-    with op_counter.DispatchCounterMode([counter_no_bn], verbose=True):
+    with op_counter.DispatchCounterMode([counter_no_bn]):
         net(x)
 
     total_full = counter_full.get_total()

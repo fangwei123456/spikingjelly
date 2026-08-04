@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import time
 from typing import Callable, Optional, Tuple
 import multiprocessing
@@ -20,7 +21,7 @@ def _split_aedat_files_to_np(
     fname: str, aedat_file: Path, csv_file: Path, output_dir: Path
 ):
     events = utils.load_aedat_v3(aedat_file)
-    print(f"Start to split [{aedat_file}] to samples.")
+    logger.debug("Start to split [%s] to samples.", aedat_file)
     # read csv file and get time stamp and label of each sample
     # then split the origin data to samples
     csv_data = np.loadtxt(csv_file, dtype=np.uint32, delimiter=",", skiprows=1)
@@ -46,7 +47,7 @@ def _split_aedat_files_to_np(
             y=events["y"][mask],
             p=events["p"][mask],
         )
-        print(f"[{file_name}] saved.")
+        logger.debug("[%s] saved.", file_name)
         label_file_num[label] += 1
 
 
@@ -85,14 +86,17 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
             .. code-block:: python
 
                 from spikingjelly.datasets import dvs128_gesture
+                from spikingjelly.logger import logger
 
                 data_dir = "D:/datasets/DVS128Gesture"
                 train_set = dvs128_gesture.DVS128Gesture(data_dir, train=True)
                 test_set = dvs128_gesture.DVS128Gesture(data_dir, train=False)
-                print(
-                    f"train samples = {train_set.__len__()}, test samples = {test_set.__len__()}"
+                logger.info(
+                    "train samples = %s, test samples = %s",
+                    len(train_set),
+                    len(test_set),
                 )
-                print(f"total samples = {train_set.__len__() + test_set.__len__()}")
+                logger.info("total samples = %s", len(train_set) + len(test_set))
 
                 # train samples = 1176, test samples = 288
                 # total samples = 1464
@@ -106,6 +110,7 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
             .. code-block:: python
 
                 from snntorch.spikevision import spikedata
+                from spikingjelly.logger import logger
 
                 train_set = spikedata.DVSGesture(
                     "D:/datasets/DVS128Gesture/temp2",
@@ -119,10 +124,12 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
                     num_steps=1800,
                     dt=1000,
                 )
-                print(
-                    f"train samples = {train_set.__len__()}, test samples = {test_set.__len__()}"
+                logger.info(
+                    "train samples = %s, test samples = %s",
+                    len(train_set),
+                    len(test_set),
                 )
-                print(f"total samples = {train_set.__len__() + test_set.__len__()}")
+                logger.info("total samples = %s", len(train_set) + len(test_set))
 
                 # train samples = 1176, test samples = 288
                 # total samples = 1464
@@ -133,6 +140,7 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
             .. code-block:: python
 
                 import tonic
+                from spikingjelly.logger import logger
 
                 train_set = tonic.datasets.DVSGesture(
                     save_to="D:/datasets/DVS128Gesture/temp", train=True
@@ -140,10 +148,12 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
                 test_set = tonic.datasets.DVSGesture(
                     save_to="D:/datasets/DVS128Gesture/temp", train=False
                 )
-                print(
-                    f"train samples = {train_set.__len__()}, test samples = {test_set.__len__()}"
+                logger.info(
+                    "train samples = %s, test samples = %s",
+                    len(train_set),
+                    len(test_set),
                 )
-                print(f"total samples = {train_set.__len__() + test_set.__len__()}")
+                logger.info("total samples = %s", len(train_set) + len(test_set))
 
                 # train samples = 1077, test samples = 264
                 # total samples = 1341
@@ -214,14 +224,17 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
             .. code-block:: python
 
                 from spikingjelly.datasets import dvs128_gesture
+                from spikingjelly.logger import logger
 
                 data_dir = "D:/datasets/DVS128Gesture"
                 train_set = dvs128_gesture.DVS128Gesture(data_dir, train=True)
                 test_set = dvs128_gesture.DVS128Gesture(data_dir, train=False)
-                print(
-                    f"train samples = {train_set.__len__()}, test samples = {test_set.__len__()}"
+                logger.info(
+                    "train samples = %s, test samples = %s",
+                    len(train_set),
+                    len(test_set),
                 )
-                print(f"total samples = {train_set.__len__() + test_set.__len__()}")
+                logger.info("total samples = %s", len(train_set) + len(test_set))
 
                 # train samples = 1176, test samples = 288
                 # total samples = 1464
@@ -235,6 +248,7 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
             .. code-block:: python
 
                 from snntorch.spikevision import spikedata
+                from spikingjelly.logger import logger
 
                 train_set = spikedata.DVSGesture(
                     "D:/datasets/DVS128Gesture/temp2",
@@ -248,10 +262,12 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
                     num_steps=1800,
                     dt=1000,
                 )
-                print(
-                    f"train samples = {train_set.__len__()}, test samples = {test_set.__len__()}"
+                logger.info(
+                    "train samples = %s, test samples = %s",
+                    len(train_set),
+                    len(test_set),
                 )
-                print(f"total samples = {train_set.__len__() + test_set.__len__()}")
+                logger.info("total samples = %s", len(train_set) + len(test_set))
 
                 # train samples = 1176, test samples = 288
                 # total samples = 1464
@@ -262,6 +278,7 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
             .. code-block:: python
 
                 import tonic
+                from spikingjelly.logger import logger
 
                 train_set = tonic.datasets.DVSGesture(
                     save_to="D:/datasets/DVS128Gesture/temp", train=True
@@ -269,10 +286,12 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
                 test_set = tonic.datasets.DVSGesture(
                     save_to="D:/datasets/DVS128Gesture/temp", train=False
                 )
-                print(
-                    f"train samples = {train_set.__len__()}, test samples = {test_set.__len__()}"
+                logger.info(
+                    "train samples = %s, test samples = %s",
+                    len(train_set),
+                    len(test_set),
                 )
-                print(f"total samples = {train_set.__len__() + test_set.__len__()}")
+                logger.info("total samples = %s", len(train_set) + len(test_set))
 
                 # train samples = 1077, test samples = 264
                 # total samples = 1341
@@ -499,7 +518,7 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
         :type extract_root: Path
         """
         fpath = download_root / "DvsGesture.tar.gz"
-        print(f"Extract [{fpath}] to [{extract_root}].")
+        logger.info("Extract [%s] to [%s].", fpath, extract_root)
         extract_archive(fpath, extract_root)
 
     @classmethod
@@ -541,12 +560,14 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
         test_dir = raw_root / "test"
         train_dir.mkdir()
         test_dir.mkdir()
-        print(f"Mkdir [{train_dir, test_dir}.")
+        logger.info("Mkdir [%s] and [%s].", train_dir, test_dir)
         for label in range(11):
             (train_dir / str(label)).mkdir()
             (test_dir / str(label)).mkdir()
-        print(
-            f"Mkdir {os.listdir(train_dir)} in [{train_dir}] and {os.listdir(test_dir)} in [{test_dir}]."
+        logger.info(
+            "Created dataset class directories in train=%s and test=%s.",
+            train_dir,
+            test_dir,
         )
 
         with (
@@ -562,8 +583,9 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
                 )
             ) as tpe:
                 futures = []
-                print(
-                    f"Start the ThreadPoolExecutor with max workers = [{tpe._max_workers}]."
+                logger.info(
+                    "Start the ThreadPoolExecutor with max workers = [%s].",
+                    tpe._max_workers,
                 )
 
                 for fname in trials_to_train_txt.readlines():
@@ -599,8 +621,9 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
                 for future in futures:
                     future.result()
 
-            print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
+            logger.info("Used time = [%ss].", round(time.time() - t_ckp, 2))
 
-        print(
-            f"All aedat files have been split to samples and saved into [{train_dir, test_dir}]."
+        logger.info(
+            "All aedat files have been split to samples and saved into [%s].",
+            {train_dir, test_dir},
         )

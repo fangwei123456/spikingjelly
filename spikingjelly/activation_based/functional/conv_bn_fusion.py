@@ -6,6 +6,7 @@ from torch import Tensor, fx
 from torch.nn.utils.fusion import fuse_conv_bn_eval
 
 from .. import base, layer, neuron
+from spikingjelly.logger import logger
 
 __all__ = [
     "fuse_conv_bn_eval_modules",
@@ -233,9 +234,8 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
     fx_model = fx.GraphModule(tracer.root, graph)
     modules = dict(fx_model.named_modules())
 
-    for (conv_target, bn_target), matched_nodes in _collect_conv_bn_matches(
-        fx_model, modules, _CONV_BN_PATTERNS
-    ).items():
+    matches = _collect_conv_bn_matches(fx_model, modules, _CONV_BN_PATTERNS)
+    for (conv_target, bn_target), matched_nodes in matches.items():
         conv = modules[conv_target]
         bn = modules[bn_target]
         if (
@@ -257,6 +257,12 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
     fx_model.graph.lint()
     fx_model.delete_all_unused_submodules()
     fx_model.recompile()
+    logger.info(
+        "conv_bn_transform_summary mode=%s matched_pairs=%s transformed_pairs=%s",
+        "eval_fuse",
+        len(matches),
+        len(matches),
+    )
     return fx_model
 
 
@@ -309,9 +315,10 @@ def pack_conv_bn_train_modules(net: nn.Module) -> fx.GraphModule:
     fx_model = fx.GraphModule(tracer.root, graph)
     modules = dict(fx_model.named_modules())
 
-    for (conv_target, bn_target), matched_nodes in _collect_conv_bn_matches(
-        fx_model, modules, _CONV_BN_PATTERNS
-    ).items():
+    matches = _collect_conv_bn_matches(fx_model, modules, _CONV_BN_PATTERNS)
+    transformed_pairs = 0
+    skipped_step_mode_pairs = 0
+    for (conv_target, bn_target), matched_nodes in matches.items():
         conv = modules[conv_target]
         bn = modules[bn_target]
         if (
@@ -321,6 +328,7 @@ def pack_conv_bn_train_modules(net: nn.Module) -> fx.GraphModule:
             )
             and getattr(conv, "step_mode", None) != getattr(bn, "step_mode", None)
         ):
+            skipped_step_mode_pairs += 1
             continue
         packed = _TrainConvBnWrapper(conv, bn)
         conv_node = matched_nodes[0].args[0]
@@ -329,8 +337,16 @@ def pack_conv_bn_train_modules(net: nn.Module) -> fx.GraphModule:
         for node in matched_nodes:
             node.replace_all_uses_with(node.args[0])
             fx_model.graph.erase_node(node)
+        transformed_pairs += 1
 
     fx_model.graph.lint()
     fx_model.delete_all_unused_submodules()
     fx_model.recompile()
+    logger.info(
+        "conv_bn_transform_summary mode=%s matched_pairs=%s transformed_pairs=%s skipped_step_mode_pairs=%s",
+        "train_pack",
+        len(matches),
+        transformed_pairs,
+        skipped_step_mode_pairs,
+    )
     return fx_model

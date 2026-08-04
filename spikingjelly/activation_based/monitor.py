@@ -1,13 +1,16 @@
-import os
-import time
-import re
 import datetime
+import logging
+import os
+import re
 import threading
+import time
 from typing import Callable, Union, Optional
 
 import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
+
+from spikingjelly.logger import logger
 
 
 def _unpack_len1_tuple(x: Union[tuple, torch.Tensor]):
@@ -739,8 +742,9 @@ class GPUMonitor(threading.Thread):
 
             在主线程的工作完成后一定要调用GPU监视器的 ``stop()`` 函数，否则主线程不会退出。
 
-        :param log_dir: 使用 ``tensorboard`` 保存GPU数据的文件夹. 若为None，则日志不会保存，而是
-            直接 ``print``
+        :param log_dir: 使用 ``tensorboard`` 保存 GPU 数据的文件夹。若为 ``None``，
+            则通过配置后的 SpikingJelly logger 以 INFO 级别记录采样结果；是否输出由
+            应用程序配置决定
         :type log_dir: Optional[str]
 
         :param gpu_ids: 监视的GPU，例如 ``(0, 1, 2, 3)``。默认为 ``(0, )``
@@ -766,8 +770,9 @@ class GPUMonitor(threading.Thread):
             Do not forget to call this module's ``stop()`` after the main thread
             finishes its job, otherwise the main thread will never stop!
 
-        :param log_dir: the directory for saving logs with tensorboard. If it is None,
-            this module will print logs
+        :param log_dir: the directory for saving logs with tensorboard. If it is
+            ``None``, samples are recorded through the configured SpikingJelly logger
+            at INFO level; applications control the handlers and output
         :type log_dir: Optional[str]
 
         :param gpu_ids: the id of GPUs to be monitored, e.g., ``(0, 1, 2, 3)``.
@@ -825,8 +830,8 @@ class GPUMonitor(threading.Thread):
     def run(self):
         while not self.stopped:
             with os.popen(self.cmds) as fp:
-                outputs = fp.read()
                 if self.writer is not None:
+                    outputs = fp.read()
                     outputs = outputs.split("\n")[1:-1]
                     # skip the first row (header) and the last row ("\n")
                     for i in range(outputs.__len__()):
@@ -840,8 +845,13 @@ class GPUMonitor(threading.Thread):
                             f"memory_used_{self.gpu_ids[i]}", memory_used, self.step
                         )
                 else:
-                    print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-                    print(outputs)
+                    if logger.isEnabledFor(logging.INFO):
+                        outputs = fp.read()
+                        logger.info(
+                            "GPU monitor sample at %s:\n%s",
+                            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            outputs,
+                        )
                     """
                     2022-04-20 18:14:26
                     utilization.gpu [%], memory.used [MiB]

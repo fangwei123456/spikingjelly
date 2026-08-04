@@ -18,6 +18,21 @@ Unreleased
 Features
 ~~~~~~~~
 
+Logging
+^^^^^^^
+
+Module: ``spikingjelly``.
+
+- Added a package-level ``spikingjelly`` logger with application-owned handlers,
+  structured summaries for operator registration, memory optimization, and
+  operation-counter results, plus an AST policy checker and logging benchmark.
+- Added lifecycle summaries for distributed setup, precision fallback, ANN2SNN and
+  NIR conversion, graph transforms, external downloads, and compiler cache events.
+- Production diagnostics now use lazy logging at lifecycle boundaries; normal
+  forward, dispatch, and kernel execution paths do not emit default logs.
+- Documented the package-level logger, handler configuration, NullHandler behavior,
+  and common application-side usage patterns.
+
 Functional State Transitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -211,6 +226,12 @@ Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Logging-Controlled Diagnostics
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- Replaced diagnostic ``verbose`` controls with the package logger; configure
+  ``spikingjelly.logger.logger`` to control output.
 
 Surrogate CUDA Code API Changes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

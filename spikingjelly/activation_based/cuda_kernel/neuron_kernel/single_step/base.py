@@ -1,13 +1,13 @@
-import logging
+from spikingjelly.logger import logger
 import math
 
 import torch
 
 try:
     import cupy
-except BaseException as e:
-    logging.info(
-        f"spikingjelly.activation_based.cuda_kernel.neuron_kernel.single_step: {e}"
+except (ImportError, OSError) as e:
+    logger.debug(
+        "spikingjelly.activation_based.cuda_kernel.neuron_kernel.single_step: %s", e
     )
     cupy = None
 

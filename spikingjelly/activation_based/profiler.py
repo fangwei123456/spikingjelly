@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import abc
 import gc
 import inspect
@@ -13,6 +14,7 @@ import torch.optim as optim
 
 KB = 1024.0
 MB = 1024.0 * 1024.0
+
 
 __all__ = [
     "BaseProfiler",
@@ -282,7 +284,7 @@ class CategoryMemoryProfiler(BaseProfiler):
         :param depth: 调用栈深度，用于在输出文本中显示当前处于那个函数调用的内部
         :type depth: int
 
-        :param output: 是否输出到控制台和文件
+        :param output: 是否写入分析结果文件并记录摘要日志
         :type output: bool
 
         :return: 总内存信息和分类内存统计信息
@@ -299,7 +301,7 @@ class CategoryMemoryProfiler(BaseProfiler):
         :param depth: call stack depth. Used to show which function is currently in
         :type depth: int
 
-        :param output: whether to output to console and file
+        :param output: whether to write the report file and emit a summary log
         :type output: bool
 
         :return: total memory info and category-wise memory statistics
@@ -335,9 +337,19 @@ class CategoryMemoryProfiler(BaseProfiler):
             out_str += "=" * len(header_str) + "\n"
             out_str += "=" * len(header_str) + "\n" * 3
 
-            print(out_str)
             with open(self.log_path, "a") as f:
                 f.write(out_str)
+            logger.info(
+                "Category memory profile exported: devices=%s categories=%s",
+                len(total_mem),
+                len(memory_usage),
+                extra={
+                    "event": "profiler_export_summary",
+                    "profile_type": type(self).__name__,
+                    "device_count": len(total_mem),
+                    "category_count": len(memory_usage),
+                },
+            )
 
         return total_mem, memory_usage
 
@@ -711,7 +723,7 @@ class LayerWiseMemoryProfiler(HookProfiler):
             不额外排序，而是按照前向传播执行的拓扑顺序。
         :type sort_by: Optional[str]
 
-        :param output: 是否输出到控制台和文件
+        :param output: 是否写入分析结果文件并记录摘要日志
         :type output: bool
 
         :return: 分层内存统计结果
@@ -736,7 +748,7 @@ class LayerWiseMemoryProfiler(HookProfiler):
             which means sorted according to the topological order of forward propagation.
         :type sort_by: str
 
-        :param output: whether to output to console and file
+        :param output: whether to write the report file and emit a summary log
         :type output: bool
 
         :return: layer-wise memory statistics
@@ -796,9 +808,17 @@ class LayerWiseMemoryProfiler(HookProfiler):
             out_str += "=" * len(header_str) + "\n"
             out_str += "=" * len(header_str) + "\n" * 3
 
-            print(out_str)
             with open(self.log_path, "a") as f:
                 f.write(out_str)
+            logger.info(
+                "Layer memory profile exported: modules=%s",
+                len(results),
+                extra={
+                    "event": "profiler_export_summary",
+                    "profile_type": type(self).__name__,
+                    "module_count": len(results),
+                },
+            )
 
             torch.save(
                 {
@@ -973,7 +993,7 @@ class LayerWiseFPCUDATimeProfiler(HookProfiler):
 
         导出分层前向传播时间分析结果。
 
-        :param output: 是否输出到控制台和文件
+        :param output: 是否写入分析结果文件并记录摘要日志
         :type output: bool
 
         :return: 时间统计结果
@@ -987,7 +1007,7 @@ class LayerWiseFPCUDATimeProfiler(HookProfiler):
 
         Export layer-wise forward propagation time profiling results.
 
-        :param output: whether to output to console and file
+        :param output: whether to write the report file and emit a summary log
         :type output: bool
 
         :return: time statistics
@@ -1007,9 +1027,17 @@ class LayerWiseFPCUDATimeProfiler(HookProfiler):
                 out_str += f"{name}:{str(self.module_obj[name])} forward => "
                 out_str += f"{avg_t:.2f} ms\n\n"
 
-            print(out_str)
             with open(self.log_path, "a") as f:
                 f.write(out_str)
+            logger.info(
+                "Layer forward CUDA time profile exported: modules=%s",
+                len(table),
+                extra={
+                    "event": "profiler_export_summary",
+                    "profile_type": type(self).__name__,
+                    "module_count": len(table),
+                },
+            )
 
         return table
 
@@ -1171,7 +1199,7 @@ class LayerWiseBPCUDATimeProfiler(HookProfiler):
 
         导出分层反向传播时间分析结果。
 
-        :param output: 是否输出到控制台和文件
+        :param output: 是否写入分析结果文件并记录摘要日志
         :type output: bool
 
         :return: 时间统计结果
@@ -1185,7 +1213,7 @@ class LayerWiseBPCUDATimeProfiler(HookProfiler):
 
         Export layer-wise backward propagation time profiling results.
 
-        :param output: whether to output to console and file
+        :param output: whether to write the report file and emit a summary log
         :type output: bool
 
         :return: time statistics
@@ -1205,8 +1233,16 @@ class LayerWiseBPCUDATimeProfiler(HookProfiler):
                 out_str += f"{name}:{self.module_obj[name]} backward => "
                 out_str += f"{avg_t:.2f} ms\n\n"
 
-            print(out_str)
             with open(self.log_path, "a") as f:
                 f.write(out_str)
+            logger.info(
+                "Layer backward CUDA time profile exported: modules=%s",
+                len(table),
+                extra={
+                    "event": "profiler_export_summary",
+                    "profile_type": type(self).__name__,
+                    "module_count": len(table),
+                },
+            )
 
         return table

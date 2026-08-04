@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import os
 from typing import Callable, Tuple, Optional
 from pathlib import Path
@@ -216,7 +217,7 @@ class SpeechCommands(Dataset):
                 with open(record, "r") as f:
                     self._walker = list([line.rstrip("\n") for line in f])
             else:
-                print("No training list, generating...")
+                logger.info("No training list, generating...")
                 walker = sorted(str(p) for p in Path(self._path).glob("*/*.wav"))
                 walker = filter(
                     lambda w: HASH_DIVIDER in w and EXCEPT_FOLDER not in w, walker
@@ -239,7 +240,7 @@ class SpeechCommands(Dataset):
                 with open(record, "w") as f:
                     f.write("\n".join(self._walker))
 
-                print("Training list generated!")
+                logger.info("Training list generated!")
 
             labels = [
                 self.label_dict.get(os.path.split(relpath)[0])

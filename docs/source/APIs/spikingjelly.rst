@@ -30,3 +30,5 @@ API 文档 | API Docs
    :caption: Package-level Configurations
 
    configure <spikingjelly.configure>
+
+   logger <spikingjelly.logger>

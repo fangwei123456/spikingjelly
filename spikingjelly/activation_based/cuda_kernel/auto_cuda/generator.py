@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import logging
 import operator as _op
 import sys
@@ -213,10 +214,12 @@ def analyse_graph(custom_fun, requires_grad: tuple):
             "silently dropping gradients for trailing inputs."
         )
 
+    debug_enabled = logger.isEnabledFor(logging.DEBUG)
     gm = _fx.symbolic_trace(custom_fun)
     graph = gm.graph
 
-    logging.debug(f"\ngraph = {graph}")
+    if debug_enabled:
+        logger.debug("\ngraph = %s", graph)
     assert sys.version_info.major >= 3 and sys.version_info.minor >= 6
 
     input_nodes = {}
@@ -282,7 +285,8 @@ def analyse_graph(custom_fun, requires_grad: tuple):
             ):
                 var.requires_grad = True
 
-            logging.debug(f"\ninput node [{ph_idx}] = {var}")
+            if debug_enabled:
+                logger.debug("\ninput node [%s] = %s", ph_idx, var)
             input_nodes[name] = var
             _fx_to_var[fx_node] = var
             ph_idx += 1
@@ -318,7 +322,8 @@ def analyse_graph(custom_fun, requires_grad: tuple):
 
             h_var = VarNode(prefix="output", name="h", instance="Tensor")
             output_nodes["h"] = h_var
-            logging.debug(f"\noutput node [0] = {h_var}")
+            if debug_enabled:
+                logger.debug("\noutput node [0] = %s", h_var)
 
             src = _fx_to_var[ret]
             # Replace src with h_var everywhere in cmds — both as a cmd's
@@ -346,8 +351,9 @@ def analyse_graph(custom_fun, requires_grad: tuple):
                     (h_var, "aten::add", (src, _make_const(0.0), _make_const(1)))
                 )
 
-    for i, node in enumerate(inter_nodes.values()):
-        logging.debug(f"\ninter node [{i}] = {node}")
+    if debug_enabled:
+        for i, node in enumerate(inter_nodes.values()):
+            logger.debug("\ninter node [%s] = %s", i, node)
 
     return input_nodes, inter_nodes, output_nodes, cmds
 
@@ -675,6 +681,7 @@ def gen_backward_codes(
     :raises NotImplementedError: Raised for unsupported operator kinds or node instance kinds.
     """
 
+    debug_enabled = logger.isEnabledFor(logging.DEBUG)
     input_bp_nodes = {}
     """
     在反向传播时，输入梯度是output_nodes的梯度
@@ -828,8 +835,9 @@ def gen_backward_codes(
                 if y.value is None:
                     input_bp_nodes[y.name] = y
 
-    for i, node in enumerate(input_bp_nodes):
-        logging.debug(f"\ninput bp node [{i}] = {node}")
+    if debug_enabled:
+        for i, node in enumerate(input_bp_nodes):
+            logger.debug("\ninput bp node [%s] = %s", i, node)
 
     # CUDA函数的参数
     cuda_params = {

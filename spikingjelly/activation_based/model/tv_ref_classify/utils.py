@@ -2,6 +2,7 @@ import copy
 import datetime
 import errno
 import hashlib
+import logging
 import os
 import statistics
 import time
@@ -11,6 +12,8 @@ from typing import Optional, Sequence, Union
 
 import torch
 import torch.distributed as dist
+
+from spikingjelly.logger import logger
 
 __all__ = [
     "SmoothedValue",
@@ -298,28 +301,28 @@ class MetricLogger:
         end = time.time()
         iter_time = SmoothedValue(fmt="{avg:.4f}")
         data_time = SmoothedValue(fmt="{avg:.4f}")
-        space_fmt = ":" + str(len(str(len(iterable)))) + "d"
+        space_width = len(str(len(iterable)))
         if torch.cuda.is_available():
             log_msg = self.delimiter.join(
                 [
-                    header,
-                    "[{0" + space_fmt + "}/{1}]",
-                    "eta: {eta}",
-                    "{meters}",
-                    "time: {time}",
-                    "data: {data}",
-                    "max mem: {memory:.0f}",
+                    "%s",
+                    "[%*d/%d]",
+                    "eta: %s",
+                    "%s",
+                    "time: %s",
+                    "data: %s",
+                    "max mem: %.0f",
                 ]
             )
         else:
             log_msg = self.delimiter.join(
                 [
-                    header,
-                    "[{0" + space_fmt + "}/{1}]",
-                    "eta: {eta}",
-                    "{meters}",
-                    "time: {time}",
-                    "data: {data}",
+                    "%s",
+                    "[%*d/%d]",
+                    "eta: %s",
+                    "%s",
+                    "time: %s",
+                    "data: %s",
                 ]
             )
         MB = 1024.0 * 1024.0
@@ -327,37 +330,45 @@ class MetricLogger:
             data_time.update(time.time() - end)
             yield obj
             iter_time.update(time.time() - end)
-            if print_freq > 0 and i % print_freq == 0:
+            if (
+                print_freq > 0
+                and i % print_freq == 0
+                and is_main_process()
+                and logger.isEnabledFor(logging.INFO)
+            ):
                 eta_seconds = iter_time.global_avg * (len(iterable) - i)
                 eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
                 if torch.cuda.is_available():
-                    print(
-                        log_msg.format(
-                            i,
-                            len(iterable),
-                            eta=eta_string,
-                            meters=str(self),
-                            time=str(iter_time),
-                            data=str(data_time),
-                            memory=torch.cuda.max_memory_allocated() / MB,
-                        )
+                    logger.info(
+                        log_msg,
+                        header,
+                        space_width,
+                        i,
+                        len(iterable),
+                        eta_string,
+                        self,
+                        str(iter_time),
+                        str(data_time),
+                        torch.cuda.max_memory_allocated() / MB,
                     )
                 else:
-                    print(
-                        log_msg.format(
-                            i,
-                            len(iterable),
-                            eta=eta_string,
-                            meters=str(self),
-                            time=str(iter_time),
-                            data=str(data_time),
-                        )
+                    logger.info(
+                        log_msg,
+                        header,
+                        space_width,
+                        i,
+                        len(iterable),
+                        eta_string,
+                        self,
+                        str(iter_time),
+                        str(data_time),
                     )
             i += 1
             end = time.time()
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        print(f"{header} Total time: {total_time_str}")
+        if is_main_process():
+            logger.info("%s Total time: %s", header, total_time_str)
 
 
 class ExponentialMovingAverage(torch.optim.swa_utils.AveragedModel):
@@ -442,22 +453,6 @@ def mkdir(path):
             raise
 
 
-def setup_for_distributed(is_master):
-    """
-    This function disables printing when not in master process
-    """
-    import builtins as __builtin__
-
-    builtin_print = __builtin__.print
-
-    def print(*args, **kwargs):
-        force = kwargs.pop("force", False)
-        if is_master or force:
-            builtin_print(*args, **kwargs)
-
-    __builtin__.print = print
-
-
 def is_dist_avail_and_initialized():
     if not dist.is_available():
         return False
@@ -524,7 +519,7 @@ def init_distributed_mode(args):
     elif hasattr(args, "rank"):
         pass
     else:
-        print("Not using distributed mode")
+        logger.info("Not using distributed mode")
         args.distributed = False
         return
 
@@ -532,14 +527,14 @@ def init_distributed_mode(args):
 
     torch.cuda.set_device(args.gpu)
     args.dist_backend = "nccl"
-    print(f"| distributed init (rank {args.rank}): {args.dist_url}", flush=True)
     torch.distributed.init_process_group(
         backend=args.dist_backend,
         init_method=args.dist_url,
         world_size=args.world_size,
         rank=args.rank,
     )
-    setup_for_distributed(args.rank == 0)
+    if args.rank == 0:
+        logger.info("Distributed training initialized: %s", args.dist_url)
 
 
 def average_checkpoints(inputs):
@@ -607,22 +602,22 @@ def store_model_weights(model, checkpoint_path, checkpoint_key="model", strict=T
 
         # Classification
         model = M.mobilenet_v3_large(pretrained=False)
-        print(store_model_weights(model, './class.pth'))
+        logger.info(store_model_weights(model, './class.pth'))
 
         # Quantized Classification
         model = M.quantization.mobilenet_v3_large(pretrained=False, quantize=False)
         model.fuse_model(is_qat=True)
         model.qconfig = torch.ao.quantization.get_default_qat_qconfig('qnnpack')
         _ = torch.ao.quantization.prepare_qat(model, inplace=True)
-        print(store_model_weights(model, './qat.pth'))
+        logger.info(store_model_weights(model, './qat.pth'))
 
         # Object Detection
         model = M.detection.fasterrcnn_mobilenet_v3_large_fpn(pretrained=False, pretrained_backbone=False)
-        print(store_model_weights(model, './obj.pth'))
+        logger.info(store_model_weights(model, './obj.pth'))
 
         # Segmentation
         model = M.segmentation.deeplabv3_mobilenet_v3_large(pretrained=False, pretrained_backbone=False, aux_loss=True)
-        print(store_model_weights(model, './segm.pth', strict=False))
+        logger.info(store_model_weights(model, './segm.pth', strict=False))
 
     Args:
         model (pytorch.nn.Module): The model on which the weights will be loaded for validation purposes.

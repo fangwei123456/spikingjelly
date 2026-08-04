@@ -259,9 +259,7 @@ def test_apply_pipeline_stage_memopt_supports_legacy_memopt_signature(monkeypatc
 
     calls = {"count": 0}
 
-    def fake_memory_optimization(
-        module, target_types, dummy_input, compress_x, level, verbose
-    ):
+    def fake_memory_optimization(module, target_types, dummy_input, compress_x, level):
         calls["count"] += 1
         return module
 
@@ -306,9 +304,7 @@ def test_apply_pipeline_stage_memopt_moves_dummy_input_to_runtime_device(monkeyp
 
     import spikingjelly.activation_based.memopt as memopt
 
-    def fake_memory_optimization(
-        module, target_types, dummy_input, compress_x, level, verbose
-    ):
+    def fake_memory_optimization(module, target_types, dummy_input, compress_x, level):
         assert next(module.parameters()).device.type == "meta"
         assert dummy_input[0].device.type == "meta"
         return module

@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import math
 
 import torch
@@ -181,9 +182,9 @@ class PrintShapeModule(nn.Module):
 
         * **中文**
 
-        只打印 ``ext_str`` 和输入的 ``shape``，不进行任何操作的网络层，可以用于debug。
+        只记录 ``ext_str`` 和输入 ``shape`` 的 DEBUG 日志，不进行任何操作的网络层，可以用于调试。
 
-        :param ext_str: 额外打印的字符串
+        :param ext_str: 额外记录的字符串
         :type ext_str: str
 
         ----
@@ -192,16 +193,16 @@ class PrintShapeModule(nn.Module):
 
         * **English**
 
-        This layer will not do any operation but print ``ext_str`` and the shape of input, which can be used for debugging.
+        This layer performs no operation and emits a DEBUG log containing ``ext_str`` and the input shape.
 
-        :param ext_str: extra strings for printing
+        :param ext_str: extra text to include in the DEBUG log
         :type ext_str: str
         """
         super().__init__()
         self.ext_str = ext_str
 
     def forward(self, x: Tensor):
-        print(self.ext_str, x.shape)
+        logger.debug("%s shape=%s", self.ext_str, x.shape)
         return x
 
 

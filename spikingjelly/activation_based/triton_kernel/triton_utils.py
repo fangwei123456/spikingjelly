@@ -3,9 +3,10 @@ https://github.com/AllenYolk/flash-snn/tree/main/flashsnn/utils
 https://github.com/fla-org/flash-linear-attention/blob/main/fla/utils.py
 """
 
+from spikingjelly.logger import logger
+
 import contextlib
 import functools
-import logging
 import os
 from typing import Callable
 
@@ -20,7 +21,7 @@ try:
     from torch.library import triton_op
 
     _TRITON_OP_AVAILABLE = True
-except BaseException:
+except (ImportError, AttributeError):
     triton_op = dummy.DummyImport()
     _TRITON_OP_AVAILABLE = False
 
@@ -46,7 +47,7 @@ try:
             type_dict[torch.bfloat16] = tl.bfloat16
             type_str_dict[torch.bfloat16] = "tl.bfloat16"
         else:
-            logging.info("bfloat16 is not supported on this device.")
+            logger.debug("bfloat16 is not supported on this device.")
     if hasattr(torch, "float8_e4m3fn"):
         if hasattr(tl, "float8e4m3fn"):
             type_dict[torch.float8_e4m3fn] = tl.float8e4m3fn
@@ -67,10 +68,8 @@ try:
     if hasattr(torch, "float8_e5m2fnuz") and hasattr(tl, "float8e5b16"):
         type_dict[torch.float8_e5m2fnuz] = tl.float8e5b16
         type_str_dict[torch.float8_e5m2fnuz] = "tl.float8e5b16"
-except BaseException as e:
-    import logging
-
-    logging.info(f"spikingjelly.activation_based.triton_kernel.triton_utils: {e}")
+except (ImportError, AttributeError, OSError, RuntimeError) as e:
+    logger.debug("spikingjelly.activation_based.triton_kernel.triton_utils: %s", e)
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
     type_dict = {}

@@ -4,6 +4,8 @@ from typing import Optional, Tuple
 import torch
 import torch.nn as nn
 
+from spikingjelly.logger import logger
+
 try:
     from torch.distributed._tensor import DeviceMesh
 except ImportError:
@@ -100,6 +102,16 @@ def configure_snn_distributed(
 
     needs_device_mesh = config.device_mesh is not None or config.mode != "none"
     if not needs_device_mesh:
+        logger.info(
+            "distributed_configuration_summary mode=%s device_type=%s mesh_shape=None "
+            "tensor_parallel=%s fsdp2=False data_parallel=False memory_modules=%s "
+            "tensor_parallel_candidates=%s",
+            config.mode,
+            config.device_type,
+            tensor_parallel,
+            len(analysis.memory_module_names),
+            len(analysis.tensor_parallel_candidate_names),
+        )
         return module, None, analysis
 
     if config.device_mesh is None:
@@ -202,4 +214,17 @@ def configure_snn_distributed(
             static_graph=config.static_graph,
         )
 
+    mesh_tensor = getattr(device_mesh, "mesh", None)
+    mesh_shape = tuple(int(value) for value in mesh_tensor.shape)
+    logger.info(
+        "distributed_configuration_summary mode=%s device_type=%s mesh_shape=%s tensor_parallel=%s fsdp2=%s data_parallel=%s memory_modules=%s tensor_parallel_candidates=%s",
+        config.mode,
+        config.device_type,
+        mesh_shape,
+        tensor_parallel,
+        config.mode in ("fsdp2", "fsdp2_tp"),
+        config.mode == "dp",
+        len(analysis.memory_module_names),
+        len(analysis.tensor_parallel_candidate_names),
+    )
     return module, device_mesh, analysis

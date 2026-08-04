@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import logging
 from typing import Optional, Union
 
@@ -9,22 +10,27 @@ from torch.nn.modules.utils import _pair, _single, _triple
 from torch.types import _int, _size
 from torch.utils.cpp_extension import load_inline
 
+
 from . import tensor_cache
 
 try:
     import cupy
-except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.spike_op: {e}")
+except (ImportError, OSError) as e:
+    logger.debug("CUDA spike op dependency unavailable: %s", e)
     cupy = None
 
 
+cpp_wrapper_error = None
 try:
-    logging.warning(
-        "spikingjelly.activation_based.spike_op: try to use `torch.utils.cpp_extension.load_inline` to load cudnn functions."
-    )
-    logging.warning(
-        f"If it is hanging, pleast try to delete torch_extensions cache directory. (In most cases, the directory is {torch.utils.cpp_extension._get_build_directory('', False)}.)"
-    )
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            "Loading CUDA spike-op extension through torch.utils.cpp_extension.load_inline"
+        )
+        logger.debug(
+            "If extension loading hangs, remove the torch extensions cache directory; "
+            "the default build directory is %s",
+            torch.utils.cpp_extension._get_build_directory("", False),
+        )
     cpp_wrapper = load_inline(
         name="cpp_wrapper",
         cpp_sources=r"""
@@ -51,9 +57,9 @@ try:
         functions=["cudnn_convolution_backward"],
         with_cuda=True,
     )
-except BaseException as e:
-    logging.info(f"spikingjelly.activation_based.spike_op: {e}")
+except (ImportError, OSError, RuntimeError) as e:
     cpp_wrapper = None
+    cpp_wrapper_error = e
 
 
 def _spike_conv_backward_common(
@@ -248,6 +254,38 @@ torch.library.register_autograd(
     _cupy_spike_convolution_backward,
     setup_context=_setup_cupy_spike_convolution_context,
 )
+
+if cpp_wrapper is None:
+    logger.warning(
+        "CUDA spike operators registered: linear=ok convolution=backward_unavailable; "
+        "using the PyTorch fallback for supported operations. extension_error=%s",
+        cpp_wrapper_error,
+        extra={
+            "event": "operator_register_summary",
+            "backend": "cuda",
+            "registration_kind": "torch.library",
+            "registered": 2,
+            "fake_registered": 2,
+            "autograd_registered": 2,
+            "failed": 1,
+        },
+    )
+else:
+    logger.info(
+        "CUDA spike operators registered: operators=%s fake_kernels=%s autograd_kernels=%s",
+        2,
+        2,
+        2,
+        extra={
+            "event": "operator_register_summary",
+            "backend": "cuda",
+            "registration_kind": "torch.library",
+            "registered": 2,
+            "fake_registered": 2,
+            "autograd_registered": 2,
+            "failed": 0,
+        },
+    )
 
 
 def spike_linear(

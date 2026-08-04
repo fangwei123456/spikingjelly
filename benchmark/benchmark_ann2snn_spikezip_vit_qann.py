@@ -531,10 +531,7 @@ def main() -> None:
         raise RuntimeError(
             f"--device {args.device!r} requested but CUDA is not available."
         )
-    if (
-        args.debug_blocks
-        and args.sequence_loop_bottlenecks
-    ):
+    if args.debug_blocks and args.sequence_loop_bottlenecks:
         raise ValueError(
             "--debug-blocks does not support --sequence-loop-bottlenecks because "
             "mixed sequence and looped block outputs are ambiguous."
@@ -654,8 +651,7 @@ def main() -> None:
         handle.remove()
     if args.debug_blocks:
         qann_outputs = _debug_qann_outputs(
-            (index, value)
-            for index, value in enumerate(qann_features)
+            (index, value) for index, value in enumerate(qann_features)
         )
         snn_outputs = _debug_snn_outputs(
             (

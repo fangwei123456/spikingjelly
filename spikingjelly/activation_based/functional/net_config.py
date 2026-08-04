@@ -1,12 +1,13 @@
 from __future__ import annotations
+from spikingjelly.logger import logger
 
-import logging
 from typing import Optional, Union
 from weakref import ReferenceType, WeakKeyDictionary, ref
 
 import torch.nn as nn
 
 from .. import base
+
 
 __all__ = [
     "collect_reset_modules",
@@ -54,9 +55,10 @@ def _resolve_cached_reset_modules(
 def reset_collected_modules(modules: tuple[nn.Module, ...]) -> None:
     for m in modules:
         if not isinstance(m, base.MemoryModule):
-            logging.warning(
-                f"Trying to call `reset()` of {m}, which is not spikingjelly.activation_based.base"
-                f".MemoryModule"
+            logger.warning(
+                "Trying to call `reset()` of %s, which is not "
+                "spikingjelly.activation_based.base.MemoryModule",
+                m,
             )
         m.reset()
 
@@ -236,9 +238,10 @@ def set_step_mode(net: nn.Module, step_mode: str):
         m = modules.pop()
         if hasattr(m, "step_mode"):
             if not isinstance(m, base.StepModule):
-                logging.warning(
-                    f"Trying to set the step mode for {m}, which is not spikingjelly.activation_based"
-                    f".base.StepModule"
+                logger.warning(
+                    "Trying to set the step mode for %s, which is not "
+                    "spikingjelly.activation_based.base.StepModule",
+                    m,
                 )
             m.step_mode = step_mode
         if not isinstance(m, keep_step_mode_instance):
@@ -312,14 +315,19 @@ def set_backend(
         if not isinstance(m, instance) or not hasattr(m, "backend"):
             continue
         if not isinstance(m, base.MemoryModule):
-            logging.warning(
-                f"Trying to set the backend for {m}, which is not spikingjelly.activation_based.base.MemoryModule"
+            logger.warning(
+                "Trying to set the backend for %s, which is not "
+                "spikingjelly.activation_based.base.MemoryModule",
+                m,
             )
         if backend in m.supported_backends:
             m.backend = backend
         else:
-            logging.warning(
-                f"{m} does not supports for backend={backend}. It will still use backend={m.backend}."
+            logger.warning(
+                "%s does not support backend=%s; it will continue using backend=%s",
+                m,
+                backend,
+                m.backend,
             )
 
 
@@ -369,8 +377,9 @@ def detach_net(net: nn.Module):
     for m in net.modules():
         if hasattr(m, "detach"):
             if not isinstance(m, base.MemoryModule):
-                logging.warning(
-                    f"Trying to call `detach()` of {m}, which is not spikingjelly.activation_based.base"
-                    f".MemoryModule"
+                logger.warning(
+                    "Trying to call `detach()` of %s, which is not "
+                    "spikingjelly.activation_based.base.MemoryModule",
+                    m,
                 )
             m.detach()

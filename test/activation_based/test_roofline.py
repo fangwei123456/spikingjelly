@@ -12,9 +12,7 @@ def test_dispatch_counter_basic():
     counter1 = op_counter.FlopCounter()
     counter2 = op_counter.MemoryAccessCounter()
 
-    with op_counter.DispatchCounterMode(
-        [counter1, counter2], verbose=True, strict=True
-    ):
+    with op_counter.DispatchCounterMode([counter1, counter2], strict=True):
         y = net(x)
         l = y.sum()
         l.backward()
@@ -47,9 +45,7 @@ def test_dispatch_counter_ignore():
     counter1 = op_counter.FlopCounter(extra_ignore_modules=(neuron.LIFNode,))
     counter2 = op_counter.MemoryAccessCounter(extra_ignore_modules=(neuron.LIFNode,))
 
-    with op_counter.DispatchCounterMode(
-        [counter1, counter2], verbose=True, strict=True
-    ):
+    with op_counter.DispatchCounterMode([counter1, counter2], strict=True):
         y = net(x)
         l = y.sum()
         l.backward()

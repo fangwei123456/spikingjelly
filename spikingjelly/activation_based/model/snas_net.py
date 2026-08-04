@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import torch
 import torch.nn as nn
 from ...activation_based import layer, surrogate, neuron
@@ -382,8 +383,7 @@ class SNASNet(nn.Module):
                 self.con_mat,
             )
         else:
-            print("not implemented")
-            exit()
+            raise ValueError(f"Unsupported celltype: {args.celltype!r}")
 
         self.downconv1 = nn.Sequential(
             nn.BatchNorm2d(
@@ -427,8 +427,7 @@ class SNASNet(nn.Module):
                 args, 256 * self.channel_ratio, 256 * self.channel_ratio, self.con_mat
             )
         else:
-            print("not implemented")
-            exit()
+            raise ValueError(f"Unsupported celltype: {args.celltype!r}")
 
         self.last_act = nn.Sequential(
             nn.BatchNorm2d(
@@ -537,8 +536,8 @@ if __name__ == "__main__":
     int_list = [[0, 0, 0, 2], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
     best_neuroncell = torch.Tensor(int_list)
 
-    print("-" * 7, "best_neuroncell", "-" * 7)
-    print(best_neuroncell)
-    print("-" * 30)
+    logger.info("------- best_neuroncell -------")
+    logger.info("%s", best_neuroncell)
+    logger.info("------------------------------")
 
     snasnet = SNASNet(args, best_neuroncell)

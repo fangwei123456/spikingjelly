@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from spikingjelly.activation_based.distributed.pipeline.partition import (
     resolve_pipeline_schedule_kind,
 )
+from spikingjelly.logger import logger
 
 try:
     from torch.distributed._tensor import DTensor
@@ -459,7 +460,10 @@ def _build_snn_pipeline_runtime(
         )
     else:
         raise ValueError(f"Unsupported pipeline schedule kind '{schedule_kind}'.")
-    return SNNPipelineRuntime(
+    stage_costs = tuple(
+        float(cost) for cost in getattr(pipeline_module, "stage_costs", ())
+    )
+    runtime = SNNPipelineRuntime(
         schedule=schedule,
         stage_module=stage_module,
         stage_modules=stage_modules,
@@ -471,9 +475,7 @@ def _build_snn_pipeline_runtime(
         model_family=model_family,
         split_points=tuple(f"stages.{idx}" for idx in range(1, num_stages)),
         group=group,
-        stage_costs=tuple(
-            float(cost) for cost in getattr(pipeline_module, "stage_costs", ())
-        ),
+        stage_costs=stage_costs,
         stage_input_examples=tuple(stage_inputs[idx] for idx in local_stage_indices),
         memopt_selected_stage_indices=(),
         schedule_kind=schedule_kind,
@@ -481,3 +483,16 @@ def _build_snn_pipeline_runtime(
         pp_layout=pp_layout,
         delayed_wgrad=delayed_wgrad,
     )
+    logger.info(
+        "distributed_pipeline_runtime_summary model_family=%s stage_index=%s local_stage_indices=%s num_stages=%s n_microbatches=%s schedule=%s device=%s stage_cost_count=%s delayed_wgrad=%s",
+        model_family,
+        stage_index,
+        local_stage_indices,
+        num_stages,
+        n_microbatches,
+        schedule_kind,
+        device,
+        len(stage_costs),
+        delayed_wgrad,
+    )
+    return runtime

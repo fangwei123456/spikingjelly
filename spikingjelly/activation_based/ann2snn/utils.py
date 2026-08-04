@@ -1,8 +1,11 @@
 import os
 import re
+import time
 
 import requests
 from tqdm import tqdm
+
+from spikingjelly.logger import logger
 
 
 def _validate_download_response(req, first_byte, file_size):
@@ -84,6 +87,7 @@ def download_url(url: str, dst: str) -> int:
     :rtype: int
     :raises RuntimeError: Raised when the server response is invalid for resume, or when the received byte count does not match the declared length
     """
+    start_time = time.perf_counter()
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0"
     }
@@ -95,15 +99,31 @@ def download_url(url: str, dst: str) -> int:
     finally:
         response.close()
     if content_length is None:
-        return _download_without_resume(url, dst, headers)
+        file_size = _download_without_resume(url, dst, headers)
+        logger.info(
+            "ann2snn_download_summary destination=%s resumed=%s bytes=%s elapsed_ms=%.3f",
+            dst,
+            False,
+            file_size,
+            (time.perf_counter() - start_time) * 1000.0,
+        )
+        return file_size
     file_size = int(content_length)  # (2)
     if os.path.exists(dst):
         first_byte = os.path.getsize(dst)  # (3)
     else:
         first_byte = 0
     if first_byte >= file_size:  # (4)
+        logger.info(
+            "ann2snn_download_summary destination=%s resumed=%s bytes=%s elapsed_ms=%.3f",
+            dst,
+            False,
+            file_size,
+            (time.perf_counter() - start_time) * 1000.0,
+        )
         return file_size
 
+    resumed = first_byte > 0
     header = {**headers, "Range": f"bytes={first_byte}-{file_size - 1}"}
 
     pbar = tqdm(
@@ -115,8 +135,14 @@ def download_url(url: str, dst: str) -> int:
         mode = "ab"
         valid_response = _validate_download_response(req, first_byte, file_size)
         if first_byte > 0 and not valid_response:
+            logger.warning(
+                "ann2snn_download_resume_restarted destination=%s existing_bytes=%s",
+                dst,
+                first_byte,
+            )
             req.close()
             first_byte = 0
+            resumed = False
             pbar.reset(total=file_size)
             header = {**headers, "Range": f"bytes=0-{file_size - 1}"}
             req = requests.get(url, headers=header, stream=True, timeout=30)
@@ -140,4 +166,11 @@ def download_url(url: str, dst: str) -> int:
         if req is not None:
             req.close()
         pbar.close()
+    logger.info(
+        "ann2snn_download_summary destination=%s resumed=%s bytes=%s elapsed_ms=%.3f",
+        dst,
+        resumed,
+        file_size,
+        (time.perf_counter() - start_time) * 1000.0,
+    )
     return file_size

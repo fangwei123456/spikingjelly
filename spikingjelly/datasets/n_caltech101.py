@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 from typing import Callable, Union, Optional, Tuple
 import os
 from pathlib import Path
@@ -18,7 +19,7 @@ __all__ = ["NCaltech101"]
 def _read_bin_save_to_np(bin_file: Union[str, Path], np_file: Union[str, Path]):
     events = utils.load_ATIS_bin(bin_file)
     utils.np_savez(np_file, t=events["t"], x=events["x"], y=events["y"], p=events["p"])
-    print(f"Save [{bin_file}] to [{np_file}].")
+    logger.debug("Save [%s] to [%s].", bin_file, np_file)
 
 
 class NCaltech101(NeuromorphicDatasetFolder):
@@ -230,7 +231,7 @@ class NCaltech101(NeuromorphicDatasetFolder):
         :type extract_root: Path
         """
         zip_file = download_root / "Caltech101.zip"
-        print(f"Extract [{zip_file}] to [{extract_root}].")
+        logger.debug("Extract [%s] to [%s].", zip_file, extract_root)
         extract_archive(zip_file, extract_root)
 
     @classmethod
@@ -279,11 +280,13 @@ class NCaltech101(NeuromorphicDatasetFolder):
                 bin_dir = extract_root / class_name
                 np_dir = raw_root / class_name
                 np_dir.mkdir()
-                print(f"Mkdir [{np_dir}].")
+                logger.debug("Mkdir [%s].", np_dir)
                 for bin_file in os.listdir(bin_dir):
                     source_file = bin_dir / bin_file
                     target_file = np_dir / (os.path.splitext(bin_file)[0] + ".npz")
-                    print(f"Start to convert [{source_file}] to [{target_file}].")
+                    logger.debug(
+                        "Start to convert [%s] to [%s].", source_file, target_file
+                    )
                     futures.append(
                         tpe.submit(_read_bin_save_to_np, source_file, target_file)
                     )
@@ -291,4 +294,4 @@ class NCaltech101(NeuromorphicDatasetFolder):
             for future in futures:
                 future.result()
 
-        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
+        logger.info("Used time = [%ss].", round(time.time() - t_ckp, 2))

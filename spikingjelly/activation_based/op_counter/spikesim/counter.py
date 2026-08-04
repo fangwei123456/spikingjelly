@@ -1,6 +1,8 @@
 from __future__ import annotations
+from spikingjelly.logger import logger
 
 import math
+import logging
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -11,6 +13,7 @@ import torch.nn.functional as F
 
 from ..base import BaseCounter, is_binary_tensor
 from .config import SpikeSimEnergyConfig
+
 
 __all__ = ["SpikeSimCounter"]
 aten = torch.ops.aten
@@ -72,7 +75,6 @@ class SpikeSimCounter(BaseCounter):
         *,
         config: SpikeSimEnergyConfig,
         strict: bool,
-        verbose: bool,
     ):
         """
         **API Language** - :ref:`中文 <SpikeSimCounter-cn>` | :ref:`English <SpikeSimCounter-en>`
@@ -89,8 +91,6 @@ class SpikeSimCounter(BaseCounter):
         :type config: SpikeSimEnergyConfig
         :param strict: 严格模式开关
         :type strict: bool
-        :param verbose: 详细输出开关
-        :type verbose: bool
 
         ----
 
@@ -104,13 +104,11 @@ class SpikeSimCounter(BaseCounter):
         :type config: SpikeSimEnergyConfig
         :param strict: Whether to use strict mode
         :type strict: bool
-        :param verbose: Whether to produce verbose output
-        :type verbose: bool
+
         """
         super().__init__()
         self.config = config
         self.strict = strict
-        self.verbose = verbose
         self.stage_stats: dict[str, _StageStats] = defaultdict(_StageStats)
         self.stage_metadata: dict[str, _StageMetadata] = {}
         self.warnings: list[str] = []
@@ -451,15 +449,19 @@ class SpikeSimCounter(BaseCounter):
             dilation=dilation,
             spike_like_input=spike_like_input,
         )
-        if self.verbose:
+        if logger.isEnabledFor(logging.DEBUG):
             mode = (
                 "event"
                 if self.config.activity_mode == "event" and spike_like_input
                 else "dense"
             )
-            print(
-                f"SpikeSimCounter: {scope} - aten.convolution.default "
-                f"[{mode}] x={tuple(x.shape)} w={tuple(w.shape)} out={tuple(out.shape)}"
+            logger.debug(
+                "SpikeSimCounter: %s - aten.convolution.default [%s] x=%s w=%s out=%s",
+                scope,
+                mode,
+                tuple(x.shape),
+                tuple(w.shape),
+                tuple(out.shape),
             )
         return dense_pe_cycles
 

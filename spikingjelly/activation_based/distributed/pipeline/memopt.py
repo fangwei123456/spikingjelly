@@ -9,6 +9,7 @@ import torch.distributed as dist
 from spikingjelly.activation_based.distributed.pipeline.runtime import (
     SNNPipelineRuntime,
 )
+from spikingjelly.logger import logger
 
 
 def recommend_pipeline_memopt_stages(
@@ -79,6 +80,15 @@ def apply_pipeline_stage_memopt(
     """
     if memopt_level <= 0:
         runtime.memopt_selected_stage_indices = ()
+        logger.info(
+            "distributed_pipeline_memopt_summary model_family=%s applied=%s memopt_level=%s selected_stage_indices=%s optimize_ms=%s compress_x=%s",
+            runtime.model_family,
+            False,
+            memopt_level,
+            (),
+            0.0,
+            compress_x,
+        )
         return runtime, 0.0, False
 
     if runtime.model_family == "cifar10dvs_vgg":
@@ -120,6 +130,15 @@ def apply_pipeline_stage_memopt(
         if logical_idx in selected
     ]
     if not local_selected_pairs:
+        logger.info(
+            "distributed_pipeline_memopt_summary model_family=%s applied=%s memopt_level=%s selected_stage_indices=%s optimize_ms=%s compress_x=%s",
+            runtime.model_family,
+            False,
+            memopt_level,
+            selected,
+            0.0,
+            compress_x,
+        )
         return runtime, 0.0, False
 
     from spikingjelly.activation_based.memopt import memory_optimization
@@ -141,7 +160,6 @@ def apply_pipeline_stage_memopt(
             dummy_input=(stage_input_example,),
             compress_x=compress_x,
             level=memopt_level,
-            verbose=False,
         )
         if supports_plan_cache:
             optimize_kwargs["use_plan_cache"] = use_plan_cache
@@ -152,4 +170,14 @@ def apply_pipeline_stage_memopt(
         )
         stage_wrapper.inner = optimized.to(runtime.device)
         stage_wrapper.refresh_reset_modules()
-    return runtime, (time.time() - start) * 1000.0, True
+    optimize_ms = (time.time() - start) * 1000.0
+    logger.info(
+        "distributed_pipeline_memopt_summary model_family=%s applied=%s memopt_level=%s selected_stage_indices=%s optimize_ms=%.3f compress_x=%s",
+        runtime.model_family,
+        True,
+        memopt_level,
+        selected,
+        optimize_ms,
+        compress_x,
+    )
+    return runtime, optimize_ms, True

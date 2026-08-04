@@ -1,3 +1,4 @@
+from spikingjelly.logger import logger
 import time
 import os
 from pathlib import Path
@@ -225,10 +226,10 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         :rtype: Tuple[pathlib.Path, Callable]
         """
         if self.processed_root.exists():
-            print(f"The directory [{self.processed_root}] already exists.")
+            logger.info("The directory [%s] already exists.", self.processed_root)
         else:
             self.processed_root.mkdir()
-            print(f"Mkdir [{self.processed_root}].")
+            logger.info("Mkdir [%s].", self.processed_root)
             self.build_impl()
         return self.processed_root, self.get_loader()
 
@@ -302,14 +303,14 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         with ThreadPoolExecutor(
             max_workers=configure.max_threads_number_for_datasets_preprocess
         ) as executor:
-            print(
-                "Start ThreadPoolExecutor with max workers = "
-                f"[{executor._max_workers}]."
+            logger.info(
+                "Start ThreadPoolExecutor with max workers = [%s].",
+                executor._max_workers,
             )
             futures = [executor.submit(process, *task_args) for task_args in tasks]
             for future in futures:
                 future.result()
-        print(f"Used time = [{round(time.time() - start, 2)}s].")
+        logger.info("Used time = [%ss].", round(time.time() - start, 2))
 
     def _build_from_event_files(self, process: Callable) -> None:
         utils.create_same_directory_structure(self.raw_root, self.processed_root)
@@ -320,9 +321,10 @@ class NeuromorphicDatasetBuilder(abc.ABC):
                 output_dir = self.processed_root / event_root.relative_to(self.raw_root)
                 for event_file in event_files:
                     events_file = event_root / event_file
-                    print(
-                        f"Start to integrate [{events_file}] to frames "
-                        f"and save to [{output_dir}]."
+                    logger.info(
+                        "Start to integrate [%s] to frames and save to [%s].",
+                        events_file,
+                        output_dir,
                     )
                     yield events_file, output_dir
 
@@ -885,13 +887,17 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         for file_name, url, md5 in resource_list:
             fpath = download_root / file_name
             if not check_integrity(fpath=fpath, md5=md5):
-                print(f"The file [{fpath}] does not exist or is corrupted.")
+                logger.warning(
+                    "The downloaded file [%s] is missing or corrupted.", fpath
+                )
                 if fpath.exists():
                     fpath.unlink()
-                    print(f"Remove [{fpath}]")
+                    logger.debug("Remove [%s]", fpath)
 
                 if cls.downloadable():
-                    print(f"Download [{file_name}] from [{url}] to [{download_root}]")
+                    logger.info(
+                        "Download [%s] from [%s] to [%s]", file_name, url, download_root
+                    )
                     download_url(
                         url=url, root=download_root, filename=file_name, md5=md5
                     )
@@ -907,7 +913,9 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         resource_list = cls.resource_url_md5()
         if cls.downloadable():
             for file_name, url, md5 in resource_list:
-                print(f"Download [{file_name}] from [{url}] to [{download_root}]")
+                logger.info(
+                    "Download [%s] from [%s] to [%s]", file_name, url, download_root
+                )
                 download_url(url=url, root=download_root, filename=file_name, md5=md5)
         else:
             raise NotImplementedError(
@@ -956,35 +964,37 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         # download
         download_root = self.cfg.root / "download"
         if download_root.exists():
-            print(
-                f"The [{download_root}] directory for saving downloaded files "
-                f"already exists, check files..."
+            logger.info(
+                "The [%s] directory for saving downloaded files already exists, check files...",
+                download_root,
             )
             self._check_downloaded_files(download_root)
         else:
             download_root.mkdir()
-            print(f"Mkdir [{download_root}] to save downloaded files.")
+            logger.info("Mkdir [%s] to save downloaded files.", download_root)
             self._download_all_files(download_root)
 
         # extract
         extract_root = self.cfg.root / "extract"
         if extract_root.exists():
-            print(
-                f"The directory [{extract_root}] for saving extracted files already exists.\n"
-                f"SpikingJelly will not check the data integrity of extracted files.\n"
-                f"If extracted files are corrupted, please delete [{extract_root}] manually."
+            logger.warning(
+                "The extracted directory [%s] already exists; SpikingJelly will "
+                "not check its integrity. Delete [%s] manually if it is corrupted.",
+                extract_root,
+                extract_root,
             )
         else:
             extract_root.mkdir()
-            print(f"Mkdir [{extract_root}].")
+            logger.info("Mkdir [%s].", extract_root)
             self.extract_downloaded_files(download_root, extract_root)
 
         # generate raw dataset in self.raw_root
         self.raw_root.mkdir(exist_ok=True)  # raw_root might be equal to extract_root
-        print(f"Mkdir [{self.raw_root}].")
-        print(
-            f"Start to convert the extracted dataset from [{extract_root}] to "
-            f"raw dataset in [{self.raw_root}]."
+        logger.info("Raw dataset directory ready: [%s].", self.raw_root)
+        logger.info(
+            "Start to convert the extracted dataset from [%s] to raw dataset in [%s].",
+            extract_root,
+            self.raw_root,
         )
         self.create_raw_from_extracted(extract_root, self.raw_root)
 

@@ -250,7 +250,6 @@ def build_model(args, runtime: DistributedRuntime):
             dummy_input=(example_input,),
             compress_x=args.memopt_compress_x,
             level=args.memopt_level,
-            verbose=False,
         )
         model = model.to(runtime.device)
 

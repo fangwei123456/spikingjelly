@@ -4,14 +4,15 @@ FlexSN Triton Kernel Templates.
 Insert a single-step kernel into a multi-step kernel template.
 """
 
+from spikingjelly.logger import logger
+
+
 try:
     import triton
-except Exception as e:
-    import logging
-
+except (ImportError, OSError) as e:
     from .. import dummy
 
-    logging.info(f"spikingjelly.activation_based.triton_kernel.flexsn.template: {e}")
+    logger.debug("spikingjelly.activation_based.triton_kernel.flexsn.template: %s", e)
     triton = dummy.DummyImport()
 
 from ..torch2triton import compile_triton_code_str
@@ -146,9 +147,7 @@ def flexsn_{kernel_type}_kernel_{hash}(
 """
 
 
-def get_flexsn_inference_kernel(
-    core_str: str, core_name: str, info: FlexSNInfo, verbose: bool = False
-):
+def get_flexsn_inference_kernel(core_str: str, core_name: str, info: FlexSNInfo):
     """Compile a Triton kernel for FlexSN inference (no backward).
 
     **API Language** - :ref:`中文 <get_flexsn_inference_kernel-cn>` | :ref:`English <get_flexsn_inference_kernel-en>`
@@ -167,8 +166,6 @@ def get_flexsn_inference_kernel(
     :type core_name: str
     :param info: FlexSN kernel metadata
     :type info: ``FlexSNInfo``
-    :param verbose: If ``True``, print compilation info
-    :type verbose: bool
     :return: Compiled Triton kernel executable
     :rtype: triton.runtime.JITFunction
 
@@ -183,11 +180,9 @@ def get_flexsn_inference_kernel(
     :param core_str: Core kernel source code as a string
     :param core_name: Unique name for the compiled kernel
     :param info: FlexSN kernel metadata
-    :param verbose: If ``True``, print compilation info
     :type core_str: str
     :type core_name: str
     :type info: ``FlexSNInfo``
-    :type verbose: bool
     :return: Compiled Triton kernel executable
     :rtype: triton.runtime.JITFunction
     """
@@ -247,21 +242,19 @@ def get_flexsn_inference_kernel(
     ).strip()
     kernel_name = f"flexsn_inference_kernel_{kernel_hash}"
 
-    if verbose:
-        print("=" * 40, core_name, "=" * 40)
-        print("Generated flexsn inference kernel:")
-        print("```")
-        print(kernel_str)
-        print("```\n")
-        print(info)
-        print("=" * 40, "=" * len(core_name), "=" * 40)
+    logger.debug(
+        "Generated flexsn inference kernel for %s:\n```\n%s\n```\n%s",
+        core_name,
+        kernel_str,
+        info,
+    )
 
-    kernel_exe = compile_triton_code_str(kernel_str, kernel_name, verbose)
+    kernel_exe = compile_triton_code_str(kernel_str, kernel_name)
     return kernel_exe
 
 
 def get_flexsn_inference_final_state_kernel(
-    core_str: str, core_name: str, info: FlexSNInfo, verbose: bool = False
+    core_str: str, core_name: str, info: FlexSNInfo
 ):
     """Compile a Triton kernel for FlexSN inference returning the final state.
 
@@ -281,8 +274,6 @@ def get_flexsn_inference_final_state_kernel(
     :type core_name: str
     :param info: FlexSN kernel metadata
     :type info: ``FlexSNInfo``
-    :param verbose: If ``True``, print compilation info
-    :type verbose: bool
     :return: Compiled Triton kernel executable
     :rtype: triton.runtime.JITFunction
 
@@ -297,11 +288,9 @@ def get_flexsn_inference_final_state_kernel(
     :param core_str: Core kernel source code as a string
     :param core_name: Unique name for the compiled kernel
     :param info: FlexSN kernel metadata
-    :param verbose: If ``True``, print compilation info
     :type core_str: str
     :type core_name: str
     :type info: ``FlexSNInfo``
-    :type verbose: bool
     :return: Compiled Triton kernel executable
     :rtype: triton.runtime.JITFunction
     """
@@ -358,16 +347,14 @@ def get_flexsn_inference_final_state_kernel(
     ).strip()
     kernel_name = f"flexsn_inference_final_state_kernel_{kernel_hash}"
 
-    if verbose:
-        print("=" * 40, core_name, "=" * 40)
-        print("Generated flexsn inference-final-state kernel:")
-        print("```")
-        print(kernel_str)
-        print("```\n")
-        print(info)
-        print("=" * 40, "=" * len(core_name), "=" * 40)
+    logger.debug(
+        "Generated flexsn inference-final-state kernel for %s:\n```\n%s\n```\n%s",
+        core_name,
+        kernel_str,
+        info,
+    )
 
-    kernel_exe = compile_triton_code_str(kernel_str, kernel_name, verbose)
+    kernel_exe = compile_triton_code_str(kernel_str, kernel_name)
     return kernel_exe
 
 
@@ -375,7 +362,6 @@ def get_flexsn_forward_kernel(
     core_str: str,
     core_name: str,
     info: FlexSNInfo,
-    verbose: bool = False,
 ):
     """Compile a Triton kernel for FlexSN forward pass (with state saving).
 
@@ -395,8 +381,6 @@ def get_flexsn_forward_kernel(
     :type core_name: str
     :param info: FlexSN kernel metadata
     :type info: ``FlexSNInfo``
-    :param verbose: If ``True``, print compilation info
-    :type verbose: bool
     :return: Compiled Triton kernel executable
     :rtype: triton.runtime.JITFunction
 
@@ -411,11 +395,9 @@ def get_flexsn_forward_kernel(
     :param core_str: Core kernel source code as a string
     :param core_name: Unique name for the compiled kernel
     :param info: FlexSN kernel metadata
-    :param verbose: If ``True``, print compilation info
     :type core_str: str
     :type core_name: str
     :type info: ``FlexSNInfo``
-    :type verbose: bool
     :return: Compiled Triton kernel executable
     :rtype: triton.runtime.JITFunction
     """
@@ -466,16 +448,14 @@ def get_flexsn_forward_kernel(
     ).strip()
     kernel_name = f"flexsn_forward_kernel_{kernel_hash}"
 
-    if verbose:
-        print("=" * 40, core_name, "=" * 40)
-        print("Generating flexsn forward kernel:")
-        print("```")
-        print(kernel_str)
-        print("```")
-        print(info)
-        print("=" * 40, "=" * len(core_name), "=" * 40)
+    logger.debug(
+        "Generating flexsn forward kernel for %s:\n```\n%s\n```\n%s",
+        core_name,
+        kernel_str,
+        info,
+    )
 
-    kernel_exe = compile_triton_code_str(kernel_str, kernel_name, verbose)
+    kernel_exe = compile_triton_code_str(kernel_str, kernel_name)
     return kernel_exe
 
 
@@ -483,7 +463,6 @@ def get_flexsn_backward_kernel(
     core_str: str,
     core_name: str,
     info: FlexSNInfo,
-    verbose: bool = False,
 ):
     """Compile a Triton kernel for FlexSN backward pass.
 
@@ -503,8 +482,6 @@ def get_flexsn_backward_kernel(
     :type core_name: str
     :param info: FlexSN kernel metadata
     :type info: ``FlexSNInfo``
-    :param verbose: If ``True``, print compilation info
-    :type verbose: bool
     :return: Compiled Triton kernel executable
     :rtype: triton.runtime.JITFunction
 
@@ -519,11 +496,9 @@ def get_flexsn_backward_kernel(
     :param core_str: Core kernel source code as a string
     :param core_name: Unique name for the compiled kernel
     :param info: FlexSN kernel metadata
-    :param verbose: If ``True``, print compilation info
     :type core_str: str
     :type core_name: str
     :type info: ``FlexSNInfo``
-    :type verbose: bool
     :return: Compiled Triton kernel executable
     :rtype: triton.runtime.JITFunction
     """
@@ -611,14 +586,12 @@ def get_flexsn_backward_kernel(
     ).strip()
     kernel_name = f"flexsn_backward_kernel_{kernel_hash}"
 
-    if verbose:
-        print("=" * 40, core_name, "=" * 40)
-        print("Generated flexsn backward kernel:")
-        print("```")
-        print(kernel_str)
-        print("```\n")
-        print(info)
-        print("=" * 40, "=" * len(core_name), "=" * 40)
+    logger.debug(
+        "Generated flexsn backward kernel for %s:\n```\n%s\n```\n%s",
+        core_name,
+        kernel_str,
+        info,
+    )
 
-    kernel_exe = compile_triton_code_str(kernel_str, kernel_name, verbose)
+    kernel_exe = compile_triton_code_str(kernel_str, kernel_name)
     return kernel_exe

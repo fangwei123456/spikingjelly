@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any
 
 import torch
+
+from spikingjelly.logger import logger
 
 
 _MAX_ENTRIES = 64
@@ -34,7 +37,9 @@ def _reset_if_forked() -> None:
 def clear() -> None:
     _reset_if_forked()
     with _CACHE_LOCK:
+        cleared_entries = len(_COMPILED_GRAPHS)
         _COMPILED_GRAPHS.clear()
+    logger.info("inductor_graph_cache_cleared entries=%s", cleared_entries)
 
 
 def info() -> dict[str, int]:
@@ -216,6 +221,7 @@ def compile_graph(cache_key: tuple[Any, ...] | None, fn: Callable) -> Callable:
                 _COMPILED_GRAPHS.move_to_end(cache_key)
                 return compiled
 
+        compile_start = time.perf_counter()
         compile_kwargs = {"backend": "inductor"}
         try:
             compiled = torch.compile(
@@ -228,10 +234,16 @@ def compile_graph(cache_key: tuple[Any, ...] | None, fn: Callable) -> Callable:
             )
         except TypeError:
             compiled = torch.compile(fn, **compile_kwargs)
-
         if cache_key is not None:
             _COMPILED_GRAPHS[cache_key] = compiled
             _COMPILED_GRAPHS.move_to_end(cache_key)
             while len(_COMPILED_GRAPHS) > _MAX_ENTRIES:
                 _COMPILED_GRAPHS.popitem(last=False)
-        return compiled
+        cache_entries = len(_COMPILED_GRAPHS)
+    logger.info(
+        "inductor_graph_compile_summary cache_key_present=%s cache_entries=%s elapsed_ms=%.3f",
+        cache_key is not None,
+        cache_entries,
+        (time.perf_counter() - compile_start) * 1000.0,
+    )
+    return compiled

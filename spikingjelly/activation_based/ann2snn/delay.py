@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 import warnings
 from typing import Dict, Iterable, List, Optional, Tuple, Union
 
@@ -13,6 +14,7 @@ from spikingjelly.activation_based.ann2snn.modules import (
     VoltageScaler,
 )
 from spikingjelly.activation_based.neuron.base_node import BaseNode
+from spikingjelly.logger import logger
 
 
 Scaler = Union[VoltageScaler, ChannelVoltageScaler]
@@ -210,8 +212,14 @@ def estimate_delay_start(
     if num_batches <= 0:
         raise ValueError("num_batches must be positive.")
 
+    start_time = time.perf_counter()
     paths = _find_scaler_neuron_scaler_paths(model)
     if not paths:
+        logger.info(
+            "ann2snn_delay_summary matched_paths=0 batches=0 raw_delay_start=0 "
+            "delay_start=0 readout_clamped=False elapsed_ms=%.3f",
+            (time.perf_counter() - start_time) * 1000.0,
+        )
         return 0
 
     original_device = None
@@ -225,6 +233,7 @@ def estimate_delay_start(
     original_training_modes = {module: module.training for module in model.modules()}
     ratios: Dict[BaseNode, List[float]] = {module: [] for module, _ in paths}
     handles = []
+    processed_batches = 0
 
     def make_hook(module: BaseNode, post_scaler: Scaler):
         def hook(_module, inputs, _output):
@@ -255,6 +264,7 @@ def estimate_delay_start(
                     raise TypeError("The extracted model input must be a tensor.")
                 _reset_snn(model)
                 model(x.to(device, non_blocking=True))
+                processed_batches += 1
         delay = 0.0
         for values in ratios.values():
             if values:
@@ -275,8 +285,8 @@ def estimate_delay_start(
         for module, training in original_training_modes.items():
             module.training = training
 
-    delay_start = math.ceil(delay) if math.isfinite(delay) else time_steps
-    if time_steps < delay_start + _MIN_READOUT_STEPS:
+    raw_delay_start = math.ceil(delay) if math.isfinite(delay) else time_steps
+    if time_steps < raw_delay_start + _MIN_READOUT_STEPS:
         warnings.warn(
             "estimate_delay_start: time_steps is too small to keep "
             f"{_MIN_READOUT_STEPS} readout steps after the estimated delay; "
@@ -284,5 +294,25 @@ def estimate_delay_start(
             RuntimeWarning,
             stacklevel=2,
         )
-        return max(time_steps - _MIN_READOUT_STEPS - 1, 0)
-    return min(delay_start, time_steps - 1)
+        result = max(time_steps - _MIN_READOUT_STEPS - 1, 0)
+        logger.info(
+            "ann2snn_delay_summary matched_paths=%s batches=%s raw_delay_start=%s delay_start=%s readout_clamped=%s elapsed_ms=%.3f",
+            len(paths),
+            processed_batches,
+            raw_delay_start,
+            result,
+            True,
+            (time.perf_counter() - start_time) * 1000.0,
+        )
+        return result
+    result = min(raw_delay_start, time_steps - 1)
+    logger.info(
+        "ann2snn_delay_summary matched_paths=%s batches=%s raw_delay_start=%s delay_start=%s readout_clamped=%s elapsed_ms=%.3f",
+        len(paths),
+        processed_batches,
+        raw_delay_start,
+        result,
+        False,
+        (time.perf_counter() - start_time) * 1000.0,
+    )
+    return result

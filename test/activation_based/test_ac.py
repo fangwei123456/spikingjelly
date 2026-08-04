@@ -32,7 +32,7 @@ def test_ac_covers_more_than_synop():
 
     synop_counter = op_counter.SynOpCounter()
     ac_counter = op_counter.ACCounter()
-    with op_counter.DispatchCounterMode([synop_counter, ac_counter], verbose=True):
+    with op_counter.DispatchCounterMode([synop_counter, ac_counter]):
         _ = net(x)
 
     total_synop = synop_counter.get_total()
@@ -97,9 +97,9 @@ def test_ac_ignore():
         extra_ignore_modules=[nn.BatchNorm2d, neuron.BaseNode]
     )
 
-    with op_counter.DispatchCounterMode([counter_full], verbose=True):
+    with op_counter.DispatchCounterMode([counter_full]):
         net(x)
-    with op_counter.DispatchCounterMode([counter_no_bn], verbose=True):
+    with op_counter.DispatchCounterMode([counter_no_bn]):
         net(x)
 
     total_full = counter_full.get_total()

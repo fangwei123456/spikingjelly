@@ -1,3 +1,4 @@
+import logging
 from typing import Union
 
 import numpy as np
@@ -7,6 +8,7 @@ import nir
 import nirtorch
 
 from .. import layer, functional, neuron
+from spikingjelly.logger import logger
 
 
 __all__ = ["import_from_nir"]
@@ -223,4 +225,13 @@ def import_from_nir(
 
     gm = nirtorch.nir_to_torch(graph, mapper.map_dict, device=device, dtype=dtype)
     functional.set_step_mode(gm, step_mode)
+    if logger.isEnabledFor(logging.INFO):
+        logger.info(
+            "nir_import_summary source=%s device=%s dtype=%s step_mode=%s modules=%s",
+            "path" if isinstance(graph, str) else type(graph).__name__,
+            device,
+            dtype,
+            step_mode,
+            sum(1 for _ in gm.modules()),
+        )
     return gm

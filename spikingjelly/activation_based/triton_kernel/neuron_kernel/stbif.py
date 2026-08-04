@@ -1,4 +1,5 @@
 from __future__ import annotations
+from spikingjelly.logger import logger
 
 import torch
 
@@ -14,11 +15,11 @@ try:
     import triton.language as tl
     from triton.language.extra import libdevice
 except (ImportError, OSError) as e:
-    import logging
-
     from .. import dummy
 
-    logging.info(f"spikingjelly.activation_based.triton_kernel.neuron_kernel.stbif: {e}")
+    logger.debug(
+        "spikingjelly.activation_based.triton_kernel.neuron_kernel.stbif: %s", e
+    )
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
     libdevice = dummy.DummyImport()

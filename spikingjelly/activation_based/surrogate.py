@@ -122,14 +122,16 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
     x.grad.zero_()
     spiking_function(x, *args, **kwargs).sum().backward()
     x_grad_manual = x.grad.clone()
-    print("auto   grad", x_grad_auto)
-    print("manual grad", x_grad_manual)
+    print("Surrogate gradient comparison: auto=", x_grad_auto, "manual=", x_grad_manual)
     abs_error = (x_grad_manual - x_grad_auto).abs()
     idx = abs_error.argmax()
-    print("max error", abs_error[idx], "occurs at")
-    print(f"x[{idx}] = {x[idx]}")
-    print("auto   grad", x_grad_auto[idx])
-    print("manual grad", x_grad_manual[idx])
+    print("Surrogate gradient maximum error=", abs_error[idx], "at x=", x[idx])
+    print(
+        "Surrogate gradient values: auto=",
+        x_grad_auto[idx],
+        "manual=",
+        x_grad_manual[idx],
+    )
 
 
 def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
@@ -197,7 +199,7 @@ def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
     """
     # check_cuda_grad(neuron.IFNode, surrogate.S2NN, device='cuda:1', alpha=4., beta=1.)
     for dtype in [torch.float, torch.half]:
-        print(dtype)
+        print("Checking CUDA surrogate gradient dtype=", dtype)
         net = neu(surrogate_function=surrogate_function(*args, **kwargs), step_mode="m")
         net.to(device)
         x = torch.arange(-2, 2, 32 / 8192, device=device, dtype=dtype)
@@ -215,10 +217,18 @@ def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
         # print('cupy   grad', x_grad_cp)
         abs_error = (x_grad_cp - x_grad_py).abs()
         idx = abs_error.argmax()
-        print("max error", abs_error[idx], "occurs at")
-        print(f"x[{idx}] = {x[idx]}")
-        print("python grad", x_grad_py[idx])
-        print("cupy   grad", x_grad_cp[idx])
+        print(
+            "CUDA surrogate gradient maximum error=",
+            abs_error[idx],
+            "at x=",
+            x[idx],
+        )
+        print(
+            "CUDA surrogate gradient values: python=",
+            x_grad_py[idx],
+            "cupy=",
+            x_grad_cp[idx],
+        )
 
 
 def plot_surrogate_function(surrogate_function):

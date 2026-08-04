@@ -79,7 +79,6 @@ For plain counting, ``train()`` and ``eval()`` are both usable. But if your mode
 
     with op_counter.DispatchCounterMode(
         [flop_counter, mem_counter],
-        verbose=False,
         strict=False,
     ):
         _ = model(x)
@@ -87,6 +86,19 @@ For plain counting, ``train()`` and ``eval()`` are both usable. But if your mode
     print("FLOPs:", flop_counter.get_total())
     print("Memory access (bytes):", mem_counter.get_total())
     print("Global FLOP record:", flop_counter.get_counts()["Global"])
+
+Operation-counter diagnostics are emitted as ``DEBUG`` records by the package logger.
+They include per-operation details and can be expensive for large models, so enable
+them only while diagnosing a counting run:
+
+.. code-block:: python
+
+    import logging
+
+    from spikingjelly.logger import logger
+
+    logging.basicConfig(level=logging.DEBUG)
+    logger.setLevel(logging.DEBUG)
 
 The examples in this tutorial use ``strict=False`` so that unsupported auxiliary operators do not stop execution immediately.
 When you want unsupported operators to fail immediately instead of being skipped, switch to ``strict=True`` after you have confirmed that the relevant operator path is fully covered by the counters you selected.

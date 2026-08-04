@@ -472,7 +472,6 @@ class NeuroMCEnergyProfiler:
         core_type: str = "fp_soma",
         memory_config: MemoryHierarchyConfig | None = None,
         strict: bool = False,
-        verbose: bool = False,
         extra_ignore_modules: list[nn.Module] | None = None,
     ):
         """
@@ -493,8 +492,6 @@ class NeuroMCEnergyProfiler:
         :type memory_config: MemoryHierarchyConfig | None
         :param strict: If ``True``, raise on unknown operations instead of warning
         :type strict: bool
-        :param verbose: If ``True``, print progress information during profiling
-        :type verbose: bool
         :param extra_ignore_modules: Additional module types to ignore during counting
         :type extra_ignore_modules: list[nn.Module] | None
         :raises ValueError: If ``core_type`` is not in the supported set
@@ -513,8 +510,6 @@ class NeuroMCEnergyProfiler:
         :type memory_config: MemoryHierarchyConfig | None
         :param strict: If ``True``, raise on unknown operations instead of warning
         :type strict: bool
-        :param verbose: If ``True``, print progress information during profiling
-        :type verbose: bool
         :param extra_ignore_modules: Additional module types to ignore during counting
         :type extra_ignore_modules: list[nn.Module] | None
         :raises ValueError: If ``core_type`` is not in the supported set
@@ -528,7 +523,6 @@ class NeuroMCEnergyProfiler:
         self.memory_config = memory_config or MemoryHierarchyConfig.neuromc_like_v1()
         self.memory_config.validate()
         self.strict = strict
-        self.verbose = verbose
         self.extra_ignore_modules = list(extra_ignore_modules or [])
 
         self._stage_stack: list[str] = []
@@ -2150,7 +2144,6 @@ def estimate_neuromc_runtime_energy(
     core_type: str = "fp_soma",
     memory_config: MemoryHierarchyConfig | None = None,
     strict: bool = False,
-    verbose: bool = False,
     extra_ignore_modules: list[nn.Module] | None = None,
 ) -> NeuroMCRuntimeEnergyReport:
     r"""
@@ -2180,8 +2173,6 @@ def estimate_neuromc_runtime_energy(
     :type memory_config: MemoryHierarchyConfig | None
     :param strict: If ``True``, raise on unknown operations instead of warning
     :type strict: bool
-    :param verbose: If ``True``, print progress information during profiling
-    :type verbose: bool
     :param extra_ignore_modules: Additional module types to ignore during counting
     :type extra_ignore_modules: list[nn.Module] | None
     :return: Energy profiling report
@@ -2207,7 +2198,6 @@ def estimate_neuromc_runtime_energy(
     :param core_type: Type of compute core (e.g., ``\"fp_soma\"``)
     :param memory_config: Memory hierarchy configuration. If ``None``, uses the default config
     :param strict: If ``True``, raise on unknown operations instead of warning
-    :param verbose: If ``True``, print progress information during profiling
     :param extra_ignore_modules: Additional module types to ignore during counting
     :type model: ``nn.Module``
     :type inputs: Any
@@ -2217,7 +2207,6 @@ def estimate_neuromc_runtime_energy(
     :type core_type: str
     :type memory_config: MemoryHierarchyConfig | None
     :type strict: bool
-    :type verbose: bool
     :type extra_ignore_modules: list[nn.Module] | None
     :return: Energy profiling report
     :rtype: NeuroMCRuntimeEnergyReport
@@ -2226,7 +2215,6 @@ def estimate_neuromc_runtime_energy(
         core_type=core_type,
         memory_config=(memory_config or MemoryHierarchyConfig.neuromc_like_v1()).copy(),
         strict=strict,
-        verbose=verbose,
         extra_ignore_modules=extra_ignore_modules,
     )
     profiler.bind_model(model)
