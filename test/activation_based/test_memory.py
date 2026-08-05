@@ -166,9 +166,10 @@ def test_to_functional_forward_stateless():
     module = StatelessModule()
     func_forward = base.to_functional_forward(module)
     x = torch.randn(3, 10)
-    result1 = func_forward(x)
+    outputs, states = func_forward((x,), ())
     result2 = module(x)
-    assert torch.equal(result1, result2)
+    assert states == ()
+    assert torch.equal(outputs[0], result2)
 
 
 def test_to_functional_forward_stateful():
@@ -187,15 +188,14 @@ def test_to_functional_forward_stateful():
     module = StatefulModule()
     func_forward = base.to_functional_forward(module)
 
-    # Test functional interface: (input, state) -> (output, new_state)
     x = torch.randn(3, 10)
     initial_state = torch.tensor(0.0)
-    output, new_state = func_forward(x, initial_state)
+    outputs, new_states = func_forward((x,), (initial_state,))
     expected_output = module.linear(x)
     expected_state = initial_state + 1.0
 
-    assert torch.equal(output, expected_output)
-    assert torch.equal(new_state, expected_state)
+    assert torch.equal(outputs[0], expected_output)
+    assert torch.equal(new_states[0], expected_state)
 
 
 def test_to_functional_forward_nested_stateful():
@@ -226,11 +226,11 @@ def test_to_functional_forward_nested_stateful():
     x = torch.randn(3, 10)
     outer_state = torch.tensor(5.0)
     inner_state = 3
-    output, new_outer_state, new_inner_state = func_forward(x, outer_state, inner_state)
+    outputs, new_states = func_forward((x,), (outer_state, inner_state))
 
-    assert torch.equal(output, x)
-    assert torch.equal(new_outer_state, outer_state + 2.0)
-    assert new_inner_state == inner_state + 1
+    assert torch.equal(outputs[0], x)
+    assert torch.equal(new_states[0], outer_state + 2.0)
+    assert new_states[1] == inner_state + 1
 
 
 def test_to_functional_forward_state_restoration():
@@ -249,7 +249,7 @@ def test_to_functional_forward_state_restoration():
     original_state = module.state.clone()
     func_forward = base.to_functional_forward(module)
     x = torch.randn(3, 10)
-    func_forward(x, torch.tensor(5.0))
+    func_forward((x,), (torch.tensor(5.0),))
 
     assert torch.equal(module.state, original_state)
 
@@ -275,10 +275,255 @@ def test_to_functional_forward_custom_fn():
     func_forward = base.to_functional_forward(module, module.custom_forward)
     x = torch.randn(3, 10)
     initial_state = torch.tensor(0.0)
-    output, new_state = func_forward(x, initial_state)
+    outputs, new_states = func_forward((x,), (initial_state,))
 
-    assert torch.equal(output, module.linear(x) * 2)
-    assert torch.equal(new_state, initial_state + 2.0)
+    assert torch.equal(outputs[0], module.linear(x) * 2)
+    assert torch.equal(new_states[0], initial_state + 2.0)
+
+
+def test_memory_module_functional_forward_is_pure_and_backs_regular_forward():
+    x = torch.tensor(1.0)
+    node = neuron.IFNode()
+    initial_v = torch.zeros_like(x)
+    outputs, updated_states = node.functional_forward((x,), (initial_v,))
+    assert node.v == 0.0
+    torch.testing.assert_close(node(x), outputs[0])
+    torch.testing.assert_close(node.v, updated_states[0])
+
+
+def test_memory_module_step_forwards_are_functional_backed():
+    class FunctionalOnlyModule(base.MemoryModule):
+        def __init__(self):
+            super().__init__()
+            self.register_memory("left", torch.tensor(2.0))
+            self.register_memory("right", torch.tensor(5.0))
+
+        def single_step_functional_forward(self, inputs, states, **kwargs):
+            x, y = inputs
+            increment = kwargs.get("increment", 1.0)
+            left = states[0] + increment
+            right = states[1] + increment
+            return (x + y + left, x - y + right), (left, right)
+
+    module = FunctionalOnlyModule()
+    outputs = module.single_step_forward(
+        torch.tensor(1.0), torch.tensor(3.0), increment=2.0
+    )
+    torch.testing.assert_close(outputs[0], torch.tensor(8.0))
+    torch.testing.assert_close(outputs[1], torch.tensor(5.0))
+    torch.testing.assert_close(module.left, torch.tensor(4.0))
+    torch.testing.assert_close(module.right, torch.tensor(7.0))
+
+    outputs = module.multi_step_forward(
+        torch.tensor([1.0, 2.0]),
+        torch.tensor([3.0, 4.0]),
+        increment=3.0,
+    )
+    torch.testing.assert_close(outputs[0], torch.tensor([11.0, 16.0]))
+    torch.testing.assert_close(outputs[1], torch.tensor([8.0, 11.0]))
+    torch.testing.assert_close(module.left, torch.tensor(10.0))
+    torch.testing.assert_close(module.right, torch.tensor(13.0))
+
+
+def test_materialize_states_uses_single_step_shape_for_multistep_forward():
+    class MaterializedStateModule(base.MemoryModule):
+        def __init__(self):
+            super().__init__()
+            self.register_memory("state", None)
+            self.step_mode = "m"
+
+        def materialize_states(self, inputs, states, step_mode):
+            x = inputs[0][0] if step_mode == "m" else inputs[0]
+            return (torch.zeros_like(x),)
+
+        def single_step_functional_forward(self, inputs, states, **kwargs):
+            state = states[0] + inputs[0]
+            return (state,), (state,)
+
+    module = MaterializedStateModule()
+    x_seq = torch.randn(4, 2, 3)
+
+    module(x_seq)
+
+    assert module.state.shape == x_seq.shape[1:]
+
+
+def test_simple_base_node_forward_uses_charge_fire_reset_hooks():
+    class SquareIFNode(neuron.SimpleBaseNode):
+        def neuronal_charge(self, x):
+            self.v = self.v + x.square()
+
+    node = SquareIFNode(v_threshold=10.0)
+    x_seq = torch.tensor([[1.0], [2.0], [1.0]])
+
+    node.step_mode = "s"
+    spike_steps = torch.stack([node(x) for x in x_seq])
+    torch.testing.assert_close(spike_steps, torch.zeros_like(x_seq))
+    torch.testing.assert_close(node.v, torch.tensor([6.0]))
+
+    node.reset()
+    node.step_mode = "m"
+    spike_seq = node(x_seq)
+    torch.testing.assert_close(spike_seq, torch.zeros_like(x_seq))
+    torch.testing.assert_close(node.v, torch.tensor([6.0]))
+
+
+@pytest.mark.parametrize(
+    ("simple_factory", "production_factory"),
+    [
+        (neuron.SimpleIFNode, neuron.IFNode),
+        (
+            lambda **kwargs: neuron.SimpleLIFNode(tau=2.5, decay_input=False, **kwargs),
+            lambda **kwargs: neuron.LIFNode(tau=2.5, decay_input=False, **kwargs),
+        ),
+    ],
+)
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+def test_simple_nodes_match_production_nodes(
+    simple_factory, production_factory, step_mode
+):
+    simple = simple_factory(v_threshold=0.8, v_reset=0.0, step_mode=step_mode)
+    production = production_factory(v_threshold=0.8, v_reset=0.0, step_mode=step_mode)
+    x = torch.randn(4, 2, 3) if step_mode == "m" else torch.randn(2, 3)
+    v = torch.randn_like(x[0] if step_mode == "m" else x)
+    simple.v = v.clone()
+    production.v = v.clone()
+
+    torch.testing.assert_close(simple(x), production(x))
+    torch.testing.assert_close(simple.v, production.v)
+
+
+def test_to_functional_forward_converts_simple_node_without_mutating_it():
+    class SquareIFNode(neuron.SimpleBaseNode):
+        def neuronal_charge(self, x):
+            self.v = self.v + x.square()
+
+    node = SquareIFNode(v_threshold=2.0, v_reset=None, step_mode="m")
+    node.v = torch.tensor([7.0])
+    x_seq = torch.tensor([[0.5], [1.0], [0.5]])
+    initial_v = torch.tensor([0.25])
+
+    with pytest.raises(NotImplementedError):
+        node.functional_forward((x_seq,), (initial_v,))
+
+    functional_forward = base.to_functional_forward(node)
+    outputs, updated_states = functional_forward((x_seq,), (initial_v,))
+
+    torch.testing.assert_close(node.v, torch.tensor([7.0]))
+    reference = SquareIFNode(v_threshold=2.0, v_reset=None, step_mode="m")
+    reference.v = initial_v
+    torch.testing.assert_close(outputs[0], reference(x_seq))
+    torch.testing.assert_close(updated_states[0], reference.v)
+
+
+def test_to_functional_forward_preserves_overridden_simple_forward():
+    class NonSpikingLIFNode(neuron.SimpleLIFNode):
+        def single_step_forward(self, x):
+            self.neuronal_charge(x)
+            return self.v
+
+    node = NonSpikingLIFNode(tau=2.0, decay_input=True, step_mode="m")
+    node.v = torch.tensor([4.0])
+    x_seq = torch.tensor([[1.0], [2.0], [3.0]])
+    initial_v = torch.tensor([0.0])
+
+    outputs, states = base.to_functional_forward(node)((x_seq,), (initial_v,))
+
+    reference = NonSpikingLIFNode(tau=2.0, decay_input=True, step_mode="m")
+    reference.v = initial_v
+    torch.testing.assert_close(outputs[0], reference(x_seq))
+    torch.testing.assert_close(states[0], reference.v)
+    torch.testing.assert_close(node.v, torch.tensor([4.0]))
+
+
+def test_to_functional_forward_uses_default_multi_step_functional_forward():
+    class FunctionalOnlyModule(base.MemoryModule):
+        def __init__(self):
+            super().__init__()
+            self.register_memory("state", torch.tensor(0.0))
+            self.step_mode = "m"
+
+        def single_step_functional_forward(self, inputs, states, **kwargs):
+            state = states[0] + inputs[0]
+            return (state,), (state,)
+
+        def forward(self, *args, **kwargs):
+            raise AssertionError("to_functional_forward used the stateful path")
+
+    module = FunctionalOnlyModule()
+    functional_forward = base.to_functional_forward(module)
+    outputs, states = functional_forward(
+        (torch.tensor([1.0, 2.0, 3.0]),), (torch.tensor(4.0),)
+    )
+
+    torch.testing.assert_close(outputs[0], torch.tensor([5.0, 7.0, 10.0]))
+    torch.testing.assert_close(states[0], torch.tensor(10.0))
+
+
+def test_to_functional_forward_sequential_multiple_inputs_outputs_and_kwargs():
+    class Add(nn.Module):
+        def forward(self, x, y, *, scale=1.0):
+            return (x + y) * scale, x - y
+
+    class Combine(nn.Module):
+        def forward(self, total, difference):
+            return total + difference
+
+    module = nn.Sequential(Add(), Combine())
+    functional_forward = base.to_functional_forward(module)
+    x = torch.tensor(3.0)
+    y = torch.tensor(2.0)
+    outputs, states = functional_forward((x, y), (), scale=2.0)
+
+    assert states == ()
+    torch.testing.assert_close(outputs[0], torch.tensor(11.0))
+
+
+def test_to_functional_forward_fallback_multiple_inputs_states_outputs_and_kwargs():
+    class Accumulator(base.MemoryModule):
+        def __init__(self):
+            super().__init__()
+            self.register_memory("left", torch.tensor(10.0))
+            self.register_memory("right", torch.tensor(20.0))
+
+        def single_step_forward(self, x, y, *, scale=1.0):
+            self.left = self.left + x * scale
+            self.right = self.right + y * scale
+            return self.left, self.right
+
+    module = Accumulator()
+    functional_forward = base.to_functional_forward(module)
+    outputs, states = functional_forward(
+        (torch.tensor(2.0), torch.tensor(3.0)),
+        (torch.tensor(1.0), torch.tensor(4.0)),
+        scale=2.0,
+    )
+
+    torch.testing.assert_close(outputs[0], torch.tensor(5.0))
+    torch.testing.assert_close(outputs[1], torch.tensor(10.0))
+    torch.testing.assert_close(states[0], torch.tensor(5.0))
+    torch.testing.assert_close(states[1], torch.tensor(10.0))
+    torch.testing.assert_close(module.left, torch.tensor(10.0))
+    torch.testing.assert_close(module.right, torch.tensor(20.0))
+
+
+def test_to_functional_forward_fallback_restores_state_after_error():
+    class FailingModule(base.MemoryModule):
+        def __init__(self):
+            super().__init__()
+            self.register_memory("state", torch.tensor(7.0))
+
+        def single_step_forward(self, x):
+            self.state = self.state + x
+            raise RuntimeError("expected failure")
+
+    module = FailingModule()
+    functional_forward = base.to_functional_forward(module)
+
+    with pytest.raises(RuntimeError, match="expected failure"):
+        functional_forward((torch.tensor(1.0),), (torch.tensor(3.0),))
+
+    torch.testing.assert_close(module.state, torch.tensor(7.0))
 
 
 if __name__ == "__main__":

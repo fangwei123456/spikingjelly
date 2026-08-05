@@ -36,7 +36,8 @@ Module: ``spikingjelly``.
 Functional State Transitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Module: ``spikingjelly.activation_based.functional``.
+Modules: ``spikingjelly.activation_based.functional`` and
+``spikingjelly.activation_based.base``.
 
 - Added explicit tensor-state APIs for modules with state-update semantics,
   including neurons, delay and synaptic filters, learning traces, and SpikeZIP
@@ -51,6 +52,24 @@ Module: ``spikingjelly.activation_based.functional``.
   transitions are also available as independent functional APIs.
 - Added FlexSN custom-op registry diagnostics for entry, owner-reference, and
   active-reference counts.
+- Added grouped ``MemoryModule.functional_forward`` interfaces and changed
+  ``to_functional_forward`` to return
+  ``(inputs, states) -> (outputs, updated_states)``. Regular forward paths for the
+  framework's stateful neurons, layers, encoders, recurrent containers, temporal
+  ANN-to-SNN operators, and transformer conversion modules are now backed by
+  their native functional transition. The default multi-step implementation
+  rolls the single-step transition over time, while sequence kernels override it.
+  Sequential modules compose child transitions directly and arbitrary composite
+  modules use a dictionary-swap fallback. Custom production ``MemoryModule`` and
+  ``BaseNode`` subclasses should implement ``single_step_functional_forward`` and
+  override ``multi_step_functional_forward`` only when they provide a specialized
+  sequence implementation. ``SimpleBaseNode``, ``SimpleIFNode``, and ``SimpleLIFNode``
+  retain the charge-fire-reset forward model for equation experiments and use the
+  general state-substitution path when converted.
+- Added ``MemoryModule.materialize_states(inputs, states, step_mode)`` as the
+  single hook for converting registered scalar or empty states into
+  input-dependent states before functional execution. Its default implementation
+  returns states unchanged.
 
 ANN-to-SNN Conversion
 ^^^^^^^^^^^^^^^^^^^^^
@@ -226,6 +245,43 @@ Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Functional Forward API Changes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.base``.
+
+- **Breaking change:** ``to_functional_forward()`` now returns a function with the
+  grouped interface
+  ``(inputs, states, **kwargs) -> (outputs, updated_states)``. Both ``inputs`` and
+  ``outputs`` remain tuples when they contain one tensor. Replace calls such as
+  ``output, state = forward(x, state)`` with
+  ``outputs, states = forward((x,), (state,))`` and read the single output from
+  ``outputs[0]``.
+
+Neuron Extension API Changes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.neuron``.
+
+- **Breaking change:** ``BaseNode`` now defines production neurons solely through
+  functional state transitions and no longer provides ``neuronal_charge()``,
+  ``neuronal_fire()``, or ``neuronal_reset()``. Existing custom neurons that inherit
+  ``BaseNode`` and override these hooks must either change their base class to
+  ``SimpleBaseNode`` to retain the charge-fire-reset extension model, or implement
+  ``single_step_functional_forward()`` for a native-functional production neuron.
+  ``to_functional_forward()`` converts ``SimpleBaseNode`` through the general
+  state-substitution path. Built-in production neurons such as ``IFNode`` and
+  ``LIFNode`` use native functional transitions and their specialized sequence
+  kernels.
+- **Breaking change:** removed ``BaseNode.v_float_to_tensor()``. Custom functional
+  modules that require input-dependent state initialization should override
+  ``materialize_states(inputs, states, step_mode)`` and return a new state tuple
+  without mutating module memory.
+- **Breaking change:** ``MemoryModule`` subclasses without functional or regular
+  forward semantics now raise ``NotImplementedError`` when called. Stateful
+  learners such as ``STDPLearner``, ``MSTDPLearner``, and ``MSTDPETLearner`` continue
+  to expose their computation through ``step()``.
 
 Logging-Controlled Diagnostics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

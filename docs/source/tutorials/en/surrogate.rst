@@ -28,12 +28,13 @@ Its derivative is the unit impulse function, which is defined by:
 If we use the unit impulse function to calculate the gradient and apply the gradient descent, the training will be very unstable. To solve this problem, the surrogate gradient method \
 is proposed. Refer to `Surrogate Gradient Learning in Spiking Neural Networks <https://arxiv.org/abs/1901.09948>`_ for more details.
 
-The surrogate function is used to generate spikes, which can be found in the codes of :class:`BaseNode.neuronal_fire <spikingjelly.activation_based.neuron.BaseNode.neuronal_fire>`:
+The surrogate function is used to generate spikes, as shown by
+:meth:`SimpleBaseNode.neuronal_fire <spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_fire>`:
 
 .. code-block:: python
 
     # spikingjelly.activation_based.neuron
-    class BaseNode(base.MemoryModule):
+    class SimpleBaseNode(base.MemoryModule):
         def __init__(..., surrogate_function: Callable = surrogate.Sigmoid(), ...)
         # ...
         self.surrogate_function = surrogate_function

@@ -1,7 +1,7 @@
 import contextlib
 import functools
 import threading
-from typing import Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 import torch
 import torch.autograd as autograd
@@ -418,13 +418,13 @@ class GCContainer(nn.Sequential):
         self.x_compressor = (
             NullSpikeCompressor() if x_compressor is None else x_compressor
         )
-        self.f_forward = base.to_functional_forward(self, fn=self.super_forward)
+        self.f_forward = base.to_functional_forward(self)
         self.num_states = len(list(base.memories(self)))
         self._forward = (
             self.stateless_forward if self.num_states == 0 else self.stateful_forward
         )
 
-    def super_forward(self, input):
+    def super_forward(self, *inputs: Any) -> Any:
         """
         The same as ``nn.Sequential.forward`` .
 
@@ -432,16 +432,28 @@ class GCContainer(nn.Sequential):
         using ``super().forward`` in order to avoid infinite recursion in multiprocess
         scenarios!!
         """
+        outputs = inputs
         for module in self:
-            input = module(input)
-        return input
+            result = module(*outputs)
+            outputs = tuple(result) if isinstance(result, (tuple, list)) else (result,)
+        return outputs[0] if len(outputs) == 1 else outputs
 
-    def stateless_forward(self, x, *args):
+    def stateless_forward(self, x: torch.Tensor, *args: Any) -> Any:
         return input_compressed_gc(self.super_forward, self.x_compressor, x, *args)
 
-    def stateful_forward(self, x, *args):
-        states = base.extract_memories(self)
-        ret = input_compressed_gc(self.f_forward, self.x_compressor, x, *args, *states)
+    def stateful_forward(self, x: torch.Tensor, *args: Any) -> Any:
+        states = tuple(base.extract_memories(self))
+        num_inputs = 1 + len(args)
+
+        def flat_forward(*flat_args):
+            inputs = tuple(flat_args[:num_inputs])
+            current_states = tuple(flat_args[num_inputs:])
+            outputs, updated_states = self.f_forward(inputs, current_states)
+            return (*outputs, *updated_states)
+
+        ret = input_compressed_gc(flat_forward, self.x_compressor, x, *args, *states)
+        if isinstance(ret, torch.Tensor):
+            ret = (ret,)
         outputs, states = ret[: -self.num_states], ret[-self.num_states :]
         base.load_memories(self, states)
         return outputs[0] if len(outputs) == 1 else outputs

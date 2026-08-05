@@ -620,3 +620,24 @@ def test_multi_level_spike_count_rejects_invalid_parameters():
             surrogate.MultiLevelSpikeCount(value)
     with pytest.raises(ValueError):
         surrogate.MultiLevelSpikeCount(4, grad_window=(1.0, 0.0))
+
+
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+def test_ilif_functional_forward_is_pure_and_backs_regular_forward(step_mode):
+    node = neuron.ILIFNode(step_mode=step_mode, store_v_seq=step_mode == "m")
+    x = torch.randn(4, 2, 3) if step_mode == "m" else torch.randn(2, 3)
+    v = torch.randn_like(x[0] if step_mode == "m" else x)
+    node.v = v
+    if step_mode == "m":
+        node.v_seq = None
+    original_states = tuple(node._memories.values())
+
+    outputs, updated_states = node.functional_forward((x,), original_states)
+
+    assert all(
+        actual is expected
+        for actual, expected in zip(node._memories.values(), original_states)
+    )
+    torch.testing.assert_close(node(x), outputs[0])
+    for actual, expected in zip(node._memories.values(), updated_states):
+        torch.testing.assert_close(actual, expected)

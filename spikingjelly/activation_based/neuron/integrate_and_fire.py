@@ -293,140 +293,148 @@ class IFNode(BaseNode):
         v = v - spike * v_threshold
         return spike, v
 
-    def _inductor_multi_step_forward(self, x_seq: torch.Tensor):
-        self.v_float_to_tensor(x_seq[0])
-        spike_seq, self.v, v_seq = functional.if_multi_step_inductor(
-            x_seq,
-            self.v,
-            self.v_threshold,
-            self.v_reset,
-            self.surrogate_function,
-            self.detach_reset,
-            self.store_v_seq,
-        )
-        if self.store_v_seq:
-            self.v_seq = v_seq
-        return spike_seq
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        r"""Execute one IF step with explicit state. / 使用显式状态执行一个 IF 时间步。
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
-        if self.backend == "inductor":
-            return self._inductor_multi_step_forward(x_seq)
+        :param inputs: 仅包含 ``x`` 的元组 / Tuple containing only ``x``
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: ``(v,)`` 或 ``(v, v_seq)``
+        :type states: tuple
+        :return: ``((spike,), updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
+        """
+        x = inputs[0]
+        v = states[0]
+
         if self.training:
             if self.backend == "torch":
-                return super().multi_step_forward(x_seq)
+                spike, v = functional.if_step(
+                    x,
+                    v,
+                    self.v_threshold,
+                    self.v_reset,
+                    self.surrogate_function,
+                    self.detach_reset,
+                )
             elif self.backend == "cupy":
-                self.v_float_to_tensor(x_seq[0])
-                spike_seq, self.v, v_seq = functional.if_multi_step_cupy(
-                    x_seq,
-                    self.v,
+                spike, v = functional.if_step_cupy(
+                    x,
+                    v,
                     self.v_threshold,
                     self.v_reset,
                     self.surrogate_function,
                     self.detach_reset,
-                    self.store_v_seq,
                 )
-                if self.store_v_seq:
-                    self.v_seq = v_seq
-                return spike_seq
-            elif self.backend == "triton":
-                self.v_float_to_tensor(x_seq[0])
-                spike_seq, v_out = triton_kernel.multistep_if(
-                    x_seq,
-                    self.v,
-                    self.v_threshold,
-                    self.v_reset,
-                    self.detach_reset,
-                    self.surrogate_function,
-                    self.store_v_seq,
-                )
-                if self.store_v_seq:
-                    self.v_seq = v_out
-                    self.v = v_out[-1].clone()
-                else:
-                    self.v = v_out
-                return spike_seq
             else:
                 raise ValueError(self.backend)
-
         else:
-            self.v_float_to_tensor(x_seq[0])
+            spike, v = self._eval_single_step_forward(
+                x, v, self.v_threshold, self.v_reset
+            )
+        return (spike,), (v, *states[1:])
 
-            if self.backend == "triton":
-                if not getattr(self.surrogate_function, "spiking", True):
-                    raise NotImplementedError(
-                        "Triton backend only supports spiking surrogate functions. "
-                        "Use backend='torch' for non-spiking surrogate functions."
-                    )
-                spike_seq, v_out = triton_kernel.multistep_if(
-                    x_seq,
-                    self.v,
-                    self.v_threshold,
-                    self.v_reset,
-                    self.detach_reset,
-                    self.surrogate_function,
-                    self.store_v_seq,
-                )
-                if self.store_v_seq:
-                    self.v_seq = v_out
-                    self.v = v_out[-1]
-                else:
-                    self.v = v_out
-                return spike_seq
-            elif self.backend == "cupy":
-                spike_seq, self.v, v_seq = functional.if_multi_step_cupy(
-                    x_seq,
-                    self.v,
-                    self.v_threshold,
-                    self.v_reset,
-                    self.surrogate_function,
-                    self.detach_reset,
-                    self.store_v_seq,
-                )
-                if self.store_v_seq:
-                    self.v_seq = v_seq
-                return spike_seq
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        r"""Execute IF sequence forward with explicit state. / 使用显式状态执行 IF 序列前向。
 
-            # torch backend:
+        :param inputs: 仅包含 ``x_seq`` 的元组 / Tuple containing only ``x_seq``
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: ``(v,)`` 或 ``(v, v_seq)``
+        :type states: tuple
+        :return: ``((spike_seq,), updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
+        """
+        x_seq = inputs[0]
+        v = states[0]
+
+        v_seq = None
+        if self.backend == "inductor":
+            spike_seq, v, v_seq = functional.if_multi_step_inductor(
+                x_seq,
+                v,
+                self.v_threshold,
+                self.v_reset,
+                self.surrogate_function,
+                self.detach_reset,
+                self.store_v_seq,
+            )
+        elif self.backend == "cupy":
+            spike_seq, v, v_seq = functional.if_multi_step_cupy(
+                x_seq,
+                v,
+                self.v_threshold,
+                self.v_reset,
+                self.surrogate_function,
+                self.detach_reset,
+                self.store_v_seq,
+            )
+        elif self.backend == "triton":
+            if not self.training and not getattr(
+                self.surrogate_function, "spiking", True
+            ):
+                raise NotImplementedError(
+                    "Triton backend only supports spiking surrogate functions. "
+                    "Use backend='torch' for non-spiking surrogate functions."
+                )
+            spike_seq, v_out = triton_kernel.multistep_if(
+                x_seq,
+                v,
+                self.v_threshold,
+                self.v_reset,
+                self.detach_reset,
+                self.surrogate_function,
+                self.store_v_seq,
+            )
+            if self.store_v_seq:
+                v_seq = v_out
+                v = v_out[-1].clone() if self.training else v_out[-1]
+            else:
+                v = v_out
+        elif self.backend == "torch" and not self.training:
             out = self._eval_multi_step_forward(
                 x_seq,
-                self.v,
+                v,
                 self.v_threshold,
                 self.v_reset,
                 store_v_seq=self.store_v_seq,
             )
             if self.store_v_seq:
-                spike_seq, self.v, self.v_seq = out
+                spike_seq, v, v_seq = out
             else:
-                spike_seq, self.v = out
-            return spike_seq
-
-    def single_step_forward(self, x: torch.Tensor):
-        if self.training:
-            if self.backend == "torch":
-                return super().single_step_forward(x)
-            elif self.backend == "cupy":
-                self.v_float_to_tensor(x)
-                spike, self.v = functional.if_step_cupy(
+                spike_seq, v = out
+        elif self.backend == "torch":
+            spike_seq = []
+            voltages = []
+            for t in range(x_seq.shape[0]):
+                x = x_seq[t]
+                spike, v = functional.if_step(
                     x,
-                    self.v,
+                    v,
                     self.v_threshold,
                     self.v_reset,
                     self.surrogate_function,
                     self.detach_reset,
                 )
-                return spike
-            else:
-                raise ValueError(self.backend)
-
+                spike_seq.append(spike)
+                if self.store_v_seq:
+                    voltages.append(v)
+            spike_seq = torch.stack(spike_seq)
+            if self.store_v_seq:
+                v_seq = torch.stack(voltages)
         else:
-            self.v_float_to_tensor(x)
-            spike, self.v = self._eval_single_step_forward(
-                x,
-                self.v,
-                self.v_threshold,
-                self.v_reset,
-            )
-            return spike
+            raise ValueError(self.backend)
+
+        updated_states = (v, v_seq) if self.store_v_seq else (v,)
+        return (spike_seq,), updated_states
 
 
 class HalfThresholdIFNode(BaseNode):
@@ -557,18 +565,45 @@ class HalfThresholdIFNode(BaseNode):
     def supported_backends(self):
         return ("torch",)
 
-    def v_float_to_tensor(self, x: torch.Tensor):
-        half_threshold = self.v_threshold / 2.0
-        if isinstance(self.v, float):
-            self.v = torch.full_like(x, self.v, requires_grad=False)
-        elif isinstance(self.v, torch.Tensor):
-            if self.v.shape != x.shape:
-                self.v = torch.full_like(x, half_threshold, requires_grad=False)
-            elif self.v.dtype != x.dtype or self.v.device != x.device:
-                self.v = self.v.to(dtype=x.dtype, device=x.device)
+    def materialize_states(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        x = inputs[0]
+        if step_mode == "m" and x.dim() > 0 and x.shape[0] > 0:
+            x = x[0]
+        v = states[0]
+        if isinstance(v, float):
+            v = torch.full_like(x, v, requires_grad=False)
+        elif isinstance(v, torch.Tensor):
+            if v.shape != x.shape:
+                v = torch.full_like(x, self.v_threshold / 2.0, requires_grad=False)
+            elif v.dtype != x.dtype or v.device != x.device:
+                v = v.to(dtype=x.dtype, device=x.device)
+        return (v, *states[1:])
 
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + x
+
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        v = states[0]
+        spike, v = functional.if_step(
+            x,
+            v,
+            self.v_threshold,
+            None,
+            self.surrogate_function,
+            self.detach_reset,
+        )
+        return (spike,), (v, *states[1:])
 
 
 class ActivationAwareIFNode(base.MemoryModule):
@@ -766,11 +801,11 @@ class ActivationAwareIFNode(base.MemoryModule):
         self.v_reset = v_reset
         self.detach_reset = detach_reset
         self.surrogate_function = surrogate_function
-        self.store_v_seq = store_v_seq
         if v_reset is None:
             self.register_memory("v", 0.0)
         else:
             self.register_memory("v", v_reset)
+        self.store_v_seq = store_v_seq
         self.step_mode = step_mode
         self.backend = backend
 
@@ -936,50 +971,68 @@ class ActivationAwareIFNode(base.MemoryModule):
         shape[channel_dim] = param.numel()
         return param.view(shape)
 
-    def v_float_to_tensor(self, x: torch.Tensor) -> None:
-        if isinstance(self.v, float):
-            self.v = torch.full_like(x, self.v, requires_grad=False)
-        elif isinstance(self.v, torch.Tensor):
-            if self.v.shape != x.shape:
+    def materialize_states(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        x = inputs[0]
+        if step_mode == "m" and x.dim() > 0 and x.shape[0] > 0:
+            x = x[0]
+        v = states[0]
+        if isinstance(v, float):
+            v = torch.full_like(x, v, requires_grad=False)
+        elif isinstance(v, torch.Tensor):
+            if v.shape != x.shape:
                 fill_value = self.v_reset if self.v_reset is not None else 0.0
-                self.v = torch.full_like(x, fill_value, requires_grad=False)
-            elif self.v.dtype != x.dtype or self.v.device != x.device:
-                self.v = self.v.to(dtype=x.dtype, device=x.device)
+                v = torch.full_like(x, fill_value, requires_grad=False)
+            elif v.dtype != x.dtype or v.device != x.device:
+                v = v.to(dtype=x.dtype, device=x.device)
+        return (v, *states[1:])
 
-    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
-        **API Language** - :ref:`中文 <ActivationAwareIFNode.single_step_forward-cn>` | :ref:`English <ActivationAwareIFNode.single_step_forward-en>`
+        **API Language** - :ref:`中文 <ActivationAwareIFNode.single_step_functional_forward-cn>` | :ref:`English <ActivationAwareIFNode.single_step_functional_forward-en>`
 
         ----
 
-        .. _ActivationAwareIFNode.single_step_forward-cn:
+        .. _ActivationAwareIFNode.single_step_functional_forward-cn:
 
         * **中文**
 
-        执行一个时间步的 activation-aware IF 前向，并将末步膜电位写回
-        ``self.v``。单步前向仅支持 ``backend="torch"``，不会从 Triton
-        隐式回退。
+        使用显式膜电位执行一个 activation-aware IF 时间步。
+        本方法不修改模块状态，且仅支持 ``backend="torch"``。
 
-        :param x: 单步输入，形状为 ``[N, *]``。
-        :type x: torch.Tensor
-        :return: 与 ``x`` 形状和 dtype 相同的脉冲张量。
-        :rtype: torch.Tensor
+        :param inputs: 仅包含单步输入 ``x`` 的元组，``x`` 形状为 ``[N, *]``。
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: 显式状态 ``(v,)`` 或 ``(v, v_seq)``。
+        :type states: tuple
+        :return: ``((spike,), updated_states)``。
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
         :raises RuntimeError: 当当前 backend 不是 ``"torch"`` 时抛出。
 
         ----
 
-        .. _ActivationAwareIFNode.single_step_forward-en:
+        .. _ActivationAwareIFNode.single_step_functional_forward-en:
 
         * **English**
 
-        Run one activation-aware IF time step and store the final membrane
-        voltage in ``self.v``. Single-step forward supports only
-        ``backend="torch"`` and never falls back implicitly from Triton.
+        Run one activation-aware IF time step with explicit membrane voltage.
+        This method does not mutate module state and supports only
+        ``backend="torch"``.
 
-        :param x: Single-step input with shape ``[N, *]``.
-        :type x: torch.Tensor
-        :return: Spike tensor with the same shape and dtype as ``x``.
-        :rtype: torch.Tensor
+        :param inputs: Tuple containing only the single-step input ``x`` with shape ``[N, *]``.
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: Explicit states ``(v,)`` or ``(v, v_seq)``.
+        :type states: tuple
+        :return: ``((spike,), updated_states)``.
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
         :raises RuntimeError: If the current backend is not ``"torch"``.
         """
         if self.backend != "torch":
@@ -987,21 +1040,25 @@ class ActivationAwareIFNode(base.MemoryModule):
                 "ActivationAwareIFNode single-step forward supports only "
                 "backend='torch'; refusing implicit backend fallback."
             )
-        self.v_float_to_tensor(x)
+        x = inputs[0]
+        v = states[0]
+
         threshold = self._broadcast_parameter(self.v_threshold, x, "v_threshold")
         offset = self._broadcast_parameter(self.v_offset, x, "v_offset")
-        spike, self.v = functional.activation_aware_if_step(
+        spike, v = functional.activation_aware_if_step(
             x,
-            self.v,
+            v,
             threshold,
             offset,
             self.v_reset,
             self.surrogate_function,
             self.detach_reset,
         )
-        return spike
+        return (spike,), (v, *states[1:])
 
-    def _triton_multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def _triton_multi_step_functional_forward(
+        self, x_seq: torch.Tensor, v
+    ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
         if activation_aware_if_triton_kernel is None:
             raise RuntimeError(
                 "ActivationAwareIFNode Triton kernel is unavailable because its "
@@ -1027,8 +1084,7 @@ class ActivationAwareIFNode(base.MemoryModule):
                 "surrogate function."
             )
 
-        self.v_float_to_tensor(x_seq[0])
-        grad_tensors = (x_seq, self.v, self.v_threshold, self.v_offset)
+        grad_tensors = (x_seq, v, self.v_threshold, self.v_offset)
         if torch.is_grad_enabled() and any(
             value.requires_grad
             for value in grad_tensors
@@ -1062,9 +1118,9 @@ class ActivationAwareIFNode(base.MemoryModule):
             channel_size = 1
             inner_size = x_seq[0].numel()
 
-        spike_seq, self.v, v_seq = functional.activation_aware_if_multi_step_triton(
+        spike_seq, v, v_seq = functional.activation_aware_if_multi_step_triton(
             x_seq,
-            self.v,
+            v,
             threshold,
             offset,
             channel_size,
@@ -1072,75 +1128,85 @@ class ActivationAwareIFNode(base.MemoryModule):
             self.v_reset,
             self.store_v_seq,
         )
-        if self.store_v_seq:
-            self.v_seq = v_seq
-        return spike_seq
+        return spike_seq, v, v_seq
 
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
-        **API Language** - :ref:`中文 <ActivationAwareIFNode.multi_step_forward-cn>` | :ref:`English <ActivationAwareIFNode.multi_step_forward-en>`
+        **API Language** - :ref:`中文 <ActivationAwareIFNode.multi_step_functional_forward-cn>` | :ref:`English <ActivationAwareIFNode.multi_step_functional_forward-en>`
 
         ----
 
-        .. _ActivationAwareIFNode.multi_step_forward-cn:
+        .. _ActivationAwareIFNode.multi_step_functional_forward-cn:
 
         * **中文**
 
-        执行 activation-aware IF 神经元的多步前向。输入和输出形状均为
-        ``[T, N, *]``。每次调用从当前 ``self.v`` 开始并将末步膜电位写回
-        ``self.v``；当 ``store_v_seq=True`` 时还会把完整膜电位序列保存到
-        ``self.v_seq``。Triton 后端仅支持 ``eval`` 模式下的 FP32/BF16 CUDA
-        推理，不提供反向传播或隐式 Torch 回退。
+        使用显式状态执行 activation-aware IF 多步前向。Torch 后端
+        默认逐步调用单步 functional 实现；``store_v_seq=True`` 时
+        同时返回完整膜电位序列。Triton 后端使用专用多步 kernel。
 
-        :param x_seq: 多步输入，形状为 ``[T, N, *]``，且 ``T > 0``。
-        :type x_seq: torch.Tensor
-        :return: 与 ``x_seq`` 形状和 dtype 相同的脉冲序列。
-        :rtype: torch.Tensor
+        :param inputs: 仅包含 ``x_seq`` 的元组，``x_seq`` 形状为 ``[T, N, *]``。
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: 显式状态 ``(v,)`` 或 ``(v, v_seq)``。
+        :type states: tuple
+        :return: ``((spike_seq,), updated_states)``。
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
         :raises ValueError: 当输入形状、T 或逐通道参数长度非法时抛出。
         :raises RuntimeError: 当 Triton 后端用于 CPU、训练、求梯度、非脉冲
             surrogate 或非 FP32/BF16 输入时抛出。
 
         ----
 
-        .. _ActivationAwareIFNode.multi_step_forward-en:
+        .. _ActivationAwareIFNode.multi_step_functional_forward-en:
 
         * **English**
 
-        Run the multi-step activation-aware IF forward pass. Input and output
-        both have shape ``[T, N, *]``. Each call starts from the current
-        ``self.v`` and stores the final membrane voltage back in ``self.v``;
-        when ``store_v_seq=True``, it also stores the full voltage sequence in
-        ``self.v_seq``. The Triton backend supports only FP32/BF16 CUDA
-        inference in ``eval`` mode, with no backward path or implicit Torch
-        fallback.
+        Run the multi-step activation-aware IF forward pass with explicit state.
+        The Torch backend uses the single-step functional implementation by
+        default and also returns the full voltage sequence when
+        ``store_v_seq=True``. The Triton backend uses its specialized sequence
+        kernel.
 
-        :param x_seq: Multi-step input with shape ``[T, N, *]`` and ``T > 0``.
-        :type x_seq: torch.Tensor
-        :return: Spike sequence with the same shape and dtype as ``x_seq``.
-        :rtype: torch.Tensor
+        :param inputs: Tuple containing only ``x_seq`` with shape ``[T, N, *]``.
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: Explicit states ``(v,)`` or ``(v, v_seq)``.
+        :type states: tuple
+        :return: ``((spike_seq,), updated_states)``.
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
         :raises ValueError: If the input shape, T, or channel-wise parameter
             length is invalid.
         :raises RuntimeError: If the Triton backend is used on CPU, for
             training or autograd, with a non-spiking surrogate, or with an
             input other than FP32/BF16.
         """
+        x_seq = inputs[0]
         if x_seq.dim() < 2 or x_seq.shape[0] == 0 or x_seq[0].numel() == 0:
             raise ValueError(
                 "ActivationAwareIFNode multi-step input must have a non-empty "
                 "shape [T, N, *] with T greater than zero."
             )
         if self.backend == "triton":
-            return self._triton_multi_step_forward(x_seq)
+            spike_seq, v, v_seq = self._triton_multi_step_functional_forward(
+                x_seq, states[0]
+            )
+            updated_states = (v, v_seq) if self.store_v_seq else (v, *states[1:])
+            return (spike_seq,), updated_states
         if not self.store_v_seq:
-            return super().multi_step_forward(x_seq)
+            return super().multi_step_functional_forward(inputs, states, **kwargs)
 
         spike_seq = []
         v_seq = []
-        for x in x_seq:
-            spike_seq.append(self.single_step_forward(x))
-            v_seq.append(self.v)
-        self.v_seq = torch.stack(v_seq)
-        return torch.stack(spike_seq)
+        for t in range(x_seq.shape[0]):
+            outputs, states = self.single_step_functional_forward(
+                (x_seq[t],), states, **kwargs
+            )
+            spike_seq.append(outputs[0])
+            v_seq.append(states[0])
+        return (torch.stack(spike_seq),), (states[0], torch.stack(v_seq))
 
     def extra_repr(self):
         return (

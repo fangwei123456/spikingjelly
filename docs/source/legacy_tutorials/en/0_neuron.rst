@@ -114,9 +114,10 @@ The corresponding code can be found in :class:`spikingjelly.activation_based.neu
             else:
                 self.v += (x - (self.v - self.v_reset)) / self.tau
 
-Different neurons have different charging equations. However, when the membrane potential exceeds the threshold potential,
-the release of spike and the reset of the membrane potential are the same for all kinds of neurons. Therefore,
-they all inherit from :class:`spikingjelly.activation_based.neuron.BaseNode` and share the same discharge and reset equations. The codes of neuronal fire can be found at :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_fire`:
+Different neurons have different charging equations. The extensible Simple
+neurons inherit from :class:`spikingjelly.activation_based.neuron.SimpleBaseNode`
+and share its discharge and reset equations. The neuronal fire implementation is
+available at :meth:`spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_fire`:
 
 .. code-block:: python
 
@@ -136,7 +137,8 @@ two ways to realize neuronal reset:
 
 It can be found that for neurons using the soft method, there is no need to reset the voltage :math:`V_{reset}`.
 For the neurons in :class:`spikingjelly.activation_based.neuron`, when ``v_reset`` is set to the a float value (e.g., the default value is ``1.0``), the neuron uses the hard reset; if ``v_reset`` is set to ``None``, the soft reset will be used.
-We can find the corresponding codes in :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_fire.neuronal_reset`:
+We can find the corresponding code in
+:meth:`spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_reset`:
 
 .. code-block:: python
 

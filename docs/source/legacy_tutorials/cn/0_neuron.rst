@@ -98,7 +98,10 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
             else:
                 self.v += (x - (self.v - self.v_reset)) / self.tau
 
-不同的神经元，充电方程不尽相同。但膜电位超过阈值电压后，释放脉冲，以及释放脉冲后，膜电位的重置都是相同的。因此它们全部继承自 :class:`spikingjelly.activation_based.neuron.BaseNode`，共享相同的放电、重置方程。可以在 :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_fire` 中找到释放脉冲的代码：
+不同的神经元具有不同的充电方程。可扩展的 Simple 神经元继承自
+:class:`spikingjelly.activation_based.neuron.SimpleBaseNode`，共享放电和重置方程。
+可以在 :meth:`spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_fire`
+中找到释放脉冲的代码：
 
 .. code-block:: python
 
@@ -113,7 +116,9 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
 
 #. Soft方式：释放脉冲后，膜电位减去阈值电压：:math:`V[t] = V[t] - V_{threshold}`
 
-可以发现，对于使用Soft方式的神经元，并不需要重置电压 :math:`V_{reset}` 这个变量。:class:`spikingjelly.activation_based.neuron` 中的神经元，在构造函数的参数之一 ``v_reset``，默认为 ``1.0`` ，表示神经元使用Hard方式；若设置为 ``None``，则会使用Soft方式。在 :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_fire.neuronal_reset` 中可以找到膜电位重置的代码：
+可以发现，对于使用Soft方式的神经元，并不需要重置电压 :math:`V_{reset}` 这个变量。:class:`spikingjelly.activation_based.neuron` 中的神经元，在构造函数的参数之一 ``v_reset``，默认为 ``1.0`` ，表示神经元使用Hard方式；若设置为 ``None``，则会使用Soft方式。在
+:meth:`spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_reset`
+中可以找到膜电位重置的代码：
 
 .. code-block:: python
 

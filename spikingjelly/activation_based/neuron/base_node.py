@@ -27,7 +27,11 @@ class SimpleBaseNode(base.MemoryModule):
 
         * **中文**
 
-        :class:`BaseNode` 的简化版，便于用户修改或扩展神经元。
+        :class:`BaseNode` 的简化版，面向神经元动力学的修改和实验。常规前向按照
+        :meth:`neuronal_charge`、:meth:`neuronal_fire`、:meth:`neuronal_reset`
+        的顺序执行；用户通常只需要重写充电方程。该类不提供原生 functional
+        状态转移，:func:`spikingjelly.activation_based.base.to_functional_forward`
+        会通过通用状态替换路径转换其实例。
 
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
@@ -46,7 +50,13 @@ class SimpleBaseNode(base.MemoryModule):
 
         * **English**
 
-        A simple version of :class:`BaseNode`. Users can modify this neuron easily.
+        A simplified :class:`BaseNode` for modifying and experimenting with neuron
+        dynamics. Regular forward executes :meth:`neuronal_charge`,
+        :meth:`neuronal_fire`, and :meth:`neuronal_reset` in order; users normally
+        only need to override the charge equation. This class does not provide a
+        native functional transition. Instances are converted by
+        :func:`spikingjelly.activation_based.base.to_functional_forward` through
+        the general state-substitution path.
 
         :param v_threshold: threshold of this neurons layer
         :type v_threshold: float
@@ -67,19 +77,158 @@ class SimpleBaseNode(base.MemoryModule):
         self.step_mode = step_mode
         self.register_memory(name="v", value=0.0)
 
-    def single_step_forward(self, x: torch.Tensor):
+    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
+        r"""
+        **API Language** - :ref:`中文 <SimpleBaseNode.single_step_forward-cn>` | :ref:`English <SimpleBaseNode.single_step_forward-en>`
+
+        ----
+
+        .. _SimpleBaseNode.single_step_forward-cn:
+
+        * **中文**
+
+        依次执行充电、放电和重置，完成一个时间步的前向传播。
+
+        :param x: 单步输入张量
+        :type x: torch.Tensor
+        :return: 输出脉冲
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _SimpleBaseNode.single_step_forward-en:
+
+        * **English**
+
+        Run one time step by applying charge, fire, and reset in order.
+
+        :param x: Single-step input tensor
+        :type x: torch.Tensor
+        :return: Output spikes
+        :rtype: torch.Tensor
+        """
         self.neuronal_charge(x)
         spike = self.neuronal_fire()
         self.neuronal_reset(spike)
         return spike
 
-    def neuronal_charge(self, x: torch.Tensor):
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        r"""
+        **API Language** - :ref:`中文 <SimpleBaseNode.multi_step_forward-cn>` | :ref:`English <SimpleBaseNode.multi_step_forward-en>`
+
+        ----
+
+        .. _SimpleBaseNode.multi_step_forward-cn:
+
+        * **中文**
+
+        沿时间维逐步调用 :meth:`single_step_forward`。
+
+        :param x_seq: 输入序列，形状约定为 ``[T, N, *]``
+        :type x_seq: torch.Tensor
+        :return: 沿时间维堆叠的输出脉冲序列
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _SimpleBaseNode.multi_step_forward-en:
+
+        * **English**
+
+        Apply :meth:`single_step_forward` successively along the time dimension.
+
+        :param x_seq: Input sequence with conventional shape ``[T, N, *]``
+        :type x_seq: torch.Tensor
+        :return: Output spike sequence stacked along the time dimension
+        :rtype: torch.Tensor
+        """
+        return torch.stack([self.single_step_forward(x) for x in x_seq])
+
+    def neuronal_charge(self, x: torch.Tensor) -> None:
+        r"""
+        **API Language** - :ref:`中文 <SimpleBaseNode.neuronal_charge-cn>` | :ref:`English <SimpleBaseNode.neuronal_charge-en>`
+
+        ----
+
+        .. _SimpleBaseNode.neuronal_charge-cn:
+
+        * **中文**
+
+        使用单步输入更新 ``self.v``。自定义 Simple 神经元通常只需要实现本方法。
+
+        :param x: 单步输入张量
+        :type x: torch.Tensor
+        :raises NotImplementedError: 子类未实现充电方程时抛出
+
+        ----
+
+        .. _SimpleBaseNode.neuronal_charge-en:
+
+        * **English**
+
+        Update ``self.v`` from one input step. Custom simple neurons normally only
+        need to implement this method.
+
+        :param x: Single-step input tensor
+        :type x: torch.Tensor
+        :raises NotImplementedError: If the subclass does not implement a charge equation
+        """
         raise NotImplementedError
 
-    def neuronal_fire(self):
+    def neuronal_fire(self) -> torch.Tensor:
+        r"""
+        **API Language** - :ref:`中文 <SimpleBaseNode.neuronal_fire-cn>` | :ref:`English <SimpleBaseNode.neuronal_fire-en>`
+
+        ----
+
+        .. _SimpleBaseNode.neuronal_fire-cn:
+
+        * **中文**
+
+        根据当前膜电位和阈值计算脉冲。
+
+        :return: 输出脉冲
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _SimpleBaseNode.neuronal_fire-en:
+
+        * **English**
+
+        Calculate spikes from the current membrane potential and threshold.
+
+        :return: Output spikes
+        :rtype: torch.Tensor
+        """
         return self.surrogate_function(self.v - self.v_threshold)
 
-    def neuronal_reset(self, spike):
+    def neuronal_reset(self, spike: torch.Tensor) -> None:
+        r"""
+        **API Language** - :ref:`中文 <SimpleBaseNode.neuronal_reset-cn>` | :ref:`English <SimpleBaseNode.neuronal_reset-en>`
+
+        ----
+
+        .. _SimpleBaseNode.neuronal_reset-cn:
+
+        * **中文**
+
+        根据输出脉冲对 ``self.v`` 执行硬重置或软重置。
+
+        :param spike: 当前时间步的输出脉冲
+        :type spike: torch.Tensor
+
+        ----
+
+        .. _SimpleBaseNode.neuronal_reset-en:
+
+        * **English**
+
+        Apply hard or soft reset to ``self.v`` according to the output spikes.
+
+        :param spike: Output spikes of the current time step
+        :type spike: torch.Tensor
+        """
         if self.detach_reset:
             spike_d = spike.detach()
         else:
@@ -114,7 +263,11 @@ class BaseNode(base.MemoryModule):
 
         * **中文**
 
-        可微分SNN神经元的基类神经元。
+        生产级可微分 SNN 神经元的基类。常规前向由显式状态的 functional
+        状态转移支持；子类应实现 ``single_step_functional_forward``，并仅在存在
+        独立序列实现或专用 kernel 时重写 ``multi_step_functional_forward``。
+        若需要通过 ``neuronal_charge`` 修改 Python 神经元方程，请继承
+        :class:`SimpleBaseNode`。
 
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
@@ -148,7 +301,12 @@ class BaseNode(base.MemoryModule):
 
         * **English**
 
-        This class is the base class of differentiable spiking neurons.
+        Base class for production differentiable spiking neurons. Regular forward
+        is backed by an explicit-state functional transition. Subclasses should
+        implement ``single_step_functional_forward`` and override
+        ``multi_step_functional_forward`` only for an independent sequence
+        implementation or specialized kernel. Inherit :class:`SimpleBaseNode`
+        instead to modify Python neuron equations through ``neuronal_charge``.
 
         :param v_threshold: threshold of this neurons layer
         :type v_threshold: float
@@ -212,9 +370,10 @@ class BaseNode(base.MemoryModule):
     @store_v_seq.setter
     def store_v_seq(self, value: bool):
         self._store_v_seq = value
-        if value:
-            if not hasattr(self, "v_seq"):
-                self.register_memory("v_seq", None)
+        if value and "v_seq" not in self._memories:
+            self.register_memory("v_seq", None)
+        elif not value and "v_seq" in self._memories:
+            del self.v_seq
 
     @staticmethod
     def apply_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
@@ -226,153 +385,105 @@ class BaseNode(base.MemoryModule):
         v = v - spike * v_threshold
         return v
 
-    @abstractmethod
-    def neuronal_charge(self, x: torch.Tensor):
-        """
-        **API Language** - :ref:`中文 <BaseNode.neuronal_charge-cn>` | :ref:`English <BaseNode.neuronal_charge-en>`
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        r"""
+        **API Language** - :ref:`中文 <BaseNode.single_step_functional_forward-cn>` | :ref:`English <BaseNode.single_step_functional_forward-en>`
 
         ----
 
-        .. _BaseNode.neuronal_charge-cn:
+        .. _BaseNode.single_step_functional_forward-cn:
 
         * **中文**
 
-        定义神经元的充电差分方程。子类必须实现这个函数。
+        使用显式状态执行一个神经元时间步。生产级神经元子类必须实现本方法，
+        且不得修改模块 memory 或传入的 ``states``。
+
+        :param inputs: 单步输入张量元组
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: 当前神经元的显式状态元组
+        :type states: tuple[object, ...]
+        :return: ``(outputs, updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
+        :raises NotImplementedError: 子类未实现 functional 状态转移时抛出
 
         ----
 
-        .. _BaseNode.neuronal_charge-en:
+        .. _BaseNode.single_step_functional_forward-en:
 
         * **English**
 
-        Define the charge difference equation. The sub-class must implement this function.
+        Run one neuron time step with explicit states. Production neuron
+        subclasses must implement this method without mutating module memories
+        or the supplied ``states``.
+
+        :param inputs: Tuple of single-step input tensors
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: Tuple of explicit neuron states
+        :type states: tuple[object, ...]
+        :return: ``(outputs, updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
+        :raises NotImplementedError: If the subclass does not implement a functional state transition
         """
-
-    def neuronal_fire(self):
-        """
-        **API Language** - :ref:`中文 <BaseNode.neuronal_fire-cn>` | :ref:`English <BaseNode.neuronal_fire-en>`
-
-        ----
-
-        .. _BaseNode.neuronal_fire-cn:
-
-        * **中文**
-
-        根据当前神经元的电压、阈值，计算输出脉冲。
-
-        ----
-
-        .. _BaseNode.neuronal_fire-en:
-
-        * **English**
-
-        Calculate out spikes of neurons by their current membrane potential and threshold voltage.
-        """
-        return self.surrogate_function(self.v - self.v_threshold)
-
-    def neuronal_reset(self, spike):
-        """
-        **API Language** - :ref:`中文 <BaseNode.neuronal_reset-cn>` | :ref:`English <BaseNode.neuronal_reset-en>`
-
-        ----
-
-        .. _BaseNode.neuronal_reset-cn:
-
-        * **中文**
-
-        根据当前神经元释放的脉冲，对膜电位进行重置。
-
-        ----
-
-        .. _BaseNode.neuronal_reset-en:
-
-        * **English**
-
-        Reset the membrane potential according to neurons' output spikes.
-        """
-        if self.detach_reset:
-            spike_d = spike.detach()
-        else:
-            spike_d = spike
-
-        if self.v_reset is None:
-            # soft reset
-            self.v = self.apply_soft_reset(self.v, spike_d, self.v_threshold)
-
-        else:
-            # hard reset
-            self.v = self.apply_hard_reset(self.v, spike_d, self.v_reset)
+        raise NotImplementedError(
+            f"{self._get_name()} must implement single_step_functional_forward."
+        )
 
     def extra_repr(self):
         return f"v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}, step_mode={self.step_mode}, backend={self.backend}"
 
-    def single_step_forward(self, x: torch.Tensor):
-        """
-        **API Language** - :ref:`中文 <BaseNode.single_step_forward-cn>` | :ref:`English <BaseNode.single_step_forward-en>`
-
-        ----
-
-        .. _BaseNode.single_step_forward-cn:
-
-        * **中文**
-
-        按照充电、放电、重置的顺序进行前向传播。
-
-        :param x: 输入到神经元的电压增量
-        :type x: torch.Tensor
-
-        :return: 神经元的输出脉冲
-        :rtype: torch.Tensor
-
-        ----
-
-        .. _BaseNode.single_step_forward-en:
-
-        * **English**
-
-        Forward by the order of ``neuronal_charge``, ``neuronal_fire``, and ``neuronal_reset``.
-
-        :param x: increment of voltage inputted to neurons
-        :type x: torch.Tensor
-
-        :return: out spikes of neurons
-        :rtype: torch.Tensor
-        """
-        self.v_float_to_tensor(x)
-        self.neuronal_charge(x)
-        spike = self.neuronal_fire()
-        self.neuronal_reset(spike)
-        return spike
-
-    def multi_step_forward(self, x_seq: torch.Tensor):
-        T = x_seq.shape[0]
-        y_seq = []
-        if self.store_v_seq:
-            v_seq = []
-        for t in range(T):
-            y = self.single_step_forward(x_seq[t])
-            y_seq.append(y)
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        output_steps = []
+        v_steps = []
+        for t in range(inputs[0].shape[0]):
+            outputs, states = self.single_step_functional_forward(
+                tuple(x[t] for x in inputs), states, **kwargs
+            )
+            output_steps.append(outputs)
             if self.store_v_seq:
-                v_seq.append(self.v)
+                v_steps.append(states[0])
 
         if self.store_v_seq:
-            self.v_seq = torch.stack(v_seq)
+            states = (states[0], torch.stack(v_steps), *states[2:])
+        return (
+            tuple(
+                torch.stack(output_seq)
+                for output_seq in zip(*output_steps, strict=True)
+            ),
+            states,
+        )
 
-        return torch.stack(y_seq)
-
-    def v_float_to_tensor(self, x: torch.Tensor):
-        if isinstance(self.v, float):
-            v_init = self.v
-            self.v = torch.full_like(x, v_init, requires_grad=False)
-        elif isinstance(self.v, torch.Tensor):
-            if self.v.shape != x.shape:
-                self.v = torch.full_like(
+    def materialize_states(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        x = inputs[0]
+        if step_mode == "m" and x.dim() > 0 and x.shape[0] > 0:
+            x = x[0]
+        v = states[0]
+        if isinstance(v, float):
+            v = torch.full_like(x, v, requires_grad=False)
+        elif isinstance(v, torch.Tensor):
+            if v.shape != x.shape:
+                v = torch.full_like(
                     x,
                     self.v_reset if self.v_reset is not None else 0.0,
                     requires_grad=False,
                 )
-            elif self.v.dtype != x.dtype or self.v.device != x.device:
-                self.v = self.v.to(dtype=x.dtype, device=x.device)
+            elif v.dtype != x.dtype or v.device != x.device:
+                v = v.to(dtype=x.dtype, device=x.device)
+        return (v, *states[1:])
 
 
 class NonSpikingBaseNode(nn.Module, base.MultiStepModule):

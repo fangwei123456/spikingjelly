@@ -133,13 +133,16 @@ def test_td_modules_support_step_mode_switching():
             module.step_mode = "bogus"
 
 
-def test_td_module_requires_explicit_multistep_forward():
+def test_td_module_uses_default_functional_multistep_forward():
     class DummyTDModule(TDModule):
         def ann_forward(self, x):
             return x
 
-    with pytest.raises(NotImplementedError, match="multi_step_forward"):
-        DummyTDModule()(torch.zeros(2, 3))
+    module = DummyTDModule()
+    x_seq = torch.randn(2, 3)
+
+    torch.testing.assert_close(module(x_seq), x_seq)
+    torch.testing.assert_close(module.x_cum, x_seq.sum(0))
 
 
 def test_td_multistep_state_owns_only_final_step_storage():

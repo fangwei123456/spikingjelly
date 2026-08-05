@@ -815,11 +815,16 @@ def lif_step(
        :func:`lif_multi_step_inductor`, :func:`lif_multi_step_cupy`,
        :func:`lif_multi_step_triton`.
     """
-    v_reset_value = 0.0 if v_reset is None else v_reset
     if decay_input:
-        v_charged = v + (x - (v - v_reset_value)) / tau
+        if v_reset is None or v_reset == 0.0:
+            v_charged = v + (x - v) / tau
+        else:
+            v_charged = v + (x - (v - v_reset)) / tau
     else:
-        v_charged = v - (v - v_reset_value) / tau + x
+        if v_reset is None or v_reset == 0.0:
+            v_charged = v * (1.0 - 1.0 / tau) + x
+        else:
+            v_charged = v - (v - v_reset) / tau + x
     spike = surrogate_function(v_charged - v_threshold)
     return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 

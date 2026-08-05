@@ -371,6 +371,23 @@ Step 1. 定义分割规则
 
 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 的时间分割将自动借助 :func:`to_functional_forward <spikingjelly.activation_based.base.to_functional_forward>` 实现，无需手动定义规则。
 
+``to_functional_forward`` 返回的函数使用分组接口
+``(inputs, states) -> (outputs, updated_states)``。``inputs`` 和 ``outputs``
+即使只有一个张量也使用 tuple。例如：
+
+.. code:: python
+
+    f_forward = base.to_functional_forward(neuron.LIFNode())
+    outputs, updated_states = f_forward((x,), (v,))
+
+已实现 functional forward 的 MemoryModule 会直接执行显式状态转移；
+``nn.Sequential`` 会递归组合子模块；其他复合模块由通用路径处理。
+``SimpleBaseNode``、``SimpleIFNode`` 和 ``SimpleLIFNode`` 为保留可修改的
+``charge → fire → reset`` 方程接口，也使用通用路径：转换函数会临时换入显式状态，
+执行原有前向后恢复模块状态。该路径保持数值与状态语义，但包含状态替换开销。
+频繁进行时间维梯度检查点或其他 functional 调用时，应优先使用具有原生 functional
+状态转移的 ``IFNode``、``LIFNode`` 等生产级神经元。
+
 Step 2. 显式声明压缩器（可选）
 ################################
 

@@ -90,32 +90,47 @@ class SpikeZIPLinear(TDLinear):
         self.register_memory("realize_time", self.bias_steps)
         self.register_memory("is_work", False)
 
-    def _release_bias(self, y: torch.Tensor) -> torch.Tensor:
-        if self.spikezip_bias is None or self.realize_time <= 0:
-            return y
-        self.realize_time -= 1
-        self.is_work = True
-        bias = self.spikezip_bias.to(device=y.device, dtype=y.dtype)
-        return y + bias / self.bias_steps
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        outputs, td_states = super().single_step_functional_forward(
+            inputs, states[:2], **kwargs
+        )
+        y = outputs[0]
+        realize_time = states[2]
+        released_bias = self.spikezip_bias is not None and realize_time > 0
+        if released_bias:
+            y = (
+                y
+                + self.spikezip_bias.to(device=y.device, dtype=y.dtype)
+                / self.bias_steps
+            )
+            realize_time -= 1
+        is_work = not bool((inputs[0] == 0).all()) or released_bias
+        return (y,), (*td_states, realize_time, is_work)
 
-    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
-        y = super().single_step_forward(x)
-        self.is_work = not bool((x == 0).all())
-        return self._release_bias(y)
-
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
-        y_seq = super().multi_step_forward(x_seq)
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        (y_seq,), td_states = super().multi_step_functional_forward(
+            inputs, states[:2], **kwargs
+        )
+        x_seq = inputs[0]
         active = bool((x_seq != 0).any())
-        bias_steps = min(x_seq.shape[0], self.realize_time)
+        bias_steps = min(x_seq.shape[0], states[2])
         if self.spikezip_bias is not None and bias_steps > 0:
             bias = self.spikezip_bias.to(device=x_seq.device, dtype=x_seq.dtype)
             view_shape = (1,) * (y_seq.dim() - 1) + (bias.numel(),)
             y_seq[:bias_steps] = (
                 y_seq[:bias_steps] + bias.view(view_shape) / self.bias_steps
             )
-            self.realize_time -= bias_steps
-        self.is_work = active or bias_steps > 0
-        return y_seq
+        return (y_seq,), (*td_states, states[2] - bias_steps, active or bias_steps > 0)
 
 
 class SpikeZIPConv2d(TDConv2d):
@@ -153,31 +168,43 @@ class SpikeZIPConv2d(TDConv2d):
         self.register_memory("realize_time", self.bias_steps)
         self.register_memory("is_work", False)
 
-    def _release_bias(self, y: torch.Tensor) -> torch.Tensor:
-        if self.spikezip_bias is None or self.realize_time <= 0:
-            return y
-        self.realize_time -= 1
-        self.is_work = True
-        bias = self.spikezip_bias.to(device=y.device, dtype=y.dtype)
-        return y + bias.view(1, -1, 1, 1) / self.bias_steps
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        outputs, td_states = super().single_step_functional_forward(
+            inputs, states[:2], **kwargs
+        )
+        y = outputs[0]
+        realize_time = states[2]
+        released_bias = self.spikezip_bias is not None and realize_time > 0
+        if released_bias:
+            bias = self.spikezip_bias.to(device=y.device, dtype=y.dtype)
+            y = y + bias.view(1, -1, 1, 1) / self.bias_steps
+            realize_time -= 1
+        is_work = not bool((inputs[0] == 0).all()) or released_bias
+        return (y,), (*td_states, realize_time, is_work)
 
-    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
-        y = super().single_step_forward(x)
-        self.is_work = not bool((x == 0).all())
-        return self._release_bias(y)
-
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
-        y_seq = super().multi_step_forward(x_seq)
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        (y_seq,), td_states = super().multi_step_functional_forward(
+            inputs, states[:2], **kwargs
+        )
+        x_seq = inputs[0]
         active = bool((x_seq != 0).any())
-        bias_steps = min(x_seq.shape[0], self.realize_time)
+        bias_steps = min(x_seq.shape[0], states[2])
         if self.spikezip_bias is not None and bias_steps > 0:
             bias = self.spikezip_bias.to(device=x_seq.device, dtype=x_seq.dtype)
             y_seq[:bias_steps] = (
                 y_seq[:bias_steps] + bias.view(1, 1, -1, 1, 1) / self.bias_steps
             )
-            self.realize_time -= bias_steps
-        self.is_work = active or bias_steps > 0
-        return y_seq
+        return (y_seq,), (*td_states, states[2] - bias_steps, active or bias_steps > 0)
 
 
 class SpikeZIPEmbedding(base.MemoryModule):
@@ -187,19 +214,31 @@ class SpikeZIPEmbedding(base.MemoryModule):
         self.step_mode = "s"
         self.register_memory("t", 0)
 
-    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.t == 0:
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        if states[0] == 0:
             y = self.embedding(x)
-            self.t += 1
-            return y
-        return torch.zeros(
-            *x.shape,
-            self.embedding.embedding_dim,
-            device=x.device,
-            dtype=self.embedding.weight.dtype,
-        )
+        else:
+            y = torch.zeros(
+                *x.shape,
+                self.embedding.embedding_dim,
+                device=x.device,
+                dtype=self.embedding.weight.dtype,
+            )
+        return (y,), (1 if states[0] == 0 else states[0],)
 
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x_seq = inputs[0]
         if x_seq.shape[0] == 0:
             raise ValueError("SpikeZIPEmbedding expects a non-empty sequence.")
         y0 = self.embedding(x_seq[0])
@@ -210,8 +249,7 @@ class SpikeZIPEmbedding(base.MemoryModule):
             dtype=y0.dtype,
         )
         y_seq[0] = y0
-        self.t = x_seq.shape[0]
-        return y_seq
+        return (y_seq,), (x_seq.shape[0],)
 
 
 class SpikeZIPLayerNorm(TDLayerNorm):
@@ -256,7 +294,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
         self.softmax = SpikeZIPSoftmax(dim=-1)
         self.dropout = copy.deepcopy(getattr(source, "dropout", nn.Identity()))
         self.step_mode = "s"
-        self.t = 0
+        self.register_memory("t", 0)
         self.position_embedding_type = getattr(
             source,
             "position_embedding_type",
@@ -281,7 +319,6 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
             self.softmax,
         ):
             module.reset()
-        self.t = 0
 
     def transpose_for_scores(self, x: torch.Tensor) -> torch.Tensor:
         shape = (*x.size()[:-1], self.num_attention_heads, self.attention_head_size)
@@ -303,16 +340,19 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
         if head_mask is not None:
             raise ValueError("SpikeZIPTFQANNRecipe v1 does not support head_mask.")
 
-    def single_step_forward(
+    def single_step_functional_forward(
         self,
-        hidden_states: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        head_mask: Optional[torch.Tensor] = None,
-        encoder_hidden_states: Optional[torch.Tensor] = None,
-        encoder_attention_mask: Optional[torch.Tensor] = None,
-        past_key_value=None,
-        output_attentions: bool = False,
-    ):
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        hidden_states = inputs[0]
+        attention_mask = kwargs.get("attention_mask")
+        head_mask = kwargs.get("head_mask")
+        encoder_hidden_states = kwargs.get("encoder_hidden_states")
+        encoder_attention_mask = kwargs.get("encoder_attention_mask")
+        past_key_value = kwargs.get("past_key_value")
+        output_attentions = kwargs.get("output_attentions", False)
         self._validate_inputs(
             head_mask,
             encoder_hidden_states,
@@ -331,7 +371,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
         k_sum = self.transpose_for_scores(self.key_if.accumulated)
         scores = _matmul_delta(query_layer, key_layer, q_sum, k_sum, True)
         scores = scores / math.sqrt(self.attention_head_size)
-        if attention_mask is not None and self.t == 0:
+        if attention_mask is not None and states[0] == 0:
             scores = scores + attention_mask
         attention_probs = self.softmax(scores)
         attention_probs = self.dropout(attention_probs)
@@ -345,19 +385,22 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
         context = self.after_attn_if(context)
         context = context.transpose(-3, -2).contiguous()
         context = context.view(*context.size()[:-2], self.all_head_size)
-        self.t += 1
-        return (context, attention_probs) if output_attentions else (context,)
+        outputs = (context, attention_probs) if output_attentions else (context,)
+        return outputs, (states[0] + 1,)
 
-    def multi_step_forward(
+    def multi_step_functional_forward(
         self,
-        hidden_states: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        head_mask: Optional[torch.Tensor] = None,
-        encoder_hidden_states: Optional[torch.Tensor] = None,
-        encoder_attention_mask: Optional[torch.Tensor] = None,
-        past_key_value=None,
-        output_attentions: bool = False,
-    ):
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        hidden_states = inputs[0]
+        attention_mask = kwargs.get("attention_mask")
+        head_mask = kwargs.get("head_mask")
+        encoder_hidden_states = kwargs.get("encoder_hidden_states")
+        encoder_attention_mask = kwargs.get("encoder_attention_mask")
+        past_key_value = kwargs.get("past_key_value")
+        output_attentions = kwargs.get("output_attentions", False)
         self._validate_inputs(
             head_mask,
             encoder_hidden_states,
@@ -402,11 +445,25 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
                 self.all_head_size,
             )
             if output_attentions:
-                return context_seq, attention_probs
-            return (context_seq,)
+                outputs = (context_seq, attention_probs)
+            else:
+                outputs = (context_seq,)
+            return outputs, states
         finally:
             for module, step_mode in step_modes.items():
                 module.step_mode = step_mode
+
+    def single_step_forward(
+        self, hidden_states: torch.Tensor, **kwargs: object
+    ) -> tuple[torch.Tensor, ...]:
+        outputs = super().single_step_forward(hidden_states, **kwargs)
+        return outputs if isinstance(outputs, tuple) else (outputs,)
+
+    def multi_step_forward(
+        self, hidden_states: torch.Tensor, **kwargs: object
+    ) -> tuple[torch.Tensor, ...]:
+        outputs = super().multi_step_forward(hidden_states, **kwargs)
+        return outputs if isinstance(outputs, tuple) else (outputs,)
 
 
 class SpikeZIPViTSelfAttention(base.MemoryModule):
@@ -452,7 +509,13 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
         qkv = self.qkv(x).reshape(*x.shape[:-1], 3, self.num_heads, self.head_dim)
         return qkv.movedim(-3, 0).transpose(-3, -2).unbind(0)
 
-    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
         batch_size, seq_len, channels = x.shape
         query, key, value = self._split_qkv(x)
 
@@ -484,9 +547,15 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
         context = context.transpose(-3, -2).reshape(batch_size, seq_len, channels)
         context = self.proj(context)
         context = self.proj_drop(context)
-        return self.proj_if(context)
+        return (self.proj_if(context),), states
 
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x_seq = inputs[0]
         step_modes = {
             module: module.step_mode
             for module in self.modules()
@@ -522,7 +591,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
             context = context.transpose(-3, -2).reshape(x_seq.shape)
             context = self.proj(context)
             context = self.proj_drop(context)
-            return self.proj_if(context)
+            return (self.proj_if(context),), states
         finally:
             for module, step_mode in step_modes.items():
                 module.step_mode = step_mode

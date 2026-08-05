@@ -32,7 +32,7 @@ Adaptive Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr, w_float_to_tensor
+   :exclude-members: supported_backends, extra_repr
 
 Nonlinear Integrate-and-fire Neurons
 --------------------------------------------------

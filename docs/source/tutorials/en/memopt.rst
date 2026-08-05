@@ -371,6 +371,26 @@ In other words, defining ``__spatial_split__`` and returning a tuple suffices. F
 
 Temporal splitting in :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` is handled automatically via :func:`to_functional_forward <spikingjelly.activation_based.base.to_functional_forward>`, so no manually designed rules are required.
 
+``to_functional_forward`` returns a grouped interface with the form
+``(inputs, states) -> (outputs, updated_states)``. ``inputs`` and ``outputs``
+remain tuples even when they contain one tensor. For example:
+
+.. code:: python
+
+    f_forward = base.to_functional_forward(neuron.LIFNode())
+    outputs, updated_states = f_forward((x,), (v,))
+
+MemoryModule implementations with functional forward use their explicit state
+transition directly. ``nn.Sequential`` modules recursively compose their children,
+while other composite modules use the general fallback path.
+``SimpleBaseNode``, ``SimpleIFNode``, and ``SimpleLIFNode`` also use the general
+path so that their configurable ``charge → fire → reset`` equation interface is
+preserved. The converted function temporarily substitutes explicit state, runs
+the regular forward, and then restores the module state. This path preserves
+numerical and state semantics but incurs state-substitution overhead. Prefer
+production neurons with native functional transitions, such as ``IFNode`` and
+``LIFNode``, for frequent temporal checkpointing or other functional calls.
+
 Step 2. Explicitly declare compressors (optional)
 ###############################################################
 

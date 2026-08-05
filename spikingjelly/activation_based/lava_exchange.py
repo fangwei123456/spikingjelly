@@ -665,12 +665,23 @@ class CubaLIFNode(neuron.BaseNode):
             )
 
     # computation process
-    def state_initialization(self, x: torch.Tensor):
-        if isinstance(self.current_state, float):
-            self.current_state = torch.zeros_like(x.data)
-
-        if isinstance(self.voltage_state, float):
-            self.voltage_state = torch.zeros_like(x.data)
+    def materialize_states(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        x = inputs[0]
+        if step_mode == "m" and x.dim() > 0 and x.shape[0] > 0:
+            x = x[0]
+        materialized = []
+        for state in states[-2:]:
+            if not isinstance(state, torch.Tensor) or state.shape != x.shape:
+                state = torch.zeros_like(x)
+            elif state.dtype != x.dtype or state.device != x.device:
+                state = state.to(dtype=x.dtype, device=x.device)
+            materialized.append(state)
+        return (*states[:-2], *materialized)
 
     def neuronal_charge(self, x: torch.Tensor):
         if self.requires_grad:
@@ -711,35 +722,74 @@ class CubaLIFNode(neuron.BaseNode):
             self.voltage_state, spike_d, self.v_reset
         )
 
-    def single_step_forward(self, x):
-        self.state_initialization(x)
-        self.neuronal_charge(x)
-        spike = self.neuronal_fire()
-        self.neuronal_reset(spike)
-        return spike
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        current_state, voltage_state = states[-2:]
+        current_decay = (
+            self.current_decay.clamp(min=0.0, max=self.p_scale)
+            if self.requires_grad
+            else self.current_decay
+        )
+        voltage_decay = (
+            self.voltage_decay.clamp(min=0.0, max=self.p_scale)
+            if self.requires_grad
+            else self.voltage_decay
+        )
+        current_state = LeakyIntegratorStep.apply(
+            x,
+            step_quantize(current_decay),
+            current_state.contiguous(),
+            self.s_scale,
+        )
+        if self.norm is not None:
+            current_state = self.norm(current_state)
+        voltage_state = LeakyIntegratorStep.apply(
+            current_state,
+            step_quantize(voltage_decay),
+            voltage_state.contiguous(),
+            self.s_scale,
+        )
+        spike = self.surrogate_function(
+            voltage_state - (self.v_threshold + self.v_threshold_eps)
+        )
+        reset_spike = spike.detach() if self.detach_reset else spike
+        voltage_state = self.apply_hard_reset(voltage_state, reset_spike, self.v_reset)
+        return (spike,), (*states[:-2], current_state, voltage_state)
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
-        T = x_seq.shape[0]
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x_seq = inputs[0]
         y_seq = []
         if self.store_v_seq:
             v_seq = []
         if self.store_i_seq:
             i_seq = []
 
-        for t in range(T):
-            y = self.single_step_forward(x_seq[t])
-            y_seq.append(y)
+        for t in range(x_seq.shape[0]):
+            outputs, states = self.single_step_functional_forward(
+                (x_seq[t],), states, **kwargs
+            )
+            y_seq.append(outputs[0])
             if self.store_v_seq:
-                v_seq.append(self.voltage_state)
+                v_seq.append(states[-1])
             if self.store_i_seq:
-                i_seq.append(self.current_state)
+                i_seq.append(states[-2])
 
+        updated_states = list(states)
         if self.store_v_seq:
-            self.v_seq = torch.stack(v_seq)
+            updated_states[1] = torch.stack(v_seq)
         if self.store_i_seq:
-            self.i_seq = torch.stack(i_seq)
-
-        return torch.stack(y_seq)
+            updated_states[2 if self.store_v_seq else 1] = torch.stack(i_seq)
+        return (torch.stack(y_seq),), tuple(updated_states)
 
 
 try:

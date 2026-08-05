@@ -261,11 +261,25 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         self.element_wise_function = element_wise_function
         self.register_memory("y", None)
 
-    def single_step_forward(self, x: Tensor):
-        if self.y is None:
-            self.y = torch.zeros_like(x)
-        self.y = self.sub_module(self.element_wise_function(self.y, x))
-        return self.y
+    def materialize_states(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        x = inputs[0] if step_mode == "s" else inputs[0][0]
+        return (torch.zeros_like(x) if states[0] is None else states[0],)
+
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        y = states[0]
+        y = self.sub_module(self.element_wise_function(y, x))
+        return (y,), (y,)
 
     def extra_repr(self) -> str:
         return f"element-wise function={self.element_wise_function}, step_mode={self.step_mode}"
@@ -390,12 +404,28 @@ class LinearRecurrentContainer(base.MemoryModule):
         self.sub_module = sub_module
         self.register_memory("y", None)
 
-    def single_step_forward(self, x: Tensor):
-        if self.y is None:
-            self.y = x.new_zeros(*x.shape[:-1], self.sub_module_out_features)
-        x = torch.cat((x, self.y), dim=-1)
-        self.y = self.sub_module(self.rc(x))
-        return self.y
+    def materialize_states(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        x = inputs[0] if step_mode == "s" else inputs[0][0]
+        y = states[0]
+        if y is None:
+            y = x.new_zeros(*x.shape[:-1], self.sub_module_out_features)
+        return (y,)
+
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        y = states[0]
+        y = self.sub_module(self.rc(torch.cat((x, y), dim=-1)))
+        return (y,), (y,)
 
     def extra_repr(self) -> str:
         return f", step_mode={self.step_mode}"

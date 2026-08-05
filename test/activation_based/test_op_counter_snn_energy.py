@@ -274,6 +274,13 @@ def test_lemaire_energy_config_passes_extra_state_rules_to_counter():
         def neuronal_charge(self, x: torch.Tensor):
             self.v = self.v + x
 
+        def single_step_functional_forward(self, inputs, states, **kwargs):
+            x = inputs[0]
+            v = states[0]
+            if isinstance(v, float):
+                v = torch.full_like(x, v)
+            return (x,), (v + x,)
+
     def rule(module, func, args, kwargs, out, state_tensor_keys):
         del module, func, args, kwargs, out, state_tensor_keys
         calls["count"] += 1

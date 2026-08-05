@@ -334,23 +334,56 @@ class ILIFNode(LIFNode):
     def neuronal_fire(self) -> torch.Tensor:
         return self.surrogate_function(self.v / self.v_threshold)
 
-    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
-        self.v_float_to_tensor(x)
-        self.neuronal_charge(x)
-        spike = self.neuronal_fire()
-        self.neuronal_reset(spike)
-        return spike
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        r"""Execute one I-LIF step with explicit state. / 使用显式状态执行一个 I-LIF 时间步。
 
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        :param inputs: 仅包含 ``x`` 的元组 / Tuple containing only ``x``
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: ``(v,)`` 或 ``(v, v_seq)``
+        :type states: tuple
+        :return: ``((spike_count,), updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
+        """
+        x = inputs[0]
+        v = states[0]
+
+        charged = v * (1.0 - 1.0 / self.tau) + x
+        spike = self.surrogate_function(charged / self.v_threshold)
+        reset_spike = spike.detach() if self.detach_reset else spike
+        v = charged - reset_spike * self.v_threshold
+        return (spike,), (v, *states[1:])
+
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        r"""Execute I-LIF sequence forward with explicit state. / 使用显式状态执行 I-LIF 序列前向。
+
+        :param inputs: 仅包含 ``x_seq`` 的元组 / Tuple containing only ``x_seq``
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: ``(v,)`` 或 ``(v, v_seq)``
+        :type states: tuple
+        :return: ``((spike_count_seq,), updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
+        """
+        x_seq = inputs[0]
+        v = states[0]
+
         if self.backend == "triton":
             if triton_ilif_kernel is None:
                 raise ImportError(
                     "ILIFNode backend='triton' requires the optional Triton backend."
                 )
-            self.v_float_to_tensor(x_seq[0])
             spike_seq, v_out = triton_ilif_kernel._multistep_ilif(
                 x_seq,
-                self.v,
+                v,
                 1.0 - 1.0 / self.tau,
                 self.v_threshold,
                 self.surrogate_function.max_spike_count,
@@ -360,19 +393,26 @@ class ILIFNode(LIFNode):
                 self.store_v_seq,
             )
             if self.store_v_seq:
-                self.v_seq = v_out
-                self.v = v_out[-1].clone()
+                v_seq = v_out
+                v = v_out[-1].clone()
             else:
-                self.v = v_out
-            return spike_seq
+                v = v_out
+                v_seq = None
+        elif self.backend == "torch":
+            spikes = []
+            voltages = []
+            for t in range(x_seq.shape[0]):
+                x = x_seq[t]
+                (spike,), (v, *_) = self.single_step_functional_forward(
+                    (x,), (v, *states[1:])
+                )
+                spikes.append(spike)
+                if self.store_v_seq:
+                    voltages.append(v)
+            spike_seq = torch.stack(spikes)
+            v_seq = torch.stack(voltages) if self.store_v_seq else None
+        else:
+            raise ValueError(self.backend)
 
-        spike_seq = []
-        if self.store_v_seq:
-            v_seq = []
-        for x in x_seq:
-            spike_seq.append(self.single_step_forward(x))
-            if self.store_v_seq:
-                v_seq.append(self.v)
-        if self.store_v_seq:
-            self.v_seq = torch.stack(v_seq)
-        return torch.stack(spike_seq)
+        updated_states = (v, v_seq) if self.store_v_seq else (v,)
+        return (spike_seq,), updated_states

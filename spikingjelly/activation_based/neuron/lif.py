@@ -395,15 +395,29 @@ class LIFNode(BaseNode):
             return spike_seq, v, v_seq
         return spike_seq, v
 
-    def single_step_forward(self, x: torch.Tensor):
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        r"""Execute one LIF step with explicit state. / 使用显式状态执行一个 LIF 时间步。
+
+        :param inputs: 仅包含 ``x`` 的元组 / Tuple containing only ``x``
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: ``(v,)`` 或 ``(v, v_seq)``
+        :type states: tuple
+        :return: ``((spike,), updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
+        """
+        x = inputs[0]
+        v = states[0]
+
         if self.training:
             if self.backend == "torch":
-                return super().single_step_forward(x)
-            elif self.backend == "cupy":
-                self.v_float_to_tensor(x)
-                spike, self.v = functional.lif_step_cupy(
+                spike, v = functional.lif_step(
                     x,
-                    self.v,
+                    v,
                     self.tau,
                     self.decay_input,
                     self.v_threshold,
@@ -411,146 +425,140 @@ class LIFNode(BaseNode):
                     self.surrogate_function,
                     self.detach_reset,
                 )
-                return spike
+            elif self.backend == "cupy":
+                spike, v = functional.lif_step_cupy(
+                    x,
+                    v,
+                    self.tau,
+                    self.decay_input,
+                    self.v_threshold,
+                    self.v_reset,
+                    self.surrogate_function,
+                    self.detach_reset,
+                )
             else:
                 raise ValueError(self.backend)
-
         else:
-            self.v_float_to_tensor(x)
-            spike, self.v = self._eval_single_step_forward(
+            spike, v = self._eval_single_step_forward(
                 x,
-                self.v,
+                v,
                 self.v_threshold,
                 self.v_reset,
                 self.tau,
                 self.decay_input,
             )
-            return spike
+        return (spike,), (v, *states[1:])
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        r"""Execute LIF sequence forward with explicit state. / 使用显式状态执行 LIF 序列前向。
+
+        :param inputs: 仅包含 ``x_seq`` 的元组 / Tuple containing only ``x_seq``
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: ``(v,)`` 或 ``(v, v_seq)``
+        :type states: tuple
+        :return: ``((spike_seq,), updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
+        """
+        x_seq = inputs[0]
+        v = states[0]
+
+        v_seq = None
         if self.backend == "inductor":
-            return self._inductor_multi_step_forward(x_seq)
-        if self.training:
-            if self.backend == "torch":
-                return super().multi_step_forward(x_seq)
-            elif self.backend == "cupy":
-                self.v_float_to_tensor(x_seq[0])
-                spike_seq, self.v, v_seq = functional.lif_multi_step_cupy(
-                    x_seq,
-                    self.v,
-                    self.tau,
-                    self.decay_input,
-                    self.v_threshold,
-                    self.v_reset,
-                    self.surrogate_function,
-                    self.detach_reset,
-                    self.store_v_seq,
+            spike_seq, v, v_seq = functional.lif_multi_step_inductor(
+                x_seq,
+                v,
+                self.tau,
+                self.decay_input,
+                self.v_threshold,
+                self.v_reset,
+                self.surrogate_function,
+                self.detach_reset,
+                self.store_v_seq,
+            )
+        elif self.backend == "cupy":
+            spike_seq, v, v_seq = functional.lif_multi_step_cupy(
+                x_seq,
+                v,
+                self.tau,
+                self.decay_input,
+                self.v_threshold,
+                self.v_reset,
+                self.surrogate_function,
+                self.detach_reset,
+                self.store_v_seq,
+            )
+        elif self.backend == "triton":
+            if not self.training and not getattr(
+                self.surrogate_function, "spiking", True
+            ):
+                raise NotImplementedError(
+                    "Triton backend only supports spiking surrogate functions. "
+                    "Use backend='torch' for non-spiking surrogate functions."
                 )
-                if self.store_v_seq:
-                    self.v_seq = v_seq
-                return spike_seq
-            elif self.backend == "triton":
-                self.v_float_to_tensor(x_seq[0])
-                spike_seq, v_out = triton_kernel.multistep_lif(
-                    x_seq,
-                    self.v,
-                    self.decay_input,
-                    self.tau,
-                    self.v_threshold,
-                    self.v_reset,
-                    self.detach_reset,
-                    self.surrogate_function,
-                    self.store_v_seq,
-                )
-                if self.store_v_seq:
-                    self.v_seq = v_out
-                    self.v = v_out[-1].clone()
-                else:
-                    self.v = v_out
-                return spike_seq
+            spike_seq, v_out = triton_kernel.multistep_lif(
+                x_seq,
+                v,
+                self.decay_input,
+                self.tau,
+                self.v_threshold,
+                self.v_reset,
+                self.detach_reset,
+                self.surrogate_function,
+                self.store_v_seq,
+            )
+            if self.store_v_seq:
+                v_seq = v_out
+                v = v_out[-1].clone() if self.training else v_out[-1]
             else:
-                raise ValueError(self.backend)
-
-        else:
-            self.v_float_to_tensor(x_seq[0])
-
-            if self.backend == "triton":
-                if not getattr(self.surrogate_function, "spiking", True):
-                    raise NotImplementedError(
-                        "Triton backend only supports spiking surrogate functions. "
-                        "Use backend='torch' for non-spiking surrogate functions."
-                    )
-                spike_seq, v_out = triton_kernel.multistep_lif(
-                    x_seq,
-                    self.v,
-                    self.decay_input,
-                    self.tau,
-                    self.v_threshold,
-                    self.v_reset,
-                    self.detach_reset,
-                    self.surrogate_function,
-                    self.store_v_seq,
-                )
-                if self.store_v_seq:
-                    self.v_seq = v_out
-                    self.v = v_out[-1]
-                else:
-                    self.v = v_out
-                return spike_seq
-            elif self.backend == "cupy":
-                spike_seq, self.v, v_seq = functional.lif_multi_step_cupy(
-                    x_seq,
-                    self.v,
-                    self.tau,
-                    self.decay_input,
-                    self.v_threshold,
-                    self.v_reset,
-                    self.surrogate_function,
-                    self.detach_reset,
-                    self.store_v_seq,
-                )
-                if self.store_v_seq:
-                    self.v_seq = v_seq
-                return spike_seq
-
-            # torch backend:
-            # (replaces the 8 separate jit_eval_multi_step_forward_* methods)
-            _spiking = getattr(self.surrogate_function, "spiking", True)
+                v = v_out
+        elif self.backend == "torch" and not self.training:
+            spiking = getattr(self.surrogate_function, "spiking", True)
             out = self._eval_multi_step_forward(
                 x_seq,
-                self.v,
+                v,
                 self.v_threshold,
                 self.v_reset,
                 self.tau,
                 self.decay_input,
                 self.store_v_seq,
-                spiking=_spiking,
-                # When spiking=False, SurrogateFunctionBase.forward() returns the
-                # primitive (smooth) function, so we can call it directly.
-                surrogate_fn=self.surrogate_function if not _spiking else None,
+                spiking=spiking,
+                surrogate_fn=self.surrogate_function if not spiking else None,
             )
             if self.store_v_seq:
-                spike_seq, self.v, self.v_seq = out
+                spike_seq, v, v_seq = out
             else:
-                spike_seq, self.v = out
-            return spike_seq
+                spike_seq, v = out
+        elif self.backend == "torch":
+            spike_seq = []
+            voltages = []
+            for t in range(x_seq.shape[0]):
+                x = x_seq[t]
+                spike, v = functional.lif_step(
+                    x,
+                    v,
+                    self.tau,
+                    self.decay_input,
+                    self.v_threshold,
+                    self.v_reset,
+                    self.surrogate_function,
+                    self.detach_reset,
+                )
+                spike_seq.append(spike)
+                if self.store_v_seq:
+                    voltages.append(v)
+            spike_seq = torch.stack(spike_seq)
+            if self.store_v_seq:
+                v_seq = torch.stack(voltages)
+        else:
+            raise ValueError(self.backend)
 
-    def _inductor_multi_step_forward(self, x_seq: torch.Tensor):
-        self.v_float_to_tensor(x_seq[0])
-        spike_seq, self.v, v_seq = functional.lif_multi_step_inductor(
-            x_seq,
-            self.v,
-            self.tau,
-            self.decay_input,
-            self.v_threshold,
-            self.v_reset,
-            self.surrogate_function,
-            self.detach_reset,
-            self.store_v_seq,
-        )
-        if self.store_v_seq:
-            self.v_seq = v_seq
-        return spike_seq
+        updated_states = (v, v_seq) if self.store_v_seq else (v,)
+        return (spike_seq,), updated_states
 
 
 class NonSpikingLIFNode(NonSpikingBaseNode):

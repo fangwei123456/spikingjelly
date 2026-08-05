@@ -163,12 +163,36 @@ class SynapseFilter(base.MemoryModule):
 
         return f"tau={tau}, learnable={self.learnable}, step_mode={self.step_mode}"
 
-    def single_step_forward(self, x: Tensor):
-        if isinstance(self.out_i, float):
-            self.out_i = torch.full_like(x, self.out_i)
+    def materialize_states(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        x = inputs[0]
+        if step_mode == "m" and x.dim() > 0 and x.shape[0] > 0:
+            x = x[0]
+        out_i = states[0]
+        if isinstance(out_i, float):
+            out_i = torch.full_like(x, out_i)
+        elif isinstance(out_i, Tensor):
+            if out_i.shape != x.shape:
+                out_i = torch.zeros_like(x)
+            elif out_i.dtype != x.dtype or out_i.device != x.device:
+                out_i = out_i.to(dtype=x.dtype, device=x.device)
+        return (out_i,)
+
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        out_i = states[0]
         inv_tau = self.w.sigmoid() if self.learnable else 1.0 / self.tau
-        self.out_i = functional.synapse_filter_step(x, self.out_i, inv_tau)
-        return self.out_i
+        out_i = functional.synapse_filter_step(x, out_i, inv_tau)
+        return (out_i,), (out_i,)
 
 
 class PrintShapeModule(nn.Module):
@@ -350,13 +374,27 @@ class Delay(base.MemoryModule):
     def delay_steps(self):
         return self._delay_steps
 
-    def single_step_forward(self, x: torch.Tensor):
-        y, queue_next = functional.delay_step(x, tuple(self.queue), self.delay_steps)
-        self.queue[:] = queue_next
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
+        y, queue = functional.delay_step(inputs[0], tuple(states[0]), self.delay_steps)
+        return (y,), (list(queue),)
+
+    def single_step_forward(self, x: Tensor) -> Tensor:
+        (y,), (queue,) = self.single_step_functional_forward((x,), (self.queue,))
+        self.queue[:] = queue
         return y
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
-        return functional.delay(x_seq, self.delay_steps)
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
+        return (functional.delay(inputs[0], self.delay_steps),), states
 
 
 class SpikeCountToBinary(nn.Module, base.MultiStepModule):

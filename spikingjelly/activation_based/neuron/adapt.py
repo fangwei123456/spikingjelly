@@ -219,50 +219,23 @@ class AdaptBaseNode(BaseNode):
             + f", v_rest={self.v_rest}, w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}"
         )
 
-    def single_step_forward(self, x: torch.Tensor):
-        """
-        **API Language** - :ref:`中文 <AdaptBaseNode.single_step_forward-cn>` | :ref:`English <AdaptBaseNode.single_step_forward-en>`
-
-        ----
-
-        .. _AdaptBaseNode.single_step_forward-cn:
-
-        * **中文**
-
-        按照充电、适应、放电、重置的顺序进行前向传播。
-
-        :param x: 输入到神经元的电压增量
-        :type x: torch.Tensor
-
-        :return: 神经元的输出脉冲
-        :rtype: torch.Tensor
-
-        ----
-
-        .. _AdaptBaseNode.single_step_forward-en:
-
-        * **English**
-
-        Forward by the order of ``neuronal_charge``, ``neuronal_adaptation``, ``neuronal_fire``, and ``neuronal_reset``.
-
-        :param x: increment of voltage inputted to neurons
-        :type x: torch.Tensor
-
-        :return: out spikes of neurons
-        :rtype: torch.Tensor
-        """
-        self.v_float_to_tensor(x)
-        self.w_float_to_tensor(x)
-        self.neuronal_charge(x)
-        self.neuronal_adaptation()
-        spike = self.neuronal_fire()
-        self.neuronal_reset(spike)
-        return spike
-
-    def w_float_to_tensor(self, x: torch.Tensor):
-        if isinstance(self.w, float):
-            w_init = self.w
-            self.w = torch.full_like(x.data, fill_value=w_init)
+    def materialize_states(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        states = super().materialize_states(inputs, states, step_mode)
+        x = states[0]
+        w = states[-1]
+        if isinstance(w, float):
+            w = torch.full_like(x, w, requires_grad=False)
+        elif isinstance(w, torch.Tensor):
+            if w.shape != x.shape:
+                w = torch.full_like(x, self.w_rest, requires_grad=False)
+            elif w.dtype != x.dtype or w.device != x.device:
+                w = w.to(dtype=x.dtype, device=x.device)
+        return (*states[:-1], w)
 
 
 class IzhikevichNode(AdaptBaseNode):
@@ -398,6 +371,28 @@ class IzhikevichNode(AdaptBaseNode):
             / self.tau
         )
 
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        v = states[0]
+        w = states[-1]
+        v = v + (x + self.a0 * (v - self.v_rest) * (v - self.v_c) - w) / self.tau
+        w = self.jit_neuronal_adaptation(w, self.tau_w, self.a, self.v_rest, v)
+        spike = self.surrogate_function(v - self.v_threshold)
+        reset_spike = spike.detach() if self.detach_reset else spike
+        if self.v_reset is None:
+            v, w = self.apply_soft_reset(
+                v, w, reset_spike, self.v_threshold, self.b, spike
+            )
+        else:
+            v, w = self.apply_hard_reset(v, w, reset_spike, self.v_reset, self.b, spike)
+        updated_states = (v, states[1], w) if self.store_v_seq else (v, w)
+        return (spike,), updated_states
+
     @property
     def supported_backends(self):
         if self.step_mode == "s":
@@ -407,16 +402,22 @@ class IzhikevichNode(AdaptBaseNode):
         else:
             raise ValueError(self.step_mode)
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         if self.backend == "torch":
-            return super().multi_step_forward(x_seq)
+            return super().multi_step_functional_forward(inputs, states, **kwargs)
         elif self.backend == "cupy":
-            self.v_float_to_tensor(x_seq[0])
-            self.w_float_to_tensor(x_seq[0])
-            spike_seq, self.v, self.w, v_seq, _ = functional.izhikevich_multi_step_cupy(
+            x_seq = inputs[0]
+            v = states[0]
+            w = states[-1]
+            spike_seq, v, w, v_seq, _ = functional.izhikevich_multi_step_cupy(
                 x_seq,
-                self.v,
-                self.w,
+                v,
+                w,
                 self.tau,
                 self.v_threshold,
                 self.v_reset,
@@ -430,8 +431,7 @@ class IzhikevichNode(AdaptBaseNode):
                 self.surrogate_function,
                 self.store_v_seq,
             )
-            if self.store_v_seq:
-                self.v_seq = v_seq
-            return spike_seq
+            updated_states = (v, v_seq, w) if self.store_v_seq else (v, w)
+            return (spike_seq,), updated_states
         else:
             raise ValueError(self.backend)

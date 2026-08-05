@@ -71,6 +71,16 @@ def test_lif_step_matches_module(decay_input):
     _assert_close(v_next, module.v)
 
 
+def test_materialize_states_is_pure():
+    module = neuron.IFNode()
+    x = torch.randn(2, 3)
+
+    states = module.materialize_states((x,), (module.v,), "s")
+
+    assert module.v == 0.0
+    assert torch.equal(states[0], torch.zeros_like(x))
+
+
 def test_plif_step_matches_module_and_parameter_gradient():
     x = torch.randn(2, 3)
     v = torch.randn(2, 3)
@@ -100,6 +110,98 @@ def test_plif_step_matches_module_and_parameter_gradient():
     _assert_close(spike, module_spike)
     _assert_close(v_next, module.v)
     _assert_close(w.grad, module.w.grad)
+
+
+@pytest.mark.parametrize(
+    "module_factory",
+    [
+        lambda: neuron.IFNode(v_reset=None, surrogate_function=_surrogate()),
+        lambda: neuron.LIFNode(
+            tau=2.5, decay_input=False, v_reset=0.0, surrogate_function=_surrogate()
+        ),
+        lambda: neuron.ParametricLIFNode(
+            init_tau=2.5,
+            decay_input=True,
+            v_reset=None,
+            surrogate_function=_surrogate(),
+        ),
+        lambda: neuron.LIAFNode(
+            torch.relu,
+            True,
+            tau=2.5,
+            decay_input=True,
+            v_reset=0.0,
+            surrogate_function=_surrogate(),
+        ),
+        lambda: neuron.ActivationAwareIFNode(
+            v_threshold=0.8,
+            v_offset=0.1,
+            v_reset=None,
+            surrogate_function=_surrogate(),
+        ),
+    ],
+)
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+def test_neuron_functional_forward_is_pure_and_backs_regular_forward(
+    module_factory, step_mode
+):
+    module = module_factory()
+    module.step_mode = step_mode
+    module.store_v_seq = step_mode == "m"
+    x = torch.randn(4, 2, 3) if step_mode == "m" else torch.randn(2, 3)
+    v = torch.randn_like(x[0] if step_mode == "m" else x, requires_grad=True)
+    module.v = v
+    if step_mode == "m":
+        module.v_seq = None
+
+    original_states = tuple(module._memories.values())
+    outputs, updated_states = module.functional_forward((x,), original_states)
+
+    assert all(
+        actual is expected
+        for actual, expected in zip(module._memories.values(), original_states)
+    )
+    actual = module(x)
+    _assert_close(actual, outputs[0])
+    for actual_state, expected_state in zip(module._memories.values(), updated_states):
+        if actual_state is not None:
+            _assert_close(actual_state, expected_state)
+
+    loss = outputs[0].sum() + updated_states[0].sum()
+    loss.backward()
+    assert v.grad is not None
+
+
+@pytest.mark.parametrize("node", [neuron.IFNode(), neuron.LIFNode()])
+def test_store_v_seq_updates_functional_state_layout(node):
+    node.step_mode = "m"
+    node.store_v_seq = True
+    assert tuple(name for name, _ in node.named_memories()) == ("v", "v_seq")
+
+    node.store_v_seq = False
+    assert tuple(name for name, _ in node.named_memories()) == ("v",)
+    node(torch.randn(3, 2))
+
+
+def test_save_v_lif_functional_forward_tracks_observed_voltage_as_memory():
+    from spikingjelly.activation_based.model.spike_dhs import save_v_LIFNode
+
+    node = save_v_LIFNode(
+        tau=2.5,
+        decay_input=False,
+        store_v_seq=True,
+        step_mode="m",
+        surrogate_function=_surrogate(),
+    )
+    x_seq = torch.randn(3, 2, 4)
+    states = tuple(node._memories.values())
+
+    outputs, updated_states = node.functional_forward((x_seq,), states)
+
+    assert tuple(node._memories.values()) == states
+    torch.testing.assert_close(node(x_seq), outputs[0])
+    for actual, expected in zip(node._memories.values(), updated_states):
+        torch.testing.assert_close(actual, expected)
 
 
 @pytest.mark.parametrize(

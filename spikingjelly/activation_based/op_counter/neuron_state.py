@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+import weakref
 from collections import defaultdict
 from typing import Any, Callable
 
@@ -216,6 +217,7 @@ class NeuronStateCounter(BaseCounter):
         self._warned_modules: set[int] = set()
         self._pending_metrics: dict[str, int] | None = None
         self._pending_projection: dict[str, int] | None = None
+        self._functional_state_refs: list[weakref.ReferenceType[torch.Tensor]] = []
 
     def has_rule(self, func) -> bool:
         return True
@@ -327,6 +329,14 @@ class NeuronStateCounter(BaseCounter):
             for value in module._memories.values():
                 if torch.is_tensor(value):
                     state_tensor_keys.add(_storage_key(value))
+
+        live_states = [
+            tensor
+            for ref in self._functional_state_refs
+            if (tensor := ref()) is not None
+        ]
+        self._functional_state_refs = [weakref.ref(tensor) for tensor in live_states]
+        state_tensor_keys.update(_storage_key(tensor) for tensor in live_states)
 
         if not state_tensor_keys:
             self._pending_metrics = None
@@ -444,6 +454,9 @@ class NeuronStateCounter(BaseCounter):
 
         if writes_state and output_tensors:
             metrics["state_writes"] += out_bytes
+            self._functional_state_refs.extend(
+                weakref.ref(tensor) for tensor in output_tensors
+            )
             has_spike_gate = sparse_state_access
             if has_spike_gate:
                 metrics["state_reset_ops"] += out_numel
@@ -582,3 +595,4 @@ class NeuronStateCounter(BaseCounter):
         self._warned_modules = set()
         self._pending_metrics = None
         self._pending_projection = None
+        self._functional_state_refs = []

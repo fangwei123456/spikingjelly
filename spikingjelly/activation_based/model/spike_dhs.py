@@ -154,49 +154,114 @@ class DSpike(SurrogateFunctionBase):
 
 
 class save_v_LIFNode(LIFNode):
-    r"""
-    **API Language** - :ref:`中文 <save_v_LIFNode-cn>` | :ref:`English <save_v_LIFNode-en>`
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        r"""
+        **API Language** - :ref:`中文 <save_v_LIFNode.__init__-cn>` | :ref:`English <save_v_LIFNode.__init__-en>`
 
-    ----
+        ----
 
-    .. _save_v_LIFNode-cn:
+        .. _save_v_LIFNode.__init__-cn:
 
-    * **中文**
+        * **中文**
 
-    保存膜电位的 LIF 神经元节点。在 DSpike 搜索中用于记录中间膜电位。
+        保存放电前平均膜电位的 LIF 神经元，用于 DSpike 搜索。构造参数与
+        :class:`LIFNode` 相同。
 
-    ----
+        :param args: 传递给 :class:`LIFNode` 的位置参数
+        :type args: tuple[object, ...]
+        :param kwargs: 传递给 :class:`LIFNode` 的关键字参数
+        :type kwargs: dict[str, object]
 
-    .. _save_v_LIFNode-en:
+        ----
 
-    * **English**
+        .. _save_v_LIFNode.__init__-en:
 
-    LIF neuron node that saves membrane potential. Used in DSpike search.
-    """
+        * **English**
 
-    def single_step_forward(self, x: torch.Tensor):
-        self.v_float_to_tensor(x)
-        self.neuronal_charge(x)
-        self.v_before_spike = (self.v - self.v_threshold).mean()
-        spike = self.neuronal_fire()
-        self.neuronal_reset(spike)
-        return spike
+        LIF neuron that stores the mean pre-spike membrane voltage for DSpike
+        search. Constructor arguments are the same as :class:`LIFNode`.
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
-        T = x_seq.shape[0]
-        y_seq = []
-        if self.store_v_seq:
-            v_seq = []
-        for t in range(T):
-            y = self.single_step_forward(x_seq[t])
-            y_seq.append(y)
+        :param args: Positional arguments forwarded to :class:`LIFNode`
+        :type args: tuple[object, ...]
+        :param kwargs: Keyword arguments forwarded to :class:`LIFNode`
+        :type kwargs: dict[str, object]
+        """
+        super().__init__(*args, **kwargs)
+        self.register_memory("v_before_spike", 0.0)
+
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        r"""Execute one observed LIF step with explicit state. / 使用显式状态执行一个带观测的 LIF 时间步。
+
+        :param inputs: 仅包含 ``x`` 的元组 / Tuple containing only ``x``
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: 按 memory 顺序排列的状态 / States in memory order
+        :type states: tuple
+        :return: ``((spike,), updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
+        """
+        x = inputs[0]
+        v = states[0]
+
+        if self.decay_input:
+            if self.v_reset is None or self.v_reset == 0.0:
+                charged = v + (x - v) / self.tau
+            else:
+                charged = v + (x - (v - self.v_reset)) / self.tau
+        else:
+            if self.v_reset is None or self.v_reset == 0.0:
+                charged = v * (1.0 - 1.0 / self.tau) + x
+            else:
+                charged = v - (v - self.v_reset) / self.tau + x
+        v_before_spike = (charged - self.v_threshold).mean()
+        spike = self.surrogate_function(charged - self.v_threshold)
+        reset_spike = spike.detach() if self.detach_reset else spike
+        if self.v_reset is None:
+            v = charged - reset_spike * self.v_threshold
+        else:
+            v = reset_spike * self.v_reset + (1.0 - reset_spike) * charged
+
+        updated_states = list(states)
+        updated_states[0] = v
+        updated_states[-1] = v_before_spike
+        return (spike,), tuple(updated_states)
+
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        r"""Execute observed LIF sequence forward with explicit state. / 使用显式状态执行带观测的 LIF 序列前向。
+
+        :param inputs: 仅包含 ``x_seq`` 的元组 / Tuple containing only ``x_seq``
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: 按 memory 顺序排列的状态 / States in memory order
+        :type states: tuple
+        :return: ``((spike_seq,), updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
+        """
+        spikes = []
+        observed_voltages = []
+        current_states = states
+        x_seq = inputs[0]
+        for t in range(x_seq.shape[0]):
+            x = x_seq[t]
+            (spike,), current_states = self.single_step_functional_forward(
+                (x,), current_states
+            )
+            spikes.append(spike)
             if self.store_v_seq:
-                v_seq.append(self.v_before_spike)
-
+                observed_voltages.append(current_states[-1])
         if self.store_v_seq:
-            self.v_seq = torch.stack(v_seq)
-
-        return torch.stack(y_seq)
+            current_states = list(current_states)
+            current_states[1] = torch.stack(observed_voltages)
+            current_states = tuple(current_states)
+        return (torch.stack(spikes),), current_states
 
 
 def getSpikingNode(v_threshold=0.5):

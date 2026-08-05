@@ -67,7 +67,6 @@ class StatelessEncoder(nn.Module, base.StepModule):
 
         :param x: 输入数据
         :type x: torch.Tensor
-
         :return: 脉冲张量，形状与 ``x.shape`` 相同
         :rtype: torch.Tensor
 
@@ -81,7 +80,6 @@ class StatelessEncoder(nn.Module, base.StepModule):
 
         :param x: input data
         :type x: torch.Tensor
-
         :return: spike, whose shape is same with ``x.shape``
         :rtype: torch.Tensor
         """
@@ -177,15 +175,22 @@ class StatefulEncoder(base.MemoryModule):
         :rtype: torch.Tensor
         """
 
-        if self.spike is None:
-            self.single_step_encode(x)
+        return super().single_step_forward(x)
 
-        t = self.t
-        self.t = (self.t + 1) % self.T
-        return self.spike[t]
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        spike, t = states
+        if spike is None:
+            spike = self.single_step_encode(inputs[0])
+        output = spike[t]
+        return (output,), (spike, (t + 1) % spike.shape[0])
 
     @abstractmethod
-    def single_step_encode(self, x: torch.Tensor):
+    def single_step_encode(self, x: torch.Tensor) -> torch.Tensor:
         r"""
         **API Language** - :ref:`中文 <StatefulEncoder.single_step_encode-cn>` | :ref:`English <StatefulEncoder.single_step_encode-en>`
 
@@ -283,7 +288,7 @@ class PeriodicEncoder(StatefulEncoder):
         """
         super().__init__(spike.shape[0], step_mode)
 
-    def single_step_encode(self, spike: torch.Tensor):
+    def single_step_encode(self, spike: torch.Tensor) -> torch.Tensor:
         r"""
         **API Language** - :ref:`中文 <PeriodicEncoder.single_step_encode-cn>` | :ref:`English <PeriodicEncoder.single_step_encode-en>`
 
@@ -310,8 +315,7 @@ class PeriodicEncoder(StatefulEncoder):
         :param spike: the spike tensor, whose 0-th dimension is the encoding period
         :type spike: torch.Tensor
         """
-        self.spike = spike
-        self.T = spike.shape[0]
+        return spike
 
 
 class LatencyEncoder(StatefulEncoder):
@@ -413,7 +417,7 @@ class LatencyEncoder(StatefulEncoder):
 
         self.enc_function = enc_function
 
-    def single_step_encode(self, x: torch.Tensor):
+    def single_step_encode(self, x: torch.Tensor) -> torch.Tensor:
         r"""
         **API Language** - :ref:`中文 <LatencyEncoder.single_step_encode-cn>` | :ref:`English <LatencyEncoder.single_step_encode-en>`
 
@@ -445,11 +449,11 @@ class LatencyEncoder(StatefulEncoder):
         else:
             t_f = ((self.T - 1.0) * (1.0 - x)).round().long()
 
-        self.spike = F.one_hot(t_f, num_classes=self.T).to(x)
+        spike = F.one_hot(t_f, num_classes=self.T).to(x)
         # [*, T] -> [T, *]
-        d_seq = list(range(self.spike.ndim - 1))
-        d_seq.insert(0, self.spike.ndim - 1)
-        self.spike = self.spike.permute(d_seq)
+        d_seq = list(range(spike.ndim - 1))
+        d_seq.insert(0, spike.ndim - 1)
+        return spike.permute(d_seq)
 
 
 class PoissonEncoder(StatelessEncoder):
@@ -607,7 +611,7 @@ class WeightedPhaseEncoder(StatefulEncoder):
         """
         super().__init__(K, step_mode)
 
-    def single_step_encode(self, x: torch.Tensor):
+    def single_step_encode(self, x: torch.Tensor) -> torch.Tensor:
         r"""
         **API Language** - :ref:`中文 <WeightedPhaseEncoder.single_step_encode-cn>` | :ref:`English <WeightedPhaseEncoder.single_step_encode-en>`
 
@@ -638,14 +642,15 @@ class WeightedPhaseEncoder(StatefulEncoder):
         """
         assert (x >= 0).all() and (x <= 1 - 2 ** (-self.T)).all()
         inputs = x.clone()
-        self.spike = torch.empty(
+        spike = torch.empty(
             (self.T,) + x.shape, device=x.device
         )  # Encoding to [T, batch_size, *]
         w = 0.5
         for i in range(self.T):
-            self.spike[i] = inputs >= w
-            inputs -= w * self.spike[i]
+            spike[i] = inputs >= w
+            inputs -= w * spike[i]
             w *= 0.5
+        return spike
 
 
 class PopSpikeEncoderDeterministic(nn.Module):

@@ -37,35 +37,15 @@ class ReplayMemory(object):
         return len(self.memory)
 
 
-class NonSpikingLIFNode(neuron.LIFNode):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class NonSpikingLIFNode(neuron.SimpleLIFNode):
+    r"""A LIF integrator without spike generation for the DQN readout layer.
+
+    用于 DQN 读出层、不生成脉冲的 LIF 积分器。
+    """
 
     def single_step_forward(self, x: torch.Tensor):
-        self.v_float_to_tensor(x)
-
-        if self.training:
-            self.neuronal_charge(x)
-        else:
-            if self.v_reset is None:
-                if self.decay_input:
-                    self.v = self.neuronal_charge_decay_input_reset0(
-                        x, self.v, self.tau
-                    )
-                else:
-                    self.v = self.neuronal_charge_no_decay_input_reset0(
-                        x, self.v, self.tau
-                    )
-
-            else:
-                if self.decay_input:
-                    self.v = self.neuronal_charge_decay_input(
-                        x, self.v, self.v_reset, self.tau
-                    )
-                else:
-                    self.v = self.neuronal_charge_no_decay_input(
-                        x, self.v, self.v_reset, self.tau
-                    )
+        self.neuronal_charge(x)
+        return self.v
 
 
 # Spiking DQN algorithm
@@ -77,7 +57,7 @@ class DQSN(nn.Module):
             layer.Linear(input_size, hidden_size),
             neuron.IFNode(),
             layer.Linear(hidden_size, output_size),
-            NonSpikingLIFNode(tau=2.0),
+            NonSpikingLIFNode(tau=2.0, decay_input=True),
         )
 
         self.T = T

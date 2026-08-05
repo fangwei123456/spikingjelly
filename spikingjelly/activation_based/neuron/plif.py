@@ -1,4 +1,3 @@
-from spikingjelly.logger import logger
 import math
 from typing import Optional
 
@@ -7,12 +6,6 @@ import torch.nn as nn
 
 from .. import functional, surrogate
 from .base_node import BaseNode
-
-try:
-    from .. import triton_kernel
-except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.neuron: %s", e)
-    triton_kernel = None
 
 
 __all__ = ["ParametricLIFNode"]
@@ -180,33 +173,57 @@ class ParametricLIFNode(BaseNode):
             else:
                 self.v = self.v - (self.v - self.v_reset) * self.w.sigmoid() + x
 
-    def _inductor_multi_step_forward(self, x_seq: torch.Tensor):
-        self.v_float_to_tensor(x_seq[0])
-        spike_seq, self.v, v_seq = functional.plif_multi_step_inductor(
-            x_seq,
-            self.v,
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        r"""Execute one PLIF step with explicit state. / 使用显式状态执行一个 PLIF 时间步。
+
+        :param inputs: 仅包含 ``x`` 的元组 / Tuple containing only ``x``
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: ``(v,)`` 或 ``(v, v_seq)``
+        :type states: tuple
+        :return: ``((spike,), updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
+        """
+        x = inputs[0]
+        v = states[0]
+        spike, v = functional.plif_step(
+            x,
+            v,
             self.w,
             self.decay_input,
             self.v_threshold,
             self.v_reset,
             self.surrogate_function,
             self.detach_reset,
-            self.store_v_seq,
         )
-        if self.store_v_seq:
-            self.v_seq = v_seq
-        return spike_seq
+        return (spike,), (v, *states[1:])
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        r"""Execute PLIF sequence forward with explicit state. / 使用显式状态执行 PLIF 序列前向。
+
+        :param inputs: 仅包含 ``x_seq`` 的元组 / Tuple containing only ``x_seq``
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: ``(v,)`` 或 ``(v, v_seq)``
+        :type states: tuple
+        :return: ``((spike_seq,), updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
+        """
+        x_seq = inputs[0]
+        v = states[0]
+
         if self.backend == "inductor":
-            return self._inductor_multi_step_forward(x_seq)
-        elif self.backend == "torch":
-            return super().multi_step_forward(x_seq)
-        elif self.backend == "cupy":
-            self.v_float_to_tensor(x_seq[0])
-            spike_seq, self.v, v_seq = functional.plif_multi_step_cupy(
+            spike_seq, v, v_seq = functional.plif_multi_step_inductor(
                 x_seq,
-                self.v,
+                v,
                 self.w,
                 self.decay_input,
                 self.v_threshold,
@@ -215,24 +232,52 @@ class ParametricLIFNode(BaseNode):
                 self.detach_reset,
                 self.store_v_seq,
             )
-            if self.store_v_seq:
-                self.v_seq = v_seq
-            return spike_seq
-        elif self.backend == "triton":
-            self.v_float_to_tensor(x_seq[0])
-            spike_seq, v_seq = triton_kernel.multistep_plif(
+        elif self.backend == "cupy":
+            spike_seq, v, v_seq = functional.plif_multi_step_cupy(
                 x_seq,
-                self.v,
-                self.w.sigmoid().to(x_seq),
+                v,
+                self.w,
                 self.decay_input,
                 self.v_threshold,
                 self.v_reset,
-                self.detach_reset,
                 self.surrogate_function,
+                self.detach_reset,
+                self.store_v_seq,
             )
-            if self.store_v_seq:
-                self.v_seq = v_seq
-            self.v = v_seq[-1].clone()
-            return spike_seq
+        elif self.backend == "triton":
+            spike_seq, v, v_seq = functional.plif_multi_step_triton(
+                x_seq,
+                v,
+                self.w,
+                self.decay_input,
+                self.v_threshold,
+                self.v_reset,
+                self.surrogate_function,
+                self.detach_reset,
+                self.store_v_seq,
+            )
+        elif self.backend == "torch":
+            spikes = []
+            voltages = []
+            for t in range(x_seq.shape[0]):
+                x = x_seq[t]
+                spike, v = functional.plif_step(
+                    x,
+                    v,
+                    self.w,
+                    self.decay_input,
+                    self.v_threshold,
+                    self.v_reset,
+                    self.surrogate_function,
+                    self.detach_reset,
+                )
+                spikes.append(spike)
+                if self.store_v_seq:
+                    voltages.append(v)
+            spike_seq = torch.stack(spikes)
+            v_seq = torch.stack(voltages) if self.store_v_seq else None
         else:
             raise ValueError(self.backend)
+
+        updated_states = (v, v_seq) if self.store_v_seq else (v,)
+        return (spike_seq,), updated_states

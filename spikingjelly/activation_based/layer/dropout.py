@@ -94,21 +94,36 @@ class Dropout(base.MemoryModule):
     def extra_repr(self):
         return f"p={self.p}"
 
-    def create_mask(self, x: Tensor):
-        self.mask = F.dropout(torch.ones_like(x), self.p, training=True)
+    def create_mask(self, x: Tensor) -> Tensor:
+        return F.dropout(torch.ones_like(x), self.p, training=True)
 
-    def _forward(self, x: Tensor, mask_input: Tensor):
-        if not self.training:
-            return x
-        if self.mask is None:
-            self.create_mask(mask_input)
-        return x * self.mask
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        mask = states[0]
+        if self.training:
+            if mask is None:
+                mask = self.create_mask(x)
+            x = x * mask
+        return (x,), (mask,)
 
-    def single_step_forward(self, x: Tensor):
-        return self._forward(x, x)
-
-    def multi_step_forward(self, x_seq: Tensor):
-        return self._forward(x_seq, x_seq[0])
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
+        x_seq = inputs[0]
+        mask = states[0]
+        if self.training:
+            if mask is None:
+                mask = self.create_mask(x_seq[0])
+            x_seq = x_seq * mask
+        return (x_seq,), (mask,)
 
 
 class Dropout2d(Dropout):
@@ -153,8 +168,8 @@ class Dropout2d(Dropout):
 """
         super().__init__(p, step_mode)
 
-    def create_mask(self, x: Tensor):
-        self.mask = F.dropout2d(torch.ones_like(x), self.p, training=True)
+    def create_mask(self, x: Tensor) -> Tensor:
+        return F.dropout2d(torch.ones_like(x), self.p, training=True)
 
 
 class DropConnectLinear(base.MemoryModule):
@@ -336,14 +351,14 @@ class DropConnectLinear(base.MemoryModule):
         if hasattr(self.activation, "reset"):
             self.activation.reset()
 
-    def drop(self, batch_size: int):
+    def drop(self, batch_size: int) -> tuple[Tensor, Optional[Tensor]]:
         mask_w = (
             torch.rand_like(
                 self.weight.unsqueeze(0).expand(batch_size, *self.weight.shape)
             )
             > self.p
         )
-        self.dropped_w = self.weight * mask_w
+        dropped_w = self.weight * mask_w
 
         if self.bias is not None:
             mask_b = (
@@ -352,16 +367,31 @@ class DropConnectLinear(base.MemoryModule):
                 )
                 > self.p
             )
-            self.dropped_b = self.bias * mask_b
+            dropped_b = self.bias * mask_b
+        else:
+            dropped_b = None
+        return dropped_w, dropped_b
 
-    def single_step_forward(self, input: Tensor) -> Tensor:
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
+        input = inputs[0]
+        dropped_w = states[0]
+        dropped_b = states[1] if self.bias is not None else None
         if self.training:
-            if not self.invariant or self.dropped_w is None:
-                self.drop(input.shape[0])
-            ret = torch.bmm(self.dropped_w, input.unsqueeze(-1)).squeeze(-1)
+            if not self.invariant or dropped_w is None:
+                dropped_w, dropped_b = self.drop(input.shape[0])
+            ret = torch.bmm(dropped_w, input.unsqueeze(-1)).squeeze(-1)
             if self.bias is not None:
-                ret = ret + self.dropped_b
-            return ret if self.activation is None else self.activation(ret)
+                ret = ret + dropped_b
+            output = ret if self.activation is None else self.activation(ret)
+            updated_states = (
+                (dropped_w, dropped_b) if self.bias is not None else (dropped_w,)
+            )
+            return (output,), updated_states
 
         mu = (1 - self.p) * F.linear(input, self.weight, self.bias)
         sigma2 = (
@@ -378,7 +408,8 @@ class DropConnectLinear(base.MemoryModule):
         )
         if self.activation is not None:
             samples = self.activation(samples)
-        return samples.mean(dim=0)
+        output = samples.mean(dim=0)
+        return (output,), states
 
     def extra_repr(self) -> str:
         return f"in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, p={self.p}, invariant={self.invariant}"
