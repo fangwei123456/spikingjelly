@@ -742,7 +742,8 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
 
 实现CUPY后端
 -------------------------------------
-利用之前我们已经定义好的 ``IFNodeFPTTKernel, IFNodeBPTTKernel, IFNodeATGF``，我们实现一个简化的IF神经元，并添加CUPY后端。
+利用之前已经定义好的 ``IFNodeFPTTKernel, IFNodeBPTTKernel, IFNodeATGF``，
+我们实现一个用于演示后端接入的 IFNode，并为其添加 CUPY 后端。
 
 完整的代码如下：
 

@@ -84,9 +84,12 @@ We use the sub-threshold neuronal dynamics :math:`\frac{\mathrm{d}V(t)}{\mathrm{
 .. math::
     V[t] = f(V[t-1], X[t]) = V[t-1] + X[t]
 
-The equation is written directly in
-:class:`spikingjelly.activation_based.neuron.SimpleIFNode` for dynamics
-experiments:
+``Simple`` in ``SimpleBaseNode`` describes the goal of the interface; it is not a
+neuron mathematical model. This pure-PyTorch interface exposes the charge, fire,
+and reset responsibilities of an SNN neuron directly, helping users understand
+the role of a neuron in an SNN and customize its dynamics. The charge equation is
+written directly in :class:`spikingjelly.activation_based.neuron.SimpleIFNode`,
+which is built on this interface:
 
 .. code-block:: python
 
@@ -94,9 +97,10 @@ experiments:
         self.v = self.v + x
 
 Different spiking neurons have different charging equations but usually share
-the firing and reset equations. ``Simple`` neurons express these stages directly
-through the ``neuronal_charge → neuronal_fire → neuronal_reset`` path in
-:class:`spikingjelly.activation_based.neuron.SimpleBaseNode`. Production neurons
+the firing and reset equations. The
+:class:`spikingjelly.activation_based.neuron.SimpleBaseNode` interface expresses
+these stages directly through the
+``neuronal_charge → neuronal_fire → neuronal_reset`` path. Production neurons
 perform the equivalent computation in functional transitions or specialized
 kernels. The core firing expression in ``SimpleBaseNode.neuronal_fire`` is:
 
@@ -287,7 +291,9 @@ Some neurons support the ``cupy`` backend in both single-step and multi-step mod
 Custom Spiking Neurons
 -------------------------------------------
 SpikingJelly provides separate interfaces for modifying neuron dynamics and for
-high-performance execution:
+high-performance execution. ``SimpleBaseNode`` is a pure-PyTorch interface for
+teaching and customization, not a new neuron mathematical model. It prioritizes
+clear responsibilities and equations so that users can modify dynamics directly.
 
 .. list-table:: Neuron extension interfaces
     :header-rows: 1
@@ -315,8 +321,9 @@ Therefore, users normally only implement ``neuronal_charge``. ``SimpleIFNode`` a
 ``SimpleBaseNode`` does not define a native functional transition. Calling
 ``functional_forward`` directly raises an error. Calling
 :func:`to_functional_forward <spikingjelly.activation_based.base.to_functional_forward>`
-on a simple node uses the general fallback, which temporarily substitutes explicit
-state, runs the regular forward, and restores the module state. This preserves the
+on a module derived from ``SimpleBaseNode`` uses the general fallback, which
+temporarily substitutes explicit state, runs the regular forward, and restores
+the module state. This preserves the
 equation extension interface but is less efficient than native-functional neurons
 such as ``LIFNode``; it is not intended for high-performance workloads that
 repeatedly require functional conversion.

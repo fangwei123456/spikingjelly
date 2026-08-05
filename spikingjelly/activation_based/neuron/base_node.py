@@ -27,11 +27,13 @@ class SimpleBaseNode(base.MemoryModule):
 
         * **中文**
 
-        :class:`BaseNode` 的简化版，面向神经元动力学的修改和实验。常规前向按照
-        :meth:`neuronal_charge`、:meth:`neuronal_fire`、:meth:`neuronal_reset`
-        的顺序执行；用户通常只需要重写充电方程。该类不提供原生 functional
-        状态转移，:func:`spikingjelly.activation_based.base.to_functional_forward`
-        会通过通用状态替换路径转换其实例。
+        面向教学和神经元动力学自定义的纯 PyTorch 接口。``Simple`` 描述的是接口
+        目标，并不表示一种神经元数学模型。该类将 SNN 神经元的充电、放电和重置
+        职责直接表达为 :meth:`neuronal_charge`、:meth:`neuronal_fire` 和
+        :meth:`neuronal_reset`；用户通常只需要重写充电方程。该类不提供原生
+        functional 状态转移，
+        :func:`spikingjelly.activation_based.base.to_functional_forward` 会通过通用
+        状态替换路径转换其实例。
 
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
@@ -50,11 +52,13 @@ class SimpleBaseNode(base.MemoryModule):
 
         * **English**
 
-        A simplified :class:`BaseNode` for modifying and experimenting with neuron
-        dynamics. Regular forward executes :meth:`neuronal_charge`,
-        :meth:`neuronal_fire`, and :meth:`neuronal_reset` in order; users normally
-        only need to override the charge equation. This class does not provide a
-        native functional transition. Instances are converted by
+        A pure-PyTorch interface for teaching and customizing neuron dynamics.
+        ``Simple`` describes the interface goal; it is not a neuron mathematical
+        model. The class exposes the charge, fire, and reset responsibilities of an
+        SNN neuron directly as :meth:`neuronal_charge`, :meth:`neuronal_fire`, and
+        :meth:`neuronal_reset`; users normally only need to override the charge
+        equation. This class does not provide a native functional transition.
+        Instances are converted by
         :func:`spikingjelly.activation_based.base.to_functional_forward` through
         the general state-substitution path.
 
@@ -154,7 +158,8 @@ class SimpleBaseNode(base.MemoryModule):
 
         * **中文**
 
-        使用单步输入更新 ``self.v``。自定义 Simple 神经元通常只需要实现本方法。
+        使用单步输入更新 ``self.v``。继承 :class:`SimpleBaseNode` 自定义动力学时，
+        通常只需要实现本方法。
 
         :param x: 单步输入张量
         :type x: torch.Tensor
@@ -166,8 +171,9 @@ class SimpleBaseNode(base.MemoryModule):
 
         * **English**
 
-        Update ``self.v`` from one input step. Custom simple neurons normally only
-        need to implement this method.
+        Update ``self.v`` from one input step. Subclasses of
+        :class:`SimpleBaseNode` normally only need to implement this method to
+        customize their dynamics.
 
         :param x: Single-step input tensor
         :type x: torch.Tensor

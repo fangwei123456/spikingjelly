@@ -755,7 +755,8 @@ The full codes are:
 
 Implement the CUPY backend
 -------------------------------------
-We have implemented  ``IFNodeFPTTKernel, IFNodeBPTTKernel, IFNodeATGF``. Now we can use them to implement the simplified IF neuron with CUPY backend. 
+We have implemented ``IFNodeFPTTKernel, IFNodeBPTTKernel, IFNodeATGF``. We can
+now use them to implement an IFNode example with a CUPY backend.
 
 
 Here are the codes:

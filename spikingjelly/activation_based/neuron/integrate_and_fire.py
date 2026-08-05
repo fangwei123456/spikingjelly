@@ -45,7 +45,8 @@ class SimpleIFNode(SimpleBaseNode):
 
         * **中文**
 
-        :class:`IFNode` 的简化版实现。
+        基于 :class:`SimpleBaseNode` 充电-放电-重置接口的纯 PyTorch IF 实现，
+        用于理解和修改神经元动力学。
 
         :param v_threshold: 神经元阈值电压
         :type v_threshold: float
@@ -64,7 +65,8 @@ class SimpleIFNode(SimpleBaseNode):
 
         * **English**
 
-        A simple version of :class:`IFNode`.
+        A pure-PyTorch IF implementation built on the charge-fire-reset interface
+        of :class:`SimpleBaseNode` for understanding and modifying neuron dynamics.
 
         :param v_threshold: Threshold voltage of the neuron
         :type v_threshold: float

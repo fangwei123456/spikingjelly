@@ -383,8 +383,10 @@ remain tuples even when they contain one tensor. For example:
 MemoryModule implementations with functional forward use their explicit state
 transition directly. ``nn.Sequential`` modules recursively compose their children,
 while other composite modules use the general fallback path.
-``SimpleBaseNode``, ``SimpleIFNode``, and ``SimpleLIFNode`` also use the general
-path so that their configurable ``charge → fire → reset`` equation interface is
+The names ``SimpleBaseNode``, ``SimpleIFNode``, and ``SimpleLIFNode`` describe a
+pure-PyTorch interface intended for understanding and customizing dynamics, not
+a neuron mathematical model. These classes also use the general path so that
+their configurable ``charge → fire → reset`` equation interface is
 preserved. The converted function temporarily substitutes explicit state, runs
 the regular forward, and then restores the module state. This path preserves
 numerical and state semantics but incurs state-substitution overhead. Prefer

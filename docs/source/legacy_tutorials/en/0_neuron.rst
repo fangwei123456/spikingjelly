@@ -114,9 +114,11 @@ The corresponding code can be found in :class:`spikingjelly.activation_based.neu
             else:
                 self.v += (x - (self.v - self.v_reset)) / self.tau
 
-Different neurons have different charging equations. The extensible Simple
-neurons inherit from :class:`spikingjelly.activation_based.neuron.SimpleBaseNode`
-and share its discharge and reset equations. The neuronal fire implementation is
+Different neurons have different charging equations.
+:class:`spikingjelly.activation_based.neuron.SimpleBaseNode` is a pure-PyTorch
+interface for teaching and dynamics customization, not a neuron mathematical
+model. It exposes the charge, fire, and reset responsibilities directly;
+implementations derived from it share the firing and reset equations. The firing implementation is
 available at :meth:`spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_fire`:
 
 .. code-block:: python

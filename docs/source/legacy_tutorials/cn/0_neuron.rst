@@ -98,8 +98,9 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
             else:
                 self.v += (x - (self.v - self.v_reset)) / self.tau
 
-不同的神经元具有不同的充电方程。可扩展的 Simple 神经元继承自
-:class:`spikingjelly.activation_based.neuron.SimpleBaseNode`，共享放电和重置方程。
+不同的神经元具有不同的充电方程。:class:`spikingjelly.activation_based.neuron.SimpleBaseNode`
+是为了教学和动力学自定义而提供的纯 PyTorch 接口，并不是一种神经元数学模型。它直接
+展示神经元的充电、放电和重置职责；继承该接口的实现共享放电和重置方程。
 可以在 :meth:`spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_fire`
 中找到释放脉冲的代码：
 

@@ -81,16 +81,18 @@ IF神经元层有一些构造参数，在API文档中对这些参数有详细的
 .. math::
     V[t] = f(V[t-1], X[t]) = V[t-1] + X[t]
 
-在用于动力学实验的 :class:`spikingjelly.activation_based.neuron.SimpleIFNode`
-中，充电方程直接写为：
+``SimpleBaseNode`` 中的 ``Simple`` 描述的是接口目标，并不是一种神经元数学模型。
+该接口使用纯 PyTorch 直接展开 SNN 神经元的充电、放电和重置职责，便于使用者理解
+神经元在 SNN 中承担的工作，也便于修改动力学方程。在基于该接口实现的
+:class:`spikingjelly.activation_based.neuron.SimpleIFNode` 中，充电方程直接写为：
 
 .. code-block:: python
 
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + x
 
-不同的神经元具有不同的充电方程，但通常共享放电和重置方程。``Simple`` 神经元通过
-:class:`spikingjelly.activation_based.neuron.SimpleBaseNode` 的
+不同的神经元具有不同的充电方程，但通常共享放电和重置方程。
+:class:`spikingjelly.activation_based.neuron.SimpleBaseNode` 通过
 ``neuronal_charge → neuronal_fire → neuronal_reset`` 路径直接表达这三个阶段；
 生产级神经元则在 functional 状态转移或专用 kernel 中实现等价计算。下面是
 ``SimpleBaseNode.neuronal_fire`` 的核心计算：
@@ -280,7 +282,9 @@ Soft方式重置方程为：
 
 自定义神经元
 -------------------------------------------
-SpikingJelly 为修改神经元动力学和高性能执行提供了两类接口：
+SpikingJelly 为修改神经元动力学和高性能执行提供了两类接口。``SimpleBaseNode`` 是
+纯 PyTorch 的教学与自定义接口，而不是新的神经元数学模型；它优先保证职责和方程清晰，
+使使用者能直接修改动力学。
 
 .. list-table:: 神经元扩展接口
     :header-rows: 1

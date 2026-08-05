@@ -36,7 +36,8 @@ class SimpleLIFNode(SimpleBaseNode):
 
         * **中文**
 
-        :class:`LIFNode` 的简化版实现。
+        基于 :class:`SimpleBaseNode` 充电-放电-重置接口的纯 PyTorch LIF 实现，
+        用于理解和修改神经元动力学。
 
         ----
 
@@ -44,7 +45,8 @@ class SimpleLIFNode(SimpleBaseNode):
 
         * **English**
 
-        A simple version of :class:`LIFNode`.
+        A pure-PyTorch LIF implementation built on the charge-fire-reset interface
+        of :class:`SimpleBaseNode` for understanding and modifying neuron dynamics.
 
         :param tau: 膜电位时间常数（详见父类 :class:`LIFNode`）
         :type tau: float
