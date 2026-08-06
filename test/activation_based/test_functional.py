@@ -484,6 +484,9 @@ def test_seq_to_ann_forward_rejects_invalid_tuple_inputs():
     with pytest.raises(ValueError, match=r"\[T, batch_size\] leading dimensions"):
         seq_to_ann_forward((torch.randn(3, 2, 4), torch.randn(2, 3, 4)), nn.Identity())
 
+    with pytest.raises(ValueError, match=r"to be torch.Tensor"):
+        seq_to_ann_forward((torch.randn(3, 2, 4), [1.0, 2.0]), nn.Identity())
+
     with pytest.raises(ValueError, match=r"at least 2 dimensions"):
         seq_to_ann_forward((torch.randn(5), torch.randn(5)), nn.Identity())
 
