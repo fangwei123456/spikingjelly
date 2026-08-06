@@ -2,7 +2,7 @@ from spikingjelly.logger import logger
 
 import torch
 
-from .. import surrogate
+from .. import functional, surrogate
 from .lif import LIFNode
 
 try:
@@ -344,7 +344,7 @@ class ILIFNode(LIFNode):
 
         :param inputs: 仅包含 ``x`` 的元组 / Tuple containing only ``x``
         :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)`` 或 ``(v, v_seq)``
+        :param states: ``(v,)``
         :type states: tuple
         :return: ``((spike_count,), updated_states)``
         :rtype: tuple[tuple[torch.Tensor, ...], tuple]
@@ -352,10 +352,15 @@ class ILIFNode(LIFNode):
         x = inputs[0]
         v = states[0]
 
-        charged = v * (1.0 - 1.0 / self.tau) + x
+        charged = functional.lif_charge(x, v, self.tau, False, None)
         spike = self.surrogate_function(charged / self.v_threshold)
-        reset_spike = spike.detach() if self.detach_reset else spike
-        v = charged - reset_spike * self.v_threshold
+        v = functional.voltage_reset(
+            charged,
+            spike,
+            self.v_threshold,
+            None,
+            self.detach_reset,
+        )
         return (spike,), (v, *states[1:])
 
     def multi_step_functional_forward(
@@ -368,7 +373,7 @@ class ILIFNode(LIFNode):
 
         :param inputs: 仅包含 ``x_seq`` 的元组 / Tuple containing only ``x_seq``
         :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)`` 或 ``(v, v_seq)``
+        :param states: ``(v,)``
         :type states: tuple
         :return: ``((spike_count_seq,), updated_states)``
         :rtype: tuple[tuple[torch.Tensor, ...], tuple]
@@ -390,29 +395,38 @@ class ILIFNode(LIFNode):
                 self.surrogate_function.grad_min,
                 self.surrogate_function.grad_max,
                 self.detach_reset,
-                self.store_v_seq,
+                False,
             )
-            if self.store_v_seq:
-                v_seq = v_out
-                v = v_out[-1].clone()
-            else:
-                v = v_out
-                v_seq = None
+            v = v_out
         elif self.backend == "torch":
-            spikes = []
-            voltages = []
-            for t in range(x_seq.shape[0]):
-                x = x_seq[t]
-                (spike,), (v, *_) = self.single_step_functional_forward(
-                    (x,), (v, *states[1:])
-                )
-                spikes.append(spike)
-                if self.store_v_seq:
-                    voltages.append(v)
-            spike_seq = torch.stack(spikes)
-            v_seq = torch.stack(voltages) if self.store_v_seq else None
+            return super().multi_step_functional_forward(inputs, states, **kwargs)
         else:
             raise ValueError(self.backend)
 
-        updated_states = (v, v_seq) if self.store_v_seq else (v,)
-        return (spike_seq,), updated_states
+        return (spike_seq,), (v,)
+
+    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
+        if not self.store_v_seq or self.backend == "torch":
+            return super().multi_step_forward(x_seq, *args, **kwargs)
+
+        states = self.materialize_states(
+            (x_seq, *args), tuple(self._memories.values()), "m"
+        )
+        if triton_ilif_kernel is None:
+            raise ImportError(
+                "ILIFNode backend='triton' requires the optional Triton backend."
+            )
+        spike_seq, v_seq = triton_ilif_kernel._multistep_ilif(
+            x_seq,
+            states[0],
+            1.0 - 1.0 / self.tau,
+            self.v_threshold,
+            self.surrogate_function.max_spike_count,
+            self.surrogate_function.grad_min,
+            self.surrogate_function.grad_max,
+            self.detach_reset,
+            True,
+        )
+        self.v = v_seq[-1].clone()
+        self.v_seq = v_seq
+        return spike_seq

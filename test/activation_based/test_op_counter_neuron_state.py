@@ -16,7 +16,7 @@ class ToyCLIFNode(neuron.BaseNode):
         states = super().materialize_states(inputs, states, step_mode)
         m = states[1]
         if isinstance(m, float):
-            m = torch.full_like(states[0], m)
+            m = torch.full_like(states[0], m, requires_grad=False)
         return states[0], m
 
     def single_step_functional_forward(self, inputs, states, **kwargs):
@@ -27,7 +27,6 @@ class ToyCLIFNode(neuron.BaseNode):
         spike = self.surrogate_function(v - self.v_threshold)
         m = m + spike
         v = v - spike * self.v_threshold
-        v = v - spike * torch.sigmoid(m)
         return (spike,), (v, m)
 
 
@@ -63,10 +62,13 @@ def test_neuron_state_counter_lif_projection_tracks_potential_access():
     assert projection["state_mac_like"] > 0
 
 
-def test_neuron_state_counter_toy_clif_has_more_state_traffic_than_lif():
+def test_neuron_state_counter_toy_clif_tracks_state_nonlinearity():
     lif = neuron.LIFNode(step_mode="s", decay_input=False)
     clif = ToyCLIFNode()
     x = torch.rand(2, 5)
+    lif.v = torch.zeros_like(x)
+    clif.v = torch.zeros_like(x)
+    clif.m = torch.zeros_like(x)
 
     lif_counter = op_counter.NeuronStateCounter()
     with op_counter.DispatchCounterMode([lif_counter]):
@@ -76,9 +78,10 @@ def test_neuron_state_counter_toy_clif_has_more_state_traffic_than_lif():
     with op_counter.DispatchCounterMode([clif_counter]):
         _ = clif(x)
 
-    lif_projection = lif_counter.get_projection_counts()["Global"]
-    clif_projection = clif_counter.get_projection_counts()["Global"]
-    assert clif_projection["read_potential"] > lif_projection["read_potential"]
+    lif_metrics = lif_counter.get_metric_counts()["Global"]
+    clif_metrics = clif_counter.get_metric_counts()["Global"]
+    assert lif_metrics["state_nonlinear_ops"] == 0
+    assert clif_metrics["state_nonlinear_ops"] > 0
 
 
 def test_neuron_state_counter_does_not_change_other_counters_when_neurons_ignored():

@@ -183,7 +183,7 @@ class ParametricLIFNode(BaseNode):
 
         :param inputs: 仅包含 ``x`` 的元组 / Tuple containing only ``x``
         :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)`` 或 ``(v, v_seq)``
+        :param states: ``(v,)``
         :type states: tuple
         :return: ``((spike,), updated_states)``
         :rtype: tuple[tuple[torch.Tensor, ...], tuple]
@@ -212,7 +212,7 @@ class ParametricLIFNode(BaseNode):
 
         :param inputs: 仅包含 ``x_seq`` 的元组 / Tuple containing only ``x_seq``
         :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)`` 或 ``(v, v_seq)``
+        :param states: ``(v,)``
         :type states: tuple
         :return: ``((spike_seq,), updated_states)``
         :rtype: tuple[tuple[torch.Tensor, ...], tuple]
@@ -221,7 +221,7 @@ class ParametricLIFNode(BaseNode):
         v = states[0]
 
         if self.backend == "inductor":
-            spike_seq, v, v_seq = functional.plif_multi_step_inductor(
+            spike_seq, v, _ = functional.plif_multi_step_inductor(
                 x_seq,
                 v,
                 self.w,
@@ -230,10 +230,10 @@ class ParametricLIFNode(BaseNode):
                 self.v_reset,
                 self.surrogate_function,
                 self.detach_reset,
-                self.store_v_seq,
+                False,
             )
         elif self.backend == "cupy":
-            spike_seq, v, v_seq = functional.plif_multi_step_cupy(
+            spike_seq, v, _ = functional.plif_multi_step_cupy(
                 x_seq,
                 v,
                 self.w,
@@ -242,10 +242,10 @@ class ParametricLIFNode(BaseNode):
                 self.v_reset,
                 self.surrogate_function,
                 self.detach_reset,
-                self.store_v_seq,
+                False,
             )
         elif self.backend == "triton":
-            spike_seq, v, v_seq = functional.plif_multi_step_triton(
+            spike_seq, v, _ = functional.plif_multi_step_triton(
                 x_seq,
                 v,
                 self.w,
@@ -254,30 +254,38 @@ class ParametricLIFNode(BaseNode):
                 self.v_reset,
                 self.surrogate_function,
                 self.detach_reset,
-                self.store_v_seq,
+                False,
             )
         elif self.backend == "torch":
-            spikes = []
-            voltages = []
-            for t in range(x_seq.shape[0]):
-                x = x_seq[t]
-                spike, v = functional.plif_step(
-                    x,
-                    v,
-                    self.w,
-                    self.decay_input,
-                    self.v_threshold,
-                    self.v_reset,
-                    self.surrogate_function,
-                    self.detach_reset,
-                )
-                spikes.append(spike)
-                if self.store_v_seq:
-                    voltages.append(v)
-            spike_seq = torch.stack(spikes)
-            v_seq = torch.stack(voltages) if self.store_v_seq else None
+            return super().multi_step_functional_forward(inputs, states, **kwargs)
         else:
             raise ValueError(self.backend)
 
-        updated_states = (v, v_seq) if self.store_v_seq else (v,)
-        return (spike_seq,), updated_states
+        return (spike_seq,), (v,)
+
+    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
+        if not self.store_v_seq or self.backend == "torch":
+            return super().multi_step_forward(x_seq, *args, **kwargs)
+
+        states = self.materialize_states(
+            (x_seq, *args), tuple(self._memories.values()), "m"
+        )
+        function = {
+            "inductor": functional.plif_multi_step_inductor,
+            "cupy": functional.plif_multi_step_cupy,
+            "triton": functional.plif_multi_step_triton,
+        }[self.backend]
+        spike_seq, v, v_seq = function(
+            x_seq,
+            states[0],
+            self.w,
+            self.decay_input,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+            True,
+        )
+        self.v = v
+        self.v_seq = v_seq
+        return spike_seq

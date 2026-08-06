@@ -188,7 +188,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
 
         .. math::
 
-            i[t] = f(x[t], y[t-1])
+            i[t] = f(y[t-1], x[t])
 
         其中 :math:`f` 是用户自定义的逐元素函数。我们默认 :math:`y[-1] = 0`。
 
@@ -200,7 +200,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         :param sub_module: 被包含的模块
         :type sub_module: torch.nn.Module
 
-        :param element_wise_function: 用户自定义的逐元素函数，应该形如 ``z=f(x, y)``
+        :param element_wise_function: 用户自定义的逐元素函数，应该形如 ``z=f(y, x)``
         :type element_wise_function: Callable
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
@@ -218,7 +218,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
 
         .. math::
 
-            i[t] = f(x[t], y[t-1])
+            i[t] = f(y[t-1], x[t])
 
         where :math:`f` is the user-defined element-wise function. We set :math:`y[-1] = 0`.
 
@@ -230,7 +230,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         :param sub_module: the contained module
         :type sub_module: torch.nn.Module
 
-        :param element_wise_function: the user-defined element-wise function, which should have the format ``z=f(x, y)``
+        :param element_wise_function: the user-defined element-wise function, which should have the format ``z=f(y, x)``
         :type element_wise_function: Callable
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)

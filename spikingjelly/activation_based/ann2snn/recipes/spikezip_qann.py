@@ -123,8 +123,10 @@ class SpikeZIPLinear(TDLinear):
         )
         x_seq = inputs[0]
         active = bool((x_seq != 0).any())
-        bias_steps = min(x_seq.shape[0], states[2])
-        if self.spikezip_bias is not None and bias_steps > 0:
+        bias_steps = (
+            min(x_seq.shape[0], states[2]) if self.spikezip_bias is not None else 0
+        )
+        if bias_steps > 0:
             bias = self.spikezip_bias.to(device=x_seq.device, dtype=x_seq.dtype)
             view_shape = (1,) * (y_seq.dim() - 1) + (bias.numel(),)
             y_seq[:bias_steps] = (
@@ -198,8 +200,10 @@ class SpikeZIPConv2d(TDConv2d):
         )
         x_seq = inputs[0]
         active = bool((x_seq != 0).any())
-        bias_steps = min(x_seq.shape[0], states[2])
-        if self.spikezip_bias is not None and bias_steps > 0:
+        bias_steps = (
+            min(x_seq.shape[0], states[2]) if self.spikezip_bias is not None else 0
+        )
+        if bias_steps > 0:
             bias = self.spikezip_bias.to(device=x_seq.device, dtype=x_seq.dtype)
             y_seq[:bias_steps] = (
                 y_seq[:bias_steps] + bias.view(1, 1, -1, 1, 1) / self.bias_steps
@@ -307,6 +311,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
             )
 
     def reset(self) -> None:
+        super().reset()
         for module in (
             self.query,
             self.key,
@@ -428,7 +433,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
                 transpose_b=True,
             )
             scores = scores / math.sqrt(self.attention_head_size)
-            if attention_mask is not None:
+            if attention_mask is not None and states[0] == 0:
                 scores = scores.clone()
                 scores[0] = scores[0] + attention_mask
             attention_probs = self.softmax(scores)
@@ -448,7 +453,7 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
                 outputs = (context_seq, attention_probs)
             else:
                 outputs = (context_seq,)
-            return outputs, states
+            return outputs, (states[0] + hidden_states.shape[0],)
         finally:
             for module, step_mode in step_modes.items():
                 module.step_mode = step_mode
@@ -488,6 +493,7 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
             self.softmax = SpikeZIPSoftmax(dim=-1)
 
     def reset(self) -> None:
+        super().reset()
         modules = [
             self.qkv,
             self.proj,

@@ -548,22 +548,18 @@ class KLIFNode(BaseNode):
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x = inputs[0]
         v = states[0]
-        v_reset = 0.0 if self.v_reset is None else self.v_reset
-        if self.decay_input:
-            v = self.neuronal_charge_decay_input(x, v, v_reset, self.tau, self.k)
-        else:
-            v = self.neuronal_charge_no_decay_input(x, v, v_reset, self.tau, self.k)
-        spike = self.surrogate_function(v - self.v_threshold)
-        reset_spike = spike.detach() if self.detach_reset else spike
-        if self.scale_reset:
-            v = v / self.k
-            v_threshold = self.v_threshold / self.k
-        else:
-            v_threshold = self.v_threshold
-        if self.v_reset is None:
-            v = self.apply_soft_reset(v, reset_spike, v_threshold)
-        else:
-            v = self.apply_hard_reset(v, reset_spike, self.v_reset)
+        spike, v = functional.klif_step(
+            x,
+            v,
+            self.k,
+            self.tau,
+            self.decay_input,
+            self.scale_reset,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+        )
         return (spike,), (v, *states[1:])
 
 
@@ -636,14 +632,17 @@ class CUBALIFNode(BaseNode):
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x = inputs[0]
         v, c = states
-        c = c * self.c_decay + x
-        v = v * self.v_decay + c
-        spike = self.surrogate_function(v - self.v_threshold)
-        reset_spike = spike.detach() if self.detach_reset else spike
-        if self.v_reset is None:
-            v = self.apply_soft_reset(v, reset_spike, self.v_threshold)
-        else:
-            v = self.apply_hard_reset(v, reset_spike, self.v_reset)
+        spike, c, v = functional.cuba_lif_step(
+            x,
+            c,
+            v,
+            self.c_decay,
+            self.v_decay,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+        )
         return (spike,), (v, c)
 
 
@@ -724,7 +723,7 @@ class LIAFNode(LIFNode):
 
         :param inputs: 仅包含 ``x`` 的元组 / Tuple containing only ``x``
         :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)`` 或 ``(v, v_seq)``
+        :param states: ``(v,)``
         :type states: tuple
         :return: ``((analog_output,), updated_states)``
         :rtype: tuple[tuple[torch.Tensor, ...], tuple]
@@ -732,50 +731,14 @@ class LIAFNode(LIFNode):
         x = inputs[0]
         v = states[0]
 
-        if self.decay_input:
-            if self.v_reset is None or self.v_reset == 0.0:
-                charged = v + (x - v) / self.tau
-            else:
-                charged = v + (x - (v - self.v_reset)) / self.tau
-        else:
-            if self.v_reset is None or self.v_reset == 0.0:
-                charged = v * (1.0 - 1.0 / self.tau) + x
-            else:
-                charged = v - (v - self.v_reset) / self.tau + x
+        charged = functional.lif_charge(x, v, self.tau, self.decay_input, self.v_reset)
         y = self.act(charged - self.v_threshold if self.threshold_related else charged)
         spike = self.surrogate_function(charged - self.v_threshold)
-        reset_spike = spike.detach() if self.detach_reset else spike
-        if self.v_reset is None:
-            v = charged - reset_spike * self.v_threshold
-        else:
-            v = reset_spike * self.v_reset + (1.0 - reset_spike) * charged
+        v = functional.voltage_reset(
+            charged,
+            spike,
+            self.v_threshold,
+            self.v_reset,
+            self.detach_reset,
+        )
         return (y,), (v, *states[1:])
-
-    def multi_step_functional_forward(
-        self,
-        inputs: tuple[torch.Tensor, ...],
-        states: tuple[object, ...],
-        **kwargs: object,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        r"""Execute LIAF sequence forward with explicit state. / 使用显式状态执行 LIAF 序列前向。
-
-        :param inputs: 仅包含 ``x_seq`` 的元组 / Tuple containing only ``x_seq``
-        :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)`` 或 ``(v, v_seq)``
-        :type states: tuple
-        :return: ``((analog_output_seq,), updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
-        """
-        outputs = []
-        voltages = []
-        v = states[0]
-        x_seq = inputs[0]
-        for t in range(x_seq.shape[0]):
-            x = x_seq[t]
-            (y,), (v, *_) = self.single_step_functional_forward((x,), (v, *states[1:]))
-            outputs.append(y)
-            if self.store_v_seq:
-                voltages.append(v)
-        v_seq = torch.stack(voltages) if self.store_v_seq else None
-        updated_states = (v, v_seq) if self.store_v_seq else (v,)
-        return (torch.stack(outputs),), updated_states

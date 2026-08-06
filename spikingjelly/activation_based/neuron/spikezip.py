@@ -149,6 +149,10 @@ class STBIFNeuron(base.MemoryModule):
             q = torch.full_like(x, 0.5)
             acc_q = torch.zeros_like(x)
             cur_output = torch.zeros_like(x)
+        else:
+            q = q.to(x)
+            acc_q = acc_q.to(x)
+            cur_output = cur_output.to(x)
         return q, acc_q, cur_output, is_work
 
     def single_step_functional_forward(
@@ -189,7 +193,9 @@ class STBIFNeuron(base.MemoryModule):
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x_seq = inputs[0]
         q, acc_q, cur_output, is_work = states
-        if x_seq.device.type == "cuda" and self.backend == "triton":
+        if self.backend == "triton" and x_seq.device.type != "cuda":
+            raise RuntimeError("STBIFNeuron backend='triton' requires a CUDA tensor.")
+        if self.backend == "triton":
             from spikingjelly.activation_based.triton_kernel.neuron_kernel import stbif
 
             out_seq, q, acc_q, cur_output, work_flag = stbif.multi_step_stbif(

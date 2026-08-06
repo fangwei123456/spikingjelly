@@ -84,12 +84,9 @@ We use the sub-threshold neuronal dynamics :math:`\frac{\mathrm{d}V(t)}{\mathrm{
 .. math::
     V[t] = f(V[t-1], X[t]) = V[t-1] + X[t]
 
-``Simple`` in ``SimpleBaseNode`` describes the goal of the interface; it is not a
-neuron mathematical model. This pure-PyTorch interface exposes the charge, fire,
-and reset responsibilities of an SNN neuron directly, helping users understand
-the role of a neuron in an SNN and customize its dynamics. The charge equation is
-written directly in :class:`spikingjelly.activation_based.neuron.SimpleIFNode`,
-which is built on this interface:
+The equation is written directly in
+:class:`spikingjelly.activation_based.neuron.SimpleIFNode` for dynamics
+experiments:
 
 .. code-block:: python
 
@@ -291,9 +288,10 @@ Some neurons support the ``cupy`` backend in both single-step and multi-step mod
 Custom Spiking Neurons
 -------------------------------------------
 SpikingJelly provides separate interfaces for modifying neuron dynamics and for
-high-performance execution. ``SimpleBaseNode`` is a pure-PyTorch interface for
-teaching and customization, not a new neuron mathematical model. It prioritizes
-clear responsibilities and equations so that users can modify dynamics directly.
+high-performance execution. ``Simple`` in ``SimpleBaseNode`` describes the role
+of the interface, not a neuron mathematical model. This pure-PyTorch interface
+exposes charge, fire, and reset directly so that users can understand the role of
+a neuron in an SNN and customize its dynamics.
 
 .. list-table:: Neuron extension interfaces
     :header-rows: 1

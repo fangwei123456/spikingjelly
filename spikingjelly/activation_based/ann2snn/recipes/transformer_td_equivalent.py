@@ -47,9 +47,9 @@ class _TDTanh(TDModule):
     def multi_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
-        states: tuple[object, ...],
-        **kwargs: object,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        states: tuple[Any, ...],
+        **kwargs: Any,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
         return self._td_sequence_forward((inputs[0],), states, torch.tanh)
 
 

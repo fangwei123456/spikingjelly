@@ -71,6 +71,30 @@ def test_lif_step_matches_module(decay_input):
     _assert_close(v_next, module.v)
 
 
+@pytest.mark.parametrize("decay_input", [False, True])
+@pytest.mark.parametrize("v_reset", [0.0, None])
+def test_lif_step_is_composed_from_charge_and_voltage_reset(decay_input, v_reset):
+    x = torch.randn(2, 3)
+    v = torch.randn(2, 3)
+    surrogate_function = _surrogate()
+
+    charged = functional.lif_charge(x, v, 2.5, decay_input, v_reset)
+    spike = surrogate_function(charged - 0.8)
+    v_next = functional.voltage_reset(charged, spike, 0.8, v_reset, False)
+    expected_spike, expected_v = functional.lif_step(
+        x,
+        v,
+        2.5,
+        decay_input,
+        0.8,
+        v_reset,
+        surrogate_function,
+    )
+
+    _assert_close(spike, expected_spike)
+    _assert_close(v_next, expected_v)
+
+
 def test_materialize_states_is_pure():
     module = neuron.IFNode()
     x = torch.randn(2, 3)
@@ -173,14 +197,22 @@ def test_neuron_functional_forward_is_pure_and_backs_regular_forward(
 
 
 @pytest.mark.parametrize("node", [neuron.IFNode(), neuron.LIFNode()])
-def test_store_v_seq_updates_functional_state_layout(node):
+def test_store_v_seq_does_not_change_functional_state_layout(node):
     node.step_mode = "m"
     node.store_v_seq = True
-    assert tuple(name for name, _ in node.named_memories()) == ("v", "v_seq")
+    assert tuple(name for name, _ in node.named_memories()) == ("v",)
+
+    x_seq = torch.randn(3, 2)
+    states = tuple(node._memories.values())
+    node.functional_forward((x_seq,), states)
+    assert node.v_seq is None
+
+    node(x_seq)
+    assert node.v_seq.shape == x_seq.shape
 
     node.store_v_seq = False
     assert tuple(name for name, _ in node.named_memories()) == ("v",)
-    node(torch.randn(3, 2))
+    assert node.v_seq is None
 
 
 def test_save_v_lif_functional_forward_tracks_observed_voltage_as_memory():
@@ -381,6 +413,57 @@ def test_lava_cuba_lif_step_matches_norm_free_module():
     _assert_close(spike, module_spike)
     _assert_close(current_next, module.current_state)
     _assert_close(voltage_next, module.voltage_state)
+
+
+def test_cuba_sequence_caches_are_not_functional_states():
+    module = lava_exchange.CubaLIFNode(
+        current_decay=0.25,
+        voltage_decay=0.5,
+        step_mode="m",
+        store_v_seq=True,
+        store_i_seq=True,
+    )
+    x_seq = torch.randn(3, 2, 4)
+    states = tuple(module._memories.values())
+
+    outputs, updated_states = module.functional_forward((x_seq,), states)
+
+    assert module.v_seq is None
+    assert module.i_seq is None
+    assert tuple(module._memories.values()) == states
+    torch.testing.assert_close(module(x_seq), outputs[0])
+    assert module.v_seq.shape == x_seq.shape
+    assert module.i_seq.shape == x_seq.shape
+    for actual, expected in zip(module._memories.values(), updated_states):
+        if isinstance(actual, torch.Tensor):
+            torch.testing.assert_close(actual, expected)
+
+
+def test_flexsn_sequence_cache_is_not_a_functional_state():
+    from spikingjelly.activation_based.neuron.flexsn import FlexSN
+
+    def core(x, state):
+        state = state + x
+        return state, state
+
+    module = FlexSN(
+        core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+        store_state_seqs=True,
+    )
+    x_seq = torch.randn(3, 2, 4)
+
+    outputs, updated_states = module.functional_forward((x_seq,), (module.states,))
+
+    assert module.states is None
+    assert module.state_seqs is None
+    torch.testing.assert_close(module(x_seq), outputs[0])
+    assert len(module.state_seqs) == 1
+    torch.testing.assert_close(module.states[0], updated_states[0][0])
 
 
 def test_activation_aware_if_step_matches_module():

@@ -10,7 +10,7 @@ from torch import Tensor
 from torch.autograd import Function
 from torch.nn.functional import interpolate
 
-from ...activation_based import layer
+from ...activation_based import functional, layer
 from ..neuron import LIFNode
 from ..surrogate import SurrogateFunctionBase, heaviside
 
@@ -207,61 +207,21 @@ class save_v_LIFNode(LIFNode):
         x = inputs[0]
         v = states[0]
 
-        if self.decay_input:
-            if self.v_reset is None or self.v_reset == 0.0:
-                charged = v + (x - v) / self.tau
-            else:
-                charged = v + (x - (v - self.v_reset)) / self.tau
-        else:
-            if self.v_reset is None or self.v_reset == 0.0:
-                charged = v * (1.0 - 1.0 / self.tau) + x
-            else:
-                charged = v - (v - self.v_reset) / self.tau + x
+        charged = functional.lif_charge(x, v, self.tau, self.decay_input, self.v_reset)
         v_before_spike = (charged - self.v_threshold).mean()
         spike = self.surrogate_function(charged - self.v_threshold)
-        reset_spike = spike.detach() if self.detach_reset else spike
-        if self.v_reset is None:
-            v = charged - reset_spike * self.v_threshold
-        else:
-            v = reset_spike * self.v_reset + (1.0 - reset_spike) * charged
+        v = functional.voltage_reset(
+            charged,
+            spike,
+            self.v_threshold,
+            self.v_reset,
+            self.detach_reset,
+        )
 
         updated_states = list(states)
         updated_states[0] = v
         updated_states[-1] = v_before_spike
         return (spike,), tuple(updated_states)
-
-    def multi_step_functional_forward(
-        self,
-        inputs: tuple[torch.Tensor, ...],
-        states: tuple[object, ...],
-        **kwargs: object,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        r"""Execute observed LIF sequence forward with explicit state. / 使用显式状态执行带观测的 LIF 序列前向。
-
-        :param inputs: 仅包含 ``x_seq`` 的元组 / Tuple containing only ``x_seq``
-        :type inputs: tuple[torch.Tensor, ...]
-        :param states: 按 memory 顺序排列的状态 / States in memory order
-        :type states: tuple
-        :return: ``((spike_seq,), updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
-        """
-        spikes = []
-        observed_voltages = []
-        current_states = states
-        x_seq = inputs[0]
-        for t in range(x_seq.shape[0]):
-            x = x_seq[t]
-            (spike,), current_states = self.single_step_functional_forward(
-                (x,), current_states
-            )
-            spikes.append(spike)
-            if self.store_v_seq:
-                observed_voltages.append(current_states[-1])
-        if self.store_v_seq:
-            current_states = list(current_states)
-            current_states[1] = torch.stack(observed_voltages)
-            current_states = tuple(current_states)
-        return (torch.stack(spikes),), current_states
 
 
 def getSpikingNode(v_threshold=0.5):

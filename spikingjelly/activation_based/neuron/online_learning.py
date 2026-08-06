@@ -21,25 +21,14 @@ class _OnlineLIFNode(LIFNode):
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x = inputs[0]
         v = states[0]
-        if not self.training:
-            spike, v = self._eval_single_step_forward(
-                x,
-                v,
-                self.v_threshold,
-                self.v_reset,
-                self.tau,
-                self.decay_input,
-            )
-            return (spike,), (v, *states[1:])
-
         spike, v = functional.lif_step(
             x,
-            v.detach(),
+            v.detach() if self.training else v,
             self.tau,
             self.decay_input,
             self.v_threshold,
             self.v_reset,
-            self.surrogate_function,
+            self.surrogate_function if self.training else surrogate.heaviside,
             self.detach_reset,
         )
         return (spike,), (v, *states[1:])

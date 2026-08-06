@@ -114,12 +114,10 @@ The corresponding code can be found in :class:`spikingjelly.activation_based.neu
             else:
                 self.v += (x - (self.v - self.v_reset)) / self.tau
 
-Different neurons have different charging equations.
-:class:`spikingjelly.activation_based.neuron.SimpleBaseNode` is a pure-PyTorch
-interface for teaching and dynamics customization, not a neuron mathematical
-model. It exposes the charge, fire, and reset responsibilities directly;
-implementations derived from it share the firing and reset equations. The firing implementation is
-available at :meth:`spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_fire`:
+Different neurons can use different charge, fire, and reset equations.
+:class:`spikingjelly.activation_based.neuron.SimpleBaseNode` exposes these three
+processes as independently overridable methods. The default firing implementation
+is available at :meth:`spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_fire`:
 
 .. code-block:: python
 
@@ -138,7 +136,7 @@ two ways to realize neuronal reset:
 #. Soft method: After releasing a spike, the membrane potential subtracts the threshold voltage :math:`V = V - V_{threshold}`
 
 It can be found that for neurons using the soft method, there is no need to reset the voltage :math:`V_{reset}`.
-For the neurons in :class:`spikingjelly.activation_based.neuron`, when ``v_reset`` is set to the a float value (e.g., the default value is ``1.0``), the neuron uses the hard reset; if ``v_reset`` is set to ``None``, the soft reset will be used.
+For the neurons in :class:`spikingjelly.activation_based.neuron`, when ``v_reset`` is set to a float value (the default is ``0.0``), the neuron uses the hard reset; if ``v_reset`` is set to ``None``, the soft reset will be used.
 We can find the corresponding code in
 :meth:`spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_reset`:
 

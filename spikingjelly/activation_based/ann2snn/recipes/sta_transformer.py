@@ -204,18 +204,7 @@ class _STASpikeEncoder(base.MemoryModule):
         states: tuple[object, ...],
         step_mode: str,
     ) -> tuple[object, ...]:
-        x = inputs[0]
-        if step_mode == "m":
-            if x.dim() < 2:
-                raise ValueError(
-                    "STA spike encoder multi-step forward expects an input "
-                    "sequence with a time dimension and at least one data dimension."
-                )
-            if x.shape[0] == 0:
-                raise ValueError(
-                    "STA spike encoder expects a non-empty time dimension."
-                )
-            x = x[0]
+        x = inputs[0][0] if step_mode == "m" else inputs[0]
         mem = states[0]
         if (
             mem is None
@@ -246,14 +235,6 @@ class _STASpikeEncoder(base.MemoryModule):
         spike_count = torch.trunc(mem / threshold)
         spike = spike_count * threshold
         return (spike,), (mem - spike,)
-
-    def multi_step_functional_forward(
-        self,
-        inputs: tuple[torch.Tensor, ...],
-        states: tuple[object, ...],
-        **kwargs: object,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        return super().multi_step_functional_forward(inputs, states, **kwargs)
 
     def _reset_sta_state(self) -> None:
         self.reset()

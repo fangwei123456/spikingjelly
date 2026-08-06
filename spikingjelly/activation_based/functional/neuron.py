@@ -17,6 +17,7 @@ __all__ = [
     "if_step",
     "qif_step",
     "eif_step",
+    "lif_charge",
     "lif_step",
     "plif_step",
     "izhikevich_step",
@@ -42,6 +43,7 @@ __all__ = [
     "stbif_step",
     "activation_aware_if_step",
     "activation_aware_if_multi_step_triton",
+    "voltage_reset",
 ]
 
 
@@ -155,18 +157,68 @@ def lava_cuba_lif_step(
         s_scale,
     )
     spike = surrogate_function(voltage_charged - (v_threshold + v_threshold_eps))
-    spike_d = spike.detach() if detach_reset else spike
-    voltage_next = spike_d * v_reset + (1.0 - spike_d) * voltage_charged
+    voltage_next = voltage_reset(
+        voltage_charged,
+        spike,
+        v_threshold,
+        v_reset,
+        detach_reset,
+    )
     return spike, current_next, voltage_next
 
 
-def _reset(
+def voltage_reset(
     v: torch.Tensor,
     spike: torch.Tensor,
     v_threshold: float,
     v_reset: Optional[float],
     detach_reset: bool,
 ) -> torch.Tensor:
+    r"""
+    **API Language** - :ref:`中文 <voltage_reset-cn>` | :ref:`English <voltage_reset-en>`
+
+    ----
+
+    .. _voltage_reset-cn:
+
+    * **中文**
+
+    根据脉冲对膜电位执行硬重置或软重置。
+
+    :param v: 重置前的膜电位
+    :type v: torch.Tensor
+    :param spike: 当前时间步的脉冲
+    :type spike: torch.Tensor
+    :param v_threshold: soft reset 时从膜电位减去的阈值
+    :type v_threshold: float
+    :param v_reset: hard reset 的目标电位；``None`` 表示使用 soft reset
+    :type v_reset: Optional[float]
+    :param detach_reset: 是否在重置分支中分离脉冲梯度
+    :type detach_reset: bool
+    :return: 重置后的膜电位
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _voltage_reset-en:
+
+    * **English**
+
+    Apply a hard or soft reset to membrane voltage according to the spike.
+
+    :param v: Membrane voltage before reset
+    :type v: torch.Tensor
+    :param spike: Spike at the current time step
+    :type spike: torch.Tensor
+    :param v_threshold: Threshold subtracted by soft reset
+    :type v_threshold: float
+    :param v_reset: Target voltage for hard reset; ``None`` selects soft reset
+    :type v_reset: Optional[float]
+    :param detach_reset: Whether to detach the spike in the reset branch
+    :type detach_reset: bool
+    :return: Membrane voltage after reset
+    :rtype: torch.Tensor
+    """
     spike_d = spike.detach() if detach_reset else spike
     if v_reset is None:
         return v - spike_d * v_threshold
@@ -254,7 +306,7 @@ def if_step(
     """
     v_charged = v + x
     spike = surrogate_function(v_charged - v_threshold)
-    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return spike, voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
 def qif_step(
@@ -341,7 +393,7 @@ def qif_step(
     """
     v_charged = v + (x + a0 * (v - v_rest) * (v - v_c)) / tau
     spike = surrogate_function(v_charged - v_threshold)
-    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return spike, voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
 def eif_step(
@@ -430,7 +482,7 @@ def eif_step(
         v + (x + v_rest - v + delta_t * torch.exp((v - theta_rh) / delta_t)) / tau
     )
     spike = surrogate_function(v_charged - v_threshold)
-    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return spike, voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
 def activation_aware_if_step(
@@ -739,6 +791,64 @@ def if_multi_step_inductor(
     return _normalize_multi_step_output(graph(x_seq, v), store_v_seq)
 
 
+def lif_charge(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    tau: float,
+    decay_input: bool,
+    v_reset: Optional[float],
+) -> torch.Tensor:
+    r"""
+    **API Language** - :ref:`中文 <lif_charge-cn>` | :ref:`English <lif_charge-en>`
+
+    ----
+
+    .. _lif_charge-cn:
+
+    * **中文**
+
+    执行 LIF 神经元的充电方程，不进行放电或重置。
+
+    :param x: 当前输入张量
+    :type x: torch.Tensor
+    :param v: 当前膜电位
+    :type v: torch.Tensor
+    :param tau: 膜电位时间常数
+    :type tau: float
+    :param decay_input: 输入是否参与衰减
+    :type decay_input: bool
+    :param v_reset: 重置电位；``None`` 在充电方程中按 ``0.0`` 处理
+    :type v_reset: Optional[float]
+    :return: 充电后的膜电位
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _lif_charge-en:
+
+    * **English**
+
+    Apply the LIF charging equation without firing or resetting.
+
+    :param x: Current input tensor
+    :type x: torch.Tensor
+    :param v: Current membrane voltage
+    :type v: torch.Tensor
+    :param tau: Membrane-voltage time constant
+    :type tau: float
+    :param decay_input: Whether the input participates in decay
+    :type decay_input: bool
+    :param v_reset: Reset voltage; ``None`` is treated as ``0.0`` by the charging equation
+    :type v_reset: Optional[float]
+    :return: Charged membrane voltage
+    :rtype: torch.Tensor
+    """
+    v_reset_value = 0.0 if v_reset is None else v_reset
+    if decay_input:
+        return v + (x - (v - v_reset_value)) / tau
+    return v - (v - v_reset_value) / tau + x
+
+
 def lif_step(
     x: torch.Tensor,
     v: torch.Tensor,
@@ -815,18 +925,9 @@ def lif_step(
        :func:`lif_multi_step_inductor`, :func:`lif_multi_step_cupy`,
        :func:`lif_multi_step_triton`.
     """
-    if decay_input:
-        if v_reset is None or v_reset == 0.0:
-            v_charged = v + (x - v) / tau
-        else:
-            v_charged = v + (x - (v - v_reset)) / tau
-    else:
-        if v_reset is None or v_reset == 0.0:
-            v_charged = v * (1.0 - 1.0 / tau) + x
-        else:
-            v_charged = v - (v - v_reset) / tau + x
+    v_charged = lif_charge(x, v, tau, decay_input, v_reset)
     spike = surrogate_function(v_charged - v_threshold)
-    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return spike, voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
 def lif_multi_step_inductor(
@@ -1024,7 +1125,7 @@ def plif_step(
     else:
         v_charged = v - (v - v_reset_value) * reciprocal_tau + x
     spike = surrogate_function(v_charged - v_threshold)
-    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return spike, voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
 def plif_multi_step_inductor(
@@ -1342,14 +1443,14 @@ def klif_step(
     v_charged = torch.relu(k * v_charged)
     spike = surrogate_function(v_charged - v_threshold)
     if scale_reset:
-        return spike, _reset(
+        return spike, voltage_reset(
             v_charged / k,
             spike,
             v_threshold / k,
             v_reset,
             detach_reset,
         )
-    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return spike, voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
 def cuba_lif_step(
@@ -1432,7 +1533,7 @@ def cuba_lif_step(
     current_next = current * current_decay + x
     v_charged = v * voltage_decay + current_next
     spike = surrogate_function(v_charged - v_threshold)
-    v_next = _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    v_next = voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
     return spike, current_next, v_next
 
 
@@ -2388,7 +2489,7 @@ def if_multi_step_triton(
         store_v_seq,
     )
     if store_v_seq:
-        return spike_seq, voltage[-1], voltage
+        return spike_seq, voltage[-1].clone(), voltage
     return spike_seq, voltage, None
 
 
@@ -2483,7 +2584,7 @@ def lif_multi_step_triton(
         store_v_seq,
     )
     if store_v_seq:
-        return spike_seq, voltage[-1], voltage
+        return spike_seq, voltage[-1].clone(), voltage
     return spike_seq, voltage, None
 
 

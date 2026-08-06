@@ -452,8 +452,6 @@ class GCContainer(nn.Sequential):
             return (*outputs, *updated_states)
 
         ret = input_compressed_gc(flat_forward, self.x_compressor, x, *args, *states)
-        if isinstance(ret, torch.Tensor):
-            ret = (ret,)
         outputs, states = ret[: -self.num_states], ret[-self.num_states :]
         base.load_memories(self, states)
         return outputs[0] if len(outputs) == 1 else outputs

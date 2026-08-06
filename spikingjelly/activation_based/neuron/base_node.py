@@ -376,10 +376,11 @@ class BaseNode(base.MemoryModule):
     @store_v_seq.setter
     def store_v_seq(self, value: bool):
         self._store_v_seq = value
-        if value and "v_seq" not in self._memories:
-            self.register_memory("v_seq", None)
-        elif not value and "v_seq" in self._memories:
-            del self.v_seq
+        self.v_seq = None
+
+    def reset(self):
+        super().reset()
+        self.v_seq = None
 
     @staticmethod
     def apply_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
@@ -442,31 +443,28 @@ class BaseNode(base.MemoryModule):
     def extra_repr(self):
         return f"v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}, step_mode={self.step_mode}, backend={self.backend}"
 
-    def multi_step_functional_forward(
-        self,
-        inputs: tuple[torch.Tensor, ...],
-        states: tuple[object, ...],
-        **kwargs: object,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
+        if not self.store_v_seq:
+            return super().multi_step_forward(x_seq, *args, **kwargs)
+
+        inputs = (x_seq, *args)
+        states = self.materialize_states(inputs, tuple(self._memories.values()), "m")
         output_steps = []
         v_steps = []
-        for t in range(inputs[0].shape[0]):
+        for t in range(x_seq.shape[0]):
             outputs, states = self.single_step_functional_forward(
                 tuple(x[t] for x in inputs), states, **kwargs
             )
             output_steps.append(outputs)
-            if self.store_v_seq:
-                v_steps.append(states[0])
+            v_steps.append(states[0])
 
-        if self.store_v_seq:
-            states = (states[0], torch.stack(v_steps), *states[2:])
-        return (
-            tuple(
-                torch.stack(output_seq)
-                for output_seq in zip(*output_steps, strict=True)
-            ),
-            states,
+        for name, value in zip(self._memories, states, strict=True):
+            self._memories[name] = value
+        self.v_seq = torch.stack(v_steps)
+        outputs = tuple(
+            torch.stack(output_seq) for output_seq in zip(*output_steps, strict=True)
         )
+        return outputs[0] if len(outputs) == 1 else outputs
 
     def materialize_states(
         self,
@@ -474,9 +472,7 @@ class BaseNode(base.MemoryModule):
         states: tuple[object, ...],
         step_mode: str,
     ) -> tuple[object, ...]:
-        x = inputs[0]
-        if step_mode == "m" and x.dim() > 0 and x.shape[0] > 0:
-            x = x[0]
+        x = inputs[0][0] if step_mode == "m" else inputs[0]
         v = states[0]
         if isinstance(v, float):
             v = torch.full_like(x, v, requires_grad=False)

@@ -104,6 +104,11 @@ _STATE_COPY_OPS = {
     aten._to_copy.default,
 }
 
+_STATE_MATERIALIZATION_OPS = {
+    aten.full_like.default,
+    aten.zeros_like.default,
+}
+
 
 def _storage_key(x: torch.Tensor) -> tuple[Any, ...]:
     if x.is_meta:
@@ -330,13 +335,20 @@ class NeuronStateCounter(BaseCounter):
                 if torch.is_tensor(value):
                     state_tensor_keys.add(_storage_key(value))
 
-        live_states = [
-            tensor
-            for ref in self._functional_state_refs
-            if (tensor := ref()) is not None
-        ]
-        self._functional_state_refs = [weakref.ref(tensor) for tensor in live_states]
+        live_refs = []
+        live_states = []
+        for state_ref in self._functional_state_refs:
+            tensor = state_ref()
+            if tensor is not None:
+                live_refs.append(state_ref)
+                live_states.append(tensor)
+        self._functional_state_refs = live_refs
         state_tensor_keys.update(_storage_key(tensor) for tensor in live_states)
+
+        if not state_tensor_keys and func in _STATE_MATERIALIZATION_OPS:
+            materialized_state = _collect_tensors(out)[0]
+            self._functional_state_refs.append(weakref.ref(materialized_state))
+            state_tensor_keys.add(_storage_key(materialized_state))
 
         if not state_tensor_keys:
             self._pending_metrics = None

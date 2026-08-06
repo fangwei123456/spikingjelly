@@ -172,13 +172,18 @@ class QIFNode(BaseNode):
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x = inputs[0]
         v = states[0]
-        v = v + (x + self.a0 * (v - self.v_rest) * (v - self.v_c)) / self.tau
-        spike = self.surrogate_function(v - self.v_threshold)
-        reset_spike = spike.detach() if self.detach_reset else spike
-        if self.v_reset is None:
-            v = self.apply_soft_reset(v, reset_spike, self.v_threshold)
-        else:
-            v = self.apply_hard_reset(v, reset_spike, self.v_reset)
+        spike, v = functional.qif_step(
+            x,
+            v,
+            self.tau,
+            self.a0,
+            self.v_rest,
+            self.v_c,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+        )
         return (spike,), (v, *states[1:])
 
     @property
@@ -201,7 +206,7 @@ class QIFNode(BaseNode):
         elif self.backend == "cupy":
             x_seq = inputs[0]
             v = states[0]
-            spike_seq, v, v_seq = functional.qif_multi_step_cupy(
+            spike_seq, v, _ = functional.qif_multi_step_cupy(
                 x_seq,
                 v,
                 self.tau,
@@ -212,12 +217,33 @@ class QIFNode(BaseNode):
                 self.a0,
                 self.detach_reset,
                 self.surrogate_function,
-                self.store_v_seq,
+                False,
             )
-            updated_states = (v, v_seq) if self.store_v_seq else (v,)
-            return (spike_seq,), updated_states
+            return (spike_seq,), (v,)
         else:
             raise ValueError(self.backend)
+
+    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
+        if not self.store_v_seq or self.backend != "cupy":
+            return super().multi_step_forward(x_seq, *args, **kwargs)
+
+        states = self.materialize_states(
+            (x_seq, *args), tuple(self._memories.values()), "m"
+        )
+        spike_seq, self.v, self.v_seq = functional.qif_multi_step_cupy(
+            x_seq,
+            states[0],
+            self.tau,
+            self.v_threshold,
+            self.v_reset,
+            self.v_rest,
+            self.v_c,
+            self.a0,
+            self.detach_reset,
+            self.surrogate_function,
+            True,
+        )
+        return spike_seq
 
 
 class EIFNode(BaseNode):
@@ -395,22 +421,18 @@ class EIFNode(BaseNode):
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x = inputs[0]
         v = states[0]
-        v = (
-            v
-            + (
-                x
-                + self.v_rest
-                - v
-                + self.delta_T * torch.exp((v - self.theta_rh) / self.delta_T)
-            )
-            / self.tau
+        spike, v = functional.eif_step(
+            x,
+            v,
+            self.tau,
+            self.delta_T,
+            self.theta_rh,
+            self.v_rest,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
         )
-        spike = self.surrogate_function(v - self.v_threshold)
-        reset_spike = spike.detach() if self.detach_reset else spike
-        if self.v_reset is None:
-            v = self.apply_soft_reset(v, reset_spike, self.v_threshold)
-        else:
-            v = self.apply_hard_reset(v, reset_spike, self.v_reset)
         return (spike,), (v, *states[1:])
 
     @property
@@ -433,7 +455,7 @@ class EIFNode(BaseNode):
         elif self.backend == "cupy":
             x_seq = inputs[0]
             v = states[0]
-            spike_seq, v, v_seq = functional.eif_multi_step_cupy(
+            spike_seq, v, _ = functional.eif_multi_step_cupy(
                 x_seq,
                 v,
                 self.tau,
@@ -444,9 +466,30 @@ class EIFNode(BaseNode):
                 self.delta_T,
                 self.detach_reset,
                 self.surrogate_function,
-                self.store_v_seq,
+                False,
             )
-            updated_states = (v, v_seq) if self.store_v_seq else (v,)
-            return (spike_seq,), updated_states
+            return (spike_seq,), (v,)
         else:
             raise ValueError(self.backend)
+
+    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
+        if not self.store_v_seq or self.backend != "cupy":
+            return super().multi_step_forward(x_seq, *args, **kwargs)
+
+        states = self.materialize_states(
+            (x_seq, *args), tuple(self._memories.values()), "m"
+        )
+        spike_seq, self.v, self.v_seq = functional.eif_multi_step_cupy(
+            x_seq,
+            states[0],
+            self.tau,
+            self.v_threshold,
+            self.v_reset,
+            self.v_rest,
+            self.theta_rh,
+            self.delta_T,
+            self.detach_reset,
+            self.surrogate_function,
+            True,
+        )
+        return spike_seq

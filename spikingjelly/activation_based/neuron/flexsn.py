@@ -1246,9 +1246,11 @@ class FlexSN(base.MemoryModule):
     @store_state_seqs.setter
     def store_state_seqs(self, value: bool):
         self._store_state_seqs = value
-        if value:
-            if not hasattr(self, "state_seqs"):
-                self.register_memory("state_seqs", None)
+        self.state_seqs = None
+
+    def reset(self):
+        super().reset()
+        self.state_seqs = None
 
     @staticmethod
     def init_states(num_states: int, step_mode: str, *args) -> List[torch.Tensor]:
@@ -1321,26 +1323,20 @@ class FlexSN(base.MemoryModule):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        state_values = states[1] if self.store_state_seqs else states[0]
+        state_values = states[0]
         if state_values is None:
             state_values = self.init_states(self.num_states, "s", *inputs)
         results = self.core(*inputs, *state_values)
-        updated_states = (
-            (states[0], list(results[self.num_outputs :]))
-            if self.store_state_seqs
-            else (list(results[self.num_outputs :]),)
-        )
-        return tuple(results[: self.num_outputs]), updated_states
+        return tuple(results[: self.num_outputs]), (list(results[self.num_outputs :]),)
 
-    def multi_step_functional_forward(
+    def _multi_step(
         self,
         inputs: tuple[torch.Tensor, ...],
-        states: tuple[object, ...],
-        **kwargs: object,
+        state_values: list[torch.Tensor] | None,
+        store_state_seqs: bool,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         T = inputs[0].shape[0]
-        state_values = states[1] if self.store_state_seqs else states[0]
-        state_sequences = states[0] if self.store_state_seqs else None
+        state_sequences = None
         if T == 0:
             if self.backend not in self.supported_backends:
                 raise ValueError(f"Unsupported backend: {self.backend}")
@@ -1355,14 +1351,14 @@ class FlexSN(base.MemoryModule):
                     self.num_inputs,
                     self.num_states,
                     self.num_outputs,
-                    self.store_state_seqs,
+                    store_state_seqs,
                     *inputs,
                     *state_args,
                     output_template_specs=self._output_template_specs,
                 )
                 output_seqs = list(result_seqs[: self.num_outputs])
                 state_results = list(result_seqs[self.num_outputs :])
-                if self.store_state_seqs:
+                if store_state_seqs:
                     state_sequences = state_results
                     state_values = [
                         _last_state_or_current(v, state_values[i])
@@ -1372,7 +1368,7 @@ class FlexSN(base.MemoryModule):
                     state_values = state_results
                 updated_states = (
                     (state_sequences, state_values)
-                    if self.store_state_seqs
+                    if store_state_seqs
                     else (state_values,)
                 )
                 return tuple(output_seqs), updated_states
@@ -1393,12 +1389,10 @@ class FlexSN(base.MemoryModule):
                 self._output_template_specs,
                 use_template_device=False,
             )
-            if self.store_state_seqs:
+            if store_state_seqs:
                 state_sequences = [s.new_empty((0, *s.shape)) for s in state_values]
             updated_states = (
-                (state_sequences, state_values)
-                if self.store_state_seqs
-                else (state_values,)
+                (state_sequences, state_values) if store_state_seqs else (state_values,)
             )
             return tuple(output_seqs), updated_states
 
@@ -1408,7 +1402,7 @@ class FlexSN(base.MemoryModule):
                     self.num_states, self.step_mode, *inputs
                 )
             output_seqs = [[] for _ in range(self.num_outputs)]
-            if self.store_state_seqs:
+            if store_state_seqs:
                 state_seqs = [[] for _ in range(self.num_states)]
 
             for t in range(T):
@@ -1417,16 +1411,14 @@ class FlexSN(base.MemoryModule):
                 state_values = list(results[self.num_outputs :])
                 for i in range(self.num_outputs):
                     output_seqs[i].append(outputs[i])
-                if self.store_state_seqs:
+                if store_state_seqs:
                     for i in range(self.num_states):
                         state_seqs[i].append(state_values[i])
 
-            if self.store_state_seqs:
+            if store_state_seqs:
                 state_sequences = [torch.stack(v, dim=0) for v in state_seqs]
             updated_states = (
-                (state_sequences, state_values)
-                if self.store_state_seqs
-                else (state_values,)
+                (state_sequences, state_values) if store_state_seqs else (state_values,)
             )
             return tuple(torch.stack(y, dim=0) for y in output_seqs), updated_states
 
@@ -1441,14 +1433,14 @@ class FlexSN(base.MemoryModule):
                 self.num_inputs,
                 self.num_states,
                 self.num_outputs,
-                self.store_state_seqs,
+                store_state_seqs,
                 *inputs,
                 *state_args,
                 output_template_specs=self._output_template_specs,
             )
             output_seqs = list(result_seqs[: self.num_outputs])
             state_results = list(result_seqs[self.num_outputs :])
-            if self.store_state_seqs:
+            if store_state_seqs:
                 state_sequences = state_results
                 state_values = [
                     _last_state_or_current(v, state_values[i])
@@ -1457,14 +1449,12 @@ class FlexSN(base.MemoryModule):
             else:
                 state_values = state_results
             updated_states = (
-                (state_sequences, state_values)
-                if self.store_state_seqs
-                else (state_values,)
+                (state_sequences, state_values) if store_state_seqs else (state_values,)
             )
             return tuple(output_seqs), updated_states
 
         elif _is_flexsn_triton_backend(self.backend):
-            result_has_state_seqs = self.store_state_seqs
+            result_has_state_seqs = store_state_seqs
             no_grad = not torch.is_grad_enabled() or (
                 not _value_requires_grad(inputs)
                 and not _value_requires_grad(state_values)
@@ -1483,7 +1473,7 @@ class FlexSN(base.MemoryModule):
             if self._inductor_handle is not None and all_cuda and same_device:
                 if no_grad:
                     if (
-                        not self.store_state_seqs
+                        not store_state_seqs
                         and self._inductor_inference_final_state_available
                     ):
                         result_seqs = flexsn_inductor_inference_final_state(
@@ -1493,7 +1483,7 @@ class FlexSN(base.MemoryModule):
                         state_values = list(result_seqs[self.num_outputs :])
                         updated_states = (
                             (state_sequences, state_values)
-                            if self.store_state_seqs
+                            if store_state_seqs
                             else (state_values,)
                         )
                         return tuple(output_seqs), updated_states
@@ -1505,7 +1495,7 @@ class FlexSN(base.MemoryModule):
                     else:
                         result_seqs = None
                 elif self._inductor_training_available:
-                    if not self.store_state_seqs:
+                    if not store_state_seqs:
                         result_seqs = flexsn_inductor_training_final_state(
                             self._inductor_handle, flat_args
                         )
@@ -1517,7 +1507,7 @@ class FlexSN(base.MemoryModule):
                         )
                         updated_states = (
                             (state_sequences, state_values)
-                            if self.store_state_seqs
+                            if store_state_seqs
                             else (state_values,)
                         )
                         return tuple(output_seqs), updated_states
@@ -1541,12 +1531,12 @@ class FlexSN(base.MemoryModule):
                     self.num_inputs,
                     self.num_states,
                     self.num_outputs,
-                    self.store_state_seqs,
+                    store_state_seqs,
                     *inputs,
                     *state_args,
                     output_template_specs=self._output_template_specs,
                 )
-                result_has_state_seqs = self.store_state_seqs
+                result_has_state_seqs = store_state_seqs
             output_seqs = list(result_seqs[: self.num_outputs])
             state_seqs = list(result_seqs[self.num_outputs :])
             if result_has_state_seqs:
@@ -1558,27 +1548,39 @@ class FlexSN(base.MemoryModule):
                     _last_state_or_current(v, state_values[i])
                     for i, v in enumerate(state_seqs)
                 ]
-                if self.store_state_seqs:
+                if store_state_seqs:
                     state_sequences = state_seqs
             else:
                 state_values = state_seqs
             updated_states = (
-                (state_sequences, state_values)
-                if self.store_state_seqs
-                else (state_values,)
+                (state_sequences, state_values) if store_state_seqs else (state_values,)
             )
             return tuple(output_seqs), updated_states
 
         else:
             raise ValueError(f"Unsupported backend: {self.backend}")
 
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        return self._multi_step(inputs, states[0], False)
+
     def single_step_forward(self, *args: torch.Tensor) -> tuple[torch.Tensor, ...]:
         outputs = super().single_step_forward(*args)
         return outputs if isinstance(outputs, tuple) else (outputs,)
 
     def multi_step_forward(self, *args: torch.Tensor) -> list[torch.Tensor]:
-        outputs = super().multi_step_forward(*args)
-        return list(outputs) if isinstance(outputs, tuple) else [outputs]
+        outputs, updated_states = self._multi_step(
+            tuple(args), self.states, self.store_state_seqs
+        )
+        if self.store_state_seqs:
+            self.state_seqs, self.states = updated_states
+        else:
+            (self.states,) = updated_states
+        return list(outputs)
 
     def forward(
         self, *args: torch.Tensor

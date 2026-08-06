@@ -394,7 +394,12 @@ class Delay(base.MemoryModule):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
-        return (functional.delay(inputs[0], self.delay_steps),), states
+        outputs = []
+        queue = tuple(states[0])
+        for x in inputs[0]:
+            y, queue = functional.delay_step(x, queue, self.delay_steps)
+            outputs.append(y)
+        return (torch.stack(outputs),), (list(queue),)
 
 
 class SpikeCountToBinary(nn.Module, base.MultiStepModule):

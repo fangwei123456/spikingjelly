@@ -380,18 +380,23 @@ class IzhikevichNode(AdaptBaseNode):
         x = inputs[0]
         v = states[0]
         w = states[-1]
-        v = v + (x + self.a0 * (v - self.v_rest) * (v - self.v_c) - w) / self.tau
-        w = self.jit_neuronal_adaptation(w, self.tau_w, self.a, self.v_rest, v)
-        spike = self.surrogate_function(v - self.v_threshold)
-        reset_spike = spike.detach() if self.detach_reset else spike
-        if self.v_reset is None:
-            v, w = self.apply_soft_reset(
-                v, w, reset_spike, self.v_threshold, self.b, spike
-            )
-        else:
-            v, w = self.apply_hard_reset(v, w, reset_spike, self.v_reset, self.b, spike)
-        updated_states = (v, states[1], w) if self.store_v_seq else (v, w)
-        return (spike,), updated_states
+        spike, v, w = functional.izhikevich_step(
+            x,
+            v,
+            w,
+            self.tau,
+            self.a0,
+            self.v_rest,
+            self.v_c,
+            self.tau_w,
+            self.a,
+            self.b,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+        )
+        return (spike,), (v, w)
 
     @property
     def supported_backends(self):
@@ -414,7 +419,7 @@ class IzhikevichNode(AdaptBaseNode):
             x_seq = inputs[0]
             v = states[0]
             w = states[-1]
-            spike_seq, v, w, v_seq, _ = functional.izhikevich_multi_step_cupy(
+            spike_seq, v, w, _, _ = functional.izhikevich_multi_step_cupy(
                 x_seq,
                 v,
                 w,
@@ -429,9 +434,36 @@ class IzhikevichNode(AdaptBaseNode):
                 self.a0,
                 self.detach_reset,
                 self.surrogate_function,
-                self.store_v_seq,
+                False,
             )
-            updated_states = (v, v_seq, w) if self.store_v_seq else (v, w)
-            return (spike_seq,), updated_states
+            return (spike_seq,), (v, w)
         else:
             raise ValueError(self.backend)
+
+    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
+        if not self.store_v_seq or self.backend != "cupy":
+            return super().multi_step_forward(x_seq, *args, **kwargs)
+
+        states = self.materialize_states(
+            (x_seq, *args), tuple(self._memories.values()), "m"
+        )
+        spike_seq, self.v, self.w, self.v_seq, _ = (
+            functional.izhikevich_multi_step_cupy(
+                x_seq,
+                states[0],
+                states[-1],
+                self.tau,
+                self.v_threshold,
+                self.v_reset,
+                self.v_rest,
+                self.a,
+                self.b,
+                self.tau_w,
+                self.v_c,
+                self.a0,
+                self.detach_reset,
+                self.surrogate_function,
+                True,
+            )
+        )
+        return spike_seq

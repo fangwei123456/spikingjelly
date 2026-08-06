@@ -41,7 +41,9 @@ Modules: ``spikingjelly.activation_based.functional`` and
 
 - Added explicit tensor-state APIs for modules with state-update semantics,
   including neurons, delay and synaptic filters, learning traces, and SpikeZIP
-  STBIF updates. Existing modules retain their public state, lifecycle, backend
+  STBIF updates. Reusable LIF charging and voltage-reset primitives are also
+  available for neuron variants that insert operations between charge, fire,
+  and reset. Existing modules retain their public state, lifecycle, backend
   selection, and output behavior.
 - State-update APIs use ``*_step`` for one complete update and ``*_multi_step`` only for
   independently implemented sequence paths. Supported CuPy, Triton, and
@@ -55,21 +57,12 @@ Modules: ``spikingjelly.activation_based.functional`` and
 - Added grouped ``MemoryModule.functional_forward`` interfaces and changed
   ``to_functional_forward`` to return
   ``(inputs, states) -> (outputs, updated_states)``. Regular forward paths for the
-  framework's stateful neurons, layers, encoders, recurrent containers, temporal
-  ANN-to-SNN operators, and transformer conversion modules are now backed by
-  their native functional transition. The default multi-step implementation
-  rolls the single-step transition over time, while sequence kernels override it.
-  Sequential modules compose child transitions directly and arbitrary composite
-  modules use a dictionary-swap fallback. Custom production ``MemoryModule`` and
-  ``BaseNode`` subclasses should implement ``single_step_functional_forward`` and
-  override ``multi_step_functional_forward`` only when they provide a specialized
-  sequence implementation. ``SimpleBaseNode``, ``SimpleIFNode``, and ``SimpleLIFNode``
-  retain the charge-fire-reset forward model for equation experiments and use the
-  general state-substitution path when converted.
-- Added ``MemoryModule.materialize_states(inputs, states, step_mode)`` as the
-  single hook for converting registered scalar or empty states into
-  input-dependent states before functional execution. Its default implementation
-  returns states unchanged.
+  framework's stateful modules now use native functional transitions. Multi-step
+  execution loops the single-step transition by default; sequence kernels may
+  override it. Sequential modules compose child transitions directly, while other
+  composite modules use the state-substitution fallback.
+- Added ``MemoryModule.materialize_states(inputs, states, step_mode)`` for converting
+  input-dependent states before functional execution.
 
 ANN-to-SNN Conversion
 ^^^^^^^^^^^^^^^^^^^^^
@@ -267,17 +260,14 @@ Module: ``spikingjelly.activation_based.neuron``.
 - **Breaking change:** ``BaseNode`` now defines production neurons solely through
   functional state transitions and no longer provides ``neuronal_charge()``,
   ``neuronal_fire()``, or ``neuronal_reset()``. Existing custom neurons that inherit
-  ``BaseNode`` and override these hooks must either change their base class to
-  ``SimpleBaseNode`` to retain the charge-fire-reset extension model, or implement
-  ``single_step_functional_forward()`` for a native-functional production neuron.
-  ``to_functional_forward()`` converts ``SimpleBaseNode`` through the general
-  state-substitution path. Built-in production neurons such as ``IFNode`` and
-  ``LIFNode`` use native functional transitions and their specialized sequence
-  kernels.
+  ``BaseNode`` and override these hooks must use ``SimpleBaseNode`` or implement
+  ``single_step_functional_forward()``.
 - **Breaking change:** removed ``BaseNode.v_float_to_tensor()``. Custom functional
   modules that require input-dependent state initialization should override
-  ``materialize_states(inputs, states, step_mode)`` and return a new state tuple
-  without mutating module memory.
+  ``materialize_states(inputs, states, step_mode)``.
+- **Breaking change:** sequence caches such as ``v_seq``, ``i_seq``, and ``state_seqs``
+  are no longer functional states. Functional forward returns only recurrent
+  states; regular multi-step forward stores the requested sequences on the module.
 - **Breaking change:** ``MemoryModule`` subclasses without functional or regular
   forward semantics now raise ``NotImplementedError`` when called. Stateful
   learners such as ``STDPLearner``, ``MSTDPLearner``, and ``MSTDPETLearner`` continue

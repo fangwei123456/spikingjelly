@@ -696,8 +696,6 @@ class MemoryModule(nn.Module, StepModule):
         """
         inputs = (x, *args)
         states = self.materialize_states(inputs, tuple(self._memories.values()), "s")
-        for name, value in zip(self._memories, states, strict=True):
-            self._memories[name] = value
         outputs, updated_states = self.single_step_functional_forward(
             inputs, states, **kwargs
         )
@@ -746,8 +744,6 @@ class MemoryModule(nn.Module, StepModule):
         """
         inputs = (x_seq, *args)
         states = self.materialize_states(inputs, tuple(self._memories.values()), "m")
-        for name, value in zip(self._memories, states, strict=True):
-            self._memories[name] = value
         outputs, updated_states = self.multi_step_functional_forward(
             inputs, states, **kwargs
         )

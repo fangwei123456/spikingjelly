@@ -280,7 +280,7 @@ We use Spiking VGG training on CIFAR10-DVS to demonstrate the workflow. The mode
 
     import torch
     import torch.nn as nn
-    from spikingjelly.activation_based import layer, neuron, surrogate, functional
+    from spikingjelly.activation_based import base, functional, layer, neuron, surrogate
 
 
     class VGGBlock(nn.Module):
@@ -382,16 +382,9 @@ remain tuples even when they contain one tensor. For example:
 
 MemoryModule implementations with functional forward use their explicit state
 transition directly. ``nn.Sequential`` modules recursively compose their children,
-while other composite modules use the general fallback path.
-The names ``SimpleBaseNode``, ``SimpleIFNode``, and ``SimpleLIFNode`` describe a
-pure-PyTorch interface intended for understanding and customizing dynamics, not
-a neuron mathematical model. These classes also use the general path so that
-their configurable ``charge → fire → reset`` equation interface is
-preserved. The converted function temporarily substitutes explicit state, runs
-the regular forward, and then restores the module state. This path preserves
-numerical and state semantics but incurs state-substitution overhead. Prefer
-production neurons with native functional transitions, such as ``IFNode`` and
-``LIFNode``, for frequent temporal checkpointing or other functional calls.
+while other composite modules use the general fallback path. The fallback
+temporarily substitutes explicit state, runs the regular forward, and then restores
+the module state, so it has additional state-substitution overhead.
 
 Step 2. Explicitly declare compressors (optional)
 ###############################################################

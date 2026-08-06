@@ -280,7 +280,7 @@ English version: :doc:`../en/memopt`
 
     import torch
     import torch.nn as nn
-    from spikingjelly.activation_based import layer, neuron, surrogate, functional
+    from spikingjelly.activation_based import base, functional, layer, neuron, surrogate
 
 
     class VGGBlock(nn.Module):
@@ -381,13 +381,8 @@ Step 1. 定义分割规则
     outputs, updated_states = f_forward((x,), (v,))
 
 已实现 functional forward 的 MemoryModule 会直接执行显式状态转移；
-``nn.Sequential`` 会递归组合子模块；其他复合模块由通用路径处理。
-``SimpleBaseNode``、``SimpleIFNode`` 和 ``SimpleLIFNode`` 的名称表示其纯 PyTorch、
-便于理解和自定义动力学的接口定位，并不表示一种神经元数学模型。它们为保留可修改的
-``charge → fire → reset`` 方程接口，也使用通用路径：转换函数会临时换入显式状态，
-执行原有前向后恢复模块状态。该路径保持数值与状态语义，但包含状态替换开销。
-频繁进行时间维梯度检查点或其他 functional 调用时，应优先使用具有原生 functional
-状态转移的 ``IFNode``、``LIFNode`` 等生产级神经元。
+``nn.Sequential`` 会递归组合子模块；其他复合模块由通用路径处理。通用路径会临时
+换入显式状态，执行原有前向后再恢复模块状态，因此包含额外的状态替换开销。
 
 Step 2. 显式声明压缩器（可选）
 ################################

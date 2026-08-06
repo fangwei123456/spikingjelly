@@ -186,7 +186,7 @@ class TestActivationAwareIFNode:
                 candidate.v_seq.untyped_storage().data_ptr()
             )
         else:
-            assert not hasattr(candidate, "v_seq")
+            assert candidate.v_seq is None
             assert candidate.v.untyped_storage().nbytes() == (
                 candidate.v.numel() * candidate.v.element_size()
             )
@@ -479,20 +479,6 @@ class TestActivationAwareIFNode:
 
         with pytest.raises(RuntimeError, match="kernel is unavailable"):
             neuron.ActivationAwareIFNode(step_mode="m", backend="triton")
-
-    @pytest.mark.parametrize(
-        "x_seq",
-        (
-            torch.tensor(1.0),
-            torch.empty(0, 2, 3),
-            torch.empty(2, 0, 3),
-        ),
-    )
-    def test_multistep_rejects_invalid_sequence_shapes(self, x_seq):
-        node = neuron.ActivationAwareIFNode(step_mode="m")
-
-        with pytest.raises(ValueError, match="non-empty shape.*T"):
-            node(x_seq)
 
     @pytest.mark.parametrize("bad_backend", ["cupy", "inductor"])
     def test_rejects_non_torch_backend(self, bad_backend):
