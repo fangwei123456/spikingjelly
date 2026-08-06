@@ -14,11 +14,13 @@ __all__ = [
 
 
 def _apply_modules(x, modules):
+    args = x if isinstance(x, tuple) else (x,)
     if isinstance(modules, (list, tuple)):
         for module in modules:
-            x = module(*x) if isinstance(x, tuple) else module(x)
+            x = module(*args)
+            args = (x,)
         return x
-    return modules(*x) if isinstance(x, tuple) else modules(x)
+    return modules(*args)
 
 
 def _multi_step_forward(x_seq, single_step_module, time_dim):
@@ -244,7 +246,8 @@ def seq_to_ann_forward(
     ``x_seq`` 也可以是 tensor tuple，例如同时输入池化值与池化索引。此时每个
     tensor 的形状均为 ``shape=[T, batch_size, ...]``，且 ``T`` 和 ``batch_size``
     必须相同；每个 tensor 的时间和批量维度会被分别展平，展平后的 tensor 作为
-    位置参数一起输入到无状态层中。
+    位置参数一起输入到第一个无状态层中。若给出多个无状态层，则后续的层依次接收
+    前一层的输出作为单个参数。
 
     :param x_seq: ``shape=[T, batch_size, ...]`` 的输入tensor，或多个此类tensor组成的tuple
     :type x_seq: Union[torch.Tensor, tuple[torch.Tensor, ...]]
@@ -275,8 +278,9 @@ def seq_to_ann_forward(
     pooling indices. In this case, every tensor must have
     ``shape=[T, batch_size, ...]`` with the same ``T`` and ``batch_size``; the
     time and batch dimensions of each tensor are flattened separately, and the
-    flattened tensors are fed to the stateless module(s) as positional
-    arguments.
+    flattened tensors are fed to the first stateless module as positional
+    arguments. If several stateless modules are given, each subsequent module
+    receives the previous module's output as a single argument.
 
     :param x_seq: the input tensor with ``shape=[T, batch_size, ...]``, or a tuple of such tensors
     :type x_seq: Union[torch.Tensor, tuple[torch.Tensor, ...]]
