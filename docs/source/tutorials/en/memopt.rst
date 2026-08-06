@@ -280,7 +280,7 @@ We use Spiking VGG training on CIFAR10-DVS to demonstrate the workflow. The mode
 
     import torch
     import torch.nn as nn
-    from spikingjelly.activation_based import layer, neuron, surrogate, functional
+    from spikingjelly.activation_based import base, functional, layer, neuron, surrogate
 
 
     class VGGBlock(nn.Module):
@@ -370,6 +370,21 @@ In other words, defining ``__spatial_split__`` and returning a tuple suffices. F
             return self.proj_bn, self.neuron
 
 Temporal splitting in :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` is handled automatically via :func:`to_functional_forward <spikingjelly.activation_based.base.to_functional_forward>`, so no manually designed rules are required.
+
+``to_functional_forward`` returns a grouped interface with the form
+``(inputs, states) -> (outputs, updated_states)``. ``inputs`` and ``outputs``
+remain tuples even when they contain one tensor. For example:
+
+.. code:: python
+
+    f_forward = base.to_functional_forward(neuron.LIFNode())
+    outputs, updated_states = f_forward((x,), (v,))
+
+MemoryModule implementations with functional forward use their explicit state
+transition directly. ``nn.Sequential`` modules recursively compose their children,
+while other composite modules use the general fallback path. The fallback
+temporarily substitutes explicit state, runs the regular forward, and then restores
+the module state, so it has additional state-substitution overhead.
 
 Step 2. Explicitly declare compressors (optional)
 ###############################################################

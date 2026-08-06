@@ -44,8 +44,13 @@ class _TDTanh(TDModule):
     def ann_forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.tanh(x)
 
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
-        return self._td_sequence_forward((x_seq,), torch.tanh)
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[Any, ...],
+        **kwargs: Any,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
+        return self._td_sequence_forward((inputs[0],), states, torch.tanh)
 
 
 class TransformerTDEquivalentRecipe(ConversionRecipe):

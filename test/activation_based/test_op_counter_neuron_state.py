@@ -12,17 +12,22 @@ class ToyCLIFNode(neuron.BaseNode):
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + x
 
-    def single_step_forward(self, x: torch.Tensor):
-        self.v_float_to_tensor(x)
-        if isinstance(self.m, float):
-            self.m = torch.full_like(x, self.m, requires_grad=False)
-        self.neuronal_charge(x)
-        self.m = self.m * torch.sigmoid(self.v)
-        spike = self.neuronal_fire()
-        self.m = self.m + spike
-        self.neuronal_reset(spike)
-        self.v = self.v - spike * torch.sigmoid(self.m)
-        return spike
+    def materialize_states(self, inputs, states, step_mode):
+        states = super().materialize_states(inputs, states, step_mode)
+        m = states[1]
+        if isinstance(m, float):
+            m = torch.full_like(states[0], m, requires_grad=False)
+        return states[0], m
+
+    def single_step_functional_forward(self, inputs, states, **kwargs):
+        x = inputs[0]
+        v, m = states
+        v = v + x
+        m = m * torch.sigmoid(v)
+        spike = self.surrogate_function(v - self.v_threshold)
+        m = m + spike
+        v = v - spike * self.v_threshold
+        return (spike,), (v, m)
 
 
 def test_neuron_state_counter_ifnode_multi_step_has_state_metrics():
@@ -57,10 +62,13 @@ def test_neuron_state_counter_lif_projection_tracks_potential_access():
     assert projection["state_mac_like"] > 0
 
 
-def test_neuron_state_counter_toy_clif_has_more_state_traffic_than_lif():
+def test_neuron_state_counter_toy_clif_tracks_state_nonlinearity():
     lif = neuron.LIFNode(step_mode="s", decay_input=False)
     clif = ToyCLIFNode()
     x = torch.rand(2, 5)
+    lif.v = torch.zeros_like(x)
+    clif.v = torch.zeros_like(x)
+    clif.m = torch.zeros_like(x)
 
     lif_counter = op_counter.NeuronStateCounter()
     with op_counter.DispatchCounterMode([lif_counter]):
@@ -70,13 +78,10 @@ def test_neuron_state_counter_toy_clif_has_more_state_traffic_than_lif():
     with op_counter.DispatchCounterMode([clif_counter]):
         _ = clif(x)
 
-    lif_projection = lif_counter.get_projection_counts()["Global"]
-    clif_projection = clif_counter.get_projection_counts()["Global"]
-    assert clif_projection["read_potential"] > lif_projection["read_potential"]
-    assert (
-        clif_projection["read_potential"] + clif_projection["write_potential"]
-        > lif_projection["read_potential"] + lif_projection["write_potential"]
-    )
+    lif_metrics = lif_counter.get_metric_counts()["Global"]
+    clif_metrics = clif_counter.get_metric_counts()["Global"]
+    assert lif_metrics["state_nonlinear_ops"] == 0
+    assert clif_metrics["state_nonlinear_ops"] > 0
 
 
 def test_neuron_state_counter_does_not_change_other_counters_when_neurons_ignored():
@@ -106,7 +111,7 @@ def test_neuron_state_counter_inplace_nonlinear_counts_state_write():
             self.v = self.v + x
 
         def single_step_forward(self, x: torch.Tensor):
-            self.v_float_to_tensor(x)
+            (self.v,) = self.materialize_states((x,), (self.v,), "s")
             self.neuronal_charge(x)
             self.v = self.v.sigmoid_()
             return self.v
@@ -131,7 +136,7 @@ def test_neuron_state_counter_counts_state_access_in_bytes_for_views():
             self.v = self.v + x
 
         def single_step_forward(self, x: torch.Tensor):
-            self.v_float_to_tensor(x)
+            (self.v,) = self.materialize_states((x,), (self.v,), "s")
             self.neuronal_charge(x)
             y = self.v.view_as(x)
             self.v = y + 1.0
@@ -159,7 +164,7 @@ def test_neuron_state_counter_uses_runtime_dtype_bytes():
             self.v = self.v + x
 
         def single_step_forward(self, x: torch.Tensor):
-            self.v_float_to_tensor(x)
+            (self.v,) = self.materialize_states((x,), (self.v,), "s")
             self.neuronal_charge(x)
             self.v = self.v + 1.0
             return self.v
@@ -188,7 +193,7 @@ def test_neuron_state_counter_supports_meta_tensor_storage_keys():
             self.v = self.v + x
 
         def single_step_forward(self, x: torch.Tensor):
-            self.v_float_to_tensor(x)
+            (self.v,) = self.materialize_states((x,), (self.v,), "s")
             self.neuronal_charge(x)
             self.v = self.v + 1.0
             return self.v
@@ -213,7 +218,7 @@ def test_neuron_state_counter_projection_does_not_double_count_reset_tags():
             self.v = self.v + x
 
         def single_step_forward(self, x: torch.Tensor):
-            self.v_float_to_tensor(x)
+            (self.v,) = self.materialize_states((x,), (self.v,), "s")
             self.neuronal_charge(x)
             spike = (self.v > 0.5).to(x)
             self.v = self.v + spike
@@ -247,7 +252,7 @@ def test_neuron_state_counter_non_binary_zero_sparse_gate_reduces_state_bytes():
             self.v = self.v + x
 
         def single_step_forward(self, x: torch.Tensor):
-            self.v_float_to_tensor(x)
+            (self.v,) = self.materialize_states((x,), (self.v,), "s")
             self.neuronal_charge(x)
             gate = torch.full_like(x, 0.25)
             self.v = self.v + gate
@@ -261,7 +266,7 @@ def test_neuron_state_counter_non_binary_zero_sparse_gate_reduces_state_bytes():
             self.v = self.v + x
 
         def single_step_forward(self, x: torch.Tensor):
-            self.v_float_to_tensor(x)
+            (self.v,) = self.materialize_states((x,), (self.v,), "s")
             self.neuronal_charge(x)
             gate = torch.zeros_like(x)
             gate[:, :2] = 0.25
@@ -297,7 +302,7 @@ def test_neuron_state_counter_clone_counts_state_write():
             self.v = self.v + x
 
         def single_step_forward(self, x: torch.Tensor):
-            self.v_float_to_tensor(x)
+            (self.v,) = self.materialize_states((x,), (self.v,), "s")
             self.neuronal_charge(x)
             self.v = self.v.clone()
             return self.v
@@ -323,7 +328,7 @@ def test_neuron_state_counter_copy_does_not_count_state_target_as_read():
             self.v = self.v + x
 
         def single_step_forward(self, x: torch.Tensor):
-            self.v_float_to_tensor(x)
+            (self.v,) = self.materialize_states((x,), (self.v,), "s")
             self.v.copy_(torch.zeros_like(x))
             return self.v
 

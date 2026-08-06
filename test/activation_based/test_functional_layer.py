@@ -105,6 +105,38 @@ def test_synapse_filter_step_does_not_mutate_state():
     assert torch.equal(state, state_before)
 
 
+def test_neunorm_step_matches_module():
+    in_spikes = torch.randn(2, 3, 4, 5)
+    state = torch.randn(2, 1, 4, 5)
+    module = layer.NeuNorm(3, 4, 5)
+    module.x = state.clone()
+
+    output, state_next = functional.neunorm_step(
+        in_spikes,
+        state,
+        module.w,
+        module.k0,
+        module.k1,
+    )
+    module_output = module(in_spikes)
+    expected_state = module.k0 * state + module.k1 * in_spikes.sum(dim=1, keepdim=True)
+
+    torch.testing.assert_close(output, module_output)
+    torch.testing.assert_close(state_next, module.x)
+    torch.testing.assert_close(state_next, expected_state)
+    torch.testing.assert_close(output, in_spikes - module.w * expected_state)
+
+
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+def test_neunorm_materializes_channel_shared_state(step_mode):
+    module = layer.NeuNorm(3, 4, 5, step_mode=step_mode)
+    x = torch.randn(2, 3, 4, 5)
+    output = module(x if step_mode == "s" else x.unsqueeze(0))
+
+    assert output.shape == (x.shape if step_mode == "s" else (1, *x.shape))
+    assert module.x.shape == (2, 1, 4, 5)
+
+
 def test_functional_layer_exports():
     for name in functional_layer.__all__:
         assert getattr(functional, name) is getattr(functional_layer, name)

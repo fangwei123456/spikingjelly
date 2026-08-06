@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+import weakref
 from collections import defaultdict
 from typing import Any, Callable
 
@@ -101,6 +102,11 @@ _STATE_COPY_OPS = {
     aten.clone.default,
     aten.copy_.default,
     aten._to_copy.default,
+}
+
+_STATE_MATERIALIZATION_OPS = {
+    aten.full_like.default,
+    aten.zeros_like.default,
 }
 
 
@@ -216,6 +222,7 @@ class NeuronStateCounter(BaseCounter):
         self._warned_modules: set[int] = set()
         self._pending_metrics: dict[str, int] | None = None
         self._pending_projection: dict[str, int] | None = None
+        self._functional_state_refs: list[weakref.ReferenceType[torch.Tensor]] = []
 
     def has_rule(self, func) -> bool:
         return True
@@ -327,6 +334,21 @@ class NeuronStateCounter(BaseCounter):
             for value in module._memories.values():
                 if torch.is_tensor(value):
                     state_tensor_keys.add(_storage_key(value))
+
+        live_refs = []
+        live_states = []
+        for state_ref in self._functional_state_refs:
+            tensor = state_ref()
+            if tensor is not None:
+                live_refs.append(state_ref)
+                live_states.append(tensor)
+        self._functional_state_refs = live_refs
+        state_tensor_keys.update(_storage_key(tensor) for tensor in live_states)
+
+        if not state_tensor_keys and func in _STATE_MATERIALIZATION_OPS:
+            materialized_state = _collect_tensors(out)[0]
+            self._functional_state_refs.append(weakref.ref(materialized_state))
+            state_tensor_keys.add(_storage_key(materialized_state))
 
         if not state_tensor_keys:
             self._pending_metrics = None
@@ -444,6 +466,9 @@ class NeuronStateCounter(BaseCounter):
 
         if writes_state and output_tensors:
             metrics["state_writes"] += out_bytes
+            self._functional_state_refs.extend(
+                weakref.ref(tensor) for tensor in output_tensors
+            )
             has_spike_gate = sparse_state_access
             if has_spike_gate:
                 metrics["state_reset_ops"] += out_numel
@@ -582,3 +607,4 @@ class NeuronStateCounter(BaseCounter):
         self._warned_modules = set()
         self._pending_metrics = None
         self._pending_projection = None
+        self._functional_state_refs = []

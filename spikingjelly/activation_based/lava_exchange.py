@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from . import base, neuron, surrogate
+from .functional import neuron as functional
 
 from spikingjelly.logger import logger
 
@@ -650,9 +651,11 @@ class CubaLIFNode(neuron.BaseNode):
     @store_i_seq.setter
     def store_i_seq(self, value: bool):
         self._store_i_seq = value
-        if value:
-            if not hasattr(self, "i_seq"):
-                self.register_memory("i_seq", None)
+        self.i_seq = None
+
+    def reset(self):
+        super().reset()
+        self.i_seq = None
 
     @property
     def supported_backends(self):
@@ -665,81 +668,113 @@ class CubaLIFNode(neuron.BaseNode):
             )
 
     # computation process
-    def state_initialization(self, x: torch.Tensor):
-        if isinstance(self.current_state, float):
-            self.current_state = torch.zeros_like(x.data)
+    def materialize_states(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        x = inputs[0][0] if step_mode == "m" else inputs[0]
+        materialized = []
+        for state in states[-2:]:
+            if not isinstance(state, torch.Tensor) or state.shape != x.shape:
+                state = torch.zeros_like(x)
+            elif state.dtype != x.dtype or state.device != x.device:
+                state = state.to(dtype=x.dtype, device=x.device)
+            materialized.append(state)
+        return (*states[:-2], *materialized)
 
-        if isinstance(self.voltage_state, float):
-            self.voltage_state = torch.zeros_like(x.data)
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        current_state, voltage_state = states[-2:]
+        current_decay = (
+            self.current_decay.clamp(min=0.0, max=self.p_scale)
+            if self.requires_grad
+            else self.current_decay
+        )
+        voltage_decay = (
+            self.voltage_decay.clamp(min=0.0, max=self.p_scale)
+            if self.requires_grad
+            else self.voltage_decay
+        )
+        if self.norm is None:
+            spike, current_state, voltage_state = functional.lava_cuba_lif_step(
+                x,
+                current_state,
+                voltage_state,
+                current_decay,
+                voltage_decay,
+                self.s_scale,
+                self.v_threshold,
+                self.v_threshold_eps,
+                self.v_reset,
+                self.surrogate_function,
+                self.detach_reset,
+            )
+            return (spike,), (*states[:-2], current_state, voltage_state)
 
-    def neuronal_charge(self, x: torch.Tensor):
-        if self.requires_grad:
-            self.clamp_decay_parameters()
-
-        current = LeakyIntegratorStep.apply(
+        current_state = LeakyIntegratorStep.apply(
             x,
-            step_quantize(self.current_decay),
-            self.current_state.contiguous(),
+            step_quantize(current_decay),
+            current_state.contiguous(),
             self.s_scale,
         )
-
         if self.norm is not None:
-            current = self.norm(current)
-
-        voltage = LeakyIntegratorStep.apply(
-            current,
-            step_quantize(self.voltage_decay),
-            self.voltage_state.contiguous(),
+            current_state = self.norm(current_state)
+        voltage_state = LeakyIntegratorStep.apply(
+            current_state,
+            step_quantize(voltage_decay),
+            voltage_state.contiguous(),
             self.s_scale,
         )
-
-        self.current_state = current
-        self.voltage_state = voltage
-
-    def neuronal_fire(self):
-        return self.surrogate_function(
-            self.voltage_state - (self.v_threshold + self.v_threshold_eps)
+        spike = self.surrogate_function(
+            voltage_state - (self.v_threshold + self.v_threshold_eps)
         )
-
-    def neuronal_reset(self, spike):
-        if self.detach_reset:
-            spike_d = spike.detach()
-        else:
-            spike_d = spike
-
-        self.voltage_state = self.apply_hard_reset(
-            self.voltage_state, spike_d, self.v_reset
+        voltage_state = functional.voltage_reset(
+            voltage_state,
+            spike,
+            self.v_threshold,
+            self.v_reset,
+            self.detach_reset,
         )
+        return (spike,), (*states[:-2], current_state, voltage_state)
 
-    def single_step_forward(self, x):
-        self.state_initialization(x)
-        self.neuronal_charge(x)
-        spike = self.neuronal_fire()
-        self.neuronal_reset(spike)
-        return spike
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        return super().multi_step_functional_forward(inputs, states, **kwargs)
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
-        T = x_seq.shape[0]
-        y_seq = []
-        if self.store_v_seq:
-            v_seq = []
-        if self.store_i_seq:
-            i_seq = []
-
-        for t in range(T):
-            y = self.single_step_forward(x_seq[t])
-            y_seq.append(y)
+    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
+        inputs = (x_seq, *args)
+        states = self.materialize_states(inputs, tuple(self._memories.values()), "m")
+        output_steps = []
+        voltage_steps = []
+        current_steps = []
+        for t in range(x_seq.shape[0]):
+            outputs, states = self.single_step_functional_forward(
+                tuple(x[t] for x in inputs), states, **kwargs
+            )
+            output_steps.append(outputs[0])
             if self.store_v_seq:
-                v_seq.append(self.voltage_state)
+                voltage_steps.append(states[-1])
             if self.store_i_seq:
-                i_seq.append(self.current_state)
+                current_steps.append(states[-2])
 
+        for name, value in zip(self._memories, states, strict=True):
+            self._memories[name] = value
         if self.store_v_seq:
-            self.v_seq = torch.stack(v_seq)
+            self.v_seq = torch.stack(voltage_steps)
         if self.store_i_seq:
-            self.i_seq = torch.stack(i_seq)
-
-        return torch.stack(y_seq)
+            self.i_seq = torch.stack(current_steps)
+        return torch.stack(output_steps)
 
 
 try:

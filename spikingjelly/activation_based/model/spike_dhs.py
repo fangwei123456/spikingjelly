@@ -10,7 +10,7 @@ from torch import Tensor
 from torch.autograd import Function
 from torch.nn.functional import interpolate
 
-from ...activation_based import layer
+from ...activation_based import functional, layer
 from ..neuron import LIFNode
 from ..surrogate import SurrogateFunctionBase, heaviside
 
@@ -154,49 +154,89 @@ class DSpike(SurrogateFunctionBase):
 
 
 class save_v_LIFNode(LIFNode):
-    r"""
-    **API Language** - :ref:`中文 <save_v_LIFNode-cn>` | :ref:`English <save_v_LIFNode-en>`
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        r"""
+        **API Language** - :ref:`中文 <save_v_LIFNode.__init__-cn>` | :ref:`English <save_v_LIFNode.__init__-en>`
 
-    ----
+        ----
 
-    .. _save_v_LIFNode-cn:
+        .. _save_v_LIFNode.__init__-cn:
 
-    * **中文**
+        * **中文**
 
-    保存膜电位的 LIF 神经元节点。在 DSpike 搜索中用于记录中间膜电位。
+        保存放电前平均膜电位的 LIF 神经元，用于 DSpike 搜索。构造参数与
+        :class:`LIFNode` 相同。
 
-    ----
+        :param args: 传递给 :class:`LIFNode` 的位置参数
+        :type args: tuple[object, ...]
+        :param kwargs: 传递给 :class:`LIFNode` 的关键字参数
+        :type kwargs: dict[str, object]
 
-    .. _save_v_LIFNode-en:
+        ----
 
-    * **English**
+        .. _save_v_LIFNode.__init__-en:
 
-    LIF neuron node that saves membrane potential. Used in DSpike search.
-    """
+        * **English**
 
-    def single_step_forward(self, x: torch.Tensor):
-        self.v_float_to_tensor(x)
-        self.neuronal_charge(x)
-        self.v_before_spike = (self.v - self.v_threshold).mean()
-        spike = self.neuronal_fire()
-        self.neuronal_reset(spike)
+        LIF neuron that stores the mean pre-spike membrane voltage for DSpike
+        search. Constructor arguments are the same as :class:`LIFNode`.
+
+        :param args: Positional arguments forwarded to :class:`LIFNode`
+        :type args: tuple[object, ...]
+        :param kwargs: Keyword arguments forwarded to :class:`LIFNode`
+        :type kwargs: dict[str, object]
+        """
+        super().__init__(*args, **kwargs)
+        self.v_before_spike = None
+
+    def _step_with_observation(
+        self, x: torch.Tensor, v: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        charged = functional.lif_charge(x, v, self.tau, self.decay_input, self.v_reset)
+        v_before_spike = (charged - self.v_threshold).mean()
+        spike = self.surrogate_function(charged - self.v_threshold)
+        v = functional.voltage_reset(
+            charged,
+            spike,
+            self.v_threshold,
+            self.v_reset,
+            self.detach_reset,
+        )
+        return spike, v, v_before_spike
+
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        v = states[0]
+
+        spike, v, _ = self._step_with_observation(x, v)
+        return (spike,), (v, *states[1:])
+
+    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
+        states = self.materialize_states((x,), tuple(self._memories.values()), "s")
+        spike, v, self.v_before_spike = self._step_with_observation(x, states[0])
+        self.v = v
         return spike
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
-        T = x_seq.shape[0]
-        y_seq = []
-        if self.store_v_seq:
-            v_seq = []
-        for t in range(T):
-            y = self.single_step_forward(x_seq[t])
-            y_seq.append(y)
-            if self.store_v_seq:
-                v_seq.append(self.v_before_spike)
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        states = self.materialize_states((x_seq,), tuple(self._memories.values()), "m")
+        v = states[0]
+        spikes = []
+        observations = []
+        for x in x_seq:
+            spike, v, observation = self._step_with_observation(x, v)
+            spikes.append(spike)
+            observations.append(observation)
 
+        self.v = v
+        self.v_before_spike = observations[-1]
         if self.store_v_seq:
-            self.v_seq = torch.stack(v_seq)
-
-        return torch.stack(y_seq)
+            self.v_seq = torch.stack(observations)
+        return torch.stack(spikes)
 
 
 def getSpikingNode(v_threshold=0.5):

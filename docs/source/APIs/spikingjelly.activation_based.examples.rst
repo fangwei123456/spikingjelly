@@ -111,6 +111,7 @@ DQN\_state
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: NonSpikingLIFNode
 
 PPO
 --------------------------------------------------

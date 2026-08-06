@@ -398,7 +398,7 @@ def test_cupy_batch_size_change_reconciles_v_state(kind, dtype):
     node_cupy(x_first)
     node_cupy.reset()
 
-    # Pass 2: change batch size to 7; v_float_to_tensor should reconcile state.
+    # Pass 2: change batch size to 7; materialize_states should reconcile state.
     s_torch_second = node_torch(x_second)
     v_torch_second = node_torch.v_seq
 

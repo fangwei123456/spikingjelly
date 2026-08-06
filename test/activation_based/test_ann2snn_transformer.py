@@ -1492,15 +1492,6 @@ def test_sta_sequence_spike_encoder_clamps_zero_threshold():
     assert torch.count_nonzero(y_seq) == 0
 
 
-def test_sta_sequence_spike_encoder_rejects_invalid_multistep_input():
-    encoder = _STASpikeEncoder(torch.ones(3), channel_dim=-1, step_mode="m")
-
-    with pytest.raises(ValueError, match="at least one data dimension"):
-        encoder(torch.zeros(4))
-    with pytest.raises(ValueError, match="non-empty time dimension"):
-        encoder(torch.zeros(0, 2, 3))
-
-
 class TinyUnsupportedSequenceOpClassifier(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x.permute(1, 0, 2)

@@ -50,35 +50,10 @@ if __name__ == "__main__":
     env.seed(seed)
 
     # Neural Network
-    class NonSpikingLIFNode(neuron.LIFNode):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-
+    class NonSpikingLIFNode(neuron.SimpleLIFNode):
         def single_step_forward(self, x: torch.Tensor):
-            self.v_float_to_tensor(x)
-
-            if self.training:
-                self.neuronal_charge(x)
-            else:
-                if self.v_reset is None:
-                    if self.decay_input:
-                        self.v = self.neuronal_charge_decay_input_reset0(
-                            x, self.v, self.tau
-                        )
-                    else:
-                        self.v = self.neuronal_charge_no_decay_input_reset0(
-                            x, self.v, self.tau
-                        )
-
-                else:
-                    if self.decay_input:
-                        self.v = self.neuronal_charge_decay_input(
-                            x, self.v, self.v_reset, self.tau
-                        )
-                    else:
-                        self.v = self.neuronal_charge_no_decay_input(
-                            x, self.v, self.v_reset, self.tau
-                        )
+            self.neuronal_charge(x)
+            return self.v
 
     class ActorCritic(nn.Module):
         def __init__(self, num_inputs, num_outputs, hidden_size, T=16, std=0.0):
@@ -88,14 +63,14 @@ if __name__ == "__main__":
                 layer.Linear(num_inputs, hidden_size),
                 neuron.IFNode(),
                 layer.Linear(hidden_size, 1),
-                NonSpikingLIFNode(tau=2.0),
+                NonSpikingLIFNode(tau=2.0, decay_input=True),
             )
 
             self.actor = nn.Sequential(
                 layer.Linear(num_inputs, hidden_size),
                 neuron.IFNode(),
                 layer.Linear(hidden_size, num_outputs),
-                NonSpikingLIFNode(tau=2.0),
+                NonSpikingLIFNode(tau=2.0, decay_input=True),
             )
 
             self.log_std = nn.Parameter(torch.ones(1, num_outputs) * std)

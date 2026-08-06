@@ -100,23 +100,20 @@ The expression of :math:`V_{t}` can be obtained as
 .. math::
     V_{t} = f(V_{t-1}, X_{t}) = V_{t-1} + \frac{1}{\tau_{m}}(-(V_{t - 1} - V_{reset}) + X_{t})
 
-The corresponding code can be found in :class:`spikingjelly.activation_based.neuron.LIFNode.neuronal_charge`:
+The corresponding code can be found in :meth:`spikingjelly.activation_based.neuron.SimpleLIFNode.neuronal_charge`:
 
 .. code-block:: python
 
-    def neuronal_charge(self, dv: torch.Tensor):
-        if self.v_reset is None:
-            self.v += (x - self.v) / self.tau
-
+    def neuronal_charge(self, x: torch.Tensor):
+        if self.decay_input:
+            self.v = self.v + (self.v_reset - self.v + x) / self.tau
         else:
-            if isinstance(self.v_reset, float) and self.v_reset == 0.:
-                self.v += (x - self.v) / self.tau
-            else:
-                self.v += (x - (self.v - self.v_reset)) / self.tau
+            self.v = self.v + (self.v_reset - self.v) / self.tau + x
 
-Different neurons have different charging equations. However, when the membrane potential exceeds the threshold potential,
-the release of spike and the reset of the membrane potential are the same for all kinds of neurons. Therefore,
-they all inherit from :class:`spikingjelly.activation_based.neuron.BaseNode` and share the same discharge and reset equations. The codes of neuronal fire can be found at :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_fire`:
+Different neurons can use different charge, fire, and reset equations.
+:class:`spikingjelly.activation_based.neuron.SimpleBaseNode` exposes these three
+processes as independently overridable methods. The default firing implementation
+is available at :meth:`spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_fire`:
 
 .. code-block:: python
 
@@ -135,8 +132,9 @@ two ways to realize neuronal reset:
 #. Soft method: After releasing a spike, the membrane potential subtracts the threshold voltage :math:`V = V - V_{threshold}`
 
 It can be found that for neurons using the soft method, there is no need to reset the voltage :math:`V_{reset}`.
-For the neurons in :class:`spikingjelly.activation_based.neuron`, when ``v_reset`` is set to the a float value (e.g., the default value is ``1.0``), the neuron uses the hard reset; if ``v_reset`` is set to ``None``, the soft reset will be used.
-We can find the corresponding codes in :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_fire.neuronal_reset`:
+For the neurons in :class:`spikingjelly.activation_based.neuron`, when ``v_reset`` is set to a float value (the default is ``0.0``), the neuron uses the hard reset; if ``v_reset`` is set to ``None``, the soft reset will be used.
+We can find the corresponding code in
+:meth:`spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_reset`:
 
 .. code-block:: python
 

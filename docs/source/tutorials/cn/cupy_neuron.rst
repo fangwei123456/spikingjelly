@@ -771,11 +771,16 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
             else:
                 self.register_memory('v', 0.)
 
-        def multi_step_forward(self, x_seq: torch.Tensor):
+        def materialize_states(self, inputs, states, step_mode):
+            x = inputs[0][0]
+            v = states[0]
+            if not isinstance(v, torch.Tensor) or v.shape != x.shape:
+                v = torch.full_like(x, self.v_reset or 0.)
+            return (v,)
 
-            if isinstance(self.v, float):
-                self.v = torch.zeros_like(x_seq[0])
-
+        def multi_step_functional_forward(self, inputs, states, **kwargs):
+            x_seq = inputs[0]
+            v = states[0]
             hard_reset = self.v_reset is not None
             if x_seq.dtype == torch.float:
                 dtype = 'float'
@@ -787,12 +792,11 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
             backward_kernel = IFNodeBPTTKernel(surrogate_function=self.surrogate_function.cuda_codes, hard_reset=hard_reset, detach_reset=self.detach_reset, dtype=dtype)
 
             # All tensors wil be regard as 2D or 1D. Thus, we use flatten
-            spike_seq, v_seq = IFNodeATGF.apply(x_seq.flatten(1), self.v.flatten(), self.v_threshold, self.v_reset, forward_kernel, backward_kernel)
+            spike_seq, v_seq = IFNodeATGF.apply(x_seq.flatten(1), v.flatten(), self.v_threshold, self.v_reset, forward_kernel, backward_kernel)
 
             spike_seq = spike_seq.view(x_seq.shape)
-            self.v = v_seq[-1].view(x_seq.shape[1:])
-
-            return spike_seq
+            v = v_seq[-1].view(x_seq.shape[1:])
+            return (spike_seq,), (v,)
 
 接下来，让我们与纯pytorch实现对比输出误差：
 

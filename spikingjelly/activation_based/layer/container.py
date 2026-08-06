@@ -188,7 +188,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
 
         .. math::
 
-            i[t] = f(x[t], y[t-1])
+            i[t] = f(y[t-1], x[t])
 
         其中 :math:`f` 是用户自定义的逐元素函数。我们默认 :math:`y[-1] = 0`。
 
@@ -200,7 +200,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         :param sub_module: 被包含的模块
         :type sub_module: torch.nn.Module
 
-        :param element_wise_function: 用户自定义的逐元素函数，应该形如 ``z=f(x, y)``
+        :param element_wise_function: 用户自定义的逐元素函数，应该形如 ``z=f(y, x)``
         :type element_wise_function: Callable
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
@@ -218,7 +218,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
 
         .. math::
 
-            i[t] = f(x[t], y[t-1])
+            i[t] = f(y[t-1], x[t])
 
         where :math:`f` is the user-defined element-wise function. We set :math:`y[-1] = 0`.
 
@@ -230,7 +230,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         :param sub_module: the contained module
         :type sub_module: torch.nn.Module
 
-        :param element_wise_function: the user-defined element-wise function, which should have the format ``z=f(x, y)``
+        :param element_wise_function: the user-defined element-wise function, which should have the format ``z=f(y, x)``
         :type element_wise_function: Callable
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
@@ -261,11 +261,25 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         self.element_wise_function = element_wise_function
         self.register_memory("y", None)
 
-    def single_step_forward(self, x: Tensor):
-        if self.y is None:
-            self.y = torch.zeros_like(x)
-        self.y = self.sub_module(self.element_wise_function(self.y, x))
-        return self.y
+    def materialize_states(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        x = inputs[0] if step_mode == "s" else inputs[0][0]
+        return (torch.zeros_like(x) if states[0] is None else states[0],)
+
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        y = states[0]
+        y = self.sub_module(self.element_wise_function(y, x))
+        return (y,), (y,)
 
     def extra_repr(self) -> str:
         return f"element-wise function={self.element_wise_function}, step_mode={self.step_mode}"
@@ -390,12 +404,28 @@ class LinearRecurrentContainer(base.MemoryModule):
         self.sub_module = sub_module
         self.register_memory("y", None)
 
-    def single_step_forward(self, x: Tensor):
-        if self.y is None:
-            self.y = x.new_zeros(*x.shape[:-1], self.sub_module_out_features)
-        x = torch.cat((x, self.y), dim=-1)
-        self.y = self.sub_module(self.rc(x))
-        return self.y
+    def materialize_states(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        x = inputs[0] if step_mode == "s" else inputs[0][0]
+        y = states[0]
+        if y is None:
+            y = x.new_zeros(*x.shape[:-1], self.sub_module_out_features)
+        return (y,)
+
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        y = states[0]
+        y = self.sub_module(self.rc(torch.cat((x, y), dim=-1)))
+        return (y,), (y,)
 
     def extra_repr(self) -> str:
         return f", step_mode={self.step_mode}"

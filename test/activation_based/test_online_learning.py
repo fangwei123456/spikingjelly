@@ -2,6 +2,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+from spikingjelly.activation_based import base
 from spikingjelly.activation_based.functional.online_learning import (
     fptt_online_training,
     fptt_online_training_init_w_ra,
@@ -30,14 +31,27 @@ def test_online_lif_nodes_share_spike_dynamics_and_reset_state():
 
     ottt.reset()
     sltt.reset()
-    assert not hasattr(ottt, "v")
-    assert not hasattr(ottt, "trace")
-    assert not hasattr(sltt, "v")
+    assert ottt.v == 0.0
+    assert ottt.trace is None
+    assert sltt.v == 0.0
 
     ottt.eval()
     sltt.eval()
     for x in inputs:
         torch.testing.assert_close(ottt(x), sltt(x))
+
+
+@pytest.mark.parametrize("node_type", [OTTTLIFNode, SLTTLIFNode])
+def test_online_lif_nodes_support_functional_conversion(node_type):
+    node = node_type()
+    functional_forward = base.to_functional_forward(node)
+    states = tuple(node._memories.values())
+
+    outputs, updated_states = functional_forward((torch.zeros(1),), states)
+
+    assert len(outputs) == (2 if node_type is OTTTLIFNode else 1)
+    assert len(updated_states) == len(states)
+    assert tuple(node._memories.values()) == states
 
 
 def test_grad_with_trace_uses_spikes_for_values_and_traces_for_gradients():

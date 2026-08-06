@@ -84,14 +84,22 @@ We use the sub-threshold neuronal dynamics :math:`\frac{\mathrm{d}V(t)}{\mathrm{
 .. math::
     V[t] = f(V[t-1], X[t]) = V[t-1] + X[t]
 
-We can find the following codes in :class:`spikingjelly.activation_based.neuron.IFNode.neuronal_charge`:
+The equation is written directly in
+:class:`spikingjelly.activation_based.neuron.SimpleIFNode` for dynamics
+experiments:
 
 .. code-block:: python
 
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + x
 
-Different spiking neurons have different charging equations. But after the membrane potential exceeds the threshold voltage, the firing and resetting equations are the same. Hence, these equations are inherited from :class:`spikingjelly.activation_based.neuron.BaseNode`. We can find the codes in :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_fire`:
+Different spiking neurons have different charging equations but usually share
+the firing and reset equations. The
+:class:`spikingjelly.activation_based.neuron.SimpleBaseNode` interface expresses
+these stages directly through the
+``neuronal_charge → neuronal_fire → neuronal_reset`` path. Production neurons
+perform the equivalent computation in functional transitions or specialized
+kernels. The core firing expression in ``SimpleBaseNode.neuronal_fire`` is:
 
 .. code-block:: python
 
@@ -104,10 +112,11 @@ Firing spike will consume the accumulated potential, and make the potential decr
 
 #. Hard reset: the membrane potential will be set to the reset voltage after firing: :math:`V[t] = V_{reset}`
 
-#. #. Soft reset: the membrane potential will decrease the threshold potential after firing: :math:`V[t] = V[t] - V_{threshold}`
+#. Soft reset: the membrane potential will decrease the threshold potential after firing: :math:`V[t] = V[t] - V_{threshold}`
 
 We can find that the neuron that uses soft reset does not need the attribute :math:`V_{reset}`. In the current implementation of :class:`spikingjelly.activation_based.neuron`, the default value of ``v_reset`` is ``0.0``, which means the neuron will use hard reset by default.\
-If we set ``v_reset = None``, then the neuron will use the soft reset. We can find the codes for neuronal reset in :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_reset`:
+If we set ``v_reset = None``, then the neuron will use the soft reset.
+``SimpleBaseNode.neuronal_reset`` uses the following equivalent logic:
 
 .. code-block:: python
 
@@ -278,21 +287,54 @@ Some neurons support the ``cupy`` backend in both single-step and multi-step mod
 
 Custom Spiking Neurons
 -------------------------------------------
-As mentioned above, SpikingJelly uses three equations: neuronal change, neuronal fire, and neuronal reset, to describe all kinds of spiking neurons.\
-We can find the corresponding codes in :class:`BaseNode <spikingjelly.activation_based.neuron.BaseNode>`. The forward of single-step, which is the ``single_step_forward`` function, \
-is composed of the three equations:
+SpikingJelly provides separate interfaces for modifying neuron dynamics and for
+high-performance execution. ``Simple`` in ``SimpleBaseNode`` describes the role
+of the interface, not a neuron mathematical model. This pure-PyTorch interface
+exposes charge, fire, and reset directly so that users can understand the role of
+a neuron in an SNN and customize its dynamics.
 
-.. code-block:: python
+.. list-table:: Neuron extension interfaces
+    :header-rows: 1
+    :widths: 20 30 25 25
 
-    # spikingjelly.activation_based.neuron.BaseNode
-    def single_step_forward(self, x: torch.Tensor):
-        self.neuronal_charge(x)
-        spike = self.neuronal_fire()
-        self.neuronal_reset(spike)
-        return spike
+    * - Base class
+      - Forward model
+      - ``to_functional_forward``
+      - Intended use
+    * - :class:`SimpleBaseNode <spikingjelly.activation_based.neuron.SimpleBaseNode>`
+      - ``neuronal_charge`` → ``neuronal_fire`` → ``neuronal_reset``
+      - General state-substitution path
+      - Teaching, dynamics experiments, and rapid prototypes
+    * - :class:`BaseNode <spikingjelly.activation_based.neuron.BaseNode>`
+      - Native functional transition with optional sequence kernels
+      - Direct functional-forward call
+      - Production neurons and backend implementations
 
-``neuronal_fire`` and ``neuronal_reset`` are same for most spiking neurons, and are defined by ``BaseNode``. The difference of neurons are ``__init__`` and ``neuronal_charge`` functions.\
-Hence, if we want to implement a new kind of spiking neuron, we only need to change the ``__init__`` and ``neuronal_charge`` functions.
+Inherit from ``SimpleBaseNode`` when only the neuron equation needs to change. Its
+single-step forward always applies charge, fire, and reset in order, and its
+multi-step forward invokes the complete single-step forward at every time step.
+Therefore, users normally only implement ``neuronal_charge``. ``SimpleIFNode`` and
+``SimpleLIFNode`` use the same interface.
+
+``SimpleBaseNode`` does not define a native functional transition. Calling
+``functional_forward`` directly raises an error. Calling
+:func:`to_functional_forward <spikingjelly.activation_based.base.to_functional_forward>`
+on a module derived from ``SimpleBaseNode`` uses the general fallback, which
+temporarily substitutes explicit state, runs the regular forward, and restores
+the module state. This preserves the
+equation extension interface but is less efficient than native-functional neurons
+such as ``LIFNode``; it is not intended for high-performance workloads that
+repeatedly require functional conversion.
+
+Production ``MemoryModule`` implementations call
+``materialize_states(inputs, states, step_mode)`` before functional forward. Its
+default implementation returns states unchanged; override it only when scalar
+or empty states must become tensors based on the current inputs. ``inputs``
+contains the complete inputs of the current forward pass. An implementation may
+use ``step_mode`` to select the first time step as its reference in multi-step
+mode; it must not assume that every input has a time dimension. The method
+returns a new state tuple and must not mutate module memory. The former
+``BaseNode.v_float_to_tensor`` hook has been removed.
 
 Suppose we want to build a Square-Integrated-and-Fire neuron, whose neuronal charge equation is:
 
@@ -306,12 +348,9 @@ We can implement this kind of neuron by the following codes:
     import torch
     from spikingjelly.activation_based import neuron
 
-    class SquareIFNode(neuron.BaseNode):
+    class SquareIFNode(neuron.SimpleBaseNode):
         def neuronal_charge(self, x: torch.Tensor):
-            self.v = self.v + x ** 2
-
-:class:`BaseNode <spikingjelly.activation_based.neuron.BaseNode>` is inherited from :class:`MemoryModule <spikingjelly.activation_based.base.MemoryModule>`, \
-which uses ``for t in range(T)`` to call single-step forward function to implement the multi-step forward by default. So, after we define the  ``neuronal_charge``, then ``single_step_forward`` is completed, and ``multi_step_forward`` is also completed.
+            self.v = self.v + x.square()
 
 Use our ``SquareIFNode`` to implement the single/multi-step forward:
 
@@ -320,10 +359,9 @@ Use our ``SquareIFNode`` to implement the single/multi-step forward:
     import torch
     from spikingjelly.activation_based import neuron
 
-    class SquareIFNode(neuron.BaseNode):
-
+    class SquareIFNode(neuron.SimpleBaseNode):
         def neuronal_charge(self, x: torch.Tensor):
-            self.v = self.v + x ** 2
+            self.v = self.v + x.square()
 
     sif_layer = SquareIFNode()
 
@@ -359,3 +397,20 @@ The outputs are:
             [1.],
             [0.],
             [0.]])
+
+To implement a production neuron that converts directly like ``LIFNode`` and can
+provide CuPy, Triton, or Inductor kernels, inherit from ``BaseNode`` and implement
+``single_step_functional_forward``. Its interface is
+``(self, inputs, states, **kwargs) -> (outputs, updated_states)``. The method must
+not mutate registered module memories or the supplied ``states``. Override
+``multi_step_functional_forward`` only when an independent sequence implementation
+or specialized kernel exists.
+
+.. warning::
+
+    Regular ``BaseNode`` forward is now functional-backed, and
+    ``neuronal_charge``, ``neuronal_fire``, and ``neuronal_reset`` have been
+    removed from it. Existing subclasses that customize Python neuron equations
+    through these methods should change their base class to ``SimpleBaseNode``;
+    their existing equations do not need to be rewritten. Production neurons and
+    custom backends should migrate to the functional interface described above.

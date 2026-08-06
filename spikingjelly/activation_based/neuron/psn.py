@@ -252,42 +252,47 @@ class MaskedPSN(base.MemoryModule):
                 self.lambda_, self.mask0, self.mask1, self.weight
             )
 
-    def single_step_forward(self, x: torch.Tensor):
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        time_step = states[0]
         if self.lambda_ < 1.0:
             raise ValueError(
                 "The masked PSN can not work in single-step mode when k < 1!"
             )
 
-        self.queue.append(x.flatten())
-        if self.queue.__len__() > self.k:
-            self.queue.pop(0)
-
-        if self.time_step + 1 > self.T:
+        if time_step + 1 > self.T:
             raise OverflowError(
-                f"The MaskedPSN(T={self.T}) has run {self.time_step + 1} time-steps!"
+                f"The MaskedPSN(T={self.T}) has run {time_step + 1} time-steps!"
             )
 
-        weight = self.masked_weight()[
-            self.time_step,
-            self.time_step + 1 - self.queue.__len__() : self.time_step + 1,
-        ]
-        x_seq = torch.stack(self.queue)
+        spike, time_step, queue = functional.masked_psn_step(
+            x,
+            time_step,
+            tuple(states[1]),
+            self.masked_weight(),
+            self.bias,
+            self.k,
+            self.surrogate_function,
+        )
+        return (spike,), (time_step, list(queue))
 
-        for i in range(x.dim()):
-            weight = weight.unsqueeze(-1)
-
-        h = torch.sum(weight * x_seq, 0)
-        spike = self.surrogate_function(h + self.bias[self.time_step])
-
-        self.time_step += 1
-        return spike.view(x.shape)
-
-    def multi_step_forward(self, x_seq: torch.Tensor):
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x_seq = inputs[0]
         # x_seq.shape = [T, N, *]
         assert x_seq.shape[0] == self.T
         h_seq = torch.addmm(self.bias, self.masked_weight(), x_seq.flatten(1))
         spike_seq = self.surrogate_function(h_seq).view(x_seq.shape)
-        return spike_seq
+        return (spike_seq,), states
 
     @property
     def lambda_(self):
@@ -423,18 +428,32 @@ class SlidingPSN(base.MemoryModule):
 
         return weight
 
-    def single_step_forward(self, x: torch.Tensor):
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         spike, queue = functional.sliding_psn_step(
-            x, tuple(self.queue), self.weight, self.bias, self.surrogate_function
+            inputs[0],
+            tuple(states[0]),
+            self.weight,
+            self.bias,
+            self.surrogate_function,
         )
-        self.queue[:] = queue
-        return spike
+        return (spike,), (list(queue),)
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x_seq = inputs[0]
         if self.backend == "gemm":
             weight = self.gen_gemm_weight(x_seq.shape[0])
             h_seq = torch.addmm(self.bias, weight, x_seq.flatten(1)).view(x_seq.shape)
-            return self.surrogate_function(h_seq)
+            output = self.surrogate_function(h_seq)
         elif self.backend == "conv":
             # x_seq.shape = [T, N, *]
             x_seq_shape = x_seq.shape
@@ -445,10 +464,11 @@ class SlidingPSN(base.MemoryModule):
             x_seq = F.conv1d(x_seq, self.weight.view(1, 1, -1), stride=1)
 
             x_seq = x_seq.squeeze(1).t().view(x_seq_shape)
-            return self.surrogate_function(x_seq + self.bias)
+            output = self.surrogate_function(x_seq + self.bias)
 
         else:
             raise NotImplementedError(self.backend)
+        return (output,), states
 
     def extra_repr(self):
         return super().extra_repr() + f", order={self.k}"

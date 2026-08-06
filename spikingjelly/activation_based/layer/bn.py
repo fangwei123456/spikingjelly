@@ -310,10 +310,27 @@ class NeuNorm(base.MemoryModule):
             self.w = nn.Parameter(Tensor(in_channels, height, width))
         nn.init.kaiming_uniform_(self.w, a=math.sqrt(5))
 
-    def single_step_forward(self, in_spikes: Tensor):
-        self.x = self.k0 * self.x + self.k1 * in_spikes.sum(dim=1, keepdim=True)
-        # x.shape = [batch_size, 1, height, width]
-        return in_spikes - self.w * self.x
+    def materialize_states(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        if isinstance(states[0], Tensor):
+            return states
+        reference = inputs[0][0] if step_mode == "m" else inputs[0]
+        return (torch.full_like(reference[:, :1], states[0]),)
+
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
+        output, state = functional.neunorm_step(
+            inputs[0], states[0], self.w, self.k0, self.k1
+        )
+        return (output,), (state,)
 
     def extra_repr(self) -> str:
         return f"shape={self.w.shape}"
@@ -722,18 +739,24 @@ class _BatchNormThroughTimeBase(base.MemoryModule):
         self.step_mode = step_mode
         self.register_memory("t", -1)
 
-    def single_step_forward(self, x: torch.Tensor):
-        self.t += 1
-        bn = self.bn_list[self.t]
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
+        t = states[0] + 1
+        bn = self.bn_list[t]
         if not in_gc_1st_forward():
-            return bn(x)
+            return (bn(inputs[0]),), (t,)
 
         track_running_stats = bn.track_running_stats
         bn.track_running_stats = False
         try:
-            return bn(x)
+            output = bn(inputs[0])
         finally:
             bn.track_running_stats = track_running_stats
+        return (output,), (t,)
 
 
 class BatchNormThroughTime1d(_BatchNormThroughTimeBase):

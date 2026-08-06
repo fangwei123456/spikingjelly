@@ -48,7 +48,7 @@ Base Classes
 .. list-table::
 
    * - :class:`SimpleBaseNode <spikingjelly.activation_based.neuron.base_node.SimpleBaseNode>`
-     - Simplified base class for neurons.
+     - Pure-PyTorch interface for understanding and customizing neuron dynamics.
    * - :class:`BaseNode <spikingjelly.activation_based.neuron.base_node.BaseNode>`
      - Base class for neurons.
    * - :class:`NonSpikingBaseNode <spikingjelly.activation_based.neuron.base_node.NonSpikingBaseNode>`
@@ -60,7 +60,7 @@ Integrate-and-fire (IF) Neurons
 .. list-table::
 
    * - :class:`SimpleIFNode <spikingjelly.activation_based.neuron.integrate_and_fire.SimpleIFNode>`
-     - Simplified IF neuron.
+     - IF implementation using the readable charge-fire-reset interface.
    * - :class:`IFNode <spikingjelly.activation_based.neuron.integrate_and_fire.IFNode>`
      - IF neuron.
    * - :class:`ActivationAwareIFNode <spikingjelly.activation_based.neuron.integrate_and_fire.ActivationAwareIFNode>`
@@ -74,7 +74,7 @@ Leaky Integrate-and-fire (LIF) Neurons
 .. list-table::
 
    * - :class:`SimpleLIFNode <spikingjelly.activation_based.neuron.lif.SimpleLIFNode>`
-     - Simplified LIF neuon.
+     - LIF implementation using the readable charge-fire-reset interface.
    * - :class:`LIFNode <spikingjelly.activation_based.neuron.lif.LIFNode>`
      - LIF neuron.
    * - :class:`NonSpikingLIFNode <spikingjelly.activation_based.neuron.lif.NonSpikingLIFNode>`

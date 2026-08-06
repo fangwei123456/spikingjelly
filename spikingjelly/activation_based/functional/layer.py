@@ -5,8 +5,72 @@ import torch
 
 __all__ = [
     "delay_step",
+    "neunorm_step",
     "synapse_filter_step",
 ]
+
+
+def neunorm_step(
+    in_spikes: torch.Tensor,
+    state: torch.Tensor,
+    weight: torch.Tensor,
+    momentum: float,
+    input_scale: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <neunorm_step-cn>` | :ref:`English <neunorm_step-en>`
+
+    ----
+
+    .. _neunorm_step-cn:
+
+    * **中文**
+
+    执行一次 NeuNorm 状态转移，返回归一化输出和下一状态。函数不读取或修改
+    module memory。
+
+    :param in_spikes: 当前输入脉冲，shape 为 ``[N, C, H, W]``
+    :type in_spikes: torch.Tensor
+    :param state: 已物化的 NeuNorm 状态，shape 为 ``[N, 1, H, W]``
+    :type state: torch.Tensor
+    :param weight: 可广播到 ``in_spikes`` 的 NeuNorm 权重
+    :type weight: torch.Tensor
+    :param momentum: 旧状态的系数
+    :type momentum: float
+    :param input_scale: 通道求和结果的系数
+    :type input_scale: float
+    :return: ``(output, state_next)``
+    :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    ----
+
+    .. _neunorm_step-en:
+
+    * **English**
+
+    Run one NeuNorm state transition and return its normalized output and next
+    state. The function does not read or mutate module memory.
+
+    :param in_spikes: Current input spikes shaped ``[N, C, H, W]``
+    :type in_spikes: torch.Tensor
+    :param state: Materialized NeuNorm state shaped ``[N, 1, H, W]``
+    :type state: torch.Tensor
+    :param weight: NeuNorm weight broadcastable to ``in_spikes``
+    :type weight: torch.Tensor
+    :param momentum: Coefficient applied to the previous state
+    :type momentum: float
+    :param input_scale: Coefficient applied to the channel sum
+    :type input_scale: float
+    :return: ``(output, state_next)``
+    :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
+    """
+    state_next = momentum * state + input_scale * in_spikes.sum(dim=1, keepdim=True)
+    return in_spikes - weight * state_next, state_next
 
 
 def delay_step(

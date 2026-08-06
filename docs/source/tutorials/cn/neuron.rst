@@ -81,14 +81,19 @@ IF神经元层有一些构造参数，在API文档中对这些参数有详细的
 .. math::
     V[t] = f(V[t-1], X[t]) = V[t-1] + X[t]
 
-可以在 :class:`spikingjelly.activation_based.neuron.IFNode.neuronal_charge` 中找到如下所示的代码：
+在用于动力学实验的 :class:`spikingjelly.activation_based.neuron.SimpleIFNode`
+中，充电方程直接写为：
 
 .. code-block:: python
 
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + x
 
-不同的神经元，充电方程不尽相同。但膜电位超过阈值电压后，释放脉冲，以及释放脉冲后，膜电位的重置都是相同的。因此它们全部继承自 :class:`spikingjelly.activation_based.neuron.BaseNode`，共享相同的放电、重置方程。可以在 :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_fire` 中找到释放脉冲的代码：
+不同的神经元具有不同的充电方程，但通常共享放电和重置方程。
+:class:`spikingjelly.activation_based.neuron.SimpleBaseNode` 通过
+``neuronal_charge → neuronal_fire → neuronal_reset`` 路径直接表达这三个阶段；
+生产级神经元则在 functional 状态转移或专用 kernel 中实现等价计算。下面是
+``SimpleBaseNode.neuronal_fire`` 的核心计算：
 
 .. code-block:: python
 
@@ -103,7 +108,7 @@ IF神经元层有一些构造参数，在API文档中对这些参数有详细的
 
 #. Soft方式：释放脉冲后，膜电位减去阈值电压：:math:`V[t] = V[t] - V_{threshold}`
 
-可以发现，对于使用Soft方式的神经元，并不需要重置电压 :math:`V_{reset}` 这个变量。在当前实现中， :class:`spikingjelly.activation_based.neuron` 中的大多数神经元构造函数中的 ``v_reset`` 默认值均为 ``0.0`` ，表示神经元默认使用Hard方式；若设置为 ``None``，则会使用Soft方式。在 :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_reset` 中可以找到膜电位重置的代码：
+可以发现，对于使用Soft方式的神经元，并不需要重置电压 :math:`V_{reset}` 这个变量。在当前实现中， :class:`spikingjelly.activation_based.neuron` 中的大多数神经元构造函数中的 ``v_reset`` 默认值均为 ``0.0`` ，表示神经元默认使用Hard方式；若设置为 ``None``，则会使用Soft方式。``SimpleBaseNode.neuronal_reset`` 使用如下等价逻辑：
 
 .. code-block:: python
 
@@ -275,20 +280,44 @@ Soft方式重置方程为：
 
 自定义神经元
 -------------------------------------------
-如前所述，SpikingJelly使用充电、放电、重置三个方程来描述脉冲神经元，在 :class:`BaseNode <spikingjelly.activation_based.neuron.BaseNode>` \
-中可以找到对应的代码，单步模式下的前向传播 ``single_step_forward`` 函数即是由这3个过程组成：
+SpikingJelly 为修改神经元动力学和高性能执行提供了两类接口。``SimpleBaseNode`` 中的
+``Simple`` 描述的是接口定位，而不是一种神经元数学模型。该接口使用纯 PyTorch 直接
+展示充电、放电和重置职责，便于理解神经元在 SNN 中承担的工作和自定义动力学。
 
-.. code-block:: python
+.. list-table:: 神经元扩展接口
+    :header-rows: 1
+    :widths: 20 30 25 25
 
-    # spikingjelly.activation_based.neuron.BaseNode
-    def single_step_forward(self, x: torch.Tensor):
-        self.neuronal_charge(x)
-        spike = self.neuronal_fire()
-        self.neuronal_reset(spike)
-        return spike
+    * - 基类
+      - 前向模型
+      - ``to_functional_forward``
+      - 适用场景
+    * - :class:`SimpleBaseNode <spikingjelly.activation_based.neuron.SimpleBaseNode>`
+      - ``neuronal_charge`` → ``neuronal_fire`` → ``neuronal_reset``
+      - 通用状态替换路径
+      - 教学、动力学实验和快速原型
+    * - :class:`BaseNode <spikingjelly.activation_based.neuron.BaseNode>`
+      - 原生 functional 状态转移，可使用专用多步 kernel
+      - 直接调用 functional forward
+      - 生产级神经元和后端实现
 
-其中 ``neuronal_fire`` 和 ``neuronal_reset`` 对绝大多数神经元都是相同的，因而在 ``BaseNode`` 中就已经定义了。不同的神经元主要是\
-构造函数和充电方程 ``neuronal_charge`` 不同。因此，若想实现新的神经元，则只需要更改构造函数和充电方程即可。
+若只需要修改神经元方程，应继承 ``SimpleBaseNode``。其单步前向固定按照充电、放电、
+重置的顺序执行，多步前向则逐时间步调用完整的单步前向。因而通常只需要实现
+``neuronal_charge``。``SimpleIFNode`` 和 ``SimpleLIFNode`` 也是基于这一接口实现的。
+
+``SimpleBaseNode`` 没有原生 functional 状态转移。直接调用 ``functional_forward`` 会报错。
+对其实例调用
+:func:`to_functional_forward <spikingjelly.activation_based.base.to_functional_forward>`
+时，会通过通用 fallback 临时换入显式状态、执行原有前向并恢复模块状态。这能保持方程扩展
+接口，但效率低于
+``LIFNode`` 等原生 functional 神经元，因此不适合作为依赖频繁 functional 转换的高性能实现。
+
+生产级 ``MemoryModule`` 在 functional forward 前会调用
+``materialize_states(inputs, states, step_mode)``。
+默认实现原样返回状态；只有当标量或空状态需要依据当前输入转换成张量时才需要重写。
+``inputs`` 是当前前向传播的完整输入；实现可依据 ``step_mode`` 在多步模式下选取第一个
+时间步作为形状和设备参照，不能假定所有输入都具有时间维。该方法返回新的状态元组，不应
+修改模块 memory。旧的 ``BaseNode.v_float_to_tensor`` 已删除。
 
 
 假设我们构造一种平方积分发放神经元，其充电方程为：
@@ -303,13 +332,9 @@ Soft方式重置方程为：
     import torch
     from spikingjelly.activation_based import neuron
 
-    class SquareIFNode(neuron.BaseNode):
+    class SquareIFNode(neuron.SimpleBaseNode):
         def neuronal_charge(self, x: torch.Tensor):
-            self.v = self.v + x ** 2
-
-
-:class:`BaseNode <spikingjelly.activation_based.neuron.BaseNode>` 继承自 :class:`MemoryModule <spikingjelly.activation_based.base.MemoryModule>`。:class:`MemoryModule <spikingjelly.activation_based.base.MemoryModule>` \
-默认的多步传播，是使用 ``for t in range(T)`` 来循环调用单步传播实现的。因此我们定义 ``neuronal_charge`` 后， ``single_step_forward`` 就已经是完整的了，进而 ``multi_step_forward`` 也可以被使用。
+            self.v = self.v + x.square()
 
 使用平方积分发放神经元进行单步或多步传播：
 
@@ -318,10 +343,9 @@ Soft方式重置方程为：
     import torch
     from spikingjelly.activation_based import neuron
 
-    class SquareIFNode(neuron.BaseNode):
-
+    class SquareIFNode(neuron.SimpleBaseNode):
         def neuronal_charge(self, x: torch.Tensor):
-            self.v = self.v + x ** 2
+            self.v = self.v + x.square()
 
     sif_layer = SquareIFNode()
 
@@ -357,3 +381,16 @@ Soft方式重置方程为：
             [1.],
             [0.],
             [0.]])
+
+若要实现与 ``LIFNode`` 一样可直接转换并可接入 CuPy、Triton 或 Inductor kernel 的生产级
+神经元，应继承 ``BaseNode`` 并实现 ``single_step_functional_forward``。该方法的接口为
+``(self, inputs, states, **kwargs) -> (outputs, updated_states)``，且不得修改模块中注册的
+memory 或传入的 ``states``。只有存在独立序列实现或专用 kernel 时，才需要重写
+``multi_step_functional_forward``。
+
+.. warning::
+
+    ``BaseNode`` 的常规前向已改为 functional-backed，并已移除 ``neuronal_charge``、
+    ``neuronal_fire`` 和 ``neuronal_reset``。旧代码若通过这些方法修改 Python 神经元方程，
+    请将基类改为 ``SimpleBaseNode``；原有方程无需重写。生产级神经元或自定义后端应迁移为
+    上述 functional 接口。

@@ -17,7 +17,10 @@ __all__ = [
     "if_step",
     "qif_step",
     "eif_step",
+    "lif_charge",
     "lif_step",
+    "liaf_step",
+    "ilif_step",
     "plif_step",
     "izhikevich_step",
     "klif_step",
@@ -38,10 +41,12 @@ __all__ = [
     "plif_multi_step_triton",
     "stbif_single_step_triton",
     "sliding_psn_step",
+    "masked_psn_step",
     "gated_lif_step",
     "stbif_step",
     "activation_aware_if_step",
     "activation_aware_if_multi_step_triton",
+    "voltage_reset",
 ]
 
 
@@ -155,18 +160,68 @@ def lava_cuba_lif_step(
         s_scale,
     )
     spike = surrogate_function(voltage_charged - (v_threshold + v_threshold_eps))
-    spike_d = spike.detach() if detach_reset else spike
-    voltage_next = spike_d * v_reset + (1.0 - spike_d) * voltage_charged
+    voltage_next = voltage_reset(
+        voltage_charged,
+        spike,
+        v_threshold,
+        v_reset,
+        detach_reset,
+    )
     return spike, current_next, voltage_next
 
 
-def _reset(
+def voltage_reset(
     v: torch.Tensor,
     spike: torch.Tensor,
     v_threshold: float,
     v_reset: Optional[float],
     detach_reset: bool,
 ) -> torch.Tensor:
+    r"""
+    **API Language** - :ref:`中文 <voltage_reset-cn>` | :ref:`English <voltage_reset-en>`
+
+    ----
+
+    .. _voltage_reset-cn:
+
+    * **中文**
+
+    根据脉冲对膜电位执行硬重置或软重置。
+
+    :param v: 重置前的膜电位
+    :type v: torch.Tensor
+    :param spike: 当前时间步的脉冲
+    :type spike: torch.Tensor
+    :param v_threshold: soft reset 时从膜电位减去的阈值
+    :type v_threshold: float
+    :param v_reset: hard reset 的目标电位；``None`` 表示使用 soft reset
+    :type v_reset: Optional[float]
+    :param detach_reset: 是否在重置分支中分离脉冲梯度
+    :type detach_reset: bool
+    :return: 重置后的膜电位
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _voltage_reset-en:
+
+    * **English**
+
+    Apply a hard or soft reset to membrane voltage according to the spike.
+
+    :param v: Membrane voltage before reset
+    :type v: torch.Tensor
+    :param spike: Spike at the current time step
+    :type spike: torch.Tensor
+    :param v_threshold: Threshold subtracted by soft reset
+    :type v_threshold: float
+    :param v_reset: Target voltage for hard reset; ``None`` selects soft reset
+    :type v_reset: Optional[float]
+    :param detach_reset: Whether to detach the spike in the reset branch
+    :type detach_reset: bool
+    :return: Membrane voltage after reset
+    :rtype: torch.Tensor
+    """
     spike_d = spike.detach() if detach_reset else spike
     if v_reset is None:
         return v - spike_d * v_threshold
@@ -254,7 +309,7 @@ def if_step(
     """
     v_charged = v + x
     spike = surrogate_function(v_charged - v_threshold)
-    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return spike, voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
 def qif_step(
@@ -341,7 +396,7 @@ def qif_step(
     """
     v_charged = v + (x + a0 * (v - v_rest) * (v - v_c)) / tau
     spike = surrogate_function(v_charged - v_threshold)
-    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return spike, voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
 def eif_step(
@@ -430,7 +485,7 @@ def eif_step(
         v + (x + v_rest - v + delta_t * torch.exp((v - theta_rh) / delta_t)) / tau
     )
     spike = surrogate_function(v_charged - v_threshold)
-    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return spike, voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
 def activation_aware_if_step(
@@ -739,6 +794,64 @@ def if_multi_step_inductor(
     return _normalize_multi_step_output(graph(x_seq, v), store_v_seq)
 
 
+def lif_charge(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    tau: float,
+    decay_input: bool,
+    v_reset: Optional[float],
+) -> torch.Tensor:
+    r"""
+    **API Language** - :ref:`中文 <lif_charge-cn>` | :ref:`English <lif_charge-en>`
+
+    ----
+
+    .. _lif_charge-cn:
+
+    * **中文**
+
+    执行 LIF 神经元的充电方程，不进行放电或重置。
+
+    :param x: 当前输入张量
+    :type x: torch.Tensor
+    :param v: 当前膜电位
+    :type v: torch.Tensor
+    :param tau: 膜电位时间常数
+    :type tau: float
+    :param decay_input: 输入是否参与衰减
+    :type decay_input: bool
+    :param v_reset: 重置电位；``None`` 在充电方程中按 ``0.0`` 处理
+    :type v_reset: Optional[float]
+    :return: 充电后的膜电位
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _lif_charge-en:
+
+    * **English**
+
+    Apply the LIF charging equation without firing or resetting.
+
+    :param x: Current input tensor
+    :type x: torch.Tensor
+    :param v: Current membrane voltage
+    :type v: torch.Tensor
+    :param tau: Membrane-voltage time constant
+    :type tau: float
+    :param decay_input: Whether the input participates in decay
+    :type decay_input: bool
+    :param v_reset: Reset voltage; ``None`` is treated as ``0.0`` by the charging equation
+    :type v_reset: Optional[float]
+    :return: Charged membrane voltage
+    :rtype: torch.Tensor
+    """
+    v_reset_value = 0.0 if v_reset is None else v_reset
+    if decay_input:
+        return v + (x - (v - v_reset_value)) / tau
+    return v - (v - v_reset_value) / tau + x
+
+
 def lif_step(
     x: torch.Tensor,
     v: torch.Tensor,
@@ -815,13 +928,175 @@ def lif_step(
        :func:`lif_multi_step_inductor`, :func:`lif_multi_step_cupy`,
        :func:`lif_multi_step_triton`.
     """
-    v_reset_value = 0.0 if v_reset is None else v_reset
-    if decay_input:
-        v_charged = v + (x - (v - v_reset_value)) / tau
-    else:
-        v_charged = v - (v - v_reset_value) / tau + x
+    v_charged = lif_charge(x, v, tau, decay_input, v_reset)
     spike = surrogate_function(v_charged - v_threshold)
-    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return spike, voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+
+
+def liaf_step(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    tau: float,
+    decay_input: bool,
+    v_threshold: float,
+    v_reset: Optional[float],
+    act: Callable[[torch.Tensor], torch.Tensor],
+    threshold_related: bool,
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <liaf_step-cn>` | :ref:`English <liaf_step-en>`
+
+    ----
+
+    .. _liaf_step-cn:
+
+    * **中文**
+
+    执行一次 LIAF 状态转移，返回模拟输出和重置后的膜电位。函数不读取或修改
+    module memory。
+
+    :param x: 当前输入张量
+    :type x: torch.Tensor
+    :param v: 已物化的当前膜电位，shape、dtype 和 device 与 ``x`` 兼容
+    :type v: torch.Tensor
+    :param tau: 膜电位时间常数
+    :type tau: float
+    :param decay_input: 输入是否参与衰减
+    :type decay_input: bool
+    :param v_threshold: 放电阈值
+    :type v_threshold: float
+    :param v_reset: 重置电位；``None`` 表示 soft reset
+    :type v_reset: Optional[float]
+    :param act: 生成模拟输出的激活函数
+    :type act: Callable[[torch.Tensor], torch.Tensor]
+    :param threshold_related: 为 ``True`` 时将 ``act`` 作用于充电电位减阈值，
+        否则直接作用于充电电位
+    :type threshold_related: bool
+    :param surrogate_function: 计算 reset 所需脉冲的替代函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否在 reset 分支中分离脉冲的计算图
+    :type detach_reset: bool
+    :return: ``(analog_output, v_next)``
+    :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    ----
+
+    .. _liaf_step-en:
+
+    * **English**
+
+    Run one LIAF state transition and return the analog output and reset membrane
+    voltage. The function does not read or mutate module memory.
+
+    :param x: Current input tensor
+    :type x: torch.Tensor
+    :param v: Materialized membrane voltage with shape, dtype, and device
+        compatible with ``x``
+    :type v: torch.Tensor
+    :param tau: Membrane-voltage time constant
+    :type tau: float
+    :param decay_input: Whether the input participates in decay
+    :type decay_input: bool
+    :param v_threshold: Firing threshold
+    :type v_threshold: float
+    :param v_reset: Reset voltage; ``None`` selects soft reset
+    :type v_reset: Optional[float]
+    :param act: Activation function that produces the analog output
+    :type act: Callable[[torch.Tensor], torch.Tensor]
+    :param threshold_related: Apply ``act`` to charged voltage minus the threshold
+        when ``True``; otherwise apply it directly to charged voltage
+    :type threshold_related: bool
+    :param surrogate_function: Surrogate function used to obtain the spike for reset
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach the spike in the reset branch
+    :type detach_reset: bool
+    :return: ``(analog_output, v_next)``
+    :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
+    """
+    v_charged = lif_charge(x, v, tau, decay_input, v_reset)
+    output = act(v_charged - v_threshold if threshold_related else v_charged)
+    spike = surrogate_function(v_charged - v_threshold)
+    v_next = voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return output, v_next
+
+
+def ilif_step(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    tau: float,
+    v_threshold: float,
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <ilif_step-cn>` | :ref:`English <ilif_step-en>`
+
+    ----
+
+    .. _ilif_step-cn:
+
+    * **中文**
+
+    执行一次 I-LIF 状态转移，返回多级脉冲计数和 soft reset 后的膜电位。
+    函数不读取或修改 module memory。
+
+    :param x: 当前输入张量
+    :type x: torch.Tensor
+    :param v: 已物化的当前膜电位，shape、dtype 和 device 与 ``x`` 兼容
+    :type v: torch.Tensor
+    :param tau: 膜电位时间常数
+    :type tau: float
+    :param v_threshold: 放电阈值
+    :type v_threshold: float
+    :param surrogate_function: 作用于归一化充电电位的多级脉冲计数函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否在 reset 分支中分离脉冲计数的计算图
+    :type detach_reset: bool
+    :return: ``(spike_count, v_next)``
+    :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    ----
+
+    .. _ilif_step-en:
+
+    * **English**
+
+    Run one I-LIF state transition and return the multi-level spike count and
+    membrane voltage after soft reset. The function does not read or mutate
+    module memory.
+
+    :param x: Current input tensor
+    :type x: torch.Tensor
+    :param v: Materialized membrane voltage with shape, dtype, and device
+        compatible with ``x``
+    :type v: torch.Tensor
+    :param tau: Membrane-voltage time constant
+    :type tau: float
+    :param v_threshold: Firing threshold
+    :type v_threshold: float
+    :param surrogate_function: Multi-level spike-count function applied to the
+        normalized charged voltage
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach the spike count in the reset branch
+    :type detach_reset: bool
+    :return: ``(spike_count, v_next)``
+    :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    .. note::
+
+       本函数没有独立多步形式；多步执行由调用者逐步循环。
+       This function has no independent multi-step form; callers iterate it.
+    """
+    v_charged = lif_charge(x, v, tau, False, None)
+    spike = surrogate_function(v_charged / v_threshold)
+    return spike, voltage_reset(v_charged, spike, v_threshold, None, detach_reset)
 
 
 def lif_multi_step_inductor(
@@ -1019,7 +1294,7 @@ def plif_step(
     else:
         v_charged = v - (v - v_reset_value) * reciprocal_tau + x
     spike = surrogate_function(v_charged - v_threshold)
-    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return spike, voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
 def plif_multi_step_inductor(
@@ -1337,14 +1612,14 @@ def klif_step(
     v_charged = torch.relu(k * v_charged)
     spike = surrogate_function(v_charged - v_threshold)
     if scale_reset:
-        return spike, _reset(
+        return spike, voltage_reset(
             v_charged / k,
             spike,
             v_threshold / k,
             v_reset,
             detach_reset,
         )
-    return spike, _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return spike, voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
 
 
 def cuba_lif_step(
@@ -1427,7 +1702,7 @@ def cuba_lif_step(
     current_next = current * current_decay + x
     v_charged = v * voltage_decay + current_next
     spike = surrogate_function(v_charged - v_threshold)
-    v_next = _reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    v_next = voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
     return spike, current_next, v_next
 
 
@@ -2383,7 +2658,7 @@ def if_multi_step_triton(
         store_v_seq,
     )
     if store_v_seq:
-        return spike_seq, voltage[-1], voltage
+        return spike_seq, voltage[-1].clone(), voltage
     return spike_seq, voltage, None
 
 
@@ -2478,7 +2753,7 @@ def lif_multi_step_triton(
         store_v_seq,
     )
     if store_v_seq:
-        return spike_seq, voltage[-1], voltage
+        return spike_seq, voltage[-1].clone(), voltage
     return spike_seq, voltage, None
 
 
@@ -2659,6 +2934,91 @@ def sliding_psn_step(
     h = torch.sum(psn_weight * x_seq, 0)
     spike = surrogate_function(h + bias)
     return spike.view(x.shape), queue_next
+
+
+def masked_psn_step(
+    x: torch.Tensor,
+    time_step: int,
+    queue: tuple[torch.Tensor, ...],
+    masked_weight: torch.Tensor,
+    bias: torch.Tensor,
+    k: int,
+    surrogate_function: SurrogateFunction,
+) -> tuple[torch.Tensor, int, tuple[torch.Tensor, ...]]:
+    r"""
+    **API Language** - :ref:`中文 <masked_psn_step-cn>` | :ref:`English <masked_psn_step-en>`
+
+    ----
+
+    .. _masked_psn_step-cn:
+
+    * **中文**
+
+    使用显式时间索引和输入队列执行一次 MaskedPSN 状态转移。调用者负责提供当前
+    ``lambda`` 对应的完整 masked weight，并保证时间索引位于其范围内。
+
+    :param x: 当前输入张量
+    :type x: torch.Tensor
+    :param time_step: 当前时间索引
+    :type time_step: int
+    :param queue: 旧输入队列，元素是 flatten 后的张量，按旧到新排列
+    :type queue: Tuple[torch.Tensor, ...]
+    :param masked_weight: shape 为 ``[T, T]`` 的 masked weight
+    :type masked_weight: torch.Tensor
+    :param bias: shape 为 ``[T, 1]`` 的偏置
+    :type bias: torch.Tensor
+    :param k: 队列保留的最大时间步数
+    :type k: int
+    :param surrogate_function: 作用于膜电位的替代函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :return: ``(spike, time_step_next, queue_next)``
+    :rtype: Tuple[torch.Tensor, int, Tuple[torch.Tensor, ...]]
+
+    ----
+
+    .. _masked_psn_step-en:
+
+    * **English**
+
+    Run one MaskedPSN state transition with an explicit time index and input
+    queue. The caller provides the complete masked weight for the current
+    ``lambda`` and ensures that the time index is in range.
+
+    :param x: Current input tensor
+    :type x: torch.Tensor
+    :param time_step: Current time index
+    :type time_step: int
+    :param queue: Previous input queue containing flattened tensors ordered from
+        oldest to newest
+    :type queue: Tuple[torch.Tensor, ...]
+    :param masked_weight: Masked weight shaped ``[T, T]``
+    :type masked_weight: torch.Tensor
+    :param bias: Bias shaped ``[T, 1]``
+    :type bias: torch.Tensor
+    :param k: Maximum number of time steps retained in the queue
+    :type k: int
+    :param surrogate_function: Surrogate function applied to membrane voltage
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :return: ``(spike, time_step_next, queue_next)``
+    :rtype: Tuple[torch.Tensor, int, Tuple[torch.Tensor, ...]]
+
+    .. note::
+
+       MaskedPSN 已有独立的矩阵化多步实现，本函数只描述其单步递推。
+       MaskedPSN has an independent matrix-based multi-step implementation; this
+       function describes only its single-step recurrence.
+    """
+    queue_next = (*queue, x.flatten())
+    if len(queue_next) > k:
+        queue_next = queue_next[1:]
+
+    weight = masked_weight[
+        time_step,
+        time_step + 1 - len(queue_next) : time_step + 1,
+    ]
+    h = torch.sum(weight.unsqueeze(-1) * torch.stack(queue_next), 0)
+    spike = surrogate_function(h + bias[time_step])
+    return spike.view(x.shape), time_step + 1, queue_next
 
 
 def gated_lif_step(

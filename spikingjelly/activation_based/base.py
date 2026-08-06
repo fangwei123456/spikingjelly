@@ -1,6 +1,5 @@
 from spikingjelly.logger import logger
 import copy
-from abc import abstractmethod
 from typing import Tuple, Generator, Optional, Callable, Any
 
 import torch
@@ -440,7 +439,224 @@ class MemoryModule(nn.Module, StepModule):
         check_backend_library(value)
         self._backend = value
 
-    @abstractmethod
+    def materialize_states(
+        self,
+        inputs: tuple[Any, ...],
+        states: tuple[Any, ...],
+        step_mode: str,
+    ) -> tuple[Any, ...]:
+        r"""
+        **API Language** - :ref:`中文 <MemoryModule.materialize_states-cn>` | :ref:`English <MemoryModule.materialize_states-en>`
+
+        ----
+
+        .. _MemoryModule.materialize_states-cn:
+
+        * **中文**
+
+        默认实现原样返回 ``states``。需要将标量或空状态转换为输入相关张量的
+        模块可以重写本方法。``inputs`` 是当前前向传播的完整输入；实现根据
+        ``step_mode`` 选择合适的形状和设备参照。实现不得修改模块 memory 或
+        传入的 ``states``。
+
+        :param inputs: 当前前向传播的完整输入元组
+        :type inputs: tuple[Any, ...]
+        :param states: 待物化的显式状态
+        :type states: tuple[Any, ...]
+        :param step_mode: 当前前向传播的步进模式，取 ``"s"`` 或 ``"m"``
+        :type step_mode: str
+        :return: 可传入 functional forward 的状态
+        :rtype: tuple[Any, ...]
+
+        ----
+
+        .. _MemoryModule.materialize_states-en:
+
+        * **English**
+
+        The default implementation returns ``states`` unchanged. Modules that
+        need to turn scalar or empty states into input-dependent tensors may
+        override this method. ``inputs`` contains the complete inputs of the
+        current forward pass; implementations select an appropriate shape and
+        device reference according to ``step_mode``. Implementations must not
+        mutate module memories or the supplied ``states``.
+
+        :param inputs: Complete input tuple of the current forward pass
+        :type inputs: tuple[Any, ...]
+        :param states: Explicit states to materialize
+        :type states: tuple[Any, ...]
+        :param step_mode: Step mode of the current forward pass, ``"s"`` or ``"m"``
+        :type step_mode: str
+        :return: States ready for functional forward
+        :rtype: tuple[Any, ...]
+        """
+        return states
+
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[Any, ...],
+        **kwargs: Any,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
+        r"""
+        **API Language** - :ref:`中文 <MemoryModule.single_step_functional_forward-cn>` | :ref:`English <MemoryModule.single_step_functional_forward-en>`
+
+        ----
+
+        .. _MemoryModule.single_step_functional_forward-cn:
+
+        * **中文**
+
+        使用显式状态执行单步前向传播。实现不得修改本模块注册的 memory
+        或传入的 ``states``。``states`` 的顺序与当前模块的
+        ``self._memories`` 一致，不包含子模块状态。复合模块的完整状态由
+        :func:`to_functional_forward` 负责展开。
+
+        :param inputs: 单步输入张量元组
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: 当前模块的显式状态元组
+        :type states: tuple[Any, ...]
+        :return: ``(outputs, updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]
+        :raises NotImplementedError: 当子类未实现单步 functional forward 时抛出
+
+        ----
+
+        .. _MemoryModule.single_step_functional_forward-en:
+
+        * **English**
+
+        Run a single-step forward pass with explicit state. The implementation
+        must not mutate this module's registered memories or the supplied
+        ``states``. State order follows ``self._memories`` and excludes states
+        owned by child modules. Use :func:`to_functional_forward` to flatten the
+        complete state of a composite module.
+
+        :param inputs: Tuple of single-step input tensors
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: Tuple of explicit states owned by this module
+        :type states: tuple[Any, ...]
+        :return: ``(outputs, updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]
+        :raises NotImplementedError: If the subclass does not implement single-step functional forward
+        """
+        raise NotImplementedError(
+            f"{self._get_name()} does not implement single_step_functional_forward."
+        )
+
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[Any, ...],
+        **kwargs: Any,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
+        r"""
+        **API Language** - :ref:`中文 <MemoryModule.multi_step_functional_forward-cn>` | :ref:`English <MemoryModule.multi_step_functional_forward-en>`
+
+        ----
+
+        .. _MemoryModule.multi_step_functional_forward-cn:
+
+        * **中文**
+
+        使用显式状态执行多步前向传播。输入张量的第 0 维为时间维。
+        默认实现逐时间步调用 :meth:`single_step_functional_forward`；具有
+        专用多步实现或 kernel 的子类可以重写本方法。实现不得修改本模块
+        注册的 memory 或传入的 ``states``。
+
+        :param inputs: 多步输入张量元组
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: 当前模块的显式状态元组
+        :type states: tuple[Any, ...]
+        :return: ``(outputs, updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]
+
+        ----
+
+        .. _MemoryModule.multi_step_functional_forward-en:
+
+        * **English**
+
+        Run a multi-step forward pass with explicit state. Dimension 0 of each
+        input tensor is the time dimension. The default implementation calls
+        :meth:`single_step_functional_forward` at each time step. Subclasses with
+        a specialized sequence implementation or kernel may override this method.
+        The implementation must not mutate this module's registered memories or
+        the supplied ``states``.
+
+        :param inputs: Tuple of multi-step input tensors
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: Tuple of explicit states owned by this module
+        :type states: tuple[Any, ...]
+        :return: ``(outputs, updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]
+        """
+        output_steps = []
+        for t in range(inputs[0].shape[0]):
+            outputs, states = self.single_step_functional_forward(
+                tuple(x[t] for x in inputs), states, **kwargs
+            )
+            output_steps.append(outputs)
+
+        return (
+            tuple(
+                torch.stack(output_seq)
+                for output_seq in zip(*output_steps, strict=True)
+            ),
+            states,
+        )
+
+    def functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[Any, ...],
+        **kwargs: Any,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
+        r"""
+        **API Language** - :ref:`中文 <MemoryModule.functional_forward-cn>` | :ref:`English <MemoryModule.functional_forward-en>`
+
+        ----
+
+        .. _MemoryModule.functional_forward-cn:
+
+        * **中文**
+
+        先调用 :meth:`materialize_states`，再按当前 ``step_mode`` 调用单步或
+        多步 functional forward。
+
+        :param inputs: 输入张量元组
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: 当前模块的显式状态元组
+        :type states: tuple[Any, ...]
+        :return: ``(outputs, updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]
+        :raises ValueError: 当 ``step_mode`` 不是 ``"s"`` 或 ``"m"`` 时抛出
+
+        ----
+
+        .. _MemoryModule.functional_forward-en:
+
+        * **English**
+
+        Call :meth:`materialize_states`, then dispatch to single-step or
+        multi-step functional forward according to the current ``step_mode``.
+
+        :param inputs: Tuple of input tensors
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: Tuple of explicit states owned by this module
+        :type states: tuple[Any, ...]
+        :return: ``(outputs, updated_states)``
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]
+        :raises ValueError: If ``step_mode`` is neither ``"s"`` nor ``"m"``
+        """
+        if self.step_mode == "s":
+            states = self.materialize_states(inputs, states, "s")
+            return self.single_step_functional_forward(inputs, states, **kwargs)
+        if self.step_mode == "m":
+            states = self.materialize_states(inputs, states, "m")
+            return self.multi_step_functional_forward(inputs, states, **kwargs)
+        raise ValueError(self.step_mode)
+
     def single_step_forward(self, x: torch.Tensor, *args, **kwargs):
         r"""
         **API Language** - :ref:`中文 <MemoryModule.single_step_forward-cn>` | :ref:`English <MemoryModule.single_step_forward-en>`
@@ -451,13 +667,15 @@ class MemoryModule(nn.Module, StepModule):
 
         * **中文**
 
-        本模块的单步的前向传播函数。
+        基于 :meth:`single_step_functional_forward` 执行单步前向传播：读取
+        ``self._memories``，执行显式状态转移，再写回更新后的状态。
 
         :param x: 输入张量，约定 ``shape = [N, *]``，其中 ``N`` 通常为 batch 维
         :type x: torch.Tensor
 
         :return: 单步前向传播的输出
         :rtype: Any
+        :raises ValueError: 更新状态数量与已注册 memory 数量不一致时抛出
 
         ----
 
@@ -465,15 +683,25 @@ class MemoryModule(nn.Module, StepModule):
 
         * **English**
 
-        The single-step forward function for this module.
+        Run a single-step forward pass through
+        :meth:`single_step_functional_forward`: read ``self._memories``, execute
+        the explicit state transition, and write the updated states back.
 
         :param x: Input tensor, conventionally with ``shape = [N, *]`` where ``N`` is usually the batch dimension
         :type x: torch.Tensor
 
         :return: Output of the single-step forward pass
         :rtype: Any
+        :raises ValueError: If the number of updated states does not match the registered memories
         """
-        pass
+        inputs = (x, *args)
+        states = self.materialize_states(inputs, tuple(self._memories.values()), "s")
+        outputs, updated_states = self.single_step_functional_forward(
+            inputs, states, **kwargs
+        )
+        for name, value in zip(self._memories.keys(), updated_states, strict=True):
+            self._memories[name] = value
+        return outputs[0] if len(outputs) == 1 else outputs
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
         r"""
@@ -485,7 +713,8 @@ class MemoryModule(nn.Module, StepModule):
 
         * **中文**
 
-        本模块的多步的前向传播函数，通过调用 ``T`` 次 ``single_step_forward(x[t], *args, **kwargs)`` 实现
+        基于 :meth:`multi_step_functional_forward` 执行多步前向传播：读取
+        ``self._memories``，执行显式状态转移，再写回更新后的状态。
 
         :param x_seq: 输入序列张量，约定 ``shape = [T, N, *]``，其中第 0 维为时间维
         :type x_seq: torch.Tensor
@@ -493,7 +722,7 @@ class MemoryModule(nn.Module, StepModule):
         :return: 按时间堆叠的输出序列
         :rtype: torch.Tensor
 
-        :raises RuntimeError: 若某个时间步返回值无法被 ``torch.stack`` 堆叠，则底层异常会原样向上传播
+        :raises ValueError: 更新状态数量与已注册 memory 数量不一致时抛出
 
         ----
 
@@ -501,8 +730,9 @@ class MemoryModule(nn.Module, StepModule):
 
         * **English**
 
-        The multi-step forward function for this module, which is implemented by
-        calling ``single_step_forward(x[t], *args, **kwargs)`` over ``T`` time steps.
+        Run a multi-step forward pass through
+        :meth:`multi_step_functional_forward`: read ``self._memories``, execute
+        the explicit state transition, and write the updated states back.
 
         :param x_seq: Input sequence tensor, conventionally with ``shape = [T, N, *]`` and the time axis at dimension 0
         :type x_seq: torch.Tensor
@@ -510,15 +740,16 @@ class MemoryModule(nn.Module, StepModule):
         :return: Output sequence stacked along the time dimension
         :rtype: torch.Tensor
 
-        :raises RuntimeError: Any stacking failure raised by ``torch.stack`` is propagated unchanged
+        :raises ValueError: If the number of updated states does not match the registered memories
         """
-        T = x_seq.shape[0]
-        y_seq = []
-        for t in range(T):
-            y = self.single_step_forward(x_seq[t], *args, **kwargs)
-            y_seq.append(y)
-
-        return torch.stack(y_seq, dim=0)
+        inputs = (x_seq, *args)
+        states = self.materialize_states(inputs, tuple(self._memories.values()), "m")
+        outputs, updated_states = self.multi_step_functional_forward(
+            inputs, states, **kwargs
+        )
+        for name, value in zip(self._memories, updated_states, strict=True):
+            self._memories[name] = value
+        return outputs[0] if len(outputs) == 1 else outputs
 
     def forward(self, *args, **kwargs):
         r"""
@@ -530,8 +761,8 @@ class MemoryModule(nn.Module, StepModule):
 
         * **中文**
 
-        若为单步模式 ``step_mode == "s"``，则调用 ``self.single_step_forward(...)`` 。
-        若为多步模式 ``step_mode == "m"``，则调用 ``self.multi_step_forward(...)`` 。
+        按 ``step_mode`` 调用 :meth:`single_step_forward` 或
+        :meth:`multi_step_forward`。functional 状态读写由这两个方法负责。
 
         :return: 与当前 ``step_mode`` 对应的前向传播结果
         :rtype: Any
@@ -544,8 +775,9 @@ class MemoryModule(nn.Module, StepModule):
 
         * **English**
 
-        Call ``self.single_step_forward(...)`` if ``step_mode == "s"``.
-        Call ``self.multi_step_forward(...)`` if ``step_mode == "m"``.
+        Dispatch to :meth:`single_step_forward` or :meth:`multi_step_forward`
+        according to ``step_mode``. Those methods own functional state loading
+        and committing.
 
         :return: Forward result selected according to the current ``step_mode``
         :rtype: Any
@@ -554,10 +786,9 @@ class MemoryModule(nn.Module, StepModule):
         """
         if self.step_mode == "s":
             return self.single_step_forward(*args, **kwargs)
-        elif self.step_mode == "m":
+        if self.step_mode == "m":
             return self.multi_step_forward(*args, **kwargs)
-        else:
-            raise ValueError(self.step_mode)
+        raise ValueError(self.step_mode)
 
     def extra_repr(self):
         r"""
@@ -1081,33 +1312,9 @@ def load_memories(module: nn.Module, memory_list: list):
         _assign_memory_by_name(module, name, value)
 
 
-class _FunctionalForward:
-    def __init__(self, module: nn.Module, fn: Optional[Callable] = None):
-        self.module = module
-        self.fn = fn if fn is not None else module.forward
-        self.num_states = len(list(named_memories(module)))
-
-    def __call__(self, *args):
-        if self.num_states == 0:  # stateless
-            return self.fn(*args)
-
-        inputs = args[: -self.num_states]
-        states = args[-self.num_states :]
-        original_states = extract_memories(self.module)
-        load_memories(self.module, states)
-
-        try:
-            outputs = self.fn(*inputs)
-            new_states = extract_memories(self.module)
-        finally:
-            load_memories(self.module, original_states)
-
-        if not isinstance(outputs, tuple):
-            outputs = (outputs,)
-        return (*outputs, *new_states)
-
-
-def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
+def to_functional_forward(
+    module: nn.Module, fn: Optional[Callable] = None
+) -> Callable[..., tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]]:
     r"""
     **API Language** - :ref:`中文 <to_functional_forward-cn>` | :ref:`English <to_functional_forward-en>`
 
@@ -1119,7 +1326,8 @@ def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
 
     给定一个可能包含隐式状态变量（记忆，memory）的模块，获取其显式状态的前向传播函数。
 
-    对于包含状态的模块，返回的函数签名为 ``(*inputs, *states) -> (*outputs, *new_states)`` ，
+    返回的函数签名为
+    ``(inputs, states, **kwargs) -> (outputs, updated_states)`` ，
     其中：
 
     - ``inputs`` 为原始 ``forward`` 所需的常规输入参数；
@@ -1127,13 +1335,13 @@ def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
     - ``outputs`` 为原始 ``forward`` 的输出结果；
     - ``new_states`` 为执行前向传播后更新得到的状态变量。
 
-    若模块中不存在任何状态变量，则直接返回 ``module.forward`` 本身。
+    单个输入和输出也使用 tuple 包装。状态顺序与
+    ``extract_memories(module)`` 一致。
 
     .. note::
 
-        该函数通过在调用过程中 **临时替换模块内部状态** 的方式实现功能转换，
-        并在执行结束后 **恢复原始状态** ，
-        因此对模块本身不产生副作用。
+        转换优先直接使用 MemoryModule 的 functional 实现，其次递归组合
+        ``nn.Sequential``，其他模块才使用临时 ``_memories`` 字典替换。
 
     .. warning::
 
@@ -1151,7 +1359,7 @@ def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
     :return: 带有显式输入输出状态的前向传播函数
     :rtype: Callable
 
-    :raises ValueError: 若后续调用时提供的显式状态数量与 ``module`` 当前 memory 布局不一致，则相关 helper 可能抛出异常
+    :raises ValueError: 调用时的状态数量或 memory 布局与转换时不一致
 
     ----
 
@@ -1162,8 +1370,8 @@ def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
     Given a module that may contain implicit state variables, get the forward function
     with explicit state variables.
 
-    For a stateful module, the returned function has the following signature
-    ``(*inputs, *states) -> (*outputs, *new_states)``
+    The returned function has the signature
+    ``(inputs, states, **kwargs) -> (outputs, updated_states)``
     where:
 
     - ``inputs`` are the regular input arguments required by the original ``forward``;
@@ -1172,14 +1380,14 @@ def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
     - ``outputs`` are the outputs of the original ``forward`` method;
     - ``new_states`` are the updated memory variables after the forward pass.
 
-    If the module does not contain any memory variables, ``module.forward`` is returned directly.
+    Single inputs and outputs are still wrapped in tuples. State order matches
+    ``extract_memories(module)``.
 
     .. note::
 
-        The conversion is implemented by **temporarily loading the provided states** into
-        the module, executing the original forward pass, extracting the updated states,
-        and finally **restoring the original internal states**. Therefore, this operation
-        has no side effects on the module itself.
+        Conversion first uses a MemoryModule functional implementation directly,
+        then recursively composes ``nn.Sequential`` modules. Other modules use a
+        temporary ``_memories`` dictionary swap as the fallback.
 
     .. warning::
 
@@ -1196,8 +1404,9 @@ def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
            Defaults to ``None``.
     :type fn: Optional[Callable]
 
-    :return: a functional-style forward function with explicit and flattened states
+    :return: a functional-style forward function with grouped inputs and states
     :rtype: Callable
+    :raises ValueError: If the state count or memory layout differs from conversion time
 
     ----
 
@@ -1223,9 +1432,143 @@ def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
         f_forward = base.to_functional_forward(module)
         x = torch.randn(3, 10)
         initial_state = torch.tensor(0.0)
-        output, new_state = f_forward(x, initial_state)
+        outputs, new_states = f_forward((x,), (initial_state,))
 
-        assert torch.equal(output, module.linear(x))
-        assert torch.equal(new_state, initial_state + 1.0)
+        assert torch.equal(outputs[0], module.linear(x))
+        assert torch.equal(new_states[0], initial_state + 1.0)
     """
-    return _FunctionalForward(module, fn)
+    memory_modules = [
+        child for child in module.modules() if isinstance(child, MemoryModule)
+    ]
+    layout = [(child, tuple(child._memories)) for child in memory_modules]
+    num_states = sum(len(names) for _, names in layout)
+
+    if fn is None and isinstance(module, nn.Sequential):
+        occurrences = [
+            id(child) for _, child in module.named_modules(remove_duplicate=False)
+        ]
+        if len(occurrences) == len(set(occurrences)) and not (
+            isinstance(module, MemoryModule) and module._memories
+        ):
+            children = list(module._modules.values())
+            child_forwards = [to_functional_forward(child) for child in children]
+            child_state_counts = [
+                sum(
+                    len(memory_module._memories)
+                    for memory_module in child.modules()
+                    if isinstance(memory_module, MemoryModule)
+                )
+                for child in children
+            ]
+
+            def sequential_forward(
+                inputs: tuple[torch.Tensor, ...],
+                states: tuple[Any, ...],
+                **kwargs: Any,
+            ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
+                if len(states) != num_states:
+                    raise ValueError(
+                        f"{module.__class__.__name__} expected {num_states} states, "
+                        f"but got {len(states)}."
+                    )
+                outputs = inputs
+                updated_states = []
+                offset = 0
+                for index, (child_forward, state_count) in enumerate(
+                    zip(child_forwards, child_state_counts)
+                ):
+                    child_states = states[offset : offset + state_count]
+                    outputs, child_updated_states = child_forward(
+                        outputs,
+                        child_states,
+                        **(kwargs if index == 0 else {}),
+                    )
+                    updated_states.extend(child_updated_states)
+                    offset += state_count
+                return outputs, tuple(updated_states)
+
+            return sequential_forward
+
+    if fn is None and isinstance(module, MemoryModule):
+        method_names = ["functional_forward"]
+        if module.step_mode == "s":
+            method_names.append("single_step_functional_forward")
+        elif module.step_mode == "m":
+            method_names.extend(
+                ("single_step_functional_forward", "multi_step_functional_forward")
+            )
+        has_functional_forward = any(
+            getattr(type(module), name) is not getattr(MemoryModule, name)
+            for name in method_names
+        )
+        if has_functional_forward and len(memory_modules) == 1:
+
+            def direct_forward(
+                inputs: tuple[torch.Tensor, ...],
+                states: tuple[Any, ...],
+                **kwargs: Any,
+            ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
+                if len(states) != num_states:
+                    raise ValueError(
+                        f"{module._get_name()} expected {num_states} states, "
+                        f"but got {len(states)}."
+                    )
+                outputs, updated_states = module.functional_forward(
+                    inputs, states, **kwargs
+                )
+                return outputs, updated_states
+
+            return direct_forward
+
+    if fn is None and isinstance(module, nn.Sequential):
+
+        def forward_fn(*inputs, **kwargs):
+            outputs = inputs
+            for index, child in enumerate(module._modules.values()):
+                result = child(*outputs, **(kwargs if index == 0 else {}))
+                outputs = (
+                    tuple(result) if isinstance(result, (tuple, list)) else (result,)
+                )
+            return outputs[0] if len(outputs) == 1 else outputs
+
+    else:
+        forward_fn = module.forward if fn is None else fn
+
+    def fallback_forward(
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[Any, ...],
+        **kwargs: Any,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
+        if len(states) != num_states:
+            raise ValueError(
+                f"{module.__class__.__name__} expected {num_states} states, "
+                f"but got {len(states)}."
+            )
+        original_attributes = [
+            memory_module.__dict__.copy() for memory_module, _ in layout
+        ]
+        offset = 0
+        for memory_module, names in layout:
+            values = states[offset : offset + len(names)]
+            temporary = dict(zip(names, values))
+            memory_module.__dict__["_memories"] = temporary
+            offset += len(names)
+
+        try:
+            outputs = forward_fn(*inputs, **kwargs)
+            if isinstance(outputs, (tuple, list)):
+                outputs = tuple(outputs)
+            else:
+                outputs = (outputs,)
+            updated_states = tuple(
+                memory_module._memories[name]
+                for memory_module, names in layout
+                for name in names
+            )
+        finally:
+            for (memory_module, _), original in zip(layout, original_attributes):
+                memory_module.__dict__.clear()
+                memory_module.__dict__.update(original)
+        return outputs, updated_states
+
+    return fallback_forward

@@ -26,12 +26,14 @@ English version: :doc:`../en/surrogate`
 直接使用冲激函数进行梯度下降，显然会使得网络的训练及其不稳定。为了解决这一问题，各种梯度替代法(the surrogate gradient method)被相继提出，参见\
 此综述 `Surrogate Gradient Learning in Spiking Neural Networks <https://arxiv.org/abs/1901.09948>`_。
 
-替代函数在神经元中被用于生成脉冲，查看 :class:`BaseNode.neuronal_fire <spikingjelly.activation_based.neuron.BaseNode.neuronal_fire>` 的源代码可以发现：
+替代函数在神经元中被用于生成脉冲，查看
+:meth:`SimpleBaseNode.neuronal_fire <spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_fire>`
+的源代码可以发现：
 
 .. code-block:: python
 
     # spikingjelly.activation_based.neuron
-    class BaseNode(base.MemoryModule):
+    class SimpleBaseNode(base.MemoryModule):
         def __init__(..., surrogate_function: Callable = surrogate.Sigmoid(), ...)
         # ...
         self.surrogate_function = surrogate_function

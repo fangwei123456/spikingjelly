@@ -131,14 +131,18 @@ class DSRIFNode(base.MemoryModule):
             + f", vth_g_scale={self.v_threshold_grad_scaling}"
         )
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
-        with torch.no_grad():
-            self.v_threshold.clamp_(min=self.v_threshold_lower_bound)
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        v_threshold = self.v_threshold.clamp(min=self.v_threshold_lower_bound)
         iffunc = self.DSRIFFunction.apply
         y_seq = iffunc(
-            x_seq, self.T, self.v_threshold, self.alpha, self.v_threshold_grad_scaling
+            inputs[0], self.T, v_threshold, self.alpha, self.v_threshold_grad_scaling
         )
-        return y_seq
+        return (y_seq,), states
 
     class DSRIFFunction(torch.autograd.Function):
         @staticmethod
@@ -329,20 +333,24 @@ class DSRLIFNode(base.MemoryModule):
             + f", vth_g_scale={self.v_threshold_grad_scaling}"
         )
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
-        with torch.no_grad():
-            self.v_threshold.clamp_(min=self.v_threshold_lower_bound)
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        v_threshold = self.v_threshold.clamp(min=self.v_threshold_lower_bound)
         liffunc = self.DSRLIFFunction.apply
         y_seq = liffunc(
-            x_seq,
+            inputs[0],
             self.T,
-            self.v_threshold,
+            v_threshold,
             self.tau,
             self.delta_t,
             self.alpha,
             self.v_threshold_grad_scaling,
         )
-        return y_seq
+        return (y_seq,), states
 
     @classmethod
     def weight_rate_spikes(cls, data, tau, delta_t):

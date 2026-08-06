@@ -150,119 +150,29 @@ class AdaptBaseNode(BaseNode):
             self.w, self.tau_w, self.a, self.v_rest, self.v
         )
 
-    @staticmethod
-    def apply_hard_reset(
-        v: torch.Tensor,
-        w: torch.Tensor,
-        spike_d: torch.Tensor,
-        v_reset: float,
-        b: float,
-        spike: torch.Tensor,
-    ):
-        v = (1.0 - spike_d) * v + spike * v_reset
-        w = w + b * spike
-        return v, w
-
-    @staticmethod
-    def apply_soft_reset(
-        v: torch.Tensor,
-        w: torch.Tensor,
-        spike_d: torch.Tensor,
-        v_threshold: float,
-        b: float,
-        spike: torch.Tensor,
-    ):
-        v = v - spike_d * v_threshold
-        w = w + b * spike
-        return v, w
-
-    def neuronal_reset(self, spike):
-        """
-        **API Language** - :ref:`中文 <AdaptBaseNode.neuronal_reset-cn>` | :ref:`English <AdaptBaseNode.neuronal_reset-en>`
-
-        ----
-
-        .. _AdaptBaseNode.neuronal_reset-cn:
-
-        * **中文**
-
-        根据当前神经元释放的脉冲，对膜电位进行重置。
-
-        ----
-
-        .. _AdaptBaseNode.neuronal_reset-en:
-
-        * **English**
-
-        Reset the membrane potential according to neurons' output spikes.
-        """
-        if self.detach_reset:
-            spike_d = spike.detach()
-        else:
-            spike_d = spike
-
-        if self.v_reset is None:
-            # soft reset
-            self.v, self.w = self.apply_soft_reset(
-                self.v, self.w, spike_d, self.v_threshold, self.b, spike
-            )
-
-        else:
-            # hard reset
-            self.v, self.w = self.apply_hard_reset(
-                self.v, self.w, spike_d, self.v_reset, self.b, spike
-            )
-
     def extra_repr(self):
         return (
             super().extra_repr()
             + f", v_rest={self.v_rest}, w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}"
         )
 
-    def single_step_forward(self, x: torch.Tensor):
-        """
-        **API Language** - :ref:`中文 <AdaptBaseNode.single_step_forward-cn>` | :ref:`English <AdaptBaseNode.single_step_forward-en>`
-
-        ----
-
-        .. _AdaptBaseNode.single_step_forward-cn:
-
-        * **中文**
-
-        按照充电、适应、放电、重置的顺序进行前向传播。
-
-        :param x: 输入到神经元的电压增量
-        :type x: torch.Tensor
-
-        :return: 神经元的输出脉冲
-        :rtype: torch.Tensor
-
-        ----
-
-        .. _AdaptBaseNode.single_step_forward-en:
-
-        * **English**
-
-        Forward by the order of ``neuronal_charge``, ``neuronal_adaptation``, ``neuronal_fire``, and ``neuronal_reset``.
-
-        :param x: increment of voltage inputted to neurons
-        :type x: torch.Tensor
-
-        :return: out spikes of neurons
-        :rtype: torch.Tensor
-        """
-        self.v_float_to_tensor(x)
-        self.w_float_to_tensor(x)
-        self.neuronal_charge(x)
-        self.neuronal_adaptation()
-        spike = self.neuronal_fire()
-        self.neuronal_reset(spike)
-        return spike
-
-    def w_float_to_tensor(self, x: torch.Tensor):
-        if isinstance(self.w, float):
-            w_init = self.w
-            self.w = torch.full_like(x.data, fill_value=w_init)
+    def materialize_states(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        states = super().materialize_states(inputs, states, step_mode)
+        x = states[0]
+        w = states[-1]
+        if isinstance(w, float):
+            w = torch.full_like(x, w, requires_grad=False)
+        elif isinstance(w, torch.Tensor):
+            if w.shape != x.shape:
+                w = torch.full_like(x, self.w_rest, requires_grad=False)
+            elif w.dtype != x.dtype or w.device != x.device:
+                w = w.to(dtype=x.dtype, device=x.device)
+        return (*states[:-1], w)
 
 
 class IzhikevichNode(AdaptBaseNode):
@@ -391,12 +301,32 @@ class IzhikevichNode(AdaptBaseNode):
     def extra_repr(self):
         return super().extra_repr() + f", tau={self.tau}, v_c={self.v_c}, a0={self.a0}"
 
-    def neuronal_charge(self, x: torch.Tensor):
-        self.v = (
-            self.v
-            + (x + self.a0 * (self.v - self.v_rest) * (self.v - self.v_c) - self.w)
-            / self.tau
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        v = states[0]
+        w = states[-1]
+        spike, v, w = functional.izhikevich_step(
+            x,
+            v,
+            w,
+            self.tau,
+            self.a0,
+            self.v_rest,
+            self.v_c,
+            self.tau_w,
+            self.a,
+            self.b,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
         )
+        return (spike,), (v, w)
 
     @property
     def supported_backends(self):
@@ -407,16 +337,22 @@ class IzhikevichNode(AdaptBaseNode):
         else:
             raise ValueError(self.step_mode)
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         if self.backend == "torch":
-            return super().multi_step_forward(x_seq)
+            return super().multi_step_functional_forward(inputs, states, **kwargs)
         elif self.backend == "cupy":
-            self.v_float_to_tensor(x_seq[0])
-            self.w_float_to_tensor(x_seq[0])
-            spike_seq, self.v, self.w, v_seq, _ = functional.izhikevich_multi_step_cupy(
+            x_seq = inputs[0]
+            v = states[0]
+            w = states[-1]
+            spike_seq, v, w, _, _ = functional.izhikevich_multi_step_cupy(
                 x_seq,
-                self.v,
-                self.w,
+                v,
+                w,
                 self.tau,
                 self.v_threshold,
                 self.v_reset,
@@ -428,10 +364,36 @@ class IzhikevichNode(AdaptBaseNode):
                 self.a0,
                 self.detach_reset,
                 self.surrogate_function,
-                self.store_v_seq,
+                False,
             )
-            if self.store_v_seq:
-                self.v_seq = v_seq
-            return spike_seq
+            return (spike_seq,), (v, w)
         else:
             raise ValueError(self.backend)
+
+    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
+        if not self.store_v_seq or self.backend != "cupy":
+            return super().multi_step_forward(x_seq, *args, **kwargs)
+
+        states = self.materialize_states(
+            (x_seq, *args), tuple(self._memories.values()), "m"
+        )
+        spike_seq, self.v, self.w, self.v_seq, _ = (
+            functional.izhikevich_multi_step_cupy(
+                x_seq,
+                states[0],
+                states[-1],
+                self.tau,
+                self.v_threshold,
+                self.v_reset,
+                self.v_rest,
+                self.a,
+                self.b,
+                self.tau_w,
+                self.v_c,
+                self.a0,
+                self.detach_reset,
+                self.surrogate_function,
+                True,
+            )
+        )
+        return spike_seq

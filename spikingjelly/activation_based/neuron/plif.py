@@ -1,4 +1,3 @@
-from spikingjelly.logger import logger
 import math
 from typing import Optional
 
@@ -7,12 +6,6 @@ import torch.nn as nn
 
 from .. import functional, surrogate
 from .base_node import BaseNode
-
-try:
-    from .. import triton_kernel
-except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.neuron: %s", e)
-    triton_kernel = None
 
 
 __all__ = ["ParametricLIFNode"]
@@ -168,71 +161,101 @@ class ParametricLIFNode(BaseNode):
             tau = 1.0 / self.w.sigmoid()
         return super().extra_repr() + f", tau={tau}"
 
-    def neuronal_charge(self, x: torch.Tensor):
-        if self.decay_input:
-            if self.v_reset is None or self.v_reset == 0.0:
-                self.v = self.v + (x - self.v) * self.w.sigmoid()
-            else:
-                self.v = self.v + (x - (self.v - self.v_reset)) * self.w.sigmoid()
-        else:
-            if self.v_reset is None or self.v_reset == 0.0:
-                self.v = self.v * (1.0 - self.w.sigmoid()) + x
-            else:
-                self.v = self.v - (self.v - self.v_reset) * self.w.sigmoid() + x
-
-    def _inductor_multi_step_forward(self, x_seq: torch.Tensor):
-        self.v_float_to_tensor(x_seq[0])
-        spike_seq, self.v, v_seq = functional.plif_multi_step_inductor(
-            x_seq,
-            self.v,
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        v = states[0]
+        spike, v = functional.plif_step(
+            x,
+            v,
             self.w,
             self.decay_input,
             self.v_threshold,
             self.v_reset,
             self.surrogate_function,
             self.detach_reset,
-            self.store_v_seq,
         )
-        if self.store_v_seq:
-            self.v_seq = v_seq
-        return spike_seq
+        return (spike,), (v, *states[1:])
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x_seq = inputs[0]
+        v = states[0]
+
         if self.backend == "inductor":
-            return self._inductor_multi_step_forward(x_seq)
-        elif self.backend == "torch":
-            return super().multi_step_forward(x_seq)
-        elif self.backend == "cupy":
-            self.v_float_to_tensor(x_seq[0])
-            spike_seq, self.v, v_seq = functional.plif_multi_step_cupy(
+            spike_seq, v, _ = functional.plif_multi_step_inductor(
                 x_seq,
-                self.v,
+                v,
                 self.w,
                 self.decay_input,
                 self.v_threshold,
                 self.v_reset,
                 self.surrogate_function,
                 self.detach_reset,
-                self.store_v_seq,
+                False,
             )
-            if self.store_v_seq:
-                self.v_seq = v_seq
-            return spike_seq
-        elif self.backend == "triton":
-            self.v_float_to_tensor(x_seq[0])
-            spike_seq, v_seq = triton_kernel.multistep_plif(
+        elif self.backend == "cupy":
+            spike_seq, v, _ = functional.plif_multi_step_cupy(
                 x_seq,
-                self.v,
-                self.w.sigmoid().to(x_seq),
+                v,
+                self.w,
                 self.decay_input,
                 self.v_threshold,
                 self.v_reset,
-                self.detach_reset,
                 self.surrogate_function,
+                self.detach_reset,
+                False,
             )
-            if self.store_v_seq:
-                self.v_seq = v_seq
-            self.v = v_seq[-1].clone()
-            return spike_seq
+        elif self.backend == "triton":
+            spike_seq, v, _ = functional.plif_multi_step_triton(
+                x_seq,
+                v,
+                self.w,
+                self.decay_input,
+                self.v_threshold,
+                self.v_reset,
+                self.surrogate_function,
+                self.detach_reset,
+                False,
+            )
+        elif self.backend == "torch":
+            return super().multi_step_functional_forward(inputs, states, **kwargs)
         else:
             raise ValueError(self.backend)
+
+        return (spike_seq,), (v,)
+
+    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
+        if not self.store_v_seq or self.backend == "torch":
+            return super().multi_step_forward(x_seq, *args, **kwargs)
+
+        states = self.materialize_states(
+            (x_seq, *args), tuple(self._memories.values()), "m"
+        )
+        function = {
+            "inductor": functional.plif_multi_step_inductor,
+            "cupy": functional.plif_multi_step_cupy,
+            "triton": functional.plif_multi_step_triton,
+        }[self.backend]
+        spike_seq, v, v_seq = function(
+            x_seq,
+            states[0],
+            self.w,
+            self.decay_input,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+            True,
+        )
+        self.v = v
+        self.v_seq = v_seq
+        return spike_seq

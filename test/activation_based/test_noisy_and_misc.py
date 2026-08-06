@@ -221,18 +221,21 @@ def test_cubalif_inherited_multi_step_matches_repeated_single_steps():
 
 
 def test_klif_scaled_reset_matches_documented_equations():
-    spike = torch.tensor([0.0, 1.0])
+    v_charged = torch.tensor([0.5, 1.5])
 
-    soft_reset = KLIFNode(scale_reset=True, v_reset=None)
+    soft_reset = KLIFNode(scale_reset=True, decay_input=False, v_reset=None)
     with torch.no_grad():
         soft_reset.k.fill_(2.0)
-    soft_reset.v = torch.tensor([0.5, 1.5])
-    soft_reset.neuronal_reset(spike)
-    torch.testing.assert_close(soft_reset.v, torch.tensor([0.25, 0.25]))
+    _, soft_states = soft_reset.single_step_functional_forward(
+        (v_charged / soft_reset.k,), (torch.zeros(2),)
+    )
+    torch.testing.assert_close(soft_states[0], torch.tensor([0.25, 0.25]))
 
-    hard_reset = KLIFNode(scale_reset=True, v_reset=0.1)
+    hard_reset = KLIFNode(scale_reset=True, decay_input=False, v_reset=0.1)
     with torch.no_grad():
         hard_reset.k.fill_(2.0)
-    hard_reset.v = torch.tensor([0.5, 1.5])
-    hard_reset.neuronal_reset(spike)
-    torch.testing.assert_close(hard_reset.v, torch.tensor([0.25, 0.1]))
+    initial_v = torch.full((2,), hard_reset.v_reset)
+    _, hard_states = hard_reset.single_step_functional_forward(
+        (v_charged / hard_reset.k - initial_v,), (initial_v,)
+    )
+    torch.testing.assert_close(hard_states[0], torch.tensor([0.25, 0.1]))

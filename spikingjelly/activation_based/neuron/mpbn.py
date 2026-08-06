@@ -2,10 +2,10 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
-from .. import surrogate
+from .. import functional, surrogate
 from .base_node import BaseNode
-from .lif import LIFNode
 
 __all__ = ["MPBNBaseNode", "MPBNLIFNode"]
 
@@ -128,9 +128,9 @@ class MPBNBaseNode(BaseNode):
         feature_count = out_channels if out_channels is not None else out_features
         if mpbn:
             self.vbn = (
-                nn.LazyBatchNorm2d()
+                nn.BatchNorm2d(feature_count)
                 if out_channels is not None
-                else nn.LazyBatchNorm1d()
+                else nn.BatchNorm1d(feature_count)
             )
         else:
             self.vbn = nn.Identity()
@@ -152,111 +152,6 @@ class MPBNBaseNode(BaseNode):
         self.learnable_vth = learnable_vth
         if learnable_vth:  # force the threshold to be positive
             self.a = nn.Parameter(torch.zeros(feature_count))
-
-    def compute_running_stats(
-        self, v: torch.Tensor
-    ):  # you can disable this completely by overiding it in subclasses
-        if v.ndim not in (2, 4):
-            raise NotImplementedError(
-                f"Only 2D and 4D tensor are supported, but got {v.ndim}D tensor."
-            )
-        if v.ndim == 2 and v.shape[0] == 1:
-            return
-
-        reduce_dims = 0 if v.ndim == 2 else (0, 2, 3)
-        mu = torch.mean(v, dim=reduce_dims).detach()
-        sigma2 = torch.var(v, dim=reduce_dims, unbiased=True).detach()
-        if self.running_stats and self.mu is not None:
-            self.mu = self.mu.detach() * (1 - self.bn_momentum) + mu * self.bn_momentum
-            self.sigma2 = (
-                self.sigma2.detach() * (1 - self.bn_momentum)
-                + sigma2 * self.bn_momentum
-            )
-            self.bn_momentum = max(
-                self.bn_momentum * self.bn_decay_momentum, self.bn_min_momentum
-            )
-        else:
-            self.mu = mu
-            self.sigma2 = sigma2
-
-    def pre_charge(self, x: torch.Tensor):
-        raise NotImplementedError(
-            "This method should be implemented in subclasses, e.g. the charging function of LIF neuron."
-        )
-
-    def neuronal_charge(self, x: torch.Tensor):
-        self.pre_charge(x)
-        self.v = self.vbn(self.v)
-        if self.fold_bn and not self.learnable_vth and self.training:
-            self.compute_running_stats(self.v)
-
-    def neuronal_fire(self):
-        if self.v.ndim not in (2, 4):
-            raise NotImplementedError(
-                f"Only 2D and 4D tensors are supported, but got {self.v.ndim}D tensors."
-            )
-
-        feature_shape = (1, -1) if self.v.ndim == 2 else (1, -1, 1, 1)
-        if self.fold_bn and not self.learnable_vth:
-            threshold = (self.v_threshold - self.beta) * torch.sqrt(
-                self.sigma2 + self.eps
-            ) / self.gamma + self.mu
-        elif self.learnable_vth:
-            threshold = torch.exp(self.a)
-        else:
-            threshold = self.v_threshold
-        if self.fold_bn or self.learnable_vth:
-            threshold = threshold.view(feature_shape)
-        diff = self.v - threshold
-        spike = self.surrogate_function(diff)
-
-        if self.normalize_residual:
-            mask = diff <= 0
-            gamma = self.gamma.view(feature_shape).expand_as(mask)
-            mu = self.mu.view(feature_shape).expand_as(mask)
-            beta = self.beta.view(feature_shape).expand_as(mask)
-            sigma = (
-                torch.sqrt(self.sigma2 + self.eps).view(feature_shape).expand_as(mask)
-            )
-            normalized_residual = (self.v[mask] - mu[mask]) / sigma[mask] * gamma[
-                mask
-            ] + beta[mask]
-            self.v = self.v.masked_scatter(mask, normalized_residual)
-        return spike
-
-    def single_step_forward(self, x: torch.Tensor):
-        """
-        **API Language** - :ref:`中文 <MPBNBaseNode.single_step_forward-cn>` | :ref:`English <MPBNBaseNode.single_step_forward-en>`
-
-        ----
-
-        .. _MPBNBaseNode.single_step_forward-cn:
-
-        * **中文**
-
-        :param x: 当前时间步输入张量（2D 或 4D）
-        :type x: torch.Tensor
-        :return: 当前时间步输出脉冲
-        :rtype: torch.Tensor
-        :raises NotImplementedError: 当输入维度不是 2D 或 4D 时，内部放电逻辑会抛出异常
-
-        ----
-
-        .. _MPBNBaseNode.single_step_forward-en:
-
-        * **English**
-
-        :param x: Input tensor at current time step (2D or 4D)
-        :type x: torch.Tensor
-        :return: Output spike at current time step
-        :rtype: torch.Tensor
-        :raises NotImplementedError: Raised by internal firing logic when input rank is neither 2D nor 4D
-        """
-        self.v_float_to_tensor(x)
-        self.neuronal_charge(x)
-        spike = self.neuronal_fire()
-        self.neuronal_reset(spike)
-        return spike
 
     def re_parameterize_v_threshold(
         self, normalize_residual: bool = False, running_stats: bool = False
@@ -380,20 +275,142 @@ class MPBNLIFNode(MPBNBaseNode):
     def supported_backends(self):
         return "torch"
 
-    def pre_charge(self, x: torch.Tensor):
-        if self.decay_input:
-            if self.v_reset is None or self.v_reset == 0.0:
-                self.v = LIFNode.neuronal_charge_decay_input_reset0(x, self.v, self.tau)
-            else:
-                self.v = LIFNode.neuronal_charge_decay_input(
-                    x, self.v, self.v_reset, self.tau
+    def _normalization_state(self):
+        return {
+            "running_mean": (
+                self.vbn.running_mean.clone()
+                if not isinstance(self.vbn, nn.Identity)
+                else None
+            ),
+            "running_var": (
+                self.vbn.running_var.clone()
+                if not isinstance(self.vbn, nn.Identity)
+                else None
+            ),
+            "num_batches_tracked": (
+                self.vbn.num_batches_tracked.clone()
+                if not isinstance(self.vbn, nn.Identity)
+                else None
+            ),
+            "mu": self.mu,
+            "sigma2": self.sigma2,
+            "bn_momentum": self.bn_momentum,
+        }
+
+    def forward(self, *args, **kwargs):
+        stats = self._normalization_state()
+        kwargs["_mpbn_stats"] = stats
+        output = super().forward(*args, **kwargs)
+        if self.training:
+            if not isinstance(self.vbn, nn.Identity):
+                self.vbn.running_mean.copy_(stats["running_mean"])
+                self.vbn.running_var.copy_(stats["running_var"])
+                self.vbn.num_batches_tracked.copy_(stats["num_batches_tracked"])
+            elif self.fold_bn and not self.learnable_vth:
+                self.mu = stats["mu"]
+                self.sigma2 = stats["sigma2"]
+                self.bn_momentum = stats["bn_momentum"]
+        return output
+
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        if "_mpbn_stats" not in kwargs:
+            kwargs["_mpbn_stats"] = self._normalization_state()
+        return super().multi_step_functional_forward(inputs, states, **kwargs)
+
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        v = states[0]
+        stats = kwargs.get("_mpbn_stats")
+        if stats is None:
+            stats = self._normalization_state()
+        v = functional.lif_charge(x, v, self.tau, self.decay_input, self.v_reset)
+
+        if not isinstance(self.vbn, nn.Identity):
+            running_mean = stats["running_mean"]
+            running_var = stats["running_var"]
+            batches_tracked = stats["num_batches_tracked"]
+            exponential_average_factor = (
+                0.0 if self.vbn.momentum is None else self.vbn.momentum
+            )
+            if self.training:
+                batches_tracked.add_(1)
+                if self.vbn.momentum is None:
+                    exponential_average_factor = 1.0 / float(batches_tracked)
+            v = F.batch_norm(
+                v,
+                running_mean,
+                running_var,
+                self.vbn.weight,
+                self.vbn.bias,
+                self.training,
+                exponential_average_factor,
+                self.vbn.eps,
+            )
+
+        mu = stats["mu"]
+        sigma2 = stats["sigma2"]
+        bn_momentum = stats["bn_momentum"]
+        if (
+            self.fold_bn
+            and not self.learnable_vth
+            and self.training
+            and not (v.ndim == 2 and v.shape[0] == 1)
+        ):
+            reduce_dims = 0 if v.ndim == 2 else (0, 2, 3)
+            batch_mu = torch.mean(v, dim=reduce_dims).detach()
+            batch_sigma2 = torch.var(v, dim=reduce_dims, unbiased=True).detach()
+            if self.running_stats:
+                mu = mu.detach() * (1 - bn_momentum) + batch_mu * bn_momentum
+                sigma2 = (
+                    sigma2.detach() * (1 - bn_momentum) + batch_sigma2 * bn_momentum
                 )
+                bn_momentum = max(
+                    bn_momentum * self.bn_decay_momentum,
+                    self.bn_min_momentum,
+                )
+            else:
+                mu = batch_mu
+                sigma2 = batch_sigma2
+            stats["mu"] = mu
+            stats["sigma2"] = sigma2
+            stats["bn_momentum"] = bn_momentum
+
+        feature_shape = (1, -1) if v.ndim == 2 else (1, -1, 1, 1)
+        if self.fold_bn and not self.learnable_vth:
+            threshold = (self.v_threshold - self.beta) * torch.sqrt(
+                sigma2 + self.eps
+            ) / self.gamma + mu
+        elif self.learnable_vth:
+            threshold = torch.exp(self.a)
         else:
-            if self.v_reset is None or self.v_reset == 0.0:
-                self.v = LIFNode.neuronal_charge_no_decay_input_reset0(
-                    x, self.v, self.tau
-                )
-            else:
-                self.v = LIFNode.neuronal_charge_no_decay_input(
-                    x, self.v, self.v_reset, self.tau
-                )
+            threshold = self.v_threshold
+        if self.fold_bn or self.learnable_vth:
+            threshold = threshold.view(feature_shape)
+        diff = v - threshold
+        spike = self.surrogate_function(diff)
+
+        if self.normalize_residual:
+            mask = diff <= 0
+            gamma = self.gamma.view(feature_shape).expand_as(mask)
+            mu = mu.view(feature_shape).expand_as(mask)
+            beta = self.beta.view(feature_shape).expand_as(mask)
+            sigma = torch.sqrt(sigma2 + self.eps).view(feature_shape).expand_as(mask)
+            normalized_residual = (v[mask] - mu[mask]) / sigma[mask] * gamma[
+                mask
+            ] + beta[mask]
+            v = v.masked_scatter(mask, normalized_residual)
+
+        v = functional.voltage_reset(
+            v, spike, self.v_threshold, self.v_reset, self.detach_reset
+        )
+        return (spike,), (v, *states[1:])

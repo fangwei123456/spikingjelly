@@ -1246,9 +1246,11 @@ class FlexSN(base.MemoryModule):
     @store_state_seqs.setter
     def store_state_seqs(self, value: bool):
         self._store_state_seqs = value
-        if value:
-            if not hasattr(self, "state_seqs"):
-                self.register_memory("state_seqs", None)
+        self.state_seqs = None
+
+    def reset(self):
+        super().reset()
+        self.state_seqs = None
 
     @staticmethod
     def init_states(num_states: int, step_mode: str, *args) -> List[torch.Tensor]:
@@ -1315,42 +1317,61 @@ class FlexSN(base.MemoryModule):
         else:
             raise ValueError(f"Unsupported step mode: {step_mode}")
 
-    def single_step_forward(self, *args):
-        # only torch backend is supported for single-step forward
-        results = self.core(*args, *self.states)  # [*outputs, *states]
-        self.states = results[self.num_outputs :]
-        return results[: self.num_outputs]
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        state_values = states[0]
+        if state_values is None:
+            state_values = self.init_states(self.num_states, "s", *inputs)
+        results = self.core(*inputs, *state_values)
+        return tuple(results[: self.num_outputs]), (list(results[self.num_outputs :]),)
 
-    def multi_step_forward(self, *args):
-        T = args[0].shape[0]
+    def _multi_step(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        state_values: list[torch.Tensor] | None,
+        store_state_seqs: bool,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        T = inputs[0].shape[0]
+        state_sequences = None
         if T == 0:
             if self.backend not in self.supported_backends:
                 raise ValueError(f"Unsupported backend: {self.backend}")
-            if self.states is None:
-                self.states = self.init_states(self.num_states, self.step_mode, *args)
+            if state_values is None:
+                state_values = self.init_states(
+                    self.num_states, self.step_mode, *inputs
+                )
             if self.backend == "hop":
-                state_args = [state.contiguous() for state in self.states]
+                state_args = [state.contiguous() for state in state_values]
                 result_seqs = _run_hop_scan(
                     self.core,
                     self.num_inputs,
                     self.num_states,
                     self.num_outputs,
-                    self.store_state_seqs,
-                    *args,
+                    store_state_seqs,
+                    *inputs,
                     *state_args,
                     output_template_specs=self._output_template_specs,
                 )
                 output_seqs = list(result_seqs[: self.num_outputs])
                 state_results = list(result_seqs[self.num_outputs :])
-                if self.store_state_seqs:
-                    self.state_seqs = state_results
-                    self.states = [
-                        _last_state_or_current(v, self.states[i])
+                if store_state_seqs:
+                    state_sequences = state_results
+                    state_values = [
+                        _last_state_or_current(v, state_values[i])
                         for i, v in enumerate(state_results)
                     ]
                 else:
-                    self.states = state_results
-                return output_seqs
+                    state_values = state_results
+                updated_states = (
+                    (state_sequences, state_values)
+                    if store_state_seqs
+                    else (state_values,)
+                )
+                return tuple(output_seqs), updated_states
             if (
                 self.backend == "torch"
                 and self.num_outputs > 0
@@ -1362,97 +1383,110 @@ class FlexSN(base.MemoryModule):
                     "match core's per-step return contract without executing core."
                 )
             output_seqs = _empty_multistep_outputs(
-                args,
-                self.states,
+                inputs,
+                state_values,
                 self.num_outputs,
                 self._output_template_specs,
                 use_template_device=False,
             )
-            if self.store_state_seqs:
-                self.state_seqs = [s.new_empty((0, *s.shape)) for s in self.states]
-            return output_seqs
+            if store_state_seqs:
+                state_sequences = [s.new_empty((0, *s.shape)) for s in state_values]
+            updated_states = (
+                (state_sequences, state_values) if store_state_seqs else (state_values,)
+            )
+            return tuple(output_seqs), updated_states
 
         if self.backend == "torch":
-            if self.states is None:
-                self.states = self.init_states(self.num_states, self.step_mode, *args)
+            if state_values is None:
+                state_values = self.init_states(
+                    self.num_states, self.step_mode, *inputs
+                )
             output_seqs = [[] for _ in range(self.num_outputs)]
-            if self.store_state_seqs:
+            if store_state_seqs:
                 state_seqs = [[] for _ in range(self.num_states)]
 
             for t in range(T):
-                outputs = self.single_step_forward(*[arg[t] for arg in args])
+                results = self.core(*(arg[t] for arg in inputs), *state_values)
+                outputs = results[: self.num_outputs]
+                state_values = list(results[self.num_outputs :])
                 for i in range(self.num_outputs):
                     output_seqs[i].append(outputs[i])
-                if self.store_state_seqs:
+                if store_state_seqs:
                     for i in range(self.num_states):
-                        state_seqs[i].append(self.states[i])
+                        state_seqs[i].append(state_values[i])
 
-            if self.store_state_seqs:
-                self.state_seqs = [torch.stack(v, dim=0) for v in state_seqs]
-
-            return [torch.stack(y, dim=0) for y in output_seqs]
+            if store_state_seqs:
+                state_sequences = [torch.stack(v, dim=0) for v in state_seqs]
+            updated_states = (
+                (state_sequences, state_values) if store_state_seqs else (state_values,)
+            )
+            return tuple(torch.stack(y, dim=0) for y in output_seqs), updated_states
 
         elif self.backend == "hop":
-            if self.states is None:
-                self.states = self.init_states(self.num_states, self.step_mode, *args)
-            state_args = [state.contiguous() for state in self.states]
+            if state_values is None:
+                state_values = self.init_states(
+                    self.num_states, self.step_mode, *inputs
+                )
+            state_args = [state.contiguous() for state in state_values]
             result_seqs = _run_hop_scan(
                 self.core,
                 self.num_inputs,
                 self.num_states,
                 self.num_outputs,
-                self.store_state_seqs,
-                *args,
+                store_state_seqs,
+                *inputs,
                 *state_args,
                 output_template_specs=self._output_template_specs,
             )
             output_seqs = list(result_seqs[: self.num_outputs])
             state_results = list(result_seqs[self.num_outputs :])
-            if self.store_state_seqs:
-                state_seqs = state_results
-                self.states = [
-                    _last_state_or_current(v, self.states[i])
-                    for i, v in enumerate(state_seqs)
+            if store_state_seqs:
+                state_sequences = state_results
+                state_values = [
+                    _last_state_or_current(v, state_values[i])
+                    for i, v in enumerate(state_sequences)
                 ]
-                self.state_seqs = state_seqs
             else:
-                self.states = state_results
-            return output_seqs
+                state_values = state_results
+            updated_states = (
+                (state_sequences, state_values) if store_state_seqs else (state_values,)
+            )
+            return tuple(output_seqs), updated_states
 
         elif _is_flexsn_triton_backend(self.backend):
-            result_has_state_seqs = self.store_state_seqs
-            can_elide_zero_states = (
-                self.states is None and _can_elide_zero_state_inputs(self)
-            )
-            # The first init_states branch handles the case where zero-state elision
-            # is impossible. _no_grad then determines whether use_implicit_zero_states
-            # can skip explicit state tensors entirely. The second init_states branch
-            # only runs if self.states is still None, so re-initialization cannot occur.
-            if self.states is None and not can_elide_zero_states:
-                self.states = self.init_states(self.num_states, self.step_mode, *args)
-            _no_grad = not torch.is_grad_enabled() or (
-                not _value_requires_grad(args)
-                and not _value_requires_grad(self.states)
+            result_has_state_seqs = store_state_seqs
+            no_grad = not torch.is_grad_enabled() or (
+                not _value_requires_grad(inputs)
+                and not _value_requires_grad(state_values)
                 and not _core_requires_grad(self.core)
             )
-            use_implicit_zero_states = can_elide_zero_states and _no_grad
-            if self.states is None and not use_implicit_zero_states:
-                self.states = self.init_states(self.num_states, self.step_mode, *args)
-            state_args = [] if use_implicit_zero_states else list(self.states)
-            flat_args = [*args, *state_args]
+            use_implicit_zero_states = (
+                state_values is None and _can_elide_zero_state_inputs(self) and no_grad
+            )
+            if state_values is None and not use_implicit_zero_states:
+                state_values = self.init_states(
+                    self.num_states, self.step_mode, *inputs
+                )
+            state_args = [] if use_implicit_zero_states else list(state_values)
+            flat_args = [*inputs, *state_args]
             all_cuda, same_device = _flat_args_on_single_cuda_device(flat_args)
             if self._inductor_handle is not None and all_cuda and same_device:
-                if _no_grad:
+                if no_grad:
                     if (
-                        not self.store_state_seqs
+                        not store_state_seqs
                         and self._inductor_inference_final_state_available
                     ):
                         result_seqs = flexsn_inductor_inference_final_state(
                             self._inductor_handle, flat_args
                         )
                         output_seqs = list(result_seqs[: self.num_outputs])
-                        self.states = list(result_seqs[self.num_outputs :])
-                        return output_seqs
+                        state_values = list(result_seqs[self.num_outputs :])
+                        updated_states = (
+                            (state_sequences, state_values)
+                            if store_state_seqs
+                            else (state_values,)
+                        )
+                        return tuple(output_seqs), updated_states
                     elif self._inductor_inference_available:
                         result_seqs = flexsn_inductor_inference(
                             self._inductor_handle, flat_args
@@ -1460,18 +1494,23 @@ class FlexSN(base.MemoryModule):
                         result_has_state_seqs = True
                     else:
                         result_seqs = None
-                elif (not _no_grad) and self._inductor_training_available:
-                    if not self.store_state_seqs:
+                elif self._inductor_training_available:
+                    if not store_state_seqs:
                         result_seqs = flexsn_inductor_training_final_state(
                             self._inductor_handle, flat_args
                         )
                         output_seqs = list(result_seqs[: self.num_outputs])
-                        self.states = list(
+                        state_values = list(
                             result_seqs[
                                 self.num_outputs : self.num_outputs + self.num_states
                             ]
                         )
-                        return output_seqs
+                        updated_states = (
+                            (state_sequences, state_values)
+                            if store_state_seqs
+                            else (state_values,)
+                        )
+                        return tuple(output_seqs), updated_states
                     result_seqs = flexsn_inductor_training(
                         self._inductor_handle, flat_args
                     )
@@ -1482,58 +1521,77 @@ class FlexSN(base.MemoryModule):
                 result_seqs = None
 
             if result_seqs is None:
-                if self.states is None:
-                    self.states = self.init_states(
-                        self.num_states, self.step_mode, *args
+                if state_values is None:
+                    state_values = self.init_states(
+                        self.num_states, self.step_mode, *inputs
                     )
-                state_args = [state.contiguous() for state in self.states]
+                state_args = [state.contiguous() for state in state_values]
                 result_seqs = _run_hop_scan(
                     self.core,
                     self.num_inputs,
                     self.num_states,
                     self.num_outputs,
-                    self.store_state_seqs,
-                    *args,
+                    store_state_seqs,
+                    *inputs,
                     *state_args,
                     output_template_specs=self._output_template_specs,
                 )
-                result_has_state_seqs = self.store_state_seqs
+                result_has_state_seqs = store_state_seqs
             output_seqs = list(result_seqs[: self.num_outputs])
             state_seqs = list(result_seqs[self.num_outputs :])
             if result_has_state_seqs:
-                if self.states is None:
-                    self.states = self.init_states(
-                        self.num_states, self.step_mode, *args
+                if state_values is None:
+                    state_values = self.init_states(
+                        self.num_states, self.step_mode, *inputs
                     )
-                self.states = [
-                    _last_state_or_current(v, self.states[i])
+                state_values = [
+                    _last_state_or_current(v, state_values[i])
                     for i, v in enumerate(state_seqs)
                 ]
-                if self.store_state_seqs:
-                    self.state_seqs = state_seqs
+                if store_state_seqs:
+                    state_sequences = state_seqs
             else:
-                self.states = state_seqs
-            return output_seqs
+                state_values = state_seqs
+            updated_states = (
+                (state_sequences, state_values) if store_state_seqs else (state_values,)
+            )
+            return tuple(output_seqs), updated_states
 
         else:
             raise ValueError(f"Unsupported backend: {self.backend}")
 
-    def forward(self, *args):
-        can_elide = (
-            self.step_mode == "m"
-            and _can_elide_zero_state_inputs(self)
-            and (
-                not torch.is_grad_enabled()
-                or (
-                    not _value_requires_grad(args)
-                    and not _core_requires_grad(self.core)
-                )
-            )
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        return self._multi_step(inputs, states[0], False)
+
+    def single_step_forward(self, *args: torch.Tensor) -> tuple[torch.Tensor, ...]:
+        outputs = super().single_step_forward(*args)
+        return outputs if isinstance(outputs, tuple) else (outputs,)
+
+    def multi_step_forward(self, *args: torch.Tensor) -> list[torch.Tensor]:
+        outputs, updated_states = self._multi_step(
+            tuple(args), self.states, self.store_state_seqs
         )
-        if self.states is None and not can_elide:
-            self.states = self.init_states(self.num_states, self.step_mode, *args)
-        output = super().forward(*args)
-        return output[0] if len(output) == 1 else output
+        if self.store_state_seqs:
+            self.state_seqs, self.states = updated_states
+        else:
+            (self.states,) = updated_states
+        return list(outputs)
+
+    def forward(
+        self, *args: torch.Tensor
+    ) -> torch.Tensor | tuple[torch.Tensor, ...] | list[torch.Tensor]:
+        if self.step_mode == "s":
+            outputs = self.single_step_forward(*args)
+        elif self.step_mode == "m":
+            outputs = self.multi_step_forward(*args)
+        else:
+            raise ValueError(self.step_mode)
+        return outputs[0] if len(outputs) == 1 else outputs
 
     def extra_repr(self):
         core_name = getattr(self.core, "__name__", type(self.core).__name__)

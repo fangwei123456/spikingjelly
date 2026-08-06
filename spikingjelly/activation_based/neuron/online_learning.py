@@ -2,97 +2,36 @@ from typing import Optional
 
 import torch
 
-from .. import surrogate
+from .. import functional, surrogate
 from .lif import LIFNode
 
 __all__ = ["OTTTLIFNode", "SLTTLIFNode"]
 
 
 class _OnlineLIFNode(LIFNode):
-    def reset(self):
-        super().reset()
-        if hasattr(self, "v"):
-            del self.v
-        if hasattr(self, "trace"):
-            del self.trace
-
     @property
     def supported_backends(self):
         return "torch"
 
-    def neuronal_charge(self, x: torch.Tensor):
-        self.v = self.v.detach()
-        reset0 = self.v_reset is None or self.v_reset == 0.0
-        if self.decay_input:
-            if reset0:
-                self.v = self.neuronal_charge_decay_input_reset0(x, self.v, self.tau)
-            else:
-                self.v = self.neuronal_charge_decay_input(
-                    x, self.v, self.v_reset, self.tau
-                )
-        elif reset0:
-            self.v = self.neuronal_charge_no_decay_input_reset0(x, self.v, self.tau)
-        else:
-            self.v = self.neuronal_charge_no_decay_input(
-                x, self.v, self.v_reset, self.tau
-            )
-
-    def _training_output(self, spike: torch.Tensor):
-        return spike
-
-    def single_step_forward(self, x: torch.Tensor):
-        r"""
-        **API Language** - :ref:`中文 <OnlineLIFNode.single_step_forward-cn>` | :ref:`English <OnlineLIFNode.single_step_forward-en>`
-
-        ----
-
-        .. _OnlineLIFNode.single_step_forward-cn:
-
-        * **中文**
-
-        执行一个时间步。训练模式下，SLTT 返回脉冲，OTTT 返回
-        ``[spike, trace]``；推理模式下二者均返回脉冲。
-
-        :param x: 当前时间步的输入
-        :type x: torch.Tensor
-        :return: 当前脉冲，或 OTTT 训练使用的 ``[spike, trace]``
-        :rtype: Union[torch.Tensor, list[torch.Tensor]]
-
-        ----
-
-        .. _OnlineLIFNode.single_step_forward-en:
-
-        * **English**
-
-        Run one time step. In training mode SLTT returns the spike and
-        OTTT returns ``[spike, trace]``; both return the spike in evaluation mode.
-
-        :param x: input at the current time step
-        :type x: torch.Tensor
-        :return: current spike, or ``[spike, trace]`` for OTTT training
-        :rtype: Union[torch.Tensor, list[torch.Tensor]]
-        """
-        if not hasattr(self, "v"):
-            self.register_buffer(
-                "v",
-                torch.full_like(x, 0.0 if self.v_reset is None else self.v_reset),
-            )
-
-        if not self.training:
-            spike, self.v = self._eval_single_step_forward(
-                x,
-                self.v,
-                self.v_threshold,
-                self.v_reset,
-                self.tau,
-                self.decay_input,
-            )
-            return spike
-
-        self.neuronal_charge(x)
-        spike = self.neuronal_fire()
-        self.neuronal_reset(spike)
-        return self._training_output(spike)
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        v = states[0]
+        spike, v = functional.lif_step(
+            x,
+            v.detach() if self.training else v,
+            self.tau,
+            self.decay_input,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function if self.training else surrogate.heaviside,
+            self.detach_reset,
+        )
+        return (spike,), (v, *states[1:])
 
 
 class OTTTLIFNode(_OnlineLIFNode):
@@ -228,13 +167,19 @@ class OTTTLIFNode(_OnlineLIFNode):
         assert step_mode == "s", (
             "Please use single-step mode to enable memory-efficient training."
         )
-        """
-        膜电位将在前向传播过程中重新登记为缓存，以支持多卡分布式训练的情况下保留信息在各时刻进行多次反向传播
+        self.register_memory("trace", None)
 
-        membrane potential will be registered as buffer during forward, to support multiple backpropagation for all time steps with
-        reserved informtion under distributed training on multiple GPUs
-        """
-        self._memories.pop("v")
+    def materialize_states(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        states = super().materialize_states(inputs, states, step_mode)
+        trace = states[1]
+        if self.training and trace is None:
+            trace = torch.zeros_like(states[0])
+        return states[0], trace
 
     @staticmethod
     def track_trace(spike: torch.Tensor, trace: torch.Tensor, tau: float):
@@ -242,11 +187,23 @@ class OTTTLIFNode(_OnlineLIFNode):
             trace = trace * (1.0 - 1.0 / tau) + spike
         return trace
 
-    def _training_output(self, spike: torch.Tensor):
-        if not hasattr(self, "trace"):
-            self.register_buffer("trace", torch.zeros_like(spike))
-        self.trace = self.track_trace(spike, self.trace, self.tau)
-        return [spike, self.trace]
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        (spike,), (v, trace) = super().single_step_functional_forward(
+            inputs, states, **kwargs
+        )
+        if not self.training:
+            return (spike,), (v, trace)
+        trace = self.track_trace(spike, trace, self.tau)
+        return (spike, trace), (v, trace)
+
+    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor | list[torch.Tensor]:
+        outputs = super().single_step_forward(x)
+        return list(outputs) if isinstance(outputs, tuple) else outputs
 
 
 class SLTTLIFNode(_OnlineLIFNode):
@@ -382,4 +339,3 @@ class SLTTLIFNode(_OnlineLIFNode):
         assert step_mode == "s", (
             "Please use single-step mode to enable memory-efficient training."
         )
-        self._memories.pop("v")

@@ -198,40 +198,43 @@ class _STASpikeEncoder(base.MemoryModule):
         self.register_memory("mem", None)
         self.step_mode = step_mode
 
+    def materialize_states(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        x = inputs[0][0] if step_mode == "m" else inputs[0]
+        mem = states[0]
+        if (
+            mem is None
+            or mem.shape != x.shape
+            or mem.device != x.device
+            or mem.dtype != x.dtype
+        ):
+            mem = torch.zeros_like(x)
+        return (mem,)
+
     @staticmethod
     def _broadcast_threshold(
         threshold: torch.Tensor, output: torch.Tensor, channel_dim: int
     ) -> torch.Tensor:
         return _broadcast_channel_vector(threshold, output, channel_dim)
 
-    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
         threshold = self._broadcast_threshold(self.v_threshold, x, self.channel_dim)
         threshold = torch.clamp(threshold, min=torch.finfo(threshold.dtype).eps)
-        if (
-            self.mem is None
-            or self.mem.shape != x.shape
-            or self.mem.device != x.device
-            or self.mem.dtype != x.dtype
-        ):
-            self.mem = torch.zeros_like(x)
-        self.mem = self.mem + x
-        spike_count = torch.trunc(self.mem / threshold)
+        mem = states[0]
+        mem = mem + x
+        spike_count = torch.trunc(mem / threshold)
         spike = spike_count * threshold
-        self.mem = self.mem - spike
-        return spike
-
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
-        if x_seq.dim() < 2:
-            raise ValueError(
-                "STA spike encoder multi-step forward expects an input sequence "
-                "with a time dimension and at least one data dimension."
-            )
-        if x_seq.shape[0] == 0:
-            raise ValueError("STA spike encoder expects a non-empty time dimension.")
-        outputs = []
-        for x in x_seq:
-            outputs.append(self.single_step_forward(x))
-        return torch.stack(outputs, dim=0)
+        return (spike,), (mem - spike,)
 
     def _reset_sta_state(self) -> None:
         self.reset()
@@ -258,13 +261,22 @@ class _STAConstant(base.MemoryModule):
         self.register_memory("t", 0)
         self.step_mode = step_mode
 
-    def single_step_forward(self) -> torch.Tensor:
-        output = self.value if self.t == 0 else torch.zeros_like(self.value)
-        self.t += 1
-        return output
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        output = self.value if states[0] == 0 else torch.zeros_like(self.value)
+        return (output,), (states[0] + 1,)
 
-    def multi_step_forward(self) -> torch.Tensor:
-        if self.t == 0:
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        if states[0] == 0:
             zeros = torch.zeros_like(self.value).expand(
                 self.time_steps - 1, *self.value.shape
             )
@@ -273,8 +285,21 @@ class _STAConstant(base.MemoryModule):
             output = torch.zeros_like(self.value).expand(
                 self.time_steps, *self.value.shape
             )
-        self.t += self.time_steps
-        return output
+        return (output,), (states[0] + self.time_steps,)
+
+    def single_step_forward(self) -> torch.Tensor:
+        outputs, states = self.single_step_functional_forward(
+            (), tuple(self._memories.values())
+        )
+        self.t = states[0]
+        return outputs[0]
+
+    def multi_step_forward(self) -> torch.Tensor:
+        outputs, states = self.multi_step_functional_forward(
+            (), tuple(self._memories.values())
+        )
+        self.t = states[0]
+        return outputs[0]
 
 
 class STATransformerRecipe(ConversionRecipe):

@@ -280,7 +280,7 @@ English version: :doc:`../en/memopt`
 
     import torch
     import torch.nn as nn
-    from spikingjelly.activation_based import layer, neuron, surrogate, functional
+    from spikingjelly.activation_based import base, functional, layer, neuron, surrogate
 
 
     class VGGBlock(nn.Module):
@@ -370,6 +370,19 @@ Step 1. 定义分割规则
             return self.proj_bn, self.neuron
 
 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 的时间分割将自动借助 :func:`to_functional_forward <spikingjelly.activation_based.base.to_functional_forward>` 实现，无需手动定义规则。
+
+``to_functional_forward`` 返回的函数使用分组接口
+``(inputs, states) -> (outputs, updated_states)``。``inputs`` 和 ``outputs``
+即使只有一个张量也使用 tuple。例如：
+
+.. code:: python
+
+    f_forward = base.to_functional_forward(neuron.LIFNode())
+    outputs, updated_states = f_forward((x,), (v,))
+
+已实现 functional forward 的 MemoryModule 会直接执行显式状态转移；
+``nn.Sequential`` 会递归组合子模块；其他复合模块由通用路径处理。通用路径会临时
+换入显式状态，执行原有前向后再恢复模块状态，因此包含额外的状态替换开销。
 
 Step 2. 显式声明压缩器（可选）
 ################################

@@ -27,21 +27,15 @@ Module: `spikingjelly`.
 
 #### Functional State Transitions
 
-Module: `spikingjelly.activation_based.functional`.
+Modules: `spikingjelly.activation_based.functional` and
+`spikingjelly.activation_based.base`.
 
-- Added explicit tensor-state APIs for modules with state-update semantics,
-  including neurons, delay and synaptic filters, learning traces, and SpikeZIP
-  STBIF updates. Existing modules retain their public state, lifecycle, backend
-  selection, and output behavior.
-- State-update APIs use `*_step` for one complete update and `*_multi_step` only for
-  independently implemented sequence paths. Supported CuPy, Triton, and
-  Inductor paths identify their backend in the function name.
-- The Inductor neuron multi-step implementation is the single source of its state-update equation
-  and shares a bounded process-local compiled-graph cache.
-- Hookable Node classes retain their existing execution paths; their standard
-  transitions are also available as independent functional APIs.
-- Added FlexSN custom-op registry diagnostics for entry, owner-reference, and
-  active-reference counts.
+- Added explicit-state functional execution across the framework's stateful
+  modules while preserving regular stateful forward behavior.
+- Regular and functional forward paths now share state transitions, with optimized
+  multi-step implementations retained where needed.
+- Functional conversion now covers native, composite, and user-defined modules,
+  while optional execution traces remain separate from recurrent state.
 
 #### ANN-to-SNN Conversion
 
@@ -198,6 +192,38 @@ Module: `spikingjelly.activation_based.triton_kernel.neuron_kernel`.
   membrane potential.
 
 ### Breaking Changes and Notices
+
+#### Functional Forward API Changes
+
+Module: `spikingjelly.activation_based.base`.
+
+- **Breaking change:** `to_functional_forward()` now returns a function with the
+  grouped interface
+  `(inputs, states, **kwargs) -> (outputs, updated_states)`. Both `inputs` and
+  `outputs` remain tuples when they contain one tensor. Replace calls such as
+  `output, state = forward(x, state)` with
+  `outputs, states = forward((x,), (state,))` and read the single output from
+  `outputs[0]`.
+
+#### Neuron Extension API Changes
+
+Module: `spikingjelly.activation_based.neuron`.
+
+- **Breaking change:** production neuron classes now define their dynamics solely
+  through functional state transitions and no longer provide
+  `neuronal_charge()`, `neuronal_fire()`, or `neuronal_reset()`. Custom neurons
+  that override these hooks must use `SimpleBaseNode` or implement
+  `single_step_functional_forward()`.
+- **Breaking change:** removed `BaseNode.v_float_to_tensor()`. Custom functional
+  modules that require input-dependent state initialization should override
+  `materialize_states(inputs, states, step_mode)`.
+- **Breaking change:** sequence caches such as `v_seq`, `i_seq`, and `state_seqs`
+  are no longer functional states. Functional forward returns only recurrent
+  states; regular multi-step forward stores the requested sequences on the module.
+- **Breaking change:** `MemoryModule` subclasses without functional or regular
+  forward semantics now raise `NotImplementedError` when called. Stateful
+  learners such as `STDPLearner`, `MSTDPLearner`, and `MSTDPETLearner` continue
+  to expose their computation through `step()`.
 
 #### Logging-Controlled Diagnostics
 

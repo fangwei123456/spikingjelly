@@ -1,5 +1,5 @@
 import math
-from typing import Literal, Optional, Sequence, Tuple, Union
+from typing import Callable, Literal, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -66,8 +66,9 @@ class TDModule(base.MemoryModule):
         memory 并返回当前差分输出；``step_mode="m"`` 时，输入第 0 维被解释为
         时间维，模块返回完整差分序列并保留最终 memory。普通 ANN/PyTorch 数值
         路径由 :meth:`ann_forward` 提供，且不读写 memory。子类必须实现
-        :meth:`ann_forward` 和 :meth:`multi_step_forward`。子类 ``__init__``
-        应调用 ``super().__init__(step_mode)`` 初始化步进模式。
+        :meth:`ann_forward`；默认多步 functional 前传会循环单步状态转移，具有
+        向量化序列算法的子类可重写 :meth:`multi_step_functional_forward`。子类
+        ``__init__`` 应调用 ``super().__init__(step_mode)`` 初始化步进模式。
 
         :param step_mode: 步进模式，``"s"`` 或 ``"m"``。默认 ``"m"`` 保持既有
             TD operator 行为。
@@ -93,9 +94,11 @@ class TDModule(base.MemoryModule):
         dimension 0 is interpreted as the time dimension; the module returns a
         full differential sequence and keeps the final memory. The ordinary
         ANN/PyTorch numeric path is exposed by :meth:`ann_forward` and does not
-        read or write memory. Subclasses must implement :meth:`ann_forward` and
-        :meth:`multi_step_forward`. Subclass ``__init__`` methods should call
-        ``super().__init__(step_mode)`` to initialize the step mode.
+        read or write memory. Subclasses must implement :meth:`ann_forward`. The
+        default multi-step functional forward rolls the single-step transition;
+        subclasses with a vectorized sequence algorithm may override
+        :meth:`multi_step_functional_forward`. Subclass ``__init__`` methods
+        should call ``super().__init__(step_mode)`` to initialize the step mode.
 
         :param step_mode: Step mode, ``"s"`` or ``"m"``. The default ``"m"``
             preserves existing TD operator behavior.
@@ -113,97 +116,74 @@ class TDModule(base.MemoryModule):
     def ann_forward(self, *args, **kwargs):
         raise NotImplementedError
 
-    def multi_step_forward(self, *args, **kwargs):
-        raise NotImplementedError(
-            f"{type(self).__name__} must implement multi_step_forward."
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        accumulated_inputs, x_cum, y_cum = self._accumulate_inputs(
+            inputs, states[0], states[1]
         )
-
-    def single_step_forward(self, *args, **kwargs):
-        y_cum = self.ann_forward(*self._accumulate_inputs(*args), **kwargs)
-        return self._diff_output(y_cum)
+        output_cum = self.ann_forward(*accumulated_inputs, **kwargs)
+        output, y_cum = self._diff_output(output_cum, y_cum)
+        return (output,), (x_cum, y_cum)
 
     @staticmethod
     def _same_tensor_meta(a: torch.Tensor, b: torch.Tensor) -> bool:
         return a.shape == b.shape and a.device == b.device and a.dtype == b.dtype
 
-    def _accumulate_one_input(self, x: torch.Tensor, index: int = 0) -> torch.Tensor:
-        if self.x_cum is None:
-            self.y_cum = None
-            x_cum = x
-        elif isinstance(self.x_cum, tuple):
-            prev = self.x_cum[index]
-            if prev is None or not self._same_tensor_meta(prev, x):
-                self.y_cum = None
-                x_cum = x
-            else:
-                x_cum = prev + x
-        else:
-            if not self._same_tensor_meta(self.x_cum, x):
-                self.y_cum = None
-                x_cum = x
-            else:
-                x_cum = self.x_cum + x
-
-        if isinstance(self.x_cum, tuple):
-            x_cum_values = list(self.x_cum)
-            x_cum_values[index] = x_cum
-            self.x_cum = tuple(x_cum_values)
-        else:
-            self.x_cum = x_cum
-        return x_cum
-
-    def _accumulate_inputs(self, *xs: torch.Tensor) -> Tuple[torch.Tensor, ...]:
-        if len(xs) == 1:
-            if isinstance(self.x_cum, tuple):
-                self.x_cum = None
-                self.y_cum = None
-            return (self._accumulate_one_input(xs[0]),)
-        if self.x_cum is None:
-            self.x_cum = tuple(None for _ in xs)
-            self.y_cum = None
-        elif not isinstance(self.x_cum, tuple) or len(self.x_cum) != len(xs):
-            self.x_cum = tuple(None for _ in xs)
-            self.y_cum = None
-        elif not all(
-            prev is not None
-            and isinstance(prev, torch.Tensor)
-            and self._same_tensor_meta(prev, x)
-            for prev, x in zip(self.x_cum, xs)
+    def _accumulate_inputs(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        x_cum: object,
+        y_cum: object,
+    ) -> tuple[tuple[torch.Tensor, ...], object, object]:
+        previous_inputs = x_cum if isinstance(x_cum, tuple) else (x_cum,)
+        if len(previous_inputs) != len(inputs) or not all(
+            isinstance(previous, torch.Tensor)
+            and self._same_tensor_meta(previous, current)
+            for previous, current in zip(previous_inputs, inputs)
         ):
-            self.x_cum = tuple(None for _ in xs)
-            self.y_cum = None
-        return tuple(self._accumulate_one_input(x, i) for i, x in enumerate(xs))
+            previous_inputs = (None,) * len(inputs)
+            y_cum = None
+        accumulated = tuple(
+            current if previous is None else previous + current
+            for previous, current in zip(previous_inputs, inputs)
+        )
+        x_cum = accumulated[0] if len(accumulated) == 1 else accumulated
+        return accumulated, x_cum, y_cum
 
-    def _diff_output(self, y_cum: torch.Tensor) -> torch.Tensor:
-        if (
-            self.y_cum is None
-            or not isinstance(self.y_cum, torch.Tensor)
-            or not self._same_tensor_meta(self.y_cum, y_cum)
+    def _diff_output(
+        self, output_cum: torch.Tensor, previous_output: object
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        if not isinstance(previous_output, torch.Tensor) or not self._same_tensor_meta(
+            previous_output, output_cum
         ):
-            y = y_cum
+            output = output_cum
         else:
-            y = y_cum - self.y_cum
-        self.y_cum = y_cum
-        return y
+            output = output_cum - previous_output
+        return output, output_cum
 
-    def _diff_sequence_output(self, y_cum_seq: torch.Tensor) -> torch.Tensor:
-        if y_cum_seq.shape[0] == 0:
-            self.y_cum = None
-            return y_cum_seq
-        if (
-            self.y_cum is None
-            or not isinstance(self.y_cum, torch.Tensor)
-            or not self._same_tensor_meta(self.y_cum, y_cum_seq[0])
+    def _diff_sequence_output(
+        self, output_cum_seq: torch.Tensor, previous_output: object
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        if not isinstance(previous_output, torch.Tensor) or not self._same_tensor_meta(
+            previous_output, output_cum_seq[0]
         ):
-            y_seq = _temporal_difference(y_cum_seq)
+            output_seq = _temporal_difference(output_cum_seq)
         else:
-            y_seq = torch.empty_like(y_cum_seq)
-            y_seq[0] = y_cum_seq[0] - self.y_cum
-            y_seq[1:] = y_cum_seq[1:] - y_cum_seq[:-1]
-        self.y_cum = y_cum_seq[-1].clone()
-        return y_seq
+            output_seq = torch.empty_like(output_cum_seq)
+            output_seq[0] = output_cum_seq[0] - previous_output
+            output_seq[1:] = output_cum_seq[1:] - output_cum_seq[:-1]
+        return output_seq, output_cum_seq[-1].clone()
 
-    def _td_sequence_forward(self, input_seqs: Tuple[torch.Tensor, ...], ann_forward):
+    def _td_sequence_forward(
+        self,
+        input_seqs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        ann_forward: Callable,
+    ) -> tuple[torch.Tensor, tuple[object, ...]]:
         for x_seq in input_seqs:
             if x_seq.shape[0] == 0:
                 raise ValueError(
@@ -211,10 +191,8 @@ class TDModule(base.MemoryModule):
                     f"dimension, but got shape {tuple(x_seq.shape)}."
                 )
         cum_seqs = tuple(x_seq.cumsum(dim=0) for x_seq in input_seqs)
-        if len(cum_seqs) == 1:
-            prev_inputs = self.x_cum if isinstance(self.x_cum, tuple) else (self.x_cum,)
-        else:
-            prev_inputs = self.x_cum
+        x_cum, y_cum = states
+        prev_inputs = x_cum if isinstance(x_cum, tuple) else (x_cum,)
 
         should_continue = (
             isinstance(prev_inputs, tuple)
@@ -232,13 +210,13 @@ class TDModule(base.MemoryModule):
                 for prev, x_cum_seq in zip(prev_inputs, cum_seqs, strict=True)
             )
         else:
-            self.y_cum = None
+            y_cum = None
 
         y_cum_seq = ann_forward(*cum_seqs)
-        y_seq = self._diff_sequence_output(y_cum_seq)
+        y_seq, y_cum = self._diff_sequence_output(y_cum_seq, y_cum)
         final_inputs = tuple(x_cum_seq[-1].clone() for x_cum_seq in cum_seqs)
-        self.x_cum = final_inputs[0] if len(final_inputs) == 1 else final_inputs
-        return y_seq
+        x_cum = final_inputs[0] if len(final_inputs) == 1 else final_inputs
+        return (y_seq,), (x_cum, y_cum)
 
 
 def _check_time_sequence(x_seq: torch.Tensor, module_name: str) -> None:
@@ -389,7 +367,12 @@ class TDSoftmax(TDModule):
     def ann_forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.softmax(x, dim=self.dim)
 
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
         .. rubric:: API Language
 
@@ -465,6 +448,7 @@ class TDSoftmax(TDModule):
         :raises ValueError: If ``x_seq`` has fewer than 2 dimensions, the time
             dimension is empty, or ``dim`` refers to the time dimension.
         """
+        x_seq = inputs[0]
         _check_time_sequence(x_seq, "TDSoftmax")
 
         dim = _resolve_dim(self.dim, x_seq.dim())
@@ -475,7 +459,7 @@ class TDSoftmax(TDModule):
             )
 
         return self._td_sequence_forward(
-            (x_seq,), lambda x_cum: torch.softmax(x_cum, dim=dim)
+            (x_seq,), states, lambda x_cum: torch.softmax(x_cum, dim=dim)
         )
 
     def extra_repr(self) -> str:
@@ -653,7 +637,12 @@ class TDLayerNorm(TDModule):
             self.eps,
         )
 
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
         .. rubric:: API Language
 
@@ -732,6 +721,7 @@ class TDLayerNorm(TDModule):
         :raises ValueError: If ``x_seq`` has fewer than 2 dimensions, the time
             dimension is empty, or the trailing shape does not match.
         """
+        x_seq = inputs[0]
         _check_time_sequence(x_seq, "TDLayerNorm")
         if len(self.normalized_shape) > x_seq.dim() - 1:
             trailing_shape = tuple(x_seq.shape[1:])
@@ -746,6 +736,7 @@ class TDLayerNorm(TDModule):
 
         return self._td_sequence_forward(
             (x_seq,),
+            states,
             lambda x_cum: F.layer_norm(
                 x_cum,
                 self.normalized_shape,
@@ -887,23 +878,38 @@ class TDRMSNorm(TDModule):
         """
         return F.rms_norm(x, self.normalized_shape, self.weight, self.eps)
 
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
-        对完整时间序列执行 TD RMSNorm。
-        Apply TD RMSNorm to a complete time sequence.
+        **API Language** - 中文 | English
 
-        :param x_seq: 输入时间差分序列，形状为 ``[T, ...]``，``T > 0``，尾部
-            形状必须匹配 ``normalized_shape``。 / Input differential sequence
-            with shape ``[T, ...]`` and ``T > 0`` whose trailing shape matches
-            ``normalized_shape``.
-        :type x_seq: torch.Tensor
-        :return: 与输入形状相同的 TD RMSNorm 差分序列。 / TD RMSNorm
-            differential sequence with the same shape as the input.
-        :rtype: torch.Tensor
-        :raises ValueError: 若时间维为空、输入维数不足或尾部形状不匹配。 / If
-            the time dimension is empty, rank is insufficient, or the trailing
+        对 ``inputs[0]`` 中的完整时间序列执行 TD RMSNorm。``states`` 为
+        ``(x_cum, y_cum)``，本方法不修改模块 memory。
+
+        Apply TD RMSNorm to the complete sequence in ``inputs[0]``. ``states``
+        contains ``(x_cum, y_cum)`` and module memories are not mutated.
+
+        :param inputs: 仅包含输入差分序列的元组，序列形状为 ``[T, ...]`` 且
+            ``T > 0``，尾部形状匹配 ``normalized_shape``。 / Tuple containing
+            the differential input sequence with shape ``[T, ...]``, ``T > 0``,
+            and trailing shape matching ``normalized_shape``.
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: 显式累计输入和累计输出 ``(x_cum, y_cum)``。 / Explicit
+            cumulative input and output states ``(x_cum, y_cum)``.
+        :type states: tuple[object, ...]
+        :return: ``((output_seq,), updated_states)``，其中输出序列形状与输入
+            相同。 / ``((output_seq,), updated_states)`` with an output sequence
+            matching the input shape.
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
+        :raises ValueError: 时间维为空、输入维数不足或尾部形状不匹配时抛出。 /
+            If the time dimension is empty, rank is insufficient, or the trailing
             shape does not match.
         """
+        x_seq = inputs[0]
         _check_time_sequence(x_seq, "TDRMSNorm")
         if len(self.normalized_shape) > x_seq.dim() - 1:
             trailing_shape = tuple(x_seq.shape[1:])
@@ -917,6 +923,7 @@ class TDRMSNorm(TDModule):
             )
         return self._td_sequence_forward(
             (x_seq,),
+            states,
             lambda x_cum: F.rms_norm(
                 x_cum,
                 self.normalized_shape,
@@ -1005,7 +1012,12 @@ class TDSiLU(TDModule):
         """
         return F.silu(x)
 
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
         对完整时间序列执行 TD SiLU。 / Apply TD SiLU to a complete sequence.
 
@@ -1018,8 +1030,9 @@ class TDSiLU(TDModule):
         :raises ValueError: 若输入维数不足或时间维为空。 / If input rank is
             insufficient or the time dimension is empty.
         """
+        x_seq = inputs[0]
         _check_time_sequence(x_seq, "TDSiLU")
-        return self._td_sequence_forward((x_seq,), F.silu)
+        return self._td_sequence_forward((x_seq,), states, F.silu)
 
 
 class TDGELU(TDModule):
@@ -1137,7 +1150,12 @@ class TDGELU(TDModule):
     def ann_forward(self, x: torch.Tensor) -> torch.Tensor:
         return F.gelu(x, approximate=self.approximate)
 
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
         .. rubric:: API Language
 
@@ -1212,10 +1230,13 @@ class TDGELU(TDModule):
         :raises ValueError: If ``x_seq`` has fewer than 2 dimensions or the time
             dimension is empty.
         """
+        x_seq = inputs[0]
         _check_time_sequence(x_seq, "TDGELU")
 
         return self._td_sequence_forward(
-            (x_seq,), lambda x_cum: F.gelu(x_cum, approximate=self.approximate)
+            (x_seq,),
+            states,
+            lambda x_cum: F.gelu(x_cum, approximate=self.approximate),
         )
 
     def extra_repr(self) -> str:
@@ -1361,7 +1382,12 @@ class TDLinear(TDModule):
     def ann_forward(self, x: torch.Tensor) -> torch.Tensor:
         return F.linear(x, self.weight, self.bias)
 
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
         **API Language:**
         :ref:`中文 <TDLinear.forward-cn>` |
@@ -1442,9 +1468,10 @@ class TDLinear(TDModule):
         :raises ValueError: If ``x_seq`` has fewer than 2 dimensions or the
             time dimension is empty.
         """
+        x_seq = inputs[0]
         _check_time_sequence(x_seq, "TDLinear")
 
-        return self._td_sequence_forward((x_seq,), self.ann_forward)
+        return self._td_sequence_forward((x_seq,), states, self.ann_forward)
 
     def extra_repr(self) -> str:
         return (
@@ -1645,7 +1672,13 @@ class TDConv2d(TDModule):
     def ann_forward(self, x: torch.Tensor) -> torch.Tensor:
         return self._conv2d(x, self.bias)
 
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x_seq = inputs[0]
         _check_time_sequence(x_seq, "TDConv2d")
         if x_seq.dim() != 5:
             raise ValueError(
@@ -1659,7 +1692,7 @@ class TDConv2d(TDModule):
             y = self._conv2d(x_cum_seq.flatten(0, 1), self.bias)
             return y.reshape(t, n, *y.shape[1:])
 
-        return self._td_sequence_forward((x_seq,), ann_forward)
+        return self._td_sequence_forward((x_seq,), states, ann_forward)
 
     def extra_repr(self) -> str:
         s = (
@@ -1758,9 +1791,12 @@ class SNNMatrixOperator(TDModule):
     def ann_forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         return torch.matmul(a, b)
 
-    def multi_step_forward(
-        self, a_seq: torch.Tensor, b_seq: torch.Tensor
-    ) -> torch.Tensor:
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
         .. rubric:: API Language
 
@@ -1837,6 +1873,7 @@ class SNNMatrixOperator(TDModule):
         :raises ValueError: If an input has fewer than 3 dimensions, the time
             dimension is empty, or the time lengths differ.
         """
+        a_seq, b_seq = inputs
         if a_seq.dim() < 3:
             raise ValueError(
                 "SNNMatrixOperator expects a_seq with shape [T, ..., M, N] "
@@ -1850,7 +1887,7 @@ class SNNMatrixOperator(TDModule):
         _check_pair_time_sequence(a_seq, b_seq, "a_seq", "b_seq", "SNNMatrixOperator")
 
         a_seq, b_seq = _align_sequence_ranks(a_seq, b_seq)
-        return self._td_sequence_forward((a_seq, b_seq), torch.matmul)
+        return self._td_sequence_forward((a_seq, b_seq), states, torch.matmul)
 
 
 class SNNElementWiseProduct(TDModule):
@@ -1927,9 +1964,12 @@ class SNNElementWiseProduct(TDModule):
     def ann_forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         return a * b
 
-    def multi_step_forward(
-        self, a_seq: torch.Tensor, b_seq: torch.Tensor
-    ) -> torch.Tensor:
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
         .. rubric:: API Language
 
@@ -2007,12 +2047,13 @@ class SNNElementWiseProduct(TDModule):
         :raises ValueError: If an input has fewer than 2 dimensions, the time
             dimension is empty, or the time lengths differ.
         """
+        a_seq, b_seq = inputs
         _check_pair_time_sequence(
             a_seq, b_seq, "a_seq", "b_seq", "SNNElementWiseProduct"
         )
 
         a_seq, b_seq = _align_sequence_ranks(a_seq, b_seq)
-        return self._td_sequence_forward((a_seq, b_seq), torch.mul)
+        return self._td_sequence_forward((a_seq, b_seq), states, torch.mul)
 
 
 class TDScaledDotProductAttention(TDModule):
@@ -2167,20 +2208,24 @@ class TDScaledDotProductAttention(TDModule):
             scale=self.scale,
         )
 
-    def single_step_forward(
+    def single_step_functional_forward(
         self,
-        query: torch.Tensor,
-        key: torch.Tensor,
-        value: torch.Tensor,
-        attn_mask: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        query, key, value = inputs[:3]
+        attn_mask = inputs[3] if len(inputs) > 3 else kwargs.get("attn_mask")
         if self.is_causal and attn_mask is not None:
             raise ValueError(
                 "TDScaledDotProductAttention does not allow attn_mask when "
                 "is_causal=True; use one masking mode at a time."
             )
-        query_cum, key_cum, value_cum = self._accumulate_inputs(query, key, value)
-        y_cum = F.scaled_dot_product_attention(
+        accumulated, x_cum, y_cum = self._accumulate_inputs(
+            inputs[:3], states[0], states[1]
+        )
+        query_cum, key_cum, value_cum = accumulated
+        output_cum = F.scaled_dot_product_attention(
             query_cum,
             key_cum,
             value_cum,
@@ -2189,15 +2234,15 @@ class TDScaledDotProductAttention(TDModule):
             is_causal=self.is_causal,
             scale=self.scale,
         )
-        return self._diff_output(y_cum)
+        output, y_cum = self._diff_output(output_cum, states[1])
+        return (output,), (x_cum, y_cum)
 
-    def multi_step_forward(
+    def multi_step_functional_forward(
         self,
-        query_seq: torch.Tensor,
-        key_seq: torch.Tensor,
-        value_seq: torch.Tensor,
-        attn_mask: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
         .. rubric:: API Language
 
@@ -2303,6 +2348,8 @@ class TDScaledDotProductAttention(TDModule):
             dimension is empty, the time lengths differ, or ``attn_mask`` is
             passed when ``is_causal=True``.
         """
+        query_seq, key_seq, value_seq = inputs[:3]
+        attn_mask = inputs[3] if len(inputs) > 3 else kwargs.get("attn_mask")
         _check_attention_sequence(query_seq, "query_seq", "TDScaledDotProductAttention")
         _check_attention_sequence(key_seq, "key_seq", "TDScaledDotProductAttention")
         _check_attention_sequence(value_seq, "value_seq", "TDScaledDotProductAttention")
@@ -2323,6 +2370,7 @@ class TDScaledDotProductAttention(TDModule):
             )
         return self._td_sequence_forward(
             (query_seq, key_seq, value_seq),
+            states,
             lambda query_cum, key_cum, value_cum: F.scaled_dot_product_attention(
                 query_cum,
                 key_cum,
@@ -2658,17 +2706,18 @@ class TDMultiheadAttention(TDModule):
         out = self.out_proj.ann_forward(self._merge_heads_single(attn))
         return out, None
 
-    def single_step_forward(
+    def single_step_functional_forward(
         self,
-        query: torch.Tensor,
-        key: torch.Tensor,
-        value: torch.Tensor,
-        key_padding_mask: Optional[torch.Tensor] = None,
-        need_weights: bool = False,
-        attn_mask: Optional[torch.Tensor] = None,
-        average_attn_weights: bool = True,
-        is_causal: bool = False,
-    ) -> Tuple[torch.Tensor, None]:
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        query, key, value = inputs
+        key_padding_mask = kwargs.get("key_padding_mask")
+        need_weights = kwargs.get("need_weights", False)
+        attn_mask = kwargs.get("attn_mask")
+        average_attn_weights = kwargs.get("average_attn_weights", True)
+        is_causal = kwargs.get("is_causal", False)
         self._check_forward_options(
             key_padding_mask, need_weights, average_attn_weights
         )
@@ -2683,7 +2732,10 @@ class TDMultiheadAttention(TDModule):
                 "is_causal=True; use one masking mode at a time."
             )
         attn_mask = self._canonical_mha_attn_mask(attn_mask, q.shape[0])
-        q_cum, k_cum, v_cum = self._accumulate_inputs(q, k, v)
+        accumulated, x_cum, y_cum = self._accumulate_inputs(
+            (q, k, v), states[0], states[1]
+        )
+        q_cum, k_cum, v_cum = accumulated
         attn_cum = F.scaled_dot_product_attention(
             q_cum,
             k_cum,
@@ -2692,21 +2744,16 @@ class TDMultiheadAttention(TDModule):
             dropout_p=0.0,
             is_causal=is_causal,
         )
-        attn = self._diff_output(attn_cum)
+        attn, y_cum = self._diff_output(attn_cum, y_cum)
         out = self.out_proj.single_step_forward(self._merge_heads_single(attn))
-        return out, None
+        return (out,), (x_cum, y_cum)
 
-    def multi_step_forward(
+    def multi_step_functional_forward(
         self,
-        query_seq: torch.Tensor,
-        key_seq: torch.Tensor,
-        value_seq: torch.Tensor,
-        key_padding_mask: Optional[torch.Tensor] = None,
-        need_weights: bool = False,
-        attn_mask: Optional[torch.Tensor] = None,
-        average_attn_weights: bool = True,
-        is_causal: bool = False,
-    ) -> Tuple[torch.Tensor, None]:
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
         **API Language:**
         :ref:`中文 <TDMultiheadAttention.forward-cn>` |
@@ -2802,6 +2849,12 @@ class TDMultiheadAttention(TDModule):
         :raises ValueError: If unsupported masks/options or invalid shapes are
             passed.
         """
+        query_seq, key_seq, value_seq = inputs
+        key_padding_mask = kwargs.get("key_padding_mask")
+        need_weights = kwargs.get("need_weights", False)
+        attn_mask = kwargs.get("attn_mask")
+        average_attn_weights = kwargs.get("average_attn_weights", True)
+        is_causal = kwargs.get("is_causal", False)
         self._check_forward_options(
             key_padding_mask, need_weights, average_attn_weights
         )
@@ -2816,8 +2869,9 @@ class TDMultiheadAttention(TDModule):
         v_seq = self._split_heads(self.v_proj.multi_step_forward(value_seq))
         self._check_attention_leading_dims(q_seq, k_seq, v_seq, "TDMultiheadAttention")
         attn_mask = self._canonical_mha_attn_mask(attn_mask, q_seq.shape[1])
-        attn_seq = self._td_sequence_forward(
+        (attn_seq,), states = self._td_sequence_forward(
             (q_seq, k_seq, v_seq),
+            states,
             lambda q_cum, k_cum, v_cum: F.scaled_dot_product_attention(
                 q_cum,
                 k_cum,
@@ -2828,7 +2882,53 @@ class TDMultiheadAttention(TDModule):
             ),
         )
         out_seq = self.out_proj.multi_step_forward(self._merge_heads(attn_seq))
-        return out_seq, None
+        return (out_seq,), states
+
+    def single_step_forward(
+        self,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        key_padding_mask: Optional[torch.Tensor] = None,
+        need_weights: bool = False,
+        attn_mask: Optional[torch.Tensor] = None,
+        average_attn_weights: bool = True,
+        is_causal: bool = False,
+    ) -> Tuple[torch.Tensor, None]:
+        output = super().single_step_forward(
+            query,
+            key,
+            value,
+            key_padding_mask=key_padding_mask,
+            need_weights=need_weights,
+            attn_mask=attn_mask,
+            average_attn_weights=average_attn_weights,
+            is_causal=is_causal,
+        )
+        return output, None
+
+    def multi_step_forward(
+        self,
+        query_seq: torch.Tensor,
+        key_seq: torch.Tensor,
+        value_seq: torch.Tensor,
+        key_padding_mask: Optional[torch.Tensor] = None,
+        need_weights: bool = False,
+        attn_mask: Optional[torch.Tensor] = None,
+        average_attn_weights: bool = True,
+        is_causal: bool = False,
+    ) -> Tuple[torch.Tensor, None]:
+        output = super().multi_step_forward(
+            query_seq,
+            key_seq,
+            value_seq,
+            key_padding_mask=key_padding_mask,
+            need_weights=need_weights,
+            attn_mask=attn_mask,
+            average_attn_weights=average_attn_weights,
+            is_causal=is_causal,
+        )
+        return output, None
 
     def extra_repr(self) -> str:
         return (
