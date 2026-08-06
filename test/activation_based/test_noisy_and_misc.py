@@ -201,8 +201,10 @@ def test_multi_step_max_unpool2d_matches_per_timestep_reference():
 
     assert torch.equal(restored, expected)
     assert torch.equal(unpool(pooled, indices, output_size=(4, 4)), expected)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"step_mode='m'.*\[H, W\] without T or N"):
         unpool(pooled, indices, output_size=(3, 2, 1, 4, 4))
+    with pytest.raises(ValueError, match=r"step_mode='m'.*\[H, W\] without T or N"):
+        unpool(pooled, indices, output_size=(2, 1, 4, 4))
 
     restored.sum().backward()
     assert x.grad is not None
@@ -262,6 +264,39 @@ def test_multi_step_max_unpool_rejects_bad_ranks_and_mismatched_indices():
             torch.randn(2, 2, 1, 4, 4),
             torch.zeros(2, 2, 1, 2, 2, dtype=torch.int64),
         )
+
+
+def test_multi_step_max_unpool_rejects_output_size_with_t_or_n():
+    torch.manual_seed(0)
+    cases = [
+        (layer.MaxPool1d, layer.MaxUnpool1d, (2, 2, 1, 4), r"\[L\] without T or N"),
+        (
+            layer.MaxPool2d,
+            layer.MaxUnpool2d,
+            (2, 2, 1, 4, 4),
+            r"\[H, W\] without T or N",
+        ),
+        (
+            layer.MaxPool3d,
+            layer.MaxUnpool3d,
+            (2, 2, 1, 4, 4, 4),
+            r"\[D, H, W\] without T or N",
+        ),
+    ]
+    for pool_cls, unpool_cls, shape, message in cases:
+        pool = pool_cls(2, return_indices=True, step_mode="m")
+        unpool = unpool_cls(2, step_mode="m")
+        x = torch.randn(shape)
+        pooled, indices = pool(x)
+        spatial = shape[3:]
+
+        assert torch.equal(
+            unpool(pooled, indices, output_size=spatial),
+            unpool(pooled, indices),
+        )
+        for output_size in (shape, shape[1:]):
+            with pytest.raises(ValueError, match=rf"step_mode='m'.*{message}"):
+                unpool(pooled, indices, output_size=output_size)
 
 
 def test_quantizers_keep_their_straight_through_gradients():

@@ -771,6 +771,13 @@ class MaxUnpool1d(nn.MaxUnpool1d, base.StepModule):
                 f"expected indices with the same shape as x ({x.shape}), "
                 f"but got indices with shape {indices.shape}!"
             )
+        if output_size is not None and len(output_size) != 1:
+            raise ValueError(
+                "when step_mode='m', T and N are flattened into a single batch "
+                "dimension, so output_size must contain only the spatial "
+                "dimensions [L] without T or N, but got output_size "
+                f"{output_size} with {len(output_size)} elements!"
+            )
         sup = super().forward
         return functional.seq_to_ann_forward(
             (x, indices), (lambda values, index: sup(values, index, output_size),)
@@ -842,6 +849,13 @@ class MaxUnpool2d(nn.MaxUnpool2d, base.StepModule):
             raise ValueError(
                 f"expected indices with the same shape as x ({x.shape}), "
                 f"but got indices with shape {indices.shape}!"
+            )
+        if output_size is not None and len(output_size) != 2:
+            raise ValueError(
+                "when step_mode='m', T and N are flattened into a single batch "
+                "dimension, so output_size must contain only the spatial "
+                "dimensions [H, W] without T or N, but got output_size "
+                f"{output_size} with {len(output_size)} elements!"
             )
         sup = super().forward
         return functional.seq_to_ann_forward(
@@ -915,6 +929,13 @@ class MaxUnpool3d(nn.MaxUnpool3d, base.StepModule):
             raise ValueError(
                 f"expected indices with the same shape as x ({x.shape}), "
                 f"but got indices with shape {indices.shape}!"
+            )
+        if output_size is not None and len(output_size) != 3:
+            raise ValueError(
+                "when step_mode='m', T and N are flattened into a single batch "
+                "dimension, so output_size must contain only the spatial "
+                "dimensions [D, H, W] without T or N, but got output_size "
+                f"{output_size} with {len(output_size)} elements!"
             )
         sup = super().forward
         return functional.seq_to_ann_forward(
