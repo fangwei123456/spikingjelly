@@ -95,6 +95,25 @@ Module: ``spikingjelly.activation_based.layer``.
   enabling integer-valued training and binary-event evaluation around bias-free
   weight layers.
 
+Layer
+^^^^^
+
+Module: ``spikingjelly.activation_based.layer``.
+
+- Added ``MaxUnpool1d``, ``MaxUnpool2d``, and ``MaxUnpool3d`` step-mode wrappers
+  supporting both ``'s'`` and ``'m'`` step modes, so the indices returned by
+  ``MaxPool1d/2d/3d(return_indices=True)`` can be consumed in multi-step
+  networks (issue #626).
+
+Functional Forward
+^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.functional``.
+
+- ``seq_to_ann_forward`` now also accepts a tuple of tensors sharing the same
+  ``[T, batch_size]`` leading dimensions; each element is flattened and passed
+  to the stateless module as a positional argument (issue #626).
+
 Bug Fixes
 ~~~~~~~~~
 

@@ -171,6 +171,100 @@ def test_fixed_rank_wrappers_reject_single_step_inputs_in_multi_step_mode():
             wrapper(torch.randn(shape))
 
 
+def test_multi_step_max_pool_with_indices_matches_per_timestep_reference():
+    torch.manual_seed(0)
+    pool = layer.MaxPool2d(2, return_indices=True, step_mode="m")
+    reference = torch.nn.MaxPool2d(2, return_indices=True)
+    x = torch.randn(3, 2, 1, 4, 4)
+
+    pooled, indices = pool(x)
+    expected = [reference(x[t]) for t in range(x.shape[0])]
+
+    assert pooled.shape == (3, 2, 1, 2, 2)
+    assert indices.shape == (3, 2, 1, 2, 2)
+    torch.testing.assert_close(pooled, torch.stack([values for values, _ in expected]))
+    assert torch.equal(indices, torch.stack([index for _, index in expected]))
+
+
+def test_multi_step_max_unpool2d_matches_per_timestep_reference():
+    torch.manual_seed(0)
+    pool = layer.MaxPool2d(2, return_indices=True, step_mode="m")
+    unpool = layer.MaxUnpool2d(2, step_mode="m")
+    reference = torch.nn.MaxUnpool2d(2)
+    x = torch.randn(3, 2, 1, 4, 4, requires_grad=True)
+
+    pooled, indices = pool(x)
+    restored = unpool(pooled, indices)
+    expected = torch.stack(
+        [reference(pooled[t], indices[t]) for t in range(x.shape[0])]
+    )
+
+    assert torch.equal(restored, expected)
+    assert torch.equal(unpool(pooled, indices, output_size=(4, 4)), expected)
+    assert torch.equal(unpool(pooled, indices, output_size=(2, 1, 4, 4)), expected)
+    with pytest.raises(ValueError):
+        unpool(pooled, indices, output_size=(3, 2, 1, 4, 4))
+
+    restored.sum().backward()
+    assert x.grad is not None
+    assert x.grad.shape == x.shape
+
+
+def test_multi_step_max_unpool1d_and_3d_match_per_timestep_reference():
+    torch.manual_seed(0)
+    cases = [
+        (layer.MaxPool1d, layer.MaxUnpool1d, torch.nn.MaxUnpool1d, (2, 2, 1, 4)),
+        (layer.MaxPool3d, layer.MaxUnpool3d, torch.nn.MaxUnpool3d, (2, 2, 1, 4, 4, 4)),
+    ]
+    for pool_cls, unpool_cls, reference_cls, shape in cases:
+        pool = pool_cls(2, return_indices=True, step_mode="m")
+        unpool = unpool_cls(2, step_mode="m")
+        reference = reference_cls(2)
+        x = torch.randn(shape)
+
+        pooled, indices = pool(x)
+        expected = torch.stack(
+            [reference(pooled[t], indices[t]) for t in range(shape[0])]
+        )
+
+        assert torch.equal(unpool(pooled, indices), expected)
+
+
+def test_single_step_max_unpool_matches_torch_module():
+    torch.manual_seed(0)
+    x = torch.randn(2, 1, 4, 4)
+    pooled, indices = torch.nn.MaxPool2d(2, return_indices=True)(x)
+
+    wrapper = layer.MaxUnpool2d(2)
+    assert wrapper.step_mode == "s"
+    assert "step_mode=s" in repr(wrapper)
+    assert torch.equal(
+        wrapper(pooled, indices), torch.nn.MaxUnpool2d(2)(pooled, indices)
+    )
+    assert torch.equal(
+        wrapper(pooled, indices, output_size=(4, 4)),
+        torch.nn.MaxUnpool2d(2)(pooled, indices, output_size=(4, 4)),
+    )
+
+
+def test_multi_step_max_unpool_rejects_bad_ranks_and_mismatched_indices():
+    unpools = [
+        (layer.MaxUnpool1d(1, step_mode="m"), (2, 2, 4)),
+        (layer.MaxUnpool2d(1, step_mode="m"), (2, 2, 4, 4)),
+        (layer.MaxUnpool3d(1, step_mode="m"), (2, 2, 4, 4, 4)),
+    ]
+    for wrapper, shape in unpools:
+        with pytest.raises(ValueError, match=r"expected x with shape \[T, N, C"):
+            wrapper(torch.randn(shape), torch.zeros(shape, dtype=torch.int64))
+
+    unpool = layer.MaxUnpool2d(1, step_mode="m")
+    with pytest.raises(ValueError, match="indices with the same shape"):
+        unpool(
+            torch.randn(2, 2, 1, 4, 4),
+            torch.zeros(2, 2, 1, 2, 2, dtype=torch.int64),
+        )
+
+
 def test_quantizers_keep_their_straight_through_gradients():
     x = torch.tensor([-0.1, 0.26, 0.74, 1.1], requires_grad=True)
     step_output = quantize.step_quantize(x, 0.25)
