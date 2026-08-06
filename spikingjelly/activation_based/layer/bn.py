@@ -310,16 +310,27 @@ class NeuNorm(base.MemoryModule):
             self.w = nn.Parameter(Tensor(in_channels, height, width))
         nn.init.kaiming_uniform_(self.w, a=math.sqrt(5))
 
+    def materialize_states(
+        self,
+        inputs: tuple[Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        if isinstance(states[0], Tensor):
+            return states
+        reference = inputs[0][0] if step_mode == "m" else inputs[0]
+        return (torch.full_like(reference[:, :1], states[0]),)
+
     def single_step_functional_forward(
         self,
         inputs: tuple[Tensor, ...],
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
-        in_spikes = inputs[0]
-        x = self.k0 * states[0] + self.k1 * in_spikes.sum(dim=1, keepdim=True)
-        # x.shape = [batch_size, 1, height, width]
-        return (in_spikes - self.w * x,), (x,)
+        output, state = functional.neunorm_step(
+            inputs[0], states[0], self.w, self.k0, self.k1
+        )
+        return (output,), (state,)
 
     def extra_repr(self) -> str:
         return f"shape={self.w.shape}"

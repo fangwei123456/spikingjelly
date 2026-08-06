@@ -260,33 +260,26 @@ class MaskedPSN(base.MemoryModule):
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x = inputs[0]
         time_step = states[0]
-        queue = [*states[1], x.flatten()]
         if self.lambda_ < 1.0:
             raise ValueError(
                 "The masked PSN can not work in single-step mode when k < 1!"
             )
-
-        if len(queue) > self.k:
-            queue.pop(0)
 
         if time_step + 1 > self.T:
             raise OverflowError(
                 f"The MaskedPSN(T={self.T}) has run {time_step + 1} time-steps!"
             )
 
-        weight = self.masked_weight()[
+        spike, time_step, queue = functional.masked_psn_step(
+            x,
             time_step,
-            time_step + 1 - len(queue) : time_step + 1,
-        ]
-        x_seq = torch.stack(queue)
-
-        for i in range(x.dim()):
-            weight = weight.unsqueeze(-1)
-
-        h = torch.sum(weight * x_seq, 0)
-        spike = self.surrogate_function(h + self.bias[time_step])
-
-        return (spike.view(x.shape),), (time_step + 1, queue)
+            tuple(states[1]),
+            self.masked_weight(),
+            self.bias,
+            self.k,
+            self.surrogate_function,
+        )
+        return (spike,), (time_step, list(queue))
 
     def multi_step_functional_forward(
         self,

@@ -40,14 +40,15 @@ Modules: ``spikingjelly.activation_based.functional`` and
 ``spikingjelly.activation_based.base``.
 
 - Added explicit tensor-state APIs for modules with state-update semantics,
-  including neurons, delay and synaptic filters, learning traces, and SpikeZIP
-  STBIF updates. Reusable LIF charging and voltage-reset primitives are also
-  available for neuron variants that insert operations between charge, fire,
-  and reset. Existing modules retain their public state, lifecycle, backend
-  selection, and output behavior.
+  including LIAF, I-LIF, MaskedPSN, NeuNorm, delay and synaptic filters,
+  learning traces, and SpikeZIP STBIF updates. Reusable LIF charging and
+  voltage-reset primitives are also available for neuron variants that insert
+  operations between charge, fire, and reset. Existing modules retain their
+  public state, lifecycle, backend selection, and output behavior.
 - State-update APIs use ``*_step`` for one complete update and ``*_multi_step`` only for
   independently implemented sequence paths. Supported CuPy, Triton, and
   Inductor paths identify their backend in the function name.
+- Fixed MaskedPSN single-step execution for inputs with more than one dimension.
 - The Inductor neuron multi-step implementation is the single source of its state-update equation
   and shares a bounded process-local compiled-graph cache.
 - Hookable Node classes retain their existing execution paths; their standard

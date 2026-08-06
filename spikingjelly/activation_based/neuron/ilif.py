@@ -352,13 +352,12 @@ class ILIFNode(LIFNode):
         x = inputs[0]
         v = states[0]
 
-        charged = functional.lif_charge(x, v, self.tau, False, None)
-        spike = self.surrogate_function(charged / self.v_threshold)
-        v = functional.voltage_reset(
-            charged,
-            spike,
+        spike, v = functional.ilif_step(
+            x,
+            v,
+            self.tau,
             self.v_threshold,
-            None,
+            self.surrogate_function,
             self.detach_reset,
         )
         return (spike,), (v, *states[1:])

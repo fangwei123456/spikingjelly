@@ -95,6 +95,58 @@ def test_lif_step_is_composed_from_charge_and_voltage_reset(decay_input, v_reset
     _assert_close(v_next, expected_v)
 
 
+@pytest.mark.parametrize("threshold_related", [False, True])
+def test_liaf_step_matches_module(threshold_related):
+    x = torch.randn(2, 3)
+    v = torch.randn(2, 3)
+    module = neuron.LIAFNode(
+        torch.tanh,
+        threshold_related,
+        tau=2.5,
+        decay_input=True,
+        v_threshold=0.8,
+        v_reset=None,
+        surrogate_function=_surrogate(),
+    )
+    module.v = v.clone()
+
+    output, v_next = functional.liaf_step(
+        x,
+        v,
+        2.5,
+        True,
+        0.8,
+        None,
+        torch.tanh,
+        threshold_related,
+        _surrogate(),
+    )
+    module_output = module(x)
+
+    _assert_close(output, module_output)
+    _assert_close(v_next, module.v)
+
+
+def test_ilif_step_matches_module():
+    x = torch.randn(2, 3)
+    v = torch.randn(2, 3)
+    module = neuron.ILIFNode(tau=1.5, v_threshold=0.8)
+    module.v = v.clone()
+
+    spike, v_next = functional.ilif_step(
+        x,
+        v,
+        1.5,
+        0.8,
+        module.surrogate_function,
+        module.detach_reset,
+    )
+    module_spike = module(x)
+
+    _assert_close(spike, module_spike)
+    _assert_close(v_next, module.v)
+
+
 def test_materialize_states_is_pure():
     module = neuron.IFNode()
     x = torch.randn(2, 3)
@@ -515,6 +567,35 @@ def test_sliding_psn_step_matches_module():
     assert len(module.queue) == len(queue)
     for actual_state, expected_state in zip(module.queue, queue):
         _assert_close(actual_state, expected_state)
+
+
+def test_masked_psn_step_matches_module_sequence():
+    x_seq = torch.randn(4, 2, 3)
+    module = neuron.MaskedPSN(k=3, T=4, lambda_init=1.0)
+    time_step = 0
+    queue = ()
+    expected = []
+
+    for x in x_seq:
+        spike, time_step, queue = functional.masked_psn_step(
+            x,
+            time_step,
+            queue,
+            module.masked_weight(),
+            module.bias,
+            module.k,
+            module.surrogate_function,
+        )
+        expected.append(spike)
+    actual = torch.stack([module(x) for x in x_seq])
+    module.reset()
+    module.step_mode = "m"
+    multi_step = module(x_seq)
+
+    _assert_close(actual, torch.stack(expected))
+    _assert_close(actual, multi_step)
+    assert time_step == x_seq.shape[0]
+    assert len(queue) == module.k
 
 
 def test_gated_lif_step_matches_module_sequence():

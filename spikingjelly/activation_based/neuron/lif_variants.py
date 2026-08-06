@@ -731,14 +731,16 @@ class LIAFNode(LIFNode):
         x = inputs[0]
         v = states[0]
 
-        charged = functional.lif_charge(x, v, self.tau, self.decay_input, self.v_reset)
-        y = self.act(charged - self.v_threshold if self.threshold_related else charged)
-        spike = self.surrogate_function(charged - self.v_threshold)
-        v = functional.voltage_reset(
-            charged,
-            spike,
+        y, v = functional.liaf_step(
+            x,
+            v,
+            self.tau,
+            self.decay_input,
             self.v_threshold,
             self.v_reset,
+            self.act,
+            self.threshold_related,
+            self.surrogate_function,
             self.detach_reset,
         )
         return (y,), (v, *states[1:])
