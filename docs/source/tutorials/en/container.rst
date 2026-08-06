@@ -107,7 +107,8 @@ which will reshape the input with ``shape = [T, N, *]`` to  ``shape = [TN, *]``,
 
 The input of :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` can also be a tuple of tensors. \
 Every tensor in the tuple must have ``shape = [T, N, *]`` with the same ``T`` and ``N``; the time and batch dimensions of each tensor are \
-flattened separately, and the flattened tensors are sent to the stateless layer as positional arguments. For example, \
+flattened separately, and the flattened tensors are sent to the first stateless layer as positional arguments. If several stateless layers are given, \
+only the first one receives all the flattened tensors, and each subsequent layer receives the previous layer's output as a single argument. For example, \
 :class:`MaxPool2d <spikingjelly.activation_based.layer.MaxPool2d>` in multi-step mode with ``return_indices=True`` outputs both the pooled \
 values and the pooling indices, which can be consumed directly by :class:`MaxUnpool2d <spikingjelly.activation_based.layer.MaxUnpool2d>` in multi-step mode:
 

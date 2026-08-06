@@ -247,7 +247,9 @@ def seq_to_ann_forward(
     tensor 的形状均为 ``shape=[T, batch_size, ...]``，且 ``T`` 和 ``batch_size``
     必须相同；每个 tensor 的时间和批量维度会被分别展平，展平后的 tensor 作为
     位置参数一起输入到第一个无状态层中。若给出多个无状态层，则后续的层依次接收
-    前一层的输出作为单个参数。
+    前一层的输出作为单个参数。因此第一个无状态层必须能够接收与tuple长度相同数量的
+    位置参数；``torch.nn.Sequential`` 只接收单个输入，故不能作为第一层接收长度
+    大于1的tuple。
 
     :param x_seq: ``shape=[T, batch_size, ...]`` 的输入tensor，或多个此类tensor组成的tuple
     :type x_seq: Union[torch.Tensor, tuple[torch.Tensor, ...]]
@@ -280,7 +282,10 @@ def seq_to_ann_forward(
     time and batch dimensions of each tensor are flattened separately, and the
     flattened tensors are fed to the first stateless module as positional
     arguments. If several stateless modules are given, each subsequent module
-    receives the previous module's output as a single argument.
+    receives the previous module's output as a single argument. The first
+    stateless module must therefore accept as many positional arguments as the
+    tuple holds; ``torch.nn.Sequential`` accepts a single input only, so it can
+    not be the first module for a tuple of more than one tensor.
 
     :param x_seq: the input tensor with ``shape=[T, batch_size, ...]``, or a tuple of such tensors
     :type x_seq: Union[torch.Tensor, tuple[torch.Tensor, ...]]

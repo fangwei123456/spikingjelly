@@ -108,7 +108,8 @@ SpikingJelly中主要提供了如下几种包装器：
 
 :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` 的输入也可以是 tensor tuple，\
 tuple中每个tensor的形状均为 ``shape = [T, N, *]``，且 ``T`` 和 ``N`` 相同；每个tensor的时间和批量维度会被分别展平，\
-展平后的tensor作为位置参数一起送入无状态的网络层。例如，多步模式的 \
+展平后的tensor作为位置参数一起送入第一个无状态的网络层。若给出多个无状态的网络层，则只有第一层接收全部展平后的tensor，\
+后续的层依次接收前一层的输出作为单个参数。例如，多步模式的 \
 :class:`MaxPool2d <spikingjelly.activation_based.layer.MaxPool2d>` 在 ``return_indices=True`` 时会输出池化值和池化索引，\
 它们可以被多步模式的 :class:`MaxUnpool2d <spikingjelly.activation_based.layer.MaxUnpool2d>` 直接使用：
 
