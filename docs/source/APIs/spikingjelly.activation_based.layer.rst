@@ -108,6 +108,12 @@ Pooling Layers
      - 2D max pooling layer with step mode support.
    * - :class:`MaxPool3d <spikingjelly.activation_based.layer.stateless_wrapper.MaxPool3d>`
      - 3D max pooling layer with step mode support.
+   * - :class:`MaxUnpool1d <spikingjelly.activation_based.layer.stateless_wrapper.MaxUnpool1d>`
+     - 1D max unpooling layer with step mode support.
+   * - :class:`MaxUnpool2d <spikingjelly.activation_based.layer.stateless_wrapper.MaxUnpool2d>`
+     - 2D max unpooling layer with step mode support.
+   * - :class:`MaxUnpool3d <spikingjelly.activation_based.layer.stateless_wrapper.MaxUnpool3d>`
+     - 3D max unpooling layer with step mode support.
    * - :class:`AvgPool1d <spikingjelly.activation_based.layer.stateless_wrapper.AvgPool1d>`
      - 1D average pooling layer with step mode support.
    * - :class:`AvgPool2d <spikingjelly.activation_based.layer.stateless_wrapper.AvgPool2d>`

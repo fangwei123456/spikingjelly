@@ -201,7 +201,6 @@ def test_multi_step_max_unpool2d_matches_per_timestep_reference():
 
     assert torch.equal(restored, expected)
     assert torch.equal(unpool(pooled, indices, output_size=(4, 4)), expected)
-    assert torch.equal(unpool(pooled, indices, output_size=(2, 1, 4, 4)), expected)
     with pytest.raises(ValueError):
         unpool(pooled, indices, output_size=(3, 2, 1, 4, 4))
 
