@@ -201,30 +201,6 @@ class GatedLIFNode(base.MemoryModule):
             + f", conduct={self.conduct}"
         )
 
-    def neuronal_charge(
-        self, x: torch.Tensor, alpha: torch.Tensor, beta: torch.Tensor, t
-    ):
-        input = x * (1 - beta * (1 - self.conduct[t].view(1, -1, 1, 1).sigmoid()))
-        self.u = (
-            (1 - alpha * (1 - self.tau.view(1, -1, 1, 1).sigmoid())) * self.v
-            - (1 - alpha) * self.linear_decay.view(1, -1, 1, 1).sigmoid()
-        ) + input
-
-    def neuronal_reset(self, spike, alpha: torch.Tensor, gamma: torch.Tensor):
-        self.u = (
-            self.u
-            - (1 - alpha * (1 - self.tau.view(1, -1, 1, 1).sigmoid()))
-            * self.v
-            * gamma
-            * spike
-            - (1 - gamma) * self.v_subreset.view(1, -1, 1, 1).sigmoid() * spike
-        )
-
-    def neuronal_fire(self):
-        return self.surrogate_function(
-            self.u - self.v_threshold.view(1, -1, 1, 1).sigmoid()
-        )
-
     def materialize_states(
         self,
         inputs: tuple[torch.Tensor, ...],
@@ -344,7 +320,7 @@ class KLIFNode(BaseNode):
                 \frac{1}{k}(F[t] - S[t]V_{th}), & \text{soft reset}
             \end{cases}
 
-        :param scale_reset: 是否在 ``neuronal_reset`` 阶段对膜电位 ``v`` 进行缩放
+        :param scale_reset: 是否在重置阶段对膜电位 ``v`` 进行缩放
         :type scale_reset: bool
 
         :param tau: 膜电位的时间常数
@@ -434,7 +410,7 @@ class KLIFNode(BaseNode):
                 \frac{1}{k}(F[t] - S[t]V_{th}), & \text{soft reset}
             \end{cases}
 
-        :param scale_reset: whether to scale the membrane potential ``v`` during ``neuronal_reset``
+        :param scale_reset: whether to scale the membrane potential ``v`` during reset
         :type scale_reset: bool
 
         :param tau: membrane time constant
@@ -490,55 +466,6 @@ class KLIFNode(BaseNode):
     @property
     def supported_backends(self):
         return ("torch",)
-
-    @staticmethod
-    def neuronal_charge_decay_input(
-        x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float, k: torch.Tensor
-    ):
-        v = v + (x - (v - v_reset)) / tau
-        v = torch.relu_(k * v)
-        return v
-
-    @staticmethod
-    def neuronal_charge_no_decay_input(
-        x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float, k: torch.Tensor
-    ):
-        v = v - (v - v_reset) / tau + x
-        v = torch.relu_(k * v)
-        return v
-
-    def neuronal_charge(self, x: torch.Tensor):
-        if self.v_reset is None:
-            v_reset = 0.0
-        else:
-            v_reset = self.v_reset
-        if self.decay_input:
-            self.v = self.neuronal_charge_decay_input(
-                x, self.v, v_reset, self.tau, self.k
-            )
-
-        else:
-            self.v = self.neuronal_charge_no_decay_input(
-                x, self.v, v_reset, self.tau, self.k
-            )
-
-    def neuronal_reset(self, spike):
-        if self.detach_reset:
-            spike_d = spike.detach()
-        else:
-            spike_d = spike
-
-        if self.scale_reset:
-            v = self.v / self.k
-            v_threshold = self.v_threshold / self.k
-        else:
-            v = self.v
-            v_threshold = self.v_threshold
-
-        if self.v_reset is None:
-            self.v = self.apply_soft_reset(v, spike_d, v_threshold)
-        else:
-            self.v = self.apply_hard_reset(v, spike_d, self.v_reset)
 
     def single_step_functional_forward(
         self,
@@ -601,10 +528,6 @@ class CUBALIFNode(BaseNode):
 
         self.c_decay = c_decay
         self.v_decay = v_decay
-
-    def neuronal_charge(self, x: torch.Tensor):
-        self.c = self.c * self.c_decay + x
-        self.v = self.v * self.v_decay + self.c
 
     def materialize_states(
         self,
@@ -719,15 +642,6 @@ class LIAFNode(LIFNode):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        r"""Execute one LIAF step with explicit state. / 使用显式状态执行一个 LIAF 时间步。
-
-        :param inputs: 仅包含 ``x`` 的元组 / Tuple containing only ``x``
-        :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)``
-        :type states: tuple
-        :return: ``((analog_output,), updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
-        """
         x = inputs[0]
         v = states[0]
 

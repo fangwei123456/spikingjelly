@@ -1544,7 +1544,9 @@ def to_functional_forward(
                 f"{module.__class__.__name__} expected {num_states} states, "
                 f"but got {len(states)}."
             )
-        original_memories = [memory_module._memories for memory_module, _ in layout]
+        original_attributes = [
+            memory_module.__dict__.copy() for memory_module, _ in layout
+        ]
         offset = 0
         for memory_module, names in layout:
             values = states[offset : offset + len(names)]
@@ -1564,8 +1566,9 @@ def to_functional_forward(
                 for name in names
             )
         finally:
-            for (memory_module, _), original in zip(layout, original_memories):
-                memory_module.__dict__["_memories"] = original
+            for (memory_module, _), original in zip(layout, original_attributes):
+                memory_module.__dict__.clear()
+                memory_module.__dict__.update(original)
         return outputs, updated_states
 
     return fallback_forward

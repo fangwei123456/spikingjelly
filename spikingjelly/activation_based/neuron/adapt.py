@@ -150,69 +150,6 @@ class AdaptBaseNode(BaseNode):
             self.w, self.tau_w, self.a, self.v_rest, self.v
         )
 
-    @staticmethod
-    def apply_hard_reset(
-        v: torch.Tensor,
-        w: torch.Tensor,
-        spike_d: torch.Tensor,
-        v_reset: float,
-        b: float,
-        spike: torch.Tensor,
-    ):
-        v = (1.0 - spike_d) * v + spike * v_reset
-        w = w + b * spike
-        return v, w
-
-    @staticmethod
-    def apply_soft_reset(
-        v: torch.Tensor,
-        w: torch.Tensor,
-        spike_d: torch.Tensor,
-        v_threshold: float,
-        b: float,
-        spike: torch.Tensor,
-    ):
-        v = v - spike_d * v_threshold
-        w = w + b * spike
-        return v, w
-
-    def neuronal_reset(self, spike):
-        """
-        **API Language** - :ref:`中文 <AdaptBaseNode.neuronal_reset-cn>` | :ref:`English <AdaptBaseNode.neuronal_reset-en>`
-
-        ----
-
-        .. _AdaptBaseNode.neuronal_reset-cn:
-
-        * **中文**
-
-        根据当前神经元释放的脉冲，对膜电位进行重置。
-
-        ----
-
-        .. _AdaptBaseNode.neuronal_reset-en:
-
-        * **English**
-
-        Reset the membrane potential according to neurons' output spikes.
-        """
-        if self.detach_reset:
-            spike_d = spike.detach()
-        else:
-            spike_d = spike
-
-        if self.v_reset is None:
-            # soft reset
-            self.v, self.w = self.apply_soft_reset(
-                self.v, self.w, spike_d, self.v_threshold, self.b, spike
-            )
-
-        else:
-            # hard reset
-            self.v, self.w = self.apply_hard_reset(
-                self.v, self.w, spike_d, self.v_reset, self.b, spike
-            )
-
     def extra_repr(self):
         return (
             super().extra_repr()
@@ -363,13 +300,6 @@ class IzhikevichNode(AdaptBaseNode):
 
     def extra_repr(self):
         return super().extra_repr() + f", tau={self.tau}, v_c={self.v_c}, a0={self.a0}"
-
-    def neuronal_charge(self, x: torch.Tensor):
-        self.v = (
-            self.v
-            + (x + self.a0 * (self.v - self.v_rest) * (self.v - self.v_c) - self.w)
-            / self.tau
-        )
 
     def single_step_functional_forward(
         self,

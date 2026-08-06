@@ -526,6 +526,27 @@ def test_to_functional_forward_fallback_restores_state_after_error():
     torch.testing.assert_close(module.state, torch.tensor(7.0))
 
 
+def test_to_functional_forward_fallback_restores_execution_traces():
+    class Composite(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.node = neuron.LIFNode(step_mode="m", store_v_seq=True)
+
+        def forward(self, x):
+            return self.node(x)
+
+    module = Composite()
+    original_v_seq = torch.tensor([7.0])
+    module.node.v_seq = original_v_seq
+    functional_forward = base.to_functional_forward(module)
+    x_seq = torch.randn(3, 2)
+
+    functional_forward((x_seq,), (torch.zeros(2),))
+
+    assert module.node.v_seq is original_v_seq
+    assert module.node.v == 0.0
+
+
 if __name__ == "__main__":
     # Run individual tests
     test_named_memories()

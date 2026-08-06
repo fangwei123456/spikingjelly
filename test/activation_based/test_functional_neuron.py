@@ -267,7 +267,7 @@ def test_store_v_seq_does_not_change_functional_state_layout(node):
     assert node.v_seq is None
 
 
-def test_save_v_lif_functional_forward_tracks_observed_voltage_as_memory():
+def test_save_v_lif_keeps_observed_voltage_out_of_functional_state():
     from spikingjelly.activation_based.model.spike_dhs import save_v_LIFNode
 
     node = save_v_LIFNode(
@@ -283,9 +283,29 @@ def test_save_v_lif_functional_forward_tracks_observed_voltage_as_memory():
     outputs, updated_states = node.functional_forward((x_seq,), states)
 
     assert tuple(node._memories.values()) == states
+    assert tuple(node._memories) == ("v",)
+    assert node.v_before_spike is None
     torch.testing.assert_close(node(x_seq), outputs[0])
     for actual, expected in zip(node._memories.values(), updated_states):
         torch.testing.assert_close(actual, expected)
+    assert node.v_seq.shape == (x_seq.shape[0],)
+
+    reference_v = states[0]
+    expected_observations = []
+    for x in x_seq:
+        charged = functional.lif_charge(
+            x, reference_v, node.tau, node.decay_input, node.v_reset
+        )
+        expected_observations.append((charged - node.v_threshold).mean())
+        spike = node.surrogate_function(charged - node.v_threshold)
+        reference_v = functional.voltage_reset(
+            charged,
+            spike,
+            node.v_threshold,
+            node.v_reset,
+            node.detach_reset,
+        )
+    torch.testing.assert_close(node.v_seq, torch.stack(expected_observations))
 
 
 @pytest.mark.parametrize(

@@ -30,31 +30,12 @@ Module: `spikingjelly`.
 Modules: `spikingjelly.activation_based.functional` and
 `spikingjelly.activation_based.base`.
 
-- Added explicit tensor-state APIs for modules with state-update semantics,
-  including LIAF, I-LIF, MaskedPSN, NeuNorm, delay and synaptic filters,
-  learning traces, and SpikeZIP STBIF updates. Reusable LIF charging and
-  voltage-reset primitives are also available for neuron variants that insert
-  operations between charge, fire, and reset. Existing modules retain their
-  public state, lifecycle, backend selection, and output behavior.
-- State-update APIs use `*_step` for one complete update and `*_multi_step` only for
-  independently implemented sequence paths. Supported CuPy, Triton, and
-  Inductor paths identify their backend in the function name.
-- Fixed MaskedPSN single-step execution for inputs with more than one dimension.
-- The Inductor neuron multi-step implementation is the single source of its state-update equation
-  and shares a bounded process-local compiled-graph cache.
-- Hookable Node classes retain their existing execution paths; their standard
-  transitions are also available as independent functional APIs.
-- Added FlexSN custom-op registry diagnostics for entry, owner-reference, and
-  active-reference counts.
-- Added grouped `MemoryModule.functional_forward` interfaces and changed
-  `to_functional_forward` to return
-  `(inputs, states) -> (outputs, updated_states)`. Regular forward paths for the
-  framework's stateful modules now use native functional transitions. Multi-step
-  execution loops the single-step transition by default; sequence kernels may
-  override it. Sequential modules compose child transitions directly, while other
-  composite modules use the state-substitution fallback.
-- Added `MemoryModule.materialize_states(inputs, states, step_mode)` for converting
-  input-dependent states before functional execution.
+- Added explicit-state functional execution across the framework's stateful
+  modules while preserving regular stateful forward behavior.
+- Regular and functional forward paths now share state transitions, with optimized
+  multi-step implementations retained where needed.
+- Functional conversion now covers native, composite, and user-defined modules,
+  while optional execution traces remain separate from recurrent state.
 
 #### ANN-to-SNN Conversion
 
@@ -228,10 +209,10 @@ Module: `spikingjelly.activation_based.base`.
 
 Module: `spikingjelly.activation_based.neuron`.
 
-- **Breaking change:** `BaseNode` now defines production neurons solely through
-  functional state transitions and no longer provides `neuronal_charge()`,
-  `neuronal_fire()`, or `neuronal_reset()`. Existing custom neurons that inherit
-  `BaseNode` and override these hooks must use `SimpleBaseNode` or implement
+- **Breaking change:** production neuron classes now define their dynamics solely
+  through functional state transitions and no longer provide
+  `neuronal_charge()`, `neuronal_fire()`, or `neuronal_reset()`. Custom neurons
+  that override these hooks must use `SimpleBaseNode` or implement
   `single_step_functional_forward()`.
 - **Breaking change:** removed `BaseNode.v_float_to_tensor()`. Custom functional
   modules that require input-dependent state initialization should override

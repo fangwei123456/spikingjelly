@@ -161,33 +161,12 @@ class ParametricLIFNode(BaseNode):
             tau = 1.0 / self.w.sigmoid()
         return super().extra_repr() + f", tau={tau}"
 
-    def neuronal_charge(self, x: torch.Tensor):
-        if self.decay_input:
-            if self.v_reset is None or self.v_reset == 0.0:
-                self.v = self.v + (x - self.v) * self.w.sigmoid()
-            else:
-                self.v = self.v + (x - (self.v - self.v_reset)) * self.w.sigmoid()
-        else:
-            if self.v_reset is None or self.v_reset == 0.0:
-                self.v = self.v * (1.0 - self.w.sigmoid()) + x
-            else:
-                self.v = self.v - (self.v - self.v_reset) * self.w.sigmoid() + x
-
     def single_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        r"""Execute one PLIF step with explicit state. / 使用显式状态执行一个 PLIF 时间步。
-
-        :param inputs: 仅包含 ``x`` 的元组 / Tuple containing only ``x``
-        :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)``
-        :type states: tuple
-        :return: ``((spike,), updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
-        """
         x = inputs[0]
         v = states[0]
         spike, v = functional.plif_step(
@@ -208,15 +187,6 @@ class ParametricLIFNode(BaseNode):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        r"""Execute PLIF sequence forward with explicit state. / 使用显式状态执行 PLIF 序列前向。
-
-        :param inputs: 仅包含 ``x_seq`` 的元组 / Tuple containing only ``x_seq``
-        :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)``
-        :type states: tuple
-        :return: ``((spike_seq,), updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
-        """
         x_seq = inputs[0]
         v = states[0]
 

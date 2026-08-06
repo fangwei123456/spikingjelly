@@ -158,12 +158,6 @@ class QIFNode(BaseNode):
             + f", tau={self.tau}, v_c={self.v_c}, a0={self.a0}, v_rest={self.v_rest}"
         )
 
-    def neuronal_charge(self, x: torch.Tensor):
-        self.v = (
-            self.v
-            + (x + self.a0 * (self.v - self.v_rest) * (self.v - self.v_c)) / self.tau
-        )
-
     def single_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
@@ -395,22 +389,6 @@ class EIFNode(BaseNode):
         return (
             super().extra_repr()
             + f", tau={self.tau}, delta_T={self.delta_T}, theta_rh={self.theta_rh}"
-        )
-
-    def neuronal_charge(self, x: torch.Tensor):
-        with torch.no_grad():
-            if not isinstance(self.v, torch.Tensor):
-                self.v = torch.as_tensor(self.v, device=x.device)
-
-        self.v = (
-            self.v
-            + (
-                x
-                + self.v_rest
-                - self.v
-                + self.delta_T * torch.exp((self.v - self.theta_rh) / self.delta_T)
-            )
-            / self.tau
         )
 
     def single_step_functional_forward(

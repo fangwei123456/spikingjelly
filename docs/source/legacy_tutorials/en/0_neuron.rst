@@ -100,19 +100,15 @@ The expression of :math:`V_{t}` can be obtained as
 .. math::
     V_{t} = f(V_{t-1}, X_{t}) = V_{t-1} + \frac{1}{\tau_{m}}(-(V_{t - 1} - V_{reset}) + X_{t})
 
-The corresponding code can be found in :class:`spikingjelly.activation_based.neuron.LIFNode.neuronal_charge`:
+The corresponding code can be found in :meth:`spikingjelly.activation_based.neuron.SimpleLIFNode.neuronal_charge`:
 
 .. code-block:: python
 
-    def neuronal_charge(self, dv: torch.Tensor):
-        if self.v_reset is None:
-            self.v += (x - self.v) / self.tau
-
+    def neuronal_charge(self, x: torch.Tensor):
+        if self.decay_input:
+            self.v = self.v + (self.v_reset - self.v + x) / self.tau
         else:
-            if isinstance(self.v_reset, float) and self.v_reset == 0.:
-                self.v += (x - self.v) / self.tau
-            else:
-                self.v += (x - (self.v - self.v_reset)) / self.tau
+            self.v = self.v + (self.v_reset - self.v) / self.tau + x
 
 Different neurons can use different charge, fire, and reset equations.
 :class:`spikingjelly.activation_based.neuron.SimpleBaseNode` exposes these three

@@ -227,43 +227,12 @@ class IFNode(BaseNode):
         else:
             raise ValueError(self.step_mode)
 
-    def neuronal_charge(self, x: torch.Tensor):
-        self.v = self.v + x
-
-    # kept for subclass backward-compatibility
-    @staticmethod
-    def jit_eval_single_step_forward_hard_reset(
-        x: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float
-    ):
-        v = v + x
-        spike = (v >= v_threshold).to(x)
-        v = v_reset * spike + (1.0 - spike) * v
-        return spike, v
-
-    @staticmethod
-    def jit_eval_single_step_forward_soft_reset(
-        x: torch.Tensor, v: torch.Tensor, v_threshold: float
-    ):
-        v = v + x
-        spike = (v >= v_threshold).to(x)
-        v = v - spike * v_threshold
-        return spike, v
-
     def single_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        r"""Execute one IF step with explicit state. / 使用显式状态执行一个 IF 时间步。
-
-        :param inputs: 仅包含 ``x`` 的元组 / Tuple containing only ``x``
-        :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)``
-        :type states: tuple
-        :return: ``((spike,), updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
-        """
         x = inputs[0]
         v = states[0]
 
@@ -301,15 +270,6 @@ class IFNode(BaseNode):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        r"""Execute IF sequence forward with explicit state. / 使用显式状态执行 IF 序列前向。
-
-        :param inputs: 仅包含 ``x_seq`` 的元组 / Tuple containing only ``x_seq``
-        :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)``
-        :type states: tuple
-        :return: ``((spike_seq,), updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
-        """
         x_seq = inputs[0]
         v = states[0]
 
@@ -553,9 +513,6 @@ class HalfThresholdIFNode(BaseNode):
             elif v.dtype != x.dtype or v.device != x.device:
                 v = v.to(dtype=x.dtype, device=x.device)
         return (v, *states[1:])
-
-    def neuronal_charge(self, x: torch.Tensor):
-        self.v = self.v + x
 
     def single_step_functional_forward(
         self,

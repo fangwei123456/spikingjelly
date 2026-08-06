@@ -40,7 +40,7 @@ Integrate-and-fire (IF) Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, jit_eval_single_step_forward_hard_reset, jit_eval_single_step_forward_soft_reset, jit_eval_multi_step_forward_hard_reset, jit_eval_multi_step_forward_hard_reset_with_v_seq, jit_eval_multi_step_forward_soft_reset, jit_eval_multi_step_forward_soft_reset_with_v_seq
+   :exclude-members: supported_backends
 
 Leaky Integrate-and-fire (LIF) Neurons
 ------------------------------------------------
@@ -49,7 +49,7 @@ Leaky Integrate-and-fire (LIF) Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, neuronal_charge_decay_input_reset0, neuronal_charge_decay_input, neuronal_charge_no_decay_input_reset0, neuronal_charge_no_decay_input, jit_eval_single_step_forward_hard_reset_decay_input, jit_eval_single_step_forward_hard_reset_no_decay_input, jit_eval_single_step_forward_soft_reset_decay_input, jit_eval_single_step_forward_soft_reset_no_decay_input, jit_eval_multi_step_forward_hard_reset_decay_input, jit_eval_multi_step_forward_hard_reset_decay_input_with_v_seq, jit_eval_multi_step_forward_hard_reset_no_decay_input, jit_eval_multi_step_forward_hard_reset_no_decay_input_with_v_seq, jit_eval_multi_step_forward_soft_reset_decay_input, jit_eval_multi_step_forward_soft_reset_decay_input_with_v_seq, jit_eval_multi_step_forward_soft_reset_no_decay_input, jit_eval_multi_step_forward_soft_reset_no_decay_input_with_v_seq,
+   :exclude-members: supported_backends
 
 Parametric Leaky Integrate-and-fire (PLIF) Neurons
 ----------------------------------------------------------

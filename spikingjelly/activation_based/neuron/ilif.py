@@ -331,24 +331,12 @@ class ILIFNode(LIFNode):
     def supported_backends(self) -> tuple[str, ...]:
         return ("torch",) if self.step_mode == "s" else ("torch", "triton")
 
-    def neuronal_fire(self) -> torch.Tensor:
-        return self.surrogate_function(self.v / self.v_threshold)
-
     def single_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        r"""Execute one I-LIF step with explicit state. / 使用显式状态执行一个 I-LIF 时间步。
-
-        :param inputs: 仅包含 ``x`` 的元组 / Tuple containing only ``x``
-        :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)``
-        :type states: tuple
-        :return: ``((spike_count,), updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
-        """
         x = inputs[0]
         v = states[0]
 
@@ -368,15 +356,6 @@ class ILIFNode(LIFNode):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        r"""Execute I-LIF sequence forward with explicit state. / 使用显式状态执行 I-LIF 序列前向。
-
-        :param inputs: 仅包含 ``x_seq`` 的元组 / Tuple containing only ``x_seq``
-        :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)``
-        :type states: tuple
-        :return: ``((spike_count_seq,), updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
-        """
         x_seq = inputs[0]
         v = states[0]
 

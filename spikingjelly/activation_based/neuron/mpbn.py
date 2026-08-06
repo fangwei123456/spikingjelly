@@ -298,7 +298,6 @@ class MPBNLIFNode(MPBNBaseNode):
         }
 
     def forward(self, *args, **kwargs):
-        r"""Run the regular forward path and commit MPBN running statistics. / 执行常规前向并提交 MPBN 运行统计量。"""
         stats = self._normalization_state()
         kwargs["_mpbn_stats"] = stats
         output = super().forward(*args, **kwargs)
@@ -319,7 +318,6 @@ class MPBNLIFNode(MPBNBaseNode):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        r"""Run a pure MPBN sequence transition. / 执行纯 MPBN 序列状态转移。"""
         if "_mpbn_stats" not in kwargs:
             kwargs["_mpbn_stats"] = self._normalization_state()
         return super().multi_step_functional_forward(inputs, states, **kwargs)
@@ -330,7 +328,6 @@ class MPBNLIFNode(MPBNBaseNode):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        r"""Run a pure MPBN single-step transition. / 执行纯 MPBN 单步状态转移。"""
         x = inputs[0]
         v = states[0]
         stats = kwargs.get("_mpbn_stats")

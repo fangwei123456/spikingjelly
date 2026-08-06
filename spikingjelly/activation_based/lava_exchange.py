@@ -684,45 +684,6 @@ class CubaLIFNode(neuron.BaseNode):
             materialized.append(state)
         return (*states[:-2], *materialized)
 
-    def neuronal_charge(self, x: torch.Tensor):
-        if self.requires_grad:
-            self.clamp_decay_parameters()
-
-        current = LeakyIntegratorStep.apply(
-            x,
-            step_quantize(self.current_decay),
-            self.current_state.contiguous(),
-            self.s_scale,
-        )
-
-        if self.norm is not None:
-            current = self.norm(current)
-
-        voltage = LeakyIntegratorStep.apply(
-            current,
-            step_quantize(self.voltage_decay),
-            self.voltage_state.contiguous(),
-            self.s_scale,
-        )
-
-        self.current_state = current
-        self.voltage_state = voltage
-
-    def neuronal_fire(self):
-        return self.surrogate_function(
-            self.voltage_state - (self.v_threshold + self.v_threshold_eps)
-        )
-
-    def neuronal_reset(self, spike):
-        if self.detach_reset:
-            spike_d = spike.detach()
-        else:
-            spike_d = spike
-
-        self.voltage_state = self.apply_hard_reset(
-            self.voltage_state, spike_d, self.v_reset
-        )
-
     def single_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],

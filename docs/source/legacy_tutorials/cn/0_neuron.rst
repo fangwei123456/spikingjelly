@@ -84,19 +84,15 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
 .. math::
     V[t] = f(V[t-1], X[t]) = V[t-1] + \frac{1}{\tau_{m}}(-(V[t - 1] - V_{reset}) + X[t])
 
-可以在 :class:`spikingjelly.activation_based.neuron.LIFNode.neuronal_charge` 中找到如下所示的代码：
+可以在 :meth:`spikingjelly.activation_based.neuron.SimpleLIFNode.neuronal_charge` 中找到如下所示的代码：
 
 .. code-block:: python
 
     def neuronal_charge(self, x: torch.Tensor):
-        if self.v_reset is None:
-            self.v += (x - self.v) / self.tau
-
+        if self.decay_input:
+            self.v = self.v + (self.v_reset - self.v + x) / self.tau
         else:
-            if isinstance(self.v_reset, float) and self.v_reset == 0.:
-                self.v += (x - self.v) / self.tau
-            else:
-                self.v += (x - (self.v - self.v_reset)) / self.tau
+            self.v = self.v + (self.v_reset - self.v) / self.tau + x
 
 不同的神经元可以使用不同的充电、放电和重置方程。
 :class:`spikingjelly.activation_based.neuron.SimpleBaseNode` 将这三个过程分别暴露为

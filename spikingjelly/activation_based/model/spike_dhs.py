@@ -187,26 +187,11 @@ class save_v_LIFNode(LIFNode):
         :type kwargs: dict[str, object]
         """
         super().__init__(*args, **kwargs)
-        self.register_memory("v_before_spike", 0.0)
+        self.v_before_spike = None
 
-    def single_step_functional_forward(
-        self,
-        inputs: tuple[torch.Tensor, ...],
-        states: tuple[object, ...],
-        **kwargs: object,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        r"""Execute one observed LIF step with explicit state. / 使用显式状态执行一个带观测的 LIF 时间步。
-
-        :param inputs: 仅包含 ``x`` 的元组 / Tuple containing only ``x``
-        :type inputs: tuple[torch.Tensor, ...]
-        :param states: 按 memory 顺序排列的状态 / States in memory order
-        :type states: tuple
-        :return: ``((spike,), updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
-        """
-        x = inputs[0]
-        v = states[0]
-
+    def _step_with_observation(
+        self, x: torch.Tensor, v: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         charged = functional.lif_charge(x, v, self.tau, self.decay_input, self.v_reset)
         v_before_spike = (charged - self.v_threshold).mean()
         spike = self.surrogate_function(charged - self.v_threshold)
@@ -217,11 +202,41 @@ class save_v_LIFNode(LIFNode):
             self.v_reset,
             self.detach_reset,
         )
+        return spike, v, v_before_spike
 
-        updated_states = list(states)
-        updated_states[0] = v
-        updated_states[-1] = v_before_spike
-        return (spike,), tuple(updated_states)
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        v = states[0]
+
+        spike, v, _ = self._step_with_observation(x, v)
+        return (spike,), (v, *states[1:])
+
+    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
+        states = self.materialize_states((x,), tuple(self._memories.values()), "s")
+        spike, v, self.v_before_spike = self._step_with_observation(x, states[0])
+        self.v = v
+        return spike
+
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        states = self.materialize_states((x_seq,), tuple(self._memories.values()), "m")
+        v = states[0]
+        spikes = []
+        observations = []
+        for x in x_seq:
+            spike, v, observation = self._step_with_observation(x, v)
+            spikes.append(spike)
+            observations.append(observation)
+
+        self.v = v
+        self.v_before_spike = observations[-1]
+        if self.store_v_seq:
+            self.v_seq = torch.stack(observations)
+        return torch.stack(spikes)
 
 
 def getSpikingNode(v_threshold=0.5):

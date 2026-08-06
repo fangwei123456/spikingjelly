@@ -240,103 +240,12 @@ class LIFNode(BaseNode):
     def extra_repr(self):
         return super().extra_repr() + f", tau={self.tau}"
 
-    def neuronal_charge(self, x: torch.Tensor):
-        if self.decay_input:
-            if self.v_reset is None or self.v_reset == 0.0:
-                self.v = self.neuronal_charge_decay_input_reset0(x, self.v, self.tau)
-            else:
-                self.v = self.neuronal_charge_decay_input(
-                    x, self.v, self.v_reset, self.tau
-                )
-
-        else:
-            if self.v_reset is None or self.v_reset == 0.0:
-                self.v = self.neuronal_charge_no_decay_input_reset0(x, self.v, self.tau)
-            else:
-                self.v = self.neuronal_charge_no_decay_input(
-                    x, self.v, self.v_reset, self.tau
-                )
-
-    @staticmethod
-    def neuronal_charge_decay_input_reset0(
-        x: torch.Tensor, v: torch.Tensor, tau: float
-    ):
-        v = v + (x - v) / tau
-        return v
-
-    @staticmethod
-    def neuronal_charge_decay_input(
-        x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float
-    ):
-        v = v + (x - (v - v_reset)) / tau
-        return v
-
-    @staticmethod
-    def neuronal_charge_no_decay_input_reset0(
-        x: torch.Tensor, v: torch.Tensor, tau: float
-    ):
-        v = v * (1.0 - 1.0 / tau) + x
-        return v
-
-    @staticmethod
-    def neuronal_charge_no_decay_input(
-        x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float
-    ):
-        v = v - (v - v_reset) / tau + x
-        return v
-
-    # ---------- kept for subclass backward-compatibility ----------
-    @staticmethod
-    def jit_eval_single_step_forward_hard_reset_decay_input(
-        x: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float, tau: float
-    ):
-        v = v + (x - (v - v_reset)) / tau
-        spike = (v >= v_threshold).to(x)
-        v = v_reset * spike + (1.0 - spike) * v
-        return spike, v
-
-    @staticmethod
-    def jit_eval_single_step_forward_hard_reset_no_decay_input(
-        x: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float, tau: float
-    ):
-        v = v - (v - v_reset) / tau + x
-        spike = (v >= v_threshold).to(x)
-        v = v_reset * spike + (1.0 - spike) * v
-        return spike, v
-
-    @staticmethod
-    def jit_eval_single_step_forward_soft_reset_decay_input(
-        x: torch.Tensor, v: torch.Tensor, v_threshold: float, tau: float
-    ):
-        v = v + (x - v) / tau
-        spike = (v >= v_threshold).to(x)
-        v = v - spike * v_threshold
-        return spike, v
-
-    @staticmethod
-    def jit_eval_single_step_forward_soft_reset_no_decay_input(
-        x: torch.Tensor, v: torch.Tensor, v_threshold: float, tau: float
-    ):
-        v = v * (1.0 - 1.0 / tau) + x
-        spike = (v >= v_threshold).to(x)
-        v = v - spike * v_threshold
-        return spike, v
-
     def single_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        r"""Execute one LIF step with explicit state. / 使用显式状态执行一个 LIF 时间步。
-
-        :param inputs: 仅包含 ``x`` 的元组 / Tuple containing only ``x``
-        :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)``
-        :type states: tuple
-        :return: ``((spike,), updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
-        """
         x = inputs[0]
         v = states[0]
 
@@ -378,15 +287,6 @@ class LIFNode(BaseNode):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        r"""Execute LIF sequence forward with explicit state. / 使用显式状态执行 LIF 序列前向。
-
-        :param inputs: 仅包含 ``x_seq`` 的元组 / Tuple containing only ``x_seq``
-        :type inputs: tuple[torch.Tensor, ...]
-        :param states: ``(v,)``
-        :type states: tuple
-        :return: ``((spike_seq,), updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple]
-        """
         x_seq = inputs[0]
         v = states[0]
 
