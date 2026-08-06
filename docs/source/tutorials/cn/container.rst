@@ -106,6 +106,41 @@ SpikingJelly中主要提供了如下几种包装器：
 
         # q_seq is identical to p_seq, and also identical to y_seq and z_seq
 
+:class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` 的输入也可以是 tensor tuple，\
+tuple中每个tensor的形状均为 ``shape = [T, N, *]``，且 ``T`` 和 ``N`` 相同；每个tensor的时间和批量维度会被分别展平，\
+展平后的tensor作为位置参数一起送入无状态的网络层。例如，多步模式的 \
+:class:`MaxPool2d <spikingjelly.activation_based.layer.MaxPool2d>` 在 ``return_indices=True`` 时会输出池化值和池化索引，\
+它们可以被多步模式的 :class:`MaxUnpool2d <spikingjelly.activation_based.layer.MaxUnpool2d>` 直接使用：
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import functional, layer
+
+    with torch.no_grad():
+        T = 4
+        N = 1
+        C = 3
+        H = 8
+        W = 8
+        x_seq = torch.rand([T, N, C, H, W])
+
+        pool = layer.MaxPool2d(2, return_indices=True, step_mode='m')
+        unpool = layer.MaxUnpool2d(2, step_mode='m')
+
+        y_seq, indices = pool(x_seq)
+        # y_seq.shape = indices.shape = [T, N, C, H // 2, W // 2]
+
+        z_seq = unpool(y_seq, indices)
+        # z_seq.shape = [T, N, C, H, W]
+
+        p_seq = functional.seq_to_ann_forward((y_seq, indices), torch.nn.MaxUnpool2d(2))
+        # p_seq is identical to z_seq
+
+:class:`MaxUnpool1d <spikingjelly.activation_based.layer.MaxUnpool1d>`、\
+:class:`MaxUnpool2d <spikingjelly.activation_based.layer.MaxUnpool2d>` 和 \
+:class:`MaxUnpool3d <spikingjelly.activation_based.layer.MaxUnpool3d>` 同时支持单步和多步模式。\
+在多步模式下，若给定 ``output_size``，其应当仅为空间尺寸(例如 ``(H, W)``)，不包含 ``T`` 或 ``N`` 维度。
 
 常用的网络层，在 :class:`spikingjelly.activation_based.layer` 已经定义过，更推荐使用 :class:`spikingjelly.activation_based.layer` 中的网络层，\
 而不是使用 :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` 手动包装，\
