@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import pytest
 import torch
 import torch.nn as nn
-from benchmark.snn_llm.qwen_conversion import quality_eval as runner
 
+from benchmark.snn_llm.qwen_conversion import quality_eval as runner
 from spikingjelly.activation_based.ann2snn import (
     Qwen2SNNCalibration,
     Qwen2SNNConfig,

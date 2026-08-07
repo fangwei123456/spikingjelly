@@ -417,10 +417,16 @@ def test_multi_step_forward_supports_both_time_axes_and_module_lists():
 def test_chunk_multi_step_forward_matches_unsplit_forward():
     module = nn.Linear(4, 3)
     x_seq = torch.randn(7, 2, 4)
+    expected = module(x_seq)
+    chunk_sizes = []
+    module.register_forward_pre_hook(
+        lambda _module, inputs: chunk_sizes.append(inputs[0].shape[0])
+    )
 
     actual = chunk_multi_step_forward(3, x_seq, module)
 
-    torch.testing.assert_close(actual, module(x_seq))
+    torch.testing.assert_close(actual, expected)
+    assert chunk_sizes == [3, 3, 1]
 
 
 @pytest.mark.parametrize(

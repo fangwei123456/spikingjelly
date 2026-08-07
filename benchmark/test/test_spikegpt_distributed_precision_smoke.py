@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import torch
+
 from benchmark.snn_llm import _spikegpt_training as spikegpt_train_smoke
 from benchmark.snn_llm import spikegpt_distributed_precision_smoke as phase4
 

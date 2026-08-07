@@ -160,23 +160,31 @@ def test_multistep_batch_norm_matches_flattened_torch(spiking_type, torch_type, 
 
 
 @pytest.mark.parametrize(
-    ("bn_type", "shape"),
+    ("bn_type", "torch_type", "shape"),
     [
-        (layer.ThresholdDependentBatchNorm1d, (3, 2, 4)),
-        (layer.ThresholdDependentBatchNorm2d, (3, 2, 4, 5, 6)),
-        (layer.ThresholdDependentBatchNorm3d, (3, 2, 4, 2, 3, 5)),
+        (layer.ThresholdDependentBatchNorm1d, nn.BatchNorm1d, (3, 2, 4)),
+        (layer.ThresholdDependentBatchNorm2d, nn.BatchNorm2d, (3, 2, 4, 5, 6)),
+        (
+            layer.ThresholdDependentBatchNorm3d,
+            nn.BatchNorm3d,
+            (3, 2, 4, 2, 3, 5),
+        ),
     ],
 )
 def test_threshold_dependent_batch_norm_uses_threshold_scaled_affine_weight(
-    bn_type, shape
+    bn_type, torch_type, shape
 ):
     module = bn_type(alpha=0.5, v_th=1.5, num_features=4).eval()
     x_seq = torch.randn(shape)
+    reference = torch_type(4).eval()
+    reference.load_state_dict(module.state_dict())
 
     output = module(x_seq)
+    expected = reference(x_seq.flatten(0, 1)).view_as(output)
 
     assert output.shape == x_seq.shape
     torch.testing.assert_close(module.weight, torch.full((4,), 0.75))
+    torch.testing.assert_close(output, expected)
 
 
 @pytest.mark.parametrize(
@@ -251,7 +259,7 @@ def test_elementwise_recurrent_container_accumulates_and_reset_clears_state():
     assert torch.equal(module(x_seq), torch.tensor([[1.0], [3.0], [6.0]]))
 
 
-def test_drop_connect_with_zero_probability_matches_linear_training(monkeypatch):
+def test_drop_connect_p_zero_keeps_connections_when_sampler_returns_zero(monkeypatch):
     monkeypatch.setattr(torch, "rand_like", torch.zeros_like)
     module = layer.DropConnectLinear(3, 2, p=0.0, activation=None).train()
     x = torch.randn(4, 3)

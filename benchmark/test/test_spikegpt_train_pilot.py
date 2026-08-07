@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
+
 from benchmark.snn_llm import _spikegpt_author
 from benchmark.snn_llm import _spikegpt_pilot as spikegpt_train_pilot
 from benchmark.snn_llm import _spikegpt_training as spikegpt_train_smoke

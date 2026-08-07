@@ -2,8 +2,8 @@ import json
 
 import pytest
 import torch
-from benchmark.snn_llm.qwen_conversion import scaleout_tp_smoke as runner
 
+from benchmark.snn_llm.qwen_conversion import scaleout_tp_smoke as runner
 from spikingjelly.activation_based.ann2snn.operators import TDLinear
 
 

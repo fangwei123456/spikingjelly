@@ -64,23 +64,25 @@ def test_straight_through_surrogates_preserve_boundary_values_and_gradients(
     assert torch.equal(x.grad, torch.ones_like(x))
 
 
-def test_super_spike_has_step_forward_and_finite_surrogate_gradient():
+def test_super_spike_has_step_forward_and_documented_surrogate_gradient():
     x = torch.tensor([-0.75, -0.25, 0.25, 0.75], requires_grad=True)
+    alpha = 1.5
 
-    output = surrogate.SuperSpike()(x)
+    output = surrogate.SuperSpike(alpha=alpha)(x)
     output.sum().backward()
 
     assert torch.equal(output, surrogate.heaviside(x))
-    assert torch.isfinite(x.grad).all()
+    torch.testing.assert_close(x.grad, alpha / (1.0 + x.detach().abs()).square())
 
 
-def test_fake_numerical_gradient_is_finite_away_from_zero():
-    x = torch.tensor([-2.0, -0.5, 0.5, 2.0], requires_grad=True)
+def test_fake_numerical_gradient_matches_clipped_reciprocal_away_from_zero():
+    x = torch.tensor([-5.0, -0.5, 0.5, 5.0], requires_grad=True)
+    alpha = 0.3
 
-    surrogate.FakeNumericalGradient(alpha=0.3)(x).sum().backward()
+    surrogate.FakeNumericalGradient(alpha=alpha)(x).sum().backward()
 
-    assert torch.isfinite(x.grad).all()
-    assert (x.grad >= 0.3).all()
+    expected = torch.clamp_max(x.detach().abs().reciprocal(), alpha)
+    torch.testing.assert_close(x.grad, expected)
 
 
 @pytest.mark.parametrize(

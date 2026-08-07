@@ -88,7 +88,7 @@ quote-style = "double"
 ignore = ["E402", "E731", "E741", "F403"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["spikingjelly", "test"]
+known-first-party = ["benchmark", "spikingjelly", "test"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

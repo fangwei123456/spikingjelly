@@ -59,7 +59,6 @@ def test_signed_if_proxy_reconstructs_qcfs_and_uses_public_neuron():
         build_signed_if_proxy,
         calibrate_signed_qcfs,
     )
-
     from spikingjelly.activation_based import neuron
 
     hidden_dense = torch.tensor(
@@ -107,7 +106,6 @@ def test_positive_only_proxy_is_not_supported():
 
 def test_recipe_uses_existing_module_converter_seam():
     from benchmark.snn_llm.gpt2_conversion import mlp_ann2snn_slice as runner
-
     from spikingjelly.activation_based.ann2snn import ModuleConverter
     from spikingjelly.activation_based.ann2snn.recipes import ModuleConversionRecipe
 

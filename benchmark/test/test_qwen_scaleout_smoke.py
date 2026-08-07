@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 import torch
+
 from benchmark.snn_llm import _reporting
 from benchmark.snn_llm.qwen_conversion import scaleout_smoke as runner
-
 from spikingjelly.activation_based.ann2snn import Qwen2SNNCalibration, Qwen2SNNConfig
 
 
