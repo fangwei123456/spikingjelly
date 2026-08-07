@@ -3,7 +3,7 @@ import torch
 
 import spikingjelly.configure as configure
 from spikingjelly.activation_based import base as activation_base
-from spikingjelly.activation_based import neuron, surrogate
+from spikingjelly.activation_based import functional, neuron, surrogate
 from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
     integrate_and_fire as if_triton_kernel,
 )
@@ -22,9 +22,6 @@ from spikingjelly.activation_based.triton_kernel.fp8_capability import (
     triton_fp8_neuron_capability_report,
 )
 from spikingjelly.activation_based.triton_kernel import triton_utils
-from spikingjelly.activation_based.neuron import integrate_and_fire as if_module
-from spikingjelly.activation_based.neuron import lif as lif_module
-from spikingjelly.activation_based.neuron import plif as plif_module
 
 
 def _cupy_available() -> bool:
@@ -575,52 +572,43 @@ def test_mixed_precision_forward_fp8_cpu_fails_with_capability_reason(kind):
 
 
 @pytest.mark.parametrize(
-    ("node_factory", "module_obj", "kernel_attr"),
+    ("node_factory", "triton_function_name"),
     [
         (
             lambda backend: neuron.IFNode(step_mode="m", backend=backend).eval(),
-            if_module,
-            "multistep_if",
+            "if_multi_step_triton",
         ),
         (
             lambda backend: neuron.LIFNode(
                 tau=2.0, step_mode="m", backend=backend
             ).eval(),
-            lif_module,
-            "multistep_lif",
+            "lif_multi_step_triton",
         ),
         (
             lambda backend: neuron.ParametricLIFNode(
                 init_tau=2.0, step_mode="m", backend=backend
             ).eval(),
-            plif_module,
-            "multistep_plif",
+            "plif_multi_step_triton",
         ),
     ],
 )
 def test_torch_backend_does_not_probe_triton_in_eval(
-    node_factory, module_obj, kernel_attr, monkeypatch
+    node_factory, triton_function_name, monkeypatch
 ):
-    if getattr(module_obj, "triton_kernel", None) is None:
-        pytest.skip("Triton module import is unavailable in this environment.")
-
     def _unexpected(*args, **kwargs):
         raise AssertionError("non-triton backend should not call Triton kernel")
 
-    monkeypatch.setattr(module_obj.triton_kernel, kernel_attr, _unexpected)
+    monkeypatch.setattr(functional, triton_function_name, _unexpected)
     x = torch.randn(5, 2, 4)
 
     node_factory("torch")(x)
 
 
 def test_lif_torch_backend_does_not_probe_triton_in_training(monkeypatch):
-    if getattr(lif_module, "triton_kernel", None) is None:
-        pytest.skip("Triton module import is unavailable in this environment.")
-
     def _unexpected(*args, **kwargs):
         raise AssertionError("torch backend should not call Triton kernel in training")
 
-    monkeypatch.setattr(lif_module.triton_kernel, "multistep_lif", _unexpected)
+    monkeypatch.setattr(functional, "lif_multi_step_triton", _unexpected)
     node = neuron.LIFNode(tau=2.0, step_mode="m", backend="torch").train()
     x = torch.randn(5, 2, 4)
     node(x)

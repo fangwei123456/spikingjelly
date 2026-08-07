@@ -162,7 +162,7 @@ def test_cpu_smoke_records_reproducible_workload_and_metrics(tmp_path: Path):
         "torch_version",
     }
     assert manifest["environment"]["device"]["type"] == "cpu"
-    assert manifest["environment"]["torch_cuda_version"] is None
+    assert manifest["environment"]["torch_cuda_version"] == torch.version.cuda
 
     experiment = manifest["experiment"]
     assert experiment["kind"] == "smoke"
@@ -212,9 +212,11 @@ def test_cpu_smoke_records_reproducible_workload_and_metrics(tmp_path: Path):
         assert metrics[name]["scope"] == "smoke"
 
 
-@pytest.mark.skipif(torch.cuda.is_available(), reason="requires a CPU-only runtime")
-def test_smoke_rejects_unavailable_cuda_without_fallback(tmp_path: Path):
+def test_smoke_rejects_unavailable_cuda_without_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     output_dir = tmp_path / "cuda-smoke"
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
 
     completed = _run_smoke(output_dir, device="cuda")
 
