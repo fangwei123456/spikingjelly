@@ -251,7 +251,8 @@ def test_elementwise_recurrent_container_accumulates_and_reset_clears_state():
     assert torch.equal(module(x_seq), torch.tensor([[1.0], [3.0], [6.0]]))
 
 
-def test_drop_connect_with_zero_probability_matches_linear_training():
+def test_drop_connect_with_zero_probability_matches_linear_training(monkeypatch):
+    monkeypatch.setattr(torch, "rand_like", torch.zeros_like)
     module = layer.DropConnectLinear(3, 2, p=0.0, activation=None).train()
     x = torch.randn(4, 3)
 

@@ -163,17 +163,16 @@ def test_cupy_single_step_matches_torch(
     ("kind", "dtype", "v_reset", "detach_reset", "training", "store_v_seq"),
     [
         ("qif", torch.float32, -0.3, True, True, True),
-        ("qif", torch.float32, None, False, True, True),
-        ("qif", torch.float16, -0.3, True, True, True),
+        ("qif", torch.float32, None, False, True, False),
+        ("qif", torch.float16, -0.3, True, False, False),
         ("qif", torch.float16, None, False, True, True),
         ("eif", torch.float32, -0.3, True, True, True),
-        ("eif", torch.float32, None, False, True, True),
-        ("eif", torch.float16, -0.3, True, True, True),
+        ("eif", torch.float32, None, False, True, False),
+        ("eif", torch.float16, -0.3, True, False, False),
         ("eif", torch.float16, None, False, True, True),
         ("izhikevich", torch.float32, -0.3, True, True, True),
-        ("izhikevich", torch.float32, -0.3, False, True, True),
-        ("qif", torch.float32, -0.3, True, True, False),
-        ("qif", torch.float32, -0.3, True, False, False),
+        ("izhikevich", torch.float32, -0.3, False, True, False),
+        ("izhikevich", torch.float32, -0.3, True, False, False),
     ],
 )
 def test_cupy_nonlinear_multistep_matches_torch(

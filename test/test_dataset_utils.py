@@ -61,19 +61,21 @@ def test_fixed_duration_preserves_all_events():
 
 def test_event_file_integration_writes_frames_archive(tmp_path):
     events_file = tmp_path / "events.npz"
+    output_dir = tmp_path / "frames"
+    output_dir.mkdir()
     np.savez(events_file, **_events())
 
     utils.integrate_events_file_to_frames_file_by_fixed_frames_number(
         lambda path: dict(np.load(path)),
         str(events_file),
-        str(tmp_path),
+        str(output_dir),
         split_by="number",
         frames_num=2,
         H=2,
         W=2,
     )
 
-    with np.load(events_file) as archive:
+    with np.load(output_dir / events_file.name) as archive:
         frames = archive["frames"]
     assert frames.shape == (2, 2, 2, 2)
     assert frames.sum() == 4

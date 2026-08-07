@@ -24,15 +24,6 @@ from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
 )
 
 
-def _cupy_available() -> bool:
-    try:
-        import cupy  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
-
-
 def _assert_close(a: torch.Tensor, b: torch.Tensor, dtype: torch.dtype):
     if dtype == torch.float16:
         atol, rtol = 1e-2, 1e-2
@@ -708,8 +699,8 @@ def test_if_triton_matches_torch_eval(v_threshold, v_reset):
 @pytest.mark.parametrize(
     ("tau", "detach_reset", "v_threshold", "v_reset"),
     [
-        (2.0, False, 1.0, 0.0),
-        (2.0, True, 0.5, -0.2),
+        (2.0, True, 1.0, 0.0),
+        (2.0, False, 0.5, -0.2),
         (5.0, False, 0.5, 0.0),
         (5.0, True, 1.0, -0.2),
         (10.0, False, 1.0, -0.2),

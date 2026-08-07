@@ -356,7 +356,7 @@ class DropConnectLinear(base.MemoryModule):
             torch.rand_like(
                 self.weight.unsqueeze(0).expand(batch_size, *self.weight.shape)
             )
-            > self.p
+            >= self.p
         )
         dropped_w = self.weight * mask_w
 
@@ -365,7 +365,7 @@ class DropConnectLinear(base.MemoryModule):
                 torch.rand_like(
                     self.bias.unsqueeze(0).expand(batch_size, *self.bias.shape)
                 )
-                > self.p
+                >= self.p
             )
             dropped_b = self.bias * mask_b
         else:

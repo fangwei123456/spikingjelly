@@ -99,7 +99,6 @@ branch = true
 omit = [
     "*/examples/*",
 ]
-parallel = true
 source = ["spikingjelly"]
 
 [tool.coverage.report]

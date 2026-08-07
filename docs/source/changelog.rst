@@ -103,6 +103,8 @@ Activation-Based Layers
 
 Module: ``spikingjelly.activation_based.layer``.
 
+- Fixed ``DropConnectLinear(p=0)`` rarely dropping weights or biases when the
+  random sampler returned exactly zero.
 - Fixed ``TemporalEffectiveBatchNorm3d`` rejecting valid multi-step 3D inputs.
 
 Activation-Based Surrogate Functions
