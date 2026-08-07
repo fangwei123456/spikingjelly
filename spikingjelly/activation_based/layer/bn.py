@@ -673,6 +673,7 @@ class TemporalEffectiveBatchNorm3d(_TemporalEffectiveBatchNormBase):
         TEBN在多步模式的BN的基础上，给每个时刻的输出增加一个可学习的缩放。
         若多步模式BN在 ``t`` 时刻的输出是 ``y[t]``，则TEBN的输出为 ``k[t] * y[t]``，
         其中 ``k[t]`` 是可学习的参数。
+        输入形状为 ``[T, N, C, D, H, W]``。
 
         .. warning::
 
@@ -695,6 +696,7 @@ class TemporalEffectiveBatchNorm3d(_TemporalEffectiveBatchNormBase):
         TEBN adds a scale on outputs of each time-step from the native multi-step BN.
         Denote the output at time step ``t`` of the native multi-step BN as ``y[t]``,
         then the output of TEBN is ``k[t] * y[t]``, where ``k[t]`` is the learnable scale.
+        The input shape is ``[T, N, C, D, H, W]``.
 
         .. warning::
 
@@ -709,9 +711,9 @@ class TemporalEffectiveBatchNorm3d(_TemporalEffectiveBatchNormBase):
         super().__init__(T, *args, **kwargs)
 
     def _check_input_dim(self, input):
-        if input.ndim != 4:
+        if input.ndim != 5:
             raise ValueError(
-                f"expect input shape [T*N, C, H, W], but get {input.shape}"
+                f"expect input shape [T*N, C, D, H, W], but get {input.shape}"
             )
 
 

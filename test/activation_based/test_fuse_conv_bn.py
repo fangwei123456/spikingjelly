@@ -2,13 +2,14 @@ import copy
 
 import pytest
 import torch
+from torch import nn
+
 from spikingjelly.activation_based import layer
 from spikingjelly.activation_based.functional.conv_bn_fusion import (
     _TrainConvBnWrapper,
     fuse_conv_bn_eval_modules,
     pack_conv_bn_train_modules,
 )
-from torch import nn
 
 
 class _StepBlock(nn.Module):

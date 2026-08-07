@@ -7,12 +7,13 @@ non-CUDA portions still run on a plain development machine.
 
 from __future__ import annotations
 
-import sys
 import copy
+import sys
 from types import SimpleNamespace
 
 import pytest
 import torch
+
 from spikingjelly.activation_based import base as base_module
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.model.spiking_vgg import spiking_vgg16_bn
@@ -22,8 +23,8 @@ from spikingjelly.activation_based.neuron.flexsn import (
     FlexSNKernel,
     _make_inductor_final_state_warmup_args,
 )
-from spikingjelly.activation_based.triton_kernel.flexsn import hop as hop_module
 from spikingjelly.activation_based.triton_kernel.flexsn import custom_ops
+from spikingjelly.activation_based.triton_kernel.flexsn import hop as hop_module
 from spikingjelly.activation_based.triton_kernel.flexsn import (
     template as template_module,
 )

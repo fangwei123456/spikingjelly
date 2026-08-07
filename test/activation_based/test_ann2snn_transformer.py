@@ -1,12 +1,12 @@
 import copy
-from collections import namedtuple
 import io
 import time
+from collections import namedtuple
 
+import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import pytest
 
 try:
     import triton  # noqa: F401
@@ -16,7 +16,6 @@ except (ImportError, OSError):
     _TRITON_AVAILABLE = False
 
 from spikingjelly.activation_based import base, functional, neuron, surrogate
-from spikingjelly.activation_based.triton_kernel.neuron_kernel import stbif
 from spikingjelly.activation_based.ann2snn import (
     Converter,
     ModuleConverter,
@@ -25,33 +24,33 @@ from spikingjelly.activation_based.ann2snn import (
     TransformerTDEquivalentRecipe,
 )
 from spikingjelly.activation_based.ann2snn.operators import (
+    TDGELU,
     SNNMatrixOperator,
     TDConv2d,
-    TDGELU,
     TDLayerNorm,
     TDLinear,
-    TDRMSNorm,
-    TDSiLU,
     TDMultiheadAttention,
+    TDRMSNorm,
     TDScaledDotProductAttention,
+    TDSiLU,
     TDSoftmax,
 )
-from spikingjelly.activation_based.ann2snn.recipes.sta_transformer import (
-    _STATIC_TENSOR_KWARGS,
-    _STAConstant,
-    _STASpikeEncoder,
-)
 from spikingjelly.activation_based.ann2snn.recipes.spikezip_qann import (
-    SpikeZIPEmbedding,
     SpikeZIPConv2d,
+    SpikeZIPEmbedding,
     SpikeZIPLayerNorm,
     SpikeZIPLinear,
     SpikeZIPRobertaSelfAttention,
     SpikeZIPSoftmax,
     SpikeZIPViTSelfAttention,
 )
+from spikingjelly.activation_based.ann2snn.recipes.sta_transformer import (
+    _STATIC_TENSOR_KWARGS,
+    _STAConstant,
+    _STASpikeEncoder,
+)
 from spikingjelly.activation_based.neuron import STBIFNeuron
-
+from spikingjelly.activation_based.triton_kernel.neuron_kernel import stbif
 
 TinyModelOutput = namedtuple("TinyModelOutput", ["logits", "hidden"])
 

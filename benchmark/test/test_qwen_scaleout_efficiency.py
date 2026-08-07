@@ -3,7 +3,6 @@ from types import SimpleNamespace
 import pytest
 import torch
 import torch.nn as nn
-
 from benchmark.snn_llm.qwen_conversion import scaleout_efficiency as runner
 
 

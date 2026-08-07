@@ -4,11 +4,10 @@ from pathlib import Path
 
 import pytest
 import torch
-
 from benchmark.snn_llm import spikegpt_checkpoint_compare
 from benchmark.snn_llm._spikegpt_author import SPIKEGPT_REVISION
-from spikingjelly.activation_based import neuron
 
+from spikingjelly.activation_based import neuron
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCRIPT = _REPO_ROOT / "benchmark" / "snn_llm" / "spikegpt_checkpoint_compare.py"

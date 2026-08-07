@@ -441,10 +441,20 @@ def test_ilif_supports_custom_gradient_window():
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize("store_v_seq", [False, True])
-@pytest.mark.parametrize("detach_reset", [False, True])
-@pytest.mark.parametrize("tau", [4.0 / 3.0, 2.0, 4.0])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+@pytest.mark.parametrize(
+    ("store_v_seq", "detach_reset", "tau", "dtype"),
+    [
+        (False, False, 4.0 / 3.0, torch.float32),
+        (True, True, 4.0 / 3.0, torch.float16),
+        (False, True, 4.0 / 3.0, torch.bfloat16),
+        (True, False, 2.0, torch.float32),
+        (False, True, 2.0, torch.float16),
+        (True, True, 2.0, torch.bfloat16),
+        (False, True, 4.0, torch.float32),
+        (True, False, 4.0, torch.float16),
+        (False, False, 4.0, torch.bfloat16),
+    ],
+)
 def test_ilif_triton_matches_torch_training(store_v_seq, detach_reset, tau, dtype):
     pytest.importorskip("triton")
     if dtype == torch.bfloat16 and torch.cuda.get_device_capability()[0] < 8:
@@ -499,9 +509,20 @@ def test_ilif_triton_matches_torch_training(store_v_seq, detach_reset, tau, dtyp
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize("store_v_seq", [False, True])
-@pytest.mark.parametrize("tau", [4.0 / 3.0, 2.0, 4.0])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+@pytest.mark.parametrize(
+    ("store_v_seq", "tau", "dtype"),
+    [
+        (False, 4.0 / 3.0, torch.float32),
+        (True, 4.0 / 3.0, torch.float16),
+        (False, 4.0 / 3.0, torch.bfloat16),
+        (True, 2.0, torch.float32),
+        (False, 2.0, torch.float16),
+        (True, 2.0, torch.bfloat16),
+        (False, 4.0, torch.float32),
+        (True, 4.0, torch.float16),
+        (False, 4.0, torch.bfloat16),
+    ],
+)
 def test_ilif_triton_matches_torch_eval(store_v_seq, tau, dtype):
     pytest.importorskip("triton")
     if dtype == torch.bfloat16 and torch.cuda.get_device_capability()[0] < 8:

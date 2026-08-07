@@ -11,25 +11,25 @@ import spikingjelly.activation_based.memopt as memopt
 import spikingjelly.activation_based.memopt.compress as memopt_compress
 import spikingjelly.activation_based.memopt.pipeline as memopt_pipeline
 import spikingjelly.activation_based.triton_kernel.compress as triton_compress
+from spikingjelly.activation_based import base, functional, neuron
 from spikingjelly.activation_based.memopt.checkpointing import (
-    in_gc_1st_forward,
-    query_autocast,
-    input_compressed_gc,
-    to_gc_function,
     GCContainer,
     TCGCContainer,
+    _combine_args,
     _gc_1st_forward,
     _separate_args,
-    _combine_args,
+    in_gc_1st_forward,
+    input_compressed_gc,
+    query_autocast,
+    to_gc_function,
 )
 from spikingjelly.activation_based.memopt.compress import (
     BaseSpikeCompressor,
-    BooleanSpikeCompressor,
     BitSpikeCompressor,
+    BooleanSpikeCompressor,
     NullSpikeCompressor,
     SparseSpikeCompressor,
 )
-from spikingjelly.activation_based import base, functional, neuron
 
 
 def simple_forward_fn(x, weight, bias=None):
@@ -1394,14 +1394,3 @@ def test_integration():
     for param, gc_param in zip(net.parameters(), gc_net.parameters()):
         if param.grad is not None and gc_param.grad is not None:
             assert torch.allclose(param.grad, gc_param.grad, atol=1e-5)
-
-
-if __name__ == "__main__":
-    test_thread_local_functions()
-    test_autocast_query()
-    test_argument_separate_combine()
-    test_input_compressed_gc()
-    test_to_gc_function()
-    test_gc_container()
-    test_tcgc_container()
-    test_integration()

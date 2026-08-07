@@ -1,9 +1,9 @@
 from argparse import Namespace
 from contextlib import nullcontext
 
+import benchmark.benchmark_train_precision_snn_fc as benchmark
 import torch
 
-import benchmark.benchmark_train_precision_snn_fc as benchmark
 from spikingjelly.activation_based.precision import PrecisionArtifacts
 
 

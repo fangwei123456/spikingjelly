@@ -16,8 +16,8 @@ from spikingjelly.activation_based import layer, neuron
 from spikingjelly.activation_based.layer.attention import SpikingSelfAttention
 from spikingjelly.activation_based.model import Spikformer
 from spikingjelly.activation_based.precision import (
-    Float8PointwiseConv1dStepModule,
     Float8LinearStepModule,
+    Float8PointwiseConv1dStepModule,
     Float8TELayerNormLinearModule,
     Float8TELayerNormMLPModule,
     PrecisionConfig,

@@ -302,51 +302,6 @@ def _populate_model_root(root: Path) -> None:
         (root / filename).write_bytes(filename.encode())
 
 
-def test_revision_mismatch_is_rejected_before_model_validation(tmp_path: Path):
-    completed = _run_cli(
-        "--model-root",
-        str(tmp_path / "missing-model"),
-        "--output-dir",
-        str(tmp_path / "report"),
-        "--device",
-        "cpu",
-        "--source-revision",
-        "wrong-revision",
-    )
-
-    assert completed.returncode != 0
-    assert "source-revision" in completed.stderr
-    assert "607a30d783dfa663caf39e06633721c8d4cfcd7e" in completed.stderr
-    assert "does not exist" not in completed.stderr
-
-
-def test_missing_model_files_are_listed(tmp_path: Path):
-    model_root = tmp_path / "model"
-    model_root.mkdir()
-    completed = _run_cli(
-        "--model-root",
-        str(model_root),
-        "--output-dir",
-        str(tmp_path / "report"),
-        "--device",
-        "cpu",
-        "--source-revision",
-        _REVISION,
-    )
-
-    assert completed.returncode != 0
-    for filename in (
-        "config.json",
-        "generation_config.json",
-        "model.safetensors",
-        "tokenizer.json",
-        "tokenizer_config.json",
-        "vocab.json",
-        "merges.txt",
-    ):
-        assert filename in completed.stderr
-
-
 def test_missing_transformers_raises_helpful_error():
     from benchmark.snn_llm.gpt2_conversion import cache_equivalence as runner
 

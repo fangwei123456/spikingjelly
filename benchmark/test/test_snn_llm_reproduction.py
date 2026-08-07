@@ -7,9 +7,7 @@ from pathlib import Path
 
 import pytest
 import torch
-
 from benchmark.snn_llm import smoke
-
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SMOKE_SCRIPT = _REPO_ROOT / "benchmark" / "snn_llm" / "smoke.py"

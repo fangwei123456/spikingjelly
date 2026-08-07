@@ -1,7 +1,6 @@
 import json
 
 import pytest
-
 from benchmark.snn_llm.qwen_conversion import quality_aggregate as runner
 from benchmark.snn_llm.qwen_conversion._quality import TASKS
 

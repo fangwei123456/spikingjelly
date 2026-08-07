@@ -9,15 +9,15 @@ from spikingjelly.activation_based.functional.misc import (
 )
 from spikingjelly.activation_based.layer.container import StepModeContainer
 from spikingjelly.activation_based.layer.dropout import Dropout
-from spikingjelly.activation_based.neuron.noisy import (
-    NoisyCUBALIFNode,
-    NoisyILCCUBALIFNode,
-    NoisyNonSpikingIFNode,
-)
 from spikingjelly.activation_based.neuron.lif_variants import (
     CUBALIFNode,
     GatedLIFNode,
     KLIFNode,
+)
+from spikingjelly.activation_based.neuron.noisy import (
+    NoisyCUBALIFNode,
+    NoisyILCCUBALIFNode,
+    NoisyNonSpikingIFNode,
 )
 
 

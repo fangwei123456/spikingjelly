@@ -16,13 +16,13 @@ from spikingjelly.activation_based import (
     neuron,
 )
 from spikingjelly.activation_based.ann2snn import (
-    Converter,
     ConversionRecipe,
-    FXConverter,
+    Converter,
     FXConversionRecipe,
+    FXConverter,
     LocalThresholdBalancingRecipe,
-    ModuleConverter,
     ModuleConversionRecipe,
+    ModuleConverter,
     NeuronFactory,
     RateCodingRecipe,
     SpikeZIPTFQANNRecipe,
@@ -38,8 +38,8 @@ from spikingjelly.activation_based.ann2snn.modules import (
     _safe_quantile,
 )
 from spikingjelly.activation_based.ann2snn.operators import (
-    TDConv2d,
     TDGELU,
+    TDConv2d,
     TDLayerNorm,
     TDLinear,
     TDMultiheadAttention,
@@ -678,12 +678,6 @@ class TestVoltageHook:
         hook(x)
         assert hook.scale.item() == pytest.approx(3.0)
 
-    def test_percentile_mode(self):
-        hook = VoltageHook(mode="99.9%")
-        x = torch.randn(1000)
-        hook(x)
-        assert hook.scale.item() > 0
-
     def test_percentile_mode_uses_torch_quantile(self):
         hook = VoltageHook(mode="50%")
         x = torch.arange(101, dtype=torch.float32)
@@ -910,19 +904,6 @@ class TestPublicExports:
         assert ann2snn.ChannelVoltageScaler is ChannelVoltageScaler
         assert ann2snn.TransformerTDEquivalentRecipe is TransformerTDEquivalentRecipe
         assert ann2snn.SpikeZIPTFQANNRecipe is SpikeZIPTFQANNRecipe
-
-    def test_recipe_base_has_no_execution_entrypoint(self):
-        assert not hasattr(ConversionRecipe, "convert")
-        assert not hasattr(ConversionRecipe, "run")
-        assert "__call__" not in ConversionRecipe.__dict__
-
-    def test_recipe_api_has_no_name_metadata(self):
-        assert not hasattr(ConversionRecipe, "name")
-        assert not hasattr(RateCodingRecipe, "name")
-        assert not hasattr(LocalThresholdBalancingRecipe, "name")
-        assert not hasattr(STATransformerRecipe, "name")
-        assert not hasattr(TransformerTDEquivalentRecipe, "name")
-        assert not hasattr(SpikeZIPTFQANNRecipe, "name")
 
 
 class TestConverterRecipes:
@@ -1283,13 +1264,6 @@ class TestConverterBackwardCompat:
         with pytest.raises(TypeError):
             converter(SimpleCNN())
 
-    def test_relu_model_converts(self):
-        model = SimpleCNN()
-        model.eval()
-        converter = _rate_converter(mode="Max", fuse_flag=False)
-        snn = converter.convert(model)
-        assert snn is not None
-
     def test_output_shape_preserved(self):
         model = SimpleCNN()
         model.eval()
@@ -1299,40 +1273,15 @@ class TestConverterBackwardCompat:
         out = snn(dummy)
         assert out.shape == (1, 10)
 
-    def test_fuse_conv_bn(self):
+    @pytest.mark.parametrize("mode", ["max", "99.9%", 0.5, 1])
+    def test_supported_modes_replace_relu(self, mode):
         model = SimpleCNN()
         model.eval()
-        converter = _rate_converter(mode="Max", fuse_flag=True)
+        converter = _rate_converter(mode=mode)
         snn = converter.convert(model)
-        assert snn is not None
 
-    def test_mode_max(self):
-        model = SimpleCNN()
-        model.eval()
-        converter = _rate_converter(mode="max")
-        snn = converter.convert(model)
-        assert snn is not None
-
-    def test_mode_robust(self):
-        model = SimpleCNN()
-        model.eval()
-        converter = _rate_converter(mode="99.9%")
-        snn = converter.convert(model)
-        assert snn is not None
-
-    def test_mode_scalar(self):
-        model = SimpleCNN()
-        model.eval()
-        converter = _rate_converter(mode=0.5)
-        snn = converter.convert(model)
-        assert snn is not None
-
-    def test_mode_integer_one(self):
-        model = SimpleCNN()
-        model.eval()
-        converter = _rate_converter(mode=1)
-        snn = converter.convert(model)
-        assert snn is not None
+        assert any(isinstance(module, neuron.IFNode) for module in snn.modules())
+        assert not any(isinstance(module, nn.ReLU) for module in snn.modules())
 
     def test_invalid_mode_raises(self):
         recipe = RateCodingRecipe(dataloader=[], mode="invalid")
@@ -1384,7 +1333,7 @@ raise SystemExit(1)
         imgs = torch.randn(2, 1, 28, 28)
         converter = _rate_converter(dataloader=[imgs], mode="Max", fuse_flag=False)
         snn = converter.convert(model)
-        assert snn is not None
+        assert any(isinstance(module, neuron.IFNode) for module in snn.modules())
 
     def test_numpy_dataloader_converts_full_batch(self):
         model = SimpleCNNNoBN()
@@ -1392,7 +1341,7 @@ raise SystemExit(1)
         imgs = np.random.randn(2, 1, 28, 28).astype(np.float32)
         converter = _rate_converter(dataloader=[imgs], mode="Max", fuse_flag=False)
         snn = converter.convert(model)
-        assert snn is not None
+        assert any(isinstance(module, neuron.IFNode) for module in snn.modules())
 
     def test_dict_dataloader_converts(self):
         model = SimpleCNNNoBN()
@@ -1402,7 +1351,7 @@ raise SystemExit(1)
             dataloader=[{"input": imgs}], mode="Max", fuse_flag=False
         )
         snn = converter.convert(model)
-        assert snn is not None
+        assert any(isinstance(module, neuron.IFNode) for module in snn.modules())
 
     def test_dict_dataloader_prefers_input_key(self):
         model = SimpleCNNNoBN()
@@ -1415,7 +1364,7 @@ raise SystemExit(1)
             fuse_flag=False,
         )
         snn = converter.convert(model)
-        assert snn is not None
+        assert any(isinstance(module, neuron.IFNode) for module in snn.modules())
 
     def test_dict_dataloader_prefers_images_key(self):
         imgs = torch.randn(2, 1, 28, 28)
@@ -1510,7 +1459,8 @@ raise SystemExit(1)
 
         snn = converter.convert(model)
 
-        assert snn is not None
+        assert snn(x0, x1).shape == x0.shape
+        assert any(isinstance(module, neuron.IFNode) for module in snn.modules())
 
     def test_calibration_preserves_tensor_dtype(self):
         model = SimpleCNNNoBN().double()
@@ -1520,7 +1470,7 @@ raise SystemExit(1)
 
         snn = converter.convert(model)
 
-        assert snn is not None
+        assert snn(imgs).dtype == torch.float64
 
     def test_extract_batch_input_rejects_empty_sequence(self):
         with pytest.raises(ValueError, match="empty list or tuple"):
@@ -1942,11 +1892,19 @@ class TestConverterTDOperatorReplacement:
 class TestFuse:
     def test_fuse_module_replacement_does_not_depend_on_asserts(self):
         code = """
-import inspect
+import torch
+from torch import nn
 from spikingjelly.activation_based.ann2snn.recipes.rate_coding import _fuse_conv_bn
 
-source = inspect.getsource(_fuse_conv_bn)
-raise SystemExit(int("assert isinstance(node.target, str)" in source))
+model = nn.Sequential(nn.Conv2d(1, 2, 3), nn.BatchNorm2d(2)).eval()
+traced = torch.fx.symbolic_trace(model)
+x = torch.randn(2, 1, 5, 5)
+expected = traced(x)
+fused = _fuse_conv_bn(traced, fuse_flag=True)
+if not torch.allclose(fused(x), expected, atol=1e-5, rtol=1e-5):
+    raise SystemExit(1)
+if any(isinstance(module, nn.BatchNorm2d) for module in fused.modules()):
+    raise SystemExit(2)
 """
         result = subprocess.run(
             [sys.executable, "-O", "-c", code],
@@ -1996,19 +1954,17 @@ raise SystemExit(int("assert isinstance(node.target, str)" in source))
         assert torch.allclose(result, expected, atol=1e-5, rtol=1e-5)
         assert not any(isinstance(m, nn.BatchNorm2d) for m in fused.modules())
 
-    def test_no_bn_model_fuse(self):
-        model = SimpleCNNNoBN()
-        model.eval()
-        converter = _rate_converter(mode="Max", fuse_flag=True)
-        snn = converter.convert(model)
-        assert snn is not None
-
-    def test_fuse_flag_false(self):
+    def test_fuse_flag_false_preserves_batch_norm(self):
         model = SimpleCNN()
         model.eval()
-        converter = _rate_converter(mode="Max", fuse_flag=False)
-        snn = converter.convert(model)
-        assert snn is not None
+        fx_model = torch.fx.symbolic_trace(model)
+        x = torch.randn(2, 1, 28, 28)
+        expected = fx_model(x)
+
+        unfused = _fuse_conv_bn(fx_model, fuse_flag=False)
+
+        torch.testing.assert_close(unfused(x), expected)
+        assert any(isinstance(module, nn.BatchNorm2d) for module in unfused.modules())
 
 
 class TestRateCodingConversion:
@@ -2854,20 +2810,6 @@ class TestChannelWiseRateCodingRecipe:
 
 
 class TestConverterAlgorithmBoundary:
-    @pytest.mark.parametrize(
-        "name",
-        [
-            "convert_to_spiking_neurons",
-            "replace_by_td_operators",
-            "fuse",
-            "set_voltagehook",
-            "replace_by_neurons",
-            "replace_by_ifnode",
-        ],
-    )
-    def test_converter_exposes_no_algorithm_public_methods(self, name):
-        assert not hasattr(Converter, name)
-
     def test_rate_coding_recipe_sets_voltagehook(self):
         model = SimpleCNNNoBN()
         model.eval()

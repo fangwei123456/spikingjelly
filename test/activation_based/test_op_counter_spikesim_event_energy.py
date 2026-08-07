@@ -3,6 +3,7 @@ import math
 import pytest
 import torch
 import torch.nn as nn
+
 from spikingjelly.activation_based import layer, neuron, op_counter
 from spikingjelly.activation_based.op_counter.spikesim.formulas import (
     compute_spikesim_event_energy_breakdown,

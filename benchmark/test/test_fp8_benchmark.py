@@ -1,9 +1,9 @@
 from argparse import Namespace
 from contextlib import contextmanager
 
+import benchmark.benchmark_triton_neuron_kernels as triton_neuron_benchmark
 import pytest
 import torch
-
 from benchmark.benchmark_fp8_training_inference import (
     _aggregate_precision_trials,
     _commit,
@@ -11,7 +11,6 @@ from benchmark.benchmark_fp8_training_inference import (
     _samples_per_second,
     validate_args,
 )
-import benchmark.benchmark_triton_neuron_kernels as triton_neuron_benchmark
 from benchmark.benchmark_triton_neuron_kernels import (
     _higher_precision_variants,
     _write_markdown,

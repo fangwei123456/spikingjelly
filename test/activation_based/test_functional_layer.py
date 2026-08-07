@@ -3,6 +3,8 @@ import math
 
 import pytest
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 from spikingjelly.activation_based import functional, layer
 from spikingjelly.activation_based.functional import layer as functional_layer
@@ -135,6 +137,133 @@ def test_neunorm_materializes_channel_shared_state(step_mode):
 
     assert output.shape == (x.shape if step_mode == "s" else (1, *x.shape))
     assert module.x.shape == (2, 1, 4, 5)
+
+
+@pytest.mark.parametrize(
+    ("spiking_type", "torch_type", "shape"),
+    [
+        (layer.BatchNorm1d, nn.BatchNorm1d, (3, 2, 4)),
+        (layer.BatchNorm2d, nn.BatchNorm2d, (3, 2, 4, 5, 6)),
+        (layer.BatchNorm3d, nn.BatchNorm3d, (3, 2, 4, 2, 3, 5)),
+    ],
+)
+def test_multistep_batch_norm_matches_flattened_torch(spiking_type, torch_type, shape):
+    spiking_bn = spiking_type(4, step_mode="m").eval()
+    torch_bn = torch_type(4).eval()
+    torch_bn.load_state_dict(spiking_bn.state_dict())
+    x_seq = torch.randn(shape)
+
+    actual = spiking_bn(x_seq)
+    expected = torch_bn(x_seq.flatten(0, 1)).view_as(actual)
+
+    torch.testing.assert_close(actual, expected)
+
+
+@pytest.mark.parametrize(
+    ("bn_type", "shape"),
+    [
+        (layer.ThresholdDependentBatchNorm1d, (3, 2, 4)),
+        (layer.ThresholdDependentBatchNorm2d, (3, 2, 4, 5, 6)),
+        (layer.ThresholdDependentBatchNorm3d, (3, 2, 4, 2, 3, 5)),
+    ],
+)
+def test_threshold_dependent_batch_norm_uses_threshold_scaled_affine_weight(
+    bn_type, shape
+):
+    module = bn_type(alpha=0.5, v_th=1.5, num_features=4).eval()
+    x_seq = torch.randn(shape)
+
+    output = module(x_seq)
+
+    assert output.shape == x_seq.shape
+    torch.testing.assert_close(module.weight, torch.full((4,), 0.75))
+
+
+@pytest.mark.parametrize(
+    ("bn_type", "torch_type", "shape"),
+    [
+        (layer.TemporalEffectiveBatchNorm1d, nn.BatchNorm1d, (3, 2, 4)),
+        (layer.TemporalEffectiveBatchNorm2d, nn.BatchNorm2d, (3, 2, 4, 5, 6)),
+        (
+            layer.TemporalEffectiveBatchNorm3d,
+            nn.BatchNorm3d,
+            (3, 2, 4, 2, 3, 5),
+        ),
+    ],
+)
+def test_temporal_effective_batch_norm_applies_per_step_scale(
+    bn_type, torch_type, shape
+):
+    module = bn_type(3, num_features=4).eval()
+    with torch.no_grad():
+        module.scale.copy_(torch.tensor([1.0, 2.0, 3.0]))
+    x_seq = torch.randn(shape)
+    unscaled = torch_type(4).eval()(x_seq.flatten(0, 1)).view_as(x_seq)
+    scale_shape = (3,) + (1,) * (x_seq.ndim - 1)
+
+    torch.testing.assert_close(module(x_seq), unscaled * module.scale.view(scale_shape))
+
+
+@pytest.mark.parametrize(
+    ("bn_type", "shape"),
+    [
+        (layer.BatchNormThroughTime1d, (3, 2, 4)),
+        (layer.BatchNormThroughTime2d, (3, 2, 4, 5, 6)),
+        (layer.BatchNormThroughTime3d, (3, 2, 4, 2, 3, 5)),
+    ],
+)
+def test_batch_norm_through_time_uses_independent_step_modules_and_resets(
+    bn_type, shape
+):
+    module = bn_type(3, 4, step_mode="m").eval()
+    with torch.no_grad():
+        for index, bn in enumerate(module.bn_list, start=1):
+            bn.weight.fill_(index)
+    x_seq = torch.randn(shape)
+    expected = torch.stack(
+        [index * x / (1.0 + 1e-5) ** 0.5 for index, x in enumerate(x_seq, 1)]
+    )
+
+    torch.testing.assert_close(module(x_seq), expected)
+    module.reset()
+    torch.testing.assert_close(module(x_seq), expected)
+
+
+def test_multistep_and_seq_to_ann_containers_match_their_execution_models():
+    linear = nn.Linear(4, 3)
+    x_seq = torch.randn(5, 2, 4)
+    loop_container = layer.MultiStepContainer(linear)
+    batch_container = layer.SeqToANNContainer(linear)
+    expected = torch.stack([linear(x) for x in x_seq])
+
+    torch.testing.assert_close(loop_container(x_seq), expected)
+    torch.testing.assert_close(batch_container(x_seq), expected)
+
+
+def test_elementwise_recurrent_container_accumulates_and_reset_clears_state():
+    module = layer.ElementWiseRecurrentContainer(
+        nn.Identity(), lambda previous, current: previous + current, step_mode="m"
+    )
+    x_seq = torch.tensor([[1.0], [2.0], [3.0]])
+
+    assert torch.equal(module(x_seq), torch.tensor([[1.0], [3.0], [6.0]]))
+    module.reset()
+    assert torch.equal(module(x_seq), torch.tensor([[1.0], [3.0], [6.0]]))
+
+
+def test_drop_connect_with_zero_probability_matches_linear_training():
+    module = layer.DropConnectLinear(3, 2, p=0.0, activation=None).train()
+    x = torch.randn(4, 3)
+
+    torch.testing.assert_close(module(x), F.linear(x, module.weight, module.bias))
+
+
+def test_voting_layer_averages_fixed_size_groups_in_both_step_modes():
+    x = torch.tensor([[1.0, 3.0, 2.0, 6.0]])
+    expected = torch.tensor([[2.0, 4.0]])
+
+    assert torch.equal(layer.VotingLayer(2)(x), expected)
+    assert torch.equal(layer.VotingLayer(2, step_mode="m")(x.unsqueeze(0))[0], expected)
 
 
 def test_functional_layer_exports():

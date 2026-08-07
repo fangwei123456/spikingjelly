@@ -98,6 +98,20 @@ Module: ``spikingjelly.activation_based.layer``.
 Bug Fixes
 ~~~~~~~~~
 
+Activation-Based Layers
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.layer``.
+
+- Fixed ``TemporalEffectiveBatchNorm3d`` rejecting valid multi-step 3D inputs.
+
+Activation-Based Surrogate Functions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.surrogate``.
+
+- Fixed non-spiking ``LogTailedReLU`` returning ``NaN`` for negative inputs.
+
 ANN-to-SNN Conversion
 ^^^^^^^^^^^^^^^^^^^^^
 

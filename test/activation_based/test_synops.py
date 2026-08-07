@@ -1,14 +1,13 @@
 import torch
 import torch.nn as nn
 
-from spikingjelly.activation_based import neuron, op_counter, functional
-from spikingjelly.activation_based.model.sew_resnet import sew_resnet18
+from spikingjelly.activation_based import neuron, op_counter
+from test.activation_based._op_counter_test_utils import TinySNN
 
 
 def test_synop_basic():
-    net = sew_resnet18(cnf="ADD", spiking_neuron=neuron.LIFNode, detach_reset=True)
-    functional.set_step_mode(net, "m")
-    x = (torch.rand(4, 8, 3, 224, 224) > 0.5).float()
+    net = TinySNN()
+    x = (torch.rand(2, 2, 3, 8, 8) > 0.5).float()
 
     counter = op_counter.SynOpCounter()
     with op_counter.DispatchCounterMode([counter]):
@@ -37,16 +36,12 @@ def test_synop_float_vs_spike():
     with op_counter.DispatchCounterMode([counter_spike]):
         model(spike_x)
     expected = int(spike_x.count_nonzero().item()) * 50
-    print(
-        f"nnz={int(spike_x.count_nonzero().item())}, expected SynOps={expected}, got={counter_spike.get_total()}"
-    )
     assert counter_spike.get_total() == expected
 
 
 def test_synop_ignore():
-    net = sew_resnet18(cnf="ADD", spiking_neuron=neuron.LIFNode, detach_reset=True)
-    functional.set_step_mode(net, "m")
-    x = (torch.rand(4, 8, 3, 224, 224) > 0.7).float()
+    net = TinySNN()
+    x = (torch.rand(2, 2, 3, 8, 8) > 0.7).float()
 
     counter_full = op_counter.SynOpCounter(extra_ignore_modules=[neuron.BaseNode])
     counter_no_conv = op_counter.SynOpCounter(
@@ -61,11 +56,4 @@ def test_synop_ignore():
 
     total_full = counter_full.get_total()
     total_no_conv = counter_no_conv.get_total()
-    print(f"full SynOps: {total_full}, without Conv2d: {total_no_conv}")
     assert total_no_conv < total_full
-
-
-if __name__ == "__main__":
-    test_synop_basic()
-    test_synop_float_vs_spike()
-    test_synop_ignore()
