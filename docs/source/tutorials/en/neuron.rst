@@ -320,8 +320,8 @@ Therefore, users normally only implement ``neuronal_charge``. ``SimpleIFNode`` a
 ``functional_forward`` directly raises an error. Calling
 :func:`to_functional_forward <spikingjelly.activation_based.base.to_functional_forward>`
 on a module derived from ``SimpleBaseNode`` uses the general fallback, which
-temporarily substitutes explicit state, runs the regular forward, and restores
-the module state. This preserves the
+temporarily substitutes explicit registered memories, runs the regular forward,
+and restores those memories. This preserves the
 equation extension interface but is less efficient than native-functional neurons
 such as ``LIFNode``; it is not intended for high-performance workloads that
 repeatedly require functional conversion.

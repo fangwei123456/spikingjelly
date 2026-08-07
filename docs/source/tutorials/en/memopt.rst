@@ -381,10 +381,10 @@ remain tuples even when they contain one tensor. For example:
     outputs, updated_states = f_forward((x,), (v,))
 
 MemoryModule implementations with functional forward use their explicit state
-transition directly. ``nn.Sequential`` modules recursively compose their children,
-while other composite modules use the general fallback path. The fallback
-temporarily substitutes explicit state, runs the regular forward, and then restores
-the module state, so it has additional state-substitution overhead.
+transition directly. Flat ``nn.Sequential`` modules compose direct functional
+children with a state cursor. Other composite modules use the general fallback,
+which temporarily loads explicit registered memories, runs the regular forward,
+and then restores those memories.
 
 Step 2. Explicitly declare compressors (optional)
 ###############################################################

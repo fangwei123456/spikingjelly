@@ -1340,8 +1340,8 @@ def to_functional_forward(
 
     .. note::
 
-        转换优先直接使用 MemoryModule 的 functional 实现，其次递归组合
-        ``nn.Sequential``，其他模块才使用临时 ``_memories`` 字典替换。
+        转换优先直接使用 MemoryModule 的 functional 实现，并使用同一方式组合
+        扁平的 ``nn.Sequential``。其他模块通过既有 memory 接口临时换入显式状态。
 
     .. warning::
 
@@ -1359,7 +1359,7 @@ def to_functional_forward(
     :return: 带有显式输入输出状态的前向传播函数
     :rtype: Callable
 
-    :raises ValueError: 调用时的状态数量或 memory 布局与转换时不一致
+    :raises ValueError: 调用时的状态数量与模块的 memory 数量不一致
 
     ----
 
@@ -1385,9 +1385,9 @@ def to_functional_forward(
 
     .. note::
 
-        Conversion first uses a MemoryModule functional implementation directly,
-        then recursively composes ``nn.Sequential`` modules. Other modules use a
-        temporary ``_memories`` dictionary swap as the fallback.
+        Conversion first uses a MemoryModule functional implementation directly and
+        composes flat ``nn.Sequential`` modules in the same way. Other modules
+        temporarily load explicit states through the existing memory interface.
 
     .. warning::
 
@@ -1406,7 +1406,7 @@ def to_functional_forward(
 
     :return: a functional-style forward function with grouped inputs and states
     :rtype: Callable
-    :raises ValueError: If the state count or memory layout differs from conversion time
+    :raises ValueError: If the state count differs from the module's memory count
 
     ----
 
@@ -1440,87 +1440,82 @@ def to_functional_forward(
     memory_modules = [
         child for child in module.modules() if isinstance(child, MemoryModule)
     ]
-    layout = [(child, tuple(child._memories)) for child in memory_modules]
-    num_states = sum(len(names) for _, names in layout)
+    num_states = sum(len(child._memories) for child in memory_modules)
 
-    if fn is None and isinstance(module, nn.Sequential):
-        occurrences = [
-            id(child) for _, child in module.named_modules(remove_duplicate=False)
-        ]
-        if len(occurrences) == len(set(occurrences)) and not (
-            isinstance(module, MemoryModule) and module._memories
-        ):
-            children = list(module._modules.values())
-            child_forwards = [to_functional_forward(child) for child in children]
-            child_state_counts = [
-                sum(
-                    len(memory_module._memories)
-                    for memory_module in child.modules()
-                    if isinstance(memory_module, MemoryModule)
-                )
-                for child in children
-            ]
+    def check_state_count(states: tuple[Any, ...]) -> None:
+        if len(states) != num_states:
+            raise ValueError(
+                f"{module.__class__.__name__} expected {num_states} states, "
+                f"but got {len(states)}."
+            )
 
-            def sequential_forward(
-                inputs: tuple[torch.Tensor, ...],
-                states: tuple[Any, ...],
-                **kwargs: Any,
-            ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
-                if len(states) != num_states:
-                    raise ValueError(
-                        f"{module.__class__.__name__} expected {num_states} states, "
-                        f"but got {len(states)}."
-                    )
-                outputs = inputs
-                updated_states = []
-                offset = 0
-                for index, (child_forward, state_count) in enumerate(
-                    zip(child_forwards, child_state_counts)
-                ):
-                    child_states = states[offset : offset + state_count]
-                    outputs, child_updated_states = child_forward(
-                        outputs,
-                        child_states,
-                        **(kwargs if index == 0 else {}),
-                    )
-                    updated_states.extend(child_updated_states)
-                    offset += state_count
-                return outputs, tuple(updated_states)
-
-            return sequential_forward
+    def has_functional_forward(memory_module: MemoryModule) -> bool:
+        return (
+            type(memory_module).functional_forward
+            is not MemoryModule.functional_forward
+            or type(memory_module).single_step_functional_forward
+            is not MemoryModule.single_step_functional_forward
+            or (
+                memory_module.step_mode == "m"
+                and type(memory_module).multi_step_functional_forward
+                is not MemoryModule.multi_step_functional_forward
+            )
+        )
 
     if fn is None and isinstance(module, MemoryModule):
-        method_names = ["functional_forward"]
-        if module.step_mode == "s":
-            method_names.append("single_step_functional_forward")
-        elif module.step_mode == "m":
-            method_names.extend(
-                ("single_step_functional_forward", "multi_step_functional_forward")
-            )
-        has_functional_forward = any(
-            getattr(type(module), name) is not getattr(MemoryModule, name)
-            for name in method_names
-        )
-        if has_functional_forward and len(memory_modules) == 1:
+        if has_functional_forward(module) and len(memory_modules) == 1:
 
             def direct_forward(
                 inputs: tuple[torch.Tensor, ...],
                 states: tuple[Any, ...],
                 **kwargs: Any,
             ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
-                if len(states) != num_states:
-                    raise ValueError(
-                        f"{module._get_name()} expected {num_states} states, "
-                        f"but got {len(states)}."
-                    )
-                outputs, updated_states = module.functional_forward(
-                    inputs, states, **kwargs
-                )
-                return outputs, updated_states
+                check_state_count(states)
+                return module.functional_forward(inputs, states, **kwargs)
 
             return direct_forward
 
     if fn is None and isinstance(module, nn.Sequential):
+        children = list(module._modules.values())
+        child_state_counts = [
+            len(child._memories)
+            if isinstance(child, MemoryModule) and has_functional_forward(child)
+            else 0
+            for child in children
+        ]
+
+        if sum(child_state_counts) == num_states:
+
+            def sequential_forward(
+                inputs: tuple[torch.Tensor, ...],
+                states: tuple[Any, ...],
+                **kwargs: Any,
+            ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
+                check_state_count(states)
+                outputs = inputs
+                updated_states = []
+                offset = 0
+                for index, (child, state_count) in enumerate(
+                    zip(children, child_state_counts)
+                ):
+                    child_kwargs = kwargs if index == 0 else {}
+                    if state_count:
+                        child_states = states[offset : offset + state_count]
+                        outputs, child_updated_states = child.functional_forward(
+                            outputs, child_states, **child_kwargs
+                        )
+                        updated_states.extend(child_updated_states)
+                        offset += state_count
+                    else:
+                        result = child(*outputs, **child_kwargs)
+                        outputs = (
+                            tuple(result)
+                            if isinstance(result, (tuple, list))
+                            else (result,)
+                        )
+                return outputs, tuple(updated_states)
+
+            return sequential_forward
 
         def forward_fn(*inputs, **kwargs):
             outputs = inputs
@@ -1539,36 +1534,18 @@ def to_functional_forward(
         states: tuple[Any, ...],
         **kwargs: Any,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
-        if len(states) != num_states:
-            raise ValueError(
-                f"{module.__class__.__name__} expected {num_states} states, "
-                f"but got {len(states)}."
-            )
-        original_attributes = [
-            memory_module.__dict__.copy() for memory_module, _ in layout
-        ]
-        offset = 0
-        for memory_module, names in layout:
-            values = states[offset : offset + len(names)]
-            temporary = dict(zip(names, values))
-            memory_module.__dict__["_memories"] = temporary
-            offset += len(names)
-
+        check_state_count(states)
+        original_states = extract_memories(module)
+        load_memories(module, list(states))
         try:
             outputs = forward_fn(*inputs, **kwargs)
             if isinstance(outputs, (tuple, list)):
                 outputs = tuple(outputs)
             else:
                 outputs = (outputs,)
-            updated_states = tuple(
-                memory_module._memories[name]
-                for memory_module, names in layout
-                for name in names
-            )
+            updated_states = tuple(extract_memories(module))
         finally:
-            for (memory_module, _), original in zip(layout, original_attributes):
-                memory_module.__dict__.clear()
-                memory_module.__dict__.update(original)
+            load_memories(module, original_states)
         return outputs, updated_states
 
     return fallback_forward

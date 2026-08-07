@@ -26,7 +26,7 @@ from spikingjelly.activation_based.memopt.compress import (
     NullSpikeCompressor,
     SparseSpikeCompressor,
 )
-from spikingjelly.activation_based import neuron
+from spikingjelly.activation_based import base, neuron
 
 
 def simple_forward_fn(x, weight, bias=None):
@@ -1242,6 +1242,62 @@ def test_tcgc_container():
     repr_str = container.extra_repr()
     assert "x_compressor=NullSpikeCompressor" in repr_str
     assert "n_chunk=4" in repr_str
+
+
+def test_tcgc_container_flat_multiple_inputs_states_outputs():
+    class PairLinear(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.left = nn.Linear(4, 4, bias=False)
+            self.right = nn.Linear(4, 4, bias=False)
+
+        def forward(self, x, y):
+            return self.left(x), self.right(y)
+
+    class PairAccumulator(base.MemoryModule):
+        def __init__(self):
+            super().__init__()
+            self.register_memory("left", 0.0)
+            self.register_memory("right", 0.0)
+            self.step_mode = "m"
+
+        def single_step_functional_forward(self, inputs, states, **kwargs):
+            left = states[0] + inputs[0]
+            right = states[1] + inputs[1]
+            return (left, right), (left, right)
+
+    layers = [PairLinear(), PairAccumulator()]
+    reference = GCContainer(None, *copy.deepcopy(layers))
+    chunked = TCGCContainer(
+        None,
+        *copy.deepcopy(layers),
+        n_chunk=3,
+        n_seq_inputs=2,
+        n_outputs=2,
+    )
+    x = torch.randn(6, 2, 4)
+    y = torch.randn(6, 2, 4)
+    x_reference = x.clone().requires_grad_()
+    y_reference = y.clone().requires_grad_()
+    x_chunked = x.clone().requires_grad_()
+    y_chunked = y.clone().requires_grad_()
+
+    reference_outputs = reference(x_reference, y_reference)
+    chunked_outputs = chunked(x_chunked, y_chunked)
+
+    for actual, expected in zip(chunked_outputs, reference_outputs):
+        torch.testing.assert_close(actual, expected)
+    for actual, expected in zip(
+        base.extract_memories(chunked), base.extract_memories(reference)
+    ):
+        torch.testing.assert_close(actual, expected)
+
+    sum(output.sum() for output in reference_outputs).backward()
+    sum(output.sum() for output in chunked_outputs).backward()
+    torch.testing.assert_close(x_chunked.grad, x_reference.grad)
+    torch.testing.assert_close(y_chunked.grad, y_reference.grad)
+    for actual, expected in zip(chunked.parameters(), reference.parameters()):
+        torch.testing.assert_close(actual.grad, expected.grad)
 
 
 def test_integration():

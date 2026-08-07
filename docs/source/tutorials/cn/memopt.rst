@@ -380,9 +380,9 @@ Step 1. 定义分割规则
     f_forward = base.to_functional_forward(neuron.LIFNode())
     outputs, updated_states = f_forward((x,), (v,))
 
-已实现 functional forward 的 MemoryModule 会直接执行显式状态转移；
-``nn.Sequential`` 会递归组合子模块；其他复合模块由通用路径处理。通用路径会临时
-换入显式状态，执行原有前向后再恢复模块状态，因此包含额外的状态替换开销。
+已实现 functional forward 的 MemoryModule 会直接执行显式状态转移；扁平的
+``nn.Sequential`` 使用 state cursor 组合直接子模块。其他复合模块由通用路径处理，
+通用路径会临时换入注册 memory，执行原有前向后再恢复这些 memory。
 
 Step 2. 显式声明压缩器（可选）
 ################################

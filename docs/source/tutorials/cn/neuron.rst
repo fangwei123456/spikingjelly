@@ -308,7 +308,7 @@ SpikingJelly 为修改神经元动力学和高性能执行提供了两类接口�
 ``SimpleBaseNode`` 没有原生 functional 状态转移。直接调用 ``functional_forward`` 会报错。
 对其实例调用
 :func:`to_functional_forward <spikingjelly.activation_based.base.to_functional_forward>`
-时，会通过通用 fallback 临时换入显式状态、执行原有前向并恢复模块状态。这能保持方程扩展
+时，会通过通用 fallback 临时换入显式注册 memory、执行原有前向并恢复这些 memory。这能保持方程扩展
 接口，但效率低于
 ``LIFNode`` 等原生 functional 神经元，因此不适合作为依赖频繁 functional 转换的高性能实现。
 

@@ -43,8 +43,8 @@ Modules: ``spikingjelly.activation_based.functional`` and
   modules while preserving regular stateful forward behavior.
 - Regular and functional forward paths now share state transitions, with optimized
   multi-step implementations retained where needed.
-- Functional conversion now covers native, composite, and user-defined modules,
-  while optional execution traces remain separate from recurrent state.
+- Functional conversion directly composes flat sequential modules and uses the
+  registered-memory interface as the fallback for other modules.
 
 ANN-to-SNN Conversion
 ^^^^^^^^^^^^^^^^^^^^^

@@ -479,6 +479,42 @@ def test_to_functional_forward_sequential_multiple_inputs_outputs_and_kwargs():
     torch.testing.assert_close(outputs[0], torch.tensor(11.0))
 
 
+def test_to_functional_forward_flat_sequential_uses_functional_states():
+    class Split(nn.Module):
+        def forward(self, x, y, *, scale=1.0):
+            return (x + y) * scale, x - y
+
+    class Accumulator(base.MemoryModule):
+        def __init__(self):
+            super().__init__()
+            self.register_memory("left", torch.tensor(10.0))
+            self.register_memory("right", torch.tensor(20.0))
+
+        def single_step_functional_forward(self, inputs, states, **kwargs):
+            left = states[0] + inputs[0]
+            right = states[1] + inputs[1]
+            return (left, right), (left, right)
+
+        def forward(self, *args, **kwargs):
+            raise AssertionError("stateful forward should not be used")
+
+    accumulator = Accumulator()
+    module = nn.Sequential(Split(), accumulator)
+    functional_forward = base.to_functional_forward(module)
+    outputs, states = functional_forward(
+        (torch.tensor(3.0), torch.tensor(2.0)),
+        (torch.tensor(1.0), torch.tensor(4.0)),
+        scale=2.0,
+    )
+
+    torch.testing.assert_close(outputs[0], torch.tensor(11.0))
+    torch.testing.assert_close(outputs[1], torch.tensor(5.0))
+    torch.testing.assert_close(states[0], torch.tensor(11.0))
+    torch.testing.assert_close(states[1], torch.tensor(5.0))
+    torch.testing.assert_close(accumulator.left, torch.tensor(10.0))
+    torch.testing.assert_close(accumulator.right, torch.tensor(20.0))
+
+
 def test_to_functional_forward_fallback_multiple_inputs_states_outputs_and_kwargs():
     class Accumulator(base.MemoryModule):
         def __init__(self):
@@ -524,27 +560,6 @@ def test_to_functional_forward_fallback_restores_state_after_error():
         functional_forward((torch.tensor(1.0),), (torch.tensor(3.0),))
 
     torch.testing.assert_close(module.state, torch.tensor(7.0))
-
-
-def test_to_functional_forward_fallback_restores_execution_traces():
-    class Composite(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.node = neuron.LIFNode(step_mode="m", store_v_seq=True)
-
-        def forward(self, x):
-            return self.node(x)
-
-    module = Composite()
-    original_v_seq = torch.tensor([7.0])
-    module.node.v_seq = original_v_seq
-    functional_forward = base.to_functional_forward(module)
-    x_seq = torch.randn(3, 2)
-
-    functional_forward((x_seq,), (torch.zeros(2),))
-
-    assert module.node.v_seq is original_v_seq
-    assert module.node.v == 0.0
 
 
 if __name__ == "__main__":
