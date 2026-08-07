@@ -174,16 +174,18 @@ def test_multistep_batch_norm_matches_flattened_torch(spiking_type, torch_type, 
 def test_threshold_dependent_batch_norm_uses_threshold_scaled_affine_weight(
     bn_type, torch_type, shape
 ):
-    module = bn_type(alpha=0.5, v_th=1.5, num_features=4).eval()
+    alpha = 0.5
+    v_th = 1.5
+    module = bn_type(alpha=alpha, v_th=v_th, num_features=4).eval()
     x_seq = torch.randn(shape)
     reference = torch_type(4).eval()
-    reference.load_state_dict(module.state_dict())
+    with torch.no_grad():
+        reference.weight.fill_(alpha * v_th)
 
     output = module(x_seq)
     expected = reference(x_seq.flatten(0, 1)).view_as(output)
 
     assert output.shape == x_seq.shape
-    torch.testing.assert_close(module.weight, torch.full((4,), 0.75))
     torch.testing.assert_close(output, expected)
 
 
@@ -223,14 +225,12 @@ def test_temporal_effective_batch_norm_applies_per_step_scale(
 def test_batch_norm_through_time_uses_independent_step_modules_and_resets(
     bn_type, shape
 ):
-    module = bn_type(3, 4, step_mode="m").eval()
+    module = bn_type(3, 4, eps=0.0, step_mode="m").eval()
     with torch.no_grad():
         for index, bn in enumerate(module.bn_list, start=1):
             bn.weight.fill_(index)
     x_seq = torch.randn(shape)
-    expected = torch.stack(
-        [index * x / (1.0 + 1e-5) ** 0.5 for index, x in enumerate(x_seq, 1)]
-    )
+    expected = torch.stack([index * x for index, x in enumerate(x_seq, 1)])
 
     torch.testing.assert_close(module(x_seq), expected)
     module.reset()

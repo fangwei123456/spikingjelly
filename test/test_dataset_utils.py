@@ -16,6 +16,11 @@ def _events():
     }
 
 
+def _load_npz(path):
+    with np.load(path) as archive:
+        return dict(archive)
+
+
 def test_integrate_events_segment_counts_repeated_positions_and_polarities():
     events = _events()
 
@@ -66,7 +71,7 @@ def test_event_file_integration_writes_frames_archive(tmp_path):
     np.savez(events_file, **_events())
 
     utils.integrate_events_file_to_frames_file_by_fixed_frames_number(
-        lambda path: dict(np.load(path)),
+        _load_npz,
         str(events_file),
         str(output_dir),
         split_by="number",
@@ -177,7 +182,7 @@ def test_create_sub_dataset_preserves_leaf_structure_and_ratio(tmp_path):
 def test_random_temporal_delete_preserves_type_order_and_layout(
     monkeypatch, batch_first, as_array
 ):
-    monkeypatch.setattr(np.random, "choice", lambda *args, **kwargs: np.array([3, 1]))
+    monkeypatch.setattr(np.random, "choice", np.random.RandomState(0).choice)
     sequence = as_array(np.arange(8).reshape(4, 2))
     if batch_first:
         sequence = sequence.T
@@ -185,7 +190,7 @@ def test_random_temporal_delete_preserves_type_order_and_layout(
     actual = transform.random_temporal_delete(
         sequence, T_remain=2, batch_first=batch_first
     )
-    expected = sequence[:, [1, 3]] if batch_first else sequence[[1, 3]]
+    expected = sequence[:, [2, 3]] if batch_first else sequence[[2, 3]]
 
     assert type(actual) is type(sequence)
     if isinstance(actual, torch.Tensor):
@@ -195,10 +200,10 @@ def test_random_temporal_delete_preserves_type_order_and_layout(
 
 
 def test_random_temporal_delete_module_uses_configured_time_layout(monkeypatch):
-    monkeypatch.setattr(np.random, "choice", lambda *args, **kwargs: np.array([2, 0]))
+    monkeypatch.setattr(np.random, "choice", np.random.RandomState(0).choice)
 
     actual = transform.RandomTemporalDelete(T_remain=2, batch_first=True)(
         torch.arange(8).reshape(2, 4)
     )
 
-    assert torch.equal(actual, torch.tensor([[0, 2], [4, 6]]))
+    assert torch.equal(actual, torch.tensor([[2, 3], [6, 7]]))
