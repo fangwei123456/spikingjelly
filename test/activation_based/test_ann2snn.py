@@ -2842,10 +2842,10 @@ class TestEndToEnd:
             out = out + snn(img)
         assert out.shape == (1, 10)
 
-    def test_snn_no_bn(self):
+    def test_snn_no_bn_with_fusion_enabled(self):
         model = SimpleCNNNoBN()
         model.eval()
-        converter = _rate_converter(mode="Max", fuse_flag=False)
+        converter = _rate_converter(mode="Max", fuse_flag=True)
         snn = converter.convert(model)
         out = snn(torch.randn(1, 1, 28, 28))
         assert out.shape == (1, 10)
