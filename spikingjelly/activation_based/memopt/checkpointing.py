@@ -7,6 +7,8 @@ import torch
 import torch.autograd as autograd
 import torch.nn as nn
 
+from spikingjelly.logger import logger
+
 from .. import base
 from .compress import BaseSpikeCompressor, NullSpikeCompressor
 
@@ -424,6 +426,15 @@ class GCContainer(nn.Sequential):
             self.stateless_forward if self.num_states == 0 else self.stateful_forward
         )
 
+    def __getstate__(self) -> dict:
+        state = super().__getstate__()
+        state.pop("f_forward")
+        return state
+
+    def __setstate__(self, state: dict) -> None:
+        super().__setstate__(state)
+        self.f_forward = base.to_functional_forward(self)
+
     def super_forward(self, *inputs: Any) -> Any:
         """
         The same as ``nn.Sequential.forward`` .
@@ -472,7 +483,7 @@ class TCGCContainer(GCContainer):
         n_seq_inputs: int = 1,
         n_outputs: int = 1,
     ):
-        """
+        r"""
         **API Language** - :ref:`中文 <TCGCContainer-cn>` | :ref:`English <TCGCContainer-en>`
 
         ----
@@ -488,7 +499,8 @@ class TCGCContainer(GCContainer):
 
         :param args: 传递给 ``nn.Sequential`` 的若干模块。必须以位置参数形式传入
 
-        :param n_chunk: 分块数量。默认为1。必须以关键字参数形式传入
+        :param n_chunk: 请求的时间分块数量。实际数量为 ``min(n_chunk, T)``；当
+            ``n_chunk > T`` 时会记录警告。默认为1。必须以关键字参数形式传入
         :type n_chunk: int
 
         :param n_seq_inputs: 需要分块处理的序列输入数量。默认为1。必须以关键字参数形式传入
@@ -510,7 +522,9 @@ class TCGCContainer(GCContainer):
 
         :param args: modules as arguments of ``nn.Sequential``. Must act as positional arguments
 
-        :param n_chunk: number of chunks. Default to 1. Must act as keyword arguments
+        :param n_chunk: requested number of temporal chunks. The actual number is
+            ``min(n_chunk, T)``; a warning is logged when ``n_chunk > T``. Defaults to
+            1. Must act as keyword arguments
         :type n_chunk: int
 
         :param n_seq_inputs: number of sequence inputs. Default to 1. Must act as keyword arguments
@@ -550,12 +564,20 @@ class TCGCContainer(GCContainer):
         self.n_outputs = n_outputs
 
     def forward(self, x_seq: torch.Tensor, *args):
-        n_chunk = min(self.n_chunk, x_seq.shape[0])  # n_chunk should not exceed T
+        n_chunk = min(self.n_chunk, x_seq.shape[0])
+        if n_chunk != self.n_chunk:
+            logger.warning(
+                "TCGCContainer received n_chunk=%d for sequence length T=%d; "
+                "using n_chunk=%d.",
+                self.n_chunk,
+                x_seq.shape[0],
+                n_chunk,
+            )
         seq_inputs = args[: self.n_seq_inputs - 1]
         other_inputs = args[self.n_seq_inputs - 1 :]
 
-        chunked = [torch.chunk(x_seq, n_chunk, dim=0)] + [
-            torch.chunk(seq, n_chunk, dim=0) for seq in seq_inputs
+        chunked = [torch.tensor_split(x_seq, n_chunk, dim=0)] + [
+            torch.tensor_split(seq, n_chunk, dim=0) for seq in seq_inputs
         ]
         outputs_per_chunk = [[] for _ in range(self.n_outputs)]
 

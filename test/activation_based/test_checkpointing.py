@@ -1,4 +1,7 @@
 import copy
+import logging
+import multiprocessing
+import pickle
 
 import pytest
 import torch
@@ -26,7 +29,7 @@ from spikingjelly.activation_based.memopt.compress import (
     NullSpikeCompressor,
     SparseSpikeCompressor,
 )
-from spikingjelly.activation_based import base, neuron
+from spikingjelly.activation_based import base, functional, neuron
 
 
 def simple_forward_fn(x, weight, bias=None):
@@ -52,6 +55,11 @@ class BinaryProject(nn.Module):
 class TargetBlock(nn.Module):
     def forward(self, x):
         return x + 1.0
+
+
+def _forward_gc_container(container: GCContainer, x: torch.Tensor) -> torch.Tensor:
+    with torch.no_grad():
+        return container(x)
 
 
 class ParameterizedTargetBlock(nn.Module):
@@ -1220,6 +1228,25 @@ def test_gc_container():
     assert isinstance(container_stateful[0], neuron.IFNode)
 
 
+def test_gc_container_deepcopy_pickle_spawn():
+    container = GCContainer(None, neuron.IFNode(step_mode="m"))
+    x_seq = torch.rand(4, 2, 3)
+
+    with torch.no_grad():
+        expected = container(x_seq)
+    functional.reset_net(container)
+
+    copied = copy.deepcopy(container)
+    restored = pickle.loads(pickle.dumps(container))
+    with multiprocessing.get_context("spawn").Pool(1) as pool:
+        spawned = pool.apply(_forward_gc_container, (container, x_seq))
+
+    with torch.no_grad():
+        torch.testing.assert_close(copied(x_seq), expected)
+        torch.testing.assert_close(restored(x_seq), expected)
+    torch.testing.assert_close(spawned, expected)
+
+
 def test_tcgc_container():
     """Test TCGCContainer module."""
     compressor = NullSpikeCompressor()
@@ -1242,6 +1269,38 @@ def test_tcgc_container():
     repr_str = container.extra_repr()
     assert "x_compressor=NullSpikeCompressor" in repr_str
     assert "n_chunk=4" in repr_str
+
+
+def test_tcgc_container_uneven_and_capped_chunks(caplog: pytest.LogCaptureFixture):
+    class RecordChunkLengths(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lengths = []
+
+        def forward(self, x):
+            self.lengths.append(x.shape[0])
+            return x
+
+    uneven_recorder = RecordChunkLengths()
+    uneven = TCGCContainer(None, uneven_recorder, n_chunk=3)
+    x = torch.randn(4, 2)
+    with torch.no_grad():
+        torch.testing.assert_close(uneven(x), x)
+    assert uneven_recorder.lengths == [2, 1, 1]
+
+    capped_recorder = RecordChunkLengths()
+    capped = TCGCContainer(None, capped_recorder, n_chunk=5)
+    x = torch.randn(3, 2)
+    with caplog.at_level(logging.WARNING, logger="spikingjelly"), torch.no_grad():
+        torch.testing.assert_close(capped(x), x)
+    assert capped_recorder.lengths == [1, 1, 1]
+    assert "n_chunk=5" in caplog.text
+    assert "T=3" in caplog.text
+    assert "using n_chunk=3" in caplog.text
+
+    empty = TCGCContainer(None, RecordChunkLengths(), n_chunk=3)
+    with pytest.raises(RuntimeError), torch.no_grad():
+        empty(torch.empty(0, 2))
 
 
 def test_tcgc_container_flat_multiple_inputs_states_outputs():

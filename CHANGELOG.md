@@ -107,6 +107,16 @@ Modules: `spikingjelly.activation_based.functional`,
 - Fixed time-last containers advancing stateful modules through stateless
   vectorization and preserved tuple outputs from sequence-to-ANN forwarding.
 
+#### Memory Optimization
+
+Module: `spikingjelly.activation_based.memopt`.
+
+- Fixed temporally chunked gradient checkpointing for sequence lengths that are
+  not divisible by the requested chunk count and warned when the count exceeds
+  the sequence length.
+- Restored deepcopy and multiprocessing spawn support for stateful gradient
+  checkpointing containers.
+
 #### Learning
 
 Module: `spikingjelly.activation_based.learning`.
