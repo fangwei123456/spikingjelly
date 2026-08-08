@@ -15,26 +15,22 @@ from torch.utils.data import TensorDataset
 
 from spikingjelly.activation_based import functional, layer, neuron
 from spikingjelly.activation_based.ann2snn.operators import TDLinear
-from spikingjelly.activation_based.functional import (
-    collect_reset_modules,
-    reset_collected_modules,
-)
 from spikingjelly.activation_based.distributed import (
-    DistributedFeatureSet,
     DTENSOR_AVAILABLE,
     FSDP2_AVAILABLE,
     PIPELINING_AVAILABLE,
+    TENSOR_PARALLEL_AVAILABLE,
+    ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE,
+    DistributedFeatureSet,
     SNNDistributedPlan,
     SNNDistributedRuntime,
     SNNDistributedTopology,
-    TENSOR_PARALLEL_AVAILABLE,
-    ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE,
-    make_tensor_shard_memory_module,
     analyze,
     apply,
     apply_pipeline_stage_memopt,
     build_snn_optimizer,
     ensure_distributed_initialized,
+    make_tensor_shard_memory_module,
     plan,
     recommend_pipeline_memopt_stages,
     recommend_snn_distributed_strategy,
@@ -47,6 +43,8 @@ from spikingjelly.activation_based.distributed.adapters import (
 )
 from spikingjelly.activation_based.distributed.analysis import (
     SNNDistributedAnalysis as CanonicalSNNDistributedAnalysis,
+)
+from spikingjelly.activation_based.distributed.analysis import (
     analyze_snn_distributed_capability,
 )
 from spikingjelly.activation_based.distributed.config import SNNDistributedConfig
@@ -57,16 +55,16 @@ from spikingjelly.activation_based.distributed.execution import (
     configure_snn_distributed,
 )
 from spikingjelly.activation_based.distributed.fsdp import apply_snn_fsdp2
+from spikingjelly.activation_based.distributed.mesh import (
+    resolve_data_parallel_partition,
+)
 from spikingjelly.activation_based.distributed.metrics import (
     PreparedModelOutput,
     prepare_classification_output,
 )
-from spikingjelly.activation_based.distributed.mesh import (
-    resolve_data_parallel_partition,
-)
 from spikingjelly.activation_based.distributed.pipeline.cifar10dvs_vgg import (
-    _CIFAR10DVSVGGPipelineStage,
     _build_cifar10dvs_vgg_pipeline_module,
+    _CIFAR10DVSVGGPipelineStage,
     configure_cifar10dvs_vgg_pipeline,
 )
 from spikingjelly.activation_based.distributed.pipeline.partition import (
@@ -74,10 +72,10 @@ from spikingjelly.activation_based.distributed.pipeline.partition import (
     resolve_pipeline_schedule_kind,
 )
 from spikingjelly.activation_based.distributed.pipeline.runtime import (
-    _MicrobatchResetStage,
+    SNNPipelineRuntime,
     _make_pipeline_outputs_contiguous,
     _measure_module_cost,
-    SNNPipelineRuntime,
+    _MicrobatchResetStage,
 )
 from spikingjelly.activation_based.distributed.pipeline.spikformer import (
     _build_spikformer_pipeline_module,
@@ -85,6 +83,8 @@ from spikingjelly.activation_based.distributed.pipeline.spikformer import (
 )
 from spikingjelly.activation_based.distributed.planner import (
     SNNDistributedRecommendation as CanonicalSNNDistributedRecommendation,
+)
+from spikingjelly.activation_based.distributed.planner import (
     recommended_pipeline_microbatches,
 )
 from spikingjelly.activation_based.distributed.tensor_parallel.channel import (
@@ -112,10 +112,13 @@ from spikingjelly.activation_based.distributed.tensor_parallel.spikformer import
     parallelize_spikformer_patch_stem,
 )
 from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
+from spikingjelly.activation_based.functional import (
+    collect_reset_modules,
+    reset_collected_modules,
+)
 from spikingjelly.activation_based.memopt.checkpointing import GCContainer
 from spikingjelly.activation_based.model.spikformer import spikformer_ti
 from test.activation_based._distributed_test_utils import single_rank_process_group
-
 
 _TRAIN_DISTRIBUTED_PATH = (
     Path(__file__).resolve().parents[2]

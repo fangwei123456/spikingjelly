@@ -1,6 +1,6 @@
+import sys
 from contextlib import nullcontext
 from datetime import timedelta
-import sys
 from types import SimpleNamespace
 
 import pytest

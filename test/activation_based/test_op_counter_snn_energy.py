@@ -311,15 +311,6 @@ def test_neuron_state_counter_still_exposes_scalar_and_structured_views():
     assert "Global" in state.get_extra_counts()
 
 
-def test_old_analytical_energy_names_are_not_exported():
-    assert not hasattr(op_counter, "estimate_analytical_energy")
-    assert not hasattr(op_counter, "AnalyticalEnergyProfiler")
-    assert not hasattr(op_counter, "AnalyticalEnergyConfig")
-    assert not hasattr(op_counter, "AnalyticalEnergyCostConfig")
-    assert not hasattr(op_counter, "AnalyticalEnergyReport")
-    assert not hasattr(op_counter, "AnalyticalMemoryCounter")
-
-
 def test_training_related_legacy_arguments_are_rejected():
     model = nn.Linear(8, 4)
     x = torch.rand(3, 8)

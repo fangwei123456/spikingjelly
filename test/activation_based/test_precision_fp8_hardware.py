@@ -15,7 +15,6 @@ from spikingjelly.activation_based.precision import (
     validate_capability,
 )
 
-
 FP8_MODES = ("fp8-torchao", "fp8-te")
 
 

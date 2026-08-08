@@ -1,7 +1,9 @@
 import torch
 
-from spikingjelly.activation_based import functional
+from spikingjelly.activation_based import functional, neuron
 from spikingjelly.activation_based.model import Spikformer, spikformer_ti
+from spikingjelly.activation_based.model.spiking_resnet import spiking_resnet18
+from spikingjelly.activation_based.model.spiking_vggws_ottt import ottt_spiking_vggws
 
 
 def _reset_net(net):
@@ -50,3 +52,30 @@ def test_spikformer_ti_factory_builds_trainable_model():
 
     assert y.shape == (2, 2, 7)
     assert any(p.grad is not None for p in model.parameters())
+
+
+def test_spiking_resnet_family_runs_multistep_forward_and_backward():
+    model = spiking_resnet18(
+        spiking_neuron=neuron.IFNode,
+        num_classes=5,
+        step_mode="m",
+    ).train()
+    functional.set_step_mode(model, "m")
+    x = torch.randn(1, 2, 3, 32, 32)
+
+    output = model(x)
+    output.sum().backward()
+
+    assert output.shape == (1, 2, 5)
+    assert model.conv1.weight.grad is not None
+
+
+def test_ottt_vgg_family_factory_runs_forward_and_backward():
+    model = ottt_spiking_vggws(num_classes=5).train()
+    x = torch.randn(1, 3, 32, 32)
+
+    output = model(x)
+    output.sum().backward()
+
+    assert output.shape == (1, 5)
+    assert model.features[0].weight.grad is not None

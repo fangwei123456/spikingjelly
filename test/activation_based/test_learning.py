@@ -440,19 +440,3 @@ def test_stdp_multi_step_preserves_empty_sequence_state():
     assert trace_pre_next is trace_pre
     assert trace_post_next is trace_post
     assert torch.equal(delta_w, torch.zeros_like(synapse.weight))
-
-
-if __name__ == "__main__":
-    test_stdp_learner_records_are_detached()
-    test_stdp_learner_step_does_not_retain_graph()
-    test_stdp_learner_matches_functional_update()
-    test_stdp_learner_frees_tensors_across_runs()
-    test_mstdp_learners_records_are_detached()
-    test_mstdp_learners_step_detaches_reward()
-    test_mstdp_learners_return_detached_delta_w()
-    test_mstdp_learners_free_tensors_with_graph_connected_reward()
-    test_functional_learning_linear_helpers_match_legacy_helpers()
-    test_functional_learning_conv_helpers_match_legacy_helpers()
-    test_mstdpet_reward_step_uses_explicit_tensor_state()
-    test_stdp_multi_step_preserves_empty_sequence_state()
-    print("Done!")

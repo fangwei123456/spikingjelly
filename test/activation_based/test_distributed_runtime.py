@@ -1,9 +1,9 @@
 # ruff: noqa: F401,F403,F405
-from test.activation_based._distributed_dtensor_test_support import *
 from spikingjelly.activation_based.distributed.pipeline.runtime import (
     _collect_resettable_modules,
     snn_sequence_cross_entropy,
 )
+from test.activation_based._distributed_dtensor_test_support import *
 
 
 def _runtime(model=None, *, mode="none", topology=None):

@@ -29,7 +29,6 @@ from typing import Mapping
 
 import pytest
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _BASELINE_SCRIPT = (
     _REPO_ROOT / "benchmark" / "snn_llm" / "gpt2_conversion" / "dense_baseline.py"

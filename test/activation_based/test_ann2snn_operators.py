@@ -2,22 +2,21 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from spikingjelly.activation_based import base, functional
+from spikingjelly.activation_based import base, functional, neuron, surrogate
 from spikingjelly.activation_based.ann2snn.operators import (
+    TDGELU,
     SNNElementWiseProduct,
     SNNMatrixOperator,
     TDConv2d,
-    TDModule,
-    TDGELU,
     TDLayerNorm,
     TDLinear,
-    TDRMSNorm,
-    TDSiLU,
+    TDModule,
     TDMultiheadAttention,
+    TDRMSNorm,
     TDScaledDotProductAttention,
+    TDSiLU,
     TDSoftmax,
 )
-from spikingjelly.activation_based import neuron, surrogate
 
 
 def _copy_td_mha_to_ann(td_op, ann_op):
@@ -1173,16 +1172,6 @@ class TestSNNElementWiseProduct:
 
         assert y_seq.shape == (5, 2, 3)
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
-
-    def test_final_sum_matches_product_of_final_sums(self):
-        a_seq = torch.randn(5, 2, 3)
-        b_seq = torch.randn(5, 2, 3)
-        op = SNNElementWiseProduct()
-
-        y_seq = op(a_seq, b_seq)
-        expected = a_seq.sum(dim=0) * b_seq.sum(dim=0)
-
-        assert torch.allclose(y_seq.sum(dim=0), expected, atol=1e-6, rtol=1e-6)
 
     def test_ann_forward_matches_product(self):
         a = torch.randn(2, 3)

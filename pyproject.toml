@@ -62,6 +62,7 @@ qwen = [
 [dependency-groups]
 dev = [
     "pytest",
+    "pytest-cov",
     "pydata-sphinx-theme>=0.16.1",
     "sphinx>=8.0.0,<9",
 ]
@@ -85,3 +86,20 @@ quote-style = "double"
 
 [tool.ruff.lint]
 ignore = ["E402", "E731", "E741", "F403"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["benchmark", "spikingjelly", "test"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["test"]
+
+[tool.coverage.run]
+branch = true
+omit = [
+    "*/examples/*",
+]
+source = ["spikingjelly"]
+
+[tool.coverage.report]
+show_missing = true

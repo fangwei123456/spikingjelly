@@ -1,14 +1,13 @@
 import torch
 import torch.nn as nn
 
-from spikingjelly.activation_based import neuron, op_counter, functional
-from spikingjelly.activation_based.model.sew_resnet import sew_resnet18
+from spikingjelly.activation_based import neuron, op_counter
+from test.activation_based._op_counter_test_utils import TinySNN
 
 
 def test_mac_basic():
-    net = sew_resnet18(cnf="ADD", spiking_neuron=neuron.LIFNode, detach_reset=True)
-    functional.set_step_mode(net, "m")
-    x = torch.randn(4, 8, 3, 224, 224)
+    net = TinySNN()
+    x = torch.randn(2, 2, 3, 8, 8)
 
     counter = op_counter.MACCounter()
     with op_counter.DispatchCounterMode([counter]):
@@ -115,9 +114,8 @@ def test_mac_ac_mutually_exclusive():
 
 
 def test_mac_ignore():
-    net = sew_resnet18(cnf="ADD", spiking_neuron=neuron.LIFNode, detach_reset=True)
-    functional.set_step_mode(net, "m")
-    x = torch.randn(4, 8, 3, 224, 224)
+    net = TinySNN()
+    x = torch.randn(2, 2, 3, 8, 8)
 
     counter_full = op_counter.MACCounter(extra_ignore_modules=[neuron.BaseNode])
     counter_no_bn = op_counter.MACCounter(
@@ -131,16 +129,4 @@ def test_mac_ignore():
 
     total_full = counter_full.get_total()
     total_no_bn = counter_no_bn.get_total()
-    print(
-        f"full MACs: {total_full}, without BatchNorm2d: {total_no_bn} ({total_no_bn / total_full * 100:.2f}%)"
-    )
     assert total_no_bn < total_full
-
-
-if __name__ == "__main__":
-    # test_mac_basic()
-    # test_mac_float_vs_spike()
-    # test_mac_bn_affine()
-    # test_mac_bn_running_stats()
-    # test_mac_ac_mutually_exclusive()
-    test_mac_ignore()

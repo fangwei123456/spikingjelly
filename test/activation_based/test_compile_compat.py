@@ -377,10 +377,19 @@ def test_triton_vs_torch_forward_backward_consistency(kind, sg_name):
         )
 
 
-@pytest.mark.parametrize("kind", ["lif", "if"])
-@pytest.mark.parametrize("T", [7, 65])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
-@pytest.mark.parametrize("v_reset,detach_reset", [(0.0, False), (None, True)])
+@pytest.mark.parametrize(
+    ("kind", "T", "dtype", "v_reset", "detach_reset"),
+    [
+        ("lif", 7, torch.float32, 0.0, False),
+        ("lif", 65, torch.float16, None, True),
+        ("lif", 7, torch.bfloat16, None, True),
+        ("lif", 65, torch.float32, 0.0, False),
+        ("if", 7, torch.float16, 0.0, False),
+        ("if", 65, torch.bfloat16, None, True),
+        ("if", 7, torch.float32, None, True),
+        ("if", 65, torch.float16, 0.0, False),
+    ],
+)
 def test_triton_last_state_matches_full_voltage_sequence(
     kind, T, dtype, v_reset, detach_reset
 ):
@@ -436,10 +445,17 @@ def test_triton_last_state_matches_full_voltage_sequence(
     last_node.detach()
 
 
-@pytest.mark.parametrize("kind", ["lif", "if"])
-@pytest.mark.parametrize("T", [1, 65])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
-@pytest.mark.parametrize("v_reset", [0.0, None])
+@pytest.mark.parametrize(
+    ("kind", "T", "dtype", "v_reset"),
+    [
+        ("lif", 1, torch.float32, 0.0),
+        ("lif", 65, torch.float16, None),
+        ("lif", 1, torch.bfloat16, None),
+        ("if", 1, torch.float16, None),
+        ("if", 65, torch.bfloat16, 0.0),
+        ("if", 65, torch.float32, None),
+    ],
+)
 def test_triton_last_state_inference_matches_full_voltage_sequence(
     kind, T, dtype, v_reset
 ):

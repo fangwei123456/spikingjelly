@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from spikingjelly.activation_based import op_counter, neuron
+from spikingjelly.activation_based import neuron, op_counter
 
 
 class ToyCLIFNode(neuron.BaseNode):

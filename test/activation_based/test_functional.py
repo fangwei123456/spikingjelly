@@ -7,17 +7,22 @@ import weakref
 import pytest
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from spikingjelly.activation_based import base, layer, neuron
 from spikingjelly.activation_based.functional import (
+    chunk_multi_step_forward,
     collect_reset_modules,
     invalidate_reset_cache,
+    kernel_dot_product,
     multi_step_forward,
     reset_collected_modules,
     reset_net,
     seq_to_ann_forward,
+    spike_similar_loss,
     t_last_multi_step_forward,
     t_last_seq_to_ann_forward,
+    temporal_efficient_training_cross_entropy,
 )
 from spikingjelly.activation_based.functional.net_config import _RESET_MODULE_CACHE
 
@@ -407,6 +412,71 @@ def test_multi_step_forward_supports_both_time_axes_and_module_lists():
         t_last_multi_step_forward(x_seq.movedim(0, -1), modules),
         expected.movedim(0, -1),
     )
+
+
+def test_chunk_multi_step_forward_matches_unsplit_forward():
+    module = nn.Linear(4, 3)
+    x_seq = torch.randn(7, 2, 4)
+    expected = module(x_seq)
+    chunk_sizes = []
+    module.register_forward_pre_hook(
+        lambda _module, inputs: chunk_sizes.append(inputs[0].shape[0])
+    )
+
+    actual = chunk_multi_step_forward(3, x_seq, module)
+
+    torch.testing.assert_close(actual, expected)
+    assert chunk_sizes == [3, 3, 1]
+
+
+@pytest.mark.parametrize(
+    ("kernel", "args"),
+    [("linear", ()), ("polynomial", (2,)), ("sigmoid", (0.5,)), ("gaussian", (1.5,))],
+)
+def test_kernel_dot_product_matches_direct_reference(kernel, args):
+    x = torch.tensor([[1.0, 2.0], [-1.0, 0.5]])
+    y = torch.tensor([[0.5, -2.0], [3.0, 1.0]])
+    dot = x @ y.T
+    if kernel == "linear":
+        expected = dot
+    elif kernel == "polynomial":
+        expected = dot.square()
+    elif kernel == "sigmoid":
+        expected = torch.sigmoid(0.5 * dot)
+    else:
+        expected = torch.exp(-torch.cdist(x, y).square() / (2 * 1.5**2))
+
+    torch.testing.assert_close(kernel_dot_product(x, y, kernel, *args), expected)
+
+
+def test_spike_similar_loss_matches_cosine_similarity_reference_and_backpropagates():
+    spikes = torch.tensor(
+        [[[1.0, 0.0]], [[0.25, 1.0]], [[1.0, 1.0]]], requires_grad=True
+    )
+    labels = torch.tensor([[1, 0], [0, 1], [1, 0]])
+    flat_spikes = spikes.flatten(start_dim=1)
+    similarity = flat_spikes @ flat_spikes.T
+    lengths = flat_spikes.norm(dim=1, keepdim=True)
+    similarity = similarity / (lengths @ lengths.T + 1e-8)
+    expected = F.mse_loss(similarity, (labels.float() @ labels.float().T).clamp_max(1))
+
+    actual = spike_similar_loss(spikes, labels)
+    actual.backward()
+
+    torch.testing.assert_close(actual, expected)
+    assert spikes.grad is not None
+
+
+def test_temporal_efficient_cross_entropy_matches_per_step_mean_and_gradient():
+    logits = torch.randn(4, 3, 5, requires_grad=True)
+    target = torch.tensor([0, 3, 1])
+    expected = torch.stack([F.cross_entropy(step, target) for step in logits]).mean()
+
+    actual = temporal_efficient_training_cross_entropy(logits, target)
+    actual.backward()
+
+    torch.testing.assert_close(actual, expected)
+    assert logits.grad is not None
 
 
 def test_t_last_multi_step_forward_preserves_contiguous_output_layout():

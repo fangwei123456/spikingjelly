@@ -1,11 +1,12 @@
+from types import SimpleNamespace
+
 import pytest
 import torch
 import torch.nn as nn
-from types import SimpleNamespace
+from torch.utils.data import TensorDataset
 
 from spikingjelly.activation_based import distributed as sjdist
 from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
-from torch.utils.data import TensorDataset
 from test.activation_based._distributed_dtensor_test_support import (
     _load_train_distributed_module,
     _train_args,

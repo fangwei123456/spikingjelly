@@ -1,26 +1,26 @@
+import pytest
 import torch
 import torch.nn as nn
-import pytest
 
-from spikingjelly.activation_based import neuron, layer, functional
-from spikingjelly.activation_based.memopt.pipeline import (
-    memory_optimization,
-    _dummy_input_to_device,
-    _probe_binary_inputs,
-    apply_gc,
-    _dummy_train_step,
-    get_module_and_parent,
-    _spatially_split_gc_container,
-    _temporally_split_gc_container,
-    _unwrap_gc_container,
-)
+from spikingjelly.activation_based import functional, layer, neuron
 from spikingjelly.activation_based.memopt.checkpointing import (
     GCContainer,
     TCGCContainer,
 )
 from spikingjelly.activation_based.memopt.compress import (
-    NullSpikeCompressor,
     BitSpikeCompressor,
+    NullSpikeCompressor,
+)
+from spikingjelly.activation_based.memopt.pipeline import (
+    _dummy_input_to_device,
+    _dummy_train_step,
+    _probe_binary_inputs,
+    _spatially_split_gc_container,
+    _temporally_split_gc_container,
+    _unwrap_gc_container,
+    apply_gc,
+    get_module_and_parent,
+    memory_optimization,
 )
 
 
@@ -248,7 +248,6 @@ def test_memory_optimization_level_1():
         dummy_input,
         level=1,
     )
-    print(optimized_net)
     gc_containers = [m for m in optimized_net.modules() if isinstance(m, GCContainer)]
     assert len(gc_containers) > 0
 
@@ -281,32 +280,9 @@ def test_memory_optimization_integration():
         level=4,
         compress_x=True,
     )
-    print(optimized_net)
-
     optimized_net = optimized_net.to("cuda")
     dummy_input = tuple(x.to("cuda") for x in dummy_input)
     optimized_net.eval()
     with torch.no_grad():
         output = optimized_net(*dummy_input)
         assert output.shape == (2, 4, 10)
-
-
-if __name__ == "__main__":
-    test_dummy_input_to_device()
-    test_probe_binary_inputs()
-    test_apply_gc()
-    test_apply_gc_with_compression()
-    test_apply_gc_without_compression()
-    test_dummy_train_step()
-    test_get_module_and_parent()
-    test_spatially_split_gc_container()
-    test_temporally_split_gc_container()
-    test_unwrap_gc_container()
-    test_memory_optimization_level_0()
-    test_memory_optimization_level_1()
-    test_memory_optimization_missing_dummy_input()
-
-    if torch.cuda.is_available():
-        test_memory_optimization_integration()
-
-    print("All tests passed!")

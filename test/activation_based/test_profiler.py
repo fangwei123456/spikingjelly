@@ -2,6 +2,7 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.optim as optim
+
 from spikingjelly.activation_based import functional, layer, neuron
 from spikingjelly.activation_based.profiler import (
     CategoryMemoryProfiler,
@@ -71,11 +72,12 @@ def test_hook_profiler_context_owns_hooks_once(tmp_path):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_context_manager_basic():
+def test_context_manager_basic(tmp_path):
     net = _create_test_model().cuda()
     optimizer = optim.Adam(net.parameters(), lr=0.001)
+    log_path = tmp_path / "category.prof.txt"
 
-    with CategoryMemoryProfiler((net,), (optimizer,), log_path="test.prof.txt") as prof:
+    with CategoryMemoryProfiler((net,), (optimizer,), log_path=log_path) as prof:
         x = torch.randn(5, 32, 1, 28, 28).cuda()
         y = net(x)
         loss = y.sum()
@@ -83,19 +85,22 @@ def test_context_manager_basic():
         optimizer.step()
         functional.reset_net(net)
         prof.export()
+    assert log_path.stat().st_size > 0
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_layer_wise_profiling():
+def test_layer_wise_profiling(tmp_path):
     net = _create_test_model().cuda()
+    log_path = tmp_path / "memory.prof.txt"
+    data_path = tmp_path / "memory.prof.pt"
     with LayerWiseMemoryProfiler(
         (net,),
         model_names=("test_net",),
         search_mode=("submodules",),
         instances=(nn.Module,),
         device="cuda",
-        log_path="test.prof.txt",
-        data_path="test.prof.pt",
+        log_path=log_path,
+        data_path=data_path,
     ) as prof:
         x = torch.randn(15, 6, 1, 28, 28).cuda()
         y = net(x)
@@ -103,18 +108,22 @@ def test_layer_wise_profiling():
         loss.backward()
         functional.reset_net(net)
     prof.export(output=True)
+    assert log_path.stat().st_size > 0
+    assert data_path.stat().st_size > 0
+    assert prof.hooks == []
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_time_profiling():
+def test_time_profiling(tmp_path):
     net = _create_test_model().cuda()
+    log_path = tmp_path / "time.prof.txt"
     with LayerWiseFPCUDATimeProfiler(
         (net,),
         model_names=("test_net",),
         search_mode=("submodules",),
         instances=(nn.Module,),
         warmup=5,
-        log_path="test.prof.txt",
+        log_path=log_path,
     ) as prof:
         net.eval()
         with torch.no_grad():
@@ -123,35 +132,25 @@ def test_time_profiling():
                 _ = net(x)
                 functional.reset_net(net)
     prof.export(output=True)
+    assert log_path.stat().st_size > 0
+    assert prof.hooks == []
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_exception_safety():
+def test_exception_safety(tmp_path):
     net = _create_test_model().cuda()
+    profiler = LayerWiseFPCUDATimeProfiler(
+        (net,),
+        model_names=("test_net",),
+        search_mode=("submodules",),
+        instances=(nn.Module,),
+        warmup=5,
+        log_path=tmp_path / "exception.prof.txt",
+    )
 
     with pytest.raises(RuntimeError):
-        with LayerWiseFPCUDATimeProfiler(
-            (net,),
-            model_names=("test_net",),
-            search_mode=("submodules",),
-            instances=(nn.Module,),
-            warmup=5,
-            log_path="test.prof.txt",
-        ) as prof:
+        with profiler:
             x = torch.randn(8, 32, 1, 28, 28).cuda()
-            y = net(x)
+            net(x)
             raise RuntimeError("Simulate an exception.")
-            loss = y.sum()
-            loss.backward()
-            print(f"len(prof.hooks)={len(prof.hooks)}")
-            assert len(prof.hooks) == 0
-
-
-if __name__ == "__main__":
-    if not torch.cuda.is_available():
-        exit(0)
-    test_context_manager_basic()
-    test_layer_wise_profiling()
-    test_time_profiling()
-    test_exception_safety()
-    print("Done!")
+    assert profiler.hooks == []

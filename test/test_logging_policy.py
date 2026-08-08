@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from spikingjelly.logger import logger
 from spikingjelly.activation_based.functional import net_config
 from spikingjelly.activation_based.op_counter.compute_energy import (
     ComputeEnergyProfiler,
 )
+from spikingjelly.logger import logger
 
 
 def test_package_logger_is_named_and_does_not_configure_root():

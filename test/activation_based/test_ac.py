@@ -1,14 +1,15 @@
 import torch
 import torch.nn as nn
 
-from spikingjelly.activation_based import neuron, op_counter, functional
+from spikingjelly.activation_based import functional, neuron, op_counter
 from spikingjelly.activation_based.model.sew_resnet import sew_resnet18
+from test.activation_based._op_counter_test_utils import TinySNN
 
 
 def test_ac_basic():
     net = sew_resnet18(cnf="ADD", spiking_neuron=neuron.LIFNode, detach_reset=True)
     functional.set_step_mode(net, "m")
-    x = torch.randn(4, 8, 3, 224, 224)
+    x = torch.randn(1, 2, 3, 32, 32)
 
     counter = op_counter.ACCounter()
     with op_counter.DispatchCounterMode([counter]):
@@ -42,7 +43,6 @@ def test_ac_covers_more_than_synop():
 
 
 def test_ac_spike_increases_total():
-    net = sew_resnet18(cnf="ADD", spiking_neuron=neuron.LIFNode, detach_reset=True)
     net = nn.Conv2d(3, 3, kernel_size=3, padding=1)
     all_zero = torch.zeros(8, 3, 224, 224)  # all-zero → no spike-driven ACs in conv
     all_one = torch.ones(8, 3, 224, 224)  # all-one → maximum spike-driven ACs
@@ -88,9 +88,8 @@ def test_ac_matmul_float_vs_spike():
 
 
 def test_ac_ignore():
-    net = sew_resnet18(cnf="ADD", spiking_neuron=neuron.LIFNode, detach_reset=True)
-    functional.set_step_mode(net, "m")
-    x = torch.randn(4, 8, 3, 224, 224)
+    net = TinySNN()
+    x = torch.randn(2, 2, 3, 8, 8)
 
     counter_full = op_counter.ACCounter(extra_ignore_modules=[neuron.BaseNode])
     counter_no_bn = op_counter.ACCounter(
@@ -104,16 +103,4 @@ def test_ac_ignore():
 
     total_full = counter_full.get_total()
     total_no_bn = counter_no_bn.get_total()
-    print(
-        f"full ACs: {total_full}, without BatchNorm2d: {total_no_bn} ({total_no_bn / total_full * 100:.2f}%)"
-    )
     assert total_no_bn < total_full
-
-
-if __name__ == "__main__":
-    test_ac_basic()
-    test_ac_covers_more_than_synop()
-    test_ac_spike_increases_total()
-    test_ac_element_wise_add()
-    test_ac_matmul_float_vs_spike()
-    test_ac_ignore()

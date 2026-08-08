@@ -1,6 +1,7 @@
 import pytest
 import torch
 import torch.nn as nn
+
 from spikingjelly.activation_based import layer, neuron, op_counter
 from spikingjelly.activation_based.op_counter.memory_residency import (
     MemoryResidencyCounter,

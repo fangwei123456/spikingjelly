@@ -1,7 +1,16 @@
+import pytest
 import torch
 
-from spikingjelly.activation_based import base
-from spikingjelly.activation_based.encoding import PopEncoder, PopSpikeEncoderRandom
+from spikingjelly.activation_based import base, functional
+from spikingjelly.activation_based.encoding import (
+    LatencyEncoder,
+    PeriodicEncoder,
+    PoissonEncoder,
+    PopEncoder,
+    PopSpikeEncoderDeterministic,
+    PopSpikeEncoderRandom,
+    WeightedPhaseEncoder,
+)
 from spikingjelly.activation_based.layer.attention import (
     MultiDimensionalAttention,
     QKAttention,
@@ -51,6 +60,71 @@ def test_random_population_encoder_matches_per_step_sampling_order():
     actual = encoder(obs)
 
     torch.testing.assert_close(actual, expected)
+
+
+def test_periodic_encoder_cycles_and_reset_restarts_sequence():
+    spike = torch.tensor([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
+    encoder = PeriodicEncoder(spike)
+
+    actual = torch.stack([encoder(spike), encoder(), encoder(), encoder()])
+
+    assert torch.equal(actual, spike[[0, 1, 2, 0]])
+    encoder.reset()
+    assert torch.equal(encoder(spike), spike[0])
+
+
+@pytest.mark.parametrize("enc_function", ["linear", "log"])
+def test_latency_encoder_places_boundary_values_at_first_and_last_step(
+    enc_function,
+):
+    encoder = LatencyEncoder(T=4, enc_function=enc_function)
+    x = torch.tensor([0.0, 1.0])
+
+    spike = torch.stack([encoder(x), encoder(), encoder(), encoder()])
+
+    assert torch.equal(spike.sum(dim=0), torch.ones_like(x))
+    assert torch.equal(spike[:, 0], torch.tensor([0.0, 0.0, 0.0, 1.0]))
+    assert torch.equal(spike[:, 1], torch.tensor([1.0, 0.0, 0.0, 0.0]))
+
+
+def test_poisson_encoder_has_deterministic_probability_boundaries():
+    x = torch.tensor([0.0, 1.0, 0.0, 1.0])
+
+    assert torch.equal(PoissonEncoder()(x), x)
+
+
+def test_weighted_phase_encoder_matches_binary_fraction_and_cycles():
+    encoder = WeightedPhaseEncoder(K=3)
+    x = torch.tensor([0.75, 0.125])
+    expected = torch.tensor([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
+
+    actual = torch.stack([encoder(x), encoder(), encoder(), encoder()])
+
+    assert torch.equal(actual[:3], expected)
+    assert torch.equal(actual[3], expected[0])
+
+
+def test_deterministic_population_encoder_is_binary_resettable_and_differentiable():
+    encoder = PopSpikeEncoderDeterministic(
+        obs_dim=2,
+        pop_dim=3,
+        spike_ts=4,
+        mean_range=(-1.0, 1.0),
+        std=0.5,
+    )
+    obs = torch.tensor([[0.0, 0.5]], requires_grad=True)
+
+    first = encoder(obs)
+    functional.reset_net(encoder)
+    second = encoder(obs)
+
+    assert first.shape == (4, 1, 6)
+    assert torch.equal(first, second)
+    assert set(first.unique().tolist()) <= {0.0, 1.0}
+    first.sum().backward()
+    assert obs.grad is not None
+    assert encoder.mean.grad is not None
+    assert encoder.std.grad is not None
 
 
 def test_multidimensional_attention_matches_the_direct_three_stage_equation():

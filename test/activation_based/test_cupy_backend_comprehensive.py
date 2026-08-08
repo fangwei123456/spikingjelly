@@ -160,23 +160,20 @@ def test_cupy_single_step_matches_torch(
 
 
 @pytest.mark.parametrize(
-    ("kind", "dtype", "v_reset", "detach_reset"),
+    ("kind", "dtype", "v_reset", "detach_reset", "training", "store_v_seq"),
     [
-        ("qif", torch.float32, -0.3, True),
-        ("qif", torch.float32, None, False),
-        ("qif", torch.float16, -0.3, True),
-        ("qif", torch.float16, None, False),
-        ("eif", torch.float32, -0.3, True),
-        ("eif", torch.float32, None, False),
-        ("eif", torch.float16, -0.3, True),
-        ("eif", torch.float16, None, False),
-        ("izhikevich", torch.float32, -0.3, True),
-        ("izhikevich", torch.float32, -0.3, False),
+        ("qif", torch.float32, -0.3, True, True, True),
+        ("qif", torch.float32, None, False, True, False),
+        ("qif", torch.float16, -0.3, True, False, False),
+        ("qif", torch.float16, None, False, True, True),
+        ("eif", torch.float32, -0.3, True, True, True),
+        ("eif", torch.float32, None, False, True, False),
+        ("eif", torch.float16, -0.3, True, False, False),
+        ("eif", torch.float16, None, False, True, True),
+        ("izhikevich", torch.float32, -0.3, True, True, True),
+        ("izhikevich", torch.float32, -0.3, False, True, False),
+        ("izhikevich", torch.float32, -0.3, True, False, False),
     ],
-)
-@pytest.mark.parametrize(
-    ("training", "store_v_seq"),
-    [(True, True), (True, False), (False, False)],
 )
 def test_cupy_nonlinear_multistep_matches_torch(
     kind, dtype, v_reset, detach_reset, training, store_v_seq

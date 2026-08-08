@@ -2921,7 +2921,7 @@ class LogTailedReLU(SurrogateFunctionBase):
             g'(x) =
             \begin{cases}
             \alpha, & x \leq 0 \\
-            1, & 0 < x \leq 0 \\
+            1, & 0 < x \leq 1 \\
             \frac{1}{x}, x > 1 \\
             \end{cases}
 
@@ -2931,8 +2931,8 @@ class LogTailedReLU(SurrogateFunctionBase):
             g(x) =
             \begin{cases}
             \alpha x, & x \leq 0 \\
-            x, & 0 < x \leq 0 \\
-            log(x), x > 1 \\
+            x, & 0 < x \leq 1 \\
+            log(x) + 1, x > 1 \\
             \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/LogTailedReLU.*
@@ -2947,6 +2947,9 @@ class LogTailedReLU(SurrogateFunctionBase):
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
         :type spiking: bool
 
+        :return: 替代函数的脉冲或原函数输出，形状与输入相同
+        :rtype: torch.Tensor
+
         ----
 
         .. _LogTailedReLU.__init__-en:
@@ -2959,7 +2962,7 @@ class LogTailedReLU(SurrogateFunctionBase):
             g'(x) =
             \begin{cases}
             \alpha, & x \leq 0 \\
-            1, & 0 < x \leq 0 \\
+            1, & 0 < x \leq 1 \\
             \frac{1}{x}, x > 1 \\
             \end{cases}
 
@@ -2969,8 +2972,8 @@ class LogTailedReLU(SurrogateFunctionBase):
             g(x) =
             \begin{cases}
             \alpha x, & x \leq 0 \\
-            x, & 0 < x \leq 0 \\
-            log(x), x > 1 \\
+            x, & 0 < x \leq 1 \\
+            log(x) + 1, x > 1 \\
             \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/LogTailedReLU.*
@@ -2985,7 +2988,9 @@ class LogTailedReLU(SurrogateFunctionBase):
             propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
             using the primitive function of the surrogate gradient function used in backward propagation
         :type spiking: bool
-        :return: 无返回值
+
+        :return: spike or primitive-function output with the same shape as the input
+        :rtype: torch.Tensor
         """
         super().__init__(spiking=spiking, alpha=alpha)
 
@@ -2995,9 +3000,11 @@ class LogTailedReLU(SurrogateFunctionBase):
 
     @staticmethod
     def primitive_function(x: torch.Tensor, alpha: float):
-        mask_ge1 = (x > 1.0).to(x)
-        y = (1.0 - mask_ge1) * F.leaky_relu(x, alpha) + mask_ge1 * (torch.log(x) + 1.0)
-        return y
+        return torch.where(
+            x > 1.0,
+            torch.log(torch.clamp_min(x, 1.0)) + 1.0,
+            F.leaky_relu(x, alpha),
+        )
 
     @staticmethod
     def backward(grad_output, x, alpha):

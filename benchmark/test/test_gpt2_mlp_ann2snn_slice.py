@@ -11,7 +11,6 @@ from pathlib import Path
 import pytest
 import torch
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _RUNNER = (
     _REPO_ROOT / "benchmark" / "snn_llm" / "gpt2_conversion" / "mlp_ann2snn_slice.py"

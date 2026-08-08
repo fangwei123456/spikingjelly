@@ -1,8 +1,8 @@
+import pytest
 import torch
 import torch.nn as nn
-import pytest
 
-from spikingjelly.activation_based import layer, functional, neuron, base
+from spikingjelly.activation_based import base, functional, layer, neuron
 
 
 def _create_test_model():
@@ -29,10 +29,9 @@ def test_named_memories():
     # Get named memories
     named_memory_list = list(base.named_memories(net))
     assert len(named_memory_list) == 3
-    for name, value in named_memory_list:
+    for name, _ in named_memory_list:
         assert isinstance(name, str)
         assert "v" in name
-        print(name, value)
 
 
 def test_named_memories_with_prefix():
@@ -43,9 +42,8 @@ def test_named_memories_with_prefix():
     named_memory_list = list(base.named_memories(net, prefix="test_model"))
 
     # Check that all names start with the prefix
-    for name, value in named_memory_list:
+    for name, _ in named_memory_list:
         assert name.startswith("test_model.")
-        print(name, value)
 
 
 def test_named_memories_nested():
@@ -560,20 +558,3 @@ def test_to_functional_forward_fallback_restores_state_after_error():
         functional_forward((torch.tensor(1.0),), (torch.tensor(3.0),))
 
     torch.testing.assert_close(module.state, torch.tensor(7.0))
-
-
-if __name__ == "__main__":
-    # Run individual tests
-    test_named_memories()
-    test_named_memories_with_prefix()
-    test_named_memories_nested()
-    test_memories()
-    test_extract_memories()
-    test_load_memories()
-    test_load_memories_length_mismatch()
-    test_to_functional_forward_stateless()
-    test_to_functional_forward_stateful()
-    test_to_functional_forward_nested_stateful()
-    test_to_functional_forward_state_restoration()
-    test_to_functional_forward_custom_fn()
-    print("All tests passed!")

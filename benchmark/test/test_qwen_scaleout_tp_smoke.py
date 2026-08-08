@@ -3,9 +3,8 @@ import json
 import pytest
 import torch
 
-from spikingjelly.activation_based.ann2snn.operators import TDLinear
-
 from benchmark.snn_llm.qwen_conversion import scaleout_tp_smoke as runner
+from spikingjelly.activation_based.ann2snn.operators import TDLinear
 
 
 def test_qwen_tp_mapping_scales_with_model_depth():
