@@ -1,4 +1,5 @@
 from collections import defaultdict
+from math import prod
 from typing import Any, Callable
 
 import torch
@@ -8,13 +9,6 @@ from .base import BaseCounter
 
 aten = torch.ops.aten
 __all__ = ["MACCounter"]
-
-
-def _prod(dims):
-    p = 1
-    for v in dims:
-        p *= v
-    return p
 
 
 def _is_spike(x: torch.Tensor) -> bool:
@@ -73,8 +67,8 @@ def _mac_convolution(args, _kwargs, out):
     spatial_shape = x.shape[2:] if transposed else out.shape[2:]
     c_out, c_in, *kernel_shape = w.shape
 
-    mac_per_position = c_in * _prod(kernel_shape)
-    return mac_per_position * _prod(spatial_shape) * c_out * b
+    mac_per_position = c_in * prod(kernel_shape)
+    return mac_per_position * prod(spatial_shape) * c_out * b
 
 
 def _mac_native_batch_norm(args, kwargs, out):

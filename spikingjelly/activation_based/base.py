@@ -1051,7 +1051,7 @@ class MemoryModule(nn.Module, StepModule):
         :return: a generator over all stateful variables
         :rtype: Generator
         """
-        for _, value in self._memories.items():
+        for value in self._memories.values():
             yield value
 
     def named_memories(self) -> Generator:
@@ -1253,7 +1253,7 @@ def extract_memories(module: nn.Module) -> list:
 
     :raises RecursionError: Raised if traversing the module tree exceeds Python recursion limits
     """
-    return [m for m in memories(module)]
+    return list(memories(module))
 
 
 def load_memories(module: nn.Module, memory_list: list):

@@ -296,7 +296,6 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         :return: a loader function that returns a single sample from a processed file
         :rtype: Callable
         """
-        pass
 
     def _run_preprocess_tasks(self, process: Callable, tasks) -> None:
         start = time.time()
@@ -1148,7 +1147,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             For example, this function returns ``(128, 128)`` for the DVS128 Gesture dataset.
         :rtype: Tuple[int]
         """
-        pass
 
     @classmethod
     @abc.abstractmethod
@@ -1175,7 +1173,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             i-th file's name, download link, and MD5 checksum.
         :rtype: list
         """
-        pass
 
     @classmethod
     @abc.abstractmethod
@@ -1202,7 +1199,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             If ``False``, users need to download it manually.
         :rtype: bool
         """
-        pass
 
     @classmethod
     @abc.abstractmethod
@@ -1241,7 +1237,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             the downloaded archives.
         :type extract_root: pathlib.Path
         """
-        pass
 
     @classmethod
     @abc.abstractmethod
@@ -1280,4 +1275,3 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             saved.
         :type raw_root: pathlib.Path
         """
-        pass

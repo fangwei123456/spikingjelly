@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from math import prod
 from typing import Any, Callable
 
 import torch
 import torch.nn as nn
 
 from .base_counter import NeuroMCBaseCounter
-from .utils import _prod
 
 aten = torch.ops.aten
 
@@ -20,7 +20,7 @@ def _cmp_element_wise(args, kwargs, out):
 def _cmp_max_pool2d_with_indices(args, kwargs, out):
     kernel_size = args[1]
     y = out[0]
-    return int(y.numel() * max(_prod(kernel_size) - 1, 0))
+    return int(y.numel() * max(prod(kernel_size) - 1, 0))
 
 
 class NeuroMCCmpCounter(NeuroMCBaseCounter):

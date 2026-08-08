@@ -9,7 +9,6 @@ def f_weight(x):
 
 
 torch.manual_seed(0)
-# plt.style.use(['science'])
 
 if __name__ == "__main__":
 

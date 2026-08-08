@@ -190,7 +190,6 @@ if __name__ == "__main__":
         loss.backward()
         optimizer.step()
 
-    # print(test_env(True))
     print("----------------------------")
     print("Complete")
 

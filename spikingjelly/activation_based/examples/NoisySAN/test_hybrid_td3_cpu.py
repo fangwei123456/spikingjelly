@@ -73,7 +73,6 @@ def test_mujoco_render(
     # Start testing
     o, d, ep_ret, ep_len = test_env.reset(), False, 0, 0
     while not (d or (ep_len == 1000)):
-        # test_env.render()
         with torch.no_grad():
             a = get_action(replay_buffer.normalize_obs(o))
         o, r, d, _ = test_env.step(a[0]) if len(a.shape) > 1 else test_env.step(a)

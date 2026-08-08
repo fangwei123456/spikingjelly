@@ -96,7 +96,6 @@ def test(env, net, n_episodes, cuda):
                 functional.reset_net(net)
 
                 if done:
-                    # print("Finished Episode {} with reward {}".format(episode, ep_reward))
                     total_reward += ep_reward
                     break
 

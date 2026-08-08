@@ -18,7 +18,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torchvision
 import torchvision.transforms as transforms
 
-from spikingjelly.activation_based import layer
+from spikingjelly.activation_based import functional, layer
 
 from tqdm import tqdm
 import math
@@ -292,9 +292,7 @@ class ResNet11(nn.Module):
         return out
 
     def reset_(self):
-        for item in self.modules():
-            if hasattr(item, "reset"):
-                item.reset()
+        functional.reset_net(self)
 
 
 def main():

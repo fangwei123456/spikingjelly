@@ -2,7 +2,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from spikingjelly.activation_based import base
+from spikingjelly.activation_based import base, layer
 from spikingjelly.activation_based.functional.online_learning import (
     fptt_online_training,
     fptt_online_training_init_w_ra,
@@ -15,6 +15,7 @@ from spikingjelly.activation_based.neuron.online_learning import (
     OTTTLIFNode,
     SLTTLIFNode,
 )
+from spikingjelly.activation_based.model.spiking_vggws_ottt import OTTTSpikingVGG
 
 
 def test_online_lif_nodes_share_spike_dynamics_and_reset_state():
@@ -39,6 +40,22 @@ def test_online_lif_nodes_share_spike_dynamics_and_reset_state():
     sltt.eval()
     for x in inputs:
         torch.testing.assert_close(ottt(x), sltt(x))
+
+
+def test_ottt_spiking_vgg_applies_requested_dropout_rate():
+    model = OTTTSpikingVGG(
+        cfg=[4],
+        num_classes=2,
+        init_weights=False,
+        spiking_neuron=OTTTLIFNode,
+        drop_rate=0.25,
+    )
+
+    dropouts = [
+        module for module in model.features if isinstance(module, layer.Dropout)
+    ]
+    assert len(dropouts) == 1
+    assert dropouts[0].p == 0.25
 
 
 @pytest.mark.parametrize("node_type", [OTTTLIFNode, SLTTLIFNode])

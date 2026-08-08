@@ -247,7 +247,7 @@ def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
             )
             for i in range(info.num_states)
         ]
-        return tuple([*output_seqs, *final_states])
+        return (*output_seqs, *final_states)
     grid = _make_grid(NCL)
 
     f[grid](
@@ -258,7 +258,7 @@ def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
         NCL=NCL,
         dtype=type_dict[dtype],
     )
-    return tuple([*output_seqs, *final_states])
+    return (*output_seqs, *final_states)
 
 
 def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:

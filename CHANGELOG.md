@@ -147,6 +147,8 @@ Module: `spikingjelly.activation_based.memopt`.
   the sequence length.
 - Restored deepcopy and multiprocessing spawn support for stateful gradient
   checkpointing containers.
+- Invalid local-rank environment variables now raise a clear error instead of
+  silently falling through to another CUDA device source.
 
 #### Learning
 
@@ -160,6 +162,12 @@ Module: `spikingjelly.activation_based.learning`.
 Module: `spikingjelly.activation_based.rnn`.
 
 - Fixed stacked spiking RNN final states and dropout placement.
+
+#### Models
+
+Module: `spikingjelly.activation_based.model.spiking_vggws_ottt`.
+
+- Fixed `OTTTSpikingVGG` ignoring its requested `drop_rate`.
 
 #### Triton Neuron Kernels
 
@@ -301,6 +309,8 @@ Module: `spikingjelly.activation_based.ann2snn`.
   `RateCodingRecipe` constructor arguments. Custom graph conversion behavior
   should be implemented as an `FXConversionRecipe`; `NeuronFactory` remains
   available for configuring neuron construction.
+- Removed the no-op `strict` argument from `SpikeZIPQANNRecipe`; it only
+  accepted the default value and did not select another behavior.
 
 #### Distributed API Changes
 
@@ -323,6 +333,16 @@ Module: `spikingjelly.activation_based.distributed`.
   `build_spikformer_eager_policy()` helpers. Use
   `configure_snn_distributed()` for manual eager configuration or the Analyze
   -> Plan -> Apply workflow.
+- Removed the unused `model_family` argument from `analyze()`; select a model
+  family when creating or applying a distributed plan.
+
+#### Learning API Changes
+
+Module: `spikingjelly.activation_based.learning`.
+
+- Removed the unused `tau_trace` argument from
+  `mstdpet_linear_single_step()`; eligibility traces are updated by
+  `MSTDPETLearner`.
 
 #### Operation-Counting API Changes
 
@@ -373,6 +393,8 @@ Module: `spikingjelly.activation_based.triton_kernel.neuron_kernel`.
 - Removed Pydantic from SpikingJelly's runtime and documentation dependencies
   after replacing its internal timing-based validation. Projects that use
   Pydantic directly must declare it as their own dependency.
+- Removed the unused `einops` dependency from the runtime, source, and
+  documentation dependency lists.
 
 ## 2.0.0.dev0 - 2026-07-09
 

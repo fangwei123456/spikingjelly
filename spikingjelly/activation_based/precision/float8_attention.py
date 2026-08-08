@@ -6,12 +6,6 @@ import torch
 import torch.nn as nn
 
 
-def _import_te_pytorch():
-    import transformer_engine.pytorch as te
-
-    return te
-
-
 class TransformerEngineDotProductAttentionAdapter(nn.Module):
     def __init__(
         self,
@@ -67,7 +61,8 @@ class TransformerEngineDotProductAttentionAdapter(nn.Module):
         :type attention_dropout: float
         """
         super().__init__()
-        te = _import_te_pytorch()
+        import transformer_engine.pytorch as te
+
         DotProductAttention = te.DotProductAttention
         self.wrapped = DotProductAttention(
             num_attention_heads=num_attention_heads,

@@ -30,6 +30,25 @@ def test_loaded_zero_noise_uses_the_same_cubalif_dynamics_as_evaluation():
     torch.testing.assert_close(training_node(x.clone()), evaluation_node(x.clone()))
 
 
+def test_dqn_agent_preprocesses_states_before_selecting_actions():
+    pytest.importorskip("gym")
+    from spikingjelly.activation_based.examples.DSQN.ptan.agent import DQNAgent
+
+    model = torch.nn.Identity()
+    model.model_name = "dqn"
+    agent = DQNAgent(
+        model,
+        action_selector=lambda scores: scores.argmax(axis=1),
+        device="cpu",
+        preprocessor=lambda states: torch.tensor(states),
+    )
+
+    actions, agent_states = agent([[0.0, 1.0]], [None])
+
+    assert actions.tolist() == [1]
+    assert agent_states == [None]
+
+
 def test_zero_recurrent_connection_reduces_ilc_node_to_cubalif_node():
     ilc = NoisyILCCUBALIFNode(
         act_dim=2,

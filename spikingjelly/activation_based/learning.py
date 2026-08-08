@@ -228,7 +228,6 @@ def mstdpet_linear_single_step(
     trace_post: Union[float, torch.Tensor, None],
     tau_pre: float,
     tau_post: float,
-    tau_trace: float,
     f_pre: Callable = lambda x: x,
     f_post: Callable = lambda x: x,
 ):
@@ -257,8 +256,6 @@ def mstdpet_linear_single_step(
     :type tau_pre: float
     :param tau_post: post trace 的时间常数
     :type tau_post: float
-    :param tau_trace: eligibility trace 的时间常数
-    :type tau_trace: float
     :param f_pre: pre 分支的权重调制函数
     :type f_pre: Callable
     :param f_post: post 分支的权重调制函数
@@ -289,8 +286,6 @@ def mstdpet_linear_single_step(
     :type tau_pre: float
     :param tau_post: Time constant of the post trace
     :type tau_post: float
-    :param tau_trace: Time constant of the eligibility trace
-    :type tau_trace: float
     :param f_pre: Weight modulation function for the pre branch
     :type f_pre: Callable
     :param f_post: Weight modulation function for the post branch
@@ -979,6 +974,7 @@ class MSTDPLearner(base.MemoryModule):
 
         self.register_memory("trace_pre", None)
         self.register_memory("trace_post", None)
+        self.register_memory("eligibility", None)
 
     def reset(self):
         r"""
@@ -1116,25 +1112,18 @@ class MSTDPLearner(base.MemoryModule):
 
         if self.step_mode == "s":
             if isinstance(self.synapse, nn.Conv2d):
-                # stdp_f = mstdp_conv2d_single_step
                 raise NotImplementedError(self.synapse)
             elif isinstance(self.synapse, nn.Linear):
                 stdp_f = mstdp_linear_single_step
             else:
                 raise NotImplementedError(self.synapse)
         elif self.step_mode == "m":
-            if isinstance(self.synapse, nn.Conv2d) or isinstance(
-                self.synapse, nn.Linear
-            ):
-                # stdp_f = mstdp_multi_step
-                raise NotImplementedError(self.synapse)
-            else:
-                raise NotImplementedError(self.synapse)
+            raise NotImplementedError(self.synapse)
         else:
             raise ValueError(self.step_mode)
 
         for _ in range(length):
-            if not hasattr(self, "eligibility"):
+            if self.eligibility is None:
                 self.eligibility = torch.zeros(
                     self.batch_size,
                     *self.synapse.weight.shape,
@@ -1258,6 +1247,7 @@ class MSTDPETLearner(base.MemoryModule):
         self.register_memory("trace_pre", None)
         self.register_memory("trace_post", None)
         self.register_memory("trace_e", None)
+        self.register_memory("eligibility", None)
 
     def reset(self):
         r"""
@@ -1396,25 +1386,18 @@ class MSTDPETLearner(base.MemoryModule):
 
         if self.step_mode == "s":
             if isinstance(self.synapse, nn.Conv2d):
-                # stdp_f = mstdpet_conv2d_single_step
                 raise NotImplementedError(self.synapse)
             elif isinstance(self.synapse, nn.Linear):
                 stdp_f = mstdpet_linear_single_step
             else:
                 raise NotImplementedError(self.synapse)
         elif self.step_mode == "m":
-            if isinstance(self.synapse, nn.Conv2d) or isinstance(
-                self.synapse, nn.Linear
-            ):
-                # stdp_f = mstdpet_multi_step
-                raise NotImplementedError(self.synapse)
-            else:
-                raise NotImplementedError(self.synapse)
+            raise NotImplementedError(self.synapse)
         else:
             raise ValueError(self.step_mode)
 
         for _ in range(length):
-            if not hasattr(self, "eligibility"):
+            if self.eligibility is None:
                 self.eligibility = torch.zeros_like(self.synapse.weight)
             if self.trace_e is None:
                 self.trace_e = torch.zeros_like(self.synapse.weight)
@@ -1441,7 +1424,6 @@ class MSTDPETLearner(base.MemoryModule):
                 self.trace_post,
                 self.tau_pre,
                 self.tau_post,
-                self.tau_trace,
                 self.f_pre,
                 self.f_post,
             )

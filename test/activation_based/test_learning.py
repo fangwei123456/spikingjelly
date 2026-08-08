@@ -319,7 +319,7 @@ def test_functional_learning_linear_helpers_match_legacy_helpers():
         assert torch.allclose(a, b)
 
     expected = learning.mstdpet_linear_single_step(
-        fc, in_spike[0], out_spike[0], None, None, 2.0, 3.0, 5.0, f_weight, f_weight
+        fc, in_spike[0], out_spike[0], None, None, 2.0, 3.0, f_weight, f_weight
     )
     eligibility, (trace_pre, trace_post) = functional.mstdpet_linear_step(
         in_spike[0],

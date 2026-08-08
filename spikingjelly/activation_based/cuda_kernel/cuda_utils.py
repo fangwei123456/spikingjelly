@@ -48,24 +48,21 @@ def _scalar_to_cupy(py_dict: dict, ref: str):
                 py_dict[key] = _as_cupy_int32(value, key)
 
 
-try:
-    _CUSTOM_OP_AVAILABLE = all(
-        hasattr(torch.library, name)
-        for name in ("custom_op", "register_fake", "register_autograd")
-    )
-except Exception:
-    _CUSTOM_OP_AVAILABLE = False
-
-
-def env_flag_enabled(var_name: str) -> bool:
-    v = os.getenv(var_name)
-    if v is None:
-        return True
-    return v.strip().lower() not in ("0", "false", "off", "no")
+_CUSTOM_OP_AVAILABLE = all(
+    hasattr(torch.library, name)
+    for name in ("custom_op", "register_fake", "register_autograd")
+)
 
 
 def use_cupy_custom_op() -> bool:
-    return _CUSTOM_OP_AVAILABLE and env_flag_enabled("SJ_USE_CUPY_OP")
+    return _CUSTOM_OP_AVAILABLE and os.getenv(
+        "SJ_USE_CUPY_OP", "1"
+    ).strip().lower() not in (
+        "0",
+        "false",
+        "off",
+        "no",
+    )
 
 
 _PYOBJ_LOCK = threading.Lock()

@@ -14,22 +14,6 @@ __all__ = [
 ]
 
 
-_TRAIN_PACK_CONV_TYPES = (
-    nn.Conv1d,
-    nn.Conv2d,
-    nn.Conv3d,
-    layer.Conv1d,
-    layer.Conv2d,
-    layer.Conv3d,
-)
-_TRAIN_PACK_BN_TYPES = (
-    nn.BatchNorm1d,
-    nn.BatchNorm2d,
-    nn.BatchNorm3d,
-    layer.BatchNorm1d,
-    layer.BatchNorm2d,
-    layer.BatchNorm3d,
-)
 _CONV_BN_PATTERNS = [
     (layer.Conv1d, layer.BatchNorm1d),
     (layer.Conv2d, layer.BatchNorm2d),
@@ -133,10 +117,6 @@ class _EvalFusionTracer(fx.Tracer):
         return super().is_leaf_module(m, module_qualified_name)
 
 
-class _TrainPackTracer(_EvalFusionTracer):
-    pass
-
-
 class _TrainConvBnWrapper(nn.Module):
     def __init__(self, conv: nn.Module, bn: nn.Module):
         super().__init__()
@@ -176,9 +156,7 @@ class _TrainConvBnWrapper(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         if (
-            isinstance(self.conv, _TRAIN_PACK_CONV_TYPES)
-            and isinstance(self.bn, _TRAIN_PACK_BN_TYPES)
-            and getattr(self.conv, "step_mode", "m") == "m"
+            getattr(self.conv, "step_mode", "m") == "m"
             and getattr(self.bn, "step_mode", "m") == "m"
             and self._expects_multistep_input(x)
         ):
@@ -310,7 +288,7 @@ def pack_conv_bn_train_modules(net: nn.Module) -> fx.GraphModule:
     if not net.training:
         raise ValueError("pack_conv_bn_train_modules only supports train() models.")
 
-    tracer = _TrainPackTracer()
+    tracer = _EvalFusionTracer()
     graph = tracer.trace(net)
     fx_model = fx.GraphModule(tracer.root, graph)
     modules = dict(fx_model.named_modules())

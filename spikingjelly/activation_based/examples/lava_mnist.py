@@ -68,7 +68,7 @@ class MNISTNet(nn.Module):
     def to_lava(self):
         ret = []
 
-        for i in range(self.conv_fc.__len__()):
+        for i in range(len(self.conv_fc)):
             m = self.conv_fc[i]
             if isinstance(m, lava_exchange.BlockContainer):
                 ret.append(m.to_lava_block())

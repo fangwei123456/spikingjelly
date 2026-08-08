@@ -112,7 +112,6 @@ class BaseProfiler(abc.ABC):
 
         Export profiling results.
         """
-        pass
 
     @abc.abstractmethod
     def close(self):
@@ -250,7 +249,7 @@ class CategoryMemoryProfiler(BaseProfiler):
                 for param in group["params"]:
                     if param in optimizer.state:
                         state = optimizer.state[param]
-                        for key, value in state.items():
+                        for value in state.values():
                             if torch.is_tensor(value) and value.is_cuda:
                                 nbytes = value.element_size() * value.numel()
                                 memory_usage["optimizer_state"] += nbytes

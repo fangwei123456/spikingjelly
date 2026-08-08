@@ -101,7 +101,7 @@ Pipeline parallelism 被单独处理，因为它需要 ``example_input`` 来构�
         torch.tensor([0, 1, 2, 3]),
     )
 
-    analysis = sjdist.analyze(model, model_family="cifar10dvs_vgg")
+    analysis = sjdist.analyze(model)
     plan = sjdist.plan(
         analysis=analysis,
         objective="memory",

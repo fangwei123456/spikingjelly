@@ -9,7 +9,7 @@ import torch
 import torchvision
 from tqdm import tqdm
 
-from spikingjelly.activation_based import ann2snn
+from spikingjelly.activation_based import ann2snn, functional
 from spikingjelly.activation_based.ann2snn.sample_models import mnist_cnn
 
 
@@ -47,7 +47,6 @@ def val(net, device, data_loader, T=None):
     total = 0.0
     if T is not None:
         corrects = np.zeros(T)
-        reset_modules = [m for m in net.modules() if hasattr(m, "reset")]
     with torch.no_grad():
         for batch, (img, label) in enumerate(tqdm(data_loader)):
             img = img.to(device, non_blocking=True)
@@ -56,8 +55,7 @@ def val(net, device, data_loader, T=None):
                 out = net(img)
                 correct += (out.argmax(dim=1) == label).float().sum().item()
             else:
-                for m in reset_modules:
-                    m.reset()
+                functional.reset_net(net)
                 out = None
                 for t in range(T):
                     step = net(img)

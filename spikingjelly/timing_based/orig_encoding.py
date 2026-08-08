@@ -27,9 +27,6 @@ class GaussianTuning:
             (1 / 1.5 * (x_max - x_min) / (m - 2)).unsqueeze(-1).square().repeat(1, m)
         )  # shape=[n, m]
 
-        # print('mu\n', self.mu)
-        # print('sigma2\n', self.sigma2)
-
     def encode(self, x: torch.Tensor, max_spike_time=50):
         """
         :param x: shape=[batch_size, n, k]，batch_size个数据，每个数据含有n个特征，每个特征中有k个数据

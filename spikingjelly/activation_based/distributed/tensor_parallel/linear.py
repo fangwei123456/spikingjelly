@@ -168,15 +168,6 @@ def _is_colwise_local_style(style: Union[str, "ParallelStyle"]) -> bool:
     return False
 
 
-def _replace_module_by_name(module: nn.Module, module_name: str, new_module: nn.Module):
-    parent_name, _, child_name = module_name.rpartition(".")
-    parent = module if not parent_name else module.get_submodule(parent_name)
-    if isinstance(parent, (nn.Sequential, nn.ModuleList)) and child_name.isdigit():
-        parent[int(child_name)] = new_module
-    else:
-        setattr(parent, child_name, new_module)
-
-
 def auto_build_tensor_parallel_plan(
     module: nn.Module,
     tensor_parallel_roots: Optional[Sequence[str]] = None,

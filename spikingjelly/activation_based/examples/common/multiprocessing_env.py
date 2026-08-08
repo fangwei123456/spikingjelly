@@ -48,7 +48,6 @@ class VecEnv(object):
         be cancelled and step_wait() should not be called
         until step_async() is invoked again.
         """
-        pass
 
     def step_async(self, actions):
         """
@@ -58,7 +57,6 @@ class VecEnv(object):
         You should not call this if a step_async run is
         already pending.
         """
-        pass
 
     def step_wait(self):
         """
@@ -71,13 +69,11 @@ class VecEnv(object):
         - ``dones``: an array of "episode done" booleans
         - ``infos``: a sequence of info objects
         """
-        pass
 
     def close(self):
         """
         Clean up the environments' resources.
         """
-        pass
 
     def step(self, actions):
         self.step_async(actions)

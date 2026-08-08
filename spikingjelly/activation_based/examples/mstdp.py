@@ -4,7 +4,6 @@ from spikingjelly.activation_based import neuron, layer, learning
 from matplotlib import pyplot as plt
 
 torch.manual_seed(0)
-# plt.style.use(['science'])
 
 if __name__ == "__main__":
 

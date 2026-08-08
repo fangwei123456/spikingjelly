@@ -4,6 +4,7 @@ import re
 from collections import defaultdict, deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from math import prod
 from typing import Any, Callable, Optional
 
 import torch
@@ -11,8 +12,9 @@ import torch.nn as nn
 from torch.overrides import resolve_name
 from torch.utils._python_dispatch import TorchDispatchMode
 
+from ..base import call_model
 from .config import MemoryHierarchyConfig, MemoryInstanceSpec
-from .utils import _is_spike, _prod
+from .utils import _is_spike
 
 __all__ = [
     "MemoryHierarchyConfig",
@@ -356,7 +358,7 @@ def _module_overlap_signature(fragment: _Fragment) -> tuple[Any, ...]:
 
 def _tensor_numel(x: Any) -> int:
     if isinstance(x, _TraceTensor):
-        return _prod(x.shape)
+        return prod(x.shape)
     if not torch.is_tensor(x):
         return 0
     return int(x.numel())
@@ -432,12 +434,6 @@ def _optimizer_param_count(fragment: _Fragment) -> int:
     return fragment.loop_dims["K"] + (
         fragment.loop_dims["FX"] * fragment.loop_dims["FY"] * fragment.loop_dims["C"]
     )
-
-
-def _call_model(model: nn.Module, inputs):
-    if isinstance(inputs, (tuple, list)):
-        return model(*inputs)
-    return model(inputs)
 
 
 def _clear_existing_grads(model: nn.Module, optimizer: torch.optim.Optimizer | None):
@@ -837,7 +833,7 @@ class NeuroMCEnergyProfiler:
     ) -> _Fragment:
         is_spike_input = _is_spike_like(x)
         t, batch, c, spatial = _tensor_layout(x, module)
-        spatial_prod = max(_prod(spatial), 1) if spatial else 1
+        spatial_prod = max(prod(spatial), 1) if spatial else 1
         loop_dims = self._make_loop_dims(
             batch_size=batch,
             time_steps=t,
@@ -874,7 +870,7 @@ class NeuroMCEnergyProfiler:
         out_tensor = out[0] if isinstance(out, (tuple, list)) else out
         if torch.is_tensor(out_tensor):
             t, batch, c, spatial = _tensor_layout(out_tensor, module)
-            spatial_prod = max(_prod(spatial), 1) if spatial else 1
+            spatial_prod = max(prod(spatial), 1) if spatial else 1
         else:
             t, batch, c, spatial_prod = 1, 1, 1, 1
         loop_dims = self._make_loop_dims(
@@ -1055,7 +1051,7 @@ class NeuroMCEnergyProfiler:
             else grad_out
         )
         t, batch, c, spatial = _tensor_layout(grad_out, module)
-        spatial_prod = max(_prod(spatial), 1) if spatial else 1
+        spatial_prod = max(prod(spatial), 1) if spatial else 1
         conv_type = self._stage_conv_type(stage)
         loop_dims = self._make_loop_dims(
             batch_size=batch,
@@ -1096,7 +1092,7 @@ class NeuroMCEnergyProfiler:
         )
         tensor = grad_in if torch.is_tensor(grad_in) else grad_out
         t, batch, c, spatial = _tensor_layout(tensor, module)
-        spatial_prod = max(_prod(spatial), 1) if spatial else 1
+        spatial_prod = max(prod(spatial), 1) if spatial else 1
         loop_dims = self._make_loop_dims(
             batch_size=batch,
             time_steps=t,
@@ -1775,7 +1771,7 @@ class NeuroMCEnergyProfiler:
                     "opt_w_updated": ("FYFXKC", 32, "reg_32b", "sram_6MB"),
                 }
 
-        for _, (count_key, bits_per_elem, reg_name, sram_name) in variables.items():
+        for count_key, bits_per_elem, _, sram_name in variables.values():
             total_bits = scalar_counts[count_key] * bits_per_elem
             sram_spec = cfg[sram_name]
             self._accumulate_memory(
@@ -1927,15 +1923,6 @@ class NeuroMCEnergyProfiler:
             "common SGD (nesterov=False, dampening=0, maximize=False); "
             f"got {type(self._optimizer).__name__}."
         )
-
-    def _optimizer_fragment(self, stage: str) -> _Fragment:
-        fragments = self._optimizer_fragments(stage)
-        if len(fragments) != 1:
-            raise RuntimeError(
-                "Optimizer expands to multiple NeuroMC fragments; use "
-                "_optimizer_fragments() instead."
-            )
-        return fragments[0]
 
     def get_report(self) -> NeuroMCRuntimeEnergyReport:
         fragments = list(self._fragments)
@@ -2223,7 +2210,7 @@ def estimate_neuromc_runtime_energy(
 
     with profiler:
         with profiler.stage("forward"):
-            output = _call_model(model, inputs)
+            output = call_model(model, inputs)
         loss = None
         if loss_fn is not None:
             with profiler.suspend():

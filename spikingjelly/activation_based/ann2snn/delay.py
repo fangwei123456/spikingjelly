@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import time
 import warnings
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import Dict, Iterable, List, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -13,18 +13,13 @@ from spikingjelly.activation_based.ann2snn.modules import (
     ChannelVoltageScaler,
     VoltageScaler,
 )
+from spikingjelly.activation_based.functional.net_config import reset_net
 from spikingjelly.activation_based.neuron.base_node import BaseNode
 from spikingjelly.logger import logger
 
 
 Scaler = Union[VoltageScaler, ChannelVoltageScaler]
 _MIN_READOUT_STEPS = 4
-
-
-def _reset_snn(model: nn.Module) -> None:
-    for module in model.modules():
-        if hasattr(module, "reset"):
-            module.reset()
 
 
 def _extract_batch_input(batch):
@@ -44,18 +39,6 @@ def _as_runtime_tensor(value, x: torch.Tensor) -> torch.Tensor:
     return torch.as_tensor(value, device=x.device, dtype=x.dtype)
 
 
-def _scale_view(scaler: Scaler, x: torch.Tensor) -> torch.Tensor:
-    if isinstance(scaler, ChannelVoltageScaler):
-        return scaler._view_scale(x).to(device=x.device, dtype=x.dtype)
-    return scaler.scale.to(device=x.device, dtype=x.dtype)
-
-
-def _channel_dim(scaler: Scaler) -> Optional[int]:
-    if isinstance(scaler, ChannelVoltageScaler):
-        return scaler.channel_dim
-    return None
-
-
 def _compute_delay_ratio(
     module: BaseNode,
     post_scaler: Scaler,
@@ -67,21 +50,22 @@ def _compute_delay_ratio(
     if not torch.isfinite(v_threshold).all() or (v_threshold <= 0).any():
         raise ValueError("Delay estimation requires finite positive v_threshold.")
 
-    try:
-        v_init = module.get_reset_value("v")
-    except (KeyError, AttributeError):
-        v_init = getattr(module, "v_reset", 0.0)
+    v_init = module.get_reset_value("v")
     if v_init is None:
         v_init = 0.0
     v_init = _as_runtime_tensor(v_init, x)
 
-    scale = _scale_view(post_scaler, x)
+    if isinstance(post_scaler, ChannelVoltageScaler):
+        scale = post_scaler._view_scale(x).to(device=x.device, dtype=x.dtype)
+        channel_dim = post_scaler.channel_dim
+    else:
+        scale = post_scaler.scale.to(device=x.device, dtype=x.dtype)
+        channel_dim = None
     x_nonnegative = torch.clamp(x.detach(), min=0)
     original_activation = x_nonnegative * scale / v_threshold
     required_charge = torch.clamp(v_threshold - v_init, min=0)
     original_required_charge = required_charge * scale / v_threshold
 
-    channel_dim = _channel_dim(post_scaler)
     if channel_dim is None or scale.dim() == 0:
         max_mean_activation = original_activation.mean()
         reduced_required_charge = original_required_charge.mean()
@@ -254,7 +238,7 @@ def estimate_delay_start(
         for module, post_scaler in paths:
             handles.append(module.register_forward_hook(make_hook(module, post_scaler)))
 
-        _reset_snn(model)
+        reset_net(model)
         with torch.no_grad():
             for batch_idx, batch in enumerate(dataloader):
                 if batch_idx >= num_batches:
@@ -262,7 +246,7 @@ def estimate_delay_start(
                 x = _extract_batch_input(batch)
                 if not isinstance(x, torch.Tensor):
                     raise TypeError("The extracted model input must be a tensor.")
-                _reset_snn(model)
+                reset_net(model)
                 model(x.to(device, non_blocking=True))
                 processed_batches += 1
         delay = 0.0
@@ -279,7 +263,7 @@ def estimate_delay_start(
     finally:
         for handle in handles:
             handle.remove()
-        _reset_snn(model)
+        reset_net(model)
         if original_device is not None:
             model.to(original_device)
         for module, training in original_training_modes.items():

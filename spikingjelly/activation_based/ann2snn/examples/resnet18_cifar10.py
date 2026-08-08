@@ -4,6 +4,7 @@ import torch
 import torchvision
 from tqdm import tqdm
 import spikingjelly.activation_based.ann2snn as ann2snn
+import spikingjelly.activation_based.functional as functional
 from spikingjelly.activation_based.ann2snn.sample_models import cifar10_resnet
 
 
@@ -11,7 +12,6 @@ def val(net, device, data_loader, T=None):
     net.eval().to(device)
     if T is not None and T <= 0:
         raise ValueError(f"T must be positive, got {T}.")
-    reset_modules = None
     correct = 0.0
     total = 0.0
     with torch.no_grad():
@@ -21,10 +21,7 @@ def val(net, device, data_loader, T=None):
             if T is None:
                 out = net(img)
             else:
-                if reset_modules is None:
-                    reset_modules = [m for m in net.modules() if hasattr(m, "reset")]
-                for m in reset_modules:
-                    m.reset()
+                functional.reset_net(net)
                 out = net(img)
                 for t in range(1, T):
                     out += net(img)

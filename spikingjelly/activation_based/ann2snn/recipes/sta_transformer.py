@@ -16,7 +16,10 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDMultiheadAttention,
     _td_module_from_ann,
 )
-from spikingjelly.activation_based.ann2snn.recipes.base import ConversionRecipe
+from spikingjelly.activation_based.ann2snn.recipes.base import (
+    ConversionRecipe,
+    replace_submodule,
+)
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
     _TRANSFORMER_SAFE_MODULE_TYPES,
     adapt_step_mode_graph,
@@ -215,12 +218,6 @@ class _STASpikeEncoder(base.MemoryModule):
             mem = torch.zeros_like(x)
         return (mem,)
 
-    @staticmethod
-    def _broadcast_threshold(
-        threshold: torch.Tensor, output: torch.Tensor, channel_dim: int
-    ) -> torch.Tensor:
-        return _broadcast_channel_vector(threshold, output, channel_dim)
-
     def single_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
@@ -228,16 +225,13 @@ class _STASpikeEncoder(base.MemoryModule):
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x = inputs[0]
-        threshold = self._broadcast_threshold(self.v_threshold, x, self.channel_dim)
+        threshold = _broadcast_channel_vector(self.v_threshold, x, self.channel_dim)
         threshold = torch.clamp(threshold, min=torch.finfo(threshold.dtype).eps)
         mem = states[0]
         mem = mem + x
         spike_count = torch.trunc(mem / threshold)
         spike = spike_count * threshold
         return (spike,), (mem - spike,)
-
-    def _reset_sta_state(self) -> None:
-        self.reset()
 
     def extra_repr(self) -> str:
         return f"channel_dim={self.channel_dim}, step_mode={self.step_mode}"
@@ -649,7 +643,7 @@ class STATransformerRecipe(ConversionRecipe):
             if not isinstance(module, (nn.Linear, nn.Conv2d)):
                 continue
             replacement = _td_module_from_ann(module)
-            self._replace_submodule(fx_model, node.target, replacement)
+            replace_submodule(fx_model, node.target, replacement)
             modules[node.target] = replacement
 
         self._wrap_time_constants(fx_model)
@@ -659,11 +653,7 @@ class STATransformerRecipe(ConversionRecipe):
                 continue
             module = modules.get(node.target)
             threshold = None
-            if isinstance(module, nn.LayerNorm):
-                observer = self._observers.get(node.target)
-                threshold = self._compute_scaled_threshold(observer)
-                replacement = _td_module_from_ann(module)
-            elif isinstance(module, nn.GELU):
+            if isinstance(module, (nn.LayerNorm, nn.GELU)):
                 observer = self._observers.get(node.target)
                 threshold = self._compute_scaled_threshold(observer)
                 replacement = _td_module_from_ann(module)
@@ -674,7 +664,7 @@ class STATransformerRecipe(ConversionRecipe):
                 replacement = _make_td_multihead_attention(module)
             else:
                 continue
-            self._replace_submodule(fx_model, node.target, replacement)
+            replace_submodule(fx_model, node.target, replacement)
             modules[node.target] = replacement
             if threshold is not None:
                 if isinstance(replacement, TDMultiheadAttention):
@@ -847,14 +837,6 @@ class STATransformerRecipe(ConversionRecipe):
                 for key, v in value.items()
             }
         return value
-
-    @staticmethod
-    def _replace_submodule(
-        fx_model: torch.fx.GraphModule, target: str, module: nn.Module
-    ) -> None:
-        parent_name, _, child_name = target.rpartition(".")
-        parent = fx_model.get_submodule(parent_name) if parent_name else fx_model
-        setattr(parent, child_name, module)
 
     @staticmethod
     def _get_attr_value(fx_model: fx.GraphModule, target: str) -> Any:

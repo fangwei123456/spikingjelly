@@ -3,13 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from spikingjelly.activation_based import rnn
-
-# from torch.utils.tensorboard import SummaryWriter
-# import sys
-# if sys.platform != 'win32':
-#     import readline
-# import torchvision
-# import tqdm
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
@@ -27,9 +20,6 @@ import math
 if __name__ == "__main__":
     all_letters = string.ascii_letters + " .,;'-"
     n_letters = len(all_letters)
-
-    def findFiles(path):
-        return glob.glob(path)
 
     # Turn a Unicode string to plain ASCII, thanks to http://stackoverflow.com/a/518232/2809427
     def unicodeToAscii(s):
@@ -49,22 +39,13 @@ if __name__ == "__main__":
     all_categories = []
 
     # Ubuntu
-    for filename in findFiles(
-        "./data/names/*.txt"
-    ):  # Windows findFiles('.\data\\names\*.txt')
+    for filename in glob.glob("./data/names/*.txt"):
         category = filename.split("/")[-1].split(".")[
             0
         ]  # Windows filename.split('\\')[-1].split('.')[0]
         all_categories.append(category)
         lines = readLines(filename)
         category_lines[category] = lines
-
-    # Windows
-    # for filename in findFiles('.\data\\names\*.txt'):  # Windows findFiles('.\data\\names\*.txt')
-    #     category = filename.split('\\')[-1].split('.')[0]  # Windows filename.split('\\')[-1].split('.')[0]
-    #     all_categories.append(category)
-    #     lines = readLines(filename)
-    #     category_lines[category] = lines
 
     n_categories = len(all_categories)
 
@@ -147,7 +128,6 @@ if __name__ == "__main__":
             self.n_out = n_categories
             self.lstm = rnn.SpikingLSTM(self.n_input, self.n_hidden, 1)
             self.fc = nn.Linear(self.n_hidden, self.n_out)
-            # self.softmax = nn.LogSoftmax()
 
         def forward(self, x):
             x, _ = self.lstm(x)
@@ -161,9 +141,7 @@ if __name__ == "__main__":
 
     IF_TRAIN = 0
     TRAIN_EPISODES = 1000000  # 100000
-    # TEST_EPISODES = 50
 
-    # print_every = 5000
     plot_every = 1000
     learning_rate = 1e-4  # 0.001  # 0.005 # If you set this too high, it might explode. If too low, it might not learn
 
@@ -176,7 +154,6 @@ if __name__ == "__main__":
         correct_num = 0
         avg_losses = []
         accuracy_rec = []
-        # all_losses = []
         test_accu_rec = []
         start = time.time()
         for epoch in range(1, TRAIN_EPISODES + 1):
@@ -186,14 +163,11 @@ if __name__ == "__main__":
 
             optimizer.zero_grad()
             out_prob_log = net(line_tensor)
-            # loss = nn.NLLLoss(out_prob_log, category_tensor)
             loss = F.mse_loss(out_prob_log, label_one_hot)
             loss.backward()
             optimizer.step()
 
             current_loss += loss.data.item()
-            # all_losses.append(loss.data.item())
-
             guess, _ = categoryFromOutput(out_prob_log.data)
             if guess == category:
                 correct_num += 1
@@ -237,9 +211,6 @@ if __name__ == "__main__":
         np.save("test_accu_rec.npy", np.array(test_accu_rec))
         np.save("category_lines_train.npy", category_lines_train, allow_pickle=True)
         np.save("category_lines_test.npy", category_lines_test, allow_pickle=True)
-        # x = np.load('category_lines_test.npy', allow_pickle=True)
-        # xdict = x.item()
-
         plt.figure()
         plt.subplot(311)
         plt.plot(avg_losses)
@@ -332,7 +303,6 @@ if __name__ == "__main__":
         # Force label at every tick
         ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
         ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
-        # sphinx_gallery_thumbnail_number = 2
         plt.show()
         plt.savefig("ConfusionMatrix.svg")
         plt.close()

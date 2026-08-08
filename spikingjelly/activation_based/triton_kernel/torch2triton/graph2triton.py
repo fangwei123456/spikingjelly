@@ -1,20 +1,22 @@
-from spikingjelly.logger import logger
-from typing import Optional, Tuple
+import contextlib
 import errno
+import hashlib
 import importlib.util
 import linecache
 import os
 from pathlib import Path
-import hashlib
 import re
 import stat
 import sys
 import tempfile
 import threading
 import types
+from typing import Optional, Tuple
 
 import torch
 import torch.fx as fx
+
+from spikingjelly.logger import logger
 
 try:
     import triton
@@ -89,10 +91,8 @@ def _codegen_cache_dir() -> Path:
 def _resolve_codegen_cache_dir() -> Path:
     candidates = []
     uid = getattr(os, "getuid", lambda: None)()
-    try:
+    with contextlib.suppress(RuntimeError):
         candidates.append(Path.home() / ".spikingjelly" / "triton_codegen")
-    except RuntimeError:
-        pass
     temp_suffix = f"_{uid}" if uid is not None else ""
     candidates.append(
         Path(tempfile.gettempdir()) / f"spikingjelly_triton_codegen{temp_suffix}"
@@ -104,10 +104,8 @@ def _resolve_codegen_cache_dir() -> Path:
             if uid is not None:
                 st = cache_dir.stat()
                 if st.st_uid == uid:
-                    try:
+                    with contextlib.suppress(OSError):
                         os.chmod(cache_dir, 0o700)
-                    except OSError:
-                        pass
                     st = cache_dir.stat()
                 mode = stat.S_IMODE(st.st_mode)
                 if st.st_uid != uid or not (mode & stat.S_IWUSR) or (mode & 0o077):
@@ -467,16 +465,12 @@ def compile_triton_code_str(
                 tmp_path = Path(tmp_file.name)
                 tmp_file.write(triton_code)
             os.replace(tmp_path, fpath)
-            try:
+            with contextlib.suppress(OSError):
                 os.chmod(fpath, 0o600)
-            except OSError:
-                pass
         except Exception:
             if tmp_path is not None:
-                try:
+                with contextlib.suppress(FileNotFoundError):
                     tmp_path.unlink()
-                except FileNotFoundError:
-                    pass
             raise
     action = "written to" if needs_write else "loaded from cache"
     logger.debug("Triton code `%s` %s %s", kernel_name, action, fpath)

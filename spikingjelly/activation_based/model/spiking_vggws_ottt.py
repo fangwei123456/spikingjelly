@@ -6,7 +6,6 @@ from .. import layer, neuron
 
 __all__ = [
     "OTTTSpikingVGG",
-    "ottt_spiking_vggws",
     "ottt_spiking_vgg11",
     "ottt_spiking_vgg11_ws",
     "ottt_spiking_vgg13",
@@ -15,6 +14,7 @@ __all__ = [
     "ottt_spiking_vgg16_ws",
     "ottt_spiking_vgg19",
     "ottt_spiking_vgg19_ws",
+    "ottt_spiking_vggws",
 ]
 
 # modified by https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py
@@ -105,7 +105,7 @@ class OTTTSpikingVGG(nn.Module):
             cfg=cfg,
             weight_standardization=weight_standardization,
             neuron=spiking_neuron,
-            drop_rate=0.0,
+            drop_rate=drop_rate,
             **kwargs,
         )
         if light_classifier:
@@ -228,16 +228,13 @@ cfgs = {
 }
 
 
-def _spiking_vgg(
-    arch, cfg, weight_standardization, spiking_neuron: callable = None, **kwargs
-):
-    model = OTTTSpikingVGG(
+def _spiking_vgg(cfg, weight_standardization, spiking_neuron, **kwargs):
+    return OTTTSpikingVGG(
         cfg=cfgs[cfg],
         weight_standardization=weight_standardization,
         spiking_neuron=spiking_neuron,
         **kwargs,
     )
-    return model
 
 
 def ottt_spiking_vggws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
@@ -275,9 +272,7 @@ def ottt_spiking_vggws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     :rtype: torch.nn.Module
     """
 
-    return _spiking_vgg(
-        "vggws", "S", True, spiking_neuron, light_classifier=True, **kwargs
-    )
+    return _spiking_vgg("S", True, spiking_neuron, light_classifier=True, **kwargs)
 
 
 def ottt_spiking_vgg11(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
@@ -315,9 +310,7 @@ def ottt_spiking_vgg11(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     :rtype: torch.nn.Module
     """
 
-    return _spiking_vgg(
-        "vgg11", "A", False, spiking_neuron, light_classifier=False, **kwargs
-    )
+    return _spiking_vgg("A", False, spiking_neuron, light_classifier=False, **kwargs)
 
 
 def ottt_spiking_vgg11_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
@@ -355,9 +348,7 @@ def ottt_spiking_vgg11_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
     :rtype: torch.nn.Module
     """
 
-    return _spiking_vgg(
-        "vgg11_ws", "A", True, spiking_neuron, light_classifier=False, **kwargs
-    )
+    return _spiking_vgg("A", True, spiking_neuron, light_classifier=False, **kwargs)
 
 
 def ottt_spiking_vgg13(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
@@ -395,9 +386,7 @@ def ottt_spiking_vgg13(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     :rtype: torch.nn.Module
     """
 
-    return _spiking_vgg(
-        "vgg13", "B", False, spiking_neuron, light_classifier=False, **kwargs
-    )
+    return _spiking_vgg("B", False, spiking_neuron, light_classifier=False, **kwargs)
 
 
 def ottt_spiking_vgg13_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
@@ -435,9 +424,7 @@ def ottt_spiking_vgg13_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
     :rtype: torch.nn.Module
     """
 
-    return _spiking_vgg(
-        "vgg13_ws", "B", True, spiking_neuron, light_classifier=False, **kwargs
-    )
+    return _spiking_vgg("B", True, spiking_neuron, light_classifier=False, **kwargs)
 
 
 def ottt_spiking_vgg16(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
@@ -475,9 +462,7 @@ def ottt_spiking_vgg16(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     :rtype: torch.nn.Module
     """
 
-    return _spiking_vgg(
-        "vgg16", "D", False, spiking_neuron, light_classifier=False, **kwargs
-    )
+    return _spiking_vgg("D", False, spiking_neuron, light_classifier=False, **kwargs)
 
 
 def ottt_spiking_vgg16_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
@@ -515,9 +500,7 @@ def ottt_spiking_vgg16_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
     :rtype: torch.nn.Module
     """
 
-    return _spiking_vgg(
-        "vgg16_ws", "D", True, spiking_neuron, light_classifier=False, **kwargs
-    )
+    return _spiking_vgg("D", True, spiking_neuron, light_classifier=False, **kwargs)
 
 
 def ottt_spiking_vgg19(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
@@ -555,9 +538,7 @@ def ottt_spiking_vgg19(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
     :rtype: torch.nn.Module
     """
 
-    return _spiking_vgg(
-        "vgg19", "E", False, spiking_neuron, light_classifier=False, **kwargs
-    )
+    return _spiking_vgg("E", False, spiking_neuron, light_classifier=False, **kwargs)
 
 
 def ottt_spiking_vgg19_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
@@ -595,6 +576,4 @@ def ottt_spiking_vgg19_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
     :rtype: torch.nn.Module
     """
 
-    return _spiking_vgg(
-        "vgg19_ws", "E", True, spiking_neuron, light_classifier=False, **kwargs
-    )
+    return _spiking_vgg("E", True, spiking_neuron, light_classifier=False, **kwargs)

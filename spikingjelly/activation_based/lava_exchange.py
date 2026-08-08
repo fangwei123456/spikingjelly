@@ -531,9 +531,6 @@ class CubaLIFNode(neuron.BaseNode):
         # self.w_scale = int(scale)
         # self.s_scale = int(scale * (1<<6))
 
-        self._v_threshold = int(v_threshold * self.scale) / self.scale
-        # ``_v_threshold`` is the nearest and no more than ``k / scale`` to ``v_threshold`` where ``k`` is an ``int``
-
         self.v_threshold_eps = 0.01 / self.s_scale
         # loihi use s[t] = v[t] > v_th, but we use s[t] = v[t] >= v_th. Thus, we use v[t] + eps >= v_th to approximate
 
@@ -724,8 +721,7 @@ class CubaLIFNode(neuron.BaseNode):
             current_state.contiguous(),
             self.s_scale,
         )
-        if self.norm is not None:
-            current_state = self.norm(current_state)
+        current_state = self.norm(current_state)
         voltage_state = LeakyIntegratorStep.apply(
             current_state,
             step_quantize(voltage_decay),
@@ -1129,7 +1125,7 @@ try:
                                       |-> {iDecay, vDecay, vThMant, refDelay, ... (other additional params)}
         """
         blocks = []
-        length = net.__len__()
+        length = len(net)
         i = 0
         k = None
         while True:

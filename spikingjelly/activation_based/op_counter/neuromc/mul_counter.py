@@ -6,25 +6,11 @@ import torch
 import torch.nn as nn
 
 from .base_counter import NeuroMCBaseCounter
-from .utils import _is_spike, _prod
+from .utils import _conv_mul_add, _is_spike
 
 aten = torch.ops.aten
 
 __all__ = ["NeuroMCMulCounter"]
-
-
-def _conv_mul_add(args, out):
-    x, w, bias = args[:3]
-    groups = args[8] if len(args) > 8 else 1
-    c_in_per_group = x.shape[1] // groups
-    kernel_prod = _prod(w.shape[2:])
-    mul_per_out = c_in_per_group * kernel_prod
-    out_numel = out.numel()
-    mul = out_numel * mul_per_out
-    add = out_numel * max(mul_per_out - 1, 0)
-    if bias is not None:
-        add += out_numel
-    return int(mul), int(add)
 
 
 def _mul_mm(args, kwargs, out):

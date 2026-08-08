@@ -3,10 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from spikingjelly.activation_based import rnn
 from torch.utils.tensorboard import SummaryWriter
-import sys
-
-if sys.platform != "win32":
-    pass
 import torchvision
 import tqdm
 
@@ -73,7 +69,6 @@ def main():
     # 使用Adam优化器
     optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
     train_times = 0
-    max_test_accuracy = 0
     for epoch in range(train_epoch):
         net.train()
         for img, label in tqdm.tqdm(train_data_loader):
@@ -120,20 +115,13 @@ def main():
                 test_sum += label.numel()
             test_accuracy = correct_sum / test_sum
             writer.add_scalar("test_accuracy", test_accuracy, epoch)
-            # if max_test_accuracy < test_accuracy:
-            #     max_test_accuracy = test_accuracy
-            #     print('saving net...')
-            #     torch.save(net, log_dir + '/net_max_acc.pt')
-            #     print('saved')
-
         print(
-            "device={}, dataset_dir={}, batch_size={}, learning_rate={}, log_dir={}, max_test_accuracy={}, train_times={}".format(
+            "device={}, dataset_dir={}, batch_size={}, learning_rate={}, log_dir={}, train_times={}".format(
                 device,
                 dataset_dir,
                 batch_size,
                 learning_rate,
                 log_dir,
-                max_test_accuracy,
                 train_times,
             )
         )

@@ -622,7 +622,6 @@ class FlexSNKernel:
             example_inputs=example_inputs,
         )
         self._core = core
-        self._core_requires_grad = _core_requires_grad(core)
         self.f_fwd, self.f_bwd, self.info = build_training_kernels(
             core,
             num_inputs,
@@ -661,7 +660,6 @@ class FlexSNKernel:
 
         shared_runtime_keys = {
             "_core",
-            "_core_requires_grad",
             "f_inf",
             "f_fwd",
             "f_bwd",

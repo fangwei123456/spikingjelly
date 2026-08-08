@@ -94,8 +94,6 @@ class FashionMNISTNet(MNISTNet):
     :type kwargs: dict
     """
 
-    pass
-
 
 class NMNISTNet(MNISTNet):
     def __init__(self, channels=128, spiking_neuron: callable = None, **kwargs):
@@ -161,7 +159,7 @@ class CIFAR10Net(nn.Module):
         conv = []
         for i in range(2):
             for j in range(3):
-                if conv.__len__() == 0:
+                if not conv:
                     in_channels = 3
                 else:
                     in_channels = channels
@@ -217,7 +215,7 @@ class CIFAR10DVSNet(nn.Module):
 
         conv = []
         for i in range(4):
-            if conv.__len__() == 0:
+            if not conv:
                 in_channels = 2
             else:
                 in_channels = channels
@@ -272,7 +270,7 @@ class DVSGestureNet(nn.Module):
 
         conv = []
         for i in range(5):
-            if conv.__len__() == 0:
+            if not conv:
                 in_channels = 2
             else:
                 in_channels = channels

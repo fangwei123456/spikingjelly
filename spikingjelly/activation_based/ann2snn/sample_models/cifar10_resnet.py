@@ -153,6 +153,3 @@ def test():
     net = ResNet18()
     y = net(torch.randn(1, 3, 32, 32))
     logger.info("ResNet test output shape=%s", y.size())
-
-
-# test()

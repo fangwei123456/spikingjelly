@@ -25,26 +25,12 @@ _DEFAULT_CAPACITY_BITS = {
 }
 
 
-def _access_mm(args, kwargs, out):
+def _access_matmul(args, kwargs, out):
     x, y = args[:2]
     return [x, y], [out]
 
 
-def _access_addmm(args, kwargs, out):
-    bias, x, y = args[:3]
-    beta = kwargs.get("beta", 1.0)
-    reads = [x, y]
-    if beta != 0:
-        reads.append(bias)
-    return reads, [out]
-
-
-def _access_bmm(args, kwargs, out):
-    x, y = args[:2]
-    return [x, y], [out]
-
-
-def _access_baddbmm(args, kwargs, out):
+def _access_add_matmul(args, kwargs, out):
     bias, x, y = args[:3]
     beta = kwargs.get("beta", 1.0)
     reads = [x, y]
@@ -120,10 +106,10 @@ def _access_where(args, kwargs, out):
 
 
 _RESIDENCY_ACCESS_RULES: dict[Any, Callable] = {
-    aten.mm.default: _access_mm,
-    aten.addmm.default: _access_addmm,
-    aten.bmm.default: _access_bmm,
-    aten.baddbmm.default: _access_baddbmm,
+    aten.mm.default: _access_matmul,
+    aten.addmm.default: _access_add_matmul,
+    aten.bmm.default: _access_matmul,
+    aten.baddbmm.default: _access_add_matmul,
     aten.convolution.default: _access_convolution,
     aten.convolution_backward.default: _access_convolution_backward,
     aten.native_batch_norm.default: _access_native_batch_norm,

@@ -183,7 +183,6 @@ class Neuronal_Cell_backward(nn.Module):
                             ),
                         )
                     )
-                    # l_idx +=1
                 elif op == 3:
                     self.cell_architecture.append(
                         nn.Sequential(
@@ -217,7 +216,7 @@ class Neuronal_Cell_backward(nn.Module):
                         nn.AvgPool2d(kernel_size=3, stride=1, padding=1)
                     )
 
-        for col in range(0, 3):
+        for col in range(3):
             for row in range(col + 1, 4):
                 op = con_mat[row, col]
                 if op == 0:

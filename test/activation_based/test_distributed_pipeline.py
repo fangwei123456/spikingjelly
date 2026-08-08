@@ -1,7 +1,11 @@
 # ruff: noqa: F401,F403,F405
+from spikingjelly.activation_based import base
 from spikingjelly.activation_based.distributed.pipeline import memopt as pipeline_memopt
 from spikingjelly.activation_based.distributed.pipeline import (
     runtime as pipeline_runtime,
+)
+from spikingjelly.activation_based.distributed.pipeline.partition import (
+    _partition_costs_contiguously,
 )
 from spikingjelly.activation_based.distributed.pipeline.runtime import (
     _build_snn_pipeline_runtime,
@@ -10,6 +14,26 @@ from spikingjelly.activation_based.distributed.pipeline.spikformer import (
     _SpikformerPipelineStage,
 )
 from test.activation_based._distributed_dtensor_test_support import *
+
+
+def test_cost_partition_never_exceeds_requested_parts_at_float_boundary():
+    costs = [
+        63.2983219267329,
+        993.0491635748301,
+        479.44063272103153,
+        319.43720121332564,
+        729.1624014985915,
+        24.291858945771793,
+        434.24914484586606,
+        664.413839099525,
+        962.1362249074848,
+        761.6377781461243,
+        885.159209602491,
+        118.90590716525107,
+        429.77060562282907,
+    ]
+
+    assert _partition_costs_contiguously(costs, 2) == [8, 5]
 
 
 def test_cifar10dvs_vgg_pipeline_module_matches_baseline():
@@ -61,6 +85,25 @@ def test_measure_module_cost_uses_autograd_inside_no_grad():
 
     assert cost > 0
     assert module.weight.grad is None
+
+
+def test_measure_module_cost_resets_state_between_forwards():
+    class StatefulModule(base.MemoryModule):
+        def __init__(self):
+            super().__init__()
+            self.register_memory("state", 0)
+            self.forward_states = []
+
+        def forward(self, x):
+            self.forward_states.append(self.state)
+            self.state += 1
+            return x
+
+    module = StatefulModule()
+    _measure_module_cost(module, torch.randn(4, 3))
+
+    assert module.forward_states == [0, 0]
+    assert module.state == 0
 
 
 def test_cifar10dvs_vgg_pipeline_runtime_supports_interleaved_single_rank():

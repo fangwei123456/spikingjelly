@@ -80,20 +80,11 @@ Genotype = namedtuple("Genotype_2D", "cell cell_concat")
 PRIMITIVES = ["skip_connect", "snn_b3", "snn_b5"]
 
 
-class Identity(nn.Module):
-    def __init__(self, C_in, C_out, signal):
-        super(Identity, self).__init__()
-        self.signal = signal
-
-    def forward(self, x):
-        return x
-
-
 OPS = {
     "skip_connect": lambda Cin, Cout, stride, signal: (
         SpikingConv2d(Cin, Cout, stride=stride, padding=1, spiking=False)
         if signal == 1
-        else Identity(Cin, Cout, signal)
+        else nn.Identity()
     ),
     "snn_b3": lambda Cin, Cout, stride, signal: SpikingConv2d(
         Cin, Cout, kernel_size=3, stride=stride, padding=1, spiking=False
@@ -378,7 +369,7 @@ class SearchSpikingConv2d_stem(nn.Module):
 
         self.dgs_alpha = nn.Parameter(1e-3 * torch.ones(3).cuda(), requires_grad=True)
 
-        for name, value in self.named_parameters():
+        for value in self.parameters():
             value.requires_grad_(True)
 
     def dgs_finish_stage(self, dgs_direction):
@@ -495,7 +486,7 @@ class SearchSpikingConv2d_cell(nn.Module):
 
         self.dgs_alpha = nn.Parameter(1e-3 * torch.ones(3).cuda(), requires_grad=True)
 
-        for name, value in self.named_parameters():
+        for value in self.parameters():
             value.requires_grad_(True)
 
     def dgs_finish_stage(self, dgs_direction):
@@ -778,7 +769,6 @@ class newFeature(nn.Module):
         self._filter_multiplier = args.fea_filter_multiplier
 
         f_initial = int(self._filter_multiplier)
-        self._num_end = self._filter_multiplier * self._block_multiplier
         self.stem0 = SearchSpikingConv2d_stem(
             frame_rate,
             f_initial * self._block_multiplier,
@@ -928,7 +918,7 @@ class SpikeDHS(nn.Module):
         self._time_step = 6
 
     def weight_parameters(self):
-        return [param for name, param in self.named_parameters()]
+        return list(self.parameters())
 
     def forward(self, input):
         input = input.expand(self._time_step, -1, -1, -1, -1)
@@ -949,11 +939,11 @@ class SpikeDHS(nn.Module):
             return logits, None
 
     def dgs_freeze_weights(self):
-        for name, value in self.named_parameters():
+        for value in self.parameters():
             value.requires_grad_(False)
 
     def dgs_unfreeze_weights(self):
-        for name, value in self.named_parameters():
+        for value in self.parameters():
             value.requires_grad_(True)
 
 

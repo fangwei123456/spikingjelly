@@ -228,7 +228,7 @@ def _prepare_precision(model, device: torch.device, precision: str):
 
 
 def _make_distributed_runtime(model, world_size: int):
-    analysis = sj_distributed.analyze(model, model_family="spikegpt")
+    analysis = sj_distributed.analyze(model)
     plan = sj_distributed.plan(
         analysis=analysis,
         objective="speed",

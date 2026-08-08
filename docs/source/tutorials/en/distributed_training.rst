@@ -123,7 +123,7 @@ Use the public package root for the high-level workflow:
         torch.tensor([0, 1, 2, 3]),
     )
 
-    analysis = sjdist.analyze(model, model_family="cifar10dvs_vgg")
+    analysis = sjdist.analyze(model)
     plan = sjdist.plan(
         analysis=analysis,
         objective="memory",

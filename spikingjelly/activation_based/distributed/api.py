@@ -39,7 +39,6 @@ def _normalize_mode(mode: Optional[str]) -> Optional[str]:
 def analyze(
     model: nn.Module,
     *,
-    model_family: Optional[str] = None,
     roots: Optional[Sequence[str]] = None,
 ) -> SNNDistributedAnalysis:
     """Analyze an SNN model for distributed execution.
@@ -51,8 +50,6 @@ def analyze(
 
     :param model: Model to inspect.
     :type model: torch.nn.Module
-    :param model_family: Optional model-family hint reserved for API symmetry.
-    :type model_family: str or None
     :param roots: Optional module roots that constrain tensor-parallel analysis.
     :type roots: sequence[str] or None
     :return: Structured distributed capability analysis.

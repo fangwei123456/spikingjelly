@@ -9,6 +9,10 @@ import torch.nn.functional as F
 from spikingjelly.activation_based.distributed.pipeline.partition import (
     resolve_pipeline_schedule_kind,
 )
+from spikingjelly.activation_based.functional.net_config import (
+    collect_reset_modules,
+    reset_collected_modules,
+)
 from spikingjelly.logger import logger
 
 try:
@@ -121,17 +125,6 @@ SNNPipelineRuntime.__init__.__doc__ = r"""Initialize an SNN pipeline runtime.
 """
 
 
-def _collect_resettable_modules(module: nn.Module) -> Tuple[nn.Module, ...]:
-    return tuple(
-        child for child in module.modules() if callable(getattr(child, "reset", None))
-    )
-
-
-def _reset_collected_modules(modules: Sequence[nn.Module]):
-    for module in modules:
-        module.reset()
-
-
 def _tensor_tree_numel(value: Any) -> int:
     if isinstance(value, torch.Tensor):
         return int(value.numel())
@@ -225,10 +218,10 @@ def _clone_tensor_tree_for_autograd(value: Any) -> Any:
 def _measure_module_cost(module: nn.Module, input_value: Any) -> Tuple[Any, float]:
     import time
 
-    reset_modules = _collect_resettable_modules(module)
+    reset_modules = collect_reset_modules(module)
     device = _infer_tensor_tree_device(input_value)
     with torch.no_grad():
-        _reset_collected_modules(reset_modules)
+        reset_collected_modules(reset_modules)
         if device is not None and device.type == "cuda":
             torch.cuda.synchronize(device)
             start_event = torch.cuda.Event(enable_timing=True)
@@ -242,12 +235,11 @@ def _measure_module_cost(module: nn.Module, input_value: Any) -> Tuple[Any, floa
             start_time = time.perf_counter()
             output_value = module(input_value)
             elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-        _reset_collected_modules(reset_modules)
+        reset_collected_modules(reset_modules)
     signal = _tensor_tree_numel(output_value)
     backward_ms = 0.0
 
     autograd_input = _clone_tensor_tree_for_autograd(input_value)
-    _reset_collected_modules(reset_modules)
     module.zero_grad(set_to_none=True)
     try:
         with torch.enable_grad():
@@ -272,7 +264,7 @@ def _measure_module_cost(module: nn.Module, input_value: Any) -> Tuple[Any, floa
                     backward_ms = (time.perf_counter() - start_time) * 1000.0
     finally:
         module.zero_grad(set_to_none=True)
-        _reset_collected_modules(reset_modules)
+        reset_collected_modules(reset_modules)
         if device is not None and device.type == "cuda":
             torch.cuda.empty_cache()
 
@@ -326,21 +318,17 @@ class _PipelineSequentialModule(nn.Module):
         return x
 
 
-def _reset_module_states(module: nn.Module):
-    _reset_collected_modules(_collect_resettable_modules(module))
-
-
 class _MicrobatchResetStage(nn.Module):
     def __init__(self, inner: nn.Module):
         super().__init__()
         self.inner = inner
-        self._reset_modules = _collect_resettable_modules(inner)
+        self._reset_modules = collect_reset_modules(inner)
 
     def refresh_reset_modules(self):
-        self._reset_modules = _collect_resettable_modules(self.inner)
+        self._reset_modules = collect_reset_modules(self.inner)
 
     def forward(self, *args, **kwargs):
-        _reset_collected_modules(self._reset_modules)
+        reset_collected_modules(self._reset_modules)
         return _make_pipeline_outputs_contiguous(self.inner(*args, **kwargs))
 
 
@@ -413,15 +401,15 @@ def _build_snn_pipeline_runtime(
     microbatch_input = _example_microbatch(example_input, n_microbatches).to(device)
     stage_inputs: list[Any] = []
     stage_outputs: list[Any] = []
-    pipeline_reset_modules = _collect_resettable_modules(pipeline_module)
+    pipeline_reset_modules = collect_reset_modules(pipeline_module)
     with torch.no_grad():
         current = microbatch_input
-        _reset_collected_modules(pipeline_reset_modules)
+        reset_collected_modules(pipeline_reset_modules)
         for stage_submodule in pipeline_module.stages:
             stage_inputs.append(current)
             current = stage_submodule(current)
             stage_outputs.append(current)
-        _reset_collected_modules(pipeline_reset_modules)
+        reset_collected_modules(pipeline_reset_modules)
     stages = [
         PipelineStage(
             stage_modules[local_idx],
