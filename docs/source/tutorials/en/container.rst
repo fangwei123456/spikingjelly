@@ -125,8 +125,8 @@ values and the pooling indices, which can be consumed directly by :class:`MaxUnp
         W = 8
         x_seq = torch.rand([T, N, C, H, W])
 
-        pool = layer.MaxPool2d(2, return_indices=True, step_mode='m')
-        unpool = layer.MaxUnpool2d(2, step_mode='m')
+        pool = layer.MaxPool2d(2, return_indices=True, step_mode="m")
+        unpool = layer.MaxUnpool2d(2, step_mode="m")
 
         y_seq, indices = pool(x_seq)
         # y_seq.shape = indices.shape = [T, N, C, H // 2, W // 2]
