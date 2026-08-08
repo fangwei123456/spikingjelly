@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional, Sequence, Union
 
 import torch
 import torch.nn as nn
@@ -28,6 +28,9 @@ __all__ = [
     "MaxPool1d",
     "MaxPool2d",
     "MaxPool3d",
+    "MaxUnpool1d",
+    "MaxUnpool2d",
+    "MaxUnpool3d",
     "AvgPool1d",
     "AvgPool2d",
     "AvgPool3d",
@@ -700,6 +703,229 @@ class MaxPool3d(nn.MaxPool3d, base.StepModule):
                 f"but got x with shape {x.shape}!"
             )
         return functional.seq_to_ann_forward(x, (super().forward,))
+
+
+class MaxUnpool1d(nn.MaxUnpool1d, base.StepModule):
+    def __init__(
+        self,
+        kernel_size: _size_1_t,
+        stride: Optional[_size_1_t] = None,
+        padding: _size_1_t = 0,
+        step_mode="s",
+    ) -> None:
+        r"""
+        **API Language** - :ref:`中文 <MaxUnpool1d.__init__-cn>` | :ref:`English <MaxUnpool1d.__init__-en>`
+
+        ----
+
+        .. _MaxUnpool1d.__init__-cn:
+
+        * **中文**
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.MaxUnpool1d`
+
+        .. note::
+            在多步模式 (``'m'``) 下，``forward`` 的输入 ``x`` 和 ``indices``
+            的形状均为 ``[T, N, C, L]``；若给定 ``output_size``，会在展平
+            ``[T, N]`` 后传递给底层 PyTorch 模块，可以使用空间尺寸 (例如
+            ``(L,)``)，也可以使用底层模块支持的展平后完整输出尺寸。
+
+        ----
+
+        .. _MaxUnpool1d.__init__-en:
+
+        * **English**
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.MaxUnpool1d` for other parameters' API
+
+        .. admonition:: Note
+            :class: note
+
+            In multi-step mode (``'m'``), both ``x`` and ``indices`` of
+            ``forward`` have ``shape=[T, N, C, L]``. If given, ``output_size``
+            is passed to the underlying PyTorch module after ``[T, N]`` are
+            flattened. It may be a spatial-only size (e.g., ``(L,)``) or a full
+            output size accepted by the underlying module for the flattened input.
+        """
+        super().__init__(kernel_size, stride, padding)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f", step_mode={self.step_mode}"
+
+    def forward(
+        self, x: Tensor, indices: Tensor, output_size: Optional[Sequence[int]] = None
+    ) -> Tensor:
+        if self.step_mode == "s":
+            return super().forward(x, indices, output_size)
+        if x.dim() != 4:
+            raise ValueError(
+                f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
+            )
+        if indices.shape != x.shape:
+            raise ValueError(
+                f"expected indices with the same shape as x ({x.shape}), "
+                f"but got indices with shape {indices.shape}!"
+            )
+        sup = super().forward
+        return functional.seq_to_ann_forward(
+            (x, indices), (lambda values, index: sup(values, index, output_size),)
+        )
+
+
+class MaxUnpool2d(nn.MaxUnpool2d, base.StepModule):
+    def __init__(
+        self,
+        kernel_size: _size_2_t,
+        stride: Optional[_size_2_t] = None,
+        padding: _size_2_t = 0,
+        step_mode="s",
+    ) -> None:
+        r"""
+        **API Language** - :ref:`中文 <MaxUnpool2d.__init__-cn>` | :ref:`English <MaxUnpool2d.__init__-en>`
+
+        ----
+
+        .. _MaxUnpool2d.__init__-cn:
+
+        * **中文**
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.MaxUnpool2d`
+
+        .. note::
+            在多步模式 (``'m'``) 下，``forward`` 的输入 ``x`` 和 ``indices``
+            的形状均为 ``[T, N, C, H, W]``；若给定 ``output_size``，会在展平
+            ``[T, N]`` 后传递给底层 PyTorch 模块，可以使用空间尺寸 (例如
+            ``(H, W)``)，也可以使用底层模块支持的展平后完整输出尺寸。
+
+        ----
+
+        .. _MaxUnpool2d.__init__-en:
+
+        * **English**
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.MaxUnpool2d` for other parameters' API
+
+        .. admonition:: Note
+            :class: note
+
+            In multi-step mode (``'m'``), both ``x`` and ``indices`` of
+            ``forward`` have ``shape=[T, N, C, H, W]``. If given, ``output_size``
+            is passed to the underlying PyTorch module after ``[T, N]`` are
+            flattened. It may be a spatial-only size (e.g., ``(H, W)``) or a full
+            output size accepted by the underlying module for the flattened input.
+        """
+        super().__init__(kernel_size, stride, padding)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f", step_mode={self.step_mode}"
+
+    def forward(
+        self, x: Tensor, indices: Tensor, output_size: Optional[Sequence[int]] = None
+    ) -> Tensor:
+        if self.step_mode == "s":
+            return super().forward(x, indices, output_size)
+        if x.dim() != 5:
+            raise ValueError(
+                f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
+            )
+        if indices.shape != x.shape:
+            raise ValueError(
+                f"expected indices with the same shape as x ({x.shape}), "
+                f"but got indices with shape {indices.shape}!"
+            )
+        sup = super().forward
+        return functional.seq_to_ann_forward(
+            (x, indices), (lambda values, index: sup(values, index, output_size),)
+        )
+
+
+class MaxUnpool3d(nn.MaxUnpool3d, base.StepModule):
+    def __init__(
+        self,
+        kernel_size: _size_3_t,
+        stride: Optional[_size_3_t] = None,
+        padding: _size_3_t = 0,
+        step_mode="s",
+    ) -> None:
+        r"""
+        **API Language** - :ref:`中文 <MaxUnpool3d.__init__-cn>` | :ref:`English <MaxUnpool3d.__init__-en>`
+
+        ----
+
+        .. _MaxUnpool3d.__init__-cn:
+
+        * **中文**
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.MaxUnpool3d`
+
+        .. note::
+            在多步模式 (``'m'``) 下，``forward`` 的输入 ``x`` 和 ``indices``
+            的形状均为 ``[T, N, C, D, H, W]``；若给定 ``output_size``，会在展平
+            ``[T, N]`` 后传递给底层 PyTorch 模块，可以使用空间尺寸 (例如
+            ``(D, H, W)``)，也可以使用底层模块支持的展平后完整输出尺寸。
+
+        ----
+
+        .. _MaxUnpool3d.__init__-en:
+
+        * **English**
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.MaxUnpool3d` for other parameters' API
+
+        .. admonition:: Note
+            :class: note
+
+            In multi-step mode (``'m'``), both ``x`` and ``indices`` of
+            ``forward`` have ``shape=[T, N, C, D, H, W]``. If given, ``output_size``
+            is passed to the underlying PyTorch module after ``[T, N]`` are
+            flattened. It may be a spatial-only size (e.g., ``(D, H, W)``) or a full
+            output size accepted by the underlying module for the flattened input.
+        """
+        super().__init__(kernel_size, stride, padding)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f", step_mode={self.step_mode}"
+
+    def forward(
+        self, x: Tensor, indices: Tensor, output_size: Optional[Sequence[int]] = None
+    ) -> Tensor:
+        if self.step_mode == "s":
+            return super().forward(x, indices, output_size)
+        if x.dim() != 6:
+            raise ValueError(
+                "expected x with shape [T, N, C, D, H, W], "
+                f"but got x with shape {x.shape}!"
+            )
+        if indices.shape != x.shape:
+            raise ValueError(
+                f"expected indices with the same shape as x ({x.shape}), "
+                f"but got indices with shape {indices.shape}!"
+            )
+        sup = super().forward
+        return functional.seq_to_ann_forward(
+            (x, indices), (lambda values, index: sup(values, index, output_size),)
+        )
 
 
 class AvgPool1d(nn.AvgPool1d, base.StepModule):

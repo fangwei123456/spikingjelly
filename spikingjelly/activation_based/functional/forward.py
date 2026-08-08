@@ -14,11 +14,13 @@ __all__ = [
 
 
 def _apply_modules(x, modules):
+    args = x if isinstance(x, tuple) else (x,)
     if isinstance(modules, (list, tuple)):
         for module in modules:
-            x = module(x)
+            x = module(*args)
+            args = (x,)
         return x
-    return modules(x)
+    return modules(*args)
 
 
 def _multi_step_forward(x_seq, single_step_module, time_dim):
@@ -226,7 +228,7 @@ def chunk_multi_step_forward(
 
 
 def seq_to_ann_forward(
-    x_seq: Tensor,
+    x_seq: Union[Tensor, tuple[Tensor, ...]],
     stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable],
 ) -> Union[Tensor, tuple[Tensor, ...]]:
     """
@@ -241,8 +243,16 @@ def seq_to_ann_forward(
     使用无状态层进行多步前向传播。输入 ``x_seq`` 的时间和批量维度将被展平，得到 ``[T*batch_size, ...]``
     形状的张量；随后，输入到无状态层中；最后，将输出张量恢复到序列形式 ``[T, batch_size, ...]`` 。
 
-    :param x_seq: ``shape=[T, batch_size, ...]`` 的输入tensor
-    :type x_seq: torch.Tensor
+    ``x_seq`` 也可以是 tensor tuple，例如同时输入池化值与池化索引。此时每个
+    tensor 的形状均为 ``shape=[T, batch_size, ...]``，且 ``T`` 和 ``batch_size``
+    必须相同；每个 tensor 的时间和批量维度会被分别展平，展平后的 tensor 作为
+    位置参数一起输入到第一个无状态层中。若给出多个无状态层，则后续的层依次接收
+    前一层的输出作为单个参数。因此第一个无状态层必须能够接收与tuple长度相同数量的
+    位置参数；``torch.nn.Sequential`` 只接收单个输入，故不能作为第一层接收长度
+    大于1的tuple。
+
+    :param x_seq: ``shape=[T, batch_size, ...]`` 的输入tensor，或多个此类tensor组成的tuple
+    :type x_seq: Union[torch.Tensor, tuple[torch.Tensor, ...]]
 
     :param stateless_module: 单个或多个无状态网络层
     :type stateless_module: Union[torch.nn.Module, list, tuple, torch.nn.Sequential, Callable]
@@ -250,6 +260,8 @@ def seq_to_ann_forward(
     :return: ``shape=[T, batch_size, ...]`` 的输出tensor；若底层模块返回
         tensor tuple，则分别恢复每个 tensor 的时间维和批量维
     :rtype: Union[torch.Tensor, tuple[torch.Tensor, ...]]
+
+    :raises ValueError: 当tuple中tensor的 ``[T, batch_size]`` 前两维不一致时抛出
 
     :raises Exception: 任何底层无状态模块在前向传播时抛出的异常都会原样向上传播
 
@@ -264,8 +276,19 @@ def seq_to_ann_forward(
     to the stateless module(s), and reshape the output back to the sequence form
     ``shape=[T, batch_size, ...]``.
 
-    :param x_seq: the input tensor with ``shape=[T, batch_size, ...]``
-    :type x_seq: torch.Tensor
+    ``x_seq`` can also be a tuple of tensors, e.g., pooled values together with
+    pooling indices. In this case, every tensor must have
+    ``shape=[T, batch_size, ...]`` with the same ``T`` and ``batch_size``; the
+    time and batch dimensions of each tensor are flattened separately, and the
+    flattened tensors are fed to the first stateless module as positional
+    arguments. If several stateless modules are given, each subsequent module
+    receives the previous module's output as a single argument. The first
+    stateless module must therefore accept as many positional arguments as the
+    tuple holds; ``torch.nn.Sequential`` accepts a single input only, so it can
+    not be the first module for a tuple of more than one tensor.
+
+    :param x_seq: the input tensor with ``shape=[T, batch_size, ...]``, or a tuple of such tensors
+    :type x_seq: Union[torch.Tensor, tuple[torch.Tensor, ...]]
 
     :param stateless_module: one or many stateless modules
     :type stateless_module: Union[torch.nn.Module, list, tuple, torch.nn.Sequential, Callable]
@@ -275,10 +298,24 @@ def seq_to_ann_forward(
         and batch dimensions restored
     :rtype: Union[torch.Tensor, tuple[torch.Tensor, ...]]
 
+    :raises ValueError: if the tensors in ``x_seq`` do not share the same ``[T, batch_size]`` leading dimensions
+
     :raises Exception: Any exception raised by an underlying stateless module is propagated unchanged
     """
-    time_steps, batch_size = x_seq.shape[:2]
-    y = _apply_modules(x_seq.flatten(0, 1), stateless_module)
+    if isinstance(x_seq, tuple):
+        leading_shape = x_seq[0].shape[:2]
+        if any(item.shape[:2] != leading_shape for item in x_seq[1:]):
+            raise ValueError(
+                "expected all tensors in x_seq to share the same "
+                "[T, batch_size] leading dimensions, but got tensors with "
+                f"shapes {[tuple(item.shape) for item in x_seq]}!"
+            )
+        time_steps, batch_size = leading_shape
+        x = tuple(item.flatten(0, 1) for item in x_seq)
+    else:
+        time_steps, batch_size = x_seq.shape[:2]
+        x = x_seq.flatten(0, 1)
+    y = _apply_modules(x, stateless_module)
     if isinstance(y, tuple):
         return tuple(item.unflatten(0, (time_steps, batch_size)) for item in y)
     return y.unflatten(0, (time_steps, batch_size))

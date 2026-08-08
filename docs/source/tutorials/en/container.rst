@@ -105,6 +105,44 @@ which will reshape the input with ``shape = [T, N, *]`` to  ``shape = [TN, *]``,
 
         # q_seq is identical to p_seq, and also identical to y_seq and z_seq
 
+The input of :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` can also be a tuple of tensors. \
+Every tensor in the tuple must have ``shape = [T, N, *]`` with the same ``T`` and ``N``; the time and batch dimensions of each tensor are \
+flattened separately, and the flattened tensors are sent to the first stateless layer as positional arguments. If several stateless layers are given, \
+only the first one receives all the flattened tensors, and each subsequent layer receives the previous layer's output as a single argument. For example, \
+:class:`MaxPool2d <spikingjelly.activation_based.layer.MaxPool2d>` in multi-step mode with ``return_indices=True`` outputs both the pooled \
+values and the pooling indices, which can be consumed directly by :class:`MaxUnpool2d <spikingjelly.activation_based.layer.MaxUnpool2d>` in multi-step mode:
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import functional, layer
+
+    with torch.no_grad():
+        T = 4
+        N = 1
+        C = 3
+        H = 8
+        W = 8
+        x_seq = torch.rand([T, N, C, H, W])
+
+        pool = layer.MaxPool2d(2, return_indices=True, step_mode="m")
+        unpool = layer.MaxUnpool2d(2, step_mode="m")
+
+        y_seq, indices = pool(x_seq)
+        # y_seq.shape = indices.shape = [T, N, C, H // 2, W // 2]
+
+        z_seq = unpool(y_seq, indices)
+        # z_seq.shape = [T, N, C, H, W]
+
+        p_seq = functional.seq_to_ann_forward((y_seq, indices), torch.nn.MaxUnpool2d(2))
+        # p_seq is identical to z_seq
+
+:class:`MaxUnpool1d <spikingjelly.activation_based.layer.MaxUnpool1d>`, \
+:class:`MaxUnpool2d <spikingjelly.activation_based.layer.MaxUnpool2d>` and \
+:class:`MaxUnpool3d <spikingjelly.activation_based.layer.MaxUnpool3d>` support both single-step and multi-step modes. \
+In multi-step mode, ``output_size``, if given, is passed to the underlying PyTorch module after ``[T, N]`` are flattened. \
+It may be a spatial-only size (e.g., ``(H, W)``) or a full output size accepted by the underlying module for the flattened input.
+
 Most frequently-used ann modules have been defined in :class:`spikingjelly.activation_based.layer`. It is recommended to use modules in :class:`spikingjelly.activation_based.layer`, \
 rather than using a container to wrap the ann layers manually. Althouth the modules in :class:`spikingjelly.activation_based.layer` are implementd by using :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` to \
 wrap forward function, the advantages of modules in :class:`spikingjelly.activation_based.layer` are:

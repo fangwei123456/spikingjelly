@@ -526,6 +526,32 @@ def test_seq_to_ann_forward_restores_tuple_outputs():
     assert torch.equal(indices.flatten(0, 1), expected[1])
 
 
+def test_seq_to_ann_forward_tuple_inputs_match_per_timestep_loop():
+    torch.manual_seed(0)
+    a = torch.randn(4, 3, 2)
+    b = torch.randn(4, 3, 2)
+    expected = torch.stack([a[t] * 2.0 + b[t] for t in range(a.shape[0])])
+
+    assert torch.equal(seq_to_ann_forward((a, b), lambda u, v: u * 2.0 + v), expected)
+
+
+def test_seq_to_ann_forward_tuple_inputs_feed_two_argument_modules():
+    torch.manual_seed(0)
+    x_seq = torch.randn(3, 2, 1, 4, 4)
+    pooled, indices = seq_to_ann_forward(x_seq, nn.MaxPool2d(2, return_indices=True))
+    unpool = nn.MaxUnpool2d(2)
+    expected = torch.stack(
+        [unpool(pooled[t], indices[t]) for t in range(pooled.shape[0])]
+    )
+
+    assert torch.equal(seq_to_ann_forward((pooled, indices), unpool), expected)
+
+
+def test_seq_to_ann_forward_rejects_mismatched_tuple_leading_dimensions():
+    with pytest.raises(ValueError, match=r"\[T, batch_size\] leading dimensions"):
+        seq_to_ann_forward((torch.randn(3, 2, 4), torch.randn(2, 3, 4)), nn.Identity())
+
+
 def test_t_last_seq_to_ann_forward_preserves_vmap_output_layout():
     def stateless_module(x):
         return x.square(), x + 1
