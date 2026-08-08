@@ -120,8 +120,8 @@ states, branches, dependencies, and indirections third.
 
 ## Result
 
-The implementation pass changes 90 files under `spikingjelly/`: 323 inserted and
-992 deleted lines, a net reduction of 669 lines. No dependency, feature flag,
+The implementation pass changes 90 files under `spikingjelly/`: 327 inserted and
+994 deleted lines, a net reduction of 667 lines. No dependency, feature flag,
 class, or public compatibility layer was added. The inserted lines are mainly
 clear error reporting and shared rule ownership; behavior-level regression checks
 live outside `spikingjelly/`.

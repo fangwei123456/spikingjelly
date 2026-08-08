@@ -130,7 +130,7 @@ def resolve_device() -> str:
 
     :return: 设备字符串，例如 ``"cpu"`` 或 ``"cuda:0"``
     :rtype: str
-    :raises ValueError: 环境变量中的本地 rank 不是整数
+    :raises ValueError: 环境变量中的本地 rank 不是整数或超出可用 CUDA 设备范围
 
     ----
 
@@ -149,7 +149,8 @@ def resolve_device() -> str:
 
     :return: device string, e.g., ``"cpu"`` or ``"cuda:0"``
     :rtype: str
-    :raises ValueError: An environment-provided local rank is not an integer
+    :raises ValueError: An environment-provided local rank is not an integer or
+        is outside the available CUDA device range
     """
     if not torch.cuda.is_available():
         return "cpu"
@@ -163,9 +164,13 @@ def resolve_device() -> str:
         v = os.environ.get(k)
         if v is not None:
             try:
-                return f"cuda:{int(v)}"
+                rank = int(v)
             except ValueError as e:
                 raise ValueError(f"{k} must be an integer, got {v!r}") from e
+            n_gpu = torch.cuda.device_count()
+            if rank not in range(n_gpu):
+                raise ValueError(f"{k} must be in [0, {n_gpu}), got {rank}")
+            return f"cuda:{rank}"
 
     if dist.is_available() and dist.is_initialized():
         rank = dist.get_rank()

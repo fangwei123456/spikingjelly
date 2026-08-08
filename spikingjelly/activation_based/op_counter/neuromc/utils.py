@@ -5,9 +5,9 @@ from math import prod
 import torch
 
 __all__ = [
+    "_conv_mul_add",
     "_is_spike",
     "_spike_nnz",
-    "_conv_mul_add",
 ]
 
 

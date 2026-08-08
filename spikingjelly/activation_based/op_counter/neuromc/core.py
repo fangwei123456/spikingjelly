@@ -1771,7 +1771,7 @@ class NeuroMCEnergyProfiler:
                     "opt_w_updated": ("FYFXKC", 32, "reg_32b", "sram_6MB"),
                 }
 
-        for count_key, bits_per_elem, reg_name, sram_name in variables.values():
+        for count_key, bits_per_elem, _, sram_name in variables.values():
             total_bits = scalar_counts[count_key] * bits_per_elem
             sram_spec = cfg[sram_name]
             self._accumulate_memory(

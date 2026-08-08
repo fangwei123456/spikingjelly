@@ -40,6 +40,16 @@ def test_resolve_device_rejects_invalid_local_rank(monkeypatch):
         memopt_pipeline.resolve_device()
 
 
+@pytest.mark.parametrize("local_rank", ["-1", "2"])
+def test_resolve_device_rejects_out_of_range_local_rank(monkeypatch, local_rank):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 2)
+    monkeypatch.setenv("LOCAL_RANK", local_rank)
+
+    with pytest.raises(ValueError, match=r"LOCAL_RANK must be in \[0, 2\)"):
+        memopt_pipeline.resolve_device()
+
+
 def simple_forward_fn(x, weight, bias=None):
     y = torch.matmul(x, weight.t())
     if bias is not None:

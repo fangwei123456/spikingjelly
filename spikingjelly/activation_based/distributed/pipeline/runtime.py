@@ -235,7 +235,6 @@ def _measure_module_cost(module: nn.Module, input_value: Any) -> Tuple[Any, floa
             start_time = time.perf_counter()
             output_value = module(input_value)
             elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-            reset_collected_modules(reset_modules)
     signal = _tensor_tree_numel(output_value)
     backward_ms = 0.0
 

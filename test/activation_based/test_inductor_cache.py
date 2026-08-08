@@ -102,7 +102,7 @@ def test_inductor_cache_reset_after_fork_replaces_lock(monkeypatch):
     assert inductor_cache.info()["entries"] == 0
 
 
-def test_inductor_cache_is_not_serialized_with_node(monkeypatch):
+def test_node_copy_and_serialization_preserve_global_inductor_cache(monkeypatch):
     inductor_cache.clear()
 
     def fake_compile(fn, **_kwargs):

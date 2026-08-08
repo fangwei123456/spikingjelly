@@ -6,7 +6,6 @@ from .. import layer, neuron
 
 __all__ = [
     "OTTTSpikingVGG",
-    "ottt_spiking_vggws",
     "ottt_spiking_vgg11",
     "ottt_spiking_vgg11_ws",
     "ottt_spiking_vgg13",
@@ -15,6 +14,7 @@ __all__ = [
     "ottt_spiking_vgg16_ws",
     "ottt_spiking_vgg19",
     "ottt_spiking_vgg19_ws",
+    "ottt_spiking_vggws",
 ]
 
 # modified by https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py
@@ -228,9 +228,7 @@ cfgs = {
 }
 
 
-def _spiking_vgg(
-    cfg, weight_standardization, spiking_neuron: callable = None, **kwargs
-):
+def _spiking_vgg(cfg, weight_standardization, spiking_neuron, **kwargs):
     return OTTTSpikingVGG(
         cfg=cfgs[cfg],
         weight_standardization=weight_standardization,
