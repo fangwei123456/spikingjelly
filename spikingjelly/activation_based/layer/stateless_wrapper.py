@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional, Sequence, Union
 
 import torch
 import torch.nn as nn
@@ -729,8 +729,9 @@ class MaxUnpool1d(nn.MaxUnpool1d, base.StepModule):
 
         .. note::
             在多步模式 (``'m'``) 下，``forward`` 的输入 ``x`` 和 ``indices``
-            的形状均为 ``[T, N, C, L]``；若给定 ``output_size``，其应当仅为
-            空间尺寸 (例如 ``(L,)``)，不包含 ``T`` 或 ``N`` 维度。
+            的形状均为 ``[T, N, C, L]``；若给定 ``output_size``，会在展平
+            ``[T, N]`` 后传递给底层 PyTorch 模块，可以使用空间尺寸 (例如
+            ``(L,)``)，也可以使用底层模块支持的展平后完整输出尺寸。
 
         ----
 
@@ -747,9 +748,10 @@ class MaxUnpool1d(nn.MaxUnpool1d, base.StepModule):
             :class: note
 
             In multi-step mode (``'m'``), both ``x`` and ``indices`` of
-            ``forward`` have ``shape=[T, N, C, L]``; ``output_size``, if given,
-            should only contain the spatial size (e.g., ``(L,)``) without the
-            ``T`` or ``N`` dimensions.
+            ``forward`` have ``shape=[T, N, C, L]``. If given, ``output_size``
+            is passed to the underlying PyTorch module after ``[T, N]`` are
+            flattened. It may be a spatial-only size (e.g., ``(L,)``) or a full
+            output size accepted by the underlying module for the flattened input.
         """
         super().__init__(kernel_size, stride, padding)
         self.step_mode = step_mode
@@ -758,8 +760,8 @@ class MaxUnpool1d(nn.MaxUnpool1d, base.StepModule):
         return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(
-        self, x: Tensor, indices: Tensor, output_size: Optional[list[int]] = None
-    ):
+        self, x: Tensor, indices: Tensor, output_size: Optional[Sequence[int]] = None
+    ) -> Tensor:
         if self.step_mode == "s":
             return super().forward(x, indices, output_size)
         if x.dim() != 4:
@@ -770,13 +772,6 @@ class MaxUnpool1d(nn.MaxUnpool1d, base.StepModule):
             raise ValueError(
                 f"expected indices with the same shape as x ({x.shape}), "
                 f"but got indices with shape {indices.shape}!"
-            )
-        if output_size is not None and len(output_size) != 1:
-            raise ValueError(
-                "when step_mode='m', T and N are flattened into a single batch "
-                "dimension, so output_size must contain only the spatial "
-                "dimensions [L] without T or N, but got output_size "
-                f"{output_size} with {len(output_size)} elements!"
             )
         sup = super().forward
         return functional.seq_to_ann_forward(
@@ -808,8 +803,9 @@ class MaxUnpool2d(nn.MaxUnpool2d, base.StepModule):
 
         .. note::
             在多步模式 (``'m'``) 下，``forward`` 的输入 ``x`` 和 ``indices``
-            的形状均为 ``[T, N, C, H, W]``；若给定 ``output_size``，其应当仅为
-            空间尺寸 (例如 ``(H, W)``)，不包含 ``T`` 或 ``N`` 维度。
+            的形状均为 ``[T, N, C, H, W]``；若给定 ``output_size``，会在展平
+            ``[T, N]`` 后传递给底层 PyTorch 模块，可以使用空间尺寸 (例如
+            ``(H, W)``)，也可以使用底层模块支持的展平后完整输出尺寸。
 
         ----
 
@@ -826,9 +822,10 @@ class MaxUnpool2d(nn.MaxUnpool2d, base.StepModule):
             :class: note
 
             In multi-step mode (``'m'``), both ``x`` and ``indices`` of
-            ``forward`` have ``shape=[T, N, C, H, W]``; ``output_size``, if
-            given, should only contain the spatial size (e.g., ``(H, W)``)
-            without the ``T`` or ``N`` dimensions.
+            ``forward`` have ``shape=[T, N, C, H, W]``. If given, ``output_size``
+            is passed to the underlying PyTorch module after ``[T, N]`` are
+            flattened. It may be a spatial-only size (e.g., ``(H, W)``) or a full
+            output size accepted by the underlying module for the flattened input.
         """
         super().__init__(kernel_size, stride, padding)
         self.step_mode = step_mode
@@ -837,8 +834,8 @@ class MaxUnpool2d(nn.MaxUnpool2d, base.StepModule):
         return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(
-        self, x: Tensor, indices: Tensor, output_size: Optional[list[int]] = None
-    ):
+        self, x: Tensor, indices: Tensor, output_size: Optional[Sequence[int]] = None
+    ) -> Tensor:
         if self.step_mode == "s":
             return super().forward(x, indices, output_size)
         if x.dim() != 5:
@@ -849,13 +846,6 @@ class MaxUnpool2d(nn.MaxUnpool2d, base.StepModule):
             raise ValueError(
                 f"expected indices with the same shape as x ({x.shape}), "
                 f"but got indices with shape {indices.shape}!"
-            )
-        if output_size is not None and len(output_size) != 2:
-            raise ValueError(
-                "when step_mode='m', T and N are flattened into a single batch "
-                "dimension, so output_size must contain only the spatial "
-                "dimensions [H, W] without T or N, but got output_size "
-                f"{output_size} with {len(output_size)} elements!"
             )
         sup = super().forward
         return functional.seq_to_ann_forward(
@@ -887,8 +877,9 @@ class MaxUnpool3d(nn.MaxUnpool3d, base.StepModule):
 
         .. note::
             在多步模式 (``'m'``) 下，``forward`` 的输入 ``x`` 和 ``indices``
-            的形状均为 ``[T, N, C, D, H, W]``；若给定 ``output_size``，其应当
-            仅为空间尺寸 (例如 ``(D, H, W)``)，不包含 ``T`` 或 ``N`` 维度。
+            的形状均为 ``[T, N, C, D, H, W]``；若给定 ``output_size``，会在展平
+            ``[T, N]`` 后传递给底层 PyTorch 模块，可以使用空间尺寸 (例如
+            ``(D, H, W)``)，也可以使用底层模块支持的展平后完整输出尺寸。
 
         ----
 
@@ -905,9 +896,10 @@ class MaxUnpool3d(nn.MaxUnpool3d, base.StepModule):
             :class: note
 
             In multi-step mode (``'m'``), both ``x`` and ``indices`` of
-            ``forward`` have ``shape=[T, N, C, D, H, W]``; ``output_size``, if
-            given, should only contain the spatial size (e.g., ``(D, H, W)``)
-            without the ``T`` or ``N`` dimensions.
+            ``forward`` have ``shape=[T, N, C, D, H, W]``. If given, ``output_size``
+            is passed to the underlying PyTorch module after ``[T, N]`` are
+            flattened. It may be a spatial-only size (e.g., ``(D, H, W)``) or a full
+            output size accepted by the underlying module for the flattened input.
         """
         super().__init__(kernel_size, stride, padding)
         self.step_mode = step_mode
@@ -916,8 +908,8 @@ class MaxUnpool3d(nn.MaxUnpool3d, base.StepModule):
         return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(
-        self, x: Tensor, indices: Tensor, output_size: Optional[list[int]] = None
-    ):
+        self, x: Tensor, indices: Tensor, output_size: Optional[Sequence[int]] = None
+    ) -> Tensor:
         if self.step_mode == "s":
             return super().forward(x, indices, output_size)
         if x.dim() != 6:
@@ -929,13 +921,6 @@ class MaxUnpool3d(nn.MaxUnpool3d, base.StepModule):
             raise ValueError(
                 f"expected indices with the same shape as x ({x.shape}), "
                 f"but got indices with shape {indices.shape}!"
-            )
-        if output_size is not None and len(output_size) != 3:
-            raise ValueError(
-                "when step_mode='m', T and N are flattened into a single batch "
-                "dimension, so output_size must contain only the spatial "
-                "dimensions [D, H, W] without T or N, but got output_size "
-                f"{output_size} with {len(output_size)} elements!"
             )
         sup = super().forward
         return functional.seq_to_ann_forward(

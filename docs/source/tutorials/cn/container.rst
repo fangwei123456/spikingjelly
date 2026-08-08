@@ -141,7 +141,8 @@ tuple中每个tensor的形状均为 ``shape = [T, N, *]``，且 ``T`` 和 ``N`` 
 :class:`MaxUnpool1d <spikingjelly.activation_based.layer.MaxUnpool1d>`、\
 :class:`MaxUnpool2d <spikingjelly.activation_based.layer.MaxUnpool2d>` 和 \
 :class:`MaxUnpool3d <spikingjelly.activation_based.layer.MaxUnpool3d>` 同时支持单步和多步模式。\
-在多步模式下，若给定 ``output_size``，其应当仅为空间尺寸(例如 ``(H, W)``)，不包含 ``T`` 或 ``N`` 维度。
+在多步模式下，若给定 ``output_size``，会在展平 ``[T, N]`` 后传递给底层 PyTorch 模块。\
+它可以是仅包含空间尺寸的形式(例如 ``(H, W)``)，也可以是底层模块针对展平后输入所支持的完整输出尺寸。
 
 常用的网络层，在 :class:`spikingjelly.activation_based.layer` 已经定义过，更推荐使用 :class:`spikingjelly.activation_based.layer` 中的网络层，\
 而不是使用 :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` 手动包装，\

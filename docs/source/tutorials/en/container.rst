@@ -140,7 +140,8 @@ values and the pooling indices, which can be consumed directly by :class:`MaxUnp
 :class:`MaxUnpool1d <spikingjelly.activation_based.layer.MaxUnpool1d>`, \
 :class:`MaxUnpool2d <spikingjelly.activation_based.layer.MaxUnpool2d>` and \
 :class:`MaxUnpool3d <spikingjelly.activation_based.layer.MaxUnpool3d>` support both single-step and multi-step modes. \
-In multi-step mode, ``output_size``, if given, should only contain the spatial size (e.g., ``(H, W)``) without the ``T`` or ``N`` dimensions.
+In multi-step mode, ``output_size``, if given, is passed to the underlying PyTorch module after ``[T, N]`` are flattened. \
+It may be a spatial-only size (e.g., ``(H, W)``) or a full output size accepted by the underlying module for the flattened input.
 
 Most frequently-used ann modules have been defined in :class:`spikingjelly.activation_based.layer`. It is recommended to use modules in :class:`spikingjelly.activation_based.layer`, \
 rather than using a container to wrap the ann layers manually. Althouth the modules in :class:`spikingjelly.activation_based.layer` are implementd by using :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` to \
