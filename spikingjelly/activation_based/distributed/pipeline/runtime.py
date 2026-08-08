@@ -235,11 +235,11 @@ def _measure_module_cost(module: nn.Module, input_value: Any) -> Tuple[Any, floa
             start_time = time.perf_counter()
             output_value = module(input_value)
             elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+        reset_collected_modules(reset_modules)
     signal = _tensor_tree_numel(output_value)
     backward_ms = 0.0
 
     autograd_input = _clone_tensor_tree_for_autograd(input_value)
-    reset_collected_modules(reset_modules)
     module.zero_grad(set_to_none=True)
     try:
         with torch.enable_grad():

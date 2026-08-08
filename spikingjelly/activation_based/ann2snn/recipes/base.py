@@ -19,9 +19,40 @@ __all__ = [
 ]
 
 
-def _replace_submodule(
-    fx_model: fx.GraphModule, target: str, module: nn.Module
-) -> None:
+def replace_submodule(fx_model: fx.GraphModule, target: str, module: nn.Module) -> None:
+    r"""
+    **API Language** - :ref:`中文 <replace_submodule-cn>` | :ref:`English <replace_submodule-en>`
+
+    ----
+
+    .. _replace_submodule-cn:
+
+    * **中文**
+
+    将 ``fx_model`` 中 ``target`` 指向的子模块替换为 ``module``。
+
+    :param fx_model: 要修改的 FX 图模块。
+    :type fx_model: torch.fx.GraphModule
+    :param target: ``named_modules()`` 使用的点分隔子模块路径。
+    :type target: str
+    :param module: 新子模块。
+    :type module: torch.nn.Module
+
+    ----
+
+    .. _replace_submodule-en:
+
+    * **English**
+
+    Replace the submodule at ``target`` in ``fx_model`` with ``module``.
+
+    :param fx_model: FX graph module to modify.
+    :type fx_model: torch.fx.GraphModule
+    :param target: Dot-separated submodule path used by ``named_modules()``.
+    :type target: str
+    :param module: Replacement module.
+    :type module: torch.nn.Module
+    """
     parent_name, _, child_name = target.rpartition(".")
     parent = fx_model.get_submodule(parent_name) if parent_name else fx_model
     setattr(parent, child_name, module)

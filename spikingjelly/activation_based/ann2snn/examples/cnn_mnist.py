@@ -308,6 +308,25 @@ def main(args):
         drop_last=False,
     )
 
+    # To train the ANN checkpoint locally:
+    # model = mnist_cnn.CNN().to(device)
+    # loss_function = torch.nn.CrossEntropyLoss()
+    # optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
+    # train_data_loader = torch.utils.data.DataLoader(
+    #     train_data_dataset, batch_size=batch_size, shuffle=True
+    # )
+    # for epoch in range(10):
+    #     model.train()
+    #     for img, label in train_data_loader:
+    #         optimizer.zero_grad()
+    #         out = model(img.to(device))
+    #         loss = loss_function(out, label.to(device))
+    #         loss.backward()
+    #         optimizer.step()
+    #     torch.save(model.state_dict(), "SJ-mnist-cnn_model-sample.pth")
+    #     print("Epoch: %d" % epoch)
+    #     print("Validating Accuracy: %.3f" % val(model, device, train_data_loader))
+
     if args.plot_mode_sweep:
         run_legacy_mode_sweep(
             device, calibration_data_loader, test_data_loader, T, args.checkpoint_path

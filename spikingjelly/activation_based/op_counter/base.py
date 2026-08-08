@@ -46,7 +46,41 @@ def _collect_tensors(tree: Any) -> list[torch.Tensor]:
     return [x for x in flat if torch.is_tensor(x)]
 
 
-def _call_model(model: nn.Module, inputs):
+def call_model(model: nn.Module, inputs: Any) -> Any:
+    r"""
+    **API Language** - :ref:`中文 <call_model-cn>` | :ref:`English <call_model-en>`
+
+    ----
+
+    .. _call_model-cn:
+
+    * **中文**
+
+    根据 ``inputs`` 的容器类型，以位置参数、关键字参数或单参数调用模型。
+
+    :param model: 要调用的模型。
+    :type model: torch.nn.Module
+    :param inputs: 单个输入，或要展开的 tuple、list、dict。
+    :type inputs: Any
+    :return: 模型输出。
+    :rtype: Any
+
+    ----
+
+    .. _call_model-en:
+
+    * **English**
+
+    Call ``model`` with one argument, expanded positional arguments, or expanded
+    keyword arguments according to the container type of ``inputs``.
+
+    :param model: Model to call.
+    :type model: torch.nn.Module
+    :param inputs: One input, or a tuple, list, or dict to expand.
+    :type inputs: Any
+    :return: Model output.
+    :rtype: Any
+    """
     if isinstance(inputs, (tuple, list)):
         return model(*inputs)
     if isinstance(inputs, dict):

@@ -4,7 +4,7 @@ from typing import Any
 import torch
 
 from ..triton_utils import (
-    _normalize_cuda_device,
+    normalize_cuda_device,
     is_fp8_dtype,
     normalize_triton_compute_dtype_name,
     normalize_triton_storage_dtype,
@@ -45,7 +45,7 @@ class TritonNeuronExecutionPlan:
         save_intermediates: bool,
     ) -> bool:
         try:
-            device = _normalize_cuda_device(device)
+            device = normalize_cuda_device(device)
             storage_dtype = normalize_triton_storage_dtype(storage_dtype)
             forward_compute_dtype_name = normalize_triton_compute_dtype_name(
                 forward_compute_dtype
@@ -179,7 +179,7 @@ def prepare_triton_neuron_execution_plan(
     _require_fp8_storage_dtype(
         backward_compute_dtype_name, storage_dtype, "backward_compute_dtype"
     )
-    device = _normalize_cuda_device(device)
+    device = normalize_cuda_device(device)
     if device.type != "cuda":
         raise RuntimeError(
             "Triton neuron execution plan is unavailable: requires a CUDA device."
@@ -237,7 +237,7 @@ def _check_mp_cuda_inputs(
         raise RuntimeError(
             f"Mixed-precision Triton {neuron_name} forward requires CUDA tensors."
         )
-    if _normalize_cuda_device(x_seq.device) != _normalize_cuda_device(v_init.device):
+    if normalize_cuda_device(x_seq.device) != normalize_cuda_device(v_init.device):
         raise RuntimeError("x_seq and v_init must be on the same CUDA device.")
     expected_shape = x_seq.shape[1:]
     if v_init.shape != expected_shape:
@@ -254,7 +254,7 @@ def _check_plan_inputs(
     neuron_name: str,
 ) -> None:
     _check_mp_cuda_inputs(x_seq, v_init, neuron_name)
-    if _normalize_cuda_device(x_seq.device) != plan.device:
+    if normalize_cuda_device(x_seq.device) != plan.device:
         raise RuntimeError(
             f"Mixed-precision Triton {neuron_name} forward input device "
             f"{x_seq.device} does not match plan device {plan.device}."

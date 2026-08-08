@@ -10,7 +10,7 @@ import torch.nn as nn
 from ...neuron.base_node import BaseNode, SimpleBaseNode
 from ...neuron.integrate_and_fire import IFNode, SimpleIFNode
 from ...neuron.lif import LIFNode, SimpleLIFNode
-from ..base import DispatchCounterMode, _call_model
+from ..base import DispatchCounterMode, call_model
 from .config import SpikeSimEnergyConfig
 from .counter import SpikeSimCounter
 from .formulas import (
@@ -370,7 +370,7 @@ def estimate_spikesim_event_energy(
     with profiler:
         profiler.add_warnings(neuron_warnings)
         with torch.no_grad():
-            _ = _call_model(model, inputs)
+            _ = call_model(model, inputs)
     report = profiler.get_report()
     if model.training:
         report.warnings.insert(0, training_message)

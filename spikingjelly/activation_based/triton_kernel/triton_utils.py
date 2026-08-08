@@ -351,7 +351,39 @@ def torch_dtype_for_triton_neuron_compute_dtype_id(dtype_id: int) -> torch.dtype
     return triton_neuron_dtype_id_to_torch_dtype(dtype_id)
 
 
-def _normalize_cuda_device(device) -> torch.device:
+def normalize_cuda_device(device: torch.device | str) -> torch.device:
+    r"""
+    **API Language** - :ref:`中文 <normalize_cuda_device-cn>` | :ref:`English <normalize_cuda_device-en>`
+
+    ----
+
+    .. _normalize_cuda_device-cn:
+
+    * **中文**
+
+    将设备转换为 :class:`torch.device`；CUDA 可用时，把未指定序号的
+    ``"cuda"`` 解析为当前 CUDA 设备。
+
+    :param device: 设备对象或设备字符串。
+    :type device: torch.device | str
+    :return: 带明确当前 CUDA 序号的设备，或原类型对应的非 CUDA 设备。
+    :rtype: torch.device
+
+    ----
+
+    .. _normalize_cuda_device-en:
+
+    * **English**
+
+    Convert ``device`` to :class:`torch.device`. When CUDA is available, resolve
+    an unindexed ``"cuda"`` device to the current CUDA device.
+
+    :param device: Device object or device string.
+    :type device: torch.device | str
+    :return: Device with an explicit current CUDA index, or the corresponding
+        non-CUDA device.
+    :rtype: torch.device
+    """
     device = torch.device(device)
     if device.type == "cuda" and device.index is None and torch.cuda.is_available():
         return torch.device("cuda", torch.cuda.current_device())

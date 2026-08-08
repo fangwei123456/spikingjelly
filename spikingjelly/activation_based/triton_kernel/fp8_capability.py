@@ -10,7 +10,7 @@ import torch
 from spikingjelly.logger import logger
 
 from .triton_utils import (
-    _normalize_cuda_device,
+    normalize_cuda_device,
     is_fp8_dtype,
     normalize_triton_compute_dtype_name,
     normalize_triton_storage_dtype,
@@ -148,7 +148,7 @@ def _probe_cached(
         return _failure(False, "triton is not installed")
     if not torch.cuda.is_available():
         return _failure(False, "CUDA is not available")
-    device = _normalize_cuda_device(device_str)
+    device = normalize_cuda_device(device_str)
     if device.type != "cuda":
         return _failure(False, "Triton FP8 neuron forward requires a CUDA device")
     if _fp8_neuron_forward_probe_kernel is None:
@@ -203,7 +203,7 @@ def _backward_probe_cached(
         return _failure(False, "triton is not installed")
     if not torch.cuda.is_available():
         return _failure(False, "CUDA is not available")
-    device = _normalize_cuda_device(device_str)
+    device = normalize_cuda_device(device_str)
     if device.type != "cuda":
         return _failure(False, "Triton FP8 neuron backward requires a CUDA device")
     if _fp8_neuron_backward_probe_kernel is None:
@@ -271,7 +271,7 @@ def _cache_key_parts(
     dtype, device, compute_dtype
 ) -> tuple[torch.dtype, torch.device, str, str, str | None]:
     dtype = _normalize_fp8_dtype(dtype)
-    device = _normalize_cuda_device(device)
+    device = normalize_cuda_device(device)
     compute_dtype_name = normalize_triton_compute_dtype_name(compute_dtype)
     triton_version = (
         getattr(triton, "__version__", None) if triton is not None else None
@@ -379,7 +379,7 @@ def triton_fp8_neuron_capability_report(
     :return: Device, version, storage-dtype, and compute-dtype probe results.
     :rtype: dict[str, Any]
     """
-    device = _normalize_cuda_device(device)
+    device = normalize_cuda_device(device)
     report = {
         "device": str(device),
         "device_type": device.type,

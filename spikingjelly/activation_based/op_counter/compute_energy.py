@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import torch.nn as nn
 
 from .ac import ACCounter
-from .base import DispatchCounterMode, _call_model
+from .base import DispatchCounterMode, call_model
 from .flop import FlopCounter
 from .mac import MACCounter
 from .synop import SynOpCounter
@@ -367,5 +367,5 @@ def estimate_compute_energy(
     """
     profiler = ComputeEnergyProfiler(config=config)
     with profiler:
-        _ = _call_model(model, inputs)
+        _ = call_model(model, inputs)
     return profiler.get_report()

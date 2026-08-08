@@ -21,7 +21,7 @@ from spikingjelly.activation_based.ann2snn.operators import (
 )
 from spikingjelly.activation_based.ann2snn.recipes.base import (
     ConversionRecipe,
-    _replace_submodule,
+    replace_submodule,
 )
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
     _SHAPE_ONLY_MODULE_TYPES,
@@ -149,7 +149,7 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
             replacement = self._make_td_operator(module, node)
             if replacement is None:
                 continue
-            _replace_submodule(fx_model, node.target, replacement)
+            replace_submodule(fx_model, node.target, replacement)
             modules[node.target] = replacement
 
         self._replace_functional_td_ops(fx_model)

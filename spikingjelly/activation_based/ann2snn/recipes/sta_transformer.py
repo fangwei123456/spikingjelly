@@ -18,7 +18,7 @@ from spikingjelly.activation_based.ann2snn.operators import (
 )
 from spikingjelly.activation_based.ann2snn.recipes.base import (
     ConversionRecipe,
-    _replace_submodule,
+    replace_submodule,
 )
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
     _TRANSFORMER_SAFE_MODULE_TYPES,
@@ -643,7 +643,7 @@ class STATransformerRecipe(ConversionRecipe):
             if not isinstance(module, (nn.Linear, nn.Conv2d)):
                 continue
             replacement = _td_module_from_ann(module)
-            _replace_submodule(fx_model, node.target, replacement)
+            replace_submodule(fx_model, node.target, replacement)
             modules[node.target] = replacement
 
         self._wrap_time_constants(fx_model)
@@ -664,7 +664,7 @@ class STATransformerRecipe(ConversionRecipe):
                 replacement = _make_td_multihead_attention(module)
             else:
                 continue
-            _replace_submodule(fx_model, node.target, replacement)
+            replace_submodule(fx_model, node.target, replacement)
             modules[node.target] = replacement
             if threshold is not None:
                 if isinstance(replacement, TDMultiheadAttention):

@@ -1,4 +1,5 @@
 # ruff: noqa: F401,F403,F405
+from spikingjelly.activation_based import base
 from spikingjelly.activation_based.distributed.pipeline import memopt as pipeline_memopt
 from spikingjelly.activation_based.distributed.pipeline import (
     runtime as pipeline_runtime,
@@ -84,6 +85,25 @@ def test_measure_module_cost_uses_autograd_inside_no_grad():
 
     assert cost > 0
     assert module.weight.grad is None
+
+
+def test_measure_module_cost_resets_state_between_forwards():
+    class StatefulModule(base.MemoryModule):
+        def __init__(self):
+            super().__init__()
+            self.register_memory("state", 0)
+            self.forward_states = []
+
+        def forward(self, x):
+            self.forward_states.append(self.state)
+            self.state += 1
+            return x
+
+    module = StatefulModule()
+    _measure_module_cost(module, torch.randn(4, 3))
+
+    assert module.forward_states == [0, 0]
+    assert module.state == 0
 
 
 def test_cifar10dvs_vgg_pipeline_runtime_supports_interleaved_single_rank():

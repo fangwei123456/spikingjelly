@@ -12,7 +12,7 @@ import torch.nn as nn
 from torch.overrides import resolve_name
 from torch.utils._python_dispatch import TorchDispatchMode
 
-from ..base import _call_model
+from ..base import call_model
 from .config import MemoryHierarchyConfig, MemoryInstanceSpec
 from .utils import _is_spike
 
@@ -2210,7 +2210,7 @@ def estimate_neuromc_runtime_energy(
 
     with profiler:
         with profiler.stage("forward"):
-            output = _call_model(model, inputs)
+            output = call_model(model, inputs)
         loss = None
         if loss_fn is not None:
             with profiler.suspend():
