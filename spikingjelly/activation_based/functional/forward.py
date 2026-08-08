@@ -261,7 +261,7 @@ def seq_to_ann_forward(
         tensor tuple，则分别恢复每个 tensor 的时间维和批量维
     :rtype: Union[torch.Tensor, tuple[torch.Tensor, ...]]
 
-    :raises ValueError: 当 ``x_seq`` 为空tuple，或tuple中包含非 ``torch.Tensor`` 元素，或tuple中tensor的维数少于2，或tuple中tensor的 ``[T, batch_size]`` 前两维不一致时抛出
+    :raises ValueError: 当tuple中tensor的 ``[T, batch_size]`` 前两维不一致时抛出
 
     :raises Exception: 任何底层无状态模块在前向传播时抛出的异常都会原样向上传播
 
@@ -298,24 +298,11 @@ def seq_to_ann_forward(
         and batch dimensions restored
     :rtype: Union[torch.Tensor, tuple[torch.Tensor, ...]]
 
-    :raises ValueError: if ``x_seq`` is an empty tuple, if any element of ``x_seq`` is not a ``torch.Tensor``, if any tensor in ``x_seq`` has fewer than 2 dimensions, or if the tensors in ``x_seq`` do not share the same ``[T, batch_size]`` leading dimensions
+    :raises ValueError: if the tensors in ``x_seq`` do not share the same ``[T, batch_size]`` leading dimensions
 
     :raises Exception: Any exception raised by an underlying stateless module is propagated unchanged
     """
     if isinstance(x_seq, tuple):
-        if len(x_seq) == 0:
-            raise ValueError("x_seq must not be an empty tuple!")
-        if any(not isinstance(item, Tensor) for item in x_seq):
-            raise ValueError(
-                "expected all elements of x_seq to be torch.Tensor, but got "
-                f"types {[type(item).__name__ for item in x_seq]}!"
-            )
-        if any(item.dim() < 2 for item in x_seq):
-            raise ValueError(
-                "expected all tensors in x_seq to have at least 2 dimensions "
-                "[T, batch_size, ...], but got tensors with "
-                f"shapes {[tuple(item.shape) for item in x_seq]}!"
-            )
         leading_shape = x_seq[0].shape[:2]
         if any(item.shape[:2] != leading_shape for item in x_seq[1:]):
             raise ValueError(
