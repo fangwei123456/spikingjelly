@@ -351,6 +351,13 @@ def torch_dtype_for_triton_neuron_compute_dtype_id(dtype_id: int) -> torch.dtype
     return triton_neuron_dtype_id_to_torch_dtype(dtype_id)
 
 
+def _normalize_cuda_device(device) -> torch.device:
+    device = torch.device(device)
+    if device.type == "cuda" and device.index is None and torch.cuda.is_available():
+        return torch.device("cuda", torch.cuda.current_device())
+    return device
+
+
 @triton.jit
 def convert_and_store(pointer, value, boundary_check):
     # For block pointers created by tl.make_block_pointer(),

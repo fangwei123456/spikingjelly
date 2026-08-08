@@ -1,5 +1,5 @@
 from spikingjelly.logger import logger
-from typing import Callable, Union, Optional, Tuple
+from typing import Callable, Optional, Tuple
 import os
 from pathlib import Path
 import multiprocessing
@@ -14,12 +14,6 @@ from .base import NeuromorphicDatasetFolder
 
 
 __all__ = ["NCaltech101"]
-
-
-def _read_bin_save_to_np(bin_file: Union[str, Path], np_file: Union[str, Path]):
-    events = utils.load_ATIS_bin(bin_file)
-    utils.np_savez(np_file, t=events["t"], x=events["x"], y=events["y"], p=events["p"])
-    logger.debug("Save [%s] to [%s].", bin_file, np_file)
 
 
 class NCaltech101(NeuromorphicDatasetFolder):
@@ -288,7 +282,9 @@ class NCaltech101(NeuromorphicDatasetFolder):
                         "Start to convert [%s] to [%s].", source_file, target_file
                     )
                     futures.append(
-                        tpe.submit(_read_bin_save_to_np, source_file, target_file)
+                        tpe.submit(
+                            utils._save_atis_bin_as_npz, source_file, target_file
+                        )
                     )
 
             for future in futures:

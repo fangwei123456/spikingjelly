@@ -127,7 +127,7 @@ if __name__ == "__main__":
         batch = Transition(*zip(*transitions))
 
         non_final_mask = torch.tensor(
-            tuple(map(lambda s: s is not None, batch.next_state)),
+            tuple(state is not None for state in batch.next_state),
             device=device,
             dtype=torch.bool,
         )

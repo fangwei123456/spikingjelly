@@ -61,7 +61,7 @@ class SResNetTrainer(train_classify.Trainer):
         return y.mean(0)  # return firing rate
 
     def get_args_parser(self, add_help=True):
-        parser = super().get_args_parser()
+        parser = super().get_args_parser(add_help=add_help)
         parser.add_argument("--T", type=int, help="total time-steps")
         parser.add_argument(
             "--cupy", action="store_true", help="set the neurons to use cupy backend"

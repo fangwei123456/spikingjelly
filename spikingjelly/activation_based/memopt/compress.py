@@ -79,7 +79,6 @@ class BaseSpikeCompressor(abc.ABC):
         To implement a spike compressor, you need to inherit this abstract base class
         and implement the ``_compress`` and ``_decompress`` methods.
         """
-        pass
 
     @abc.abstractmethod
     def _compress(self, s_seq: torch.Tensor) -> torch.Tensor:

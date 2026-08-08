@@ -118,7 +118,6 @@ def hybrid_td3(
     start_steps=10000,
     update_after=1000,
     update_every=50,
-    act_noise=0.1,
     target_noise=0.2,
     noise_clip=0.5,
     policy_delay=2,

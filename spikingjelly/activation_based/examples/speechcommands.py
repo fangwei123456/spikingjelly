@@ -612,8 +612,6 @@ if __name__ == "__main__":
             loss = criterion(out_spikes_counter_frequency, labels)
             loss.backward()
 
-            # nn.utils.clip_grad_value_(net.parameters(), 5)
-
             optimizer.step()
 
             reset_net(net)
@@ -665,12 +663,6 @@ if __name__ == "__main__":
 
             print("Confusion Matrix:")
             print(cmatrix)
-
-            # plt.clf()
-            # fig = plt.figure()
-            # plt.imshow(cmatrix)
-            # writer.add_figure('Confusion Matrix', figure=fig,
-            #                   global_step=net.epochs)
 
             test_accuracy = correct_sum / test_sum
             writer.add_scalar("Test Acc.", test_accuracy, global_step=net.epochs)

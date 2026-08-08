@@ -132,7 +132,7 @@ def train(use_cuda, model_dir, log_dir, env_name, hidden_size, num_episodes, see
         batch = Transition(*zip(*transitions))
 
         non_final_mask = torch.tensor(
-            tuple(map(lambda s: s is not None, batch.next_state)),
+            tuple(state is not None for state in batch.next_state),
             device=device,
             dtype=torch.bool,
         )

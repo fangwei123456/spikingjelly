@@ -32,6 +32,14 @@ from spikingjelly.activation_based.memopt.compress import (
 )
 
 
+def test_resolve_device_rejects_invalid_local_rank(monkeypatch):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setenv("LOCAL_RANK", "not-an-integer")
+
+    with pytest.raises(ValueError, match="LOCAL_RANK must be an integer"):
+        memopt_pipeline.resolve_device()
+
+
 def simple_forward_fn(x, weight, bias=None):
     y = torch.matmul(x, weight.t())
     if bias is not None:

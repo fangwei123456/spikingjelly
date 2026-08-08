@@ -346,13 +346,9 @@ def load_aedat_v3(file_name: Union[str, Path]) -> dict:
 
             # read header
             e_type = struct.unpack("H", header[0:2])[0]
-            # e_source = struct.unpack("H", header[2:4])[0]
             e_size = struct.unpack("I", header[4:8])[0]
-            # e_offset = struct.unpack("I", header[8:12])[0]
             e_tsoverflow = struct.unpack("I", header[12:16])[0]
             e_capacity = struct.unpack("I", header[16:20])[0]
-            # e_number = struct.unpack("I", header[20:24])[0]
-            # e_valid = struct.unpack("I", header[24:28])[0]
 
             data_length = e_capacity * e_size
             data = bin_f.read(data_length)
@@ -435,6 +431,12 @@ def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
         p = (rd_2__5 & 128) >> 7
         t = ((rd_2__5 & 127) << 16) | (raw_data[3::5] << 8) | (raw_data[4::5])
     return {"t": t, "x": x, "y": y, "p": p}
+
+
+def _save_atis_bin_as_npz(bin_file: Union[str, Path], np_file: Union[str, Path]):
+    events = load_ATIS_bin(bin_file)
+    np_savez(np_file, t=events["t"], x=events["x"], y=events["y"], p=events["p"])
+    logger.debug("Save [%s] to [%s].", bin_file, np_file)
 
 
 def load_npz_frames(file_name: Union[str, Path]) -> np.ndarray:
@@ -1491,12 +1493,12 @@ def create_sub_dataset(
     create_same_directory_structure(source_dir, target_dir)
 
     for e_root, e_dirs, e_files in os.walk(source_dir, followlinks=True):
-        if e_files.__len__() > 0:
+        if e_files:
             output_dir = os.path.join(target_dir, os.path.relpath(e_root, source_dir))
             if ratio >= 1.0:
-                samples_number = e_files.__len__()
+                samples_number = len(e_files)
             else:
-                samples_number = int(ratio * e_files.__len__())
+                samples_number = int(ratio * len(e_files))
             if samples_number == 0:
                 logger.warning(
                     "No samples selected from [%s] for output [%s].",
@@ -1512,10 +1514,8 @@ def create_sub_dataset(
                 target_file = os.path.join(output_dir, os.path.basename(source_file))
                 if use_soft_link:
                     os.symlink(source_file, target_file)
-                    # print(f'symlink {source_file} -> {target_file}')
                 else:
                     shutil.copyfile(source_file, target_file)
-                    # print(f'copyfile {source_file} -> {target_file}')
             operation = "linked" if use_soft_link else "copied"
             logger.debug(
                 "[%s] files in [%s] were %s to [%s].",

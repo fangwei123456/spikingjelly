@@ -754,7 +754,6 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
         self,
         time_steps: int = 200,
         model_family: str = "roberta",
-        strict: bool = True,
     ) -> None:
         r"""
         **API Language** - :ref:`中文 <SpikeZIPTFQANNRecipe.__init__-cn>` | :ref:`English <SpikeZIPTFQANNRecipe.__init__-en>`
@@ -787,9 +786,6 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
         :type time_steps: int
         :param model_family: 模型族。支持 ``"roberta"`` 或 ``"vit"``。
         :type model_family: str
-        :param strict: 必须为 ``True``。保留该参数用于未来显式放宽支持边界。
-        :type strict: bool
-
         ----
 
         .. _SpikeZIPTFQANNRecipe.__init__-en:
@@ -823,13 +819,9 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
         :param model_family: Model family. Supported values are ``"roberta"``
             and ``"vit"``.
         :type model_family: str
-        :param strict: Must be ``True``. The parameter is reserved for future
-            explicit boundary relaxation.
-        :type strict: bool
         """
         self.time_steps = time_steps
         self.model_family = model_family
-        self.strict = strict
 
     def validate(self, converter: "ModuleConverter") -> None:
         if (
@@ -842,8 +834,6 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
             raise ValueError(
                 "SpikeZIPTFQANNRecipe supports model_family='roberta' or 'vit'."
             )
-        if self.strict is not True:
-            raise ValueError("SpikeZIPTFQANNRecipe requires strict=True.")
 
     def convert_module(self, converter: "ModuleConverter", ann: nn.Module) -> nn.Module:
         model = copy.deepcopy(ann).eval()

@@ -119,17 +119,11 @@ def _parse_raw_address(
 def _load_events(
     fp,
     filter_dvs=False,
-    # bytes_skip=0,
-    # bytes_trim=0,
-    # times_first=False,
     **kwargs,
 ):
     timestamp, addr = _load_raw_events(
         fp,
         filter_dvs=filter_dvs,
-        #   bytes_skip=bytes_skip,
-        #   bytes_trim=bytes_trim,
-        #   times_first=times_first
     )
     x, y, polarity = _parse_raw_address(addr, **kwargs)
     return timestamp, x, y, polarity

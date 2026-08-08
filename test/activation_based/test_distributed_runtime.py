@@ -1,6 +1,5 @@
 # ruff: noqa: F401,F403,F405
 from spikingjelly.activation_based.distributed.pipeline.runtime import (
-    _collect_resettable_modules,
     snn_sequence_cross_entropy,
 )
 from test.activation_based._distributed_dtensor_test_support import *
@@ -32,12 +31,6 @@ def test_collect_reset_modules_and_reset_collected_modules():
 def test_collect_reset_modules_ignores_non_callable_reset_attributes():
     net = nn.Sequential(_ToyNonCallableReset(), _ToyResetCounter())
     modules = collect_reset_modules(net)
-    assert modules == (net[1],)
-
-
-def test_pipeline_collect_resettable_modules_ignores_non_callable_reset_attributes():
-    net = nn.Sequential(_ToyNonCallableReset(), _ToyResetCounter())
-    modules = _collect_resettable_modules(net)
     assert modules == (net[1],)
 
 

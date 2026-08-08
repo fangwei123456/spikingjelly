@@ -1,4 +1,5 @@
 from collections import defaultdict
+from math import prod
 from typing import Any, Callable
 
 import torch
@@ -8,13 +9,6 @@ from .base import BaseCounter
 
 aten = torch.ops.aten
 __all__ = ["FlopCounter"]
-
-
-def _prod(dims):
-    p = 1
-    for v in dims:
-        p *= v
-    return p
 
 
 def _flop_null(args, kwargs, out):
@@ -143,8 +137,8 @@ def _flop_convolution(args, kwargs, out):
     c_out, c_in, *kernel_shape = w.shape
 
     spatial_shape = x.shape[2:] if transposed else out.shape[2:]
-    flops_per_position = 2 * c_in * _prod(kernel_shape)
-    flops = flops_per_position * _prod(spatial_shape) * c_out * b
+    flops_per_position = 2 * c_in * prod(kernel_shape)
+    flops = flops_per_position * prod(spatial_shape) * c_out * b
     flops -= out.numel()  # for each output element, the first add can be avoided
     if bias is not None:
         flops += out.numel()
@@ -202,7 +196,7 @@ def _flop_convolution_backward(args, kwargs, out):
         B = grad_out.shape[0]
         C_out = grad_out.shape[1]
         spatial_shape = grad_out.shape[2:]
-        flops += C_out * (B * _prod(spatial_shape) - 1)
+        flops += C_out * (B * prod(spatial_shape) - 1)
 
     return flops
 
@@ -210,12 +204,12 @@ def _flop_convolution_backward(args, kwargs, out):
 def _flop_max_pool2d_with_indices(args, kwargs, out):
     kernel_size = args[1]
     y = out[0]
-    return y.numel() * (_prod(kernel_size) - 1)  # K-1 * max
+    return y.numel() * (prod(kernel_size) - 1)  # K-1 * max
 
 
 def _flop_avg_pool2d(args, kwargs, out):
     kernel_size = args[1]
-    return out.numel() * _prod(kernel_size)  # K-1 * add, 1 * div
+    return out.numel() * prod(kernel_size)  # K-1 * add, 1 * div
 
 
 def _flop_sum(args, kwargs, out):

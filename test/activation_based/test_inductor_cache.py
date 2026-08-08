@@ -53,8 +53,6 @@ def test_inductor_cache_reuses_same_config_across_modules_and_function(monkeypat
     assert inductor_cache.info()["entries"] == 1
     assert torch.equal(y0, y_function)
     assert torch.equal(y0, y1)
-    assert node0._inductor_compiled_graphs == {}
-    assert node1._inductor_compiled_graphs == {}
 
     inductor_cache.clear()
 
@@ -116,11 +114,9 @@ def test_inductor_cache_is_not_serialized_with_node(monkeypatch):
     node(torch.randn(4, 2, 3))
     assert inductor_cache.info()["entries"] == 1
 
-    copied = copy.deepcopy(node)
-    restored = pickle.loads(pickle.dumps(node))
+    copy.deepcopy(node)
+    pickle.loads(pickle.dumps(node))
 
-    assert copied._inductor_compiled_graphs == {}
-    assert restored._inductor_compiled_graphs == {}
     assert inductor_cache.info()["entries"] == 1
 
     inductor_cache.clear()

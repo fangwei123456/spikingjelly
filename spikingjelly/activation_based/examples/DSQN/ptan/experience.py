@@ -391,7 +391,6 @@ class ExperienceReplayBuffer:
     def sample(self, batch_size):
         """
         Get one random batch from experience replay
-        TODO: implement sampling order policy
         :param batch_size:
         :return:
         """

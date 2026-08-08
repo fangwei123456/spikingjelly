@@ -1011,7 +1011,6 @@ class Qwen2SNNModel(nn.Module):
         :type use_cache: bool
         :return: 含 ``logits`` 与 ``past_key_values`` 的 namespace。
         :rtype: types.SimpleNamespace
-        :raises RuntimeError: 保留给运行时错误。
         :raises ValueError: ``encoding_mode``、position shape 或 cache 参数组合无效。
 
         ----
@@ -1044,7 +1043,6 @@ class Qwen2SNNModel(nn.Module):
         :type use_cache: bool
         :return: Namespace containing ``logits`` and ``past_key_values``.
         :rtype: types.SimpleNamespace
-        :raises RuntimeError: Reserved for runtime failures.
         :raises ValueError: If ``encoding_mode``, the position shape, or the cache
             argument combination is invalid.
         """

@@ -427,7 +427,7 @@ def gen_forward_codes(
     :raises NotImplementedError: Raised for unsupported node instance kinds or operator kinds.
     """
     # 暂时只支持单个输出
-    assert output_nodes.__len__() == 1
+    assert len(output_nodes) == 1
 
     # 代码生成
     codes = "\n"
@@ -549,9 +549,8 @@ def gen_forward_codes(
     for node in output_nodes.values():
         assert node.name not in params_name
 
-    for i in range(params.__len__()):
-        param = params[i]
-        params[i] = param[1] + param[0]
+    for i, (name, param_type) in enumerate(params):
+        params[i] = param_type + name
 
     head = ", ".join(params)
     head = "(" + head + ")"
@@ -694,11 +693,12 @@ def gen_backward_codes(
 
     codes = "\n"
 
-    for i in range(cmds.__len__()):
-        output, fun, inputs = cmds[cmds.__len__() - 1 - i]
+    for (output, fun, inputs), cuda_cmd in zip(
+        reversed(cmds), reversed(cuda_cmds), strict=True
+    ):
         codes += "\n"
         codes += "                 "
-        codes += f"// {cuda_cmds[cmds.__len__() - 1 - i]}"
+        codes += f"// {cuda_cmd}"
         if fun == "aten::add":
             # z = x + y * alpha
             x, y, alpha = inputs

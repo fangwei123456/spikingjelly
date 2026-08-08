@@ -849,7 +849,7 @@ def test_neuromc_exact_optimizer_counts_mixed_parameter_shapes():
     model.weight.grad = torch.ones_like(model.weight)
     model.bias.grad = torch.ones_like(model.bias)
 
-    fragment = profiler._optimizer_fragment("optimizer")
+    (fragment,) = profiler._optimizer_fragments("optimizer")
     counts = profiler._extra_counts(fragment)
     bits, _ = profiler._extra_memory_for_fragment(fragment)
 
@@ -1028,7 +1028,7 @@ def test_neuromc_exact_optimizer_skips_params_without_grad():
     model.weight.grad = torch.ones_like(model.weight)
     model.bias.grad = None
 
-    fragment = profiler._optimizer_fragment("optimizer")
+    (fragment,) = profiler._optimizer_fragments("optimizer")
     counts = profiler._extra_counts(fragment)
 
     assert fragment.input_numel == 0

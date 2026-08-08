@@ -19,6 +19,14 @@ __all__ = [
 ]
 
 
+def _replace_submodule(
+    fx_model: fx.GraphModule, target: str, module: nn.Module
+) -> None:
+    parent_name, _, child_name = target.rpartition(".")
+    parent = fx_model.get_submodule(parent_name) if parent_name else fx_model
+    setattr(parent, child_name, module)
+
+
 class FXConversionRecipe:
     r"""
     **API Language** - :ref:`中文 <ConversionRecipe-cn>` | :ref:`English <ConversionRecipe-en>`

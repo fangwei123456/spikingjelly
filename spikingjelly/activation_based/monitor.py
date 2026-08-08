@@ -834,7 +834,7 @@ class GPUMonitor(threading.Thread):
                     outputs = fp.read()
                     outputs = outputs.split("\n")[1:-1]
                     # skip the first row (header) and the last row ("\n")
-                    for i in range(outputs.__len__()):
+                    for i in range(len(outputs)):
                         utilization_memory = re.findall(r"\d+", outputs[i])
                         utilization = int(utilization_memory[0])
                         memory_used = int(utilization_memory[1])

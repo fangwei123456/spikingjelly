@@ -73,9 +73,7 @@ def validate_rate_coding_mode(mode: Union[str, float]) -> None:
                     raise NotImplementedError(err_msg)
             except ValueError as exc:
                 raise NotImplementedError(err_msg) from exc
-        elif mode.lower() in ["max"]:
-            pass
-        else:
+        elif mode.lower() != "max":
             raise NotImplementedError(err_msg)
     elif isinstance(mode, (int, float)) and not isinstance(mode, bool):
         if not (0 < mode <= 1):

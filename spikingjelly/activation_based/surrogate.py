@@ -115,7 +115,6 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
     :return: 无返回值，直接打印对比结果
     """
     x = torch.arange(-2, 2, 32 / 8192)
-    # x = torch.as_tensor([-1., 0., 1.])
     x.requires_grad_(True)
     primitive_function(x, *args, **kwargs).sum().backward()
     x_grad_auto = x.grad.clone()
@@ -197,7 +196,6 @@ def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
                 neuron.IFNode, surrogate.S2NN, device="cuda:1", alpha=4.0, beta=1.0
             )
     """
-    # check_cuda_grad(neuron.IFNode, surrogate.S2NN, device='cuda:1', alpha=4., beta=1.)
     for dtype in [torch.float, torch.half]:
         print("Checking CUDA surrogate gradient dtype=", dtype)
         net = neu(surrogate_function=surrogate_function(*args, **kwargs), step_mode="m")
@@ -213,8 +211,6 @@ def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
         net(x.unsqueeze(0)).sum().backward()
 
         x_grad_cp = x.grad.clone()
-        # print('python grad', x_grad_py)
-        # print('cupy   grad', x_grad_cp)
         abs_error = (x_grad_cp - x_grad_py).abs()
         idx = abs_error.argmax()
         print(
@@ -3431,14 +3427,3 @@ class Rect(SurrogateFunctionBase):
     @staticmethod
     def backward(grad_output, x, alpha):
         return rect_backward(grad_output, x, alpha)[0]
-
-
-_has_cuda_ = [
-    ATan,
-    Sigmoid,
-    PiecewiseLeakyReLU,
-    S2NN,
-    QPseudoSpike,
-    LeakyKReLU,
-    FakeNumericalGradient,
-]

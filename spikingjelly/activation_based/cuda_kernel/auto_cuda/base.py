@@ -282,8 +282,8 @@ class CKernel:
                 py_dict.keys() & self.cparams.keys()
             )
 
-            if missed_keys.__len__() > 0:
-                if (missed_keys & py_dict.keys()).__len__() > 0:
+            if missed_keys:
+                if missed_keys & py_dict.keys():
                     msg = f"{missed_keys} is in py_dict but not in cparams!"
                 else:
                     msg = f"{missed_keys} is in cparams but not in py_dict!"
@@ -1028,7 +1028,7 @@ class CKernel2D(CKernel):
             :meth:`CKernel2D.__call__` performs automatic padding for odd-sized
             half tensors before launch. This method is for validation checks.
         """
-        for key, value in py_dict.items():
+        for value in py_dict.values():
             if isinstance(value, torch.Tensor):
                 if value.dtype == torch.half:
                     if value.ndim <= 1:
@@ -1330,12 +1330,12 @@ class CodeTyper:
         """
         codes = codes.replace("\n", "")
         codes = codes.split(";")
-        for i in range(codes.__len__()):
-            if codes[i].__len__() > 0:
-                if codes[i] in ("{", "}"):
-                    self.codes += self.indent + codes[i] + "\n"
+        for code in codes:
+            if code:
+                if code in ("{", "}"):
+                    self.codes += self.indent + code + "\n"
                 else:
-                    self.codes += self.indent + codes[i] + ";\n"
+                    self.codes += self.indent + code + ";\n"
 
 
 class CodeBlock:

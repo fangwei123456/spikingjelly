@@ -10,6 +10,7 @@ import torch
 from spikingjelly.logger import logger
 
 from .triton_utils import (
+    _normalize_cuda_device,
     is_fp8_dtype,
     normalize_triton_compute_dtype_name,
     normalize_triton_storage_dtype,
@@ -116,17 +117,6 @@ def _normalize_fp8_dtype(dtype) -> torch.dtype:
     if not is_fp8_dtype(normalized):
         raise ValueError(f"Unsupported Triton FP8 dtype: {normalized}.")
     return normalized
-
-
-def _normalize_cuda_device(device) -> torch.device:
-    device = torch.device(device)
-    if device.type != "cuda":
-        return device
-    if device.index is None:
-        if not torch.cuda.is_available():
-            return torch.device("cuda")
-        return torch.device("cuda", torch.cuda.current_device())
-    return device
 
 
 def _failure(available: bool, reason: str | None = None) -> dict[str, Any]:

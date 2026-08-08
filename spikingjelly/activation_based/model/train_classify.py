@@ -285,8 +285,8 @@ class Trainer:
                 loss = criterion(output, target)
 
                 acc1, acc5 = self.cal_acc1_acc5(output, target)
-                # FIXME need to take into account that the datasets
-                # could have been padded in distributed setup
+                # Distributed samplers can pad the dataset; the check below warns
+                # when the processed count therefore differs from its length.
                 batch_size = target.shape[0]
                 metric_logger.update(loss=loss.item())
                 metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
@@ -301,7 +301,6 @@ class Trainer:
             and len(data_loader.dataset) != num_processed_samples
             and torch.distributed.get_rank() == 0
         ):
-            # See FIXME above
             warnings.warn(
                 f"It looks like the dataset has {len(data_loader.dataset)} samples, but {num_processed_samples} "
                 "samples were used for the validation, which might bias the results. "

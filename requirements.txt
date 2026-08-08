@@ -2,7 +2,6 @@
 torch>=2.6.0   # tested on 2.7.1+cu118
 torchvision
 torchaudio
-einops
 h5py
 matplotlib
 numpy

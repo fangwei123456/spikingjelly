@@ -1,4 +1,5 @@
 from collections import defaultdict
+from math import prod
 from typing import Any, Callable
 
 import torch
@@ -8,13 +9,6 @@ from .base import BaseCounter, is_binary_tensor
 
 aten = torch.ops.aten
 __all__ = ["LemaireAddressingCounter"]
-
-
-def _prod(dims):
-    p = 1
-    for v in dims:
-        p *= int(v)
-    return p
 
 
 def _address_linear(x: torch.Tensor, out: torch.Tensor) -> dict[str, int]:
@@ -29,7 +23,7 @@ def _address_linear(x: torch.Tensor, out: torch.Tensor) -> dict[str, int]:
     }
 
 
-def _address_mm(args, kwargs, out):
+def _address_matmul(args, kwargs, out):
     del kwargs
     x = args[0]
     if not torch.is_tensor(x) or not torch.is_tensor(out):
@@ -37,23 +31,7 @@ def _address_mm(args, kwargs, out):
     return _address_linear(x, out)
 
 
-def _address_addmm(args, kwargs, out):
-    del kwargs
-    x = args[1]
-    if not torch.is_tensor(x) or not torch.is_tensor(out):
-        return {"acc_addr": 0, "mac_addr": 0}
-    return _address_linear(x, out)
-
-
-def _address_bmm(args, kwargs, out):
-    del kwargs
-    x = args[0]
-    if not torch.is_tensor(x) or not torch.is_tensor(out):
-        return {"acc_addr": 0, "mac_addr": 0}
-    return _address_linear(x, out)
-
-
-def _address_baddbmm(args, kwargs, out):
+def _address_add_matmul(args, kwargs, out):
     del kwargs
     x = args[1]
     if not torch.is_tensor(x) or not torch.is_tensor(out):
@@ -69,7 +47,7 @@ def _address_convolution(args, kwargs, out):
     if transposed or not torch.is_tensor(x) or not torch.is_tensor(out):
         return {"acc_addr": 0, "mac_addr": 0}
 
-    kernel_volume = _prod(w.shape[2:])
+    kernel_volume = prod(w.shape[2:])
     out_channels = int(w.shape[0])
     if is_binary_tensor(x):
         spike_num_in = int(x.count_nonzero().item())
@@ -151,10 +129,10 @@ class LemaireAddressingCounter(BaseCounter):
         """
         super().__init__()
         self.rules: dict[Any, Callable] = {
-            aten.mm.default: _address_mm,
-            aten.addmm.default: _address_addmm,
-            aten.bmm.default: _address_bmm,
-            aten.baddbmm.default: _address_baddbmm,
+            aten.mm.default: _address_matmul,
+            aten.addmm.default: _address_add_matmul,
+            aten.bmm.default: _address_matmul,
+            aten.baddbmm.default: _address_add_matmul,
             aten.convolution.default: _address_convolution,
         }
         self.ignore_modules = []

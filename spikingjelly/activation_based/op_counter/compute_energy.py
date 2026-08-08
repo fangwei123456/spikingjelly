@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import torch.nn as nn
 
 from .ac import ACCounter
-from .base import DispatchCounterMode
+from .base import DispatchCounterMode, _call_model
 from .flop import FlopCounter
 from .mac import MACCounter
 from .synop import SynOpCounter
@@ -20,14 +20,6 @@ __all__ = [
     "ComputeEnergyReport",
     "estimate_compute_energy",
 ]
-
-
-def _call_model(model: nn.Module, inputs):
-    if isinstance(inputs, (tuple, list)):
-        return model(*inputs)
-    if isinstance(inputs, dict):
-        return model(**inputs)
-    return model(inputs)
 
 
 @dataclass

@@ -57,7 +57,6 @@ parser.add_argument(
     help='学习率，例如“1e-3”\n Learning rate, e.g., "1e-3": ',
     dest="lr",
 )
-# parser.add_argument('--tau', default=2.0, type=float, help='LIF神经元的时间常数tau，例如“100.0”\n Membrane time constant, tau, for LIF neurons, e.g., "100.0"')
 parser.add_argument(
     "-N",
     "--epoch",
@@ -221,8 +220,6 @@ def main():
 
     # 保存模型
     torch.save(net, model_output_dir + "/tempotron_snn_mnist.ckpt")
-    # 读取模型
-    # net = torch.load(model_output_dir + "/tempotron_snn_mnist.ckpt")
 
 
 if __name__ == "__main__":

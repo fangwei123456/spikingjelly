@@ -4,145 +4,17 @@ from typing import Any, Callable
 import torch
 import torch.nn as nn
 
+from .ac import (
+    _spike_addmm,
+    _spike_baddbmm,
+    _spike_bmm,
+    _spike_convolution,
+    _spike_mm,
+)
 from .base import BaseCounter
 
 aten = torch.ops.aten
 __all__ = ["SynOpCounter"]
-
-
-def _prod(dims):
-    p = 1
-    for v in dims:
-        p *= v
-    return p
-
-
-def _spike_nnz(x: torch.Tensor) -> int | None:
-    """Return the number of non-zero elements if *x* is a binary spike tensor, else None."""
-    if x.dtype == torch.bool:
-        return int(x.count_nonzero().item())
-    is_binary = bool(x.eq(0).logical_or_(x.eq(1)).all().item())
-    if not is_binary:
-        return None
-    return int(x.count_nonzero().item())
-
-
-def _synop_mm(args, kwargs, out):
-    x, y = args[:2]
-    nnz_x = _spike_nnz(x)
-    nnz_y = _spike_nnz(y)
-    if nnz_x is not None and nnz_y is not None:
-        return int(out.sum().item())
-    elif nnz_x is not None:
-        return nnz_x * y.shape[1]
-    elif nnz_y is not None:
-        return nnz_y * x.shape[0]
-    else:
-        return 0
-
-
-def _synop_addmm(args, kwargs, out):
-    _, x, y = args[:3]
-    alpha = kwargs.get("alpha", 1)
-    nnz_x = _spike_nnz(x)
-    nnz_y = _spike_nnz(y)
-    if nnz_x is not None and nnz_y is not None:
-        with torch.no_grad():
-            with torch._C._ExcludeDispatchKeyGuard(
-                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
-            ):
-                result = torch.ops.aten.mm.default(x.double(), y.double())
-        return int(result.sum().item())
-    elif alpha != 1:
-        return 0
-    elif nnz_x is not None:
-        return nnz_x * y.shape[1]
-    elif nnz_y is not None:
-        return nnz_y * x.shape[0]
-    else:
-        return 0
-
-
-def _synop_bmm(args, kwargs, out):
-    x, y = args[:2]
-    nnz_x = _spike_nnz(x)
-    nnz_y = _spike_nnz(y)
-    if nnz_x is not None and nnz_y is not None:
-        return int(out.sum().item())
-    elif nnz_x is not None:
-        return nnz_x * y.shape[2]
-    elif nnz_y is not None:
-        return nnz_y * x.shape[1]
-    else:
-        return 0
-
-
-def _synop_baddbmm(args, kwargs, out):
-    _, x, y = args[:3]
-    alpha = kwargs.get("alpha", 1)
-    nnz_x = _spike_nnz(x)
-    nnz_y = _spike_nnz(y)
-    if nnz_x is not None and nnz_y is not None:
-        with torch.no_grad():
-            with torch._C._ExcludeDispatchKeyGuard(
-                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
-            ):
-                result = torch.ops.aten.bmm.default(x.double(), y.double())
-        return int(result.sum().item())
-    elif alpha != 1:
-        return 0
-    elif nnz_x is not None:
-        return nnz_x * y.shape[2]
-    elif nnz_y is not None:
-        return nnz_y * x.shape[1]
-    else:
-        return 0
-
-
-def _synop_convolution(args, _kwargs, out):
-    x, w, _, stride, padding, dilation, transposed, output_padding, groups = args[:9]
-    nnz_x = _spike_nnz(x)
-    nnz_w = _spike_nnz(w)
-    if nnz_x is not None and nnz_w is not None:
-        with torch.no_grad():
-            with torch._C._ExcludeDispatchKeyGuard(
-                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
-            ):
-                result = torch.ops.aten.convolution.default(
-                    x.double(),
-                    w.double(),
-                    None,
-                    stride,
-                    padding,
-                    dilation,
-                    transposed,
-                    output_padding,
-                    groups,
-                )
-        return int(result.sum().item())
-    elif nnz_x is not None:
-        w_ones = torch.ones(w.shape, dtype=torch.float64, device=x.device)
-        with torch.no_grad():
-            with torch._C._ExcludeDispatchKeyGuard(
-                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
-            ):
-                result = torch.ops.aten.convolution.default(
-                    x.double(),
-                    w_ones,
-                    None,
-                    stride,
-                    padding,
-                    dilation,
-                    transposed,
-                    output_padding,
-                    groups,
-                )
-        return int(result.sum().item())
-    elif nnz_w is not None:
-        ref = x if transposed else out
-        return nnz_w * ref.shape[0] * _prod(ref.shape[2:])
-    else:
-        return 0
 
 
 class SynOpCounter(BaseCounter):
@@ -239,11 +111,11 @@ class SynOpCounter(BaseCounter):
         """
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {
-            aten.mm.default: _synop_mm,
-            aten.addmm.default: _synop_addmm,
-            aten.bmm.default: _synop_bmm,
-            aten.baddbmm.default: _synop_baddbmm,
-            aten.convolution.default: _synop_convolution,
+            aten.mm.default: _spike_mm,
+            aten.addmm.default: _spike_addmm,
+            aten.bmm.default: _spike_bmm,
+            aten.baddbmm.default: _spike_baddbmm,
+            aten.convolution.default: _spike_convolution,
             # other aten ops do not involve SynOp operations
         }
         self.ignore_modules = []

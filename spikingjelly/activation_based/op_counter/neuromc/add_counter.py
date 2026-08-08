@@ -1,30 +1,17 @@
 from __future__ import annotations
 
+from math import prod
 from typing import Any, Callable
 
 import torch
 import torch.nn as nn
 
 from .base_counter import NeuroMCBaseCounter
-from .utils import _prod, _spike_nnz
+from .utils import _conv_mul_add, _spike_nnz
 
 aten = torch.ops.aten
 
 __all__ = ["NeuroMCAddCounter"]
-
-
-def _conv_mul_add(args, out):
-    x, w, bias = args[:3]
-    groups = args[8] if len(args) > 8 else 1
-    c_in_per_group = x.shape[1] // groups
-    kernel_prod = _prod(w.shape[2:])
-    mul_per_out = c_in_per_group * kernel_prod
-    out_numel = out.numel()
-    mul = out_numel * mul_per_out
-    add = out_numel * max(mul_per_out - 1, 0)
-    if bias is not None:
-        add += out_numel
-    return int(mul), int(add)
 
 
 def _add_mm(args, kwargs, out):
@@ -152,7 +139,7 @@ def _add_convolution(args, kwargs, out):
         return int(torch.clamp(result - 1.0, min=0.0).sum().item())
     if nnz_w is not None:
         ref = x if transposed else out
-        return int(nnz_w * ref.shape[0] * _prod(ref.shape[2:]))
+        return int(nnz_w * ref.shape[0] * prod(ref.shape[2:]))
     _, add = _conv_mul_add(args, out)
     return add
 
@@ -197,7 +184,7 @@ def _add_convolution_backward(args, kwargs, out):
     ):
         b = grad_out.shape[0]
         c_out = grad_out.shape[1]
-        add += c_out * (b * _prod(grad_out.shape[2:]) - 1)
+        add += c_out * (b * prod(grad_out.shape[2:]) - 1)
     return int(add)
 
 
@@ -205,12 +192,7 @@ def _add_element_wise(args, kwargs, out):
     return int(out.numel())
 
 
-def _add_sum(args, kwargs, out):
-    x = args[0]
-    return int(max(x.numel() - out.numel(), 0))
-
-
-def _add_mean(args, kwargs, out):
+def _add_reduction(args, kwargs, out):
     x = args[0]
     return int(max(x.numel() - out.numel(), 0))
 
@@ -338,8 +320,8 @@ class NeuroMCAddCounter(NeuroMCBaseCounter):
             aten.sub_.Scalar: _add_element_wise,
             aten.rsub.Tensor: _add_element_wise,
             aten.rsub.Scalar: _add_element_wise,
-            aten.sum.default: _add_sum,
-            aten.sum.dim_IntList: _add_sum,
-            aten.mean.dim: _add_mean,
+            aten.sum.default: _add_reduction,
+            aten.sum.dim_IntList: _add_reduction,
+            aten.mean.dim: _add_reduction,
         }
         self.rules.update(extra_rules)

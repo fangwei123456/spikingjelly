@@ -151,14 +151,7 @@ class BaseNode(nn.Module):
         elif self.step_mode == "m":
             x_shape = x.shape
 
-            # 起始 编译通过-------------------
             x = x.reshape(self.T, x.shape[0] // self.T, -1)
-            # 终结 编译通过-------------------
-
-            # 起始 编译报错-------------------
-            # x = x.flatten(1)
-            # x = unfold_seq(self.T, x)
-            # 终结 编译报错-------------------
 
             if v is not None:
                 v = v.flatten()
@@ -548,7 +541,7 @@ def to_lynxi_supported_modules(net: Union[list, tuple, nn.Sequential], T: int):
     :rtype: list
     """
     output_net = []
-    for i in range(net.__len__()):
+    for i in range(len(net)):
         m_in = net[i]
         m_out = to_lynxi_supported_module(m_in, T)
         output_net.append(m_out)

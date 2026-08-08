@@ -56,6 +56,13 @@ def float32_preprocessor(states):
     return torch.tensor(np_states)
 
 
+def _prepare_states(states, preprocessor, device):
+    if preprocessor is None:
+        return states
+    states = preprocessor(states)
+    return states.to(device) if torch.is_tensor(states) else states
+
+
 class DQNAgent(BaseAgent):
     """
     DQNAgent is a memoryless DQN agent which calculates Q values
@@ -78,10 +85,7 @@ class DQNAgent(BaseAgent):
     def __call__(self, states, agent_states=None):
         if agent_states is None:
             agent_states = [None] * len(states)
-        if self.preprocessor is not None:
-            states = self.preprocessor(states)
-            if torch.is_tensor(states):
-                states = states.to(self.device)
+        states = _prepare_states(states, self.preprocessor, self.device)
         q_v = (
             self.dqn_model(states)
             if "dqn" in self.dqn_model.model_name
@@ -128,7 +132,6 @@ class PolicyAgent(BaseAgent):
     Policy agent gets action probabilities from the model and samples actions from it
     """
 
-    # TODO: unify code with DQNAgent, as only action selector is differs.
     def __init__(
         self,
         model,
@@ -152,10 +155,7 @@ class PolicyAgent(BaseAgent):
         """
         if agent_states is None:
             agent_states = [None] * len(states)
-        if self.preprocessor is not None:
-            states = self.preprocessor(states)
-            if torch.is_tensor(states):
-                states = states.to(self.device)
+        states = _prepare_states(states, self.preprocessor, self.device)
         probs_v = self.model(states)
         if self.apply_softmax:
             probs_v = F.softmax(probs_v, dim=1)
@@ -191,10 +191,7 @@ class ActorCriticAgent(BaseAgent):
         :param states: list of states
         :return: list of actions
         """
-        if self.preprocessor is not None:
-            states = self.preprocessor(states)
-            if torch.is_tensor(states):
-                states = states.to(self.device)
+        states = _prepare_states(states, self.preprocessor, self.device)
         probs_v, values_v = self.model(states)
         if self.apply_softmax:
             probs_v = F.softmax(probs_v, dim=1)

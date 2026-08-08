@@ -366,9 +366,6 @@ class BaseNode(base.MemoryModule):
         # Lava conversion reads this instance value so callers can tune its scale.
         self.lava_s_cale = 1 << 6
 
-        # Kept empty for compatibility; compiled graphs live in inductor_cache.
-        self._inductor_compiled_graphs = {}
-
     @property
     def store_v_seq(self):
         return self._store_v_seq

@@ -1477,8 +1477,6 @@ def test_spikezip_qann_recipe_rejects_unsupported_options():
         SpikeZIPTFQANNRecipe(time_steps=0).validate(None)
     with pytest.raises(ValueError, match="model_family"):
         SpikeZIPTFQANNRecipe(model_family="bert").validate(None)
-    with pytest.raises(ValueError, match="strict=True"):
-        SpikeZIPTFQANNRecipe(strict=False).validate(None)
 
 
 def test_sta_sequence_spike_encoder_clamps_zero_threshold():

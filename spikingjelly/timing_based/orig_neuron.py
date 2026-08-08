@@ -116,12 +116,9 @@ class Tempotron(nn.Module):
             )  # shape=[batch_size, out_features]
             v_max = F.max_pool1d(v_out, kernel_size=self.T).squeeze()
             mask = (v_max >= self.v_threshold).float() * 2 - 1
-            # mask_soft = torch.tanh(v_max - self.v_threshold)
             # mask中的元素均为±1，表示峰值电压是否过阈值
             max_index = max_index * mask
-            # max_index_soft = max_index_soft * mask_soft
             max_index_soft = max_index_soft * mask
-            # print('max_index\n', max_index, '\nmax_index_soft\n', max_index_soft)
             return max_index_soft + (max_index - max_index_soft).detach()
         else:
             raise ValueError

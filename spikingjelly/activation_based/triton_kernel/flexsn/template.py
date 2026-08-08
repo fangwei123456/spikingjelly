@@ -427,7 +427,7 @@ def get_flexsn_forward_kernel(
 
     loads = "".join([load_template.format(name=f"x{i}") for i in range(num_inputs)])
     stores = "".join([store_template.format(name=r) for r in fwd_kernel_returns])
-    lhs = ", ".join([r for r in fwd_core_recipients])
+    lhs = ", ".join(fwd_core_recipients)
     core_args = ", ".join([f"x{i}" for i in range(num_inputs)])
     core_args += ", "
     core_args += ", ".join([f"v{i}" for i in range(num_states)])

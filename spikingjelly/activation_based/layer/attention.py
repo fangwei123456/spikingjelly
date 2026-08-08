@@ -344,7 +344,7 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         self.proj_lif.backend = value
 
     @staticmethod
-    def _ssa_kernel_torch(qkv, scale):  # TODO: add triton implementation
+    def _ssa_kernel_torch(qkv, scale):
         # qkv.shape = [T, N, 3, NUM_HEADS, Cph, L]
         # qt, kt, vt.shape = [T, N, NUM_HEADS, Cph, L]
         qt, kt, vt = qkv.flatten(2, 3).chunk(3, dim=2)

@@ -28,10 +28,7 @@ def test_new_distributed_api_supports_manual_training_loop_single_rank():
             torch.tensor([0, 1, 2, 3]),
         )
 
-        analysis = sjdist.analyze(
-            model,
-            model_family="cifar10dvs_vgg",
-        )
+        analysis = sjdist.analyze(model)
         distributed_plan = sjdist.plan(
             analysis=analysis,
             objective="speed",

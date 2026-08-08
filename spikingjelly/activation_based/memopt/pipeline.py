@@ -127,10 +127,10 @@ def resolve_device() -> str:
     2. 环境变量 ``LOCAL_RANK`` / ``SLURM_LOCALID`` / ``OMPI_COMM_WORLD_LOCAL_RANK``
     3. 如果 torch.distributed 已初始化，则使用 ``rank % ngpus``
     4. ``torch.cuda.current_device()``
-    5. 回退到 ``"cuda"``
 
     :return: 设备字符串，例如 ``"cpu"`` 或 ``"cuda:0"``
     :rtype: str
+    :raises ValueError: 环境变量中的本地 rank 不是整数
 
     ----
 
@@ -146,15 +146,14 @@ def resolve_device() -> str:
     2. Environment variables ``LOCAL_RANK`` / ``SLURM_LOCALID`` / ``OMPI_COMM_WORLD_LOCAL_RANK``
     3. If ``torch.distributed`` is initialized, use ``rank % ngpus``
     4. ``torch.cuda.current_device()``
-    5. Fallback to ``"cuda"``
 
     :return: device string, e.g., ``"cpu"`` or ``"cuda:0"``
     :rtype: str
+    :raises ValueError: An environment-provided local rank is not an integer
     """
     if not torch.cuda.is_available():
         return "cpu"
 
-    # common env vars
     for k in (
         "LOCAL_RANK",
         "SLURM_LOCALID",
@@ -165,24 +164,16 @@ def resolve_device() -> str:
         if v is not None:
             try:
                 return f"cuda:{int(v)}"
-            except Exception:
-                pass
+            except ValueError as e:
+                raise ValueError(f"{k} must be an integer, got {v!r}") from e
 
-    # if dist inited, use rank % n_gpus
-    try:
-        if dist.is_available() and dist.is_initialized():
-            rank = dist.get_rank()
-            n_gpu = torch.cuda.device_count()
-            if n_gpu > 0:
-                return f"cuda:{rank % n_gpu}"
-    except Exception:
-        pass
+    if dist.is_available() and dist.is_initialized():
+        rank = dist.get_rank()
+        n_gpu = torch.cuda.device_count()
+        if n_gpu > 0:
+            return f"cuda:{rank % n_gpu}"
 
-    # fallback to current_device (logical ID after CUDA_VISIBLE_DEVICES)
-    try:
-        return f"cuda:{torch.cuda.current_device()}"
-    except Exception:
-        return "cuda"
+    return f"cuda:{torch.cuda.current_device()}"
 
 
 def _dummy_input_to_device(dummy_input, device):
@@ -314,10 +305,6 @@ def _estimate_module_input_bytes(
     for h in hooks:
         h.remove()
     return dict(estimated_bytes)
-
-
-def _module_path_map(net: nn.Module) -> Dict[nn.Module, str]:
-    return {module: name for name, module in net.named_modules() if name}
 
 
 def _resolve_gc_selection_targets(
@@ -773,7 +760,7 @@ def apply_gc(
     apply_summary["gc_selection_policy"] = selection_policy
     apply_summary["checkpoint_budget"] = checkpoint_budget
     apply_summary["budget_notes"] = budget_notes
-    path_map = _module_path_map(net)
+    path_map = {module: name for name, module in net.named_modules() if name}
     apply_summary["gc_selected_modules"] = (
         [path_map.get(m, "<root>") for m in selected_targets]
         if selected_targets is not None

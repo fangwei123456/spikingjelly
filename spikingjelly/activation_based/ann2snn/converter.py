@@ -20,6 +20,15 @@ from spikingjelly.logger import logger
 _FX_TRACE_LOCK = threading.RLock()
 
 
+def _resolve_device(
+    ann: nn.Module, configured_device: Optional[Union[torch.device, str]]
+) -> torch.device:
+    if configured_device is not None:
+        return torch.device(configured_device)
+    parameter = next(ann.parameters(), None)
+    return parameter.device if parameter is not None else torch.device("cpu")
+
+
 def _symbolic_trace(root: nn.Module) -> fx.GraphModule:
     with _FX_TRACE_LOCK:
         original_reshape = torch.reshape
@@ -141,14 +150,6 @@ class FXConverter:
             f"instance, but got {type(recipe).__name__}."
         )
 
-    def _resolve_device(self, ann: nn.Module) -> torch.device:
-        if self.device is not None:
-            return torch.device(self.device)
-        try:
-            return next(ann.parameters()).device
-        except StopIteration:
-            return torch.device("cpu")
-
     def convert(self, ann: nn.Module) -> nn.Module:
         r"""
         **API Language** - :ref:`中文 <Converter.convert-cn>` | :ref:`English <Converter.convert-en>`
@@ -194,7 +195,7 @@ class FXConverter:
             original_training_modes = {
                 module: module.training for module in ann.modules()
             }
-            self.device = self._resolve_device(ann)
+            self.device = _resolve_device(ann, self.device)
             target_device = self.device
             with torch.no_grad():
                 self.recipe.validate(self)
@@ -285,14 +286,6 @@ class ModuleConverter:
         self.recipe = recipe
         self.device = device
 
-    def _resolve_device(self, ann: nn.Module) -> torch.device:
-        if self.device is not None:
-            return torch.device(self.device)
-        try:
-            return next(ann.parameters()).device
-        except StopIteration:
-            return torch.device("cpu")
-
     def convert(self, ann: nn.Module) -> nn.Module:
         r"""
         **API Language** - :ref:`中文 <ModuleConverter.convert-cn>` | :ref:`English <ModuleConverter.convert-en>`
@@ -331,7 +324,7 @@ class ModuleConverter:
             original_training_modes = {
                 module: module.training for module in ann.modules()
             }
-            self.device = self._resolve_device(ann)
+            self.device = _resolve_device(ann, self.device)
             target_device = self.device
             with torch.no_grad():
                 self.recipe.validate(self)

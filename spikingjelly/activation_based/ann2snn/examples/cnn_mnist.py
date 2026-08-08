@@ -9,7 +9,7 @@ import torch
 import torchvision
 from tqdm import tqdm
 
-from spikingjelly.activation_based import ann2snn
+from spikingjelly.activation_based import ann2snn, functional
 from spikingjelly.activation_based.ann2snn.sample_models import mnist_cnn
 
 
@@ -47,7 +47,6 @@ def val(net, device, data_loader, T=None):
     total = 0.0
     if T is not None:
         corrects = np.zeros(T)
-        reset_modules = [m for m in net.modules() if hasattr(m, "reset")]
     with torch.no_grad():
         for batch, (img, label) in enumerate(tqdm(data_loader)):
             img = img.to(device, non_blocking=True)
@@ -56,8 +55,7 @@ def val(net, device, data_loader, T=None):
                 out = net(img)
                 correct += (out.argmax(dim=1) == label).float().sum().item()
             else:
-                for m in reset_modules:
-                    m.reset()
+                functional.reset_net(net)
                 out = None
                 for t in range(T):
                     step = net(img)
@@ -309,25 +307,6 @@ def main(args):
         shuffle=False,
         drop_last=False,
     )
-
-    # To train the ANN checkpoint locally:
-    # model = mnist_cnn.CNN().to(device)
-    # loss_function = torch.nn.CrossEntropyLoss()
-    # optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
-    # train_data_loader = torch.utils.data.DataLoader(
-    #     train_data_dataset, batch_size=batch_size, shuffle=True
-    # )
-    # for epoch in range(10):
-    #     model.train()
-    #     for img, label in train_data_loader:
-    #         optimizer.zero_grad()
-    #         out = model(img.to(device))
-    #         loss = loss_function(out, label.to(device))
-    #         loss.backward()
-    #         optimizer.step()
-    #     torch.save(model.state_dict(), "SJ-mnist-cnn_model-sample.pth")
-    #     print("Epoch: %d" % epoch)
-    #     print("Validating Accuracy: %.3f" % val(model, device, train_data_loader))
 
     if args.plot_mode_sweep:
         run_legacy_mode_sweep(

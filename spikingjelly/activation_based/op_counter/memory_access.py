@@ -183,12 +183,7 @@ def _memory_max_pool2d_with_indices_backward(args, kwargs, out):
     return _bytes(grad_output) + _bytes(indices) + _bytes(grad_x)
 
 
-def _memory_avg_pool2d(args, kwargs, out):
-    x = args[0]
-    return _bytes(x) + _bytes(out)
-
-
-def _memory_mean(args, kwargs, out):
+def _memory_read_write(args, kwargs, out):
     x = args[0]
     return _bytes(x) + _bytes(out)
 
@@ -198,19 +193,9 @@ def _memory_element_wise_binary(args, kwargs, out):
     return _bytes(x) + _bytes(y) + _bytes(out)
 
 
-def _memory_element_wise_unary(args, kwargs, out):
-    x = args[0]
-    return _bytes(x) + _bytes(out)
-
-
 def _memory_stack(args, kwargs, out):
     tensor_list = args[0]
     return sum(_bytes(x) for x in tensor_list) + _bytes(out)
-
-
-def _memory_clone(args, kwargs, out):
-    x = args[0]
-    return _bytes(x) + _bytes(out)
 
 
 def _memory_full_like(args, kwargs, out):
@@ -367,10 +352,10 @@ class MemoryAccessCounter(BaseCounter):
             aten.native_batch_norm_backward.default: _memory_native_batch_norm_backward,
             aten.max_pool2d_with_indices.default: _memory_max_pool2d_with_indices,
             aten.max_pool2d_with_indices_backward.default: _memory_max_pool2d_with_indices_backward,
-            aten.avg_pool2d.default: _memory_avg_pool2d,
-            aten.sum.default: _memory_mean,
-            aten.sum.dim_IntList: _memory_mean,
-            aten.mean.dim: _memory_mean,
+            aten.avg_pool2d.default: _memory_read_write,
+            aten.sum.default: _memory_read_write,
+            aten.sum.dim_IntList: _memory_read_write,
+            aten.mean.dim: _memory_read_write,
             aten.add.Tensor: _memory_element_wise_binary,
             aten.add_.Tensor: _memory_element_wise_binary,
             aten.add.Scalar: _memory_element_wise_binary,
@@ -381,8 +366,8 @@ class MemoryAccessCounter(BaseCounter):
             aten.sub_.Scalar: _memory_element_wise_binary,
             aten.rsub.Tensor: _memory_element_wise_binary,
             aten.rsub.Scalar: _memory_element_wise_binary,
-            aten.neg.default: _memory_element_wise_unary,
-            aten.neg_.default: _memory_element_wise_unary,
+            aten.neg.default: _memory_read_write,
+            aten.neg_.default: _memory_read_write,
             aten.mul.Tensor: _memory_element_wise_binary,
             aten.mul_.Tensor: _memory_element_wise_binary,
             aten.mul.Scalar: _memory_element_wise_binary,
@@ -407,10 +392,10 @@ class MemoryAccessCounter(BaseCounter):
             aten.logical_or.default: _memory_element_wise_binary,
             aten.logical_xor.default: _memory_element_wise_binary,
             aten.logical_not.default: _memory_element_wise_binary,
-            aten.sigmoid_.default: _memory_element_wise_unary,
+            aten.sigmoid_.default: _memory_read_write,
             aten.stack.default: _memory_stack,
-            aten.clone.default: _memory_clone,
-            aten._to_copy.default: _memory_clone,
+            aten.clone.default: _memory_read_write,
+            aten._to_copy.default: _memory_read_write,
             aten.full_like.default: _memory_full_like,
             aten.ones_like.default: _memory_full_like,
             aten.view.default: _memory_null,

@@ -25,13 +25,6 @@ from .base import NeuromorphicDatasetFolder
 __all__ = ["NAVGestureWalk", "NAVGestureSit"]
 
 
-def _peek(f, length=1):
-    pos = f.tell()
-    data = f.read(length)
-    f.seek(pos)
-    return data
-
-
 def _readATIS_tddat(
     file_name,
     orig_at_zero=True,
@@ -64,7 +57,7 @@ def _readATIS_tddat(
     file = open(file_name, "rb")
 
     header = False
-    while _peek(file) == b"%":
+    while file.peek(1).startswith(b"%"):
         file.readline()
         header = True
     if header:
@@ -81,6 +74,7 @@ def _readATIS_tddat(
                 file_name,
                 ev_size,
             )
+            file.close()
             return -1, -1, -1, -1
     else:  # set default ev type and size
         logger.debug("> No header. Setting default event type and size.")
@@ -107,7 +101,6 @@ def _readATIS_tddat(
     for i in np.arange(0, int(Nevents)):
         event = unpack("Q", file.read(8))
         ts = event[0] & 0x00000000FFFFFFFF
-        # padding = event[0] & 0xFFFC000000000000
         pol = (event[0] & polmask) >> polpadding
         y = (event[0] & ymask) >> ypadding
         x = (event[0] & xmask) >> xpadding

@@ -46,6 +46,14 @@ def _collect_tensors(tree: Any) -> list[torch.Tensor]:
     return [x for x in flat if torch.is_tensor(x)]
 
 
+def _call_model(model: nn.Module, inputs):
+    if isinstance(inputs, (tuple, list)):
+        return model(*inputs)
+    if isinstance(inputs, dict):
+        return model(**inputs)
+    return model(inputs)
+
+
 def _infer_stage(func, args, kwargs, out) -> str:
     op_name = resolve_name(func)
     if "backward" in op_name:

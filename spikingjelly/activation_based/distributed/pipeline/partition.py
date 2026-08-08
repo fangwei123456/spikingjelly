@@ -48,7 +48,11 @@ def _partition_costs_contiguously(costs: Sequence[float], num_parts: int) -> Lis
     for idx in range(num_items - 1, -1, -1):
         cost = float(costs[idx])
         remaining_items = idx + 1
-        if count > 0 and (acc + cost > limit or remaining_items < parts_remaining):
+        if (
+            count > 0
+            and parts_remaining > 1
+            and (acc + cost > limit or remaining_items < parts_remaining)
+        ):
             sizes_reversed.append(count)
             parts_remaining -= 1
             acc = 0.0

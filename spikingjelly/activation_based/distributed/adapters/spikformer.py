@@ -22,10 +22,6 @@ class SpikformerAdapter:
         device_type: str = "cuda",
         device_mesh=None,
     ) -> SNNDistributedRuntime:
-        if plan.mode == "pp":
-            raise NotImplementedError(
-                "Pipeline parallelism ('pp') is not supported by SpikformerAdapter.apply()."
-            )
         tensor_parallel = plan.mode in ("tp", "fsdp2_tp")
         experimental_tp = (
             tensor_parallel

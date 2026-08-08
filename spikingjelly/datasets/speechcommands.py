@@ -203,7 +203,7 @@ class SpeechCommands(Dataset):
         if download:
             if not os.path.isdir(self._path):
                 if not os.path.isfile(archive):
-                    checksum = _CHECKSUMS.get(url, None)
+                    checksum = _CHECKSUMS.get(url)
                     download_url(url, root, md5=checksum)
                 extract_archive(archive, self._path)
         elif not os.path.isdir(self._path):
@@ -215,14 +215,14 @@ class SpeechCommands(Dataset):
             record = os.path.join(self._path, TRAIN_RECORD)
             if os.path.exists(record):
                 with open(record, "r") as f:
-                    self._walker = list([line.rstrip("\n") for line in f])
+                    self._walker = [line.rstrip("\n") for line in f]
             else:
                 logger.info("No training list, generating...")
                 walker = sorted(str(p) for p in Path(self._path).glob("*/*.wav"))
                 walker = filter(
                     lambda w: HASH_DIVIDER in w and EXCEPT_FOLDER not in w, walker
                 )
-                walker = map(lambda w: os.path.relpath(w, self._path), walker)
+                walker = (os.path.relpath(w, self._path) for w in walker)
 
                 walker = set(walker)
 
@@ -267,7 +267,7 @@ class SpeechCommands(Dataset):
             else:
                 record = os.path.join(self._path, TEST_RECORD)
             with open(record, "r") as f:
-                self._walker = list([line.rstrip("\n") for line in f])
+                self._walker = [line.rstrip("\n") for line in f]
 
     def __getitem__(self, n: int) -> Tuple[Tensor, int]:
         if n < len(self._walker):

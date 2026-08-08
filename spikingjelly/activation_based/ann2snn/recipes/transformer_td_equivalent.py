@@ -19,7 +19,10 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDSoftmax,
     _td_module_from_ann,
 )
-from spikingjelly.activation_based.ann2snn.recipes.base import ConversionRecipe
+from spikingjelly.activation_based.ann2snn.recipes.base import (
+    ConversionRecipe,
+    _replace_submodule,
+)
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
     _SHAPE_ONLY_MODULE_TYPES,
     _TRANSFORMER_SAFE_MODULE_TYPES,
@@ -146,7 +149,7 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
             replacement = self._make_td_operator(module, node)
             if replacement is None:
                 continue
-            self._replace_submodule(fx_model, node.target, replacement)
+            _replace_submodule(fx_model, node.target, replacement)
             modules[node.target] = replacement
 
         self._replace_functional_td_ops(fx_model)
@@ -202,14 +205,6 @@ class TransformerTDEquivalentRecipe(ConversionRecipe):
         if self.time_steps is not None:
             object.__setattr__(fx_model, "time_steps", self.time_steps)
         return fx_model
-
-    @staticmethod
-    def _replace_submodule(
-        fx_model: torch.fx.GraphModule, target: str, module: nn.Module
-    ) -> None:
-        parent_name, _, child_name = target.rpartition(".")
-        parent = fx_model.get_submodule(parent_name) if parent_name else fx_model
-        setattr(parent, child_name, module)
 
     @staticmethod
     def _get_literal_argument(

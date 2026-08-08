@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, Subset
 from torchvision.models import ResNet18_Weights, resnet18
 from tqdm import tqdm
 
-from spikingjelly.activation_based import ann2snn
+from spikingjelly.activation_based import ann2snn, functional
 
 
 def parse_args():
@@ -102,12 +102,6 @@ def evaluate_ann(model, data_loader, device):
     return {"top1": top1 / total * 100.0, "top5": top5 / total * 100.0}
 
 
-def reset_snn(model):
-    for module in model.modules():
-        if hasattr(module, "reset"):
-            module.reset()
-
-
 def resolve_delay_start(model, data_loader, device, time_steps, delay_start):
     if delay_start == "none":
         return 0
@@ -139,7 +133,7 @@ def evaluate_snn(model, data_loader, device, time_steps, delay_start=0):
         for img, label in tqdm(data_loader):
             img = img.to(device, non_blocking=True)
             label = label.to(device, non_blocking=True)
-            reset_snn(model)
+            functional.reset_net(model)
             out = None
             for t in range(time_steps):
                 current = model(img)

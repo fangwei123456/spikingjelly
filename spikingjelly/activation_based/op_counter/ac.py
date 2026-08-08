@@ -1,4 +1,5 @@
 from collections import defaultdict
+from math import prod
 from typing import Any, Callable
 
 import torch
@@ -8,13 +9,6 @@ from .base import BaseCounter
 
 aten = torch.ops.aten
 __all__ = ["ACCounter"]
-
-
-def _prod(dims):
-    p = 1
-    for v in dims:
-        p *= v
-    return p
 
 
 def _spike_nnz(x: torch.Tensor) -> int | None:
@@ -39,7 +33,7 @@ def _ac_element_wise(args, kwargs, out):
         return out.numel()
 
 
-def _ac_mm(args, kwargs, out):
+def _spike_mm(args, kwargs, out):
     x, y = args[:2]
     nnz_x = _spike_nnz(x)
     nnz_y = _spike_nnz(y)
@@ -53,7 +47,7 @@ def _ac_mm(args, kwargs, out):
         return 0
 
 
-def _ac_addmm(args, kwargs, out):
+def _spike_addmm(args, kwargs, out):
     _, x, y = args[:3]
     alpha = kwargs.get("alpha", 1)
     nnz_x = _spike_nnz(x)
@@ -75,7 +69,7 @@ def _ac_addmm(args, kwargs, out):
         return 0
 
 
-def _ac_bmm(args, kwargs, out):
+def _spike_bmm(args, kwargs, out):
     x, y = args[:2]
     nnz_x = _spike_nnz(x)
     nnz_y = _spike_nnz(y)
@@ -89,7 +83,7 @@ def _ac_bmm(args, kwargs, out):
         return 0
 
 
-def _ac_baddbmm(args, kwargs, out):
+def _spike_baddbmm(args, kwargs, out):
     _, x, y = args[:3]
     alpha = kwargs.get("alpha", 1)
     nnz_x = _spike_nnz(x)
@@ -111,7 +105,7 @@ def _ac_baddbmm(args, kwargs, out):
         return 0
 
 
-def _ac_convolution(args, _kwargs, out):
+def _spike_convolution(args, _kwargs, out):
     x, w, _, stride, padding, dilation, transposed, output_padding, groups = args[:9]
     nnz_x = _spike_nnz(x)
     nnz_w = _spike_nnz(w)
@@ -152,22 +146,17 @@ def _ac_convolution(args, _kwargs, out):
         return int(result.sum().item())
     elif nnz_w is not None:
         ref = x if transposed else out
-        return nnz_w * ref.shape[0] * _prod(ref.shape[2:])
+        return nnz_w * ref.shape[0] * prod(ref.shape[2:])
     else:
         return 0
 
 
 def _ac_avg_pool2d(args, kwargs, out):
     kernel_size = args[1]
-    return out.numel() * (_prod(kernel_size) - 1)
+    return out.numel() * (prod(kernel_size) - 1)
 
 
-def _ac_sum(args, kwargs, out):
-    x = args[0]
-    return x.numel() - out.numel()
-
-
-def _ac_mean(args, kwargs, out):
+def _ac_reduction(args, kwargs, out):
     x = args[0]
     return x.numel() - out.numel()
 
@@ -297,16 +286,16 @@ class ACCounter(BaseCounter):
         """
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {
-            aten.mm.default: _ac_mm,
-            aten.addmm.default: _ac_addmm,
-            aten.bmm.default: _ac_bmm,
-            aten.baddbmm.default: _ac_baddbmm,
-            aten.convolution.default: _ac_convolution,
+            aten.mm.default: _spike_mm,
+            aten.addmm.default: _spike_addmm,
+            aten.bmm.default: _spike_bmm,
+            aten.baddbmm.default: _spike_baddbmm,
+            aten.convolution.default: _spike_convolution,
             aten.native_batch_norm.default: _ac_native_batch_norm,
             aten.avg_pool2d.default: _ac_avg_pool2d,
-            aten.sum.default: _ac_sum,
-            aten.sum.dim_IntList: _ac_sum,
-            aten.mean.dim: _ac_mean,
+            aten.sum.default: _ac_reduction,
+            aten.sum.dim_IntList: _ac_reduction,
+            aten.mean.dim: _ac_reduction,
             aten.add.Tensor: _ac_element_wise,
             aten.add_.Tensor: _ac_element_wise,
             aten.add.Scalar: _ac_element_wise,
