@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
-import importlib.util
 from pathlib import Path
-from uuid import uuid4
 from typing import Any
+from uuid import uuid4
 
 import torch
 
@@ -188,7 +189,20 @@ def _generated_code(cache_dir: Path) -> tuple[list[str], int, int]:
         allocation_count += text.count("empty_strided_") + text.count(
             "alloc_from_pool("
         )
-        launch_count += text.count(".run(") + text.count("extern_kernels.")
+        launch_count += len(
+            re.findall(
+                r"^\s*(?:\w+\s*=\s*)?(?:(?:triton_|cpp_)\w+|\w*kernel\w*)\.run\(",
+                text,
+                re.MULTILINE,
+            )
+        )
+        launch_count += len(
+            re.findall(
+                r"^\s*(?:\w+\s*=\s*)?extern_kernels\.\w+\(",
+                text,
+                re.MULTILINE,
+            )
+        )
     return [str(path) for path in paths], allocation_count, launch_count
 
 

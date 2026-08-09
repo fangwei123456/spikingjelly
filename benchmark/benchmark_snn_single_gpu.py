@@ -104,6 +104,33 @@ def _run_isolated_case(command: list[str], env: dict[str, str], timeout: int) ->
         )
 
 
+def _stop_monitor(monitor) -> None:
+    if monitor is None:
+        return
+    try:
+        if monitor.poll() is not None:
+            return
+    except ProcessLookupError:
+        return
+    try:
+        monitor.terminate()
+    except ProcessLookupError:
+        pass
+    try:
+        monitor.wait(timeout=10)
+    except ProcessLookupError:
+        pass
+    except subprocess.TimeoutExpired:
+        try:
+            monitor.kill()
+        except ProcessLookupError:
+            pass
+        try:
+            monitor.wait()
+        except ProcessLookupError:
+            pass
+
+
 def aggregate_records(
     records: list[dict[str, Any]], baseline_label: str, candidate_label: str
 ) -> dict[str, Any]:
@@ -133,6 +160,13 @@ def aggregate_records(
         candidate_rounds = [item["timing"]["median_ms"] for item in candidate]
         baseline_ms = statistics.median(baseline_rounds)
         candidate_ms = statistics.median(candidate_rounds)
+        candidate_min = min(candidate_rounds)
+        latency_change_pct = (
+            (candidate_ms / baseline_ms - 1.0) * 100.0 if baseline_ms else None
+        )
+        candidate_round_spread = (
+            max(candidate_rounds) / candidate_min if candidate_min else None
+        )
         baseline_peak = statistics.median(
             item["memory"]["peak_allocated_bytes"] for item in baseline
         )
@@ -154,7 +188,7 @@ def aggregate_records(
                 "candidate_round_medians_ms": candidate_rounds,
                 "baseline_median_ms": baseline_ms,
                 "candidate_median_ms": candidate_ms,
-                "latency_change_pct": (candidate_ms / baseline_ms - 1.0) * 100.0,
+                "latency_change_pct": latency_change_pct,
                 "peak_allocated_change_pct": (
                     (candidate_peak / baseline_peak - 1.0) * 100.0
                     if baseline_peak
@@ -164,12 +198,10 @@ def aggregate_records(
                     candidate_item["timing"]["median_ms"]
                     < baseline_item["timing"]["median_ms"]
                     for baseline_item, candidate_item in zip(
-                        sorted(baseline, key=lambda item: item["round"]),
-                        sorted(candidate, key=lambda item: item["round"]),
-                        strict=False,
+                        baseline, candidate, strict=False
                     )
                 ),
-                "candidate_round_spread": max(candidate_rounds) / min(candidate_rounds),
+                "candidate_round_spread": candidate_round_spread,
             }
         )
     qualifying_families = {
@@ -177,7 +209,10 @@ def aggregate_records(
         for item in comparisons
         if item["all_candidate_rounds_faster"]
         and (
-            item["latency_change_pct"] <= -5.0
+            (
+                item["latency_change_pct"] is not None
+                and item["latency_change_pct"] <= -5.0
+            )
             or (
                 item["peak_allocated_change_pct"] is not None
                 and item["peak_allocated_change_pct"] <= -15.0
@@ -185,11 +220,14 @@ def aggregate_records(
         )
     }
     stable_rounds = all(
-        item["rounds"] >= 3 and item["candidate_round_spread"] <= 1.05
+        item["rounds"] >= 3
+        and item["candidate_round_spread"] is not None
+        and item["candidate_round_spread"] <= 1.05
         for item in comparisons
     )
     no_latency_regression = all(
-        item["latency_change_pct"] <= 3.0 for item in comparisons
+        item["latency_change_pct"] is not None and item["latency_change_pct"] <= 3.0
+        for item in comparisons
     )
     return {
         "baseline_label": baseline_label,
@@ -541,27 +579,30 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
         args.monitor_log.parent.mkdir(parents=True, exist_ok=True)
         try:
             monitor_file = args.monitor_log.open("w", encoding="utf-8")
-            monitor = subprocess.Popen(
-                [
-                    "nvidia-smi",
-                    "dmon",
-                    "-i",
-                    gpu_selector,
-                    "-s",
-                    "pucvmet",
-                    "-d",
-                    "1",
-                    "-o",
-                    "DT",
-                ],
-                stdout=monitor_file,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
+            try:
+                monitor = subprocess.Popen(
+                    [
+                        "nvidia-smi",
+                        "dmon",
+                        "-i",
+                        gpu_selector,
+                        "-s",
+                        "pucvmet",
+                        "-d",
+                        "1",
+                        "-o",
+                        "DT",
+                    ],
+                    stdout=monitor_file,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+            finally:
+                if monitor is None:
+                    monitor_file.close()
+                    monitor_file = None
         except OSError:
             monitor = None
-            if monitor_file is not None:
-                monitor_file.close()
 
     try:
         torch.cuda.synchronize(device)
@@ -605,18 +646,11 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
     finally:
         if hooks is not None:
             hooks.close()
-        if monitor is not None:
-            try:
-                if monitor.poll() is None:
-                    monitor.terminate()
-                    try:
-                        monitor.wait(timeout=10)
-                    except subprocess.TimeoutExpired:
-                        monitor.kill()
-                        monitor.wait()
-            finally:
-                if monitor_file is not None:
-                    monitor_file.close()
+        try:
+            _stop_monitor(monitor)
+        finally:
+            if monitor_file is not None:
+                monitor_file.close()
 
     raw_counters = _dynamo_counters()
     result = {

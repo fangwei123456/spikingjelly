@@ -132,6 +132,26 @@ def test_isolated_case_timeout_kills_process_group(monkeypatch):
     assert raised.value.stderr == "partial stderr"
 
 
+def test_stop_monitor_tolerates_exit_race():
+    class ExitedMonitor:
+        def __init__(self):
+            self.wait_calls = []
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            raise ProcessLookupError
+
+        def wait(self, timeout=None):
+            self.wait_calls.append(timeout)
+
+    monitor = ExitedMonitor()
+    benchmark._stop_monitor(monitor)
+
+    assert monitor.wait_calls == [10]
+
+
 def test_physical_gpu_selector_uses_cuda_visible_devices(monkeypatch):
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "3,GPU-example")
 
@@ -192,6 +212,20 @@ def test_aggregate_records_reports_paired_latency_and_memory_changes():
     assert acceptance["accepted"] is False
 
 
+def test_aggregate_records_rejects_zero_latency_measurements():
+    records = [
+        _record("baseline", 1, 0.0, 1000),
+        _record("candidate", 1, 0.0, 800),
+    ]
+
+    comparison = benchmark.aggregate_records(records, "baseline", "candidate")
+    result = comparison["comparisons"][0]
+
+    assert result["latency_change_pct"] is None
+    assert result["candidate_round_spread"] is None
+    assert comparison["acceptance"]["accepted"] is False
+
+
 def test_aggregate_records_compares_only_matching_successful_rounds():
     records = [
         _record("baseline", 1, 10.0, 1000),
@@ -219,6 +253,25 @@ def test_probe_marks_unmeasured_physical_metrics_as_null():
     assert result["kernel_launch_count"] is None
     assert result["allocation_count"] is None
     assert result["graph_break_count"] is None
+
+
+def test_generated_code_counts_only_kernel_call_sites(tmp_path: Path):
+    generated = tmp_path / "output_code.py"
+    generated.write_text(
+        """
+triton_poi_fused_0.run(arg0, arg1)
+flexsn_forward_kernel_0.run(arg0, arg1)
+buf0 = extern_kernels.mm(arg0, arg1)
+wrapper.run(arg0)
+benchmark.run(arg0)
+""",
+        encoding="utf-8",
+    )
+
+    paths, _allocations, launches = probe._generated_code(tmp_path)
+
+    assert paths == [str(generated)]
+    assert launches == 3
 
 
 def test_probe_records_child_timeouts(monkeypatch, tmp_path: Path):
