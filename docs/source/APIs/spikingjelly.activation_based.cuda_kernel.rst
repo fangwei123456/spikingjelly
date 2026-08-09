@@ -25,6 +25,7 @@ CuPy Neuron Kernels
 
    spike_op <spikingjelly.activation_based.cuda_kernel.spike_op>
    tensor_cache <spikingjelly.activation_based.cuda_kernel.tensor_cache>
+   spike_linear <spikingjelly.activation_based.cuda_kernel.spike_linear>
 
 Utilities
 ------------------------------------------------------------------

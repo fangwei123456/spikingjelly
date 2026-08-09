@@ -18,8 +18,22 @@ CUDA kernel 模块，提供代码生成、CuPy 神经元内核、脉冲算子和
 
 CUDA kernel module providing code generation, CuPy neuron kernels, spike
 operations, and runtime utilities.
+
+The ``spike_linear`` submodule provides experimental hand-written CUDA
+kernels for explicitly profiled binary SpikeLinear workloads. It does not
+perform automatic density-based dispatch.
 """
 
 from . import auto_cuda, neuron_kernel
+from .spike_linear import (
+    bit_pack_spike_dense,
+    sparse_linear,
+)
 
-__all__ = ["auto_cuda", "neuron_kernel"]
+__all__ = [
+    "auto_cuda",
+    "neuron_kernel",
+    # Experimental: hand-written CUDA sparse SpikeLinear
+    "sparse_linear",
+    "bit_pack_spike_dense",
+]
