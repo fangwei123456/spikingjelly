@@ -1539,6 +1539,84 @@ def test_plif_triton_matches_torch_training(
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_plif_training_avoids_voltage_history_materialization():
+    for T in (4, 32):
+        torch_node = neuron.ParametricLIFNode(
+            init_tau=2.0, step_mode="m", backend="torch"
+        ).to("cuda")
+        triton_node = neuron.ParametricLIFNode(
+            init_tau=2.0,
+            step_mode="m",
+            backend="triton",
+            store_v_seq=True,
+        ).to("cuda")
+        triton_node.load_state_dict(torch_node.state_dict())
+        x = torch.randn(T, 3, 8, device="cuda")
+        x_torch = x.clone().requires_grad_()
+        x_triton = x.clone().requires_grad_()
+        v = torch.randn_like(x[0]) * 0.1
+        v_torch = v.clone().requires_grad_()
+        v_triton = v.clone().requires_grad_()
+        torch_node.v = v_torch
+        triton_node.v = v_triton
+
+        output_torch = torch_node(x_torch)
+        with torch.profiler.profile(
+            activities=[torch.profiler.ProfilerActivity.CPU]
+        ) as profile:
+            output_triton = triton_node(x_triton)
+
+        assert "aten::cat" not in {event.key for event in profile.key_averages()}
+        assert triton_node.v_seq.is_contiguous()
+        assert triton_node.v_seq.storage_offset() == 0
+        _assert_close(output_torch, output_triton, torch.float32)
+        output_torch.sum().backward()
+        output_triton.sum().backward()
+        _assert_close(x_torch.grad, x_triton.grad, torch.float32)
+        _assert_close(v_torch.grad, v_triton.grad, torch.float32)
+        _assert_close(torch_node.w.grad, triton_node.w.grad, torch.float32)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_plif_mixed_precision_dynamic_backward_uses_nonzero_initial_state():
+    T = 32
+    torch_node = neuron.ParametricLIFNode(
+        init_tau=2.0, step_mode="m", backend="torch"
+    ).to("cuda")
+    x = torch.randn(T, 3, 8, device="cuda")
+    x_torch = x.clone().requires_grad_()
+    x_mixed = x.clone().requires_grad_()
+    v = torch.randn_like(x[0]) * 0.1
+    v_torch = v.clone().requires_grad_()
+    v_mixed = v.clone().requires_grad_()
+    torch_node.v = v_torch
+    r_tau = torch_node.w.sigmoid().detach().clone().requires_grad_()
+
+    output_torch = torch_node(x_torch)
+    with torch.profiler.profile(
+        activities=[torch.profiler.ProfilerActivity.CPU]
+    ) as profile:
+        output_mixed, _, _ = _call_mixed_precision_forward(
+            "plif",
+            x_mixed,
+            v_mixed,
+            storage_dtype=torch.float32,
+            compute_dtype="fp32",
+            backward_compute_dtype="fp32",
+            r_tau=r_tau,
+        )
+
+    assert "aten::cat" not in {event.key for event in profile.key_averages()}
+    _assert_close(output_torch, output_mixed, torch.float32)
+    output_torch.sum().backward()
+    output_mixed.sum().backward()
+    _assert_close(x_torch.grad, x_mixed.grad, torch.float32)
+    _assert_close(v_torch.grad, v_mixed.grad, torch.float32)
+    expected_w_grad = r_tau.grad * r_tau.detach() * (1.0 - r_tau.detach())
+    _assert_close(torch_node.w.grad, expected_w_grad, torch.float32)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize(
     ("kernel_module", "runner"),
     [
