@@ -2029,7 +2029,6 @@ def test_flexsn_registered_operators_pass_opcheck(op_name):
         raise_exception=False,
     )
 
-    assert result
     assert set(result.values()) == {"SUCCESS"}
 
 

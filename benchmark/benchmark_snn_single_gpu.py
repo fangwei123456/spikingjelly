@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import platform
+import signal
 import statistics
 import subprocess
 import sys
@@ -77,11 +78,40 @@ def case_key(record: dict[str, Any]) -> tuple[str, str, str, int, int, int]:
     )
 
 
+def _run_isolated_case(command: list[str], env: dict[str, str], timeout: int) -> None:
+    process = subprocess.Popen(
+        command,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        stdout, stderr = process.communicate()
+        raise subprocess.TimeoutExpired(
+            command, timeout, output=stdout, stderr=stderr
+        ) from error
+    if process.returncode:
+        raise subprocess.CalledProcessError(
+            process.returncode, command, output=stdout, stderr=stderr
+        )
+
+
 def aggregate_records(
     records: list[dict[str, Any]], baseline_label: str, candidate_label: str
 ) -> dict[str, Any]:
     grouped: dict[tuple[str, str, str, int, int, int], dict[str, list[dict]]] = {}
+    failures = [record for record in records if record.get("status") == "error"]
     for record in records:
+        if record.get("status") == "error":
+            continue
         grouped.setdefault(case_key(record), {}).setdefault(
             record["source_label"], []
         ).append(record)
@@ -91,6 +121,13 @@ def aggregate_records(
         baseline = by_source.get(baseline_label, [])
         candidate = by_source.get(candidate_label, [])
         if not baseline or not candidate:
+            continue
+        baseline_by_round = {item["round"]: item for item in baseline}
+        candidate_by_round = {item["round"]: item for item in candidate}
+        paired_rounds = sorted(baseline_by_round.keys() & candidate_by_round.keys())
+        baseline = [baseline_by_round[round_index] for round_index in paired_rounds]
+        candidate = [candidate_by_round[round_index] for round_index in paired_rounds]
+        if not baseline:
             continue
         baseline_rounds = [item["timing"]["median_ms"] for item in baseline]
         candidate_rounds = [item["timing"]["median_ms"] for item in candidate]
@@ -158,6 +195,7 @@ def aggregate_records(
         "baseline_label": baseline_label,
         "candidate_label": candidate_label,
         "comparisons": comparisons,
+        "failures": failures,
         "acceptance": {
             "qualifying_model_families": sorted(qualifying_families),
             "at_least_two_model_families": len(qualifying_families) >= 2,
@@ -167,6 +205,7 @@ def aggregate_records(
                 len(qualifying_families) >= 2
                 and stable_rounds
                 and no_latency_regression
+                and not failures
             ),
         },
     }
@@ -251,6 +290,10 @@ def _environment_metadata(
         key: value
         for key, value in os.environ.items()
         if key.startswith(("CUDA", "TORCH", "TRITON", "SJ_", "NCCL"))
+        and not any(
+            marker in key.upper()
+            for marker in ("TOKEN", "SECRET", "KEY", "PASSWORD", "CREDENTIAL")
+        )
     }
     return {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -563,10 +606,17 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
         if hooks is not None:
             hooks.close()
         if monitor is not None:
-            monitor.terminate()
-            monitor.wait(timeout=10)
-            assert monitor_file is not None
-            monitor_file.close()
+            try:
+                if monitor.poll() is None:
+                    monitor.terminate()
+                    try:
+                        monitor.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        monitor.kill()
+                        monitor.wait()
+            finally:
+                if monitor_file is not None:
+                    monitor_file.close()
 
     raw_counters = _dynamo_counters()
     result = {
@@ -717,8 +767,38 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
                         env["TORCHINDUCTOR_CACHE_DIR"] = str(
                             output_dir / "cache" / stem
                         )
-                        subprocess.run(command, check=True, env=env)
-                        records.append(json.loads(output.read_text(encoding="utf-8")))
+                        try:
+                            _run_isolated_case(command, env, args.timeout)
+                            record = json.loads(output.read_text(encoding="utf-8"))
+                        except (
+                            subprocess.CalledProcessError,
+                            subprocess.TimeoutExpired,
+                            OSError,
+                        ) as error:
+                            record = {
+                                "source_label": label,
+                                "round": round_index,
+                                "status": "error",
+                                "case": {
+                                    "model": model,
+                                    "phase": phase,
+                                    "execution": execution,
+                                    "T": args.T,
+                                    "batch_size": batch_size,
+                                    "image_size": args.image_size,
+                                },
+                                "error": {
+                                    "type": type(error).__name__,
+                                    "message": str(error),
+                                    "stdout": str(getattr(error, "stdout", "") or "")[
+                                        -4000:
+                                    ],
+                                    "stderr": str(getattr(error, "stderr", "") or "")[
+                                        -4000:
+                                    ],
+                                },
+                            }
+                        records.append(record)
 
     baseline_label, candidate_label = (label for label, _ in sources)
     summary = aggregate_records(records, baseline_label, candidate_label)
@@ -777,6 +857,7 @@ def _add_matrix_parser(subparsers) -> None:
         "--executions", nargs="+", choices=EXECUTIONS, default=list(EXECUTIONS)
     )
     parser.add_argument("--rounds", type=int, default=3)
+    parser.add_argument("--timeout", type=int, default=1800)
     parser.add_argument("--inference-batch-size", type=int, default=64)
     parser.add_argument("--training-batch-size", type=int, default=32)
     parser.add_argument("--inference-warmup", type=int, default=100)
@@ -821,6 +902,7 @@ def main() -> None:
             args.inference_steps,
             args.training_steps,
             args.profile_steps,
+            args.timeout,
         )
         if min(positive) <= 0 or min(args.inference_warmup, args.training_warmup) < 0:
             raise ValueError("matrix counts must be positive and warmups non-negative")

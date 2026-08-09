@@ -321,11 +321,12 @@ def _multistep_plif_backward_kernel_static(
         h = tl.load(h_ptrs, boundary_check=(1,), padding_option="zero").to(
             compute_dtype
         )
+        previous_t = tl.maximum(t - 1, 0)
         v_seq_ptrs = tl.make_block_ptr(
             v_seq_ptr,
             shape=(T, NCL),
             strides=(NCL, 1),
-            offsets=(t - 1, ncl_offset),
+            offsets=(previous_t, ncl_offset),
             block_shape=(1, BLOCK_NCL),
             order=(1, 0),
         )
@@ -479,11 +480,12 @@ def _multistep_plif_backward_kernel_dynamic(
         h = tl.load(h_ptrs, boundary_check=(1,), padding_option="zero").to(
             compute_dtype
         )
+        previous_t = tl.maximum(t - 1, 0)
         v_seq_ptrs = tl.make_block_ptr(
             v_seq_ptr,
             shape=(T, NCL),
             strides=(NCL, 1),
-            offsets=(t - 1, ncl_offset),
+            offsets=(previous_t, ncl_offset),
             block_shape=(1, BLOCK_NCL),
             order=(1, 0),
         )

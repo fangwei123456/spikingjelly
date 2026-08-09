@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -62,6 +63,75 @@ def test_source_parser_requires_one_baseline_and_one_candidate(tmp_path: Path):
         benchmark.parse_source_specs([f"baseline={tmp_path}", f"baseline={tmp_path}"])
 
 
+def test_matrix_records_child_timeouts(monkeypatch, tmp_path: Path):
+    sources = []
+    for label in ("baseline", "candidate"):
+        root = tmp_path / label
+        package = root / "spikingjelly"
+        package.mkdir(parents=True)
+        (package / "__init__.py").write_text("", encoding="utf-8")
+        sources.extend(["--source", f"{label}={root}"])
+    args = benchmark.build_parser().parse_args(
+        [
+            "matrix",
+            *sources,
+            "--models",
+            "sew_resnet18",
+            "--phases",
+            "inference",
+            "--executions",
+            "eager",
+            "--rounds",
+            "1",
+            "--timeout",
+            "1",
+            "--output-dir",
+            str(tmp_path / "output"),
+        ]
+    )
+
+    def timeout(command, _env, seconds):
+        raise benchmark.subprocess.TimeoutExpired(command, seconds)
+
+    monkeypatch.setattr(benchmark, "_run_isolated_case", timeout)
+    payload = benchmark.run_matrix(args)
+
+    assert len(payload["records"]) == 2
+    assert len(payload["comparison"]["failures"]) == 2
+    assert payload["comparison"]["acceptance"]["accepted"] is False
+
+
+def test_isolated_case_timeout_kills_process_group(monkeypatch):
+    class HungProcess:
+        pid = 123
+        returncode = None
+
+        def __init__(self):
+            self.calls = 0
+
+        def communicate(self, timeout=None):
+            self.calls += 1
+            if self.calls == 1:
+                raise benchmark.subprocess.TimeoutExpired(["case"], timeout)
+            return "partial stdout", "partial stderr"
+
+    process = HungProcess()
+    killed = []
+    monkeypatch.setattr(
+        benchmark.subprocess, "Popen", lambda *_args, **_kwargs: process
+    )
+    monkeypatch.setattr(
+        benchmark.os, "killpg", lambda pid, sig: killed.append((pid, sig))
+    )
+
+    with pytest.raises(benchmark.subprocess.TimeoutExpired) as raised:
+        benchmark._run_isolated_case(["case"], {}, 1)
+
+    assert killed == [(123, benchmark.signal.SIGKILL)]
+    assert raised.value.stdout == "partial stdout"
+    assert raised.value.stderr == "partial stderr"
+
+
 def test_physical_gpu_selector_uses_cuda_visible_devices(monkeypatch):
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "3,GPU-example")
 
@@ -70,6 +140,30 @@ def test_physical_gpu_selector_uses_cuda_visible_devices(monkeypatch):
         benchmark._physical_gpu_selector(benchmark.torch.device("cuda", 1))
         == "GPU-example"
     )
+
+
+def test_environment_metadata_filters_secrets(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("SJ_MODE", "benchmark")
+    monkeypatch.setenv("SJ_API_TOKEN", "secret")
+    monkeypatch.setattr(
+        benchmark.torch.cuda,
+        "get_device_properties",
+        lambda _device: SimpleNamespace(
+            name="test-gpu", major=8, minor=0, total_memory=1024
+        ),
+    )
+    monkeypatch.setattr(benchmark, "_git_metadata", lambda _root: {})
+    monkeypatch.setattr(benchmark, "_nvidia_snapshot", lambda _selector: None)
+
+    metadata = benchmark._environment_metadata(
+        tmp_path,
+        benchmark.torch.device("cuda", 0),
+        tmp_path / "spikingjelly" / "__init__.py",
+        "0",
+    )
+
+    assert metadata["environment"]["SJ_MODE"] == "benchmark"
+    assert "SJ_API_TOKEN" not in metadata["environment"]
 
 
 def test_aggregate_records_reports_paired_latency_and_memory_changes():
@@ -98,6 +192,24 @@ def test_aggregate_records_reports_paired_latency_and_memory_changes():
     assert acceptance["accepted"] is False
 
 
+def test_aggregate_records_compares_only_matching_successful_rounds():
+    records = [
+        _record("baseline", 1, 10.0, 1000),
+        _record("baseline", 2, 11.0, 1000),
+        _record("candidate", 2, 9.0, 800),
+        _record("candidate", 3, 8.0, 800),
+        {"source_label": "candidate", "round": 1, "status": "error"},
+    ]
+
+    result = benchmark.aggregate_records(records, "baseline", "candidate")[
+        "comparisons"
+    ][0]
+
+    assert result["rounds"] == 1
+    assert result["baseline_round_medians_ms"] == [11.0]
+    assert result["candidate_round_medians_ms"] == [9.0]
+
+
 def test_probe_marks_unmeasured_physical_metrics_as_null():
     result = probe._unsupported(
         "triton_lif", "training", "cuda_required", "CUDA required"
@@ -107,6 +219,58 @@ def test_probe_marks_unmeasured_physical_metrics_as_null():
     assert result["kernel_launch_count"] is None
     assert result["allocation_count"] is None
     assert result["graph_break_count"] is None
+
+
+def test_probe_records_child_timeouts(monkeypatch, tmp_path: Path):
+    args = probe.build_parser().parse_args(
+        [
+            "--cases",
+            "torch_lif",
+            "--phases",
+            "inference",
+            "--timeout",
+            "1",
+            "--output",
+            str(tmp_path / "probe.json"),
+        ]
+    )
+
+    def timeout(command, **kwargs):
+        raise probe.subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(probe.subprocess, "run", timeout)
+    result = probe.run_parent(args)["results"][0]
+
+    assert result["status"] == "error"
+    assert result["reason_code"] == "child_process_timeout"
+    assert result["registration_environment"] == {
+        "SJ_USE_TRITON_OP": "0",
+        "SJ_USE_WRAP_TRITON": "0",
+    }
+
+
+@pytest.mark.parametrize(
+    ("phase", "message"),
+    [
+        ("inference", "inference kernel construction failed"),
+        ("training", "training kernel construction failed"),
+    ],
+)
+def test_flexsn_probe_rejects_unavailable_phase_kernel(monkeypatch, phase, message):
+    from spikingjelly.activation_based.neuron import flexsn
+
+    class UnavailableFlexSN(probe.torch.nn.Module):
+        _inductor_inference_available = False
+        _inductor_inference_final_state_available = False
+        _inductor_training_available = False
+
+        def __init__(self, *_args, **_kwargs):
+            super().__init__()
+
+    monkeypatch.setattr(flexsn, "FlexSN", UnavailableFlexSN)
+
+    with pytest.raises(RuntimeError, match=message):
+        probe._build_model("triton_flexsn", phase, probe.torch.device("cpu"))
 
 
 def test_flexsn_probe_core_is_differentiable():

@@ -23,6 +23,15 @@ CASES = (
 PHASES = ("inference", "training")
 
 
+def _registration_env(case: str) -> dict[str, str]:
+    return {
+        "SJ_USE_TRITON_OP": ("1" if case in {"triton_lif", "triton_flexsn"} else "0"),
+        "SJ_USE_WRAP_TRITON": (
+            "1" if case in {"custom_lif", "triton_lif", "triton_flexsn"} else "0"
+        ),
+    }
+
+
 def _graph_break_count(explain_output: Any) -> int:
     if hasattr(explain_output, "graph_break_count"):
         return int(explain_output.graph_break_count)
@@ -102,7 +111,7 @@ def _lif_core(x: torch.Tensor, v: torch.Tensor):
     return output, h - output
 
 
-def _build_model(case: str, device: torch.device) -> torch.nn.Module:
+def _build_model(case: str, phase: str, device: torch.device) -> torch.nn.Module:
     from spikingjelly.activation_based import neuron, surrogate
 
     if case.endswith("lif") and "flexsn" not in case:
@@ -133,8 +142,14 @@ def _build_model(case: str, device: torch.device) -> torch.nn.Module:
             step_mode="m",
             backend=backend,
         )
-        if backend == "triton" and not node._inductor_training_available:
-            raise RuntimeError("FlexSN Triton training kernel construction failed")
+        if backend == "triton":
+            if phase == "inference" and not (
+                node._inductor_inference_final_state_available
+                or node._inductor_inference_available
+            ):
+                raise RuntimeError("FlexSN Triton inference kernel construction failed")
+            if phase == "training" and not node._inductor_training_available:
+                raise RuntimeError("FlexSN Triton training kernel construction failed")
 
     class PointwiseNode(torch.nn.Module):
         def __init__(self, inner: torch.nn.Module):
@@ -249,7 +264,9 @@ def run_child(args: argparse.Namespace) -> dict[str, Any]:
         torch.cuda.manual_seed_all(args.seed)
     x_template = torch.randn(4, 2, 16, device=device)
 
-    explain_model = _build_model(args.case, device).train(args.phase == "training")
+    explain_model = _build_model(args.case, args.phase, device).train(
+        args.phase == "training"
+    )
     explain_input = x_template.clone().requires_grad_(args.phase == "training")
     _clear_dynamo_state()
     try:
@@ -268,8 +285,12 @@ def run_child(args: argparse.Namespace) -> dict[str, Any]:
         args.output.write_text(json.dumps(result, indent=2), encoding="utf-8")
         return result
 
-    eager_model = _build_model(args.case, device).train(args.phase == "training")
-    compiled_source = _build_model(args.case, device).train(args.phase == "training")
+    eager_model = _build_model(args.case, args.phase, device).train(
+        args.phase == "training"
+    )
+    compiled_source = _build_model(args.case, args.phase, device).train(
+        args.phase == "training"
+    )
     compiled_source.load_state_dict(eager_model.state_dict(), strict=True)
     eager_x = x_template.clone().requires_grad_(args.phase == "training")
     compiled_x = x_template.clone().requires_grad_(args.phase == "training")
@@ -304,6 +325,9 @@ def run_child(args: argparse.Namespace) -> dict[str, Any]:
             "reason": None,
             "device": str(device),
             "spikingjelly_file": str(package_file),
+            "registration_environment": {
+                key: os.environ.get(key) for key in _registration_env(args.case)
+            },
             "graph_count": compile_counts["graph_count"],
             "graph_break_count": compile_counts["graph_break_count"],
             "recompile_count": compile_counts["recompile_count"],
@@ -359,12 +383,7 @@ def run_parent(args: argparse.Namespace) -> dict[str, Any]:
             child_output = work_dir / f"{case}-{phase}.json"
             cache_dir = work_dir / "cache" / f"{case}-{phase}"
             env = os.environ.copy()
-            env["SJ_USE_TRITON_OP"] = (
-                "1" if case in {"triton_lif", "triton_flexsn"} else "0"
-            )
-            env["SJ_USE_WRAP_TRITON"] = (
-                "1" if case in {"custom_lif", "triton_lif", "triton_flexsn"} else "0"
-            )
+            env.update(_registration_env(case))
             env["TORCHINDUCTOR_CACHE_DIR"] = str(cache_dir)
             env["TORCH_COMPILE_DEBUG"] = "1"
             command = [
@@ -380,9 +399,26 @@ def run_parent(args: argparse.Namespace) -> dict[str, Any]:
                 "--output",
                 str(child_output),
             ]
-            completed = subprocess.run(
-                command, env=env, capture_output=True, text=True, timeout=args.timeout
-            )
+            try:
+                completed = subprocess.run(
+                    command,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    timeout=args.timeout,
+                )
+            except subprocess.TimeoutExpired:
+                result = _unsupported(
+                    case,
+                    phase,
+                    "child_process_timeout",
+                    f"child exceeded timeout of {args.timeout} seconds",
+                )
+                result["status"] = "error"
+                result["registration_environment"] = _registration_env(case)
+                results.append(result)
+                print(json.dumps(result), flush=True)
+                continue
             if child_output.exists():
                 result = json.loads(child_output.read_text(encoding="utf-8"))
             else:
@@ -391,6 +427,7 @@ def run_parent(args: argparse.Namespace) -> dict[str, Any]:
                 )
                 result["status"] = "error"
                 result["returncode"] = completed.returncode
+            result.setdefault("registration_environment", _registration_env(case))
             results.append(result)
             print(json.dumps(result), flush=True)
 
@@ -425,6 +462,7 @@ def main() -> None:
     if args.child:
         if args.case is None or args.phase is None:
             raise ValueError("--child requires --case and --phase")
+        os.environ.update(_registration_env(args.case))
         result = run_child(args)
         print("JSON_RESULT=" + json.dumps(result), flush=True)
     else:

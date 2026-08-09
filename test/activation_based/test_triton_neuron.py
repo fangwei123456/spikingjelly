@@ -1540,7 +1540,7 @@ def test_plif_triton_matches_torch_training(
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_plif_training_avoids_voltage_history_materialization():
-    for T in (4, 32):
+    for T in (1, 4, 32):
         torch_node = neuron.ParametricLIFNode(
             init_tau=2.0, step_mode="m", backend="torch"
         ).to("cuda")
