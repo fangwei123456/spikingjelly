@@ -255,6 +255,25 @@ def test_probe_marks_unmeasured_physical_metrics_as_null():
     assert result["graph_break_count"] is None
 
 
+@pytest.mark.parametrize(
+    ("case", "missing_api", "reason_code"),
+    [
+        ("triton_flexsn", "triton_op", "triton_op_unavailable"),
+        ("custom_lif", "wrap_triton", "wrap_triton_unavailable"),
+    ],
+)
+def test_probe_checks_registration_prerequisites(
+    monkeypatch, case, missing_api, reason_code
+):
+    monkeypatch.setattr(probe.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(probe.importlib.util, "find_spec", lambda _name: object())
+    monkeypatch.delattr(probe.torch.library, missing_api, raising=False)
+
+    result = probe._prerequisite_failure(case, "inference")
+
+    assert result["reason_code"] == reason_code
+
+
 def test_generated_code_counts_only_kernel_call_sites(tmp_path: Path):
     generated = tmp_path / "output_code.py"
     generated.write_text(
@@ -300,6 +319,27 @@ def test_probe_records_child_timeouts(monkeypatch, tmp_path: Path):
         "SJ_USE_TRITON_OP": "0",
         "SJ_USE_WRAP_TRITON": "0",
     }
+
+
+def test_probe_preserves_failed_child_stderr(monkeypatch, tmp_path: Path):
+    args = probe.build_parser().parse_args(
+        [
+            "--cases",
+            "torch_lif",
+            "--phases",
+            "inference",
+            "--output",
+            str(tmp_path / "probe.json"),
+        ]
+    )
+    stderr = "root cause\n" + "x" * 5000
+    completed = SimpleNamespace(stderr=stderr, returncode=1)
+    monkeypatch.setattr(probe.subprocess, "run", lambda *_args, **_kwargs: completed)
+
+    result = probe.run_parent(args)["results"][0]
+
+    assert Path(result["stderr_path"]).read_text(encoding="utf-8") == stderr
+    assert result["stderr_path"] in result["reason"]
 
 
 @pytest.mark.parametrize(

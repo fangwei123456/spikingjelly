@@ -505,6 +505,7 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
     ).resolve()
     sys.path.insert(0, str(source_root))
     import spikingjelly
+    from spikingjelly.activation_based import functional
 
     package_file = Path(spikingjelly.__file__).resolve()
     try:
@@ -541,8 +542,6 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
     criterion = torch.nn.CrossEntropyLoss()
 
     def reset_net() -> None:
-        from spikingjelly.activation_based import functional
-
         functional.reset_net(state_model)
 
     def step() -> torch.Tensor:

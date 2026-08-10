@@ -907,6 +907,8 @@ def test_inductor_backward_impl_passes_state_templates_to_wrapper(monkeypatch):
         training_info=SimpleNamespace(num_inputs=1, num_outputs=0, num_states=1),
     )
     seen = {}
+    wrapped_kernel = object()
+    wrap_calls = []
 
     def fake_backward(
         kernel,
@@ -920,8 +922,12 @@ def test_inductor_backward_impl_passes_state_templates_to_wrapper(monkeypatch):
         seen["state_templates"] = state_templates
         return [torch.zeros_like(input_template), torch.zeros_like(state_template)]
 
+    def fake_wrap_triton(kernel):
+        wrap_calls.append(kernel)
+        return wrapped_kernel
+
     monkeypatch.setattr(custom_ops, "flexsn_backward", fake_backward)
-    monkeypatch.setattr(custom_ops, "wrap_triton", lambda kernel: ("wrapped", kernel))
+    monkeypatch.setattr(custom_ops, "wrap_triton", fake_wrap_triton)
 
     grads = custom_ops._flexsn_inductor_backward_impl(
         bundle,
@@ -931,7 +937,8 @@ def test_inductor_backward_impl_passes_state_templates_to_wrapper(monkeypatch):
     )
 
     assert len(seen["input_templates"]) == 1
-    assert seen["kernel"] == ("wrapped", bundle.backward_kernel)
+    assert wrap_calls == [bundle.backward_kernel]
+    assert seen["kernel"] is wrapped_kernel
     assert len(seen["state_templates"]) == 1
     assert seen["input_templates"][0].shape == input_template.shape
     assert seen["state_templates"][0].shape == state_template.shape

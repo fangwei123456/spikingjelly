@@ -73,7 +73,16 @@ def _unsupported(
 
 
 def _prerequisite_failure(case: str, phase: str) -> dict[str, Any] | None:
-    if not hasattr(torch, "compile") or not hasattr(torch, "_dynamo"):
+    if not hasattr(torch, "compile"):
+        return _unsupported(
+            case,
+            phase,
+            "torch_compile_unavailable",
+            "torch.compile and torch._dynamo are required",
+        )
+    try:
+        importlib.import_module("torch._dynamo")
+    except ImportError:
         return _unsupported(
             case,
             phase,
@@ -94,14 +103,24 @@ def _prerequisite_failure(case: str, phase: str) -> dict[str, Any] | None:
             return _unsupported(
                 case, phase, "triton_required", "the Triton package is not importable"
             )
-    if case == "triton_lif" and not (
-        hasattr(torch.library, "triton_op") and hasattr(torch.library, "wrap_triton")
+    registration_env = _registration_env(case)
+    if registration_env["SJ_USE_TRITON_OP"] == "1" and not hasattr(
+        torch.library, "triton_op"
     ):
         return _unsupported(
             case,
             phase,
             "triton_op_unavailable",
-            "torch.library.triton_op and wrap_triton are required",
+            "torch.library.triton_op is required",
+        )
+    if registration_env["SJ_USE_WRAP_TRITON"] == "1" and not hasattr(
+        torch.library, "wrap_triton"
+    ):
+        return _unsupported(
+            case,
+            phase,
+            "wrap_triton_unavailable",
+            "torch.library.wrap_triton is required",
         )
     return None
 
@@ -181,6 +200,7 @@ def _run_once(model: torch.nn.Module, x: torch.Tensor, phase: str):
 
 
 def _generated_code(cache_dir: Path) -> tuple[list[str], int, int]:
+    """Count same-line Inductor launcher calls; profiler counts are authoritative."""
     paths = sorted(cache_dir.rglob("output_code.py"))
     allocation_count = 0
     launch_count = 0
@@ -433,14 +453,23 @@ def run_parent(args: argparse.Namespace) -> dict[str, Any]:
                 results.append(result)
                 print(json.dumps(result), flush=True)
                 continue
+            stderr_log = None
+            if completed.stderr:
+                stderr_log = work_dir / f"{case}-{phase}.stderr"
+                stderr_log.write_text(
+                    completed.stderr, encoding="utf-8", errors="replace"
+                )
             if child_output.exists():
                 result = json.loads(child_output.read_text(encoding="utf-8"))
             else:
-                result = _unsupported(
-                    case, phase, "child_process_failed", completed.stderr[-4000:]
-                )
+                reason = completed.stderr[-4000:]
+                if stderr_log is not None:
+                    reason = f"{reason}\nfull stderr: {stderr_log}"
+                result = _unsupported(case, phase, "child_process_failed", reason)
                 result["status"] = "error"
                 result["returncode"] = completed.returncode
+            if stderr_log is not None:
+                result["stderr_path"] = str(stderr_log)
             result.setdefault("registration_environment", _registration_env(case))
             results.append(result)
             print(json.dumps(result), flush=True)
