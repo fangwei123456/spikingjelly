@@ -251,17 +251,6 @@ def test_aggregate_records_rejects_invalid_compile_metrics(metric):
     assert comparison["performance_gates"]["met"] is False
 
 
-def test_probe_marks_unmeasured_physical_metrics_as_null():
-    result = probe._unsupported(
-        "triton_lif", "training", "cuda_required", "CUDA required"
-    )
-
-    assert result["status"] == "unsupported"
-    assert result["kernel_launch_count"] is None
-    assert result["allocation_count"] is None
-    assert result["graph_break_count"] is None
-
-
 @pytest.mark.parametrize(
     ("case", "missing_api", "reason_code"),
     [
@@ -327,6 +316,9 @@ def test_probe_records_child_timeouts(monkeypatch, tmp_path: Path):
 
     assert result["status"] == "error"
     assert result["reason_code"] == "child_process_timeout"
+    assert result["kernel_launch_count"] is None
+    assert result["allocation_count"] is None
+    assert result["graph_break_count"] is None
     assert result["registration_environment"] == {
         "SJ_USE_TRITON_OP": "0",
         "SJ_USE_WRAP_TRITON": "0",

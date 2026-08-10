@@ -238,12 +238,6 @@ def aggregate_records(
                 and not failures
             ),
         },
-        "manual_acceptance_checks": [
-            "exclusive_gpu_access",
-            "no_gpu_throttle_or_xid",
-            "no_oom",
-            "numerical_correctness",
-        ],
     }
 
 
@@ -477,21 +471,16 @@ def _make_batch(args: argparse.Namespace, device: torch.device):
     return x, target
 
 
-def _dynamo_counters() -> dict[str, Any]:
+def _dynamo_metrics() -> dict[str, Any]:
     dynamo = getattr(torch, "_dynamo", None)
     utils = getattr(dynamo, "utils", None)
     counters = getattr(utils, "counters", {})
-    return {group: dict(values) for group, values in counters.items() if values}
-
-
-def _derived_dynamo_counts(counters: dict[str, Any]) -> dict[str, int]:
-    stats = counters.get("stats", {})
-    graph_break = counters.get("graph_break", {})
-    recompiles = counters.get("recompiles", {})
+    raw = {group: dict(values) for group, values in counters.items() if values}
     return {
-        "graph_count": int(stats.get("unique_graphs", 0)),
-        "graph_break_count": int(sum(graph_break.values())),
-        "recompile_count": int(sum(recompiles.values())),
+        "graph_count": int(raw.get("stats", {}).get("unique_graphs", 0)),
+        "graph_break_count": int(sum(raw.get("graph_break", {}).values())),
+        "recompile_count": int(sum(raw.get("recompiles", {}).values())),
+        "raw_counters": raw,
     }
 
 
@@ -571,12 +560,10 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
 
     hooks = None
     monitor = None
-    monitor_file = None
     if args.monitor_log:
         args.monitor_log.parent.mkdir(parents=True, exist_ok=True)
         try:
-            monitor_file = args.monitor_log.open("w", encoding="utf-8")
-            try:
+            with args.monitor_log.open("w", encoding="utf-8") as monitor_file:
                 monitor = subprocess.Popen(
                     [
                         "nvidia-smi",
@@ -594,12 +581,8 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
                     stderr=subprocess.STDOUT,
                     text=True,
                 )
-            finally:
-                if monitor is None:
-                    monitor_file.close()
-                    monitor_file = None
         except OSError:
-            monitor = None
+            pass
 
     try:
         torch.cuda.synchronize(device)
@@ -643,13 +626,9 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
     finally:
         if hooks is not None:
             hooks.close()
-        try:
-            _stop_monitor(monitor)
-        finally:
-            if monitor_file is not None:
-                monitor_file.close()
+        _stop_monitor(monitor)
 
-    raw_counters = _dynamo_counters()
+    dynamo_metrics = _dynamo_metrics()
     result = {
         "schema_version": 1,
         "source_label": args.source_label,
@@ -690,10 +669,7 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
             "peak_allocated_bytes": peak_allocated_bytes,
             "peak_reserved_bytes": peak_reserved_bytes,
         },
-        "dynamo": {
-            **_derived_dynamo_counts(raw_counters),
-            "raw_counters": raw_counters,
-        },
+        "dynamo": dynamo_metrics,
         "metadata": {
             **metadata,
             "nvidia_smi_after": _nvidia_snapshot(gpu_selector),

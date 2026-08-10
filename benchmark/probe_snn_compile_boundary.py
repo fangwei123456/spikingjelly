@@ -501,7 +501,6 @@ def main() -> None:
     if args.child:
         if args.case is None or args.phase is None:
             raise ValueError("--child requires --case and --phase")
-        os.environ.update(_registration_env(args.case))
         result = run_child(args)
         print("JSON_RESULT=" + json.dumps(result), flush=True)
     else:
