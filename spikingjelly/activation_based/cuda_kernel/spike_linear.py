@@ -1,6 +1,6 @@
 """Experimental hand-written CUDA kernels for binary SpikeLinear.
 
-``sparse_linear`` exposes the v15 row-index kernel and a cuBLAS fallback.
+``sparse_linear`` exposes a row-index sparse kernel and a cuBLAS fallback.
 The slower v3 kernel remains available only as a low-level custom op for
 pre-packed spike tensors. Both kernels require CUDA, CuPy, contiguous FP32
 weights, and explicitly registered fake/autograd implementations.
@@ -22,8 +22,8 @@ except (ImportError, OSError) as e:
 
 
 __all__ = [
-    "sparse_linear",
     "bit_pack_spike_dense",
+    "sparse_linear",
 ]
 
 
@@ -33,9 +33,9 @@ __all__ = [
 
 _BIT_PACK_SRC = r"""
 extern "C" __global__ void pack_kernel(
-    const float* __restrict__ S,
+    const void* __restrict__ S,
     unsigned char* __restrict__ S_packed,
-    int M, int K, int K_PACKED)
+    int M, int K, int K_PACKED, int dtype)
 {
     int m = blockIdx.x;
     if (m >= M) return;
@@ -44,8 +44,17 @@ extern "C" __global__ void pack_kernel(
         #pragma unroll
         for (int i = 0; i < 8; i++) {
             int k = kp * 8 + i;
-            float v = (k < K) ? S[m * K + k] : 0.0f;
-            b |= ((unsigned char)(v > 0.5f)) << i;
+            int offset = m * K + k;
+            bool active = false;
+            if (k < K) {
+                if (dtype == 0) {
+                    active = static_cast<const float*>(S)[offset] > 0.5f;
+                } else {
+                    // FP16 and BF16 binary 0/1 values share zero/nonzero storage.
+                    active = static_cast<const unsigned short*>(S)[offset] != 0;
+                }
+            }
+            b |= ((unsigned char)active) << i;
         }
         S_packed[m * K_PACKED + kp] = b;
     }
@@ -323,12 +332,29 @@ def _check_weight_bias(
 
 
 def bit_pack_spike_dense(spike: torch.Tensor) -> torch.Tensor:
-    """Pack a contiguous binary FP32 CUDA matrix into row-major uint8 bytes.
+    """Pack a contiguous binary CUDA matrix into row-major uint8 bytes.
 
-    Bit ``i`` of byte ``b`` represents ``spike[:, b * 8 + i]``. A trailing
-    partial byte is zero-padded. Values greater than ``0.5`` are treated as 1.
+    ``spike`` may be FP32, FP16, or BF16. Bit ``i`` of byte ``b`` represents
+    ``spike[:, b * 8 + i]``; a trailing partial byte is zero-padded.
     """
-    _check_cuda_tensor(spike, "spike", torch.float32, 2)
+    if spike.dim() != 2:
+        raise ValueError("spike must be 2D")
+    dtype = {
+        torch.float32: 0,
+        torch.float16: 1,
+        torch.bfloat16: 2,
+    }.get(spike.dtype)
+    if dtype is None:
+        raise TypeError("spike must have dtype float32, float16, or bfloat16")
+    if not spike.is_cuda:
+        raise ValueError("spike must be a CUDA tensor")
+    if not spike.is_contiguous():
+        raise ValueError("spike must be contiguous")
+    if spike.numel() > _MAX_CUDA_ELEMENTS:
+        raise ValueError(
+            f"spike exceeds the {_MAX_CUDA_ELEMENTS}-element CUDA kernel limit"
+        )
+
     M, K = spike.shape
     K_PACKED = (K + 7) // 8
     out = torch.empty((M, K_PACKED), dtype=torch.uint8, device=spike.device)
@@ -341,7 +367,7 @@ def bit_pack_spike_dense(spike: torch.Tensor) -> torch.Tensor:
         kernel,
         (M,),
         (min(K_PACKED, 256),),
-        (spike.data_ptr(), out.data_ptr(), M, K, K_PACKED),
+        (spike.data_ptr(), out.data_ptr(), M, K, K_PACKED, dtype),
         device,
     )
     return out
@@ -436,6 +462,7 @@ def _cupy_spike_linear_v3_dense_forward_fake(
 
 
 def _setup_v3_context(ctx, inputs, output):
+    del output
     spike_packed, weight, bias = inputs
     ctx.save_for_backward(spike_packed, weight, bias)
 
@@ -467,8 +494,8 @@ torch.library.register_autograd(
 # ----------------------------------------------------------------------
 
 
-@torch.library.custom_op("sj::cupy_spike_linear_v15_sparse_forward", mutates_args=())
-def cupy_spike_linear_v15_sparse_forward(
+@torch.library.custom_op("sj::cupy_spike_linear_sparse_forward", mutates_args=())
+def cupy_spike_linear_sparse_forward(
     spike: torch.Tensor,
     weight: torch.Tensor,
     bias: Optional[torch.Tensor],
@@ -540,14 +567,14 @@ def cupy_spike_linear_v15_sparse_forward(
     return Y
 
 
-@torch.library.register_fake("sj::cupy_spike_linear_v15_sparse_forward")
-def _cupy_spike_linear_v15_sparse_forward_fake(
+@torch.library.register_fake("sj::cupy_spike_linear_sparse_forward")
+def _cupy_spike_linear_sparse_forward_fake(
     spike: torch.Tensor,
     weight: torch.Tensor,
     bias: Optional[torch.Tensor],
 ) -> torch.Tensor:
     if spike.dtype != torch.float32 or weight.dtype != torch.float32:
-        raise TypeError("v15 requires float32 spike and weight")
+        raise TypeError("sparse kernel requires float32 spike and weight")
     torch._check(spike.dim() == 2)
     torch._check(weight.dim() == 2)
     torch._check(
@@ -567,6 +594,7 @@ def _cupy_spike_linear_v15_sparse_forward_fake(
 
 
 def _setup_v15_context(ctx, inputs, output):
+    del output
     spike, weight, bias = inputs
     ctx.save_for_backward(spike, weight, bias)
 
@@ -581,7 +609,7 @@ def _v15_backward(ctx, grad_output):
 
 
 torch.library.register_autograd(
-    "sj::cupy_spike_linear_v15_sparse_forward",
+    "sj::cupy_spike_linear_sparse_forward",
     _v15_backward,
     setup_context=_setup_v15_context,
 )
@@ -596,30 +624,33 @@ def sparse_linear(
     spike: torch.Tensor,
     weight: torch.Tensor,
     bias: Optional[torch.Tensor] = None,
-    strategy: Literal["torch", "v15_sparse"] = "torch",
+    strategy: Literal["torch", "sparse"] = "torch",
 ) -> torch.Tensor:
     """Apply Linear to an unbitpacked binary spike tensor.
 
     Args:
-        spike: FP32 tensor with shape ``[M, K]`` containing only 0 and 1.
+        spike: input tensor containing only 0 and 1.
         weight: FP32 tensor with shape ``[N, K]``.
         bias: optional FP32 tensor with shape ``[N]``.
-        strategy: ``"torch"`` (default) or ``"v15_sparse"``.
+        strategy: ``"torch"`` (default) or ``"sparse"``.
 
-    ``"v15_sparse"`` requires CUDA and CuPy and is intended for explicitly
-    profiled low-density workloads. ``"torch"`` calls
-    :func:`torch.nn.functional.linear`. There is no automatic strategy
-    selection or density synchronization.
+    ``"sparse"`` requires a 2D FP32 CUDA ``spike`` and CuPy. It uses an
+    int32 ``[M, K]`` workspace (``4 * M * K`` bytes) and is intended for
+    explicitly profiled low-density workloads. It thresholds values at
+    ``> 0.5`` and treats selected values as 1; the caller must guarantee the
+    binary input contract because checking values would synchronize the device.
+
+    ``"torch"`` calls :func:`torch.nn.functional.linear` and accepts all input
+    shapes and dtypes supported by that function. There is no automatic
+    strategy selection or density synchronization.
     """
-    if strategy not in ("torch", "v15_sparse"):
+    if strategy not in ("torch", "sparse"):
         raise ValueError(
-            f"Unknown strategy: {strategy!r}. Choose from: 'torch', 'v15_sparse'."
+            f"Unknown strategy: {strategy!r}. Choose from: 'torch', 'sparse'."
         )
     if strategy == "torch":
         return torch.nn.functional.linear(spike, weight, bias)
-    if cupy is None:
-        raise RuntimeError("strategy='v15_sparse' requires cupy and CUDA")
-    return cupy_spike_linear_v15_sparse_forward(
+    return cupy_spike_linear_sparse_forward(
         spike.contiguous(),
         weight.contiguous(),
         None if bias is None else bias.contiguous(),

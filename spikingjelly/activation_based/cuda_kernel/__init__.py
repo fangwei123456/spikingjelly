@@ -32,8 +32,7 @@ from .spike_linear import (
 
 __all__ = [
     "auto_cuda",
-    "neuron_kernel",
-    # Experimental: hand-written CUDA sparse SpikeLinear
-    "sparse_linear",
     "bit_pack_spike_dense",
+    "neuron_kernel",
+    "sparse_linear",
 ]

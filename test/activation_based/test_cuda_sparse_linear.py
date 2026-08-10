@@ -1,6 +1,6 @@
 """Tests for the experimental CUDA SpikeLinear kernels.
 
-The public ``sparse_linear`` API exposes only the torch and v15 strategies.
+The public ``sparse_linear`` API exposes only the torch and sparse strategies.
 The slower v3 kernel remains available as a low-level custom op that requires
 a pre-packed uint8 spike tensor.
 """
@@ -16,7 +16,7 @@ except (ImportError, OSError):
 
 from spikingjelly.activation_based.cuda_kernel.spike_linear import (
     bit_pack_spike_dense,
-    cupy_spike_linear_v15_sparse_forward,
+    cupy_spike_linear_sparse_forward,
     cupy_spike_linear_v3_dense_forward,
     sparse_linear,
 )
@@ -36,7 +36,7 @@ def test_sparse_linear_matches_dense(density, M, K, N):
     s = (torch.rand(M, K, device="cuda") < density).float()
     W = torch.randn(N, K, device="cuda")
     y_ref = torch.nn.functional.linear(s, W)
-    y_test = sparse_linear(s, W, strategy="v15_sparse")
+    y_test = sparse_linear(s, W, strategy="sparse")
     torch.testing.assert_close(y_test, y_ref, rtol=1e-4, atol=1e-5)
 
 
@@ -50,7 +50,7 @@ def test_sparse_linear_with_bias():
     W = torch.randn(N, K, device="cuda")
     b = torch.randn(N, device="cuda")
     y_ref = torch.nn.functional.linear(s, W, b)
-    y_test = sparse_linear(s, W, b, strategy="v15_sparse")
+    y_test = sparse_linear(s, W, b, strategy="sparse")
     torch.testing.assert_close(y_test, y_ref, rtol=1e-4, atol=1e-5)
 
 
@@ -66,7 +66,7 @@ def test_sparse_linear_backward():
     b_ref = b.detach().clone().requires_grad_()
     grad_output = torch.randn(M, N, device="cuda")
 
-    sparse_linear(s, W, b, strategy="v15_sparse").backward(grad_output)
+    sparse_linear(s, W, b, strategy="sparse").backward(grad_output)
     torch.nn.functional.linear(s_ref, W_ref, b_ref).backward(grad_output)
 
     torch.testing.assert_close(s.grad, s_ref.grad, rtol=1e-3, atol=1e-4)
@@ -92,13 +92,15 @@ def test_custom_ops_validate_input_contracts():
     s = torch.zeros(4, 16, device="cuda")
     W = torch.zeros(8, 16, device="cuda")
 
+    with pytest.raises(TypeError, match="float32, float16, or bfloat16"):
+        bit_pack_spike_dense(torch.zeros(4, 16, dtype=torch.int32, device="cuda"))
     with pytest.raises(TypeError, match="float32"):
-        cupy_spike_linear_v15_sparse_forward(s.half(), W, None)
-    with pytest.raises(ValueError, match="weight.shape"):
-        cupy_spike_linear_v15_sparse_forward(s, W[:, :-1].contiguous(), None)
+        cupy_spike_linear_sparse_forward(s.half(), W, None)
+    with pytest.raises(ValueError, match=r"weight\.shape"):
+        cupy_spike_linear_sparse_forward(s, W[:, :-1].contiguous(), None)
     with pytest.raises(ValueError, match="contiguous"):
-        cupy_spike_linear_v15_sparse_forward(s[:, ::2], W[:, ::2], None)
-    with pytest.raises(ValueError, match="packed.shape"):
+        cupy_spike_linear_sparse_forward(s[:, ::2], W[:, ::2], None)
+    with pytest.raises(ValueError, match=r"packed\.shape"):
         cupy_spike_linear_v3_dense_forward(
             torch.zeros(4, 1, dtype=torch.uint8, device="cuda"), W, None
         )
@@ -109,7 +111,7 @@ def test_nondefault_stream():
     with torch.cuda.stream(stream):
         s = (torch.rand(64, 128, device="cuda") < 0.05).float()
         W = torch.randn(32, 128, device="cuda")
-        y = sparse_linear(s, W, strategy="v15_sparse")
+        y = sparse_linear(s, W, strategy="sparse")
         y_ref = torch.nn.functional.linear(s, W)
     torch.cuda.current_stream().wait_stream(stream)
     torch.testing.assert_close(y, y_ref, rtol=1e-4, atol=1e-5)
@@ -120,7 +122,7 @@ def test_noncurrent_cuda_device():
     with torch.cuda.device(1):
         s = (torch.rand(32, 64, device="cuda:1") < 0.05).float()
         W = torch.randn(16, 64, device="cuda:1", requires_grad=True)
-        y = sparse_linear(s, W, strategy="v15_sparse")
+        y = sparse_linear(s, W, strategy="sparse")
         y_ref = torch.nn.functional.linear(s, W)
         y.sum().backward()
     assert y.device == torch.device("cuda:1")
@@ -129,14 +131,14 @@ def test_noncurrent_cuda_device():
 
     W_other = torch.randn(16, 64, device="cuda:0")
     with pytest.raises(ValueError, match="same CUDA device"):
-        cupy_spike_linear_v15_sparse_forward(s, W_other, None)
+        cupy_spike_linear_sparse_forward(s, W_other, None)
 
 
 @pytest.mark.parametrize("M,K,N", [(0, 8, 4), (4, 8, 0), (4, 0, 8)])
 def test_zero_dimensions(M, K, N):
     s = torch.empty(M, K, device="cuda")
     W = torch.empty(N, K, device="cuda")
-    y = sparse_linear(s, W, strategy="v15_sparse")
+    y = sparse_linear(s, W, strategy="sparse")
     y_ref = torch.nn.functional.linear(s, W)
     torch.testing.assert_close(y, y_ref, rtol=0, atol=0)
 
@@ -145,7 +147,7 @@ def test_flattened_grid_exceeds_legacy_y_limit():
     N = 256 * 65_535 + 1
     s = torch.empty(1, 0, device="cuda")
     W = torch.empty(N, 0, device="cuda")
-    y = cupy_spike_linear_v15_sparse_forward(s, W, None)
+    y = cupy_spike_linear_sparse_forward(s, W, None)
     assert y.shape == (1, N)
     assert torch.count_nonzero(y).item() == 0
 
@@ -157,7 +159,7 @@ def test_flattened_grid_exceeds_legacy_y_limit():
     assert torch.count_nonzero(y).item() == 0
 
 
-@pytest.mark.parametrize("strategy", ["torch", "v15_sparse"])
+@pytest.mark.parametrize("strategy", ["torch", "sparse"])
 def test_sparse_linear_explicit_strategies(strategy):
     """Each explicit strategy must produce correct results."""
     torch.manual_seed(0)
@@ -232,25 +234,26 @@ def test_v3_user_packs_repeated_calls():
     torch.testing.assert_close(y2, y_ref2, rtol=1e-4, atol=1e-5)
 
 
-def test_bit_pack_roundtrip():
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+def test_bit_pack_roundtrip(dtype):
     """bit_pack_spike_dense followed by unpack should be lossless."""
     torch.manual_seed(0)
     M, K = 64, 130  # 130 not a multiple of 8
-    s = (torch.rand(M, K, device="cuda") < 0.3).float()
+    s = (torch.rand(M, K, device="cuda") < 0.3).to(dtype)
     packed = bit_pack_spike_dense(s)
     # Unpack manually
     bits = (
         packed.unsqueeze(-1) >> torch.arange(8, dtype=torch.uint8, device="cuda")
     ) & 1
     bits = bits.reshape(M, packed.shape[1] * 8)[:, :K]
-    s_back = bits.float()
+    s_back = bits.to(dtype)
     assert torch.equal(s, s_back)
 
 
 def test_custom_op_registered():
     """Both forward custom ops must be registered with torch.library."""
     assert hasattr(torch.ops.sj, "cupy_spike_linear_v3_dense_forward")
-    assert hasattr(torch.ops.sj, "cupy_spike_linear_v15_sparse_forward")
+    assert hasattr(torch.ops.sj, "cupy_spike_linear_sparse_forward")
 
 
 def test_fake_tensor_shape():
@@ -264,12 +267,12 @@ def test_fake_tensor_shape():
     y_meta = torch.ops.sj.cupy_spike_linear_v3_dense_forward(packed_meta, W_meta, None)
     assert y_meta.shape == (M, N)
     assert y_meta.dtype == W_meta.dtype
-    y_meta = torch.ops.sj.cupy_spike_linear_v15_sparse_forward(s_meta, W_meta, None)
+    y_meta = torch.ops.sj.cupy_spike_linear_sparse_forward(s_meta, W_meta, None)
     assert y_meta.shape == (M, N)
     assert y_meta.dtype == W_meta.dtype
 
     with pytest.raises(TypeError, match="float32"):
-        torch.ops.sj.cupy_spike_linear_v15_sparse_forward(s_meta.half(), W_meta, None)
+        torch.ops.sj.cupy_spike_linear_sparse_forward(s_meta.half(), W_meta, None)
 
 
 def test_via_torch_compile():
@@ -280,7 +283,7 @@ def test_via_torch_compile():
     W = torch.randn(N, K, device="cuda")
 
     def f(s, W):
-        return sparse_linear(s, W, strategy="v15_sparse")
+        return sparse_linear(s, W, strategy="sparse")
 
     explanation = torch._dynamo.explain(f)(s, W)
     assert explanation.graph_count == 1

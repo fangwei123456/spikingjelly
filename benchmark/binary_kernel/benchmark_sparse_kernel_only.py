@@ -1,6 +1,6 @@
 """Benchmark public sparse Linear strategies with correctness gates.
 
-The v15 timing includes row-index construction and weight transposition.
+The sparse timing includes row-index construction and weight transposition.
 """
 
 import argparse
@@ -37,6 +37,10 @@ def main():
     parser.add_argument("--warmup", type=int, default=20)
     parser.add_argument("--iters", type=int, default=100)
     args = parser.parse_args()
+    if args.warmup < 0:
+        parser.error("--warmup must be non-negative")
+    if args.iters <= 0:
+        parser.error("--iters must be positive")
 
     device = torch.device("cuda")
     torch.manual_seed(0)
@@ -61,25 +65,25 @@ def main():
         def torch_linear():
             return sparse_linear(s, W, strategy="torch")
 
-        def v15_sparse():
-            return sparse_linear(s, W, strategy="v15_sparse")
+        def sparse():
+            return sparse_linear(s, W, strategy="sparse")
 
         reference = dense()
         correctness_atol = 1e-5 if density <= 0.05 else 5e-5
         torch.testing.assert_close(torch_linear(), reference, rtol=1e-4, atol=1e-5)
         torch.testing.assert_close(
-            v15_sparse(), reference, rtol=1e-4, atol=correctness_atol
+            sparse(), reference, rtol=1e-4, atol=correctness_atol
         )
 
         times = {
             "dense_ms": time_fn(dense, args.warmup, args.iters),
             "torch_ms": time_fn(torch_linear, args.warmup, args.iters),
-            "v15_sparse_ms": time_fn(v15_sparse, args.warmup, args.iters),
+            "sparse_ms": time_fn(sparse, args.warmup, args.iters),
         }
         nnz = int(s.to(torch.bool).sum().item())
         speedups = {
             "torch": times["dense_ms"] / times["torch_ms"],
-            "v15_sparse": times["dense_ms"] / times["v15_sparse_ms"],
+            "sparse": times["dense_ms"] / times["sparse_ms"],
         }
         case = {
             "M": M,
@@ -95,7 +99,7 @@ def main():
             f"M={M:5d} K={K:5d} N={N:5d} d={density:.2f} nnz={nnz:7d}  "
             f"dense={times['dense_ms']:6.3f}ms "
             f"torch={times['torch_ms']:6.3f}ms ({speedups['torch']:.2f}x) "
-            f"v15={times['v15_sparse_ms']:6.3f}ms ({speedups['v15_sparse']:.2f}x)"
+            f"sparse={times['sparse_ms']:6.3f}ms ({speedups['sparse']:.2f}x)"
         )
         results.append(case)
 
@@ -117,7 +121,7 @@ def main():
             "tf32_matmul": torch.backends.cuda.matmul.allow_tf32,
             "warmup": args.warmup,
             "iterations": args.iters,
-            "v15_includes_row_index_build": True,
+            "sparse_includes_row_index_build": True,
             "correctness_rtol": 1e-4,
             "strict_low_density_atol": 1e-5,
             "exploratory_high_density_atol": 5e-5,
