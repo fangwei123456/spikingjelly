@@ -7,15 +7,17 @@
 
 * **中文**
 
-``custom_ops`` 模块为 FlexSN 的共享 Triton 路径提供底层 opaque custom op。
+``custom_ops`` 模块为 FlexSN 的共享 Triton 路径提供底层 registered op。
 它负责在 Python 侧保存 Triton kernel 与元数据，并通过轻量级整数 ``handle``
-把这些 kernel 暴露给 ``torch.compile`` / AOTAutograd。
+把这些 kernel 暴露给 ``torch.compile`` / AOTAutograd。默认注册使用与其他 Triton
+神经元一致的 ``torch.library.triton_op`` + ``wrap_triton``；设置
+``SJ_USE_TRITON_OP=0`` 后使用 opaque ``custom_op`` fallback。
 
 该模块的主要职责包括：
 
 * 在 Python 注册表中维护 FlexSN kernel handle；
-* 将前向 / 反向封装为 ``torch.library`` custom op，避免编译器追踪 Python
-  kernel 对象与 Triton launcher 细节；
+* 将前向 / 反向封装为 ``torch.library`` registered op，避免编译器追踪 Python
+  kernel 对象与 launcher 细节，同时让默认路径看到包装后的 Triton launch；
 * 为 fake tensor、autograd setup/backward、final-state fast path 提供辅助实现。
 
 通常用户不需要直接调用这些函数；它们主要由
@@ -28,16 +30,19 @@
 
 * **English**
 
-The ``custom_ops`` module provides the low-level opaque custom ops used by
+The ``custom_ops`` module provides the low-level registered ops used by
 FlexSN's shared Triton execution path. It stores Triton kernels and metadata in
 a Python-side registry and exposes them to ``torch.compile`` / AOTAutograd
-through lightweight integer ``handle`` values.
+through lightweight integer ``handle`` values. By default, registration uses
+the same ``torch.library.triton_op`` + ``wrap_triton`` path as the other Triton
+neurons; ``SJ_USE_TRITON_OP=0`` selects the opaque ``custom_op`` fallback.
 
 Its main responsibilities are:
 
 * maintaining the Python-side FlexSN kernel-handle registry;
-* wrapping forward and backward as ``torch.library`` custom ops so the
-  compiler does not trace Python kernel objects or Triton launcher internals;
+* wrapping forward and backward as ``torch.library`` registered ops so the
+  compiler can see wrapped Triton launches without tracing Python kernel objects
+  or launcher internals;
 * providing helpers for fake tensors, autograd setup/backward, and final-state
   fast paths.
 
@@ -61,6 +66,7 @@ import torch
 from spikingjelly.logger import logger
 
 from .info import FlexSNInfo
+from ..triton_utils import register_op, wrap_triton
 from .wrapper import (
     flexsn_backward,
     flexsn_forward,
@@ -487,7 +493,7 @@ def _materialize_zero_state_args(
     if len(flat_args) == info.num_inputs:
         # In the common reset-before-forward path, FlexSN initial states are
         # zero tensors matching the per-step input shape. Materialize them
-        # inside the opaque custom op so compile graphs do not need explicit
+        # inside the registered op so compile graphs do not need explicit
         # ``zeros_like`` nodes in front of every neuron layer.
         if info.num_inputs == 0:
             raise ValueError("FlexSN custom ops require at least one input sequence.")
@@ -505,7 +511,7 @@ def _flexsn_inductor_inference_impl(
     with _device_guard(args):
         return list(
             flexsn_inference(
-                bundle.inference_kernel,
+                wrap_triton(bundle.inference_kernel),
                 bundle.inference_info,
                 *args,
             )
@@ -520,7 +526,7 @@ def _flexsn_inductor_inference_final_state_impl(
     with _device_guard(args):
         return list(
             flexsn_inference_final_state(
-                bundle.inference_final_state_kernel,
+                wrap_triton(bundle.inference_final_state_kernel),
                 bundle.inference_final_state_info,
                 *args,
             )
@@ -535,7 +541,7 @@ def _flexsn_inductor_training_impl(
     with _device_guard(args):
         return list(
             flexsn_forward(
-                bundle.forward_kernel,
+                wrap_triton(bundle.forward_kernel),
                 bundle.training_info,
                 *args,
             )
@@ -580,7 +586,7 @@ def _flexsn_inductor_backward_impl(
     with _device_guard([*grads, *saved, *templates]):
         return list(
             flexsn_backward(
-                bundle.backward_kernel,
+                wrap_triton(bundle.backward_kernel),
                 info,
                 *grads,
                 *saved,
@@ -590,7 +596,7 @@ def _flexsn_inductor_backward_impl(
         )
 
 
-@torch.library.custom_op("sj::flexsn_inductor_inference", mutates_args=())
+@register_op("sj::flexsn_inductor_inference", mutates_args=())
 def flexsn_inductor_inference(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
@@ -635,7 +641,7 @@ def flexsn_inductor_inference(
     return _flexsn_inductor_inference_impl(bundle, flat_args)
 
 
-@torch.library.custom_op("sj::flexsn_inductor_inference_final_state", mutates_args=())
+@register_op("sj::flexsn_inductor_inference_final_state", mutates_args=())
 def flexsn_inductor_inference_final_state(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
@@ -719,7 +725,7 @@ def _flexsn_inductor_inference_final_state_fake(
     return [*seq_outputs, *final_states]
 
 
-@torch.library.custom_op("sj::flexsn_inductor_training", mutates_args=())
+@register_op("sj::flexsn_inductor_training", mutates_args=())
 def flexsn_inductor_training(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
@@ -768,7 +774,7 @@ def flexsn_inductor_training(
     return _flexsn_inductor_training_impl(bundle, flat_args)
 
 
-@torch.library.custom_op("sj::flexsn_inductor_training_final_state", mutates_args=())
+@register_op("sj::flexsn_inductor_training_final_state", mutates_args=())
 def flexsn_inductor_training_final_state(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
@@ -852,7 +858,7 @@ def _flexsn_inductor_training_final_state_fake(
     return [*seq_outputs, *final_states, *extra_saved_tensors]
 
 
-@torch.library.custom_op("sj::flexsn_inductor_backward", mutates_args=())
+@register_op("sj::flexsn_inductor_backward", mutates_args=())
 def flexsn_inductor_backward(
     handle: int,
     grad_outputs: List[torch.Tensor],
@@ -1101,7 +1107,7 @@ torch.library.register_autograd(
 )
 
 logger.info(
-    "FlexSN custom operators registered: operators=%s fake_kernels=%s autograd_kernels=%s",
+    "FlexSN operators registered: operators=%s fake_kernels=%s autograd_kernels=%s",
     5,
     5,
     2,

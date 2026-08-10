@@ -907,6 +907,7 @@ def test_inductor_backward_impl_passes_state_templates_to_wrapper(monkeypatch):
         training_info=SimpleNamespace(num_inputs=1, num_outputs=0, num_states=1),
     )
     seen = {}
+    wrapped_kernel = object()
 
     def fake_backward(
         kernel,
@@ -915,11 +916,17 @@ def test_inductor_backward_impl_passes_state_templates_to_wrapper(monkeypatch):
         input_templates=None,
         state_templates=None,
     ):
+        seen["kernel"] = kernel
         seen["input_templates"] = input_templates
         seen["state_templates"] = state_templates
         return [torch.zeros_like(input_template), torch.zeros_like(state_template)]
 
+    def fake_wrap_triton(kernel):
+        assert kernel is bundle.backward_kernel
+        return wrapped_kernel
+
     monkeypatch.setattr(custom_ops, "flexsn_backward", fake_backward)
+    monkeypatch.setattr(custom_ops, "wrap_triton", fake_wrap_triton)
 
     grads = custom_ops._flexsn_inductor_backward_impl(
         bundle,
@@ -929,6 +936,7 @@ def test_inductor_backward_impl_passes_state_templates_to_wrapper(monkeypatch):
     )
 
     assert len(seen["input_templates"]) == 1
+    assert seen["kernel"] is wrapped_kernel
     assert len(seen["state_templates"]) == 1
     assert seen["input_templates"][0].shape == input_template.shape
     assert seen["state_templates"][0].shape == state_template.shape
@@ -1970,6 +1978,63 @@ def test_flexsnkernel_matches_inductor_backend(rng):
     torch.testing.assert_close(v_seq_kernel, v_seq_inductor)
     torch.testing.assert_close(x_kernel.grad, x_inductor.grad)
     torch.testing.assert_close(v0_kernel.grad, v0_inductor.grad)
+
+
+def test_flexsn_registered_operator_schemas_are_stable():
+    expected = {
+        "flexsn_inductor_inference": (
+            "sj::flexsn_inductor_inference(SymInt handle, Tensor[] flat_args) -> Tensor[]"
+        ),
+        "flexsn_inductor_inference_final_state": (
+            "sj::flexsn_inductor_inference_final_state(SymInt handle, Tensor[] flat_args) -> Tensor[]"
+        ),
+        "flexsn_inductor_training": (
+            "sj::flexsn_inductor_training(SymInt handle, Tensor[] flat_args) -> Tensor[]"
+        ),
+        "flexsn_inductor_training_final_state": (
+            "sj::flexsn_inductor_training_final_state(SymInt handle, Tensor[] flat_args) -> Tensor[]"
+        ),
+        "flexsn_inductor_backward": (
+            "sj::flexsn_inductor_backward(SymInt handle, Tensor[] grad_outputs, "
+            "Tensor[] saved_tensors, Tensor[] input_templates) -> Tensor[]"
+        ),
+    }
+
+    assert {
+        name: str(getattr(torch.ops.sj, name).default._schema) for name in expected
+    } == expected
+
+
+@pytest.mark.parametrize(
+    "op_name",
+    ["flexsn_inductor_inference", "flexsn_inductor_training"],
+)
+def test_flexsn_registered_operators_pass_opcheck(op_name):
+    if not torch.cuda.is_available():
+        pytest.skip("FlexSN operator contracts are exercised on CUDA")
+    if base_module.triton is None:
+        pytest.skip("Triton is required for FlexSN operator contracts")
+
+    example = torch.zeros(2, 16, device="cuda")
+    kernel = FlexSNKernel(
+        core=_differentiable_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        example_inputs=(example, example),
+        requires_grad=(True, True),
+    )
+    needs_grad = op_name.endswith("training")
+    x = torch.randn(4, 2, 16, device="cuda", requires_grad=needs_grad)
+    state = torch.randn(2, 16, device="cuda", requires_grad=needs_grad)
+
+    result = torch.library.opcheck(
+        getattr(torch.ops.sj, op_name).default,
+        (kernel._handle, [x, state]),
+        raise_exception=False,
+    )
+
+    assert set(result.values()) == {"SUCCESS"}
 
 
 def test_flexsnkernel_deepcopy_preserves_handle_lifetime(rng):

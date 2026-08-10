@@ -248,7 +248,8 @@ def _multistep_plif_backward_kernel_static(
     grad_s_seq_ptr,
     grad_v_seq_ptr,
     h_seq_ptr,
-    v_init_v_seq_ptr,
+    v_init_ptr,
+    v_seq_ptr,
     grad_x_seq_ptr,
     grad_v_init_ptr,
     grad_r_tau_ptr,
@@ -273,6 +274,18 @@ def _multistep_plif_backward_kernel_static(
     r_tau = tl.full([1], r_tau, dtype=compute_dtype)
     grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
     grad_r_tau_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
+
+    v_init_ptrs = tl.make_block_ptr(
+        v_init_ptr,
+        shape=(1, NCL),
+        strides=(NCL, 1),
+        offsets=(0, ncl_offset),
+        block_shape=(1, BLOCK_NCL),
+        order=(1, 0),
+    )
+    v_initial = tl.load(v_init_ptrs, boundary_check=(1,), padding_option="zero").to(
+        compute_dtype
+    )
 
     for t in tl.static_range(T - 1, -1, -1):
         grad_s_ptrs = tl.make_block_ptr(
@@ -308,17 +321,19 @@ def _multistep_plif_backward_kernel_static(
         h = tl.load(h_ptrs, boundary_check=(1,), padding_option="zero").to(
             compute_dtype
         )
-        v_last_ptrs = tl.make_block_ptr(
-            v_init_v_seq_ptr,
-            shape=(T + 1, NCL),
+        previous_t = tl.maximum(t - 1, 0)
+        v_seq_ptrs = tl.make_block_ptr(
+            v_seq_ptr,
+            shape=(T, NCL),
             strides=(NCL, 1),
-            offsets=(t, ncl_offset),
+            offsets=(previous_t, ncl_offset),
             block_shape=(1, BLOCK_NCL),
             order=(1, 0),
         )
-        v_last = tl.load(v_last_ptrs, boundary_check=(0, 1), padding_option="zero").to(
-            compute_dtype
-        )
+        v_previous = tl.load(
+            v_seq_ptrs, boundary_check=(0, 1), padding_option="zero"
+        ).to(compute_dtype)
+        v_last = tl.where(t == 0, v_initial, v_previous)
 
         sg = sg_triton(h - v_threshold, alpha, sg_triton_id)
         grad_v_acc = grad_v + grad_v_acc
@@ -392,7 +407,8 @@ def _multistep_plif_backward_kernel_dynamic(
     grad_s_seq_ptr,
     grad_v_seq_ptr,
     h_seq_ptr,
-    v_init_v_seq_ptr,
+    v_init_ptr,
+    v_seq_ptr,
     grad_x_seq_ptr,
     grad_v_init_ptr,
     grad_r_tau_ptr,
@@ -417,6 +433,18 @@ def _multistep_plif_backward_kernel_dynamic(
     r_tau = tl.full([1], r_tau, dtype=compute_dtype)
     grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
     grad_r_tau_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
+
+    v_init_ptrs = tl.make_block_ptr(
+        v_init_ptr,
+        shape=(1, NCL),
+        strides=(NCL, 1),
+        offsets=(0, ncl_offset),
+        block_shape=(1, BLOCK_NCL),
+        order=(1, 0),
+    )
+    v_initial = tl.load(v_init_ptrs, boundary_check=(1,), padding_option="zero").to(
+        compute_dtype
+    )
 
     for t in tl.range(T - 1, -1, -1):
         grad_s_ptrs = tl.make_block_ptr(
@@ -452,17 +480,19 @@ def _multistep_plif_backward_kernel_dynamic(
         h = tl.load(h_ptrs, boundary_check=(1,), padding_option="zero").to(
             compute_dtype
         )
-        v_last_ptrs = tl.make_block_ptr(
-            v_init_v_seq_ptr,
-            shape=(T + 1, NCL),
+        previous_t = tl.maximum(t - 1, 0)
+        v_seq_ptrs = tl.make_block_ptr(
+            v_seq_ptr,
+            shape=(T, NCL),
             strides=(NCL, 1),
-            offsets=(t, ncl_offset),
+            offsets=(previous_t, ncl_offset),
             block_shape=(1, BLOCK_NCL),
             order=(1, 0),
         )
-        v_last = tl.load(v_last_ptrs, boundary_check=(0, 1), padding_option="zero").to(
-            compute_dtype
-        )
+        v_previous = tl.load(
+            v_seq_ptrs, boundary_check=(0, 1), padding_option="zero"
+        ).to(compute_dtype)
+        v_last = tl.where(t == 0, v_initial, v_previous)
 
         sg = sg_triton(h - v_threshold, alpha, sg_triton_id)
         grad_v_acc = grad_v + grad_v_acc
@@ -592,7 +622,8 @@ def _launch_plif_backward_kernel(
     grad_s_seq: torch.Tensor,
     grad_v_seq: torch.Tensor,
     h_seq: torch.Tensor,
-    v_init_v_seq: torch.Tensor,
+    v_init: torch.Tensor,
+    v_seq: torch.Tensor,
     grad_x_seq: torch.Tensor,
     grad_v_init: torch.Tensor,
     grad_r_tau: torch.Tensor,
@@ -623,7 +654,8 @@ def _launch_plif_backward_kernel(
             grad_s_seq,
             grad_v_seq,
             h_seq,
-            v_init_v_seq,
+            v_init,
+            v_seq,
             grad_x_seq,
             grad_v_init,
             grad_r_tau,
@@ -1053,8 +1085,7 @@ def _setup_mp_plif_context(ctx, inputs, output):
     _, v_seq, h_seq = output
     storage_dtype = triton_neuron_dtype_id_to_torch_dtype(storage_dtype_id)
     v_storage = v_init.detach().to(dtype=storage_dtype).contiguous()
-    v_init_v_seq = torch.cat([v_storage.unsqueeze(0), v_seq.detach()], dim=0)
-    ctx.save_for_backward(h_seq, v_init_v_seq, r_tau)
+    ctx.save_for_backward(h_seq, v_storage, v_seq.detach(), r_tau)
     ctx.x_dtype = x_seq.dtype
     ctx.v_init_dtype = v_init.dtype
     ctx.r_tau_dtype = r_tau.dtype
@@ -1071,7 +1102,7 @@ def _setup_mp_plif_context(ctx, inputs, output):
 
 
 def _multistep_plif_mp_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
-    h_seq, v_init_v_seq, r_tau = ctx.saved_tensors
+    h_seq, v_init, v_seq, r_tau = ctx.saved_tensors
     del grad_h_seq
     storage_dtype = triton_neuron_dtype_id_to_torch_dtype(ctx.storage_dtype_id)
     spike_dtype = triton_neuron_dtype_id_to_torch_dtype(ctx.spike_dtype_id)
@@ -1082,7 +1113,8 @@ def _multistep_plif_mp_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
     grad_s_seq = grad_s_seq.contiguous()
     grad_v_seq = grad_v_seq.contiguous()
     h_seq = h_seq.contiguous()
-    v_init_v_seq = v_init_v_seq.contiguous()
+    v_init = v_init.contiguous()
+    v_seq = v_seq.contiguous()
     grad_x_seq = torch.empty(h_seq.shape, dtype=ctx.x_dtype, device=h_seq.device)
     grad_v_init = torch.empty(
         h_seq[0].shape, dtype=ctx.v_init_dtype, device=h_seq.device
@@ -1098,7 +1130,8 @@ def _multistep_plif_mp_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
         grad_s_seq,
         grad_v_seq,
         h_seq,
-        v_init_v_seq,
+        v_init,
+        v_seq,
         grad_x_seq,
         grad_v_init,
         grad_r_tau_seq,
@@ -1154,8 +1187,7 @@ def _setup_context(ctx, inputs, output):
         sg_alpha,
     ) = inputs[1:]
     _, v_seq, h_seq = output
-    v_init_v_seq = torch.cat([v_init.unsqueeze(0), v_seq], dim=0)
-    ctx.save_for_backward(h_seq, v_init_v_seq, r_tau)
+    ctx.save_for_backward(h_seq, v_init, v_seq, r_tau)
     ctx.decay_input = decay_input
     ctx.v_threshold = v_threshold
     ctx.v_reset = v_reset
@@ -1166,11 +1198,12 @@ def _setup_context(ctx, inputs, output):
 
 
 def _multistep_plif_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
-    h_seq, v_init_v_seq, r_tau = ctx.saved_tensors
+    h_seq, v_init, v_seq, r_tau = ctx.saved_tensors
     grad_s_seq = grad_s_seq.contiguous()
     grad_v_seq = grad_v_seq.contiguous()
     h_seq = h_seq.contiguous()
-    v_init_v_seq = v_init_v_seq.contiguous()
+    v_init = v_init.contiguous()
+    v_seq = v_seq.contiguous()
     grad_x_seq = torch.empty(
         grad_s_seq.shape, dtype=grad_s_seq.dtype, device=grad_s_seq.device
     )
@@ -1185,7 +1218,8 @@ def _multistep_plif_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
         grad_s_seq,
         grad_v_seq,
         h_seq,
-        v_init_v_seq,
+        v_init,
+        v_seq,
         grad_x_seq,
         grad_v_init,
         grad_r_tau,

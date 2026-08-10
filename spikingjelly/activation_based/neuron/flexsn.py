@@ -522,7 +522,7 @@ class FlexSNKernel:
         * **中文**
 
         ``FlexSNKernel`` 可以根据自定义的 PyTorch 单步函数 ``core`` 生成 Triton 多步脉冲神经元核。
-        不同于 :class:`FlexSN` ， ``FlexSNKernel`` 是对底层 custom op 调度的轻量 ``Callable`` 封装。
+        不同于 :class:`FlexSN` ， ``FlexSNKernel`` 是对底层 ``torch.library`` registered op 调度的轻量 ``Callable`` 封装。
 
         实例化后， ``FlexSNKernel`` 对象接受的输入参数为 ``[*input_seqs, *states]`` ，其中 ``input_seqs`` 是
         ``num_inputs`` 个输入序列，``states`` 是 ``num_states`` 个初始状态；返回值为 ``[*output_seqs, *state_seqs]`` ，
@@ -561,7 +561,7 @@ class FlexSNKernel:
         from a customized PyTorch single-step function ``core`` via FlexSN's
         triton / inductor backend.
         It is a lightweight ``Callable`` wrapper over the underlying FlexSN
-        custom-op dispatch path.
+        ``torch.library`` registered-op dispatch path.
 
         The input arguments of a ``FlexSNKernel`` object is ``[*input_seqs, *states]`` , where ``input_seqs`` is
         a list of input sequences, ``states`` is a list of initial states; the return value is
