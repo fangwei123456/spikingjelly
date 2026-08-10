@@ -182,14 +182,10 @@ def _build_model(case: str, phase: str, device: torch.device) -> torch.nn.Module
     return PointwiseNode(node).to(device)
 
 
-def _reset(model: torch.nn.Module) -> None:
+def _run_once(model: torch.nn.Module, x: torch.Tensor, phase: str):
     from spikingjelly.activation_based import functional
 
     functional.reset_net(model)
-
-
-def _run_once(model: torch.nn.Module, x: torch.Tensor, phase: str):
-    _reset(model)
     if phase == "inference":
         with torch.inference_mode():
             return model(x), None

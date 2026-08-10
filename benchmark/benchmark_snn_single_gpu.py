@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import suppress
 import json
 import os
 import platform
@@ -23,24 +24,18 @@ PHASES = ("inference", "training")
 EXECUTIONS = ("eager", "compile")
 
 
-def percentile(values: list[float], q: float) -> float:
-    if not values:
-        raise ValueError("percentile requires at least one value")
-    ordered = sorted(values)
-    index = (len(ordered) - 1) * q
-    lower = int(index)
-    upper = min(lower + 1, len(ordered) - 1)
-    weight = index - lower
-    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
-
-
 def summarize_samples(samples_ms: list[float]) -> dict[str, float]:
     if not samples_ms:
         raise ValueError("samples_ms must not be empty")
+    deciles = (
+        statistics.quantiles(samples_ms, n=10, method="inclusive")
+        if len(samples_ms) > 1
+        else samples_ms * 9
+    )
     return {
         "median_ms": statistics.median(samples_ms),
-        "p10_ms": percentile(samples_ms, 0.10),
-        "p90_ms": percentile(samples_ms, 0.90),
+        "p10_ms": deciles[0],
+        "p90_ms": deciles[8],
         "stdev_ms": statistics.stdev(samples_ms) if len(samples_ms) > 1 else 0.0,
     }
 
@@ -110,25 +105,14 @@ def _stop_monitor(monitor) -> None:
     try:
         if monitor.poll() is not None:
             return
-    except ProcessLookupError:
-        return
-    try:
         monitor.terminate()
-    except ProcessLookupError:
-        pass
-    try:
         monitor.wait(timeout=10)
     except ProcessLookupError:
-        pass
+        return
     except subprocess.TimeoutExpired:
-        try:
+        with suppress(ProcessLookupError):
             monitor.kill()
-        except ProcessLookupError:
-            pass
-        try:
             monitor.wait()
-        except ProcessLookupError:
-            pass
 
 
 def aggregate_records(
@@ -844,9 +828,6 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
     }
     (output_dir / "matrix.json").write_text(
         json.dumps(payload, indent=2), encoding="utf-8"
-    )
-    (output_dir / "comparison.json").write_text(
-        json.dumps(summary, indent=2), encoding="utf-8"
     )
     return payload
 

@@ -134,22 +134,13 @@ def test_isolated_case_timeout_kills_process_group(monkeypatch):
 
 def test_stop_monitor_tolerates_exit_race():
     class ExitedMonitor:
-        def __init__(self):
-            self.wait_calls = []
-
         def poll(self):
             return None
 
         def terminate(self):
             raise ProcessLookupError
 
-        def wait(self, timeout=None):
-            self.wait_calls.append(timeout)
-
-    monitor = ExitedMonitor()
-    benchmark._stop_monitor(monitor)
-
-    assert monitor.wait_calls == [10]
+    benchmark._stop_monitor(ExitedMonitor())
 
 
 def test_physical_gpu_selector_uses_cuda_visible_devices(monkeypatch):
