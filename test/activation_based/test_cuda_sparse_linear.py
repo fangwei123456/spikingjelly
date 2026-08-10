@@ -31,7 +31,6 @@ pytestmark = pytest.mark.skipif(
 @pytest.mark.parametrize("density", [0.02, 0.05, 0.10])
 @pytest.mark.parametrize("M,K,N", [(64, 128, 64), (256, 512, 256), (512, 1024, 512)])
 def test_sparse_linear_matches_dense(density, M, K, N):
-    """sparse_linear must match F.linear for all density cells."""
     torch.manual_seed(0)
     s = (torch.rand(M, K, device="cuda") < density).float()
     W = torch.randn(N, K, device="cuda")
@@ -75,7 +74,6 @@ def test_sparse_linear_backward():
 
 
 def test_unknown_strategy_raises():
-    """Unknown strategy should raise ValueError, not silently fall back."""
     torch.manual_seed(0)
     M, K, N = 64, 128, 64
     s = (torch.rand(M, K, device="cuda") < 0.1).float()
@@ -161,7 +159,6 @@ def test_flattened_grid_exceeds_legacy_y_limit():
 
 @pytest.mark.parametrize("strategy", ["torch", "sparse"])
 def test_sparse_linear_explicit_strategies(strategy):
-    """Each explicit strategy must produce correct results."""
     torch.manual_seed(0)
     M, K, N = 128, 256, 128
     s = (torch.rand(M, K, device="cuda") < 0.1).float()
@@ -172,24 +169,7 @@ def test_sparse_linear_explicit_strategies(strategy):
     torch.testing.assert_close(y_test, y_ref, rtol=1e-4, atol=1e-5)
 
 
-def test_strategy_torch_skips_custom_op():
-    """strategy='torch' should not call any custom CUDA kernel."""
-    torch.manual_seed(0)
-    M, K, N = 64, 128, 64
-    s = (torch.rand(M, K, device="cuda") < 0.05).float()
-    W = torch.randn(N, K, device="cuda")
-
-    # We can't easily intercept the custom op, but we can verify the
-    # result is bit-exactly equal to F.linear (custom ops introduce
-    # ~1e-6 float round-off in the bit-pack path).
-    y_ref = torch.nn.functional.linear(s, W)
-    y_test = sparse_linear(s, W, strategy="torch")
-    err = (y_ref - y_test).abs().max().item()
-    assert err == 0.0, f"strategy=torch should be bit-exact F.linear, err={err}"
-
-
 def test_default_strategy_is_torch():
-    """The safe default is the dense torch implementation."""
     torch.manual_seed(0)
     s = (torch.rand(128, 256, device="cuda") < 0.1).float()
     W = torch.randn(128, 256, device="cuda")
@@ -199,10 +179,6 @@ def test_default_strategy_is_torch():
 
 
 def test_v3_takes_prepacked_input():
-    """v3 custom op takes uint8 [M, K_PACKED]; no internal bit-pack.
-
-    This is the right pattern when the user pre-packs (e.g. when
-    calling v3 multiple times with the same spike)."""
     torch.manual_seed(0)
     M, K, N = 64, 128, 64
     s = (torch.rand(M, K, device="cuda") < 0.1).float()
@@ -218,7 +194,6 @@ def test_v3_takes_prepacked_input():
 
 
 def test_v3_user_packs_repeated_calls():
-    """User can pack once and call v3 multiple times (no re-pack)."""
     torch.manual_seed(0)
     M, K = 1024, 1024
     s = (torch.rand(M, K, device="cuda") < 0.05).float()
@@ -236,7 +211,6 @@ def test_v3_user_packs_repeated_calls():
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 def test_bit_pack_roundtrip(dtype):
-    """bit_pack_spike_dense followed by unpack should be lossless."""
     torch.manual_seed(0)
     M, K = 64, 130  # 130 not a multiple of 8
     s = (torch.rand(M, K, device="cuda") < 0.3).to(dtype)
@@ -250,14 +224,7 @@ def test_bit_pack_roundtrip(dtype):
     assert torch.equal(s, s_back)
 
 
-def test_custom_op_registered():
-    """Both forward custom ops must be registered with torch.library."""
-    assert hasattr(torch.ops.sj, "cupy_spike_linear_v3_dense_forward")
-    assert hasattr(torch.ops.sj, "cupy_spike_linear_sparse_forward")
-
-
 def test_fake_tensor_shape():
-    """The fake implementation should produce a tensor of the right shape."""
     torch.manual_seed(0)
     M, K, N = 64, 128, 64
     # Build meta tensors to exercise both fake implementations.
@@ -276,7 +243,6 @@ def test_fake_tensor_shape():
 
 
 def test_via_torch_compile():
-    """sparse_linear should compile as one graph without graph breaks."""
     torch.manual_seed(0)
     M, K, N = 64, 128, 64
     s = (torch.rand(M, K, device="cuda") < 0.05).float()

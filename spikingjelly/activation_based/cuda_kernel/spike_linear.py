@@ -62,7 +62,9 @@ extern "C" __global__ void pack_kernel(
 """
 
 
-_CUDA_SRC = r"""
+_CUDA_SRC = (
+    _BIT_PACK_SRC
+    + r"""
 #include <cuda_runtime.h>
 
 
@@ -229,6 +231,7 @@ extern "C" __global__ void spike_linear_v15_sparse_wT_kernel(
 }
 
 """
+)
 
 
 # ----------------------------------------------------------------------
@@ -236,7 +239,6 @@ extern "C" __global__ void spike_linear_v15_sparse_wT_kernel(
 # ----------------------------------------------------------------------
 
 _main_modules: dict[int, object] = {}
-_pack_modules: dict[int, object] = {}
 _kernel_cache: dict[tuple[int, str], object] = {}
 _MAX_CUDA_ELEMENTS = 2**31 - 1
 
@@ -253,31 +255,11 @@ def _get_main_module(device: int):
     return _main_modules[device]
 
 
-def _get_pack_module(device: int):
-    if cupy is None:
-        raise RuntimeError("cupy is required for bit pack kernel")
-    if device not in _pack_modules:
-        with cuda_utils.DeviceEnvironment(device):
-            _pack_modules[device] = RawModule(
-                code=_BIT_PACK_SRC,
-                options=("--use_fast_math",),
-            )
-    return _pack_modules[device]
-
-
 def _get_kernel(name: str, device: int):
     key = (device, name)
     if key not in _kernel_cache:
         with cuda_utils.DeviceEnvironment(device):
             _kernel_cache[key] = _get_main_module(device).get_function(name)
-    return _kernel_cache[key]
-
-
-def _get_pack_kernel(device: int):
-    key = (device, "pack_kernel")
-    if key not in _kernel_cache:
-        with cuda_utils.DeviceEnvironment(device):
-            _kernel_cache[key] = _get_pack_module(device).get_function("pack_kernel")
     return _kernel_cache[key]
 
 
@@ -362,7 +344,7 @@ def bit_pack_spike_dense(spike: torch.Tensor) -> torch.Tensor:
         return out
 
     device = spike.get_device()
-    kernel = _get_pack_kernel(device)
+    kernel = _get_kernel("pack_kernel", device)
     _launch(
         kernel,
         (M,),

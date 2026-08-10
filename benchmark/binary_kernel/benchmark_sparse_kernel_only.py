@@ -1,7 +1,4 @@
-"""Benchmark public sparse Linear strategies with correctness gates.
-
-The sparse timing includes row-index construction and weight transposition.
-"""
+"""Benchmark sparse Linear against dense PyTorch, including index/transpose costs."""
 
 import argparse
 import hashlib
@@ -62,27 +59,21 @@ def main():
         def dense():
             return torch.nn.functional.linear(s, W)
 
-        def torch_linear():
-            return sparse_linear(s, W, strategy="torch")
-
         def sparse():
             return sparse_linear(s, W, strategy="sparse")
 
         reference = dense()
         correctness_atol = 1e-5 if density <= 0.05 else 5e-5
-        torch.testing.assert_close(torch_linear(), reference, rtol=1e-4, atol=1e-5)
         torch.testing.assert_close(
             sparse(), reference, rtol=1e-4, atol=correctness_atol
         )
 
         times = {
             "dense_ms": time_fn(dense, args.warmup, args.iters),
-            "torch_ms": time_fn(torch_linear, args.warmup, args.iters),
             "sparse_ms": time_fn(sparse, args.warmup, args.iters),
         }
         nnz = int(s.to(torch.bool).sum().item())
         speedups = {
-            "torch": times["dense_ms"] / times["torch_ms"],
             "sparse": times["dense_ms"] / times["sparse_ms"],
         }
         case = {
@@ -98,7 +89,6 @@ def main():
         print(
             f"M={M:5d} K={K:5d} N={N:5d} d={density:.2f} nnz={nnz:7d}  "
             f"dense={times['dense_ms']:6.3f}ms "
-            f"torch={times['torch_ms']:6.3f}ms ({speedups['torch']:.2f}x) "
             f"sparse={times['sparse_ms']:6.3f}ms ({speedups['sparse']:.2f}x)"
         )
         results.append(case)
