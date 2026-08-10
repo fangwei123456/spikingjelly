@@ -119,9 +119,17 @@ def aggregate_records(
     records: list[dict[str, Any]], baseline_label: str, candidate_label: str
 ) -> dict[str, Any]:
     grouped: dict[tuple[str, str, str, int, int, int], dict[str, list[dict]]] = {}
-    failures = [record for record in records if record.get("status") == "error"]
+    failures = []
     for record in records:
-        if record.get("status") == "error":
+        compile_metrics = record.get("dynamo", {})
+        compile_metrics_invalid = record.get("case", {}).get(
+            "execution"
+        ) == "compile" and (
+            compile_metrics.get("graph_break_count") != 0
+            or compile_metrics.get("recompile_count") != 0
+        )
+        if record.get("status") == "error" or compile_metrics_invalid:
+            failures.append(record)
             continue
         grouped.setdefault(case_key(record), {}).setdefault(
             record["source_label"], []
@@ -218,18 +226,24 @@ def aggregate_records(
         "candidate_label": candidate_label,
         "comparisons": comparisons,
         "failures": failures,
-        "acceptance": {
+        "performance_gates": {
             "qualifying_model_families": sorted(qualifying_families),
             "at_least_two_model_families": len(qualifying_families) >= 2,
             "three_stable_rounds_per_case": stable_rounds,
             "no_case_latency_regression_over_3pct": no_latency_regression,
-            "accepted": (
+            "met": (
                 len(qualifying_families) >= 2
                 and stable_rounds
                 and no_latency_regression
                 and not failures
             ),
         },
+        "manual_acceptance_checks": [
+            "exclusive_gpu_access",
+            "no_gpu_throttle_or_xid",
+            "no_oom",
+            "numerical_correctness",
+        ],
     }
 
 

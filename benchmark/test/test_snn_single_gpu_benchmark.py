@@ -21,6 +21,7 @@ def _record(label: str, round_index: int, latency_ms: float, peak_bytes: int):
         },
         "timing": {"median_ms": latency_ms},
         "memory": {"peak_allocated_bytes": peak_bytes},
+        "dynamo": {"graph_break_count": 0, "recompile_count": 0},
     }
 
 
@@ -98,7 +99,7 @@ def test_matrix_records_child_timeouts(monkeypatch, tmp_path: Path):
 
     assert len(payload["records"]) == 2
     assert len(payload["comparison"]["failures"]) == 2
-    assert payload["comparison"]["acceptance"]["accepted"] is False
+    assert payload["comparison"]["performance_gates"]["met"] is False
 
 
 def test_isolated_case_timeout_kills_process_group(monkeypatch):
@@ -195,12 +196,12 @@ def test_aggregate_records_reports_paired_latency_and_memory_changes():
     assert result["peak_allocated_change_pct"] == pytest.approx(-20.0)
     assert result["all_candidate_rounds_faster"] is True
     assert result["candidate_round_spread"] == pytest.approx(9.0 / 8.0)
-    acceptance = comparison["acceptance"]
-    assert acceptance["qualifying_model_families"] == ["sew_resnet18"]
-    assert acceptance["at_least_two_model_families"] is False
-    assert acceptance["three_stable_rounds_per_case"] is False
-    assert acceptance["no_case_latency_regression_over_3pct"] is True
-    assert acceptance["accepted"] is False
+    gates = comparison["performance_gates"]
+    assert gates["qualifying_model_families"] == ["sew_resnet18"]
+    assert gates["at_least_two_model_families"] is False
+    assert gates["three_stable_rounds_per_case"] is False
+    assert gates["no_case_latency_regression_over_3pct"] is True
+    assert gates["met"] is False
 
 
 def test_aggregate_records_rejects_zero_latency_measurements():
@@ -214,7 +215,7 @@ def test_aggregate_records_rejects_zero_latency_measurements():
 
     assert result["latency_change_pct"] is None
     assert result["candidate_round_spread"] is None
-    assert comparison["acceptance"]["accepted"] is False
+    assert comparison["performance_gates"]["met"] is False
 
 
 def test_aggregate_records_compares_only_matching_successful_rounds():
@@ -233,6 +234,21 @@ def test_aggregate_records_compares_only_matching_successful_rounds():
     assert result["rounds"] == 1
     assert result["baseline_round_medians_ms"] == [11.0]
     assert result["candidate_round_medians_ms"] == [9.0]
+
+
+@pytest.mark.parametrize("metric", ["graph_break_count", "recompile_count"])
+def test_aggregate_records_rejects_invalid_compile_metrics(metric):
+    baseline = _record("baseline", 1, 10.0, 1000)
+    candidate = _record("candidate", 1, 9.0, 800)
+    candidate["dynamo"][metric] = 1
+
+    comparison = benchmark.aggregate_records(
+        [baseline, candidate], "baseline", "candidate"
+    )
+
+    assert comparison["failures"] == [candidate]
+    assert comparison["comparisons"] == []
+    assert comparison["performance_gates"]["met"] is False
 
 
 def test_probe_marks_unmeasured_physical_metrics_as_null():
@@ -257,7 +273,12 @@ def test_probe_checks_registration_prerequisites(
     monkeypatch, case, missing_api, reason_code
 ):
     monkeypatch.setattr(probe.torch.cuda, "is_available", lambda: True)
-    monkeypatch.setattr(probe.importlib.util, "find_spec", lambda _name: object())
+    find_spec = probe.importlib.util.find_spec
+    monkeypatch.setattr(
+        probe.importlib.util,
+        "find_spec",
+        lambda name: object() if name == "triton" else find_spec(name),
+    )
     monkeypatch.delattr(probe.torch.library, missing_api, raising=False)
 
     result = probe._prerequisite_failure(case, "inference")
