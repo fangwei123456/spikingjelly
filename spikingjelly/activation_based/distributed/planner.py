@@ -307,7 +307,7 @@ def recommend_snn_distributed_strategy(
     world_size: int,
     prefer: str,
     batch_size: int,
-    backend: str = "inductor",
+    backend: str = "triton",
     zero_redundancy_optimizer_available: Optional[bool] = None,
     pipelining_available: Optional[bool] = None,
     fsdp2_available: Optional[bool] = None,
@@ -382,7 +382,7 @@ def recommend_snn_distributed_strategy(
             mesh_shape = _recommended_fsdp2_tp_mesh_shape(world_size)
             if mesh_shape is not None:
                 rationale.append(
-                    "Use fsdp2_tp on multi-GPU CIFAR10DVSVGG because current inductor benchmarks show the best global throughput there."
+                    "Use fsdp2_tp on multi-GPU CIFAR10DVSVGG because current benchmarks show the best global throughput there."
                 )
                 return result(
                     "fsdp2_tp",

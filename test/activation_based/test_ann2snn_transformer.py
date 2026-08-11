@@ -929,6 +929,29 @@ def test_spikezip_stbif_triton_matches_torch(dtype, time_steps):
     not torch.cuda.is_available() or not _TRITON_AVAILABLE,
     reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
 )
+def test_spikezip_stbif_triton_avoids_device_scalar_read():
+    neuron = STBIFNeuron(0.25, level=8, sym=True, step_mode="m").cuda()
+    neuron.backend = "triton"
+    x_seq = torch.randn(8, 7, 13, device="cuda")
+
+    neuron(x_seq)
+    neuron.reset()
+    with torch.profiler.profile(
+        activities=[torch.profiler.ProfilerActivity.CPU]
+    ) as profile:
+        neuron(x_seq)
+
+    operation_names = {event.key for event in profile.key_averages()}
+    assert "aten::item" not in operation_names
+    assert "aten::_local_scalar_dense" not in operation_names
+    assert torch.is_tensor(neuron.is_work)
+    assert neuron.is_work.dtype == torch.bool
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
+    reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
+)
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 def test_spikezip_stbif_single_step_triton_matches_torch(dtype):
     if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
@@ -1026,6 +1049,7 @@ def test_spikezip_linear_is_tdlinear_with_distributed_bias():
 
     functional.set_step_mode(spike, "m")
     spike_seq = spike(x_seq)
+    assert torch.is_tensor(spike.is_work)
     td_seq = td(x_seq)
     expected_bias = source.bias.view(1, 1, -1) / 4
     expected_seq = td_seq.clone()
@@ -1107,6 +1131,7 @@ def test_spikezip_conv2d_is_tdconv2d_with_distributed_bias():
 
     functional.set_step_mode(spike, "m")
     spike_seq = spike(x_seq)
+    assert torch.is_tensor(spike.is_work)
     td_seq = td(x_seq)
     expected_bias = source.bias.view(1, 1, -1, 1, 1) / 4
     expected_seq = td_seq.clone()

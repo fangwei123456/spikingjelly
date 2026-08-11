@@ -707,7 +707,7 @@ def test_stbif_module_derives_is_work():
 
 
 def test_multi_step_names_identify_independent_sequence_paths():
-    backend_suffixes = ("_cupy", "_triton", "_inductor")
+    backend_suffixes = ("_cupy", "_triton")
     for name in functional_neuron.__all__:
         if "_multi_step" in name:
             assert name.endswith(backend_suffixes), name

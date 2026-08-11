@@ -673,7 +673,7 @@ def _cupy_multistep_eif_forward_fake(*args):
     return (
         x_seq.new_empty(x_seq.shape),
         x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty((), dtype=torch.int64),
+        torch.empty((), dtype=torch.int64),
     )
 
 

@@ -1538,6 +1538,70 @@ def test_plif_triton_matches_torch_training(
     _assert_close(lif.w.grad, lif_triton.w.grad, torch.float32)
 
 
+def test_plif_launch_requires_device_local_r_tau():
+    x_seq = torch.empty(2, 3, device="meta")
+    v_init = torch.empty(3, device="meta")
+    output = torch.empty_like(x_seq)
+
+    with pytest.raises(ValueError, match="same CUDA device"):
+        plif_triton_kernel._launch_plif_forward_kernel(
+            x_seq,
+            v_init,
+            output,
+            output,
+            output,
+            r_tau=torch.tensor(0.5),
+            decay_input=True,
+            v_threshold=1.0,
+            v_reset=0.0,
+            soft_reset=False,
+            compute_dtype=None,
+            save_intermediates=True,
+            use_torch_wrap=True,
+        )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_plif_training_avoids_device_scalar_read():
+    node = neuron.ParametricLIFNode(
+        init_tau=2.0,
+        step_mode="m",
+        backend="triton",
+        store_v_seq=True,
+    ).to("cuda")
+
+    def run():
+        functional.reset_net(node)
+        node.zero_grad(set_to_none=True)
+        x = torch.randn(8, 3, 8, device="cuda", requires_grad=True)
+        node(x).sum().backward()
+
+    run()
+    with torch.profiler.profile(
+        activities=[torch.profiler.ProfilerActivity.CPU]
+    ) as profile:
+        run()
+
+    operation_names = {event.key for event in profile.key_averages()}
+    assert "aten::item" not in operation_names
+    assert "aten::_local_scalar_dense" not in operation_names
+
+    node.eval()
+    functional.reset_net(node)
+    with (
+        torch.no_grad(),
+        torch.profiler.profile(
+            activities=[torch.profiler.ProfilerActivity.CPU]
+        ) as inference_profile,
+    ):
+        node(torch.randn(8, 3, 8, device="cuda"))
+    inference_operation_names = {
+        event.key for event in inference_profile.key_averages()
+    }
+    assert "aten::item" not in inference_operation_names
+    assert "aten::_local_scalar_dense" not in inference_operation_names
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_plif_training_avoids_voltage_history_cat():
     for T in (1, 4, 32):
@@ -1606,10 +1670,19 @@ def test_plif_mp_helper_dynamic_backward_uses_nonzero_initial_state():
             r_tau=r_tau,
         )
 
-    assert "aten::cat" not in {event.key for event in profile.key_averages()}
+    operation_names = {event.key for event in profile.key_averages()}
+    assert "aten::cat" not in operation_names
+    assert "aten::item" not in operation_names
+    assert "aten::_local_scalar_dense" not in operation_names
     _assert_close(output_torch, output_mixed, torch.float32)
     output_torch.sum().backward()
-    output_mixed.sum().backward()
+    with torch.profiler.profile(
+        activities=[torch.profiler.ProfilerActivity.CPU]
+    ) as backward_profile:
+        output_mixed.sum().backward()
+    backward_operation_names = {event.key for event in backward_profile.key_averages()}
+    assert "aten::item" not in backward_operation_names
+    assert "aten::_local_scalar_dense" not in backward_operation_names
     _assert_close(x_torch.grad, x_mixed.grad, torch.float32)
     _assert_close(v_torch.grad, v_mixed.grad, torch.float32)
     expected_w_grad = r_tau.grad * r_tau.detach() * (1.0 - r_tau.detach())

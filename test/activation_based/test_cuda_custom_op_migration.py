@@ -1,5 +1,7 @@
 import gc
+import importlib
 import os
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -133,12 +135,60 @@ def test_capture_token_skips_context_stash_without_grad(context_factory):
 
     with context_factory():
         token = runtime._capture_token(
-            captured_ctx, (input_tensor,), torch.device("cpu")
+            captured_ctx, (input_tensor,), torch.device("meta")
         )
 
+    assert token.device.type == "cpu"
     assert token.item() == -1
     with runtime._CAPTURE_CTX_LOCK:
         assert set(runtime._CAPTURE_CTX_BY_ID) == before_ids
+
+
+def test_capture_context_setup_skips_fake_token():
+    from torch._subclasses.fake_tensor import FakeTensorMode
+
+    from spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step import (
+        runtime,
+    )
+
+    with FakeTensorMode():
+        token = torch.empty((), dtype=torch.int64)
+    ctx = SimpleNamespace()
+
+    runtime._setup_capture_ctx(ctx, (), (token,))
+
+    assert ctx.captured is None
+
+
+def test_raw_kernel_cache_reuses_compile_identity(monkeypatch):
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
+
+    calls = []
+
+    def fake_raw_kernel(code, name, *, options, backend):
+        kernel = object()
+        calls.append((code, name, options, backend, kernel))
+        return kernel
+
+    class FakeCupy:
+        RawKernel = staticmethod(fake_raw_kernel)
+
+    monkeypatch.setattr(base, "cupy", FakeCupy)
+    base._get_raw_kernel.cache_clear()
+    try:
+        first = base._get_raw_kernel("code", "kernel", ("-O3",), "nvrtc")
+        second = base._get_raw_kernel("code", "kernel", ("-O3",), "nvrtc")
+        different = base._get_raw_kernel("other", "kernel", ("-O3",), "nvrtc")
+        different_options = base._get_raw_kernel(
+            "code", "kernel", ("--use_fast_math",), "nvrtc"
+        )
+    finally:
+        base._get_raw_kernel.cache_clear()
+
+    assert first is second
+    assert different is not first
+    assert different_options is not first
+    assert len(calls) == 3
 
 
 def _require_cuda():
@@ -208,62 +258,87 @@ def test_spike_linear_backward_no_bias_cuda():
 
 
 @pytest.mark.parametrize("kind", ["qif", "eif", "izhikevich"])
-def test_nonlinear_functional_cupy_forward_backward(kind):
+def test_nonlinear_functional_cupy_forward_backward(kind, monkeypatch):
     _require_cuda()
     _require_cupy()
     _maybe_skip_custom_op_unavailable()
+
+    kernel_module = importlib.import_module(
+        "spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step." + kind
+    )
+    capture_tokens = []
+    capture_token = kernel_module._capture_token
+
+    def record_capture_token(*args, **kwargs):
+        token = capture_token(*args, **kwargs)
+        capture_tokens.append(token)
+        return token
+
+    monkeypatch.setattr(kernel_module, "_capture_token", record_capture_token)
 
     sg = surrogate.ATan()
     x_seq = (torch.randn(4, 64, device="cuda") * 0.2).requires_grad_(True)
     v_init = torch.zeros(64, device="cuda", requires_grad=True)
 
-    if kind == "qif":
-        spike_seq, v_next, v_seq = functional.qif_multi_step_cupy(
-            x_seq=x_seq,
-            v=v_init,
-            tau=2.5,
-            v_threshold=0.9,
-            v_reset=-0.3,
-            v_rest=-0.2,
-            v_c=0.4,
-            a0=0.6,
-            detach_reset=True,
-            surrogate_function=sg,
-            store_v_seq=True,
-        )
-    elif kind == "eif":
-        spike_seq, v_next, v_seq = functional.eif_multi_step_cupy(
-            x_seq=x_seq,
-            v=v_init,
-            tau=2.5,
-            v_threshold=0.9,
-            v_reset=-0.3,
-            v_rest=-0.2,
-            theta_rh=0.4,
-            delta_t=0.7,
-            detach_reset=True,
-            surrogate_function=sg,
-            store_v_seq=True,
-        )
-    else:
-        w_init = torch.zeros(64, device="cuda", requires_grad=True)
-        spike_seq, v_next, w_next, v_seq, w_seq = functional.izhikevich_multi_step_cupy(
-            x_seq=x_seq,
-            v=v_init,
-            w=w_init,
-            tau=2.5,
-            v_threshold=0.9,
-            v_reset=-0.3,
-            v_rest=-0.2,
-            a=0.1,
-            b=0.2,
-            tau_w=3.0,
-            v_c=0.4,
-            a0=0.6,
-            detach_reset=True,
-            surrogate_function=sg,
-            store_state_seq=True,
-        )
+    with torch.profiler.profile(
+        activities=[torch.profiler.ProfilerActivity.CPU]
+    ) as profile:
+        if kind == "qif":
+            spike_seq, v_next, v_seq = functional.qif_multi_step_cupy(
+                x_seq=x_seq,
+                v=v_init,
+                tau=2.5,
+                v_threshold=0.9,
+                v_reset=-0.3,
+                v_rest=-0.2,
+                v_c=0.4,
+                a0=0.6,
+                detach_reset=True,
+                surrogate_function=sg,
+                store_v_seq=True,
+            )
+        elif kind == "eif":
+            spike_seq, v_next, v_seq = functional.eif_multi_step_cupy(
+                x_seq=x_seq,
+                v=v_init,
+                tau=2.5,
+                v_threshold=0.9,
+                v_reset=-0.3,
+                v_rest=-0.2,
+                theta_rh=0.4,
+                delta_t=0.7,
+                detach_reset=True,
+                surrogate_function=sg,
+                store_v_seq=True,
+            )
+        else:
+            w_init = torch.zeros(64, device="cuda", requires_grad=True)
+            spike_seq, v_next, w_next, v_seq, w_seq = (
+                functional.izhikevich_multi_step_cupy(
+                    x_seq=x_seq,
+                    v=v_init,
+                    w=w_init,
+                    tau=2.5,
+                    v_threshold=0.9,
+                    v_reset=-0.3,
+                    v_rest=-0.2,
+                    a=0.1,
+                    b=0.2,
+                    tau_w=3.0,
+                    v_c=0.4,
+                    a0=0.6,
+                    detach_reset=True,
+                    surrogate_function=sg,
+                    store_state_seq=True,
+                )
+            )
+
+    operation_names = {event.key for event in profile.key_averages()}
+    assert "cudaStreamSynchronize" not in operation_names
+    assert capture_tokens
+    assert all(token.device.type == "cpu" for token in capture_tokens)
+
+    if kind == "izhikevich":
         assert w_seq is not None
         torch.testing.assert_close(w_next, w_seq[-1])
 

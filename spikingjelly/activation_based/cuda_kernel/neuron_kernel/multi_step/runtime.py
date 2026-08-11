@@ -1,11 +1,12 @@
 """Runtime context helpers for handwritten multi-step custom operators."""
 
-from spikingjelly.logger import logger
-
 import math
 import threading
 
 import torch
+from torch._subclasses.fake_tensor import is_fake
+
+from spikingjelly.logger import logger
 
 try:
     import cupy
@@ -51,12 +52,13 @@ def _should_stash_capture_ctx(inputs, capture_context: bool | None = None) -> bo
 
 
 def _capture_token(captured_ctx, inputs, device, capture_context: bool | None = None):
+    del device
     capture_id = (
         _stash_capture_ctx(captured_ctx)
         if _should_stash_capture_ctx(inputs, capture_context)
         else -1
     )
-    return torch.tensor(capture_id, device=device, dtype=torch.int64)
+    return torch.tensor(capture_id, dtype=torch.int64)
 
 
 def _take_capture_ctx(capture_id: int) -> _CapturedAutogradCtx:
@@ -70,7 +72,7 @@ def _take_capture_ctx(capture_id: int) -> _CapturedAutogradCtx:
 def _setup_capture_ctx(ctx, inputs, output):
     del inputs
     capture_token = output[-1]
-    if capture_token.is_meta:
+    if capture_token.is_meta or is_fake(capture_token):
         ctx.captured = None
         return
     capture_id = int(capture_token.item())

@@ -1,4 +1,5 @@
 import math
+from functools import cache
 from typing import Optional
 
 import torch
@@ -40,19 +41,12 @@ class IFNodeBPTTKernel(NeuronBPTTKernel):
         )
 
 
-_IF_FWD_KERNEL_CACHE = {}
-_IF_BWD_KERNEL_CACHE = {}
-
-
+@cache
 def _get_if_forward_kernel(*, hard_reset: bool, dtype: str) -> IFNodeFPTTKernel:
-    key = (hard_reset, dtype)
-    kernel = _IF_FWD_KERNEL_CACHE.get(key)
-    if kernel is None:
-        kernel = IFNodeFPTTKernel(hard_reset=hard_reset, dtype=dtype)
-        _IF_FWD_KERNEL_CACHE[key] = kernel
-    return kernel
+    return IFNodeFPTTKernel(hard_reset=hard_reset, dtype=dtype)
 
 
+@cache
 def _get_if_backward_kernel(
     *,
     sg_cupy_id: int,
@@ -60,17 +54,12 @@ def _get_if_backward_kernel(
     detach_reset: bool,
     dtype: str,
 ) -> IFNodeBPTTKernel:
-    key = (sg_cupy_id, hard_reset, detach_reset, dtype)
-    kernel = _IF_BWD_KERNEL_CACHE.get(key)
-    if kernel is None:
-        kernel = IFNodeBPTTKernel(
-            surrogate_function=_cuda_codes_callable(sg_cupy_id, dtype),
-            hard_reset=hard_reset,
-            detach_reset=detach_reset,
-            dtype=dtype,
-        )
-        _IF_BWD_KERNEL_CACHE[key] = kernel
-    return kernel
+    return IFNodeBPTTKernel(
+        surrogate_function=_cuda_codes_callable(sg_cupy_id, dtype),
+        hard_reset=hard_reset,
+        detach_reset=detach_reset,
+        dtype=dtype,
+    )
 
 
 @torch.library.custom_op("sj::cupy_multistep_if_forward", mutates_args=())

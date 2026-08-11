@@ -1,9 +1,11 @@
-from spikingjelly.logger import logger
 import logging
 import sys
+from functools import lru_cache
 
 import numpy as np
 import torch
+
+from spikingjelly.logger import logger
 
 try:
     import cupy
@@ -37,6 +39,11 @@ def startswiths(x: str, prefixes: tuple):
             ret = True
 
     return ret
+
+
+@lru_cache(maxsize=128)
+def _get_raw_kernel(code: str, name: str, options: tuple[str, ...], backend: str):
+    return cupy.RawKernel(code, name, options=options, backend=backend)
 
 
 class CKernel:
@@ -466,11 +473,11 @@ class CKernel:
         # 需要使用有序词典
         # python >= 3.6时，字典默认是有序的
 
-        cp_kernel = cupy.RawKernel(
+        cp_kernel = _get_raw_kernel(
             self.full_codes,
             self.kernel_name,
-            options=configure.cuda_compiler_options,
-            backend=configure.cuda_compiler_backend,
+            tuple(configure.cuda_compiler_options),
+            configure.cuda_compiler_backend,
         )
 
         with cuda_utils.DeviceEnvironment(device):

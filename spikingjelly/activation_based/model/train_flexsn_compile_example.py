@@ -1,16 +1,17 @@
-"""Example training entrypoint for FlexSN inductor models.
+"""Example training entrypoint for compiled FlexSN models.
 This script mirrors ``train_imagenet_example.py`` but uses ``spiking_vgg`` with
-``FlexSN(backend="inductor")`` and defaults to ``torch.compile`` so users can
-exercise the compile-friendly FlexSN training path end-to-end.
+``FlexSN(backend="triton")`` and defaults to ``torch.compile`` so users can
+exercise the compiler-visible FlexSN training path end-to-end.
 """
 
 import torch
-from spikingjelly.activation_based import functional, surrogate
-from spikingjelly.activation_based.model import spiking_vgg, train_classify
-from spikingjelly.activation_based.neuron.flexsn import FlexSN
+
+from .. import functional, surrogate
+from ..neuron.flexsn import FlexSN
+from . import spiking_vgg, train_classify
 
 
-class FlexSNTrainer(train_classify.Trainer):
+class _FlexSNTrainer(train_classify.Trainer):
     r"""
     **API Language** - :ref:`中文 <FlexSNTrainer-cn>` | :ref:`English <FlexSNTrainer-en>`
 
@@ -55,7 +56,7 @@ class FlexSNTrainer(train_classify.Trainer):
     def get_tb_logdir_name(self, args):
         return (
             super().get_tb_logdir_name(args)
-            + f"_T{args.T}_flexsn_inductor_sa{args.surrogate_alpha}"
+            + f"_T{args.T}_flexsn_triton_compile_sa{args.surrogate_alpha}"
         )
 
     def load_model(self, args, num_classes):
@@ -77,7 +78,7 @@ class FlexSNTrainer(train_classify.Trainer):
                 num_states=1,
                 num_outputs=1,
                 step_mode=kwargs.get("step_mode", "m"),
-                backend="inductor",
+                backend="triton",
             )
 
         model = spiking_vgg.__dict__[args.model](
@@ -90,7 +91,7 @@ class FlexSNTrainer(train_classify.Trainer):
 
 
 if __name__ == "__main__":
-    # python -m spikingjelly.activation_based.model.train_flexsn_inductor_example --model spiking_vgg11_bn --data-path /datasets/ImageNet0_03125 --batch-size 64 --lr 0.1 --lr-scheduler cosa --epochs 90
-    trainer = FlexSNTrainer()
+    # python -m spikingjelly.activation_based.model.train_flexsn_compile_example --model spiking_vgg11_bn --data-path /datasets/ImageNet0_03125 --batch-size 64 --lr 0.1 --lr-scheduler cosa --epochs 90
+    trainer = _FlexSNTrainer()
     args = trainer.get_args_parser().parse_args()
     trainer.main(args)

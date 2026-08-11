@@ -109,7 +109,7 @@ class SpikeZIPLinear(TDLinear):
                 / self.bias_steps
             )
             realize_time -= 1
-        is_work = not bool((inputs[0] == 0).all()) or released_bias
+        is_work = (inputs[0] != 0).any() | released_bias
         return (y,), (*td_states, realize_time, is_work)
 
     def multi_step_functional_forward(
@@ -122,7 +122,7 @@ class SpikeZIPLinear(TDLinear):
             inputs, states[:2], **kwargs
         )
         x_seq = inputs[0]
-        active = bool((x_seq != 0).any())
+        active = (x_seq != 0).any()
         bias_steps = (
             min(x_seq.shape[0], states[2]) if self.spikezip_bias is not None else 0
         )
@@ -132,7 +132,10 @@ class SpikeZIPLinear(TDLinear):
             y_seq[:bias_steps] = (
                 y_seq[:bias_steps] + bias.view(view_shape) / self.bias_steps
             )
-        return (y_seq,), (*td_states, states[2] - bias_steps, active or bias_steps > 0)
+        return (
+            (y_seq,),
+            (*td_states, states[2] - bias_steps, active | (bias_steps > 0)),
+        )
 
 
 class SpikeZIPConv2d(TDConv2d):
@@ -186,7 +189,7 @@ class SpikeZIPConv2d(TDConv2d):
             bias = self.spikezip_bias.to(device=y.device, dtype=y.dtype)
             y = y + bias.view(1, -1, 1, 1) / self.bias_steps
             realize_time -= 1
-        is_work = not bool((inputs[0] == 0).all()) or released_bias
+        is_work = (inputs[0] != 0).any() | released_bias
         return (y,), (*td_states, realize_time, is_work)
 
     def multi_step_functional_forward(
@@ -199,7 +202,7 @@ class SpikeZIPConv2d(TDConv2d):
             inputs, states[:2], **kwargs
         )
         x_seq = inputs[0]
-        active = bool((x_seq != 0).any())
+        active = (x_seq != 0).any()
         bias_steps = (
             min(x_seq.shape[0], states[2]) if self.spikezip_bias is not None else 0
         )
@@ -208,7 +211,10 @@ class SpikeZIPConv2d(TDConv2d):
             y_seq[:bias_steps] = (
                 y_seq[:bias_steps] + bias.view(1, 1, -1, 1, 1) / self.bias_steps
             )
-        return (y_seq,), (*td_states, states[2] - bias_steps, active or bias_steps > 0)
+        return (
+            (y_seq,),
+            (*td_states, states[2] - bias_steps, active | (bias_steps > 0)),
+        )
 
 
 class SpikeZIPEmbedding(base.MemoryModule):

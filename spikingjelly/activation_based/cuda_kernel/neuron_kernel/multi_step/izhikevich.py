@@ -597,7 +597,7 @@ def _cupy_multistep_izhikevich_forward_fake(*args):
         x_seq.new_empty(x_seq.shape),
         x_seq.new_empty(x_seq.shape),
         x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty((), dtype=torch.int64),
+        torch.empty((), dtype=torch.int64),
     )
 
 

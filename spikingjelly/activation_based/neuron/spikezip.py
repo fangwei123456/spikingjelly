@@ -172,7 +172,7 @@ class STBIFNeuron(base.MemoryModule):
                 self.pos_max,
                 self.neg_min,
             )
-            is_work = bool(work_flag.item())
+            is_work = work_flag
             return (out,), (q, acc_q, cur_output, is_work)
         out, q, acc_q, cur_output = functional.stbif_step(
             x,
@@ -182,7 +182,7 @@ class STBIFNeuron(base.MemoryModule):
             self.pos_max,
             self.neg_min,
         )
-        is_work = bool((x != 0).any() | (out != 0).any())
+        is_work = (x != 0).any() | (out != 0).any()
         return (out,), (q, acc_q, cur_output, is_work)
 
     def multi_step_functional_forward(
@@ -206,7 +206,7 @@ class STBIFNeuron(base.MemoryModule):
                 self.pos_max.to(dtype=x_seq.dtype),
                 self.neg_min.to(dtype=x_seq.dtype),
             )
-            is_work = bool(work_flag.item())
+            is_work = work_flag
         else:
             out_seq = torch.empty_like(x_seq)
             for t in range(x_seq.shape[0]):
@@ -218,7 +218,7 @@ class STBIFNeuron(base.MemoryModule):
                     self.pos_max,
                     self.neg_min,
                 )
-            is_work = bool((x_seq != 0).any() | (out_seq != 0).any())
+            is_work = (x_seq != 0).any() | (out_seq != 0).any()
         return (out_seq,), (q, acc_q, cur_output, is_work)
 
     @property

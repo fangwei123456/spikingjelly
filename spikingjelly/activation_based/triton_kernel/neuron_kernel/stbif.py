@@ -93,9 +93,9 @@ def _multi_step_stbif_kernel_static(
     acc_q_final_ptr,
     cur_output_ptr,
     work_flags_ptr,
-    q_threshold,
-    pos_max,
-    neg_min,
+    q_threshold_ptr,
+    pos_max_ptr,
+    neg_min_ptr,
     T: tl.constexpr,
     N: tl.constexpr,
     BLOCK_N: tl.constexpr,
@@ -108,6 +108,9 @@ def _multi_step_stbif_kernel_static(
     acc_q = tl.load(acc_q_init_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
     cur = tl.zeros([BLOCK_N], dtype=tl.float32)
     work = tl.full([BLOCK_N], False, dtype=tl.int1)
+    q_threshold = tl.load(q_threshold_ptr).to(tl.float32)
+    pos_max = tl.load(pos_max_ptr).to(tl.float32)
+    neg_min = tl.load(neg_min_ptr).to(tl.float32)
 
     for t in tl.static_range(0, T, 1):
         x = tl.load(x_seq_ptr + t * N + offsets, mask=mask, other=0.0).to(tl.float32)
@@ -149,9 +152,9 @@ def _multi_step_stbif_kernel_dynamic(
     acc_q_final_ptr,
     cur_output_ptr,
     work_flags_ptr,
-    q_threshold,
-    pos_max,
-    neg_min,
+    q_threshold_ptr,
+    pos_max_ptr,
+    neg_min_ptr,
     T,
     N: tl.constexpr,
     BLOCK_N: tl.constexpr,
@@ -164,6 +167,9 @@ def _multi_step_stbif_kernel_dynamic(
     acc_q = tl.load(acc_q_init_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
     cur = tl.zeros([BLOCK_N], dtype=tl.float32)
     work = tl.full([BLOCK_N], False, dtype=tl.int1)
+    q_threshold = tl.load(q_threshold_ptr).to(tl.float32)
+    pos_max = tl.load(pos_max_ptr).to(tl.float32)
+    neg_min = tl.load(neg_min_ptr).to(tl.float32)
 
     for t in tl.range(0, T, 1):
         x = tl.load(x_seq_ptr + t * N + offsets, mask=mask, other=0.0).to(tl.float32)
@@ -311,7 +317,7 @@ def single_step_stbif(
             BLOCK_N=block_n,
             dtype=type_dict[dtype],
         )
-    return out, q_final, acc_q_final, cur_output, work_flags.max()
+    return out, q_final, acc_q_final, cur_output, work_flags.any()
 
 
 @torch.library.register_fake("sj::single_step_stbif")
@@ -329,7 +335,7 @@ def _single_step_stbif_fake(
         torch.empty_like(q),
         torch.empty_like(acc_q),
         torch.empty_like(q),
-        x.new_empty((), dtype=torch.int32),
+        x.new_empty((), dtype=torch.bool),
     )
 
 
@@ -368,10 +374,10 @@ def multi_step_stbif(
         return (triton.cdiv(N, meta["BLOCK_N"]),)
 
     work_flags = torch.zeros(triton.cdiv(N, 32), device=x_seq.device, dtype=torch.int32)
+    q_threshold = q_threshold.to(device=x_seq.device, dtype=x_seq.dtype).contiguous()
+    pos_max = pos_max.to(device=x_seq.device, dtype=x_seq.dtype).contiguous()
+    neg_min = neg_min.to(device=x_seq.device, dtype=x_seq.dtype).contiguous()
 
-    q_threshold_value = float(q_threshold.to(x_seq).detach().item())
-    pos_max_value = float(pos_max.to(x_seq).detach().item())
-    neg_min_value = float(neg_min.to(x_seq).detach().item())
     with torch.cuda.device(x_seq.device):
         wrap_triton(_select_stbif_kernel(T))[grid](
             x_seq_flat,
@@ -382,9 +388,9 @@ def multi_step_stbif(
             acc_q_final_flat,
             cur_output_flat,
             work_flags,
-            q_threshold_value,
-            pos_max_value,
-            neg_min_value,
+            q_threshold,
+            pos_max,
+            neg_min,
             T=T,
             N=N,
             dtype=type_dict[dtype],
@@ -394,7 +400,7 @@ def multi_step_stbif(
         q_final,
         acc_q_final,
         cur_output,
-        work_flags.max(),
+        work_flags.any(),
     )
 
 
@@ -412,5 +418,5 @@ def _multi_step_stbif_fake(
         q.new_empty(q.shape),
         acc_q.new_empty(acc_q.shape),
         q.new_empty(q.shape),
-        torch.empty((), device=x_seq.device, dtype=torch.int32),
+        torch.empty((), device=x_seq.device, dtype=torch.bool),
     )

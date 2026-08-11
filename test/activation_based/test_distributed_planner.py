@@ -9,7 +9,7 @@ def test_plan_returns_structured_plan_from_analysis():
         analysis=analysis,
         objective="speed",
         topology={"dp": 1},
-        backend="inductor",
+        backend="triton",
         batch_size=8,
         model_family="toy_snn",
         features=DistributedFeatureSet(),
@@ -28,7 +28,7 @@ def test_plan_accepts_missing_model_family():
         analysis=analysis,
         objective="speed",
         topology={"dp": 1},
-        backend="inductor",
+        backend="triton",
         batch_size=8,
     )
     assert isinstance(distributed_plan, SNNDistributedPlan)
@@ -42,7 +42,7 @@ def test_plan_respects_allow_zero_optimizer_flag():
         analysis=analysis,
         objective="speed",
         topology={"dp": 2},
-        backend="inductor",
+        backend="triton",
         batch_size=8,
         features=DistributedFeatureSet(allow_zero_optimizer=False),
     )
@@ -57,7 +57,7 @@ def test_plan_allows_explicit_mode_override_for_advanced_users():
         analysis=analysis,
         objective="speed",
         topology={"tp": 2},
-        backend="inductor",
+        backend="triton",
         batch_size=8,
         mode="tp",
     )
@@ -127,7 +127,7 @@ def test_plan_rejects_tensor_parallel_without_candidates():
             analysis=analysis,
             objective="memory",
             topology={"tp": 2},
-            backend="inductor",
+            backend="triton",
             batch_size=8,
             mode="tp",
         )
@@ -141,7 +141,7 @@ def test_plan_rejects_pipeline_when_feature_flag_disables_it():
             analysis=analysis,
             objective="capacity",
             topology={"pp": 2},
-            backend="inductor",
+            backend="triton",
             batch_size=8,
             mode="pp",
             features=DistributedFeatureSet(),

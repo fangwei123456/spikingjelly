@@ -120,7 +120,7 @@ def parse_args():
     parser.add_argument("--T", type=_positive_int, default=10)
     parser.add_argument("--steps", type=_positive_int, default=20)
     parser.add_argument("--warmup", type=_non_negative_int, default=5)
-    parser.add_argument("--backend", type=str, default="inductor")
+    parser.add_argument("--backend", type=str, default="triton")
     parser.add_argument(
         "--mode",
         type=str,

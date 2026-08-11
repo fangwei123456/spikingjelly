@@ -37,7 +37,7 @@ def make_flexsn(**kwargs):
         num_states=1,
         num_outputs=1,
         step_mode=kwargs.get("step_mode", "m"),
-        backend="inductor",
+        backend="triton",
     )
 
 
@@ -125,7 +125,7 @@ def bench_single_shape(step_shape, repeats=20, warmup=6):
         num_states=1,
         num_outputs=1,
         step_mode="m",
-        backend="inductor",
+        backend="triton",
         store_state_seqs=False,
         example_inputs=example_inputs,
     ).cuda()

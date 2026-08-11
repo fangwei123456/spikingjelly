@@ -61,7 +61,7 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--T", type=int, default=10)
-    parser.add_argument("--backend", type=str, default="inductor")
+    parser.add_argument("--backend", type=str, default="triton")
     parser.add_argument(
         "--distributed-mode",
         type=str,
