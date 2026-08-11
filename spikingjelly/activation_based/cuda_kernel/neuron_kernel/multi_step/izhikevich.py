@@ -584,7 +584,6 @@ def cupy_multistep_izhikevich_forward(
         _capture_token(
             captured_ctx,
             (x_seq, v_init, w_init),
-            x_seq.device,
             capture_context,
         ),
     )

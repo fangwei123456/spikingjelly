@@ -1,7 +1,8 @@
 from __future__ import annotations
-from spikingjelly.logger import logger
 
 import torch
+
+from spikingjelly.logger import logger
 
 from ..triton_utils import (
     register_op,
@@ -348,6 +349,70 @@ def multi_step_stbif(
     pos_max: torch.Tensor,
     neg_min: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <multi_step_stbif-cn>` | :ref:`English <multi_step_stbif-en>`
+
+    ----
+
+    .. _multi_step_stbif-cn:
+
+    * **中文**
+
+    使用专用 Triton kernel 执行多步 STBIF 状态转移。``x_seq`` 的第 0 维
+    是时间维；``q`` 和 ``acc_q`` 必须与单个时间步的输入具有相同的
+    shape、dtype 和 device。张量必须位于 CUDA，dtype 为 FP32、FP16 或
+    BF16。本函数仅提供离散推理状态转移，不支持 autograd。
+
+    :param x_seq: 形状为 ``[T, *]`` 的多步 CUDA 输入，且 ``T > 0``
+    :type x_seq: torch.Tensor
+    :param q: 形状为 ``x_seq.shape[1:]`` 的量化残差初始状态
+    :type q: torch.Tensor
+    :param acc_q: 形状为 ``x_seq.shape[1:]`` 的累计释放量初始状态
+    :type acc_q: torch.Tensor
+    :param q_threshold: 单元素量化尺度张量
+    :type q_threshold: torch.Tensor
+    :param pos_max: 单元素正向累计上界张量
+    :type pos_max: torch.Tensor
+    :param neg_min: 单元素负向累计下界张量
+    :type neg_min: torch.Tensor
+    :return: ``(out_seq, q_final, acc_q_final, cur_output, is_work)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises ValueError: 任一标量参数不是单元素张量
+    :raises NotImplementedError: dtype 不受 Triton 后端支持
+
+    ----
+
+    .. _multi_step_stbif-en:
+
+    * **English**
+
+    Run a multi-step STBIF state transition with the dedicated Triton kernel.
+    Dimension 0 of ``x_seq`` is time; ``q`` and ``acc_q`` must match one input
+    step in shape, dtype, and device. Tensors must be CUDA FP32, FP16, or BF16.
+    This function implements a discrete inference transition and does not
+    support autograd.
+
+    :param x_seq: Multi-step CUDA input shaped ``[T, *]`` with ``T > 0``
+    :type x_seq: torch.Tensor
+    :param q: Initial quantized-residual state shaped ``x_seq.shape[1:]``
+    :type q: torch.Tensor
+    :param acc_q: Initial accumulated released-quantity state shaped
+        ``x_seq.shape[1:]``
+    :type acc_q: torch.Tensor
+    :param q_threshold: Scalar quantization-scale tensor
+    :type q_threshold: torch.Tensor
+    :param pos_max: Scalar positive accumulated bound
+    :type pos_max: torch.Tensor
+    :param neg_min: Scalar negative accumulated bound
+    :type neg_min: torch.Tensor
+    :return: ``(out_seq, q_final, acc_q_final, cur_output, is_work)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises ValueError: If a scalar parameter does not contain exactly one element
+    :raises NotImplementedError: If the dtype is not supported by the Triton
+        backend
+    """
+    if any(value.numel() != 1 for value in (q_threshold, pos_max, neg_min)):
+        raise ValueError("q_threshold, pos_max, and neg_min must be scalar tensors.")
     x_shape = x_seq.shape
     x_seq = x_seq.contiguous()
     q = q.contiguous()

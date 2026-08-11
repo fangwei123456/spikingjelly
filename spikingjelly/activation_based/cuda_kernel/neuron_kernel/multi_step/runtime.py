@@ -51,8 +51,7 @@ def _should_stash_capture_ctx(inputs, capture_context: bool | None = None) -> bo
     return any(isinstance(item, torch.Tensor) and item.requires_grad for item in inputs)
 
 
-def _capture_token(captured_ctx, inputs, device, capture_context: bool | None = None):
-    del device
+def _capture_token(captured_ctx, inputs, capture_context: bool | None = None):
     capture_id = (
         _stash_capture_ctx(captured_ctx)
         if _should_stash_capture_ctx(inputs, capture_context)

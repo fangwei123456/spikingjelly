@@ -1543,7 +1543,7 @@ def test_plif_launch_requires_device_local_r_tau():
     v_init = torch.empty(3, device="meta")
     output = torch.empty_like(x_seq)
 
-    with pytest.raises(ValueError, match="same CUDA device"):
+    with pytest.raises(ValueError, match="same device"):
         plif_triton_kernel._launch_plif_forward_kernel(
             x_seq,
             v_init,

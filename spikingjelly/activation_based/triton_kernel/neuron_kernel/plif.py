@@ -1,7 +1,8 @@
-from spikingjelly.logger import logger
 from typing import Optional
 
 import torch
+
+from spikingjelly.logger import logger
 
 from ... import surrogate
 from ..surrogate_kernel import resolve_sg_triton_id_and_alpha, sg_triton
@@ -592,7 +593,7 @@ def _launch_plif_forward_kernel(
     if r_tau.numel() != 1:
         raise ValueError("r_tau must contain exactly one element")
     if r_tau.device != x_seq.device:
-        raise ValueError("r_tau and x_seq must be on the same CUDA device")
+        raise ValueError("r_tau and x_seq must be on the same device")
     T = x_seq.shape[0]
     NCL = x_seq[0].numel()
 
@@ -646,7 +647,7 @@ def _launch_plif_backward_kernel(
     if r_tau.numel() != 1:
         raise ValueError("r_tau must contain exactly one element")
     if r_tau.device != grad_s_seq.device:
-        raise ValueError("r_tau and gradients must be on the same CUDA device")
+        raise ValueError("r_tau and gradients must be on the same device")
     T = grad_s_seq.shape[0]
     NCL = grad_s_seq[0].numel()
 

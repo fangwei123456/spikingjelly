@@ -1773,7 +1773,7 @@ def plif_multi_step_cupy(
 
     * **中文**
 
-    使用 CuPy kernel 执行 PLIF 多步状态转移；``w`` 与 torch 接口语义一致。
+    使用 CuPy kernel 执行 PLIF 多步状态转移。``w`` 与 torch 接口语义一致。
     输入必须是 CUDA 上的 ``float32`` 或 ``float16`` 张量，并且替代梯度函数必须
     提供可调用的 ``cuda_codes`` 属性。运行时需要安装 CuPy。
 
@@ -2447,7 +2447,7 @@ def plif_multi_step_triton(
 
     * **中文**
 
-    使用 Triton kernel 执行 PLIF 多步状态转移；``w`` 与 torch 接口语义一致。
+    使用 Triton kernel 执行 PLIF 多步状态转移。``w`` 与 torch 接口语义一致。
 
     :param x_seq: 输入序列，shape 为 ``[T, N, *]``
     :type x_seq: torch.Tensor

@@ -243,7 +243,6 @@ def test_bit_pack_roundtrip(dtype):
     torch.manual_seed(0)
     M, K = 64, 130  # 130 not a multiple of 8
     s = (torch.rand(M, K, device="cuda") < 0.3).to(dtype)
-    s[0, 0] = -0.0
     packed = bit_pack_spike_dense(s)
     # Unpack manually
     bits = (

@@ -1151,7 +1151,7 @@ def test_set_backend_to_triton():
     assert neuron.backend == "triton"
 
 
-def test_flexsn_rejects_triton_backend():
+def test_flexsn_rejects_inductor_backend():
     neuron = FlexSN(
         core=_lif_core,
         num_inputs=1,

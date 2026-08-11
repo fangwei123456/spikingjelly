@@ -134,9 +134,7 @@ def test_capture_token_skips_context_stash_without_grad(context_factory):
         before_ids = set(runtime._CAPTURE_CTX_BY_ID)
 
     with context_factory():
-        token = runtime._capture_token(
-            captured_ctx, (input_tensor,), torch.device("meta")
-        )
+        token = runtime._capture_token(captured_ctx, (input_tensor,))
 
     assert token.device.type == "cpu"
     assert token.item() == -1

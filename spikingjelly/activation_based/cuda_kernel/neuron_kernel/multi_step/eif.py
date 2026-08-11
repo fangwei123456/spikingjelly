@@ -663,7 +663,7 @@ def cupy_multistep_eif_forward(
     )
     return (
         *out,
-        _capture_token(captured_ctx, (x_seq, v_init), x_seq.device, capture_context),
+        _capture_token(captured_ctx, (x_seq, v_init), capture_context),
     )
 
 

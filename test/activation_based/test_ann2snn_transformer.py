@@ -1037,6 +1037,24 @@ def test_spikezip_stbif_triton_rounds_half_to_even(dtype):
         torch.testing.assert_close(actual, reference)
 
 
+@pytest.mark.parametrize("parameter", ["q_threshold", "pos_max", "neg_min"])
+def test_multi_step_stbif_rejects_non_scalar_parameters(parameter):
+    inputs = {
+        "q_threshold": torch.tensor(0.1),
+        "pos_max": torch.tensor(10.0),
+        "neg_min": torch.tensor(-10.0),
+    }
+    inputs[parameter] = torch.ones(2)
+
+    with pytest.raises(ValueError, match="must be scalar tensors"):
+        stbif.multi_step_stbif(
+            torch.zeros(1, 2),
+            torch.zeros(2),
+            torch.zeros(2),
+            **inputs,
+        )
+
+
 def test_spikezip_linear_is_tdlinear_with_distributed_bias():
     torch.manual_seed(276)
     source = nn.Linear(4, 3).eval()
