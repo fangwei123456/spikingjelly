@@ -1737,17 +1737,7 @@ def memory_optimization(
         1 for m in net.modules() if isinstance(m, TCGCContainer)
     )
     summary.recommendation = _build_memopt_recommendation(summary)
-    logger.bind(
-        event="memopt_profile_summary",
-        device=summary.device,
-        profile=summary.profile,
-        requested_level=summary.requested_level,
-        applied_level=summary.applied_level,
-        applied_steps=len(summary.applied_steps),
-        skipped_steps=len(summary.skipped_steps),
-        gc_candidate_count=summary.gc_candidate_count,
-        gc_selected_count=summary.gc_selected_count,
-    ).info(
+    logger.info(
         "Memory optimization completed: device={} profile={} requested_level={} applied_level={} applied_steps={} skipped_steps={}",
         summary.device,
         summary.profile,

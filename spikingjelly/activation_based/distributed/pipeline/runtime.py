@@ -471,8 +471,8 @@ def _build_snn_pipeline_runtime(
         pp_layout=pp_layout,
         delayed_wgrad=delayed_wgrad,
     )
-    logger.bind(event="distributed_pipeline_runtime_summary").info(
-        "distributed_pipeline_runtime_summary model_family={} stage_index={} local_stage_indices={} num_stages={} n_microbatches={} schedule={} device={} stage_cost_count={} delayed_wgrad={}",
+    logger.info(
+        "Distributed pipeline runtime prepared: model_family={} stage_index={} local_stage_indices={} num_stages={} n_microbatches={} schedule={} device={} stage_cost_count={} delayed_wgrad={}",
         model_family,
         stage_index,
         local_stage_indices,

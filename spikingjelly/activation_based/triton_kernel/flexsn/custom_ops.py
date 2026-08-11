@@ -1106,16 +1106,7 @@ torch.library.register_autograd(
     setup_context=_flexsn_training_final_state_setup_context,
 )
 
-logger.bind(
-    event="operator_register_summary",
-    backend="triton",
-    registration_kind="torch.library",
-    registered=5,
-    fake_registered=5,
-    autograd_registered=2,
-    failed=0,
-    fallback=0,
-).info(
+logger.info(
     "FlexSN operators registered: operators={} fake_kernels={} autograd_kernels={}",
     5,
     5,

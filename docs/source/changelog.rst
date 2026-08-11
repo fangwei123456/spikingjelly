@@ -26,13 +26,11 @@ Module: ``spikingjelly``.
 - Migrated the package logger from stdlib ``logging`` to Loguru. SpikingJelly is
   disabled by default and never adds or removes application-owned sinks; enable the
   colored console with ``logger.enable("spikingjelly")``.
-- Added structured lifecycle events for training, checkpoints, operator registration,
-  memory optimization, distributed setup, precision fallback, ANN2SNN/NIR conversion,
-  graph transforms, external downloads, compiler cache, and profiler results.
-- Production diagnostics use Loguru parameterized or lazy formatting; normal forward,
-  time-step, batch, dispatch, and kernel execution paths do not emit default logs.
-- Updated the AST policy checker, Loguru performance benchmark, tests, bilingual API
-  documentation, and migration guidance. This is a breaking change: stdlib handlers,
+- Production diagnostics use direct Loguru calls with parameterized formatting;
+  applications own sink configuration and any structured context or stdlib logging
+  integration.
+- Updated the AST policy checker, Loguru performance benchmark, tests, and bilingual
+  API documentation. This is a breaking change: stdlib handlers,
   ``basicConfig()``, ``dictConfig()``, and pytest ``caplog`` no longer capture SpikingJelly
   records.
 

@@ -99,30 +99,16 @@ def configure_snn_distributed(
     analysis = analyze_snn_distributed_capability(
         module, tensor_parallel_roots=config.tensor_parallel_roots
     )
-    distributed_initialized = torch.distributed.is_initialized()
-    rank = torch.distributed.get_rank() if distributed_initialized else 0
-    world_size = torch.distributed.get_world_size() if distributed_initialized else 1
-    distributed_backend = (
-        torch.distributed.get_backend() if distributed_initialized else None
-    )
-
     needs_device_mesh = config.device_mesh is not None or config.mode != "none"
     if not needs_device_mesh:
-        with logger.contextualize(rank=rank, world_size=world_size):
-            logger.bind(
-                event="distributed_configuration_summary",
-                distributed_backend=distributed_backend,
-                mode=config.mode,
-                device_type=config.device_type,
-                mesh_shape=None,
-            ).info(
-                "distributed_configuration_summary mode={} device_type={} mesh_shape=None tensor_parallel={} fsdp2=False data_parallel=False memory_modules={} tensor_parallel_candidates={}",
-                config.mode,
-                config.device_type,
-                tensor_parallel,
-                len(analysis.memory_module_names),
-                len(analysis.tensor_parallel_candidate_names),
-            )
+        logger.info(
+            "Distributed configuration completed: mode={} device_type={} mesh_shape=None tensor_parallel={} fsdp2=False data_parallel=False memory_modules={} tensor_parallel_candidates={}",
+            config.mode,
+            config.device_type,
+            tensor_parallel,
+            len(analysis.memory_module_names),
+            len(analysis.tensor_parallel_candidate_names),
+        )
         return module, None, analysis
 
     if config.device_mesh is None:
@@ -227,22 +213,15 @@ def configure_snn_distributed(
 
     mesh_tensor = getattr(device_mesh, "mesh", None)
     mesh_shape = tuple(int(value) for value in mesh_tensor.shape)
-    with logger.contextualize(rank=rank, world_size=world_size):
-        logger.bind(
-            event="distributed_configuration_summary",
-            distributed_backend=distributed_backend,
-            mode=config.mode,
-            device_type=config.device_type,
-            mesh_shape=mesh_shape,
-        ).info(
-            "distributed_configuration_summary mode={} device_type={} mesh_shape={} tensor_parallel={} fsdp2={} data_parallel={} memory_modules={} tensor_parallel_candidates={}",
-            config.mode,
-            config.device_type,
-            mesh_shape,
-            tensor_parallel,
-            config.mode in ("fsdp2", "fsdp2_tp"),
-            config.mode == "dp",
-            len(analysis.memory_module_names),
-            len(analysis.tensor_parallel_candidate_names),
-        )
+    logger.info(
+        "Distributed configuration completed: mode={} device_type={} mesh_shape={} tensor_parallel={} fsdp2={} data_parallel={} memory_modules={} tensor_parallel_candidates={}",
+        config.mode,
+        config.device_type,
+        mesh_shape,
+        tensor_parallel,
+        config.mode in ("fsdp2", "fsdp2_tp"),
+        config.mode == "dp",
+        len(analysis.memory_module_names),
+        len(analysis.tensor_parallel_candidate_names),
+    )
     return module, device_mesh, analysis

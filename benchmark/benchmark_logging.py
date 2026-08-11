@@ -1,4 +1,4 @@
-"""Microbenchmark disabled, filtered, lazy, and active Loguru calls."""
+"""Microbenchmark disabled, filtered, and active Loguru calls."""
 
 from __future__ import annotations
 
@@ -139,20 +139,6 @@ def main() -> None:
         ),
         args.calls,
     )
-
-    lazy_calls = 0
-
-    def expensive_value() -> int:
-        nonlocal lazy_calls
-        lazy_calls += 1
-        return 1
-
-    _run(
-        1,
-        lambda _: logger.opt(lazy=True).debug("value={}", expensive_value),
-        args.calls,
-    )
-    assert lazy_calls == 0
 
     logger.enable(__name__)
     sink_id = logger.add(lambda _: None, level="WARNING", format="{message}")

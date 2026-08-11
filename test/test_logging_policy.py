@@ -129,10 +129,10 @@ def test_compute_energy_summary_is_emitted_once(loguru_records):
     summaries = [
         record
         for record in loguru_records
-        if record["extra"].get("event") == "op_counter_summary"
+        if record["message"].startswith("Operation counter completed:")
     ]
     assert len(summaries) == 1
-    assert summaries[0]["extra"]["total_operations"] >= 0
+    assert "total_operations=" in summaries[0]["message"]
 
 
 def test_data_preprocess_summary_reports_completed_tasks(loguru_records):
@@ -145,12 +145,11 @@ def test_data_preprocess_summary_reports_completed_tasks(loguru_records):
     summaries = [
         record
         for record in loguru_records
-        if record["extra"].get("event") == "data_preprocess_summary"
+        if record["message"].startswith("Dataset preprocessing completed:")
     ]
     assert sorted(processed) == [1, 2, 3]
     assert len(summaries) == 1
-    assert summaries[0]["extra"]["task_count"] == 3
-    assert summaries[0]["extra"]["duration_seconds"] >= 0
+    assert "tasks=3" in summaries[0]["message"]
 
 
 def test_precision_prepare_emits_one_lifecycle_summary(loguru_records):
@@ -162,7 +161,7 @@ def test_precision_prepare_emits_one_lifecycle_summary(loguru_records):
     summaries = [
         record
         for record in loguru_records
-        if record["extra"].get("event") == "precision_prepare_summary"
+        if record["message"].startswith("Precision preparation completed:")
     ]
     assert len(summaries) == 1
 
@@ -179,13 +178,11 @@ def test_distributed_configuration_emits_one_lifecycle_summary(loguru_records):
     summaries = [
         record
         for record in loguru_records
-        if record["extra"].get("event") == "distributed_configuration_summary"
+        if record["message"].startswith("Distributed configuration completed:")
     ]
     assert len(summaries) == 1
-    assert summaries[0]["extra"]["rank"] == 0
-    assert summaries[0]["extra"]["world_size"] == 1
-    assert summaries[0]["extra"]["distributed_backend"] is None
-    assert summaries[0]["extra"]["mesh_shape"] is None
+    assert "mode=none" in summaries[0]["message"]
+    assert "mesh_shape=None" in summaries[0]["message"]
 
 
 def test_metric_logger_formats_progress_with_loguru_arguments(loguru_records):
@@ -196,7 +193,7 @@ def test_metric_logger_formats_progress_with_loguru_arguments(loguru_records):
     assert any("Train" in message and "[0/1]" in message for message in messages)
 
 
-def test_serialized_sink_contains_standard_and_event_fields(tmp_path):
+def test_serialized_sink_contains_standard_fields(tmp_path):
     import torch
 
     from spikingjelly.activation_based.precision import prepare_model_for_precision
@@ -217,7 +214,7 @@ def test_serialized_sink_contains_standard_and_event_fields(tmp_path):
 
     payload = json.loads(path.read_text().splitlines()[0])
     record = payload["record"]
-    assert record["extra"]["event"] == "precision_prepare_summary"
+    assert record["message"].startswith("Precision preparation completed:")
     for field in ("time", "level", "name", "function", "line", "process", "thread"):
         assert field in record
 
@@ -244,14 +241,6 @@ def test_serialized_sink_contains_standard_and_event_fields(tmp_path):
             "from spikingjelly.logger import logger\nlogger.info(f'value={value}')\n",
             "eager formatting",
         ),
-        (
-            "from spikingjelly.logger import logger\nlogger.info('work_summary result={}', value)\n",
-            "lifecycle summary requires event",
-        ),
-        (
-            "from spikingjelly.logger import logger\nlogger.bind(event='Bad Event').info('done')\n",
-            "literal snake_case",
-        ),
         ("import builtins\nbuiltins.print('not allowed')\n", "builtins.print"),
     ],
 )
@@ -262,13 +251,24 @@ def test_policy_checker_rejects_invalid_logging(tmp_path, source, expected):
     assert any(expected in violation for violation in violations)
 
 
-def test_policy_checker_accepts_bound_loguru_summary(tmp_path):
+@pytest.mark.parametrize("method", ["bind", "contextualize", "opt"])
+def test_policy_checker_rejects_logger_call_chains(tmp_path, method):
+    arguments = "lazy=True" if method == "opt" else "event='work'"
+    path = tmp_path / "invalid_logging.py"
+    path.write_text(
+        "from spikingjelly.logger import logger\n"
+        f"logger.{method}({arguments}).info('done')\n",
+        encoding="utf-8",
+    )
+    violations = _load_checker().check(tmp_path)
+    assert any(f"logger.{method} is not allowed" in item for item in violations)
+
+
+def test_policy_checker_accepts_direct_loguru_call(tmp_path):
     path = tmp_path / "valid_logging.py"
     path.write_text(
         "from spikingjelly.logger import logger\n"
-        "logger.bind(event='work_summary', result=value).info(\n"
-        "    'work_summary result={}', value\n"
-        ")\n",
+        "logger.info('Work completed: result={}', value)\n",
         encoding="utf-8",
     )
     assert _load_checker().check(tmp_path) == []

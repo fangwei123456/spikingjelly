@@ -448,18 +448,6 @@ class SpikeSimCounter(BaseCounter):
             dilation=dilation,
             spike_like_input=spike_like_input,
         )
-        logger.opt(lazy=True).debug(
-            "SpikeSimCounter: {} - aten.convolution.default [{}] x={} w={} out={}",
-            lambda: scope,
-            lambda: (
-                "event"
-                if self.config.activity_mode == "event" and spike_like_input
-                else "dense"
-            ),
-            lambda: tuple(x.shape),
-            lambda: tuple(w.shape),
-            lambda: tuple(out.shape),
-        )
         return dense_pe_cycles
 
     def _count_convolution(

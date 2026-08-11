@@ -414,8 +414,8 @@ def triton_fp8_neuron_capability_report(
             }
         report["compute_dtypes"][compute_dtype] = compute_report
     report["dtypes"] = copy.deepcopy(report["compute_dtypes"]["fp32"])
-    logger.bind(event="triton_fp8_capability_summary").info(
-        "triton_fp8_capability_summary device={} triton_available={} cuda_available={} compute_dtypes={}",
+    logger.info(
+        "Triton FP8 capability checked: device={} triton_available={} cuda_available={} compute_dtypes={}",
         device,
         report["triton_available"],
         report["cuda_available"],

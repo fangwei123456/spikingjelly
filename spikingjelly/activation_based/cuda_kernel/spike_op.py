@@ -24,9 +24,9 @@ try:
     logger.debug(
         "Loading CUDA spike-op extension through torch.utils.cpp_extension.load_inline"
     )
-    logger.opt(lazy=True).debug(
+    logger.debug(
         "If extension loading hangs, remove the torch extensions cache directory; the default build directory is {}",
-        lambda: torch.utils.cpp_extension._get_build_directory("", False),
+        torch.utils.cpp_extension._get_build_directory("", False),
     )
     cpp_wrapper = load_inline(
         name="cpp_wrapper",
@@ -253,28 +253,12 @@ torch.library.register_autograd(
 )
 
 if cpp_wrapper is None:
-    logger.bind(
-        event="operator_register_summary",
-        backend="cuda",
-        registration_kind="torch.library",
-        registered=2,
-        fake_registered=2,
-        autograd_registered=2,
-        failed=1,
-    ).warning(
+    logger.warning(
         "CUDA spike operators registered: linear=ok convolution=backward_unavailable; using the PyTorch fallback for supported operations. extension_error={}",
         cpp_wrapper_error,
     )
 else:
-    logger.bind(
-        event="operator_register_summary",
-        backend="cuda",
-        registration_kind="torch.library",
-        registered=2,
-        fake_registered=2,
-        autograd_registered=2,
-        failed=0,
-    ).info(
+    logger.info(
         "CUDA spike operators registered: operators={} fake_kernels={} autograd_kernels={}",
         2,
         2,

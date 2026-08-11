@@ -296,8 +296,8 @@ def export_to_nir(
 
     if save_path is not None:
         nir.write(save_path, graph)
-    logger.bind(event="nir_export_summary").info(
-        "nir_export_summary model={} device={} dtype={} dt={} save_path={}",
+    logger.info(
+        "NIR export completed: model={} device={} dtype={} dt={} save_path={}",
         type(net).__name__,
         example_input.device,
         example_input.dtype,

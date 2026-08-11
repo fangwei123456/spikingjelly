@@ -331,37 +331,37 @@ class MetricLogger:
             iter_time.update(time.time() - end)
             if print_freq > 0 and i % print_freq == 0 and is_main_process():
                 if torch.cuda.is_available():
-                    logger.opt(lazy=True).info(
+                    logger.info(
                         log_msg,
-                        lambda: header,
-                        lambda: i,
-                        lambda: space_width,
-                        lambda: len(iterable),
-                        lambda: str(
+                        header,
+                        i,
+                        space_width,
+                        len(iterable),
+                        str(
                             datetime.timedelta(
                                 seconds=int(iter_time.global_avg * (len(iterable) - i))
                             )
                         ),
-                        lambda: self,
-                        lambda: str(iter_time),
-                        lambda: str(data_time),
-                        lambda: torch.cuda.max_memory_allocated() / MB,
+                        self,
+                        str(iter_time),
+                        str(data_time),
+                        torch.cuda.max_memory_allocated() / MB,
                     )
                 else:
-                    logger.opt(lazy=True).info(
+                    logger.info(
                         log_msg,
-                        lambda: header,
-                        lambda: i,
-                        lambda: space_width,
-                        lambda: len(iterable),
-                        lambda: str(
+                        header,
+                        i,
+                        space_width,
+                        len(iterable),
+                        str(
                             datetime.timedelta(
                                 seconds=int(iter_time.global_avg * (len(iterable) - i))
                             )
                         ),
-                        lambda: self,
-                        lambda: str(iter_time),
-                        lambda: str(data_time),
+                        self,
+                        str(iter_time),
+                        str(data_time),
                     )
             i += 1
             end = time.time()
@@ -534,12 +534,7 @@ def init_distributed_mode(args):
         rank=args.rank,
     )
     if args.rank == 0:
-        with logger.contextualize(rank=args.rank, world_size=args.world_size):
-            logger.bind(
-                event="distributed_training_summary",
-                distributed_backend=args.dist_backend,
-                init_method=args.dist_url,
-            ).info("Distributed training initialized: {}", args.dist_url)
+        logger.info("Distributed training initialized: {}", args.dist_url)
 
 
 def average_checkpoints(inputs):

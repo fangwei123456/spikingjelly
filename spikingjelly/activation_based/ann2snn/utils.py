@@ -100,8 +100,8 @@ def download_url(url: str, dst: str) -> int:
         response.close()
     if content_length is None:
         file_size = _download_without_resume(url, dst, headers)
-        logger.bind(event="ann2snn_download_summary").info(
-            "ann2snn_download_summary destination={} resumed={} bytes={} elapsed_ms={:.3f}",
+        logger.info(
+            "ANN2SNN download completed: destination={} resumed={} bytes={} elapsed_ms={:.3f}",
             dst,
             False,
             file_size,
@@ -114,8 +114,8 @@ def download_url(url: str, dst: str) -> int:
     else:
         first_byte = 0
     if first_byte >= file_size:  # (4)
-        logger.bind(event="ann2snn_download_summary").info(
-            "ann2snn_download_summary destination={} resumed={} bytes={} elapsed_ms={:.3f}",
+        logger.info(
+            "ANN2SNN download completed: destination={} resumed={} bytes={} elapsed_ms={:.3f}",
             dst,
             False,
             file_size,
@@ -166,8 +166,8 @@ def download_url(url: str, dst: str) -> int:
         if req is not None:
             req.close()
         pbar.close()
-    logger.bind(event="ann2snn_download_summary").info(
-        "ann2snn_download_summary destination={} resumed={} bytes={} elapsed_ms={:.3f}",
+    logger.info(
+        "ANN2SNN download completed: destination={} resumed={} bytes={} elapsed_ms={:.3f}",
         dst,
         resumed,
         file_size,

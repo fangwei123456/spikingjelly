@@ -12,7 +12,6 @@ from pathlib import Path
 EXCLUDED_PARTS = {"example", "examples", "test", "benchmark", "docs"}
 LOG_METHODS = {"debug", "info", "warning", "error", "exception", "critical"}
 DIAGNOSTIC_PRINT_FUNCTIONS = {"check_manual_grad", "check_cuda_grad"}
-EVENT_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
 PERCENT_PLACEHOLDER = re.compile(
     r"%(?!%)(?:\([^)]+\))?[#0 +\-]?(?:\d+|\*)?(?:\.\d+|\.\*)?[hlL]?[diouxXeEfFgGcrsa]"
 )
@@ -34,18 +33,6 @@ def _is_logger_call(node: ast.Call) -> bool:
         and node.func.attr in LOG_METHODS
         and _root_name(node.func.value) == "logger"
     )
-
-
-def _find_method_call(node: ast.AST, method: str) -> ast.Call | None:
-    for part in ast.walk(node):
-        if (
-            isinstance(part, ast.Call)
-            and isinstance(part.func, ast.Attribute)
-            and part.func.attr == method
-            and _root_name(part.func.value) == "logger"
-        ):
-            return part
-    return None
 
 
 def _is_allowed_diagnostic_print(
@@ -120,39 +107,6 @@ def _check_logger_call(path: Path, node: ast.Call) -> list[str]:
                     f"does not match argument count {arguments}"
                 )
 
-        first_word = message.value.split(maxsplit=1)[0] if message.value else ""
-        if first_word.endswith("_summary"):
-            bind = _find_method_call(node.func, "bind")
-            event = (
-                None
-                if bind is None
-                else next(
-                    (
-                        keyword.value
-                        for keyword in bind.keywords
-                        if keyword.arg == "event"
-                    ),
-                    None,
-                )
-            )
-            if not (isinstance(event, ast.Constant) and event.value == first_word):
-                violations.append(
-                    f"{path}:{node.lineno}: lifecycle summary requires event={first_word!r}"
-                )
-
-    bind = _find_method_call(node.func, "bind")
-    if bind is not None:
-        for keyword in bind.keywords:
-            if keyword.arg != "event":
-                continue
-            if not (
-                isinstance(keyword.value, ast.Constant)
-                and isinstance(keyword.value.value, str)
-                and EVENT_PATTERN.fullmatch(keyword.value.value)
-            ):
-                violations.append(
-                    f"{path}:{node.lineno}: event must be a literal snake_case name"
-                )
     return violations
 
 
@@ -209,6 +163,14 @@ def check(root: Path) -> list[str]:
                 ):
                     violations.append(
                         f"{path}:{node.lineno}: direct builtins.print call"
+                    )
+                elif (
+                    isinstance(func, ast.Attribute)
+                    and func.attr in {"bind", "contextualize", "opt"}
+                    and _root_name(func.value) == "logger"
+                ):
+                    violations.append(
+                        f"{path}:{node.lineno}: logger.{func.attr} is not allowed"
                     )
                 elif (
                     isinstance(func, ast.Attribute)

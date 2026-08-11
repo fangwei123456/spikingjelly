@@ -296,13 +296,7 @@ class ComputeEnergyProfiler:
             warnings=warnings_list,
         )
         if not self._summary_logged:
-            logger.bind(
-                event="op_counter_summary",
-                counter_type=type(self).__name__,
-                total_operations=mac + ac + synop + flop,
-                matched_counter_rules=matched_counter_rules,
-                warnings=len(warnings_list),
-            ).info(
+            logger.info(
                 "Operation counter completed: counter={} total_operations={} matched_counter_rules={} warnings={}",
                 type(self).__name__,
                 mac + ac + synop + flop,

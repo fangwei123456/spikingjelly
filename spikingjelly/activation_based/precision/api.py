@@ -122,8 +122,8 @@ def prepare_model_for_precision(
         fallback_reason=fallback_reason,
     )
     conversion_report = artifacts.policy.conversion_report()
-    logger.bind(event="precision_prepare_summary").info(
-        "precision_prepare_summary requested_mode={} effective_mode={} device={} fallback={} fallback_reason={} converted_modules={} unsupported_modules={} grad_scaler={} elapsed_ms={:.3f}",
+    logger.info(
+        "Precision preparation completed: requested_mode={} effective_mode={} device={} fallback={} fallback_reason={} converted_modules={} unsupported_modules={} grad_scaler={} elapsed_ms={:.3f}",
         requested.mode,
         effective.mode,
         device,

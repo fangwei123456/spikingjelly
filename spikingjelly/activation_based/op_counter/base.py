@@ -648,12 +648,6 @@ class DispatchCounterMode(TorchDispatchMode):
         active_modules = set(self.module_tracker.active_modules)
         parent_names_snapshot = set(parent_names)
 
-        logger.opt(lazy=True).debug(
-            "DispatchCounterMode: {} - {}",
-            lambda: parent_names,
-            lambda: resolve_name(func),
-        )
-
         for counter in self.counters:
             if self._should_skip(counter, func):
                 continue
@@ -771,12 +765,6 @@ class FunctionCounterMode(TorchFunctionMode):
         parent_names = self.module_tracker.parents
         active_modules = set(self.module_tracker.active_modules)
         parent_names_snapshot = set(parent_names)
-
-        logger.opt(lazy=True).debug(
-            "FunctionCounterMode: {} - {}",
-            lambda: parent_names,
-            lambda: resolve_name(func),
-        )
 
         for counter in self.counters:
             if self._should_skip(counter, func):

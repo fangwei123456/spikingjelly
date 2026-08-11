@@ -844,10 +844,10 @@ class GPUMonitor(threading.Thread):
                             f"memory_used_{self.gpu_ids[i]}", memory_used, self.step
                         )
                 else:
-                    logger.opt(lazy=True).info(
+                    logger.info(
                         "GPU monitor sample at {}:\n{}",
-                        lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        fp.read,
+                        datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        fp.read(),
                     )
                     """
                     2022-04-20 18:14:26

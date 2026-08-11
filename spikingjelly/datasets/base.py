@@ -310,14 +310,8 @@ class NeuromorphicDatasetBuilder(abc.ABC):
             for future in futures:
                 future.result()
         duration_seconds = time.time() - start
-        logger.bind(
-            event="data_preprocess_summary",
-            builder_type=type(self).__name__,
-            task_count=len(futures),
-            max_workers=configure.max_threads_number_for_datasets_preprocess,
-            duration_seconds=duration_seconds,
-        ).info(
-            "data_preprocess_summary builder={} tasks={} max_workers={} duration_seconds={:.3f}",
+        logger.info(
+            "Dataset preprocessing completed: builder={} tasks={} max_workers={} duration_seconds={:.3f}",
             type(self).__name__,
             len(futures),
             configure.max_threads_number_for_datasets_preprocess,
@@ -1008,14 +1002,8 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             self.raw_root,
         )
         self.create_raw_from_extracted(extract_root, self.raw_root)
-        logger.bind(
-            event="data_prepare_summary",
-            dataset_type=type(self).__name__,
-            download_root=str(download_root),
-            extract_root=str(extract_root),
-            raw_root=str(self.raw_root),
-        ).info(
-            "data_prepare_summary dataset={} raw_root={}",
+        logger.info(
+            "Dataset preparation completed: dataset={} raw_root={}",
             type(self).__name__,
             self.raw_root,
         )

@@ -259,20 +259,14 @@ class Trainer:
             metric_logger.acc5.global_avg,
         )
         if utils.is_main_process():
-            with logger.contextualize(epoch=epoch):
-                logger.bind(
-                    event="training_epoch_summary",
-                    train_loss=train_loss,
-                    train_acc1=train_acc1,
-                    train_acc5=train_acc5,
-                    samples_per_second=metric_logger.meters["img/s"].global_avg,
-                ).info(
-                    "Train: train_acc1={}, train_acc5={}, train_loss={}, samples/s={}",
-                    train_acc1,
-                    train_acc5,
-                    train_loss,
-                    metric_logger.meters["img/s"].global_avg,
-                )
+            logger.info(
+                "Train epoch {}: train_acc1={}, train_acc5={}, train_loss={}, samples/s={}",
+                epoch,
+                train_acc1,
+                train_acc5,
+                train_loss,
+                metric_logger.meters["img/s"].global_avg,
+            )
         return train_loss, train_acc1, train_acc5
 
     def evaluate(self, args, model, criterion, data_loader, device, log_suffix=""):
@@ -324,14 +318,7 @@ class Trainer:
         )
         if utils.is_main_process():
             samples_per_second = num_processed_samples / (time.time() - start_time)
-            logger.bind(
-                event="training_validation_summary",
-                validation_kind=log_suffix or "model",
-                test_loss=test_loss,
-                test_acc1=test_acc1,
-                test_acc5=test_acc5,
-                samples_per_second=samples_per_second,
-            ).info(
+            logger.info(
                 "Test: test_acc1={}, test_acc5={}, test_loss={}, samples/s={}",
                 test_acc1,
                 test_acc5,
@@ -631,14 +618,7 @@ class Trainer:
 
         utils.init_distributed_mode(args)
         if utils.is_main_process():
-            with logger.contextualize(
-                rank=utils.get_rank(), world_size=utils.get_world_size()
-            ):
-                logger.bind(
-                    event="training_run_start",
-                    device=args.device,
-                    epochs=args.epochs,
-                ).info("Training arguments: {}", args)
+            logger.info("Training arguments: {}", args)
 
         device = torch.device(args.device)
 
@@ -776,12 +756,7 @@ class Trainer:
                 max_test_acc1 = checkpoint["max_test_acc1"]
                 if model_ema:
                     max_ema_test_acc1 = checkpoint["max_ema_test_acc1"]
-                logger.bind(
-                    event="checkpoint_load_summary",
-                    checkpoint_path=checkpoint_path,
-                    checkpoint_epoch=checkpoint["epoch"],
-                    next_epoch=args.start_epoch,
-                ).info(
+                logger.info(
                     "Checkpoint loaded: path={} epoch={} next_epoch={}",
                     checkpoint_path,
                     checkpoint["epoch"],
@@ -913,13 +888,7 @@ class Trainer:
                         os.path.join(pt_dir, "checkpoint_max_ema_test_acc1.pth"),
                     )
 
-                logger.bind(
-                    event="checkpoint_save_summary",
-                    checkpoint_directory=pt_dir,
-                    epoch=epoch,
-                    saved_best=save_max_test_acc1,
-                    saved_best_ema=bool(model_ema and save_max_ema_test_acc1),
-                ).info(
+                logger.info(
                     "Checkpoint saved: directory={} epoch={} best={} best_ema={}",
                     pt_dir,
                     epoch,
@@ -940,12 +909,7 @@ class Trainer:
                 )
         if utils.is_main_process():
             duration_seconds = time.perf_counter() - run_started_at
-            logger.bind(
-                event="training_run_summary",
-                completed_epochs=max(0, args.epochs - args.start_epoch),
-                max_test_acc1=max_test_acc1,
-                duration_seconds=duration_seconds,
-            ).info(
+            logger.info(
                 "Training completed: epochs={} max_test_acc1={} duration_seconds={:.3f}",
                 max(0, args.epochs - args.start_epoch),
                 max_test_acc1,
