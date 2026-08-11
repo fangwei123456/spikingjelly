@@ -83,6 +83,10 @@ def _check_logger_call(path: Path, node: ast.Call) -> list[str]:
     violations: list[str] = []
     if not node.args:
         return [f"{path}:{node.lineno}: logger call requires a message"]
+    if node.keywords:
+        violations.append(
+            f"{path}:{node.lineno}: logger call must use positional arguments"
+        )
 
     message = node.args[0]
     if _is_eager_message(message) or any(
@@ -101,7 +105,7 @@ def _check_logger_call(path: Path, node: ast.Call) -> list[str]:
             violations.append(f"{path}:{node.lineno}: invalid Loguru format: {exc}")
         else:
             arguments = len(node.args) - 1
-            if placeholders != arguments:
+            if not node.keywords and placeholders != arguments:
                 violations.append(
                     f"{path}:{node.lineno}: Loguru placeholder count {placeholders} "
                     f"does not match argument count {arguments}"
@@ -138,6 +142,10 @@ def check(root: Path) -> list[str]:
                     if alias.name == "logging" or alias.name.startswith("logging."):
                         violations.append(
                             f"{path}:{node.lineno}: stdlib logging import"
+                        )
+                    if alias.name == "loguru" or alias.name.startswith("loguru."):
+                        violations.append(
+                            f"{path}:{node.lineno}: logger must be imported from spikingjelly.logger"
                         )
             elif isinstance(node, ast.ImportFrom):
                 if node.module == "logging" or (node.module or "").startswith(

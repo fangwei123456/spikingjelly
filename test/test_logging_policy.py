@@ -77,6 +77,16 @@ assert output.getvalue().strip() == "user-sink-still-active"
     subprocess.run([sys.executable, "-c", script], check=True)
 
 
+def test_logging_benchmark_rejects_nonpositive_counts():
+    result = subprocess.run(
+        [sys.executable, "benchmark/benchmark_logging.py", "--calls", "0"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert "value must be > 0" in result.stderr
+
+
 def test_package_is_disabled_until_enabled():
     script = """
 import io
@@ -193,6 +203,30 @@ def test_metric_logger_formats_progress_with_loguru_arguments(loguru_records):
     assert any("Train" in message and "[0/1]" in message for message in messages)
 
 
+def test_evaluation_handles_zero_duration(monkeypatch, loguru_records):
+    from types import SimpleNamespace
+
+    import torch
+
+    from spikingjelly.activation_based.model import train_classify
+
+    monkeypatch.setattr(train_classify.time, "perf_counter", lambda: 1.0)
+    data_loader = torch.utils.data.DataLoader(
+        torch.utils.data.TensorDataset(
+            torch.ones(1, 5), torch.zeros(1, dtype=torch.long)
+        ),
+        batch_size=1,
+    )
+    train_classify.Trainer().evaluate(
+        SimpleNamespace(disable_pinmemory=True),
+        torch.nn.Identity(),
+        torch.nn.CrossEntropyLoss(),
+        data_loader,
+        torch.device("cpu"),
+    )
+    assert any("samples/s=inf" in record["message"] for record in loguru_records)
+
+
 def test_serialized_sink_contains_standard_fields(tmp_path):
     import torch
 
@@ -223,6 +257,7 @@ def test_serialized_sink_contains_standard_fields(tmp_path):
     ("source", "expected"),
     [
         ("import logging\n", "stdlib logging import"),
+        ("import loguru\n", "must be imported"),
         ("from loguru import logger\nlogger.info('x')\n", "must be imported"),
         (
             "from spikingjelly.logger import logger\nlogger.info('value=%s', value)\n",
@@ -240,6 +275,10 @@ def test_serialized_sink_contains_standard_fields(tmp_path):
         (
             "from spikingjelly.logger import logger\nlogger.info(f'value={value}')\n",
             "eager formatting",
+        ),
+        (
+            "from spikingjelly.logger import logger\nlogger.info('value={value}', value=1)\n",
+            "must use positional arguments",
         ),
         ("import builtins\nbuiltins.print('not allowed')\n", "builtins.print"),
     ],

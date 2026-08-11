@@ -24,8 +24,9 @@ Logging
 Module: ``spikingjelly``.
 
 - Migrated the package logger from stdlib ``logging`` to Loguru. SpikingJelly is
-  disabled by default and never adds or removes application-owned sinks; enable the
-  colored console with ``logger.enable("spikingjelly")``.
+  disabled by default and never adds or removes application-owned sinks; applications
+  enable the namespace with ``logger.enable("spikingjelly")`` and configure sinks
+  separately.
 - Production diagnostics use direct Loguru calls with parameterized formatting;
   applications own sink configuration and any structured context or stdlib logging
   integration.

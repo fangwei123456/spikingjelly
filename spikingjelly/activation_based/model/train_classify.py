@@ -276,7 +276,7 @@ class Trainer:
         data_to_device_kwargs = self.get_data_to_device_kwargs(args)
 
         num_processed_samples = 0
-        start_time = time.time()
+        start_time = time.perf_counter()
         with torch.inference_mode():
             for image, target in metric_logger.log_every(data_loader, -1, header):
                 image = image.to(device, **data_to_device_kwargs)
@@ -317,7 +317,12 @@ class Trainer:
             metric_logger.acc5.global_avg,
         )
         if utils.is_main_process():
-            samples_per_second = num_processed_samples / (time.time() - start_time)
+            elapsed_seconds = time.perf_counter() - start_time
+            samples_per_second = (
+                num_processed_samples / elapsed_seconds
+                if elapsed_seconds > 0
+                else float("inf")
+            )
             logger.info(
                 "Test: test_acc1={}, test_acc5={}, test_loss={}, samples/s={}",
                 test_acc1,

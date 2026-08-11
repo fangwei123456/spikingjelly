@@ -1300,9 +1300,6 @@ def pad_sequence_collate(batch: list):
 
     .. code-block:: python
 
-        from spikingjelly.logger import logger
-
-
         class VariableLengthDataset(torch.utils.data.Dataset):
             def __init__(self, n=1000):
                 super().__init__()
@@ -1323,7 +1320,7 @@ def pad_sequence_collate(batch: list):
         )
 
         for i, (x_p, label, x_len) in enumerate(loader):
-            logger.info("x_p.shape={}, label={}, x_len={}", x_p.shape, label, x_len)
+            print(f"x_p.shape={x_p.shape}, label={label}, x_len={x_len}")
             if i == 2:
                 break
 
@@ -1399,17 +1396,15 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
 
     .. code-block:: python
 
-        from spikingjelly.logger import logger
-
         x1 = torch.rand([2, 6])
         x2 = torch.rand([3, 6])
         x3 = torch.rand([4, 6])
         x = torch.nn.utils.rnn.pad_sequence([x1, x2, x3])  # [T, N, *]
-        logger.info("x.shape={}", x.shape)
+        print(f"x.shape={x.shape}")
         x_len = torch.as_tensor([x1.shape[0], x2.shape[0], x3.shape[0]])
         mask = padded_sequence_mask(x_len)
-        logger.info("mask.shape={}", mask.shape)
-        logger.info("mask=\n{}", mask)
+        print(f"mask.shape={mask.shape}")
+        print(f"mask=\n{mask}")
 
     Outputs:
 

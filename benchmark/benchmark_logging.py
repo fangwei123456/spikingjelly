@@ -15,9 +15,13 @@ from spikingjelly.logger import logger
 
 
 _STDLIB_LOGGER = logging.getLogger("spikingjelly-benchmark-baseline")
-_STDLIB_LOGGER.propagate = False
-_STDLIB_LOGGER.setLevel(logging.WARNING)
-_STDLIB_LOGGER.addHandler(logging.NullHandler())
+
+
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("value must be > 0")
+    return parsed
 
 
 class _StdlibPrintShapeModule(nn.Module):
@@ -107,11 +111,15 @@ def _print_workload_comparison(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--calls", type=int, default=1_000_000)
-    parser.add_argument("--repeats", type=int, default=5)
-    parser.add_argument("--training-steps", type=int, default=50)
-    parser.add_argument("--inference-steps", type=int, default=200)
+    parser.add_argument("--calls", type=_positive_int, default=1_000_000)
+    parser.add_argument("--repeats", type=_positive_int, default=5)
+    parser.add_argument("--training-steps", type=_positive_int, default=50)
+    parser.add_argument("--inference-steps", type=_positive_int, default=200)
     args = parser.parse_args()
+
+    _STDLIB_LOGGER.propagate = False
+    _STDLIB_LOGGER.setLevel(logging.WARNING)
+    _STDLIB_LOGGER.addHandler(logging.NullHandler())
 
     logger.remove()
     _print_result(
