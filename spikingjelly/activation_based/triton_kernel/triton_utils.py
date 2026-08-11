@@ -69,7 +69,7 @@ try:
         type_dict[torch.float8_e5m2fnuz] = tl.float8e5b16
         type_str_dict[torch.float8_e5m2fnuz] = "tl.float8e5b16"
 except (ImportError, AttributeError, OSError, RuntimeError) as e:
-    logger.debug("spikingjelly.activation_based.triton_kernel.triton_utils: %s", e)
+    logger.debug("spikingjelly.activation_based.triton_kernel.triton_utils: {}", e)
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
     type_dict = {}

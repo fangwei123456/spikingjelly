@@ -2,7 +2,6 @@ import copy
 import datetime
 import errno
 import hashlib
-import logging
 import os
 import statistics
 import time
@@ -305,24 +304,24 @@ class MetricLogger:
         if torch.cuda.is_available():
             log_msg = self.delimiter.join(
                 [
-                    "%s",
-                    "[%*d/%d]",
-                    "eta: %s",
-                    "%s",
-                    "time: %s",
-                    "data: %s",
-                    "max mem: %.0f",
+                    "{}",
+                    "[{:>{}}/{}]",
+                    "eta: {}",
+                    "{}",
+                    "time: {}",
+                    "data: {}",
+                    "max mem: {:.0f}",
                 ]
             )
         else:
             log_msg = self.delimiter.join(
                 [
-                    "%s",
-                    "[%*d/%d]",
-                    "eta: %s",
-                    "%s",
-                    "time: %s",
-                    "data: %s",
+                    "{}",
+                    "[{:>{}}/{}]",
+                    "eta: {}",
+                    "{}",
+                    "time: {}",
+                    "data: {}",
                 ]
             )
         MB = 1024.0 * 1024.0
@@ -330,45 +329,46 @@ class MetricLogger:
             data_time.update(time.time() - end)
             yield obj
             iter_time.update(time.time() - end)
-            if (
-                print_freq > 0
-                and i % print_freq == 0
-                and is_main_process()
-                and logger.isEnabledFor(logging.INFO)
-            ):
-                eta_seconds = iter_time.global_avg * (len(iterable) - i)
-                eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+            if print_freq > 0 and i % print_freq == 0 and is_main_process():
                 if torch.cuda.is_available():
-                    logger.info(
+                    logger.opt(lazy=True).info(
                         log_msg,
-                        header,
-                        space_width,
-                        i,
-                        len(iterable),
-                        eta_string,
-                        self,
-                        str(iter_time),
-                        str(data_time),
-                        torch.cuda.max_memory_allocated() / MB,
+                        lambda: header,
+                        lambda: i,
+                        lambda: space_width,
+                        lambda: len(iterable),
+                        lambda: str(
+                            datetime.timedelta(
+                                seconds=int(iter_time.global_avg * (len(iterable) - i))
+                            )
+                        ),
+                        lambda: self,
+                        lambda: str(iter_time),
+                        lambda: str(data_time),
+                        lambda: torch.cuda.max_memory_allocated() / MB,
                     )
                 else:
-                    logger.info(
+                    logger.opt(lazy=True).info(
                         log_msg,
-                        header,
-                        space_width,
-                        i,
-                        len(iterable),
-                        eta_string,
-                        self,
-                        str(iter_time),
-                        str(data_time),
+                        lambda: header,
+                        lambda: i,
+                        lambda: space_width,
+                        lambda: len(iterable),
+                        lambda: str(
+                            datetime.timedelta(
+                                seconds=int(iter_time.global_avg * (len(iterable) - i))
+                            )
+                        ),
+                        lambda: self,
+                        lambda: str(iter_time),
+                        lambda: str(data_time),
                     )
             i += 1
             end = time.time()
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
         if is_main_process():
-            logger.info("%s Total time: %s", header, total_time_str)
+            logger.info("{} Total time: {}", header, total_time_str)
 
 
 class ExponentialMovingAverage(torch.optim.swa_utils.AveragedModel):
@@ -534,7 +534,12 @@ def init_distributed_mode(args):
         rank=args.rank,
     )
     if args.rank == 0:
-        logger.info("Distributed training initialized: %s", args.dist_url)
+        with logger.contextualize(rank=args.rank, world_size=args.world_size):
+            logger.bind(
+                event="distributed_training_summary",
+                distributed_backend=args.dist_backend,
+                init_method=args.dist_url,
+            ).info("Distributed training initialized: {}", args.dist_url)
 
 
 def average_checkpoints(inputs):
@@ -602,22 +607,22 @@ def store_model_weights(model, checkpoint_path, checkpoint_key="model", strict=T
 
         # Classification
         model = M.mobilenet_v3_large(pretrained=False)
-        logger.info(store_model_weights(model, './class.pth'))
+        logger.info("{}", store_model_weights(model, './class.pth'))
 
         # Quantized Classification
         model = M.quantization.mobilenet_v3_large(pretrained=False, quantize=False)
         model.fuse_model(is_qat=True)
         model.qconfig = torch.ao.quantization.get_default_qat_qconfig('qnnpack')
         _ = torch.ao.quantization.prepare_qat(model, inplace=True)
-        logger.info(store_model_weights(model, './qat.pth'))
+        logger.info("{}", store_model_weights(model, './qat.pth'))
 
         # Object Detection
         model = M.detection.fasterrcnn_mobilenet_v3_large_fpn(pretrained=False, pretrained_backbone=False)
-        logger.info(store_model_weights(model, './obj.pth'))
+        logger.info("{}", store_model_weights(model, './obj.pth'))
 
         # Segmentation
         model = M.segmentation.deeplabv3_mobilenet_v3_large(pretrained=False, pretrained_backbone=False, aux_loss=True)
-        logger.info(store_model_weights(model, './segm.pth', strict=False))
+        logger.info("{}", store_model_weights(model, './segm.pth', strict=False))
 
     Args:
         model (pytorch.nn.Module): The model on which the weights will be loaded for validation purposes.

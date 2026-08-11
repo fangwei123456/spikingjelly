@@ -7,7 +7,7 @@ try:
     import cupy
 except (ImportError, OSError) as e:
     logger.debug(
-        "spikingjelly.activation_based.cuda_kernel.neuron_kernel.single_step: %s", e
+        "spikingjelly.activation_based.cuda_kernel.neuron_kernel.single_step: {}", e
     )
     cupy = None
 

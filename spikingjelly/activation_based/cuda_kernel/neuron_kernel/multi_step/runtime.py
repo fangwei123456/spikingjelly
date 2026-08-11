@@ -11,7 +11,7 @@ try:
     import cupy
 except (ImportError, OSError) as e:
     logger.debug(
-        "spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step: %s", e
+        "spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step: {}", e
     )
     cupy = None
 

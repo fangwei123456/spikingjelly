@@ -2,7 +2,6 @@ from __future__ import annotations
 from spikingjelly.logger import logger
 
 import math
-import logging
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -449,20 +448,18 @@ class SpikeSimCounter(BaseCounter):
             dilation=dilation,
             spike_like_input=spike_like_input,
         )
-        if logger.isEnabledFor(logging.DEBUG):
-            mode = (
+        logger.opt(lazy=True).debug(
+            "SpikeSimCounter: {} - aten.convolution.default [{}] x={} w={} out={}",
+            lambda: scope,
+            lambda: (
                 "event"
                 if self.config.activity_mode == "event" and spike_like_input
                 else "dense"
-            )
-            logger.debug(
-                "SpikeSimCounter: %s - aten.convolution.default [%s] x=%s w=%s out=%s",
-                scope,
-                mode,
-                tuple(x.shape),
-                tuple(w.shape),
-                tuple(out.shape),
-            )
+            ),
+            lambda: tuple(x.shape),
+            lambda: tuple(w.shape),
+            lambda: tuple(out.shape),
+        )
         return dense_pe_cycles
 
     def _count_convolution(

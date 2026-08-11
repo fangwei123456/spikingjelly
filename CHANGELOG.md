@@ -15,15 +15,18 @@ and the archived documentation linked from the project README.
 
 Module: `spikingjelly`.
 
-- Added a package-level `spikingjelly` logger with application-owned handlers,
-  structured summaries for operator registration, memory optimization, and
-  operation-counter results, plus an AST policy checker and logging benchmark.
-- Added lifecycle summaries for distributed setup, precision fallback, ANN2SNN and
-  NIR conversion, graph transforms, external downloads, and compiler cache events.
-- Production diagnostics now use lazy logging at lifecycle boundaries; normal
-  forward, dispatch, and kernel execution paths do not emit default logs.
-- Documented the package-level logger, handler configuration, NullHandler behavior,
-  and common application-side usage patterns.
+- Migrated the package logger from stdlib `logging` to Loguru. SpikingJelly is
+  disabled by default and never adds or removes application-owned sinks; enable the
+  colored console with `logger.enable("spikingjelly")`.
+- Added structured lifecycle events for training, checkpoints, operator registration,
+  memory optimization, distributed setup, precision fallback, ANN2SNN/NIR conversion,
+  graph transforms, external downloads, compiler cache, and profiler results.
+- Production diagnostics use Loguru parameterized or lazy formatting; normal forward,
+  time-step, batch, dispatch, and kernel execution paths do not emit default logs.
+- Updated the AST policy checker, Loguru performance benchmark, tests, bilingual API
+  documentation, and migration guidance. This is a breaking change: stdlib handlers,
+  `basicConfig()`, `dictConfig()`, and pytest `caplog` no longer capture SpikingJelly
+  records.
 
 #### Functional State Transitions
 

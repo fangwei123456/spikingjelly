@@ -1,5 +1,4 @@
 from spikingjelly.logger import logger
-import logging
 import sys
 
 import numpy as np
@@ -8,7 +7,7 @@ import torch
 try:
     import cupy
 except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.cuda_kernel.auto_cuda.base: %s", e)
+    logger.debug("spikingjelly.activation_based.cuda_kernel.auto_cuda.base: {}", e)
     cupy = None
 
 from .... import configure
@@ -16,18 +15,7 @@ from .. import cuda_utils
 
 
 def wrap_with_comment(code: str, comment: str):
-    if logging.DEBUG >= logging.root.level:
-        return (
-            "\n//------"
-            + comment
-            + " start------\n"
-            + code
-            + "\n//------"
-            + comment
-            + " end--------\n\n"
-        )
-    else:
-        return code
+    return code
 
 
 def startswiths(x: str, prefixes: tuple):

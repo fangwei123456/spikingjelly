@@ -8,7 +8,7 @@ try:
     from . import wrapper as wrapper
     from . import custom_ops as custom_ops
 except (ImportError, OSError, RuntimeError) as e:
-    logger.debug("spikingjelly.activation_based.triton_kernel.flexsn: %s", e)
+    logger.debug("spikingjelly.activation_based.triton_kernel.flexsn: {}", e)
     info = None
     hop = None
     kernel = None

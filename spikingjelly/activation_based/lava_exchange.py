@@ -320,7 +320,7 @@ class BatchNorm2d(nn.Module):
         )
         bn.load_state_dict(self.state_dict())
         logger.debug(
-            "Exporting Slayer batch norm: num_features=%s",
+            "Exporting Slayer batch norm: num_features={}",
             self.num_features,
         )
         return bn
@@ -1386,5 +1386,5 @@ try:
 
 
 except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.lava_exchange: %s", e)
+    logger.debug("spikingjelly.activation_based.lava_exchange: {}", e)
     slayer = None

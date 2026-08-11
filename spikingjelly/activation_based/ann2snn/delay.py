@@ -199,9 +199,8 @@ def estimate_delay_start(
     start_time = time.perf_counter()
     paths = _find_scaler_neuron_scaler_paths(model)
     if not paths:
-        logger.info(
-            "ann2snn_delay_summary matched_paths=0 batches=0 raw_delay_start=0 "
-            "delay_start=0 readout_clamped=False elapsed_ms=%.3f",
+        logger.bind(event="ann2snn_delay_summary").info(
+            "ann2snn_delay_summary matched_paths=0 batches=0 raw_delay_start=0 delay_start=0 readout_clamped=False elapsed_ms={:.3f}",
             (time.perf_counter() - start_time) * 1000.0,
         )
         return 0
@@ -279,8 +278,8 @@ def estimate_delay_start(
             stacklevel=2,
         )
         result = max(time_steps - _MIN_READOUT_STEPS - 1, 0)
-        logger.info(
-            "ann2snn_delay_summary matched_paths=%s batches=%s raw_delay_start=%s delay_start=%s readout_clamped=%s elapsed_ms=%.3f",
+        logger.bind(event="ann2snn_delay_summary").info(
+            "ann2snn_delay_summary matched_paths={} batches={} raw_delay_start={} delay_start={} readout_clamped={} elapsed_ms={:.3f}",
             len(paths),
             processed_batches,
             raw_delay_start,
@@ -290,8 +289,8 @@ def estimate_delay_start(
         )
         return result
     result = min(raw_delay_start, time_steps - 1)
-    logger.info(
-        "ann2snn_delay_summary matched_paths=%s batches=%s raw_delay_start=%s delay_start=%s readout_clamped=%s elapsed_ms=%.3f",
+    logger.bind(event="ann2snn_delay_summary").info(
+        "ann2snn_delay_summary matched_paths={} batches={} raw_delay_start={} delay_start={} readout_clamped={} elapsed_ms={:.3f}",
         len(paths),
         processed_batches,
         raw_delay_start,

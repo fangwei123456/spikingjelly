@@ -8,12 +8,12 @@ r"""SpikingJelly package-level logger.
 
 * **中文**
 
-提供固定名称为 ``"spikingjelly"`` 的包级 :class:`logging.Logger`。框架代码应从
-``spikingjelly.logger`` 导入共享变量 ``logger``。详细配置和用法见
+提供默认禁用的包级 Loguru logger。框架代码应从 ``spikingjelly.logger`` 导入共享
+变量 ``logger``。详细配置和用法见
 ``docs/source/APIs/spikingjelly.logger.rst``。
 
-:var logger: 包级 Logger，名称固定为 ``"spikingjelly"``。
-:vartype logger: logging.Logger
+:var logger: Loguru 全局 logger。
+:vartype logger: loguru.Logger
 
 ----
 
@@ -21,22 +21,20 @@ r"""SpikingJelly package-level logger.
 
 * **English**
 
-This module exposes the package-level :class:`logging.Logger` with the fixed name
-``"spikingjelly"``. Framework code should import the shared variable ``logger`` from
-``spikingjelly.logger``.
+This module exposes Loguru's global logger, disabled for the ``"spikingjelly"``
+namespace by default. Framework code should import the shared variable ``logger``
+from ``spikingjelly.logger``.
 
-The module installs one :class:`logging.NullHandler` and does not configure the root
-logger, level, formatter, or output destination. See
-``docs/source/APIs/spikingjelly.logger.rst`` for configuration examples.
+The module does not add or remove sinks. See ``docs/source/APIs/spikingjelly.logger.rst``
+for configuration examples.
 
-:var logger: Package-level logger with the fixed name ``"spikingjelly"``.
-:vartype logger: logging.Logger
+:var logger: Loguru's global logger.
+:vartype logger: loguru.Logger
 """
 
-import logging
+from loguru import logger
 
 
-logger: logging.Logger = logging.getLogger("spikingjelly")
-logger.addHandler(logging.NullHandler())
+logger.disable("spikingjelly")
 
 __all__ = ["logger"]

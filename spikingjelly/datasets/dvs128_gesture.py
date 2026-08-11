@@ -21,7 +21,7 @@ def _split_aedat_files_to_np(
     fname: str, aedat_file: Path, csv_file: Path, output_dir: Path
 ):
     events = utils.load_aedat_v3(aedat_file)
-    logger.debug("Start to split [%s] to samples.", aedat_file)
+    logger.debug("Start to split [{}] to samples.", aedat_file)
     # read csv file and get time stamp and label of each sample
     # then split the origin data to samples
     csv_data = np.loadtxt(csv_file, dtype=np.uint32, delimiter=",", skiprows=1)
@@ -47,7 +47,7 @@ def _split_aedat_files_to_np(
             y=events["y"][mask],
             p=events["p"][mask],
         )
-        logger.debug("[%s] saved.", file_name)
+        logger.debug("[{}] saved.", file_name)
         label_file_num[label] += 1
 
 
@@ -92,11 +92,11 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
                 train_set = dvs128_gesture.DVS128Gesture(data_dir, train=True)
                 test_set = dvs128_gesture.DVS128Gesture(data_dir, train=False)
                 logger.info(
-                    "train samples = %s, test samples = %s",
+                    "train samples = {}, test samples = {}",
                     len(train_set),
                     len(test_set),
                 )
-                logger.info("total samples = %s", len(train_set) + len(test_set))
+                logger.info("total samples = {}", len(train_set) + len(test_set))
 
                 # train samples = 1176, test samples = 288
                 # total samples = 1464
@@ -125,11 +125,11 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
                     dt=1000,
                 )
                 logger.info(
-                    "train samples = %s, test samples = %s",
+                    "train samples = {}, test samples = {}",
                     len(train_set),
                     len(test_set),
                 )
-                logger.info("total samples = %s", len(train_set) + len(test_set))
+                logger.info("total samples = {}", len(train_set) + len(test_set))
 
                 # train samples = 1176, test samples = 288
                 # total samples = 1464
@@ -149,11 +149,11 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
                     save_to="D:/datasets/DVS128Gesture/temp", train=False
                 )
                 logger.info(
-                    "train samples = %s, test samples = %s",
+                    "train samples = {}, test samples = {}",
                     len(train_set),
                     len(test_set),
                 )
-                logger.info("total samples = %s", len(train_set) + len(test_set))
+                logger.info("total samples = {}", len(train_set) + len(test_set))
 
                 # train samples = 1077, test samples = 264
                 # total samples = 1341
@@ -230,11 +230,11 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
                 train_set = dvs128_gesture.DVS128Gesture(data_dir, train=True)
                 test_set = dvs128_gesture.DVS128Gesture(data_dir, train=False)
                 logger.info(
-                    "train samples = %s, test samples = %s",
+                    "train samples = {}, test samples = {}",
                     len(train_set),
                     len(test_set),
                 )
-                logger.info("total samples = %s", len(train_set) + len(test_set))
+                logger.info("total samples = {}", len(train_set) + len(test_set))
 
                 # train samples = 1176, test samples = 288
                 # total samples = 1464
@@ -263,11 +263,11 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
                     dt=1000,
                 )
                 logger.info(
-                    "train samples = %s, test samples = %s",
+                    "train samples = {}, test samples = {}",
                     len(train_set),
                     len(test_set),
                 )
-                logger.info("total samples = %s", len(train_set) + len(test_set))
+                logger.info("total samples = {}", len(train_set) + len(test_set))
 
                 # train samples = 1176, test samples = 288
                 # total samples = 1464
@@ -287,11 +287,11 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
                     save_to="D:/datasets/DVS128Gesture/temp", train=False
                 )
                 logger.info(
-                    "train samples = %s, test samples = %s",
+                    "train samples = {}, test samples = {}",
                     len(train_set),
                     len(test_set),
                 )
-                logger.info("total samples = %s", len(train_set) + len(test_set))
+                logger.info("total samples = {}", len(train_set) + len(test_set))
 
                 # train samples = 1077, test samples = 264
                 # total samples = 1341
@@ -518,7 +518,7 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
         :type extract_root: Path
         """
         fpath = download_root / "DvsGesture.tar.gz"
-        logger.info("Extract [%s] to [%s].", fpath, extract_root)
+        logger.info("Extract [{}] to [{}].", fpath, extract_root)
         extract_archive(fpath, extract_root)
 
     @classmethod
@@ -560,12 +560,12 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
         test_dir = raw_root / "test"
         train_dir.mkdir()
         test_dir.mkdir()
-        logger.info("Mkdir [%s] and [%s].", train_dir, test_dir)
+        logger.info("Mkdir [{}] and [{}].", train_dir, test_dir)
         for label in range(11):
             (train_dir / str(label)).mkdir()
             (test_dir / str(label)).mkdir()
         logger.info(
-            "Created dataset class directories in train=%s and test=%s.",
+            "Created dataset class directories in train={} and test={}.",
             train_dir,
             test_dir,
         )
@@ -584,7 +584,7 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
             ) as tpe:
                 futures = []
                 logger.info(
-                    "Start the ThreadPoolExecutor with max workers = [%s].",
+                    "Start the ThreadPoolExecutor with max workers = [{}].",
                     tpe._max_workers,
                 )
 
@@ -621,9 +621,9 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
                 for future in futures:
                     future.result()
 
-            logger.info("Used time = [%ss].", round(time.time() - t_ckp, 2))
+            logger.info("Used time = [{}s].", round(time.time() - t_ckp, 2))
 
         logger.info(
-            "All aedat files have been split to samples and saved into [%s].",
+            "All aedat files have been split to samples and saved into [{}].",
             {train_dir, test_dir},
         )

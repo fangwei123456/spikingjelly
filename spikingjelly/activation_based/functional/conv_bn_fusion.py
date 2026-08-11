@@ -235,8 +235,8 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
     fx_model.graph.lint()
     fx_model.delete_all_unused_submodules()
     fx_model.recompile()
-    logger.info(
-        "conv_bn_transform_summary mode=%s matched_pairs=%s transformed_pairs=%s",
+    logger.bind(event="conv_bn_transform_summary").info(
+        "conv_bn_transform_summary mode={} matched_pairs={} transformed_pairs={}",
         "eval_fuse",
         len(matches),
         len(matches),
@@ -320,8 +320,8 @@ def pack_conv_bn_train_modules(net: nn.Module) -> fx.GraphModule:
     fx_model.graph.lint()
     fx_model.delete_all_unused_submodules()
     fx_model.recompile()
-    logger.info(
-        "conv_bn_transform_summary mode=%s matched_pairs=%s transformed_pairs=%s skipped_step_mode_pairs=%s",
+    logger.bind(event="conv_bn_transform_summary").info(
+        "conv_bn_transform_summary mode={} matched_pairs={} transformed_pairs={} skipped_step_mode_pairs={}",
         "train_pack",
         len(matches),
         transformed_pairs,

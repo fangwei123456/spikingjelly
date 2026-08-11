@@ -259,13 +259,20 @@ class Trainer:
             metric_logger.acc5.global_avg,
         )
         if utils.is_main_process():
-            logger.info(
-                "Train: train_acc1=%s, train_acc5=%s, train_loss=%s, samples/s=%s",
-                train_acc1,
-                train_acc5,
-                train_loss,
-                metric_logger.meters["img/s"].global_avg,
-            )
+            with logger.contextualize(epoch=epoch):
+                logger.bind(
+                    event="training_epoch_summary",
+                    train_loss=train_loss,
+                    train_acc1=train_acc1,
+                    train_acc5=train_acc5,
+                    samples_per_second=metric_logger.meters["img/s"].global_avg,
+                ).info(
+                    "Train: train_acc1={}, train_acc5={}, train_loss={}, samples/s={}",
+                    train_acc1,
+                    train_acc5,
+                    train_loss,
+                    metric_logger.meters["img/s"].global_avg,
+                )
         return train_loss, train_acc1, train_acc5
 
     def evaluate(self, args, model, criterion, data_loader, device, log_suffix=""):
@@ -316,12 +323,20 @@ class Trainer:
             metric_logger.acc5.global_avg,
         )
         if utils.is_main_process():
-            logger.info(
-                "Test: test_acc1=%s, test_acc5=%s, test_loss=%s, samples/s=%s",
+            samples_per_second = num_processed_samples / (time.time() - start_time)
+            logger.bind(
+                event="training_validation_summary",
+                validation_kind=log_suffix or "model",
+                test_loss=test_loss,
+                test_acc1=test_acc1,
+                test_acc5=test_acc5,
+                samples_per_second=samples_per_second,
+            ).info(
+                "Test: test_acc1={}, test_acc5={}, test_loss={}, samples/s={}",
                 test_acc1,
                 test_acc5,
                 test_loss,
-                num_processed_samples / (time.time() - start_time),
+                samples_per_second,
             )
         return test_loss, test_acc1, test_acc5
 
@@ -363,7 +378,7 @@ class Trainer:
         )
 
         if log_progress:
-            logger.info("Took %s seconds", time.time() - st)
+            logger.info("Took {} seconds", time.time() - st)
 
         if log_progress:
             logger.info("Loading validation data")
@@ -425,7 +440,7 @@ class Trainer:
         if args.cache_dataset and os.path.exists(cache_path):
             # Attention, as the transforms are also cached!
             if log_progress:
-                logger.info("Loading dataset_train from %s", cache_path)
+                logger.info("Loading dataset_train from {}", cache_path)
             dataset, _ = torch.load(cache_path)
         else:
             dataset = torchvision.datasets.ImageFolder(
@@ -439,11 +454,11 @@ class Trainer:
             )
             if args.cache_dataset:
                 if log_progress:
-                    logger.info("Saving dataset_train to %s", cache_path)
+                    logger.info("Saving dataset_train to {}", cache_path)
                 utils.mkdir(os.path.dirname(cache_path))
                 utils.save_on_master((dataset, traindir), cache_path)
         if log_progress:
-            logger.info("Took %s seconds", time.time() - st)
+            logger.info("Took {} seconds", time.time() - st)
 
         if log_progress:
             logger.info("Loading validation data")
@@ -451,7 +466,7 @@ class Trainer:
         if args.cache_dataset and os.path.exists(cache_path):
             # Attention, as the transforms are also cached!
             if log_progress:
-                logger.info("Loading dataset_test from %s", cache_path)
+                logger.info("Loading dataset_test from {}", cache_path)
             dataset_test, _ = torch.load(cache_path)
         else:
             if args.prototype and args.weights:
@@ -476,7 +491,7 @@ class Trainer:
             )
             if args.cache_dataset:
                 if log_progress:
-                    logger.info("Saving dataset_test to %s", cache_path)
+                    logger.info("Saving dataset_test to {}", cache_path)
                 utils.mkdir(os.path.dirname(cache_path))
                 utils.save_on_master((dataset_test, valdir), cache_path)
 
@@ -616,7 +631,14 @@ class Trainer:
 
         utils.init_distributed_mode(args)
         if utils.is_main_process():
-            logger.info("Training arguments: %s", args)
+            with logger.contextualize(
+                rank=utils.get_rank(), world_size=utils.get_world_size()
+            ):
+                logger.bind(
+                    event="training_run_start",
+                    device=args.device,
+                    epochs=args.epochs,
+                ).info("Training arguments: {}", args)
 
         device = torch.device(args.device)
 
@@ -664,8 +686,8 @@ class Trainer:
         model = self.load_model(args, num_classes)
         model.to(device)
         if utils.is_main_process():
-            logger.info("Model created: %s", type(model).__name__)
-            logger.debug("Model architecture:\n%s", model)
+            logger.info("Model created: {}", type(model).__name__)
+            logger.debug("Model architecture:\n{}", model)
 
         if args.distributed and args.sync_bn:
             model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -718,8 +740,8 @@ class Trainer:
         tb_dir = os.path.join(args.output_dir, tb_dir)
         if args.print_logdir:
             if utils.is_main_process():
-                logger.info("TensorBoard log directory: %s", tb_dir)
-                logger.info("Checkpoint directory: %s", pt_dir)
+                logger.info("TensorBoard log directory: {}", tb_dir)
+                logger.info("Checkpoint directory: {}", pt_dir)
             exit()
         if args.clean:
             if utils.is_main_process():
@@ -727,19 +749,19 @@ class Trainer:
                     shutil.rmtree(tb_dir)
                 if os.path.exists(pt_dir):
                     shutil.rmtree(pt_dir)
-                logger.info("remove %s and %s.", tb_dir, pt_dir)
+                logger.info("remove {} and {}.", tb_dir, pt_dir)
 
         if utils.is_main_process():
             os.makedirs(tb_dir, exist_ok=args.resume is not None)
             os.makedirs(pt_dir, exist_ok=args.resume is not None)
 
         if args.resume is not None:
-            if args.resume == "latest":
-                checkpoint = torch.load(
-                    os.path.join(pt_dir, "checkpoint_latest.pth"), map_location="cpu"
-                )
-            else:
-                checkpoint = torch.load(args.resume, map_location="cpu")
+            checkpoint_path = (
+                os.path.join(pt_dir, "checkpoint_latest.pth")
+                if args.resume == "latest"
+                else args.resume
+            )
+            checkpoint = torch.load(checkpoint_path, map_location="cpu")
             model_without_ddp.load_state_dict(checkpoint["model"])
             if not args.test_only:
                 optimizer.load_state_dict(checkpoint["optimizer"])
@@ -754,6 +776,17 @@ class Trainer:
                 max_test_acc1 = checkpoint["max_test_acc1"]
                 if model_ema:
                     max_ema_test_acc1 = checkpoint["max_ema_test_acc1"]
+                logger.bind(
+                    event="checkpoint_load_summary",
+                    checkpoint_path=checkpoint_path,
+                    checkpoint_epoch=checkpoint["epoch"],
+                    next_epoch=args.start_epoch,
+                ).info(
+                    "Checkpoint loaded: path={} epoch={} next_epoch={}",
+                    checkpoint_path,
+                    checkpoint["epoch"],
+                    args.start_epoch,
+                )
 
         model = self.compile_model(args, model_without_ddp)
         eval_model = self.get_eval_model(args, model, model_without_ddp)
@@ -792,6 +825,7 @@ class Trainer:
                 )
             return
 
+        run_started_at = time.perf_counter()
         for epoch in range(args.start_epoch, args.epochs):
             start_time = time.time()
             if args.distributed:
@@ -879,11 +913,24 @@ class Trainer:
                         os.path.join(pt_dir, "checkpoint_max_ema_test_acc1.pth"),
                     )
 
+                logger.bind(
+                    event="checkpoint_save_summary",
+                    checkpoint_directory=pt_dir,
+                    epoch=epoch,
+                    saved_best=save_max_test_acc1,
+                    saved_best_ema=bool(model_ema and save_max_ema_test_acc1),
+                ).info(
+                    "Checkpoint saved: directory={} epoch={} best={} best_ema={}",
+                    pt_dir,
+                    epoch,
+                    save_max_test_acc1,
+                    bool(model_ema and save_max_ema_test_acc1),
+                )
                 if utils.is_main_process() and epoch > 0:
                     os.remove(os.path.join(pt_dir, f"checkpoint_{epoch - 1}.pth"))
             if utils.is_main_process():
                 logger.info(
-                    "Estimated finish time: %s",
+                    "Estimated finish time: {}",
                     (
                         datetime.datetime.now()
                         + datetime.timedelta(
@@ -891,6 +938,19 @@ class Trainer:
                         )
                     ).strftime("%Y-%m-%d %H:%M:%S"),
                 )
+        if utils.is_main_process():
+            duration_seconds = time.perf_counter() - run_started_at
+            logger.bind(
+                event="training_run_summary",
+                completed_epochs=max(0, args.epochs - args.start_epoch),
+                max_test_acc1=max_test_acc1,
+                duration_seconds=duration_seconds,
+            ).info(
+                "Training completed: epochs={} max_test_acc1={} duration_seconds={:.3f}",
+                max(0, args.epochs - args.start_epoch),
+                max_test_acc1,
+                duration_seconds,
+            )
 
     def before_test_one_epoch(self, args, model, epoch):
         pass

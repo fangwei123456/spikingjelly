@@ -43,7 +43,7 @@ def _convert_npy_to_npz(src_path: Path, dst_dir: Path, label: int):
     p = np.array([d[3] for d in original_data])
     target_file_path = dst_dir / str(label) / f"{src_path.stem}.npz"
     utils.np_savez(target_file_path, t=t, x=x, y=y, p=p)
-    logger.info("[%s] saved.", target_file_path)
+    logger.info("[{}] saved.", target_file_path)
 
 
 class Bullying10kClassification(NeuromorphicDatasetFolder):
@@ -247,7 +247,7 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
                     shutil.copy(src_file, dst_file)
                 else:
                     zip_file = download_root / file_name
-                    logger.info("Extract [%s] to [%s].", zip_file, extract_root)
+                    logger.info("Extract [{}] to [{}].", zip_file, extract_root)
                     futures.append(tpe.submit(extract_archive, zip_file, extract_root))
 
             for future in futures:
@@ -259,12 +259,12 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
         test_dir = raw_root / "test"
         train_dir.mkdir()
         test_dir.mkdir()
-        logger.info("Mkdir [%s] and [%s].", train_dir, test_dir)
+        logger.info("Mkdir [{}] and [{}].", train_dir, test_dir)
         for label in range(10):
             (train_dir / str(label)).mkdir()
             (test_dir / str(label)).mkdir()
         logger.info(
-            "Created dataset class directories in train=%s and test=%s.",
+            "Created dataset class directories in train={} and test={}.",
             train_dir,
             test_dir,
         )
@@ -286,7 +286,7 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
                     )
         num_files = len(all_files_labels)
         all_files_labels = np.array(all_files_labels)
-        logger.info("Found %s files in total.", num_files)
+        logger.info("Found {} files in total.", num_files)
 
         logger.info(
             "Use the same way to split training / validation sets as the original work: "
@@ -297,7 +297,7 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
         train_files_labels = all_files_labels[~test_loc]
         test_files_labels = all_files_labels[test_loc]
         logger.info(
-            "Training set: %s files. Test set: %s files.",
+            "Training set: {} files. Test set: {} files.",
             len(train_files_labels),
             len(test_files_labels),
         )
@@ -311,7 +311,7 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
         ) as tpe:
             futures = []
             logger.info(
-                "Start the ThreadPoolExecutor with max workers = [%s].",
+                "Start the ThreadPoolExecutor with max workers = [{}].",
                 tpe._max_workers,
             )
             for fpath, label in train_files_labels:
@@ -320,12 +320,12 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
                 futures.append(tpe.submit(_convert_npy_to_npz, fpath, test_dir, label))
             for future in futures:
                 future.result()
-        logger.info("Used time = [%ss].", round(time.time() - t_ckp, 2))
+        logger.info("Used time = [{}s].", round(time.time() - t_ckp, 2))
         logger.info(
-            "All npy files have been converted into npz files and into [%s].",
+            "All npy files have been converted into npz files and into [{}].",
             {train_dir, test_dir},
         )
 
         # remove the extracted files, since they're too large
-        logger.info("Remove the directory [%s].", extract_root)
+        logger.info("Remove the directory [{}].", extract_root)
         shutil.rmtree(extract_root)

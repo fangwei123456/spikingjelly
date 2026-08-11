@@ -1,5 +1,4 @@
 from spikingjelly.logger import logger
-import logging
 from collections import defaultdict
 from typing import Any, Callable, Optional
 
@@ -180,7 +179,7 @@ class ActiveModuleTracker(ModuleTracker):
                 self._maybe_set_engine_callback()
             if name in self.parents:
                 logger.info(
-                    "The module hierarchy tracking seems to be broken as this Module was already entered. %s during %s",
+                    "The module hierarchy tracking seems to be broken as this Module was already entered. {} during {}",
                     name,
                     "backward" if is_bw else "forward",
                 )
@@ -195,7 +194,7 @@ class ActiveModuleTracker(ModuleTracker):
                 self.parents.remove(name)
             else:
                 logger.info(
-                    "The Module hierarchy tracking is confused as we're exiting a Module that was never entered. %s during %s",
+                    "The Module hierarchy tracking is confused as we're exiting a Module that was never entered. {} during {}",
                     name,
                     "backward" if is_bw else "forward",
                 )
@@ -207,7 +206,7 @@ class ActiveModuleTracker(ModuleTracker):
                 self.active_modules.remove(mod)
             else:
                 logger.info(
-                    "The Module hierarchy tracking is confused as we're exiting a Module that was never entered. %s during %s",
+                    "The Module hierarchy tracking is confused as we're exiting a Module that was never entered. {} during {}",
                     name,
                     "backward" if is_bw else "forward",
                 )
@@ -621,7 +620,7 @@ class DispatchCounterMode(TorchDispatchMode):
         for am in active_modules:
             if isinstance(am, tuple(counter.ignore_modules)):  # inside a ignored module
                 logger.debug(
-                    "%s ignored by %s as it is inside %s",
+                    "{} ignored by {} as it is inside {}",
                     _arrow,
                     counter.__class__.__name__,
                     am.__class__.__name__,
@@ -637,7 +636,7 @@ class DispatchCounterMode(TorchDispatchMode):
                     f"To disable this error, "
                     f"set strict=False when initializing {counter.__class__.__name__}."
                 )
-            logger.debug("%s not defined by %s", _arrow, counter.__class__.__name__)
+            logger.debug("{} not defined by {}", _arrow, counter.__class__.__name__)
             return True
 
         return False
@@ -649,12 +648,11 @@ class DispatchCounterMode(TorchDispatchMode):
         active_modules = set(self.module_tracker.active_modules)
         parent_names_snapshot = set(parent_names)
 
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
-                "DispatchCounterMode: %s - %s",
-                parent_names,
-                resolve_name(func),
-            )
+        logger.opt(lazy=True).debug(
+            "DispatchCounterMode: {} - {}",
+            lambda: parent_names,
+            lambda: resolve_name(func),
+        )
 
         for counter in self.counters:
             if self._should_skip(counter, func):
@@ -667,7 +665,7 @@ class DispatchCounterMode(TorchDispatchMode):
                 active_modules=active_modules,
                 parent_names=parent_names_snapshot,
             )
-            logger.debug("%s + %s [%s]", _arrow, value, counter.__class__.__name__)
+            logger.debug("{} + {} [{}]", _arrow, value, counter.__class__.__name__)
             for parent in parent_names_snapshot:
                 counter.record(parent, func, value)  # add the count to every ancestor
             if hasattr(counter, "finalize_record"):
@@ -750,21 +748,21 @@ class FunctionCounterMode(TorchFunctionMode):
                     f"To disable this error, "
                     f"set strict=False when initializing {counter.__class__.__name__}."
                 )
-            logger.debug("%s not defined by %s", _arrow, counter.__class__.__name__)
+            logger.debug("{} not defined by {}", _arrow, counter.__class__.__name__)
             return True
 
         active_modules = self.module_tracker.active_modules
         for am in active_modules:
             if isinstance(am, tuple(counter.ignore_modules)):  # inside a ignored module
                 logger.debug(
-                    "%s ignored by %s as it is inside %s",
+                    "{} ignored by {} as it is inside {}",
                     _arrow,
                     counter.__class__.__name__,
                     am.__class__.__name__,
                 )
                 return True
 
-        logger.debug("%s counted by %s", _arrow, counter.__class__.__name__)
+        logger.debug("{} counted by {}", _arrow, counter.__class__.__name__)
         return False
 
     def __torch_function__(self, func, types, args=(), kwargs=None):
@@ -774,12 +772,11 @@ class FunctionCounterMode(TorchFunctionMode):
         active_modules = set(self.module_tracker.active_modules)
         parent_names_snapshot = set(parent_names)
 
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
-                "FunctionCounterMode: %s - %s",
-                parent_names,
-                resolve_name(func),
-            )
+        logger.opt(lazy=True).debug(
+            "FunctionCounterMode: {} - {}",
+            lambda: parent_names,
+            lambda: resolve_name(func),
+        )
 
         for counter in self.counters:
             if self._should_skip(counter, func):
@@ -792,7 +789,7 @@ class FunctionCounterMode(TorchFunctionMode):
                 active_modules=active_modules,
                 parent_names=parent_names_snapshot,
             )
-            logger.debug("%s + %s", _arrow, value)
+            logger.debug("{} + {}", _arrow, value)
             for parent in parent_names_snapshot:
                 counter.record(parent, func, value)  # add the count to every ancestor
             if hasattr(counter, "finalize_record"):

@@ -21,7 +21,7 @@ try:
     import triton
     import triton.language as tl
 except (ImportError, OSError) as e:
-    logger.debug("Failed to import Triton for FP8 capability probe: %s", e)
+    logger.debug("Failed to import Triton for FP8 capability probe: {}", e)
     triton = None
     tl = None
 
@@ -414,8 +414,8 @@ def triton_fp8_neuron_capability_report(
             }
         report["compute_dtypes"][compute_dtype] = compute_report
     report["dtypes"] = copy.deepcopy(report["compute_dtypes"]["fp32"])
-    logger.info(
-        "triton_fp8_capability_summary device=%s triton_available=%s cuda_available=%s compute_dtypes=%s",
+    logger.bind(event="triton_fp8_capability_summary").info(
+        "triton_fp8_capability_summary device={} triton_available={} cuda_available={} compute_dtypes={}",
         device,
         report["triton_available"],
         report["cuda_available"],

@@ -292,7 +292,7 @@ def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> N
         for t in range(img_tensor.shape[0]):
             img_list.append(to_img(img_tensor[t]))
         img_list[0].save(save_gif_to, save_all=True, append_images=img_list[1:], loop=0)
-        logger.info("Save frames to [%s].", save_gif_to)
+        logger.info("Save frames to [{}].", save_gif_to)
 
 
 def load_aedat_v3(file_name: Union[str, Path]) -> dict:
@@ -436,7 +436,7 @@ def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
 def _save_atis_bin_as_npz(bin_file: Union[str, Path], np_file: Union[str, Path]):
     events = load_ATIS_bin(bin_file)
     np_savez(np_file, t=events["t"], x=events["x"], y=events["y"], p=events["p"])
-    logger.debug("Save [%s] to [%s].", bin_file, np_file)
+    logger.debug("Save [{}] to [{}].", bin_file, np_file)
 
 
 def load_npz_frames(file_name: Union[str, Path]) -> np.ndarray:
@@ -840,7 +840,7 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(
         ),
     )
     if print_save:
-        logger.debug("Frames [%s] saved.", fname)
+        logger.debug("Frames [{}] saved.", fname)
 
 
 def integrate_events_by_fixed_duration(
@@ -1000,7 +1000,7 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     fname = os.path.join(output_dir, f"{fname}_{frames.shape[0]}.npz")
     np_savez(fname, frames=frames)
     if print_save:
-        logger.debug("Frames [%s] saved.", fname)
+        logger.debug("Frames [{}] saved.", fname)
     return frames.shape[0]
 
 
@@ -1034,7 +1034,7 @@ def save_frames_to_npz_and_print(fname: str, frames: np.ndarray):
     :type frames: np.ndarray
     """
     np_savez(fname, frames=frames)
-    logger.debug("Frames [%s] saved.", fname)
+    logger.debug("Frames [{}] saved.", fname)
 
 
 def create_same_directory_structure(
@@ -1077,7 +1077,7 @@ def create_same_directory_structure(
         if os.path.isdir(source_sub_dir):
             target_sub_dir = os.path.join(target_dir, sub_dir_name)
             os.mkdir(target_sub_dir)
-            logger.debug("Mkdir [%s].", target_sub_dir)
+            logger.debug("Mkdir [{}].", target_sub_dir)
             create_same_directory_structure(source_sub_dir, target_sub_dir)
 
 
@@ -1323,7 +1323,7 @@ def pad_sequence_collate(batch: list):
         )
 
         for i, (x_p, label, x_len) in enumerate(loader):
-            logger.info("x_p.shape=%s, label=%s, x_len=%s", x_p.shape, label, x_len)
+            logger.info("x_p.shape={}, label={}, x_len={}", x_p.shape, label, x_len)
             if i == 2:
                 break
 
@@ -1405,11 +1405,11 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
         x2 = torch.rand([3, 6])
         x3 = torch.rand([4, 6])
         x = torch.nn.utils.rnn.pad_sequence([x1, x2, x3])  # [T, N, *]
-        logger.info("x.shape=%s", x.shape)
+        logger.info("x.shape={}", x.shape)
         x_len = torch.as_tensor([x1.shape[0], x2.shape[0], x3.shape[0]])
         mask = padded_sequence_mask(x_len)
-        logger.info("mask.shape=%s", mask.shape)
-        logger.info("mask=\n%s", mask)
+        logger.info("mask.shape={}", mask.shape)
+        logger.info("mask=\n{}", mask)
 
     Outputs:
 
@@ -1489,7 +1489,7 @@ def create_sub_dataset(
     """
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
-        logger.debug("Mkdir [%s].", target_dir)
+        logger.debug("Mkdir [{}].", target_dir)
     create_same_directory_structure(source_dir, target_dir)
 
     for e_root, e_dirs, e_files in os.walk(source_dir, followlinks=True):
@@ -1501,7 +1501,7 @@ def create_sub_dataset(
                 samples_number = int(ratio * len(e_files))
             if samples_number == 0:
                 logger.warning(
-                    "No samples selected from [%s] for output [%s].",
+                    "No samples selected from [{}] for output [{}].",
                     e_root,
                     output_dir,
                 )
@@ -1518,7 +1518,7 @@ def create_sub_dataset(
                     shutil.copyfile(source_file, target_file)
             operation = "linked" if use_soft_link else "copied"
             logger.debug(
-                "[%s] files in [%s] were %s to [%s].",
+                "[{}] files in [{}] were {} to [{}].",
                 samples_number,
                 e_root,
                 operation,

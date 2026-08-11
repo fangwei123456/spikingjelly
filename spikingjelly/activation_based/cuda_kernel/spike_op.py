@@ -1,5 +1,4 @@
 from spikingjelly.logger import logger
-import logging
 from typing import Optional, Union
 
 import torch
@@ -16,21 +15,19 @@ from . import tensor_cache
 try:
     import cupy
 except (ImportError, OSError) as e:
-    logger.debug("CUDA spike op dependency unavailable: %s", e)
+    logger.debug("CUDA spike op dependency unavailable: {}", e)
     cupy = None
 
 
 cpp_wrapper_error = None
 try:
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(
-            "Loading CUDA spike-op extension through torch.utils.cpp_extension.load_inline"
-        )
-        logger.debug(
-            "If extension loading hangs, remove the torch extensions cache directory; "
-            "the default build directory is %s",
-            torch.utils.cpp_extension._get_build_directory("", False),
-        )
+    logger.debug(
+        "Loading CUDA spike-op extension through torch.utils.cpp_extension.load_inline"
+    )
+    logger.opt(lazy=True).debug(
+        "If extension loading hangs, remove the torch extensions cache directory; the default build directory is {}",
+        lambda: torch.utils.cpp_extension._get_build_directory("", False),
+    )
     cpp_wrapper = load_inline(
         name="cpp_wrapper",
         cpp_sources=r"""
@@ -256,35 +253,32 @@ torch.library.register_autograd(
 )
 
 if cpp_wrapper is None:
-    logger.warning(
-        "CUDA spike operators registered: linear=ok convolution=backward_unavailable; "
-        "using the PyTorch fallback for supported operations. extension_error=%s",
+    logger.bind(
+        event="operator_register_summary",
+        backend="cuda",
+        registration_kind="torch.library",
+        registered=2,
+        fake_registered=2,
+        autograd_registered=2,
+        failed=1,
+    ).warning(
+        "CUDA spike operators registered: linear=ok convolution=backward_unavailable; using the PyTorch fallback for supported operations. extension_error={}",
         cpp_wrapper_error,
-        extra={
-            "event": "operator_register_summary",
-            "backend": "cuda",
-            "registration_kind": "torch.library",
-            "registered": 2,
-            "fake_registered": 2,
-            "autograd_registered": 2,
-            "failed": 1,
-        },
     )
 else:
-    logger.info(
-        "CUDA spike operators registered: operators=%s fake_kernels=%s autograd_kernels=%s",
+    logger.bind(
+        event="operator_register_summary",
+        backend="cuda",
+        registration_kind="torch.library",
+        registered=2,
+        fake_registered=2,
+        autograd_registered=2,
+        failed=0,
+    ).info(
+        "CUDA spike operators registered: operators={} fake_kernels={} autograd_kernels={}",
         2,
         2,
         2,
-        extra={
-            "event": "operator_register_summary",
-            "backend": "cuda",
-            "registration_kind": "torch.library",
-            "registered": 2,
-            "fake_registered": 2,
-            "autograd_registered": 2,
-            "failed": 0,
-        },
     )
 
 

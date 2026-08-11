@@ -8,7 +8,7 @@ from .lif import LIFNode
 try:
     from ..triton_kernel.neuron_kernel import ilif as triton_ilif_kernel
 except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.neuron.ilif: %s", e)
+    logger.debug("spikingjelly.activation_based.neuron.ilif: {}", e)
     triton_ilif_kernel = None
 
 __all__ = ["ILIFNode"]

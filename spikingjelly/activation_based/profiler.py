@@ -338,16 +338,15 @@ class CategoryMemoryProfiler(BaseProfiler):
 
             with open(self.log_path, "a") as f:
                 f.write(out_str)
-            logger.info(
-                "Category memory profile exported: devices=%s categories=%s",
+            logger.bind(
+                event="profiler_export_summary",
+                profile_type=type(self).__name__,
+                device_count=len(total_mem),
+                category_count=len(memory_usage),
+            ).info(
+                "Category memory profile exported: devices={} categories={}",
                 len(total_mem),
                 len(memory_usage),
-                extra={
-                    "event": "profiler_export_summary",
-                    "profile_type": type(self).__name__,
-                    "device_count": len(total_mem),
-                    "category_count": len(memory_usage),
-                },
             )
 
         return total_mem, memory_usage
@@ -809,15 +808,11 @@ class LayerWiseMemoryProfiler(HookProfiler):
 
             with open(self.log_path, "a") as f:
                 f.write(out_str)
-            logger.info(
-                "Layer memory profile exported: modules=%s",
-                len(results),
-                extra={
-                    "event": "profiler_export_summary",
-                    "profile_type": type(self).__name__,
-                    "module_count": len(results),
-                },
-            )
+            logger.bind(
+                event="profiler_export_summary",
+                profile_type=type(self).__name__,
+                module_count=len(results),
+            ).info("Layer memory profile exported: modules={}", len(results))
 
             torch.save(
                 {
@@ -1028,15 +1023,11 @@ class LayerWiseFPCUDATimeProfiler(HookProfiler):
 
             with open(self.log_path, "a") as f:
                 f.write(out_str)
-            logger.info(
-                "Layer forward CUDA time profile exported: modules=%s",
-                len(table),
-                extra={
-                    "event": "profiler_export_summary",
-                    "profile_type": type(self).__name__,
-                    "module_count": len(table),
-                },
-            )
+            logger.bind(
+                event="profiler_export_summary",
+                profile_type=type(self).__name__,
+                module_count=len(table),
+            ).info("Layer forward CUDA time profile exported: modules={}", len(table))
 
         return table
 
@@ -1234,14 +1225,10 @@ class LayerWiseBPCUDATimeProfiler(HookProfiler):
 
             with open(self.log_path, "a") as f:
                 f.write(out_str)
-            logger.info(
-                "Layer backward CUDA time profile exported: modules=%s",
-                len(table),
-                extra={
-                    "event": "profiler_export_summary",
-                    "profile_type": type(self).__name__,
-                    "module_count": len(table),
-                },
-            )
+            logger.bind(
+                event="profiler_export_summary",
+                profile_type=type(self).__name__,
+                module_count=len(table),
+            ).info("Layer backward CUDA time profile exported: modules={}", len(table))
 
         return table

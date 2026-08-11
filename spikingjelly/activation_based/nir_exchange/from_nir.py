@@ -1,4 +1,3 @@
-import logging
 from typing import Union
 
 import numpy as np
@@ -225,13 +224,12 @@ def import_from_nir(
 
     gm = nirtorch.nir_to_torch(graph, mapper.map_dict, device=device, dtype=dtype)
     functional.set_step_mode(gm, step_mode)
-    if logger.isEnabledFor(logging.INFO):
-        logger.info(
-            "nir_import_summary source=%s device=%s dtype=%s step_mode=%s modules=%s",
-            "path" if isinstance(graph, str) else type(graph).__name__,
-            device,
-            dtype,
-            step_mode,
-            sum(1 for _ in gm.modules()),
-        )
+    logger.bind(event="nir_import_summary").opt(lazy=True).info(
+        "nir_import_summary source={} device={} dtype={} step_mode={} modules={}",
+        lambda: "path" if isinstance(graph, str) else type(graph).__name__,
+        lambda: device,
+        lambda: dtype,
+        lambda: step_mode,
+        lambda: sum(1 for _ in gm.modules()),
+    )
     return gm

@@ -17,7 +17,7 @@ except (ImportError, OSError) as e:
     from .. import dummy
 
     logger.debug(
-        "spikingjelly.activation_based.triton_kernel.neuron_kernel.ilif: %s", e
+        "spikingjelly.activation_based.triton_kernel.neuron_kernel.ilif: {}", e
     )
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()

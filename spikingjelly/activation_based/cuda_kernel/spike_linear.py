@@ -17,7 +17,7 @@ try:
     import cupy
     from cupy import RawModule
 except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.cuda_kernel.spike_linear: %s", e)
+    logger.debug("spikingjelly.activation_based.cuda_kernel.spike_linear: {}", e)
     cupy = None
 
 

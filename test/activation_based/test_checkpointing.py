@@ -1,5 +1,4 @@
 import copy
-import logging
 import multiprocessing
 import pickle
 
@@ -1289,7 +1288,7 @@ def test_tcgc_container():
     assert "n_chunk=4" in repr_str
 
 
-def test_tcgc_container_uneven_and_capped_chunks(caplog: pytest.LogCaptureFixture):
+def test_tcgc_container_uneven_and_capped_chunks(loguru_records):
     class RecordChunkLengths(nn.Module):
         def __init__(self):
             super().__init__()
@@ -1309,12 +1308,13 @@ def test_tcgc_container_uneven_and_capped_chunks(caplog: pytest.LogCaptureFixtur
     capped_recorder = RecordChunkLengths()
     capped = TCGCContainer(None, capped_recorder, n_chunk=5)
     x = torch.randn(3, 2)
-    with caplog.at_level(logging.WARNING, logger="spikingjelly"), torch.no_grad():
+    with torch.no_grad():
         torch.testing.assert_close(capped(x), x)
     assert capped_recorder.lengths == [1, 1, 1]
-    assert "n_chunk=5" in caplog.text
-    assert "T=3" in caplog.text
-    assert "using n_chunk=3" in caplog.text
+    messages = "\n".join(record["message"] for record in loguru_records)
+    assert "n_chunk=5" in messages
+    assert "T=3" in messages
+    assert "using n_chunk=3" in messages
 
     empty = TCGCContainer(None, RecordChunkLengths(), n_chunk=3)
     with pytest.raises(RuntimeError), torch.no_grad():

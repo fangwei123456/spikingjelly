@@ -1,4 +1,3 @@
-import logging
 import threading
 import time
 import types
@@ -206,15 +205,14 @@ class FXConverter:
                 fx_model = self.recipe.calibrate(self, fx_model)
                 fx_model = self.recipe.replace(self, fx_model)
                 fx_model = self.recipe.finalize(self, fx_model)
-                if logger.isEnabledFor(logging.INFO):
-                    logger.info(
-                        "ann2snn_conversion_summary converter=%s recipe=%s device=%s modules=%s elapsed_ms=%.3f",
-                        type(self).__name__,
-                        type(self.recipe).__name__,
-                        target_device,
-                        sum(1 for _ in fx_model.modules()),
-                        (time.perf_counter() - start_time) * 1000.0,
-                    )
+                logger.bind(event="ann2snn_conversion_summary").opt(lazy=True).info(
+                    "ann2snn_conversion_summary converter={} recipe={} device={} modules={} elapsed_ms={:.3f}",
+                    lambda: type(self).__name__,
+                    lambda: type(self.recipe).__name__,
+                    lambda: target_device,
+                    lambda: sum(1 for _ in fx_model.modules()),
+                    lambda: (time.perf_counter() - start_time) * 1000.0,
+                )
                 return fx_model
         finally:
             for module, training in original_training_modes.items():
@@ -336,15 +334,14 @@ class ModuleConverter:
                         f"{type(converted).__name__}."
                     )
                 converted = converted.to(self.device)
-                if logger.isEnabledFor(logging.INFO):
-                    logger.info(
-                        "ann2snn_conversion_summary converter=%s recipe=%s device=%s modules=%s elapsed_ms=%.3f",
-                        type(self).__name__,
-                        type(self.recipe).__name__,
-                        target_device,
-                        sum(1 for _ in converted.modules()),
-                        (time.perf_counter() - start_time) * 1000.0,
-                    )
+                logger.bind(event="ann2snn_conversion_summary").opt(lazy=True).info(
+                    "ann2snn_conversion_summary converter={} recipe={} device={} modules={} elapsed_ms={:.3f}",
+                    lambda: type(self).__name__,
+                    lambda: type(self.recipe).__name__,
+                    lambda: target_device,
+                    lambda: sum(1 for _ in converted.modules()),
+                    lambda: (time.perf_counter() - start_time) * 1000.0,
+                )
                 return converted
         finally:
             for module, training in original_training_modes.items():

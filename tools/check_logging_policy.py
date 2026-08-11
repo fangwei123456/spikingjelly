@@ -1,42 +1,51 @@
-"""Check the repository logging conventions with the Python AST."""
+"""Check the repository Loguru conventions with the Python AST."""
 
 from __future__ import annotations
 
 import argparse
 import ast
+import re
+import string
 from pathlib import Path
 
 
 EXCLUDED_PARTS = {"example", "examples", "test", "benchmark", "docs"}
 LOG_METHODS = {"debug", "info", "warning", "error", "exception", "critical"}
 DIAGNOSTIC_PRINT_FUNCTIONS = {"check_manual_grad", "check_cuda_grad"}
+EVENT_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
+PERCENT_PLACEHOLDER = re.compile(
+    r"%(?!%)(?:\([^)]+\))?[#0 +\-]?(?:\d+|\*)?(?:\.\d+|\.\*)?[hlL]?[diouxXeEfFgGcrsa]"
+)
 
 
 def _is_production(path: Path) -> bool:
     return not (set(path.parts) & EXCLUDED_PARTS or path.name.endswith("_example.py"))
 
 
-def _is_logging_call(node: ast.Call) -> bool:
+def _root_name(node: ast.AST) -> str | None:
+    while isinstance(node, (ast.Attribute, ast.Call)):
+        node = node.value if isinstance(node, ast.Attribute) else node.func
+    return node.id if isinstance(node, ast.Name) else None
+
+
+def _is_logger_call(node: ast.Call) -> bool:
     return (
         isinstance(node.func, ast.Attribute)
-        and isinstance(node.func.value, ast.Name)
-        and node.func.value.id in {"logger", "logging"}
         and node.func.attr in LOG_METHODS
+        and _root_name(node.func.value) == "logger"
     )
 
 
-def _is_get_logger_call(node: ast.AST) -> bool:
-    return (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and isinstance(node.func.value, ast.Name)
-        and node.func.value.id == "logging"
-        and node.func.attr == "getLogger"
-    )
-
-
-def _is_package_logger_module(path: Path, root: Path) -> bool:
-    return path.resolve() == (root / "logger.py").resolve()
+def _find_method_call(node: ast.AST, method: str) -> ast.Call | None:
+    for part in ast.walk(node):
+        if (
+            isinstance(part, ast.Call)
+            and isinstance(part.func, ast.Attribute)
+            and part.func.attr == method
+            and _root_name(part.func.value) == "logger"
+        ):
+            return part
+    return None
 
 
 def _is_allowed_diagnostic_print(
@@ -55,8 +64,96 @@ def _is_allowed_diagnostic_print(
     return False
 
 
-def _is_eagerly_formatted_message(node: ast.AST) -> bool:
-    return isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Mod))
+def _is_eager_message(node: ast.AST) -> bool:
+    has_string_literal = any(
+        isinstance(part, ast.Constant) and isinstance(part.value, str)
+        for part in ast.walk(node)
+    )
+    return (
+        isinstance(node, ast.JoinedStr)
+        or isinstance(node, ast.BinOp)
+        and isinstance(node.op, (ast.Add, ast.Mod))
+        and has_string_literal
+        or isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "format"
+    )
+
+
+def _placeholder_count(message: str) -> int:
+    def count(template: str) -> int:
+        total = 0
+        for _, field, format_spec, _ in string.Formatter().parse(template):
+            if field is not None:
+                total += 1
+                total += count(format_spec)
+        return total
+
+    return count(message)
+
+
+def _check_logger_call(path: Path, node: ast.Call) -> list[str]:
+    violations: list[str] = []
+    if not node.args:
+        return [f"{path}:{node.lineno}: logger call requires a message"]
+
+    message = node.args[0]
+    if _is_eager_message(message) or any(
+        _is_eager_message(arg) for arg in node.args[1:]
+    ):
+        violations.append(f"{path}:{node.lineno}: eager formatting in logger call")
+
+    if isinstance(message, ast.Constant) and isinstance(message.value, str):
+        if PERCENT_PLACEHOLDER.search(message.value):
+            violations.append(
+                f"{path}:{node.lineno}: percent placeholder in logger call"
+            )
+        try:
+            placeholders = _placeholder_count(message.value)
+        except ValueError as exc:
+            violations.append(f"{path}:{node.lineno}: invalid Loguru format: {exc}")
+        else:
+            arguments = len(node.args) - 1
+            if placeholders != arguments:
+                violations.append(
+                    f"{path}:{node.lineno}: Loguru placeholder count {placeholders} "
+                    f"does not match argument count {arguments}"
+                )
+
+        first_word = message.value.split(maxsplit=1)[0] if message.value else ""
+        if first_word.endswith("_summary"):
+            bind = _find_method_call(node.func, "bind")
+            event = (
+                None
+                if bind is None
+                else next(
+                    (
+                        keyword.value
+                        for keyword in bind.keywords
+                        if keyword.arg == "event"
+                    ),
+                    None,
+                )
+            )
+            if not (isinstance(event, ast.Constant) and event.value == first_word):
+                violations.append(
+                    f"{path}:{node.lineno}: lifecycle summary requires event={first_word!r}"
+                )
+
+    bind = _find_method_call(node.func, "bind")
+    if bind is not None:
+        for keyword in bind.keywords:
+            if keyword.arg != "event":
+                continue
+            if not (
+                isinstance(keyword.value, ast.Constant)
+                and isinstance(keyword.value.value, str)
+                and EVENT_PATTERN.fullmatch(keyword.value.value)
+            ):
+                violations.append(
+                    f"{path}:{node.lineno}: event must be a literal snake_case name"
+                )
+    return violations
 
 
 def check(root: Path) -> list[str]:
@@ -75,8 +172,29 @@ def check(root: Path) -> list[str]:
             for parent in ast.walk(tree)
             for child in ast.iter_child_nodes(parent)
         }
+        imports_package_logger = path.name == "logger.py" or any(
+            isinstance(node, ast.ImportFrom)
+            and node.module == "spikingjelly.logger"
+            and any(alias.name == "logger" for alias in node.names)
+            for node in ast.walk(tree)
+        )
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "logging" or alias.name.startswith("logging."):
+                        violations.append(
+                            f"{path}:{node.lineno}: stdlib logging import"
+                        )
+            elif isinstance(node, ast.ImportFrom):
+                if node.module == "logging" or (node.module or "").startswith(
+                    "logging."
+                ):
+                    violations.append(f"{path}:{node.lineno}: stdlib logging import")
+                if node.module == "loguru" and path.name != "logger.py":
+                    violations.append(
+                        f"{path}:{node.lineno}: logger must be imported from spikingjelly.logger"
+                    )
+            elif isinstance(node, ast.Call):
                 func = node.func
                 if isinstance(func, ast.Name) and func.id in {"print", "pprint"}:
                     if not _is_allowed_diagnostic_print(path, node, parents):
@@ -101,72 +219,14 @@ def check(root: Path) -> list[str]:
                     and func.attr == "write"
                 ):
                     violations.append(f"{path}:{node.lineno}: direct sys stream write")
-                elif (
-                    isinstance(func, ast.Attribute)
-                    and isinstance(func.value, ast.Name)
-                    and func.value.id == "logging"
-                    and func.attr in LOG_METHODS
-                ):
-                    violations.append(
-                        f"{path}:{node.lineno}: root logging.{func.attr} call"
-                    )
-                elif (
-                    isinstance(func, ast.Attribute)
-                    and isinstance(func.value, ast.Name)
-                    and func.value.id == "logging"
-                    and func.attr
-                    in {
-                        "basicConfig",
-                        "dictConfig",
-                        "fileConfig",
-                        "StreamHandler",
-                        "FileHandler",
-                        "NullHandler",
-                    }
-                ):
-                    if func.attr != "NullHandler" or not _is_package_logger_module(
-                        path, root
-                    ):
-                        violations.append(
-                            f"{path}:{node.lineno}: logging configuration call"
-                        )
-                elif _is_get_logger_call(node):
-                    if not _is_package_logger_module(path, root):
+                elif _is_logger_call(node):
+                    violations.extend(_check_logger_call(path, node))
+                    if not imports_package_logger:
                         violations.append(
                             f"{path}:{node.lineno}: logger must be imported from spikingjelly.logger"
                         )
-                    if not (
-                        len(node.args) == 1
-                        and isinstance(node.args[0], ast.Constant)
-                        and node.args[0].value == "spikingjelly"
-                    ):
-                        violations.append(
-                            f"{path}:{node.lineno}: non-package logger name"
-                        )
-                elif isinstance(func, ast.Attribute) and _is_get_logger_call(
-                    func.value
-                ):
-                    violations.append(
-                        f"{path}:{node.lineno}: logger must be imported from spikingjelly.logger"
-                    )
-                if _is_logging_call(node):
-                    if node.args and _is_eagerly_formatted_message(node.args[0]):
-                        violations.append(
-                            f"{path}:{node.lineno}: manual string formatting in logging call"
-                        )
-                    for value in node.args:
-                        if isinstance(value, ast.JoinedStr):
-                            violations.append(
-                                f"{path}:{node.lineno}: f-string in logging call"
-                            )
-                        if (
-                            isinstance(value, ast.Call)
-                            and isinstance(value.func, ast.Attribute)
-                            and value.func.attr == "format"
-                        ):
-                            violations.append(
-                                f"{path}:{node.lineno}: .format() in logging call"
-                            )
+            elif isinstance(node, ast.Name) and node.id == "logging":
+                violations.append(f"{path}:{node.lineno}: stdlib logging reference")
             elif isinstance(node, (ast.Assign, ast.AnnAssign)):
                 targets = (
                     node.targets if isinstance(node, ast.Assign) else [node.target]

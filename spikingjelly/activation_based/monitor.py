@@ -1,5 +1,4 @@
 import datetime
-import logging
 import os
 import re
 import threading
@@ -845,13 +844,11 @@ class GPUMonitor(threading.Thread):
                             f"memory_used_{self.gpu_ids[i]}", memory_used, self.step
                         )
                 else:
-                    if logger.isEnabledFor(logging.INFO):
-                        outputs = fp.read()
-                        logger.info(
-                            "GPU monitor sample at %s:\n%s",
-                            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            outputs,
-                        )
+                    logger.opt(lazy=True).info(
+                        "GPU monitor sample at {}:\n{}",
+                        lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        fp.read,
+                    )
                     """
                     2022-04-20 18:14:26
                     utilization.gpu [%], memory.used [MiB]

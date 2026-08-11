@@ -1,7 +1,6 @@
 """Tests for activation-based functional helpers."""
 
 import gc
-import logging
 import weakref
 
 import pytest
@@ -299,15 +298,14 @@ def test_reset_net_preserves_parameters():
         invalidate_reset_cache(net)
 
 
-def test_reset_net_warns_for_non_memorymodule(caplog: pytest.LogCaptureFixture):
+def test_reset_net_warns_for_non_memorymodule(loguru_records):
     net = nn.Sequential(_ResetCounter())
-    with caplog.at_level(logging.WARNING):
-        reset_net(net)
+    reset_net(net)
     try:
         assert net[0].reset_calls == 1
         assert any(
-            "not spikingjelly.activation_based.base.MemoryModule" in r.message
-            for r in caplog.records
+            "not spikingjelly.activation_based.base.MemoryModule" in record["message"]
+            for record in loguru_records
         )
     finally:
         invalidate_reset_cache(net)
