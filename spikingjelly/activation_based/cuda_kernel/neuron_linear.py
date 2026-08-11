@@ -18,7 +18,7 @@ try:
     import cupy
     from cupy import RawModule
 except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.cuda_kernel.lif_linear: %s", e)
+    logger.debug("spikingjelly.activation_based.cuda_kernel.neuron_linear: %s", e)
     cupy = None
 
 
@@ -36,10 +36,19 @@ __device__ __forceinline__ float neuron_charge(
 {{
 #if IF_NEURON
     return v + x;
-#elif DECAY_INPUT
-    return v + r_tau * (v_reset - v + x);
 #else
-    return v + r_tau * (v_reset - v) + x;
+    float temp;
+#if SOFT_RESET
+    temp = v;
+#else
+    temp = v - v_reset;
+#endif
+#if DECAY_INPUT
+    temp = r_tau * (x - temp);
+#else
+    temp = x - r_tau * temp;
+#endif
+    return temp + v;
 #endif
 }}
 

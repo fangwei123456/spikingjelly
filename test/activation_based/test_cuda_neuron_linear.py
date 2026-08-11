@@ -153,16 +153,16 @@ def test_if_linear_forward_backward(shape, v_reset):
 
 def test_lif_linear_without_bias_and_nondefault_stream():
     torch.manual_seed(1)
-    x = torch.randn(2, 5, 64, device="cuda")
-    v = torch.randn(5, 64, device="cuda")
-    weight = torch.randn(33, 64, device="cuda")
+    x = torch.randn(2, 5, 64, device="cuda", requires_grad=True)
+    v = torch.randn(5, 64, device="cuda", requires_grad=True)
+    weight = torch.randn(33, 64, device="cuda", requires_grad=True)
+    refs = [z.detach().clone().requires_grad_() for z in (x, v, weight)]
     stream = torch.cuda.Stream()
+    stream.wait_stream(torch.cuda.current_stream())
     with torch.cuda.stream(stream):
         y, v_next = lif_linear(x, v, weight.t().contiguous(), threads=256)
         y_ref, v_ref = _reference(
-            x,
-            v,
-            weight,
+            *refs,
             None,
             tau=2.0,
             decay_input=True,
@@ -174,6 +174,30 @@ def test_lif_linear_without_bias_and_nondefault_stream():
     torch.cuda.current_stream().wait_stream(stream)
     torch.testing.assert_close(y, y_ref, rtol=1e-4, atol=2e-5)
     torch.testing.assert_close(v_next, v_ref)
+    grad_y, grad_v = torch.randn_like(y), torch.randn_like(v_next)
+    torch.autograd.backward((y, v_next), (grad_y, grad_v))
+    torch.autograd.backward((y_ref, v_ref), (grad_y, grad_v))
+    for actual, expected in zip((x, v, weight), refs):
+        torch.testing.assert_close(actual.grad, expected.grad, rtol=2e-4, atol=2e-5)
+
+
+def test_lif_linear_backward_recomputes_forward_spikes():
+    torch.manual_seed(3)
+    K, tau, threshold, v_reset = 130, 3.1, 0.75, 0.25
+    v = torch.randn(1, K, device="cuda") * 8
+    x = (threshold - v) * tau + (v - v_reset)
+    weight_t = torch.eye(K, device="cuda", requires_grad=True)
+    y, _ = lif_linear(
+        x,
+        v,
+        weight_t,
+        tau=tau,
+        v_threshold=threshold,
+        v_reset=v_reset,
+        threads=128,
+    )
+    y.sum().backward()
+    torch.testing.assert_close(weight_t.grad[:, 0], y[0], rtol=0, atol=0)
 
 
 def test_lif_linear_fake_and_compile():
