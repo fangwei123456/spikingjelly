@@ -1103,38 +1103,24 @@ class FlexSN(base.MemoryModule):
         # copy: the compiled kernels reference the original module's ``core``,
         # and some kernel objects are not safely deep-copyable. The copy falls
         # back to the HOP/eager path with its own deep-copied ``core``.
-        _triton_skip_keys = {
-            "_triton_handle",
-            "_triton_handle_finalizer",
-            "_triton_inference_available",
-            "_triton_inference_final_state_available",
-            "_triton_training_available",
-            "_triton_scan_kernel",
-            "_triton_scan_info",
-            "_triton_scan_final_state_kernel",
-            "_triton_scan_final_state_info",
-            "_triton_fwd_kernel",
-            "_triton_bwd_kernel",
-            "_triton_train_info",
+        triton_defaults = {
+            "_triton_handle": None,
+            "_triton_handle_finalizer": None,
+            "_triton_inference_available": False,
+            "_triton_inference_final_state_available": False,
+            "_triton_training_available": False,
+            "_triton_scan_kernel": None,
+            "_triton_scan_info": None,
+            "_triton_scan_final_state_kernel": None,
+            "_triton_scan_final_state_info": None,
+            "_triton_fwd_kernel": None,
+            "_triton_bwd_kernel": None,
+            "_triton_train_info": None,
         }
         for key, value in self.__dict__.items():
-            if key in _triton_skip_keys:
-                continue
-            result.__dict__[key] = copy.deepcopy(value, memo)
-
-        # Explicitly reset Triton state on the copy.
-        result._triton_handle = None
-        result._triton_handle_finalizer = None
-        result._triton_inference_available = False
-        result._triton_inference_final_state_available = False
-        result._triton_training_available = False
-        result._triton_scan_kernel = None
-        result._triton_scan_info = None
-        result._triton_scan_final_state_kernel = None
-        result._triton_scan_final_state_info = None
-        result._triton_fwd_kernel = None
-        result._triton_bwd_kernel = None
-        result._triton_train_info = None
+            if key not in triton_defaults:
+                result.__dict__[key] = copy.deepcopy(value, memo)
+        result.__dict__.update(triton_defaults)
 
         return result
 

@@ -515,7 +515,8 @@ def cupy_spike_linear_v3_dense_forward(
     * **中文**
 
     对预先按位打包的二维脉冲执行实验性 v3 CUDA Linear kernel。低精度输入
-    使用 FP32 累加，并将结果转换回权重 dtype。
+    矩阵乘法使用 FP32 累加，并将结果转换回权重 dtype；可选偏置随后以
+    输出 dtype 相加。
 
     :param spike_packed: 形状为 ``[M, ceil(K / 8)]`` 的连续 ``uint8`` CUDA 张量
     :type spike_packed: torch.Tensor
@@ -537,8 +538,8 @@ def cupy_spike_linear_v3_dense_forward(
     * **English**
 
     Apply the experimental v3 CUDA Linear kernel to a pre-packed binary spike
-    matrix. Low-precision inputs accumulate in FP32 and are converted back to
-    the weight dtype.
+    matrix. Low-precision matrix products accumulate in FP32 and are converted
+    back to the weight dtype before the optional bias is added in that dtype.
 
     :param spike_packed: Contiguous ``uint8`` CUDA tensor shaped
         ``[M, ceil(K / 8)]``
@@ -682,7 +683,8 @@ def cupy_spike_linear_sparse_forward(
 
     使用实验性稀疏行索引 CUDA kernel 对二维二值脉冲执行 Linear。kernel 使用
     固定容量的 ``int32 [M, K]`` 索引工作区，避免为数据相关的紧凑 CSR 缓冲区
-    执行 host 同步。低精度输入使用 FP32 累加并转换回输入 dtype。
+    执行 host 同步。低精度矩阵乘法使用 FP32 累加并转换回输入 dtype；可选偏置
+    随后以输出 dtype 相加。
 
     :param spike: 形状为 ``[M, K]`` 的连续二值 CUDA 张量，dtype 为
         ``float32``、``float16`` 或 ``bfloat16``
@@ -706,8 +708,9 @@ def cupy_spike_linear_sparse_forward(
     Apply Linear to a two-dimensional binary spike tensor with the experimental
     sparse row-index CUDA kernel. A fixed-capacity ``int32 [M, K]`` index
     workspace avoids the host synchronization required by a data-dependent
-    compact CSR allocation. Low-precision inputs accumulate in FP32 and are
-    converted back to the input dtype.
+    compact CSR allocation. Low-precision matrix products accumulate in FP32
+    and are converted back to the input dtype before the optional bias is added
+    in that dtype.
 
     :param spike: Contiguous binary ``[M, K]`` CUDA tensor with ``float32``,
         ``float16``, or ``bfloat16`` dtype

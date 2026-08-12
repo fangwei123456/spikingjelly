@@ -32,6 +32,11 @@ def _assert_close(a: torch.Tensor, b: torch.Tensor, dtype: torch.dtype):
     torch.testing.assert_close(a, b, atol=atol, rtol=rtol)
 
 
+def _assert_no_host_scalar_read(operation_names):
+    assert "aten::item" not in operation_names
+    assert "aten::_local_scalar_dense" not in operation_names
+
+
 def _make_training_node(kind: str, backend: str):
     common_kwargs = {
         "v_threshold": 1.0,
@@ -1583,8 +1588,7 @@ def test_plif_training_avoids_device_scalar_read():
         run()
 
     operation_names = {event.key for event in profile.key_averages()}
-    assert "aten::item" not in operation_names
-    assert "aten::_local_scalar_dense" not in operation_names
+    _assert_no_host_scalar_read(operation_names)
 
     node.eval()
     functional.reset_net(node)
@@ -1598,8 +1602,7 @@ def test_plif_training_avoids_device_scalar_read():
     inference_operation_names = {
         event.key for event in inference_profile.key_averages()
     }
-    assert "aten::item" not in inference_operation_names
-    assert "aten::_local_scalar_dense" not in inference_operation_names
+    _assert_no_host_scalar_read(inference_operation_names)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
@@ -1672,8 +1675,7 @@ def test_plif_mp_helper_dynamic_backward_uses_nonzero_initial_state():
 
     operation_names = {event.key for event in profile.key_averages()}
     assert "aten::cat" not in operation_names
-    assert "aten::item" not in operation_names
-    assert "aten::_local_scalar_dense" not in operation_names
+    _assert_no_host_scalar_read(operation_names)
     _assert_close(output_torch, output_mixed, torch.float32)
     output_torch.sum().backward()
     with torch.profiler.profile(
@@ -1681,8 +1683,7 @@ def test_plif_mp_helper_dynamic_backward_uses_nonzero_initial_state():
     ) as backward_profile:
         output_mixed.sum().backward()
     backward_operation_names = {event.key for event in backward_profile.key_averages()}
-    assert "aten::item" not in backward_operation_names
-    assert "aten::_local_scalar_dense" not in backward_operation_names
+    _assert_no_host_scalar_read(backward_operation_names)
     _assert_close(x_torch.grad, x_mixed.grad, torch.float32)
     _assert_close(v_torch.grad, v_mixed.grad, torch.float32)
     expected_w_grad = r_tau.grad * r_tau.detach() * (1.0 - r_tau.detach())

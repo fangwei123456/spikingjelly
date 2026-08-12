@@ -255,8 +255,6 @@ def test_bit_pack_roundtrip(dtype):
 
 @pytest.mark.parametrize("dtype", _DTYPES)
 def test_fake_tensor_shape(dtype):
-    from torch._subclasses.fake_tensor import FakeTensorMode
-
     torch.manual_seed(0)
     M, K, N = 64, 128, 64
     # Build meta tensors to exercise both fake implementations.
@@ -270,12 +268,17 @@ def test_fake_tensor_shape(dtype):
     assert y_meta.shape == (M, N)
     assert y_meta.dtype == dtype
 
+
+def test_fake_tensor_input_contracts():
+    from torch._subclasses.fake_tensor import FakeTensorMode
+
+    M, K, N = 64, 128, 64
     with FakeTensorMode():
-        spike_cuda0 = torch.empty(M, K, dtype=dtype, device="cuda:0")
+        spike_cuda0 = torch.empty(M, K, device="cuda:0")
         packed_cuda0 = torch.empty(M, (K + 7) // 8, dtype=torch.uint8, device="cuda:0")
-        weight_cuda0 = torch.empty(N, K, dtype=dtype, device="cuda:0")
-        weight_cpu = torch.empty(N, K, dtype=dtype, device="cpu")
-        bias_cpu = torch.empty(N, dtype=dtype, device="cpu")
+        weight_cuda0 = torch.empty(N, K, device="cuda:0")
+        weight_cpu = torch.empty(N, K, device="cpu")
+        bias_cpu = torch.empty(N, device="cpu")
         with pytest.raises(ValueError, match="same device"):
             torch.ops.sj.cupy_spike_linear_sparse_forward(spike_cuda0, weight_cpu, None)
         with pytest.raises(ValueError, match="same device"):
