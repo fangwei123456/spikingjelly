@@ -985,7 +985,7 @@ try:
         """
         check_instance(pool2d_nn, nn.AvgPool2d)
         logger.warning(
-            "The lava slayer pool layer applies sum pooling, rather than average pooling. `avgpool2d_to_lava_synapse_pool` will return a sum pooling layer."
+            "The Lava-DL pooling layer applies sum pooling; returning a sum-pooling layer instead of average pooling."
         )
 
         return slayer.synapse.Pool(
@@ -1096,7 +1096,7 @@ try:
             )
 
         logger.warning(
-            "The lava slayer pool layer applies sum pooling, rather than average pooling. `avgpool2d_to_lava_synapse_pool` will return a sum pooling layer."
+            "The Lava-DL pooling layer applies sum pooling; returning a sum-pooling layer instead of average pooling."
         )
 
         return lava_block
@@ -1386,5 +1386,5 @@ try:
 
 
 except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.lava_exchange: {}", e)
+    logger.debug("Optional Lava-DL dependency unavailable: {}", e)
     slayer = None

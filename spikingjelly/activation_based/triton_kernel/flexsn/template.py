@@ -12,7 +12,7 @@ try:
 except (ImportError, OSError) as e:
     from .. import dummy
 
-    logger.debug("spikingjelly.activation_based.triton_kernel.flexsn.template: {}", e)
+    logger.debug("Optional Triton dependency unavailable: {}", e)
     triton = dummy.DummyImport()
 
 from ..torch2triton import compile_triton_code_str
@@ -243,7 +243,7 @@ def get_flexsn_inference_kernel(core_str: str, core_name: str, info: FlexSNInfo)
     kernel_name = f"flexsn_inference_kernel_{kernel_hash}"
 
     logger.debug(
-        "Generated flexsn inference kernel for {}:\n```\n{}\n```\n{}",
+        "Generated inference kernel for {}:\n```\n{}\n```\n{}",
         core_name,
         kernel_str,
         info,
@@ -348,7 +348,7 @@ def get_flexsn_inference_final_state_kernel(
     kernel_name = f"flexsn_inference_final_state_kernel_{kernel_hash}"
 
     logger.debug(
-        "Generated flexsn inference-final-state kernel for {}:\n```\n{}\n```\n{}",
+        "Generated inference-final-state kernel for {}:\n```\n{}\n```\n{}",
         core_name,
         kernel_str,
         info,
@@ -449,7 +449,7 @@ def get_flexsn_forward_kernel(
     kernel_name = f"flexsn_forward_kernel_{kernel_hash}"
 
     logger.debug(
-        "Generating flexsn forward kernel for {}:\n```\n{}\n```\n{}",
+        "Generating forward kernel for {}:\n```\n{}\n```\n{}",
         core_name,
         kernel_str,
         info,
@@ -587,7 +587,7 @@ def get_flexsn_backward_kernel(
     kernel_name = f"flexsn_backward_kernel_{kernel_hash}"
 
     logger.debug(
-        "Generated flexsn backward kernel for {}:\n```\n{}\n```\n{}",
+        "Generated backward kernel for {}:\n```\n{}\n```\n{}",
         core_name,
         kernel_str,
         info,

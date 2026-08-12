@@ -95,6 +95,8 @@ def _check_logger_call(path: Path, node: ast.Call) -> list[str]:
         violations.append(f"{path}:{node.lineno}: eager formatting in logger call")
 
     if isinstance(message, ast.Constant) and isinstance(message.value, str):
+        if "spikingjelly." in message.value.lower():
+            violations.append(f"{path}:{node.lineno}: source module in logger message")
         if PERCENT_PLACEHOLDER.search(message.value):
             violations.append(
                 f"{path}:{node.lineno}: percent placeholder in logger call"

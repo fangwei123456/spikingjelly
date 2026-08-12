@@ -101,7 +101,7 @@ def download_url(url: str, dst: str) -> int:
     if content_length is None:
         file_size = _download_without_resume(url, dst, headers)
         logger.info(
-            "ANN2SNN download completed: destination={} resumed={} bytes={} elapsed_ms={:.3f}",
+            "Download completed: destination={} resumed={} bytes={} elapsed_ms={:.3f}",
             dst,
             False,
             file_size,
@@ -115,7 +115,7 @@ def download_url(url: str, dst: str) -> int:
         first_byte = 0
     if first_byte >= file_size:  # (4)
         logger.info(
-            "ANN2SNN download completed: destination={} resumed={} bytes={} elapsed_ms={:.3f}",
+            "Download completed: destination={} resumed={} bytes={} elapsed_ms={:.3f}",
             dst,
             False,
             file_size,
@@ -136,7 +136,7 @@ def download_url(url: str, dst: str) -> int:
         valid_response = _validate_download_response(req, first_byte, file_size)
         if first_byte > 0 and not valid_response:
             logger.warning(
-                "ann2snn_download_resume_restarted destination={} existing_bytes={}",
+                "Download restarted: destination={} existing_bytes={}",
                 dst,
                 first_byte,
             )
@@ -167,7 +167,7 @@ def download_url(url: str, dst: str) -> int:
             req.close()
         pbar.close()
     logger.info(
-        "ANN2SNN download completed: destination={} resumed={} bytes={} elapsed_ms={:.3f}",
+        "Download completed: destination={} resumed={} bytes={} elapsed_ms={:.3f}",
         dst,
         resumed,
         file_size,

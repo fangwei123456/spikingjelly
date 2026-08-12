@@ -1,6 +1,4 @@
 from __future__ import annotations
-from spikingjelly.logger import logger
-
 import math
 from collections import defaultdict
 from dataclasses import asdict, dataclass

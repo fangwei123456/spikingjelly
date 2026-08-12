@@ -7,7 +7,7 @@ import torch
 try:
     import cupy
 except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.cuda_kernel.auto_cuda.base: {}", e)
+    logger.debug("Optional CuPy dependency unavailable: {}", e)
     cupy = None
 
 from .... import configure

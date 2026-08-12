@@ -225,7 +225,7 @@ def import_from_nir(
     gm = nirtorch.nir_to_torch(graph, mapper.map_dict, device=device, dtype=dtype)
     functional.set_step_mode(gm, step_mode)
     logger.info(
-        "NIR import completed: source={} device={} dtype={} step_mode={} modules={}",
+        "Import completed: source={} device={} dtype={} step_mode={} modules={}",
         "path" if isinstance(graph, str) else type(graph).__name__,
         device,
         dtype,

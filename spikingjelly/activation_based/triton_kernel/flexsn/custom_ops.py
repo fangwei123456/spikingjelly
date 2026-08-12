@@ -1107,7 +1107,7 @@ torch.library.register_autograd(
 )
 
 logger.info(
-    "FlexSN operators registered: operators={} fake_kernels={} autograd_kernels={}",
+    "Operators registered: operators={} fake_kernels={} autograd_kernels={}",
     5,
     5,
     2,

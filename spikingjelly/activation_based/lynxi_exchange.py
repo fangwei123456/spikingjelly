@@ -795,7 +795,7 @@ try:
         out_path = offline_builder.build(
             model.graph, model.params, out_path=output_dir, apu_only=True
         )
-        logger.info("Lynxi model artifacts generated at {}", out_path)
+        logger.info("Model artifacts generated at {}", out_path)
         return os.path.join(out_path, "Net_0")
 
     def load_lynxi_model(device_id: int, model_path: str):
@@ -846,4 +846,4 @@ try:
 
 
 except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.lynxi_exchange: {}", e)
+    logger.debug("Optional Lynxi dependency unavailable: {}", e)

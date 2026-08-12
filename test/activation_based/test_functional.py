@@ -304,8 +304,7 @@ def test_reset_net_warns_for_non_memorymodule(loguru_records):
     try:
         assert net[0].reset_calls == 1
         assert any(
-            "not spikingjelly.activation_based.base.MemoryModule" in record["message"]
-            for record in loguru_records
+            "not a MemoryModule" in record["message"] for record in loguru_records
         )
     finally:
         invalidate_reset_cache(net)

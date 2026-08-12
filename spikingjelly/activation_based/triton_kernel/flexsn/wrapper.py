@@ -8,7 +8,7 @@ try:
 except (ImportError, OSError) as e:
     from .. import dummy
 
-    logger.debug("spikingjelly.activation_based.triton_kernel.flexsn.wrapper: {}", e)
+    logger.debug("Optional Triton dependency unavailable: {}", e)
     triton = dummy.DummyImport()
 
 from ..triton_utils import type_dict

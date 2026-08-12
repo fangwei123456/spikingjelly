@@ -206,7 +206,7 @@ class FXConverter:
                 fx_model = self.recipe.replace(self, fx_model)
                 fx_model = self.recipe.finalize(self, fx_model)
                 logger.info(
-                    "ANN2SNN conversion completed: converter={} recipe={} device={} modules={} elapsed_ms={:.3f}",
+                    "Conversion completed: converter={} recipe={} device={} modules={} elapsed_ms={:.3f}",
                     type(self).__name__,
                     type(self.recipe).__name__,
                     target_device,
@@ -335,7 +335,7 @@ class ModuleConverter:
                     )
                 converted = converted.to(self.device)
                 logger.info(
-                    "ANN2SNN conversion completed: converter={} recipe={} device={} modules={} elapsed_ms={:.3f}",
+                    "Conversion completed: converter={} recipe={} device={} modules={} elapsed_ms={:.3f}",
                     type(self).__name__,
                     type(self.recipe).__name__,
                     target_device,

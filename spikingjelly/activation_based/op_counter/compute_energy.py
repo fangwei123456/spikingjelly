@@ -297,7 +297,7 @@ class ComputeEnergyProfiler:
         )
         if not self._summary_logged:
             logger.info(
-                "Operation counter completed: counter={} total_operations={} matched_counter_rules={} warnings={}",
+                "Counting completed: counter={} total_operations={} matched_counter_rules={} warnings={}",
                 type(self).__name__,
                 mac + ac + synop + flop,
                 matched_counter_rules,

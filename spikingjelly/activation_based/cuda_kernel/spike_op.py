@@ -15,7 +15,7 @@ from . import tensor_cache
 try:
     import cupy
 except (ImportError, OSError) as e:
-    logger.debug("CUDA spike op dependency unavailable: {}", e)
+    logger.debug("Optional dependency unavailable: {}", e)
     cupy = None
 
 
@@ -254,12 +254,12 @@ torch.library.register_autograd(
 
 if cpp_wrapper is None:
     logger.warning(
-        "CUDA spike operators registered: linear=ok convolution=backward_unavailable; using the PyTorch fallback for supported operations. extension_error={}",
+        "Operators registered: linear=ok convolution=backward_unavailable; using the PyTorch fallback for supported operations. extension_error={}",
         cpp_wrapper_error,
     )
 else:
     logger.info(
-        "CUDA spike operators registered: operators={} fake_kernels={} autograd_kernels={}",
+        "Operators registered: operators={} fake_kernels={} autograd_kernels={}",
         2,
         2,
         2,

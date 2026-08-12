@@ -139,7 +139,7 @@ def test_compute_energy_summary_is_emitted_once(loguru_records):
     summaries = [
         record
         for record in loguru_records
-        if record["message"].startswith("Operation counter completed:")
+        if record["message"].startswith("Counting completed:")
     ]
     assert len(summaries) == 1
     assert "total_operations=" in summaries[0]["message"]
@@ -171,7 +171,7 @@ def test_precision_prepare_emits_one_lifecycle_summary(loguru_records):
     summaries = [
         record
         for record in loguru_records
-        if record["message"].startswith("Precision preparation completed:")
+        if record["message"].startswith("Preparation completed:")
     ]
     assert len(summaries) == 1
 
@@ -188,7 +188,7 @@ def test_distributed_configuration_emits_one_lifecycle_summary(loguru_records):
     summaries = [
         record
         for record in loguru_records
-        if record["message"].startswith("Distributed configuration completed:")
+        if record["message"].startswith("Configuration completed:")
     ]
     assert len(summaries) == 1
     assert "mode=none" in summaries[0]["message"]
@@ -248,7 +248,7 @@ def test_serialized_sink_contains_standard_fields(tmp_path):
 
     payload = json.loads(path.read_text().splitlines()[0])
     record = payload["record"]
-    assert record["message"].startswith("Precision preparation completed:")
+    assert record["message"].startswith("Preparation completed:")
     for field in ("time", "level", "name", "function", "line", "process", "thread"):
         assert field in record
 
@@ -279,6 +279,11 @@ def test_serialized_sink_contains_standard_fields(tmp_path):
         (
             "from spikingjelly.logger import logger\nlogger.info('value={value}', value=1)\n",
             "must use positional arguments",
+        ),
+        (
+            "from spikingjelly.logger import logger\n"
+            "logger.info('spikingjelly.activation_based.neuron: unavailable')\n",
+            "source module in logger message",
         ),
         ("import builtins\nbuiltins.print('not allowed')\n", "builtins.print"),
     ],

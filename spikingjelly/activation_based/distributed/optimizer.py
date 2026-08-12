@@ -85,7 +85,7 @@ def build_snn_optimizer(
             **optimizer_kwargs,
         )
     logger.info(
-        "distributed_optimizer_created optimizer={} mode={} sharding={} lr={} weight_decay={}",
+        "Optimizer created: optimizer={} mode={} sharding={} lr={} weight_decay={}",
         type(optimizer).__name__,
         mode,
         optimizer_sharding,

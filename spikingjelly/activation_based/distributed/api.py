@@ -57,7 +57,7 @@ def analyze(
     """
     analysis = analyze_snn_distributed_capability(model, tensor_parallel_roots=roots)
     logger.info(
-        "Distributed analysis completed: memory_modules={} tensor_parallel_candidates={} unsupported_tensor_parallel={} roots={}",
+        "Analysis completed: memory_modules={} tensor_parallel_candidates={} unsupported_tensor_parallel={} roots={}",
         len(analysis.memory_module_names),
         len(analysis.tensor_parallel_candidate_names),
         len(analysis.unsupported_tensor_parallel_names),
@@ -233,7 +233,7 @@ def plan(
         experimental_features=features,
     )
     logger.info(
-        "Distributed plan created: mode={} objective={} backend={} world_size={} mesh_shape={} optimizer_strategy={} memopt_level={} tensor_parallel_plan={}",
+        "Plan created: mode={} objective={} backend={} world_size={} mesh_shape={} optimizer_strategy={} memopt_level={} tensor_parallel_plan={}",
         distributed_plan.mode,
         distributed_plan.objective,
         distributed_plan.backend,

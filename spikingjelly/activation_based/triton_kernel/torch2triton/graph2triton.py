@@ -24,9 +24,7 @@ try:
 except (ImportError, OSError) as e:
     from .. import dummy
 
-    logger.debug(
-        "spikingjelly.activation_based.triton_kernel.torch2triton.graph2triton: {}", e
-    )
+    logger.debug("Optional Triton dependency unavailable: {}", e)
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
 
@@ -349,7 +347,7 @@ def generate_triton_code_str(
 
     Generate Triton code string
     """
-    logger.debug("Generated Triton graph={}", graph)
+    logger.debug("Generated graph={}", graph)
 
     inputs = []
     triton_code_lines = []
@@ -473,7 +471,7 @@ def compile_triton_code_str(
                     tmp_path.unlink()
             raise
     action = "written to" if needs_write else "loaded from cache"
-    logger.debug("Triton code `{}` {} {}", kernel_name, action, fpath)
+    logger.debug("Code `{}` {} {}", kernel_name, action, fpath)
 
     linecache.checkcache(str(fpath))
 
