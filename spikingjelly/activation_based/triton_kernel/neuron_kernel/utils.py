@@ -33,38 +33,6 @@ class TritonNeuronExecutionPlan:
     spike_dtype_id: int
     save_intermediates: bool
 
-    def matches(
-        self,
-        *,
-        neuron_type: str,
-        device: torch.device | str | int,
-        storage_dtype: torch.dtype | str,
-        forward_compute_dtype: str | torch.dtype,
-        backward_compute_dtype: str | torch.dtype = "fp32",
-        spike_dtype: torch.dtype,
-        save_intermediates: bool,
-    ) -> bool:
-        try:
-            device = normalize_cuda_device(device)
-            storage_dtype = normalize_triton_storage_dtype(storage_dtype)
-            forward_compute_dtype_name = normalize_triton_compute_dtype_name(
-                forward_compute_dtype
-            )
-            backward_compute_dtype_name = normalize_triton_compute_dtype_name(
-                backward_compute_dtype
-            )
-        except (ValueError, RuntimeError, TypeError):
-            return False
-        return (
-            self.neuron_type == neuron_type
-            and self.device == device
-            and self.storage_dtype == storage_dtype
-            and self.forward_compute_dtype_name == forward_compute_dtype_name
-            and self.backward_compute_dtype_name == backward_compute_dtype_name
-            and self.spike_dtype == spike_dtype
-            and self.save_intermediates == save_intermediates
-        )
-
 
 def _validate_mp_options(
     storage_dtype,
@@ -130,28 +98,6 @@ def _check_fp8_capability(
         )
 
 
-def _check_fp8_forward_capability(
-    storage_dtype: torch.dtype,
-    device: torch.device,
-    compute_dtype_name: str,
-    neuron_name: str,
-) -> None:
-    _check_fp8_capability(
-        storage_dtype, device, compute_dtype_name, neuron_name, "forward"
-    )
-
-
-def _check_fp8_backward_capability(
-    storage_dtype: torch.dtype,
-    device: torch.device,
-    backward_compute_dtype_name: str,
-    neuron_name: str,
-) -> None:
-    _check_fp8_capability(
-        storage_dtype, device, backward_compute_dtype_name, neuron_name, "backward"
-    )
-
-
 def prepare_triton_neuron_execution_plan(
     *,
     neuron_type: str,
@@ -195,17 +141,19 @@ def prepare_triton_neuron_execution_plan(
     backward_compute_tl_dtype = resolve_triton_compute_dtype(
         backward_compute_dtype_name, storage_dtype
     )
-    _check_fp8_forward_capability(
+    _check_fp8_capability(
         storage_dtype,
         device,
         forward_compute_dtype_name,
         neuron_type.upper(),
+        "forward",
     )
-    _check_fp8_backward_capability(
+    _check_fp8_capability(
         storage_dtype,
         device,
         backward_compute_dtype_name,
         neuron_type.upper(),
+        "backward",
     )
     return TritonNeuronExecutionPlan(
         neuron_type=neuron_type,

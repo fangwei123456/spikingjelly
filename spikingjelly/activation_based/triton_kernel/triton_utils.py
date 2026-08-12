@@ -321,25 +321,6 @@ def resolve_triton_compute_dtype(
     raise ValueError(f"Unsupported Triton compute dtype name: {name!r}.")
 
 
-def torch_dtype_for_triton_compute_dtype(
-    compute_dtype: str | torch.dtype,
-) -> torch.dtype:
-    name = normalize_triton_compute_dtype_name(compute_dtype)
-    if name == "fp32":
-        return torch.float32
-    if name == "fp16":
-        return torch.float16
-    if name == "bf16":
-        if not hasattr(torch, "bfloat16"):
-            raise ValueError("torch.bfloat16 is unavailable.")
-        return torch.bfloat16
-    if name == "fp8":
-        # PyTorch does not provide useful reductions for float8 tensors. Keep
-        # reduction buffers in fp32 while the Triton kernel computes in fp8.
-        return torch.float32
-    raise ValueError(f"Unsupported Triton compute dtype name: {name!r}.")
-
-
 def torch_dtype_for_triton_neuron_compute_dtype_id(dtype_id: int) -> torch.dtype:
     if dtype_id in (
         TRITON_NEURON_DTYPE_FP8_E4M3FN,

@@ -82,7 +82,6 @@ __all__ = [
     "retain_owner_flexsn_kernel_handle",
     "release_flexsn_kernel_handle",
     "release_active_flexsn_kernel_handle",
-    "flexsn_kernel_registry_info",
     "flexsn_triton_inference",
     "flexsn_triton_inference_final_state",
     "flexsn_triton_training",
@@ -135,21 +134,8 @@ _KERNEL_REGISTRY_LOCK = Lock()
 _KERNEL_ID_GEN = count(1)
 
 
-def _normalize_kernel_handle(handle) -> int:
-    if isinstance(handle, int):
-        return handle
-    if isinstance(handle, torch.Tensor):
-        if handle.numel() != 1:
-            raise TypeError(
-                f"Unsupported FlexSN kernel handle tensor shape: {tuple(handle.shape)}"
-            )
-        return int(handle.item())
-    try:
-        return int(handle)
-    except (TypeError, ValueError) as exc:
-        raise TypeError(
-            f"Unsupported FlexSN kernel handle type: {type(handle)!r}"
-        ) from exc
+def _normalize_kernel_handle(handle: int) -> int:
+    return int(handle)
 
 
 def register_flexsn_kernel_handle(
@@ -267,7 +253,6 @@ def retain_flexsn_kernel_handle(handle: int) -> None:
     :param handle: FlexSN kernel handle
     :type handle: int
     """
-    handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
         bundle = _lookup_kernel_handle(handle)
         bundle.active_refs += 1
@@ -302,7 +287,6 @@ def retain_owner_flexsn_kernel_handle(handle: int) -> None:
     :param handle: FlexSN kernel handle
     :type handle: int
     """
-    handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
         bundle = _lookup_kernel_handle(handle)
         bundle.owner_refs += 1
@@ -336,7 +320,6 @@ def release_flexsn_kernel_handle(handle: int) -> None:
     :param handle: FlexSN kernel handle
     :type handle: int
     """
-    handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
         bundle = _KERNEL_REGISTRY.get(handle)
         if bundle is None:
@@ -377,7 +360,6 @@ def release_active_flexsn_kernel_handle(handle: int) -> None:
     :param handle: FlexSN kernel handle
     :type handle: int
     """
-    handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
         bundle = _KERNEL_REGISTRY.get(handle)
         if bundle is None:
@@ -388,47 +370,6 @@ def release_active_flexsn_kernel_handle(handle: int) -> None:
             _KERNEL_REGISTRY.pop(handle, None)
     if should_cleanup:
         _cleanup_kernel_handle(bundle)
-
-
-def flexsn_kernel_registry_info() -> Dict[str, int]:
-    """
-    **API Language** - :ref:`中文 <flexsn_kernel_registry_info-cn>` | :ref:`English <flexsn_kernel_registry_info-en>`
-
-    ----
-
-    .. _flexsn_kernel_registry_info-cn:
-
-    * **中文**
-
-    返回 FlexSN kernel handle 注册表的诊断计数。该函数只读取 registry，不改变
-    owner/active 引用计数，也不触发 kernel 清理。
-
-    :return: 包含 ``entries``、``owner_refs`` 和 ``active_refs`` 的计数字典
-    :rtype: Dict[str, int]
-
-    ----
-
-    .. _flexsn_kernel_registry_info-en:
-
-    * **English**
-
-    Return diagnostic counts for the FlexSN kernel-handle registry. This function
-    only reads the registry; it does not change owner/active reference counts or
-    trigger kernel cleanup.
-
-    :return: Count dictionary with ``entries``, ``owner_refs``, and ``active_refs``
-    :rtype: Dict[str, int]
-    """
-    with _KERNEL_REGISTRY_LOCK:
-        return {
-            "entries": len(_KERNEL_REGISTRY),
-            "owner_refs": sum(
-                bundle.owner_refs for bundle in _KERNEL_REGISTRY.values()
-            ),
-            "active_refs": sum(
-                bundle.active_refs for bundle in _KERNEL_REGISTRY.values()
-            ),
-        }
 
 
 def _make_seq_outputs_like(

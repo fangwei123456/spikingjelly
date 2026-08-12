@@ -27,8 +27,6 @@ except (ImportError, OSError) as e:
 
 
 __all__ = [
-    "supports_triton_fp8_e4m3fn",
-    "supports_triton_fp8_e5m2",
     "supports_triton_fp8_neuron_forward",
     "supports_triton_fp8_neuron_backward",
     "triton_fp8_neuron_capability",
@@ -313,16 +311,6 @@ def _backward_probe(dtype, device, compute_dtype="fp32") -> dict[str, Any]:
             str(triton_version),
         )
     )
-
-
-def supports_triton_fp8_e4m3fn(device) -> bool:
-    dtype = getattr(torch, "float8_e4m3fn", None)
-    return False if dtype is None else bool(_probe(dtype, device)["available"])
-
-
-def supports_triton_fp8_e5m2(device) -> bool:
-    dtype = getattr(torch, "float8_e5m2", None)
-    return False if dtype is None else bool(_probe(dtype, device)["available"])
 
 
 def supports_triton_fp8_neuron_forward(dtype, device, compute_dtype="fp32") -> bool:

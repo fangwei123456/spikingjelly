@@ -549,26 +549,15 @@ def _multistep_plif_backward_kernel_dynamic(
     convert_and_store(grad_r_tau_ptrs, grad_r_tau_acc, boundary_check=(1,))
 
 
-# Test instrumentation only; not thread-safe.
-LAST_FORWARD_LOOP_MODE = None
-LAST_BACKWARD_LOOP_MODE = None
-
-
 def _select_forward_kernel(T: int):
-    global LAST_FORWARD_LOOP_MODE
     if use_static_range_for_triton_neuron_kernel(T):
-        LAST_FORWARD_LOOP_MODE = "static"
         return _multistep_plif_forward_kernel_static
-    LAST_FORWARD_LOOP_MODE = "dynamic"
     return _multistep_plif_forward_kernel_dynamic
 
 
 def _select_backward_kernel(T: int):
-    global LAST_BACKWARD_LOOP_MODE
     if use_static_range_for_triton_neuron_kernel(T):
-        LAST_BACKWARD_LOOP_MODE = "static"
         return _multistep_plif_backward_kernel_static
-    LAST_BACKWARD_LOOP_MODE = "dynamic"
     return _multistep_plif_backward_kernel_dynamic
 
 
@@ -1061,10 +1050,6 @@ def multistep_plif_mp(
         detach_reset=detach_reset,
         surrogate_function=surrogate_function,
     )
-
-
-multistep_plif_mixed_precision_forward = multistep_plif_mp
-multistep_plif_mixed_precision_forward_with_plan = multistep_plif_mp_with_plan
 
 
 def _setup_mp_plif_context(ctx, inputs, output):

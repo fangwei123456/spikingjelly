@@ -2041,7 +2041,6 @@ def test_flexsn_kernel_registry_reference_counts_and_finalizer():
         def close(self):
             self.closed = True
 
-    baseline = custom_ops.flexsn_kernel_registry_info()
     kernels = [DummyKernel() for _ in range(4)]
     handle = custom_ops.register_flexsn_kernel_handle(
         inference_kernel=kernels[0],
@@ -2052,33 +2051,16 @@ def test_flexsn_kernel_registry_reference_counts_and_finalizer():
         backward_kernel=kernels[3],
         training_info=None,
     )
-    try:
-        info = custom_ops.flexsn_kernel_registry_info()
-        assert info["entries"] == baseline["entries"] + 1
-        assert info["owner_refs"] == baseline["owner_refs"] + 1
-        assert info["active_refs"] == baseline["active_refs"]
+    custom_ops.retain_owner_flexsn_kernel_handle(handle)
+    custom_ops.retain_flexsn_kernel_handle(handle)
+    custom_ops.release_flexsn_kernel_handle(handle)
+    custom_ops.release_active_flexsn_kernel_handle(handle)
+    assert not any(kernel.closed for kernel in kernels)
 
-        custom_ops.retain_owner_flexsn_kernel_handle(handle)
+    custom_ops.release_flexsn_kernel_handle(handle)
+    assert all(kernel.closed for kernel in kernels)
+    with pytest.raises(RuntimeError, match="Unknown FlexSN kernel handle"):
         custom_ops.retain_flexsn_kernel_handle(handle)
-        info = custom_ops.flexsn_kernel_registry_info()
-        assert info["entries"] == baseline["entries"] + 1
-        assert info["owner_refs"] == baseline["owner_refs"] + 2
-        assert info["active_refs"] == baseline["active_refs"] + 1
-
-        custom_ops.release_flexsn_kernel_handle(handle)
-        custom_ops.release_active_flexsn_kernel_handle(handle)
-        info = custom_ops.flexsn_kernel_registry_info()
-        assert info["entries"] == baseline["entries"] + 1
-        assert info["owner_refs"] == baseline["owner_refs"] + 1
-        assert info["active_refs"] == baseline["active_refs"]
-
-        custom_ops.release_flexsn_kernel_handle(handle)
-        info = custom_ops.flexsn_kernel_registry_info()
-        assert info == baseline
-        assert all(kernel.closed for kernel in kernels)
-    finally:
-        custom_ops.release_active_flexsn_kernel_handle(handle)
-        custom_ops.release_flexsn_kernel_handle(handle)
 
     class Owner:
         pass
@@ -2096,8 +2078,9 @@ def test_flexsn_kernel_registry_reference_counts_and_finalizer():
     finalizer = custom_ops.attach_flexsn_handle_finalizer(Owner(), finalizer_handle)
     finalizer()
 
-    assert custom_ops.flexsn_kernel_registry_info() == baseline
     assert all(kernel.closed for kernel in finalizer_kernels)
+    with pytest.raises(RuntimeError, match="Unknown FlexSN kernel handle"):
+        custom_ops.retain_flexsn_kernel_handle(finalizer_handle)
 
 
 def test_triton_backend_backward_matches_torch_backend(rng):

@@ -335,15 +335,6 @@ def test_mixed_precision_uses_custom_op_not_autograd_function():
     assert hasattr(if_triton_kernel, "multistep_if_mp_forward")
     assert hasattr(lif_triton_kernel, "multistep_lif_mp_forward")
     assert hasattr(plif_triton_kernel, "multistep_plif_mp_forward")
-    assert if_triton_kernel.multistep_if_mixed_precision_forward is (
-        if_triton_kernel.multistep_if_mp
-    )
-    assert lif_triton_kernel.multistep_lif_mixed_precision_forward is (
-        lif_triton_kernel.multistep_lif_mp
-    )
-    assert plif_triton_kernel.multistep_plif_mixed_precision_forward is (
-        plif_triton_kernel.multistep_plif_mp
-    )
 
 
 def test_fp8_backward_capability_uses_backward_probe(monkeypatch):
@@ -373,8 +364,12 @@ def test_fp8_backward_capability_uses_backward_probe(monkeypatch):
     )
 
     with pytest.raises(RuntimeError, match="backward probe failed"):
-        neuron_triton_utils._check_fp8_backward_capability(
-            storage_dtype, torch.device("cuda", 0), "fp32", "LIF"
+        neuron_triton_utils._check_fp8_capability(
+            storage_dtype,
+            torch.device("cuda", 0),
+            "fp32",
+            "LIF",
+            "backward",
         )
     assert calls == {"forward": 0, "backward": 1}
 
@@ -430,105 +425,6 @@ def test_prepare_triton_neuron_execution_plan_rejects_invalid_options():
             storage_dtype=torch.float32,
             backward_compute_dtype="fp8",
         )
-
-
-def test_triton_neuron_execution_plan_matches_config():
-    plan = neuron_triton_utils.TritonNeuronExecutionPlan(
-        neuron_type="lif",
-        device=torch.device("cuda", 0),
-        storage_dtype=torch.float32,
-        forward_compute_dtype_name="fp32",
-        forward_compute_tl_dtype=object(),
-        backward_compute_dtype_name="fp32",
-        backward_compute_tl_dtype=object(),
-        spike_dtype=torch.float32,
-        storage_dtype_id=0,
-        forward_compute_dtype_id=0,
-        backward_compute_dtype_id=0,
-        spike_dtype_id=0,
-        save_intermediates=True,
-    )
-
-    assert plan.matches(
-        neuron_type="lif",
-        device=torch.device("cuda", 0),
-        storage_dtype="fp32",
-        forward_compute_dtype=torch.float32,
-        backward_compute_dtype="fp32",
-        spike_dtype=torch.float32,
-        save_intermediates=True,
-    )
-    assert not plan.matches(
-        neuron_type="if",
-        device=torch.device("cuda", 0),
-        storage_dtype="fp32",
-        forward_compute_dtype=torch.float32,
-        backward_compute_dtype="fp32",
-        spike_dtype=torch.float32,
-        save_intermediates=True,
-    )
-    assert not plan.matches(
-        neuron_type="lif",
-        device=torch.device("cuda", 1),
-        storage_dtype="fp32",
-        forward_compute_dtype=torch.float32,
-        backward_compute_dtype="fp32",
-        spike_dtype=torch.float32,
-        save_intermediates=True,
-    )
-    assert not plan.matches(
-        neuron_type="lif",
-        device=torch.device("cuda", 0),
-        storage_dtype=torch.float16,
-        forward_compute_dtype=torch.float32,
-        backward_compute_dtype="fp32",
-        spike_dtype=torch.float32,
-        save_intermediates=True,
-    )
-    assert not plan.matches(
-        neuron_type="lif",
-        device=torch.device("cuda", 0),
-        storage_dtype="fp32",
-        forward_compute_dtype="fp16",
-        backward_compute_dtype="fp32",
-        spike_dtype=torch.float32,
-        save_intermediates=True,
-    )
-    assert not plan.matches(
-        neuron_type="lif",
-        device=torch.device("cuda", 0),
-        storage_dtype="fp32",
-        forward_compute_dtype=torch.float32,
-        backward_compute_dtype="fp16",
-        spike_dtype=torch.float32,
-        save_intermediates=True,
-    )
-    assert not plan.matches(
-        neuron_type="lif",
-        device=torch.device("cuda", 0),
-        storage_dtype="fp32",
-        forward_compute_dtype=torch.float32,
-        backward_compute_dtype="fp32",
-        spike_dtype=torch.float16,
-        save_intermediates=True,
-    )
-    assert not plan.matches(
-        neuron_type="lif",
-        device=torch.device("cuda", 0),
-        storage_dtype="fp32",
-        forward_compute_dtype=torch.float32,
-        backward_compute_dtype="fp32",
-        spike_dtype=torch.float32,
-        save_intermediates=False,
-    )
-    assert not plan.matches(
-        neuron_type="lif",
-        device="invalid-device",
-        storage_dtype=torch.float32,
-        forward_compute_dtype="fp32",
-        spike_dtype=torch.float32,
-        save_intermediates=True,
-    )
 
 
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
@@ -632,45 +528,6 @@ def test_triton_backend_rejects_non_spiking_surrogate_in_eval():
     ).eval()
     with pytest.raises(NotImplementedError, match="spiking surrogate functions"):
         lif_node(x)
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize(
-    ("kind", "backend", "kernel_module"),
-    [
-        ("if", "torch", if_triton_kernel),
-        ("if", "triton", if_triton_kernel),
-        ("lif", "triton", lif_triton_kernel),
-        ("plif", "triton", plif_triton_kernel),
-    ],
-)
-def test_eval_backend_respects_triton_selection(kind, backend, kernel_module):
-    x = torch.randn(9, 4, 16, device="cuda")
-
-    if kind == "if":
-        node = neuron.IFNode(step_mode="m", backend=backend, store_v_seq=True).eval()
-    elif kind == "lif":
-        node = neuron.LIFNode(
-            tau=2.0, step_mode="m", backend=backend, store_v_seq=True
-        ).eval()
-    elif kind == "plif":
-        node = neuron.ParametricLIFNode(
-            init_tau=2.0, step_mode="m", backend=backend, store_v_seq=True
-        ).eval()
-    else:
-        raise ValueError(kind)
-
-    original_loop_mode = kernel_module.LAST_FORWARD_LOOP_MODE
-    try:
-        kernel_module.LAST_FORWARD_LOOP_MODE = None
-        node(x)
-
-        if backend == "triton":
-            assert kernel_module.LAST_FORWARD_LOOP_MODE in ("static", "dynamic")
-        else:
-            assert kernel_module.LAST_FORWARD_LOOP_MODE is None
-    finally:
-        kernel_module.LAST_FORWARD_LOOP_MODE = original_loop_mode
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
@@ -881,54 +738,51 @@ def test_mixed_precision_float32_matches_torch_eval(
         else:
             raise ValueError(kind)
 
-        original_loop_mode = kernel_module.LAST_FORWARD_LOOP_MODE
-        try:
-            kernel_module.LAST_FORWARD_LOOP_MODE = None
-            plan = neuron_triton_utils.prepare_triton_neuron_execution_plan(
-                neuron_type=kind,
-                device=x.device,
+        plan = neuron_triton_utils.prepare_triton_neuron_execution_plan(
+            neuron_type=kind,
+            device=x.device,
+            storage_dtype=torch.float32,
+            forward_compute_dtype="fp32",
+            spike_dtype=torch.float32,
+            save_intermediates=True,
+        )
+        with torch.no_grad():
+            expected = node(x)
+            spike, v_seq, h_seq = _call_mixed_precision_forward(
+                kind,
+                x,
+                v_init,
+                decay_input=decay_input,
+                v_reset=v_reset,
                 storage_dtype=torch.float32,
-                forward_compute_dtype="fp32",
+                compute_dtype="fp32",
                 spike_dtype=torch.float32,
                 save_intermediates=True,
+                r_tau=r_tau,
             )
-            with torch.no_grad():
-                expected = node(x)
-                spike, v_seq, h_seq = _call_mixed_precision_forward(
+            plan_spike, plan_v_seq, plan_h_seq = (
+                _call_mixed_precision_forward_with_plan(
                     kind,
                     x,
                     v_init,
+                    plan,
                     decay_input=decay_input,
                     v_reset=v_reset,
-                    storage_dtype=torch.float32,
-                    compute_dtype="fp32",
-                    spike_dtype=torch.float32,
-                    save_intermediates=True,
                     r_tau=r_tau,
                 )
-                plan_spike, plan_v_seq, plan_h_seq = (
-                    _call_mixed_precision_forward_with_plan(
-                        kind,
-                        x,
-                        v_init,
-                        plan,
-                        decay_input=decay_input,
-                        v_reset=v_reset,
-                        r_tau=r_tau,
-                    )
-                )
-            _assert_close(expected, spike, torch.float32)
-            _assert_close(node.v_seq, v_seq, torch.float32)
-            assert h_seq is not None and h_seq.dtype == torch.float32
-            _assert_close(spike, plan_spike, torch.float32)
-            _assert_close(v_seq, plan_v_seq, torch.float32)
-            assert plan_h_seq is not None and plan_h_seq.dtype == torch.float32
-            _assert_close(h_seq, plan_h_seq, torch.float32)
-            assert kernel_module.LAST_FORWARD_LOOP_MODE == (
-                "static" if T <= 16 else "dynamic"
             )
-        finally:
-            kernel_module.LAST_FORWARD_LOOP_MODE = original_loop_mode
+        _assert_close(expected, spike, torch.float32)
+        _assert_close(node.v_seq, v_seq, torch.float32)
+        assert h_seq is not None and h_seq.dtype == torch.float32
+        _assert_close(spike, plan_spike, torch.float32)
+        _assert_close(v_seq, plan_v_seq, torch.float32)
+        assert plan_h_seq is not None and plan_h_seq.dtype == torch.float32
+        _assert_close(h_seq, plan_h_seq, torch.float32)
+        expected_kernel = getattr(
+            kernel_module,
+            f"_multistep_{kind}_forward_kernel_{'static' if T <= 16 else 'dynamic'}",
+        )
+        assert kernel_module._select_forward_kernel(T) is expected_kernel
     finally:
         configure.triton_neuron_kernel_static_range_max_T = original_threshold
 
@@ -969,12 +823,7 @@ def test_mixed_precision_forward_with_plan_skips_repeated_preflight(kind, monkey
     )
     monkeypatch.setattr(
         neuron_triton_utils,
-        "_check_fp8_forward_capability",
-        _unexpected_preflight,
-    )
-    monkeypatch.setattr(
-        neuron_triton_utils,
-        "_check_fp8_backward_capability",
+        "_check_fp8_capability",
         _unexpected_preflight,
     )
 
@@ -1075,12 +924,7 @@ def test_mixed_precision_backward_with_plan_skips_repeated_preflight(kind, monke
     )
     monkeypatch.setattr(
         neuron_triton_utils,
-        "_check_fp8_forward_capability",
-        _unexpected_preflight,
-    )
-    monkeypatch.setattr(
-        neuron_triton_utils,
-        "_check_fp8_backward_capability",
+        "_check_fp8_capability",
         _unexpected_preflight,
     )
 
@@ -1690,74 +1534,30 @@ def test_plif_mp_helper_dynamic_backward_uses_nonzero_initial_state():
     _assert_close(torch_node.w.grad, expected_w_grad, torch.float32)
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize(
-    ("kernel_module", "runner"),
+    ("kernel_module", "kind"),
     [
-        (
-            if_triton_kernel,
-            lambda T: neuron.IFNode(step_mode="m", backend="triton").to("cuda")(
-                torch.randn(T, 2, 8, device="cuda")
-            ),
-        ),
-        (
-            lif_triton_kernel,
-            lambda T: neuron.LIFNode(tau=2.0, step_mode="m", backend="triton").to(
-                "cuda"
-            )(torch.randn(T, 2, 8, device="cuda")),
-        ),
-        (
-            plif_triton_kernel,
-            lambda T: neuron.ParametricLIFNode(
-                init_tau=2.0, step_mode="m", backend="triton"
-            ).to("cuda")(torch.randn(T, 2, 8, device="cuda")),
-        ),
+        (if_triton_kernel, "if"),
+        (lif_triton_kernel, "lif"),
+        (plif_triton_kernel, "plif"),
     ],
 )
-def test_triton_loop_mode_switches_for_large_T(kernel_module, runner):
+def test_triton_loop_mode_switches_for_large_T(kernel_module, kind):
     original_threshold = configure.triton_neuron_kernel_static_range_max_T
     try:
         configure.triton_neuron_kernel_static_range_max_T = 16
-        kernel_module.LAST_FORWARD_LOOP_MODE = None
-        runner(8)
-        assert kernel_module.LAST_FORWARD_LOOP_MODE == "static"
-
-        kernel_module.LAST_FORWARD_LOOP_MODE = None
-        runner(32)
-        assert kernel_module.LAST_FORWARD_LOOP_MODE == "dynamic"
-    finally:
-        configure.triton_neuron_kernel_static_range_max_T = original_threshold
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize(
-    ("kernel_module", "node_factory"),
-    [
-        (
-            if_triton_kernel,
-            lambda: neuron.IFNode(step_mode="m", backend="triton").to("cuda"),
-        ),
-        (
-            lif_triton_kernel,
-            lambda: neuron.LIFNode(tau=2.0, step_mode="m", backend="triton").to("cuda"),
-        ),
-        (
-            plif_triton_kernel,
-            lambda: neuron.ParametricLIFNode(
-                init_tau=2.0, step_mode="m", backend="triton"
-            ).to("cuda"),
-        ),
-    ],
-)
-def test_triton_backward_loop_mode_switches_for_large_T(kernel_module, node_factory):
-    original_threshold = configure.triton_neuron_kernel_static_range_max_T
-    try:
-        configure.triton_neuron_kernel_static_range_max_T = 16
-        node = node_factory()
-        x = torch.randn(32, 2, 8, device="cuda", requires_grad=True)
-        kernel_module.LAST_BACKWARD_LOOP_MODE = None
-        node(x).sum().backward()
-        assert kernel_module.LAST_BACKWARD_LOOP_MODE == "dynamic"
+        assert kernel_module._select_forward_kernel(8) is getattr(
+            kernel_module, f"_multistep_{kind}_forward_kernel_static"
+        )
+        assert kernel_module._select_forward_kernel(32) is getattr(
+            kernel_module, f"_multistep_{kind}_forward_kernel_dynamic"
+        )
+        assert kernel_module._select_backward_kernel(8) is getattr(
+            kernel_module, f"_multistep_{kind}_backward_kernel_static"
+        )
+        assert kernel_module._select_backward_kernel(32) is getattr(
+            kernel_module, f"_multistep_{kind}_backward_kernel_dynamic"
+        )
     finally:
         configure.triton_neuron_kernel_static_range_max_T = original_threshold
 
@@ -1775,8 +1575,6 @@ def test_triton_plif_low_precision_dynamic_backward_compiles(dtype, variant):
         x = torch.rand(32, 64, device="cuda", dtype=dtype, requires_grad=True)
         v = torch.zeros(64, device="cuda", dtype=dtype, requires_grad=True)
         r_tau = torch.tensor(0.25, device="cuda", dtype=dtype, requires_grad=True)
-        plif_triton_kernel.LAST_BACKWARD_LOOP_MODE = None
-
         if variant == "stable":
             s_seq, v_seq = plif_triton_kernel.multistep_plif(
                 x,
@@ -1806,7 +1604,6 @@ def test_triton_plif_low_precision_dynamic_backward_compiles(dtype, variant):
 
         (s_seq.float().mean() + v_seq.float().mean()).backward()
 
-        assert plif_triton_kernel.LAST_BACKWARD_LOOP_MODE == "dynamic"
         assert torch.isfinite(x.grad.float()).all()
         assert torch.isfinite(v.grad.float()).all()
         assert torch.isfinite(r_tau.grad.float()).all()

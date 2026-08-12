@@ -16,15 +16,6 @@ from .... import configure
 from .. import cuda_utils
 
 
-def startswiths(x: str, prefixes: tuple):
-    ret = False
-    for prefix in prefixes:
-        if x.startswith(prefix):
-            ret = True
-
-    return ret
-
-
 @lru_cache(maxsize=128)
 def _get_raw_kernel(code: str, name: str, options: tuple[str, ...], backend: str):
     return cupy.RawKernel(code, name, options=options, backend=backend)
@@ -315,22 +306,22 @@ class CKernel:
             ctype: str = self.cparams[key]
             if isinstance(value, torch.Tensor):
                 if value.dtype == torch.float:
-                    assert startswiths(ctype, ("const float", "float"))
+                    assert ctype.startswith(("const float", "float"))
 
                 elif value.dtype == torch.half:
-                    assert startswiths(ctype, ("const half2", "half2"))
+                    assert ctype.startswith(("const half2", "half2"))
 
             if isinstance(value, cupy.ndarray):
                 if value.dtype == np.float32:
-                    assert startswiths(ctype, ("const float", "float"))
+                    assert ctype.startswith(("const float", "float"))
 
                 elif value.dtype == np.float16:
-                    assert startswiths(ctype, ("const half2", "half2"))
+                    assert ctype.startswith(("const half2", "half2"))
 
                 elif value.dtype == int or (
                     hasattr(np, "int") and value.dtype == np.int
                 ):
-                    assert startswiths(ctype, ("const int", "int"))
+                    assert ctype.startswith(("const int", "int"))
 
     def check_half2(self, py_dict: dict):
         r"""
