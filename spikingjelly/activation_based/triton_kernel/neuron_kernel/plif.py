@@ -644,10 +644,6 @@ def _launch_plif_backward_kernel(
     detach_reset: bool,
     use_torch_wrap: bool,
 ) -> None:
-    if r_tau.numel() != 1:
-        raise ValueError("r_tau must contain exactly one element")
-    if r_tau.device != grad_s_seq.device:
-        raise ValueError("r_tau and gradients must be on the same device")
     T = grad_s_seq.shape[0]
     NCL = grad_s_seq[0].numel()
 

@@ -2837,8 +2837,7 @@ def stbif_step(
     ``q`` 时使用 ``detach``；``acc_q`` 在判断边界前执行 ``round``；输出
     ``cur_output_next * q_threshold``。函数不读取或写入 ``MemoryModule`` memory，
     不负责 ``training/eval``、``step_mode`` 或 backend dispatch，也不原地修改传入
-    state。``is_work`` 是由输入和输出即时派生的 module 调度状态，不属于状态转移
-    方程的返回值。
+    state。
 
     :param x: 当前输入张量
     :type x: torch.Tensor
@@ -2873,9 +2872,7 @@ def stbif_step(
     ``acc_q`` is rounded before bound checks; and the output is
     ``cur_output_next * q_threshold``. The function does not read or write
     ``MemoryModule`` memory, does not manage ``training/eval``, ``step_mode``, or
-    backend dispatch, and does not mutate input states in place. ``is_work`` is a
-    module scheduling state derived immediately from input and output, not part
-    of the state-transition return value.
+    backend dispatch, and does not mutate input states in place.
 
     :param x: Current input tensor
     :type x: torch.Tensor
@@ -2924,7 +2921,7 @@ def stbif_single_step_triton(
     q_threshold: torch.Tensor,
     pos_max: torch.Tensor,
     neg_min: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
     **API Language** - :ref:`中文 <stbif_single_step_triton-cn>` | :ref:`English <stbif_single_step_triton-en>`
 
@@ -2950,8 +2947,8 @@ def stbif_single_step_triton(
     :type pos_max: torch.Tensor
     :param neg_min: 单元素负向累计下界张量
     :type neg_min: torch.Tensor
-    :return: ``(out, q_next, acc_q_next, cur_output, is_work)``
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(out, q_next, acc_q_next, cur_output)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     :raises ValueError: 输入 shape、dtype、device 或标量参数不满足约束
     :raises NotImplementedError: dtype 不受 Triton 后端支持
 
@@ -2978,8 +2975,8 @@ def stbif_single_step_triton(
     :type pos_max: torch.Tensor
     :param neg_min: Scalar negative accumulated bound
     :type neg_min: torch.Tensor
-    :return: ``(out, q_next, acc_q_next, cur_output, is_work)``
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(out, q_next, acc_q_next, cur_output)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     :raises ValueError: If the input shape, dtype, device, or scalar
         parameter is invalid
     :raises NotImplementedError: If the dtype is not supported by the Triton

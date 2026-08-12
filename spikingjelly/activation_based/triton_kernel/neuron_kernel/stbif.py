@@ -42,7 +42,6 @@ def _single_step_stbif_kernel(
     q_final_ptr,
     acc_q_final_ptr,
     cur_output_ptr,
-    work_flags_ptr,
     N: tl.constexpr,
     BLOCK_N: tl.constexpr,
     dtype: tl.constexpr,
@@ -71,8 +70,6 @@ def _single_step_stbif_kernel(
     tl.store(q_final_ptr + offsets, q, mask=mask)
     tl.store(acc_q_final_ptr + offsets, acc_q, mask=mask)
     tl.store(cur_output_ptr + offsets, cur, mask=mask)
-    work = (normalized != 0.0) | (cur != 0.0)
-    tl.store(work_flags_ptr + pid_n, tl.max(work.to(tl.int32), axis=0))
 
 
 @triton.autotune(
@@ -93,7 +90,6 @@ def _multi_step_stbif_kernel_static(
     q_final_ptr,
     acc_q_final_ptr,
     cur_output_ptr,
-    work_flags_ptr,
     q_threshold_ptr,
     pos_max_ptr,
     neg_min_ptr,
@@ -108,7 +104,6 @@ def _multi_step_stbif_kernel_static(
     q = tl.load(q_init_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
     acc_q = tl.load(acc_q_init_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
     cur = tl.zeros([BLOCK_N], dtype=tl.float32)
-    work = tl.full([BLOCK_N], False, dtype=tl.int1)
     q_threshold = tl.load(q_threshold_ptr).to(tl.float32)
     pos_max = tl.load(pos_max_ptr).to(tl.float32)
     neg_min = tl.load(neg_min_ptr).to(tl.float32)
@@ -123,7 +118,6 @@ def _multi_step_stbif_kernel_static(
         cur = pos.to(tl.float32) - neg.to(tl.float32)
         acc_q = acc_q + cur
         q = q - pos.to(tl.float32) + neg.to(tl.float32)
-        work = work | (normalized != 0.0) | (cur != 0.0)
         tl.store(
             out_seq_ptr + t * N + offsets, (cur * q_threshold).to(dtype), mask=mask
         )
@@ -131,7 +125,6 @@ def _multi_step_stbif_kernel_static(
     tl.store(q_final_ptr + offsets, q, mask=mask)
     tl.store(acc_q_final_ptr + offsets, acc_q, mask=mask)
     tl.store(cur_output_ptr + offsets, cur, mask=mask)
-    tl.store(work_flags_ptr + pid_n, tl.max(work.to(tl.int32), axis=0))
 
 
 @triton.autotune(
@@ -152,7 +145,6 @@ def _multi_step_stbif_kernel_dynamic(
     q_final_ptr,
     acc_q_final_ptr,
     cur_output_ptr,
-    work_flags_ptr,
     q_threshold_ptr,
     pos_max_ptr,
     neg_min_ptr,
@@ -167,7 +159,6 @@ def _multi_step_stbif_kernel_dynamic(
     q = tl.load(q_init_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
     acc_q = tl.load(acc_q_init_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
     cur = tl.zeros([BLOCK_N], dtype=tl.float32)
-    work = tl.full([BLOCK_N], False, dtype=tl.int1)
     q_threshold = tl.load(q_threshold_ptr).to(tl.float32)
     pos_max = tl.load(pos_max_ptr).to(tl.float32)
     neg_min = tl.load(neg_min_ptr).to(tl.float32)
@@ -182,7 +173,6 @@ def _multi_step_stbif_kernel_dynamic(
         cur = pos.to(tl.float32) - neg.to(tl.float32)
         acc_q = acc_q + cur
         q = q - pos.to(tl.float32) + neg.to(tl.float32)
-        work = work | (normalized != 0.0) | (cur != 0.0)
         tl.store(
             out_seq_ptr + t * N + offsets, (cur * q_threshold).to(dtype), mask=mask
         )
@@ -190,7 +180,6 @@ def _multi_step_stbif_kernel_dynamic(
     tl.store(q_final_ptr + offsets, q, mask=mask)
     tl.store(acc_q_final_ptr + offsets, acc_q, mask=mask)
     tl.store(cur_output_ptr + offsets, cur, mask=mask)
-    tl.store(work_flags_ptr + pid_n, tl.max(work.to(tl.int32), axis=0))
 
 
 def _select_stbif_kernel(T: int):
@@ -207,7 +196,7 @@ def single_step_stbif(
     q_threshold: torch.Tensor,
     pos_max: torch.Tensor,
     neg_min: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
     **API Language** - :ref:`中文 <single_step_stbif-cn>` | :ref:`English <single_step_stbif-en>`
 
@@ -233,8 +222,8 @@ def single_step_stbif(
     :type pos_max: torch.Tensor
     :param neg_min: 单元素负向累计下界张量
     :type neg_min: torch.Tensor
-    :return: ``(out, q_next, acc_q_next, cur_output, is_work)``
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(out, q_next, acc_q_next, cur_output)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     :raises ValueError: 当 ``x``、``q`` 和 ``acc_q`` 的 shape、dtype 或 device
         不一致，或任一标量参数不是单元素张量时
     :raises NotImplementedError: 当 dtype 不受 Triton 后端支持时
@@ -262,8 +251,8 @@ def single_step_stbif(
     :type pos_max: torch.Tensor
     :param neg_min: Scalar negative accumulated bound
     :type neg_min: torch.Tensor
-    :return: ``(out, q_next, acc_q_next, cur_output, is_work)``
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(out, q_next, acc_q_next, cur_output)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     :raises ValueError: If ``x``, ``q``, and ``acc_q`` differ in shape, dtype,
         or device, or if a scalar parameter does not contain exactly one element
     :raises NotImplementedError: If the dtype is not supported by the Triton
@@ -297,9 +286,6 @@ def single_step_stbif(
     acc_q_final = torch.empty_like(acc_q)
     cur_output = torch.empty_like(q)
     block_n = 256
-    work_flags = torch.empty(
-        triton.cdiv(N, block_n), device=x.device, dtype=torch.int32
-    )
     grid = (triton.cdiv(N, block_n),)
     with torch.cuda.device(x.device):
         wrap_triton(_single_step_stbif_kernel)[grid](
@@ -313,12 +299,11 @@ def single_step_stbif(
             q_final,
             acc_q_final,
             cur_output,
-            work_flags,
             N=N,
             BLOCK_N=block_n,
             dtype=type_dict[dtype],
         )
-    return out, q_final, acc_q_final, cur_output, work_flags.any()
+    return out, q_final, acc_q_final, cur_output
 
 
 @torch.library.register_fake("sj::single_step_stbif")
@@ -336,7 +321,6 @@ def _single_step_stbif_fake(
         torch.empty_like(q),
         torch.empty_like(acc_q),
         torch.empty_like(q),
-        x.new_empty((), dtype=torch.bool),
     )
 
 
@@ -348,7 +332,7 @@ def multi_step_stbif(
     q_threshold: torch.Tensor,
     pos_max: torch.Tensor,
     neg_min: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
     **API Language** - :ref:`中文 <multi_step_stbif-cn>` | :ref:`English <multi_step_stbif-en>`
 
@@ -375,8 +359,8 @@ def multi_step_stbif(
     :type pos_max: torch.Tensor
     :param neg_min: 单元素负向累计下界张量
     :type neg_min: torch.Tensor
-    :return: ``(out_seq, q_final, acc_q_final, cur_output, is_work)``
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(out_seq, q_final, acc_q_final, cur_output)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     :raises ValueError: 任一标量参数不是单元素张量
     :raises NotImplementedError: dtype 不受 Triton 后端支持
 
@@ -405,8 +389,8 @@ def multi_step_stbif(
     :type pos_max: torch.Tensor
     :param neg_min: Scalar negative accumulated bound
     :type neg_min: torch.Tensor
-    :return: ``(out_seq, q_final, acc_q_final, cur_output, is_work)``
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(out_seq, q_final, acc_q_final, cur_output)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     :raises ValueError: If a scalar parameter does not contain exactly one element
     :raises NotImplementedError: If the dtype is not supported by the Triton
         backend
@@ -438,7 +422,6 @@ def multi_step_stbif(
     def grid(meta):
         return (triton.cdiv(N, meta["BLOCK_N"]),)
 
-    work_flags = torch.zeros(triton.cdiv(N, 32), device=x_seq.device, dtype=torch.int32)
     q_threshold = q_threshold.to(device=x_seq.device, dtype=x_seq.dtype).contiguous()
     pos_max = pos_max.to(device=x_seq.device, dtype=x_seq.dtype).contiguous()
     neg_min = neg_min.to(device=x_seq.device, dtype=x_seq.dtype).contiguous()
@@ -452,7 +435,6 @@ def multi_step_stbif(
             q_final_flat,
             acc_q_final_flat,
             cur_output_flat,
-            work_flags,
             q_threshold,
             pos_max,
             neg_min,
@@ -460,13 +442,7 @@ def multi_step_stbif(
             N=N,
             dtype=type_dict[dtype],
         )
-    return (
-        out_seq.reshape(x_shape),
-        q_final,
-        acc_q_final,
-        cur_output,
-        work_flags.any(),
-    )
+    return out_seq.reshape(x_shape), q_final, acc_q_final, cur_output
 
 
 @torch.library.register_fake("sj::multi_step_stbif")
@@ -483,5 +459,4 @@ def _multi_step_stbif_fake(
         q.new_empty(q.shape),
         acc_q.new_empty(acc_q.shape),
         q.new_empty(q.shape),
-        torch.empty((), device=x_seq.device, dtype=torch.bool),
     )

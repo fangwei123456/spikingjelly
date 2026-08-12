@@ -117,7 +117,6 @@ class STBIFNeuron(base.MemoryModule):
         self.register_memory("q", None)
         self.register_memory("acc_q", None)
         self.register_memory("cur_output", None)
-        self.register_memory("is_work", False)
 
     @classmethod
     def from_quantizer(cls, quantizer: nn.Module) -> "STBIFNeuron":
@@ -144,7 +143,7 @@ class STBIFNeuron(base.MemoryModule):
         step_mode: str,
     ) -> tuple[object, ...]:
         x = inputs[0] if step_mode == "s" else inputs[0][0]
-        q, acc_q, cur_output, is_work = states
+        q, acc_q, cur_output = states
         if q is None or q.shape != x.shape:
             q = torch.full_like(x, 0.5)
             acc_q = torch.zeros_like(x)
@@ -153,7 +152,7 @@ class STBIFNeuron(base.MemoryModule):
             q = q.to(x)
             acc_q = acc_q.to(x)
             cur_output = cur_output.to(x)
-        return q, acc_q, cur_output, is_work
+        return q, acc_q, cur_output
 
     def single_step_functional_forward(
         self,
@@ -162,9 +161,9 @@ class STBIFNeuron(base.MemoryModule):
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x = inputs[0]
-        q, acc_q, cur_output, is_work = states
+        q, acc_q, cur_output = states
         if self.backend == "triton":
-            out, q, acc_q, cur_output, work_flag = functional.stbif_single_step_triton(
+            out, q, acc_q, cur_output = functional.stbif_single_step_triton(
                 x,
                 q,
                 acc_q,
@@ -172,8 +171,7 @@ class STBIFNeuron(base.MemoryModule):
                 self.pos_max,
                 self.neg_min,
             )
-            is_work = work_flag
-            return (out,), (q, acc_q, cur_output, is_work)
+            return (out,), (q, acc_q, cur_output)
         out, q, acc_q, cur_output = functional.stbif_step(
             x,
             q,
@@ -182,8 +180,7 @@ class STBIFNeuron(base.MemoryModule):
             self.pos_max,
             self.neg_min,
         )
-        is_work = (x != 0).any() | (out != 0).any()
-        return (out,), (q, acc_q, cur_output, is_work)
+        return (out,), (q, acc_q, cur_output)
 
     def multi_step_functional_forward(
         self,
@@ -192,13 +189,13 @@ class STBIFNeuron(base.MemoryModule):
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x_seq = inputs[0]
-        q, acc_q, cur_output, is_work = states
+        q, acc_q, cur_output = states
         if self.backend == "triton" and x_seq.device.type != "cuda":
             raise RuntimeError("STBIFNeuron backend='triton' requires a CUDA tensor.")
         if self.backend == "triton":
             from spikingjelly.activation_based.triton_kernel.neuron_kernel import stbif
 
-            out_seq, q, acc_q, cur_output, work_flag = stbif.multi_step_stbif(
+            out_seq, q, acc_q, cur_output = stbif.multi_step_stbif(
                 x_seq,
                 q,
                 acc_q,
@@ -206,7 +203,6 @@ class STBIFNeuron(base.MemoryModule):
                 self.pos_max.to(dtype=x_seq.dtype),
                 self.neg_min.to(dtype=x_seq.dtype),
             )
-            is_work = work_flag
         else:
             out_seq = torch.empty_like(x_seq)
             for t in range(x_seq.shape[0]):
@@ -218,8 +214,7 @@ class STBIFNeuron(base.MemoryModule):
                     self.pos_max,
                     self.neg_min,
                 )
-            is_work = (x_seq != 0).any() | (out_seq != 0).any()
-        return (out_seq,), (q, acc_q, cur_output, is_work)
+        return (out_seq,), (q, acc_q, cur_output)
 
     @property
     def accumulated(self) -> torch.Tensor:

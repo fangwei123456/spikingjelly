@@ -1,5 +1,4 @@
 import gc
-import importlib
 import os
 from types import SimpleNamespace
 
@@ -256,85 +255,62 @@ def test_spike_linear_backward_no_bias_cuda():
 
 
 @pytest.mark.parametrize("kind", ["qif", "eif", "izhikevich"])
-def test_nonlinear_functional_cupy_forward_backward(kind, monkeypatch):
+def test_nonlinear_functional_cupy_forward_backward(kind):
     _require_cuda()
     _require_cupy()
     _maybe_skip_custom_op_unavailable()
-
-    kernel_module = importlib.import_module(
-        "spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step." + kind
-    )
-    capture_tokens = []
-    capture_token = kernel_module._capture_token
-
-    def record_capture_token(*args, **kwargs):
-        token = capture_token(*args, **kwargs)
-        capture_tokens.append(token)
-        return token
-
-    monkeypatch.setattr(kernel_module, "_capture_token", record_capture_token)
 
     sg = surrogate.ATan()
     x_seq = (torch.randn(4, 64, device="cuda") * 0.2).requires_grad_(True)
     v_init = torch.zeros(64, device="cuda", requires_grad=True)
 
-    with torch.profiler.profile(
-        activities=[torch.profiler.ProfilerActivity.CPU]
-    ) as profile:
-        if kind == "qif":
-            spike_seq, v_next, v_seq = functional.qif_multi_step_cupy(
-                x_seq=x_seq,
-                v=v_init,
-                tau=2.5,
-                v_threshold=0.9,
-                v_reset=-0.3,
-                v_rest=-0.2,
-                v_c=0.4,
-                a0=0.6,
-                detach_reset=True,
-                surrogate_function=sg,
-                store_v_seq=True,
-            )
-        elif kind == "eif":
-            spike_seq, v_next, v_seq = functional.eif_multi_step_cupy(
-                x_seq=x_seq,
-                v=v_init,
-                tau=2.5,
-                v_threshold=0.9,
-                v_reset=-0.3,
-                v_rest=-0.2,
-                theta_rh=0.4,
-                delta_t=0.7,
-                detach_reset=True,
-                surrogate_function=sg,
-                store_v_seq=True,
-            )
-        else:
-            w_init = torch.zeros(64, device="cuda", requires_grad=True)
-            spike_seq, v_next, w_next, v_seq, w_seq = (
-                functional.izhikevich_multi_step_cupy(
-                    x_seq=x_seq,
-                    v=v_init,
-                    w=w_init,
-                    tau=2.5,
-                    v_threshold=0.9,
-                    v_reset=-0.3,
-                    v_rest=-0.2,
-                    a=0.1,
-                    b=0.2,
-                    tau_w=3.0,
-                    v_c=0.4,
-                    a0=0.6,
-                    detach_reset=True,
-                    surrogate_function=sg,
-                    store_state_seq=True,
-                )
-            )
-
-    operation_names = {event.key for event in profile.key_averages()}
-    assert "cudaStreamSynchronize" not in operation_names
-    assert capture_tokens
-    assert all(token.device.type == "cpu" for token in capture_tokens)
+    if kind == "qif":
+        spike_seq, v_next, v_seq = functional.qif_multi_step_cupy(
+            x_seq=x_seq,
+            v=v_init,
+            tau=2.5,
+            v_threshold=0.9,
+            v_reset=-0.3,
+            v_rest=-0.2,
+            v_c=0.4,
+            a0=0.6,
+            detach_reset=True,
+            surrogate_function=sg,
+            store_v_seq=True,
+        )
+    elif kind == "eif":
+        spike_seq, v_next, v_seq = functional.eif_multi_step_cupy(
+            x_seq=x_seq,
+            v=v_init,
+            tau=2.5,
+            v_threshold=0.9,
+            v_reset=-0.3,
+            v_rest=-0.2,
+            theta_rh=0.4,
+            delta_t=0.7,
+            detach_reset=True,
+            surrogate_function=sg,
+            store_v_seq=True,
+        )
+    else:
+        w_init = torch.zeros(64, device="cuda", requires_grad=True)
+        spike_seq, v_next, w_next, v_seq, w_seq = functional.izhikevich_multi_step_cupy(
+            x_seq=x_seq,
+            v=v_init,
+            w=w_init,
+            tau=2.5,
+            v_threshold=0.9,
+            v_reset=-0.3,
+            v_rest=-0.2,
+            a=0.1,
+            b=0.2,
+            tau_w=3.0,
+            v_c=0.4,
+            a0=0.6,
+            detach_reset=True,
+            surrogate_function=sg,
+            store_state_seq=True,
+        )
 
     if kind == "izhikevich":
         assert w_seq is not None

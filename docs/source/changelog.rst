@@ -273,9 +273,8 @@ Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
 
 - Reduced memory usage with ``store_v_seq=False`` by retaining only the final
   membrane potential.
-- PLIF and STBIF kernels now load scalar tensor parameters directly on device;
-  SpikeZIP work-state reductions remain tensors until callers explicitly read
-  them as Python control values.
+- PLIF and STBIF kernels now load scalar tensor parameters directly on device,
+  avoiding device-to-host scalar reads during kernel dispatch.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

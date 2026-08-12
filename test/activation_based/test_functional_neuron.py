@@ -687,25 +687,6 @@ def test_stbif_step_matches_reference_sequence():
         q_ref, acc_q_ref = step[1:3]
 
 
-def test_stbif_module_derives_is_work():
-    module = neuron.STBIFNeuron(0.25, level=8, sym=True)
-    x = torch.zeros(2, 3)
-
-    module(x)
-    assert not module.is_work
-
-    module(torch.full_like(x, 0.25))
-    assert module.is_work
-
-    module.reset()
-    module.step_mode = "m"
-    module(torch.stack([x, x]))
-    assert not module.is_work
-
-    module(torch.stack([x, torch.full_like(x, 0.25)]))
-    assert module.is_work
-
-
 def test_multi_step_names_identify_independent_sequence_paths():
     backend_suffixes = ("_cupy", "_triton")
     for name in functional_neuron.__all__:
