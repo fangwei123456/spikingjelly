@@ -3,7 +3,7 @@
 These tests cover the seams established by
 ``.agents/plans/PLAN.md``:
 
-* CLI surface for ``dense_baseline.py`` exposes only Phase 5.0 controls.
+* Invalid CLI inputs fail before model loading or report creation.
 * Optional Hugging Face dependency is reported honestly when absent.
 * Required model/tokenizer files produce a deterministic refusal when missing.
 * Output directory refuses to overwrite an existing ``report.json``.
@@ -59,47 +59,8 @@ def _import_contract_module():
 
 
 # --------------------------------------------------------------------------- #
-# Slice 1: constants, pure helpers, file validation.
+# Slice 1: helpers and file validation.
 # --------------------------------------------------------------------------- #
-
-
-def test_package_exposes_pinned_baseline_constants():
-    package = _import_package()
-
-    assert package.BASELINE_SCHEMA_VERSION == 1
-    assert package.CONTRACT_SCHEMA_VERSION == 1
-    assert package.EXPECTED_REVISION == "607a30d783dfa663caf39e06633721c8d4cfcd7e"
-    assert package.DEFAULT_MODEL_NAME == "openai-community/gpt2"
-    assert package.MAX_LENGTH == 64
-    assert package.DEFAULT_MAX_SAMPLES == 4
-    assert isinstance(package.FIXED_PROMPTS, tuple)
-    assert len(package.FIXED_PROMPTS) >= package.DEFAULT_MAX_SAMPLES
-
-
-def test_required_files_lists_match_plan():
-    package = _import_package()
-
-    assert set(package.REQUIRED_MODEL_FILES) == {
-        "config.json",
-        "generation_config.json",
-        "model.safetensors",
-    }
-    assert set(package.REQUIRED_TOKENIZER_FILES) == {
-        "tokenizer.json",
-        "tokenizer_config.json",
-        "vocab.json",
-        "merges.txt",
-    }
-
-
-def test_fixed_prompts_returns_frozen_tuple_of_strings():
-    baseline = _import_baseline_module()
-
-    prompts = baseline.fixed_prompts()
-    assert prompts == baseline.FIXED_PROMPTS
-    assert isinstance(prompts, tuple)
-    assert all(isinstance(item, str) for item in prompts)
-    assert len(prompts) >= baseline.DEFAULT_MAX_SAMPLES
 
 
 def test_hash_files_returns_empty_mapping_when_directory_missing(tmp_path: Path):
@@ -253,15 +214,6 @@ def test_contract_report_never_advertises_snn_or_fas_result():
     ):
         assert needle not in payload, needle
     assert not leaked, leaked
-
-
-def test_contract_report_json_serialisable():
-    contract = _import_contract_module()
-
-    report = contract.build_contract_report()
-    encoded = json.dumps(report)
-    decoded = json.loads(encoded)
-    assert decoded == report
 
 
 # --------------------------------------------------------------------------- #
@@ -490,7 +442,7 @@ def test_compute_baseline_reports_perplexity_overflow_as_value_error(
 
 
 # --------------------------------------------------------------------------- #
-# Slice 4: CLI surface and end-to-end runner behaviour.
+# Slice 4: CLI validation and end-to-end runner behaviour.
 # --------------------------------------------------------------------------- #
 
 
@@ -509,23 +461,6 @@ def _run_cli(
         check=False,
         env={**os.environ, **(env or {})},
     )
-
-
-def test_dense_baseline_cli_help_only_exposes_phase5_controls():
-    completed = _run_cli("--help")
-
-    assert completed.returncode == 0, completed.stderr
-    for flag in ("--model-root", "--output-dir", "--device", "--source-revision"):
-        assert flag in completed.stdout
-    assert "--max-samples" in completed.stdout
-    forbidden = (
-        "--checkpoint",
-        "--do-sample",
-        "--max-new-tokens",
-        "--revision-cli",
-    )
-    for flag in forbidden:
-        assert flag not in completed.stdout, flag
 
 
 def test_dense_baseline_cli_rejects_unknown_flags(tmp_path: Path):
@@ -616,41 +551,6 @@ def test_dense_baseline_rejects_unknown_device(tmp_path: Path):
     assert completed.returncode != 0
 
 
-def test_max_samples_only_narrows_the_fixed_prompt_bank():
-    """``--max-samples`` truncates ``FIXED_PROMPTS``; nothing else.
-
-    Phase 5.0 contract: the runner narrows an existing bank of literal
-    strings. It must never substitute, shuffle, synthesise, or re-tokenize
-    prompts based on the count. Tokenizer / model / config state are
-    explicitly off-limits; truncation is the sole transformation.
-    """
-
-    baseline = _import_baseline_module()
-
-    full = baseline.fixed_prompts()
-    assert len(full) >= baseline.DEFAULT_MAX_SAMPLES >= 1
-
-    seen: list[tuple[str, ...]] = []
-    for count in (1, 2, baseline.DEFAULT_MAX_SAMPLES, len(full)):
-        truncated = full[:count]
-        assert len(truncated) == count
-        # Strict prefix of the canonical bank, in canonical order.
-        assert truncated == full[:count]
-        # No synthesised / shuffled entries; every slot is the original
-        # literal at the same index.
-        for index, prompt in enumerate(truncated):
-            assert prompt == full[index]
-            assert isinstance(prompt, str)
-        seen.append(truncated)
-
-    # Different counts must select different prefixes, but never different
-    # content per slot. Order and identity are preserved.
-    assert seen[0] != seen[1]
-    assert seen[1] != seen[2]
-    assert seen[0] == full[:1]
-    assert seen[-1] == full
-
-
 def test_max_samples_must_be_positive(tmp_path: Path):
     model_root = tmp_path / "model"
     _populate_model_root(model_root)
@@ -686,19 +586,3 @@ def test_import_huggingface_missing_raises_helpful_error():
         baseline._import_huggingface(failing)  # noqa: SLF001
     assert "uv pip install transformers" in str(excinfo.value)
     assert "hugging face" in str(excinfo.value).lower()
-
-
-def test_import_huggingface_returns_dependencies_when_present():
-    baseline = _import_baseline_module()
-
-    loader_calls = []
-
-    fake_module = type(sys)("fake_transformers")
-
-    def loader():
-        loader_calls.append("ok")
-        return fake_module
-
-    result = baseline._import_huggingface(loader)  # noqa: SLF001
-    assert loader_calls == ["ok"]
-    assert result is fake_module

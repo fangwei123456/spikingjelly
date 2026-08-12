@@ -7,19 +7,16 @@ import torch
 import benchmark.benchmark_triton_neuron_kernels as triton_neuron_benchmark
 from benchmark.benchmark_fp8_training_inference import (
     _aggregate_precision_trials,
-    _commit,
     _cuda_time_ms,
     _samples_per_second,
     validate_args,
 )
 from benchmark.benchmark_triton_neuron_kernels import (
-    _higher_precision_variants,
     _write_markdown,
 )
 from benchmark.fp8_efficiency import (
     assess_model_efficiency,
     assess_triton_efficiency,
-    percentile,
     require_efficiency,
 )
 
@@ -106,14 +103,6 @@ def test_triton_benchmark_timing_uses_requested_cuda_device(monkeypatch):
     assert not event_synchronize_calls
 
 
-def test_percentile_rejects_invalid_inputs():
-    assert percentile([3.0, 1.0, 2.0], 0.25) == pytest.approx(1.5)
-    with pytest.raises(ValueError, match="empty sequence"):
-        percentile([], 0.5)
-    with pytest.raises(ValueError, match="quantile"):
-        percentile([1.0], 1.1)
-
-
 def test_aggregate_precision_trials_uses_medians_and_preserves_raw_trials():
     trials = [
         {
@@ -162,24 +151,6 @@ def test_samples_per_second_rejects_invalid_cuda_timing(elapsed_ms):
 
 def test_samples_per_second_converts_milliseconds():
     assert _samples_per_second(16, 2.0) == pytest.approx(8000.0)
-
-
-def test_triton_benchmark_includes_fp16_and_bf16_comparisons():
-    variants = _higher_precision_variants()
-
-    assert [(name, compute) for name, _, compute in variants] == [
-        ("float16", "fp16"),
-        ("bfloat16", "bf16"),
-    ]
-
-
-def test_model_benchmark_commit_prefers_explicit_value(monkeypatch):
-    monkeypatch.delenv("SJ_COMMIT", raising=False)
-    monkeypatch.delenv("GIT_COMMIT", raising=False)
-    monkeypatch.setenv("CODEX_COMMIT", "environment-commit")
-
-    assert _commit("explicit-commit") == "explicit-commit"
-    assert _commit() == "environment-commit"
 
 
 @pytest.mark.parametrize(

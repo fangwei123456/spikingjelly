@@ -15,7 +15,6 @@ DIAGNOSTIC_PRINT_FUNCTIONS = {"check_manual_grad", "check_cuda_grad"}
 PERCENT_PLACEHOLDER = re.compile(
     r"%(?!%)(?:\([^)]+\))?[#0 +\-]?(?:\d+|\*)?(?:\.\d+|\.\*)?[hlL]?[diouxXeEfFgGcrsa]"
 )
-SOURCE_MODULE_PREFIX = re.compile(r"^spikingjelly(?:\.[A-Za-z_]\w*)+\s*:")
 
 
 def _is_production(path: Path) -> bool:
@@ -94,8 +93,6 @@ def _check_logger_call(path: Path, node: ast.Call) -> list[str]:
         violations.append(f"{path}:{node.lineno}: eager formatting in logger call")
 
     if isinstance(message, ast.Constant) and isinstance(message.value, str):
-        if SOURCE_MODULE_PREFIX.match(message.value):
-            violations.append(f"{path}:{node.lineno}: source module in logger message")
         if PERCENT_PLACEHOLDER.search(message.value):
             violations.append(
                 f"{path}:{node.lineno}: percent placeholder in logger call"

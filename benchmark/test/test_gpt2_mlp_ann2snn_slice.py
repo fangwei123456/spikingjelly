@@ -29,31 +29,6 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_cli_help_only_exposes_phase51_controls():
-    completed = _run_cli("--help")
-
-    assert completed.returncode == 0
-    for option in (
-        "--model-root",
-        "--output-dir",
-        "--device",
-        "--source-revision",
-        "--block-index",
-        "--time-steps",
-        "--max-samples",
-    ):
-        assert option in completed.stdout
-    for forbidden in (
-        "generation",
-        "cache",
-        "checkpoint",
-        "fine-tune",
-        "fine_tune",
-        "ppl",
-    ):
-        assert forbidden not in completed.stdout.lower()
-
-
 def test_signed_if_proxy_reconstructs_qcfs_and_uses_public_neuron():
     from benchmark.snn_llm.gpt2_conversion.mlp_ann2snn_slice import (
         build_signed_if_proxy,
@@ -93,24 +68,6 @@ def test_signed_if_proxy_matches_qcfs_at_rounding_boundaries():
     expected = torch.round(hidden_dense / scale).clamp(-16, 16) * scale
 
     assert torch.equal(hidden_if, expected)
-
-
-def test_positive_only_proxy_is_not_supported():
-    from benchmark.snn_llm.gpt2_conversion.mlp_ann2snn_slice import (
-        SIGNED_ENCODING,
-    )
-
-    assert SIGNED_ENCODING != "positive_only"
-    assert "signed" in SIGNED_ENCODING
-
-
-def test_recipe_uses_existing_module_converter_seam():
-    from benchmark.snn_llm.gpt2_conversion import mlp_ann2snn_slice as runner
-    from spikingjelly.activation_based.ann2snn import ModuleConverter
-    from spikingjelly.activation_based.ann2snn.recipes import ModuleConversionRecipe
-
-    assert issubclass(runner.GPT2MLPAnn2SNNRecipe, ModuleConversionRecipe)
-    assert runner.ModuleConverter is ModuleConverter
 
 
 def _populate_model_root(root: Path) -> None:

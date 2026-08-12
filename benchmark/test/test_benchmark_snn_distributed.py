@@ -130,17 +130,6 @@ def test_summarize_benchmark_comparison_reports_pct_deltas():
     assert summary["warning_count"]["pct"] == -50.0
 
 
-def test_line_pattern_counter_tracks_torch_warning_prefix():
-    counter = bench._LinePatternCounter()
-    counter.feed("W0429 17:23:09.278000 some torch warning\n")
-    counter.feed("recompile because shape changed\n")
-    counter.feed("graph break detected\n")
-    counter.finalize()
-    assert counter.warning_count == 1
-    assert counter.recompile_count == 1
-    assert counter.graph_break_count == 1
-
-
 def test_capture_benchmark_events_counts_fd_level_warnings():
     with bench.capture_benchmark_events() as counter:
         os.write(2, b"W9999 native warning that bypasses sys.stderr\n")

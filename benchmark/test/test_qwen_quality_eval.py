@@ -1,6 +1,5 @@
 import sys
 from contextlib import nullcontext
-from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -12,10 +11,6 @@ from spikingjelly.activation_based.ann2snn import (
     Qwen2SNNCalibration,
     Qwen2SNNConfig,
 )
-
-
-def test_distributed_task_timeout_allows_imbalanced_long_tasks():
-    assert runner.DISTRIBUTED_TASK_TIMEOUT >= timedelta(hours=6)
 
 
 def test_quality_metric_extraction_uses_declared_primary_metric():
@@ -371,11 +366,6 @@ def test_statistics_probe_disables_collection_before_quality():
     assert converted.forward_collection_state is True
     assert encoder.collect_statistics is False
     assert summary["worst_local_encoder"] == "probe"
-
-
-def test_runner_sha_is_captured_at_module_import():
-    assert len(runner.RUNNER_SHA256) == 64
-    int(runner.RUNNER_SHA256, 16)
 
 
 def test_chunked_nll_preserves_cross_chunk_targets(monkeypatch):

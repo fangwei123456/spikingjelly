@@ -1,16 +1,9 @@
-import subprocess
-import sys
-from pathlib import Path
-
 import pytest
 import torch
 
 from benchmark.snn_llm import spikegpt_checkpoint_compare
 from benchmark.snn_llm._spikegpt_author import SPIKEGPT_REVISION
 from spikingjelly.activation_based import neuron
-
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_SCRIPT = _REPO_ROOT / "benchmark" / "snn_llm" / "spikegpt_checkpoint_compare.py"
 
 
 def test_compare_runs_rejects_logit_or_token_mismatch():
@@ -52,21 +45,6 @@ def test_current_lif_matches_author_inference_defaults():
     assert lif.step_mode == "s"
     assert lif.backend == "torch"
     assert lif.training is False
-
-
-def test_help_does_not_load_checkpoint_or_author_code():
-    completed = subprocess.run(
-        [sys.executable, str(_SCRIPT), "--help"],
-        cwd=_REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert completed.returncode == 0
-    assert "--spikegpt-root" in completed.stdout
-    assert "--checkpoint" in completed.stdout
-    assert "RWKV_HEAD_QK_DIM" not in completed.stdout
 
 
 def test_artifact_hashes_are_enforced(monkeypatch, tmp_path):

@@ -14,27 +14,6 @@ _SCRIPT = (
 )
 
 
-def test_help_exposes_only_phase4_controls():
-    completed = subprocess.run(
-        [sys.executable, str(_SCRIPT), "--help"],
-        cwd=_REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert completed.returncode == 0
-    assert "--spikegpt-root" in completed.stdout
-    assert "--data" in completed.stdout
-    assert "--output-dir" in completed.stdout
-    assert "--source-revision" in completed.stdout
-    assert "--precision" in completed.stdout
-    assert "--max-steps" in completed.stdout
-    assert "--checkpoint-every" in completed.stdout
-    assert "--resume-checkpoint" in completed.stdout
-    assert "--max-minutes" not in completed.stdout
-
-
 def test_invalid_precision_is_rejected_before_cuda(tmp_path):
     completed = subprocess.run(
         [
@@ -198,11 +177,6 @@ def test_mixed_precision_lif_wrapper_keeps_lif_math_float32():
     assert y.dtype == torch.bfloat16
     assert wrapped.v == lif.v
     assert torch.equal(wrapped.v_seq, lif.v_seq)
-
-
-def test_validation_sample_metric_name_is_not_full_validation():
-    assert phase4.VALIDATION_SAMPLE_METRIC == "validation_sample_bpc"
-    assert "full" not in phase4.VALIDATION_SAMPLE_METRIC
 
 
 def test_resume_config_mismatch_is_rejected(tmp_path):

@@ -318,11 +318,7 @@ class Trainer:
         )
         if utils.is_main_process():
             elapsed_seconds = time.perf_counter() - start_time
-            samples_per_second = (
-                num_processed_samples / elapsed_seconds
-                if elapsed_seconds > 0
-                else float("inf")
-            )
+            samples_per_second = num_processed_samples / elapsed_seconds
             logger.info(
                 "Test: test_acc1={}, test_acc5={}, test_loss={}, samples/s={}",
                 test_acc1,

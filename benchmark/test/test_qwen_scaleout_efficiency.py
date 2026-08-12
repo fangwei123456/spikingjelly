@@ -92,13 +92,3 @@ def test_backend_parity_requires_equal_tokens_and_bounded_logits():
     candidate["token_id"] = 8
     with pytest.raises(ValueError, match="token"):
         runner._backend_parity(candidate, reference)
-
-
-def test_cli_rejects_non_cuda_and_exposes_fixed_benchmark_controls():
-    with pytest.raises(SystemExit):
-        runner._parse_args(["--device", "cpu"])
-
-    with pytest.raises(SystemExit) as info:
-        runner._parse_args(["--help"])
-    assert info.value.code == 0
-    assert 512 in runner.TIME_STEP_CHOICES

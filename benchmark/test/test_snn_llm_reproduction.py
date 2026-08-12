@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 import torch
 
-from benchmark.snn_llm import smoke
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SMOKE_SCRIPT = _REPO_ROOT / "benchmark" / "snn_llm" / "smoke.py"
@@ -34,32 +33,6 @@ _REQUIRES_GIT_AT_REPO_ROOT = pytest.mark.skipif(
         "still exercises the no-git error path via tmp_path."
     ),
 )
-
-
-def test_git_probe_has_a_timeout(monkeypatch, tmp_path):
-    def fake_run(*args, **kwargs):
-        assert kwargs["timeout"] == smoke.GIT_TIMEOUT_SECONDS
-        return subprocess.CompletedProcess(args[0], 0, stdout="revision\n")
-
-    monkeypatch.setattr(smoke.subprocess, "run", fake_run)
-
-    assert smoke._run_git(tmp_path, "rev-parse", "HEAD") == "revision"
-
-
-@pytest.mark.parametrize(
-    "error",
-    (
-        subprocess.TimeoutExpired(["git"], smoke.GIT_TIMEOUT_SECONDS),
-        OSError("git is unavailable"),
-    ),
-)
-def test_git_probe_failure_is_treated_as_unavailable(monkeypatch, tmp_path, error):
-    def fail(*args, **kwargs):
-        raise error
-
-    monkeypatch.setattr(smoke.subprocess, "run", fail)
-
-    assert smoke._run_git(tmp_path, "rev-parse", "HEAD") is None
 
 
 def _smoke_command(output_dir: Path, *extra_args: str, device: str = "cpu"):

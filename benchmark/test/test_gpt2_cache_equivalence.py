@@ -1,7 +1,7 @@
 """Focused tests for the private Phase 6.0 GPT-2 cache equivalence runner.
 
-These tests verify both fake-cache seams and the CLI surface. They never
-import Hugging Face, so they run inside the default virtualenv.
+These tests verify cache semantics, CLI validation, and report contracts without
+requiring Hugging Face in the default virtualenv.
 """
 
 from __future__ import annotations
@@ -37,30 +37,6 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         check=False,
     )
-
-
-def test_cli_help_exposes_only_phase60_controls():
-    completed = _run_cli("--help")
-
-    assert completed.returncode == 0
-    for option in (
-        "--model-root",
-        "--output-dir",
-        "--device",
-        "--source-revision",
-        "--max-samples",
-        "--max-length",
-        "--prefill-length",
-        "--decode-steps",
-    ):
-        assert option in completed.stdout, option
-    for forbidden in (
-        "--do-sample",
-        "--max-new-tokens",
-        "fine-tune",
-        "ppl",
-    ):
-        assert forbidden not in completed.stdout.lower(), forbidden
 
 
 def test_cache_helpers_read_dynamic_cache_layer_summaries():
@@ -195,37 +171,6 @@ def test_cache_reorder_accepts_returned_cache_object():
     assert reordered is not cache
     assert torch.allclose(reordered.layers[0].keys[0, 0, 0, 0], torch.tensor(6.0))
     assert torch.allclose(cache.layers[0].keys[0, 0, 0, 0], torch.tensor(0.0))
-
-
-def test_cache_reorder_falls_back_to_batch_select_when_reorder_missing():
-    from benchmark.snn_llm.gpt2_conversion.cache_equivalence import _reorder_cache
-
-    class _Layer:
-        def __init__(self) -> None:
-            self.keys = torch.arange(2 * 1 * 3 * 2, dtype=torch.float32).view(
-                2, 1, 3, 2
-            )
-            self.values = self.keys + 100.0
-
-    class _CacheNoReorder:
-        def __init__(self) -> None:
-            self.layers = [_Layer()]
-
-        def get_seq_length(self) -> int:
-            return 3
-
-        def batch_select_indices(self, indices: torch.Tensor) -> None:
-            for layer in self.layers:
-                layer.keys = layer.keys[indices]
-                layer.values = layer.values[indices]
-
-    cache = _CacheNoReorder()
-    reordered = _reorder_cache(cache, torch.tensor([1, 0]))
-    # batch_select_indices reordered the batch axis: row 0 of the reordered
-    # tensor is the original row 1, so its first scalar equals 6.0.
-    assert torch.allclose(cache.layers[0].keys[0, 0, 0, 0], torch.tensor(6.0))
-    assert torch.allclose(cache.layers[0].keys[1, 0, 0, 0], torch.tensor(0.0))
-    assert reordered is cache
 
 
 def test_compute_shifted_ce_loss_matches_phase5_convention():

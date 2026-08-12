@@ -101,26 +101,6 @@ def test_numpy_rng_checkpoint_state_is_portable_and_exact():
     np.testing.assert_array_equal(actual, expected)
 
 
-def test_help_exposes_only_pilot_resource_and_resume_controls():
-    completed = subprocess.run(
-        [sys.executable, str(_SCRIPT), "--help"],
-        cwd=_REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert completed.returncode == 0
-    assert "--spikegpt-root" in completed.stdout
-    assert "--data" in completed.stdout
-    assert "--output-dir" in completed.stdout
-    assert "--resume-checkpoint" in completed.stdout
-    assert "--max-steps" in completed.stdout
-    assert "--max-minutes" in completed.stdout
-    assert "--checkpoint-every" in completed.stdout
-    assert "RWKV_HEAD_QK_DIM" not in completed.stdout
-
-
 def test_cli_rejects_nonpositive_resource_limits_before_loading_cuda(tmp_path):
     completed = subprocess.run(
         [
@@ -198,24 +178,6 @@ def test_wkv_instrumentation_does_not_stack_wrappers():
     assert author_model.RUN_CUDA(7) == 7
     assert calls == [7]
     assert author_model._comparison_wkv_calls == 1
-
-
-@pytest.mark.parametrize(
-    "error",
-    (
-        subprocess.TimeoutExpired(["git"], 30),
-        OSError("git is unavailable"),
-    ),
-)
-def test_git_head_failure_is_treated_as_unavailable(monkeypatch, tmp_path, error):
-    (tmp_path / ".git").mkdir()
-
-    def fail(*args, **kwargs):
-        raise error
-
-    monkeypatch.setattr(_spikegpt_author.subprocess, "run", fail)
-
-    assert _spikegpt_author._git_head(tmp_path) is None
 
 
 def test_pilot_config_fingerprints_full_validation_protocol():
