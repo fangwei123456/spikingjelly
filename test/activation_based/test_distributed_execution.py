@@ -125,7 +125,7 @@ def test_apply_returns_unified_runtime_single_rank():
             analysis=analysis,
             objective="speed",
             topology={"dp": 1},
-            backend="inductor",
+            backend="triton",
             batch_size=4,
             model_family="toy_snn",
         )
@@ -212,7 +212,7 @@ def test_apply_rejects_device_mesh_world_size_mismatch():
         analysis=analysis,
         objective="speed",
         topology={"dp": 1},
-        backend="inductor",
+        backend="triton",
         batch_size=4,
         model_family="toy_snn",
     )
@@ -236,7 +236,7 @@ def test_apply_rejects_pipeline_mode_without_example_input():
         objective="capacity",
         topology=SNNDistributedTopology.from_mapping({"pp": 2}),
         model_family="toy_snn",
-        backend="inductor",
+        backend="triton",
         batch_size=8,
         optimizer_strategy="none",
         memopt_level=1,

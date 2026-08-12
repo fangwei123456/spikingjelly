@@ -6,7 +6,7 @@ try:
     from .lif import *
     from .plif import *
 except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.triton_kernel.neuron_kernel: %s", e)
+    logger.debug("Optional neuron kernels unavailable: {}", e)
     activation_aware_if = None
     ilif = None
     integrate_and_fire = None

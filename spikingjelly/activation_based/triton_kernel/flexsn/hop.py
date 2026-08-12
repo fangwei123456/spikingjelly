@@ -51,7 +51,7 @@ Current limitations:
 * Training and autograd still use the existing eager/unrolled path.
 * The current while-loop lowering is functionally correct for the validated
   forward ``no_grad`` cases, but it is not yet faster than the current
-  ``backend="inductor"`` custom-op compile path on the server benchmark.
+  ``backend="triton"`` custom-op compile path on the server benchmark.
 * A true first-class Inductor lowering for ``flex_sn_scan`` itself does not
   exist yet; the current "less unrolled" path relies on PyTorch's built-in
   scan / while_loop decomposition.
@@ -559,7 +559,7 @@ def eager_scan(
     English:
         Run the FlexSN scan with an eager Python loop. This helper is reused by
         both the HOP eager implementation and the Dynamo-friendly
-        ``backend="inductor"`` path, so ``torch.compile`` can trace the
+        ``backend="triton"`` path, so ``torch.compile`` can trace the
         unrolled loop into a standard FX graph.
         When ``T == 0``, ``output_template_specs`` must describe the output
         sequence shapes/dtypes so empty outputs can be materialized without

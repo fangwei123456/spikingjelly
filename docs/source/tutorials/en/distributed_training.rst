@@ -180,7 +180,7 @@ The repository includes a CIFAR10-DVS training entry:
       --data-dir /path/to/cifar10dvs \
       --distributed-mode fsdp2_tp \
       --mesh-shape 2 2 \
-      --backend inductor \
+      --backend triton \
       --batch-size 16 \
       --epochs 1 \
       --print-summary
@@ -204,7 +204,7 @@ benchmark also expose a high-level recommender:
       --data-dir /path/to/cifar10dvs \
       --distributed-mode auto \
       --prefer memory \
-      --backend inductor \
+      --backend triton \
       --batch-size 16
 
 The current high-level intents are:
@@ -583,7 +583,7 @@ For example:
       --mode auto \
       --prefer speed \
       --model spikformer_ti \
-      --backend inductor \
+      --backend triton \
       --batch-size 4 \
       --T 8
 

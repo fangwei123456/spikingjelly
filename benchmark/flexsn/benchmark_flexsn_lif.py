@@ -6,11 +6,11 @@ Equivalent neuron config:
 
 Backends / modes tested:
   - "torch"                : pure PyTorch multi-step loop (CPU and CUDA)
-  - "inductor"             : Triton scan kernel path on CUDA
-  - "inductor" + compile   : same CUDA path wrapped by torch.compile
+  - "triton"             : Triton scan kernel path on CUDA
+  - "triton" + compile   : same CUDA path wrapped by torch.compile
 
-In FlexSN, ``backend="triton"`` and ``backend="inductor"`` are equivalent
-CUDA backend labels. This benchmark measures the triton / inductor backend once.
+FlexSN uses ``backend="triton"`` for its dedicated CUDA kernels. This benchmark
+compares the Triton path with and without outer ``torch.compile``.
 
 Usage:
   python benchmark/flexsn/benchmark_flexsn_lif.py
@@ -104,33 +104,33 @@ def main() -> None:
         )
 
     if device.type == "cuda":
-        model_inductor = FlexSN(
+        model_triton = FlexSN(
             core=core,
             num_inputs=1,
             num_states=1,
             num_outputs=1,
             step_mode="m",
-            backend="inductor",
+            backend="triton",
         ).to(device)
-        model_inductor_compiled = FlexSN(
+        model_triton_compiled = FlexSN(
             core=core,
             num_inputs=1,
             num_states=1,
             num_outputs=1,
             step_mode="m",
-            backend="inductor",
+            backend="triton",
         ).to(device)
-        compiled = torch.compile(model_inductor_compiled, fullgraph=True)
+        compiled = torch.compile(model_triton_compiled, fullgraph=True)
 
         with torch.no_grad():
-            model_inductor.eval()
-            model_inductor_compiled.eval()
+            model_triton.eval()
+            model_triton_compiled.eval()
             run_benchmark(
-                model_inductor,
+                model_triton,
                 x,
                 warmup,
                 iterations,
-                "FlexSN backend=inductor",
+                "FlexSN backend=triton",
                 device,
             )
             run_benchmark(
@@ -138,12 +138,12 @@ def main() -> None:
                 x,
                 warmup,
                 iterations,
-                "FlexSN inductor + compile",
+                "FlexSN triton + compile",
                 device,
             )
     else:
-        print("  FlexSN backend=inductor            [skipped — CUDA not available]")
-        print("  FlexSN inductor + compile          [skipped — CUDA not available]")
+        print("  FlexSN backend=triton            [skipped — CUDA not available]")
+        print("  FlexSN triton + compile          [skipped — CUDA not available]")
 
     print("-" * 65)
     print("Done.")

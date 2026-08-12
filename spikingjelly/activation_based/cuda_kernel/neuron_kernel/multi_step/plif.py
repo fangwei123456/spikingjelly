@@ -1,4 +1,5 @@
 import math
+from functools import cache
 from typing import Callable, Optional
 
 import torch
@@ -237,10 +238,6 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
         return codes
 
 
-_PLIF_FWD_KERNEL_CACHE = {}
-_PLIF_BWD_KERNEL_CACHE = {}
-
-
 def _ensure_power_of_two_threads() -> None:
     threads = configure.cuda_threads
     if threads <= 0 or (threads & (threads - 1)) != 0:
@@ -250,19 +247,16 @@ def _ensure_power_of_two_threads() -> None:
         )
 
 
+@cache
 def _get_plif_forward_kernel(
     *, decay_input: bool, hard_reset: bool, dtype: str
 ) -> ParametricLIFNodeFPTTKernel:
-    key = (decay_input, hard_reset, dtype)
-    kernel = _PLIF_FWD_KERNEL_CACHE.get(key)
-    if kernel is None:
-        kernel = ParametricLIFNodeFPTTKernel(
-            decay_input=decay_input, hard_reset=hard_reset, dtype=dtype
-        )
-        _PLIF_FWD_KERNEL_CACHE[key] = kernel
-    return kernel
+    return ParametricLIFNodeFPTTKernel(
+        decay_input=decay_input, hard_reset=hard_reset, dtype=dtype
+    )
 
 
+@cache
 def _get_plif_backward_kernel(
     *,
     decay_input: bool,
@@ -271,18 +265,13 @@ def _get_plif_backward_kernel(
     detach_reset: bool,
     dtype: str,
 ) -> ParametricLIFNodeBPTTKernel:
-    key = (decay_input, sg_cupy_id, hard_reset, detach_reset, dtype)
-    kernel = _PLIF_BWD_KERNEL_CACHE.get(key)
-    if kernel is None:
-        kernel = ParametricLIFNodeBPTTKernel(
-            decay_input=decay_input,
-            surrogate_function=_cuda_codes_callable(sg_cupy_id, dtype),
-            hard_reset=hard_reset,
-            detach_reset=detach_reset,
-            dtype=dtype,
-        )
-        _PLIF_BWD_KERNEL_CACHE[key] = kernel
-    return kernel
+    return ParametricLIFNodeBPTTKernel(
+        decay_input=decay_input,
+        surrogate_function=_cuda_codes_callable(sg_cupy_id, dtype),
+        hard_reset=hard_reset,
+        detach_reset=detach_reset,
+        dtype=dtype,
+    )
 
 
 @torch.library.custom_op("sj::cupy_multistep_plif_forward", mutates_args=())

@@ -107,7 +107,7 @@ To generate a multi-step Triton kernel, use :class:`FlexSN <spikingjelly.activat
         ),
         requires_grad=(True, True, True, True),
         step_mode="m",
-        backend="inductor",
+        backend="triton",
         store_state_seqs=True,
     )
 
@@ -126,9 +126,9 @@ The construction of :class:`FlexSN <spikingjelly.activation_based.neuron.flexsn.
 * ``core`` : a function that describes the single-step neuron dynamics, with the signature ``[*inputs, *states] -> [*outputs, *states]``.
 * ``num_inputs, num_states, num_outputs`` : the numbers of inputs, state variables, and outputs, which should be consistent with the signature of ``core``.
 * ``example_inputs`` : example arguments for ``core``. ``FlexSN`` will call ``core`` with these example inputs in order to capture the computation graph.
-* ``example_outputs`` : optional, per-step output templates for ``core``. They are mainly used to determine output shapes and dtypes when the input sequence is empty (``T == 0``). On the ``"triton"`` / ``"inductor"`` path, if this argument is provided, each template tensor should match the first ``example_inputs`` tensor's per-step shape and dtype.
+* ``example_outputs`` : optional, per-step output templates for ``core``. They are mainly used to determine output shapes and dtypes when the input sequence is empty (``T == 0``). On the ``"triton"`` path, if this argument is provided, each template tensor should match the first ``example_inputs`` tensor's per-step shape and dtype.
 * ``requires_grad`` : whether the arguments of ``core`` require gradients. The default value is ``None``, which means that all arguments require gradients (i.e., equivalent to all ``True``).
-* ``step_mode, backend`` : similar to other neuron modules, these two arguments determine the step mode and the backend. The ``"torch"`` backend is always available. The ``"triton"``, ``"inductor"``, and ``"hop"`` backends are only valid when ``step_mode="m"``. In FlexSN, ``"triton"`` and ``"inductor"`` are equivalent labels for the same Triton path, while ``"hop"`` uses the HOP/eager-scan path.
+* ``step_mode, backend`` : similar to other neuron modules, these two arguments determine the step mode and the backend. The ``"torch"`` backend is always available. The ``"triton"`` and ``"hop"`` backends are only valid when ``step_mode="m"``.
 * ``store_state_seqs`` : similar to ``store_v_seq`` in other neuron modules, this argument determines whether state sequences are stored. If ``True``, the state sequences from the last run can be accessed via the ``state_seqs`` attribute. This attribute is a list, where each element corresponds to the sequence of a specific state variable.
 
 
@@ -136,7 +136,7 @@ The construction of :class:`FlexSN <spikingjelly.activation_based.neuron.flexsn.
 
 .. code:: python
 
-    n_inductor = neuron.FlexSN(
+    n_triton = neuron.FlexSN(
         core=complicated_lif_core_generator(beta=0.5, gamma=0.9),
         num_inputs=2,
         num_states=2,
@@ -147,7 +147,7 @@ The construction of :class:`FlexSN <spikingjelly.activation_based.neuron.flexsn.
         ),
         requires_grad=(True, True, True, True),
         step_mode="m",
-        backend="inductor",
+        backend="triton",
         store_state_seqs=True,
     )
 
@@ -168,32 +168,32 @@ The construction of :class:`FlexSN <spikingjelly.activation_based.neuron.flexsn.
 
     x = torch.randn([16, 3, 32, 32], device="cuda")
     y = torch.randn([16, 3, 32, 32], device="cuda")
-    x_inductor = x.clone().requires_grad_(True)
-    y_inductor = y.clone().requires_grad_(True)
+    x_triton = x.clone().requires_grad_(True)
+    y_triton = y.clone().requires_grad_(True)
     x_torch = x.clone().requires_grad_(True)
     y_torch = y.clone().requires_grad_(True)
 
-    s1_inductor, s2_inductor = n_inductor(x_inductor, y_inductor)
+    s1_triton, s2_triton = n_triton(x_triton, y_triton)
     s1_torch, s2_torch = n_torch(x_torch, y_torch)
-    grad = torch.randn_like(s1_inductor)
-    s1_inductor.backward(grad)
+    grad = torch.randn_like(s1_triton)
+    s1_triton.backward(grad)
     s1_torch.backward(grad)
 
-    v_inductor, rho_inductor = n_inductor.state_seqs
+    v_triton, rho_triton = n_triton.state_seqs
     v_torch, rho_torch = n_torch.state_seqs
 
-    assert torch.allclose(s1_inductor, s1_torch)
-    assert torch.allclose(s2_inductor, s2_torch)
-    assert torch.allclose(x_inductor.grad, x_torch.grad, atol=1e-6, rtol=1e-6)
-    assert torch.allclose(y_inductor.grad, y_torch.grad, atol=1e-6, rtol=1e-6)
-    assert torch.allclose(v_inductor, v_torch, atol=1e-6, rtol=1e-6)
-    assert torch.allclose(rho_inductor, rho_torch)
-    print(s1_inductor.mean())
-    print(s2_inductor.mean())
-    print(x_inductor.grad.mean())
-    print(y_inductor.grad.mean())
-    print(v_inductor.mean())
-    print(rho_inductor.mean())
+    assert torch.allclose(s1_triton, s1_torch)
+    assert torch.allclose(s2_triton, s2_torch)
+    assert torch.allclose(x_triton.grad, x_torch.grad, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(y_triton.grad, y_torch.grad, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(v_triton, v_torch, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(rho_triton, rho_torch)
+    print(s1_triton.mean())
+    print(s2_triton.mean())
+    print(x_triton.grad.mean())
+    print(y_triton.grad.mean())
+    print(v_triton.mean())
+    print(rho_triton.mean())
 
 All ``assert`` statements pass, and the outputs are shown below. This demonstrates that the Triton scan kernels used by ``FlexSN`` are equivalent to the original PyTorch function in both forward and backward propagation.
 
@@ -241,7 +241,7 @@ With the workflow described above, users can obtain Triton-accelerated neuron mo
 
     When using ``FlexSN``, please note the following:
 
-    * The ``"torch"`` backend can run on CPU or GPU. The ``"triton"`` and ``"inductor"`` backends require a GPU, and the ``"triton"``, ``"inductor"``, and ``"hop"`` backends only support multi-step mode ``step_mode="m"``.
+    * The ``"torch"`` backend can run on CPU or GPU. The ``"triton"`` backend requires a GPU, and the ``"triton"`` and ``"hop"`` backends only support multi-step mode ``step_mode="m"``.
     * The PyTorch backend is implemented by repeatedly calling ``core``.
     * In the design of ``FlexSN``, compromises are made in efficiency in order to pursue generality. At present, ``IFNode``, ``LIFNode``, and ``PLIFNode`` are equipped with highly optimized predefined Triton kernels. Please use these predefined kernels whenever possible to obtain higher performance.
     * After completing a simulation with ``FlexSN``, ``reset()`` must be called to reset the neuron states.
@@ -249,7 +249,9 @@ With the workflow described above, users can obtain Triton-accelerated neuron mo
 Compatibility with ``torch.compile``
 ------------------------------------
 
-``FlexSN`` exposes two equivalent backend labels for the same Triton path: ``backend="triton"`` and ``backend="inductor"``. The latter is the custom-op-wrapped entry to the same maintained Triton execution path. In practice, choose whichever label is clearer in your codebase; behavior and kernel generation are aligned.
+``FlexSN`` exposes one dedicated CUDA execution backend: ``backend="triton"``.
+It dispatches custom-op-wrapped Triton kernels and remains compatible with an
+outer ``torch.compile``.
 
 Key properties:
 
@@ -260,10 +262,10 @@ Key properties:
 .. admonition:: Important
    :class: warning
 
-   * This section is about the Triton path. The ``"triton"`` and ``"inductor"`` backends require CUDA.
+   * This section is about the Triton path. The ``"triton"`` backend requires CUDA.
    * Ops inside ``core`` must be in the ``FX_TO_TRITON`` table.
      Unsupported ops fall back to ``eager_scan`` with a WARNING log.
-     See :ref:`Op Coverage <flexsn-inductor-op-coverage-en>` below for the full list.
+     See :ref:`Op Coverage <flexsn-triton-op-coverage-en>` below for the full list.
    * For training, ``core`` should use a surrogate gradient
      (e.g. :class:`Sigmoid <spikingjelly.activation_based.surrogate.Sigmoid>`) instead
      of a hard threshold; hard thresholds yield zero gradients by design.
@@ -286,7 +288,7 @@ Inference:
         return s, h * (1.0 - s)
 
     neuron = FlexSN(core=lif_core, num_inputs=1, num_states=1,
-                    num_outputs=1, step_mode="m", backend="inductor").cuda()
+                    num_outputs=1, step_mode="m", backend="triton").cuda()
 
     x = torch.randn(8, 64, 512, device="cuda")
     with torch.no_grad():
@@ -314,7 +316,7 @@ Training:
         return s, h * (1.0 - s)
 
     neuron = FlexSN(core=lif_core_sg, num_inputs=1, num_states=1,
-                    num_outputs=1, step_mode="m", backend="inductor").cuda()
+                    num_outputs=1, step_mode="m", backend="triton").cuda()
 
     x = torch.randn(8, 64, 512, device="cuda", requires_grad=True)
     out = neuron(x)
@@ -322,7 +324,7 @@ Training:
     print(x.grad.shape)         # [8, 64, 512]
 
 ``torch.compile`` is optional in both examples. Without it, the ``"triton"``
-and ``"inductor"`` backends still use the same dedicated Triton scan kernels. With it,
+backend still uses dedicated Triton scan kernels. With it,
 FlexSN stays in the compiled graph through the custom-op path, which is the
 mode to use when benchmarking cross-layer fusion with surrounding
 ``Linear`` / ``Conv`` modules.
@@ -342,10 +344,10 @@ Supported Backends
      - CPU / CUDA
      - Pure PyTorch multi-step loop
      - Reference implementation, debugging, CPU prototyping
-   * - ``"triton"`` / ``"inductor"``
+   * - ``"triton"``
      - CUDA
-     - Same Triton path
-     - Primary high-performance path. ``inductor`` is custom-op-wrapped entry to same Triton kernels
+     - Dedicated Triton path
+     - Primary high-performance path
    * - ``"hop"``
      - CPU / CUDA
      - HOP / eager scan path
@@ -354,7 +356,7 @@ Supported Backends
 Runtime Behavior
 ^^^^^^^^^^^^^^^^
 
-Under ``backend="triton"`` or ``backend="inductor"``:
+Under ``backend="triton"``:
 
 * Inference traces ``core`` with ``make_fx`` and emits one Triton scan kernel with ``tl.static_range(T)``. Each inference call launches exactly one kernel, independent of ``T``.
 * Training traces both forward and backward and emits dedicated Triton forward/backward scan kernels. Without ``torch.compile``, this is already the full Triton path.
@@ -364,10 +366,10 @@ Under ``backend="triton"`` or ``backend="inductor"``:
 Practical recommendation:
 
 * Use the ``"torch"`` backend for CPU work, debugging, or when you want simplest semantics.
-* Use the ``"triton"`` or ``"inductor"`` backend for actual high-performance GPU execution.
+* Use the ``"triton"`` backend for actual high-performance GPU execution.
 * Add ``torch.compile`` only when you want cross-layer fusion with surrounding modules.
 
-.. _flexsn-inductor-op-coverage-en:
+.. _flexsn-triton-op-coverage-en:
 
 Op Coverage
 ^^^^^^^^^^^

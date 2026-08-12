@@ -472,7 +472,7 @@ def _build_snn_pipeline_runtime(
         delayed_wgrad=delayed_wgrad,
     )
     logger.info(
-        "distributed_pipeline_runtime_summary model_family=%s stage_index=%s local_stage_indices=%s num_stages=%s n_microbatches=%s schedule=%s device=%s stage_cost_count=%s delayed_wgrad=%s",
+        "Runtime prepared: model_family={} stage_index={} local_stage_indices={} num_stages={} n_microbatches={} schedule={} device={} stage_cost_count={} delayed_wgrad={}",
         model_family,
         stage_index,
         local_stage_indices,

@@ -8,7 +8,7 @@ import torch.nn as nn
 try:
     import cupy
 except (ImportError, OSError) as e:
-    logger.info("Optional CuPy backend unavailable: %s", e)
+    logger.info("Optional CuPy backend unavailable: {}", e)
     _CUPY_IMPORT_ERROR = e
     cupy = None
 else:
@@ -17,7 +17,7 @@ else:
 try:
     import triton
 except (ImportError, OSError) as e:
-    logger.info("Optional Triton backend unavailable: %s", e)
+    logger.info("Optional Triton backend unavailable: {}", e)
     _TRITON_IMPORT_ERROR = e
     triton = None
 else:

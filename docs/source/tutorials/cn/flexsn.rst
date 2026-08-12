@@ -107,7 +107,7 @@ FlexSN 使用流程
         ),
         requires_grad=(True, True, True, True),
         step_mode="m",
-        backend="inductor",
+        backend="triton",
         store_state_seqs=True,
     )
 
@@ -126,14 +126,14 @@ FlexSN 使用流程
 * ``core`` ：描述单步神经元动力学的函数，签名为 ``[*inputs, *states] -> [*outputs, *states]`` 。
 * ``num_inputs, num_states, num_outputs`` ：输入、状态变量和输出的个数。应与 ``core`` 签名的情况相一致。
 * ``example_inputs`` ： ``core`` 的参数示例。 ``FlexSN`` 内部将使用这些示例输入调用 ``core`` ，从而捕获计算图。若为 ``None`` （默认），则自动生成 ``num_inputs + num_states`` 个仅含一个元素的张量作为示例输入。
-* ``example_outputs`` ： 可选，``core`` 的单步输出模板。它主要在空序列输入（ ``T == 0`` ）时用于确定输出张量的形状和 dtype；对 ``"triton"`` / ``"inductor"`` 路径而言，若提供该参数，则每个模板张量都需要与第一个 ``example_inputs`` 张量的单步形状和 dtype 相匹配。
+* ``example_outputs`` ： 可选，``core`` 的单步输出模板。它主要在空序列输入（ ``T == 0`` ）时用于确定输出张量的形状和 dtype；对 ``"triton"`` 路径而言，若提供该参数，则每个模板张量都需要与第一个 ``example_inputs`` 张量的单步形状和 dtype 相匹配。
 * ``requires_grad`` ： ``core`` 参数是否需要求梯度。默认值为 ``None`` ，含义为“所有参数都需要梯度”（即等价于全为 ``True`` ）。
-* ``step_mode, backend`` ：类似于其他神经元模块，这两个参数决定了步进模式和后端。 ``"torch"`` 后端始终可用； ``"triton"`` 、 ``"inductor"`` 和 ``"hop"`` 后端只在 ``step_mode="m"`` 时有效。
+* ``step_mode, backend`` ：类似于其他神经元模块，这两个参数决定了步进模式和后端。 ``"torch"`` 后端始终可用； ``"triton"`` 和 ``"hop"`` 后端只在 ``step_mode="m"`` 时有效。
 * ``store_state_seqs`` ：类似于其他神经元的 ``store_v_seq`` ，该参数决定是否保存状态序列。若为 ``True`` ，则可通过 ``state_seqs`` 属性获取上一次运行的状态序列：该属性是一个列表，列表的每个元素对应着某个状态的序列。 ``FlexSN`` 当然也支持反向传播，如下面的代码片段所示：
 
 .. code:: python
 
-    n_inductor = neuron.FlexSN(
+    n_triton = neuron.FlexSN(
         core=complicated_lif_core_generator(beta=0.5, gamma=0.9),
         num_inputs=2,
         num_states=2,
@@ -144,7 +144,7 @@ FlexSN 使用流程
         ),
         requires_grad=(True, True, True, True),
         step_mode="m",
-        backend="inductor",
+        backend="triton",
         store_state_seqs=True,
     )
 
@@ -165,32 +165,32 @@ FlexSN 使用流程
 
     x = torch.randn([16, 3, 32, 32], device="cuda")
     y = torch.randn([16, 3, 32, 32], device="cuda")
-    x_inductor = x.clone().requires_grad_(True)
-    y_inductor = y.clone().requires_grad_(True)
+    x_triton = x.clone().requires_grad_(True)
+    y_triton = y.clone().requires_grad_(True)
     x_torch = x.clone().requires_grad_(True)
     y_torch = y.clone().requires_grad_(True)
 
-    s1_inductor, s2_inductor = n_inductor(x_inductor, y_inductor)
+    s1_triton, s2_triton = n_triton(x_triton, y_triton)
     s1_torch, s2_torch = n_torch(x_torch, y_torch)
-    grad = torch.randn_like(s1_inductor)
-    s1_inductor.backward(grad)
+    grad = torch.randn_like(s1_triton)
+    s1_triton.backward(grad)
     s1_torch.backward(grad)
 
-    v_inductor, rho_inductor = n_inductor.state_seqs
+    v_triton, rho_triton = n_triton.state_seqs
     v_torch, rho_torch = n_torch.state_seqs
 
-    assert torch.allclose(s1_inductor, s1_torch)
-    assert torch.allclose(s2_inductor, s2_torch)
-    assert torch.allclose(x_inductor.grad, x_torch.grad, atol=1e-6, rtol=1e-6)
-    assert torch.allclose(y_inductor.grad, y_torch.grad, atol=1e-6, rtol=1e-6)
-    assert torch.allclose(v_inductor, v_torch, atol=1e-6, rtol=1e-6)
-    assert torch.allclose(rho_inductor, rho_torch)
-    print(s1_inductor.mean())
-    print(s2_inductor.mean())
-    print(x_inductor.grad.mean())
-    print(y_inductor.grad.mean())
-    print(v_inductor.mean())
-    print(rho_inductor.mean())
+    assert torch.allclose(s1_triton, s1_torch)
+    assert torch.allclose(s2_triton, s2_torch)
+    assert torch.allclose(x_triton.grad, x_torch.grad, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(y_triton.grad, y_torch.grad, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(v_triton, v_torch, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(rho_triton, rho_torch)
+    print(s1_triton.mean())
+    print(s2_triton.mean())
+    print(x_triton.grad.mean())
+    print(y_triton.grad.mean())
+    print(v_triton.mean())
+    print(rho_triton.mean())
 
 ``assert`` 全部通过，输出如下所示。这证明： ``FlexSN`` 使用的 Triton scan 内核与原始 PyTorch 函数在前向和反向传播时都具有等价性。
 
@@ -238,7 +238,7 @@ FlexSN 使用流程
 
     在使用 ``FlexSN`` 时，需注意：
 
-    * ``"torch"`` 后端可以在 CPU 或 GPU 上运行； ``"triton"`` 与 ``"inductor"`` 后端需要 GPU，且 ``"triton"`` / ``"inductor"`` / ``"hop"`` 后端都仅支持多步运行模式 ``step_mode="m"`` 。
+    * ``"torch"`` 后端可以在 CPU 或 GPU 上运行； ``"triton"`` 后端需要 GPU，且 ``"triton"`` 和 ``"hop"`` 后端都仅支持多步运行模式 ``step_mode="m"`` 。
     * PyTorch 后端是通过反复调用 ``core`` 来实现的。
     * ``FlexSN`` 完成一次模拟之后，需要调用 ``reset()`` 方法来重置神经元状态。
 
@@ -251,9 +251,9 @@ FlexSN 使用流程
 .. admonition:: 注意
    :class: warning
 
-   * 本节讨论的是 Triton 路径。 ``"triton"`` 后端与 ``"inductor"`` 后端需要 CUDA 设备。
+   * 本节讨论的是 Triton 路径。 ``"triton"`` 后端需要 CUDA 设备。
    * ``core`` 中的算子需在 ``FX_TO_TRITON`` 映射表内，不在表内的算子自动回退 ``eager_scan`` （日志中会有提示）。
-     支持的算子见下方 :ref:`算子覆盖 <flexsn-inductor-op-coverage>` 一节。
+     支持的算子见下方 :ref:`算子覆盖 <flexsn-triton-op-coverage>` 一节。
    * 训练时 ``core`` 应使用替代梯度模块（如 :class:`Sigmoid <spikingjelly.activation_based.surrogate.Sigmoid>` ），
      而非硬阈值，否则梯度为零。
 
@@ -275,7 +275,7 @@ FlexSN 使用流程
         return s, h * (1.0 - s)
 
     neuron = FlexSN(core=lif_core, num_inputs=1, num_states=1,
-                    num_outputs=1, step_mode="m", backend="inductor").cuda()
+                    num_outputs=1, step_mode="m", backend="triton").cuda()
 
     x = torch.randn(8, 64, 512, device="cuda")
     with torch.no_grad():
@@ -303,15 +303,15 @@ FlexSN 使用流程
         return s, h * (1.0 - s)
 
     neuron = FlexSN(core=lif_core_sg, num_inputs=1, num_states=1,
-                    num_outputs=1, step_mode="m", backend="inductor").cuda()
+                    num_outputs=1, step_mode="m", backend="triton").cuda()
 
     x = torch.randn(8, 64, 512, device="cuda", requires_grad=True)
     out = neuron(x)
     out.sum().backward()        # BPTT via Triton fwd+bwd 核
     print(x.grad.shape)         # [8, 64, 512]
 
-上面两种场景都不强制依赖 ``torch.compile`` 。不套时， ``"triton"`` 后端与
-``"inductor"`` 后端依然直接使用同一套专用 Triton scan kernel；套上时，
+上面两种场景都不强制依赖 ``torch.compile`` 。不套时， ``"triton"`` 后端
+直接使用专用 Triton scan kernel；套上时，
 FlexSN 会通过 custom-op 路径继续调度这些 Triton kernel，同时让外层
 ``Linear`` / ``Conv`` 一起进入编译图。
 
@@ -330,9 +330,9 @@ FlexSN 会通过 custom-op 路径继续调度这些 Triton kernel，同时让外
      - CPU / CUDA
      - 纯 PyTorch 多步循环
      - 参考实现、调试、CPU 原型验证
-   * - ``"triton"`` / ``"inductor"``
+   * - ``"triton"``
      - CUDA
-     - 同一条 Triton 执行路径
+     - 专用 Triton 执行路径
      - 高性能路径
    * - ``"hop"``
      - CPU / CUDA
@@ -342,7 +342,7 @@ FlexSN 会通过 custom-op 路径继续调度这些 Triton kernel，同时让外
 运行时行为
 ^^^^^^^^^^
 
-在 ``backend="triton"`` 或 ``backend="inductor"`` 下：
+在 ``backend="triton"`` 下：
 
 * 推理阶段会先用 ``make_fx`` 追踪 ``core`` ，生成带 ``tl.static_range(T)`` 时间循环的单个 Triton scan kernel。每次推理调用只触发一次 kernel launch，与 ``T`` 无关。
 * 训练阶段会同时追踪前向和反向，生成专用的 Triton 正向/反向 scan kernel。不套 ``torch.compile`` 时，这已经是完整 Triton 路径。
@@ -352,10 +352,10 @@ FlexSN 会通过 custom-op 路径继续调度这些 Triton kernel，同时让外
 实践建议：
 
 * 做 CPU 工作、调试、验证语义时，用 ``"torch"`` 后端。
-* 真正做高性能 GPU 运行时，用 ``"triton"`` 后端或 ``"inductor"`` 后端。
+* 真正做高性能 GPU 运行时，用 ``"triton"`` 后端。
 * 只有当你需要和外层模块做跨层融合时，再额外套 ``torch.compile`` 。
 
-.. _flexsn-inductor-op-coverage:
+.. _flexsn-triton-op-coverage:
 
 算子覆盖
 ^^^^^^^^

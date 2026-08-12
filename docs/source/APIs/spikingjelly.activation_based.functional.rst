@@ -89,7 +89,7 @@ Neuron State Updates
 这些函数显式接收并返回神经元状态。``*_step`` 表示一个时间步的完整更新；
 ``*_multi_step`` 表示具有独立实现的时间序列更新，而不是对 ``*_step`` 的 Python
 循环包装。backend 仍由 ``MemoryModule`` 选择，因此 backend 专用函数在名称中
-标出 ``cupy``、``triton`` 或 ``inductor``。
+标出 ``cupy`` 或 ``triton``。
 
 ----
 
@@ -97,7 +97,7 @@ These functions receive and return neuron states explicitly. ``*_step`` denotes
 one complete time-step update. ``*_multi_step`` denotes an independently implemented
 sequence update, not a Python-loop wrapper around ``*_step``. Backend selection
 remains a ``MemoryModule`` responsibility, so backend-specific functions identify
-``cupy``, ``triton``, or ``inductor`` in their names.
+``cupy`` or ``triton`` in their names.
 
 .. list-table::
 
@@ -127,12 +127,6 @@ remains a ``MemoryModule`` responsibility, so backend-specific functions identif
      - One GatedLIF state update.
    * - :func:`stbif_step <spikingjelly.activation_based.functional.neuron.stbif_step>`
      - One SpikeZIP STBIF state update.
-   * - :func:`if_multi_step_inductor <spikingjelly.activation_based.functional.neuron.if_multi_step_inductor>`
-     - IF sequence update compiled by Inductor.
-   * - :func:`lif_multi_step_inductor <spikingjelly.activation_based.functional.neuron.lif_multi_step_inductor>`
-     - LIF sequence update compiled by Inductor.
-   * - :func:`plif_multi_step_inductor <spikingjelly.activation_based.functional.neuron.plif_multi_step_inductor>`
-     - ParametricLIF sequence update compiled by Inductor.
    * - :func:`if_step_cupy <spikingjelly.activation_based.functional.neuron.if_step_cupy>`
      - One IF update with caller-selected CuPy kernels.
    * - :func:`lif_step_cupy <spikingjelly.activation_based.functional.neuron.lif_step_cupy>`

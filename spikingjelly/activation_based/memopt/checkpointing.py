@@ -567,8 +567,7 @@ class TCGCContainer(GCContainer):
         n_chunk = min(self.n_chunk, x_seq.shape[0])
         if n_chunk != self.n_chunk:
             logger.warning(
-                "TCGCContainer received n_chunk=%d for sequence length T=%d; "
-                "using n_chunk=%d.",
+                "TCGCContainer received n_chunk={:d} for sequence length T={:d}; using n_chunk={:d}.",
                 self.n_chunk,
                 x_seq.shape[0],
                 n_chunk,

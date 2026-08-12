@@ -1,8 +1,8 @@
-"""Coverage for FlexSN's triton / inductor backend and HOP fallback helpers.
-The file exercises FlexSN's shared ``triton`` / ``inductor`` CUDA backend
-labels, the ``flex_sn_scan`` HOP path, and the low-level helper modules under
-``triton_kernel.flexsn``. CUDA-specific cases are guarded individually so the
-non-CUDA portions still run on a plain development machine.
+"""Coverage for FlexSN's Triton backend and HOP fallback helpers.
+The file exercises FlexSN's ``triton`` CUDA backend, the ``flex_sn_scan`` HOP
+path, and the low-level helper modules under ``triton_kernel.flexsn``.
+CUDA-specific cases are guarded individually so the non-CUDA portions still
+run on a plain development machine.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from spikingjelly.activation_based.neuron import flexsn as flexsn_module
 from spikingjelly.activation_based.neuron.flexsn import (
     FlexSN,
     FlexSNKernel,
-    _make_inductor_final_state_warmup_args,
+    _make_triton_final_state_warmup_args,
 )
 from spikingjelly.activation_based.triton_kernel.flexsn import custom_ops
 from spikingjelly.activation_based.triton_kernel.flexsn import hop as hop_module
@@ -236,7 +236,7 @@ def test_scan_backends_reject_mismatched_example_output_template():
             num_states=1,
             num_outputs=1,
             step_mode="m",
-            backend="inductor",
+            backend="triton",
             example_inputs=(torch.zeros(3), torch.zeros(3)),
             example_outputs=(torch.zeros(4),),
         )
@@ -250,7 +250,7 @@ def test_scan_backends_reject_mismatched_example_output_template_without_example
             num_states=1,
             num_outputs=1,
             step_mode="m",
-            backend="inductor",
+            backend="triton",
             example_outputs=(torch.zeros(4),),
         )
 
@@ -263,7 +263,7 @@ def test_scan_backends_reject_mismatched_example_input_numel():
             num_states=1,
             num_outputs=1,
             step_mode="m",
-            backend="inductor",
+            backend="triton",
             example_inputs=(torch.zeros(2, 3), torch.zeros(5)),
             example_outputs=(torch.zeros(2, 3),),
         )
@@ -374,14 +374,14 @@ def test_multi_step_forward_initializes_states_for_triton_backend():
     assert m.backend == "triton"
 
 
-def test_multi_step_forward_initializes_states_for_inductor_training_fallback():
+def test_multi_step_forward_initializes_states_for_triton_training_fallback():
     m = FlexSN(
         core=_lif_core,
         num_inputs=1,
         num_states=1,
         num_outputs=1,
         step_mode="m",
-        backend="inductor",
+        backend="triton",
     )
 
     out = m.multi_step_forward(torch.randn(2, 3, requires_grad=True))[0]
@@ -736,7 +736,7 @@ def test_flexsn_wrapper_backward_requires_input_templates_when_output_grads_miss
         wrapper.flexsn_backward(None, info, None, grad_state_seq)
 
 
-def test_inductor_final_state_warmup_args_use_example_shapes():
+def test_triton_final_state_warmup_args_use_example_shapes():
     info = SimpleNamespace(num_inputs=2, num_states=2)
     specs = (
         ((3, 4), torch.float32),
@@ -745,7 +745,7 @@ def test_inductor_final_state_warmup_args_use_example_shapes():
         ((2, 3), torch.float64),
     )
 
-    warm_args = _make_inductor_final_state_warmup_args(
+    warm_args = _make_triton_final_state_warmup_args(
         info,
         torch.device("cpu"),
         specs,
@@ -765,7 +765,7 @@ def test_inductor_final_state_warmup_args_use_example_shapes():
     ]
 
 
-def test_inductor_final_state_wrapper_t0_returns_non_aliased_states():
+def test_triton_final_state_wrapper_t0_returns_non_aliased_states():
     from spikingjelly.activation_based.triton_kernel.flexsn.wrapper import (
         flexsn_inference_final_state,
     )
@@ -781,7 +781,7 @@ def test_inductor_final_state_wrapper_t0_returns_non_aliased_states():
     assert v_final.data_ptr() != v.data_ptr()
 
 
-def test_inductor_training_final_state_impl_t0_returns_non_aliased_states(
+def test_triton_training_final_state_impl_t0_returns_non_aliased_states(
     monkeypatch,
 ):
     from spikingjelly.activation_based.triton_kernel.flexsn import (
@@ -808,11 +808,11 @@ def test_inductor_training_final_state_impl_t0_returns_non_aliased_states(
 
     monkeypatch.setattr(
         custom_ops,
-        "_flexsn_inductor_training_impl",
+        "_flexsn_triton_training_impl",
         fake_training_impl,
     )
 
-    y_seq, v_final = custom_ops._flexsn_inductor_training_final_state_impl(
+    y_seq, v_final = custom_ops._flexsn_triton_training_final_state_impl(
         bundle,
         [x, v],
     )
@@ -822,7 +822,7 @@ def test_inductor_training_final_state_impl_t0_returns_non_aliased_states(
     assert v_final.data_ptr() != v.data_ptr()
 
 
-def test_inductor_fake_final_state_templates_use_explicit_states():
+def test_triton_fake_final_state_templates_use_explicit_states():
     from spikingjelly.activation_based.triton_kernel.flexsn import (
         custom_ops,
     )
@@ -841,7 +841,7 @@ def test_inductor_fake_final_state_templates_use_explicit_states():
     ]
 
 
-def test_inductor_training_final_state_backward_pads_missing_grads(monkeypatch):
+def test_triton_training_final_state_backward_pads_missing_grads(monkeypatch):
     from spikingjelly.activation_based.triton_kernel.flexsn import (
         custom_ops,
     )
@@ -876,7 +876,7 @@ def test_inductor_training_final_state_backward_pads_missing_grads(monkeypatch):
         return [torch.zeros_like(x), torch.zeros_like(v)]
 
     monkeypatch.setattr(custom_ops, "_lookup_kernel_handle", lambda handle: bundle)
-    monkeypatch.setattr(custom_ops, "flexsn_inductor_backward", fake_backward)
+    monkeypatch.setattr(custom_ops, "flexsn_triton_backward", fake_backward)
     monkeypatch.setattr(
         custom_ops,
         "release_active_flexsn_kernel_handle",
@@ -894,7 +894,7 @@ def test_inductor_training_final_state_backward_pads_missing_grads(monkeypatch):
     torch.testing.assert_close(grads[1], torch.zeros_like(v))
 
 
-def test_inductor_backward_impl_passes_state_templates_to_wrapper(monkeypatch):
+def test_triton_backward_impl_passes_state_templates_to_wrapper(monkeypatch):
     from spikingjelly.activation_based.triton_kernel.flexsn import (
         custom_ops,
     )
@@ -928,7 +928,7 @@ def test_inductor_backward_impl_passes_state_templates_to_wrapper(monkeypatch):
     monkeypatch.setattr(custom_ops, "flexsn_backward", fake_backward)
     monkeypatch.setattr(custom_ops, "wrap_triton", fake_wrap_triton)
 
-    grads = custom_ops._flexsn_inductor_backward_impl(
+    grads = custom_ops._flexsn_triton_backward_impl(
         bundle,
         [grad_state_seq],
         [],
@@ -989,7 +989,7 @@ def test_hop_matches_manual_loop_with_lifted_tensor(rng):
 
 @pytest.mark.parametrize("T", [1, 4, 16])
 @pytest.mark.parametrize("shape", [(8,), (4, 8)])
-def test_inductor_backend_matches_torch_backend(rng, T, shape):
+def test_triton_backend_matches_torch_backend(rng, T, shape):
     x = torch.randn((T, *shape), generator=rng)
 
     torch_neuron = FlexSN(
@@ -1000,21 +1000,21 @@ def test_inductor_backend_matches_torch_backend(rng, T, shape):
         step_mode="m",
         backend="torch",
     )
-    inductor_neuron = FlexSN(
+    triton_neuron = FlexSN(
         core=_lif_core,
         num_inputs=1,
         num_states=1,
         num_outputs=1,
         step_mode="m",
-        backend="inductor",
+        backend="triton",
     )
 
     torch_out = torch_neuron(x)
-    inductor_out = inductor_neuron(x)
+    triton_out = triton_neuron(x)
 
-    torch.testing.assert_close(inductor_out, torch_out)
-    assert len(inductor_neuron.states) == 1
-    torch.testing.assert_close(inductor_neuron.states[0], torch_neuron.states[0])
+    torch.testing.assert_close(triton_out, torch_out)
+    assert len(triton_neuron.states) == 1
+    torch.testing.assert_close(triton_neuron.states[0], torch_neuron.states[0])
 
 
 @pytest.mark.parametrize("T", [1, 4, 16])
@@ -1083,7 +1083,7 @@ def test_hop_backend_matches_torch_backend_with_closure(rng):
     torch.testing.assert_close(hop_neuron.states[0], torch_neuron.states[0])
 
 
-def test_inductor_backend_store_state_seqs(rng):
+def test_triton_backend_store_state_seqs(rng):
     T, N = 8, 16
     x = torch.randn((T, N), generator=rng)
 
@@ -1096,33 +1096,31 @@ def test_inductor_backend_store_state_seqs(rng):
         backend="torch",
         store_state_seqs=True,
     )
-    inductor_neuron = FlexSN(
+    triton_neuron = FlexSN(
         core=_lif_core,
         num_inputs=1,
         num_states=1,
         num_outputs=1,
         step_mode="m",
-        backend="inductor",
+        backend="triton",
         store_state_seqs=True,
     )
 
     torch_neuron(x)
-    inductor_neuron(x)
+    triton_neuron(x)
 
-    assert len(inductor_neuron.state_seqs) == 1
-    torch.testing.assert_close(
-        inductor_neuron.state_seqs[0], torch_neuron.state_seqs[0]
-    )
+    assert len(triton_neuron.state_seqs) == 1
+    torch.testing.assert_close(triton_neuron.state_seqs[0], torch_neuron.state_seqs[0])
 
 
-def test_inductor_backend_exposes_kernel_accessor():
+def test_triton_backend_exposes_kernel_accessor():
     neuron = FlexSN(
         core=_lif_core,
         num_inputs=1,
         num_states=1,
         num_outputs=1,
         step_mode="m",
-        backend="inductor",
+        backend="triton",
     )
     assert callable(neuron.kernel)
 
@@ -1153,17 +1151,19 @@ def test_set_backend_to_triton():
     assert neuron.backend == "triton"
 
 
-def test_inductor_backend_in_supported_backends():
+def test_flexsn_rejects_inductor_backend():
     neuron = FlexSN(
         core=_lif_core,
         num_inputs=1,
         num_states=1,
         num_outputs=1,
         step_mode="m",
-        backend="inductor",
+        backend="triton",
     )
-    assert "triton" in neuron.supported_backends
-    assert "inductor" in neuron.supported_backends
+
+    assert neuron.supported_backends == ("triton", "torch", "hop")
+    with pytest.raises(NotImplementedError, match="not a supported backend"):
+        neuron.backend = "inductor"
 
 
 def test_set_backend_accepts_triton_for_flexsn():
@@ -1190,36 +1190,6 @@ def test_set_backend_accepts_triton_for_flexsn():
 
     for module in net:
         assert module.backend == "triton"
-
-
-def test_triton_and_inductor_labels_share_dispatch(rng):
-    T, N = 6, 16
-    x_t = torch.randn(T, N, generator=rng, requires_grad=True)
-    x_i = x_t.detach().clone().requires_grad_(True)
-
-    triton_neuron = FlexSN(
-        core=_differentiable_lif_core,
-        num_inputs=1,
-        num_states=1,
-        num_outputs=1,
-        step_mode="m",
-        backend="triton",
-    )
-    inductor_neuron = FlexSN(
-        core=_differentiable_lif_core,
-        num_inputs=1,
-        num_states=1,
-        num_outputs=1,
-        step_mode="m",
-        backend="inductor",
-    )
-
-    y_t = triton_neuron(x_t).sum()
-    y_i = inductor_neuron(x_i).sum()
-    y_t.backward()
-    y_i.backward()
-
-    torch.testing.assert_close(x_t.grad, x_i.grad)
 
 
 def test_hop_rejects_wrong_arity():
@@ -1937,7 +1907,7 @@ def test_flexsnkernel_matches_torch_reference(rng):
     torch.testing.assert_close(v0_kernel.grad, v0_ref.grad)
 
 
-def test_flexsnkernel_matches_inductor_backend(rng):
+def test_flexsnkernel_matches_triton_backend(rng):
     if not torch.cuda.is_available():
         pytest.skip("FlexSNKernel parity is exercised on CUDA")
     if base_module.triton is None:
@@ -1946,8 +1916,8 @@ def test_flexsnkernel_matches_inductor_backend(rng):
     T, N = 6, 16
     x_kernel = torch.randn(T, N, generator=rng).to("cuda").requires_grad_(True)
     v0_kernel = torch.randn(N, generator=rng).to("cuda").requires_grad_(True)
-    x_inductor = x_kernel.detach().clone().requires_grad_(True)
-    v0_inductor = v0_kernel.detach().clone().requires_grad_(True)
+    x_triton = x_kernel.detach().clone().requires_grad_(True)
+    v0_triton = v0_kernel.detach().clone().requires_grad_(True)
 
     kernel = FlexSNKernel(
         core=_differentiable_lif_core,
@@ -1962,40 +1932,40 @@ def test_flexsnkernel_matches_inductor_backend(rng):
         num_states=1,
         num_outputs=1,
         step_mode="m",
-        backend="inductor",
+        backend="triton",
         store_state_seqs=True,
     ).cuda()
-    neuron.states = [v0_inductor]
+    neuron.states = [v0_triton]
 
     y_seq_kernel, v_seq_kernel = kernel(x_kernel, v0_kernel)
     (y_seq_kernel.sum() + v_seq_kernel.sum()).backward()
 
-    y_seq_inductor = neuron(x_inductor)
-    v_seq_inductor = neuron.state_seqs[0]
-    (y_seq_inductor.sum() + v_seq_inductor.sum()).backward()
+    y_seq_triton = neuron(x_triton)
+    v_seq_triton = neuron.state_seqs[0]
+    (y_seq_triton.sum() + v_seq_triton.sum()).backward()
 
-    torch.testing.assert_close(y_seq_kernel, y_seq_inductor)
-    torch.testing.assert_close(v_seq_kernel, v_seq_inductor)
-    torch.testing.assert_close(x_kernel.grad, x_inductor.grad)
-    torch.testing.assert_close(v0_kernel.grad, v0_inductor.grad)
+    torch.testing.assert_close(y_seq_kernel, y_seq_triton)
+    torch.testing.assert_close(v_seq_kernel, v_seq_triton)
+    torch.testing.assert_close(x_kernel.grad, x_triton.grad)
+    torch.testing.assert_close(v0_kernel.grad, v0_triton.grad)
 
 
 def test_flexsn_registered_operator_schemas_are_stable():
     expected = {
-        "flexsn_inductor_inference": (
-            "sj::flexsn_inductor_inference(SymInt handle, Tensor[] flat_args) -> Tensor[]"
+        "flexsn_triton_inference": (
+            "sj::flexsn_triton_inference(SymInt handle, Tensor[] flat_args) -> Tensor[]"
         ),
-        "flexsn_inductor_inference_final_state": (
-            "sj::flexsn_inductor_inference_final_state(SymInt handle, Tensor[] flat_args) -> Tensor[]"
+        "flexsn_triton_inference_final_state": (
+            "sj::flexsn_triton_inference_final_state(SymInt handle, Tensor[] flat_args) -> Tensor[]"
         ),
-        "flexsn_inductor_training": (
-            "sj::flexsn_inductor_training(SymInt handle, Tensor[] flat_args) -> Tensor[]"
+        "flexsn_triton_training": (
+            "sj::flexsn_triton_training(SymInt handle, Tensor[] flat_args) -> Tensor[]"
         ),
-        "flexsn_inductor_training_final_state": (
-            "sj::flexsn_inductor_training_final_state(SymInt handle, Tensor[] flat_args) -> Tensor[]"
+        "flexsn_triton_training_final_state": (
+            "sj::flexsn_triton_training_final_state(SymInt handle, Tensor[] flat_args) -> Tensor[]"
         ),
-        "flexsn_inductor_backward": (
-            "sj::flexsn_inductor_backward(SymInt handle, Tensor[] grad_outputs, "
+        "flexsn_triton_backward": (
+            "sj::flexsn_triton_backward(SymInt handle, Tensor[] grad_outputs, "
             "Tensor[] saved_tensors, Tensor[] input_templates) -> Tensor[]"
         ),
     }
@@ -2007,7 +1977,7 @@ def test_flexsn_registered_operator_schemas_are_stable():
 
 @pytest.mark.parametrize(
     "op_name",
-    ["flexsn_inductor_inference", "flexsn_inductor_training"],
+    ["flexsn_triton_inference", "flexsn_triton_training"],
 )
 def test_flexsn_registered_operators_pass_opcheck(op_name):
     if not torch.cuda.is_available():
@@ -2130,18 +2100,18 @@ def test_flexsn_kernel_registry_reference_counts_and_finalizer():
     assert all(kernel.closed for kernel in finalizer_kernels)
 
 
-def test_inductor_backend_backward_matches_torch_backend(rng):
+def test_triton_backend_backward_matches_torch_backend(rng):
     T, N = 6, 16
     x_i = torch.randn(T, N, generator=rng, requires_grad=True)
     x_t = x_i.detach().clone().requires_grad_(True)
 
-    inductor_neuron = FlexSN(
+    triton_neuron = FlexSN(
         core=_differentiable_lif_core,
         num_inputs=1,
         num_states=1,
         num_outputs=1,
         step_mode="m",
-        backend="inductor",
+        backend="triton",
     )
     torch_neuron = FlexSN(
         core=_differentiable_lif_core,
@@ -2152,7 +2122,7 @@ def test_inductor_backend_backward_matches_torch_backend(rng):
         backend="torch",
     )
 
-    out_i = inductor_neuron(x_i).sum()
+    out_i = triton_neuron(x_i).sum()
     out_t = torch_neuron(x_t).sum()
     out_i.backward()
     out_t.backward()
@@ -2270,7 +2240,7 @@ def test_compile_fullgraph_forward_matches_eager(rng):
             num_states=1,
             num_outputs=1,
             step_mode="m",
-            backend="inductor",
+            backend="triton",
         )
 
     eager_out = make_neuron()(x_eager)
@@ -2294,7 +2264,7 @@ def test_compile_fullgraph_backward_matches_eager(rng):
             num_states=1,
             num_outputs=1,
             step_mode="m",
-            backend="inductor",
+            backend="triton",
         )
 
     make_neuron()(x_eager).sum().backward()
@@ -2319,7 +2289,7 @@ def test_compile_fullgraph_backward_store_state_seqs_false_matches_eager(rng):
             num_states=1,
             num_outputs=1,
             step_mode="m",
-            backend="inductor",
+            backend="triton",
             store_state_seqs=False,
         )
 
@@ -2462,7 +2432,7 @@ def test_compile_fuses_surrounding_linear_layers(rng):
                 num_states=1,
                 num_outputs=1,
                 step_mode="m",
-                backend="inductor",
+                backend="triton",
             )
             self.post = torch.nn.Linear(N, N)
 
@@ -2611,7 +2581,7 @@ def test_compile_captures_core_ops_in_fx_graph(rng):
         num_states=1,
         num_outputs=1,
         step_mode="m",
-        backend="inductor",
+        backend="triton",
     )
 
     explanation = explain(neuron)(x)
@@ -2621,11 +2591,11 @@ def test_compile_captures_core_ops_in_fx_graph(rng):
     )
 
 
-def test_inductor_compile_graph_elides_explicit_zero_state_init():
+def test_triton_compile_graph_elides_explicit_zero_state_init():
     if sys.platform == "win32":
         pytest.skip("torch.compile is not supported on Windows")
     if not torch.cuda.is_available():
-        pytest.skip("inductor custom-op graph coverage is exercised on CUDA")
+        pytest.skip("Triton custom-op graph coverage is exercised on CUDA")
 
     from torch._dynamo import explain
 
@@ -2642,7 +2612,7 @@ def test_inductor_compile_graph_elides_explicit_zero_state_init():
             num_states=1,
             num_outputs=1,
             step_mode=kwargs.get("step_mode", "m"),
-            backend="inductor",
+            backend="triton",
         )
 
     T, N = 4, 8
@@ -2657,17 +2627,16 @@ def test_inductor_compile_graph_elides_explicit_zero_state_init():
     ]
 
     assert any(
-        "sj.flexsn_inductor_inference_final_state.default" in target
-        for target in targets
+        "sj.flexsn_triton_inference_final_state.default" in target for target in targets
     )
     assert not any("zeros_like" in target for target in targets)
 
 
-def test_inductor_compile_training_graph_uses_final_state_custom_op():
+def test_triton_compile_training_graph_uses_final_state_custom_op():
     if sys.platform == "win32":
         pytest.skip("torch.compile is not supported on Windows")
     if not torch.cuda.is_available():
-        pytest.skip("inductor custom-op graph coverage is exercised on CUDA")
+        pytest.skip("Triton custom-op graph coverage is exercised on CUDA")
 
     from torch._dynamo import explain
 
@@ -2687,7 +2656,7 @@ def test_inductor_compile_training_graph_uses_final_state_custom_op():
             num_states=1,
             num_outputs=1,
             step_mode="m",
-            backend="inductor",
+            backend="triton",
             store_state_seqs=False,
         )
         .cuda()
@@ -2700,8 +2669,7 @@ def test_inductor_compile_training_graph_uses_final_state_custom_op():
     ]
 
     assert any(
-        "sj.flexsn_inductor_training_final_state.default" in target
-        for target in targets
+        "sj.flexsn_triton_training_final_state.default" in target for target in targets
     )
 
 

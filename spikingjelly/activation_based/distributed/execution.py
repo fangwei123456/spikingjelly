@@ -99,13 +99,10 @@ def configure_snn_distributed(
     analysis = analyze_snn_distributed_capability(
         module, tensor_parallel_roots=config.tensor_parallel_roots
     )
-
     needs_device_mesh = config.device_mesh is not None or config.mode != "none"
     if not needs_device_mesh:
         logger.info(
-            "distributed_configuration_summary mode=%s device_type=%s mesh_shape=None "
-            "tensor_parallel=%s fsdp2=False data_parallel=False memory_modules=%s "
-            "tensor_parallel_candidates=%s",
+            "Configuration completed: mode={} device_type={} mesh_shape=None tensor_parallel={} fsdp2=False data_parallel=False memory_modules={} tensor_parallel_candidates={}",
             config.mode,
             config.device_type,
             tensor_parallel,
@@ -217,7 +214,7 @@ def configure_snn_distributed(
     mesh_tensor = getattr(device_mesh, "mesh", None)
     mesh_shape = tuple(int(value) for value in mesh_tensor.shape)
     logger.info(
-        "distributed_configuration_summary mode=%s device_type=%s mesh_shape=%s tensor_parallel=%s fsdp2=%s data_parallel=%s memory_modules=%s tensor_parallel_candidates=%s",
+        "Configuration completed: mode={} device_type={} mesh_shape={} tensor_parallel={} fsdp2={} data_parallel={} memory_modules={} tensor_parallel_candidates={}",
         config.mode,
         config.device_type,
         mesh_shape,

@@ -91,12 +91,9 @@ English version: :doc:`../en/op_counter`
 
 .. code-block:: python
 
-    import logging
-
     from spikingjelly.logger import logger
 
-    logging.basicConfig(level=logging.DEBUG)
-    logger.setLevel(logging.DEBUG)
+    logger.enable("spikingjelly")
 
 本教程中的示例统一使用 ``strict=False``，这样即使遇到不受支持的辅助算子，也不会立刻中断执行。
 如果你已经确认所选计数器完整覆盖了相关算子路径，并且希望在遇到 unsupported 算子时立即报错，再切换到 ``strict=True``。

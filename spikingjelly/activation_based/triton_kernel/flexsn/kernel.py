@@ -1,4 +1,4 @@
-"""Build Triton scan kernels for FlexSN's Triton/Inductor backends.
+"""Build Triton scan kernels for FlexSN's Triton backend.
 Three entry points:
 * build_inference_kernel  — no-grad fast path (make_fx, no PYTORCH_JIT=0 needed)
 * build_inference_final_state_kernel — inference path that returns final states only
@@ -133,7 +133,7 @@ def build_inference_kernel(
     # Replace every non-alphanumeric character (including < > space) with "_".
     raw_name = getattr(core_fn, "__name__", type(core_fn).__name__)
     safe_name = "".join(c if c.isalnum() else "_" for c in raw_name)
-    core_name = f"{safe_name}_inductor_scan"
+    core_name = f"{safe_name}_triton_scan"
     core_str, core_name = generate_triton_code_str(graph, core_name)
 
     # Extract metadata: arg/return names, output/state counts.
@@ -219,7 +219,7 @@ def build_inference_final_state_kernel(
 
     raw_name = getattr(core_fn, "__name__", type(core_fn).__name__)
     safe_name = "".join(c if c.isalnum() else "_" for c in raw_name)
-    core_name = f"{safe_name}_inductor_scan_final_state"
+    core_name = f"{safe_name}_triton_scan_final_state"
     core_str, core_name = generate_triton_code_str(graph, core_name)
     info = extract_info(graph, num_inputs, num_states, num_outputs)
     kernel = get_flexsn_inference_final_state_kernel(core_str, core_name, info=info)
@@ -418,7 +418,7 @@ def build_training_kernels(
 
     raw_name = getattr(core_fn, "__name__", type(core_fn).__name__)
     safe_name = "".join(c if c.isalnum() else "_" for c in raw_name)
-    core_name = safe_name + "_inductor_train"
+    core_name = safe_name + "_triton_train"
 
     # Forward kernel — saves intermediates needed by backward
     fwd_str, fwd_name = generate_triton_code_str(fwd_graph, core_name + "_fwd")

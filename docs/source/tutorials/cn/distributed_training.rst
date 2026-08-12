@@ -157,7 +157,7 @@ Pipeline parallelism 被单独处理，因为它需要 ``example_input`` 来构�
       --data-dir /path/to/cifar10dvs \
       --distributed-mode fsdp2_tp \
       --mesh-shape 2 2 \
-      --backend inductor \
+      --backend triton \
       --batch-size 16 \
       --epochs 1 \
       --print-summary
@@ -179,7 +179,7 @@ Pipeline parallelism 被单独处理，因为它需要 ``example_input`` 来构�
       --data-dir /path/to/cifar10dvs \
       --distributed-mode auto \
       --prefer memory \
-      --backend inductor \
+      --backend triton \
       --batch-size 16
 
 其中：
@@ -489,7 +489,7 @@ Benchmark 自动记录
       --mode auto \
       --prefer speed \
       --model spikformer_ti \
-      --backend inductor \
+      --backend triton \
       --batch-size 4 \
       --T 8
 

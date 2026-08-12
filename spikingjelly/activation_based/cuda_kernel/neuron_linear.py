@@ -18,7 +18,7 @@ try:
     import cupy
     from cupy import RawModule
 except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.cuda_kernel.neuron_linear: %s", e)
+    logger.debug("Optional CuPy dependency unavailable: {}", e)
     cupy = None
 
 

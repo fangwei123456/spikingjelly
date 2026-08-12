@@ -225,7 +225,7 @@ class NCaltech101(NeuromorphicDatasetFolder):
         :type extract_root: Path
         """
         zip_file = download_root / "Caltech101.zip"
-        logger.debug("Extract [%s] to [%s].", zip_file, extract_root)
+        logger.debug("Extract [{}] to [{}].", zip_file, extract_root)
         extract_archive(zip_file, extract_root)
 
     @classmethod
@@ -274,12 +274,12 @@ class NCaltech101(NeuromorphicDatasetFolder):
                 bin_dir = extract_root / class_name
                 np_dir = raw_root / class_name
                 np_dir.mkdir()
-                logger.debug("Mkdir [%s].", np_dir)
+                logger.debug("Mkdir [{}].", np_dir)
                 for bin_file in os.listdir(bin_dir):
                     source_file = bin_dir / bin_file
                     target_file = np_dir / (os.path.splitext(bin_file)[0] + ".npz")
                     logger.debug(
-                        "Start to convert [%s] to [%s].", source_file, target_file
+                        "Start to convert [{}] to [{}].", source_file, target_file
                     )
                     futures.append(
                         tpe.submit(
@@ -290,4 +290,4 @@ class NCaltech101(NeuromorphicDatasetFolder):
             for future in futures:
                 future.result()
 
-        logger.info("Used time = [%ss].", round(time.time() - t_ckp, 2))
+        logger.info("Used time = [{}s].", round(time.time() - t_ckp, 2))

@@ -434,12 +434,9 @@ Step 3. 调用工具函数
 
 .. code:: python
 
-    import logging
-
     from spikingjelly.logger import logger
 
-    logging.basicConfig(level=logging.DEBUG)
-    logger.setLevel(logging.DEBUG)
+    logger.enable("spikingjelly")
 
 如果用户更关注“少调参、快速拿到一个合理配置”，则推荐优先使用 ``profile`` 接口。例如：
 

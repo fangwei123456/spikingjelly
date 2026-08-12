@@ -1,7 +1,8 @@
-from spikingjelly.logger import logger
 from typing import Optional
 
 import torch
+
+from spikingjelly.logger import logger
 
 from ... import surrogate
 from ..surrogate_kernel import resolve_sg_triton_id_and_alpha, sg_triton
@@ -28,9 +29,7 @@ try:
 except (ImportError, OSError) as e:
     from .. import dummy
 
-    logger.debug(
-        "spikingjelly.activation_based.triton_kernel.neuron_kernel.plif: %s", e
-    )
+    logger.debug("Optional Triton dependency unavailable: {}", e)
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
 
@@ -54,7 +53,7 @@ def _multistep_plif_forward_kernel_static(
     s_seq_ptr,
     h_seq_ptr,
     v_seq_ptr,
-    r_tau,
+    r_tau_ptr,
     v_threshold,
     v_reset,
     T: tl.constexpr,
@@ -81,7 +80,7 @@ def _multistep_plif_forward_kernel_static(
     v = tl.load(v_init_ptrs, boundary_check=(1,), padding_option="zero").to(
         compute_dtype
     )
-    r_tau = tl.full([1], r_tau, dtype=compute_dtype)
+    r_tau = tl.load(r_tau_ptr).to(compute_dtype)
 
     for t in tl.static_range(0, T, 1):
         x_ptrs = tl.make_block_ptr(
@@ -152,7 +151,7 @@ def _multistep_plif_forward_kernel_dynamic(
     s_seq_ptr,
     h_seq_ptr,
     v_seq_ptr,
-    r_tau,
+    r_tau_ptr,
     v_threshold,
     v_reset,
     T,
@@ -179,7 +178,7 @@ def _multistep_plif_forward_kernel_dynamic(
     v = tl.load(v_init_ptrs, boundary_check=(1,), padding_option="zero").to(
         compute_dtype
     )
-    r_tau = tl.full([1], r_tau, dtype=compute_dtype)
+    r_tau = tl.load(r_tau_ptr).to(compute_dtype)
 
     for t in tl.range(0, T, 1):
         x_ptrs = tl.make_block_ptr(
@@ -253,7 +252,7 @@ def _multistep_plif_backward_kernel_static(
     grad_x_seq_ptr,
     grad_v_init_ptr,
     grad_r_tau_ptr,
-    r_tau,
+    r_tau_ptr,
     v_threshold,
     v_reset,
     alpha,  # for surrogate gradient
@@ -271,7 +270,7 @@ def _multistep_plif_backward_kernel_static(
     v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
     v_reset = tl.full([1], v_reset, dtype=compute_dtype)
 
-    r_tau = tl.full([1], r_tau, dtype=compute_dtype)
+    r_tau = tl.load(r_tau_ptr).to(compute_dtype)
     grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
     grad_r_tau_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
 
@@ -412,7 +411,7 @@ def _multistep_plif_backward_kernel_dynamic(
     grad_x_seq_ptr,
     grad_v_init_ptr,
     grad_r_tau_ptr,
-    r_tau,
+    r_tau_ptr,
     v_threshold,
     v_reset,
     alpha,
@@ -430,7 +429,7 @@ def _multistep_plif_backward_kernel_dynamic(
     v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
     v_reset = tl.full([1], v_reset, dtype=compute_dtype)
 
-    r_tau = tl.full([1], r_tau, dtype=compute_dtype)
+    r_tau = tl.load(r_tau_ptr).to(compute_dtype)
     grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
     grad_r_tau_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
 
@@ -580,7 +579,7 @@ def _launch_plif_forward_kernel(
     h_seq: torch.Tensor,
     v_seq: torch.Tensor,
     *,
-    r_tau: float,
+    r_tau: torch.Tensor,
     decay_input: bool,
     v_threshold: float,
     v_reset: float,
@@ -589,6 +588,10 @@ def _launch_plif_forward_kernel(
     save_intermediates: bool,
     use_torch_wrap: bool,
 ) -> None:
+    if r_tau.numel() != 1:
+        raise ValueError("r_tau must contain exactly one element")
+    if r_tau.device != x_seq.device:
+        raise ValueError("r_tau and x_seq must be on the same device")
     T = x_seq.shape[0]
     NCL = x_seq[0].numel()
 
@@ -628,7 +631,7 @@ def _launch_plif_backward_kernel(
     grad_v_init: torch.Tensor,
     grad_r_tau: torch.Tensor,
     *,
-    r_tau: float,
+    r_tau: torch.Tensor,
     v_threshold: float,
     v_reset: float,
     sg_alpha: float,
@@ -695,7 +698,7 @@ def multistep_plif_inference(
         s_seq,
         v_seq,  # dummy
         v_seq,
-        r_tau=r_tau.item(),
+        r_tau=r_tau,
         decay_input=decay_input,
         v_threshold=v_threshold,
         v_reset=v_reset,
@@ -749,7 +752,7 @@ def multistep_plif_forward(
         s_seq,
         h_seq,
         v_seq,
-        r_tau=r_tau.item(),
+        r_tau=r_tau,
         decay_input=decay_input,
         v_threshold=v_threshold,
         v_reset=v_reset,
@@ -818,7 +821,7 @@ def multistep_plif_mp_inference(
         s_seq,
         h_buffer,
         v_seq,
-        r_tau=r_tau.detach().item(),
+        r_tau=r_tau.detach(),
         decay_input=decay_input,
         v_threshold=v_threshold,
         v_reset=v_reset,
@@ -899,7 +902,7 @@ def multistep_plif_mp_forward(
         s_seq,
         h_seq,
         v_seq,
-        r_tau=r_tau.detach().item(),
+        r_tau=r_tau.detach(),
         decay_input=decay_input,
         v_threshold=v_threshold,
         v_reset=v_reset,
@@ -1135,7 +1138,7 @@ def _multistep_plif_mp_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
         grad_x_seq,
         grad_v_init,
         grad_r_tau_seq,
-        r_tau=r_tau.item(),
+        r_tau=r_tau,
         v_threshold=ctx.v_threshold,
         v_reset=ctx.v_reset,
         sg_alpha=ctx.sg_alpha,
@@ -1223,7 +1226,7 @@ def _multistep_plif_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
         grad_x_seq,
         grad_v_init,
         grad_r_tau,
-        r_tau=r_tau.item(),
+        r_tau=r_tau,
         v_threshold=ctx.v_threshold,
         v_reset=ctx.v_reset,
         sg_alpha=ctx.sg_alpha,
@@ -1269,7 +1272,8 @@ def multistep_plif(
     :type x_seq: ``torch.Tensor``
     :param v_init: Initial membrane potential
     :type v_init: ``torch.Tensor``
-    :param r_tau: Reciprocal of the learnable membrane time constant
+    :param r_tau: 可学习膜时间常数倒数。必须是与 ``x_seq`` 位于同一 CUDA
+        设备的单元素张量
     :type r_tau: ``torch.Tensor``
     :param decay_input: Whether input participates in decay
     :type decay_input: bool
@@ -1283,6 +1287,8 @@ def multistep_plif(
     :type surrogate_function: ``surrogate.SurrogateFunctionBase``
     :return: Tuple of (spike_seq, v_seq)
     :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: ``r_tau`` 不是单元素张量，或未与 ``x_seq`` 位于同一
+        CUDA 设备
 
     ----
 
@@ -1294,7 +1300,8 @@ def multistep_plif(
 
     :param x_seq: Input sequence, shape ``[T, N, *]``
     :param v_init: Initial membrane potential
-    :param r_tau: Reciprocal of the learnable membrane time constant
+    :param r_tau: Reciprocal of the learnable membrane time constant. It must be
+        a single-element tensor on the same CUDA device as ``x_seq``
     :param decay_input: Whether input participates in decay
     :param v_threshold: Threshold voltage
     :param v_reset: Reset voltage (``None`` for soft reset)
@@ -1310,6 +1317,8 @@ def multistep_plif(
     :type surrogate_function: ``surrogate.SurrogateFunctionBase``
     :return: Tuple of (spike_seq, v_seq)
     :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: If ``r_tau`` does not contain exactly one element or is
+        not on the same CUDA device as ``x_seq``
     """
     soft_reset = v_reset is None
     v_reset = v_reset if v_reset is not None else 0.0

@@ -226,10 +226,10 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         :rtype: Tuple[pathlib.Path, Callable]
         """
         if self.processed_root.exists():
-            logger.info("The directory [%s] already exists.", self.processed_root)
+            logger.info("The directory [{}] already exists.", self.processed_root)
         else:
             self.processed_root.mkdir()
-            logger.info("Mkdir [%s].", self.processed_root)
+            logger.info("Mkdir [{}].", self.processed_root)
             self.build_impl()
         return self.processed_root, self.get_loader()
 
@@ -303,13 +303,20 @@ class NeuromorphicDatasetBuilder(abc.ABC):
             max_workers=configure.max_threads_number_for_datasets_preprocess
         ) as executor:
             logger.info(
-                "Start ThreadPoolExecutor with max workers = [%s].",
+                "Start ThreadPoolExecutor with max workers = [{}].",
                 executor._max_workers,
             )
             futures = [executor.submit(process, *task_args) for task_args in tasks]
             for future in futures:
                 future.result()
-        logger.info("Used time = [%ss].", round(time.time() - start, 2))
+        duration_seconds = time.time() - start
+        logger.info(
+            "Dataset preprocessing completed: builder={} tasks={} max_workers={} duration_seconds={:.3f}",
+            type(self).__name__,
+            len(futures),
+            configure.max_threads_number_for_datasets_preprocess,
+            duration_seconds,
+        )
 
     def _build_from_event_files(self, process: Callable) -> None:
         utils.create_same_directory_structure(self.raw_root, self.processed_root)
@@ -321,7 +328,7 @@ class NeuromorphicDatasetBuilder(abc.ABC):
                 for event_file in event_files:
                     events_file = event_root / event_file
                     logger.info(
-                        "Start to integrate [%s] to frames and save to [%s].",
+                        "Start to integrate [{}] to frames and save to [{}].",
                         events_file,
                         output_dir,
                     )
@@ -887,15 +894,15 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             fpath = download_root / file_name
             if not check_integrity(fpath=fpath, md5=md5):
                 logger.warning(
-                    "The downloaded file [%s] is missing or corrupted.", fpath
+                    "The downloaded file [{}] is missing or corrupted.", fpath
                 )
                 if fpath.exists():
                     fpath.unlink()
-                    logger.debug("Remove [%s]", fpath)
+                    logger.debug("Remove [{}]", fpath)
 
                 if cls.downloadable():
                     logger.info(
-                        "Download [%s] from [%s] to [%s]", file_name, url, download_root
+                        "Download [{}] from [{}] to [{}]", file_name, url, download_root
                     )
                     download_url(
                         url=url, root=download_root, filename=file_name, md5=md5
@@ -913,7 +920,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         if cls.downloadable():
             for file_name, url, md5 in resource_list:
                 logger.info(
-                    "Download [%s] from [%s] to [%s]", file_name, url, download_root
+                    "Download [{}] from [{}] to [{}]", file_name, url, download_root
                 )
                 download_url(url=url, root=download_root, filename=file_name, md5=md5)
         else:
@@ -964,38 +971,42 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         download_root = self.cfg.root / "download"
         if download_root.exists():
             logger.info(
-                "The [%s] directory for saving downloaded files already exists, check files...",
+                "The [{}] directory for saving downloaded files already exists, check files...",
                 download_root,
             )
             self._check_downloaded_files(download_root)
         else:
             download_root.mkdir()
-            logger.info("Mkdir [%s] to save downloaded files.", download_root)
+            logger.info("Mkdir [{}] to save downloaded files.", download_root)
             self._download_all_files(download_root)
 
         # extract
         extract_root = self.cfg.root / "extract"
         if extract_root.exists():
             logger.warning(
-                "The extracted directory [%s] already exists; SpikingJelly will "
-                "not check its integrity. Delete [%s] manually if it is corrupted.",
+                "The extracted directory [{}] already exists; SpikingJelly will not check its integrity. Delete [{}] manually if it is corrupted.",
                 extract_root,
                 extract_root,
             )
         else:
             extract_root.mkdir()
-            logger.info("Mkdir [%s].", extract_root)
+            logger.info("Mkdir [{}].", extract_root)
             self.extract_downloaded_files(download_root, extract_root)
 
         # generate raw dataset in self.raw_root
         self.raw_root.mkdir(exist_ok=True)  # raw_root might be equal to extract_root
-        logger.info("Raw dataset directory ready: [%s].", self.raw_root)
+        logger.info("Raw dataset directory ready: [{}].", self.raw_root)
         logger.info(
-            "Start to convert the extracted dataset from [%s] to raw dataset in [%s].",
+            "Start to convert the extracted dataset from [{}] to raw dataset in [{}].",
             extract_root,
             self.raw_root,
         )
         self.create_raw_from_extracted(extract_root, self.raw_root)
+        logger.info(
+            "Dataset preparation completed: dataset={} raw_root={}",
+            type(self).__name__,
+            self.raw_root,
+        )
 
     def get_dataset_builder(self):
         r"""

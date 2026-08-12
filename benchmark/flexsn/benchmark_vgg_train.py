@@ -4,7 +4,7 @@ Benchmark: SpikingVGG16-BN training (forward + backward) speed.
 Compares:
   - LIFNode  backend="torch"    — pure PyTorch BPTT baseline
   - LIFNode  backend="triton"   — hand-optimised Triton fwd+bwd
-  - FlexSN   backend="inductor" — Triton fwd+bwd via build_training_kernels
+  - FlexSN   backend="triton" — Triton fwd+bwd via build_training_kernels
 
 All three use Sigmoid surrogate gradient (alpha=4.0) for a fair comparison.
 
@@ -44,7 +44,7 @@ def make_flexsn(**kwargs):
         num_states=1,
         num_outputs=1,
         step_mode=kwargs.get("step_mode", "m"),
-        backend="inductor",
+        backend="triton",
     )
 
 
@@ -108,7 +108,7 @@ def main() -> None:
             ).cuda(),
         ),
         (
-            "FlexSN   backend=inductor",
+            "FlexSN   backend=triton",
             lambda: spiking_vgg16_bn(spiking_neuron=make_flexsn, step_mode="m").cuda(),
         ),
     ]
@@ -126,7 +126,7 @@ def main() -> None:
         functional.set_step_mode(model, "m")
         optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
 
-        def step():
+        def step(model=model, optimizer=optimizer):
             functional.reset_net(model)
             optimizer.zero_grad(set_to_none=True)
             out = model(x_base)  # [T*B, num_classes] or [B, num_classes]
