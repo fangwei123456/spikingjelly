@@ -147,7 +147,7 @@ class SNNDistributedRuntime:
             drop_last=drop_last,
         )
         logger.info(
-            "distributed_dataloader_prepared dataset=%s batch_size=%s num_workers=%s sampler=%s replicas=%s rank=%s drop_last=%s pin_memory=%s",
+            "Data loader prepared: dataset={} batch_size={} num_workers={} sampler={} replicas={} rank={} drop_last={} pin_memory={}",
             type(dataset).__name__,
             batch_size,
             num_workers,

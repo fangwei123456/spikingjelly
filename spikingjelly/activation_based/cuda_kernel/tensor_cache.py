@@ -9,7 +9,7 @@ from . import cuda_utils
 try:
     import cupy
 except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.tensor_cache: %s", e)
+    logger.debug("Optional CuPy dependency unavailable: {}", e)
     cupy = None
 
 

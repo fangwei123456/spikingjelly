@@ -69,7 +69,7 @@ def ensure_distributed_initialized(
 
     dist.init_process_group(backend=backend, **kwargs)
     logger.info(
-        "distributed_process_group_initialized backend=%s rank=%s world_size=%s",
+        "Process group initialized: backend={} rank={} world_size={}",
         backend,
         dist.get_rank(),
         dist.get_world_size(),
@@ -126,7 +126,7 @@ def build_device_mesh(
         device_type, mesh_shape, mesh_dim_names=mesh_dim_names
     )
     logger.info(
-        "distributed_device_mesh_created device_type=%s mesh_shape=%s mesh_dim_names=%s world_size=%s",
+        "Device mesh created: device_type={} mesh_shape={} mesh_dim_names={} world_size={}",
         device_type,
         mesh_shape,
         mesh_dim_names,

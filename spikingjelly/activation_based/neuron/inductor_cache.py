@@ -39,7 +39,7 @@ def clear() -> None:
     with _CACHE_LOCK:
         cleared_entries = len(_COMPILED_GRAPHS)
         _COMPILED_GRAPHS.clear()
-    logger.info("inductor_graph_cache_cleared entries=%s", cleared_entries)
+    logger.info("Graph cache cleared: entries={}", cleared_entries)
 
 
 def info() -> dict[str, int]:
@@ -241,7 +241,7 @@ def compile_graph(cache_key: tuple[Any, ...] | None, fn: Callable) -> Callable:
                 _COMPILED_GRAPHS.popitem(last=False)
         cache_entries = len(_COMPILED_GRAPHS)
     logger.info(
-        "inductor_graph_compile_summary cache_key_present=%s cache_entries=%s elapsed_ms=%.3f",
+        "Inductor graph compiled: cache_key_present={} cache_entries={} elapsed_ms={:.3f}",
         cache_key is not None,
         cache_entries,
         (time.perf_counter() - compile_start) * 1000.0,

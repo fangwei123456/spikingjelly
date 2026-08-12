@@ -81,7 +81,7 @@ def apply_pipeline_stage_memopt(
     if memopt_level <= 0:
         runtime.memopt_selected_stage_indices = ()
         logger.info(
-            "distributed_pipeline_memopt_summary model_family=%s applied=%s memopt_level=%s selected_stage_indices=%s optimize_ms=%s compress_x=%s",
+            "Memory optimization completed: model_family={} applied={} memopt_level={} selected_stage_indices={} optimize_ms={} compress_x={}",
             runtime.model_family,
             False,
             memopt_level,
@@ -131,7 +131,7 @@ def apply_pipeline_stage_memopt(
     ]
     if not local_selected_pairs:
         logger.info(
-            "distributed_pipeline_memopt_summary model_family=%s applied=%s memopt_level=%s selected_stage_indices=%s optimize_ms=%s compress_x=%s",
+            "Memory optimization completed: model_family={} applied={} memopt_level={} selected_stage_indices={} optimize_ms={} compress_x={}",
             runtime.model_family,
             False,
             memopt_level,
@@ -172,7 +172,7 @@ def apply_pipeline_stage_memopt(
         stage_wrapper.refresh_reset_modules()
     optimize_ms = (time.time() - start) * 1000.0
     logger.info(
-        "distributed_pipeline_memopt_summary model_family=%s applied=%s memopt_level=%s selected_stage_indices=%s optimize_ms=%.3f compress_x=%s",
+        "Memory optimization completed: model_family={} applied={} memopt_level={} selected_stage_indices={} optimize_ms={:.3f} compress_x={}",
         runtime.model_family,
         True,
         memopt_level,

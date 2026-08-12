@@ -153,7 +153,7 @@ class DVSLip(NeuromorphicDatasetFolder):
     @classmethod
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
         zip_file = download_root / "DVS-Lip.zip"
-        logger.info("Extract [%s] to [%s].", zip_file, extract_root)
+        logger.info("Extract [{}] to [{}].", zip_file, extract_root)
         extract_archive(zip_file, extract_root)
 
     @classmethod

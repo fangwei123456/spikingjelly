@@ -123,7 +123,7 @@ def prepare_model_for_precision(
     )
     conversion_report = artifacts.policy.conversion_report()
     logger.info(
-        "precision_prepare_summary requested_mode=%s effective_mode=%s device=%s fallback=%s fallback_reason=%s converted_modules=%s unsupported_modules=%s grad_scaler=%s elapsed_ms=%.3f",
+        "Preparation completed: requested_mode={} effective_mode={} device={} fallback={} fallback_reason={} converted_modules={} unsupported_modules={} grad_scaler={} elapsed_ms={:.3f}",
         requested.mode,
         effective.mode,
         device,
@@ -161,7 +161,7 @@ def save_precision_reports(artifacts: PrecisionArtifacts, output_dir: str) -> No
                 sort_keys=True,
             )
     logger.info(
-        "precision_reports_saved output_dir=%s files=%s",
+        "Reports saved: output_dir={} files={}",
         output_dir,
         tuple(filename for filename, _ in report_files),
     )

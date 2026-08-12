@@ -56,8 +56,7 @@ def reset_collected_modules(modules: tuple[nn.Module, ...]) -> None:
     for m in modules:
         if not isinstance(m, base.MemoryModule):
             logger.warning(
-                "Trying to call `reset()` of %s, which is not "
-                "spikingjelly.activation_based.base.MemoryModule",
+                "Trying to call `reset()` of {}, which is not a MemoryModule",
                 m,
             )
         m.reset()
@@ -239,8 +238,7 @@ def set_step_mode(net: nn.Module, step_mode: str):
         if hasattr(m, "step_mode"):
             if not isinstance(m, base.StepModule):
                 logger.warning(
-                    "Trying to set the step mode for %s, which is not "
-                    "spikingjelly.activation_based.base.StepModule",
+                    "Trying to set the step mode for {}, which is not a StepModule",
                     m,
                 )
             m.step_mode = step_mode
@@ -316,15 +314,14 @@ def set_backend(
             continue
         if not isinstance(m, base.MemoryModule):
             logger.warning(
-                "Trying to set the backend for %s, which is not "
-                "spikingjelly.activation_based.base.MemoryModule",
+                "Trying to set the backend for {}, which is not a MemoryModule",
                 m,
             )
         if backend in m.supported_backends:
             m.backend = backend
         else:
             logger.warning(
-                "%s does not support backend=%s; it will continue using backend=%s",
+                "{} does not support backend={}; it will continue using backend={}",
                 m,
                 backend,
                 m.backend,
@@ -378,8 +375,7 @@ def detach_net(net: nn.Module):
         if hasattr(m, "detach"):
             if not isinstance(m, base.MemoryModule):
                 logger.warning(
-                    "Trying to call `detach()` of %s, which is not "
-                    "spikingjelly.activation_based.base.MemoryModule",
+                    "Trying to call `detach()` of {}, which is not a MemoryModule",
                     m,
                 )
             m.detach()

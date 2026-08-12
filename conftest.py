@@ -11,6 +11,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import pytest
+
 _REPO_ROOT = Path(__file__).resolve().parent
 
 
@@ -18,3 +20,21 @@ def pytest_configure(config):
     existing = os.environ.get("PYTHONPATH", "")
     parts = [p for p in (str(_REPO_ROOT), existing) if p]
     os.environ["PYTHONPATH"] = os.pathsep.join(parts)
+
+
+@pytest.fixture
+def loguru_records():
+    from spikingjelly.logger import logger
+
+    records = []
+    sink_id = logger.add(
+        lambda message: records.append(message.record),
+        level="DEBUG",
+        filter=lambda record: record["name"].startswith("spikingjelly"),
+    )
+    logger.enable("spikingjelly")
+    try:
+        yield records
+    finally:
+        logger.disable("spikingjelly")
+        logger.remove(sink_id)

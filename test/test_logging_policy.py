@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import logging
+import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from loguru import logger as loguru_logger
 
 from spikingjelly.activation_based.functional import net_config
 from spikingjelly.activation_based.op_counter.compute_energy import (
@@ -14,9 +16,21 @@ from spikingjelly.activation_based.op_counter.compute_energy import (
 from spikingjelly.logger import logger
 
 
-def test_package_logger_is_named_and_does_not_configure_root():
-    assert logger.name == "spikingjelly"
-    assert any(isinstance(handler, logging.NullHandler) for handler in logger.handlers)
+def _load_checker():
+    checker_path = (
+        Path(__file__).resolve().parent.parent / "tools/check_logging_policy.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "logging_policy_checker", checker_path
+    )
+    checker = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(checker)
+    return checker
+
+
+def test_package_exports_loguru_logger():
+    assert logger is loguru_logger
 
 
 def test_package_does_not_reexport_logger_object():
@@ -31,221 +45,294 @@ def test_package_does_not_reexport_logger_object():
     assert logger_module.logger is logger
 
 
-def test_import_does_not_change_root_configuration():
+def test_import_is_silent_and_does_not_change_stdlib_root():
     script = """
+import contextlib
+import io
 import logging
 root = logging.getLogger()
-def snapshot():
-    return (
-        root.level,
-        tuple(
-            (
-                type(h).__name__,
-                h.level,
-                h.formatter._fmt if h.formatter is not None else None,
-            )
-            for h in root.handlers
-        ),
-    )
-before = snapshot()
-import spikingjelly
-after = snapshot()
-if before != after:
-    raise SystemExit(f"root logging configuration changed: {before!r} != {after!r}")
+before = (root.level, tuple(root.handlers))
+stdout = io.StringIO()
+stderr = io.StringIO()
+with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+    import spikingjelly
+assert stdout.getvalue() == ""
+assert stderr.getvalue() == ""
+assert before == (root.level, tuple(root.handlers))
 """
     subprocess.run([sys.executable, "-c", script], check=True)
 
 
-def test_net_config_warning_uses_package_logger(caplog):
+def test_import_preserves_user_loguru_sink():
+    script = """
+import io
+from loguru import logger
+output = io.StringIO()
+sink_id = logger.add(output, format="{message}")
+import spikingjelly
+logger.info("user-sink-still-active")
+logger.remove(sink_id)
+assert output.getvalue().strip() == "user-sink-still-active"
+"""
+    subprocess.run([sys.executable, "-c", script], check=True)
+
+
+def test_logging_benchmark_rejects_nonpositive_counts():
+    result = subprocess.run(
+        [sys.executable, "benchmark/benchmark_logging.py", "--calls", "0"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert "value must be > 0" in result.stderr
+
+
+def test_package_is_disabled_until_enabled():
+    script = """
+import io
+import torch.nn as nn
+from loguru import logger
+from spikingjelly.activation_based.functional import net_config
+output = io.StringIO()
+sink_id = logger.add(
+    output,
+    format="{message}",
+    filter=lambda record: record["name"].startswith("spikingjelly"),
+)
+module = nn.Module()
+module.backend = "torch"
+module.supported_backends = ("torch",)
+net_config.set_backend(module, "unsupported")
+assert output.getvalue() == ""
+logger.enable("spikingjelly")
+net_config.set_backend(module, "unsupported")
+assert "unsupported" in output.getvalue()
+logger.disable("spikingjelly")
+before = output.getvalue()
+net_config.set_backend(module, "unsupported")
+assert output.getvalue() == before
+logger.remove(sink_id)
+"""
+    subprocess.run([sys.executable, "-c", script], check=True)
+
+
+def test_net_config_warning_uses_package_logger(loguru_records):
     import torch.nn as nn
 
     module = nn.Module()
     module.backend = "torch"
     module.supported_backends = ("torch",)
-    with caplog.at_level(logging.WARNING, logger="spikingjelly"):
-        net_config.set_backend(module, "unsupported")
-    assert caplog.records
-    assert all(record.name == "spikingjelly" for record in caplog.records)
+    net_config.set_backend(module, "unsupported")
+    assert loguru_records
+    assert all(record["name"].startswith("spikingjelly") for record in loguru_records)
 
 
-def test_compute_energy_summary_is_emitted_once(caplog):
+def test_compute_energy_summary_is_emitted_once(loguru_records):
     import torch
 
     model = torch.nn.Linear(2, 2, bias=False)
     profiler = ComputeEnergyProfiler()
-    with caplog.at_level(logging.INFO, logger="spikingjelly"):
-        with profiler:
-            model(torch.ones(1, 2))
-        profiler.get_report()
-        profiler.get_report()
+    with profiler:
+        model(torch.ones(1, 2))
+    profiler.get_report()
+    profiler.get_report()
     summaries = [
         record
-        for record in caplog.records
-        if record.__dict__.get("event") == "op_counter_summary"
+        for record in loguru_records
+        if record["message"].startswith("Counting completed:")
     ]
     assert len(summaries) == 1
+    assert "total_operations=" in summaries[0]["message"]
 
 
-def test_precision_prepare_emits_one_lifecycle_summary(caplog):
+def test_data_preprocess_summary_reports_completed_tasks(loguru_records):
+    from spikingjelly.datasets.base import NeuromorphicDatasetBuilder
+
+    processed = []
+    NeuromorphicDatasetBuilder._run_preprocess_tasks(
+        object(), processed.append, ((1,), (2,), (3,))
+    )
+    summaries = [
+        record
+        for record in loguru_records
+        if record["message"].startswith("Dataset preprocessing completed:")
+    ]
+    assert sorted(processed) == [1, 2, 3]
+    assert len(summaries) == 1
+    assert "tasks=3" in summaries[0]["message"]
+
+
+def test_precision_prepare_emits_one_lifecycle_summary(loguru_records):
     import torch
 
     from spikingjelly.activation_based.precision import prepare_model_for_precision
 
-    with caplog.at_level(logging.INFO, logger="spikingjelly"):
-        prepare_model_for_precision(torch.nn.Linear(2, 2), "cpu", "fp32")
+    prepare_model_for_precision(torch.nn.Linear(2, 2), "cpu", "fp32")
     summaries = [
         record
-        for record in caplog.records
-        if record.getMessage().startswith("precision_prepare_summary")
+        for record in loguru_records
+        if record["message"].startswith("Preparation completed:")
     ]
     assert len(summaries) == 1
-    assert all(record.name == "spikingjelly" for record in summaries)
 
 
-def test_distributed_configuration_emits_one_lifecycle_summary(caplog):
+def test_distributed_configuration_emits_one_lifecycle_summary(loguru_records):
     import torch
 
-    from spikingjelly.activation_based.distributed.config import (
-        SNNDistributedConfig,
-    )
+    from spikingjelly.activation_based.distributed.config import SNNDistributedConfig
     from spikingjelly.activation_based.distributed.execution import (
         configure_snn_distributed,
     )
 
-    with caplog.at_level(logging.INFO, logger="spikingjelly"):
-        configure_snn_distributed(torch.nn.Linear(2, 2), SNNDistributedConfig())
+    configure_snn_distributed(torch.nn.Linear(2, 2), SNNDistributedConfig())
     summaries = [
         record
-        for record in caplog.records
-        if record.getMessage().startswith("distributed_configuration_summary")
+        for record in loguru_records
+        if record["message"].startswith("Configuration completed:")
     ]
     assert len(summaries) == 1
+    assert "mode=none" in summaries[0]["message"]
+    assert "mesh_shape=None" in summaries[0]["message"]
 
 
-def test_metric_logger_formats_progress_with_logging_arguments(caplog):
-    from spikingjelly.activation_based.model.tv_ref_classify.utils import (
-        MetricLogger,
-    )
+def test_metric_logger_formats_progress_with_loguru_arguments(loguru_records):
+    from spikingjelly.activation_based.model.tv_ref_classify.utils import MetricLogger
 
-    with caplog.at_level(logging.INFO, logger="spikingjelly"):
-        list(MetricLogger().log_every(["sample"], 1, "Train"))
-
-    messages = [record.getMessage() for record in caplog.records]
+    list(MetricLogger().log_every(["sample"], 1, "Train"))
+    messages = [record["message"] for record in loguru_records]
     assert any("Train" in message and "[0/1]" in message for message in messages)
 
 
-def test_policy_checker_rejects_nested_get_logger(tmp_path):
-    import importlib.util
+def test_evaluation_handles_zero_duration(monkeypatch, loguru_records):
+    from types import SimpleNamespace
 
-    checker_path = (
-        Path(__file__).resolve().parent.parent / "tools/check_logging_policy.py"
+    import torch
+
+    from spikingjelly.activation_based.model import train_classify
+
+    monkeypatch.setattr(train_classify.time, "perf_counter", lambda: 1.0)
+    data_loader = torch.utils.data.DataLoader(
+        torch.utils.data.TensorDataset(
+            torch.ones(1, 5), torch.zeros(1, dtype=torch.long)
+        ),
+        batch_size=1,
     )
-    spec = importlib.util.spec_from_file_location(
-        "logging_policy_checker", checker_path
+    train_classify.Trainer().evaluate(
+        SimpleNamespace(disable_pinmemory=True),
+        torch.nn.Identity(),
+        torch.nn.CrossEntropyLoss(),
+        data_loader,
+        torch.device("cpu"),
     )
-    checker = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(checker)
+    assert any("samples/s=inf" in record["message"] for record in loguru_records)
 
-    source = tmp_path / "nested_logger.py"
-    source.write_text(
-        'import logging\nlogging.getLogger(__name__).info("not allowed")\n',
-        encoding="utf-8",
+
+def test_serialized_sink_contains_standard_fields(tmp_path):
+    import torch
+
+    from spikingjelly.activation_based.precision import prepare_model_for_precision
+
+    path = tmp_path / "spikingjelly.jsonl"
+    sink_id = logger.add(
+        path,
+        serialize=True,
+        diagnose=False,
+        filter=lambda record: record["name"].startswith("spikingjelly"),
     )
-    violations = checker.check(tmp_path)
-    assert any("logger must be imported" in violation for violation in violations)
+    logger.enable("spikingjelly")
+    try:
+        prepare_model_for_precision(torch.nn.Linear(2, 2), "cpu", "fp32")
+    finally:
+        logger.disable("spikingjelly")
+        logger.remove(sink_id)
+
+    payload = json.loads(path.read_text().splitlines()[0])
+    record = payload["record"]
+    assert record["message"].startswith("Preparation completed:")
+    for field in ("time", "level", "name", "function", "line", "process", "thread"):
+        assert field in record
 
 
-def test_policy_checker_rejects_standalone_get_logger(tmp_path):
-    import importlib.util
-
-    checker_path = (
-        Path(__file__).resolve().parent.parent / "tools/check_logging_policy.py"
-    )
-    spec = importlib.util.spec_from_file_location(
-        "logging_policy_checker", checker_path
-    )
-    checker = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(checker)
-
-    source = tmp_path / "standalone_logger.py"
-    source.write_text(
-        "import logging\n"
-        'logging.getLogger("spikingjelly")\n'
-        'logger = logging.getLogger("wrong_name")\n',
-        encoding="utf-8",
-    )
-    violations = checker.check(tmp_path)
-    assert any("logger must be imported" in violation for violation in violations)
-    assert any("non-package logger name" in violation for violation in violations)
-
-
-def test_policy_checker_rejects_nested_null_handler(tmp_path):
-    import importlib.util
-
-    checker_path = (
-        Path(__file__).resolve().parent.parent / "tools/check_logging_policy.py"
-    )
-    spec = importlib.util.spec_from_file_location(
-        "logging_policy_checker", checker_path
-    )
-    checker = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(checker)
-
-    package = tmp_path / "nested" / "__init__.py"
-    package.parent.mkdir()
-    package.write_text("import logging\nlogging.NullHandler()\n", encoding="utf-8")
-    violations = checker.check(tmp_path)
-    assert any("logging configuration call" in violation for violation in violations)
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("import logging\n", "stdlib logging import"),
+        ("import loguru\n", "must be imported"),
+        ("from loguru import logger\nlogger.info('x')\n", "must be imported"),
+        (
+            "from spikingjelly.logger import logger\nlogger.info('value=%s', value)\n",
+            "percent placeholder",
+        ),
+        (
+            "from spikingjelly.logger import logger\nlogger.info('value=%08.3f', value)\n",
+            "percent placeholder",
+        ),
+        (
+            "from spikingjelly.logger import logger\nlogger.info('value={}')\n",
+            "placeholder count",
+        ),
+        (
+            "from spikingjelly.logger import logger\nlogger.info(f'value={value}')\n",
+            "eager formatting",
+        ),
+        (
+            "from spikingjelly.logger import logger\nlogger.info('value={value}', value=1)\n",
+            "must use positional arguments",
+        ),
+        (
+            "from spikingjelly.logger import logger\n"
+            "logger.info('spikingjelly.activation_based.neuron: unavailable')\n",
+            "source module in logger message",
+        ),
+        ("import builtins\nbuiltins.print('not allowed')\n", "builtins.print"),
+    ],
+)
+def test_policy_checker_rejects_invalid_logging(tmp_path, source, expected):
+    path = tmp_path / "invalid_logging.py"
+    path.write_text(source, encoding="utf-8")
+    violations = _load_checker().check(tmp_path)
+    assert any(expected in violation for violation in violations)
 
 
-def test_policy_checker_rejects_builtins_print(tmp_path):
-    import importlib.util
-
-    checker_path = (
-        Path(__file__).resolve().parent.parent / "tools/check_logging_policy.py"
-    )
-    spec = importlib.util.spec_from_file_location(
-        "logging_policy_checker", checker_path
-    )
-    checker = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(checker)
-
-    source = tmp_path / "builtins_print.py"
-    source.write_text(
-        "import builtins\nbuiltins.print('not allowed')\n", encoding="utf-8"
-    )
-    violations = checker.check(tmp_path)
-    assert any("builtins.print" in violation for violation in violations)
-
-
-def test_policy_checker_rejects_eager_logging_formatting(tmp_path):
-    import importlib.util
-
-    checker_path = (
-        Path(__file__).resolve().parent.parent / "tools/check_logging_policy.py"
-    )
-    spec = importlib.util.spec_from_file_location(
-        "logging_policy_checker", checker_path
-    )
-    checker = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(checker)
-
-    source = tmp_path / "eager_logging.py"
-    source.write_text(
+@pytest.mark.parametrize("method", ["bind", "contextualize", "opt"])
+def test_policy_checker_rejects_logger_call_chains(tmp_path, method):
+    arguments = "lazy=True" if method == "opt" else "event='work'"
+    path = tmp_path / "invalid_logging.py"
+    path.write_text(
         "from spikingjelly.logger import logger\n"
-        'logger.info("value=%s" % value)\n'
-        'logger.warning("prefix " + value)\n',
+        f"logger.{method}({arguments}).info('done')\n",
         encoding="utf-8",
     )
-    violations = checker.check(tmp_path)
-    assert sum("manual string formatting" in violation for violation in violations) == 2
+    violations = _load_checker().check(tmp_path)
+    assert any(f"logger.{method} is not allowed" in item for item in violations)
 
 
-@pytest.mark.parametrize("path", [Path("tools/check_logging_policy.py")])
-def test_policy_checker_exists(path):
-    assert path.is_file()
+def test_policy_checker_accepts_direct_loguru_call(tmp_path):
+    path = tmp_path / "valid_logging.py"
+    path.write_text(
+        "from spikingjelly.logger import logger\n"
+        "logging = object()\n"
+        "logger.info('Work completed: result={}', prefix + 'value')\n"
+        "logger.info('Install spikingjelly.optional_backend when needed')\n",
+        encoding="utf-8",
+    )
+    assert _load_checker().check(tmp_path) == []
+
+
+def test_policy_checker_reports_missing_package_import_once(tmp_path):
+    path = tmp_path / "invalid_logging.py"
+    path.write_text("logger.info('first')\nlogger.info('second')\n", encoding="utf-8")
+    violations = _load_checker().check(tmp_path)
+    assert sum("must be imported" in item for item in violations) == 1
+
+
+def test_policy_checker_rejects_loguru_import_from_nested_logger_module(tmp_path):
+    path = tmp_path / "subsystem" / "logger.py"
+    path.parent.mkdir()
+    path.write_text("from loguru import logger\n", encoding="utf-8")
+    violations = _load_checker().check(tmp_path)
+    assert any("must be imported" in item for item in violations)
+
+
+def test_policy_checker_exists():
+    assert Path("tools/check_logging_policy.py").is_file()

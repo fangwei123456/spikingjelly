@@ -536,7 +536,7 @@ if __name__ == "__main__":
     best_neuroncell = torch.Tensor(int_list)
 
     logger.info("------- best_neuroncell -------")
-    logger.info("%s", best_neuroncell)
+    logger.info("{}", best_neuroncell)
     logger.info("------------------------------")
 
     snasnet = SNASNet(args, best_neuroncell)

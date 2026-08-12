@@ -10,6 +10,7 @@ from spikingjelly.activation_based.cuda_kernel.cuda_utils import (
     register_python_object,
     resolve_python_object,
 )
+from spikingjelly.activation_based.cuda_kernel import spike_op
 from spikingjelly.activation_based.cuda_kernel.spike_op import spike_linear
 from spikingjelly.activation_based.cuda_kernel.tensor_cache import BoolTensorCache
 
@@ -156,6 +157,17 @@ def _maybe_skip_custom_op_unavailable():
         for name in ("custom_op", "register_fake", "register_autograd")
     ):
         pytest.skip("torch.library custom_op/register_autograd are unavailable.")
+
+
+def test_spike_convolution_reports_extension_build_error(monkeypatch):
+    build_error = OSError("build failed")
+    monkeypatch.setattr(spike_op, "cpp_wrapper", None)
+    monkeypatch.setattr(spike_op, "cpp_wrapper_error", build_error)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        spike_op._spike_conv_backward_common(None, None, None, None, None, None, 1, ())
+
+    assert exc_info.value.__cause__ is build_error
 
 
 def test_python_object_registry_uses_identity_and_releases_objects():

@@ -1445,7 +1445,7 @@ def memory_optimization(
         ),
     )
     summary.applied_level = level
-    logger.debug("Optimizing memory on device %s", device)
+    logger.debug("Optimizing memory on device {}", device)
     peak_allocated = -1.0
 
     if level > 0:
@@ -1531,7 +1531,7 @@ def memory_optimization(
 
                     split_cb = _spatially_split_gc_container(cb, compress_x)
                     if split_cb is None:
-                        logger.debug("\t%s: can't be spatially split", cb_name)
+                        logger.debug("\t{}: can't be spatially split", cb_name)
                         blocked_candidates.add(cb_path)
                         continue
                     setattr(parent, child_name, split_cb)
@@ -1545,7 +1545,7 @@ def memory_optimization(
                     )
                     if new_peak_allocated >= peak_allocated:
                         logger.debug(
-                            "\t%s: no reduction in memory, revert (%s -> %s)",
+                            "\t{}: no reduction in memory, revert ({} -> {})",
                             cb_name,
                             peak_allocated,
                             new_peak_allocated,
@@ -1555,7 +1555,7 @@ def memory_optimization(
                         continue
 
                     logger.debug(
-                        "\t%s: successfully split (%s -> %s)",
+                        "\t{}: successfully split ({} -> {})",
                         cb_name,
                         peak_allocated,
                         new_peak_allocated,
@@ -1628,7 +1628,7 @@ def memory_optimization(
 
                     split_cb = _temporally_split_gc_container(cb, temporal_split_factor)
                     if split_cb is None:
-                        logger.debug("\t%s: can't be temporally split", cb_name)
+                        logger.debug("\t{}: can't be temporally split", cb_name)
                         blocked_candidates.add(cb_path)
                         continue
                     setattr(parent, child_name, split_cb)
@@ -1642,7 +1642,7 @@ def memory_optimization(
                     )
                     if new_peak_allocated >= peak_allocated:
                         logger.debug(
-                            "\t%s: no reduction in memory, revert (%s -> %s)",
+                            "\t{}: no reduction in memory, revert ({} -> {})",
                             cb_name,
                             peak_allocated,
                             new_peak_allocated,
@@ -1652,7 +1652,7 @@ def memory_optimization(
                         continue
 
                     logger.debug(
-                        "\t%s: successfully split (%s -> %s)",
+                        "\t{}: successfully split ({} -> {})",
                         cb_name,
                         peak_allocated,
                         new_peak_allocated,
@@ -1705,7 +1705,7 @@ def memory_optimization(
                 )
                 if new_peak_allocated > peak_allocated:
                     logger.debug(
-                        "\t%s: keep GCContainer (%s -> %s)",
+                        "\t{}: keep GCContainer ({} -> {})",
                         cb_name,
                         peak_allocated,
                         new_peak_allocated,
@@ -1713,7 +1713,7 @@ def memory_optimization(
                     setattr(parent, child_name, cb)
                 else:
                     logger.debug(
-                        "\t%s: disable GCContainer (%s -> %s)",
+                        "\t{}: disable GCContainer ({} -> {})",
                         cb_name,
                         peak_allocated,
                         new_peak_allocated,
@@ -1728,7 +1728,7 @@ def memory_optimization(
         _dummy_train_step(net, dummy_input, restore_bn=True)
 
     et = time.time()
-    logger.debug("Total time: %.2fs", et - st)
+    logger.debug("Total time: {:.2f}s", et - st)
     net = net.cpu()  # must return a model on CPU
     summary.gc_container_count = sum(
         1 for m in net.modules() if isinstance(m, GCContainer)
@@ -1738,25 +1738,13 @@ def memory_optimization(
     )
     summary.recommendation = _build_memopt_recommendation(summary)
     logger.info(
-        "Memory optimization completed: device=%s profile=%s requested_level=%s "
-        "applied_level=%s applied_steps=%s skipped_steps=%s",
+        "Memory optimization completed: device={} profile={} requested_level={} applied_level={} applied_steps={} skipped_steps={}",
         summary.device,
         summary.profile,
         summary.requested_level,
         summary.applied_level,
         len(summary.applied_steps),
         len(summary.skipped_steps),
-        extra={
-            "event": "memopt_profile_summary",
-            "device": summary.device,
-            "profile": summary.profile,
-            "requested_level": summary.requested_level,
-            "applied_level": summary.applied_level,
-            "applied_steps": len(summary.applied_steps),
-            "skipped_steps": len(summary.skipped_steps),
-            "gc_candidate_count": summary.gc_candidate_count,
-            "gc_selected_count": summary.gc_selected_count,
-        },
     )
     if return_summary:
         return net, summary

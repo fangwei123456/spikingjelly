@@ -226,7 +226,7 @@ class PrintShapeModule(nn.Module):
         self.ext_str = ext_str
 
     def forward(self, x: Tensor):
-        logger.debug("%s shape=%s", self.ext_str, x.shape)
+        logger.debug("{} shape={}", self.ext_str, x.shape)
         return x
 
 

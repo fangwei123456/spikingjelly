@@ -84,8 +84,7 @@ def _load_raw_events(
     data = np.frombuffer(data, dtype=">u4")
     if len(data) % 2 != 0:
         logger.error(
-            "Malformed event stream: odd number of data elements; "
-            "raw_even=%s raw_odd=%s",
+            "Malformed event stream: odd number of data elements; raw_even={} raw_odd={}",
             data[:20:2].tolist(),
             data[1:21:2].tolist(),
         )
@@ -146,7 +145,7 @@ def _load_origin_data(file_name: Union[str, Path]) -> dict:
 def _read_aedat_save_to_np(bin_file: Union[str, Path], np_file: Union[str, Path]):
     events = _load_origin_data(bin_file)
     utils.np_savez(np_file, t=events["t"], x=events["x"], y=events["y"], p=events["p"])
-    logger.debug("Save [%s] to [%s].", bin_file, np_file)
+    logger.debug("Save [{}] to [{}].", bin_file, np_file)
 
 
 class CIFAR10DVS(NeuromorphicDatasetFolder):
@@ -332,7 +331,7 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
         ) as tpe:
             futures = []
             for zip_file in download_root.iterdir():
-                logger.debug("Extract [%s] to [%s].", zip_file, extract_root)
+                logger.debug("Extract [{}] to [{}].", zip_file, extract_root)
                 futures.append(tpe.submit(extract_archive, zip_file, extract_root))
 
             for future in futures:
@@ -352,12 +351,12 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
                 aedat_dir = extract_root / class_name
                 np_dir = raw_root / class_name
                 np_dir.mkdir()
-                logger.debug("Mkdir [%s].", np_dir)
+                logger.debug("Mkdir [{}].", np_dir)
                 for bin_file in os.listdir(aedat_dir):
                     source_file = aedat_dir / bin_file
                     target_file = np_dir / (os.path.splitext(bin_file)[0] + ".npz")
                     logger.debug(
-                        "Start to convert [%s] to [%s].", source_file, target_file
+                        "Start to convert [{}] to [{}].", source_file, target_file
                     )
                     futures.append(
                         tpe.submit(_read_aedat_save_to_np, source_file, target_file)
@@ -365,7 +364,7 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
             for future in futures:
                 future.result()
 
-        logger.info("Used time = [%ss].", round(time.time() - t_ckp, 2))
+        logger.info("Used time = [{}s].", round(time.time() - t_ckp, 2))
 
 
 def _move_data(root: Union[str, Path]):
@@ -377,22 +376,22 @@ def _move_data(root: Union[str, Path]):
         target = root / "test" / cn
         if not target.exists():
             target.mkdir(parents=True)
-            logger.debug("mkdir [%s]", target)
+            logger.debug("mkdir [{}]", target)
             for i in range(100):
                 source_file = source / f"cifar10_{cn}_{i}.npz"
                 target_file = target / f"cifar10_{cn}_{i}.npz"
                 target_file.symlink_to(source_file)
-                logger.debug("symlink: [%s] -> [%s]", target_file, source_file)
+                logger.debug("symlink: [{}] -> [{}]", target_file, source_file)
 
         target = root / "train" / cn
         if not target.exists():
             target.mkdir(parents=True)
-            logger.debug("mkdir [%s]", target)
+            logger.debug("mkdir [{}]", target)
             for i in range(100, 1000):
                 source_file = source / f"cifar10_{cn}_{i}.npz"
                 target_file = target / f"cifar10_{cn}_{i}.npz"
                 target_file.symlink_to(source_file)
-                logger.debug("symlink: [%s] -> [%s]", target_file, source_file)
+                logger.debug("symlink: [{}] -> [{}]", target_file, source_file)
 
 
 class CIFAR10DVSTEBNSplit(CIFAR10DVS):
@@ -518,7 +517,7 @@ class CIFAR10DVSTEBNSplit(CIFAR10DVS):
         split_root = self.processed_root / ("train" if self.cfg.train else "test")
         if not split_root.exists():
             logger.info(
-                "We have the unsplit processed dataset at [%s]. _move_data() is called to split the dataset following TEBN's approach.",
+                "We have the unsplit processed dataset at [{}]. _move_data() is called to split the dataset following TEBN's approach.",
                 self.processed_root,
             )
             _move_data(self.processed_root)

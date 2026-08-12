@@ -25,6 +25,7 @@ dependencies = [
     "torchvision",
     "torchaudio",
     "h5py",
+    "loguru>=0.7,<1",
     "matplotlib",
     "numpy",
     "packaging",

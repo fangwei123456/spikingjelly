@@ -1,5 +1,4 @@
 from spikingjelly.logger import logger
-import logging
 import sys
 
 import numpy as np
@@ -8,26 +7,11 @@ import torch
 try:
     import cupy
 except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.cuda_kernel.auto_cuda.base: %s", e)
+    logger.debug("Optional CuPy dependency unavailable: {}", e)
     cupy = None
 
 from .... import configure
 from .. import cuda_utils
-
-
-def wrap_with_comment(code: str, comment: str):
-    if logging.DEBUG >= logging.root.level:
-        return (
-            "\n//------"
-            + comment
-            + " start------\n"
-            + code
-            + "\n//------"
-            + comment
-            + " end--------\n\n"
-        )
-    else:
-        return code
 
 
 def startswiths(x: str, prefixes: tuple):
@@ -576,12 +560,7 @@ class CKernel:
         :return: Full CUDA source code
         :rtype: str
         """
-        return (
-            wrap_with_comment(self.declaration, "declaration")
-            + wrap_with_comment(self.head, "head")
-            + wrap_with_comment(self.core, "core")
-            + wrap_with_comment(self.tail, "tail")
-        )
+        return self.declaration + self.head + self.core + self.tail
 
 
 class CKernel1D(CKernel):
@@ -1182,7 +1161,7 @@ class CKernel2D(CKernel):
                 const int dt = N;
         """
 
-        codes += wrap_with_comment(self.pre_core, "pre_core")
+        codes += self.pre_core
 
         if self.reverse:
             codes += """
@@ -1202,7 +1181,7 @@ class CKernel2D(CKernel):
                 }
         """
 
-        codes += wrap_with_comment(self.post_core, "post_core")
+        codes += self.post_core
 
         codes += """
             }
