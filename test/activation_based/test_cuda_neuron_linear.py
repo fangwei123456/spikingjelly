@@ -83,7 +83,6 @@ def test_lif_linear_forward_backward(shape, decay_input, v_reset, detach_reset):
         "v_threshold": 0.75,
         "v_reset": v_reset,
         "detach_reset": detach_reset,
-        "surrogate_function": sg,
     }
 
     y, v_next = lif_linear(
@@ -92,11 +91,10 @@ def test_lif_linear_forward_backward(shape, decay_input, v_reset, detach_reset):
         weight.t().contiguous(),
         bias,
         threads=128,
+        surrogate_function=sg,
         **kwargs,
     )
-    y_ref, v_ref = _reference(
-        *refs, sg=sg, **{k: kwargs[k] for k in kwargs if k != "surrogate_function"}
-    )
+    y_ref, v_ref = _reference(*refs, sg=sg, **kwargs)
     torch.testing.assert_close(y, y_ref, rtol=1e-4, atol=2e-5)
     torch.testing.assert_close(v_next, v_ref, rtol=1e-5, atol=1e-6)
 
@@ -122,7 +120,6 @@ def test_if_linear_forward_backward(shape, v_reset):
         "v_threshold": 0.75,
         "v_reset": v_reset,
         "detach_reset": True,
-        "surrogate_function": sg,
     }
 
     y, v_next = if_linear(
@@ -131,6 +128,7 @@ def test_if_linear_forward_backward(shape, v_reset):
         weight.t().contiguous(),
         bias,
         threads=128,
+        surrogate_function=sg,
         **kwargs,
     )
     y_ref, v_ref = _reference(
@@ -138,7 +136,7 @@ def test_if_linear_forward_backward(shape, v_reset):
         tau=None,
         decay_input=True,
         sg=sg,
-        **{k: kwargs[k] for k in kwargs if k != "surrogate_function"},
+        **kwargs,
     )
     torch.testing.assert_close(y, y_ref, rtol=1e-4, atol=2e-5)
     torch.testing.assert_close(v_next, v_ref, rtol=1e-5, atol=1e-6)

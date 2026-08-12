@@ -5,6 +5,7 @@ the intermediate spike tensor. They are intentionally not exported from the
 ``cuda_kernel`` package while their useful workload range is being measured.
 """
 
+from functools import cache
 from typing import Literal, Optional
 
 import numpy as np
@@ -23,6 +24,9 @@ except (ImportError, OSError) as e:
 
 
 __all__ = ["if_linear", "lif_linear"]
+
+
+_OUTPUTS_PER_THREAD = 4
 
 
 _IF_CHARGE = r"""
@@ -147,54 +151,41 @@ extern "C" __global__ void {kernel_name}(
 """
 
 
-_module_cache: dict[tuple, object] = {}
-_kernel_cache: dict[tuple, object] = {}
 _MAX_CUDA_ELEMENTS = 2**31 - 1
 
 
-def _compile_kernel(device: int, key: tuple, source: str, kernel_name: str):
-    if key not in _module_cache:
-        with cuda_utils.DeviceEnvironment(device):
-            _module_cache[key] = RawModule(
-                code=source,
-                options=("--use_fast_math",),
-            )
-    if key not in _kernel_cache:
-        with cuda_utils.DeviceEnvironment(device):
-            _kernel_cache[key] = _module_cache[key].get_function(kernel_name)
-    return _kernel_cache[key]
-
-
+@cache
 def _get_if_kernel(device: int, soft_reset: bool):
     kernel_name = "if_linear_kernel"
-    key = (device, kernel_name, soft_reset)
-    if key in _kernel_cache:
-        return _kernel_cache[key]
     source = _CUDA_TEMPLATE.format(
-        outputs_per_thread=4,
+        outputs_per_thread=_OUTPUTS_PER_THREAD,
         soft_reset=int(soft_reset),
         charge_code=_IF_CHARGE,
         kernel_name=kernel_name,
         charge_parameter="",
         charge_argument="",
     )
-    return _compile_kernel(device, key, source, kernel_name)
+    with cuda_utils.DeviceEnvironment(device):
+        return RawModule(code=source, options=("--use_fast_math",)).get_function(
+            kernel_name
+        )
 
 
+@cache
 def _get_lif_kernel(device: int, decay_input: bool, soft_reset: bool):
     kernel_name = "lif_linear_kernel"
-    key = (device, kernel_name, decay_input, soft_reset)
-    if key in _kernel_cache:
-        return _kernel_cache[key]
     source = _CUDA_TEMPLATE.format(
-        outputs_per_thread=4,
+        outputs_per_thread=_OUTPUTS_PER_THREAD,
         soft_reset=int(soft_reset),
         charge_code=_LIF_CHARGE.format(decay_input=int(decay_input)),
         kernel_name=kernel_name,
         charge_parameter="float r_tau, ",
         charge_argument=", r_tau, v_reset",
     )
-    return _compile_kernel(device, key, source, kernel_name)
+    with cuda_utils.DeviceEnvironment(device):
+        return RawModule(code=source, options=("--use_fast_math",)).get_function(
+            kernel_name
+        )
 
 
 def _check_tensor(
@@ -270,7 +261,8 @@ def _launch(
     y_seq = torch.empty((T, M, N), device=x_seq.device, dtype=torch.float32)
     v_out = torch.empty_like(v_init)
     bias_ptr = y_seq.data_ptr() if bias is None else bias.data_ptr()
-    n_groups = (N + threads * 4 - 1) // (threads * 4)
+    n_per_block = threads * _OUTPUTS_PER_THREAD
+    n_groups = (N + n_per_block - 1) // n_per_block
     blocks = M * n_groups
     args = (
         x_seq.data_ptr(),
