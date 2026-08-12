@@ -299,7 +299,7 @@ def _launch(
 
 
 @torch.library.custom_op("sj::cupy_if_linear_forward", mutates_args=())
-def _cupy_if_linear_forward(
+def cupy_if_linear_forward(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     weight_t: torch.Tensor,
@@ -326,7 +326,7 @@ def _cupy_if_linear_forward(
 
 
 @torch.library.custom_op("sj::cupy_lif_linear_forward", mutates_args=())
-def _cupy_lif_linear_forward(
+def cupy_lif_linear_forward(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     weight_t: torch.Tensor,
@@ -651,7 +651,7 @@ def if_linear(
     x_seq, v, weight_t, bias, surrogate_id, single_step = _prepare_inputs(
         x, v, weight_t, bias, surrogate_function
     )
-    y_seq, v_out = _cupy_if_linear_forward(
+    y_seq, v_out = cupy_if_linear_forward(
         x_seq,
         v,
         weight_t,
@@ -688,7 +688,7 @@ def lif_linear(
     x_seq, v, weight_t, bias, surrogate_id, single_step = _prepare_inputs(
         x, v, weight_t, bias, surrogate_function
     )
-    y_seq, v_out = _cupy_lif_linear_forward(
+    y_seq, v_out = cupy_lif_linear_forward(
         x_seq,
         v,
         weight_t,
