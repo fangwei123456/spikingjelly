@@ -158,15 +158,15 @@ class NeuroMCRuntimeEnergyReport:
     :param energy_memory_pj: 总内存能耗，单位为 pJ。
     :type energy_memory_pj: float
     :param energy_by_stage: 各执行阶段的能耗。
-    :type energy_by_stage: dict[str, float]
+    :type energy_by_stage: Optional[dict[str, float]]
     :param energy_by_op: 各算子类型的能耗。
-    :type energy_by_op: dict[str, float]
+    :type energy_by_op: Optional[dict[str, float]]
     :param primitive_counts: 原始操作计数。
-    :type primitive_counts: dict[str, Any]
+    :type primitive_counts: Optional[dict[str, Any]]
     :param memory_bits_by_level: 各内存层级的访问位数。
-    :type memory_bits_by_level: dict[str, Any]
+    :type memory_bits_by_level: Optional[dict[str, Any]]
     :param warnings: 分析期间产生的警告。
-    :type warnings: list[str]
+    :type warnings: Optional[list[str]]
     :param energy_mac_pj: MAC 操作能耗，单位为 pJ。
     :type energy_mac_pj: float
     :param energy_base_memory_pj: 基础内存能耗，单位为 pJ。
@@ -176,17 +176,17 @@ class NeuroMCRuntimeEnergyReport:
     :param energy_extra_compute_pj: 额外计算能耗，单位为 pJ。
     :type energy_extra_compute_pj: float
     :param energy_by_core_type: 各核心类型的能耗。
-    :type energy_by_core_type: dict[str, float]
+    :type energy_by_core_type: Optional[dict[str, float]]
     :param energy_by_process_key: 各处理路径的能耗。
-    :type energy_by_process_key: dict[str, float]
+    :type energy_by_process_key: Optional[dict[str, float]]
     :param energy_by_memory_level_dir: 各内存层级和方向的能耗。
-    :type energy_by_memory_level_dir: dict[str, dict[str, float]]
+    :type energy_by_memory_level_dir: Optional[dict[str, dict[str, float]]]
     :param counts_by_core_type: 各核心类型的操作计数。
-    :type counts_by_core_type: dict[str, dict[str, int]]
+    :type counts_by_core_type: Optional[dict[str, dict[str, int]]]
     :param counts_by_process_key: 各处理路径的操作计数。
-    :type counts_by_process_key: dict[str, dict[str, int]]
+    :type counts_by_process_key: Optional[dict[str, dict[str, int]]]
     :param mapping_summary: 硬件映射摘要。
-    :type mapping_summary: list[dict[str, Any]]
+    :type mapping_summary: Optional[list[dict[str, Any]]]
 
     ----
 
@@ -206,15 +206,15 @@ class NeuroMCRuntimeEnergyReport:
     :param energy_memory_pj: Total memory energy in pJ.
     :type energy_memory_pj: float
     :param energy_by_stage: Energy by execution stage.
-    :type energy_by_stage: dict[str, float]
+    :type energy_by_stage: Optional[dict[str, float]]
     :param energy_by_op: Energy by operation type.
-    :type energy_by_op: dict[str, float]
+    :type energy_by_op: Optional[dict[str, float]]
     :param primitive_counts: Raw primitive operation counts.
-    :type primitive_counts: dict[str, Any]
+    :type primitive_counts: Optional[dict[str, Any]]
     :param memory_bits_by_level: Memory access bits by hierarchy level.
-    :type memory_bits_by_level: dict[str, Any]
+    :type memory_bits_by_level: Optional[dict[str, Any]]
     :param warnings: Warnings generated during profiling.
-    :type warnings: list[str]
+    :type warnings: Optional[list[str]]
     :param energy_mac_pj: MAC operation energy in pJ.
     :type energy_mac_pj: float
     :param energy_base_memory_pj: Base memory energy in pJ.
@@ -224,17 +224,17 @@ class NeuroMCRuntimeEnergyReport:
     :param energy_extra_compute_pj: Extra compute energy in pJ.
     :type energy_extra_compute_pj: float
     :param energy_by_core_type: Energy by core type.
-    :type energy_by_core_type: dict[str, float]
+    :type energy_by_core_type: Optional[dict[str, float]]
     :param energy_by_process_key: Energy by processing path.
-    :type energy_by_process_key: dict[str, float]
+    :type energy_by_process_key: Optional[dict[str, float]]
     :param energy_by_memory_level_dir: Energy by memory level and direction.
-    :type energy_by_memory_level_dir: dict[str, dict[str, float]]
+    :type energy_by_memory_level_dir: Optional[dict[str, dict[str, float]]]
     :param counts_by_core_type: Operation counts by core type.
-    :type counts_by_core_type: dict[str, dict[str, int]]
+    :type counts_by_core_type: Optional[dict[str, dict[str, int]]]
     :param counts_by_process_key: Operation counts by processing path.
-    :type counts_by_process_key: dict[str, dict[str, int]]
+    :type counts_by_process_key: Optional[dict[str, dict[str, int]]]
     :param mapping_summary: Hardware mapping summary.
-    :type mapping_summary: list[dict[str, Any]]
+    :type mapping_summary: Optional[list[dict[str, Any]]]
     """
 
     energy_total_pj: float = 0.0

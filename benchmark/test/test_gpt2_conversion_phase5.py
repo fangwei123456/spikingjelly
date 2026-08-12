@@ -72,6 +72,18 @@ def test_baseline_input_protocol_is_pinned():
     assert package.DEFAULT_MODEL_NAME == "openai-community/gpt2"
     assert package.MAX_LENGTH == 64
     assert package.DEFAULT_MAX_SAMPLES == 4
+    assert package.FIXED_PROMPTS == (
+        "The quick brown fox jumps over the lazy dog.",
+        "In a hole in the ground there lived a hobbit.",
+        "All happy families are alike; each unhappy family is unhappy in its own way.",
+        "It was the best of times, it was the worst of times.",
+        "To be, or not to be, that is the question.",
+        "Call me Ishmael. Some years ago\u2014never mind how long precisely\u2014",
+        "It is a truth universally acknowledged, that a single man in possession "
+        "of a good fortune, must be in want of a wife.",
+        "The only way to do great work is to love what you do.",
+    )
+    assert _import_baseline_module().fixed_prompts() is package.FIXED_PROMPTS
     assert set(package.REQUIRED_MODEL_FILES) == {
         "config.json",
         "generation_config.json",
@@ -356,6 +368,7 @@ class _FakeTokenizer:
     def __call__(self, prompts, *, padding, max_length, truncation, return_tensors):
         import torch
 
+        type(self).prompts = tuple(prompts)
         assert padding == "max_length"
         assert truncation is True
         assert return_tensors == "pt"
@@ -409,7 +422,10 @@ class _FakeTransformers:
     AutoModelForCausalLM = _FakeModel
 
 
-def test_compute_baseline_reports_loss_in_range(tmp_path: Path, monkeypatch):
+@pytest.mark.parametrize("max_samples", [1, 4])
+def test_compute_baseline_reports_loss_in_range(
+    tmp_path: Path, monkeypatch, max_samples
+):
     baseline = _import_baseline_module()
 
     _populate_model_root(tmp_path)
@@ -423,17 +439,18 @@ def test_compute_baseline_reports_loss_in_range(tmp_path: Path, monkeypatch):
     metrics, model_meta = baseline.compute_baseline(
         paths=paths,
         device="cpu",
-        max_samples=baseline.DEFAULT_MAX_SAMPLES,
+        max_samples=max_samples,
     )
 
     assert math.isfinite(metrics["loss"])
-    assert metrics["logits_shape"][0] == baseline.DEFAULT_MAX_SAMPLES
+    assert metrics["logits_shape"][0] == max_samples
     assert metrics["logits_shape"][1] == baseline.MAX_LENGTH
     assert metrics["logits_shape"][2] == model_meta["vocabulary_size"]
     assert metrics["layer_count"] == model_meta["layer_count"]
     assert metrics["embedding_dim"] == model_meta["embedding_dim"]
     assert metrics["parameter_count"] > 0
     assert metrics["perplexity"] == pytest.approx(math.exp(metrics["loss"]))
+    assert _FakeTokenizer.prompts == baseline.FIXED_PROMPTS[:max_samples]
     assert _FakeTokenizer.kwargs["local_files_only"] is True
     assert _FakeModel.kwargs["local_files_only"] is True
 
