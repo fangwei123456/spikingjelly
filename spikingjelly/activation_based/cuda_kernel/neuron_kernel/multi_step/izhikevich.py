@@ -584,7 +584,6 @@ def cupy_multistep_izhikevich_forward(
         _capture_token(
             captured_ctx,
             (x_seq, v_init, w_init),
-            x_seq.device,
             capture_context,
         ),
     )
@@ -597,7 +596,7 @@ def _cupy_multistep_izhikevich_forward_fake(*args):
         x_seq.new_empty(x_seq.shape),
         x_seq.new_empty(x_seq.shape),
         x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty((), dtype=torch.int64),
+        torch.empty((), dtype=torch.int64),
     )
 
 

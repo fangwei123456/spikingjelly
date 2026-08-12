@@ -152,7 +152,7 @@ class ParametricLIFNode(BaseNode):
         if self.step_mode == "s":
             return ("torch",)
         elif self.step_mode == "m":
-            return ("torch", "cupy", "triton", "inductor")
+            return ("torch", "cupy", "triton")
         else:
             raise ValueError(self.step_mode)
 
@@ -190,19 +190,7 @@ class ParametricLIFNode(BaseNode):
         x_seq = inputs[0]
         v = states[0]
 
-        if self.backend == "inductor":
-            spike_seq, v, _ = functional.plif_multi_step_inductor(
-                x_seq,
-                v,
-                self.w,
-                self.decay_input,
-                self.v_threshold,
-                self.v_reset,
-                self.surrogate_function,
-                self.detach_reset,
-                False,
-            )
-        elif self.backend == "cupy":
+        if self.backend == "cupy":
             spike_seq, v, _ = functional.plif_multi_step_cupy(
                 x_seq,
                 v,
@@ -241,7 +229,6 @@ class ParametricLIFNode(BaseNode):
             (x_seq, *args), tuple(self._memories.values()), "m"
         )
         function = {
-            "inductor": functional.plif_multi_step_inductor,
             "cupy": functional.plif_multi_step_cupy,
             "triton": functional.plif_multi_step_triton,
         }[self.backend]

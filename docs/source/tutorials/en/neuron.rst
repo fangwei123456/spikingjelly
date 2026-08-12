@@ -399,7 +399,7 @@ The outputs are:
             [0.]])
 
 To implement a production neuron that converts directly like ``LIFNode`` and can
-provide CuPy, Triton, or Inductor kernels, inherit from ``BaseNode`` and implement
+provide CuPy or Triton kernels, inherit from ``BaseNode`` and implement
 ``single_step_functional_forward``. Its interface is
 ``(self, inputs, states, **kwargs) -> (outputs, updated_states)``. The method must
 not mutate registered module memories or the supplied ``states``. Override

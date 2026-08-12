@@ -4,11 +4,11 @@ Benchmark: SpikingVGG16 with different neuron backends.
 Compares:
   - LIFNode  backend="torch"    (pure PyTorch loop, baseline)
   - LIFNode  backend="triton"   (existing Triton scan kernel)
-  - FlexSN   backend="inductor" (M3.b single-kernel scan, no PYTORCH_JIT=0)
+  - FlexSN   backend="triton" (M3.b single-kernel scan, no PYTORCH_JIT=0)
 
 Usage (run from repo root):
   PYTORCH_JIT=0 CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$(pwd) \\
-    python benchmark/flexsn/benchmark_vgg_inductor.py
+    python benchmark/flexsn/benchmark_vgg_triton.py
 """
 
 import gc
@@ -46,7 +46,7 @@ def make_flexsn_factory():
             num_states=1,
             num_outputs=1,
             step_mode=step_mode,
-            backend="inductor",
+            backend="triton",
         )
 
     return factory
@@ -127,7 +127,7 @@ def main() -> None:
             "LIFNode  backend=triton ",
             lambda: build_vgg(neuron.LIFNode, backend="triton"),
         ),
-        ("FlexSN   backend=inductor", lambda: build_vgg(make_flexsn_factory())),
+        ("FlexSN   backend=triton", lambda: build_vgg(make_flexsn_factory())),
     ]
 
     scale = "ImageNet-scale" if H >= 224 and W >= 224 else "CIFAR-scale"
@@ -147,7 +147,8 @@ def main() -> None:
             # autotune before timing begins (avoids measuring compile cost).
             model(x)
             ms = cuda_time_ms(
-                lambda: model(x), reset_hook=lambda: functional.reset_net(model)
+                lambda model=model: model(x),
+                reset_hook=lambda model=model: functional.reset_net(model),
             )
 
         imgs_per_sec = B * 1000 / ms
@@ -161,8 +162,6 @@ def main() -> None:
         torch.cuda.empty_cache()
 
     print("-" * 68)
-    print("Note: inductor path does NOT require PYTORCH_JIT=0 at runtime.")
-    print("      triton path requires PYTORCH_JIT=0 (set in this script).")
 
 
 if __name__ == "__main__":

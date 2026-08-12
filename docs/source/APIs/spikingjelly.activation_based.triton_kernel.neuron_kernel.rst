@@ -25,7 +25,7 @@ Current limits and notes:
   - ``fullgraph=True`` can trigger backend compiler exceptions (observed on PLIF).
   - ``mode`` and ``options`` cannot be used together on some PyTorch versions.
 
-- It is recommended to use ``backend="inductor"`` with explicit ``options`` and tune CUDAGraph-related options if needed.
+- It is recommended to use ``torch.compile(..., backend="inductor")`` with explicit ``options`` and tune CUDAGraph-related options if needed.
 
 
 IF

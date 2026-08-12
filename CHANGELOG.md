@@ -208,15 +208,16 @@ Modules: `spikingjelly.activation_based.neuron`,
   `neuron_cupy_lite` paths.
 - Moved concrete kernels to `cuda_kernel.neuron_kernel`, organized by
   single-step and multi-step role; `auto_cuda` now contains only code generation.
+- Reused generated `RawKernel` objects through a bounded compile-identity cache
+  and kept nonlinear custom-op context tokens on CPU, avoiding repeated wrapper
+  construction and device-to-host token reads.
 
-#### Neuron Backend Caches
+#### CUDA SpikeLinear Kernels
 
-Module: `spikingjelly.activation_based.neuron`.
+Module: `spikingjelly.activation_based.cuda_kernel.spike_linear`.
 
-- Moved standard IF/LIF/ParametricLIF Inductor compiled-graph ownership from
-  individual neuron instances to a bounded, PID-aware neuron backend cache.
-  Equivalent modules can now share compiled callables without serializing cache
-  entries through module deepcopy or pickle.
+- Experimental v3 bit-packed and sparse row-index SpikeLinear kernels now accept
+  FP32, FP16, and BF16 tensors, accumulate in FP32, and return the input dtype.
 
 #### Timing-Based Models
 
@@ -235,14 +236,30 @@ Module: `spikingjelly.activation_based.distributed`.
   for `TDLinear`.
 - Updated distributed benchmarks, result fields, and tutorials.
 
-#### Triton IF/LIF Memory Optimisation
+#### Triton Neuron Runtime
 
 Module: `spikingjelly.activation_based.triton_kernel.neuron_kernel`.
 
 - Reduced memory usage with `store_v_seq=False` by retaining only the final
   membrane potential.
+- PLIF and STBIF kernels now load scalar tensor parameters directly on device,
+  avoiding device-to-host scalar reads during kernel dispatch.
 
 ### Breaking Changes and Notices
+
+#### Neuron Execution Backends
+
+Modules: `spikingjelly.activation_based.neuron` and
+`spikingjelly.activation_based.functional.neuron`.
+
+- **Breaking change:** removed the per-neuron `backend="inductor"` option from
+  IF, LIF, and PLIF nodes, together with their dedicated compiled-function cache
+  and functional APIs. Use `backend="triton"` for dedicated CUDA kernels, or use
+  `backend="torch"` and compile the complete model with `torch.compile`.
+- **Breaking change:** removed the equivalent `backend="inductor"` alias from
+  FlexSN. Its Triton custom operators and internal kernel state now consistently
+  use `triton` in their names; the supported FlexSN backends are `"triton"`,
+  `"torch"`, and `"hop"`.
 
 #### Functional Forward API Changes
 

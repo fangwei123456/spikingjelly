@@ -1,5 +1,6 @@
 import gc
 import os
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -133,13 +134,59 @@ def test_capture_token_skips_context_stash_without_grad(context_factory):
         before_ids = set(runtime._CAPTURE_CTX_BY_ID)
 
     with context_factory():
-        token = runtime._capture_token(
-            captured_ctx, (input_tensor,), torch.device("cpu")
-        )
+        token = runtime._capture_token(captured_ctx, (input_tensor,))
 
+    assert token.device.type == "cpu"
     assert token.item() == -1
     with runtime._CAPTURE_CTX_LOCK:
         assert set(runtime._CAPTURE_CTX_BY_ID) == before_ids
+
+
+def test_capture_context_setup_skips_fake_token():
+    from torch._subclasses.fake_tensor import FakeTensorMode
+
+    from spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step import (
+        runtime,
+    )
+
+    with FakeTensorMode():
+        token = torch.empty((), dtype=torch.int64)
+    ctx = SimpleNamespace()
+
+    runtime._setup_capture_ctx(ctx, (), (token,))
+
+    assert ctx.captured is None
+
+
+def test_raw_kernel_cache_reuses_compile_identity(monkeypatch):
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
+
+    calls = []
+
+    def fake_raw_kernel(code, name, *, options, backend):
+        kernel = object()
+        calls.append((code, name, options, backend, kernel))
+        return kernel
+
+    class FakeCupy:
+        RawKernel = staticmethod(fake_raw_kernel)
+
+    monkeypatch.setattr(base, "cupy", FakeCupy)
+    base._get_raw_kernel.cache_clear()
+    try:
+        first = base._get_raw_kernel("code", "kernel", ("-O3",), "nvrtc")
+        second = base._get_raw_kernel("code", "kernel", ("-O3",), "nvrtc")
+        different = base._get_raw_kernel("other", "kernel", ("-O3",), "nvrtc")
+        different_options = base._get_raw_kernel(
+            "code", "kernel", ("--use_fast_math",), "nvrtc"
+        )
+    finally:
+        base._get_raw_kernel.cache_clear()
+
+    assert first is second
+    assert different is not first
+    assert different_options is not first
+    assert len(calls) == 3
 
 
 def _require_cuda():
@@ -276,6 +323,8 @@ def test_nonlinear_functional_cupy_forward_backward(kind):
             surrogate_function=sg,
             store_state_seq=True,
         )
+
+    if kind == "izhikevich":
         assert w_seq is not None
         torch.testing.assert_close(w_next, w_seq[-1])
 

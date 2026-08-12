@@ -655,7 +655,7 @@ def cupy_multistep_qif_forward(
     )
     return (
         *out,
-        _capture_token(captured_ctx, (x_seq, v_init), x_seq.device, capture_context),
+        _capture_token(captured_ctx, (x_seq, v_init), capture_context),
     )
 
 
@@ -665,7 +665,7 @@ def _cupy_multistep_qif_forward_fake(*args):
     return (
         x_seq.new_empty(x_seq.shape),
         x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty((), dtype=torch.int64),
+        torch.empty((), dtype=torch.int64),
     )
 
 

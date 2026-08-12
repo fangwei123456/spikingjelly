@@ -83,11 +83,11 @@ __all__ = [
     "release_flexsn_kernel_handle",
     "release_active_flexsn_kernel_handle",
     "flexsn_kernel_registry_info",
-    "flexsn_inductor_inference",
-    "flexsn_inductor_inference_final_state",
-    "flexsn_inductor_training",
-    "flexsn_inductor_training_final_state",
-    "flexsn_inductor_backward",
+    "flexsn_triton_inference",
+    "flexsn_triton_inference_final_state",
+    "flexsn_triton_training",
+    "flexsn_triton_training_final_state",
+    "flexsn_triton_backward",
     "attach_flexsn_handle_finalizer",
 ]
 
@@ -503,7 +503,7 @@ def _materialize_zero_state_args(
     return flat_args
 
 
-def _flexsn_inductor_inference_impl(
+def _flexsn_triton_inference_impl(
     bundle: FlexSNKernelHandle, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     args = _materialize_zero_state_args(bundle.inference_info, flat_args)
@@ -518,7 +518,7 @@ def _flexsn_inductor_inference_impl(
         )
 
 
-def _flexsn_inductor_inference_final_state_impl(
+def _flexsn_triton_inference_final_state_impl(
     bundle: FlexSNKernelHandle, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     args = _materialize_zero_state_args(bundle.inference_final_state_info, flat_args)
@@ -533,7 +533,7 @@ def _flexsn_inductor_inference_final_state_impl(
         )
 
 
-def _flexsn_inductor_training_impl(
+def _flexsn_triton_training_impl(
     bundle: FlexSNKernelHandle, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     args = _materialize_zero_state_args(bundle.training_info, flat_args)
@@ -548,13 +548,13 @@ def _flexsn_inductor_training_impl(
         )
 
 
-def _flexsn_inductor_training_final_state_impl(
+def _flexsn_triton_training_final_state_impl(
     bundle: FlexSNKernelHandle, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     info = bundle.training_info
     assert info is not None
     args = _materialize_zero_state_args(info, flat_args)
-    full_returns = _flexsn_inductor_training_impl(bundle, args)
+    full_returns = _flexsn_triton_training_impl(bundle, args)
     visible_outputs = list(full_returns[: info.num_outputs])
     state_seqs = list(
         full_returns[info.num_outputs : info.num_outputs + info.num_states]
@@ -570,7 +570,7 @@ def _flexsn_inductor_training_final_state_impl(
     return [*visible_outputs, *final_states, *extra_saved_tensors]
 
 
-def _flexsn_inductor_backward_impl(
+def _flexsn_triton_backward_impl(
     bundle: FlexSNKernelHandle,
     grad_outputs: List[torch.Tensor],
     saved_tensors: List[torch.Tensor],
@@ -596,16 +596,16 @@ def _flexsn_inductor_backward_impl(
         )
 
 
-@register_op("sj::flexsn_inductor_inference", mutates_args=())
-def flexsn_inductor_inference(
+@register_op("sj::flexsn_triton_inference", mutates_args=())
+def flexsn_triton_inference(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     """
-    **API Language** - :ref:`中文 <flexsn_inductor_inference-cn>` | :ref:`English <flexsn_inductor_inference-en>`
+    **API Language** - :ref:`中文 <flexsn_triton_inference-cn>` | :ref:`English <flexsn_triton_inference-en>`
 
     ----
 
-    .. _flexsn_inductor_inference-cn:
+    .. _flexsn_triton_inference-cn:
 
     * **中文**
 
@@ -620,7 +620,7 @@ def flexsn_inductor_inference(
 
     ----
 
-    .. _flexsn_inductor_inference-en:
+    .. _flexsn_triton_inference-en:
 
     * **English**
 
@@ -638,19 +638,19 @@ def flexsn_inductor_inference(
     bundle = _lookup_kernel_handle(handle)
     if bundle.inference_kernel is None or bundle.inference_info is None:
         raise RuntimeError("FlexSN inference kernel is unavailable for this handle.")
-    return _flexsn_inductor_inference_impl(bundle, flat_args)
+    return _flexsn_triton_inference_impl(bundle, flat_args)
 
 
-@register_op("sj::flexsn_inductor_inference_final_state", mutates_args=())
-def flexsn_inductor_inference_final_state(
+@register_op("sj::flexsn_triton_inference_final_state", mutates_args=())
+def flexsn_triton_inference_final_state(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     """
-    **API Language** - :ref:`中文 <flexsn_inductor_inference_final_state-cn>` | :ref:`English <flexsn_inductor_inference_final_state-en>`
+    **API Language** - :ref:`中文 <flexsn_triton_inference_final_state-cn>` | :ref:`English <flexsn_triton_inference_final_state-en>`
 
     ----
 
-    .. _flexsn_inductor_inference_final_state-cn:
+    .. _flexsn_triton_inference_final_state-cn:
 
     * **中文**
 
@@ -665,7 +665,7 @@ def flexsn_inductor_inference_final_state(
 
     ----
 
-    .. _flexsn_inductor_inference_final_state-en:
+    .. _flexsn_triton_inference_final_state-en:
 
     * **English**
 
@@ -688,11 +688,11 @@ def flexsn_inductor_inference_final_state(
         raise RuntimeError(
             "FlexSN inference-final-state kernel is unavailable for this handle."
         )
-    return _flexsn_inductor_inference_final_state_impl(bundle, flat_args)
+    return _flexsn_triton_inference_final_state_impl(bundle, flat_args)
 
 
-@torch.library.register_fake("sj::flexsn_inductor_inference")
-def _flexsn_inductor_inference_fake(
+@torch.library.register_fake("sj::flexsn_triton_inference")
+def _flexsn_triton_inference_fake(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     bundle = _lookup_kernel_handle(handle)
@@ -705,8 +705,8 @@ def _flexsn_inductor_inference_fake(
     )
 
 
-@torch.library.register_fake("sj::flexsn_inductor_inference_final_state")
-def _flexsn_inductor_inference_final_state_fake(
+@torch.library.register_fake("sj::flexsn_triton_inference_final_state")
+def _flexsn_triton_inference_final_state_fake(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     bundle = _lookup_kernel_handle(handle)
@@ -725,16 +725,16 @@ def _flexsn_inductor_inference_final_state_fake(
     return [*seq_outputs, *final_states]
 
 
-@register_op("sj::flexsn_inductor_training", mutates_args=())
-def flexsn_inductor_training(
+@register_op("sj::flexsn_triton_training", mutates_args=())
+def flexsn_triton_training(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     """
-    **API Language** - :ref:`中文 <flexsn_inductor_training-cn>` | :ref:`English <flexsn_inductor_training-en>`
+    **API Language** - :ref:`中文 <flexsn_triton_training-cn>` | :ref:`English <flexsn_triton_training-en>`
 
     ----
 
-    .. _flexsn_inductor_training-cn:
+    .. _flexsn_triton_training-cn:
 
     * **中文**
 
@@ -749,7 +749,7 @@ def flexsn_inductor_training(
 
     ----
 
-    .. _flexsn_inductor_training-en:
+    .. _flexsn_triton_training-en:
 
     * **English**
 
@@ -771,19 +771,19 @@ def flexsn_inductor_training(
         or bundle.training_info is None
     ):
         raise RuntimeError("FlexSN training kernels are unavailable for this handle.")
-    return _flexsn_inductor_training_impl(bundle, flat_args)
+    return _flexsn_triton_training_impl(bundle, flat_args)
 
 
-@register_op("sj::flexsn_inductor_training_final_state", mutates_args=())
-def flexsn_inductor_training_final_state(
+@register_op("sj::flexsn_triton_training_final_state", mutates_args=())
+def flexsn_triton_training_final_state(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     """
-    **API Language** - :ref:`中文 <flexsn_inductor_training_final_state-cn>` | :ref:`English <flexsn_inductor_training_final_state-en>`
+    **API Language** - :ref:`中文 <flexsn_triton_training_final_state-cn>` | :ref:`English <flexsn_triton_training_final_state-en>`
 
     ----
 
-    .. _flexsn_inductor_training_final_state-cn:
+    .. _flexsn_triton_training_final_state-cn:
 
     * **中文**
 
@@ -798,7 +798,7 @@ def flexsn_inductor_training_final_state(
 
     ----
 
-    .. _flexsn_inductor_training_final_state-en:
+    .. _flexsn_triton_training_final_state-en:
 
     * **English**
 
@@ -820,11 +820,11 @@ def flexsn_inductor_training_final_state(
         or bundle.training_info is None
     ):
         raise RuntimeError("FlexSN training kernels are unavailable for this handle.")
-    return _flexsn_inductor_training_final_state_impl(bundle, flat_args)
+    return _flexsn_triton_training_final_state_impl(bundle, flat_args)
 
 
-@torch.library.register_fake("sj::flexsn_inductor_training")
-def _flexsn_inductor_training_fake(
+@torch.library.register_fake("sj::flexsn_triton_training")
+def _flexsn_triton_training_fake(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     bundle = _lookup_kernel_handle(handle)
@@ -837,8 +837,8 @@ def _flexsn_inductor_training_fake(
     )
 
 
-@torch.library.register_fake("sj::flexsn_inductor_training_final_state")
-def _flexsn_inductor_training_final_state_fake(
+@torch.library.register_fake("sj::flexsn_triton_training_final_state")
+def _flexsn_triton_training_final_state_fake(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
     bundle = _lookup_kernel_handle(handle)
@@ -858,19 +858,19 @@ def _flexsn_inductor_training_final_state_fake(
     return [*seq_outputs, *final_states, *extra_saved_tensors]
 
 
-@register_op("sj::flexsn_inductor_backward", mutates_args=())
-def flexsn_inductor_backward(
+@register_op("sj::flexsn_triton_backward", mutates_args=())
+def flexsn_triton_backward(
     handle: int,
     grad_outputs: List[torch.Tensor],
     saved_tensors: List[torch.Tensor],
     input_templates: List[torch.Tensor],
 ) -> List[torch.Tensor]:
     """
-    **API Language** - :ref:`中文 <flexsn_inductor_backward-cn>` | :ref:`English <flexsn_inductor_backward-en>`
+    **API Language** - :ref:`中文 <flexsn_triton_backward-cn>` | :ref:`English <flexsn_triton_backward-en>`
 
     ----
 
-    .. _flexsn_inductor_backward-cn:
+    .. _flexsn_triton_backward-cn:
 
     * **中文**
 
@@ -889,7 +889,7 @@ def flexsn_inductor_backward(
 
     ----
 
-    .. _flexsn_inductor_backward-en:
+    .. _flexsn_triton_backward-en:
 
     * **English**
 
@@ -910,7 +910,7 @@ def flexsn_inductor_backward(
     bundle = _lookup_kernel_handle(handle)
     if bundle.backward_kernel is None or bundle.training_info is None:
         raise RuntimeError("FlexSN backward kernel is unavailable for this handle.")
-    return _flexsn_inductor_backward_impl(
+    return _flexsn_triton_backward_impl(
         bundle,
         grad_outputs,
         saved_tensors,
@@ -918,8 +918,8 @@ def flexsn_inductor_backward(
     )
 
 
-@torch.library.register_fake("sj::flexsn_inductor_backward")
-def _flexsn_inductor_backward_fake(
+@torch.library.register_fake("sj::flexsn_triton_backward")
+def _flexsn_triton_backward_fake(
     handle: int,
     grad_outputs: List[torch.Tensor],
     saved_tensors: List[torch.Tensor],
@@ -1018,7 +1018,7 @@ def _flexsn_training_backward(ctx, grad_out: List[Optional[torch.Tensor]]):
         if ctx._active_ref_finalizer.alive:
             ctx._active_ref_finalizer.detach()
         grads = list(
-            flexsn_inductor_backward(
+            flexsn_triton_backward(
                 ctx.handle,
                 grad_inputs,
                 list(ctx.saved_tensors),
@@ -1060,13 +1060,13 @@ def _flexsn_training_final_state_backward(ctx, grad_out: List[Optional[torch.Ten
         state_grads.append(seq_grad)
 
     # ctx.input_template_specs already includes both input-sequence and initial-state
-    # templates, and flexsn_inductor_backward splits them back apart internally.
+    # templates, and flexsn_triton_backward splits them back apart internally.
     arg_templates = [_materialize_template(spec) for spec in ctx.input_template_specs]
     try:
         if ctx._active_ref_finalizer.alive:
             ctx._active_ref_finalizer.detach()
         grads = list(
-            flexsn_inductor_backward(
+            flexsn_triton_backward(
                 ctx.handle,
                 [*output_grads, *state_grads],
                 list(ctx.saved_tensors),
@@ -1095,13 +1095,13 @@ def _flexsn_training_final_state_backward(ctx, grad_out: List[Optional[torch.Ten
 
 
 torch.library.register_autograd(
-    "sj::flexsn_inductor_training",
+    "sj::flexsn_triton_training",
     _flexsn_training_backward,
     setup_context=_flexsn_training_setup_context,
 )
 
 torch.library.register_autograd(
-    "sj::flexsn_inductor_training_final_state",
+    "sj::flexsn_triton_training_final_state",
     _flexsn_training_final_state_backward,
     setup_context=_flexsn_training_final_state_setup_context,
 )

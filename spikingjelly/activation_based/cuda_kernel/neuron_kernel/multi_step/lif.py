@@ -1,4 +1,5 @@
 import math
+from functools import cache
 from typing import Callable, Optional
 
 import torch
@@ -102,23 +103,16 @@ class LIFNodeBPTTKernel(NeuronBPTTKernel):
         )
 
 
-_LIF_FWD_KERNEL_CACHE = {}
-_LIF_BWD_KERNEL_CACHE = {}
-
-
+@cache
 def _get_lif_forward_kernel(
     *, decay_input: bool, hard_reset: bool, dtype: str
 ) -> LIFNodeFPTTKernel:
-    key = (decay_input, hard_reset, dtype)
-    kernel = _LIF_FWD_KERNEL_CACHE.get(key)
-    if kernel is None:
-        kernel = LIFNodeFPTTKernel(
-            decay_input=decay_input, hard_reset=hard_reset, dtype=dtype
-        )
-        _LIF_FWD_KERNEL_CACHE[key] = kernel
-    return kernel
+    return LIFNodeFPTTKernel(
+        decay_input=decay_input, hard_reset=hard_reset, dtype=dtype
+    )
 
 
+@cache
 def _get_lif_backward_kernel(
     *,
     decay_input: bool,
@@ -127,18 +121,13 @@ def _get_lif_backward_kernel(
     detach_reset: bool,
     dtype: str,
 ) -> LIFNodeBPTTKernel:
-    key = (decay_input, sg_cupy_id, hard_reset, detach_reset, dtype)
-    kernel = _LIF_BWD_KERNEL_CACHE.get(key)
-    if kernel is None:
-        kernel = LIFNodeBPTTKernel(
-            decay_input=decay_input,
-            surrogate_function=_cuda_codes_callable(sg_cupy_id, dtype),
-            hard_reset=hard_reset,
-            detach_reset=detach_reset,
-            dtype=dtype,
-        )
-        _LIF_BWD_KERNEL_CACHE[key] = kernel
-    return kernel
+    return LIFNodeBPTTKernel(
+        decay_input=decay_input,
+        surrogate_function=_cuda_codes_callable(sg_cupy_id, dtype),
+        hard_reset=hard_reset,
+        detach_reset=detach_reset,
+        dtype=dtype,
+    )
 
 
 @torch.library.custom_op("sj::cupy_multistep_lif_forward", mutates_args=())

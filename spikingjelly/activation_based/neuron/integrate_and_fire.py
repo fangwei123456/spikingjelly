@@ -223,7 +223,7 @@ class IFNode(BaseNode):
         if self.step_mode == "s":
             return ("torch", "cupy")
         elif self.step_mode == "m":
-            return ("torch", "cupy", "triton", "inductor")
+            return ("torch", "cupy", "triton")
         else:
             raise ValueError(self.step_mode)
 
@@ -273,17 +273,7 @@ class IFNode(BaseNode):
         x_seq = inputs[0]
         v = states[0]
 
-        if self.backend == "inductor":
-            spike_seq, v, _ = functional.if_multi_step_inductor(
-                x_seq,
-                v,
-                self.v_threshold,
-                self.v_reset,
-                self.surrogate_function,
-                self.detach_reset,
-                False,
-            )
-        elif self.backend == "cupy":
+        if self.backend == "cupy":
             spike_seq, v, _ = functional.if_multi_step_cupy(
                 x_seq,
                 v,
@@ -325,17 +315,7 @@ class IFNode(BaseNode):
             (x_seq, *args), tuple(self._memories.values()), "m"
         )
         v = states[0]
-        if self.backend == "inductor":
-            spike_seq, v, v_seq = functional.if_multi_step_inductor(
-                x_seq,
-                v,
-                self.v_threshold,
-                self.v_reset,
-                self.surrogate_function,
-                self.detach_reset,
-                True,
-            )
-        elif self.backend == "cupy":
+        if self.backend == "cupy":
             spike_seq, v, v_seq = functional.if_multi_step_cupy(
                 x_seq,
                 v,

@@ -382,7 +382,7 @@ SpikingJelly 为修改神经元动力学和高性能执行提供了两类接口�
             [0.],
             [0.]])
 
-若要实现与 ``LIFNode`` 一样可直接转换并可接入 CuPy、Triton 或 Inductor kernel 的生产级
+若要实现与 ``LIFNode`` 一样可直接转换并可接入 CuPy 或 Triton kernel 的生产级
 神经元，应继承 ``BaseNode`` 并实现 ``single_step_functional_forward``。该方法的接口为
 ``(self, inputs, states, **kwargs) -> (outputs, updated_states)``，且不得修改模块中注册的
 memory 或传入的 ``states``。只有存在独立序列实现或专用 kernel 时，才需要重写
