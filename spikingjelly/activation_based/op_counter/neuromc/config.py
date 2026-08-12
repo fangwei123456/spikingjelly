@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import ClassVar
 
 __all__ = ["MemoryInstanceSpec", "MemoryHierarchyConfig"]
 
@@ -148,8 +147,6 @@ class MemoryHierarchyConfig:
     ``technology_nm`` are fixed report metadata rather than configuration knobs.
     """
 
-    preset_name: ClassVar[str] = "neuromc_like_v1"
-    technology_nm: ClassVar[int] = 32
     level_order: tuple[str, str, str, str] = ("dram", "sram", "reg", "noc")
     memory_instances: dict[str, MemoryInstanceSpec] = field(
         default_factory=lambda: dict(_MEMORY_INSTANCES)
@@ -157,6 +154,14 @@ class MemoryHierarchyConfig:
     zero_dram_in_paper_energy: bool = True
     zero_noc_in_paper_energy: bool = True
     zero_sram_high_directions: bool = True
+
+    @property
+    def preset_name(self) -> str:
+        return "neuromc_like_v1"
+
+    @property
+    def technology_nm(self) -> int:
+        return 32
 
     def validate(self):
         required = {

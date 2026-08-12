@@ -144,6 +144,31 @@ def test_cache_reorder_supports_dynamic_cache_and_falls_back_to_batch_select():
     assert cache.layers[0].keys.shape == (2, 1, 3, 2)
 
 
+def test_cache_reorder_falls_back_to_batch_select():
+    from benchmark.snn_llm.gpt2_conversion.cache_equivalence import _reorder_cache
+
+    class _Layer:
+        def __init__(self) -> None:
+            self.keys = torch.arange(2 * 1 * 3 * 2, dtype=torch.float32).view(
+                2, 1, 3, 2
+            )
+            self.values = self.keys + 100.0
+
+    class _Cache:
+        def __init__(self) -> None:
+            self.layers = [_Layer()]
+
+        def batch_select_indices(self, indices: torch.Tensor) -> None:
+            for layer in self.layers:
+                layer.keys = layer.keys[indices]
+                layer.values = layer.values[indices]
+
+    cache = _Cache()
+
+    assert _reorder_cache(cache, torch.tensor([1, 0])) is cache
+    assert cache.layers[0].keys[0, 0, 0, 0] == 6.0
+
+
 def test_cache_reorder_accepts_returned_cache_object():
     from benchmark.snn_llm.gpt2_conversion.cache_equivalence import _reorder_cache
 

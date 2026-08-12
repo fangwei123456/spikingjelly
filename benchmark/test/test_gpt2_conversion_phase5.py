@@ -63,6 +63,28 @@ def _import_contract_module():
 # --------------------------------------------------------------------------- #
 
 
+def test_baseline_input_protocol_is_pinned():
+    package = _import_package()
+
+    assert package.BASELINE_SCHEMA_VERSION == 1
+    assert package.CONTRACT_SCHEMA_VERSION == 1
+    assert package.EXPECTED_REVISION == "607a30d783dfa663caf39e06633721c8d4cfcd7e"
+    assert package.DEFAULT_MODEL_NAME == "openai-community/gpt2"
+    assert package.MAX_LENGTH == 64
+    assert package.DEFAULT_MAX_SAMPLES == 4
+    assert set(package.REQUIRED_MODEL_FILES) == {
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+    }
+    assert set(package.REQUIRED_TOKENIZER_FILES) == {
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json",
+        "merges.txt",
+    }
+
+
 def test_hash_files_returns_empty_mapping_when_directory_missing(tmp_path: Path):
     baseline = _import_baseline_module()
 

@@ -1563,6 +1563,29 @@ def test_triton_loop_mode_switches_for_large_T(kernel_module, kind):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize(
+    "node_factory",
+    [
+        lambda: neuron.IFNode(step_mode="m", backend="triton").to("cuda"),
+        lambda: neuron.LIFNode(tau=2.0, step_mode="m", backend="triton").to("cuda"),
+    ],
+    ids=["if", "lif"],
+)
+def test_triton_dynamic_backward_executes(node_factory):
+    original_threshold = configure.triton_neuron_kernel_static_range_max_T
+    try:
+        configure.triton_neuron_kernel_static_range_max_T = 16
+        node = node_factory()
+        x = torch.randn(32, 2, 8, device="cuda", requires_grad=True)
+
+        node(x).sum().backward()
+
+        assert torch.isfinite(x.grad).all()
+    finally:
+        configure.triton_neuron_kernel_static_range_max_T = original_threshold
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("variant", ["stable", "mp"])
 def test_triton_plif_low_precision_dynamic_backward_compiles(dtype, variant):

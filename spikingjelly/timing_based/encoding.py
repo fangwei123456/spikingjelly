@@ -98,6 +98,7 @@ class GaussianTuning:
         :return: 形状为 ``[batch_size, n, samples_count, m]`` 的脉冲时间
         :rtype: torch.Tensor
         :raises AssertionError: 输入不是三维张量或特征维不等于 ``n``
+        :raises ValueError: ``max_spike_time`` 为负数
 
         ----
 
@@ -114,7 +115,10 @@ class GaussianTuning:
         :rtype: torch.Tensor
         :raises AssertionError: If the input is not three-dimensional or its
             feature dimension differs from ``n``
+        :raises ValueError: If ``max_spike_time`` is negative
         """
+        if max_spike_time < 0:
+            raise ValueError("max_spike_time must be non-negative.")
         if x.dim() != 3 or x.shape[1] != self.n:
             raise AssertionError(
                 f"x must have shape [batch_size, {self.n}, samples_count], "

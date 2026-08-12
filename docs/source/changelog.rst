@@ -277,6 +277,12 @@ Module: ``spikingjelly.activation_based.triton_kernel.neuron_kernel``.
   membrane potential.
 - PLIF and STBIF kernels now load scalar tensor parameters directly on device,
   avoiding device-to-host scalar reads during kernel dispatch.
+- Removed the redundant ``supports_triton_fp8_e4m3fn()`` and
+  ``supports_triton_fp8_e5m2()`` helpers. Use
+  ``supports_triton_fp8_neuron_forward(dtype, device, compute_dtype)`` or the
+  corresponding backward capability API.
+- Removed the test-oriented ``flexsn_kernel_registry_info()`` helper; FlexSN
+  kernel handles remain managed internally by the registered-op lifecycle.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -125,6 +125,18 @@ def test_zero_max_spike_time_marks_all_neurons_inactive():
     assert torch.equal(spikes, torch.full_like(spikes, -1))
 
 
+def test_negative_max_spike_time_is_rejected():
+    encoder = GaussianTuning(
+        n=1,
+        m=4,
+        x_min=torch.tensor([0.0]),
+        x_max=torch.tensor([1.0]),
+    )
+
+    with pytest.raises(ValueError, match="non-negative"):
+        encoder.encode(torch.tensor([[[0.5]]]), max_spike_time=-1)
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [

@@ -240,23 +240,27 @@ class NeuroMCRuntimeEnergyReport:
     energy_total_pj: float = 0.0
     energy_compute_pj: float = 0.0
     energy_memory_pj: float = 0.0
-    energy_by_stage: dict[str, float] = field(default_factory=dict)
-    energy_by_op: dict[str, float] = field(default_factory=dict)
-    primitive_counts: dict[str, Any] = field(default_factory=dict)
-    memory_bits_by_level: dict[str, Any] = field(default_factory=dict)
-    warnings: list[str] = field(default_factory=list)
+    energy_by_stage: Optional[dict[str, float]] = field(default_factory=dict)
+    energy_by_op: Optional[dict[str, float]] = field(default_factory=dict)
+    primitive_counts: Optional[dict[str, Any]] = field(default_factory=dict)
+    memory_bits_by_level: Optional[dict[str, Any]] = field(default_factory=dict)
+    warnings: Optional[list[str]] = field(default_factory=list)
     energy_mac_pj: float = 0.0
     energy_base_memory_pj: float = 0.0
     energy_extra_memory_pj: float = 0.0
     energy_extra_compute_pj: float = 0.0
-    energy_by_core_type: dict[str, float] = field(default_factory=dict)
-    energy_by_process_key: dict[str, float] = field(default_factory=dict)
-    energy_by_memory_level_dir: dict[str, dict[str, float]] = field(
+    energy_by_core_type: Optional[dict[str, float]] = field(default_factory=dict)
+    energy_by_process_key: Optional[dict[str, float]] = field(default_factory=dict)
+    energy_by_memory_level_dir: Optional[dict[str, dict[str, float]]] = field(
         default_factory=dict
     )
-    counts_by_core_type: dict[str, dict[str, int]] = field(default_factory=dict)
-    counts_by_process_key: dict[str, dict[str, int]] = field(default_factory=dict)
-    mapping_summary: list[dict[str, Any]] = field(default_factory=list)
+    counts_by_core_type: Optional[dict[str, dict[str, int]]] = field(
+        default_factory=dict
+    )
+    counts_by_process_key: Optional[dict[str, dict[str, int]]] = field(
+        default_factory=dict
+    )
+    mapping_summary: Optional[list[dict[str, Any]]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         for name in (

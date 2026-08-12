@@ -827,6 +827,10 @@ def test_neuromc_exact_memory_config_api():
     cfg = op_counter.MemoryHierarchyConfig()
     cfg.validate()
     assert cfg.technology_nm == 32
+    with pytest.raises(AttributeError):
+        cfg.preset_name = "invalid"
+    with pytest.raises(AttributeError):
+        cfg.technology_nm = 7
     assert "dram" in cfg.memory_instances
     assert hasattr(op_counter.neuromc, "MemoryResidencySimulator")
     assert hasattr(op_counter.neuromc, "NeuroMCMemoryResidencyCounter")
