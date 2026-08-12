@@ -15,6 +15,7 @@ DIAGNOSTIC_PRINT_FUNCTIONS = {"check_manual_grad", "check_cuda_grad"}
 PERCENT_PLACEHOLDER = re.compile(
     r"%(?!%)(?:\([^)]+\))?[#0 +\-]?(?:\d+|\*)?(?:\.\d+|\.\*)?[hlL]?[diouxXeEfFgGcrsa]"
 )
+SOURCE_MODULE_PREFIX = re.compile(r"^spikingjelly(?:\.[A-Za-z_]\w*)+\s*:")
 
 
 def _is_production(path: Path) -> bool:
@@ -89,13 +90,11 @@ def _check_logger_call(path: Path, node: ast.Call) -> list[str]:
         )
 
     message = node.args[0]
-    if _is_eager_message(message) or any(
-        _is_eager_message(arg) for arg in node.args[1:]
-    ):
+    if _is_eager_message(message):
         violations.append(f"{path}:{node.lineno}: eager formatting in logger call")
 
     if isinstance(message, ast.Constant) and isinstance(message.value, str):
-        if "spikingjelly." in message.value.lower():
+        if SOURCE_MODULE_PREFIX.match(message.value):
             violations.append(f"{path}:{node.lineno}: source module in logger message")
         if PERCENT_PLACEHOLDER.search(message.value):
             violations.append(
@@ -132,12 +131,20 @@ def check(root: Path) -> list[str]:
             for parent in ast.walk(tree)
             for child in ast.iter_child_nodes(parent)
         }
-        imports_package_logger = path.name == "logger.py" or any(
+        is_package_logger_module = path == root / "logger.py"
+        imports_package_logger = is_package_logger_module or any(
             isinstance(node, ast.ImportFrom)
             and node.module == "spikingjelly.logger"
             and any(alias.name == "logger" for alias in node.names)
             for node in ast.walk(tree)
         )
+        if not imports_package_logger and any(
+            isinstance(node, ast.Call) and _is_logger_call(node)
+            for node in ast.walk(tree)
+        ):
+            violations.append(
+                f"{path}: logger must be imported from spikingjelly.logger"
+            )
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
@@ -154,7 +161,7 @@ def check(root: Path) -> list[str]:
                     "logging."
                 ):
                     violations.append(f"{path}:{node.lineno}: stdlib logging import")
-                if node.module == "loguru" and path.name != "logger.py":
+                if node.module == "loguru" and not is_package_logger_module:
                     violations.append(
                         f"{path}:{node.lineno}: logger must be imported from spikingjelly.logger"
                     )
@@ -193,12 +200,6 @@ def check(root: Path) -> list[str]:
                     violations.append(f"{path}:{node.lineno}: direct sys stream write")
                 elif _is_logger_call(node):
                     violations.extend(_check_logger_call(path, node))
-                    if not imports_package_logger:
-                        violations.append(
-                            f"{path}:{node.lineno}: logger must be imported from spikingjelly.logger"
-                        )
-            elif isinstance(node, ast.Name) and node.id == "logging":
-                violations.append(f"{path}:{node.lineno}: stdlib logging reference")
             elif isinstance(node, (ast.Assign, ast.AnnAssign)):
                 targets = (
                     node.targets if isinstance(node, ast.Assign) else [node.target]

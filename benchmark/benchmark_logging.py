@@ -130,7 +130,7 @@ def main() -> None:
 
     logger.disable(__name__)
     _print_result(
-        "package_disabled_info",
+        "namespace_disabled_info",
         _run(
             args.repeats,
             lambda index: logger.info("benchmark index={}", index),
@@ -139,7 +139,7 @@ def main() -> None:
         args.calls,
     )
     _print_result(
-        "package_disabled_debug",
+        "namespace_disabled_debug",
         _run(
             args.repeats,
             lambda index: logger.debug("benchmark index={}", index),

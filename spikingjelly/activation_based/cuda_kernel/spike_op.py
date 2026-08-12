@@ -24,10 +24,6 @@ try:
     logger.debug(
         "Loading CUDA spike-op extension through torch.utils.cpp_extension.load_inline"
     )
-    logger.debug(
-        "If extension loading hangs, remove the torch extensions cache directory; the default build directory is {}",
-        torch.utils.cpp_extension._get_build_directory("", False),
-    )
     cpp_wrapper = load_inline(
         name="cpp_wrapper",
         cpp_sources=r"""
@@ -75,7 +71,7 @@ def _spike_conv_backward_common(
         raise RuntimeError(
             "cpp_wrapper is unavailable for spike convolution backward. "
             "Please ensure the inline extension can be built in this environment."
-        )
+        ) from cpp_wrapper_error
     output_padding = [0] * (len(stride) if isinstance(stride, (list, tuple)) else 1)
     return cpp_wrapper.cudnn_convolution_backward(
         spike,

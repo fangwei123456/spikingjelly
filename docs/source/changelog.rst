@@ -33,7 +33,7 @@ Module: ``spikingjelly``.
 - Updated the AST policy checker, Loguru performance benchmark, tests, and bilingual
   API documentation. This is a breaking change: stdlib handlers,
   ``basicConfig()``, ``dictConfig()``, and pytest ``caplog`` no longer capture SpikingJelly
-  records.
+  records. Tests should attach and remove a temporary Loguru sink instead.
 
 Functional State Transitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

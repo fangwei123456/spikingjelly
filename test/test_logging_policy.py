@@ -267,7 +267,6 @@ def test_serialized_sink_contains_standard_fields(tmp_path):
             "from spikingjelly.logger import logger\nlogger.info('value=%08.3f', value)\n",
             "percent placeholder",
         ),
-        ("logging.warning('not allowed')\n", "stdlib logging reference"),
         (
             "from spikingjelly.logger import logger\nlogger.info('value={}')\n",
             "placeholder count",
@@ -312,10 +311,27 @@ def test_policy_checker_accepts_direct_loguru_call(tmp_path):
     path = tmp_path / "valid_logging.py"
     path.write_text(
         "from spikingjelly.logger import logger\n"
-        "logger.info('Work completed: result={}', value)\n",
+        "logging = object()\n"
+        "logger.info('Work completed: result={}', prefix + 'value')\n"
+        "logger.info('Install spikingjelly.optional_backend when needed')\n",
         encoding="utf-8",
     )
     assert _load_checker().check(tmp_path) == []
+
+
+def test_policy_checker_reports_missing_package_import_once(tmp_path):
+    path = tmp_path / "invalid_logging.py"
+    path.write_text("logger.info('first')\nlogger.info('second')\n", encoding="utf-8")
+    violations = _load_checker().check(tmp_path)
+    assert sum("must be imported" in item for item in violations) == 1
+
+
+def test_policy_checker_rejects_loguru_import_from_nested_logger_module(tmp_path):
+    path = tmp_path / "subsystem" / "logger.py"
+    path.parent.mkdir()
+    path.write_text("from loguru import logger\n", encoding="utf-8")
+    violations = _load_checker().check(tmp_path)
+    assert any("must be imported" in item for item in violations)
 
 
 def test_policy_checker_exists():
