@@ -3,7 +3,6 @@ import math
 import os
 import shutil
 import struct
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional, Union
 
@@ -20,7 +19,6 @@ from .. import configure
 __all__ = [
     "np_savez",
     "save_as_pic",
-    "save_every_frame_of_an_entire_DVS_dataset",
     "play_frame",
     "load_aedat_v3",
     "load_ATIS_bin",
@@ -31,10 +29,8 @@ __all__ = [
     "integrate_events_file_to_frames_file_by_fixed_frames_number",
     "integrate_events_by_fixed_duration",
     "integrate_events_file_to_frames_file_by_fixed_duration",
-    "save_frames_to_npz_and_print",
     "create_same_directory_structure",
     "split_to_train_test_set",
-    "fast_split_to_train_test_set",
     "pad_sequence_collate",
     "padded_sequence_mask",
     "create_sub_dataset",
@@ -114,135 +110,6 @@ def save_as_pic(
         plt.savefig(
             save_pic_to / f"{pic_first_name}_{t}.png", bbox_inches="tight", pad_inches=0
         )
-
-
-def save_every_frame_of_an_entire_DVS_dataset(
-    dataset: str,
-    dataset_path: str,
-    time_steps: int,
-    save_pic_to: str = "./",
-    number_of_threads: int = 4,
-):
-    """
-    **API Language** - :ref:`中文 <save_every_frame_of_an_entire_DVS_dataset-cn>` | :ref:`English <save_every_frame_of_an_entire_DVS_dataset-en>`
-
-    ----
-
-    .. _save_every_frame_of_an_entire_DVS_dataset-cn:
-
-    * **中文**
-
-    将指定 DVS 数据集的每个样本按固定帧数加载为帧数据, 并将所有帧逐张保存为图片。
-
-    :param dataset: 要保存的数据集名称。当前可用的选项有：DVS128Gesture、CIFAR10DVS 和 NCaltech101。
-    :type dataset: str
-
-    :param dataset_path: 与加载数据集相同的存储路径。
-    :type dataset_path: str
-
-    :param time_steps: 与加载数据集相同的 T。
-    :type time_steps: int
-
-    :param save_pic_to: 每一帧图像的保存位置。
-    :type save_pic_to: str
-
-    :param number_of_threads: 用于保存图像的线程数。
-    :type number_of_threads: int
-
-
-    :raises ValueError: 当必要参数为空, 或 ``dataset`` 不是 ``"DVS128Gesture"``,
-        ``"CIFAR10DVS"``, ``"NCaltech101"`` 之一时抛出。
-
-    ----
-
-    .. _save_every_frame_of_an_entire_DVS_dataset-en:
-
-    * **English**
-
-    Load every sample from the specified DVS dataset as frame data with a fixed
-    frame count, and save every frame as an image.
-
-    :param dataset: name of the dataset to be saved. The current available options
-        are: DVS128Gesture, CIFAR10DVS and NCaltech101.
-    :type dataset: str
-
-    :param dataset_path: same storage path as loading dataset.
-    :type dataset_path: str
-
-    :param time_steps: same T as loading the dataset.
-    :type time_steps: int
-
-    :param save_pic_to: where to store each frame's image.
-    :type save_pic_to: str
-
-    :param number_of_threads: how many threads are used to save images.
-    :type number_of_threads: int
-
-
-    :raises ValueError: raised when required arguments are empty, or when
-        ``dataset`` is not one of ``"DVS128Gesture"``, ``"CIFAR10DVS"``, or
-        ``"NCaltech101"``.
-
-    ----
-
-    * **代码示例 | Example**
-
-    .. code:: python
-
-        save_every_frame_of_an_entire_DVS_dataset(dataset='DVS128Gesture', dataset_path="../../datasets/DVS128Gesture",
-                                                time_steps=16, save_pic_to='./demo', number_of_threads=20)
-        save_every_frame_of_an_entire_DVS_dataset(dataset='CIFAR10DVS', dataset_path="../../datasets/cifar10dvs",
-                                                time_steps=10, save_pic_to='./demo', number_of_threads=20)
-        save_every_frame_of_an_entire_DVS_dataset(dataset='NCaltech101', dataset_path="../../datasets/NCaltech101",
-                                                time_steps=14, save_pic_to='./demo', number_of_threads=20)
-    """
-    if not dataset or not dataset_path or time_steps is None or not save_pic_to:
-        raise ValueError(
-            "All parameters(dataset, dataset_path, time_steps and save_pic_to) must be provided and cannot be empty."
-        )
-    if dataset == "DVS128Gesture":
-        from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
-
-        data = DVS128Gesture(
-            root=dataset_path,
-            train=False,
-            data_type="frame",
-            split_by="number",
-            frames_number=time_steps,
-        )
-    elif dataset == "CIFAR10DVS":
-        from spikingjelly.datasets.cifar10_dvs import CIFAR10DVS
-
-        data = CIFAR10DVS(
-            root=dataset_path,
-            data_type="frame",
-            split_by="number",
-            frames_number=time_steps,
-        )
-    elif dataset == "NCaltech101":
-        from spikingjelly.datasets.n_caltech101 import NCaltech101
-
-        data = NCaltech101(
-            root=dataset_path,
-            data_type="frame",
-            split_by="number",
-            frames_number=time_steps,
-        )
-    else:
-        raise ValueError(
-            "The dataset attribute can only be DVS128Gesture, CIFAR10DVS or NCaltech101"
-        )
-
-    import multiprocessing
-
-    multiprocessing.freeze_support()
-    pool = multiprocessing.Pool(processes=number_of_threads)
-    for i in range(len(data)):
-        frame, _ = data[i]
-        pool.apply_async(save_as_pic, args=(frame, save_pic_to, str(i)))
-    pool.close()
-    pool.join()
-    logger.info("complete!!!")
 
 
 def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> None:
@@ -1004,39 +871,6 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     return frames.shape[0]
 
 
-def save_frames_to_npz_and_print(fname: str, frames: np.ndarray):
-    r"""
-    **API Language** - :ref:`中文 <save_frames_to_npz_and_print-cn>` | :ref:`English <save_frames_to_npz_and_print-en>`
-
-    ----
-
-    .. _save_frames_to_npz_and_print-cn:
-
-    * **中文**
-
-    :param fname: 目标 npz 文件的路径
-    :type fname: str
-
-    :param frames: 帧对象
-    :type frames: np.ndarray
-
-
-    ----
-
-    .. _save_frames_to_npz_and_print-en:
-
-    * **English**
-
-    :param fname: path of the target npz file
-    :type fname: str
-
-    :param frames: frames object
-    :type frames: np.ndarray
-    """
-    np_savez(fname, frames=frames)
-    logger.debug("Frames [{}] saved.", fname)
-
-
 def create_same_directory_structure(
     source_dir: Union[str, Path], target_dir: Union[str, Path]
 ) -> None:
@@ -1165,93 +999,6 @@ def _split_class_indices(label_idx, train_ratio, random_split):
         train_idx.extend(indices[:pos])
         test_idx.extend(indices[pos:])
     return train_idx, test_idx
-
-
-def fast_split_to_train_test_set(
-    train_ratio: float,
-    origin_dataset: torch.utils.data.Dataset,
-    num_classes: int,
-    random_split: bool = False,
-    batch_size: int = 16,
-):
-    r"""
-    **API Language** - :ref:`中文 <fast_split_to_train_test_set-cn>` | :ref:`English <fast_split_to_train_test_set-en>`
-
-    ----
-
-    .. _fast_split_to_train_test_set-cn:
-
-    * **中文**
-
-    :param train_ratio: 将原始数据集按此比例划分为训练集
-    :type train_ratio: float
-
-    :param origin_dataset: 原始数据集
-    :type origin_dataset: torch.utils.data.Dataset
-
-    :param num_classes: 总类别数，例如 MNIST 数据集为 ``10``
-    :type num_classes: int
-
-    :param random_split: 如果 ``False``，每个类的前半部分样本将包含在训练集中，其余部分包含在测试集中。
-        如果 ``True``，此函数将随机划分每个类别的样本。随机性由
-        ``numpy.random.seed`` 控制
-    :type random_split: bool
-
-    :param batch_size: 每个批次处理的样本数量
-    :type batch_size: int
-
-    :return: 一个元组 ``(train_set, test_set)``, 二者均为基于 ``origin_dataset`` 构造的
-        :class:`torch.utils.data.Subset`
-    :rtype: tuple[torch.utils.data.Subset, torch.utils.data.Subset]
-
-    ----
-
-    .. _fast_split_to_train_test_set-en:
-
-    * **English**
-
-    :param train_ratio: split the ratio of the origin dataset as the train set
-    :type train_ratio: float
-
-    :param origin_dataset: the origin dataset
-    :type origin_dataset: torch.utils.data.Dataset
-
-    :param num_classes: total classes number, e.g., ``10`` for the MNIST dataset
-    :type num_classes: int
-
-    :param random_split: If ``False``, the front ratio of samples in each classes will
-        be included in train set, while the reset will be included in test set.
-        If ``True``, this function will split samples in each classes randomly. The randomness is controlled by
-        ``numpy.random.seed``
-    :type random_split: bool
-
-    :param batch_size: the number of samples to process in each batch
-    :type batch_size: int
-
-    :return: a tuple ``(train_set, test_set)``, where both elements are
-        :class:`torch.utils.data.Subset` instances built from ``origin_dataset``
-    :rtype: tuple[torch.utils.data.Subset, torch.utils.data.Subset]
-    """
-    label_idx = [[] for _ in range(num_classes)]
-
-    def process_batch(start_idx, end_idx):
-        return [(i, _class_index(origin_dataset[i])) for i in range(start_idx, end_idx)]
-
-    num_samples = len(origin_dataset)
-    with ThreadPoolExecutor() as executor:
-        batches = (
-            (start, min(start + batch_size, num_samples))
-            for start in range(0, num_samples, batch_size)
-        )
-        futures = [executor.submit(process_batch, *batch) for batch in batches]
-        for future in tqdm.tqdm(futures, desc="Processing batches"):
-            for i, label in future.result():
-                label_idx[label].append(i)
-
-    train_idx, test_idx = _split_class_indices(label_idx, train_ratio, random_split)
-    return torch.utils.data.Subset(origin_dataset, train_idx), torch.utils.data.Subset(
-        origin_dataset, test_idx
-    )
 
 
 def pad_sequence_collate(batch: list):

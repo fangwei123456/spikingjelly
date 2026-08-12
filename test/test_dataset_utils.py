@@ -107,18 +107,6 @@ def test_padding_collate_and_mask_share_sequence_length_contract():
     )
 
 
-def test_fast_and_regular_class_splits_produce_the_same_indices():
-    dataset = torch.utils.data.TensorDataset(
-        torch.arange(12), torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2])
-    )
-
-    regular = utils.split_to_train_test_set(0.5, dataset, num_classes=3)
-    fast = utils.fast_split_to_train_test_set(0.5, dataset, num_classes=3, batch_size=2)
-
-    assert regular[0].indices == fast[0].indices
-    assert regular[1].indices == fast[1].indices
-
-
 def test_event_binary_loaders_decode_documented_bit_layouts(tmp_path):
     timestamp = 0x12345
     atis_file = tmp_path / "events.bin"

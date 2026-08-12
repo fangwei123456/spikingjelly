@@ -92,8 +92,8 @@ class GaussianTuning:
 
         :param x: 输入张量，形状为 ``[batch_size, n, samples_count]``
         :type x: torch.Tensor
-        :param max_spike_time: 最大脉冲时间；达到该值的神经元以 ``-1`` 表示不发放。
-            传入 ``0`` 时沿用历史行为，使用 ``100``
+        :param max_spike_time: 非负编码时间窗长度；达到该值的神经元以 ``-1`` 表示不发放。
+            当其为 ``0`` 时，所有神经元均不发放
         :type max_spike_time: int
         :return: 形状为 ``[batch_size, n, samples_count, m]`` 的脉冲时间
         :rtype: torch.Tensor
@@ -107,9 +107,8 @@ class GaussianTuning:
 
         :param x: Input tensor with shape ``[batch_size, n, samples_count]``
         :type x: torch.Tensor
-        :param max_spike_time: Maximum spike time; neurons reaching it are marked
-            inactive with ``-1``. Passing ``0`` preserves the historical
-            fallback to ``100``
+        :param max_spike_time: Non-negative encoding-window length; neurons reaching
+            it are marked inactive with ``-1``. When it is ``0``, all neurons are inactive
         :type max_spike_time: int
         :return: Spike times with shape ``[batch_size, n, samples_count, m]``
         :rtype: torch.Tensor
@@ -121,7 +120,6 @@ class GaussianTuning:
                 f"x must have shape [batch_size, {self.n}, samples_count], "
                 f"but got {tuple(x.shape)}."
             )
-        max_spike_time = max_spike_time or 100
         batch_size, _, samples_count = x.shape
         values = x.permute(0, 2, 1).reshape(-1, self.n, 1).expand(-1, -1, self.m)
         responses = torch.exp(-(values - self.mu).square() / (2 * self.sigma2))

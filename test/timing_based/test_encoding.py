@@ -112,19 +112,17 @@ def test_far_out_of_range_values_are_inactive():
     assert (spikes == -1).float().mean() > 0.95
 
 
-def test_zero_max_spike_time_preserves_default_fallback():
+def test_zero_max_spike_time_marks_all_neurons_inactive():
     encoder = GaussianTuning(
         n=1,
         m=4,
         x_min=torch.tensor([0.0]),
         x_max=torch.tensor([1.0]),
     )
-    x = torch.tensor([[[0.1, 0.5, 0.9]]])
 
-    assert torch.equal(
-        encoder.encode(x, max_spike_time=0),
-        encoder.encode(x, max_spike_time=100),
-    )
+    spikes = encoder.encode(torch.tensor([[[0.1, 0.5, 0.9]]]), max_spike_time=0)
+
+    assert torch.equal(spikes, torch.full_like(spikes, -1))
 
 
 @pytest.mark.parametrize(

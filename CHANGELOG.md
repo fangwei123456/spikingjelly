@@ -247,6 +247,23 @@ Module: `spikingjelly.activation_based.triton_kernel.neuron_kernel`.
 
 ### Breaking Changes and Notices
 
+#### Dataset Utility API Changes
+
+Module: `spikingjelly.datasets.utils`.
+
+- **Breaking change:** removed `save_every_frame_of_an_entire_DVS_dataset()`,
+  `save_frames_to_npz_and_print()`, and `fast_split_to_train_test_set()`. Construct
+  datasets directly and use `save_as_pic()`, `numpy.savez`, or
+  `split_to_train_test_set()` for the corresponding operations.
+
+#### Timing-Based API Changes
+
+Module: `spikingjelly.timing_based.encoding`.
+
+- **Breaking change:** `GaussianTuning.encode(max_spike_time=0)` now uses the
+  empty encoding window directly, marking every neuron inactive, instead of
+  silently replacing zero with `100`.
+
 #### Neuron Execution Backends
 
 Modules: `spikingjelly.activation_based.neuron` and

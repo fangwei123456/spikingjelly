@@ -628,7 +628,9 @@ class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
             frames = self.cfg.custom_integrate_function(
                 self._event_loader(events_file), self.H, self.W
             )
-            utils.save_frames_to_npz_and_print(output_dir / events_file.name, frames)
+            output_file = output_dir / events_file.name
+            utils.np_savez(output_file, frames=frames)
+            logger.debug("Frames [{}] saved.", output_file)
 
         self._build_from_event_files(process)
 
@@ -1046,16 +1048,9 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         H, W = self.get_H_W()
         if self.cfg.frames_number is not None:
             return FrameFixedNumberBuilder(self.cfg, self.raw_root, H, W)
-        elif self.cfg.duration is not None:
+        if self.cfg.duration is not None:
             return FrameFixedDurationBuilder(self.cfg, self.raw_root, H, W)
-        elif self.cfg.custom_integrate_function is not None:
-            return FrameCustomIntegrateBuilder(self.cfg, self.raw_root, H, W)
-        else:
-            # not reachable
-            raise NotImplementedError(
-                "Please specify the frames number or duration or "
-                "custom integrate function."
-            )
+        return FrameCustomIntegrateBuilder(self.cfg, self.raw_root, H, W)
 
     def get_root_when_train_is_none(self, _root: Path) -> Path:
         r"""

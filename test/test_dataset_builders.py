@@ -54,6 +54,27 @@ def test_frame_builder_preserves_directory_structure_and_event_loader(
     assert np.array_equal(loader(output_file), expected)
 
 
+def test_custom_frame_builder_saves_integrated_frames(tmp_path):
+    root = tmp_path / "dataset"
+    raw_root = root / "events"
+    sample_dir = raw_root / "class0"
+    sample_dir.mkdir(parents=True)
+    np.savez(sample_dir / "sample.npz", x=np.array([1]))
+    expected = np.arange(8).reshape(1, 2, 2, 2)
+    cfg = base.NeuromorphicDatasetConfig(
+        root=root,
+        train=None,
+        data_type="frame",
+        custom_integrate_function=lambda events, height, width: expected,
+    )
+
+    processed_root, loader = base.FrameCustomIntegrateBuilder(
+        cfg, raw_root, 2, 2
+    ).build()
+
+    assert np.array_equal(loader(processed_root / "class0" / "sample.npz"), expected)
+
+
 def test_es_imagenet_builder_only_overrides_event_format(tmp_path, monkeypatch):
     root = tmp_path / "dataset"
     raw_root = root / "events"
