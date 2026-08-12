@@ -1052,6 +1052,45 @@ def test_multi_step_stbif_rejects_non_scalar_parameters(parameter):
         )
 
 
+@pytest.mark.parametrize("state_name", ["q", "acc_q"])
+@pytest.mark.parametrize(
+    "invalid_state",
+    [
+        torch.zeros(1, 2),
+        torch.zeros(2, dtype=torch.float64),
+    ],
+    ids=["shape", "dtype"],
+)
+def test_multi_step_stbif_rejects_mismatched_state(state_name, invalid_state):
+    states = {"q": torch.zeros(2), "acc_q": torch.zeros(2)}
+    states[state_name] = invalid_state
+
+    with pytest.raises(ValueError, match="shape, dtype, and device"):
+        stbif.multi_step_stbif(
+            torch.zeros(1, 2),
+            **states,
+            q_threshold=torch.tensor(0.1),
+            pos_max=torch.tensor(10.0),
+            neg_min=torch.tensor(-10.0),
+        )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("state_name", ["q", "acc_q"])
+def test_multi_step_stbif_rejects_mismatched_state_device(state_name):
+    states = {"q": torch.zeros(2), "acc_q": torch.zeros(2)}
+    states[state_name] = states[state_name].cuda()
+
+    with pytest.raises(ValueError, match="shape, dtype, and device"):
+        stbif.multi_step_stbif(
+            torch.zeros(1, 2),
+            **states,
+            q_threshold=torch.tensor(0.1),
+            pos_max=torch.tensor(10.0),
+            neg_min=torch.tensor(-10.0),
+        )
+
+
 def test_spikezip_linear_is_tdlinear_with_distributed_bias():
     torch.manual_seed(276)
     source = nn.Linear(4, 3).eval()

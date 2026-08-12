@@ -393,6 +393,16 @@ def multi_step_stbif(
     :raises NotImplementedError: If the dtype is not supported by the Triton
         backend
     """
+    state_shape = x_seq.shape[1:]
+    if any(
+        state.shape != state_shape
+        or state.dtype != x_seq.dtype
+        or state.device != x_seq.device
+        for state in (q, acc_q)
+    ):
+        raise ValueError(
+            "q and acc_q must match one x_seq step in shape, dtype, and device."
+        )
     if any(value.numel() != 1 for value in (q_threshold, pos_max, neg_min)):
         raise ValueError("q_threshold, pos_max, and neg_min must be scalar tensors.")
     x_shape = x_seq.shape
