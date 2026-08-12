@@ -380,6 +380,9 @@ Module: `spikingjelly.activation_based.distributed`.
   -> Plan -> Apply workflow.
 - Removed the unused `model_family` argument from `analyze()`; select a model
   family when creating or applying a distributed plan.
+- Removed the model-specific adapter `analyze()` methods. Use
+  `distributed.analyze(model, roots=("classifier",))` for CIFAR10-DVS VGG or
+  `distributed.analyze(model, roots=("head",))` for Spikformer.
 
 #### Learning API Changes
 
@@ -399,6 +402,8 @@ Module: `spikingjelly.activation_based.op_counter`.
 - Removed stage-level aggregation and
   `MemoryResidencyCounter.get_stage_level_bits()`. Use the level- and
   operation-level residency methods for current measurements.
+- Removed `SpikeSimEnergyProfiler.add_warnings()`; warning collection is now
+  internal to the SpikeSim estimate entry point.
 - `MemoryHierarchyConfig` now represents the single supported NeuroMC v1
   hierarchy directly. Construct it with `MemoryHierarchyConfig()` and use
   `dataclasses.replace()` for modified copies; the redundant
@@ -427,6 +432,9 @@ Module: `spikingjelly.activation_based.triton_kernel.triton_utils`.
 - Removed the documented `ensure_cleanup_tmp_python_files()` decorator. Callers
   that create temporary Python files should own their lifecycle with
   `tempfile` context managers.
+- Removed `torch_dtype_for_triton_compute_dtype()`. Use
+  `normalize_triton_compute_dtype_name()` when validating configuration or
+  `resolve_triton_compute_dtype()` when constructing a Triton kernel.
 
 #### Triton Neuron Kernel API Changes
 
@@ -438,6 +446,12 @@ Module: `spikingjelly.activation_based.triton_kernel.neuron_kernel`.
   related fields are now named `forward_compute_dtype`,
   `forward_compute_dtype_name`, and `forward_compute_tl_dtype` to distinguish
   forward and backward execution.
+- Removed `TritonNeuronExecutionPlan.matches()`; prepare a plan for the current
+  arguments instead of maintaining a second normalization/comparison path.
+- Removed the legacy
+  `multistep_{if,lif,plif}_mixed_precision_forward{,_with_plan}` aliases. Use
+  `multistep_{if,lif,plif}_mp` and
+  `multistep_{if,lif,plif}_mp_with_plan`.
 
 #### Dependencies
 

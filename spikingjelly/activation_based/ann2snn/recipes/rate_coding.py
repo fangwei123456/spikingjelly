@@ -588,7 +588,7 @@ class RateCodingRecipe(ConversionRecipe):
         prefix = f"{hook_parent}.{spike_leaf}" if hook_parent else spike_leaf
 
         spiking_neuron = (
-            neuron.IFNode()
+            neuron.IFNode(v_reset=None)
             if self.neuron_factory is None
             else self.neuron_factory(scale)
         )
@@ -645,7 +645,7 @@ class RateCodingRecipe(ConversionRecipe):
             spiking_neuron = neuron.HalfThresholdIFNode()
         else:
             spiking_neuron = (
-                neuron.IFNode()
+                neuron.IFNode(v_reset=None)
                 if self.neuron_factory is None
                 else self.neuron_factory(1.0)
             )

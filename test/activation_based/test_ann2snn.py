@@ -1947,6 +1947,7 @@ class TestRateCodingConversion:
         if_nodes = [m for m in snn.modules() if isinstance(m, neuron.IFNode)]
         assert len(if_nodes) == 1
         assert isinstance(if_nodes[0].v_threshold, float)
+        assert if_nodes[0].v_reset is None
 
     def test_module_names_with_underscores_convert(self):
         model = UnderscoreModuleCNN()
@@ -2692,7 +2693,9 @@ class TestChannelWiseRateCodingRecipe:
 
         assert not any(isinstance(m, nn.ReLU) for m in snn.modules())
         assert any(isinstance(m, ChannelVoltageScaler) for m in snn.modules())
-        assert any(isinstance(m, neuron.IFNode) for m in snn.modules())
+        if_nodes = [m for m in snn.modules() if isinstance(m, neuron.IFNode)]
+        assert len(if_nodes) == 1
+        assert if_nodes[0].v_reset is None
         y = snn(torch.rand(2, 1, 28, 28))
         assert y.shape == (2, 10)
 
