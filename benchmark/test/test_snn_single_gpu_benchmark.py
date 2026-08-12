@@ -357,9 +357,13 @@ def test_flexsn_probe_rejects_unavailable_phase_kernel(monkeypatch, phase, messa
     from spikingjelly.activation_based.neuron import flexsn
 
     class UnavailableFlexSN(probe.torch.nn.Module):
-        _triton_inference_available = False
-        _triton_inference_final_state_available = False
-        _triton_training_available = False
+        _triton_scan_kernel = None
+        _triton_scan_info = None
+        _triton_scan_final_state_kernel = None
+        _triton_scan_final_state_info = None
+        _triton_fwd_kernel = None
+        _triton_bwd_kernel = None
+        _triton_train_info = None
 
         def __init__(self, *_args, **_kwargs):
             super().__init__()

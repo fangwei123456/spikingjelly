@@ -164,11 +164,21 @@ def _build_model(case: str, phase: str, device: torch.device) -> torch.nn.Module
         )
         if backend == "triton":
             if phase == "inference" and not (
-                node._triton_inference_final_state_available
-                or node._triton_inference_available
+                (
+                    node._triton_scan_final_state_kernel is not None
+                    and node._triton_scan_final_state_info is not None
+                )
+                or (
+                    node._triton_scan_kernel is not None
+                    and node._triton_scan_info is not None
+                )
             ):
                 raise RuntimeError("FlexSN Triton inference kernel construction failed")
-            if phase == "training" and not node._triton_training_available:
+            if phase == "training" and not (
+                node._triton_fwd_kernel is not None
+                and node._triton_bwd_kernel is not None
+                and node._triton_train_info is not None
+            ):
                 raise RuntimeError("FlexSN Triton training kernel construction failed")
 
     class PointwiseNode(torch.nn.Module):

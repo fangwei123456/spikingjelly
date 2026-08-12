@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import torch.nn as nn
 
-from ..analysis import SNNDistributedAnalysis, analyze_snn_distributed_capability
 from ..planner import SNNDistributedPlan
 from ..runtime import SNNDistributedRuntime
 from .base import build_distributed_runtime
@@ -10,11 +9,6 @@ from .base import build_distributed_runtime
 
 class CIFAR10DVSVGGAdapter:
     name = "cifar10dvs_vgg"
-
-    def analyze(self, model: nn.Module) -> SNNDistributedAnalysis:
-        return analyze_snn_distributed_capability(
-            model, tensor_parallel_roots=["classifier"]
-        )
 
     def apply(
         self,

@@ -4,7 +4,6 @@ from typing import Optional, Protocol, runtime_checkable
 
 import torch.nn as nn
 
-from ..analysis import SNNDistributedAnalysis
 from ..config import SNNDistributedConfig
 from ..execution import configure_snn_distributed
 from ..planner import SNNDistributedPlan
@@ -50,8 +49,6 @@ def build_distributed_runtime(
 @runtime_checkable
 class SNNDistributedAdapter(Protocol):
     name: str
-
-    def analyze(self, model: nn.Module) -> SNNDistributedAnalysis: ...
 
     def apply(
         self,

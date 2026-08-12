@@ -1036,14 +1036,14 @@ class FlexSN(base.MemoryModule):
             self._triton_bwd_kernel = None
             self._triton_train_info = None
         self._triton_handle = None
-        self._triton_inference_available = (
+        inference_available = (
             self._triton_scan_kernel is not None and self._triton_scan_info is not None
         )
-        self._triton_inference_final_state_available = (
+        final_state_available = (
             self._triton_scan_final_state_kernel is not None
             and self._triton_scan_final_state_info is not None
         )
-        self._triton_training_available = (
+        training_available = (
             self._triton_fwd_kernel is not None
             and self._triton_bwd_kernel is not None
             and self._triton_train_info is not None
@@ -1051,11 +1051,7 @@ class FlexSN(base.MemoryModule):
         if (
             backend == "triton"
             and register_flexsn_kernel_handle is not None
-            and (
-                self._triton_inference_available
-                or self._triton_inference_final_state_available
-                or self._triton_training_available
-            )
+            and (inference_available or final_state_available or training_available)
         ):
             self._triton_handle = register_flexsn_kernel_handle(
                 inference_kernel=self._triton_scan_kernel,
@@ -1069,7 +1065,7 @@ class FlexSN(base.MemoryModule):
             self._triton_handle_finalizer = attach_flexsn_handle_finalizer(
                 self, self._triton_handle
             )
-            if self._triton_inference_final_state_available:
+            if final_state_available:
                 try:
                     _warmup_triton_inference_final_state_kernel(self)
                 except Exception as e:
@@ -1087,7 +1083,6 @@ class FlexSN(base.MemoryModule):
                     )
                     self._triton_scan_final_state_kernel = None
                     self._triton_scan_final_state_info = None
-                    self._triton_inference_final_state_available = False
         else:
             self._triton_handle_finalizer = None
 
@@ -1106,9 +1101,6 @@ class FlexSN(base.MemoryModule):
         triton_defaults = {
             "_triton_handle": None,
             "_triton_handle_finalizer": None,
-            "_triton_inference_available": False,
-            "_triton_inference_final_state_available": False,
-            "_triton_training_available": False,
             "_triton_scan_kernel": None,
             "_triton_scan_info": None,
             "_triton_scan_final_state_kernel": None,
@@ -1166,7 +1158,11 @@ class FlexSN(base.MemoryModule):
             or any(tensor.requires_grad for tensor in flat_args)
         )
         if use_training:
-            if not self._triton_training_available:
+            if (
+                self._triton_fwd_kernel is None
+                or self._triton_bwd_kernel is None
+                or self._triton_train_info is None
+            ):
                 raise RuntimeError(
                     "FlexSN.kernel training path is unavailable for the current "
                     "Triton handle."
@@ -1177,7 +1173,7 @@ class FlexSN(base.MemoryModule):
                 ]
             )
 
-        if not self._triton_inference_available:
+        if self._triton_scan_kernel is None or self._triton_scan_info is None:
             raise RuntimeError(
                 "FlexSN.kernel inference path is unavailable for the current "
                 "Triton handle."
@@ -1448,7 +1444,8 @@ class FlexSN(base.MemoryModule):
                 if no_grad:
                     if (
                         not store_state_seqs
-                        and self._triton_inference_final_state_available
+                        and self._triton_scan_final_state_kernel is not None
+                        and self._triton_scan_final_state_info is not None
                     ):
                         result_seqs = flexsn_triton_inference_final_state(
                             self._triton_handle, flat_args
@@ -1461,14 +1458,21 @@ class FlexSN(base.MemoryModule):
                             else (state_values,)
                         )
                         return tuple(output_seqs), updated_states
-                    elif self._triton_inference_available:
+                    elif (
+                        self._triton_scan_kernel is not None
+                        and self._triton_scan_info is not None
+                    ):
                         result_seqs = flexsn_triton_inference(
                             self._triton_handle, flat_args
                         )
                         result_has_state_seqs = True
                     else:
                         result_seqs = None
-                elif self._triton_training_available:
+                elif (
+                    self._triton_fwd_kernel is not None
+                    and self._triton_bwd_kernel is not None
+                    and self._triton_train_info is not None
+                ):
                     if not store_state_seqs:
                         result_seqs = flexsn_triton_training_final_state(
                             self._triton_handle, flat_args
