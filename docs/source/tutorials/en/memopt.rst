@@ -437,12 +437,9 @@ only when diagnosing an optimization run:
 
 .. code:: python
 
-    import logging
-
     from spikingjelly.logger import logger
 
-    logging.basicConfig(level=logging.DEBUG)
-    logger.setLevel(logging.DEBUG)
+    logger.enable("spikingjelly")
 
 If you prefer a simpler, higher-level entry point, start from the ``profile`` argument instead:
 

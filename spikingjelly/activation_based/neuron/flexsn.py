@@ -41,7 +41,7 @@ try:
         lowerable_while_loop_scan_final_state as _flexsn_lowerable_while_loop_scan_final_state,
     )
 except (ImportError, AttributeError) as e:
-    logger.debug("spikingjelly.activation_based.neuron.flexsn: %s", e)
+    logger.debug("Optional kernel dependency unavailable: {}", e)
     _flexsn_eager_scan = None
     _flexsn_eager_scan_final_state = None
     _flexsn_hop_scan = None
@@ -939,8 +939,8 @@ class FlexSN(base.MemoryModule):
                 )
             except (ImportError, RuntimeError) as e:
                 logger.warning(
-                    "FlexSN: could not import Triton kernel builders (%s); "
-                    "falling back to eager_scan/flex_sn_scan for all paths.",
+                    "Could not import Triton kernel builders ({}); falling back to "
+                    "eager_scan/flex_sn_scan for all paths.",
                     e,
                 )
                 build_inference_kernel = None
@@ -961,8 +961,8 @@ class FlexSN(base.MemoryModule):
                     )
                 except Exception as e:
                     logger.warning(
-                        "FlexSN: could not build Triton inference kernel (%s); "
-                        "inference falls back to eager_scan.",
+                        "Could not build Triton inference kernel ({}); inference "
+                        "falls back to eager_scan.",
                         e,
                     )
                     self._triton_scan_kernel = None
@@ -988,8 +988,8 @@ class FlexSN(base.MemoryModule):
                         else "HOP/eager_scan"
                     )
                     logger.warning(
-                        "FlexSN: could not build Triton inference-final-state kernel (%s: %s); "
-                        "store_state_seqs=False inference falls back to %s.",
+                        "Could not build Triton inference-final-state kernel ({}: {}); "
+                        "store_state_seqs=False inference falls back to {}.",
                         type(e).__name__,
                         e,
                         fallback,
@@ -1011,8 +1011,8 @@ class FlexSN(base.MemoryModule):
                     )
                 except Exception as e:
                     logger.warning(
-                        "FlexSN: could not build Triton training kernels (%s); "
-                        "training falls back to eager_scan.",
+                        "Could not build Triton training kernels ({}); training "
+                        "falls back to eager_scan.",
                         e,
                     )
                     self._triton_fwd_kernel = None
@@ -1079,8 +1079,8 @@ class FlexSN(base.MemoryModule):
                         else "HOP/eager_scan"
                     )
                     logger.warning(
-                        "FlexSN: could not warm up Triton inference-final-state "
-                        "kernel (%s: %s); falling back to %s for store_state_seqs=False.",
+                        "Could not warm up Triton inference-final-state kernel "
+                        "({}: {}); falling back to {} for store_state_seqs=False.",
                         type(e).__name__,
                         e,
                         fallback,
@@ -1217,8 +1217,8 @@ class FlexSN(base.MemoryModule):
             base.check_backend_library(value)
         elif "_triton_handle" in self.__dict__ and self._triton_handle is None:
             logger.warning(
-                "Switching FlexSN.backend to %s without prebuilt Triton kernels; "
-                "this module will fall back to the HOP/eager path.",
+                "Switching backend to {} without prebuilt Triton kernels; falling "
+                "back to the HOP/eager path.",
                 value,
             )
         self._backend = value

@@ -1107,20 +1107,10 @@ torch.library.register_autograd(
 )
 
 logger.info(
-    "FlexSN operators registered: operators=%s fake_kernels=%s autograd_kernels=%s",
+    "Operators registered: operators={} fake_kernels={} autograd_kernels={}",
     5,
     5,
     2,
-    extra={
-        "event": "operator_register_summary",
-        "backend": "triton",
-        "registration_kind": "torch.library",
-        "registered": 5,
-        "fake_registered": 5,
-        "autograd_registered": 2,
-        "failed": 0,
-        "fallback": 0,
-    },
 )
 
 

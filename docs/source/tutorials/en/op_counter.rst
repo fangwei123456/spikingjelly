@@ -93,12 +93,9 @@ them only while diagnosing a counting run:
 
 .. code-block:: python
 
-    import logging
-
     from spikingjelly.logger import logger
 
-    logging.basicConfig(level=logging.DEBUG)
-    logger.setLevel(logging.DEBUG)
+    logger.enable("spikingjelly")
 
 The examples in this tutorial use ``strict=False`` so that unsupported auxiliary operators do not stop execution immediately.
 When you want unsupported operators to fail immediately instead of being skipped, switch to ``strict=True`` after you have confirmed that the relevant operator path is fully covered by the counters you selected.

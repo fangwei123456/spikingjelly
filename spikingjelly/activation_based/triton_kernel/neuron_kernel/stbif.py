@@ -18,9 +18,7 @@ try:
 except (ImportError, OSError) as e:
     from .. import dummy
 
-    logger.debug(
-        "spikingjelly.activation_based.triton_kernel.neuron_kernel.stbif: %s", e
-    )
+    logger.debug("Optional Triton dependency unavailable: {}", e)
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
     libdevice = dummy.DummyImport()

@@ -18,16 +18,10 @@ except (ImportError, OSError):
     triton = None
 
 if triton is not None:
-    logger.info(
-        "spikingjelly.activation_based.triton_kernel.compress: "
-        "Use Triton backend for bit spike compression"
-    )
+    logger.info("Using Triton backend for bit spike compression")
     from ..triton_kernel import bit_spike_compress, bit_spike_decompress
 else:
-    logger.info(
-        "spikingjelly.activation_based.triton_kernel.compress: "
-        "Use PyTorch backend for bit spike compression"
-    )
+    logger.info("Using PyTorch backend for bit spike compression")
 
     def bit_spike_compress(s_seq: torch.Tensor) -> torch.Tensor:
         s_seq = s_seq.to(dtype=torch.bool).reshape(-1)

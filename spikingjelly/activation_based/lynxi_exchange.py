@@ -489,7 +489,7 @@ def to_lynxi_supported_module(m_in: nn.Module, T: int):
 
     else:
         logger.critical(
-            "%s is not processed and the origin module is used for lynxi compiling.",
+            "{} is not processed and the origin module is used for lynxi compiling.",
             type(m_in),
         )
         m_out = copy.deepcopy(m_in).cpu()
@@ -557,8 +557,8 @@ try:
     import lyngor
     import lynpy
 
-    logger.info("lynpy.version=%s", lynpy.version)
-    logger.info("lyngor.version=%s", lyngor.version)
+    logger.info("lynpy.version={}", lynpy.version)
+    logger.info("lyngor.version={}", lyngor.version)
 
     def torch_tensor_to_lynxi(x: torch.Tensor, device_id: int = 0, to_apu: bool = True):
         r"""
@@ -795,7 +795,7 @@ try:
         out_path = offline_builder.build(
             model.graph, model.params, out_path=output_dir, apu_only=True
         )
-        logger.info("Lynxi model artifacts generated at %s", out_path)
+        logger.info("Model artifacts generated at {}", out_path)
         return os.path.join(out_path, "Net_0")
 
     def load_lynxi_model(device_id: int, model_path: str):
@@ -846,4 +846,4 @@ try:
 
 
 except (ImportError, OSError) as e:
-    logger.debug("spikingjelly.activation_based.lynxi_exchange: %s", e)
+    logger.debug("Optional Lynxi dependency unavailable: {}", e)
