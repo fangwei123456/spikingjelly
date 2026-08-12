@@ -102,7 +102,7 @@ def test_lif_linear_forward_backward(shape, decay_input, v_reset, detach_reset):
     grad_v = torch.randn_like(v_next)
     torch.autograd.backward((y, v_next), (grad_y, grad_v))
     torch.autograd.backward((y_ref, v_ref), (grad_y, grad_v))
-    for actual, expected in zip((x, v, weight, bias), refs):
+    for actual, expected in zip((x, v, weight, bias), refs, strict=True):
         torch.testing.assert_close(actual.grad, expected.grad, rtol=2e-4, atol=2e-5)
 
 
@@ -145,7 +145,7 @@ def test_if_linear_forward_backward(shape, v_reset):
     grad_v = torch.randn_like(v_next)
     torch.autograd.backward((y, v_next), (grad_y, grad_v))
     torch.autograd.backward((y_ref, v_ref), (grad_y, grad_v))
-    for actual, expected in zip((x, v, weight, bias), refs):
+    for actual, expected in zip((x, v, weight, bias), refs, strict=True):
         torch.testing.assert_close(actual.grad, expected.grad, rtol=2e-4, atol=2e-5)
 
 
@@ -175,7 +175,7 @@ def test_lif_linear_without_bias_and_nondefault_stream():
     grad_y, grad_v = torch.randn_like(y), torch.randn_like(v_next)
     torch.autograd.backward((y, v_next), (grad_y, grad_v))
     torch.autograd.backward((y_ref, v_ref), (grad_y, grad_v))
-    for actual, expected in zip((x, v, weight), refs):
+    for actual, expected in zip((x, v, weight), refs, strict=True):
         torch.testing.assert_close(actual.grad, expected.grad, rtol=2e-4, atol=2e-5)
 
 
@@ -205,6 +205,9 @@ def test_neuron_linear_fake_and_compile(fused_op):
     weight_t_meta = torch.empty(16, 8, device="meta")
     y, v_next = fused_op(x_meta, v_meta, weight_t_meta, threads=128)
     assert y.shape == (4, 3, 8)
+    assert v_next.shape == v_meta.shape
+    y, v_next = fused_op(x_meta[0], v_meta, weight_t_meta, threads=128)
+    assert y.shape == (3, 8)
     assert v_next.shape == v_meta.shape
 
     x = torch.randn(2, 3, 16, device="cuda")

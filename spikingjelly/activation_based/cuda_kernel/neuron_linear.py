@@ -89,6 +89,7 @@ extern "C" __global__ void {kernel_name}(
     int n_group = blockIdx.x % n_groups;
     int tid = threadIdx.x;
 
+    // Output groups recompute neuron state to avoid materializing spikes.
     extern __shared__ unsigned char shared[];
     float* v = reinterpret_cast<float*>(shared);
     unsigned int* spike_masks = reinterpret_cast<unsigned int*>(
@@ -352,6 +353,14 @@ def _fake_outputs(x_seq, v_init, weight_t):
     torch._check(x_seq.dim() == 3)
     torch._check(v_init.dim() == 2)
     torch._check(weight_t.dim() == 2)
+    torch._check(
+        v_init.shape == x_seq.shape[1:],
+        lambda: "v_init must have shape [M, K]",
+    )
+    torch._check(
+        weight_t.shape[0] == x_seq.shape[2],
+        lambda: "weight_t must have shape [K, N]",
+    )
     return (
         x_seq.new_empty((x_seq.shape[0], x_seq.shape[1], weight_t.shape[1])),
         v_init.new_empty(v_init.shape),
@@ -638,6 +647,7 @@ def if_linear(
     """Run fused single- or multi-step IF followed by Linear.
 
     ``x`` is ``[M, K]`` or ``[T, M, K]``; ``weight_t`` is contiguous ``[K, N]``.
+    Cache a contiguous ``weight_t`` to avoid copying it on every call.
     Backward rematerializes spikes and supports first-order gradients only.
     """
     x_seq, v, weight_t, bias, surrogate_id, single_step = _prepare_inputs(
@@ -648,12 +658,12 @@ def if_linear(
         v,
         weight_t,
         bias,
-        v_threshold,
-        0.0 if v_reset is None else v_reset,
-        v_reset is None,
-        detach_reset,
-        surrogate_id,
-        threads,
+        v_threshold=v_threshold,
+        v_reset=0.0 if v_reset is None else v_reset,
+        soft_reset=v_reset is None,
+        detach_reset=detach_reset,
+        surrogate_id=surrogate_id,
+        threads=threads,
     )
     return (y_seq[0] if single_step else y_seq), v_out
 
@@ -675,6 +685,7 @@ def lif_linear(
     """Run fused single- or multi-step LIF followed by Linear.
 
     ``x`` is ``[M, K]`` or ``[T, M, K]``; ``weight_t`` is contiguous ``[K, N]``.
+    Cache a contiguous ``weight_t`` to avoid copying it on every call.
     Backward rematerializes spikes and supports first-order gradients only.
     """
     x_seq, v, weight_t, bias, surrogate_id, single_step = _prepare_inputs(
