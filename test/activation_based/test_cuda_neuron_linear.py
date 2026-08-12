@@ -200,11 +200,12 @@ def test_lif_linear_backward_recomputes_forward_spikes():
     torch.testing.assert_close(weight_t.grad[:, 0], y[0], rtol=0, atol=0)
 
 
-def test_lif_linear_fake_and_compile():
+@pytest.mark.parametrize("fused_op", [if_linear, lif_linear], ids=["if", "lif"])
+def test_neuron_linear_fake_and_compile(fused_op):
     x_meta = torch.empty(4, 3, 16, device="meta")
     v_meta = torch.empty(3, 16, device="meta")
     weight_t_meta = torch.empty(16, 8, device="meta")
-    y, v_next = lif_linear(x_meta, v_meta, weight_t_meta, threads=128)
+    y, v_next = fused_op(x_meta, v_meta, weight_t_meta, threads=128)
     assert y.shape == (4, 3, 8)
     assert v_next.shape == v_meta.shape
 
@@ -213,7 +214,7 @@ def test_lif_linear_fake_and_compile():
     weight_t = torch.randn(16, 8, device="cuda")
 
     def f(x, v, weight_t):
-        return lif_linear(x, v, weight_t, threads=128)
+        return fused_op(x, v, weight_t, threads=128)
 
     expected = f(x, v, weight_t)
     actual = torch.compile(f, fullgraph=True)(x, v, weight_t)

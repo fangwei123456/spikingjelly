@@ -25,18 +25,19 @@ except (ImportError, OSError) as e:
 __all__ = ["if_linear", "lif_linear"]
 
 
-_CUDA_SRC = r"""
-#define OUTPUTS_PER_THREAD {outputs_per_thread}
-#define IF_NEURON {if_neuron}
+_IF_CHARGE = r"""
+__device__ __forceinline__ float neuron_charge(float x, float v)
+{
+    return v + x;
+}
+"""
+
+_LIF_CHARGE = r"""
 #define DECAY_INPUT {decay_input}
-#define SOFT_RESET {soft_reset}
 
 __device__ __forceinline__ float neuron_charge(
     float x, float v, float r_tau, float v_reset)
 {{
-#if IF_NEURON
-    return v + x;
-#else
     float temp;
 #if SOFT_RESET
     temp = v;
@@ -49,10 +50,16 @@ __device__ __forceinline__ float neuron_charge(
     temp = x - r_tau * temp;
 #endif
     return temp + v;
-#endif
 }}
+"""
 
-__device__ __forceinline__ float lif_reset(
+_CUDA_TEMPLATE = r"""
+#define OUTPUTS_PER_THREAD {outputs_per_thread}
+#define SOFT_RESET {soft_reset}
+
+{charge_code}
+
+__device__ __forceinline__ float neuron_reset(
     float h, bool spike, float v_threshold, float v_reset)
 {{
 #if SOFT_RESET
@@ -62,7 +69,7 @@ __device__ __forceinline__ float lif_reset(
 #endif
 }}
 
-extern "C" __global__ void neuron_linear_kernel(
+extern "C" __global__ void {kernel_name}(
     const float* __restrict__ x_seq,
     const float* __restrict__ v_init,
     const float* __restrict__ weight_t,
@@ -70,7 +77,7 @@ extern "C" __global__ void neuron_linear_kernel(
     float* __restrict__ y_seq,
     float* __restrict__ v_out,
     int T, int M, int K, int N,
-    float r_tau, float v_threshold, float v_reset, int has_bias)
+    {charge_parameter}float v_threshold, float v_reset, int has_bias)
 {{
     int n_per_block = blockDim.x * OUTPUTS_PER_THREAD;
     int n_groups = (N + n_per_block - 1) / n_per_block;
@@ -100,9 +107,9 @@ extern "C" __global__ void neuron_linear_kernel(
             bool spike = false;
             if (k < K) {{
                 float h = neuron_charge(
-                    x_seq[(t * M + m) * K + k], v[k], r_tau, v_reset);
+                    x_seq[(t * M + m) * K + k], v[k]{charge_argument});
                 spike = h >= v_threshold;
-                v[k] = lif_reset(h, spike, v_threshold, v_reset);
+                v[k] = neuron_reset(h, spike, v_threshold, v_reset);
             }}
             unsigned int mask = __ballot_sync(0xffffffffu, spike);
             if ((tid & 31) == 0) spike_masks[tid >> 5] = mask;
@@ -140,36 +147,54 @@ extern "C" __global__ void neuron_linear_kernel(
 """
 
 
-_module_cache: dict[tuple[int, bool, bool, bool], object] = {}
-_kernel_cache: dict[tuple[int, bool, bool, bool], object] = {}
+_module_cache: dict[tuple, object] = {}
+_kernel_cache: dict[tuple, object] = {}
 _MAX_CUDA_ELEMENTS = 2**31 - 1
 
 
-def _get_kernel(
-    device: int,
-    if_neuron: bool,
-    decay_input: bool,
-    soft_reset: bool,
-):
-    module_key = (device, if_neuron, decay_input, soft_reset)
-    if module_key not in _module_cache:
-        source = _CUDA_SRC.format(
-            outputs_per_thread=4,
-            if_neuron=int(if_neuron),
-            decay_input=int(decay_input),
-            soft_reset=int(soft_reset),
-        )
+def _compile_kernel(device: int, key: tuple, source: str, kernel_name: str):
+    if key not in _module_cache:
         with cuda_utils.DeviceEnvironment(device):
-            _module_cache[module_key] = RawModule(
+            _module_cache[key] = RawModule(
                 code=source,
                 options=("--use_fast_math",),
             )
-    if module_key not in _kernel_cache:
+    if key not in _kernel_cache:
         with cuda_utils.DeviceEnvironment(device):
-            _kernel_cache[module_key] = _module_cache[module_key].get_function(
-                "neuron_linear_kernel"
-            )
-    return _kernel_cache[module_key]
+            _kernel_cache[key] = _module_cache[key].get_function(kernel_name)
+    return _kernel_cache[key]
+
+
+def _get_if_kernel(device: int, soft_reset: bool):
+    kernel_name = "if_linear_kernel"
+    key = (device, kernel_name, soft_reset)
+    if key in _kernel_cache:
+        return _kernel_cache[key]
+    source = _CUDA_TEMPLATE.format(
+        outputs_per_thread=4,
+        soft_reset=int(soft_reset),
+        charge_code=_IF_CHARGE,
+        kernel_name=kernel_name,
+        charge_parameter="",
+        charge_argument="",
+    )
+    return _compile_kernel(device, key, source, kernel_name)
+
+
+def _get_lif_kernel(device: int, decay_input: bool, soft_reset: bool):
+    kernel_name = "lif_linear_kernel"
+    key = (device, kernel_name, decay_input, soft_reset)
+    if key in _kernel_cache:
+        return _kernel_cache[key]
+    source = _CUDA_TEMPLATE.format(
+        outputs_per_thread=4,
+        soft_reset=int(soft_reset),
+        charge_code=_LIF_CHARGE.format(decay_input=int(decay_input)),
+        kernel_name=kernel_name,
+        charge_parameter="float r_tau, ",
+        charge_argument=", r_tau, v_reset",
+    )
+    return _compile_kernel(device, key, source, kernel_name)
 
 
 def _check_tensor(
@@ -192,22 +217,13 @@ def _check_tensor(
         raise ValueError(f"{name} exceeds the CUDA kernel element limit")
 
 
-@torch.library.custom_op("sj::cupy_neuron_linear_forward", mutates_args=())
-def _cupy_neuron_linear_forward(
+def _check_forward_inputs(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     weight_t: torch.Tensor,
     bias: Optional[torch.Tensor],
-    if_neuron: bool,
-    tau: float,
-    decay_input: bool,
-    v_threshold: float,
-    v_reset: float,
-    soft_reset: bool,
-    detach_reset: bool,
-    surrogate_id: int,
     threads: int,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[int, int, int, int, int, int]:
     if cupy is None:
         raise RuntimeError("cupy is required for fused CUDA neuron-Linear")
     _check_tensor(x_seq, "x_seq", 3)
@@ -225,8 +241,6 @@ def _cupy_neuron_linear_forward(
         raise ValueError("weight_t must have shape [K, N]")
     if bias is not None and bias.shape != (N,):
         raise ValueError("bias must have shape [N]")
-    if not if_neuron and tau <= 1.0:
-        raise ValueError("tau must be greater than 1")
     if threads not in (128, 256, 512):
         raise ValueError("threads must be 128, 256, or 512")
     if T * M * N > _MAX_CUDA_ELEMENTS:
@@ -239,8 +253,20 @@ def _cupy_neuron_linear_forward(
         raise ValueError(
             f"K={K} requires {shared_bytes} shared bytes, limit is {max_shared}"
         )
+    return T, M, K, N, device, shared_bytes
 
-    kernel = _get_kernel(device, if_neuron, decay_input, soft_reset)
+
+def _launch(
+    kernel,
+    x_seq: torch.Tensor,
+    v_init: torch.Tensor,
+    weight_t: torch.Tensor,
+    bias: Optional[torch.Tensor],
+    dimensions: tuple[int, int, int, int, int, int],
+    kernel_parameters: tuple,
+    threads: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    T, M, K, N, device, shared_bytes = dimensions
     y_seq = torch.empty((T, M, N), device=x_seq.device, dtype=torch.float32)
     v_out = torch.empty_like(v_init)
     bias_ptr = y_seq.data_ptr() if bias is None else bias.data_ptr()
@@ -257,9 +283,7 @@ def _cupy_neuron_linear_forward(
         np.int32(M),
         np.int32(K),
         np.int32(N),
-        np.float32(1.0 / tau),
-        np.float32(v_threshold),
-        np.float32(v_reset),
+        *kernel_parameters,
         np.int32(bias is not None),
     )
     with cuda_utils.DeviceEnvironment(device):
@@ -274,22 +298,65 @@ def _cupy_neuron_linear_forward(
     return y_seq, v_out
 
 
-@torch.library.register_fake("sj::cupy_neuron_linear_forward")
-def _cupy_neuron_linear_forward_fake(
-    x_seq,
-    v_init,
-    weight_t,
-    bias,
-    if_neuron,
-    tau,
-    decay_input,
-    v_threshold,
-    v_reset,
-    soft_reset,
-    detach_reset,
-    surrogate_id,
-    threads,
-):
+@torch.library.custom_op("sj::cupy_if_linear_forward", mutates_args=())
+def _cupy_if_linear_forward(
+    x_seq: torch.Tensor,
+    v_init: torch.Tensor,
+    weight_t: torch.Tensor,
+    bias: Optional[torch.Tensor],
+    v_threshold: float,
+    v_reset: float,
+    soft_reset: bool,
+    detach_reset: bool,
+    surrogate_id: int,
+    threads: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    dimensions = _check_forward_inputs(x_seq, v_init, weight_t, bias, threads)
+    kernel = _get_if_kernel(dimensions[4], soft_reset)
+    return _launch(
+        kernel,
+        x_seq,
+        v_init,
+        weight_t,
+        bias,
+        dimensions,
+        (np.float32(v_threshold), np.float32(v_reset)),
+        threads,
+    )
+
+
+@torch.library.custom_op("sj::cupy_lif_linear_forward", mutates_args=())
+def _cupy_lif_linear_forward(
+    x_seq: torch.Tensor,
+    v_init: torch.Tensor,
+    weight_t: torch.Tensor,
+    bias: Optional[torch.Tensor],
+    tau: float,
+    decay_input: bool,
+    v_threshold: float,
+    v_reset: float,
+    soft_reset: bool,
+    detach_reset: bool,
+    surrogate_id: int,
+    threads: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if tau <= 1.0:
+        raise ValueError("tau must be greater than 1")
+    dimensions = _check_forward_inputs(x_seq, v_init, weight_t, bias, threads)
+    kernel = _get_lif_kernel(dimensions[4], decay_input, soft_reset)
+    return _launch(
+        kernel,
+        x_seq,
+        v_init,
+        weight_t,
+        bias,
+        dimensions,
+        (np.float32(1.0 / tau), np.float32(v_threshold), np.float32(v_reset)),
+        threads,
+    )
+
+
+def _fake_outputs(x_seq, v_init, weight_t):
     torch._check(x_seq.dim() == 3)
     torch._check(v_init.dim() == 2)
     torch._check(weight_t.dim() == 2)
@@ -299,72 +366,156 @@ def _cupy_neuron_linear_forward_fake(
     )
 
 
-def _recompute_neuron(
+@torch.library.register_fake("sj::cupy_if_linear_forward")
+def _cupy_if_linear_forward_fake(
+    x_seq,
+    v_init,
+    weight_t,
+    bias,
+    v_threshold,
+    v_reset,
+    soft_reset,
+    detach_reset,
+    surrogate_id,
+    threads,
+):
+    return _fake_outputs(x_seq, v_init, weight_t)
+
+
+@torch.library.register_fake("sj::cupy_lif_linear_forward")
+def _cupy_lif_linear_forward_fake(
+    x_seq,
+    v_init,
+    weight_t,
+    bias,
+    tau,
+    decay_input,
+    v_threshold,
+    v_reset,
+    soft_reset,
+    detach_reset,
+    surrogate_id,
+    threads,
+):
+    return _fake_outputs(x_seq, v_init, weight_t)
+
+
+def _recompute_if(
     x_seq: torch.Tensor,
     v: torch.Tensor,
-    if_neuron: bool,
-    tau: float,
-    decay_input: bool,
-    v_threshold: float,
-    v_reset: Optional[float],
-    detach_reset: bool,
-    surrogate_function,
+    ctx,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     from .. import functional
 
-    if if_neuron and x_seq.shape[0] == 1:
+    if x_seq.shape[0] == 1:
         spike, v = functional.if_step_cupy(
             x_seq[0],
             v,
-            v_threshold,
-            v_reset,
-            surrogate_function,
-            detach_reset,
+            ctx.v_threshold,
+            ctx.v_reset,
+            ctx.surrogate_function,
+            ctx.detach_reset,
         )
         spike_seq = spike.unsqueeze(0)
-    elif if_neuron:
+    else:
         spike_seq, v, _ = functional.if_multi_step_cupy(
             x_seq,
             v,
-            v_threshold,
-            v_reset,
-            surrogate_function,
-            detach_reset,
+            ctx.v_threshold,
+            ctx.v_reset,
+            ctx.surrogate_function,
+            ctx.detach_reset,
         )
-    elif x_seq.shape[0] == 1:
+    return spike_seq, v
+
+
+def _recompute_lif(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    ctx,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    from .. import functional
+
+    if x_seq.shape[0] == 1:
         spike, v = functional.lif_step_cupy(
             x_seq[0],
             v,
-            tau,
-            decay_input,
-            v_threshold,
-            v_reset,
-            surrogate_function,
-            detach_reset,
+            ctx.tau,
+            ctx.decay_input,
+            ctx.v_threshold,
+            ctx.v_reset,
+            ctx.surrogate_function,
+            ctx.detach_reset,
         )
         spike_seq = spike.unsqueeze(0)
     else:
         spike_seq, v, _ = functional.lif_multi_step_cupy(
             x_seq,
             v,
-            tau,
-            decay_input,
-            v_threshold,
-            v_reset,
-            surrogate_function,
-            detach_reset,
+            ctx.tau,
+            ctx.decay_input,
+            ctx.v_threshold,
+            ctx.v_reset,
+            ctx.surrogate_function,
+            ctx.detach_reset,
         )
     return spike_seq, v
 
 
-def _setup_context(ctx, inputs, output):
+def _save_context(
+    ctx,
+    x_seq,
+    v_init,
+    weight_t,
+    bias,
+    v_threshold,
+    v_reset,
+    soft_reset,
+    detach_reset,
+    surrogate_id,
+):
+    ctx.save_for_backward(x_seq, v_init, weight_t, bias)
+    ctx.v_threshold = v_threshold
+    ctx.v_reset = None if soft_reset else v_reset
+    ctx.detach_reset = detach_reset
+    ctx.surrogate_function = cuda_utils.resolve_python_object(surrogate_id)
+
+
+def _setup_if_context(ctx, inputs, output):
     del output
     (
         x_seq,
         v_init,
         weight_t,
         bias,
-        if_neuron,
+        v_threshold,
+        v_reset,
+        soft_reset,
+        detach_reset,
+        surrogate_id,
+        _,
+    ) = inputs
+    _save_context(
+        ctx,
+        x_seq,
+        v_init,
+        weight_t,
+        bias,
+        v_threshold,
+        v_reset,
+        soft_reset,
+        detach_reset,
+        surrogate_id,
+    )
+
+
+def _setup_lif_context(ctx, inputs, output):
+    del output
+    (
+        x_seq,
+        v_init,
+        weight_t,
+        bias,
         tau,
         decay_input,
         v_threshold,
@@ -374,17 +525,23 @@ def _setup_context(ctx, inputs, output):
         surrogate_id,
         _,
     ) = inputs
-    ctx.save_for_backward(x_seq, v_init, weight_t, bias)
-    ctx.if_neuron = if_neuron
+    _save_context(
+        ctx,
+        x_seq,
+        v_init,
+        weight_t,
+        bias,
+        v_threshold,
+        v_reset,
+        soft_reset,
+        detach_reset,
+        surrogate_id,
+    )
     ctx.tau = tau
     ctx.decay_input = decay_input
-    ctx.v_threshold = v_threshold
-    ctx.v_reset = None if soft_reset else v_reset
-    ctx.detach_reset = detach_reset
-    ctx.surrogate_function = cuda_utils.resolve_python_object(surrogate_id)
 
 
-def _backward(ctx, grad_y, grad_v_out):
+def _linear_backward(ctx, grad_y, grad_v_out, recompute):
     x_seq, v_init, weight_t, bias = ctx.saved_tensors
     if grad_y is None:
         grad_y = torch.zeros(
@@ -398,17 +555,7 @@ def _backward(ctx, grad_y, grad_v_out):
     with torch.enable_grad():
         x = x_seq.detach().requires_grad_()
         v = v_init.detach().requires_grad_()
-        spike, v_out = _recompute_neuron(
-            x,
-            v,
-            ctx.if_neuron,
-            ctx.tau,
-            ctx.decay_input,
-            ctx.v_threshold,
-            ctx.v_reset,
-            ctx.detach_reset,
-            ctx.surrogate_function,
-        )
+        spike, v_out = recompute(x, v, ctx)
         grad_spike = torch.matmul(grad_y, weight_t.t())
         grad_x, grad_v = torch.autograd.grad(
             (spike, v_out), (x, v), (grad_spike, grad_v_out)
@@ -416,45 +563,45 @@ def _backward(ctx, grad_y, grad_v_out):
     K, N = weight_t.shape
     grad_w = torch.mm(spike.detach().reshape(-1, K).t(), grad_y.reshape(-1, N))
     grad_b = grad_y.reshape(-1, N).sum(0) if bias is not None else None
-    return (
-        grad_x,
-        grad_v,
-        grad_w,
-        grad_b,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
+    return grad_x, grad_v, grad_w, grad_b
+
+
+def _if_backward(ctx, grad_y, grad_v_out):
+    return _linear_backward(ctx, grad_y, grad_v_out, _recompute_if) + (None,) * 6
 
 
 torch.library.register_autograd(
-    "sj::cupy_neuron_linear_forward",
-    _backward,
-    setup_context=_setup_context,
+    "sj::cupy_if_linear_forward",
+    _if_backward,
+    setup_context=_setup_if_context,
 )
 
 
-def _neuron_linear(
+def _lif_backward(ctx, grad_y, grad_v_out):
+    return _linear_backward(ctx, grad_y, grad_v_out, _recompute_lif) + (None,) * 8
+
+
+torch.library.register_autograd(
+    "sj::cupy_lif_linear_forward",
+    _lif_backward,
+    setup_context=_setup_lif_context,
+)
+
+
+def _prepare_inputs(
     x: torch.Tensor,
     v: torch.Tensor,
     weight_t: torch.Tensor,
-    bias: Optional[torch.Tensor] = None,
-    *,
-    if_neuron: bool,
-    tau: float,
-    decay_input: bool,
-    v_threshold: float,
-    v_reset: Optional[float],
-    detach_reset: bool,
+    bias: Optional[torch.Tensor],
     surrogate_function,
-    threads: Literal[128, 256, 512],
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    Optional[torch.Tensor],
+    int,
+    bool,
+]:
     if x.dim() == 2:
         single_step = True
         x_seq = x.unsqueeze(0)
@@ -471,22 +618,17 @@ def _neuron_linear(
         or weight_t.requires_grad
         or (bias is not None and bias.requires_grad)
     )
-    y_seq, v_out = _cupy_neuron_linear_forward(
+    surrogate_id = (
+        cuda_utils.register_python_object(surrogate_function) if needs_backward else 0
+    )
+    return (
         x_seq.contiguous(),
         v.contiguous(),
         weight_t.contiguous(),
         None if bias is None else bias.contiguous(),
-        if_neuron,
-        tau,
-        decay_input,
-        v_threshold,
-        0.0 if v_reset is None else v_reset,
-        v_reset is None,
-        detach_reset,
-        cuda_utils.register_python_object(surrogate_function) if needs_backward else 0,
-        threads,
+        surrogate_id,
+        single_step,
     )
-    return (y_seq[0] if single_step else y_seq), v_out
 
 
 def if_linear(
@@ -506,20 +648,22 @@ def if_linear(
     ``x`` is ``[M, K]`` or ``[T, M, K]``; ``weight_t`` is contiguous ``[K, N]``.
     Backward rematerializes spikes and supports first-order gradients only.
     """
-    return _neuron_linear(
-        x,
+    x_seq, v, weight_t, bias, surrogate_id, single_step = _prepare_inputs(
+        x, v, weight_t, bias, surrogate_function
+    )
+    y_seq, v_out = _cupy_if_linear_forward(
+        x_seq,
         v,
         weight_t,
         bias,
-        if_neuron=True,
-        tau=2.0,
-        decay_input=False,
-        v_threshold=v_threshold,
-        v_reset=v_reset,
-        detach_reset=detach_reset,
-        surrogate_function=surrogate_function,
-        threads=threads,
+        v_threshold,
+        0.0 if v_reset is None else v_reset,
+        v_reset is None,
+        detach_reset,
+        surrogate_id,
+        threads,
     )
+    return (y_seq[0] if single_step else y_seq), v_out
 
 
 def lif_linear(
@@ -541,17 +685,21 @@ def lif_linear(
     ``x`` is ``[M, K]`` or ``[T, M, K]``; ``weight_t`` is contiguous ``[K, N]``.
     Backward rematerializes spikes and supports first-order gradients only.
     """
-    return _neuron_linear(
-        x,
+    x_seq, v, weight_t, bias, surrogate_id, single_step = _prepare_inputs(
+        x, v, weight_t, bias, surrogate_function
+    )
+    y_seq, v_out = _cupy_lif_linear_forward(
+        x_seq,
         v,
         weight_t,
         bias,
-        if_neuron=False,
         tau=tau,
         decay_input=decay_input,
         v_threshold=v_threshold,
-        v_reset=v_reset,
+        v_reset=0.0 if v_reset is None else v_reset,
+        soft_reset=v_reset is None,
         detach_reset=detach_reset,
-        surrogate_function=surrogate_function,
+        surrogate_id=surrogate_id,
         threads=threads,
     )
+    return (y_seq[0] if single_step else y_seq), v_out
