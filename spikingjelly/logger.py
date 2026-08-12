@@ -13,7 +13,6 @@ r"""SpikingJelly package-level logger.
 ``docs/source/APIs/spikingjelly.logger.rst``。
 
 :var logger: Loguru 全局 logger。
-:vartype logger: loguru.Logger
 
 ----
 
@@ -29,7 +28,6 @@ The module does not add or remove sinks. See ``docs/source/APIs/spikingjelly.log
 for configuration examples.
 
 :var logger: Loguru's global logger.
-:vartype logger: loguru.Logger
 """
 
 from loguru import logger
