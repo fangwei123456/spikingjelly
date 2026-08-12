@@ -3,12 +3,12 @@ from __future__ import annotations
 import math
 from typing import (
     Any,
+    Callable,
     Dict,
     Iterable,
     Optional,
     TYPE_CHECKING,
     Tuple,
-    Type,
     Union,
 )
 
@@ -20,7 +20,6 @@ from torch.nn.utils.fusion import fuse_conv_bn_eval
 from tqdm import tqdm
 
 from spikingjelly.activation_based import neuron
-from spikingjelly.activation_based.ann2snn.factories import NeuronFactory
 from spikingjelly.activation_based.ann2snn.modules import (
     ChannelVoltageScaler,
     VoltageHook,
@@ -273,7 +272,7 @@ class RateCodingRecipe(ConversionRecipe):
         pre_spike_maxpool: bool = False,
         half_threshold: bool = False,
         eps: float = 1e-6,
-        neuron_factory: Optional[NeuronFactory] = None,
+        neuron_factory: Optional[Callable[[float], nn.Module]] = None,
     ) -> None:
         r"""
         **API Language** - :ref:`中文 <RateCodingRecipe.__init__-cn>` | :ref:`English <RateCodingRecipe.__init__-en>`
@@ -312,8 +311,10 @@ class RateCodingRecipe(ConversionRecipe):
         :type half_threshold: bool
         :param eps: ``channel_wise=True`` 时的阈值数值下界。
         :type eps: float
-        :param neuron_factory: 脉冲神经元工厂。
-        :type neuron_factory: Optional[NeuronFactory]
+        :param neuron_factory: 接收当前层校准尺度并返回脉冲神经元模块的可调用对象。
+            ``None`` 时创建阈值为 ``1.0``、软复位的
+            :class:`~spikingjelly.activation_based.neuron.IFNode`。
+        :type neuron_factory: Optional[Callable[[float], torch.nn.Module]]
 
         ----
 
@@ -353,8 +354,11 @@ class RateCodingRecipe(ConversionRecipe):
         :type half_threshold: bool
         :param eps: Numeric lower bound for thresholds when ``channel_wise=True``.
         :type eps: float
-        :param neuron_factory: Spiking-neuron factory.
-        :type neuron_factory: Optional[NeuronFactory]
+        :param neuron_factory: Callable that receives the calibrated layer scale
+            and returns a spiking-neuron module. ``None`` creates an
+            :class:`~spikingjelly.activation_based.neuron.IFNode` with threshold
+            ``1.0`` and soft reset.
+        :type neuron_factory: Optional[Callable[[float], torch.nn.Module]]
         """
         self.dataloader = dataloader
         self.mode = mode
@@ -370,9 +374,7 @@ class RateCodingRecipe(ConversionRecipe):
                 "RateCodingRecipe(channel_wise=True, half_threshold=True) does not "
                 "support custom neuron_factory."
             )
-        self.neuron_factory = (
-            neuron_factory if neuron_factory is not None else NeuronFactory()
-        )
+        self.neuron_factory = neuron_factory
 
     def validate(self, converter: "Converter") -> None:
         if self.dataloader is None:
@@ -585,7 +587,11 @@ class RateCodingRecipe(ConversionRecipe):
         spike_leaf = hook_leaf.replace("voltage_hook_", "spiking_")
         prefix = f"{hook_parent}.{spike_leaf}" if hook_parent else spike_leaf
 
-        spiking_neuron = self.neuron_factory.create(scale=scale)
+        spiking_neuron = (
+            neuron.IFNode()
+            if self.neuron_factory is None
+            else self.neuron_factory(scale)
+        )
         neuron_threshold = getattr(spiking_neuron, "v_threshold", 1.0)
         if hasattr(neuron_threshold, "item"):
             if not hasattr(neuron_threshold, "numel") or neuron_threshold.numel() == 1:
@@ -638,7 +644,11 @@ class RateCodingRecipe(ConversionRecipe):
             neuron_threshold = 1.0
             spiking_neuron = neuron.HalfThresholdIFNode()
         else:
-            spiking_neuron = self.neuron_factory.create(scale=1.0)
+            spiking_neuron = (
+                neuron.IFNode()
+                if self.neuron_factory is None
+                else self.neuron_factory(1.0)
+            )
             neuron_threshold = getattr(spiking_neuron, "v_threshold", 1.0)
             if hasattr(neuron_threshold, "item"):
                 if (

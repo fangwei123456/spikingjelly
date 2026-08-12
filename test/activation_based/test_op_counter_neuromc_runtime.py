@@ -54,6 +54,12 @@ def test_neuromc_runtime_report_constructor_remains_backward_compatible():
     assert other.energy_by_stage == {}
     assert other.warnings == []
 
+    source = {"forward": 2.0}
+    report = NeuroMCRuntimeEnergyReport(energy_by_stage=source, warnings=None)
+    source["forward"] = 3.0
+    assert report.energy_by_stage == {"forward": 2.0}
+    assert report.warnings == []
+
 
 def test_neuromc_runtime_report_preserves_legacy_positional_prefix():
     report = NeuroMCRuntimeEnergyReport(
@@ -818,7 +824,7 @@ def test_neuromc_exact_ann_forward_input_is_supported():
 
 
 def test_neuromc_exact_memory_config_api():
-    cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1()
+    cfg = op_counter.MemoryHierarchyConfig()
     cfg.validate()
     assert cfg.technology_nm == 32
     assert "dram" in cfg.memory_instances
@@ -1009,13 +1015,13 @@ def test_neuromc_exact_sgd_optimizer_counts_mixed_param_groups():
 
 
 def test_neuromc_memory_residency_accepts_config():
-    cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1()
+    cfg = op_counter.MemoryHierarchyConfig()
     counter = NeuroMCMemoryResidencyCounter(config=cfg)
     assert isinstance(counter, MemoryResidencyCounter)
 
 
-def test_neuromc_like_v1_config_validates():
-    cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1()
+def test_neuromc_default_config_validates():
+    cfg = op_counter.MemoryHierarchyConfig()
     cfg.validate()
 
 

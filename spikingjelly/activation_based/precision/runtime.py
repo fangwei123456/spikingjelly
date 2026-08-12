@@ -5,10 +5,6 @@ from .config import PrecisionConfig
 from .policy import BF16Policy, FP16Policy, FP32Policy
 
 
-def normalize_precision_mode(config: PrecisionConfig | str | dict | None) -> str:
-    return PrecisionConfig.from_any(config).mode.lower()
-
-
 def resolve_precision_policy(config: PrecisionConfig | str | dict | None):
     cfg = PrecisionConfig.from_any(config)
     mode = cfg.mode.lower()

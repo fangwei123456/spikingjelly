@@ -149,20 +149,14 @@ class SpikeSimEnergyProfiler:
             [self._counter],
             strict=False,
         )
-        self._active = False
         self._warnings: list[str] = []
 
     def __enter__(self):
         self._dispatch_mode.__enter__()
-        self._active = True
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        self._active = False
         return self._dispatch_mode.__exit__(exc_type, exc, tb)
-
-    def add_warnings(self, messages: list[str]) -> None:
-        self._warnings.extend(messages)
 
     def get_report(self) -> SpikeSimEnergyReport:
         r"""
@@ -367,8 +361,8 @@ def estimate_spikesim_event_energy(
             if strict:
                 raise ValueError(message)
             neuron_warnings.append(message)
+    profiler._warnings = neuron_warnings
     with profiler:
-        profiler.add_warnings(neuron_warnings)
         with torch.no_grad():
             _ = call_model(model, inputs)
     report = profiler.get_report()

@@ -451,8 +451,9 @@ FX 路径固定步骤顺序为 ``validate`` -> ``before_trace`` -> ``after_trace
 
 ``RateCodingRecipe`` 直接匹配类型严格为 ``nn.ReLU`` 的模块，使用
 ``VoltageHook`` 完成校准，然后将每个激活替换为
-``VoltageScaler(1 / s) -> IFNode -> VoltageScaler(s)``。``NeuronFactory``
-是唯一保留的构造选项。不同激活或不同转换算法应实现为独立 recipe。
+``VoltageScaler(1 / s) -> IFNode -> VoltageScaler(s)``。若要自定义神经元构造，
+传入 ``neuron_factory=lambda scale: ...``；该可调用对象会收到当前层的校准尺度。
+不同激活或不同转换算法应实现为独立 recipe。
 
 不同转换模式的对比
 ^^^^^^^^^^^^^^^^^^

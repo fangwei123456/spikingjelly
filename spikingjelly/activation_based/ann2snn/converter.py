@@ -1,7 +1,6 @@
 import threading
 import time
 import types
-import warnings
 from typing import Optional, Union
 
 import torch
@@ -121,14 +120,6 @@ class FXConverter:
                 "FXConverter/Converter requires an FXConversionRecipe. "
                 "Use ModuleConverter for ModuleConversionRecipe instances."
             )
-        if recipe == "transformer_spike_equivalent":
-            warnings.warn(
-                "The 'transformer_spike_equivalent' recipe string is deprecated; "
-                "use 'transformer_td_equivalent' instead.",
-                DeprecationWarning,
-                stacklevel=3,
-            )
-            return TransformerTDEquivalentRecipe()
         if recipe == "transformer_td_equivalent":
             return TransformerTDEquivalentRecipe()
         if recipe == "rate_coding":

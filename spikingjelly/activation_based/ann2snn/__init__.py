@@ -9,8 +9,8 @@ r"""
 
 ANN 到 SNN 的转换模块。提供 FX graph 路径的 :class:`FXConverter` /
 :class:`FXConversionRecipe`、module tree 路径的 :class:`ModuleConverter` /
-:class:`ModuleConversionRecipe`、可配置的 :class:`NeuronFactory`，以及
-``download_url`` 工具函数。兼容名 :class:`Converter` 等价于
+:class:`ModuleConversionRecipe`，以及 ``download_url`` 工具函数。兼容名
+:class:`Converter` 等价于
 :class:`FXConverter`，:class:`ConversionRecipe` 等价于
 :class:`FXConversionRecipe`。
 
@@ -22,15 +22,14 @@ ANN 到 SNN 的转换模块。提供 FX graph 路径的 :class:`FXConverter` /
 
 ANN-to-SNN conversion module. Provides the FX graph :class:`FXConverter` /
 :class:`FXConversionRecipe`, the module-tree :class:`ModuleConverter` /
-:class:`ModuleConversionRecipe`, the configurable :class:`NeuronFactory`, and a
-``download_url`` helper for fetching pretrained models. The compatibility name
+:class:`ModuleConversionRecipe`, and a ``download_url`` helper for fetching
+pretrained models. The compatibility name
 :class:`Converter` is equivalent to :class:`FXConverter`, and
 :class:`ConversionRecipe` is equivalent to :class:`FXConversionRecipe`.
 """
 
 from .converter import Converter, FXConverter, ModuleConverter
 from .delay import estimate_delay_start
-from .factories import NeuronFactory
 from .modules import ChannelVoltageScaler
 from .qcfs import SignedQCFSSequenceEncoder
 from .recipes import (
@@ -71,5 +70,4 @@ __all__ = [
     "SignedQCFSSequenceEncoder",
     "estimate_delay_start",
     "download_url",
-    "NeuronFactory",
 ]

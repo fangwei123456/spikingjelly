@@ -364,11 +364,14 @@ ANN-to-SNN API Changes
 
 Module: ``spikingjelly.activation_based.ann2snn``.
 
-- Removed the generic ``ActivationRule``, ``HookFactory``, ``ReLURule``, and
-  ``ThresholdOptimizer`` extension points and the corresponding
-  ``RateCodingRecipe`` constructor arguments. Custom graph conversion behavior
-  should be implemented as an ``FXConversionRecipe``; ``NeuronFactory`` remains
-  available for configuring neuron construction.
+- Removed the generic ``ActivationRule``, ``HookFactory``, ``ReLURule``,
+  ``ThresholdOptimizer``, and ``NeuronFactory`` extension points and the
+  corresponding ``RateCodingRecipe`` constructor arguments. Custom graph
+  conversion behavior should be implemented as an ``FXConversionRecipe``;
+  custom neuron construction now uses a scale-aware callable passed as
+  ``RateCodingRecipe(neuron_factory=...)``.
+- Removed the unreleased ``"transformer_spike_equivalent"`` recipe string;
+  use ``"transformer_td_equivalent"``.
 - Removed the no-op ``strict`` argument from ``SpikeZIPQANNRecipe``; it only
   accepted the default value and did not select another behavior.
 
@@ -417,6 +420,12 @@ Module: ``spikingjelly.activation_based.op_counter``.
 - Removed stage-level aggregation and
   ``MemoryResidencyCounter.get_stage_level_bits()``. Use the level- and
   operation-level residency methods for current measurements.
+- ``MemoryHierarchyConfig`` now represents the single supported NeuroMC v1
+  hierarchy directly. Construct it with ``MemoryHierarchyConfig()`` and use
+  ``dataclasses.replace()`` for modified copies; the redundant
+  ``neuromc_like_v1()`` and ``copy()`` methods and configurable ``preset_name`` /
+  ``technology_nm`` constructor fields were removed. Reports retain the
+  ``"neuromc_like_v1"`` preset name.
 
 Precision API Changes
 ^^^^^^^^^^^^^^^^^^^^^

@@ -61,16 +61,12 @@ historical name ``ConversionRecipe`` is a compatibility alias for
    :undoc-members:
    :show-inheritance:
 
-Rate-Coding Factory
+Rate-Coding Neurons
 +++++++++++++++++++
 
-``NeuronFactory`` customizes the neuron created by ``RateCodingRecipe``. The
-recipe itself owns ReLU matching, calibration, and graph replacement.
-
-.. automodule:: spikingjelly.activation_based.ann2snn.factories
-   :members:
-   :undoc-members:
-   :show-inheritance:
+``RateCodingRecipe.neuron_factory`` accepts a callable from the calibrated
+layer scale to a spiking-neuron module. Leaving it as ``None`` creates the
+standard ``IFNode`` directly.
 
 Stateful Operators and Runtime Modules
 ++++++++++++++++++++++++++++++++++++++

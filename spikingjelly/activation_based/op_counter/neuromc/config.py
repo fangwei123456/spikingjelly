@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 __all__ = ["MemoryInstanceSpec", "MemoryHierarchyConfig"]
 
@@ -134,11 +135,8 @@ class MemoryHierarchyConfig:
 
     * **中文**
 
-    NeuroMC v1 硬件预设配置类。
-
-    :param preset_name: 预设名称
-    :type preset_name: str
-    :param technology_nm: 工艺节点（纳米）
+    NeuroMC v1 硬件预设配置。``preset_name`` 和 ``technology_nm`` 是固定的
+    报告元数据，不是可配置项。
 
     ----
 
@@ -146,11 +144,12 @@ class MemoryHierarchyConfig:
 
     * **English**
 
-    MemoryHierarchyConfig class
+    NeuroMC v1 hardware constants and memory hierarchy. ``preset_name`` and
+    ``technology_nm`` are fixed report metadata rather than configuration knobs.
     """
 
-    preset_name: str = "neuromc_like_v1"
-    technology_nm: int = 32
+    preset_name: ClassVar[str] = "neuromc_like_v1"
+    technology_nm: ClassVar[int] = 32
     level_order: tuple[str, str, str, str] = ("dram", "sram", "reg", "noc")
     memory_instances: dict[str, MemoryInstanceSpec] = field(
         default_factory=lambda: dict(_MEMORY_INSTANCES)
@@ -159,36 +158,7 @@ class MemoryHierarchyConfig:
     zero_noc_in_paper_energy: bool = True
     zero_sram_high_directions: bool = True
 
-    @classmethod
-    def neuromc_like_v1(cls):
-        return cls(
-            preset_name="neuromc_like_v1",
-            technology_nm=32,
-            level_order=("dram", "sram", "reg", "noc"),
-            memory_instances=dict(_MEMORY_INSTANCES),
-            zero_dram_in_paper_energy=True,
-            zero_noc_in_paper_energy=True,
-            zero_sram_high_directions=True,
-        )
-
-    def copy(self):
-        return MemoryHierarchyConfig(
-            preset_name=self.preset_name,
-            technology_nm=self.technology_nm,
-            level_order=tuple(self.level_order),
-            memory_instances=dict(self.memory_instances),
-            zero_dram_in_paper_energy=self.zero_dram_in_paper_energy,
-            zero_noc_in_paper_energy=self.zero_noc_in_paper_energy,
-            zero_sram_high_directions=self.zero_sram_high_directions,
-        )
-
     def validate(self):
-        if self.preset_name != "neuromc_like_v1":
-            raise ValueError(
-                f"Only preset_name='neuromc_like_v1' is supported, got {self.preset_name}."
-            )
-        if self.technology_nm != 32:
-            raise ValueError("Exact NeuroMC v1 only supports 32nm hardware constants.")
         required = {
             "reg_1b",
             "reg_16b",

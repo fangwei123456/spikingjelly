@@ -419,8 +419,9 @@ Rate-coding implementation
 
 ``Converter`` directly matches exact ``nn.ReLU`` modules, calibrates them with
 ``VoltageHook``, and replaces each activation with
-``VoltageScaler(1 / s) -> IFNode -> VoltageScaler(s)``. ``NeuronFactory`` is
-the only construction option. A different activation or conversion algorithm
+``VoltageScaler(1 / s) -> IFNode -> VoltageScaler(s)``. To customize neuron
+construction, pass ``neuron_factory=lambda scale: ...``; the callable receives
+the calibrated layer scale. A different activation or conversion algorithm
 should be implemented as a separate recipe.
 
 Comparison of different converting modes

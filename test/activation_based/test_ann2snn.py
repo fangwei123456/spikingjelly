@@ -23,7 +23,6 @@ from spikingjelly.activation_based.ann2snn import (
     LocalThresholdBalancingRecipe,
     ModuleConversionRecipe,
     ModuleConverter,
-    NeuronFactory,
     RateCodingRecipe,
     SpikeZIPTFQANNRecipe,
     STATransformerRecipe,
@@ -886,7 +885,6 @@ class TestPublicExports:
             "ChannelVoltageScaler",
             "estimate_delay_start",
             "download_url",
-            "NeuronFactory",
         }
 
     def test_recipe_api_is_importable(self):
@@ -943,7 +941,7 @@ class TestConverterRecipes:
             {"mode": "Max"},
             {"fuse_flag": False},
             {"rules": []},
-            {"neuron_factory": NeuronFactory()},
+            {"neuron_factory": lambda scale: neuron.IFNode()},
         ],
     )
     def test_converter_rejects_algorithm_parameters(self, kwargs):
@@ -952,11 +950,6 @@ class TestConverterRecipes:
 
     def test_transformer_recipe_does_not_require_dataloader(self):
         converter = Converter(recipe="transformer_td_equivalent")
-        assert isinstance(converter.recipe, TransformerTDEquivalentRecipe)
-
-    def test_transformer_spike_equivalent_string_is_compat_alias(self):
-        with pytest.warns(DeprecationWarning, match="transformer_spike_equivalent"):
-            converter = Converter(recipe="transformer_spike_equivalent")
         assert isinstance(converter.recipe, TransformerTDEquivalentRecipe)
 
     def test_rate_coding_recipe_name_requires_recipe_object(self):
@@ -1213,47 +1206,6 @@ class TestConverterRecipes:
         assert isinstance(modules["fc0"], TDLinear)
         assert isinstance(modules["act"], TDGELU)
         assert isinstance(modules["fc1"], TDLinear)
-
-
-class TestNeuronFactory:
-    def test_default_creates_ifnode(self):
-        factory = NeuronFactory()
-        n = factory.create(scale=5.0)
-        assert isinstance(n, neuron.IFNode)
-        assert n.v_threshold == 1.0
-        assert n.v_reset is None
-
-    def test_custom_threshold(self):
-        factory = NeuronFactory(v_threshold=2.0)
-        n = factory.create(scale=5.0)
-        assert n.v_threshold == 2.0
-
-    def test_custom_neuron_type(self):
-        factory = NeuronFactory(neuron_type=neuron.LIFNode, tau=2.0)
-        n = factory.create(scale=1.0)
-        assert isinstance(n, neuron.LIFNode)
-
-    def test_invalid_neuron_type_raises(self):
-        with pytest.raises(TypeError, match="nn.Module subclass"):
-            NeuronFactory(neuron_type=object)
-
-    def test_invalid_threshold_raises(self):
-        with pytest.raises(ValueError, match="positive"):
-            NeuronFactory(v_threshold=0.0)
-        with pytest.raises(ValueError, match="finite"):
-            NeuronFactory(v_threshold=float("inf"))
-
-    def test_invalid_threshold_type_raises(self):
-        with pytest.raises(TypeError, match="real number"):
-            NeuronFactory(v_threshold="1.0")
-
-    def test_invalid_v_reset_raises(self):
-        factory = NeuronFactory(v_reset=-1.0)
-        assert factory.create(scale=1.0).v_reset == -1.0
-        with pytest.raises(ValueError, match="finite"):
-            NeuronFactory(v_reset=float("nan"))
-        with pytest.raises(TypeError, match="v_reset"):
-            NeuronFactory(v_reset="0.0")
 
 
 class TestConverterBackwardCompat:
@@ -1971,11 +1923,18 @@ class TestRateCodingConversion:
     def test_custom_neuron_factory(self):
         model = SimpleCNN()
         model.eval()
+        scales = []
+
+        def create_neuron(scale):
+            scales.append(scale)
+            return neuron.IFNode(v_threshold=2.0)
+
         snn = _rate_converter(
-            neuron_factory=NeuronFactory(v_threshold=2.0),
+            neuron_factory=create_neuron,
             fuse_flag=False,
         ).convert(model)
 
+        assert scales and scales[0] > 0.0
         if_nodes = [m for m in snn.modules() if isinstance(m, neuron.IFNode)]
         assert len(if_nodes) == 1
         assert if_nodes[0].v_threshold == 2.0
@@ -2805,7 +2764,7 @@ class TestChannelWiseRateCodingRecipe:
                 dataloader=[],
                 channel_wise=True,
                 half_threshold=True,
-                neuron_factory=NeuronFactory(),
+                neuron_factory=lambda scale: neuron.IFNode(),
             )
 
 

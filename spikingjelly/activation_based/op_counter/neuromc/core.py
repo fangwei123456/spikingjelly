@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict, deque
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from math import prod
 from typing import Any, Callable, Optional
 
@@ -136,8 +136,107 @@ _AUXILIARY_ATEN_OPS = {
 }
 
 
-@dataclass(init=False)
+@dataclass
 class NeuroMCRuntimeEnergyReport:
+    r"""
+    **API Language** - :ref:`中文 <NeuroMCRuntimeEnergyReport-cn>` | :ref:`English <NeuroMCRuntimeEnergyReport-en>`
+
+    ----
+
+    .. _NeuroMCRuntimeEnergyReport-cn:
+
+    * **中文**
+
+    NeuroMC 运行时能耗报告。标量字段记录总能耗及计算、内存细分；字典和列表
+    字段记录阶段、算子、硬件映射和警告。传入的可变容器会浅复制，传入 ``None``
+    等价于空容器。
+
+    :param energy_total_pj: 总能耗，单位为 pJ。
+    :type energy_total_pj: float
+    :param energy_compute_pj: 总计算能耗，单位为 pJ。
+    :type energy_compute_pj: float
+    :param energy_memory_pj: 总内存能耗，单位为 pJ。
+    :type energy_memory_pj: float
+    :param energy_by_stage: 各执行阶段的能耗。
+    :type energy_by_stage: dict[str, float]
+    :param energy_by_op: 各算子类型的能耗。
+    :type energy_by_op: dict[str, float]
+    :param primitive_counts: 原始操作计数。
+    :type primitive_counts: dict[str, Any]
+    :param memory_bits_by_level: 各内存层级的访问位数。
+    :type memory_bits_by_level: dict[str, Any]
+    :param warnings: 分析期间产生的警告。
+    :type warnings: list[str]
+    :param energy_mac_pj: MAC 操作能耗，单位为 pJ。
+    :type energy_mac_pj: float
+    :param energy_base_memory_pj: 基础内存能耗，单位为 pJ。
+    :type energy_base_memory_pj: float
+    :param energy_extra_memory_pj: 额外内存能耗，单位为 pJ。
+    :type energy_extra_memory_pj: float
+    :param energy_extra_compute_pj: 额外计算能耗，单位为 pJ。
+    :type energy_extra_compute_pj: float
+    :param energy_by_core_type: 各核心类型的能耗。
+    :type energy_by_core_type: dict[str, float]
+    :param energy_by_process_key: 各处理路径的能耗。
+    :type energy_by_process_key: dict[str, float]
+    :param energy_by_memory_level_dir: 各内存层级和方向的能耗。
+    :type energy_by_memory_level_dir: dict[str, dict[str, float]]
+    :param counts_by_core_type: 各核心类型的操作计数。
+    :type counts_by_core_type: dict[str, dict[str, int]]
+    :param counts_by_process_key: 各处理路径的操作计数。
+    :type counts_by_process_key: dict[str, dict[str, int]]
+    :param mapping_summary: 硬件映射摘要。
+    :type mapping_summary: list[dict[str, Any]]
+
+    ----
+
+    .. _NeuroMCRuntimeEnergyReport-en:
+
+    * **English**
+
+    NeuroMC runtime energy report. Scalar fields store total, compute, and
+    memory energy; dictionary and list fields store stage, operation, hardware
+    mapping, and warning details. Mutable inputs are shallow-copied, and
+    ``None`` is treated as an empty container.
+
+    :param energy_total_pj: Total energy in pJ.
+    :type energy_total_pj: float
+    :param energy_compute_pj: Total compute energy in pJ.
+    :type energy_compute_pj: float
+    :param energy_memory_pj: Total memory energy in pJ.
+    :type energy_memory_pj: float
+    :param energy_by_stage: Energy by execution stage.
+    :type energy_by_stage: dict[str, float]
+    :param energy_by_op: Energy by operation type.
+    :type energy_by_op: dict[str, float]
+    :param primitive_counts: Raw primitive operation counts.
+    :type primitive_counts: dict[str, Any]
+    :param memory_bits_by_level: Memory access bits by hierarchy level.
+    :type memory_bits_by_level: dict[str, Any]
+    :param warnings: Warnings generated during profiling.
+    :type warnings: list[str]
+    :param energy_mac_pj: MAC operation energy in pJ.
+    :type energy_mac_pj: float
+    :param energy_base_memory_pj: Base memory energy in pJ.
+    :type energy_base_memory_pj: float
+    :param energy_extra_memory_pj: Extra memory energy in pJ.
+    :type energy_extra_memory_pj: float
+    :param energy_extra_compute_pj: Extra compute energy in pJ.
+    :type energy_extra_compute_pj: float
+    :param energy_by_core_type: Energy by core type.
+    :type energy_by_core_type: dict[str, float]
+    :param energy_by_process_key: Energy by processing path.
+    :type energy_by_process_key: dict[str, float]
+    :param energy_by_memory_level_dir: Energy by memory level and direction.
+    :type energy_by_memory_level_dir: dict[str, dict[str, float]]
+    :param counts_by_core_type: Operation counts by core type.
+    :type counts_by_core_type: dict[str, dict[str, int]]
+    :param counts_by_process_key: Operation counts by processing path.
+    :type counts_by_process_key: dict[str, dict[str, int]]
+    :param mapping_summary: Hardware mapping summary.
+    :type mapping_summary: list[dict[str, Any]]
+    """
+
     energy_total_pj: float = 0.0
     energy_compute_pj: float = 0.0
     energy_memory_pj: float = 0.0
@@ -159,126 +258,21 @@ class NeuroMCRuntimeEnergyReport:
     counts_by_process_key: dict[str, dict[str, int]] = field(default_factory=dict)
     mapping_summary: list[dict[str, Any]] = field(default_factory=list)
 
-    def __init__(
-        self,
-        energy_total_pj: float = 0.0,
-        energy_compute_pj: float = 0.0,
-        energy_memory_pj: float = 0.0,
-        energy_by_stage: Optional[dict[str, float]] = None,
-        energy_by_op: Optional[dict[str, float]] = None,
-        primitive_counts: Optional[dict[str, Any]] = None,
-        memory_bits_by_level: Optional[dict[str, Any]] = None,
-        warnings: Optional[list[str]] = None,
-        energy_mac_pj: float = 0.0,
-        energy_base_memory_pj: float = 0.0,
-        energy_extra_memory_pj: float = 0.0,
-        energy_extra_compute_pj: float = 0.0,
-        energy_by_core_type: Optional[dict[str, float]] = None,
-        energy_by_process_key: Optional[dict[str, float]] = None,
-        energy_by_memory_level_dir: Optional[dict[str, dict[str, float]]] = None,
-        counts_by_core_type: Optional[dict[str, dict[str, int]]] = None,
-        counts_by_process_key: Optional[dict[str, dict[str, int]]] = None,
-        mapping_summary: Optional[list[dict[str, Any]]] = None,
-    ):
-        """
-        Energy profiling report generated by the NeuroMC framework.
-        **API Language** - :ref:`中文 <NeuroMCRuntimeEnergyReport-cn>` | :ref:`English <NeuroMCRuntimeEnergyReport-en>`
-
-        ----
-
-        .. _NeuroMCRuntimeEnergyReport-cn:
-
-        * **中文**
-
-        NeuroMC 运行时能耗报告数据类。
-
-        记录一次能耗分析会话的完整结果，包括总能耗、计算能耗、内存能耗、
-        各阶段能耗分解、各算子类型的能耗分布以及内存访问位宽等详细信息。
-        可通过 :meth:`~NeuroMCRuntimeEnergyReport.summary` 方法获取
-        关键指标的字符串摘要，便于快速查看分析结果。
-
-        :param energy_total_pj: Total energy consumption in picojoules
-        :type energy_total_pj: float
-        :param energy_compute_pj: Total compute energy in picojoules
-        :type energy_compute_pj: float
-        :param energy_memory_pj: Total memory access energy in picojoules
-        :type energy_memory_pj: float
-        :param energy_by_stage: Energy breakdown by execution stage
-        :type energy_by_stage: ``dict[str, float]``
-        :param energy_by_op: Energy breakdown by operation type
-        :type energy_by_op: ``dict[str, float]``
-        :param primitive_counts: Raw primitive operation counts
-        :type primitive_counts: ``dict[str, Any]``
-        :param memory_bits_by_level: Memory access bits by hierarchy level
-        :type memory_bits_by_level: ``dict[str, Any]``
-        :param warnings: List of warnings generated during profiling
-        :type warnings: ``list[str]``
-        :param energy_mac_pj: Energy of MAC operations in picojoules
-        :type energy_mac_pj: float
-        :param energy_base_memory_pj: Base memory energy in picojoules
-        :type energy_base_memory_pj: float
-        :param energy_extra_memory_pj: Extra memory energy in picojoules
-        :type energy_extra_memory_pj: float
-        :param energy_extra_compute_pj: Extra compute energy in picojoules
-        :type energy_extra_compute_pj: float
-
-        ----
-
-        .. _NeuroMCRuntimeEnergyReport-en:
-
-        * **English**
-
-        Data class for energy profiling report generated by the NeuroMC framework.
-
-        Captures the complete results of an energy analysis session, including total energy,
-        compute energy, memory energy, breakdowns by execution stage and operation type,
-        as well as memory access bitwidths and other detailed information.
-        A string summary of key metrics can be obtained via the
-        :meth:`~NeuroMCRuntimeEnergyReport.summary` method for quick review of the analysis results.
-
-        :param energy_total_pj: Total energy consumption in picojoules
-        :param energy_compute_pj: Total compute energy in picojoules
-        :param energy_memory_pj: Total memory access energy in picojoules
-        :param energy_by_stage: Energy breakdown by execution stage
-        :param energy_by_op: Energy breakdown by operation type
-        :param primitive_counts: Raw primitive operation counts
-        :param memory_bits_by_level: Memory access bits by hierarchy level
-        :param warnings: List of warnings generated during profiling
-        :param energy_mac_pj: Energy of MAC operations in picojoules
-        :param energy_base_memory_pj: Base memory energy in picojoules
-        :param energy_extra_memory_pj: Extra memory energy in picojoules
-        :param energy_extra_compute_pj: Extra compute energy in picojoules
-        :type energy_total_pj: float
-        :type energy_compute_pj: float
-        :type energy_memory_pj: float
-        :type energy_by_stage: ``dict[str, float]``
-        :type energy_by_op: ``dict[str, float]``
-        :type primitive_counts: ``dict[str, Any]``
-        :type memory_bits_by_level: ``dict[str, Any]``
-        :type warnings: ``list[str]``
-        :type energy_mac_pj: float
-        :type energy_base_memory_pj: float
-        :type energy_extra_memory_pj: float
-        :type energy_extra_compute_pj: float
-        """
-        self.energy_total_pj = energy_total_pj
-        self.energy_compute_pj = energy_compute_pj
-        self.energy_memory_pj = energy_memory_pj
-        self.energy_by_stage = dict(energy_by_stage or {})
-        self.energy_by_op = dict(energy_by_op or {})
-        self.primitive_counts = dict(primitive_counts or {})
-        self.memory_bits_by_level = dict(memory_bits_by_level or {})
-        self.warnings = list(warnings or [])
-        self.energy_mac_pj = energy_mac_pj
-        self.energy_base_memory_pj = energy_base_memory_pj
-        self.energy_extra_memory_pj = energy_extra_memory_pj
-        self.energy_extra_compute_pj = energy_extra_compute_pj
-        self.energy_by_core_type = dict(energy_by_core_type or {})
-        self.energy_by_process_key = dict(energy_by_process_key or {})
-        self.energy_by_memory_level_dir = dict(energy_by_memory_level_dir or {})
-        self.counts_by_core_type = dict(counts_by_core_type or {})
-        self.counts_by_process_key = dict(counts_by_process_key or {})
-        self.mapping_summary = list(mapping_summary or [])
+    def __post_init__(self) -> None:
+        for name in (
+            "energy_by_stage",
+            "energy_by_op",
+            "primitive_counts",
+            "memory_bits_by_level",
+            "energy_by_core_type",
+            "energy_by_process_key",
+            "energy_by_memory_level_dir",
+            "counts_by_core_type",
+            "counts_by_process_key",
+        ):
+            setattr(self, name, dict(getattr(self, name) or {}))
+        self.warnings = list(self.warnings or [])
+        self.mapping_summary = list(self.mapping_summary or [])
 
 
 @dataclass
@@ -516,7 +510,10 @@ class NeuroMCEnergyProfiler:
                 f"Supported: {sorted(_ALLOWED_CORE_TYPES)}."
             )
         self.core_type = core_type
-        self.memory_config = memory_config or MemoryHierarchyConfig.neuromc_like_v1()
+        config = memory_config or MemoryHierarchyConfig()
+        self.memory_config = replace(
+            config, memory_instances=dict(config.memory_instances)
+        )
         self.memory_config.validate()
         self.strict = strict
         self.extra_ignore_modules = list(extra_ignore_modules or [])
@@ -2200,7 +2197,7 @@ def estimate_neuromc_runtime_energy(
     """
     profiler = NeuroMCEnergyProfiler(
         core_type=core_type,
-        memory_config=(memory_config or MemoryHierarchyConfig.neuromc_like_v1()).copy(),
+        memory_config=memory_config,
         strict=strict,
         extra_ignore_modules=extra_ignore_modules,
     )
