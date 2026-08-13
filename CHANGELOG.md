@@ -9,6 +9,8 @@ and the archived documentation linked from the project README.
 
 ## Unreleased
 
+## 2.0.0.dev1 - 2026-08-14
+
 ### Features
 
 #### Package Configuration
