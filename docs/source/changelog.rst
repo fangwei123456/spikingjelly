@@ -18,6 +18,16 @@ Unreleased
 Features
 ~~~~~~~~
 
+Package Configuration
+^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.configure``.
+
+- Package-level options are now configured exclusively through ``SJ_*``
+  environment variables read when ``spikingjelly.configure`` is first imported.
+  Assigning ``spikingjelly.configure`` module attributes is no longer a supported
+  configuration method.
+
 Logging
 ^^^^^^^
 
