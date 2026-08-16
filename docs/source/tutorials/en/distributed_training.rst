@@ -1,610 +1,698 @@
 Distributed SNN Training
-==========================================
+========================
+
+Authors: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_, `Wei Fang (fangwei123456) <https://github.com/fangwei123456>`_
 
 中文版： :doc:`../cn/distributed_training`
 
-Overview
-++++++++
+The high-level interfaces launch predefined training workflows. The low-level
+interfaces support custom models and training loops. The final section reports
+measured throughput and memory.
 
-This tutorial explains the distributed-training helpers in
-``spikingjelly.activation_based.distributed``. The package provides two entry
-points:
+API design rationale
+--------------------
 
-* a high-level **Analyze -> Plan -> Apply** workflow for most users;
-* the lower-level ``SNNDistributedConfig`` path for users who need exact mesh
-  dimensions, tensor-parallel roots, or FSDP roots.
+The API is divided into ``vision`` and ``llm`` workloads instead of assuming
+that every SNN shares one parallel strategy. Spiking CNN channels, feature maps,
+and pipeline boundaries have different semantics from LLM tokens, attention,
+and context parallelism. A single model description would merely hide those
+differences behind branches. The two paths are therefore symmetric only where
+the concepts are genuinely shared: ``ModelConfig`` describes a model,
+``ModelBuilder`` connects architecture-specific code, ``TrainingConfig``
+describes a run, and ``train`` owns the default training lifecycle.
 
-Before running the examples, you should know a few PyTorch distributed terms.
-``torchrun`` starts one process per rank, ``world_size`` is the number of
-participating ranks, and ``init_process_group`` creates the process group used
-by DeviceMesh, DTensor, DDP, FSDP2, and pipeline schedules.
+The high-level interface is inspired by the current Megatron Core model
+extension style. MCore separates declarative ``TransformerConfig`` data and
+architecture-specific ``ModuleSpec`` / ``model_provider`` / ``forward_step``
+from the common pipeline schedule, optimizer, and checkpoint lifecycle.
+SpikingJelly keeps the same boundary—configuration states facts, a builder
+adapts an architecture, and the training entry point owns the lifecycle—without
+requiring users to edit one large predefined training function. An LLM builder
+returns the MCore-native ``model_provider`` and ``forward_step``; a Vision
+builder returns the stage, FSDP2 shard roots, and boundary shapes required by
+PyTorch pipelines. Their outer style matches while each inner contract follows
+its runtime.
 
-Method Overview
-+++++++++++++++
+The low-level interface follows a “reuse the runtime; add only SNN semantics”
+rule. PyTorch supplies DP, FSDP2, device meshes, and general pipelines. Megatron
+Core supplies LLM TP, PP, CP, the distributed optimizer, and sharded
+checkpoints. SpikingJelly adds the pieces those runtimes do not express: SNN
+temporal layouts and state resets, channel-sharded layers for channel-oriented
+models, and spike-compression memopt. Memopt also remains separate from MCore
+recomputation: the former handles SNN activations and spike representations,
+while the latter is used only for non-overlapping Transformer subcomputations
+when needed. The high-level ``train`` therefore covers standard workflows,
+while custom tasks, models, and schedules can compose the low-level pieces
+directly.
 
-Why SNN Distributed Training Needs Special Handling
-------------------------------------------------------
+High-level APIs
+---------------
 
-SNN modules carry neuron state across timesteps. A distributed wrapper must keep
-that state consistent with the activation shard owned by each rank. For example,
-Linear tensor parallelism shards the feature dimension, while Conv/BN/neuron
-channel tensor parallelism shards the channel dimension. Stateful neurons should
-therefore keep local state for the local shard instead of silently replicating a
-full global state.
+Vision models
+~~~~~~~~~~~~~
 
-Pipeline parallelism adds another SNN-specific constraint: microbatches must not
-share neuron state. The pipeline runtime resets state inside each stage between
-microbatches, so one microbatch cannot leak voltage or other state into the
-next.
+``spikingjelly.activation_based.distributed.vision`` provides image
+classification training with PyTorch DDP, FSDP2, tensor parallelism, and
+pipeline parallelism. ``vision.TrainingConfig`` describes the job and
+``vision.train`` executes it:
 
-Parallel Strategy Map
----------------------
+.. code-block:: python
 
-.. list-table::
-    :header-rows: 1
+    from pathlib import Path
 
-    * - Mode
-      - Best fit
-      - Mesh
-      - Notes
-    * - ``dp``
-      - Simple throughput scaling
-      - 1D data mesh
-      - Uses DDP-style replication. ``ZeroRedundancyOptimizer`` is optional.
-    * - ``tp``
-      - Lower per-rank activation/state memory
-      - 1D tensor mesh
-      - Linear TP is stable; Conv/BN and Spikformer TP are experimental flags.
-    * - ``fsdp2``
-      - Parameter, gradient, and optimizer-state sharding
-      - 1D data mesh
-      - Uses DTensor/FSDP2 and is the recommended memory baseline.
-    * - ``fsdp2_tp``
-      - Hybrid memory reduction and model parallelism
-      - 2D ``(dp, tp)`` mesh
-      - Recommended hybrid path. Avoids unsupported DDP + TP synchronization.
-    * - ``pp``
-      - Stage-level memory pressure or pipeline experiments
-      - pipeline ranks, optional virtual stages
-      - Uses dedicated pipeline builders, not the unified ``apply()`` path.
+    from spikingjelly.activation_based.distributed import vision
 
-DeviceMesh gives names and coordinates to ranks. DTensor records how a tensor is
-placed on that mesh. The SNN helpers use these concepts to keep weights,
-gradients, optimizer state, activations, and neuron state aligned with the
-selected strategy.
+    config = vision.TrainingConfig(
+        model=vision.SEWResNet34Config(time_steps=4, num_classes=1000),
+        dataset_builder=(
+            "spikingjelly.activation_based.distributed.vision."
+            "build_imagefolder_datasets"
+        ),
+        dataset_kwargs={"root": Path("/datasets/imagenet")},
+        batch_size=32,
+        tensor_parallel_size=2,
+        data_parallel="fsdp2",
+        precision="bf16",
+        memopt_level=1,
+    )
+    metrics = vision.train(config)
 
-How the API Is Organized
-------------------------
+``batch_size`` is the batch size on each DP rank. The global batch is
+``batch_size * DP`` and does not include TP, PP, or SNN time steps.
+``tensor_parallel_size`` and ``pipeline_parallel_size`` select TP and PP; the
+remaining ranks become DP replicas. The built-in models are
+``SEWResNet34Config`` and ``SpikformerConfig``.
 
-The high-level path keeps the public interface small while the implementation is
-split into focused modules:
+The repository's synthetic-data entry point can verify the installation and
+parallel configuration directly:
 
-.. code:: text
+.. code-block:: bash
 
-    analyze(model) -> analysis.py scans stateful modules and TP candidates
-        |
-        v
-    plan(...) -> planner.py chooses mode, mesh, roots, and notes
-        |
-        v
-    apply(...) -> api.py selects an adapter when a model family needs one
-        |
-        v
-    configure_snn_distributed(...) -> TP, FSDP2, or DDP modules are applied
+    torchrun --standalone --nproc-per-node=4 benchmark/vision_distributed.py \
+        --model sew-resnet34 \
+        --data-parallel fsdp2 \
+        --tensor-parallel-size 2 \
+        --precision bf16 \
+        --max-steps 10
 
-Model adapters add the model-family roots needed by
-``SNNDistributedConfig`` and then call the shared execution path.
+Custom models use ``vision.ModelConfig`` and ``vision.ModelBuilder``. ``build``
+returns the model for the current rank, FSDP2 shard roots, and PP input/output
+shapes. See :class:`spikingjelly.activation_based.distributed.vision.ModelBuilder`
+for the complete signature.
 
-Pipeline parallelism is intentionally separate because it requires an
-``example_input`` for stage construction and cost measurement. The pipeline
-modules own stage partitioning, schedule selection, microbatch reset, and
-optional stage-level memory optimization.
+LLMs
+~~~~
 
-Usage Guide
-+++++++++++
+``spikingjelly.activation_based.distributed.llm`` provides SNN language-model
+training on Megatron Core. It requires Python 3.12 or newer. Install the optional
+dependency first:
 
-Recommended High-level Workflow
--------------------------------
+.. code-block:: bash
 
-Use the public package root for the high-level workflow:
+    uv pip install --editable ".[megatron]"
 
-.. code:: python
+``llm.TrainingConfig`` combines:
+
+* an ``llm.ModelConfig`` containing the MCore ``TransformerConfig``, vocabulary,
+  context, and SNN time steps;
+* an MCore ``OptimizerConfig``;
+* the dataset builder, micro/global batch, training progress, evaluation, and
+  checkpoint settings;
+* optional SpikingJelly memopt.
+
+When no topology is specified, ``llm.plan_training`` selects TP, PP, CP, and
+recomputation from the GPU count, memory budget, and objective. For a known
+topology, set ``TransformerConfig`` directly. The complete SpikeLM model,
+optimizer, and dataset configuration lives in ``benchmark/snn_llm/cli.py``:
+
+.. code-block:: bash
+
+    torchrun --standalone --nproc-per-node=4 \
+        benchmark/snn_llm/train_spikelm.py \
+        --data /datasets/tokens \
+        --output checkpoints/spikelm \
+        --train-steps 200 \
+        --global-batch-size 128
+
+Low-level APIs
+--------------
+
+Custom vision models
+~~~~~~~~~~~~~~~~~~~~
+
+``vision.ModelBuilder.build`` constructs the current PP stage, applies model
+parallelism, and returns the FSDP2 shard roots. See ``SEWResNet34Builder`` and
+``SpikformerBuilder`` for working implementations.
+
+A minimal declaration has this form:
+
+.. code-block:: python
+
+    from dataclasses import dataclass
+    from typing import ClassVar
+
+    from spikingjelly.activation_based.distributed import vision
+
+    @dataclass(frozen=True)
+    class MyModelConfig(vision.ModelConfig):
+        builder: ClassVar[str] = "my_package.model.MyModelBuilder"
+        width: int = 128
+
+    class MyModelBuilder(vision.ModelBuilder):
+        def build(
+            self,
+            *,
+            process_group,
+            pipeline_rank,
+            pipeline_size,
+            pipeline_microbatches,
+            device,
+            micro_batch_size,
+            memopt_level,
+            memopt_compress_inputs,
+        ):
+            if pipeline_size != 1:
+                raise ValueError("MyModelBuilder does not define PP stages.")
+            model = build_my_model(self.config)
+            model = parallelize_my_model(model, process_group)
+            model.to(device)
+            return model, ("blocks",), None, None
+
+The model author supplies ``parallelize_my_model``. This example replaces model
+layers with public components from
+``spikingjelly.activation_based.distributed.tensor_parallel``:
+
+.. code-block:: python
+
+    from spikingjelly.activation_based.distributed.tensor_parallel import (
+        ChannelShardBatchNorm2d,
+        ChannelShardConv2d,
+    )
+
+    def parallelize_my_model(model, process_group):
+        block = model.block
+        block.conv1 = ChannelShardConv2d(block.conv1, process_group, "colwise")
+        block.bn1 = ChannelShardBatchNorm2d(block.bn1, process_group)
+        block.conv2 = ChannelShardConv2d(block.conv2, process_group, "rowwise")
+        return model
+
+The neuron consumes the local-channel tensor produced by the colwise layer
+directly; no wrapper is required. The model author only needs to ensure that the
+following rowwise layer consumes that local tensor.
+
+Custom training loops
+~~~~~~~~~~~~~~~~~~~~~
+
+When the predefined ``train`` does not fit the task, compose the PyTorch
+distributed interfaces with the SpikingJelly components above. The following
+omits the task-specific ``build_my_model``, ``dataset``, and hyperparameters and
+shows only the assembly order:
+
+.. code-block:: python
+
+    import os
 
     import torch
-    import torch.nn as nn
-    from torch.utils.data import TensorDataset
+    import torch.distributed as dist
+    from torch.distributed.device_mesh import init_device_mesh
+    from torch.nn.parallel import DistributedDataParallel
+    from torch.utils.data import DataLoader, DistributedSampler
 
-    from spikingjelly.activation_based import distributed as sjdist
-    from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
+    from spikingjelly.activation_based import functional
 
-    model = CIFAR10DVSVGG(dropout=0.0, backend="torch")
-    dataset = TensorDataset(
-        torch.randn(4, 2, 2, 48, 48),
-        torch.tensor([0, 1, 2, 3]),
+    local_rank = int(os.environ["LOCAL_RANK"])
+    torch.cuda.set_device(local_rank)
+    dist.init_process_group("nccl", device_id=torch.device("cuda", local_rank))
+
+    mesh = init_device_mesh(
+        "cuda", (dp_size, tp_size), mesh_dim_names=("dp", "tp")
     )
+    dp_group = mesh["dp"].get_group()
+    tp_group = mesh["tp"].get_group()
 
-    analysis = sjdist.analyze(model)
-    plan = sjdist.plan(
-        analysis=analysis,
-        objective="memory",
-        topology={"dp": 1},
-        backend="torch",
-        batch_size=2,
-        model_family="cifar10dvs_vgg",
-        mode="none",
-        features=sjdist.DistributedFeatureSet(
-            allow_experimental_conv_tp=False,
-        ),
+    model = build_my_model()
+    model = parallelize_my_model(model, tp_group).cuda(local_rank)
+    model = DistributedDataParallel(
+        model, device_ids=[local_rank], process_group=dp_group
     )
-    runtime = sjdist.apply(model=model, plan=plan, device_type="cpu")
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 
-    optimizer = runtime.build_optimizer(torch.optim.SGD, lr=1e-3)
-    loader = runtime.prepare_dataloader(
-        dataset=dataset,
-        batch_size=2,
-        shuffle=False,
-        num_workers=0,
-        drop_last=False,
-        pin_memory=False,
+    sampler = DistributedSampler(
+        dataset,
+        num_replicas=dp_size,
+        rank=mesh.get_local_rank("dp"),
+        shuffle=True,
     )
-    criterion = nn.CrossEntropyLoss()
+    loader = DataLoader(dataset, batch_size=local_batch_size, sampler=sampler)
 
-    runtime.model.train()
-    for images, labels in loader:
-        optimizer.zero_grad(set_to_none=True)
-        logits = runtime.model(images.float())
-        logits, labels = runtime.prepare_classification_output(logits, labels)
-        loss = criterion(logits, labels)
-        loss.backward()
-        optimizer.step()
-        runtime.reset_state()
+    for epoch in range(epochs):
+        sampler.set_epoch(epoch)
+        for images, labels in loader:
+            images = images.cuda(local_rank, non_blocking=True)
+            labels = labels.cuda(local_rank, non_blocking=True)
+            sequence = (
+                images.unsqueeze(0)
+                .expand(time_steps, *images.shape)
+                .contiguous()
+            )
 
-The example above is a single-process smoke path because it uses ``mode="none"``.
-For distributed runs, launch the training script with ``torchrun``, initialize
-the process group, and choose a distributed mode such as ``dp``, ``fsdp2``,
-``tp``, or ``fsdp2_tp`` before creating the runtime:
+            optimizer.zero_grad(set_to_none=True)
+            logits = model(sequence).mean(0)
+            loss = torch.nn.functional.cross_entropy(logits, labels)
+            loss.backward()
+            optimizer.step()
+            functional.reset_net(model)
 
-.. code:: bash
+Validation, mixed precision, scheduling, metric reduction, and checkpoints are
+task-specific. The following calling contracts are required:
 
-    torchrun --nproc_per_node=4 train.py
+* world size must be divisible by the selected model-parallel size;
+* data is sharded only over DP, and ranks in one TP group receive the same batch;
+* create the optimizer after model parallelism and DDP/FSDP2 wrapping;
+* reset SNN state after every independent batch or pipeline microbatch;
+* global batch excludes TP, PP, CP, and SNN time steps.
 
-Using the Official Training Script
-----------------------------------
+Custom LLMs
+~~~~~~~~~~~
 
-The repository includes a CIFAR10-DVS training entry:
+An LLM subclasses ``llm.ModelConfig`` and points its ``builder`` class variable
+to an ``llm.ModelBuilder``. The builder's ``build`` method returns the MCore
+``model_provider`` and ``forward_step`` callbacks:
 
-.. code:: bash
+.. code-block:: python
 
-    torchrun --nproc_per_node=4 \
-      spikingjelly/activation_based/examples/memopt/train_distributed.py \
-      --data-dir /path/to/cifar10dvs \
-      --distributed-mode fsdp2_tp \
-      --mesh-shape 2 2 \
-      --backend triton \
-      --batch-size 16 \
-      --epochs 1 \
-      --print-summary
+    from spikingjelly.activation_based.distributed import llm
 
-Common mode choices:
+    class MyModelBuilder(llm.ModelBuilder):
+        def build(self, *, use_snn_memopt: bool, resume: bool):
+            return model_provider, forward_step
 
-* Start with ``dp`` for the simplest throughput baseline.
-* Use ``fsdp2`` for memory reduction on a 1D mesh.
-* Use ``fsdp2_tp --mesh-shape DP TP`` when the model also benefits from tensor
-  parallelism.
-* Use ``tp`` only when you explicitly want tensor parallelism without FSDP2.
-* Use ``pp`` through the dedicated pipeline path for stage-level experiments.
+``model_provider`` builds the current PP stage. ``forward_step`` reads one
+microbatch from the data iterator, invokes the model, and returns the MCore loss
+callback. These callbacks can be passed to ``llm.train`` or used in a custom
+MCore training loop. Complete SpikeLM and Qwen2 implementations are available in
+``benchmark/snn_llm/spikelm.py`` and ``benchmark/snn_llm/qwen2.py``.
 
-If you do not want to hand-pick the mode yourself, the training script and
-benchmark also expose a high-level recommender:
+The SNN temporal layout is ``[T, B, S, H] -> [S, T*B, H]``. ``T`` is folded only
+into the MCore batch dimension. It is not folded into the token dimension and
+does not contribute to global batch size.
 
-.. code:: bash
+Measured results
+----------------
 
-    torchrun --nproc_per_node=4 \
-      spikingjelly/activation_based/examples/memopt/train_distributed.py \
-      --data-dir /path/to/cifar10dvs \
-      --distributed-mode auto \
-      --prefer memory \
-      --backend triton \
-      --batch-size 16
+The following results were measured on four RTX 4090 24-GiB GPUs. The machine
+had no NVLink, and CUDA peer access was ``False`` across GPUs. The software stack
+used PyTorch 2.8.0, Megatron Core 0.18.2, and Triton 3.4.0. These results are
+relative references for a PCIe multi-GPU machine and should not be extrapolated
+directly to an NVLink cluster.
 
-The current high-level intents are:
+Vision benchmarks
+~~~~~~~~~~~~~~~~~
 
-* ``--prefer speed`` for throughput-oriented defaults;
-* ``--prefer memory`` for lower per-GPU memory defaults;
-* ``--prefer capacity`` for configurations that are more likely to fit larger
-  models, typically prioritizing ``PP``.
+The Vision benchmarks fixed BF16, ``T=4``, 128 x 128 inputs, and 1000 classes.
+The plots retain only one GPU, DP4, FSDP4, TP4, and PP4. Each curve labels its
+largest successful global batch size (``G``). For one GPU, TP4, and PP4, global batch equals the
+per-rank batch; for DP4 and FSDP4 it is four times the per-rank batch.
 
-Manual Configuration
---------------------
+All topologies at a fixed global batch
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Advanced users can bypass the planner and call the low-level entry directly
-when they need exact TP/FSDP roots or manual 2D mesh dimensions.
+The table restores the complete topology comparison at ``G=32``. Each
+configuration started in a fresh process, warmed up for 10 optimizer steps,
+measured 50 steps, and was repeated independently three times. Values are the
+three-run medians. Throughput covers the whole job; memory is the highest CUDA
+peak allocated memory among all ranks.
 
-.. code:: python
-
-    from spikingjelly.activation_based.distributed import (
-        SNNDistributedConfig,
-        configure_snn_distributed,
-    )
-
-    model, mesh, analysis = configure_snn_distributed(
-        model,
-        SNNDistributedConfig(
-            mode="fsdp2_tp",
-            device_type="cuda",
-            mesh_shape=(2, 2),
-            fsdp_shard_roots=["features"],
-            fsdp_shard_module_root=False,
-            tensor_parallel_roots=["classifier"],
-            auto_tensor_parallel=True,
-            conv_tensor_parallel_roots=["features"],
-            dp_mesh_dim=0,
-            tp_mesh_dim=1,
-        ),
-    )
-
-Most users should prefer
-``analyze`` / ``plan`` / ``apply`` unless they need direct control over roots or
-mesh dimensions.
-
-Pipeline Parallelism
---------------------
-
-Pipeline parallelism uses dedicated builders because it requires an
-``example_input`` for stage construction and cost measurement. The unified
-``apply()`` API intentionally rejects ``mode='pp'``.
-
-Supported controls include ``--pp-schedule``, ``--pp-microbatches``,
-``--pp-virtual-stages``, ``--pp-layout``, and ``--pp-delay-wgrad``. The
-SNN invariant is that stage-local neuron state is reset between
-microbatches.
-
-Choosing a Strategy
-+++++++++++++++++++
-
-If you already know your main objective, the following rules of thumb work well:
-
-* **Throughput first, memory is not the main bottleneck**: start with ``dp`` for
-  straightforward weak scaling. Use ``dp + zero`` when optimizer state is
-  expected to matter, but benchmark it because the benefit is workload-dependent.
-* **Per-GPU memory first, especially for Transformer-style SNNs**: try ``tp``
-  when activation and neuron-state memory dominate. Use ``fsdp2_tp`` when you
-  also need FSDP2-style sharding, and keep an explicit 2D mesh such as
-  ``--mesh-shape 2 2``.
-* **Pipeline experiments or stage-level memory pressure**: use ``pp`` through
-  the dedicated pipeline runtime. In the current CIFAR10DVSVGG benchmark,
-  the throughput-oriented result uses ``gpipe``, while the memory-oriented
-  result uses ``1f1b``. ``auto`` chooses a schedule from the virtual-stage
-  configuration.
-* **Simplest distributed entry point**: begin with ``dp``. Move to
-  ``fsdp2``, ``tp``, ``fsdp2_tp``, or ``pp`` only when the model size or memory
-  profile justifies the extra machinery.
-
-``hybrid`` (``DDP + TP``) is explicitly unsupported because DDP state
-synchronization mixes regular ``Tensor`` parameters and ``DTensor`` parameters.
-Use ``fsdp2_tp`` instead.
-
-When ``prefer=capacity`` and the environment supports it, the auto recommender
-currently prefers:
-
-* ``mode=pp``
-* ``pp_virtual_stages=2``
-* ``pp_schedule=interleaved``
-* ``memopt level=1``
-
-``zero_bubble`` remains available as an explicit command-line option. It now
-runs stably, but the default recommendation still prefers the faster and more
-predictable ``interleaved`` schedule. ``zero_bubble`` is better treated as a
-manual experimental or capacity-oriented tuning path.
-
-If you explicitly set ``--distributed-mode``, the ``prefer`` hint can still fill
-in defaults such as ``memopt`` or ``optimizer_sharding``, but it will not
-override the manually selected mode.
-
-Benchmark Results and Logging
-+++++++++++++++++++++++++++++
-
-How to Run Benchmarks
----------------------
-
-Use the benchmark script for smoke tests and for comparing modes under the same
-hardware, model, and batch regime:
-
-.. code:: bash
-
-    torchrun --nproc_per_node=4 \
-      benchmark/benchmark_snn_distributed.py \
-      --model cifar10dvs_vgg \
-      --mode fsdp2_tp \
-      --mesh-shape 2 2 \
-      --backend torch \
-      --steps 2 \
-      --warmup 1 \
-      --batch-size 2 \
-      --T 4
-
-A short smoke run proves startup, forward, backward, optimizer step, state reset,
-and clean shutdown. It does not prove scaling efficiency. For scaling claims,
-compare longer runs with identical benchmark regimes and report both throughput
-and peak memory.
-
-Read the headline metrics together:
-
-.. list-table::
+.. list-table:: Vision results across all topologies at fixed ``G=32``
     :header-rows: 1
 
-    * - Metric
-      - Meaning
-      - Compare by
-    * - ``global_throughput_sps``
-      - End-to-end throughput for the whole distributed job.
-      - Higher is better only under the same model, backend, batch regime, and step count.
-    * - ``peak_allocated_mb``
-      - Peak memory observed on a rank.
-      - Lower is better when the run still completes the same workload.
-    * - ``step_latency_ms``
-      - Per-step latency after warmup.
-      - Lower is better for latency runs; use throughput for weak-scaling runs.
-
-Server Setup
-------------
-
-The following numbers were collected on ``g3``, a 7-GPU RTX 4090 server, with
-PyTorch ``2.7.1+cu118`` and Triton ``3.3.1``. The benchmark used
-``backend='triton'``, ``NCCL_P2P_DISABLE=1``,
-``TORCH_COMPILE_DISABLE=1``, ``TORCHDYNAMO_DISABLE=1``, and
-``memopt_level=0``. No ``torch.compile`` path was enabled. The tables therefore
-focus on the effect of distributed parallel strategies, not memory-optimization
-rewrites.
-
-All rows use ``benchmark_regime='throughput_weak_scaling'``. In this regime,
-``batch_size`` is the per-rank batch size. ``global_samples/s`` is the
-end-to-end throughput of the whole distributed job, and ``peak_allocated_mb`` is
-the maximum CUDA allocation observed on any rank.
-
-CIFAR10DVSVGG Strategy Results
-------------------------------
-
-``CIFAR10DVSVGG``, per-rank ``batch_size=16``, ``T=10``:
-
-.. list-table::
-    :header-rows: 1
-
-    * - Mode
-      - #GPUs
-      - ``step_ms``
-      - ``global_samples/s``
-      - ``peak_allocated_mb``
-      - Notes
-    * - ``none``
+    * - Topology
+      - GPUs
+      - SEW-ResNet34 images/s
+      - SEW-ResNet34 GiB/GPU
+      - Spikformer-S images/s
+      - Spikformer-S GiB/GPU
+    * - One GPU
       - 1
-      - 38.34
-      - 417.36
-      - 2265.79
-      - single-GPU baseline
-    * - ``dp``
+      - 269.0
+      - 1.67
+      - 270.1
+      - 3.15
+    * - DP2
       - 2
-      - 39.34
-      - 813.40
-      - 2303.16
-      - pure DDP weak scaling
-    * - ``dp`` + ``zero``
+      - 261.8
+      - 1.15
+      - 264.3
+      - 1.73
+    * - FSDP2
       - 2
-      - 41.69
-      - 767.49
-      - 2303.16
-      - DDP with ``ZeroRedundancyOptimizer``
-    * - ``tp``
+      - 146.9
+      - 0.86
+      - 172.6
+      - 1.59
+    * - TP2
       - 2
-      - 85.71
-      - 186.69
-      - 1897.22
-      - tensor parallelism reduces per-GPU memory but lowers throughput here
-    * - ``fsdp2``
+      - 257.6
+      - 1.30
+      - 262.6
+      - 2.03
+    * - PP2
       - 2
-      - 47.88
-      - 668.31
-      - 2285.63
-      - parameter/gradient/optimizer-state sharding
-    * - ``fsdp2_tp``
+      - 83.9
+      - 1.01
+      - 85.9
+      - 2.20
+    * - DP4
       - 4
-      - 116.64
-      - 274.34
-      - 1924.02
-      - hybrid FSDP2 + TP on a ``(2, 2)`` mesh
-    * - ``hybrid`` (``DDP + TP``)
+      - 259.9
+      - 0.82
+      - 258.8
+      - 1.00
+    * - FSDP4
       - 4
-      - -
-      - -
-      - -
-      - explicitly unsupported; use ``fsdp2_tp`` instead
+      - 145.7
+      - 0.45
+      - 169.4
+      - 0.81
+    * - TP4
+      - 4
+      - 240.3
+      - 1.10
+      - 246.9
+      - 1.45
+    * - PP4
+      - 4
+      - 122.2
+      - 0.75
+      - 148.5
+      - 1.71
+    * - TP2 + DP2
+      - 4
+      - 244.8
+      - 0.82
+      - 251.3
+      - 1.10
+    * - TP2 + FSDP2
+      - 4
+      - 143.3
+      - 0.65
+      - 166.7
+      - 1.01
+    * - PP2 + DP2
+      - 4
+      - 150.9
+      - 0.53
+      - 146.3
+      - 1.18
+    * - PP2 + FSDP2
+      - 4
+      - 74.4
+      - 0.52
+      - 86.2
+      - 1.13
+    * - TP2 + PP2
+      - 4
+      - 81.9
+      - 0.86
+      - 82.0
+      - 1.45
 
-With a realistic per-rank batch size, ``dp`` reaches about ``1.95x`` global
-throughput over the single-GPU baseline. ``fsdp2`` also improves throughput, but
-trails plain ``dp`` on this workload. ``tp`` and ``fsdp2_tp`` reduce peak memory
-by about ``16%`` and ``15%`` respectively, but their communication and sharded
-execution overhead outweigh the memory benefit for throughput.
+At the same ``G=32``, multiple GPUs primarily reduce per-GPU memory rather than
+automatically raising throughput: as compute per GPU shrinks, PCIe communication,
+synchronization, and pipeline bubbles dominate more easily. The capacity curves
+below answer a different question: how far each strategy extends the
+throughput-memory frontier when it may use a larger global batch.
 
-CIFAR10DVSVGG Pipeline Results
-------------------------------
+Batch size was increased by powers of two until the first candidate that could
+not complete. SEW-ResNet34 succeeded through per-rank batch 256 on one GPU, DP4,
+and FSDP4, and through 512 on TP4 and PP4. Each configuration started in a fresh
+process, warmed up for 10 optimizer steps, and measured 40 steps. Spikformer-S
+succeeded through per-rank batch 128 on one GPU, DP4, and FSDP4, and through 256
+on TP4 and PP4, with 5 warmup and 25 measured steps. Every successful point was
+repeated independently three times; the plots show the median and three-run
+range. Timing includes H2D, forward, backward, communication, and the optimizer,
+but excludes initialization, DataLoader work, validation, and checkpoints.
 
-The pipeline runtime supports cost-aware stage balancing, automatic microbatch
-selection, ``gpipe`` / ``1f1b`` / ``interleaved`` / ``zero_bubble`` schedules,
-optional virtual stages, manual ``pp_layout`` overrides, and stage-local
-neuron-state reset between microbatches.
+The vertical axis is aggregate job throughput: the global batch completed by all
+ranks divided by the slowest rank's measured time. The horizontal axis is the
+highest CUDA peak allocated memory among all ranks. They respectively answer how
+many images the whole job processes per second and the minimum per-GPU memory
+capacity it needs. Both axes are logarithmic. Failed candidates are not plotted
+as throughput points.
 
-``CIFAR10DVSVGG``, ``backend='triton'``, single-GPU baseline plus 2-GPU PP,
-``batch_size=128``, ``T=10``, ``memopt_level=0``. The PP rows use
-``data_replicas=1``, so the global batch size remains 128.
+.. figure:: ../../_static/tutorials/distributed/sew-resnet34-tradeoff.png
+    :width: 720px
+    :alt: SEW-ResNet34 aggregate throughput and per-GPU peak memory at different global batches
 
-.. list-table::
+    SEW-ResNet34 aggregate training throughput versus the busiest GPU's peak allocated memory.
+
+.. figure:: ../../_static/tutorials/distributed/spikformer-tradeoff.png
+    :width: 720px
+    :alt: Spikformer-S aggregate throughput and per-GPU peak memory at different global batches
+
+    Spikformer-S aggregate training throughput versus the busiest GPU's peak allocated memory.
+
+SEW-ResNet34 DP4 reached 3616.2 images/s and 11.25 GiB/GPU at ``G=1024``;
+FSDP4 reached 3482.5 images/s and 10.86 GiB/GPU, while PP4 reached 1636.5
+images/s at ``G=512``. The largest successful Spikformer-S points for DP4 and
+FSDP4 both used ``G=512`` and reached 2503.8 and 2334.6 images/s; PP4 reached
+1028.2 images/s at ``G=256``. TP4 plateaued early on both models: increasing
+batch primarily raised memory, indicating that TP communication dominates on
+this PCIe host. These numbers describe the throughput-capacity frontier under
+more total work, not fixed-batch speedup.
+
+.. list-table:: Vision capacity search (largest success → first failed candidate)
     :header-rows: 1
 
-    * - Mode / schedule
-      - #GPUs
-      - ``pp_virtual_stages``
-      - ``pp_microbatches``
-      - microbatch size
-      - ``step_ms``
-      - ``global_samples/s``
-      - ``peak_allocated_mb``
-      - Notes
-    * - ``none``
-      - 1
-      - -
-      - -
-      - -
-      - 298.36
-      - 429.01
-      - 15834.60
-      - single-GPU baseline
-    * - ``pp`` / ``gpipe``
-      - 2
-      - 1
-      - 8
-      - 16
-      - 329.13
-      - 388.91
-      - 9782.20
-      - best PP throughput
-    * - ``pp`` / ``1f1b``
-      - 2
-      - 1
-      - 8
-      - 16
-      - 382.29
-      - 334.82
-      - 4973.04
-      - best PP memory
-    * - ``pp`` / ``interleaved``
-      - 2
-      - 2
-      - 16
-      - 8
-      - 495.61
-      - 258.27
-      - 6272.98
-      - virtual-stage schedule
-    * - ``pp`` / ``zero_bubble``
-      - 2
-      - 2
-      - 16
-      - 8
-      - 492.13
-      - 260.09
-      - 6396.97
-      - virtual-stage zero-bubble schedule
+    * - Model
+      - Topology
+      - Largest successful ``B/G``
+      - First failed ``B/G``
+      - Result
+    * - SEW-ResNet34
+      - One GPU
+      - 256/256
+      - 512/512
+      - CUDA OOM
+    * - SEW-ResNet34
+      - DP4
+      - 256/1024
+      - 512/2048
+      - CUDA OOM
+    * - SEW-ResNet34
+      - FSDP4
+      - 256/1024
+      - 512/2048
+      - CUDA OOM
+    * - SEW-ResNet34
+      - TP4
+      - 512/512
+      - 1024/1024
+      - CUDA OOM
+    * - SEW-ResNet34
+      - PP4
+      - 512/512
+      - 1024/1024
+      - NCCL collective timeout
+    * - Spikformer-S
+      - One GPU
+      - 128/128
+      - 256/256
+      - CUDA OOM
+    * - Spikformer-S
+      - DP4
+      - 128/512
+      - 256/1024
+      - CUDA OOM
+    * - Spikformer-S
+      - FSDP4
+      - 128/512
+      - 256/1024
+      - CUDA OOM
+    * - Spikformer-S
+      - TP4
+      - 256/256
+      - 512/512
+      - NCCL collective timeout
+    * - Spikformer-S
+      - PP4
+      - 256/256
+      - 512/512
+      - NCCL collective timeout
 
-With this larger batch size, PP reduces peak memory, but it does not beat
-the single-GPU throughput baseline on this small CIFAR10-DVS VGG
-workload. ``gpipe`` is the best PP schedule for throughput here, reaching about
-``0.91x`` of the baseline throughput while reducing peak memory to about ``62%``
-of the baseline. ``1f1b`` gives the lowest PP memory, about ``31%`` of the
-baseline, at about ``0.78x`` throughput. ``interleaved`` and ``zero_bubble`` run
-successfully, but their extra virtual-stage scheduling overhead makes them
-slower here.
+``B`` is the per-rank batch. A collective timeout means that the candidate
+produced no training metrics; it is neither a slow successful point nor labeled
+as OOM without an OOM traceback.
 
-Spikformer Strategy Results
----------------------------
+LLM benchmarks
+~~~~~~~~~~~~~~
 
-``spikformer_ti``, ``backend='triton'``, per-rank ``batch_size=16``, ``T=8``,
-``image_size=224``, ``memopt_level=0``:
+The LLM benchmark used an approximately 1.41B-parameter SpikeLM with 24 layers,
+hidden size 2048, 16 heads, FFN size 8192, vocabulary 50304, BF16, sequence 128,
+and ``T=4``. Every capacity-search point below disabled SpikingJelly memopt and
+gradient accumulation, so
+``global_batch_size = micro_batch_size × data_parallel_size`` and each optimizer
+step executes one micro batch on every DP rank.
 
-.. list-table::
+All topologies at a fixed global batch
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The following table is the earlier fixed-work comparison across every tested
+two-GPU, four-GPU, and hybrid topology: ``micro batch=1``, ``G=8``, 10 warmup
+optimizer steps, 30 measured steps, and three independent repeats. Values are
+the three-run medians. One GPU OOMed during distributed-optimizer initialization,
+so DP2 is the relative-throughput baseline. Holding ``G=8`` across different DP
+sizes required ``8 / DP`` accumulation steps in this fixed-work experiment:
+four for DP2, two for DP4, and eight for each DP1 topology. It is a different
+protocol from the no-accumulation capacity search below.
+
+.. list-table:: 1.41B SpikeLM results across all topologies at fixed ``G=8``
     :header-rows: 1
 
-    * - Mode
-      - #GPUs
-      - ``step_ms``
-      - ``global_samples/s``
-      - ``peak_allocated_mb``
-      - Notes
-    * - ``none``
-      - 1
-      - 85.54
-      - 187.04
-      - 8262.18
-      - single-GPU baseline
-    * - ``dp``
+    * - Topology
+      - GPUs
+      - Semantic tokens/s
+      - GiB/GPU
+      - Relative to DP2
+    * - DP2
       - 2
-      - 87.62
-      - 365.22
-      - 8279.84
-      - best throughput in this no-memopt run
-    * - ``dp`` + ``zero``
+      - 746.3
+      - 17.35
+      - 1.00x
+    * - TP2
       - 2
-      - 89.30
-      - 358.34
-      - 8279.84
-      - optimizer sharding does not reduce peak activation memory here
-    * - ``fsdp2``
+      - 679.9
+      - 12.86
+      - 0.91x
+    * - PP2
       - 2
-      - 91.82
-      - 348.51
-      - 8260.82
-      - close to DP throughput, with similar peak activation memory
-    * - ``tp``
+      - 1008.3
+      - 13.15
+      - 1.35x
+    * - CP2
       - 2
-      - 197.99
-      - 80.81
-      - 5379.38
-      - clear per-GPU memory reduction
-    * - ``fsdp2_tp``
+      - 417.7
+      - 16.56
+      - 0.56x
+    * - DP4
       - 4
-      - 281.31
-      - 113.75
-      - 5383.90
-      - hybrid path with similar memory to pure TP
+      - 585.6
+      - 13.40
+      - 0.78x
+    * - TP4
+      - 4
+      - 673.1
+      - 6.65
+      - 0.90x
+    * - PP4
+      - 4
+      - 1379.9
+      - 8.09
+      - 1.85x
+    * - CP4
+      - 4
+      - 289.5
+      - 12.34
+      - 0.39x
+    * - TP2 + DP2
+      - 4
+      - 817.1
+      - 8.91
+      - 1.09x
+    * - PP2 + DP2
+      - 4
+      - 997.9
+      - 9.20
+      - 1.34x
+    * - CP2 + DP2
+      - 4
+      - 446.0
+      - 12.61
+      - 0.60x
+    * - TP2 + PP2
+      - 4
+      - 989.1
+      - 6.81
+      - 1.33x
+    * - TP2 + CP2
+      - 4
+      - 427.2
+      - 8.39
+      - 0.57x
+    * - PP2 + CP2
+      - 4
+      - 612.6
+      - 8.44
+      - 0.82x
 
-For ``spikformer_ti``, plain ``dp`` reaches about ``1.95x`` global throughput
-over the single-GPU baseline, and ``fsdp2`` reaches about ``1.86x``.
-Tensor-parallel modes reduce per-GPU peak allocation from about ``8.26 GB`` to
-about ``5.38 GB`` without using memopt. The cost is lower throughput, so
-plain ``dp`` remains the strongest throughput baseline when memory is
-sufficient.
+At fixed ``G=8``, PP4 has the highest aggregate throughput, while TP4 and
+TP2 + PP2 have the lowest per-GPU peak memory. CP cannot amortize its
+communication at sequence length 128. This table compares topologies directly;
+the following no-accumulation experiment compares their batch-capacity and
+throughput limits.
 
-Automatic Benchmark Logging
----------------------------
+The plot retains DP2, DP4, TP4, PP4, and CP4. DP2 succeeds only through micro
+batch 1 (``G=2``), DP4 through micro batch 4 (``G=16``), and TP4, PP4, and CP4
+through micro batch 16 (``G=16``). Each configuration started in a fresh process,
+warmed up for 5 steps, measured 15 steps, and was repeated independently three
+times. One GPU OOMed during distributed-optimizer initialization and is therefore
+omitted. The LLM path uses MCore DDP and its distributed optimizer rather than
+PyTorch FSDP2.
 
-``benchmark/benchmark_snn_distributed.py`` appends results to
-``benchmark/results/benchmark_snn_distributed.jsonl`` by default and compares
-each run against the most recent earlier run with the same configuration. Each
-record stores the benchmark regime, global and per-rank batch size, data
-replicas, latency, throughput, peak allocation, optimization time, forward /
-backward / optimizer / reset / materialization time, TP communication counters,
-warnings, recompiles, and graph breaks.
+.. figure:: ../../_static/tutorials/distributed/spikelm-1.41b-tradeoff.png
+    :width: 720px
+    :alt: 1.41B SpikeLM aggregate throughput and per-GPU peak memory at different global batches
 
-For example:
+    1.41B SpikeLM aggregate training throughput versus the busiest GPU's peak allocated memory, without gradient accumulation or memopt.
 
-.. code:: bash
+PP4 at ``G=16`` reached 2997.4 semantic tokens/s and 14.85 GiB/GPU, the highest
+throughput in this set; it is already close to the 2897.0 tokens/s measured at
+``G=8``. TP4 reached 1684.4 tokens/s and 16.47 GiB/GPU at ``G=16`` and likewise
+flattened noticeably after ``G=4``. DP4's largest successful point remains
+``G=16`` at 1284.3 tokens/s and 17.55 GiB/GPU. CP4 reached 865.5 tokens/s and
+16.52 GiB/GPU after scaling to ``G=16``, but remained below TP4 and PP4. DP2
+retains only ``G=2`` at 303.0 tokens/s and 17.35 GiB/GPU.
 
-    torchrun --nproc_per_node=4 \
-      benchmark/benchmark_snn_distributed.py \
-      --mode auto \
-      --prefer speed \
-      --model spikformer_ti \
-      --backend triton \
-      --batch-size 4 \
-      --T 8
+.. list-table:: LLM capacity search (largest success → first failed candidate)
+    :header-rows: 1
 
-Use records with the same ``benchmark_regime``, model, backend, batch semantics,
-and step count for comparisons. The fields most often used for reports are
-``global_throughput_sps``, ``step_latency_ms``, ``peak_allocated_mb``,
-``optimize_ms``, ``tp_all_reduce_calls``, and ``tp_all_reduce_mb``.
+    * - Topology
+      - Largest successful ``micro/G``
+      - First failed ``micro/G``
+      - Result
+    * - DP2
+      - 1/2
+      - 2/4
+      - CUDA OOM
+    * - DP4
+      - 4/16
+      - 8/32
+      - CUDA OOM
+    * - TP4
+      - 16/16
+      - 32/32
+      - CUDA OOM
+    * - PP4
+      - 16/16
+      - 32/32
+      - stalled, no training metrics
+    * - CP4
+      - 16/16
+      - 32/32
+      - stalled, no training metrics
 
-Limitations and Troubleshooting
-+++++++++++++++++++++++++++++++
+The PP4 and CP4 ``micro=32`` candidates remained in fixed rank-wait states for
+several normal run durations and were terminated as stalled. They are neither
+throughput points nor mislabeled as OOM.
 
-* ``DDP + TP`` is not supported. Use ``fsdp2_tp`` instead.
-* ``fsdp2_tp`` should use an explicit 2D mesh such as ``--mesh-shape 2 4``.
-* Pipeline batch size must be compatible with the selected microbatch count.
-* Some features depend on optional PyTorch APIs. Availability flags such as
-  ``DTENSOR_AVAILABLE``, ``FSDP2_AVAILABLE``, and ``PIPELINING_AVAILABLE`` are
-  exported at the package root.
-* Outputs from DTensor paths may need materialization before ordinary loss or
-  metric code. ``SNNDistributedRuntime.prepare_classification_output`` handles
-  the common classification case.
-* High-level ``memopt`` (``level >= 2``) is available on large
-  Spikformer-like workloads, but the search cost is high and is more likely to
-  trigger extra ``inductor`` recompiles. Treat it as an offline tuning workflow
-  for now.
+Points on different curves can have different global batches, so this plot shows
+the throughput-capacity frontier rather than fixed-batch speedup. Complete
+medians, three-run ranges, and batch configurations are available in the
+:download:`summary CSV <../../_static/tutorials/distributed/distributed-tradeoff.csv>`.
+
+Functional tests also covered BF16 TP4, PP4, TP2 x PP2, CP4, TP2 x CP2, and PP2
+x CP2, plus FP8 TP4, PP4, and CP4. Every case produced finite loss and gradients
+and nonzero gradients in the SNN modules. Under a 7-GiB memory budget, the planner
+selected TP4, SpikingJelly memopt, and MCore selective ``core_attn``
+recomputation; two training steps used 6.28 GiB. A TP2 x PP2 sharded
+model/optimizer checkpoint also resumed successfully from step 1 to step 2.

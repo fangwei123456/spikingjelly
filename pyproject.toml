@@ -49,6 +49,7 @@ cupy12 = ["cupy-cuda12x"]
 triton = ["triton>=3.3.1"]
 nir = ["nir", "nirtorch"]
 lightning = ["lightning", "jsonargparse[signatures]"]
+megatron = ["megatron-core==0.18.2; python_version >= '3.12'"]
 fp8-torchao = [
     "torchao>=0.13,<0.18",
 ]

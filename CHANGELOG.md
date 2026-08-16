@@ -241,11 +241,40 @@ Modules: `spikingjelly.timing_based.encoding`,
 
 Module: `spikingjelly.activation_based.distributed`.
 
-- Added Analyze -> Plan -> Apply configuration for data parallel, tensor
-  parallel, FSDP2, and FSDP2+TP. Pipeline execution uses dedicated builders.
-- Added explicit tensor-parallel plans and replicated-activation DTensor styles
-  for `TDLinear`.
-- Updated distributed benchmarks, result fields, and tutorials.
+- Added a Megatron Core training module for large SNN Transformers with DP, TP,
+  PP, sequence parallelism, distributed optimization, and sharded checkpoints.
+- Added native PyTorch DDP/FSDP2 and pipeline-parallel vision training with
+  architecture-specific channel TP/PP for SEW-ResNet34 and head/channel TP/PP
+  for Spikformer-S.
+- Added shared channel-sharded Conv/BatchNorm primitives for custom SNN parallel
+  training loops; stateful neurons consume their local-channel tensors directly.
+- Added a functional `[T, B, S, H]` to `[S, T*B, H]` temporal envelope that keeps
+  complete SNN time windows rank-local and safe under pipeline recomputation.
+- Added repository benchmark workloads for MCore-native SpikeLM BF16 pretraining
+  and Qwen2.5 `qcfs_sg` FP8 fine-tuning, including deterministic Hugging Face
+  weight import.
+- Added Transformer Engine context parallelism that shards only token length `S`
+  while keeping complete SNN time windows `T` rank-local.
+- Added TP/PP model execution with optimizer-boundary checkpoint loading,
+  functional per-call SNN state, and MCore static KV-cache prefill/decode.
+- Added typed `distributed.llm.ModelConfig` subclasses that own MCore
+  `TransformerConfig` and their model builder, matching the vision declaration
+  style; `plan_training()` returns a TP/PP/CP configuration accepted by
+  `train(config)` without a global registry or untyped builder kwargs.
+- Added `distributed.vision` model builders, serializable `TrainingConfig`,
+  ImageFolder datasets, optimizer-boundary distributed checkpoints, and
+  `train(config)` for image classification.
+- Added SpikingJelly memopt checkpointing for deterministic SNN temporal
+  transforms, with non-overlapping MCore selective `core_attn` recomputation as
+  a memory fallback. Full MCore recomputation is never selected automatically.
+- Kept channel-sharded BatchNorm in full precision under combined TP and FSDP2,
+  fixing BF16 running-statistic dtype failures.
+- Normalized SpikeLM activations before the spiking transition and returned an
+  integer MCore token count, keeping deep BF16 training gradients finite.
+- Made the packed `[S, T*B, H]` temporal envelope contiguous for MCore sequence
+  parallel all-gathers.
+- Reported Vision and LLM throughput after configurable warm-up steps, including
+  maximum per-rank and summed allocated/reserved peak memory across ranks.
 
 #### Triton Neuron Runtime
 
@@ -372,28 +401,12 @@ Module: `spikingjelly.activation_based.ann2snn`.
 
 Module: `spikingjelly.activation_based.distributed`.
 
-- Replaced `TensorShardMemoryModule` with the
-  `make_tensor_shard_memory_module()` factory. Tensor-parallel stateful modules
-  now keep their concrete module type and original state-dict paths instead of
-  adding an `inner` module namespace.
-- Removed the `spikingjelly.activation_based.distributed.dtensor` compatibility
-  facade. Import the high-level Analyze -> Plan -> Apply APIs from
-  `spikingjelly.activation_based.distributed` and low-level utilities from their
-  `data_parallel`, `pipeline`, or `tensor_parallel` modules.
-- Replaced the `SNNDistributedConfig` enable/experimental flags with the
-  explicit `mode` values `none`, `dp`, `tp`, `fsdp2`, and `fsdp2_tp`.
-  Model-specific tensor-parallel and FSDP roots are now passed directly through
-  the corresponding root fields.
-- Removed `build_eager_config()`, `SNNDistributedRuntime.from_legacy()`, and the
-  `build_cifar10dvs_vgg_eager_policy()` and
-  `build_spikformer_eager_policy()` helpers. Use
-  `configure_snn_distributed()` for manual eager configuration or the Analyze
-  -> Plan -> Apply workflow.
-- Removed the unused `model_family` argument from `analyze()`; select a model
-  family when creating or applying a distributed plan.
-- Removed the model-specific adapter `analyze()` methods. Use
-  `distributed.analyze(model, roots=("classifier",))` for CIFAR10-DVS VGG or
-  `distributed.analyze(model, roots=("head",))` for Spikformer.
+- **Breaking change:** replaced the unreleased Analyze/Plan/Apply API,
+  `SNNDistributedConfig`, `SNNDistributedRuntime`, generic model registry, and
+  separate pipeline runtime with workload namespaces. Use
+  `distributed.vision.TrainingConfig` for native PyTorch vision training,
+  `distributed.llm.TrainingConfig` for MCore LLM training, or the root
+  `tensor_parallel` primitives in a custom loop. No aliases are retained.
 
 #### Learning API Changes
 

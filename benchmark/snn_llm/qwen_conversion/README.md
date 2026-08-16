@@ -61,12 +61,6 @@ task set. It supports bounded development runs and complete, disjoint shards.
 protocols and accepted measurements belong in the ANN2SNN Qwen tutorial, not
 this runner README.
 
-## Tensor Parallelism
-
-`scaleout_tp_smoke.py` validates the explicit TDLinear tensor-parallel plan.
-It requires exactly two CUDA ranks and `NCCL_P2P_DISABLE=1` on g-series hosts.
-It is a correctness and parameter-capacity check, not a speedup claim.
-
 ## Reports
 
 Each successful command atomically writes one non-overwriting `report.json`.

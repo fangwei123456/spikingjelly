@@ -1,37 +1,39 @@
-spikingjelly.activation\_based.distributed package
-===========================================================
+spikingjelly.activation_based.distributed package
+=================================================
 
-本子包提供基于 ``torch.distributed``、``DTensor``、tensor parallel 与 FSDP2 的实验性分布式训练工具，面向 ``spikingjelly.activation_based`` 的多步 SNN。
+The root package contains SNN-specific tensor-parallel primitives. Training
+interfaces are grouped by workload: native PyTorch image training lives in
+``distributed.vision`` and Megatron Core language-model training lives in
+``distributed.llm``. Importing the root package does not import Megatron Core.
 
-----
+Tensor parallel primitives
+++++++++++++++++++++++++++
 
-This package provides experimental distributed-training helpers for multi-step SNNs in ``spikingjelly.activation_based`` based on ``torch.distributed``, ``DTensor``, tensor parallelism, and FSDP2.
+.. automodule:: spikingjelly.activation_based.distributed.tensor_parallel
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
-Distributed Helpers
-+++++++++++++++++++++++++++++
+Vision training
++++++++++++++++
 
-.. list-table::
+.. automodule:: spikingjelly.activation_based.distributed.vision
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
-    * - :func:`analyze <spikingjelly.activation_based.distributed.analyze>`
-      - Analyze an SNN model and find stateful modules and tensor-parallel candidates.
-    * - :func:`plan <spikingjelly.activation_based.distributed.plan>`
-      - Build a structured distributed plan from analysis, topology, objective, and backend.
-    * - :func:`apply <spikingjelly.activation_based.distributed.apply>`
-      - Apply a structured plan and return ``SNNDistributedRuntime``.
-    * - :class:`SNNDistributedConfig <spikingjelly.activation_based.distributed.SNNDistributedConfig>`
-      - Low-level configuration for manual SNN distribution.
-    * - :class:`SNNDistributedAnalysis <spikingjelly.activation_based.distributed.SNNDistributedAnalysis>`
-      - Capability analysis for stateful modules and tensor-parallel candidates.
-    * - :func:`ensure_distributed_initialized <spikingjelly.activation_based.distributed.ensure_distributed_initialized>`
-      - Initialize ``torch.distributed`` when needed.
-    * - :func:`build_device_mesh <spikingjelly.activation_based.distributed.build_device_mesh>`
-      - Build a ``DeviceMesh`` for tensor/data parallelism.
-    * - :func:`configure_snn_distributed <spikingjelly.activation_based.distributed.configure_snn_distributed>`
-      - Low-level entry for manual SNN distribution.
-    * - :func:`materialize_dtensor_output <spikingjelly.activation_based.distributed.materialize_dtensor_output>`
-      - Convert a ``DTensor`` output back to a regular tensor when needed.
+LLM training
+++++++++++++
 
-.. automodule:: spikingjelly.activation_based.distributed
+.. automodule:: spikingjelly.activation_based.distributed.llm
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+LLM inference
++++++++++++++
+
+.. automodule:: spikingjelly.activation_based.distributed.llm.inference
     :members:
     :undoc-members:
     :show-inheritance:
