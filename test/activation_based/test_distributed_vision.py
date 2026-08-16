@@ -83,6 +83,13 @@ def test_vision_training_config_rejects_unknown_serialized_fields():
         vision.TrainingConfig.from_dict(data)
 
 
+def test_vision_training_config_rejects_non_config_target():
+    with pytest.raises(ValueError, match="Unsupported config target"):
+        vision.TrainingConfig.from_dict(
+            {"_target_": "pathlib.Path", "pathsegments": ["unexpected"]}
+        )
+
+
 def test_vision_training_rejects_empty_datasets(monkeypatch):
     empty = TensorDataset(torch.empty(0), torch.empty(0, dtype=torch.long))
     monkeypatch.setattr(
@@ -99,9 +106,16 @@ def test_vision_training_rejects_empty_datasets(monkeypatch):
 
 
 def test_vision_pipeline_drops_ragged_batches(monkeypatch):
-    dataset = TensorDataset(torch.zeros(3, 3, 4, 4), torch.zeros(3, dtype=torch.long))
+    train_dataset = TensorDataset(
+        torch.zeros(3, 3, 4, 4), torch.zeros(3, dtype=torch.long)
+    )
+    validation_dataset = TensorDataset(
+        torch.zeros(4, 3, 4, 4), torch.zeros(4, dtype=torch.long)
+    )
     monkeypatch.setattr(
-        training, "_import_object", lambda _path: lambda: (dataset, dataset)
+        training,
+        "_import_object",
+        lambda _path: lambda: (train_dataset, validation_dataset),
     )
     config = vision.TrainingConfig(
         model=vision.SEWResNet34Config(),
@@ -115,7 +129,25 @@ def test_vision_pipeline_drops_ragged_batches(monkeypatch):
         config, dp_size=1, dp_rank=0
     )
 
-    assert len(train_loader) == len(validation_loader) == 1
+    assert len(train_loader) == 1
+    assert len(validation_loader) == 2
+
+
+def test_vision_pipeline_rejects_ragged_validation_dataset(monkeypatch):
+    dataset = TensorDataset(torch.zeros(3, 3, 4, 4), torch.zeros(3, dtype=torch.long))
+    monkeypatch.setattr(
+        training, "_import_object", lambda _path: lambda: (dataset, dataset)
+    )
+    config = vision.TrainingConfig(
+        model=vision.SEWResNet34Config(),
+        dataset_builder="package.datasets.build",
+        batch_size=2,
+        workers=0,
+        pipeline_parallel_size=2,
+    )
+
+    with pytest.raises(ValueError, match="validation dataset size"):
+        training._build_loaders(config, dp_size=1, dp_rank=0)
 
 
 def test_spikformer_pipeline_rejects_ragged_patch_grid():

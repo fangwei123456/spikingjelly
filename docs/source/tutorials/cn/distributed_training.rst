@@ -459,9 +459,10 @@ LLM 基准
 ~~~~~~~~
 
 LLM 基准使用约 1.41B 参数的 SpikeLM：24 层、hidden 2048、16 heads、FFN 8192、
-词表 50304、BF16、sequence 128 和 ``T=4``。所有点均关闭 SpikingJelly memopt 和
-梯度累计，因此 ``global_batch_size = micro_batch_size × data_parallel_size``；每个
-optimizer step 在每个 DP rank 上只执行一个 micro batch。
+词表 50304、BF16、sequence 128 和 ``T=4``。下方容量搜索中的所有点均关闭
+SpikingJelly memopt 和梯度累计，因此
+``global_batch_size = micro_batch_size × data_parallel_size``；每个 optimizer step
+在每个 DP rank 上只执行一个 micro batch。
 
 固定 global batch 的全拓扑对比
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -469,8 +470,9 @@ optimizer step 在每个 DP rank 上只执行一个 micro batch。
 下表是此前遍历全部 2 卡、4 卡及混合拓扑的固定工作量实验：``micro batch=1``、
 ``G=8``，预热 10 个 optimizer step，再测量 30 个 step，并独立重复三次；表中为
 三次中位数。单卡在 distributed optimizer 初始化时 OOM，因此以 DP2 作为相对吞吐
-基线。为让不同 DP size 都保持 ``G=8``，这组固定工作量实验使用了梯度累计；它与
-下方明确关闭梯度累计的容量搜索是两套不同口径。
+基线。为让不同 DP size 都保持 ``G=8``，这组固定工作量实验使用了梯度累计：累计
+次数为 ``8 / DP``，所以 DP2 为 4、DP4 为 2，其余 DP1 拓扑为 8。它与下方明确关闭
+梯度累计的容量搜索是两套不同口径。
 
 .. list-table:: 1.41B SpikeLM 固定 ``G=8`` 的全拓扑结果
     :header-rows: 1

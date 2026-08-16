@@ -1,5 +1,6 @@
 import torch
-from types import SimpleNamespace
+import sys
+from types import ModuleType, SimpleNamespace
 
 from spikingjelly.activation_based.ann2snn.qcfs import SignedQCFSSequenceEncoder
 from spikingjelly.activation_based.ann2snn.recipes.qwen2 import Qwen2SNNCalibration
@@ -9,6 +10,7 @@ from benchmark.snn_llm.qwen2 import (
     _qwen2_architecture,
     _qwen2_rotary_base,
     _validate_qwen2_calibration,
+    load_hf_qwen2_weights,
 )
 from spikingjelly.activation_based.distributed.llm.temporal import (
     pack_time_batch,
@@ -60,6 +62,49 @@ def test_qwen_qkv_import_interleaves_query_groups():
         fused.flatten(),
         torch.tensor([0, 1, 2, 3, 100, 101, 200, 201, 4, 5, 6, 7, 102, 103, 202, 203]),
     )
+
+
+def test_qwen_checkpoint_import_rejects_bias_mismatch(monkeypatch):
+    core = ModuleType("megatron.core")
+    core.parallel_state = SimpleNamespace(
+        get_tensor_model_parallel_rank=lambda: 0,
+        get_tensor_model_parallel_world_size=lambda: 1,
+    )
+    megatron = ModuleType("megatron")
+    megatron.core = core
+    monkeypatch.setitem(sys.modules, "megatron", megatron)
+    monkeypatch.setitem(sys.modules, "megatron.core", core)
+    source_attention = SimpleNamespace(
+        q_proj=torch.nn.Linear(1, 8, bias=True),
+        k_proj=torch.nn.Linear(1, 4, bias=True),
+        v_proj=torch.nn.Linear(1, 4, bias=True),
+    )
+    source = SimpleNamespace(
+        model=SimpleNamespace(
+            layers=[SimpleNamespace(self_attn=source_attention)],
+        ),
+        config=SimpleNamespace(num_attention_heads=4, num_key_value_heads=2),
+    )
+    target = SimpleNamespace(
+        pre_process=False,
+        decoder=SimpleNamespace(
+            layers=[
+                SimpleNamespace(
+                    layer_number=1,
+                    self_attention=SimpleNamespace(
+                        linear_qkv=SimpleNamespace(weight=torch.empty(16, 1), bias=None)
+                    ),
+                )
+            ]
+        ),
+    )
+
+    try:
+        load_hf_qwen2_weights(target, source)
+    except ValueError as error:
+        assert "QKV bias settings must match" in str(error)
+    else:
+        raise AssertionError("Mismatched QKV bias settings must fail.")
 
 
 def test_qwen_rotary_base_accepts_only_default_rope():

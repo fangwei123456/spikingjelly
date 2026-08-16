@@ -92,9 +92,15 @@ def _run_spikelm(args: argparse.Namespace) -> None:
         hidden_size=2048,
         num_attention_heads=16,
         ffn_hidden_size=8192,
-        tensor_model_parallel_size=args.tensor_parallel_size or 1,
-        pipeline_model_parallel_size=args.pipeline_parallel_size or 1,
-        context_parallel_size=args.context_parallel_size or 1,
+        tensor_model_parallel_size=args.tensor_parallel_size
+        if args.tensor_parallel_size is not None
+        else 1,
+        pipeline_model_parallel_size=args.pipeline_parallel_size
+        if args.pipeline_parallel_size is not None
+        else 1,
+        context_parallel_size=args.context_parallel_size
+        if args.context_parallel_size is not None
+        else 1,
         sequence_parallel=False,
         calculate_per_token_loss=True,
         params_dtype=torch.bfloat16,
@@ -191,7 +197,7 @@ def _run_qwen2(args: argparse.Namespace) -> None:
         gated_linear_unit=True,
         activation_func=F.silu,
         add_bias_linear=False,
-        add_qkv_bias=True,
+        add_qkv_bias=bool(source_config.attention_bias),
         params_dtype=torch.bfloat16,
         pipeline_dtype=torch.bfloat16,
         bf16=True,

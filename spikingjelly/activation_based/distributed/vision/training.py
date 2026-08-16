@@ -285,6 +285,13 @@ def _build_loaders(
         raise TypeError("dataset_builder outputs must be torch Dataset instances.")
     if len(train_dataset) == 0 or len(validation_dataset) == 0:
         raise ValueError("Training and validation datasets must be non-empty.")
+    if config.pipeline_parallel_size > 1 and len(validation_dataset) % (
+        config.batch_size * dp_size
+    ):
+        raise ValueError(
+            "Pipeline validation dataset size must be divisible by "
+            "batch_size * data_parallel_size."
+        )
 
     train_sampler = DistributedSampler(
         train_dataset,
@@ -307,11 +314,17 @@ def _build_loaders(
         worker_init_fn=_seed_worker,
         generator=generator,
         persistent_workers=config.workers > 0,
-        drop_last=config.pipeline_parallel_size > 1,
     )
     return (
-        DataLoader(train_dataset, sampler=train_sampler, **kwargs),
-        DataLoader(validation_dataset, sampler=validation_sampler, **kwargs),
+        DataLoader(
+            train_dataset,
+            sampler=train_sampler,
+            drop_last=config.pipeline_parallel_size > 1,
+            **kwargs,
+        ),
+        DataLoader(
+            validation_dataset, sampler=validation_sampler, drop_last=False, **kwargs
+        ),
         train_sampler,
         validation_sampler,
     )

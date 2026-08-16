@@ -144,6 +144,9 @@ def _plot(rows: list[dict], model: str, output: Path) -> None:
     }
     markers = ("o", "s", "^", "D", "P")
     linestyles = ("-", "--", "-.", ":", (0, (3, 1, 1, 1)))
+    model_rows = [row for row in rows if row["model"] == model]
+    if not model_rows:
+        raise ValueError(f"No benchmark rows found for {model}.")
 
     with (
         plt.style.context(["science", "no-latex", "bright"]),
@@ -210,7 +213,6 @@ def _plot(rows: list[dict], model: str, output: Path) -> None:
             "spikformer": "Spikformer-S",
             "spikelm-1.41b": "SpikeLM 1.41B · no accumulation · memopt off",
         }
-        model_rows = [row for row in rows if row["model"] == model]
         min_memory = min(row["peak_memory_gib_median"] for row in model_rows)
         max_memory = max(row["peak_memory_gib_median"] for row in model_rows)
         min_throughput = min(row["throughput_median"] for row in model_rows)
@@ -244,6 +246,8 @@ def main() -> None:
     args.output.mkdir(parents=True, exist_ok=True)
 
     rows = _aggregate(_load_runs(args.results))
+    if not rows:
+        raise ValueError(f"No completed benchmark runs found in {args.results}.")
     with (args.output / "distributed-tradeoff.csv").open(
         "w", newline="", encoding="utf-8"
     ) as file:

@@ -491,9 +491,10 @@ LLM benchmarks
 
 The LLM benchmark used an approximately 1.41B-parameter SpikeLM with 24 layers,
 hidden size 2048, 16 heads, FFN size 8192, vocabulary 50304, BF16, sequence 128,
-and ``T=4``. Every point disabled SpikingJelly memopt and gradient accumulation,
-so ``global_batch_size = micro_batch_size × data_parallel_size`` and each
-optimizer step executes one micro batch on every DP rank.
+and ``T=4``. Every capacity-search point below disabled SpikingJelly memopt and
+gradient accumulation, so
+``global_batch_size = micro_batch_size × data_parallel_size`` and each optimizer
+step executes one micro batch on every DP rank.
 
 All topologies at a fixed global batch
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -503,8 +504,9 @@ two-GPU, four-GPU, and hybrid topology: ``micro batch=1``, ``G=8``, 10 warmup
 optimizer steps, 30 measured steps, and three independent repeats. Values are
 the three-run medians. One GPU OOMed during distributed-optimizer initialization,
 so DP2 is the relative-throughput baseline. Holding ``G=8`` across different DP
-sizes required gradient accumulation in this fixed-work experiment; it is a
-different protocol from the no-accumulation capacity search below.
+sizes required ``8 / DP`` accumulation steps in this fixed-work experiment:
+four for DP2, two for DP4, and eight for each DP1 topology. It is a different
+protocol from the no-accumulation capacity search below.
 
 .. list-table:: 1.41B SpikeLM results across all topologies at fixed ``G=8``
     :header-rows: 1

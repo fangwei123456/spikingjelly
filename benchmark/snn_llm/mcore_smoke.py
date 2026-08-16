@@ -250,7 +250,11 @@ def _main() -> None:
         loss = torch.zeros((), device="cuda")
         if parallel_state.is_pipeline_last_stage():
             loss = torch.stack([item["loss"] for item in losses]).mean()
-        dist.broadcast(loss, src=dist.get_world_size() - 1)
+        dist.broadcast(
+            loss,
+            src=parallel_state.get_pipeline_model_parallel_last_rank(),
+            group=parallel_state.get_pipeline_model_parallel_group(),
+        )
         if dist.get_rank() == 0:
             print(
                 f"loss={loss.item():.8f} seam_grad={seam_grad.item():.8e} "

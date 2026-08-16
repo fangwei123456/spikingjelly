@@ -36,7 +36,9 @@ def forward_step(
         )
     input_ids = batch["input_ids"]
     labels = batch["labels"]
-    loss_mask = batch.get("loss_mask", torch.ones_like(labels, dtype=torch.float32))
+    loss_mask = batch.get("loss_mask")
+    if loss_mask is None:
+        loss_mask = torch.ones_like(labels, dtype=torch.float32)
     position_ids = batch["position_ids"]
     time_steps = get_attr_wrapped_model(model, "snn_model_config").time_steps
     output = model(

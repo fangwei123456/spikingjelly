@@ -88,7 +88,6 @@ def _activation_memory_bytes(
     tensor_parallel_size: int,
     pipeline_parallel_size: int,
     context_parallel_size: int,
-    num_microbatches: int,
     selective_recompute: bool,
 ) -> float:
     transformer = config.model.transformer
@@ -115,17 +114,16 @@ def _activation_memory_bytes(
         )
         activation += 8 * sequence * batch * pipeline_parallel_size
         activation += sequence * batch * hidden * pipeline_parallel_size
-    if pipeline_parallel_size > 1:
-        activation *= min(1, num_microbatches / pipeline_parallel_size)
-    elif selective_recompute:
-        activation += (
-            sequence * batch * hidden * 4 * (1 + config.model.vocab_size / hidden)
-        )
-    else:
-        activation += (
-            sequence * batch * config.model.vocab_size / tensor_parallel_size
-            + sequence * batch * hidden
-        ) * 2
+    if pipeline_parallel_size == 1:
+        if selective_recompute:
+            activation += (
+                sequence * batch * hidden * 4 * (1 + config.model.vocab_size / hidden)
+            )
+        else:
+            activation += (
+                sequence * batch * config.model.vocab_size / tensor_parallel_size
+                + sequence * batch * hidden
+            ) * 2
     if not selective_recompute:
         activation *= 1.05
     return activation * element_scale
@@ -228,7 +226,7 @@ def plan_training(
     transformer = config.model.transformer
     analysis = _analyze_model(config)
     budget = device_memory_bytes * memory_fraction
-    topologies: list[tuple[int, int, int, int, int]] = []
+    topologies: list[tuple[int, int, int, int]] = []
     for tensor_parallel_size in _divisors(world_size):
         if transformer.num_attention_heads % tensor_parallel_size:
             continue
@@ -265,7 +263,6 @@ def plan_training(
                         pipeline_parallel_size,
                         context_parallel_size,
                         data_parallel_size,
-                        num_microbatches,
                     )
                 )
 
@@ -275,7 +272,7 @@ def plan_training(
     smallest_estimate = float("inf")
     for selective_recompute in (False, True):
         feasible: list[tuple[float, TrainingConfig, tuple[int, int, int]]] = []
-        for tp, pp, cp, dp, num_microbatches in topologies:
+        for tp, pp, cp, dp in topologies:
             if selective_recompute and (transformer.fp8 is not None or cp > 1):
                 continue
             estimate = _parameter_memory_bytes(
@@ -285,7 +282,6 @@ def plan_training(
                 tp,
                 pp,
                 cp,
-                num_microbatches,
                 selective_recompute,
             )
             smallest_estimate = min(smallest_estimate, estimate)

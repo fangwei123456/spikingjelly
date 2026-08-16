@@ -36,8 +36,14 @@ def _decode(value: Any) -> Any:
     if "_target_" not in value:
         return {key: _decode(item) for key, item in value.items()}
 
-    module_name, class_name = value["_target_"].rsplit(".", 1)
-    target = getattr(importlib.import_module(module_name), class_name)
+    target_name = value["_target_"]
+    config_types = _config_types()
+    if not isinstance(target_name, str) or target_name not in config_types:
+        raise ValueError(
+            f"Unsupported config target {target_name!r}; import its ModelConfig or "
+            "TrainingConfig class before loading."
+        )
+    target = config_types[target_name]
     kwargs = {key: _decode(item) for key, item in value.items() if key != "_target_"}
     return target(**kwargs)
 
@@ -245,8 +251,11 @@ class TrainingConfig:
     def from_dict(cls, data: dict[str, Any]) -> TrainingConfig:
         r"""Restore a configuration created by :meth:`as_dict`.
 
-        **中文：** 从 ``as_dict`` 结果恢复具体 model config 子类。
-        **English:** Restore the concrete model-config subclass from ``as_dict``.
+        **中文：** 从 ``as_dict`` 结果恢复具体 config 子类。自定义 config 类必须先
+        导入，未加载或非 config 类型的 target 会被拒绝。
+        **English:** Restore concrete config subclasses from ``as_dict``. Custom
+        config classes must already be imported; unavailable or non-config targets
+        are rejected.
 
         :param data: 已序列化配置。 / Serialized configuration.
         :type data: dict[str, Any]
@@ -258,6 +267,16 @@ class TrainingConfig:
         if not isinstance(config, cls):
             raise TypeError(f"Expected {cls.__name__}, got {type(config).__name__}.")
         return config
+
+
+def _config_types() -> dict[str, type]:
+    pending = [ModelConfig, TrainingConfig]
+    result = {}
+    while pending:
+        config_type = pending.pop()
+        result[f"{config_type.__module__}.{config_type.__qualname__}"] = config_type
+        pending.extend(config_type.__subclasses__())
+    return result
 
 
 TrainingConfig.__init__.__doc__ = r"""Initialize distributed vision training.

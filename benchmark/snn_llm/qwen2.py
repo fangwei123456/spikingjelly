@@ -364,11 +364,19 @@ def load_hf_qwen2_weights(model: "MegatronModule", source: nn.Module) -> None:
             source.config.num_key_value_heads,
         )
         _copy(attention.linear_qkv.weight, fused_weight.chunk(world_size)[rank])
-        if attention.linear_qkv.bias is not None:
+        query_bias = source_attention.q_proj.bias
+        key_bias = source_attention.k_proj.bias
+        value_bias = source_attention.v_proj.bias
+        if attention.linear_qkv.bias is None:
+            if query_bias is not None or key_bias is not None or value_bias is not None:
+                raise ValueError("The source and target QKV bias settings must match.")
+        else:
+            if query_bias is None or key_bias is None or value_bias is None:
+                raise ValueError("The source and target QKV bias settings must match.")
             fused_bias = _fuse_qkv(
-                source_attention.q_proj.bias,
-                source_attention.k_proj.bias,
-                source_attention.v_proj.bias,
+                query_bias,
+                key_bias,
+                value_bias,
                 source.config.num_attention_heads,
                 source.config.num_key_value_heads,
             )
