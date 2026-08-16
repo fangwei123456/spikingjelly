@@ -1,58 +1,46 @@
+from __future__ import annotations
+
+from typing import Any, Literal, Optional
+
 import torch
 import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
 
-from spikingjelly.activation_based.distributed.tensor_parallel.debug import (
-    _record_tp_all_reduce,
-)
-from spikingjelly.activation_based.distributed.tensor_parallel.state import (
-    _require_even_shard,
-    _shard_range,
-)
+from spikingjelly.activation_based.memopt import in_gc_1st_forward
+
+__all__ = [
+    "ChannelShardBatchNorm1d",
+    "ChannelShardBatchNorm2d",
+    "ChannelShardConv1d",
+    "ChannelShardConv2d",
+]
 
 
-def _reversed_padding_repeated_twice(source: nn.Module) -> tuple[int, ...]:
-    padding = getattr(source, "_reversed_padding_repeated_twice", None)
-    if padding is not None:
-        return tuple(padding)
-
-    padding = source.padding
-    if isinstance(padding, str):
-        if padding == "valid":
-            return tuple(0 for _ in range(2 * len(source.kernel_size)))
-        if padding != "same":
-            raise ValueError(f"Unsupported padding string '{padding}'.")
-        total_padding = [
-            dilation * (kernel - 1)
-            for dilation, kernel in zip(
-                source.dilation, source.kernel_size, strict=True
-            )
-        ]
-        return tuple(
-            value
-            for total in reversed(total_padding)
-            for value in (total // 2, total - total // 2)
+def _require_even_shard(total: int, world_size: int, name: str) -> None:
+    if total % world_size:
+        raise ValueError(
+            f"{name}={total} must be divisible by tensor-parallel world_size={world_size}."
         )
-    if isinstance(padding, int):
-        padding = (padding,)
-    return tuple(value for pad in reversed(padding) for value in (pad, pad))
+
+
+def _shard_range(total: int, rank: int, world_size: int) -> tuple[int, int]:
+    shard = total // world_size
+    start = shard * rank
+    return start, start + shard
 
 
 class _ColwiseBackwardAllReduce(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x: torch.Tensor, process_group, world_size: int):
+    def forward(ctx, x: torch.Tensor, process_group):
         ctx.process_group = process_group
-        ctx.world_size = int(world_size)
         return x
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
-        if ctx.world_size > 1:
-            _record_tp_all_reduce(grad_output)
-            grad_output = grad_output.contiguous()
-            dist.all_reduce(grad_output, group=ctx.process_group)
-        return grad_output, None, None
+        grad_output = grad_output.contiguous()
+        dist.all_reduce(grad_output, group=ctx.process_group)
+        return grad_output, None
 
 
 class _ChannelShardConv(nn.Module):
@@ -61,7 +49,12 @@ class _ChannelShardConv(nn.Module):
     _spatial_dims = 0
     _zero_padding = ()
 
-    def __init__(self, source: nn.Module, process_group, mode: str):
+    def __init__(
+        self,
+        source: nn.Module,
+        process_group: Optional[Any],
+        mode: Literal["colwise", "rowwise"],
+    ) -> None:
         super().__init__()
         if source.groups != 1:
             raise NotImplementedError(f"{type(self).__name__} only supports groups=1.")
@@ -70,7 +63,7 @@ class _ChannelShardConv(nn.Module):
 
         self.mode = mode
         self.process_group = process_group
-        self.rank = dist.get_rank(process_group) if process_group is not None else 0
+        rank = dist.get_rank(process_group) if process_group is not None else 0
         self.world_size = (
             dist.get_world_size(process_group) if process_group is not None else 1
         )
@@ -80,21 +73,22 @@ class _ChannelShardConv(nn.Module):
         self.dilation = source.dilation
         self.groups = source.groups
         self.padding_mode = source.padding_mode
-        self._reversed_padding_repeated_twice = _reversed_padding_repeated_twice(source)
+        self._reversed_padding_repeated_twice = tuple(
+            source._reversed_padding_repeated_twice
+        )
         self.in_channels = source.in_channels
         self.out_channels = source.out_channels
         self.kernel_size = source.kernel_size
 
         if mode == "colwise":
             _require_even_shard(source.out_channels, self.world_size, "out_channels")
-            start, end = _shard_range(source.out_channels, self.rank, self.world_size)
+            start, end = _shard_range(source.out_channels, rank, self.world_size)
             weight = source.weight.detach()[start:end].clone()
             bias = (
                 source.bias.detach()[start:end].clone()
                 if source.bias is not None
                 else None
             )
-            self.local_out_channels = end - start
             self.register_parameter(
                 "weight",
                 nn.Parameter(weight, requires_grad=source.weight.requires_grad),
@@ -107,10 +101,9 @@ class _ChannelShardConv(nn.Module):
             )
         else:
             _require_even_shard(source.in_channels, self.world_size, "in_channels")
-            start, end = _shard_range(source.in_channels, self.rank, self.world_size)
+            start, end = _shard_range(source.in_channels, rank, self.world_size)
             weight = source.weight.detach()[:, start:end].clone()
             bias = source.bias.detach().clone() if source.bias is not None else None
-            self.local_in_channels = end - start
             self.register_parameter(
                 "weight",
                 nn.Parameter(weight, requires_grad=source.weight.requires_grad),
@@ -137,9 +130,7 @@ class _ChannelShardConv(nn.Module):
 
         if self.mode == "colwise":
             if self.world_size > 1:
-                x = _ColwiseBackwardAllReduce.apply(
-                    x, self.process_group, self.world_size
-                )
+                x = _ColwiseBackwardAllReduce.apply(x, self.process_group)
             return self._conv(
                 x,
                 self.weight,
@@ -160,7 +151,6 @@ class _ChannelShardConv(nn.Module):
             self.groups,
         )
         if self.world_size > 1:
-            _record_tp_all_reduce(y)
             dist.all_reduce(y, group=self.process_group)
         if self.bias is not None:
             y = y + self.bias.view(1, -1, *(1,) * self._spatial_dims)
@@ -185,7 +175,12 @@ class ChannelShardConv2d(_ChannelShardConv):
     _spatial_dims = 2
     _zero_padding = (0, 0)
 
-    def __init__(self, source: nn.Module, process_group, mode: str):
+    def __init__(
+        self,
+        source: nn.Module,
+        process_group: Optional[Any],
+        mode: Literal["colwise", "rowwise"],
+    ) -> None:
         r"""**API Language** - :ref:`中文 <ChannelShardConv2d-cn>` | :ref:`English <ChannelShardConv2d-en>`
 
         ----
@@ -227,7 +222,12 @@ class ChannelShardConv1d(_ChannelShardConv):
     _spatial_dims = 1
     _zero_padding = (0,)
 
-    def __init__(self, source: nn.Module, process_group, mode: str):
+    def __init__(
+        self,
+        source: nn.Module,
+        process_group: Optional[Any],
+        mode: Literal["colwise", "rowwise"],
+    ) -> None:
         r"""**API Language** - :ref:`中文 <ChannelShardConv1d-cn>` | :ref:`English <ChannelShardConv1d-en>`
 
         ----
@@ -267,10 +267,10 @@ class _ChannelShardBatchNorm(nn.Module):
     _input_shape = ""
     _spatial_dims = 0
 
-    def __init__(self, source: nn.Module, process_group):
+    def __init__(self, source: nn.Module, process_group: Optional[Any]) -> None:
         super().__init__()
         self.process_group = process_group
-        self.rank = dist.get_rank(process_group) if process_group is not None else 0
+        rank = dist.get_rank(process_group) if process_group is not None else 0
         self.world_size = (
             dist.get_world_size(process_group) if process_group is not None else 1
         )
@@ -282,7 +282,7 @@ class _ChannelShardBatchNorm(nn.Module):
         self.num_features = source.num_features
 
         _require_even_shard(source.num_features, self.world_size, "num_features")
-        start, end = _shard_range(source.num_features, self.rank, self.world_size)
+        start, end = _shard_range(source.num_features, rank, self.world_size)
 
         if self.affine:
             self.register_parameter(
@@ -310,13 +310,9 @@ class _ChannelShardBatchNorm(nn.Module):
             self.register_buffer(
                 "running_var", source.running_var.detach()[start:end].clone()
             )
-            num_batches_tracked = getattr(source, "num_batches_tracked", None)
-            if num_batches_tracked is not None:
-                self.register_buffer(
-                    "num_batches_tracked", num_batches_tracked.detach().clone()
-                )
-            else:
-                self.register_buffer("num_batches_tracked", None)
+            self.register_buffer(
+                "num_batches_tracked", source.num_batches_tracked.detach().clone()
+            )
         else:
             self.register_buffer("running_mean", None)
             self.register_buffer("running_var", None)
@@ -329,11 +325,8 @@ class _ChannelShardBatchNorm(nn.Module):
 
     def _batch_norm(self, x: torch.Tensor) -> torch.Tensor:
         exponential_average_factor = self.momentum
-        if (
-            self.training
-            and self.track_running_stats
-            and self.num_batches_tracked is not None
-        ):
+        checkpoint_forward = in_gc_1st_forward()
+        if self.training and self.track_running_stats and not checkpoint_forward:
             self.num_batches_tracked.add_(1)
             if self.momentum is None:
                 exponential_average_factor = 1.0 / float(
@@ -341,8 +334,8 @@ class _ChannelShardBatchNorm(nn.Module):
                 )
         return F.batch_norm(
             x,
-            self.running_mean,
-            self.running_var,
+            None if checkpoint_forward else self.running_mean,
+            None if checkpoint_forward else self.running_var,
             self.weight,
             self.bias,
             self.training or not self.track_running_stats,
@@ -367,7 +360,7 @@ class ChannelShardBatchNorm2d(_ChannelShardBatchNorm):
     _input_shape = "[T, N, C, H, W]"
     _spatial_dims = 2
 
-    def __init__(self, source: nn.Module, process_group):
+    def __init__(self, source: nn.Module, process_group: Optional[Any]) -> None:
         r"""**API Language** - :ref:`中文 <ChannelShardBatchNorm2d-cn>` | :ref:`English <ChannelShardBatchNorm2d-en>`
 
         ----
@@ -403,7 +396,7 @@ class ChannelShardBatchNorm1d(_ChannelShardBatchNorm):
     _input_shape = "[T, N, C, L]"
     _spatial_dims = 1
 
-    def __init__(self, source: nn.Module, process_group):
+    def __init__(self, source: nn.Module, process_group: Optional[Any]) -> None:
         r"""**API Language** - :ref:`中文 <ChannelShardBatchNorm1d-cn>` | :ref:`English <ChannelShardBatchNorm1d-en>`
 
         ----

@@ -1,0 +1,356 @@
+from __future__ import annotations
+
+import functools
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, ClassVar
+
+import torch
+import torch.nn as nn
+
+from spikingjelly.activation_based import base
+from spikingjelly.activation_based.distributed.llm import (
+    ModelBuilder,
+    ModelConfig,
+)
+from spikingjelly.activation_based.distributed.llm.temporal import (
+    pack_time_batch,
+    run_functional_sequence,
+    unpack_time_batch,
+)
+from spikingjelly.activation_based.memopt import (
+    NullSpikeCompressor,
+    input_compressed_gc,
+)
+
+from ._causal_lm import forward_step
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from megatron.core.transformer import MegatronModule, TransformerConfig
+
+
+@dataclass(frozen=True, kw_only=True)
+class SpikeLMConfig(ModelConfig):
+    builder: ClassVar[str] = "benchmark.snn_llm.spikelm.SpikeLMBuilder"
+    spike_decay: float = 0.25
+    spike_amplitude: float = 1.0
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not 0.0 <= self.spike_decay <= 1.0:
+            raise ValueError("spike_decay must lie in [0, 1].")
+        if self.spike_amplitude <= 0.0:
+            raise ValueError("spike_amplitude must be positive.")
+
+
+SpikeLMConfig.__init__.__doc__ = r"""Initialize the MCore-native SpikeLM recipe.
+
+**API Language** - :ref:`中文 <SpikeLMConfig-cn>` | :ref:`English <SpikeLMConfig-en>`
+
+----
+
+.. _SpikeLMConfig-cn:
+
+* **中文**
+
+定义完整的 SpikeLM 模型配置：MCore Transformer 结构、词表、上下文、时间步和
+elastic bi-spiking 参数。
+
+:param transformer: MCore Transformer 配置。
+:type transformer: megatron.core.transformer.TransformerConfig
+:param vocab_size: 词表大小。
+:type vocab_size: int
+:param max_sequence_length: 最大上下文长度。
+:type max_sequence_length: int
+:param time_steps: SNN 时间步。
+:type time_steps: int
+:param share_embeddings_and_output_weights: 是否共享 embedding 与输出权重。
+:type share_embeddings_and_output_weights: bool
+:param position_embedding_type: 位置编码类型。
+:type position_embedding_type: str
+:param spike_decay: 膜电位残留系数。
+:type spike_decay: float
+:param spike_amplitude: 双向脉冲幅值。
+:type spike_amplitude: float
+:raises ValueError: 数值范围无效。
+
+----
+
+.. _SpikeLMConfig-en:
+
+* **English**
+
+Defines the complete SpikeLM model configuration: MCore Transformer structure,
+vocabulary, context, time steps, and elastic bi-spiking parameters.
+
+:param transformer: MCore Transformer configuration.
+:type transformer: megatron.core.transformer.TransformerConfig
+:param vocab_size: Vocabulary size.
+:type vocab_size: int
+:param max_sequence_length: Maximum context length.
+:type max_sequence_length: int
+:param time_steps: SNN time steps.
+:type time_steps: int
+:param share_embeddings_and_output_weights: Whether to tie embedding and output weights.
+:type share_embeddings_and_output_weights: bool
+:param position_embedding_type: Position-embedding type.
+:type position_embedding_type: str
+:param spike_decay: Membrane carry coefficient.
+:type spike_decay: float
+:param spike_amplitude: Bidirectional spike amplitude.
+:type spike_amplitude: float
+:raises ValueError: If a numeric range is invalid.
+"""
+
+
+class _ElasticBiSpike(base.MemoryModule):
+    def __init__(self, time_steps: int, decay: float, amplitude: float) -> None:
+        super().__init__()
+        self.time_steps = time_steps
+        self.decay = decay
+        self.register_buffer("amplitude", torch.full((time_steps,), amplitude))
+        self.register_memory("v", 0.0)
+        self.step_mode = "m"
+
+    def materialize_states(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[Any, ...],
+        step_mode: str,
+    ) -> tuple[torch.Tensor, ...]:
+        del step_mode
+        voltage = states[0]
+        if not isinstance(voltage, torch.Tensor):
+            voltage = torch.zeros_like(inputs[0][0])
+        return (voltage,)
+
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[torch.Tensor, ...],
+        **kwargs: Any,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[torch.Tensor, ...]]:
+        del kwargs
+        sequence = inputs[0]
+        if sequence.shape[0] != self.time_steps:
+            raise ValueError(
+                f"Expected T={self.time_steps}, got sequence length {sequence.shape[0]}."
+            )
+        voltage = states[0]
+        previous_spike = torch.zeros_like(voltage)
+        spikes = []
+        for step, current in enumerate(sequence):
+            amplitude = self.amplitude[step].to(dtype=current.dtype)
+            if step == 0:
+                voltage = voltage + current
+            else:
+                voltage = (
+                    voltage
+                    * self.decay
+                    * (
+                        self.amplitude[step - 1].to(dtype=current.dtype)
+                        - previous_spike.detach()
+                    )
+                    + current
+                )
+            scaled = (voltage / amplitude).clamp(-1.0, 1.0)
+            rounded = scaled.round()
+            previous_spike = ((rounded - scaled).detach() + scaled) * amplitude
+            spikes.append(previous_spike)
+        return (torch.stack(spikes),), (voltage,)
+
+
+class _SpikingLayerNorm(nn.LayerNorm):
+    def __init__(
+        self,
+        *,
+        config: "TransformerConfig",
+        hidden_size: int,
+        eps: float,
+        time_steps: int,
+        decay: float,
+        amplitude: float,
+        use_snn_memopt: bool,
+    ) -> None:
+        del config
+        super().__init__(hidden_size, eps=eps)
+        self.time_steps = time_steps
+        self.spike = _ElasticBiSpike(time_steps, decay, amplitude)
+        self.use_snn_memopt = use_snn_memopt
+        self.compressor = NullSpikeCompressor()
+
+    def _spike(self, hidden: torch.Tensor) -> torch.Tensor:
+        sequence = unpack_time_batch(hidden, self.time_steps)
+        spikes = run_functional_sequence(self.spike, (sequence,))[0]
+        return pack_time_batch(spikes)
+
+    def forward(self, hidden: torch.Tensor) -> torch.Tensor:
+        hidden = super().forward(hidden)
+        if self.use_snn_memopt and torch.is_grad_enabled():
+            return input_compressed_gc(self._spike, self.compressor, hidden)
+        return self._spike(hidden)
+
+
+def _layer_norm(
+    *, config: "TransformerConfig", hidden_size: int, eps: float
+) -> nn.LayerNorm:
+    del config
+    return nn.LayerNorm(hidden_size, eps=eps)
+
+
+def model_provider(
+    config: SpikeLMConfig,
+    use_snn_memopt: bool,
+    pre_process: bool,
+    post_process: bool,
+) -> "MegatronModule":
+    r"""Build the local MCore pipeline stage for SpikeLM.
+
+    **API Language** - :ref:`中文 <spikelm-provider-cn>` | :ref:`English <spikelm-provider-en>`
+
+    ----
+
+    .. _spikelm-provider-cn:
+
+    * **中文**
+
+    通过公开 ``ModuleSpec`` 在 attention 与 MLP 投影前注入 functional elastic
+    bi-spiking transition；FP8 配置使用 TE GPT layer spec，且不会静默回退。
+
+    :param config: 完整 SpikeLM 模型配置。
+    :type config: SpikeLMConfig
+    :param use_snn_memopt: 是否 checkpoint 确定性 spiking transition。
+    :type use_snn_memopt: bool
+    :param pre_process: 当前 PP stage 是否拥有 embedding。
+    :type pre_process: bool
+    :param post_process: 当前 PP stage 是否拥有 LM head。
+    :type post_process: bool
+    :return: 当前 PP stage 的 MCore GPT model。
+    :rtype: megatron.core.transformer.MegatronModule
+    :raises ValueError: 模型 context 与训练配置不一致，或 normalization 不受支持。
+    :raises ImportError: 启用 FP8 但 Transformer Engine 不可用。
+
+    ----
+
+    .. _spikelm-provider-en:
+
+    * **English**
+
+    Injects functional elastic bi-spiking transitions before attention and MLP
+    projections through public ``ModuleSpec``. FP8 uses the TE GPT layer spec and
+    never silently falls back.
+
+    :param config: Complete SpikeLM model configuration.
+    :type config: SpikeLMConfig
+    :param use_snn_memopt: Whether deterministic spiking transitions are checkpointed.
+    :type use_snn_memopt: bool
+    :param pre_process: Whether this PP stage owns the embedding.
+    :type pre_process: bool
+    :param post_process: Whether this PP stage owns the LM head.
+    :type post_process: bool
+    :return: MCore GPT model for the current PP stage.
+    :rtype: megatron.core.transformer.MegatronModule
+    :raises ValueError: If model context disagrees with training or normalization is unsupported.
+    :raises ImportError: If FP8 is enabled without Transformer Engine.
+    """
+    from megatron.core.models.gpt.gpt_layer_specs import (
+        get_gpt_layer_local_spec,
+        get_gpt_layer_with_transformer_engine_spec,
+    )
+    from megatron.core.models.gpt.gpt_model import GPTModel
+    from megatron.core.transformer.mlp import MLP, MLPSubmodules
+    from megatron.core.transformer.transformer_block import (
+        TransformerBlockSubmodules,
+        get_num_layers_to_build,
+    )
+
+    transformer_config = config.transformer
+    if transformer_config.normalization != "LayerNorm":
+        raise ValueError("SpikeLM currently requires MCore LayerNorm.")
+    use_te = (
+        transformer_config.fp8 is not None
+        or transformer_config.context_parallel_size > 1
+    )
+    layer_spec = (
+        get_gpt_layer_with_transformer_engine_spec()
+        if use_te
+        else get_gpt_layer_local_spec()
+    )
+    spiking_norm = functools.partial(
+        _SpikingLayerNorm,
+        time_steps=config.time_steps,
+        decay=config.spike_decay,
+        amplitude=config.spike_amplitude,
+        use_snn_memopt=use_snn_memopt,
+    )
+    layer_spec.submodules.input_layernorm = spiking_norm
+    layer_spec.submodules.pre_mlp_layernorm = spiking_norm
+    if use_te:
+        from megatron.core.extensions.transformer_engine import TEColumnParallelLinear
+
+        layer_spec.submodules.self_attention.submodules.linear_qkv = (
+            TEColumnParallelLinear
+        )
+        mlp_submodules = layer_spec.submodules.mlp.keywords["submodules"]
+        layer_spec.submodules.mlp = functools.partial(
+            MLP.as_mlp_submodule,
+            submodules=MLPSubmodules(
+                linear_fc1=TEColumnParallelLinear,
+                linear_fc2=mlp_submodules.linear_fc2,
+            ),
+        )
+    block_spec = TransformerBlockSubmodules(
+        layer_specs=[layer_spec] * get_num_layers_to_build(transformer_config),
+        layer_norm=_layer_norm,
+    )
+    model = GPTModel(
+        config=transformer_config,
+        transformer_layer_spec=block_spec,
+        vocab_size=config.vocab_size,
+        max_sequence_length=config.max_sequence_length,
+        pre_process=pre_process,
+        post_process=post_process,
+        parallel_output=True,
+        share_embeddings_and_output_weights=config.share_embeddings_and_output_weights,
+        position_embedding_type=config.position_embedding_type,
+    )
+    model.snn_model_config = config
+    model.snn_memopt_enabled = use_snn_memopt
+    model.temporal_output_reduction = "mean"
+    model.checkpoint_metadata = {
+        "recipe_name": "spikelm",
+        "model_config": {
+            "spike_decay": config.spike_decay,
+            "spike_amplitude": config.spike_amplitude,
+            "transformer": {
+                "num_layers": transformer_config.num_layers,
+                "hidden_size": transformer_config.hidden_size,
+                "num_attention_heads": transformer_config.num_attention_heads,
+                "ffn_hidden_size": transformer_config.ffn_hidden_size,
+                "normalization": transformer_config.normalization,
+                "layernorm_epsilon": transformer_config.layernorm_epsilon,
+            },
+        },
+    }
+    return model
+
+
+class SpikeLMBuilder(ModelBuilder):
+    def build(
+        self, *, use_snn_memopt: bool, resume: bool
+    ) -> tuple["Callable", "Callable"]:
+        del resume
+        if not isinstance(self.config, SpikeLMConfig):
+            raise TypeError("SpikeLMBuilder requires SpikeLMConfig.")
+        return (
+            functools.partial(
+                model_provider,
+                self.config,
+                use_snn_memopt,
+            ),
+            forward_step,
+        )
+
+
+__all__ = ["SpikeLMBuilder", "SpikeLMConfig", "forward_step", "model_provider"]

@@ -161,25 +161,6 @@ def test_precision_prepare_emits_one_lifecycle_summary(loguru_records):
     assert len(summaries) == 1
 
 
-def test_distributed_configuration_emits_one_lifecycle_summary(loguru_records):
-    import torch
-
-    from spikingjelly.activation_based.distributed.config import SNNDistributedConfig
-    from spikingjelly.activation_based.distributed.execution import (
-        configure_snn_distributed,
-    )
-
-    configure_snn_distributed(torch.nn.Linear(2, 2), SNNDistributedConfig())
-    summaries = [
-        record
-        for record in loguru_records
-        if record["message"].startswith("Configuration completed:")
-    ]
-    assert len(summaries) == 1
-    assert "mode=none" in summaries[0]["message"]
-    assert "mesh_shape=None" in summaries[0]["message"]
-
-
 def test_metric_logger_formats_progress_with_loguru_arguments(loguru_records):
     from spikingjelly.activation_based.model.tv_ref_classify.utils import MetricLogger
 

@@ -140,6 +140,15 @@ class InputCompressedGC(autograd.Function):
         ctx.x_compressor = x_compressor
         ctx.x_seq_shape = x_seq.shape
         ctx.ac_device_type, ctx.ac_dtype, ctx.ac_enabled = query_autocast()
+        ctx.fwd_cuda_devices = sorted(
+            {
+                tensor.device.index
+                if tensor.device.index is not None
+                else torch.cuda.current_device()
+                for tensor in (x_seq, *args)
+                if torch.is_tensor(tensor) and tensor.is_cuda
+            }
+        )
 
         input_args, tensor_args, tensor_args_indices = _separate_args(
             x_compressor.compress(x_seq), *args
@@ -150,10 +159,9 @@ class InputCompressedGC(autograd.Function):
 
         # save RNG states
         ctx.fwd_rng_state_cpu = torch.get_rng_state()
-        if torch.cuda._initialized:
-            ctx.fwd_rng_state_cuda = torch.cuda.get_rng_state_all()
-        else:
-            ctx.fwd_rng_state_cuda = []
+        ctx.fwd_rng_state_cuda = {
+            device: torch.cuda.get_rng_state(device) for device in ctx.fwd_cuda_devices
+        }
 
         # depend on external autocast context
         with _gc_1st_forward(), torch.no_grad():
@@ -181,10 +189,10 @@ class InputCompressedGC(autograd.Function):
                         if torch.is_tensor(args[i]):
                             args[i] = args[i].detach().requires_grad_(rg)
 
-                    devices = range(torch.cuda.device_count())
-                    with torch.random.fork_rng(devices):
+                    with torch.random.fork_rng(devices=ctx.fwd_cuda_devices):
                         torch.set_rng_state(ctx.fwd_rng_state_cpu)
-                        torch.cuda.set_rng_state_all(ctx.fwd_rng_state_cuda)
+                        for device, state in ctx.fwd_rng_state_cuda.items():
+                            torch.cuda.set_rng_state(state, device)
                         outputs = ctx.f_forward(x_seq, *args)
 
                 # grad_outputs is a tuple, while outputs can be a tensor or a tuple

@@ -1,820 +1,166 @@
-# ruff: noqa: F401,F403,F405
-import pickle
-from typing import NamedTuple
+import copy
+import os
+import tempfile
 
+import torch
 import torch.distributed as dist
+import torch.multiprocessing as mp
 
-import spikingjelly.activation_based.distributed.tensor_parallel.linear as tp_linear
-from spikingjelly.activation_based import base
-from spikingjelly.activation_based.distributed.tensor_parallel.state import (
-    _has_tensor_shard_input_validator,
+from spikingjelly.activation_based import functional, layer, neuron
+from spikingjelly.activation_based.distributed.tensor_parallel import (
+    ChannelShardBatchNorm2d,
+    ChannelShardConv2d,
 )
-from test.activation_based._distributed_dtensor_test_support import *
+from spikingjelly.activation_based.memopt import GCContainer
 
 
-class _ResetCountingMemoryModule(base.MemoryModule):
-    def __init__(self):
-        super().__init__()
-        self.register_memory("v", 0.0)
-        self.reset_calls = 0
-
-    def single_step_forward(self, x: torch.Tensor):
-        self.v = x * 2
-        return self.v
-
-    def reset(self):
-        self.reset_calls += 1
-        super().reset()
-
-
-def test_tp_communication_debug_stats_recorded_for_rowwise_conv(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    conv = ChannelShardConv1d(
-        nn.Conv1d(4, 6, kernel_size=1, bias=True),
-        process_group=None,
-        mode="rowwise",
+def _vision_tp_worker(rank: int, store_path: str) -> None:
+    from spikingjelly.activation_based.distributed.vision.sew_resnet import (
+        SEWResNet34Builder,
+        SEWResNet34Config,
     )
-    x = torch.randn(2, 4, 8)
-    reset_tp_communication_debug_stats()
-    enable_tp_communication_debug(True)
+    from spikingjelly.activation_based.distributed.vision.spikformer import (
+        SpikformerBuilder,
+        SpikformerConfig,
+    )
+
+    dist.init_process_group(
+        "gloo",
+        init_method=f"file://{store_path}",
+        rank=rank,
+        world_size=2,
+    )
     try:
-        conv(x)
-        stats = get_tp_communication_debug_stats()
-        assert stats["all_reduce_calls"] == 0
-        assert stats["all_reduce_bytes"] == 0
+        cases = (
+            (
+                SEWResNet34Config(time_steps=2, num_classes=7, image_size=32),
+                SEWResNet34Builder,
+            ),
+            (
+                SpikformerConfig(
+                    time_steps=2,
+                    num_classes=7,
+                    image_height=32,
+                    image_width=32,
+                ),
+                SpikformerBuilder,
+            ),
+        )
+        for config, builder_cls in cases:
+            torch.manual_seed(17)
+            reference, _, _, _ = builder_cls(config).build(
+                process_group=None,
+                pipeline_rank=0,
+                pipeline_size=1,
+                pipeline_microbatches=1,
+                device=torch.device("cpu"),
+                micro_batch_size=1,
+                memopt_level=0,
+                memopt_compress_inputs=False,
+            )
+            torch.manual_seed(17)
+            candidate, _, _, _ = builder_cls(config).build(
+                process_group=dist.group.WORLD,
+                pipeline_rank=0,
+                pipeline_size=1,
+                pipeline_microbatches=1,
+                device=torch.device("cpu"),
+                micro_batch_size=1,
+                memopt_level=0,
+                memopt_compress_inputs=False,
+            )
+            reference.eval()
+            candidate.eval()
+            torch.manual_seed(19)
+            x_reference = torch.randn(
+                config.time_steps, 1, 3, 32, 32, requires_grad=True
+            )
+            x_candidate = x_reference.detach().clone().requires_grad_(True)
 
-        conv.world_size = 2
-        conv.process_group = None
-        calls = {"count": 0}
-
-        def _fake_all_reduce(tensor, group=None):
-            calls["count"] += 1
-            return tensor
-
-        monkeypatch.setattr(dist, "is_available", lambda: True)
-        monkeypatch.setattr(dist, "is_initialized", lambda: True)
-        monkeypatch.setattr(dist, "all_reduce", _fake_all_reduce)
-        conv(x)
-        stats = get_tp_communication_debug_stats()
-        assert calls["count"] == 1
-        assert stats["all_reduce_calls"] == 1
-        assert stats["all_reduce_bytes"] > 0
+            reference_output = reference(x_reference)
+            candidate_output = candidate(x_candidate)
+            torch.testing.assert_close(candidate_output, reference_output)
+            reference_output.square().mean().backward()
+            candidate_output.square().mean().backward()
+            torch.testing.assert_close(x_candidate.grad, x_reference.grad)
     finally:
-        enable_tp_communication_debug(False)
-        reset_tp_communication_debug_stats()
+        dist.destroy_process_group()
 
 
-def test_make_colwise_parallel_rejects_unavailable_local_output(monkeypatch):
-    class _LegacyColwiseParallel:
-        def __init__(self):
-            pass
-
-    monkeypatch.setattr(tp_linear, "TENSOR_PARALLEL_AVAILABLE", True)
-    monkeypatch.setattr(tp_linear, "ColwiseParallel", _LegacyColwiseParallel)
-    monkeypatch.setattr(tp_linear, "make_output_tensor", None)
-
-    with pytest.raises(RuntimeError, match="Cannot produce local output"):
-        tp_linear._make_colwise_parallel(local_output=True)
-
-
-def test_tdlinear_replicated_tp_styles_preserve_multistep_output_single_rank():
-    with single_rank_process_group():
-        torch.manual_seed(0)
-        baseline = nn.Sequential(
-            TDLinear(4, 6),
-            TDLinear(6, 3),
-        ).eval()
-        candidate = copy.deepcopy(baseline)
-        automatic_plan = auto_build_tensor_parallel_plan(candidate)
-        assert type(automatic_plan["0"]).__name__ == "_TDLinearColwiseReplicated"
-        assert type(automatic_plan["1"]).__name__ == "_TDLinearRowwiseReplicated"
-        x = torch.randn(5, 2, 4, requires_grad=True)
-        reference = baseline(x)
-        reference.square().sum().backward()
-        reference_input_grad = x.grad.detach().clone()
-
-        distributed_model, _, _ = configure_snn_distributed(
-            candidate,
-            SNNDistributedConfig(
-                device_type="cpu",
-                mesh_shape=(1,),
-                tensor_parallel_plan={
-                    "0": "td_colwise_replicated",
-                    "1": "td_rowwise_replicated",
-                },
-                mode="tp",
-            ),
-        )
-        distributed_input = x.detach().clone().requires_grad_(True)
-        result = materialize_dtensor_output(distributed_model(distributed_input))
-        result.square().sum().backward()
-
-        torch.testing.assert_close(reference, result)
-        torch.testing.assert_close(reference_input_grad, distributed_input.grad)
-        for reference_parameter, distributed_parameter in zip(
-            baseline.parameters(), distributed_model.parameters(), strict=True
-        ):
-            distributed_grad = distributed_parameter.grad
-            if hasattr(distributed_grad, "to_local"):
-                distributed_grad = distributed_grad.to_local()
-            torch.testing.assert_close(reference_parameter.grad, distributed_grad)
-
-
-def test_parallelize_snn_module_validates_named_mesh_dim_bounds(monkeypatch):
-    class _FakeMesh:
-        ndim = 2
-        mesh_dim_names = ("dp", "tp")
-
-        def __getitem__(self, key):
-            return key
-
-    def _fake_parallelize_module(module, device_mesh, parallelize_plan):
-        return module
-
-    monkeypatch.setattr(tp_linear, "TENSOR_PARALLEL_AVAILABLE", True)
-    monkeypatch.setattr(tp_linear, "parallelize_module", _fake_parallelize_module)
-
-    with pytest.raises(ValueError, match="tp_mesh_dim=2 is out of range"):
-        parallelize_snn_module(nn.Identity(), _FakeMesh(), {}, tp_mesh_dim=2)
-
-
-def test_channel_shard_conv2d_preserves_nonzero_padding_mode():
-    torch.manual_seed(0)
-    source = nn.Conv2d(
-        2,
-        4,
-        kernel_size=3,
-        padding=1,
-        padding_mode="reflect",
-        bias=True,
+def _channel_tp_worker(rank: int, store_path: str) -> None:
+    dist.init_process_group(
+        "gloo",
+        init_method=f"file://{store_path}",
+        rank=rank,
+        world_size=2,
     )
-    x = torch.randn(3, 2, 8, 8)
-    reference = source(x)
-    delattr(source, "_reversed_padding_repeated_twice")
+    try:
+        torch.manual_seed(7)
+        conv1 = layer.Conv2d(4, 8, kernel_size=1, bias=False, step_mode="m")
+        bn1 = layer.BatchNorm2d(8, step_mode="m")
+        spike = neuron.IFNode(step_mode="m")
+        conv2 = layer.Conv2d(8, 6, kernel_size=1, bias=True, step_mode="m")
 
-    wrapped = ChannelShardConv2d(source, process_group=None, mode="colwise")
-    torch.testing.assert_close(wrapped(x), reference)
-
-
-def test_channel_shard_conv2d_preserves_string_padding_fallback():
-    torch.manual_seed(0)
-    source = nn.Conv2d(
-        2,
-        4,
-        kernel_size=3,
-        padding="same",
-        padding_mode="reflect",
-        bias=True,
-    )
-    x = torch.randn(3, 2, 8, 8)
-    reference = source(x)
-    delattr(source, "_reversed_padding_repeated_twice")
-
-    wrapped = ChannelShardConv2d(source, process_group=None, mode="colwise")
-    torch.testing.assert_close(wrapped(x), reference)
-
-
-def test_channel_shard_conv1d_preserves_padding_and_multistep_shape():
-    torch.manual_seed(0)
-    source = nn.Conv1d(
-        2,
-        4,
-        kernel_size=3,
-        padding=1,
-        padding_mode="reflect",
-        bias=True,
-    )
-    source.step_mode = "m"
-    x = torch.randn(5, 3, 2, 8)
-    reference = source(x.flatten(0, 1)).view(5, 3, 4, 8)
-    delattr(source, "_reversed_padding_repeated_twice")
-
-    wrapped = ChannelShardConv1d(source, process_group=None, mode="colwise")
-    torch.testing.assert_close(wrapped(x), reference)
-
-
-def test_channel_shard_conv_preserves_requires_grad_flags():
-    for conv_cls, wrapper_cls in (
-        (nn.Conv1d, ChannelShardConv1d),
-        (nn.Conv2d, ChannelShardConv2d),
-    ):
-        for mode in ("colwise", "rowwise"):
-            source = conv_cls(4, 8, kernel_size=1, bias=True)
-            source.weight.requires_grad_(False)
-            source.bias.requires_grad_(False)
-
-            wrapped = wrapper_cls(source, process_group=None, mode=mode)
-
-            assert wrapped.weight.requires_grad is False
-            assert wrapped.bias.requires_grad is False
-
-
-def test_channel_shard_batch_norm_preserves_requires_grad_flags():
-    for bn_cls, wrapper_cls in (
-        (nn.BatchNorm1d, ChannelShardBatchNorm1d),
-        (nn.BatchNorm2d, ChannelShardBatchNorm2d),
-    ):
-        source = bn_cls(4)
-        source.weight.requires_grad_(False)
-        source.bias.requires_grad_(False)
-
-        wrapped = wrapper_cls(source, process_group=None)
-
-        assert wrapped.weight.requires_grad is False
-        assert wrapped.bias.requires_grad is False
-
-
-def test_make_tensor_shard_memory_module_uses_channel_dim_for_single_step():
-    source = neuron.IFNode(step_mode="s")
-    module = make_tensor_shard_memory_module(
-        source,
-        shard_dim=2,
-        logical_dim_size=4,
-        process_group=None,
-    )
-    x = torch.ones(2, 4, 3, 3)
-
-    assert module is not source
-    assert type(module) is type(source)
-    assert module(x).shape == x.shape
-
-
-def test_make_tensor_shard_memory_module_rejects_invalid_shard_configuration(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    for shard_dim in (3, -3):
-        module = make_tensor_shard_memory_module(
-            neuron.IFNode(step_mode="s"), shard_dim, None, None
+        local_conv1 = ChannelShardConv2d(
+            copy.deepcopy(conv1), dist.group.WORLD, "colwise"
         )
-        with pytest.raises(ValueError, match="is invalid for input"):
-            module(torch.ones(2, 4))
+        local_bn1 = ChannelShardBatchNorm2d(copy.deepcopy(bn1), dist.group.WORLD)
+        local_spike = copy.deepcopy(spike)
+        local_conv2 = ChannelShardConv2d(
+            copy.deepcopy(conv2), dist.group.WORLD, "rowwise"
+        )
 
-    process_group = object()
-    monkeypatch.setattr(torch.distributed, "get_rank", lambda _group: 0)
-    monkeypatch.setattr(torch.distributed, "get_world_size", lambda _group: 2)
-    with pytest.raises(ValueError, match="logical_dim_size=3 must be divisible"):
-        make_tensor_shard_memory_module(
-            neuron.IFNode(step_mode="s"), -1, 3, process_group
+        x_reference = torch.randn(3, 2, 4, 5, 5, requires_grad=True)
+        x_local = x_reference.detach().clone().requires_grad_(True)
+        reference = conv2(spike(bn1(conv1(x_reference))))
+        candidate = local_conv2(local_spike(local_bn1(local_conv1(x_local))))
+        torch.testing.assert_close(candidate, reference)
+
+        reference.square().mean().backward()
+        candidate.square().mean().backward()
+        torch.testing.assert_close(x_local.grad, x_reference.grad)
+
+        start = rank * 4
+        end = start + 4
+        torch.testing.assert_close(
+            local_conv1.weight.grad, conv1.weight.grad[start:end]
+        )
+        torch.testing.assert_close(local_bn1.running_mean, bn1.running_mean[start:end])
+        torch.testing.assert_close(
+            local_conv2.weight.grad, conv2.weight.grad[:, start:end]
+        )
+
+        functional.reset_net(local_spike)
+        assert local_spike.v == 0.0
+    finally:
+        dist.destroy_process_group()
+
+
+def test_channel_tp_matches_dense_multistep_forward_and_backward():
+    with tempfile.TemporaryDirectory() as directory:
+        mp.spawn(
+            _channel_tp_worker,
+            args=(os.path.join(directory, "store"),),
+            nprocs=2,
+            join=True,
         )
 
 
-def test_make_tensor_shard_memory_module_preserves_memory_interface():
-    source = _ResetCountingMemoryModule()
-    module = make_tensor_shard_memory_module(
-        source,
-        shard_dim=-1,
-        logical_dim_size=3,
-        process_group=None,
-    )
-    module(torch.ones(2, 3, requires_grad=True))
+def test_channel_shard_batch_norm_updates_stats_once_under_memopt():
+    source = layer.BatchNorm2d(4, step_mode="m")
+    module = GCContainer(None, ChannelShardBatchNorm2d(source, None))
+    x = torch.randn(2, 3, 4, 5, 5, requires_grad=True)
 
-    assert list(source.named_memories()) == [("v", 0.0)]
-    assert module.get_reset_value("v") == 0.0
-    assert module.v.requires_grad
+    module(x).sum().backward()
 
-    module.detach()
-    assert not module.v.requires_grad
-
-    functional.reset_net(module)
-    assert module.reset_calls == 1
-    assert module.v == 0.0
+    assert module[0].num_batches_tracked.item() == 1
 
 
-def test_make_tensor_shard_memory_module_preserves_source_runtime_options():
-    source = neuron.IFNode(step_mode="m", backend="torch", store_v_seq=True)
-    module = make_tensor_shard_memory_module(source, -1, 4, None)
-
-    assert module.step_mode == "m"
-    assert module.backend == "torch"
-    assert module.store_v_seq is True
-
-
-def test_make_tensor_shard_memory_module_is_idempotent_and_serializable():
-    source = neuron.IFNode(step_mode="s")
-    module = make_tensor_shard_memory_module(source, -1, 4, None)
-
-    assert make_tensor_shard_memory_module(module, -1, 4, None) is module
-    assert not source._forward_pre_hooks
-
-    for restored in (copy.deepcopy(module), pickle.loads(pickle.dumps(module))):
-        assert make_tensor_shard_memory_module(restored, -1, 4, None) is restored
-        assert restored(torch.ones(2, 4)).shape == (2, 4)
-        with pytest.raises(ValueError, match="Expected local shard size 4"):
-            restored(torch.ones(2, 3))
-
-
-def test_tensor_shard_validator_precedes_existing_hook_and_accepts_keyword_input():
-    events = []
-    source = neuron.IFNode(step_mode="s")
-    source.register_forward_pre_hook(lambda _module, _args: events.append("source"))
-    module = make_tensor_shard_memory_module(source, -1, 4, None)
-
-    assert module(x=torch.ones(2, 4)).shape == (2, 4)
-    assert events == ["source"]
-
-    events.clear()
-    with pytest.raises(ValueError, match="Expected local shard size 4"):
-        module(x=torch.ones(2, 3))
-    assert events == []
-
-    with pytest.raises(TypeError, match="first positional argument or the 'x'"):
-        module(input=torch.ones(2, 4))
-
-
-def test_tensor_shard_memory_module_keeps_source_state_dict_paths():
-    source = neuron.ParametricLIFNode(step_mode="s")
-    module = make_tensor_shard_memory_module(source, -1, 4, None)
-
-    assert tuple(module.state_dict()) == ("w",)
-    assert "inner" not in dict(module.named_modules())
-    module.load_state_dict(source.state_dict(), strict=True)
-
-
-def test_tensor_shard_memory_module_compiles_for_valid_input():
-    module = make_tensor_shard_memory_module(neuron.IFNode(step_mode="s"), -1, 4, None)
-    compiled = torch.compile(module, backend="eager", fullgraph=True)
-
-    assert compiled(torch.ones(2, 4)).shape == (2, 4)
-
-
-def test_channel_shard_conv2d_colwise_all_reduces_input_gradient(monkeypatch):
-    torch.manual_seed(0)
-    source = nn.Conv2d(2, 4, kernel_size=1, bias=False)
-    wrapped = ChannelShardConv2d(source, process_group=None, mode="colwise")
-    wrapped.world_size = 2
-    x = torch.randn(1, 2, 3, 3, requires_grad=True)
-    x_ref = x.detach().clone().requires_grad_(True)
-    calls = {"count": 0}
-
-    def _fake_all_reduce(tensor, group=None):
-        calls["count"] += 1
-        tensor.mul_(2)
-        return tensor
-
-    monkeypatch.setattr(dist, "is_available", lambda: True)
-    monkeypatch.setattr(dist, "is_initialized", lambda: True)
-    monkeypatch.setattr(dist, "all_reduce", _fake_all_reduce)
-
-    wrapped(x).sum().backward()
-    torch.nn.functional.conv2d(
-        x_ref, wrapped.weight, wrapped.bias, wrapped.stride
-    ).sum().backward()
-
-    assert calls["count"] == 1
-    torch.testing.assert_close(x.grad, x_ref.grad * 2)
-
-
-def test_colwise_backward_all_reduce_contiguous_grad(monkeypatch):
-    from spikingjelly.activation_based.distributed.tensor_parallel.channel import (
-        _ColwiseBackwardAllReduce,
-    )
-
-    x = torch.randn(2, 3, requires_grad=True)
-    non_contiguous_grad = torch.ones(3, 2).t()
-    assert not non_contiguous_grad.is_contiguous()
-    calls = {"count": 0}
-
-    def _fake_all_reduce(tensor, group=None):
-        calls["count"] += 1
-        assert tensor.is_contiguous()
-        return tensor
-
-    monkeypatch.setattr(dist, "is_available", lambda: True)
-    monkeypatch.setattr(dist, "is_initialized", lambda: True)
-    monkeypatch.setattr(dist, "all_reduce", _fake_all_reduce)
-
-    y = _ColwiseBackwardAllReduce.apply(x, None, 2)
-    y.backward(non_contiguous_grad)
-
-    assert calls["count"] == 1
-    torch.testing.assert_close(x.grad, non_contiguous_grad)
-
-
-def test_channel_shard_conv1d_colwise_all_reduces_input_gradient(monkeypatch):
-    torch.manual_seed(0)
-    source = nn.Conv1d(2, 4, kernel_size=1, bias=False)
-    wrapped = ChannelShardConv1d(source, process_group=None, mode="colwise")
-    wrapped.world_size = 2
-    x = torch.randn(1, 2, 5, requires_grad=True)
-    x_ref = x.detach().clone().requires_grad_(True)
-    calls = {"count": 0}
-
-    def _fake_all_reduce(tensor, group=None):
-        calls["count"] += 1
-        tensor.mul_(2)
-        return tensor
-
-    monkeypatch.setattr(dist, "is_available", lambda: True)
-    monkeypatch.setattr(dist, "is_initialized", lambda: True)
-    monkeypatch.setattr(dist, "all_reduce", _fake_all_reduce)
-
-    wrapped(x).sum().backward()
-    torch.nn.functional.conv1d(
-        x_ref, wrapped.weight, wrapped.bias, wrapped.stride
-    ).sum().backward()
-
-    assert calls["count"] == 1
-    torch.testing.assert_close(x.grad, x_ref.grad * 2)
-
-
-def test_channel_shard_batch_norm2d_supports_cumulative_momentum():
-    torch.manual_seed(0)
-    source = nn.BatchNorm2d(4, momentum=None)
-    wrapped = ChannelShardBatchNorm2d(source, process_group=None)
-    x = torch.randn(3, 4, 5, 5)
-
-    torch.testing.assert_close(wrapped(x), source(x))
-    assert wrapped.num_batches_tracked.item() == source.num_batches_tracked.item()
-
-
-def test_channel_shard_batch_norm1d_supports_cumulative_momentum():
-    torch.manual_seed(0)
-    source = nn.BatchNorm1d(4, momentum=None)
-    wrapped = ChannelShardBatchNorm1d(source, process_group=None)
-    x = torch.randn(3, 4, 5)
-
-    torch.testing.assert_close(wrapped(x), source(x))
-    assert wrapped.num_batches_tracked.item() == source.num_batches_tracked.item()
-
-
-def test_materialize_dtensor_output_recurses_nested_containers():
-    class FakeDTensor:
-        def __init__(self, value):
-            self.value = value
-
-        def full_tensor(self):
-            return self.value
-
-    result = materialize_dtensor_output(
-        {
-            "a": FakeDTensor(torch.tensor([1])),
-            "b": [FakeDTensor(torch.tensor([2])), (FakeDTensor(torch.tensor([3])),)],
-        }
-    )
-
-    torch.testing.assert_close(result["a"], torch.tensor([1]))
-    torch.testing.assert_close(result["b"][0], torch.tensor([2]))
-    torch.testing.assert_close(result["b"][1][0], torch.tensor([3]))
-
-
-def test_materialize_dtensor_output_preserves_named_tuple_type():
-    class FakeDTensor:
-        def __init__(self, value):
-            self.value = value
-
-        def full_tensor(self):
-            return self.value
-
-    class ModelOutput(NamedTuple):
-        logits: torch.Tensor
-        hidden: tuple[torch.Tensor]
-
-    result = materialize_dtensor_output(
-        ModelOutput(
-            logits=FakeDTensor(torch.tensor([1])),
-            hidden=(FakeDTensor(torch.tensor([2])),),
+def test_builtin_vision_tensor_parallel_strategies_match_dense_models():
+    with tempfile.TemporaryDirectory() as directory:
+        mp.spawn(
+            _vision_tp_worker,
+            args=(os.path.join(directory, "store"),),
+            nprocs=2,
+            join=True,
         )
-    )
-
-    assert isinstance(result, ModelOutput)
-    torch.testing.assert_close(result.logits, torch.tensor([1]))
-    torch.testing.assert_close(result.hidden[0], torch.tensor([2]))
-
-
-def test_auto_tensor_parallel_plan_and_forward_match_single_rank():
-    with single_rank_process_group():
-        torch.manual_seed(0)
-        baseline = ToyDistributedSNN()
-        candidate = copy.deepcopy(baseline)
-
-        x = torch.randn(5, 2, 8)
-        _reset_net(baseline)
-        reference = baseline(x)
-
-        config = SNNDistributedConfig(
-            mode="tp",
-            device_type="cpu",
-            mesh_shape=(1,),
-            tensor_parallel_roots=["features"],
-            auto_tensor_parallel=True,
-        )
-        distributed_model, mesh, analysis = configure_snn_distributed(candidate, config)
-
-        assert mesh.ndim == 1
-        assert analysis.tensor_parallel_candidate_names == ("features.0", "features.2")
-
-        _reset_net(distributed_model)
-        result = materialize_dtensor_output(distributed_model(x))
-
-        torch.testing.assert_close(reference, result)
-        assert type(distributed_model.features[1]) is type(baseline.features[1])
-        assert not hasattr(distributed_model.features[1], "inner")
-        assert _has_tensor_shard_input_validator(distributed_model.features[1])
-
-        plan = auto_build_tensor_parallel_plan(
-            candidate, tensor_parallel_roots=["features"]
-        )
-        assert set(plan.keys()) == {"features.0", "features.2"}
-
-
-def test_wrap_tp_memory_modules_skips_stateless_layers_before_memory_module():
-    module = nn.Sequential(
-        nn.Linear(4, 6),
-        nn.Dropout(p=0.0),
-        nn.Identity(),
-        neuron.ParametricLIFNode(step_mode="s"),
-    )
-
-    wrapped = wrap_tp_memory_modules(
-        module,
-        {"0": "colwise_local_output"},
-        process_group=None,
-    )
-
-    assert wrapped is module
-    assert _has_tensor_shard_input_validator(module[3])
-    assert module[3](torch.ones(2, 6)).shape == (2, 6)
-    with pytest.raises(ValueError, match="Expected local shard size 6"):
-        module[3](torch.ones(2, 5))
-
-
-def test_configure_snn_distributed_supports_experimental_conv_tp_on_real_snn():
-    with single_rank_process_group():
-        torch.manual_seed(0)
-        baseline = CIFAR10DVSVGG(dropout=0.0, backend="torch")
-        candidate = copy.deepcopy(baseline)
-        baseline.eval()
-        candidate.eval()
-
-        x = torch.randn(1, 2, 2, 48, 48)
-        _reset_net(baseline)
-        reference = baseline(x)
-
-        config = SNNDistributedConfig(
-            mode="tp",
-            device_type="cpu",
-            mesh_shape=(1,),
-            auto_tensor_parallel=True,
-            tensor_parallel_roots=["classifier"],
-            conv_tensor_parallel_roots=["features"],
-        )
-        distributed_model, _, _ = configure_snn_distributed(candidate, config)
-
-        _reset_net(distributed_model)
-        result = materialize_dtensor_output(distributed_model(x))
-
-        torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
-        assert (
-            "ChannelShardConv2d"
-            in type(distributed_model.features[0].proj_bn[-2]).__name__
-        )
-        assert type(distributed_model.features[0].neuron) is type(
-            baseline.features[0].neuron
-        )
-        assert (
-            distributed_model.features[0].neuron.v.shape[1]
-            == distributed_model.features[0].proj_bn[-2].out_channels
-        )
-
-
-def test_cifar10dvs_vgg_tp_helper_after_memopt_level2_single_rank():
-    with single_rank_process_group():
-        torch.manual_seed(0)
-        baseline = CIFAR10DVSVGG(dropout=0.0, backend="torch").eval()
-        x = torch.randn(1, 2, 2, 48, 48)
-        candidate = copy.deepcopy(baseline).eval()
-        candidate.features[0] = GCContainer(None, candidate.features[0])
-        distributed_model, _, _ = configure_snn_distributed(
-            candidate,
-            SNNDistributedConfig(
-                mode="tp",
-                device_type="cpu",
-                mesh_shape=(1,),
-                tensor_parallel_roots=["classifier"],
-                auto_tensor_parallel=True,
-                conv_tensor_parallel_roots=["features"],
-            ),
-        )
-        _reset_net(baseline)
-        reference = baseline(x)
-        _reset_net(distributed_model)
-        result = materialize_dtensor_output(distributed_model(x))
-        torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
-        assert _has_tensor_shard_input_validator(
-            distributed_model.features[0][0].neuron
-        )
-
-
-def test_spikformer_tp_helper_after_memopt_level2_single_rank():
-    with single_rank_process_group():
-        torch.manual_seed(0)
-        baseline = spikformer_ti(
-            T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
-        ).eval()
-        x = torch.randn(2, 3, 64, 64)
-        candidate = copy.deepcopy(baseline).eval()
-        candidate.patch_embed.stages[0] = GCContainer(
-            None, candidate.patch_embed.stages[0]
-        )
-        candidate.blocks[0] = GCContainer(None, candidate.blocks[0])
-        distributed_model, _, _ = configure_snn_distributed(
-            candidate,
-            SNNDistributedConfig(
-                mode="tp",
-                device_type="cpu",
-                mesh_shape=(1,),
-                tensor_parallel_roots=["head"],
-                auto_tensor_parallel=True,
-                spikformer_tensor_parallel_roots=["blocks"],
-                spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
-            ),
-        )
-        _reset_net(baseline)
-        reference = baseline(x)
-        _reset_net(distributed_model)
-        result = materialize_dtensor_output(distributed_model(x))
-        torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
-        assert _has_tensor_shard_input_validator(
-            distributed_model.patch_embed.stages[0][0].neuron
-        )
-        assert (
-            "ChannelShardConv1d"
-            in type(distributed_model.blocks[0][0].attn.qkv_conv_bn[0]).__name__
-        )
-        assert _has_tensor_shard_input_validator(
-            distributed_model.blocks[0][0].mlp.neuron1
-        )
-
-
-def test_spikformer_head_tp_helper_single_rank():
-    with single_rank_process_group():
-        torch.manual_seed(0)
-        baseline = spikformer_ti(
-            T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
-        ).eval()
-        candidate = copy.deepcopy(baseline).eval()
-        distributed_model, mesh, analysis = configure_snn_distributed(
-            candidate,
-            SNNDistributedConfig(
-                mode="tp",
-                device_type="cpu",
-                mesh_shape=(1,),
-                tensor_parallel_roots=["head"],
-                auto_tensor_parallel=True,
-                spikformer_tensor_parallel_roots=["blocks"],
-                spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
-            ),
-        )
-        x = torch.randn(2, 3, 64, 64)
-        _reset_net(baseline)
-        reference = baseline(x)
-        _reset_net(distributed_model)
-        result = materialize_dtensor_output(distributed_model(x))
-        torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
-        assert mesh.ndim == 1
-        assert analysis.tensor_parallel_candidate_names == ("head",)
-        assert isinstance(
-            distributed_model.patch_embed.stages[0].neuron, base.MemoryModule
-        )
-        assert not hasattr(distributed_model.patch_embed.stages[0].neuron, "inner")
-        assert (
-            "ChannelShardConv2d"
-            in type(distributed_model.patch_embed.stages[0].conv_bn.block[0]).__name__
-        )
-
-
-def test_spikformer_fsdp2_single_rank_smoke():
-    with single_rank_process_group():
-        torch.manual_seed(0)
-        candidate = spikformer_ti(
-            T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
-        ).eval()
-        analysis = analyze(candidate)
-        distributed_plan = plan(
-            analysis=analysis,
-            objective="memory",
-            topology={"dp": 1},
-            backend="torch",
-            batch_size=1,
-            model_family="spikformer",
-            mode="fsdp2",
-        )
-        runtime = apply(model=candidate, plan=distributed_plan, device_type="cpu")
-        mesh = runtime.mesh
-        assert mesh is not None
-        assert tuple(mesh.shape) == tuple(distributed_plan.topology.mesh_shape)
-        assert runtime.plan is distributed_plan
-
-
-def test_spikformer_patch_stem_tp_helper_handles_patch_embed_root():
-    with single_rank_process_group():
-        torch.manual_seed(0)
-        candidate = spikformer_ti(
-            T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
-        ).eval()
-        distributed_model, _, _ = configure_snn_distributed(
-            candidate,
-            SNNDistributedConfig(
-                mode="tp",
-                device_type="cpu",
-                mesh_shape=(1,),
-                tensor_parallel_roots=["head"],
-                auto_tensor_parallel=True,
-                spikformer_tensor_parallel_roots=["blocks"],
-                spikformer_patch_stem_tensor_parallel_roots=["patch_embed"],
-            ),
-        )
-        assert (
-            "ChannelShardConv2d"
-            in type(distributed_model.patch_embed.stages[0].conv_bn.block[0]).__name__
-        )
-        assert isinstance(
-            distributed_model.patch_embed.stages[0].neuron, base.MemoryModule
-        )
-        assert not hasattr(distributed_model.patch_embed.stages[0].neuron, "inner")
-
-
-def test_spikformer_patch_stem_tp_helper_handles_single_stage_root_colwise():
-    with single_rank_process_group():
-        torch.manual_seed(0)
-        candidate = spikformer_ti(
-            T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
-        ).eval()
-        distributed_model, _, _ = configure_snn_distributed(
-            candidate,
-            SNNDistributedConfig(
-                mode="tp",
-                device_type="cpu",
-                mesh_shape=(1,),
-                auto_tensor_parallel=False,
-                spikformer_patch_stem_tensor_parallel_roots=["patch_embed.stages.0"],
-            ),
-        )
-        shard_conv = distributed_model.patch_embed.stages[0].conv_bn.block[0]
-        assert "ChannelShardConv2d" in type(shard_conv).__name__
-        assert shard_conv.mode == "colwise"
-        next_conv = distributed_model.patch_embed.stages[1].conv_bn.block[0]
-        assert "ChannelShardConv2d" in type(next_conv).__name__
-        assert next_conv.mode == "rowwise"
-
-
-def test_spikformer_patch_stem_tp_helper_handles_seq_to_ann_root():
-    with single_rank_process_group():
-        stem = (
-            spikformer_ti(
-                T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
-            )
-            .patch_embed.stages[0]
-            .conv_bn.block
-        )
-        module = nn.Sequential(stem, copy.deepcopy(stem))
-
-        distributed_model, _, _ = configure_snn_distributed(
-            module,
-            SNNDistributedConfig(
-                mode="tp",
-                device_type="cpu",
-                mesh_shape=(1,),
-                auto_tensor_parallel=False,
-                spikformer_patch_stem_tensor_parallel_roots=["0"],
-            ),
-        )
-
-        assert "ChannelShardConv2d" in type(distributed_model[0][0]).__name__
-
-
-def test_spikformer_patch_stem_tp_helper_rejects_unpaired_isolated_root():
-    with single_rank_process_group():
-        torch.manual_seed(0)
-        candidate = spikformer_ti(
-            T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
-        ).eval()
-        with pytest.raises(ValueError, match="at least two consecutive stem blocks"):
-            configure_snn_distributed(
-                candidate,
-                SNNDistributedConfig(
-                    mode="tp",
-                    device_type="cpu",
-                    mesh_shape=(1,),
-                    auto_tensor_parallel=False,
-                    spikformer_patch_stem_tensor_parallel_roots=[
-                        "patch_embed.stages.3"
-                    ],
-                ),
-            )
-
-
-def test_spikformer_patch_stem_tp_helper_rejects_non_stem_stage():
-    with single_rank_process_group():
-        with pytest.raises(ValueError, match="must start with Conv2d and BatchNorm2d"):
-            configure_snn_distributed(
-                nn.Sequential(nn.Identity(), nn.Identity()),
-                SNNDistributedConfig(
-                    mode="tp",
-                    device_type="cpu",
-                    mesh_shape=(1,),
-                    auto_tensor_parallel=False,
-                    spikformer_patch_stem_tensor_parallel_roots=["0"],
-                ),
-            )
