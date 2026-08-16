@@ -94,6 +94,8 @@ def save_checkpoint(
     :param recipe: 可序列化的 recipe 名称、模型配置和时间语义元数据。
     :type recipe: dict[str, Any]
     :raises FileExistsError: 目标目录非空。
+    :raises OSError: rank 0 无法检查或创建目标目录。
+    :raises RuntimeError: 其他 rank 收到 rank 0 的目录设置失败状态。
 
     ----
 
@@ -121,35 +123,36 @@ def save_checkpoint(
     :param recipe: Serializable recipe name, model configuration, and temporal metadata.
     :type recipe: dict[str, Any]
     :raises FileExistsError: If the destination directory is non-empty.
+    :raises OSError: If rank 0 cannot inspect or create the destination.
+    :raises RuntimeError: If another rank receives rank 0's setup failure status.
     """
     from megatron.core import dist_checkpointing
 
     checkpoint_dir = Path(checkpoint_dir)
-    occupied = torch.tensor(
-        int(
-            torch.distributed.get_rank() == 0
-            and checkpoint_dir.exists()
-            and next(checkpoint_dir.iterdir(), None) is not None
-        ),
-        device=torch.cuda.current_device(),
+    setup_status = torch.zeros(
+        (), dtype=torch.uint8, device=torch.cuda.current_device()
     )
-    torch.distributed.broadcast(occupied, src=0)
-    if occupied.item():
-        raise FileExistsError(f"Checkpoint directory is not empty: {checkpoint_dir}")
-    creation_failed = torch.zeros_like(occupied)
-    creation_error = None
+    setup_error = None
     if torch.distributed.get_rank() == 0:
         try:
-            checkpoint_dir.mkdir(parents=True, exist_ok=True)
+            if (
+                checkpoint_dir.exists()
+                and next(checkpoint_dir.iterdir(), None) is not None
+            ):
+                setup_status.fill_(1)
+            else:
+                checkpoint_dir.mkdir(parents=True, exist_ok=True)
         except OSError as error:
-            creation_failed.fill_(1)
-            creation_error = error
-    torch.distributed.broadcast(creation_failed, src=0)
-    if creation_failed.item():
-        if creation_error is not None:
-            raise creation_error
+            setup_status.fill_(2)
+            setup_error = error
+    torch.distributed.broadcast(setup_status, src=0)
+    if setup_status.item() == 1:
+        raise FileExistsError(f"Checkpoint directory is not empty: {checkpoint_dir}")
+    if setup_status.item() == 2:
+        if setup_error is not None:
+            raise setup_error
         raise RuntimeError(
-            f"Rank 0 could not create checkpoint directory: {checkpoint_dir}"
+            f"Rank 0 could not prepare checkpoint directory: {checkpoint_dir}"
         )
     torch.distributed.barrier()
 

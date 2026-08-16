@@ -285,12 +285,17 @@ def _build_loaders(
         raise TypeError("dataset_builder outputs must be torch Dataset instances.")
     if len(train_dataset) == 0 or len(validation_dataset) == 0:
         raise ValueError("Training and validation datasets must be non-empty.")
-    if config.pipeline_parallel_size > 1 and len(validation_dataset) % (
-        config.batch_size * dp_size
-    ):
+    validation_multiple = dp_size * (
+        config.batch_size if config.pipeline_parallel_size > 1 else 1
+    )
+    if len(validation_dataset) % validation_multiple:
+        requirement = (
+            "batch_size * data_parallel_size"
+            if config.pipeline_parallel_size > 1
+            else "data_parallel_size"
+        )
         raise ValueError(
-            "Pipeline validation dataset size must be divisible by "
-            "batch_size * data_parallel_size."
+            f"The validation dataset size must be divisible by {requirement}."
         )
 
     train_sampler = DistributedSampler(
@@ -501,8 +506,8 @@ def train(config: TrainingConfig) -> dict[str, float]:
         loading, validation, and checkpointing.
     :rtype: dict[str, float]
     :raises RuntimeError: CUDA、NCCL 或 FSDP2 不可用。 / If CUDA, NCCL, or FSDP2 is unavailable.
-    :raises ValueError: world size、模型输出或输入布局无效。 / If world size,
-        model output, or input layout is invalid.
+    :raises ValueError: world size、验证集划分、模型输出或输入布局无效。 / If world
+        size, validation partitioning, model output, or input layout is invalid.
     """
     if not torch.cuda.is_available():
         raise RuntimeError("Distributed vision training requires CUDA.")

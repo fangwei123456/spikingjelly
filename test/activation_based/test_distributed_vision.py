@@ -150,6 +150,21 @@ def test_vision_pipeline_rejects_ragged_validation_dataset(monkeypatch):
         training._build_loaders(config, dp_size=1, dp_rank=0)
 
 
+def test_vision_data_parallel_rejects_padded_validation_dataset(monkeypatch):
+    dataset = TensorDataset(torch.zeros(3, 3, 4, 4), torch.zeros(3, dtype=torch.long))
+    monkeypatch.setattr(
+        training, "_import_object", lambda _path: lambda: (dataset, dataset)
+    )
+    config = vision.TrainingConfig(
+        model=vision.SEWResNet34Config(),
+        dataset_builder="package.datasets.build",
+        workers=0,
+    )
+
+    with pytest.raises(ValueError, match="validation dataset size"):
+        training._build_loaders(config, dp_size=2, dp_rank=0)
+
+
 def test_spikformer_pipeline_rejects_ragged_patch_grid():
     config = vision.SpikformerConfig(image_height=33, image_width=32)
     builder = config.get_builder_cls()(config)
