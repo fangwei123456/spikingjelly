@@ -1,10 +1,38 @@
 SNN 分布式训练
 ==============
 
+本教程作者： `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_、`Wei Fang (fangwei123456) <https://github.com/fangwei123456>`_
+
 English version: :doc:`../en/distributed_training`
 
 高层接口用于直接启动训练；底层接口用于接入模型或自行编写训练循环。最后一节给出
 不同并行策略的实测吞吐和显存。
+
+API 设计动机
+------------
+
+这套 API 首先按工作负载划分为 ``vision`` 和 ``llm``，而不是假设所有 SNN 都适用
+同一种并行策略。Spiking CNN 的通道、特征图和流水线边界与 LLM 的 token、attention
+和 context parallel 有不同语义；强行共用一套模型描述只会把这些差异藏进大量分支。
+两条路径因此只在确实相同的外层概念上保持对称：都使用 ``ModelConfig`` 描述模型、
+``ModelBuilder`` 接入 architecture-specific 实现、``TrainingConfig`` 描述训练，并由
+``train`` 提供默认训练生命周期。
+
+高层接口受到 Megatron Core 当前模型接入方式的启发。MCore 将声明式的
+``TransformerConfig``、模型专项的 ``ModuleSpec`` / ``model_provider`` / ``forward_step``
+与通用 pipeline schedule、optimizer 和 checkpoint 生命周期分开。SpikingJelly 沿用
+这种“配置描述事实、builder 适配架构、训练入口拥有生命周期”的边界，而没有要求用户
+修改一个巨大的预定义训练函数。LLM builder 返回 MCore 原生需要的 ``model_provider``
+和 ``forward_step``；Vision builder 则返回 PyTorch pipeline 所需的 stage、FSDP2 分片
+位置和边界形状。外层风格一致，内层契约服从各自运行时。
+
+底层接口遵循“复用成熟运行时，只补 SNN 特有语义”的原则。DP、FSDP2、device mesh
+和通用 pipeline 来自 PyTorch；LLM 的 TP、PP、CP、distributed optimizer 和 sharded
+checkpoint 来自 Megatron Core。SpikingJelly 只提供这些运行时没有表达的部分，例如
+SNN 时间布局与状态重置、适合通道型网络的分片层，以及脉冲压缩 memopt。memopt 与
+MCore 重计算也保持职责分离：前者处理 SNN 激活和脉冲表示，后者仅在需要时处理不重叠
+的 Transformer 子计算。因此，高层 ``train`` 适合标准流程，而需要新任务、模型或
+调度方式的用户仍可直接组合下面的底层组件。
 
 高层 API
 --------

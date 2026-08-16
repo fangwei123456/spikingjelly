@@ -1,11 +1,49 @@
 Distributed SNN Training
 ========================
 
+Authors: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_, `Wei Fang (fangwei123456) <https://github.com/fangwei123456>`_
+
 中文版： :doc:`../cn/distributed_training`
 
 The high-level interfaces launch predefined training workflows. The low-level
 interfaces support custom models and training loops. The final section reports
 measured throughput and memory.
+
+API design rationale
+--------------------
+
+The API is divided into ``vision`` and ``llm`` workloads instead of assuming
+that every SNN shares one parallel strategy. Spiking CNN channels, feature maps,
+and pipeline boundaries have different semantics from LLM tokens, attention,
+and context parallelism. A single model description would merely hide those
+differences behind branches. The two paths are therefore symmetric only where
+the concepts are genuinely shared: ``ModelConfig`` describes a model,
+``ModelBuilder`` connects architecture-specific code, ``TrainingConfig``
+describes a run, and ``train`` owns the default training lifecycle.
+
+The high-level interface is inspired by the current Megatron Core model
+extension style. MCore separates declarative ``TransformerConfig`` data and
+architecture-specific ``ModuleSpec`` / ``model_provider`` / ``forward_step``
+from the common pipeline schedule, optimizer, and checkpoint lifecycle.
+SpikingJelly keeps the same boundary—configuration states facts, a builder
+adapts an architecture, and the training entry point owns the lifecycle—without
+requiring users to edit one large predefined training function. An LLM builder
+returns the MCore-native ``model_provider`` and ``forward_step``; a Vision
+builder returns the stage, FSDP2 shard roots, and boundary shapes required by
+PyTorch pipelines. Their outer style matches while each inner contract follows
+its runtime.
+
+The low-level interface follows a “reuse the runtime; add only SNN semantics”
+rule. PyTorch supplies DP, FSDP2, device meshes, and general pipelines. Megatron
+Core supplies LLM TP, PP, CP, the distributed optimizer, and sharded
+checkpoints. SpikingJelly adds the pieces those runtimes do not express: SNN
+temporal layouts and state resets, channel-sharded layers for channel-oriented
+models, and spike-compression memopt. Memopt also remains separate from MCore
+recomputation: the former handles SNN activations and spike representations,
+while the latter is used only for non-overlapping Transformer subcomputations
+when needed. The high-level ``train`` therefore covers standard workflows,
+while custom tasks, models, and schedules can compose the low-level pieces
+directly.
 
 High-level APIs
 ---------------
