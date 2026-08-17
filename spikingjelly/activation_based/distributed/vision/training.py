@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import functools
 import importlib
 import json
 import os
 import random
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Optional
 
@@ -29,6 +31,15 @@ def _import_object(path: str) -> Any:
     return getattr(importlib.import_module(module_name), name)
 
 
+def _build_loss_function(
+    config: TrainingConfig,
+) -> Callable[..., torch.Tensor]:
+    loss_function = _import_object(config.loss_function)
+    if not callable(loss_function):
+        raise TypeError("loss_function must resolve to a callable.")
+    return functools.partial(loss_function, **config.loss_kwargs)
+
+
 def _seed_worker(worker_id: int) -> None:
     seed = torch.initial_seed() % 2**32
     np.random.seed(seed)
@@ -46,6 +57,66 @@ def _classification_logits(output: torch.Tensor) -> torch.Tensor:
     )
 
 
+def _classification_sequence(
+    images: torch.Tensor,
+    time_steps: int,
+    input_layout: str,
+    *,
+    batch_first: bool = False,
+) -> torch.Tensor:
+    if input_layout == "NCHW":
+        if images.ndim != 4:
+            raise ValueError(
+                "input_layout='NCHW' requires image batches shaped [N, C, H, W]."
+            )
+        time_dim = 1 if batch_first else 0
+        shape = list(images.shape)
+        shape.insert(time_dim, time_steps)
+        return images.unsqueeze(time_dim).expand(*shape).contiguous()
+
+    if images.ndim != 5:
+        raise ValueError(
+            "input_layout='NTCHW' requires image batches shaped [N, T, C, H, W]."
+        )
+    if images.shape[1] != time_steps:
+        raise ValueError(
+            f"input time dimension {images.shape[1]} does not match "
+            f"model.time_steps={time_steps}."
+        )
+    return images.contiguous() if batch_first else images.transpose(0, 1).contiguous()
+
+
+def _forward_classification(
+    model: nn.Module,
+    images: torch.Tensor,
+    time_steps: int,
+    step_mode: str,
+    input_layout: str,
+) -> torch.Tensor:
+    if step_mode == "s" and input_layout == "NCHW":
+        if images.ndim != 4:
+            raise ValueError(
+                "input_layout='NCHW' requires image batches shaped [N, C, H, W]."
+            )
+        return _classification_logits(
+            torch.stack([model(images) for _ in range(time_steps)])
+        )
+
+    sequence = _classification_sequence(images, time_steps, input_layout)
+    output = (
+        torch.stack([model(x) for x in sequence])
+        if step_mode == "s"
+        else model(sequence)
+    )
+    return _classification_logits(output)
+
+
+def _broadcast_data_parallel_buffers(model: nn.Module, process_group: Any) -> None:
+    source = dist.get_global_rank(process_group, 0)
+    for buffer in model.buffers():
+        dist.broadcast(buffer, src=source, group=process_group)
+
+
 class _ResetAfterForward(nn.Module):
     def __init__(self, module: nn.Module, batch_first: bool = False) -> None:
         super().__init__()
@@ -60,8 +131,26 @@ class _ResetAfterForward(nn.Module):
         return output
 
 
-def _pipeline_loss(output: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-    return nn.functional.cross_entropy(_classification_logits(output), target)
+def _classification_loss(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    loss_function: Callable[..., torch.Tensor],
+) -> torch.Tensor:
+    loss = loss_function(logits, targets)
+    if not isinstance(loss, torch.Tensor):
+        raise TypeError("loss_function must return a torch.Tensor.")
+    if loss.ndim != 0:
+        raise ValueError("loss_function must return a scalar tensor.")
+    return loss
+
+
+def _pipeline_loss(
+    output: torch.Tensor,
+    target: torch.Tensor,
+    *,
+    loss_function: Callable[..., torch.Tensor],
+) -> torch.Tensor:
+    return _classification_loss(_classification_logits(output), target, loss_function)
 
 
 def _recipe(config: TrainingConfig) -> dict[str, Any]:
@@ -231,6 +320,7 @@ def _wrap_data_parallel(
             model,
             device_ids=[device.index],
             process_group=dp_group,
+            broadcast_buffers=config.model.step_mode == "m",
         )
 
     from torch.distributed.fsdp import MixedPrecisionPolicy, fully_shard
@@ -340,32 +430,33 @@ def _evaluate(
     loader: DataLoader,
     *,
     time_steps: int,
+    step_mode: str,
+    input_layout: str,
     device: torch.device,
     precision: str,
+    loss_function: Callable[..., torch.Tensor],
     dp_group: Optional[Any],
     dp_size: int,
+    sync_buffers: bool,
 ) -> tuple[float, float]:
     model.eval()
+    if sync_buffers:
+        _broadcast_data_parallel_buffers(model, dp_group)
     totals = torch.zeros(3, device=device, dtype=torch.float64)
     dtype = torch.bfloat16 if precision == "bf16" else torch.float16
     with torch.inference_mode():
         for images, targets in loader:
-            if images.ndim != 4:
-                raise ValueError(
-                    "Vision training expects image batches shaped [N, C, H, W]."
-                )
             images = images.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
-            sequence = (
-                images.unsqueeze(0).expand(time_steps, *images.shape).contiguous()
-            )
             with torch.autocast(
                 device_type="cuda",
                 dtype=dtype,
                 enabled=precision != "fp32",
             ):
-                logits = _classification_logits(model(sequence))
-                loss = nn.functional.cross_entropy(logits, targets)
+                logits = _forward_classification(
+                    model, images, time_steps, step_mode, input_layout
+                )
+                loss = _classification_loss(logits, targets, loss_function)
             totals[0] += loss.double() * targets.numel()
             totals[1] += (logits.argmax(1) == targets).sum().double()
             totals[2] += targets.numel()
@@ -381,8 +472,10 @@ def _evaluate_pipeline(
     loader: DataLoader,
     *,
     time_steps: int,
+    input_layout: str,
     device: torch.device,
     precision: str,
+    loss_function: Callable[..., torch.Tensor],
     dp_group: Optional[Any],
     dp_size: int,
     pp_group: Any,
@@ -396,10 +489,8 @@ def _evaluate_pipeline(
         for images, targets in loader:
             images = images.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
-            sequence = (
-                images.unsqueeze(1)
-                .expand(images.shape[0], time_steps, *images.shape[1:])
-                .contiguous()
+            sequence = _classification_sequence(
+                images, time_steps, input_layout, batch_first=True
             )
             with torch.autocast(
                 device_type="cuda",
@@ -412,10 +503,8 @@ def _evaluate_pipeline(
                     output = schedule.step()
             if pp_rank == pp_size - 1:
                 logits = _classification_logits(output)
-                totals[0] += (
-                    nn.functional.cross_entropy(logits, targets).double()
-                    * targets.numel()
-                )
+                loss = _classification_loss(logits, targets, loss_function)
+                totals[0] += loss.double() * targets.numel()
                 totals[1] += (logits.argmax(1) == targets).sum().double()
                 totals[2] += targets.numel()
     if pp_rank == pp_size - 1 and dp_size > 1:
@@ -484,19 +573,26 @@ def build_imagefolder_datasets(
     )
 
 
-def train(config: TrainingConfig) -> dict[str, float]:
+def train_classification(config: TrainingConfig) -> dict[str, float]:
     r"""Train a vision SNN with native PyTorch distributed execution.
 
     **API Language** - 中文 | English
 
     **中文：** 从可序列化 config 构建数据和 architecture-specific 模型，初始化
-    ``DP × PP × TP`` DeviceMesh，运行 DDP 或 FSDP2 图像分类训练，并在每个 batch 后重置
-    SNN 状态。所有 TP rank 使用同一个 DP sampler rank。
+    ``DP × PP × TP`` DeviceMesh，使用配置的 loss 函数运行 DDP 或 FSDP2
+    图像分类训练。单步模式显式循环 ``T`` 次，多步模式一次处理完整时间序列；
+    ``input_layout`` 显式选择静态 ``[N, C, H, W]`` 或 batch-first 时序
+    ``[N, T, C, H, W]`` 输入。每个 batch 后重置 SNN 状态。所有 TP rank 使用
+    同一个 DP sampler rank。rank 0 在每个 epoch 后输出一行 JSON 训练与验证指标。
 
     **English:** Build data and an architecture-specific model from a serializable
     config, initialize a ``DP × PP × TP`` DeviceMesh, run DDP or FSDP2 image
-    classification, and reset SNN state after every batch. TP peers share the same
-    DP sampler rank.
+    classification with the configured loss function. Single-step mode calls the
+    model explicitly for each of ``T`` steps, while multi-step mode processes the
+    complete sequence in one call. ``input_layout`` explicitly selects static
+    ``[N, C, H, W]`` or batch-first temporal ``[N, T, C, H, W]`` input. SNN state
+    is reset after every batch. TP peers share the same DP sampler rank. Rank zero
+    emits one JSON line of training and validation metrics after every epoch.
 
     :param config: 可直接运行的训练配置。 / Train-ready configuration.
     :type config: TrainingConfig
@@ -506,8 +602,14 @@ def train(config: TrainingConfig) -> dict[str, float]:
         loading, validation, and checkpointing.
     :rtype: dict[str, float]
     :raises RuntimeError: CUDA、NCCL 或 FSDP2 不可用。 / If CUDA, NCCL, or FSDP2 is unavailable.
-    :raises ValueError: world size、验证集划分、模型输出或输入布局无效。 / If world
-        size, validation partitioning, model output, or input layout is invalid.
+    :raises ImportError: 配置的模块无法导入。 / If a configured module cannot be imported.
+    :raises AttributeError: 配置的导入对象不存在。 / If a configured imported object
+        does not exist.
+    :raises TypeError: model builder 或 loss 函数无效。 / If the model builder or
+        loss function is invalid.
+    :raises ValueError: world size、验证集划分、模型输出、loss 输出或输入布局无效。 /
+        If world size, validation partitioning, model output, loss output, or input
+        layout is invalid.
     """
     if not torch.cuda.is_available():
         raise RuntimeError("Distributed vision training requires CUDA.")
@@ -550,6 +652,16 @@ def train(config: TrainingConfig) -> dict[str, float]:
         pp_group = pp_mesh.get_group() if config.pipeline_parallel_size > 1 else None
         tp_group = tp_mesh.get_group() if config.tensor_parallel_size > 1 else None
 
+        loss_function = _build_loss_function(config)
+        mixup = None
+        if config.mixup_alpha:
+            from torchvision.transforms import v2
+
+            mixup = v2.MixUp(
+                alpha=config.mixup_alpha,
+                num_classes=config.model.num_classes,
+            )
+
         torch.manual_seed(config.seed)
         builder_cls = config.model.get_builder_cls()
         if not isinstance(builder_cls, type) or not issubclass(
@@ -568,6 +680,7 @@ def train(config: TrainingConfig) -> dict[str, float]:
             memopt_level=config.memopt_level,
             memopt_compress_inputs=config.memopt_compress_inputs,
         )
+        functional.set_step_mode(model, config.model.step_mode)
         model = _wrap_data_parallel(
             model,
             config=config,
@@ -576,6 +689,11 @@ def train(config: TrainingConfig) -> dict[str, float]:
             dp_group=dp_group,
             dp_mesh=dp_mesh,
             fsdp_roots=fsdp_roots,
+        )
+        sync_single_step_buffers = (
+            config.model.step_mode == "s"
+            and config.data_parallel == "ddp"
+            and dp_size > 1
         )
 
         train_schedule = evaluation_schedule = None
@@ -610,7 +728,7 @@ def train(config: TrainingConfig) -> dict[str, float]:
                     output_args=output_args,
                     group=pp_group,
                 ),
-                loss_fn=_pipeline_loss,
+                loss_fn=functools.partial(_pipeline_loss, loss_function=loss_function),
                 **schedule_kwargs,
             )
             evaluation_schedule = ScheduleGPipe(
@@ -676,30 +794,21 @@ def train(config: TrainingConfig) -> dict[str, float]:
                 measure_step = global_step - start_step >= config.timing_warmup_steps
                 torch.cuda.synchronize(device)
                 step_started = time.perf_counter() if measure_step else 0.0
-                if images.ndim != 4:
-                    raise ValueError(
-                        "Vision training expects image batches shaped [N, C, H, W]."
-                    )
                 images = images.to(device, non_blocking=True)
                 targets = targets.to(device, non_blocking=True)
-                if train_schedule is None:
-                    sequence = (
-                        images.unsqueeze(0)
-                        .expand(config.model.time_steps, *images.shape)
-                        .contiguous()
-                    )
-                else:
-                    sequence = (
-                        images.unsqueeze(1)
-                        .expand(
-                            images.shape[0],
-                            config.model.time_steps,
-                            *images.shape[1:],
-                        )
-                        .contiguous()
-                    )
+                loss_targets = targets
+                if mixup is not None:
+                    images, loss_targets = mixup(images, targets)
+                if sync_single_step_buffers:
+                    _broadcast_data_parallel_buffers(model, dp_group)
                 optimizer.zero_grad(set_to_none=True)
                 if train_schedule is not None:
+                    sequence = _classification_sequence(
+                        images,
+                        config.model.time_steps,
+                        config.input_layout,
+                        batch_first=True,
+                    )
                     losses = []
                     with torch.autocast(
                         device_type="cuda",
@@ -709,7 +818,7 @@ def train(config: TrainingConfig) -> dict[str, float]:
                         if pp_rank == 0:
                             train_schedule.step(sequence)
                         elif pp_rank == config.pipeline_parallel_size - 1:
-                            train_schedule.step(target=targets, losses=losses)
+                            train_schedule.step(target=loss_targets, losses=losses)
                         else:
                             train_schedule.step()
                     loss = (
@@ -736,8 +845,14 @@ def train(config: TrainingConfig) -> dict[str, float]:
                         dtype=autocast_dtype,
                         enabled=config.precision != "fp32",
                     ):
-                        logits = _classification_logits(model(sequence))
-                        loss = nn.functional.cross_entropy(logits, targets)
+                        logits = _forward_classification(
+                            model,
+                            images,
+                            config.model.time_steps,
+                            config.model.step_mode,
+                            config.input_layout,
+                        )
+                        loss = _classification_loss(logits, loss_targets, loss_function)
                     if scaler.is_enabled():
                         scale = scaler.get_scale()
                         scaler.scale(loss).backward()
@@ -794,10 +909,14 @@ def train(config: TrainingConfig) -> dict[str, float]:
                     model,
                     validation_loader,
                     time_steps=config.model.time_steps,
+                    step_mode=config.model.step_mode,
+                    input_layout=config.input_layout,
                     device=device,
                     precision=config.precision,
+                    loss_function=loss_function,
                     dp_group=dp_group,
                     dp_size=dp_size,
+                    sync_buffers=sync_single_step_buffers,
                 )
             else:
                 model.eval()
@@ -805,8 +924,10 @@ def train(config: TrainingConfig) -> dict[str, float]:
                     evaluation_schedule,
                     validation_loader,
                     time_steps=config.model.time_steps,
+                    input_layout=config.input_layout,
                     device=device,
                     precision=config.precision,
+                    loss_function=loss_function,
                     dp_group=dp_group,
                     dp_size=dp_size,
                     pp_group=pp_group,
@@ -815,6 +936,20 @@ def train(config: TrainingConfig) -> dict[str, float]:
                     tp_size=config.tensor_parallel_size,
                 )
                 model.train()
+            if rank == 0:
+                print(
+                    json.dumps(
+                        {
+                            "epoch": epoch + 1,
+                            "optimizer_step": global_step,
+                            "train_loss": train_loss,
+                            "validation_accuracy": validation_accuracy,
+                            "validation_loss": validation_loss,
+                        },
+                        sort_keys=True,
+                    ),
+                    flush=True,
+                )
             start_batch = 0
             if stop:
                 break
@@ -825,10 +960,14 @@ def train(config: TrainingConfig) -> dict[str, float]:
                     model,
                     validation_loader,
                     time_steps=config.model.time_steps,
+                    step_mode=config.model.step_mode,
+                    input_layout=config.input_layout,
                     device=device,
                     precision=config.precision,
+                    loss_function=loss_function,
                     dp_group=dp_group,
                     dp_size=dp_size,
+                    sync_buffers=sync_single_step_buffers,
                 )
             else:
                 model.eval()
@@ -836,8 +975,10 @@ def train(config: TrainingConfig) -> dict[str, float]:
                     evaluation_schedule,
                     validation_loader,
                     time_steps=config.model.time_steps,
+                    input_layout=config.input_layout,
                     device=device,
                     precision=config.precision,
+                    loss_function=loss_function,
                     dp_group=dp_group,
                     dp_size=dp_size,
                     pp_group=pp_group,

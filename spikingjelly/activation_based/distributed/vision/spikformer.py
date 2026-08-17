@@ -20,6 +20,7 @@ from spikingjelly.activation_based.distributed.tensor_parallel.channel import (
 from spikingjelly.activation_based.model.spikformer import (
     SpikformerBlock,
     SpikformerPatchStem,
+    spikformer_cifar10,
     spikformer_s,
 )
 
@@ -41,12 +42,22 @@ def _pipeline_stage(model: nn.Module, rank: int, size: int) -> nn.Module:
         return model
     if size not in {2, 4}:
         raise ValueError("Spikformer-S PP size must be 1, 2, or 4.")
-    chunks = (
-        nn.Sequential(model.patch_embed, model.blocks[0]),
-        nn.Sequential(model.blocks[1], model.blocks[2]),
-        nn.Sequential(model.blocks[3], model.blocks[4]),
-        _SpikformerHead(model.blocks[5], model.head),
-    )
+    if len(model.blocks) == 6:
+        chunks = (
+            nn.Sequential(model.patch_embed, model.blocks[0]),
+            nn.Sequential(model.blocks[1], model.blocks[2]),
+            nn.Sequential(model.blocks[3], model.blocks[4]),
+            _SpikformerHead(model.blocks[5], model.head),
+        )
+    elif len(model.blocks) == 4:
+        chunks = (
+            model.patch_embed,
+            nn.Sequential(model.blocks[0], model.blocks[1]),
+            nn.Sequential(model.blocks[2], model.blocks[3]),
+            _SpikformerHead(nn.Identity(), model.head),
+        )
+    else:
+        raise ValueError("Spikformer PP requires 4 or 6 transformer blocks.")
     chunks_per_stage = len(chunks) // size
     start = rank * chunks_per_stage
     return nn.Sequential(*chunks[start : start + chunks_per_stage])
@@ -163,6 +174,8 @@ class SpikformerConfig(ModelConfig):
         super().__post_init__()
         if self.image_height <= 0 or self.image_width <= 0 or self.in_channels <= 0:
             raise ValueError("image dimensions and in_channels must be positive.")
+        if self.step_mode != "m":
+            raise ValueError("The built-in Spikformer requires step_mode='m'.")
 
 
 SpikformerConfig.__init__.__doc__ = r"""Configure the built-in Spikformer-S.
@@ -180,6 +193,8 @@ QKV from separately selected Q, K, and V heads.
 :type time_steps: int
 :param num_classes: 分类类别数。 / Number of classes.
 :type num_classes: int
+:param step_mode: 固定为 ``"m"``。 / Must be ``"m"``.
+:type step_mode: str
 :param image_height: 输入图像高度。 / Input image height.
 :type image_height: int
 :param image_width: 输入图像宽度。 / Input image width.
@@ -188,7 +203,45 @@ QKV from separately selected Q, K, and V heads.
 :type in_channels: int
 :param neuron_backend: 神经元 backend。 / Neuron backend.
 :type neuron_backend: str
-:raises ValueError: 图像尺寸或通道无效。 / If image dimensions or channels are invalid.
+:raises ValueError: 图像尺寸、通道或 step mode 无效。 / If image dimensions,
+    channels, or the step mode are invalid.
+"""
+
+
+@dataclass(frozen=True)
+class SpikformerCIFAR10Config(ModelConfig):
+    builder: ClassVar[str] = (
+        "spikingjelly.activation_based.distributed.vision.spikformer.SpikformerBuilder"
+    )
+    num_classes: int = 10
+    neuron_backend: str = "torch"
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.step_mode != "m":
+            raise ValueError("The built-in Spikformer requires step_mode='m'.")
+
+
+SpikformerCIFAR10Config.__init__.__doc__ = r"""Configure CIFAR-10 Spikformer.
+
+**API Language** - 中文 | English
+
+**中文：** 声明固定 32×32 输入、4×4 patch、384 维、12 heads、4 blocks 的
+CIFAR-10 Spikformer。TP 按 attention head 分片。
+
+**English:** Declare the CIFAR-10 Spikformer with fixed 32×32 input, 4×4 patches,
+384 channels, 12 heads, and 4 blocks. TP shards attention heads.
+
+:param time_steps: SNN 时间步。 / SNN time steps.
+:type time_steps: int
+:param num_classes: 分类类别数。 / Number of classes.
+:type num_classes: int
+:param step_mode: 固定为 ``"m"``。 / Must be ``"m"``.
+:type step_mode: str
+:param neuron_backend: 神经元 backend。 / Neuron backend.
+:type neuron_backend: str
+:raises ValueError: 时间步、类别数或 step mode 无效。 / If time steps, class count,
+    or the step mode are invalid.
 """
 
 
@@ -252,20 +305,36 @@ class SpikformerBuilder(ModelBuilder):
         Optional[tuple[int, ...]],
     ]:
         config = self.config
-        if not isinstance(config, SpikformerConfig):
-            raise TypeError("SpikformerBuilder requires SpikformerConfig.")
-        if pipeline_size > 1 and (config.image_height % 16 or config.image_width % 16):
-            raise ValueError(
-                "Spikformer-S image dimensions must be divisible by 16 with PP."
+        if isinstance(config, SpikformerCIFAR10Config):
+            image_height = image_width = 32
+            in_channels = 3
+            patch_size = 4
+            model = spikformer_cifar10(
+                T=config.time_steps,
+                num_classes=config.num_classes,
+                backend=config.neuron_backend,
             )
-        model = spikformer_s(
-            T=config.time_steps,
-            in_channels=config.in_channels,
-            img_size_h=config.image_height,
-            img_size_w=config.image_width,
-            num_classes=config.num_classes,
-            backend=config.neuron_backend,
-        )
+        elif isinstance(config, SpikformerConfig):
+            image_height = config.image_height
+            image_width = config.image_width
+            in_channels = config.in_channels
+            patch_size = 16
+            model = spikformer_s(
+                T=config.time_steps,
+                in_channels=in_channels,
+                img_size_h=image_height,
+                img_size_w=image_width,
+                num_classes=config.num_classes,
+                backend=config.neuron_backend,
+            )
+        else:
+            raise TypeError("SpikformerBuilder requires a Spikformer config.")
+        if pipeline_size > 1 and (
+            image_height % patch_size or image_width % patch_size
+        ):
+            raise ValueError(
+                f"Spikformer image dimensions must be divisible by {patch_size} with PP."
+            )
         _convert_batch_norms(model)
         world_size = dist.get_world_size(process_group) if process_group else 1
         if world_size > 1:
@@ -284,9 +353,9 @@ class SpikformerBuilder(ModelBuilder):
         if memopt_level:
             dummy = torch.zeros(
                 micro_batch_size,
-                config.in_channels,
-                config.image_height,
-                config.image_width,
+                in_channels,
+                image_height,
+                image_width,
                 device=device,
             )
             model = memopt.memory_optimization(
@@ -304,8 +373,8 @@ class SpikformerBuilder(ModelBuilder):
             config.time_steps,
             micro_batch,
             384,
-            config.image_height // 16,
-            config.image_width // 16,
+            image_height // patch_size,
+            image_width // patch_size,
         )
         stage_shapes = (
             activation_shape,
@@ -319,9 +388,9 @@ class SpikformerBuilder(ModelBuilder):
             (
                 micro_batch,
                 config.time_steps,
-                config.in_channels,
-                config.image_height,
-                config.image_width,
+                in_channels,
+                image_height,
+                image_width,
             )
             if start == 0
             else stage_shapes[start - 1]

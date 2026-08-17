@@ -297,7 +297,24 @@ Module: ``spikingjelly.activation_based.distributed``.
   ``train(config)`` without a global registry or untyped builder kwargs.
 - Added ``distributed.vision`` model builders, serializable ``TrainingConfig``,
   ImageFolder datasets, optimizer-boundary distributed checkpoints, and
-  ``train(config)`` for image classification.
+  ``train_classification(config)`` for image classification.
+- Added importable Vision classification loss functions with serializable keyword
+  arguments shared by non-pipeline and pipeline training and validation.
+- Added model-owned Vision ``step_mode`` configuration. Classification training now
+  runs an explicit outer time loop for single-step SEW-ResNet34; the intrinsically
+  multi-step Spikformer and single-step PP, memopt, and Triton combinations are
+  rejected explicitly.
+- Added ``SpikformerCIFAR10Config`` with the official 32×32, 4×4-patch, 384-channel,
+  12-head, 4-block architecture while reusing the existing TP, PP, and FSDP2 paths.
+- Added serializable batch-level Vision mixup through ``TrainingConfig.mixup_alpha``.
+- Added explicit Vision ``input_layout`` handling for static ``NCHW`` images and
+  default-collated ``NTCHW`` neuromorphic frame sequences.
+- Added rank-zero JSON progress output after every Vision training epoch with
+  optimizer step, train loss, validation loss, and validation accuracy.
+- Fixed ``functional.set_step_mode()`` changing the single-step modules owned by
+  multi-step and sequence-to-ANN containers.
+- Fixed single-step DDP buffer synchronization by broadcasting once before each
+  complete temporal window instead of once per single-step forward.
 - Added SpikingJelly memopt checkpointing for deterministic SNN temporal
   transforms, with non-overlapping MCore selective ``core_attn`` recomputation as
   a memory fallback. Full MCore recomputation is never selected automatically.

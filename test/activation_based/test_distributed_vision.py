@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset
 
-from spikingjelly.activation_based import layer
+from spikingjelly.activation_based import functional, layer
 from spikingjelly.activation_based.distributed import vision
 from spikingjelly.activation_based.distributed.tensor_parallel import (
     ChannelShardBatchNorm2d,
@@ -19,14 +19,18 @@ from spikingjelly.activation_based.model.spikformer import SpikformerBlock, spik
 
 def test_vision_training_config_json_round_trip():
     config = vision.TrainingConfig(
-        model=vision.SpikformerConfig(
+        model=vision.SEWResNet34Config(
             time_steps=6,
             num_classes=11,
-            image_height=48,
-            image_width=64,
+            step_mode="s",
+            image_size=48,
         ),
         dataset_builder="package.datasets.build",
         dataset_kwargs={"root": Path("images")},
+        input_layout="NTCHW",
+        loss_function="package.losses.focal_loss",
+        loss_kwargs={"gamma": 2.0},
+        mixup_alpha=0.5,
         tensor_parallel_size=2,
         data_parallel="fsdp2",
         checkpoint_dir=Path("checkpoints"),
@@ -36,40 +40,147 @@ def test_vision_training_config_json_round_trip():
     restored = vision.TrainingConfig.from_dict(config.as_dict())
 
     assert restored == config
-    assert restored.model.get_builder_cls().__name__ == "SpikformerBuilder"
+    assert restored.model.get_builder_cls().__name__ == "SEWResNet34Builder"
+
+    cifar = vision.TrainingConfig(
+        model=vision.SpikformerCIFAR10Config(),
+        dataset_builder="package.datasets.build",
+    )
+    assert vision.TrainingConfig.from_dict(cifar.as_dict()) == cifar
 
 
-def test_vision_training_config_rejects_invalid_parallel_values():
-    model = vision.SEWResNet34Config()
+@pytest.mark.parametrize(
+    ("match", "kwargs"),
+    [
+        ("tensor_parallel_size", {"tensor_parallel_size": 0}),
+        ("checkpoint_dir", {"checkpoint_interval": 1}),
+        ("pipeline_microbatches", {"batch_size": 10, "pipeline_microbatches": 4}),
+        ("timing_warmup_steps", {"max_steps": 10, "timing_warmup_steps": 10}),
+        ("loss_function", {"loss_function": "cross_entropy"}),
+        ("input_layout", {"input_layout": "NHWC"}),
+        ("mixup_alpha", {"mixup_alpha": -0.1}),
+        (
+            "step_mode='m'",
+            {
+                "model": vision.SEWResNet34Config(step_mode="s"),
+                "pipeline_parallel_size": 2,
+            },
+        ),
+        (
+            "memopt",
+            {"model": vision.SEWResNet34Config(step_mode="s"), "memopt_level": 1},
+        ),
+    ],
+)
+def test_vision_training_config_rejects_invalid_values(match, kwargs):
+    kwargs = dict(kwargs)
+    model = kwargs.pop("model", vision.SEWResNet34Config())
 
-    with pytest.raises(ValueError, match="tensor_parallel_size"):
+    with pytest.raises(ValueError, match=match):
         vision.TrainingConfig(
             model=model,
             dataset_builder="package.datasets.build",
-            tensor_parallel_size=0,
+            **kwargs,
         )
-    with pytest.raises(ValueError, match="checkpoint_dir"):
-        vision.TrainingConfig(
-            model=model,
-            dataset_builder="package.datasets.build",
-            checkpoint_interval=1,
-        )
-    with pytest.raises(ValueError, match="pipeline_microbatches"):
-        vision.TrainingConfig(
-            model=model,
-            dataset_builder="package.datasets.build",
-            batch_size=10,
-            pipeline_microbatches=4,
-        )
-    with pytest.raises(ValueError, match="timing_warmup_steps"):
-        vision.TrainingConfig(
-            model=model,
-            dataset_builder="package.datasets.build",
-            max_steps=10,
-            timing_warmup_steps=10,
-        )
+
+
+def test_vision_model_config_rejects_invalid_values():
     with pytest.raises(ValueError, match="in_channels=3"):
         vision.SEWResNet34Config(in_channels=1)
+    with pytest.raises(ValueError, match="step_mode"):
+        vision.SEWResNet34Config(step_mode="invalid")
+    with pytest.raises(ValueError, match="Spikformer requires step_mode='m'"):
+        vision.SpikformerConfig(step_mode="s")
+
+
+def test_vision_classification_loss_uses_custom_function_and_requires_scalar():
+    logits = torch.tensor([[2.0, 1.0], [1.0, 3.0]])
+    targets = torch.tensor([0, 1])
+    config = vision.TrainingConfig(
+        model=vision.SEWResNet34Config(),
+        dataset_builder="package.datasets.build",
+        loss_kwargs={"label_smoothing": 0.2},
+    )
+    loss_function = training._build_loss_function(config)
+
+    assert torch.equal(
+        training._classification_loss(logits, targets, loss_function),
+        nn.functional.cross_entropy(logits, targets, label_smoothing=0.2),
+    )
+
+    with pytest.raises(TypeError, match="torch.Tensor"):
+        training._classification_loss(logits, targets, lambda *_args: 0.0)
+    with pytest.raises(ValueError, match="scalar"):
+        training._classification_loss(logits, targets, lambda output, _labels: output)
+
+
+def test_vision_classification_forward_respects_step_mode():
+    class Recorder(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.shapes = []
+
+        def forward(self, x):
+            self.shapes.append(tuple(x.shape))
+            return x.mean(dim=(-2, -1))
+
+    images = torch.randn(2, 4, 3, 3)
+    single_step = Recorder()
+    multi_step = Recorder()
+
+    single_logits = training._forward_classification(
+        single_step, images, 3, "s", "NCHW"
+    )
+    multi_logits = training._forward_classification(multi_step, images, 3, "m", "NCHW")
+
+    expected = images.mean(dim=(-2, -1))
+    torch.testing.assert_close(single_logits, expected)
+    torch.testing.assert_close(multi_logits, expected)
+    assert single_step.shapes == [(2, 4, 3, 3)] * 3
+    assert multi_step.shapes == [(3, 2, 4, 3, 3)]
+
+
+def test_vision_classification_sequence_uses_declared_layout():
+    temporal = torch.randn(2, 3, 4, 5, 5)
+
+    time_first = training._classification_sequence(temporal, 3, "NTCHW")
+    batch_first = training._classification_sequence(
+        temporal, 3, "NTCHW", batch_first=True
+    )
+
+    torch.testing.assert_close(time_first, temporal.transpose(0, 1))
+    torch.testing.assert_close(batch_first, temporal)
+    with pytest.raises(ValueError, match="model.time_steps"):
+        training._classification_sequence(temporal, 4, "NTCHW")
+    with pytest.raises(ValueError, match="NCHW"):
+        training._classification_sequence(temporal, 3, "NCHW")
+
+
+def test_vision_broadcasts_data_parallel_buffers(monkeypatch):
+    model = nn.BatchNorm2d(3)
+    process_group = object()
+    calls = []
+    monkeypatch.setattr(torch.distributed, "get_global_rank", lambda group, rank: 7)
+    monkeypatch.setattr(
+        torch.distributed,
+        "broadcast",
+        lambda tensor, **kwargs: calls.append((id(tensor), kwargs)),
+    )
+
+    training._broadcast_data_parallel_buffers(model, process_group)
+
+    assert [call[0] for call in calls] == [id(buffer) for buffer in model.buffers()]
+    assert all(call[1] == {"src": 7, "group": process_group} for call in calls)
+
+
+def test_set_step_mode_preserves_seq_to_ann_children():
+    container = layer.SeqToANNContainer(
+        layer.Conv2d(2, 3, kernel_size=1, step_mode="s")
+    )
+
+    functional.set_step_mode(container, "m")
+
+    assert container[0].step_mode == "s"
 
 
 def test_vision_training_config_rejects_unknown_serialized_fields():
@@ -180,6 +291,37 @@ def test_spikformer_pipeline_rejects_ragged_patch_grid():
             memopt_level=0,
             memopt_compress_inputs=False,
         )
+
+
+def test_sew_resnet34_single_step_matches_multi_step():
+    config = vision.SEWResNet34Config(
+        time_steps=2,
+        num_classes=5,
+        step_mode="m",
+        image_size=32,
+    )
+    model, _, _, _ = config.get_builder_cls()(config).build(
+        process_group=None,
+        pipeline_rank=0,
+        pipeline_size=1,
+        pipeline_microbatches=1,
+        device=torch.device("cpu"),
+        micro_batch_size=2,
+        memopt_level=0,
+        memopt_compress_inputs=False,
+    )
+    model.eval()
+    images = torch.randn(2, 3, 32, 32)
+    sequence = images.unsqueeze(0).expand(2, *images.shape).contiguous()
+
+    functional.set_step_mode(model, "m")
+    functional.reset_net(model)
+    multi_step = model(sequence)
+    functional.set_step_mode(model, "s")
+    functional.reset_net(model)
+    single_step = torch.stack([model(x) for x in sequence])
+
+    torch.testing.assert_close(single_step, multi_step)
 
 
 def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch):
@@ -303,6 +445,27 @@ def test_spikformer_pipeline_keeps_every_transformer_block():
         for stage in stages
         for module in stage.modules()
     ) == len(model.blocks)
+
+
+def test_spikformer_cifar10_pipeline_uses_8_by_8_tokens():
+    config = vision.SpikformerCIFAR10Config(time_steps=2)
+    builder = config.get_builder_cls()(config)
+
+    assert config.num_classes == 10
+
+    _, _, input_shape, output_shape = builder.build(
+        process_group=None,
+        pipeline_rank=0,
+        pipeline_size=2,
+        pipeline_microbatches=2,
+        device=torch.device("cpu"),
+        micro_batch_size=4,
+        memopt_level=0,
+        memopt_compress_inputs=False,
+    )
+
+    assert input_shape == (2, 2, 3, 32, 32)
+    assert output_shape == (2, 2, 384, 8, 8)
 
 
 def test_fsdp2_keeps_batch_norm_in_full_precision(monkeypatch):

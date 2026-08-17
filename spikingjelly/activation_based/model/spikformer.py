@@ -11,6 +11,7 @@ __all__ = [
     "SpikformerConv2dBNLIF",
     "SpikformerMLP",
     "SpikformerPatchStem",
+    "spikformer_cifar10",
     "spikformer_s",
     "spikformer_ti",
 ]
@@ -234,7 +235,8 @@ class SpikformerPatchStem(nn.Module, base.MultiStepModule):
 
         * **中文**
 
-        图像分块嵌入 (patch embedding) 模块，由 4 个卷积降采样阶段和 1 个位置编码卷积组成。每个阶段包含 ``SpikformerConv2dBNLIF`` (Conv2d + BN + MaxPool + LIF)。
+        图像分块嵌入 (patch embedding) 模块，由 4 个卷积阶段和 1 个位置编码卷积组成。
+        ``patch_size=4`` 时仅后两个阶段池化；``patch_size=16`` 时全部阶段池化。
 
         :param img_size_h: 输入图像高度。默认为 224
         :type img_size_h: int
@@ -242,7 +244,8 @@ class SpikformerPatchStem(nn.Module, base.MultiStepModule):
         :param img_size_w: 输入图像宽度。默认为 224
         :type img_size_w: int
 
-        :param patch_size: 分块大小，当前固定为 16。传入其他值将抛出 ``ValueError``
+        :param patch_size: 分块大小，支持 4 或 16。4 仅在后两个卷积阶段下采样，
+            16 在全部四个阶段下采样。
         :type patch_size: int
 
         :param in_channels: 输入图像的通道数。默认为 3
@@ -260,7 +263,7 @@ class SpikformerPatchStem(nn.Module, base.MultiStepModule):
         :param detach_reset: 是否在重置时断开计算图。默认为 ``True``
         :type detach_reset: bool
 
-        :raises ValueError: 当 ``patch_size`` 不是 16 时抛出
+        :raises ValueError: 当 ``patch_size`` 不是 4 或 16 时抛出
 
         ----
 
@@ -268,7 +271,9 @@ class SpikformerPatchStem(nn.Module, base.MultiStepModule):
 
         * **English**
 
-        Image patch embedding stem consisting of 4 convolutional downsampling stages and a positional encoding convolution. Each stage uses ``SpikformerConv2dBNLIF`` (Conv2d + BN + MaxPool + LIF).
+        Image patch embedding stem with four convolution stages and one positional
+        encoding convolution. Only the last two stages pool for ``patch_size=4``;
+        all four stages pool for ``patch_size=16``.
 
         :param img_size_h: Input image height. Default: 224
         :type img_size_h: int
@@ -276,7 +281,8 @@ class SpikformerPatchStem(nn.Module, base.MultiStepModule):
         :param img_size_w: Input image width. Default: 224
         :type img_size_w: int
 
-        :param patch_size: Patch size, currently fixed to 16. Other values will raise a ``ValueError``
+        :param patch_size: Patch size, either 4 or 16. Size 4 downsamples only in
+            the last two convolution stages; size 16 downsamples in all four stages.
         :type patch_size: int
 
         :param in_channels: Number of channels in the input image. Default: 3
@@ -294,13 +300,13 @@ class SpikformerPatchStem(nn.Module, base.MultiStepModule):
         :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
         :type detach_reset: bool
 
-        :raises ValueError: If ``patch_size`` is not 16
+        :raises ValueError: If ``patch_size`` is not 4 or 16
         """
         super().__init__()
-        if patch_size != 16:
+        if patch_size not in {4, 16}:
             raise ValueError(
-                "The current SpikformerPatchStem uses a fixed 4-stage /16 patch pipeline; "
-                f"expected patch_size=16, but got {patch_size}."
+                "SpikformerPatchStem supports patch_size=4 or 16, "
+                f"but got {patch_size}."
             )
         self.image_size = (img_size_h, img_size_w)
         self.patch_size = patch_size
@@ -309,7 +315,8 @@ class SpikformerPatchStem(nn.Module, base.MultiStepModule):
         stage_dims = [embed_dims // 8, embed_dims // 4, embed_dims // 2, embed_dims]
         layers = []
         in_c = in_channels
-        for out_c in stage_dims:
+        pool_from = 2 if patch_size == 4 else 0
+        for index, out_c in enumerate(stage_dims):
             layers.append(
                 SpikformerConv2dBNLIF(
                     in_channels=in_c,
@@ -317,7 +324,7 @@ class SpikformerPatchStem(nn.Module, base.MultiStepModule):
                     kernel_size=3,
                     stride=1,
                     padding=1,
-                    pool=True,
+                    pool=index >= pool_from,
                     backend=backend,
                     tau=tau,
                     detach_reset=detach_reset,
@@ -853,5 +860,44 @@ def spikformer_s(
         num_heads=12,
         mlp_ratio=4.0,
         depths=6,
+        backend=backend,
+    )
+
+
+def spikformer_cifar10(
+    T: int = 4,
+    num_classes: int = 10,
+    backend: str = "torch",
+) -> Spikformer:
+    r"""Build the Spikformer configuration used for CIFAR-10.
+
+    **API Language** - 中文 | English
+
+    **中文：** 构建官方 CIFAR-10 结构：32×32 输入、4×4 patch、384 维、
+    12 个 attention heads 和 4 个 Transformer blocks。
+
+    **English:** Build the official CIFAR-10 architecture with 32×32 input,
+    4×4 patches, 384 channels, 12 attention heads, and 4 Transformer blocks.
+
+    :param T: SNN 时间步。 / SNN time steps.
+    :type T: int
+    :param num_classes: 分类类别数。 / Number of classes.
+    :type num_classes: int
+    :param backend: 神经元 backend。 / Neuron backend.
+    :type backend: str
+    :return: CIFAR-10 Spikformer。 / CIFAR-10 Spikformer.
+    :rtype: Spikformer
+    """
+    return Spikformer(
+        T=T,
+        in_channels=3,
+        img_size_h=32,
+        img_size_w=32,
+        patch_size=4,
+        num_classes=num_classes,
+        embed_dims=384,
+        num_heads=12,
+        mlp_ratio=4.0,
+        depths=4,
         backend=backend,
     )

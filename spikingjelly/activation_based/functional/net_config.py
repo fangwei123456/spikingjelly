@@ -171,6 +171,10 @@ def set_step_mode(net: nn.Module, step_mode: str):
     .. note::
 
         :class:`StepModeContainer <spikingjelly.activation_based.layer.container.StepModeContainer>`,
+        :class:`MultiStepContainer <spikingjelly.activation_based.layer.container.MultiStepContainer>`,
+        :class:`SeqToANNContainer <spikingjelly.activation_based.layer.container.SeqToANNContainer>`,
+        :class:`TLastMultiStepContainer <spikingjelly.activation_based.layer.container.TLastMultiStepContainer>`,
+        :class:`TLastSeqToANNContainer <spikingjelly.activation_based.layer.container.TLastSeqToANNContainer>`,
         :class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.container.ElementWiseRecurrentContainer>`,
         :class:`LinearRecurrentContainer <spikingjelly.activation_based.layer.container.LinearRecurrentContainer>`
         的子模块（不包含包装器本身）的 ``step_mode`` 不会被改变。
@@ -202,6 +206,10 @@ def set_step_mode(net: nn.Module, step_mode: str):
 
         The submodule (not including the container itself) of
         :class:`StepModeContainer <spikingjelly.activation_based.layer.container.StepModeContainer>`,
+        :class:`MultiStepContainer <spikingjelly.activation_based.layer.container.MultiStepContainer>`,
+        :class:`SeqToANNContainer <spikingjelly.activation_based.layer.container.SeqToANNContainer>`,
+        :class:`TLastMultiStepContainer <spikingjelly.activation_based.layer.container.TLastMultiStepContainer>`,
+        :class:`TLastSeqToANNContainer <spikingjelly.activation_based.layer.container.TLastSeqToANNContainer>`,
         :class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.container.ElementWiseRecurrentContainer>`,
         :class:`LinearRecurrentContainer <spikingjelly.activation_based.layer.container.LinearRecurrentContainer>`
         will not be changed.
@@ -222,11 +230,19 @@ def set_step_mode(net: nn.Module, step_mode: str):
     from ..layer import (
         ElementWiseRecurrentContainer,
         LinearRecurrentContainer,
+        MultiStepContainer,
+        SeqToANNContainer,
         StepModeContainer,
+        TLastMultiStepContainer,
+        TLastSeqToANNContainer,
     )
 
     keep_step_mode_instance = (
         StepModeContainer,
+        MultiStepContainer,
+        SeqToANNContainer,
+        TLastMultiStepContainer,
+        TLastSeqToANNContainer,
         ElementWiseRecurrentContainer,
         LinearRecurrentContainer,
     )

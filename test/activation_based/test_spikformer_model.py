@@ -1,7 +1,11 @@
 import torch
 
 from spikingjelly.activation_based import functional, neuron
-from spikingjelly.activation_based.model import Spikformer, spikformer_ti
+from spikingjelly.activation_based.model import (
+    Spikformer,
+    spikformer_cifar10,
+    spikformer_ti,
+)
 from spikingjelly.activation_based.model.spiking_resnet import spiking_resnet18
 from spikingjelly.activation_based.model.spiking_vggws_ottt import ottt_spiking_vggws
 
@@ -52,6 +56,16 @@ def test_spikformer_ti_factory_builds_trainable_model():
 
     assert y.shape == (2, 2, 7)
     assert any(p.grad is not None for p in model.parameters())
+
+
+def test_spikformer_cifar10_factory_runs_official_shape():
+    model = spikformer_cifar10(T=1, backend="torch").eval()
+
+    output = model(torch.randn(1, 3, 32, 32))
+
+    assert output.shape == (1, 1, 10)
+    assert model.patch_embed.grid_size == (8, 8)
+    assert len(model.blocks) == 4
 
 
 def test_spiking_resnet_family_runs_multistep_forward_and_backward():

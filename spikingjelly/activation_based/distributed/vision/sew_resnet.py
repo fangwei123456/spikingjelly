@@ -70,6 +70,8 @@ class SEWResNet34Config(ModelConfig):
             raise ValueError("connection must be 'ADD', 'AND', or 'IAND'.")
         if self.tau <= 1.0:
             raise ValueError("tau must be greater than 1.0.")
+        if self.step_mode == "s" and self.neuron_backend == "triton":
+            raise ValueError("The Triton neuron backend requires step_mode='m'.")
 
 
 SEWResNet34Config.__init__.__doc__ = r"""Configure the built-in SEW-ResNet34.
@@ -87,6 +89,9 @@ colwise/rowwise channel-parallel strategy.
 :type time_steps: int
 :param num_classes: 分类类别数。 / Number of classes.
 :type num_classes: int
+:param step_mode: ``"s"``（单步）或 ``"m"``（多步）。 / ``"s"``
+    (single-step) or ``"m"`` (multi-step).
+:type step_mode: str
 :param image_size: 输入图像边长。 / Input image side length.
 :type image_size: int
 :param in_channels: 固定为 ``3``。 / Must be ``3``.
@@ -136,7 +141,7 @@ class SEWResNet34Builder(ModelBuilder):
             detach_reset=config.detach_reset,
             backend=config.neuron_backend,
         )
-        functional.set_step_mode(model, "m")
+        functional.set_step_mode(model, config.step_mode)
 
         world_size = dist.get_world_size(process_group) if process_group else 1
         if world_size > 1:

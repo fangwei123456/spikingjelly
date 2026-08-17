@@ -26,6 +26,7 @@ from .spikformer import (
     SpikformerConv2dBNLIF,
     SpikformerMLP,
     SpikformerPatchStem,
+    spikformer_cifar10,
     spikformer_s,
     spikformer_ti,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "SpikformerConv2dBNLIF",
     "SpikformerMLP",
     "SpikformerPatchStem",
+    "spikformer_cifar10",
     "spikformer_s",
     "spikformer_ti",
     "Trainer",

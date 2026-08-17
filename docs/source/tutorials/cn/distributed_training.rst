@@ -42,7 +42,7 @@ MCore 重计算也保持职责分离：前者处理 SNN 激活和脉冲表示，
 
 ``spikingjelly.activation_based.distributed.vision`` 提供基于 PyTorch DDP、FSDP2、
 张量并行和流水线并行的图像分类训练入口：``vision.TrainingConfig`` 描述任务，
-``vision.train`` 执行训练。
+``vision.train_classification`` 执行训练。
 
 .. code-block:: python
 
@@ -51,24 +51,53 @@ MCore 重计算也保持职责分离：前者处理 SNN 激活和脉冲表示，
     from spikingjelly.activation_based.distributed import vision
 
     config = vision.TrainingConfig(
-        model=vision.SEWResNet34Config(time_steps=4, num_classes=1000),
+        model=vision.SEWResNet34Config(
+            time_steps=4, num_classes=1000, step_mode="m"
+        ),
         dataset_builder=(
             "spikingjelly.activation_based.distributed.vision."
             "build_imagefolder_datasets"
         ),
         dataset_kwargs={"root": Path("/datasets/imagenet")},
+        input_layout="NCHW",
         batch_size=32,
+        loss_function="torch.nn.functional.cross_entropy",
+        loss_kwargs={"label_smoothing": 0.1},
         tensor_parallel_size=2,
         data_parallel="fsdp2",
         precision="bf16",
         memopt_level=1,
     )
-    metrics = vision.train(config)
+    metrics = vision.train_classification(config)
 
 ``batch_size`` 是每个 DP rank 的 batch size；global batch 为
 ``batch_size * DP``，不乘 TP、PP 或 SNN 时间步。``tensor_parallel_size`` 和
 ``pipeline_parallel_size`` 分别控制 TP 和 PP，剩余 rank 自动作为 DP。内置模型包括
-``SEWResNet34Config`` 和 ``SpikformerConfig``。
+``SEWResNet34Config``、``SpikformerConfig`` 和 ``SpikformerCIFAR10Config``。
+CIFAR-10 变体固定使用官方的 32×32 输入、4×4 patch stem、384 维、12 个 attention
+heads 和 4 个 Transformer blocks，并复用相同的 TP、PP 与 FSDP2 实现。
+``mixup_alpha`` 配置可序列化的 batch-level mixup；``0`` 表示禁用。
+rank 0 在每个 epoch 后输出一行 JSON，其中包含 optimizer step、train loss、
+validation loss 和 validation accuracy；返回的 ``metrics`` 字典包含最终指标与吞吐统计。
+
+``input_layout`` 显式声明 DataLoader batch 的布局。``"NCHW"`` 接收静态图像
+``[N, C, H, W]``；single-step 直接对同一 batch 调用模型 ``T`` 次，multi-step
+使用连续的 ``[T, N, C, H, W]``。``"NTCHW"`` 接收 CIFAR10-DVS、DVS Gesture
+等默认 collate 产生的 ``[N, T, C, H, W]``，训练函数校验 T 后转为 time-first。
+输入布局不根据 tensor 维数自动推断。
+
+训练入口在并行包装前调用 ``functional.set_step_mode``，并在完整时间窗结束后调用
+``functional.reset_net``。single-step 当前不支持 PP、memopt 或 Triton 神经元后端。
+内置 SEW-ResNet34 支持 ``"s"`` 和 ``"m"``；Spikformer 的 architecture 与
+attention 原生只支持 ``"m"``，不会通过 wrapper 模拟单步接口。
+single-step DDP 会关闭逐次 forward 的 buffer 广播，避免 T 次调用期间原地修改
+BatchNorm buffer；训练函数改为在每个完整 T 窗口前只广播一次 buffer，从而在不修改
+单步 forward 已保存 buffer 的前提下同步各 DP rank。
+
+``loss_function`` 是 loss callable 的完整导入路径；它接收经时间维归约后的
+``[N, C]`` logits 和分类 target，并返回用于反向传播和 loss 统计的 batch-mean
+标量张量。``loss_kwargs`` 是每次调用时传入的关键字参数。普通训练、PP、验证
+共用同一 loss 函数；top-1 accuracy 仍是固定的分类指标。
 
 仓库中的合成数据入口可以直接验证安装和并行配置：
 
@@ -114,6 +143,11 @@ config、optimizer 和 dataset 配置位于 ``benchmark/snn_llm/cli.py``，可�
         --output checkpoints/spikelm \
         --train-steps 200 \
         --global-batch-size 128
+
+``llm.train`` 当前只支持完整、相互独立的固定 T 时间窗。模型专项
+``forward_step`` 负责时间编码、状态隔离与时间归约；该 MCore ``T*B`` envelope
+不等同于通用 SpikingJelly ``step_mode="m"``，因此 LLM config 暂不提供
+``step_mode`` 字段。
 
 底层 API
 --------
@@ -208,6 +242,7 @@ rowwise 层消费该本地张量。
 
     model = build_my_model()
     model = parallelize_my_model(model, tp_group).cuda(local_rank)
+    functional.set_step_mode(model, step_mode)
     model = DistributedDataParallel(
         model, device_ids=[local_rank], process_group=dp_group
     )
@@ -233,7 +268,10 @@ rowwise 层消费该本地张量。
             )
 
             optimizer.zero_grad(set_to_none=True)
-            logits = model(sequence).mean(0)
+            if step_mode == "s":
+                logits = torch.stack([model(x_t) for x_t in sequence]).mean(0)
+            else:
+                logits = model(sequence).mean(0)
             loss = torch.nn.functional.cross_entropy(logits, labels)
             loss.backward()
             optimizer.step()

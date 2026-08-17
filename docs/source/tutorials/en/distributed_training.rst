@@ -54,7 +54,7 @@ Vision models
 ``spikingjelly.activation_based.distributed.vision`` provides image
 classification training with PyTorch DDP, FSDP2, tensor parallelism, and
 pipeline parallelism. ``vision.TrainingConfig`` describes the job and
-``vision.train`` executes it:
+``vision.train_classification`` executes it:
 
 .. code-block:: python
 
@@ -63,25 +63,62 @@ pipeline parallelism. ``vision.TrainingConfig`` describes the job and
     from spikingjelly.activation_based.distributed import vision
 
     config = vision.TrainingConfig(
-        model=vision.SEWResNet34Config(time_steps=4, num_classes=1000),
+        model=vision.SEWResNet34Config(
+            time_steps=4, num_classes=1000, step_mode="m"
+        ),
         dataset_builder=(
             "spikingjelly.activation_based.distributed.vision."
             "build_imagefolder_datasets"
         ),
         dataset_kwargs={"root": Path("/datasets/imagenet")},
+        input_layout="NCHW",
         batch_size=32,
+        loss_function="torch.nn.functional.cross_entropy",
+        loss_kwargs={"label_smoothing": 0.1},
         tensor_parallel_size=2,
         data_parallel="fsdp2",
         precision="bf16",
         memopt_level=1,
     )
-    metrics = vision.train(config)
+    metrics = vision.train_classification(config)
 
 ``batch_size`` is the batch size on each DP rank. The global batch is
 ``batch_size * DP`` and does not include TP, PP, or SNN time steps.
 ``tensor_parallel_size`` and ``pipeline_parallel_size`` select TP and PP; the
 remaining ranks become DP replicas. The built-in models are
-``SEWResNet34Config`` and ``SpikformerConfig``.
+``SEWResNet34Config``, ``SpikformerConfig``, and ``SpikformerCIFAR10Config``.
+The CIFAR-10 variant fixes the official 32×32 input, 4×4 patch stem, 384 channels,
+12 attention heads, and 4 transformer blocks while retaining the same TP, PP, and
+FSDP2 implementation. ``mixup_alpha`` enables serializable batch-level mixup;
+``0`` disables it.
+Rank zero prints one JSON record after every epoch containing the optimizer step,
+train loss, validation loss, and validation accuracy. The returned ``metrics``
+dictionary contains the final values and throughput statistics.
+
+``input_layout`` explicitly declares the DataLoader batch layout. ``"NCHW"``
+accepts static ``[N, C, H, W]`` images; single-step calls the model ``T`` times
+with the same batch, while multi-step constructs contiguous
+``[T, N, C, H, W]`` input. ``"NTCHW"`` accepts default-collated
+``[N, T, C, H, W]`` frames from datasets such as CIFAR10-DVS and DVS Gesture,
+validates T, and converts them to time-first layout. Tensor rank is never used
+to infer the declared layout.
+
+Before parallel wrapping, the entry point calls ``functional.set_step_mode`` and
+resets the model with ``functional.reset_net`` after each complete time window.
+Single-step currently does not support PP, memopt, or the Triton neuron backend.
+The built-in SEW-ResNet34 supports both modes. Spikformer's architecture and
+attention are intrinsically multi-step and are not wrapped to simulate a
+single-step interface.
+Single-step DDP disables per-forward buffer broadcasts so repeated calls do not
+modify BatchNorm buffers needed by backward. It instead broadcasts buffers once
+before each complete T window, keeping replicas synchronized without mutating a
+saved buffer between single-step forwards.
+
+``loss_function`` is the full import path of a callable receiving reduced
+``[N, C]`` logits and class targets. It must return the batch-mean scalar used
+for backward and loss reporting. ``loss_kwargs`` supplies keyword arguments to
+each call. The same function is used by non-pipeline and pipeline training and
+validation; top-1 accuracy remains the fixed classification metric.
 
 The repository's synthetic-data entry point can verify the installation and
 parallel configuration directly:
@@ -133,6 +170,12 @@ optimizer, and dataset configuration lives in ``benchmark/snn_llm/cli.py``:
         --output checkpoints/spikelm \
         --train-steps 200 \
         --global-batch-size 128
+
+``llm.train`` currently supports only complete, independent fixed-T windows.
+The architecture-specific ``forward_step`` owns temporal encoding, state
+isolation, and reduction. Its MCore ``T*B`` envelope is not the generic
+SpikingJelly ``step_mode="m"`` interface, so LLM configs intentionally do not
+expose a ``step_mode`` field yet.
 
 Low-level APIs
 --------------
@@ -232,6 +275,7 @@ shows only the assembly order:
 
     model = build_my_model()
     model = parallelize_my_model(model, tp_group).cuda(local_rank)
+    functional.set_step_mode(model, step_mode)
     model = DistributedDataParallel(
         model, device_ids=[local_rank], process_group=dp_group
     )
@@ -257,7 +301,10 @@ shows only the assembly order:
             )
 
             optimizer.zero_grad(set_to_none=True)
-            logits = model(sequence).mean(0)
+            if step_mode == "s":
+                logits = torch.stack([model(x_t) for x_t in sequence]).mean(0)
+            else:
+                logits = model(sequence).mean(0)
             loss = torch.nn.functional.cross_entropy(logits, labels)
             loss.backward()
             optimizer.step()

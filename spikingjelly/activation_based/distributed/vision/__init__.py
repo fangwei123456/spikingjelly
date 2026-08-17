@@ -10,15 +10,16 @@ architecture-specific channel tensor parallelism.
 
 from .config import ModelBuilder, ModelConfig, TrainingConfig
 from .sew_resnet import SEWResNet34Config
-from .spikformer import SpikformerConfig
-from .training import build_imagefolder_datasets, train
+from .spikformer import SpikformerCIFAR10Config, SpikformerConfig
+from .training import build_imagefolder_datasets, train_classification
 
 __all__ = [
     "ModelBuilder",
     "ModelConfig",
     "SEWResNet34Config",
+    "SpikformerCIFAR10Config",
     "SpikformerConfig",
     "TrainingConfig",
     "build_imagefolder_datasets",
-    "train",
+    "train_classification",
 ]

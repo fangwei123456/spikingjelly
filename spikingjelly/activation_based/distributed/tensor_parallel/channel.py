@@ -7,7 +7,8 @@ import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
 
-from spikingjelly.activation_based.memopt import in_gc_1st_forward
+from ... import base
+from ...memopt import in_gc_1st_forward
 
 __all__ = [
     "ChannelShardBatchNorm1d",
@@ -43,7 +44,7 @@ class _ColwiseBackwardAllReduce(torch.autograd.Function):
         return grad_output, None
 
 
-class _ChannelShardConv(nn.Module):
+class _ChannelShardConv(nn.Module, base.StepModule):
     _conv = None
     _input_shape = ""
     _spatial_dims = 0
@@ -263,7 +264,7 @@ class ChannelShardConv1d(_ChannelShardConv):
         super().__init__(source, process_group, mode)
 
 
-class _ChannelShardBatchNorm(nn.Module):
+class _ChannelShardBatchNorm(nn.Module, base.StepModule):
     _input_shape = ""
     _spatial_dims = 0
 
