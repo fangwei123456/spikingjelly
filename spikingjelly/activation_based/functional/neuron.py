@@ -1,8 +1,37 @@
-"""Explicit neuron updates.
+r"""显式的神经元状态转移函数 / Explicit neuron state-transition functions.
 
-``*_step`` consumes one time step. ``*_multi_step`` consumes a time-major sequence
-and is exposed only when the sequence path has its own implementation rather
-than being a Python loop over ``*_step``.
+单步函数显式接收当前输入和状态，不读取或写入 ``MemoryModule`` 的 memory。
+其共同契约是：
+
+.. math::
+
+   (Y_t, V_t) = \Phi(X_t, V_{t-1}; \theta)
+
+其中 :math:`V_t` 可以是一个或多个状态张量；具体神经元自行定义
+:math:`\Phi`，不要求拆分为固定的充电、发放和复位步骤。状态生命周期由拥有它的
+neuron module 管理。
+
+多步函数接收时间优先的 ``[T, ...]`` 序列，返回输出序列和最终状态。支持
+``store_v_seq=True`` 的后端还会返回可选的状态轨迹 ``v_seq``；它是调试或监控用的
+派生结果，不是需要传给下一次调用的持久化状态。后端选择由神经元 module 负责，
+这里的 CuPy/Triton 函数只执行已经选定的路径。
+
+Single-step functions explicitly receive the current input and state. They do not read
+or write ``MemoryModule`` memory. Their common contract is:
+
+.. math::
+
+   (Y_t, V_t) = \Phi(X_t, V_{t-1}; \theta)
+
+``V_t`` may contain one or more state tensors. Each neuron defines ``Phi`` as needed;
+the transition is not required to split into fixed charging, firing, and reset steps.
+The owning neuron module manages state lifetime.
+
+Multi-step functions consume time-major ``[T, ...]`` sequences and return the output
+sequence and final state. Backends supporting ``store_v_seq=True`` additionally return
+the optional state trace ``v_seq``. This trace is derived monitoring data, not persistent
+state for the next call. Backend dispatch belongs to the neuron module; CuPy/Triton
+functions here execute an already selected path.
 """
 
 from __future__ import annotations
@@ -34,6 +63,7 @@ __all__ = [
     "eif_multi_step_cupy",
     "izhikevich_multi_step_cupy",
     "if_multi_step_triton",
+    "ilif_multi_step_triton",
     "lif_multi_step_triton",
     "plif_multi_step_triton",
     "stbif_single_step_triton",
@@ -2420,6 +2450,94 @@ def lif_multi_step_triton(
         v_reset,
         detach_reset,
         surrogate_function,
+        store_v_seq,
+    )
+    if store_v_seq:
+        return spike_seq, voltage[-1].clone(), voltage
+    return spike_seq, voltage, None
+
+
+def ilif_multi_step_triton(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    tau: float,
+    v_threshold: float,
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+    store_v_seq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    r"""
+    **API Language** - :ref:`中文 <ilif_multi_step_triton-cn>` | :ref:`English <ilif_multi_step_triton-en>`
+
+    ----
+
+    .. _ilif_multi_step_triton-cn:
+
+    * **中文**
+
+    使用 Triton kernel 执行 I-LIF 多步状态转移，不进行 backend 分发。
+    ``v`` 是已物化的初始膜电位；``store_v_seq`` 为 ``True`` 时返回完整的
+    reset 后膜电位序列。
+
+    :param x_seq: 输入序列，shape 为 ``[T, N, *]``。
+    :type x_seq: torch.Tensor
+    :param v: 初始膜电位，shape 为 ``x_seq.shape[1:]``。
+    :type v: torch.Tensor
+    :param tau: 膜电位时间常数。
+    :type tau: float
+    :param v_threshold: 发放阈值。
+    :type v_threshold: float
+    :param surrogate_function: 多级整数发放函数。
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否分离 reset 分支中的发放计数。
+    :type detach_reset: bool
+    :param store_v_seq: 是否返回膜电位序列。
+    :type store_v_seq: bool
+    :return: ``(spike_seq, v_next, v_seq_or_none)``。
+    :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ImportError: Triton kernel 不可用。
+
+    ----
+
+    .. _ilif_multi_step_triton-en:
+
+    * **English**
+
+    Run the I-LIF multi-step state transition with the Triton kernel without
+    backend dispatch. ``v`` is the materialized initial membrane voltage;
+    ``store_v_seq=True`` also returns the post-reset voltage sequence.
+
+    :param x_seq: Input sequence shaped ``[T, N, *]``.
+    :type x_seq: torch.Tensor
+    :param v: Initial membrane voltage shaped ``x_seq.shape[1:]``.
+    :type v: torch.Tensor
+    :param tau: Membrane-voltage time constant.
+    :type tau: float
+    :param v_threshold: Firing threshold.
+    :type v_threshold: float
+    :param surrogate_function: Multi-level integer firing function.
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach the firing count in reset.
+    :type detach_reset: bool
+    :param store_v_seq: Whether to return the membrane-voltage sequence.
+    :type store_v_seq: bool
+    :return: ``(spike_seq, v_next, v_seq_or_none)``.
+    :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ImportError: If the Triton kernel is unavailable.
+    """
+    from ..triton_kernel.neuron_kernel import ilif
+
+    if ilif is None:
+        raise ImportError("ilif_multi_step_triton requires the Triton backend.")
+    spike_seq, voltage = ilif._multistep_ilif(
+        x_seq,
+        v,
+        1.0 - 1.0 / tau,
+        v_threshold,
+        surrogate_function.max_spike_count,
+        surrogate_function.grad_min,
+        surrogate_function.grad_max,
+        detach_reset,
         store_v_seq,
     )
     if store_v_seq:

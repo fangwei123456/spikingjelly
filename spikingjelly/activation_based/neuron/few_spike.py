@@ -141,6 +141,9 @@ class FewSpikeNode(nn.Module, base.StepModule):
     输入必须为浮点 tensor。编码表参数注册为 buffer，会随模块 ``to(device/dtype)`` 迁移；
     若输入 dtype 与 buffer dtype 不同，遵循 PyTorch 的 dtype promotion 规则。
 
+    该实现对应 Stöckl 和 Maass 提出的 Few-Spikes (FS) 神经元，参见
+    `Stöckl and Maass (2021) <https://doi.org/10.1038/s42256-021-00311-4>`__。
+
     ----
 
     .. _FewSpikeNode-en:
@@ -162,6 +165,10 @@ class FewSpikeNode(nn.Module, base.StepModule):
     Inputs must be floating point tensors. Coding table parameters are registered
     as buffers and follow module ``to(device/dtype)`` conversions. If the input
     dtype differs from the buffer dtype, PyTorch dtype promotion rules apply.
+
+    This implementation corresponds to the Few-Spikes (FS) neuron proposed by
+    Stöckl and Maass; see `Stöckl and Maass (2021)
+    <https://doi.org/10.1038/s42256-021-00311-4>`__.
     """
 
     def __init__(
@@ -206,15 +213,13 @@ class FewSpikeNode(nn.Module, base.StepModule):
         if not torch.is_floating_point(x):
             raise TypeError(f"{name} must be a floating point tensor.")
 
-    def _forward_from_gate(
-        self, gate: torch.Tensor, return_sequence: bool
+    def _run_table(
+        self, gate: torch.Tensor, theta, h, d, return_sequence: bool
     ) -> torch.Tensor:
         v = gate
         y_seq = []
         y = torch.zeros_like(gate) if not return_sequence else None
-        for theta_k, h_k, d_k in zip(
-            self.theta.unbind(0), self.h.unbind(0), self.d.unbind(0)
-        ):
+        for theta_k, h_k, d_k in zip(theta, h, d):
             z = self.surrogate_function(v - theta_k)
             weighted_spike = d_k * z
             if return_sequence:
@@ -225,6 +230,11 @@ class FewSpikeNode(nn.Module, base.StepModule):
         if return_sequence:
             return torch.stack(y_seq, dim=0)
         return y
+
+    def _forward_from_gate(
+        self, gate: torch.Tensor, return_sequence: bool
+    ) -> torch.Tensor:
+        return self._run_table(gate, self.theta, self.h, self.d, return_sequence)
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         r"""
@@ -349,6 +359,8 @@ class OutlierAwareThresholdNode(FewSpikeNode):
         ``mtn`` 表生成或 fast floor-quantized 路径。若需要与 LAS 数值完全一致，应显式
         传入对应的 :class:`FewSpikeTable`。
 
+        来源：`LAS 论文 <https://arxiv.org/abs/2505.09659>`__。
+
         :param table: normal 分支编码表。
         :type table: FewSpikeTable
         :param outlier_table: outlier 分支编码表。
@@ -384,6 +396,8 @@ class OutlierAwareThresholdNode(FewSpikeNode):
         branches, but does not include LAS ``mtn`` table generation or the fast
         floor-quantized path. Pass matching :class:`FewSpikeTable` objects explicitly
         when exact LAS numeric behavior is required.
+
+        Source: `the LAS paper <https://arxiv.org/abs/2505.09659>`__.
 
         :param table: Coding table for the normal branch.
         :type table: FewSpikeTable
@@ -444,28 +458,22 @@ class OutlierAwareThresholdNode(FewSpikeNode):
         signs = torch.sign(gate).detach()
         magnitude = gate.abs()
         mask = magnitude <= self.split_threshold
-        v = magnitude
-        y_seq = []
-        y = torch.zeros_like(gate) if not return_sequence else None
-        for theta_k, h_k, d_k, outlier_theta_k, outlier_h_k, outlier_d_k in zip(
-            self.theta.unbind(0),
-            self.h.unbind(0),
-            self.d.unbind(0),
-            self.outlier_theta.unbind(0),
-            self.outlier_h.unbind(0),
-            self.outlier_d.unbind(0),
-        ):
-            z = self.surrogate_function(v - torch.where(mask, theta_k, outlier_theta_k))
-            weighted_spike = torch.where(mask, d_k, outlier_d_k) * z
-            if return_sequence:
-                y_seq.append(weighted_spike)
-            else:
-                y = y + weighted_spike
-            v = v - torch.where(mask, h_k, outlier_h_k) * z
+        theta = (
+            torch.where(mask, theta_k, outlier_theta_k)
+            for theta_k, outlier_theta_k in zip(self.theta, self.outlier_theta)
+        )
+        h = (
+            torch.where(mask, h_k, outlier_h_k)
+            for h_k, outlier_h_k in zip(self.h, self.outlier_h)
+        )
+        d = (
+            torch.where(mask, d_k, outlier_d_k)
+            for d_k, outlier_d_k in zip(self.d, self.outlier_d)
+        )
+        output = self._run_table(magnitude, theta, h, d, return_sequence)
         if return_sequence:
             signs = signs.unsqueeze(0)
-            return torch.stack(y_seq, dim=0) * signs
-        return y * signs
+        return output * signs
 
     def extra_repr(self) -> str:
         return super().extra_repr() + (
@@ -499,6 +507,8 @@ class HGNode(FewSpikeNode):
         该类提供区域路由形式的通用层级门控，不声明与 LAS 中某个具体 fitted activation
         模块完全等价。需要复现特定 LAS 非线性时，应使用与该非线性对应的 table 和阈值。
 
+        来源：`LAS 论文 <https://arxiv.org/abs/2505.09659>`__。
+
         :param tables: 每个 gate 区间对应的编码表序列，长度至少为 1。
         :type tables: Sequence[FewSpikeTable]
         :param gate_thresholds: 升序一维阈值序列，长度必须为 ``len(tables) - 1``。
@@ -529,6 +539,8 @@ class HGNode(FewSpikeNode):
         claim exact equivalence to a specific LAS fitted activation module. To
         reproduce a specific LAS nonlinearity, use tables and thresholds matching
         that nonlinearity.
+
+        Source: `the LAS paper <https://arxiv.org/abs/2505.09659>`__.
 
         :param tables: Coding tables for gate regions, with length at least 1.
         :type tables: Sequence[FewSpikeTable]
@@ -614,23 +626,13 @@ class HGNode(FewSpikeNode):
         self, gate: torch.Tensor, return_sequence: bool
     ) -> torch.Tensor:
         region_ids = torch.bucketize(gate.detach(), self.gate_thresholds)
-        v = gate
-        y_seq = []
-        y = torch.zeros_like(gate) if not return_sequence else None
-        for k in range(self.K):
-            theta_k = self.region_theta[:, k][region_ids]
-            h_k = self.region_h[:, k][region_ids]
-            d_k = self.region_d[:, k][region_ids]
-            z = self.surrogate_function(v - theta_k)
-            weighted_spike = d_k * z
-            if return_sequence:
-                y_seq.append(weighted_spike)
-            else:
-                y = y + weighted_spike
-            v = v - h_k * z
-        if return_sequence:
-            return torch.stack(y_seq, dim=0)
-        return y
+        return self._run_table(
+            gate,
+            (self.region_theta[:, k][region_ids] for k in range(self.K)),
+            (self.region_h[:, k][region_ids] for k in range(self.K)),
+            (self.region_d[:, k][region_ids] for k in range(self.K)),
+            return_sequence,
+        )
 
     def extra_repr(self) -> str:
         return super().extra_repr() + (

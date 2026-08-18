@@ -1,15 +1,7 @@
-from spikingjelly.logger import logger
-
 import torch
 
 from .. import functional, surrogate
 from .lif import LIFNode
-
-try:
-    from ..triton_kernel.neuron_kernel import ilif as triton_ilif_kernel
-except (ImportError, OSError) as e:
-    logger.debug("Optional Triton kernel unavailable: {}", e)
-    triton_ilif_kernel = None
 
 __all__ = ["ILIFNode"]
 
@@ -36,9 +28,10 @@ class ILIFNode(LIFNode):
 
         * **中文**
 
-        I-LIF 由 ECCV 2024 论文 *Integer-Valued Training and Spike-Driven Inference
-        Spiking Neural Network for High-performance and Energy-efficient Object
-        Detection* 中提出。本实现保留论文中的整数发放和 soft reset，
+        I-LIF 由 ECCV 2024 论文 `Integer-Valued Training and Spike-Driven
+        Inference Spiking Neural Network for High-performance and Energy-efficient
+        Object Detection <https://arxiv.org/abs/2407.20708>`__ 中提出。
+        本实现保留论文中的整数发放和 soft reset，
         将单位阈值推广为 ``v_threshold``。整数发放上限和替代梯度由
         ``surrogate_function`` 配置。
 
@@ -164,9 +157,10 @@ class ILIFNode(LIFNode):
 
         * **English**
 
-        I-LIF was introduced in the ECCV 2024 paper *Integer-Valued Training and
+        I-LIF was introduced in the ECCV 2024 paper `Integer-Valued Training and
         Spike-Driven Inference Spiking Neural Network for High-performance and
-        Energy-efficient Object Detection*. This implementation keeps the integer
+        Energy-efficient Object Detection
+        <https://arxiv.org/abs/2407.20708>`__. This implementation keeps the integer
         firing and soft reset used in the paper and generalizes its unit threshold
         to ``v_threshold``. The integer firing limit and surrogate gradient are
         configured by ``surrogate_function``.
@@ -360,22 +354,14 @@ class ILIFNode(LIFNode):
         v = states[0]
 
         if self.backend == "triton":
-            if triton_ilif_kernel is None:
-                raise ImportError(
-                    "ILIFNode backend='triton' requires the optional Triton backend."
-                )
-            spike_seq, v_out = triton_ilif_kernel._multistep_ilif(
+            spike_seq, v, _ = functional.ilif_multi_step_triton(
                 x_seq,
                 v,
-                1.0 - 1.0 / self.tau,
+                self.tau,
                 self.v_threshold,
-                self.surrogate_function.max_spike_count,
-                self.surrogate_function.grad_min,
-                self.surrogate_function.grad_max,
+                self.surrogate_function,
                 self.detach_reset,
-                False,
             )
-            v = v_out
         elif self.backend == "torch":
             return super().multi_step_functional_forward(inputs, states, **kwargs)
         else:
@@ -390,21 +376,17 @@ class ILIFNode(LIFNode):
         states = self.materialize_states(
             (x_seq, *args), tuple(self._memories.values()), "m"
         )
-        if triton_ilif_kernel is None:
-            raise ImportError(
-                "ILIFNode backend='triton' requires the optional Triton backend."
-            )
-        spike_seq, v_seq = triton_ilif_kernel._multistep_ilif(
+        if self.backend != "triton":
+            raise ValueError(self.backend)
+        spike_seq, v, v_seq = functional.ilif_multi_step_triton(
             x_seq,
             states[0],
-            1.0 - 1.0 / self.tau,
+            self.tau,
             self.v_threshold,
-            self.surrogate_function.max_spike_count,
-            self.surrogate_function.grad_min,
-            self.surrogate_function.grad_max,
+            self.surrogate_function,
             self.detach_reset,
-            True,
+            store_v_seq=True,
         )
-        self.v = v_seq[-1].clone()
+        self.v = v
         self.v_seq = v_seq
         return spike_seq
