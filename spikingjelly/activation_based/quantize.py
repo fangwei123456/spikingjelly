@@ -1,13 +1,26 @@
 import torch
 
 
-class round_atgf(torch.autograd.Function):
+__all__ = [
+    "round",
+    "ceil",
+    "floor",
+    "clamp",
+    "step_quantize",
+    "multi_level_spike_count",
+    "k_bit_quantize",
+    "affine_k_bit_quantize",
+    "clamp_by_linear",
+]
+
+
+class RoundATGF(torch.autograd.Function):
     r"""
-    **API Language** - :ref:`中文 <round_atgf-cn>` | :ref:`English <round_atgf-en>`
+    **API Language** - :ref:`中文 <RoundATGF-cn>` | :ref:`English <RoundATGF-en>`
 
     ----
 
-    .. _round_atgf-cn:
+    .. _RoundATGF-cn:
 
     * **中文**
 
@@ -22,7 +35,7 @@ class round_atgf(torch.autograd.Function):
 
     ----
 
-    .. _round_atgf-en:
+    .. _RoundATGF-en:
 
     * **English**
 
@@ -78,16 +91,16 @@ def round(x: torch.Tensor):
     :return: the output tensor
     :rtype: torch.Tensor
     """
-    return round_atgf.apply(x)
+    return RoundATGF.apply(x)
 
 
-class ceil_atgf(torch.autograd.Function):
+class CeilATGF(torch.autograd.Function):
     r"""
-    **API Language** - :ref:`中文 <ceil_atgf-cn>` | :ref:`English <ceil_atgf-en>`
+    **API Language** - :ref:`中文 <CeilATGF-cn>` | :ref:`English <CeilATGF-en>`
 
     ----
 
-    .. _ceil_atgf-cn:
+    .. _CeilATGF-cn:
 
     * **中文**
 
@@ -102,7 +115,7 @@ class ceil_atgf(torch.autograd.Function):
 
     ----
 
-    .. _ceil_atgf-en:
+    .. _CeilATGF-en:
 
     * **English**
 
@@ -158,16 +171,16 @@ def ceil(x: torch.Tensor):
     :return: the output tensor
     :rtype: torch.Tensor
     """
-    return ceil_atgf.apply(x)
+    return CeilATGF.apply(x)
 
 
-class floor_atgf(torch.autograd.Function):
+class FloorATGF(torch.autograd.Function):
     r"""
-    **API Language** - :ref:`中文 <floor_atgf-cn>` | :ref:`English <floor_atgf-en>`
+    **API Language** - :ref:`中文 <FloorATGF-cn>` | :ref:`English <FloorATGF-en>`
 
     ----
 
-    .. _floor_atgf-cn:
+    .. _FloorATGF-cn:
 
     * **中文**
 
@@ -182,7 +195,7 @@ class floor_atgf(torch.autograd.Function):
 
     ----
 
-    .. _floor_atgf-en:
+    .. _FloorATGF-en:
 
     * **English**
 
@@ -238,84 +251,21 @@ def floor(x: torch.Tensor):
     :return: the output tensor
     :rtype: torch.Tensor
     """
-    return floor_atgf.apply(x)
+    return FloorATGF.apply(x)
 
 
-def clamp_backward(
-    grad_output: torch.Tensor, x: torch.Tensor, min_value: float, max_value: float
-):
+class ClampATGF(torch.autograd.Function):
     r"""
-    **API Language** - :ref:`中文 <clamp_backward-cn>` | :ref:`English <clamp_backward-en>`
+    **API Language** - :ref:`中文 <ClampATGF-cn>` | :ref:`English <ClampATGF-en>`
 
     ----
 
-    .. _clamp_backward-cn:
-
-    * **中文**
-
-    :class:`clamp_atgf` 的反向传播辅助函数。计算梯度掩码：对于 ``min_value <= x <= max_value`` 范围内的元素梯度保持不变，否则梯度为 0。
-
-    .. math::
-
-        \frac{\partial y}{\partial x} = \begin{cases}
-            1, \mathrm{min\_value} \leq x \leq \mathrm{max\_value} \\
-            0, \mathrm{otherwise}
-        \end{cases}
-
-    :param grad_output: 上游梯度
-    :type grad_output: torch.Tensor
-    :param x: 前向传播时的输入张量
-    :type x: torch.Tensor
-    :param min_value: 夹紧范围的下界
-    :type min_value: float
-    :param max_value: 夹紧范围的上界
-    :type max_value: float
-    :return: 施加掩码后的梯度
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _clamp_backward-en:
-
-    * **English**
-
-    The backward helper function for :class:`clamp_atgf`. Computes a gradient mask:
-    for elements within ``min_value <= x <= max_value`` the gradient passes through,
-    otherwise it is zero.
-
-    .. math::
-
-        \frac{\partial y}{\partial x} = \begin{cases}
-            1, \mathrm{min\_value} \leq x \leq \mathrm{max\_value} \\
-            0, \mathrm{otherwise}
-        \end{cases}
-
-    :param grad_output: the upstream gradient
-    :type grad_output: torch.Tensor
-    :param x: the input tensor from the forward pass
-    :type x: torch.Tensor
-    :param min_value: the lower-bound of the clamping range
-    :type min_value: float
-    :param max_value: the upper-bound of the clamping range
-    :type max_value: float
-    :return: the masked gradient
-    :rtype: torch.Tensor
-    """
-    return grad_output * ((x >= min_value) & (x <= max_value))
-
-
-class clamp_atgf(torch.autograd.Function):
-    r"""
-    **API Language** - :ref:`中文 <clamp_atgf-cn>` | :ref:`English <clamp_atgf-en>`
-
-    ----
-
-    .. _clamp_atgf-cn:
+    .. _ClampATGF-cn:
 
     * **中文**
 
     :class:`clamp` 的自动梯度函数。前向传播执行 ``y = torch.clamp(x, min_value, max_value)``，
-    反向传播使用 :func:`clamp_backward` 对在 ``[min_value, max_value]`` 范围内的元素传递梯度，范围外的元素梯度为 0。
+    反向传播使用 PyTorch 的原生夹紧梯度。
 
     :param x: 输入张量
     :type x: torch.Tensor
@@ -330,13 +280,12 @@ class clamp_atgf(torch.autograd.Function):
 
     ----
 
-    .. _clamp_atgf-en:
+    .. _ClampATGF-en:
 
     * **English**
 
-    The autograd function for :class:`clamp`. The forward executes ``y = torch.clamp(x, min_value, max_value)``,
-    and the backward uses :func:`clamp_backward` to pass gradients for elements within ``[min_value, max_value]``
-    and zero out gradients outside.
+    The autograd function for :class:`clamp`. The forward executes ``y = torch.clamp(x, min_value, max_value)``
+    and uses PyTorch's native clamp gradient in backward.
 
     :param x: the input tensor
     :type x: torch.Tensor
@@ -360,13 +309,9 @@ class clamp_atgf(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
-        return (
-            clamp_backward(
-                grad_output, ctx.saved_tensors[0], ctx.min_value, ctx.max_value
-            ),
-            None,
-            None,
-        )
+        x = ctx.saved_tensors[0]
+        mask = (x >= ctx.min_value) & (x <= ctx.max_value)
+        return grad_output * mask.to(grad_output.dtype), None, None
 
 
 def clamp(x: torch.Tensor, min_value: float, max_value: float):
@@ -427,66 +372,20 @@ def clamp(x: torch.Tensor, min_value: float, max_value: float):
     :return: the output tensor
     :rtype: torch.Tensor
     """
-    return clamp_atgf.apply(x, min_value, max_value)
+    return ClampATGF.apply(x, min_value, max_value)
 
 
-def step_quantize_forward(x: torch.Tensor, step: float):
+class StepQuantizeATGF(torch.autograd.Function):
     r"""
-    **API Language** - :ref:`中文 <step_quantize_forward-cn>` | :ref:`English <step_quantize_forward-en>`
+    **API Language** - :ref:`中文 <StepQuantizeATGF-cn>` | :ref:`English <StepQuantizeATGF-en>`
 
     ----
 
-    .. _step_quantize_forward-cn:
+    .. _StepQuantizeATGF-cn:
 
     * **中文**
 
-    :class:`step_quantize_atgf` 的前向传播辅助函数。将 ``x`` 量化到最近的 ``i * step``，其中 ``i`` 是整数。
-
-    .. math::
-
-        y = \\mathrm{round}(x / \\mathrm{step}) \\times \\mathrm{step}
-
-    :param x: 输入张量
-    :type x: torch.Tensor
-    :param step: 量化步长
-    :type step: float
-    :return: 量化后的张量
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _step_quantize_forward-en:
-
-    * **English**
-
-    The forward helper function for :class:`step_quantize_atgf`. Quantizes ``x`` to the nearest ``i * step``,
-    where ``i`` is an integer.
-
-    .. math::
-
-        y = \\mathrm{round}(x / \\mathrm{step}) \\times \\mathrm{step}
-
-    :param x: the input tensor
-    :type x: torch.Tensor
-    :param step: the quantization step size
-    :type step: float
-    :return: the quantized tensor
-    :rtype: torch.Tensor
-    """
-    return torch.round(x / step) * step
-
-
-class step_quantize_atgf(torch.autograd.Function):
-    r"""
-    **API Language** - :ref:`中文 <step_quantize_atgf-cn>` | :ref:`English <step_quantize_atgf-en>`
-
-    ----
-
-    .. _step_quantize_atgf-cn:
-
-    * **中文**
-
-    :class:`step_quantize` 的自动梯度函数。前向传播调用 :func:`step_quantize_forward` 执行步长量化，
+    :class:`step_quantize` 的自动梯度函数。前向传播执行步长量化，
     反向传播将梯度原样传递（即梯度直通估计器 Straight-Through Estimator）。
 
     :param x: 输入张量
@@ -500,11 +399,11 @@ class step_quantize_atgf(torch.autograd.Function):
 
     ----
 
-    .. _step_quantize_atgf-en:
+    .. _StepQuantizeATGF-en:
 
     * **English**
 
-    The autograd function for :class:`step_quantize`. The forward calls :func:`step_quantize_forward` to perform
+    The autograd function for :class:`step_quantize`. The forward performs
     step quantization, and the backward passes the gradient through unchanged (i.e., a Straight-Through Estimator).
 
     :param x: the input tensor
@@ -519,14 +418,14 @@ class step_quantize_atgf(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, x: torch.Tensor, step: float):
-        return step_quantize_forward(x, step)
+        return torch.round(x / step) * step
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
         return grad_output, None
 
 
-def step_quantize(x: torch.Tensor, step: float):
+def step_quantize(x: torch.Tensor, step: float = 1.0):
     r"""
     **API Language** - :ref:`中文 <step_quantize-cn>` | :ref:`English <step_quantize-en>`
 
@@ -574,10 +473,10 @@ def step_quantize(x: torch.Tensor, step: float):
     :return: the quantized tensor
     :rtype: torch.Tensor
     """
-    return step_quantize_atgf.apply(x, step)
+    return StepQuantizeATGF.apply(x, step)
 
 
-class multi_level_spike_count_atgf(torch.autograd.Function):
+class MultiLevelSpikeCountATGF(torch.autograd.Function):
     @staticmethod
     def forward(
         ctx,
@@ -608,7 +507,7 @@ def multi_level_spike_count(
         grad_min, grad_max = 0.0, float(max_spike_count)
     else:
         grad_min, grad_max = grad_window
-    return multi_level_spike_count_atgf.apply(
+    return MultiLevelSpikeCountATGF.apply(
         x,
         max_spike_count,
         grad_min,
@@ -616,65 +515,17 @@ def multi_level_spike_count(
     )
 
 
-def k_bit_quantize_forward(x: torch.Tensor, k: int):
+class KBitQuantizeATGF(torch.autograd.Function):
     r"""
-    **API Language** - :ref:`中文 <k_bit_quantize_forward-cn>` | :ref:`English <k_bit_quantize_forward-en>`
+    **API Language** - :ref:`中文 <KBitQuantizeATGF-cn>` | :ref:`English <KBitQuantizeATGF-en>`
 
     ----
 
-    .. _k_bit_quantize_forward-cn:
+    .. _KBitQuantizeATGF-cn:
 
     * **中文**
 
-    :class:`k_bit_quantize_atgf` 的前向传播辅助函数。将范围为 ``[0, 1]`` 的输入量化到最近的 ``i / (2 ** k - 1)``，
-    其中 ``i = 0, 1, ..., (2 ** k - 1)``。
-
-    .. math::
-
-        y = \\frac{\\mathrm{round}((2^k - 1) \\cdot x)}{2^k - 1}
-
-    :param x: 范围为 ``[0, 1]`` 的浮点张量
-    :type x: torch.Tensor
-    :param k: 输出位数
-    :type k: int
-    :return: 量化后的张量
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _k_bit_quantize_forward-en:
-
-    * **English**
-
-    The forward helper function for :class:`k_bit_quantize_atgf`. Quantizes the input in range ``[0, 1]``
-    to the nearest ``i / (2 ** k - 1)``, where ``i = 0, 1, ..., (2 ** k - 1)``.
-
-    .. math::
-
-        y = \\frac{\\mathrm{round}((2^k - 1) \\cdot x)}{2^k - 1}
-
-    :param x: a float tensor whose range is ``[0, 1]``
-    :type x: torch.Tensor
-    :param k: the bit number of output
-    :type k: int
-    :return: the quantized tensor
-    :rtype: torch.Tensor
-    """
-    levels = float(1 << k) - 1.0
-    return torch.round(x * levels) / levels
-
-
-class k_bit_quantize_atgf(torch.autograd.Function):
-    r"""
-    **API Language** - :ref:`中文 <k_bit_quantize_atgf-cn>` | :ref:`English <k_bit_quantize_atgf-en>`
-
-    ----
-
-    .. _k_bit_quantize_atgf-cn:
-
-    * **中文**
-
-    :class:`k_bit_quantize` 的自动梯度函数。前向传播调用 :func:`k_bit_quantize_forward` 执行 DoReFa-Net 风格的 k 位量化，
+    :class:`k_bit_quantize` 的自动梯度函数。前向传播执行 DoReFa-Net 风格的 k 位量化，
     反向传播将梯度原样传递（即梯度直通估计器 Straight-Through Estimator）。
 
     :param x: 范围为 ``[0, 1]`` 的浮点张量
@@ -688,11 +539,11 @@ class k_bit_quantize_atgf(torch.autograd.Function):
 
     ----
 
-    .. _k_bit_quantize_atgf-en:
+    .. _KBitQuantizeATGF-en:
 
     * **English**
 
-    The autograd function for :class:`k_bit_quantize`. The forward calls :func:`k_bit_quantize_forward` to perform
+    The autograd function for :class:`k_bit_quantize`. The forward performs
     DoReFa-Net style k-bit quantization, and the backward passes the gradient through unchanged (i.e., a Straight-Through Estimator).
 
     :param x: a float tensor whose range is ``[0, 1]``
@@ -707,7 +558,8 @@ class k_bit_quantize_atgf(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, x: torch.Tensor, k: int):
-        return k_bit_quantize_forward(x, k)
+        levels = float(1 << k) - 1.0
+        return torch.round(x * levels) / levels
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -776,7 +628,7 @@ def k_bit_quantize(x: torch.Tensor, k: int):
     """
     if k < 1:
         raise ValueError(f"k must be a positive integer, but got {k}")
-    return k_bit_quantize_atgf.apply(x, k)
+    return KBitQuantizeATGF.apply(x, k)
 
 
 def affine_k_bit_quantize(x: torch.Tensor, k: int, w: torch.Tensor, b: torch.Tensor):

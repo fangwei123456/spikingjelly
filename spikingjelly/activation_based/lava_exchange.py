@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from . import base, neuron, surrogate
+from . import base, neuron, quantize, surrogate
 from .functional import neuron as functional
 
 from spikingjelly.logger import logger
@@ -12,114 +12,7 @@ from spikingjelly.logger import logger
 _hw_bits = 12
 
 
-def step_quantize_forward(x: torch.Tensor, step: float):
-    r"""
-    **API Language** - :ref:`中文 <step_quantize_forward-cn>` | :ref:`English <step_quantize_forward-en>`
-
-    ----
-
-    .. _step_quantize_forward-cn:
-
-    * **中文**
-
-    ``step_quantize`` 的前向量化函数。将 ``x`` 除以 ``step``，四舍五入后再乘回 ``step``。
-
-    :param x: 输入张量
-    :type x: torch.Tensor
-    :param step: 量化步长
-    :type step: float
-    :return: 量化后的张量
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _step_quantize_forward-en:
-
-    * **English**
-
-    The forward quantization function of ``step_quantize``. Divide ``x`` by ``step``, round, and multiply back by ``step``.
-
-    :param x: Input tensor
-    :type x: torch.Tensor
-    :param step: Quantization step
-    :type step: float
-    :return: Quantized tensor
-    :rtype: torch.Tensor
-    """
-    x = x / step
-    torch.round_(x)
-    return x * step
-
-
-class step_quantize_atgf(torch.autograd.Function):
-    r"""
-    **API Language** - :ref:`中文 <step_quantize_atgf-cn>` | :ref:`English <step_quantize_atgf-en>`
-
-    ----
-
-    .. _step_quantize_atgf-cn:
-
-    * **中文**
-
-    ``step_quantize`` 的自定义自动求导函数。前向使用 ``step_quantize_forward`` 进行量化，反向使用直通估计器（Straight-Through Estimator）。
-
-    ----
-
-    .. _step_quantize_atgf-en:
-
-    * **English**
-
-    Custom autograd Function for ``step_quantize``. Uses ``step_quantize_forward`` for forward quantization and a straight-through estimator (STE) for backward.
-    """
-
-    @staticmethod
-    def forward(ctx, x: torch.Tensor, step: float = 1.0):
-        return step_quantize_forward(x, step)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        return grad_output, None
-
-
-def step_quantize(x: torch.Tensor, step: float = 1.0):
-    r"""
-    **API Language** - :ref:`中文 <step_quantize-cn>` | :ref:`English <step_quantize-en>`
-
-    ----
-
-    .. _step_quantize-cn:
-
-    * **中文**
-
-    步进量化器，定义在 `Lava` 中。
-
-    记 ``k`` 为 ``int``，``x[i]`` 将被量化到最近的 ``k * step``。
-
-    :param x: 浮点张量，取值范围为 ``0 <= x <= 1``。
-    :type x: torch.Tensor
-    :param step: 量化步长
-    :type step: float
-    :return: ``y = round(x / step) * step``
-    :rtype: torch.Tensor
-
-    ----
-
-    .. _step_quantize-en:
-
-    * **English**
-
-    The step quantizer defined in `Lava`.
-
-    Denote ``k`` as an ``int``, ``x[i]`` will be quantized to the nearest ``k * step``.
-
-    :param x: a float tensor whose range is ``0 <= x <= 1``.
-    :type x: torch.Tensor
-    :param step: the quantization step
-    :type step: float
-    :return: ``y = round(x / step) * step``
-    :rtype: torch.Tensor
-    """
-    return step_quantize_atgf.apply(x, step)
+step_quantize = quantize.step_quantize
 
 
 def quantize_8b(x, scale, descale=False):

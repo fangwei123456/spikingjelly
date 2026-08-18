@@ -540,13 +540,7 @@ def to_lynxi_supported_modules(net: Union[list, tuple, nn.Sequential], T: int):
     :return: List of Lynxi-compatible modules
     :rtype: list
     """
-    output_net = []
-    for i in range(len(net)):
-        m_in = net[i]
-        m_out = to_lynxi_supported_module(m_in, T)
-        output_net.append(m_out)
-
-    return output_net
+    return [to_lynxi_supported_module(module, T) for module in net]
 
 
 try:
