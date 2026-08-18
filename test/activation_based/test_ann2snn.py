@@ -34,7 +34,6 @@ from spikingjelly.activation_based.ann2snn.modules import (
     ChannelVoltageScaler,
     VoltageHook,
     VoltageScaler,
-    _safe_quantile,
 )
 from spikingjelly.activation_based.ann2snn.operators import (
     TDGELU,
@@ -684,28 +683,6 @@ class TestVoltageHook:
         hook(x)
 
         assert hook.scale.item() == pytest.approx(torch.quantile(x, 0.5).item())
-
-    def test_safe_quantile_matches_torch_quantile(self):
-        x = torch.randn(5, 7, 11)
-
-        assert torch.allclose(
-            _safe_quantile(x, 0.999),
-            torch.quantile(x, 0.999),
-            atol=1e-6,
-            rtol=1e-6,
-        )
-        assert torch.allclose(
-            _safe_quantile(x.reshape(5, -1), 0.75, dim=1),
-            torch.quantile(x.reshape(5, -1), 0.75, dim=1),
-            atol=1e-6,
-            rtol=1e-6,
-        )
-        assert torch.allclose(
-            _safe_quantile(x, 0.75, dim=1),
-            torch.quantile(x, 0.75, dim=1),
-            atol=1e-6,
-            rtol=1e-6,
-        )
 
     def test_percentile_mode_supports_half_precision(self):
         hook = VoltageHook(mode="50%")

@@ -8,6 +8,7 @@ from typing import (
     Iterable,
     Optional,
     TYPE_CHECKING,
+    Type,
     Tuple,
     Union,
 )
@@ -24,7 +25,6 @@ from spikingjelly.activation_based.ann2snn.modules import (
     ChannelVoltageScaler,
     VoltageHook,
     VoltageScaler,
-    _safe_quantile,
 )
 from spikingjelly.activation_based.ann2snn.recipes.base import ConversionRecipe
 from spikingjelly.activation_based.ann2snn.recipes.step_mode_adapters import (
@@ -223,11 +223,11 @@ class ChannelVoltageHook(nn.Module):
             if self.mode[-1] == "%":
                 try:
                     quantile = float(self.mode[:-1]) / 100.0
-                    if not (0.0 <= quantile <= 1.0):
-                        raise NotImplementedError(err_msg)
-                    s_t = _safe_quantile(channel_values, quantile, dim=1)
-                except (ValueError, RuntimeError) as exc:
+                except ValueError as exc:
                     raise NotImplementedError(err_msg) from exc
+                if not (0.0 <= quantile <= 1.0):
+                    raise NotImplementedError(err_msg)
+                s_t = torch.quantile(channel_values, quantile, dim=1)
             elif self.mode.lower() in ["max"]:
                 s_t = channel_values.max(dim=1).values
             else:
@@ -419,7 +419,7 @@ class RateCodingRecipe(ConversionRecipe):
         self, converter: "Converter", fx_model: fx.GraphModule
     ) -> fx.GraphModule:
         with torch.no_grad():
-            for _, data in enumerate(tqdm(self.dataloader)):
+            for data in tqdm(self.dataloader):
                 imgs = _extract_batch_input(data)
                 if isinstance(imgs, torch.Tensor):
                     imgs = imgs.to(device=converter.device)

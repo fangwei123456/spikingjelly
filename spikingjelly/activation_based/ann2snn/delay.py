@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import time
 import warnings
+from itertools import islice
 from typing import Dict, Iterable, List, Tuple, Union
 
 import torch
@@ -34,8 +35,6 @@ def _extract_batch_input(batch):
 
 
 def _as_runtime_tensor(value, x: torch.Tensor) -> torch.Tensor:
-    if isinstance(value, torch.Tensor):
-        return value.to(device=x.device, dtype=x.dtype)
     return torch.as_tensor(value, device=x.device, dtype=x.dtype)
 
 
@@ -205,14 +204,10 @@ def estimate_delay_start(
         )
         return 0
 
-    original_device = None
-    try:
-        original_device = next(model.parameters()).device
-    except StopIteration:
-        try:
-            original_device = next(model.buffers()).device
-        except StopIteration:
-            original_device = torch.device("cpu")
+    state = next(model.parameters(), None)
+    if state is None:
+        state = next(model.buffers(), None)
+    original_device = state.device if state is not None else torch.device("cpu")
     original_training_modes = {module: module.training for module in model.modules()}
     ratios: Dict[BaseNode, List[float]] = {module: [] for module, _ in paths}
     handles = []
@@ -239,9 +234,7 @@ def estimate_delay_start(
 
         reset_net(model)
         with torch.no_grad():
-            for batch_idx, batch in enumerate(dataloader):
-                if batch_idx >= num_batches:
-                    break
+            for batch in islice(dataloader, num_batches):
                 x = _extract_batch_input(batch)
                 if not isinstance(x, torch.Tensor):
                     raise TypeError("The extracted model input must be a tensor.")
@@ -263,8 +256,7 @@ def estimate_delay_start(
         for handle in handles:
             handle.remove()
         reset_net(model)
-        if original_device is not None:
-            model.to(original_device)
+        model.to(original_device)
         for module, training in original_training_modes.items():
             module.training = training
 

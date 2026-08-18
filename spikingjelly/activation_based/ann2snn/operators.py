@@ -25,13 +25,6 @@ __all__ = [
 ]
 
 
-def _temporal_difference(y_cum: torch.Tensor) -> torch.Tensor:
-    y_seq = torch.empty_like(y_cum)
-    y_seq[0] = y_cum[0]
-    y_seq[1:] = y_cum[1:] - y_cum[:-1]
-    return y_seq
-
-
 def _resolve_dim(dim: int, ndim: int) -> int:
     resolved = dim
     if resolved < 0:
@@ -171,11 +164,12 @@ class TDModule(base.MemoryModule):
         if not isinstance(previous_output, torch.Tensor) or not self._same_tensor_meta(
             previous_output, output_cum_seq[0]
         ):
-            output_seq = _temporal_difference(output_cum_seq)
-        else:
-            output_seq = torch.empty_like(output_cum_seq)
-            output_seq[0] = output_cum_seq[0] - previous_output
-            output_seq[1:] = output_cum_seq[1:] - output_cum_seq[:-1]
+            previous_output = torch.zeros_like(output_cum_seq[0])
+        output_seq = torch.diff(
+            output_cum_seq,
+            dim=0,
+            prepend=previous_output.unsqueeze(0),
+        )
         return output_seq, output_cum_seq[-1].clone()
 
     def _td_sequence_forward(

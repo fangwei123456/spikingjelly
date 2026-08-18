@@ -15,6 +15,17 @@ and the archived documentation linked from the project README.
 Unreleased
 ----------
 
+Improvements
+~~~~~~~~~~~~
+
+ANN-to-SNN Conversion
+^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.ann2snn``.
+
+- Rate-coding percentile calibration now uses PyTorch's exact
+  ``torch.quantile`` instead of an internal sampled approximation.
+
 2.0.0.dev1 - 2026-08-14
 -----------------------
 

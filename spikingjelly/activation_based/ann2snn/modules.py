@@ -1,6 +1,3 @@
-import math
-from typing import Optional
-
 import torch
 import torch.nn as nn
 
@@ -8,61 +5,6 @@ from spikingjelly.activation_based import base, functional
 
 
 __all__ = ["VoltageHook", "VoltageScaler", "ChannelVoltageScaler"]
-
-
-def _safe_quantile(
-    x: torch.Tensor,
-    quantile: float,
-    dim: Optional[int] = None,
-    max_elements: int = 1048576,
-) -> torch.Tensor:
-    """Approximate ``torch.quantile`` with bounded calibration memory.
-
-    Large activation tensors can make ``torch.quantile`` allocate enough
-    temporary memory to dominate ANN2SNN calibration. This helper limits each
-    reduction to at most ``max_elements`` sampled values, then applies kth-value
-    interpolation. The result is approximate when subsampling is used.
-    """
-    if not (0.0 <= quantile <= 1.0):
-        raise ValueError("quantile must be in [0, 1].")
-    if x.numel() == 0:
-        raise ValueError("quantile input must not be empty.")
-    if max_elements <= 0:
-        raise ValueError("max_elements must be positive.")
-
-    if dim is None:
-        values = x.reshape(-1)
-        if values.numel() > max_elements:
-            stride = math.ceil(values.numel() / max_elements)
-            values = values[::stride][:max_elements].contiguous()
-        rank = quantile * (values.numel() - 1)
-        lower_idx = int(math.floor(rank))
-        upper_idx = int(math.ceil(rank))
-        lower = values.kthvalue(lower_idx + 1).values
-        if lower_idx == upper_idx:
-            return lower
-        upper = values.kthvalue(upper_idx + 1).values
-        return lower + (upper - lower) * (rank - lower_idx)
-
-    if dim < 0:
-        dim += x.dim()
-    if dim < 0 or dim >= x.dim():
-        raise ValueError("dim is out of range.")
-    values = x.movedim(dim, -1)
-    original_shape = values.shape[:-1]
-    values = values.reshape(-1, values.shape[-1]).contiguous()
-    if values.shape[-1] > max_elements:
-        stride = math.ceil(values.shape[-1] / max_elements)
-        values = values[:, ::stride][:, :max_elements].contiguous()
-    rank = quantile * (values.shape[-1] - 1)
-    lower_idx = int(math.floor(rank))
-    upper_idx = int(math.ceil(rank))
-    lower = values.kthvalue(lower_idx + 1, dim=1).values
-    if lower_idx == upper_idx:
-        return lower.reshape(original_shape)
-    upper = values.kthvalue(upper_idx + 1, dim=1).values
-    result = lower + (upper - lower) * (rank - lower_idx)
-    return result.reshape(original_shape)
 
 
 class VoltageHook(nn.Module):
@@ -149,16 +91,16 @@ class VoltageHook(nn.Module):
             if self.mode[-1] == "%":
                 try:
                     quantile = float(self.mode[:-1]) / 100.0
-                    if not (0.0 <= quantile <= 1.0):
-                        raise NotImplementedError(err_msg)
-                    quantile_input = x.detach()
-                    if quantile_input.dtype in [torch.float16, torch.bfloat16]:
-                        quantile_input = quantile_input.to(torch.float32)
-                    s_t = _safe_quantile(quantile_input, quantile).to(x.dtype)
-                except ValueError:
-                    raise
-                except RuntimeError as exc:
+                except ValueError as exc:
                     raise NotImplementedError(err_msg) from exc
+                if not (0.0 <= quantile <= 1.0):
+                    raise NotImplementedError(err_msg)
+                quantile_input = x.detach()
+                if quantile_input.dtype in [torch.float16, torch.bfloat16]:
+                    quantile_input = quantile_input.to(torch.float32)
+                if quantile_input.numel() == 0:
+                    raise ValueError("quantile input must not be empty.")
+                s_t = torch.quantile(quantile_input, quantile).to(x.dtype)
             elif self.mode.lower() in ["max"]:
                 s_t = x.max().detach()
             else:
