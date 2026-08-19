@@ -22,6 +22,7 @@
   - [数据集](#数据集)
   - [转换与部署](#转换与部署)
 - [项目状态与版本说明](#项目状态与版本说明)
+- [许可证](#许可证)
 - [致谢](#致谢)
 - [贡献](#贡献)
 - [引用](#引用)
@@ -150,6 +151,11 @@ SpikingJelly 内置以下事件数据和神经形态数据集：
 - [NIR exchange](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/cn/nir_exchange.html)
 - [Lava exchange](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/cn/lava_exchange.html)
 - [Lynxi exchange](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/cn/inference_on_lynxi.html)
+
+## 许可证
+
+SpikingJelly 采用启智开源许可证 1.0 版发布。请参阅[具有权威效力的中文许可证](./LICENSE)、
+[其他语言译文](./LICENSES/translations/)和[使用与再发布说明](./LICENSES/README.md)。
 
 ## 致谢
 

@@ -41,7 +41,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Operating System :: OS Independent",
 ]
-license-files = ["LICENSE", "LICENSES/translations/*"]
+license-files = ["LICENSE", "LICENSES/README.md", "LICENSES/translations/*"]
 
 [project.optional-dependencies]
 cupy11 = ["cupy-cuda11x"]
@@ -75,6 +75,7 @@ llm-benchmark = [
 [project.urls]
 Homepage = "https://github.com/fangwei123456/spikingjelly"
 Documentation = "https://spikingjelly.readthedocs.io/"
+License = "https://github.com/fangwei123456/spikingjelly/blob/master/LICENSES/README.md"
 
 [tool.ruff]
 src = ["spikingjelly", "test"]

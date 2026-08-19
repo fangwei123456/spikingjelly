@@ -1,64 +1,142 @@
-Open-Intelligence Open Source License
-V1.0
+# Open-Intelligence Open Source License Version 1.0
 
-## Language
+## Languages
 
-English | [Deutsch](https://github.com/fangwei123456/spikingjelly/blob/master/LICENSES/translations/LICENSE.de) | [French(français)](https://github.com/fangwei123456/spikingjelly/blob/master/LICENSES/translations/LICENSE.fr) | [Hindi(हिन्दी)](https://github.com/fangwei123456/spikingjelly/blob/master/LICENSES/translations/LICENSE.hi) | [中文(Chinese)](https://github.com/fangwei123456/spikingjelly/blob/master/LICENSE)
+English | [Deutsch](LICENSE.de) | [Français](LICENSE.fr) |
+[हिन्दी](LICENSE.hi) | [中文](../../LICENSE) | [License guide](../README.md)
 
-Notice: This is an English translation of the Chinese Open-Intelligence Open Source License V1.0. The Chinese version in the repository root LICENSE file is the original and authoritative text. In case of any discrepancy, the Chinese version prevails.
+> **Translation notice:** This English translation is provided for
+> convenience only. The Chinese text in the repository's root `LICENSE` file
+> is the original and authoritative version. If this translation differs from
+> the Chinese text, the Chinese text prevails.
 
-I.Definition 
-1.“Work” shall mean any work of authorship, whether in source or object code, made available under this License. 
-2.“Licensor” shall mean the copyright owner, or a person or legal entity authorized by the copyright owner that is granting the License. 
-3.“User” shall mean an individual or legal entity exercising permissions granted by this License. 
-4.“Distributor/Redistributor” shall mean an individual or legal entity that distributes the Work or its derivative work in any medium. 
+## I. Definitions
 
-II.Copyright License
-1.Scope of the License 
-The Licensor grants the User the right to use and redistribute the software work, whether revised or not, whether in source or executable code, provided that the User meets the following conditions set in Article 2. 
-2.Conditions of the License 
-(1)You must retain, in the source code you distribute, the conditions set in Article 2, Section II, the License Notice in Section III, the Disclaimer Notice in Section VI. 
-(2)You must attach, in the executable code you distribute, a file or other attachment that contains the conditions set in Article 2, Section II, the License Notice in Section III, the Disclaimer Notice in Section VI.
-(3),For the use and distribution of commercial purpose, you must meet the conditions of Section V. 
-(4)Regarding the notice “The Copyright owner promises to follow “Open-Intelligence Open Source Platform Management Regulation V1.0”, which is provided by The New Generation of Artificial Intelligence Technology Innovation Strategic Alliance (the AITISA), please refer to www.aitisa.org.cn.
+1. **“Work”** means any work of authorship made available under this License,
+   whether in source-code or object-code form.
+2. **“Licensor”** means the copyright holder, or an individual or legal entity
+   authorized by the copyright holder to grant this License.
+3. **“User”** means an individual or legal entity exercising permissions
+   granted by this License.
+4. **“Distributor/Redistributor”** means an individual or legal entity that
+   distributes the Work or a derivative work in any medium.
 
+## II. Copyright License
 
-III.License Notice
-The License Notice is as follows:
+### 1. Scope of the License
 
-Copyright (c) [xxxx] [Name of Copyright owner]
-The software is released under the Open-Intelligence Open Source License V1.0.
-[Voluntary Patent Announcement] The software is granted a patent license in a way of ( authorization ).
-The copyright owner promises to follow “Open-Intelligence Open Source Platform Management Regulation V1.0”, 
-which is provided by The New Generation of Artificial Intelligence Technology Innovation Strategic Alliance (the AITISA)
+Subject to the User's compliance with the conditions in Subsection 2 below,
+the Licensor grants the User the right to use and redistribute this software,
+with or without modification, in source-code or executable-code form.
 
-IV.Patent License [Voluntary Patent Announcement]
-If the Licensor owns a patent  covering the Software,
-1.He grants a license  as the following (  2  )to any user or distributor that does not own any patent that cover the software:
-(1)A royalty free license under Fair, Reasonable, and Non-discriminatory conditions (“FRAND RF”);
-(2)Join a patent pool established by The New Generation of Artificial Intelligence Technology Innovation Strategic Alliance (the AITISA);
-(3)A license under Fair, Reasonable, and Non-discriminatory conditions (“FRAND”);
-2.He may, grants a reciprocal patent license, to any user or distributor that also owns a patent that cover the software:
+### 2. Conditions of the License
 
-V.Commercial Use 
-1.Disclosure of Commercial Use
-For commercial use of the Software, regardless revised or not, any user or distributor of the Software, shall disclose the following information at www.aitisa.org.cn/OI_Statement/ of the New Generation of Artificial Intelligence Technology Innovation Strategic Alliance (the AITISA):
-User/Distributor：
-Contact of User/Distributor：
-Address
-Telephone:
-Email:
-Purpose of the Use/Distribution (including name, brief description of the functions of Product, Software, or Application which the software is applied):
+1. When redistributing this software in source-code form, you must retain the
+   license conditions in this subsection, the License Notice in Section III,
+   and the Disclaimer in Section VI.
+2. When redistributing this software in executable-code form, you must
+   reproduce the license conditions in this subsection, the License Notice in
+   Section III, and the Disclaimer in Section VI in an accompanying file
+   and/or other materials provided with the redistribution.
+3. Commercial use or redistribution must comply with Section V.
+4. For the statement in Section III that “The copyright holder undertakes to
+   comply with the Open-Intelligence Open Source Platform Management
+   Regulation Version 1.0 of the New Generation of Artificial Intelligence
+   Technology Innovation Strategic Alliance,” please refer to
+   <https://www.aitisa.org.cn/>.
 
-2.Patent License for Commercial Use
-For commercial use of the Software, any user or distributor of the Software who owns a patent covering the Software shall also disclose related patent information in Article 1 of this Section, and expressly grant a license in any of the following manners to the copyright owner, distributor or a third party user (    ):
-(1)A royalty free license under Fair, Reasonable, and Non-discriminatory conditions (“FRAND RF”);
-(2)Join a patent pool established by The New Generation of Artificial Intelligence Technology Innovation Strategic Alliance (the AITISA);
-(3)A license under Fair, Reasonable, and Non-discriminatory conditions (“FRAND”);
-(4)NO LICENSE
+## III. License Notice
 
-Regarding the license choice made by the user or distributor for commercial purpose, for the patent that the copyright owner owns covering the Software, if the copyright owner do not make any choice in the above Voluntary Patent Announcement, he hereby grant the user and distributor the same license chosen in this term.
+The notice for adopting this License is as follows:
 
-VI.Disclaimer Notice
-The Software is provided under this License by the copyright owner and other contributors on an “as is” basis, and managed by The New Generation of Artificial Intelligence Technology Innovation Strategic Alliance (the AITISA) on an “as is” basis. 
-This software does not provide any express or implied warranty, including but not limited to implied warranties of merchantability, fitness for a particular purpose, and non-infringement. The copyright owner and the contributors of the software, regardless of any conditions, regardless of the cause or any principle of liability, whether the responsibility is due to the contractual relationship, the principle of no-fault liability or due to infringement (including negligence or other reasons, etc.), are not responsible for any damage (including but not limited to: purchase of replacement goods or services, loss of use, loss of data, etc. arising from any direct, indirect, incidental, special, punitive or any resulting damage arising out of the use of the Software, loss of profits, business interruptions, etc.), even if such use has been informed beforehand that such damage may occur. In addition to the express grants stated in the above patent announcement, the use of the software may also be subject to other rights (including patent rights). Under this license, there is no express or implied grant to anyone of these other rights (including patent rights).
+> Copyright (c) XXXX. Copyright owned by “[Name of copyright holder].”
+>
+> This software is released under the Open-Intelligence Open Source License
+> Version 1.0.
+>
+> [Voluntary Patent Declaration] This software is provided with a patent
+> license in the form of (authorization).
+>
+> The copyright holder undertakes to comply with the Open-Intelligence Open
+> Source Platform Management Regulation Version 1.0 of the New Generation of
+> Artificial Intelligence Technology Innovation Strategic Alliance.
+
+## IV. Patent License [Voluntary Patent Declaration]
+
+If the Licensor owns patents covering this software:
+
+1. For Users and Distributors/Redistributors that do not own any patent
+   covering this software, the Licensor grants the license specified in option
+   (2) below:
+
+   1. a royalty-free license on fair, reasonable, and non-discriminatory terms
+      (“FRAND RF”);
+   2. participation in the patent pool established by the New Generation of
+      Artificial Intelligence Technology Innovation Strategic Alliance
+      (“POOL”); or
+   3. a license on fair, reasonable, and non-discriminatory terms (“FRAND”).
+
+2. For a User or Distributor/Redistributor that owns patents covering this
+   software, the Licensor may, but is not required to, apply the principle of
+   reciprocity when licensing patents with that patent holder.
+
+## V. Commercial Use
+
+### 1. Disclosure of Commercial Use
+
+Before using or redistributing this software for commercial purposes, with or
+without modification, a User or Distributor/Redistributor must disclose at
+<https://www.aitisa.org.cn/OI_Statement/> at least the following information:
+
+- name of the User/Distributor/Redistributor;
+- contact information of the User/Distributor/Redistributor;
+- address;
+- telephone number;
+- email address; and
+- purpose of the use/redistribution, including the name and a brief functional
+  description of the product, software, or application in which this software
+  is used.
+
+### 2. Patent License for Commercial Use
+
+If a commercial User or Distributor/Redistributor owns patents covering this
+software, that patent holder must also disclose basic information about those
+patents as part of the disclosure required by Subsection 1 and expressly
+select one of the following options for licensing those patents to the
+copyright holder, third-party Users, and Distributors/Redistributors:
+
+1. a royalty-free license on fair, reasonable, and non-discriminatory terms
+   (“FRAND RF”);
+2. participation in the patent pool established by the New Generation of
+   Artificial Intelligence Technology Innovation Strategic Alliance
+   (“POOL”);
+3. a license on fair, reasonable, and non-discriminatory terms (“FRAND”); or
+4. no license (“NO LICENSE”).
+
+If the copyright holder owns patents covering this software but made no
+selection in the Voluntary Patent Declaration above, the copyright holder
+hereby grants the commercial User or Distributor/Redistributor the same form
+of patent license that the User or Distributor/Redistributor selected under
+this subsection.
+
+## VI. Disclaimer
+
+This software is provided “as is” by its copyright holder and contributors and
+is managed “as is” by the New Generation of Artificial Intelligence
+Technology Innovation Strategic Alliance.
+
+This software is provided without any express or implied warranty, including,
+without limitation, the implied warranties of merchantability, fitness for a
+particular purpose, and non-infringement. Under no circumstances and under no
+theory of liability, whether in contract, strict liability, or tort (including
+negligence or otherwise), shall the copyright holder or contributors be liable
+for any direct, indirect, incidental, special, punitive, or consequential
+damages arising in any way out of the use of this software, including, without
+limitation, procurement of substitute goods or services; loss of use, data, or
+profits; or business interruption, even if advised in advance of the
+possibility of such damages.
+
+In addition to the rights expressly granted in the patent declarations above,
+use of this software may be restricted by other rights, including patent
+rights. This License grants no express or implied license to any such other
+rights, including patent rights.
