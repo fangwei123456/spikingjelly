@@ -22,6 +22,7 @@
   - [Datasets](#datasets)
   - [Interchange and Deployment](#interchange-and-deployment)
 - [Project Status and Version Notes](#project-status-and-version-notes)
+- [License](#license)
 - [Acknowledgement](#acknowledgement)
 - [Contributing](#contributing)
 - [Citation](#citation)
@@ -184,6 +185,13 @@ Historical documentation:
 - [latest](https://spikingjelly.readthedocs.io/zh_CN/latest/#index-en)
 
 </details>
+
+## License
+
+SpikingJelly is distributed under the Open-Intelligence Open Source License
+Version 1.0. See the [authoritative Chinese license](./LICENSE),
+[translations](./LICENSES/translations/), and the
+[usage and distribution guide](./LICENSES/README.md).
 
 ## Acknowledgement
 

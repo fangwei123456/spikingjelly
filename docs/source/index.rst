@@ -114,6 +114,12 @@ SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，
 
 使用惊蜇(SpikingJelly)的出版物可见于 :doc:`./publications` 。
 
+许可证
+-------------------------
+SpikingJelly 采用 `启智开源许可证 1.0 版 <https://github.com/fangwei123456/spikingjelly/blob/master/LICENSE>`_ 发布。
+中文许可证具有权威效力；其他语言译文以及常见使用、再发布场景说明见
+`许可证指南 <https://github.com/fangwei123456/spikingjelly/blob/master/LICENSES/README.md>`_。
+
 项目信息
 -------------------------
 北京大学信息科学技术学院数字媒体所媒体学习组 `Multimedia Learning Group <https://pkuml.org/>`_ 和 `鹏城实验室 <https://www.pcl.ac.cn/>`_ 是SpikingJelly的主要负责机构。
@@ -143,7 +149,7 @@ SpikingJelly主要由以下开发者开发维护：
 Welcome to SpikingJelly's documentation
 ############################################
 
-`SpikingJelly <https://github.com/fangwei123456/spikingjelly>`_ is an open-source deep learning framework for Spiking Neural Network (SNN) based on `PyTorch <https://pytorch.org/>`_.
+`SpikingJelly <https://github.com/fangwei123456/spikingjelly>`_ is a deep learning framework for Spiking Neural Network (SNN) based on `PyTorch <https://pytorch.org/>`_.
 
 Notification
 ----------------
@@ -253,6 +259,13 @@ If you use SpikingJelly in your work, please cite it as follows:
 
 
 Publications using SpikingJelly are recorded in :doc:`./publications`.
+
+License
+-------------------------
+SpikingJelly is distributed under the `Open-Intelligence Open Source License Version 1.0 <https://github.com/fangwei123456/spikingjelly/blob/master/LICENSE>`_.
+The Chinese license is authoritative. Translations and guidance for common use
+and redistribution scenarios are available in the
+`license guide <https://github.com/fangwei123456/spikingjelly/blob/master/LICENSES/README.md>`_.
 
 About
 -------------------------
