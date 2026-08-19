@@ -25,6 +25,16 @@ Module: ``spikingjelly.activation_based.ann2snn``.
 
 - Rate-coding percentile calibration now uses PyTorch's exact
   ``torch.quantile`` instead of an internal sampled approximation.
+- Clarified the ANN2SNN quick-start path, recipe-to-converter mapping, and
+  custom recipe extension points in the API and tutorial documentation.
+
+Operation Counters
+^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.op_counter``.
+
+- Clarified the basic counting workflow, estimator/module coverage, and the
+  boundary between ATen rules and custom ``torch.*`` function rules.
 
 2.0.0.dev1 - 2026-08-14
 -----------------------

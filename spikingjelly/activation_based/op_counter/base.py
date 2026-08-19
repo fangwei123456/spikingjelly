@@ -506,7 +506,62 @@ class BaseCounter:
         self.records = defaultdict(lambda: defaultdict(int))
 
 
-class DispatchCounterMode(TorchDispatchMode):
+class _CounterMode:
+    def __init__(self, counters: list[BaseCounter], strict: bool = False):
+        super().__init__()
+        self.counters = counters
+        self.strict = strict
+        self.module_tracker = ActiveModuleTracker()
+
+    def __enter__(self):
+        self.module_tracker.__enter__()
+        return super().__enter__()
+
+    def __exit__(self, *args):
+        ret = super().__exit__(*args)
+        self.module_tracker.__exit__(*args)
+        return ret
+
+    def _should_skip(self, counter, func) -> bool:
+        if any(
+            isinstance(module, tuple(counter.ignore_modules))
+            for module in self.module_tracker.active_modules
+        ):
+            logger.debug("{} ignored by {}", _arrow, counter.__class__.__name__)
+            return True
+        if counter.has_rule(func):
+            return False
+        if self.strict:
+            raise NotImplementedError(
+                f"{type(self).__name__}: {self.module_tracker.parents} - "
+                f"{resolve_name(func)} not defined by {counter.__class__.__name__}. "
+                "To disable this error, set strict=False."
+            )
+        logger.debug("{} not defined by {}", _arrow, counter.__class__.__name__)
+        return True
+
+    def _record_counts(self, func, args, kwargs, out):
+        active_modules = set(self.module_tracker.active_modules)
+        parent_names = set(self.module_tracker.parents)
+        for counter in self.counters:
+            if self._should_skip(counter, func):
+                continue
+            value = counter.count(
+                func,
+                args,
+                kwargs,
+                out,
+                active_modules=active_modules,
+                parent_names=parent_names,
+            )
+            logger.debug("{} + {} [{}]", _arrow, value, counter.__class__.__name__)
+            for parent in parent_names:
+                counter.record(parent, func, value)
+            if hasattr(counter, "finalize_record"):
+                counter.finalize_record()
+
+
+class DispatchCounterMode(_CounterMode, TorchDispatchMode):
     def __init__(self, counters: list[BaseCounter], strict: bool = False):
         r"""
         **API Language** - :ref:`中文 <DispatchCounterMode.__init__-cn>` | :ref:`English <DispatchCounterMode.__init__-en>`
@@ -601,74 +656,16 @@ class DispatchCounterMode(TorchDispatchMode):
             # Get and print results
             print("FLOP counts:", flop_counter.get_total())
         """
-        super().__init__()
-        self.counters = counters
-        self.strict = strict
-        self.module_tracker = ActiveModuleTracker()
-
-    def __enter__(self):
-        self.module_tracker.__enter__()
-        return super().__enter__()
-
-    def __exit__(self, *args):
-        ret = super().__exit__(*args)
-        self.module_tracker.__exit__(*args)
-        return ret
-
-    def _should_skip(self, counter, func) -> bool:
-        active_modules = self.module_tracker.active_modules
-        for am in active_modules:
-            if isinstance(am, tuple(counter.ignore_modules)):  # inside a ignored module
-                logger.debug(
-                    "{} ignored by {} as it is inside {}",
-                    _arrow,
-                    counter.__class__.__name__,
-                    am.__class__.__name__,
-                )
-                return True
-
-        parent_names = self.module_tracker.parents
-        if not counter.has_rule(func):  # stats rule not defined
-            if self.strict:
-                raise NotImplementedError(
-                    f"DispatchCounterMode: {parent_names} - {resolve_name(func)}"
-                    f" not defined by {counter.__class__.__name__}. "
-                    f"To disable this error, "
-                    f"set strict=False when initializing {counter.__class__.__name__}."
-                )
-            logger.debug("{} not defined by {}", _arrow, counter.__class__.__name__)
-            return True
-
-        return False
+        super().__init__(counters, strict)
 
     def __torch_dispatch__(self, func, types, args, kwargs):
         kwargs = {} if kwargs is None else kwargs
         out = func(*args, **kwargs)
-        parent_names = self.module_tracker.parents
-        active_modules = set(self.module_tracker.active_modules)
-        parent_names_snapshot = set(parent_names)
-
-        for counter in self.counters:
-            if self._should_skip(counter, func):
-                continue
-            value = counter.count(
-                func,
-                args,
-                kwargs,
-                out,
-                active_modules=active_modules,
-                parent_names=parent_names_snapshot,
-            )
-            logger.debug("{} + {} [{}]", _arrow, value, counter.__class__.__name__)
-            for parent in parent_names_snapshot:
-                counter.record(parent, func, value)  # add the count to every ancestor
-            if hasattr(counter, "finalize_record"):
-                counter.finalize_record()
-
+        self._record_counts(func, args, kwargs, out)
         return out
 
 
-class FunctionCounterMode(TorchFunctionMode):
+class FunctionCounterMode(_CounterMode, TorchFunctionMode):
     def __init__(self, counters: list[BaseCounter], strict: bool = False):
         r"""
         **API Language** - :ref:`中文 <FunctionCounterMode.__init__-cn>` | :ref:`English <FunctionCounterMode.__init__-en>`
@@ -679,22 +676,13 @@ class FunctionCounterMode(TorchFunctionMode):
 
         * **中文**
 
-        基于 PyTorch Function 机制的 **上下文管理器** ，用于计算函数的计数。
-
-        该类通过重写 ``__torch_function__`` 方法来拦截所有 PyTorch 函数调用，并使用注册的计数器来统计这些
-        操作的某些计数。
-
-        工作原理与 :class:`DispatchCounterMode` 类似。
+        基于 PyTorch ``__torch_function__`` 机制的计数上下文。计数器必须为
+        当前被拦截的 PyTorch 函数注册对应规则。
 
         :param counters: 计数器列表
         :type counters: list[BaseCounter]
-
-        :param strict: 如果为 ``True``，当遇到未定义规则的操作时会报错；否则，未定义的操作将被跳过。
-            默认为 ``False``
+        :param strict: 遇到未注册规则时是否抛出异常
         :type strict: bool
-
-        :return: 上下文管理器对象
-        :rtype: FunctionCounterMode
 
         ----
 
@@ -702,85 +690,18 @@ class FunctionCounterMode(TorchFunctionMode):
 
         * **English**
 
-        **Context manager** based on PyTorch's Function mechanism for counting operations.
-        It intercepts all PyTorch function calls through overriding ``__torch_function__`` and
-        uses registered counters to track these operations.
+        Counting context based on PyTorch's ``__torch_function__`` mechanism.
+        Counters must register rules for the intercepted PyTorch functions.
 
-        It has a similar working mechanism to :class:`DispatchCounterMode` .
-
-        :param counters: list of counters
+        :param counters: Counter list
         :type counters: list[BaseCounter]
-
-        :param strict: if ``True``, raises ``NotImplementedError`` when encountering operations without defined rules;
-            if ``False``, skips operations without defined rules. Default to ``False``
+        :param strict: Whether to raise for an unregistered rule
         :type strict: bool
-
-        :return: Context manager object
-        :rtype: FunctionCounterMode
         """
-        super().__init__()
-        self.counters = counters
-        self.strict = strict
-        self.module_tracker = ActiveModuleTracker()
-
-    def __enter__(self):
-        self.module_tracker.__enter__()
-        return super().__enter__()
-
-    def __exit__(self, *args):
-        ret = super().__exit__(*args)
-        self.module_tracker.__exit__(*args)
-        return ret
-
-    def _should_skip(self, counter, func) -> bool:
-        parent_names = self.module_tracker.parents
-        if not counter.has_rule(func):  # stats rule not defined
-            if self.strict:
-                raise NotImplementedError(
-                    f"FunctionCounterMode: {parent_names} - {resolve_name(func)} "
-                    f"not defined by {counter.__class__.__name__}. "
-                    f"To disable this error, "
-                    f"set strict=False when initializing {counter.__class__.__name__}."
-                )
-            logger.debug("{} not defined by {}", _arrow, counter.__class__.__name__)
-            return True
-
-        active_modules = self.module_tracker.active_modules
-        for am in active_modules:
-            if isinstance(am, tuple(counter.ignore_modules)):  # inside a ignored module
-                logger.debug(
-                    "{} ignored by {} as it is inside {}",
-                    _arrow,
-                    counter.__class__.__name__,
-                    am.__class__.__name__,
-                )
-                return True
-
-        logger.debug("{} counted by {}", _arrow, counter.__class__.__name__)
-        return False
+        super().__init__(counters, strict)
 
     def __torch_function__(self, func, types, args=(), kwargs=None):
         kwargs = {} if kwargs is None else kwargs
         out = func(*args, **kwargs)
-        parent_names = self.module_tracker.parents
-        active_modules = set(self.module_tracker.active_modules)
-        parent_names_snapshot = set(parent_names)
-
-        for counter in self.counters:
-            if self._should_skip(counter, func):
-                continue
-            value = counter.count(
-                func,
-                args,
-                kwargs,
-                out,
-                active_modules=active_modules,
-                parent_names=parent_names_snapshot,
-            )
-            logger.debug("{} + {}", _arrow, value)
-            for parent in parent_names_snapshot:
-                counter.record(parent, func, value)  # add the count to every ancestor
-            if hasattr(counter, "finalize_record"):
-                counter.finalize_record()
-
+        self._record_counts(func, args, kwargs, out)
         return out

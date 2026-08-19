@@ -16,6 +16,36 @@ Most users start by choosing a converter, then a conversion recipe. Lower-level
 operators, factories, and helper functions are documented after the public
 conversion APIs.
 
+Quick Start
++++++++++++
+
+For a standard ReLU CNN, use the rate-coding recipe with a calibration loader:
+
+.. code-block:: python
+
+   from spikingjelly.activation_based import ann2snn
+
+   recipe = ann2snn.RateCodingRecipe(
+       dataloader=calibration_loader,
+       mode="max",
+   )
+   snn = ann2snn.FXConverter(recipe).convert(ann)
+
+Choose the algorithm first, then its executor:
+
+* ``RateCodingRecipe`` or ``LocalThresholdBalancingRecipe`` for ReLU CNNs;
+  use ``FXConverter`` and a calibration dataloader.
+* ``TransformerTDEquivalentRecipe`` or ``STATransformerRecipe`` for FX-traced
+  Transformer graphs; use ``FXConverter``.
+* ``SpikeZIPTFQANNRecipe`` or ``Qwen2SNNRecipe`` for supported module trees;
+  use ``ModuleConverter``.
+
+To implement a custom algorithm, subclass ``FXConversionRecipe`` and override
+only the lifecycle steps it needs (usually ``replace`` and optionally
+``calibrate``). Use ``ModuleConversionRecipe`` instead when the algorithm
+replaces modules directly without an FX graph. The converter owns execution,
+state restoration, and device placement; the recipe owns algorithm behavior.
+
 Converters
 ++++++++++
 

@@ -218,7 +218,7 @@ STA spike encoder
 使用 Recipe
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``STATransformerRecipe`` 是一个 FX graph recipe。最简 Python API 使用 ``Converter``（``FXConverter`` 的兼容名）执行转换：
+``STATransformerRecipe`` 是一个 FX graph recipe。最简 Python API 使用 ``FXConverter``（``Converter`` 为兼容名）执行转换：
 
 .. code-block:: python
 
@@ -231,7 +231,7 @@ STA spike encoder
         threshold_mode="mse",
         threshold_scale=0.5,
     )
-    converted = ann2snn.Converter(recipe=recipe, device="cuda:0").convert(model)
+    converted = ann2snn.FXConverter(recipe=recipe, device="cuda:0").convert(model)
     converted.eval()
 
 ``time_steps`` 属于 recipe 参数，因为它参与阈值校准，也用于在转换图中展开那些无法从运行时输入推断序列长度的常量。

@@ -8,7 +8,7 @@ English version: :doc:`../en/ann2snn`
 
     当前 ANN2SNN 教程按转换流程拆分：
 
-    #. 本页介绍当前 Recipe API 中基于 FX graph 的 rate-coded CNN 转换：``RateCodingRecipe`` / ``LocalThresholdBalancingRecipe`` 定义算法，``Converter`` （即 ``FXConverter`` 的兼容名）执行转换。
+    #. 本页介绍当前 Recipe API 中基于 FX graph 的 rate-coded CNN 转换：``RateCodingRecipe`` / ``LocalThresholdBalancingRecipe`` 定义算法，``FXConverter`` 执行转换（``Converter`` 为兼容名）。
     #. :doc:`Transformer ANN2SNN 转换 <ann2snn_transformer>` 介绍面向 Transformer 模型的 ``STATransformerRecipe``、``SpikeZIPTFQANNRecipe`` 和离线多步 ``Qwen2SNNRecipe``。
 
     旧 API 教程仍可查阅：
@@ -195,7 +195,7 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
 .. code-block:: python
 
     recipe = ann2snn.RateCodingRecipe(dataloader=train_loader, mode="max")
-    snn = ann2snn.Converter(recipe=recipe).convert(ann)
+    snn = ann2snn.FXConverter(recipe=recipe).convert(ann)
 
 转换产物的运行方式与 ``spikingjelly.activation_based`` 中其他模块一致。单步模式下，用户显式编写时间循环。Rate-coding 和 LTB 模型在每个时间步接收同一个静态 ANN 输入：
 
@@ -226,7 +226,7 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
 
 .. note::
 
-    本页的 FX 转换使用 ``Converter(recipe=...)`` 和 ``Converter.convert(model)``。``Converter`` 是 ``FXConverter`` 的兼容名，只接受 ``FXConversionRecipe`` / ``ConversionRecipe``。旧的公开函数已移除，包括 ``convert_to_spiking_neurons()``、``replace_by_td_operators()``、``fuse()``、``set_voltagehook()``、``replace_by_neurons()`` 和 ``replace_by_ifnode()``。
+    本页的 FX 转换使用 ``FXConverter(recipe=...)`` 和 ``FXConverter.convert(model)``。``Converter`` 保留为兼容名，只接受 ``FXConversionRecipe`` / ``ConversionRecipe``。旧的公开函数已移除，包括 ``convert_to_spiking_neurons()``、``replace_by_td_operators()``、``fuse()``、``set_voltagehook()``、``replace_by_neurons()`` 和 ``replace_by_ifnode()``。
 
 
 识别MNIST
@@ -339,7 +339,7 @@ ANN 训练完成。选择 rate-coding recipe，传入确定性校准 dataloader�
 .. code-block:: python
 
     recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode="max")
-    model_converter = ann2snn.Converter(recipe=recipe)
+    model_converter = ann2snn.FXConverter(recipe=recipe)
     snn_model = model_converter.convert(model)
 
 ``snn_model`` 即转换后的 SNN 模型。查看其网络结构，``BatchNorm2d`` 模块已消失——默认 rate-coding recipe 在校准前将 BatchNorm 参数吸收进了前面的 Conv 层：
@@ -420,7 +420,7 @@ ANN 训练完成。选择 rate-coding recipe，传入确定性校准 dataloader�
 .. code-block:: python
 
     recipe = ann2snn.TransformerTDEquivalentRecipe()
-    td_model = ann2snn.Converter(recipe=recipe).convert(transformer_ann)
+    td_model = ann2snn.FXConverter(recipe=recipe).convert(transformer_ann)
 
 该 recipe 不需要 dataloader，不插入 ``VoltageHook``，也不运行 rate-coding 校准。它将当前支持的 ANN 模块和 attention 调用替换为 TD-equivalent 算子，但不覆盖完整的 fully spike-driven LLM 转换。在这些 TD 算子中，``ann_forward(...)`` 是普通无状态 PyTorch 路径；``single_step_forward(...)`` 是有状态 temporal-difference 单步传播，处理独立序列前应先 ``reset()``。
 

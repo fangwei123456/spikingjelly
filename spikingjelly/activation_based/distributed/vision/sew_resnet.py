@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, ClassVar, Optional
+from typing import ClassVar, Optional
 
 import torch
 import torch.distributed as dist
+from torch.distributed import ProcessGroup
 import torch.nn as nn
 
 from spikingjelly.activation_based import functional, memopt, neuron
@@ -114,7 +115,7 @@ class SEWResNet34Builder(ModelBuilder):
     def build(
         self,
         *,
-        process_group: Optional[Any],
+        process_group: Optional[ProcessGroup],
         pipeline_rank: int,
         pipeline_size: int,
         pipeline_microbatches: int,

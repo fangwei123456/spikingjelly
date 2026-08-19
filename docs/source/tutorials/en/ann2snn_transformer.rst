@@ -216,7 +216,7 @@ The recommended configuration in this tutorial is ``STATransformerRecipe(mode="s
 Using the Recipe
 ^^^^^^^^^^^^^^^^
 
-``STATransformerRecipe`` is an FX graph recipe. The minimum Python API uses ``Converter`` (the compatibility name for ``FXConverter``) to execute the conversion:
+``STATransformerRecipe`` is an FX graph recipe. The minimum Python API uses ``FXConverter`` (``Converter`` remains a compatibility name) to execute the conversion:
 
 .. code-block:: python
 
@@ -229,7 +229,7 @@ Using the Recipe
         threshold_mode="mse",
         threshold_scale=0.5,
     )
-    converted = ann2snn.Converter(recipe=recipe, device="cuda:0").convert(model)
+    converted = ann2snn.FXConverter(recipe=recipe, device="cuda:0").convert(model)
     converted.eval()
 
 ``time_steps`` belongs to the recipe because it drives threshold calibration and the conversion-time expansion of any graph constant whose sequence length cannot be inferred from runtime inputs.

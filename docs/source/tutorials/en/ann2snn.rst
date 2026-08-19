@@ -9,7 +9,7 @@ Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https:/
 
     Current ANN2SNN tutorials are split by conversion workflow:
 
-    #. This page covers the current FX graph Recipe API for rate-coded CNN conversion: ``RateCodingRecipe`` / ``LocalThresholdBalancingRecipe`` define the algorithm, and ``Converter`` (the compatibility name for ``FXConverter``) executes it.
+    #. This page covers the current FX graph Recipe API for rate-coded CNN conversion: ``RateCodingRecipe`` / ``LocalThresholdBalancingRecipe`` define the algorithm, and ``FXConverter`` executes it (``Converter`` is the compatibility name).
     #. :doc:`Transformer ANN2SNN conversion <ann2snn_transformer>` covers ``STATransformerRecipe``, ``SpikeZIPTFQANNRecipe``, and offline multi-step ``Qwen2SNNRecipe`` conversion.
 
     Legacy API tutorials remain available:
@@ -195,7 +195,7 @@ The minimal rate-coding call is:
 .. code-block:: python
 
     recipe = ann2snn.RateCodingRecipe(dataloader=train_loader, mode="max")
-    snn = ann2snn.Converter(recipe=recipe).convert(ann)
+    snn = ann2snn.FXConverter(recipe=recipe).convert(ann)
 
 Step-mode execution follows the same convention as other ``spikingjelly.activation_based`` modules. In single-step mode, users write the time loop explicitly. Rate-coding and LTB models receive the same static ANN input at each timestep:
 
@@ -226,7 +226,7 @@ After conversion, ReLU modules are removed. New modules needed by the SNN, such 
 
 .. note::
 
-    The FX conversion path on this page uses ``Converter(recipe=...)`` and ``Converter.convert(model)``. ``Converter`` is the compatibility name for ``FXConverter`` and only accepts ``FXConversionRecipe`` / ``ConversionRecipe``. Older public algorithm methods, including ``convert_to_spiking_neurons()``, ``replace_by_td_operators()``, ``fuse()``, ``set_voltagehook()``, ``replace_by_neurons()``, and ``replace_by_ifnode()``, have been removed.
+    The FX conversion path on this page uses ``FXConverter(recipe=...)`` and ``FXConverter.convert(model)``. ``Converter`` remains as a compatibility name and only accepts ``FXConversionRecipe`` / ``ConversionRecipe``. Older public algorithm methods, including ``convert_to_spiking_neurons()``, ``replace_by_td_operators()``, ``fuse()``, ``set_voltagehook()``, ``replace_by_neurons()``, and ``replace_by_ifnode()``, have been removed.
 
 
 Classify MNIST
@@ -340,7 +340,7 @@ The ANN is trained and validated. Select the rate-coding recipe, pass the determ
 .. code-block:: python
 
     recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode="max")
-    model_converter = ann2snn.Converter(recipe=recipe)
+    model_converter = ann2snn.FXConverter(recipe=recipe)
     snn_model = model_converter.convert(model)
 
 ``snn_model`` is the converted SNN model. The ``BatchNorm2d`` modules have disappeared because the default rate-coding recipe fuses BatchNorm parameters into the preceding Conv layers before calibration:
@@ -421,7 +421,7 @@ The MNIST example above uses rate coding to convert ReLU activations to IF neuro
 .. code-block:: python
 
     recipe = ann2snn.TransformerTDEquivalentRecipe()
-    td_model = ann2snn.Converter(recipe=recipe).convert(transformer_ann)
+    td_model = ann2snn.FXConverter(recipe=recipe).convert(transformer_ann)
 
 This recipe does not need a dataloader, does not insert ``VoltageHook``, and does not run rate-coding calibration. It replaces currently supported ANN modules and attention calls with TD-equivalent operators, but does not cover fully spike-driven LLM conversion. In these TD operators, ``ann_forward(...)`` is the ordinary stateless PyTorch path; ``single_step_forward(...)`` is a stateful temporal-difference step and should be reset before an independent sequence.
 

@@ -1,6 +1,6 @@
 from spikingjelly.logger import logger
 import copy
-from typing import Tuple, Generator, Optional, Callable, Any
+from typing import Tuple, Generator, Optional, Callable
 
 import torch
 import torch.nn as nn
@@ -441,10 +441,10 @@ class MemoryModule(nn.Module, StepModule):
 
     def materialize_states(
         self,
-        inputs: tuple[Any, ...],
-        states: tuple[Any, ...],
+        inputs: tuple[object, ...],
+        states: tuple[object, ...],
         step_mode: str,
-    ) -> tuple[Any, ...]:
+    ) -> tuple[object, ...]:
         r"""
         **API Language** - :ref:`中文 <MemoryModule.materialize_states-cn>` | :ref:`English <MemoryModule.materialize_states-en>`
 
@@ -460,13 +460,13 @@ class MemoryModule(nn.Module, StepModule):
         传入的 ``states``。
 
         :param inputs: 当前前向传播的完整输入元组
-        :type inputs: tuple[Any, ...]
+        :type inputs: tuple[object, ...]
         :param states: 待物化的显式状态
-        :type states: tuple[Any, ...]
+        :type states: tuple[object, ...]
         :param step_mode: 当前前向传播的步进模式，取 ``"s"`` 或 ``"m"``
         :type step_mode: str
         :return: 可传入 functional forward 的状态
-        :rtype: tuple[Any, ...]
+        :rtype: tuple[object, ...]
 
         ----
 
@@ -482,22 +482,22 @@ class MemoryModule(nn.Module, StepModule):
         mutate module memories or the supplied ``states``.
 
         :param inputs: Complete input tuple of the current forward pass
-        :type inputs: tuple[Any, ...]
+        :type inputs: tuple[object, ...]
         :param states: Explicit states to materialize
-        :type states: tuple[Any, ...]
+        :type states: tuple[object, ...]
         :param step_mode: Step mode of the current forward pass, ``"s"`` or ``"m"``
         :type step_mode: str
         :return: States ready for functional forward
-        :rtype: tuple[Any, ...]
+        :rtype: tuple[object, ...]
         """
         return states
 
     def single_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
-        states: tuple[Any, ...],
-        **kwargs: Any,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
         **API Language** - :ref:`中文 <MemoryModule.single_step_functional_forward-cn>` | :ref:`English <MemoryModule.single_step_functional_forward-en>`
 
@@ -515,9 +515,9 @@ class MemoryModule(nn.Module, StepModule):
         :param inputs: 单步输入张量元组
         :type inputs: tuple[torch.Tensor, ...]
         :param states: 当前模块的显式状态元组
-        :type states: tuple[Any, ...]
+        :type states: tuple[object, ...]
         :return: ``(outputs, updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
         :raises NotImplementedError: 当子类未实现单步 functional forward 时抛出
 
         ----
@@ -535,9 +535,9 @@ class MemoryModule(nn.Module, StepModule):
         :param inputs: Tuple of single-step input tensors
         :type inputs: tuple[torch.Tensor, ...]
         :param states: Tuple of explicit states owned by this module
-        :type states: tuple[Any, ...]
+        :type states: tuple[object, ...]
         :return: ``(outputs, updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
         :raises NotImplementedError: If the subclass does not implement single-step functional forward
         """
         raise NotImplementedError(
@@ -547,9 +547,9 @@ class MemoryModule(nn.Module, StepModule):
     def multi_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
-        states: tuple[Any, ...],
-        **kwargs: Any,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
         **API Language** - :ref:`中文 <MemoryModule.multi_step_functional_forward-cn>` | :ref:`English <MemoryModule.multi_step_functional_forward-en>`
 
@@ -567,9 +567,9 @@ class MemoryModule(nn.Module, StepModule):
         :param inputs: 多步输入张量元组
         :type inputs: tuple[torch.Tensor, ...]
         :param states: 当前模块的显式状态元组
-        :type states: tuple[Any, ...]
+        :type states: tuple[object, ...]
         :return: ``(outputs, updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
 
         ----
 
@@ -587,9 +587,9 @@ class MemoryModule(nn.Module, StepModule):
         :param inputs: Tuple of multi-step input tensors
         :type inputs: tuple[torch.Tensor, ...]
         :param states: Tuple of explicit states owned by this module
-        :type states: tuple[Any, ...]
+        :type states: tuple[object, ...]
         :return: ``(outputs, updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
         """
         output_steps = []
         for t in range(inputs[0].shape[0]):
@@ -609,9 +609,9 @@ class MemoryModule(nn.Module, StepModule):
     def functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
-        states: tuple[Any, ...],
-        **kwargs: Any,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         r"""
         **API Language** - :ref:`中文 <MemoryModule.functional_forward-cn>` | :ref:`English <MemoryModule.functional_forward-en>`
 
@@ -627,9 +627,9 @@ class MemoryModule(nn.Module, StepModule):
         :param inputs: 输入张量元组
         :type inputs: tuple[torch.Tensor, ...]
         :param states: 当前模块的显式状态元组
-        :type states: tuple[Any, ...]
+        :type states: tuple[object, ...]
         :return: ``(outputs, updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
         :raises ValueError: 当 ``step_mode`` 不是 ``"s"`` 或 ``"m"`` 时抛出
 
         ----
@@ -644,9 +644,9 @@ class MemoryModule(nn.Module, StepModule):
         :param inputs: Tuple of input tensors
         :type inputs: tuple[torch.Tensor, ...]
         :param states: Tuple of explicit states owned by this module
-        :type states: tuple[Any, ...]
+        :type states: tuple[object, ...]
         :return: ``(outputs, updated_states)``
-        :rtype: tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
         :raises ValueError: If ``step_mode`` is neither ``"s"`` nor ``"m"``
         """
         if self.step_mode == "s":
@@ -674,7 +674,7 @@ class MemoryModule(nn.Module, StepModule):
         :type x: torch.Tensor
 
         :return: 单步前向传播的输出
-        :rtype: Any
+        :rtype: object
         :raises ValueError: 更新状态数量与已注册 memory 数量不一致时抛出
 
         ----
@@ -691,7 +691,7 @@ class MemoryModule(nn.Module, StepModule):
         :type x: torch.Tensor
 
         :return: Output of the single-step forward pass
-        :rtype: Any
+        :rtype: object
         :raises ValueError: If the number of updated states does not match the registered memories
         """
         inputs = (x, *args)
@@ -765,7 +765,7 @@ class MemoryModule(nn.Module, StepModule):
         :meth:`multi_step_forward`。functional 状态读写由这两个方法负责。
 
         :return: 与当前 ``step_mode`` 对应的前向传播结果
-        :rtype: Any
+        :rtype: object
 
         :raises ValueError: 当 ``self.step_mode`` 既不是 ``"s"`` 也不是 ``"m"`` 时抛出
 
@@ -780,7 +780,7 @@ class MemoryModule(nn.Module, StepModule):
         and committing.
 
         :return: Forward result selected according to the current ``step_mode``
-        :rtype: Any
+        :rtype: object
 
         :raises ValueError: Raised when ``self.step_mode`` is neither ``"s"`` nor ``"m"``
         """
@@ -838,7 +838,7 @@ class MemoryModule(nn.Module, StepModule):
         :param name: 状态变量的名字
         :type name: str
         :param value: 状态变量的初始与重制值
-        :type value: Any
+        :type value: object
 
         :raises AssertionError: 当 ``name`` 已经是模块现有成员属性时抛出
 
@@ -859,7 +859,7 @@ class MemoryModule(nn.Module, StepModule):
         :param name: state variable's name
         :type name: str
         :param value: state variable's initial and reset value
-        :type value: Any
+        :type value: object
 
         :raises AssertionError: Raised when ``name`` already exists as an attribute of the module
         """
@@ -936,7 +936,7 @@ class MemoryModule(nn.Module, StepModule):
         :param name: 状态变量名称
         :type name: str
         :param value: 新的重制值
-        :type value: Any
+        :type value: object
 
         ----
 
@@ -949,11 +949,11 @@ class MemoryModule(nn.Module, StepModule):
         :param name: Name of the state variable
         :type name: str
         :param value: New reset value
-        :type value: Any
+        :type value: object
         """
         self._memories_rv[name] = copy.deepcopy(value)
 
-    def get_reset_value(self, name: str) -> Any:
+    def get_reset_value(self, name: str) -> object:
         r"""
         **API Language** - :ref:`中文 <MemoryModule.get_reset_value-cn>` | :ref:`English <MemoryModule.get_reset_value-en>`
 
@@ -968,7 +968,7 @@ class MemoryModule(nn.Module, StepModule):
         :param name: 状态变量名称
         :type name: str
         :return: 状态变量的重置值
-        :rtype: Any
+        :rtype: object
         :raises KeyError: 当 ``name`` 不是已注册的状态变量，或没有设置重置值时抛出
 
         ----
@@ -982,7 +982,7 @@ class MemoryModule(nn.Module, StepModule):
         :param name: Name of the state variable
         :type name: str
         :return: Reset value of the state variable
-        :rtype: Any
+        :rtype: object
         :raises KeyError: Raised when ``name`` is not a registered state variable, or has no reset value
         """
         if name not in self._memories:
@@ -1314,7 +1314,7 @@ def load_memories(module: nn.Module, memory_list: list):
 
 def to_functional_forward(
     module: nn.Module, fn: Optional[Callable] = None
-) -> Callable[..., tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]]:
+) -> Callable[..., tuple[tuple[torch.Tensor, ...], tuple[object, ...]]]:
     r"""
     **API Language** - :ref:`中文 <to_functional_forward-cn>` | :ref:`English <to_functional_forward-en>`
 
@@ -1442,7 +1442,7 @@ def to_functional_forward(
     ]
     num_states = sum(len(child._memories) for child in memory_modules)
 
-    def check_state_count(states: tuple[Any, ...]) -> None:
+    def check_state_count(states: tuple[object, ...]) -> None:
         if len(states) != num_states:
             raise ValueError(
                 f"{module.__class__.__name__} expected {num_states} states, "
@@ -1467,9 +1467,9 @@ def to_functional_forward(
 
             def direct_forward(
                 inputs: tuple[torch.Tensor, ...],
-                states: tuple[Any, ...],
-                **kwargs: Any,
-            ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
+                states: tuple[object, ...],
+                **kwargs: object,
+            ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
                 check_state_count(states)
                 return module.functional_forward(inputs, states, **kwargs)
 
@@ -1488,9 +1488,9 @@ def to_functional_forward(
 
             def sequential_forward(
                 inputs: tuple[torch.Tensor, ...],
-                states: tuple[Any, ...],
-                **kwargs: Any,
-            ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
+                states: tuple[object, ...],
+                **kwargs: object,
+            ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
                 check_state_count(states)
                 outputs = inputs
                 updated_states = []
@@ -1531,9 +1531,9 @@ def to_functional_forward(
 
     def fallback_forward(
         inputs: tuple[torch.Tensor, ...],
-        states: tuple[Any, ...],
-        **kwargs: Any,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[Any, ...]]:
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         check_state_count(states)
         original_states = extract_memories(module)
         load_memories(module, list(states))

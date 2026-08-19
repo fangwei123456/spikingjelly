@@ -1,5 +1,5 @@
 import warnings
-from typing import Any, Callable, Optional, Sequence, Tuple
+from typing import Callable, Optional, Sequence, Tuple
 
 import torch
 import torch.fx as fx
@@ -77,7 +77,7 @@ class GraphOptimizer(fx.Transformer):
         return super().call_function(target, args, kwargs)
 
 
-def _optimize_graph(graph_or_module: Any) -> fx.Graph:
+def _optimize_graph(graph_or_module: fx.Graph | fx.GraphModule) -> fx.Graph:
     # Accept either an fx.GraphModule or an fx.Graph. Prefer operating on the
     # original GraphModule when available so module attributes/constants are
     # preserved; otherwise fall back to creating a temporary GraphModule.

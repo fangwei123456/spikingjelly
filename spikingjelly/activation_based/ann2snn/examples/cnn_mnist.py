@@ -115,7 +115,7 @@ def download_checkpoint(checkpoint_url, checkpoint_path):
 
 
 def convert_and_eval(recipe, device, ann_model, test_data_loader, time_steps):
-    model_converter = ann2snn.Converter(recipe=recipe, device=device)
+    model_converter = ann2snn.FXConverter(recipe=recipe, device=device)
     snn_model = model_converter.convert(copy.deepcopy(ann_model))
     return val(snn_model, device, test_data_loader, T=time_steps)
 

@@ -2,12 +2,13 @@ from spikingjelly.logger import logger
 import operator as _op
 import sys
 import typing
+from collections.abc import Hashable
 
 import torch
 import torch.fx as _fx
 
 
-def hash_str(x: object):
+def hash_str(x: Hashable) -> str | int:
     r"""
     **API Language** - :ref:`中文 <hash_str-cn>` | :ref:`English <hash_str-en>`
 
@@ -20,7 +21,7 @@ def hash_str(x: object):
     计算对象 ``x`` 的哈希值，并将负值转换为以下划线开头的字符串形式，便于生成合法且稳定的 CUDA 内核名称片段。
 
     :param x: 任意可哈希对象。
-    :type x: object
+    :type x: Hashable
 
     :return: 若 ``hash(x) < 0``，返回 ``\"_\" + str(-hash(x))``；否则返回非负哈希值本身。
     :rtype: typing.Union[str, int]
@@ -34,7 +35,7 @@ def hash_str(x: object):
     Compute the hash value of ``x``. If the hash is negative, convert it to an underscore-prefixed string so it can be used safely in generated CUDA kernel name fragments.
 
     :param x: Any hashable object.
-    :type x: object
+    :type x: Hashable
 
     :return: ``\"_\" + str(-hash(x))`` when ``hash(x) < 0``; otherwise the non-negative hash value itself.
     :rtype: typing.Union[str, int]

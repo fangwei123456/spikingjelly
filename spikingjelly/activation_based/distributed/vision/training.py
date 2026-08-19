@@ -13,6 +13,7 @@ from typing import Any, Optional
 import numpy as np
 import torch
 import torch.distributed as dist
+from torch.distributed import ProcessGroup
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
@@ -111,7 +112,9 @@ def _forward_classification(
     return _classification_logits(output)
 
 
-def _broadcast_data_parallel_buffers(model: nn.Module, process_group: Any) -> None:
+def _broadcast_data_parallel_buffers(
+    model: nn.Module, process_group: ProcessGroup
+) -> None:
     source = dist.get_global_rank(process_group, 0)
     for buffer in model.buffers():
         dist.broadcast(buffer, src=source, group=process_group)
@@ -307,7 +310,7 @@ def _wrap_data_parallel(
     config: TrainingConfig,
     device: torch.device,
     dp_size: int,
-    dp_group: Optional[Any],
+    dp_group: Optional[ProcessGroup],
     dp_mesh: Any,
     fsdp_roots: tuple[str, ...],
 ) -> nn.Module:
@@ -435,7 +438,7 @@ def _evaluate(
     device: torch.device,
     precision: str,
     loss_function: Callable[..., torch.Tensor],
-    dp_group: Optional[Any],
+    dp_group: Optional[ProcessGroup],
     dp_size: int,
     sync_buffers: bool,
 ) -> tuple[float, float]:
@@ -476,9 +479,9 @@ def _evaluate_pipeline(
     device: torch.device,
     precision: str,
     loss_function: Callable[..., torch.Tensor],
-    dp_group: Optional[Any],
+    dp_group: Optional[ProcessGroup],
     dp_size: int,
-    pp_group: Any,
+    pp_group: ProcessGroup,
     pp_rank: int,
     pp_size: int,
     tp_size: int,

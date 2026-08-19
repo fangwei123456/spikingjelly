@@ -1,6 +1,27 @@
 spikingjelly.activation_based.op_counter package
 =====================================================
 
+Quick Start
++++++++++++
+
+Count one real execution with one or more counters:
+
+.. code-block:: python
+
+   from spikingjelly.activation_based import op_counter
+
+   counter = op_counter.FlopCounter()
+   with op_counter.DispatchCounterMode([counter]):
+       model(x)
+   print(counter.get_total())
+
+Use the basic counters for runtime counts. Use an energy estimator when you
+need a specific cost model; the estimators are not interchangeable.
+
+Built-in counters register ATen rules and should use ``DispatchCounterMode``.
+Use ``FunctionCounterMode`` only with custom counters whose rules target the
+intercepted ``torch.*`` functions.
+
 Base Classes and Context Managers
 ++++++++++++++++++++++++++++++++++++++
 
@@ -47,6 +68,29 @@ Compute-Only Energy Estimator
 +++++++++++++++++++++++++++++
 
 .. automodule:: spikingjelly.activation_based.op_counter.compute_energy
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Analytical and Runtime Energy Modules
+++++++++++++++++++++++++++++++++++++++
+
+.. automodule:: spikingjelly.activation_based.op_counter.lemaire_addressing
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: spikingjelly.activation_based.op_counter.memory_residency
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: spikingjelly.activation_based.op_counter.neuron_state
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: spikingjelly.activation_based.op_counter.analytical_energy
    :members:
    :undoc-members:
    :show-inheritance:

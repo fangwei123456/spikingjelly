@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Literal, Optional
 
 import torch
 import torch.distributed as dist
+from torch.distributed import ProcessGroup
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -53,7 +54,7 @@ class _ChannelShardConv(nn.Module, base.StepModule):
     def __init__(
         self,
         source: nn.Module,
-        process_group: Optional[Any],
+        process_group: Optional[ProcessGroup],
         mode: Literal["colwise", "rowwise"],
     ) -> None:
         super().__init__()
@@ -179,7 +180,7 @@ class ChannelShardConv2d(_ChannelShardConv):
     def __init__(
         self,
         source: nn.Module,
-        process_group: Optional[Any],
+        process_group: Optional[ProcessGroup],
         mode: Literal["colwise", "rowwise"],
     ) -> None:
         r"""**API Language** - :ref:`中文 <ChannelShardConv2d-cn>` | :ref:`English <ChannelShardConv2d-en>`
@@ -195,7 +196,7 @@ class ChannelShardConv2d(_ChannelShardConv):
         :param source: 源 Conv2d 模块。
         :type source: nn.Module
         :param process_group: 分布式进程组。
-        :type process_group: Any
+        :type process_group: Optional[ProcessGroup]
         :param mode: ``"colwise"`` 或 ``"rowwise"``。
         :type mode: str
 
@@ -210,7 +211,7 @@ class ChannelShardConv2d(_ChannelShardConv):
         :param source: Source Conv2d module.
         :type source: nn.Module
         :param process_group: Distributed process group.
-        :type process_group: Any
+        :type process_group: Optional[ProcessGroup]
         :param mode: ``"colwise"`` or ``"rowwise"``.
         :type mode: str
         """
@@ -226,7 +227,7 @@ class ChannelShardConv1d(_ChannelShardConv):
     def __init__(
         self,
         source: nn.Module,
-        process_group: Optional[Any],
+        process_group: Optional[ProcessGroup],
         mode: Literal["colwise", "rowwise"],
     ) -> None:
         r"""**API Language** - :ref:`中文 <ChannelShardConv1d-cn>` | :ref:`English <ChannelShardConv1d-en>`
@@ -242,7 +243,7 @@ class ChannelShardConv1d(_ChannelShardConv):
         :param source: 源 Conv1d 模块。
         :type source: nn.Module
         :param process_group: 分布式进程组。
-        :type process_group: Any
+        :type process_group: Optional[ProcessGroup]
         :param mode: ``"colwise"`` 或 ``"rowwise"``。
         :type mode: str
 
@@ -257,7 +258,7 @@ class ChannelShardConv1d(_ChannelShardConv):
         :param source: Source Conv1d module.
         :type source: nn.Module
         :param process_group: Distributed process group.
-        :type process_group: Any
+        :type process_group: Optional[ProcessGroup]
         :param mode: ``"colwise"`` or ``"rowwise"``.
         :type mode: str
         """
@@ -268,7 +269,9 @@ class _ChannelShardBatchNorm(nn.Module, base.StepModule):
     _input_shape = ""
     _spatial_dims = 0
 
-    def __init__(self, source: nn.Module, process_group: Optional[Any]) -> None:
+    def __init__(
+        self, source: nn.Module, process_group: Optional[ProcessGroup]
+    ) -> None:
         super().__init__()
         self.process_group = process_group
         rank = dist.get_rank(process_group) if process_group is not None else 0
@@ -361,7 +364,9 @@ class ChannelShardBatchNorm2d(_ChannelShardBatchNorm):
     _input_shape = "[T, N, C, H, W]"
     _spatial_dims = 2
 
-    def __init__(self, source: nn.Module, process_group: Optional[Any]) -> None:
+    def __init__(
+        self, source: nn.Module, process_group: Optional[ProcessGroup]
+    ) -> None:
         r"""**API Language** - :ref:`中文 <ChannelShardBatchNorm2d-cn>` | :ref:`English <ChannelShardBatchNorm2d-en>`
 
         ----
@@ -375,7 +380,7 @@ class ChannelShardBatchNorm2d(_ChannelShardBatchNorm):
         :param source: 源 BatchNorm2d 模块。
         :type source: nn.Module
         :param process_group: 分布式进程组。
-        :type process_group: Any
+        :type process_group: Optional[ProcessGroup]
 
         ----
 
@@ -388,7 +393,7 @@ class ChannelShardBatchNorm2d(_ChannelShardBatchNorm):
         :param source: Source BatchNorm2d module.
         :type source: nn.Module
         :param process_group: Distributed process group.
-        :type process_group: Any
+        :type process_group: Optional[ProcessGroup]
         """
         super().__init__(source, process_group)
 
@@ -397,7 +402,9 @@ class ChannelShardBatchNorm1d(_ChannelShardBatchNorm):
     _input_shape = "[T, N, C, L]"
     _spatial_dims = 1
 
-    def __init__(self, source: nn.Module, process_group: Optional[Any]) -> None:
+    def __init__(
+        self, source: nn.Module, process_group: Optional[ProcessGroup]
+    ) -> None:
         r"""**API Language** - :ref:`中文 <ChannelShardBatchNorm1d-cn>` | :ref:`English <ChannelShardBatchNorm1d-en>`
 
         ----
@@ -411,7 +418,7 @@ class ChannelShardBatchNorm1d(_ChannelShardBatchNorm):
         :param source: 源 BatchNorm1d 模块。
         :type source: nn.Module
         :param process_group: 分布式进程组。
-        :type process_group: Any
+        :type process_group: Optional[ProcessGroup]
 
         ----
 
@@ -424,6 +431,6 @@ class ChannelShardBatchNorm1d(_ChannelShardBatchNorm):
         :param source: Source BatchNorm1d module.
         :type source: nn.Module
         :param process_group: Distributed process group.
-        :type process_group: Any
+        :type process_group: Optional[ProcessGroup]
         """
         super().__init__(source, process_group)

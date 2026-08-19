@@ -5,6 +5,19 @@ import torch.nn as nn
 from spikingjelly.activation_based import op_counter
 
 
+def test_function_counter_mode_accepts_function_rules():
+    class AddCounter(op_counter.BaseCounter):
+        def __init__(self):
+            super().__init__()
+            self.rules = {torch.add: lambda args, kwargs, out: 1}
+
+    counter = AddCounter()
+    with op_counter.FunctionCounterMode([counter]):
+        torch.add(torch.ones(2), torch.ones(2))
+
+    assert counter.get_total() == 1
+
+
 def test_compute_energy_uses_mac_and_ac_as_authoritative_total():
     class AddModel(nn.Module):
         def forward(self, x, y):

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, ClassVar, Optional
+from typing import ClassVar, Optional
 
 import torch
 import torch.distributed as dist
+from torch.distributed import ProcessGroup
 import torch.nn as nn
 
 from spikingjelly.activation_based import layer, memopt
@@ -112,7 +113,7 @@ class _HeadShardQKVConv1d(nn.Conv1d):
     def __init__(
         self,
         source: nn.Conv1d,
-        process_group: Any,
+        process_group: ProcessGroup,
         num_heads: int,
     ) -> None:
         if source.kernel_size != (1,) or source.groups != 1:
@@ -247,7 +248,7 @@ CIFAR-10 Spikformer。TP 按 attention head 分片。
 
 class SpikformerBuilder(ModelBuilder):
     @staticmethod
-    def _parallelize_stem(model: nn.Module, process_group: Any) -> None:
+    def _parallelize_stem(model: nn.Module, process_group: ProcessGroup) -> None:
         for index, stage in enumerate(model.patch_embed.stages):
             container = stage.conv_bn.block
             conv = container[0]
@@ -262,7 +263,7 @@ class SpikformerBuilder(ModelBuilder):
         positional[1] = _copy_batch_norm(positional[1])
 
     @staticmethod
-    def _parallelize_block(block: SpikformerBlock, process_group: Any) -> None:
+    def _parallelize_block(block: SpikformerBlock, process_group: ProcessGroup) -> None:
         attention = block.attn
         qkv_source = attention.qkv_conv_bn[0]
         qkv = _HeadShardQKVConv1d(
@@ -290,7 +291,7 @@ class SpikformerBuilder(ModelBuilder):
     def build(
         self,
         *,
-        process_group: Optional[Any],
+        process_group: Optional[ProcessGroup],
         pipeline_rank: int,
         pipeline_size: int,
         pipeline_microbatches: int,

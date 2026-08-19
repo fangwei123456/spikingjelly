@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, ClassVar, Literal, Optional
 
 import torch
+from torch.distributed import ProcessGroup
 import torch.nn as nn
 
 
@@ -132,7 +133,7 @@ class ModelBuilder(abc.ABC):
     def build(
         self,
         *,
-        process_group: Optional[Any],
+        process_group: Optional[ProcessGroup],
         pipeline_rank: int,
         pipeline_size: int,
         pipeline_microbatches: int,
@@ -154,7 +155,7 @@ class ModelBuilder(abc.ABC):
         memopt, FSDP2 module paths ordered from inner to outer, and PP boundary shapes.
 
         :param process_group: TP 进程组；TP=1 时为 ``None``。
-        :type process_group: Optional[Any]
+        :type process_group: Optional[ProcessGroup]
         :param pipeline_rank: 当前 PP rank。 / Current PP rank.
         :type pipeline_rank: int
         :param pipeline_size: PP rank 数。 / Number of PP ranks.

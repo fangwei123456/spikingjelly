@@ -82,7 +82,7 @@ def _on_python_object_finalize(obj_id: int) -> None:
         _drop_python_object_locked(obj_id)
 
 
-def register_python_object(obj: Any) -> int:
+def register_python_object(obj: object) -> int:
     global _PYOBJ_NEXT_ID
     with _PYOBJ_LOCK:
         object_id = id(obj)

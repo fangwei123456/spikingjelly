@@ -2,6 +2,7 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from dataclasses import asdict, dataclass
+from collections.abc import Sequence
 from typing import Any
 
 import torch
@@ -20,7 +21,7 @@ def _shape_tuple(x: torch.Tensor) -> tuple[int, ...]:
     return tuple(int(v) for v in x.shape)
 
 
-def _pair_tuple(x: Any) -> tuple[int, int]:
+def _pair_tuple(x: int | Sequence[int]) -> tuple[int, int]:
     if isinstance(x, int):
         return (int(x), int(x))
     if len(x) != 2:

@@ -1,6 +1,4 @@
 from dataclasses import dataclass
-from typing import Any
-
 import torch
 
 from ..triton_utils import (
@@ -23,9 +21,9 @@ class TritonNeuronExecutionPlan:
     device: torch.device
     storage_dtype: torch.dtype
     forward_compute_dtype_name: str
-    forward_compute_tl_dtype: Any
+    forward_compute_tl_dtype: object
     backward_compute_dtype_name: str
-    backward_compute_tl_dtype: Any
+    backward_compute_tl_dtype: object
     spike_dtype: torch.dtype
     storage_dtype_id: int
     forward_compute_dtype_id: int
