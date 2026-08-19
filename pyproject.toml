@@ -75,7 +75,7 @@ llm-benchmark = [
 [project.urls]
 Homepage = "https://github.com/fangwei123456/spikingjelly"
 Documentation = "https://spikingjelly.readthedocs.io/"
-License = "https://github.com/fangwei123456/spikingjelly/blob/master/LICENSES/README.md"
+License = "https://github.com/fangwei123456/spikingjelly/blob/master/LICENSE"
 
 [tool.ruff]
 src = ["spikingjelly", "test"]
