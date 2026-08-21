@@ -1,5 +1,5 @@
 """Example training entrypoint for compiled FlexSN models.
-This script mirrors ``train_imagenet_example.py`` but uses ``spiking_vgg`` with
+This script mirrors ``train_imagenet.py`` but uses ``spiking_vgg`` with
 ``FlexSN(backend="triton")`` and defaults to ``torch.compile`` so users can
 exercise the compiler-visible FlexSN training path end-to-end.
 """
@@ -8,30 +8,11 @@ import torch
 
 from .. import functional, surrogate
 from ..neuron.flexsn import FlexSN
-from . import spiking_vgg, train_classify
+from ..model import spiking_vgg
+from .common import train_classify
 
 
 class _FlexSNTrainer(train_classify.Trainer):
-    r"""
-    **API Language** - :ref:`中文 <FlexSNTrainer-cn>` | :ref:`English <FlexSNTrainer-en>`
-
-    ----
-
-    .. _FlexSNTrainer-cn:
-
-    * **中文**
-
-    FlexSN 模型的训练器。继承 :class:`train_classify.Trainer`，覆写了 ``preprocess_train_sample`` 和 ``preprocess_test_sample`` 以给数据添加时间维度。
-
-    ----
-
-    .. _FlexSNTrainer-en:
-
-    * **English**
-
-    Trainer for FlexSN models. Inherits :class:`train_classify.Trainer`, overrides ``preprocess_train_sample`` and ``preprocess_test_sample`` to add the time dimension to data.
-    """
-
     def preprocess_train_sample(self, args, x: torch.Tensor):
         return x.unsqueeze(0).expand(args.T, -1, -1, -1, -1)
 
@@ -91,7 +72,6 @@ class _FlexSNTrainer(train_classify.Trainer):
 
 
 if __name__ == "__main__":
-    # python -m spikingjelly.activation_based.model.train_flexsn_compile_example --model spiking_vgg11_bn --data-path /datasets/ImageNet0_03125 --batch-size 64 --lr 0.1 --lr-scheduler cosa --epochs 90
     trainer = _FlexSNTrainer()
     args = trainer.get_args_parser().parse_args()
     trainer.main(args)

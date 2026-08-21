@@ -162,7 +162,7 @@ def test_precision_prepare_emits_one_lifecycle_summary(loguru_records):
 
 
 def test_metric_logger_formats_progress_with_loguru_arguments(loguru_records):
-    from spikingjelly.activation_based.model.tv_ref_classify.utils import MetricLogger
+    from spikingjelly.activation_based.examples.common.tv_ref_classify.utils import MetricLogger
 
     list(MetricLogger().log_every(["sample"], 1, "Train"))
     messages = [record["message"] for record in loguru_records]

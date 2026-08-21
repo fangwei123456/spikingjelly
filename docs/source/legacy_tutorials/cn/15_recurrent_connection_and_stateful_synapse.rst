@@ -105,7 +105,6 @@ Sequential FashionMNIST上的对比实验
     import torch.nn as nn
     import torch.nn.functional as F
     import torchvision.datasets
-    from spikingjelly.activation_based.model import train_classify
     from spikingjelly.activation_based import neuron, surrogate, layer
     from spikingjelly.activation_based.functional import seq_to_ann_forward
     from torchvision import transforms

@@ -30,7 +30,6 @@ from .spikformer import (
     spikformer_s,
     spikformer_ti,
 )
-from .train_classify import Trainer
 
 __all__ = [
     "Spikformer",
@@ -42,5 +41,4 @@ __all__ = [
     "spikformer_cifar10",
     "spikformer_s",
     "spikformer_ti",
-    "Trainer",
 ]

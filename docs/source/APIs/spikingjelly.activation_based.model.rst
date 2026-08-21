@@ -33,16 +33,3 @@ Spiking VGG
    :members:
    :undoc-members:
    :show-inheritance:
-
-Trainers
------------------------------------------------------------
-
-.. automodule:: spikingjelly.activation_based.model.train_classify
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: spikingjelly.activation_based.model.train_imagenet_example
-   :members:
-   :undoc-members:
-   :show-inheritance:

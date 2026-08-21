@@ -1,6 +1,8 @@
 import torch
-from spikingjelly.activation_based import surrogate, neuron, functional
-from spikingjelly.activation_based.model import spiking_resnet, train_classify
+
+from .. import functional, neuron, surrogate
+from ..model import spiking_resnet
+from .common import train_classify
 
 
 class SResNetTrainer(train_classify.Trainer):
@@ -89,8 +91,8 @@ class SResNetTrainer(train_classify.Trainer):
 
 
 if __name__ == "__main__":
-    # -m torch.distributed.launch --nproc_per_node=2 spikingjelly.activation_based.model.train_imagenet_example
-    # python -m spikingjelly.activation_based.model.train_imagenet_example --T 4 --model spiking_resnet18 --data-path /datasets/ImageNet0_03125 --batch-size 64 --lr 0.1 --lr-scheduler cosa --epochs 90
+    # -m torch.distributed.launch --nproc_per_node=2 spikingjelly.activation_based.examples.train_imagenet
+    # python -m spikingjelly.activation_based.examples.train_imagenet --T 4 --model spiking_resnet18 --data-path /datasets/ImageNet0_03125 --batch-size 64 --lr 0.1 --lr-scheduler cosa --epochs 90
     trainer = SResNetTrainer()
     args = trainer.get_args_parser().parse_args()
     trainer.main(args)

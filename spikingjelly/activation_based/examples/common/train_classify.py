@@ -18,7 +18,7 @@ from torch.utils.data.dataloader import default_collate
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms.functional import InterpolationMode
 
-from .. import functional
+from ... import functional
 from .tv_ref_classify import presets, transforms, utils
 from .tv_ref_classify.sampler import RASampler
 from spikingjelly.logger import logger
@@ -76,9 +76,7 @@ def set_deterministic(_seed_: int = 2020, disable_uda=False):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    if disable_uda:
-        pass
-    else:
+    if not disable_uda:
         os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
         # set a debug environment variable CUBLAS_WORKSPACE_CONFIG to ":16:8" (may limit overall performance) or ":4096:8" (will increase library footprint in GPU memory by approximately 24MiB).
         torch.use_deterministic_algorithms(True)
@@ -139,9 +137,6 @@ class Trainer:
     Classification task trainer. Wraps training/validation loops, LR scheduling, mixed-precision training, torch.compile support, and TensorBoard logging.
     """
 
-    def get_data_to_device_kwargs(self, args):
-        return {"non_blocking": not args.disable_pinmemory}
-
     def cal_acc1_acc5(self, output, target):
         # define how to calculate acc1 and acc5
         acc1, acc5 = utils.accuracy(output, target, topk=(1, 5))
@@ -186,11 +181,6 @@ class Trainer:
 
         return torch.compile(model, **compile_kwargs)
 
-    def get_eval_model(self, args, train_model, model_without_ddp):
-        if args.compile and not args.compile_eval:
-            return model_without_ddp
-        return train_model
-
     def train_one_epoch(
         self,
         model,
@@ -209,13 +199,12 @@ class Trainer:
         metric_logger.add_meter("img/s", utils.ThroughputValue(fmt="{global_avg:.3f}"))
 
         header = f"Epoch: [{epoch}]"
-        data_to_device_kwargs = self.get_data_to_device_kwargs(args)
         for i, (image, target) in enumerate(
             metric_logger.log_every(data_loader, -1, header)
         ):
             start_time = time.time()
-            image = image.to(device, **data_to_device_kwargs)
-            target = target.to(device, **data_to_device_kwargs)
+            image = image.to(device, non_blocking=not args.disable_pinmemory)
+            target = target.to(device, non_blocking=not args.disable_pinmemory)
             with torch.cuda.amp.autocast(enabled=scaler is not None):
                 image = self.preprocess_train_sample(args, image)
                 output = self.process_model_output(args, model(image))
@@ -273,14 +262,12 @@ class Trainer:
         model.eval()
         metric_logger = utils.MetricLogger(delimiter="  ")
         header = f"Test: {log_suffix}"
-        data_to_device_kwargs = self.get_data_to_device_kwargs(args)
-
         num_processed_samples = 0
         start_time = time.perf_counter()
         with torch.inference_mode():
             for image, target in metric_logger.log_every(data_loader, -1, header):
-                image = image.to(device, **data_to_device_kwargs)
-                target = target.to(device, **data_to_device_kwargs)
+                image = image.to(device, non_blocking=not args.disable_pinmemory)
+                target = target.to(device, non_blocking=not args.disable_pinmemory)
                 image = self.preprocess_test_sample(args, image)
                 output = self.process_model_output(args, model(image))
                 loss = criterion(output, target)
@@ -338,75 +325,6 @@ class Trainer:
         cache_path = os.path.expanduser(cache_path)
         return cache_path
 
-    def load_data(self, args):
-        return self.load_ImageNet(args)
-
-    def load_CIFAR10(self, args):
-        # Data loading code
-        log_progress = utils.is_main_process()
-        if log_progress:
-            logger.info("Loading data")
-        train_crop_size = args.train_crop_size
-        interpolation = InterpolationMode(args.interpolation)
-
-        if log_progress:
-            logger.info("Loading training data")
-        st = time.time()
-        dataset = torchvision.datasets.CIFAR10(
-            root=args.data_path,
-            train=True,
-            transform=presets.ClassificationPresetTrain(
-                crop_size=train_crop_size,
-                mean=(0.4914, 0.4822, 0.4465),
-                std=(0.2023, 0.1994, 0.2010),
-                interpolation=interpolation,
-                auto_augment_policy=args.auto_augment,
-                random_erase_prob=args.random_erase,
-            ),
-        )
-
-        if log_progress:
-            logger.info("Took {} seconds", time.time() - st)
-
-        if log_progress:
-            logger.info("Loading validation data")
-
-        dataset_test = torchvision.datasets.CIFAR10(
-            root=args.data_path,
-            train=False,
-            transform=torchvision.transforms.Compose(
-                [
-                    torchvision.transforms.ToTensor(),
-                    torchvision.transforms.Normalize(
-                        (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
-                    ),
-                ]
-            ),
-        )
-
-        if log_progress:
-            logger.info("Creating data loaders")
-        loader_g = torch.Generator()
-        loader_g.manual_seed(args.seed)
-
-        if args.distributed:
-            if args.ra_sampler:
-                train_sampler = RASampler(
-                    dataset, shuffle=True, repetitions=args.ra_reps, seed=args.seed
-                )
-            else:
-                train_sampler = torch.utils.data.distributed.DistributedSampler(
-                    dataset, seed=args.seed
-                )
-            test_sampler = torch.utils.data.distributed.DistributedSampler(
-                dataset_test, shuffle=False
-            )
-        else:
-            train_sampler = torch.utils.data.RandomSampler(dataset, generator=loader_g)
-            test_sampler = torch.utils.data.SequentialSampler(dataset_test)
-
-        return dataset, dataset_test, train_sampler, test_sampler
-
     def load_ImageNet(self, args):
         # Data loading code
         log_progress = utils.is_main_process()
@@ -443,7 +361,7 @@ class Trainer:
             if args.cache_dataset:
                 if log_progress:
                     logger.info("Saving dataset_train to {}", cache_path)
-                utils.mkdir(os.path.dirname(cache_path))
+                os.makedirs(os.path.dirname(cache_path), exist_ok=True)
                 utils.save_on_master((dataset, traindir), cache_path)
         if log_progress:
             logger.info("Took {} seconds", time.time() - st)
@@ -480,7 +398,7 @@ class Trainer:
             if args.cache_dataset:
                 if log_progress:
                     logger.info("Saving dataset_test to {}", cache_path)
-                utils.mkdir(os.path.dirname(cache_path))
+                os.makedirs(os.path.dirname(cache_path), exist_ok=True)
                 utils.save_on_master((dataset_test, valdir), cache_path)
 
         if log_progress:
@@ -615,7 +533,7 @@ class Trainer:
                 "The weights parameter works only in prototype mode. Please pass the --prototype argument."
             )
         if args.output_dir:
-            utils.mkdir(args.output_dir)
+            os.makedirs(args.output_dir, exist_ok=True)
 
         utils.init_distributed_mode(args)
         if utils.is_main_process():
@@ -623,7 +541,7 @@ class Trainer:
 
         device = torch.device(args.device)
 
-        dataset, dataset_test, train_sampler, test_sampler = self.load_data(args)
+        dataset, dataset_test, train_sampler, test_sampler = self.load_ImageNet(args)
 
         collate_fn = None
         num_classes = len(dataset.classes)
@@ -765,7 +683,9 @@ class Trainer:
                 )
 
         model = self.compile_model(args, model_without_ddp)
-        eval_model = self.get_eval_model(args, model, model_without_ddp)
+        eval_model = (
+            model_without_ddp if args.compile and not args.compile_eval else model
+        )
 
         if args.distributed:
             model = torch.nn.parallel.DistributedDataParallel(
@@ -807,7 +727,6 @@ class Trainer:
             if args.distributed:
                 train_sampler.set_epoch(epoch)
 
-            self.before_train_one_epoch(args, model, epoch)
             train_loss, train_acc1, train_acc5 = self.train_one_epoch(
                 model,
                 criterion,
@@ -825,7 +744,6 @@ class Trainer:
                 tb_writer.add_scalar("train_acc5", train_acc5, epoch)
 
             lr_scheduler.step()
-            self.before_test_one_epoch(args, eval_model, epoch)
             test_loss, test_acc1, test_acc5 = self.evaluate(
                 args, eval_model, criterion, data_loader_test, device=device
             )
@@ -916,12 +834,6 @@ class Trainer:
                 max_test_acc1,
                 duration_seconds,
             )
-
-    def before_test_one_epoch(self, args, model, epoch):
-        pass
-
-    def before_train_one_epoch(self, args, model, epoch):
-        pass
 
     def get_args_parser(self, add_help=True):
         parser = argparse.ArgumentParser(
