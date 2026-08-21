@@ -28,7 +28,7 @@ def _readATIS_tddat(
     file_name,
     orig_at_zero=True,
     drop_negative_dt=True,
-    events_restriction=[0, np.inf],
+    events_restriction=(0, np.inf),
 ):
     """
     Read ATIS td events from a ``.dat`` file.

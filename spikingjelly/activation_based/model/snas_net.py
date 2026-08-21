@@ -1,8 +1,9 @@
-from spikingjelly.logger import logger
 import torch
 import torch.nn as nn
-from ...activation_based import layer, surrogate, neuron
-import argparse
+
+from .. import layer, neuron, surrogate
+
+__all__ = ["SNASNet"]
 
 
 ### Components ###
@@ -47,7 +48,7 @@ class Neuronal_Cell(nn.Module):
 
         Neuronal forward cell.
         """
-        super(Neuronal_Cell, self).__init__()
+        super().__init__()
         self.cell_architecture = nn.ModuleList([])
         self.con_mat = con_mat
         for col in range(1, 4):
@@ -140,7 +141,7 @@ class Neuronal_Cell_backward(nn.Module):
 
         Neuronal backward cell.
         """
-        super(Neuronal_Cell_backward, self).__init__()
+        super().__init__()
 
         self.cell_architecture = nn.ModuleList([])
         self.con_mat = con_mat
@@ -315,7 +316,7 @@ class SNASNet(nn.Module):
 
         The SNASNet `Neural Architecture Search for Spiking Neural Networks <https://arxiv.org/abs/2201.10355>`_ implementation by Spikingjelly.
         """
-        super(SNASNet, self).__init__()
+        super().__init__()
 
         self.con_mat = con_mat
         self.total_timestep = args.timestep
@@ -510,33 +511,3 @@ class SNASNet(nn.Module):
         self.cell2.last_xin = 0.0
         self.cell2.last_x1 = 0.0
         self.cell2.last_x2 = 0.0
-
-
-if __name__ == "__main__":
-    ### Example ###
-
-    parser = argparse.ArgumentParser("SNASNet")
-    parser.add_argument(
-        "--dataset", type=str, default="cifar100", help="[cifar10, cifar100]"
-    )
-    parser.add_argument("--timestep", type=int, default=5, help="timestep for SNN")
-    parser.add_argument(
-        "--tau", type=float, default=4 / 3, help="neuron decay time factor"
-    )
-    parser.add_argument(
-        "--threshold", type=float, default=1.0, help="neuron firing threshold"
-    )
-    parser.add_argument(
-        "--celltype", type=str, default="backward", help="[forward, backward]"
-    )
-    parser.add_argument("--second_avgpooling", type=int, default=2, help="momentum")
-    args = parser.parse_args()
-
-    int_list = [[0, 0, 0, 2], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
-    best_neuroncell = torch.Tensor(int_list)
-
-    logger.info("------- best_neuroncell -------")
-    logger.info("{}", best_neuroncell)
-    logger.info("------------------------------")
-
-    snasnet = SNASNet(args, best_neuroncell)

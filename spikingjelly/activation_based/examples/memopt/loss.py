@@ -3,15 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class TMeanCrossEntropyLoss(nn.CrossEntropyLoss):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def forward(self, y_seq, label):
-        y = y_seq.mean(dim=0)
-        return super().forward(y, label)
-
-
 class TETLoss(nn.Module):
     def __init__(
         self,

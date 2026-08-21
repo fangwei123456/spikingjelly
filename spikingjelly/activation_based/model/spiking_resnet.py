@@ -153,7 +153,7 @@ class BasicBlock(nn.Module):
         spiking_neuron: callable = None,
         **kwargs,
     ):
-        super(BasicBlock, self).__init__()
+        super().__init__()
         if norm_layer is None:
             norm_layer = layer.BatchNorm2d
         if groups != 1 or base_width != 64:
@@ -211,7 +211,7 @@ class Bottleneck(nn.Module):
         spiking_neuron: callable = None,
         **kwargs,
     ):
-        super(Bottleneck, self).__init__()
+        super().__init__()
         if norm_layer is None:
             norm_layer = layer.BatchNorm2d
         width = int(planes * (base_width / 64.0)) * groups
@@ -326,7 +326,7 @@ class SpikingResNet(nn.Module):
         :param kwargs: Extra arguments for the spiking neuron
         :type kwargs: dict
         """
-        super(SpikingResNet, self).__init__()
+        super().__init__()
         if norm_layer is None:
             norm_layer = layer.BatchNorm2d
         self._norm_layer = norm_layer

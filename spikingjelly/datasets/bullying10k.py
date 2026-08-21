@@ -270,20 +270,19 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
         )
 
         all_files_labels = []
-        categories = list(
-            filter(
-                lambda x: (not x.endswith(".json")) and (not x.startswith(".")),
-                os.listdir(extract_root),
-            )
-        )
+        categories = [
+            name
+            for name in os.listdir(extract_root)
+            if not name.endswith(".json") and not name.startswith(".")
+        ]
         for c in categories:
             cpath = extract_root / c
             for dir_path, _, dir_file_names in os.walk(cpath):
                 dir_path = Path(dir_path)
-                for dfn in dir_file_names:
-                    all_files_labels.append(
-                        (dir_path / dfn, BULLYING10K_CATEGORY_LABEL[c])
-                    )
+                all_files_labels.extend(
+                    (dir_path / name, BULLYING10K_CATEGORY_LABEL[c])
+                    for name in dir_file_names
+                )
         num_files = len(all_files_labels)
         all_files_labels = np.array(all_files_labels)
         logger.info("Found {} files in total.", num_files)

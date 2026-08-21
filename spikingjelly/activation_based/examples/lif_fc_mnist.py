@@ -157,9 +157,7 @@ def main():
     if args.amp:
         out_dir += "_amp"
 
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
-        print(f"Mkdir {out_dir}.")
+    os.makedirs(out_dir, exist_ok=True)
 
     with open(os.path.join(out_dir, "args.txt"), "w", encoding="utf-8") as args_txt:
         args_txt.write(str(args))

@@ -69,31 +69,8 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 #. 检测数据集是否存在。如果存在，则进行MD5校验，确认数据集无误后，开始进行解压。将原始数据解压到同级目录下的 ``extract`` 文件夹
 #. DVS128 Gesture中的每个样本，是在不同光照环境下，对不同表演者进行录制的手势视频。一个AER文件中包含了多个手势，对应的会有一个csv文件来标注整个视频内各个时间段内都是哪种手势。因此，单个的视频文件并不是一个类别，而是多个类别的集合。惊蜇框架会启动多线程进行划分，将每个视频中的每个手势类别文件单独提取出来
 
-下面是运行过程中的命令行输出：
-
-.. code:: bash
-
-    The [D:/datasets/DVS128Gesture/download] directory for saving downloaed files already exists, check files...
-    Mkdir [D:/datasets/DVS128Gesture/extract].
-    Extract [D:/datasets/DVS128Gesture/download/DvsGesture.tar.gz] to [D:/datasets/DVS128Gesture/extract].
-    Mkdir [D:/datasets/DVS128Gesture/events_np].
-    Start to convert the origin data from [D:/datasets/DVS128Gesture/extract] to [D:/datasets/DVS128Gesture/events_np] in np.ndarray format.
-    Mkdir [('D:/datasets/DVS128Gesture//events_np//train', 'D:/datasets/DVS128Gesture//events_np//test').
-    Mkdir ['0', '1', '10', '2', '3', '4', '5', '6', '7', '8', '9'] in [D:/datasets/DVS128Gesture/events_np/train] and ['0', '1', '10', '2', '3', '4', '5', '6', '7', '8', '9'] in [D:/datasets/DVS128Gesture/events_np/test].
-    Start the ThreadPoolExecutor with max workers = [8].
-    Start to split [D:/datasets/DVS128Gesture/extract/DvsGesture/user02_fluorescent.aedat] to samples.
-    [D:/datasets/DVS128Gesture/events_np/train/0/user02_fluorescent_0.npz] saved.
-    [D:/datasets/DVS128Gesture/events_np/train/1/user02_fluorescent_0.npz] saved.
-
-    ......
-
-    [D:/datasets/DVS128Gesture/events_np/test/8/user29_lab_0.npz] saved.
-    [D:/datasets/DVS128Gesture/events_np/test/9/user29_lab_0.npz] saved.
-    [D:/datasets/DVS128Gesture/events_np/test/10/user29_lab_0.npz] saved.
-    Used time = [1017.27s].
-    All aedat files have been split to samples and saved into [('D:/datasets/DVS128Gesture//events_np//train', 'D:/datasets/DVS128Gesture//events_np//test')].
-
-提取各个手势类别的速度较慢，需要耐心等待。运行完成后，同级目录下会多出一个 ``events_np`` 文件夹，其中包含训练集和测试集：
+提取各个手势类别需要一定时间。成功后，同级目录下会生成包含训练集和测试集的
+``events_np`` 文件夹：
 
 .. code:: bash
 
@@ -121,6 +98,10 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
     label 0
 
 其中 ``event`` 使用字典格式存储Events数据，键为 ``['t', 'x', 'y', 'p']``； ``label`` 是数据的标签，DVS128 Gesture共有11类。
+字典中的值是独立的 NumPy 数组，``t`` 的单位为微秒。
+
+若准备过程被中断，SpikingJelly 会保留同级 ``.building`` 标记。重试前应清理未完成的
+输出目录并删除该标记。
 
 获取Frame数据
 -----------------------
@@ -142,45 +123,6 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 .. code:: python
 
     train_set = DVS128Gesture(root_dir, train=True, data_type='frame', frames_number=20, split_by='number')
-
-命令行的输出为：
-
-.. code:: bash
-
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/0].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/1].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/10].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/2].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/3].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/4].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/5].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/6].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/7].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/8].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/9].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/0].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/1].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/10].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/2].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/3].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/4].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/5].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/6].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/7].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/8].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/9].
-    Start ThreadPoolExecutor with max workers = [8].
-    Start to integrate [D:/datasets/DVS128Gesture/events_np/test/0/user24_fluorescent_0.npz] to frames and save to [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/0].
-    Start to integrate [D:/datasets/DVS128Gesture/events_np/test/0/user24_fluorescent_led_0.npz] to frames and save to [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/0].
-
-    ......
-
-    Frames [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/9/user23_lab_0.npz] saved.Frames [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/9/user23_led_0.npz] saved.
-
-    Used time = [102.11s].
 
 运行后，同级目录下会出现 ``frames_number_20_split_by_number`` 文件夹，这里存放了积分生成的Frame数据。
 

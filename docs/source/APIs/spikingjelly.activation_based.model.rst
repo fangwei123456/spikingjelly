@@ -34,15 +34,34 @@ Spiking VGG
    :undoc-members:
    :show-inheritance:
 
-Trainers
------------------------------------------------------------
+QKFormer
+--------------------------------------------------------
 
-.. automodule:: spikingjelly.activation_based.model.train_classify
+.. automodule:: spikingjelly.activation_based.model.qkformer
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: spikingjelly.activation_based.model.train_imagenet_example
+MS-ResNet and Max-ResNet
+--------------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.model.ms_resnet
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+MaxFormer
+--------------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.model.maxformer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Spike-driven Transformer
+--------------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.model.spike_driven_transformer
    :members:
    :undoc-members:
    :show-inheritance:

@@ -1,0 +1,523 @@
+import datetime
+import os
+import statistics
+import time
+from collections import defaultdict, deque
+from numbers import Number
+from typing import Optional, Sequence, Union
+
+import torch
+import torch.distributed as dist
+
+from spikingjelly.logger import logger
+
+__all__ = [
+    "SmoothedValue",
+    "MetricLogger",
+    "init_distributed_mode",
+]
+
+
+class SmoothedValue:
+    def __init__(self, window_size=20, fmt=None):
+        """
+        **API Language** - :ref:`中文 <SmoothedValue-cn>` | :ref:`English <SmoothedValue-en>`
+
+        ----
+
+        .. _SmoothedValue-cn:
+
+        * **中文**
+
+        记录一组数值，并提供滑动窗口统计量以及全局平均值。
+
+        :param window_size: 滑动窗口大小
+        :type window_size: int
+        :param fmt: 格式化字符串
+        :type fmt: str
+
+        ----
+
+        .. _SmoothedValue-en:
+
+        * **English**
+
+        Track a series of values and provide smoothed statistics over a window or
+        the global average.
+
+        :param window_size: Size of the smoothing window
+        :type window_size: int
+        :param fmt: Format string for output
+        :type fmt: str
+        """
+        if fmt is None:
+            fmt = "{median:.4f} ({global_avg:.4f})"
+        self.deque = deque(maxlen=window_size)
+        self.total = 0.0
+        self.count = 0
+        self.fmt = fmt
+
+    def update(self, value, n=1):
+        self.deque.append(value)
+        self.count += n
+        self.total += value * n
+
+    def synchronize_between_processes(self):
+        r"""
+        **API Language** - :ref:`中文 <SmoothedValue.synchronize_between_processes-cn>` | :ref:`English <SmoothedValue.synchronize_between_processes-en>`
+
+        ----
+
+        .. _SmoothedValue.synchronize_between_processes-cn:
+
+        * **中文**
+
+        在多进程间同步平滑值。注意：不同步 deque 数据。
+
+        ----
+
+        .. _SmoothedValue.synchronize_between_processes-en:
+
+        * **English**
+
+        Synchronize smoothed values between processes. Warning: does not synchronize the deque!
+        """
+        t = reduce_across_processes([self.count, self.total])
+        t = t.tolist()
+        self.count = int(t[0])
+        self.total = t[1]
+
+    @property
+    def median(self):
+        d = torch.tensor(list(self.deque))
+        return d.median().item()
+
+    @property
+    def avg(self):
+        d = torch.tensor(list(self.deque), dtype=torch.float32)
+        return d.mean().item()
+
+    @property
+    def global_avg(self):
+        return self.total / self.count
+
+    @property
+    def max(self):
+        return max(self.deque)
+
+    @property
+    def value(self):
+        return self.deque[-1]
+
+    def __str__(self):
+        return self.fmt.format(
+            median=self.median,
+            avg=self.avg,
+            global_avg=self.global_avg,
+            max=self.max,
+            value=self.value,
+        )
+
+
+class ThroughputValue:
+    def __init__(self, window_size=20, fmt=None):
+        """
+        **API Language** - :ref:`中文 <ThroughputValue-cn>` | :ref:`English <ThroughputValue-en>`
+
+        ----
+
+        .. _ThroughputValue-cn:
+
+        * **中文**
+
+        按 ``total_samples / total_time`` 记录吞吐量。
+
+        ----
+
+        .. _ThroughputValue-en:
+
+        * **English**
+
+        Track throughput as ``total_samples / total_time``.
+        """
+        if fmt is None:
+            fmt = "{global_avg:.4f}"
+        self.deque = deque(maxlen=window_size)
+        self.total_samples = 0.0
+        self.total_time = 0.0
+        self.fmt = fmt
+
+    def update(self, samples, elapsed_time):
+        if elapsed_time <= 0:
+            return
+        throughput = samples / elapsed_time
+        self.deque.append(throughput)
+        self.total_samples += samples
+        self.total_time += elapsed_time
+
+    def synchronize_between_processes(self):
+        """Synchronize cumulative throughput statistics across ranks.
+        Chinese:
+            同步跨进程的累计吞吐统计量。
+
+        English:
+            Synchronize cumulative throughput statistics across distributed ranks.
+
+        :return: EN: ``None``. Chinese: 无返回值。
+
+        .. note::
+
+            English: ``total_samples`` is reduced with ``SUM`` across ranks,
+            while ``total_time`` is reduced with ``MAX`` so global throughput is
+            computed as ``sum(samples) / max(elapsed_time)``. Windowed
+            statistics stored in ``deque`` remain local to each rank.
+
+            Chinese: ``total_samples`` 会在各 rank 间执行 ``SUM`` 归约,
+            ``total_time`` 会执行 ``MAX`` 归约, 因此全局吞吐被定义为
+            ``sum(samples) / max(elapsed_time)``。保存在 ``deque`` 中的窗口统计
+            仍然保持各 rank 本地独立。
+        """
+        if not is_dist_avail_and_initialized():
+            return
+
+        samples = reduce_across_processes(
+            self.total_samples, op=dist.ReduceOp.SUM, dtype=torch.float64
+        )
+        elapsed = reduce_across_processes(
+            self.total_time, op=dist.ReduceOp.MAX, dtype=torch.float64
+        )
+        self.total_samples = samples.item()
+        self.total_time = elapsed.item()
+
+    @property
+    def median(self):
+        if not self.deque:
+            return 0.0
+        return float(statistics.median(self.deque))
+
+    @property
+    def avg(self):
+        if not self.deque:
+            return 0.0
+        return sum(self.deque) / len(self.deque)
+
+    @property
+    def global_avg(self):
+        if self.total_time == 0.0:
+            return 0.0
+        return self.total_samples / self.total_time
+
+    @property
+    def max(self):
+        if not self.deque:
+            return 0.0
+        return max(self.deque)
+
+    @property
+    def value(self):
+        if not self.deque:
+            return 0.0
+        return self.deque[-1]
+
+    def __str__(self):
+        return self.fmt.format(
+            median=self.median,
+            avg=self.avg,
+            global_avg=self.global_avg,
+            max=self.max,
+            value=self.value,
+        )
+
+
+class MetricLogger:
+    def __init__(self, delimiter="\t"):
+        """
+        **API Language** - :ref:`中文 <MetricLogger-cn>` | :ref:`English <MetricLogger-en>`
+
+        ----
+
+        .. _MetricLogger-cn:
+
+        * **中文**
+
+        指标记录器。用于追踪训练过程中的损失与准确率等指标。
+
+        :param delimiter: 分隔符
+        :type delimiter: str
+
+        ----
+
+        .. _MetricLogger-en:
+
+        * **English**
+
+        Metric logger for tracking training metrics like loss and accuracy.
+
+        :param delimiter: Delimiter used when logging
+        :type delimiter: str
+        """
+        self.meters = defaultdict(SmoothedValue)
+        self.delimiter = delimiter
+
+    def update(self, **kwargs):
+        for k, v in kwargs.items():
+            if isinstance(v, torch.Tensor):
+                v = v.item()
+            assert isinstance(v, (float, int))
+            self.meters[k].update(v)
+
+    def __getattr__(self, attr):
+        if attr in self.meters:
+            return self.meters[attr]
+        if attr in self.__dict__:
+            return self.__dict__[attr]
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{attr}'"
+        )
+
+    def __str__(self):
+        loss_str = []
+        for name, meter in self.meters.items():
+            loss_str.append(f"{name}: {str(meter)}")
+        return self.delimiter.join(loss_str)
+
+    def synchronize_between_processes(self):
+        for meter in self.meters.values():
+            meter.synchronize_between_processes()
+
+    def add_meter(self, name, meter):
+        self.meters[name] = meter
+
+    def log_every(self, iterable, print_freq, header=None):
+        i = 0
+        if not header:
+            header = ""
+        start_time = time.time()
+        end = time.time()
+        iter_time = SmoothedValue(fmt="{avg:.4f}")
+        data_time = SmoothedValue(fmt="{avg:.4f}")
+        space_width = len(str(len(iterable)))
+        if torch.cuda.is_available():
+            log_msg = self.delimiter.join(
+                [
+                    "{}",
+                    "[{:>{}}/{}]",
+                    "eta: {}",
+                    "{}",
+                    "time: {}",
+                    "data: {}",
+                    "max mem: {:.0f}",
+                ]
+            )
+        else:
+            log_msg = self.delimiter.join(
+                [
+                    "{}",
+                    "[{:>{}}/{}]",
+                    "eta: {}",
+                    "{}",
+                    "time: {}",
+                    "data: {}",
+                ]
+            )
+        MB = 1024.0 * 1024.0
+        for obj in iterable:
+            data_time.update(time.time() - end)
+            yield obj
+            iter_time.update(time.time() - end)
+            if print_freq > 0 and i % print_freq == 0 and is_main_process():
+                if torch.cuda.is_available():
+                    logger.info(
+                        log_msg,
+                        header,
+                        i,
+                        space_width,
+                        len(iterable),
+                        str(
+                            datetime.timedelta(
+                                seconds=int(iter_time.global_avg * (len(iterable) - i))
+                            )
+                        ),
+                        self,
+                        str(iter_time),
+                        str(data_time),
+                        torch.cuda.max_memory_allocated() / MB,
+                    )
+                else:
+                    logger.info(
+                        log_msg,
+                        header,
+                        i,
+                        space_width,
+                        len(iterable),
+                        str(
+                            datetime.timedelta(
+                                seconds=int(iter_time.global_avg * (len(iterable) - i))
+                            )
+                        ),
+                        self,
+                        str(iter_time),
+                        str(data_time),
+                    )
+            i += 1
+            end = time.time()
+        total_time = time.time() - start_time
+        total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+        if is_main_process():
+            logger.info("{} Total time: {}", header, total_time_str)
+
+
+class ExponentialMovingAverage(torch.optim.swa_utils.AveragedModel):
+    def __init__(self, model, decay, device="cpu"):
+        """
+        Maintains moving averages of model parameters using an exponential decay.
+        ``ema_avg = decay * avg_model_param + (1 - decay) * model_param``
+        `torch.optim.swa_utils.AveragedModel <https://pytorch.org/docs/stable/optim.html#custom-averaging-strategies>`_
+        is used to compute the EMA.
+        """
+
+        def ema_avg(avg_model_param, model_param, num_averaged):
+            return decay * avg_model_param + (1 - decay) * model_param
+
+        super().__init__(model, device, ema_avg)
+
+    def update_parameters(self, model):
+        for p_swa, p_model in zip(
+            self.module.state_dict().values(), model.state_dict().values()
+        ):
+            device = p_swa.device
+            p_model_ = p_model.detach().to(device)
+            if self.n_averaged == 0:
+                p_swa.detach().copy_(p_model_)
+            else:
+                p_swa.detach().copy_(
+                    self.avg_fn(p_swa.detach(), p_model_, self.n_averaged.to(device))
+                )
+        self.n_averaged += 1
+
+
+def accuracy(output, target, topk=(1,)):
+    """Computes the accuracy over the k top predictions for the specified values of k"""
+    with torch.inference_mode():
+        maxk = max(topk)
+        batch_size = target.size(0)
+        if target.ndim == 2:
+            target = target.max(dim=1)[1]
+
+        _, pred = output.topk(maxk, 1, True, True)
+        pred = pred.t()
+        correct = pred.eq(target[None])
+
+        res = []
+        for k in topk:
+            correct_k = correct[:k].flatten().sum(dtype=torch.float32)
+            res.append(correct_k * (100.0 / batch_size))
+        return res
+
+
+def is_dist_avail_and_initialized():
+    return dist.is_available() and dist.is_initialized()
+
+
+def get_rank():
+    if not is_dist_avail_and_initialized():
+        return 0
+    return dist.get_rank()
+
+
+def is_main_process():
+    return get_rank() == 0
+
+
+def save_on_master(*args, **kwargs):
+    if is_main_process():
+        torch.save(*args, **kwargs)
+
+
+def init_distributed_mode(args):
+    r"""
+    **API Language** - :ref:`中文 <init_distributed_mode-cn>` | :ref:`English <init_distributed_mode-en>`
+
+    ----
+
+    .. _init_distributed_mode-cn:
+
+    * **中文**
+
+    初始化分布式训练模式。根据 args 中的分布式配置设置后端、初始化进程组。
+
+    :param args: 包含分布式配置的参数对象
+    :type args: Any
+
+    ----
+
+    .. _init_distributed_mode-en:
+
+    * **English**
+
+    Initialize distributed training mode. Sets the backend and initializes process group based on args.
+
+    :param args: Args object containing distributed configuration
+    :type args: Any
+    """
+
+    if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
+        args.rank = int(os.environ["RANK"])
+        args.world_size = int(os.environ["WORLD_SIZE"])
+        args.gpu = int(os.environ["LOCAL_RANK"])
+    elif "SLURM_PROCID" in os.environ:
+        args.rank = int(os.environ["SLURM_PROCID"])
+        args.gpu = args.rank % torch.cuda.device_count()
+    elif hasattr(args, "rank"):
+        pass
+    else:
+        logger.info("Not using distributed mode")
+        args.distributed = False
+        return
+
+    args.distributed = True
+
+    torch.cuda.set_device(args.gpu)
+    args.dist_backend = "nccl"
+    torch.distributed.init_process_group(
+        backend=args.dist_backend,
+        init_method=args.dist_url,
+        world_size=args.world_size,
+        rank=args.rank,
+    )
+    if args.rank == 0:
+        logger.info("Distributed training initialized: {}", args.dist_url)
+
+
+def reduce_across_processes(
+    val: Union[int, float, torch.Tensor, Sequence[Number]],
+    op: dist.ReduceOp = dist.ReduceOp.SUM,
+    dtype: Optional[torch.dtype] = None,
+) -> torch.Tensor:
+    """EN: Reduce a scalar, tensor, or number sequence across distributed processes.
+    Chinese: 对标量、张量或数字序列在分布式进程间执行归约。
+
+    :param val: EN: Value to reduce. Chinese: 待归约的值。
+    :type val: Union[int, float, torch.Tensor, Sequence[Number]]
+    :param op: EN: Reduction operator, defaulting to SUM. Chinese: 归约操作符, 默认为 SUM。
+    :type op: torch.distributed.ReduceOp
+    :param dtype: EN: Optional output tensor dtype. Chinese: 可选的输出张量数据类型。
+    :type dtype: Optional[torch.dtype]
+    :return: EN: Reduced tensor placed on the backend-appropriate device. Chinese: 位于当前后端对应设备上的归约结果张量。
+    :rtype: torch.Tensor
+    """
+    if not is_dist_avail_and_initialized():
+        # nothing to sync, but we still convert to tensor for consistency with the distributed case.
+        return torch.tensor(val, dtype=dtype)
+
+    backend = dist.get_backend()
+    backend_name = (
+        backend if isinstance(backend, str) else getattr(backend, "value", str(backend))
+    )
+    if "nccl" in backend_name.lower():
+        device = torch.device("cuda", torch.cuda.current_device())
+    else:
+        device = torch.device("cpu")
+    t = torch.tensor(val, device=device, dtype=dtype)
+    dist.all_reduce(t, op=op)
+    return t

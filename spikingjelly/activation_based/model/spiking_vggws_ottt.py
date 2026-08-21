@@ -22,7 +22,7 @@ __all__ = [
 
 class Scale(nn.Module):
     def __init__(self, scale):
-        super(Scale, self).__init__()
+        super().__init__()
         self.scale = scale
 
     def forward(self, x):
@@ -94,7 +94,7 @@ class OTTTSpikingVGG(nn.Module):
         :param kwargs: Extra arguments for the parent class
         :type kwargs: dict
         """
-        super(OTTTSpikingVGG, self).__init__()
+        super().__init__()
         self.fc_hw = kwargs.get("fc_hw", 1)
         if weight_standardization:
             ws_scale = 2.74

@@ -6,6 +6,7 @@ import abc
 from typing import Callable, Optional, Tuple, Union
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 
 import numpy as np
 from torchvision.datasets.utils import check_integrity, download_url
@@ -24,6 +25,14 @@ __all__ = [
     "FrameCustomIntegrateBuilder",
     "NeuromorphicDatasetConfig",
 ]
+
+
+def _load_events(file_name: Union[str, Path]) -> Union[dict, np.ndarray]:
+    events = np.load(file_name)
+    if isinstance(events, np.ndarray):
+        return events
+    with events:
+        return {key: events[key] for key in events.files}
 
 
 @dataclass(frozen=True)
@@ -74,7 +83,6 @@ class NeuromorphicDatasetConfig:
         if self.data_type == "event":
             return
 
-        # data_type == "frame"
         cnt = sum(
             [
                 self.frames_number is not None,
@@ -94,9 +102,10 @@ class NeuromorphicDatasetConfig:
             if self.split_by not in ("time", "number"):
                 raise ValueError('split_by must be "time" or "number"')
 
-        if self.duration is not None:
-            if not isinstance(self.duration, int) or self.duration <= 0:
-                raise ValueError("duration must be a positive integer")
+        if self.duration is not None and (
+            not isinstance(self.duration, int) or self.duration <= 0
+        ):
+            raise ValueError("duration must be a positive integer")
 
 
 class NeuromorphicDatasetBuilder(abc.ABC):
@@ -189,7 +198,6 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         :return: 处理后的数据集的根目录
         :rtype: Path
         """
-        return self.cfg.root / "processed"
 
     def build(self) -> Tuple[Path, Callable]:
         r"""
@@ -208,6 +216,8 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         :return: 一个元组 ``(processed_root, loader)``。``processed_root`` 由属性 :attr:`processed_root` 定义，``loader`` 是一个加载单个样本的函数。
         :rtype: Tuple[pathlib.Path, Callable]
 
+        :raises RuntimeError: 若发现 ``processed_root`` 对应的 ``.building`` 标记，说明上次预处理未完成
+
         ----
 
         .. _NeuromorphicDatasetBuilder.build-en:
@@ -224,13 +234,26 @@ class NeuromorphicDatasetBuilder(abc.ABC):
             defined by property :attr:`processed_root` . ``loader`` is a
             function that loads individual samples.
         :rtype: Tuple[pathlib.Path, Callable]
+
+        :raises RuntimeError: if the ``.building`` marker for ``processed_root``
+            indicates that the previous preprocessing run did not finish
         """
+        building_marker = self.processed_root.with_name(
+            f"{self.processed_root.name}.building"
+        )
+        if building_marker.exists():
+            raise RuntimeError(
+                f"Found unfinished dataset preprocessing marker [{building_marker}]. "
+                f"Remove [{self.processed_root}] and [{building_marker}] before retrying."
+            )
         if self.processed_root.exists():
             logger.info("The directory [{}] already exists.", self.processed_root)
         else:
+            building_marker.touch(exist_ok=False)
             self.processed_root.mkdir()
             logger.info("Mkdir [{}].", self.processed_root)
             self.build_impl()
+            building_marker.unlink()
         return self.processed_root, self.get_loader()
 
     def build_impl(self) -> None:
@@ -304,7 +327,7 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         ) as executor:
             logger.info(
                 "Start ThreadPoolExecutor with max workers = [{}].",
-                executor._max_workers,
+                configure.max_threads_number_for_datasets_preprocess,
             )
             futures = [executor.submit(process, *task_args) for task_args in tasks]
             for future in futures:
@@ -350,7 +373,8 @@ class EventBuilder(NeuromorphicDatasetBuilder):
 
         原始事件数据的数据集构建器。
 
-        此构建器不执行任何预处理，直接使用原始数据集作为处理后的数据集。每个样本通过 ``np.load`` 直接加载为原始事件文件（例如 ``.npz``），无需帧积分。
+        此构建器不执行任何预处理，直接使用原始数据集作为处理后的数据集。``.npy``
+        样本加载为数组，``.npz`` 样本加载为包含独立数组的字典，无需帧积分。
 
         通常，当 ``data_type == "event"`` 时使用此构建器。
 
@@ -363,8 +387,8 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         Dataset builder for raw event data.
 
         This builder performs no preprocessing and directly uses the raw dataset as
-        the processed dataset. Each sample is loaded directly by ``np.load`` as a raw event
-        file (e.g., ``.npz``) without frame integration.
+        the processed dataset. Each ``.npy`` sample is loaded as an array and each
+        ``.npz`` sample as a dictionary of independent arrays, without frame integration.
 
         Typically, this builder is used when ``data_type == "event"``.
 
@@ -393,7 +417,7 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         直接使用原始数据集目录作为处理后的数据集目录，不做额外处理。
 
         :return: 元组 ``(processed_root, loader)``, 其中 ``processed_root`` 为原始数据集目录,
-            loader 为 ``np.load``。
+            loader 返回事件数据。
         :rtype: Tuple[pathlib.Path, Callable]
 
         ----
@@ -406,7 +430,7 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         without any additional preprocessing.
 
         :return: a tuple ``(processed_root, loader)``, where ``processed_root``
-            is the raw dataset directory and the loader is ``np.load``.
+            is the raw dataset directory and the loader returns event data.
         :rtype: Tuple[pathlib.Path, Callable]
         """
         return self.processed_root, self.get_loader()
@@ -416,11 +440,11 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         return self.raw_root
 
     def get_loader(self) -> Callable:
-        return np.load
+        return _load_events
 
 
 class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
-    _event_loader = staticmethod(np.load)
+    _event_loader = staticmethod(_load_events)
 
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
         r"""
@@ -472,19 +496,17 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
         self.H, self.W = H, W
 
     def build_impl(self) -> None:
-        def process(events_file, output_dir):
-            utils.integrate_events_file_to_frames_file_by_fixed_frames_number(
+        self._build_from_event_files(
+            partial(
+                utils.integrate_events_file_to_frames_file_by_fixed_frames_number,
                 self._event_loader,
-                events_file,
-                output_dir,
-                self.cfg.split_by,
-                self.cfg.frames_number,
-                self.H,
-                self.W,
-                True,
+                split_by=self.cfg.split_by,
+                frames_num=self.cfg.frames_number,
+                H=self.H,
+                W=self.W,
+                print_save=True,
             )
-
-        self._build_from_event_files(process)
+        )
 
     @property
     def processed_root(self) -> Path:
@@ -498,7 +520,7 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
 
 
 class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
-    _event_loader = staticmethod(np.load)
+    _event_loader = staticmethod(_load_events)
 
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
         r"""
@@ -549,18 +571,16 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
         self.H, self.W = H, W
 
     def build_impl(self) -> None:
-        def process(events_file, output_dir):
-            utils.integrate_events_file_to_frames_file_by_fixed_duration(
+        self._build_from_event_files(
+            partial(
+                utils.integrate_events_file_to_frames_file_by_fixed_duration,
                 self._event_loader,
-                events_file,
-                output_dir,
-                self.cfg.duration,
-                self.H,
-                self.W,
-                True,
+                duration=self.cfg.duration,
+                H=self.H,
+                W=self.W,
+                print_save=True,
             )
-
-        self._build_from_event_files(process)
+        )
 
     @property
     def processed_root(self) -> Path:
@@ -571,7 +591,7 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
 
 
 class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
-    _event_loader = staticmethod(np.load)
+    _event_loader = staticmethod(_load_events)
 
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
         r"""
@@ -950,6 +970,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         2. 通过调用 :meth:`extract_downloaded_files` 将下载的文件提取到 ``root/extract`` 中。
         3. 通过调用 :meth:`create_raw_from_extracted` 将提取的数据转换为原始数据集，并将原始数据集保存到 :attr:`raw_root`。
 
+        :raises RuntimeError: 若发现 ``raw_root`` 对应的 ``.building`` 标记，说明上次数据集准备未完成
 
         ----
 
@@ -965,9 +986,20 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         1. Download dataset files to ``root/download`` (if supported) or verify existing downloads.
         2. Extract downloaded files into ``root/extract`` by calling :meth:`extract_downloaded_files`.
         3. Convert extracted data into raw dataset by calling :meth:`create_raw_from_extracted`, and save the raw dataset to :attr:`raw_root`.
+
+        :raises RuntimeError: if the ``.building`` marker for ``raw_root`` indicates
+            that the previous dataset preparation did not finish
         """
+        building_marker = self.raw_root.with_name(f"{self.raw_root.name}.building")
+        if building_marker.exists():
+            raise RuntimeError(
+                f"Found unfinished dataset preparation marker [{building_marker}]. "
+                "Clean the partial dataset directories and remove the marker before retrying."
+            )
         if self.raw_root.exists():
             return
+
+        building_marker.touch(exist_ok=False)
 
         # download
         download_root = self.cfg.root / "download"
@@ -1009,6 +1041,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             type(self).__name__,
             self.raw_root,
         )
+        building_marker.unlink()
 
     def get_dataset_builder(self):
         r"""

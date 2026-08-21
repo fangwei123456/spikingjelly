@@ -36,6 +36,59 @@ Module: ``spikingjelly.activation_based.op_counter``.
 - Clarified the basic counting workflow, estimator/module coverage, and the
   boundary between ATen rules and custom ``torch.*`` function rules.
 
+Spiking Model Families
+^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.model``.
+
+- Added QKFormer builders using the existing Q-K attention layer.
+- Added membrane-shortcut MS-ResNet and Max-ResNet builders.
+- Added MaxFormer builders using max-pooling, depth-wise convolution, and the
+  existing SpikingJelly multi-step layers.
+- Added Spike-driven Transformer v1 and its reusable spike-driven self-attention
+  layer.
+
+Bug Fixes
+~~~~~~~~~
+
+Datasets
+^^^^^^^^
+
+Module: ``spikingjelly.datasets``.
+
+- Dataset preparation now leaves a ``.building`` marker after interrupted raw or
+  frame preprocessing instead of silently reusing partial output directories.
+- NPZ loaders now close archives after reading, and SHD event datasets can be
+  used by spawned ``DataLoader`` workers after access in the parent process.
+
+Examples
+^^^^^^^^
+
+Module: ``spikingjelly.activation_based.examples.dsqn``.
+
+- DSQN replay batches now build correctly with NumPy 2.x.
+
+Breaking Changes and Notices
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Model and Example Layout
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Modules: ``spikingjelly.activation_based.model`` and
+``spikingjelly.activation_based.examples``.
+
+- Training helpers and ImageNet/FlexSN training entry points moved out of the
+  model package into ``spikingjelly.activation_based.examples``; imports and
+  module commands using the old ``model.train_*`` paths must be updated.
+- Examples now use one shallow entry per example; shared training code lives in
+  ``spikingjelly.activation_based.examples.common``, and example names use
+  lowercase ``snake_case``.
+- Model package and model-module wildcard exports now focus on complete models
+  and builders; implementation blocks remain available from their model modules.
+- Removed the unused built-in CIFAR10 loader and no-op epoch hooks from the
+  example ``Trainer``; active customization points remain model, preprocessing,
+  output, optimizer, and scheduler hooks.
+
 2.0.0.dev1 - 2026-08-14
 -----------------------
 

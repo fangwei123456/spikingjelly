@@ -75,31 +75,8 @@ SpikingJelly will do the followed work when running these codes:
 #. Check whether the dataset exists. If the dataset exists, check MD5 to ensure the dataset is complete. Then SpikingJelly will extract the original data into the ``extracted`` folder
 #. The sample in DVS128 Gesture is the video that records one actor displaying different gestures under different illumination conditions. Hence, an AER sample contains many gestures and there is also an adjoint csv file to label the time stamp of each gesture. Hence, an AER sample is not a sample with one class but multi-classes. SpikingJelly will use multi-threads to cut and extract each gesture from these files.
 
-Here are the terminal outputs:
-
-.. code:: bash
-
-    The [D:/datasets/DVS128Gesture/download] directory for saving downloaded files already exists, check files...
-    Mkdir [D:/datasets/DVS128Gesture/extract].
-    Extract [D:/datasets/DVS128Gesture/download/DvsGesture.tar.gz] to [D:/datasets/DVS128Gesture/extract].
-    Mkdir [D:/datasets/DVS128Gesture/events_np].
-    Start to convert the origin data from [D:/datasets/DVS128Gesture/extract] to [D:/datasets/DVS128Gesture/events_np] in np.ndarray format.
-    Mkdir [('D:/datasets/DVS128Gesture//events_np//train', 'D:/datasets/DVS128Gesture//events_np//test').
-    Mkdir ['0', '1', '10', '2', '3', '4', '5', '6', '7', '8', '9'] in [D:/datasets/DVS128Gesture/events_np/train] and ['0', '1', '10', '2', '3', '4', '5', '6', '7', '8', '9'] in [D:/datasets/DVS128Gesture/events_np/test].
-    Start the ThreadPoolExecutor with max workers = [8].
-    Start to split [D:/datasets/DVS128Gesture/extract/DvsGesture/user02_fluorescent.aedat] to samples.
-    [D:/datasets/DVS128Gesture/events_np/train/0/user02_fluorescent_0.npz] saved.
-    [D:/datasets/DVS128Gesture/events_np/train/1/user02_fluorescent_0.npz] saved.
-
-    ......
-
-    [D:/datasets/DVS128Gesture/events_np/test/8/user29_lab_0.npz] saved.
-    [D:/datasets/DVS128Gesture/events_np/test/9/user29_lab_0.npz] saved.
-    [D:/datasets/DVS128Gesture/events_np/test/10/user29_lab_0.npz] saved.
-    Used time = [1017.27s].
-    All aedat files have been split to samples and saved into [('D:/datasets/DVS128Gesture//events_np//train', 'D:/datasets/DVS128Gesture//events_np//test')].
-
-We have to wait for a moment because the cutting and extracting are very slow. A ``events_np`` folder will be created and contain the train/test set:
+Cutting and extracting can take some time. On success, an ``events_np`` folder
+contains the train/test set:
 
 .. code:: bash
 
@@ -127,6 +104,10 @@ The output is:
     label 0
 
 where ``event`` is a dictionary with keys ``['t', 'x', 'y', 'p']`` ; ``label`` is the label of the sample. Note that there are 11 classes in DVS128 Gesture.
+The values are independent NumPy arrays and ``t`` is measured in microseconds.
+
+If preparation is interrupted, SpikingJelly leaves a sibling ``.building``
+marker. Clean the partial output directory and remove the marker before retrying.
 
 Get Frame Data
 -----------------------
@@ -146,45 +127,6 @@ SpikingJelly will integrate events to frames when running the followed codes:
 .. code:: python
 
     train_set = DVS128Gesture(root_dir, train=True, data_type='frame', frames_number=20, split_by='number')
-
-The outputs from the terminal are:
-
-.. code:: bash
-
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/0].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/1].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/10].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/2].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/3].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/4].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/5].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/6].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/7].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/8].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/9].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/0].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/1].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/10].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/2].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/3].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/4].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/5].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/6].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/7].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/8].
-    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/9].
-    Start ThreadPoolExecutor with max workers = [8].
-    Start to integrate [D:/datasets/DVS128Gesture/events_np/test/0/user24_fluorescent_0.npz] to frames and save to [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/0].
-    Start to integrate [D:/datasets/DVS128Gesture/events_np/test/0/user24_fluorescent_led_0.npz] to frames and save to [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/0].
-
-    ......
-
-    Frames [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/9/user23_lab_0.npz] saved.Frames [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/9/user23_led_0.npz] saved.
-
-    Used time = [102.11s].
 
 A ``frames_number_20_split_by_number`` folder will be created and contain the Frame data.
 

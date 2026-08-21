@@ -187,18 +187,18 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
 
   s_resnet18 = spiking_resnet.spiking_resnet18(pretrained=True, spiking_neuron=neuron.IFNode, surrogate_function=surrogate.ATan(), detach_reset=True)
 
-使用 ``activation_based.model.train_classify``
-----------------------------------------------
+使用 ``activation_based.examples.common.train_classify``
+----------------------------------------------------------------
 
-:class:`spikingjelly.activation_based.model.train_classify` 是根据 `torchvision 0.12 references <https://github.com/pytorch/vision/tree/release/0.12/references>`_ \
+:class:`spikingjelly.activation_based.examples.common.train_classify` 是根据 `torchvision 0.12 references <https://github.com/pytorch/vision/tree/release/0.12/references>`_ \
 的分类代码进行改动而来，使用这个模块可以很方便的进行训练。
 
-:class:`spikingjelly.activation_based.model.train_classify.Trainer` 提供了较为灵活的训练方式，预留了一些接口给用户改动。\
-例如， :class:`spikingjelly.activation_based.model.train_classify.Trainer.set_optimizer` 定义了如何设置优化器，默认为：
+:class:`spikingjelly.activation_based.examples.common.train_classify.Trainer` 提供了较为灵活的训练方式，预留了一些接口给用户改动。\
+例如， :class:`spikingjelly.activation_based.examples.common.train_classify.Trainer.set_optimizer` 定义了如何设置优化器，默认为：
 
 .. code-block:: python
 
-    # spikingjelly.activation_based.model.train_classify
+    # spikingjelly.activation_based.examples.common.train_classify
     class Trainer:
       # ...
       def set_optimizer(self, args, parameters):
@@ -239,99 +239,12 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
           else:
               return super().set_optimizer(args, parameters)
 
-默认的 :class:`Trainer.get_args_parser <spikingjelly.activation_based.model.train_classify.Trainer.get_args_parser>` 已经包含了较多的参数设置：
+默认的 :class:`Trainer.get_args_parser <spikingjelly.activation_based.examples.common.train_classify.Trainer.get_args_parser>` 已经包含了较多的参数设置：
 
 
 .. code-block:: shell
 
-  (pytorch-env) PS spikingjelly> python -m spikingjelly.activation_based.model.train_classify -h
-
-  usage: train_classify.py [-h] [--data-path DATA_PATH] [--model MODEL] [--device DEVICE] [-b BATCH_SIZE] [--epochs N] [-j N] [--opt OPT] [--lr LR] [--momentum M] [--wd W] [--norm-weight-decay NORM_WEIGHT_DECAY] [--label-smoothing LABEL_SMOOTHING]
-                          [--mixup-alpha MIXUP_ALPHA] [--cutmix-alpha CUTMIX_ALPHA] [--lr-scheduler LR_SCHEDULER] [--lr-warmup-epochs LR_WARMUP_EPOCHS] [--lr-warmup-method LR_WARMUP_METHOD] [--lr-warmup-decay LR_WARMUP_DECAY]                     
-                          [--lr-step-size LR_STEP_SIZE] [--lr-gamma LR_GAMMA] [--output-dir OUTPUT_DIR] [--resume RESUME] [--start-epoch N] [--cache-dataset] [--sync-bn] [--test-only] [--pretrained] [--auto-augment AUTO_AUGMENT]                  
-                          [--random-erase RANDOM_ERASE] [--world-size WORLD_SIZE] [--dist-url DIST_URL] [--model-ema] [--model-ema-steps MODEL_EMA_STEPS] [--model-ema-decay MODEL_EMA_DECAY] [--interpolation INTERPOLATION]                         
-                          [--val-resize-size VAL_RESIZE_SIZE] [--val-crop-size VAL_CROP_SIZE] [--train-crop-size TRAIN_CROP_SIZE] [--clip-grad-norm CLIP_GRAD_NORM] [--ra-sampler] [--ra-reps RA_REPS] [--prototype] [--weights WEIGHTS] [--seed SEED]
-                          [--print-logdir] [--clean] [--disable-pinmemory] [--disable-amp] [--local_rank LOCAL_RANK] [--disable-uda]                                                                                                                  
-                                                                                                                                                                                                                                                     
-  PyTorch Classification Training                                                                                                                                                                                                                      
-                                                                                                                                                                                                                                                      
-  optional arguments:                                                                                                                                                                                                                                  
-    -h, --help            show this help message and exit                                                                                                                                                                                              
-    --data-path DATA_PATH                                                                                                                                                                                                                              
-                          dataset path                                                                                                                                                                                                                 
-    --model MODEL         model name                                                                                                                                                                                                                   
-    --device DEVICE       device (Use cuda or cpu Default: cuda)                                                                                                                                                                                       
-    -b BATCH_SIZE, --batch-size BATCH_SIZE                                                                                                                                                                                                             
-                          images per gpu, the total batch size is $NGPU x batch_size                                                                                                                                                                   
-    --epochs N            number of total epochs to run                                                                                                                                                                                                
-    -j N, --workers N     number of data loading workers (default: 16)                                                                                                                                                                                 
-    --opt OPT             optimizer                                                                                                                                                                                                                    
-    --lr LR               initial learning rate
-    --momentum M          momentum
-    --wd W, --weight-decay W
-                          weight decay (default: 0.)
-    --norm-weight-decay NORM_WEIGHT_DECAY
-                          weight decay for Normalization layers (default: None, same value as --wd)
-    --label-smoothing LABEL_SMOOTHING
-                          label smoothing (default: 0.1)
-    --mixup-alpha MIXUP_ALPHA
-                          mixup alpha (default: 0.2)
-    --cutmix-alpha CUTMIX_ALPHA
-                          cutmix alpha (default: 1.0)
-    --lr-scheduler LR_SCHEDULER
-                          the lr scheduler (default: cosa)
-    --lr-warmup-epochs LR_WARMUP_EPOCHS
-                          the number of epochs to warmup (default: 5)
-    --lr-warmup-method LR_WARMUP_METHOD
-                          the warmup method (default: linear)
-    --lr-warmup-decay LR_WARMUP_DECAY
-                          the decay for lr
-    --lr-step-size LR_STEP_SIZE
-                          decrease lr every step-size epochs
-    --lr-gamma LR_GAMMA   decrease lr by a factor of lr-gamma
-    --output-dir OUTPUT_DIR
-                          path to save outputs
-    --resume RESUME       path of checkpoint. If set to 'latest', it will try to load the latest checkpoint
-    --start-epoch N       start epoch
-    --cache-dataset       Cache the datasets for quicker initialization. It also serializes the transforms
-    --sync-bn             Use sync batch norm
-    --test-only           Only test the model
-    --pretrained          Use pre-trained models from the modelzoo
-    --auto-augment AUTO_AUGMENT
-                          auto augment policy (default: ta_wide)
-    --random-erase RANDOM_ERASE
-                          random erasing probability (default: 0.1)
-    --world-size WORLD_SIZE
-                          number of distributed processes
-    --dist-url DIST_URL   url used to set up distributed training
-    --model-ema           enable tracking Exponential Moving Average of model parameters
-    --model-ema-steps MODEL_EMA_STEPS
-                          the number of iterations that controls how often to update the EMA model (default: 32)
-    --model-ema-decay MODEL_EMA_DECAY
-                          decay factor for Exponential Moving Average of model parameters (default: 0.99998)
-    --interpolation INTERPOLATION
-                          the interpolation method (default: bilinear)
-    --val-resize-size VAL_RESIZE_SIZE
-                          the resize size used for validation (default: 232)
-    --val-crop-size VAL_CROP_SIZE
-                          the central crop size used for validation (default: 224)
-    --train-crop-size TRAIN_CROP_SIZE
-                          the random crop size used for training (default: 176)
-    --clip-grad-norm CLIP_GRAD_NORM
-                          the maximum gradient norm (default None)
-    --ra-sampler          whether to use Repeated Augmentation in training
-    --ra-reps RA_REPS     number of repetitions for Repeated Augmentation (default: 4)
-    --prototype           Use prototype model builders instead those from main area
-    --weights WEIGHTS     the weights enum name to load
-    --seed SEED           the random seed
-    --print-logdir        print the dirs for tensorboard logs and pt files and exit
-    --clean               delete the dirs for tensorboard logs and pt files
-    --disable-pinmemory   not use pin memory in dataloader, which can help reduce memory consumption
-    --disable-amp         not use automatic mixed precision training
-    --local_rank LOCAL_RANK
-                          args for DDP, which should not be set by user
-    --disable-uda         not set 'torch.use_deterministic_algorithms(True)', which can avoid the error raised by some functions that do not have a deterministic implementation
-
+  (pytorch-env) PS spikingjelly> python -m spikingjelly.activation_based.examples.common.train_classify -h
 
 如果想增加参数，仍然可以通过继承的方式实现：
 
@@ -342,7 +255,7 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
           parser = super().get_args_parser()
           parser.add_argument('--do-something', type=str, help="do something")
 
-:class:`Trainer <spikingjelly.activation_based.model.train_classify.Trainer>` 的许多其他函数都可以进行补充修改或覆盖，方法类似，不再赘述。
+:class:`Trainer <spikingjelly.activation_based.examples.common.train_classify.Trainer>` 的许多其他函数都可以进行补充修改或覆盖，方法类似，不再赘述。
 
 对于 ``Trainer`` 及用户自己继承实现的子类，可以通过如下方式调用并进行训练：
 
@@ -357,16 +270,17 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
 
 在ImageNet上训练
 ----------------------------------------------
- ``Trainer`` 默认的数据加载函数 :class:`load_data <spikingjelly.activation_based.model.train_classify.Trainer.load_data>` 加载 ImageNet [#ImageNet]_ 数据集。\
- 结合 :class:`Trainer <spikingjelly.activation_based.model.train_classify.Trainer>` 和 :class:`spikingjelly.activation_based.model.spiking_resnet`，我们可以轻松训练\
+ ``Trainer`` 默认的数据加载函数 :class:`load_ImageNet <spikingjelly.activation_based.examples.common.train_classify.Trainer.load_ImageNet>` 加载 ImageNet [#ImageNet]_ 数据集。\
+ 结合 :class:`Trainer <spikingjelly.activation_based.examples.common.train_classify.Trainer>` 和 :class:`spikingjelly.activation_based.model.spiking_resnet`，我们可以轻松训练\
  大型深度SNN，示例代码如下：
 
 .. code-block:: python
 
-  # spikingjelly.activation_based.model.train_imagenet_example
+  # spikingjelly.activation_based.examples.train_imagenet
   import torch
   from spikingjelly.activation_based import surrogate, neuron, functional
-  from spikingjelly.activation_based.model import spiking_resnet, train_classify
+  from spikingjelly.activation_based.model import spiking_resnet
+  from spikingjelly.activation_based.examples.common import train_classify
 
 
   class SResNetTrainer(train_classify.Trainer):
@@ -408,18 +322,18 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
       args = trainer.get_args_parser().parse_args()
       trainer.main(args)
 
-代码位于 :class:`spikingjelly.activation_based.model.train_imagenet_example`，可以直接运行。
+代码位于 :class:`spikingjelly.activation_based.examples.train_imagenet`，可以直接运行。
 在单卡上进行训练：
 
 .. code-block:: shell
 
-  python -m spikingjelly.activation_based.model.train_imagenet_example --T 4 --model spiking_resnet18 --data-path /datasets/ImageNet0_03125 --batch-size 64 --lr 0.1 --lr-scheduler cosa --epochs 90
+  python -m spikingjelly.activation_based.examples.train_imagenet --T 4 --model spiking_resnet18 --data-path /datasets/ImageNet0_03125 --batch-size 64 --lr 0.1 --lr-scheduler cosa --epochs 90
 
 在多卡上进行训练：
 
 .. code-block:: shell
 
-  torchrun --nproc_per_node=2 -m spikingjelly.activation_based.model.train_imagenet_example --T 4 --model spiking_resnet18 --data-path /datasets/ImageNet0_03125 --batch-size 64 --lr 0.1 --lr-scheduler cosa --epochs 90
+  torchrun --nproc_per_node=2 -m spikingjelly.activation_based.examples.train_imagenet --T 4 --model spiking_resnet18 --data-path /datasets/ImageNet0_03125 --batch-size 64 --lr 0.1 --lr-scheduler cosa --epochs 90
 
 .. [#ResNet] He, Kaiming, et al. "Deep residual learning for image recognition." Proceedings of the IEEE conference on computer vision and pattern recognition. 2016.
 

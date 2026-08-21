@@ -250,9 +250,7 @@ def main():
     if args.cupy:
         out_dir += "_cupy"
 
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
-        print(f"Mkdir {out_dir}.")
+    os.makedirs(out_dir, exist_ok=True)
 
     writer = SummaryWriter(out_dir, purge_step=start_epoch)
     with open(os.path.join(out_dir, "args.txt"), "w", encoding="utf-8") as args_txt:

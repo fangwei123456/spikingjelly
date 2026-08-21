@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 import math
 
 import h5py
@@ -94,7 +95,6 @@ def _integrate_events_file_to_frames_file_by_fixed_frames_number(
     split_by: str,
     frames_num: int,
     W: int,
-    print_save: bool = False,
 ) -> None:
     events = {"t": h5_file["spikes"]["times"][i], "x": h5_file["spikes"]["units"][i]}
     label = h5_file["labels"][i]
@@ -105,8 +105,7 @@ def _integrate_events_file_to_frames_file_by_fixed_frames_number(
             events, split_by, frames_num, W
         ),
     )
-    if print_save:
-        logger.debug("Frames [{}] saved.", fname)
+    logger.debug("Frames [{}] saved.", fname)
 
 
 def _integrate_events_by_fixed_duration(
@@ -117,7 +116,7 @@ def _integrate_events_by_fixed_duration(
     t = t - t[0]
     N = t.size
 
-    frames_num = int(math.ceil(t[-1] / duration))
+    frames_num = math.ceil(t[-1] / duration)
     frames = np.zeros([frames_num, W])
     frame_index = t // duration
     left = 0
@@ -137,7 +136,6 @@ def _integrate_events_file_to_frames_file_by_fixed_duration(
     output_dir: str,
     duration: int,
     W: int,
-    print_save: bool = False,
 ) -> None:
     events = {"t": h5_file["spikes"]["times"][i], "x": h5_file["spikes"]["units"][i]}
     label = h5_file["labels"][i]
@@ -146,14 +144,7 @@ def _integrate_events_file_to_frames_file_by_fixed_duration(
     frames = _integrate_events_by_fixed_duration(events, duration, W)
 
     utils.np_savez(fname, frames=frames)
-    if print_save:
-        logger.debug("Frames [{}] saved.", fname)
-    return frames.shape[0]
-
-
-class NullBuilder(EventBuilder):
-    def get_loader(self) -> Callable:
-        return lambda x: x
+    logger.debug("Frames [{}] saved.", fname)
 
 
 class _SHDFrameBuilder(NeuromorphicDatasetBuilder):
@@ -185,18 +176,10 @@ class _SHDFrameBuilder(NeuromorphicDatasetBuilder):
             with h5py.File(
                 self.raw_root / f"{self.dataset_name}_{split}.h5"
             ) as h5_file:
-
-                def tasks():
-                    for i in range(len(h5_file["labels"])):
-                        logger.debug(
-                            "Start to integrate [{}]-th {} sample to frames and save to [{}].",
-                            i,
-                            split,
-                            processed_root,
-                        )
-                        yield h5_file, i, processed_root
-
-                self._run_preprocess_tasks(process, tasks())
+                tasks = (
+                    (h5_file, i, processed_root) for i in range(len(h5_file["labels"]))
+                )
+                self._run_preprocess_tasks(process, tasks)
 
     def get_loader(self):
         return utils.load_npz_frames
@@ -204,18 +187,14 @@ class _SHDFrameBuilder(NeuromorphicDatasetBuilder):
 
 class SHDFrameFixedNumberBuilder(_SHDFrameBuilder):
     def build_impl(self):
-        def process(h5_file, sample_index, processed_root):
-            _integrate_events_file_to_frames_file_by_fixed_frames_number(
-                h5_file,
-                sample_index,
-                processed_root,
-                self.cfg.split_by,
-                self.cfg.frames_number,
-                self.W,
-                True,
+        self._build_samples(
+            partial(
+                _integrate_events_file_to_frames_file_by_fixed_frames_number,
+                split_by=self.cfg.split_by,
+                frames_num=self.cfg.frames_number,
+                W=self.W,
             )
-
-        self._build_samples(process)
+        )
 
     @property
     def processed_root(self) -> Path:
@@ -227,17 +206,13 @@ class SHDFrameFixedNumberBuilder(_SHDFrameBuilder):
 
 class SHDFrameFixedDurationBuilder(_SHDFrameBuilder):
     def build_impl(self):
-        def process(h5_file, sample_index, processed_root):
-            _integrate_events_file_to_frames_file_by_fixed_duration(
-                h5_file,
-                sample_index,
-                processed_root,
-                self.cfg.duration,
-                self.W,
-                True,
+        self._build_samples(
+            partial(
+                _integrate_events_file_to_frames_file_by_fixed_duration,
+                duration=self.cfg.duration,
+                W=self.W,
             )
-
-        self._build_samples(process)
+        )
 
     @property
     def processed_root(self) -> Path:
@@ -401,26 +376,21 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
     def get_dataset_builder(self):
         if self.cfg.data_type == "event":
             # prepare for manual __getitem__
-            h5_file = self.raw_root / (
+            self.h5_file_path = self.raw_root / (
                 "shd_train.h5" if self.cfg.train else "shd_test.h5"
             )
-            self.h5_file = h5py.File(h5_file)
-            self.length = len(self.h5_file["labels"])
-            return NullBuilder(self.cfg, self.raw_root)
+            self.h5_file = None
+            self.h5_file_pid = None
+            with h5py.File(self.h5_file_path) as h5_file:
+                self.length = len(h5_file["labels"])
+            return EventBuilder(self.cfg, self.raw_root)
 
         _, W = self.get_H_W()
         if self.cfg.frames_number is not None:
             return SHDFrameFixedNumberBuilder(self.cfg, self.raw_root, W)
-        elif self.cfg.duration is not None:
+        if self.cfg.duration is not None:
             return SHDFrameFixedDurationBuilder(self.cfg, self.raw_root, W)
-        elif self.cfg.custom_integrate_function is not None:
-            return SHDFrameCustomIntegrateBuilder(self.cfg, self.raw_root, W)
-        else:
-            # not reachable
-            raise NotImplementedError(
-                "Please specify the frames number or duration or "
-                "custom integrate function."
-            )
+        return SHDFrameCustomIntegrateBuilder(self.cfg, self.raw_root, W)
 
     @classmethod
     def get_H_W(cls) -> Tuple:
@@ -481,6 +451,11 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
         if self.cfg.data_type != "event":
             return super().__getitem__(index)
 
+        if self.h5_file_pid != os.getpid():
+            if self.h5_file is not None:
+                self.h5_file.close()
+            self.h5_file = h5py.File(self.h5_file_path)
+            self.h5_file_pid = os.getpid()
         events = {
             "t": self.h5_file["spikes"]["times"][index],
             "x": self.h5_file["spikes"]["units"][index],
@@ -491,6 +466,12 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
         if self.target_transform is not None:
             label = self.target_transform(label)
         return events, label
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["h5_file"] = None
+        state["h5_file_pid"] = None
+        return state
 
 
 class SpikingSpeechCommands(NeuromorphicDatasetFolder):
@@ -638,10 +619,12 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
     def get_dataset_builder(self):
         if self.cfg.data_type == "event":
             # prepare for manual __getitem__
-            h5_file = self.raw_root / f"ssc_{self.split}.h5"
-            self.h5_file = h5py.File(h5_file)
-            self.length = len(self.h5_file["labels"])
-            return NullBuilder(self.cfg, self.raw_root)
+            self.h5_file_path = self.raw_root / f"ssc_{self.split}.h5"
+            self.h5_file = None
+            self.h5_file_pid = None
+            with h5py.File(self.h5_file_path) as h5_file:
+                self.length = len(h5_file["labels"])
+            return EventBuilder(self.cfg, self.raw_root)
 
         _, W = self.get_H_W()
         if self.cfg.frames_number is not None:
@@ -653,7 +636,7 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
                 splits=self.splits,
                 n_classes=SSC_N_CLASSES,
             )
-        elif self.cfg.duration is not None:
+        if self.cfg.duration is not None:
             return SHDFrameFixedDurationBuilder(
                 self.cfg,
                 self.raw_root,
@@ -662,21 +645,14 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
                 splits=self.splits,
                 n_classes=SSC_N_CLASSES,
             )
-        elif self.cfg.custom_integrate_function is not None:
-            return SHDFrameCustomIntegrateBuilder(
-                self.cfg,
-                self.raw_root,
-                W,
-                dataset_name="ssc",
-                splits=self.splits,
-                n_classes=SSC_N_CLASSES,
-            )
-        else:
-            # not reachable
-            raise NotImplementedError(
-                "Please specify the frames number or duration or "
-                "custom integrate function."
-            )
+        return SHDFrameCustomIntegrateBuilder(
+            self.cfg,
+            self.raw_root,
+            W,
+            dataset_name="ssc",
+            splits=self.splits,
+            n_classes=SSC_N_CLASSES,
+        )
 
     @classmethod
     def get_H_W(cls) -> Tuple:
@@ -737,6 +713,11 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
         if self.cfg.data_type != "event":
             return super().__getitem__(index)
 
+        if self.h5_file_pid != os.getpid():
+            if self.h5_file is not None:
+                self.h5_file.close()
+            self.h5_file = h5py.File(self.h5_file_path)
+            self.h5_file_pid = os.getpid()
         events = {
             "t": self.h5_file["spikes"]["times"][index],
             "x": self.h5_file["spikes"]["units"][index],
@@ -747,3 +728,9 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
         if self.target_transform is not None:
             label = self.target_transform(label)
         return events, label
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["h5_file"] = None
+        state["h5_file_pid"] = None
+        return state

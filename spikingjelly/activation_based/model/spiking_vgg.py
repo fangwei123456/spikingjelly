@@ -1,7 +1,9 @@
+from copy import deepcopy
+
 import torch
 import torch.nn as nn
-from copy import deepcopy
-from .. import functional, neuron, layer
+
+from .. import layer
 
 try:
     from torchvision.models.utils import load_state_dict_from_url
@@ -64,7 +66,7 @@ class SpikingVGG(nn.Module):
 
         Spiking VGG network. Inherits from :class:`torchvision.models.VGG` with activations replaced by spiking neurons.
         """
-        super(SpikingVGG, self).__init__()
+        super().__init__()
         self.features = self.make_layers(
             cfg=cfg,
             batch_norm=batch_norm,
@@ -129,18 +131,6 @@ class SpikingVGG(nn.Module):
         return nn.Sequential(*layers)
 
 
-def sequential_forward(sequential, x_seq):
-    assert isinstance(sequential, nn.Sequential)
-    out = x_seq
-    for i in range(len(sequential)):
-        m = sequential[i]
-        if isinstance(m, neuron.BaseNode):
-            out = m(out)
-        else:
-            out = functional.seq_to_ann_forward(out, m)
-    return out
-
-
 cfgs = {
     "A": [64, "M", 128, "M", 256, 256, "M", 512, 512, "M", 512, 512, "M"],
     "B": [64, 64, "M", 128, 128, "M", 256, 256, "M", 512, 512, "M", 512, 512, "M"],
@@ -202,10 +192,7 @@ def _spiking_vgg(
 ):
     if pretrained:
         kwargs["init_weights"] = False
-    if batch_norm:
-        norm_layer = norm_layer
-    else:
-        norm_layer = None
+    norm_layer = norm_layer if batch_norm else None
     model = SpikingVGG(
         cfg=cfgs[cfg],
         batch_norm=batch_norm,

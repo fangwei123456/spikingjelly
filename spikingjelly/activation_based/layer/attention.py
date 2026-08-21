@@ -2,7 +2,9 @@ import torch
 import torch.nn as nn
 
 from .. import base, neuron
+from .bn import BatchNorm2d
 from .container import SeqToANNContainer
+from .stateless_wrapper import Conv2d
 
 
 __all__ = [
@@ -12,6 +14,7 @@ __all__ = [
     "QKAttention",
     "TokenQKAttention",
     "ChannelQKAttention",
+    "SpikeDrivenSelfAttention",
 ]
 
 
@@ -600,3 +603,184 @@ class ChannelQKAttention(QKAttention):
         :type backend: str
         """
         super().__init__(dim, num_heads, qka_type="channel", backend=backend)
+
+
+class SpikeDrivenSelfAttention(nn.Module, base.MultiStepModule):
+    def __init__(
+        self, dim: int, num_heads: int = 8, backend: str = "torch"
+    ) -> None:
+        r"""
+        **API Language** - :ref:`中文 <SpikeDrivenSelfAttention.__init__-cn>` | :ref:`English <SpikeDrivenSelfAttention.__init__-en>`
+
+        ----
+
+        .. _SpikeDrivenSelfAttention.__init__-cn:
+
+        * **中文**
+
+        Spike-driven Transformer v1 的 Spike-driven Self-Attention。脉冲化后的
+        Q、K、V 使用逐元素乘法与 token 求和，避免稠密 softmax attention。
+        输入和输出均为 ``[T, N, C, H, W]`` 浮点张量，且 dtype 和 device 保持不变。
+
+        :param dim: 通道数 ``C``，必须能被 ``num_heads`` 整除
+        :type dim: int
+        :param num_heads: attention head 数
+        :type num_heads: int
+        :param backend: 内部脉冲神经元使用的后端
+        :type backend: str
+        :raises ValueError: ``dim`` 不能被 ``num_heads`` 整除
+
+        ----
+
+        .. _SpikeDrivenSelfAttention.__init__-en:
+
+        * **English**
+
+        Spike-driven Self-Attention from Spike-driven Transformer v1. Spiking Q,
+        K, and V use element-wise products and token reduction instead of dense
+        softmax attention. Input and output are floating-point tensors shaped
+        ``[T, N, C, H, W]`` with unchanged dtype and device.
+
+        :param dim: number of channels ``C``; must be divisible by ``num_heads``
+        :type dim: int
+        :param num_heads: number of attention heads
+        :type num_heads: int
+        :param backend: backend used by the internal spiking neurons
+        :type backend: str
+        :raises ValueError: if ``dim`` is not divisible by ``num_heads``
+
+        **参考文献 | Reference**
+
+        `Spike-Driven Transformer
+        <https://openreview.net/forum?id=9FmolyOHi5>`_
+        """
+        super().__init__()
+        if dim % num_heads:
+            raise ValueError(f"dim {dim} should be divided by num_heads {num_heads}.")
+        self.dim = dim
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.shortcut_lif = neuron.LIFNode(
+            tau=2.0, detach_reset=True, step_mode="m", backend=backend
+        )
+        self.q_conv = Conv2d(dim, dim, 1, bias=False, step_mode="m")
+        self.q_bn = BatchNorm2d(dim, step_mode="m")
+        self.q_lif = neuron.LIFNode(
+            tau=2.0, detach_reset=True, step_mode="m", backend=backend
+        )
+        self.k_conv = Conv2d(dim, dim, 1, bias=False, step_mode="m")
+        self.k_bn = BatchNorm2d(dim, step_mode="m")
+        self.k_lif = neuron.LIFNode(
+            tau=2.0, detach_reset=True, step_mode="m", backend=backend
+        )
+        self.v_conv = Conv2d(dim, dim, 1, bias=False, step_mode="m")
+        self.v_bn = BatchNorm2d(dim, step_mode="m")
+        self.v_lif = neuron.LIFNode(
+            tau=2.0, detach_reset=True, step_mode="m", backend=backend
+        )
+        self.attn_lif = neuron.LIFNode(
+            tau=2.0,
+            v_threshold=0.5,
+            detach_reset=True,
+            step_mode="m",
+            backend=backend,
+        )
+        self.proj_conv = Conv2d(dim, dim, 1, step_mode="m")
+        self.proj_bn = BatchNorm2d(dim, step_mode="m")
+
+    @property
+    def backend(self) -> str:
+        r"""
+        **API Language** - :ref:`中文 <SpikeDrivenSelfAttention.backend-cn>` | :ref:`English <SpikeDrivenSelfAttention.backend-en>`
+
+        ----
+
+        .. _SpikeDrivenSelfAttention.backend-cn:
+
+        * **中文**
+
+        内部脉冲神经元的后端。赋值会同时更新所有内部脉冲神经元。
+
+        :return: 后端名称
+        :rtype: str
+
+        ----
+
+        .. _SpikeDrivenSelfAttention.backend-en:
+
+        * **English**
+
+        Backend of the internal spiking neurons. Assignment updates every internal
+        spiking neuron.
+
+        :return: backend name
+        :rtype: str
+        """
+        return self.q_lif.backend
+
+    @backend.setter
+    def backend(self, value: str) -> None:
+        for module in (
+            self.shortcut_lif,
+            self.q_lif,
+            self.k_lif,
+            self.v_lif,
+            self.attn_lif,
+        ):
+            module.backend = value
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        r"""
+        **API Language** - :ref:`中文 <SpikeDrivenSelfAttention.forward-cn>` | :ref:`English <SpikeDrivenSelfAttention.forward-en>`
+
+        ----
+
+        .. _SpikeDrivenSelfAttention.forward-cn:
+
+        * **中文**
+
+        :param x: 输入张量，形状为 ``[T, N, C, H, W]``，其中
+            ``C == dim``
+        :type x: torch.Tensor
+        :return: 与输入形状、dtype 和 device 相同的张量
+        :rtype: torch.Tensor
+        :raises ValueError: 输入不是五维张量
+
+        ----
+
+        .. _SpikeDrivenSelfAttention.forward-en:
+
+        * **English**
+
+        :param x: input tensor shaped ``[T, N, C, H, W]``, where
+            ``C == dim``
+        :type x: torch.Tensor
+        :return: tensor with the same shape, dtype, and device as the input
+        :rtype: torch.Tensor
+        :raises ValueError: if the input is not five-dimensional
+        """
+        if x.ndim != 5:
+            raise ValueError(
+                f"expected 5D input [T, N, C, H, W], but got {x.shape}"
+            )
+        T, N, C, H, W = x.shape
+        identity = x
+        x = self.shortcut_lif(x)
+        q = self.q_lif(self.q_bn(self.q_conv(x)))
+        k = self.k_lif(self.k_bn(self.k_conv(x)))
+        v = self.v_lif(self.v_bn(self.v_conv(x)))
+
+        def split_heads(value: torch.Tensor) -> torch.Tensor:
+            value = value.flatten(3).transpose(-1, -2)
+            return value.reshape(T, N, H * W, self.num_heads, self.head_dim).permute(
+                0, 1, 3, 2, 4
+            )
+
+        q, k, v = split_heads(q), split_heads(k), split_heads(v)
+        kv = self.attn_lif((k * v).sum(dim=-2, keepdim=True))
+        x = q * kv
+        x = x.transpose(3, 4).reshape(T, N, C, H, W)
+        return self.proj_bn(self.proj_conv(x)) + identity
+
+    def extra_repr(self) -> str:
+        return f"dim={self.dim}, num_heads={self.num_heads}, backend={self.backend}"
