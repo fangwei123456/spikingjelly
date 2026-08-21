@@ -53,11 +53,10 @@ class _MaxEmbedStage(nn.Module):
         )
         self.bn2 = layer.BatchNorm2d(out_channels, step_mode="m")
         self.lif2 = neuron.LIFNode(step_mode="m", backend=backend)
-        self.shortcut_pool = layer.MaxPool2d(3, stride=2, padding=1, step_mode="m")
         self.shortcut = nn.Sequential(
             layer.Conv2d(in_channels, out_channels, 1, stride=1, step_mode="m"),
             layer.BatchNorm2d(out_channels, step_mode="m"),
-            self.shortcut_pool,
+            layer.MaxPool2d(3, stride=2, padding=1, step_mode="m"),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

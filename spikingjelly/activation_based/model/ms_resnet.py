@@ -212,7 +212,7 @@ class MSResNet(nn.Module):
         if len(stage_channels) != len(layers):
             raise ValueError("stage_channels must match layers")
         self.T = T
-        self.in_channels = base_channels
+        self.inplanes = base_channels
         self.backend = backend
         self.stem = nn.Sequential(
             layer.Conv2d(
@@ -245,16 +245,16 @@ class MSResNet(nn.Module):
 
     def _make_layer(self, out_channels: int, blocks: int, stride: int) -> nn.Sequential:
         downsample = None
-        if stride != 1 or self.in_channels != out_channels:
+        if stride != 1 or self.inplanes != out_channels:
             downsample = nn.Sequential(
-                _conv1x1(self.in_channels, out_channels, stride),
+                _conv1x1(self.inplanes, out_channels, stride),
                 layer.BatchNorm2d(out_channels, step_mode="m"),
             )
         block_type = self._transition_block_type if stride != 1 else self._block_type
         layers = [
-            block_type(self.in_channels, out_channels, stride, self.backend, downsample)
+            block_type(self.inplanes, out_channels, stride, self.backend, downsample)
         ]
-        self.in_channels = out_channels
+        self.inplanes = out_channels
         layers.extend(
             self._block_type(out_channels, out_channels, 1, self.backend, None)
             for _ in range(1, blocks)
