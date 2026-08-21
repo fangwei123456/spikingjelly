@@ -452,6 +452,8 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
             return super().__getitem__(index)
 
         if self.h5_file_pid != os.getpid():
+            if self.h5_file is not None:
+                self.h5_file.close()
             self.h5_file = h5py.File(self.h5_file_path)
             self.h5_file_pid = os.getpid()
         events = {
@@ -712,6 +714,8 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
             return super().__getitem__(index)
 
         if self.h5_file_pid != os.getpid():
+            if self.h5_file is not None:
+                self.h5_file.close()
             self.h5_file = h5py.File(self.h5_file_path)
             self.h5_file_pid = os.getpid()
         events = {

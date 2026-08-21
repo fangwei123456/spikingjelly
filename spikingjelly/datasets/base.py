@@ -247,7 +247,7 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         if self.processed_root.exists():
             logger.info("The directory [{}] already exists.", self.processed_root)
         else:
-            building_marker.touch()
+            building_marker.touch(exist_ok=False)
             self.processed_root.mkdir()
             logger.info("Mkdir [{}].", self.processed_root)
             self.build_impl()
@@ -996,6 +996,8 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         if self.raw_root.exists():
             return
 
+        building_marker.touch(exist_ok=False)
+
         # download
         download_root = self.cfg.root / "download"
         if download_root.exists():
@@ -1008,8 +1010,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             download_root.mkdir()
             logger.info("Mkdir [{}] to save downloaded files.", download_root)
             self._download_all_files(download_root)
-
-        building_marker.touch()
 
         # extract
         extract_root = self.cfg.root / "extract"

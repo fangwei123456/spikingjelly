@@ -216,7 +216,7 @@ class SpeechCommands(Dataset):
                     test_walker = {line.rstrip("\n") for line in f}
 
                 walker -= val_walker | test_walker
-                self._walker = list(walker)
+                self._walker = sorted(walker)
 
                 with open(record, "w") as f:
                     f.write("\n".join(self._walker))

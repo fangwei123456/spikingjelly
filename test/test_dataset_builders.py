@@ -219,6 +219,10 @@ def test_shd_event_dataset_works_with_spawn_workers(tmp_path):
 
     dataset = SpikingHeidelbergDigits(tmp_path, train=True, data_type="event")
     dataset[0]
+    old_h5_file = dataset.h5_file
+    dataset.h5_file_pid = -1
+    dataset[0]
+    assert not old_h5_file.id.valid
     samples = list(
         DataLoader(
             dataset,
