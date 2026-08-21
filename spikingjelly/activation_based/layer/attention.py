@@ -245,7 +245,7 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
         return self.relu(out).transpose(0, 1)
 
 
-class SpikingSelfAttention(nn.Module, base.MultiStepModule):
+class SpikingSelfAttention(nn.Module):
     def __init__(self, dim, num_heads=8, backend: str = "torch"):
         """
         **API Language** - :ref:`中文 <SpikingSelfAttention.__init__-cn>` | :ref:`English <SpikingSelfAttention.__init__-en>`
@@ -390,7 +390,7 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         return f"dim={self.dim}, num_heads={self.num_heads}, backend={self.backend}"
 
 
-class QKAttention(nn.Module, base.MultiStepModule):
+class QKAttention(nn.Module):
     def __init__(
         self,
         dim: int,
@@ -605,7 +605,7 @@ class ChannelQKAttention(QKAttention):
         super().__init__(dim, num_heads, qka_type="channel", backend=backend)
 
 
-class SpikeDrivenSelfAttention(nn.Module, base.MultiStepModule):
+class SpikeDrivenSelfAttention(nn.Module):
     def __init__(
         self, dim: int, num_heads: int = 8, backend: str = "torch"
     ) -> None:

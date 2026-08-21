@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from .. import base, functional, layer, neuron
+from .. import functional, layer, neuron
 from ..layer.attention import SpikingSelfAttention
 
 __all__ = [
@@ -100,7 +100,7 @@ class SpikformerConv2dBN(nn.Module):
         return tuple(self.block.children())
 
 
-class SpikformerConv2dBNLIF(nn.Module, base.MultiStepModule):
+class SpikformerConv2dBNLIF(nn.Module):
     def __init__(
         self,
         in_channels: int,
@@ -209,7 +209,7 @@ class SpikformerConv2dBNLIF(nn.Module, base.MultiStepModule):
         return self.conv_bn, self.neuron
 
 
-class SpikformerPatchStem(nn.Module, base.MultiStepModule):
+class SpikformerPatchStem(nn.Module):
     def __init__(
         self,
         img_size_h: int = 224,
@@ -348,7 +348,7 @@ class SpikformerPatchStem(nn.Module, base.MultiStepModule):
         return x_seq + residual
 
 
-class SpikformerMLP(nn.Module, base.MultiStepModule):
+class SpikformerMLP(nn.Module):
     def __init__(
         self,
         in_features: int,
@@ -444,7 +444,7 @@ class SpikformerMLP(nn.Module, base.MultiStepModule):
         return self.fc1, self.neuron1, self.fc2, self.neuron2
 
 
-class SpikformerBlock(nn.Module, base.MultiStepModule):
+class SpikformerBlock(nn.Module):
     def __init__(
         self,
         dim: int,
@@ -537,7 +537,7 @@ class SpikformerBlock(nn.Module, base.MultiStepModule):
         return x_tokens.reshape(T, N, C, H, W).contiguous()
 
 
-class Spikformer(nn.Module, base.MultiStepModule):
+class Spikformer(nn.Module):
     def __init__(
         self,
         T: int = 4,

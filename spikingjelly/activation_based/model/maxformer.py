@@ -60,6 +60,7 @@ class _MaxEmbedStage(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # The paper's Embed_Max feeds the same spike tensor to both branches.
         x = self.lif1(x)
         identity = self.shortcut(x)
         x = self.pool(self.bn1(self.conv1(x)))
@@ -191,6 +192,7 @@ class MaxFormer(nn.Module):
         ``forward`` 接收与模型参数同设备、同浮点类型的 ``[N, C, H, W]`` 图像或
         ``[T, N, C, H, W]`` 序列，并返回 ``[N, num_classes]`` 分类结果。静态图像
         会沿时间维重复 ``T`` 次。
+        处理相互独立的输入序列时，应调用 :func:`reset_net <spikingjelly.activation_based.functional.net_config.reset_net>` 重置网络状态。
 
         :param T: 静态图像输入的仿真时间步数
         :type T: int
@@ -221,6 +223,8 @@ class MaxFormer(nn.Module):
         image ``[N, C, H, W]`` or sequence ``[T, N, C, H, W]`` on the same device
         and with the same dtype as the model parameters, and returns logits shaped
         ``[N, num_classes]``. A static image is repeated for ``T`` time steps.
+        Call :func:`reset_net <spikingjelly.activation_based.functional.net_config.reset_net>`
+        between independent input sequences.
 
         :param T: number of simulation steps used for static images
         :type T: int

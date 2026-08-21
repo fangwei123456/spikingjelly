@@ -37,6 +37,8 @@ Module: `spikingjelly.activation_based.model`.
   existing SpikingJelly multi-step layers.
 - Added Spike-driven Transformer v1 and its reusable spike-driven self-attention
   layer.
+- The new model classes and builders are available directly from
+  `spikingjelly.activation_based.model`.
 
 ### Bug Fixes
 
@@ -70,6 +72,8 @@ Modules: `spikingjelly.activation_based.model` and
   lowercase `snake_case`.
 - Model package and model-module wildcard exports now focus on complete models
   and builders; implementation blocks remain available from their model modules.
+- Composite Spikformer and attention modules are plain `nn.Module` objects;
+  step-mode configuration remains on their atomic child layers.
 - Removed the unused built-in CIFAR10 loader and no-op epoch hooks from the
   example `Trainer`; active customization points remain model, preprocessing,
   output, optimizer, and scheduler hooks.

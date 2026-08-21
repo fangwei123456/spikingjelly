@@ -2,7 +2,7 @@ import copy
 
 import torch
 
-from spikingjelly.activation_based import functional, layer, surrogate
+from spikingjelly.activation_based import base, functional, layer, model, surrogate
 from spikingjelly.activation_based.model.maxformer import MaxFormer
 from spikingjelly.activation_based.model.ms_resnet import MaxResNet, MSResNet
 from spikingjelly.activation_based.model.qkformer import QKFormer
@@ -19,8 +19,28 @@ def _train_step(model):
     assert any(parameter.grad is not None for parameter in model.parameters())
 
 
+def test_model_package_exports_new_models_and_builders():
+    expected = {
+        "MSResNet",
+        "MaxFormer",
+        "MaxResNet",
+        "QKFormer",
+        "SpikeDrivenTransformer",
+        "max_resnet18",
+        "maxformer_10_384",
+        "ms_resnet18",
+        "ms_resnet34",
+        "qkformer_10_384",
+        "sdt_8_384",
+    }
+
+    assert expected <= set(model.__all__)
+
+
 def test_spike_driven_self_attention_preserves_feature_shape():
     attention = layer.SpikeDrivenSelfAttention(dim=8, num_heads=2)
+    assert not isinstance(attention, base.StepModule)
+    assert isinstance(attention.q_lif, base.StepModule)
     x = torch.randn(2, 2, 8, 4, 4)
     y = attention(x)
     assert y.shape == x.shape
@@ -37,6 +57,8 @@ def test_qkformer_tiny_forward_and_backward():
         depths=(1, 1, 1),
     )
     assert isinstance(model.stage1[0].attn, layer.QKAttention)
+    assert not isinstance(model.stage1[0].attn, base.StepModule)
+    assert not isinstance(model.stage3[0].attn, base.StepModule)
     _train_step(model)
 
 

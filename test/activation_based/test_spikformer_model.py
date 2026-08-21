@@ -1,6 +1,6 @@
 import torch
 
-from spikingjelly.activation_based import functional, neuron
+from spikingjelly.activation_based import base, functional, neuron
 from spikingjelly.activation_based.model import (
     Spikformer,
     spikformer_cifar10,
@@ -33,6 +33,15 @@ def test_spikformer_forward_accepts_image_and_sequence_inputs():
         depths=2,
         backend="torch",
     ).eval()
+
+    assert not isinstance(model, base.StepModule)
+    assert not isinstance(model.patch_embed, base.StepModule)
+    assert not isinstance(model.patch_embed.stages[0], base.StepModule)
+    assert not isinstance(model.blocks[0], base.StepModule)
+    assert not isinstance(model.blocks[0].mlp, base.StepModule)
+    assert isinstance(model.patch_embed.stages[0].neuron, base.StepModule)
+    functional.set_step_mode(model, "m")
+    assert model.patch_embed.stages[0].neuron.step_mode == "m"
 
     x_img = torch.randn(3, 3, 64, 64)
     _reset_net(model)

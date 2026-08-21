@@ -64,6 +64,11 @@ You may want to directly sync your virtual environment through `uv sync --extra 
 
 New code should be readable, **well-documented**, and maintainable. Public APIs should include clear docstrings. Please follow the docstring style of other modules in SpikingJelly.
 
+In SpikingJelly's own code, `StepModule` is normally an atomic step-mode leaf:
+networks, blocks, and attention compositions remain plain `nn.Module` objects.
+Explicit step-mode containers and modules that own temporal state and dispatch
+are exceptions. This rule does not restrict user-defined modules.
+
 Before committing, run `uv format --preview-features format` at the project root.
 When changing production diagnostics, also run
 `uv run python tools/check_logging_policy.py`.
