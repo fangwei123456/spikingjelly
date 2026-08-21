@@ -274,7 +274,7 @@ def import_from_nir(
     graph to a SpikingJelly model. The function automatically maps NIR nodes to
     corresponding SpikingJelly modules (e.g., Linear, convolution, and
     IF/LIF/CubaLIF neurons) and returns a runnable
-    :class:`fx.GraphModule <https://docs.pytorch.org/docs/stable/fx.html#torch.fx.GraphModule>`.
+    `fx.GraphModule <https://docs.pytorch.org/docs/stable/fx.html#torch.fx.GraphModule>`_.
     Its forward pass returns ``(output, state)``. Passing ``state=None`` starts
     from the initial state; pass the previously returned ``state`` to continue.
 

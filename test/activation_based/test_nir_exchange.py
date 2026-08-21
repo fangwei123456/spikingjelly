@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -134,7 +135,10 @@ def test_export_preserves_memories():
     nir_exchange.export_to_nir(net, x)
 
     after = list(base.memories(net))
-    assert all(torch.equal(x, y) for x, y in zip(before, after))
+    assert all(
+        torch.equal(expected, actual)
+        for expected, actual in zip(before, after, strict=True)
+    )
 
 
 def test_export_restores_memories_when_tracing_fails():
@@ -190,7 +194,7 @@ def test_rejects_invalid_nir_parameters():
             v_reset=np.zeros(2),
         )
     )
-    with pytest.raises(ValueError, match="nir.IF.r must be uniform"):
+    with pytest.raises(ValueError, match=re.escape("nir.IF.r must be uniform")):
         nir_exchange.import_from_nir(heterogeneous_r)
 
     incompatible_r = nir.NIRGraph.from_list(
@@ -200,7 +204,7 @@ def test_rejects_invalid_nir_parameters():
             v_reset=np.zeros(2),
         )
     )
-    with pytest.raises(ValueError, match="nir.IF.r must equal"):
+    with pytest.raises(ValueError, match=re.escape("nir.IF.r must equal")):
         nir_exchange.import_from_nir(incompatible_r)
 
     invalid_lif = nir.NIRGraph.from_list(
@@ -263,7 +267,9 @@ def test_rejects_heterogeneous_cuba_lif_parameters(field: str, values: np.ndarra
     )
     setattr(node, field, values)
 
-    with pytest.raises(ValueError, match=rf"nir.CubaLIF.{field} must be uniform"):
+    with pytest.raises(
+        ValueError, match=re.escape(f"nir.CubaLIF.{field} must be uniform")
+    ):
         nir_exchange.import_from_nir(nir.NIRGraph.from_list(node))
 
 
@@ -277,7 +283,7 @@ def test_rejects_incompatible_cuba_lif_parameters():
         v_reset=np.zeros(2),
         w_in=np.full(2, 2.0),
     )
-    with pytest.raises(ValueError, match="nir.CubaLIF.r must equal"):
+    with pytest.raises(ValueError, match=re.escape("nir.CubaLIF.r must equal")):
         nir_exchange.import_from_nir(nir.NIRGraph.from_list(incompatible))
 
     non_finite = nir.CubaLIF(
