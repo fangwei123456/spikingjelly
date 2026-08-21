@@ -33,3 +33,35 @@ Spiking VGG
    :members:
    :undoc-members:
    :show-inheritance:
+
+QKFormer
+--------------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.model.qkformer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+MS-ResNet and Max-ResNet
+--------------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.model.ms_resnet
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+MaxFormer
+--------------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.model.maxformer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Spike-driven Transformer
+--------------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.model.spike_driven_transformer
+   :members:
+   :undoc-members:
+   :show-inheritance:
