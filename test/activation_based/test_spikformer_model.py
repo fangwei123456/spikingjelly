@@ -14,6 +14,13 @@ def _reset_net(net):
     functional.reset_net(net)
 
 
+def test_model_package_keeps_training_out_of_model_exports():
+    import spikingjelly.activation_based.model as model
+
+    assert not hasattr(model, "Trainer")
+    assert not hasattr(model, "SpikformerBlock")
+
+
 def test_spikformer_forward_accepts_image_and_sequence_inputs():
     model = Spikformer(
         T=2,

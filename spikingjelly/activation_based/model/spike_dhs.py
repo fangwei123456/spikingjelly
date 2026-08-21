@@ -1,4 +1,3 @@
-import argparse
 from collections import namedtuple
 from math import tanh
 
@@ -10,7 +9,7 @@ from torch import Tensor
 from torch.autograd import Function
 from torch.nn.functional import interpolate
 
-from ...activation_based import functional, layer
+from .. import functional, layer
 from ..neuron import LIFNode
 from ..surrogate import SurrogateFunctionBase, heaviside
 
@@ -281,7 +280,7 @@ class SpikingConv2d(nn.Module):
 
         Spiking convolutional layer used in DSpike search.
         """
-        super(SpikingConv2d, self).__init__()
+        super().__init__()
         self.conv = layer.Conv2d(
             input_c, output_c, kernel_size=kernel_size, stride=stride, padding=padding
         )
@@ -328,7 +327,7 @@ class SearchSpikingConv2d_stem(nn.Module):
 
         Stem spiking conv layer for DSpike search network.
         """
-        super(SearchSpikingConv2d_stem, self).__init__()
+        super().__init__()
         self.conv_m = layer.Conv2d(
             input_c, output_c, kernel_size=kernel_size, stride=stride, padding=padding
         )
@@ -423,7 +422,7 @@ class SearchSpikingConv2d_cell(nn.Module):
 
         Cell spiking conv layer for DSpike search network.
         """
-        super(SearchSpikingConv2d_cell, self).__init__()
+        super().__init__()
         [input_c1, output_c1, primitive1], [input_c2, output_c2, primitive2] = io_c
 
         self.conv1_m = layer.Conv2d(
@@ -542,7 +541,7 @@ class SpikingLinear(nn.Module):
 
         Spiking linear layer used in DSpike search.
         """
-        super(SpikingLinear, self).__init__()
+        super().__init__()
         self.linear = layer.Linear(input_c, output_c)
         self.bn = layer.SeqToANNContainer(nn.BatchNorm1d(output_c))
         self.spiking = spiking
@@ -577,7 +576,7 @@ class SpikingAvgPool2d(nn.Module):
 
         Spiking avg pooling layer used in DSpike search.
         """
-        super(SpikingAvgPool2d, self).__init__()
+        super().__init__()
         self.pooling = layer.SeqToANNContainer(
             nn.AvgPool2d(
                 kernel_size=kernel_size,
@@ -613,7 +612,7 @@ class SpikingAdaptiveAvgPool2d(nn.Module):
 
         Spiking adaptive avg pooling layer used in DSpike search.
         """
-        super(SpikingAdaptiveAvgPool2d, self).__init__()
+        super().__init__()
         self.pooling = layer.SeqToANNContainer(nn.AdaptiveAvgPool2d(dimension))
         self.spike = getSpikingNode()
 
@@ -667,7 +666,7 @@ class Cell(nn.Module):
 
         A cell is defined as a repeated and searchable unit, which is a directed acyclic graph with N nodes.
         """
-        super(Cell, self).__init__()
+        super().__init__()
 
         self.cell_arch = cell_arch
         self.C_in = block_multiplier * filter_multiplier
@@ -758,7 +757,7 @@ class newFeature(nn.Module):
 
         newFeature is used to extract feature.
         """
-        super(newFeature, self).__init__()
+        super().__init__()
         self.args = args
         self.cells = nn.ModuleList()
         self.network_arch = torch.from_numpy(network_arch)
@@ -878,7 +877,7 @@ class newFeature(nn.Module):
 class AuxiliaryHeadCIFAR(nn.Module):
     def __init__(self, C, num_classes):
         """assuming input size 8x8"""
-        super(AuxiliaryHeadCIFAR, self).__init__()
+        super().__init__()
         self.pooling = SpikingAvgPool2d(kernel_size=5, stride=3, padding=0)
         self.conv1 = SpikingConv2d(C, 128, 1, padding=0, b=3)
         self.conv2 = SpikingConv2d(128, 768, 2, padding=0, b=3)
@@ -902,7 +901,7 @@ class SpikeDHS(nn.Module):
 
         The SpikeDHS `Auto-Spikformer: Spikformer Architecture Search <https://arxiv.org/abs/2306.00807>`_ implementation by Spikingjelly.
         """
-        super(SpikeDHS, self).__init__()
+        super().__init__()
         network_path_fea = [0, 0, 1, 1, 1, 2, 2, 2]
         network_path_fea = np.array(network_path_fea)
         network_arch_fea = network_layer_to_space(network_path_fea)
@@ -945,31 +944,3 @@ class SpikeDHS(nn.Module):
     def dgs_unfreeze_weights(self):
         for value in self.parameters():
             value.requires_grad_(True)
-
-
-if __name__ == "__main__":
-    ### Example ###
-
-    parser = argparse.ArgumentParser("cifar")
-
-    parser.add_argument("--layers", type=int, default=8, help="total number of layers")
-
-    parser.add_argument(
-        "--auxiliary", action="store_true", default=False, help="use auxiliary tower"
-    )
-    parser.add_argument(
-        "--auxiliary_weight", type=float, default=0.4, help="weight for auxiliary loss"
-    )
-
-    parser.add_argument("--seed", type=int, default=0, help="random seed")
-    parser.add_argument(
-        "--arch", type=str, default="DARTS", help="which architecture to use"
-    )
-    parser.add_argument("--fea_num_layers", type=int, default=8)
-    parser.add_argument("--fea_filter_multiplier", type=int, default=48)
-    parser.add_argument("--fea_block_multiplier", type=int, default=3)
-    parser.add_argument("--fea_step", type=int, default=3)
-    parser.add_argument("--net_arch_fea", default=None, type=str)
-    parser.add_argument("--cell_arch_fea", default=None, type=str)
-    args = parser.parse_args()
-    spikedhs = SpikeDHS(init_channels=3, args=args)

@@ -21,11 +21,6 @@ Pre-defined SNN model module including Spikformer, SEW ResNet, and more.
 
 from .spikformer import (
     Spikformer,
-    SpikformerBlock,
-    SpikformerConv2dBN,
-    SpikformerConv2dBNLIF,
-    SpikformerMLP,
-    SpikformerPatchStem,
     spikformer_cifar10,
     spikformer_s,
     spikformer_ti,
@@ -33,11 +28,6 @@ from .spikformer import (
 
 __all__ = [
     "Spikformer",
-    "SpikformerBlock",
-    "SpikformerConv2dBN",
-    "SpikformerConv2dBNLIF",
-    "SpikformerMLP",
-    "SpikformerPatchStem",
     "spikformer_cifar10",
     "spikformer_s",
     "spikformer_ti",
