@@ -56,7 +56,7 @@ def eval_Q(env, net, cuda):
                 rand_actions = np.random.choice(n_actions, sum(mask))
                 actions[mask] = rand_actions
 
-                obs, reward, done, _ = env.step(actions.item())
+                obs, _, done, _ = env.step(actions.item())
 
                 value_estimate += q.max()
                 step_cnt += 1
