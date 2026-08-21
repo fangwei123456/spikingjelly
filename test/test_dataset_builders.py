@@ -62,6 +62,17 @@ def test_frame_builder_preserves_directory_structure_and_event_loader(
     assert not (root / "frames_number_2_split_by_number.building").exists()
 
 
+def test_event_loader_supports_structured_npy(tmp_path):
+    events = np.array([(1, 2)], dtype=[("t", "i8"), ("x", "i8")])
+    sample = tmp_path / "sample.npy"
+    np.save(sample, events)
+    cfg = base.NeuromorphicDatasetConfig(tmp_path, True, data_type="event")
+
+    loaded = base.EventBuilder(cfg, tmp_path).get_loader()(sample)
+
+    assert np.array_equal(loaded, events)
+
+
 def test_custom_frame_builder_saves_integrated_frames(tmp_path):
     root = tmp_path / "dataset"
     raw_root = root / "events"
@@ -252,3 +263,33 @@ def test_speechcommands_loads_waveform_and_label(tmp_path, monkeypatch):
 
     assert torch.equal(waveform, torch.tensor([[-1.0, 0.5]]))
     assert label == 3
+
+
+def test_speechcommands_discovers_noise_after_download(tmp_path, monkeypatch):
+    def download(_, root, **__):
+        (Path(root) / "archive.tar.gz").touch()
+
+    def extract(_, path):
+        path = Path(path)
+        noise_dir = path / "_background_noise_"
+        noise_dir.mkdir(parents=True)
+        (noise_dir / "noise.wav").touch()
+        (path / "testing_list.txt").touch()
+
+    monkeypatch.setattr("spikingjelly.datasets.speechcommands.download_url", download)
+    monkeypatch.setattr("spikingjelly.datasets.speechcommands.extract_archive", extract)
+
+    dataset = SpeechCommands(
+        {"_silence_": 0},
+        str(tmp_path),
+        silence_cnt=1,
+        url="https://example.com/archive.tar.gz",
+        split="test",
+        download=True,
+    )
+
+    assert dataset.noise_list == [
+        str(
+            tmp_path / "SpeechCommands" / "archive" / "_background_noise_" / "noise.wav"
+        )
+    ]

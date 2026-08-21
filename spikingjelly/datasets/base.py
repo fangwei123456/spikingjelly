@@ -27,9 +27,11 @@ __all__ = [
 ]
 
 
-def _load_npz_events(file_name: Union[str, Path]) -> dict:
-    # Loading an .npz returns an NpzFile that keeps the ZIP archive open.
-    with np.load(file_name) as events:
+def _load_events(file_name: Union[str, Path]) -> Union[dict, np.ndarray]:
+    events = np.load(file_name)
+    if isinstance(events, np.ndarray):
+        return events
+    with events:
         return {key: events[key] for key in events.files}
 
 
@@ -371,7 +373,8 @@ class EventBuilder(NeuromorphicDatasetBuilder):
 
         原始事件数据的数据集构建器。
 
-        此构建器不执行任何预处理，直接使用原始数据集作为处理后的数据集。每个 ``.npz`` 样本加载为包含独立 ``numpy.ndarray`` 的字典，无需帧积分。
+        此构建器不执行任何预处理，直接使用原始数据集作为处理后的数据集。``.npy``
+        样本加载为数组，``.npz`` 样本加载为包含独立数组的字典，无需帧积分。
 
         通常，当 ``data_type == "event"`` 时使用此构建器。
 
@@ -384,8 +387,8 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         Dataset builder for raw event data.
 
         This builder performs no preprocessing and directly uses the raw dataset as
-        the processed dataset. Each ``.npz`` sample is loaded as a dictionary of
-        independent ``numpy.ndarray`` values without frame integration.
+        the processed dataset. Each ``.npy`` sample is loaded as an array and each
+        ``.npz`` sample as a dictionary of independent arrays, without frame integration.
 
         Typically, this builder is used when ``data_type == "event"``.
 
@@ -414,7 +417,7 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         直接使用原始数据集目录作为处理后的数据集目录，不做额外处理。
 
         :return: 元组 ``(processed_root, loader)``, 其中 ``processed_root`` 为原始数据集目录,
-            loader 返回事件数组字典。
+            loader 返回事件数据。
         :rtype: Tuple[pathlib.Path, Callable]
 
         ----
@@ -427,7 +430,7 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         without any additional preprocessing.
 
         :return: a tuple ``(processed_root, loader)``, where ``processed_root``
-            is the raw dataset directory and the loader returns an event-array dictionary.
+            is the raw dataset directory and the loader returns event data.
         :rtype: Tuple[pathlib.Path, Callable]
         """
         return self.processed_root, self.get_loader()
@@ -437,11 +440,11 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         return self.raw_root
 
     def get_loader(self) -> Callable:
-        return _load_npz_events
+        return _load_events
 
 
 class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
-    _event_loader = staticmethod(_load_npz_events)
+    _event_loader = staticmethod(_load_events)
 
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
         r"""
@@ -517,7 +520,7 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
 
 
 class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
-    _event_loader = staticmethod(_load_npz_events)
+    _event_loader = staticmethod(_load_events)
 
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
         r"""
@@ -588,7 +591,7 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
 
 
 class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
-    _event_loader = staticmethod(_load_npz_events)
+    _event_loader = staticmethod(_load_events)
 
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
         r"""

@@ -181,10 +181,6 @@ class SpeechCommands(Dataset):
 
         self._path = os.path.join(root, folder_in_archive)
 
-        self.noise_list = sorted(
-            str(p) for p in Path(self._path).glob("_background_noise_/*.wav")
-        )
-
         if not os.path.isdir(self._path):
             if not download:
                 raise FileNotFoundError(
@@ -193,6 +189,10 @@ class SpeechCommands(Dataset):
             if not os.path.isfile(archive):
                 download_url(url, root, md5=_CHECKSUMS.get(url))
             extract_archive(archive, self._path)
+
+        self.noise_list = sorted(
+            str(p) for p in Path(self._path).glob("_background_noise_/*.wav")
+        )
 
         if self.split == "train":
             record = os.path.join(self._path, TRAIN_RECORD)
