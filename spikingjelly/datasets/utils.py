@@ -155,9 +155,7 @@ def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> N
                 plt.imshow(to_img(img_tensor[t]))
                 plt.pause(0.01)
     else:
-        img_list = []
-        for t in range(img_tensor.shape[0]):
-            img_list.append(to_img(img_tensor[t]))
+        img_list = [to_img(frame) for frame in img_tensor]
         img_list[0].save(save_gif_to, save_all=True, append_images=img_list[1:], loop=0)
         logger.info("Save frames to [{}].", save_gif_to)
 
@@ -202,13 +200,12 @@ def load_aedat_v3(file_name: Union[str, Path]) -> dict:
         while line.startswith(b"#"):
             if line == b"#!END-HEADER\r\n":
                 break
-            else:
-                line = bin_f.readline()
+            line = bin_f.readline()
 
         txyp = {"t": [], "x": [], "y": [], "p": []}
         while True:
             header = bin_f.read(28)
-            if not header or len(header) == 0:
+            if not header:
                 break
 
             # read header
@@ -219,10 +216,9 @@ def load_aedat_v3(file_name: Union[str, Path]) -> dict:
 
             data_length = e_capacity * e_size
             data = bin_f.read(data_length)
-            counter = 0
 
             if e_type == 1:
-                while data[counter : counter + e_size]:
+                for counter in range(0, len(data), e_size):
                     aer_data = struct.unpack("I", data[counter : counter + 4])[0]
                     timestamp = (
                         struct.unpack("I", data[counter + 4 : counter + 8])[0]
@@ -231,19 +227,11 @@ def load_aedat_v3(file_name: Union[str, Path]) -> dict:
                     x = (aer_data >> 17) & 0x00007FFF
                     y = (aer_data >> 2) & 0x00007FFF
                     pol = (aer_data >> 1) & 0x00000001
-                    counter = counter + e_size
                     txyp["x"].append(x)
                     txyp["y"].append(y)
                     txyp["t"].append(timestamp)
                     txyp["p"].append(pol)
-            else:
-                # non-polarity event packet, not implemented
-                pass
-        txyp["x"] = np.asarray(txyp["x"])
-        txyp["y"] = np.asarray(txyp["y"])
-        txyp["t"] = np.asarray(txyp["t"])
-        txyp["p"] = np.asarray(txyp["p"])
-        return txyp
+        return {key: np.asarray(value) for key, value in txyp.items()}
 
 
 def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
@@ -319,7 +307,7 @@ def load_npz_frames(file_name: Union[str, Path]) -> np.ndarray:
     :param file_name: 保存帧的 npz 文件的路径
     :type file_name: Union[str, pathlib.Path]
 
-    :return: 帧
+    :return: ``float32`` 帧数组
     :rtype: np.ndarray
 
     ----
@@ -331,10 +319,12 @@ def load_npz_frames(file_name: Union[str, Path]) -> np.ndarray:
     :param file_name: path of the npz file that saves the frames
     :type file_name: Union[str, pathlib.Path]
 
-    :return: frames
+    :return: frames with dtype ``float32``
     :rtype: np.ndarray
     """
-    return np.load(file_name, allow_pickle=True)["frames"].astype(np.float32)
+    # Loading an .npz returns an NpzFile that keeps the ZIP archive open.
+    with np.load(file_name) as frames_file:
+        return frames_file["frames"].astype(np.float32)
 
 
 def integrate_events_segment_to_frame(
@@ -770,7 +760,7 @@ def integrate_events_by_fixed_duration(
 
     t = t - t.min()
 
-    frames_num = int(math.ceil(t[-1] / duration))
+    frames_num = math.ceil(t[-1] / duration)
     frames = np.zeros([frames_num, 2, H, W])
     frame_index = t // duration
     left = 0
@@ -1079,18 +1069,13 @@ def pad_sequence_collate(batch: list):
         x_p.shape=torch.Size([2, 29, 2]), label=tensor([3, 6]), x_len=tensor([29, 26])
         x_p.shape=torch.Size([2, 23, 2]), label=tensor([ 9, 23]), x_len=tensor([23,  9])
     """
-    x_list = []
-    x_len_list = []
-    y_list = []
-    for x, y in batch:
-        x_list.append(torch.as_tensor(x))
-        x_len_list.append(x.shape[0])
-        y_list.append(y)
+    x_list, y_list = zip(*batch, strict=True)
+    x_list = [torch.as_tensor(x) for x in x_list]
 
     return (
         torch.nn.utils.rnn.pad_sequence(x_list, batch_first=True),
         torch.as_tensor(y_list),
-        torch.as_tensor(x_len_list),
+        torch.as_tensor([x.shape[0] for x in x_list]),
     )
 
 
@@ -1234,13 +1219,10 @@ def create_sub_dataset(
         logger.debug("Mkdir [{}].", target_dir)
     create_same_directory_structure(source_dir, target_dir)
 
-    for e_root, e_dirs, e_files in os.walk(source_dir, followlinks=True):
+    for e_root, _, e_files in os.walk(source_dir, followlinks=True):
         if e_files:
             output_dir = os.path.join(target_dir, os.path.relpath(e_root, source_dir))
-            if ratio >= 1.0:
-                samples_number = len(e_files)
-            else:
-                samples_number = int(ratio * len(e_files))
+            samples_number = len(e_files) if ratio >= 1.0 else int(ratio * len(e_files))
             if samples_number == 0:
                 logger.warning(
                     "No samples selected from [{}] for output [{}].",

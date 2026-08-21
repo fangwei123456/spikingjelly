@@ -20,9 +20,9 @@ __all__ = ["ESImageNet"]
 
 
 def _load_events(fname: Union[str, Path]):
-    events = np.load(fname)
-    e_pos = events["pos"]
-    e_neg = events["neg"]
+    with np.load(fname) as events:
+        e_pos = events["pos"]
+        e_neg = events["neg"]
     e_pos = np.hstack((e_pos, np.ones((e_pos.shape[0], 1))))
     e_neg = np.hstack((e_neg, np.zeros((e_neg.shape[0], 1))))
     events = np.vstack((e_pos, e_neg))  # shape = [N, 4], N * (x, y, t, p)
@@ -151,16 +151,9 @@ class ESImageNet(NeuromorphicDatasetFolder):
         H, W = self.get_H_W()
         if self.cfg.frames_number is not None:
             return ESImageNetFrameFixedNumberBuilder(self.cfg, self.raw_root, H, W)
-        elif self.cfg.duration is not None:
+        if self.cfg.duration is not None:
             return ESImageNetFrameFixedDurationBuilder(self.cfg, self.raw_root, H, W)
-        elif self.cfg.custom_integrate_function is not None:
-            return ESImageNetFrameCustomIntegrateBuilder(self.cfg, self.raw_root, H, W)
-        else:
-            # not reachable
-            raise NotImplementedError(
-                "Please specify the frames number or duration or "
-                "custom integrate function."
-            )
+        return ESImageNetFrameCustomIntegrateBuilder(self.cfg, self.raw_root, H, W)
 
     @classmethod
     def get_H_W(cls) -> Tuple:

@@ -29,21 +29,6 @@ TEST_RECORD = "testing_list.txt"
 TRAIN_RECORD = "training_list.txt"
 
 
-def _load_speechcommands_item(
-    relpath: str, path: str
-) -> Tuple[Tensor, int, str, str, int]:
-    filepath = os.path.join(path, relpath)
-    label, filename = os.path.split(relpath)
-    speaker, _ = os.path.splitext(filename)
-
-    speaker_id, utterance_number = speaker.split(HASH_DIVIDER)
-    utterance_number = int(utterance_number)
-
-    # Load audio
-    waveform, sample_rate = torchaudio.load(filepath)
-    return waveform, sample_rate, label, speaker_id, utterance_number
-
-
 class SpeechCommands(Dataset):
     def __init__(
         self,
@@ -200,16 +185,14 @@ class SpeechCommands(Dataset):
             str(p) for p in Path(self._path).glob("_background_noise_/*.wav")
         )
 
-        if download:
-            if not os.path.isdir(self._path):
-                if not os.path.isfile(archive):
-                    checksum = _CHECKSUMS.get(url)
-                    download_url(url, root, md5=checksum)
-                extract_archive(archive, self._path)
-        elif not os.path.isdir(self._path):
-            raise FileNotFoundError(
-                'Audio data not found. Please specify "download=True" and try again.'
-            )
+        if not os.path.isdir(self._path):
+            if not download:
+                raise FileNotFoundError(
+                    'Audio data not found. Please specify "download=True" and try again.'
+                )
+            if not os.path.isfile(archive):
+                download_url(url, root, md5=_CHECKSUMS.get(url))
+            extract_archive(archive, self._path)
 
         if self.split == "train":
             record = os.path.join(self._path, TRAIN_RECORD)
@@ -218,23 +201,21 @@ class SpeechCommands(Dataset):
                     self._walker = [line.rstrip("\n") for line in f]
             else:
                 logger.info("No training list, generating...")
-                walker = sorted(str(p) for p in Path(self._path).glob("*/*.wav"))
-                walker = filter(
-                    lambda w: HASH_DIVIDER in w and EXCEPT_FOLDER not in w, walker
-                )
-                walker = (os.path.relpath(w, self._path) for w in walker)
-
-                walker = set(walker)
+                walker = {
+                    os.path.relpath(path, self._path)
+                    for path in map(str, Path(self._path).glob("*/*.wav"))
+                    if HASH_DIVIDER in path and EXCEPT_FOLDER not in path
+                }
 
                 val_record = os.path.join(self._path, VAL_RECORD)
                 with open(val_record, "r") as f:
-                    val_walker = set([line.rstrip("\n") for line in f])
+                    val_walker = {line.rstrip("\n") for line in f}
 
                 test_record = os.path.join(self._path, TEST_RECORD)
                 with open(test_record, "r") as f:
-                    test_walker = set([line.rstrip("\n") for line in f])
+                    test_walker = {line.rstrip("\n") for line in f}
 
-                walker = walker - val_walker - test_walker
+                walker -= val_walker | test_walker
                 self._walker = list(walker)
 
                 with open(record, "w") as f:
@@ -272,15 +253,14 @@ class SpeechCommands(Dataset):
     def __getitem__(self, n: int) -> Tuple[Tensor, int]:
         if n < len(self._walker):
             fileid = self._walker[n]
-            waveform, sample_rate, label, speaker_id, utterance_number = (
-                _load_speechcommands_item(fileid, self._path)
-            )
+            waveform, _ = torchaudio.load(os.path.join(self._path, fileid))
+            label = os.path.split(fileid)[0]
         else:
             # Silence data are randomly and dynamically generated from noise data
 
             # Load random noise
             noisepath = choice(self.noise_list)
-            waveform, sample_rate = torchaudio.load(noisepath)
+            waveform, _ = torchaudio.load(noisepath)
 
             # Random crop
             offset = np.random.randint(waveform.shape[1] - self.silence_size)
