@@ -21,11 +21,11 @@ This tutorial provides a detailed introduction to these two functions.
 
 .. note::
 
-    ``nir_exchange`` depends on ``nir>=1.0.7,<2`` and ``nirtorch>=2.6,<3``. Install the optional dependencies with:
+    Install the NIR exchange optional dependencies with:
 
     .. code:: shell
 
-        uv pip install "spikingjelly[nir]"
+        pip install "spikingjelly[nir]"
 
 From SpikingJelly to NIR
 ============================
@@ -138,7 +138,6 @@ The function :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.
 .. code:: python
 
     gm = nir_exchange.import_from_nir(graph="./example.nir", dt=1e-4)
-    print(gm)
     x = torch.rand(9, 3, 32, 32) # [B, C, H, W]
     y, state = gm(x) # state=None starts from the initial state
     print("y.shape =", y.shape)
@@ -151,7 +150,7 @@ Here, the arguments of :func:`import_from_nir <spikingjelly.activation_based.nir
 * ``graph``: A ``NIRGraph`` object or a string/``Path`` pointing to an HDF5 NIR file.
 * ``dt``: The simulation time step of the NIR graph. This parameter should be consistent with the ``dt`` argument of :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>`.
 
-The returned ``torch.fx.GraphModule`` uses explicit state. Calling it with ``state=None`` always starts from the initial neuron and graph state; pass the returned state into the next call to continue a sequence. Recurrent NIR graphs must use single-step mode and advance one time step per call.
+The returned ``torch.fx.GraphModule`` uses explicit state. Calling it with ``state=None`` always starts from the initial neuron and graph state. A step-by-step loop must pass the returned state into the next call; otherwise every step restarts from the initial state. :func:`functional.reset_net <spikingjelly.activation_based.functional.reset_net>` does not reset a previously returned state; pass ``state=None`` to restart. Recurrent NIR graphs must use single-step mode and advance one time step per call.
 
 Currently, :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` supports only the following NIR node types.
 
@@ -173,7 +172,6 @@ Currently, :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.fr
         gm = nir_exchange.import_from_nir(
             "./example.nir", dt=1e-4, step_mode="m"
         )
-        print(gm)
         x = torch.rand(7, 9, 3, 32, 32) # [T, B, C, H, W]
         y, state = gm(x)
         print("y.shape =", y.shape)

@@ -71,7 +71,7 @@ Optional dependencies:
 | --- | --- |
 | CuPy backend | `pip install cupy-cuda12x` or `pip install cupy-cuda11x` |
 | Triton backend | `pip install triton==3.3.1` |
-| NIR exchange | `pip install nir nirtorch` |
+| NIR exchange | `pip install "spikingjelly[nir]"` |
 | Lightning integration | `pip install lightning jsonargparse[signatures]` |
 
 ## Quick Start

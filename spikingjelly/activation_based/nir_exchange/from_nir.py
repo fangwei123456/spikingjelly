@@ -25,15 +25,24 @@ def _uniform_scalar(value: np.ndarray, name: str):
     unique = np.unique(value)
     if unique.size != 1:
         raise ValueError(f"{name} must be uniform across all neurons.")
-    return unique.item()
+    return float(unique.item())
 
 
-def _matches_discretization(value: float, expected: float) -> bool:
+def _is_close_finite(value: float, expected: float) -> bool:
     return bool(
         np.isfinite(value)
         and np.isfinite(expected)
         and np.isclose(value, expected, rtol=1e-6, atol=1e-12)
     )
+
+
+def _require_ungrouped(groups) -> int:
+    groups = _to_python_value(groups)
+    if groups != 1:
+        raise NotImplementedError(
+            "Grouped convolutions are not supported by NIR exchange."
+        )
+    return 1
 
 
 def _has_cycle(graph: nir.NIRGraph) -> bool:
@@ -93,10 +102,7 @@ class _NodeMapper:
         return module
 
     def map_conv1d(self, node: nir.Conv1d) -> layer.Conv1d:
-        if _to_python_value(node.groups) != 1:
-            raise NotImplementedError(
-                "NIR type inference does not support grouped convolutions."
-            )
+        _require_ungrouped(node.groups)
         weight = node.weight
         module = layer.Conv1d(
             in_channels=weight.shape[1],
@@ -118,11 +124,7 @@ class _NodeMapper:
         stride = _to_python_value(node.stride)
         padding = _to_python_value(node.padding)
         dilation = _to_python_value(node.dilation)
-        groups = _to_python_value(node.groups)
-        if groups != 1:
-            raise NotImplementedError(
-                "NIR type inference does not support grouped convolutions."
-            )
+        groups = _require_ungrouped(node.groups)
 
         module = layer.Conv2d(
             in_channels=weight.shape[1],
@@ -157,7 +159,7 @@ class _NodeMapper:
 
     def map_if(self, node: nir.IF) -> nn.Module:
         r = _uniform_scalar(node.r, "nir.IF.r")
-        if not _matches_discretization(r, 1.0 / self.dt):
+        if not _is_close_finite(r, 1.0 / self.dt):
             raise ValueError("nir.IF.r must equal 1 / dt.")
         return _NIRStatefulModule(
             neuron.IFNode(
@@ -171,16 +173,16 @@ class _NodeMapper:
         if not np.isfinite(tau) or tau <= 1.0:
             raise ValueError("nir.LIF.tau / dt must be finite and greater than 1.")
         r = _uniform_scalar(node.r, "nir.LIF.r")
-        if _matches_discretization(r, 1.0):
+        if _is_close_finite(r, 1.0):
             decay_input = True
-        elif _matches_discretization(r, tau):
+        elif _is_close_finite(r, tau):
             decay_input = False
         else:
             raise ValueError("nir.LIF.r must equal 1 or tau / dt.")
 
         v_reset = _uniform_scalar(node.v_reset, "nir.LIF.v_reset")
         v_leak = _uniform_scalar(node.v_leak, "nir.LIF.v_leak")
-        if not _matches_discretization(v_leak, v_reset):
+        if not _is_close_finite(v_leak, v_reset):
             raise ValueError("nir.LIF.v_leak must equal v_reset.")
 
         return _NIRStatefulModule(
@@ -200,13 +202,13 @@ class _NodeMapper:
         if tau_syn < self.dt or tau_mem < self.dt:
             raise ValueError("nir.CubaLIF time constants must be at least dt.")
         r = _uniform_scalar(node.r, "nir.CubaLIF.r")
-        if not _matches_discretization(r, tau_mem / self.dt):
+        if not _is_close_finite(r, tau_mem / self.dt):
             raise ValueError("nir.CubaLIF.r must equal tau_mem / dt.")
         w_in = _uniform_scalar(node.w_in, "nir.CubaLIF.w_in")
-        if not _matches_discretization(w_in, tau_syn / self.dt):
+        if not _is_close_finite(w_in, tau_syn / self.dt):
             raise ValueError("nir.CubaLIF.w_in must equal tau_syn / dt.")
         v_leak = _uniform_scalar(node.v_leak, "nir.CubaLIF.v_leak")
-        if not _matches_discretization(v_leak, 0.0):
+        if not _is_close_finite(v_leak, 0.0):
             raise ValueError("nir.CubaLIF.v_leak must equal 0.")
 
         return _NIRStatefulModule(
@@ -241,7 +243,9 @@ def import_from_nir(
     转换为 SpikingJelly 神经网络模型。函数会根据 NIR 节点类型自动映射为对应的
     SpikingJelly 模块（如 Linear、Conv、IF/LIF/CubaLIF 神经元等），并返回可直接运行的
     ``fx.GraphModule`` 对象。模型前向返回 ``(output, state)``；传入 ``state=None``
-    会从初始状态运行，连续运行时应将上一次返回的 ``state`` 传回模型。
+    会从初始状态运行。逐步循环必须将上一次返回的 ``state`` 传回模型，否则每一步都会
+    从初始状态重新运行。:func:`functional.reset_net <spikingjelly.activation_based.functional.reset_net>`
+    不会重置已经返回的显式状态；传入 ``state=None`` 可重新开始。
 
     :param graph: NIR 图，或存储 NIR 图的 HDF5 文件路径
     :type graph: Union[nir.NIRGraph, str, Path]
@@ -276,7 +280,10 @@ def import_from_nir(
     IF/LIF/CubaLIF neurons) and returns a runnable
     `fx.GraphModule <https://docs.pytorch.org/docs/stable/fx.html#torch.fx.GraphModule>`_.
     Its forward pass returns ``(output, state)``. Passing ``state=None`` starts
-    from the initial state; pass the previously returned ``state`` to continue.
+    from the initial state. A step-by-step loop must pass the previously returned
+    ``state`` to continue; otherwise every step restarts from the initial state.
+    :func:`functional.reset_net <spikingjelly.activation_based.functional.reset_net>`
+    does not reset a previously returned explicit state; pass ``state=None`` to restart.
 
     :param graph: NIR graph, or the path to the HDF5 file storing the NIR graph
     :type graph: Union[nir.NIRGraph, str, Path]

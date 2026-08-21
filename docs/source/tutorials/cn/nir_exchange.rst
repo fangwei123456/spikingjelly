@@ -21,11 +21,11 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
 
 .. note::
 
-    ``nir_exchange`` 依赖 ``nir>=1.0.7,<2`` 和 ``nirtorch>=2.6,<3``。可安装 SpikingJelly 的可选依赖：
+    使用以下命令安装 NIR exchange 可选依赖：
 
     .. code:: shell
 
-        uv pip install "spikingjelly[nir]"
+        pip install "spikingjelly[nir]"
 
 从 SpikingJelly 到 NIR
 ==========================
@@ -138,7 +138,6 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
 .. code:: python
 
     gm = nir_exchange.import_from_nir(graph="./example.nir", dt=1e-4)
-    print(gm)
     x = torch.rand(9, 3, 32, 32) # [B, C, H, W]
     y, state = gm(x) # state=None 表示从初始状态开始
     print("y.shape =", y.shape)
@@ -151,7 +150,7 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
 * ``graph`` ：``NIRGraph`` 对象，或指向 HDF5 NIR 文件的字符串/``Path``。
 * ``dt`` ：NIR 图的模拟时间步长。与 :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` 的 ``dt`` 参数一致。
 
-返回的 ``torch.fx.GraphModule`` 使用显式状态。以 ``state=None`` 调用时总是从神经元和图的初始状态开始；若要继续序列，应将返回的状态传入下一次调用。循环 NIR 图只能使用单步模式，每次调用推进一个时间步。
+返回的 ``torch.fx.GraphModule`` 使用显式状态。以 ``state=None`` 调用时总是从神经元和图的初始状态开始。逐步循环必须将返回的状态传入下一次调用，否则每一步都会从初始状态重新运行。:func:`functional.reset_net <spikingjelly.activation_based.functional.reset_net>` 不会重置已经返回的显式状态；若要重新开始，应传入 ``state=None``。循环 NIR 图只能使用单步模式，每次调用推进一个时间步。
 
 目前， :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` 仅支持以下 NIR 节点类型：
 
@@ -173,7 +172,6 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
         gm = nir_exchange.import_from_nir(
             "./example.nir", dt=1e-4, step_mode="m"
         )
-        print(gm)
         x = torch.rand(7, 9, 3, 32, 32) # [T, B, C, H, W]
         y, state = gm(x)
         print("y.shape =", y.shape)

@@ -35,6 +35,7 @@ class _ModuleMapper:
         self.set_module_io_shape(example_input)
 
     def set_module_io_shape(self, example_input: torch.Tensor):
+        # Memory slots can contain nested non-leaf tensors, which deepcopy rejects.
         memories = tree_map(
             lambda value: (
                 value.detach().clone()
@@ -91,48 +92,54 @@ class _ModuleMapper:
         return nir.Affine(_to_numpy(module.weight), _to_numpy(module.bias))
 
     @staticmethod
-    def _conv_bias(module: nn.Module) -> np.ndarray:
-        if module.bias is None:
-            return np.zeros(
-                module.weight.shape[0], dtype=_to_numpy(module.weight).dtype
-            )
-        return _to_numpy(module.bias)
-
-    @staticmethod
-    def _require_ungrouped(module: nn.Module) -> None:
+    def _validate_conv(module: nn.Module) -> None:
         if module.groups != 1:
             raise NotImplementedError(
-                "NIR type inference does not support grouped convolutions."
+                "Grouped convolutions are not supported by NIR exchange."
             )
         if module.padding_mode != "zeros":
-            raise NotImplementedError("NIR supports only zero-padded convolutions.")
+            raise NotImplementedError(
+                "NIR exchange supports only zero-padded convolutions."
+            )
 
     def map_conv1d(self, module: nn.Conv1d) -> nir.Conv1d:
-        self._require_ungrouped(module)
+        self._validate_conv(module)
+        weight = _to_numpy(module.weight)
+        bias = (
+            _to_numpy(module.bias)
+            if module.bias is not None
+            else np.zeros(weight.shape[0], dtype=weight.dtype)
+        )
         padding = (
             module.padding if isinstance(module.padding, str) else module.padding[0]
         )
         return nir.Conv1d(
             input_shape=self.module_io_shape[module][-1],
-            weight=_to_numpy(module.weight),
+            weight=weight,
             stride=module.stride[0],
             padding=padding,
             dilation=module.dilation[0],
             groups=module.groups,
-            bias=self._conv_bias(module),
+            bias=bias,
         )
 
     def map_conv2d(self, module: nn.Conv2d) -> nir.Conv2d:
-        self._require_ungrouped(module)
+        self._validate_conv(module)
+        weight = _to_numpy(module.weight)
+        bias = (
+            _to_numpy(module.bias)
+            if module.bias is not None
+            else np.zeros(weight.shape[0], dtype=weight.dtype)
+        )
         height, width = self.module_io_shape[module][-2:]
         return nir.Conv2d(
             input_shape=(height, width),
-            weight=_to_numpy(module.weight),
+            weight=weight,
             stride=module.stride,
             padding=module.padding,
             dilation=module.dilation,
             groups=module.groups,
-            bias=self._conv_bias(module),
+            bias=bias,
         )
 
     def map_avgpool2d(self, module: nn.AvgPool2d) -> nir.NIRNode:
@@ -146,7 +153,7 @@ class _ModuleMapper:
             )
         return nir.AvgPool2d(
             kernel_size=module.kernel_size,
-            stride=module.kernel_size if module.stride is None else module.stride,
+            stride=module.stride,
             padding=module.padding,
         )
 
@@ -200,8 +207,7 @@ class _ModuleMapper:
         )
 
     def map_plif(self, module: neuron.ParametricLIFNode) -> nir.LIF:
-        with torch.no_grad():
-            tau = float((1.0 / module.w.sigmoid()).detach().cpu())
+        tau = 1.0 / module.w.sigmoid().item()
         v_reset = self._hard_reset(module)
         shape = self._neuron_shape(module)
 

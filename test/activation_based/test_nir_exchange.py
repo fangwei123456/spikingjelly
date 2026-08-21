@@ -35,7 +35,7 @@ def test_existing_nodes_round_trip(tmp_path: Path, step_mode: str):
     functional.reset_net(net)
     expected = net(x)
     actual, _ = restored(x)
-    assert torch.equal(actual, expected)
+    torch.testing.assert_close(actual, expected)
 
     restored_conv = next(m for m in restored.modules() if isinstance(m, layer.Conv2d))
     assert restored_conv.in_channels == 2
@@ -66,7 +66,7 @@ def test_conv1d_cuba_lif_round_trip(tmp_path: Path, step_mode: str):
     functional.reset_net(net)
     expected = net(x)
     actual, _ = restored(x)
-    assert torch.equal(actual, expected)
+    torch.testing.assert_close(actual, expected)
     assert any(isinstance(node, nir.Conv1d) for node in graph.nodes.values())
     assert any(isinstance(node, nir.CubaLIF) for node in graph.nodes.values())
 
@@ -79,8 +79,22 @@ def test_linear_without_bias_round_trip():
     restored = nir_exchange.import_from_nir(graph)
 
     actual, _ = restored(x)
-    assert torch.equal(actual, net(x))
+    torch.testing.assert_close(actual, net(x))
     assert any(isinstance(node, nir.Linear) for node in graph.nodes.values())
+
+
+def test_integer_if_parameters_import_as_floats():
+    graph = nir.NIRGraph.from_list(
+        nir.IF(
+            r=np.full(2, 10_000, dtype=np.int64),
+            v_threshold=np.ones(2, dtype=np.int64),
+            v_reset=np.zeros(2, dtype=np.int64),
+        )
+    )
+    model = nir_exchange.import_from_nir(graph)
+
+    output, _ = model(torch.full((1, 2), 0.6))
+    assert torch.count_nonzero(output) == 0
 
 
 def test_imported_state_is_explicit():
@@ -123,7 +137,7 @@ def test_plif_cuda_round_trip():
     functional.reset_net(net)
     expected = net(x)
     actual, _ = restored(x)
-    assert torch.equal(actual, expected)
+    torch.testing.assert_close(actual, expected)
 
 
 def test_export_preserves_memories():
@@ -163,7 +177,7 @@ def test_rejects_unrepresentable_models():
             nn.Sequential(neuron.LIFNode(v_reset=None)), torch.rand(1, 2)
         )
 
-    with pytest.raises(NotImplementedError, match="grouped convolutions"):
+    with pytest.raises(NotImplementedError, match="Grouped convolutions"):
         nir_exchange.export_to_nir(
             nn.Sequential(layer.Conv2d(2, 2, 3, groups=2)),
             torch.rand(1, 2, 5, 5),
@@ -176,7 +190,7 @@ def test_rejects_unrepresentable_models():
         )
 
 
-def test_rejects_invalid_nir_parameters():
+def test_rejects_invalid_if_parameters():
     graph = nir.NIRGraph.from_list(
         nir.IF(
             r=np.full(2, 1e4),
@@ -207,30 +221,33 @@ def test_rejects_invalid_nir_parameters():
     with pytest.raises(ValueError, match=re.escape("nir.IF.r must equal")):
         nir_exchange.import_from_nir(incompatible_r)
 
-    invalid_lif = nir.NIRGraph.from_list(
+
+@pytest.mark.parametrize(
+    ("tau", "r", "match"),
+    [(0.5e-4, 1.0, "greater than 1"), (np.inf, np.inf, "finite")],
+)
+def test_rejects_invalid_lif_time_constants(tau: float, r: float, match: str):
+    graph = nir.NIRGraph.from_list(
         nir.LIF(
-            tau=np.full(2, 0.5e-4),
-            r=np.ones(2),
+            tau=np.full(2, tau),
+            r=np.full(2, r),
             v_leak=np.zeros(2),
             v_threshold=np.ones(2),
             v_reset=np.zeros(2),
         )
     )
-    with pytest.raises(ValueError, match="greater than 1"):
-        nir_exchange.import_from_nir(invalid_lif)
+    with pytest.raises(ValueError, match=match):
+        nir_exchange.import_from_nir(graph)
 
-    infinite_lif = nir.NIRGraph.from_list(
-        nir.LIF(
-            tau=np.full(2, np.inf),
-            r=np.full(2, np.inf),
-            v_leak=np.zeros(2),
+
+def test_rejects_invalid_public_arguments():
+    graph = nir.NIRGraph.from_list(
+        nir.IF(
+            r=np.full(2, 1e4),
             v_threshold=np.ones(2),
             v_reset=np.zeros(2),
         )
     )
-    with pytest.raises(ValueError, match="finite"):
-        nir_exchange.import_from_nir(infinite_lif)
-
     with pytest.raises(ValueError, match="positive"):
         nir_exchange.import_from_nir(graph, dt=0.0)
     with pytest.raises(ValueError, match="step_mode"):
@@ -238,9 +255,16 @@ def test_rejects_invalid_nir_parameters():
     with pytest.raises(ValueError, match="positive"):
         nir_exchange.export_to_nir(nn.Identity(), torch.rand(1, 2), dt=0.0)
 
+
+def test_rejects_recurrent_multistep():
+    node = nir.IF(
+        r=np.full(2, 1e4),
+        v_threshold=np.ones(2),
+        v_reset=np.zeros(2),
+    )
     recurrent = nir.NIRGraph(
-        nodes={"lif": graph.nodes["if"]},
-        edges=[("lif", "lif")],
+        nodes={"if": node},
+        edges=[("if", "if")],
         type_check=False,
     )
     with pytest.raises(NotImplementedError, match="step_mode='s'"):

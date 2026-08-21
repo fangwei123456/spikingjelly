@@ -32,10 +32,10 @@ Module: `spikingjelly.activation_based.op_counter`.
 Module: `spikingjelly.activation_based.nir_exchange`.
 
 - Added bidirectional NIR conversion for Conv1d and current-based LIF neurons.
-- Imported NIR models now return authoritative explicit neuron and graph state;
-  pass the returned state into the next call to continue execution.
+- Imported NIR models now expose neuron and graph state through the returned
+  state value.
 - The NIR optional dependency now supports `nir>=1.0.7,<2` with
-  `nirtorch>=2.6,<3`.
+  `nirtorch>=2.6,<2.7`.
 
 #### Spiking Model Families
 
@@ -84,6 +84,9 @@ Module: `spikingjelly.activation_based.nir_exchange`.
 - NIR conversion now rejects soft-reset neurons, grouped convolutions, and
   incompatible heterogeneous neuron parameters instead of silently changing
   their semantics.
+- Imported NIR models no longer advance implicit module memory. Step-by-step
+  callers must pass the returned state to continue; `state=None` restarts, and
+  `functional.reset_net` does not reset an already returned state value.
 - Recurrent NIR graphs require single-step mode.
 
 #### Model and Example Layout
