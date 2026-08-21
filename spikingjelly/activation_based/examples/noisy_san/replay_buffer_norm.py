@@ -100,23 +100,14 @@ class ReplayBuffer:
         :return: batch
         """
         idxs = np.random.randint(0, self.size, size=batch_size)
-        if self.cn_buf is None:
-            batch = dict(
-                obs=self.normalize_obs(self.obs_buf[idxs]),
-                obs2=self.normalize_obs(self.obs2_buf[idxs]),
-                act=self.act_buf[idxs],
-                rew=self.rew_buf[idxs],
-                done=self.done_buf[idxs],
-            )
-        else:
-            batch = dict(
-                obs=self.normalize_obs(self.obs_buf[idxs]),
-                obs2=self.normalize_obs(self.obs2_buf[idxs]),
-                act=self.act_buf[idxs],
-                rew=self.rew_buf[idxs],
-                done=self.done_buf[idxs],
-                cn=self.cn_buf[idxs],
-            )
+        batch = dict(
+            obs=self.normalize_obs(self.obs_buf[idxs]),
+            obs2=self.normalize_obs(self.obs2_buf[idxs]),
+            act=self.act_buf[idxs],
+            rew=self.rew_buf[idxs],
+            done=self.done_buf[idxs],
+            cn=self.cn_buf[idxs],
+        )
         return {
             k: torch.as_tensor(v, dtype=torch.float32, device=device)
             for k, v in batch.items()

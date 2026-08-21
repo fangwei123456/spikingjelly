@@ -51,44 +51,40 @@ class NoisySpikeMLP(nn.Module):
     def forward(self, in_pop_spikes):
         return self.hidden_layers(in_pop_spikes)
 
+    def _noisy_nodes(self):
+        return (
+            module
+            for module in self.hidden_layers
+            if isinstance(module, (neuron.NoisyCUBALIFNode, neuron.NoisyILCCUBALIFNode))
+        )
+
     def use_noise(self, is_training=True):
-        for name, module in self.hidden_layers.named_modules():
-            if not isinstance(module, layer.Linear):
-                module.is_training = is_training
+        for module in self._noisy_nodes():
+            module.is_training = is_training
 
     def reset_noise(self, num_steps):
-        for name, module in self.hidden_layers.named_modules():
-            if not isinstance(module, layer.Linear):
-                module.reset_noise(num_steps)
+        for module in self._noisy_nodes():
+            module.reset_noise(num_steps)
 
     def get_colored_noise(self):
-        cn = []
-        for name, module in self.hidden_layers.named_modules():
-            if not isinstance(module, layer.Linear):
-                cn.append(module.get_colored_noise())
-        cn = torch.cat(cn, dim=1)
-        return cn
+        return torch.cat(
+            [module.get_colored_noise() for module in self._noisy_nodes()], dim=1
+        )
 
     def get_colored_noise_length(self):
-        length = 0
-        for name, module in self.hidden_layers.named_modules():
-            if not isinstance(module, layer.Linear):
-                length += module.num_node * 2
-        self.cn_length = length
-        return length
+        self.cn_length = sum(module.num_node * 2 for module in self._noisy_nodes())
+        return self.cn_length
 
     def load_colored_noise(self, cn):
         start_idx = 0
-        for name, module in self.hidden_layers.named_modules():
-            if not isinstance(module, layer.Linear):
-                length = module.num_node * 2
-                module.load_colored_noise(cn[:, :, start_idx : start_idx + length])
-                start_idx += length
+        for module in self._noisy_nodes():
+            length = module.num_node * 2
+            module.load_colored_noise(cn[:, :, start_idx : start_idx + length])
+            start_idx += length
 
     def cancel_load(self):
-        for name, module in self.hidden_layers.named_modules():
-            if not isinstance(module, layer.Linear):
-                module.cancel_load()
+        for module in self._noisy_nodes():
+            module.cancel_load()
 
 
 class NoisyPopSpikeDecoder(nn.Module):

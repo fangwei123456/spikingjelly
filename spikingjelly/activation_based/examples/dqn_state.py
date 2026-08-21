@@ -51,9 +51,7 @@ class DQN(nn.Module):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DQN State")
     parser.add_argument("--seed", type=int, default=1, help="random seed (default: 1)")
-    parser.add_argument(
-        "--use-cuda", default=False, help="use cuda or not (default: False)"
-    )
+    parser.add_argument("--use-cuda", action="store_true", help="use cuda")
 
     args = parser.parse_args()
 
@@ -162,8 +160,7 @@ if __name__ == "__main__":
     # Train
     for i_episode in range(num_episodes):
         # Initialize the environment and state
-        env.reset()
-        state = torch.zeros([1, n_states], dtype=torch.float, device=device)
+        state = torch.from_numpy(env.reset()).float().to(device).unsqueeze(0)
 
         total_reward = 0
 

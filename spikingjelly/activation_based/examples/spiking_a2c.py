@@ -133,7 +133,7 @@ if __name__ == "__main__":
 
     state = envs.reset()
 
-    writer = SummaryWriter(logdir="./log")
+    writer = SummaryWriter(log_dir="./log")
 
     while step_idx < max_steps:
         log_probs = []

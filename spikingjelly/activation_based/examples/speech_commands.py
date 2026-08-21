@@ -314,6 +314,7 @@ class Rescale(object):
 def collate_fn(data):
     X_batch = torch.cat([d[0] for d in data])
     std = X_batch.std(axis=(0, 2), keepdim=True, unbiased=False)
+    std.masked_fill_(std == 0, 1)
     X_batch.div_(std)
 
     y_batch = torch.tensor([d[1] for d in data])
@@ -541,8 +542,6 @@ if __name__ == "__main__":
 
     transform = torchvision.transforms.Compose([pad, spec, melscale, rescale])
 
-    print(label_cnt)
-
     train_dataset = SPEECHCOMMANDS(
         label_dict,
         dataset_dir,
@@ -616,14 +615,6 @@ if __name__ == "__main__":
 
             reset_net(net)
 
-            # Rate-based output decoding
-            correct_rate = (
-                (out_spikes_counter_frequency.argmax(dim=1) == labels)
-                .float()
-                .mean()
-                .item()
-            )
-
             net.train_times += 1
 
         if e >= warmup_epochs:
@@ -640,8 +631,8 @@ if __name__ == "__main__":
             pred = []
             label = []
             for audios, labels in tqdm(test_dataloader):
-                audios = audios.cuda(non_blocking=True)
-                labels = labels.cuda(non_blocking=True)
+                audios = audios.to(device, non_blocking=True)
+                labels = labels.to(device, non_blocking=True)
 
                 out_spikes_counter = net(audios)
 

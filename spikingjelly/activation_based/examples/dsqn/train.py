@@ -56,7 +56,7 @@ def eval_Q(env, net, cuda):
                 rand_actions = np.random.choice(n_actions, sum(mask))
                 actions[mask] = rand_actions
 
-                obs, reward, done, _ = env.step(actions)
+                obs, reward, done, _ = env.step(actions.item())
 
                 value_estimate += q.max()
                 step_cnt += 1
@@ -89,7 +89,7 @@ def test(env, net, n_episodes, cuda):
                 rand_actions = np.random.choice(n_actions, sum(mask))
                 actions[mask] = rand_actions
 
-                obs, reward, done, _ = env.step(actions)
+                obs, reward, done, _ = env.step(actions.item())
 
                 ep_reward += reward
 
@@ -271,7 +271,7 @@ if __name__ == "__main__":
                 )
 
                 if args.eval_q:
-                    eval_q = eval_Q(env, net, cuda=args.cuda)
+                    eval_q = eval_Q(test_env, net, cuda=args.cuda)
                     print("Eval-Q: %.1f" % (eval_q))
                     test_writer.add_scalar(game + "/eval_q", eval_q, frame_idx)
 
