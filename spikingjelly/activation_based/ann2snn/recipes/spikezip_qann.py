@@ -780,6 +780,7 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
         :type time_steps: int
         :param model_family: 模型族。支持 ``"roberta"`` 或 ``"vit"``。
         :type model_family: str
+
         ----
 
         .. _SpikeZIPTFQANNRecipe.__init__-en:
