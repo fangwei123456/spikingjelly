@@ -33,24 +33,6 @@ DVS Gesture Classification
    :undoc-members:
    :show-inheritance:
 
-Image Classification Training
--------------------------------------------------------------
-
-.. automodule:: spikingjelly.activation_based.examples.common.train_classify
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: spikingjelly.activation_based.examples.train_imagenet
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: spikingjelly.activation_based.examples.train_flexsn_compile
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Optimizing Training Memory: Spiking VGG for CIFAR10-DVS
 ---------------------------------------------------------------
 
