@@ -35,21 +35,26 @@ def _conv1x1(in_channels: int, out_channels: int, stride: int = 1) -> layer.Conv
     )
 
 
-def _lif(backend: str, tau: float) -> neuron.LIFNode:
+def _ms_lif(backend: str, tau: float) -> neuron.LIFNode:
     return neuron.LIFNode(
         tau=tau,
         v_threshold=0.5,
         detach_reset=True,
         decay_input=False,
         step_mode="m",
-        surrogate_function=surrogate.ATan(),
+        surrogate_function=surrogate.Rect(alpha=2.0),
         backend=backend,
     )
 
 
 class _MSBlock(nn.Module):
     tau = 4.0 / 3.0
+    bn_weight = 0.5
     zero_init = True
+
+    @classmethod
+    def _make_lif(cls, backend: str) -> neuron.LIFNode:
+        return _ms_lif(backend, cls.tau)
 
     def __init__(
         self,
@@ -60,14 +65,14 @@ class _MSBlock(nn.Module):
         downsample: nn.Module | None,
     ):
         super().__init__()
-        self.spike1 = _lif(backend, self.tau)
+        self.spike1 = self._make_lif(backend)
         self.conv1 = _conv3x3(in_channels, out_channels, stride)
         self.bn1 = layer.BatchNorm2d(out_channels, step_mode="m")
-        self.spike2 = _lif(backend, self.tau)
+        nn.init.constant_(self.bn1.weight, self.bn_weight)
+        self.spike2 = self._make_lif(backend)
         self.conv2 = _conv3x3(out_channels, out_channels)
         self.bn2 = layer.BatchNorm2d(out_channels, step_mode="m")
-        if self.zero_init:
-            nn.init.zeros_(self.bn2.weight)
+        nn.init.constant_(self.bn2.weight, 0.0 if self.zero_init else self.bn_weight)
         self.downsample = downsample
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -79,7 +84,14 @@ class _MSBlock(nn.Module):
 
 class _MaxResNetBlock(_MSBlock):
     tau = 2.0
+    bn_weight = 1.0
     zero_init = False
+
+    @classmethod
+    def _make_lif(cls, backend: str) -> neuron.LIFNode:
+        return neuron.LIFNode(
+            tau=cls.tau, detach_reset=True, step_mode="m", backend=backend
+        )
 
 
 class _MaxResNetMaxBlock(_MaxResNetBlock):
@@ -189,7 +201,8 @@ class MSResNet(nn.Module):
 
     _block_type = _MSBlock
     _transition_block_type = _MSBlock
-    _head_tau = 4.0 / 3.0
+    _first_stage_stride = 2
+    _bn_weight = 0.5
 
     def __init__(
         self,
@@ -214,6 +227,8 @@ class MSResNet(nn.Module):
         self.T = T
         self.inplanes = base_channels
         self.backend = backend
+        stem_bn = layer.BatchNorm2d(base_channels, step_mode="m")
+        nn.init.constant_(stem_bn.weight, self._bn_weight)
         self.stem = nn.Sequential(
             layer.Conv2d(
                 in_channels,
@@ -224,12 +239,14 @@ class MSResNet(nn.Module):
                 bias=False,
                 step_mode="m",
             ),
-            layer.BatchNorm2d(base_channels, step_mode="m"),
+            stem_bn,
         )
         if stem_pool:
             self.stem.append(layer.MaxPool2d(3, stride=2, padding=1, step_mode="m"))
 
-        self.layer1 = self._make_layer(stage_channels[0], layers[0], 1)
+        self.layer1 = self._make_layer(
+            stage_channels[0], layers[0], self._first_stage_stride
+        )
         self.layer2 = self._make_layer(stage_channels[1], layers[1], 2)
         self.layer3 = self._make_layer(stage_channels[2], layers[2], 2)
         self.layer4 = (
@@ -238,7 +255,7 @@ class MSResNet(nn.Module):
             else None
         )
         final_channels = stage_channels[-1]
-        self.head_lif = _lif(backend, self._head_tau)
+        self.head_lif = self._block_type._make_lif(backend)
         self.avgpool = layer.AdaptiveAvgPool2d((1, 1), step_mode="m")
         self.head = layer.Linear(final_channels, num_classes, step_mode="m")
         functional.set_step_mode(self, "m")
@@ -246,9 +263,11 @@ class MSResNet(nn.Module):
     def _make_layer(self, out_channels: int, blocks: int, stride: int) -> nn.Sequential:
         downsample = None
         if stride != 1 or self.inplanes != out_channels:
+            downsample_bn = layer.BatchNorm2d(out_channels, step_mode="m")
+            nn.init.constant_(downsample_bn.weight, self._bn_weight)
             downsample = nn.Sequential(
                 _conv1x1(self.inplanes, out_channels, stride),
-                layer.BatchNorm2d(out_channels, step_mode="m"),
+                downsample_bn,
             )
         block_type = self._transition_block_type if stride != 1 else self._block_type
         layers = [
@@ -309,9 +328,33 @@ class MSResNet(nn.Module):
 
 
 class MaxResNet(MSResNet):
+    r"""
+    **API Language** - :ref:`中文 <MaxResNet-cn>` | :ref:`English <MaxResNet-en>`
+
+    ----
+
+    .. _MaxResNet-cn:
+
+    * **中文**
+
+    Max-ResNet。在 :class:`MSResNet` 的膜电位 shortcut 基础上，使用 max-pool
+    完成 stage 间下采样。构造参数、输入和输出约定与 :class:`MSResNet` 相同。
+
+    ----
+
+    .. _MaxResNet-en:
+
+    * **English**
+
+    Max-ResNet. It uses max-pooling for downsampling between stages while retaining
+    the membrane shortcut of :class:`MSResNet`. Constructor parameters, input, and
+    output conventions are identical to :class:`MSResNet`.
+    """
+
     _block_type = _MaxResNetBlock
     _transition_block_type = _MaxResNetMaxBlock
-    _head_tau = 2.0
+    _first_stage_stride = 1
+    _bn_weight = 1.0
 
 
 def ms_resnet18(

@@ -19,7 +19,7 @@ class _PatchEmbed(nn.Module):
         channels = (embed_dims // 8, embed_dims // 4, embed_dims // 2, embed_dims)
         self.stages = nn.ModuleList()
         previous = in_channels
-        for use_pool, channels_out in zip(pooling_stat, channels):
+        for use_pool, channels_out in zip(pooling_stat[:3], channels[:3]):
             stage = [
                 layer.Conv2d(previous, channels_out, 3, padding=1, step_mode="m"),
                 layer.BatchNorm2d(channels_out, step_mode="m"),
@@ -29,6 +29,14 @@ class _PatchEmbed(nn.Module):
                 stage.append(layer.MaxPool2d(3, stride=2, padding=1, step_mode="m"))
             self.stages.append(nn.Sequential(*stage))
             previous = channels_out
+        final_stage = [
+            layer.Conv2d(previous, embed_dims, 3, padding=1, step_mode="m"),
+            layer.BatchNorm2d(embed_dims, step_mode="m"),
+        ]
+        if pooling_stat[3] == "1":
+            final_stage.append(layer.MaxPool2d(3, stride=2, padding=1, step_mode="m"))
+        self.final_stage = nn.Sequential(*final_stage)
+        self.final_lif = neuron.LIFNode(step_mode="m", backend=backend)
         self.rpe_conv = layer.Conv2d(
             embed_dims, embed_dims, 3, padding=1, bias=False, step_mode="m"
         )
@@ -37,8 +45,9 @@ class _PatchEmbed(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         for stage in self.stages:
             x = stage(x)
+        x = self.final_stage(x)
         identity = x
-        x = self.rpe_bn(self.rpe_conv(x))
+        x = self.rpe_bn(self.rpe_conv(self.final_lif(x)))
         return x + identity
 
 

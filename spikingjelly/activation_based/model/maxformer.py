@@ -60,8 +60,9 @@ class _MaxEmbedStage(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.lif1(x)
         identity = self.shortcut(x)
-        x = self.pool(self.lif1(self.bn1(self.conv1(x))))
+        x = self.pool(self.bn1(self.conv1(x)))
         x = self.lif2(x)
         x = self.bn2(self.conv2(x))
         return x + identity
