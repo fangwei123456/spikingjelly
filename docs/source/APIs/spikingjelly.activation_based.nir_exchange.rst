@@ -20,26 +20,32 @@ Supported Modules
 **Supported SpikingJelly / PyTorch Modules:**
 
 * ``torch.nn.Linear``, :class:`layer.Linear <spikingjelly.activation_based.layer.Linear>`
+* ``torch.nn.Conv1d``, :class:`layer.Conv1d <spikingjelly.activation_based.layer.Conv1d>`
 * ``torch.nn.Conv2d``, :class:`layer.Conv2d <spikingjelly.activation_based.layer.Conv2d>`
 * ``torch.nn.AvgPool2d``, :class:`layer.AvgPool2d <spikingjelly.activation_based.layer.AvgPool2d>`
 * ``torch.nn.Flatten``, :class:`layer.Flatten <spikingjelly.activation_based.layer.Flatten>`
 * :class:`IFNode <spikingjelly.activation_based.neuron.IFNode>`
 * :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>` and :class:`ParametricLIFNode <spikingjelly.activation_based.neuron.ParametricLIFNode>`
+* :class:`CUBALIFNode <spikingjelly.activation_based.neuron.CUBALIFNode>`
 
 **Supported NIR Nodes:**
 
 * ``nir.Linear``, ``nir.Affine``
+* ``nir.Conv1d``
 * ``nir.Conv2d``
 * ``nir.AvgPool2d``
 * ``nir.Flatten``
 * ``nir.IF``
 * ``nir.LIF``
+* ``nir.CubaLIF``
 
-.. note::
+.. warning::
 
-   我们将在后续更新中逐渐完善对其他模块的支持。
+   转换仅支持 hard reset 和非分组卷积。NIR 神经元参数必须在所有神经元上均匀，
+   并符合 SpikingJelly 使用的离散化关系。
 
-   We will add support for more modules in future updates.
+   Conversion supports only hard reset and ungrouped convolutions. NIR neuron
+   parameters must be uniform and match the discretization used by SpikingJelly.
 
 SpikingJelly to NIR
 -----------------------------

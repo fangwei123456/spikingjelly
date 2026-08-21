@@ -1,27 +1,75 @@
-from typing import Union
+from graphlib import CycleError, TopologicalSorter
+from pathlib import Path
+from typing import Optional, Union
 
-import numpy as np
-import torch
-from torch import fx
 import nir
 import nirtorch
+import numpy as np
+import torch
+import torch.nn as nn
+from torch import fx
 
-from .. import layer, functional, neuron
-from spikingjelly.logger import logger
+from .. import base, functional, layer, neuron
+from ...logger import logger
 
 
 __all__ = ["import_from_nir"]
 
 
-def _from_numpy(x):
-    if isinstance(x, (int, np.int64)):
-        return int(x)
-    if isinstance(x, (np.float32, np.float64)):
-        return float(x)
-    elif isinstance(x, np.ndarray):
-        return tuple(x.tolist())
-    else:
-        return tuple(x)
+def _to_python_value(x):
+    value = np.asarray(x)
+    return value.item() if value.ndim == 0 else tuple(value.tolist())
+
+
+def _uniform_scalar(value: np.ndarray, name: str):
+    unique = np.unique(value)
+    if unique.size != 1:
+        raise ValueError(f"{name} must be uniform across all neurons.")
+    return float(unique.item())
+
+
+def _is_close_finite(value: float, expected: float) -> bool:
+    return bool(
+        np.isfinite(value)
+        and np.isfinite(expected)
+        and np.isclose(value, expected, rtol=1e-6, atol=1e-12)
+    )
+
+
+def _require_ungrouped(groups) -> int:
+    groups = _to_python_value(groups)
+    if groups != 1:
+        raise NotImplementedError(
+            "Grouped convolutions are not supported by NIR exchange."
+        )
+    return 1
+
+
+def _has_cycle(graph: nir.NIRGraph) -> bool:
+    predecessors = {name: set() for name in graph.nodes}
+    for source, target in graph.edges:
+        predecessors[target].add(source)
+    try:
+        TopologicalSorter(predecessors).prepare()
+    except CycleError:
+        return True
+    return False
+
+
+class _NIRStatefulModule(nn.Module):
+    def __init__(self, module: base.MemoryModule):
+        super().__init__()
+        self.module = module
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        state: Optional[tuple[object, ...]] = None,
+    ) -> tuple[torch.Tensor, tuple[object, ...]]:
+        if state is None:
+            state = tuple(base.extract_memories(self.module))
+        outputs, updated_state = self.module.functional_forward((x,), tuple(state))
+        return outputs[0], updated_state
 
 
 class _NodeMapper:
@@ -33,12 +81,14 @@ class _NodeMapper:
         return {
             nir.Affine: self.map_affine,
             nir.Linear: self.map_linear,
+            nir.Conv1d: self.map_conv1d,
             nir.Conv2d: self.map_conv2d,
             nir.AvgPool2d: self.map_avgpool2d,
             nir.Flatten: self.map_flatten,
             nir.IF: self.map_if,
             nir.LIF: self.map_lif,
-        }  # all the functions return single-step modules
+            nir.CubaLIF: self.map_cuba_lif,
+        }
 
     def map_affine(self, node: nir.Affine) -> layer.Linear:
         module = layer.Linear(node.weight.shape[-1], node.weight.shape[-2], bias=True)
@@ -51,17 +101,34 @@ class _NodeMapper:
         module.weight.data = torch.from_numpy(node.weight)
         return module
 
+    def map_conv1d(self, node: nir.Conv1d) -> layer.Conv1d:
+        _require_ungrouped(node.groups)
+        weight = node.weight
+        module = layer.Conv1d(
+            in_channels=weight.shape[1],
+            out_channels=weight.shape[0],
+            kernel_size=weight.shape[-1],
+            stride=_to_python_value(node.stride),
+            padding=_to_python_value(node.padding),
+            dilation=_to_python_value(node.dilation),
+            groups=1,
+            bias=True,
+        )
+        module.weight.data = torch.from_numpy(weight)
+        module.bias.data = torch.from_numpy(node.bias)
+        return module
+
     def map_conv2d(self, node: nir.Conv2d) -> layer.Conv2d:
         weight = node.weight
         bias = node.bias
-        stride = _from_numpy(node.stride)
-        padding = _from_numpy(node.padding)
-        dilation = _from_numpy(node.dilation)
-        groups = _from_numpy(node.groups)
+        stride = _to_python_value(node.stride)
+        padding = _to_python_value(node.padding)
+        dilation = _to_python_value(node.dilation)
+        groups = _require_ungrouped(node.groups)
 
         module = layer.Conv2d(
-            in_channels=weight.shape[-4],
-            out_channels=weight.shape[-3],
+            in_channels=weight.shape[1],
+            out_channels=weight.shape[0],
             kernel_size=weight.shape[-2:],
             stride=stride,
             padding=padding,
@@ -74,9 +141,9 @@ class _NodeMapper:
         return module
 
     def map_avgpool2d(self, node: nir.AvgPool2d) -> layer.AvgPool2d:
-        kernel_size = _from_numpy(node.kernel_size)
-        stride = _from_numpy(node.stride)
-        padding = _from_numpy(node.padding)
+        kernel_size = _to_python_value(node.kernel_size)
+        stride = _to_python_value(node.stride)
+        padding = _to_python_value(node.padding)
 
         return layer.AvgPool2d(
             kernel_size=kernel_size,
@@ -90,65 +157,74 @@ class _NodeMapper:
         end_dim = end_dim + 1 if end_dim >= 0 else end_dim
         return layer.Flatten(start_dim, end_dim)
 
-    def map_if(self, node: nir.IF) -> neuron.IFNode:
-        v_threshold = np.unique(node.v_threshold)
-        if v_threshold.size != 1:
-            raise AssertionError("`v_threshold` must be the same for all neurons!")
-        v_threshold = _from_numpy(v_threshold[0])
+    def map_if(self, node: nir.IF) -> nn.Module:
+        r = _uniform_scalar(node.r, "nir.IF.r")
+        if not _is_close_finite(r, 1.0 / self.dt):
+            raise ValueError("nir.IF.r must equal 1 / dt.")
+        return _NIRStatefulModule(
+            neuron.IFNode(
+                v_threshold=_uniform_scalar(node.v_threshold, "nir.IF.v_threshold"),
+                v_reset=_uniform_scalar(node.v_reset, "nir.IF.v_reset"),
+            )
+        )
 
-        v_reset = np.unique(node.v_reset)
-        if v_reset.size != 1:
-            raise AssertionError("`v_reset` must be the same for all neurons!")
-        v_reset = _from_numpy(v_reset[0])
+    def map_lif(self, node: nir.LIF) -> nn.Module:
+        tau = _uniform_scalar(node.tau, "nir.LIF.tau") / self.dt
+        if not np.isfinite(tau) or tau <= 1.0:
+            raise ValueError("nir.LIF.tau / dt must be finite and greater than 1.")
+        r = _uniform_scalar(node.r, "nir.LIF.r")
+        if _is_close_finite(r, 1.0):
+            decay_input = True
+        elif _is_close_finite(r, tau):
+            decay_input = False
+        else:
+            raise ValueError("nir.LIF.r must equal 1 or tau / dt.")
 
-        # r can be reconstructed directly from self.dt
-        r_value = 1.0 / self.dt
-        if not np.allclose(np.unique(node.r), r_value):
-            raise AssertionError("`nir.IF.r` mismatch 1.0/dt !")
+        v_reset = _uniform_scalar(node.v_reset, "nir.LIF.v_reset")
+        v_leak = _uniform_scalar(node.v_leak, "nir.LIF.v_leak")
+        if not _is_close_finite(v_leak, v_reset):
+            raise ValueError("nir.LIF.v_leak must equal v_reset.")
 
-        return neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset)
+        return _NIRStatefulModule(
+            neuron.LIFNode(
+                tau=tau,
+                decay_input=decay_input,
+                v_reset=v_reset,
+                v_threshold=_uniform_scalar(node.v_threshold, "nir.LIF.v_threshold"),
+            )
+        )
 
-    def map_lif(self, node: nir.LIF) -> neuron.LIFNode:
-        tau_ = np.unique(node.tau)
-        if tau_.size != 1:
-            raise AssertionError("`tau` must be the same for all neurons!")
-        tau = _from_numpy(tau_[0] / self.dt)  # reverse tau_ = tau * dt
+    def map_cuba_lif(self, node: nir.CubaLIF) -> nn.Module:
+        tau_syn = _uniform_scalar(node.tau_syn, "nir.CubaLIF.tau_syn")
+        tau_mem = _uniform_scalar(node.tau_mem, "nir.CubaLIF.tau_mem")
+        if not np.isfinite(tau_syn) or not np.isfinite(tau_mem):
+            raise ValueError("nir.CubaLIF time constants must be finite.")
+        if tau_syn < self.dt or tau_mem < self.dt:
+            raise ValueError("nir.CubaLIF time constants must be at least dt.")
+        r = _uniform_scalar(node.r, "nir.CubaLIF.r")
+        if not _is_close_finite(r, tau_mem / self.dt):
+            raise ValueError("nir.CubaLIF.r must equal tau_mem / dt.")
+        w_in = _uniform_scalar(node.w_in, "nir.CubaLIF.w_in")
+        if not _is_close_finite(w_in, tau_syn / self.dt):
+            raise ValueError("nir.CubaLIF.w_in must equal tau_syn / dt.")
+        v_leak = _uniform_scalar(node.v_leak, "nir.CubaLIF.v_leak")
+        if not _is_close_finite(v_leak, 0.0):
+            raise ValueError("nir.CubaLIF.v_leak must equal 0.")
 
-        r = np.unique(node.r)
-        if r.size != 1:
-            raise AssertionError("`r` must be the same for all neurons!")
-        r = _from_numpy(r[0])
-        # note that: r = 1. if decay_input else tau
-        decay_input = False if r == tau else (True if r == 1.0 else False)
-
-        v_reset = np.unique(node.v_reset)
-        if v_reset.size != 1:
-            raise AssertionError("`v_reset` must be the same for all neurons!")
-        v_reset = _from_numpy(v_reset[0])
-
-        # Recover v_leak (usually equals v_reset in torch->NIR conversion)
-        v_leak = np.unique(node.v_leak)
-        if v_leak.size != 1:
-            raise AssertionError("`v_leak` must be the same for all neurons!")
-        v_leak = _from_numpy(v_leak[0])
-        if v_leak != v_reset:
-            raise AssertionError("`v_leak` should be equal to `v_reset`!")
-
-        v_threshold = np.unique(node.v_threshold)
-        if v_threshold.size != 1:
-            raise AssertionError("`v_threshold` must be the same for all neurons!")
-        v_threshold = _from_numpy(v_threshold[0])
-
-        return neuron.LIFNode(
-            tau=tau,
-            decay_input=decay_input,
-            v_reset=v_reset,
-            v_threshold=v_threshold,
+        return _NIRStatefulModule(
+            neuron.CUBALIFNode(
+                c_decay=1.0 - self.dt / tau_syn,
+                v_decay=1.0 - self.dt / tau_mem,
+                v_threshold=_uniform_scalar(
+                    node.v_threshold, "nir.CubaLIF.v_threshold"
+                ),
+                v_reset=_uniform_scalar(node.v_reset, "nir.CubaLIF.v_reset"),
+            )
         )
 
 
 def import_from_nir(
-    graph: Union[nir.NIRGraph, str],
+    graph: Union[nir.NIRGraph, str, Path],
     dt: float = 1e-4,
     device: str = "cpu",
     dtype: torch.dtype = torch.float32,
@@ -165,11 +241,14 @@ def import_from_nir(
 
     将 `NIR（Neuromorphic Intermediate Representation） <https://neuroir.org/docs/index.html>`_ 图
     转换为 SpikingJelly 神经网络模型。函数会根据 NIR 节点类型自动映射为对应的
-    SpikingJelly 模块（如 Linear、Conv2d、IF/LIF 神经元等），并返回可直接运行的
-    ``fx.GraphModule`` 对象。
+    SpikingJelly 模块（如 Linear、Conv、IF/LIF/CubaLIF 神经元等），并返回可直接运行的
+    ``fx.GraphModule`` 对象。模型前向返回 ``(output, state)``；传入 ``state=None``
+    会从初始状态运行。逐步循环必须将上一次返回的 ``state`` 传回模型，否则每一步都会
+    从初始状态重新运行。:func:`functional.reset_net <spikingjelly.activation_based.functional.reset_net>`
+    不会重置已经返回的显式状态；传入 ``state=None`` 可重新开始。
 
     :param graph: NIR 图，或存储 NIR 图的 HDF5 文件路径
-    :type graph: Union[nir.NIRGraph, str]
+    :type graph: Union[nir.NIRGraph, str, Path]
 
     :param dt: 网络时间步长，单位为秒，用于重构 IF/LIF 节点的时间常量等超参数。默认值为 ``1e-4``，与大多数兼容 NIR 的框架一致
     :type dt: float
@@ -181,11 +260,13 @@ def import_from_nir(
     :type dtype: torch.dtype
 
     :param step_mode: 步进模式，可选 ``'s'`` (单步) 或 ``'m'`` (多步)。NIR 图将首先转换到单步模式的 SpikingJelly 模型，
-        随后统一改变模型中所有子模块的步进模式
+        随后统一改变模型中所有子模块的步进模式。循环图仅支持 ``'s'``
     :type step_mode: str
 
     :return: 转换得到的 ``fx.GraphModule`` 对象
     :rtype: torch.fx.GraphModule
+    :raises ValueError: ``dt`` 非正、``step_mode`` 非法，或 NIR 神经元参数非均匀、不符合 SpikingJelly 离散化约束
+    :raises NotImplementedError: NIR 图包含 grouped convolution，或循环图使用多步模式
 
     ----
 
@@ -195,11 +276,17 @@ def import_from_nir(
 
     Convert a `NIR（Neuromorphic Intermediate Representation） <https://neuroir.org/docs/index.html>`_
     graph to a SpikingJelly model. The function automatically maps NIR nodes to
-    corresponding SpikingJelly modules (e.g., Linear, Conv2d, IF/LIF neurons)
-    and returns an runnable :class:`fx.GraphModule <https://docs.pytorch.org/docs/stable/fx.html#torch.fx.GraphModule>` object.
+    corresponding SpikingJelly modules (e.g., Linear, convolution, and
+    IF/LIF/CubaLIF neurons) and returns a runnable
+    `fx.GraphModule <https://docs.pytorch.org/docs/stable/fx.html#torch.fx.GraphModule>`_.
+    Its forward pass returns ``(output, state)``. Passing ``state=None`` starts
+    from the initial state. A step-by-step loop must pass the previously returned
+    ``state`` to continue; otherwise every step restarts from the initial state.
+    :func:`functional.reset_net <spikingjelly.activation_based.functional.reset_net>`
+    does not reset a previously returned explicit state; pass ``state=None`` to restart.
 
     :param graph: NIR graph, or the path to the HDF5 file storing the NIR graph
-    :type graph: Union[nir.NIRGraph, str]
+    :type graph: Union[nir.NIRGraph, str, Path]
 
     :param dt: simulation time step in seconds, used to reconstruct time constant
         and other neuronal hyperparameters. Default is ``1e-4``, which is consistent
@@ -214,19 +301,35 @@ def import_from_nir(
 
     :param step_mode: step mode, either ``'s'`` (single-step) or ``'m'`` (multi-step).
         NIR graph will first be converted to a single-step SpikingJelly model.
-        Then, all the submodules will be set to the specified step mode.
+        Then, all the submodules will be set to the specified step mode. Recurrent
+        graphs support only ``'s'``.
     :type step_mode: str
 
     :return: the converted SpikingJelly ``fx.GraphModule`` object
     :rtype: torch.fx.GraphModule
+    :raises ValueError: If ``dt`` is not positive, ``step_mode`` is invalid, or
+        NIR neuron parameters are non-uniform or incompatible with SpikingJelly
+        discretization
+    :raises NotImplementedError: If the NIR graph contains grouped convolution,
+        or a recurrent graph uses multi-step mode
     """
+    if dt <= 0:
+        raise ValueError("dt must be positive.")
+    if step_mode not in ("s", "m"):
+        raise ValueError("step_mode must be 's' or 'm'.")
+
+    source_is_path = isinstance(graph, (str, Path))
+    if source_is_path:
+        graph = nir.read(graph)
+    if step_mode == "m" and _has_cycle(graph):
+        raise NotImplementedError("Recurrent NIR graphs require step_mode='s'.")
     mapper = _NodeMapper(dt=dt)
 
     gm = nirtorch.nir_to_torch(graph, mapper.map_dict, device=device, dtype=dtype)
     functional.set_step_mode(gm, step_mode)
     logger.info(
         "Import completed: source={} device={} dtype={} step_mode={} modules={}",
-        "path" if isinstance(graph, str) else type(graph).__name__,
+        "path" if source_is_path else type(graph).__name__,
         device,
         dtype,
         step_mode,

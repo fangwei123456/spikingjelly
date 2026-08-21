@@ -71,7 +71,7 @@ pip install .
 | --- | --- |
 | CuPy 后端 | `pip install cupy-cuda12x` 或 `pip install cupy-cuda11x` |
 | Triton 后端 | `pip install triton==3.3.1` |
-| NIR exchange | `pip install nir nirtorch` |
+| NIR exchange | `pip install "spikingjelly[nir]"`（PyPI）或 `pip install ".[nir]"`（源码目录） |
 | Lightning 集成 | `pip install lightning jsonargparse[signatures]` |
 
 ## 快速开始
