@@ -10,6 +10,7 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.nn as nn
+from torch.utils._pytree import tree_map
 
 from .. import functional, neuron
 from ..profiler import LayerWiseFPCUDATimeProfiler, LayerWiseMemoryProfiler
@@ -182,15 +183,10 @@ def resolve_device() -> str:
 
 
 def _dummy_input_to_device(dummy_input, device):
-    if isinstance(dummy_input, torch.Tensor):
-        return dummy_input.to(device)
-    elif isinstance(dummy_input, (tuple, list)):
-        return type(dummy_input)(_dummy_input_to_device(t, device) for t in dummy_input)
-    elif isinstance(dummy_input, dict):
-        return {k: _dummy_input_to_device(v, device) for k, v in dummy_input.items()}
-    else:
-        # Non-tensor inputs (e.g., None, int, etc.)
-        return dummy_input
+    return tree_map(
+        lambda value: value.to(device) if isinstance(value, torch.Tensor) else value,
+        dummy_input,
+    )
 
 
 def _randomize_input_like(dummy_input):
@@ -885,18 +881,14 @@ def _dummy_train_step(
     if restore_bn:
         saved_bn_states = _save_bn_states(net)
 
-    def _prepare_dummy_input(dummy_input):  # clone, detach, requires grad
-        if isinstance(dummy_input, torch.Tensor):
-            return dummy_input.clone().detach().requires_grad_(True)
-        elif isinstance(dummy_input, (tuple, list)):
-            return type(dummy_input)(_prepare_dummy_input(t) for t in dummy_input)
-        elif isinstance(dummy_input, dict):
-            return {k: _prepare_dummy_input(v) for k, v in dummy_input.items()}
-        else:
-            # Non-tensor inputs (e.g., None, int, etc.)
-            return dummy_input
-
-    dummy_input = _prepare_dummy_input(dummy_input)
+    dummy_input = tree_map(
+        lambda value: (
+            value.clone().detach().requires_grad_(True)
+            if isinstance(value, torch.Tensor)
+            else value
+        ),
+        dummy_input,
+    )
     out = net(*dummy_input)
 
     def _calculate_loss(out):

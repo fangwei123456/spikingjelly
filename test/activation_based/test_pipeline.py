@@ -42,34 +42,24 @@ def _create_simple_snn_model():
 
 
 def test_dummy_input_to_device():
-    """Test _dummy_input_to_device function."""
-    # Test tensor input
-    tensor = torch.randn(2, 3)
-    result = _dummy_input_to_device(tensor, "cpu")
-    assert torch.equal(result, tensor)
+    dummy_input = {
+        "float": [
+            torch.randn(2, 3, dtype=torch.float64),
+            ("label", torch.ones(2, dtype=torch.int64)),
+        ],
+        "none": None,
+    }
 
-    # Test tuple input
-    tuple_input = (torch.randn(2, 3), torch.randn(4, 5))
-    result = _dummy_input_to_device(tuple_input, "cpu")
-    assert isinstance(result, tuple)
-    assert len(result) == 2
-    assert torch.equal(result[0], tuple_input[0])
-    assert torch.equal(result[1], tuple_input[1])
+    result = _dummy_input_to_device(dummy_input, "meta")
 
-    # Test dict input
-    dict_input = {"x": torch.randn(2, 3), "y": torch.randn(4, 5)}
-    result = _dummy_input_to_device(dict_input, "cpu")
-    assert isinstance(result, dict)
-    assert "x" in result and "y" in result
-    assert torch.equal(result["x"], dict_input["x"])
-    assert torch.equal(result["y"], dict_input["y"])
-
-    # Test non-tensor input
-    mixed_input = (torch.randn(2, 3), "string", 42, None)
-    result = _dummy_input_to_device(mixed_input, "cpu")
-    assert result[1] == "string"
-    assert result[2] == 42
-    assert result[3] is None
+    assert list(result) == ["float", "none"]
+    assert isinstance(result["float"], list)
+    assert isinstance(result["float"][1], tuple)
+    assert result["float"][1][0] == "label" and result["none"] is None
+    assert result["float"][0].device.type == "meta"
+    assert result["float"][0].dtype == torch.float64
+    assert result["float"][1][1].device.type == "meta"
+    assert result["float"][1][1].dtype == torch.int64
 
 
 def test_probe_binary_inputs():
@@ -162,7 +152,8 @@ def test_apply_gc_without_compression():
 def test_dummy_train_step():
     """Test _dummy_train_step function."""
     net = _create_simple_snn_model()
-    dummy_input = (torch.randn(4, 8, 1, 28, 28),)
+    source = torch.randn(4, 8, 1, 28, 28, requires_grad=True)
+    dummy_input = (source * 2,)
 
     # Test that the function runs without error
     _dummy_train_step(net, dummy_input)
@@ -171,6 +162,7 @@ def test_dummy_train_step():
     for module in net.modules():
         if hasattr(module, "v"):
             assert module.v == 0.0
+    assert source.grad is None
 
 
 def test_get_module_and_parent():

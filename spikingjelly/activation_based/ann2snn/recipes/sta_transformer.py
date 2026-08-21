@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import fx
+from torch.utils._pytree import tree_map
 from tqdm import tqdm
 
 from spikingjelly.activation_based import base
@@ -825,18 +826,10 @@ class STATransformerRecipe(ConversionRecipe):
 
     @staticmethod
     def _to_device(value: Any, device: torch.device) -> Any:
-        if torch.is_tensor(value):
-            return value.to(device)
-        if isinstance(value, tuple):
-            return tuple(STATransformerRecipe._to_device(v, device) for v in value)
-        if isinstance(value, list):
-            return [STATransformerRecipe._to_device(v, device) for v in value]
-        if isinstance(value, dict):
-            return {
-                key: STATransformerRecipe._to_device(v, device)
-                for key, v in value.items()
-            }
-        return value
+        return tree_map(
+            lambda item: item.to(device) if torch.is_tensor(item) else item,
+            value,
+        )
 
     @staticmethod
     def _get_attr_value(fx_model: fx.GraphModule, target: str) -> Any:
