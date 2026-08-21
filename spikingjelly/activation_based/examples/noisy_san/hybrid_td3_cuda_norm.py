@@ -13,7 +13,7 @@ from torch.optim import Adam
 from spikingjelly.activation_based import functional
 
 from replay_buffer_norm import ReplayBuffer
-from noisysan import NoisyPopSpikeActor
+from noisy_san import NoisyPopSpikeActor
 from core_cuda import MLPQFunction
 from torch.utils.tensorboard import SummaryWriter
 
@@ -288,17 +288,9 @@ def hybrid_td3(
     # Save rewards also create dir for saving parameters
     save_test_reward = []
     save_test_reward_steps = []
-    try:
-        os.mkdir(root_dir + "/params")
-        print("Directory params Created")
-    except FileExistsError:
-        print("Directory params already exists")
+    os.makedirs(root_dir + "/params", exist_ok=True)
     model_dir = root_dir + "/params/hybrid-td3_" + tb_comment
-    try:
-        os.mkdir(model_dir)
-        print("Directory ", model_dir, " Created")
-    except FileExistsError:
-        print("Directory ", model_dir, " already exists")
+    os.makedirs(model_dir, exist_ok=True)
 
     tb_dir = model_dir + "/tb/" + str(seed)
     writer = SummaryWriter(log_dir=tb_dir)

@@ -12,7 +12,7 @@ import os
 from spikingjelly.activation_based import functional
 
 from replay_buffer_norm import ReplayBuffer
-from ilcsan import PopSpikeActor
+from ilc_san import PopSpikeActor
 from core_cuda import MLPQFunction
 
 
@@ -239,17 +239,9 @@ def spike_td3(
 
     save_test_reward = []
     save_test_reward_steps = []
-    try:
-        os.mkdir(root_dir + "/params")
-        print("Directory params Created")
-    except FileExistsError:
-        print("Directory params already exists")
+    os.makedirs(root_dir + "/params", exist_ok=True)
     model_dir = root_dir + "/params/hybrid-td3_" + tb_comment
-    try:
-        os.mkdir(model_dir)
-        print("Directory ", model_dir, " Created")
-    except FileExistsError:
-        print("Directory ", model_dir, " already exists")
+    os.makedirs(model_dir, exist_ok=True)
 
     total_steps = steps_per_epoch * epochs
     o, ep_ret, ep_len = env.reset(), 0, 0

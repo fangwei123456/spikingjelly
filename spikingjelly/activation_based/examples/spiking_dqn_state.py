@@ -164,8 +164,7 @@ def train(use_cuda, model_dir, log_dir, env_name, hidden_size, num_episodes, see
         optimizer.step()
         functional.reset_net(policy_net)
 
-    if not os.path.isdir(model_dir):
-        os.makedirs(model_dir)
+    os.makedirs(model_dir, exist_ok=True)
 
     max_reward = 0
     max_pt_path = os.path.join(model_dir, f"policy_net_{hidden_size}_max.pt")

@@ -75,7 +75,7 @@ See the :doc:`tutorial <../tutorials/en/memopt>` and the `Github repo <https://g
 Speech Commands
 -------------------------------------------------------------
 
-.. automodule:: spikingjelly.activation_based.examples.speechcommands
+.. automodule:: spikingjelly.activation_based.examples.speech_commands
    :members:
    :undoc-members:
    :show-inheritance:
@@ -107,12 +107,12 @@ Spiking LSTM for Text Classification
 A2C
 --------------------------------------------------
 
-.. automodule:: spikingjelly.activation_based.examples.A2C
+.. automodule:: spikingjelly.activation_based.examples.a2c
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: spikingjelly.activation_based.examples.Spiking_A2C
+.. automodule:: spikingjelly.activation_based.examples.spiking_a2c
    :members:
    :undoc-members:
    :show-inheritance:
@@ -120,12 +120,12 @@ A2C
 DQN\_state
 ---------------------------------------------------------
 
-.. automodule:: spikingjelly.activation_based.examples.DQN_state
+.. automodule:: spikingjelly.activation_based.examples.dqn_state
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: spikingjelly.activation_based.examples.Spiking_DQN_state
+.. automodule:: spikingjelly.activation_based.examples.spiking_dqn_state
    :members:
    :undoc-members:
    :show-inheritance:
@@ -134,12 +134,12 @@ DQN\_state
 PPO
 --------------------------------------------------
 
-.. automodule:: spikingjelly.activation_based.examples.PPO
+.. automodule:: spikingjelly.activation_based.examples.ppo
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: spikingjelly.activation_based.examples.Spiking_PPO
+.. automodule:: spikingjelly.activation_based.examples.spiking_ppo
    :members:
    :undoc-members:
    :show-inheritance:

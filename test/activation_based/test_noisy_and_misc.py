@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 import torch
 
@@ -32,7 +34,7 @@ def test_loaded_zero_noise_uses_the_same_cubalif_dynamics_as_evaluation():
 
 def test_dqn_agent_preprocesses_states_before_selecting_actions():
     pytest.importorskip("gym")
-    from spikingjelly.activation_based.examples.DSQN.ptan.agent import DQNAgent
+    from spikingjelly.activation_based.examples.dsqn.ptan.agent import DQNAgent
 
     model = torch.nn.Identity()
     model.model_name = "dqn"
@@ -47,6 +49,24 @@ def test_dqn_agent_preprocesses_states_before_selecting_actions():
 
     assert actions.tolist() == [1]
     assert agent_states == [None]
+
+
+def test_dqn_batch_unpack_supports_numpy_two():
+    from spikingjelly.activation_based.examples.dsqn.utils.common import unpack_batch
+
+    states, actions, rewards, dones, next_states = unpack_batch(
+        [
+            SimpleNamespace(
+                state=[[1, 2]], action=0, reward=1.0, last_state=[[3, 4]]
+            )
+        ]
+    )
+
+    assert states.tolist() == [[[1, 2]]]
+    assert next_states.tolist() == [[[3, 4]]]
+    assert actions.tolist() == [0]
+    assert rewards.tolist() == [1.0]
+    assert dones.tolist() == [0]
 
 
 def test_zero_recurrent_connection_reduces_ilc_node_to_cubalif_node():

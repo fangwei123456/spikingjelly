@@ -17,10 +17,6 @@ def mlp(sizes, activation, output_activation=nn.Identity):
     return nn.Sequential(*layers)
 
 
-def count_vars(module):
-    return sum([np.prod(p.shape) for p in module.parameters()])
-
-
 class MLPQFunction(nn.Module):
     def __init__(self, obs_dim, act_dim, hidden_sizes, activation):
         super().__init__()

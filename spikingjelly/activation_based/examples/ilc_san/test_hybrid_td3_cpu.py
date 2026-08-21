@@ -6,7 +6,7 @@ import pickle
 from spikingjelly.activation_based import functional
 
 from replay_buffer_norm import ReplayBuffer
-from ilcsan import PopSpikeActor
+from ilc_san import PopSpikeActor
 
 
 def test_mujoco_render(
