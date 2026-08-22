@@ -180,7 +180,7 @@ Roofline 分析示例
 
 ``op_counter`` 当前暴露了四种高层能耗估计器：
 
-* ``estimate_compute_energy``：仅计算 MAC/AC 的能耗；
+* ``estimate_simple_energy``：运行时 MAC/AC/访存的简单能耗；
 * ``estimate_lemaire_energy``：Lemaire 风格解析式前向推理能耗；
 * ``estimate_neuromc_runtime_energy``：运行时 NeuroMC 风格能耗；
 * ``estimate_spikesim_event_energy``：运行时 SpikeSim 风格 Conv2d 能耗。
@@ -194,10 +194,10 @@ Roofline 分析示例
       - 主要用途
       - 覆盖范围
       - 主要边界
-    * - ``estimate_compute_energy``
-      - 归一化的计算能耗比较
-      - 仅 MAC 和 AC 能耗
-      - 不包含访存、寻址、神经元状态驻留和硬件映射
+    * - ``estimate_simple_energy``
+      - 归一化的运行时能耗比较
+      - MAC、AC、权重/bias 读取和持久神经元状态读写
+      - 不包含信号流、FIFO、路由、寻址和硬件映射
     * - ``estimate_lemaire_energy``
       - 与 Lemaire 公式对齐的前向 SNN 推理估计
       - ops、寻址、运行时尺寸的访存、神经元状态访存
@@ -214,26 +214,32 @@ Roofline 分析示例
 最重要的一条是：不要把不同估计器给出的绝对值当成共享同一硬件假设的数字来直接比较。
 每个估计器都有自己的成本口径和建模范围。
 
-仅计算 MAC/AC 的能耗模型
---------------------------
+简单运行时能耗模型
+--------------------
 
-``estimate_compute_energy`` 是最简单的高层估计器。
-它执行一次真实前向传播，然后用一个很小的成本表，把运行时 MAC 和 AC 计数换算成能耗。
+``estimate_simple_energy`` 是最简单的高层估计器。
+它执行一次真实前向传播，然后用三个显式成本把运行时 MAC、AC 和支持算子的
+神经形态逻辑访存字节数换算成能耗：
+``MAC * E_MAC + AC * E_AC + bytes * E_memory``。
 
 它适合用于归一化比较，例如：
 
 * 在同一成本口径下比较两个结构；
-* 在算术层面比较脉冲驱动执行和稠密执行；
-* 报告 Horowitz 风格的 FP32、FP16 或 INT8 计算成本。
+* 在同一运行时 workload 下比较脉冲驱动执行和稠密执行；
+* 透明地报告计算能耗和访存能耗；
+* 使用 FP32、FP16 或 INT8 算术 preset。
 
 它的边界同样必须明确：
 
-* 不建模访存能耗；
-* 不建模寻址或路由开销；
-* 不尝试复现某个具体加速器；
-* ``SynOps`` 和 ``FLOPs`` 只是辅助统计，不会直接进入总能耗。
+* ``NeuromorphicMemoryAccessCounter`` 独立统计实际使用的权重和 bias，
+  以及持久神经元状态每时间步的一次读取和一次写回；
+* 输入电流和输出 spike 被视为片上信号流，不计为访存；
+* 不建模 FIFO、寻址、路由、cache reuse 或具体硬件映射；
+* ``SynOps`` 是 AC 的辅助子集，不会重复收费；
+* 默认访存成本是 ``24.96 pJ/byte``（``3.12 pJ/bit``），可以手动覆盖。
 
-默认使用 Horowitz 2014 的 FP32 口径。如果你想做 FP16 或 INT8 比较，需要显式传入对应 preset。
+默认使用 Horowitz 2014 FP32 算术成本和上面说明的访存成本。如果需要其他口径，
+显式传入 ``SimpleEnergyCostConfig``。
 
 Lemaire 解析式推理能耗
 ------------------------
@@ -247,16 +253,18 @@ Lemaire 解析式推理能耗
 * MAC 和 AC 类工作；
 * 寻址计数；
 * 神经元状态读写和状态算术；
-* 基于运行时字节流量与 buffer 尺寸的分段访存能耗估计。
+* 基于运行时访问次数和逐层本地 SRAM 容量的分段访存能耗估计。
 
 它的边界是：
 
 * 仅前向推理；
 * 属于解析式估计，而不是 cycle-accurate 的硬件仿真；
-* 访存成本来自被建模的 buffer 尺寸，而不是宿主机真实 cache 行为；
-* 对某些不受支持的稀疏情况，可能会带 warning 地回退到稠密 lower bound 的访存统计。
+* 参数、FIFO 和膜电位访问先按各层本地 SRAM 容量计价，再汇总能耗；
+* 二元输入使用 SNN 事件公式，稀疏但非二元的输入仍使用 FNN 稠密公式；
+* SNN FIFO 默认容纳 1000 个消息；可通过 ``snn_fifo_capacity_elements`` 覆盖；
+* 不支持的转置卷积会被警告并跳过，strict 模式下直接报错。
 
-当你需要一个比 compute-only MAC/AC 能耗更丰富的前向 SNN 推理估计，但又不需要反向和优化器建模时，就使用这个估计器。
+当你需要一个比 simple runtime 能耗更丰富的前向 SNN 推理估计，但又不需要反向和优化器建模时，就使用这个估计器。
 
 NeuroMC 运行时能耗
 --------------------
@@ -309,7 +317,7 @@ SpikeSim 事件能耗
 推理能耗估计示例
 ++++++++++++++++++++++++
 
-Compute-Only 示例
+Simple Energy 示例
 -------------------
 
 在使用面向推理的能耗估计器之前，先调用 ``model.eval()``。
@@ -326,21 +334,23 @@ Compute-Only 示例
     model = nn.Linear(8, 4, bias=False).eval()
     x = torch.rand(2, 8)
 
-    report = op_counter.estimate_compute_energy(model, x)
+    report = op_counter.estimate_simple_energy(model, x)
 
     print("total energy (pJ):", report.energy_total_pj)
+    print("compute energy (pJ):", report.energy_compute_pj)
     print("MAC energy (pJ):", report.energy_mac_pj)
     print("AC energy (pJ):", report.energy_ac_pj)
+    print("memory energy (pJ):", report.energy_memory_pj)
     print("counts:", report.counts)
 
 如果你想切换到另一套成本口径：
 
 .. code-block:: python
 
-    cfg = op_counter.ComputeEnergyConfig(
-        cost_config=op_counter.ComputeEnergyCostConfig.fp16()
+    cfg = op_counter.SimpleEnergyConfig(
+        cost_config=op_counter.SimpleEnergyCostConfig.fp16()
     )
-    report_fp16 = op_counter.estimate_compute_energy(model, x, config=cfg)
+    report_fp16 = op_counter.estimate_simple_energy(model, x, config=cfg)
     print("FP16-regime energy (pJ):", report_fp16.energy_total_pj)
 
 这个例子刻意保持简单，是为了聚焦基础的能耗估计工作流。
@@ -374,9 +384,11 @@ Compute-Only 示例
 
 让工具去匹配你的问题：
 
-* 如果你需要 FLOPs、访存或 SynOps，直接使用基础计数器；
+* 如果你需要宿主执行张量流量，使用 ``MemoryAccessCounter``；
+* 如果你需要简单神经形态权重/状态访存，使用 ``NeuromorphicMemoryAccessCounter``；
+* 如果你需要 FLOPs 或 SynOps，直接使用对应基础计数器；
 * 如果你需要 roofline 输入，组合 ``FlopCounter`` 和 ``MemoryAccessCounter``；
-* 如果你需要一个简单、归一化的算术能耗比较，使用 ``estimate_compute_energy``；
+* 如果你需要一个简单、归一化的运行时计算与访存能耗估计，使用 ``estimate_simple_energy``；
 * 如果你需要包含访存和神经元状态效应的前向 SNN 推理能耗，使用 ``estimate_lemaire_energy``；
 * 如果你需要训练阶段 breakdown 或优化器能耗，使用 ``estimate_neuromc_runtime_energy``；
 * 如果你需要 SpikeSim 风格的 Conv2d 加速器能耗，使用 ``estimate_spikesim_event_energy``。

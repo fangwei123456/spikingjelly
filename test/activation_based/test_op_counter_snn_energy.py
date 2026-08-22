@@ -25,6 +25,23 @@ def test_lemaire_energy_report_uses_single_authoritative_total():
     assert report.breakdown_pj["inout_pj"] > 0.0
 
 
+def test_lemaire_energy_charges_spike_synops_once_through_ac():
+    model = nn.Linear(4, 3, bias=False)
+    x = torch.tensor([[1.0, 0.0, 1.0, 0.0]])
+    cost = op_counter.LemaireEnergyCostConfig(
+        e_add_pj=1.0,
+        e_mul_pj=0.0,
+        memory_breakpoints=((0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0)),
+    )
+    config = op_counter.LemaireEnergyConfig(cost_config=cost)
+
+    report = op_counter.estimate_lemaire_energy(model, x, config=config)
+
+    assert report.counts["synop"] == 6
+    assert report.counts["ac"] == 6
+    assert report.breakdown_pj["ops_pj"] == pytest.approx(6.0)
+
+
 def test_lemaire_energy_profiler_bind_model_rejects_non_torch_backend_when_strict():
     model = neuron.IFNode()
     model._backend = "triton"
@@ -61,27 +78,26 @@ def test_lemaire_energy_conv_inference_report_has_memory_and_addressing():
     assert report.counts["acc_addr"] > 0
 
 
-def test_lemaire_energy_sparse_linear_memory_is_lower_than_dense():
+def test_lemaire_energy_binary_linear_uses_event_driven_access_formulas():
     model = nn.Sequential(nn.Linear(8, 8, bias=False), neuron.IFNode())
-    dense_x = torch.rand(4, 8)
-    sparse_x = torch.zeros(4, 8)
-    sparse_x[0, 0] = 0.25
-    sparse_x[1, 3] = 0.5
+    dense_x = torch.full((4, 8), 0.25)
+    spike_x = torch.zeros(4, 8)
+    spike_x[0, 0] = 1.0
+    spike_x[1, 3] = 1.0
 
     dense_report = op_counter.estimate_lemaire_energy(model, dense_x)
-    sparse_report = op_counter.estimate_lemaire_energy(model, sparse_x)
+    spike_report = op_counter.estimate_lemaire_energy(model, spike_x)
 
+    assert spike_report.counts["read_in_bytes"] == 2 * 4
+    assert spike_report.counts["read_params_bytes"] == 2 * 8 * 4
     assert (
-        sparse_report.breakdown_pj["inout_pj"] < dense_report.breakdown_pj["inout_pj"]
+        spike_report.counts["read_params_bytes"]
+        < dense_report.counts["read_params_bytes"]
     )
-    assert (
-        sparse_report.breakdown_pj["params_pj"] < dense_report.breakdown_pj["params_pj"]
-    )
-    assert sparse_report.total_pj < dense_report.total_pj
 
 
-def test_lemaire_energy_non_binary_sparse_linear_memory_is_lower_than_dense():
-    model = nn.Sequential(nn.Linear(8, 8, bias=False), neuron.IFNode())
+def test_lemaire_energy_non_binary_sparse_linear_stays_dense():
+    model = nn.Linear(8, 8, bias=False)
     dense_x = torch.full((4, 8), 0.25)
     sparse_x = torch.zeros(4, 8)
     sparse_x[:, :2] = 0.25
@@ -89,8 +105,10 @@ def test_lemaire_energy_non_binary_sparse_linear_memory_is_lower_than_dense():
     dense_report = op_counter.estimate_lemaire_energy(model, dense_x)
     sparse_report = op_counter.estimate_lemaire_energy(model, sparse_x)
 
+    assert sparse_report.counts["read_in_bytes"] == dense_report.counts["read_in_bytes"]
     assert (
-        sparse_report.breakdown_pj["inout_pj"] < dense_report.breakdown_pj["inout_pj"]
+        sparse_report.counts["read_params_bytes"]
+        == dense_report.counts["read_params_bytes"]
     )
 
 
@@ -108,24 +126,38 @@ def test_lemaire_energy_sparse_zero_ratio_below_threshold_stays_dense():
     )
 
 
-def test_lemaire_energy_sparse_conv_memory_is_lower_than_dense():
+def test_lemaire_energy_binary_conv_uses_paper_event_fanout():
     model = nn.Sequential(
         nn.Conv2d(2, 4, kernel_size=3, padding=1, bias=False),
         neuron.IFNode(),
     )
     dense_x = torch.rand(1, 2, 6, 6)
     sparse_x = torch.zeros(1, 2, 6, 6)
-    sparse_x[:, 0, 1, 1] = 0.25
+    sparse_x[:, 0, 1, 1] = 1.0
 
     dense_report = op_counter.estimate_lemaire_energy(model, dense_x)
     sparse_report = op_counter.estimate_lemaire_energy(model, sparse_x)
 
+    expected_fanout = 4 * 3 * 3
+    assert sparse_report.counts["read_in_bytes"] == 4
+    assert sparse_report.counts["read_params_bytes"] == expected_fanout * 4
     assert (
-        sparse_report.breakdown_pj["inout_pj"] < dense_report.breakdown_pj["inout_pj"]
+        sparse_report.counts["read_params_bytes"]
+        < dense_report.counts["read_params_bytes"]
     )
-    assert (
-        sparse_report.breakdown_pj["params_pj"] < dense_report.breakdown_pj["params_pj"]
-    )
+
+
+def test_lemaire_energy_binary_conv_uses_actual_border_fanout():
+    model = nn.Conv2d(1, 1, kernel_size=3, padding=1, bias=False)
+    x = torch.zeros(1, 1, 3, 3)
+    x[0, 0, 0, 0] = 1.0
+
+    report = op_counter.estimate_lemaire_energy(model, x)
+
+    assert report.counts["synop"] == 4
+    assert report.counts["read_params_bytes"] == 4 * 4
+    assert report.counts["read_potential_bytes"] == 4 * 4
+    assert report.counts["write_potential_bytes"] == 4 * 4
 
 
 def test_lemaire_energy_conv_transpose_sparse_input_falls_back_with_warning():
@@ -136,6 +168,16 @@ def test_lemaire_energy_conv_transpose_sparse_input_falls_back_with_warning():
     report = op_counter.estimate_lemaire_energy(model, x)
 
     assert any("ConvTranspose2d" in message for message in report.warnings)
+
+
+def test_lemaire_energy_conv_transpose_raises_when_strict():
+    model = nn.ConvTranspose2d(2, 4, kernel_size=3, bias=False)
+    config = op_counter.LemaireEnergyConfig(strict=True)
+
+    with pytest.raises(ValueError, match="do not support ConvTranspose2d"):
+        op_counter.estimate_lemaire_energy(
+            model, torch.zeros(1, 2, 5, 5), config=config
+        )
 
 
 def test_lemaire_energy_manual_profiler_usage_defaults_to_forward_only():
@@ -186,6 +228,34 @@ def test_lemaire_energy_cost_config_converts_access_costs_to_pj_per_byte():
     assert cost.memory_cost_pj(8.0 * 1024.0) == pytest.approx(2.5)
     assert cost.memory_cost_pj(32.0 * 1024.0) == pytest.approx(5.0)
     assert cost.memory_cost_pj(1024.0 * 1024.0) == pytest.approx(25.0)
+
+
+def test_lemaire_energy_config_validates_fifo_capacity():
+    with pytest.raises(ValueError, match="snn_fifo_capacity_elements"):
+        op_counter.LemaireEnergyConfig(snn_fifo_capacity_elements=0)
+
+
+def test_lemaire_energy_prices_parameter_sram_per_layer():
+    model = nn.Sequential(
+        nn.Linear(2, 2, bias=False),
+        nn.Linear(2, 8, bias=False),
+    )
+    with torch.no_grad():
+        for module in model:
+            module.weight.fill_(0.5)
+    cost = op_counter.LemaireEnergyCostConfig(
+        memory_breakpoints=((0.0, 0.0), (16.0, 1.0), (32.0, 2.0), (64.0, 4.0))
+    )
+    report = op_counter.estimate_lemaire_energy(
+        model,
+        torch.full((1, 2), 0.5),
+        config=op_counter.LemaireEnergyConfig(cost_config=cost),
+    )
+
+    # Layer capacities are 16 B and 64 B; their read traffic is also 16 B and 64 B.
+    assert report.counts["read_params_bytes"] == 80
+    assert report.breakdown_pj["params_pj"] == pytest.approx(16 * 1 + 64 * 4)
+    assert report.breakdown_pj["params_pj"] != pytest.approx(80 * 4)
 
 
 def test_lemaire_addressing_counter_linear_counts_dense_and_binary():
@@ -260,8 +330,32 @@ def test_lemaire_energy_linear_inout_uses_runtime_dtype_bytes():
     assert report.counts["read_in_bytes"] == x.numel() * x.element_size()
     assert report.counts["write_out_bytes"] == (3 * 4) * x.element_size()
     assert report.counts["read_params_bytes"] == (
-        model.weight.numel() * model.weight.element_size()
+        3 * model.weight.numel() * model.weight.element_size()
     )
+
+
+def test_lemaire_energy_counts_output_spikes_and_potential_accesses():
+    linear = nn.Linear(4, 3, bias=True)
+    with torch.no_grad():
+        linear.weight.fill_(1.0)
+        linear.bias.zero_()
+    model = nn.Sequential(linear, neuron.IFNode(v_threshold=0.5))
+    x = torch.tensor([[1.0, 0.0, 1.0, 0.0]])
+
+    report = op_counter.estimate_lemaire_energy(model, x)
+
+    event_fanout = 2 * 3
+    base_potential_updates = 3
+    assert report.counts["write_out_bytes"] == 3 * 4
+    assert (
+        report.counts["read_potential_bytes"]
+        == (event_fanout + base_potential_updates) * 4
+    )
+    assert (
+        report.counts["write_potential_bytes"]
+        == (event_fanout + base_potential_updates) * 4
+    )
+    assert report.buffer_sizes_bytes["inout_buffer_bytes"] == 1000 * 4
 
 
 def test_lemaire_energy_config_passes_extra_state_rules_to_counter():
