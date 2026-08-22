@@ -59,7 +59,7 @@ Module: `spikingjelly.activation_based.model`.
 
 ### Bug Fixes
 
-#### Operation Counters
+#### Lemaire Memory Accounting
 
 Module: `spikingjelly.activation_based.op_counter`.
 
@@ -94,7 +94,7 @@ Module: `spikingjelly.activation_based.examples.dsqn`.
 
 ### Breaking Changes and Notices
 
-#### Operation Counters
+#### Operation Counter API Migration
 
 Module: `spikingjelly.activation_based.op_counter`.
 

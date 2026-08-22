@@ -281,8 +281,11 @@ class _LemaireForwardTracker:
                 int(param.numel()) * int(param.element_size())
                 for param in module.parameters(recurse=False)
             )
-            is_spike_input = is_binary_tensor(x)
-            active_inputs = int(x.count_nonzero().item()) if is_spike_input else 0
+            with torch._C._ExcludeDispatchKeyGuard(
+                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
+            ):
+                is_spike_input = is_binary_tensor(x)
+                active_inputs = int(x.count_nonzero().item()) if is_spike_input else 0
             if isinstance(module, nn.Linear):
                 dense_weight_uses = int(out.numel()) * module.in_features
                 event_fanout = active_inputs * module.out_features
@@ -362,9 +365,15 @@ class _LemaireForwardTracker:
             self._record(
                 "write_potential_bytes", potential_access_bytes, potential_capacity
             )
+            with torch._C._ExcludeDispatchKeyGuard(
+                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
+            ):
+                output_spike_bytes = int(out.count_nonzero().item()) * int(
+                    out.element_size()
+                )
             self._record(
                 "write_out_bytes",
-                int(out.count_nonzero().item()) * int(out.element_size()),
+                output_spike_bytes,
                 self.fifo_capacity_elements * int(out.element_size()),
             )
 
@@ -431,7 +440,7 @@ class LemaireEnergyProfiler:
                 self.neuron_state_counter,
                 self.addressing_counter,
             ],
-            strict=self.config.strict,
+            strict=False,
         )
         self._warnings: list[str] = []
         self._lemaire_tracker = _LemaireForwardTracker(

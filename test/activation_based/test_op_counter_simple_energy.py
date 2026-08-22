@@ -276,6 +276,27 @@ def test_neuromorphic_memory_counter_uses_actual_conv_spike_fanout():
     assert counter.get_counts()["Global"]["weight_read_bytes"] == 8 * 4
 
 
+@pytest.mark.parametrize(("padding", "weight_uses"), (("same", 4), ("valid", 1)))
+def test_neuromorphic_memory_counter_supports_string_conv_padding(padding, weight_uses):
+    model = nn.Conv2d(1, 1, kernel_size=3, padding=padding, bias=False)
+    x = torch.zeros(1, 1, 3, 3)
+    x[0, 0, 0, 0] = 1.0
+    counter = op_counter.NeuromorphicMemoryAccessCounter()
+    counter.bind_model(model)
+
+    with counter:
+        _ = model(x)
+
+    assert counter.get_counts()["Global"]["weight_read_bytes"] == weight_uses * 4
+
+
+def test_neuromorphic_memory_counter_empty_reads_do_not_create_scopes():
+    counter = op_counter.NeuromorphicMemoryAccessCounter()
+
+    assert counter.get_total() == 0
+    assert counter.get_counts() == {}
+
+
 def test_simple_energy_ignores_module_subtrees():
     class Block(nn.Module):
         def __init__(self):

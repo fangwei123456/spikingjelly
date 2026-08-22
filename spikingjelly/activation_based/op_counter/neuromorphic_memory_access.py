@@ -34,9 +34,12 @@ def _spike_conv_weight_uses(module: nn.Module, x: torch.Tensor) -> int:
         ),
     ):
         x = x.double()
-        if module.padding_mode != "zeros":
-            x = F.pad(x, module._reversed_padding_repeated_twice, module.padding_mode)
-            padding = tuple(0 for _ in module.padding)
+        if isinstance(padding, str) or module.padding_mode != "zeros":
+            mode = (
+                "constant" if module.padding_mode == "zeros" else module.padding_mode
+            )
+            x = F.pad(x, module._reversed_padding_repeated_twice, mode)
+            padding = tuple(0 for _ in module.stride)
         out = torch.ops.aten.convolution.default(
             x,
             torch.ones_like(module.weight, dtype=torch.float64),
@@ -221,4 +224,4 @@ class NeuromorphicMemoryAccessCounter:
         :return: 全局访存字节总数 / Global total bytes
         :rtype: int
         """
-        return sum(self._records["Global"].values())
+        return sum(self._records.get("Global", {}).values())

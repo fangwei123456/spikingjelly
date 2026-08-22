@@ -53,6 +53,18 @@ def test_lemaire_energy_profiler_bind_model_rejects_non_torch_backend_when_stric
         profiler.bind_model(model)
 
 
+def test_lemaire_energy_strict_profiles_supported_linear():
+    model = nn.Linear(4, 3, bias=False)
+    x = torch.tensor([[1.0, 0.0, 1.0, 0.0]])
+
+    report = op_counter.estimate_lemaire_energy(
+        model, x, config=op_counter.LemaireEnergyConfig(strict=True)
+    )
+
+    assert report.counts["synop"] == 6
+    assert report.counts["read_params_bytes"] == 6 * 4
+
+
 def test_lemaire_energy_profiler_bind_model_warns_non_torch_backend_when_not_strict():
     model = neuron.IFNode()
     model._backend = "triton"
