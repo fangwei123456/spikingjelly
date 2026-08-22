@@ -35,6 +35,13 @@ Module: ``spikingjelly.activation_based.op_counter``.
 
 - Clarified the basic counting workflow, estimator/module coverage, and the
   boundary between ATen rules and custom ``torch.*`` function rules.
+- Replaced the compute-only ``ComputeEnergy*`` interface with ``SimpleEnergy*``,
+  which combines runtime MAC and AC with logical neuromorphic memory accesses.
+- Added ``NeuromorphicMemoryAccessCounter`` for runtime weight/bias reads and
+  persistent neuron-state reads and writes, independently of host-device memory
+  traffic and the Lemaire analytical model.
+- The Simple Energy default uses ``24.96 pJ/byte`` for memory traffic and exposes
+  the memory coefficient for explicit hardware-regime overrides.
 
 NIR Exchange
 ^^^^^^^^^^^^
@@ -64,6 +71,17 @@ Module: ``spikingjelly.activation_based.model``.
 Bug Fixes
 ~~~~~~~~~
 
+Lemaire Memory Accounting
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.op_counter``.
+
+- Corrected Lemaire memory accesses to follow the per-layer FNN/SNN formulas,
+  count output spikes and membrane-potential traffic, and price accesses using
+  each layer's local SRAM capacity instead of a global maximum traffic value.
+- Lemaire memory accounting now treats only binary tensors as spike traffic and
+  reports unsupported transposed convolutions instead of applying a dense fallback.
+
 NIR Exchange
 ^^^^^^^^^^^^
 
@@ -92,6 +110,16 @@ Module: ``spikingjelly.activation_based.examples.dsqn``.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Operation Counter API Migration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.op_counter``.
+
+- Removed ``ComputeEnergyCostConfig``, ``ComputeEnergyConfig``,
+  ``ComputeEnergyProfiler``, ``ComputeEnergyReport``, and
+  ``estimate_compute_energy``. Use the corresponding ``SimpleEnergy*`` names and
+  ``estimate_simple_energy`` instead.
 
 NIR Exchange
 ^^^^^^^^^^^^

@@ -64,10 +64,18 @@ MAC / AC / SynOp Counters
    :undoc-members:
    :show-inheritance:
 
-Compute-Only Energy Estimator
-+++++++++++++++++++++++++++++
+Neuromorphic Memory Counter
+++++++++++++++++++++++++++++
 
-.. automodule:: spikingjelly.activation_based.op_counter.compute_energy
+.. automodule:: spikingjelly.activation_based.op_counter.neuromorphic_memory_access
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Simple Runtime Energy Estimator
++++++++++++++++++++++++++++++++
+
+.. automodule:: spikingjelly.activation_based.op_counter.simple_energy
    :members:
    :undoc-members:
    :show-inheritance:

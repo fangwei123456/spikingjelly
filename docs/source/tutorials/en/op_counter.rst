@@ -183,7 +183,7 @@ Model Overview and Boundaries
 
 ``op_counter`` currently exposes four high-level energy estimators:
 
-* ``estimate_compute_energy``: compute-only MAC/AC energy;
+* ``estimate_simple_energy``: simple runtime MAC/AC/memory energy;
 * ``estimate_lemaire_energy``: Lemaire-aligned analytical forward inference energy;
 * ``estimate_neuromc_runtime_energy``: runtime NeuroMC-style energy;
 * ``estimate_spikesim_event_energy``: runtime SpikeSim-style Conv2d energy.
@@ -197,10 +197,10 @@ They do not answer the same question. Their intended use and boundaries are:
       - Main purpose
       - Covers
       - Main boundary
-    * - ``estimate_compute_energy``
-      - normalized compute comparison
-      - MAC and AC energy only
-      - excludes memory, addressing, neuron-state residency, and hardware mapping
+    * - ``estimate_simple_energy``
+      - normalized runtime energy comparison
+      - MAC, AC, weight/bias reads, and persistent neuron-state accesses
+      - excludes signal flow, FIFOs, routing, addressing, and hardware mapping
     * - ``estimate_lemaire_energy``
       - forward SNN inference estimate aligned with Lemaire-style formulas
       - ops, addressing, runtime-sized memory traffic, neuron-state traffic
@@ -217,26 +217,34 @@ They do not answer the same question. Their intended use and boundaries are:
 The most important rule is: do not compare absolute numbers across different estimators as if they shared the same hardware assumptions.
 Each estimator uses its own cost regime and modeling scope.
 
-Compute-Only MAC/AC Energy
----------------------------
+Simple Runtime Energy
+---------------------
 
-``estimate_compute_energy`` is the simplest high-level estimator.
-It runs one real forward pass and converts runtime MAC and AC counts into energy using a small cost table.
+``estimate_simple_energy`` is the simplest high-level estimator.
+It runs one real forward pass and converts runtime MAC, AC, and logical
+neuromorphic-memory byte counts into energy using three explicit costs:
+``MAC * E_MAC + AC * E_AC + bytes * E_memory``.
 
 Its intended use is normalized comparison, for example:
 
 * comparing two architectures under the same cost regime;
-* comparing spike-driven and dense execution at the arithmetic level;
-* reporting Horowitz-style FP32, FP16, or INT8 compute cost.
+* comparing spike-driven and dense execution under the same runtime workload;
+* reporting a transparent compute-versus-memory energy breakdown;
+* applying the FP32, FP16, or INT8 arithmetic presets.
 
 Its boundary is equally important:
 
-* it does not model memory energy;
-* it does not model addressing or routing cost;
-* it does not try to reproduce a specific accelerator;
-* ``SynOps`` and ``FLOPs`` are returned as auxiliary statistics only and do not directly contribute to the total energy.
+* ``NeuromorphicMemoryAccessCounter`` independently counts weights and biases
+  that are actually used, plus one read and one write per timestep for persistent
+  neuron states;
+* input currents and output spikes are treated as on-chip signal flow, not memory;
+* it does not model FIFOs, addressing, routing, cache reuse, or hardware mapping;
+* ``SynOps`` is an auxiliary subset of AC and is not charged a second time;
+* the default memory cost is ``24.96 pJ/byte`` (``3.12 pJ/bit``), and can be overridden.
 
-By default it uses the Horowitz 2014 FP32 regime. If you want FP16 or INT8 comparisons, pass an explicit preset.
+By default it uses Horowitz 2014 FP32 arithmetic and the documented memory-cost
+reference above. If you want a different regime, pass an explicit
+``SimpleEnergyCostConfig``.
 
 Lemaire Analytical Inference Energy
 ------------------------------------
@@ -250,16 +258,21 @@ It includes:
 * MAC and AC-like work;
 * addressing counts;
 * neuron-state reads, writes, and state arithmetic;
-* memory energy estimated from runtime byte traffic and buffer-size-based piecewise memory cost.
+* memory energy estimated from runtime accesses and per-layer local-SRAM capacity.
 
 Its boundaries are:
 
 * forward inference only;
 * analytical estimation rather than cycle-accurate hardware simulation;
-* memory cost is derived from the modeled buffer size, not from measured cache behavior on the host machine;
-* unsupported sparse cases may fall back to dense lower-bound memory accounting with warnings.
+* parameter, FIFO, and potential accesses are priced against each layer's local
+  SRAM capacity before energy is aggregated;
+* binary inputs use the SNN event formulas, while sparse non-binary inputs remain
+  on the dense FNN path;
+* SNN FIFOs hold 1000 messages by default; override
+  ``snn_fifo_capacity_elements`` for another assumption;
+* unsupported transposed convolutions are warned and omitted, or rejected in strict mode.
 
-Use this estimator when you need a richer forward SNN inference estimate than compute-only MAC/AC energy,
+Use this estimator when you need a richer forward SNN inference estimate than simple runtime energy,
 but do not need backward or optimizer modeling.
 
 NeuroMC Runtime Energy
@@ -313,7 +326,7 @@ If your target is broader forward or training energy, consider ``estimate_lemair
 Inference Energy Estimation Example
 +++++++++++++++++++++++++++++++++++
 
-Compute-Only Example
+Simple Energy Example
 ---------------------
 
 Before using an inference-oriented energy estimator, call ``model.eval()`` first.
@@ -330,21 +343,23 @@ The following example uses the simplest energy model to estimate forward inferen
     model = nn.Linear(8, 4, bias=False).eval()
     x = torch.rand(2, 8)
 
-    report = op_counter.estimate_compute_energy(model, x)
+    report = op_counter.estimate_simple_energy(model, x)
 
     print("total energy (pJ):", report.energy_total_pj)
+    print("compute energy (pJ):", report.energy_compute_pj)
     print("MAC energy (pJ):", report.energy_mac_pj)
     print("AC energy (pJ):", report.energy_ac_pj)
+    print("memory energy (pJ):", report.energy_memory_pj)
     print("counts:", report.counts)
 
 If you want a different cost regime:
 
 .. code-block:: python
 
-    cfg = op_counter.ComputeEnergyConfig(
-        cost_config=op_counter.ComputeEnergyCostConfig.fp16()
+    cfg = op_counter.SimpleEnergyConfig(
+        cost_config=op_counter.SimpleEnergyCostConfig.fp16()
     )
-    report_fp16 = op_counter.estimate_compute_energy(model, x, config=cfg)
+    report_fp16 = op_counter.estimate_simple_energy(model, x, config=cfg)
     print("FP16-regime energy (pJ):", report_fp16.energy_total_pj)
 
 This example is intentionally kept simple so that it focuses on the basic energy-estimation workflow.
@@ -378,9 +393,11 @@ Choosing a Counter or Energy Model
 
 Use the tool that matches your question:
 
-* if you need FLOPs, memory traffic, or SynOps, use the basic counters directly;
+* if you need host-execution tensor traffic, use ``MemoryAccessCounter``;
+* if you need simple neuromorphic weight/state traffic, use ``NeuromorphicMemoryAccessCounter``;
+* if you need FLOPs or SynOps, use the corresponding basic counter;
 * if you need roofline inputs, combine ``FlopCounter`` and ``MemoryAccessCounter``;
-* if you need a simple normalized arithmetic-energy comparison, use ``estimate_compute_energy``;
+* if you need a simple normalized runtime compute-and-memory estimate, use ``estimate_simple_energy``;
 * if you need forward SNN inference energy with memory and neuron-state effects, use ``estimate_lemaire_energy``;
 * if you need training-stage breakdowns or optimizer energy, use ``estimate_neuromc_runtime_energy``;
 * if you need SpikeSim-style Conv2d accelerator energy, use ``estimate_spikesim_event_energy``.

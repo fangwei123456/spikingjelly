@@ -7,8 +7,8 @@ import pytest
 from loguru import logger as loguru_logger
 
 from spikingjelly.activation_based.functional import net_config
-from spikingjelly.activation_based.op_counter.compute_energy import (
-    ComputeEnergyProfiler,
+from spikingjelly.activation_based.op_counter.simple_energy import (
+    SimpleEnergyProfiler,
 )
 from spikingjelly.logger import logger
 from tools import check_logging_policy
@@ -112,11 +112,12 @@ def test_net_config_warning_uses_package_logger(loguru_records):
     assert all(record["name"].startswith("spikingjelly") for record in loguru_records)
 
 
-def test_compute_energy_summary_is_emitted_once(loguru_records):
+def test_simple_energy_summary_is_emitted_once(loguru_records):
     import torch
 
     model = torch.nn.Linear(2, 2, bias=False)
-    profiler = ComputeEnergyProfiler()
+    profiler = SimpleEnergyProfiler()
+    profiler.bind_model(model)
     with profiler:
         model(torch.ones(1, 2))
     profiler.get_report()
@@ -128,6 +129,7 @@ def test_compute_energy_summary_is_emitted_once(loguru_records):
     ]
     assert len(summaries) == 1
     assert "total_operations=" in summaries[0]["message"]
+    assert "memory_access_bytes=" in summaries[0]["message"]
 
 
 def test_data_preprocess_summary_reports_completed_tasks(loguru_records):
@@ -162,7 +164,9 @@ def test_precision_prepare_emits_one_lifecycle_summary(loguru_records):
 
 
 def test_metric_logger_formats_progress_with_loguru_arguments(loguru_records):
-    from spikingjelly.activation_based.examples.common.tv_ref_classify.utils import MetricLogger
+    from spikingjelly.activation_based.examples.common.tv_ref_classify.utils import (
+        MetricLogger,
+    )
 
     list(MetricLogger().log_every(["sample"], 1, "Train"))
     messages = [record["message"] for record in loguru_records]
