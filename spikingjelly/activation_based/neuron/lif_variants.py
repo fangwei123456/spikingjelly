@@ -676,6 +676,8 @@ class ComplementaryLIFNode(BaseNode):
         v, m = states
         if not isinstance(m, torch.Tensor):
             m = torch.full_like(v, m, requires_grad=False)
+        elif m.ndim == 0:
+            m = m.to(dtype=v.dtype, device=v.device).expand_as(v)
         elif m.shape != v.shape:
             m = torch.zeros_like(v, requires_grad=False)
         elif m.dtype != v.dtype or m.device != v.device:
