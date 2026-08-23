@@ -28,8 +28,8 @@ from .core import (
 )
 
 __all__ = [
-    "SpikeSimEnergyConfig",
     "SpikeSimCounter",
+    "SpikeSimEnergyConfig",
     "SpikeSimEnergyProfiler",
     "SpikeSimEnergyReport",
     "estimate_spikesim_energy",

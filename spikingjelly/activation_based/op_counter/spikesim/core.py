@@ -19,10 +19,10 @@ from .formulas import (
 )
 
 __all__ = [
-    "SpikeSimEnergyConfig",
     "SpikeSimCounter",
-    "SpikeSimEnergyReport",
+    "SpikeSimEnergyConfig",
     "SpikeSimEnergyProfiler",
+    "SpikeSimEnergyReport",
     "estimate_spikesim_energy",
 ]
 
@@ -74,6 +74,27 @@ class SpikeSimEnergyReport:
     字段包括总能耗、stage 分解、统计量、stage 元数据和 warning。
     ``event_stats_by_stage`` 在两种 mode 下都会填充。
 
+    :param energy_total_pj: 总能耗，单位为 pJ
+    :type energy_total_pj: float
+    :param energy_by_stage: 各 stage 总能耗
+    :type energy_by_stage: dict[str, float]
+    :param energy_by_component: 总体和逐 stage 的分项能耗
+    :type energy_by_component: dict[str, Any]
+    :param event_stats_by_stage: 运行时 stage 统计量
+    :type event_stats_by_stage: dict[str, dict[str, Any]]
+    :param stage_metadata: SpikeSim 映射所需的 stage 元数据
+    :type stage_metadata: dict[str, dict[str, Any]]
+    :param warnings: 未支持路径或假设的告警
+    :type warnings: list[str]
+    :param breakdown_pj: 跨 stage 聚合的分项能耗
+    :type breakdown_pj: dict[str, float]
+    :param counts: PE 周期数和 stage 数量
+    :type counts: dict[str, int]
+    :param model_info: 模型来源与适用范围
+    :type model_info: EnergyModelInfo
+    :param config: 生成本报告的配置副本
+    :type config: SpikeSimEnergyConfig
+
     ----
 
     .. _SpikeSimEnergyReport-en:
@@ -86,6 +107,27 @@ class SpikeSimEnergyReport:
     Fields include total energy, stage-wise energy breakdown, event stats,
     stage metadata, and warnings. ``event_stats_by_stage`` is populated
     regardless of the selected activity mode.
+
+    :param energy_total_pj: Total energy in pJ
+    :type energy_total_pj: float
+    :param energy_by_stage: Total energy by stage
+    :type energy_by_stage: dict[str, float]
+    :param energy_by_component: Aggregate and per-stage component energy
+    :type energy_by_component: dict[str, Any]
+    :param event_stats_by_stage: Runtime statistics by stage
+    :type event_stats_by_stage: dict[str, dict[str, Any]]
+    :param stage_metadata: Stage metadata required by the SpikeSim mapping
+    :type stage_metadata: dict[str, dict[str, Any]]
+    :param warnings: Warnings for unsupported paths or assumptions
+    :type warnings: list[str]
+    :param breakdown_pj: Component energy aggregated across stages
+    :type breakdown_pj: dict[str, float]
+    :param counts: PE-cycle and stage counts
+    :type counts: dict[str, int]
+    :param model_info: Model provenance and applicability
+    :type model_info: EnergyModelInfo
+    :param config: Copy of the configuration used for this report
+    :type config: SpikeSimEnergyConfig
     """
 
     energy_total_pj: float
@@ -186,6 +228,9 @@ class SpikeSimEnergyProfiler:
 
         生成并返回完整的 SpikeSim runtime 能耗报告。
 
+        :return: stage 能耗、统计量、告警和来源信息
+        :rtype: SpikeSimEnergyReport
+
         ----
 
         .. _SpikeSimEnergyProfiler.get_report-en:
@@ -193,6 +238,9 @@ class SpikeSimEnergyProfiler:
         * **English**
 
         Build and return the full runtime SpikeSim energy report.
+
+        :return: Stage energy, statistics, warnings, and provenance
+        :rtype: SpikeSimEnergyReport
         """
         event_stats_by_stage = self._counter.get_stage_stats()
         stage_metadata = self._counter.get_stage_metadata()
@@ -344,9 +392,15 @@ def estimate_spikesim_energy(
     该函数会执行一次真实前向传播并返回能耗报告。
 
     :param model: 待统计模型
+    :type model: torch.nn.Module
     :param inputs: 模型输入；若为 tuple/list 则按 ``model(*inputs)`` 调用
+    :type inputs: Any
     :param config: SpikeSim 能耗配置
+    :type config: SpikeSimEnergyConfig | None
     :param strict: 是否在 unsupported 情况下直接抛异常
+    :type strict: bool
+    :return: SpikeSim runtime 能耗报告
+    :rtype: SpikeSimEnergyReport
 
     ----
 
@@ -358,10 +412,16 @@ def estimate_spikesim_energy(
     It runs one real forward pass and returns the energy report.
 
     :param model: model to profile
+    :type model: torch.nn.Module
     :param inputs: model input; tuple/list will be passed as
         ``model(*inputs)``
+    :type inputs: Any
     :param config: SpikeSim energy config
+    :type config: SpikeSimEnergyConfig | None
     :param strict: whether to raise immediately on unsupported behaviors
+    :type strict: bool
+    :return: Runtime SpikeSim energy report
+    :rtype: SpikeSimEnergyReport
 
     """
     profiler = SpikeSimEnergyProfiler(config=config, strict=strict)

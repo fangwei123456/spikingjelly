@@ -115,6 +115,11 @@ Module: ``spikingjelly.activation_based.op_counter``.
   tensor operations to dispatch counters.
 - NeuroMC preserves trainable-parameter shape information required to classify
   backward fragments after the profiling context exits.
+- Module-driven profilers now reject rebinding throughout an active context,
+  including models that install no module hooks.
+- NeuroMC now rejects conflicting options for a reused stage name, matches
+  repeated module calls in full backward passes, and rejects ambiguous selective
+  backward through a repeated module.
 
 NIR Exchange
 ^^^^^^^^^^^^

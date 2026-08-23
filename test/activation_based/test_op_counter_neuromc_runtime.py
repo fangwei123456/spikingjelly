@@ -180,6 +180,60 @@ def test_neuromc_exact_repeated_forward_reuses_weights():
     assert any(item["t_type"] == 1 for item in report.mapping_summary)
 
 
+def test_neuromc_rejects_reused_stage_name_with_different_options():
+    model = nn.Linear(4, 2)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_model(model)
+
+    with profiler:
+        with profiler.stage("same"):
+            pass
+        with pytest.raises(ValueError, match="different options"):
+            with profiler.stage("same", reuse_weights=True):
+                pass
+
+
+def test_neuromc_repeated_module_calls_match_backward_inputs():
+    model = nn.Linear(4, 2, bias=False)
+    spike = torch.tensor([[1.0, 0.0, 1.0, 0.0]], requires_grad=True)
+    dense = torch.full((1, 4), 0.5, requires_grad=True)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_model(model)
+
+    with profiler:
+        with profiler.stage("forward"):
+            spike_out = model(spike)
+            dense_out = model(dense)
+        with profiler.stage("backward", phase="backward"):
+            (spike_out.sum() + dense_out.sum()).backward()
+    report = profiler.get_report()
+
+    weight_grad_core_types = {
+        item["core_type"]
+        for item in report.mapping_summary
+        if item["op_name"] == "linear.backward.grad_weight"
+    }
+    assert weight_grad_core_types == {"wg", "ann_we"}
+
+
+def test_neuromc_rejects_selective_backward_for_repeated_module():
+    model = nn.Linear(4, 2, bias=False)
+    spike = torch.tensor([[1.0, 0.0, 1.0, 0.0]])
+    dense = torch.full((1, 4), 0.5)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_model(model)
+
+    with profiler:
+        with profiler.stage("forward"):
+            spike_out = model(spike)
+            model(dense)
+        with profiler.stage("backward", phase="backward"):
+            spike_out.sum().backward()
+
+    with pytest.raises(ValueError, match="selective backward"):
+        profiler.get_report()
+
+
 def test_neuromc_exact_plain_sgd_optimizer_is_supported():
     model = nn.Linear(4, 2)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
@@ -520,9 +574,8 @@ def test_neuromc_exact_dense_conv2d_backward_uses_ann_paths():
     grad_out = torch.randn(3, 3, 5, 5)
     profiler = op_counter.NeuroMCEnergyProfiler()
 
-    model._neuromc_last_input = x
     fragments = profiler._make_conv_backward_fragments(
-        "backward", model, (grad_in,), (grad_out,)
+        "backward", model, x, (grad_in,), (grad_out,)
     )
 
     assert {fragment.core_type for fragment in fragments} == {"ann_be", "ann_we"}
@@ -728,7 +781,7 @@ def test_neuromc_spike_nnz_empty_tensor_returns_none():
     assert _spike_nnz(x) is None
 
 
-def test_neuromc_profiler_cleans_last_input_attribute():
+def test_neuromc_profiler_keeps_inputs_off_user_modules():
     model = nn.Linear(4, 3)
     x = (torch.rand(2, 4) > 0.5).float()
     profiler = op_counter.NeuroMCEnergyProfiler()
@@ -736,8 +789,7 @@ def test_neuromc_profiler_cleans_last_input_attribute():
     with profiler:
         with profiler.stage("forward"):
             _ = model(x)
-        assert hasattr(model, "_neuromc_last_input")
-    assert not hasattr(model, "_neuromc_last_input")
+        assert not hasattr(model, "_neuromc_last_input")
 
 
 def test_neuromc_exact_conv3d_is_rejected():

@@ -104,6 +104,7 @@ English version: :doc:`../en/op_counter`
 
 module counter 的规则键为 ``("forward" | "backward", module_type)``。Mode
 负责 hook 生命周期、module scope、ignore subtree 和异常清理；它不会自动 reset counter。
+scope key 与其他 Mode 一致：``Global`` 之后使用根 module 类型和完整子 module 路径。
 
 .. code-block:: python
 
@@ -327,9 +328,12 @@ NeuroMC 运行时能耗
 
 * 不支持的算子会拒绝生成总量；
 * 手工 profiling 使用 ``stage(name, phase=..., reuse_weights=...,
-  batch_norm_backward=...)`` 显式传递映射语义，名称本身不再编码协议；
+  batch_norm_backward=...)`` 显式传递映射语义，名称本身不再编码协议；同一
+  context 内复用 stage 名称时必须使用相同选项；
 * 便捷训练入口会捕获 backward 并估算 optimizer，但不会调用
   ``optimizer.step()`` 或修改模型参数；
+* 同一个 module 被重复调用时，这些调用必须全部参与 backward；只对部分调用
+  反传会因映射歧义而拒绝报告；
 * 它仍然是基于硬件模型的估计，而不是从真实芯片上测得的功耗。
 
 如果你需要训练阶段能耗，或者需要在线学习场景下的 stage breakdown，就使用这个估计器。

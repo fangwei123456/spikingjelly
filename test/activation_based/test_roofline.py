@@ -226,8 +226,8 @@ def test_module_counter_mode_counts_forward_backward_and_parent_scopes():
     backward_key = ("backward", nn.Linear)
     assert counts["Global"][forward_key] == 6
     assert counts["Global"][backward_key] == 6
-    assert counts["block"][forward_key] == 6
-    assert counts["block.0"][backward_key] == 6
+    assert counts["Module.block"][forward_key] == 6
+    assert counts["Module.block.0"][backward_key] == 6
 
 
 def test_module_counter_mode_uses_most_specific_rule_and_forward_kwargs():

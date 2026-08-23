@@ -29,21 +29,49 @@ __all__ = [
 @dataclass(frozen=True)
 class EnergyModelInfo:
     r"""
-    能耗模型的来源与适用口径。Energy-model provenance and scope.
+    **API Language** - :ref:`中文 <EnergyModelInfo-cn>` |
+    :ref:`English <EnergyModelInfo-en>`
 
-    :param model_id: 稳定模型标识 / Stable model identifier
+    ----
+
+    .. _EnergyModelInfo-cn:
+
+    * **中文**
+
+    描述能耗模型的来源、复刻程度和适用口径。
+
+    :param model_id: 稳定模型标识
     :type model_id: str
-    :param fidelity: ``paper``、``reference-code``、``source-aligned`` 或
-        ``spikingjelly-defined`` / Fidelity category
+    :param fidelity: 复刻类别，例如 ``paper`` 或 ``reference-code``
     :type fidelity: str
-    :param source_urls: 论文或作者代码来源 / Paper or author-code sources
+    :param source_urls: 论文或作者代码链接
     :type source_urls: tuple[str, ...]
-    :param technology_nm: 工艺节点；未知时为 ``None`` / Technology node, or
-        ``None`` when unspecified
+    :param technology_nm: 工艺节点；未知时为 ``None``
     :type technology_nm: Optional[int]
-    :param precision: 算术与存储精度说明 / Arithmetic and storage precision
+    :param precision: 算术与存储精度说明
     :type precision: str
-    :param scope: 可解释的硬件和执行范围 / Interpretable hardware and execution scope
+    :param scope: 模型覆盖的硬件和执行范围
+    :type scope: str
+
+    ----
+
+    .. _EnergyModelInfo-en:
+
+    * **English**
+
+    Describes an energy model's source, fidelity, and applicability.
+
+    :param model_id: Stable model identifier
+    :type model_id: str
+    :param fidelity: Fidelity category such as ``paper`` or ``reference-code``
+    :type fidelity: str
+    :param source_urls: Paper or author-code URLs
+    :type source_urls: tuple[str, ...]
+    :param technology_nm: Technology node, or ``None`` when unspecified
+    :type technology_nm: Optional[int]
+    :param precision: Arithmetic and storage precision
+    :type precision: str
+    :param scope: Covered hardware and execution scope
     :type scope: str
     """
 
@@ -540,7 +568,7 @@ class BaseCounter:
 
 
 class ModuleCounter(BaseCounter):
-    def __init__(self):
+    def __init__(self) -> None:
         r"""
         **API Language** - :ref:`中文 <ModuleCounter.__init__-cn>` | :ref:`English <ModuleCounter.__init__-en>`
 
@@ -575,6 +603,36 @@ class ModuleCounter(BaseCounter):
         raise KeyError(event)
 
     def has_rule(self, event: Any) -> bool:
+        r"""
+        **API Language** - :ref:`中文 <ModuleCounter.has_rule-cn>` |
+        :ref:`English <ModuleCounter.has_rule-en>`
+
+        ----
+
+        .. _ModuleCounter.has_rule-cn:
+
+        * **中文**
+
+        判断 module event 是否匹配当前类型或其基类规则。
+
+        :param event: ``(phase, module)`` event
+        :type event: Any
+        :return: 是否存在匹配规则
+        :rtype: bool
+
+        ----
+
+        .. _ModuleCounter.has_rule-en:
+
+        * **English**
+
+        Check whether a module event matches a rule for its type or a base type.
+
+        :param event: ``(phase, module)`` event
+        :type event: Any
+        :return: Whether a matching rule exists
+        :rtype: bool
+        """
         if not (
             isinstance(event, tuple)
             and len(event) == 2
@@ -597,11 +655,95 @@ class ModuleCounter(BaseCounter):
         active_modules: Optional[set[nn.Module]] = None,
         parent_names: Optional[set[str]] = None,
     ) -> int:
+        r"""
+        **API Language** - :ref:`中文 <ModuleCounter.count-cn>` |
+        :ref:`English <ModuleCounter.count-en>`
+
+        ----
+
+        .. _ModuleCounter.count-cn:
+
+        * **中文**
+
+        调用与 module event 匹配的最具体规则。
+
+        :param func: ``(phase, module)`` event
+        :type func: Any
+        :param args: module hook 的位置参数
+        :type args: tuple
+        :param kwargs: module hook 的关键字参数
+        :type kwargs: dict
+        :param out: forward 输出或 backward gradient 输出
+        :type out: Any
+        :param active_modules: 当前 module 作用域；基础实现不使用
+        :type active_modules: Optional[set[torch.nn.Module]]
+        :param parent_names: 当前作用域名称；基础实现不使用
+        :type parent_names: Optional[set[str]]
+        :return: 本次 event 的整数计数
+        :rtype: int
+
+        ----
+
+        .. _ModuleCounter.count-en:
+
+        * **English**
+
+        Invoke the most specific rule matching a module event.
+
+        :param func: ``(phase, module)`` event
+        :type func: Any
+        :param args: Positional module-hook arguments
+        :type args: tuple
+        :param kwargs: Keyword module-hook arguments
+        :type kwargs: dict
+        :param out: Forward output or backward gradient output
+        :type out: Any
+        :param active_modules: Active module scope; unused by the base implementation
+        :type active_modules: Optional[set[torch.nn.Module]]
+        :param parent_names: Active scope names; unused by the base implementation
+        :type parent_names: Optional[set[str]]
+        :return: Integer count for this event
+        :rtype: int
+        """
         phase, module = func
         rule = self.rules[self._rule_key((phase, module))]
         return int(rule(module, args, kwargs, out))
 
     def record(self, scope: str, func: Any, value: int) -> None:
+        r"""
+        **API Language** - :ref:`中文 <ModuleCounter.record-cn>` |
+        :ref:`English <ModuleCounter.record-en>`
+
+        ----
+
+        .. _ModuleCounter.record-cn:
+
+        * **中文**
+
+        按匹配后的 ``(phase, module_type)`` 规则键记录计数。
+
+        :param scope: module 作用域名称
+        :type scope: str
+        :param func: ``(phase, module)`` event
+        :type func: Any
+        :param value: 本次 event 的计数
+        :type value: int
+
+        ----
+
+        .. _ModuleCounter.record-en:
+
+        * **English**
+
+        Record a count under the resolved ``(phase, module_type)`` rule key.
+
+        :param scope: Module scope name
+        :type scope: str
+        :param func: ``(phase, module)`` event
+        :type func: Any
+        :param value: Count for this event
+        :type value: int
+        """
         self.records[scope][self._rule_key(func)] += value
 
 
@@ -630,18 +772,37 @@ class _CounterMode:
 
     def get_unsupported(self, counter: BaseCounter) -> dict[str, int]:
         r"""
-        返回指定计数器在最近一次上下文中跳过的目标及调用次数。
+        **API Language** - :ref:`中文 <CounterMode.get_unsupported-cn>` |
+        :ref:`English <CounterMode.get_unsupported-en>`
+
+        ----
+
+        .. _CounterMode.get_unsupported-cn:
+
+        * **中文**
+
+        返回指定计数器在最近一次 context 中跳过的目标及调用次数。
+
+        :param counter: 已传入本 context 的计数器
+        :type counter: BaseCounter
+        :return: 以算子、函数或 module event 名称为键的调用次数
+        :rtype: dict[str, int]
+        :raises ValueError: 当 ``counter`` 不属于本 context 时抛出
+
+        ----
+
+        .. _CounterMode.get_unsupported-en:
+
+        * **English**
 
         Return subjects skipped by ``counter`` in the latest context and their
         call counts.
 
-        :param counter: 已传入本计数上下文的计数器 / A counter passed to this mode
+        :param counter: A counter passed to this mode
         :type counter: BaseCounter
-        :return: 以算子、函数或 module event 名称为键的调用次数 / Call counts
-            keyed by operator, function, or module-event name
+        :return: Call counts keyed by operator, function, or module-event name
         :rtype: dict[str, int]
-        :raises ValueError: 当 ``counter`` 不属于本上下文时抛出 / Raised when
-            ``counter`` does not belong to this mode
+        :raises ValueError: Raised when ``counter`` does not belong to this mode
         """
         if counter not in self._unsupported:
             raise ValueError("counter does not belong to this counter mode")
@@ -732,7 +893,7 @@ class ModuleCounterMode(_CounterMode):
         *,
         model: nn.Module,
         strict: bool = False,
-    ):
+    ) -> None:
         r"""
         **API Language** - :ref:`中文 <ModuleCounterMode.__init__-cn>` | :ref:`English <ModuleCounterMode.__init__-en>`
 
@@ -772,17 +933,19 @@ class ModuleCounterMode(_CounterMode):
         self.model = model
         self._handles: list[Any] = []
         self._scopes: dict[nn.Module, tuple[set[nn.Module], set[str]]] = {}
+        self._active = False
 
     def _build_scopes(self) -> None:
         named_modules = dict(self.model.named_modules())
+        root_name = type(self.model).__name__
         for name, module in named_modules.items():
             active_modules = {self.model}
-            parent_names = {"Global"}
+            parent_names = {"Global", root_name}
             if name:
                 parts = name.split(".")
                 for end in range(1, len(parts) + 1):
                     parent_name = ".".join(parts[:end])
-                    parent_names.add(parent_name)
+                    parent_names.add(f"{root_name}.{parent_name}")
                     active_modules.add(named_modules[parent_name])
             self._scopes[module] = active_modules, parent_names
 
@@ -809,11 +972,12 @@ class ModuleCounterMode(_CounterMode):
         )
 
     def __enter__(self) -> "ModuleCounterMode":
-        if self._handles:
+        if self._active:
             raise RuntimeError("ModuleCounterMode is already active.")
+        self._active = True
         self._unsupported = {counter: {} for counter in self.counters}
-        self._build_scopes()
         try:
+            self._build_scopes()
             for module in self.model.modules():
                 if any(
                     counter.has_rule(("forward", module)) for counter in self.counters
@@ -836,9 +1000,12 @@ class ModuleCounterMode(_CounterMode):
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        for handle in self._handles:
-            handle.remove()
-        self._handles.clear()
+        try:
+            for handle in self._handles:
+                handle.remove()
+        finally:
+            self._handles.clear()
+            self._active = False
 
 
 class DispatchCounterMode(_CounterMode, TorchDispatchMode):

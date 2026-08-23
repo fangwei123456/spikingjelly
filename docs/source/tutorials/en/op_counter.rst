@@ -106,7 +106,8 @@ Using ``ModuleCounterMode``
 
 Module-counter rule keys are ``("forward" | "backward", module_type)``. The
 mode owns hook lifetime, module scopes, ignored subtrees, and exception cleanup;
-it does not reset counters automatically.
+it does not reset counters automatically. Scope keys follow the other modes:
+``Global``, then the root module type and its qualified child path.
 
 .. code-block:: python
 
@@ -341,9 +342,12 @@ Its boundaries are:
 
 * unsupported energy-bearing operators reject the report;
 * manual profiling passes mapping semantics explicitly with
-  ``stage(name, phase=..., reuse_weights=..., batch_norm_backward=...)``;
+  ``stage(name, phase=..., reuse_weights=..., batch_norm_backward=...)``; a stage
+  name reused in one context must keep the same options;
 * the training convenience path captures backward and estimates the optimizer but
   does not call ``optimizer.step()`` or update parameters;
+* repeated calls to one module must all participate in backward; selective
+  backward through only some calls is rejected as ambiguous;
 * it is still a hardware-model-based estimate, not a measurement from a real chip.
 
 Use this estimator when you need training-stage energy or online-learning stage breakdowns.

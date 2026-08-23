@@ -255,9 +255,10 @@ def test_simple_energy_supports_keyword_module_inputs():
     assert report.counts["weight_read_bytes"] == 6 * 4
 
 
-def test_simple_energy_profiler_rejects_rebinding_while_active():
+@pytest.mark.parametrize("model", (nn.Linear(4, 3), nn.ReLU()))
+def test_simple_energy_profiler_rejects_rebinding_while_active(model):
     profiler = op_counter.SimpleEnergyProfiler()
-    profiler.bind_model(nn.Linear(4, 3))
+    profiler.bind_model(model)
 
     with profiler, pytest.raises(RuntimeError, match="while profiling"):
         profiler.bind_model(nn.Linear(4, 3))

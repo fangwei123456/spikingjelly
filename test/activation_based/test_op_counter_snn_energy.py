@@ -378,11 +378,19 @@ def test_lemaire_energy_ignores_unsupported_functional_matmul():
 
     model = MatmulWrapper()
     report = op_counter.estimate_lemaire_energy(
-        model, (torch.rand(3, 8), torch.rand(8, 4))
+        model,
+        (torch.rand(3, 8), torch.rand(8, 4)),
+        config=op_counter.LemaireEnergyConfig(strict=False),
     )
 
     assert report.counts["acc_addr"] == 0
     assert report.counts["mac_addr"] == 0
+    assert any("MatmulWrapper" in message for message in report.warnings)
+
+
+def test_lemaire_energy_strict_rejects_unknown_leaf_module():
+    with pytest.raises(ValueError, match="ReLU"):
+        op_counter.estimate_lemaire_energy(nn.ReLU(), torch.rand(2, 4))
 
 
 def test_lemaire_energy_rejects_neurons_outside_paper_scope():

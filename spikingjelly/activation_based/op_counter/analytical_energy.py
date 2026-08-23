@@ -73,6 +73,15 @@ class LemaireEnergyCostConfig:
 
     Lemaire 风格解析式能耗模型的成本配置。
 
+    :param e_add_pj: 单次 32-bit 整数加法能耗，单位为 pJ
+    :type e_add_pj: float
+    :param e_mul_pj: 单次 32-bit 整数乘法能耗，单位为 pJ
+    :type e_mul_pj: float
+    :param memory_breakpoints: 四个 ``(容量字节数, 每字节访问能耗 pJ)`` 插值点
+    :type memory_breakpoints: tuple[tuple[float, float], ...]
+
+    :raises ValueError: 当成本或插值点无效时抛出
+
     ----
 
     .. _LemaireEnergyCostConfig-en:
@@ -80,6 +89,16 @@ class LemaireEnergyCostConfig:
     * **English**
 
     Cost configuration for the Lemaire-style analytical energy model.
+
+    :param e_add_pj: Energy of one 32-bit integer addition in pJ
+    :type e_add_pj: float
+    :param e_mul_pj: Energy of one 32-bit integer multiplication in pJ
+    :type e_mul_pj: float
+    :param memory_breakpoints: Four ``(capacity bytes, access pJ per byte)``
+        interpolation points
+    :type memory_breakpoints: tuple[tuple[float, float], ...]
+
+    :raises ValueError: Raised for invalid costs or interpolation points
     """
 
     e_add_pj: float = 0.1
@@ -149,6 +168,11 @@ class LemaireEnergyConfig:
 
     控制 inference-only、Lemaire 对齐能耗分析器的行为。
 
+    :param strict: 遇到论文范围外的 module 或 backend 时是否抛出异常
+    :type strict: bool
+    :param cost_config: 算术和 SRAM 访问成本
+    :type cost_config: LemaireEnergyCostConfig
+
     :param snn_fifo_capacity_elements: 每层 SNN 输入/输出 FIFO 可容纳的消息数，
         默认 ``1000``，与论文实验设置一致
     :type snn_fifo_capacity_elements: int
@@ -162,6 +186,11 @@ class LemaireEnergyConfig:
     * **English**
 
     Controls the inference-only, Lemaire-aligned energy profiler.
+
+    :param strict: Whether modules or backends outside the paper scope raise
+    :type strict: bool
+    :param cost_config: Arithmetic and SRAM-access costs
+    :type cost_config: LemaireEnergyCostConfig
 
     :param snn_fifo_capacity_elements: Number of messages that each SNN input/output
         FIFO can hold. The default ``1000`` follows the paper's experiments
@@ -197,6 +226,21 @@ class LemaireEnergyReport:
 
     单一 Lemaire 口径的前向推理能耗报告。
 
+    :param total_pj: 总能耗，单位为 pJ
+    :type total_pj: float
+    :param breakdown_pj: 按计算、寻址和访存分解的能耗
+    :type breakdown_pj: dict[str, float]
+    :param counts: 论文口径的操作和访问计数
+    :type counts: dict[str, int]
+    :param buffer_sizes_bytes: 各类本地存储的最大容量，单位为字节
+    :type buffer_sizes_bytes: dict[str, int]
+    :param warnings: 非严格模式下省略项的告警
+    :type warnings: list[str]
+    :param model_info: 模型来源与适用范围
+    :type model_info: EnergyModelInfo
+    :param config: 生成本报告的配置副本
+    :type config: LemaireEnergyConfig
+
     ----
 
     .. _LemaireEnergyReport-en:
@@ -204,6 +248,21 @@ class LemaireEnergyReport:
     * **English**
 
     Single-report, Lemaire-aligned forward inference energy report.
+
+    :param total_pj: Total energy in pJ
+    :type total_pj: float
+    :param breakdown_pj: Energy split by compute, addressing, and memory
+    :type breakdown_pj: dict[str, float]
+    :param counts: Paper-aligned operation and access counts
+    :type counts: dict[str, int]
+    :param buffer_sizes_bytes: Maximum local-storage capacities in bytes
+    :type buffer_sizes_bytes: dict[str, int]
+    :param warnings: Omitted-scope warnings in non-strict mode
+    :type warnings: list[str]
+    :param model_info: Model provenance and applicability
+    :type model_info: EnergyModelInfo
+    :param config: Copy of the configuration used for this report
+    :type config: LemaireEnergyConfig
     """
 
     total_pj: float
@@ -465,11 +524,23 @@ class _LemaireCounter(ModuleCounter):
         }
 
     def validate_model(self, model: nn.Module) -> None:
+        neuron_internals = {
+            child
+            for module in model.modules()
+            if isinstance(module, BaseNode)
+            for child in module.modules()
+            if child is not module
+        }
         for module in model.modules():
+            if module in neuron_internals:
+                continue
             if isinstance(module, _UNSUPPORTED_LEMAIRE_MEMORY_MODULES):
                 self._warn_or_raise_unsupported(module)
-            elif isinstance(module, BaseNode) and not isinstance(
-                module, _SUPPORTED_LEMAIRE_NEURONS
+            elif isinstance(module, BaseNode):
+                if not isinstance(module, _SUPPORTED_LEMAIRE_NEURONS):
+                    self._warn_or_raise_unsupported(module)
+            elif not any(module.children()) and not isinstance(
+                module, _SUPPORTED_LEMAIRE_MEMORY_MODULES
             ):
                 self._warn_or_raise_unsupported(module)
 
@@ -517,7 +588,37 @@ class LemaireEnergyProfiler:
         self._module_mode: ModuleCounterMode | None = None
 
     def bind_model(self, model: nn.Module) -> None:
-        if self._module_mode is not None and self._module_mode._handles:
+        r"""
+        **API Language** - :ref:`中文 <LemaireEnergyProfiler.bind_model-cn>` |
+        :ref:`English <LemaireEnergyProfiler.bind_model-en>`
+
+        ----
+
+        .. _LemaireEnergyProfiler.bind_model-cn:
+
+        * **中文**
+
+        绑定模型并准备 Lemaire module 规则。
+
+        :param model: 待分析模型
+        :type model: torch.nn.Module
+        :raises RuntimeError: 分析器处于活跃 context 时抛出
+        :raises ValueError: 严格模式遇到不支持的神经元 backend 时抛出
+
+        ----
+
+        .. _LemaireEnergyProfiler.bind_model-en:
+
+        * **English**
+
+        Bind a model and prepare the Lemaire module rules.
+
+        :param model: Model to profile
+        :type model: torch.nn.Module
+        :raises RuntimeError: Raised while the profiler context is active
+        :raises ValueError: Raised for an unsupported neuron backend in strict mode
+        """
+        if self._module_mode is not None and self._module_mode._active:
             raise RuntimeError(
                 "LemaireEnergyProfiler.bind_model() cannot run while profiling."
             )
@@ -557,6 +658,32 @@ class LemaireEnergyProfiler:
         return self._module_mode.__exit__(exc_type, exc, tb)
 
     def get_report(self) -> LemaireEnergyReport:
+        r"""
+        **API Language** - :ref:`中文 <LemaireEnergyProfiler.get_report-cn>` |
+        :ref:`English <LemaireEnergyProfiler.get_report-en>`
+
+        ----
+
+        .. _LemaireEnergyProfiler.get_report-cn:
+
+        * **中文**
+
+        返回最近一次运行的 Lemaire 能耗报告。
+
+        :return: 能耗、计数、存储容量、告警和来源信息
+        :rtype: LemaireEnergyReport
+
+        ----
+
+        .. _LemaireEnergyProfiler.get_report-en:
+
+        * **English**
+
+        Return the Lemaire energy report for the latest run.
+
+        :return: Energy, counts, storage capacities, warnings, and provenance
+        :rtype: LemaireEnergyReport
+        """
         cost = self.config.cost_config
         memory_counts, buffers, memory_breakdown = self.lemaire_counter.summarize(cost)
         counts = {
