@@ -104,8 +104,8 @@ Module: `spikingjelly.activation_based.op_counter`.
 - Module-driven profilers now reject rebinding throughout an active context,
   including models that install no module hooks.
 - NeuroMC now rejects conflicting options for a reused stage name, matches
-  repeated module calls in full backward passes, and rejects ambiguous selective
-  backward through a repeated module.
+  repeated module calls in full backward passes, ignores reentrant-checkpoint
+  recomputation, and rejects ambiguous selective backward through a repeated module.
 
 #### NIR Exchange
 

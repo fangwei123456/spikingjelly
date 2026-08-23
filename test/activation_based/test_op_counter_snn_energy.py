@@ -116,6 +116,23 @@ def test_lemaire_energy_profiler_bind_model_warns_non_torch_backend_when_not_str
         profiler.bind_model(model)
 
 
+def test_lemaire_energy_profiler_rebind_clears_old_backend_warning():
+    unsupported = neuron.IFNode()
+    unsupported._backend = "triton"
+    profiler = op_counter.LemaireEnergyProfiler(
+        config=op_counter.LemaireEnergyConfig(strict=False)
+    )
+    with pytest.warns(RuntimeWarning, match="only supports torch backend"):
+        profiler.bind_model(unsupported)
+
+    model = nn.Linear(4, 2, bias=False)
+    profiler.bind_model(model)
+    with profiler:
+        model(torch.rand(1, 4))
+
+    assert profiler.get_report().warnings == []
+
+
 def test_lemaire_energy_conv_inference_report_has_memory_and_addressing():
     model = nn.Sequential(
         nn.Conv2d(3, 4, kernel_size=3, padding=1, bias=False),

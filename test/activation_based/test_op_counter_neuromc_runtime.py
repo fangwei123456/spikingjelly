@@ -1,6 +1,7 @@
 import pytest
 import torch
 import torch.nn as nn
+from torch.utils.checkpoint import checkpoint
 
 from spikingjelly.activation_based import layer, neuron, op_counter
 from spikingjelly.activation_based.op_counter.neuromc.core import (
@@ -232,6 +233,22 @@ def test_neuromc_rejects_selective_backward_for_repeated_module():
 
     with pytest.raises(ValueError, match="selective backward"):
         profiler.get_report()
+
+
+def test_neuromc_reentrant_checkpoint_matches_backward_input():
+    model = nn.Linear(4, 2, bias=False)
+    x = torch.randn(2, 4, requires_grad=True)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_model(model)
+
+    with profiler:
+        with profiler.stage("forward"):
+            out = checkpoint(model, x, use_reentrant=True)
+        with profiler.stage("backward", phase="backward"):
+            out.sum().backward()
+
+    report = profiler.get_report()
+    assert report.primitive_counts["totals"]["mac"] == 80
 
 
 def test_neuromc_exact_plain_sgd_optimizer_is_supported():

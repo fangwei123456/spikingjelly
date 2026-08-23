@@ -758,6 +758,8 @@ class NeuroMCEnergyProfiler(ModuleCounter):
     def _maybe_record_trace_event(self, op_name: str, args, kwargs, out):
         if not self._active or self._suspended:
             return
+        if self._stage_phase() == "backward" and torch.is_grad_enabled():
+            return
         self._trace_events.append(
             _TraceEvent(
                 op_name=op_name,
@@ -786,8 +788,10 @@ class NeuroMCEnergyProfiler(ModuleCounter):
             if args
             else next(value for value in kwargs.values() if torch.is_tensor(value))
         )
-        if not isinstance(module, BaseNode):
+        if not isinstance(module, BaseNode) and torch.is_grad_enabled():
             self._module_inputs[module].append(x)
+        if self._stage_phase(stage) == "backward" and torch.is_grad_enabled():
+            return 0
         if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d)):
             self._fragments.append(
                 self._make_conv_forward_fragment(stage, module, x, out)

@@ -622,6 +622,7 @@ class LemaireEnergyProfiler:
             raise RuntimeError(
                 "LemaireEnergyProfiler.bind_model() cannot run while profiling."
             )
+        self._warnings.clear()
         warned = False
         for module in model.modules():
             if not isinstance(module, BaseNode):
