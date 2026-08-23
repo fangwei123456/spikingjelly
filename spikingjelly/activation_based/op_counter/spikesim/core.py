@@ -126,6 +126,8 @@ class SpikeSimEnergyProfiler:
         - 以 context manager 方式包住一次真实前向传播
         - 结束后调用 ``get_report()`` 获取能耗报告
 
+        每次进入 context 都会清空上一次的统计结果。
+
         :param config: SpikeSim 能耗配置；默认使用 ``SpikeSimEnergyConfig()``
         :param strict: 是否在 unsupported 情况下直接抛异常
 
@@ -141,6 +143,8 @@ class SpikeSimEnergyProfiler:
 
         - wrap one real forward pass in the profiler context
         - call ``get_report()`` afterwards to build the energy report
+
+        Entering the context starts a fresh profiling result.
 
         :param config: SpikeSim energy config; defaults to ``SpikeSimEnergyConfig()``
         :param strict: whether to raise immediately on unsupported behaviors

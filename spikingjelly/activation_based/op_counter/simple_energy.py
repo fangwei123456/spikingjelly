@@ -279,6 +279,10 @@ class SimpleEnergyProfiler:
         :param model: 待统计模型 / Model to profile
         :type model: torch.nn.Module
         """
+        if self._module_mode is not None and self._module_mode._handles:
+            raise RuntimeError(
+                "SimpleEnergyProfiler.bind_model() cannot run while profiling."
+            )
         self._module_mode = ModuleCounterMode(
             [self.memory_counter],
             model=model,

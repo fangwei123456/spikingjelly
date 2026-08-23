@@ -30,17 +30,17 @@ def _spike_conv_weight_uses_from_tensors(
     dilation,
     groups: int,
 ) -> int:
-    group_kernel = torch.ones(
-        (groups, w.shape[1], *w.shape[2:]),
-        dtype=torch.float32,
-        device=x.device,
-    )
     with (
         torch.no_grad(),
         torch._C._ExcludeDispatchKeyGuard(
             torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
         ),
     ):
+        group_kernel = torch.ones(
+            (groups, w.shape[1], *w.shape[2:]),
+            dtype=torch.float32,
+            device=x.device,
+        )
         occupancy = torch.ops.aten.convolution.default(
             x.float(),
             group_kernel,
@@ -61,7 +61,13 @@ def _spike_conv_weight_uses(module: nn.Module, x: torch.Tensor) -> int:
     padding = module.padding
     if isinstance(padding, str) or module.padding_mode != "zeros":
         mode = "constant" if module.padding_mode == "zeros" else module.padding_mode
-        x = F.pad(x, module._reversed_padding_repeated_twice, mode)
+        with (
+            torch.no_grad(),
+            torch._C._ExcludeDispatchKeyGuard(
+                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
+            ),
+        ):
+            x = F.pad(x, module._reversed_padding_repeated_twice, mode)
         padding = tuple(0 for _ in module.stride)
     return _spike_conv_weight_uses_from_tensors(
         x,
@@ -139,8 +145,11 @@ class NeuromorphicMemoryAccessCounter(ModuleCounter):
         kwargs: dict[str, Any],
         output: torch.Tensor,
     ) -> int:
-        del kwargs
-        x = inputs[0]
+        x = (
+            inputs[0]
+            if inputs
+            else next(value for value in kwargs.values() if torch.is_tensor(value))
+        )
         if is_binary_tensor(x):
             if isinstance(module, nn.Linear):
                 weight_uses = int(x.count_nonzero().item()) * module.out_features
@@ -168,8 +177,12 @@ class NeuromorphicMemoryAccessCounter(ModuleCounter):
         kwargs: dict[str, Any],
         output: Any,
     ) -> int:
-        del kwargs, output
-        time_steps = int(inputs[0].shape[0]) if module.step_mode == "m" else 1
+        x = (
+            inputs[0]
+            if inputs
+            else next(value for value in kwargs.values() if torch.is_tensor(value))
+        )
+        time_steps = int(x.shape[0]) if module.step_mode == "m" else 1
         state_bytes = sum(
             int(state.numel()) * int(state.element_size())
             for state in module.memories()

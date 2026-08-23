@@ -587,6 +587,7 @@ class NeuroMCEnergyProfiler(ModuleCounter):
         self._trace_events: list[_TraceEvent] = []
         self._fragments: list[_Fragment] = []
         self._bound_model: nn.Module | None = None
+        self._trainable_param_shapes: set[tuple[int, ...]] = set()
         self._active = False
         self._suspended = False
         self._optimizer: torch.optim.Optimizer | None = None
@@ -612,10 +613,13 @@ class NeuroMCEnergyProfiler(ModuleCounter):
         )
         for module in model.modules():
             if isinstance(module, nn.Conv3d):
-                raise ValueError(
-                    "NeuroMC runtime runtime does not support nn.Conv3d yet."
-                )
+                raise ValueError("NeuroMC runtime does not support nn.Conv3d yet.")
         self._bound_model = model
+        self._trainable_param_shapes = {
+            tuple(parameter.shape)
+            for parameter in model.parameters()
+            if parameter.requires_grad
+        }
         self.rules = {
             **{
                 ("forward", module_type): self._count_forward_module
@@ -759,32 +763,32 @@ class NeuroMCEnergyProfiler(ModuleCounter):
         kwargs: dict[str, Any],
         out: Any,
     ) -> int:
-        del kwargs
         if not self._active or self._suspended:
             return 0
         stage = self._current_stage()
         from ...neuron.base_node import BaseNode
 
+        x = (
+            args[0]
+            if args
+            else next(value for value in kwargs.values() if torch.is_tensor(value))
+        )
         if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d)):
-            x = args[0]
             module._neuromc_last_input = x
             self._fragments.append(
                 self._make_conv_forward_fragment(stage, module, x, out)
             )
         elif isinstance(module, nn.Linear):
-            x = args[0]
             module._neuromc_last_input = x
             self._fragments.append(
                 self._make_linear_forward_fragment(stage, module, x, out)
             )
         elif isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
-            x = args[0]
             module._neuromc_last_input = x
             self._fragments.append(
                 self._make_bn_forward_fragment(stage, module, x, out)
             )
         elif isinstance(module, BaseNode):
-            x = args[0]
             self._fragments.append(
                 self._make_soma_forward_fragment(stage, module, x, out)
             )
@@ -797,7 +801,6 @@ class NeuroMCEnergyProfiler(ModuleCounter):
         kwargs: dict[str, Any],
         grad_output: tuple[Any, ...],
     ) -> int:
-        del kwargs
         if not self._active or self._suspended:
             return 0
         stage = self._current_stage()
@@ -1239,15 +1242,9 @@ class NeuroMCEnergyProfiler(ModuleCounter):
         )
 
     def _matches_trainable_param_shape(self, out: Any) -> bool:
-        if self._bound_model is None or not (
-            torch.is_tensor(out) or isinstance(out, _TraceTensor)
-        ):
+        if not (torch.is_tensor(out) or isinstance(out, _TraceTensor)):
             return False
-        out_shape = tuple(out.shape)
-        for p in self._bound_model.parameters():
-            if p.requires_grad and tuple(p.shape) == out_shape:
-                return True
-        return False
+        return tuple(out.shape) in self._trainable_param_shapes
 
     def _gemm_backward_fragment_kind(
         self, x: torch.Tensor | _TraceTensor, y: torch.Tensor | _TraceTensor, out: Any
@@ -1289,21 +1286,21 @@ class NeuroMCEnergyProfiler(ModuleCounter):
                 out = event.out
                 if x.ndim > 4 or out.ndim > 4:
                     raise ValueError(
-                        "NeuroMC runtime runtime does not support multi-step or 3D "
+                        "NeuroMC runtime does not support multi-step or 3D "
                         "Conv trace fallback yet."
                     )
                 is_spike_input = _is_spike_like(x)
                 spatial = tuple(out.shape[2:]) if out.ndim > 2 else (1, 1)
                 if len(spatial) > 2:
                     raise ValueError(
-                        "NeuroMC runtime runtime does not support Conv3d fallback yet."
+                        "NeuroMC runtime does not support Conv3d fallback yet."
                     )
                 if len(spatial) == 1:
                     spatial = (spatial[0], 1)
                 kernel = tuple(w.shape[2:]) if w.ndim > 2 else (1, 1)
                 if len(kernel) > 2:
                     raise ValueError(
-                        "NeuroMC runtime runtime does not support Conv3d fallback yet."
+                        "NeuroMC runtime does not support Conv3d fallback yet."
                     )
                 if len(kernel) == 1:
                     kernel = (kernel[0], 1)
@@ -1482,7 +1479,7 @@ class NeuroMCEnergyProfiler(ModuleCounter):
                 x = event.args[0]
                 if x.ndim > 4:
                     raise ValueError(
-                        "NeuroMC runtime runtime does not support multi-step or 3D "
+                        "NeuroMC runtime does not support multi-step or 3D "
                         "BatchNorm trace fallback yet."
                     )
                 out = (
@@ -2067,7 +2064,7 @@ class NeuroMCEnergyProfiler(ModuleCounter):
         unsupported = self._unsupported_ops()
         if unsupported:
             raise ValueError(
-                "NeuroMC runtime runtime does not support these aten ops: "
+                "NeuroMC runtime does not support these aten ops: "
                 + ", ".join(unsupported[:30])
             )
         if not fragments:

@@ -246,6 +246,23 @@ def test_simple_energy_supports_dict_inputs_for_keyword_only_models():
     assert report.counts["ac"] == 12
 
 
+def test_simple_energy_supports_keyword_module_inputs():
+    model = nn.Linear(4, 3, bias=False)
+    x = torch.tensor([[1.0, 0.0, 1.0, 0.0]])
+
+    report = op_counter.estimate_simple_energy(model, {"input": x})
+
+    assert report.counts["weight_read_bytes"] == 6 * 4
+
+
+def test_simple_energy_profiler_rejects_rebinding_while_active():
+    profiler = op_counter.SimpleEnergyProfiler()
+    profiler.bind_model(nn.Linear(4, 3))
+
+    with profiler, pytest.raises(RuntimeError, match="while profiling"):
+        profiler.bind_model(nn.Linear(4, 3))
+
+
 def test_neuromorphic_memory_counter_uses_module_counter_mode():
     counter = op_counter.NeuromorphicMemoryAccessCounter()
     assert isinstance(counter, op_counter.ModuleCounter)
@@ -310,6 +327,25 @@ def test_neuromorphic_memory_counter_supports_string_conv_padding(padding, weigh
         _ = model(x)
 
     assert counter.get_counts()["Global"]["weight_read_bytes"] == weight_uses * 4
+
+
+def test_neuromorphic_memory_probe_does_not_dispatch_extra_padding():
+    model = nn.Conv2d(
+        1, 1, kernel_size=3, padding=1, padding_mode="reflect", bias=False
+    )
+    memory_counter = op_counter.NeuromorphicMemoryAccessCounter()
+    pad_counter = op_counter.BaseCounter()
+    pad_counter.rules = {
+        torch.ops.aten.reflection_pad2d.default: lambda args, kwargs, out: 1
+    }
+
+    with (
+        op_counter.DispatchCounterMode([pad_counter]),
+        op_counter.ModuleCounterMode([memory_counter], model=model),
+    ):
+        model(torch.ones(1, 1, 3, 3))
+
+    assert pad_counter.get_total() == 1
 
 
 def test_neuromorphic_memory_counter_empty_reads_do_not_create_scopes():

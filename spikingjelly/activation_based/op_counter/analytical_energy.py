@@ -302,8 +302,11 @@ class _LemaireCounter(ModuleCounter):
             kwargs: dict[str, Any],
             output: torch.Tensor,
         ) -> int:
-            del kwargs
-            x = inputs[0]
+            x = (
+                inputs[0]
+                if inputs
+                else next(value for value in kwargs.values() if torch.is_tensor(value))
+            )
             out = output
             word_bytes = int(_LEMAIRE_ACCESS_WIDTH_BYTES)
 
@@ -356,6 +359,7 @@ class _LemaireCounter(ModuleCounter):
                         * (module.out_channels // module.groups)
                         * prod(module.kernel_size)
                     )
+                    # Each spike needs two multiplies to locate its first output.
                     self.paper_mac_addr += active_inputs * 2
             else:
                 self.paper_mac += dense_weight_uses
@@ -413,7 +417,6 @@ class _LemaireCounter(ModuleCounter):
             kwargs: dict[str, Any],
             output: Any,
         ) -> int:
-            del kwargs
             out = (
                 output[0]
                 if isinstance(output, (tuple, list)) and len(output) > 0
@@ -421,7 +424,12 @@ class _LemaireCounter(ModuleCounter):
             )
             if not torch.is_tensor(out):
                 return 0
-            time_steps = self._time_steps(module, inputs[0])
+            x = (
+                inputs[0]
+                if inputs
+                else next(value for value in kwargs.values() if torch.is_tensor(value))
+            )
+            time_steps = self._time_steps(module, x)
             word_bytes = int(_LEMAIRE_ACCESS_WIDTH_BYTES)
             potential_capacity = int(out.numel()) // max(time_steps, 1) * word_bytes
             potential_access_bytes = potential_capacity * time_steps
@@ -509,6 +517,10 @@ class LemaireEnergyProfiler:
         self._module_mode: ModuleCounterMode | None = None
 
     def bind_model(self, model: nn.Module) -> None:
+        if self._module_mode is not None and self._module_mode._handles:
+            raise RuntimeError(
+                "LemaireEnergyProfiler.bind_model() cannot run while profiling."
+            )
         warned = False
         for module in model.modules():
             if not isinstance(module, BaseNode):

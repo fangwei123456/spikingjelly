@@ -109,6 +109,12 @@ Module: ``spikingjelly.activation_based.op_counter``.
   integer event counts are not rounded through float32.
 - Ideal fused-attention traffic now includes optional masks/biases and available
   bias gradients.
+- Module-driven energy profilers now accept keyword tensor inputs and reject
+  model rebinding while hooks are active.
+- Neuromorphic convolution probes no longer expose their padding or helper
+  tensor operations to dispatch counters.
+- NeuroMC preserves trainable-parameter shape information required to classify
+  backward fragments after the profiling context exits.
 
 NIR Exchange
 ^^^^^^^^^^^^

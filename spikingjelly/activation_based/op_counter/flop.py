@@ -347,8 +347,8 @@ class FlopCounter(BaseCounter):
             其中 ``func`` 是一个函数，接受 ``(args, kwargs, out)`` 并返回计数值
         :type extra_rules: dict[Any, Callable]
 
-        :param extra_ignore_modules: 额外需要忽略的模块列表，这些模块中的操作不会被计数
-        :type extra_ignore_modules: list[torch.nn.Module]
+        :param extra_ignore_modules: 额外需要忽略的模块类型列表，这些模块中的操作不会被计数
+        :type extra_ignore_modules: Optional[list[type[torch.nn.Module]]]
 
         ----
 
@@ -382,9 +382,9 @@ class FlopCounter(BaseCounter):
             where ``func`` is a function that takes ``(args, kwargs, out)`` and returns the count value
         :type extra_rules: dict[Any, Callable]
 
-        :param extra_ignore_modules: additional list of modules to ignore.
+        :param extra_ignore_modules: additional module types to ignore.
             Operations within these modules will not be counted
-        :type extra_ignore_modules: list[torch.nn.Module]
+        :type extra_ignore_modules: Optional[list[type[torch.nn.Module]]]
 
         ----
 

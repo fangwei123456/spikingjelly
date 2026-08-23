@@ -227,8 +227,8 @@ class ACCounter(BaseCounter):
             其中 ``func`` 是一个函数，接受 ``(args, kwargs, out)`` 并返回 AC 次数
         :type extra_rules: dict[Any, Callable]
 
-        :param extra_ignore_modules: 额外需要忽略的模块列表
-        :type extra_ignore_modules: list[torch.nn.Module]
+        :param extra_ignore_modules: 额外需要忽略的模块类型列表
+        :type extra_ignore_modules: Optional[list[type[torch.nn.Module]]]
 
         ----
 
@@ -265,8 +265,8 @@ class ACCounter(BaseCounter):
             where ``func`` is a function that takes ``(args, kwargs, out)`` and returns the AC count
         :type extra_rules: dict[Any, Callable]
 
-        :param extra_ignore_modules: additional list of modules to ignore
-        :type extra_ignore_modules: list[torch.nn.Module]
+        :param extra_ignore_modules: additional module types to ignore
+        :type extra_ignore_modules: Optional[list[type[torch.nn.Module]]]
 
         ----
 

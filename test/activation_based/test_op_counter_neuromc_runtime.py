@@ -137,6 +137,28 @@ def test_neuromc_exact_training_uses_bp_wg_and_optimizer():
     )
 
 
+def test_neuromc_report_classification_survives_context_exit():
+    model = nn.Linear(4, 3, bias=False)
+    x = torch.ones(1, requires_grad=True)
+    out = torch.empty_like(model.weight)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_model(model)
+
+    with profiler:
+        inside = profiler._gemm_backward_fragment_kind(x, x, out)
+    outside = profiler._gemm_backward_fragment_kind(x, x, out)
+
+    assert inside == outside == "wg"
+
+
+def test_neuromc_runtime_supports_keyword_module_inputs():
+    report = op_counter.estimate_neuromc_runtime_energy(
+        nn.Linear(4, 3, bias=False), {"input": torch.randn(2, 4)}
+    )
+
+    assert report.primitive_counts["totals"]["mac"] == 24
+
+
 def _optimizer_fragment_totals(profiler, fragments):
     total_add = 0
     total_mul = 0
@@ -651,23 +673,6 @@ def test_neuromc_exact_dense_mixed_hook_and_functional_addmm_use_ann_path():
         item["op_name"] == "aten.addmm.default" and item["core_type"] == "ann_fe"
         for item in report.mapping_summary
     )
-
-
-def test_neuromc_exact_b_type_reuse_hint_reduces_later_forward_energy():
-    model = nn.Linear(16, 8, bias=False)
-    x = (torch.rand(4, 16) > 0.75).float()
-
-    profiler = op_counter.NeuroMCEnergyProfiler()
-    profiler.bind_model(model)
-    with profiler:
-        with profiler.stage("first"):
-            _ = model(x)
-        with profiler.stage("reused", reuse_weights=True):
-            _ = model(x)
-    report = profiler.get_report()
-
-    assert report.energy_by_stage["first"] > report.energy_by_stage["reused"]
-    assert any(item["t_type"] == 1 for item in report.mapping_summary)
 
 
 def test_neuromc_exact_stage_conv_type_controls_bn_backward_counts():

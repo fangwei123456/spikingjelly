@@ -93,6 +93,18 @@ def test_lemaire_energy_strict_profiles_supported_linear():
     assert report.counts["read_params_bytes"] == 6 * 4
 
 
+def test_lemaire_energy_supports_keyword_module_inputs():
+    x = torch.tensor([[1.0, 0.0, 1.0, 0.0]])
+
+    linear_report = op_counter.estimate_lemaire_energy(
+        nn.Linear(4, 3, bias=False), {"input": x}
+    )
+    neuron_report = op_counter.estimate_lemaire_energy(neuron.IFNode(), {"x": x})
+
+    assert linear_report.counts["synop"] == 6
+    assert neuron_report.counts["write_potential_bytes"] == x.numel() * 4
+
+
 def test_lemaire_energy_profiler_bind_model_warns_non_torch_backend_when_not_strict():
     model = neuron.IFNode()
     model._backend = "triton"
@@ -253,6 +265,14 @@ def test_lemaire_energy_profiler_reuse_does_not_accumulate_counters():
 
     assert second_report.total_pj == pytest.approx(first_report.total_pj)
     assert second_report.counts == first_report.counts
+
+
+def test_lemaire_energy_profiler_rejects_rebinding_while_active():
+    profiler = op_counter.LemaireEnergyProfiler()
+    profiler.bind_model(nn.Linear(4, 3))
+
+    with profiler, pytest.raises(RuntimeError, match="while profiling"):
+        profiler.bind_model(nn.Linear(4, 3))
 
 
 def test_lemaire_energy_cost_config_validates_memory_breakpoints():

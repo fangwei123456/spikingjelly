@@ -286,7 +286,7 @@ class BaseCounter:
 
         - :attr:`records`: 存储计数记录，结构为 ``dict[scope][operation] = count``
         - :attr:`rules`: 定义如何计算各个操作的计数的函数
-        - :attr:`ignore_modules`: 需要忽略的模块列表，这些模块中的操作不会被计数
+        - :attr:`ignore_modules`: 需要忽略的模块类型列表，这些模块中的操作不会被计数
 
         子类需要实现具体的规则 ``rules`` 来定义如何计算特定操作的计数。
 
@@ -303,14 +303,14 @@ class BaseCounter:
 
         - :attr:`records`: stores count records, structured as ``dict[scope][operation] = count``
         - :attr:`rules`: functions that define how to calculate counts for each operation
-        - :attr:`ignore_modules`: list of modules to ignore. Operations within these modules will not be counted
+        - :attr:`ignore_modules`: module types to ignore. Operations within these modules will not be counted
 
         Subclasses need to implement specific rule functions in :attr:`rules` to define
         how to calculate counts for particular operations.
         """
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {}
-        self.ignore_modules: list[nn.Module] = []
+        self.ignore_modules: list[type[nn.Module]] = []
 
     def has_rule(self, func: Any) -> bool:
         r"""
