@@ -113,24 +113,41 @@ def test_scaled_dot_product_attention_counts_mask_and_backward_bias_traffic():
     counter = op_counter.MemoryAccessCounter()
     with op_counter.DispatchCounterMode([counter]):
         out = F.scaled_dot_product_attention(q, q, q, attn_mask=mask)
-    assert counter.get_total() == sum(
+    expected_forward_bytes = sum(
         tensor.numel() * tensor.element_size() for tensor in (q, q, q, mask, out)
     )
+    assert counter.get_total() == expected_forward_bytes
 
     grad_out = torch.randn_like(out)
     logsumexp = torch.randn(1, 2, 4)
     grad_q, grad_k, grad_v = (torch.randn_like(q) for _ in range(3))
     grad_bias = torch.randn_like(mask)
     try:
+        forward_func = torch.ops.aten._scaled_dot_product_efficient_attention.default
         func = torch.ops.aten._scaled_dot_product_efficient_attention_backward.default
     except AttributeError:
-        pytest.skip("efficient attention backward is unavailable")
+        pytest.skip("efficient attention is unavailable")
+
+    value = counter.count(
+        forward_func, (q, q, q), {"attn_bias": mask}, (out, logsumexp)
+    )
+    assert value == expected_forward_bytes
+
     args = (grad_out, q, q, q, mask, out, logsumexp)
     value = counter.count(func, args, {}, (grad_q, grad_k, grad_v, grad_bias))
-    assert value == sum(
+    expected_backward_bytes = sum(
         tensor.numel() * tensor.element_size()
         for tensor in (grad_out, q, q, q, mask, grad_q, grad_k, grad_v, grad_bias)
     )
+    assert value == expected_backward_bytes
+
+    value = counter.count(
+        func,
+        (grad_out, q, q, q),
+        {"attn_bias": mask},
+        (grad_q, grad_k, grad_v, grad_bias),
+    )
+    assert value == expected_backward_bytes
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is unavailable")

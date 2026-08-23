@@ -211,7 +211,7 @@ def _memory_sdpa(args, kwargs, out):
     primary_out = out[0] if isinstance(out, (tuple, list)) else out
     bias = args[3] if len(args) > 3 and torch.is_tensor(args[3]) else None
     if bias is None:
-        bias = kwargs.get("attn_mask")
+        bias = kwargs.get("attn_mask", kwargs.get("attn_bias"))
     return sum(_bytes(x) for x in (*args[:3], bias, primary_out))
 
 
@@ -221,7 +221,7 @@ def _memory_sdpa_backward(args, kwargs, out, *, bias_index):
         if bias_index is not None
         and len(args) > bias_index
         and torch.is_tensor(args[bias_index])
-        else kwargs.get("attn_mask")
+        else kwargs.get("attn_mask", kwargs.get("attn_bias"))
     )
     outputs = out if isinstance(out, (tuple, list)) else (out,)
     return sum(_bytes(x) for x in (*args[:4], bias, *outputs))
