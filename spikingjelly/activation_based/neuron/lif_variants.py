@@ -551,7 +551,8 @@ class ComplementaryLIFNode(BaseNode):
         :type backend: str
         :param store_state_seqs: 在多步模式下是否保存完整状态轨迹。若为 ``True``，
             ``state_seqs`` 按 ``[v_seq, m_seq]`` 保存两个形状为 ``[T, N, *]`` 的张量；
-            functional forward 不写入该缓存
+            functional forward 不写入该缓存。本类不使用父类的 ``store_v_seq`` 和
+            ``v_seq``，所有状态轨迹统一由 ``store_state_seqs`` 控制
         :type store_state_seqs: bool
         :raises AssertionError: ``tau`` 不是大于 ``1.0`` 的浮点数时抛出
         :raises ValueError: ``step_mode`` 不是 ``"s"`` 或 ``"m"`` 时抛出
@@ -603,7 +604,9 @@ class ComplementaryLIFNode(BaseNode):
         :param store_state_seqs: Whether to store complete state trajectories in
             multi-step mode. If ``True``, ``state_seqs`` contains two tensors in
             ``[v_seq, m_seq]`` order, each with shape ``[T, N, *]``. Functional
-            forward does not write this cache
+            forward does not write this cache. This class does not use the parent
+            ``store_v_seq`` or ``v_seq`` interface; ``store_state_seqs`` controls
+            all state trajectories
         :type store_state_seqs: bool
         :raises AssertionError: If ``tau`` is not a float greater than ``1.0``
         :raises ValueError: If ``step_mode`` is neither ``"s"`` nor ``"m"``
@@ -671,7 +674,9 @@ class ComplementaryLIFNode(BaseNode):
     ) -> tuple[object, ...]:
         states = super().materialize_states(inputs, states, step_mode)
         v, m = states
-        if isinstance(m, float) or m.shape != v.shape:
+        if not isinstance(m, torch.Tensor):
+            m = torch.full_like(v, m, requires_grad=False)
+        elif m.shape != v.shape:
             m = torch.zeros_like(v, requires_grad=False)
         elif m.dtype != v.dtype or m.device != v.device:
             m = m.to(dtype=v.dtype, device=v.device)
@@ -699,7 +704,7 @@ class ComplementaryLIFNode(BaseNode):
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         if not self.store_state_seqs:
-            return super().multi_step_forward(x_seq)
+            return base.MemoryModule.multi_step_forward(self, x_seq)
 
         states = self.materialize_states((x_seq,), tuple(self._memories.values()), "m")
         spike_steps = []

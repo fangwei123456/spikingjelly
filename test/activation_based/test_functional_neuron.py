@@ -160,6 +160,10 @@ def test_complementary_lif_matches_paper_dynamics_and_gradient(
 
 
 def test_complementary_lif_single_multi_step_and_functional_state():
+    scalar_state = neuron.ComplementaryLIFNode()
+    _, states = scalar_state.functional_forward((torch.zeros(2),), (0.0, 1))
+    torch.testing.assert_close(states[1], torch.full((2,), 0.5))
+
     x_seq = torch.tensor(
         [[0.3, 0.8], [0.9, 0.4], [0.7, 1.0], [0.6, 0.2]],
         dtype=torch.float64,
@@ -208,10 +212,12 @@ def test_complementary_lif_state_storage_reset_and_backend_contract():
     evaluation_output = module(x_seq)
     torch.testing.assert_close(training_output, evaluation_output)
     module.store_state_seqs = False
+    module.store_v_seq = True
     assert module.state_seqs is None
 
     x_seq = torch.randn(2, 3, dtype=torch.float64)
     module(x_seq)
+    assert module.v_seq is None
     assert module.v.shape == x_seq.shape[1:]
     assert module.m.shape == x_seq.shape[1:]
     assert module.v.dtype == x_seq.dtype
