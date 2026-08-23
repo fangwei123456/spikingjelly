@@ -155,6 +155,8 @@ LIF Variants
      - Gated LIF (GLIF) neuron.
    * - :class:`KLIFNode <spikingjelly.activation_based.neuron.lif_variants.KLIFNode>`
      - KLIF neuron.
+   * - :class:`ComplementaryLIFNode <spikingjelly.activation_based.neuron.lif_variants.ComplementaryLIFNode>`
+     - Complementary LIF (CLIF) neuron.
    * - :class:`CUBALIFNode <spikingjelly.activation_based.neuron.lif_variants.CUBALIFNode>`
      - CUrrent-BAsed LIF neuron.
    * - :class:`LIAFNode <spikingjelly.activation_based.neuron.lif_variants.LIAFNode>`
