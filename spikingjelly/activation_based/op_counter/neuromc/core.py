@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import re
 from collections import defaultdict, deque
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from math import prod
@@ -12,7 +12,7 @@ import torch.nn as nn
 from torch.overrides import resolve_name
 from torch.utils._python_dispatch import TorchDispatchMode
 
-from ..base import call_model
+from ..base import EnergyModelInfo, ModuleCounter, ModuleCounterMode, call_model
 from .config import MemoryHierarchyConfig, MemoryInstanceSpec
 from .utils import _is_spike
 
@@ -23,20 +23,6 @@ __all__ = [
     "estimate_neuromc_runtime_energy",
 ]
 
-
-_ALLOWED_CORE_TYPES = {
-    "fp_soma",
-    "fp_bn",
-    "bp_grad",
-    "bp_bn",
-    "bp_grad_opt",
-    "wg",
-    "ann_fe",
-    "ann_be",
-    "ann_we",
-    "ann_bn",
-    "ann_bn_bp",
-}
 
 _EXTRA_OP_COST_PJ = {
     "mux": 0.548 * (1.0 / 16.0),
@@ -53,6 +39,99 @@ _MAC_COST_PJ = {
     "ann_fe": 0.548 + 0.812,
     "ann_be": 0.548 + 0.812,
     "ann_we": 0.548 + 0.812,
+}
+
+_NEUROMC_MODEL_INFO = EnergyModelInfo(
+    model_id="neuromc_712c66_runtime_v1",
+    fidelity="source-aligned",
+    source_urls=(
+        "https://www.nature.com/articles/s41467-026-70586-x",
+        "https://github.com/dayanhn/NeuroMC/commit/"
+        "712c66f47cf76ae530a55f8bcad3858bd68788de",
+    ),
+    technology_nm=32,
+    precision="1-bit spikes and 16-bit values under the NeuroMC v1 constants",
+    scope="runtime fragment adapter for NeuroMC-style FE/BP/WG/BN/optimizer energy",
+)
+
+_EXTRA_RH2L_MULTIPLIER = {
+    "fp_yi1": 1,
+    "fp_u_l": 1,
+    "fp_s_l": 1,
+    "bp_conv_res": 1,
+    "bp_u_l_pre": 1,
+    "bp_s_l_pre": 1,
+    "bp_smask_l_pre": 1,
+    "bp_du_l_pre": 1,
+    "fp_bn_mean_v": 2,
+    "fp_bn_variance": 1,
+    "fp_bn_n": 1,
+    "fp_bn_sqrt": 1,
+    "fp_bn_xi_": 1,
+    "fp_bn_y": 1,
+    "fp_bn_b": 1,
+    "bp_bn_du_l_pre1": 2,
+    "bp_bn_sqrt": 2,
+    "bp_bn_y": 2,
+    "bp_bn_m": 3,
+    "bp_bn_n": 3,
+    "bp_bn_sigma_m": 1,
+    "bp_bn_sigma_n": 1,
+    "bp_bn_sigma_mn": 2,
+    "opt_y": 1,
+    "opt_b": 1,
+    "opt_w": 1,
+    "opt_dy": 1,
+    "opt_db": 1,
+    "opt_dw": 1,
+    "opt_v_y": 1,
+    "opt_v_b": 1,
+    "opt_v_w": 1,
+    "opt_s_y": 1,
+    "opt_s_b": 1,
+    "opt_s_w": 1,
+    "opt_vbc_y": 1,
+    "opt_vbc_b": 1,
+    "opt_vbc_w": 1,
+    "opt_sbc_y": 1,
+    "opt_sbc_b": 1,
+    "opt_sbc_w": 1,
+}
+
+_EXTRA_WL2H = {
+    "fp_yi1",
+    "fp_u_l",
+    "fp_s_l",
+    "fp_smask_l",
+    "fp_bn_mean_v",
+    "fp_bn_variance",
+    "fp_bn_n",
+    "fp_bn_sqrt",
+    "fp_bn_xi_",
+    "bp_u_l_pre",
+    "bp_du_l_pre",
+    "bp_bn_m",
+    "bp_bn_sigma_m",
+    "bp_bn_sigma_n",
+    "bp_bn_sigma_mn",
+    "bp_bn_dy",
+    "bp_bn_db",
+    "bp_bn_du_l_pre2",
+    "opt_v_y",
+    "opt_v_b",
+    "opt_v_w",
+    "opt_s_y",
+    "opt_s_b",
+    "opt_s_w",
+    "opt_vbc_y",
+    "opt_vbc_b",
+    "opt_vbc_w",
+    "opt_sbc_y",
+    "opt_sbc_b",
+    "opt_sbc_w",
+    "opt_y_updated",
+    "opt_b_updated",
+    "opt_w_updated",
 }
 
 _IGNORED_OP_PREFIXES = (
@@ -261,6 +340,8 @@ class NeuroMCRuntimeEnergyReport:
         default_factory=dict
     )
     mapping_summary: Optional[list[dict[str, Any]]] = field(default_factory=list)
+    model_info: Optional[EnergyModelInfo] = None
+    memory_config: Optional[MemoryHierarchyConfig] = None
 
     def __post_init__(self) -> None:
         for name in (
@@ -459,17 +540,13 @@ class _TraceMode(TorchDispatchMode):
         return out
 
 
-class NeuroMCEnergyProfiler:
+class NeuroMCEnergyProfiler(ModuleCounter):
     def __init__(
         self,
         *,
-        core_type: str = "fp_soma",
         memory_config: MemoryHierarchyConfig | None = None,
-        strict: bool = False,
-        extra_ignore_modules: list[nn.Module] | None = None,
     ):
-        """
-        High-level energy profiler for spiking neural networks using the NeuroMC framework.
+        r"""
         **API Language** - :ref:`中文 <NeuroMCEnergyProfiler-cn>` | :ref:`English <NeuroMCEnergyProfiler-en>`
 
         ----
@@ -478,17 +555,11 @@ class NeuroMCEnergyProfiler:
 
         * **中文**
 
-        NeuroMC能耗分析器
+        NeuroMC source-aligned 运行时适配器。它动态捕获真实执行 fragment，
+        再应用固定 NeuroMC v1 成本表；它不包含完整 ZigZag mapping。
 
-        :param core_type: Type of compute core (e.g., ``"fp_soma"``)
-        :type core_type: str
-        :param memory_config: Memory hierarchy configuration. If ``None``, uses the default ``neuromc_like_v1`` config
+        :param memory_config: 内存层次配置；``None`` 使用 ``neuromc_like_v1``
         :type memory_config: MemoryHierarchyConfig | None
-        :param strict: If ``True``, raise on unknown operations instead of warning
-        :type strict: bool
-        :param extra_ignore_modules: Additional module types to ignore during counting
-        :type extra_ignore_modules: list[nn.Module] | None
-        :raises ValueError: If ``core_type`` is not in the supported set
 
         ----
 
@@ -496,33 +567,21 @@ class NeuroMCEnergyProfiler:
 
         * **English**
 
-        NeuroMC energy profiler
+        Source-aligned NeuroMC runtime adapter. It captures executed fragments and
+        applies the fixed NeuroMC v1 cost tables; it is not a complete ZigZag mapping.
 
-        :param core_type: Type of compute core (e.g., ``"fp_soma"``)
-        :type core_type: str
-        :param memory_config: Memory hierarchy configuration. If ``None``, uses the default ``neuromc_like_v1`` config
+        :param memory_config: Memory hierarchy configuration. ``None`` selects
+            ``neuromc_like_v1``
         :type memory_config: MemoryHierarchyConfig | None
-        :param strict: If ``True``, raise on unknown operations instead of warning
-        :type strict: bool
-        :param extra_ignore_modules: Additional module types to ignore during counting
-        :type extra_ignore_modules: list[nn.Module] | None
-        :raises ValueError: If ``core_type`` is not in the supported set
         """
-        if core_type not in _ALLOWED_CORE_TYPES:
-            raise ValueError(
-                f"Unsupported NeuroMC core_type={core_type}. "
-                f"Supported: {sorted(_ALLOWED_CORE_TYPES)}."
-            )
-        self.core_type = core_type
+        super().__init__()
         config = memory_config or MemoryHierarchyConfig()
         self.memory_config = replace(
             config, memory_instances=dict(config.memory_instances)
         )
         self.memory_config.validate()
-        self.strict = strict
-        self.extra_ignore_modules = list(extra_ignore_modules or [])
-
         self._stage_stack: list[str] = []
+        self._stage_options: dict[str, tuple[str, bool, bool]] = {}
         self._warnings: list[str] = []
         self._trace_mode = _TraceMode(self)
         self._trace_events: list[_TraceEvent] = []
@@ -530,12 +589,11 @@ class NeuroMCEnergyProfiler:
         self._bound_model: nn.Module | None = None
         self._active = False
         self._suspended = False
-        self._model_bound = False
         self._optimizer: torch.optim.Optimizer | None = None
-        self._hook_handles = []
+        self._module_mode: ModuleCounterMode | None = None
 
-    def bind_model(self, model: nn.Module):
-        if self._model_bound:
+    def bind_model(self, model: nn.Module) -> None:
+        if self._bound_model is not None:
             if self._bound_model is model:
                 return
             raise RuntimeError(
@@ -553,56 +611,94 @@ class NeuroMCEnergyProfiler:
             BaseNode,
         )
         for module in model.modules():
-            if module in self.extra_ignore_modules:
-                continue
             if isinstance(module, nn.Conv3d):
                 raise ValueError(
-                    "Exact NeuroMC runtime does not support nn.Conv3d yet."
+                    "NeuroMC runtime runtime does not support nn.Conv3d yet."
                 )
         self._bound_model = model
-        for module in model.modules():
-            if module in self.extra_ignore_modules:
-                continue
-            if isinstance(module, supported):
-                self._hook_handles.append(
-                    module.register_forward_hook(self._forward_hook)
-                )
-                self._hook_handles.append(
-                    module.register_full_backward_hook(self._backward_hook)
-                )
-        self._model_bound = True
+        self.rules = {
+            **{
+                ("forward", module_type): self._count_forward_module
+                for module_type in supported
+            },
+            **{
+                ("backward", module_type): self._count_backward_module
+                for module_type in supported
+            },
+        }
+        self._module_mode = ModuleCounterMode([self], model=model)
 
-    def bind_optimizer(self, optimizer: torch.optim.Optimizer | None):
+    def bind_optimizer(self, optimizer: torch.optim.Optimizer | None) -> None:
         self._optimizer = optimizer
 
     def __enter__(self):
-        self._trace_mode.__enter__()
+        self._stage_stack.clear()
+        self._stage_options.clear()
+        self._warnings.clear()
+        self._trace_events.clear()
+        self._fragments.clear()
+        self._trace_mode.op_counts.clear()
+        if self._module_mode is None:
+            raise RuntimeError(
+                "NeuroMCEnergyProfiler.bind_model() must be called before entering."
+            )
+        self._module_mode.__enter__()
+        try:
+            self._trace_mode.__enter__()
+        except BaseException:
+            self._module_mode.__exit__(None, None, None)
+            raise
         self._active = True
         return self
 
     def __exit__(self, exc_type, exc, tb):
         self._active = False
         try:
-            for handle in self._hook_handles:
-                handle.remove()
+            return self._trace_mode.__exit__(exc_type, exc, tb)
+        finally:
+            self._module_mode.__exit__(exc_type, exc, tb)
             if self._bound_model is not None:
                 for module in self._bound_model.modules():
                     if hasattr(module, "_neuromc_last_input"):
                         delattr(module, "_neuromc_last_input")
-            self._model_bound = False
             self._bound_model = None
-        finally:
-            self._hook_handles.clear()
-        return self._trace_mode.__exit__(exc_type, exc, tb)
+            self._module_mode = None
 
     @contextmanager
-    def stage(self, name: str):
+    def stage(
+        self,
+        name: str,
+        *,
+        phase: str = "forward",
+        reuse_weights: bool = False,
+        batch_norm_backward: bool = True,
+    ) -> Iterator["NeuroMCEnergyProfiler"]:
+        r"""
+        标记一个执行阶段及其 NeuroMC 映射语义。
+
+        Label an execution stage and its NeuroMC mapping semantics.
+
+        :param name: 报告中的阶段名称 / Stage name used in reports
+        :type name: str
+        :param phase: ``forward``、``backward`` 或 ``optimizer``
+        :type phase: str
+        :param reuse_weights: 是否复用已驻留权重 / Whether resident weights are reused
+        :type reuse_weights: bool
+        :param batch_norm_backward: 是否计入 BN backward / Whether BN backward is present
+        :type batch_norm_backward: bool
+        :raises ValueError: 当 ``phase`` 非法时抛出 / Raised for an invalid phase
+        :raises RuntimeError: 当 profiler 未激活或 stage 嵌套时抛出 / Raised
+            outside an active profiler or for nested stages
+        """
         if not self._active:
             raise RuntimeError(
                 "stage() can only be used inside active profiler context."
             )
         if self._stage_stack:
             raise RuntimeError("Nested stage() is not supported in NeuroMC v2.")
+        if phase not in {"forward", "backward", "optimizer"}:
+            raise ValueError(f"Unsupported NeuroMC phase={phase!r}.")
+        self._stage_options[name] = (phase, reuse_weights, batch_norm_backward)
         self._stage_stack.append(name)
         try:
             yield self
@@ -610,7 +706,7 @@ class NeuroMCEnergyProfiler:
             self._stage_stack.pop()
 
     @contextmanager
-    def suspend(self):
+    def suspend(self) -> Iterator["NeuroMCEnergyProfiler"]:
         old = self._suspended
         self._suspended = True
         try:
@@ -630,27 +726,17 @@ class NeuroMCEnergyProfiler:
 
     def _stage_phase(self, stage: str | None = None) -> str:
         name = stage or self._current_stage()
-        lowered = name.lower()
-        if "backward" in lowered:
-            return "backward"
-        if "optimizer" in lowered or "update" in lowered:
-            return "optimizer"
-        return "forward"
+        return self._stage_options.get(name, ("forward", False, True))[0]
 
     def _stage_position(self, stage: str | None = None) -> tuple[int, int]:
         name = stage or self._current_stage()
-        lowered = name.lower()
-        b_match = re.search(r"(?:^|[^a-z0-9])b(\d+)(?:[^a-z0-9]|$)", lowered)
-        t_match = re.search(r"(?:^|[^a-z0-9])t(\d+)(?:[^a-z0-9]|$)", lowered)
-        b_type = int(b_match.group(1)) if b_match is not None else 0
-        t_type = int(t_match.group(1)) if t_match is not None else 0
-        return b_type, t_type
+        reuse_weights = self._stage_options.get(name, ("forward", False, True))[1]
+        return 0, int(reuse_weights)
 
     def _stage_conv_type(self, stage: str | None = None) -> str:
-        name = (stage or self._current_stage()).lower()
-        if "without_bp_bn" in name:
-            return "without_bp_bn"
-        return "--"
+        name = stage or self._current_stage()
+        include_bn = self._stage_options.get(name, ("forward", False, True))[2]
+        return "--" if include_bn else "without_bp_bn"
 
     def _maybe_record_trace_event(self, op_name: str, args, kwargs, out):
         if not self._active or self._suspended:
@@ -666,9 +752,16 @@ class NeuroMCEnergyProfiler:
             )
         )
 
-    def _forward_hook(self, module: nn.Module, args, out):
+    def _count_forward_module(
+        self,
+        module: nn.Module,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        out: Any,
+    ) -> int:
+        del kwargs
         if not self._active or self._suspended:
-            return
+            return 0
         stage = self._current_stage()
         from ...neuron.base_node import BaseNode
 
@@ -695,10 +788,18 @@ class NeuroMCEnergyProfiler:
             self._fragments.append(
                 self._make_soma_forward_fragment(stage, module, x, out)
             )
+        return 0
 
-    def _backward_hook(self, module: nn.Module, grad_input, grad_output):
+    def _count_backward_module(
+        self,
+        module: nn.Module,
+        grad_input: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        grad_output: tuple[Any, ...],
+    ) -> int:
+        del kwargs
         if not self._active or self._suspended:
-            return
+            return 0
         stage = self._current_stage()
         from ...neuron.base_node import BaseNode
 
@@ -724,6 +825,10 @@ class NeuroMCEnergyProfiler:
                     stage, module, grad_input, grad_output
                 )
             )
+        return 0
+
+    def record(self, scope: str, func: Any, value: int) -> None:
+        del scope, func, value
 
     def _make_loop_dims(
         self,
@@ -1184,21 +1289,21 @@ class NeuroMCEnergyProfiler:
                 out = event.out
                 if x.ndim > 4 or out.ndim > 4:
                     raise ValueError(
-                        "Exact NeuroMC runtime does not support multi-step or 3D "
+                        "NeuroMC runtime runtime does not support multi-step or 3D "
                         "Conv trace fallback yet."
                     )
                 is_spike_input = _is_spike_like(x)
                 spatial = tuple(out.shape[2:]) if out.ndim > 2 else (1, 1)
                 if len(spatial) > 2:
                     raise ValueError(
-                        "Exact NeuroMC runtime does not support Conv3d fallback yet."
+                        "NeuroMC runtime runtime does not support Conv3d fallback yet."
                     )
                 if len(spatial) == 1:
                     spatial = (spatial[0], 1)
                 kernel = tuple(w.shape[2:]) if w.ndim > 2 else (1, 1)
                 if len(kernel) > 2:
                     raise ValueError(
-                        "Exact NeuroMC runtime does not support Conv3d fallback yet."
+                        "NeuroMC runtime runtime does not support Conv3d fallback yet."
                     )
                 if len(kernel) == 1:
                     kernel = (kernel[0], 1)
@@ -1377,7 +1482,7 @@ class NeuroMCEnergyProfiler:
                 x = event.args[0]
                 if x.ndim > 4:
                     raise ValueError(
-                        "Exact NeuroMC runtime does not support multi-step or 3D "
+                        "NeuroMC runtime runtime does not support multi-step or 3D "
                         "BatchNorm trace fallback yet."
                     )
                 out = (
@@ -1772,43 +1877,58 @@ class NeuroMCEnergyProfiler:
                     "opt_w_updated": ("FYFXKC", 32, "reg_32b", "sram_6MB"),
                 }
 
-        for count_key, bits_per_elem, _, sram_name in variables.values():
+        for variable_name, (
+            count_key,
+            bits_per_elem,
+            reg_name,
+            sram_name,
+        ) in variables.items():
             total_bits = scalar_counts[count_key] * bits_per_elem
-            sram_spec = cfg[sram_name]
-            self._accumulate_memory(
-                totals,
-                energy,
-                "sram",
-                "rh2l",
-                total_bits,
-                sram_spec,
-                bits_per_elem,
-                True,
-            )
-            self._accumulate_memory(
-                totals,
-                energy,
-                "sram",
-                "wl2h",
-                total_bits,
-                sram_spec,
-                bits_per_elem,
-                False,
-            )
+            read_multiplier = _EXTRA_RH2L_MULTIPLIER.get(variable_name, 0)
+            for level, spec_name in (("reg", reg_name), ("sram", sram_name)):
+                spec = cfg[spec_name]
+                self._accumulate_memory(
+                    totals,
+                    energy,
+                    level,
+                    "rh2l",
+                    total_bits * read_multiplier,
+                    spec,
+                    bits_per_elem,
+                    True,
+                )
+                write_variable = variable_name
+                if fragment.process_key == "with_sg" and fragment.phase == "backward":
+                    if level == "reg" and variable_name == "bp_du_l_pre":
+                        write_variable = "bp_du_l_pre"
+                    elif level == "sram" and variable_name == "bp_u_l_pre":
+                        write_variable = "bp_u_l_pre"
+                    else:
+                        write_variable = ""
+                self._accumulate_memory(
+                    totals,
+                    energy,
+                    level,
+                    "wl2h",
+                    total_bits if write_variable in _EXTRA_WL2H else 0,
+                    spec,
+                    bits_per_elem,
+                    False,
+                )
         return totals, energy
 
     def _validate_sgd_group(self, group: dict[str, Any]) -> None:
         if group.get("nesterov", False):
             raise ValueError(
-                "Exact NeuroMC SGD modeling currently supports only nesterov=False."
+                "NeuroMC runtime SGD modeling currently supports only nesterov=False."
             )
         if float(group.get("dampening", 0.0)) != 0.0:
             raise ValueError(
-                "Exact NeuroMC SGD modeling currently supports only dampening=0."
+                "NeuroMC runtime SGD modeling currently supports only dampening=0."
             )
         if group.get("maximize", False):
             raise ValueError(
-                "Exact NeuroMC SGD modeling currently supports only maximize=False."
+                "NeuroMC runtime SGD modeling currently supports only maximize=False."
             )
 
     def _make_optimizer_fragment(
@@ -1920,7 +2040,7 @@ class NeuroMCEnergyProfiler:
                 )
             return fragments
         raise ValueError(
-            "Exact NeuroMC optimizer modeling only supports Adam/AdamW and "
+            "NeuroMC runtime optimizer modeling only supports Adam/AdamW and "
             "common SGD (nesterov=False, dampening=0, maximize=False); "
             f"got {type(self._optimizer).__name__}."
         )
@@ -1947,7 +2067,7 @@ class NeuroMCEnergyProfiler:
         unsupported = self._unsupported_ops()
         if unsupported:
             raise ValueError(
-                "Exact NeuroMC runtime does not support these aten ops: "
+                "NeuroMC runtime runtime does not support these aten ops: "
                 + ", ".join(unsupported[:30])
             )
         if not fragments:
@@ -2069,7 +2189,6 @@ class NeuroMCEnergyProfiler:
             "totals": primitive_totals,
             "by_stage": {k: dict(v) for k, v in primitive_by_stage.items()},
             "by_op": {k: dict(v) for k, v in primitive_by_op.items()},
-            "core_type": self.core_type,
         }
         memory_report = {
             "preset_name": self.memory_config.preset_name,
@@ -2104,6 +2223,11 @@ class NeuroMCEnergyProfiler:
                 k: dict(v) for k, v in counts_by_process_key.items()
             },
             mapping_summary=mapping_summary,
+            model_info=_NEUROMC_MODEL_INFO,
+            memory_config=replace(
+                self.memory_config,
+                memory_instances=dict(self.memory_config.memory_instances),
+            ),
         )
 
     def get_total(self) -> float:
@@ -2124,15 +2248,12 @@ class NeuroMCEnergyProfiler:
 
 def estimate_neuromc_runtime_energy(
     model: nn.Module,
-    inputs,
+    inputs: Any,
     *,
     target: torch.Tensor | None = None,
     loss_fn: Callable | None = None,
     optimizer: torch.optim.Optimizer | None = None,
-    core_type: str = "fp_soma",
     memory_config: MemoryHierarchyConfig | None = None,
-    strict: bool = False,
-    extra_ignore_modules: list[nn.Module] | None = None,
 ) -> NeuroMCRuntimeEnergyReport:
     r"""
     **API Language** - :ref:`中文 <estimate_neuromc_runtime_energy-cn>` | :ref:`English <estimate_neuromc_runtime_energy-en>`
@@ -2143,7 +2264,8 @@ def estimate_neuromc_runtime_energy(
 
     * **中文**
 
-    estimate neuromc runtime energy 函数
+    运行一次真实 forward；提供 loss 时继续捕获 backward，并按 optimizer 配置
+    估算更新阶段。该函数不会执行 ``optimizer.step()``，因此不会修改参数。
 
     :param model: The PyTorch model to profile
     :type model: ``nn.Module``
@@ -2155,14 +2277,8 @@ def estimate_neuromc_runtime_energy(
     :type loss_fn: Callable | None
     :param optimizer: Optimizer for training-stage profiling
     :type optimizer: torch.optim.Optimizer | None
-    :param core_type: Type of compute core (e.g., ``\"fp_soma\"``)
-    :type core_type: str
     :param memory_config: Memory hierarchy configuration. If ``None``, uses the default config
     :type memory_config: MemoryHierarchyConfig | None
-    :param strict: If ``True``, raise on unknown operations instead of warning
-    :type strict: bool
-    :param extra_ignore_modules: Additional module types to ignore during counting
-    :type extra_ignore_modules: list[nn.Module] | None
     :return: Energy profiling report
     :rtype: NeuroMCRuntimeEnergyReport
 
@@ -2176,41 +2292,34 @@ def estimate_neuromc_runtime_energy(
 
     * **English**
 
-    Estimate Neuromc Runtime Energy function
+    Run one real forward pass, optionally capture backward, and estimate the
+    configured optimizer stage. The function does not call ``optimizer.step()``
+    and therefore does not update model parameters.
 
     :param model: The PyTorch model to profile
     :param inputs: Input tensors for the forward pass
     :param target: Target tensors for loss computation
     :param loss_fn: Loss function for the backward pass
     :param optimizer: Optimizer for training-stage profiling
-    :param core_type: Type of compute core (e.g., ``\"fp_soma\"``)
     :param memory_config: Memory hierarchy configuration. If ``None``, uses the default config
-    :param strict: If ``True``, raise on unknown operations instead of warning
-    :param extra_ignore_modules: Additional module types to ignore during counting
     :type model: ``nn.Module``
     :type inputs: Any
     :type target: torch.Tensor | None
     :type loss_fn: Callable | None
     :type optimizer: torch.optim.Optimizer | None
-    :type core_type: str
     :type memory_config: MemoryHierarchyConfig | None
-    :type strict: bool
-    :type extra_ignore_modules: list[nn.Module] | None
     :return: Energy profiling report
     :rtype: NeuroMCRuntimeEnergyReport
     """
     profiler = NeuroMCEnergyProfiler(
-        core_type=core_type,
         memory_config=memory_config,
-        strict=strict,
-        extra_ignore_modules=extra_ignore_modules,
     )
     profiler.bind_model(model)
     profiler.bind_optimizer(optimizer)
     _clear_existing_grads(model, optimizer)
 
     with profiler:
-        with profiler.stage("forward"):
+        with profiler.stage("forward", phase="forward"):
             output = call_model(model, inputs)
         loss = None
         if loss_fn is not None:
@@ -2219,17 +2328,16 @@ def estimate_neuromc_runtime_energy(
                     raise ValueError("target is required when loss_fn is provided")
                 loss = loss_fn(output, target)
         if loss is not None:
-            with profiler.stage("backward"):
+            with profiler.stage("backward", phase="backward"):
                 loss.backward()
             if optimizer is not None:
-                with profiler.stage("optimizer"):
+                with profiler.stage("optimizer", phase="optimizer"):
                     profiler.record_optimizer_step("optimizer")
                     with profiler.suspend():
-                        optimizer.step()
                         optimizer.zero_grad(set_to_none=True)
         elif optimizer is not None:
             raise ValueError(
-                "Exact NeuroMC optimizer modeling requires loss_fn and target; "
+                "NeuroMC runtime optimizer modeling requires loss_fn and target; "
                 "optimizer.step() without backward is unsupported."
             )
     return profiler.get_report()

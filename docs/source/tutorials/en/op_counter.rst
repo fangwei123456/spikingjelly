@@ -23,7 +23,8 @@ Overview
 What Is ``op_counter``?
 -------------------------
 
-``op_counter`` is a runtime profiling toolkit built on PyTorch dispatch and module tracking.
+``op_counter`` is a runtime profiling toolkit built on PyTorch dispatch,
+function interception, and module hooks.
 Instead of estimating counts only from static layer shapes, it observes one real execution of your
 model and records what actually happened under the given input.
 
@@ -43,9 +44,9 @@ This design keeps the profiling logic explicit:
 * inside the context, supported operators are intercepted and counted;
 * multiple counters can run together during the same execution.
 
-The main entry point is
-:class:`DispatchCounterMode <spikingjelly.activation_based.op_counter.base.DispatchCounterMode>`.
-It routes runtime operator calls to one or more counters and stores the results by module scope and in a global summary.
+The three entry points are ``DispatchCounterMode``, ``FunctionCounterMode``, and
+``ModuleCounterMode``. They route ATen operators, ``torch.*`` functions, and
+executed ``nn.Module`` forward/backward events, respectively.
 
 Basic Counting Workflow
 ++++++++++++++++++++++++
@@ -99,6 +100,26 @@ them only while diagnosing a counting run:
 
 The examples in this tutorial use ``strict=False`` so that unsupported auxiliary operators do not stop execution immediately.
 When you want unsupported operators to fail immediately instead of being skipped, switch to ``strict=True`` after you have confirmed that the relevant operator path is fully covered by the counters you selected.
+
+Using ``ModuleCounterMode``
+---------------------------
+
+Module-counter rule keys are ``("forward" | "backward", module_type)``. The
+mode owns hook lifetime, module scopes, ignored subtrees, and exception cleanup;
+it does not reset counters automatically.
+
+.. code-block:: python
+
+    memory_counter = op_counter.NeuromorphicMemoryAccessCounter()
+    with op_counter.ModuleCounterMode(
+        [memory_counter], model=model, strict=True
+    ):
+        _ = model(x)
+
+    print(memory_counter.get_counts()["Global"])
+
+After any of the three modes exits, call ``mode.get_unsupported(counter)`` to
+inspect subjects skipped by a non-strict run.
 
 Although this first example already uses an SNN-style block with ``IFNode``, it still focuses only on the generic counter workflow.
 The SNN-specific interpretation of spike-driven metrics such as ``SynOps`` is introduced separately below.
@@ -175,6 +196,12 @@ If you only care about inference roofline, remove the ``backward()`` call.
 This example does not draw the roofline figure for you. It provides the measured workload point
 that you can place on a roofline chart after combining it with hardware peak FLOPs and bandwidth.
 
+The GPU regime is an ideal analytical estimate, not a kernel simulator: matrix
+multiplication uses two FLOPs per MAC, and logical tensor traffic reads each input
+once and writes each output once. Tiling, caches, fusion, bank conflicts, and real
+DRAM traffic are outside scope. After a non-strict run, call
+``mode.get_unsupported(counter)`` to inspect skipped ATen operators.
+
 High-Level Energy Models
 ++++++++++++++++++++++++
 
@@ -186,7 +213,7 @@ Model Overview and Boundaries
 * ``estimate_simple_energy``: simple runtime MAC/AC/memory energy;
 * ``estimate_lemaire_energy``: Lemaire-aligned analytical forward inference energy;
 * ``estimate_neuromc_runtime_energy``: runtime NeuroMC-style energy;
-* ``estimate_spikesim_event_energy``: runtime SpikeSim-style Conv2d energy.
+* ``estimate_spikesim_energy``: runtime SpikeSim-style Conv2d energy.
 
 They do not answer the same question. Their intended use and boundaries are:
 
@@ -209,13 +236,19 @@ They do not answer the same question. Their intended use and boundaries are:
       - more complete runtime energy for forward, backward, and optimizer stages
       - compute and memory under NeuroMC-like mapping rules
       - exact only for the supported fragment set and stage semantics
-    * - ``estimate_spikesim_event_energy``
+    * - ``estimate_spikesim_energy``
       - SpikeSim-style Conv2d accelerator estimate
       - Conv2d stage energy with SpikeSim coefficients
       - only for supported Conv2d inference stages; not a general full-model energy estimator
 
 The most important rule is: do not compare absolute numbers across different estimators as if they shared the same hardware assumptions.
 Each estimator uses its own cost regime and modeling scope.
+
+Every report exposes ``model_info`` with a stable model ID, sources, technology,
+precision, scope, and fidelity. ``config`` (``memory_config`` for NeuroMC) records
+the actual cost configuration. ``paper`` and ``reference-code`` identify upstream
+parity, ``source-aligned`` identifies an upstream-cost runtime adapter, and
+``spikingjelly-defined`` identifies a formula specified by this project.
 
 Simple Runtime Energy
 ---------------------
@@ -240,7 +273,9 @@ Its boundary is equally important:
 * input currents and output spikes are treated as on-chip signal flow, not memory;
 * it does not model FIFOs, addressing, routing, cache reuse, or hardware mapping;
 * ``SynOps`` is an auxiliary subset of AC and is not charged a second time;
-* the default memory cost is ``24.96 pJ/byte`` (``3.12 pJ/bit``), and can be overridden.
+* the default memory cost is STEP Table 9's ``3.12 pJ/bit`` or
+  ``24.96 pJ/byte``; the traffic formula itself is not STEP's formula;
+* FP16 and INT8 presets select comparison costs and do not quantize the model.
 
 By default it uses Horowitz 2014 FP32 arithmetic and the documented memory-cost
 reference above. If you want a different regime, pass an explicit
@@ -264,13 +299,19 @@ Its boundaries are:
 
 * forward inference only;
 * analytical estimation rather than cycle-accurate hardware simulation;
+* operations and accesses keep the paper's fixed 32-bit regime regardless of the
+  host tensor dtype;
 * parameter, FIFO, and potential accesses are priced against each layer's local
   SRAM capacity before energy is aggregated;
 * binary inputs use the SNN event formulas, while sparse non-binary inputs remain
   on the dense FNN path;
+* grouped and depthwise convolutions use output channels per group for spike fanout;
+* neuron modules are limited to the paper's IF/LIF scope; other ``BaseNode`` types
+  are rejected by default;
 * SNN FIFOs hold 1000 messages by default; override
   ``snn_fifo_capacity_elements`` for another assumption;
-* unsupported transposed convolutions are warned and omitted, or rejected in strict mode.
+* ``strict=True`` is the default and rejects unsupported transposed convolutions;
+  explicitly setting it to ``False`` warns and omits them.
 
 Use this estimator when you need a richer forward SNN inference estimate than simple runtime energy,
 but do not need backward or optimizer modeling.
@@ -278,8 +319,10 @@ but do not need backward or optimizer modeling.
 NeuroMC Runtime Energy
 -----------------------
 
-``estimate_neuromc_runtime_energy`` is the most ambitious estimator in this module.
-It profiles real execution fragments and maps them to NeuroMC-like compute and memory formulas.
+``estimate_neuromc_runtime_energy`` profiles real execution fragments and maps
+them to the fixed NeuroMC v1 constants and per-variable memory directions and
+multipliers. It is a source-aligned runtime adapter, not a reproduction of the
+complete ZigZag mapping.
 
 It supports several usage levels:
 
@@ -296,17 +339,19 @@ Its strengths are:
 
 Its boundaries are:
 
-* the report is exact only within the supported fragment set;
-* unsupported operators are not meant to be interpreted as fully covered exact energy;
-* stage naming carries semantics such as weight reuse across time or batch in manual profiling;
+* unsupported energy-bearing operators reject the report;
+* manual profiling passes mapping semantics explicitly with
+  ``stage(name, phase=..., reuse_weights=..., batch_norm_backward=...)``;
+* the training convenience path captures backward and estimates the optimizer but
+  does not call ``optimizer.step()`` or update parameters;
 * it is still a hardware-model-based estimate, not a measurement from a real chip.
 
 Use this estimator when you need training-stage energy or online-learning stage breakdowns.
 
-SpikeSim Event Energy
-----------------------
+SpikeSim Runtime Energy
+-----------------------
 
-``estimate_spikesim_event_energy`` targets a much narrower question:
+``estimate_spikesim_energy`` targets a much narrower question:
 how much energy do the supported Conv2d inference stages consume under a SpikeSim-style accelerator model?
 
 By default, it preserves the dense PE-cycle energy path of the released SpikeSim implementation,
@@ -314,9 +359,12 @@ while using runtime profiling to discover the actual Conv2d stages and shapes.
 
 Its boundaries are strict:
 
+* ``strict=True`` is the default, so unsupported Conv2d stages and empty reports fail;
 * it is only for supported Conv2d forward inference stages;
 * it is not a general-purpose full-model energy estimator;
 * with the default ``activity_mode="dense"``, runtime spike sparsity does not reduce energy;
+* ``activity_mode="event"`` is the stable ``spikingjelly_spikesim_event_v1``
+  model using SpikeSim constants and SpikingJelly's documented A/R/Z sparse formula;
 * when ``require_if_lif_neurons=True``, the model is expected to stay within IF/LIF-style neuron assumptions;
 * non-Conv2d work is outside the main energy path.
 
@@ -400,7 +448,7 @@ Use the tool that matches your question:
 * if you need a simple normalized runtime compute-and-memory estimate, use ``estimate_simple_energy``;
 * if you need forward SNN inference energy with memory and neuron-state effects, use ``estimate_lemaire_energy``;
 * if you need training-stage breakdowns or optimizer energy, use ``estimate_neuromc_runtime_energy``;
-* if you need SpikeSim-style Conv2d accelerator energy, use ``estimate_spikesim_event_energy``.
+* if you need SpikeSim-style Conv2d accelerator energy, use ``estimate_spikesim_energy``.
 
 When reporting results, always state:
 
@@ -408,6 +456,18 @@ When reporting results, always state:
 * whether the run was forward-only or included backward/optimizer;
 * the cost regime or hardware assumptions;
 * the input type and sparsity conditions.
+
+Primary Sources
+---------------
+
+* Simple arithmetic costs: `Horowitz 2014 <https://doi.org/10.1109/ISSCC.2014.6757323>`_;
+  memory coefficient: `STEP Table 9 <https://openreview.net/pdf?id=SzwU2XrXIS>`_.
+* Lemaire: `An Analytical Estimation of Spiking Neural Networks Energy Efficiency
+  <https://arxiv.org/abs/2210.13107>`_.
+* SpikeSim dense: author-code commit
+  `c2627bc <https://github.com/Intelligent-Computing-Lab-Panda/SpikeSim/commit/c2627bc091a47bdcb630ca6207eaf44a00bd1da4>`_.
+* NeuroMC: author-code commit
+  `712c66f <https://github.com/dayanhn/NeuroMC/commit/712c66f47cf76ae530a55f8bcad3858bd68788de>`_.
 
 Summary
 ++++++++++++++++++++++++

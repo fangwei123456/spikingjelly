@@ -39,6 +39,9 @@ def test_simple_energy_uses_mac_and_ac_as_authoritative_total():
     assert report.energy_total_pj == pytest.approx(
         report.energy_mac_pj + report.energy_ac_pj + report.energy_memory_pj
     )
+    assert report.model_info.model_id == "simple_horowitz_step_composite_v1"
+    assert report.model_info.fidelity == "spikingjelly-defined"
+    assert report.config.cost_config.e_mac_pj == 4.6
 
 
 def test_simple_energy_spike_linear_counts_synop_as_auxiliary_only():
@@ -157,6 +160,13 @@ def test_simple_energy_cost_config_presets_match_horowitz_reference_table():
     assert int8.e_memory_pj_per_byte == pytest.approx(24.96)
 
 
+def test_simple_energy_costs_must_be_finite_and_nonnegative():
+    with pytest.raises(ValueError, match="finite and nonnegative"):
+        op_counter.SimpleEnergyCostConfig(e_mac_pj=-1.0)
+    with pytest.raises(ValueError, match="finite and nonnegative"):
+        op_counter.SimpleEnergyCostConfig(e_memory_pj_per_byte=float("nan"))
+
+
 def test_simple_energy_default_cost_config_matches_fp32_preset():
     cfg = op_counter.SimpleEnergyConfig()
     fp32 = op_counter.SimpleEnergyCostConfig.fp32()
@@ -236,26 +246,24 @@ def test_simple_energy_supports_dict_inputs_for_keyword_only_models():
     assert report.counts["ac"] == 12
 
 
-def test_neuromorphic_memory_counter_requires_bound_model():
+def test_neuromorphic_memory_counter_uses_module_counter_mode():
     counter = op_counter.NeuromorphicMemoryAccessCounter()
-
-    with pytest.raises(RuntimeError, match="bind_model"):
-        with counter:
-            pass
+    assert isinstance(counter, op_counter.ModuleCounter)
+    assert not hasattr(counter, "bind_model")
 
 
 def test_neuromorphic_memory_counter_counts_dense_and_spike_weight_reads():
     model = nn.Linear(4, 3, bias=True)
     counter = op_counter.NeuromorphicMemoryAccessCounter()
-    counter.bind_model(model)
 
-    with counter:
+    with op_counter.ModuleCounterMode([counter], model=model):
         _ = model(torch.full((2, 4), 0.5))
     dense = counter.get_counts()["Global"]
     assert dense["weight_read_bytes"] == 24 * 4
     assert dense["bias_read_bytes"] == 6 * 4
 
-    with counter:
+    counter.reset()
+    with op_counter.ModuleCounterMode([counter], model=model):
         _ = model(torch.tensor([[1.0, 0.0, 1.0, 0.0]]))
     spike = counter.get_counts()["Global"]
     assert spike["weight_read_bytes"] == 6 * 4
@@ -267,13 +275,28 @@ def test_neuromorphic_memory_counter_uses_actual_conv_spike_fanout():
     x = torch.zeros(1, 1, 3, 3)
     x[0, 0, 0, 0] = 1.0
     counter = op_counter.NeuromorphicMemoryAccessCounter()
-    counter.bind_model(model)
 
-    with counter:
+    with op_counter.ModuleCounterMode([counter], model=model):
         _ = model(x)
 
     # A corner spike reaches 2 x 2 positions in each of two output channels.
     assert counter.get_counts()["Global"]["weight_read_bytes"] == 8 * 4
+
+
+def test_neuromorphic_memory_counter_preserves_large_integer_fanout():
+    size = 192
+    model = nn.Conv2d(64, 16, kernel_size=3, padding=1, bias=False)
+    x = torch.ones(1, 64, size, size)
+    x[0, 0, size // 2, size // 2] = 0
+    counter = op_counter.NeuromorphicMemoryAccessCounter()
+
+    with op_counter.ModuleCounterMode([counter], model=model):
+        model(x)
+
+    expected_weight_uses = (64 * (3 * size - 2) ** 2 - 9) * 16
+    assert counter.get_counts()["Global"]["weight_read_bytes"] == (
+        expected_weight_uses * model.weight.element_size()
+    )
 
 
 @pytest.mark.parametrize(("padding", "weight_uses"), (("same", 4), ("valid", 1)))
@@ -282,9 +305,8 @@ def test_neuromorphic_memory_counter_supports_string_conv_padding(padding, weigh
     x = torch.zeros(1, 1, 3, 3)
     x[0, 0, 0, 0] = 1.0
     counter = op_counter.NeuromorphicMemoryAccessCounter()
-    counter.bind_model(model)
 
-    with counter:
+    with op_counter.ModuleCounterMode([counter], model=model):
         _ = model(x)
 
     assert counter.get_counts()["Global"]["weight_read_bytes"] == weight_uses * 4
@@ -319,14 +341,12 @@ def test_simple_energy_ignores_module_subtrees():
 def test_neuromorphic_memory_counter_counts_state_once_per_timestep():
     single = neuron.IFNode(step_mode="s")
     single_counter = op_counter.NeuromorphicMemoryAccessCounter()
-    single_counter.bind_model(single)
-    with single_counter:
+    with op_counter.ModuleCounterMode([single_counter], model=single):
         _ = single(torch.rand(2, 3))
 
     multi = neuron.IFNode(step_mode="m")
     multi_counter = op_counter.NeuromorphicMemoryAccessCounter()
-    multi_counter.bind_model(multi)
-    with multi_counter:
+    with op_counter.ModuleCounterMode([multi_counter], model=multi):
         _ = multi(torch.rand(4, 2, 3))
 
     single_counts = single_counter.get_counts()["Global"]
@@ -341,9 +361,8 @@ def test_neuromorphic_memory_counter_supports_multistep_conv_and_runtime_dtype()
     model = layer.Conv2d(1, 2, kernel_size=1, bias=False, step_mode="m").half()
     x = torch.tensor([[[[[1.0]]]], [[[[0.0]]]], [[[[1.0]]]]], dtype=torch.float16)
     counter = op_counter.NeuromorphicMemoryAccessCounter()
-    counter.bind_model(model)
 
-    with counter:
+    with op_counter.ModuleCounterMode([counter], model=model):
         _ = model(x)
 
     assert counter.get_counts()["Global"]["weight_read_bytes"] == 4 * 2
@@ -360,3 +379,21 @@ def test_simple_energy_breaks_memory_energy_into_parameter_and_state_parts():
     assert report.counts["neuron_state_write_bytes"] == 3 * 4
     assert report.breakdown_pj["parameter_memory_pj"] == pytest.approx(24 * 24.96)
     assert report.breakdown_pj["neuron_state_memory_pj"] == pytest.approx(24 * 24.96)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is unavailable")
+def test_cuda_simple_and_lemaire_match_cpu_counts():
+    cpu_model = nn.Linear(8, 4, bias=True).eval()
+    cuda_model = nn.Linear(8, 4, bias=True).cuda().eval()
+    cuda_model.load_state_dict(cpu_model.state_dict())
+    x = (torch.rand(3, 8) > 0.6).float()
+
+    simple_cpu = op_counter.estimate_simple_energy(cpu_model, x)
+    simple_cuda = op_counter.estimate_simple_energy(cuda_model, x.cuda())
+    lemaire_cpu = op_counter.estimate_lemaire_energy(cpu_model, x)
+    lemaire_cuda = op_counter.estimate_lemaire_energy(cuda_model, x.cuda())
+
+    assert simple_cuda.counts == simple_cpu.counts
+    assert simple_cuda.energy_total_pj == pytest.approx(simple_cpu.energy_total_pj)
+    assert lemaire_cuda.counts == lemaire_cpu.counts
+    assert lemaire_cuda.total_pj == pytest.approx(lemaire_cpu.total_pj)

@@ -87,8 +87,8 @@ def _mac_native_batch_norm(args, kwargs, out):
 class MACCounter(BaseCounter):
     def __init__(
         self,
-        extra_rules: dict[Any, Callable] = {},
-        extra_ignore_modules: list[nn.Module] = [],
+        extra_rules: dict[Any, Callable] | None = None,
+        extra_ignore_modules: list[type[nn.Module]] | None = None,
     ):
         r"""
         **API Language** - :ref:`中文 <MACCounter.__init__-cn>` | :ref:`English <MACCounter.__init__-en>`
@@ -204,5 +204,5 @@ class MACCounter(BaseCounter):
             # other aten ops do not involve MAC operations
         }
         self.ignore_modules = []
-        self.rules.update(extra_rules)
-        self.ignore_modules.extend(extra_ignore_modules)
+        self.rules.update(extra_rules or {})
+        self.ignore_modules.extend(extra_ignore_modules or [])

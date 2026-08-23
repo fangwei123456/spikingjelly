@@ -1,4 +1,5 @@
 from collections import defaultdict
+from functools import partial
 from typing import Any, Callable
 
 import torch
@@ -206,6 +207,26 @@ def _memory_select_backward(args, kwargs, out):
     return _bytes(args[0]) + _bytes(out)
 
 
+def _memory_sdpa(args, kwargs, out):
+    primary_out = out[0] if isinstance(out, (tuple, list)) else out
+    bias = args[3] if len(args) > 3 and torch.is_tensor(args[3]) else None
+    if bias is None:
+        bias = kwargs.get("attn_mask")
+    return sum(_bytes(x) for x in (*args[:3], bias, primary_out))
+
+
+def _memory_sdpa_backward(args, kwargs, out, *, bias_index):
+    bias = (
+        args[bias_index]
+        if bias_index is not None
+        and len(args) > bias_index
+        and torch.is_tensor(args[bias_index])
+        else kwargs.get("attn_mask")
+    )
+    outputs = out if isinstance(out, (tuple, list)) else (out,)
+    return sum(_bytes(x) for x in (*args[:4], bias, *outputs))
+
+
 def _memory_native_batch_norm(args, kwargs, out):
     x, mean, var, gamma, beta, train = args[:6]
     m = _bytes(x) + _bytes(mean) + _bytes(var) + _bytes(gamma) + _bytes(beta)
@@ -248,8 +269,8 @@ def _memory_native_batch_norm_backward(args, kwargs, out):
 class MemoryAccessCounter(BaseCounter):
     def __init__(
         self,
-        extra_rules: dict[Any, Callable] = {},
-        extra_ignore_modules: list[nn.Module] = [],
+        extra_rules: dict[Any, Callable] | None = None,
+        extra_ignore_modules: list[type[nn.Module]] | None = None,
     ):
         r"""
         **API Language** - :ref:`中文 <MemoryAccessCounter.__init__-cn>` | :ref:`English <MemoryAccessCounter.__init__-en>`
@@ -407,5 +428,25 @@ class MemoryAccessCounter(BaseCounter):
             aten.expand.default: _memory_null,
         }
         self.ignore_modules = []
-        self.rules.update(extra_rules)
-        self.ignore_modules.extend(extra_ignore_modules)
+        for name in (
+            "_scaled_dot_product_flash_attention_for_cpu",
+            "_scaled_dot_product_flash_attention",
+            "_scaled_dot_product_efficient_attention",
+            "_scaled_dot_product_cudnn_attention",
+        ):
+            packet = getattr(aten, name, None)
+            if packet is not None:
+                self.rules[packet.default] = _memory_sdpa
+        for name, bias_index in (
+            ("_scaled_dot_product_flash_attention_for_cpu_backward", None),
+            ("_scaled_dot_product_flash_attention_backward", None),
+            ("_scaled_dot_product_efficient_attention_backward", 4),
+            ("_scaled_dot_product_cudnn_attention_backward", 8),
+        ):
+            packet = getattr(aten, name, None)
+            if packet is not None:
+                self.rules[packet.default] = partial(
+                    _memory_sdpa_backward, bias_index=bias_index
+                )
+        self.rules.update(extra_rules or {})
+        self.ignore_modules.extend(extra_ignore_modules or [])

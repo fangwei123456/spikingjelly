@@ -68,13 +68,13 @@ _MEMORY_INSTANCES = {
         "reg_32b", 32, 32, 32, 32, 0.14416 * 2 / 7.1 * 2, 0.14416 * 2 / 7.1 * 2
     ),
     "sram_fp_conv_in_s": MemoryInstanceSpec(
-        "sram_fp_conv_in_s", 18496, 1, 1, 1, 0.44854798, 0.44854798
+        "sram_fp_conv_in_s", 18496 * 16, 1, 1, 1, 0.44854798, 0.44854798
     ),
     "sram_fp_conv_in_w": MemoryInstanceSpec(
-        "sram_fp_conv_in_w", 18432, 16, 16, 16, 5.302477904, 5.302477904
+        "sram_fp_conv_in_w", 18432 * 256, 16, 16, 16, 5.302477904, 5.302477904
     ),
     "sram_fp_conv_out_xi": MemoryInstanceSpec(
-        "sram_fp_conv_out_xi", 65536, 16, 16, 16, 5.792676768, 5.792676768
+        "sram_fp_conv_out_xi", 65536 * 16, 16, 16, 16, 5.792676768, 5.792676768
     ),
     "sram_fp_soma_u": MemoryInstanceSpec(
         "sram_fp_soma_u", 1048576, 16, 256, 256, 92.68282828, 92.68282828
@@ -86,13 +86,13 @@ _MEMORY_INSTANCES = {
         "sram_fp_soma_smask", 65536, 1, 16, 16, 7.176767677, 7.176767677
     ),
     "sram_bp_conv_in_du": MemoryInstanceSpec(
-        "sram_bp_conv_in_du", 73984, 16, 16, 16, 5.792676768, 5.792676768
+        "sram_bp_conv_in_du", 73984 * 16, 16, 16, 16, 5.792676768, 5.792676768
     ),
     "sram_bp_conv_in_w": MemoryInstanceSpec(
-        "sram_bp_conv_in_w", 18432, 16, 16, 16, 5.302477904, 5.302477904
+        "sram_bp_conv_in_w", 18432 * 256, 16, 16, 16, 5.302477904, 5.302477904
     ),
     "sram_bp_conv_out_res": MemoryInstanceSpec(
-        "sram_bp_conv_out_res", 65536, 16, 16, 16, 5.792676768, 5.792676768
+        "sram_bp_conv_out_res", 65536 * 16, 16, 16, 16, 5.792676768, 5.792676768
     ),
     "sram_bp_grad_in_u": MemoryInstanceSpec(
         "sram_bp_grad_in_u", 1048576, 16, 256, 256, 92.68282828, 92.68282828
@@ -107,15 +107,17 @@ _MEMORY_INSTANCES = {
         "sram_bp_grad_out_du", 1048576, 16, 256, 256, 92.68282828, 92.68282828
     ),
     "sram_wg_conv_in_s": MemoryInstanceSpec(
-        "sram_wg_conv_in_s", 4624, 1, 1, 1, 0.44854798, 0.44854798
+        "sram_wg_conv_in_s", 4624 * 16, 1, 1, 1, 0.44854798, 0.44854798
     ),
     "sram_wg_conv_in_du": MemoryInstanceSpec(
-        "sram_wg_conv_in_du", 65536, 16, 16, 16, 5.792676768, 5.792676768
+        "sram_wg_conv_in_du", 65536 * 16, 16, 16, 16, 5.792676768, 5.792676768
     ),
     "sram_wg_conv_out_dw": MemoryInstanceSpec(
-        "sram_wg_conv_out_dw", 18432, 16, 16, 16, 5.302477904, 5.302477904
+        "sram_wg_conv_out_dw", 18432 * 256, 16, 16, 16, 5.302477904, 5.302477904
     ),
-    "sram_2MB": MemoryInstanceSpec("sram_2MB", 1048576, 16, 256, 256, 46.976, 45.96),
+    "sram_2MB": MemoryInstanceSpec(
+        "sram_2MB", 1048576 * 16, 16, 256, 256, 46.976, 45.96
+    ),
     "sram_6MB": MemoryInstanceSpec(
         "sram_6MB", 50331648, 16, 256, 256, 458.1830181, 375.0422185
     ),
@@ -163,7 +165,7 @@ class MemoryHierarchyConfig:
     def technology_nm(self) -> int:
         return 32
 
-    def validate(self):
+    def validate(self) -> None:
         required = {
             "reg_1b",
             "reg_16b",

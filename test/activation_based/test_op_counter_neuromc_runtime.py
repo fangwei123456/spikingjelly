@@ -1,20 +1,12 @@
+import inspect
+
 import pytest
 import torch
 import torch.nn as nn
 
 from spikingjelly.activation_based import layer, neuron, op_counter
-from spikingjelly.activation_based.op_counter.memory_residency import (
-    MemoryResidencyCounter,
-    MemoryResidencySimulator,
-)
-from spikingjelly.activation_based.op_counter.neuromc.base_counter import (
-    NeuroMCBaseCounter,
-)
 from spikingjelly.activation_based.op_counter.neuromc.core import (
     NeuroMCRuntimeEnergyReport,
-)
-from spikingjelly.activation_based.op_counter.neuromc.memory_residency_counter import (
-    NeuroMCMemoryResidencyCounter,
 )
 from spikingjelly.activation_based.op_counter.neuromc.utils import _is_spike, _spike_nnz
 
@@ -40,6 +32,20 @@ def test_neuromc_exact_linear_report_fields():
     assert report.energy_by_core_type["fp_soma"] > 0.0
     assert report.counts_by_core_type["fp_soma"]["mac"] == 3 * 8 * 4
     assert report.primitive_counts["totals"]["mac"] == 3 * 8 * 4
+    assert report.model_info.model_id == "neuromc_712c66_runtime_v1"
+    assert report.model_info.fidelity == "source-aligned"
+    assert report.memory_config.preset_name == "neuromc_like_v1"
+
+
+def test_neuromc_public_interface_has_no_ineffective_parameters():
+    profiler_parameters = inspect.signature(op_counter.NeuroMCEnergyProfiler).parameters
+    estimate_parameters = inspect.signature(
+        op_counter.estimate_neuromc_runtime_energy
+    ).parameters
+
+    for name in ("core_type", "strict", "extra_ignore_modules"):
+        assert name not in profiler_parameters
+        assert name not in estimate_parameters
 
 
 def test_neuromc_runtime_report_constructor_remains_backward_compatible():
@@ -98,6 +104,11 @@ def test_neuromc_exact_batchnorm_supports_bn_breakdown():
     assert report.energy_by_core_type["ann_bn"] > 0.0
     assert report.energy_by_process_key["with_bn"] > 0.0
     assert report.counts_by_process_key["with_bn"]["sqrt"] > 0
+    by_level = report.memory_bits_by_level["by_level_dir"]
+    assert by_level["reg"]["rh2l"] == 2848
+    assert by_level["reg"]["wl2h"] == 1920
+    assert by_level["sram"]["rh2l"] == 2848
+    assert by_level["sram"]["wl2h"] == 1920
 
 
 def test_neuromc_exact_training_uses_bp_wg_and_optimizer():
@@ -107,6 +118,7 @@ def test_neuromc_exact_training_uses_bp_wg_and_optimizer():
 
     x = (torch.rand(3, 8) > 0.7).float()
     target = torch.randn(3, 4)
+    parameters_before = [parameter.detach().clone() for parameter in model.parameters()]
     report = op_counter.estimate_neuromc_runtime_energy(
         model, x, target=target, loss_fn=loss_fn, optimizer=optimizer
     )
@@ -119,6 +131,10 @@ def test_neuromc_exact_training_uses_bp_wg_and_optimizer():
     assert report.energy_by_core_type["bp_grad_opt"] > 0.0
     assert report.energy_by_process_key["with_opt"] > 0.0
     assert sum(report.energy_by_stage.values()) == pytest.approx(report.energy_total_pj)
+    assert all(
+        torch.equal(before, after)
+        for before, after in zip(parameters_before, model.parameters(), strict=True)
+    )
 
 
 def _optimizer_fragment_totals(profiler, fragments):
@@ -142,15 +158,16 @@ def test_neuromc_exact_repeated_forward_reuses_weights():
     model = nn.Linear(16, 8, bias=False)
     x = (torch.rand(4, 16) > 0.75).float()
 
-    with op_counter.NeuroMCEnergyProfiler() as profiler:
-        profiler.bind_model(model)
-        with profiler.stage("t0_forward"):
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_model(model)
+    with profiler:
+        with profiler.stage("first"):
             _ = model(x)
-        with profiler.stage("t1_forward"):
+        with profiler.stage("reused", reuse_weights=True):
             _ = model(x)
     report = profiler.get_report()
 
-    assert report.energy_by_stage["t0_forward"] > report.energy_by_stage["t1_forward"]
+    assert report.energy_by_stage["first"] > report.energy_by_stage["reused"]
     assert any(item["t_type"] == 1 for item in report.mapping_summary)
 
 
@@ -207,17 +224,18 @@ def test_neuromc_exact_online_learning_optimizer_step_each_time_step():
     xs = [torch.randn(3, 4), torch.randn(3, 4)]
     targets = [torch.randn(3, 2), torch.randn(3, 2)]
 
-    with op_counter.NeuroMCEnergyProfiler() as profiler:
-        profiler.bind_model(model)
-        profiler.bind_optimizer(optimizer)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_model(model)
+    profiler.bind_optimizer(optimizer)
+    with profiler:
         for t, (x, target) in enumerate(zip(xs, targets, strict=True)):
-            with profiler.stage(f"t{t}_forward"):
+            with profiler.stage(f"t{t}_forward", reuse_weights=t > 0):
                 out = model(x)
             with profiler.suspend():
                 loss = loss_fn(out, target)
-            with profiler.stage(f"t{t}_backward"):
+            with profiler.stage(f"t{t}_backward", phase="backward"):
                 loss.backward()
-            with profiler.stage(f"t{t}_optimizer"):
+            with profiler.stage(f"t{t}_optimizer", phase="optimizer"):
                 profiler.record_optimizer_step(f"t{t}_optimizer")
                 with profiler.suspend():
                     optimizer.step()
@@ -639,21 +657,17 @@ def test_neuromc_exact_b_type_reuse_hint_reduces_later_forward_energy():
     model = nn.Linear(16, 8, bias=False)
     x = (torch.rand(4, 16) > 0.75).float()
 
-    with op_counter.NeuroMCEnergyProfiler() as profiler:
-        profiler.bind_model(model)
-        with profiler.stage("b0_t0_forward"):
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_model(model)
+    with profiler:
+        with profiler.stage("first"):
             _ = model(x)
-        with profiler.stage("b1_t0_forward"):
+        with profiler.stage("reused", reuse_weights=True):
             _ = model(x)
     report = profiler.get_report()
 
-    assert (
-        report.energy_by_stage["b0_t0_forward"]
-        > report.energy_by_stage["b1_t0_forward"]
-    )
-    assert any(
-        item["b_type"] == 1 and item["t_type"] == 0 for item in report.mapping_summary
-    )
+    assert report.energy_by_stage["first"] > report.energy_by_stage["reused"]
+    assert any(item["t_type"] == 1 for item in report.mapping_summary)
 
 
 def test_neuromc_exact_stage_conv_type_controls_bn_backward_counts():
@@ -664,13 +678,18 @@ def test_neuromc_exact_stage_conv_type_controls_bn_backward_counts():
 
     def run(stage_name: str):
         model.zero_grad(set_to_none=True)
-        with op_counter.NeuroMCEnergyProfiler() as profiler:
-            profiler.bind_model(model)
+        profiler = op_counter.NeuroMCEnergyProfiler()
+        profiler.bind_model(model)
+        with profiler:
             with profiler.stage("forward"):
                 out = model(x)
             with profiler.suspend():
                 loss = loss_fn(out, target)
-            with profiler.stage(stage_name):
+            with profiler.stage(
+                stage_name,
+                phase="backward",
+                batch_norm_backward=stage_name == "backward",
+            ):
                 loss.backward()
         return profiler.get_report()
 
@@ -692,13 +711,14 @@ def test_neuromc_exact_bn_backward_counts_scale_with_batch():
         x = torch.randn(batch_size, 8, 2, 2, requires_grad=True)
         target = torch.randn(batch_size, 8, 2, 2)
         model.zero_grad(set_to_none=True)
-        with op_counter.NeuroMCEnergyProfiler() as profiler:
-            profiler.bind_model(model)
+        profiler = op_counter.NeuroMCEnergyProfiler()
+        profiler.bind_model(model)
+        with profiler:
             with profiler.stage("forward"):
                 out = model(x)
             with profiler.suspend():
                 loss = loss_fn(out, target)
-            with profiler.stage("backward"):
+            with profiler.stage("backward", phase="backward"):
                 loss.backward()
         return profiler.get_report()
 
@@ -710,63 +730,6 @@ def test_neuromc_exact_bn_backward_counts_scale_with_batch():
     )
 
 
-def test_memory_residency_reset_clears_state():
-    counter = MemoryResidencyCounter()
-    x = torch.randn(2, 3)
-    y = torch.randn(3, 4)
-    func = torch.ops.aten.mm.default
-    out = torch.mm(x, y)
-    _ = counter.count(func, (x, y), {}, out)
-    assert counter.get_level_bits()
-    counter.reset()
-    assert counter.get_level_bits() == {}
-    assert counter.get_level_rw_bits() == {}
-    assert counter.get_move_bits_by_edge() == {}
-
-
-def test_memory_residency_unknown_op_returns_zero():
-    counter = MemoryResidencyCounter()
-    x = torch.randn(2, 2)
-    out = torch.sin(x)
-    value = counter.count(torch.ops.aten.sin.default, (x,), {}, out)
-    assert value == 0
-
-
-def test_memory_residency_views_share_storage_identity():
-    sim = MemoryResidencySimulator()
-    base = torch.randn(16)
-    view1 = base[:8]
-    view2 = base[4:12]
-    sim.on_tensor_read(view1, "op")
-    before = dict(sim.sram_cache)
-    sim.on_tensor_read(view2, "op")
-    after = dict(sim.sram_cache)
-    assert len(after) == len(before)
-
-
-def test_neuromc_base_counter_unknown_op_returns_zero():
-    counter = NeuroMCBaseCounter()
-    x = torch.randn(2, 2)
-    out = torch.sin(x)
-    value = counter.count(torch.ops.aten.sin.default, (x,), {}, out)
-    assert value == 0
-
-
-def test_neuromc_base_counter_reset_clears_all_aggregates():
-    counter = NeuroMCBaseCounter()
-    counter.records["Global"]["op"] = 1
-    counter.stage_records["forward"] = 2
-    counter.op_records["aten.add"] = 3
-    counter.stage_op_records["forward"]["aten.add"] = 4
-
-    counter.reset()
-
-    assert counter.get_counts() == {}
-    assert counter.get_stage_counts() == {}
-    assert counter.get_op_counts() == {}
-    assert counter.get_stage_op_counts() == {}
-
-
 def test_neuromc_spike_nnz_empty_tensor_returns_none():
     x = torch.empty(0)
     assert _is_spike(x) is False
@@ -776,8 +739,9 @@ def test_neuromc_spike_nnz_empty_tensor_returns_none():
 def test_neuromc_profiler_cleans_last_input_attribute():
     model = nn.Linear(4, 3)
     x = (torch.rand(2, 4) > 0.5).float()
-    with op_counter.NeuroMCEnergyProfiler() as profiler:
-        profiler.bind_model(model)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_model(model)
+    with profiler:
         with profiler.stage("forward"):
             _ = model(x)
         assert hasattr(model, "_neuromc_last_input")
@@ -832,16 +796,17 @@ def test_neuromc_exact_memory_config_api():
     with pytest.raises(AttributeError):
         cfg.technology_nm = 7
     assert "dram" in cfg.memory_instances
-    assert hasattr(op_counter.neuromc, "MemoryResidencySimulator")
-    assert hasattr(op_counter.neuromc, "NeuroMCMemoryResidencyCounter")
+    assert cfg.memory_instances["sram_fp_conv_in_w"].size_bits == 4_718_592
+    assert cfg.memory_instances["sram_2MB"].size_bits == 16_777_216
 
 
 def test_neuromc_exact_trace_events_do_not_retain_live_tensors():
     model = nn.Linear(4, 3, bias=False)
     x = (torch.rand(2, 4) > 0.5).float()
 
-    with op_counter.NeuroMCEnergyProfiler() as profiler:
-        profiler.bind_model(model)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_model(model)
+    with profiler:
         with profiler.stage("forward"):
             _ = model(x)
 
@@ -866,8 +831,10 @@ def test_neuromc_exact_optimizer_counts_mixed_parameter_shapes():
     assert counts["add"] == 48
     assert counts["mul"] == 132
     assert counts["sqrt"] == 12
-    assert bits["sram"]["rh2l"] == (14 * 3 + 7 * 6) * 32
-    assert bits["sram"]["wl2h"] == (14 * 3 + 7 * 6) * 32
+    assert bits["reg"]["rh2l"] == 2304
+    assert bits["reg"]["wl2h"] == 1920
+    assert bits["sram"]["rh2l"] == 2304
+    assert bits["sram"]["wl2h"] == 1920
 
 
 def test_neuromc_exact_sgd_optimizer_counts_plain_step():
@@ -1016,12 +983,6 @@ def test_neuromc_exact_sgd_optimizer_counts_mixed_param_groups():
     assert rh2l == (bias_numel * 2 + weight_numel * 3) * 32
     assert wl2h == (bias_numel + weight_numel * 2) * 32
     assert len(fragments) == 2
-
-
-def test_neuromc_memory_residency_accepts_config():
-    cfg = op_counter.MemoryHierarchyConfig()
-    counter = NeuroMCMemoryResidencyCounter(config=cfg)
-    assert isinstance(counter, MemoryResidencyCounter)
 
 
 def test_neuromc_default_config_validates():

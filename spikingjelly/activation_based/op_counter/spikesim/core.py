@@ -10,7 +10,7 @@ import torch.nn as nn
 from ...neuron.base_node import BaseNode, SimpleBaseNode
 from ...neuron.integrate_and_fire import IFNode, SimpleIFNode
 from ...neuron.lif import LIFNode, SimpleLIFNode
-from ..base import DispatchCounterMode, call_model
+from ..base import DispatchCounterMode, EnergyModelInfo, call_model
 from .config import SpikeSimEnergyConfig
 from .counter import SpikeSimCounter
 from .formulas import (
@@ -23,7 +23,7 @@ __all__ = [
     "SpikeSimCounter",
     "SpikeSimEnergyReport",
     "SpikeSimEnergyProfiler",
-    "estimate_spikesim_event_energy",
+    "estimate_spikesim_energy",
 ]
 
 
@@ -32,6 +32,12 @@ _SUPPORTED_SPIKESIM_NEURONS = (
     LIFNode,
     SimpleIFNode,
     SimpleLIFNode,
+)
+
+_SPIKESIM_SOURCE = (
+    "https://doi.org/10.1109/TCAD.2023.3274918",
+    "https://github.com/Intelligent-Computing-Lab-Panda/SpikeSim/commit/"
+    "c2627bc091a47bdcb630ca6207eaf44a00bd1da4",
 )
 
 
@@ -90,6 +96,8 @@ class SpikeSimEnergyReport:
     warnings: list[str]
     breakdown_pj: dict[str, float]
     counts: dict[str, int]
+    model_info: EnergyModelInfo
+    config: SpikeSimEnergyConfig
 
 
 class SpikeSimEnergyProfiler:
@@ -97,7 +105,7 @@ class SpikeSimEnergyProfiler:
         self,
         *,
         config: SpikeSimEnergyConfig | None = None,
-        strict: bool = False,
+        strict: bool = True,
     ):
         r"""
         .. rubric:: API Language
@@ -152,6 +160,7 @@ class SpikeSimEnergyProfiler:
         self._warnings: list[str] = []
 
     def __enter__(self):
+        self._counter.reset()
         self._dispatch_mode.__enter__()
         return self
 
@@ -207,10 +216,13 @@ class SpikeSimEnergyProfiler:
         warnings = list(self._counter.warnings)
         warnings = list(self._warnings) + warnings
         if not energy_by_stage:
-            warnings.append(
+            message = (
                 "No supported Conv2d forward inference stages were profiled by "
                 "SpikeSim energy."
             )
+            if self.strict:
+                raise ValueError(message)
+            warnings.append(message)
 
         totals_dict = dict(component_totals)
         total_pj = sum(energy_by_stage.values())
@@ -218,12 +230,6 @@ class SpikeSimEnergyProfiler:
             "dense_pe_cycle_count": int(self._counter.get_total()),
             "stage_count": len(stage_metadata),
         }
-        if self.config.activity_mode == "event":
-            warnings.append(
-                "SpikeSim activity_mode='event' is an experimental sparse runtime "
-                "extension; activity_mode='dense' is the original SpikeSim-aligned "
-                "default."
-            )
         return SpikeSimEnergyReport(
             energy_total_pj=total_pj,
             energy_by_stage=energy_by_stage,
@@ -236,6 +242,23 @@ class SpikeSimEnergyProfiler:
             warnings=warnings,
             breakdown_pj=totals_dict,
             counts=counts,
+            model_info=EnergyModelInfo(
+                model_id=(
+                    "spikesim_c2627bc_dense_v1"
+                    if self.config.activity_mode == "dense"
+                    else "spikingjelly_spikesim_event_v1"
+                ),
+                fidelity=(
+                    "reference-code"
+                    if self.config.activity_mode == "dense"
+                    else "spikingjelly-defined"
+                ),
+                source_urls=_SPIKESIM_SOURCE,
+                technology_nm=65,
+                precision="SpikeSim crossbar and IF/LIF peripheral assumptions",
+                scope="runtime Conv2d inference PE-cycle energy",
+            ),
+            config=self.config.copy(),
         )
 
     def get_total(self) -> float:
@@ -294,22 +317,22 @@ class SpikeSimEnergyProfiler:
         }
 
 
-def estimate_spikesim_event_energy(
+def estimate_spikesim_energy(
     model: nn.Module,
-    inputs,
+    inputs: Any,
     *,
     config: SpikeSimEnergyConfig | None = None,
-    strict: bool = False,
+    strict: bool = True,
 ) -> SpikeSimEnergyReport:
     r"""
     .. rubric:: API Language
 
-    :ref:`中文 <estimate_spikesim_event_energy-cn>` |
-    :ref:`English <estimate_spikesim_event_energy-en>`
+    :ref:`中文 <estimate_spikesim_energy-cn>` |
+    :ref:`English <estimate_spikesim_energy-en>`
 
     ----
 
-    .. _estimate_spikesim_event_energy-cn:
+    .. _estimate_spikesim_energy-cn:
 
     * **中文**
 
@@ -324,7 +347,7 @@ def estimate_spikesim_event_energy(
 
     ----
 
-    .. _estimate_spikesim_event_energy-en:
+    .. _estimate_spikesim_energy-en:
 
     * **English**
 

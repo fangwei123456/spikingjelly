@@ -2,8 +2,6 @@ from .base import *
 from .flop import *
 from .memory_access import *
 from .neuromorphic_memory_access import *
-from .lemaire_addressing import *
-from .memory_residency import *
 from .neuron_state import *
 from .ac import *
 from .synop import *

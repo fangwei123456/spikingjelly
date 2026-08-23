@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import copy
+import math
 from dataclasses import dataclass, field
+from typing import Any
 
 import torch.nn as nn
+import torch
 
 from spikingjelly.logger import logger
 
 from .ac import ACCounter
-from .base import DispatchCounterMode, call_model
+from .base import DispatchCounterMode, EnergyModelInfo, ModuleCounterMode, call_model
 from .mac import MACCounter
 from .neuromorphic_memory_access import NeuromorphicMemoryAccessCounter
 from .synop import SynOpCounter
@@ -21,6 +24,18 @@ __all__ = [
     "SimpleEnergyReport",
     "estimate_simple_energy",
 ]
+
+_SIMPLE_MODEL_INFO = EnergyModelInfo(
+    model_id="simple_horowitz_step_composite_v1",
+    fidelity="spikingjelly-defined",
+    source_urls=(
+        "https://doi.org/10.1109/ISSCC.2014.6757323",
+        "https://openreview.net/pdf?id=SzwU2XrXIS",
+    ),
+    technology_nm=45,
+    precision="configurable comparison regime; runtime bytes use observed dtype",
+    scope="runtime MAC/AC plus SpikingJelly logical parameter and neuron-state traffic",
+)
 
 
 @dataclass
@@ -69,6 +84,12 @@ class SimpleEnergyCostConfig:
     e_mac_pj: float = 4.6
     e_ac_pj: float = 0.9
     e_memory_pj_per_byte: float = 24.96
+
+    def __post_init__(self) -> None:
+        for name in ("e_mac_pj", "e_ac_pj", "e_memory_pj_per_byte"):
+            value = getattr(self, name)
+            if not math.isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be finite and nonnegative.")
 
     @classmethod
     def fp32(cls) -> "SimpleEnergyCostConfig":
@@ -189,6 +210,8 @@ class SimpleEnergyReport:
     breakdown_pj: dict[str, float]
     counts: dict[str, int]
     warnings: list[str]
+    model_info: EnergyModelInfo
+    config: SimpleEnergyConfig
 
 
 class SimpleEnergyProfiler:
@@ -243,6 +266,7 @@ class SimpleEnergyProfiler:
             ],
             strict=False,
         )
+        self._module_mode: ModuleCounterMode | None = None
         self._summary_logged = False
 
     def bind_model(self, model: nn.Module) -> None:
@@ -255,18 +279,26 @@ class SimpleEnergyProfiler:
         :param model: 待统计模型 / Model to profile
         :type model: torch.nn.Module
         """
-        self.memory_counter.bind_model(model)
+        self._module_mode = ModuleCounterMode(
+            [self.memory_counter],
+            model=model,
+        )
 
     def __enter__(self):
         self.mac_counter.reset()
         self.ac_counter.reset()
         self.synop_counter.reset()
+        self.memory_counter.reset()
         self._summary_logged = False
-        self.memory_counter.__enter__()
+        if self._module_mode is None:
+            raise RuntimeError(
+                "SimpleEnergyProfiler.bind_model() must be called before entering."
+            )
+        self._module_mode.__enter__()
         try:
             self._dispatch_mode.__enter__()
         except BaseException:
-            self.memory_counter.__exit__(None, None, None)
+            self._module_mode.__exit__(None, None, None)
             raise
         return self
 
@@ -274,7 +306,7 @@ class SimpleEnergyProfiler:
         try:
             return self._dispatch_mode.__exit__(exc_type, exc, tb)
         finally:
-            self.memory_counter.__exit__(exc_type, exc, tb)
+            self._module_mode.__exit__(exc_type, exc, tb)
 
     def get_report(self) -> SimpleEnergyReport:
         mac = self.mac_counter.get_total()
@@ -340,6 +372,8 @@ class SimpleEnergyProfiler:
                 "memory_access_bytes": memory_access_bytes,
             },
             warnings=warnings_list,
+            model_info=_SIMPLE_MODEL_INFO,
+            config=copy.deepcopy(self.config),
         )
         if not self._summary_logged:
             logger.info(
@@ -362,7 +396,7 @@ class SimpleEnergyProfiler:
 
 def estimate_simple_energy(
     model: nn.Module,
-    inputs,
+    inputs: Any,
     *,
     config: SimpleEnergyConfig | None = None,
 ) -> SimpleEnergyReport:
@@ -406,6 +440,6 @@ def estimate_simple_energy(
     """
     profiler = SimpleEnergyProfiler(config=config)
     profiler.bind_model(model)
-    with profiler:
+    with profiler, torch.no_grad():
         _ = call_model(model, inputs)
     return profiler.get_report()

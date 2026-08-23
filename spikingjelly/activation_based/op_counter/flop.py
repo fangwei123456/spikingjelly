@@ -31,7 +31,7 @@ def _flop_mm(args, kwargs, out):
     kk, n = y.shape
     if k != kk:
         raise AssertionError(f"mm: inner dimensions mismatch [{x.shape} and {y.shape}]")
-    return m * n * (2 * k - 1)
+    return m * n * 2 * k
 
 
 def _flop_addmm(args, kwargs, out):
@@ -56,7 +56,7 @@ def _flop_addmm(args, kwargs, out):
     alpha = kwargs.get("alpha", 1)
     beta = kwargs.get("beta", 1)
 
-    flops = m * n * (2 * k - 1)  # matmul; 2k-1 flops for each output element
+    flops = m * n * 2 * k
     if alpha != 1:
         flops += m * n  # scale by alpha
     if beta == 1:
@@ -84,7 +84,7 @@ def _flop_bmm(args, kwargs, out):
         raise AssertionError(
             f"bmm: batch or inner dimensions mismatch [{x.shape} and {y.shape}]"
         )
-    return b * m * n * (2 * k - 1)
+    return b * m * n * 2 * k
 
 
 def _flop_baddbmm(args, kwargs, out):
@@ -109,7 +109,7 @@ def _flop_baddbmm(args, kwargs, out):
     alpha = kwargs.get("alpha", 1)
     beta = kwargs.get("beta", 1)
 
-    flops = b * m * n * (2 * k - 1)  # batched matmul
+    flops = b * m * n * 2 * k
     if alpha != 1:
         flops += b * m * n  # scale by alpha
     if beta == 1:
@@ -139,7 +139,6 @@ def _flop_convolution(args, kwargs, out):
     spatial_shape = x.shape[2:] if transposed else out.shape[2:]
     flops_per_position = 2 * c_in * prod(kernel_shape)
     flops = flops_per_position * prod(spatial_shape) * c_out * b
-    flops -= out.numel()  # for each output element, the first add can be avoided
     if bias is not None:
         flops += out.numel()
     return flops
@@ -240,6 +239,22 @@ def _flop_sigmoid(args, kwargs, out):
     return 4 * out.numel()
 
 
+def _flop_sdpa(args, kwargs, out):
+    q, k, v = args[:3]
+    b, h_q, s_q, d_q = q.shape
+    s_k = k.shape[2]
+    d_v = v.shape[3]
+    return 2 * b * h_q * s_q * s_k * (d_q + d_v)
+
+
+def _flop_sdpa_backward(args, kwargs, out):
+    grad_out, q, k, v = args[:4]
+    b, h_q, s_q, d_q = q.shape
+    s_k = k.shape[2]
+    d_v = v.shape[3]
+    return 2 * b * h_q * s_q * s_k * (3 * d_q + 2 * d_v)
+
+
 def _flop_native_batch_norm(args, kwargs, out):
     x, train = args[0], args[5]
     n, c = x.numel(), x.shape[1]
@@ -298,8 +313,8 @@ def _flop_native_batch_norm_backward(args, kwargs, out):
 class FlopCounter(BaseCounter):
     def __init__(
         self,
-        extra_rules: dict[Any, Callable] = {},
-        extra_ignore_modules: list[nn.Module] = [],
+        extra_rules: dict[Any, Callable] | None = None,
+        extra_ignore_modules: list[type[nn.Module]] | None = None,
     ):
         r"""
         **API Language** - :ref:`中文 <FlopCounter.__init__-cn>` | :ref:`English <FlopCounter.__init__-en>`
@@ -463,5 +478,23 @@ class FlopCounter(BaseCounter):
             aten.expand.default: _flop_null,
         }
         self.ignore_modules = []
-        self.rules.update(extra_rules)
-        self.ignore_modules.extend(extra_ignore_modules)
+        for name in (
+            "_scaled_dot_product_flash_attention_for_cpu",
+            "_scaled_dot_product_flash_attention",
+            "_scaled_dot_product_efficient_attention",
+            "_scaled_dot_product_cudnn_attention",
+        ):
+            packet = getattr(aten, name, None)
+            if packet is not None:
+                self.rules[packet.default] = _flop_sdpa
+        for name in (
+            "_scaled_dot_product_flash_attention_for_cpu_backward",
+            "_scaled_dot_product_flash_attention_backward",
+            "_scaled_dot_product_efficient_attention_backward",
+            "_scaled_dot_product_cudnn_attention_backward",
+        ):
+            packet = getattr(aten, name, None)
+            if packet is not None:
+                self.rules[packet.default] = _flop_sdpa_backward
+        self.rules.update(extra_rules or {})
+        self.ignore_modules.extend(extra_ignore_modules or [])

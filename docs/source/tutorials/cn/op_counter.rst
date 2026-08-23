@@ -23,7 +23,8 @@ English version: :doc:`../en/op_counter`
 什么是 ``op_counter``？
 -------------------------
 
-``op_counter`` 是一个基于 PyTorch dispatch 和模块追踪的运行时 profiling 工具集。
+``op_counter`` 是一个基于 PyTorch dispatch、function interception 和 module hook
+的运行时 profiling 工具集。
 它并不只从静态层形状估算计数，而是观察一次真实执行，在给定输入下记录模型实际发生了什么。
 
 这对 SNN 尤其有用，因为很多量都依赖运行时活动：
@@ -42,9 +43,9 @@ English version: :doc:`../en/op_counter`
 * 在 context 内，受支持的算子会被拦截并计数；
 * 多个计数器可以在同一次执行中同时工作。
 
-核心入口是
-:class:`DispatchCounterMode <spikingjelly.activation_based.op_counter.base.DispatchCounterMode>`。
-它会把运行时算子调用分发给一个或多个计数器，并把结果按模块作用域和全局汇总保存下来。
+三个入口分别是 ``DispatchCounterMode``、``FunctionCounterMode`` 和
+``ModuleCounterMode``：它们分别分发 ATen 算子、``torch.*`` 函数和实际执行的
+``nn.Module`` forward/backward event。
 
 基础计数工作流
 ++++++++++++++++++++++++
@@ -97,6 +98,25 @@ English version: :doc:`../en/op_counter`
 
 本教程中的示例统一使用 ``strict=False``，这样即使遇到不受支持的辅助算子，也不会立刻中断执行。
 如果你已经确认所选计数器完整覆盖了相关算子路径，并且希望在遇到 unsupported 算子时立即报错，再切换到 ``strict=True``。
+
+使用 ``ModuleCounterMode``
+----------------------------
+
+module counter 的规则键为 ``("forward" | "backward", module_type)``。Mode
+负责 hook 生命周期、module scope、ignore subtree 和异常清理；它不会自动 reset counter。
+
+.. code-block:: python
+
+    memory_counter = op_counter.NeuromorphicMemoryAccessCounter()
+    with op_counter.ModuleCounterMode(
+        [memory_counter], model=model, strict=True
+    ):
+        _ = model(x)
+
+    print(memory_counter.get_counts()["Global"])
+
+三个 Mode 都可在 context 结束后调用 ``mode.get_unsupported(counter)`` 检查非严格
+模式跳过的目标。
 
 虽然这个第一个例子已经使用了带 ``IFNode`` 的 SNN 风格模块，但它此处仍然只聚焦于通用的 counter workflow。
 像 ``SynOps`` 这类真正依赖脉冲语义的指标，会在下文单独解释。
@@ -172,6 +192,11 @@ Roofline 分析示例
 
 这个例子不会替你直接画 roofline 图。它给出了工作负载测得的点，之后你可以再结合硬件峰值 FLOPs 和带宽，把这个点放到 roofline 图上。
 
+这里的 GPU 口径是理论理想值，而不是 kernel 仿真：矩阵乘法按每个 MAC 为
+2 FLOPs，访存按逻辑输入各读取一次、逻辑输出写入一次。它不建模 tiling、cache、
+fusion、bank conflict 或真实 DRAM traffic。上下文结束后可调用
+``mode.get_unsupported(counter)`` 检查非严格模式跳过了哪些 ATen 算子。
+
 高层次能耗模型
 ++++++++++++++++++++++++
 
@@ -183,7 +208,7 @@ Roofline 分析示例
 * ``estimate_simple_energy``：运行时 MAC/AC/访存的简单能耗；
 * ``estimate_lemaire_energy``：Lemaire 风格解析式前向推理能耗；
 * ``estimate_neuromc_runtime_energy``：运行时 NeuroMC 风格能耗；
-* ``estimate_spikesim_event_energy``：运行时 SpikeSim 风格 Conv2d 能耗。
+* ``estimate_spikesim_energy``：运行时 SpikeSim 风格 Conv2d 能耗。
 
 它们回答的不是同一个问题。各自的目标和边界如下：
 
@@ -206,13 +231,19 @@ Roofline 分析示例
       - 更完整的前向、反向、优化器运行时能耗
       - NeuroMC 风格映射下的计算和访存
       - 只有在受支持 fragment 集合内才能解释为 exact
-    * - ``estimate_spikesim_event_energy``
+    * - ``estimate_spikesim_energy``
       - SpikeSim 风格卷积加速器估计
       - 带有 SpikeSim 系数的 Conv2d stage 能耗
       - 只适用于受支持的 Conv2d 推理 stage，不是通用完整模型能耗估计器
 
 最重要的一条是：不要把不同估计器给出的绝对值当成共享同一硬件假设的数字来直接比较。
 每个估计器都有自己的成本口径和建模范围。
+
+每份报告的 ``model_info`` 给出稳定模型 ID、来源、工艺节点、精度、适用范围和
+fidelity；``config``（NeuroMC 为 ``memory_config``）保存实际成本配置。
+``paper``/``reference-code`` 表示论文或作者脚本复刻，``source-aligned`` 表示采用
+作者常量和表格但保留本项目的 runtime mapping，``spikingjelly-defined`` 表示公式由
+SpikingJelly 明确定义。
 
 简单运行时能耗模型
 --------------------
@@ -236,7 +267,9 @@ Roofline 分析示例
 * 输入电流和输出 spike 被视为片上信号流，不计为访存；
 * 不建模 FIFO、寻址、路由、cache reuse 或具体硬件映射；
 * ``SynOps`` 是 AC 的辅助子集，不会重复收费；
-* 默认访存成本是 ``24.96 pJ/byte``（``3.12 pJ/bit``），可以手动覆盖。
+* 默认访存成本是 STEP Table 9 的 ``3.12 pJ/bit``，即 ``24.96 pJ/byte``；
+  本实现的 traffic 公式不是 STEP 公式；
+* FP16/INT8 preset 只选择比较口径，不执行模型量化。
 
 默认使用 Horowitz 2014 FP32 算术成本和上面说明的访存成本。如果需要其他口径，
 显式传入 ``SimpleEnergyCostConfig``。
@@ -259,18 +292,22 @@ Lemaire 解析式推理能耗
 
 * 仅前向推理；
 * 属于解析式估计，而不是 cycle-accurate 的硬件仿真；
+* 运算和访存固定使用论文的 32-bit 口径，不随宿主 tensor dtype 改变；
 * 参数、FIFO 和膜电位访问先按各层本地 SRAM 容量计价，再汇总能耗；
 * 二元输入使用 SNN 事件公式，稀疏但非二元的输入仍使用 FNN 稠密公式；
+* grouped/depthwise Conv 按每组输出通道计算 spike fanout；
+* 神经元只支持论文范围内的 IF/LIF，其他 ``BaseNode`` 默认直接拒绝；
 * SNN FIFO 默认容纳 1000 个消息；可通过 ``snn_fifo_capacity_elements`` 覆盖；
-* 不支持的转置卷积会被警告并跳过，strict 模式下直接报错。
+* 默认 ``strict=True``，不支持的转置卷积直接报错；显式设为 ``False`` 时才警告并跳过。
 
 当你需要一个比 simple runtime 能耗更丰富的前向 SNN 推理估计，但又不需要反向和优化器建模时，就使用这个估计器。
 
 NeuroMC 运行时能耗
 --------------------
 
-``estimate_neuromc_runtime_energy`` 是这个模块里目标最完整的估计器。
-它对真实执行片段做 profiling，再把这些片段映射到 NeuroMC 风格的计算和访存公式上。
+``estimate_neuromc_runtime_energy`` 对真实执行片段做 profiling，再把这些片段映射到
+固定的 NeuroMC v1 常量、逐变量访存方向和倍率。它是 source-aligned runtime adapter，
+没有复刻完整 ZigZag mapping，因此不称为论文 exact 能耗。
 
 它支持几个层次的使用方式：
 
@@ -288,26 +325,31 @@ NeuroMC 运行时能耗
 
 它的边界包括：
 
-* 只有在受支持 fragment 集合内，报告才应被解释为 exact；
-* 不支持的算子不应被理解为“完整覆盖下的精确能耗”；
-* 在手工 profiling 时，stage 命名本身会携带诸如时间/批次复用等语义；
+* 不支持的算子会拒绝生成总量；
+* 手工 profiling 使用 ``stage(name, phase=..., reuse_weights=...,
+  batch_norm_backward=...)`` 显式传递映射语义，名称本身不再编码协议；
+* 便捷训练入口会捕获 backward 并估算 optimizer，但不会调用
+  ``optimizer.step()`` 或修改模型参数；
 * 它仍然是基于硬件模型的估计，而不是从真实芯片上测得的功耗。
 
 如果你需要训练阶段能耗，或者需要在线学习场景下的 stage breakdown，就使用这个估计器。
 
-SpikeSim 事件能耗
+SpikeSim 运行时能耗
 -------------------
 
-``estimate_spikesim_event_energy`` 面向的是一个更窄的问题：
+``estimate_spikesim_energy`` 面向的是一个更窄的问题：
 在 SpikeSim 风格加速器模型下，受支持的 Conv2d 推理 stage 消耗了多少能耗？
 
 默认情况下，它会保留已发布 SpikeSim 实现中的 dense PE-cycle 能耗路径，同时用运行时 profiling 自动发现真实发生的 Conv2d stage 和 shape。
 
 它的边界很严格：
 
+* 默认 ``strict=True``，不支持的 Conv2d stage 或空报告直接报错；
 * 只适用于受支持的 Conv2d 前向推理 stage；
 * 不是通用的完整模型能耗估计器；
 * 默认 ``activity_mode="dense"`` 时，运行时脉冲稀疏度不会降低能耗；
+* ``activity_mode="event"`` 是正式的 ``spikingjelly_spikesim_event_v1``，
+  使用 SpikeSim 常量和本项目定义的 A/R/Z 稀疏公式，不冒充作者 dense 模型；
 * 当 ``require_if_lif_neurons=True`` 时，模型应保持在 IF/LIF 风格神经元假设之内；
 * 非 Conv2d 的工作不在它的主要能耗路径中。
 
@@ -391,7 +433,7 @@ Simple Energy 示例
 * 如果你需要一个简单、归一化的运行时计算与访存能耗估计，使用 ``estimate_simple_energy``；
 * 如果你需要包含访存和神经元状态效应的前向 SNN 推理能耗，使用 ``estimate_lemaire_energy``；
 * 如果你需要训练阶段 breakdown 或优化器能耗，使用 ``estimate_neuromc_runtime_energy``；
-* 如果你需要 SpikeSim 风格的 Conv2d 加速器能耗，使用 ``estimate_spikesim_event_energy``。
+* 如果你需要 SpikeSim 风格的 Conv2d 加速器能耗，使用 ``estimate_spikesim_energy``。
 
 在汇报结果时，始终要说明：
 
@@ -399,6 +441,18 @@ Simple Energy 示例
 * 这次运行是否只包含前向，还是还包含反向/优化器；
 * 采用了什么成本口径或硬件假设；
 * 输入类型和稀疏条件是什么。
+
+模型来源
+--------
+
+* Simple Energy 算术单价：`Horowitz 2014 <https://doi.org/10.1109/ISSCC.2014.6757323>`_；
+  访存单价：`STEP Table 9 <https://openreview.net/pdf?id=SzwU2XrXIS>`_。
+* Lemaire：`An Analytical Estimation of Spiking Neural Networks Energy Efficiency
+  <https://arxiv.org/abs/2210.13107>`_。
+* SpikeSim dense：作者代码 commit
+  `c2627bc <https://github.com/Intelligent-Computing-Lab-Panda/SpikeSim/commit/c2627bc091a47bdcb630ca6207eaf44a00bd1da4>`_。
+* NeuroMC：作者代码 commit
+  `712c66f <https://github.com/dayanhn/NeuroMC/commit/712c66f47cf76ae530a55f8bcad3858bd68788de>`_。
 
 总结
 ++++++++++++++++++++++++
