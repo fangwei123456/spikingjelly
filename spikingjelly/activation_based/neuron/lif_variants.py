@@ -9,7 +9,13 @@ from .. import base, functional, surrogate
 from .base_node import BaseNode
 from .lif import LIFNode
 
-__all__ = ["GatedLIFNode", "KLIFNode", "CUBALIFNode", "LIAFNode"]
+__all__ = [
+    "GatedLIFNode",
+    "KLIFNode",
+    "ComplementaryLIFNode",
+    "CUBALIFNode",
+    "LIAFNode",
+]
 
 
 class GatedLIFNode(base.MemoryModule):
@@ -488,6 +494,236 @@ class KLIFNode(BaseNode):
             self.detach_reset,
         )
         return (spike,), (v, *states[1:])
+
+
+class ComplementaryLIFNode(BaseNode):
+    def __init__(
+        self,
+        tau: float = 2.0,
+        v_threshold: float = 1.0,
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(alpha=1.0),
+        step_mode: str = "s",
+        backend: str = "torch",
+        store_state_seqs: bool = False,
+    ) -> None:
+        r"""
+        **API Language** - :ref:`中文 <ComplementaryLIFNode.__init__-cn>` | :ref:`English <ComplementaryLIFNode.__init__-en>`
+
+        ----
+
+        .. _ComplementaryLIFNode.__init__-cn:
+
+        * **中文**
+
+        Complementary Leaky Integrate-and-Fire（CLIF）神经元，由
+        `CLIF: Complementary Leaky Integrate-and-Fire Neuron for Spiking Neural Networks
+        <https://proceedings.mlr.press/v235/huang24n.html>`_ 提出。
+
+        CLIF 在 LIF 的膜电位 :math:`V[t]` 之外维护互补电位 :math:`M[t]`。
+        对当前输入 :math:`X[t]`，状态按照以下顺序更新：
+
+        .. math::
+            H[t] = \left(1 - \frac{1}{\tau}\right)V[t-1] + X[t]
+
+        .. math::
+            S[t] = \Theta(H[t] - V_{th})
+
+        .. math::
+            M[t] = M[t-1] \odot \sigma\left(\frac{H[t]}{\tau}\right) + S[t]
+
+        .. math::
+            V[t] = H[t] - S[t] \odot \left(V_{th} + \sigma(M[t])\right)
+
+        该实现仅包含论文定义的输入不衰减和软重置动力学，不引入 CLIF
+        专属可学习参数。``v`` 和 ``m`` 是持久状态，调用 :meth:`reset` 会将两者
+        恢复为零。默认替代函数的前向输出为二值脉冲；若显式传入非脉冲替代函数，
+        则输出遵循该替代函数的定义。
+
+        :param tau: 膜电位时间常数，必须为大于 ``1.0`` 的浮点数
+        :type tau: float
+        :param v_threshold: 放电阈值
+        :type v_threshold: float
+        :param surrogate_function: 反向传播中用于近似阶跃函数梯度的替代函数
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param step_mode: 步进模式，``"s"`` 表示单步，``"m"`` 表示多步
+        :type step_mode: str
+        :param backend: 计算后端，仅支持 ``"torch"``
+        :type backend: str
+        :param store_state_seqs: 在多步模式下是否保存完整状态轨迹。若为 ``True``，
+            ``state_seqs`` 按 ``[v_seq, m_seq]`` 保存两个形状为 ``[T, N, *]`` 的张量；
+            functional forward 不写入该缓存。本类不使用父类的 ``store_v_seq`` 和
+            ``v_seq``，所有状态轨迹统一由 ``store_state_seqs`` 控制
+        :type store_state_seqs: bool
+        :raises AssertionError: ``tau`` 不是大于 ``1.0`` 的浮点数时抛出
+        :raises ValueError: ``step_mode`` 不是 ``"s"`` 或 ``"m"`` 时抛出
+        :raises NotImplementedError: ``backend`` 不是 ``"torch"`` 时抛出
+
+        ----
+
+        .. _ComplementaryLIFNode.__init__-en:
+
+        * **English**
+
+        The Complementary Leaky Integrate-and-Fire (CLIF) neuron proposed in
+        `CLIF: Complementary Leaky Integrate-and-Fire Neuron for Spiking Neural Networks
+        <https://proceedings.mlr.press/v235/huang24n.html>`_.
+
+        In addition to the LIF membrane potential :math:`V[t]`, CLIF maintains
+        the complementary potential :math:`M[t]`. For the current input
+        :math:`X[t]`, the states are updated in the following order:
+
+        .. math::
+            H[t] = \left(1 - \frac{1}{\tau}\right)V[t-1] + X[t]
+
+        .. math::
+            S[t] = \Theta(H[t] - V_{th})
+
+        .. math::
+            M[t] = M[t-1] \odot \sigma\left(\frac{H[t]}{\tau}\right) + S[t]
+
+        .. math::
+            V[t] = H[t] - S[t] \odot \left(V_{th} + \sigma(M[t])\right)
+
+        This implementation contains only the non-decayed-input and soft-reset
+        dynamics defined by the paper and adds no CLIF-specific learnable
+        parameters. ``v`` and ``m`` are persistent states; :meth:`reset`
+        restores both to zero. The default surrogate produces binary spikes in
+        forward propagation. If a non-spiking surrogate is supplied explicitly,
+        the output follows that surrogate's definition.
+
+        :param tau: Membrane time constant, which must be a float greater than ``1.0``
+        :type tau: float
+        :param v_threshold: Firing threshold
+        :type v_threshold: float
+        :param surrogate_function: Surrogate function used to approximate the gradient of the step function
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param step_mode: Step mode, ``"s"`` for single-step or ``"m"`` for multi-step
+        :type step_mode: str
+        :param backend: Execution backend; only ``"torch"`` is supported
+        :type backend: str
+        :param store_state_seqs: Whether to store complete state trajectories in
+            multi-step mode. If ``True``, ``state_seqs`` contains two tensors in
+            ``[v_seq, m_seq]`` order, each with shape ``[T, N, *]``. Functional
+            forward does not write this cache. This class does not use the parent
+            ``store_v_seq`` or ``v_seq`` interface; ``store_state_seqs`` controls
+            all state trajectories
+        :type store_state_seqs: bool
+        :raises AssertionError: If ``tau`` is not a float greater than ``1.0``
+        :raises ValueError: If ``step_mode`` is neither ``"s"`` nor ``"m"``
+        :raises NotImplementedError: If ``backend`` is not ``"torch"``
+        """
+        assert isinstance(tau, float) and tau > 1.0
+        super().__init__(
+            v_threshold,
+            None,
+            surrogate_function,
+            False,
+            step_mode,
+            backend,
+            False,
+        )
+        self.tau = tau
+        self.register_memory("m", 0.0)
+        self.store_state_seqs = store_state_seqs
+
+    @property
+    def supported_backends(self) -> tuple[str, ...]:
+        return ("torch",)
+
+    @property
+    def store_state_seqs(self) -> bool:
+        r"""
+        **API Language** - :ref:`中文 <ComplementaryLIFNode.store_state_seqs-cn>` | :ref:`English <ComplementaryLIFNode.store_state_seqs-en>`
+
+        ----
+
+        .. _ComplementaryLIFNode.store_state_seqs-cn:
+
+        * **中文**
+
+        :return: 是否在常规多步前向后保存 ``[v_seq, m_seq]``。修改该属性会清除
+            已保存的 ``state_seqs``
+        :rtype: bool
+
+        ----
+
+        .. _ComplementaryLIFNode.store_state_seqs-en:
+
+        * **English**
+
+        :return: Whether to store ``[v_seq, m_seq]`` after a regular multi-step
+            forward. Assigning this property clears the cached ``state_seqs``
+        :rtype: bool
+        """
+        return self._store_state_seqs
+
+    @store_state_seqs.setter
+    def store_state_seqs(self, value: bool) -> None:
+        self._store_state_seqs = value
+        self.state_seqs = None
+
+    def reset(self) -> None:
+        super().reset()
+        self.state_seqs = None
+
+    def materialize_states(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        step_mode: str,
+    ) -> tuple[object, ...]:
+        states = super().materialize_states(inputs, states, step_mode)
+        v, m = states
+        if not isinstance(m, torch.Tensor):
+            m = torch.full_like(v, m, requires_grad=False)
+        elif m.ndim == 0:
+            m = m.to(dtype=v.dtype, device=v.device).expand_as(v)
+        elif m.shape != v.shape:
+            m = torch.zeros_like(v, requires_grad=False)
+        elif m.dtype != v.dtype or m.device != v.device:
+            m = m.to(dtype=v.dtype, device=v.device)
+        return v, m
+
+    def single_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        x = inputs[0]
+        v, m = states
+        v = functional.lif_charge(x, v, self.tau, False, None)
+        m = m * torch.sigmoid(v / self.tau)
+        spike_function = (
+            self.surrogate_function
+            if self.training or not self.surrogate_function.spiking
+            else surrogate.heaviside
+        )
+        spike = spike_function(v - self.v_threshold)
+        m = m + spike
+        v = v - spike * (self.v_threshold + torch.sigmoid(m))
+        return (spike,), (v, m)
+
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        if not self.store_state_seqs:
+            return base.MemoryModule.multi_step_forward(self, x_seq)
+
+        states = self.materialize_states((x_seq,), tuple(self._memories.values()), "m")
+        spike_steps = []
+        v_steps = []
+        m_steps = []
+        for x in x_seq:
+            (spike,), states = self.single_step_functional_forward((x,), states)
+            spike_steps.append(spike)
+            v_steps.append(states[0])
+            m_steps.append(states[1])
+
+        self.v, self.m = states
+        self.state_seqs = [torch.stack(v_steps), torch.stack(m_steps)]
+        return torch.stack(spike_steps)
+
+    def extra_repr(self) -> str:
+        return super().extra_repr() + f", tau={self.tau}"
 
 
 class CUBALIFNode(BaseNode):

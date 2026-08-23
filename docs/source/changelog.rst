@@ -15,6 +15,17 @@ and the archived documentation linked from the project README.
 Unreleased
 ----------
 
+Features
+~~~~~~~~
+
+Spiking Neurons
+^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.neuron``.
+
+- Added the paper-faithful ``ComplementaryLIFNode`` with single-step and
+  multi-step PyTorch execution and optional trajectories for both neuron states.
+
 2.0.0.dev2 - 2026-08-23
 -----------------------
 

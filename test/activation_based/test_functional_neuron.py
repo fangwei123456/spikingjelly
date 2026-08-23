@@ -95,6 +95,139 @@ def test_lif_step_is_composed_from_charge_and_voltage_reset(decay_input, v_reset
     _assert_close(v_next, expected_v)
 
 
+@pytest.mark.parametrize(
+    ("device", "dtype", "rtol", "atol"),
+    [
+        ("cpu", torch.float64, 1e-10, 1e-12),
+        pytest.param(
+            "cuda",
+            torch.float32,
+            1e-6,
+            1e-6,
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA is not available"
+            ),
+        ),
+    ],
+)
+def test_complementary_lif_matches_paper_dynamics_and_gradient(
+    device, dtype, rtol, atol
+):
+    x_seq = torch.tensor(
+        [[0.8], [0.4], [0.9], [0.4], [1.0]],
+        dtype=dtype,
+        device=device,
+        requires_grad=True,
+    )
+    module = neuron.ComplementaryLIFNode(step_mode="m", store_state_seqs=True)
+
+    spike_seq = module(x_seq)
+
+    expected_spike_seq = x_seq.new_tensor([[0.0], [0.0], [1.0], [0.0], [1.0]])
+    expected_v_seq = x_seq.new_tensor(
+        [
+            [0.8],
+            [0.8],
+            [-0.43105857863000474],
+            [0.18447071068499765],
+            [-0.6988051099221311],
+        ]
+    )
+    expected_m_seq = x_seq.new_tensor(
+        [[0.0], [0.0], [1.0], [0.5230425052426416], [1.331208504044421]]
+    )
+    torch.testing.assert_close(spike_seq, expected_spike_seq, rtol=rtol, atol=atol)
+    torch.testing.assert_close(
+        module.state_seqs[0], expected_v_seq, rtol=rtol, atol=atol
+    )
+    torch.testing.assert_close(
+        module.state_seqs[1], expected_m_seq, rtol=rtol, atol=atol
+    )
+
+    weights = x_seq.new_tensor([1, 2, 3, 4, 5]).unsqueeze(1)
+    (spike_seq * weights).sum().backward()
+    expected_grad = x_seq.new_tensor(
+        [
+            [0.5587231024047484],
+            [1.3784269134271934],
+            [1.8404118601606416],
+            [2.5],
+            [5.0],
+        ]
+    )
+    torch.testing.assert_close(x_seq.grad, expected_grad, rtol=rtol, atol=atol)
+    assert list(module.parameters()) == []
+
+
+def test_complementary_lif_single_multi_step_and_functional_state():
+    scalar_state = neuron.ComplementaryLIFNode()
+    for m in (1, torch.tensor(1.0)):
+        _, states = scalar_state.functional_forward((torch.zeros(2),), (0.0, m))
+        torch.testing.assert_close(states[1], torch.full((2,), 0.5))
+
+    x_seq = torch.tensor(
+        [[0.3, 0.8], [0.9, 0.4], [0.7, 1.0], [0.6, 0.2]],
+        dtype=torch.float64,
+    )
+    multi_step = neuron.ComplementaryLIFNode(step_mode="m", store_state_seqs=True)
+    original_states = (multi_step.v, multi_step.m)
+    functional_outputs, functional_states = multi_step.functional_forward(
+        (x_seq,), original_states
+    )
+
+    assert (multi_step.v, multi_step.m) == original_states
+    assert multi_step.state_seqs is None
+
+    multi_output = multi_step(x_seq)
+    single_step = neuron.ComplementaryLIFNode()
+    single_outputs = []
+    single_v_steps = []
+    single_m_steps = []
+    for x in x_seq:
+        single_outputs.append(single_step(x))
+        single_v_steps.append(single_step.v)
+        single_m_steps.append(single_step.m)
+
+    torch.testing.assert_close(multi_output, torch.stack(single_outputs))
+    torch.testing.assert_close(multi_output, functional_outputs[0])
+    torch.testing.assert_close(multi_step.state_seqs[0], torch.stack(single_v_steps))
+    torch.testing.assert_close(multi_step.state_seqs[1], torch.stack(single_m_steps))
+    torch.testing.assert_close(multi_step.v, functional_states[0])
+    torch.testing.assert_close(multi_step.m, functional_states[1])
+
+
+def test_complementary_lif_state_storage_reset_and_backend_contract():
+    module = neuron.ComplementaryLIFNode(step_mode="m", store_state_seqs=True)
+    x_seq = torch.randn(3, 2, 4)
+
+    training_output = module(x_seq)
+    assert len(module.state_seqs) == 2
+    assert all(state_seq.shape == x_seq.shape for state_seq in module.state_seqs)
+
+    module.reset()
+    assert module.v == 0.0
+    assert module.m == 0.0
+    assert module.state_seqs is None
+
+    module.eval()
+    evaluation_output = module(x_seq)
+    torch.testing.assert_close(training_output, evaluation_output)
+    module.store_state_seqs = False
+    module.store_v_seq = True
+    assert module.state_seqs is None
+
+    x_seq = torch.randn(2, 3, dtype=torch.float64)
+    module(x_seq)
+    assert module.v_seq is None
+    assert module.v.shape == x_seq.shape[1:]
+    assert module.m.shape == x_seq.shape[1:]
+    assert module.v.dtype == x_seq.dtype
+    assert module.m.dtype == x_seq.dtype
+    assert module.supported_backends == ("torch",)
+    with pytest.raises(NotImplementedError, match="not a supported backend"):
+        neuron.ComplementaryLIFNode(backend="triton")
+
+
 @pytest.mark.parametrize("threshold_related", [False, True])
 def test_liaf_step_matches_module(threshold_related):
     x = torch.randn(2, 3)
