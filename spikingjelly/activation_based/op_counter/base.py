@@ -597,7 +597,6 @@ class ModuleCounter(BaseCounter):
         active_modules: Optional[set[nn.Module]] = None,
         parent_names: Optional[set[str]] = None,
     ) -> int:
-        del active_modules, parent_names
         phase, module = func
         rule = self.rules[self._rule_key((phase, module))]
         return int(rule(module, args, kwargs, out))
@@ -837,7 +836,6 @@ class ModuleCounterMode(_CounterMode):
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        del exc_type, exc, tb
         for handle in self._handles:
             handle.remove()
         self._handles.clear()

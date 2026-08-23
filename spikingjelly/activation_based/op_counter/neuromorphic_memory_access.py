@@ -136,7 +136,7 @@ class NeuromorphicMemoryAccessCounter(ModuleCounter):
             },
             ("forward", BaseNode): self._count_neuron,
         }
-        self._pending_metrics: dict[str, int] | None = None
+        self._pending_metrics: dict[str, int] = {}
 
     def _count_synaptic(
         self,
@@ -196,19 +196,16 @@ class NeuromorphicMemoryAccessCounter(ModuleCounter):
         return sum(self._pending_metrics.values())
 
     def record(self, scope: str, func: Any, value: int) -> None:
-        del func, value
-        if self._pending_metrics is None:
-            return
         for name, metric_value in self._pending_metrics.items():
             self.records[scope][name] += metric_value
 
     def finalize_record(self) -> None:
-        self._pending_metrics = None
+        self._pending_metrics.clear()
 
     def reset(self) -> None:
         r"""重置全部计数。Reset all counts."""
         super().reset()
-        self._pending_metrics = None
+        self._pending_metrics.clear()
 
     def get_counts(self) -> dict[str, dict[str, int]]:
         r"""

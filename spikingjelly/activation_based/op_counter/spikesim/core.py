@@ -217,8 +217,7 @@ class SpikeSimEnergyProfiler:
                     continue
                 component_totals[key] += value
 
-        warnings = list(self._counter.warnings)
-        warnings = list(self._warnings) + warnings
+        warnings = list(self._warnings) + list(self._counter.warnings)
         if not energy_by_stage:
             message = (
                 "No supported Conv2d forward inference stages were profiled by "

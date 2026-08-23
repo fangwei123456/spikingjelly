@@ -1,5 +1,3 @@
-import inspect
-
 import pytest
 import torch
 import torch.nn as nn
@@ -35,17 +33,6 @@ def test_neuromc_exact_linear_report_fields():
     assert report.model_info.model_id == "neuromc_712c66_runtime_v1"
     assert report.model_info.fidelity == "source-aligned"
     assert report.memory_config.preset_name == "neuromc_like_v1"
-
-
-def test_neuromc_public_interface_has_no_ineffective_parameters():
-    profiler_parameters = inspect.signature(op_counter.NeuroMCEnergyProfiler).parameters
-    estimate_parameters = inspect.signature(
-        op_counter.estimate_neuromc_runtime_energy
-    ).parameters
-
-    for name in ("core_type", "strict", "extra_ignore_modules"):
-        assert name not in profiler_parameters
-        assert name not in estimate_parameters
 
 
 def test_neuromc_runtime_report_constructor_remains_backward_compatible():

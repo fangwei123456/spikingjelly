@@ -831,7 +831,7 @@ class NeuroMCEnergyProfiler(ModuleCounter):
         return 0
 
     def record(self, scope: str, func: Any, value: int) -> None:
-        del scope, func, value
+        pass
 
     def _make_loop_dims(
         self,
@@ -1894,20 +1894,17 @@ class NeuroMCEnergyProfiler(ModuleCounter):
                     bits_per_elem,
                     True,
                 )
-                write_variable = variable_name
+                write_enabled = variable_name in _EXTRA_WL2H
                 if fragment.process_key == "with_sg" and fragment.phase == "backward":
-                    if level == "reg" and variable_name == "bp_du_l_pre":
-                        write_variable = "bp_du_l_pre"
-                    elif level == "sram" and variable_name == "bp_u_l_pre":
-                        write_variable = "bp_u_l_pre"
-                    else:
-                        write_variable = ""
+                    write_enabled = (
+                        level == "reg" and variable_name == "bp_du_l_pre"
+                    ) or (level == "sram" and variable_name == "bp_u_l_pre")
                 self._accumulate_memory(
                     totals,
                     energy,
                     level,
                     "wl2h",
-                    total_bits if write_variable in _EXTRA_WL2H else 0,
+                    total_bits if write_enabled else 0,
                     spec,
                     bits_per_elem,
                     False,

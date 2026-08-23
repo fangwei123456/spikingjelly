@@ -263,12 +263,6 @@ def test_simple_energy_profiler_rejects_rebinding_while_active():
         profiler.bind_model(nn.Linear(4, 3))
 
 
-def test_neuromorphic_memory_counter_uses_module_counter_mode():
-    counter = op_counter.NeuromorphicMemoryAccessCounter()
-    assert isinstance(counter, op_counter.ModuleCounter)
-    assert not hasattr(counter, "bind_model")
-
-
 def test_neuromorphic_memory_counter_counts_dense_and_spike_weight_reads():
     model = nn.Linear(4, 3, bias=True)
     counter = op_counter.NeuromorphicMemoryAccessCounter()

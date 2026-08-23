@@ -474,7 +474,7 @@ class _LemaireCounter(ModuleCounter):
                 self._warn_or_raise_unsupported(module)
 
     def record(self, scope: str, func: Any, value: int) -> None:
-        del scope, func, value
+        pass
 
 
 class LemaireEnergyProfiler:

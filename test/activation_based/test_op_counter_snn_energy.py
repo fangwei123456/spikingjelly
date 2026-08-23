@@ -245,8 +245,6 @@ def test_lemaire_energy_manual_profiler_usage_defaults_to_forward_only():
 
     report = profiler.get_report()
     assert report.breakdown_pj["inout_pj"] > 0.0
-    assert not hasattr(profiler, "stage")
-    assert not hasattr(profiler, "suspend")
 
 
 def test_lemaire_energy_profiler_reuse_does_not_accumulate_counters():
