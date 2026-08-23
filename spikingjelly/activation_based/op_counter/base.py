@@ -1,5 +1,6 @@
 from spikingjelly.logger import logger
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 import torch
@@ -16,10 +17,70 @@ _arrow = chr(0x2937)
 __all__ = [
     "ActiveModuleTracker",
     "BaseCounter",
+    "ModuleCounter",
+    "EnergyModelInfo",
     "is_binary_tensor",
     "DispatchCounterMode",
     "FunctionCounterMode",
+    "ModuleCounterMode",
 ]
+
+
+@dataclass(frozen=True)
+class EnergyModelInfo:
+    r"""
+    **API Language** - :ref:`中文 <EnergyModelInfo-cn>` |
+    :ref:`English <EnergyModelInfo-en>`
+
+    ----
+
+    .. _EnergyModelInfo-cn:
+
+    * **中文**
+
+    描述能耗模型的来源、复刻程度和适用口径。
+
+    :param model_id: 稳定模型标识
+    :type model_id: str
+    :param fidelity: 复刻类别，例如 ``paper`` 或 ``reference-code``
+    :type fidelity: str
+    :param source_urls: 论文或作者代码链接
+    :type source_urls: tuple[str, ...]
+    :param technology_nm: 工艺节点；未知时为 ``None``
+    :type technology_nm: Optional[int]
+    :param precision: 算术与存储精度说明
+    :type precision: str
+    :param scope: 模型覆盖的硬件和执行范围
+    :type scope: str
+
+    ----
+
+    .. _EnergyModelInfo-en:
+
+    * **English**
+
+    Describes an energy model's source, fidelity, and applicability.
+
+    :param model_id: Stable model identifier
+    :type model_id: str
+    :param fidelity: Fidelity category such as ``paper`` or ``reference-code``
+    :type fidelity: str
+    :param source_urls: Paper or author-code URLs
+    :type source_urls: tuple[str, ...]
+    :param technology_nm: Technology node, or ``None`` when unspecified
+    :type technology_nm: Optional[int]
+    :param precision: Arithmetic and storage precision
+    :type precision: str
+    :param scope: Covered hardware and execution scope
+    :type scope: str
+    """
+
+    model_id: str
+    fidelity: str
+    source_urls: tuple[str, ...]
+    technology_nm: Optional[int]
+    precision: str
+    scope: str
 
 
 _OPTIMIZER_HINTS = (
@@ -253,7 +314,7 @@ class BaseCounter:
 
         - :attr:`records`: 存储计数记录，结构为 ``dict[scope][operation] = count``
         - :attr:`rules`: 定义如何计算各个操作的计数的函数
-        - :attr:`ignore_modules`: 需要忽略的模块列表，这些模块中的操作不会被计数
+        - :attr:`ignore_modules`: 需要忽略的模块类型列表，这些模块中的操作不会被计数
 
         子类需要实现具体的规则 ``rules`` 来定义如何计算特定操作的计数。
 
@@ -270,16 +331,16 @@ class BaseCounter:
 
         - :attr:`records`: stores count records, structured as ``dict[scope][operation] = count``
         - :attr:`rules`: functions that define how to calculate counts for each operation
-        - :attr:`ignore_modules`: list of modules to ignore. Operations within these modules will not be counted
+        - :attr:`ignore_modules`: module types to ignore. Operations within these modules will not be counted
 
         Subclasses need to implement specific rule functions in :attr:`rules` to define
         how to calculate counts for particular operations.
         """
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {}
-        self.ignore_modules: list[nn.Module] = []
+        self.ignore_modules: list[type[nn.Module]] = []
 
-    def has_rule(self, func) -> bool:
+    def has_rule(self, func: Any) -> bool:
         r"""
         **API Language** - :ref:`中文 <BaseCounter.has_rule-cn>` | :ref:`English <BaseCounter.has_rule-en>`
 
@@ -312,10 +373,10 @@ class BaseCounter:
 
     def count(
         self,
-        func,
+        func: Any,
         args: tuple,
         kwargs: dict,
-        out,
+        out: Any,
         active_modules: Optional[set[nn.Module]] = None,
         parent_names: Optional[set[str]] = None,
     ) -> int:
@@ -386,7 +447,7 @@ class BaseCounter:
         """
         return int(self.rules[func](args, kwargs, out))
 
-    def record(self, scope, func, value):
+    def record(self, scope: str, func: Any, value: int) -> None:
         r"""
         **API Language** - :ref:`中文 <BaseCounter.record-cn>` | :ref:`English <BaseCounter.record-en>`
 
@@ -475,7 +536,7 @@ class BaseCounter:
         """
         return sum(self.records["Global"].values())
 
-    def reset(self):
+    def reset(self) -> None:
         r"""
         **API Language** - :ref:`中文 <BaseCounter.reset-cn>` | :ref:`English <BaseCounter.reset-en>`
 
@@ -506,45 +567,309 @@ class BaseCounter:
         self.records = defaultdict(lambda: defaultdict(int))
 
 
+class ModuleCounter(BaseCounter):
+    def __init__(self) -> None:
+        r"""
+        **API Language** - :ref:`中文 <ModuleCounter.__init__-cn>` | :ref:`English <ModuleCounter.__init__-en>`
+
+        ----
+
+        .. _ModuleCounter.__init__-cn:
+
+        * **中文**
+
+        基于实际 ``nn.Module`` 调用的计数器基类。规则键为
+        ``("forward" | "backward", module_type)``，规则函数接收
+        ``(module, args, kwargs, out)`` 并返回整数计数。
+
+        ----
+
+        .. _ModuleCounter.__init__-en:
+
+        * **English**
+
+        Base counter for executed ``nn.Module`` calls. Rule keys are
+        ``("forward" | "backward", module_type)``. Each rule receives
+        ``(module, args, kwargs, out)`` and returns an integer count.
+        """
+        super().__init__()
+
+    def _rule_key(self, event: tuple[str, nn.Module]) -> tuple[str, type[nn.Module]]:
+        phase, module = event
+        for module_type in type(module).__mro__:
+            key = (phase, module_type)
+            if key in self.rules:
+                return key
+        raise KeyError(event)
+
+    def has_rule(self, event: Any) -> bool:
+        r"""
+        **API Language** - :ref:`中文 <ModuleCounter.has_rule-cn>` |
+        :ref:`English <ModuleCounter.has_rule-en>`
+
+        ----
+
+        .. _ModuleCounter.has_rule-cn:
+
+        * **中文**
+
+        判断 module event 是否匹配当前类型或其基类规则。
+
+        :param event: ``(phase, module)`` event
+        :type event: Any
+        :return: 是否存在匹配规则
+        :rtype: bool
+
+        ----
+
+        .. _ModuleCounter.has_rule-en:
+
+        * **English**
+
+        Check whether a module event matches a rule for its type or a base type.
+
+        :param event: ``(phase, module)`` event
+        :type event: Any
+        :return: Whether a matching rule exists
+        :rtype: bool
+        """
+        if not (
+            isinstance(event, tuple)
+            and len(event) == 2
+            and event[0] in {"forward", "backward"}
+            and isinstance(event[1], nn.Module)
+        ):
+            return False
+        try:
+            self._rule_key(event)
+        except KeyError:
+            return False
+        return True
+
+    def count(
+        self,
+        func: Any,
+        args: tuple,
+        kwargs: dict,
+        out: Any,
+        active_modules: Optional[set[nn.Module]] = None,
+        parent_names: Optional[set[str]] = None,
+    ) -> int:
+        r"""
+        **API Language** - :ref:`中文 <ModuleCounter.count-cn>` |
+        :ref:`English <ModuleCounter.count-en>`
+
+        ----
+
+        .. _ModuleCounter.count-cn:
+
+        * **中文**
+
+        调用与 module event 匹配的最具体规则。
+
+        :param func: ``(phase, module)`` event
+        :type func: Any
+        :param args: module hook 的位置参数
+        :type args: tuple
+        :param kwargs: module hook 的关键字参数
+        :type kwargs: dict
+        :param out: forward 输出或 backward gradient 输出
+        :type out: Any
+        :param active_modules: 当前 module 作用域；基础实现不使用
+        :type active_modules: Optional[set[torch.nn.Module]]
+        :param parent_names: 当前作用域名称；基础实现不使用
+        :type parent_names: Optional[set[str]]
+        :return: 本次 event 的整数计数
+        :rtype: int
+
+        ----
+
+        .. _ModuleCounter.count-en:
+
+        * **English**
+
+        Invoke the most specific rule matching a module event.
+
+        :param func: ``(phase, module)`` event
+        :type func: Any
+        :param args: Positional module-hook arguments
+        :type args: tuple
+        :param kwargs: Keyword module-hook arguments
+        :type kwargs: dict
+        :param out: Forward output or backward gradient output
+        :type out: Any
+        :param active_modules: Active module scope; unused by the base implementation
+        :type active_modules: Optional[set[torch.nn.Module]]
+        :param parent_names: Active scope names; unused by the base implementation
+        :type parent_names: Optional[set[str]]
+        :return: Integer count for this event
+        :rtype: int
+        """
+        phase, module = func
+        rule = self.rules[self._rule_key((phase, module))]
+        return int(rule(module, args, kwargs, out))
+
+    def record(self, scope: str, func: Any, value: int) -> None:
+        r"""
+        **API Language** - :ref:`中文 <ModuleCounter.record-cn>` |
+        :ref:`English <ModuleCounter.record-en>`
+
+        ----
+
+        .. _ModuleCounter.record-cn:
+
+        * **中文**
+
+        按匹配后的 ``(phase, module_type)`` 规则键记录计数。
+
+        :param scope: module 作用域名称
+        :type scope: str
+        :param func: ``(phase, module)`` event
+        :type func: Any
+        :param value: 本次 event 的计数
+        :type value: int
+
+        ----
+
+        .. _ModuleCounter.record-en:
+
+        * **English**
+
+        Record a count under the resolved ``(phase, module_type)`` rule key.
+
+        :param scope: Module scope name
+        :type scope: str
+        :param func: ``(phase, module)`` event
+        :type func: Any
+        :param value: Count for this event
+        :type value: int
+        """
+        self.records[scope][self._rule_key(func)] += value
+
+
 class _CounterMode:
     def __init__(self, counters: list[BaseCounter], strict: bool = False):
         super().__init__()
         self.counters = counters
         self.strict = strict
-        self.module_tracker = ActiveModuleTracker()
+        self._unsupported: dict[BaseCounter, dict[str, int]] = {}
 
     def __enter__(self):
+        self._unsupported = {counter: {} for counter in self.counters}
         self.module_tracker.__enter__()
-        return super().__enter__()
+        try:
+            super().__enter__()
+        except BaseException:
+            self.module_tracker.__exit__(None, None, None)
+            raise
+        return self
 
     def __exit__(self, *args):
-        ret = super().__exit__(*args)
-        self.module_tracker.__exit__(*args)
-        return ret
+        try:
+            return super().__exit__(*args)
+        finally:
+            self.module_tracker.__exit__(*args)
 
-    def _should_skip(self, counter, func) -> bool:
+    def get_unsupported(self, counter: BaseCounter) -> dict[str, int]:
+        r"""
+        **API Language** - :ref:`中文 <CounterMode.get_unsupported-cn>` |
+        :ref:`English <CounterMode.get_unsupported-en>`
+
+        ----
+
+        .. _CounterMode.get_unsupported-cn:
+
+        * **中文**
+
+        返回指定计数器在最近一次 context 中跳过的目标及调用次数。
+
+        :param counter: 已传入本 context 的计数器
+        :type counter: BaseCounter
+        :return: 以算子、函数或 module event 名称为键的调用次数
+        :rtype: dict[str, int]
+        :raises ValueError: 当 ``counter`` 不属于本 context 时抛出
+
+        ----
+
+        .. _CounterMode.get_unsupported-en:
+
+        * **English**
+
+        Return subjects skipped by ``counter`` in the latest context and their
+        call counts.
+
+        :param counter: A counter passed to this mode
+        :type counter: BaseCounter
+        :return: Call counts keyed by operator, function, or module-event name
+        :rtype: dict[str, int]
+        :raises ValueError: Raised when ``counter`` does not belong to this mode
+        """
+        if counter not in self._unsupported:
+            raise ValueError("counter does not belong to this counter mode")
+        return dict(self._unsupported[counter])
+
+    @staticmethod
+    def _subject_name(subject: Any) -> str:
+        if (
+            isinstance(subject, tuple)
+            and len(subject) == 2
+            and isinstance(subject[1], nn.Module)
+        ):
+            phase, module = subject
+            module_type = type(module)
+            return f"{phase}:{module_type.__module__}.{module_type.__qualname__}"
+        return resolve_name(subject)
+
+    def _should_skip(
+        self,
+        counter: BaseCounter,
+        func: Any,
+        active_modules: Optional[set[nn.Module]] = None,
+    ) -> bool:
+        active_modules = (
+            self.module_tracker.active_modules
+            if active_modules is None
+            else active_modules
+        )
         if any(
             isinstance(module, tuple(counter.ignore_modules))
-            for module in self.module_tracker.active_modules
+            for module in active_modules
         ):
             logger.debug("{} ignored by {}", _arrow, counter.__class__.__name__)
             return True
         if counter.has_rule(func):
             return False
+        subject_name = self._subject_name(func)
+        unsupported = self._unsupported[counter]
+        unsupported[subject_name] = unsupported.get(subject_name, 0) + 1
         if self.strict:
             raise NotImplementedError(
-                f"{type(self).__name__}: {self.module_tracker.parents} - "
-                f"{resolve_name(func)} not defined by {counter.__class__.__name__}. "
+                f"{type(self).__name__}: {subject_name} not defined by "
+                f"{counter.__class__.__name__}. "
                 "To disable this error, set strict=False."
             )
         logger.debug("{} not defined by {}", _arrow, counter.__class__.__name__)
         return True
 
-    def _record_counts(self, func, args, kwargs, out):
-        active_modules = set(self.module_tracker.active_modules)
-        parent_names = set(self.module_tracker.parents)
+    def _record_counts(
+        self,
+        func: Any,
+        args: tuple,
+        kwargs: dict,
+        out: Any,
+        active_modules: Optional[set[nn.Module]] = None,
+        parent_names: Optional[set[str]] = None,
+    ) -> None:
+        active_modules = (
+            set(self.module_tracker.active_modules)
+            if active_modules is None
+            else active_modules
+        )
+        parent_names = (
+            set(self.module_tracker.parents) if parent_names is None else parent_names
+        )
         for counter in self.counters:
-            if self._should_skip(counter, func):
+            if self._should_skip(counter, func, active_modules):
                 continue
             value = counter.count(
                 func,
@@ -559,6 +884,128 @@ class _CounterMode:
                 counter.record(parent, func, value)
             if hasattr(counter, "finalize_record"):
                 counter.finalize_record()
+
+
+class ModuleCounterMode(_CounterMode):
+    def __init__(
+        self,
+        counters: list[ModuleCounter],
+        *,
+        model: nn.Module,
+        strict: bool = False,
+    ) -> None:
+        r"""
+        **API Language** - :ref:`中文 <ModuleCounterMode.__init__-cn>` | :ref:`English <ModuleCounterMode.__init__-en>`
+
+        ----
+
+        .. _ModuleCounterMode.__init__-cn:
+
+        * **中文**
+
+        基于 module forward/full-backward hook 的计数上下文。它只为至少一个
+        counter 注册了规则的 module 和执行阶段安装 hook。
+
+        :param counters: module 计数器列表
+        :type counters: list[ModuleCounter]
+        :param model: 被统计模型
+        :type model: torch.nn.Module
+        :param strict: 遇到 counter 未覆盖的已匹配 module event 时是否报错
+        :type strict: bool
+
+        ----
+
+        .. _ModuleCounterMode.__init__-en:
+
+        * **English**
+
+        Counting context based on module forward and full-backward hooks. Hooks
+        are installed only for module phases covered by at least one counter.
+
+        :param counters: Module counters
+        :type counters: list[ModuleCounter]
+        :param model: Model to profile
+        :type model: torch.nn.Module
+        :param strict: Whether an uncovered matched module event raises
+        :type strict: bool
+        """
+        super().__init__(counters, strict)
+        self.model = model
+        self._handles: list[Any] = []
+        self._scopes: dict[nn.Module, tuple[set[nn.Module], set[str]]] = {}
+        self._active = False
+
+    def _build_scopes(self) -> None:
+        named_modules = dict(self.model.named_modules())
+        root_name = type(self.model).__name__
+        for name, module in named_modules.items():
+            active_modules = {self.model}
+            parent_names = {"Global", root_name}
+            if name:
+                parts = name.split(".")
+                for end in range(1, len(parts) + 1):
+                    parent_name = ".".join(parts[:end])
+                    parent_names.add(f"{root_name}.{parent_name}")
+                    active_modules.add(named_modules[parent_name])
+            self._scopes[module] = active_modules, parent_names
+
+    def _forward_hook(self, module, args, kwargs, out) -> None:
+        active_modules, parent_names = self._scopes[module]
+        self._record_counts(
+            ("forward", module),
+            args,
+            kwargs,
+            out,
+            active_modules=active_modules,
+            parent_names=parent_names,
+        )
+
+    def _backward_hook(self, module, grad_input, grad_output) -> None:
+        active_modules, parent_names = self._scopes[module]
+        self._record_counts(
+            ("backward", module),
+            grad_input,
+            {},
+            grad_output,
+            active_modules=active_modules,
+            parent_names=parent_names,
+        )
+
+    def __enter__(self) -> "ModuleCounterMode":
+        if self._active:
+            raise RuntimeError("ModuleCounterMode is already active.")
+        self._active = True
+        self._unsupported = {counter: {} for counter in self.counters}
+        try:
+            self._build_scopes()
+            for module in self.model.modules():
+                if any(
+                    counter.has_rule(("forward", module)) for counter in self.counters
+                ):
+                    self._handles.append(
+                        module.register_forward_hook(
+                            self._forward_hook,
+                            with_kwargs=True,
+                        )
+                    )
+                if any(
+                    counter.has_rule(("backward", module)) for counter in self.counters
+                ):
+                    self._handles.append(
+                        module.register_full_backward_hook(self._backward_hook)
+                    )
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        try:
+            for handle in self._handles:
+                handle.remove()
+        finally:
+            self._handles.clear()
+            self._active = False
 
 
 class DispatchCounterMode(_CounterMode, TorchDispatchMode):
@@ -657,6 +1104,7 @@ class DispatchCounterMode(_CounterMode, TorchDispatchMode):
             print("FLOP counts:", flop_counter.get_total())
         """
         super().__init__(counters, strict)
+        self.module_tracker = ActiveModuleTracker()
 
     def __torch_dispatch__(self, func, types, args, kwargs):
         kwargs = {} if kwargs is None else kwargs
@@ -699,6 +1147,7 @@ class FunctionCounterMode(_CounterMode, TorchFunctionMode):
         :type strict: bool
         """
         super().__init__(counters, strict)
+        self.module_tracker = ActiveModuleTracker()
 
     def __torch_function__(self, func, types, args=(), kwargs=None):
         kwargs = {} if kwargs is None else kwargs

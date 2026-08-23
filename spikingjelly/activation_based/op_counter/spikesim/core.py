@@ -10,7 +10,7 @@ import torch.nn as nn
 from ...neuron.base_node import BaseNode, SimpleBaseNode
 from ...neuron.integrate_and_fire import IFNode, SimpleIFNode
 from ...neuron.lif import LIFNode, SimpleLIFNode
-from ..base import DispatchCounterMode, call_model
+from ..base import DispatchCounterMode, EnergyModelInfo, call_model
 from .config import SpikeSimEnergyConfig
 from .counter import SpikeSimCounter
 from .formulas import (
@@ -19,11 +19,11 @@ from .formulas import (
 )
 
 __all__ = [
-    "SpikeSimEnergyConfig",
     "SpikeSimCounter",
-    "SpikeSimEnergyReport",
+    "SpikeSimEnergyConfig",
     "SpikeSimEnergyProfiler",
-    "estimate_spikesim_event_energy",
+    "SpikeSimEnergyReport",
+    "estimate_spikesim_energy",
 ]
 
 
@@ -32,6 +32,12 @@ _SUPPORTED_SPIKESIM_NEURONS = (
     LIFNode,
     SimpleIFNode,
     SimpleLIFNode,
+)
+
+_SPIKESIM_SOURCE = (
+    "https://doi.org/10.1109/TCAD.2023.3274918",
+    "https://github.com/Intelligent-Computing-Lab-Panda/SpikeSim/commit/"
+    "c2627bc091a47bdcb630ca6207eaf44a00bd1da4",
 )
 
 
@@ -68,6 +74,27 @@ class SpikeSimEnergyReport:
     字段包括总能耗、stage 分解、统计量、stage 元数据和 warning。
     ``event_stats_by_stage`` 在两种 mode 下都会填充。
 
+    :param energy_total_pj: 总能耗，单位为 pJ
+    :type energy_total_pj: float
+    :param energy_by_stage: 各 stage 总能耗
+    :type energy_by_stage: dict[str, float]
+    :param energy_by_component: 总体和逐 stage 的分项能耗
+    :type energy_by_component: dict[str, Any]
+    :param event_stats_by_stage: 运行时 stage 统计量
+    :type event_stats_by_stage: dict[str, dict[str, Any]]
+    :param stage_metadata: SpikeSim 映射所需的 stage 元数据
+    :type stage_metadata: dict[str, dict[str, Any]]
+    :param warnings: 未支持路径或假设的告警
+    :type warnings: list[str]
+    :param breakdown_pj: 跨 stage 聚合的分项能耗
+    :type breakdown_pj: dict[str, float]
+    :param counts: PE 周期数和 stage 数量
+    :type counts: dict[str, int]
+    :param model_info: 模型来源与适用范围
+    :type model_info: EnergyModelInfo
+    :param config: 生成本报告的配置副本
+    :type config: SpikeSimEnergyConfig
+
     ----
 
     .. _SpikeSimEnergyReport-en:
@@ -80,6 +107,27 @@ class SpikeSimEnergyReport:
     Fields include total energy, stage-wise energy breakdown, event stats,
     stage metadata, and warnings. ``event_stats_by_stage`` is populated
     regardless of the selected activity mode.
+
+    :param energy_total_pj: Total energy in pJ
+    :type energy_total_pj: float
+    :param energy_by_stage: Total energy by stage
+    :type energy_by_stage: dict[str, float]
+    :param energy_by_component: Aggregate and per-stage component energy
+    :type energy_by_component: dict[str, Any]
+    :param event_stats_by_stage: Runtime statistics by stage
+    :type event_stats_by_stage: dict[str, dict[str, Any]]
+    :param stage_metadata: Stage metadata required by the SpikeSim mapping
+    :type stage_metadata: dict[str, dict[str, Any]]
+    :param warnings: Warnings for unsupported paths or assumptions
+    :type warnings: list[str]
+    :param breakdown_pj: Component energy aggregated across stages
+    :type breakdown_pj: dict[str, float]
+    :param counts: PE-cycle and stage counts
+    :type counts: dict[str, int]
+    :param model_info: Model provenance and applicability
+    :type model_info: EnergyModelInfo
+    :param config: Copy of the configuration used for this report
+    :type config: SpikeSimEnergyConfig
     """
 
     energy_total_pj: float
@@ -90,6 +138,8 @@ class SpikeSimEnergyReport:
     warnings: list[str]
     breakdown_pj: dict[str, float]
     counts: dict[str, int]
+    model_info: EnergyModelInfo
+    config: SpikeSimEnergyConfig
 
 
 class SpikeSimEnergyProfiler:
@@ -97,7 +147,7 @@ class SpikeSimEnergyProfiler:
         self,
         *,
         config: SpikeSimEnergyConfig | None = None,
-        strict: bool = False,
+        strict: bool = True,
     ):
         r"""
         .. rubric:: API Language
@@ -118,6 +168,8 @@ class SpikeSimEnergyProfiler:
         - 以 context manager 方式包住一次真实前向传播
         - 结束后调用 ``get_report()`` 获取能耗报告
 
+        每次进入 context 都会清空上一次的统计结果。
+
         :param config: SpikeSim 能耗配置；默认使用 ``SpikeSimEnergyConfig()``
         :param strict: 是否在 unsupported 情况下直接抛异常
 
@@ -133,6 +185,8 @@ class SpikeSimEnergyProfiler:
 
         - wrap one real forward pass in the profiler context
         - call ``get_report()`` afterwards to build the energy report
+
+        Entering the context starts a fresh profiling result.
 
         :param config: SpikeSim energy config; defaults to ``SpikeSimEnergyConfig()``
         :param strict: whether to raise immediately on unsupported behaviors
@@ -152,6 +206,7 @@ class SpikeSimEnergyProfiler:
         self._warnings: list[str] = []
 
     def __enter__(self):
+        self._counter.reset()
         self._dispatch_mode.__enter__()
         return self
 
@@ -173,6 +228,9 @@ class SpikeSimEnergyProfiler:
 
         生成并返回完整的 SpikeSim runtime 能耗报告。
 
+        :return: stage 能耗、统计量、告警和来源信息
+        :rtype: SpikeSimEnergyReport
+
         ----
 
         .. _SpikeSimEnergyProfiler.get_report-en:
@@ -180,6 +238,9 @@ class SpikeSimEnergyProfiler:
         * **English**
 
         Build and return the full runtime SpikeSim energy report.
+
+        :return: Stage energy, statistics, warnings, and provenance
+        :rtype: SpikeSimEnergyReport
         """
         event_stats_by_stage = self._counter.get_stage_stats()
         stage_metadata = self._counter.get_stage_metadata()
@@ -204,13 +265,15 @@ class SpikeSimEnergyProfiler:
                     continue
                 component_totals[key] += value
 
-        warnings = list(self._counter.warnings)
-        warnings = list(self._warnings) + warnings
+        warnings = list(self._warnings) + list(self._counter.warnings)
         if not energy_by_stage:
-            warnings.append(
+            message = (
                 "No supported Conv2d forward inference stages were profiled by "
                 "SpikeSim energy."
             )
+            if self.strict:
+                raise ValueError(message)
+            warnings.append(message)
 
         totals_dict = dict(component_totals)
         total_pj = sum(energy_by_stage.values())
@@ -218,12 +281,6 @@ class SpikeSimEnergyProfiler:
             "dense_pe_cycle_count": int(self._counter.get_total()),
             "stage_count": len(stage_metadata),
         }
-        if self.config.activity_mode == "event":
-            warnings.append(
-                "SpikeSim activity_mode='event' is an experimental sparse runtime "
-                "extension; activity_mode='dense' is the original SpikeSim-aligned "
-                "default."
-            )
         return SpikeSimEnergyReport(
             energy_total_pj=total_pj,
             energy_by_stage=energy_by_stage,
@@ -236,6 +293,23 @@ class SpikeSimEnergyProfiler:
             warnings=warnings,
             breakdown_pj=totals_dict,
             counts=counts,
+            model_info=EnergyModelInfo(
+                model_id=(
+                    "spikesim_c2627bc_dense_v1"
+                    if self.config.activity_mode == "dense"
+                    else "spikingjelly_spikesim_event_v1"
+                ),
+                fidelity=(
+                    "reference-code"
+                    if self.config.activity_mode == "dense"
+                    else "spikingjelly-defined"
+                ),
+                source_urls=_SPIKESIM_SOURCE,
+                technology_nm=65,
+                precision="SpikeSim crossbar and IF/LIF peripheral assumptions",
+                scope="runtime Conv2d inference PE-cycle energy",
+            ),
+            config=self.config.copy(),
         )
 
     def get_total(self) -> float:
@@ -294,22 +368,22 @@ class SpikeSimEnergyProfiler:
         }
 
 
-def estimate_spikesim_event_energy(
+def estimate_spikesim_energy(
     model: nn.Module,
-    inputs,
+    inputs: Any,
     *,
     config: SpikeSimEnergyConfig | None = None,
-    strict: bool = False,
+    strict: bool = True,
 ) -> SpikeSimEnergyReport:
     r"""
     .. rubric:: API Language
 
-    :ref:`中文 <estimate_spikesim_event_energy-cn>` |
-    :ref:`English <estimate_spikesim_event_energy-en>`
+    :ref:`中文 <estimate_spikesim_energy-cn>` |
+    :ref:`English <estimate_spikesim_energy-en>`
 
     ----
 
-    .. _estimate_spikesim_event_energy-cn:
+    .. _estimate_spikesim_energy-cn:
 
     * **中文**
 
@@ -318,13 +392,19 @@ def estimate_spikesim_event_energy(
     该函数会执行一次真实前向传播并返回能耗报告。
 
     :param model: 待统计模型
+    :type model: torch.nn.Module
     :param inputs: 模型输入；若为 tuple/list 则按 ``model(*inputs)`` 调用
+    :type inputs: Any
     :param config: SpikeSim 能耗配置
+    :type config: SpikeSimEnergyConfig | None
     :param strict: 是否在 unsupported 情况下直接抛异常
+    :type strict: bool
+    :return: SpikeSim runtime 能耗报告
+    :rtype: SpikeSimEnergyReport
 
     ----
 
-    .. _estimate_spikesim_event_energy-en:
+    .. _estimate_spikesim_energy-en:
 
     * **English**
 
@@ -332,10 +412,16 @@ def estimate_spikesim_event_energy(
     It runs one real forward pass and returns the energy report.
 
     :param model: model to profile
+    :type model: torch.nn.Module
     :param inputs: model input; tuple/list will be passed as
         ``model(*inputs)``
+    :type inputs: Any
     :param config: SpikeSim energy config
+    :type config: SpikeSimEnergyConfig | None
     :param strict: whether to raise immediately on unsupported behaviors
+    :type strict: bool
+    :return: Runtime SpikeSim energy report
+    :rtype: SpikeSimEnergyReport
 
     """
     profiler = SpikeSimEnergyProfiler(config=config, strict=strict)

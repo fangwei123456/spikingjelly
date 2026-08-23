@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from math import prod
 from typing import Any
 
@@ -9,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ..neuron.base_node import BaseNode
-from .base import is_binary_tensor
+from .base import ModuleCounter, is_binary_tensor
 
 __all__ = ["NeuromorphicMemoryAccessCounter"]
 
@@ -23,38 +22,64 @@ _MEMORY_METRICS = (
 _SYNAPTIC_MODULES = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)
 
 
-def _spike_conv_weight_uses(module: nn.Module, x: torch.Tensor) -> int:
-    if getattr(module, "step_mode", "s") == "m":
-        x = x.flatten(0, 1)
-    padding = module.padding
+def _spike_conv_weight_uses_from_tensors(
+    x: torch.Tensor,
+    w: torch.Tensor,
+    stride,
+    padding,
+    dilation,
+    groups: int,
+) -> int:
     with (
         torch.no_grad(),
         torch._C._ExcludeDispatchKeyGuard(
             torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
         ),
     ):
-        x = x.double()
-        if isinstance(padding, str) or module.padding_mode != "zeros":
-            mode = (
-                "constant" if module.padding_mode == "zeros" else module.padding_mode
-            )
-            x = F.pad(x, module._reversed_padding_repeated_twice, mode)
-            padding = tuple(0 for _ in module.stride)
-        out = torch.ops.aten.convolution.default(
-            x,
-            torch.ones_like(module.weight, dtype=torch.float64),
-            None,
-            module.stride,
-            padding,
-            module.dilation,
-            False,
-            tuple(0 for _ in module.stride),
-            module.groups,
+        group_kernel = torch.ones(
+            (groups, w.shape[1], *w.shape[2:]),
+            dtype=torch.float32,
+            device=x.device,
         )
-    return int(out.sum().item())
+        occupancy = torch.ops.aten.convolution.default(
+            x.float(),
+            group_kernel,
+            None,
+            stride,
+            padding,
+            dilation,
+            False,
+            tuple(0 for _ in stride),
+            groups,
+        )
+    return int(occupancy.sum(dtype=torch.float64).item()) * (int(w.shape[0]) // groups)
 
 
-class NeuromorphicMemoryAccessCounter:
+def _spike_conv_weight_uses(module: nn.Module, x: torch.Tensor) -> int:
+    if getattr(module, "step_mode", "s") == "m":
+        x = x.flatten(0, 1)
+    padding = module.padding
+    if isinstance(padding, str) or module.padding_mode != "zeros":
+        mode = "constant" if module.padding_mode == "zeros" else module.padding_mode
+        with (
+            torch.no_grad(),
+            torch._C._ExcludeDispatchKeyGuard(
+                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
+            ),
+        ):
+            x = F.pad(x, module._reversed_padding_repeated_twice, mode)
+        padding = tuple(0 for _ in module.stride)
+    return _spike_conv_weight_uses_from_tensors(
+        x,
+        module.weight,
+        module.stride,
+        padding,
+        module.dilation,
+        module.groups,
+    )
+
+
+class NeuromorphicMemoryAccessCounter(ModuleCounter):
     def __init__(
         self,
         *,
@@ -102,38 +127,29 @@ class NeuromorphicMemoryAccessCounter:
         :param extra_ignore_modules: Additional module types excluded from counting
         :type extra_ignore_modules: Optional[list[type[torch.nn.Module]]]
         """
-        self.extra_ignore_modules = tuple(extra_ignore_modules or ())
-        self.model: nn.Module | None = None
-        self._module_names: dict[nn.Module, str] = {}
-        self._handles: list[Any] = []
-        self._records: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-
-    def bind_model(self, model: nn.Module) -> None:
-        r"""
-        绑定待统计模型。Bind the model to be counted.
-
-        :param model: 待统计模型 / Model to profile
-        :type model: torch.nn.Module
-        """
-        self.model = model
-        self._module_names = {
-            module: name or module.__class__.__name__
-            for name, module in model.named_modules()
+        super().__init__()
+        self.ignore_modules.extend(extra_ignore_modules or [])
+        self.rules = {
+            **{
+                ("forward", module_type): self._count_synaptic
+                for module_type in _SYNAPTIC_MODULES
+            },
+            ("forward", BaseNode): self._count_neuron,
         }
+        self._pending_metrics: dict[str, int] = {}
 
-    def _record(self, module: nn.Module, **metrics: int) -> None:
-        scope = self._module_names[module]
-        for name, value in metrics.items():
-            self._records["Global"][name] += value
-            self._records[scope][name] += value
-
-    def _synaptic_hook(
+    def _count_synaptic(
         self,
         module: nn.Module,
         inputs: tuple[torch.Tensor, ...],
+        kwargs: dict[str, Any],
         output: torch.Tensor,
-    ) -> None:
-        x = inputs[0]
+    ) -> int:
+        x = (
+            inputs[0]
+            if inputs
+            else next(value for value in kwargs.values() if torch.is_tensor(value))
+        )
         if is_binary_tensor(x):
             if isinstance(module, nn.Linear):
                 weight_uses = int(x.count_nonzero().item()) * module.out_features
@@ -144,64 +160,52 @@ class NeuromorphicMemoryAccessCounter:
         else:
             weight_uses = int(output.numel()) * int(prod(module.weight.shape[1:]))
 
-        self._record(
-            module,
-            weight_read_bytes=weight_uses * int(module.weight.element_size()),
-            bias_read_bytes=(
+        self._pending_metrics = {
+            "weight_read_bytes": weight_uses * int(module.weight.element_size()),
+            "bias_read_bytes": (
                 0
                 if module.bias is None
                 else int(output.numel()) * int(module.bias.element_size())
             ),
-        )
+        }
+        return sum(self._pending_metrics.values())
 
-    def _neuron_hook(
-        self, module: BaseNode, inputs: tuple[torch.Tensor, ...], output: Any
-    ) -> None:
-        del output
-        time_steps = int(inputs[0].shape[0]) if module.step_mode == "m" else 1
+    def _count_neuron(
+        self,
+        module: BaseNode,
+        inputs: tuple[torch.Tensor, ...],
+        kwargs: dict[str, Any],
+        output: Any,
+    ) -> int:
+        x = (
+            inputs[0]
+            if inputs
+            else next(value for value in kwargs.values() if torch.is_tensor(value))
+        )
+        time_steps = int(x.shape[0]) if module.step_mode == "m" else 1
         state_bytes = sum(
             int(state.numel()) * int(state.element_size())
             for state in module.memories()
             if torch.is_tensor(state)
         )
         state_bytes *= time_steps
-        self._record(
-            module,
-            neuron_state_read_bytes=state_bytes,
-            neuron_state_write_bytes=state_bytes,
-        )
-
-    def __enter__(self) -> "NeuromorphicMemoryAccessCounter":
-        if self.model is None:
-            raise RuntimeError(
-                "NeuromorphicMemoryAccessCounter.bind_model() must be called "
-                "before entering the counter context."
-            )
-        self.reset()
-        ignored_modules = {
-            child
-            for module in self.model.modules()
-            if isinstance(module, self.extra_ignore_modules)
-            for child in module.modules()
+        self._pending_metrics = {
+            "neuron_state_read_bytes": state_bytes,
+            "neuron_state_write_bytes": state_bytes,
         }
-        for module in self.model.modules():
-            if module in ignored_modules:
-                continue
-            if isinstance(module, _SYNAPTIC_MODULES):
-                self._handles.append(module.register_forward_hook(self._synaptic_hook))
-            elif isinstance(module, BaseNode):
-                self._handles.append(module.register_forward_hook(self._neuron_hook))
-        return self
+        return sum(self._pending_metrics.values())
 
-    def __exit__(self, exc_type, exc, tb) -> None:
-        del exc_type, exc, tb
-        for handle in self._handles:
-            handle.remove()
-        self._handles.clear()
+    def record(self, scope: str, func: Any, value: int) -> None:
+        for name, metric_value in self._pending_metrics.items():
+            self.records[scope][name] += metric_value
+
+    def finalize_record(self) -> None:
+        self._pending_metrics.clear()
 
     def reset(self) -> None:
         r"""重置全部计数。Reset all counts."""
-        self._records = defaultdict(lambda: defaultdict(int))
+        super().reset()
+        self._pending_metrics.clear()
 
     def get_counts(self) -> dict[str, dict[str, int]]:
         r"""
@@ -214,7 +218,7 @@ class NeuromorphicMemoryAccessCounter:
         """
         return {
             scope: {metric: values.get(metric, 0) for metric in _MEMORY_METRICS}
-            for scope, values in self._records.items()
+            for scope, values in self.records.items()
         }
 
     def get_total(self) -> int:
@@ -224,4 +228,4 @@ class NeuromorphicMemoryAccessCounter:
         :return: 全局访存字节总数 / Global total bytes
         :rtype: int
         """
-        return sum(self._records.get("Global", {}).values())
+        return sum(self.records.get("Global", {}).values())

@@ -23,6 +23,9 @@ def test_lemaire_energy_report_uses_single_authoritative_total():
     )
     assert report.breakdown_pj["addressing_pj"] >= 0.0
     assert report.breakdown_pj["inout_pj"] > 0.0
+    assert report.model_info.model_id == "lemaire_2022_runtime_v1"
+    assert report.model_info.fidelity == "paper"
+    assert report.config.snn_fifo_capacity_elements == 1000
 
 
 def test_lemaire_energy_charges_spike_synops_once_through_ac():
@@ -40,6 +43,31 @@ def test_lemaire_energy_charges_spike_synops_once_through_ac():
     assert report.counts["synop"] == 6
     assert report.counts["ac"] == 6
     assert report.breakdown_pj["ops_pj"] == pytest.approx(6.0)
+
+
+@pytest.mark.parametrize(
+    ("node", "expected_mac"), ((neuron.IFNode(), 0), (neuron.LIFNode(), 3))
+)
+def test_lemaire_runtime_counts_follow_paper_if_lif_buckets(node, expected_mac):
+    linear = nn.Linear(4, 3, bias=False)
+    with torch.no_grad():
+        linear.weight.fill_(0.1)
+    model = nn.Sequential(linear, node).eval()
+    cost = op_counter.LemaireEnergyCostConfig(
+        e_add_pj=1.0,
+        e_mul_pj=1.0,
+        memory_breakpoints=((0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0)),
+    )
+
+    report = op_counter.estimate_lemaire_energy(
+        model,
+        torch.tensor([[1.0, 0.0, 1.0, 0.0]]),
+        config=op_counter.LemaireEnergyConfig(cost_config=cost),
+    )
+
+    assert report.counts["ac"] == 6
+    assert report.counts["mac"] == expected_mac
+    assert report.breakdown_pj["ops_pj"] == pytest.approx(6 + expected_mac * 2)
 
 
 def test_lemaire_energy_profiler_bind_model_rejects_non_torch_backend_when_strict():
@@ -65,6 +93,18 @@ def test_lemaire_energy_strict_profiles_supported_linear():
     assert report.counts["read_params_bytes"] == 6 * 4
 
 
+def test_lemaire_energy_supports_keyword_module_inputs():
+    x = torch.tensor([[1.0, 0.0, 1.0, 0.0]])
+
+    linear_report = op_counter.estimate_lemaire_energy(
+        nn.Linear(4, 3, bias=False), {"input": x}
+    )
+    neuron_report = op_counter.estimate_lemaire_energy(neuron.IFNode(), {"x": x})
+
+    assert linear_report.counts["synop"] == 6
+    assert neuron_report.counts["write_potential_bytes"] == x.numel() * 4
+
+
 def test_lemaire_energy_profiler_bind_model_warns_non_torch_backend_when_not_strict():
     model = neuron.IFNode()
     model._backend = "triton"
@@ -74,6 +114,23 @@ def test_lemaire_energy_profiler_bind_model_warns_non_torch_backend_when_not_str
 
     with pytest.warns(RuntimeWarning, match="only supports torch backend"):
         profiler.bind_model(model)
+
+
+def test_lemaire_energy_profiler_rebind_clears_old_backend_warning():
+    unsupported = neuron.IFNode()
+    unsupported._backend = "triton"
+    profiler = op_counter.LemaireEnergyProfiler(
+        config=op_counter.LemaireEnergyConfig(strict=False)
+    )
+    with pytest.warns(RuntimeWarning, match="only supports torch backend"):
+        profiler.bind_model(unsupported)
+
+    model = nn.Linear(4, 2, bias=False)
+    profiler.bind_model(model)
+    with profiler:
+        model(torch.rand(1, 4))
+
+    assert profiler.get_report().warnings == []
 
 
 def test_lemaire_energy_conv_inference_report_has_memory_and_addressing():
@@ -159,17 +216,17 @@ def test_lemaire_energy_binary_conv_uses_paper_event_fanout():
     )
 
 
-def test_lemaire_energy_binary_conv_uses_actual_border_fanout():
+def test_lemaire_energy_binary_conv_uses_paper_fanout_at_borders():
     model = nn.Conv2d(1, 1, kernel_size=3, padding=1, bias=False)
     x = torch.zeros(1, 1, 3, 3)
     x[0, 0, 0, 0] = 1.0
 
     report = op_counter.estimate_lemaire_energy(model, x)
 
-    assert report.counts["synop"] == 4
-    assert report.counts["read_params_bytes"] == 4 * 4
-    assert report.counts["read_potential_bytes"] == 4 * 4
-    assert report.counts["write_potential_bytes"] == 4 * 4
+    assert report.counts["synop"] == 9
+    assert report.counts["read_params_bytes"] == 9 * 4
+    assert report.counts["read_potential_bytes"] == 9 * 4
+    assert report.counts["write_potential_bytes"] == 9 * 4
 
 
 def test_lemaire_energy_conv_transpose_sparse_input_falls_back_with_warning():
@@ -177,7 +234,9 @@ def test_lemaire_energy_conv_transpose_sparse_input_falls_back_with_warning():
     x = torch.zeros(1, 2, 5, 5)
     x[:, 0, 1, 1] = 0.25
 
-    report = op_counter.estimate_lemaire_energy(model, x)
+    report = op_counter.estimate_lemaire_energy(
+        model, x, config=op_counter.LemaireEnergyConfig(strict=False)
+    )
 
     assert any("ConvTranspose2d" in message for message in report.warnings)
 
@@ -203,8 +262,6 @@ def test_lemaire_energy_manual_profiler_usage_defaults_to_forward_only():
 
     report = profiler.get_report()
     assert report.breakdown_pj["inout_pj"] > 0.0
-    assert not hasattr(profiler, "stage")
-    assert not hasattr(profiler, "suspend")
 
 
 def test_lemaire_energy_profiler_reuse_does_not_accumulate_counters():
@@ -225,6 +282,14 @@ def test_lemaire_energy_profiler_reuse_does_not_accumulate_counters():
     assert second_report.counts == first_report.counts
 
 
+def test_lemaire_energy_profiler_rejects_rebinding_while_active():
+    profiler = op_counter.LemaireEnergyProfiler()
+    profiler.bind_model(nn.Linear(4, 3))
+
+    with profiler, pytest.raises(RuntimeError, match="while profiling"):
+        profiler.bind_model(nn.Linear(4, 3))
+
+
 def test_lemaire_energy_cost_config_validates_memory_breakpoints():
     with pytest.raises(ValueError, match="exactly 4"):
         op_counter.LemaireEnergyCostConfig(memory_breakpoints=((0.0, 0.0),))
@@ -232,6 +297,18 @@ def test_lemaire_energy_cost_config_validates_memory_breakpoints():
     with pytest.raises(ValueError, match="strictly increasing"):
         op_counter.LemaireEnergyCostConfig(
             memory_breakpoints=((0.0, 0.0), (1.0, 1.0), (1.0, 2.0), (2.0, 3.0))
+        )
+
+    with pytest.raises(ValueError, match="finite and nonnegative"):
+        op_counter.LemaireEnergyCostConfig(e_add_pj=-1.0)
+    with pytest.raises(ValueError, match="finite and nonnegative"):
+        op_counter.LemaireEnergyCostConfig(
+            memory_breakpoints=(
+                (0.0, 0.0),
+                (1.0, 1.0),
+                (2.0, float("nan")),
+                (3.0, 3.0),
+            )
         )
 
 
@@ -270,22 +347,16 @@ def test_lemaire_energy_prices_parameter_sram_per_layer():
     assert report.breakdown_pj["params_pj"] != pytest.approx(80 * 4)
 
 
-def test_lemaire_addressing_counter_linear_counts_dense_and_binary():
+def test_lemaire_energy_linear_addressing_counts_dense_and_binary():
     model = nn.Linear(8, 4, bias=False)
-    counter = op_counter.LemaireAddressingCounter()
     dense_x = torch.rand(3, 8)
     spike_x = (torch.rand(3, 8) > 0.5).float()
 
-    with op_counter.DispatchCounterMode([counter]):
-        _ = model(dense_x)
-    dense_counts = counter.get_metric_counts()["Global"]
+    dense_counts = op_counter.estimate_lemaire_energy(model, dense_x).counts
     assert dense_counts["mac_addr"] == 0
     assert dense_counts["acc_addr"] == dense_x.numel() + 3 * 4
 
-    counter = op_counter.LemaireAddressingCounter()
-    with op_counter.DispatchCounterMode([counter]):
-        _ = model(spike_x)
-    spike_counts = counter.get_metric_counts()["Global"]
+    spike_counts = op_counter.estimate_lemaire_energy(model, spike_x).counts
     assert spike_counts["mac_addr"] == 0
     assert (
         spike_counts["acc_addr"]
@@ -293,57 +364,70 @@ def test_lemaire_addressing_counter_linear_counts_dense_and_binary():
     )
 
 
-def test_lemaire_addressing_counter_conv_counts_dense_binary_and_grouped():
-    dense_counter = op_counter.LemaireAddressingCounter()
+def test_lemaire_energy_conv_addressing_counts_dense_binary_and_grouped():
     dense_model = nn.Conv2d(2, 4, kernel_size=3, bias=False)
     dense_x = torch.rand(1, 2, 5, 5)
-    with op_counter.DispatchCounterMode([dense_counter]):
-        dense_out = dense_model(dense_x)
-    dense_counts = dense_counter.get_metric_counts()["Global"]
+    dense_out = dense_model(dense_x)
+    dense_counts = op_counter.estimate_lemaire_energy(dense_model, dense_x).counts
     assert dense_counts["mac_addr"] == 0
     assert dense_counts["acc_addr"] == (
         dense_x.numel() + dense_out.numel() + dense_model.out_channels * 9
     )
 
-    grouped_counter = op_counter.LemaireAddressingCounter()
     grouped_model = nn.Conv2d(4, 8, kernel_size=3, bias=False, groups=2)
     spike_x = torch.zeros(1, 4, 5, 5)
     spike_x[:, 0, 1, 1] = 1.0
     spike_x[:, 3, 2, 2] = 1.0
-    with op_counter.DispatchCounterMode([grouped_counter]):
-        _ = grouped_model(spike_x)
-    grouped_counts = grouped_counter.get_metric_counts()["Global"]
+    grouped_counts = op_counter.estimate_lemaire_energy(grouped_model, spike_x).counts
     spike_num_in = int(spike_x.count_nonzero().item())
+    assert grouped_counts["synop"] == spike_num_in * 4 * 9
+    assert grouped_counts["read_params_bytes"] == spike_num_in * 4 * 9 * 4
     assert grouped_counts["mac_addr"] == spike_num_in * 2
     assert grouped_counts["acc_addr"] == (
         spike_num_in * (grouped_model.out_channels // grouped_model.groups) * 9
     )
 
 
-def test_lemaire_addressing_counter_only_counts_supported_modules():
+def test_lemaire_energy_ignores_unsupported_functional_matmul():
     class MatmulWrapper(nn.Module):
         def forward(self, x, y):
             return torch.mm(x, y)
 
     model = MatmulWrapper()
-    counter = op_counter.LemaireAddressingCounter()
+    report = op_counter.estimate_lemaire_energy(
+        model,
+        (torch.rand(3, 8), torch.rand(8, 4)),
+        config=op_counter.LemaireEnergyConfig(strict=False),
+    )
 
-    with op_counter.DispatchCounterMode([counter]):
-        _ = model(torch.rand(3, 8), torch.rand(8, 4))
+    assert report.counts["acc_addr"] == 0
+    assert report.counts["mac_addr"] == 0
+    assert any("MatmulWrapper" in message for message in report.warnings)
 
-    assert counter.get_total() == 0
+
+def test_lemaire_energy_strict_rejects_unknown_leaf_module():
+    with pytest.raises(ValueError, match="ReLU"):
+        op_counter.estimate_lemaire_energy(nn.ReLU(), torch.rand(2, 4))
 
 
-def test_lemaire_energy_linear_inout_uses_runtime_dtype_bytes():
+def test_lemaire_energy_rejects_neurons_outside_paper_scope():
+    model = nn.Sequential(
+        nn.Linear(4, 3, bias=False),
+        neuron.ParametricLIFNode(),
+    ).eval()
+
+    with pytest.raises(ValueError, match="ParametricLIFNode"):
+        op_counter.estimate_lemaire_energy(model, torch.rand(2, 4))
+
+
+def test_lemaire_energy_uses_paper_32bit_access_width():
     model = nn.Linear(8, 4, bias=False).half()
     x = torch.rand(3, 8, dtype=torch.float16)
     report = op_counter.estimate_lemaire_energy(model, x)
 
-    assert report.counts["read_in_bytes"] == x.numel() * x.element_size()
-    assert report.counts["write_out_bytes"] == (3 * 4) * x.element_size()
-    assert report.counts["read_params_bytes"] == (
-        3 * model.weight.numel() * model.weight.element_size()
-    )
+    assert report.counts["read_in_bytes"] == x.numel() * 4
+    assert report.counts["write_out_bytes"] == (3 * 4) * 4
+    assert report.counts["read_params_bytes"] == 3 * model.weight.numel() * 4
 
 
 def test_lemaire_energy_counts_output_spikes_and_potential_accesses():
@@ -368,39 +452,6 @@ def test_lemaire_energy_counts_output_spikes_and_potential_accesses():
         == (event_fanout + base_potential_updates) * 4
     )
     assert report.buffer_sizes_bytes["inout_buffer_bytes"] == 1000 * 4
-
-
-def test_lemaire_energy_config_passes_extra_state_rules_to_counter():
-    calls = {"count": 0}
-
-    class RuleNode(neuron.BaseNode):
-        def __init__(self):
-            super().__init__(v_threshold=1.0, v_reset=None, step_mode="s")
-
-        def neuronal_charge(self, x: torch.Tensor):
-            self.v = self.v + x
-
-        def single_step_functional_forward(self, inputs, states, **kwargs):
-            x = inputs[0]
-            v = states[0]
-            if isinstance(v, float):
-                v = torch.full_like(x, v)
-            return (x,), (v + x,)
-
-    def rule(module, func, args, kwargs, out, state_tensor_keys):
-        del module, func, args, kwargs, out, state_tensor_keys
-        calls["count"] += 1
-        return {"state_reads": 1, "state_writes": 1}
-
-    node = RuleNode()
-    profiler = op_counter.LemaireEnergyProfiler(
-        config=op_counter.LemaireEnergyConfig(extra_state_rules={RuleNode: rule})
-    )
-    profiler.bind_model(node)
-    with profiler:
-        _ = node(torch.rand(2, 4))
-
-    assert calls["count"] > 0
 
 
 def test_neuron_state_counter_still_exposes_scalar_and_structured_views():

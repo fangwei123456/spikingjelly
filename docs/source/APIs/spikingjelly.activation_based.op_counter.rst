@@ -18,9 +18,8 @@ Count one real execution with one or more counters:
 Use the basic counters for runtime counts. Use an energy estimator when you
 need a specific cost model; the estimators are not interchangeable.
 
-Built-in counters register ATen rules and should use ``DispatchCounterMode``.
-Use ``FunctionCounterMode`` only with custom counters whose rules target the
-intercepted ``torch.*`` functions.
+Use ``DispatchCounterMode`` for ATen rules, ``FunctionCounterMode`` for custom
+``torch.*`` rules, and ``ModuleCounterMode`` for module forward/backward rules.
 
 Base Classes and Context Managers
 ++++++++++++++++++++++++++++++++++++++
@@ -83,16 +82,6 @@ Simple Runtime Energy Estimator
 Analytical and Runtime Energy Modules
 ++++++++++++++++++++++++++++++++++++++
 
-.. automodule:: spikingjelly.activation_based.op_counter.lemaire_addressing
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: spikingjelly.activation_based.op_counter.memory_residency
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 .. automodule:: spikingjelly.activation_based.op_counter.neuron_state
    :members:
    :undoc-members:
@@ -111,7 +100,7 @@ NeuroMC Energy Profiler
    :undoc-members:
    :show-inheritance:
 
-SpikeSim Event-Driven Energy Profiler
+SpikeSim Runtime Energy Profiler
 ++++++++++++++++++++++++++++++++++++++
 
 .. automodule:: spikingjelly.activation_based.op_counter.spikesim

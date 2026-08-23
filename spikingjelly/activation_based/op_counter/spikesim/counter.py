@@ -118,6 +118,15 @@ class SpikeSimCounter(BaseCounter):
             aten.convolution.default: self._count_convolution,
         }
 
+    def reset(self) -> None:
+        r"""清空最近一次分析的全部状态。Clear all state from the latest profile."""
+        super().reset()
+        self.stage_stats.clear()
+        self.stage_metadata.clear()
+        self.warnings.clear()
+        self._warning_keys.clear()
+        self._ones_kernel_cache.clear()
+
     def count(
         self,
         func,

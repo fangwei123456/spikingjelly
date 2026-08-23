@@ -104,3 +104,16 @@ def test_ac_ignore():
     total_full = counter_full.get_total()
     total_no_bn = counter_no_bn.get_total()
     assert total_no_bn < total_full
+
+
+def test_ac_preserves_large_transposed_convolution_reduction():
+    size = 192
+    model = nn.ConvTranspose2d(64, 1, kernel_size=3, padding=1, bias=False)
+    x = torch.ones(1, 64, size, size)
+    x[0, 0, size // 2, size // 2] = 0
+    counter = op_counter.ACCounter()
+
+    with op_counter.DispatchCounterMode([counter]):
+        model(x)
+
+    assert counter.get_total() == 64 * (3 * size - 2) ** 2 - 9

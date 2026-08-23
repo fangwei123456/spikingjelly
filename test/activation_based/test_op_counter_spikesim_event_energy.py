@@ -35,7 +35,7 @@ def test_spikesim_event_energy_dense_equivalence():
     model = nn.Conv2d(3, 5, kernel_size=3, padding=0, bias=False).eval()
     x = torch.ones(2, 3, 8, 8)
 
-    report = op_counter.estimate_spikesim_event_energy(model, x, config=config)
+    report = op_counter.estimate_spikesim_energy(model, x, config=config)
 
     out = model(x)
     expected = _dense_stage_energy(
@@ -47,6 +47,26 @@ def test_spikesim_event_energy_dense_equivalence():
     )
     assert len(report.energy_by_stage) == 1
     assert report.energy_total_pj == pytest.approx(expected)
+    assert report.model_info.model_id == "spikesim_c2627bc_dense_v1"
+    assert report.model_info.fidelity == "reference-code"
+    assert report.config.xbar_size == 4
+
+
+def test_spikesim_reference_code_golden_and_profiler_reuse():
+    model = nn.Conv2d(1, 1, kernel_size=3, padding=1, bias=False).eval()
+    x = torch.ones(1, 1, 120, 160)
+    profiler = op_counter.SpikeSimEnergyProfiler()
+
+    with profiler, torch.no_grad():
+        model(x)
+    first = profiler.get_report()
+    with profiler, torch.no_grad():
+        model(x)
+    second = profiler.get_report()
+
+    assert first.counts["dense_pe_cycle_count"] == 19_200
+    assert first.energy_total_pj == pytest.approx(15_906_934.02624)
+    assert second.energy_total_pj == pytest.approx(first.energy_total_pj)
 
 
 def test_spikesim_event_energy_dense_xbar_component_equivalence():
@@ -54,7 +74,7 @@ def test_spikesim_event_energy_dense_xbar_component_equivalence():
     model = nn.Conv2d(5, 4, kernel_size=3, padding=0, bias=False).eval()
     x = torch.ones(2, 5, 8, 8)
 
-    report = op_counter.estimate_spikesim_event_energy(model, x, config=config)
+    report = op_counter.estimate_spikesim_energy(model, x, config=config)
 
     out = model(x)
     stage = next(iter(report.energy_by_stage))
@@ -78,7 +98,7 @@ def test_spikesim_event_energy_sparse_counts_hand_checked():
         ]
     )
 
-    report = op_counter.estimate_spikesim_event_energy(model, x, config=config)
+    report = op_counter.estimate_spikesim_energy(model, x, config=config)
     stage = next(iter(report.event_stats_by_stage))
     stats = report.event_stats_by_stage[stage]
 
@@ -102,11 +122,11 @@ def test_spikesim_event_energy_multi_step_matches_repeated_single_step():
         model_s.weight.copy_(model_m.weight)
 
     x_seq = (torch.rand(3, 2, 3, 8, 8) > 0.7).float()
-    report_m = op_counter.estimate_spikesim_event_energy(model_m, x_seq, config=config)
+    report_m = op_counter.estimate_spikesim_energy(model_m, x_seq, config=config)
 
     total_s = 0.0
     for t in range(x_seq.shape[0]):
-        total_s += op_counter.estimate_spikesim_event_energy(
+        total_s += op_counter.estimate_spikesim_energy(
             model_s, x_seq[t], config=config
         ).energy_total_pj
 
@@ -130,7 +150,7 @@ def test_spikesim_event_energy_mixed_dense_and_event_driven_stages():
 
     model = MixedModel().eval()
     x = torch.rand(2, 3, 8, 8)
-    report = op_counter.estimate_spikesim_event_energy(model, x, config=config)
+    report = op_counter.estimate_spikesim_energy(model, x, config=config)
 
     conv1_stats = report.stage_metadata["MixedModel.conv1"]
     conv2_stats = report.stage_metadata["MixedModel.conv2"]
@@ -155,7 +175,7 @@ def test_spikesim_event_energy_repeated_same_scope_accumulates():
 
     model = ReuseConvModel().eval()
     x = (torch.rand(2, 3, 8, 8) > 0.5).float()
-    report = op_counter.estimate_spikesim_event_energy(model, x, config=config)
+    report = op_counter.estimate_spikesim_energy(model, x, config=config)
 
     assert list(report.stage_metadata.keys()) == ["ReuseConvModel.conv"]
     assert report.stage_metadata["ReuseConvModel.conv"]["total_calls"] == 2
@@ -189,6 +209,8 @@ def test_spikesim_event_energy_config_validation():
         op_counter.SpikeSimEnergyConfig(xbar_size=0).validate()
     with pytest.raises(ValueError):
         op_counter.SpikeSimEnergyConfig(device="foo").validate()
+    with pytest.raises(ValueError, match="finite and nonnegative"):
+        op_counter.SpikeSimEnergyConfig(neuron_pj=-1.0).validate()
     with pytest.raises(ValueError):
         op_counter.SpikeSimEnergyConfig(activity_mode="foo").validate()
 
@@ -203,7 +225,7 @@ def test_spikesim_event_energy_config_properties_are_defensive():
 def test_spikesim_event_energy_no_supported_stage_warning():
     model = nn.ReLU().eval()
     x = torch.randn(2, 3)
-    report = op_counter.estimate_spikesim_event_energy(model, x)
+    report = op_counter.estimate_spikesim_energy(model, x, strict=False)
     assert any(
         "No supported Conv2d forward inference stages" in msg for msg in report.warnings
     )
@@ -224,7 +246,7 @@ def test_spikesim_event_energy_shape_mismatch_warns_without_crash():
 
     model = ShapeMismatchModel().eval()
     x = (torch.rand(1, 3, 8, 8) > 0.5).float()
-    report = op_counter.estimate_spikesim_event_energy(model, x, config=config)
+    report = op_counter.estimate_spikesim_energy(model, x, config=config, strict=False)
 
     assert any("inconsistent shapes" in msg for msg in report.warnings)
 
@@ -274,27 +296,31 @@ def test_spikesim_event_energy_grouped_conv_warns_or_raises():
     grouped = nn.Conv2d(4, 4, kernel_size=3, padding=1, groups=2, bias=False).eval()
     x = (torch.rand(1, 4, 8, 8) > 0.5).float()
 
-    report = op_counter.estimate_spikesim_event_energy(grouped, x, config=config)
+    report = op_counter.estimate_spikesim_energy(
+        grouped, x, config=config, strict=False
+    )
     assert any("grouped/depthwise" in msg for msg in report.warnings)
 
     with pytest.raises(NotImplementedError):
-        op_counter.estimate_spikesim_event_energy(
-            grouped, x, config=config, strict=True
-        )
+        op_counter.estimate_spikesim_energy(grouped, x, config=config, strict=True)
 
 
 def test_spikesim_event_energy_transposed_conv_and_linear_warn():
     config = op_counter.SpikeSimEnergyConfig(xbar_size=4)
     conv_t = nn.ConvTranspose2d(4, 4, kernel_size=3, padding=1, bias=False).eval()
     x = (torch.rand(1, 4, 8, 8) > 0.5).float()
-    report_t = op_counter.estimate_spikesim_event_energy(conv_t, x, config=config)
+    report_t = op_counter.estimate_spikesim_energy(
+        conv_t, x, config=config, strict=False
+    )
     assert any(
         "transposed convolutions are outside scope" in msg for msg in report_t.warnings
     )
 
     linear = nn.Linear(8, 4, bias=False).eval()
     y = torch.randn(2, 8)
-    report_linear = op_counter.estimate_spikesim_event_energy(linear, y, config=config)
+    report_linear = op_counter.estimate_spikesim_energy(
+        linear, y, config=config, strict=False
+    )
     assert any(
         "No supported Conv2d forward inference stages" in msg
         for msg in report_linear.warnings
@@ -314,7 +340,7 @@ def test_spikesim_event_energy_scalar_add_does_not_warn():
 
     model = ScalarAddModel().eval()
     x = (torch.rand(1, 3, 8, 8) > 0.5).float()
-    report = op_counter.estimate_spikesim_event_energy(model, x, config=config)
+    report = op_counter.estimate_spikesim_energy(model, x, config=config, strict=False)
 
     assert not any("merge-like op" in msg for msg in report.warnings)
 
@@ -327,12 +353,8 @@ def test_spikesim_event_energy_tail_tile_rows_cost_more():
     x_tail_tile = torch.zeros(1, 5, 1, 1)
     x_tail_tile[:, 4, 0, 0] = 1.0
 
-    report_full = op_counter.estimate_spikesim_event_energy(
-        model, x_full_tile, config=config
-    )
-    report_tail = op_counter.estimate_spikesim_event_energy(
-        model, x_tail_tile, config=config
-    )
+    report_full = op_counter.estimate_spikesim_energy(model, x_full_tile, config=config)
+    report_tail = op_counter.estimate_spikesim_energy(model, x_tail_tile, config=config)
 
     stage = next(iter(report_full.energy_by_stage))
     full_xbar = report_full.energy_by_component["by_stage"][stage]["xbar_pj"]
@@ -346,12 +368,8 @@ def test_spikesim_event_energy_monotonic_with_input_sparsity():
     dense_x = (torch.rand(2, 3, 8, 8) > 0.2).float()
     sparse_x = (torch.rand(2, 3, 8, 8) > 0.8).float()
 
-    dense_report = op_counter.estimate_spikesim_event_energy(
-        model, dense_x, config=config
-    )
-    sparse_report = op_counter.estimate_spikesim_event_energy(
-        model, sparse_x, config=config
-    )
+    dense_report = op_counter.estimate_spikesim_energy(model, dense_x, config=config)
+    sparse_report = op_counter.estimate_spikesim_energy(model, sparse_x, config=config)
 
     assert dense_report.energy_total_pj >= sparse_report.energy_total_pj
 
@@ -363,12 +381,8 @@ def test_spikesim_default_dense_mode_ignores_input_sparsity():
     sparse_x = torch.zeros(2, 3, 8, 8)
     sparse_x[:, :, ::2, ::2] = 1.0
 
-    dense_report = op_counter.estimate_spikesim_event_energy(
-        model, dense_x, config=config
-    )
-    sparse_report = op_counter.estimate_spikesim_event_energy(
-        model, sparse_x, config=config
-    )
+    dense_report = op_counter.estimate_spikesim_energy(model, dense_x, config=config)
+    sparse_report = op_counter.estimate_spikesim_energy(model, sparse_x, config=config)
 
     assert dense_report.energy_total_pj == pytest.approx(sparse_report.energy_total_pj)
     assert (
@@ -382,13 +396,13 @@ def test_spikesim_training_scope_warns_or_raises():
     model = nn.Conv2d(3, 4, kernel_size=3, padding=1, bias=False).train()
     x = torch.randn(1, 3, 8, 8)
 
-    report = op_counter.estimate_spikesim_event_energy(model, x, config=config)
+    report = op_counter.estimate_spikesim_energy(model, x, config=config, strict=False)
     assert any(
         "No supported Conv2d forward inference stages" in msg for msg in report.warnings
     )
 
     with pytest.raises(ValueError):
-        op_counter.estimate_spikesim_event_energy(model, x, config=config, strict=True)
+        op_counter.estimate_spikesim_energy(model, x, config=config, strict=True)
 
 
 def test_spikesim_allows_if_and_lif_neurons():
@@ -401,7 +415,7 @@ def test_spikesim_allows_if_and_lif_neurons():
     ).eval()
     x = torch.randn(1, 3, 8, 8)
 
-    report = op_counter.estimate_spikesim_event_energy(model, x, config=config)
+    report = op_counter.estimate_spikesim_energy(model, x, config=config)
 
     assert report.energy_total_pj > 0.0
     assert not any("Unsupported neuron modules" in msg for msg in report.warnings)
@@ -415,11 +429,11 @@ def test_spikesim_unsupported_neuron_warns_or_raises():
     ).eval()
     x = torch.randn(1, 3, 8, 8)
 
-    report = op_counter.estimate_spikesim_event_energy(model, x, config=config)
+    report = op_counter.estimate_spikesim_energy(model, x, config=config, strict=False)
     assert any("Unsupported neuron modules" in msg for msg in report.warnings)
 
     with pytest.raises(ValueError, match="Unsupported neuron modules"):
-        op_counter.estimate_spikesim_event_energy(model, x, config=config, strict=True)
+        op_counter.estimate_spikesim_energy(model, x, config=config, strict=True)
 
 
 def test_spikesim_unsupported_neuron_check_can_be_disabled():
@@ -430,7 +444,25 @@ def test_spikesim_unsupported_neuron_check_can_be_disabled():
     ).eval()
     x = torch.randn(1, 3, 8, 8)
 
-    report = op_counter.estimate_spikesim_event_energy(model, x, config=config)
+    report = op_counter.estimate_spikesim_energy(model, x, config=config)
 
     assert report.energy_total_pj > 0.0
     assert not any("Unsupported neuron modules" in msg for msg in report.warnings)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is unavailable")
+def test_cuda_spikesim_event_matches_cpu_counts():
+    config = op_counter.SpikeSimEnergyConfig(xbar_size=4, activity_mode="event")
+    cpu_model = nn.Conv2d(3, 5, kernel_size=3, padding=1, bias=False).eval()
+    cuda_model = nn.Conv2d(3, 5, kernel_size=3, padding=1, bias=False).cuda().eval()
+    cuda_model.load_state_dict(cpu_model.state_dict())
+    x = (torch.rand(2, 3, 8, 8) > 0.7).float()
+
+    cpu_report = op_counter.estimate_spikesim_energy(cpu_model, x, config=config)
+    cuda_report = op_counter.estimate_spikesim_energy(
+        cuda_model, x.cuda(), config=config
+    )
+
+    assert cuda_report.counts == cpu_report.counts
+    assert cuda_report.event_stats_by_stage == cpu_report.event_stats_by_stage
+    assert cuda_report.energy_total_pj == pytest.approx(cpu_report.energy_total_pj)

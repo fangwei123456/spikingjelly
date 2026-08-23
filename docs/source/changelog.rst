@@ -42,6 +42,21 @@ Module: ``spikingjelly.activation_based.op_counter``.
   traffic and the Lemaire analytical model.
 - The Simple Energy default uses ``24.96 pJ/byte`` for memory traffic and exposes
   the memory coefficient for explicit hardware-regime overrides.
+- Operation reports now include stable model provenance and the cost
+  configuration required to interpret or reproduce an estimate.
+- FLOP counting uses the GPU roofline convention of two FLOPs per MAC, supports
+  fused scaled-dot-product attention, and exposes skipped ATen operations.
+- Added ``ModuleCounter`` and ``ModuleCounterMode`` for runtime module
+  forward/backward rules with shared scope, ignored-subtree, strict-mode, and
+  hook-lifecycle handling.
+- Lemaire, Simple Energy's neuromorphic memory counter, and NeuroMC now share
+  ``ModuleCounterMode``; energy formulas and reports remain owned by each model.
+- Lemaire inference now uses runtime spike activity with the paper's IF/LIF
+  compute buckets and fixed 32-bit memory-access regime.
+- NeuroMC runtime energy now follows the author-code variable direction
+  multipliers, includes register traffic, and uses aggregate SRAM capacities.
+- SpikeSim dense energy is locked to the released ``c2627bc`` PE-cycle formula;
+  event mode is a separately identified SpikingJelly sparse model.
 
 NIR Exchange
 ^^^^^^^^^^^^
@@ -81,6 +96,30 @@ Module: ``spikingjelly.activation_based.op_counter``.
   each layer's local SRAM capacity instead of a global maximum traffic value.
 - Lemaire memory accounting now treats only binary tensors as spike traffic and
   reports unsupported transposed convolutions instead of applying a dense fallback.
+- Corrected grouped and depthwise spike fanout to use output channels per group.
+- Lemaire profiling now rejects neuron types outside its IF/LIF paper scope
+  instead of returning incomplete compute energy.
+
+Operation Counter Accuracy
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.op_counter``.
+
+- Spike-convolution counters now use float64 reduction accumulators so large
+  integer event counts are not rounded through float32.
+- Ideal fused-attention traffic now includes positional or keyword masks/biases
+  and available bias gradients.
+- Module-driven energy profilers now accept keyword tensor inputs and reject
+  model rebinding while hooks are active.
+- Neuromorphic convolution probes no longer expose their padding or helper
+  tensor operations to dispatch counters.
+- NeuroMC preserves trainable-parameter shape information required to classify
+  backward fragments after the profiling context exits.
+- Module-driven profilers now reject rebinding throughout an active context,
+  including models that install no module hooks.
+- NeuroMC now rejects conflicting options for a reused stage name, matches
+  repeated module calls in full backward passes, ignores reentrant-checkpoint
+  recomputation, and rejects ambiguous selective backward through a repeated module.
 
 NIR Exchange
 ^^^^^^^^^^^^
@@ -120,6 +159,31 @@ Module: ``spikingjelly.activation_based.op_counter``.
   ``ComputeEnergyProfiler``, ``ComputeEnergyReport``, and
   ``estimate_compute_energy``. Use the corresponding ``SimpleEnergy*`` names and
   ``estimate_simple_energy`` instead.
+- Renamed ``estimate_spikesim_event_energy`` to ``estimate_spikesim_energy`` because
+  the same entry point supports both dense and event activity models.
+- Lemaire and SpikeSim estimators now default to strict handling of unsupported
+  model paths; partial warning-only reports require an explicit ``strict=False``.
+- Removed ineffective NeuroMC ``core_type``, ``strict``, and
+  ``extra_ignore_modules`` parameters. Unsupported runtime operations remain
+  fail-closed.
+- NeuroMC stage semantics now use explicit ``phase``, ``reuse_weights``, and
+  ``batch_norm_backward`` arguments instead of parsing stage names.
+- Removed unused memory-residency and standalone NeuroMC primitive-counter
+  interfaces that were not connected to the runtime energy profiler.
+- Removed Lemaire's unused non-binary sparsity and custom state-rule settings;
+  ``NeuronStateCounter`` remains available as an independent diagnostic.
+- Replaced ``get_unsupported_ops(counter)`` with the mode-independent
+  ``get_unsupported(counter)`` on all counter modes.
+- ``NeuromorphicMemoryAccessCounter`` is no longer a context manager and no
+  longer has ``bind_model()``; use it through ``ModuleCounterMode``.
+- Removed ``LemaireAddressingCounter``; Lemaire addressing is now part of the
+  single module-driven Lemaire counter.
+- Manual NeuroMC profiling now requires ``bind_model()`` before entering the
+  profiler context; module hook registration is owned by ``ModuleCounterMode``.
+- Flattened the one-file ``analytical_energy`` package into
+  ``op_counter/analytical_energy.py``; import its public symbols from
+  ``op_counter`` or ``op_counter.analytical_energy`` instead of the removed
+  ``op_counter.analytical_energy.core`` path.
 
 NIR Exchange
 ^^^^^^^^^^^^
@@ -627,9 +691,8 @@ Module: ``spikingjelly.activation_based.op_counter``.
 - Removed the redundant ``SpikeSimEventEnergyProfiler`` and
   ``SpikeSimEventEnergyReport`` aliases. Use ``SpikeSimEnergyProfiler`` and
   ``SpikeSimEnergyReport``.
-- Removed stage-level aggregation and
-  ``MemoryResidencyCounter.get_stage_level_bits()``. Use the level- and
-  operation-level residency methods for current measurements.
+- Removed the legacy memory-residency interfaces; they were not connected to
+  the current GPU traffic or NeuroMC runtime models.
 - Removed ``SpikeSimEnergyProfiler.add_warnings()``; warning collection is now
   internal to the SpikeSim estimate entry point.
 - ``MemoryHierarchyConfig`` now represents the single supported NeuroMC v1

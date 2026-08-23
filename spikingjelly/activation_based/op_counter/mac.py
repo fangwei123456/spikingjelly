@@ -87,8 +87,8 @@ def _mac_native_batch_norm(args, kwargs, out):
 class MACCounter(BaseCounter):
     def __init__(
         self,
-        extra_rules: dict[Any, Callable] = {},
-        extra_ignore_modules: list[nn.Module] = [],
+        extra_rules: dict[Any, Callable] | None = None,
+        extra_ignore_modules: list[type[nn.Module]] | None = None,
     ):
         r"""
         **API Language** - :ref:`中文 <MACCounter.__init__-cn>` | :ref:`English <MACCounter.__init__-en>`
@@ -129,8 +129,8 @@ class MACCounter(BaseCounter):
             其中 ``func`` 是一个函数，接受 ``(args, kwargs, out)`` 并返回 MAC 次数
         :type extra_rules: dict[Any, Callable]
 
-        :param extra_ignore_modules: 额外需要忽略的模块列表，这些模块中的操作不会被计数
-        :type extra_ignore_modules: list[torch.nn.Module]
+        :param extra_ignore_modules: 额外需要忽略的模块类型列表，这些模块中的操作不会被计数
+        :type extra_ignore_modules: Optional[list[type[torch.nn.Module]]]
 
         ----
 
@@ -166,9 +166,9 @@ class MACCounter(BaseCounter):
             where ``func`` is a function that takes ``(args, kwargs, out)`` and returns the MAC count
         :type extra_rules: dict[Any, Callable]
 
-        :param extra_ignore_modules: additional list of modules to ignore.
+        :param extra_ignore_modules: additional module types to ignore.
             Operations within these modules will not be counted
-        :type extra_ignore_modules: list[torch.nn.Module]
+        :type extra_ignore_modules: Optional[list[type[torch.nn.Module]]]
 
         ----
 
@@ -204,5 +204,5 @@ class MACCounter(BaseCounter):
             # other aten ops do not involve MAC operations
         }
         self.ignore_modules = []
-        self.rules.update(extra_rules)
-        self.ignore_modules.extend(extra_ignore_modules)
+        self.rules.update(extra_rules or {})
+        self.ignore_modules.extend(extra_ignore_modules or [])

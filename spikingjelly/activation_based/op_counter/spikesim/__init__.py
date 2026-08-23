@@ -24,13 +24,13 @@ from .counter import SpikeSimCounter
 from .core import (
     SpikeSimEnergyProfiler,
     SpikeSimEnergyReport,
-    estimate_spikesim_event_energy,
+    estimate_spikesim_energy,
 )
 
 __all__ = [
-    "SpikeSimEnergyConfig",
     "SpikeSimCounter",
+    "SpikeSimEnergyConfig",
     "SpikeSimEnergyProfiler",
     "SpikeSimEnergyReport",
-    "estimate_spikesim_event_energy",
+    "estimate_spikesim_energy",
 ]

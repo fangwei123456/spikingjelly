@@ -112,6 +112,21 @@ class SpikeSimEnergyConfig:
             raise ValueError(
                 f"activity_mode must be 'dense' or 'event', got {self.activity_mode}."
             )
+        for name in (
+            "tile_buffer_pj",
+            "temp_buffer_pj",
+            "sub_pj",
+            "adc_pj",
+            "htree_pj",
+            "mux_pj",
+            "mem_fetch_pj",
+            "neuron_pj",
+            "rram_xbar_pj",
+            "sram_xbar_pj",
+        ):
+            value = getattr(self, name)
+            if not math.isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be finite and nonnegative.")
 
     @property
     def xbar_array_energy_pj(self) -> float:

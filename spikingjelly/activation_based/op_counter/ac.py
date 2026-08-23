@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 
 from .base import BaseCounter
+from .neuromorphic_memory_access import _spike_conv_weight_uses_from_tensors
 
 aten = torch.ops.aten
 __all__ = ["ACCounter"]
@@ -38,7 +39,7 @@ def _spike_mm(args, kwargs, out):
     nnz_x = _spike_nnz(x)
     nnz_y = _spike_nnz(y)
     if nnz_x is not None and nnz_y is not None:
-        return int(out.sum().item())
+        return int(out.sum(dtype=torch.float64).item())
     elif nnz_x is not None:
         return nnz_x * y.shape[1]
     elif nnz_y is not None:
@@ -74,7 +75,7 @@ def _spike_bmm(args, kwargs, out):
     nnz_x = _spike_nnz(x)
     nnz_y = _spike_nnz(y)
     if nnz_x is not None and nnz_y is not None:
-        return int(out.sum().item())
+        return int(out.sum(dtype=torch.float64).item())
     elif nnz_x is not None:
         return nnz_x * y.shape[2]
     elif nnz_y is not None:
@@ -125,25 +126,30 @@ def _spike_convolution(args, _kwargs, out):
                     output_padding,
                     groups,
                 )
-        return int(result.sum().item())
+        return int(result.sum(dtype=torch.float64).item())
     elif nnz_x is not None:
-        w_ones = torch.ones(w.shape, dtype=torch.float64, device=x.device)
-        with torch.no_grad():
-            with torch._C._ExcludeDispatchKeyGuard(
-                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
+        if transposed:
+            with (
+                torch.no_grad(),
+                torch._C._ExcludeDispatchKeyGuard(
+                    torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
+                ),
             ):
                 result = torch.ops.aten.convolution.default(
-                    x.double(),
-                    w_ones,
+                    x.float(),
+                    torch.ones_like(w, dtype=torch.float32),
                     None,
                     stride,
                     padding,
                     dilation,
-                    transposed,
+                    True,
                     output_padding,
                     groups,
                 )
-        return int(result.sum().item())
+            return int(result.sum(dtype=torch.float64).item())
+        return _spike_conv_weight_uses_from_tensors(
+            x, w, stride, padding, dilation, groups
+        )
     elif nnz_w is not None:
         ref = x if transposed else out
         return nnz_w * ref.shape[0] * prod(ref.shape[2:])
@@ -184,8 +190,8 @@ def _ac_native_batch_norm(args, kwargs, out):
 class ACCounter(BaseCounter):
     def __init__(
         self,
-        extra_rules: dict[Any, Callable] = {},
-        extra_ignore_modules: list[nn.Module] = [],
+        extra_rules: dict[Any, Callable] | None = None,
+        extra_ignore_modules: list[type[nn.Module]] | None = None,
     ):
         r"""
         **API Language** - :ref:`中文 <ACCounter.__init__-cn>` | :ref:`English <ACCounter.__init__-en>`
@@ -221,8 +227,8 @@ class ACCounter(BaseCounter):
             其中 ``func`` 是一个函数，接受 ``(args, kwargs, out)`` 并返回 AC 次数
         :type extra_rules: dict[Any, Callable]
 
-        :param extra_ignore_modules: 额外需要忽略的模块列表
-        :type extra_ignore_modules: list[torch.nn.Module]
+        :param extra_ignore_modules: 额外需要忽略的模块类型列表
+        :type extra_ignore_modules: Optional[list[type[torch.nn.Module]]]
 
         ----
 
@@ -259,8 +265,8 @@ class ACCounter(BaseCounter):
             where ``func`` is a function that takes ``(args, kwargs, out)`` and returns the AC count
         :type extra_rules: dict[Any, Callable]
 
-        :param extra_ignore_modules: additional list of modules to ignore
-        :type extra_ignore_modules: list[torch.nn.Module]
+        :param extra_ignore_modules: additional module types to ignore
+        :type extra_ignore_modules: Optional[list[type[torch.nn.Module]]]
 
         ----
 
@@ -310,5 +316,5 @@ class ACCounter(BaseCounter):
             # other aten ops do not involve AC operations
         }
         self.ignore_modules = []
-        self.rules.update(extra_rules)
-        self.ignore_modules.extend(extra_ignore_modules)
+        self.rules.update(extra_rules or {})
+        self.ignore_modules.extend(extra_ignore_modules or [])

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import copy
+import math
 from dataclasses import dataclass, field
+from typing import Any
 
 import torch.nn as nn
+import torch
 
 from spikingjelly.logger import logger
 
 from .ac import ACCounter
-from .base import DispatchCounterMode, call_model
+from .base import DispatchCounterMode, EnergyModelInfo, ModuleCounterMode, call_model
 from .mac import MACCounter
 from .neuromorphic_memory_access import NeuromorphicMemoryAccessCounter
 from .synop import SynOpCounter
@@ -21,6 +24,18 @@ __all__ = [
     "SimpleEnergyReport",
     "estimate_simple_energy",
 ]
+
+_SIMPLE_MODEL_INFO = EnergyModelInfo(
+    model_id="simple_horowitz_step_composite_v1",
+    fidelity="spikingjelly-defined",
+    source_urls=(
+        "https://doi.org/10.1109/ISSCC.2014.6757323",
+        "https://openreview.net/pdf?id=SzwU2XrXIS",
+    ),
+    technology_nm=45,
+    precision="configurable comparison regime; runtime bytes use observed dtype",
+    scope="runtime MAC/AC plus SpikingJelly logical parameter and neuron-state traffic",
+)
 
 
 @dataclass
@@ -69,6 +84,12 @@ class SimpleEnergyCostConfig:
     e_mac_pj: float = 4.6
     e_ac_pj: float = 0.9
     e_memory_pj_per_byte: float = 24.96
+
+    def __post_init__(self) -> None:
+        for name in ("e_mac_pj", "e_ac_pj", "e_memory_pj_per_byte"):
+            value = getattr(self, name)
+            if not math.isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be finite and nonnegative.")
 
     @classmethod
     def fp32(cls) -> "SimpleEnergyCostConfig":
@@ -160,6 +181,27 @@ class SimpleEnergyReport:
     该估计器面向“统一比较口径”，而不是对真实 kernel、混合精度累加路径或
     特定硬件微架构做精确建模。
 
+    :param energy_total_pj: 总能耗，单位为 pJ
+    :type energy_total_pj: float
+    :param energy_compute_pj: MAC 与 AC 的计算能耗，单位为 pJ
+    :type energy_compute_pj: float
+    :param energy_mac_pj: MAC 能耗，单位为 pJ
+    :type energy_mac_pj: float
+    :param energy_ac_pj: AC 能耗，单位为 pJ
+    :type energy_ac_pj: float
+    :param energy_memory_pj: 参数和神经元状态访存能耗，单位为 pJ
+    :type energy_memory_pj: float
+    :param breakdown_pj: 分项能耗
+    :type breakdown_pj: dict[str, float]
+    :param counts: 运行时操作数和逻辑访存字节数
+    :type counts: dict[str, int]
+    :param warnings: 未匹配模型路径的告警
+    :type warnings: list[str]
+    :param model_info: 模型来源与适用范围
+    :type model_info: EnergyModelInfo
+    :param config: 生成本报告的配置副本
+    :type config: SimpleEnergyConfig
+
     ----
 
     .. _SimpleEnergyReport-en:
@@ -179,6 +221,27 @@ class SimpleEnergyReport:
     The estimator is intended as a normalized comparison regime rather than an
     exact model of real kernels, mixed-precision accumulation paths, or a
     specific hardware microarchitecture.
+
+    :param energy_total_pj: Total energy in pJ
+    :type energy_total_pj: float
+    :param energy_compute_pj: MAC and AC compute energy in pJ
+    :type energy_compute_pj: float
+    :param energy_mac_pj: MAC energy in pJ
+    :type energy_mac_pj: float
+    :param energy_ac_pj: AC energy in pJ
+    :type energy_ac_pj: float
+    :param energy_memory_pj: Parameter and neuron-state memory energy in pJ
+    :type energy_memory_pj: float
+    :param breakdown_pj: Component energy breakdown
+    :type breakdown_pj: dict[str, float]
+    :param counts: Runtime operation counts and logical memory bytes
+    :type counts: dict[str, int]
+    :param warnings: Warnings for unmatched model paths
+    :type warnings: list[str]
+    :param model_info: Model provenance and applicability
+    :type model_info: EnergyModelInfo
+    :param config: Copy of the configuration used for this report
+    :type config: SimpleEnergyConfig
     """
 
     energy_total_pj: float
@@ -189,6 +252,8 @@ class SimpleEnergyReport:
     breakdown_pj: dict[str, float]
     counts: dict[str, int]
     warnings: list[str]
+    model_info: EnergyModelInfo
+    config: SimpleEnergyConfig
 
 
 class SimpleEnergyProfiler:
@@ -243,6 +308,7 @@ class SimpleEnergyProfiler:
             ],
             strict=False,
         )
+        self._module_mode: ModuleCounterMode | None = None
         self._summary_logged = False
 
     def bind_model(self, model: nn.Module) -> None:
@@ -255,18 +321,30 @@ class SimpleEnergyProfiler:
         :param model: 待统计模型 / Model to profile
         :type model: torch.nn.Module
         """
-        self.memory_counter.bind_model(model)
+        if self._module_mode is not None and self._module_mode._active:
+            raise RuntimeError(
+                "SimpleEnergyProfiler.bind_model() cannot run while profiling."
+            )
+        self._module_mode = ModuleCounterMode(
+            [self.memory_counter],
+            model=model,
+        )
 
     def __enter__(self):
         self.mac_counter.reset()
         self.ac_counter.reset()
         self.synop_counter.reset()
+        self.memory_counter.reset()
         self._summary_logged = False
-        self.memory_counter.__enter__()
+        if self._module_mode is None:
+            raise RuntimeError(
+                "SimpleEnergyProfiler.bind_model() must be called before entering."
+            )
+        self._module_mode.__enter__()
         try:
             self._dispatch_mode.__enter__()
         except BaseException:
-            self.memory_counter.__exit__(None, None, None)
+            self._module_mode.__exit__(None, None, None)
             raise
         return self
 
@@ -274,9 +352,35 @@ class SimpleEnergyProfiler:
         try:
             return self._dispatch_mode.__exit__(exc_type, exc, tb)
         finally:
-            self.memory_counter.__exit__(exc_type, exc, tb)
+            self._module_mode.__exit__(exc_type, exc, tb)
 
     def get_report(self) -> SimpleEnergyReport:
+        r"""
+        **API Language** - :ref:`中文 <SimpleEnergyProfiler.get_report-cn>` |
+        :ref:`English <SimpleEnergyProfiler.get_report-en>`
+
+        ----
+
+        .. _SimpleEnergyProfiler.get_report-cn:
+
+        * **中文**
+
+        返回最近一次运行的 Simple Energy 报告。
+
+        :return: 计算、访存、计数、告警和来源信息
+        :rtype: SimpleEnergyReport
+
+        ----
+
+        .. _SimpleEnergyProfiler.get_report-en:
+
+        * **English**
+
+        Return the Simple Energy report for the latest run.
+
+        :return: Compute, memory, counts, warnings, and provenance
+        :rtype: SimpleEnergyReport
+        """
         mac = self.mac_counter.get_total()
         ac = self.ac_counter.get_total()
         synop = self.synop_counter.get_total()
@@ -340,6 +444,8 @@ class SimpleEnergyProfiler:
                 "memory_access_bytes": memory_access_bytes,
             },
             warnings=warnings_list,
+            model_info=_SIMPLE_MODEL_INFO,
+            config=copy.deepcopy(self.config),
         )
         if not self._summary_logged:
             logger.info(
@@ -362,7 +468,7 @@ class SimpleEnergyProfiler:
 
 def estimate_simple_energy(
     model: nn.Module,
-    inputs,
+    inputs: Any,
     *,
     config: SimpleEnergyConfig | None = None,
 ) -> SimpleEnergyReport:
@@ -385,8 +491,13 @@ def estimate_simple_energy(
     请显式传入对应 preset。
 
     :param model: 待统计模型
+    :type model: torch.nn.Module
     :param inputs: 模型输入；若为 tuple/list 则按 ``model(*inputs)`` 调用
+    :type inputs: Any
     :param config: simple 能耗配置
+    :type config: SimpleEnergyConfig | None
+    :return: Simple Energy 运行时能耗报告
+    :rtype: SimpleEnergyReport
 
     ----
 
@@ -401,11 +512,16 @@ def estimate_simple_energy(
     comparisons, pass an explicit preset cost configuration.
 
     :param model: model to profile
+    :type model: torch.nn.Module
     :param inputs: model input; tuple/list will be passed as ``model(*inputs)``
+    :type inputs: Any
     :param config: simple energy configuration
+    :type config: SimpleEnergyConfig | None
+    :return: Runtime Simple Energy report
+    :rtype: SimpleEnergyReport
     """
     profiler = SimpleEnergyProfiler(config=config)
     profiler.bind_model(model)
-    with profiler:
+    with profiler, torch.no_grad():
         _ = call_model(model, inputs)
     return profiler.get_report()
