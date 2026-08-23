@@ -9,6 +9,8 @@ and the archived documentation linked from the project README.
 
 ## Unreleased
 
+## 2.0.0.dev2 - 2026-08-23
+
 ### Improvements
 
 #### ANN-to-SNN Conversion
