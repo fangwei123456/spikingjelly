@@ -333,8 +333,25 @@ class ModelBuilder(abc.ABC):
 
         :param state_dict: Canonical model state. / Canonical model state.
         :type state_dict: Mapping[str, torch.Tensor]
+        :param process_group: TP 进程组；TP=1 时为 ``None``。 / TP process
+            group; ``None`` when TP=1.
+        :type process_group: Optional[ProcessGroup]
+        :param pipeline_rank: 当前 PP rank。 / Current PP rank.
+        :type pipeline_rank: int
+        :param pipeline_size: PP rank 数。 / Number of PP ranks.
+        :type pipeline_size: int
+        :param pipeline_microbatches: 每个本地 batch 的 pipeline microbatch 数。 /
+            Pipeline microbatches per local batch.
+        :type pipeline_microbatches: int
+        :param device: 当前 rank 的设备。 / Device for the current rank.
+        :type device: torch.device
+        :param micro_batch_size: 当前 DP rank 的图像 batch size。 / Image batch
+            size on the current DP rank.
+        :type micro_batch_size: int
         :return: The same tuple as :meth:`build`. / Same tuple as :meth:`build`.
         :rtype: tuple
+        :raises ValueError: artifact state 或目标 TP/PP shard 无效。 / If the
+            artifact state or target TP/PP shard is invalid.
         """
         built = self.build(
             process_group=process_group,
@@ -515,30 +532,6 @@ class PredictionConfig:
 
 @dataclass(frozen=True)
 class EvaluationConfig(PredictionConfig):
-    r"""Configure distributed vision classification evaluation.
-
-    **API Language** - 中文 | English
-
-    **中文：** 在 :class:`PredictionConfig` 的执行配置上增加分类 loss。
-    dataset 的每个元素必须是 ``(image, target)``；评测返回全局 loss、accuracy
-    与性能指标，不写逐样本预测。
-
-    **English:** Add classification loss to :class:`PredictionConfig` execution
-    settings. Every dataset item must be ``(image, target)``. Evaluation returns
-    global loss, accuracy, and performance metrics without writing per-sample
-    predictions.
-
-    :param loss_function: 分类 loss 函数的完整导入路径。 / Full loss-function
-        import path.
-    :type loss_function: str
-    :param loss_kwargs: loss 参数。 / Loss-function kwargs.
-    :type loss_kwargs: dict[str, Any]
-    :param timing_warmup_batches: 计时前执行且不计入指标的 batch 数。 / Batches
-        executed before timing and excluded from metrics.
-    :type timing_warmup_batches: int
-    :raises ValueError: loss 导入路径无效。 / If the loss import path is invalid.
-    """
-
     loss_function: str = "torch.nn.functional.cross_entropy"
     loss_kwargs: dict[str, Any] = field(default_factory=dict)
     timing_warmup_batches: int = 0
@@ -549,6 +542,63 @@ class EvaluationConfig(PredictionConfig):
             raise ValueError("loss_function must be a full import path.")
         if self.timing_warmup_batches < 0:
             raise ValueError("timing_warmup_batches cannot be negative.")
+
+
+EvaluationConfig.__init__.__doc__ = r"""Configure distributed vision classification evaluation.
+
+**API Language** - 中文 | English
+
+**中文：** 从 topology-independent artifact 构建视觉 SNN，并使用 PyTorch
+replicated DP、FSDP2、architecture-specific TP 与 PP 评测分类 dataset。
+每个元素必须是 ``(image, target)``；返回全局 loss、accuracy 与性能指标。
+
+**English:** Build a vision SNN from a topology-independent artifact and evaluate
+a classification dataset with PyTorch replicated DP, FSDP2, architecture-specific
+TP, and PP. Every item must be ``(image, target)``. The result contains global
+loss, accuracy, and performance metrics.
+
+:param artifact: :func:`export_inference_artifact` 生成的 artifact。 / Artifact
+    created by :func:`export_inference_artifact`.
+:type artifact: pathlib.Path
+:param dataset_builder: 返回一个 Dataset 的完整导入路径。 / Full import path
+    returning one Dataset.
+:type dataset_builder: str
+:param dataset_kwargs: dataset builder 参数。 / Dataset-builder arguments.
+:type dataset_kwargs: dict[str, Any]
+:param input_layout: ``"NCHW"`` 或 ``"NTCHW"``。 / DataLoader input layout.
+:type input_layout: str
+:param batch_size: 每个 DP rank 的 batch size。 / Batch size per DP rank.
+:type batch_size: int
+:param workers: 每个 DataLoader 的 worker 数。 / DataLoader workers.
+:type workers: int
+:param tensor_parallel_size: TP rank 数。 / Number of TP ranks.
+:type tensor_parallel_size: int
+:param pipeline_parallel_size: PP rank 数。 / Number of PP ranks.
+:type pipeline_parallel_size: int
+:param pipeline_microbatches: 每个 batch 的 pipeline microbatch 数。 / Pipeline
+    microbatches per batch.
+:type pipeline_microbatches: int
+:param data_parallel: ``"replicate"`` 或 ``"fsdp2"``。 / Replicated or FSDP2
+    data parallelism.
+:type data_parallel: str
+:param precision: ``"fp32"``、``"bf16"`` 或 ``"fp16"``。 / Arithmetic precision.
+:type precision: str
+:param compile: 是否使用 ``torch.compile``；当前仅支持无 PP 的 replicated 模式。 /
+    Whether to use ``torch.compile``; currently limited to replicated execution
+    without PP.
+:type compile: bool
+:param seed: 模型与数据随机种子。 / Model and data seed.
+:type seed: int
+:param loss_function: 分类 loss 函数的完整导入路径。 / Full loss-function
+    import path.
+:type loss_function: str
+:param loss_kwargs: loss 参数。 / Loss-function arguments.
+:type loss_kwargs: dict[str, Any]
+:param timing_warmup_batches: 计时前执行且不计入指标的 batch 数。 / Batches
+    executed before timing and excluded from metrics.
+:type timing_warmup_batches: int
+:raises ValueError: 配置值或导入路径无效。 / If a value or import path is invalid.
+"""
 
 
 @dataclass(frozen=True)

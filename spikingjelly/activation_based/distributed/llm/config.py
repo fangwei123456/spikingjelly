@@ -156,49 +156,6 @@ class ModelBuilder(abc.ABC):
 
 @dataclass(frozen=True)
 class EvaluationConfig:
-    r"""Configure standalone MCore loss and perplexity evaluation.
-
-    **API Language** - 中文 | English
-
-    **中文：** 从 optimizer-boundary checkpoint 仅恢复 model，并使用
-    ``ModelConfig.transformer`` 中的 DP/TP/PP/CP 拓扑评测一个完整
-    token dataset。dataset builder 必须返回一个非空 ``Dataset``，其元素
-    为包含 ``input_ids`` 和 ``labels`` 的 mapping，可选 ``loss_mask``。
-
-    **English:** Restore model state only from an optimizer-boundary checkpoint
-    and evaluate one complete token dataset with the DP/TP/PP/CP topology in
-    ``ModelConfig.transformer``. The dataset builder must return one non-empty
-    ``Dataset`` whose items contain ``input_ids`` and ``labels``, with an optional
-    ``loss_mask``.
-
-    :param model: MCore SNN model configuration. / MCore SNN model configuration.
-    :type model: ModelConfig
-    :param checkpoint: Completed training checkpoint. / Completed training checkpoint.
-    :type checkpoint: pathlib.Path
-    :param dataset_builder: Full import path returning one Dataset.
-    :type dataset_builder: str
-    :param sequence_length: Token sequence length ``S``. / Token sequence length ``S``.
-    :type sequence_length: int
-    :param micro_batch_size: 每个 pipeline microbatch 的语义样本数。 /
-        Semantic samples per pipeline microbatch.
-    :type micro_batch_size: int
-    :param pipeline_microbatches: 每次 pipeline schedule 的 microbatch 数；每个
-        DP rank 的本地 schedule batch 为两者乘积。 / Microbatches per pipeline
-        schedule; their product is the local schedule batch per DP rank.
-    :type pipeline_microbatches: int
-    :param dataset_kwargs: Dataset-builder kwargs.
-    :type dataset_kwargs: dict[str, Any]
-    :param seed: Sampler and MCore model seed. / Sampler and MCore model seed.
-    :type seed: int
-    :param use_snn_memopt: Match the checkpoint's SNN memopt recipe.
-    :type use_snn_memopt: bool
-    :param timing_warmup_batches: 计时前从 dataset 起点重复执行、但不计入指标的
-        schedule batch 数。 / Number of schedule batches repeatedly run from the
-        start of the dataset before timing and excluded from metrics.
-    :type timing_warmup_batches: int
-    :raises ValueError: A size or import path is invalid.
-    """
-
     model: ModelConfig
     checkpoint: Path
     dataset_builder: str
@@ -228,35 +185,54 @@ class EvaluationConfig:
             raise ValueError("sequence_length cannot exceed model.max_sequence_length.")
 
 
+EvaluationConfig.__init__.__doc__ = r"""Configure standalone MCore loss and perplexity evaluation.
+
+**API Language** - 中文 | English
+
+**中文：** 从 optimizer-boundary checkpoint 仅恢复 model，并使用
+``ModelConfig.transformer`` 中的 DP/TP/PP/CP 拓扑评测完整 token dataset。
+dataset builder 必须返回非空 ``Dataset``，元素包含 ``input_ids``、``labels``
+和可选 ``loss_mask``。
+
+**English:** Restore model state only from an optimizer-boundary checkpoint and
+evaluate a complete token dataset with the DP/TP/PP/CP topology in
+``ModelConfig.transformer``. The non-empty dataset must provide ``input_ids``,
+``labels``, and an optional ``loss_mask``.
+
+:param model: MCore SNN 模型配置。 / MCore SNN model configuration.
+:type model: ModelConfig
+:param checkpoint: 已完成的训练 checkpoint。 / Completed training checkpoint.
+:type checkpoint: pathlib.Path
+:param dataset_builder: 返回一个 Dataset 的完整导入路径。 / Full import path
+    returning one Dataset.
+:type dataset_builder: str
+:param sequence_length: token 序列长度 ``S``。 / Token sequence length ``S``.
+:type sequence_length: int
+:param micro_batch_size: 每个 pipeline microbatch 的语义样本数。 / Semantic
+    samples per pipeline microbatch.
+:type micro_batch_size: int
+:param dataset_kwargs: dataset builder 参数。 / Dataset-builder arguments.
+:type dataset_kwargs: dict[str, Any]
+:param seed: sampler 与 MCore model seed。 / Sampler and MCore model seed.
+:type seed: int
+:param use_snn_memopt: 是否匹配 checkpoint 的 SNN memopt recipe。 / Whether to
+    match the checkpoint's SNN memopt recipe.
+:type use_snn_memopt: bool
+:param timing_warmup_batches: 计时前从 dataset 起点重复执行、但不计入指标的
+    schedule batch 数。 / Schedule batches repeatedly run from the dataset start
+    before timing and excluded from metrics.
+:type timing_warmup_batches: int
+:param pipeline_microbatches: 每次 pipeline schedule 的 microbatch 数；与
+    ``micro_batch_size`` 的乘积是每个 DP rank 的本地 schedule batch。 /
+    Microbatches per pipeline schedule; their product with ``micro_batch_size``
+    is the local schedule batch per DP rank.
+:type pipeline_microbatches: int
+:raises ValueError: 尺寸或导入路径无效。 / If a size or import path is invalid.
+"""
+
+
 @dataclass(frozen=True)
 class MCoreGenerationConfig:
-    r"""Configure offline MCore cached generation.
-
-    **API Language** - 中文 | English
-
-    **中文：** 从 checkpoint 恢复 MCore model，使用 TP/PP 执行 cached
-    greedy generation，并沿 DP 切分 prompt batch。MCore cached generation
-    要求 ``context_parallel_size=1``。
-
-    **English:** Restore an MCore model, run cached greedy generation with TP/PP,
-    and shard the prompt batch over DP replicas. MCore cached generation requires
-    ``context_parallel_size=1``.
-
-    :param model: MCore SNN model configuration. / MCore SNN model configuration.
-    :type model: ModelConfig
-    :param checkpoint: Completed training checkpoint. / Completed training checkpoint.
-    :type checkpoint: pathlib.Path
-    :param max_new_tokens: Maximum generated token count. / Maximum generated token count.
-    :type max_new_tokens: int
-    :param eos_token_id: Optional EOS token ID. / Optional EOS token ID.
-    :type eos_token_id: Optional[int]
-    :param seed: MCore model seed. / MCore model seed.
-    :type seed: int
-    :param use_snn_memopt: Match the checkpoint's SNN memopt recipe.
-    :type use_snn_memopt: bool
-    :raises ValueError: A generation value or MCore topology is invalid.
-    """
-
     model: ModelConfig
     checkpoint: Path
     max_new_tokens: int
@@ -282,52 +258,38 @@ class MCoreGenerationConfig:
             )
 
 
+MCoreGenerationConfig.__init__.__doc__ = r"""Configure offline MCore cached generation.
+
+**API Language** - 中文 | English
+
+**中文：** 从 checkpoint 恢复 MCore model，使用 TP/PP 执行 cached greedy
+generation，并沿 DP 切分 prompt batch。MCore cached generation 要求
+``context_parallel_size=1``。
+
+**English:** Restore an MCore model, run cached greedy generation with TP/PP,
+and shard the prompt batch over DP replicas. MCore cached generation requires
+``context_parallel_size=1``.
+
+:param model: MCore SNN 模型配置。 / MCore SNN model configuration.
+:type model: ModelConfig
+:param checkpoint: 已完成的训练 checkpoint。 / Completed training checkpoint.
+:type checkpoint: pathlib.Path
+:param max_new_tokens: 最大生成 token 数。 / Maximum generated token count.
+:type max_new_tokens: int
+:param eos_token_id: 可选 EOS token ID。 / Optional EOS token ID.
+:type eos_token_id: Optional[int]
+:param seed: MCore model seed。 / MCore model seed.
+:type seed: int
+:param use_snn_memopt: 是否匹配 checkpoint 的 SNN memopt recipe。 / Whether to
+    match the checkpoint's SNN memopt recipe.
+:type use_snn_memopt: bool
+:raises ValueError: 生成参数或 MCore 拓扑无效。 / If a generation value or
+    MCore topology is invalid.
+"""
+
+
 @dataclass(frozen=True)
 class SGLangGenerationConfig:
-    r"""Configure experimental offline generation in a separate SGLang environment.
-
-    **API Language** - 中文 | English
-
-    **中文：** 此接口为实验性接口，其配置和支持的拓扑在稳定前可能调整。它使用
-    SGLang offline ``Engine`` 加载一个已导出的 model artifact。DCP 与 prefill
-    CP 在 TP group 内重用 rank，不额外增加 world size。
-
-    **English:** This API is experimental; its configuration and supported
-    topologies may change before stabilization. It loads an exported model
-    artifact with SGLang's offline ``Engine``. DCP and prefill CP reuse ranks
-    within each TP group and do not increase the process world size.
-
-    :param artifact: SGLang/Hugging Face style model directory.
-    :type artifact: pathlib.Path
-    :param max_new_tokens: Maximum generated tokens per request.
-    :type max_new_tokens: int
-    :param tensor_parallel_size: SGLang TP size.
-    :type tensor_parallel_size: int
-    :param pipeline_parallel_size: SGLang PP size.
-    :type pipeline_parallel_size: int
-    :param data_parallel_size: SGLang DP size.
-    :type data_parallel_size: int
-    :param prefill_context_parallel_size: Prefill attention CP size within TP.
-    :type prefill_context_parallel_size: int
-    :param decode_context_parallel_size: Decode KV-cache CP size within TP.
-    :type decode_context_parallel_size: int
-    :param memory_fraction: Fraction of free GPU memory reserved by SGLang.
-    :type memory_fraction: float
-    :param temperature: Sampling temperature; ``0`` selects greedy generation.
-    :type temperature: float
-    :param top_p: Nucleus-sampling probability.
-    :type top_p: float
-    :param top_k: Top-k sampling limit; ``-1`` disables it.
-    :type top_k: int
-    :param seed: SGLang sampling seed.
-    :type seed: int
-    :param tokenizer: Optional tokenizer directory; ``None`` uses token-in/token-out.
-    :type tokenizer: Optional[pathlib.Path]
-    :param external_model_package: Optional SGLang external model package.
-    :type external_model_package: Optional[str]
-    :raises ValueError: A topology or sampling value is invalid.
-    """
-
     artifact: Path
     max_new_tokens: int
     tensor_parallel_size: int = 1
@@ -364,6 +326,59 @@ class SGLangGenerationConfig:
             raise ValueError("temperature and top_p are invalid.")
         if self.top_k == 0 or self.top_k < -1:
             raise ValueError("top_k must be -1 or positive.")
+
+
+SGLangGenerationConfig.__init__.__doc__ = r"""Configure experimental SGLang offline generation.
+
+**API Language** - 中文 | English
+
+**中文：** 此接口为实验性接口，其配置和支持的拓扑在稳定前可能调整。它在独立
+Python 环境中使用 SGLang offline ``Engine`` 加载已导出的 model artifact。
+DCP 与 prefill CP 在 TP group 内重用 rank，不额外增加 world size。
+
+**English:** This API is experimental; its configuration and supported
+topologies may change before stabilization. In a separate Python environment,
+it loads an exported model artifact with SGLang's offline ``Engine``. DCP and
+prefill CP reuse ranks within each TP group and do not increase world size.
+
+:param artifact: SGLang/Hugging Face 风格的模型目录。 / SGLang/Hugging Face
+    style model directory.
+:type artifact: pathlib.Path
+:param max_new_tokens: 每个请求的最大生成 token 数。 / Maximum generated tokens
+    per request.
+:type max_new_tokens: int
+:param tensor_parallel_size: SGLang TP 大小。 / SGLang TP size.
+:type tensor_parallel_size: int
+:param pipeline_parallel_size: SGLang PP 大小。 / SGLang PP size.
+:type pipeline_parallel_size: int
+:param data_parallel_size: SGLang DP 大小。 / SGLang DP size.
+:type data_parallel_size: int
+:param prefill_context_parallel_size: TP 内的 prefill attention CP 大小。 /
+    Prefill attention CP size within TP.
+:type prefill_context_parallel_size: int
+:param decode_context_parallel_size: TP 内的 decode KV-cache CP 大小。 /
+    Decode KV-cache CP size within TP.
+:type decode_context_parallel_size: int
+:param memory_fraction: SGLang 预留的空闲 GPU 显存比例。 / Fraction of free GPU
+    memory reserved by SGLang.
+:type memory_fraction: float
+:param temperature: 采样温度；``0`` 选择 greedy generation。 / Sampling
+    temperature; ``0`` selects greedy generation.
+:type temperature: float
+:param top_p: nucleus-sampling 概率。 / Nucleus-sampling probability.
+:type top_p: float
+:param top_k: top-k 限制；``-1`` 禁用。 / Top-k sampling limit; ``-1`` disables it.
+:type top_k: int
+:param seed: SGLang sampling seed。 / SGLang sampling seed.
+:type seed: int
+:param tokenizer: 可选 tokenizer 目录；``None`` 使用 token-in/token-out。 /
+    Optional tokenizer directory; ``None`` uses token-in/token-out.
+:type tokenizer: Optional[pathlib.Path]
+:param external_model_package: 可选 SGLang external model package。 / Optional
+    SGLang external model package.
+:type external_model_package: Optional[str]
+:raises ValueError: 拓扑或采样参数无效。 / If a topology or sampling value is invalid.
+"""
 
 
 @dataclass
@@ -548,4 +563,11 @@ CP, sequence parallelism, and Transformer precision have one source of truth in
 """
 
 
-__all__ = ["ModelBuilder", "ModelConfig", "TrainingConfig"]
+__all__ = [
+    "EvaluationConfig",
+    "MCoreGenerationConfig",
+    "ModelBuilder",
+    "ModelConfig",
+    "SGLangGenerationConfig",
+    "TrainingConfig",
+]
