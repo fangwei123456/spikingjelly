@@ -11,7 +11,7 @@ from statistics import median
 VISION_NAME = re.compile(
     r"(?P<model>sew-resnet34|spikformer)_"
     r"(?P<topology>serial|dp4|fsdp4|tp4|pp4)_"
-    r"b(?P<batch>\d+)_r\d+_optimized"
+    r"b(?P<batch>\d+)_r\d+_optimized(?P<protocol>_k4)?"
 )
 VISION_PROBE_NAME = re.compile(
     r"(?P<model>sew-resnet34|spikformer)_"
@@ -89,7 +89,7 @@ def _vision_topology(topology: str, batch_size: int) -> tuple[int, int, int, int
     data_size = 4 if topology in {"dp4", "fsdp4"} else 1
     tensor_size = 4 if topology == "tp4" else 1
     pipeline_size = 4 if topology == "pp4" else 1
-    microbatches = max(4, batch_size // 16) if pipeline_size > 1 else 1
+    microbatches = 4 if pipeline_size > 1 else 1
     return data_size, tensor_size, pipeline_size, microbatches
 
 
@@ -131,6 +131,8 @@ def _load_vision(results: Path) -> list[dict]:
         match = VISION_NAME.fullmatch(log.stem)
         if match is None:
             continue
+        if match["topology"] == "pp4" and match["protocol"] is None:
+            continue
         status = int(Path(f"{log}.status").read_text().strip())
         text = log.read_text(encoding="utf-8")
         metrics = (
@@ -147,11 +149,7 @@ def _load_vision(results: Path) -> list[dict]:
         completed = [metrics for status, metrics, _ in runs if status == 0]
         status_codes = [status for status, _, _ in runs]
         if len(completed) == 3:
-            status = (
-                "capacity_probe_completed"
-                if topology == "pp4" and batch_size >= 4096
-                else "completed"
-            )
+            status = "completed"
         elif completed:
             status = "unstable"
         elif any(
@@ -185,12 +183,8 @@ def _load_vision(results: Path) -> list[dict]:
             "throughput_unit": "images/s",
             "memory_metric": "cuda_peak_allocated",
             "notes": (
-                (
-                    "one measured batch; no warmup; "
-                    if topology == "pp4" and batch_size >= 4096
-                    else "five warmup and ten measured batches; "
-                )
-                + f"exit statuses: {','.join(map(str, sorted(status_codes)))}"
+                "five warmup and ten measured batches; "
+                f"exit statuses: {','.join(map(str, sorted(status_codes)))}"
             ),
         }
         if len(completed) == 3:
@@ -213,7 +207,7 @@ def _load_vision(results: Path) -> list[dict]:
         rows.append(row)
     for log in (results / "vision").glob("*_probe.log"):
         match = VISION_PROBE_NAME.fullmatch(log.stem)
-        if match is None:
+        if match is None or match["topology"] == "pp4":
             continue
         exit_status = int(Path(f"{log}.status").read_text().strip())
         text = log.read_text(encoding="utf-8")
@@ -487,13 +481,13 @@ def _plot_vision(rows: list[dict], output: Path) -> None:
         ):
             figure, axis = plt.subplots(figsize=(6.1, 3.6))
             for index, topology in enumerate(TOPOLOGY_ORDER):
-                points = _pareto_frontier(
-                    [
+                points = sorted(
+                    (
                         row
                         for row in model_rows
                         if row["topology"] == topology and row["status"] == "completed"
-                    ],
-                    memory_resolution_gib=0.001,
+                    ),
+                    key=lambda row: row["global_batch_size"],
                 )
                 lines = axis.errorbar(
                     [point["peak_memory_gib_median"] for point in points],
@@ -535,7 +529,7 @@ def _plot_vision(rows: list[dict], output: Path) -> None:
             axis.set_xlabel("Peak allocated memory / GPU (GiB)")
             axis.set_ylabel("Aggregate inference throughput (images/s)")
             axis.set_title(
-                f"{model} · inference frontier",
+                f"{model} · inference batch sweep",
                 loc="left",
                 fontweight="bold",
                 pad=8,

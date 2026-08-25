@@ -8,7 +8,11 @@ import pytest
 import torch
 from torch.utils.data import Dataset
 
-from benchmark.plot_distributed_inference import _load_sglang, _pareto_frontier
+from benchmark.plot_distributed_inference import (
+    _load_sglang,
+    _pareto_frontier,
+    _vision_topology,
+)
 from benchmark.snn_llm.spikelm import SpikeLMConfig
 from spikingjelly.activation_based.distributed.llm import (
     EvaluationConfig,
@@ -45,6 +49,11 @@ def test_inference_plot_uses_pareto_frontier():
     ]
 
     assert _pareto_frontier(points) == [points[1], points[4]]
+
+
+@pytest.mark.parametrize("batch_size", [16, 64, 96, 512, 2048])
+def test_vision_pipeline_benchmark_fixes_microbatch_count(batch_size):
+    assert _vision_topology("pp4", batch_size) == (1, 1, 4, 4)
 
 
 def test_sglang_plot_accepts_seven_repeat_median(tmp_path):

@@ -799,14 +799,13 @@ PCIe/CPU interconnect。软件栈与训练相同：PyTorch 2.8.0、Megatron Core
 Vision 使用 BF16、``T=4``、1000 类和缓存的 224 × 224 合成图像。SEW-ResNet34
 各非 PP 曲线的 per-rank batch grid 为
 ``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024``；Spikformer-S 根据
-OOM 在 384--1024 之间停止。PP4 另测到 ``1536, 2048``，并用单 batch probe
-继续搜索容量边界。每个成功吞吐点从新进程启动，使用 4 个 DataLoader workers，
+OOM 在 384--1024 之间停止。PP4 固定 K=4；SEW-ResNet34 的 L grid 为
+``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 3072``，
+Spikformer-S 使用同一 grid 到 ``1536``。每个成功吞吐点从新进程启动，使用
+4 个 DataLoader workers，
 预热 5 个 batch、测量 10 个 batch，并独立重复三次。计时包含 H2D、forward、通信和指标归约，不包含 DataLoader、
-模型/artifact 加载和初始化。图中是三次中位数与完整范围；只有三次均完成的正式
-protocol 点才参与吞吐—显存 Pareto 前沿。
-PP4 的容量尾部 ``L >= 4096`` 因单个高层 batch 已含 256 个以上 pipeline
-microbatch，改为每进程测量 1 个 batch、不额外预热，并仍启动三个独立进程；这些点
-与常规吞吐段在 CSV 的 notes/status 中区分，只用于容量表，不与正式吞吐折线相连。
+模型/artifact 加载和初始化。图中连接同一 protocol 下所有三次完成点，并显示三次
+中位数与完整范围；不做 Pareto 抽点或人工平滑。
 本节统一用 ``L`` 表示每个 DP rank/replica 的本地 batch，用 ``G`` 表示整个作业的
 global batch；始终有 ``G = L × DP``，TP、PP、CP 和 SNN 时间步 ``T`` 均不乘入
 ``G``。PP 另用 ``K`` 表示 pipeline microbatch 数，每块大小为 ``L / K``。所有图
@@ -822,32 +821,33 @@ global batch；始终有 ``G = L × DP``，TP、PP、CP 和 SNN 时间步 ``T`` 
 跨 batch 堆积；SEW 下采样 block 被放到 stage 边界前，Spikformer 的 blocks 按
 ``0/2/2/2`` 分配。公共配置中的 ``pipeline_microbatches`` 表示每个 DP rank 的
 本地 batch 被切成的块数，默认 1，并要求 ``batch_size`` 能被它整除；每块样本数为
-``batch_size / pipeline_microbatches``。Vision 基准单独使用
-``pipeline_microbatches = 4``（``L < 64``），否则使用 ``L / 16``，即在大
-batch 时保持 16 images/pipeline microbatch。该规则只属于实验 protocol，框架不会
+``batch_size / pipeline_microbatches``。Vision 与 MCore 的 PP benchmark 都固定
+``pipeline_microbatches = 4``，因此 L 增长时每块样本数始终按 ``L / 4`` 等比例
+增长，直到 CUDA OOM。该规则只属于实验 protocol，框架不会
 在用户调用中自动改写这个参数。汇总 CSV 分别记录 ``per_rank_batch_size``、
 ``global_batch_size``、``pipeline_microbatches`` 和
 ``pipeline_microbatch_size``。
-Vision 对正式 protocol 点使用精确显存 Pareto 前沿；SGLang 按 0.05 GiB 横轴
-分辨率合并同一显存 bin，只保留该 bin 最高吞吐。MCore 则连接直到 OOM 的全部
-成功 batch sweep 点。CSV 对三者都保留未量化的精确显存和全部测量点。
+SGLang 自身调度器不暴露 pipeline microbatch 参数，其图仍按 0.05 GiB 横轴分辨率
+绘制 Pareto 前沿；Vision 和 MCore 则连接统一 protocol 下直到 OOM 的全部成功
+batch sweep 点。CSV 对三者都保留未量化的精确显存和全部测量点。
 
 .. figure:: ../../_static/tutorials/distributed/sew-resnet34-inference-tradeoff.png
     :width: 720px
     :alt: SEW-ResNet34 分布式评测吞吐与单卡峰值显存
 
-    SEW-ResNet34：正式 protocol 的总评测吞吐—peak allocated memory Pareto 前沿。
+    SEW-ResNet34：固定 PP K=4 的完整 batch sweep。
 
 .. figure:: ../../_static/tutorials/distributed/spikformer-inference-tradeoff.png
     :width: 720px
     :alt: Spikformer-S 分布式评测吞吐与单卡峰值显存
 
-    Spikformer-S：正式 protocol 的总评测吞吐—peak allocated memory Pareto 前沿。
+    Spikformer-S：固定 PP K=4 的完整 batch sweep。
 
 在每 rank batch 128 时，SEW-ResNet34 的单卡、DP4、FSDP4、TP4、PP4 分别为
-845.7、3368.9、3109.3、548.3、1404.1 images/s；Spikformer-S 分别为
-516.6、2060.4、2000.2、412.2、1273.1 images/s。DP/FSDP 接近四卡线性吞吐，
-PP 分别达到单卡的 1.66 倍和 2.46 倍，且大 batch 后进入稳定平台。
+845.7、3368.9、3109.3、548.3、1320.9 images/s；Spikformer-S 分别为
+516.6、2060.4、2000.2、412.2、1088.5 images/s。DP/FSDP 接近四卡线性吞吐，
+PP 分别达到单卡的 1.56 倍和 2.11 倍。固定 K 后 PP 吞吐在中等 batch 达峰，随后
+随每块样本和显存继续增大而平滑进入容量尾部。
 
 纯 TP4 在两个模型上仍低于单卡，但曲线已经稳定；这是模型计算/通信比限制，不是调度
 波动。SEW 每 batch 需要 16 次、合计约 1.41 GB 的 rowwise all-reduce，Spikformer
@@ -879,8 +879,8 @@ PP 分别达到单卡的 1.66 倍和 2.46 倍，且大 batch 后进入稳定平�
       - 768/768：正式多 batch 运行 CUDA OOM
     * - SEW-ResNet34
       - PP4
-      - 32768/32768
-      - 49152/49152：runtime timeout
+      - 3072/3072
+      - 4096/4096：CUDA OOM
     * - Spikformer-S
       - 单卡
       - 256/256
@@ -899,8 +899,8 @@ PP 分别达到单卡的 1.66 倍和 2.46 倍，且大 batch 后进入稳定平�
       - 768/768：CUDA OOM
     * - Spikformer-S
       - PP4
-      - 32768/32768
-      - 49152/49152：runtime timeout
+      - 1536/1536
+      - 2048/2048：CUDA OOM
 
 Vision 正确性测试还覆盖 FSDP2、PP2，以及 TP2 × PP2 训练 checkpoint 导出后在
 TP1 × DP4 上恢复；后者的 validation loss 为 2.310132205 和 2.310132384。

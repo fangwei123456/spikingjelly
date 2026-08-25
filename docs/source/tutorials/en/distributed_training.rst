@@ -869,20 +869,15 @@ Triton 3.4.0.
 Vision used BF16, ``T=4``, 1000 classes, and cached 224 x 224 synthetic images.
 The non-PP SEW-ResNet34 per-rank grid is
 ``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024``; Spikformer-S stops
-between 384 and 1024 according to OOM. PP4 also measures ``1536, 2048`` and then
-uses single-batch probes for its capacity boundary. Each successful throughput
+between 384 and 1024 according to OOM. PP4 fixes K=4. The SEW-ResNet34 L grid is
+``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 3072``;
+Spikformer-S follows the same grid through ``1536``. Each successful throughput
 point starts in a fresh process and uses four
 DataLoader workers, runs five untimed batches and ten measured batches, and is repeated independently three
 times. Timing includes H2D, forward, communication, and metric reduction but
-excludes DataLoader work, model/artifact loading, and initialization. The plots
-show medians and complete ranges. Only three-run points from the regular
-protocol participate in the throughput-memory Pareto frontiers.
-For the PP4 capacity tail at ``L >= 4096``, one high-level batch already contains
-at least 256 pipeline microbatches. Each fresh process therefore measures one
-batch without an additional warmup, while retaining three independent process
-runs. CSV notes/status distinguish these points from the regular throughput
-segment; they remain capacity-table evidence and are not connected to the
-formal throughput lines.
+excludes DataLoader work, model/artifact loading, and initialization. Each plot
+connects every three-run point from one protocol and shows its median and full
+range; it applies neither Pareto point removal nor artificial smoothing.
 This section uses ``L`` for the local batch on each DP rank/replica and ``G``
 for the whole-job global batch. Always ``G = L × DP``; TP, PP, CP, and SNN time
 steps ``T`` do not multiply G. PP additionally uses ``K`` for the number of
@@ -903,36 +898,36 @@ work accumulation. SEW downsampling blocks sit before stage boundaries, while
 Spikformer distributes blocks as ``0/2/2/2``. In the public configuration,
 ``pipeline_microbatches`` is the number of chunks cut from one DP rank's local
 batch. It defaults to one, requires divisibility, and gives
-``samples per chunk = batch_size / pipeline_microbatches``. The Vision
-benchmark alone sets it to 4 for ``L < 64`` and to ``L / 16`` otherwise,
-keeping 16 images per
-pipeline microbatch at large B. The framework does not silently apply this rule
+``samples per chunk = batch_size / pipeline_microbatches``. Both Vision and
+MCore PP benchmarks fix ``pipeline_microbatches = 4``. Each chunk therefore
+grows proportionally as ``L / 4`` until CUDA OOM. The framework does not
+silently apply this rule
 to user calls. The summary CSV records ``per_rank_batch_size``,
 ``global_batch_size``, ``pipeline_microbatches``, and
 ``pipeline_microbatch_size`` separately.
-Vision uses exact-memory Pareto frontiers for regular-protocol points. SGLang
-frontier lines merge measurements within the same 0.05-GiB horizontal bin and
-retain its highest throughput. MCore instead connects every successful
-batch-sweep point through OOM. The CSV keeps exact, unquantized memory and every
-measurement for all three cases.
+The SGLang scheduler does not expose a pipeline-microbatch control, so its lines
+still use 0.05-GiB Pareto frontiers. Vision and MCore instead connect every
+successful point from their fixed protocol through OOM. The CSV keeps exact,
+unquantized memory and every measurement for all three cases.
 
 .. figure:: ../../_static/tutorials/distributed/sew-resnet34-inference-tradeoff.png
     :width: 720px
     :alt: SEW-ResNet34 distributed evaluation throughput and per-GPU peak memory
 
-    SEW-ResNet34 regular-protocol aggregate evaluation throughput-memory Pareto frontiers.
+    Complete SEW-ResNet34 batch sweeps with PP K fixed at 4.
 
 .. figure:: ../../_static/tutorials/distributed/spikformer-inference-tradeoff.png
     :width: 720px
     :alt: Spikformer-S distributed evaluation throughput and per-GPU peak memory
 
-    Spikformer-S regular-protocol aggregate evaluation throughput-memory Pareto frontiers.
+    Complete Spikformer-S batch sweeps with PP K fixed at 4.
 
 At per-rank batch 128, SEW-ResNet34 reaches 845.7, 3368.9, 3109.3, 548.3, and
-1404.1 images/s on one GPU, DP4, FSDP4, TP4, and PP4. Spikformer-S reaches
-516.6, 2060.4, 2000.2, 412.2, and 1273.1 images/s. DP/FSDP approach linear
-four-GPU throughput. PP reaches 1.66x and 2.46x single-GPU throughput and then
-enters a stable large-batch plateau.
+1320.9 images/s on one GPU, DP4, FSDP4, TP4, and PP4. Spikformer-S reaches
+516.6, 2060.4, 2000.2, 412.2, and 1088.5 images/s. DP/FSDP approach linear
+four-GPU throughput. PP reaches 1.56x and 2.11x single-GPU throughput. With K
+fixed, PP peaks at a medium batch and then moves smoothly into its capacity tail
+as per-chunk samples and memory continue to grow.
 
 Pure TP4 remains below one GPU but is now stable; this is a model
 compute-to-communication limit rather than scheduler variance. SEW executes 16
@@ -966,8 +961,8 @@ throughput.
       - 768/768: sustained multi-batch CUDA OOM
     * - SEW-ResNet34
       - PP4
-      - 32768/32768
-      - 49152/49152: runtime timeout
+      - 3072/3072
+      - 4096/4096: CUDA OOM
     * - Spikformer-S
       - One GPU
       - 256/256
@@ -986,8 +981,8 @@ throughput.
       - 768/768: CUDA OOM
     * - Spikformer-S
       - PP4
-      - 32768/32768
-      - 49152/49152: runtime timeout
+      - 1536/1536
+      - 2048/2048: CUDA OOM
 
 Vision correctness tests also covered FSDP2, PP2, and exporting a TP2 x PP2
 training checkpoint before restoring it under TP1 x DP4. The latter reported
