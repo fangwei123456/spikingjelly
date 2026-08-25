@@ -8,10 +8,7 @@ import pytest
 import torch
 from torch.utils.data import Dataset
 
-from benchmark.plot_distributed_inference import (
-    _load_sglang,
-    _vision_topology,
-)
+from benchmark.plot_distributed_inference import _vision_topology
 from benchmark.snn_llm.spikelm import SpikeLMConfig
 from spikingjelly.activation_based.distributed.llm import (
     EvaluationConfig,
@@ -41,34 +38,6 @@ def test_inference_temporal_logit_reduction():
 @pytest.mark.parametrize("batch_size", [16, 64, 96, 512, 2048])
 def test_vision_pipeline_benchmark_fixes_microbatch_count(batch_size):
     assert _vision_topology("pp4", batch_size) == (1, 1, 4, 4)
-
-
-def test_sglang_plot_accepts_seven_repeat_median(tmp_path):
-    data = {
-        "tensor_parallel_size": 1,
-        "pipeline_parallel_size": 1,
-        "data_parallel_size": 1,
-        "memory_fraction": 0.5,
-        "measurements": [
-            {
-                "prompt_count": 16,
-                "outputs": [[1] * 8],
-                "inference_seconds_samples": [1.0, 2.0, 3.0],
-                "peak_device_memory_bytes": 1024**3,
-            },
-            {
-                "prompt_count": 32,
-                "outputs": [[1] * 8],
-                "inference_seconds_samples": [1.0] * 7,
-                "peak_device_memory_bytes": 1024**3,
-            },
-        ],
-    }
-    (tmp_path / "sglang_tp1_stable.json").write_text(json.dumps(data))
-
-    rows = _load_sglang(tmp_path)
-
-    assert [row["status"] for row in rows] == ["unstable", "completed"]
 
 
 def test_evaluation_config_and_padding_mask():

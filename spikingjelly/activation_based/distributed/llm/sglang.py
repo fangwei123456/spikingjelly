@@ -10,15 +10,17 @@ from .config import SGLangGenerationConfig
 
 
 def create_sglang_engine(config: SGLangGenerationConfig) -> Any:
-    r"""Create an SGLang offline Engine for repeated inference calls.
+    r"""Create an experimental SGLang offline Engine for repeated inference calls.
 
     **API Language** - 中文 | English
 
-    **中文：** 校验 artifact 和并行拓扑后创建 offline Engine。调用方拥有
-    Engine 生命周期，完成后必须调用 ``shutdown()``。
+    **中文：** 此接口为实验性接口，其行为在稳定前可能调整。校验 artifact 和并行
+    拓扑后创建 offline Engine。调用方拥有 Engine 生命周期，完成后必须调用
+    ``shutdown()``。
 
-    **English:** Validate the artifact and topology, then create an offline
-    Engine. The caller owns its lifecycle and must call ``shutdown()``.
+    **English:** This API is experimental and may change before stabilization.
+    It validates the artifact and topology, then creates an offline Engine. The
+    caller owns its lifecycle and must call ``shutdown()``.
 
     :param config: SGLang generation configuration.
     :type config: SGLangGenerationConfig
@@ -86,17 +88,18 @@ def create_sglang_engine(config: SGLangGenerationConfig) -> Any:
 def generate_sglang(
     config: SGLangGenerationConfig, input_ids: torch.Tensor
 ) -> list[dict[str, Any]]:
-    r"""Generate token IDs with SGLang's offline Engine.
+    r"""Generate token IDs with the experimental SGLang offline integration.
 
     **API Language** - 中文 | English
 
-    **中文：** 在独立 SGLang 环境中加载 artifact，直接向 offline
-    ``Engine`` 提交 tokenized prompts。本函数不启动 HTTP、router 或其他
-    serving 控制面。
+    **中文：** 此接口为实验性接口，其行为在稳定前可能调整。它在独立 SGLang 环境中
+    加载 artifact，直接向 offline ``Engine`` 提交 tokenized prompts。本函数不启动
+    HTTP、router 或其他 serving 控制面。
 
-    **English:** Load the artifact in a separate SGLang environment and submit
-    tokenized prompts directly to the offline ``Engine``. This function starts no
-    HTTP server, router, or other serving control plane.
+    **English:** This API is experimental and may change before stabilization.
+    It loads the artifact in a separate SGLang environment and submits tokenized
+    prompts directly to the offline ``Engine``. This function starts no HTTP
+    server, router, or other serving control plane.
 
     :param config: SGLang generation configuration.
     :type config: SGLangGenerationConfig

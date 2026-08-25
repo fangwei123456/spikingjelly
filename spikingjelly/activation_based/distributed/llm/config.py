@@ -283,17 +283,18 @@ class MCoreGenerationConfig:
 
 @dataclass(frozen=True)
 class SGLangGenerationConfig:
-    r"""Configure offline generation with a separate SGLang environment.
+    r"""Configure experimental offline generation in a separate SGLang environment.
 
     **API Language** - 中文 | English
 
-    **中文：** 使用 SGLang offline ``Engine`` 加载一个已导出的
-    model artifact。DCP 与 prefill CP 在 TP group 内重用 rank，不额外
-    增加 world size。
+    **中文：** 此接口为实验性接口，其配置和支持的拓扑在稳定前可能调整。它使用
+    SGLang offline ``Engine`` 加载一个已导出的 model artifact。DCP 与 prefill
+    CP 在 TP group 内重用 rank，不额外增加 world size。
 
-    **English:** Load an exported model artifact with SGLang's offline ``Engine``.
-    DCP and prefill CP reuse ranks within each TP group and do not increase the
-    process world size.
+    **English:** This API is experimental; its configuration and supported
+    topologies may change before stabilization. It loads an exported model
+    artifact with SGLang's offline ``Engine``. DCP and prefill CP reuse ranks
+    within each TP group and do not increase the process world size.
 
     :param artifact: SGLang/Hugging Face style model directory.
     :type artifact: pathlib.Path
@@ -323,7 +324,7 @@ class SGLangGenerationConfig:
     :type tokenizer: Optional[pathlib.Path]
     :param external_model_package: Optional SGLang external model package.
     :type external_model_package: Optional[str]
-    :param disable_radix_cache: Disable prefix-cache reuse for controlled benchmarks.
+    :param disable_radix_cache: Disable prefix-cache reuse for controlled runs.
     :type disable_radix_cache: bool
     :raises ValueError: A topology or sampling value is invalid.
     """

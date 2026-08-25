@@ -30,10 +30,8 @@ TOPOLOGY_LABELS = {
     "tp4": "TP4",
     "pp4": "PP4",
     "tp1": "TP1",
-    "dp2": "DP2",
     "tp2": "TP2",
     "pp2": "PP2",
-    "dp2tp2": "DP2 + TP2",
 }
 CSV_FIELDS = (
     "workload",
@@ -264,78 +262,6 @@ def _load_vision(results: Path) -> list[dict]:
     return rows
 
 
-def _load_sglang(results: Path) -> list[dict]:
-    rows = []
-    for topology in ("tp1", "dp2", "dp4", "tp2", "pp2", "pp4", "dp2tp2"):
-        stable = sorted(results.glob(f"sglang_{topology}_stable*.json"))
-        if stable:
-            datasets = []
-            for path in stable:
-                try:
-                    datasets.append(_last_json(path))
-                except ValueError:
-                    continue
-        else:
-            continue
-        measurements = {
-            measurement["prompt_count"]: (data, measurement)
-            for data in datasets
-            for measurement in data["measurements"]
-        }
-        for data, measurement in (
-            measurements[prompt_count] for prompt_count in sorted(measurements)
-        ):
-            generated_tokens = sum(len(output) for output in measurement["outputs"])
-            throughputs = [
-                generated_tokens / elapsed
-                for elapsed in measurement["inference_seconds_samples"]
-            ]
-            throughput = _summary(throughputs)
-            memory = measurement["peak_device_memory_bytes"] / 1024**3
-            status = (
-                "completed"
-                if len(throughputs) >= 7
-                or (len(throughputs) == 3 and throughput[2] / throughput[1] <= 1.3)
-                else "unstable"
-            )
-            rows.append(
-                {
-                    "workload": "llm_generation",
-                    "backend": "sglang",
-                    "model": "Qwen2.5-0.5B-qcfs",
-                    "topology": topology,
-                    "gpus": data["tensor_parallel_size"]
-                    * data["pipeline_parallel_size"]
-                    * data["data_parallel_size"],
-                    "data_parallel_size": data["data_parallel_size"],
-                    "tensor_parallel_size": data["tensor_parallel_size"],
-                    "pipeline_parallel_size": data["pipeline_parallel_size"],
-                    "per_rank_batch_size": measurement["prompt_count"]
-                    // data["data_parallel_size"],
-                    "global_batch_size": measurement["prompt_count"],
-                    "pipeline_microbatches": "",
-                    "pipeline_microbatch_size": "",
-                    "repeats": len(throughputs),
-                    "successful_repeats": len(throughputs),
-                    "status": status,
-                    "throughput_unit": "generated_tokens/s",
-                    "throughput_median": throughput[0],
-                    "throughput_min": throughput[1],
-                    "throughput_max": throughput[2],
-                    "memory_metric": "nvml_device_used",
-                    "peak_memory_gib_median": memory,
-                    "peak_memory_gib_min": memory,
-                    "peak_memory_gib_max": memory,
-                    "notes": (
-                        "Radix cache disabled; static memory fraction "
-                        f"{data['memory_fraction']}; "
-                        f"{len(throughputs)} timed repeats"
-                    ),
-                }
-            )
-    return rows
-
-
 def _load_mcore(results: Path) -> list[dict]:
     groups = defaultdict(list)
     for log in (results / "mcore").glob("*.log"):
@@ -520,95 +446,6 @@ def _plot_vision(rows: list[dict], output: Path) -> None:
             plt.close(figure)
 
 
-def _plot_sglang(rows: list[dict], output: Path) -> None:
-    import matplotlib.pyplot as plt
-    import scienceplots  # noqa: F401
-    from matplotlib.ticker import FuncFormatter, LogLocator
-
-    markers = ("o", "s", "^", "D", "P", "X", "v")
-    linestyles = (
-        "-",
-        "--",
-        "-.",
-        ":",
-        (0, (3, 1, 1, 1)),
-        (0, (5, 2)),
-        (0, (1, 1)),
-    )
-    with (
-        plt.style.context(["science", "no-latex", "bright"]),
-        plt.rc_context(PLOT_RC),
-    ):
-        figure, (throughput_axis, memory_axis) = plt.subplots(
-            1, 2, figsize=(9.2, 3.6), sharex=True
-        )
-        handles = []
-        labels = []
-        for index, topology in enumerate(
-            ("tp1", "dp2", "dp4", "tp2", "pp2", "pp4", "dp2tp2")
-        ):
-            points = sorted(
-                (
-                    row
-                    for row in rows
-                    if row["topology"] == topology and row["status"] == "completed"
-                ),
-                key=lambda row: row["global_batch_size"],
-            )
-            if not points:
-                continue
-            color = f"C{index}"
-            label = (
-                f"{TOPOLOGY_LABELS[topology]} · max $G_{{req}}$="
-                f"{points[-1]['global_batch_size']}"
-            )
-            lines = throughput_axis.errorbar(
-                [point["global_batch_size"] for point in points],
-                [point["throughput_median"] for point in points],
-                yerr=_error(points),
-                marker=markers[index],
-                linestyle=linestyles[index],
-                capsize=2,
-                color=color,
-            )
-            memory_axis.plot(
-                [point["global_batch_size"] for point in points],
-                [point["peak_memory_gib_median"] for point in points],
-                marker=markers[index],
-                linestyle=linestyles[index],
-                color=color,
-            )
-            handles.append(lines.lines[0])
-            labels.append(label)
-        for axis in (throughput_axis, memory_axis):
-            axis.set_xscale("log", base=2)
-            axis.xaxis.set_major_locator(LogLocator(base=2))
-            axis.xaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:g}"))
-            axis.spines[["top", "right"]].set_visible(False)
-            axis.tick_params(axis="both", which="both", top=False, right=False)
-            axis.grid(color="0.88", linewidth=0.6, linestyle="--")
-        throughput_axis.set_ylim(bottom=0)
-        throughput_axis.set_ylabel("Aggregate generation throughput (tokens/s)")
-        memory_axis.set_ylabel("Device memory used / GPU (GiB, NVML)")
-        figure.suptitle(
-            "Qwen2.5-0.5B QCFS · SGLang offline request scaling",
-            x=0.08,
-            ha="left",
-            fontweight="bold",
-        )
-        figure.supxlabel("Submitted requests $G_{req}$")
-        figure.legend(
-            handles,
-            labels,
-            loc="center left",
-            bbox_to_anchor=(0.82, 0.5),
-            frameon=False,
-        )
-        figure.tight_layout(rect=(0, 0, 0.82, 0.94))
-        figure.savefig(output / "sglang-inference.png", dpi=300, bbox_inches="tight")
-        plt.close(figure)
-
-
 def _plot_mcore(rows: list[dict], output: Path) -> None:
     import matplotlib.pyplot as plt
     import scienceplots  # noqa: F401
@@ -671,13 +508,11 @@ def main() -> None:
     if args.results.is_file():
         rows = _load_csv(args.results)
         vision_rows = [row for row in rows if row["backend"] == "pytorch"]
-        sglang_rows = [row for row in rows if row["backend"] == "sglang"]
         mcore_rows = [row for row in rows if row["backend"] == "mcore"]
     else:
         vision_rows = _load_vision(args.results)
-        sglang_rows = _load_sglang(args.results)
         mcore_rows = _load_mcore(args.results)
-        rows = vision_rows + sglang_rows + mcore_rows
+        rows = vision_rows + mcore_rows
         for row in rows:
             if row["global_batch_size"] != (
                 row["per_rank_batch_size"] * row["data_parallel_size"]
@@ -699,7 +534,6 @@ def main() -> None:
             writer.writeheader()
             writer.writerows(rows)
     _plot_vision(vision_rows, args.output)
-    _plot_sglang(sglang_rows, args.output)
     _plot_mcore(mcore_rows, args.output)
 
 

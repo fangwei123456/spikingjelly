@@ -519,18 +519,18 @@ Module: ``spikingjelly.activation_based.distributed``.
   training-schedule state and cross-batch work accumulation. Communication-aware
   SEW-ResNet34 boundaries and balanced Spikformer stages provide stable PP
   throughput above one GPU.
-- Added inference capacity benchmarks that sweep Vision batches through OOM or
-  a streaming throughput plateau and SGLang request batches through scheduler
-  saturation with a 2x/1.5x boundary search. Three-run throughput-memory plots
-  reuse the training-figure style and report per-rank and global batches
-  separately.
+- Added inference capacity benchmarks that sweep Vision and MCore evaluation
+  batches through measured capacity boundaries with a 2x/1.5x search. Three-run
+  throughput-memory plots reuse the training-figure style and report per-rank
+  and global batches separately.
   Vision and MCore evaluation support untimed warmup batches; Vision excludes
   DataLoader work from reported throughput.
 - Added optimizer-free MCore loss/perplexity evaluation with DP/TP/PP/CP and
   explicit forward-only pipeline microbatches, plus DP-sharded cached generation
   with exact prompt ordering.
-- Added a separate-environment SGLang 0.5.17 offline backend and deterministic
-  MCore-to-safetensors exporters for the SpikeLM and Qwen2 reference recipes.
+- Added an experimental, separate-environment SGLang 0.5.17 offline backend and
+  deterministic MCore-to-safetensors exporters for the SpikeLM and Qwen2
+  reference recipes.
   SNN time remains explicit inside each external model and is folded into KV
   heads only at the RadixAttention seam; both reference adapters use SGLang's
   native pipeline-stage protocol.
