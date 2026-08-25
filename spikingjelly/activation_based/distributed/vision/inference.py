@@ -157,6 +157,7 @@ def export_inference_artifact(checkpoint: Path, output: Path) -> None:
         failed = torch.zeros((), dtype=torch.uint8, device=device)
         error: Optional[BaseException] = None
         if rank == 0:
+            temporary = output.with_name(f".{output.name}.tmp")
             try:
                 canonical = builder.merge_state_dicts(
                     gathered,
@@ -164,7 +165,6 @@ def export_inference_artifact(checkpoint: Path, output: Path) -> None:
                     tensor_size=config.tensor_parallel_size,
                 )
                 output.parent.mkdir(parents=True, exist_ok=True)
-                temporary = output.with_name(f".{output.name}.tmp")
                 torch.save(
                     {
                         "schema_version": _ARTIFACT_SCHEMA_VERSION,
@@ -182,6 +182,8 @@ def export_inference_artifact(checkpoint: Path, output: Path) -> None:
             except BaseException as exception:
                 failed.fill_(1)
                 error = exception
+                if temporary.exists():
+                    temporary.unlink()
         dist.broadcast(failed, src=0)
         if failed.item():
             if error is not None:
@@ -315,26 +317,30 @@ def _merge_prediction_shards(
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(f".{output.name}.tmp")
     seen = np.zeros(dataset_size, dtype=np.bool_)
-    with h5py.File(temporary, "w", locking=False) as target:
-        target.create_dataset("index", data=np.arange(dataset_size, dtype=np.int64))
-        logits = target.create_dataset(
-            "logits", (dataset_size, num_classes), dtype="f4"
-        )
-        for key, value in attributes.items():
-            target.attrs[key] = value
-        for path in shard_paths:
-            with h5py.File(path, "r", locking=False) as shard:
-                indices = shard["index"][:]
-                if np.any(seen[indices]):
-                    raise ValueError(
-                        "Prediction shards contain duplicate dataset indices."
-                    )
-                seen[indices] = True
-                order = np.argsort(indices)
-                logits[indices[order]] = shard["logits"][:][order]
-        if not seen.all():
-            raise ValueError("Prediction shards do not cover the complete dataset.")
-    temporary.replace(output)
+    try:
+        with h5py.File(temporary, "w", locking=False) as target:
+            target.create_dataset("index", data=np.arange(dataset_size, dtype=np.int64))
+            logits = target.create_dataset(
+                "logits", (dataset_size, num_classes), dtype="f4"
+            )
+            for key, value in attributes.items():
+                target.attrs[key] = value
+            for path in shard_paths:
+                with h5py.File(path, "r", locking=False) as shard:
+                    indices = shard["index"][:]
+                    if len(np.unique(indices)) != len(indices) or np.any(seen[indices]):
+                        raise ValueError(
+                            "Prediction shards contain duplicate dataset indices."
+                        )
+                    seen[indices] = True
+                    order = np.argsort(indices)
+                    logits[indices[order]] = shard["logits"][:][order]
+            if not seen.all():
+                raise ValueError("Prediction shards do not cover the complete dataset.")
+        temporary.replace(output)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
     for path in shard_paths:
         path.unlink()
 
@@ -491,7 +497,7 @@ def _run_classification(
 
         schedule = None
         if config.pipeline_parallel_size > 1:
-            dtype = {
+            stage_dtype = {
                 "fp32": torch.float32,
                 "bf16": torch.bfloat16,
             }[config.precision]
@@ -508,7 +514,7 @@ def _run_classification(
                 pipeline_size=config.pipeline_parallel_size,
                 microbatches=config.pipeline_microbatches,
                 input_shape=stage_input_shape,
-                input_dtype=torch.float32 if pipeline_rank == 0 else dtype,
+                input_dtype=(torch.float32 if pipeline_rank == 0 else stage_dtype),
                 device=device,
                 batch_first=pipeline_rank == 0 and not static_input,
                 time_steps=model_config.time_steps if static_input else None,
@@ -577,8 +583,6 @@ def _run_classification(
                         if pipeline_rank == 0
                         else schedule.step()
                     )
-                    if output_rank:
-                        logits = _classification_logits(logits)
             if schedule is None:
                 functional.reset_net(model)
             return logits, targets, indices, valid, has_target
@@ -682,6 +686,8 @@ def _run_classification(
     finally:
         if prediction_shard is not None:
             prediction_shard.close()
+        if shard_path is not None and shard_path.exists():
+            shard_path.unlink()
         if initialized_here and dist.is_initialized():
             dist.destroy_process_group()
 

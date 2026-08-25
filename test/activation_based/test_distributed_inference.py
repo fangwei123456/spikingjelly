@@ -1,5 +1,8 @@
 import json
+import os
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -10,6 +13,7 @@ from benchmark.snn_llm.spikelm import SpikeLMConfig
 from spikingjelly.activation_based.distributed.llm import (
     EvaluationConfig,
     SGLangGenerationConfig,
+    create_sglang_engine,
     generate_sglang,
 )
 from spikingjelly.activation_based.distributed.llm.inference import _EvaluationDataset
@@ -91,14 +95,17 @@ def test_evaluation_config_and_padding_mask():
     assert torch.equal(padded[1]["loss_mask"], torch.zeros(4))
 
 
-def test_sglang_generation_config_rejects_invalid_dcp_artifact(tmp_path):
+@pytest.mark.parametrize(("tensor_parallel_size", "kv_heads"), [(2, 8), (24, 8)])
+def test_sglang_generation_config_rejects_invalid_dcp_artifact(
+    tmp_path, tensor_parallel_size, kv_heads
+):
     artifact = tmp_path / "artifact"
     artifact.mkdir()
     (artifact / "config.json").write_text(
         json.dumps(
             {
                 "spikingjelly_artifact_schema": 1,
-                "num_key_value_heads": 8,
+                "num_key_value_heads": kv_heads,
             }
         ),
         encoding="utf-8",
@@ -106,9 +113,38 @@ def test_sglang_generation_config_rejects_invalid_dcp_artifact(tmp_path):
     config = SGLangGenerationConfig(
         artifact=artifact,
         max_new_tokens=2,
-        tensor_parallel_size=2,
+        tensor_parallel_size=tensor_parallel_size,
         decode_context_parallel_size=2,
     )
 
     with pytest.raises(ValueError, match="TP-replicated KV heads"):
         generate_sglang(config, torch.ones((1, 2), dtype=torch.long))
+
+
+def test_sglang_engine_restores_external_model_package(tmp_path, monkeypatch):
+    artifact = tmp_path / "artifact"
+    artifact.mkdir()
+    (artifact / "config.json").write_text("{}", encoding="utf-8")
+    observed = []
+    monkeypatch.setitem(
+        sys.modules,
+        "sglang",
+        SimpleNamespace(
+            Engine=lambda **_kwargs: observed.append(
+                os.environ.get("SGLANG_EXTERNAL_MODEL_PACKAGE")
+            )
+        ),
+    )
+    monkeypatch.setenv("SGLANG_EXTERNAL_MODEL_PACKAGE", "original")
+
+    create_sglang_engine(
+        SGLangGenerationConfig(
+            artifact=artifact,
+            max_new_tokens=1,
+            external_model_package="custom.models",
+        )
+    )
+    create_sglang_engine(SGLangGenerationConfig(artifact=artifact, max_new_tokens=1))
+
+    assert observed == ["custom.models", None]
+    assert os.environ["SGLANG_EXTERNAL_MODEL_PACKAGE"] == "original"

@@ -150,10 +150,7 @@ class _QwenAttention(nn.Module):
             mean=False,
         )
 
-        def pack(value: torch.Tensor) -> torch.Tensor:
-            return value.flatten(1)
-
-        output = self.attention(pack(q), pack(k), pack(v), forward_batch)
+        output = self.attention(q.flatten(1), k.flatten(1), v.flatten(1), forward_batch)
         output = output.reshape(token_count * self.time_steps, self.q_size)
         output, _ = self.proj(output)
         return output.reshape(token_count, self.time_steps, self.hidden_size)
@@ -163,7 +160,6 @@ class _QwenMLP(nn.Module):
     def __init__(
         self,
         config,
-        layer_id: int,
         quant_config: Optional[QuantizationConfig],
         prefix: str,
     ) -> None:
@@ -220,7 +216,7 @@ class _QwenLayer(nn.Module):
             config, layer_id, quant_config, add_prefix("attn", prefix)
         )
         self.mlp_norm = _RMSNorm(config.hidden_size, config.rms_norm_eps)
-        self.mlp = _QwenMLP(config, layer_id, quant_config, add_prefix("mlp", prefix))
+        self.mlp = _QwenMLP(config, quant_config, add_prefix("mlp", prefix))
         self.register_buffer("input_scale", torch.ones(config.hidden_size))
 
     def forward(

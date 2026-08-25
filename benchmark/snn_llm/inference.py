@@ -136,8 +136,6 @@ def _export_sglang(
         or args.context_parallel_size != 1
     ):
         raise ValueError("SpikeLM SGLang export currently requires TP=PP=CP=1.")
-    if args.output.exists() and any(args.output.iterdir()):
-        raise FileExistsError(f"Export directory is not empty: {args.output}")
     try:
         from safetensors.torch import save_file
     except ImportError as error:
@@ -153,6 +151,7 @@ def _export_sglang(
         load_for_inference,
     )
 
+    args.output.mkdir(parents=True)
     torch.cuda.set_device(0)
     dist.init_process_group(
         "nccl",
@@ -226,7 +225,6 @@ def _export_sglang(
                 .detach()
                 .cpu()
             )
-        args.output.mkdir(parents=True, exist_ok=True)
         save_file(weights, args.output / "model.safetensors")
         exported_config = {
             "architectures": ["SpikingJellySpikeLMForCausalLM"],

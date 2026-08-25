@@ -308,9 +308,7 @@ def _load_sglang(results: Path) -> list[dict]:
                     "data_parallel_size": data["data_parallel_size"],
                     "tensor_parallel_size": data["tensor_parallel_size"],
                     "pipeline_parallel_size": data["pipeline_parallel_size"],
-                    "per_rank_batch_size": (
-                        measurement["prompt_count"] + data["data_parallel_size"] - 1
-                    )
+                    "per_rank_batch_size": measurement["prompt_count"]
                     // data["data_parallel_size"],
                     "global_batch_size": measurement["prompt_count"],
                     "pipeline_microbatches": "",
@@ -339,9 +337,7 @@ def _load_mcore(results: Path) -> list[dict]:
         if match is None:
             continue
         status_path = Path(f"{log}.status")
-        if not status_path.is_file():
-            continue
-        exit_status = int(status_path.read_text().strip().split(":")[-1])
+        exit_status = int(status_path.read_text().strip())
         text = log.read_text(encoding="utf-8")
         metrics = _last_json(log) if exit_status == 0 else None
         groups[(match["topology"], int(match["batch"]))].append(
@@ -465,6 +461,9 @@ def _plot_vision(rows: list[dict], output: Path) -> None:
         ("Spikformer-S", "spikformer-inference-tradeoff.png"),
     ):
         model_rows = [row for row in rows if row["model"] == model]
+        stable_rows = [row for row in model_rows if row["status"] == "completed"]
+        if not stable_rows:
+            continue
         with (
             plt.style.context(["science", "no-latex", "bright"]),
             plt.rc_context(PLOT_RC),
@@ -503,7 +502,6 @@ def _plot_vision(rows: list[dict], output: Path) -> None:
                         color=lines.lines[0].get_color(),
                         verticalalignment="bottom" if label_above else "top",
                     )
-            stable_rows = [row for row in model_rows if row["status"] == "completed"]
             min_memory = min(row["peak_memory_gib_median"] for row in stable_rows)
             max_memory = max(row["peak_memory_gib_median"] for row in stable_rows)
             min_throughput = min(row["throughput_median"] for row in stable_rows)

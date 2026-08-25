@@ -55,7 +55,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--timing-warmup-batches", type=int, default=0)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--compile", action="store_true")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if min(args.samples, args.classes, args.image_size, args.time_steps) <= 0:
+        parser.error("samples, classes, image-size, and time-steps must be positive")
+    return args
 
 
 def main() -> None:

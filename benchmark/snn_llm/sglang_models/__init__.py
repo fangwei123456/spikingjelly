@@ -16,6 +16,8 @@ def _load_stage_weights(
 ) -> None:
     params = dict(module.named_parameters())
     buffers = dict(module.named_buffers())
+    expected = set(module.state_dict())
+    loaded = set()
     for name, value in weights:
         layer_id = get_layer_id(name)
         if layer_id is not None and not (
@@ -34,3 +36,7 @@ def _load_stage_weights(
                 continue
             raise KeyError(f"Unknown {model_name} artifact tensor: {name}")
         getattr(target, "weight_loader", default_weight_loader)(target, value)
+        loaded.add(name)
+    missing = sorted(expected - loaded)
+    if missing:
+        raise KeyError(f"Missing {model_name} artifact tensors: {missing}")

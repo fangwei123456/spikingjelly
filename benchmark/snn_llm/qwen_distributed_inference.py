@@ -79,7 +79,7 @@ def _train(args: argparse.Namespace, model: Qwen2Config) -> dict[str, float]:
             },
             sequence_length=args.sequence_length,
             micro_batch_size=args.micro_batch_size,
-            timing_warmup_batches=args.timing_warmup_batches,
+            timing_warmup_steps=args.timing_warmup_batches,
             global_batch_size=args.global_batch_size,
             train_steps=args.steps,
             eval_interval=1,
@@ -129,47 +129,6 @@ def _generate(args: argparse.Namespace, model: Qwen2Config):
     )
 
 
-def _inspect(args: argparse.Namespace, model_config: Qwen2Config) -> list[str]:
-    import torch.distributed as dist
-    from megatron.core import parallel_state
-    from megatron.core.tensor_parallel.random import model_parallel_cuda_manual_seed
-    from megatron.core.utils import unwrap_model
-
-    from spikingjelly.activation_based.distributed.llm.inference import (
-        load_for_inference,
-    )
-
-    if any(
-        size != 1
-        for size in (
-            args.tensor_parallel_size,
-            args.pipeline_parallel_size,
-            args.context_parallel_size,
-        )
-    ):
-        raise ValueError("inspect requires TP=PP=CP=1.")
-    torch.cuda.set_device(0)
-    dist.init_process_group(
-        "nccl",
-        init_method="tcp://127.0.0.1:29581",
-        rank=0,
-        world_size=1,
-        device_id=torch.device("cuda", 0),
-    )
-    try:
-        parallel_state.initialize_model_parallel()
-        model_parallel_cuda_manual_seed(1234)
-        provider, _ = model_config.get_builder_cls()(model_config).build(
-            use_snn_memopt=False, resume=True
-        )
-        model = load_for_inference(model_config.transformer, provider, args.checkpoint)
-        return list(unwrap_model(model).state_dict())
-    finally:
-        if parallel_state.model_parallel_is_initialized():
-            parallel_state.destroy_model_parallel()
-        dist.destroy_process_group()
-
-
 def _initialize_checkpoint(
     args: argparse.Namespace, model_config: Qwen2Config
 ) -> dict[str, object]:
@@ -186,8 +145,7 @@ def _initialize_checkpoint(
         )
     ):
         raise ValueError("initialize requires TP=PP=CP=1.")
-    if args.output.exists() and any(args.output.iterdir()):
-        raise FileExistsError(f"Checkpoint directory is not empty: {args.output}")
+    args.output.mkdir(parents=True)
     torch.cuda.set_device(0)
     dist.init_process_group(
         "nccl",
@@ -215,7 +173,6 @@ def _initialize_checkpoint(
             "mcore_recompute_granularity": model_config.transformer.recompute_granularity,
             "mcore_recompute_modules": model_config.transformer.recompute_modules,
         }
-        args.output.mkdir(parents=True, exist_ok=True)
         dist_checkpointing.save(
             {
                 "model": model.sharded_state_dict(metadata=metadata),
@@ -258,8 +215,7 @@ def _export_sglang(
         )
     ):
         raise ValueError("export-sglang requires TP=PP=CP=1.")
-    if args.output.exists() and any(args.output.iterdir()):
-        raise FileExistsError(f"Export directory is not empty: {args.output}")
+    args.output.mkdir(parents=True)
     torch.cuda.set_device(0)
     dist.init_process_group(
         "nccl",
@@ -331,7 +287,6 @@ def _export_sglang(
                 .cpu()
             )
 
-        args.output.mkdir(parents=True, exist_ok=True)
         save_file(weights, args.output / "model.safetensors")
         rope = source_config.rope_parameters
         exported_config = {
@@ -392,7 +347,6 @@ def _parse_args() -> argparse.Namespace:
             "train",
             "evaluate",
             "generate",
-            "inspect",
             "initialize",
             "export-sglang",
         ),
@@ -419,7 +373,7 @@ def _parse_args() -> argparse.Namespace:
     if args.command in {"train", "initialize", "export-sglang"} and args.output is None:
         parser.error("train, initialize, and export-sglang require --output")
     if args.command not in {"train", "initialize"} and args.checkpoint is None:
-        parser.error("evaluate, generate, and inspect require --checkpoint")
+        parser.error("evaluate, generate, and export-sglang require --checkpoint")
     if args.evaluation_samples is not None and args.evaluation_samples <= 0:
         parser.error("evaluation-samples must be positive")
     return args
@@ -447,8 +401,6 @@ def main() -> None:
             if generated is not None
             else None
         )
-    elif args.command == "inspect":
-        result = _inspect(args, model)
     elif args.command == "initialize":
         result = _initialize_checkpoint(args, model)
     else:

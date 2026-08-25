@@ -48,16 +48,15 @@ class _TemporalSpikingLayerNorm(nn.Module):
         hidden = self.norm(hidden)
         voltage = torch.zeros_like(hidden[:, 0])
         previous_spike = torch.zeros_like(voltage)
+        amplitudes = self.amplitude.to(hidden)
         spikes = []
         for step in range(self.time_steps):
-            amplitude = self.amplitude[step].to(hidden)
+            amplitude = amplitudes[step]
             if step == 0:
                 voltage = voltage + hidden[:, step]
             else:
                 voltage = (
-                    voltage
-                    * self.decay
-                    * (self.amplitude[step - 1].to(hidden) - previous_spike)
+                    voltage * self.decay * (amplitudes[step - 1] - previous_spike)
                     + hidden[:, step]
                 )
             previous_spike = (voltage / amplitude).clamp(-1.0, 1.0).round() * amplitude
@@ -127,14 +126,12 @@ class _TemporalAttention(nn.Module):
         temporal_positions = positions.repeat_interleave(self.time_steps)
         q, k = self.rotary(temporal_positions, q, k)
 
-        def pack_heads(value: torch.Tensor) -> torch.Tensor:
-            return value.reshape(
-                token_count,
-                self.time_steps * self.local_heads * self.head_dim,
-            )
-
+        packed_size = self.time_steps * self.local_heads * self.head_dim
         output = self.attention(
-            pack_heads(q), pack_heads(k), pack_heads(v), forward_batch
+            q.reshape(token_count, packed_size),
+            k.reshape(token_count, packed_size),
+            v.reshape(token_count, packed_size),
+            forward_batch,
         )
         output = output.reshape(token_count * self.time_steps, self.local_hidden_size)
         output, _ = self.proj(output)

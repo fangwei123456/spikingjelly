@@ -131,6 +131,29 @@ def test_vision_prediction_writes_only_ordered_outputs(tmp_path):
         )
 
 
+def test_vision_prediction_merge_cleans_failed_temporary_file(tmp_path):
+    shard = tmp_path / "rank-0.h5"
+    handle = inference._open_prediction_shard(shard, num_classes=2)
+    inference._append_predictions(
+        handle,
+        torch.tensor([0, 0]),
+        torch.tensor([[0.0, 1.0], [1.0, 2.0]]),
+    )
+    handle.close()
+    output = tmp_path / "predictions.h5"
+
+    with pytest.raises(ValueError, match="duplicate"):
+        inference._merge_prediction_shards(
+            output,
+            [shard],
+            dataset_size=1,
+            num_classes=2,
+            attributes={},
+        )
+
+    assert not output.with_name(".predictions.h5.tmp").exists()
+
+
 def test_vision_predict_returns_no_metrics(monkeypatch, tmp_path):
     config = vision.PredictionConfig(
         artifact=tmp_path / "model.pt",
@@ -650,13 +673,13 @@ def test_vision_checkpoint_broadcasts_rank_zero_creation_failure(tmp_path, monke
 def test_spikformer_pipeline_keeps_every_transformer_block():
     model = spikformer_s(img_size_h=32, img_size_w=32)
 
-    stages = [_pipeline_stage(model, rank, 2) for rank in range(2)]
-
-    assert sum(
-        isinstance(module, SpikformerBlock)
+    stages = [_pipeline_stage(model, rank, 4) for rank in range(4)]
+    block_counts = [
+        sum(isinstance(module, SpikformerBlock) for module in stage.modules())
         for stage in stages
-        for module in stage.modules()
-    ) == len(model.blocks)
+    ]
+
+    assert block_counts == [0, 2, 2, 2]
 
 
 def test_sew_pipeline_downsamples_before_stage_boundaries():

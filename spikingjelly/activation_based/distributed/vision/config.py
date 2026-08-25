@@ -163,6 +163,9 @@ class ModelBuilder(abc.ABC):
     ``config.step_mode``: single-step input is ``[N, ...]`` and multi-step input is
     ``[T, N, ...]``. The training lifecycle belongs to
     :func:`spikingjelly.activation_based.distributed.vision.train_classification`.
+
+    ``_pipeline_stage`` 必须复用 canonical model 的参数对象。 / ``_pipeline_stage``
+    must reuse the canonical model's parameter objects.
     """
 
     def __init__(self, config: ModelConfig) -> None:

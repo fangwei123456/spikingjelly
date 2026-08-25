@@ -24,7 +24,7 @@ def create_sglang_engine(config: SGLangGenerationConfig) -> Any:
     :type config: SGLangGenerationConfig
     :return: SGLang offline Engine.
     :rtype: sglang.Engine
-    :raises ImportError: SGLang 0.5.17 is unavailable.
+    :raises ImportError: ``spikingjelly[sglang]`` is unavailable.
     :raises ValueError: The artifact or DCP topology is invalid.
     """
 
@@ -38,37 +38,49 @@ def create_sglang_engine(config: SGLangGenerationConfig) -> Any:
         and config.decode_context_parallel_size > 1
     ):
         kv_heads = int(artifact_config["num_key_value_heads"])
-        maximum_dcp = config.tensor_parallel_size // kv_heads
-        if maximum_dcp < config.decode_context_parallel_size:
+        if kv_heads <= 0 or config.tensor_parallel_size % (
+            kv_heads * config.decode_context_parallel_size
+        ):
             raise ValueError(
                 "DCP requires TP-replicated KV heads; increase TP or reduce "
                 "decode_context_parallel_size."
             )
-    if config.external_model_package is not None:
+    previous_package = os.environ.get("SGLANG_EXTERNAL_MODEL_PACKAGE")
+    if config.external_model_package is None:
+        os.environ.pop("SGLANG_EXTERNAL_MODEL_PACKAGE", None)
+    else:
         os.environ["SGLANG_EXTERNAL_MODEL_PACKAGE"] = config.external_model_package
     try:
-        import sglang
-    except ImportError as error:
-        raise ImportError(
-            "SGLang inference requires a separate environment with "
-            "spikingjelly[sglang]."
-        ) from error
-    return sglang.Engine(
-        model_path=str(config.artifact),
-        tokenizer_path=str(config.tokenizer) if config.tokenizer is not None else None,
-        skip_tokenizer_init=config.tokenizer is None,
-        tp_size=config.tensor_parallel_size,
-        pp_size=config.pipeline_parallel_size,
-        dp_size=config.data_parallel_size,
-        attn_cp_size=config.prefill_context_parallel_size,
-        enable_prefill_cp=config.prefill_context_parallel_size > 1,
-        dcp_size=config.decode_context_parallel_size,
-        mem_fraction_static=config.memory_fraction,
-        random_seed=config.seed,
-        attention_backend="triton",
-        disable_cuda_graph=True,
-        disable_radix_cache=config.disable_radix_cache,
-    )
+        try:
+            import sglang
+        except ImportError as error:
+            raise ImportError(
+                "SGLang inference requires a separate environment with "
+                "spikingjelly[sglang]."
+            ) from error
+        return sglang.Engine(
+            model_path=str(config.artifact),
+            tokenizer_path=(
+                str(config.tokenizer) if config.tokenizer is not None else None
+            ),
+            skip_tokenizer_init=config.tokenizer is None,
+            tp_size=config.tensor_parallel_size,
+            pp_size=config.pipeline_parallel_size,
+            dp_size=config.data_parallel_size,
+            attn_cp_size=config.prefill_context_parallel_size,
+            enable_prefill_cp=config.prefill_context_parallel_size > 1,
+            dcp_size=config.decode_context_parallel_size,
+            mem_fraction_static=config.memory_fraction,
+            random_seed=config.seed,
+            attention_backend="triton",
+            disable_cuda_graph=True,
+            disable_radix_cache=config.disable_radix_cache,
+        )
+    finally:
+        if previous_package is None:
+            os.environ.pop("SGLANG_EXTERNAL_MODEL_PACKAGE", None)
+        else:
+            os.environ["SGLANG_EXTERNAL_MODEL_PACKAGE"] = previous_package
 
 
 def generate_sglang(
@@ -93,7 +105,7 @@ def generate_sglang(
     :return: SGLang results in input order; each item contains ``output_ids``,
         ``text``, and ``meta_info``.
     :rtype: list[dict[str, Any]]
-    :raises ImportError: SGLang 0.5.17 is unavailable.
+    :raises ImportError: ``spikingjelly[sglang]`` is unavailable.
     :raises ValueError: The artifact or prompt tensor is invalid.
     """
     if (

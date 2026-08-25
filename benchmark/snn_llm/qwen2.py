@@ -157,7 +157,11 @@ class _InputQCFSRMSNorm(nn.RMSNorm):
                 {"weight": self.weight}, prefix, {}, sharded_offsets, **kwargs
             ),
             **make_sharded_tensors_for_checkpoint(
-                {"qcfs_scale": self.qcfs_scale}, prefix, {}, (), **kwargs
+                {"qcfs_scale": self.qcfs_scale},
+                prefix,
+                {},
+                sharded_offsets,
+                **kwargs,
             ),
         }
 
