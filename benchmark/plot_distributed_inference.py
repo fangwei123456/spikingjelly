@@ -653,7 +653,7 @@ def main() -> None:
         sglang_rows,
         args.output,
         ("tp1", "dp2", "dp4", "tp2", "pp2", "pp4", "dp2tp2"),
-        "Qwen2.5-0.5B QCFS · SGLang frontier · PP memory fraction 0.8",
+        "Qwen2.5-0.5B QCFS · SGLang frontier · matched PP batch grid",
         "Device memory used / GPU (GiB, NVML)",
         "Aggregate generation throughput (tokens/s)",
         "sglang-inference.png",

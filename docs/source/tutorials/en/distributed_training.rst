@@ -1067,15 +1067,16 @@ capacity-boundary ``2x/1.5x`` candidate owns a separate Engine lifetime and a
 measurements; scheduler points whose three-run max/min exceeds 1.3 remain
 ``unstable``. The TP1 frontier refinement and the formal PP2/PP4 sweeps use
 three warmups followed by seven timed runs. Their medians resist periodic
-scheduler slow samples while plots retain the complete min/max range. PP2 uses
-11 points over G=16--4096 and PP4 uses 13 over G=16--8192; three-run capacity
-probes at G=6144/16384 confirm request-queue plateaus. Engine startup was excluded
+scheduler slow samples while plots retain the complete min/max range. PP2 and
+PP4 both use the exact MCore PP global-batch grid:
+``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048``. Engine startup was excluded
 and Radix cache was disabled. SGLang workers do not expose PyTorch allocator peak,
 so the horizontal axis uses the busiest GPU's post-generation NVML device-memory
-usage. Non-PP topologies use ``memory_fraction_static=0.5``. That setting made
-each PP stage plateau prematurely at 13--16 GiB, so the formal PP2/PP4 sweeps
-uniformly use 0.8. The horizontal axis includes this static KV pool and is not
-directly comparable to Vision peak allocated memory. The static KV pool and
+usage. Every topology uses the same ``memory_fraction_static=0.5``. The
+horizontal axis includes the static KV pool reserved at Engine initialization,
+so PP2/PP4 already use about 12.7 GiB at G=16. This is not batch-activation
+memory and is not numerically comparable with MCore ``cuda_peak_allocated``.
+The static KV pool and
 MiB-resolution NVML readings can give different G
 values the same horizontal coordinate. The CSV retains every measurement, while
 lines connect only the throughput-memory Pareto frontier. Only the
@@ -1086,14 +1087,14 @@ segments and unexplained detached markers.
     :width: 720px
     :alt: Qwen2.5-0.5B QCFS SGLang offline-generation throughput
 
-    SGLang offline-generation throughput-memory Pareto frontiers; PP2/PP4 use a 0.8 static-memory fraction.
+    SGLang offline-generation throughput-memory Pareto frontiers; PP2/PP4 use the MCore global-batch grid.
 
 The best TP1, DP2, DP4, TP2, PP2, PP4, and DP2 x TP2 frontier points reach
-15758.7, 18636.8, 25743.8, 9097.7, 13003.0, 10470.4, and 14355.1 generated
-tokens/s at G=2048, 16384, 32768, 8192, 4096, 4096, and 32768. None should be
-misread as per-GPU batch. The PP2/PP4 frontiers now extend to 23.21/21.43 GiB;
-capacity probes at G=6144/16384 do not improve throughput, confirming that the
-horizontal range reaches the memory/request plateau.
+15758.7, 18636.8, 25743.8, 9097.7, 12707.9, 10117.7, and 14355.1 generated
+tokens/s at G=2048, 16384, 32768, 8192, 1536, 2048, and 32768. None should be
+misread as per-GPU batch. The 13-point PP2/PP4 grids span
+12.71--14.53/12.70--13.74 GiB. Their narrower horizontal ranges come from PP
+sharding plus the fixed 0.5 static pool, not from missing batch measurements.
 
 The two rightmost TP1 frontier points come from independent Engine grids at
 G=2176 and G=2048. Their medians are 15522.8 and 15758.7 tokens/s, while their
@@ -1128,11 +1129,11 @@ disables the overlap schedule and stage traffic crosses PCIe.
       - 49152/49152
       - 65536/65536
     * - PP2
-      - 6144/6144
-      - not reached; 23.23-GiB request-queue plateau
+      - 2048/2048
+      - not probed beyond the matched grid
     * - PP4
-      - 16384/16384
-      - not reached; 21.43-GiB request-queue plateau
+      - 2048/2048
+      - not probed beyond the matched grid
     * - DP2 x TP2
       - 32768/65536
       - 49152/98304

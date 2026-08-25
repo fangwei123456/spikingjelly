@@ -976,13 +976,13 @@ global batch ``G`` 从 16 开始按 ``2x/1.5x`` 规则增长。常规 grid 在�
 和 360 秒预算。常规点先用相同 G 预热三次，再测量三次；三次 max/min 超过 1.3
 的 scheduler 波动点标为 ``unstable``。TP1 的前沿细网格，以及 PP2/PP4 的正式
 sweep 均预热三次、再计时七次，以七次中位数抵抗周期性 scheduler 慢样本，并保留
-完整 min/max 误差条。PP2 使用 G=16--4096 的 11 个点，PP4 使用 G=16--8192
-的 13 个点；另以三次容量 probe 验证 G=6144/16384 已进入请求排队平台。
+完整 min/max 误差条。PP2/PP4 都严格使用 MCore PP 的 13 点 global-batch grid：
+``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048``。
 计时不包括 Engine 启动，且关闭 Radix cache。SGLang worker 不公开 PyTorch allocator
 peak，因此横轴使用同步生成后的最繁忙 GPU NVML device-memory used；它包含
-非 PP 拓扑使用 ``memory_fraction_static=0.5``；原 PP 配置的 0.5 会让每 stage
-过早停在 13--16 GiB，正式 PP2/PP4 sweep 因而统一改为 0.8。横轴包含该静态 KV
-pool，不能与 Vision 的 peak allocated memory 直接比较。静态 KV pool 和 MiB
+所有拓扑都使用相同的 ``memory_fraction_static=0.5``。横轴包含初始化时预留的
+静态 KV pool，因此 PP2/PP4 即使在 G=16 也约占 12.7 GiB；这不是 batch 激活显存，
+也不能与 MCore 的 ``cuda_peak_allocated`` 横轴数值比较。静态 KV pool 和 MiB
 粒度的 NVML 读数可能让不同 G
 得到相同横坐标；CSV 保留所有测量，连线只连接吞吐—显存 Pareto 前沿。同显存点
 仅保留最高吞吐进入连线，因此不会产生竖直线段或无图例说明的游离散点。
@@ -991,13 +991,14 @@ pool，不能与 Vision 的 peak allocated memory 直接比较。静态 KV pool 
     :width: 720px
     :alt: Qwen2.5-0.5B QCFS 在 SGLang 上的离线生成吞吐
 
-    SGLang 离线生成的吞吐—显存 Pareto 前沿；PP2/PP4 使用 0.8 static-memory fraction。
+    SGLang 离线生成的吞吐—显存 Pareto 前沿；PP2/PP4 使用与 MCore 相同的 G grid。
 
 TP1、DP2、DP4、TP2、PP2、PP4 和 DP2 × TP2 的最佳前沿点分别达到
-15758.7、18636.8、25743.8、9097.7、13003.0、10470.4 和 14355.1
-generated tokens/s，对应 G 为 2048、16384、32768、8192、4096、4096 和
-32768；不能把它们误读为每卡 batch。PP2/PP4 的前沿分别延伸到 23.21/21.43 GiB，
-容量 probe 的 G=6144/16384 未再提高吞吐，说明横轴已经覆盖到显存/请求平台。
+15758.7、18636.8、25743.8、9097.7、12707.9、10117.7 和 14355.1
+generated tokens/s，对应 G 为 2048、16384、32768、8192、1536、2048 和
+32768；不能把它们误读为每卡 batch。PP2/PP4 的 13 点 grid 分别覆盖
+12.71--14.53/12.70--13.74 GiB；较窄范围来自 PP 分片和固定 0.5 静态 pool，
+不是少测 batch。
 
 TP1 前沿最右两个点来自独立 Engine grid 的 G=2176 和 G=2048，中位吞吐为
 15522.8 和 15758.7 tokens/s；七次完整范围分别为 9339.4--15976.3 和
@@ -1027,11 +1028,11 @@ PP2/PP4 因 overlap schedule 被关闭且跨 stage 经过 PCIe，低于 TP1。
       - 49152/49152
       - 65536/65536
     * - PP2
-      - 6144/6144
-      - 未触发；23.23 GiB 请求排队平台
+      - 2048/2048
+      - 匹配 grid 内未继续测试
     * - PP4
-      - 16384/16384
-      - 未触发；21.43 GiB 请求排队平台
+      - 2048/2048
+      - 匹配 grid 内未继续测试
     * - DP2 × TP2
       - 32768/65536
       - 49152/98304
