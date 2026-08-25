@@ -4,9 +4,10 @@ import abc
 import importlib
 from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Any, ClassVar, Literal, Optional
+from typing import Any, ClassVar, Literal, Mapping, Optional, Sequence
 
 import torch
+import torch.distributed as dist
 from torch.distributed import ProcessGroup
 import torch.nn as nn
 
@@ -91,7 +92,7 @@ class ModelConfig:
         if self.step_mode not in {"s", "m"}:
             raise ValueError("step_mode must be 's' or 'm'.")
 
-    def get_builder_cls(self) -> type:
+    def get_builder_cls(self) -> type[ModelBuilder]:
         r"""Resolve the declared model builder.
 
         **中文：** 返回 ``builder`` 导入路径指向的类。
@@ -101,9 +102,47 @@ class ModelConfig:
         :rtype: type
         :raises ImportError: builder 模块无法导入。 / If the module cannot be imported.
         :raises AttributeError: builder 类不存在。 / If the class does not exist.
+        :raises TypeError: builder 未继承 :class:`ModelBuilder`。 / If the class
+            does not inherit :class:`ModelBuilder`.
         """
         module_name, class_name = self.builder.rsplit(".", 1)
-        return getattr(importlib.import_module(module_name), class_name)
+        builder_cls = getattr(importlib.import_module(module_name), class_name)
+        if not isinstance(builder_cls, type) or not issubclass(
+            builder_cls, ModelBuilder
+        ):
+            raise TypeError("model builder must inherit vision.ModelBuilder.")
+        return builder_cls
+
+    def as_dict(self) -> dict[str, Any]:
+        r"""Serialize this model configuration.
+
+        **中文：** 返回包含具体 config 类型的 JSON 兼容 mapping。
+        **English:** Return a JSON-compatible mapping containing the concrete
+        configuration type.
+
+        :return: 可序列化配置。 / Serializable configuration.
+        :rtype: dict[str, Any]
+        """
+        return _encode(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ModelConfig:
+        r"""Restore a model configuration created by :meth:`as_dict`.
+
+        **中文：** 恢复具体 model config；自定义 config 类必须已导入。
+        **English:** Restore a concrete model configuration; custom configuration
+        classes must already be imported.
+
+        :param data: 已序列化配置。 / Serialized configuration.
+        :type data: dict[str, Any]
+        :return: 模型配置。 / Model configuration.
+        :rtype: ModelConfig
+        :raises TypeError: 结果不是 ``ModelConfig``。 / If the result is not a ModelConfig.
+        """
+        config = _decode(data)
+        if not isinstance(config, cls):
+            raise TypeError(f"Expected {cls.__name__}, got {type(config).__name__}.")
+        return config
 
 
 class ModelBuilder(abc.ABC):
@@ -124,10 +163,229 @@ class ModelBuilder(abc.ABC):
     ``config.step_mode``: single-step input is ``[N, ...]`` and multi-step input is
     ``[T, N, ...]``. The training lifecycle belongs to
     :func:`spikingjelly.activation_based.distributed.vision.train_classification`.
+
+    ``_pipeline_stage`` 必须复用 canonical model 的参数对象。 / ``_pipeline_stage``
+    must reuse the canonical model's parameter objects.
     """
 
     def __init__(self, config: ModelConfig) -> None:
         self.config = config
+
+    def _build_canonical_model(self) -> nn.Module:
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support topology-independent artifacts."
+        )
+
+    def _pipeline_stage(self, model: nn.Module, rank: int, size: int) -> nn.Module:
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support topology-independent artifacts."
+        )
+
+    def _canonical_key_map(
+        self, pipeline_rank: int, pipeline_size: int
+    ) -> dict[str, str]:
+        model = self._build_canonical_model()
+        full_names = {
+            id(value): name for name, value in model.state_dict(keep_vars=True).items()
+        }
+        stage = self._pipeline_stage(model, pipeline_rank, pipeline_size)
+        return {
+            local_name: full_names[id(value)]
+            for local_name, value in stage.state_dict(keep_vars=True).items()
+        }
+
+    def _merge_tensor_parallel_shards(
+        self,
+        name: str,
+        shards: Sequence[torch.Tensor],
+        reference: torch.Tensor,
+    ) -> torch.Tensor:
+        del name
+        if shards[0].shape == reference.shape:
+            if any(not torch.equal(shards[0], shard) for shard in shards[1:]):
+                raise ValueError("Replicated tensor differs across TP ranks.")
+            return shards[0]
+        shard_dims = [
+            dim
+            for dim in range(reference.ndim)
+            if reference.shape[dim] == shards[0].shape[dim] * len(shards)
+            and all(
+                reference.shape[other] == shards[0].shape[other]
+                for other in range(reference.ndim)
+                if other != dim
+            )
+        ]
+        if len(shard_dims) != 1:
+            raise ValueError(
+                f"Cannot reconstruct tensor with shape {tuple(reference.shape)} "
+                f"from TP shards shaped {tuple(shards[0].shape)}."
+            )
+        return torch.cat(tuple(shards), dim=shard_dims[0])
+
+    def _shard_tensor_parallel_tensor(
+        self,
+        name: str,
+        value: torch.Tensor,
+        target: torch.Tensor,
+        tensor_rank: int,
+        tensor_size: int,
+    ) -> torch.Tensor:
+        del name
+        if value.shape == target.shape:
+            return value
+        shard_dims = [
+            dim
+            for dim in range(value.ndim)
+            if value.shape[dim] == target.shape[dim] * tensor_size
+            and all(
+                value.shape[other] == target.shape[other]
+                for other in range(value.ndim)
+                if other != dim
+            )
+        ]
+        if len(shard_dims) != 1:
+            raise ValueError(
+                f"Cannot shard tensor {tuple(value.shape)} for target "
+                f"{tuple(target.shape)}."
+            )
+        return value.chunk(tensor_size, dim=shard_dims[0])[tensor_rank].contiguous()
+
+    def merge_state_dicts(
+        self,
+        shards: Sequence[tuple[int, int, Mapping[str, torch.Tensor]]],
+        *,
+        pipeline_size: int,
+        tensor_size: int,
+    ) -> dict[str, torch.Tensor]:
+        r"""Merge local PP/TP states into the canonical model state.
+
+        **中文：** 输入 ``(pp_rank, tp_rank, state_dict)`` 序列，在 CPU 上还原
+        与非并行模型同名同形的 state dict。
+
+        **English:** Merge ``(pp_rank, tp_rank, state_dict)`` entries on CPU into
+        a state dict matching the unpartitioned model.
+
+        :param shards: Local states ordered by PP and TP rank.
+        :type shards: Sequence[tuple[int, int, Mapping[str, torch.Tensor]]]
+        :param pipeline_size: Source PP size. / Source PP size.
+        :type pipeline_size: int
+        :param tensor_size: Source TP size. / Source TP size.
+        :type tensor_size: int
+        :return: Canonical CPU state dict. / Canonical CPU state dict.
+        :rtype: dict[str, torch.Tensor]
+        :raises ValueError: A rank, key, or shard shape is inconsistent.
+        """
+        reference = self._build_canonical_model().state_dict()
+        key_maps = {
+            rank: self._canonical_key_map(rank, pipeline_size)
+            for rank in range(pipeline_size)
+        }
+        by_name: dict[str, list[tuple[int, torch.Tensor]]] = {}
+        for pipeline_rank, tensor_rank, state in shards:
+            if (
+                not 0 <= pipeline_rank < pipeline_size
+                or not 0 <= tensor_rank < tensor_size
+            ):
+                raise ValueError("Invalid PP or TP rank in state shards.")
+            key_map = key_maps[pipeline_rank]
+            if set(state) != set(key_map):
+                raise ValueError("Local state keys do not match the pipeline stage.")
+            for local_name, value in state.items():
+                by_name.setdefault(key_map[local_name], []).append(
+                    (tensor_rank, value.detach().cpu())
+                )
+
+        result = {}
+        if set(by_name) != set(reference):
+            raise ValueError("Pipeline shards do not cover the canonical model state.")
+        for name, entries in by_name.items():
+            entries.sort(key=lambda item: item[0])
+            if [rank for rank, _ in entries] != list(range(tensor_size)):
+                raise ValueError(f"Tensor {name!r} does not contain every TP rank.")
+            result[name] = self._merge_tensor_parallel_shards(
+                name, [value for _, value in entries], reference[name]
+            )
+        return result
+
+    def build_for_inference(
+        self,
+        state_dict: Mapping[str, torch.Tensor],
+        *,
+        process_group: Optional[ProcessGroup],
+        pipeline_rank: int,
+        pipeline_size: int,
+        pipeline_microbatches: int,
+        device: torch.device,
+        micro_batch_size: int,
+    ) -> tuple[
+        nn.Module,
+        tuple[str, ...],
+        Optional[tuple[int, ...]],
+        Optional[tuple[int, ...]],
+    ]:
+        r"""Build a target PP/TP stage from a canonical state dict.
+
+        **中文：** 先构建目标拓扑的本地 stage，再按当前 TP rank 从
+        canonical state 取出对应 shard。
+
+        **English:** Build the local stage for the target topology and select its
+        TP shards from the canonical state.
+
+        :param state_dict: Canonical model state. / Canonical model state.
+        :type state_dict: Mapping[str, torch.Tensor]
+        :param process_group: TP 进程组；TP=1 时为 ``None``。 / TP process
+            group; ``None`` when TP=1.
+        :type process_group: Optional[ProcessGroup]
+        :param pipeline_rank: 当前 PP rank。 / Current PP rank.
+        :type pipeline_rank: int
+        :param pipeline_size: PP rank 数。 / Number of PP ranks.
+        :type pipeline_size: int
+        :param pipeline_microbatches: 每个本地 batch 的 pipeline microbatch 数。 /
+            Pipeline microbatches per local batch.
+        :type pipeline_microbatches: int
+        :param device: 当前 rank 的设备。 / Device for the current rank.
+        :type device: torch.device
+        :param micro_batch_size: 当前 DP rank 的图像 batch size。 / Image batch
+            size on the current DP rank.
+        :type micro_batch_size: int
+        :return: The same tuple as :meth:`build`. / Same tuple as :meth:`build`.
+        :rtype: tuple
+        :raises ValueError: artifact state 或目标 TP/PP shard 无效。 / If the
+            artifact state or target TP/PP shard is invalid.
+        """
+        built = self.build(
+            process_group=process_group,
+            pipeline_rank=pipeline_rank,
+            pipeline_size=pipeline_size,
+            pipeline_microbatches=pipeline_microbatches,
+            device=device,
+            micro_batch_size=micro_batch_size,
+            memopt_level=0,
+            memopt_compress_inputs=False,
+        )
+        model = built[0]
+        local_state = model.state_dict()
+        key_map = self._canonical_key_map(pipeline_rank, pipeline_size)
+        if set(state_dict) != set(self._build_canonical_model().state_dict()):
+            raise ValueError("Artifact state does not match the configured model.")
+        tensor_rank = dist.get_rank(process_group) if process_group is not None else 0
+        tensor_size = (
+            dist.get_world_size(process_group) if process_group is not None else 1
+        )
+        model.load_state_dict(
+            {
+                local_name: self._shard_tensor_parallel_tensor(
+                    canonical_name,
+                    state_dict[canonical_name],
+                    target,
+                    tensor_rank,
+                    tensor_size,
+                )
+                for local_name, target in local_state.items()
+                for canonical_name in (key_map[local_name],)
+            }
+        )
+        return built
 
     @abc.abstractmethod
     def build(
@@ -176,6 +434,171 @@ class ModelBuilder(abc.ABC):
         :rtype: tuple
         """
         raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class PredictionConfig:
+    r"""Configure distributed vision classification prediction.
+
+    **API Language** - 中文 | English
+
+    **中文：** 从 topology-independent artifact 构建视觉 SNN，并使用
+    PyTorch replicated DP、FSDP2、architecture-specific TP 与 PP 执行离线
+    预测。dataset builder 必须返回一个 ``Dataset``；元素可以是 image 或
+    ``(image, target)``，其中 target 被忽略。
+
+    **English:** Build a vision SNN from a topology-independent artifact and run
+    offline prediction with PyTorch replicated DP, FSDP2, architecture-specific
+    TP, and PP. The dataset builder must return one ``Dataset`` whose items may
+    be images or ``(image, target)``; targets are ignored.
+
+    :param artifact: :func:`export_inference_artifact` 生成的 artifact。 /
+        Artifact created by :func:`export_inference_artifact`.
+    :type artifact: pathlib.Path
+    :param dataset_builder: 返回一个 Dataset 的完整导入路径。 / Full
+        import path returning one Dataset.
+    :type dataset_builder: str
+    :param dataset_kwargs: dataset builder 参数。 / Dataset-builder kwargs.
+    :type dataset_kwargs: dict[str, Any]
+    :param input_layout: ``"NCHW"`` 或 ``"NTCHW"``。 / DataLoader input layout.
+    :type input_layout: str
+    :param batch_size: 每个 DP rank 的 batch size。 / Batch size per DP rank.
+    :type batch_size: int
+    :param workers: 每个 DataLoader 的 worker 数。 / DataLoader workers.
+    :type workers: int
+    :param tensor_parallel_size: TP rank 数。 / Number of TP ranks.
+    :type tensor_parallel_size: int
+    :param pipeline_parallel_size: PP rank 数。 / Number of PP ranks.
+    :type pipeline_parallel_size: int
+    :param pipeline_microbatches: 每个 batch 的 pipeline microbatch 数。 /
+        Pipeline microbatches per batch.
+    :type pipeline_microbatches: int
+    :param data_parallel: ``"replicate"`` 或 ``"fsdp2"``。 / Replicated or
+        FSDP2 data parallelism.
+    :type data_parallel: str
+    :param precision: ``"fp32"``、``"bf16"`` 或 ``"fp16"``。 / Arithmetic precision.
+    :type precision: str
+    :param compile: 是否使用 ``torch.compile``；当前仅支持无 PP 的
+        replicated 模式。 / Whether to use ``torch.compile``; currently limited
+        to replicated execution without PP.
+    :type compile: bool
+    :param seed: 模型与数据随机种子。 / Model and data seed.
+    :type seed: int
+    :raises ValueError: 配置值或导入路径无效。 / If a value or import path is invalid.
+    """
+
+    artifact: Path
+    dataset_builder: str
+    dataset_kwargs: dict[str, Any] = field(default_factory=dict)
+    input_layout: Literal["NCHW", "NTCHW"] = "NCHW"
+    batch_size: int = 32
+    workers: int = 4
+    tensor_parallel_size: int = 1
+    pipeline_parallel_size: int = 1
+    pipeline_microbatches: int = 1
+    data_parallel: Literal["replicate", "fsdp2"] = "replicate"
+    precision: Literal["fp32", "bf16", "fp16"] = "bf16"
+    compile: bool = False
+    seed: int = 1234
+
+    def __post_init__(self) -> None:
+        for name in (
+            "batch_size",
+            "tensor_parallel_size",
+            "pipeline_parallel_size",
+            "pipeline_microbatches",
+        ):
+            if getattr(self, name) <= 0:
+                raise ValueError(f"{name} must be positive.")
+        if self.batch_size % self.pipeline_microbatches:
+            raise ValueError("batch_size must be divisible by pipeline_microbatches.")
+        if self.workers < 0:
+            raise ValueError("workers cannot be negative.")
+        if self.input_layout not in {"NCHW", "NTCHW"}:
+            raise ValueError("input_layout must be 'NCHW' or 'NTCHW'.")
+        if self.data_parallel not in {"replicate", "fsdp2"}:
+            raise ValueError("data_parallel must be 'replicate' or 'fsdp2'.")
+        if self.precision not in {"fp32", "bf16", "fp16"}:
+            raise ValueError("precision must be 'fp32', 'bf16', or 'fp16'.")
+        if self.pipeline_parallel_size > 1 and self.precision == "fp16":
+            raise ValueError("Vision PP currently supports fp32 and bf16.")
+        if self.compile and (
+            self.pipeline_parallel_size > 1 or self.data_parallel != "replicate"
+        ):
+            raise ValueError("compile requires replicated execution without PP.")
+        if "." not in self.dataset_builder:
+            raise ValueError("dataset_builder must be a full import path.")
+
+
+@dataclass(frozen=True)
+class EvaluationConfig(PredictionConfig):
+    loss_function: str = "torch.nn.functional.cross_entropy"
+    loss_kwargs: dict[str, Any] = field(default_factory=dict)
+    timing_warmup_batches: int = 0
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if "." not in self.loss_function:
+            raise ValueError("loss_function must be a full import path.")
+        if self.timing_warmup_batches < 0:
+            raise ValueError("timing_warmup_batches cannot be negative.")
+
+
+EvaluationConfig.__init__.__doc__ = r"""Configure distributed vision classification evaluation.
+
+**API Language** - 中文 | English
+
+**中文：** 从 topology-independent artifact 构建视觉 SNN，并使用 PyTorch
+replicated DP、FSDP2、architecture-specific TP 与 PP 评测分类 dataset。
+每个元素必须是 ``(image, target)``；返回全局 loss、accuracy 与性能指标。
+
+**English:** Build a vision SNN from a topology-independent artifact and evaluate
+a classification dataset with PyTorch replicated DP, FSDP2, architecture-specific
+TP, and PP. Every item must be ``(image, target)``. The result contains global
+loss, accuracy, and performance metrics.
+
+:param artifact: :func:`export_inference_artifact` 生成的 artifact。 / Artifact
+    created by :func:`export_inference_artifact`.
+:type artifact: pathlib.Path
+:param dataset_builder: 返回一个 Dataset 的完整导入路径。 / Full import path
+    returning one Dataset.
+:type dataset_builder: str
+:param dataset_kwargs: dataset builder 参数。 / Dataset-builder arguments.
+:type dataset_kwargs: dict[str, Any]
+:param input_layout: ``"NCHW"`` 或 ``"NTCHW"``。 / DataLoader input layout.
+:type input_layout: str
+:param batch_size: 每个 DP rank 的 batch size。 / Batch size per DP rank.
+:type batch_size: int
+:param workers: 每个 DataLoader 的 worker 数。 / DataLoader workers.
+:type workers: int
+:param tensor_parallel_size: TP rank 数。 / Number of TP ranks.
+:type tensor_parallel_size: int
+:param pipeline_parallel_size: PP rank 数。 / Number of PP ranks.
+:type pipeline_parallel_size: int
+:param pipeline_microbatches: 每个 batch 的 pipeline microbatch 数。 / Pipeline
+    microbatches per batch.
+:type pipeline_microbatches: int
+:param data_parallel: ``"replicate"`` 或 ``"fsdp2"``。 / Replicated or FSDP2
+    data parallelism.
+:type data_parallel: str
+:param precision: ``"fp32"``、``"bf16"`` 或 ``"fp16"``。 / Arithmetic precision.
+:type precision: str
+:param compile: 是否使用 ``torch.compile``；当前仅支持无 PP 的 replicated 模式。 /
+    Whether to use ``torch.compile``; currently limited to replicated execution
+    without PP.
+:type compile: bool
+:param seed: 模型与数据随机种子。 / Model and data seed.
+:type seed: int
+:param loss_function: 分类 loss 函数的完整导入路径。 / Full loss-function
+    import path.
+:type loss_function: str
+:param loss_kwargs: loss 参数。 / Loss-function arguments.
+:type loss_kwargs: dict[str, Any]
+:param timing_warmup_batches: 计时前执行且不计入指标的 batch 数。 / Batches
+    executed before timing and excluded from metrics.
+:type timing_warmup_batches: int
+:raises ValueError: 配置值或导入路径无效。 / If a value or import path is invalid.
+"""
 
 
 @dataclass(frozen=True)
@@ -297,7 +720,7 @@ class TrainingConfig:
 
 
 def _config_types() -> dict[str, type]:
-    pending = [ModelConfig, TrainingConfig]
+    pending = [ModelConfig, PredictionConfig, TrainingConfig]
     result = {}
     while pending:
         config_type = pending.pop()

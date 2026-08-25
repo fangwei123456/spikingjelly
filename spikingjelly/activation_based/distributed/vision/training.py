@@ -24,7 +24,7 @@ from spikingjelly.activation_based.distributed.tensor_parallel import (
     ChannelShardBatchNorm2d,
 )
 
-from .config import ModelBuilder, TrainingConfig
+from .config import TrainingConfig
 
 
 def _import_object(path: str) -> Any:
@@ -667,10 +667,6 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
 
         torch.manual_seed(config.seed)
         builder_cls = config.model.get_builder_cls()
-        if not isinstance(builder_cls, type) or not issubclass(
-            builder_cls, ModelBuilder
-        ):
-            raise TypeError("model builder must inherit vision.ModelBuilder.")
         model, fsdp_roots, pipeline_input_shape, pipeline_output_shape = builder_cls(
             config.model
         ).build(

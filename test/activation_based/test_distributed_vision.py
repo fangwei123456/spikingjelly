@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import h5py
+import numpy as np
 import pytest
 import torch
 import torch.nn as nn
@@ -7,14 +9,24 @@ from torch.utils.data import TensorDataset
 
 from spikingjelly.activation_based import functional, layer
 from spikingjelly.activation_based.distributed import vision
+from spikingjelly.activation_based.distributed.vision import inference
 from spikingjelly.activation_based.distributed.tensor_parallel import (
     ChannelShardBatchNorm2d,
 )
 from spikingjelly.activation_based.distributed.vision import training
+from spikingjelly.activation_based.distributed.vision.sew_resnet import (
+    _pipeline_stage as sew_pipeline_stage,
+)
+from spikingjelly.activation_based.model.sew_resnet import BasicBlock
 from spikingjelly.activation_based.distributed.vision.spikformer import (
+    SpikformerBuilder,
     _pipeline_stage,
 )
-from spikingjelly.activation_based.model.spikformer import SpikformerBlock, spikformer_s
+from spikingjelly.activation_based.model.spikformer import (
+    SpikformerBlock,
+    spikformer_cifar10,
+    spikformer_s,
+)
 
 
 def test_vision_training_config_json_round_trip():
@@ -47,6 +59,152 @@ def test_vision_training_config_json_round_trip():
         dataset_builder="package.datasets.build",
     )
     assert vision.TrainingConfig.from_dict(cifar.as_dict()) == cifar
+
+
+def test_vision_evaluation_config_and_artifact_round_trip(tmp_path):
+    config = vision.EvaluationConfig(
+        artifact=tmp_path / "model.pt",
+        dataset_builder="package.datasets.build",
+        tensor_parallel_size=2,
+        pipeline_parallel_size=2,
+        pipeline_microbatches=2,
+        batch_size=4,
+        data_parallel="fsdp2",
+    )
+    assert config.data_parallel == "fsdp2"
+
+    model_config = vision.SEWResNet34Config(time_steps=2, num_classes=3, image_size=32)
+    model, _, _, _ = model_config.get_builder_cls()(model_config).build(
+        process_group=None,
+        pipeline_rank=0,
+        pipeline_size=1,
+        pipeline_microbatches=1,
+        device=torch.device("cpu"),
+        micro_batch_size=1,
+        memopt_level=0,
+        memopt_compress_inputs=False,
+    )
+    torch.save(
+        {
+            "schema_version": 1,
+            "model_config": model_config.as_dict(),
+            "state_dict": model.state_dict(),
+            "source": {"checkpoint": "checkpoint"},
+        },
+        config.artifact,
+    )
+
+    restored_config, restored_state, source = vision.load_inference_artifact(
+        config.artifact
+    )
+
+    assert restored_config == model_config
+    assert restored_state.keys() == model.state_dict().keys()
+    assert source == {"checkpoint": "checkpoint"}
+
+
+def test_vision_prediction_writes_only_ordered_outputs(tmp_path):
+    shard_paths = [tmp_path / "rank-0.h5", tmp_path / "rank-1.h5"]
+    for path, indices, logits in (
+        (shard_paths[0], [2, 0], [[2.0, 3.0], [0.0, 1.0]]),
+        (shard_paths[1], [1], [[1.0, 2.0]]),
+    ):
+        handle = inference._open_prediction_shard(path, num_classes=2)
+        inference._append_predictions(
+            handle,
+            torch.tensor(indices),
+            torch.tensor(logits),
+        )
+        handle.close()
+
+    output = tmp_path / "predictions.h5"
+    inference._merge_prediction_shards(
+        output,
+        shard_paths,
+        dataset_size=3,
+        num_classes=2,
+        attributes={},
+    )
+
+    with h5py.File(output, "r") as predictions:
+        assert set(predictions) == {"index", "logits"}
+        np.testing.assert_array_equal(predictions["index"][:], [0, 1, 2])
+        np.testing.assert_array_equal(
+            predictions["logits"][:],
+            [[0.0, 1.0], [1.0, 2.0], [2.0, 3.0]],
+        )
+
+
+def test_vision_prediction_merge_cleans_failed_temporary_file(tmp_path):
+    shard = tmp_path / "rank-0.h5"
+    handle = inference._open_prediction_shard(shard, num_classes=2)
+    inference._append_predictions(
+        handle,
+        torch.tensor([0, 0]),
+        torch.tensor([[0.0, 1.0], [1.0, 2.0]]),
+    )
+    handle.close()
+    output = tmp_path / "predictions.h5"
+
+    with pytest.raises(ValueError, match="duplicate"):
+        inference._merge_prediction_shards(
+            output,
+            [shard],
+            dataset_size=1,
+            num_classes=2,
+            attributes={},
+        )
+
+    assert not output.with_name(".predictions.h5.tmp").exists()
+
+
+def test_vision_predict_returns_no_metrics(monkeypatch, tmp_path):
+    config = vision.PredictionConfig(
+        artifact=tmp_path / "model.pt",
+        dataset_builder="package.datasets.build",
+    )
+    monkeypatch.setattr(inference, "_run_classification", lambda *_args: None)
+
+    assert inference.predict_classification(config, tmp_path / "output.h5") is None
+
+
+@pytest.mark.parametrize(
+    ("match", "kwargs"),
+    [
+        ("batch_size", {"batch_size": 0}),
+        ("dataset_builder", {"dataset_builder": "dataset"}),
+        ("data_parallel", {"data_parallel": "ddp"}),
+        ("compile", {"compile": True, "pipeline_parallel_size": 2}),
+    ],
+)
+def test_vision_prediction_config_rejects_invalid_values(match, kwargs):
+    arguments = {
+        "artifact": Path("model.pt"),
+        "dataset_builder": "package.datasets.build",
+        **kwargs,
+    }
+    with pytest.raises(ValueError, match=match):
+        vision.PredictionConfig(**arguments)
+
+
+def test_vision_evaluation_owns_loss_configuration():
+    prediction = vision.PredictionConfig(
+        artifact=Path("model.pt"),
+        dataset_builder="package.datasets.build",
+    )
+    assert not hasattr(prediction, "loss_function")
+    with pytest.raises(ValueError, match="loss_function"):
+        vision.EvaluationConfig(
+            artifact=Path("model.pt"),
+            dataset_builder="package.datasets.build",
+            loss_function="cross_entropy",
+        )
+    with pytest.raises(ValueError, match="timing_warmup_batches"):
+        vision.EvaluationConfig(
+            artifact=Path("model.pt"),
+            dataset_builder="package.datasets.build",
+            timing_warmup_batches=-1,
+        )
 
 
 @pytest.mark.parametrize(
@@ -91,6 +249,38 @@ def test_vision_model_config_rejects_invalid_values():
         vision.SEWResNet34Config(step_mode="invalid")
     with pytest.raises(ValueError, match="Spikformer requires step_mode='m'"):
         vision.SpikformerConfig(step_mode="s")
+
+
+def test_vision_artifact_tensor_sharding_round_trip():
+    sew_builder = vision.SEWResNet34Config().get_builder_cls()(
+        vision.SEWResNet34Config()
+    )
+    reference = torch.arange(32).reshape(8, 4)
+    targets = [torch.empty(4, 4), torch.empty(4, 4)]
+    shards = [
+        sew_builder._shard_tensor_parallel_tensor("weight", reference, target, rank, 2)
+        for rank, target in enumerate(targets)
+    ]
+    assert torch.equal(
+        sew_builder._merge_tensor_parallel_shards("weight", shards, reference),
+        reference,
+    )
+
+    spikformer_builder = SpikformerBuilder(vision.SpikformerConfig())
+    qkv = torch.arange(24 * 4).reshape(24, 4)
+    qkv_targets = [torch.empty(12, 4), torch.empty(12, 4)]
+    qkv_shards = [
+        spikformer_builder._shard_tensor_parallel_tensor(
+            "blocks.0.attn.qkv_conv_bn.0.weight", qkv, target, rank, 2
+        )
+        for rank, target in enumerate(qkv_targets)
+    ]
+    assert torch.equal(
+        spikformer_builder._merge_tensor_parallel_shards(
+            "blocks.0.attn.qkv_conv_bn.0.weight", qkv_shards, qkv
+        ),
+        qkv,
+    )
 
 
 def test_vision_classification_loss_uses_custom_function_and_requires_scalar():
@@ -154,6 +344,107 @@ def test_vision_classification_sequence_uses_declared_layout():
         training._classification_sequence(temporal, 4, "NTCHW")
     with pytest.raises(ValueError, match="NCHW"):
         training._classification_sequence(temporal, 3, "NCHW")
+
+
+def test_pipeline_expands_static_input_per_microbatch():
+    class Recorder(nn.Module):
+        def forward(self, value):
+            self.shape = tuple(value.shape)
+            return value.mean(dim=(-2, -1))
+
+    recorder = Recorder()
+    images = torch.randn(2, 3, 5, 5)
+
+    pipeline = inference._ForwardPipeline(
+        recorder,
+        process_group=None,
+        pipeline_rank=0,
+        pipeline_size=1,
+        microbatches=1,
+        input_shape=(2, 3, 5, 5),
+        communication_dtype=torch.float32,
+        device=torch.device("cpu"),
+        time_steps=4,
+    )
+    output = pipeline.step(images)
+
+    assert recorder.shape == (4, 2, 3, 5, 5)
+    assert output.shape == (2, 3)
+
+
+def test_forward_pipeline_merges_semantic_microbatches():
+    class Classifier(nn.Module):
+        def forward(self, value):
+            return value.mean(dim=(-2, -1))
+
+    pipeline = inference._ForwardPipeline(
+        Classifier(),
+        process_group=None,
+        pipeline_rank=0,
+        pipeline_size=1,
+        microbatches=2,
+        input_shape=(2, 3, 5, 5),
+        communication_dtype=torch.float32,
+        device=torch.device("cpu"),
+        time_steps=4,
+    )
+    images = torch.randn(4, 3, 5, 5)
+
+    output = pipeline.step(images)
+
+    torch.testing.assert_close(output, images.mean(dim=(-2, -1)))
+
+
+def test_forward_pipeline_sends_declared_dtype(monkeypatch):
+    sent = []
+    monkeypatch.setattr(torch.distributed, "get_global_rank", lambda _group, rank: rank)
+    monkeypatch.setattr(
+        torch.distributed, "send", lambda value, **_kwargs: sent.append(value)
+    )
+    monkeypatch.setattr(torch.distributed, "barrier", lambda **_kwargs: None)
+    pipeline = inference._ForwardPipeline(
+        nn.Identity(),
+        process_group=None,
+        pipeline_rank=0,
+        pipeline_size=2,
+        microbatches=1,
+        input_shape=(2, 3),
+        communication_dtype=torch.bfloat16,
+        device=torch.device("cpu"),
+    )
+
+    pipeline.step(torch.ones(2, 3))
+
+    assert sent[0].dtype == torch.bfloat16
+
+
+def test_vision_inference_preserves_early_configuration_error(monkeypatch):
+    config = vision.EvaluationConfig(
+        artifact=Path("artifact.pt"),
+        dataset_builder="package.datasets.build",
+        pipeline_parallel_size=2,
+    )
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "set_device", lambda _device: None)
+    monkeypatch.setattr(inference.dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(inference.dist, "get_world_size", lambda: 3)
+
+    with pytest.raises(ValueError, match="world_size"):
+        inference._run_classification(config, None)
+
+
+def test_vision_inference_rejects_wrong_config_before_runtime():
+    prediction = vision.PredictionConfig(
+        artifact=Path("artifact.pt"), dataset_builder="package.datasets.build"
+    )
+    evaluation = vision.EvaluationConfig(
+        artifact=Path("artifact.pt"), dataset_builder="package.datasets.build"
+    )
+
+    with pytest.raises(TypeError, match="EvaluationConfig"):
+        vision.evaluate_classification(prediction)
+    with pytest.raises(TypeError, match="PredictionConfig"):
+        vision.predict_classification(evaluation, Path("predictions.h5"))
 
 
 def test_vision_broadcasts_data_parallel_buffers(monkeypatch):
@@ -438,13 +729,55 @@ def test_vision_checkpoint_broadcasts_rank_zero_creation_failure(tmp_path, monke
 def test_spikformer_pipeline_keeps_every_transformer_block():
     model = spikformer_s(img_size_h=32, img_size_w=32)
 
-    stages = [_pipeline_stage(model, rank, 2) for rank in range(2)]
-
-    assert sum(
-        isinstance(module, SpikformerBlock)
+    stages = [_pipeline_stage(model, rank, 4) for rank in range(4)]
+    block_counts = [
+        sum(isinstance(module, SpikformerBlock) for module in stage.modules())
         for stage in stages
-        for module in stage.modules()
-    ) == len(model.blocks)
+    ]
+
+    assert block_counts == [0, 2, 2, 2]
+
+
+def test_four_block_spikformer_rejects_pipeline_size_four():
+    with pytest.raises(ValueError, match="4-block Spikformer"):
+        _pipeline_stage(spikformer_cifar10(), 0, 4)
+
+
+def test_sew_pipeline_downsamples_before_stage_boundaries():
+    config = vision.SEWResNet34Config(time_steps=2, image_size=224)
+    builder = config.get_builder_cls()(config)
+    model = builder._build_canonical_model()
+    stages = [sew_pipeline_stage(model, rank, 4) for rank in range(4)]
+
+    assert (
+        sum(
+            isinstance(module, BasicBlock)
+            for stage in stages
+            for module in stage.modules()
+        )
+        == 16
+    )
+
+    expected_shapes = (
+        (2, 2, 128, 28, 28),
+        (2, 2, 256, 14, 14),
+        (2, 2, 512, 7, 7),
+        (2, 2, 1000),
+    )
+    for rank, expected_output_shape in enumerate(expected_shapes):
+        _, _, input_shape, output_shape = builder.build(
+            process_group=None,
+            pipeline_rank=rank,
+            pipeline_size=4,
+            pipeline_microbatches=2,
+            device=torch.device("cpu"),
+            micro_batch_size=4,
+            memopt_level=0,
+            memopt_compress_inputs=False,
+        )
+        assert output_shape == expected_output_shape
+        if rank:
+            assert input_shape == expected_shapes[rank - 1]
 
 
 def test_spikformer_cifar10_pipeline_uses_8_by_8_tokens():

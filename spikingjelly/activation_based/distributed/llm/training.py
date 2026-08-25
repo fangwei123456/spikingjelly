@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 
 from spikingjelly.logger import logger
 
-from .config import ModelBuilder, TrainingConfig
+from .config import TrainingConfig
 
 
 def _import_object(path: str) -> Any:
@@ -24,8 +24,6 @@ def _import_object(path: str) -> Any:
 
 def _build_training_inputs(config: TrainingConfig) -> tuple[Any, Any, Any]:
     builder_cls = config.model.get_builder_cls()
-    if not isinstance(builder_cls, type) or not issubclass(builder_cls, ModelBuilder):
-        raise TypeError("model builder must inherit llm.ModelBuilder.")
     model_provider, forward_step = builder_cls(config.model).build(
         use_snn_memopt=config.use_snn_memopt,
         resume=config.resume is not None,

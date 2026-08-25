@@ -169,7 +169,7 @@ def _run_qwen2(args: argparse.Namespace) -> None:
         train,
     )
 
-    from .qwen2 import Qwen2Config, _qwen2_rotary_base
+    from .qwen2 import Qwen2Config
 
     source_config = AutoConfig.from_pretrained(args.source)
     calibration = Qwen2SNNCalibration.from_state_dict(
@@ -203,7 +203,6 @@ def _run_qwen2(args: argparse.Namespace) -> None:
         bf16=True,
         fp8="hybrid",
         fp8_recipe="delayed",
-        rotary_base=_qwen2_rotary_base(source_config),
     )
     model = Qwen2Config(
         transformer=transformer,

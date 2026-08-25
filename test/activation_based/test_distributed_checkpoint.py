@@ -26,6 +26,36 @@ def test_checkpoint_keeps_calibration_but_not_ephemeral_membrane():
     )
 
 
+def test_qwen_input_scale_checkpoint_sharding(monkeypatch):
+    offsets = []
+    groups = []
+
+    def make_sharded_tensors(state, prefix, axis_map, sharded_offsets, **kwargs):
+        offsets.append(sharded_offsets)
+        groups.append(kwargs)
+        return {next(iter(state)): object()}
+
+    utils = ModuleType("megatron.core.transformer.utils")
+    utils.make_sharded_tensors_for_checkpoint = make_sharded_tensors
+    monkeypatch.setitem(sys.modules, "megatron.core.transformer.utils", utils)
+    module = _InputQCFSRMSNorm(
+        config=object(),
+        hidden_size=3,
+        eps=1e-6,
+        scale=torch.ones(3),
+        time_steps=2,
+        use_snn_memopt=False,
+    )
+
+    layer_offsets = ((0, 0, 24),)
+    module.sharded_state_dict(
+        sharded_offsets=layer_offsets, metadata={"dp_cp_group": object()}
+    )
+
+    assert offsets == [layer_offsets, ()]
+    assert groups == [{}, {}]
+
+
 def test_checkpoint_file_path_notifies_every_rank(tmp_path, monkeypatch):
     core = ModuleType("megatron.core")
     core.dist_checkpointing = SimpleNamespace()

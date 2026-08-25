@@ -143,6 +143,21 @@ class _InputQCFSRMSNorm(nn.RMSNorm):
             hidden = _encode_input(hidden, self.qcfs_scale, self.time_steps)
         return super().forward(hidden)
 
+    def sharded_state_dict(self, prefix: str = "", sharded_offsets=(), metadata=None):
+        from megatron.core.transformer.utils import (
+            make_sharded_tensors_for_checkpoint,
+        )
+
+        # The input scale exists only on global layer 0, so it has no PP layer axis.
+        return {
+            **make_sharded_tensors_for_checkpoint(
+                {"weight": self.weight}, prefix, {}, sharded_offsets
+            ),
+            **make_sharded_tensors_for_checkpoint(
+                {"qcfs_scale": self.qcfs_scale}, prefix, {}, ()
+            ),
+        }
+
 
 def _rms_norm(
     *, config: "TransformerConfig", hidden_size: int, eps: float
@@ -399,8 +414,9 @@ def load_hf_qwen2_weights(model: "MegatronModule", source: nn.Module) -> None:
         )
     if model.post_process:
         _copy(model.decoder.final_layernorm.weight, source_model.norm.weight)
-        output = source.lm_head.weight.chunk(world_size)[rank]
-        _copy(model.output_layer.weight, output)
+        if model.output_layer.weight is not None:
+            output = source.lm_head.weight.chunk(world_size)[rank]
+            _copy(model.output_layer.weight, output)
 
 
 def model_provider(

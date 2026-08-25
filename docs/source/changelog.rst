@@ -487,8 +487,8 @@ Modules: ``spikingjelly.timing_based.encoding``,
 
 - Simplified ``GaussianTuning`` and ``Tempotron`` to direct PyTorch operations.
 
-Distributed Training
-^^^^^^^^^^^^^^^^^^^^
+Distributed Training and Inference
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Module: ``spikingjelly.activation_based.distributed``.
 
@@ -508,6 +508,41 @@ Module: ``spikingjelly.activation_based.distributed``.
   while keeping complete SNN time windows ``T`` rank-local.
 - Added TP/PP model execution with optimizer-boundary checkpoint loading,
   functional per-call SNN state, and MCore static KV-cache prefill/decode.
+- Corrected Qwen2 input-calibration checkpoint metadata so TP ranks restore the
+  replicated scale without duplicate main shards.
+- Added standalone Vision evaluation and ordered logits-only HDF5 prediction
+  with replicated DP, FSDP2, TP, and PP. ``EvaluationConfig`` requires targets and
+  returns aggregate metrics; ``PredictionConfig`` ignores targets and prediction
+  returns no metrics. Canonical inference artifacts can be restored under a
+  different TP/PP topology.
+- Added a bounded forward-only Vision pipeline schedule for inference, avoiding
+  training-schedule state and cross-batch work accumulation. Communication-aware
+  SEW-ResNet34 boundaries and balanced six-block Spikformer stages provide stable
+  PP throughput above one GPU.
+- Changed the SEW-ResNet34 and Spikformer PP stage boundaries for both training
+  and inference. Vision PP checkpoints created before this change cannot be
+  resumed; checkpoints without PP are unaffected.
+- Rejected PP4 for the four-block Spikformer because its fourth stage would
+  contain only the classifier head; PP1 and PP2 remain supported.
+- Added inference capacity benchmarks that sweep Vision and MCore evaluation
+  batches through measured capacity boundaries with a 2x/1.5x search. Three-run
+  throughput-memory plots reuse the training-figure style and report per-rank
+  and global batches separately.
+  Vision and MCore evaluation support untimed warmup batches; Vision excludes
+  DataLoader work from reported throughput.
+- Added optimizer-free MCore loss/perplexity evaluation with DP/TP/PP/CP and
+  explicit forward-only pipeline microbatches, plus DP-sharded cached generation
+  with exact prompt ordering.
+- Renamed the previous low-level `distributed.llm.generate(transformer_config,
+  model_provider, ...)`` API to ``generate_mcore(...)``. The ``generate(...)` name now
+  accepts ``MCoreGenerationConfig`` and ``input_ids``; existing low-level callers
+  must use ``generate_mcore``.
+- Added an experimental, separate-environment SGLang 0.5.17 offline backend and
+  deterministic MCore-to-safetensors exporters for the SpikeLM and Qwen2
+  reference recipes.
+  SNN time remains explicit inside each external model and is folded into KV
+  heads only at the RadixAttention seam; both reference adapters use SGLang's
+  native pipeline-stage protocol.
 - Added typed ``distributed.llm.ModelConfig`` subclasses that own MCore
   ``TransformerConfig`` and their model builder, matching the vision declaration
   style; ``plan_training()`` returns a TP/PP/CP configuration accepted by
