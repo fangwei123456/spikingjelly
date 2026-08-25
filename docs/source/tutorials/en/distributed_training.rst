@@ -1069,7 +1069,9 @@ measurements; scheduler points whose three-run max/min exceeds 1.3 remain
 three warmups followed by seven timed runs. Their medians resist periodic
 scheduler slow samples while plots retain the complete min/max range. PP2 and
 PP4 both use the exact MCore PP global-batch grid:
-``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048``. Engine startup was excluded
+``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048`` and then
+extend the capacity tail with the ``2x/1.5x`` rule. Their final grids are strict
+supersets of the MCore grid. Engine startup was excluded
 and Radix cache was disabled. SGLang workers do not expose PyTorch allocator peak,
 so the horizontal axis uses the busiest GPU's post-generation NVML device-memory
 usage. Every topology uses the same ``memory_fraction_static=0.5``. The
@@ -1087,14 +1089,15 @@ segments and unexplained detached markers.
     :width: 720px
     :alt: Qwen2.5-0.5B QCFS SGLang offline-generation throughput
 
-    SGLang offline-generation throughput-memory Pareto frontiers; PP2/PP4 use the MCore global-batch grid.
+    SGLang offline-generation throughput-memory Pareto frontiers; PP2/PP4 use the MCore grid plus a capacity tail.
 
 The best TP1, DP2, DP4, TP2, PP2, PP4, and DP2 x TP2 frontier points reach
 15758.7, 18636.8, 25743.8, 9097.7, 12707.9, 10117.7, and 14355.1 generated
 tokens/s at G=2048, 16384, 32768, 8192, 1536, 2048, and 32768. None should be
-misread as per-GPU batch. The 13-point PP2/PP4 grids span
-12.71--14.53/12.70--13.74 GiB. Their narrower horizontal ranges come from PP
-sharding plus the fixed 0.5 static pool, not from missing batch measurements.
+misread as per-GPU batch. The MCore-matched PP2/PP4 base segments span
+12.71--14.53/12.70--13.74 GiB. Their capacity tails continue to G=65536/49152
+and plateau at 19.98/15.93 GiB. Larger G does not imply an equally large
+concurrent GPU batch.
 
 The two rightmost TP1 frontier points come from independent Engine grids at
 G=2176 and G=2048. Their medians are 15522.8 and 15758.7 tokens/s, while their
@@ -1102,10 +1105,14 @@ full seven-run ranges are 9339.4--15976.3 and 8666.4--16176.7. The heavy overlap
 shows a scheduler plateau, not duplicate data. Their different horizontal
 positions reflect NVML allocator state across Engine lifetimes; the frontier is
 ordered by memory rather than G.
-SGLang caps in-flight
-tokens and queues excess requests, so user request batch has no traditional OOM
-point; the complete boundary is a throughput plateau rather than a manufactured
-OOM. TP1 remains fastest at small and medium request batches while this 0.5B
+SGLang caps in-flight tokens and queues excess requests, so user request batch
+has no traditional OOM point. PP2 first reaches an independent-Engine runtime
+timeout at G=98304 and PP4 at G=65536; neither is a CUDA OOM. MCore K=4
+evaluation materializes computation chunks of size ``L/4`` concurrently, so
+activation memory grows with L until OOM. SGLang G is primarily the number of
+requests submitted to the scheduler; requests beyond the in-flight token/KV
+budget remain in a host queue, allowing G far beyond MCore L. TP1 remains
+fastest at small and medium request batches while this 0.5B
 model fits on one GPU; with a sufficiently large queue, pure DP2 and DP4 reach
 1.18x and 1.63x TP1's best throughput. PP2 and PP4 remain below TP1 because PP
 disables the overlap schedule and stage traffic crosses PCIe.
@@ -1129,11 +1136,11 @@ disables the overlap schedule and stage traffic crosses PCIe.
       - 49152/49152
       - 65536/65536
     * - PP2
-      - 2048/2048
-      - not probed beyond the matched grid
+      - 65536/65536
+      - 98304/98304 (runtime timeout, no CUDA OOM)
     * - PP4
-      - 2048/2048
-      - not probed beyond the matched grid
+      - 49152/49152
+      - 65536/65536 (runtime timeout, no CUDA OOM)
     * - DP2 x TP2
       - 32768/65536
       - 49152/98304

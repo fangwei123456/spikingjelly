@@ -977,7 +977,8 @@ global batch ``G`` 从 16 开始按 ``2x/1.5x`` 规则增长。常规 grid 在�
 的 scheduler 波动点标为 ``unstable``。TP1 的前沿细网格，以及 PP2/PP4 的正式
 sweep 均预热三次、再计时七次，以七次中位数抵抗周期性 scheduler 慢样本，并保留
 完整 min/max 误差条。PP2/PP4 都严格使用 MCore PP 的 13 点 global-batch grid：
-``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048``。
+``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048``；
+随后继续按 ``2x/1.5x`` 扩展容量尾部，因此最终 grid 是 MCore grid 的严格超集。
 计时不包括 Engine 启动，且关闭 Radix cache。SGLang worker 不公开 PyTorch allocator
 peak，因此横轴使用同步生成后的最繁忙 GPU NVML device-memory used；它包含
 所有拓扑都使用相同的 ``memory_fraction_static=0.5``。横轴包含初始化时预留的
@@ -991,21 +992,24 @@ peak，因此横轴使用同步生成后的最繁忙 GPU NVML device-memory used
     :width: 720px
     :alt: Qwen2.5-0.5B QCFS 在 SGLang 上的离线生成吞吐
 
-    SGLang 离线生成的吞吐—显存 Pareto 前沿；PP2/PP4 使用与 MCore 相同的 G grid。
+    SGLang 离线生成的吞吐—显存 Pareto 前沿；PP2/PP4 使用 MCore G grid 加容量尾部。
 
 TP1、DP2、DP4、TP2、PP2、PP4 和 DP2 × TP2 的最佳前沿点分别达到
 15758.7、18636.8、25743.8、9097.7、12707.9、10117.7 和 14355.1
 generated tokens/s，对应 G 为 2048、16384、32768、8192、1536、2048 和
-32768；不能把它们误读为每卡 batch。PP2/PP4 的 13 点 grid 分别覆盖
-12.71--14.53/12.70--13.74 GiB；较窄范围来自 PP 分片和固定 0.5 静态 pool，
-不是少测 batch。
+32768；不能把它们误读为每卡 batch。PP2/PP4 的 MCore-matched 基础段分别覆盖
+12.71--14.53/12.70--13.74 GiB；容量尾部继续到 G=65536/49152，显存平台为
+19.98/15.93 GiB。较大 G 并不表示同等规模的 GPU 并发 batch。
 
 TP1 前沿最右两个点来自独立 Engine grid 的 G=2176 和 G=2048，中位吞吐为
 15522.8 和 15758.7 tokens/s；七次完整范围分别为 9339.4--15976.3 和
 8666.4--16176.7，统计上高度重叠。它们接近同一纵坐标表示 scheduler 已饱和；
 横坐标差异来自独立 Engine 生命周期的 NVML allocator 占用，且前沿按显存而非 G 排序。
 SGLang 会限制在途 token 并排队请求，因此这里没有用户 batch 对应的传统 OOM 点；
-完整边界是吞吐平台，而不是强行制造 OOM。0.5B 模型在中小请求 batch 下以 TP1
+PP2 在 G=98304、PP4 在 G=65536 首先达到独立 Engine runtime timeout，但均未
+发生 CUDA OOM。MCore 的 K=4 评测会同时 materialize ``L/4`` 大小的计算块，激活
+显存随 L 增长并最终 OOM；SGLang 的 G 主要是提交给 scheduler 的请求数，超过在途
+token/KV 预算后留在主机队列，所以可以远大于 MCore L。0.5B 模型在中小请求 batch 下以 TP1
 最快；请求队列足够大时，纯 DP2/DP4 分别达到 TP1 最佳吞吐的 1.18/1.63 倍。
 PP2/PP4 因 overlap schedule 被关闭且跨 stage 经过 PCIe，低于 TP1。
 
@@ -1028,11 +1032,11 @@ PP2/PP4 因 overlap schedule 被关闭且跨 stage 经过 PCIe，低于 TP1。
       - 49152/49152
       - 65536/65536
     * - PP2
-      - 2048/2048
-      - 匹配 grid 内未继续测试
+      - 65536/65536
+      - 98304/98304（runtime timeout，无 CUDA OOM）
     * - PP4
-      - 2048/2048
-      - 匹配 grid 内未继续测试
+      - 49152/49152
+      - 65536/65536（runtime timeout，无 CUDA OOM）
     * - DP2 × TP2
       - 32768/65536
       - 49152/98304
