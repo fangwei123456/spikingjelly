@@ -147,7 +147,11 @@ def _load_vision(results: Path) -> list[dict]:
         completed = [metrics for status, metrics, _ in runs if status == 0]
         status_codes = [status for status, _, _ in runs]
         if len(completed) == 3:
-            status = "completed"
+            status = (
+                "capacity_probe_completed"
+                if topology == "pp4" and batch_size >= 4096
+                else "completed"
+            )
         elif completed:
             status = "unstable"
         elif any(
@@ -189,7 +193,7 @@ def _load_vision(results: Path) -> list[dict]:
                 + f"exit statuses: {','.join(map(str, sorted(status_codes)))}"
             ),
         }
-        if status == "completed":
+        if len(completed) == 3:
             throughput = _summary(
                 [float(metrics["images_per_second"]) for metrics in completed]
             )
@@ -296,7 +300,8 @@ def _load_sglang(results: Path) -> list[dict]:
             memory = measurement["peak_device_memory_bytes"] / 1024**3
             status = (
                 "completed"
-                if len(throughputs) == 3 and throughput[2] / throughput[1] <= 1.3
+                if len(throughputs) >= 7
+                or (len(throughputs) == 3 and throughput[2] / throughput[1] <= 1.3)
                 else "unstable"
             )
             rows.append(
@@ -327,7 +332,10 @@ def _load_sglang(results: Path) -> list[dict]:
                     "peak_memory_gib_median": memory,
                     "peak_memory_gib_min": memory,
                     "peak_memory_gib_max": memory,
-                    "notes": "Radix cache disabled; static memory fraction 0.5",
+                    "notes": (
+                        "Radix cache disabled; static memory fraction 0.5; "
+                        f"{len(throughputs)} timed repeats"
+                    ),
                 }
             )
     return rows
@@ -479,13 +487,13 @@ def _plot_vision(rows: list[dict], output: Path) -> None:
         ):
             figure, axis = plt.subplots(figsize=(6.1, 3.6))
             for index, topology in enumerate(TOPOLOGY_ORDER):
-                points = sorted(
-                    (
+                points = _pareto_frontier(
+                    [
                         row
                         for row in model_rows
                         if row["topology"] == topology and row["status"] == "completed"
-                    ),
-                    key=lambda row: row["global_batch_size"],
+                    ],
+                    memory_resolution_gib=0.001,
                 )
                 lines = axis.errorbar(
                     [point["peak_memory_gib_median"] for point in points],
@@ -526,7 +534,12 @@ def _plot_vision(rows: list[dict], output: Path) -> None:
             axis.yaxis.set_major_formatter(formatter)
             axis.set_xlabel("Peak allocated memory / GPU (GiB)")
             axis.set_ylabel("Aggregate inference throughput (images/s)")
-            axis.set_title(f"{model} · inference", loc="left", fontweight="bold", pad=8)
+            axis.set_title(
+                f"{model} · inference frontier",
+                loc="left",
+                fontweight="bold",
+                pad=8,
+            )
             axis.spines[["top", "right"]].set_visible(False)
             axis.tick_params(axis="both", which="both", top=False, right=False)
             axis.grid(which="major", color="0.86", linewidth=0.6, linestyle="--")

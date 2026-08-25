@@ -8,7 +8,7 @@ import pytest
 import torch
 from torch.utils.data import Dataset
 
-from benchmark.plot_distributed_inference import _pareto_frontier
+from benchmark.plot_distributed_inference import _load_sglang, _pareto_frontier
 from benchmark.snn_llm.spikelm import SpikeLMConfig
 from spikingjelly.activation_based.distributed.llm import (
     EvaluationConfig,
@@ -45,6 +45,33 @@ def test_inference_plot_uses_pareto_frontier():
     ]
 
     assert _pareto_frontier(points) == [points[1], points[4]]
+
+
+def test_sglang_plot_accepts_seven_repeat_median(tmp_path):
+    data = {
+        "tensor_parallel_size": 1,
+        "pipeline_parallel_size": 1,
+        "data_parallel_size": 1,
+        "measurements": [
+            {
+                "prompt_count": 16,
+                "outputs": [[1] * 8],
+                "inference_seconds_samples": [1.0, 2.0, 3.0],
+                "peak_device_memory_bytes": 1024**3,
+            },
+            {
+                "prompt_count": 32,
+                "outputs": [[1] * 8],
+                "inference_seconds_samples": [1.0] * 7,
+                "peak_device_memory_bytes": 1024**3,
+            },
+        ],
+    }
+    (tmp_path / "sglang_tp1_stable.json").write_text(json.dumps(data))
+
+    rows = _load_sglang(tmp_path)
+
+    assert [row["status"] for row in rows] == ["unstable", "completed"]
 
 
 def test_evaluation_config_and_padding_mask():

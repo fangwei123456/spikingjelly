@@ -875,11 +875,14 @@ point starts in a fresh process and uses four
 DataLoader workers, runs five untimed batches and ten measured batches, and is repeated independently three
 times. Timing includes H2D, forward, communication, and metric reduction but
 excludes DataLoader work, model/artifact loading, and initialization. The plots
-show medians and complete ranges; a point appears only when all three runs finish.
+show medians and complete ranges. Only three-run points from the regular
+protocol participate in the throughput-memory Pareto frontiers.
 For the PP4 capacity tail at ``L >= 4096``, one high-level batch already contains
 at least 256 pipeline microbatches. Each fresh process therefore measures one
 batch without an additional warmup, while retaining three independent process
-runs. CSV notes distinguish these points from the regular throughput segment.
+runs. CSV notes/status distinguish these points from the regular throughput
+segment; they remain capacity-table evidence and are not connected to the
+formal throughput lines.
 This section uses ``L`` for the local batch on each DP rank/replica and ``G``
 for the whole-job global batch. Always ``G = L × DP``; TP, PP, CP, and SNN time
 steps ``T`` do not multiply G. PP additionally uses ``K`` for the number of
@@ -907,22 +910,23 @@ pipeline microbatch at large B. The framework does not silently apply this rule
 to user calls. The summary CSV records ``per_rank_batch_size``,
 ``global_batch_size``, ``pipeline_microbatches``, and
 ``pipeline_microbatch_size`` separately.
-SGLang frontier lines merge measurements within the same 0.05-GiB horizontal
-bin and retain its highest throughput. MCore instead connects every successful
+Vision uses exact-memory Pareto frontiers for regular-protocol points. SGLang
+frontier lines merge measurements within the same 0.05-GiB horizontal bin and
+retain its highest throughput. MCore instead connects every successful
 batch-sweep point through OOM. The CSV keeps exact, unquantized memory and every
-measurement for both backends.
+measurement for all three cases.
 
 .. figure:: ../../_static/tutorials/distributed/sew-resnet34-inference-tradeoff.png
     :width: 720px
     :alt: SEW-ResNet34 distributed evaluation throughput and per-GPU peak memory
 
-    SEW-ResNet34 aggregate evaluation throughput versus the busiest GPU's peak allocated memory.
+    SEW-ResNet34 regular-protocol aggregate evaluation throughput-memory Pareto frontiers.
 
 .. figure:: ../../_static/tutorials/distributed/spikformer-inference-tradeoff.png
     :width: 720px
     :alt: Spikformer-S distributed evaluation throughput and per-GPU peak memory
 
-    Spikformer-S aggregate evaluation throughput versus the busiest GPU's peak allocated memory.
+    Spikformer-S regular-protocol aggregate evaluation throughput-memory Pareto frontiers.
 
 At per-rank batch 128, SEW-ResNet34 reaches 845.7, 3368.9, 3109.3, 548.3, and
 1404.1 images/s on one GPU, DP4, FSDP4, TP4, and PP4. Spikformer-S reaches
@@ -1064,14 +1068,17 @@ LLM generation used Qwen2.5-0.5B QCFS, BF16, ``T=2``, 8-token prompts, and
 The global prompt batch G starts at 16 and follows the ``2x/1.5x`` growth rule.
 The regular grid runs sequentially within one Engine per topology. Every
 capacity-boundary ``2x/1.5x`` candidate owns a separate Engine lifetime and a
-360-second budget. Every point has three same-G warmups followed by three
-measurements. Engine startup was excluded
+360-second budget. Regular points have three same-G warmups followed by three
+measurements; scheduler points whose three-run max/min exceeds 1.3 remain
+``unstable``. This update adds non-power-of-two fine grids near the TP1, PP2,
+and PP4 frontiers. Those points also use three warmups, followed by seven timed
+runs whose median resists periodic scheduler slow samples while the plot retains
+the complete min/max range. Engine startup was excluded
 and Radix cache was disabled. SGLang workers do not expose PyTorch allocator peak,
 so the horizontal axis uses the busiest GPU's post-generation NVML device-memory
 usage. It includes the ``memory_fraction_static=0.5`` KV pool and is not directly
-comparable to Vision peak allocated memory. Scheduler points whose three-run
-max/min exceeds 1.3 remain in the CSV as ``unstable`` and are omitted from the
-curve. The static KV pool and MiB-resolution NVML readings can give different G
+comparable to Vision peak allocated memory. The static KV pool and
+MiB-resolution NVML readings can give different G
 values the same horizontal coordinate. The CSV retains every measurement, while
 lines connect only the throughput-memory Pareto frontier. Only the
 highest-throughput point at equal memory enters a line, avoiding vertical
@@ -1081,19 +1088,22 @@ segments and unexplained detached markers.
     :width: 720px
     :alt: Qwen2.5-0.5B QCFS SGLang offline-generation throughput
 
-    SGLang offline-generation throughput-memory Pareto frontiers; frontier points show the three-run median and full range.
+    SGLang offline-generation throughput-memory Pareto frontiers; frontier points show the three- or seven-run median and full range.
 
-At their largest three-run points, TP1, DP2, DP4, TP2, PP2, PP4, and DP2 x TP2
-reach 11147.3, 16416.8, 25079.8, 8610.3, 10397.6, 8345.6, and 13549.1
-generated tokens/s. Their respective global G values are 65536, 98304, 131072,
-49152, 65536, 49152, and 65536; none should be misread as per-GPU batch.
+The best TP1, DP2, DP4, TP2, PP2, PP4, and DP2 x TP2 frontier points reach
+15758.7, 18636.8, 25743.8, 9097.7, 12733.8, 9885.6, and 14355.1 generated
+tokens/s at G=2048, 16384, 32768, 8192, 1024, 2048, and 32768. None should be
+misread as per-GPU batch. The seven-run TP1, PP2, and PP4 fine grids continue to
+G=3072, 12288, and 8192 without improving median throughput. Their plotted
+endpoints are therefore measured plateau frontiers rather than prematurely
+terminated rising segments.
 SGLang caps in-flight
 tokens and queues excess requests, so user request batch has no traditional OOM
 point; the complete boundary is a throughput plateau rather than a manufactured
 OOM. TP1 remains fastest at small and medium request batches while this 0.5B
 model fits on one GPU; with a sufficiently large queue, pure DP2 and DP4 reach
-1.27x and 1.71x TP1's best throughput. PP2 nearly matches TP1, while PP4 remains
-below it because PP disables the overlap schedule and stage traffic crosses PCIe.
+1.18x and 1.63x TP1's best throughput. PP2 and PP4 remain below TP1 because PP
+disables the overlap schedule and stage traffic crosses PCIe.
 
 .. list-table:: SGLang capacity tail (largest completion → first independent timeout)
     :header-rows: 1

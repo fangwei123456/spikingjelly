@@ -802,10 +802,11 @@ Vision 使用 BF16、``T=4``、1000 类和缓存的 224 × 224 合成图像。SE
 OOM 在 384--1024 之间停止。PP4 另测到 ``1536, 2048``，并用单 batch probe
 继续搜索容量边界。每个成功吞吐点从新进程启动，使用 4 个 DataLoader workers，
 预热 5 个 batch、测量 10 个 batch，并独立重复三次。计时包含 H2D、forward、通信和指标归约，不包含 DataLoader、
-模型/artifact 加载和初始化。图中是三次中位数与完整范围；只有三次均完成的点才进入曲线。
+模型/artifact 加载和初始化。图中是三次中位数与完整范围；只有三次均完成的正式
+protocol 点才参与吞吐—显存 Pareto 前沿。
 PP4 的容量尾部 ``L >= 4096`` 因单个高层 batch 已含 256 个以上 pipeline
 microbatch，改为每进程测量 1 个 batch、不额外预热，并仍启动三个独立进程；这些点
-与常规吞吐段在 CSV 的 notes 中区分。
+与常规吞吐段在 CSV 的 notes/status 中区分，只用于容量表，不与正式吞吐折线相连。
 本节统一用 ``L`` 表示每个 DP rank/replica 的本地 batch，用 ``G`` 表示整个作业的
 global batch；始终有 ``G = L × DP``，TP、PP、CP 和 SNN 时间步 ``T`` 均不乘入
 ``G``。PP 另用 ``K`` 表示 pipeline microbatch 数，每块大小为 ``L / K``。所有图
@@ -827,21 +828,21 @@ batch 时保持 16 images/pipeline microbatch。该规则只属于实验 protoco
 在用户调用中自动改写这个参数。汇总 CSV 分别记录 ``per_rank_batch_size``、
 ``global_batch_size``、``pipeline_microbatches`` 和
 ``pipeline_microbatch_size``。
-SGLang 的前沿连线按 0.05 GiB 横轴分辨率合并同一显存 bin，只保留该 bin
-最高吞吐；MCore 则连接直到 OOM 的全部成功 batch sweep 点。CSV 对两者都保留
-未量化的精确显存和全部测量点。
+Vision 对正式 protocol 点使用精确显存 Pareto 前沿；SGLang 按 0.05 GiB 横轴
+分辨率合并同一显存 bin，只保留该 bin 最高吞吐。MCore 则连接直到 OOM 的全部
+成功 batch sweep 点。CSV 对三者都保留未量化的精确显存和全部测量点。
 
 .. figure:: ../../_static/tutorials/distributed/sew-resnet34-inference-tradeoff.png
     :width: 720px
     :alt: SEW-ResNet34 分布式评测吞吐与单卡峰值显存
 
-    SEW-ResNet34：总评测吞吐与最繁忙 GPU 的 peak allocated memory。
+    SEW-ResNet34：正式 protocol 的总评测吞吐—peak allocated memory Pareto 前沿。
 
 .. figure:: ../../_static/tutorials/distributed/spikformer-inference-tradeoff.png
     :width: 720px
     :alt: Spikformer-S 分布式评测吞吐与单卡峰值显存
 
-    Spikformer-S：总评测吞吐与最繁忙 GPU 的 peak allocated memory。
+    Spikformer-S：正式 protocol 的总评测吞吐—peak allocated memory Pareto 前沿。
 
 在每 rank batch 128 时，SEW-ResNet34 的单卡、DP4、FSDP4、TP4、PP4 分别为
 845.7、3368.9、3109.3、548.3、1404.1 images/s；Spikformer-S 分别为
@@ -972,12 +973,14 @@ LLM 生成使用 Qwen2.5-0.5B QCFS、BF16、``T=2``、8-token prompt 和 8-token
 输出。SGLang 比较 TP1、DP2、DP4、TP2、PP2、PP4 和 DP2 × TP2；prompt
 global batch ``G`` 从 16 开始按 ``2x/1.5x`` 规则增长。常规 grid 在同一拓扑的
 一个 Engine 内顺序运行；容量边界的每个 ``2x/1.5x`` 候选独占一次 Engine 生命周期
-和 360 秒预算。每个点都先用相同 G 预热三次，再测量三次；
+和 360 秒预算。常规点先用相同 G 预热三次，再测量三次；三次 max/min 超过 1.3
+的 scheduler 波动点标为 ``unstable``。本轮在 TP1、PP2 和 PP4 的前沿附近加入
+非 2 的幂次细网格；这些新点同样预热三次，再计时七次，以七次中位数抵抗周期性
+scheduler 慢样本，并保留完整 min/max 误差条。
 计时不包括 Engine 启动，且关闭 Radix cache。SGLang worker 不公开 PyTorch allocator
 peak，因此横轴使用同步生成后的最繁忙 GPU NVML device-memory used；它包含
 ``memory_fraction_static=0.5`` 预留的 KV pool，不能与 Vision 的 peak allocated
-memory 直接比较。三次 max/min 超过 1.3 的 scheduler 波动点在 CSV 中标为
-``unstable``，不进入曲线。静态 KV pool 和 MiB 粒度的 NVML 读数可能让不同 G
+memory 直接比较。静态 KV pool 和 MiB 粒度的 NVML 读数可能让不同 G
 得到相同横坐标；CSV 保留所有测量，连线只连接吞吐—显存 Pareto 前沿。同显存点
 仅保留最高吞吐进入连线，因此不会产生竖直线段或无图例说明的游离散点。
 
@@ -985,16 +988,18 @@ memory 直接比较。三次 max/min 超过 1.3 的 scheduler 波动点在 CSV �
     :width: 720px
     :alt: Qwen2.5-0.5B QCFS 在 SGLang 上的离线生成吞吐
 
-    SGLang 离线生成的吞吐—显存 Pareto 前沿；前沿点显示三次中位数和完整范围。
+    SGLang 离线生成的吞吐—显存 Pareto 前沿；前沿点显示三次或七次中位数和完整范围。
 
-最大三次完成点上，TP1、DP2、DP4、TP2、PP2、PP4 和 DP2 × TP2 分别达到
-11147.3、16416.8、25079.8、8610.3、10397.6、8345.6 和 13549.1
-generated tokens/s。这里对应的 G 分别为 65536、98304、131072、49152、
-65536、49152 和 65536；不能把它们误读为每卡 batch。
+TP1、DP2、DP4、TP2、PP2、PP4 和 DP2 × TP2 的最佳前沿点分别达到
+15758.7、18636.8、25743.8、9097.7、12733.8、9885.6 和 14355.1
+generated tokens/s，对应 G 为 2048、16384、32768、8192、1024、2048 和
+32768；不能把它们误读为每卡 batch。TP1、PP2 和 PP4 的七次细网格继续测到
+G=3072、12288 和 8192，后续中位吞吐均未再提高，因此图中端点已经是测得的平台
+前沿，而不是提前停止的上升段。
 SGLang 会限制在途 token 并排队请求，因此这里没有用户 batch 对应的传统 OOM 点；
 完整边界是吞吐平台，而不是强行制造 OOM。0.5B 模型在中小请求 batch 下以 TP1
-最快；请求队列足够大时，纯 DP2/DP4 分别达到 TP1 最佳吞吐的 1.27/1.71 倍。
-PP2 基本追平 TP1，而 PP4 因 overlap schedule 被关闭且跨 stage 经过 PCIe，低于 TP1。
+最快；请求队列足够大时，纯 DP2/DP4 分别达到 TP1 最佳吞吐的 1.18/1.63 倍。
+PP2/PP4 因 overlap schedule 被关闭且跨 stage 经过 PCIe，低于 TP1。
 
 .. list-table:: SGLang 容量尾部（最大完成点 → 首个独立 timeout）
     :header-rows: 1
