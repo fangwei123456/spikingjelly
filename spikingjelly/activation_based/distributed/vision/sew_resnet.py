@@ -22,11 +22,11 @@ from .config import ModelBuilder, ModelConfig
 
 
 class _SEWHead(nn.Module):
-    def __init__(self, model: nn.Module) -> None:
+    def __init__(self, layer4: nn.Module, avgpool: nn.Module, fc: nn.Module) -> None:
         super().__init__()
-        self.layer4 = model.layer4
-        self.avgpool = model.avgpool
-        self.fc = model.fc
+        self.layer4 = layer4
+        self.avgpool = avgpool
+        self.fc = fc
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.avgpool(self.layer4(x))
@@ -38,11 +38,21 @@ def _pipeline_stage(model: nn.Module, rank: int, size: int) -> nn.Module:
         return model
     if size not in {2, 4}:
         raise ValueError("SEW-ResNet34 PP size must be 1, 2, or 4.")
+    layer2 = tuple(model.layer2.children())
+    layer3 = tuple(model.layer3.children())
+    layer4 = tuple(model.layer4.children())
     chunks = (
-        nn.Sequential(model.conv1, model.bn1, model.sn1, model.maxpool, model.layer1),
-        model.layer2,
-        model.layer3,
-        _SEWHead(model),
+        nn.Sequential(
+            model.conv1,
+            model.bn1,
+            model.sn1,
+            model.maxpool,
+            model.layer1,
+            layer2[0],
+        ),
+        nn.Sequential(*layer2[1:], layer3[0]),
+        nn.Sequential(*layer3[1:], layer4[0]),
+        _SEWHead(nn.Sequential(*layer4[1:]), model.avgpool, model.fc),
     )
     chunks_per_stage = len(chunks) // size
     start = rank * chunks_per_stage
@@ -112,6 +122,25 @@ colwise/rowwise channel-parallel strategy.
 
 
 class SEWResNet34Builder(ModelBuilder):
+    def _build_canonical_model(self) -> nn.Module:
+        config = self.config
+        if not isinstance(config, SEWResNet34Config):
+            raise TypeError("SEWResNet34Builder requires SEWResNet34Config.")
+        model = sew_resnet34(
+            pretrained=False,
+            cnf=config.connection,
+            spiking_neuron=neuron.LIFNode,
+            num_classes=config.num_classes,
+            tau=config.tau,
+            detach_reset=config.detach_reset,
+            backend=config.neuron_backend,
+        )
+        functional.set_step_mode(model, config.step_mode)
+        return model
+
+    def _pipeline_stage(self, model: nn.Module, rank: int, size: int) -> nn.Module:
+        return _pipeline_stage(model, rank, size)
+
     def build(
         self,
         *,
@@ -130,19 +159,7 @@ class SEWResNet34Builder(ModelBuilder):
         Optional[tuple[int, ...]],
     ]:
         config = self.config
-        if not isinstance(config, SEWResNet34Config):
-            raise TypeError("SEWResNet34Builder requires SEWResNet34Config.")
-
-        model = sew_resnet34(
-            pretrained=False,
-            cnf=config.connection,
-            spiking_neuron=neuron.LIFNode,
-            num_classes=config.num_classes,
-            tau=config.tau,
-            detach_reset=config.detach_reset,
-            backend=config.neuron_backend,
-        )
-        functional.set_step_mode(model, config.step_mode)
+        model = self._build_canonical_model()
 
         world_size = dist.get_world_size(process_group) if process_group else 1
         if world_size > 1:
@@ -155,7 +172,7 @@ class SEWResNet34Builder(ModelBuilder):
 
         if pipeline_size > 1 and memopt_level:
             raise ValueError("SEW-ResNet34 memopt is not supported together with PP.")
-        model = _pipeline_stage(model, pipeline_rank, pipeline_size)
+        model = self._pipeline_stage(model, pipeline_rank, pipeline_size)
         fsdp_roots = tuple(
             name
             for name, module in model.named_modules()
@@ -183,7 +200,6 @@ class SEWResNet34Builder(ModelBuilder):
         micro_batch = micro_batch_size // pipeline_microbatches
         stem_size = (config.image_size + 3) // 4
         stage_shapes = (
-            (config.time_steps, micro_batch, 64, stem_size, stem_size),
             (
                 config.time_steps,
                 micro_batch,
@@ -197,6 +213,13 @@ class SEWResNet34Builder(ModelBuilder):
                 256,
                 (stem_size + 3) // 4,
                 (stem_size + 3) // 4,
+            ),
+            (
+                config.time_steps,
+                micro_batch,
+                512,
+                (stem_size + 7) // 8,
+                (stem_size + 7) // 8,
             ),
             (config.time_steps, micro_batch, config.num_classes),
         )

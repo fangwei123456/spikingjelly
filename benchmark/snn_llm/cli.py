@@ -169,7 +169,7 @@ def _run_qwen2(args: argparse.Namespace) -> None:
         train,
     )
 
-    from .qwen2 import Qwen2Config, _qwen2_rotary_base
+    from .qwen2 import Qwen2Config
 
     source_config = AutoConfig.from_pretrained(args.source)
     calibration = Qwen2SNNCalibration.from_state_dict(
@@ -197,13 +197,12 @@ def _run_qwen2(args: argparse.Namespace) -> None:
         gated_linear_unit=True,
         activation_func=F.silu,
         add_bias_linear=False,
-        add_qkv_bias=bool(source_config.attention_bias),
+        add_qkv_bias=bool(getattr(source_config, "attention_bias", True)),
         params_dtype=torch.bfloat16,
         pipeline_dtype=torch.bfloat16,
         bf16=True,
         fp8="hybrid",
         fp8_recipe="delayed",
-        rotary_base=_qwen2_rotary_base(source_config),
     )
     model = Qwen2Config(
         transformer=transformer,

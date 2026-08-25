@@ -1,13 +1,14 @@
-Distributed SNN Training
-========================
+Distributed SNN Training and Inference
+======================================
 
 Authors: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_, `Wei Fang (fangwei123456) <https://github.com/fangwei123456>`_
 
 中文版： :doc:`../cn/distributed_training`
 
-The high-level interfaces launch predefined training workflows. The low-level
-interfaces support custom models and training loops. The final section reports
-measured throughput and memory.
+The high-level interfaces launch predefined training, evaluation, and offline
+inference workflows. The low-level interfaces support custom models and loops.
+The final section reports throughput and memory on the same four-RTX-4090 host
+used for the training measurements.
 
 API design rationale
 --------------------
@@ -19,7 +20,9 @@ and context parallelism. A single model description would merely hide those
 differences behind branches. The two paths are therefore symmetric only where
 the concepts are genuinely shared: ``ModelConfig`` describes a model,
 ``ModelBuilder`` connects architecture-specific code, ``TrainingConfig``
-describes a run, and ``train`` owns the default training lifecycle.
+describes training, and ``EvaluationConfig`` describes labeled evaluation.
+Vision ``PredictionConfig`` and the LLM generation configs describe unlabeled
+outputs. Each high-level entry point owns its runtime lifecycle.
 
 The high-level interface is inspired by the current Megatron Core model
 extension style. MCore separates declarative ``TransformerConfig`` data and
@@ -176,6 +179,114 @@ The architecture-specific ``forward_step`` owns temporal encoding, state
 isolation, and reduction. Its MCore ``T*B`` envelope is not the generic
 SpikingJelly ``step_mode="m"`` interface, so LLM configs intentionally do not
 expose a ``step_mode`` field yet.
+
+Offline distributed inference
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Interface roles
+^^^^^^^^^^^^^^^
+
+Inference interfaces are divided by whether execution belongs to the training
+lifecycle and whether ground truth is required. Validation and test use the same
+evaluation computation and differ only in invocation time and dataset, so there
+are no duplicate ``validate`` and ``test`` functions.
+
+.. list-table:: Vision and LLM inference interface roles
+    :header-rows: 1
+
+    * - Scenario
+      - Ground truth
+      - Vision
+      - LLM
+      - Output
+    * - Validation during training
+      - Required
+      - ``train_classification`` evaluates the validation dataset every epoch
+      - ``train`` evaluates according to ``eval_interval`` / ``eval_steps``
+      - Validation loss/accuracy or LM loss
+    * - Post-training evaluation/test
+      - Required
+      - ``evaluate_classification``
+      - MCore ``evaluate``
+      - Aggregate loss, accuracy/perplexity, and performance metrics
+    * - Post-training prediction/generation
+      - Not required
+      - ``predict_classification``
+      - MCore ``generate`` or SGLang ``generate_sglang``
+      - Per-sample logits or generated tokens; no evaluation metrics
+
+``evaluate_classification`` requires every dataset item to be
+``(image, target)``. Likewise, ``llm.evaluate`` requires ``input_ids``,
+``labels``, and an optional ``loss_mask``. Prediction and generation do not read
+ground truth: Vision ignores targets even if items are ``(image, target)``, while
+LLM generation accepts prompts only. All three roles belong to training or
+offline workflows; the SGLang path includes no HTTP server, router, or other
+online-serving control plane.
+
+Vision
+^^^^^^
+
+Vision inference remains native PyTorch. First export a training checkpoint to
+a TP/PP-independent canonical artifact, then evaluate it under a different DP,
+FSDP2, TP, or PP topology:
+
+.. code-block:: bash
+
+    torchrun --standalone --nproc-per-node=4 benchmark/vision_inference.py \
+        --artifact artifacts/sew-resnet34.pt \
+        --export-checkpoint checkpoints/step_00000010 \
+        --model sew-resnet34
+
+    torchrun --standalone --nproc-per-node=4 benchmark/vision_inference.py \
+        --artifact artifacts/sew-resnet34.pt \
+        --model sew-resnet34 \
+        --data-parallel replicate \
+        --batch-size 32
+
+``vision.evaluate_classification`` returns global loss, accuracy, images/s, and
+the busiest rank's peak memory. ``vision.predict_classification`` computes and
+returns none of those metrics; it merges rank outputs by dataset index into one
+HDF5 file containing only ``index`` and ``logits``. Classes can be derived with
+``logits.argmax(axis=1)``. Padding never appears in the final output, so dataset
+size need not divide DP or batch size.
+
+LLMs
+^^^^
+
+LLMs expose two backends with different roles:
+
+* MCore reuses the training model provider and sharded checkpoint.
+  ``llm.evaluate(EvaluationConfig(...))`` runs complete DP/TP/PP/CP loss and
+  perplexity evaluation. ``llm.generate(MCoreGenerationConfig(...), input_ids)``
+  adds DP prompt sharding to TP/PP static-KV-cache generation. MCore cached
+  generation requires CP=1.
+* SGLang handles high-throughput post-training offline generation. It consumes a
+  ``config.json`` plus safetensors artifact from a separate Python environment
+  and starts no HTTP server or router.
+
+SGLang 0.5.17 owns its PyTorch and Transformers runtime, so do not force it into
+the main training environment:
+
+.. code-block:: bash
+
+    uv venv --python 3.12 .venv-sglang
+    source .venv-sglang/bin/activate
+    uv pip install --editable ".[sglang]"
+
+The SpikeLM and Qwen2 export and generation references live in
+``benchmark/snn_llm/inference.py``, ``qwen_distributed_inference.py``, and
+``sglang_inference.py``. The SGLang models retain hidden state as
+``[token, T, hidden]`` and fold T into the head dimension only at the
+RadixAttention/KV-cache seam. The scheduler still owns one semantic request.
+
+SGLang DCP can remove only KV-head replicas already created by TP. For a
+SpikingJelly artifact, ``TP / effective_KV_heads`` must be at least the DCP
+size. The high-level interface rejects any smaller topology before starting
+the Engine rather than producing incorrect tokens.
+The SpikeLM and Qwen2 reference adapters use SGLang's native layer staging and
+``PPProxyTensors`` protocol. The Engine owns TP, PP, DP, and DCP configurations
+satisfying the constraint above. SGLang 0.5.17 automatically disables its
+overlap schedule when PP is greater than one.
 
 Low-level APIs
 --------------
@@ -743,3 +854,269 @@ and nonzero gradients in the SNN modules. Under a 7-GiB memory budget, the plann
 selected TP4, SpikingJelly memopt, and MCore selective ``core_attn``
 recomputation; two training steps used 6.28 GiB. A TP2 x PP2 sharded
 model/optimizer checkpoint also resumed successfully from step 1 to step 2.
+
+Distributed inference benchmarks
+--------------------------------
+
+The inference benchmark used the same single-host 4 x RTX 4090 24-GiB environment
+as training. ``nvidia-smi topo -m`` reports ``SYS`` from GPU0 to every other GPU
+and ``NODE`` among GPUs 1--3, with no ``NV#`` link. ``nvidia-smi topo -p2p r/w``
+returns ``CNS`` for every GPU pair. The host therefore has neither NVLink nor a
+usable CUDA peer read/write path; NCCL traffic traverses PCIe/CPU interconnects.
+The software stack matches training: PyTorch 2.8.0, Megatron Core 0.18.2, and
+Triton 3.4.0.
+
+Vision used BF16, ``T=4``, 1000 classes, and cached 224 x 224 synthetic images.
+The non-PP SEW-ResNet34 per-rank grid is
+``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024``; Spikformer-S stops
+between 384 and 1024 according to OOM. PP4 also measures ``1536, 2048`` and then
+uses single-batch probes for its capacity boundary. Each successful throughput
+point starts in a fresh process and uses four
+DataLoader workers, runs five untimed batches and ten measured batches, and is repeated independently three
+times. Timing includes H2D, forward, communication, and metric reduction but
+excludes DataLoader work, model/artifact loading, and initialization. The plots
+show medians and complete ranges; a point appears only when all three runs finish.
+For the PP4 capacity tail at ``L >= 4096``, one high-level batch already contains
+at least 256 pipeline microbatches. Each fresh process therefore measures one
+batch without an additional warmup, while retaining three independent process
+runs. CSV notes distinguish these points from the regular throughput segment.
+This section uses ``L`` for the local batch on each DP rank/replica and ``G``
+for the whole-job global batch. Always ``G = L × DP``; TP, PP, CP, and SNN time
+steps ``T`` do not multiply G. PP additionally uses ``K`` for the number of
+pipeline microbatches, each of size ``L / K``. Figure endpoints report only
+global batch G.
+
+Every capacity search uses the same growth rule: from the largest successful
+point ``x``, try ``2x``; if ``2x`` fails, try ``1.5x``; if ``1.5x`` succeeds,
+make it the new x and repeat. Non-streaming topologies continue to CUDA OOM.
+When streaming PP or request queuing makes peak memory independent of G, the
+search instead stops at a runtime boundary where a candidate cannot finish
+within its own full timeout budget.
+
+Inference PP uses a dedicated forward-only streaming schedule instead of the
+``ScheduleGPipe`` backward state machine needed by training. It synchronizes the
+pipeline group before returning each high-level batch, preventing cross-batch
+work accumulation. SEW downsampling blocks sit before stage boundaries, while
+Spikformer distributes blocks as ``0/2/2/2``. In the public configuration,
+``pipeline_microbatches`` is the number of chunks cut from one DP rank's local
+batch. It defaults to one, requires divisibility, and gives
+``samples per chunk = batch_size / pipeline_microbatches``. This benchmark alone
+sets it to 4 for ``L < 64`` and to ``L / 16`` otherwise, keeping 16 images per
+pipeline microbatch at large B. The framework does not silently apply this rule
+to user calls. The summary CSV records ``per_rank_batch_size``,
+``global_batch_size``, ``pipeline_microbatches``, and
+``pipeline_microbatch_size`` separately.
+MCore and SGLang frontier lines merge measurements within the same 0.05-GiB
+horizontal bin and retain its highest throughput. The CSV keeps exact,
+unquantized memory and every measurement.
+
+.. figure:: ../../_static/tutorials/distributed/sew-resnet34-inference-tradeoff.png
+    :width: 720px
+    :alt: SEW-ResNet34 distributed evaluation throughput and per-GPU peak memory
+
+    SEW-ResNet34 aggregate evaluation throughput versus the busiest GPU's peak allocated memory.
+
+.. figure:: ../../_static/tutorials/distributed/spikformer-inference-tradeoff.png
+    :width: 720px
+    :alt: Spikformer-S distributed evaluation throughput and per-GPU peak memory
+
+    Spikformer-S aggregate evaluation throughput versus the busiest GPU's peak allocated memory.
+
+At per-rank batch 128, SEW-ResNet34 reaches 845.7, 3368.9, 3109.3, 548.3, and
+1404.1 images/s on one GPU, DP4, FSDP4, TP4, and PP4. Spikformer-S reaches
+516.6, 2060.4, 2000.2, 412.2, and 1273.1 images/s. DP/FSDP approach linear
+four-GPU throughput. PP reaches 1.66x and 2.46x single-GPU throughput and then
+enters a stable large-batch plateau.
+
+Pure TP4 remains below one GPU but is now stable; this is a model
+compute-to-communication limit rather than scheduler variance. SEW executes 16
+rowwise all-reduces totaling about 1.41 GB per batch, while Spikformer executes
+12 totaling about 0.92 GB. Two TP2 replicas on four GPUs reach 1226.1 and 858.6
+images/s, so practical deployments use TP to fit the model and DP to scale
+throughput.
+
+.. list-table:: Vision inference capacity boundaries
+    :header-rows: 1
+
+    * - Model
+      - Topology
+      - Largest three-run ``L/G``
+      - First failure and final capacity evidence
+    * - SEW-ResNet34
+      - One GPU
+      - 512/512
+      - 768/768: sustained multi-batch CUDA OOM
+    * - SEW-ResNet34
+      - DP4
+      - 512/2048
+      - 768/3072: sustained multi-batch CUDA OOM
+    * - SEW-ResNet34
+      - FSDP4
+      - 512/2048
+      - 768/3072: sustained multi-batch CUDA OOM
+    * - SEW-ResNet34
+      - TP4
+      - 512/512
+      - 768/768: sustained multi-batch CUDA OOM
+    * - SEW-ResNet34
+      - PP4
+      - 32768/32768
+      - 49152/49152: runtime timeout
+    * - Spikformer-S
+      - One GPU
+      - 256/256
+      - 384/384: CUDA OOM
+    * - Spikformer-S
+      - DP4
+      - 384/1536
+      - 512/2048: CUDA OOM
+    * - Spikformer-S
+      - FSDP4
+      - 256/1024
+      - 384/1536: CUDA OOM
+    * - Spikformer-S
+      - TP4
+      - 512/512
+      - 768/768: CUDA OOM
+    * - Spikformer-S
+      - PP4
+      - 32768/32768
+      - 49152/49152: runtime timeout
+
+Vision correctness tests also covered FSDP2, PP2, and exporting a TP2 x PP2
+training checkpoint before restoring it under TP1 x DP4. The latter reported
+validation losses 2.310132205 and 2.310132384.
+
+MCore loss/perplexity evaluation uses Qwen2.5-0.5B QCFS, BF16, ``T=2``, and
+sequence length 16. The baseline uses a fixed 128-sample dataset; the capacity
+tail sets dataset samples equal to G so padding cannot depress throughput. It
+compares TP1, DP4, TP2, PP2, and PP4. Every point restores the same sharded
+checkpoint in a fresh process, runs five untimed schedule batches, measures one
+or more complete schedules, and is repeated independently three times;
+checkpoint/model initialization is excluded. In the MCore API,
+``micro_batch_size`` is the chunk size, while this section's L equals
+``micro_batch_size × pipeline_microbatches``. Non-PP points use K=1. The PP
+capacity tail fixes 16 semantic samples per chunk, hence K=L/16.
+
+.. figure:: ../../_static/tutorials/distributed/mcore-inference.png
+    :width: 720px
+    :alt: Qwen2.5-0.5B QCFS MCore distributed evaluation throughput and per-GPU peak memory
+
+    MCore loss/perplexity evaluation Pareto frontiers: aggregate semantic-token throughput versus the busiest GPU's peak allocated memory.
+
+At local L=16, TP1, DP4, PP2, and PP4 reach 4636.2, 17958.6, 7555.9, and
+9446.0 semantic tokens/s. PP2 and PP4 are 1.63x and 2.04x one-GPU throughput.
+At their largest points, TP1 reaches 23145.8 tokens/s and 11.37 GiB at
+L/G=384/384, while DP4 reaches 91939.8 tokens/s and 11.37 GiB/GPU at
+L/G=384/1536. PP2 reaches 8445.4 tokens/s and 1.03 GiB/GPU at 12288/12288;
+PP4 reaches 14392.3 tokens/s and 0.87 GiB/GPU at 16384/16384. PP first exceeds
+one GPU at the same L as pipeline microbatches fill the stages, then plateaus on
+stage communication and primarily provides a memory-capacity advantage. TP2 remained in sharded
+checkpoint restore for 120 seconds and is recorded as timeout, not plotted.
+
+.. list-table:: MCore capacity tail (largest completion → first failure)
+    :header-rows: 1
+
+    * - Topology
+      - Largest ``L/G``
+      - First failed ``L/G``
+      - Status
+    * - TP1
+      - 384/384
+      - 512/512
+      - CUDA OOM
+    * - DP4
+      - 384/1536
+      - 512/2048
+      - CUDA OOM
+    * - TP2
+      - none
+      - 1/1
+      - checkpoint restore timeout
+    * - PP2
+      - 12288/12288
+      - 18432/18432
+      - runtime timeout
+    * - PP4
+      - 16384/16384
+      - 24576/24576
+      - runtime timeout
+
+LLM generation used Qwen2.5-0.5B QCFS, BF16, ``T=2``, 8-token prompts, and
+8-token outputs. SGLang compares TP1, DP2, DP4, TP2, PP2, PP4, and DP2 x TP2.
+The global prompt batch G starts at 16 and follows the ``2x/1.5x`` growth rule.
+The regular grid runs sequentially within one Engine per topology. Every
+capacity-boundary ``2x/1.5x`` candidate owns a separate Engine lifetime and a
+360-second budget. Every point has three same-G warmups followed by three
+measurements. Engine startup was excluded
+and Radix cache was disabled. SGLang workers do not expose PyTorch allocator peak,
+so the horizontal axis uses the busiest GPU's post-generation NVML device-memory
+usage. It includes the ``memory_fraction_static=0.5`` KV pool and is not directly
+comparable to Vision peak allocated memory. Scheduler points whose three-run
+max/min exceeds 1.3 remain in the CSV as ``unstable`` and are omitted from the
+curve. The static KV pool and MiB-resolution NVML readings can give different G
+values the same horizontal coordinate. The CSV retains every measurement, while
+lines connect only the throughput-memory Pareto frontier. Only the
+highest-throughput point at equal memory enters a line, avoiding vertical
+segments and unexplained detached markers.
+
+.. figure:: ../../_static/tutorials/distributed/sglang-inference.png
+    :width: 720px
+    :alt: Qwen2.5-0.5B QCFS SGLang offline-generation throughput
+
+    SGLang offline-generation throughput-memory Pareto frontiers; frontier points show the three-run median and full range.
+
+At their largest three-run points, TP1, DP2, DP4, TP2, PP2, PP4, and DP2 x TP2
+reach 11147.3, 16416.8, 25079.8, 8610.3, 10397.6, 8345.6, and 13549.1
+generated tokens/s. Their respective global G values are 65536, 98304, 131072,
+49152, 65536, 49152, and 65536; none should be misread as per-GPU batch.
+SGLang caps in-flight
+tokens and queues excess requests, so user request batch has no traditional OOM
+point; the complete boundary is a throughput plateau rather than a manufactured
+OOM. TP1 remains fastest at small and medium request batches while this 0.5B
+model fits on one GPU; with a sufficiently large queue, pure DP2 and DP4 reach
+1.27x and 1.71x TP1's best throughput. PP2 nearly matches TP1, while PP4 remains
+below it because PP disables the overlap schedule and stage traffic crosses PCIe.
+
+.. list-table:: SGLang capacity tail (largest completion → first independent timeout)
+    :header-rows: 1
+
+    * - Topology
+      - Largest ``L/G``
+      - First timeout ``L/G``
+    * - TP1
+      - 65536/65536
+      - 98304/98304
+    * - DP2
+      - 49152/98304
+      - 65536/131072
+    * - DP4
+      - 32768/131072
+      - 49152/196608
+    * - TP2
+      - 49152/49152
+      - 65536/65536
+    * - PP2
+      - 65536/65536
+      - 98304/98304
+    * - PP4
+      - 49152/49152
+      - 65536/65536
+    * - DP2 x TP2
+      - 32768/65536
+      - 49152/98304
+
+Correctness acceptance covered SpikeLM TP2 x PP2 checkpoint evaluation and
+generation, CP2 x TP2 evaluation, and exact token equality between MCore and
+SGLang TP1/TP2/DP2 x TP2 for Qwen2 and SpikeLM. Qwen2 SGLang PP2/PP4 and
+SpikeLM SGLang PP2 also match their TP1 baselines token for token. Complete
+medians, ranges, memory,
+and failed statuses are available in the
+:download:`throughput-memory CSV <../../_static/tutorials/distributed/distributed-inference-tradeoff.csv>`.
+Regenerate all inference plots directly from the summary:
+
+.. code-block:: bash
+
+    python benchmark/plot_distributed_inference.py \
+        docs/source/_static/tutorials/distributed/distributed-inference-tradeoff.csv \
+        docs/source/_static/tutorials/distributed

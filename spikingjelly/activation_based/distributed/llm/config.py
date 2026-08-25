@@ -77,7 +77,7 @@ class ModelConfig:
                 "position_embedding_type must be 'rope' or 'learned_absolute'."
             )
 
-    def get_builder_cls(self) -> type:
+    def get_builder_cls(self) -> type[ModelBuilder]:
         r"""Resolve the model builder declared by the concrete configuration.
 
         **中文：** 返回 ``builder`` 导入路径指向的模型 builder。
@@ -87,9 +87,16 @@ class ModelConfig:
         :rtype: type
         :raises ImportError: builder 模块无法导入。 / If its module cannot be imported.
         :raises AttributeError: builder 类不存在。 / If the class does not exist.
+        :raises TypeError: builder 未继承 :class:`ModelBuilder`。 / If the class
+            does not inherit :class:`ModelBuilder`.
         """
         module_name, class_name = self.builder.rsplit(".", 1)
-        return getattr(importlib.import_module(module_name), class_name)
+        builder_cls = getattr(importlib.import_module(module_name), class_name)
+        if not isinstance(builder_cls, type) or not issubclass(
+            builder_cls, ModelBuilder
+        ):
+            raise TypeError("model builder must inherit llm.ModelBuilder.")
+        return builder_cls
 
     def _checkpoint_metadata(self) -> dict[str, Any]:
         return {
@@ -145,6 +152,219 @@ class ModelBuilder(abc.ABC):
         :rtype: tuple[Callable, Callable]
         """
         raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class EvaluationConfig:
+    r"""Configure standalone MCore loss and perplexity evaluation.
+
+    **API Language** - 中文 | English
+
+    **中文：** 从 optimizer-boundary checkpoint 仅恢复 model，并使用
+    ``ModelConfig.transformer`` 中的 DP/TP/PP/CP 拓扑评测一个完整
+    token dataset。dataset builder 必须返回一个非空 ``Dataset``，其元素
+    为包含 ``input_ids`` 和 ``labels`` 的 mapping，可选 ``loss_mask``。
+
+    **English:** Restore model state only from an optimizer-boundary checkpoint
+    and evaluate one complete token dataset with the DP/TP/PP/CP topology in
+    ``ModelConfig.transformer``. The dataset builder must return one non-empty
+    ``Dataset`` whose items contain ``input_ids`` and ``labels``, with an optional
+    ``loss_mask``.
+
+    :param model: MCore SNN model configuration. / MCore SNN model configuration.
+    :type model: ModelConfig
+    :param checkpoint: Completed training checkpoint. / Completed training checkpoint.
+    :type checkpoint: pathlib.Path
+    :param dataset_builder: Full import path returning one Dataset.
+    :type dataset_builder: str
+    :param sequence_length: Token sequence length ``S``. / Token sequence length ``S``.
+    :type sequence_length: int
+    :param micro_batch_size: 每个 pipeline microbatch 的语义样本数。 /
+        Semantic samples per pipeline microbatch.
+    :type micro_batch_size: int
+    :param pipeline_microbatches: 每次 pipeline schedule 的 microbatch 数；每个
+        DP rank 的本地 schedule batch 为两者乘积。 / Microbatches per pipeline
+        schedule; their product is the local schedule batch per DP rank.
+    :type pipeline_microbatches: int
+    :param dataset_kwargs: Dataset-builder kwargs.
+    :type dataset_kwargs: dict[str, Any]
+    :param seed: Sampler and MCore model seed. / Sampler and MCore model seed.
+    :type seed: int
+    :param use_snn_memopt: Match the checkpoint's SNN memopt recipe.
+    :type use_snn_memopt: bool
+    :param timing_warmup_batches: 计时前执行但不计入指标的 batch 数。 / Number
+        of batches run before timing and excluded from metrics.
+    :type timing_warmup_batches: int
+    :raises ValueError: A size or import path is invalid.
+    """
+
+    model: ModelConfig
+    checkpoint: Path
+    dataset_builder: str
+    sequence_length: int
+    micro_batch_size: int
+    dataset_kwargs: dict[str, Any] = field(default_factory=dict)
+    seed: int = 1234
+    use_snn_memopt: bool = False
+    timing_warmup_batches: int = 0
+    pipeline_microbatches: int = 1
+
+    def __post_init__(self) -> None:
+        if "." not in self.dataset_builder:
+            raise ValueError("dataset_builder must be a full import path.")
+        if (
+            self.sequence_length <= 0
+            or self.micro_batch_size <= 0
+            or self.pipeline_microbatches <= 0
+        ):
+            raise ValueError(
+                "sequence_length, micro_batch_size, and pipeline_microbatches "
+                "must be positive."
+            )
+        if self.timing_warmup_batches < 0:
+            raise ValueError("timing_warmup_batches must be non-negative.")
+        if self.sequence_length > self.model.max_sequence_length:
+            raise ValueError("sequence_length cannot exceed model.max_sequence_length.")
+
+
+@dataclass(frozen=True)
+class MCoreGenerationConfig:
+    r"""Configure offline MCore cached generation.
+
+    **API Language** - 中文 | English
+
+    **中文：** 从 checkpoint 恢复 MCore model，使用 TP/PP 执行 cached
+    greedy generation，并沿 DP 切分 prompt batch。MCore cached generation
+    要求 ``context_parallel_size=1``。
+
+    **English:** Restore an MCore model, run cached greedy generation with TP/PP,
+    and shard the prompt batch over DP replicas. MCore cached generation requires
+    ``context_parallel_size=1``.
+
+    :param model: MCore SNN model configuration. / MCore SNN model configuration.
+    :type model: ModelConfig
+    :param checkpoint: Completed training checkpoint. / Completed training checkpoint.
+    :type checkpoint: pathlib.Path
+    :param max_new_tokens: Maximum generated token count. / Maximum generated token count.
+    :type max_new_tokens: int
+    :param eos_token_id: Optional EOS token ID. / Optional EOS token ID.
+    :type eos_token_id: Optional[int]
+    :param seed: MCore model seed. / MCore model seed.
+    :type seed: int
+    :param use_snn_memopt: Match the checkpoint's SNN memopt recipe.
+    :type use_snn_memopt: bool
+    :raises ValueError: A generation value or MCore topology is invalid.
+    """
+
+    model: ModelConfig
+    checkpoint: Path
+    max_new_tokens: int
+    eos_token_id: Optional[int] = None
+    seed: int = 1234
+    use_snn_memopt: bool = False
+
+    def __post_init__(self) -> None:
+        if self.max_new_tokens <= 0:
+            raise ValueError("max_new_tokens must be positive.")
+        if (
+            self.eos_token_id is not None
+            and not 0 <= self.eos_token_id < self.model.vocab_size
+        ):
+            raise ValueError("eos_token_id must lie in the model vocabulary.")
+        if self.model.transformer.context_parallel_size != 1:
+            raise ValueError(
+                "MCore cached generation requires context_parallel_size=1."
+            )
+        if self.model.transformer.sequence_parallel:
+            raise ValueError(
+                "MCore cached generation requires sequence_parallel=False."
+            )
+
+
+@dataclass(frozen=True)
+class SGLangGenerationConfig:
+    r"""Configure offline generation with a separate SGLang environment.
+
+    **API Language** - 中文 | English
+
+    **中文：** 使用 SGLang offline ``Engine`` 加载一个已导出的
+    model artifact。DCP 与 prefill CP 在 TP group 内重用 rank，不额外
+    增加 world size。
+
+    **English:** Load an exported model artifact with SGLang's offline ``Engine``.
+    DCP and prefill CP reuse ranks within each TP group and do not increase the
+    process world size.
+
+    :param artifact: SGLang/Hugging Face style model directory.
+    :type artifact: pathlib.Path
+    :param max_new_tokens: Maximum generated tokens per request.
+    :type max_new_tokens: int
+    :param tensor_parallel_size: SGLang TP size.
+    :type tensor_parallel_size: int
+    :param pipeline_parallel_size: SGLang PP size.
+    :type pipeline_parallel_size: int
+    :param data_parallel_size: SGLang DP size.
+    :type data_parallel_size: int
+    :param prefill_context_parallel_size: Prefill attention CP size within TP.
+    :type prefill_context_parallel_size: int
+    :param decode_context_parallel_size: Decode KV-cache CP size within TP.
+    :type decode_context_parallel_size: int
+    :param memory_fraction: Fraction of free GPU memory reserved by SGLang.
+    :type memory_fraction: float
+    :param temperature: Sampling temperature; ``0`` selects greedy generation.
+    :type temperature: float
+    :param top_p: Nucleus-sampling probability.
+    :type top_p: float
+    :param top_k: Top-k sampling limit; ``-1`` disables it.
+    :type top_k: int
+    :param seed: SGLang sampling seed.
+    :type seed: int
+    :param tokenizer: Optional tokenizer directory; ``None`` uses token-in/token-out.
+    :type tokenizer: Optional[pathlib.Path]
+    :param external_model_package: Optional SGLang external model package.
+    :type external_model_package: Optional[str]
+    :param disable_radix_cache: Disable prefix-cache reuse for controlled benchmarks.
+    :type disable_radix_cache: bool
+    :raises ValueError: A topology or sampling value is invalid.
+    """
+
+    artifact: Path
+    max_new_tokens: int
+    tensor_parallel_size: int = 1
+    pipeline_parallel_size: int = 1
+    data_parallel_size: int = 1
+    prefill_context_parallel_size: int = 1
+    decode_context_parallel_size: int = 1
+    memory_fraction: float = 0.9
+    temperature: float = 0.0
+    top_p: float = 1.0
+    top_k: int = -1
+    seed: int = 1234
+    tokenizer: Optional[Path] = None
+    external_model_package: Optional[str] = None
+    disable_radix_cache: bool = False
+
+    def __post_init__(self) -> None:
+        for name in (
+            "max_new_tokens",
+            "tensor_parallel_size",
+            "pipeline_parallel_size",
+            "data_parallel_size",
+            "prefill_context_parallel_size",
+            "decode_context_parallel_size",
+        ):
+            if getattr(self, name) <= 0:
+                raise ValueError(f"{name} must be positive.")
+        if self.tensor_parallel_size % self.prefill_context_parallel_size:
+            raise ValueError("prefill_context_parallel_size must divide TP size.")
+        if self.tensor_parallel_size % self.decode_context_parallel_size:
+            raise ValueError("decode_context_parallel_size must divide TP size.")
+        if not 0.0 < self.memory_fraction < 1.0:
+            raise ValueError("memory_fraction must lie in (0, 1).")
+        if self.temperature < 0.0 or not 0.0 < self.top_p <= 1.0:
+            raise ValueError("temperature and top_p are invalid.")
+        if self.top_k == 0 or self.top_k < -1:
+            raise ValueError("top_k must be -1 or positive.")
 
 
 @dataclass

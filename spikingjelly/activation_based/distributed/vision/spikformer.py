@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar, Optional
+from typing import ClassVar, Optional, Sequence
 
 import torch
 import torch.distributed as dist
@@ -45,10 +45,12 @@ def _pipeline_stage(model: nn.Module, rank: int, size: int) -> nn.Module:
         raise ValueError("Spikformer-S PP size must be 1, 2, or 4.")
     if len(model.blocks) == 6:
         chunks = (
-            nn.Sequential(model.patch_embed, model.blocks[0]),
-            nn.Sequential(model.blocks[1], model.blocks[2]),
-            nn.Sequential(model.blocks[3], model.blocks[4]),
-            _SpikformerHead(model.blocks[5], model.head),
+            model.patch_embed,
+            nn.Sequential(model.blocks[0], model.blocks[1]),
+            nn.Sequential(model.blocks[2], model.blocks[3]),
+            _SpikformerHead(
+                nn.Sequential(model.blocks[4], model.blocks[5]), model.head
+            ),
         )
     elif len(model.blocks) == 4:
         chunks = (
@@ -247,6 +249,78 @@ CIFAR-10 Spikformer。TP 按 attention head 分片。
 
 
 class SpikformerBuilder(ModelBuilder):
+    def _build_canonical_model(self) -> nn.Module:
+        config = self.config
+        if isinstance(config, SpikformerCIFAR10Config):
+            model = spikformer_cifar10(
+                T=config.time_steps,
+                num_classes=config.num_classes,
+                backend=config.neuron_backend,
+            )
+        elif isinstance(config, SpikformerConfig):
+            model = spikformer_s(
+                T=config.time_steps,
+                in_channels=config.in_channels,
+                img_size_h=config.image_height,
+                img_size_w=config.image_width,
+                num_classes=config.num_classes,
+                backend=config.neuron_backend,
+            )
+        else:
+            raise TypeError("SpikformerBuilder requires a Spikformer config.")
+        _convert_batch_norms(model)
+        return model
+
+    def _pipeline_stage(self, model: nn.Module, rank: int, size: int) -> nn.Module:
+        return _pipeline_stage(model, rank, size)
+
+    @staticmethod
+    def _qkv_indices(total: int, rank: int, size: int) -> torch.Tensor:
+        dim = total // 3
+        local_dim = dim // size
+        start = rank * local_dim
+        end = start + local_dim
+        return torch.cat(
+            [torch.arange(offset + start, offset + end) for offset in (0, dim, 2 * dim)]
+        )
+
+    def _merge_tensor_parallel_shards(
+        self,
+        name: str,
+        shards: Sequence[torch.Tensor],
+        reference: torch.Tensor,
+    ) -> torch.Tensor:
+        if (
+            "attn.qkv_conv_bn." not in name
+            or reference.ndim == 0
+            or shards[0].shape == reference.shape
+        ):
+            return super()._merge_tensor_parallel_shards(name, shards, reference)
+        result = torch.empty_like(reference)
+        for rank, shard in enumerate(shards):
+            result[self._qkv_indices(reference.shape[0], rank, len(shards))] = shard
+        return result
+
+    def _shard_tensor_parallel_tensor(
+        self,
+        name: str,
+        value: torch.Tensor,
+        target: torch.Tensor,
+        tensor_rank: int,
+        tensor_size: int,
+    ) -> torch.Tensor:
+        if (
+            "attn.qkv_conv_bn." in name
+            and value.ndim > 0
+            and value.shape != target.shape
+        ):
+            return value[
+                self._qkv_indices(value.shape[0], tensor_rank, tensor_size)
+            ].contiguous()
+        return super()._shard_tensor_parallel_tensor(
+            name, value, target, tensor_rank, tensor_size
+        )
+
     @staticmethod
     def _parallelize_stem(model: nn.Module, process_group: ProcessGroup) -> None:
         for index, stage in enumerate(model.patch_embed.stages):
@@ -310,33 +384,20 @@ class SpikformerBuilder(ModelBuilder):
             image_height = image_width = 32
             in_channels = 3
             patch_size = 4
-            model = spikformer_cifar10(
-                T=config.time_steps,
-                num_classes=config.num_classes,
-                backend=config.neuron_backend,
-            )
         elif isinstance(config, SpikformerConfig):
             image_height = config.image_height
             image_width = config.image_width
             in_channels = config.in_channels
             patch_size = 16
-            model = spikformer_s(
-                T=config.time_steps,
-                in_channels=in_channels,
-                img_size_h=image_height,
-                img_size_w=image_width,
-                num_classes=config.num_classes,
-                backend=config.neuron_backend,
-            )
         else:
             raise TypeError("SpikformerBuilder requires a Spikformer config.")
+        model = self._build_canonical_model()
         if pipeline_size > 1 and (
             image_height % patch_size or image_width % patch_size
         ):
             raise ValueError(
                 f"Spikformer image dimensions must be divisible by {patch_size} with PP."
             )
-        _convert_batch_norms(model)
         world_size = dist.get_world_size(process_group) if process_group else 1
         if world_size > 1:
             self._parallelize_stem(model, process_group)
@@ -345,7 +406,7 @@ class SpikformerBuilder(ModelBuilder):
 
         if pipeline_size > 1 and memopt_level:
             raise ValueError("Spikformer-S memopt is not supported together with PP.")
-        model = _pipeline_stage(model, pipeline_rank, pipeline_size)
+        model = self._pipeline_stage(model, pipeline_rank, pipeline_size)
         fsdp_roots = tuple(
             name
             for name, module in model.named_modules()

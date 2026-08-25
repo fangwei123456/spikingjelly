@@ -1,12 +1,13 @@
-SNN 分布式训练
-==============
+SNN 分布式训练与推理
+====================
 
 本教程作者： `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_、`Wei Fang (fangwei123456) <https://github.com/fangwei123456>`_
 
 English version: :doc:`../en/distributed_training`
 
-高层接口用于直接启动训练；底层接口用于接入模型或自行编写训练循环。最后一节给出
-不同并行策略的实测吞吐和显存。
+高层接口用于直接启动训练、评测与离线推理；底层接口用于接入模型
+或自行编写运行循环。最后一节给出与训练相同 4 卡 RTX 4090 环境下的
+吞吐和显存结果。
 
 API 设计动机
 ------------
@@ -15,8 +16,9 @@ API 设计动机
 同一种并行策略。Spiking CNN 的通道、特征图和流水线边界与 LLM 的 token、attention
 和 context parallel 有不同语义；强行共用一套模型描述只会把这些差异藏进大量分支。
 两条路径因此只在确实相同的外层概念上保持对称：都使用 ``ModelConfig`` 描述模型、
-``ModelBuilder`` 接入 architecture-specific 实现、``TrainingConfig`` 描述训练，并由
-``train`` 提供默认训练生命周期。
+``ModelBuilder`` 接入 architecture-specific 实现、``TrainingConfig`` 描述训练，
+``EvaluationConfig`` 描述有标签评测；Vision ``PredictionConfig`` 与 LLM generation
+config 描述无标签输出。各高层入口拥有对应资源生命周期。
 
 高层接口受到 Megatron Core 当前模型接入方式的启发。MCore 将声明式的
 ``TransformerConfig``、模型专项的 ``ModuleSpec`` / ``model_provider`` / ``forward_step``
@@ -148,6 +150,107 @@ config、optimizer 和 dataset 配置位于 ``benchmark/snn_llm/cli.py``，可�
 ``forward_step`` 负责时间编码、状态隔离与时间归约；该 MCore ``T*B`` envelope
 不等同于通用 SpikingJelly ``step_mode="m"``，因此 LLM config 暂不提供
 ``step_mode`` 字段。
+
+离线分布式推理
+~~~~~~~~~~~~~~~~~~
+
+接口分工
+^^^^^^^^
+
+推理接口按是否处于训练生命周期以及是否需要 ground truth 分为三类。validation
+与 test 使用相同的评测计算，区别只是调用时机和数据集，因此不增加重复的
+``validate`` / ``test`` 函数。
+
+.. list-table:: Vision 与 LLM 推理接口分工
+    :header-rows: 1
+
+    * - 场景
+      - Ground truth
+      - Vision
+      - LLM
+      - 输出
+    * - 训练期间 validation
+      - 需要
+      - ``train_classification`` 每个 epoch 评测 validation dataset
+      - ``train`` 按 ``eval_interval`` / ``eval_steps`` 评测
+      - validation loss/accuracy 或 LM loss
+    * - 训练后 evaluation/test
+      - 需要
+      - ``evaluate_classification``
+      - MCore ``evaluate``
+      - 聚合 loss、accuracy/perplexity 和性能指标
+    * - 训练后 prediction/generation
+      - 不需要
+      - ``predict_classification``
+      - MCore ``generate`` 或 SGLang ``generate_sglang``
+      - 逐样本 logits 或生成 token；不返回评测指标
+
+``evaluate_classification`` 要求 dataset 的每个元素都是 ``(image, target)``；
+``llm.evaluate`` 同样要求 ``input_ids``、``labels`` 和可选 ``loss_mask``。
+相反，prediction/generation 不读取 ground truth：Vision 即使收到
+``(image, target)`` 也会忽略 target，LLM generation 只接收 prompt。
+这三类均属于训练或离线工作流；SGLang 路径不包含 HTTP server、router 或其他
+在线 serving 控制面。
+
+Vision
+^^^^^^
+
+Vision 推理继续使用 PyTorch。训练 checkpoint 先导出为与 TP/PP 拓扑无关的
+canonical artifact，之后可在不同 DP、FSDP2、TP 或 PP 拓扑上评测：
+
+.. code-block:: bash
+
+    torchrun --standalone --nproc-per-node=4 benchmark/vision_inference.py \
+        --artifact artifacts/sew-resnet34.pt \
+        --export-checkpoint checkpoints/step_00000010 \
+        --model sew-resnet34
+
+    torchrun --standalone --nproc-per-node=4 benchmark/vision_inference.py \
+        --artifact artifacts/sew-resnet34.pt \
+        --model sew-resnet34 \
+        --data-parallel replicate \
+        --batch-size 32
+
+``vision.evaluate_classification`` 返回全局 loss、accuracy、images/s 和最繁忙
+rank 的峰值显存。``vision.predict_classification`` 不计算或返回这些指标，而是把
+各 rank 的输出按 dataset index 合并为一个 HDF5 文件；文件只包含 ``index`` 和
+``logits``，类别可用 ``logits.argmax(axis=1)`` 得到。填充样本不会写入结果，因而
+数据集大小无需整除 DP 或 batch size。
+
+LLM
+^^^
+
+LLM 提供两个目的不同的 backend：
+
+* MCore 与训练使用相同 model provider 和 sharded checkpoint。
+  ``llm.evaluate(EvaluationConfig(...))`` 支持 DP/TP/PP/CP 的完整 loss/perplexity
+  评测；``llm.generate(MCoreGenerationConfig(...), input_ids)`` 支持 DP prompt
+  切分、TP/PP 和 static KV-cache decode。MCore cached generation 要求 CP=1。
+* SGLang 用于训练完成后的高吞吐离线生成。它使用独立 Python 环境，
+  通过 ``config.json`` 和 safetensors artifact 与 MCore 交接；不启动 HTTP
+  server 或 router。
+
+SGLang 0.5.17 固定自己的 PyTorch/Transformers 运行栈，不应与主训练
+环境强行合并：
+
+.. code-block:: bash
+
+    uv venv --python 3.12 .venv-sglang
+    source .venv-sglang/bin/activate
+    uv pip install --editable ".[sglang]"
+
+SpikeLM 和 Qwen2 的导出与离线生成参考分别位于
+``benchmark/snn_llm/inference.py``、``qwen_distributed_inference.py`` 与
+``sglang_inference.py``。SNN 的 ``T`` 在 SGLang 模型内部保留为
+``[token, T, hidden]``，仅在 RadixAttention/KV cache 边界并入 head 维；
+scheduler 仍然只管理一条语义请求。
+
+SGLang DCP 只能消除 TP 中已复制的 KV heads。对 SpikingJelly artifact，
+``TP / effective_KV_heads`` 必须不小于 DCP size；否则高层接口在启动
+Engine 前拒绝配置，不会运行会产生错误 token 的拓扑。
+SpikeLM 与 Qwen2 参考适配使用 SGLang 原生的 stage 分层和
+``PPProxyTensors`` 协议，TP、PP、DP 和满足上述约束的 DCP 均由 SGLang Engine
+管理。SGLang 0.5.17 在 PP>1 时自动关闭 overlap schedule。
 
 底层 API
 --------
@@ -682,3 +785,241 @@ batch 下的加速比。完整中位数、三次运行范围和 batch 配置见
 在 7 GiB 显存预算下，planner 选择 TP4、SpikingJelly memopt 和 MCore selective
 ``core_attn`` 重计算，两步训练使用 6.28 GiB。TP2 × PP2 的 sharded model/optimizer
 checkpoint 也已验证从 step 1 恢复到 step 2。
+
+分布式推理基准
+----------------
+
+推理基准使用与训练相同的单机 4 × RTX 4090 24 GiB 环境。``nvidia-smi topo -m``
+显示 GPU0 到其余 GPU 为跨 NUMA 的 ``SYS``，GPU1--3 之间为 ``NODE``，没有
+``NV#`` 链路；``nvidia-smi topo -p2p r/w`` 对所有跨卡组合均返回 ``CNS``。
+因此本机既没有 NVLink，也没有可用的 CUDA P2P read/write，NCCL 跨卡通信经过
+PCIe/CPU interconnect。软件栈与训练相同：PyTorch 2.8.0、Megatron Core 0.18.2
+和 Triton 3.4.0。
+
+Vision 使用 BF16、``T=4``、1000 类和缓存的 224 × 224 合成图像。SEW-ResNet34
+各非 PP 曲线的 per-rank batch grid 为
+``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024``；Spikformer-S 根据
+OOM 在 384--1024 之间停止。PP4 另测到 ``1536, 2048``，并用单 batch probe
+继续搜索容量边界。每个成功吞吐点从新进程启动，使用 4 个 DataLoader workers，
+预热 5 个 batch、测量 10 个 batch，并独立重复三次。计时包含 H2D、forward、通信和指标归约，不包含 DataLoader、
+模型/artifact 加载和初始化。图中是三次中位数与完整范围；只有三次均完成的点才进入曲线。
+PP4 的容量尾部 ``L >= 4096`` 因单个高层 batch 已含 256 个以上 pipeline
+microbatch，改为每进程测量 1 个 batch、不额外预热，并仍启动三个独立进程；这些点
+与常规吞吐段在 CSV 的 notes 中区分。
+本节统一用 ``L`` 表示每个 DP rank/replica 的本地 batch，用 ``G`` 表示整个作业的
+global batch；始终有 ``G = L × DP``，TP、PP、CP 和 SNN 时间步 ``T`` 均不乘入
+``G``。PP 另用 ``K`` 表示 pipeline microbatch 数，每块大小为 ``L / K``。所有图
+端点只标 global batch ``G``。
+
+所有容量搜索使用相同的增长规则：从最大成功点 ``x`` 测 ``2x``；若 ``2x``
+失败，再测 ``1.5x``；若 ``1.5x`` 成功，就以它为新的 ``x`` 重复上述过程。
+非流式拓扑一直搜索到 CUDA OOM；流式 PP 或请求排队拓扑若峰值显存不再随 G
+增长，则搜索到每个候选独享完整 timeout 后仍无法完成的 runtime boundary。
+
+推理 PP 使用专门的 forward-only streaming schedule，而不是训练所需的
+``ScheduleGPipe`` backward 状态机。每个高层 batch 返回前同步 pipeline group，避免
+跨 batch 堆积；SEW 下采样 block 被放到 stage 边界前，Spikformer 的 blocks 按
+``0/2/2/2`` 分配。公共配置中的 ``pipeline_microbatches`` 表示每个 DP rank 的
+本地 batch 被切成的块数，默认 1，并要求 ``batch_size`` 能被它整除；每块样本数为
+``batch_size / pipeline_microbatches``。本基准单独使用
+``pipeline_microbatches = 4``（``L < 64``），否则使用 ``L / 16``，即在大
+batch 时保持 16 images/pipeline microbatch。该规则只属于实验 protocol，框架不会
+在用户调用中自动改写这个参数。汇总 CSV 分别记录 ``per_rank_batch_size``、
+``global_batch_size``、``pipeline_microbatches`` 和
+``pipeline_microbatch_size``。
+MCore/SGLang 的前沿连线按 0.05 GiB 横轴分辨率合并同一显存 bin，只保留该 bin
+最高吞吐；CSV 仍保留未量化的精确显存和全部测量点。
+
+.. figure:: ../../_static/tutorials/distributed/sew-resnet34-inference-tradeoff.png
+    :width: 720px
+    :alt: SEW-ResNet34 分布式评测吞吐与单卡峰值显存
+
+    SEW-ResNet34：总评测吞吐与最繁忙 GPU 的 peak allocated memory。
+
+.. figure:: ../../_static/tutorials/distributed/spikformer-inference-tradeoff.png
+    :width: 720px
+    :alt: Spikformer-S 分布式评测吞吐与单卡峰值显存
+
+    Spikformer-S：总评测吞吐与最繁忙 GPU 的 peak allocated memory。
+
+在每 rank batch 128 时，SEW-ResNet34 的单卡、DP4、FSDP4、TP4、PP4 分别为
+845.7、3368.9、3109.3、548.3、1404.1 images/s；Spikformer-S 分别为
+516.6、2060.4、2000.2、412.2、1273.1 images/s。DP/FSDP 接近四卡线性吞吐，
+PP 分别达到单卡的 1.66 倍和 2.46 倍，且大 batch 后进入稳定平台。
+
+纯 TP4 在两个模型上仍低于单卡，但曲线已经稳定；这是模型计算/通信比限制，不是调度
+波动。SEW 每 batch 需要 16 次、合计约 1.41 GB 的 rowwise all-reduce，Spikformer
+需要 12 次、约 0.92 GB。使用两个 TP2 replica 的四卡 ``TP2 × DP2`` 可达到
+1226.1 和 858.6 images/s，说明实际部署应以 TP 容纳模型、再以 DP 扩展吞吐。
+
+.. list-table:: Vision 推理容量边界
+    :header-rows: 1
+
+    * - 模型
+      - 拓扑
+      - 最大三次完成 ``L/G``
+      - 首个失败与最终容量证据
+    * - SEW-ResNet34
+      - 单卡
+      - 512/512
+      - 768/768：正式多 batch 运行 CUDA OOM
+    * - SEW-ResNet34
+      - DP4
+      - 512/2048
+      - 768/3072：正式多 batch 运行 CUDA OOM
+    * - SEW-ResNet34
+      - FSDP4
+      - 512/2048
+      - 768/3072：正式多 batch 运行 CUDA OOM
+    * - SEW-ResNet34
+      - TP4
+      - 512/512
+      - 768/768：正式多 batch 运行 CUDA OOM
+    * - SEW-ResNet34
+      - PP4
+      - 32768/32768
+      - 49152/49152：runtime timeout
+    * - Spikformer-S
+      - 单卡
+      - 256/256
+      - 384/384：CUDA OOM
+    * - Spikformer-S
+      - DP4
+      - 384/1536
+      - 512/2048：CUDA OOM
+    * - Spikformer-S
+      - FSDP4
+      - 256/1024
+      - 384/1536：CUDA OOM
+    * - Spikformer-S
+      - TP4
+      - 512/512
+      - 768/768：CUDA OOM
+    * - Spikformer-S
+      - PP4
+      - 32768/32768
+      - 49152/49152：runtime timeout
+
+Vision 正确性测试还覆盖 FSDP2、PP2，以及 TP2 × PP2 训练 checkpoint 导出后在
+TP1 × DP4 上恢复；后者的 validation loss 为 2.310132205 和 2.310132384。
+
+MCore loss/perplexity 评测使用 Qwen2.5-0.5B QCFS、BF16、``T=2`` 和序列长度16。
+基线段使用固定 128-sample 数据集；容量尾部令数据集样本数等于 G，避免 padding
+污染吞吐。拓扑为 TP1、DP4、TP2、PP2 和 PP4。每个点从新进程恢复同一 sharded
+checkpoint，先执行 5 个不计时 schedule batch，再计时 1 个或多个完整 schedule，
+并独立重复三次；checkpoint/model 初始化不计时。MCore API 中
+``micro_batch_size`` 表示每块大小，而本节的 L 是
+``micro_batch_size × pipeline_microbatches``。非 PP 点 K=1；PP 容量尾部固定
+每块16个语义样本，即 K=L/16。
+
+.. figure:: ../../_static/tutorials/distributed/mcore-inference.png
+    :width: 720px
+    :alt: Qwen2.5-0.5B QCFS 的 MCore 分布式评测吞吐与单卡峰值显存
+
+    MCore loss/perplexity 评测的 Pareto 前沿：总 semantic-token 吞吐与最繁忙 GPU 的 peak allocated memory。
+
+在本地 L=16 时，TP1、DP4、PP2 和 PP4 分别达到 4636.2、17958.6、7555.9
+和 9446.0 semantic tokens/s；PP2/PP4 是单卡的 1.63/2.04 倍。最大点上，TP1
+在 L/G=384/384 达到 23145.8 tokens/s、11.37 GiB，DP4 在 L/G=384/1536
+达到 91939.8 tokens/s、11.37 GiB/卡。PP2 在 L/G=12288/12288 为
+8445.4 tokens/s、1.03 GiB/卡；PP4 在 16384/16384 为 14392.3 tokens/s、
+0.87 GiB/卡。PP 随 pipeline 填满先超过相同 L 的单卡，随后受 stage 通信限制
+进入平台；它的主要收益转为显存容量。
+TP2 在 120 秒内停留于 sharded checkpoint restore，记为 timeout，不进入曲线。
+
+.. list-table:: MCore 容量尾部（最大完成点 → 首个失败点）
+    :header-rows: 1
+
+    * - 拓扑
+      - 最大完成 ``L/G``
+      - 首个失败 ``L/G``
+      - 状态
+    * - TP1
+      - 384/384
+      - 512/512
+      - CUDA OOM
+    * - DP4
+      - 384/1536
+      - 512/2048
+      - CUDA OOM
+    * - TP2
+      - 无
+      - 1/1
+      - checkpoint restore timeout
+    * - PP2
+      - 12288/12288
+      - 18432/18432
+      - runtime timeout
+    * - PP4
+      - 16384/16384
+      - 24576/24576
+      - runtime timeout
+
+LLM 生成使用 Qwen2.5-0.5B QCFS、BF16、``T=2``、8-token prompt 和 8-token
+输出。SGLang 比较 TP1、DP2、DP4、TP2、PP2、PP4 和 DP2 × TP2；prompt
+global batch ``G`` 从 16 开始按 ``2x/1.5x`` 规则增长。常规 grid 在同一拓扑的
+一个 Engine 内顺序运行；容量边界的每个 ``2x/1.5x`` 候选独占一次 Engine 生命周期
+和 360 秒预算。每个点都先用相同 G 预热三次，再测量三次；
+计时不包括 Engine 启动，且关闭 Radix cache。SGLang worker 不公开 PyTorch allocator
+peak，因此横轴使用同步生成后的最繁忙 GPU NVML device-memory used；它包含
+``memory_fraction_static=0.5`` 预留的 KV pool，不能与 Vision 的 peak allocated
+memory 直接比较。三次 max/min 超过 1.3 的 scheduler 波动点在 CSV 中标为
+``unstable``，不进入曲线。静态 KV pool 和 MiB 粒度的 NVML 读数可能让不同 G
+得到相同横坐标；CSV 保留所有测量，连线只连接吞吐—显存 Pareto 前沿。同显存点
+仅保留最高吞吐进入连线，因此不会产生竖直线段或无图例说明的游离散点。
+
+.. figure:: ../../_static/tutorials/distributed/sglang-inference.png
+    :width: 720px
+    :alt: Qwen2.5-0.5B QCFS 在 SGLang 上的离线生成吞吐
+
+    SGLang 离线生成的吞吐—显存 Pareto 前沿；前沿点显示三次中位数和完整范围。
+
+最大三次完成点上，TP1、DP2、DP4、TP2、PP2、PP4 和 DP2 × TP2 分别达到
+11147.3、16416.8、25079.8、8610.3、10397.6、8345.6 和 13549.1
+generated tokens/s。这里对应的 G 分别为 65536、98304、131072、49152、
+65536、49152 和 65536；不能把它们误读为每卡 batch。
+SGLang 会限制在途 token 并排队请求，因此这里没有用户 batch 对应的传统 OOM 点；
+完整边界是吞吐平台，而不是强行制造 OOM。0.5B 模型在中小请求 batch 下以 TP1
+最快；请求队列足够大时，纯 DP2/DP4 分别达到 TP1 最佳吞吐的 1.27/1.71 倍。
+PP2 基本追平 TP1，而 PP4 因 overlap schedule 被关闭且跨 stage 经过 PCIe，低于 TP1。
+
+.. list-table:: SGLang 容量尾部（最大完成点 → 首个独立 timeout）
+    :header-rows: 1
+
+    * - 拓扑
+      - 最大完成 ``L/G``
+      - 首个 timeout ``L/G``
+    * - TP1
+      - 65536/65536
+      - 98304/98304
+    * - DP2
+      - 49152/98304
+      - 65536/131072
+    * - DP4
+      - 32768/131072
+      - 49152/196608
+    * - TP2
+      - 49152/49152
+      - 65536/65536
+    * - PP2
+      - 65536/65536
+      - 98304/98304
+    * - PP4
+      - 49152/49152
+      - 65536/65536
+    * - DP2 × TP2
+      - 32768/65536
+      - 49152/98304
+
+正确性验收包括 SpikeLM 的 TP2 × PP2 checkpoint 评测和生成、CP2 × TP2 评测，
+以及 Qwen2/SpikeLM 在 MCore 与 SGLang TP1/TP2/DP2 × TP2 之间逐 token 相等；
+Qwen2 的 SGLang PP2/PP4 和 SpikeLM 的 SGLang PP2 也与各自 TP1 基线逐 token 相等。
+完整中位数、运行范围、显存和失败状态见
+:download:`吞吐—显存 CSV <../../_static/tutorials/distributed/distributed-inference-tradeoff.csv>`；
+图可直接从汇总 CSV 重新生成：
+
+.. code-block:: bash
+
+    python benchmark/plot_distributed_inference.py \
+        docs/source/_static/tutorials/distributed/distributed-inference-tradeoff.csv \
+        docs/source/_static/tutorials/distributed
