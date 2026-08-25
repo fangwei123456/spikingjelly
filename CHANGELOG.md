@@ -457,6 +457,8 @@ Module: `spikingjelly.activation_based.distributed`.
   while keeping complete SNN time windows `T` rank-local.
 - Added TP/PP model execution with optimizer-boundary checkpoint loading,
   functional per-call SNN state, and MCore static KV-cache prefill/decode.
+- Corrected Qwen2 input-calibration checkpoint metadata so TP ranks restore the
+  replicated scale without duplicate main shards.
 - Added standalone Vision evaluation and ordered logits-only HDF5 prediction
   with replicated DP, FSDP2, TP, and PP. `EvaluationConfig` requires targets and
   returns aggregate metrics; `PredictionConfig` ignores targets and prediction

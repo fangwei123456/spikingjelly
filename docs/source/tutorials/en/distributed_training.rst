@@ -900,15 +900,17 @@ work accumulation. SEW downsampling blocks sit before stage boundaries, while
 Spikformer distributes blocks as ``0/2/2/2``. In the public configuration,
 ``pipeline_microbatches`` is the number of chunks cut from one DP rank's local
 batch. It defaults to one, requires divisibility, and gives
-``samples per chunk = batch_size / pipeline_microbatches``. This benchmark alone
-sets it to 4 for ``L < 64`` and to ``L / 16`` otherwise, keeping 16 images per
+``samples per chunk = batch_size / pipeline_microbatches``. The Vision
+benchmark alone sets it to 4 for ``L < 64`` and to ``L / 16`` otherwise,
+keeping 16 images per
 pipeline microbatch at large B. The framework does not silently apply this rule
 to user calls. The summary CSV records ``per_rank_batch_size``,
 ``global_batch_size``, ``pipeline_microbatches``, and
 ``pipeline_microbatch_size`` separately.
-MCore and SGLang frontier lines merge measurements within the same 0.05-GiB
-horizontal bin and retain its highest throughput. The CSV keeps exact,
-unquantized memory and every measurement.
+SGLang frontier lines merge measurements within the same 0.05-GiB horizontal
+bin and retain its highest throughput. MCore instead connects every successful
+batch-sweep point through OOM. The CSV keeps exact, unquantized memory and every
+measurement for both backends.
 
 .. figure:: ../../_static/tutorials/distributed/sew-resnet34-inference-tradeoff.png
     :width: 720px
@@ -988,31 +990,46 @@ training checkpoint before restoring it under TP1 x DP4. The latter reported
 validation losses 2.310132205 and 2.310132384.
 
 MCore loss/perplexity evaluation uses Qwen2.5-0.5B QCFS, BF16, ``T=2``, and
-sequence length 16. The baseline uses a fixed 128-sample dataset; the capacity
-tail sets dataset samples equal to G so padding cannot depress throughput. It
-compares TP1, DP4, TP2, PP2, and PP4. Every point restores the same sharded
-checkpoint in a fresh process, runs five untimed schedule batches, measures one
-or more complete schedules, and is repeated independently three times;
-checkpoint/model initialization is excluded. In the MCore API,
+sequence length 16. The TP1/DP4 baseline segment uses a fixed 128-sample
+dataset; the newly measured TP2/PP2/PP4 points set dataset samples equal to G so
+padding cannot depress throughput. It compares TP1, DP4, TP2, PP2, and PP4.
+Because this model has 14 attention heads, TP2 is the valid pure-TP topology
+above one on the four-GPU host; TP4 violates head divisibility.
+Every point restores the same initialized state from a sharded checkpoint in a
+fresh process, runs five untimed schedule batches, measures a complete schedule,
+and is repeated independently three times; checkpoint/model initialization is
+excluded. The new sweep explicitly sets ``NCCL_P2P_DISABLE=1``,
+``NCCL_IB_DISABLE=1``, and
+``PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True``. In the MCore API,
 ``micro_batch_size`` is the chunk size, while this section's L equals
-``micro_batch_size × pipeline_microbatches``. Non-PP points use K=1. The PP
-capacity tail fixes 16 semantic samples per chunk, hence K=L/16.
+``micro_batch_size × pipeline_microbatches``. Non-PP points use K=1. Every
+PP2/PP4 point fixes K=4, so each chunk is ``L/4`` and grows with L through OOM;
+the benchmark no longer fixes the chunk size while merely lengthening its queue.
+The fine grid is ``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024``, followed
+by the ``2x/1.5x`` boundary search. Every three-run curve point uses five warmup
+schedules. The PP4 L=3072 debug capacity probe uses one to avoid allocator
+fragmentation from repeated warmups and serves only as capacity evidence.
 
 .. figure:: ../../_static/tutorials/distributed/mcore-inference.png
     :width: 720px
     :alt: Qwen2.5-0.5B QCFS MCore distributed evaluation throughput and per-GPU peak memory
 
-    MCore loss/perplexity evaluation Pareto frontiers: aggregate semantic-token throughput versus the busiest GPU's peak allocated memory.
+    Complete MCore loss/perplexity evaluation batch sweeps: aggregate semantic-token throughput versus the busiest GPU's peak allocated memory.
 
-At local L=16, TP1, DP4, PP2, and PP4 reach 4636.2, 17958.6, 7555.9, and
-9446.0 semantic tokens/s. PP2 and PP4 are 1.63x and 2.04x one-GPU throughput.
-At their largest points, TP1 reaches 23145.8 tokens/s and 11.37 GiB at
-L/G=384/384, while DP4 reaches 91939.8 tokens/s and 11.37 GiB/GPU at
-L/G=384/1536. PP2 reaches 8445.4 tokens/s and 1.03 GiB/GPU at 12288/12288;
-PP4 reaches 14392.3 tokens/s and 0.87 GiB/GPU at 16384/16384. PP first exceeds
-one GPU at the same L as pipeline microbatches fill the stages, then plateaus on
-stage communication and primarily provides a memory-capacity advantage. TP2 remained in sharded
-checkpoint restore for 120 seconds and is recorded as timeout, not plotted.
+At small-batch L=16, TP1, TP2, PP2, and PP4 reach 4636.2, 3611.2, 1823.5, and
+2203.6 semantic tokens/s. With K fixed at 4, each PP chunk contains only four
+samples, so kernel and schedule overheads are not yet amortized. By L=384, TP1,
+TP2, PP2, and PP4 reach 23145.8, 28975.2, 24707.7, and 28348.2 tokens/s; all
+three model-parallel topologies exceed one GPU at the same L.
+
+The best TP1, TP2, PP2, and PP4 points reach 24549.7, 29767.5, 30217.9, and
+34317.2 tokens/s. The latter three are 1.21x, 1.23x, and 1.40x the best one-GPU
+throughput. TP2 peaks at L=256 and 3.95 GiB/GPU; PP2 and PP4 peak at L=1024
+and 7.57/7.40 GiB/GPU. Both three-run PP curves extend through L=2048 and about
+14.5 GiB/GPU. Their capacity-tail drop repeats across all three runs and is the
+measured cost of growing each chunk to 512 samples. A single debug capacity
+probe completes PP4 L=3072 at 21.35 GiB/GPU, but the non-debug formal run times
+out, so that point is excluded from the curve; L=4096 is a confirmed CUDA OOM.
 
 .. list-table:: MCore capacity tail (largest completion → first failure)
     :header-rows: 1
@@ -1030,17 +1047,17 @@ checkpoint restore for 120 seconds and is recorded as timeout, not plotted.
       - 512/2048
       - CUDA OOM
     * - TP2
-      - none
-      - 1/1
-      - checkpoint restore timeout
+      - 1024/1024
+      - 1536/1536
+      - CUDA OOM
     * - PP2
-      - 12288/12288
-      - 18432/18432
-      - runtime timeout
+      - 2048/2048
+      - 2304/2304
+      - CUDA OOM
     * - PP4
-      - 16384/16384
-      - 24576/24576
-      - runtime timeout
+      - 2048/2048
+      - 3072/3072
+      - one debug probe completed but the formal run timed out; 4096 CUDA OOM
 
 LLM generation used Qwen2.5-0.5B QCFS, BF16, ``T=2``, 8-token prompts, and
 8-token outputs. SGLang compares TP1, DP2, DP4, TP2, PP2, PP4, and DP2 x TP2.

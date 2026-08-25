@@ -821,14 +821,15 @@ global batch；始终有 ``G = L × DP``，TP、PP、CP 和 SNN 时间步 ``T`` 
 跨 batch 堆积；SEW 下采样 block 被放到 stage 边界前，Spikformer 的 blocks 按
 ``0/2/2/2`` 分配。公共配置中的 ``pipeline_microbatches`` 表示每个 DP rank 的
 本地 batch 被切成的块数，默认 1，并要求 ``batch_size`` 能被它整除；每块样本数为
-``batch_size / pipeline_microbatches``。本基准单独使用
+``batch_size / pipeline_microbatches``。Vision 基准单独使用
 ``pipeline_microbatches = 4``（``L < 64``），否则使用 ``L / 16``，即在大
 batch 时保持 16 images/pipeline microbatch。该规则只属于实验 protocol，框架不会
 在用户调用中自动改写这个参数。汇总 CSV 分别记录 ``per_rank_batch_size``、
 ``global_batch_size``、``pipeline_microbatches`` 和
 ``pipeline_microbatch_size``。
-MCore/SGLang 的前沿连线按 0.05 GiB 横轴分辨率合并同一显存 bin，只保留该 bin
-最高吞吐；CSV 仍保留未量化的精确显存和全部测量点。
+SGLang 的前沿连线按 0.05 GiB 横轴分辨率合并同一显存 bin，只保留该 bin
+最高吞吐；MCore 则连接直到 OOM 的全部成功 batch sweep 点。CSV 对两者都保留
+未量化的精确显存和全部测量点。
 
 .. figure:: ../../_static/tutorials/distributed/sew-resnet34-inference-tradeoff.png
     :width: 720px
@@ -904,28 +905,40 @@ Vision 正确性测试还覆盖 FSDP2、PP2，以及 TP2 × PP2 训练 checkpoin
 TP1 × DP4 上恢复；后者的 validation loss 为 2.310132205 和 2.310132384。
 
 MCore loss/perplexity 评测使用 Qwen2.5-0.5B QCFS、BF16、``T=2`` 和序列长度16。
-基线段使用固定 128-sample 数据集；容量尾部令数据集样本数等于 G，避免 padding
-污染吞吐。拓扑为 TP1、DP4、TP2、PP2 和 PP4。每个点从新进程恢复同一 sharded
-checkpoint，先执行 5 个不计时 schedule batch，再计时 1 个或多个完整 schedule，
-并独立重复三次；checkpoint/model 初始化不计时。MCore API 中
+TP1/DP4 的基线段使用固定 128-sample 数据集；新测的 TP2/PP2/PP4 点令数据集
+样本数等于 G，避免 padding 污染吞吐。拓扑为 TP1、DP4、TP2、
+PP2 和 PP4；该模型有 14 个 attention heads，故四卡节点上大于 1 的合法纯 TP
+拓扑为 TP2，TP4 不满足 head 整除约束。每个点从新进程恢复同一初始化状态的
+sharded checkpoint，先执行 5 个不计时 schedule batch，再计时完整 schedule，
+并独立重复三次；checkpoint/model
+初始化不计时。新测 sweep 显式设置 ``NCCL_P2P_DISABLE=1``、``NCCL_IB_DISABLE=1``
+和 ``PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True``。MCore API 中
 ``micro_batch_size`` 表示每块大小，而本节的 L 是
-``micro_batch_size × pipeline_microbatches``。非 PP 点 K=1；PP 容量尾部固定
-每块16个语义样本，即 K=L/16。
+``micro_batch_size × pipeline_microbatches``。非 PP 点 K=1；PP2/PP4 的所有点
+固定 K=4，因此每块为 ``L/4``，会随 L 一起增长到 OOM，而不是固定每块大小后只增加
+排队块数。细网格为 ``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024``，
+再按 ``2x/1.5x`` 规则搜索各拓扑边界。三次正式曲线点均预热 5 个 schedule；
+PP4 的 L=3072 debug 容量 probe 为避免重复预热造成 allocator 碎片，只预热 1 个，
+并仅作为容量证据。
 
 .. figure:: ../../_static/tutorials/distributed/mcore-inference.png
     :width: 720px
     :alt: Qwen2.5-0.5B QCFS 的 MCore 分布式评测吞吐与单卡峰值显存
 
-    MCore loss/perplexity 评测的 Pareto 前沿：总 semantic-token 吞吐与最繁忙 GPU 的 peak allocated memory。
+    MCore loss/perplexity 评测的完整 batch sweep：总 semantic-token 吞吐与最繁忙 GPU 的 peak allocated memory。
 
-在本地 L=16 时，TP1、DP4、PP2 和 PP4 分别达到 4636.2、17958.6、7555.9
-和 9446.0 semantic tokens/s；PP2/PP4 是单卡的 1.63/2.04 倍。最大点上，TP1
-在 L/G=384/384 达到 23145.8 tokens/s、11.37 GiB，DP4 在 L/G=384/1536
-达到 91939.8 tokens/s、11.37 GiB/卡。PP2 在 L/G=12288/12288 为
-8445.4 tokens/s、1.03 GiB/卡；PP4 在 16384/16384 为 14392.3 tokens/s、
-0.87 GiB/卡。PP 随 pipeline 填满先超过相同 L 的单卡，随后受 stage 通信限制
-进入平台；它的主要收益转为显存容量。
-TP2 在 120 秒内停留于 sharded checkpoint restore，记为 timeout，不进入曲线。
+在小 batch 的 L=16，TP1、TP2、PP2 和 PP4 分别为 4636.2、3611.2、1823.5
+和 2203.6 semantic tokens/s；固定 K=4 后 PP 每块仅有 4 个样本，kernel 与 schedule
+开销尚未摊薄。到 L=384，TP1、TP2、PP2 和 PP4 分别达到 23145.8、28975.2、
+24707.7 和 28348.2 tokens/s，三种模型并行拓扑均已超过同 L 单卡。
+
+TP1、TP2、PP2 和 PP4 的最佳点分别为 24549.7、29767.5、30217.9 和
+34317.2 tokens/s；后三者为单卡最佳点的 1.21、1.23 和 1.40 倍。TP2 最佳点在
+L=256、3.95 GiB/卡；PP2/PP4 最佳点都在 L=1024，分别为 7.57/7.40 GiB/卡。
+PP2/PP4 的三次正式曲线均延伸到 L=2048、约 14.5 GiB/卡，容量尾部的吞吐下降在
+三次运行中重复出现，是每块增至 512 后的真实代价。PP4 的 L=3072 debug 容量
+probe 单次通过（21.35 GiB/卡），但无 debug 的正式运行 timeout，因此不进入曲线；
+L=4096 明确 CUDA OOM。
 
 .. list-table:: MCore 容量尾部（最大完成点 → 首个失败点）
     :header-rows: 1
@@ -943,17 +956,17 @@ TP2 在 120 秒内停留于 sharded checkpoint restore，记为 timeout，不进
       - 512/2048
       - CUDA OOM
     * - TP2
-      - 无
-      - 1/1
-      - checkpoint restore timeout
+      - 1024/1024
+      - 1536/1536
+      - CUDA OOM
     * - PP2
-      - 12288/12288
-      - 18432/18432
-      - runtime timeout
+      - 2048/2048
+      - 2304/2304
+      - CUDA OOM
     * - PP4
-      - 16384/16384
-      - 24576/24576
-      - runtime timeout
+      - 2048/2048
+      - 3072/3072
+      - 单次 debug probe 通过但正式运行 timeout；4096 CUDA OOM
 
 LLM 生成使用 Qwen2.5-0.5B QCFS、BF16、``T=2``、8-token prompt 和 8-token
 输出。SGLang 比较 TP1、DP2、DP4、TP2、PP2、PP4 和 DP2 × TP2；prompt

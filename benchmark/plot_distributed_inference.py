@@ -18,7 +18,10 @@ VISION_PROBE_NAME = re.compile(
     r"(?P<topology>serial|dp4|fsdp4|tp4|pp4)_"
     r"b(?P<batch>\d+)_probe"
 )
-MCORE_NAME = re.compile(r"mcore_(?P<topology>tp1|dp4|tp2|pp2|pp4)_b(?P<batch>\d+)_r\d+")
+MCORE_NAME = re.compile(
+    r"mcore_(?P<topology>tp1|dp4|tp2|pp2|pp4)_b(?P<batch>\d+)_r\d+"
+    r"(?:_k(?P<microbatches>\d+))?"
+)
 TOPOLOGY_ORDER = ("serial", "dp4", "fsdp4", "tp4", "pp4")
 TOPOLOGY_LABELS = {
     "serial": "Single GPU",
@@ -336,16 +339,23 @@ def _load_mcore(results: Path) -> list[dict]:
         match = MCORE_NAME.fullmatch(log.stem)
         if match is None:
             continue
+        topology = match["topology"]
+        if topology in {"tp2", "pp2", "pp4"} and match["microbatches"] is None:
+            continue
         status_path = Path(f"{log}.status")
         exit_status = int(status_path.read_text().strip())
         text = log.read_text(encoding="utf-8")
         metrics = _last_json(log) if exit_status == 0 else None
-        groups[(match["topology"], int(match["batch"]))].append(
-            (exit_status, metrics, text)
-        )
+        groups[
+            (
+                topology,
+                int(match["batch"]),
+                int(match["microbatches"] or 1),
+            )
+        ].append((exit_status, metrics, text))
 
     rows = []
-    for (topology, batch_size), runs in sorted(groups.items()):
+    for (topology, batch_size, pipeline_microbatches), runs in sorted(groups.items()):
         completed = [metrics for exit_status, metrics, _ in runs if exit_status == 0]
         if len(completed) == 3:
             status = "completed"
@@ -363,12 +373,6 @@ def _load_mcore(results: Path) -> list[dict]:
         data_parallel_size = 4 if topology == "dp4" else 1
         tensor_parallel_size = 2 if topology == "tp2" else 1
         pipeline_parallel_size = {"pp2": 2, "pp4": 4}.get(topology, 1)
-        if completed:
-            pipeline_microbatches = int(completed[0]["pipeline_microbatches"])
-        elif topology in {"pp2", "pp4"} and batch_size > 16:
-            pipeline_microbatches = batch_size // 16
-        else:
-            pipeline_microbatches = 1
         row = {
             "workload": "llm_evaluation",
             "backend": "mcore",
@@ -394,7 +398,12 @@ def _load_mcore(results: Path) -> list[dict]:
                     if completed
                     else "capacity candidate; "
                 )
-                + f"MCore micro batch {batch_size // pipeline_microbatches}"
+                + f"MCore micro batch {batch_size // pipeline_microbatches}; "
+                + (
+                    "one warmup"
+                    if topology == "pp4" and batch_size == 3072
+                    else "five warmups"
+                )
             ),
         }
         if completed:
@@ -535,6 +544,7 @@ def _plot_llm(
     x_label: str,
     y_label: str,
     filename: str,
+    pareto: bool = True,
 ) -> None:
     import matplotlib.pyplot as plt
     import scienceplots  # noqa: F401
@@ -562,7 +572,11 @@ def _plot_llm(
             ]
             if not measured:
                 continue
-            points = _pareto_frontier(measured)
+            points = (
+                _pareto_frontier(measured)
+                if pareto
+                else sorted(measured, key=lambda row: row["peak_memory_gib_median"])
+            )
             color = f"C{index}"
             axis.errorbar(
                 [point["peak_memory_gib_median"] for point in points],
@@ -640,10 +654,11 @@ def main() -> None:
         mcore_rows,
         args.output,
         ("tp1", "dp4", "tp2", "pp2", "pp4"),
-        "Qwen2.5-0.5B QCFS · MCore evaluation frontier",
+        "Qwen2.5-0.5B QCFS · MCore evaluation batch sweep",
         "Peak allocated memory / GPU (GiB)",
         "Aggregate evaluation throughput (tokens/s)",
         "mcore-inference.png",
+        pareto=False,
     )
 
 

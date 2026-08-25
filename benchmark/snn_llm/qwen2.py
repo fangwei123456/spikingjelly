@@ -148,20 +148,13 @@ class _InputQCFSRMSNorm(nn.RMSNorm):
             make_sharded_tensors_for_checkpoint,
         )
 
-        kwargs = {
-            "tp_group": getattr(self, "tp_group", getattr(self, "_tp_group", None)),
-            "dp_cp_group": metadata["dp_cp_group"],
-        }
+        # The input scale exists only on global layer 0, so it has no PP layer axis.
         return {
             **make_sharded_tensors_for_checkpoint(
-                {"weight": self.weight}, prefix, {}, sharded_offsets, **kwargs
+                {"weight": self.weight}, prefix, {}, sharded_offsets
             ),
             **make_sharded_tensors_for_checkpoint(
-                {"qcfs_scale": self.qcfs_scale},
-                prefix,
-                {},
-                sharded_offsets,
-                **kwargs,
+                {"qcfs_scale": self.qcfs_scale}, prefix, {}, ()
             ),
         }
 
