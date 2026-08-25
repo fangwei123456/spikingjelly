@@ -119,6 +119,7 @@ def main() -> None:
                         "decode_context_parallel_size": (
                             args.decode_context_parallel_size
                         ),
+                        "memory_fraction": args.memory_fraction,
                     },
                     sort_keys=True,
                 ),

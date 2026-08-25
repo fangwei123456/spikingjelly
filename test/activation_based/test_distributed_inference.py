@@ -61,6 +61,7 @@ def test_sglang_plot_accepts_seven_repeat_median(tmp_path):
         "tensor_parallel_size": 1,
         "pipeline_parallel_size": 1,
         "data_parallel_size": 1,
+        "memory_fraction": 0.5,
         "measurements": [
             {
                 "prompt_count": 16,

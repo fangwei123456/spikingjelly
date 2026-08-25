@@ -974,13 +974,16 @@ LLM 生成使用 Qwen2.5-0.5B QCFS、BF16、``T=2``、8-token prompt 和 8-token
 global batch ``G`` 从 16 开始按 ``2x/1.5x`` 规则增长。常规 grid 在同一拓扑的
 一个 Engine 内顺序运行；容量边界的每个 ``2x/1.5x`` 候选独占一次 Engine 生命周期
 和 360 秒预算。常规点先用相同 G 预热三次，再测量三次；三次 max/min 超过 1.3
-的 scheduler 波动点标为 ``unstable``。本轮在 TP1、PP2 和 PP4 的前沿附近加入
-非 2 的幂次细网格；这些新点同样预热三次，再计时七次，以七次中位数抵抗周期性
-scheduler 慢样本，并保留完整 min/max 误差条。
+的 scheduler 波动点标为 ``unstable``。TP1 的前沿细网格，以及 PP2/PP4 的正式
+sweep 均预热三次、再计时七次，以七次中位数抵抗周期性 scheduler 慢样本，并保留
+完整 min/max 误差条。PP2 使用 G=16--4096 的 11 个点，PP4 使用 G=16--8192
+的 13 个点；另以三次容量 probe 验证 G=6144/16384 已进入请求排队平台。
 计时不包括 Engine 启动，且关闭 Radix cache。SGLang worker 不公开 PyTorch allocator
 peak，因此横轴使用同步生成后的最繁忙 GPU NVML device-memory used；它包含
-``memory_fraction_static=0.5`` 预留的 KV pool，不能与 Vision 的 peak allocated
-memory 直接比较。静态 KV pool 和 MiB 粒度的 NVML 读数可能让不同 G
+非 PP 拓扑使用 ``memory_fraction_static=0.5``；原 PP 配置的 0.5 会让每 stage
+过早停在 13--16 GiB，正式 PP2/PP4 sweep 因而统一改为 0.8。横轴包含该静态 KV
+pool，不能与 Vision 的 peak allocated memory 直接比较。静态 KV pool 和 MiB
+粒度的 NVML 读数可能让不同 G
 得到相同横坐标；CSV 保留所有测量，连线只连接吞吐—显存 Pareto 前沿。同显存点
 仅保留最高吞吐进入连线，因此不会产生竖直线段或无图例说明的游离散点。
 
@@ -988,14 +991,18 @@ memory 直接比较。静态 KV pool 和 MiB 粒度的 NVML 读数可能让不�
     :width: 720px
     :alt: Qwen2.5-0.5B QCFS 在 SGLang 上的离线生成吞吐
 
-    SGLang 离线生成的吞吐—显存 Pareto 前沿；前沿点显示三次或七次中位数和完整范围。
+    SGLang 离线生成的吞吐—显存 Pareto 前沿；PP2/PP4 使用 0.8 static-memory fraction。
 
 TP1、DP2、DP4、TP2、PP2、PP4 和 DP2 × TP2 的最佳前沿点分别达到
-15758.7、18636.8、25743.8、9097.7、12733.8、9885.6 和 14355.1
-generated tokens/s，对应 G 为 2048、16384、32768、8192、1024、2048 和
-32768；不能把它们误读为每卡 batch。TP1、PP2 和 PP4 的七次细网格继续测到
-G=3072、12288 和 8192，后续中位吞吐均未再提高，因此图中端点已经是测得的平台
-前沿，而不是提前停止的上升段。
+15758.7、18636.8、25743.8、9097.7、13003.0、10470.4 和 14355.1
+generated tokens/s，对应 G 为 2048、16384、32768、8192、4096、4096 和
+32768；不能把它们误读为每卡 batch。PP2/PP4 的前沿分别延伸到 23.21/21.43 GiB，
+容量 probe 的 G=6144/16384 未再提高吞吐，说明横轴已经覆盖到显存/请求平台。
+
+TP1 前沿最右两个点来自独立 Engine grid 的 G=2176 和 G=2048，中位吞吐为
+15522.8 和 15758.7 tokens/s；七次完整范围分别为 9339.4--15976.3 和
+8666.4--16176.7，统计上高度重叠。它们接近同一纵坐标表示 scheduler 已饱和；
+横坐标差异来自独立 Engine 生命周期的 NVML allocator 占用，且前沿按显存而非 G 排序。
 SGLang 会限制在途 token 并排队请求，因此这里没有用户 batch 对应的传统 OOM 点；
 完整边界是吞吐平台，而不是强行制造 OOM。0.5B 模型在中小请求 batch 下以 TP1
 最快；请求队列足够大时，纯 DP2/DP4 分别达到 TP1 最佳吞吐的 1.18/1.63 倍。
@@ -1020,11 +1027,11 @@ PP2/PP4 因 overlap schedule 被关闭且跨 stage 经过 PCIe，低于 TP1。
       - 49152/49152
       - 65536/65536
     * - PP2
-      - 65536/65536
-      - 98304/98304
+      - 6144/6144
+      - 未触发；23.23 GiB 请求排队平台
     * - PP4
-      - 49152/49152
-      - 65536/65536
+      - 16384/16384
+      - 未触发；21.43 GiB 请求排队平台
     * - DP2 × TP2
       - 32768/65536
       - 49152/98304

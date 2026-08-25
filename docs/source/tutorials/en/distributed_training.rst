@@ -1065,14 +1065,17 @@ The regular grid runs sequentially within one Engine per topology. Every
 capacity-boundary ``2x/1.5x`` candidate owns a separate Engine lifetime and a
 360-second budget. Regular points have three same-G warmups followed by three
 measurements; scheduler points whose three-run max/min exceeds 1.3 remain
-``unstable``. This update adds non-power-of-two fine grids near the TP1, PP2,
-and PP4 frontiers. Those points also use three warmups, followed by seven timed
-runs whose median resists periodic scheduler slow samples while the plot retains
-the complete min/max range. Engine startup was excluded
+``unstable``. The TP1 frontier refinement and the formal PP2/PP4 sweeps use
+three warmups followed by seven timed runs. Their medians resist periodic
+scheduler slow samples while plots retain the complete min/max range. PP2 uses
+11 points over G=16--4096 and PP4 uses 13 over G=16--8192; three-run capacity
+probes at G=6144/16384 confirm request-queue plateaus. Engine startup was excluded
 and Radix cache was disabled. SGLang workers do not expose PyTorch allocator peak,
 so the horizontal axis uses the busiest GPU's post-generation NVML device-memory
-usage. It includes the ``memory_fraction_static=0.5`` KV pool and is not directly
-comparable to Vision peak allocated memory. The static KV pool and
+usage. Non-PP topologies use ``memory_fraction_static=0.5``. That setting made
+each PP stage plateau prematurely at 13--16 GiB, so the formal PP2/PP4 sweeps
+uniformly use 0.8. The horizontal axis includes this static KV pool and is not
+directly comparable to Vision peak allocated memory. The static KV pool and
 MiB-resolution NVML readings can give different G
 values the same horizontal coordinate. The CSV retains every measurement, while
 lines connect only the throughput-memory Pareto frontier. Only the
@@ -1083,15 +1086,21 @@ segments and unexplained detached markers.
     :width: 720px
     :alt: Qwen2.5-0.5B QCFS SGLang offline-generation throughput
 
-    SGLang offline-generation throughput-memory Pareto frontiers; frontier points show the three- or seven-run median and full range.
+    SGLang offline-generation throughput-memory Pareto frontiers; PP2/PP4 use a 0.8 static-memory fraction.
 
 The best TP1, DP2, DP4, TP2, PP2, PP4, and DP2 x TP2 frontier points reach
-15758.7, 18636.8, 25743.8, 9097.7, 12733.8, 9885.6, and 14355.1 generated
-tokens/s at G=2048, 16384, 32768, 8192, 1024, 2048, and 32768. None should be
-misread as per-GPU batch. The seven-run TP1, PP2, and PP4 fine grids continue to
-G=3072, 12288, and 8192 without improving median throughput. Their plotted
-endpoints are therefore measured plateau frontiers rather than prematurely
-terminated rising segments.
+15758.7, 18636.8, 25743.8, 9097.7, 13003.0, 10470.4, and 14355.1 generated
+tokens/s at G=2048, 16384, 32768, 8192, 4096, 4096, and 32768. None should be
+misread as per-GPU batch. The PP2/PP4 frontiers now extend to 23.21/21.43 GiB;
+capacity probes at G=6144/16384 do not improve throughput, confirming that the
+horizontal range reaches the memory/request plateau.
+
+The two rightmost TP1 frontier points come from independent Engine grids at
+G=2176 and G=2048. Their medians are 15522.8 and 15758.7 tokens/s, while their
+full seven-run ranges are 9339.4--15976.3 and 8666.4--16176.7. The heavy overlap
+shows a scheduler plateau, not duplicate data. Their different horizontal
+positions reflect NVML allocator state across Engine lifetimes; the frontier is
+ordered by memory rather than G.
 SGLang caps in-flight
 tokens and queues excess requests, so user request batch has no traditional OOM
 point; the complete boundary is a throughput plateau rather than a manufactured
@@ -1119,11 +1128,11 @@ disables the overlap schedule and stage traffic crosses PCIe.
       - 49152/49152
       - 65536/65536
     * - PP2
-      - 65536/65536
-      - 98304/98304
+      - 6144/6144
+      - not reached; 23.23-GiB request-queue plateau
     * - PP4
-      - 49152/49152
-      - 65536/65536
+      - 16384/16384
+      - not reached; 21.43-GiB request-queue plateau
     * - DP2 x TP2
       - 32768/65536
       - 49152/98304

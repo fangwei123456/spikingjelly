@@ -327,7 +327,8 @@ def _load_sglang(results: Path) -> list[dict]:
                     "peak_memory_gib_min": memory,
                     "peak_memory_gib_max": memory,
                     "notes": (
-                        "Radix cache disabled; static memory fraction 0.5; "
+                        "Radix cache disabled; static memory fraction "
+                        f"{data['memory_fraction']}; "
                         f"{len(throughputs)} timed repeats"
                     ),
                 }
@@ -652,7 +653,7 @@ def main() -> None:
         sglang_rows,
         args.output,
         ("tp1", "dp2", "dp4", "tp2", "pp2", "pp4", "dp2tp2"),
-        "Qwen2.5-0.5B QCFS · SGLang frontier",
+        "Qwen2.5-0.5B QCFS · SGLang frontier · PP memory fraction 0.8",
         "Device memory used / GPU (GiB, NVML)",
         "Aggregate generation throughput (tokens/s)",
         "sglang-inference.png",
