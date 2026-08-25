@@ -35,9 +35,8 @@ def test_inference_temporal_logit_reduction():
         _reduce_time_batch(logits, 2, "max")
 
 
-@pytest.mark.parametrize("batch_size", [16, 64, 96, 512, 2048])
-def test_vision_pipeline_benchmark_fixes_microbatch_count(batch_size):
-    assert _vision_topology("pp4", batch_size) == (1, 1, 4, 4)
+def test_vision_pipeline_benchmark_fixes_microbatch_count():
+    assert _vision_topology("pp4") == (1, 1, 4, 4)
 
 
 def test_evaluation_config_and_padding_mask():

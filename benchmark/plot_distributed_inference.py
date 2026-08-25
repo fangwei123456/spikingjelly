@@ -83,7 +83,7 @@ def _summary(values: list[float]) -> tuple[float, float, float]:
     return median(values), min(values), max(values)
 
 
-def _vision_topology(topology: str, batch_size: int) -> tuple[int, int, int, int]:
+def _vision_topology(topology: str) -> tuple[int, int, int, int]:
     data_size = 4 if topology in {"dp4", "fsdp4"} else 1
     tensor_size = 4 if topology == "tp4" else 1
     pipeline_size = 4 if topology == "pp4" else 1
@@ -160,7 +160,7 @@ def _load_vision(results: Path) -> list[dict]:
         else:
             status = "failed"
         data_parallel_size, tensor_size, pipeline_size, microbatches = _vision_topology(
-            topology, batch_size
+            topology
         )
         row = {
             "workload": "vision_evaluation",
@@ -225,7 +225,7 @@ def _load_vision(results: Path) -> list[dict]:
         topology = match["topology"]
         batch_size = int(match["batch"])
         data_parallel_size, tensor_size, pipeline_size, microbatches = _vision_topology(
-            topology, batch_size
+            topology
         )
         row = {
             "workload": "vision_capacity_probe",

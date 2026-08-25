@@ -76,7 +76,6 @@ def create_sglang_engine(config: SGLangGenerationConfig) -> Any:
             random_seed=config.seed,
             attention_backend="triton",
             disable_cuda_graph=True,
-            disable_radix_cache=config.disable_radix_cache,
         )
     finally:
         if previous_package is None:

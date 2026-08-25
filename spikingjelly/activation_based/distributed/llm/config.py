@@ -324,8 +324,6 @@ class SGLangGenerationConfig:
     :type tokenizer: Optional[pathlib.Path]
     :param external_model_package: Optional SGLang external model package.
     :type external_model_package: Optional[str]
-    :param disable_radix_cache: Disable prefix-cache reuse for controlled runs.
-    :type disable_radix_cache: bool
     :raises ValueError: A topology or sampling value is invalid.
     """
 
@@ -343,7 +341,6 @@ class SGLangGenerationConfig:
     seed: int = 1234
     tokenizer: Optional[Path] = None
     external_model_package: Optional[str] = None
-    disable_radix_cache: bool = False
 
     def __post_init__(self) -> None:
         for name in (
