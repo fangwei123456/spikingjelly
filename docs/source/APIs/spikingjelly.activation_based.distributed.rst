@@ -24,23 +24,10 @@ Vision training and inference
     :undoc-members:
     :show-inheritance:
 
-LLM training
-++++++++++++
+LLM training and inference
+++++++++++++++++++++++++++
 
 .. automodule:: spikingjelly.activation_based.distributed.llm
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-LLM inference
-+++++++++++++
-
-.. automodule:: spikingjelly.activation_based.distributed.llm.inference
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-.. automodule:: spikingjelly.activation_based.distributed.llm.sglang
     :members:
     :undoc-members:
     :show-inheritance:

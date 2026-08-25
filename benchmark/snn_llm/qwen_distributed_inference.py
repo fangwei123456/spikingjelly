@@ -41,7 +41,7 @@ def _model(args: argparse.Namespace) -> Qwen2Config:
         gated_linear_unit=True,
         activation_func=F.silu,
         add_bias_linear=False,
-        add_qkv_bias=bool(getattr(source, "attention_bias", True)),
+        add_qkv_bias=bool(source.attention_bias),
         params_dtype=torch.bfloat16,
         pipeline_dtype=torch.bfloat16,
         bf16=True,
@@ -233,6 +233,7 @@ def _export_sglang(
         model = load_for_inference(model_config.transformer, provider, args.checkpoint)
         source = unwrap_model(model).state_dict()
         source_config = AutoConfig.from_pretrained(args.source)
+        attention_bias = bool(source_config.attention_bias)
         input_scale = source["decoder.layers.0.input_layernorm.qcfs_scale"]
         embedding = source["embedding.word_embeddings.weight"]
         weights = {
@@ -281,11 +282,14 @@ def _export_sglang(
                 .detach()
                 .cpu()
             )
-            weights[target_prefix + "attn.qkv.bias"] = (
-                reorder_qkv(source[source_prefix + "self_attention.linear_qkv.bias"])
-                .detach()
-                .cpu()
-            )
+            if attention_bias:
+                weights[target_prefix + "attn.qkv.bias"] = (
+                    reorder_qkv(
+                        source[source_prefix + "self_attention.linear_qkv.bias"]
+                    )
+                    .detach()
+                    .cpu()
+                )
 
         save_file(weights, args.output / "model.safetensors")
         rope = source_config.rope_parameters
@@ -307,7 +311,7 @@ def _export_sglang(
             "max_position_embeddings": source_config.max_position_embeddings,
             "rms_norm_eps": source_config.rms_norm_eps,
             "rope_theta": float(rope["rope_theta"]),
-            "attention_bias": True,
+            "attention_bias": attention_bias,
             "tie_word_embeddings": source_config.tie_word_embeddings,
             "bos_token_id": source_config.bos_token_id,
             "eos_token_id": source_config.eos_token_id,

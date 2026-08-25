@@ -5,18 +5,27 @@ import json
 import os
 from pathlib import Path
 
+import torch
 from torch.utils.data import Dataset
 
 from spikingjelly.activation_based.distributed import vision
 
 
 class _SyntheticImages(Dataset):
-    def __init__(self, samples: int, classes: int, image_size: int) -> None:
-        import torch
-
+    def __init__(
+        self,
+        samples: int,
+        classes: int,
+        image_size: int,
+        time_steps: int,
+        input_layout: str,
+    ) -> None:
         self.samples = samples
         self.classes = classes
-        self.image = torch.zeros(3, image_size, image_size)
+        shape = (3, image_size, image_size)
+        if input_layout == "NTCHW":
+            shape = (time_steps, *shape)
+        self.image = torch.zeros(shape)
 
     def __len__(self) -> int:
         return self.samples
@@ -25,8 +34,14 @@ class _SyntheticImages(Dataset):
         return self.image, index % self.classes
 
 
-def build_synthetic_dataset(samples: int, classes: int, image_size: int) -> Dataset:
-    return _SyntheticImages(samples, classes, image_size)
+def build_synthetic_dataset(
+    samples: int,
+    classes: int,
+    image_size: int,
+    time_steps: int,
+    input_layout: str,
+) -> Dataset:
+    return _SyntheticImages(samples, classes, image_size, time_steps, input_layout)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -76,6 +91,8 @@ def main() -> None:
             "samples": args.samples,
             "classes": args.classes,
             "image_size": args.image_size,
+            "time_steps": args.time_steps,
+            "input_layout": args.input_layout,
         },
         input_layout=args.input_layout,
         batch_size=args.batch_size,

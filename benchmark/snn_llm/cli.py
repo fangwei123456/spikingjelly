@@ -197,7 +197,7 @@ def _run_qwen2(args: argparse.Namespace) -> None:
         gated_linear_unit=True,
         activation_func=F.silu,
         add_bias_linear=False,
-        add_qkv_bias=bool(getattr(source_config, "attention_bias", True)),
+        add_qkv_bias=bool(source_config.attention_bias),
         params_dtype=torch.bfloat16,
         pipeline_dtype=torch.bfloat16,
         bf16=True,

@@ -22,7 +22,11 @@ from spikingjelly.activation_based.distributed.vision.spikformer import (
     SpikformerBuilder,
     _pipeline_stage,
 )
-from spikingjelly.activation_based.model.spikformer import SpikformerBlock, spikformer_s
+from spikingjelly.activation_based.model.spikformer import (
+    SpikformerBlock,
+    spikformer_cifar10,
+    spikformer_s,
+)
 
 
 def test_vision_training_config_json_round_trip():
@@ -358,7 +362,7 @@ def test_pipeline_expands_static_input_per_microbatch():
         pipeline_size=1,
         microbatches=1,
         input_shape=(2, 3, 5, 5),
-        input_dtype=torch.float32,
+        communication_dtype=torch.float32,
         device=torch.device("cpu"),
         time_steps=4,
     )
@@ -380,7 +384,7 @@ def test_forward_pipeline_merges_semantic_microbatches():
         pipeline_size=1,
         microbatches=2,
         input_shape=(2, 3, 5, 5),
-        input_dtype=torch.float32,
+        communication_dtype=torch.float32,
         device=torch.device("cpu"),
         time_steps=4,
     )
@@ -389,6 +393,58 @@ def test_forward_pipeline_merges_semantic_microbatches():
     output = pipeline.step(images)
 
     torch.testing.assert_close(output, images.mean(dim=(-2, -1)))
+
+
+def test_forward_pipeline_sends_declared_dtype(monkeypatch):
+    sent = []
+    monkeypatch.setattr(torch.distributed, "get_global_rank", lambda _group, rank: rank)
+    monkeypatch.setattr(
+        torch.distributed, "send", lambda value, **_kwargs: sent.append(value)
+    )
+    monkeypatch.setattr(torch.distributed, "barrier", lambda **_kwargs: None)
+    pipeline = inference._ForwardPipeline(
+        nn.Identity(),
+        process_group=None,
+        pipeline_rank=0,
+        pipeline_size=2,
+        microbatches=1,
+        input_shape=(2, 3),
+        communication_dtype=torch.bfloat16,
+        device=torch.device("cpu"),
+    )
+
+    pipeline.step(torch.ones(2, 3))
+
+    assert sent[0].dtype == torch.bfloat16
+
+
+def test_vision_inference_preserves_early_configuration_error(monkeypatch):
+    config = vision.EvaluationConfig(
+        artifact=Path("artifact.pt"),
+        dataset_builder="package.datasets.build",
+        pipeline_parallel_size=2,
+    )
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "set_device", lambda _device: None)
+    monkeypatch.setattr(inference.dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(inference.dist, "get_world_size", lambda: 3)
+
+    with pytest.raises(ValueError, match="world_size"):
+        inference._run_classification(config, None)
+
+
+def test_vision_inference_rejects_wrong_config_before_runtime():
+    prediction = vision.PredictionConfig(
+        artifact=Path("artifact.pt"), dataset_builder="package.datasets.build"
+    )
+    evaluation = vision.EvaluationConfig(
+        artifact=Path("artifact.pt"), dataset_builder="package.datasets.build"
+    )
+
+    with pytest.raises(TypeError, match="EvaluationConfig"):
+        vision.evaluate_classification(prediction)
+    with pytest.raises(TypeError, match="PredictionConfig"):
+        vision.predict_classification(evaluation, Path("predictions.h5"))
 
 
 def test_vision_broadcasts_data_parallel_buffers(monkeypatch):
@@ -680,6 +736,11 @@ def test_spikformer_pipeline_keeps_every_transformer_block():
     ]
 
     assert block_counts == [0, 2, 2, 2]
+
+
+def test_four_block_spikformer_rejects_pipeline_size_four():
+    with pytest.raises(ValueError, match="4-block Spikformer"):
+        _pipeline_stage(spikformer_cifar10(), 0, 4)
 
 
 def test_sew_pipeline_downsamples_before_stage_boundaries():

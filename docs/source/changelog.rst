@@ -517,8 +517,13 @@ Module: ``spikingjelly.activation_based.distributed``.
   different TP/PP topology.
 - Added a bounded forward-only Vision pipeline schedule for inference, avoiding
   training-schedule state and cross-batch work accumulation. Communication-aware
-  SEW-ResNet34 boundaries and balanced Spikformer stages provide stable PP
-  throughput above one GPU.
+  SEW-ResNet34 boundaries and balanced six-block Spikformer stages provide stable
+  PP throughput above one GPU.
+- Changed the SEW-ResNet34 and Spikformer PP stage boundaries for both training
+  and inference. Vision PP checkpoints created before this change cannot be
+  resumed; checkpoints without PP are unaffected.
+- Rejected PP4 for the four-block Spikformer because its fourth stage would
+  contain only the classifier head; PP1 and PP2 remain supported.
 - Added inference capacity benchmarks that sweep Vision and MCore evaluation
   batches through measured capacity boundaries with a 2x/1.5x search. Three-run
   throughput-memory plots reuse the training-figure style and report per-rank
@@ -528,6 +533,10 @@ Module: ``spikingjelly.activation_based.distributed``.
 - Added optimizer-free MCore loss/perplexity evaluation with DP/TP/PP/CP and
   explicit forward-only pipeline microbatches, plus DP-sharded cached generation
   with exact prompt ordering.
+- Renamed the previous low-level `distributed.llm.generate(transformer_config,
+  model_provider, ...)`` API to ``generate_mcore(...)``. The ``generate(...)` name now
+  accepts ``MCoreGenerationConfig`` and ``input_ids``; existing low-level callers
+  must use ``generate_mcore``.
 - Added an experimental, separate-environment SGLang 0.5.17 offline backend and
   deterministic MCore-to-safetensors exporters for the SpikeLM and Qwen2
   reference recipes.

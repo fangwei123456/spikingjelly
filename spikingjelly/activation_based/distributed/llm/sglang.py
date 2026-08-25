@@ -60,6 +60,8 @@ def create_sglang_engine(config: SGLangGenerationConfig) -> Any:
                 "SGLang inference requires a separate environment with "
                 "spikingjelly[sglang]."
             ) from error
+        # The experimental SNN adapters are validated only with Triton and
+        # eager execution; CUDA graphs remain outside the supported boundary.
         return sglang.Engine(
             model_path=str(config.artifact),
             tokenizer_path=(

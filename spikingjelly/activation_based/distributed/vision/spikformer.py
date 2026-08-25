@@ -42,7 +42,7 @@ def _pipeline_stage(model: nn.Module, rank: int, size: int) -> nn.Module:
     if size == 1:
         return model
     if size not in {2, 4}:
-        raise ValueError("Spikformer-S PP size must be 1, 2, or 4.")
+        raise ValueError("Spikformer PP size must be 1, 2, or 4.")
     if len(model.blocks) == 6:
         chunks = (
             model.patch_embed,
@@ -53,6 +53,8 @@ def _pipeline_stage(model: nn.Module, rank: int, size: int) -> nn.Module:
             ),
         )
     elif len(model.blocks) == 4:
+        if size == 4:
+            raise ValueError("The 4-block Spikformer supports PP size 1 or 2.")
         chunks = (
             model.patch_embed,
             nn.Sequential(model.blocks[0], model.blocks[1]),
@@ -230,10 +232,11 @@ SpikformerCIFAR10Config.__init__.__doc__ = r"""Configure CIFAR-10 Spikformer.
 **API Language** - 中文 | English
 
 **中文：** 声明固定 32×32 输入、4×4 patch、384 维、12 heads、4 blocks 的
-CIFAR-10 Spikformer。TP 按 attention head 分片。
+CIFAR-10 Spikformer。TP 按 attention head 分片；PP 支持 1 或 2 stages。
 
 **English:** Declare the CIFAR-10 Spikformer with fixed 32×32 input, 4×4 patches,
-384 channels, 12 heads, and 4 blocks. TP shards attention heads.
+384 channels, 12 heads, and 4 blocks. TP shards attention heads; PP supports one
+or two stages.
 
 :param time_steps: SNN 时间步。 / SNN time steps.
 :type time_steps: int

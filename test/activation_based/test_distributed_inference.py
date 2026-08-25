@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -8,15 +9,19 @@ import pytest
 import torch
 from torch.utils.data import Dataset
 
-from benchmark.plot_distributed_inference import _vision_topology
 from benchmark.snn_llm.spikelm import SpikeLMConfig
+from benchmark.vision_inference import build_synthetic_dataset
 from spikingjelly.activation_based.distributed.llm import (
     EvaluationConfig,
     SGLangGenerationConfig,
     create_sglang_engine,
+    generate,
     generate_sglang,
 )
-from spikingjelly.activation_based.distributed.llm.inference import _EvaluationDataset
+from spikingjelly.activation_based.distributed.llm.inference import (
+    _EvaluationDataset,
+    _perplexity,
+)
 from spikingjelly.activation_based.distributed.llm.temporal import _reduce_time_batch
 
 
@@ -35,8 +40,20 @@ def test_inference_temporal_logit_reduction():
         _reduce_time_batch(logits, 2, "max")
 
 
-def test_vision_pipeline_benchmark_fixes_microbatch_count():
-    assert _vision_topology("pp4") == (1, 1, 4, 4)
+def test_perplexity_overflows_only_when_math_exp_does():
+    assert _perplexity(100.0) == math.exp(100.0)
+    assert math.isinf(_perplexity(1000.0))
+
+
+def test_mcore_generate_points_low_level_callers_to_generate_mcore():
+    with pytest.raises(TypeError, match="use generate_mcore"):
+        generate(object(), torch.ones((1, 2), dtype=torch.long))
+
+
+def test_vision_inference_synthetic_dataset_follows_input_layout():
+    dataset = build_synthetic_dataset(2, 10, 8, 4, "NTCHW")
+
+    assert dataset[0][0].shape == (4, 3, 8, 8)
 
 
 def test_evaluation_config_and_padding_mask():

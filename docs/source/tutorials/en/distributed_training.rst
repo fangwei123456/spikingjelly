@@ -906,7 +906,9 @@ and Triton 3.4.0.
 Vision evaluation
 ~~~~~~~~~~~~~~~~~
 
-Vision used BF16, ``T=4``, 1000 classes, and cached 224 x 224 synthetic images.
+Vision used BF16, ``T=4``, 1000 classes, and cached all-zero 224 x 224 synthetic
+images. This input measures dense-execution throughput and memory only; its
+loss and accuracy are not model-quality metrics.
 The non-PP SEW-ResNet34 per-rank grid is
 ``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024``; Spikformer-S stops
 between 384 and 1024 according to OOM. PP4 fixes K=4. The SEW-ResNet34 L grid is
@@ -1035,7 +1037,10 @@ above one on the four-GPU host; TP4 violates head divisibility.
 Every point restores the same initialized state from a sharded checkpoint in a
 fresh process, runs five untimed schedule batches, measures a complete schedule,
 and is repeated independently three times; checkpoint/model initialization is
-excluded. The new sweep explicitly sets ``NCCL_P2P_DISABLE=1``,
+excluded. The MCore schedule fetches batches from its DataLoader iterator inside
+the timed region, so throughput includes dataset indexing and collation. Vision
+excludes DataLoader time; throughput is not comparable across these workloads.
+The new sweep explicitly sets ``NCCL_P2P_DISABLE=1``,
 ``NCCL_IB_DISABLE=1``, and
 ``PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True``. In the MCore API,
 ``micro_batch_size`` is the chunk size, while this section's L equals

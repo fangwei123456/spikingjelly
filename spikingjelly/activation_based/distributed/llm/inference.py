@@ -154,6 +154,13 @@ class _EvaluationDataset(Dataset):
         return item
 
 
+def _perplexity(loss: float) -> float:
+    try:
+        return math.exp(loss)
+    except OverflowError:
+        return float("inf")
+
+
 def evaluate(config: EvaluationConfig) -> dict[str, float]:
     r"""Evaluate loss and perplexity with MCore DP/TP/PP/CP execution.
 
@@ -302,7 +309,7 @@ def evaluate(config: EvaluationConfig) -> dict[str, float]:
         loss = metrics["lm_loss"]
         return {
             "lm_loss": loss,
-            "perplexity": math.exp(loss) if loss < 80.0 else float("inf"),
+            "perplexity": _perplexity(loss),
             "valid_tokens": token_count.item(),
             "evaluation_seconds": elapsed.item(),
             "semantic_tokens_per_second": token_count.item() / elapsed.item(),
@@ -335,9 +342,10 @@ def generate_mcore(
 
     **API Language** - 中文 | English
 
-    **中文：** 广播 rank 0 的 ``[B,S]`` prompt，使用 MCore static inference context
-    完成 prefill 与 cached decode。每次模型调用包含完整 ``T``，神经元状态在调用后
-    丢弃；KV cache 跨 decode-step ``D`` 保留。仅 global rank 0 返回 CPU token。
+    **中文：** 广播 rank 0 的 ``[B,S]`` global prompt batch，沿 DP replicas 切分，
+    并使用 MCore static inference context 完成 prefill 与 cached decode。每次模型调用
+    包含完整 ``T``，神经元状态在调用后丢弃；KV cache 跨 decode-step ``D`` 保留。
+    仅 global rank 0 返回按原顺序合并的 CPU token。
 
     :param transformer_config: 推理用 MCore 配置；当前要求 CP=1 且关闭 sequence parallel。
     :type transformer_config: megatron.core.transformer.TransformerConfig
@@ -349,15 +357,20 @@ def generate_mcore(
     :type input_ids: torch.Tensor
     :param max_new_tokens: 要生成的正整数 token 数。
     :type max_new_tokens: int
+    :param eos_token_id: 可选 EOS token ID；已完成序列后续填充该值。
+    :type eos_token_id: Optional[int]
+    :param seed: MCore model seed。
+    :type seed: int
     :return: global rank 0 上的 ``[B,S+max_new_tokens]`` CPU tensor；其他 rank 为 ``None``。
     :rtype: Optional[torch.Tensor]
     :raises ValueError: 输入、上下文长度或推理并行配置无效。
     :raises RuntimeError: CUDA 或 MCore 不可用。
 
-    **English:** Broadcast rank 0's ``[B,S]`` prompt and run prefill plus cached
-    decode with MCore's static inference context. Every model call contains a full
-    ``T`` window and discards neuron state afterwards, while the KV cache persists
-    across decode steps ``D``. Only global rank 0 returns CPU tokens.
+    **English:** Broadcast rank 0's global ``[B,S]`` prompt batch, shard it over
+    DP replicas, and run prefill plus cached decode with MCore's static inference
+    context. Every model call contains a full ``T`` window and discards neuron
+    state afterwards, while the KV cache persists across decode steps ``D``.
+    Only global rank 0 returns CPU tokens merged in input order.
 
     :param transformer_config: Inference MCore config; CP must be one and sequence parallel disabled.
     :type transformer_config: megatron.core.transformer.TransformerConfig
@@ -369,6 +382,10 @@ def generate_mcore(
     :type input_ids: torch.Tensor
     :param max_new_tokens: Positive number of tokens to generate.
     :type max_new_tokens: int
+    :param eos_token_id: Optional EOS token ID used to pad completed sequences.
+    :type eos_token_id: Optional[int]
+    :param seed: MCore model seed.
+    :type seed: int
     :return: ``[B,S+max_new_tokens]`` CPU tensor on global rank 0, otherwise ``None``.
     :rtype: Optional[torch.Tensor]
     :raises ValueError: If inputs, context length, or inference parallelism are invalid.
@@ -548,7 +565,14 @@ def generate(
     :type input_ids: torch.Tensor
     :return: Generated CPU token IDs on global rank zero, otherwise ``None``.
     :rtype: Optional[torch.Tensor]
+    :raises TypeError: If ``config`` is not :class:`MCoreGenerationConfig`; use
+        :func:`generate_mcore` for the low-level callback API.
     """
+    if not isinstance(config, MCoreGenerationConfig):
+        raise TypeError(
+            "generate requires MCoreGenerationConfig; use generate_mcore for "
+            "the low-level callback API."
+        )
     builder_cls = config.model.get_builder_cls()
     model_provider, _ = builder_cls(config.model).build(
         use_snn_memopt=config.use_snn_memopt,

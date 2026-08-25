@@ -345,6 +345,8 @@ def _merge_prediction_shards(
         path.unlink()
 
 
+# ScheduleGPipe retains training state across repeated calls; inference needs one
+# bounded send/recv lifecycle per batch.
 class _ForwardPipeline:
     def __init__(
         self,
@@ -355,7 +357,7 @@ class _ForwardPipeline:
         pipeline_size: int,
         microbatches: int,
         input_shape: tuple[int, ...],
-        input_dtype: torch.dtype,
+        communication_dtype: torch.dtype,
         device: torch.device,
         batch_first: bool = False,
         time_steps: Optional[int] = None,
@@ -367,6 +369,7 @@ class _ForwardPipeline:
         self.pipeline_rank = pipeline_rank
         self.pipeline_size = pipeline_size
         self.microbatches = microbatches
+        self.communication_dtype = communication_dtype
         self.source = (
             dist.get_global_rank(process_group, pipeline_rank - 1)
             if pipeline_rank > 0
@@ -378,7 +381,7 @@ class _ForwardPipeline:
             else None
         )
         self.receive_buffer = (
-            torch.empty(input_shape, device=device, dtype=input_dtype)
+            torch.empty(input_shape, device=device, dtype=communication_dtype)
             if pipeline_rank > 0
             else None
         )
@@ -407,7 +410,7 @@ class _ForwardPipeline:
             functional.reset_net(self.module)
             if self.destination is not None:
                 dist.send(
-                    output.contiguous(),
+                    output.to(self.communication_dtype, copy=False).contiguous(),
                     dst=self.destination,
                     group=self.process_group,
                 )
@@ -423,7 +426,7 @@ def _run_classification(
 ) -> Optional[dict[str, float]]:
     if not torch.cuda.is_available():
         raise RuntimeError("Distributed vision inference requires CUDA.")
-    if output is not None and Path(output).exists():
+    if output is not None and output.exists():
         raise FileExistsError(f"Prediction output already exists: {output}")
 
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
@@ -433,14 +436,15 @@ def _run_classification(
     if initialized_here:
         dist.init_process_group("nccl", device_id=device)
     prediction_shard = None
+    shard_path = None
     try:
         world_size = dist.get_world_size()
-        rank = dist.get_rank()
         model_parallel_size = (
             config.pipeline_parallel_size * config.tensor_parallel_size
         )
         if world_size % model_parallel_size:
             raise ValueError("world_size must be divisible by PP * TP.")
+        rank = dist.get_rank()
         data_parallel_size = world_size // model_parallel_size
         tensor_rank = rank % config.tensor_parallel_size
         pipeline_rank = (
@@ -514,7 +518,7 @@ def _run_classification(
                 pipeline_size=config.pipeline_parallel_size,
                 microbatches=config.pipeline_microbatches,
                 input_shape=stage_input_shape,
-                input_dtype=(torch.float32 if pipeline_rank == 0 else stage_dtype),
+                communication_dtype=stage_dtype,
                 device=device,
                 batch_first=pipeline_rank == 0 and not static_input,
                 time_steps=model_config.time_steps if static_input else None,
@@ -526,8 +530,6 @@ def _run_classification(
             data_parallel_rank=data_parallel_rank,
         )
         if output is None:
-            if not isinstance(config, EvaluationConfig):
-                raise TypeError("Evaluation requires vision.EvaluationConfig.")
             loss_function = functools.partial(
                 _import_object(config.loss_function), **config.loss_kwargs
             )
@@ -538,9 +540,7 @@ def _run_classification(
         output_rank = (
             pipeline_rank == config.pipeline_parallel_size - 1 and tensor_rank == 0
         )
-        shard_path = None
         if output is not None and output_rank:
-            output = Path(output)
             shard_path = output.with_name(f".{output.name}.rank-{rank:05d}.h5")
             if shard_path.exists():
                 raise FileExistsError(f"Prediction shard already exists: {shard_path}")
@@ -642,12 +642,12 @@ def _run_classification(
                     for dp_rank in range(data_parallel_size)
                 ]
                 _merge_prediction_shards(
-                    Path(output),
+                    output,
                     [
-                        Path(output).with_name(
-                            f".{Path(output).name}.rank-{output_rank:05d}.h5"
+                        output.with_name(
+                            f".{output.name}.rank-{last_stage_rank:05d}.h5"
                         )
-                        for output_rank in output_ranks
+                        for last_stage_rank in output_ranks
                     ],
                     dataset_size=dataset_size,
                     num_classes=model_config.num_classes,
@@ -705,7 +705,11 @@ def evaluate_classification(config: EvaluationConfig) -> dict[str, float]:
     :type config: spikingjelly.activation_based.distributed.vision.EvaluationConfig
     :return: 全局评测与性能指标。 / Global evaluation and performance metrics.
     :rtype: dict[str, float]
+    :raises TypeError: ``config`` 不是 :class:`EvaluationConfig`。 / If ``config``
+        is not :class:`EvaluationConfig`.
     """
+    if not isinstance(config, EvaluationConfig):
+        raise TypeError("evaluate_classification requires EvaluationConfig.")
     return _run_classification(config, None)
 
 
@@ -726,7 +730,12 @@ def predict_classification(config: PredictionConfig, output: Path) -> None:
     :type output: pathlib.Path
     :return: 无。 / None.
     :rtype: None
+    :raises TypeError: ``config`` 不是 :class:`PredictionConfig`，或是
+        :class:`EvaluationConfig`。 / If ``config`` is not a prediction-only
+        :class:`PredictionConfig`.
     """
+    if not isinstance(config, PredictionConfig) or isinstance(config, EvaluationConfig):
+        raise TypeError("predict_classification requires PredictionConfig.")
     _run_classification(config, Path(output))
 
 

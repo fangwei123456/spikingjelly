@@ -276,6 +276,10 @@ class ModelBuilder(abc.ABC):
         :raises ValueError: A rank, key, or shard shape is inconsistent.
         """
         reference = self._build_canonical_model().state_dict()
+        key_maps = {
+            rank: self._canonical_key_map(rank, pipeline_size)
+            for rank in range(pipeline_size)
+        }
         by_name: dict[str, list[tuple[int, torch.Tensor]]] = {}
         for pipeline_rank, tensor_rank, state in shards:
             if (
@@ -283,7 +287,7 @@ class ModelBuilder(abc.ABC):
                 or not 0 <= tensor_rank < tensor_size
             ):
                 raise ValueError("Invalid PP or TP rank in state shards.")
-            key_map = self._canonical_key_map(pipeline_rank, pipeline_size)
+            key_map = key_maps[pipeline_rank]
             if set(state) != set(key_map):
                 raise ValueError("Local state keys do not match the pipeline stage.")
             for local_name, value in state.items():

@@ -192,8 +192,9 @@ class EvaluationConfig:
     :type seed: int
     :param use_snn_memopt: Match the checkpoint's SNN memopt recipe.
     :type use_snn_memopt: bool
-    :param timing_warmup_batches: 计时前执行但不计入指标的 batch 数。 / Number
-        of batches run before timing and excluded from metrics.
+    :param timing_warmup_batches: 计时前从 dataset 起点重复执行、但不计入指标的
+        schedule batch 数。 / Number of schedule batches repeatedly run from the
+        start of the dataset before timing and excluded from metrics.
     :type timing_warmup_batches: int
     :raises ValueError: A size or import path is invalid.
     """
