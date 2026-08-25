@@ -209,19 +209,25 @@ are no duplicate ``validate`` and ``test`` functions.
       - ``evaluate_classification``
       - MCore ``evaluate``
       - Aggregate loss, accuracy/perplexity, and performance metrics
-    * - Post-training prediction/generation
+    * - Post-training direct prediction/generation
       - Not required
       - ``predict_classification``
-      - MCore ``generate`` or SGLang ``generate_sglang``
+      - MCore ``generate``
       - Per-sample logits or generated tokens; no evaluation metrics
+    * - Post-training scheduler-backed offline generation
+      - Not required
+      - —
+      - SGLang ``generate_sglang``
+      - Per-request generated tokens; no evaluation metrics
 
 ``evaluate_classification`` requires every dataset item to be
 ``(image, target)``. Likewise, ``llm.evaluate`` requires ``input_ids``,
 ``labels``, and an optional ``loss_mask``. Prediction and generation do not read
 ground truth: Vision ignores targets even if items are ``(image, target)``, while
-LLM generation accepts prompts only. All three roles belong to training or
-offline workflows; the SGLang path includes no HTTP server, router, or other
-online-serving control plane.
+LLM generation accepts prompts only. All four roles belong to training or
+offline workflows. SGLang ``Engine`` includes an internal execution scheduler
+for requests and the KV pool, but the SpikingJelly path includes no HTTP server,
+router, or other online-serving control plane.
 
 Vision
 ^^^^^^
@@ -255,14 +261,36 @@ LLMs
 
 LLMs expose two backends with different roles:
 
-* MCore reuses the training model provider and sharded checkpoint.
+* MCore reuses the training model provider and sharded checkpoint. It serves
+  validation, loss/perplexity evaluation, and synchronous generation with direct
+  tensor-batch semantics.
   ``llm.evaluate(EvaluationConfig(...))`` runs complete DP/TP/PP/CP loss and
   perplexity evaluation. ``llm.generate(MCoreGenerationConfig(...), input_ids)``
   adds DP prompt sharding to TP/PP static-KV-cache generation. MCore cached
   generation requires CP=1.
-* SGLang handles high-throughput post-training offline generation. It consumes a
+* SGLang handles scheduler-backed, high-throughput post-training offline
+  generation. It consumes a
   ``config.json`` plus safetensors artifact from a separate Python environment
   and starts no HTTP server or router.
+
+.. list-table:: Choosing an LLM inference backend
+    :header-rows: 1
+
+    * - Requirement
+      - Backend
+    * - Validation, loss/perplexity, or direct training-checkpoint restore
+      - MCore
+    * - Explicit local/global batch, pipeline microbatch, and CUDA OOM semantics
+      - MCore
+    * - Large prompt corpus, continuous batching, and KV-cache scheduling
+      - SGLang
+    * - HTTP/router, multi-tenancy, or SLA serving
+      - Out of scope
+
+MCore evaluation and SGLang generation answer different questions. Sharing a
+model and hardware does not make their throughput, batch size, memory, or OOM
+boundaries directly comparable. Cross-backend acceptance covers only artifact
+and generated-token correctness.
 
 SGLang 0.5.17 owns its PyTorch and Transformers runtime, so do not force it into
 the main training environment:
@@ -858,13 +886,19 @@ model/optimizer checkpoint also resumed successfully from step 1 to step 2.
 Distributed inference benchmarks
 --------------------------------
 
+Common environment
+~~~~~~~~~~~~~~~~~~
+
 The inference benchmark used the same single-host 4 x RTX 4090 24-GiB environment
 as training. ``nvidia-smi topo -m`` reports ``SYS`` from GPU0 to every other GPU
 and ``NODE`` among GPUs 1--3, with no ``NV#`` link. ``nvidia-smi topo -p2p r/w``
 returns ``CNS`` for every GPU pair. The host therefore has neither NVLink nor a
 usable CUDA peer read/write path; NCCL traffic traverses PCIe/CPU interconnects.
-The software stack matches training: PyTorch 2.8.0, Megatron Core 0.18.2, and
-Triton 3.4.0.
+The Vision/MCore stack matches training: PyTorch 2.8.0, Megatron Core 0.18.2,
+and Triton 3.4.0. SGLang uses the separate environment described above.
+
+Vision evaluation
+~~~~~~~~~~~~~~~~~
 
 Vision used BF16, ``T=4``, 1000 classes, and cached 224 x 224 synthetic images.
 The non-PP SEW-ResNet34 per-rank grid is
@@ -878,18 +912,15 @@ times. Timing includes H2D, forward, communication, and metric reduction but
 excludes DataLoader work, model/artifact loading, and initialization. Each plot
 connects every three-run point from one protocol and shows its median and full
 range; it applies neither Pareto point removal nor artificial smoothing.
-This section uses ``L`` for the local batch on each DP rank/replica and ``G``
-for the whole-job global batch. Always ``G = L × DP``; TP, PP, CP, and SNN time
-steps ``T`` do not multiply G. PP additionally uses ``K`` for the number of
-pipeline microbatches, each of size ``L / K``. Figure endpoints report only
-global batch G.
+The Vision and MCore subsections use ``L`` for the local batch on each DP
+rank/replica and ``G`` for the whole-job global batch. Always ``G = L × DP``;
+TP, PP, CP, and SNN time steps ``T`` do not multiply G. PP additionally uses
+``K`` for the number of pipeline microbatches, each of size ``L / K``. Vision
+figure endpoints report only global batch G.
 
 Every capacity search uses the same growth rule: from the largest successful
 point ``x``, try ``2x``; if ``2x`` fails, try ``1.5x``; if ``1.5x`` succeeds,
-make it the new x and repeat. Non-streaming topologies continue to CUDA OOM.
-When streaming PP or request queuing makes peak memory independent of G, the
-search instead stops at a runtime boundary where a candidate cannot finish
-within its own full timeout budget.
+make it the new x and repeat. Every Vision topology continues to CUDA OOM.
 
 Inference PP uses a dedicated forward-only streaming schedule instead of the
 ``ScheduleGPipe`` backward state machine needed by training. It synchronizes the
@@ -905,10 +936,8 @@ silently apply this rule
 to user calls. The summary CSV records ``per_rank_batch_size``,
 ``global_batch_size``, ``pipeline_microbatches``, and
 ``pipeline_microbatch_size`` separately.
-The SGLang scheduler does not expose a pipeline-microbatch control, so its lines
-still use 0.05-GiB Pareto frontiers. Vision and MCore instead connect every
-successful point from their fixed protocol through OOM. The CSV keeps exact,
-unquantized memory and every measurement for all three cases.
+Vision connects every successful batch-sweep point from its fixed protocol
+through OOM. The CSV also retains failed candidate states.
 
 .. figure:: ../../_static/tutorials/distributed/sew-resnet34-inference-tradeoff.png
     :width: 720px
@@ -988,6 +1017,9 @@ Vision correctness tests also covered FSDP2, PP2, and exporting a TP2 x PP2
 training checkpoint before restoring it under TP1 x DP4. The latter reported
 validation losses 2.310132205 and 2.310132384.
 
+MCore loss/perplexity evaluation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 MCore loss/perplexity evaluation uses Qwen2.5-0.5B QCFS, BF16, ``T=2``, and
 sequence length 16. The TP1/DP4 baseline segment uses a fixed 128-sample
 dataset; the newly measured TP2/PP2/PP4 points set dataset samples equal to G so
@@ -1058,101 +1090,96 @@ out, so that point is excluded from the curve; L=4096 is a confirmed CUDA OOM.
       - 3072/3072
       - one debug probe completed but the formal run timed out; 4096 CUDA OOM
 
+SGLang scheduler-backed offline generation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 LLM generation used Qwen2.5-0.5B QCFS, BF16, ``T=2``, 8-token prompts, and
 8-token outputs. SGLang compares TP1, DP2, DP4, TP2, PP2, PP4, and DP2 x TP2.
-The global prompt batch G starts at 16 and follows the ``2x/1.5x`` growth rule.
-The regular grid runs sequentially within one Engine per topology. Every
-capacity-boundary ``2x/1.5x`` candidate owns a separate Engine lifetime and a
-360-second budget. Regular points have three same-G warmups followed by three
-measurements; scheduler points whose three-run max/min exceeds 1.3 remain
-``unstable``. The TP1 frontier refinement and the formal PP2/PP4 sweeps use
-three warmups followed by seven timed runs. Their medians resist periodic
-scheduler slow samples while plots retain the complete min/max range. PP2 and
-PP4 both use the exact MCore PP global-batch grid:
-``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048`` and then
-extend the capacity tail with the ``2x/1.5x`` rule. Their final grids are strict
-supersets of the MCore grid. Engine startup was excluded
-and Radix cache was disabled. SGLang workers do not expose PyTorch allocator peak,
-so the horizontal axis uses the busiest GPU's post-generation NVML device-memory
-usage. Every topology uses the same ``memory_fraction_static=0.5``. The
-horizontal axis includes the static KV pool reserved at Engine initialization,
-so PP2/PP4 already use about 12.7 GiB at G=16. This is not batch-activation
-memory and is not numerically comparable with MCore ``cuda_peak_allocated``.
-The static KV pool and
-MiB-resolution NVML readings can give different G
-values the same horizontal coordinate. The CSV retains every measurement, while
-lines connect only the throughput-memory Pareto frontier. Only the
-highest-throughput point at equal memory enters a line, avoiding vertical
-segments and unexplained detached markers.
+This subsection uses ``G_req`` for the total requests submitted in one Engine
+call; it is not a concurrent GPU batch. ``G_req`` starts at 16 and follows the
+``2x/1.5x`` growth rule. A regular grid runs sequentially within one Engine per
+topology, while each capacity candidate owns a separate Engine lifetime and a
+360-second budget.
+
+Regular points have three same-``G_req`` warmups followed by three measurements;
+points whose three-run max/min exceeds 1.3 remain ``unstable``. The TP1 fine grid
+and formal PP2/PP4 sweeps use three warmups followed by seven timed runs. Their
+medians resist periodic scheduler slow samples while the figure retains the full
+min/max range. Every topology uses ``memory_fraction_static=0.5`` with Radix
+cache disabled, and timing excludes Engine startup.
+
+The left panel connects every completed point by ``G_req`` and shows aggregate
+generation throughput. The right panel shows the busiest GPU's NVML device
+memory. NVML includes the static KV pool reserved during Engine initialization,
+so the roughly 12.7-GiB starting point is not batch-activation memory. This
+metric describes SGLang request scaling and static-pool saturation only.
 
 .. figure:: ../../_static/tutorials/distributed/sglang-inference.png
     :width: 720px
     :alt: Qwen2.5-0.5B QCFS SGLang offline-generation throughput
 
-    SGLang offline-generation throughput-memory Pareto frontiers; PP2/PP4 use the MCore grid plus a capacity tail.
+    Scheduler-native SGLang offline generation: throughput and NVML memory versus submitted requests ``G_req``.
 
-The best TP1, DP2, DP4, TP2, PP2, PP4, and DP2 x TP2 frontier points reach
+The best TP1, DP2, DP4, TP2, PP2, PP4, and DP2 x TP2 throughput points reach
 15758.7, 18636.8, 25743.8, 9097.7, 12707.9, 10117.7, and 14355.1 generated
-tokens/s at G=2048, 16384, 32768, 8192, 1536, 2048, and 32768. None should be
-misread as per-GPU batch. The MCore-matched PP2/PP4 base segments span
-12.71--14.53/12.70--13.74 GiB. Their capacity tails continue to G=65536/49152
-and plateau at 19.98/15.93 GiB. Larger G does not imply an equally large
-concurrent GPU batch.
+tokens/s at respective ``G_req`` values 2048, 16384, 32768, 8192, 1536, 2048,
+and 32768. None should be
+misread as per-GPU batches. As ``G_req`` grows, each topology first gains
+throughput and then reaches a plateau; the right panel shows static KV-pool and
+in-flight-request memory stabilizing at the same time.
 
-The two rightmost TP1 frontier points come from independent Engine grids at
-G=2176 and G=2048. Their medians are 15522.8 and 15758.7 tokens/s, while their
-full seven-run ranges are 9339.4--15976.3 and 8666.4--16176.7. The heavy overlap
-shows a scheduler plateau, not duplicate data. Their different horizontal
-positions reflect NVML allocator state across Engine lifetimes; the frontier is
-ordered by memory rather than G.
-SGLang caps in-flight tokens and queues excess requests, so user request batch
-has no traditional OOM point. PP2 first reaches an independent-Engine runtime
-timeout at G=98304 and PP4 at G=65536; neither is a CUDA OOM. MCore K=4
-evaluation materializes computation chunks of size ``L/4`` concurrently, so
-activation memory grows with L until OOM. SGLang G is primarily the number of
-requests submitted to the scheduler; requests beyond the in-flight token/KV
-budget remain in a host queue, allowing G far beyond MCore L. TP1 remains
-fastest at small and medium request batches while this 0.5B
+SGLang caps in-flight tokens and queues excess requests, so there is no
+traditional user-batch OOM point. PP2 first reaches an independent-Engine
+runtime timeout at ``G_req=98304`` and PP4 at ``G_req=65536``; neither is a CUDA
+OOM. Requests beyond the in-flight token/KV budget remain in a host queue, so
+``G_req`` can grow while GPU memory stays flat. TP1 remains fastest at small and
+medium request counts while this 0.5B
 model fits on one GPU; with a sufficiently large queue, pure DP2 and DP4 reach
 1.18x and 1.63x TP1's best throughput. PP2 and PP4 remain below TP1 because PP
 disables the overlap schedule and stage traffic crosses PCIe.
 
-.. list-table:: SGLang capacity tail (largest completion → first independent timeout)
+.. list-table:: SGLang request-capacity tail (largest completion → first independent timeout)
     :header-rows: 1
 
     * - Topology
-      - Largest ``L/G``
-      - First timeout ``L/G``
+      - Largest ``G_req``
+      - First timeout ``G_req``
     * - TP1
-      - 65536/65536
-      - 98304/98304
+      - 65536
+      - 98304
     * - DP2
-      - 49152/98304
-      - 65536/131072
+      - 98304
+      - 131072
     * - DP4
-      - 32768/131072
-      - 49152/196608
+      - 131072
+      - 196608
     * - TP2
-      - 49152/49152
-      - 65536/65536
+      - 49152
+      - 65536
     * - PP2
-      - 65536/65536
-      - 98304/98304 (runtime timeout, no CUDA OOM)
+      - 65536
+      - 98304 (runtime timeout, no CUDA OOM)
     * - PP4
-      - 49152/49152
-      - 65536/65536 (runtime timeout, no CUDA OOM)
+      - 49152
+      - 65536 (runtime timeout, no CUDA OOM)
     * - DP2 x TP2
-      - 32768/65536
-      - 49152/98304
+      - 65536
+      - 98304
+
+Cross-backend correctness
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Correctness acceptance covered SpikeLM TP2 x PP2 checkpoint evaluation and
 generation, CP2 x TP2 evaluation, and exact token equality between MCore and
 SGLang TP1/TP2/DP2 x TP2 for Qwen2 and SpikeLM. Qwen2 SGLang PP2/PP4 and
-SpikeLM SGLang PP2 also match their TP1 baselines token for token. Complete
-medians, ranges, memory,
+SpikeLM SGLang PP2 also match their TP1 baselines token for token. This is the
+tutorial's only cross-MCore/SGLang comparison; performance claims remain within
+one workload/backend. Complete medians, ranges, memory,
 and failed statuses are available in the
-:download:`throughput-memory CSV <../../_static/tutorials/distributed/distributed-inference-tradeoff.csv>`.
-Regenerate all inference plots directly from the summary:
+:download:`inference-results CSV <../../_static/tutorials/distributed/distributed-inference-tradeoff.csv>`.
+CSV ``workload`` and ``backend`` fields are interpretation boundaries and must
+not be crossed when computing speedups. Regenerate all inference plots directly
+from the summary:
 
 .. code-block:: bash
 

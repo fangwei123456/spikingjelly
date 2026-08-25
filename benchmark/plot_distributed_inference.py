@@ -430,30 +430,6 @@ def _load_mcore(results: Path) -> list[dict]:
     return rows
 
 
-def _pareto_frontier(
-    points: list[dict], memory_resolution_gib: float = 0.05
-) -> list[dict]:
-    memory_bins = {}
-    for point in points:
-        memory_bin = round(point["peak_memory_gib_median"] / memory_resolution_gib)
-        current = memory_bins.get(memory_bin)
-        if current is None or point["throughput_median"] > current["throughput_median"]:
-            memory_bins[memory_bin] = point
-    frontier = []
-    best_throughput = -1.0
-    for point in sorted(
-        memory_bins.values(),
-        key=lambda row: (
-            row["peak_memory_gib_median"],
-            -row["throughput_median"],
-        ),
-    ):
-        if point["throughput_median"] > best_throughput:
-            frontier.append(point)
-            best_throughput = point["throughput_median"]
-    return frontier
-
-
 def _error(points: list[dict]) -> tuple[list[float], list[float]]:
     return (
         [point["throughput_median"] - point["throughput_min"] for point in points],
@@ -544,18 +520,10 @@ def _plot_vision(rows: list[dict], output: Path) -> None:
             plt.close(figure)
 
 
-def _plot_llm(
-    rows: list[dict],
-    output: Path,
-    topology_order: tuple[str, ...],
-    title: str,
-    x_label: str,
-    y_label: str,
-    filename: str,
-    pareto: bool = True,
-) -> None:
+def _plot_sglang(rows: list[dict], output: Path) -> None:
     import matplotlib.pyplot as plt
     import scienceplots  # noqa: F401
+    from matplotlib.ticker import FuncFormatter, LogLocator
 
     markers = ("o", "s", "^", "D", "P", "X", "v")
     linestyles = (
@@ -571,20 +539,98 @@ def _plot_llm(
         plt.style.context(["science", "no-latex", "bright"]),
         plt.rc_context(PLOT_RC),
     ):
-        figure, axis = plt.subplots(figsize=(6.1, 3.6))
-        for index, topology in enumerate(topology_order):
-            measured = [
-                row
-                for row in rows
-                if row["topology"] == topology and row["status"] == "completed"
-            ]
-            if not measured:
-                continue
-            points = (
-                _pareto_frontier(measured)
-                if pareto
-                else sorted(measured, key=lambda row: row["peak_memory_gib_median"])
+        figure, (throughput_axis, memory_axis) = plt.subplots(
+            1, 2, figsize=(9.2, 3.6), sharex=True
+        )
+        handles = []
+        labels = []
+        for index, topology in enumerate(
+            ("tp1", "dp2", "dp4", "tp2", "pp2", "pp4", "dp2tp2")
+        ):
+            points = sorted(
+                (
+                    row
+                    for row in rows
+                    if row["topology"] == topology and row["status"] == "completed"
+                ),
+                key=lambda row: row["global_batch_size"],
             )
+            if not points:
+                continue
+            color = f"C{index}"
+            label = (
+                f"{TOPOLOGY_LABELS[topology]} · max $G_{{req}}$="
+                f"{points[-1]['global_batch_size']}"
+            )
+            lines = throughput_axis.errorbar(
+                [point["global_batch_size"] for point in points],
+                [point["throughput_median"] for point in points],
+                yerr=_error(points),
+                marker=markers[index],
+                linestyle=linestyles[index],
+                capsize=2,
+                color=color,
+            )
+            memory_axis.plot(
+                [point["global_batch_size"] for point in points],
+                [point["peak_memory_gib_median"] for point in points],
+                marker=markers[index],
+                linestyle=linestyles[index],
+                color=color,
+            )
+            handles.append(lines.lines[0])
+            labels.append(label)
+        for axis in (throughput_axis, memory_axis):
+            axis.set_xscale("log", base=2)
+            axis.xaxis.set_major_locator(LogLocator(base=2))
+            axis.xaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:g}"))
+            axis.spines[["top", "right"]].set_visible(False)
+            axis.tick_params(axis="both", which="both", top=False, right=False)
+            axis.grid(color="0.88", linewidth=0.6, linestyle="--")
+        throughput_axis.set_ylim(bottom=0)
+        throughput_axis.set_ylabel("Aggregate generation throughput (tokens/s)")
+        memory_axis.set_ylabel("Device memory used / GPU (GiB, NVML)")
+        figure.suptitle(
+            "Qwen2.5-0.5B QCFS · SGLang offline request scaling",
+            x=0.08,
+            ha="left",
+            fontweight="bold",
+        )
+        figure.supxlabel("Submitted requests $G_{req}$")
+        figure.legend(
+            handles,
+            labels,
+            loc="center left",
+            bbox_to_anchor=(0.82, 0.5),
+            frameon=False,
+        )
+        figure.tight_layout(rect=(0, 0, 0.82, 0.94))
+        figure.savefig(output / "sglang-inference.png", dpi=300, bbox_inches="tight")
+        plt.close(figure)
+
+
+def _plot_mcore(rows: list[dict], output: Path) -> None:
+    import matplotlib.pyplot as plt
+    import scienceplots  # noqa: F401
+
+    markers = ("o", "s", "^", "D", "P")
+    linestyles = ("-", "--", "-.", ":", (0, (3, 1, 1, 1)))
+    with (
+        plt.style.context(["science", "no-latex", "bright"]),
+        plt.rc_context(PLOT_RC),
+    ):
+        figure, axis = plt.subplots(figsize=(6.1, 3.6))
+        for index, topology in enumerate(("tp1", "dp4", "tp2", "pp2", "pp4")):
+            points = sorted(
+                (
+                    row
+                    for row in rows
+                    if row["topology"] == topology and row["status"] == "completed"
+                ),
+                key=lambda row: row["peak_memory_gib_median"],
+            )
+            if not points:
+                continue
             color = f"C{index}"
             axis.errorbar(
                 [point["peak_memory_gib_median"] for point in points],
@@ -596,19 +642,23 @@ def _plot_llm(
                 color=color,
                 label=(
                     f"{TOPOLOGY_LABELS[topology]} · max G="
-                    f"{max(point['global_batch_size'] for point in measured)}"
+                    f"{max(point['global_batch_size'] for point in points)}"
                 ),
             )
-        axis.set_title(title, loc="left", fontweight="bold")
-        axis.set_xlabel(x_label)
-        axis.set_ylabel(y_label)
+        axis.set_title(
+            "Qwen2.5-0.5B QCFS · MCore evaluation batch sweep",
+            loc="left",
+            fontweight="bold",
+        )
+        axis.set_xlabel("Peak allocated memory / GPU (GiB)")
+        axis.set_ylabel("Aggregate evaluation throughput (tokens/s)")
         axis.set_ylim(bottom=0)
         axis.spines[["top", "right"]].set_visible(False)
         axis.tick_params(axis="both", which="both", top=False, right=False)
         axis.grid(color="0.88", linewidth=0.6, linestyle="--")
         axis.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), frameon=False)
         figure.tight_layout()
-        figure.savefig(output / filename, dpi=300, bbox_inches="tight")
+        figure.savefig(output / "mcore-inference.png", dpi=300, bbox_inches="tight")
         plt.close(figure)
 
 
@@ -649,25 +699,8 @@ def main() -> None:
             writer.writeheader()
             writer.writerows(rows)
     _plot_vision(vision_rows, args.output)
-    _plot_llm(
-        sglang_rows,
-        args.output,
-        ("tp1", "dp2", "dp4", "tp2", "pp2", "pp4", "dp2tp2"),
-        "Qwen2.5-0.5B QCFS · SGLang frontier · matched PP grid + capacity tail",
-        "Device memory used / GPU (GiB, NVML)",
-        "Aggregate generation throughput (tokens/s)",
-        "sglang-inference.png",
-    )
-    _plot_llm(
-        mcore_rows,
-        args.output,
-        ("tp1", "dp4", "tp2", "pp2", "pp4"),
-        "Qwen2.5-0.5B QCFS · MCore evaluation batch sweep",
-        "Peak allocated memory / GPU (GiB)",
-        "Aggregate evaluation throughput (tokens/s)",
-        "mcore-inference.png",
-        pareto=False,
-    )
+    _plot_sglang(sglang_rows, args.output)
+    _plot_mcore(mcore_rows, args.output)
 
 
 if __name__ == "__main__":

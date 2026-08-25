@@ -10,7 +10,6 @@ from torch.utils.data import Dataset
 
 from benchmark.plot_distributed_inference import (
     _load_sglang,
-    _pareto_frontier,
     _vision_topology,
 )
 from benchmark.snn_llm.spikelm import SpikeLMConfig
@@ -37,18 +36,6 @@ def test_inference_temporal_logit_reduction():
     )
     with pytest.raises(ValueError, match="reduction"):
         _reduce_time_batch(logits, 2, "max")
-
-
-def test_inference_plot_uses_pareto_frontier():
-    points = [
-        {"peak_memory_gib_median": 2.0, "throughput_median": 20.0},
-        {"peak_memory_gib_median": 2.0, "throughput_median": 30.0},
-        {"peak_memory_gib_median": 2.01, "throughput_median": 25.0},
-        {"peak_memory_gib_median": 3.0, "throughput_median": 25.0},
-        {"peak_memory_gib_median": 4.0, "throughput_median": 40.0},
-    ]
-
-    assert _pareto_frontier(points) == [points[1], points[4]]
 
 
 @pytest.mark.parametrize("batch_size", [16, 64, 96, 512, 2048])

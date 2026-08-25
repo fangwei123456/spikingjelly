@@ -179,18 +179,24 @@ config、optimizer 和 dataset 配置位于 ``benchmark/snn_llm/cli.py``，可�
       - ``evaluate_classification``
       - MCore ``evaluate``
       - 聚合 loss、accuracy/perplexity 和性能指标
-    * - 训练后 prediction/generation
+    * - 训练后 direct prediction/generation
       - 不需要
       - ``predict_classification``
-      - MCore ``generate`` 或 SGLang ``generate_sglang``
+      - MCore ``generate``
       - 逐样本 logits 或生成 token；不返回评测指标
+    * - 训练后 scheduler-backed offline generation
+      - 不需要
+      - —
+      - SGLang ``generate_sglang``
+      - 按请求生成 token；不返回评测指标
 
 ``evaluate_classification`` 要求 dataset 的每个元素都是 ``(image, target)``；
 ``llm.evaluate`` 同样要求 ``input_ids``、``labels`` 和可选 ``loss_mask``。
 相反，prediction/generation 不读取 ground truth：Vision 即使收到
 ``(image, target)`` 也会忽略 target，LLM generation 只接收 prompt。
-这三类均属于训练或离线工作流；SGLang 路径不包含 HTTP server、router 或其他
-在线 serving 控制面。
+这四类均属于训练或离线工作流。SGLang ``Engine`` 包含管理 request/KV pool 的
+内部执行 scheduler，但 SpikingJelly 路径不包含 HTTP server、router 或其他在线
+serving 控制面。
 
 Vision
 ^^^^^^
@@ -222,13 +228,32 @@ LLM
 
 LLM 提供两个目的不同的 backend：
 
-* MCore 与训练使用相同 model provider 和 sharded checkpoint。
+* MCore 与训练使用相同 model provider 和 sharded checkpoint，适合 validation、
+  loss/perplexity evaluation 和具有直接 tensor-batch 语义的同步 generation。
   ``llm.evaluate(EvaluationConfig(...))`` 支持 DP/TP/PP/CP 的完整 loss/perplexity
   评测；``llm.generate(MCoreGenerationConfig(...), input_ids)`` 支持 DP prompt
   切分、TP/PP 和 static KV-cache decode。MCore cached generation 要求 CP=1。
-* SGLang 用于训练完成后的高吞吐离线生成。它使用独立 Python 环境，
+* SGLang 用于训练完成后的 scheduler-backed 高吞吐离线生成。它使用独立 Python 环境，
   通过 ``config.json`` 和 safetensors artifact 与 MCore 交接；不启动 HTTP
   server 或 router。
+
+.. list-table:: LLM 推理 backend 选择
+    :header-rows: 1
+
+    * - 需求
+      - 后端
+    * - validation、loss/perplexity、训练 checkpoint 直接恢复
+      - MCore
+    * - 可解释的 local/global batch、pipeline microbatch 和 CUDA OOM
+      - MCore
+    * - 大规模 prompt corpus、continuous batching 和 KV-cache 调度
+      - SGLang
+    * - HTTP/router、多租户或 SLA serving
+      - 本轮不支持
+
+MCore evaluation 与 SGLang generation 回答不同问题。共享模型和硬件并不使它们的
+throughput、batch size、显存或 OOM 边界可以横向比较；跨后端只验收 artifact 与
+生成 token 的正确性。
 
 SGLang 0.5.17 固定自己的 PyTorch/Transformers 运行栈，不应与主训练
 环境强行合并：
@@ -789,12 +814,18 @@ checkpoint 也已验证从 step 1 恢复到 step 2。
 分布式推理基准
 ----------------
 
+共同实验环境
+~~~~~~~~~~~~
+
 推理基准使用与训练相同的单机 4 × RTX 4090 24 GiB 环境。``nvidia-smi topo -m``
 显示 GPU0 到其余 GPU 为跨 NUMA 的 ``SYS``，GPU1--3 之间为 ``NODE``，没有
 ``NV#`` 链路；``nvidia-smi topo -p2p r/w`` 对所有跨卡组合均返回 ``CNS``。
 因此本机既没有 NVLink，也没有可用的 CUDA P2P read/write，NCCL 跨卡通信经过
-PCIe/CPU interconnect。软件栈与训练相同：PyTorch 2.8.0、Megatron Core 0.18.2
-和 Triton 3.4.0。
+PCIe/CPU interconnect。Vision/MCore 软件栈与训练相同：PyTorch 2.8.0、Megatron
+Core 0.18.2 和 Triton 3.4.0；SGLang 使用前文所述的独立环境。
+
+Vision evaluation
+~~~~~~~~~~~~~~~~~
 
 Vision 使用 BF16、``T=4``、1000 类和缓存的 224 × 224 合成图像。SEW-ResNet34
 各非 PP 曲线的 per-rank batch grid 为
@@ -806,15 +837,14 @@ Spikformer-S 使用同一 grid 到 ``1536``。每个成功吞吐点从新进程�
 预热 5 个 batch、测量 10 个 batch，并独立重复三次。计时包含 H2D、forward、通信和指标归约，不包含 DataLoader、
 模型/artifact 加载和初始化。图中连接同一 protocol 下所有三次完成点，并显示三次
 中位数与完整范围；不做 Pareto 抽点或人工平滑。
-本节统一用 ``L`` 表示每个 DP rank/replica 的本地 batch，用 ``G`` 表示整个作业的
-global batch；始终有 ``G = L × DP``，TP、PP、CP 和 SNN 时间步 ``T`` 均不乘入
-``G``。PP 另用 ``K`` 表示 pipeline microbatch 数，每块大小为 ``L / K``。所有图
-端点只标 global batch ``G``。
+Vision 与 MCore 小节用 ``L`` 表示每个 DP rank/replica 的本地 batch，用 ``G``
+表示整个作业的 global batch；始终有 ``G = L × DP``，TP、PP、CP 和 SNN 时间步
+``T`` 均不乘入 ``G``。PP 另用 ``K`` 表示 pipeline microbatch 数，每块大小为
+``L / K``。Vision 图端点只标 global batch ``G``。
 
 所有容量搜索使用相同的增长规则：从最大成功点 ``x`` 测 ``2x``；若 ``2x``
 失败，再测 ``1.5x``；若 ``1.5x`` 成功，就以它为新的 ``x`` 重复上述过程。
-非流式拓扑一直搜索到 CUDA OOM；流式 PP 或请求排队拓扑若峰值显存不再随 G
-增长，则搜索到每个候选独享完整 timeout 后仍无法完成的 runtime boundary。
+Vision 的所有拓扑均搜索到 CUDA OOM。
 
 推理 PP 使用专门的 forward-only streaming schedule，而不是训练所需的
 ``ScheduleGPipe`` backward 状态机。每个高层 batch 返回前同步 pipeline group，避免
@@ -827,9 +857,8 @@ global batch；始终有 ``G = L × DP``，TP、PP、CP 和 SNN 时间步 ``T`` 
 在用户调用中自动改写这个参数。汇总 CSV 分别记录 ``per_rank_batch_size``、
 ``global_batch_size``、``pipeline_microbatches`` 和
 ``pipeline_microbatch_size``。
-SGLang 自身调度器不暴露 pipeline microbatch 参数，其图仍按 0.05 GiB 横轴分辨率
-绘制 Pareto 前沿；Vision 和 MCore 则连接统一 protocol 下直到 OOM 的全部成功
-batch sweep 点。CSV 对三者都保留未量化的精确显存和全部测量点。
+Vision 图连接统一 protocol 下直到 OOM 的全部成功 batch sweep 点；CSV 还保留
+失败候选的状态。
 
 .. figure:: ../../_static/tutorials/distributed/sew-resnet34-inference-tradeoff.png
     :width: 720px
@@ -905,6 +934,9 @@ PP 分别达到单卡的 1.56 倍和 2.11 倍。固定 K 后 PP 吞吐在中等 
 Vision 正确性测试还覆盖 FSDP2、PP2，以及 TP2 × PP2 训练 checkpoint 导出后在
 TP1 × DP4 上恢复；后者的 validation loss 为 2.310132205 和 2.310132384。
 
+MCore loss/perplexity evaluation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 MCore loss/perplexity 评测使用 Qwen2.5-0.5B QCFS、BF16、``T=2`` 和序列长度16。
 TP1/DP4 的基线段使用固定 128-sample 数据集；新测的 TP2/PP2/PP4 点令数据集
 样本数等于 G，避免 padding 污染吞吐。拓扑为 TP1、DP4、TP2、
@@ -969,84 +1001,83 @@ L=4096 明确 CUDA OOM。
       - 3072/3072
       - 单次 debug probe 通过但正式运行 timeout；4096 CUDA OOM
 
+SGLang scheduler-backed offline generation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 LLM 生成使用 Qwen2.5-0.5B QCFS、BF16、``T=2``、8-token prompt 和 8-token
-输出。SGLang 比较 TP1、DP2、DP4、TP2、PP2、PP4 和 DP2 × TP2；prompt
-global batch ``G`` 从 16 开始按 ``2x/1.5x`` 规则增长。常规 grid 在同一拓扑的
-一个 Engine 内顺序运行；容量边界的每个 ``2x/1.5x`` 候选独占一次 Engine 生命周期
-和 360 秒预算。常规点先用相同 G 预热三次，再测量三次；三次 max/min 超过 1.3
-的 scheduler 波动点标为 ``unstable``。TP1 的前沿细网格，以及 PP2/PP4 的正式
-sweep 均预热三次、再计时七次，以七次中位数抵抗周期性 scheduler 慢样本，并保留
-完整 min/max 误差条。PP2/PP4 都严格使用 MCore PP 的 13 点 global-batch grid：
-``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048``；
-随后继续按 ``2x/1.5x`` 扩展容量尾部，因此最终 grid 是 MCore grid 的严格超集。
-计时不包括 Engine 启动，且关闭 Radix cache。SGLang worker 不公开 PyTorch allocator
-peak，因此横轴使用同步生成后的最繁忙 GPU NVML device-memory used；它包含
-所有拓扑都使用相同的 ``memory_fraction_static=0.5``。横轴包含初始化时预留的
-静态 KV pool，因此 PP2/PP4 即使在 G=16 也约占 12.7 GiB；这不是 batch 激活显存，
-也不能与 MCore 的 ``cuda_peak_allocated`` 横轴数值比较。静态 KV pool 和 MiB
-粒度的 NVML 读数可能让不同 G
-得到相同横坐标；CSV 保留所有测量，连线只连接吞吐—显存 Pareto 前沿。同显存点
-仅保留最高吞吐进入连线，因此不会产生竖直线段或无图例说明的游离散点。
+输出。SGLang 比较 TP1、DP2、DP4、TP2、PP2、PP4 和 DP2 × TP2。本小节用
+``G_req`` 表示一次提交给 Engine 的总请求数；它不是 GPU 同时执行的 batch。
+``G_req`` 从 16 开始按 ``2x/1.5x`` 规则增长。常规 grid 在同一拓扑的一个 Engine
+内顺序运行；容量候选独占一次 Engine 生命周期和 360 秒预算。
+
+常规点先用相同 ``G_req`` 预热三次，再测量三次；三次 max/min 超过 1.3 的点标为
+``unstable``。TP1 细网格和 PP2/PP4 正式 sweep 预热三次、再计时七次，以中位数
+抵抗周期性 scheduler 慢样本，并保留完整 min/max 误差条。所有拓扑都使用
+``memory_fraction_static=0.5``，关闭 Radix cache，且计时不含 Engine 启动。
+
+图左侧按 ``G_req`` 连接所有 completed 点，展示 aggregate generation throughput；
+右侧展示最繁忙 GPU 的 NVML device-memory used。NVML 包含 Engine 初始化时预留的
+静态 KV pool，因此约 12.7 GiB 的起点不是 batch activation memory。该指标只用于
+解释 SGLang 内部的请求规模与静态池平台。
 
 .. figure:: ../../_static/tutorials/distributed/sglang-inference.png
     :width: 720px
     :alt: Qwen2.5-0.5B QCFS 在 SGLang 上的离线生成吞吐
 
-    SGLang 离线生成的吞吐—显存 Pareto 前沿；PP2/PP4 使用 MCore G grid 加容量尾部。
+    SGLang scheduler-native 离线生成：吞吐与 NVML 显存随 submitted requests ``G_req`` 的变化。
 
-TP1、DP2、DP4、TP2、PP2、PP4 和 DP2 × TP2 的最佳前沿点分别达到
+TP1、DP2、DP4、TP2、PP2、PP4 和 DP2 × TP2 的最佳吞吐点分别达到
 15758.7、18636.8、25743.8、9097.7、12707.9、10117.7 和 14355.1
-generated tokens/s，对应 G 为 2048、16384、32768、8192、1536、2048 和
-32768；不能把它们误读为每卡 batch。PP2/PP4 的 MCore-matched 基础段分别覆盖
-12.71--14.53/12.70--13.74 GiB；容量尾部继续到 G=65536/49152，显存平台为
-19.98/15.93 GiB。较大 G 并不表示同等规模的 GPU 并发 batch。
+generated tokens/s，对应的 ``G_req`` 分别为 2048、16384、32768、8192、1536、2048 和
+32768；它们都是 submitted requests，不是每卡 batch。随着 ``G_req`` 增长，各曲线
+先提高吞吐，随后进入平台；右图同时显示静态 KV pool 与在途请求显存趋于稳定。
 
-TP1 前沿最右两个点来自独立 Engine grid 的 G=2176 和 G=2048，中位吞吐为
-15522.8 和 15758.7 tokens/s；七次完整范围分别为 9339.4--15976.3 和
-8666.4--16176.7，统计上高度重叠。它们接近同一纵坐标表示 scheduler 已饱和；
-横坐标差异来自独立 Engine 生命周期的 NVML allocator 占用，且前沿按显存而非 G 排序。
-SGLang 会限制在途 token 并排队请求，因此这里没有用户 batch 对应的传统 OOM 点；
-PP2 在 G=98304、PP4 在 G=65536 首先达到独立 Engine runtime timeout，但均未
-发生 CUDA OOM。MCore 的 K=4 评测会同时 materialize ``L/4`` 大小的计算块，激活
-显存随 L 增长并最终 OOM；SGLang 的 G 主要是提交给 scheduler 的请求数，超过在途
-token/KV 预算后留在主机队列，所以可以远大于 MCore L。0.5B 模型在中小请求 batch 下以 TP1
+SGLang 会限制在途 token 并排队请求，因此没有传统的用户 batch OOM 点。PP2 在
+``G_req=98304``、PP4 在 ``G_req=65536`` 首先达到独立 Engine runtime timeout，
+但均未发生 CUDA OOM。超过在途 token/KV 预算的请求留在主机队列，所以
+``G_req`` 可以继续增大而 GPU 显存保持平台。0.5B 模型在中小请求规模下以 TP1
 最快；请求队列足够大时，纯 DP2/DP4 分别达到 TP1 最佳吞吐的 1.18/1.63 倍。
 PP2/PP4 因 overlap schedule 被关闭且跨 stage 经过 PCIe，低于 TP1。
 
-.. list-table:: SGLang 容量尾部（最大完成点 → 首个独立 timeout）
+.. list-table:: SGLang 请求容量尾部（最大完成点 → 首个独立 timeout）
     :header-rows: 1
 
     * - 拓扑
-      - 最大完成 ``L/G``
-      - 首个 timeout ``L/G``
+      - 最大完成 ``G_req``
+      - 首个 timeout ``G_req``
     * - TP1
-      - 65536/65536
-      - 98304/98304
+      - 65536
+      - 98304
     * - DP2
-      - 49152/98304
-      - 65536/131072
+      - 98304
+      - 131072
     * - DP4
-      - 32768/131072
-      - 49152/196608
+      - 131072
+      - 196608
     * - TP2
-      - 49152/49152
-      - 65536/65536
+      - 49152
+      - 65536
     * - PP2
-      - 65536/65536
-      - 98304/98304（runtime timeout，无 CUDA OOM）
+      - 65536
+      - 98304（runtime timeout，无 CUDA OOM）
     * - PP4
-      - 49152/49152
-      - 65536/65536（runtime timeout，无 CUDA OOM）
+      - 49152
+      - 65536（runtime timeout，无 CUDA OOM）
     * - DP2 × TP2
-      - 32768/65536
-      - 49152/98304
+      - 65536
+      - 98304
+
+跨后端 correctness
+~~~~~~~~~~~~~~~~~~
 
 正确性验收包括 SpikeLM 的 TP2 × PP2 checkpoint 评测和生成、CP2 × TP2 评测，
 以及 Qwen2/SpikeLM 在 MCore 与 SGLang TP1/TP2/DP2 × TP2 之间逐 token 相等；
 Qwen2 的 SGLang PP2/PP4 和 SpikeLM 的 SGLang PP2 也与各自 TP1 基线逐 token 相等。
+这是教程中唯一的跨 MCore/SGLang 比较；性能结论只在各自 workload/backend 内成立。
 完整中位数、运行范围、显存和失败状态见
-:download:`吞吐—显存 CSV <../../_static/tutorials/distributed/distributed-inference-tradeoff.csv>`；
-图可直接从汇总 CSV 重新生成：
+:download:`推理结果 CSV <../../_static/tutorials/distributed/distributed-inference-tradeoff.csv>`；
+CSV 的 ``workload`` 与 ``backend`` 是解释边界，不能跨组计算 speedup。图可直接从
+汇总 CSV 重新生成：
 
 .. code-block:: bash
 
