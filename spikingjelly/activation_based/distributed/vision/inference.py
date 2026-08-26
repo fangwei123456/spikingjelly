@@ -38,11 +38,6 @@ def _import_object(path: str) -> Any:
     return getattr(importlib.import_module(module_name), name)
 
 
-def _load_training_config(checkpoint: Path) -> TrainingConfig:
-    data = json.loads((checkpoint / "config.json").read_text(encoding="utf-8"))
-    return TrainingConfig.from_dict(data)
-
-
 def _load_checkpoint_model(
     checkpoint: Path,
     model: torch.nn.Module,
@@ -117,7 +112,9 @@ def export_inference_artifact(checkpoint: Path, output: Path) -> None:
     if initialized_here:
         dist.init_process_group("nccl", device_id=device)
     try:
-        config = _load_training_config(checkpoint)
+        config = TrainingConfig.from_dict(
+            json.loads((checkpoint / "config.json").read_text(encoding="utf-8"))
+        )
         expected_world_size = (
             config.tensor_parallel_size * config.pipeline_parallel_size
         )

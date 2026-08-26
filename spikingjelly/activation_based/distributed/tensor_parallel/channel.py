@@ -273,9 +273,8 @@ class _ChannelShardBatchNorm(nn.Module, base.StepModule):
         self, source: nn.Module, process_group: Optional[ProcessGroup]
     ) -> None:
         super().__init__()
-        self.process_group = process_group
         rank = dist.get_rank(process_group) if process_group is not None else 0
-        self.world_size = (
+        world_size = (
             dist.get_world_size(process_group) if process_group is not None else 1
         )
         self.step_mode = getattr(source, "step_mode", "s")
@@ -285,8 +284,8 @@ class _ChannelShardBatchNorm(nn.Module, base.StepModule):
         self.track_running_stats = source.track_running_stats
         self.num_features = source.num_features
 
-        _require_even_shard(source.num_features, self.world_size, "num_features")
-        start, end = _shard_range(source.num_features, rank, self.world_size)
+        _require_even_shard(source.num_features, world_size, "num_features")
+        start, end = _shard_range(source.num_features, rank, world_size)
 
         if self.affine:
             self.register_parameter(
