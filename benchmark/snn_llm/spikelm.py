@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import functools
+import re
+from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
@@ -11,6 +14,8 @@ from spikingjelly.activation_based import base
 from spikingjelly.activation_based.distributed.llm import (
     ModelBuilder,
     ModelConfig,
+    SGLangExportStage,
+    export_sglang_artifact,
 )
 from spikingjelly.activation_based.distributed.llm.temporal import (
     pack_time_batch,
@@ -353,4 +358,159 @@ class SpikeLMBuilder(ModelBuilder):
         )
 
 
-__all__ = ["SpikeLMBuilder", "SpikeLMConfig", "forward_step", "model_provider"]
+def _source_layers(stage: SGLangExportStage) -> list[int]:
+    layers = sorted(
+        {
+            int(match.group(1))
+            for name in stage.tensor_names()
+            if (match := re.match(r"decoder\.layers\.(\d+)\.", name))
+        }
+    )
+    if len(layers) != stage.local_layer_count:
+        raise ValueError("MCore PP stage does not contain the expected layer count.")
+    return layers
+
+
+def _sglang_tensors(
+    config: SpikeLMConfig, stage: SGLangExportStage
+) -> Iterator[tuple[str, torch.Tensor]]:
+    embedding_weight = None
+    if stage.is_first or (stage.is_last and config.share_embeddings_and_output_weights):
+        embedding_weight = stage.merge_tensor(
+            "embedding.word_embeddings.weight", dim=0, pipeline_rank=0
+        )
+    if stage.is_first:
+        yield "model.embedding.weight", embedding_weight
+    for position, source_index in enumerate(_source_layers(stage)):
+        source = f"decoder.layers.{source_index}."
+        target = f"model.layers.{stage.layer_offset + position}."
+        mapping = {
+            "input_layernorm.weight": ("attn_norm.norm.weight", None),
+            "input_layernorm.bias": ("attn_norm.norm.bias", None),
+            "input_layernorm.spike.amplitude": ("attn_norm.amplitude", None),
+            "self_attention.linear_proj.weight": ("attn.proj.weight", 1),
+            "self_attention.linear_proj.bias": ("attn.proj.bias", None),
+            "pre_mlp_layernorm.weight": ("mlp_norm.norm.weight", None),
+            "pre_mlp_layernorm.bias": ("mlp_norm.norm.bias", None),
+            "pre_mlp_layernorm.spike.amplitude": ("mlp_norm.amplitude", None),
+            "mlp.linear_fc1.weight": ("mlp.fc1.weight", 0),
+            "mlp.linear_fc1.bias": ("mlp.fc1.bias", 0),
+            "mlp.linear_fc2.weight": ("mlp.fc2.weight", 1),
+            "mlp.linear_fc2.bias": ("mlp.fc2.bias", None),
+        }
+        for source_name, (target_name, dim) in mapping.items():
+            yield (
+                target + target_name,
+                stage.merge_tensor(source + source_name, dim=dim),
+            )
+        for suffix in ("weight", "bias"):
+            name = source + f"self_attention.linear_qkv.{suffix}"
+            value = stage.merge_tensor(name, dim=0)
+            heads = config.transformer.num_attention_heads
+            head_dim = value.shape[0] // (3 * heads)
+            grouped = value.reshape(heads, 3, head_dim, *value.shape[1:])
+            yield (
+                target + f"attn.qkv.{suffix}",
+                torch.cat(
+                    tuple(
+                        grouped[:, index].reshape(-1, *value.shape[1:])
+                        for index in range(3)
+                    )
+                ),
+            )
+    if stage.is_last:
+        yield (
+            "model.final_norm.weight",
+            stage.merge_tensor("decoder.final_layernorm.weight"),
+        )
+        yield (
+            "model.final_norm.bias",
+            stage.merge_tensor("decoder.final_layernorm.bias"),
+        )
+        yield (
+            "lm_head.weight",
+            embedding_weight
+            if config.share_embeddings_and_output_weights
+            else stage.merge_tensor("output_layer.weight", dim=0),
+        )
+
+
+def export_sglang(
+    config: SpikeLMConfig,
+    model_provider: "Callable[[bool, bool], MegatronModule]",
+    checkpoint: Path,
+    output: Path,
+    *,
+    tokenizer: Path | None = None,
+) -> None:
+    r"""Export a SpikeLM checkpoint with the generic distributed SGLang exporter.
+
+    **API Language** - 中文 | English
+
+    **中文：** 模型 recipe 负责 SpikeLM 权重映射和 artifact config；
+    :func:`export_sglang_artifact` 负责分布式生命周期和文件发布。
+
+    **English:** The model recipe owns SpikeLM weight mapping and artifact
+    configuration, while :func:`export_sglang_artifact` owns the distributed
+    lifecycle and artifact publication.
+
+    :param config: SpikeLM 模型配置。 / SpikeLM model configuration.
+    :type config: SpikeLMConfig
+    :param model_provider: MCore model provider。 / MCore model provider.
+    :type model_provider: Callable
+    :param checkpoint: MCore checkpoint 目录。 / MCore checkpoint directory.
+    :type checkpoint: pathlib.Path
+    :param output: 新 artifact 目录。 / New artifact directory.
+    :type output: pathlib.Path
+    :param tokenizer: 可选 tokenizer 目录。 / Optional tokenizer directory.
+    :type tokenizer: Optional[pathlib.Path]
+    :return: None.
+    :rtype: None
+    """
+    transformer = config.transformer
+    heads = transformer.num_attention_heads
+    artifact_config = {
+        "architectures": ["SpikingJellySpikeLMForCausalLM"],
+        "model_type": "gpt2",
+        "vocab_size": config.vocab_size,
+        "n_embd": transformer.hidden_size,
+        "n_layer": transformer.num_layers,
+        "n_head": heads * config.time_steps,
+        "n_inner": transformer.ffn_hidden_size,
+        "n_positions": config.max_sequence_length,
+        "hidden_size": transformer.hidden_size,
+        "num_hidden_layers": transformer.num_layers,
+        "num_attention_heads": heads * config.time_steps,
+        "num_key_value_heads": heads * config.time_steps,
+        "head_dim": transformer.hidden_size // heads,
+        "intermediate_size": transformer.ffn_hidden_size,
+        "max_position_embeddings": config.max_sequence_length,
+        "layer_norm_epsilon": transformer.layernorm_epsilon,
+        "rope_theta": 10000.0,
+        "tie_word_embeddings": config.share_embeddings_and_output_weights,
+        "torch_dtype": "bfloat16",
+        "bos_token_id": None,
+        "eos_token_id": None,
+        "snn_time_steps": config.time_steps,
+        "snn_num_attention_heads": heads,
+        "snn_spike_decay": config.spike_decay,
+        "snn_spike_amplitude": config.spike_amplitude,
+    }
+    export_sglang_artifact(
+        transformer,
+        model_provider,
+        checkpoint,
+        output,
+        artifact_config=artifact_config,
+        stage_tensors=functools.partial(_sglang_tensors, config),
+        tokenizer=tokenizer,
+    )
+
+
+__all__ = [
+    "SpikeLMBuilder",
+    "SpikeLMConfig",
+    "export_sglang",
+    "forward_step",
+    "model_provider",
+]

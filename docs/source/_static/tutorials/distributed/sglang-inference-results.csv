@@ -1,0 +1,7 @@
+model,tp,pp,dp,requests,input_tokens,output_tokens,shared_prefix_tokens,input_tokens_per_second_median,output_tokens_per_second_median,ttft_p99_ms_median,tpot_p99_ms_median,peak_memory_mib
+Qwen2.5-0.5B-QCFS,1,1,1,32,128,128,0,1399.421,1486.522,116.837,21.258,22652
+Qwen2.5-0.5B-QCFS,1,1,1,32,2176,128,2048,25606.827,1517.090,138.645,20.363,22652
+Qwen2.5-0.5B-QCFS,2,1,1,32,1024,128,0,7529.178,955.612,1093.287,33.140,22632
+Qwen2.5-0.5B-QCFS,1,2,1,32,128,128,0,1207.289,1282.432,75.231,24.853,22778
+Qwen2.5-0.5B-QCFS,1,1,4,128,128,128,0,5502.992,5845.502,109.475,21.197,22652
+SpikeLM-12.6B,1,4,1,1,4,1,0,20.337,5.084,196.570,0.000,10236

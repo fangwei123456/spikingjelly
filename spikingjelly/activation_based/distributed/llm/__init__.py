@@ -14,12 +14,13 @@ from .config import (
     MCoreGenerationConfig,
     ModelBuilder,
     ModelConfig,
-    SGLangGenerationConfig,
+    SGLangEngineConfig,
     TrainingConfig,
 )
 from .inference import evaluate, generate, generate_mcore, load_for_inference
 from .planning import plan_training
-from .sglang import create_sglang_engine, generate_sglang
+from .sglang import open_sglang_engine
+from .sglang_export import SGLangExportStage, export_sglang_artifact
 from .training import train
 
 __all__ = [
@@ -27,14 +28,15 @@ __all__ = [
     "MCoreGenerationConfig",
     "ModelBuilder",
     "ModelConfig",
-    "SGLangGenerationConfig",
+    "SGLangExportStage",
+    "SGLangEngineConfig",
     "TrainingConfig",
-    "create_sglang_engine",
     "evaluate",
+    "export_sglang_artifact",
     "generate",
     "generate_mcore",
-    "generate_sglang",
     "load_for_inference",
+    "open_sglang_engine",
     "plan_training",
     "train",
 ]

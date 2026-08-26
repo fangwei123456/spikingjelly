@@ -64,9 +64,10 @@ pipeline parallelism. ``vision.TrainingConfig`` describes the job and
     from pathlib import Path
 
     from spikingjelly.activation_based.distributed import vision
+    from spikingjelly.activation_based.model.sew_resnet import SEWResNet34Config
 
     config = vision.TrainingConfig(
-        model=vision.SEWResNet34Config(
+        model=SEWResNet34Config(
             time_steps=4, num_classes=1000, step_mode="m"
         ),
         dataset_builder=(
@@ -88,8 +89,10 @@ pipeline parallelism. ``vision.TrainingConfig`` describes the job and
 ``batch_size`` is the batch size on each DP rank. The global batch is
 ``batch_size * DP`` and does not include TP, PP, or SNN time steps.
 ``tensor_parallel_size`` and ``pipeline_parallel_size`` select TP and PP; the
-remaining ranks become DP replicas. The built-in models are
-``SEWResNet34Config``, ``SpikformerConfig``, and ``SpikformerCIFAR10Config``.
+remaining ranks become DP replicas. Model-owned distributed recipes are imported
+from ``model.sew_resnet`` and ``model.spikformer`` rather than
+``distributed.vision``. The included examples are ``SEWResNet34Config``,
+``SpikformerConfig``, and ``SpikformerCIFAR10Config``.
 The CIFAR-10 variant fixes the official 32×32 input, 4×4 patch stem, 384 channels,
 12 attention heads, and 4 transformer blocks while retaining the same TP, PP, and
 FSDP2 implementation. ``mixup_alpha`` enables serializable batch-level mixup;
@@ -217,7 +220,7 @@ are no duplicate ``validate`` and ``test`` functions.
     * - Post-training scheduler-backed offline generation
       - Not required
       - —
-      - SGLang (experimental) ``generate_sglang``
+      - SGLang ``open_sglang_engine``
       - Per-request generated tokens; no evaluation metrics
 
 ``evaluate_classification`` requires every dataset item to be
@@ -268,17 +271,10 @@ LLMs expose two backends with different roles:
   perplexity evaluation. ``llm.generate(MCoreGenerationConfig(...), input_ids)``
   adds DP prompt sharding to TP/PP static-KV-cache generation. MCore cached
   generation requires CP=1.
-* SGLang (experimental) handles scheduler-backed, high-throughput post-training
-  offline generation. It consumes a ``config.json`` plus safetensors artifact
-  from a separate Python environment and starts no HTTP server or router.
-
-.. warning::
-
-    The SGLang integration is experimental. Its API, artifact adapters, and
-    supported parallel topologies may change before stabilization. This tutorial
-    documents only the offline Engine interface and usage; it provides neither an
-    official performance benchmark nor serving. Benchmark TTFT and TPS on the
-    target workload.
+* SGLang handles scheduler-backed, high-throughput post-training offline
+  generation. :func:`open_sglang_engine` manages the native Engine lifecycle;
+  sampling, variable-length token IDs, asynchronous generation, and streaming
+  use the native Engine interface. It starts no HTTP server or router.
 
 .. list-table:: Choosing an LLM inference backend
     :header-rows: 1
@@ -306,21 +302,93 @@ the main training environment:
     source .venv-sglang/bin/activate
     uv pip install --editable ".[sglang]"
 
-The SpikeLM and Qwen2 export references live in
-``benchmark/snn_llm/inference.py`` and ``qwen_distributed_inference.py``; the
-SGLang model adapters live under ``benchmark/snn_llm/sglang_models``. The SGLang
-models retain hidden state as
-``[token, T, hidden]`` and fold T into the head dimension only at the
-RadixAttention/KV-cache seam. The scheduler still owns one semantic request.
+``llm.export_sglang_artifact`` owns distributed checkpoint loading, per-stage
+sharded writes, indexing, failure synchronization, and atomic publication. A
+model-owned ``stage_tensors`` callback supplies weight names and transformations,
+while ``artifact_config`` supplies the SGLang/Hugging Face configuration. Run
+export with ``torchrun`` using the checkpoint's TP x PP x CP topology; no GPU
+gathers the complete model, and the resulting artifact may use another TP/PP/DP
+topology at inference.
 
-SGLang DCP can remove only KV-head replicas already created by TP. For a
-SpikingJelly artifact, ``TP / effective_KV_heads`` must be at least the DCP
-size. The high-level interface rejects any smaller topology before starting
-the Engine rather than producing incorrect tokens.
-The SpikeLM and Qwen2 reference adapters use SGLang's native layer staging and
-``PPProxyTensors`` protocol. The Engine owns TP, PP, DP, and DCP configurations
-satisfying the constraint above. SGLang 0.5.17 automatically disables its
-overlap schedule when PP is greater than one.
+The repository's SpikeLM and Qwen2 recipes and external runtime models live in
+``benchmark/snn_llm`` and demonstrate this seam; they are not wheel-installed
+model support. Their adapters retain hidden state as ``[token, T, hidden]`` and
+fold T into the head dimension only at the RadixAttention/KV-cache seam. A custom
+model must provide both its export callback and an importable SGLang external
+model package.
+
+The first supported runtime covers single-node NVIDIA BF16 TP, PP, and DP.
+Prefill CP and DCP are not supported and are absent from ``SGLangEngineConfig``.
+CUDA Graph is also disabled: SGLang 0.5.17's graph capture requires attention
+metadata that the temporal adapters do not yet provide. The adapters use
+SGLang's native layer staging and ``PPProxyTensors`` protocol.
+
+.. code-block:: python
+
+    from pathlib import Path
+
+    from spikingjelly.activation_based.distributed import llm
+
+    def main():
+        config = llm.SGLangEngineConfig(
+            artifact=Path("artifacts/qwen2-snn"),
+            external_model_package="benchmark.snn_llm.sglang_models",
+            tensor_parallel_size=2,
+        )
+        with llm.open_sglang_engine(config) as engine:
+            outputs = engine.generate(
+                input_ids=[[1, 2, 3], [1, 2, 3, 4, 5]],
+                sampling_params={"temperature": 0, "max_new_tokens": 32},
+            )
+        print(outputs)
+
+    if __name__ == "__main__":
+        main()
+
+Use ``benchmark/snn_llm/sglang_benchmark.py`` for reproducible offline Engine
+measurements. It accepts variable token lengths and shared-prefix workloads and
+reports request/input/output throughput, median/p99 TTFT, TPOT, end-to-end
+latency, and peak per-GPU memory.
+
+The formal SGLang validation used one on-demand 4 x RTX 4090 host with no
+NVLink, PyTorch 2.11.0, CUDA 13.0, SGLang 0.5.17, BF16, Triton attention, and
+CUDA Graph disabled. Every performance point ran one warmup request followed by
+three repeats; the Engine flushes its Radix cache after warmup and before each
+measured repeat, and the figure reports their median. The Qwen artifact uses
+Qwen2.5-0.5B weights and deterministic unit QCFS scales, so these are system
+measurements rather than model-quality results.
+
+.. figure:: ../../_static/tutorials/distributed/sglang-inference.png
+    :width: 900px
+    :alt: SGLang Qwen2.5-0.5B scale-out and shared-prefix throughput and latency
+
+    Left: fixed-workload output throughput and p99 TPOT for TP1, PP2, and DP4.
+    Right: TP1 input/output throughput and p99 TTFT with and without a
+    2048-token shared prefix. Different right-panel prompt lengths are an
+    intentional Radix-cache workload comparison, not a topology comparison.
+
+DP4 reached 3.93 times TP1 output throughput while keeping TPOT effectively
+unchanged. TP2 and PP2 were slower than TP1 on this PCIe host; use model
+parallelism for capacity, then DP for throughput. The 12.6B SpikeLM export wrote
+564 tensors and 25,173,851,048 artifact bytes, then loaded and generated on PP4
+without any GPU holding the complete model.
+
+Qwen2 produced the same 32 greedy tokens as MCore for the fixed parity prompts.
+SpikeLM matched every first decode token; three of four PP2 prompts matched all
+eight tokens, while one diverged after the third generated token under different
+BF16 execution orders. Cross-backend free-running token identity is therefore
+not a contract for near-tied logits.
+
+The complete medians are available in :download:`the SGLang result CSV
+<../../_static/tutorials/distributed/sglang-inference-results.csv>`.
+
+Regenerate the figure directly from that CSV:
+
+.. code-block:: bash
+
+    python benchmark/plot_sglang_inference.py \
+        docs/source/_static/tutorials/distributed/sglang-inference-results.csv \
+        docs/source/_static/tutorials/distributed/sglang-inference.png
 
 Low-level APIs
 --------------
@@ -906,9 +974,10 @@ and Triton 3.4.0.
 Vision evaluation
 ~~~~~~~~~~~~~~~~~
 
-Vision used BF16, ``T=4``, 1000 classes, and cached all-zero 224 x 224 synthetic
-images. This input measures dense-execution throughput and memory only; its
-loss and accuracy are not model-quality metrics.
+The historical curves below used BF16, ``T=4``, 1000 classes, and a cached
+all-zero 224 x 224 synthetic image. Current benchmark runs must instead pass
+``--cifar10-data`` or ``--data`` for a fixed real-image subset; the seeded-random
+default is only a smoke workload. Do not mix historical and replacement points.
 The non-PP SEW-ResNet34 per-rank grid is
 ``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024``; Spikformer-S stops
 between 384 and 1024 according to OOM. PP4 fixes K=4. The SEW-ResNet34 L grid is

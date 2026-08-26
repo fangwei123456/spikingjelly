@@ -123,6 +123,25 @@ def _load_csv(path: Path) -> list[dict]:
     return rows
 
 
+def _classify_runs(runs):
+    completed = [metrics for status, metrics, _ in runs if status == 0]
+    status_codes = [status for status, _, _ in runs]
+    if len(completed) == 3:
+        status = "completed"
+    elif completed:
+        status = "unstable"
+    elif any(
+        "OutOfMemoryError" in text or "CUDA out of memory" in text
+        for _, _, text in runs
+    ):
+        status = "cuda_oom"
+    elif 124 in status_codes:
+        status = "timeout"
+    else:
+        status = "failed"
+    return status, completed, status_codes
+
+
 def _load_vision(results: Path) -> list[dict]:
     groups = defaultdict(list)
     for log in (results / "vision").glob("*.log"):
@@ -144,21 +163,7 @@ def _load_vision(results: Path) -> list[dict]:
 
     rows = []
     for (model, topology, batch_size), runs in sorted(groups.items()):
-        completed = [metrics for status, metrics, _ in runs if status == 0]
-        status_codes = [status for status, _, _ in runs]
-        if len(completed) == 3:
-            status = "completed"
-        elif completed:
-            status = "unstable"
-        elif any(
-            "OutOfMemoryError" in text or "CUDA out of memory" in text
-            for _, _, text in runs
-        ):
-            status = "cuda_oom"
-        elif 124 in status_codes:
-            status = "timeout"
-        else:
-            status = "failed"
+        status, completed, status_codes = _classify_runs(runs)
         data_parallel_size, tensor_size, pipeline_size, microbatches = _vision_topology(
             topology
         )
@@ -285,20 +290,7 @@ def _load_mcore(results: Path) -> list[dict]:
 
     rows = []
     for (topology, batch_size, pipeline_microbatches), runs in sorted(groups.items()):
-        completed = [metrics for exit_status, metrics, _ in runs if exit_status == 0]
-        if len(completed) == 3:
-            status = "completed"
-        elif completed:
-            status = "unstable"
-        elif any(
-            "OutOfMemoryError" in text or "CUDA out of memory" in text
-            for _, _, text in runs
-        ):
-            status = "cuda_oom"
-        elif any(exit_status == 124 for exit_status, _, _ in runs):
-            status = "timeout"
-        else:
-            status = "failed"
+        status, completed, _ = _classify_runs(runs)
         data_parallel_size = 4 if topology == "dp4" else 1
         tensor_parallel_size = 2 if topology == "tp2" else 1
         pipeline_parallel_size = {"pp2": 2, "pp4": 4}.get(topology, 1)

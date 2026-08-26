@@ -289,95 +289,68 @@ and shard the prompt batch over DP replicas. MCore cached generation requires
 
 
 @dataclass(frozen=True)
-class SGLangGenerationConfig:
+class SGLangEngineConfig:
     artifact: Path
-    max_new_tokens: int
+    external_model_package: str
     tensor_parallel_size: int = 1
     pipeline_parallel_size: int = 1
     data_parallel_size: int = 1
-    prefill_context_parallel_size: int = 1
-    decode_context_parallel_size: int = 1
     memory_fraction: float = 0.9
-    temperature: float = 0.0
-    top_p: float = 1.0
-    top_k: int = -1
     seed: int = 1234
     tokenizer: Optional[Path] = None
-    external_model_package: Optional[str] = None
 
     def __post_init__(self) -> None:
+        if (
+            not isinstance(self.external_model_package, str)
+            or not self.external_model_package.strip()
+        ):
+            raise ValueError("external_model_package must be non-empty.")
         for name in (
-            "max_new_tokens",
             "tensor_parallel_size",
             "pipeline_parallel_size",
             "data_parallel_size",
-            "prefill_context_parallel_size",
-            "decode_context_parallel_size",
         ):
             if getattr(self, name) <= 0:
                 raise ValueError(f"{name} must be positive.")
-        if self.tensor_parallel_size % self.prefill_context_parallel_size:
-            raise ValueError("prefill_context_parallel_size must divide TP size.")
-        if self.tensor_parallel_size % self.decode_context_parallel_size:
-            raise ValueError("decode_context_parallel_size must divide TP size.")
         if not 0.0 < self.memory_fraction < 1.0:
             raise ValueError("memory_fraction must lie in (0, 1).")
-        if self.temperature < 0.0 or not 0.0 < self.top_p <= 1.0:
-            raise ValueError("temperature and top_p are invalid.")
-        if self.top_k == 0 or self.top_k < -1:
-            raise ValueError("top_k must be -1 or positive.")
 
 
-SGLangGenerationConfig.__init__.__doc__ = r"""Configure experimental SGLang offline generation.
+SGLangEngineConfig.__init__.__doc__ = r"""Configure a managed SGLang offline Engine.
 
 **API Language** - 中文 | English
 
-**中文：** 此接口为实验性接口，其配置和支持的拓扑在稳定前可能调整。它在独立
-Python 环境中使用 SGLang offline ``Engine`` 加载已导出的 model artifact。
-DCP 与 prefill CP 在 TP group 内重用 rank，不额外增加 world size。
+**中文：** 在独立 Python 环境中使用 SGLang offline ``Engine`` 加载
+SpikingJelly artifact。首版支持单节点 NVIDIA BF16 TP/PP/DP，不支持 context
+parallel。采样、变长 token IDs、异步生成和 streaming 直接使用原生 Engine 接口。
 
-**English:** This API is experimental; its configuration and supported
-topologies may change before stabilization. In a separate Python environment,
-it loads an exported model artifact with SGLang's offline ``Engine``. DCP and
-prefill CP reuse ranks within each TP group and do not increase world size.
+**English:** Load a SpikingJelly artifact with SGLang's offline ``Engine`` in a
+separate Python environment. The first release supports single-node NVIDIA BF16
+TP/PP/DP and no context parallelism. Sampling, variable-length token IDs,
+asynchronous generation, and streaming use the native Engine interface.
 
 :param artifact: SGLang/Hugging Face 风格的模型目录。 / SGLang/Hugging Face
     style model directory.
 :type artifact: pathlib.Path
-:param max_new_tokens: 每个请求的最大生成 token 数。 / Maximum generated tokens
-    per request.
-:type max_new_tokens: int
+:param external_model_package: SGLang external model package 的显式导入路径。 /
+    Explicit import path of the SGLang external model package.
+:type external_model_package: str
 :param tensor_parallel_size: SGLang TP 大小。 / SGLang TP size.
 :type tensor_parallel_size: int
 :param pipeline_parallel_size: SGLang PP 大小。 / SGLang PP size.
 :type pipeline_parallel_size: int
 :param data_parallel_size: SGLang DP 大小。 / SGLang DP size.
 :type data_parallel_size: int
-:param prefill_context_parallel_size: TP 内的 prefill attention CP 大小。 /
-    Prefill attention CP size within TP.
-:type prefill_context_parallel_size: int
-:param decode_context_parallel_size: TP 内的 decode KV-cache CP 大小。 /
-    Decode KV-cache CP size within TP.
-:type decode_context_parallel_size: int
 :param memory_fraction: SGLang 预留的空闲 GPU 显存比例。 / Fraction of free GPU
     memory reserved by SGLang.
 :type memory_fraction: float
-:param temperature: 采样温度；``0`` 选择 greedy generation。 / Sampling
-    temperature; ``0`` selects greedy generation.
-:type temperature: float
-:param top_p: nucleus-sampling 概率。 / Nucleus-sampling probability.
-:type top_p: float
-:param top_k: top-k 限制；``-1`` 禁用。 / Top-k sampling limit; ``-1`` disables it.
-:type top_k: int
 :param seed: SGLang sampling seed。 / SGLang sampling seed.
 :type seed: int
 :param tokenizer: 可选 tokenizer 目录；``None`` 使用 token-in/token-out。 /
     Optional tokenizer directory; ``None`` uses token-in/token-out.
 :type tokenizer: Optional[pathlib.Path]
-:param external_model_package: 可选 SGLang external model package。 / Optional
-    SGLang external model package.
-:type external_model_package: Optional[str]
-:raises ValueError: 拓扑或采样参数无效。 / If a topology or sampling value is invalid.
+:raises ValueError: 外部包、拓扑或显存比例无效。 / If the external package,
+    topology, or memory fraction is invalid.
 """
 
 
@@ -568,6 +541,6 @@ __all__ = [
     "MCoreGenerationConfig",
     "ModelBuilder",
     "ModelConfig",
-    "SGLangGenerationConfig",
+    "SGLangEngineConfig",
     "TrainingConfig",
 ]

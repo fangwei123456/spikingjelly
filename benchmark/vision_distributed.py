@@ -9,6 +9,11 @@ import torch
 from torch.utils.data import Dataset, Subset
 
 from spikingjelly.activation_based.distributed import vision
+from spikingjelly.activation_based.model.sew_resnet import SEWResNet34Config
+from spikingjelly.activation_based.model.spikformer import (
+    SpikformerCIFAR10Config,
+    SpikformerConfig,
+)
 
 
 class _SyntheticImages(Dataset):
@@ -149,21 +154,21 @@ def main() -> None:
             raise ValueError("global batch size must be divisible by DP size.")
         batch_size = args.global_batch_size // dp_size
     if args.model == "spikformer-cifar10":
-        model = vision.SpikformerCIFAR10Config(
+        model = SpikformerCIFAR10Config(
             time_steps=args.time_steps,
             num_classes=classes,
             step_mode=args.step_mode,
             neuron_backend="triton",
         )
     elif args.model == "sew-resnet34":
-        model = vision.SEWResNet34Config(
+        model = SEWResNet34Config(
             time_steps=args.time_steps,
             num_classes=classes,
             step_mode=args.step_mode,
             image_size=args.image_size,
         )
     else:
-        model = vision.SpikformerConfig(
+        model = SpikformerConfig(
             time_steps=args.time_steps,
             num_classes=classes,
             step_mode=args.step_mode,

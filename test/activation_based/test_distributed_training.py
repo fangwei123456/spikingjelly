@@ -4,10 +4,10 @@ import torch
 from torch.utils.data import DataLoader, DistributedSampler, TensorDataset
 
 from benchmark.snn_llm.spikelm import SpikeLMConfig
+from spikingjelly.activation_based.distributed.llm.metrics import _loss_totals
 from spikingjelly.activation_based.distributed.llm.training import (
     _build_training_inputs,
     _iterator,
-    _loss_totals,
 )
 
 

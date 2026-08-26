@@ -1,3 +1,5 @@
+"""SGLang runtime model for the benchmark SpikeLM recipe."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable

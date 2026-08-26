@@ -6,7 +6,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import h5py
 import numpy as np
@@ -23,7 +23,7 @@ from .config import (
     PredictionConfig,
     TrainingConfig,
 )
-from .training import (
+from .execution import (
     _classification_logits,
     _classification_sequence,
     _forward_classification,
@@ -422,11 +422,17 @@ class _ForwardPipeline:
 
 
 def _run_classification(
-    config: PredictionConfig, output: Optional[Path]
+    config: PredictionConfig,
+    *,
+    mode: Literal["evaluate", "predict"],
+    output: Optional[Path] = None,
 ) -> Optional[dict[str, float]]:
+    evaluate = mode == "evaluate"
+    if evaluate != (output is None):
+        raise ValueError("evaluate mode cannot write output; predict mode requires it.")
     if not torch.cuda.is_available():
         raise RuntimeError("Distributed vision inference requires CUDA.")
-    if output is not None and output.exists():
+    if not evaluate and output.exists():
         raise FileExistsError(f"Prediction output already exists: {output}")
 
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
@@ -488,7 +494,10 @@ def _run_classification(
         if config.data_parallel == "fsdp2":
             model = _wrap_data_parallel(
                 model,
-                config=config,
+                data_parallel="fsdp2",
+                pipeline_parallel_size=config.pipeline_parallel_size,
+                step_mode=model_config.step_mode,
+                precision=config.precision,
                 device=device,
                 dp_size=data_parallel_size,
                 dp_group=data_group,
@@ -529,7 +538,7 @@ def _run_classification(
             data_parallel_size=data_parallel_size,
             data_parallel_rank=data_parallel_rank,
         )
-        if output is None:
+        if evaluate:
             loss_function = functools.partial(
                 _import_object(config.loss_function), **config.loss_kwargs
             )
@@ -540,7 +549,7 @@ def _run_classification(
         output_rank = (
             pipeline_rank == config.pipeline_parallel_size - 1 and tensor_rank == 0
         )
-        if output is not None and output_rank:
+        if not evaluate and output_rank:
             shard_path = output.with_name(f".{output.name}.rank-{rank:05d}.h5")
             if shard_path.exists():
                 raise FileExistsError(f"Prediction shard already exists: {shard_path}")
@@ -552,7 +561,7 @@ def _run_classification(
             images, targets, indices, valid, has_target = batch
             if schedule is None or pipeline_rank == 0:
                 images = images.to(device, non_blocking=True)
-            if output is None and output_rank:
+            if evaluate and output_rank:
                 targets = targets.to(device, non_blocking=True)
             with torch.autocast(
                 device_type="cuda",
@@ -588,7 +597,7 @@ def _run_classification(
             return logits, targets, indices, valid, has_target
 
         with torch.inference_mode():
-            if output is None and config.timing_warmup_batches:
+            if evaluate and config.timing_warmup_batches:
                 if config.timing_warmup_batches > len(loader):
                     raise ValueError(
                         "timing_warmup_batches cannot exceed evaluation batches."
@@ -598,17 +607,17 @@ def _run_classification(
                     forward_batch(next(warmup_iterator))
                 torch.cuda.synchronize(device)
 
-        if output is None:
+        if evaluate:
             torch.cuda.reset_peak_memory_stats(device)
         dist.barrier()
         elapsed_seconds = 0.0
         with torch.inference_mode():
             for batch in loader:
-                batch_started = time.perf_counter() if output is None else 0.0
+                batch_started = time.perf_counter() if evaluate else 0.0
                 logits, targets, indices, valid, has_target = forward_batch(batch)
                 if output_rank:
                     valid_device = valid.to(device=device, dtype=torch.bool)
-                    if output is None:
+                    if evaluate:
                         target_device = has_target.to(device=device, dtype=torch.bool)
                         selected = valid_device & target_device
                         if selected.any():
@@ -627,13 +636,13 @@ def _run_classification(
                             logits[selected_cpu.to(device)].detach().float().cpu(),
                         )
                 torch.cuda.synchronize(device)
-                if output is None:
+                if evaluate:
                     elapsed_seconds += time.perf_counter() - batch_started
         if prediction_shard is not None:
             prediction_shard.close()
             prediction_shard = None
 
-        if output is not None:
+        if not evaluate:
             dist.barrier()
             if rank == 0:
                 output_ranks = [
@@ -710,7 +719,7 @@ def evaluate_classification(config: EvaluationConfig) -> dict[str, float]:
     """
     if not isinstance(config, EvaluationConfig):
         raise TypeError("evaluate_classification requires EvaluationConfig.")
-    return _run_classification(config, None)
+    return _run_classification(config, mode="evaluate")
 
 
 def predict_classification(config: PredictionConfig, output: Path) -> None:
@@ -736,7 +745,7 @@ def predict_classification(config: PredictionConfig, output: Path) -> None:
     """
     if not isinstance(config, PredictionConfig) or isinstance(config, EvaluationConfig):
         raise TypeError("predict_classification requires PredictionConfig.")
-    _run_classification(config, Path(output))
+    _run_classification(config, mode="predict", output=Path(output))
 
 
 __all__ = [

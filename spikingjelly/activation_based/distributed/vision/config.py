@@ -40,10 +40,24 @@ def _decode(value: Any) -> Any:
 
     target_name = value["_target_"]
     config_types = _config_types()
+    if (
+        isinstance(target_name, str)
+        and target_name not in config_types
+        and target_name.startswith("spikingjelly.activation_based.distributed.vision.")
+    ):
+        target_name = "spikingjelly.activation_based.model." + target_name.removeprefix(
+            "spikingjelly.activation_based.distributed.vision."
+        )
+    if isinstance(target_name, str) and target_name not in config_types:
+        try:
+            importlib.import_module(target_name.rsplit(".", 1)[0])
+        except (ImportError, ValueError) as error:
+            raise ValueError(f"Unsupported config target {target_name!r}.") from error
+        config_types = _config_types()
     if not isinstance(target_name, str) or target_name not in config_types:
         raise ValueError(
-            f"Unsupported config target {target_name!r}; import its ModelConfig or "
-            "TrainingConfig class before loading."
+            f"Unsupported config target {target_name!r}; target must be a ModelConfig, "
+            "PredictionConfig, or TrainingConfig subclass."
         )
     target = config_types[target_name]
     kwargs = {key: _decode(item) for key, item in value.items() if key != "_target_"}
@@ -129,9 +143,9 @@ class ModelConfig:
     def from_dict(cls, data: dict[str, Any]) -> ModelConfig:
         r"""Restore a model configuration created by :meth:`as_dict`.
 
-        **中文：** 恢复具体 model config；自定义 config 类必须已导入。
-        **English:** Restore a concrete model configuration; custom configuration
-        classes must already be imported.
+        **中文：** 按 ``_target_`` 导入并恢复具体 model config。
+        **English:** Import and restore a concrete model configuration from its
+        ``_target_`` path.
 
         :param data: 已序列化配置。 / Serialized configuration.
         :type data: dict[str, Any]
@@ -182,9 +196,13 @@ class ModelBuilder(abc.ABC):
         )
 
     def _canonical_key_map(
-        self, pipeline_rank: int, pipeline_size: int
+        self,
+        pipeline_rank: int,
+        pipeline_size: int,
+        model: Optional[nn.Module] = None,
     ) -> dict[str, str]:
-        model = self._build_canonical_model()
+        if model is None:
+            model = self._build_canonical_model()
         full_names = {
             id(value): name for name, value in model.state_dict(keep_vars=True).items()
         }
@@ -275,9 +293,10 @@ class ModelBuilder(abc.ABC):
         :rtype: dict[str, torch.Tensor]
         :raises ValueError: A rank, key, or shard shape is inconsistent.
         """
-        reference = self._build_canonical_model().state_dict()
+        canonical = self._build_canonical_model()
+        reference = canonical.state_dict()
         key_maps = {
-            rank: self._canonical_key_map(rank, pipeline_size)
+            rank: self._canonical_key_map(rank, pipeline_size, canonical)
             for rank in range(pipeline_size)
         }
         by_name: dict[str, list[tuple[int, torch.Tensor]]] = {}
@@ -365,8 +384,9 @@ class ModelBuilder(abc.ABC):
         )
         model = built[0]
         local_state = model.state_dict()
-        key_map = self._canonical_key_map(pipeline_rank, pipeline_size)
-        if set(state_dict) != set(self._build_canonical_model().state_dict()):
+        canonical = self._build_canonical_model()
+        key_map = self._canonical_key_map(pipeline_rank, pipeline_size, canonical)
+        if set(state_dict) != set(canonical.state_dict()):
             raise ValueError("Artifact state does not match the configured model.")
         tensor_rank = dist.get_rank(process_group) if process_group is not None else 0
         tensor_size = (
@@ -701,11 +721,11 @@ class TrainingConfig:
     def from_dict(cls, data: dict[str, Any]) -> TrainingConfig:
         r"""Restore a configuration created by :meth:`as_dict`.
 
-        **中文：** 从 ``as_dict`` 结果恢复具体 config 子类。自定义 config 类必须先
-        导入，未加载或非 config 类型的 target 会被拒绝。
-        **English:** Restore concrete config subclasses from ``as_dict``. Custom
-        config classes must already be imported; unavailable or non-config targets
-        are rejected.
+        **中文：** 从 ``as_dict`` 结果按 ``_target_`` 导入并恢复具体 config 子类；
+        不可用或非 config 类型的 target 会被拒绝。
+        **English:** Import and restore concrete config subclasses from the
+        ``_target_`` path produced by ``as_dict``; unavailable or non-config
+        targets are rejected.
 
         :param data: 已序列化配置。 / Serialized configuration.
         :type data: dict[str, Any]

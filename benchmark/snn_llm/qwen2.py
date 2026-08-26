@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import functools
+import re
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -20,6 +22,8 @@ from spikingjelly.activation_based.distributed.llm.temporal import (
 from spikingjelly.activation_based.distributed.llm import (
     ModelBuilder,
     ModelConfig,
+    SGLangExportStage,
+    export_sglang_artifact,
 )
 from spikingjelly.activation_based.memopt import (
     NullSpikeCompressor,
@@ -681,9 +685,168 @@ class Qwen2Builder(ModelBuilder):
         )
 
 
+def _source_layers(stage: SGLangExportStage) -> list[int]:
+    layers = sorted(
+        {
+            int(match.group(1))
+            for name in stage.tensor_names()
+            if (match := re.match(r"decoder\.layers\.(\d+)\.", name))
+        }
+    )
+    if len(layers) != stage.local_layer_count:
+        raise ValueError("MCore PP stage does not contain the expected layer count.")
+    return layers
+
+
+def _reorder_qkv(value: torch.Tensor, heads: int, kv_heads: int) -> torch.Tensor:
+    shape = value.shape
+    head_dim = shape[0] // (heads + 2 * kv_heads)
+    heads_per_group = heads // kv_heads
+    grouped = value.reshape(kv_heads, heads_per_group + 2, head_dim, *shape[1:])
+    query = grouped[:, :heads_per_group].reshape(-1, *shape[1:])
+    key = grouped[:, heads_per_group].reshape(-1, *shape[1:])
+    values = grouped[:, heads_per_group + 1].reshape(-1, *shape[1:])
+    return torch.cat((query, key, values))
+
+
+def _gated_tensor(stage: SGLangExportStage, name: str) -> torch.Tensor:
+    chunks = [value.chunk(2, dim=0) for value in stage.tensor_shards(name)]
+    return torch.cat(
+        [chunk[0] for chunk in chunks] + [chunk[1] for chunk in chunks], dim=0
+    )
+
+
+def _sglang_tensors(
+    config: Qwen2Config,
+    source_config: Any,
+    stage: SGLangExportStage,
+) -> Iterator[tuple[str, torch.Tensor]]:
+    input_scale = stage.merge_tensor(
+        "decoder.layers.0.input_layernorm.qcfs_scale", pipeline_rank=0
+    )
+    embedding_weight = stage.merge_tensor(
+        "embedding.word_embeddings.weight", dim=0, pipeline_rank=0
+    )
+    if stage.is_first:
+        yield "model.embedding.weight", embedding_weight
+    for position, source_index in enumerate(_source_layers(stage)):
+        source = f"decoder.layers.{source_index}."
+        target = f"model.layers.{stage.layer_offset + position}."
+        mapping = {
+            "input_layernorm.weight": ("input_norm.weight", None),
+            "self_attention.core_attention.query_scale": ("attn.query_scale", 0),
+            "self_attention.core_attention.key_scale": ("attn.key_scale", 0),
+            "self_attention.core_attention.value_scale": ("attn.value_scale", 0),
+            "self_attention.linear_proj.weight": ("attn.proj.weight", 1),
+            "pre_mlp_layernorm.weight": ("mlp_norm.weight", None),
+            "mlp.linear_fc2.weight": ("mlp.down.weight", 1),
+            "mlp.linear_fc2.qcfs_scale": ("mlp.scale", 0),
+        }
+        yield target + "input_scale", input_scale
+        for source_name, (target_name, dim) in mapping.items():
+            yield (
+                target + target_name,
+                stage.merge_tensor(source + source_name, dim=dim),
+            )
+        yield (
+            target + "mlp.gate_up.weight",
+            _gated_tensor(stage, source + "mlp.linear_fc1.weight"),
+        )
+        qkv = stage.merge_tensor(source + "self_attention.linear_qkv.weight", dim=0)
+        heads = int(source_config.num_attention_heads)
+        kv_heads = int(source_config.num_key_value_heads)
+        yield target + "attn.qkv.weight", _reorder_qkv(qkv, heads, kv_heads)
+        if bool(getattr(source_config, "attention_bias", True)):
+            qkv_bias = stage.merge_tensor(
+                source + "self_attention.linear_qkv.bias", dim=0
+            )
+            yield target + "attn.qkv.bias", _reorder_qkv(qkv_bias, heads, kv_heads)
+    if stage.is_last:
+        yield (
+            "model.final_norm.weight",
+            stage.merge_tensor("decoder.final_layernorm.weight"),
+        )
+        output_weight = (
+            embedding_weight
+            if config.share_embeddings_and_output_weights
+            else stage.merge_tensor("output_layer.weight", dim=0)
+        )
+        yield "lm_head.weight", output_weight
+
+
+def export_sglang(
+    config: Qwen2Config,
+    model_provider: "Callable[[bool, bool], MegatronModule]",
+    checkpoint: Path,
+    output: Path,
+    *,
+    tokenizer: Path | None = None,
+) -> None:
+    r"""Export a Qwen2 checkpoint with the generic distributed SGLang exporter.
+
+    **API Language** - 中文 | English
+
+    **中文：** 模型 recipe 从 Hugging Face config 构造 SGLang config 并负责
+    Qwen2 权重映射；通用导出器负责分布式生命周期和文件发布。
+
+    **English:** The model recipe builds the SGLang configuration from the
+    Hugging Face config and owns Qwen2 weight mapping; the generic exporter owns
+    the distributed lifecycle and artifact publication.
+
+    :param config: Qwen2 模型配置。 / Qwen2 model configuration.
+    :type config: Qwen2Config
+    :param model_provider: MCore model provider。 / MCore model provider.
+    :type model_provider: Callable
+    :param checkpoint: MCore checkpoint 目录。 / MCore checkpoint directory.
+    :type checkpoint: pathlib.Path
+    :param output: 新 artifact 目录。 / New artifact directory.
+    :type output: pathlib.Path
+    :param tokenizer: 可选 tokenizer 目录。 / Optional tokenizer directory.
+    :type tokenizer: Optional[pathlib.Path]
+    :return: None.
+    :rtype: None
+    """
+    from transformers import AutoConfig
+
+    source_config = AutoConfig.from_pretrained(config.source_path)
+    head_dim = source_config.hidden_size // source_config.num_attention_heads
+    artifact_config = {
+        "architectures": ["SpikingJellyQwen2ForCausalLM"],
+        "model_type": "qwen2",
+        "vocab_size": source_config.vocab_size,
+        "hidden_size": source_config.hidden_size,
+        "intermediate_size": source_config.intermediate_size,
+        "num_hidden_layers": source_config.num_hidden_layers,
+        "num_attention_heads": source_config.num_attention_heads * config.time_steps,
+        "num_key_value_heads": source_config.num_key_value_heads * config.time_steps,
+        "snn_num_attention_heads": source_config.num_attention_heads,
+        "snn_num_key_value_heads": source_config.num_key_value_heads,
+        "snn_time_steps": config.time_steps,
+        "head_dim": head_dim,
+        "max_position_embeddings": source_config.max_position_embeddings,
+        "rms_norm_eps": source_config.rms_norm_eps,
+        "rope_theta": _qwen2_rotary_base(source_config),
+        "attention_bias": bool(getattr(source_config, "attention_bias", True)),
+        "tie_word_embeddings": bool(source_config.tie_word_embeddings),
+        "bos_token_id": source_config.bos_token_id,
+        "eos_token_id": source_config.eos_token_id,
+        "torch_dtype": "bfloat16",
+    }
+    export_sglang_artifact(
+        config.transformer,
+        model_provider,
+        checkpoint,
+        output,
+        artifact_config=artifact_config,
+        stage_tensors=functools.partial(_sglang_tensors, config, source_config),
+        tokenizer=tokenizer,
+    )
+
+
 __all__ = [
     "Qwen2Builder",
     "Qwen2Config",
+    "export_sglang",
     "forward_step",
     "load_hf_qwen2_weights",
     "model_provider",
