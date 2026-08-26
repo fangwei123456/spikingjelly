@@ -30,7 +30,9 @@ def _import_object(path: str) -> Any:
 def _build_training_inputs(config: TrainingConfig) -> tuple[Any, Any, Any]:
     builder_cls = config.model.get_builder_cls()
     model_provider, forward_step = builder_cls(config.model).build(
-        use_snn_memopt=config.use_snn_memopt,
+        memopt_level=config.memopt_level,
+        memopt_checkpoint_budget=config.memopt_checkpoint_budget,
+        memopt_compress_inputs=config.memopt_compress_inputs,
         resume=config.resume is not None,
     )
     dataset_provider = functools.partial(
@@ -73,7 +75,7 @@ def train(
     初始化 NCCL 与 MCore 并行组，从 ``config.model`` 和
     ``config.dataset_builder`` 构建当前 PP stage 与数据集，再使用 MCore DDP、
     distributed optimizer 与 pipeline schedule 运行训练。模型必须公开与配置相同的
-    ``snn_model_config`` 和 ``snn_memopt_enabled``；有效 MCore microbatch 的 ``T``
+    ``snn_model_config`` 和 ``snn_memopt_level``；有效 MCore microbatch 的 ``T``
     由 ``config.model.time_steps`` 唯一决定。
 
     :param config: 训练配置。
@@ -93,7 +95,7 @@ def train(
     Initializes NCCL and MCore process groups, builds the local PP stage and datasets
     from ``config.model`` and ``config.dataset_builder``, and runs MCore DDP,
     distributed optimizer, and pipeline schedules. The model must expose
-    ``snn_model_config`` and ``snn_memopt_enabled`` values matching the configuration.
+    ``snn_model_config`` and ``snn_memopt_level`` values matching the configuration.
     ``config.model.time_steps`` is the sole source of ``T`` for the effective MCore
     microbatch ``T × B``.
 
@@ -185,10 +187,10 @@ def train(
                 "model_provider returned a model whose snn_model_config does not "
                 "match config.model."
             )
-        if getattr(model, "snn_memopt_enabled", None) is not config.use_snn_memopt:
+        if getattr(model, "snn_memopt_level", None) != config.memopt_level:
             raise RuntimeError(
-                "model_provider returned a model whose snn_memopt_enabled does "
-                "not match config.use_snn_memopt."
+                "model_provider returned a model whose snn_memopt_level does "
+                "not match config.memopt_level."
             )
         time_steps = config.model.time_steps
         recipe = getattr(model, "checkpoint_metadata", {})
@@ -199,7 +201,9 @@ def train(
             "model": config.model._checkpoint_metadata(),
             "dataset_builder": config.dataset_builder,
             "dataset_kwargs": config.dataset_kwargs,
-            "use_snn_memopt": config.use_snn_memopt,
+            "memopt_level": config.memopt_level,
+            "memopt_checkpoint_budget": config.memopt_checkpoint_budget,
+            "memopt_compress_inputs": config.memopt_compress_inputs,
             "mcore_recompute_granularity": transformer.recompute_granularity,
             "mcore_recompute_modules": transformer.recompute_modules,
             "sequence_length": config.sequence_length,
@@ -462,7 +466,7 @@ def train(
                 ),
                 "context_parallel_size": float(transformer.context_parallel_size),
                 "data_parallel_size": float(data_parallel_size),
-                "use_snn_memopt": float(config.use_snn_memopt),
+                "memopt_level": float(config.memopt_level),
                 "selective_recompute": float(
                     transformer.recompute_granularity == "selective"
                 ),

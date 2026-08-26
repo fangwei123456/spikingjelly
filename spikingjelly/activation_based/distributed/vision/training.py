@@ -515,6 +515,23 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
         dp_group = dp_mesh.get_group() if dp_size > 1 else None
         pp_group = pp_mesh.get_group() if config.pipeline_parallel_size > 1 else None
         tp_group = tp_mesh.get_group() if config.tensor_parallel_size > 1 else None
+        if dp_size > 1 and config.tensor_parallel_size > 1:
+            stage_group = None
+            for pipeline_rank in range(config.pipeline_parallel_size):
+                ranks = [
+                    (data_rank * config.pipeline_parallel_size + pipeline_rank)
+                    * config.tensor_parallel_size
+                    + tensor_rank
+                    for data_rank in range(dp_size)
+                    for tensor_rank in range(config.tensor_parallel_size)
+                ]
+                group = dist.new_group(ranks)
+                if pipeline_rank == pp_rank:
+                    stage_group = group
+        elif dp_size > 1:
+            stage_group = dp_group
+        else:
+            stage_group = tp_group
 
         loss_function = _build_loss_function(config)
         mixup = None
@@ -532,6 +549,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
             config.model
         ).build(
             process_group=tp_group,
+            memopt_process_group=stage_group,
             pipeline_rank=pp_rank,
             pipeline_size=config.pipeline_parallel_size,
             pipeline_microbatches=config.pipeline_microbatches,
@@ -539,6 +557,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
             micro_batch_size=config.batch_size,
             memopt_level=config.memopt_level,
             memopt_compress_inputs=config.memopt_compress_inputs,
+            memopt_checkpoint_budget=config.memopt_checkpoint_budget,
         )
         functional.set_step_mode(model, config.model.step_mode)
         model = _wrap_data_parallel(

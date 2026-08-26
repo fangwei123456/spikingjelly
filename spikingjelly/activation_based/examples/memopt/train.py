@@ -10,22 +10,29 @@ from lightning_callbacks import (
 )
 from lightning_modules import ClassificationLightningModule
 from models import VGGBlock
-from spikingjelly.activation_based import memopt
+from spikingjelly.activation_based import memopt, neuron
 
 
 class CIFAR10DVSLightningModule(ClassificationLightningModule):
     def __init__(
         self, net: nn.Module, T: int, level: int, compress_x: bool, criterion: nn.Module
     ):
-        net = memopt.memory_optimization(
-            net,
-            (VGGBlock,),
-            dummy_input=(torch.zeros(32, T, 2, 48, 48),),
-            compress_x=compress_x,
-            level=level,
-        )
         super().__init__(net, criterion, num_classes=10, y_with_T=True)
         self.T = T
+        self.memopt_level = level
+        self.memopt_compress_inputs = compress_x
+
+    def on_fit_start(self) -> None:
+        dummy = torch.zeros(32, self.T, 2, 48, 48, device=self.device)
+        memopt.optimize_memory(
+            self.net,
+            VGGBlock,
+            lambda current: current(dummy),
+            level=self.memopt_level,
+            compress=self.memopt_compress_inputs,
+            split_fn=lambda module: (module.proj_bn, module.neuron),
+            can_chunk=lambda module: isinstance(module, neuron.BaseNode),
+        )
 
 
 def main():

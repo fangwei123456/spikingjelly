@@ -72,7 +72,7 @@ def test_spikelm_memopt_preserves_output_and_gradient():
         time_steps=2,
         decay=0.25,
         amplitude=1.0,
-        use_snn_memopt=False,
+        checkpoint_spike=False,
     )
     optimized = _SpikingLayerNorm(
         config=object(),
@@ -81,7 +81,7 @@ def test_spikelm_memopt_preserves_output_and_gradient():
         time_steps=2,
         decay=0.25,
         amplitude=1.0,
-        use_snn_memopt=True,
+        checkpoint_spike=True,
     )
     optimized.load_state_dict(plain.state_dict())
     plain_input = torch.randn(4, 4, 3, requires_grad=True)
@@ -106,7 +106,7 @@ def test_spiking_layer_norm_keeps_deep_residual_gradients_bounded():
             time_steps=4,
             decay=0.25,
             amplitude=1.0,
-            use_snn_memopt=False,
+            checkpoint_spike=False,
         )
         output = output + layer(output)
 

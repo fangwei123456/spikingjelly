@@ -26,6 +26,33 @@ Module: ``spikingjelly.activation_based.neuron``.
 - Added the paper-faithful ``ComplementaryLIFNode`` with single-step and
   multi-step PyTorch execution and optional trajectories for both neuron states.
 
+Memory Optimization
+^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.memopt``.
+
+- Added ``checkpoint`` and state-dict-transparent ``checkpoint_module`` building
+  blocks for user-defined checkpoint boundaries, optional stateless input
+  compression, and explicit temporal chunking.
+- Added ``optimize_memory`` as the high-level paper preset with levels 0-4,
+  speed/balanced/memory checkpoint budgets, user-provided spatial and temporal
+  rules, and synchronized decisions within a distributed pipeline stage.
+- Integrated the new configuration with Vision and MCore training while keeping
+  evaluation, generation, prediction, and artifact export free of memopt wrappers.
+
+Breaking Changes and Notices
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Memory Optimization
+^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.memopt``.
+
+- Replaced ``memory_optimization``, ``input_compressed_gc``, ``GCContainer``,
+  ``TCGCContainer``, mutable compressor bases, profile presets, summaries, and
+  module-side ``__spatial_split__`` hooks with the smaller public API above. No
+  compatibility aliases are provided.
+
 2.0.0.dev2 - 2026-08-23
 -----------------------
 

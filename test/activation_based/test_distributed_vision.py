@@ -125,6 +125,7 @@ def test_vision_evaluation_config_and_artifact_round_trip(tmp_path):
     model_config = SEWResNet34Config(time_steps=2, num_classes=3, image_size=32)
     model, _, _, _ = model_config.get_builder_cls()(model_config).build(
         process_group=None,
+        memopt_process_group=None,
         pipeline_rank=0,
         pipeline_size=1,
         pipeline_microbatches=1,
@@ -132,6 +133,7 @@ def test_vision_evaluation_config_and_artifact_round_trip(tmp_path):
         micro_batch_size=1,
         memopt_level=0,
         memopt_compress_inputs=False,
+        memopt_checkpoint_budget="memory",
     )
     torch.save(
         {
@@ -677,6 +679,7 @@ def test_spikformer_pipeline_rejects_ragged_patch_grid():
     with pytest.raises(ValueError, match="divisible by 16"):
         builder.build(
             process_group=None,
+            memopt_process_group=None,
             pipeline_rank=0,
             pipeline_size=2,
             pipeline_microbatches=1,
@@ -684,6 +687,7 @@ def test_spikformer_pipeline_rejects_ragged_patch_grid():
             micro_batch_size=2,
             memopt_level=0,
             memopt_compress_inputs=False,
+            memopt_checkpoint_budget="memory",
         )
 
 
@@ -696,6 +700,7 @@ def test_sew_resnet34_single_step_matches_multi_step():
     )
     model, _, _, _ = config.get_builder_cls()(config).build(
         process_group=None,
+        memopt_process_group=None,
         pipeline_rank=0,
         pipeline_size=1,
         pipeline_microbatches=1,
@@ -703,6 +708,7 @@ def test_sew_resnet34_single_step_matches_multi_step():
         micro_batch_size=2,
         memopt_level=0,
         memopt_compress_inputs=False,
+        memopt_checkpoint_budget="memory",
     )
     model.eval()
     images = torch.randn(2, 3, 32, 32)
@@ -870,6 +876,7 @@ def test_sew_pipeline_downsamples_before_stage_boundaries():
     for rank, expected_output_shape in enumerate(expected_shapes):
         _, _, input_shape, output_shape = builder.build(
             process_group=None,
+            memopt_process_group=None,
             pipeline_rank=rank,
             pipeline_size=4,
             pipeline_microbatches=2,
@@ -877,6 +884,7 @@ def test_sew_pipeline_downsamples_before_stage_boundaries():
             micro_batch_size=4,
             memopt_level=0,
             memopt_compress_inputs=False,
+            memopt_checkpoint_budget="memory",
         )
         assert output_shape == expected_output_shape
         if rank:
@@ -891,6 +899,7 @@ def test_spikformer_cifar10_pipeline_uses_8_by_8_tokens():
 
     _, _, input_shape, output_shape = builder.build(
         process_group=None,
+        memopt_process_group=None,
         pipeline_rank=0,
         pipeline_size=2,
         pipeline_microbatches=2,
@@ -898,6 +907,7 @@ def test_spikformer_cifar10_pipeline_uses_8_by_8_tokens():
         micro_batch_size=4,
         memopt_level=0,
         memopt_compress_inputs=False,
+        memopt_checkpoint_budget="memory",
     )
 
     assert input_shape == (2, 2, 3, 32, 32)

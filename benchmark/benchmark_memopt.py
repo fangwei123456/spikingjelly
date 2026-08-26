@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 
 from spikingjelly.activation_based import functional, neuron
-from spikingjelly.activation_based.memopt import memory_optimization
+from spikingjelly.activation_based.memopt import optimize_memory
 
 
 class MemOptToyNet(nn.Module):
@@ -34,14 +34,6 @@ class MemOptBlock(nn.Sequential):
             nn.Linear(channels, channels),
             neuron.IFNode(step_mode="m"),
         )
-        self.n_seq_inputs = 1
-        self.n_outputs = 1
-
-    def __spatial_split__(self):
-        return [
-            nn.Sequential(self[0], self[1]),
-            nn.Sequential(self[2], self[3]),
-        ]
 
 
 class MemOptBlockNet(nn.Module):
@@ -95,18 +87,15 @@ def optimize_model(
     instance,
     x,
     level: int,
-    warmup_in_main_process: bool,
-    warmup_in_profile_workers: bool,
 ):
     t0 = time.perf_counter()
-    optimized = memory_optimization(
+    optimized = optimize_memory(
         net,
         instance,
-        dummy_input=(x,),
-        compress_x=True,
+        lambda current: current(x),
         level=level,
-        warmup_in_main_process=warmup_in_main_process,
-        warmup_in_profile_workers=warmup_in_profile_workers,
+        split_fn=lambda module: tuple(module.children()),
+        can_chunk=lambda module: isinstance(module, (nn.Linear, neuron.BaseNode)),
     )
     optimize_ms = (time.perf_counter() - t0) * 1000.0
     return optimized, optimize_ms
@@ -117,20 +106,15 @@ def run_single_variant(
     instance,
     x,
     level: int,
-    warmup_in_main_process: bool,
-    warmup_in_profile_workers: bool,
     warmup: int,
     iters: int,
 ):
     model, optimize_ms = optimize_model(
-        copy.deepcopy(base).cpu(),
+        copy.deepcopy(base),
         instance,
-        x.detach().cpu(),
+        x.detach(),
         level=level,
-        warmup_in_main_process=warmup_in_main_process,
-        warmup_in_profile_workers=warmup_in_profile_workers,
     )
-    model = model.to(x.device)
     result = benchmark_train_step(model, x, warmup, iters)
     result["optimize_ms"] = optimize_ms
     return result
@@ -166,17 +150,9 @@ def main():
     for level in args.levels:
         if level == 0:
             continue
-        results["levels"][str(level)] = {
-            "warm_main": run_single_variant(
-                base, instance, x, level, True, True, args.warmup, args.iters
-            ),
-            "no_main_warmup": run_single_variant(
-                base, instance, x, level, False, True, args.warmup, args.iters
-            ),
-            "no_profile_worker_warmup": run_single_variant(
-                base, instance, x, level, False, False, args.warmup, args.iters
-            ),
-        }
+        results["levels"][str(level)] = run_single_variant(
+            base, instance, x, level, args.warmup, args.iters
+        )
 
     print(json.dumps(results, indent=2))
 

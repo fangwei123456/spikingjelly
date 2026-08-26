@@ -140,13 +140,15 @@ def export_inference_artifact(checkpoint: Path, output: Path) -> None:
         builder = builder_cls(config.model)
         model, _, _, _ = builder.build(
             process_group=tensor_group,
+            memopt_process_group=None,
             pipeline_rank=pipeline_rank,
             pipeline_size=config.pipeline_parallel_size,
             pipeline_microbatches=config.pipeline_microbatches,
             device=device,
             micro_batch_size=config.batch_size,
-            memopt_level=config.memopt_level,
-            memopt_compress_inputs=config.memopt_compress_inputs,
+            memopt_level=0,
+            memopt_compress_inputs=False,
+            memopt_checkpoint_budget="memory",
         )
         _load_checkpoint_model(
             checkpoint,

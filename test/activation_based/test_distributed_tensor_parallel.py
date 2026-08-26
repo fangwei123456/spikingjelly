@@ -11,7 +11,7 @@ from spikingjelly.activation_based.distributed.tensor_parallel import (
     ChannelShardBatchNorm2d,
     ChannelShardConv2d,
 )
-from spikingjelly.activation_based.memopt import GCContainer
+from spikingjelly.activation_based.memopt import checkpoint_module
 
 
 def _vision_tp_worker(rank: int, store_path: str) -> None:
@@ -50,6 +50,7 @@ def _vision_tp_worker(rank: int, store_path: str) -> None:
             torch.manual_seed(17)
             reference, _, _, _ = builder_cls(config).build(
                 process_group=None,
+                memopt_process_group=None,
                 pipeline_rank=0,
                 pipeline_size=1,
                 pipeline_microbatches=1,
@@ -57,10 +58,12 @@ def _vision_tp_worker(rank: int, store_path: str) -> None:
                 micro_batch_size=1,
                 memopt_level=0,
                 memopt_compress_inputs=False,
+                memopt_checkpoint_budget="memory",
             )
             torch.manual_seed(17)
             candidate, _, _, _ = builder_cls(config).build(
                 process_group=dist.group.WORLD,
+                memopt_process_group=dist.group.WORLD,
                 pipeline_rank=0,
                 pipeline_size=1,
                 pipeline_microbatches=1,
@@ -68,6 +71,7 @@ def _vision_tp_worker(rank: int, store_path: str) -> None:
                 micro_batch_size=1,
                 memopt_level=0,
                 memopt_compress_inputs=False,
+                memopt_checkpoint_budget="memory",
             )
             reference.eval()
             candidate.eval()
@@ -148,12 +152,13 @@ def test_channel_tp_matches_dense_multistep_forward_and_backward():
 
 def test_channel_shard_batch_norm_updates_stats_once_under_memopt():
     source = layer.BatchNorm2d(4, step_mode="m")
-    module = GCContainer(None, ChannelShardBatchNorm2d(source, None))
+    batch_norm = ChannelShardBatchNorm2d(source, None)
+    module = checkpoint_module(batch_norm)
     x = torch.randn(2, 3, 4, 5, 5, requires_grad=True)
 
     module(x).sum().backward()
 
-    assert module[0].num_batches_tracked.item() == 1
+    assert batch_norm.num_batches_tracked.item() == 1
 
 
 def test_builtin_vision_tensor_parallel_strategies_match_dense_models():

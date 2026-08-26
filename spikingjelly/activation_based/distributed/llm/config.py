@@ -132,7 +132,12 @@ class ModelBuilder(abc.ABC):
 
     @abc.abstractmethod
     def build(
-        self, *, use_snn_memopt: bool, resume: bool
+        self,
+        *,
+        memopt_level: int,
+        memopt_checkpoint_budget: Literal["speed", "balanced", "memory"],
+        memopt_compress_inputs: bool,
+        resume: bool,
     ) -> tuple[
         Callable[[bool, bool], "MegatronModule"],
         Callable[[Iterator[Any], "MegatronModule"], tuple[torch.Tensor, Callable]],
@@ -142,9 +147,12 @@ class ModelBuilder(abc.ABC):
         **中文：** 返回模型 provider 与 forward-step。
         **English:** Return the model provider and forward-step.
 
-        :param use_snn_memopt: 是否 checkpoint 确定性的 SNN 变换。 / Whether to
-            checkpoint deterministic SNN transforms.
-        :type use_snn_memopt: bool
+        :param memopt_level: SpikingJelly memopt 级别。 / SpikingJelly memopt level.
+        :type memopt_level: int
+        :param memopt_checkpoint_budget: checkpoint 数量预设。 / Checkpoint-count preset.
+        :type memopt_checkpoint_budget: Literal["speed", "balanced", "memory"]
+        :param memopt_compress_inputs: 是否压缩二值输入。 / Whether to compress binary inputs.
+        :type memopt_compress_inputs: bool
         :param resume: 是否从 MCore checkpoint 恢复。 / Whether this run resumes
             from an MCore checkpoint.
         :type resume: bool
@@ -163,7 +171,6 @@ class EvaluationConfig:
     micro_batch_size: int
     dataset_kwargs: dict[str, Any] = field(default_factory=dict)
     seed: int = 1234
-    use_snn_memopt: bool = False
     timing_warmup_batches: int = 0
     pipeline_microbatches: int = 1
 
@@ -215,9 +222,6 @@ evaluate a complete token dataset with the DP/TP/PP/CP topology in
 :type dataset_kwargs: dict[str, Any]
 :param seed: sampler 与 MCore model seed。 / Sampler and MCore model seed.
 :type seed: int
-:param use_snn_memopt: 是否匹配 checkpoint 的 SNN memopt recipe。 / Whether to
-    match the checkpoint's SNN memopt recipe.
-:type use_snn_memopt: bool
 :param timing_warmup_batches: 计时前从 dataset 起点重复执行、但不计入指标的
     schedule batch 数。 / Schedule batches repeatedly run from the dataset start
     before timing and excluded from metrics.
@@ -238,7 +242,6 @@ class MCoreGenerationConfig:
     max_new_tokens: int
     eos_token_id: Optional[int] = None
     seed: int = 1234
-    use_snn_memopt: bool = False
 
     def __post_init__(self) -> None:
         if self.max_new_tokens <= 0:
@@ -280,9 +283,6 @@ and shard the prompt batch over DP replicas. MCore cached generation requires
 :type eos_token_id: Optional[int]
 :param seed: MCore model seed。 / MCore model seed.
 :type seed: int
-:param use_snn_memopt: 是否匹配 checkpoint 的 SNN memopt recipe。 / Whether to
-    match the checkpoint's SNN memopt recipe.
-:type use_snn_memopt: bool
 :raises ValueError: 生成参数或 MCore 拓扑无效。 / If a generation value or
     MCore topology is invalid.
 """
@@ -375,7 +375,9 @@ class TrainingConfig:
     checkpoint_interval: int = 0
     resume: Optional[Path] = None
     seed: int = 1234
-    use_snn_memopt: bool = False
+    memopt_level: int = 0
+    memopt_checkpoint_budget: Literal["speed", "balanced", "memory"] = "memory"
+    memopt_compress_inputs: bool = True
 
     def __post_init__(self) -> None:
         if "." not in self.dataset_builder:
@@ -431,10 +433,16 @@ class TrainingConfig:
             )
         if transformer.expert_model_parallel_size != 1:
             raise ValueError("Expert parallelism is not supported.")
+        if not 0 <= self.memopt_level <= 4:
+            raise ValueError("memopt_level must lie in [0, 4].")
+        if self.memopt_checkpoint_budget not in {"speed", "balanced", "memory"}:
+            raise ValueError(
+                "memopt_checkpoint_budget must be 'speed', 'balanced', or 'memory'."
+            )
         recompute = transformer.recompute_granularity
-        if self.use_snn_memopt and recompute == "full":
+        if self.memopt_level and recompute == "full":
             raise ValueError("SNN memopt cannot overlap MCore full recompute.")
-        if self.use_snn_memopt and recompute == "selective":
+        if self.memopt_level and recompute == "selective":
             if set(transformer.recompute_modules or ()) != {"core_attn"}:
                 raise ValueError(
                     "SNN memopt only supports MCore selective core_attn recompute."
@@ -530,8 +538,12 @@ CP, sequence parallelism, and Transformer precision have one source of truth in
 :type resume: Optional[pathlib.Path]
 :param seed: MCore 随机种子。 / MCore random seed.
 :type seed: int
-:param use_snn_memopt: 是否 checkpoint 确定性的 SNN 变换。 / Whether to checkpoint deterministic SNN transforms.
-:type use_snn_memopt: bool
+:param memopt_level: SpikingJelly memopt 级别。 / SpikingJelly memopt level.
+:type memopt_level: int
+:param memopt_checkpoint_budget: checkpoint 数量预设。 / Checkpoint-count preset.
+:type memopt_checkpoint_budget: Literal["speed", "balanced", "memory"]
+:param memopt_compress_inputs: 是否压缩二值输入。 / Whether to compress binary inputs.
+:type memopt_compress_inputs: bool
 :raises ValueError: 配置不一致。 / If configuration values are inconsistent.
 """
 

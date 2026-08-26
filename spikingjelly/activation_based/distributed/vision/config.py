@@ -378,6 +378,7 @@ class ModelBuilder(abc.ABC):
         """
         built = self.build(
             process_group=process_group,
+            memopt_process_group=None,
             pipeline_rank=pipeline_rank,
             pipeline_size=pipeline_size,
             pipeline_microbatches=pipeline_microbatches,
@@ -385,6 +386,7 @@ class ModelBuilder(abc.ABC):
             micro_batch_size=micro_batch_size,
             memopt_level=0,
             memopt_compress_inputs=False,
+            memopt_checkpoint_budget="memory",
         )
         model = built[0]
         local_state = model.state_dict()
@@ -416,6 +418,7 @@ class ModelBuilder(abc.ABC):
         self,
         *,
         process_group: Optional[ProcessGroup],
+        memopt_process_group: Optional[ProcessGroup],
         pipeline_rank: int,
         pipeline_size: int,
         pipeline_microbatches: int,
@@ -423,6 +426,7 @@ class ModelBuilder(abc.ABC):
         micro_batch_size: int,
         memopt_level: int,
         memopt_compress_inputs: bool,
+        memopt_checkpoint_budget: Literal["speed", "balanced", "memory"],
     ) -> tuple[
         nn.Module,
         tuple[str, ...],
@@ -438,6 +442,8 @@ class ModelBuilder(abc.ABC):
 
         :param process_group: TP 进程组；TP=1 时为 ``None``。
         :type process_group: Optional[ProcessGroup]
+        :param memopt_process_group: 当前 PP stage 的 DP x TP 进程组。
+        :type memopt_process_group: Optional[ProcessGroup]
         :param pipeline_rank: 当前 PP rank。 / Current PP rank.
         :type pipeline_rank: int
         :param pipeline_size: PP rank 数。 / Number of PP ranks.
@@ -453,6 +459,8 @@ class ModelBuilder(abc.ABC):
         :type memopt_level: int
         :param memopt_compress_inputs: 是否压缩 checkpoint 输入。
         :type memopt_compress_inputs: bool
+        :param memopt_checkpoint_budget: checkpoint 数量预设。
+        :type memopt_checkpoint_budget: Literal["speed", "balanced", "memory"]
         :return: model、FSDP2 roots 以及 PP input/output shapes。 / Model, FSDP2
             roots, and PP input/output shapes.
         :rtype: tuple
@@ -650,7 +658,8 @@ class TrainingConfig:
     data_parallel: Literal["ddp", "fsdp2"] = "ddp"
     precision: Literal["fp32", "bf16", "fp16"] = "bf16"
     memopt_level: int = 0
-    memopt_compress_inputs: bool = False
+    memopt_compress_inputs: bool = True
+    memopt_checkpoint_budget: Literal["speed", "balanced", "memory"] = "memory"
     max_steps: Optional[int] = None
     timing_warmup_steps: int = 0
     checkpoint_dir: Optional[Path] = None
@@ -686,6 +695,10 @@ class TrainingConfig:
             raise ValueError("Vision PP currently requires step_mode='m'.")
         if not 0 <= self.memopt_level <= 4:
             raise ValueError("memopt_level must lie in [0, 4].")
+        if self.memopt_checkpoint_budget not in {"speed", "balanced", "memory"}:
+            raise ValueError(
+                "memopt_checkpoint_budget must be 'speed', 'balanced', or 'memory'."
+            )
         if self.model.step_mode == "s" and self.memopt_level:
             raise ValueError("Vision memopt currently requires step_mode='m'.")
         if self.max_steps is not None and self.max_steps <= 0:
@@ -826,6 +839,10 @@ receives ``dataset_kwargs`` and returns train and validation datasets.
 :param memopt_compress_inputs: 是否压缩 checkpoint 输入。 / Whether to compress
     checkpoint inputs.
 :type memopt_compress_inputs: bool
+:param memopt_checkpoint_budget: ``"speed"``、``"balanced"`` 或 ``"memory"``
+    checkpoint 数量预设。 / ``"speed"``, ``"balanced"``, or ``"memory"``
+    checkpoint-count preset.
+:type memopt_checkpoint_budget: Literal["speed", "balanced", "memory"]
 :param max_steps: 可选的 optimizer-step 上限。 / Optional optimizer-step limit.
 :type max_steps: Optional[int]
 :param timing_warmup_steps: 不计入性能指标的前置 optimizer steps。 / Initial

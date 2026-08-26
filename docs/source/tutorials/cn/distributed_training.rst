@@ -57,6 +57,7 @@ FSDP2 roots 和边界形状。高层入口管理生命周期，自定义任务�
         data_parallel="fsdp2",
         precision="bf16",
         memopt_level=1,
+        memopt_checkpoint_budget="balanced",
     )
     metrics = vision.train_classification(config)
 
@@ -321,6 +322,7 @@ attention metadata。SpikeLM 与 Qwen2 adapter 使用 SGLang 原生 stage 分层
             self,
             *,
             process_group,
+            memopt_process_group,
             pipeline_rank,
             pipeline_size,
             pipeline_microbatches,
@@ -328,6 +330,7 @@ attention metadata。SpikeLM 与 Qwen2 adapter 使用 SGLang 原生 stage 分层
             micro_batch_size,
             memopt_level,
             memopt_compress_inputs,
+            memopt_checkpoint_budget,
         ):
             if pipeline_size != 1:
                 raise ValueError("MyModelBuilder does not define PP stages.")
@@ -441,7 +444,14 @@ LLM 模型继承 ``llm.ModelConfig``，并通过 ``builder`` 类变量指向一�
     from spikingjelly.activation_based.distributed import llm
 
     class MyModelBuilder(llm.ModelBuilder):
-        def build(self, *, use_snn_memopt: bool, resume: bool):
+        def build(
+            self,
+            *,
+            memopt_level: int,
+            memopt_checkpoint_budget: str,
+            memopt_compress_inputs: bool,
+            resume: bool,
+        ):
             return model_provider, forward_step
 
 ``model_provider`` 构建当前 PP stage；``forward_step`` 从 data iterator 读取一个

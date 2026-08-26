@@ -16,7 +16,6 @@ from spikingjelly.activation_based.distributed.llm.temporal import (
     pack_time_batch,
     unpack_time_batch,
 )
-from spikingjelly.activation_based.memopt import NullSpikeCompressor
 
 
 def test_qwen_qcfs_envelope_matches_existing_reconstruction():
@@ -34,7 +33,7 @@ def test_qwen_qcfs_envelope_matches_existing_reconstruction():
             pack_time_batch(optimized_sequence),
             scale,
             time_steps,
-            NullSpikeCompressor(),
+            True,
         ),
         time_steps,
     )

@@ -157,4 +157,4 @@ def test_snn_memopt_rejects_overlapping_mcore_recompute():
     config.model.transformer.recompute_granularity = "full"
 
     with pytest.raises(ValueError, match="cannot overlap"):
-        _config(model=config.model, use_snn_memopt=True)
+        _config(model=config.model, memopt_level=1)

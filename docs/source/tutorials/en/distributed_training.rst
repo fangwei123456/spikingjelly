@@ -64,6 +64,7 @@ pipeline parallelism. ``vision.TrainingConfig`` describes the job and
         data_parallel="fsdp2",
         precision="bf16",
         memopt_level=1,
+        memopt_checkpoint_budget="balanced",
     )
     metrics = vision.train_classification(config)
 
@@ -359,6 +360,7 @@ A minimal declaration has this form:
             self,
             *,
             process_group,
+            memopt_process_group,
             pipeline_rank,
             pipeline_size,
             pipeline_microbatches,
@@ -366,6 +368,7 @@ A minimal declaration has this form:
             micro_batch_size,
             memopt_level,
             memopt_compress_inputs,
+            memopt_checkpoint_budget,
         ):
             if pipeline_size != 1:
                 raise ValueError("MyModelBuilder does not define PP stages.")
@@ -484,7 +487,14 @@ to an ``llm.ModelBuilder``. The builder's ``build`` method returns the MCore
     from spikingjelly.activation_based.distributed import llm
 
     class MyModelBuilder(llm.ModelBuilder):
-        def build(self, *, use_snn_memopt: bool, resume: bool):
+        def build(
+            self,
+            *,
+            memopt_level: int,
+            memopt_checkpoint_budget: str,
+            memopt_compress_inputs: bool,
+            resume: bool,
+        ):
             return model_provider, forward_step
 
 ``model_provider`` builds the current PP stage. ``forward_step`` reads one
