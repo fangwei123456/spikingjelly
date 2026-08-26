@@ -18,6 +18,14 @@ Module: `spikingjelly.activation_based.neuron`.
 - Added the paper-faithful `ComplementaryLIFNode` with single-step and
   multi-step PyTorch execution and optional trajectories for both neuron states.
 
+#### Operation Counters
+
+Module: `spikingjelly.activation_based.op_counter`.
+
+- Added reproducible external validation for the Lemaire, SpikeSim dense, and
+  NeuroMC forward-energy estimators using pinned author code or published
+  equations, with scale-free ranking metrics and explicit unvalidated scopes.
+
 ## 2.0.0.dev2 - 2026-08-23
 
 ### Improvements
