@@ -5,47 +5,25 @@
 
 English version: :doc:`../en/op_counter`
 
-本教程介绍 ``spikingjelly.activation_based.op_counter`` 模块。
-
-该模块服务于两个紧密相关的目标：
-
-1. 统计模型侧的运行时代价，例如 FLOPs、访存、SynOps、MACs 和 ACs；
-2. 在这些计数器之上构建更高层的能耗估计器。
-
-本教程中的示例都刻意保持得较小，以便在 CPU 上也能在几秒内运行完成。
-
-当你对自己的模型做 profiling 时，要始终使用有代表性的输入形状和有代表性的脉冲稀疏度。
-``op_counter`` 是 runtime-driven 的，因此输入一变，计数结果和能耗估计也可能随之变化。
+本教程介绍 ``spikingjelly.activation_based.op_counter``。它统计一次真实执行中的
+FLOPs、访存、SynOps、MACs 和 ACs，并基于这些计数估算能耗。结果取决于输入形状、
+脉冲稀疏度和 ``train``/``eval`` 模式，因此应使用能代表目标场景的配置。
 
 概述
 ++++++++++++++++++++++++
 
-什么是 ``op_counter``？
--------------------------
+运行时统计方式
+--------------
 
-``op_counter`` 是一个基于 PyTorch dispatch、function interception 和 module hook
-的运行时 profiling 工具集。
-它并不只从静态层形状估算计数，而是观察一次真实执行，在给定输入下记录模型实际发生了什么。
+``op_counter`` 通过三种上下文管理器观察运行时调用：
 
-这对 SNN 尤其有用，因为很多量都依赖运行时活动：
+* ``DispatchCounterMode`` 拦截 ATen 算子；
+* ``FunctionCounterMode`` 拦截 ``torch.*`` 函数；
+* ``ModuleCounterMode`` 记录实际执行的 ``nn.Module`` 前向和反向事件。
 
-* 二值脉冲和稠密激活不能按同一种方式理解；
-* 同一层在不同输入稀疏度下可能表现不同；
-* 有些能耗模型只需要前向统计，而另一些还需要反向和优化器阶段。
-
-为什么 counter mode 很重要？
-------------------------------
-
-计数器不会修改模型，它们只会在 context manager 内生效。
-这种设计让 profiling 逻辑保持显式：
-
-* 在 context 外，模型行为完全正常；
-* 在 context 内，受支持的算子会被拦截并计数；
-* 多个计数器可以在同一次执行中同时工作。
-
-三个入口分别是 ``DispatchCounterMode``、``FunctionCounterMode`` 和
-``ModuleCounterMode``：它们分别分发 ATen 算子、``torch.*`` 函数和实际执行的
-``nn.Module`` forward/backward event。
+它们只在上下文内生效，不修改模型。多个计数器可以统计同一次执行。与静态形状
+分析相比，这种方式能区分二值脉冲和稠密激活，也能反映输入稀疏度及执行阶段的
+变化。
 
 基础计数工作流
 ++++++++++++++++++++++++
@@ -53,13 +31,12 @@ English version: :doc:`../en/op_counter`
 使用 ``DispatchCounterMode``
 ------------------------------
 
-基本工作流如下：
-
 1. 实例化一个或多个计数器；
 2. 在 ``DispatchCounterMode`` 内执行一次真实前向或前向加反向；
 3. 用 ``get_counts()`` 读取按作用域划分的计数，或用 ``get_total()`` 读取全局总数。
 
-对于纯计数来说，``train()`` 和 ``eval()`` 都可以使用。但如果模型里包含 dropout、batch normalization 这类运行时行为会随 mode 改变的模块，就应该选择与你想 profiling 的场景一致的 mode。
+``train()`` 和 ``eval()`` 都可以统计。若模型包含 dropout 或 batch normalization，
+应选择与目标场景一致的模式。
 
 .. code-block:: python
 
@@ -87,8 +64,8 @@ English version: :doc:`../en/op_counter`
     print("Memory access (bytes):", mem_counter.get_total())
     print("Global FLOP record:", flop_counter.get_counts()["Global"])
 
-算子计数器的诊断信息以包级 logger 的 ``DEBUG`` 记录输出，包含逐算子的细节；
-大型模型开启后可能产生较高开销，因此仅在诊断计数过程时开启：
+包级 logger 会以 ``DEBUG`` 级别输出逐算子记录。该日志在大型模型上开销较高，
+只应在排查计数问题时启用：
 
 .. code-block:: python
 
@@ -96,15 +73,15 @@ English version: :doc:`../en/op_counter`
 
     logger.enable("spikingjelly")
 
-本教程中的示例统一使用 ``strict=False``，这样即使遇到不受支持的辅助算子，也不会立刻中断执行。
-如果你已经确认所选计数器完整覆盖了相关算子路径，并且希望在遇到 unsupported 算子时立即报错，再切换到 ``strict=True``。
+上述算子分发示例使用 ``strict=False``，未支持的辅助算子会被跳过。确认计数器覆盖目标
+路径后，可改用 ``strict=True`` 让未支持的算子立即报错。
 
 使用 ``ModuleCounterMode``
 ----------------------------
 
-module counter 的规则键为 ``("forward" | "backward", module_type)``。Mode
-负责 hook 生命周期、module scope、ignore subtree 和异常清理；它不会自动 reset counter。
-scope key 与其他 Mode 一致：``Global`` 之后使用根 module 类型和完整子 module 路径。
+模块计数器的规则键为 ``("forward" | "backward", module_type)``。
+``ModuleCounterMode`` 管理钩子、作用域和异常清理，但不会自动重置计数器。作用域
+以 ``Global`` 开始，随后是根模块类型和完整的子模块路径。
 
 .. code-block:: python
 
@@ -116,16 +93,11 @@ scope key 与其他 Mode 一致：``Global`` 之后使用根 module 类型和完
 
     print(memory_counter.get_counts()["Global"])
 
-三个 Mode 都可在 context 结束后调用 ``mode.get_unsupported(counter)`` 检查非严格
+三种模式都可在上下文结束后调用 ``mode.get_unsupported(counter)``，查看非严格
 模式跳过的目标。
-
-虽然这个第一个例子已经使用了带 ``IFNode`` 的 SNN 风格模块，但它此处仍然只聚焦于通用的 counter workflow。
-像 ``SynOps`` 这类真正依赖脉冲语义的指标，会在下文单独解释。
 
 可用的计数器
 ----------------
-
-最常用的计数器包括：
 
 * :class:`FlopCounter <spikingjelly.activation_based.op_counter.flop.FlopCounter>`：
   统计浮点操作数，适合做 ANN 风格的计算强度分析。
@@ -138,10 +110,9 @@ scope key 与其他 Mode 一致：``Global`` 之后使用根 module 类型和完
 * :class:`ACCounter <spikingjelly.activation_based.op_counter.ac.ACCounter>`：
   统计未被建模为 MAC 的加法类算术工作。
 
-这些计数器是互补的，而不是相互替代的。例如，某个脉冲驱动的线性层可能有非零 SynOps 和 ACs，但 MACs 为零。
-
-``SynOpCounter`` 还需要额外提醒一点：只有当相关层真正接收到二值脉冲输入时，它才有意义。
-如果同一层接收到的是稠密浮点激活，那么 SynOp 计数为 0 是完全正常的。
+这些计数器统计不同含义的工作量。例如，脉冲驱动的线性层可能产生 SynOps 和
+ACs，但不产生 MACs。``SynOpCounter`` 只把二值脉冲输入计为 SynOps；稠密浮点输入
+得到 0。
 
 .. code-block:: python
 
@@ -161,8 +132,8 @@ scope key 与其他 Mode 一致：``Global`` 之后使用根 module 类型和完
 Roofline 分析示例
 -------------------
 
-下面的示例复现了一次训练步 roofline 分析所需的基本量：FLOPs、访存和 arithmetic intensity。
-如果你只关心推理 roofline，把 ``backward()`` 去掉即可。
+下面的示例统计一个训练步的 FLOPs、访存和算术强度。推理分析可去掉
+``backward()``。
 
 .. code-block:: python
 
@@ -191,27 +162,22 @@ Roofline 分析示例
     print("total memory access (bytes):", mem_bytes)
     print("arithmetic intensity (FLOPs/byte):", intensity)
 
-这个例子不会替你直接画 roofline 图。它给出了工作负载测得的点，之后你可以再结合硬件峰值 FLOPs 和带宽，把这个点放到 roofline 图上。
+该结果是工作负载在 roofline 图上的测量点，还需配合硬件峰值 FLOPs 和带宽。
+计数采用理想化口径：每个 MAC 计 2 FLOPs，逻辑输入读取一次，逻辑输出写入一次；
+不建模 tiling、cache、fusion、bank conflict 或真实 DRAM 流量。
 
-这里的 GPU 口径是理论理想值，而不是 kernel 仿真：矩阵乘法按每个 MAC 为
-2 FLOPs，访存按逻辑输入各读取一次、逻辑输出写入一次。它不建模 tiling、cache、
-fusion、bank conflict 或真实 DRAM traffic。上下文结束后可调用
-``mode.get_unsupported(counter)`` 检查非严格模式跳过了哪些 ATen 算子。
-
-高层次能耗模型
+高层能耗模型
 ++++++++++++++++++++++++
 
-模型概览与适用边界
---------------------
+模型概览
+--------
 
-``op_counter`` 当前暴露了四种高层能耗估计器：
+``op_counter`` 目前提供四种高层能耗估计器：
 
 * ``estimate_simple_energy``：运行时 MAC/AC/访存的简单能耗；
 * ``estimate_lemaire_energy``：Lemaire 风格解析式前向推理能耗；
 * ``estimate_neuromc_runtime_energy``：运行时 NeuroMC 风格能耗；
 * ``estimate_spikesim_energy``：运行时 SpikeSim 风格 Conv2d 能耗。
-
-它们回答的不是同一个问题。各自的目标和边界如下：
 
 .. list-table::
     :header-rows: 1
@@ -229,147 +195,98 @@ fusion、bank conflict 或真实 DRAM traffic。上下文结束后可调用
       - ops、寻址、运行时尺寸的访存、神经元状态访存
       - 仅前向推理；是解析式估计，不是硬件仿真
     * - ``estimate_neuromc_runtime_energy``
-      - 更完整的前向、反向、优化器运行时能耗
+      - 前向、反向和优化器阶段的运行时能耗
       - NeuroMC 风格映射下的计算和访存
-      - 只有在受支持 fragment 集合内才能解释为 exact
+      - 仅覆盖受支持的执行片段和阶段语义
     * - ``estimate_spikesim_energy``
       - SpikeSim 风格卷积加速器估计
-      - 带有 SpikeSim 系数的 Conv2d stage 能耗
-      - 只适用于受支持的 Conv2d 推理 stage，不是通用完整模型能耗估计器
+      - 带有 SpikeSim 系数的 Conv2d 阶段能耗
+      - 只适用于受支持的 Conv2d 推理阶段，不是通用完整模型能耗估计器
 
-最重要的一条是：不要把不同估计器给出的绝对值当成共享同一硬件假设的数字来直接比较。
-每个估计器都有自己的成本口径和建模范围。
+四个估计器使用不同的成本口径和硬件假设，绝对值不能交叉比较。
 
 每份报告的 ``model_info`` 给出稳定模型 ID、来源、工艺节点、精度、适用范围和
 fidelity；``config``（NeuroMC 为 ``memory_config``）保存实际成本配置。
 ``paper``/``reference-code`` 表示论文或作者脚本复刻，``source-aligned`` 表示采用
-作者常量和表格但保留本项目的 runtime mapping，``spikingjelly-defined`` 表示公式由
-SpikingJelly 明确定义。
+作者常量和表格但保留本项目的运行时映射，``spikingjelly-defined`` 表示公式由
+SpikingJelly 明确定义。汇报结果时，应注明估计器、执行阶段、成本配置、输入类型
+和稀疏度。
 
 简单运行时能耗模型
 --------------------
 
-``estimate_simple_energy`` 是最简单的高层估计器。
-它执行一次真实前向传播，然后用三个显式成本把运行时 MAC、AC 和支持算子的
-神经形态逻辑访存字节数换算成能耗：
+``estimate_simple_energy`` 执行一次前向传播，并按下式换算运行时计数：
 ``MAC * E_MAC + AC * E_AC + bytes * E_memory``。
 
-它适合用于归一化比较，例如：
+主要假设如下：
 
-* 在同一成本口径下比较两个结构；
-* 在同一运行时 workload 下比较脉冲驱动执行和稠密执行；
-* 透明地报告计算能耗和访存能耗；
-* 使用 FP32、FP16 或 INT8 算术 preset。
-
-它的边界同样必须明确：
-
-* ``NeuromorphicMemoryAccessCounter`` 独立统计实际使用的权重和 bias，
+* ``NeuromorphicMemoryAccessCounter`` 独立统计实际使用的权重和偏置，
   以及持久神经元状态每时间步的一次读取和一次写回；
-* 输入电流和输出 spike 被视为片上信号流，不计为访存；
-* 不建模 FIFO、寻址、路由、cache reuse 或具体硬件映射；
+* 输入电流和输出脉冲被视为片上信号流，不计为访存；
+* 不建模 FIFO、寻址、路由、缓存复用或具体硬件映射；
 * ``SynOps`` 是 AC 的辅助子集，不会重复收费；
-* 默认访存成本是 STEP Table 9 的 ``3.12 pJ/bit``，即 ``24.96 pJ/byte``；
-  本实现的 traffic 公式不是 STEP 公式；
-* FP16/INT8 preset 只选择比较口径，不执行模型量化。
-
-默认使用 Horowitz 2014 FP32 算术成本和上面说明的访存成本。如果需要其他口径，
-显式传入 ``SimpleEnergyCostConfig``。
+* 默认使用 Horowitz 2014 FP32 算术成本和 STEP Table 9 的 ``24.96 pJ/byte``
+  访存单价；访存流量公式由 SpikingJelly 定义；
+* FP16/INT8 预设只更换算术单价，不量化模型。
 
 Lemaire 解析式推理能耗
 ------------------------
 
-``estimate_lemaire_energy`` 是一个仅用于推理的解析式估计器，与 Lemaire 风格的 SNN 能耗文献对齐。
-与纯静态公式不同，当前实现仍会运行一次真实前向传播，以收集运行时计数和访存字节数。
-
-它包含：
-
-* 突触操作计数；
-* MAC 和 AC 类工作；
-* 寻址计数；
-* 神经元状态读写和状态算术；
-* 基于运行时访问次数和逐层本地 SRAM 容量的分段访存能耗估计。
-
-它的边界是：
+``estimate_lemaire_energy`` 执行一次前向传播，再把突触操作、MAC/AC、寻址、
+神经元状态和逐层 SRAM 访问代入 Lemaire 解析式。主要限制如下：
 
 * 仅前向推理；
-* 属于解析式估计，而不是 cycle-accurate 的硬件仿真；
-* 运算和访存固定使用论文的 32-bit 口径，不随宿主 tensor dtype 改变；
+* 是解析式估计，不是周期精确的硬件仿真；
+* 运算和访存固定使用论文的 32-bit 口径，不随宿主张量数据类型改变；
 * 参数、FIFO 和膜电位访问先按各层本地 SRAM 容量计价，再汇总能耗；
 * 二元输入使用 SNN 事件公式，稀疏但非二元的输入仍使用 FNN 稠密公式；
-* grouped/depthwise Conv 按每组输出通道计算 spike fanout；
+* 分组卷积和深度卷积按每组输出通道计算脉冲扇出；
 * 神经元只支持论文范围内的 IF/LIF，其他 ``BaseNode`` 默认直接拒绝；
 * SNN FIFO 默认容纳 1000 个消息；可通过 ``snn_fifo_capacity_elements`` 覆盖；
 * 默认 ``strict=True``，不支持的转置卷积直接报错；显式设为 ``False`` 时才警告并跳过。
 
-当你需要一个比 simple runtime 能耗更丰富的前向 SNN 推理估计，但又不需要反向和优化器建模时，就使用这个估计器。
-
 NeuroMC 运行时能耗
 --------------------
 
-``estimate_neuromc_runtime_energy`` 对真实执行片段做 profiling，再把这些片段映射到
-固定的 NeuroMC v1 常量、逐变量访存方向和倍率。它是 source-aligned runtime adapter，
-没有复刻完整 ZigZag mapping，因此不称为论文 exact 能耗。
+``estimate_neuromc_runtime_energy`` 分析实际执行片段，再按固定的 NeuroMC v1 常量、
+逐变量访存方向和倍率估算能耗。它保留作者的成本口径，但不复刻完整的 ZigZag 映射。
+便捷入口始终执行前向；提供 ``target`` 和 ``loss_fn``
+时继续执行反向，另提供 ``optimizer`` 时估算优化器阶段。手工分阶段统计可使用
+:class:`NeuroMCEnergyProfiler <spikingjelly.activation_based.op_counter.neuromc.core.NeuroMCEnergyProfiler>`。
 
-它支持几个层次的使用方式：
+主要限制如下：
 
-* 仅前向推理；
-* 一次完整训练步的 ``forward -> backward -> optimizer``；
-* 通过
-  :class:`NeuroMCEnergyProfiler <spikingjelly.activation_based.op_counter.neuromc.core.NeuroMCEnergyProfiler>`
-  做手工分阶段 profiling。
-
-它的优势包括：
-
-* 支持 ``forward``、``backward``、``optimizer`` 这样的 stage 级报告；
-* 在受支持 fragment 上兼容 ANN、SNN 和混合执行路径；
-* 能显式处理脉冲生成、BatchNorm、优化器等不同 process category。
-
-它的边界包括：
-
-* 不支持的算子会拒绝生成总量；
-* 手工 profiling 使用 ``stage(name, phase=..., reuse_weights=...,
+* 不支持的能耗相关算子会拒绝生成总量；
+* 手工分析使用 ``stage(name, phase=..., reuse_weights=...,
   batch_norm_backward=...)`` 显式传递映射语义，名称本身不再编码协议；同一
-  context 内复用 stage 名称时必须使用相同选项；
-* 便捷训练入口会捕获 backward 并估算 optimizer，但不会调用
-  ``optimizer.step()`` 或修改模型参数；
-* 同一个 module 被重复调用时，这些调用必须全部参与 backward；只对部分调用
+  上下文内复用阶段名称时必须使用相同选项；
+* 便捷入口会清空已有梯度，但不会调用 ``optimizer.step()`` 或修改模型参数；
+* 同一个模块被重复调用时，这些调用必须全部参与反向传播；只对部分调用
   反传会因映射歧义而拒绝报告；
-* 它仍然是基于硬件模型的估计，而不是从真实芯片上测得的功耗。
-
-如果你需要训练阶段能耗，或者需要在线学习场景下的 stage breakdown，就使用这个估计器。
+* 结果来自硬件模型，不是真实芯片功耗测量。
 
 SpikeSim 运行时能耗
 -------------------
 
-``estimate_spikesim_energy`` 面向的是一个更窄的问题：
-在 SpikeSim 风格加速器模型下，受支持的 Conv2d 推理 stage 消耗了多少能耗？
+``estimate_spikesim_energy`` 统计实际执行的 Conv2d 推理阶段。默认 ``dense`` 模式
+使用作者代码的 PE-cycle 公式；``event`` 模式使用 SpikingJelly 定义的稀疏公式。
+主要限制如下：
 
-默认情况下，它会保留已发布 SpikeSim 实现中的 dense PE-cycle 能耗路径，同时用运行时 profiling 自动发现真实发生的 Conv2d stage 和 shape。
-
-它的边界很严格：
-
-* 默认 ``strict=True``，不支持的 Conv2d stage 或空报告直接报错；
-* 只适用于受支持的 Conv2d 前向推理 stage；
-* 不是通用的完整模型能耗估计器；
+* 模型应处于 ``eval`` 模式；默认 ``strict=True``，未支持的 Conv2d 阶段或空报告
+  直接报错；
+* 只统计受支持的 Conv2d 前向阶段，非 Conv2d 工作不进入主要能耗路径；
 * 默认 ``activity_mode="dense"`` 时，运行时脉冲稀疏度不会降低能耗；
-* ``activity_mode="event"`` 是正式的 ``spikingjelly_spikesim_event_v1``，
+* ``activity_mode="event"`` 对应 ``spikingjelly_spikesim_event_v1``，
   使用 SpikeSim 常量和本项目定义的 A/R/Z 稀疏公式，不冒充作者 dense 模型；
-* 当 ``require_if_lif_neurons=True`` 时，模型应保持在 IF/LIF 风格神经元假设之内；
-* 非 Conv2d 的工作不在它的主要能耗路径中。
+* ``require_if_lif_neurons=True`` 时只接受 IF/LIF 风格神经元。
 
-如果你的目标问题明确是 SpikeSim 风格的 Conv2d 加速器能耗，就使用它。
-如果你的目标是更广义的前向或训练能耗，可以改用 ``estimate_lemaire_energy`` 或 ``estimate_neuromc_runtime_energy``。
-
-推理能耗估计示例
+能耗估计示例
 ++++++++++++++++++++++++
 
 Simple Energy 示例
 -------------------
 
-在使用面向推理的能耗估计器之前，先调用 ``model.eval()``。
-如果你想把反向或优化器阶段也纳入进来，应切换到 ``estimate_neuromc_runtime_energy``。
-
-下面的例子使用最简单的能耗模型估计一次前向推理能耗。
+面向推理的估计器应在 ``model.eval()`` 后运行。下面先使用 Simple Energy：
 
 .. code-block:: python
 
@@ -389,7 +306,7 @@ Simple Energy 示例
     print("memory energy (pJ):", report.energy_memory_pj)
     print("counts:", report.counts)
 
-如果你想切换到另一套成本口径：
+可显式切换成本口径：
 
 .. code-block:: python
 
@@ -399,11 +316,7 @@ Simple Energy 示例
     report_fp16 = op_counter.estimate_simple_energy(model, x, config=cfg)
     print("FP16-regime energy (pJ):", report_fp16.energy_total_pj)
 
-这个例子刻意保持简单，是为了聚焦基础的能耗估计工作流。
-如果你需要更细致的前向 SNN 推理建模，可以把入口替换为 ``estimate_lemaire_energy``。
-
-如果你希望得到一个更丰富的仅前向推理估计，并且把访存、寻址和神经元状态效应也纳入进去，
-可以切换到 Lemaire 风格估计器：
+Lemaire 估计器还会计入寻址和神经元状态：
 
 .. code-block:: python
 
@@ -422,29 +335,8 @@ Simple Energy 示例
     print("Lemaire total (pJ):", lemaire_report.total_pj)
     print("Lemaire breakdown:", lemaire_report.breakdown_pj)
 
-实践建议
+验证与来源
 +++++++++++++++++
-
-如何选择计数器或能耗模型
---------------------------
-
-让工具去匹配你的问题：
-
-* 如果你需要宿主执行张量流量，使用 ``MemoryAccessCounter``；
-* 如果你需要简单神经形态权重/状态访存，使用 ``NeuromorphicMemoryAccessCounter``；
-* 如果你需要 FLOPs 或 SynOps，直接使用对应基础计数器；
-* 如果你需要 roofline 输入，组合 ``FlopCounter`` 和 ``MemoryAccessCounter``；
-* 如果你需要一个简单、归一化的运行时计算与访存能耗估计，使用 ``estimate_simple_energy``；
-* 如果你需要包含访存和神经元状态效应的前向 SNN 推理能耗，使用 ``estimate_lemaire_energy``；
-* 如果你需要训练阶段 breakdown 或优化器能耗，使用 ``estimate_neuromc_runtime_energy``；
-* 如果你需要 SpikeSim 风格的 Conv2d 加速器能耗，使用 ``estimate_spikesim_energy``。
-
-在汇报结果时，始终要说明：
-
-* 你使用了哪个估计器；
-* 这次运行是否只包含前向，还是还包含反向/优化器；
-* 采用了什么成本口径或硬件假设；
-* 输入类型和稀疏条件是什么。
 
 模型来源
 --------
@@ -454,18 +346,104 @@ Simple Energy 示例
 * Lemaire：`An Analytical Estimation of Spiking Neural Networks Energy Efficiency
   <https://arxiv.org/abs/2210.13107>`_。
 * SpikeSim dense：作者代码 commit
-  `c2627bc <https://github.com/Intelligent-Computing-Lab-Panda/SpikeSim/commit/c2627bc091a47bdcb630ca6207eaf44a00bd1da4>`_。
+  `c2627bc <https://github.com/Intelligent-Computing-Lab-Yale/SpikeSim/commit/c2627bc091a47bdcb630ca6207eaf44a00bd1da4>`_。
 * NeuroMC：作者代码 commit
   `712c66f <https://github.com/dayanhn/NeuroMC/commit/712c66f47cf76ae530a55f8bcad3858bd68788de>`_。
+
+相对趋势检查
+------------
+
+该基准只回答一个问题：在选定案例中，SpikingJelly 是否保留来源
+模型给出的相对趋势。每个案例记录一对 ``(E_origin, E_SJ)``。SpikeSim 和 NeuroMC
+使用固定版本的作者代码；Lemaire 没有公开代码，因此参考值按论文方程 (1)--(20)
+计算。参考路径只接收静态拓扑、张量尺寸和独立观测的发放数，不读取
+SpikingJelly 报告。
+
+主指标是 Kendall tau-b，并用 2,000 次成对 bootstrap 给出 95% 重采样区间。Spearman rho
+和 log-Pearson ``r`` 用作辅助观察。P90 对称倍率先移除中位乘法尺度，再衡量相对
+误差。``tau-b >= 0.80`` 和 ``P90 <= 1.50x`` 是预先设定的比较参考线，不是准确性
+判定标准。
+
+* **Kendall tau-b** 比较案例两两之间的高低顺序。``1`` 表示顺序完全一致，``0``
+  表示没有稳定的排序关系，``-1`` 表示顺序完全相反。
+* **Spearman rho** 计算两组名次的相关性。它也位于 ``[-1, 1]``，并且比 tau-b 更
+  关注单个案例的名次移动幅度。
+* **P90 对称倍率** 是移除固定尺度差后，相对误差倍率的经验 90 分位数。
+  ``1.0x`` 最理想；``1.5x`` 表示该分位点对应参考相对值的 ``1 / 1.5`` 到
+  ``1.5`` 倍。
+
+.. list-table:: 验证结果
+   :header-rows: 1
+   :widths: 20 12 23 14 14 14 14
+
+   * - 估计器模式
+     - 可比案例数
+     - Kendall tau-b（95% bootstrap 区间）
+     - Spearman rho
+     - Log-Pearson r
+     - P90 倍率
+     - 中位尺度 E_SJ/E_origin
+   * - Lemaire
+     - 12
+     - 0.939 [0.729, 1.000]
+     - 0.979
+     - 0.998
+     - 1.478x
+     - 0.877x
+   * - SpikeSim dense
+     - 7（另有 5 个压力案例）
+     - 1.000 [1.000, 1.000]
+     - 1.000
+     - 1.000
+     - 1.000x
+     - 1.000x
+   * - NeuroMC
+     - 13
+     - 0.795 [0.541, 0.971]
+     - 0.934
+     - 0.981
+     - 1.189x
+     - 0.396x
+
+.. figure:: ../../_static/tutorials/op_counter/energy_model_validation.png
+   :alt: 归一化参考值与 SpikingJelly 评分，以及各模型的 tau-b 与 P90 减一
+   :align: center
+
+   左图比较归一化后的成对评分。靠近虚线只表示相对趋势接近，不能说明绝对能耗
+   准确。右图汇总各模型的 tau-b 和 ``P90 - 1``。
+
+Lemaire 的 tau-b 和 P90 都达到参考线。NeuroMC 的 P90 达标，tau-b 为 ``0.795``，
+略低于 ``0.80``。SpikeSim 的 7 个可比案例完全一致，因为 ``dense`` 模式直接实现
+作者公式；该结果主要检查集成和计算过程。另有 5 个动态压力案例不参与相关性
+计算，其动态/静态比值为 ``0.500x`` 到 ``3.000x``。这里不作统一的“通过”判断。
+
+**局限性：**
+
+* 每组只有 7、12 或 13 个选定案例，不能代表更广泛的网络和发放模式；bootstrap
+  区间只反映这些案例内的重采样稳定性。
+* 两条路径共享拓扑、尺寸和发放数，网络规模本身可能产生高相关性。高 tau 或 rho
+  不能逐项验证能耗项或系数。
+* 参考值来自其他分析模型，不是硬件测量。相关性只能说明与这些模型的趋势接近，
+  不能证明物理能耗准确。
+* 排名和 P90 都弱化或移除了绝对尺度；即使存在固定的绝对偏差，也可能得到较好的
+  指标。
+* 覆盖仍不完整：Lemaire 参考值由论文方程重建，NeuroMC 只覆盖前向能耗，Simple
+  Energy 和 SpikeSim event 未使用独立的端到端外部估计器。
+
+手动运行基准脚本：
+
+.. code-block:: bash
+
+    uv run python benchmark/energy_model_validation.py \
+        --spikesim-root /path/to/SpikeSim \
+        --neuromc-root /path/to/NeuroMC
+
+精确的案例输入、双边评分、指标、仓库版本、依赖版本和参考版本均记录在
+:download:`案例级 CSV <../../_static/tutorials/op_counter/energy_model_validation.csv>` 中。
+该脚本依赖固定版本的外部仓库，因此不在 CI 中运行。
 
 总结
 ++++++++++++++++++++++++
 
-``op_counter`` 不只是一个单独的计数器，而是一套从底层运行时计数走向高层能耗估计的 profiling 框架。
-
-对大多数工作流来说，一个实用的推进顺序是：
-
-1. 先用直接计数器理解运行时行为；
-2. 再用 FLOP 和访存计数做 roofline 风格分析；
-3. 然后选择与目标问题匹配的能耗估计器；
-4. 最后在各自的建模边界内解释结果，而不是把它们当成普适真值。
+``op_counter`` 按给定输入记录实际执行。基础计数器适合分析操作量和流量；能耗
+估计器用于各自模型范围内的相对比较。不同估计器的绝对值不能直接比较。

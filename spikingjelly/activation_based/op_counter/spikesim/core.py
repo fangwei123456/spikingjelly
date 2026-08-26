@@ -36,7 +36,7 @@ _SUPPORTED_SPIKESIM_NEURONS = (
 
 _SPIKESIM_SOURCE = (
     "https://doi.org/10.1109/TCAD.2023.3274918",
-    "https://github.com/Intelligent-Computing-Lab-Panda/SpikeSim/commit/"
+    "https://github.com/Intelligent-Computing-Lab-Yale/SpikeSim/commit/"
     "c2627bc091a47bdcb630ca6207eaf44a00bd1da4",
 )
 
