@@ -49,6 +49,8 @@ def _validate_artifact(config: SGLangEngineConfig) -> None:
         raise ValueError("Unsupported SpikingJelly SGLang artifact.")
     if manifest.get("dtype") != "bfloat16":
         raise ValueError("SGLang artifacts currently require bfloat16 weights.")
+    if not isinstance(manifest.get("recipe_name"), str) or not manifest["recipe_name"]:
+        raise ValueError("SGLang artifact must declare a non-empty recipe_name.")
     weight_map = index.get("weight_map")
     if not isinstance(weight_map, dict) or not weight_map:
         raise ValueError("SGLang artifact tensor index is empty or invalid.")

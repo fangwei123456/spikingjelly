@@ -49,9 +49,11 @@ def _decode(value: Any) -> Any:
             "spikingjelly.activation_based.distributed.vision."
         )
     if isinstance(target_name, str) and target_name not in config_types:
+        if not target_name.startswith("spikingjelly.activation_based.model."):
+            raise ValueError(f"Unsupported config target {target_name!r}.")
         try:
             importlib.import_module(target_name.rsplit(".", 1)[0])
-        except (ImportError, ValueError) as error:
+        except ImportError as error:
             raise ValueError(f"Unsupported config target {target_name!r}.") from error
         config_types = _config_types()
     if not isinstance(target_name, str) or target_name not in config_types:
@@ -143,9 +145,11 @@ class ModelConfig:
     def from_dict(cls, data: dict[str, Any]) -> ModelConfig:
         r"""Restore a model configuration created by :meth:`as_dict`.
 
-        **中文：** 按 ``_target_`` 导入并恢复具体 model config。
-        **English:** Import and restore a concrete model configuration from its
-        ``_target_`` path.
+        **中文：** 按 ``_target_`` 恢复具体 model config。内置模型会自动导入；
+        外部 config 类必须由调用方预先导入。
+        **English:** Restore a concrete model configuration from its ``_target_``
+        path. Built-in models are imported automatically; callers must pre-import
+        external config classes.
 
         :param data: 已序列化配置。 / Serialized configuration.
         :type data: dict[str, Any]
@@ -721,10 +725,11 @@ class TrainingConfig:
     def from_dict(cls, data: dict[str, Any]) -> TrainingConfig:
         r"""Restore a configuration created by :meth:`as_dict`.
 
-        **中文：** 从 ``as_dict`` 结果按 ``_target_`` 导入并恢复具体 config 子类；
-        不可用或非 config 类型的 target 会被拒绝。
-        **English:** Import and restore concrete config subclasses from the
-        ``_target_`` path produced by ``as_dict``; unavailable or non-config
+        **中文：** 从 ``as_dict`` 结果按 ``_target_`` 恢复具体 config 子类。内置模型
+        会自动导入；外部 config 类必须预先导入；不可用或非 config 类型会被拒绝。
+        **English:** Restore concrete config subclasses from the ``_target_`` path
+        produced by ``as_dict``. Built-in models are imported automatically;
+        external config classes must already be imported; unavailable or non-config
         targets are rejected.
 
         :param data: 已序列化配置。 / Serialized configuration.

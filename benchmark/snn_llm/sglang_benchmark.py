@@ -75,10 +75,11 @@ async def _run_requests(engine, prompts, output_length):
         async for chunk in stream:
             if first_token is None and chunk.get("output_ids"):
                 first_token = time.perf_counter()
-            chunk_ids = chunk.get("output_ids", [])
-            completion_tokens = int(
-                chunk.get("meta_info", {}).get("completion_tokens", len(chunk_ids))
-            )
+            chunk_ids = chunk.get("output_ids") or []
+            meta = chunk.get("meta_info") or {}
+            if "completion_tokens" not in meta:
+                raise RuntimeError("SGLang stream chunk missing completion_tokens.")
+            completion_tokens = int(meta["completion_tokens"])
             if len(chunk_ids) == completion_tokens:
                 output_ids = chunk_ids
             elif len(output_ids) + len(chunk_ids) == completion_tokens:
@@ -116,8 +117,9 @@ def _gpu_memory(stop: threading.Event, peaks: list[int], errors: list[str]) -> N
                 check=False,
                 capture_output=True,
                 text=True,
+                timeout=5,
             )
-        except OSError as error:
+        except (OSError, subprocess.TimeoutExpired) as error:
             errors.append(str(error))
             return
         values = [

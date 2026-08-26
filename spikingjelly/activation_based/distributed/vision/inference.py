@@ -428,7 +428,7 @@ def _run_classification(
     output: Optional[Path] = None,
 ) -> Optional[dict[str, float]]:
     evaluate = mode == "evaluate"
-    if evaluate != (output is None):
+    if (evaluate and output is not None) or (not evaluate and output is None):
         raise ValueError("evaluate mode cannot write output; predict mode requires it.")
     if not torch.cuda.is_available():
         raise RuntimeError("Distributed vision inference requires CUDA.")

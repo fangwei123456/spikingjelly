@@ -511,7 +511,8 @@ Module: `spikingjelly.activation_based.distributed`.
   for image classification. SEW-ResNet34 and Spikformer distributed recipes are
   owned by their corresponding `activation_based.model` modules; serialized
   targets from the previous `distributed.vision` model paths are migrated when
-  loaded.
+  loaded. Direct imports from `distributed.vision` must move to the corresponding
+  `activation_based.model` submodule.
 - Added importable Vision classification loss functions with serializable keyword
   arguments shared by non-pipeline and pipeline training and validation.
 - Added model-owned Vision `step_mode` configuration. Classification training now

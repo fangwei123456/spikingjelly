@@ -11,6 +11,10 @@ from torch.utils.data import Dataset
 from spikingjelly.activation_based.distributed import vision
 
 
+def _spread_indices(size: int, samples: int) -> list[int]:
+    return torch.linspace(0, size - 1, samples, dtype=torch.int64).tolist()
+
+
 class _SyntheticImages(Dataset):
     def __init__(
         self,
@@ -64,7 +68,7 @@ def build_imagefolder_dataset(data_dir: Path, image_size: int, samples: int) -> 
     )
     if samples > len(dataset):
         raise ValueError("samples cannot exceed the ImageFolder dataset size.")
-    return Subset(dataset, range(samples))
+    return Subset(dataset, _spread_indices(len(dataset), samples))
 
 
 def build_cifar10_dataset(data_dir: Path, image_size: int, samples: int) -> Dataset:
@@ -81,7 +85,7 @@ def build_cifar10_dataset(data_dir: Path, image_size: int, samples: int) -> Data
     )
     if samples > len(dataset):
         raise ValueError("samples cannot exceed the CIFAR10 test dataset size.")
-    return Subset(dataset, range(samples))
+    return Subset(dataset, _spread_indices(len(dataset), samples))
 
 
 def _parse_args() -> argparse.Namespace:

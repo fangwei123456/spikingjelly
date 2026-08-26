@@ -1012,9 +1012,9 @@ TP1/DP4 的基线段使用固定 128-sample 数据集；新测的 TP2/PP2/PP4 �
 PP2 和 PP4；该模型有 14 个 attention heads，故四卡节点上大于 1 的合法纯 TP
 拓扑为 TP2，TP4 不满足 head 整除约束。每个点从新进程恢复同一初始化状态的
 sharded checkpoint，先执行 5 个不计时 schedule batch，再计时完整 schedule，
-并独立重复三次；checkpoint/model 初始化不计时。MCore schedule 在计时区间内从
-DataLoader iterator 取 batch，因此其吞吐包含 dataset indexing 和 collation；Vision
-曲线则排除 DataLoader 时间，两种 workload 的吞吐不能横向比较。新测 sweep 显式设置
+并独立重复三次；checkpoint/model 初始化、dataset indexing 和 collation 不计时。
+计时包含 H2D、模型执行、通信和指标归约。Vision 采用相同的计时边界，但其图像吞吐
+与 LLM token 吞吐属于不同 workload，不能横向比较。新测 sweep 显式设置
 ``NCCL_P2P_DISABLE=1``、``NCCL_IB_DISABLE=1``
 和 ``PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True``。MCore API 中
 ``micro_batch_size`` 表示每块大小，而本节的 L 是

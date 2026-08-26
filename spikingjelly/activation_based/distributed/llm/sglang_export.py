@@ -325,7 +325,14 @@ def export_sglang_artifact(
         model = load_for_inference(transformer_config, model_provider, checkpoint)
         unwrapped = unwrap_model(model)
         model_config = unwrapped.snn_model_config
-        recipe = dict(unwrapped.checkpoint_metadata)
+        recipe = getattr(unwrapped, "checkpoint_metadata", None)
+        if not isinstance(recipe, dict):
+            raise ValueError("Model checkpoint_metadata must be a dictionary.")
+        recipe = dict(recipe)
+        if not isinstance(recipe.get("recipe_name"), str) or not recipe["recipe_name"]:
+            raise ValueError(
+                "Model checkpoint_metadata must declare a non-empty recipe_name."
+            )
         reduction = str(unwrapped.temporal_output_reduction)
 
         payload = [None]

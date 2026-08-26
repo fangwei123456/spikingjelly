@@ -1105,10 +1105,11 @@ Because this model has 14 attention heads, TP2 is the valid pure-TP topology
 above one on the four-GPU host; TP4 violates head divisibility.
 Every point restores the same initialized state from a sharded checkpoint in a
 fresh process, runs five untimed schedule batches, measures a complete schedule,
-and is repeated independently three times; checkpoint/model initialization is
-excluded. The MCore schedule fetches batches from its DataLoader iterator inside
-the timed region, so throughput includes dataset indexing and collation. Vision
-excludes DataLoader time; throughput is not comparable across these workloads.
+and is repeated independently three times; checkpoint/model initialization,
+dataset indexing, and collation are excluded. Timing retains H2D transfer, model
+execution, communication, and metric reduction. Vision uses the same timing
+boundary, but throughput remains workload-specific and is not comparable to LLM
+token throughput.
 The new sweep explicitly sets ``NCCL_P2P_DISABLE=1``,
 ``NCCL_IB_DISABLE=1``, and
 ``PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True``. In the MCore API,

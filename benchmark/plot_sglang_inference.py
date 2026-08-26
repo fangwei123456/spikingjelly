@@ -97,7 +97,7 @@ def plot(rows: list[dict[str, object]], output: Path) -> None:
         colors = ("C0", "C2", "C1")
         bars = scale_axis.bar(range(3), throughputs, color=colors, width=0.68)
         baseline = throughputs[0]
-        for index, (bar, row) in enumerate(zip(bars, fixed, strict=True)):
+        for bar, row in zip(bars, fixed, strict=True):
             scale_axis.text(
                 bar.get_x() + bar.get_width() / 2,
                 bar.get_height() + max(throughputs) * 0.035,

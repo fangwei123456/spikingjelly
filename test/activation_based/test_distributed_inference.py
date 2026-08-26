@@ -16,6 +16,7 @@ from benchmark.snn_llm import sglang_benchmark, spikelm
 from benchmark.snn_llm.spikelm import SpikeLMConfig
 from benchmark.snn_llm.qwen2 import _gated_tensor, _reorder_qkv
 from benchmark.snn_llm.sglang_benchmark import _prompts, _run_requests
+from benchmark import vision_inference
 from benchmark.vision_inference import build_synthetic_dataset
 from spikingjelly.activation_based.distributed.llm import (
     EvaluationConfig,
@@ -33,6 +34,7 @@ from spikingjelly.activation_based.distributed.llm.sglang_export import (
     _copy_tokenizer,
     _write_tensor_shards,
 )
+from spikingjelly.activation_based.distributed.llm.sglang import _validate_artifact
 
 
 def test_inference_temporal_logit_reduction():
@@ -130,6 +132,7 @@ def _sglang_artifact(tmp_path, *, schema=2):
             {
                 "schema_version": schema,
                 "dtype": "bfloat16",
+                "recipe_name": "test",
             }
         ),
         encoding="utf-8",
@@ -153,6 +156,19 @@ def test_sglang_engine_rejects_invalid_artifact_and_package(tmp_path):
             )
         ):
             pass
+
+    manifest_path = artifact / "spikingjelly_sglang.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["schema_version"] = 2
+    manifest.pop("recipe_name")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="recipe_name"):
+        _validate_artifact(
+            SGLangEngineConfig(
+                artifact=artifact,
+                external_model_package="benchmark.snn_llm.sglang_models",
+            )
+        )
 
     with pytest.raises(ValueError, match="external_model_package"):
         SGLangEngineConfig(artifact=artifact, external_model_package="")
@@ -457,6 +473,18 @@ def test_sglang_benchmark_rejects_failed_gpu_memory_poll(monkeypatch):
     assert errors == ["nvidia-smi failed"]
 
 
+def test_sglang_benchmark_rejects_gpu_memory_poll_timeout(monkeypatch):
+    def timeout(*_args, **_kwargs):
+        raise sglang_benchmark.subprocess.TimeoutExpired("nvidia-smi", 5)
+
+    monkeypatch.setattr(sglang_benchmark.subprocess, "run", timeout)
+    errors = []
+
+    sglang_benchmark._gpu_memory(threading.Event(), [0], errors)
+
+    assert errors
+
+
 def test_sglang_benchmark_samples_gpu_memory_when_already_stopped(monkeypatch):
     monkeypatch.setattr(
         sglang_benchmark.subprocess,
@@ -495,3 +523,20 @@ def test_sglang_benchmark_merges_incremental_stream_tokens():
 
     assert requests[0]["tokens"] == 4
     assert requests[0]["output_ids"] == [1, 2, 3, 4]
+
+
+def test_sglang_benchmark_rejects_stream_chunks_without_token_counts():
+    class Engine:
+        async def async_generate(self, **_kwargs):
+            async def stream():
+                yield {"output_ids": [1]}
+                yield {"output_ids": [2]}
+
+            return stream()
+
+    with pytest.raises(RuntimeError, match="completion_tokens"):
+        asyncio.run(_run_requests(Engine(), [[7, 8]], 2))
+
+
+def test_vision_benchmark_subset_indices_span_the_dataset():
+    assert vision_inference._spread_indices(10, 4) == [0, 3, 6, 9]

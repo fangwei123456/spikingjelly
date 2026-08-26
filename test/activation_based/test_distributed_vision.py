@@ -12,6 +12,7 @@ from torch.utils.data import TensorDataset
 
 from spikingjelly.activation_based import functional, layer
 from spikingjelly.activation_based.distributed import vision
+from spikingjelly.activation_based.distributed.vision import config as vision_config
 from spikingjelly.activation_based.distributed.vision import execution, inference
 from spikingjelly.activation_based.distributed.tensor_parallel import (
     ChannelShardBatchNorm2d,
@@ -89,6 +90,22 @@ def test_vision_model_config_targets_load_in_a_fresh_process():
             text=True,
         )
         assert completed.returncode == 0, completed.stderr
+
+
+def test_vision_config_does_not_auto_import_external_targets(monkeypatch):
+    imported = []
+    monkeypatch.setattr(
+        vision_config.importlib,
+        "import_module",
+        lambda name: imported.append(name),
+    )
+
+    with pytest.raises(ValueError, match="Unsupported config target"):
+        vision_config.ModelConfig.from_dict(
+            {"_target_": "external_package.model.CustomConfig"}
+        )
+
+    assert imported == []
 
 
 def test_vision_evaluation_config_and_artifact_round_trip(tmp_path):

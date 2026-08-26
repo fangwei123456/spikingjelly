@@ -12,7 +12,7 @@ def _loss_totals(
     counts: dict[str, float] = {}
     for loss in losses:
         for name, value in loss.items():
-            values = value.detach().float().reshape(-1)
+            values = value.detach().to(dtype=torch.float64).reshape(-1)
             if values.numel() == 2:
                 total, count = values.tolist()
             else:
@@ -45,7 +45,9 @@ def _reduce_data_parallel_metrics(
     if not totals:
         return {}
     names = sorted(totals)
-    values = torch.tensor([totals[name] for name in names], device=device)
+    values = torch.tensor(
+        [totals[name] for name in names], device=device, dtype=torch.float64
+    )
     torch.distributed.all_reduce(
         values,
         group=parallel_state.get_data_parallel_group(with_context_parallel=True),
