@@ -156,6 +156,7 @@ workspace/
 .agents/
 .codex/
 .goal*/
+.review-*-loop-state.json
 ObsidianVault
 .mimocode/
 .codegraph/
