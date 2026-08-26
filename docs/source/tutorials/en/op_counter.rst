@@ -458,9 +458,9 @@ cases are excluded from the correlation, with runtime/static ratios from
   accuracy.
 * Ranking and P90 weaken or remove absolute scale. A fixed absolute bias can
   coexist with favorable metrics.
-* Coverage remains incomplete: published equations reconstruct Lemaire,
-  NeuroMC covers forward energy only, and Simple Energy and SpikeSim event have
-  no independent end-to-end external estimator in this benchmark.
+* Coverage remains incomplete: published equations reconstruct Lemaire, this
+  benchmark validates only NeuroMC forward energy, and Simple Energy and
+  SpikeSim event have no independent end-to-end external estimator.
 
 Run the benchmark manually with:
 

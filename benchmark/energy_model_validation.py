@@ -631,6 +631,7 @@ def _plot(scores: list[Score], metrics: dict[str, dict[str, float]]) -> None:
     x = np.arange(len(models))
     tau = [metrics[model]["kendall_tau_b"] for model in models]
     p90 = [metrics[model]["p90_factor"] for model in models]
+    p90_minus_one = np.asarray(p90) - 1.0
     bars.bar(
         x - 0.18,
         tau,
@@ -640,14 +641,14 @@ def _plot(scores: list[Score], metrics: dict[str, dict[str, float]]) -> None:
     )
     bars.bar(
         x + 0.18,
-        np.asarray(p90) - 1.0,
+        p90_minus_one,
         width=0.36,
         color="#E69F00",
         label="P90 factor - 1",
     )
     bars.axhline(0.8, color="#555555", linestyle="--", linewidth=1)
     bars.set_xticks(x, models, rotation=15, ha="right")
-    bars.set_ylim(0, max(1.05, max(p90)))
+    bars.set_ylim(min(0.0, min(tau)), max(1.05, max(p90_minus_one)))
     bars.set_ylabel("Scale-free validation metric")
     bars.legend(frameon=False)
     bars.grid(axis="y", alpha=0.2)

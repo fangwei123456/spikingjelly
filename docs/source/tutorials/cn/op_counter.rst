@@ -427,8 +427,8 @@ Lemaire 的 tau-b 和 P90 都达到参考线。NeuroMC 的 P90 达标，tau-b �
   不能证明物理能耗准确。
 * 排名和 P90 都弱化或移除了绝对尺度；即使存在固定的绝对偏差，也可能得到较好的
   指标。
-* 覆盖仍不完整：Lemaire 参考值由论文方程重建，NeuroMC 只覆盖前向能耗，Simple
-  Energy 和 SpikeSim event 未使用独立的端到端外部估计器。
+* 覆盖仍不完整：Lemaire 参考值由论文方程重建，本基准只验证 NeuroMC 前向能耗，
+  Simple Energy 和 SpikeSim event 未使用独立的端到端外部估计器。
 
 手动运行基准脚本：
 
