@@ -68,6 +68,17 @@ def _load_checkpoint_model(
     set_model_state_dict(model, state["model"], options=options)
 
 
+def _sync_rank_zero_error(
+    error: Optional[BaseException], device: torch.device, message: str
+) -> None:
+    failed = torch.tensor(int(error is not None), dtype=torch.uint8, device=device)
+    dist.broadcast(failed, src=0)
+    if failed.item():
+        if error is not None:
+            raise error
+        raise RuntimeError(message)
+
+
 def export_inference_artifact(checkpoint: Path, output: Path) -> None:
     r"""Export a distributed vision checkpoint as one canonical artifact.
 
@@ -154,7 +165,6 @@ def export_inference_artifact(checkpoint: Path, output: Path) -> None:
         gathered = [None] * expected_world_size if rank == 0 else None
         dist.gather_object(payload, gathered, dst=0)
 
-        failed = torch.zeros((), dtype=torch.uint8, device=device)
         error: Optional[BaseException] = None
         if rank == 0:
             temporary = output.with_name(f".{output.name}.tmp")
@@ -180,15 +190,12 @@ def export_inference_artifact(checkpoint: Path, output: Path) -> None:
                 )
                 temporary.replace(output)
             except BaseException as exception:
-                failed.fill_(1)
                 error = exception
                 if temporary.exists():
                     temporary.unlink()
-        dist.broadcast(failed, src=0)
-        if failed.item():
-            if error is not None:
-                raise error
-            raise RuntimeError("Rank 0 could not export the inference artifact.")
+        _sync_rank_zero_error(
+            error, device, "Rank 0 could not export the inference artifact."
+        )
         dist.barrier()
     finally:
         if initialized_here and dist.is_initialized():
@@ -479,6 +486,8 @@ def _run_classification(
         )
 
         model_config, state_dict, source = load_inference_artifact(config.artifact)
+        if config.pipeline_parallel_size > 1 and model_config.step_mode == "s":
+            raise ValueError("Vision PP currently requires step_mode='m'.")
         torch.manual_seed(config.seed)
         builder_cls = model_config.get_builder_cls()
         builder = builder_cls(model_config)
@@ -644,29 +653,36 @@ def _run_classification(
 
         if not evaluate:
             dist.barrier()
+            error = None
             if rank == 0:
-                output_ranks = [
-                    dp_rank * model_parallel_size
-                    + (config.pipeline_parallel_size - 1) * config.tensor_parallel_size
-                    for dp_rank in range(data_parallel_size)
-                ]
-                _merge_prediction_shards(
-                    output,
-                    [
-                        output.with_name(
-                            f".{output.name}.rank-{last_stage_rank:05d}.h5"
-                        )
-                        for last_stage_rank in output_ranks
-                    ],
-                    dataset_size=dataset_size,
-                    num_classes=model_config.num_classes,
-                    attributes={
-                        "artifact": str(config.artifact),
-                        "precision": config.precision,
-                        "source_checkpoint": source["checkpoint"],
-                    },
-                )
-            dist.barrier()
+                try:
+                    output_ranks = [
+                        dp_rank * model_parallel_size
+                        + (config.pipeline_parallel_size - 1)
+                        * config.tensor_parallel_size
+                        for dp_rank in range(data_parallel_size)
+                    ]
+                    _merge_prediction_shards(
+                        output,
+                        [
+                            output.with_name(
+                                f".{output.name}.rank-{last_stage_rank:05d}.h5"
+                            )
+                            for last_stage_rank in output_ranks
+                        ],
+                        dataset_size=dataset_size,
+                        num_classes=model_config.num_classes,
+                        attributes={
+                            "artifact": str(config.artifact),
+                            "precision": config.precision,
+                            "source_checkpoint": source["checkpoint"],
+                        },
+                    )
+                except BaseException as exception:
+                    error = exception
+            _sync_rank_zero_error(
+                error, device, "Rank 0 could not merge prediction shards."
+            )
             return None
 
         elapsed = torch.tensor(elapsed_seconds, device=device)

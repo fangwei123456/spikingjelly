@@ -42,8 +42,10 @@ def _sync_error(error: Optional[BaseException], device: torch.device) -> None:
 def _copy_tokenizer(source: Optional[Path], output: Path) -> None:
     if source is None:
         return
-    if not source.is_dir():
+    if not source.exists():
         raise ValueError(f"Tokenizer directory does not exist: {source}")
+    if not source.is_dir():
+        raise ValueError(f"Tokenizer path is not a directory: {source}")
 
     def ignored(_path: str, names: list[str]) -> set[str]:
         return {
@@ -227,13 +229,15 @@ def export_sglang_artifact(
 
     **中文：** 在源 TP/PP/CP 拓扑上加载 model shards，并为每个 PP stage 调用
     ``stage_tensors`` 完成模型专属的权重映射。框架负责分片写入、索引、manifest、
-    tokenizer、跨 rank 错误同步和原子发布，不要求任意 GPU 持有完整模型。
+    tokenizer、跨 rank 错误同步和原子发布，不要求任意 GPU 持有完整模型。源配置
+    必须使用 BF16，并且 ``expert_model_parallel_size`` 必须为 1。
 
     **English:** Load model shards on the source TP/PP/CP topology and invoke
     ``stage_tensors`` for model-owned weight mapping on each PP stage. The
     framework owns sharded writes, indexing, the manifest, tokenizer files,
     cross-rank error synchronization, and atomic publication without requiring
-    any GPU to hold the complete model.
+    any GPU to hold the complete model. The source configuration must use BF16
+    with ``expert_model_parallel_size=1``.
 
     :param transformer_config: 源 MCore Transformer 配置。 / Source MCore configuration.
     :type transformer_config: megatron.core.transformer.TransformerConfig
@@ -269,6 +273,8 @@ def export_sglang_artifact(
     checkpoint, output = Path(checkpoint), Path(output)
     if not transformer_config.bf16 or transformer_config.params_dtype != torch.bfloat16:
         raise ValueError("SGLang artifact export currently requires MCore bfloat16.")
+    if transformer_config.expert_model_parallel_size != 1:
+        raise ValueError("SGLang artifact export does not support expert parallelism.")
     architectures = artifact_config.get("architectures")
     if (
         not isinstance(architectures, list)

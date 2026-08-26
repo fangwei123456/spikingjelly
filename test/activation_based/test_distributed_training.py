@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+import pytest
 import torch
 from torch.utils.data import DataLoader, DistributedSampler, TensorDataset
 
@@ -60,3 +61,8 @@ def test_metric_reduction_preserves_large_token_counts(monkeypatch):
 
     assert totals["loss"][1] == count
     assert metrics["loss"] == 1.0 / count
+
+
+def test_loss_totals_rejects_ambiguous_metric_tensors():
+    with pytest.raises(ValueError, match="one or two elements"):
+        _loss_totals([{"loss": torch.ones(3)}])

@@ -33,6 +33,7 @@ from spikingjelly.activation_based.distributed.llm.temporal import _reduce_time_
 from spikingjelly.activation_based.distributed.llm.sglang_export import (
     _copy_tokenizer,
     _write_tensor_shards,
+    export_sglang_artifact,
 )
 from spikingjelly.activation_based.distributed.llm.sglang import _validate_artifact
 
@@ -267,6 +268,27 @@ def test_sglang_export_reconstructs_tp_tensor_layouts():
         stage.merge_tensor("replicated")
 
 
+def test_sglang_export_rejects_expert_parallelism_before_runtime(tmp_path, monkeypatch):
+    transformer = SimpleNamespace(
+        bf16=True,
+        params_dtype=torch.bfloat16,
+        expert_model_parallel_size=2,
+    )
+    checkpoint = tmp_path / "checkpoint"
+    checkpoint.mkdir()
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+
+    with pytest.raises(ValueError, match="expert parallelism"):
+        export_sglang_artifact(
+            transformer,
+            lambda *_args: None,
+            checkpoint,
+            tmp_path / "artifact",
+            artifact_config={"architectures": ["TestForCausalLM"]},
+            stage_tensors=lambda _stage: (),
+        )
+
+
 def test_sglang_benchmark_builds_variable_prompts_with_shared_prefix():
     prompts = _prompts(
         count=4,
@@ -456,6 +478,11 @@ def test_sglang_export_copies_generic_tokenizer_assets_and_counts_parameters(
     assert not (output / "model.safetensors").exists()
     assert set(weight_map) == {"a", "b"}
     assert parameter_count == 10
+
+    tokenizer_file = tmp_path / "tokenizer.json"
+    tokenizer_file.write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="not a directory"):
+        _copy_tokenizer(tokenizer_file, output)
 
 
 def test_sglang_benchmark_rejects_failed_gpu_memory_poll(monkeypatch):

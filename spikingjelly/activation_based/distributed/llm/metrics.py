@@ -15,8 +15,12 @@ def _loss_totals(
             values = value.detach().to(dtype=torch.float64).reshape(-1)
             if values.numel() == 2:
                 total, count = values.tolist()
+            elif values.numel() == 1:
+                total, count = values.item(), 1.0
             else:
-                total, count = values.mean().item(), 1.0
+                raise ValueError(
+                    f"Loss tensor must have one or two elements, got {values.numel()}."
+                )
             totals[name] = totals.get(name, 0.0) + total
             counts[name] = counts.get(name, 0.0) + count
     return {name: (total, counts[name]) for name, total in totals.items()}

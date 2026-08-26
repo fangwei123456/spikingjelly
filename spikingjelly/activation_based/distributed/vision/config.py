@@ -469,12 +469,13 @@ class PredictionConfig:
     **中文：** 从 topology-independent artifact 构建视觉 SNN，并使用
     PyTorch replicated DP、FSDP2、architecture-specific TP 与 PP 执行离线
     预测。dataset builder 必须返回一个 ``Dataset``；元素可以是 image 或
-    ``(image, target)``，其中 target 被忽略。
+    ``(image, target)``，其中 target 被忽略。PP 只支持 multi-step artifact。
 
     **English:** Build a vision SNN from a topology-independent artifact and run
     offline prediction with PyTorch replicated DP, FSDP2, architecture-specific
     TP, and PP. The dataset builder must return one ``Dataset`` whose items may
-    be images or ``(image, target)``; targets are ignored.
+    be images or ``(image, target)``; targets are ignored. PP requires a
+    multi-step artifact.
 
     :param artifact: :func:`export_inference_artifact` 生成的 artifact。 /
         Artifact created by :func:`export_inference_artifact`.

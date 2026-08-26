@@ -93,7 +93,7 @@ def open_sglang_engine(config: SGLangEngineConfig) -> Iterator[Any]:
     try:
         if importlib.util.find_spec(config.external_model_package) is None:
             raise ModuleNotFoundError(config.external_model_package)
-    except (ImportError, AttributeError) as error:
+    except ImportError as error:
         raise ImportError(
             f"SGLang external model package is unavailable: "
             f"{config.external_model_package}"

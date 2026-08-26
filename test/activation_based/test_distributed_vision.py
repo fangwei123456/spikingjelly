@@ -2,11 +2,13 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import h5py
 import numpy as np
 import pytest
 import torch
+import torch.distributed.device_mesh as device_mesh
 import torch.nn as nn
 from torch.utils.data import TensorDataset
 
@@ -478,6 +480,60 @@ def test_vision_inference_preserves_early_configuration_error(monkeypatch):
 
     with pytest.raises(ValueError, match="world_size"):
         inference._run_classification(config, mode="evaluate")
+
+
+def test_vision_inference_rejects_single_step_pipeline_artifact(monkeypatch):
+    config = vision.EvaluationConfig(
+        artifact=Path("artifact.pt"),
+        dataset_builder="package.datasets.build",
+        pipeline_parallel_size=2,
+    )
+
+    class Mesh:
+        def __getitem__(self, _name):
+            return self
+
+        def get_group(self):
+            return object()
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "set_device", lambda _device: None)
+    monkeypatch.setattr(inference.dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(inference.dist, "get_world_size", lambda: 2)
+    monkeypatch.setattr(inference.dist, "get_rank", lambda: 0)
+    monkeypatch.setattr(
+        device_mesh, "init_device_mesh", lambda *_args, **_kwargs: Mesh()
+    )
+    monkeypatch.setattr(
+        inference,
+        "load_inference_artifact",
+        lambda _path: (SimpleNamespace(step_mode="s"), {}, {}),
+    )
+
+    with pytest.raises(ValueError, match="step_mode='m'"):
+        inference._run_classification(config, mode="evaluate")
+
+
+def test_vision_rank_zero_error_is_broadcast(monkeypatch):
+    broadcasts = []
+    monkeypatch.setattr(
+        inference.dist,
+        "broadcast",
+        lambda tensor, **_kwargs: broadcasts.append(tensor.item()),
+    )
+
+    with pytest.raises(OSError, match="merge failed"):
+        inference._sync_rank_zero_error(
+            OSError("merge failed"), torch.device("cpu"), "remote failure"
+        )
+
+    assert broadcasts == [1]
+
+    monkeypatch.setattr(
+        inference.dist, "broadcast", lambda tensor, **_kwargs: tensor.fill_(1)
+    )
+    with pytest.raises(RuntimeError, match="remote failure"):
+        inference._sync_rank_zero_error(None, torch.device("cpu"), "remote failure")
 
 
 def test_vision_inference_rejects_wrong_config_before_runtime():
