@@ -29,7 +29,7 @@ TOPOLOGY_LABELS = {
     "fsdp4": "FSDP4",
     "tp4": "TP4",
     "pp4": "PP4",
-    "tp1": "TP1",
+    "tp1": "Single GPU",
     "tp2": "TP2",
     "pp2": "PP2",
 }

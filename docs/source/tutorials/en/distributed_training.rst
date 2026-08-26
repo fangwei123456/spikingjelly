@@ -345,50 +345,9 @@ SGLang's native layer staging and ``PPProxyTensors`` protocol.
     if __name__ == "__main__":
         main()
 
-Use ``benchmark/snn_llm/sglang_benchmark.py`` for reproducible offline Engine
-measurements. It accepts variable token lengths and shared-prefix workloads and
-reports request/input/output throughput, median/p99 TTFT, TPOT, end-to-end
-latency, and peak per-GPU memory.
-
-The formal SGLang validation used one on-demand 4 x RTX 4090 host with no
-NVLink, PyTorch 2.11.0, CUDA 13.0, SGLang 0.5.17, BF16, Triton attention, and
-CUDA Graph disabled. Every performance point ran one warmup request followed by
-three repeats; the Engine flushes its Radix cache after warmup and before each
-measured repeat, and the figure reports their median. The Qwen artifact uses
-Qwen2.5-0.5B weights and deterministic unit QCFS scales, so these are system
-measurements rather than model-quality results.
-
-.. figure:: ../../_static/tutorials/distributed/sglang-inference.png
-    :width: 900px
-    :alt: SGLang Qwen2.5-0.5B scale-out and shared-prefix throughput and latency
-
-    Left: fixed-workload output throughput and p99 TPOT for TP1, PP2, and DP4.
-    Right: TP1 input/output throughput and p99 TTFT with and without a
-    2048-token shared prefix. Different right-panel prompt lengths are an
-    intentional Radix-cache workload comparison, not a topology comparison.
-
-DP4 reached 3.93 times TP1 output throughput while keeping TPOT effectively
-unchanged. TP2 and PP2 were slower than TP1 on this PCIe host; use model
-parallelism for capacity, then DP for throughput. The 12.6B SpikeLM export wrote
-564 tensors and 25,173,851,048 artifact bytes, then loaded and generated on PP4
-without any GPU holding the complete model.
-
-Qwen2 produced the same 32 greedy tokens as MCore for the fixed parity prompts.
-SpikeLM matched every first decode token; three of four PP2 prompts matched all
-eight tokens, while one diverged after the third generated token under different
-BF16 execution orders. Cross-backend free-running token identity is therefore
-not a contract for near-tied logits.
-
-The complete medians are available in :download:`the SGLang result CSV
-<../../_static/tutorials/distributed/sglang-inference-results.csv>`.
-
-Regenerate the figure directly from that CSV:
-
-.. code-block:: bash
-
-    python benchmark/plot_sglang_inference.py \
-        docs/source/_static/tutorials/distributed/sglang-inference-results.csv \
-        docs/source/_static/tutorials/distributed/sglang-inference.png
+``benchmark/snn_llm/sglang_benchmark.py`` provides reproducible offline Engine
+measurements. The experimental protocol, throughput/latency metrics, and results
+are kept together in the SGLang subsection under “Measured results.”
 
 Low-level APIs
 --------------
@@ -560,14 +519,15 @@ does not contribute to global batch size.
 Measured results
 ----------------
 
-The following results were measured on four RTX 4090 24-GiB GPUs. The machine
-had no NVLink, and CUDA peer access was ``False`` across GPUs. The software stack
-used PyTorch 2.8.0, Megatron Core 0.18.2, and Triton 3.4.0. These results are
-relative references for a PCIe multi-GPU machine and should not be extrapolated
-directly to an NVLink cluster.
+The Vision and MCore results below were measured on one 4 x RTX 4090 24-GiB
+host without NVLink or CUDA peer access. Its software stack used PyTorch 2.8.0,
+Megatron Core 0.18.2, and Triton 3.4.0. SGLang used separate rentals with the
+same GPU/interconnect class and its own pinned runtime, described in that
+subsection. All results are relative references for PCIe multi-GPU machines and
+should not be extrapolated directly to an NVLink cluster.
 
-Vision benchmarks
-~~~~~~~~~~~~~~~~~
+Vision training benchmarks
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The Vision benchmarks fixed BF16, ``T=4``, 128 x 128 inputs, and 1000 classes.
 The plots retain only one GPU, DP4, FSDP4, TP4, and PP4. Each curve labels its
@@ -784,8 +744,8 @@ more total work, not fixed-batch speedup.
 produced no training metrics; it is neither a slow successful point nor labeled
 as OOM without an OOM traceback.
 
-LLM benchmarks
-~~~~~~~~~~~~~~
+LLM training benchmarks
+~~~~~~~~~~~~~~~~~~~~~~~
 
 The LLM benchmark used an approximately 1.41B-parameter SpikeLM with 24 layers,
 hidden size 2048, 16 heads, FFN size 8192, vocabulary 50304, BF16, sequence 128,
@@ -958,10 +918,10 @@ recomputation; two training steps used 6.28 GiB. A TP2 x PP2 sharded
 model/optimizer checkpoint also resumed successfully from step 1 to step 2.
 
 Distributed inference benchmarks
---------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Common environment
-~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^
 
 The inference benchmark used the same single-host 4 x RTX 4090 24-GiB environment
 as training. ``nvidia-smi topo -m`` reports ``SYS`` from GPU0 to every other GPU
@@ -972,7 +932,7 @@ The Vision/MCore stack matches training: PyTorch 2.8.0, Megatron Core 0.18.2,
 and Triton 3.4.0.
 
 Vision evaluation
-~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^
 
 The historical curves below used BF16, ``T=4``, 1000 classes, and a cached
 all-zero 224 x 224 synthetic image. Current benchmark runs must instead pass
@@ -1091,16 +1051,16 @@ throughput.
       - 2048/2048: CUDA OOM
 
 Vision correctness tests also covered FSDP2, PP2, and exporting a TP2 x PP2
-training checkpoint before restoring it under TP1 x DP4. The latter reported
+training checkpoint before restoring it on four single-GPU replicas (DP4). The latter reported
 validation losses 2.310132205 and 2.310132384.
 
 MCore loss/perplexity evaluation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 MCore loss/perplexity evaluation uses Qwen2.5-0.5B QCFS, BF16, ``T=2``, and
-sequence length 16. The TP1/DP4 baseline segment uses a fixed 128-sample
+sequence length 16. The single-GPU/DP4 baseline segment uses a fixed 128-sample
 dataset; the newly measured TP2/PP2/PP4 points set dataset samples equal to G so
-padding cannot depress throughput. It compares TP1, DP4, TP2, PP2, and PP4.
+padding cannot depress throughput. It compares one GPU, DP4, TP2, PP2, and PP4.
 Because this model has 14 attention heads, TP2 is the valid pure-TP topology
 above one on the four-GPU host; TP4 violates head divisibility.
 Every point restores the same initialized state from a sharded checkpoint in a
@@ -1128,13 +1088,13 @@ fragmentation from repeated warmups and serves only as capacity evidence.
 
     Complete MCore loss/perplexity evaluation batch sweeps: aggregate semantic-token throughput versus the busiest GPU's peak allocated memory.
 
-At small-batch L=16, TP1, TP2, PP2, and PP4 reach 4636.2, 3611.2, 1823.5, and
+At small-batch L=16, one GPU, TP2, PP2, and PP4 reach 4636.2, 3611.2, 1823.5, and
 2203.6 semantic tokens/s. With K fixed at 4, each PP chunk contains only four
-samples, so kernel and schedule overheads are not yet amortized. By L=384, TP1,
+samples, so kernel and schedule overheads are not yet amortized. By L=384, one GPU,
 TP2, PP2, and PP4 reach 23145.8, 28975.2, 24707.7, and 28348.2 tokens/s; all
 three model-parallel topologies exceed one GPU at the same L.
 
-The best TP1, TP2, PP2, and PP4 points reach 24549.7, 29767.5, 30217.9, and
+The best one-GPU, TP2, PP2, and PP4 points reach 24549.7, 29767.5, 30217.9, and
 34317.2 tokens/s. The latter three are 1.21x, 1.23x, and 1.40x the best one-GPU
 throughput. TP2 peaks at L=256 and 3.95 GiB/GPU; PP2 and PP4 peak at L=1024
 and 7.57/7.40 GiB/GPU. Both three-run PP curves extend through L=2048 and about
@@ -1150,7 +1110,7 @@ out, so that point is excluded from the curve; L=4096 is a confirmed CUDA OOM.
       - Largest ``L/G``
       - First failed ``L/G``
       - Status
-    * - TP1
+    * - One GPU
       - 384/384
       - 512/512
       - CUDA OOM
@@ -1181,3 +1141,64 @@ directly from the summary:
     python benchmark/plot_distributed_inference.py \
         docs/source/_static/tutorials/distributed/distributed-inference-tradeoff.csv \
         docs/source/_static/tutorials/distributed
+
+SGLang scheduler-backed generation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``benchmark/snn_llm/sglang_benchmark.py`` measures native offline Engine
+request/input/output throughput, TTFT, TPOT, end-to-end latency, and peak
+per-GPU memory. Formal points use on-demand 4 x RTX 4090 hosts without NVLink or
+CUDA peer read/write. The separate SGLang environment uses PyTorch 2.11.0,
+CUDA 13.0, SGLang 0.5.17, BF16, Triton attention, and disabled CUDA Graphs.
+Each point runs one warmup request, flushes the Radix cache before every timed
+repeat, and reports the median of three independent repeats. Qwen and SpikeLM
+were measured on two rentals with the same GPU/interconnect class, so topology
+and workload comparisons are made only within a model, never across models.
+
+The Qwen artifact uses Qwen2.5-0.5B weights and deterministic unit QCFS scales.
+The SpikeLM artifact is deterministically initialized with 32 layers, hidden
+size 2560, 20 heads, FFN size 10240, vocabulary 50304, and ``T=4``: exactly
+2,775,209,216 parameters. Both are system measurements, not claims about
+post-training model quality.
+
+.. figure:: ../../_static/tutorials/distributed/sglang-inference.png
+    :width: 1000px
+    :alt: SGLang pipeline concurrency, data-parallel scaling, and shared-prefix reuse
+
+    Left: one GPU and PP4 output throughput for SpikeLM-2.78B at 32/64 requests;
+    middle: one-GPU and DP4 Qwen2.5-0.5B output throughput; right: one-GPU
+    input/output throughput with shared-prefix reuse.
+
+PP is not an unconditional speedup. At 32 requests with 64 input and 64 output
+tokens, one-GPU and PP4 SpikeLM-2.78B reach 1074.8 and 786.9 output tokens/s;
+PP4 is only 0.73x because communication and pipeline bubbles are not amortized.
+At 64 requests under the same token workload, one GPU reaches 1031.1 tokens/s
+and PP4 reaches 1416.9 tokens/s, or 1.37x. The p99 TTFT falls from 2430.9 ms to
+446.4 ms, while p99 TPOT rises from 33.2 ms to 39.8 ms. On this host PP4 therefore
+shows throughput value only at sufficient concurrency. These measurements do not
+promise lower single-request latency or attribute the gain to one kernel or
+communication mechanism.
+
+Qwen2.5-0.5B DP4 uses 32 requests per replica and reaches 5845.5 aggregate
+output tokens/s, 3.93x the one-GPU 1486.5 tokens/s, with effectively unchanged
+TPOT. A one-GPU workload with a 2048-token shared prefix raises input throughput
+18.3x. Small-model PP2 remains slower than one GPU and is retained in the CSV;
+the SpikeLM concurrency crossover must not be generalized to every model.
+
+The capacity test also exported a 12.6B SpikeLM artifact containing 564 tensors
+and 25,173,851,048 bytes, then loaded and generated with PP4 without any GPU
+holding the full model. Qwen2 produced the same 32 greedy tokens as MCore for
+the fixed parity prompts. SpikeLM matched every first decode token; three of
+four PP2 prompts matched all eight tokens, while one diverged after the third
+token under a different BF16 execution order. Cross-backend free-running token
+identity is therefore not a contract for near-tied logits.
+
+Published medians are available in :download:`the SGLang result CSV
+<../../_static/tutorials/distributed/sglang-inference-results.csv>`. Regenerate
+the figure directly:
+
+.. code-block:: bash
+
+    python benchmark/plot_sglang_inference.py \
+        docs/source/_static/tutorials/distributed/sglang-inference-results.csv \
+        docs/source/_static/tutorials/distributed/sglang-inference.png

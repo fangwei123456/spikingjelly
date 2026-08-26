@@ -304,44 +304,8 @@ Qwen2 adapter 使用 SGLang 原生 stage 分层和 ``PPProxyTensors`` 协议。
     if __name__ == "__main__":
         main()
 
-使用 ``benchmark/snn_llm/sglang_benchmark.py`` 产生可复现的 offline Engine
-测量。它支持变长 token 和共享前缀 workload，报告 request/input/output 吞吐、
-TTFT、TPOT、端到端延迟的 median/p99，以及每卡峰值显存。
-
-正式 SGLang 验收使用一台 on-demand 4 × RTX 4090、无 NVLink 的主机，软件为
-PyTorch 2.11.0、CUDA 13.0、SGLang 0.5.17、BF16、Triton attention，并关闭
-CUDA Graph。每个性能点先执行一个 warmup request；Engine 在 warmup 后及每次
-测量前清空 Radix cache，再重复三次并报告中位数。Qwen artifact 使用
-Qwen2.5-0.5B 权重和确定性的全一 QCFS scale，因此这里是系统测量，不是模型质量结论。
-
-.. figure:: ../../_static/tutorials/distributed/sglang-inference.png
-    :width: 900px
-    :alt: SGLang Qwen2.5-0.5B 扩展吞吐与共享前缀延迟
-
-    左图：固定 workload 下 TP1、PP2 和 DP4 的 output 吞吐与 p99 TPOT。
-    右图：TP1 在无共享和 2048-token 共享前缀下的 input/output 吞吐与 p99 TTFT。
-    右图的 prompt 长度差异用于刻画 Radix cache，不是拓扑横向对比。
-
-DP4 的 output 吞吐为 TP1 的 3.93 倍，而 TPOT 基本不变。该 PCIe 主机上的 TP2
-与 PP2 均慢于 TP1；模型并行应用于容量，之后再用 DP 扩吞吐。12.6B SpikeLM
-导出包含 564 个 tensor、25,173,851,048 artifact bytes，并成功在 PP4 上加载和生成，
-没有任何 GPU 持有完整模型。
-
-Qwen2 在固定 parity prompts 上与 MCore 的 32 个 greedy tokens 完全一致。
-SpikeLM 的所有首个 decode token 一致；PP2 的四个 prompt 中三个完整 8-token 一致，
-一个在第三个生成 token 后因不同 BF16 执行次序分叉。因此，接近并列的 logits 下，
-跨 backend 的 free-running token 完全相同不属于契约。
-
-完整中位数见 :download:`SGLang 结果 CSV
-<../../_static/tutorials/distributed/sglang-inference-results.csv>`。
-
-可直接从该 CSV 重新生成图片：
-
-.. code-block:: bash
-
-    python benchmark/plot_sglang_inference.py \
-        docs/source/_static/tutorials/distributed/sglang-inference-results.csv \
-        docs/source/_static/tutorials/distributed/sglang-inference.png
+``benchmark/snn_llm/sglang_benchmark.py`` 提供可复现的 offline Engine 测量入口；
+实验 protocol、吞吐/延迟指标和结果统一放在后文“实测效果”的 SGLang 小节。
 
 底层 API
 --------
@@ -505,12 +469,14 @@ SNN 时间布局为 ``[T, B, S, H] -> [S, T*B, H]``。``T`` 只并入 MCore batc
 实测效果
 --------
 
-以下结果在 4 张 RTX 4090 24 GiB 上测得。机器没有 NVLink，跨卡 CUDA peer access
-均为 ``False``；软件栈为 PyTorch 2.8.0、Megatron Core 0.18.2 和 Triton 3.4.0。
-因此结果适合作为 PCIe 多卡机器上的相对参考，不应直接外推到 NVLink 集群。
+以下 Vision 与 MCore 结果在同一台 4 × RTX 4090 24 GiB 主机上测得。机器没有
+NVLink，跨卡 CUDA peer access 均为 ``False``；软件栈为 PyTorch 2.8.0、
+Megatron Core 0.18.2 和 Triton 3.4.0。SGLang 使用相同 GPU/互连类别的独立租用实例
+和自己的固定运行栈，具体口径在对应小节说明。所有结果都只适合作为 PCIe 多卡机器上
+的相对参考，不应直接外推到 NVLink 集群。
 
-Vision 基准
-~~~~~~~~~~~
+Vision 训练基准
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 Vision 基准固定 BF16、``T=4``、128 × 128 输入和 1000 类。图中只保留单卡、
 DP4、FSDP4、TP4 和 PP4；曲线末端标出最大的成功 global batch size（``G``）。单卡、TP4
@@ -715,8 +681,8 @@ batch 加速比。
 ``B`` 是每 rank batch。collective timeout 表示候选没有产出训练指标，不能当作
 慢速成功点，也不能在没有 OOM 栈时标成 OOM。
 
-LLM 基准
-~~~~~~~~
+LLM 训练基准
+~~~~~~~~~~~~~~~~~~~~
 
 LLM 基准使用约 1.41B 参数的 SpikeLM：24 层、hidden 2048、16 heads、FFN 8192、
 词表 50304、BF16、sequence 128 和 ``T=4``。下方容量搜索中的所有点均关闭
@@ -878,10 +844,10 @@ batch 下的加速比。完整中位数、三次运行范围和 batch 配置见
 checkpoint 也已验证从 step 1 恢复到 step 2。
 
 分布式推理基准
-----------------
+~~~~~~~~~~~~~~~~
 
 共同实验环境
-~~~~~~~~~~~~
+^^^^^^^^^^^^
 
 推理基准使用与训练相同的单机 4 × RTX 4090 24 GiB 环境。``nvidia-smi topo -m``
 显示 GPU0 到其余 GPU 为跨 NUMA 的 ``SYS``，GPU1--3 之间为 ``NODE``，没有
@@ -891,7 +857,7 @@ PCIe/CPU interconnect。Vision/MCore 软件栈与训练相同：PyTorch 2.8.0、
 Core 0.18.2 和 Triton 3.4.0。
 
 Vision evaluation
-~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^
 
 下方历史曲线使用 BF16、``T=4``、1000 类和缓存的全零 224 × 224 合成图像。
 当前正式 benchmark 必须通过 ``--cifar10-data`` 或 ``--data`` 使用固定真实图像
@@ -1001,14 +967,14 @@ PP 分别达到单卡的 1.56 倍和 2.11 倍。固定 K 后 PP 吞吐在中等 
       - 2048/2048：CUDA OOM
 
 Vision 正确性测试还覆盖 FSDP2、PP2，以及 TP2 × PP2 训练 checkpoint 导出后在
-TP1 × DP4 上恢复；后者的 validation loss 为 2.310132205 和 2.310132384。
+4 个单卡 replica（DP4）上恢复；后者的 validation loss 为 2.310132205 和 2.310132384。
 
 MCore loss/perplexity evaluation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 MCore loss/perplexity 评测使用 Qwen2.5-0.5B QCFS、BF16、``T=2`` 和序列长度16。
-TP1/DP4 的基线段使用固定 128-sample 数据集；新测的 TP2/PP2/PP4 点令数据集
-样本数等于 G，避免 padding 污染吞吐。拓扑为 TP1、DP4、TP2、
+单卡/DP4 的基线段使用固定 128-sample 数据集；新测的 TP2/PP2/PP4 点令数据集
+样本数等于 G，避免 padding 污染吞吐。拓扑为单卡、DP4、TP2、
 PP2 和 PP4；该模型有 14 个 attention heads，故四卡节点上大于 1 的合法纯 TP
 拓扑为 TP2，TP4 不满足 head 整除约束。每个点从新进程恢复同一初始化状态的
 sharded checkpoint，先执行 5 个不计时 schedule batch，再计时完整 schedule，
@@ -1031,12 +997,12 @@ PP4 的 L=3072 debug 容量 probe 为避免重复预热造成 allocator 碎片�
 
     MCore loss/perplexity 评测的完整 batch sweep：总 semantic-token 吞吐与最繁忙 GPU 的 peak allocated memory。
 
-在小 batch 的 L=16，TP1、TP2、PP2 和 PP4 分别为 4636.2、3611.2、1823.5
+在小 batch 的 L=16，单卡、TP2、PP2 和 PP4 分别为 4636.2、3611.2、1823.5
 和 2203.6 semantic tokens/s；固定 K=4 后 PP 每块仅有 4 个样本，kernel 与 schedule
-开销尚未摊薄。到 L=384，TP1、TP2、PP2 和 PP4 分别达到 23145.8、28975.2、
+开销尚未摊薄。到 L=384，单卡、TP2、PP2 和 PP4 分别达到 23145.8、28975.2、
 24707.7 和 28348.2 tokens/s，三种模型并行拓扑均已超过同 L 单卡。
 
-TP1、TP2、PP2 和 PP4 的最佳点分别为 24549.7、29767.5、30217.9 和
+单卡、TP2、PP2 和 PP4 的最佳点分别为 24549.7、29767.5、30217.9 和
 34317.2 tokens/s；后三者为单卡最佳点的 1.21、1.23 和 1.40 倍。TP2 最佳点在
 L=256、3.95 GiB/卡；PP2/PP4 最佳点都在 L=1024，分别为 7.57/7.40 GiB/卡。
 PP2/PP4 的三次正式曲线均延伸到 L=2048、约 14.5 GiB/卡，容量尾部的吞吐下降在
@@ -1051,7 +1017,7 @@ L=4096 明确 CUDA OOM。
       - 最大完成 ``L/G``
       - 首个失败 ``L/G``
       - 状态
-    * - TP1
+    * - 单卡
       - 384/384
       - 512/512
       - CUDA OOM
@@ -1081,3 +1047,53 @@ L=4096 明确 CUDA OOM。
     python benchmark/plot_distributed_inference.py \
         docs/source/_static/tutorials/distributed/distributed-inference-tradeoff.csv \
         docs/source/_static/tutorials/distributed
+
+SGLang scheduler-backed generation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``benchmark/snn_llm/sglang_benchmark.py`` 测量原生 offline Engine 的
+request/input/output 吞吐、TTFT、TPOT、端到端延迟和每卡峰值显存。正式点使用
+无 NVLink、无 CUDA P2P read/write 的 on-demand 4 × RTX 4090 主机；SGLang
+独立环境为 PyTorch 2.11.0、CUDA 13.0、SGLang 0.5.17、BF16 和 Triton
+attention，并关闭 CUDA Graph。每个点先执行一个 warmup request，随后在每次计时前
+清空 Radix cache，独立测量三次并报告中位数。Qwen 与 SpikeLM 来自两次相同规格的
+租用实例，因此只比较同一模型内部的拓扑或 workload，不跨模型解释绝对吞吐。
+
+Qwen artifact 使用 Qwen2.5-0.5B 权重和确定性的全一 QCFS scale。SpikeLM
+artifact 使用确定性初始化的 32 层模型：hidden 2560、20 heads、FFN 10240、词表
+50304、``T=4``，共 2,775,209,216 个参数。两者都用于系统测量，不代表训练后模型质量。
+
+.. figure:: ../../_static/tutorials/distributed/sglang-inference.png
+    :width: 1000px
+    :alt: SGLang pipeline 并发、数据并行扩展和共享前缀复用
+
+    左：SpikeLM-2.78B 在 32/64 requests 下的单卡与 PP4 output 吞吐；中：
+    Qwen2.5-0.5B 单卡与 DP4 output 吞吐；右：单卡共享前缀的 input/output 吞吐。
+
+PP 不是无条件加速。在 32 requests、64 input/64 output 时，SpikeLM-2.78B 的单卡和
+PP4 分别为 1074.8 和 786.9 output tokens/s，PP4 只有 0.73 倍；通信和 pipeline
+bubble 尚未摊薄。请求数增至 64 后，同一 workload 下单卡为 1031.1 tokens/s，PP4
+为 1416.9 tokens/s，即 1.37 倍。此时 p99 TTFT 从 2430.9 ms 降到 446.4 ms，
+而 p99 TPOT 从 33.2 ms 增到 39.8 ms。该结果表明在本机上只有足够并发时 PP4
+才体现吞吐价值；它不证明单请求延迟必然降低，也不把收益归因于某一个 kernel 或通信机制。
+
+Qwen2.5-0.5B 的 DP4 使用每个 replica 32 个请求，总 output 吞吐为 5845.5
+tokens/s，是单卡 1486.5 tokens/s 的 3.93 倍，TPOT 基本不变。单卡的 2048-token
+共享前缀 workload 将 input 吞吐提高 18.3 倍。小模型 PP2 仍低于单卡，该中位数保留在
+CSV 中；不应从 SpikeLM 的高并发交叉点推导“所有模型使用 PP 都会更快”。
+
+容量测试还将 12.6B SpikeLM 导出为 564 个 tensor、25,173,851,048 artifact
+bytes，并在 PP4 上成功加载和生成，没有任何 GPU 持有完整模型。Qwen2 在固定 parity
+prompts 上与 MCore 的 32 个 greedy tokens 完全一致。SpikeLM 的首个 decode token
+全部一致；PP2 的四个 prompt 中三个完整 8-token 一致，一个在第三个 token 后因不同
+BF16 执行次序分叉，因此接近并列 logits 下的跨 backend free-running token 完全一致
+不属于契约。
+
+已发布中位数见 :download:`SGLang 结果 CSV
+<../../_static/tutorials/distributed/sglang-inference-results.csv>`。可直接重新生成图片：
+
+.. code-block:: bash
+
+    python benchmark/plot_sglang_inference.py \
+        docs/source/_static/tutorials/distributed/sglang-inference-results.csv \
+        docs/source/_static/tutorials/distributed/sglang-inference.png
