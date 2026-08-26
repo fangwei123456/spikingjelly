@@ -32,6 +32,7 @@ FIGURE_PATH = OUTPUT_DIR / "energy_model_validation.png"
 SPIKESIM_COMMIT = "c2627bc091a47bdcb630ca6207eaf44a00bd1da4"
 NEUROMC_COMMIT = "712c66f47cf76ae530a55f8bcad3858bd68788de"
 SENTINEL = "ENERGY_MODEL_VALIDATION_JSON="
+AUTHOR_ADAPTER_TIMEOUT_SECONDS = 600
 
 
 @dataclass(frozen=True)
@@ -132,6 +133,7 @@ def _run_author_adapter(code: str, payload: Any, cwd: Path) -> Any:
         text=True,
         capture_output=True,
         check=True,
+        timeout=AUTHOR_ADAPTER_TIMEOUT_SECONDS,
     )
     line = next(
         (
