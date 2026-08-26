@@ -519,8 +519,14 @@ def _bootstrap_tau(
 
 
 def _metrics(scores: list[Score]) -> dict[str, float]:
+    if not scores:
+        raise ValueError("metrics require at least one score")
     oracle = np.asarray([score.oracle_pj for score in scores], dtype=float)
     dynamic = np.asarray([score.spikingjelly_pj for score in scores], dtype=float)
+    if not np.all(np.isfinite(oracle) & (oracle > 0)) or not np.all(
+        np.isfinite(dynamic) & (dynamic > 0)
+    ):
+        raise ValueError("energy scores must be finite and positive")
     log_ratio = np.log(dynamic / oracle)
     calibrated_log_error = log_ratio - np.median(log_ratio)
     factors = np.exp(np.abs(calibrated_log_error))
