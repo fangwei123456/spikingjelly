@@ -11,6 +11,7 @@ from typing import Any
 from .config import SGLangEngineConfig
 
 _ARTIFACT_SCHEMA_VERSION = 2
+_external_model_package: str | None = None
 
 
 def _validate_artifact(config: SGLangEngineConfig) -> None:
@@ -71,14 +72,17 @@ def open_sglang_engine(config: SGLangEngineConfig) -> Iterator[Any]:
 
     **中文：** 校验 SpikingJelly artifact，显式加载 ``external_model_package``，
     并返回原生 SGLang ``Engine``。退出上下文时总会调用 ``shutdown()`` 并恢复
-    进程环境。由于 SGLang 使用 spawned workers，应只在受
+    进程环境。SGLang 的 model registry 是进程级状态，同一进程首次加载后不能
+    切换 ``external_model_package``。由于 SGLang 使用 spawned workers，应只在受
     ``if __name__ == "__main__"`` 保护的应用入口调用本函数。
 
     **English:** Validate a SpikingJelly artifact, explicitly load
     ``external_model_package``, and yield the native SGLang ``Engine``. Leaving
     the context always calls ``shutdown()`` and restores the process environment.
-    Because SGLang uses spawned workers, call this function only from an
-    application entry point protected by ``if __name__ == "__main__"``.
+    SGLang's model registry is process-global, so ``external_model_package``
+    cannot change after the first load in a process. Because SGLang uses spawned
+    workers, call this function only from an application entry point protected by
+    ``if __name__ == "__main__"``.
 
     :param config: SGLang Engine configuration.
     :type config: SGLangEngineConfig
@@ -90,6 +94,14 @@ def open_sglang_engine(config: SGLangEngineConfig) -> Iterator[Any]:
     if not isinstance(config, SGLangEngineConfig):
         raise TypeError("open_sglang_engine requires SGLangEngineConfig.")
     _validate_artifact(config)
+    global _external_model_package
+    if (
+        _external_model_package is not None
+        and _external_model_package != config.external_model_package
+    ):
+        raise ValueError(
+            "SGLang external_model_package cannot change within one process."
+        )
     try:
         if importlib.util.find_spec(config.external_model_package) is None:
             raise ModuleNotFoundError(config.external_model_package)
@@ -109,6 +121,7 @@ def open_sglang_engine(config: SGLangEngineConfig) -> Iterator[Any]:
                 "SGLang inference requires a separate Python 3.12 environment "
                 "with spikingjelly[sglang]."
             ) from error
+        _external_model_package = config.external_model_package
         engine = sglang.Engine(
             model_path=str(config.artifact),
             tokenizer_path=(

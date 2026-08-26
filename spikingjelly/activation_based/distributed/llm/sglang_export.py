@@ -39,6 +39,20 @@ def _sync_error(error: Optional[BaseException], device: torch.device) -> None:
         raise RuntimeError("Another rank failed while exporting the SGLang artifact.")
 
 
+def _validate_model_parallel_topology(
+    transformer_config: Any, parallel_state: Any
+) -> None:
+    if (
+        parallel_state.get_tensor_model_parallel_world_size()
+        != transformer_config.tensor_model_parallel_size
+        or parallel_state.get_pipeline_model_parallel_world_size()
+        != transformer_config.pipeline_model_parallel_size
+        or parallel_state.get_context_parallel_world_size()
+        != transformer_config.context_parallel_size
+    ):
+        raise ValueError("Existing MCore process groups do not match source TP/PP/CP.")
+
+
 def _copy_tokenizer(source: Optional[Path], output: Path) -> None:
     if source is None:
         return
@@ -91,6 +105,8 @@ def _write_tensor_shards(
         shard_bytes = 0
 
     for name, value in tensors:
+        if value.dtype != torch.bfloat16:
+            raise ValueError(f"Exported tensor {name!r} must use torch.bfloat16.")
         parameter_count += value.numel()
         if name in weight_map or name in shard:
             raise ValueError(f"Duplicate exported tensor: {name}")
@@ -320,6 +336,8 @@ def export_sglang_artifact(
                 context_parallel_size=transformer_config.context_parallel_size,
                 expert_model_parallel_size=1,
             )
+        else:
+            _validate_model_parallel_topology(transformer_config, parallel_state)
         model_parallel_size = (
             transformer_config.tensor_model_parallel_size
             * transformer_config.pipeline_model_parallel_size

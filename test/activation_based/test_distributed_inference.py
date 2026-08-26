@@ -32,9 +32,11 @@ from spikingjelly.activation_based.distributed.llm.inference import (
 from spikingjelly.activation_based.distributed.llm.temporal import _reduce_time_batch
 from spikingjelly.activation_based.distributed.llm.sglang_export import (
     _copy_tokenizer,
+    _validate_model_parallel_topology,
     _write_tensor_shards,
     export_sglang_artifact,
 )
+from spikingjelly.activation_based.distributed.llm import sglang as sglang_runtime
 from spikingjelly.activation_based.distributed.llm.sglang import _validate_artifact
 
 
@@ -202,6 +204,7 @@ def test_sglang_engine_manages_lifecycle_and_environment(tmp_path, monkeypatch):
         "sglang",
         SimpleNamespace(Engine=Engine),
     )
+    monkeypatch.setattr(sglang_runtime, "_external_model_package", None)
     monkeypatch.setenv("SGLANG_EXTERNAL_MODEL_PACKAGE", "original")
 
     with open_sglang_engine(
@@ -219,6 +222,13 @@ def test_sglang_engine_manages_lifecycle_and_environment(tmp_path, monkeypatch):
         "shutdown",
     ]
     assert os.environ["SGLANG_EXTERNAL_MODEL_PACKAGE"] == "original"
+    with pytest.raises(ValueError, match="cannot change"):
+        with open_sglang_engine(
+            SGLangEngineConfig(
+                artifact=artifact, external_model_package="another.package"
+            )
+        ):
+            pass
 
 
 def test_sglang_export_reconstructs_tp_tensor_layouts():
@@ -287,6 +297,22 @@ def test_sglang_export_rejects_expert_parallelism_before_runtime(tmp_path, monke
             artifact_config={"architectures": ["TestForCausalLM"]},
             stage_tensors=lambda _stage: (),
         )
+
+
+def test_sglang_export_rejects_mismatched_preinitialized_topology():
+    parallel_state = SimpleNamespace(
+        get_tensor_model_parallel_world_size=lambda: 4,
+        get_pipeline_model_parallel_world_size=lambda: 1,
+        get_context_parallel_world_size=lambda: 1,
+    )
+    transformer = SimpleNamespace(
+        tensor_model_parallel_size=2,
+        pipeline_model_parallel_size=2,
+        context_parallel_size=1,
+    )
+
+    with pytest.raises(ValueError, match="source TP/PP/CP"):
+        _validate_model_parallel_topology(transformer, parallel_state)
 
 
 def test_sglang_benchmark_builds_variable_prompts_with_shared_prefix():
@@ -466,7 +492,12 @@ def test_sglang_export_copies_generic_tokenizer_assets_and_counts_parameters(
 
     _copy_tokenizer(tokenizer, output)
     weight_map, parameter_count = _write_tensor_shards(
-        iter((("a", torch.ones(2, 3)), ("b", torch.ones(4)))),
+        iter(
+            (
+                ("a", torch.ones(2, 3, dtype=torch.bfloat16)),
+                ("b", torch.ones(4, dtype=torch.bfloat16)),
+            )
+        ),
         output,
         "test",
         1024,
@@ -478,6 +509,9 @@ def test_sglang_export_copies_generic_tokenizer_assets_and_counts_parameters(
     assert not (output / "model.safetensors").exists()
     assert set(weight_map) == {"a", "b"}
     assert parameter_count == 10
+
+    with pytest.raises(ValueError, match="torch.bfloat16"):
+        _write_tensor_shards(iter((("fp32", torch.ones(1)),)), output, "invalid", 1024)
 
     tokenizer_file = tmp_path / "tokenizer.json"
     tokenizer_file.write_text("{}", encoding="utf-8")
