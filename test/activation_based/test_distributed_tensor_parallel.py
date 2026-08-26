@@ -15,11 +15,11 @@ from spikingjelly.activation_based.memopt import GCContainer
 
 
 def _vision_tp_worker(rank: int, store_path: str) -> None:
-    from spikingjelly.activation_based.distributed.vision.sew_resnet import (
+    from spikingjelly.activation_based.model.sew_resnet import (
         SEWResNet34Builder,
         SEWResNet34Config,
     )
-    from spikingjelly.activation_based.distributed.vision.spikformer import (
+    from spikingjelly.activation_based.model.spikformer import (
         SpikformerBuilder,
         SpikformerConfig,
     )

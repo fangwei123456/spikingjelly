@@ -4,9 +4,10 @@ spikingjelly.activation_based.distributed package
 The root package contains SNN-specific tensor-parallel primitives. Training and
 offline inference interfaces are grouped by workload: native PyTorch vision
 lives in ``distributed.vision`` and Megatron Core language-model execution lives
-in ``distributed.llm``. The package also provides an experimental SGLang offline
-generation integration. Importing the root package imports neither optional
-runtime.
+in ``distributed.llm``. The package also provides a model-independent managed
+SGLang offline Engine and topology-independent artifact exporter; concrete model
+recipes own their weight mappings and external runtime packages. Importing the
+root package imports neither optional runtime.
 
 Tensor parallel primitives
 ++++++++++++++++++++++++++

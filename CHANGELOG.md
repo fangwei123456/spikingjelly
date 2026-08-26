@@ -486,19 +486,33 @@ Module: `spikingjelly.activation_based.distributed`.
   model_provider, ...)` API to `generate_mcore(...)`. The `generate(...)` name now
   accepts `MCoreGenerationConfig` and `input_ids`; existing low-level callers
   must use `generate_mcore`.
-- Added an experimental, separate-environment SGLang 0.5.17 offline backend and
-  deterministic MCore-to-safetensors exporters for the SpikeLM and Qwen2
-  reference recipes.
-  SNN time remains explicit inside each external model and is folded into KV
-  heads only at the RadixAttention seam; both reference adapters use SGLang's
-  native pipeline-stage protocol.
+- Added a managed, model-independent SGLang 0.5.17 offline Engine with an
+  explicit external-model package. Reference Qwen2 and SpikeLM adapters live in
+  `benchmark/snn_llm` rather than the SpikingJelly wheel.
+- Added `export_sglang_artifact()`, a distributed MCore-to-sharded-safetensors
+  exporter that delegates model weight mapping to a stage callback and never
+  requires the complete model to fit on one GPU. Tokenizer assets are copied
+  without assuming a tokenizer family.
+- Replaced the experimental one-shot SGLang generation interface with the
+  managed `SGLangEngineConfig` and `open_sglang_engine()` lifecycle. Sampling,
+  variable-length token IDs, asynchronous generation, and streaming use the
+  native SGLang Engine interface.
+- Excluded dataset indexing and collation from MCore evaluation timing while
+  retaining H2D transfer, model execution, communication, and metric reduction.
+- Added a reproducible two-panel SGLang result figure showing fixed-workload
+  TP/PP/DP scale-out and Radix shared-prefix reuse, backed by the downloadable
+  measurement CSV.
 - Added typed `distributed.llm.ModelConfig` subclasses that own MCore
   `TransformerConfig` and their model builder, matching the vision declaration
   style; `plan_training()` returns a TP/PP/CP configuration accepted by
   `train(config)` without a global registry or untyped builder kwargs.
-- Added `distributed.vision` model builders, serializable `TrainingConfig`,
-  ImageFolder datasets, optimizer-boundary distributed checkpoints, and
-  `train_classification(config)` for image classification.
+- Added serializable `distributed.vision.TrainingConfig`, ImageFolder datasets,
+  optimizer-boundary distributed checkpoints, and `train_classification(config)`
+  for image classification. SEW-ResNet34 and Spikformer distributed recipes are
+  owned by their corresponding `activation_based.model` modules; serialized
+  targets from the previous `distributed.vision` model paths are migrated when
+  loaded. Direct imports from `distributed.vision` must move to the corresponding
+  `activation_based.model` submodule.
 - Added importable Vision classification loss functions with serializable keyword
   arguments shared by non-pipeline and pipeline training and validation.
 - Added model-owned Vision `step_mode` configuration. Classification training now
@@ -659,6 +673,10 @@ Module: `spikingjelly.activation_based.distributed`.
   `distributed.vision.TrainingConfig` for native PyTorch vision training,
   `distributed.llm.TrainingConfig` for MCore LLM training, or the root
   `tensor_parallel` primitives in a custom loop. No aliases are retained.
+- **Breaking change:** replaced the experimental `SGLangGenerationConfig`,
+  `create_sglang_engine()`, and one-shot `generate_sglang()` interfaces with
+  `SGLangEngineConfig` and the managed `open_sglang_engine()` context. Request
+  generation now uses the native SGLang Engine interface.
 
 #### Learning API Changes
 

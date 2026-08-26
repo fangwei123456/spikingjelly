@@ -66,7 +66,10 @@ def forward_step(
             token_count,
             {
                 "lm_loss": torch.stack(
-                    (loss_sum.detach(), token_count.detach().to(loss_sum.dtype))
+                    (
+                        loss_sum.detach().to(torch.float64),
+                        token_count.detach().to(torch.float64),
+                    )
                 )
             },
         )

@@ -156,6 +156,7 @@ workspace/
 .agents/
 .codex/
 .goal*/
+.review-*-loop-state.json
 ObsidianVault
 .mimocode/
 .codegraph/
@@ -171,3 +172,6 @@ benchmark/**/*.qdrep
 benchmark/**/*.sqlite
 results/fp8-blackwell-5090/
 ocr.*
+
+# Personal worktree helper script (kept only in the source worktree)
+/tools/new_worktree.sh

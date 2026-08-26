@@ -21,8 +21,6 @@ from .inference import (
     load_inference_artifact,
     predict_classification,
 )
-from .sew_resnet import SEWResNet34Config
-from .spikformer import SpikformerCIFAR10Config, SpikformerConfig
 from .training import build_imagefolder_datasets, train_classification
 
 __all__ = [
@@ -30,9 +28,6 @@ __all__ = [
     "ModelBuilder",
     "ModelConfig",
     "PredictionConfig",
-    "SEWResNet34Config",
-    "SpikformerCIFAR10Config",
-    "SpikformerConfig",
     "TrainingConfig",
     "build_imagefolder_datasets",
     "evaluate_classification",

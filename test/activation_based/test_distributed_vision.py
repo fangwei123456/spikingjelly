@@ -1,28 +1,35 @@
+import json
+import subprocess
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import h5py
 import numpy as np
 import pytest
 import torch
+import torch.distributed.device_mesh as device_mesh
 import torch.nn as nn
 from torch.utils.data import TensorDataset
 
 from spikingjelly.activation_based import functional, layer
 from spikingjelly.activation_based.distributed import vision
-from spikingjelly.activation_based.distributed.vision import inference
+from spikingjelly.activation_based.distributed.vision import config as vision_config
+from spikingjelly.activation_based.distributed.vision import execution, inference
 from spikingjelly.activation_based.distributed.tensor_parallel import (
     ChannelShardBatchNorm2d,
 )
 from spikingjelly.activation_based.distributed.vision import training
-from spikingjelly.activation_based.distributed.vision.sew_resnet import (
+from spikingjelly.activation_based.model.sew_resnet import (
+    SEWResNet34Config,
     _pipeline_stage as sew_pipeline_stage,
 )
 from spikingjelly.activation_based.model.sew_resnet import BasicBlock
-from spikingjelly.activation_based.distributed.vision.spikformer import (
-    SpikformerBuilder,
-    _pipeline_stage,
-)
 from spikingjelly.activation_based.model.spikformer import (
+    SpikformerCIFAR10Config,
+    SpikformerBuilder,
+    SpikformerConfig,
+    _pipeline_stage,
     SpikformerBlock,
     spikformer_cifar10,
     spikformer_s,
@@ -31,7 +38,7 @@ from spikingjelly.activation_based.model.spikformer import (
 
 def test_vision_training_config_json_round_trip():
     config = vision.TrainingConfig(
-        model=vision.SEWResNet34Config(
+        model=SEWResNet34Config(
             time_steps=6,
             num_classes=11,
             step_mode="s",
@@ -55,10 +62,52 @@ def test_vision_training_config_json_round_trip():
     assert restored.model.get_builder_cls().__name__ == "SEWResNet34Builder"
 
     cifar = vision.TrainingConfig(
-        model=vision.SpikformerCIFAR10Config(),
+        model=SpikformerCIFAR10Config(),
         dataset_builder="package.datasets.build",
     )
     assert vision.TrainingConfig.from_dict(cifar.as_dict()) == cifar
+
+
+def test_vision_model_config_targets_load_in_a_fresh_process():
+    script = (
+        "import json,sys; "
+        "from spikingjelly.activation_based.distributed.vision.config import ModelConfig; "
+        "config=ModelConfig.from_dict(json.loads(sys.argv[1])); "
+        "assert type(config).__module__ == "
+        "'spikingjelly.activation_based.model.sew_resnet'"
+    )
+    values = {
+        "time_steps": 2,
+        "num_classes": 3,
+        "step_mode": "m",
+        "image_size": 32,
+    }
+    for target in (
+        "spikingjelly.activation_based.model.sew_resnet.SEWResNet34Config",
+        "spikingjelly.activation_based.distributed.vision.sew_resnet.SEWResNet34Config",
+    ):
+        completed = subprocess.run(
+            [sys.executable, "-c", script, json.dumps({"_target_": target, **values})],
+            capture_output=True,
+            text=True,
+        )
+        assert completed.returncode == 0, completed.stderr
+
+
+def test_vision_config_does_not_auto_import_external_targets(monkeypatch):
+    imported = []
+    monkeypatch.setattr(
+        vision_config.importlib,
+        "import_module",
+        lambda name: imported.append(name),
+    )
+
+    with pytest.raises(ValueError, match="Unsupported config target"):
+        vision_config.ModelConfig.from_dict(
+            {"_target_": "external_package.model.CustomConfig"}
+        )
+
+    assert imported == []
 
 
 def test_vision_evaluation_config_and_artifact_round_trip(tmp_path):
@@ -73,7 +122,7 @@ def test_vision_evaluation_config_and_artifact_round_trip(tmp_path):
     )
     assert config.data_parallel == "fsdp2"
 
-    model_config = vision.SEWResNet34Config(time_steps=2, num_classes=3, image_size=32)
+    model_config = SEWResNet34Config(time_steps=2, num_classes=3, image_size=32)
     model, _, _, _ = model_config.get_builder_cls()(model_config).build(
         process_group=None,
         pipeline_rank=0,
@@ -163,7 +212,9 @@ def test_vision_predict_returns_no_metrics(monkeypatch, tmp_path):
         artifact=tmp_path / "model.pt",
         dataset_builder="package.datasets.build",
     )
-    monkeypatch.setattr(inference, "_run_classification", lambda *_args: None)
+    monkeypatch.setattr(
+        inference, "_run_classification", lambda *_args, **_kwargs: None
+    )
 
     assert inference.predict_classification(config, tmp_path / "output.h5") is None
 
@@ -220,19 +271,19 @@ def test_vision_evaluation_owns_loss_configuration():
         (
             "step_mode='m'",
             {
-                "model": vision.SEWResNet34Config(step_mode="s"),
+                "model": SEWResNet34Config(step_mode="s"),
                 "pipeline_parallel_size": 2,
             },
         ),
         (
             "memopt",
-            {"model": vision.SEWResNet34Config(step_mode="s"), "memopt_level": 1},
+            {"model": SEWResNet34Config(step_mode="s"), "memopt_level": 1},
         ),
     ],
 )
 def test_vision_training_config_rejects_invalid_values(match, kwargs):
     kwargs = dict(kwargs)
-    model = kwargs.pop("model", vision.SEWResNet34Config())
+    model = kwargs.pop("model", SEWResNet34Config())
 
     with pytest.raises(ValueError, match=match):
         vision.TrainingConfig(
@@ -244,17 +295,15 @@ def test_vision_training_config_rejects_invalid_values(match, kwargs):
 
 def test_vision_model_config_rejects_invalid_values():
     with pytest.raises(ValueError, match="in_channels=3"):
-        vision.SEWResNet34Config(in_channels=1)
+        SEWResNet34Config(in_channels=1)
     with pytest.raises(ValueError, match="step_mode"):
-        vision.SEWResNet34Config(step_mode="invalid")
+        SEWResNet34Config(step_mode="invalid")
     with pytest.raises(ValueError, match="Spikformer requires step_mode='m'"):
-        vision.SpikformerConfig(step_mode="s")
+        SpikformerConfig(step_mode="s")
 
 
 def test_vision_artifact_tensor_sharding_round_trip():
-    sew_builder = vision.SEWResNet34Config().get_builder_cls()(
-        vision.SEWResNet34Config()
-    )
+    sew_builder = SEWResNet34Config().get_builder_cls()(SEWResNet34Config())
     reference = torch.arange(32).reshape(8, 4)
     targets = [torch.empty(4, 4), torch.empty(4, 4)]
     shards = [
@@ -266,7 +315,7 @@ def test_vision_artifact_tensor_sharding_round_trip():
         reference,
     )
 
-    spikformer_builder = SpikformerBuilder(vision.SpikformerConfig())
+    spikformer_builder = SpikformerBuilder(SpikformerConfig())
     qkv = torch.arange(24 * 4).reshape(24, 4)
     qkv_targets = [torch.empty(12, 4), torch.empty(12, 4)]
     qkv_shards = [
@@ -287,21 +336,21 @@ def test_vision_classification_loss_uses_custom_function_and_requires_scalar():
     logits = torch.tensor([[2.0, 1.0], [1.0, 3.0]])
     targets = torch.tensor([0, 1])
     config = vision.TrainingConfig(
-        model=vision.SEWResNet34Config(),
+        model=SEWResNet34Config(),
         dataset_builder="package.datasets.build",
         loss_kwargs={"label_smoothing": 0.2},
     )
     loss_function = training._build_loss_function(config)
 
     assert torch.equal(
-        training._classification_loss(logits, targets, loss_function),
+        execution._classification_loss(logits, targets, loss_function),
         nn.functional.cross_entropy(logits, targets, label_smoothing=0.2),
     )
 
     with pytest.raises(TypeError, match="torch.Tensor"):
-        training._classification_loss(logits, targets, lambda *_args: 0.0)
+        execution._classification_loss(logits, targets, lambda *_args: 0.0)
     with pytest.raises(ValueError, match="scalar"):
-        training._classification_loss(logits, targets, lambda output, _labels: output)
+        execution._classification_loss(logits, targets, lambda output, _labels: output)
 
 
 def test_vision_classification_forward_respects_step_mode():
@@ -318,10 +367,10 @@ def test_vision_classification_forward_respects_step_mode():
     single_step = Recorder()
     multi_step = Recorder()
 
-    single_logits = training._forward_classification(
+    single_logits = execution._forward_classification(
         single_step, images, 3, "s", "NCHW"
     )
-    multi_logits = training._forward_classification(multi_step, images, 3, "m", "NCHW")
+    multi_logits = execution._forward_classification(multi_step, images, 3, "m", "NCHW")
 
     expected = images.mean(dim=(-2, -1))
     torch.testing.assert_close(single_logits, expected)
@@ -333,17 +382,17 @@ def test_vision_classification_forward_respects_step_mode():
 def test_vision_classification_sequence_uses_declared_layout():
     temporal = torch.randn(2, 3, 4, 5, 5)
 
-    time_first = training._classification_sequence(temporal, 3, "NTCHW")
-    batch_first = training._classification_sequence(
+    time_first = execution._classification_sequence(temporal, 3, "NTCHW")
+    batch_first = execution._classification_sequence(
         temporal, 3, "NTCHW", batch_first=True
     )
 
     torch.testing.assert_close(time_first, temporal.transpose(0, 1))
     torch.testing.assert_close(batch_first, temporal)
     with pytest.raises(ValueError, match="model.time_steps"):
-        training._classification_sequence(temporal, 4, "NTCHW")
+        execution._classification_sequence(temporal, 4, "NTCHW")
     with pytest.raises(ValueError, match="NCHW"):
-        training._classification_sequence(temporal, 3, "NCHW")
+        execution._classification_sequence(temporal, 3, "NCHW")
 
 
 def test_pipeline_expands_static_input_per_microbatch():
@@ -430,7 +479,61 @@ def test_vision_inference_preserves_early_configuration_error(monkeypatch):
     monkeypatch.setattr(inference.dist, "get_world_size", lambda: 3)
 
     with pytest.raises(ValueError, match="world_size"):
-        inference._run_classification(config, None)
+        inference._run_classification(config, mode="evaluate")
+
+
+def test_vision_inference_rejects_single_step_pipeline_artifact(monkeypatch):
+    config = vision.EvaluationConfig(
+        artifact=Path("artifact.pt"),
+        dataset_builder="package.datasets.build",
+        pipeline_parallel_size=2,
+    )
+
+    class Mesh:
+        def __getitem__(self, _name):
+            return self
+
+        def get_group(self):
+            return object()
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "set_device", lambda _device: None)
+    monkeypatch.setattr(inference.dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(inference.dist, "get_world_size", lambda: 2)
+    monkeypatch.setattr(inference.dist, "get_rank", lambda: 0)
+    monkeypatch.setattr(
+        device_mesh, "init_device_mesh", lambda *_args, **_kwargs: Mesh()
+    )
+    monkeypatch.setattr(
+        inference,
+        "load_inference_artifact",
+        lambda _path: (SimpleNamespace(step_mode="s"), {}, {}),
+    )
+
+    with pytest.raises(ValueError, match="step_mode='m'"):
+        inference._run_classification(config, mode="evaluate")
+
+
+def test_vision_rank_zero_error_is_broadcast(monkeypatch):
+    broadcasts = []
+    monkeypatch.setattr(
+        inference.dist,
+        "broadcast",
+        lambda tensor, **_kwargs: broadcasts.append(tensor.item()),
+    )
+
+    with pytest.raises(OSError, match="merge failed"):
+        inference._sync_rank_zero_error(
+            OSError("merge failed"), torch.device("cpu"), "remote failure"
+        )
+
+    assert broadcasts == [1]
+
+    monkeypatch.setattr(
+        inference.dist, "broadcast", lambda tensor, **_kwargs: tensor.fill_(1)
+    )
+    with pytest.raises(RuntimeError, match="remote failure"):
+        inference._sync_rank_zero_error(None, torch.device("cpu"), "remote failure")
 
 
 def test_vision_inference_rejects_wrong_config_before_runtime():
@@ -476,7 +579,7 @@ def test_set_step_mode_preserves_seq_to_ann_children():
 
 def test_vision_training_config_rejects_unknown_serialized_fields():
     data = vision.TrainingConfig(
-        model=vision.SEWResNet34Config(),
+        model=SEWResNet34Config(),
         dataset_builder="package.datasets.build",
     ).as_dict()
     data["unknown"] = True
@@ -498,7 +601,7 @@ def test_vision_training_rejects_empty_datasets(monkeypatch):
         training, "_import_object", lambda _path: lambda: (empty, empty)
     )
     config = vision.TrainingConfig(
-        model=vision.SEWResNet34Config(),
+        model=SEWResNet34Config(),
         dataset_builder="package.datasets.build",
         workers=0,
     )
@@ -520,7 +623,7 @@ def test_vision_pipeline_drops_ragged_batches(monkeypatch):
         lambda _path: lambda: (train_dataset, validation_dataset),
     )
     config = vision.TrainingConfig(
-        model=vision.SEWResNet34Config(),
+        model=SEWResNet34Config(),
         dataset_builder="package.datasets.build",
         batch_size=2,
         workers=0,
@@ -541,7 +644,7 @@ def test_vision_pipeline_rejects_ragged_validation_dataset(monkeypatch):
         training, "_import_object", lambda _path: lambda: (dataset, dataset)
     )
     config = vision.TrainingConfig(
-        model=vision.SEWResNet34Config(),
+        model=SEWResNet34Config(),
         dataset_builder="package.datasets.build",
         batch_size=2,
         workers=0,
@@ -558,7 +661,7 @@ def test_vision_data_parallel_rejects_padded_validation_dataset(monkeypatch):
         training, "_import_object", lambda _path: lambda: (dataset, dataset)
     )
     config = vision.TrainingConfig(
-        model=vision.SEWResNet34Config(),
+        model=SEWResNet34Config(),
         dataset_builder="package.datasets.build",
         workers=0,
     )
@@ -568,7 +671,7 @@ def test_vision_data_parallel_rejects_padded_validation_dataset(monkeypatch):
 
 
 def test_spikformer_pipeline_rejects_ragged_patch_grid():
-    config = vision.SpikformerConfig(image_height=33, image_width=32)
+    config = SpikformerConfig(image_height=33, image_width=32)
     builder = config.get_builder_cls()(config)
 
     with pytest.raises(ValueError, match="divisible by 16"):
@@ -585,7 +688,7 @@ def test_spikformer_pipeline_rejects_ragged_patch_grid():
 
 
 def test_sew_resnet34_single_step_matches_multi_step():
-    config = vision.SEWResNet34Config(
+    config = SEWResNet34Config(
         time_steps=2,
         num_classes=5,
         step_mode="m",
@@ -622,7 +725,7 @@ def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch):
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     scaler = torch.amp.GradScaler("cuda", enabled=False)
     config = vision.TrainingConfig(
-        model=vision.SEWResNet34Config(),
+        model=SEWResNet34Config(),
         dataset_builder="package.datasets.build",
         workers=0,
     )
@@ -701,7 +804,7 @@ def test_vision_checkpoint_broadcasts_rank_zero_creation_failure(tmp_path, monke
     model = nn.Linear(2, 2)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     config = vision.TrainingConfig(
-        model=vision.SEWResNet34Config(),
+        model=SEWResNet34Config(),
         dataset_builder="package.datasets.build",
         workers=0,
     )
@@ -744,7 +847,7 @@ def test_four_block_spikformer_rejects_pipeline_size_four():
 
 
 def test_sew_pipeline_downsamples_before_stage_boundaries():
-    config = vision.SEWResNet34Config(time_steps=2, image_size=224)
+    config = SEWResNet34Config(time_steps=2, image_size=224)
     builder = config.get_builder_cls()(config)
     model = builder._build_canonical_model()
     stages = [sew_pipeline_stage(model, rank, 4) for rank in range(4)]
@@ -781,7 +884,7 @@ def test_sew_pipeline_downsamples_before_stage_boundaries():
 
 
 def test_spikformer_cifar10_pipeline_uses_8_by_8_tokens():
-    config = vision.SpikformerCIFAR10Config(time_steps=2)
+    config = SpikformerCIFAR10Config(time_steps=2)
     builder = config.get_builder_cls()(config)
 
     assert config.num_classes == 10
@@ -816,15 +919,18 @@ def test_fsdp2_keeps_batch_norm_in_full_precision(monkeypatch):
         nn.Conv2d(4, 5, 1),
     )
     config = vision.TrainingConfig(
-        model=vision.SEWResNet34Config(),
+        model=SEWResNet34Config(),
         dataset_builder="package.datasets.build",
         data_parallel="fsdp2",
         precision="bf16",
     )
 
-    training._wrap_data_parallel(
+    execution._wrap_data_parallel(
         model,
-        config=config,
+        data_parallel=config.data_parallel,
+        pipeline_parallel_size=config.pipeline_parallel_size,
+        step_mode=config.model.step_mode,
+        precision=config.precision,
         device=torch.device("cuda", 0),
         dp_size=2,
         dp_group=None,

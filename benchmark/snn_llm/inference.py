@@ -11,7 +11,7 @@ import torch
 from torch.utils.data import Dataset
 
 from benchmark.snn_llm.cli import _TokenDataset
-from benchmark.snn_llm.spikelm import SpikeLMConfig
+from benchmark.snn_llm.spikelm import SpikeLMConfig, export_sglang
 from spikingjelly.activation_based.distributed import llm
 
 
@@ -127,157 +127,96 @@ def _generate(args: argparse.Namespace, model: SpikeLMConfig):
     )
 
 
-def _export_sglang(
+def _initialize_checkpoint(
     args: argparse.Namespace, model_config: SpikeLMConfig
 ) -> dict[str, object]:
-    if (
-        args.tensor_parallel_size != 1
-        or args.pipeline_parallel_size != 1
-        or args.context_parallel_size != 1
-    ):
-        raise ValueError("SpikeLM SGLang export currently requires TP=PP=CP=1.")
-    try:
-        from safetensors.torch import save_file
-    except ImportError as error:
-        raise ImportError(
-            "SGLang export requires spikingjelly[sglang-export]."
-        ) from error
     import torch.distributed as dist
-    from megatron.core import parallel_state
+    from megatron.core import dist_checkpointing, parallel_state
     from megatron.core.tensor_parallel.random import model_parallel_cuda_manual_seed
-    from megatron.core.utils import unwrap_model
 
-    from spikingjelly.activation_based.distributed.llm.inference import (
-        load_for_inference,
-    )
-
-    args.output.mkdir(parents=True)
-    torch.cuda.set_device(0)
-    dist.init_process_group(
-        "nccl",
-        init_method="tcp://127.0.0.1:29579",
-        rank=0,
-        world_size=1,
-        device_id=torch.device("cuda", 0),
-    )
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    torch.cuda.set_device(local_rank)
+    device = torch.device("cuda", local_rank)
+    initialized_distributed = not dist.is_initialized()
+    if initialized_distributed:
+        dist.init_process_group("nccl", device_id=device)
+    initialized_model_parallel = not parallel_state.model_parallel_is_initialized()
     try:
-        parallel_state.initialize_model_parallel(
-            tensor_model_parallel_size=1,
-            pipeline_model_parallel_size=1,
-            context_parallel_size=1,
-        )
+        if initialized_model_parallel:
+            parallel_state.initialize_model_parallel(
+                tensor_model_parallel_size=args.tensor_parallel_size,
+                pipeline_model_parallel_size=args.pipeline_parallel_size,
+                context_parallel_size=args.context_parallel_size,
+                expert_model_parallel_size=1,
+            )
         model_parallel_cuda_manual_seed(1234)
         provider, _ = model_config.get_builder_cls()(model_config).build(
             use_snn_memopt=False, resume=True
         )
-        model = load_for_inference(model_config.transformer, provider, args.checkpoint)
-        source = unwrap_model(model).state_dict()
-        weights = {
-            "model.embedding.weight": source["embedding.word_embeddings.weight"]
-            .detach()
-            .cpu(),
-            "model.final_norm.weight": source["decoder.final_layernorm.weight"]
-            .detach()
-            .cpu(),
-            "model.final_norm.bias": source["decoder.final_layernorm.bias"]
-            .detach()
-            .cpu(),
-            "lm_head.weight": source["output_layer.weight"].detach().cpu(),
+        model = provider(
+            parallel_state.is_pipeline_first_stage(),
+            parallel_state.is_pipeline_last_stage(),
+        ).cuda(device)
+        metadata = {
+            "dp_cp_group": parallel_state.get_data_parallel_group(
+                with_context_parallel=True
+            )
         }
-        head_count = model_config.transformer.num_attention_heads
-        head_dim = model_config.transformer.hidden_size // head_count
-
-        def reorder_qkv(value: torch.Tensor) -> torch.Tensor:
-            shape = value.shape
-            grouped = value.reshape(head_count, 3, head_dim, *shape[1:])
-            return torch.cat(
-                tuple(grouped[:, index].reshape(-1, *shape[1:]) for index in range(3))
-            )
-
-        for index in range(model_config.transformer.num_layers):
-            source_prefix = f"decoder.layers.{index}."
-            target_prefix = f"model.layers.{index}."
-            mapping = {
-                "input_layernorm.weight": "attn_norm.norm.weight",
-                "input_layernorm.bias": "attn_norm.norm.bias",
-                "input_layernorm.spike.amplitude": "attn_norm.amplitude",
-                "self_attention.linear_proj.weight": "attn.proj.weight",
-                "self_attention.linear_proj.bias": "attn.proj.bias",
-                "pre_mlp_layernorm.weight": "mlp_norm.norm.weight",
-                "pre_mlp_layernorm.bias": "mlp_norm.norm.bias",
-                "pre_mlp_layernorm.spike.amplitude": "mlp_norm.amplitude",
-                "mlp.linear_fc1.weight": "mlp.fc1.weight",
-                "mlp.linear_fc1.bias": "mlp.fc1.bias",
-                "mlp.linear_fc2.weight": "mlp.fc2.weight",
-                "mlp.linear_fc2.bias": "mlp.fc2.bias",
-            }
-            for source_name, target_name in mapping.items():
-                weights[target_prefix + target_name] = (
-                    source[source_prefix + source_name].detach().cpu()
-                )
-            weights[target_prefix + "attn.qkv.weight"] = (
-                reorder_qkv(source[source_prefix + "self_attention.linear_qkv.weight"])
-                .detach()
-                .cpu()
-            )
-            weights[target_prefix + "attn.qkv.bias"] = (
-                reorder_qkv(source[source_prefix + "self_attention.linear_qkv.bias"])
-                .detach()
-                .cpu()
-            )
-        save_file(weights, args.output / "model.safetensors")
-        exported_config = {
-            "architectures": ["SpikingJellySpikeLMForCausalLM"],
-            "model_type": "gpt2",
-            "vocab_size": model_config.vocab_size,
-            "n_embd": model_config.transformer.hidden_size,
-            "n_layer": model_config.transformer.num_layers,
-            "n_head": model_config.transformer.num_attention_heads
-            * model_config.time_steps,
-            "n_inner": model_config.transformer.ffn_hidden_size,
-            "n_positions": model_config.max_sequence_length,
-            "hidden_size": model_config.transformer.hidden_size,
-            "num_hidden_layers": model_config.transformer.num_layers,
-            "num_attention_heads": model_config.transformer.num_attention_heads
-            * model_config.time_steps,
-            "num_key_value_heads": model_config.transformer.num_attention_heads
-            * model_config.time_steps,
-            "head_dim": model_config.transformer.hidden_size
-            // model_config.transformer.num_attention_heads,
-            "intermediate_size": model_config.transformer.ffn_hidden_size,
-            "max_position_embeddings": model_config.max_sequence_length,
-            "layer_norm_epsilon": model_config.transformer.layernorm_epsilon,
-            "rope_theta": 10000.0,
-            "tie_word_embeddings": False,
-            "torch_dtype": "bfloat16",
-            "bos_token_id": None,
-            "eos_token_id": None,
-            "snn_time_steps": model_config.time_steps,
-            "snn_num_attention_heads": model_config.transformer.num_attention_heads,
-            "snn_spike_decay": model_config.spike_decay,
-            "snn_spike_amplitude": model_config.spike_amplitude,
-            "spikingjelly_artifact_schema": 1,
-            "source_checkpoint": str(args.checkpoint),
+        recipe = {
+            **model.checkpoint_metadata,
+            "model": model_config._checkpoint_metadata(),
+            "use_snn_memopt": False,
+            "mcore_recompute_granularity": model_config.transformer.recompute_granularity,
+            "mcore_recompute_modules": model_config.transformer.recompute_modules,
         }
-        (args.output / "config.json").write_text(
-            json.dumps(exported_config, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
+        if dist.get_rank() == 0:
+            args.output.mkdir(parents=True, exist_ok=True)
+        dist.barrier()
+        dist_checkpointing.save(
+            {
+                "model": model.sharded_state_dict(metadata=metadata),
+                "recipe": recipe,
+            },
+            str(args.output),
         )
-        return {
-            "artifact": str(args.output),
-            "tensor_count": len(weights),
-            "parameter_count": sum(value.numel() for value in weights.values()),
-        }
+        return {"checkpoint": str(args.output), "recipe": recipe}
     finally:
-        if parallel_state.model_parallel_is_initialized():
+        if (
+            initialized_model_parallel
+            and parallel_state.model_parallel_is_initialized()
+        ):
             parallel_state.destroy_model_parallel()
-        dist.destroy_process_group()
+        if initialized_distributed and dist.is_initialized():
+            dist.destroy_process_group()
+
+
+def _export_sglang(
+    args: argparse.Namespace, model_config: SpikeLMConfig
+) -> dict[str, object]:
+    provider, _ = model_config.get_builder_cls()(model_config).build(
+        use_snn_memopt=False, resume=True
+    )
+    export_sglang(
+        model_config,
+        provider,
+        args.checkpoint,
+        args.output,
+    )
+    index = json.loads(
+        (args.output / "model.safetensors.index.json").read_text(encoding="utf-8")
+    )
+    return {
+        "artifact": str(args.output),
+        "tensor_count": len(index["weight_map"]),
+        "parameter_count": index["metadata"]["parameter_count"],
+    }
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="MCore distributed inference smoke")
     parser.add_argument(
-        "command", choices=("train", "evaluate", "generate", "export-sglang")
+        "command",
+        choices=("train", "evaluate", "generate", "initialize", "export-sglang"),
     )
     parser.add_argument("--data", required=True, type=Path)
     parser.add_argument("--output", type=Path)
@@ -299,9 +238,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--prompt-length", type=int, default=8)
     parser.add_argument("--max-new-tokens", type=int, default=4)
     args = parser.parse_args()
-    if args.command in {"train", "export-sglang"} and args.output is None:
-        parser.error("train and export-sglang require --output")
-    if args.command != "train" and args.checkpoint is None:
+    if args.command in {"train", "initialize", "export-sglang"} and args.output is None:
+        parser.error("train, initialize, and export-sglang require --output")
+    if args.command not in {"train", "initialize"} and args.checkpoint is None:
         parser.error("evaluate, generate, and export-sglang require --checkpoint")
     return args
 
@@ -328,6 +267,8 @@ def main() -> None:
             if generated is not None
             else None
         )
+    elif args.command == "initialize":
+        result = _initialize_checkpoint(args, model)
     else:
         result = _export_sglang(args, model)
     if int(os.environ.get("RANK", "0")) == 0:

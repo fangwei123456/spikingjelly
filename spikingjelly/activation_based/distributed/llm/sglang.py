@@ -1,68 +1,128 @@
 from __future__ import annotations
 
+import contextlib
+import importlib.util
 import json
 import os
+from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
-import torch
+from .config import SGLangEngineConfig
 
-from .config import SGLangGenerationConfig
+_ARTIFACT_SCHEMA_VERSION = 2
+_external_model_package: str | None = None
 
 
-def create_sglang_engine(config: SGLangGenerationConfig) -> Any:
-    r"""Create an experimental SGLang offline Engine for repeated inference calls.
+def _validate_artifact(config: SGLangEngineConfig) -> None:
+    if not config.artifact.is_dir():
+        raise ValueError(f"SGLang artifact directory does not exist: {config.artifact}")
+    if config.tokenizer is not None and not config.tokenizer.is_dir():
+        raise ValueError(f"Tokenizer directory does not exist: {config.tokenizer}")
+    try:
+        model = json.loads(
+            (config.artifact / "config.json").read_text(encoding="utf-8")
+        )
+        manifest = json.loads(
+            (config.artifact / "spikingjelly_sglang.json").read_text(encoding="utf-8")
+        )
+        index = json.loads(
+            (config.artifact / "model.safetensors.index.json").read_text(
+                encoding="utf-8"
+            )
+        )
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("SGLang artifact metadata is missing or invalid.") from error
+    if (
+        not isinstance(model, dict)
+        or not isinstance(manifest, dict)
+        or not isinstance(index, dict)
+    ):
+        raise ValueError("Unsupported SpikingJelly SGLang artifact.")
+    architectures = model.get("architectures")
+    if (
+        manifest.get("schema_version") != _ARTIFACT_SCHEMA_VERSION
+        or not isinstance(architectures, list)
+        or len(architectures) != 1
+        or not isinstance(architectures[0], str)
+        or not architectures[0]
+    ):
+        raise ValueError("Unsupported SpikingJelly SGLang artifact.")
+    if manifest.get("dtype") != "bfloat16":
+        raise ValueError("SGLang artifacts currently require bfloat16 weights.")
+    if not isinstance(manifest.get("recipe_name"), str) or not manifest["recipe_name"]:
+        raise ValueError("SGLang artifact must declare a non-empty recipe_name.")
+    weight_map = index.get("weight_map")
+    if not isinstance(weight_map, dict) or not weight_map:
+        raise ValueError("SGLang artifact tensor index is empty or invalid.")
+    if any(
+        not isinstance(filename, str)
+        or Path(filename).name != filename
+        or not (config.artifact / filename).is_file()
+        for filename in weight_map.values()
+    ):
+        raise ValueError("SGLang artifact tensor shard is missing or invalid.")
+
+
+@contextlib.contextmanager
+def open_sglang_engine(config: SGLangEngineConfig) -> Iterator[Any]:
+    r"""Open a managed SGLang offline Engine for SpikingJelly artifacts.
 
     **API Language** - 中文 | English
 
-    **中文：** 此接口为实验性接口，其行为在稳定前可能调整。校验 artifact 和并行
-    拓扑后创建 offline Engine。调用方拥有 Engine 生命周期，完成后必须调用
-    ``shutdown()``。
+    **中文：** 校验 SpikingJelly artifact，显式加载 ``external_model_package``，
+    并返回原生 SGLang ``Engine``。退出上下文时总会调用 ``shutdown()`` 并恢复
+    进程环境。SGLang 的 model registry 是进程级状态，同一进程首次加载后不能
+    切换 ``external_model_package``。由于 SGLang 使用 spawned workers，应只在受
+    ``if __name__ == "__main__"`` 保护的应用入口调用本函数。
 
-    **English:** This API is experimental and may change before stabilization.
-    It validates the artifact and topology, then creates an offline Engine. The
-    caller owns its lifecycle and must call ``shutdown()``.
+    **English:** Validate a SpikingJelly artifact, explicitly load
+    ``external_model_package``, and yield the native SGLang ``Engine``. Leaving
+    the context always calls ``shutdown()`` and restores the process environment.
+    SGLang's model registry is process-global, so ``external_model_package``
+    cannot change after the first load in a process. Because SGLang uses spawned
+    workers, call this function only from an application entry point protected by
+    ``if __name__ == "__main__"``.
 
-    :param config: SGLang generation configuration.
-    :type config: SGLangGenerationConfig
-    :return: SGLang offline Engine.
-    :rtype: sglang.Engine
+    :param config: SGLang Engine configuration.
+    :type config: SGLangEngineConfig
+    :return: Managed native SGLang Engine.
+    :rtype: contextlib.AbstractContextManager[sglang.Engine]
     :raises ImportError: ``spikingjelly[sglang]`` is unavailable.
-    :raises ValueError: The artifact or DCP topology is invalid.
+    :raises ValueError: The artifact or topology is invalid.
     """
-
-    if not config.artifact.is_dir():
-        raise ValueError(f"SGLang artifact directory does not exist: {config.artifact}")
-    artifact_config = json.loads(
-        (config.artifact / "config.json").read_text(encoding="utf-8")
-    )
+    if not isinstance(config, SGLangEngineConfig):
+        raise TypeError("open_sglang_engine requires SGLangEngineConfig.")
+    _validate_artifact(config)
+    global _external_model_package
     if (
-        artifact_config.get("spikingjelly_artifact_schema") is not None
-        and config.decode_context_parallel_size > 1
+        _external_model_package is not None
+        and _external_model_package != config.external_model_package
     ):
-        kv_heads = int(artifact_config["num_key_value_heads"])
-        if kv_heads <= 0 or config.tensor_parallel_size % (
-            kv_heads * config.decode_context_parallel_size
-        ):
-            raise ValueError(
-                "DCP requires TP-replicated KV heads; increase TP or reduce "
-                "decode_context_parallel_size."
-            )
+        raise ValueError(
+            "SGLang external_model_package cannot change within one process."
+        )
+    try:
+        if importlib.util.find_spec(config.external_model_package) is None:
+            raise ModuleNotFoundError(config.external_model_package)
+    except ImportError as error:
+        raise ImportError(
+            f"SGLang external model package is unavailable: "
+            f"{config.external_model_package}"
+        ) from error
     previous_package = os.environ.get("SGLANG_EXTERNAL_MODEL_PACKAGE")
-    if config.external_model_package is None:
-        os.environ.pop("SGLANG_EXTERNAL_MODEL_PACKAGE", None)
-    else:
-        os.environ["SGLANG_EXTERNAL_MODEL_PACKAGE"] = config.external_model_package
+    os.environ["SGLANG_EXTERNAL_MODEL_PACKAGE"] = config.external_model_package
+    engine = None
     try:
         try:
             import sglang
         except ImportError as error:
             raise ImportError(
-                "SGLang inference requires a separate environment with "
-                "spikingjelly[sglang]."
+                "SGLang inference requires a separate Python 3.12 environment "
+                "with spikingjelly[sglang]."
             ) from error
-        # The experimental SNN adapters are validated only with Triton and
-        # eager execution; CUDA graphs remain outside the supported boundary.
-        return sglang.Engine(
+        _external_model_package = config.external_model_package
+        engine = sglang.Engine(
             model_path=str(config.artifact),
             tokenizer_path=(
                 str(config.tokenizer) if config.tokenizer is not None else None
@@ -71,67 +131,23 @@ def create_sglang_engine(config: SGLangGenerationConfig) -> Any:
             tp_size=config.tensor_parallel_size,
             pp_size=config.pipeline_parallel_size,
             dp_size=config.data_parallel_size,
-            attn_cp_size=config.prefill_context_parallel_size,
-            enable_prefill_cp=config.prefill_context_parallel_size > 1,
-            dcp_size=config.decode_context_parallel_size,
             mem_fraction_static=config.memory_fraction,
             random_seed=config.seed,
             attention_backend="triton",
             disable_cuda_graph=True,
+            disable_prefill_cuda_graph=True,
+            disable_decode_cuda_graph=True,
         )
+        yield engine
     finally:
-        if previous_package is None:
-            os.environ.pop("SGLANG_EXTERNAL_MODEL_PACKAGE", None)
-        else:
-            os.environ["SGLANG_EXTERNAL_MODEL_PACKAGE"] = previous_package
+        try:
+            if engine is not None:
+                engine.shutdown()
+        finally:
+            if previous_package is None:
+                os.environ.pop("SGLANG_EXTERNAL_MODEL_PACKAGE", None)
+            else:
+                os.environ["SGLANG_EXTERNAL_MODEL_PACKAGE"] = previous_package
 
 
-def generate_sglang(
-    config: SGLangGenerationConfig, input_ids: torch.Tensor
-) -> list[dict[str, Any]]:
-    r"""Generate token IDs with the experimental SGLang offline integration.
-
-    **API Language** - 中文 | English
-
-    **中文：** 此接口为实验性接口，其行为在稳定前可能调整。它在独立 SGLang 环境中
-    加载 artifact，直接向 offline ``Engine`` 提交 tokenized prompts。本函数不启动
-    HTTP、router 或其他 serving 控制面。
-
-    **English:** This API is experimental and may change before stabilization.
-    It loads the artifact in a separate SGLang environment and submits tokenized
-    prompts directly to the offline ``Engine``. This function starts no HTTP
-    server, router, or other serving control plane.
-
-    :param config: SGLang generation configuration.
-    :type config: SGLangGenerationConfig
-    :param input_ids: Non-empty integer prompts shaped ``[B, S]``.
-    :type input_ids: torch.Tensor
-    :return: SGLang results in input order; each item contains ``output_ids``,
-        ``text``, and ``meta_info``.
-    :rtype: list[dict[str, Any]]
-    :raises ImportError: ``spikingjelly[sglang]`` is unavailable.
-    :raises ValueError: The artifact or prompt tensor is invalid.
-    """
-    if (
-        input_ids.ndim != 2
-        or input_ids.numel() == 0
-        or input_ids.dtype
-        not in (torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64)
-    ):
-        raise ValueError("input_ids must be a non-empty integer [B, S] tensor.")
-    engine = create_sglang_engine(config)
-    try:
-        return engine.generate(
-            input_ids=input_ids.long().tolist(),
-            sampling_params={
-                "max_new_tokens": config.max_new_tokens,
-                "temperature": config.temperature,
-                "top_p": config.top_p,
-                "top_k": config.top_k,
-            },
-        )
-    finally:
-        engine.shutdown()
-
-
-__all__ = ["create_sglang_engine", "generate_sglang"]
+__all__ = ["open_sglang_engine"]

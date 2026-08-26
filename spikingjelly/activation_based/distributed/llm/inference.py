@@ -14,6 +14,11 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
 
 from .config import EvaluationConfig, MCoreGenerationConfig
+from .metrics import (
+    _broadcast_pipeline_metrics,
+    _loss_totals,
+    _reduce_data_parallel_metrics,
+)
 from .temporal import _reduce_time_batch
 
 if TYPE_CHECKING:
@@ -202,12 +207,6 @@ def evaluate(config: EvaluationConfig) -> dict[str, float]:
         raise RuntimeError(
             "MCore evaluation requires Python 3.12 and spikingjelly[megatron]."
         ) from error
-    from .training import (
-        _broadcast_pipeline_metrics,
-        _loss_totals,
-        _reduce_data_parallel_metrics,
-    )
-
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
     torch.cuda.set_device(local_rank)
     device = torch.device("cuda", local_rank)
@@ -274,19 +273,27 @@ def evaluate(config: EvaluationConfig) -> dict[str, float]:
             "decoder_seq_length": config.sequence_length,
             "forward_only": True,
         }
+
+        def next_schedule(data_iterator):
+            batches = [next(data_iterator) for _ in range(config.pipeline_microbatches)]
+            return schedule(data_iterator=iter(batches), **schedule_kwargs)
+
+        elapsed_seconds = 0.0
         with torch.no_grad():
             for _ in range(config.timing_warmup_batches):
-                schedule(data_iterator=iter(loader), **schedule_kwargs)
+                next_schedule(iter(loader))
             torch.cuda.synchronize(device)
             torch.cuda.reset_peak_memory_stats(device)
             torch.distributed.barrier()
             iterator = iter(loader)
-            started = time.perf_counter()
             for _ in range(len(loader) // config.pipeline_microbatches):
-                losses.extend(schedule(data_iterator=iterator, **schedule_kwargs))
-        torch.cuda.synchronize(device)
-        elapsed = torch.tensor(time.perf_counter() - started, device=device)
-        torch.distributed.all_reduce(elapsed, op=torch.distributed.ReduceOp.MAX)
+                batches = [next(iterator) for _ in range(config.pipeline_microbatches)]
+                torch.cuda.synchronize(device)
+                started = time.perf_counter()
+                losses.extend(schedule(data_iterator=iter(batches), **schedule_kwargs))
+                torch.cuda.synchronize(device)
+                elapsed_seconds += time.perf_counter() - started
+        metrics_started = time.perf_counter()
         totals = _broadcast_pipeline_metrics(
             _loss_totals(losses) if parallel_state.is_pipeline_last_stage() else {},
             parallel_state,
@@ -306,6 +313,11 @@ def evaluate(config: EvaluationConfig) -> dict[str, float]:
             float(torch.cuda.max_memory_allocated(device)), device=device
         )
         torch.distributed.all_reduce(peak, op=torch.distributed.ReduceOp.MAX)
+        torch.cuda.synchronize(device)
+        elapsed = torch.tensor(
+            elapsed_seconds + time.perf_counter() - metrics_started, device=device
+        )
+        torch.distributed.all_reduce(elapsed, op=torch.distributed.ReduceOp.MAX)
         loss = metrics["lm_loss"]
         return {
             "lm_loss": loss,

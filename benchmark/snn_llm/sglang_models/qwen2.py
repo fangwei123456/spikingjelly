@@ -1,3 +1,5 @@
+"""SGLang runtime model for the benchmark Qwen2 SNN recipe."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable

@@ -1,4 +1,4 @@
-"""SGLang external model package for reference SNN LLM recipes."""
+"""SGLang external model package for the benchmark SNN LLM recipes."""
 
 from collections.abc import Iterable
 

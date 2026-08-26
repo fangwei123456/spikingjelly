@@ -11,6 +11,10 @@ from torch.utils.data import Dataset
 from spikingjelly.activation_based.distributed import vision
 
 
+def _spread_indices(size: int, samples: int) -> list[int]:
+    return torch.linspace(0, size - 1, samples, dtype=torch.int64).tolist()
+
+
 class _SyntheticImages(Dataset):
     def __init__(
         self,
@@ -19,13 +23,14 @@ class _SyntheticImages(Dataset):
         image_size: int,
         time_steps: int,
         input_layout: str,
+        seed: int,
     ) -> None:
         self.samples = samples
         self.classes = classes
         shape = (3, image_size, image_size)
         if input_layout == "NTCHW":
             shape = (time_steps, *shape)
-        self.image = torch.zeros(shape)
+        self.image = torch.rand(shape, generator=torch.Generator().manual_seed(seed))
 
     def __len__(self) -> int:
         return self.samples
@@ -40,13 +45,55 @@ def build_synthetic_dataset(
     image_size: int,
     time_steps: int,
     input_layout: str,
+    seed: int = 1234,
 ) -> Dataset:
-    return _SyntheticImages(samples, classes, image_size, time_steps, input_layout)
+    return _SyntheticImages(
+        samples, classes, image_size, time_steps, input_layout, seed
+    )
+
+
+def build_imagefolder_dataset(data_dir: Path, image_size: int, samples: int) -> Dataset:
+    from torch.utils.data import Subset
+    from torchvision import datasets, transforms
+
+    dataset = datasets.ImageFolder(
+        data_dir,
+        transforms.Compose(
+            (
+                transforms.Resize(image_size),
+                transforms.CenterCrop(image_size),
+                transforms.ToTensor(),
+            )
+        ),
+    )
+    if samples > len(dataset):
+        raise ValueError("samples cannot exceed the ImageFolder dataset size.")
+    return Subset(dataset, _spread_indices(len(dataset), samples))
+
+
+def build_cifar10_dataset(data_dir: Path, image_size: int, samples: int) -> Dataset:
+    from torch.utils.data import Subset
+    from torchvision import datasets, transforms
+
+    dataset = datasets.CIFAR10(
+        data_dir,
+        train=False,
+        download=True,
+        transform=transforms.Compose(
+            (transforms.Resize(image_size), transforms.ToTensor())
+        ),
+    )
+    if samples > len(dataset):
+        raise ValueError("samples cannot exceed the CIFAR10 test dataset size.")
+    return Subset(dataset, _spread_indices(len(dataset), samples))
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Distributed vision inference")
     parser.add_argument("--artifact", required=True, type=Path)
+    data = parser.add_mutually_exclusive_group()
+    data.add_argument("--data", type=Path)
+    data.add_argument("--cifar10-data", type=Path)
     parser.add_argument("--export-checkpoint", type=Path)
     parser.add_argument(
         "--model",
@@ -73,6 +120,10 @@ def _parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if min(args.samples, args.classes, args.image_size, args.time_steps) <= 0:
         parser.error("samples, classes, image-size, and time-steps must be positive")
+    if (
+        args.data is not None or args.cifar10_data is not None
+    ) and args.input_layout != "NCHW":
+        parser.error("real-image inference requires --input-layout NCHW")
     return args
 
 
@@ -84,16 +135,33 @@ def main() -> None:
     config_type = (
         vision.PredictionConfig if args.output is not None else vision.EvaluationConfig
     )
+    dataset_builder = f"{__name__}.build_synthetic_dataset"
+    dataset_kwargs = {
+        "samples": args.samples,
+        "classes": args.classes,
+        "image_size": args.image_size,
+        "time_steps": args.time_steps,
+        "input_layout": args.input_layout,
+        "seed": 1234,
+    }
+    if args.data is not None:
+        dataset_builder = f"{__name__}.build_imagefolder_dataset"
+        dataset_kwargs = {
+            "data_dir": args.data,
+            "image_size": args.image_size,
+            "samples": args.samples,
+        }
+    elif args.cifar10_data is not None:
+        dataset_builder = f"{__name__}.build_cifar10_dataset"
+        dataset_kwargs = {
+            "data_dir": args.cifar10_data,
+            "image_size": args.image_size,
+            "samples": args.samples,
+        }
     config = config_type(
         artifact=args.artifact,
-        dataset_builder=f"{__name__}.build_synthetic_dataset",
-        dataset_kwargs={
-            "samples": args.samples,
-            "classes": args.classes,
-            "image_size": args.image_size,
-            "time_steps": args.time_steps,
-            "input_layout": args.input_layout,
-        },
+        dataset_builder=dataset_builder,
+        dataset_kwargs=dataset_kwargs,
         input_layout=args.input_layout,
         batch_size=args.batch_size,
         workers=args.workers,

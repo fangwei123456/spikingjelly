@@ -51,9 +51,10 @@ MCore 重计算也保持职责分离：前者处理 SNN 激活和脉冲表示，
     from pathlib import Path
 
     from spikingjelly.activation_based.distributed import vision
+    from spikingjelly.activation_based.model.sew_resnet import SEWResNet34Config
 
     config = vision.TrainingConfig(
-        model=vision.SEWResNet34Config(
+        model=SEWResNet34Config(
             time_steps=4, num_classes=1000, step_mode="m"
         ),
         dataset_builder=(
@@ -74,8 +75,10 @@ MCore 重计算也保持职责分离：前者处理 SNN 激活和脉冲表示，
 
 ``batch_size`` 是每个 DP rank 的 batch size；global batch 为
 ``batch_size * DP``，不乘 TP、PP 或 SNN 时间步。``tensor_parallel_size`` 和
-``pipeline_parallel_size`` 分别控制 TP 和 PP，剩余 rank 自动作为 DP。内置模型包括
-``SEWResNet34Config``、``SpikformerConfig`` 和 ``SpikformerCIFAR10Config``。
+``pipeline_parallel_size`` 分别控制 TP 和 PP，剩余 rank 自动作为 DP。模型专属的
+distributed recipe 从 ``model.sew_resnet`` 和 ``model.spikformer`` 导入，而不是由
+``distributed.vision`` 持有。仓库示例包括 ``SEWResNet34Config``、
+``SpikformerConfig`` 和 ``SpikformerCIFAR10Config``。
 CIFAR-10 变体固定使用官方的 32×32 输入、4×4 patch stem、384 维、12 个 attention
 heads 和 4 个 Transformer blocks，并复用相同的 TP、PP 与 FSDP2 实现。
 ``mixup_alpha`` 配置可序列化的 batch-level mixup；``0`` 表示禁用。
@@ -187,7 +190,7 @@ config、optimizer 和 dataset 配置位于 ``benchmark/snn_llm/cli.py``，可�
     * - 训练后 scheduler-backed offline generation
       - 不需要
       - —
-      - SGLang（experimental）``generate_sglang``
+      - SGLang ``open_sglang_engine``
       - 按请求生成 token；不返回评测指标
 
 ``evaluate_classification`` 要求 dataset 的每个元素都是 ``(image, target)``；
@@ -233,15 +236,9 @@ LLM 提供两个目的不同的 backend：
   ``llm.evaluate(EvaluationConfig(...))`` 支持 DP/TP/PP/CP 的完整 loss/perplexity
   评测；``llm.generate(MCoreGenerationConfig(...), input_ids)`` 支持 DP prompt
   切分、TP/PP 和 static KV-cache decode。MCore cached generation 要求 CP=1。
-* SGLang（experimental）用于训练完成后的 scheduler-backed 高吞吐离线生成。它使用
-  独立 Python 环境，通过 ``config.json`` 和 safetensors artifact 与 MCore 交接；
-  不启动 HTTP server 或 router。
-
-.. warning::
-
-    SGLang 集成目前是实验性接口，其 API、artifact 适配和支持的并行拓扑在稳定前可能
-    调整。本教程只说明 offline Engine 的接口和用法，不提供官方性能 benchmark，
-    也不提供 serving；请按实际 workload 自行评测 TTFT 和 TPS。
+* SGLang 用于训练完成后的 scheduler-backed 高吞吐离线生成。
+  :func:`open_sglang_engine` 管理原生 Engine 生命周期；采样、变长 token IDs、异步
+  生成和 streaming 直接使用原生 Engine 接口。该路径不启动 HTTP server 或 router。
 
 .. list-table:: LLM 推理 backend 选择
     :header-rows: 1
@@ -269,18 +266,82 @@ SGLang 0.5.17 固定自己的 PyTorch/Transformers 运行栈，不应与主训�
     source .venv-sglang/bin/activate
     uv pip install --editable ".[sglang]"
 
-SpikeLM 和 Qwen2 的导出参考分别位于 ``benchmark/snn_llm/inference.py`` 和
-``qwen_distributed_inference.py``；SGLang 模型适配位于
-``benchmark/snn_llm/sglang_models``。SNN 的 ``T`` 在 SGLang 模型内部保留为
-``[token, T, hidden]``，仅在 RadixAttention/KV cache 边界并入 head 维；
-scheduler 仍然只管理一条语义请求。
+``llm.export_sglang_artifact`` 负责分布式 checkpoint 加载、逐 stage 分片写入、
+index、失败同步和原子发布。模型自己的 ``stage_tensors`` 回调负责权重名称和变换，
+``artifact_config`` 负责 SGLang/Hugging Face 配置。导出时用 ``torchrun`` 启动
+checkpoint 的 TP x PP x CP 拓扑；任意 GPU 都不会聚合完整模型，输出 artifact 可在
+推理时改用其他 TP/PP/DP 拓扑。
 
-SGLang DCP 只能消除 TP 中已复制的 KV heads。对 SpikingJelly artifact，
-``TP / effective_KV_heads`` 必须不小于 DCP size；否则高层接口在启动
-Engine 前拒绝配置，不会运行会产生错误 token 的拓扑。
-SpikeLM 与 Qwen2 参考适配使用 SGLang 原生的 stage 分层和
-``PPProxyTensors`` 协议，TP、PP、DP 和满足上述约束的 DCP 均由 SGLang Engine
-管理。SGLang 0.5.17 在 PP>1 时自动关闭 overlap schedule。
+仓库中的 SpikeLM、Qwen2 recipe 和 external runtime model 位于
+``benchmark/snn_llm``，用于演示该 seam，并不作为 wheel 内置模型支持。其 adapter
+在内部保留 ``[token, T, hidden]``，仅在 RadixAttention/KV cache 边界并入 head 维。
+自定义模型必须同时提供 export 回调和可导入的 SGLang external model package。
+
+首个支持范围是单节点 NVIDIA BF16 TP、PP 和 DP；prefill CP 与 DCP 不受支持，
+也不会出现在 ``SGLangEngineConfig`` 中。CUDA Graph 同样禁用：SGLang 0.5.17
+graph capture 所需的 attention metadata 尚未由 temporal adapter 提供。SpikeLM 与
+Qwen2 adapter 使用 SGLang 原生 stage 分层和 ``PPProxyTensors`` 协议。
+
+.. code-block:: python
+
+    from pathlib import Path
+
+    from spikingjelly.activation_based.distributed import llm
+
+    def main():
+        config = llm.SGLangEngineConfig(
+            artifact=Path("artifacts/qwen2-snn"),
+            external_model_package="benchmark.snn_llm.sglang_models",
+            tensor_parallel_size=2,
+        )
+        with llm.open_sglang_engine(config) as engine:
+            outputs = engine.generate(
+                input_ids=[[1, 2, 3], [1, 2, 3, 4, 5]],
+                sampling_params={"temperature": 0, "max_new_tokens": 32},
+            )
+        print(outputs)
+
+    if __name__ == "__main__":
+        main()
+
+使用 ``benchmark/snn_llm/sglang_benchmark.py`` 产生可复现的 offline Engine
+测量。它支持变长 token 和共享前缀 workload，报告 request/input/output 吞吐、
+TTFT、TPOT、端到端延迟的 median/p99，以及每卡峰值显存。
+
+正式 SGLang 验收使用一台 on-demand 4 × RTX 4090、无 NVLink 的主机，软件为
+PyTorch 2.11.0、CUDA 13.0、SGLang 0.5.17、BF16、Triton attention，并关闭
+CUDA Graph。每个性能点先执行一个 warmup request；Engine 在 warmup 后及每次
+测量前清空 Radix cache，再重复三次并报告中位数。Qwen artifact 使用
+Qwen2.5-0.5B 权重和确定性的全一 QCFS scale，因此这里是系统测量，不是模型质量结论。
+
+.. figure:: ../../_static/tutorials/distributed/sglang-inference.png
+    :width: 900px
+    :alt: SGLang Qwen2.5-0.5B 扩展吞吐与共享前缀延迟
+
+    左图：固定 workload 下 TP1、PP2 和 DP4 的 output 吞吐与 p99 TPOT。
+    右图：TP1 在无共享和 2048-token 共享前缀下的 input/output 吞吐与 p99 TTFT。
+    右图的 prompt 长度差异用于刻画 Radix cache，不是拓扑横向对比。
+
+DP4 的 output 吞吐为 TP1 的 3.93 倍，而 TPOT 基本不变。该 PCIe 主机上的 TP2
+与 PP2 均慢于 TP1；模型并行应用于容量，之后再用 DP 扩吞吐。12.6B SpikeLM
+导出包含 564 个 tensor、25,173,851,048 artifact bytes，并成功在 PP4 上加载和生成，
+没有任何 GPU 持有完整模型。
+
+Qwen2 在固定 parity prompts 上与 MCore 的 32 个 greedy tokens 完全一致。
+SpikeLM 的所有首个 decode token 一致；PP2 的四个 prompt 中三个完整 8-token 一致，
+一个在第三个生成 token 后因不同 BF16 执行次序分叉。因此，接近并列的 logits 下，
+跨 backend 的 free-running token 完全相同不属于契约。
+
+完整中位数见 :download:`SGLang 结果 CSV
+<../../_static/tutorials/distributed/sglang-inference-results.csv>`。
+
+可直接从该 CSV 重新生成图片：
+
+.. code-block:: bash
+
+    python benchmark/plot_sglang_inference.py \
+        docs/source/_static/tutorials/distributed/sglang-inference-results.csv \
+        docs/source/_static/tutorials/distributed/sglang-inference.png
 
 底层 API
 --------
@@ -832,8 +893,10 @@ Core 0.18.2 和 Triton 3.4.0。
 Vision evaluation
 ~~~~~~~~~~~~~~~~~
 
-Vision 使用 BF16、``T=4``、1000 类和缓存的全零 224 × 224 合成图像。该输入只用于
-测量 dense execution 的吞吐和显存；其 loss/accuracy 不是模型质量指标。SEW-ResNet34
+下方历史曲线使用 BF16、``T=4``、1000 类和缓存的全零 224 × 224 合成图像。
+当前正式 benchmark 必须通过 ``--cifar10-data`` 或 ``--data`` 使用固定真实图像
+子集；seeded-random 默认值只用于 smoke。历史点与替换后的新点不能混在同一条曲线。
+SEW-ResNet34
 各非 PP 曲线的 per-rank batch grid 为
 ``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024``；Spikformer-S 根据
 OOM 在 384--1024 之间停止。PP4 固定 K=4；SEW-ResNet34 的 L grid 为
@@ -949,9 +1012,9 @@ TP1/DP4 的基线段使用固定 128-sample 数据集；新测的 TP2/PP2/PP4 �
 PP2 和 PP4；该模型有 14 个 attention heads，故四卡节点上大于 1 的合法纯 TP
 拓扑为 TP2，TP4 不满足 head 整除约束。每个点从新进程恢复同一初始化状态的
 sharded checkpoint，先执行 5 个不计时 schedule batch，再计时完整 schedule，
-并独立重复三次；checkpoint/model 初始化不计时。MCore schedule 在计时区间内从
-DataLoader iterator 取 batch，因此其吞吐包含 dataset indexing 和 collation；Vision
-曲线则排除 DataLoader 时间，两种 workload 的吞吐不能横向比较。新测 sweep 显式设置
+并独立重复三次；checkpoint/model 初始化、dataset indexing 和 collation 不计时。
+计时包含 H2D、模型执行、通信和指标归约。Vision 采用相同的计时边界，但其图像吞吐
+与 LLM token 吞吐属于不同 workload，不能横向比较。新测 sweep 显式设置
 ``NCCL_P2P_DISABLE=1``、``NCCL_IB_DISABLE=1``
 和 ``PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True``。MCore API 中
 ``micro_batch_size`` 表示每块大小，而本节的 L 是

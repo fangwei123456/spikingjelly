@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import time
 from pathlib import Path
 
@@ -11,7 +10,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from benchmark.snn_llm.qwen2 import Qwen2Config
+from benchmark.snn_llm.qwen2 import Qwen2Config, export_sglang
 from spikingjelly.activation_based.ann2snn.recipes.qwen2 import Qwen2SNNCalibration
 from spikingjelly.activation_based.distributed import llm
 
@@ -41,7 +40,7 @@ def _model(args: argparse.Namespace) -> Qwen2Config:
         gated_linear_unit=True,
         activation_func=F.silu,
         add_bias_linear=False,
-        add_qkv_bias=bool(source.attention_bias),
+        add_qkv_bias=bool(getattr(source, "attention_bias", True)),
         params_dtype=torch.bfloat16,
         pipeline_dtype=torch.bfloat16,
         bf16=True,
@@ -190,157 +189,24 @@ def _initialize_checkpoint(
 def _export_sglang(
     args: argparse.Namespace, model_config: Qwen2Config
 ) -> dict[str, object]:
-    try:
-        from safetensors.torch import save_file
-    except ImportError as error:
-        raise ImportError(
-            "SGLang export requires spikingjelly[sglang-export]."
-        ) from error
-    import torch.distributed as dist
-    from megatron.core import parallel_state
-    from megatron.core.tensor_parallel.random import model_parallel_cuda_manual_seed
-    from megatron.core.utils import unwrap_model
-    from transformers import AutoConfig
-
-    from spikingjelly.activation_based.distributed.llm.inference import (
-        load_for_inference,
+    provider, _ = model_config.get_builder_cls()(model_config).build(
+        use_snn_memopt=False, resume=True
     )
-
-    if any(
-        size != 1
-        for size in (
-            args.tensor_parallel_size,
-            args.pipeline_parallel_size,
-            args.context_parallel_size,
-        )
-    ):
-        raise ValueError("export-sglang requires TP=PP=CP=1.")
-    args.output.mkdir(parents=True)
-    torch.cuda.set_device(0)
-    dist.init_process_group(
-        "nccl",
-        init_method="tcp://127.0.0.1:29587",
-        rank=0,
-        world_size=1,
-        device_id=torch.device("cuda", 0),
+    export_sglang(
+        model_config,
+        provider,
+        args.checkpoint,
+        args.output,
+        tokenizer=args.source,
     )
-    try:
-        parallel_state.initialize_model_parallel()
-        model_parallel_cuda_manual_seed(1234)
-        provider, _ = model_config.get_builder_cls()(model_config).build(
-            use_snn_memopt=False, resume=True
-        )
-        model = load_for_inference(model_config.transformer, provider, args.checkpoint)
-        source = unwrap_model(model).state_dict()
-        source_config = AutoConfig.from_pretrained(args.source)
-        attention_bias = bool(source_config.attention_bias)
-        input_scale = source["decoder.layers.0.input_layernorm.qcfs_scale"]
-        embedding = source["embedding.word_embeddings.weight"]
-        weights = {
-            "model.embedding.weight": embedding.detach().cpu(),
-            "model.final_norm.weight": source["decoder.final_layernorm.weight"]
-            .detach()
-            .cpu(),
-            "lm_head.weight": embedding.detach().cpu(),
-        }
-        head_count = source_config.num_attention_heads
-        group_count = source_config.num_key_value_heads
-        heads_per_group = head_count // group_count
-        head_dim = source_config.hidden_size // head_count
-
-        def reorder_qkv(value: torch.Tensor) -> torch.Tensor:
-            shape = value.shape
-            grouped = value.reshape(
-                group_count, heads_per_group + 2, head_dim, *shape[1:]
-            )
-            query = grouped[:, :heads_per_group].reshape(-1, *shape[1:])
-            key = grouped[:, heads_per_group].reshape(-1, *shape[1:])
-            value = grouped[:, heads_per_group + 1].reshape(-1, *shape[1:])
-            return torch.cat((query, key, value))
-
-        for index in range(source_config.num_hidden_layers):
-            source_prefix = f"decoder.layers.{index}."
-            target_prefix = f"model.layers.{index}."
-            mapping = {
-                "input_layernorm.weight": "input_norm.weight",
-                "self_attention.core_attention.query_scale": "attn.query_scale",
-                "self_attention.core_attention.key_scale": "attn.key_scale",
-                "self_attention.core_attention.value_scale": "attn.value_scale",
-                "self_attention.linear_proj.weight": "attn.proj.weight",
-                "pre_mlp_layernorm.weight": "mlp_norm.weight",
-                "mlp.linear_fc1.weight": "mlp.gate_up.weight",
-                "mlp.linear_fc2.weight": "mlp.down.weight",
-                "mlp.linear_fc2.qcfs_scale": "mlp.scale",
-            }
-            weights[target_prefix + "input_scale"] = input_scale.detach().cpu()
-            for source_name, target_name in mapping.items():
-                weights[target_prefix + target_name] = (
-                    source[source_prefix + source_name].detach().cpu()
-                )
-            weights[target_prefix + "attn.qkv.weight"] = (
-                reorder_qkv(source[source_prefix + "self_attention.linear_qkv.weight"])
-                .detach()
-                .cpu()
-            )
-            if attention_bias:
-                weights[target_prefix + "attn.qkv.bias"] = (
-                    reorder_qkv(
-                        source[source_prefix + "self_attention.linear_qkv.bias"]
-                    )
-                    .detach()
-                    .cpu()
-                )
-
-        save_file(weights, args.output / "model.safetensors")
-        rope = source_config.rope_parameters
-        exported_config = {
-            "architectures": ["SpikingJellyQwen2ForCausalLM"],
-            "model_type": "qwen2",
-            "vocab_size": source_config.vocab_size,
-            "hidden_size": source_config.hidden_size,
-            "intermediate_size": source_config.intermediate_size,
-            "num_hidden_layers": source_config.num_hidden_layers,
-            "num_attention_heads": source_config.num_attention_heads
-            * model_config.time_steps,
-            "num_key_value_heads": source_config.num_key_value_heads
-            * model_config.time_steps,
-            "snn_num_attention_heads": source_config.num_attention_heads,
-            "snn_num_key_value_heads": source_config.num_key_value_heads,
-            "snn_time_steps": model_config.time_steps,
-            "head_dim": head_dim,
-            "max_position_embeddings": source_config.max_position_embeddings,
-            "rms_norm_eps": source_config.rms_norm_eps,
-            "rope_theta": float(rope["rope_theta"]),
-            "attention_bias": attention_bias,
-            "tie_word_embeddings": source_config.tie_word_embeddings,
-            "bos_token_id": source_config.bos_token_id,
-            "eos_token_id": source_config.eos_token_id,
-            "torch_dtype": "bfloat16",
-            "spikingjelly_artifact_schema": 1,
-            "source_checkpoint": str(args.checkpoint),
-        }
-        (args.output / "config.json").write_text(
-            json.dumps(exported_config, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        for name in (
-            "tokenizer.json",
-            "tokenizer_config.json",
-            "vocab.json",
-            "merges.txt",
-        ):
-            source_path = args.source / name
-            if source_path.is_file():
-                shutil.copy2(source_path, args.output / name)
-        return {
-            "artifact": str(args.output),
-            "tensor_count": len(weights),
-            "parameter_count": sum(value.numel() for value in weights.values()),
-        }
-    finally:
-        if parallel_state.model_parallel_is_initialized():
-            parallel_state.destroy_model_parallel()
-        dist.destroy_process_group()
+    index = json.loads(
+        (args.output / "model.safetensors.index.json").read_text(encoding="utf-8")
+    )
+    return {
+        "artifact": str(args.output),
+        "tensor_count": len(index["weight_map"]),
+        "parameter_count": index["metadata"]["parameter_count"],
+    }
 
 
 def _parse_args() -> argparse.Namespace:
