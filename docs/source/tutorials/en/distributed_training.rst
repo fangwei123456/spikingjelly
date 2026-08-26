@@ -5,48 +5,29 @@ Authors: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_, `Wei Fang (f
 
 中文版： :doc:`../cn/distributed_training`
 
-The high-level interfaces launch predefined training, evaluation, and offline
-inference workflows. The low-level interfaces support custom models and loops.
-The final section reports throughput and memory on the same four-RTX-4090 host
-used for the training measurements.
+This tutorial starts with high-level training, evaluation, and offline inference
+APIs, then shows how to connect custom models and loops. The final section
+reports throughput and memory on four RTX 4090 GPUs.
 
 API design rationale
 --------------------
 
-The API is divided into ``vision`` and ``llm`` workloads instead of assuming
-that every SNN shares one parallel strategy. Spiking CNN channels, feature maps,
-and pipeline boundaries have different semantics from LLM tokens, attention,
-and context parallelism. A single model description would merely hide those
-differences behind branches. The two paths are therefore symmetric only where
-the concepts are genuinely shared: ``ModelConfig`` describes a model,
-``ModelBuilder`` connects architecture-specific code, ``TrainingConfig``
-describes training, and ``EvaluationConfig`` describes labeled evaluation.
-Vision ``PredictionConfig`` and the LLM generation configs describe unlabeled
-outputs. Each high-level entry point owns its runtime lifecycle.
+The API separates ``vision`` and ``llm`` workloads. Spiking CNNs are organized
+around channels and feature maps, whereas LLMs are organized around tokens,
+attention, and context parallelism. Sharing one model description would add
+branches rather than simplify either path. The common vocabulary remains small:
+``ModelConfig`` describes a model, ``ModelBuilder`` connects its implementation,
+``TrainingConfig`` and ``EvaluationConfig`` describe training and labeled
+evaluation, and prediction or generation configs describe unlabeled output.
 
-The high-level interface is inspired by the current Megatron Core model
-extension style. MCore separates declarative ``TransformerConfig`` data and
-architecture-specific ``ModuleSpec`` / ``model_provider`` / ``forward_step``
-from the common pipeline schedule, optimizer, and checkpoint lifecycle.
-SpikingJelly keeps the same boundary—configuration states facts, a builder
-adapts an architecture, and the training entry point owns the lifecycle—without
-requiring users to edit one large predefined training function. An LLM builder
-returns the MCore-native ``model_provider`` and ``forward_step``; a Vision
-builder returns the stage, FSDP2 shard roots, and boundary shapes required by
-PyTorch pipelines. Their outer style matches while each inner contract follows
-its runtime.
-
-The low-level interface follows a “reuse the runtime; add only SNN semantics”
-rule. PyTorch supplies DP, FSDP2, device meshes, and general pipelines. Megatron
-Core supplies LLM TP, PP, CP, the distributed optimizer, and sharded
-checkpoints. SpikingJelly adds the pieces those runtimes do not express: SNN
-temporal layouts and state resets, channel-sharded layers for channel-oriented
-models, and spike-compression memopt. Memopt also remains separate from MCore
-recomputation: the former handles SNN activations and spike representations,
-while the latter is used only for non-overlapping Transformer subcomputations
-when needed. The high-level ``train`` therefore covers standard workflows,
-while custom tasks, models, and schedules can compose the low-level pieces
-directly.
+Parallel execution comes from the native runtime whenever possible. PyTorch
+provides DP, FSDP2, device meshes, and Vision pipelines. Megatron Core provides
+LLM TP, PP, CP, the distributed optimizer, and sharded checkpoints. SpikingJelly
+adds SNN temporal layout, state reset, channel-sharded layers, and memopt. An LLM
+builder returns MCore's ``model_provider`` / ``forward_step`` callbacks; a Vision
+builder returns pipeline stages, FSDP2 roots, and boundary shapes. High-level
+entry points own lifecycle management, while custom workloads can compose the
+low-level pieces directly.
 
 High-level APIs
 ---------------
@@ -293,8 +274,8 @@ LLMs expose two backends with different roles:
 MCore evaluation and SGLang generation answer different questions and cannot be
 compared with one shared batch, memory, or throughput protocol.
 
-SGLang 0.5.17 owns its PyTorch and Transformers runtime, so do not force it into
-the main training environment:
+SGLang 0.5.17 uses its own PyTorch and Transformers stack. Create a separate
+environment:
 
 .. code-block:: bash
 
@@ -317,11 +298,11 @@ fold T into the head dimension only at the RadixAttention/KV-cache seam. A custo
 model must provide both its export callback and an importable SGLang external
 model package.
 
-The first supported runtime covers single-node NVIDIA BF16 TP, PP, and DP.
-Prefill CP and DCP are not supported and are absent from ``SGLangEngineConfig``.
-CUDA Graph is also disabled: SGLang 0.5.17's graph capture requires attention
-metadata that the temporal adapters do not yet provide. The adapters use
-SGLang's native layer staging and ``PPProxyTensors`` protocol.
+The current runtime supports single-node NVIDIA BF16 TP, PP, and DP. Prefill CP
+and DCP are unsupported. CUDA Graph is disabled because the temporal adapters
+do not yet provide the attention metadata required by SGLang 0.5.17 graph
+capture. The adapters use SGLang's native layer staging and
+``PPProxyTensors`` protocol.
 
 .. code-block:: python
 
@@ -523,21 +504,21 @@ The Vision and MCore results below were measured on one 4 x RTX 4090 24-GiB
 host without NVLink or CUDA peer access. Its software stack used PyTorch 2.8.0,
 Megatron Core 0.18.2, and Triton 3.4.0. SGLang used separate rentals with the
 same GPU/interconnect class and its own pinned runtime, described in that
-subsection. All results are relative references for PCIe multi-GPU machines and
-should not be extrapolated directly to an NVLink cluster.
+subsection. Treat these as relative references for PCIe multi-GPU hosts; NVLink
+systems need separate measurements.
 
 Vision training benchmarks
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The Vision benchmarks fixed BF16, ``T=4``, 128 x 128 inputs, and 1000 classes.
 The plots retain only one GPU, DP4, FSDP4, TP4, and PP4. Each curve labels its
-largest successful global batch size (``G``). For one GPU, TP4, and PP4, global batch equals the
-per-rank batch; for DP4 and FSDP4 it is four times the per-rank batch.
+largest successful global batch size (``G``). For one GPU, TP4, and PP4, global
+batch equals per-rank batch; for DP4 and FSDP4 it is four times larger.
 
 All topologies at a fixed global batch
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The table restores the complete topology comparison at ``G=32``. Each
+The table gives the complete topology comparison at ``G=32``. Each
 configuration started in a fresh process, warmed up for 10 optimizer steps,
 measured 50 steps, and was repeated independently three times. Values are the
 three-run medians. Throughput covers the whole job; memory is the highest CUDA
@@ -637,11 +618,10 @@ peak allocated memory among all ranks.
       - 82.0
       - 1.45
 
-At the same ``G=32``, multiple GPUs primarily reduce per-GPU memory rather than
-automatically raising throughput: as compute per GPU shrinks, PCIe communication,
-synchronization, and pipeline bubbles dominate more easily. The capacity curves
-below answer a different question: how far each strategy extends the
-throughput-memory frontier when it may use a larger global batch.
+At the same ``G=32``, multiple GPUs primarily reduce per-GPU memory. As compute
+per GPU shrinks, PCIe communication, synchronization, and pipeline bubbles
+dominate more easily. The capacity curves below instead increase global batch
+and compare each strategy's throughput-memory frontier.
 
 Batch size was increased by powers of two until the first candidate that could
 not complete. SEW-ResNet34 succeeded through per-rank batch 256 on one GPU, DP4,
@@ -653,12 +633,10 @@ repeated independently three times; the plots show the median and three-run
 range. Timing includes H2D, forward, backward, communication, and the optimizer,
 but excludes initialization, DataLoader work, validation, and checkpoints.
 
-The vertical axis is aggregate job throughput: the global batch completed by all
-ranks divided by the slowest rank's measured time. The horizontal axis is the
-highest CUDA peak allocated memory among all ranks. They respectively answer how
-many images the whole job processes per second and the minimum per-GPU memory
-capacity it needs. Both axes are logarithmic. Failed candidates are not plotted
-as throughput points.
+The vertical axis is aggregate job throughput: global batch divided by the
+slowest rank's measured time. The horizontal axis is the highest CUDA peak
+allocated memory among all ranks. Both axes are logarithmic; failed candidates
+are omitted.
 
 .. figure:: ../../_static/tutorials/distributed/sew-resnet34-tradeoff.png
     :width: 720px
@@ -757,7 +735,7 @@ step executes one micro batch on every DP rank.
 All topologies at a fixed global batch
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The following table is the earlier fixed-work comparison across every tested
+The following table is the fixed-work comparison across every tested
 two-GPU, four-GPU, and hybrid topology: ``micro batch=1``, ``G=8``, 10 warmup
 optimizer steps, 30 measured steps, and three independent repeats. Values are
 the three-run medians. One GPU OOMed during distributed-optimizer initialization,
@@ -855,15 +833,15 @@ The plot retains DP2, DP4, TP4, PP4, and CP4. DP2 succeeds only through micro
 batch 1 (``G=2``), DP4 through micro batch 4 (``G=16``), and TP4, PP4, and CP4
 through micro batch 16 (``G=16``). Each configuration started in a fresh process,
 warmed up for 5 steps, measured 15 steps, and was repeated independently three
-times. One GPU OOMed during distributed-optimizer initialization and is therefore
-omitted. The LLM path uses MCore DDP and its distributed optimizer rather than
+times. One GPU OOMed during distributed-optimizer initialization and is omitted.
+The LLM path uses MCore DDP and its distributed optimizer rather than
 PyTorch FSDP2.
 
 .. figure:: ../../_static/tutorials/distributed/spikelm-1.41b-tradeoff.png
     :width: 720px
     :alt: 1.41B SpikeLM aggregate throughput and per-GPU peak memory at different global batches
 
-    1.41B SpikeLM aggregate training throughput versus the busiest GPU's peak allocated memory, without gradient accumulation or memopt.
+    1.41B SpikeLM training throughput versus peak memory per GPU, without gradient accumulation or memopt.
 
 PP4 at ``G=16`` reached 2997.4 semantic tokens/s and 14.85 GiB/GPU, the highest
 throughput in this set; it is already close to the 2897.0 tokens/s measured at
@@ -901,9 +879,8 @@ retains only ``G=2`` at 303.0 tokens/s and 17.35 GiB/GPU.
       - 32/32
       - stalled, no training metrics
 
-The PP4 and CP4 ``micro=32`` candidates remained in fixed rank-wait states for
-several normal run durations and were terminated as stalled. They are neither
-throughput points nor mislabeled as OOM.
+The PP4 and CP4 ``micro=32`` candidates remained in fixed rank-wait states and
+were terminated as stalled; they are not throughput points.
 
 Points on different curves can have different global batches, so this plot shows
 the throughput-capacity frontier rather than fixed-batch speedup. Complete
@@ -935,46 +912,31 @@ Vision evaluation
 ^^^^^^^^^^^^^^^^^
 
 The historical curves below used BF16, ``T=4``, 1000 classes, and a cached
-all-zero 224 x 224 synthetic image. Current benchmark runs must instead pass
-``--cifar10-data`` or ``--data`` for a fixed real-image subset; the seeded-random
-default is only a smoke workload. Do not mix historical and replacement points.
-The non-PP SEW-ResNet34 per-rank grid is
+all-zero 224 x 224 image. Current runs instead pass ``--cifar10-data`` or
+``--data`` for a fixed real-image subset; the seeded-random default is for smoke
+tests. Results from the two protocols remain separate.
+
+Each throughput point starts in a fresh process with four DataLoader workers,
+five warmup batches, ten measured batches, and three independent repeats.
+Timing includes H2D, forward, communication, and metric reduction, but excludes
+DataLoader work, artifact loading, and initialization. The plots show every
+three-run completion with its median and range.
+
+``L`` denotes local batch per DP replica and ``G = L × DP`` denotes global
+batch; TP, PP, CP, and ``T`` do not multiply ``G``. For PP, ``K`` is the number
+of pipeline microbatches and each chunk has size ``L / K``. The non-PP
+SEW-ResNet34 grid is
 ``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024``; Spikformer-S stops
-between 384 and 1024 according to OOM. PP4 fixes K=4. The SEW-ResNet34 L grid is
-``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 3072``;
-Spikformer-S follows the same grid through ``1536``. Each successful throughput
-point starts in a fresh process and uses four
-DataLoader workers, runs five untimed batches and ten measured batches, and is repeated independently three
-times. Timing includes H2D, forward, communication, and metric reduction but
-excludes DataLoader work, model/artifact loading, and initialization. Each plot
-connects every three-run point from one protocol and shows its median and full
-range; it applies neither Pareto point removal nor artificial smoothing.
-The Vision and MCore subsections use ``L`` for the local batch on each DP
-rank/replica and ``G`` for the whole-job global batch. Always ``G = L × DP``;
-TP, PP, CP, and SNN time steps ``T`` do not multiply G. PP additionally uses
-``K`` for the number of pipeline microbatches, each of size ``L / K``. Vision
-figure endpoints report only global batch G.
+between 384 and 1024 according to OOM. PP4 fixes ``K=4`` and extends
+SEW-ResNet34 to ``L=3072`` and Spikformer-S to ``L=1536``. Capacity searches
+try ``2x`` and then ``1.5x`` from each successful point until CUDA OOM.
 
-Every capacity search uses the same growth rule: from the largest successful
-point ``x``, try ``2x``; if ``2x`` fails, try ``1.5x``; if ``1.5x`` succeeds,
-make it the new x and repeat. Every Vision topology continues to CUDA OOM.
-
-Inference PP uses a dedicated forward-only streaming schedule instead of the
-``ScheduleGPipe`` backward state machine needed by training. It synchronizes the
-pipeline group before returning each high-level batch, preventing cross-batch
-work accumulation. SEW downsampling blocks sit before stage boundaries, while
-Spikformer distributes blocks as ``0/2/2/2``. In the public configuration,
-``pipeline_microbatches`` is the number of chunks cut from one DP rank's local
-batch. It defaults to one, requires divisibility, and gives
-``samples per chunk = batch_size / pipeline_microbatches``. Both Vision and
-MCore PP benchmarks fix ``pipeline_microbatches = 4``. Each chunk therefore
-grows proportionally as ``L / 4`` until CUDA OOM. The framework does not
-silently apply this rule
-to user calls. The summary CSV records ``per_rank_batch_size``,
-``global_batch_size``, ``pipeline_microbatches``, and
-``pipeline_microbatch_size`` separately.
-Vision connects every successful batch-sweep point from its fixed protocol
-through OOM. The CSV also retains failed candidate states.
+Inference PP uses a forward-only streaming schedule and synchronizes the
+pipeline group before returning each high-level batch. SEW downsampling blocks
+precede stage boundaries; Spikformer blocks are split ``0/2/2/2``.
+``pipeline_microbatches`` defaults to one, while the Vision and MCore PP points
+here fix it at four, so chunk size grows as ``L/4``. The CSV records L, G, K,
+chunk size, and failed candidates.
 
 .. figure:: ../../_static/tutorials/distributed/sew-resnet34-inference-tradeoff.png
     :width: 720px
@@ -1051,42 +1013,36 @@ throughput.
       - 2048/2048: CUDA OOM
 
 Vision correctness tests also covered FSDP2, PP2, and exporting a TP2 x PP2
-training checkpoint before restoring it on four single-GPU replicas (DP4). The latter reported
-validation losses 2.310132205 and 2.310132384.
+training checkpoint before restoring it on four single-GPU replicas (DP4).
+Validation loss was 2.310132205 before export and 2.310132384 after restore.
 
 MCore loss/perplexity evaluation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 MCore loss/perplexity evaluation uses Qwen2.5-0.5B QCFS, BF16, ``T=2``, and
-sequence length 16. The single-GPU/DP4 baseline segment uses a fixed 128-sample
-dataset; the newly measured TP2/PP2/PP4 points set dataset samples equal to G so
-padding cannot depress throughput. It compares one GPU, DP4, TP2, PP2, and PP4.
-Because this model has 14 attention heads, TP2 is the valid pure-TP topology
-above one on the four-GPU host; TP4 violates head divisibility.
-Every point restores the same initialized state from a sharded checkpoint in a
-fresh process, runs five untimed schedule batches, measures a complete schedule,
-and is repeated independently three times; checkpoint/model initialization,
-dataset indexing, and collation are excluded. Timing retains H2D transfer, model
-execution, communication, and metric reduction. Vision uses the same timing
-boundary, but throughput remains workload-specific and is not comparable to LLM
-token throughput.
-The new sweep explicitly sets ``NCCL_P2P_DISABLE=1``,
+sequence length 16. It compares one GPU, DP4, TP2, PP2, and PP4. With 14
+attention heads, TP2 is the only valid pure-TP option above one. The one-GPU and
+DP4 runs use a fixed 128-sample dataset; TP2/PP2/PP4 set sample count to G so
+padding does not affect throughput.
+
+Each point restores the same sharded checkpoint in a fresh process, warms up
+five schedules, measures a complete schedule, and repeats three times. Timing
+includes H2D, model execution, communication, and metric reduction; initialization,
+dataset indexing, and collation are excluded. Runs set ``NCCL_P2P_DISABLE=1``,
 ``NCCL_IB_DISABLE=1``, and
-``PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True``. In the MCore API,
-``micro_batch_size`` is the chunk size, while this section's L equals
-``micro_batch_size × pipeline_microbatches``. Non-PP points use K=1. Every
-PP2/PP4 point fixes K=4, so each chunk is ``L/4`` and grows with L through OOM;
-the benchmark no longer fixes the chunk size while merely lengthening its queue.
-The fine grid is ``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024``, followed
-by the ``2x/1.5x`` boundary search. Every three-run curve point uses five warmup
-schedules. The PP4 L=3072 debug capacity probe uses one to avoid allocator
-fragmentation from repeated warmups and serves only as capacity evidence.
+``PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True``.
+
+Here L equals ``micro_batch_size × pipeline_microbatches``. Non-PP points use
+``K=1`` and PP2/PP4 fix ``K=4``, so chunk size grows as ``L/4``. The grid is
+``16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024``, followed by the
+``2x/1.5x`` capacity search. The PP4 ``L=3072`` debug probe uses one warmup and
+serves only as capacity evidence.
 
 .. figure:: ../../_static/tutorials/distributed/mcore-inference.png
     :width: 720px
     :alt: Qwen2.5-0.5B QCFS MCore distributed evaluation throughput and per-GPU peak memory
 
-    Complete MCore loss/perplexity evaluation batch sweeps: aggregate semantic-token throughput versus the busiest GPU's peak allocated memory.
+    MCore evaluation: aggregate semantic-token throughput versus peak memory per GPU.
 
 At small-batch L=16, one GPU, TP2, PP2, and PP4 reach 4636.2, 3611.2, 1823.5, and
 2203.6 semantic tokens/s. With K fixed at 4, each PP chunk contains only four
@@ -1145,15 +1101,14 @@ directly from the summary:
 SGLang scheduler-backed generation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``benchmark/snn_llm/sglang_benchmark.py`` measures native offline Engine
-request/input/output throughput, TTFT, TPOT, end-to-end latency, and peak
-per-GPU memory. Formal points use on-demand 4 x RTX 4090 hosts without NVLink or
-CUDA peer read/write. The separate SGLang environment uses PyTorch 2.11.0,
-CUDA 13.0, SGLang 0.5.17, BF16, Triton attention, and disabled CUDA Graphs.
-Each point runs one warmup request, flushes the Radix cache before every timed
-repeat, and reports the median of three independent repeats. Qwen and SpikeLM
-were measured on two rentals with the same GPU/interconnect class, so topology
-and workload comparisons are made only within a model, never across models.
+``benchmark/snn_llm/sglang_benchmark.py`` measures offline Engine request/input/
+output throughput, TTFT, TPOT, end-to-end latency, and peak per-GPU memory.
+Formal points use on-demand 4 x RTX 4090 hosts without NVLink or CUDA peer
+read/write. The separate environment uses PyTorch 2.11.0, CUDA 13.0,
+SGLang 0.5.17, BF16, Triton attention, and disabled CUDA Graphs. Each point runs
+one warmup, flushes the Radix cache before every timed repeat, and reports the
+median of three repeats. Qwen and SpikeLM use two rentals of the same class;
+topology and workload comparisons stay within each model.
 
 The Qwen artifact uses Qwen2.5-0.5B weights and deterministic unit QCFS scales.
 The SpikeLM artifact is deterministically initialized with 32 layers, hidden
@@ -1174,24 +1129,25 @@ tokens, one-GPU and PP4 SpikeLM-2.78B reach 1074.8 and 786.9 output tokens/s;
 PP4 is only 0.73x because communication and pipeline bubbles are not amortized.
 At 64 requests under the same token workload, one GPU reaches 1031.1 tokens/s
 and PP4 reaches 1416.9 tokens/s, or 1.37x. The p99 TTFT falls from 2430.9 ms to
-446.4 ms, while p99 TPOT rises from 33.2 ms to 39.8 ms. On this host PP4 therefore
-shows throughput value only at sufficient concurrency. These measurements do not
-promise lower single-request latency or attribute the gain to one kernel or
-communication mechanism.
+446.4 ms, while p99 TPOT rises from 33.2 ms to 39.8 ms. On this host, PP4 needs
+enough concurrency to improve throughput; the result does not imply lower
+single-request latency.
 
 Qwen2.5-0.5B DP4 uses 32 requests per replica and reaches 5845.5 aggregate
 output tokens/s, 3.93x the one-GPU 1486.5 tokens/s, with effectively unchanged
 TPOT. A one-GPU workload with a 2048-token shared prefix raises input throughput
-18.3x. Small-model PP2 remains slower than one GPU and is retained in the CSV;
-the SpikeLM concurrency crossover must not be generalized to every model.
+18.3x. The CSV also includes small-model PP2, which remains slower than one GPU.
+Choose topology for the model size and request concurrency.
 
 The capacity test also exported a 12.6B SpikeLM artifact containing 564 tensors
-and 25,173,851,048 bytes, then loaded and generated with PP4 without any GPU
-holding the full model. Qwen2 produced the same 32 greedy tokens as MCore for
-the fixed parity prompts. SpikeLM matched every first decode token; three of
-four PP2 prompts matched all eight tokens, while one diverged after the third
-token under a different BF16 execution order. Cross-backend free-running token
-identity is therefore not a contract for near-tied logits.
+and 25,173,851,048 bytes, then loaded and generated with PP4 without placing the
+full model on one GPU.
+
+On fixed parity prompts, Qwen2 matched all 32 MCore greedy tokens. SpikeLM
+matched every first decode token; three of four PP2 prompts matched all eight
+tokens, while one diverged after the third token under a different BF16
+execution order. Near-tied logits do not require identical free-running
+sequences across backends.
 
 Published medians are available in :download:`the SGLang result CSV
 <../../_static/tutorials/distributed/sglang-inference-results.csv>`. Regenerate
