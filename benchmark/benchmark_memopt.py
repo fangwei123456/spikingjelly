@@ -64,6 +64,7 @@ def train_step(net: nn.Module, x: torch.Tensor):
 
 
 def benchmark_train_step(net: nn.Module, x: torch.Tensor, warmup: int, iters: int):
+    torch.cuda.empty_cache()
     for _ in range(warmup):
         train_step(net, x)
     torch.cuda.synchronize()
@@ -110,7 +111,7 @@ def run_single_variant(
     iters: int,
 ):
     model, optimize_ms = optimize_model(
-        copy.deepcopy(base),
+        copy.deepcopy(base).to(x.device),
         instance,
         x.detach(),
         level=level,
@@ -134,13 +135,17 @@ def main():
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for benchmark_memopt.py")
 
+    torch.manual_seed(0)
     device = torch.device("cuda")
     x = torch.randn(args.T, args.N, args.C, device=device)
     base, instance = build_case(args.model_kind, args.C)
-    base = base.to(device)
 
-    baseline = benchmark_train_step(copy.deepcopy(base), x, args.warmup, args.iters)
+    baseline = benchmark_train_step(
+        copy.deepcopy(base).to(device), x, args.warmup, args.iters
+    )
     results = {
+        "device": torch.cuda.get_device_name(),
+        "pytorch": torch.__version__,
         "model_kind": args.model_kind,
         "shape": {"T": args.T, "N": args.N, "C": args.C},
         "baseline": baseline,

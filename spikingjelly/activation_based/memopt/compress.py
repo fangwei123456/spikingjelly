@@ -1,4 +1,4 @@
-from typing import Protocol
+from abc import ABC, abstractmethod
 
 import torch
 import torch.nn.functional as F
@@ -12,23 +12,39 @@ __all__ = [
 ]
 
 
-class SpikeCompressor(Protocol):
+class SpikeCompressor(ABC):
     r"""Compress and restore one tensor without storing per-call instance state.
 
-    **中文：** 压缩器协议。``compress`` 返回值必须包含恢复 shape、dtype 和
+    **中文：** 压缩器基类。``compress`` 返回值必须包含恢复 shape、dtype 和
     device 所需的信息；实现不得把单次调用信息写入实例。
 
-    **English:** Compressor protocol. The value returned by ``compress`` must
+    **English:** Compressor base class. The value returned by ``compress`` must
     carry the metadata needed to restore shape, dtype, and device. Implementations
     must not store per-call metadata on the instance.
     """
 
-    def compress(self, x: torch.Tensor) -> object: ...
+    @abstractmethod
+    def compress(self, x: torch.Tensor) -> object:
+        r"""Compress one tensor. / 压缩一个 tensor。
 
-    def decompress(self, packed: object) -> torch.Tensor: ...
+        :param x: input tensor / 输入 tensor
+        :type x: torch.Tensor
+        :return: compressed payload / 压缩后的 payload
+        :rtype: object
+        """
+
+    @abstractmethod
+    def decompress(self, packed: object) -> torch.Tensor:
+        r"""Restore one tensor. / 恢复一个 tensor。
+
+        :param packed: compressed payload / 压缩后的 payload
+        :type packed: object
+        :return: restored tensor / 恢复后的 tensor
+        :rtype: torch.Tensor
+        """
 
 
-class BooleanSpikeCompressor:
+class BooleanSpikeCompressor(SpikeCompressor):
     def __init__(self) -> None:
         r"""Store strictly binary spikes as bool. / 将严格二值脉冲保存为 bool。"""
 
@@ -40,7 +56,7 @@ class BooleanSpikeCompressor:
         return values.to(dtype=dtype).reshape(shape)
 
 
-class Uint8SpikeCompressor:
+class Uint8SpikeCompressor(SpikeCompressor):
     def __init__(self) -> None:
         r"""Store integer-valued spikes as uint8. / 将整数脉冲保存为 uint8。"""
 
@@ -52,7 +68,7 @@ class Uint8SpikeCompressor:
         return values.to(dtype=dtype).reshape(shape)
 
 
-class BitSpikeCompressor:
+class BitSpikeCompressor(SpikeCompressor):
     def __init__(self) -> None:
         r"""Pack eight strictly binary spikes into one byte.
 
@@ -79,7 +95,7 @@ class BitSpikeCompressor:
         return flat[: torch.Size(shape).numel()].to(dtype=dtype).reshape(shape)
 
 
-class SparseSpikeCompressor:
+class SparseSpikeCompressor(SpikeCompressor):
     def __init__(self, dtype: torch.dtype = torch.int64) -> None:
         r"""Store indices of nonzero strictly binary spikes.
 

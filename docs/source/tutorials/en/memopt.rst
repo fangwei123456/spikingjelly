@@ -127,10 +127,23 @@ Bit, Boolean, and Sparse compression require values that are exactly zero or one
 Memopt does not validate values when you choose a compressor manually. Using one
 of these compressors on ordinary floating-point activations changes the values.
 
-Custom compressors are also supported. An object only needs ``compress(tensor)``
-and ``decompress(payload)`` methods. Put per-call metadata, including shape,
-dtype, and device, in the payload rather than on the compressor instance. This
-keeps one compressor safe to use from concurrent calls.
+Custom compressors must inherit ``SpikeCompressor`` and implement ``compress`` and
+``decompress``. For example, when every input is an integer spike in the int16
+range:
+
+.. code-block:: python
+
+    class Int16SpikeCompressor(memopt.SpikeCompressor):
+        def compress(self, tensor):
+            return tensor.short(), tensor.dtype
+
+        def decompress(self, payload):
+            tensor, dtype = payload
+            return tensor.to(dtype)
+
+Put per-call metadata, including shape, dtype, and device, in the payload rather
+than on the compressor instance. This keeps one compressor safe to use from
+concurrent calls.
 
 Split Work Along Time
 ---------------------
@@ -252,6 +265,107 @@ backward with the actual model, dtype, backend, and distributed topology.
 The uncompressed, Boolean-compressed, and bit-compressed paths support
 ``torch.compile(..., fullgraph=True)``. Sparse payload size depends on the input
 and may require dynamic shapes during compilation.
+
+Measured Performance
+--------------------
+
+These results use the refactored implementation, not the benchmark numbers from
+the paper code. The Vast.ai on-demand instance had four 24 GiB RTX 4090 GPUs and
+no NVLink. The software stack was PyTorch 2.11.0, CUDA 12.8, and NCCL 2.28.9.
+Every configuration started in a new process and ran three times. Tables report
+the median and the minimum-to-maximum range in parentheses. Memory comes from
+``torch.cuda.max_memory_allocated``, not reserved memory.
+
+Simple Single-GPU Case
+^^^^^^^^^^^^^^^^^^^^^^
+
+The single-GPU model has three ``Linear-IF-Linear-IF`` blocks. Its FP32 input has
+shape ``[T=16, N=512, C=512]``. Each run warms up for 10 steps and measures 50:
+
+.. code-block:: bash
+
+    CUDA_VISIBLE_DEVICES=0 python benchmark/benchmark_memopt.py \
+        --model-kind block --T 16 --N 512 --C 512 \
+        --warmup 10 --iters 50
+
+.. list-table:: Single-GPU training results
+    :header-rows: 1
+
+    * - level
+      - peak memory (MiB)
+      - versus level 0
+      - time per step (ms)
+      - one-time search (ms)
+    * - 0
+      - 462.3
+      - --
+      - 48.9 (47.9--50.3)
+      - --
+    * - 1
+      - 249.3
+      - -46.1%
+      - 93.5 (66.5--95.1)
+      - 66.4
+    * - 2
+      - 249.3
+      - -46.1%
+      - 66.5 (65.5--67.0)
+      - 833.2
+    * - 3
+      - 249.3
+      - -46.1%
+      - 66.8 (65.4--67.5)
+      - 684.9
+    * - 4
+      - 248.8
+      - -46.2%
+      - 60.1 (59.8--60.3)
+      - 1687.5
+
+Deeper spatial and temporal searches did not reduce memory further on this
+workload. Level 4 reduced the median step time from level 1's 93.5 ms to 60.1 ms
+at the same memory level. Search runs once inside ``optimize_memory`` and is not
+included in step time.
+
+Four-GPU Case
+^^^^^^^^^^^^^
+
+The distributed benchmark uses DDP4, SEW-ResNet34, BF16, ``T=4``, and random
+synthetic 128 × 128 inputs. The local batch is 32 and the global batch is 128.
+Each run executes 30 steps, discards the first 5 for timing, and measures the
+remaining 25. The baseline uses ``memopt_level=0``. The memopt run uses level 1
+with its default memory budget and input compression:
+
+.. code-block:: bash
+
+    torchrun --standalone --nproc-per-node=4 benchmark/vision_distributed.py \
+        --model sew-resnet34 --dataset synthetic --data-parallel ddp \
+        --precision bf16 --time-steps 4 --image-size 128 --classes 1000 \
+        --batch-size 32 --samples 3840 --workers 0 \
+        --max-steps 30 --timing-warmup-steps 5 --memopt-level 1
+
+Change the final argument to ``--memopt-level 0`` to reproduce the baseline.
+
+.. list-table:: Four-GPU DDP training results
+    :header-rows: 1
+
+    * - configuration
+      - peak memory per GPU (GiB)
+      - versus baseline
+      - total throughput (images/s)
+    * - baseline
+      - 1.83 (1.75--1.83)
+      - --
+      - 1496.2 (1416.9--1499.3)
+    * - memopt level 1
+      - 1.08 (1.08--1.08)
+      - -40.7%
+      - 821.6 (720.7--836.6)
+
+In this configuration, four-GPU DDP applied the checkpoints consistently across
+ranks. The memory and speed changes in the table belong to this workload. Rerun
+the benchmark with the real model, inputs, and topology before a full training
+job.
 
 Migrate from the Previous API
 -----------------------------

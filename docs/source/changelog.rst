@@ -32,8 +32,8 @@ Memory Optimization
 Module: ``spikingjelly.activation_based.memopt``.
 
 - Added ``checkpoint`` and state-dict-transparent ``checkpoint_module`` building
-  blocks for user-defined checkpoint boundaries, optional stateless input
-  compression, and explicit temporal chunking.
+  blocks for user-defined checkpoint boundaries, stateless input compression
+  through ``SpikeCompressor``, and explicit temporal chunking.
 - Added ``optimize_memory`` as the high-level paper preset with levels 0-4,
   speed/balanced/memory checkpoint budgets, user-provided spatial and temporal
   rules, and synchronized decisions within a distributed pipeline stage.

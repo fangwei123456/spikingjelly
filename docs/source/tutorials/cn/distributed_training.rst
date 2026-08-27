@@ -836,8 +836,9 @@ batch 下的加速比。完整中位数、三次运行范围和 batch 配置见
 功能测试还覆盖了 BF16 的 TP4、PP4、TP2 × PP2、CP4、TP2 × CP2、PP2 × CP2，
 以及 TP4/PP4/CP4 的 FP8。所有组合都得到有限 loss、有限梯度，且 SNN 模块上存在非零梯度。
 在 7 GiB 显存预算下，planner 选择 TP4、SpikingJelly memopt 和 MCore selective
-``core_attn`` 重计算，两步训练使用 6.28 GiB。TP2 × PP2 的 sharded model/optimizer
-checkpoint 也已验证从 step 1 恢复到 step 2。
+``core_attn`` 重计算。6.28 GiB 是静态规划输入；强制按该方案运行两步时，实际峰值
+约为 7.26 GiB/卡。TP2 × PP2 的 sharded model/optimizer checkpoint 也已验证从
+step 1 恢复到 step 2。
 
 分布式推理基准
 ~~~~~~~~~~~~~~~~

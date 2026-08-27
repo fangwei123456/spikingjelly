@@ -904,8 +904,10 @@ Functional tests also covered BF16 TP4, PP4, TP2 x PP2, CP4, TP2 x CP2, and PP2
 x CP2, plus FP8 TP4, PP4, and CP4. Every case produced finite loss and gradients
 and nonzero gradients in the SNN modules. Under a 7-GiB memory budget, the planner
 selected TP4, SpikingJelly memopt, and MCore selective ``core_attn``
-recomputation; two training steps used 6.28 GiB. A TP2 x PP2 sharded
-model/optimizer checkpoint also resumed successfully from step 1 to step 2.
+recomputation. The 6.28 GiB figure is the static planning input; forcing this
+plan for two training steps reached about 7.26 GiB/GPU in practice. A TP2 x PP2
+sharded model/optimizer checkpoint also resumed successfully from step 1 to step
+2.
 
 Distributed inference benchmarks
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -123,9 +123,21 @@ tensor：
 Bit、Boolean 和 Sparse 压缩要求输入严格为 0 或 1。手工选择压缩器时，memopt
 不会检查输入值。普通浮点激活若误用这些压缩器，解压后的数值会改变。
 
-也可以传入自己的压缩器。对象只需实现 ``compress(tensor)`` 和
-``decompress(payload)``。shape、dtype 和 device 等本次调用所需的信息应放在
-payload 中，不要保存在压缩器实例上。这样同一个压缩器才能安全地用于并发调用。
+自定义压缩器必须继承 ``SpikeCompressor``，并实现 ``compress`` 和
+``decompress``。例如，输入保证为 int16 范围内的整数脉冲时：
+
+.. code-block:: python
+
+    class Int16SpikeCompressor(memopt.SpikeCompressor):
+        def compress(self, tensor):
+            return tensor.short(), tensor.dtype
+
+        def decompress(self, payload):
+            tensor, dtype = payload
+            return tensor.to(dtype)
+
+shape、dtype 和 device 等本次调用所需的信息应放在 payload 中，不要保存在压缩器
+实例上。这样同一个压缩器才能安全地用于并发调用。
 
 沿时间维分块
 ------------
@@ -232,6 +244,102 @@ CuPy 和 Triton 都可以放在检查点内。自定义后端如果不支持这�
 ``memopt.checkpoint`` 使用 PyTorch non-reentrant checkpoint。无压缩、
 Boolean 压缩和 bit 压缩路径支持 ``torch.compile(..., fullgraph=True)``。Sparse
 压缩后的大小随输入变化，编译时可能需要动态 shape。
+
+性能实测
+--------
+
+以下结果都由本次重构后的实现测得，不是论文代码的旧数据。测试机是 Vast.ai
+on-demand 实例，配备 4 张 RTX 4090 24 GiB，卡间没有 NVLink；软件为 PyTorch
+2.11.0、CUDA 12.8 和 NCCL 2.28.9。每个配置都从新进程启动并独立运行三次。表中
+给出中位数，括号内为最小值到最大值。显存记录
+``torch.cuda.max_memory_allocated`` 返回的峰值，不记录 reserved memory。
+
+简单单卡场景
+^^^^^^^^^^^^
+
+单卡模型包含 3 个 ``Linear-IF-Linear-IF`` block，输入 shape 为
+``[T=16, N=512, C=512]``，使用 FP32。每次运行先预热 10 step，再测量 50 step：
+
+.. code-block:: bash
+
+    CUDA_VISIBLE_DEVICES=0 python benchmark/benchmark_memopt.py \
+        --model-kind block --T 16 --N 512 --C 512 \
+        --warmup 10 --iters 50
+
+.. list-table:: 单卡训练结果
+    :header-rows: 1
+
+    * - level
+      - 峰值显存 (MiB)
+      - 相对 level 0
+      - 每 step 用时 (ms)
+      - 一次性搜索耗时 (ms)
+    * - 0
+      - 462.3
+      - --
+      - 48.9 (47.9--50.3)
+      - --
+    * - 1
+      - 249.3
+      - -46.1%
+      - 93.5 (66.5--95.1)
+      - 66.4
+    * - 2
+      - 249.3
+      - -46.1%
+      - 66.5 (65.5--67.0)
+      - 833.2
+    * - 3
+      - 249.3
+      - -46.1%
+      - 66.8 (65.4--67.5)
+      - 684.9
+    * - 4
+      - 248.8
+      - -46.2%
+      - 60.1 (59.8--60.3)
+      - 1687.5
+
+这个测试里，更深的空间和时间搜索没有继续降低显存；level 4 在相同显存水平
+下把每 step 用时从 level 1 的中位数 93.5 ms 降到 60.1 ms。搜索只在调用
+``optimize_memory`` 时运行一次，不计入训练 step 用时。
+
+四卡并行场景
+^^^^^^^^^^^^
+
+多卡测试使用 DDP4、SEW-ResNet34、BF16、``T=4`` 和 128 × 128 随机合成输入。
+每卡 batch 为 32，global batch 为 128。每次运行 30 step，前 5 step 只预热，后
+25 step 计时。baseline 使用 ``memopt_level=0``；memopt 配置使用 level 1、
+``checkpoint_budget="memory"`` 和输入压缩：
+
+.. code-block:: bash
+
+    torchrun --standalone --nproc-per-node=4 benchmark/vision_distributed.py \
+        --model sew-resnet34 --dataset synthetic --data-parallel ddp \
+        --precision bf16 --time-steps 4 --image-size 128 --classes 1000 \
+        --batch-size 32 --samples 3840 --workers 0 \
+        --max-steps 30 --timing-warmup-steps 5 --memopt-level 1
+
+将最后一个参数改为 ``--memopt-level 0`` 即可复现 baseline。
+
+.. list-table:: 四卡 DDP 训练结果
+    :header-rows: 1
+
+    * - 配置
+      - 单卡峰值显存 (GiB)
+      - 相对 baseline
+      - 总吞吐 (images/s)
+    * - baseline
+      - 1.83 (1.75--1.83)
+      - --
+      - 1496.2 (1416.9--1499.3)
+    * - memopt level 1
+      - 1.08 (1.08--1.08)
+      - -40.7%
+      - 821.6 (720.7--836.6)
+
+在这组配置里，四卡 DDP 成功同步应用了检查点。表中的显存和速度变化只适用于上述
+模型和输入；正式训练前应使用实际模型、输入和拓扑重测。
 
 从旧 API 迁移
 ---------------

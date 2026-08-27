@@ -27,8 +27,8 @@ def test_compressors_are_stateless_and_preserve_dtype(compressor, dtype):
     assert not hasattr(compressor, "s_seq_dtype")
 
 
-def test_structural_compressor_requires_no_inheritance():
-    class NegatingCompressor:
+def test_custom_compressor_inherits_base_class():
+    class NegatingCompressor(memopt.SpikeCompressor):
         def compress(self, x):
             return -x
 
@@ -42,6 +42,13 @@ def test_structural_compressor_requires_no_inheritance():
     y.sum().backward()
 
     assert torch.allclose(x.grad, 2 * x)
+
+    class IncompleteCompressor(memopt.SpikeCompressor):
+        def compress(self, x):
+            return x
+
+    with pytest.raises(TypeError):
+        IncompleteCompressor()
 
 
 def test_checkpoint_supports_kwargs_pytree_and_gradients():
