@@ -303,7 +303,8 @@ attention metadata。SpikeLM 与 Qwen2 adapter 使用 SGLang 原生 stage 分层
 ``vision.ModelBuilder.build`` 构建当前 PP stage、配置模型并行并返回 FSDP2 分片位置。
 实现可参考 ``SEWResNet34Builder`` 和 ``SpikformerBuilder``。
 
-最小声明形式如下：
+最小声明形式如下。这个例子没有定义模型特定的 checkpoint 边界，因此明确拒绝
+非零 ``memopt_level``；实际实现应像内置 builder 一样在返回前应用 memopt。
 
 .. code-block:: python
 
@@ -334,6 +335,8 @@ attention metadata。SpikeLM 与 Qwen2 adapter 使用 SGLang 原生 stage 分层
         ):
             if pipeline_size != 1:
                 raise ValueError("MyModelBuilder does not define PP stages.")
+            if memopt_level:
+                raise ValueError("MyModelBuilder does not define memopt rules.")
             model = build_my_model(self.config)
             model = parallelize_my_model(model, process_group)
             model.to(device)

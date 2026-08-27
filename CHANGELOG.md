@@ -41,7 +41,7 @@ Module: `spikingjelly.activation_based.op_counter`.
 
 ### Breaking Changes and Notices
 
-#### Memory Optimization
+#### Memory Optimization Migration
 
 Module: `spikingjelly.activation_based.memopt`.
 
@@ -49,6 +49,8 @@ Module: `spikingjelly.activation_based.memopt`.
   `TCGCContainer`, mutable compressor bases, profile presets, summaries, and
   module-side `__spatial_split__` hooks with the smaller public API above. No
   compatibility aliases are provided.
+- MCore training checkpoints whose recipe contains the former `use_snn_memopt`
+  field cannot be resumed directly with the new configuration.
 
 ## 2.0.0.dev2 - 2026-08-23
 

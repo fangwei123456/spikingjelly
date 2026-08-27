@@ -117,6 +117,22 @@ def test_checkpoint_module_commits_batch_norm_buffers_once():
     assert torch.equal(module.running_var, reference.running_var)
 
 
+def test_checkpoint_module_uses_buffers_registered_after_wrapping():
+    class LateBuffer(nn.Module):
+        def forward(self, x):
+            self.total.add_(x.sum())
+            return x * self.total
+
+    module = LateBuffer()
+    wrapped = memopt.checkpoint_module(module)
+    module.register_buffer("total", torch.zeros(()))
+    reference = copy.deepcopy(module)
+
+    _compare_module(reference, wrapped, torch.randn(3, 2))
+
+    assert torch.equal(module.total, reference.total)
+
+
 def test_temporal_chunks_support_uneven_inputs_and_pytree_outputs():
     class PytreeModule(nn.Module):
         def forward(self, x, scale):

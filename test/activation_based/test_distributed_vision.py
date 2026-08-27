@@ -891,7 +891,7 @@ def test_sew_pipeline_downsamples_before_stage_boundaries():
             assert input_shape == expected_shapes[rank - 1]
 
 
-def test_spikformer_cifar10_pipeline_uses_8_by_8_tokens():
+def test_spikformer_cifar10_pipeline_memopt_uses_8_by_8_tokens():
     config = SpikformerCIFAR10Config(time_steps=2)
     builder = config.get_builder_cls()(config)
 
@@ -905,7 +905,7 @@ def test_spikformer_cifar10_pipeline_uses_8_by_8_tokens():
         pipeline_microbatches=2,
         device=torch.device("cpu"),
         micro_batch_size=4,
-        memopt_level=0,
+        memopt_level=1,
         memopt_compress_inputs=False,
         memopt_checkpoint_budget="memory",
     )

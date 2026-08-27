@@ -536,7 +536,8 @@ def optimize_memory(
     :type compress: bool
     :param split_fn: ordered descendant selector for level 2 / level 2 有序子模块选择函数
     :type split_fn: Optional[Callable[[nn.Module], Sequence[nn.Module]]]
-    :param can_chunk: temporal-separability predicate for final leaves / 最终片段时间可分判断
+    :param can_chunk: temporal-separability predicate for final leaves; this preset
+        chunks dimension 0 / 最终片段时间可分判断；本预设固定切分第 0 维
     :type can_chunk: Optional[Callable[[nn.Module], bool]]
     :param process_group: ranks sharing one stage structure / 共享当前 stage 结构的进程组
     :type process_group: Optional[ProcessGroup]

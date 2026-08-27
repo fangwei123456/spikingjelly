@@ -1320,19 +1320,24 @@ class SpikformerBuilder(ModelBuilder):
                 if pipeline_size == 1
                 else micro_batch_size // pipeline_microbatches
             )
-            chunks_per_stage = 4 // pipeline_size
-            start = pipeline_rank * chunks_per_stage
-            shape = (
-                (batch, in_channels, image_height, image_width)
-                if start == 0
-                else (
+            if pipeline_size == 1:
+                shape = (batch, in_channels, image_height, image_width)
+            elif pipeline_rank == 0:
+                shape = (
+                    config.time_steps,
+                    batch,
+                    in_channels,
+                    image_height,
+                    image_width,
+                )
+            else:
+                shape = (
                     config.time_steps,
                     batch,
                     384,
                     image_height // patch_size,
                     image_width // patch_size,
                 )
-            )
             dummy = torch.zeros(shape, device=device)
             memopt.optimize_memory(
                 model,

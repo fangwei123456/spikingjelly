@@ -172,7 +172,6 @@ def _checkpoint_module_forward(
     module: nn.Module,
     *args: object,
     functional_forward: Callable,
-    buffer_names: tuple[str, ...],
     compressor: Optional[SpikeCompressor],
     chunks: int,
     chunked_args: tuple[int, ...],
@@ -180,7 +179,9 @@ def _checkpoint_module_forward(
     **kwargs: object,
 ):
     states = tuple(base.extract_memories(module))
-    buffer_refs = tuple(dict(module.named_buffers()).values())
+    live_buffers = dict(module.named_buffers())
+    buffer_names = tuple(live_buffers)
+    buffer_refs = tuple(live_buffers.values())
     buffers = tuple(buffer.detach().clone() for buffer in buffer_refs)
     if chunks == 1:
         outputs, states, buffers = _run_module(
@@ -239,7 +240,7 @@ def _checkpoint_module_forward(
 
     base.load_memories(module, list(states))
     with torch.no_grad():
-        for buffer, updated in zip(buffer_refs, buffers):
+        for buffer, updated in zip(buffer_refs, buffers, strict=True):
             buffer.copy_(updated)
     return result
 
@@ -279,12 +280,10 @@ def checkpoint_module(
     """
     if chunks < 1:
         raise ValueError(f"chunks must be positive, got {chunks}.")
-    buffer_names = tuple(dict(module.named_buffers()))
     return checkpoint_wrapper(
         module,
         checkpoint_fn=_checkpoint_module_forward,
         functional_forward=base.to_functional_forward(module),
-        buffer_names=buffer_names,
         compressor=compressor,
         chunks=chunks,
         chunked_args=chunked_args,

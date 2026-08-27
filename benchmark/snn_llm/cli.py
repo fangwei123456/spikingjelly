@@ -240,6 +240,8 @@ def _run_qwen2(args: argparse.Namespace) -> None:
         checkpoint_dir=args.output,
         checkpoint_interval=50,
         resume=args.resume,
+        memopt_level=args.memopt_level,
+        memopt_checkpoint_budget=args.memopt_checkpoint_budget,
     )
     training = plan_training(
         training,
@@ -291,6 +293,12 @@ def _parse_args() -> argparse.Namespace:
     )
     qwen2.add_argument("--memory-fraction", type=float, default=0.9)
     qwen2.add_argument("--device-memory-gib", type=float)
+    qwen2.add_argument("--memopt-level", type=int, choices=range(5), default=0)
+    qwen2.add_argument(
+        "--memopt-checkpoint-budget",
+        choices=("speed", "balanced", "memory"),
+        default="memory",
+    )
     return parser.parse_args()
 
 

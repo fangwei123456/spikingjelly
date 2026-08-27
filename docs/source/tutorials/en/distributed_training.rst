@@ -341,7 +341,9 @@ Custom vision models
 parallelism, and returns the FSDP2 shard roots. See ``SEWResNet34Builder`` and
 ``SpikformerBuilder`` for working implementations.
 
-A minimal declaration has this form:
+A minimal declaration has this form. It defines no model-specific checkpoint
+boundaries, so it rejects a nonzero ``memopt_level``. A real implementation
+should apply memopt before returning, as the built-in builders do.
 
 .. code-block:: python
 
@@ -372,6 +374,8 @@ A minimal declaration has this form:
         ):
             if pipeline_size != 1:
                 raise ValueError("MyModelBuilder does not define PP stages.")
+            if memopt_level:
+                raise ValueError("MyModelBuilder does not define memopt rules.")
             model = build_my_model(self.config)
             model = parallelize_my_model(model, process_group)
             model.to(device)
