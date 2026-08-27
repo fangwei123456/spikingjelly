@@ -31,6 +31,14 @@ Module: `spikingjelly.activation_based.memopt`.
 - Integrated the new configuration with Vision and MCore training while keeping
   evaluation, generation, prediction, and artifact export free of memopt wrappers.
 
+#### Operation Counters
+
+Module: `spikingjelly.activation_based.op_counter`.
+
+- Added reproducible external validation for the Lemaire, SpikeSim dense, and
+  NeuroMC forward-energy estimators using pinned author code or published
+  equations, with scale-free ranking metrics and explicit unvalidated scopes.
+
 ### Breaking Changes and Notices
 
 #### Memory Optimization
