@@ -3,7 +3,6 @@ from typing import Callable, Optional
 import torch
 import torch.nn as nn
 from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
-    CheckpointWrapper,
     checkpoint_wrapper,
 )
 from torch.utils.checkpoint import checkpoint as torch_checkpoint
@@ -184,14 +183,6 @@ def _checkpoint_module_forward(
     buffer_refs = tuple(dict(module.named_buffers()).values())
     buffers = tuple(buffer.detach().clone() for buffer in buffer_refs)
     if chunks == 1:
-        for index in chunked_args:
-            if (
-                index < len(args)
-                and isinstance(args[index], torch.Tensor)
-                and args[index].ndim
-                and args[index].shape[time_dim] == 0
-            ):
-                raise ValueError("temporal length T must be nonzero.")
         outputs, states, buffers = _run_module(
             module,
             functional_forward,
@@ -202,58 +193,55 @@ def _checkpoint_module_forward(
             buffers,
             compressor,
         )
-        base.load_memories(module, list(states))
-        with torch.no_grad():
-            for buffer, updated in zip(buffer_refs, buffers):
-                buffer.copy_(updated)
-        return outputs[0] if len(outputs) == 1 else outputs
+        result = outputs[0] if len(outputs) == 1 else outputs
+    else:
+        sequence_length = None
+        chunk_values: dict[int, tuple[torch.Tensor, ...]] = {}
+        for index in chunked_args:
+            if index >= len(args) or not isinstance(args[index], torch.Tensor):
+                raise ValueError(
+                    f"chunked_args contains non-tensor argument index {index}."
+                )
+            length = args[index].shape[time_dim]
+            if sequence_length is None:
+                sequence_length = length
+            elif length != sequence_length:
+                raise ValueError(
+                    "All chunked arguments must have the same temporal length."
+                )
+            chunk_values[index] = torch.tensor_split(args[index], chunks, dim=time_dim)
 
-    sequence_length = None
-    chunk_values: dict[int, tuple[torch.Tensor, ...]] = {}
-    for index in chunked_args:
-        if index >= len(args) or not isinstance(args[index], torch.Tensor):
-            raise ValueError(
-                f"chunked_args contains non-tensor argument index {index}."
-            )
-        length = args[index].shape[time_dim]
         if sequence_length is None:
-            sequence_length = length
-        elif length != sequence_length:
+            raise ValueError("chunked_args must contain at least one tensor argument.")
+        if sequence_length == 0 or chunks > sequence_length:
             raise ValueError(
-                "All chunked arguments must have the same temporal length."
+                f"chunks={chunks} requires a non-empty temporal length T >= chunks; "
+                f"got T={sequence_length}."
             )
-        chunk_values[index] = torch.tensor_split(args[index], chunks, dim=time_dim)
 
-    if sequence_length is None:
-        raise ValueError("chunked_args must contain at least one tensor argument.")
-    if sequence_length == 0 or chunks > sequence_length:
-        raise ValueError(
-            f"chunks={chunks} requires a non-empty temporal length T >= chunks; "
-            f"got T={sequence_length}."
-        )
-
-    chunk_outputs = []
-    for chunk_index in range(chunks):
-        current_args = list(args)
-        for index, values in chunk_values.items():
-            current_args[index] = values[chunk_index]
-        outputs, states, buffers = _run_module(
-            module,
-            functional_forward,
-            buffer_names,
-            tuple(current_args),
-            kwargs,
-            states,
-            buffers,
-            compressor,
-        )
-        chunk_outputs.append(outputs[0] if len(outputs) == 1 else outputs)
+        chunk_outputs = []
+        for chunk_index in range(chunks):
+            current_args = list(args)
+            for index, values in chunk_values.items():
+                current_args[index] = values[chunk_index]
+            outputs, states, buffers = _run_module(
+                module,
+                functional_forward,
+                buffer_names,
+                tuple(current_args),
+                kwargs,
+                states,
+                buffers,
+                compressor,
+            )
+            chunk_outputs.append(outputs[0] if len(outputs) == 1 else outputs)
+        result = _merge_chunk_outputs(chunk_outputs, time_dim)
 
     base.load_memories(module, list(states))
     with torch.no_grad():
         for buffer, updated in zip(buffer_refs, buffers):
             buffer.copy_(updated)
-    return _merge_chunk_outputs(chunk_outputs, time_dim)
+    return result
 
 
 def checkpoint_module(
@@ -304,23 +292,9 @@ def checkpoint_module(
     )
 
 
-def _is_checkpoint_wrapper(module: nn.Module) -> bool:
-    return isinstance(module, CheckpointWrapper)
-
-
 def _unwrap_checkpoint_module(module: nn.Module) -> nn.Module:
-    if not isinstance(module, CheckpointWrapper):
-        raise TypeError(f"Expected CheckpointWrapper, got {type(module).__name__}.")
     return module._checkpoint_wrapped_module
 
 
 def _checkpoint_options(module: nn.Module) -> dict[str, object]:
-    if not isinstance(module, CheckpointWrapper):
-        raise TypeError(f"Expected CheckpointWrapper, got {type(module).__name__}.")
-    keywords = module.checkpoint_fn.keywords
-    return {
-        "compressor": keywords["compressor"],
-        "chunks": keywords["chunks"],
-        "chunked_args": keywords["chunked_args"],
-        "time_dim": keywords["time_dim"],
-    }
+    return module.checkpoint_fn.keywords

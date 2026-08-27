@@ -447,9 +447,8 @@ LLM 模型继承 ``llm.ModelConfig``，并通过 ``builder`` 类变量指向一�
         def build(
             self,
             *,
-            memopt_level: int,
-            memopt_checkpoint_budget: str,
-            memopt_compress_inputs: bool,
+            memopt_level: int = 0,
+            memopt_checkpoint_budget: str = "memory",
             resume: bool,
         ):
             return model_provider, forward_step

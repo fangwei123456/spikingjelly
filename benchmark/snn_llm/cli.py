@@ -141,7 +141,6 @@ def _run_spikelm(args: argparse.Namespace) -> None:
         resume=args.resume,
         memopt_level=args.memopt_level,
         memopt_checkpoint_budget=args.memopt_checkpoint_budget,
-        memopt_compress_inputs=args.memopt_compress_inputs,
     )
     if not explicit_topology:
         training = plan_training(
@@ -280,11 +279,6 @@ def _parse_args() -> argparse.Namespace:
         "--memopt-checkpoint-budget",
         choices=("speed", "balanced", "memory"),
         default="memory",
-    )
-    spikelm.add_argument(
-        "--memopt-compress-inputs",
-        action=argparse.BooleanOptionalAction,
-        default=True,
     )
     qwen2 = commands.add_parser("qwen2-finetune")
     qwen2.add_argument("--data", required=True, type=Path)

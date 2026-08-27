@@ -134,9 +134,8 @@ class ModelBuilder(abc.ABC):
     def build(
         self,
         *,
-        memopt_level: int,
-        memopt_checkpoint_budget: Literal["speed", "balanced", "memory"],
-        memopt_compress_inputs: bool,
+        memopt_level: int = 0,
+        memopt_checkpoint_budget: Literal["speed", "balanced", "memory"] = "memory",
         resume: bool,
     ) -> tuple[
         Callable[[bool, bool], "MegatronModule"],
@@ -151,8 +150,6 @@ class ModelBuilder(abc.ABC):
         :type memopt_level: int
         :param memopt_checkpoint_budget: checkpoint 数量预设。 / Checkpoint-count preset.
         :type memopt_checkpoint_budget: Literal["speed", "balanced", "memory"]
-        :param memopt_compress_inputs: 是否压缩二值输入。 / Whether to compress binary inputs.
-        :type memopt_compress_inputs: bool
         :param resume: 是否从 MCore checkpoint 恢复。 / Whether this run resumes
             from an MCore checkpoint.
         :type resume: bool
@@ -377,7 +374,6 @@ class TrainingConfig:
     seed: int = 1234
     memopt_level: int = 0
     memopt_checkpoint_budget: Literal["speed", "balanced", "memory"] = "memory"
-    memopt_compress_inputs: bool = True
 
     def __post_init__(self) -> None:
         if "." not in self.dataset_builder:
@@ -542,8 +538,6 @@ CP, sequence parallelism, and Transformer precision have one source of truth in
 :type memopt_level: int
 :param memopt_checkpoint_budget: checkpoint 数量预设。 / Checkpoint-count preset.
 :type memopt_checkpoint_budget: Literal["speed", "balanced", "memory"]
-:param memopt_compress_inputs: 是否压缩二值输入。 / Whether to compress binary inputs.
-:type memopt_compress_inputs: bool
 :raises ValueError: 配置不一致。 / If configuration values are inconsistent.
 """
 

@@ -490,9 +490,8 @@ to an ``llm.ModelBuilder``. The builder's ``build`` method returns the MCore
         def build(
             self,
             *,
-            memopt_level: int,
-            memopt_checkpoint_budget: str,
-            memopt_compress_inputs: bool,
+            memopt_level: int = 0,
+            memopt_checkpoint_budget: str = "memory",
             resume: bool,
         ):
             return model_provider, forward_step

@@ -10,7 +10,6 @@ from spikingjelly.activation_based import memopt, neuron
 @pytest.mark.parametrize(
     "compressor",
     [
-        memopt.NullSpikeCompressor(),
         memopt.BooleanSpikeCompressor(),
         memopt.Uint8SpikeCompressor(),
         memopt.BitSpikeCompressor(),
@@ -30,8 +29,6 @@ def test_compressors_are_stateless_and_preserve_dtype(compressor, dtype):
 
 def test_structural_compressor_requires_no_inheritance():
     class NegatingCompressor:
-        requires_strictly_binary = False
-
         def compress(self, x):
             return -x
 
@@ -138,11 +135,17 @@ def test_temporal_chunks_support_uneven_inputs_and_pytree_outputs():
     assert torch.allclose(x.grad, torch.full_like(x, 2))
 
 
-@pytest.mark.parametrize("shape,chunks", [((0, 2), 1), ((2, 2), 3)])
+@pytest.mark.parametrize("shape,chunks", [((0, 2), 2), ((2, 2), 3)])
 def test_temporal_chunks_reject_empty_or_excessive_chunks(shape, chunks):
     wrapped = memopt.checkpoint_module(nn.Identity(), chunks=chunks)
     with pytest.raises(ValueError, match="temporal length"):
         wrapped(torch.randn(shape, requires_grad=True))
+
+
+def test_checkpoint_without_temporal_chunks_accepts_empty_input():
+    x = torch.empty(0, 2, requires_grad=True)
+
+    assert memopt.checkpoint_module(nn.Identity())(x).shape == x.shape
 
 
 def test_temporal_chunks_require_matching_input_lengths():

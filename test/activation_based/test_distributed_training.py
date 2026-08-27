@@ -25,7 +25,6 @@ def test_training_config_resolves_model_and_dataset_builders():
         ),
         memopt_level=0,
         memopt_checkpoint_budget="memory",
-        memopt_compress_inputs=False,
         resume=None,
         dataset_builder="benchmark.snn_llm.cli._dataset_provider",
         dataset_kwargs={"data_dir": "tokens", "sequence_length": 8},

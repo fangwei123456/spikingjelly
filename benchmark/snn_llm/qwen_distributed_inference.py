@@ -157,9 +157,6 @@ def _initialize_checkpoint(
         parallel_state.initialize_model_parallel()
         model_parallel_cuda_manual_seed(1234)
         provider, _ = model_config.get_builder_cls()(model_config).build(
-            memopt_level=0,
-            memopt_checkpoint_budget="memory",
-            memopt_compress_inputs=False,
             resume=False,
         )
         model = provider(True, True).cuda()
@@ -192,9 +189,6 @@ def _export_sglang(
     args: argparse.Namespace, model_config: Qwen2Config
 ) -> dict[str, object]:
     provider, _ = model_config.get_builder_cls()(model_config).build(
-        memopt_level=0,
-        memopt_checkpoint_budget="memory",
-        memopt_compress_inputs=False,
         resume=True,
     )
     export_sglang(

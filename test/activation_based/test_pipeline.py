@@ -92,6 +92,22 @@ def test_level_one_selects_largest_observed_inputs(budget, wrapped):
     } == wrapped
 
 
+@pytest.mark.parametrize("level", [2, 3])
+def test_level_without_a_matching_rule_skips_profiling(level, monkeypatch):
+    monkeypatch.setattr(
+        pipeline,
+        "_measure_peak",
+        lambda *args: pytest.fail("profiling should not run"),
+    )
+
+    memopt.optimize_memory(
+        BudgetModel(),
+        Target,
+        lambda current: current(torch.ones(2, 4)),
+        level=level,
+    )
+
+
 def test_probe_preserves_mode_rng_buffers_memories_and_grads():
     model = nn.Sequential(nn.BatchNorm1d(4), Target())
     model.eval()

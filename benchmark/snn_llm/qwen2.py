@@ -430,7 +430,6 @@ def model_provider(
     config: Qwen2Config,
     memopt_level: int,
     memopt_checkpoint_budget: str,
-    memopt_compress_inputs: bool,
     pre_process: bool,
     post_process: bool,
 ) -> "MegatronModule":
@@ -457,8 +456,6 @@ def model_provider(
     :type memopt_level: int
     :param memopt_checkpoint_budget: checkpoint 数量预设。
     :type memopt_checkpoint_budget: str
-    :param memopt_compress_inputs: 是否压缩二值输入。
-    :type memopt_compress_inputs: bool
     :param pre_process: 当前 stage 是否拥有 embedding。
     :type pre_process: bool
     :param post_process: 当前 stage 是否拥有 LM head。
@@ -487,8 +484,6 @@ def model_provider(
     :type memopt_level: int
     :param memopt_checkpoint_budget: Checkpoint-count preset.
     :type memopt_checkpoint_budget: str
-    :param memopt_compress_inputs: Whether binary inputs are compressed.
-    :type memopt_compress_inputs: bool
     :param pre_process: Whether this stage owns the embedding.
     :type pre_process: bool
     :param post_process: Whether this stage owns the LM head.
@@ -577,7 +572,6 @@ def model_provider(
         row_base = RowParallelLinear
     attention_builder = _attention_builder(attention_base)
     row_builder = _row_linear_builder(row_base)
-    del memopt_compress_inputs
     local_layers = get_num_layers_to_build(transformer_config)
     checkpoint_layers = math.ceil(
         local_layers
@@ -671,9 +665,8 @@ class Qwen2Builder(ModelBuilder):
     def build(
         self,
         *,
-        memopt_level: int,
-        memopt_checkpoint_budget: str,
-        memopt_compress_inputs: bool,
+        memopt_level: int = 0,
+        memopt_checkpoint_budget: str = "memory",
         resume: bool,
     ) -> tuple["Callable", "Callable"]:
         from transformers import AutoConfig
@@ -703,7 +696,6 @@ class Qwen2Builder(ModelBuilder):
                 self.config,
                 memopt_level,
                 memopt_checkpoint_budget,
-                memopt_compress_inputs,
             ),
             forward_step,
         )

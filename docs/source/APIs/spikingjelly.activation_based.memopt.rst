@@ -40,8 +40,6 @@ Compressors that convert spike tensors represented in floating-point numbers int
 
     * - :class:`SpikeCompressor <spikingjelly.activation_based.memopt.compress.SpikeCompressor>`
       - Structural protocol for stateless compressors.
-    * - :class:`NullSpikeCompressor <spikingjelly.activation_based.memopt.compress.NullSpikeCompressor>`
-      - Do not perform any compression/decompression.
     * - :class:`BooleanSpikeCompressor <spikingjelly.activation_based.memopt.compress.BooleanSpikeCompressor>`
       - Convert spike tensors to/from boolean tensors.
     * - :class:`Uint8SpikeCompressor <spikingjelly.activation_based.memopt.compress.Uint8SpikeCompressor>`

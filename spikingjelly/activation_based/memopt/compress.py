@@ -5,7 +5,6 @@ import torch.nn.functional as F
 
 __all__ = [
     "SpikeCompressor",
-    "NullSpikeCompressor",
     "BooleanSpikeCompressor",
     "Uint8SpikeCompressor",
     "BitSpikeCompressor",
@@ -24,31 +23,12 @@ class SpikeCompressor(Protocol):
     must not store per-call metadata on the instance.
     """
 
-    requires_strictly_binary: bool
-
     def compress(self, x: torch.Tensor) -> object: ...
 
     def decompress(self, packed: object) -> torch.Tensor: ...
 
 
-class NullSpikeCompressor:
-    requires_strictly_binary = False
-
-    def __init__(self) -> None:
-        r"""Keep a tensor unchanged. / 保持张量不变。"""
-
-    def compress(self, x: torch.Tensor) -> object:
-        return x.detach()
-
-    def decompress(self, packed: object) -> torch.Tensor:
-        if not isinstance(packed, torch.Tensor):
-            raise TypeError("NullSpikeCompressor expects a tensor payload.")
-        return packed
-
-
 class BooleanSpikeCompressor:
-    requires_strictly_binary = True
-
     def __init__(self) -> None:
         r"""Store strictly binary spikes as bool. / 将严格二值脉冲保存为 bool。"""
 
@@ -61,8 +41,6 @@ class BooleanSpikeCompressor:
 
 
 class Uint8SpikeCompressor:
-    requires_strictly_binary = False
-
     def __init__(self) -> None:
         r"""Store integer-valued spikes as uint8. / 将整数脉冲保存为 uint8。"""
 
@@ -75,8 +53,6 @@ class Uint8SpikeCompressor:
 
 
 class BitSpikeCompressor:
-    requires_strictly_binary = True
-
     def __init__(self) -> None:
         r"""Pack eight strictly binary spikes into one byte.
 
@@ -104,8 +80,6 @@ class BitSpikeCompressor:
 
 
 class SparseSpikeCompressor:
-    requires_strictly_binary = True
-
     def __init__(self, dtype: torch.dtype = torch.int64) -> None:
         r"""Store indices of nonzero strictly binary spikes.
 

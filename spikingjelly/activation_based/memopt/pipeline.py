@@ -1,6 +1,5 @@
 import copy
 import math
-import time
 from collections.abc import Callable, Sequence
 from typing import Literal, Optional
 
@@ -8,6 +7,9 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 from torch.distributed import ProcessGroup
+from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
+    CheckpointWrapper,
+)
 from torch.utils._pytree import tree_flatten
 
 from spikingjelly.logger import logger
@@ -15,7 +17,6 @@ from spikingjelly.logger import logger
 from .. import base
 from .checkpointing import (
     _checkpoint_options,
-    _is_checkpoint_wrapper,
     _unwrap_checkpoint_module,
     checkpoint_module,
 )
@@ -43,7 +44,6 @@ def _capture_runtime(model: nn.Module):
             if torch.cuda.is_available()
             else None
         ),
-        "training": [(module, module.training) for module in model.modules()],
         "buffers": [(buffer, buffer.detach().clone()) for buffer in model.buffers()],
         "memories": [_clone_value(value) for value in base.extract_memories(model)],
         "grads": [
@@ -57,8 +57,6 @@ def _restore_runtime(model: nn.Module, state) -> None:
     torch.set_rng_state(state["cpu_rng"])
     if state["cuda_rng"] is not None:
         torch.cuda.set_rng_state(state["cuda_rng"], torch.cuda.current_device())
-    for module, training in state["training"]:
-        module.training = training
     with torch.no_grad():
         for buffer, saved in state["buffers"]:
             buffer.copy_(saved)
@@ -109,15 +107,6 @@ def _group_values(
     return tensor.cpu().tolist()
 
 
-def _leader_choice(value, process_group: Optional[ProcessGroup]):
-    if process_group is None:
-        return value
-    leader = dist.get_global_rank(process_group, 0)
-    payload = [value if dist.get_rank(process_group) == 0 else None]
-    dist.broadcast_object_list(payload, src=leader, group=process_group)
-    return payload[0]
-
-
 def _run_trial(function: Callable[[], float], process_group: Optional[ProcessGroup]):
     error = None
     status = 0
@@ -127,7 +116,7 @@ def _run_trial(function: Callable[[], float], process_group: Optional[ProcessGro
     except torch.cuda.OutOfMemoryError as exc:
         status, error = 1, exc
         torch.cuda.empty_cache()
-    except BaseException as exc:
+    except Exception as exc:
         status, error = 2, exc
 
     if process_group is not None:
@@ -258,7 +247,6 @@ def _selected_paths(
     targets: type | tuple[type, ...],
     activation_bytes: dict[nn.Module, int],
     checkpoint_budget: str,
-    process_group: Optional[ProcessGroup],
 ) -> list[str]:
     path_map = _module_path_map(model)
     candidates = []
@@ -273,8 +261,7 @@ def _selected_paths(
     count = math.ceil(len(candidates) * _BUDGET_RATIOS[checkpoint_budget])
     order = {module: index for index, module in enumerate(candidates)}
     candidates.sort(key=lambda module: (-activation_bytes[module], order[module]))
-    paths = [path_map[module] for module in candidates[:count]]
-    return _leader_choice(paths, process_group)
+    return [path_map[module] for module in candidates[:count]]
 
 
 def _compressor_for(module: nn.Module, binary: dict[nn.Module, bool], compress: bool):
@@ -285,7 +272,7 @@ def _checkpoint_leaves(model: nn.Module) -> list[tuple[str, nn.Module]]:
     return [
         (path, module)
         for path, module in model.named_modules()
-        if path and _is_checkpoint_wrapper(module)
+        if path and isinstance(module, CheckpointWrapper)
     ]
 
 
@@ -366,7 +353,7 @@ def _spatial_split(
                 peak = _run_trial(
                     lambda: _measure_peak(model, example_forward), process_group
                 )
-            except BaseException:
+            except Exception:
                 _restore_split(model, path, wrapper, parts)
                 raise
             if peak is not None and peak < best:
@@ -423,7 +410,7 @@ def _temporal_split(
                 peak = _run_trial(
                     lambda: _measure_peak(model, example_forward), process_group
                 )
-            except BaseException:
+            except Exception:
                 model.set_submodule(path, wrapper)
                 raise
             if peak is not None and peak < baseline:
@@ -442,30 +429,23 @@ def _forward_costs(
     process_group,
 ) -> dict[str, float]:
     leaves = _checkpoint_leaves(model)
-    costs = {path: 0.0 for path, _ in leaves}
+    events = {path: [] for path, _ in leaves}
     starts = {}
     handles = []
-    use_cuda = torch.cuda.is_available()
 
     def pre_hook(path):
         def hook(module, args):
-            if use_cuda:
-                event = torch.cuda.Event(enable_timing=True)
-                event.record()
-                starts[path] = event
-            else:
-                starts[path] = time.perf_counter()
+            event = torch.cuda.Event(enable_timing=True)
+            event.record()
+            starts[path] = event
 
         return hook
 
     def post_hook(path):
         def hook(module, args, output):
-            if use_cuda:
-                end = torch.cuda.Event(enable_timing=True)
-                end.record()
-                costs[path].append((starts[path], end))
-            else:
-                costs[path] += time.perf_counter() - starts[path]
+            end = torch.cuda.Event(enable_timing=True)
+            end.record()
+            events[path].append((starts[path], end))
 
         return hook
 
@@ -478,18 +458,14 @@ def _forward_costs(
             original = _unwrap_checkpoint_module(wrapper)
             handles.append(original.register_forward_pre_hook(pre_hook(path)))
             handles.append(original.register_forward_hook(post_hook(path)))
-        if use_cuda:
-            event_pairs = {path: [] for path in costs}
-            costs = event_pairs
         for _ in range(10):
             example_forward(model)
             _restore_runtime(model, state)
-        if use_cuda:
-            torch.cuda.synchronize()
-            costs = {
-                path: sum(start.elapsed_time(end) for start, end in pairs)
-                for path, pairs in costs.items()
-            }
+        torch.cuda.synchronize()
+        costs = {
+            path: sum(start.elapsed_time(end) for start, end in pairs)
+            for path, pairs in events.items()
+        }
     finally:
         for handle in handles:
             handle.remove()
@@ -508,15 +484,13 @@ def _greedy_unwrap(
     costs = _forward_costs(model, example_forward, process_group)
     for path in sorted(costs, key=lambda name: (-costs[name], name)):
         wrapper = model.get_submodule(path)
-        if not _is_checkpoint_wrapper(wrapper):
-            continue
         original = _unwrap_checkpoint_module(wrapper)
         model.set_submodule(path, original)
         try:
             peak = _run_trial(
                 lambda: _measure_peak(model, example_forward), process_group
             )
-        except BaseException:
+        except Exception:
             model.set_submodule(path, wrapper)
             raise
         if peak is None or peak > baseline:
@@ -592,9 +566,7 @@ def optimize_memory(
     activation_bytes, binary, sequence_lengths = _probe_inputs(
         model, example_forward, process_group
     )
-    selected = _selected_paths(
-        model, targets, activation_bytes, checkpoint_budget, process_group
-    )
+    selected = _selected_paths(model, targets, activation_bytes, checkpoint_budget)
     for path in selected:
         module = model.get_submodule(path)
         model.set_submodule(
@@ -607,8 +579,9 @@ def optimize_memory(
 
     if level == 1 or not selected:
         return model
-    baseline = (
-        _spatial_split(
+
+    if split_fn is not None:
+        baseline = _spatial_split(
             model,
             example_forward,
             split_fn,
@@ -617,12 +590,14 @@ def optimize_memory(
             compress,
             process_group,
         )
-        if split_fn is not None
-        else (
-            _run_trial(lambda: _measure_peak(model, example_forward), process_group)
-            or float("inf")
+    elif level == 4 or (level >= 3 and can_chunk is not None):
+        measured = _run_trial(
+            lambda: _measure_peak(model, example_forward), process_group
         )
-    )
+        baseline = float("inf") if measured is None else measured
+    else:
+        return model
+
     if level >= 3 and can_chunk is not None:
         baseline = _temporal_split(
             model,

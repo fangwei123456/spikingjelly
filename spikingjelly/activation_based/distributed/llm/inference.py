@@ -191,9 +191,6 @@ def evaluate(config: EvaluationConfig) -> dict[str, float]:
         raise RuntimeError("MCore distributed evaluation requires CUDA.")
     builder_cls = config.model.get_builder_cls()
     model_provider, forward_step = builder_cls(config.model).build(
-        memopt_level=0,
-        memopt_checkpoint_budget="memory",
-        memopt_compress_inputs=False,
         resume=True,
     )
     dataset = _import_object(config.dataset_builder)(**config.dataset_kwargs)
@@ -588,9 +585,6 @@ def generate(
         )
     builder_cls = config.model.get_builder_cls()
     model_provider, _ = builder_cls(config.model).build(
-        memopt_level=0,
-        memopt_checkpoint_budget="memory",
-        memopt_compress_inputs=False,
         resume=True,
     )
     return generate_mcore(

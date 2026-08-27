@@ -32,7 +32,6 @@ def _build_training_inputs(config: TrainingConfig) -> tuple[Any, Any, Any]:
     model_provider, forward_step = builder_cls(config.model).build(
         memopt_level=config.memopt_level,
         memopt_checkpoint_budget=config.memopt_checkpoint_budget,
-        memopt_compress_inputs=config.memopt_compress_inputs,
         resume=config.resume is not None,
     )
     dataset_provider = functools.partial(
@@ -203,7 +202,6 @@ def train(
             "dataset_kwargs": config.dataset_kwargs,
             "memopt_level": config.memopt_level,
             "memopt_checkpoint_budget": config.memopt_checkpoint_budget,
-            "memopt_compress_inputs": config.memopt_compress_inputs,
             "mcore_recompute_granularity": transformer.recompute_granularity,
             "mcore_recompute_modules": transformer.recompute_modules,
             "sequence_length": config.sequence_length,
