@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 
 from spikingjelly.activation_based import functional, neuron
-from spikingjelly.activation_based.memopt import memory_optimization
+from spikingjelly.activation_based.memopt import optimize_memory
 
 
 class MemOptToyNet(nn.Module):
@@ -34,14 +34,6 @@ class MemOptBlock(nn.Sequential):
             nn.Linear(channels, channels),
             neuron.IFNode(step_mode="m"),
         )
-        self.n_seq_inputs = 1
-        self.n_outputs = 1
-
-    def __spatial_split__(self):
-        return [
-            nn.Sequential(self[0], self[1]),
-            nn.Sequential(self[2], self[3]),
-        ]
 
 
 class MemOptBlockNet(nn.Module):
@@ -72,6 +64,7 @@ def train_step(net: nn.Module, x: torch.Tensor):
 
 
 def benchmark_train_step(net: nn.Module, x: torch.Tensor, warmup: int, iters: int):
+    torch.cuda.empty_cache()
     for _ in range(warmup):
         train_step(net, x)
     torch.cuda.synchronize()
@@ -95,18 +88,15 @@ def optimize_model(
     instance,
     x,
     level: int,
-    warmup_in_main_process: bool,
-    warmup_in_profile_workers: bool,
 ):
     t0 = time.perf_counter()
-    optimized = memory_optimization(
+    optimized = optimize_memory(
         net,
         instance,
-        dummy_input=(x,),
-        compress_x=True,
+        lambda current: current(x),
         level=level,
-        warmup_in_main_process=warmup_in_main_process,
-        warmup_in_profile_workers=warmup_in_profile_workers,
+        split_fn=lambda module: tuple(module.children()),
+        can_chunk=lambda module: isinstance(module, (nn.Linear, neuron.BaseNode)),
     )
     optimize_ms = (time.perf_counter() - t0) * 1000.0
     return optimized, optimize_ms
@@ -117,20 +107,15 @@ def run_single_variant(
     instance,
     x,
     level: int,
-    warmup_in_main_process: bool,
-    warmup_in_profile_workers: bool,
     warmup: int,
     iters: int,
 ):
     model, optimize_ms = optimize_model(
-        copy.deepcopy(base).cpu(),
+        copy.deepcopy(base).to(x.device),
         instance,
-        x.detach().cpu(),
+        x.detach(),
         level=level,
-        warmup_in_main_process=warmup_in_main_process,
-        warmup_in_profile_workers=warmup_in_profile_workers,
     )
-    model = model.to(x.device)
     result = benchmark_train_step(model, x, warmup, iters)
     result["optimize_ms"] = optimize_ms
     return result
@@ -150,13 +135,17 @@ def main():
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for benchmark_memopt.py")
 
+    torch.manual_seed(0)
     device = torch.device("cuda")
     x = torch.randn(args.T, args.N, args.C, device=device)
     base, instance = build_case(args.model_kind, args.C)
-    base = base.to(device)
 
-    baseline = benchmark_train_step(copy.deepcopy(base), x, args.warmup, args.iters)
+    baseline = benchmark_train_step(
+        copy.deepcopy(base).to(device), x, args.warmup, args.iters
+    )
     results = {
+        "device": torch.cuda.get_device_name(),
+        "pytorch": torch.__version__,
         "model_kind": args.model_kind,
         "shape": {"T": args.T, "N": args.N, "C": args.C},
         "baseline": baseline,
@@ -166,17 +155,9 @@ def main():
     for level in args.levels:
         if level == 0:
             continue
-        results["levels"][str(level)] = {
-            "warm_main": run_single_variant(
-                base, instance, x, level, True, True, args.warmup, args.iters
-            ),
-            "no_main_warmup": run_single_variant(
-                base, instance, x, level, False, True, args.warmup, args.iters
-            ),
-            "no_profile_worker_warmup": run_single_variant(
-                base, instance, x, level, False, False, args.warmup, args.iters
-            ),
-        }
+        results["levels"][str(level)] = run_single_variant(
+            base, instance, x, level, args.warmup, args.iters
+        )
 
     print(json.dumps(results, indent=2))
 

@@ -1,451 +1,487 @@
-from spikingjelly.logger import logger
-import abc
-import torch
+from abc import ABC, abstractmethod
 
+import torch
+import torch.nn.functional as F
 
 __all__ = [
-    "BaseSpikeCompressor",
-    "NullSpikeCompressor",
+    "SpikeCompressor",
     "BooleanSpikeCompressor",
     "Uint8SpikeCompressor",
     "BitSpikeCompressor",
     "SparseSpikeCompressor",
 ]
 
-try:
-    import triton
-except (ImportError, OSError):
-    triton = None
 
-if triton is not None:
-    logger.info("Using Triton backend for bit spike compression")
-    from ..triton_kernel import bit_spike_compress, bit_spike_decompress
-else:
-    logger.info("Using PyTorch backend for bit spike compression")
+class SpikeCompressor(ABC):
+    r"""
+    **API Language** - :ref:`中文 <spike-compressor-cn>` | :ref:`English <spike-compressor-en>`
 
-    def bit_spike_compress(s_seq: torch.Tensor) -> torch.Tensor:
-        s_seq = s_seq.to(dtype=torch.bool).reshape(-1)
-        compressed_shape = (s_seq.numel() + 7) // 8
-        s_seq_compressed = torch.zeros(
-            compressed_shape, dtype=torch.uint8, device=s_seq.device
-        )
-        for i in range(8):
-            sliced = s_seq[i::8].to(dtype=torch.uint8)
-            sliced_len = sliced.numel()
-            if sliced_len > 0:
-                s_seq_compressed[:sliced_len] |= sliced << i
-        return s_seq_compressed
+    ----
 
-    def bit_spike_decompress(s_seq_compressed: torch.Tensor, shape) -> torch.Tensor:
-        decompressed_len = torch.Size(shape).numel()
-        s_seq_decompressed = torch.zeros(
-            decompressed_len, dtype=torch.bool, device=s_seq_compressed.device
-        )
-        for i in range(8):
-            sliced_len = (decompressed_len - i + 7) // 8
-            sliced = ((s_seq_compressed >> i) & 1)[:sliced_len]
-            s_seq_decompressed[i::8] = sliced
-        return s_seq_decompressed.reshape(shape)
+    .. _spike-compressor-cn:
 
+    * **中文**
 
-class BaseSpikeCompressor(abc.ABC):
-    requires_strictly_binary = False
+    无状态张量压缩器的抽象基类。``compress`` 返回的 payload 必须包含
+    ``decompress`` 恢复 shape、dtype 和 device 所需的信息。实现不得把单次调用的
+    信息保存在实例中。
 
-    def __init__(self):
+    ----
+
+    .. _spike-compressor-en:
+
+    * **English**
+
+    Abstract base class for stateless tensor compressors. The payload returned by
+    ``compress`` must contain everything ``decompress`` needs to restore the shape,
+    dtype, and device. Implementations must not keep per-call data on the instance.
+    """
+
+    @abstractmethod
+    def compress(self, x: torch.Tensor) -> object:
         r"""
-        **API Language** - :ref:`中文 <BaseSpikeCompressor.__init__-cn>` | :ref:`English <BaseSpikeCompressor.__init__-en>`
+        **API Language** - :ref:`中文 <spike-compressor-compress-cn>` | :ref:`English <spike-compressor-compress-en>`
 
         ----
 
-        .. _BaseSpikeCompressor.__init__-cn:
+        .. _spike-compressor-compress-cn:
 
         * **中文**
 
-        脉冲压缩器的抽象基类。欲实现脉冲压缩器，需继承该抽象基类并实现 ``_compress`` 和 ``_decompress`` 方法。
+        压缩一个张量。
+
+        :param x: 输入张量；支持的 shape、dtype 和 device 由实现决定。
+        :type x: torch.Tensor
+        :return: 可传给 :meth:`decompress` 的 payload。
+        :rtype: object
 
         ----
 
-        .. _BaseSpikeCompressor.__init__-en:
+        .. _spike-compressor-compress-en:
 
         * **English**
 
-        Abstract base class for spike compressors.
-        To implement a spike compressor, you need to inherit this abstract base class
-        and implement the ``_compress`` and ``_decompress`` methods.
+        Compress one tensor.
+
+        :param x: Input tensor; supported shapes, dtypes, and devices are defined by
+            the implementation.
+        :type x: torch.Tensor
+        :return: Payload accepted by :meth:`decompress`.
+        :rtype: object
         """
 
-    @abc.abstractmethod
-    def _compress(self, s_seq: torch.Tensor) -> torch.Tensor:
-        pass
-
-    @abc.abstractmethod
-    def _decompress(self, s_seq: torch.Tensor, shape) -> torch.Tensor:
-        pass
-
-    def compress(self, s_seq: torch.Tensor) -> torch.Tensor:
+    @abstractmethod
+    def decompress(self, packed: object) -> torch.Tensor:
         r"""
-        **API Language** - :ref:`中文 <BaseSpikeCompressor.compress-cn>` | :ref:`English <BaseSpikeCompressor.compress-en>`
+        **API Language** - :ref:`中文 <spike-compressor-decompress-cn>` | :ref:`English <spike-compressor-decompress-en>`
 
         ----
 
-        .. _BaseSpikeCompressor.compress-cn:
+        .. _spike-compressor-decompress-cn:
 
         * **中文**
 
-        压缩缩脉冲序列。
+        恢复一个张量。
 
-        :param s_seq: 输入脉冲序列
-        :type s_seq: torch.Tensor
-
-        :return: 压缩后的脉冲序列
+        :param packed: :meth:`compress` 返回的 payload。
+        :type packed: object
+        :return: 恢复 shape、dtype 和 device 的张量。
         :rtype: torch.Tensor
 
         ----
 
-        .. _BaseSpikeCompressor.compress-en:
+        .. _spike-compressor-decompress-en:
 
         * **English**
 
-        Compress spike sequence.
+        Restore one tensor.
 
-        :param s_seq: input spike sequence
-        :type s_seq: torch.Tensor
-
-        :return: compressed spike sequence
+        :param packed: Payload returned by :meth:`compress`.
+        :type packed: object
+        :return: Tensor restored to its original shape, dtype, and device.
         :rtype: torch.Tensor
         """
-        with torch.no_grad():
-            return self._compress(s_seq)
 
-    def decompress(self, s_seq: torch.Tensor, shape) -> torch.Tensor:
+
+class BooleanSpikeCompressor(SpikeCompressor):
+    def __init__(self) -> None:
         r"""
-        **API Language** - :ref:`中文 <BaseSpikeCompressor.decompress-cn>` | :ref:`English <BaseSpikeCompressor.decompress-en>`
+        **API Language** - :ref:`中文 <boolean-spike-compressor-cn>` | :ref:`English <boolean-spike-compressor-en>`
 
         ----
 
-        .. _BaseSpikeCompressor.decompress-cn:
+        .. _boolean-spike-compressor-cn:
 
         * **中文**
 
-        解压缩脉冲序列。
+        将严格取值为 0 或 1 的脉冲张量保存为 ``bool``。支持 PyTorch 可用的
+        CPU 和加速器 device，并在解压时恢复原 shape、dtype 和 device。
 
-        :param s_seq: 压缩的脉冲序列
-        :type s_seq: torch.Tensor
+        ----
 
-        :param shape: 原始形状
-        :type shape: tuple or torch.Size
+        .. _boolean-spike-compressor-en:
 
-        :return: 解压缩后的脉冲序列
+        * **English**
+
+        Store spike tensors whose values are strictly 0 or 1 as ``bool``. It works
+        on CPU and accelerator devices supported by PyTorch, and restores the
+        original shape, dtype, and device.
+        """
+
+    def compress(self, x: torch.Tensor) -> object:
+        r"""
+        **API Language** - :ref:`中文 <boolean-spike-compress-cn>` | :ref:`English <boolean-spike-compress-en>`
+
+        ----
+
+        .. _boolean-spike-compress-cn:
+
+        * **中文**
+
+        将严格二值张量转换为 ``bool``。
+
+        :param x: 任意 shape 和 device 的张量，元素必须为 0 或 1。
+        :type x: torch.Tensor
+        :return: ``bool`` 张量、原 dtype 和原 shape。
+        :rtype: object
+
+        ----
+
+        .. _boolean-spike-compress-en:
+
+        * **English**
+
+        Convert a strictly binary tensor to ``bool``.
+
+        :param x: Tensor of any shape and device whose values must be 0 or 1.
+        :type x: torch.Tensor
+        :return: Boolean tensor, original dtype, and original shape.
+        :rtype: object
+        """
+        return x.to(torch.bool), x.dtype, x.shape
+
+    def decompress(self, packed: object) -> torch.Tensor:
+        r"""
+        **API Language** - :ref:`中文 <boolean-spike-decompress-cn>` | :ref:`English <boolean-spike-decompress-en>`
+
+        ----
+
+        .. _boolean-spike-decompress-cn:
+
+        * **中文**
+
+        恢复 :meth:`compress` 生成的 payload。
+
+        :param packed: ``bool`` 张量、原 dtype 和原 shape。
+        :type packed: object
+        :return: 恢复原 shape、dtype 和 device 的张量。
         :rtype: torch.Tensor
 
         ----
 
-        .. _BaseSpikeCompressor.decompress-en:
+        .. _boolean-spike-decompress-en:
 
         * **English**
 
-        Decompress spike sequence.
+        Restore a payload produced by :meth:`compress`.
 
-        :param s_seq: compressed spike sequence
-        :type s_seq: torch.Tensor
-
-        :param shape: original shape
-        :type shape: tuple or torch.Size
-
-        :return: decompressed spike sequence
+        :param packed: Boolean tensor, original dtype, and original shape.
+        :type packed: object
+        :return: Tensor with its original shape, dtype, and device.
         :rtype: torch.Tensor
         """
-        with torch.no_grad():
-            return self._decompress(s_seq, shape)
+        values, dtype, shape = packed
+        return values.to(dtype=dtype).reshape(shape)
 
 
-class NullSpikeCompressor(BaseSpikeCompressor):
-    requires_strictly_binary = False
-
-    def __init__(self):
+class Uint8SpikeCompressor(SpikeCompressor):
+    def __init__(self) -> None:
         r"""
-        **API Language** - :ref:`中文 <NullSpikeCompressor.__init__-cn>` | :ref:`English <NullSpikeCompressor.__init__-en>`
+        **API Language** - :ref:`中文 <uint8-spike-compressor-cn>` | :ref:`English <uint8-spike-compressor-en>`
 
         ----
 
-        .. _NullSpikeCompressor.__init__-cn:
+        .. _uint8-spike-compressor-cn:
 
         * **中文**
 
-        空脉冲压缩器。压缩和解压缩过程都是恒等映射。
-
-        ``NullSpikeCompressor`` 是唯一能够无损处理非二进制张量的"脉冲压缩器"模块。例如，SNN的输入层
-        应该始终使用 ``NullSpikeCompressor`` ，因为其输入是浮点张量而不是二值张量。
+        将取值范围为 0 到 255 的整数脉冲保存为 ``uint8``，并在解压时恢复原
+        shape、dtype 和 device。
 
         ----
 
-        .. _NullSpikeCompressor.__init__-en:
+        .. _uint8-spike-compressor-en:
 
         * **English**
 
-        Null spike compressor. The compression and decompression process are identity mapping.
-
-        ``NullSpikeCompressor`` is the only compressor module that can deal with non-binary
-        tensors losslessly. For instance, the input layer should always use
-        ``NullSpikeCompressor``, as its input is a float tensor rather than a binary tensor.
-
-        ----
-
-        * **代码示例 | Example**
-
-        .. code-block:: python
-
-            import torch
-            from spikingjelly.activation_based.memopt.compress import (
-                NullSpikeCompressor,
-            )
-
-            compressor = NullSpikeCompressor()
-            x = torch.randn(32, 10)
-            compressed = compressor.compress(x)
-            decompressed = compressor.decompress(compressed, x.shape)
+        Store integer-valued spikes in the range 0 to 255 as ``uint8``, then restore
+        their original shape, dtype, and device.
         """
-        super().__init__()
 
-    def _compress(self, s_seq: torch.Tensor) -> torch.Tensor:
-        return s_seq
-
-    def _decompress(self, s_seq: torch.Tensor, shape) -> torch.Tensor:
-        return s_seq
-
-
-class BooleanSpikeCompressor(BaseSpikeCompressor):
-    requires_strictly_binary = True
-
-    def __init__(self):
+    def compress(self, x: torch.Tensor) -> object:
         r"""
-        **API Language** - :ref:`中文 <BooleanSpikeCompressor.__init__-cn>` | :ref:`English <BooleanSpikeCompressor.__init__-en>`
+        **API Language** - :ref:`中文 <uint8-spike-compress-cn>` | :ref:`English <uint8-spike-compress-en>`
 
         ----
 
-        .. _BooleanSpikeCompressor.__init__-cn:
+        .. _uint8-spike-compress-cn:
 
         * **中文**
 
-        布尔脉冲压缩器。
+        将整数值张量转换为 ``uint8``。
 
-        将脉冲序列转换为布尔类型以节省内存。要求输入必须是严格的二进制脉冲。
+        :param x: 任意 shape 和 device 的张量，元素必须是 ``[0, 255]`` 内的整数。
+        :type x: torch.Tensor
+        :return: ``uint8`` 张量、原 dtype 和原 shape。
+        :rtype: object
 
         ----
 
-        .. _BooleanSpikeCompressor.__init__-en:
+        .. _uint8-spike-compress-en:
 
         * **English**
 
-        Boolean spike compressor.
+        Convert an integer-valued tensor to ``uint8``.
 
-        Convert spike sequences to boolean type to save memory.
-        Requires input to be strictly binary spikes.
-
-        ----
-
-        * **代码示例 | Example**
-
-        .. code-block:: python
-
-            import torch
-            from spikingjelly.activation_based.memopt.compress import (
-                BooleanSpikeCompressor,
-            )
-
-            compressor = BooleanSpikeCompressor()
-            spikes = torch.randint(0, 2, (32, 100)).float()
-            compressed = compressor.compress(spikes)
-            decompressed = compressor.decompress(compressed, spikes.shape)
+        :param x: Tensor of any shape and device with integer values in ``[0, 255]``.
+        :type x: torch.Tensor
+        :return: Uint8 tensor, original dtype, and original shape.
+        :rtype: object
         """
-        super().__init__()
-        self.s_seq_dtype = torch.float32
+        return x.to(torch.uint8), x.dtype, x.shape
 
-    def _compress(self, s_seq: torch.Tensor) -> torch.Tensor:
-        self.s_seq_dtype = s_seq.dtype
-        return s_seq.to(dtype=torch.bool)
-
-    def _decompress(self, s_seq: torch.Tensor, shape) -> torch.Tensor:
-        return s_seq.to(dtype=self.s_seq_dtype).reshape(shape)
-
-
-class Uint8SpikeCompressor(BaseSpikeCompressor):
-    requires_strictly_binary = False
-
-    def __init__(self):
+    def decompress(self, packed: object) -> torch.Tensor:
         r"""
-        **API Language** - :ref:`中文 <Uint8SpikeCompressor.__init__-cn>` | :ref:`English <Uint8SpikeCompressor.__init__-en>`
+        **API Language** - :ref:`中文 <uint8-spike-decompress-cn>` | :ref:`English <uint8-spike-decompress-en>`
 
         ----
 
-        .. _Uint8SpikeCompressor.__init__-cn:
+        .. _uint8-spike-decompress-cn:
 
         * **中文**
 
-        Uint8脉冲压缩器。
+        恢复 :meth:`compress` 生成的 payload。
 
-        将脉冲序列转换为uint8类型以节省内存。可以处理非二进制整数数值。
+        :param packed: ``uint8`` 张量、原 dtype 和原 shape。
+        :type packed: object
+        :return: 恢复原 shape、dtype 和 device 的张量。
+        :rtype: torch.Tensor
 
         ----
 
-        .. _Uint8SpikeCompressor.__init__-en:
+        .. _uint8-spike-decompress-en:
 
         * **English**
 
-        Uint8 spike compressor.
+        Restore a payload produced by :meth:`compress`.
 
-        Convert spike sequences to uint8 type to save memory. Can handle non-binary integer values.
-
-        ----
-
-        * **代码示例 | Example**
-
-        .. code-block:: python
-
-            import torch
-            from spikingjelly.activation_based.memopt.compress import (
-                Uint8SpikeCompressor,
-            )
-
-            compressor = Uint8SpikeCompressor()
-            x = torch.randn(32, 10)
-            compressed = compressor.compress(x)
-            decompressed = compressor.decompress(compressed, x.shape)
+        :param packed: Uint8 tensor, original dtype, and original shape.
+        :type packed: object
+        :return: Tensor with its original shape, dtype, and device.
+        :rtype: torch.Tensor
         """
-        super().__init__()
-        self.s_seq_dtype = torch.float32
-
-    def _compress(self, s_seq: torch.Tensor) -> torch.Tensor:
-        self.s_seq_dtype = s_seq.dtype
-        return s_seq.to(dtype=torch.uint8)
-
-    def _decompress(self, s_seq: torch.Tensor, shape) -> torch.Tensor:
-        return s_seq.to(dtype=self.s_seq_dtype).reshape(shape)
+        values, dtype, shape = packed
+        return values.to(dtype=dtype).reshape(shape)
 
 
-class BitSpikeCompressor(BaseSpikeCompressor):
-    requires_strictly_binary = True
-
-    def __init__(self):
+class BitSpikeCompressor(SpikeCompressor):
+    def __init__(self) -> None:
         r"""
-        **API Language** - :ref:`中文 <BitSpikeCompressor.__init__-cn>` | :ref:`English <BitSpikeCompressor.__init__-en>`
+        **API Language** - :ref:`中文 <bit-spike-compressor-cn>` | :ref:`English <bit-spike-compressor-en>`
 
         ----
 
-        .. _BitSpikeCompressor.__init__-cn:
+        .. _bit-spike-compressor-cn:
 
         * **中文**
 
-        比特脉冲压缩器。
-
-        使用位压缩技术将8个二进制脉冲压缩到一个字节中，实现极高的内存压缩比。
-        要求输入必须是严格的二进制脉冲（0或1）。
+        将 8 个严格取值为 0 或 1 的脉冲打包进一个字节。CPU 和 CUDA 使用相同的
+        PyTorch 张量运算，且该路径可被 ``torch.compile`` 捕获。解压时恢复原
+        shape、dtype 和 device。
 
         ----
 
-        .. _BitSpikeCompressor.__init__-en:
+        .. _bit-spike-compressor-en:
 
         * **English**
 
-        Bit-level spike compressor.
-
-        Use bit compression technique to compress 8 binary spikes into one byte,
-        achieving high memory compression ratio.
-        Requires input to be strictly binary spikes (0 or 1).
-
-        ----
-
-        * **代码示例 | Example**
-
-        .. code-block:: python
-
-            import torch
-            from spikingjelly.activation_based.memopt.compress import BitSpikeCompressor
-
-            compressor = BitSpikeCompressor()
-            spikes = torch.randint(0, 2, (32, 1000)).float()
-            compressed = compressor.compress(spikes)
-            decompressed = compressor.decompress(compressed, spikes.shape)
+        Pack eight spikes whose values are strictly 0 or 1 into one byte. CPU and
+        CUDA use the same PyTorch tensor operations, and the path can be captured by
+        ``torch.compile``. Decompression restores the original shape, dtype, and
+        device.
         """
-        super().__init__()
-        self.s_seq_dtype = torch.float32
 
-    def _compress(self, s_seq: torch.Tensor) -> torch.Tensor:
-        # s_seq: float32
-        return bit_spike_compress(s_seq)
-
-    def _decompress(self, s_seq: torch.Tensor, shape) -> torch.Tensor:
-        s_seq_decompressed = bit_spike_decompress(s_seq, shape)
-        return s_seq_decompressed.to(dtype=self.s_seq_dtype)
-
-
-class SparseSpikeCompressor(BaseSpikeCompressor):
-    requires_strictly_binary = True
-
-    def __init__(self, dtype=torch.int64):
+    def compress(self, x: torch.Tensor) -> object:
         r"""
-        **API Language** - :ref:`中文 <SparseSpikeCompressor.__init__-cn>` | :ref:`English <SparseSpikeCompressor.__init__-en>`
+        **API Language** - :ref:`中文 <bit-spike-compress-cn>` | :ref:`English <bit-spike-compress-en>`
 
         ----
 
-        .. _SparseSpikeCompressor.__init__-cn:
+        .. _bit-spike-compress-cn:
 
         * **中文**
 
-        稀疏脉冲压缩器。
+        将严格二值张量按每 8 个元素一组打包。
 
-        只存储非零脉冲的位置索引，适用于稀疏脉冲序列。
-        要求输入必须是严格的二进制脉冲（0或1）。
+        :param x: 任意 shape 和 device 的张量，元素必须为 0 或 1。
+        :type x: torch.Tensor
+        :return: 打包后的字节张量、原 dtype 和原 shape。
+        :rtype: object
 
-        :param dtype: 索引数据类型，默认为 ``torch.int64``
+        ----
+
+        .. _bit-spike-compress-en:
+
+        * **English**
+
+        Pack a strictly binary tensor in groups of eight values.
+
+        :param x: Tensor of any shape and device whose values must be 0 or 1.
+        :type x: torch.Tensor
+        :return: Packed byte tensor, original dtype, and original shape.
+        :rtype: object
+        """
+        flat = x.to(torch.uint8).reshape(-1)
+        padding = (-flat.numel()) % 8
+        if padding:
+            flat = F.pad(flat, (0, padding))
+        shifts = torch.arange(8, dtype=torch.uint8, device=x.device)
+        values = (flat.reshape(-1, 8) << shifts).sum(dim=1, dtype=torch.int16)
+        return values.to(torch.uint8), x.dtype, x.shape
+
+    def decompress(self, packed: object) -> torch.Tensor:
+        r"""
+        **API Language** - :ref:`中文 <bit-spike-decompress-cn>` | :ref:`English <bit-spike-decompress-en>`
+
+        ----
+
+        .. _bit-spike-decompress-cn:
+
+        * **中文**
+
+        恢复 :meth:`compress` 生成的 payload。
+
+        :param packed: 字节张量、原 dtype 和原 shape。
+        :type packed: object
+        :return: 恢复原 shape、dtype 和 device 的张量。
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _bit-spike-decompress-en:
+
+        * **English**
+
+        Restore a payload produced by :meth:`compress`.
+
+        :param packed: Byte tensor, original dtype, and original shape.
+        :type packed: object
+        :return: Tensor with its original shape, dtype, and device.
+        :rtype: torch.Tensor
+        """
+        values, dtype, shape = packed
+        shifts = torch.arange(8, dtype=torch.uint8, device=values.device)
+        flat = ((values.unsqueeze(1) >> shifts) & 1).reshape(-1)
+        return flat[: torch.Size(shape).numel()].to(dtype=dtype).reshape(shape)
+
+
+class SparseSpikeCompressor(SpikeCompressor):
+    def __init__(self, dtype: torch.dtype = torch.int64) -> None:
+        r"""
+        **API Language** - :ref:`中文 <sparse-spike-compressor-cn>` | :ref:`English <sparse-spike-compressor-en>`
+
+        ----
+
+        .. _sparse-spike-compressor-cn:
+
+        * **中文**
+
+        只保存严格二值脉冲中非零元素的一维索引。适合稀疏输入；解压时恢复原
+        shape、dtype 和 device。
+
+        :param dtype: 保存索引的整数 dtype。
         :type dtype: torch.dtype
 
         ----
 
-        .. _SparseSpikeCompressor.__init__-en:
+        .. _sparse-spike-compressor-en:
 
         * **English**
 
-        Sparse spike compressor.
+        Store only the flattened indices of nonzero elements in a strictly binary
+        spike tensor. This suits sparse inputs; decompression restores the original
+        shape, dtype, and device.
 
-        Only store the position indices of non-zero spikes, suitable for sparse spike sequences.
-        Requires input to be strictly binary spikes (0 or 1).
-
-        :param dtype: index data type. Default to ``torch.int64``
+        :param dtype: Integer dtype used for stored indices.
         :type dtype: torch.dtype
-
-        ----
-
-        * **代码示例 | Example**
-
-        .. code-block:: python
-
-            import torch
-            from spikingjelly.activation_based.memopt.compress import (
-                SparseSpikeCompressor,
-            )
-
-            compressor = SparseSpikeCompressor()
-            spikes = (torch.rand(32, 1000) < 0.04).float()
-            compressed = compressor.compress(spikes)
-            decompressed = compressor.decompress(compressed, spikes.shape)
         """
-        super().__init__()
         self.dtype = dtype
-        self.s_seq_dtype = torch.float32
 
-    def _compress(self, s_seq: torch.Tensor) -> torch.Tensor:
-        indices = torch.nonzero(s_seq.reshape(-1))
-        self.s_seq_dtype = s_seq.dtype
-        return indices.to(dtype=self.dtype)
+    def compress(self, x: torch.Tensor) -> object:
+        r"""
+        **API Language** - :ref:`中文 <sparse-spike-compress-cn>` | :ref:`English <sparse-spike-compress-en>`
 
-    def _decompress(self, s_seq: torch.Tensor, shape) -> torch.Tensor:
-        s_seq_decompressed = torch.zeros(
-            torch.Size(shape).numel(), dtype=self.s_seq_dtype, device=s_seq.device
+        ----
+
+        .. _sparse-spike-compress-cn:
+
+        * **中文**
+
+        保存严格二值张量中非零元素的一维索引。
+
+        :param x: 任意 shape 和 device 的张量，元素必须为 0 或 1。
+        :type x: torch.Tensor
+        :return: 非零索引、原 dtype 和原 shape。
+        :rtype: object
+
+        ----
+
+        .. _sparse-spike-compress-en:
+
+        * **English**
+
+        Store the flattened indices of nonzero values in a strictly binary tensor.
+
+        :param x: Tensor of any shape and device whose values must be 0 or 1.
+        :type x: torch.Tensor
+        :return: Nonzero indices, original dtype, and original shape.
+        :rtype: object
+        """
+        indices = torch.nonzero(x.reshape(-1), as_tuple=False).reshape(-1)
+        return indices.to(self.dtype), x.dtype, x.shape
+
+    def decompress(self, packed: object) -> torch.Tensor:
+        r"""
+        **API Language** - :ref:`中文 <sparse-spike-decompress-cn>` | :ref:`English <sparse-spike-decompress-en>`
+
+        ----
+
+        .. _sparse-spike-decompress-cn:
+
+        * **中文**
+
+        恢复 :meth:`compress` 生成的 payload。
+
+        :param packed: 非零索引、原 dtype 和原 shape。
+        :type packed: object
+        :return: 恢复原 shape、dtype 和 device 的张量。
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _sparse-spike-decompress-en:
+
+        * **English**
+
+        Restore a payload produced by :meth:`compress`.
+
+        :param packed: Nonzero indices, original dtype, and original shape.
+        :type packed: object
+        :return: Tensor with its original shape, dtype, and device.
+        :rtype: torch.Tensor
+        """
+        indices, dtype, shape = packed
+        flat = torch.zeros(
+            torch.Size(shape).numel(), dtype=dtype, device=indices.device
         )
-        s_seq_decompressed = s_seq_decompressed.scatter_(
-            dim=0,
-            index=s_seq.to(dtype=torch.int64).reshape(-1),
-            value=1,
-        )
-        return s_seq_decompressed.reshape(shape)
+        return flat.scatter_(0, indices.to(torch.int64), 1).reshape(shape)

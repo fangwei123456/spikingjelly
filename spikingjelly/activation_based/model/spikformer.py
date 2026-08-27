@@ -111,9 +111,6 @@ class SpikformerConv2dBN(nn.Module):
     def forward(self, x_seq: torch.Tensor):
         return self.block(x_seq)
 
-    def __spatial_split__(self):
-        return tuple(self.block.children())
-
 
 class SpikformerConv2dBNLIF(nn.Module):
     def __init__(
@@ -219,9 +216,6 @@ class SpikformerConv2dBNLIF(nn.Module):
 
     def forward(self, x_seq: torch.Tensor):
         return self.neuron(self.conv_bn(x_seq))
-
-    def __spatial_split__(self):
-        return self.conv_bn, self.neuron
 
 
 class SpikformerPatchStem(nn.Module):
@@ -454,9 +448,6 @@ class SpikformerMLP(nn.Module):
         x_seq = self.neuron1(self.fc1(x_seq))
         x_seq = self.neuron2(self.fc2(x_seq))
         return x_seq
-
-    def __spatial_split__(self):
-        return self.fc1, self.neuron1, self.fc2, self.neuron2
 
 
 class SpikformerBlock(nn.Module):
@@ -1137,6 +1128,28 @@ or two stages.
 
 
 class SpikformerBuilder(ModelBuilder):
+    @staticmethod
+    def _memopt_split(module: nn.Module) -> tuple[nn.Module, ...]:
+        if isinstance(module, SpikformerBlock):
+            return module.attn, module.mlp
+        if isinstance(module, SpikingSelfAttention):
+            return (
+                module.qkv_conv_bn,
+                module.qkv_lif,
+                module.attn_lif,
+                module.proj_conv_bn,
+                module.proj_lif,
+            )
+        if isinstance(module, SpikformerMLP):
+            return module.fc1, module.neuron1, module.fc2, module.neuron2
+        if isinstance(module, layer.SeqToANNContainer):
+            return tuple(module.children())
+        return ()
+
+    @staticmethod
+    def _memopt_can_chunk(module: nn.Module) -> bool:
+        return isinstance(module, (nn.Conv1d, nn.Conv2d, neuron.BaseNode))
+
     def _build_canonical_model(self) -> nn.Module:
         config = self.config
         if isinstance(config, SpikformerCIFAR10Config):
@@ -1254,6 +1267,7 @@ class SpikformerBuilder(ModelBuilder):
         self,
         *,
         process_group: Optional[ProcessGroup],
+        memopt_process_group: Optional[ProcessGroup],
         pipeline_rank: int,
         pipeline_size: int,
         pipeline_microbatches: int,
@@ -1261,6 +1275,7 @@ class SpikformerBuilder(ModelBuilder):
         micro_batch_size: int,
         memopt_level: int,
         memopt_compress_inputs: bool,
+        memopt_checkpoint_budget: str,
     ) -> tuple[
         nn.Module,
         tuple[str, ...],
@@ -1292,30 +1307,49 @@ class SpikformerBuilder(ModelBuilder):
             for block in model.blocks:
                 self._parallelize_block(block, process_group)
 
-        if pipeline_size > 1 and memopt_level:
-            raise ValueError("Spikformer-S memopt is not supported together with PP.")
         model = self._pipeline_stage(model, pipeline_rank, pipeline_size)
         fsdp_roots = tuple(
             name
             for name, module in model.named_modules()
             if isinstance(module, (SpikformerPatchStem, SpikformerBlock))
         )
+        model.to(device)
         if memopt_level:
-            dummy = torch.zeros(
-                micro_batch_size,
-                in_channels,
-                image_height,
-                image_width,
-                device=device,
+            batch = (
+                micro_batch_size
+                if pipeline_size == 1
+                else micro_batch_size // pipeline_microbatches
             )
-            model = memopt.memory_optimization(
+            if pipeline_size == 1:
+                shape = (batch, in_channels, image_height, image_width)
+            elif pipeline_rank == 0:
+                shape = (
+                    config.time_steps,
+                    batch,
+                    in_channels,
+                    image_height,
+                    image_width,
+                )
+            else:
+                shape = (
+                    config.time_steps,
+                    batch,
+                    384,
+                    image_height // patch_size,
+                    image_width // patch_size,
+                )
+            dummy = torch.zeros(shape, device=device)
+            memopt.optimize_memory(
                 model,
                 SpikformerBlock,
-                dummy_input=(dummy,),
-                compress_x=memopt_compress_inputs,
+                lambda current: current(dummy),
                 level=memopt_level,
+                checkpoint_budget=memopt_checkpoint_budget,
+                compress=False,
+                split_fn=self._memopt_split,
+                can_chunk=self._memopt_can_chunk,
+                process_group=memopt_process_group,
             )
-        model.to(device)
         if pipeline_size == 1:
             return model, fsdp_roots, None, None
         micro_batch = micro_batch_size // pipeline_microbatches

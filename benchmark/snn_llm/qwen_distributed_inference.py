@@ -157,7 +157,7 @@ def _initialize_checkpoint(
         parallel_state.initialize_model_parallel()
         model_parallel_cuda_manual_seed(1234)
         provider, _ = model_config.get_builder_cls()(model_config).build(
-            use_snn_memopt=False, resume=False
+            resume=False,
         )
         model = provider(True, True).cuda()
         metadata = {
@@ -168,7 +168,6 @@ def _initialize_checkpoint(
         recipe = {
             **model.checkpoint_metadata,
             "model": model_config._checkpoint_metadata(),
-            "use_snn_memopt": False,
             "mcore_recompute_granularity": model_config.transformer.recompute_granularity,
             "mcore_recompute_modules": model_config.transformer.recompute_modules,
         }
@@ -190,7 +189,7 @@ def _export_sglang(
     args: argparse.Namespace, model_config: Qwen2Config
 ) -> dict[str, object]:
     provider, _ = model_config.get_builder_cls()(model_config).build(
-        use_snn_memopt=False, resume=True
+        resume=True,
     )
     export_sglang(
         model_config,

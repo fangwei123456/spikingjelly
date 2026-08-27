@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import math
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -9,6 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
 import torch.nn as nn
+from torch.utils.checkpoint import checkpoint as torch_checkpoint
 
 from spikingjelly.activation_based import base
 from spikingjelly.activation_based.distributed.llm import (
@@ -22,11 +24,6 @@ from spikingjelly.activation_based.distributed.llm.temporal import (
     run_functional_sequence,
     unpack_time_batch,
 )
-from spikingjelly.activation_based.memopt import (
-    NullSpikeCompressor,
-    input_compressed_gc,
-)
-
 from ._causal_lm import forward_step
 
 if TYPE_CHECKING:
@@ -176,14 +173,13 @@ class _SpikingLayerNorm(nn.LayerNorm):
         time_steps: int,
         decay: float,
         amplitude: float,
-        use_snn_memopt: bool,
+        checkpoint_spike: bool,
     ) -> None:
         del config
         super().__init__(hidden_size, eps=eps)
         self.time_steps = time_steps
         self.spike = _ElasticBiSpike(time_steps, decay, amplitude)
-        self.use_snn_memopt = use_snn_memopt
-        self.compressor = NullSpikeCompressor()
+        self.checkpoint_spike = checkpoint_spike
 
     def _spike(self, hidden: torch.Tensor) -> torch.Tensor:
         sequence = unpack_time_batch(hidden, self.time_steps)
@@ -192,8 +188,10 @@ class _SpikingLayerNorm(nn.LayerNorm):
 
     def forward(self, hidden: torch.Tensor) -> torch.Tensor:
         hidden = super().forward(hidden)
-        if self.use_snn_memopt and torch.is_grad_enabled():
-            return input_compressed_gc(self._spike, self.compressor, hidden)
+        if self.checkpoint_spike and torch.is_grad_enabled():
+            return torch_checkpoint(
+                self._spike, hidden, use_reentrant=True, preserve_rng_state=False
+            )
         return self._spike(hidden)
 
 
@@ -206,7 +204,8 @@ def _layer_norm(
 
 def model_provider(
     config: SpikeLMConfig,
-    use_snn_memopt: bool,
+    memopt_level: int,
+    memopt_checkpoint_budget: str,
     pre_process: bool,
     post_process: bool,
 ) -> "MegatronModule":
@@ -225,8 +224,10 @@ def model_provider(
 
     :param config: 完整 SpikeLM 模型配置。
     :type config: SpikeLMConfig
-    :param use_snn_memopt: 是否 checkpoint 确定性 spiking transition。
-    :type use_snn_memopt: bool
+    :param memopt_level: SpikingJelly memopt 级别。
+    :type memopt_level: int
+    :param memopt_checkpoint_budget: checkpoint 数量预设。
+    :type memopt_checkpoint_budget: str
     :param pre_process: 当前 PP stage 是否拥有 embedding。
     :type pre_process: bool
     :param post_process: 当前 PP stage 是否拥有 LM head。
@@ -248,8 +249,10 @@ def model_provider(
 
     :param config: Complete SpikeLM model configuration.
     :type config: SpikeLMConfig
-    :param use_snn_memopt: Whether deterministic spiking transitions are checkpointed.
-    :type use_snn_memopt: bool
+    :param memopt_level: SpikingJelly memopt level.
+    :type memopt_level: int
+    :param memopt_checkpoint_budget: Checkpoint-count preset.
+    :type memopt_checkpoint_budget: str
     :param pre_process: Whether this PP stage owns the embedding.
     :type pre_process: bool
     :param post_process: Whether this PP stage owns the LM head.
@@ -277,36 +280,46 @@ def model_provider(
         transformer_config.fp8 is not None
         or transformer_config.context_parallel_size > 1
     )
-    layer_spec = (
-        get_gpt_layer_with_transformer_engine_spec()
-        if use_te
-        else get_gpt_layer_local_spec()
+    local_layers = get_num_layers_to_build(transformer_config)
+    checkpoint_layers = math.ceil(
+        local_layers
+        * {"speed": 0.5, "balanced": 0.75, "memory": 1.0}[memopt_checkpoint_budget]
     )
-    spiking_norm = functools.partial(
-        _SpikingLayerNorm,
-        time_steps=config.time_steps,
-        decay=config.spike_decay,
-        amplitude=config.spike_amplitude,
-        use_snn_memopt=use_snn_memopt,
-    )
-    layer_spec.submodules.input_layernorm = spiking_norm
-    layer_spec.submodules.pre_mlp_layernorm = spiking_norm
-    if use_te:
-        from megatron.core.extensions.transformer_engine import TEColumnParallelLinear
+    layer_specs = []
+    for index in range(local_layers):
+        layer_spec = (
+            get_gpt_layer_with_transformer_engine_spec()
+            if use_te
+            else get_gpt_layer_local_spec()
+        )
+        spiking_norm = functools.partial(
+            _SpikingLayerNorm,
+            time_steps=config.time_steps,
+            decay=config.spike_decay,
+            amplitude=config.spike_amplitude,
+            checkpoint_spike=bool(memopt_level and index < checkpoint_layers),
+        )
+        layer_spec.submodules.input_layernorm = spiking_norm
+        layer_spec.submodules.pre_mlp_layernorm = spiking_norm
+        if use_te:
+            from megatron.core.extensions.transformer_engine import (
+                TEColumnParallelLinear,
+            )
 
-        layer_spec.submodules.self_attention.submodules.linear_qkv = (
-            TEColumnParallelLinear
-        )
-        mlp_submodules = layer_spec.submodules.mlp.keywords["submodules"]
-        layer_spec.submodules.mlp = functools.partial(
-            MLP.as_mlp_submodule,
-            submodules=MLPSubmodules(
-                linear_fc1=TEColumnParallelLinear,
-                linear_fc2=mlp_submodules.linear_fc2,
-            ),
-        )
+            layer_spec.submodules.self_attention.submodules.linear_qkv = (
+                TEColumnParallelLinear
+            )
+            mlp_submodules = layer_spec.submodules.mlp.keywords["submodules"]
+            layer_spec.submodules.mlp = functools.partial(
+                MLP.as_mlp_submodule,
+                submodules=MLPSubmodules(
+                    linear_fc1=TEColumnParallelLinear,
+                    linear_fc2=mlp_submodules.linear_fc2,
+                ),
+            )
+        layer_specs.append(layer_spec)
     block_spec = TransformerBlockSubmodules(
-        layer_specs=[layer_spec] * get_num_layers_to_build(transformer_config),
+        layer_specs=layer_specs,
         layer_norm=_layer_norm,
     )
     model = GPTModel(
@@ -321,7 +334,7 @@ def model_provider(
         position_embedding_type=config.position_embedding_type,
     )
     model.snn_model_config = config
-    model.snn_memopt_enabled = use_snn_memopt
+    model.snn_memopt_level = memopt_level
     model.temporal_output_reduction = "mean"
     model.checkpoint_metadata = {
         "recipe_name": "spikelm",
@@ -343,7 +356,11 @@ def model_provider(
 
 class SpikeLMBuilder(ModelBuilder):
     def build(
-        self, *, use_snn_memopt: bool, resume: bool
+        self,
+        *,
+        memopt_level: int = 0,
+        memopt_checkpoint_budget: str = "memory",
+        resume: bool,
     ) -> tuple["Callable", "Callable"]:
         del resume
         if not isinstance(self.config, SpikeLMConfig):
@@ -352,7 +369,8 @@ class SpikeLMBuilder(ModelBuilder):
             functools.partial(
                 model_provider,
                 self.config,
-                use_snn_memopt,
+                memopt_level,
+                memopt_checkpoint_budget,
             ),
             forward_step,
         )

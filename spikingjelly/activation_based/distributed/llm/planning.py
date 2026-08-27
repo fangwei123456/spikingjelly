@@ -135,7 +135,7 @@ def _candidate(
     tensor_parallel_size: int,
     pipeline_parallel_size: int,
     context_parallel_size: int,
-    use_snn_memopt: bool,
+    memopt_level: int,
     selective_recompute: bool,
 ) -> TrainingConfig:
     transformer = replace(
@@ -157,7 +157,7 @@ def _candidate(
     return replace(
         config,
         model=replace(config.model, transformer=transformer),
-        use_snn_memopt=use_snn_memopt,
+        memopt_level=memopt_level,
     )
 
 
@@ -294,10 +294,9 @@ def plan_training(
                             tensor_parallel_size=tp,
                             pipeline_parallel_size=pp,
                             context_parallel_size=cp,
-                            use_snn_memopt=(
-                                config.use_snn_memopt
-                                or objective == "memory"
-                                or selective_recompute
+                            memopt_level=max(
+                                config.memopt_level,
+                                int(objective == "memory" or selective_recompute),
                             ),
                             selective_recompute=selective_recompute,
                         ),

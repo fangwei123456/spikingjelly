@@ -64,6 +64,7 @@ pipeline parallelism. ``vision.TrainingConfig`` describes the job and
         data_parallel="fsdp2",
         precision="bf16",
         memopt_level=1,
+        memopt_checkpoint_budget="balanced",
     )
     metrics = vision.train_classification(config)
 
@@ -340,7 +341,9 @@ Custom vision models
 parallelism, and returns the FSDP2 shard roots. See ``SEWResNet34Builder`` and
 ``SpikformerBuilder`` for working implementations.
 
-A minimal declaration has this form:
+A minimal declaration has this form. It defines no model-specific checkpoint
+boundaries, so it rejects a nonzero ``memopt_level``. A real implementation
+should apply memopt before returning, as the built-in builders do.
 
 .. code-block:: python
 
@@ -359,6 +362,7 @@ A minimal declaration has this form:
             self,
             *,
             process_group,
+            memopt_process_group,
             pipeline_rank,
             pipeline_size,
             pipeline_microbatches,
@@ -366,9 +370,12 @@ A minimal declaration has this form:
             micro_batch_size,
             memopt_level,
             memopt_compress_inputs,
+            memopt_checkpoint_budget,
         ):
             if pipeline_size != 1:
                 raise ValueError("MyModelBuilder does not define PP stages.")
+            if memopt_level:
+                raise ValueError("MyModelBuilder does not define memopt rules.")
             model = build_my_model(self.config)
             model = parallelize_my_model(model, process_group)
             model.to(device)
@@ -484,7 +491,13 @@ to an ``llm.ModelBuilder``. The builder's ``build`` method returns the MCore
     from spikingjelly.activation_based.distributed import llm
 
     class MyModelBuilder(llm.ModelBuilder):
-        def build(self, *, use_snn_memopt: bool, resume: bool):
+        def build(
+            self,
+            *,
+            memopt_level: int = 0,
+            memopt_checkpoint_budget: str = "memory",
+            resume: bool,
+        ):
             return model_provider, forward_step
 
 ``model_provider`` builds the current PP stage. ``forward_step`` reads one
@@ -891,8 +904,10 @@ Functional tests also covered BF16 TP4, PP4, TP2 x PP2, CP4, TP2 x CP2, and PP2
 x CP2, plus FP8 TP4, PP4, and CP4. Every case produced finite loss and gradients
 and nonzero gradients in the SNN modules. Under a 7-GiB memory budget, the planner
 selected TP4, SpikingJelly memopt, and MCore selective ``core_attn``
-recomputation; two training steps used 6.28 GiB. A TP2 x PP2 sharded
-model/optimizer checkpoint also resumed successfully from step 1 to step 2.
+recomputation. The 6.28 GiB figure is the static planning input; forcing this
+plan for two training steps reached about 7.26 GiB/GPU in practice. A TP2 x PP2
+sharded model/optimizer checkpoint also resumed successfully from step 1 to step
+2.
 
 Distributed inference benchmarks
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

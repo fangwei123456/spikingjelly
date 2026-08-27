@@ -62,494 +62,305 @@ English version: :doc:`../en/memopt`
     先考虑空间分割，再考虑时间分割；换言之，**时间分割仅仅作为空间分割的补充**。这是因为：时间分割与时间维度并行方法不兼容；而且，这限制了沿着时间步的内核融合（原本可将 :math:`T` 步融合到一个内核，分割后则需运行 :math:`k` 个 :math:`T/k` 步的内核），降低了速度。
 
 使用说明
-+++++++++++++++++++++++++
+++++++++++++++++++++++++
 
-实现方式简述
----------------------
+选择使用方式
+------------
 
-本框架使用以下两个类来表示检查点片段：
+``memopt`` 有两种入口：
 
-* :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` ： ``nn.Sequential`` 的子类，含一系列 ``nn.Module`` 成员。重写了 ``forward`` 方法，以实现梯度检查点逻辑。
-* :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` ： :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 的子类，额外记录了时间维度分段的份数。重写了 ``forward`` 方法，以实现时间分段 (temporal chunked) 梯度检查点的逻辑。
+* 已经知道网络的哪一段适合重算时，直接使用 ``checkpoint`` 或
+  ``checkpoint_module``。
+* 希望自动寻找检查点结构时，使用 ``optimize_memory``。
 
-上一节介绍的整个优化过程被封装为 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 函数。它将根据显存/时间分析结果，自适应地用 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 和 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` 包装目标网络中的特定模块。检查点调整策略的实现方式即为：
+建议先尝试手工检查点。它更直接，也不需要额外的搜索。论文中的自动调整策略已封装为
+``optimize_memory``，作为可选的高层预设。
 
-* 空间分割：将一个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 拆分成多个。
-* 时间分割：将 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 变换成 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` ，或者增加 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` 的分割块数。
-* 贪心还原：将 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 或 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` 解包。
+手工设置检查点
+--------------
 
-用户无需了解底层实现，只需调用 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` ，即可自动网络结构转换。
+如果检查点范围不是一个完整模块，直接把函数或可调用对象传给
+:func:`checkpoint <spikingjelly.activation_based.memopt.checkpoint>`：
 
-高层预设与摘要
----------------------
+.. code-block:: python
 
-除了直接指定 ``level=0..4`` ， :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 现在还提供了更高层的 ``profile`` 预设：
+    from spikingjelly.activation_based import memopt
 
-* ``"safe"`` ：保守模式。仅启用逐层GC，关闭高开销 profiling，适合快速试用。
-* ``"balanced"`` ：推荐默认模式。启用有限的 split 搜索，在显存收益和优化耗时之间取得折中。
-* ``"memory"`` ：更偏向显存优化。默认会尝试时间/空间 split。
-* ``"exhaustive"`` ：激进模式。允许更完整的搜索和 greedy unwrap，适合离线调优。
+    y = memopt.checkpoint(block, x)
 
-这些 ``profile`` 的实际效果和取舍大致如下：
+如果要重算的范围正好是一个模块，使用 :func:`checkpoint_module
+<spikingjelly.activation_based.memopt.checkpoint_module>`：
 
-* ``"safe"`` ：优化器自身开销最低，通常只做逐层GC，适合先快速验证功能是否可用。
-* ``"balanced"`` ：通常是最推荐的起点。会尝试有限的 split 搜索，往往能在显存收益和优化耗时之间取得较好平衡。
-* ``"memory"`` ：更积极地追求峰值显存下降，更可能启用空间/时间 split；代价是优化器本身更慢，训练速度也更可能下降。
-* ``"exhaustive"`` ：适合离线调参或论文实验。它会尝试更完整的搜索流程，最有机会找到更激进的结构调整，但优化耗时最高。
+.. code-block:: python
 
-如果不确定如何选择，建议优先从 ``"balanced"`` 开始；若只想快速启用并尽量减少额外开销，可先尝试 ``"safe"`` ；若显存非常紧张，再考虑 ``"memory"`` 或 ``"exhaustive"`` 。
+    model.blocks[2] = memopt.checkpoint_module(model.blocks[2])
 
-如果用户希望显式限制优化器本身的开销，可设置 ``allow_expensive_profiling=False`` 。此时会自动收紧 split 搜索预算，并关闭 profiling worker 的 warmup。
+``checkpoint_module`` 不改变参数对象、参数名或 ``state_dict`` 键，因此可以在
+包装前后使用同一份权重。它还会显式传递神经元状态。BatchNorm 的 running
+statistics 等 buffer 在一次训练迭代中只更新一次，不会因 backward 重算而重复
+更新。
 
-在此基础上，当前版本还提供了两层更高阶的自动控制：
+压缩检查点输入
+--------------
 
-* ``checkpoint_budget`` ：控制 **有多少目标模块会被包装成检查点片段** 。可选
-  ``"speed"`` 、 ``"balanced"`` 、 ``"memory"`` 。
+检查点仍需保存输入。如果输入是脉冲，可以同时压缩以位置参数传入的第一个
+tensor：
 
-  * ``"speed"`` ：只对一部分最“值钱”的热点模块做 checkpoint，优先减少额外训练开销。
-  * ``"balanced"`` ：覆盖更多热点模块，在显存和训练速度之间取折中。
-  * ``"memory"`` ：尽可能覆盖全部候选模块，更偏向显存下降。
+.. code-block:: python
 
-* ``prefer`` ：再往上一层的“目标导向”入口。可选
-  ``"speed"`` 、 ``"balanced"`` 、 ``"memory"`` 。当用户没有显式指定
-  ``profile`` 或 ``checkpoint_budget`` 时，会自动映射为推荐组合：
+    model.spike_block = memopt.checkpoint_module(
+        model.spike_block,
+        compressor=memopt.BitSpikeCompressor(),
+    )
 
-  * ``prefer="speed"`` -> ``profile="safe"`` + ``checkpoint_budget="speed"``
-  * ``prefer="balanced"`` -> ``profile="balanced"`` + ``checkpoint_budget="balanced"``
-  * ``prefer="memory"`` -> ``profile="memory"`` + ``checkpoint_budget="memory"``
+内置压缩器的用途如下：
 
-这意味着，用户现在可以用三种粒度来控制 memopt：
+* ``BitSpikeCompressor`` 将 8 个二值脉冲打包到 1 byte。
+* ``BooleanSpikeCompressor`` 将二值脉冲保存为 ``bool``。
+* ``Uint8SpikeCompressor`` 保存能由 ``uint8`` 表示的整数脉冲。
+* ``SparseSpikeCompressor`` 只保存非零位置，适合非常稀疏的二值脉冲。
 
-* 只想要最简单的高层接口：直接指定 ``prefer=...``
-* 希望分别控制搜索激进度与 checkpoint 覆盖范围：组合 ``profile`` 和 ``checkpoint_budget``
-* 需要精细实验：继续使用 ``level`` 、 ``max_gc_wrapped_modules`` 、 ``gc_target_budget_ratio`` 等底层参数
+Bit、Boolean 和 Sparse 压缩要求输入严格为 0 或 1。手工选择压缩器时，memopt
+不会检查输入值。普通浮点激活若误用这些压缩器，解压后的数值会改变。
 
-为了给这些取舍提供一个更直观的量化参考，我们在服务器上的一张 ``RTX 4090`` 上，对一个较小的合成工作负载做了对比测试。测试模型为 ``MemOptBlockNet(depth=1)`` ，输入形状为 ``[T, N, C] = [2, 2, 16]`` ，每个配置均测量了 ``memory_optimization`` 自身耗时、优化后单步训练耗时以及训练峰值显存。未优化 baseline 的单步训练耗时约为 ``5.80 ms`` ， ``peak_allocated`` 为 ``17.26 MB`` ， ``peak_reserved`` 为 ``22.0 MB`` 。四个 ``profile`` 的结果如下：
+自定义压缩器必须继承 ``SpikeCompressor``，并实现 ``compress`` 和
+``decompress``。例如，输入保证为 int16 范围内的整数脉冲时：
 
-.. list-table::
+.. code-block:: python
+
+    class Int16SpikeCompressor(memopt.SpikeCompressor):
+        def compress(self, tensor):
+            return tensor.short(), tensor.dtype
+
+        def decompress(self, payload):
+            tensor, dtype = payload
+            return tensor.to(dtype)
+
+shape、dtype 和 device 等本次调用所需的信息应放在 payload 中，不要保存在压缩器
+实例上。这样同一个压缩器才能安全地用于并发调用。
+
+沿时间维分块
+------------
+
+``checkpoint_module`` 可以把序列分成多个时间块，依次重算：
+
+.. code-block:: python
+
+    model.neuron = memopt.checkpoint_module(
+        model.neuron,
+        chunks=2,
+        chunked_args=(0,),
+        time_dim=0,
+    )
+
+时间分块不只是一个显存开关，它会改变模块的执行顺序。只有按时间顺序分块计算仍
+保持原有语义时才能使用。普通多步神经元会在块之间传递状态，适合这种方式；训练态
+BatchNorm、跨时间注意力以及依赖完整序列统计量的运算通常不适合。
+
+所有被切分的输入必须具有相同且非零的时间长度，``chunks`` 不能大于该长度。
+tensor 输出沿 ``time_dim`` 拼接；非 tensor 输出必须在各块中保持相同。
+
+使用自动预设
+------------
+
+:func:`optimize_memory <spikingjelly.activation_based.memopt.optimize_memory>`
+会原地修改模型，并返回同一个对象。下面假设模型中已经定义了
+``ResidualBlock``：
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import memopt, neuron
+
+    def split_residual(module):
+        if isinstance(module, ResidualBlock):
+            return module.conv, module.neuron
+        return ()
+
+    sample = torch.zeros(4, 8, 128, device="cuda")
+    model.cuda()
+    memopt.optimize_memory(
+        model,
+        targets=ResidualBlock,
+        example_forward=lambda current: current(sample),
+        level=3,
+        checkpoint_budget="balanced",
+        split_fn=split_residual,
+        can_chunk=lambda module: isinstance(module, neuron.BaseNode),
+    )
+
+``example_forward`` 应使用与真实训练相同的 shape、dtype、device 和训练模式，并
+返回至少一个可求导的浮点 tensor。自动搜索只依据这次运行做决定，因此样本必须能
+代表实际训练负载。
+
+``level`` 控制搜索深度，各级包含前一级的结果：
+
+``0``
+    不做任何修改，也不需要 ``example_forward``。
+``1``
+    观察各个 target 的第一个 tensor 输入，优先为输入较大的模块设置检查点。
+``2``
+    尝试用 ``split_fn`` 把一个大检查点拆成多个小检查点。只有峰值显存下降时才保留。
+``3``
+    对 ``can_chunk`` 认可的检查点尝试时间分块。
+``4``
+    测量各检查点的前向开销，在不增加当前峰值显存的前提下移除代价较高的检查点。
+
+``checkpoint_budget`` 决定 level 1 覆盖多少候选模块：``"speed"``、
+``"balanced"`` 和 ``"memory"`` 分别选择 50%、75% 和 100%。候选模块按输入
+大小排序，大小相同时保持模型中的原顺序。
+
+如果启用了 ``compress``，预设只会在所有相关 rank 都观察到严格二值输入时自动
+使用 bit 压缩。``split_fn`` 应返回至少两个互不重叠的已注册后代模块；不适用时
+返回空 tuple。``can_chunk`` 只应对确实可以沿时间维切分的模块返回 ``True``。
+
+``level=2..4`` 会反复运行前向和反向，因此只适合在训练开始前搜索一次，并要求模型和
+样本位于 CUDA。每次尝试后，框架会恢复随机数状态、buffer、神经元状态和已有
+梯度。发生 OOM 或显存没有下降时，本次修改会被撤销。
+
+分布式训练
+----------
+
+应在 DDP 或 FSDP 包装模型之前调用 ``optimize_memory``。使用 PP 时，
+``process_group`` 必须包含当前 pipeline stage 的全部 DP 和 TP rank。各 rank 必须
+按相同顺序调用该函数。memopt 会汇总组内观测，让所有 rank 生成相同的模型结构。
+
+内置的分布式视觉训练会自动创建这个进程组，并提供
+``memopt_level``、``memopt_checkpoint_budget`` 和
+``memopt_compress_inputs``。输入压缩只在模型 recipe 能保证候选输入严格二值时启用。
+MCore 训练提供 level 和 budget 配置，但只在预先确定的 Transformer 边界设置检查点，
+不会强行进行空间或时间切分。
+
+评测、预测、生成和模型导出不会保留训练期的检查点包装。由于
+``checkpoint_module`` 保持 ``state_dict`` 兼容，推理时不需要转换权重。
+
+神经元后端与 ``torch.compile``
+--------------------------------
+
+memopt 不会替换神经元后端。只要神经元的函数式 forward 路径支持对应实现，Torch、
+CuPy 和 Triton 都可以放在检查点内。自定义后端如果不支持这条路径，也不会因为包装
+了 memopt 而自动兼容。正式训练前，应使用实际模型、dtype、后端和分布式拓扑完成
+一次前向与反向测试。
+
+``memopt.checkpoint`` 使用 PyTorch non-reentrant checkpoint。无压缩、
+Boolean 压缩和 bit 压缩路径支持 ``torch.compile(..., fullgraph=True)``。Sparse
+压缩后的大小随输入变化，编译时可能需要动态 shape。
+
+性能实测
+--------
+
+以下结果都由本次重构后的实现测得，不是论文代码的旧数据。测试机是 Vast.ai
+on-demand 实例，配备 4 张 RTX 4090 24 GiB，卡间没有 NVLink；软件为 PyTorch
+2.11.0、CUDA 12.8 和 NCCL 2.28.9。每个配置都从新进程启动并独立运行三次。表中
+给出中位数，括号内为最小值到最大值。显存记录
+``torch.cuda.max_memory_allocated`` 返回的峰值，不记录 reserved memory。
+
+简单单卡场景
+^^^^^^^^^^^^
+
+单卡模型包含 3 个 ``Linear-IF-Linear-IF`` block，输入 shape 为
+``[T=16, N=512, C=512]``，使用 FP32。每次运行先预热 10 step，再测量 50 step：
+
+.. code-block:: bash
+
+    CUDA_VISIBLE_DEVICES=0 python benchmark/benchmark_memopt.py \
+        --model-kind block --T 16 --N 512 --C 512 \
+        --warmup 10 --iters 50
+
+.. list-table:: 单卡训练结果
     :header-rows: 1
 
-    * - Profile
-      - ``memory_optimization`` 耗时
-      - 单步训练耗时
-      - ``peak_allocated``
-      - ``peak_reserved``
-      - 结构变化
-    * - ``safe``
-      - ``910.9 ms``
-      - ``5.73 ms``
-      - ``17.26 MB``
-      - ``278.0 MB``
-      - 仅包装为 1 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
-    * - ``balanced``
-      - ``8661.2 ms``
-      - ``6.13 ms``
-      - ``17.26 MB``
-      - ``278.0 MB``
-      - 1 次 spatial split，最终为 2 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
-    * - ``memory``
-      - ``20027.8 ms``
-      - ``6.07 ms``
-      - ``17.26 MB``
-      - ``278.0 MB``
-      - 1 次 spatial split，最终为 2 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
-    * - ``exhaustive``
-      - ``32880.1 ms``
-      - ``5.71 ms``
-      - ``17.26 MB``
-      - ``278.0 MB``
-      - 1 次 spatial split，最终为 2 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+    * - level
+      - 峰值显存 (MiB)
+      - 相对 level 0
+      - 每 step 用时 (ms)
+      - 一次性搜索耗时 (ms)
+    * - 0
+      - 462.3
+      - --
+      - 48.9 (47.9--50.3)
+      - --
+    * - 1
+      - 249.3
+      - -46.1%
+      - 93.5 (66.5--95.1)
+      - 66.4
+    * - 2
+      - 249.3
+      - -46.1%
+      - 66.5 (65.5--67.0)
+      - 833.2
+    * - 3
+      - 249.3
+      - -46.1%
+      - 66.8 (65.4--67.5)
+      - 684.9
+    * - 4
+      - 248.8
+      - -46.2%
+      - 60.1 (59.8--60.3)
+      - 1687.5
 
-需要强调的是，这组数据的主要用途是说明不同 ``profile`` 的 **优化器开销趋势** ，而非给出对所有网络都成立的通用绝对值。对于真实的大模型，具体的训练速度和显存收益仍取决于网络结构、输入形状、batch size 以及当前设备环境。
+这个测试里，更深的空间和时间搜索没有继续降低显存；level 4 在相同显存水平
+下把每 step 用时从 level 1 的中位数 93.5 ms 降到 60.1 ms。搜索只在调用
+``optimize_memory`` 时运行一次，不计入训练 step 用时。
 
-为了更贴近真实使用场景，我们还在同一张 ``RTX 4090`` 上，对教程后文将介绍的真实网络 ``CIFAR10DVSVGG`` 做了对比。测试配置为：
+四卡并行场景
+^^^^^^^^^^^^
 
-* 后端： ``triton``
-* 输入形状： ``[N, T, C, H, W] = [8, 10, 2, 48, 48]``
-* 指标：
-  
-  * ``samples/s`` ：训练吞吐
-  * ``step_ms`` ：单步训练耗时
-  * ``peak_allocated_mb`` ：训练峰值已分配显存
-  * ``peak_reserved_mb`` ：训练峰值保留显存
-  * ``optimize_ms`` ：执行 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 的耗时
+多卡测试使用 DDP4、SEW-ResNet34、BF16、``T=4`` 和 128 × 128 随机合成输入。
+每卡 batch 为 32，global batch 为 128。每次运行 30 step，前 5 step 只预热，后
+25 step 计时。baseline 使用 ``memopt_level=0``；memopt 配置使用 level 1 和
+``checkpoint_budget="memory"``。默认的 ``ADD`` 残差不能保证 block 输入严格
+二值，因此这个模型不会自动做 bit 压缩：
 
-结果如下：
+.. code-block:: bash
 
-.. list-table::
+    torchrun --standalone --nproc-per-node=4 benchmark/vision_distributed.py \
+        --model sew-resnet34 --dataset synthetic --data-parallel ddp \
+        --precision bf16 --time-steps 4 --image-size 128 --classes 1000 \
+        --batch-size 32 --samples 3840 --workers 0 \
+        --max-steps 30 --timing-warmup-steps 5 --memopt-level 1
+
+将最后一个参数改为 ``--memopt-level 0`` 即可复现 baseline。
+
+.. list-table:: 四卡 DDP 训练结果
     :header-rows: 1
 
     * - 配置
-      - ``samples/s``
-      - ``step_ms``
-      - ``peak_allocated``
-      - ``peak_reserved``
-      - ``optimize_ms``
-      - 结构变化
+      - 单卡峰值显存 (GiB)
+      - 相对 baseline
+      - 总吞吐 (images/s)
     * - baseline
-      - ``290.14``
-      - ``27.57 ms``
-      - ``1022.23 MB``
-      - ``1574.0 MB``
-      - ``0``
-      - 无优化
-    * - ``safe``
-      - ``218.58``
-      - ``36.60 ms``
-      - ``833.94 MB``
-      - ``1512.0 MB``
-      - ``2605.76 ms``
-      - ``level=1`` ，8 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
-    * - ``balanced``
-      - ``236.15``
-      - ``33.88 ms``
-      - ``787.94 MB``
-      - ``1422.0 MB``
-      - ``37038.26 ms``
-      - ``level=2`` ，1 次 spatial split，9 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
-    * - ``memory``
-      - ``223.30``
-      - ``35.83 ms``
-      - ``671.56 MB``
-      - ``1242.0 MB``
-      - ``89788.63 ms``
-      - ``level=3`` ，1 次 spatial split + 2 次 temporal split，9 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 与 2 个 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>`
-    * - ``exhaustive``
-      - ``289.18``
-      - ``27.66 ms``
-      - ``589.16 MB``
-      - ``1332.0 MB``
-      - ``450972.60 ms``
-      - ``level=4`` ，1 次 spatial split + 3 次 temporal split + 4 次 greedy unwrap，5 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 与 2 个 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>`
+      - 1.75 (1.75--1.83)
+      - --
+      - 1103.7 (1070.1--1116.9)
+    * - memopt level 1
+      - 1.19 (1.19--1.19)
+      - -31.9%
+      - 566.9 (547.9--571.9)
 
-这组真实网络数据反映了更实际的取舍：
+在这组配置里，四卡 DDP 成功同步应用了检查点。表中的显存和速度变化只适用于上述
+模型和输入；正式训练前应使用实际模型、输入和拓扑重测。
 
-* ``safe`` 是最稳妥的入门选项，显存开始明显下降，但训练会变慢。
-* ``balanced`` 在这组实验里比 ``safe`` 再省一些显存，同时训练速度略好。
-* ``memory`` 继续降低峰值显存，但优化器自身耗时已经明显上升。
-* ``exhaustive`` 在这组实验里给出了最好的显存结果，而且单步训练速度几乎回到 baseline，但它的结构搜索成本极高，更适合离线调优。
-
-如果把目光缩小到新的高层接口 ``prefer`` ，在同一网络、同一输入形状下也能观察到比较清晰的梯度：
+从旧 API 迁移
+---------------
 
 .. list-table::
     :header-rows: 1
 
-    * - ``prefer``
-      - 自动映射
-      - 选中的 checkpoint 模块数
-      - ``step_ms``
-      - ``peak_allocated``
-      - ``optimize_ms``
-    * - ``"speed"``
-      - ``safe`` + ``speed``
-      - ``4 / 8``
-      - ``34.43 ms``
-      - ``922.39 MB``
-      - ``2726.53 ms``
-    * - ``"balanced"``
-      - ``balanced`` + ``balanced``
-      - ``6 / 8``
-      - ``34.35 ms``
-      - ``877.14 MB``
-      - ``34360.89 ms``
-    * - ``"memory"``
-      - ``memory`` + ``memory``
-      - ``8 / 8``
-      - ``43.36 ms``
-      - ``699.17 MB``
-      - ``92689.79 ms``
+    * - 旧用法
+      - 新用法
+    * - ``input_compressed_gc``
+      - ``checkpoint(..., compressor=...)``
+    * - ``GCContainer`` / ``TCGCContainer``
+      - ``checkpoint_module``
+    * - ``memory_optimization``
+      - ``optimize_memory``
+    * - 模块上的 ``__spatial_split__``
+      - 调用 ``optimize_memory`` 时传入 ``split_fn``
 
-可以把它理解为： ``prefer`` 直接回答“这次优化更偏训练速度，还是更偏显存”，而内部再自动决定该用什么 ``profile`` 和 checkpoint 覆盖预算。
-
-另外，若设置 ``return_summary=True`` ，函数将返回 ``(net, summary)`` 。 ``summary`` 是 :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>` 对象，包含：
-
-* 请求/实际生效的优化级别
-* 使用的 ``prefer`` 、 ``profile`` 、 ``checkpoint_budget`` 和 ``allow_expensive_profiling`` 配置
-* 哪些优化步骤被应用、哪些步骤被跳过
-* 包装成 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` / :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` 的数量
-* 自动选择的压缩器统计、checkpoint 候选数与实际选中数，以及空间/时间 split、greedy unwrap 的执行次数
-* ``gc_selected_modules`` / ``gc_selection_explanation`` ：说明这次为什么选中了这些 checkpoint 模块
-* ``recommendation`` ：基于当前选择结果给出的下一步调参建议，例如更偏速度还是更偏显存
-
-示例
------------------------
-
-以在CIFAR10-DVS上训练Spiking VGG为例，讲解如何使用上述工具。Spiking VGG模型定义如下：
-
-.. code:: python
-
-    import torch
-    import torch.nn as nn
-    from spikingjelly.activation_based import base, functional, layer, neuron, surrogate
-
-
-    class VGGBlock(nn.Module):
-        def __init__(
-            self, in_plane, out_plane, kernel_size, stride, padding,
-            preceding_avg_pool=False, **kwargs
-        ):
-            super().__init__()
-            proj_bn = []
-            if preceding_avg_pool:
-                proj_bn.append(layer.AvgPool2d(2))
-            proj_bn += [
-                layer.Conv2d(in_plane, out_plane, kernel_size, stride, padding),
-                layer.BatchNorm2d(out_plane),
-            ]
-            self.proj_bn = nn.Sequential(*proj_bn)
-            self.neuron = neuron.LIFNode(**kwargs)
-
-        def forward(self, x_seq):
-            return self.neuron(self.proj_bn(x_seq))
-
-
-    class CIFAR10DVSVGG(nn.Module):
-        def __init__(
-            self, dropout: float = 0.25, tau: float = 1.333,
-            decay_input: bool = False, detach_reset: bool = True,
-            surrogate_function=surrogate.ATan(), backend="triton",
-        ):
-            super().__init__()
-            kwargs = {
-                "tau": tau,
-                "decay_input": decay_input,
-                "detach_reset": detach_reset,
-                "surrogate_function": surrogate_function,
-                "backend": backend,
-                "step_mode": "m",
-            }
-            self.features = nn.Sequential(
-                VGGBlock(2, 64, 3, 1, 1, False, **kwargs),
-                VGGBlock(64, 128, 3, 1, 1, False, **kwargs),
-                VGGBlock(128, 256, 3, 1, 1, True, **kwargs),
-                VGGBlock(256, 256, 3, 1, 1, False, **kwargs),
-                VGGBlock(256, 512, 3, 1, 1, True, **kwargs),
-                VGGBlock(512, 512, 3, 1, 1, False, **kwargs),
-                VGGBlock(512, 512, 3, 1, 1, True, **kwargs),
-                VGGBlock(512, 512, 3, 1, 1, False, **kwargs),
-                layer.AvgPool2d(2),
-            )
-            d = int(48 / 2 / 2 / 2 / 2)
-            l = [nn.Dropout(dropout)] if dropout > 0 else []
-            l.append(nn.Linear(512 * d * d, 10))
-            self.classifier = nn.Sequential(*l)
-            for m in self.modules():
-                if isinstance(m, nn.Conv2d):
-                    nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            functional.set_step_mode(self, "m")
-
-        def forward(self, input):
-            functional.reset_net(self)
-            # input.shape = [N, T, C, H, W]
-            input = input.transpose(0, 1).contiguous()  # [T, N, C, H, W]
-            x = self.features(input)
-            x = torch.flatten(x, 2)  # [T, N, D]
-            x = self.classifier(x)
-            return x
-
-注意：在 ``CIFAR10DVSVGG`` 的构造函数中，整个网络被配置为以多步模式运行。
-
-欲使用 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` ，用户只需做以下准备。
-
-Step 1. 定义分割规则
-################################
-
-:func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 将按以下方式尝试对一个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 做空间分割：
-
-1. 若 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 的成员模块数量 ``n>1`` ，则将其拆分成 ``n`` 个片段。每个成员模块独自构成一个片段。
-2. 若 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 成员模块数量 ``n==1`` ，则调用该成员的 ``__spatial_split__`` 方法，得到一个模块元组。该元组中的每个模块都构成一个拆分后的检查点片段。
-3. 若上述方法都不可行，则当前片段不可沿空间分割。
-
-换言之，用户只需定义 ``__spatial_split__`` 方法，返回一个模块元组，即可实现空间分割。对于 ``VGGBlock`` 而言，可以定义为：
-
-.. code:: python
-
-    class VGGBlock(nn.Module):
-        ...
-        def __spatial_split__(self):
-            return self.proj_bn, self.neuron
-
-:func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 的时间分割将自动借助 :func:`to_functional_forward <spikingjelly.activation_based.base.to_functional_forward>` 实现，无需手动定义规则。
-
-``to_functional_forward`` 返回的函数使用分组接口
-``(inputs, states) -> (outputs, updated_states)``。``inputs`` 和 ``outputs``
-即使只有一个张量也使用 tuple。例如：
-
-.. code:: python
-
-    f_forward = base.to_functional_forward(neuron.LIFNode())
-    outputs, updated_states = f_forward((x,), (v,))
-
-已实现 functional forward 的 MemoryModule 会直接执行显式状态转移；扁平的
-``nn.Sequential`` 使用 state cursor 组合直接子模块。其他复合模块由通用路径处理，
-通用路径会临时换入注册 memory，执行原有前向后再恢复这些 memory。
-
-Step 2. 显式声明压缩器（可选）
-################################
-
-:func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 会自动探测每个检查点模块的输入分布。若输入是二值的，则会使用比特压缩器 :class:`BitSpikeCompressor <spikingjelly.activation_based.memopt.compress.BitSpikeCompressor>` 进行压缩；否则，使用空压缩器 :class:`NullSpikeCompressor <spikingjelly.activation_based.memopt.compress.NullSpikeCompressor>` （即：不压缩）。自动探测机制无法穷尽所有情况，存在出现错误的可能；用户有时也希望使用其它类型的压缩器。为此，用户可以显式声明每个检查点片段的压缩器，以覆盖自动探测的结果。
-
-例如， 如果 ``CIFAR10DVSVGG`` 的输入并非二值，可以这样声明：
-
-.. code:: python
-
-    class CIFAR10DVSVGG(nn.Module):
-        def __init__(
-            self, dropout: float = 0.25, tau: float = 1.333,
-            decay_input: bool = False, detach_reset: bool = True,
-            surrogate_function=surrogate.ATan(), backend="triton",
-        ):
-            ...
-            self.features = nn.Sequential(
-                VGGBlock(2, 64, 3, 1, 1, False, **kwargs),
-                ...
-            )
-            self.features[0].x_compressor = "NullSpikeCompressor"
-            ...
-
-这样一来，在用 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 包装 ``features[0]`` 时，将使用 :class:`NullSpikeCompressor <spikingjelly.activation_based.memopt.compress.NullSpikeCompressor>` 作为其输入压缩器。 ``x_compressor`` 属性可被赋值为 :class:`BaseSpikeCompressor <spikingjelly.activation_based.memopt.compress.BaseSpikeCompressor>` 子类的实例，或是子类名称字符串（如上例）；查阅 :doc:`../../APIs/spikingjelly.activation_based.memopt.compress` 文档以获取所有可选的压缩器。
-
-Step 3. 调用工具函数
-################################
-
-完成上述准备后，调用 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 即可：
-
-.. code:: python
-
-    from spikingjelly.activation_based import memopt
-
-    net = CIFAR10DVSVGG(...)
-    net = memopt.memory_optimization(
-        net,
-        (VGGBlock,),
-        dummy_input=(torch.zeros(32, T, 2, 48, 48),),
-        compress_x=True,
-        level=4,
-        temporal_split_factor=2,
-    )
-
-查询 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 的文档以获取参数说明。
-
-优化过程以包级 logger 的 ``DEBUG`` 记录输出。仅在需要诊断一次优化过程时开启：
-
-.. code:: python
-
-    from spikingjelly.logger import logger
-
-    logger.enable("spikingjelly")
-
-如果用户更关注“少调参、快速拿到一个合理配置”，则推荐优先使用 ``profile`` 接口。例如：
-
-.. code:: python
-
-    from spikingjelly.activation_based import memopt
-
-    net, summary = memopt.memory_optimization(
-        net,
-        (VGGBlock,),
-        dummy_input=(torch.zeros(32, T, 2, 48, 48),),
-        profile="balanced",
-        allow_expensive_profiling=False,
-        return_summary=True,
-    )
-
-    print(summary.applied_steps)
-    print(summary.skipped_steps)
-    print(summary.gc_container_count, summary.tcgc_container_count)
-
-若 ``profile`` 要求 ``level > 1`` 但没有提供 ``dummy_input`` ，则框架会自动回退到 ``level=1`` ，并在 ``summary.notes`` 中记录这一回退原因。
-
-结果
-###############################
-
-调用 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` ，输出为：
-
-.. code:: text
-
-    Level 1: layer-wise GC with input spike compression
-    Level 2: split GCContainers spatially
-            net's features.1: successfully split (2830308352 -> 2726500352)
-            net's features.1.0: can't be spatially split
-    Level 3: split GCContainers temporally
-            net's features.1.0: successfully split (2726500352 -> 2641563648)
-            net's features.1.1: successfully split (2641563648 -> 2338393088)
-            net's features.2: successfully split (2338393088 -> 2132545536)
-            net's features.1.1: no reduction in memory, revert (2132545536 -> 2147287040)
-    Level 4: greedily disable GCContainers
-            net's features.3: disable GCContainer (2132545536 -> 2126712832)
-            net's features.1.0: keep GCContainer (2126712832 -> 2687308800)
-            net's features.2: keep GCContainer (2126712832 -> 2898722816)
-            net's features.5: disable GCContainer (2126712832 -> 2123108352)
-            net's features.4: keep GCContainer (2123108352 -> 2232676352)
-            net's features.1.1: disable GCContainer (2123108352 -> 2039347200)
-            net's features.0: keep GCContainer (2039347200 -> 2417163264)
-            net's features.6: disable GCContainer (2039347200 -> 2036398080)
-            net's features.7: disable GCContainer (2036398080 -> 2036316160)
-
-优化后的网络结构大致为：
-
-.. code:: text
-
-  (net): CIFAR10DVSVGG(
-    (features): Sequential(
-      (0): GCContainer(
-        x_compressor=NullSpikeCompressor,
-        (0): VGGBlock(...)
-      )
-      (1): Sequential(
-        (0): TCGCContainer(
-          x_compressor=BitSpikeCompressor, n_chunk=2, n_seq_inputs=1, n_seq_outputs=1
-          (0): Sequential(
-            (0): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), step_mode=m)
-            (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
-          )
-        )
-        (1): LIFNode()
-      )
-      (2): TCGCContainer(
-        x_compressor=BitSpikeCompressor, n_chunk=2, n_seq_inputs=1, n_seq_outputs=1
-        (0): VGGBlock(...)
-      )
-      (3): VGGBlock(...)
-      (4): GCContainer(
-        x_compressor=BitSpikeCompressor,
-        (0): VGGBlock(...)
-      )
-      (5): VGGBlock(...)
-      (6): VGGBlock(...)
-      (7): VGGBlock(...)
-      (8): AvgPool2d(kernel_size=2, stride=2, padding=0, step_mode=m)
-    )
-    (classifier): Sequential(
-      (0): Dropout(p=0.25, inplace=False)
-      (1): Linear(in_features=4608, out_features=10, bias=True)
-    )
-  )
-
-在 CIFAR10-DVS 上训练， 令 ``batch_size=32`` 且 ``T=10`` 。未经优化的CuPy后端网络、未经优化的Triton后端网络，以及优化后的Triton后端网络在 ``epoch=5`` 时的训练日志为：
-
-.. code:: text
-
-    # CuPy backend, not optimized (level=0)
-    Epoch 5/100: train_samples_per_second=349.36 samples/s
-    Epoch 5/100: peak_allocated=4966.7451171875 MB, peak_reserved=5370.0 MB
-    Epoch 5/100: train_loss=1.63, train_acc=47.92%
-
-    # Triton backend, not optimized (level=0)
-    Epoch 5/100: train_samples_per_second=383.55 samples/s
-    Epoch 5/100: peak_allocated=3830.3056640625 MB, peak_reserved=5544.0 MB
-    Epoch 5/100: train_loss=1.64, train_acc=47.42%
-
-    # Triton backend, optimized (level=4)
-    Epoch 5/100: train_samples_per_second=315.77 samples/s
-    Epoch 5/100: peak_allocated=1973.11767578125 MB, peak_reserved=2770.0 MB
-    Epoch 5/100: train_loss=1.64, train_acc=47.89%
-
-可见，训练峰值显存显著降低，而训练速度的降低可以接受。优化后的Triton后端网络与未经优化的Triton后端网络并非完全等价，是对BN层的计算做时间分段的结果，详见原论文 Appendix G [#huang2026gc]_ 。完整可运行的示例代码位于 `spikingjelly.activation_based.examples.memopt <https://github.com/fangwei123456/spikingjelly/tree/master/spikingjelly/activation_based/examples/memopt>`_ 中。
-
-.. note::
-
-    本教程的结果与原论文结果 [#huang2026gc]_ 并不相同，是因为SpikingJelly对 ``memopt`` 的实现与原工作并不完全相同。若想获得与原论文完全一致的结果，请使用原工作的 `源代码  <https://github.com/AllenYolk/snn-gradient-checkpointing>`_ 。
+旧版的可变压缩器基类、summary/profile 对象和兼容别名不再提供。
 
 
 .. [#huang2026gc] Huang, Y., Fang, W., Hao, Z., Ma, Z., & Tian Y. (2026). Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression. The Fourteenth International Conference on Learning Representations.

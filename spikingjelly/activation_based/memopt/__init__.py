@@ -1,9 +1,20 @@
-from .checkpointing import *
-from .compress import *
-from .pipeline import (  # noqa
-    MEMOPT_CHECKPOINT_BUDGETS,
-    MEMOPT_PREFERENCES,
-    MEMOPT_PROFILES,
-    MemOptSummary,
-    memory_optimization,
+from .checkpointing import checkpoint, checkpoint_module
+from .compress import (
+    BitSpikeCompressor,
+    BooleanSpikeCompressor,
+    SparseSpikeCompressor,
+    SpikeCompressor,
+    Uint8SpikeCompressor,
 )
+from .pipeline import optimize_memory
+
+__all__ = [
+    "SpikeCompressor",
+    "BooleanSpikeCompressor",
+    "Uint8SpikeCompressor",
+    "BitSpikeCompressor",
+    "SparseSpikeCompressor",
+    "checkpoint",
+    "checkpoint_module",
+    "optimize_memory",
+]

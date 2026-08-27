@@ -17,7 +17,7 @@ def test_checkpoint_keeps_calibration_but_not_ephemeral_membrane():
         eps=1e-6,
         scale=torch.tensor([0.25, 0.5, 1.0]),
         time_steps=4,
-        use_snn_memopt=False,
+        checkpoint_enabled=False,
     )
 
     assert "v" not in spike.state_dict()
@@ -44,7 +44,7 @@ def test_qwen_input_scale_checkpoint_sharding(monkeypatch):
         eps=1e-6,
         scale=torch.ones(3),
         time_steps=2,
-        use_snn_memopt=False,
+        checkpoint_enabled=False,
     )
 
     layer_offsets = ((0, 0, 24),)

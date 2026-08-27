@@ -57,6 +57,7 @@ FSDP2 roots 和边界形状。高层入口管理生命周期，自定义任务�
         data_parallel="fsdp2",
         precision="bf16",
         memopt_level=1,
+        memopt_checkpoint_budget="balanced",
     )
     metrics = vision.train_classification(config)
 
@@ -302,7 +303,8 @@ attention metadata。SpikeLM 与 Qwen2 adapter 使用 SGLang 原生 stage 分层
 ``vision.ModelBuilder.build`` 构建当前 PP stage、配置模型并行并返回 FSDP2 分片位置。
 实现可参考 ``SEWResNet34Builder`` 和 ``SpikformerBuilder``。
 
-最小声明形式如下：
+最小声明形式如下。这个例子没有定义模型特定的 checkpoint 边界，因此明确拒绝
+非零 ``memopt_level``；实际实现应像内置 builder 一样在返回前应用 memopt。
 
 .. code-block:: python
 
@@ -321,6 +323,7 @@ attention metadata。SpikeLM 与 Qwen2 adapter 使用 SGLang 原生 stage 分层
             self,
             *,
             process_group,
+            memopt_process_group,
             pipeline_rank,
             pipeline_size,
             pipeline_microbatches,
@@ -328,9 +331,12 @@ attention metadata。SpikeLM 与 Qwen2 adapter 使用 SGLang 原生 stage 分层
             micro_batch_size,
             memopt_level,
             memopt_compress_inputs,
+            memopt_checkpoint_budget,
         ):
             if pipeline_size != 1:
                 raise ValueError("MyModelBuilder does not define PP stages.")
+            if memopt_level:
+                raise ValueError("MyModelBuilder does not define memopt rules.")
             model = build_my_model(self.config)
             model = parallelize_my_model(model, process_group)
             model.to(device)
@@ -441,7 +447,13 @@ LLM 模型继承 ``llm.ModelConfig``，并通过 ``builder`` 类变量指向一�
     from spikingjelly.activation_based.distributed import llm
 
     class MyModelBuilder(llm.ModelBuilder):
-        def build(self, *, use_snn_memopt: bool, resume: bool):
+        def build(
+            self,
+            *,
+            memopt_level: int = 0,
+            memopt_checkpoint_budget: str = "memory",
+            resume: bool,
+        ):
             return model_provider, forward_step
 
 ``model_provider`` 构建当前 PP stage；``forward_step`` 从 data iterator 读取一个
@@ -824,8 +836,9 @@ batch 下的加速比。完整中位数、三次运行范围和 batch 配置见
 功能测试还覆盖了 BF16 的 TP4、PP4、TP2 × PP2、CP4、TP2 × CP2、PP2 × CP2，
 以及 TP4/PP4/CP4 的 FP8。所有组合都得到有限 loss、有限梯度，且 SNN 模块上存在非零梯度。
 在 7 GiB 显存预算下，planner 选择 TP4、SpikingJelly memopt 和 MCore selective
-``core_attn`` 重计算，两步训练使用 6.28 GiB。TP2 × PP2 的 sharded model/optimizer
-checkpoint 也已验证从 step 1 恢复到 step 2。
+``core_attn`` 重计算。6.28 GiB 是静态规划输入；强制按该方案运行两步时，实际峰值
+约为 7.26 GiB/卡。TP2 × PP2 的 sharded model/optimizer checkpoint 也已验证从
+step 1 恢复到 step 2。
 
 分布式推理基准
 ~~~~~~~~~~~~~~~~

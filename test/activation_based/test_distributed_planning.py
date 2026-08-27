@@ -84,7 +84,7 @@ def test_plan_training_returns_train_config_without_mutating_input():
     assert planned.model.transformer is not config.model.transformer
     assert config.model.transformer.tensor_model_parallel_size == 1
     assert planned.model.transformer.recompute_granularity is None
-    assert not planned.use_snn_memopt
+    assert planned.memopt_level == 0
 
 
 def test_memory_objective_prefers_snn_memopt_without_mcore_recompute():
@@ -95,21 +95,21 @@ def test_memory_objective_prefers_snn_memopt_without_mcore_recompute():
         objective="memory",
     )
 
-    assert planned.use_snn_memopt
+    assert planned.memopt_level == 1
     assert planned.model.transformer.recompute_granularity is None
     assert planned.model.transformer.recompute_modules is None
 
 
 def test_planner_preserves_requested_snn_memopt():
     config = _config()
-    config.use_snn_memopt = True
+    config.memopt_level = 2
     planned = plan_training(
         config,
         world_size=1,
         device_memory_bytes=8 * 1024**3,
     )
 
-    assert planned.use_snn_memopt
+    assert planned.memopt_level == 2
 
 
 def test_planner_uses_only_non_overlapping_selective_recompute_as_fallback():
@@ -127,7 +127,7 @@ def test_planner_uses_only_non_overlapping_selective_recompute_as_fallback():
         memory_fraction=1.0,
     )
 
-    assert planned.use_snn_memopt
+    assert planned.memopt_level == 1
     assert planned.model.transformer.recompute_granularity == "selective"
     assert planned.model.transformer.recompute_modules == ["core_attn"]
 

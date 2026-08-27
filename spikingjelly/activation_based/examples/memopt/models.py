@@ -28,9 +28,6 @@ class VGGBlock(nn.Module):
     def forward(self, x_seq):
         return self.neuron(self.proj_bn(x_seq))
 
-    def __spatial_split__(self):
-        return self.proj_bn, self.neuron
-
 
 class CIFAR10DVSVGG(nn.Module):
     def __init__(
@@ -62,7 +59,6 @@ class CIFAR10DVSVGG(nn.Module):
             VGGBlock(512, 512, 3, 1, 1, False, **kwargs),
             layer.AvgPool2d(2),
         )
-        self.features[0].x_compressor = "NullSpikeCompressor"
         d = int(48 / 2 / 2 / 2 / 2)
         l = [nn.Dropout(dropout)] if dropout > 0 else []
         l.append(nn.Linear(512 * d * d, 10))

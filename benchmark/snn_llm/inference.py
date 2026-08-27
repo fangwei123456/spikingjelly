@@ -151,7 +151,7 @@ def _initialize_checkpoint(
             )
         model_parallel_cuda_manual_seed(1234)
         provider, _ = model_config.get_builder_cls()(model_config).build(
-            use_snn_memopt=False, resume=True
+            resume=True,
         )
         model = provider(
             parallel_state.is_pipeline_first_stage(),
@@ -165,7 +165,6 @@ def _initialize_checkpoint(
         recipe = {
             **model.checkpoint_metadata,
             "model": model_config._checkpoint_metadata(),
-            "use_snn_memopt": False,
             "mcore_recompute_granularity": model_config.transformer.recompute_granularity,
             "mcore_recompute_modules": model_config.transformer.recompute_modules,
         }
@@ -194,7 +193,7 @@ def _export_sglang(
     args: argparse.Namespace, model_config: SpikeLMConfig
 ) -> dict[str, object]:
     provider, _ = model_config.get_builder_cls()(model_config).build(
-        use_snn_memopt=False, resume=True
+        resume=True,
     )
     export_sglang(
         model_config,

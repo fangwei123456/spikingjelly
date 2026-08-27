@@ -64,495 +64,330 @@ See Algorithm 2 in the original paper for more details [#huang2026gc]_.
 Usage Guide
 ++++++++++++++++++++++++
 
-Implementation Overview
------------------------
+Choose an Entry Point
+---------------------
 
-This framework relies on two classes to represent GC segments:
+``memopt`` has two entry points:
 
-* :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`: a subclass of ``nn.Sequential`` that contains a sequence of ``nn.Module`` members and overrides ``forward`` to implement GC logic.
-* :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>`: a subclass of :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` that additionally records the number of temporal chunks. Its ``forward`` implements temporal chunked gradient checkpointing.
+* Use ``checkpoint`` or ``checkpoint_module`` when you know which part of the
+  network should be recomputed.
+* Use ``optimize_memory`` when you want memopt to search for a checkpoint layout.
 
-The entire optimization procedure described above is wrapped inside :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>`. Based on the memory/time profile, it automatically wraps selected modules of the target network with :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` or :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>`. The checkpoint adjustment strategies translate to:
+Start with manual checkpoints when possible. They are direct and require no
+search. ``optimize_memory`` packages the paper's automatic strategy as an
+optional high-level preset.
 
-* Spatial splitting: split one :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` into multiple :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` .
-* Temporal splitting: turn a :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` into a :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` or increase a :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>`'s number of chunks.
-* Greedy reversion: unwrap a :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` or :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` back to the original module.
+Set Checkpoints Manually
+------------------------
 
-Users do not need to understand the internals. Simply call :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` to transform the network automatically.
+Use :func:`checkpoint <spikingjelly.activation_based.memopt.checkpoint>` with a
+function or any other callable:
 
-High-level presets and summaries
---------------------------------
+.. code-block:: python
 
-Besides manually choosing ``level=0..4``, :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` now provides higher-level ``profile`` presets:
+    from spikingjelly.activation_based import memopt
 
-* ``"safe"``: conservative mode. Only applies layer-wise GC and avoids expensive profiling.
-* ``"balanced"``: recommended default. Enables limited split search and balances memory savings against optimization overhead.
-* ``"memory"``: more aggressive toward memory reduction. Tries both spatial and temporal split by default.
-* ``"exhaustive"``: most aggressive mode. Allows fuller search and greedy unwrap, suitable for offline tuning.
+    y = memopt.checkpoint(block, x)
 
-In practice, these presets usually imply the following trade-offs:
+When the recomputation region matches a module boundary, use
+:func:`checkpoint_module
+<spikingjelly.activation_based.memopt.checkpoint_module>`:
 
-* ``"safe"``: lowest optimizer-side overhead. It usually stays close to layer-wise GC only, making it a good first try when you mainly want something robust and cheap to run.
-* ``"balanced"``: the recommended starting point. It performs limited split search and often provides a good compromise between memory savings and optimization latency.
-* ``"memory"``: more aggressive about reducing peak memory and therefore more likely to trigger spatial/temporal split; the trade-off is higher optimization overhead and a larger chance of training slowdown.
-* ``"exhaustive"``: best suited for offline tuning or research experiments. It explores a fuller search space and is the most likely to find aggressive structure changes, but also has the highest optimization cost.
+.. code-block:: python
 
-If you are unsure which one to choose, start from ``"balanced"``. Use ``"safe"`` when you want the smallest extra overhead, and reserve ``"memory"`` / ``"exhaustive"`` for memory-constrained or offline tuning scenarios.
+    model.blocks[2] = memopt.checkpoint_module(model.blocks[2])
 
-If you want to explicitly limit the optimizer's own overhead, set ``allow_expensive_profiling=False``. This automatically tightens split-search budgets and disables worker warmup during profiling.
+``checkpoint_module`` preserves parameter objects, parameter names, and
+``state_dict`` keys, so the same weights work before and after wrapping. It also
+passes neuron state explicitly. Buffers such as BatchNorm running statistics are
+updated once per training iteration, not again during backward recomputation.
 
-On top of ``profile``, the current version also exposes two more automatic control layers:
+Compress Checkpoint Inputs
+--------------------------
 
-* ``checkpoint_budget`` controls **how many candidate modules should actually be wrapped as checkpoint segments**. It accepts
-  ``"speed"``, ``"balanced"``, and ``"memory"``.
+A checkpoint still has to save its inputs. If the first positional tensor is a
+spike tensor, it can be compressed at the same time:
 
-  * ``"speed"`` keeps checkpointing focused on only the most valuable hotspots and prioritizes lower training overhead.
-  * ``"balanced"`` covers more hotspots and trades some extra overhead for more memory reduction.
-  * ``"memory"`` tries to cover as many candidates as possible and leans toward lower peak memory.
+.. code-block:: python
 
-* ``prefer`` is an even higher-level goal-oriented entry point. It accepts
-  ``"speed"``, ``"balanced"``, and ``"memory"``. When the user does not explicitly specify
-  ``profile`` or ``checkpoint_budget``, it maps to recommended defaults:
+    model.spike_block = memopt.checkpoint_module(
+        model.spike_block,
+        compressor=memopt.BitSpikeCompressor(),
+    )
 
-  * ``prefer="speed"`` -> ``profile="safe"`` + ``checkpoint_budget="speed"``
-  * ``prefer="balanced"`` -> ``profile="balanced"`` + ``checkpoint_budget="balanced"``
-  * ``prefer="memory"`` -> ``profile="memory"`` + ``checkpoint_budget="memory"``
+The built-in compressors cover the common storage formats:
 
-This gives three levels of control:
+* ``BitSpikeCompressor`` packs eight binary spikes into one byte.
+* ``BooleanSpikeCompressor`` stores binary spikes as ``bool``.
+* ``Uint8SpikeCompressor`` stores integer spikes representable as ``uint8``.
+* ``SparseSpikeCompressor`` stores nonzero positions and suits very sparse binary
+  spikes.
 
-* the simplest goal-driven interface: set ``prefer=...``
-* separate control over search aggressiveness and checkpoint coverage: combine ``profile`` and ``checkpoint_budget``
-* fully manual experimentation: keep using low-level knobs such as ``level``, ``max_gc_wrapped_modules``, and ``gc_target_budget_ratio``
+Bit, Boolean, and Sparse compression require values that are exactly zero or one.
+Memopt does not validate values when you choose a compressor manually. Using one
+of these compressors on ordinary floating-point activations changes the values.
 
-To make these trade-offs more concrete, we also ran a small synthetic benchmark on a single ``RTX 4090``. The tested model was ``MemOptBlockNet(depth=1)`` with input shape ``[T, N, C] = [2, 2, 16]``. For each profile, we measured the time spent inside ``memory_optimization``, the post-optimization training step latency, and the training peak memory. The unoptimized baseline on this workload took about ``5.80 ms`` per training step, with ``peak_allocated = 17.26 MB`` and ``peak_reserved = 22.0 MB``. The profile-wise results were:
+Custom compressors must inherit ``SpikeCompressor`` and implement ``compress`` and
+``decompress``. For example, when every input is an integer spike in the int16
+range:
 
-.. list-table::
-    :header-rows: 1
+.. code-block:: python
 
-    * - Profile
-      - ``memory_optimization`` time
-      - Training step time
-      - ``peak_allocated``
-      - ``peak_reserved``
-      - Structural effect
-    * - ``safe``
-      - ``910.9 ms``
-      - ``5.73 ms``
-      - ``17.26 MB``
-      - ``278.0 MB``
-      - Only wraps the target block into 1 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
-    * - ``balanced``
-      - ``8661.2 ms``
-      - ``6.13 ms``
-      - ``17.26 MB``
-      - ``278.0 MB``
-      - Performs 1 spatial split and ends with 2 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
-    * - ``memory``
-      - ``20027.8 ms``
-      - ``6.07 ms``
-      - ``17.26 MB``
-      - ``278.0 MB``
-      - Performs 1 spatial split and ends with 2 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
-    * - ``exhaustive``
-      - ``32880.1 ms``
-      - ``5.71 ms``
-      - ``17.26 MB``
-      - ``278.0 MB``
-      - Performs 1 spatial split and ends with 2 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
+    class Int16SpikeCompressor(memopt.SpikeCompressor):
+        def compress(self, tensor):
+            return tensor.short(), tensor.dtype
 
-These numbers are mainly intended to show the **optimizer-overhead trend** of different profiles, not to provide universal absolute values. On larger real workloads, the exact training-speed and memory trade-offs still depend on model structure, input shapes, batch size, and the current GPU environment.
+        def decompress(self, payload):
+            tensor, dtype = payload
+            return tensor.to(dtype)
 
-To complement the synthetic case, we also benchmarked the real tutorial network ``CIFAR10DVSVGG`` on the same ``RTX 4090``. The setup was:
+Put per-call metadata, including shape, dtype, and device, in the payload rather
+than on the compressor instance. This keeps one compressor safe to use from
+concurrent calls.
 
-* backend: ``triton``
-* input shape: ``[N, T, C, H, W] = [8, 10, 2, 48, 48]``
-* reported metrics:
+Split Work Along Time
+---------------------
 
-  * ``samples/s``: training throughput
-  * ``step_ms``: per-step training latency
-  * ``peak_allocated_mb``: peak allocated training memory
-  * ``peak_reserved_mb``: peak reserved training memory
-  * ``optimize_ms``: time spent inside :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>`
+``checkpoint_module`` can process a sequence in several temporal chunks:
 
-The results were:
+.. code-block:: python
 
-.. list-table::
-    :header-rows: 1
+    model.neuron = memopt.checkpoint_module(
+        model.neuron,
+        chunks=2,
+        chunked_args=(0,),
+        time_dim=0,
+    )
 
-    * - Configuration
-      - ``samples/s``
-      - ``step_ms``
-      - ``peak_allocated``
-      - ``peak_reserved``
-      - ``optimize_ms``
-      - Structural effect
-    * - baseline
-      - ``290.14``
-      - ``27.57 ms``
-      - ``1022.23 MB``
-      - ``1574.0 MB``
-      - ``0``
-      - no optimization
-    * - ``safe``
-      - ``218.58``
-      - ``36.60 ms``
-      - ``833.94 MB``
-      - ``1512.0 MB``
-      - ``2605.76 ms``
-      - ``level=1`` with 8 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
-    * - ``balanced``
-      - ``236.15``
-      - ``33.88 ms``
-      - ``787.94 MB``
-      - ``1422.0 MB``
-      - ``37038.26 ms``
-      - ``level=2`` with 1 spatial split and 9 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
-    * - ``memory``
-      - ``223.30``
-      - ``35.83 ms``
-      - ``671.56 MB``
-      - ``1242.0 MB``
-      - ``89788.63 ms``
-      - ``level=3`` with 1 spatial split + 2 temporal splits, ending with 9 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` and 2 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` instances
-    * - ``exhaustive``
-      - ``289.18``
-      - ``27.66 ms``
-      - ``589.16 MB``
-      - ``1332.0 MB``
-      - ``450972.60 ms``
-      - ``level=4`` with 1 spatial split + 3 temporal splits + 4 greedy unwrap operations, ending with 5 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` and 2 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` instances
+Temporal chunking changes execution order. Use it only when processing chunks in
+sequence preserves the module's behavior. Standard multi-step neurons carry state
+between chunks and fit this model. Training BatchNorm, attention across time, and
+operations that depend on whole-sequence statistics usually do not.
 
-This real-network benchmark shows a more practical trade-off:
+All chunked inputs must have the same nonzero temporal length, and ``chunks``
+cannot exceed that length. Tensor outputs are concatenated along ``time_dim``.
+Non-tensor outputs must be identical for every chunk.
 
-* ``safe`` is the safest starting point: peak memory already drops noticeably, but training slows down.
-* ``balanced`` saves even more memory than ``safe`` on this workload while recovering a bit of training speed.
-* ``memory`` pushes peak memory lower still, but the optimizer-side search cost becomes much larger.
-* ``exhaustive`` gives the best memory result here and almost recovers baseline training-step speed, but its structure-search cost is extremely high and is best treated as an offline tuning mode.
+Use the Automatic Preset
+------------------------
 
-If we zoom in on the new ``prefer`` interface alone, the same network and input shape also show a clear gradient:
+:func:`optimize_memory <spikingjelly.activation_based.memopt.optimize_memory>`
+modifies the model in place and returns the same object. This example assumes the
+model defines ``ResidualBlock``:
 
-.. list-table::
-    :header-rows: 1
-
-    * - ``prefer``
-      - Automatic mapping
-      - Selected checkpoint modules
-      - ``step_ms``
-      - ``peak_allocated``
-      - ``optimize_ms``
-    * - ``"speed"``
-      - ``safe`` + ``speed``
-      - ``4 / 8``
-      - ``34.43 ms``
-      - ``922.39 MB``
-      - ``2726.53 ms``
-    * - ``"balanced"``
-      - ``balanced`` + ``balanced``
-      - ``6 / 8``
-      - ``34.35 ms``
-      - ``877.14 MB``
-      - ``34360.89 ms``
-    * - ``"memory"``
-      - ``memory`` + ``memory``
-      - ``8 / 8``
-      - ``43.36 ms``
-      - ``699.17 MB``
-      - ``92689.79 ms``
-
-You can think of ``prefer`` as directly answering "should this optimization lean more toward training speed or toward memory reduction?", while the framework automatically chooses the corresponding ``profile`` and checkpoint coverage budget underneath.
-
-In addition, ``return_summary=True`` makes the function return ``(net, summary)``. The ``summary`` object is :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>`, which records:
-
-* requested versus applied optimization levels
-* the chosen ``prefer``, ``profile``, ``checkpoint_budget``, and ``allow_expensive_profiling`` setting
-* which optimization stages were applied or skipped
-* how many :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` / :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` objects remain
-* compressor statistics, checkpoint candidate/selection counts, and counts of spatial split, temporal split, and greedy unwrap operations
-* ``gc_selected_modules`` / ``gc_selection_explanation`` to explain why those modules were chosen for checkpointing
-* ``recommendation`` for the next tuning step, e.g. whether to lean further toward speed or memory
-
-Example
--------
-
-We use Spiking VGG training on CIFAR10-DVS to demonstrate the workflow. The model is defined as follows:
-
-.. code:: python
+.. code-block:: python
 
     import torch
-    import torch.nn as nn
-    from spikingjelly.activation_based import base, functional, layer, neuron, surrogate
+    from spikingjelly.activation_based import memopt, neuron
 
+    def split_residual(module):
+        if isinstance(module, ResidualBlock):
+            return module.conv, module.neuron
+        return ()
 
-    class VGGBlock(nn.Module):
-        def __init__(
-            self, in_plane, out_plane, kernel_size, stride, padding,
-            preceding_avg_pool=False, **kwargs
-        ):
-            super().__init__()
-            proj_bn = []
-            if preceding_avg_pool:
-                proj_bn.append(layer.AvgPool2d(2))
-            proj_bn += [
-                layer.Conv2d(in_plane, out_plane, kernel_size, stride, padding),
-                layer.BatchNorm2d(out_plane),
-            ]
-            self.proj_bn = nn.Sequential(*proj_bn)
-            self.neuron = neuron.LIFNode(**kwargs)
-
-        def forward(self, x_seq):
-            return self.neuron(self.proj_bn(x_seq))
-
-
-    class CIFAR10DVSVGG(nn.Module):
-        def __init__(
-            self, dropout: float = 0.25, tau: float = 1.333,
-            decay_input: bool = False, detach_reset: bool = True,
-            surrogate_function=surrogate.ATan(), backend="triton",
-        ):
-            super().__init__()
-            kwargs = {
-                "tau": tau,
-                "decay_input": decay_input,
-                "detach_reset": detach_reset,
-                "surrogate_function": surrogate_function,
-                "backend": backend,
-                "step_mode": "m",
-            }
-            self.features = nn.Sequential(
-                VGGBlock(2, 64, 3, 1, 1, False, **kwargs),
-                VGGBlock(64, 128, 3, 1, 1, False, **kwargs),
-                VGGBlock(128, 256, 3, 1, 1, True, **kwargs),
-                VGGBlock(256, 256, 3, 1, 1, False, **kwargs),
-                VGGBlock(256, 512, 3, 1, 1, True, **kwargs),
-                VGGBlock(512, 512, 3, 1, 1, False, **kwargs),
-                VGGBlock(512, 512, 3, 1, 1, True, **kwargs),
-                VGGBlock(512, 512, 3, 1, 1, False, **kwargs),
-                layer.AvgPool2d(2),
-            )
-            d = int(48 / 2 / 2 / 2 / 2)
-            l = [nn.Dropout(dropout)] if dropout > 0 else []
-            l.append(nn.Linear(512 * d * d, 10))
-            self.classifier = nn.Sequential(*l)
-            for m in self.modules():
-                if isinstance(m, nn.Conv2d):
-                    nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            functional.set_step_mode(self, "m")
-
-        def forward(self, input):
-            functional.reset_net(self)
-            # input.shape = [N, T, C, H, W]
-            input = input.transpose(0, 1).contiguous()  # [T, N, C, H, W]
-            x = self.features(input)
-            x = torch.flatten(x, 2)  # [T, N, D]
-            x = self.classifier(x)
-            return x
-
-Note: the entire ``CIFAR10DVSVGG`` network is configured to run in multi-step mode inside its constructor.
-
-To use :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>`, prepare the following steps.
-
-Step 1. Define splitting rules
-################################
-
-:func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` attempts to spatially split a :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` as follows:
-
-1. If the container hosts ``n > 1`` modules, split it into ``n`` GC segments, each containing one module.
-2. If the container hosts ``n == 1`` module, call that module's ``__spatial_split__`` method to obtain a tuple of modules; each element becomes a new subsegment.
-3. If none of the above works, the current segment cannot be spatially split.
-
-In other words, defining ``__spatial_split__`` and returning a tuple suffices. For ``VGGBlock`` we can simply write:
-
-.. code:: python
-
-    class VGGBlock(nn.Module):
-        ...
-        def __spatial_split__(self):
-            return self.proj_bn, self.neuron
-
-Temporal splitting in :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` is handled automatically via :func:`to_functional_forward <spikingjelly.activation_based.base.to_functional_forward>`, so no manually designed rules are required.
-
-``to_functional_forward`` returns a grouped interface with the form
-``(inputs, states) -> (outputs, updated_states)``. ``inputs`` and ``outputs``
-remain tuples even when they contain one tensor. For example:
-
-.. code:: python
-
-    f_forward = base.to_functional_forward(neuron.LIFNode())
-    outputs, updated_states = f_forward((x,), (v,))
-
-MemoryModule implementations with functional forward use their explicit state
-transition directly. Flat ``nn.Sequential`` modules compose direct functional
-children with a state cursor. Other composite modules use the general fallback,
-which temporarily loads explicit registered memories, runs the regular forward,
-and then restores those memories.
-
-Step 2. Explicitly declare compressors (optional)
-###############################################################
-
-:func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` automatically inspects the input distribution of each GC segment. If the input is binary, it applies :class:`BitSpikeCompressor <spikingjelly.activation_based.memopt.compress.BitSpikeCompressor>`; otherwise it uses :class:`NullSpikeCompressor <spikingjelly.activation_based.memopt.compress.NullSpikeCompressor>` (no compression). Auto detection may fail in rare cases, and users might prefer other compressors. Therefore, you can explicitly assign a compressor per GC segment to override the detection result.
-
-For example, if ``CIFAR10DVSVGG`` receives non-binary inputs, we can do:
-
-.. code:: python
-
-    class CIFAR10DVSVGG(nn.Module):
-        def __init__(
-            self, dropout: float = 0.25, tau: float = 1.333,
-            decay_input: bool = False, detach_reset: bool = True,
-            surrogate_function=surrogate.ATan(), backend="triton",
-        ):
-            ...
-            self.features = nn.Sequential(
-                VGGBlock(2, 64, 3, 1, 1, False, **kwargs),
-                ...
-            )
-            self.features[0].x_compressor = "NullSpikeCompressor"
-            ...
-
-When wrapping ``features[0]`` with :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`, :class:`NullSpikeCompressor <spikingjelly.activation_based.memopt.compress.NullSpikeCompressor>` will be used as its input compressor. The ``x_compressor`` attribute can accept either an instance of any :class:`BaseSpikeCompressor <spikingjelly.activation_based.memopt.compress.BaseSpikeCompressor>` or the subclass name string, as shown above. See :doc:`../../APIs/spikingjelly.activation_based.memopt.compress` for the full list of available compressors.
-
-Step 3. Call the helper function
-################################
-
-Once the preparation is done, call :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>`:
-
-.. code:: python
-
-    from spikingjelly.activation_based import memopt
-
-    net = CIFAR10DVSVGG(...)
-    net = memopt.memory_optimization(
-        net,
-        (VGGBlock,),
-        dummy_input=(torch.zeros(32, T, 2, 48, 48),),
-        compress_x=True,
-        level=4,
-        temporal_split_factor=2,
+    sample = torch.zeros(4, 8, 128, device="cuda")
+    model.cuda()
+    memopt.optimize_memory(
+        model,
+        targets=ResidualBlock,
+        example_forward=lambda current: current(sample),
+        level=3,
+        checkpoint_budget="balanced",
+        split_fn=split_residual,
+        can_chunk=lambda module: isinstance(module, neuron.BaseNode),
     )
 
-Refer to the :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` docs for argument details.
+``example_forward`` should match real training in shape, dtype, device, and
+training mode, and it must return at least one differentiable floating-point
+tensor. The search only sees this run, so use a representative sample.
 
-Optimization progress is emitted as ``DEBUG`` records by the package logger. Enable it
-only when diagnosing an optimization run:
+``level`` controls how far the search goes. Each level includes the one before it:
 
-.. code:: python
+``0``
+    Make no changes. ``example_forward`` is not required.
+``1``
+    Observe the first tensor input to each target and checkpoint the modules with
+    the largest inputs first.
+``2``
+    Use ``split_fn`` to try several smaller checkpoints in place of one large
+    checkpoint. Keep a split only when peak memory falls.
+``3``
+    Try temporal chunking on checkpoints for which ``can_chunk`` returns ``True``.
+``4``
+    Measure checkpoint forward cost and remove expensive checkpoints when doing so
+    does not raise the current peak memory.
 
-    from spikingjelly.logger import logger
+``checkpoint_budget`` controls how many level-1 candidates are selected.
+``"speed"``, ``"balanced"``, and ``"memory"`` select 50%, 75%, and 100%
+respectively. Candidates are ordered by input size, with model order breaking
+ties.
 
-    logger.enable("spikingjelly")
+When ``compress`` is enabled, the preset uses bit compression only if every rank
+in the relevant process group observes a strictly binary input. ``split_fn`` must
+return at least two non-overlapping registered descendants, or an empty tuple when
+it does not apply. ``can_chunk`` should accept only modules that are genuinely
+safe to split along time.
 
-If you prefer a simpler, higher-level entry point, start from the ``profile`` argument instead:
+Levels 2-4 run forward and backward repeatedly. They are intended as a one-time
+search before training and require both the model and sample on CUDA. After each
+trial, memopt restores random-number state, buffers, neuron state, and existing
+gradients. A change is reverted after an OOM or when it fails to reduce peak
+memory.
 
-.. code:: python
+Distributed Training
+--------------------
 
-    from spikingjelly.activation_based import memopt
+Call ``optimize_memory`` before wrapping the model with DDP or FSDP. With pipeline
+parallelism, ``process_group`` must contain every DP and TP rank for the current
+pipeline stage. All ranks must call the function in the same order. Memopt
+combines their observations so every rank builds the same structure.
 
-    net, summary = memopt.memory_optimization(
-        net,
-        (VGGBlock,),
-        dummy_input=(torch.zeros(32, T, 2, 48, 48),),
-        profile="balanced",
-        allow_expensive_profiling=False,
-        return_summary=True,
-    )
+The built-in distributed Vision training path creates this group and exposes
+``memopt_level``, ``memopt_checkpoint_budget``, and
+``memopt_compress_inputs``. Input compression is enabled only when the model recipe
+guarantees strictly binary candidate inputs. MCore training exposes the level and
+budget settings, but its Transformer path checkpoints only predefined module
+boundaries. It does not force spatial or temporal splitting into the Transformer.
 
-    print(summary.applied_steps)
-    print(summary.skipped_steps)
-    print(summary.gc_container_count, summary.tcgc_container_count)
+Evaluation, prediction, generation, and model export omit training-time
+checkpoint wrappers. Because ``checkpoint_module`` preserves ``state_dict``
+keys, inference does not need a weight conversion step.
 
-If a chosen ``profile`` implies ``level > 1`` but no ``dummy_input`` is provided, the framework will automatically fall back to ``level=1`` and record the fallback reason in ``summary.notes``.
+Neuron Backends and ``torch.compile``
+-------------------------------------
 
-Results
-###############################
+Memopt does not replace the neuron backend. Torch, CuPy, and Triton neurons can
+run inside a checkpoint when their functional forward path supports the selected
+backend. A custom backend that does not support this path will not become
+compatible just by adding memopt. Before a full training run, test forward and
+backward with the actual model, dtype, backend, and distributed topology.
 
-Running :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` yields the following logs:
+``memopt.checkpoint`` uses PyTorch's non-reentrant checkpoint.
+The uncompressed, Boolean-compressed, and bit-compressed paths support
+``torch.compile(..., fullgraph=True)``. Sparse payload size depends on the input
+and may require dynamic shapes during compilation.
 
-.. code:: text
+Measured Performance
+--------------------
 
-    Level 1: layer-wise GC with input spike compression
-    Level 2: split GCContainers spatially
-        net's features.1: successfully split (2830308352 -> 2726500352)
-        net's features.1.0: can't be spatially split
-    Level 3: split GCContainers temporally
-        net's features.1.0: successfully split (2726500352 -> 2641563648)
-        net's features.1.1: successfully split (2641563648 -> 2338393088)
-        net's features.2: successfully split (2338393088 -> 2132545536)
-        net's features.1.1: no reduction in memory, revert (2132545536 -> 2147287040)
-    Level 4: greedily disable GCContainers
-        net's features.3: disable GCContainer (2132545536 -> 2126712832)
-        net's features.1.0: keep GCContainer (2126712832 -> 2687308800)
-        net's features.2: keep GCContainer (2126712832 -> 2898722816)
-        net's features.5: disable GCContainer (2126712832 -> 2123108352)
-        net's features.4: keep GCContainer (2123108352 -> 2232676352)
-        net's features.1.1: disable GCContainer (2123108352 -> 2039347200)
-        net's features.0: keep GCContainer (2039347200 -> 2417163264)
-        net's features.6: disable GCContainer (2039347200 -> 2036398080)
-        net's features.7: disable GCContainer (2036398080 -> 2036316160)
+These results use the refactored implementation, not the benchmark numbers from
+the paper code. The Vast.ai on-demand instance had four 24 GiB RTX 4090 GPUs and
+no NVLink. The software stack was PyTorch 2.11.0, CUDA 12.8, and NCCL 2.28.9.
+Every configuration started in a new process and ran three times. Tables report
+the median and the minimum-to-maximum range in parentheses. Memory comes from
+``torch.cuda.max_memory_allocated``, not reserved memory.
 
-The optimized network roughly becomes:
+Simple Single-GPU Case
+^^^^^^^^^^^^^^^^^^^^^^
 
-.. code:: text
+The single-GPU model has three ``Linear-IF-Linear-IF`` blocks. Its FP32 input has
+shape ``[T=16, N=512, C=512]``. Each run warms up for 10 steps and measures 50:
 
-  (net): CIFAR10DVSVGG(
-    (features): Sequential(
-      (0): GCContainer(
-        x_compressor=NullSpikeCompressor,
-        (0): VGGBlock(...)
-      )
-      (1): Sequential(
-        (0): TCGCContainer(
-          x_compressor=BitSpikeCompressor, n_chunk=2, n_seq_inputs=1, n_seq_outputs=1
-          (0): Sequential(
-            (0): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), step_mode=m)
-            (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
-          )
-        )
-        (1): LIFNode()
-      )
-      (2): TCGCContainer(
-        x_compressor=BitSpikeCompressor, n_chunk=2, n_seq_inputs=1, n_seq_outputs=1
-        (0): VGGBlock(...)
-      )
-      (3): VGGBlock(...)
-      (4): GCContainer(
-        x_compressor=BitSpikeCompressor,
-        (0): VGGBlock(...)
-      )
-      (5): VGGBlock(...)
-      (6): VGGBlock(...)
-      (7): VGGBlock(...)
-      (8): AvgPool2d(kernel_size=2, stride=2, padding=0, step_mode=m)
-    )
-    (classifier): Sequential(
-      (0): Dropout(p=0.25, inplace=False)
-      (1): Linear(in_features=4608, out_features=10, bias=True)
-    )
-  )
+.. code-block:: bash
 
-Training on CIFAR10-DVS with ``batch_size=32`` and ``T=10`` gives the following logs at ``epoch=5`` for different variants: the unoptimized CuPy backend, the unoptimized Triton backend, and the optimized Triton backend.
+    CUDA_VISIBLE_DEVICES=0 python benchmark/benchmark_memopt.py \
+        --model-kind block --T 16 --N 512 --C 512 \
+        --warmup 10 --iters 50
 
-.. code:: text
+.. list-table:: Single-GPU training results
+    :header-rows: 1
 
-    # CuPy backend, not optimized (level=0)
-    Epoch 5/100: train_samples_per_second=349.36 samples/s
-    Epoch 5/100: peak_allocated=4966.7451171875 MB, peak_reserved=5370.0 MB
-    Epoch 5/100: train_loss=1.63, train_acc=47.92%
+    * - level
+      - peak memory (MiB)
+      - versus level 0
+      - time per step (ms)
+      - one-time search (ms)
+    * - 0
+      - 462.3
+      - --
+      - 48.9 (47.9--50.3)
+      - --
+    * - 1
+      - 249.3
+      - -46.1%
+      - 93.5 (66.5--95.1)
+      - 66.4
+    * - 2
+      - 249.3
+      - -46.1%
+      - 66.5 (65.5--67.0)
+      - 833.2
+    * - 3
+      - 249.3
+      - -46.1%
+      - 66.8 (65.4--67.5)
+      - 684.9
+    * - 4
+      - 248.8
+      - -46.2%
+      - 60.1 (59.8--60.3)
+      - 1687.5
 
-    # Triton backend, not optimized (level=0)
-    Epoch 5/100: train_samples_per_second=383.55 samples/s
-    Epoch 5/100: peak_allocated=3830.3056640625 MB, peak_reserved=5544.0 MB
-    Epoch 5/100: train_loss=1.64, train_acc=47.42%
+Deeper spatial and temporal searches did not reduce memory further on this
+workload. Level 4 reduced the median step time from level 1's 93.5 ms to 60.1 ms
+at the same memory level. Search runs once inside ``optimize_memory`` and is not
+included in step time.
 
-    # Triton backend, optimized (level=4)
-    Epoch 5/100: train_samples_per_second=315.77 samples/s
-    Epoch 5/100: peak_allocated=1973.11767578125 MB, peak_reserved=2770.0 MB
-    Epoch 5/100: train_loss=1.64, train_acc=47.89%
+Four-GPU Case
+^^^^^^^^^^^^^
 
-We observe a dramatic reduction in peak memory with an acceptable slowdown. The optimized Triton network is not exactly equivalent to the unoptimized one because the BN layers operate with temporal chunking; see Appendix G in the original paper [#huang2026gc]_. Fully runnable code is available in `spikingjelly.activation_based.examples.memopt <https://github.com/fangwei123456/spikingjelly/tree/master/spikingjelly/activation_based/examples/memopt>`_.
+The distributed benchmark uses DDP4, SEW-ResNet34, BF16, ``T=4``, and random
+synthetic 128 × 128 inputs. The local batch is 32 and the global batch is 128.
+Each run executes 30 steps, discards the first 5 for timing, and measures the
+remaining 25. The baseline uses ``memopt_level=0``. The memopt run uses level 1
+with its default memory budget. The default ``ADD`` residual does not guarantee
+strictly binary block inputs, so this model does not apply bit compression:
 
-.. note::
+.. code-block:: bash
 
-    The results in this tutorial differ from those reported in the original paper [#huang2026gc]_ because the ``memopt`` implementation in SpikingJelly is not the same as the original source code. Use the original `source code <https://github.com/AllenYolk/snn-gradient-checkpointing>`_ if you want to reproduce the results in the paper.
+    torchrun --standalone --nproc-per-node=4 benchmark/vision_distributed.py \
+        --model sew-resnet34 --dataset synthetic --data-parallel ddp \
+        --precision bf16 --time-steps 4 --image-size 128 --classes 1000 \
+        --batch-size 32 --samples 3840 --workers 0 \
+        --max-steps 30 --timing-warmup-steps 5 --memopt-level 1
+
+Change the final argument to ``--memopt-level 0`` to reproduce the baseline.
+
+.. list-table:: Four-GPU DDP training results
+    :header-rows: 1
+
+    * - configuration
+      - peak memory per GPU (GiB)
+      - versus baseline
+      - total throughput (images/s)
+    * - baseline
+      - 1.75 (1.75--1.83)
+      - --
+      - 1103.7 (1070.1--1116.9)
+    * - memopt level 1
+      - 1.19 (1.19--1.19)
+      - -31.9%
+      - 566.9 (547.9--571.9)
+
+In this configuration, four-GPU DDP applied the checkpoints consistently across
+ranks. The memory and speed changes in the table belong to this workload. Rerun
+the benchmark with the real model, inputs, and topology before a full training
+job.
+
+Migrate from the Previous API
+-----------------------------
+
+.. list-table::
+    :header-rows: 1
+
+    * - Previous API
+      - Replacement
+    * - ``input_compressed_gc``
+      - ``checkpoint(..., compressor=...)``
+    * - ``GCContainer`` / ``TCGCContainer``
+      - ``checkpoint_module``
+    * - ``memory_optimization``
+      - ``optimize_memory``
+    * - Module-side ``__spatial_split__``
+      - Pass ``split_fn`` to ``optimize_memory``
+
+The previous mutable compressor base class, summary/profile objects, and
+compatibility aliases are no longer available.
 
 
 .. [#huang2026gc] Huang, Y., Fang, W., Hao, Z., Ma, Z., & Tian Y. (2026). Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression. The Fourteenth International Conference on Learning Representations.

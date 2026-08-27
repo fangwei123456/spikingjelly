@@ -1015,6 +1015,19 @@ channel parallelism inside BasicBlock.
 
 
 class SEWResNet34Builder(ModelBuilder):
+    @staticmethod
+    def _memopt_split(module: nn.Module) -> tuple[nn.Module, ...]:
+        if not isinstance(module, BasicBlock):
+            return ()
+        names = ("conv1", "bn1", "sn1", "conv2", "bn2", "sn2")
+        if module.downsample is not None:
+            names += ("downsample", "downsample_sn")
+        return tuple(getattr(module, name) for name in names)
+
+    @staticmethod
+    def _memopt_can_chunk(module: nn.Module) -> bool:
+        return isinstance(module, (layer.Conv2d, neuron.BaseNode))
+
     def _build_canonical_model(self) -> nn.Module:
         config = self.config
         if not isinstance(config, SEWResNet34Config):
@@ -1038,6 +1051,7 @@ class SEWResNet34Builder(ModelBuilder):
         self,
         *,
         process_group: Optional[ProcessGroup],
+        memopt_process_group: Optional[ProcessGroup],
         pipeline_rank: int,
         pipeline_size: int,
         pipeline_microbatches: int,
@@ -1045,6 +1059,7 @@ class SEWResNet34Builder(ModelBuilder):
         micro_batch_size: int,
         memopt_level: int,
         memopt_compress_inputs: bool,
+        memopt_checkpoint_budget: str,
     ) -> tuple[
         nn.Module,
         tuple[str, ...],
@@ -1063,31 +1078,68 @@ class SEWResNet34Builder(ModelBuilder):
                 block.bn1 = ChannelShardBatchNorm2d(block.bn1, process_group)
                 block.conv2 = ChannelShardConv2d(block.conv2, process_group, "rowwise")
 
-        if pipeline_size > 1 and memopt_level:
-            raise ValueError("SEW-ResNet34 memopt is not supported together with PP.")
         model = self._pipeline_stage(model, pipeline_rank, pipeline_size)
         fsdp_roots = tuple(
             name
             for name, module in model.named_modules()
             if isinstance(module, BasicBlock)
         )
+        model.to(device)
         if memopt_level:
-            dummy = torch.zeros(
-                config.time_steps,
-                micro_batch_size,
-                config.in_channels,
-                config.image_size,
-                config.image_size,
-                device=device,
+            batch = (
+                micro_batch_size
+                if pipeline_size == 1
+                else micro_batch_size // pipeline_microbatches
             )
-            model = memopt.memory_optimization(
+            stem_size = (config.image_size + 3) // 4
+            stage_shapes = (
+                (
+                    config.time_steps,
+                    batch,
+                    128,
+                    (stem_size + 1) // 2,
+                    (stem_size + 1) // 2,
+                ),
+                (
+                    config.time_steps,
+                    batch,
+                    256,
+                    (stem_size + 3) // 4,
+                    (stem_size + 3) // 4,
+                ),
+                (
+                    config.time_steps,
+                    batch,
+                    512,
+                    (stem_size + 7) // 8,
+                    (stem_size + 7) // 8,
+                ),
+            )
+            chunks_per_stage = 4 // pipeline_size
+            start = pipeline_rank * chunks_per_stage
+            shape = (
+                (
+                    config.time_steps,
+                    batch,
+                    config.in_channels,
+                    config.image_size,
+                    config.image_size,
+                )
+                if start == 0
+                else stage_shapes[start - 1]
+            )
+            dummy = torch.zeros(shape, device=device)
+            memopt.optimize_memory(
                 model,
                 BasicBlock,
-                dummy_input=(dummy,),
-                compress_x=memopt_compress_inputs,
+                lambda current: current(dummy),
                 level=memopt_level,
+                checkpoint_budget=memopt_checkpoint_budget,
+                compress=memopt_compress_inputs and config.connection != "ADD",
+                split_fn=self._memopt_split,
+                can_chunk=self._memopt_can_chunk,
+                process_group=memopt_process_group,
             )
-        model.to(device)
         if pipeline_size == 1:
             return model, fsdp_roots, None, None
         micro_batch = micro_batch_size // pipeline_microbatches

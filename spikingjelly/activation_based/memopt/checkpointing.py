@@ -1,609 +1,367 @@
-import contextlib
-import functools
-import threading
-from typing import Any, Callable, Optional, Tuple
+from typing import Callable, Optional
 
 import torch
-import torch.autograd as autograd
 import torch.nn as nn
-
-from spikingjelly.logger import logger
+from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
+    checkpoint_wrapper,
+)
+from torch.utils.checkpoint import checkpoint as torch_checkpoint
+from torch.utils._pytree import tree_flatten, tree_unflatten
 
 from .. import base
-from .compress import BaseSpikeCompressor, NullSpikeCompressor
+from .compress import SpikeCompressor
 
-__all__ = [
-    "in_gc_1st_forward",
-    "query_autocast",
-    "input_compressed_gc",
-    "to_gc_function",
-    "GCContainer",
-    "TCGCContainer",
-]
+__all__ = ["checkpoint", "checkpoint_module"]
 
 
-_thread_local = threading.local()
-
-
-@contextlib.contextmanager
-def _gc_1st_forward():
-    """
-    Context manager that marks execution as being inside the first forward pass
-    of gradient checkpointing.
-
-    This implementation:
-    - Is thread-safe (uses threading.local)
-    - Supports nested usage
-    - Guarantees proper restoration even if exceptions occur
-    """
-    depth = getattr(_thread_local, "gc_1st_forward_depth", 0)
-    _thread_local.gc_1st_forward_depth = depth + 1
-    try:
-        yield
-    finally:
-        _thread_local.gc_1st_forward_depth = depth
-
-
-def in_gc_1st_forward() -> bool:
-    r"""
-    **API Language** - :ref:`中文 <in_gc_1st_forward-cn>` | :ref:`English <in_gc_1st_forward-en>`
-
-    ----
-
-    .. _in_gc_1st_forward-cn:
-
-    * **中文**
-
-    判断当前是否处于梯度检查点的第一次前向传播过程中。
-
-    :rtype: bool
-
-    ----
-
-    .. _in_gc_1st_forward-en:
-
-    * **English**
-
-    Determine whether the current execution is inside the first forward pass of gradient checkpointing.
-
-    :rtype: bool
-    """
-    return getattr(_thread_local, "gc_1st_forward_depth", 0) > 0
-
-
-def query_autocast() -> Tuple[str, torch.dtype, bool]:
-    r"""
-    **API Language** - :ref:`中文 <query_autocast-cn>` | :ref:`English <query_autocast-en>`
-
-    ----
-
-    .. _query_autocast-cn:
-
-    * **中文**
-
-    查询当前自动混合精度设置。
-
-    :return: 一个包含 ``(设备类型, 数据类型, 是否启用)`` 的元组。如果 ``is_enabled == False`` ，
-        ``device_type`` 和 ``dtype`` 将分别设置为 ``"cpu"`` 和 ``torch.get_autocast_dtype("cpu")``
-    :rtype: Tuple[str, torch.dtype, bool]
-
-    ----
-
-    .. _query_autocast-en:
-
-    * **English**
-
-    Query the current autocast settings.
-
-    :return: a tuple of ``(device_type, dtype, is_enabled)`` . If ``is_enabled == False``,
-        ``device_type`` and ``dtype`` will be set as ``"cpu"`` and
-        ``torch.get_autocast_dtype("cpu")``, respectively.
-    :rtype: Tuple[str, torch.dtype, bool]
-    """
-    for device_type in ("cuda", "cpu"):
-        if torch.is_autocast_enabled(device_type):
-            return device_type, torch.get_autocast_dtype(device_type), True
-    return "cpu", torch.get_autocast_dtype("cpu"), False
-
-
-def _separate_args(*args) -> Tuple[list, list, list]:
-    input_args = []  # *args, but tensors -> None
-    tensor_args = []  # tensors in *args
-    tensor_args_indices = []  # indices of the tensors in *args
-    for i, arg in enumerate(args):
-        if torch.is_tensor(arg):
-            tensor_args.append(arg)
-            input_args.append(None)
-            tensor_args_indices.append(i)
-        else:
-            input_args.append(arg)
-    return input_args, tensor_args, tensor_args_indices
-
-
-def _combine_args(input_args, tensor_args, tensor_args_indices) -> list:
-    for i, idx in enumerate(tensor_args_indices):
-        input_args[idx] = tensor_args[i]
-    return input_args
-
-
-class InputCompressedGC(autograd.Function):
-    """Gradient checkpointing with input compression.
-    Reference:
-    https://github.com/pytorch/pytorch/blob/v2.6.0/torch/utils/checkpoint.py
-    """
+class _GradientToken(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, tensor: torch.Tensor) -> torch.Tensor:
+        return tensor.new_zeros(()).expand_as(tensor)
 
     @staticmethod
-    def forward(
-        ctx, f_forward: Callable, x_compressor: BaseSpikeCompressor, x_seq, *args
-    ):
-        ctx.f_forward = f_forward
-        ctx.x_compressor = x_compressor
-        ctx.x_seq_shape = x_seq.shape
-        ctx.ac_device_type, ctx.ac_dtype, ctx.ac_enabled = query_autocast()
-        ctx.fwd_cuda_devices = sorted(
-            {
-                tensor.device.index
-                if tensor.device.index is not None
-                else torch.cuda.current_device()
-                for tensor in (x_seq, *args)
-                if torch.is_tensor(tensor) and tensor.is_cuda
-            }
-        )
-
-        input_args, tensor_args, tensor_args_indices = _separate_args(
-            x_compressor.compress(x_seq), *args
-        )
-        ctx.input_args = input_args  # (x_seq_compressed, *args), whose tensor -> None
-        ctx.save_for_backward(*tensor_args)  # tensors in (x_seq_compressed, *args)
-        ctx.tensor_args_indices = tensor_args_indices  # idx of tensors in input_args
-
-        # save RNG states
-        ctx.fwd_rng_state_cpu = torch.get_rng_state()
-        ctx.fwd_rng_state_cuda = {
-            device: torch.cuda.get_rng_state(device) for device in ctx.fwd_cuda_devices
-        }
-
-        # depend on external autocast context
-        with _gc_1st_forward(), torch.no_grad():
-            outputs = f_forward(x_seq, *args)
-        return outputs  # tensor or tuple
-
-    @staticmethod
-    def backward(ctx, *grad_outputs):
-        cnt_input = len(ctx.input_args) + 2
-        grads = [None] * cnt_input
-
-        if any(ctx.needs_input_grad):
-            x_seq_compressed, *args = _combine_args(
-                ctx.input_args, ctx.saved_tensors, ctx.tensor_args_indices
-            )
-
-            with torch.set_grad_enabled(True):
-                with torch.autocast(ctx.ac_device_type, ctx.ac_dtype, ctx.ac_enabled):
-                    x_seq = ctx.x_compressor.decompress(
-                        x_seq_compressed, ctx.x_seq_shape
-                    )
-                    x_seq = x_seq.detach().requires_grad_(True)
-                    for i, r in enumerate(ctx.needs_input_grad[3:]):
-                        rg = r and args[i].requires_grad
-                        if torch.is_tensor(args[i]):
-                            args[i] = args[i].detach().requires_grad_(rg)
-
-                    with torch.random.fork_rng(devices=ctx.fwd_cuda_devices):
-                        torch.set_rng_state(ctx.fwd_rng_state_cpu)
-                        for device, state in ctx.fwd_rng_state_cuda.items():
-                            torch.cuda.set_rng_state(state, device)
-                        outputs = ctx.f_forward(x_seq, *args)
-
-                # grad_outputs is a tuple, while outputs can be a tensor or a tuple
-                if isinstance(outputs, torch.Tensor):
-                    outputs = (outputs,)
-                torch.autograd.backward(outputs, grad_outputs)
-
-            if ctx.needs_input_grad[2]:
-                grads[2] = x_seq.grad
-            for i in range(len(args)):
-                if ctx.needs_input_grad[3 + i]:
-                    grads[3 + i] = args[i].grad
-
-        return tuple(grads)
+    def backward(ctx, grad: torch.Tensor):
+        return grad
 
 
-def input_compressed_gc(f_forward, x_compressor: BaseSpikeCompressor, x_seq, *args):
+def checkpoint(
+    function: Callable,
+    *args: object,
+    compressor: Optional[SpikeCompressor] = None,
+    **kwargs: object,
+) -> object:
     r"""
-    **API Language** - :ref:`中文 <input_compressed_gc-cn>` | :ref:`English <input_compressed_gc-en>`
+    **API Language** - :ref:`中文 <memopt-checkpoint-cn>` | :ref:`English <memopt-checkpoint-en>`
 
     ----
 
-    .. _input_compressed_gc-cn:
+    .. _memopt-checkpoint-cn:
 
     * **中文**
 
-    带有输入压缩的梯度检查点。
+    使用 PyTorch non-reentrant gradient checkpoint 执行 ``function``，支持关键字
+    参数和 pytree 输入输出。指定 ``compressor`` 时，仅压缩第一个位置 tensor
+    参数；其他参数由 PyTorch checkpoint 原样管理。输入的 device 和 dtype 支持范围
+    由 ``function`` 与 ``compressor`` 决定。
 
-    :param f_forward: 要进行检查点的前向函数
-    :type f_forward: Callable
-
-    :param x_compressor: 施加于 ``x_seq`` 的压缩器
-    :type x_compressor: BaseSpikeCompressor
-
-    :param x_seq: 主要输入参数，通常是脉冲序列。该张量将先被压缩，后暂存
-    :type x_seq: torch.Tensor
-
-    :param args: 其他输入参数。这些张量不会被压缩，直接被暂存
-    :type args: tuple
-
-    :return: 张量或元组
-    :rtype: torch.Tensor or tuple
+    :param function: 需要 checkpoint 的可调用对象。
+    :type function: Callable
+    :param args: 传给 ``function`` 的位置参数。
+    :type args: object
+    :param compressor: 可选的首个位置 tensor 输入压缩器。``None`` 表示不压缩。
+    :type compressor: Optional[SpikeCompressor]
+    :param kwargs: 传给 ``function`` 的关键字参数。
+    :type kwargs: object
+    :return: ``function`` 的输出。
+    :rtype: object
 
     ----
 
-    .. _input_compressed_gc-en:
+    .. _memopt-checkpoint-en:
 
     * **English**
 
-    Gradient checkpointing with input compression.
+    Run ``function`` with PyTorch non-reentrant gradient checkpointing, including
+    keyword arguments and pytree inputs and outputs. When ``compressor`` is set,
+    only the first positional tensor is compressed; PyTorch checkpointing manages
+    all other inputs unchanged. Supported devices and dtypes are determined by
+    ``function`` and ``compressor``.
 
-    :param f_forward: the forward function whose arguments will be checkpointed
-    :type f_forward: Callable
-
-    :param x_compressor: the compressor for ``x_seq``
-    :type x_compressor: BaseSpikeCompressor
-
-    :param x_seq: the input argument to be compressed and then checkpointed. Typically,
-        ``x_seq`` is a spike train
-    :type x_seq: torch.Tensor
-
-    :param args: other arguments that will be checkpointed without compression
-    :type args: tuple
-
-    :return: a Tensor or a tuple
-    :rtype: torch.Tensor or tuple
-
-    ----
-
-    * **代码示例 | Example**
-
-    .. code-block:: python
-
-        import torch
-        import torch.nn as nn
-        from spikingjelly.activation_based.memopt import input_compressed_gc
-        from spikingjelly.activation_based.memopt import NullSpikeCompressor
-
-
-        def simple_forward(x, weight):
-            return torch.matmul(x, weight.t())
-
-
-        x = torch.randn(5, 3, requires_grad=True)
-        weight = torch.randn(4, 3, requires_grad=True)
-        result = input_compressed_gc(simple_forward, NullSpikeCompressor(), x, weight)
-        loss = result.sum()
-        loss.backward()
+    :param function: Callable to checkpoint.
+    :type function: Callable
+    :param args: Positional arguments passed to ``function``.
+    :type args: object
+    :param compressor: Optional compressor for the first positional tensor input;
+        ``None`` disables compression.
+    :type compressor: Optional[SpikeCompressor]
+    :param kwargs: Keyword arguments passed to ``function``.
+    :type kwargs: object
+    :return: Output of ``function``.
+    :rtype: object
     """
-    if torch.is_grad_enabled():
-        x_seq.requires_grad_(True)  # make sure the retval requires grad
-        return InputCompressedGC.apply(f_forward, x_compressor, x_seq, *args)
-    else:
-        # If gradients are not enabled, call the forward function directly
-        return f_forward(x_seq, *args)
+    target_index = next(
+        (index for index, arg in enumerate(args) if isinstance(arg, torch.Tensor)),
+        None,
+    )
+    if compressor is None or target_index is None:
+        return torch_checkpoint(function, *args, use_reentrant=False, **kwargs)
+
+    target = args[target_index]
+    with torch.no_grad():
+        packed = compressor.compress(target)
+    token = _GradientToken.apply(target)
+    remaining_args = args[:target_index] + args[target_index + 1 :]
+
+    def compressed_function(packed_input, gradient_token, *inner_args, **inner_kwargs):
+        restored = compressor.decompress(packed_input)
+        restored = gradient_token + (restored - gradient_token).detach()
+        function_args = (
+            inner_args[:target_index] + (restored,) + inner_args[target_index:]
+        )
+        return function(*function_args, **inner_kwargs)
+
+    return torch_checkpoint(
+        compressed_function,
+        packed,
+        token,
+        *remaining_args,
+        use_reentrant=False,
+        **kwargs,
+    )
 
 
-def to_gc_function(
-    x_compressor: BaseSpikeCompressor, f_forward: Optional[Callable] = None
+def _run_functional(
+    module: nn.Module,
+    functional_forward: Callable,
+    buffer_names: tuple[str, ...],
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+    states: tuple[object, ...],
+    buffers: tuple[torch.Tensor, ...],
 ):
+    if not buffer_names:
+        outputs, updated_states = functional_forward(args, states, **kwargs)
+        return outputs, updated_states, ()
+
+    original_states = base.extract_memories(module)
+    base.load_memories(module, list(states))
+    working_buffers = {
+        name: value.clone() for name, value in zip(buffer_names, buffers)
+    }
+    try:
+        outputs = torch.func.functional_call(
+            module, (dict(module.named_parameters()), working_buffers), args, kwargs
+        )
+        updated_states = tuple(base.extract_memories(module))
+    finally:
+        base.load_memories(module, original_states)
+    if not isinstance(outputs, (tuple, list)):
+        outputs = (outputs,)
+    return tuple(outputs), updated_states, tuple(working_buffers.values())
+
+
+def _run_module(
+    module: nn.Module,
+    functional_forward: Callable,
+    buffer_names: tuple[str, ...],
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+    states: tuple[object, ...],
+    buffers: tuple[torch.Tensor, ...],
+    compressor: Optional[SpikeCompressor],
+):
+    arg_count = len(args)
+    state_count = len(states)
+
+    def function(*flat_args, **inner_kwargs):
+        module_args = flat_args[:arg_count]
+        module_states = flat_args[arg_count : arg_count + state_count]
+        module_buffers = flat_args[arg_count + state_count :]
+        return _run_functional(
+            module,
+            functional_forward,
+            buffer_names,
+            module_args,
+            inner_kwargs,
+            module_states,
+            module_buffers,
+        )
+
+    outputs, updated_states, updated_buffers = checkpoint(
+        function, *args, *states, *buffers, compressor=compressor, **kwargs
+    )
+    return outputs, updated_states, updated_buffers
+
+
+def _merge_chunk_outputs(outputs: list[object], time_dim: int):
+    flat_chunks = []
+    spec = None
+    for output in outputs:
+        flat, current_spec = tree_flatten(output)
+        if spec is None:
+            spec = current_spec
+        elif current_spec != spec:
+            raise ValueError(
+                "All temporal chunks must return the same pytree structure."
+            )
+        flat_chunks.append(flat)
+
+    merged = []
+    for leaves in zip(*flat_chunks):
+        first = leaves[0]
+        if isinstance(first, torch.Tensor):
+            if not all(isinstance(leaf, torch.Tensor) for leaf in leaves):
+                raise ValueError("Output leaf types differ between temporal chunks.")
+            merged.append(torch.cat(leaves, dim=time_dim))
+        else:
+            if any(leaf != first for leaf in leaves[1:]):
+                raise ValueError("Non-tensor output leaves must be chunk-invariant.")
+            merged.append(first)
+    return tree_unflatten(merged, spec)
+
+
+def _checkpoint_module_forward(
+    module: nn.Module,
+    *args: object,
+    functional_forward: Callable,
+    compressor: Optional[SpikeCompressor],
+    chunks: int,
+    chunked_args: tuple[int, ...],
+    time_dim: int,
+    **kwargs: object,
+):
+    states = tuple(base.extract_memories(module))
+    live_buffers = dict(module.named_buffers())
+    buffer_names = tuple(live_buffers)
+    buffer_refs = tuple(live_buffers.values())
+    buffers = tuple(buffer.detach().clone() for buffer in buffer_refs)
+    if chunks == 1:
+        outputs, states, buffers = _run_module(
+            module,
+            functional_forward,
+            buffer_names,
+            args,
+            kwargs,
+            states,
+            buffers,
+            compressor,
+        )
+        result = outputs[0] if len(outputs) == 1 else outputs
+    else:
+        sequence_length = None
+        chunk_values: dict[int, tuple[torch.Tensor, ...]] = {}
+        for index in chunked_args:
+            if index >= len(args) or not isinstance(args[index], torch.Tensor):
+                raise ValueError(
+                    f"chunked_args contains non-tensor argument index {index}."
+                )
+            length = args[index].shape[time_dim]
+            if sequence_length is None:
+                sequence_length = length
+            elif length != sequence_length:
+                raise ValueError(
+                    "All chunked arguments must have the same temporal length."
+                )
+            chunk_values[index] = torch.tensor_split(args[index], chunks, dim=time_dim)
+
+        if sequence_length is None:
+            raise ValueError("chunked_args must contain at least one tensor argument.")
+        if sequence_length == 0 or chunks > sequence_length:
+            raise ValueError(
+                f"chunks={chunks} requires a non-empty temporal length T >= chunks; "
+                f"got T={sequence_length}."
+            )
+
+        chunk_outputs = []
+        for chunk_index in range(chunks):
+            current_args = list(args)
+            for index, values in chunk_values.items():
+                current_args[index] = values[chunk_index]
+            outputs, states, buffers = _run_module(
+                module,
+                functional_forward,
+                buffer_names,
+                tuple(current_args),
+                kwargs,
+                states,
+                buffers,
+                compressor,
+            )
+            chunk_outputs.append(outputs[0] if len(outputs) == 1 else outputs)
+        result = _merge_chunk_outputs(chunk_outputs, time_dim)
+
+    base.load_memories(module, list(states))
+    with torch.no_grad():
+        for buffer, updated in zip(buffer_refs, buffers, strict=True):
+            buffer.copy_(updated)
+    return result
+
+
+def checkpoint_module(
+    module: nn.Module,
+    *,
+    compressor: Optional[SpikeCompressor] = None,
+    chunks: int = 1,
+    chunked_args: tuple[int, ...] = (0,),
+    time_dim: int = 0,
+) -> nn.Module:
     r"""
-    **API Language** - :ref:`中文 <to_gc_function-cn>` | :ref:`English <to_gc_function-en>`
+    **API Language** - :ref:`中文 <checkpoint-module-cn>` | :ref:`English <checkpoint-module-en>`
 
     ----
 
-    .. _to_gc_function-cn:
+    .. _checkpoint-module-cn:
 
     * **中文**
 
-    将函数转换为被 ``input_compressed_gc`` 包装后的函数。本接口可作为装饰器或转换函数。
+    返回保留参数名称、参数对象和 ``state_dict`` 键的 checkpoint wrapper。包含
+    :class:`~spikingjelly.activation_based.base.MemoryModule` 的模块使用显式状态重算；
+    神经元状态和 buffer 只提交一次。``chunks > 1`` 时，``chunked_args`` 指定的
+    tensor 沿 ``time_dim`` 分块，tensor 输出沿同一维拼接，非 tensor 输出必须在各
+    分块中相同。输入的 device、dtype 和 backend 支持范围由被包装模块和压缩器决定。
 
-    :param x_compressor: 压缩器
-    :type x_compressor: BaseSpikeCompressor
-
-    :param f_forward: 前向函数，如果为 ``None`` 则使用装饰器模式；否则使用转换函数模式。
-        默认为 ``None``
-    :type f_forward: Optional[Callable]
-
-    :return: 检查点包装后的函数
-    :rtype: Callable
+    :param module: 需要包装的模块。
+    :type module: nn.Module
+    :param compressor: 可选的首个位置 tensor 输入压缩器。``None`` 表示不压缩。
+    :type compressor: Optional[SpikeCompressor]
+    :param chunks: 时间分块数，必须大于 0，且不能超过时间维长度。
+    :type chunks: int
+    :param chunked_args: 需要分块的位置 tensor 参数索引。
+    :type chunked_args: tuple[int, ...]
+    :param time_dim: 输入分块和输出拼接使用的时间维。
+    :type time_dim: int
+    :return: 保持 ``state_dict`` 键不变的 checkpoint wrapper。
+    :rtype: nn.Module
+    :raises ValueError: 分块数、参数索引、时间长度或各分块输出不兼容时抛出。
 
     ----
 
-    .. _to_gc_function-en:
+    .. _checkpoint-module-en:
 
     * **English**
 
-    Convert a forward function to a GC-wrapped forward function.
-    This API can be used as a decorator or a conversion function.
+    Return a checkpoint wrapper that preserves parameter names, parameter objects,
+    and ``state_dict`` keys. Modules containing
+    :class:`~spikingjelly.activation_based.base.MemoryModule` use explicit state
+    during recomputation; neuron state and buffers are committed once. When
+    ``chunks > 1``, tensors selected by ``chunked_args`` are split along
+    ``time_dim``. Tensor outputs are concatenated along the same dimension, while
+    non-tensor outputs must be identical across chunks. Supported devices, dtypes,
+    and backends are determined by the wrapped module and compressor.
 
-    :param x_compressor: compressor
-    :type x_compressor: BaseSpikeCompressor
-
-    :param f_forward: forward function. If ``None``, use the decorator mode;
-        otherwise, use the conversion function mode. Defaults to ``None``.
-    :type f_forward: Optional[Callable]
-
-    :return: the GC-wrapped forward function
-    :rtype: Callable
-
-    ----
-
-    * **代码示例 | Example**
-
-    .. code-block:: python
-
-        import torch
-        from spikingjelly.activation_based.memopt import to_gc_function
-        from spikingjelly.activation_based.memopt import NullSpikeCompressor
-
-        x = torch.randn(5, 3, requires_grad=True)
-        weight = torch.randn(4, 3, requires_grad=True)
-        compressor = NullSpikeCompressor()
-
-
-        # Usage 1: as decorator
-        @to_gc_function(compressor)
-        def decorated_forward(x, weight):
-            return torch.matmul(x, weight.t())
-
-
-        result1 = decorated_forward(x, weight)
-
-
-        # Usage 2: as conversion function
-        def simple_forward(x, weight):
-            return torch.matmul(x, weight.t())
-
-
-        converted_forward = to_gc_function(compressor, simple_forward)
-        result2 = converted_forward(x, weight)
+    :param module: Module to wrap.
+    :type module: nn.Module
+    :param compressor: Optional compressor for the first positional tensor input;
+        ``None`` disables compression.
+    :type compressor: Optional[SpikeCompressor]
+    :param chunks: Number of temporal chunks; must be positive and no greater than
+        the temporal length.
+    :type chunks: int
+    :param chunked_args: Indices of positional tensor arguments to split.
+    :type chunked_args: tuple[int, ...]
+    :param time_dim: Temporal dimension used for input splitting and output joining.
+    :type time_dim: int
+    :return: Checkpoint wrapper with unchanged ``state_dict`` keys.
+    :rtype: nn.Module
+    :raises ValueError: If the chunk count, argument indices, temporal lengths, or
+        chunk outputs are incompatible.
     """
-
-    def decorator_function(forward_fn):
-        @functools.wraps(forward_fn)
-        def wrapped_f_forward(x_seq, *args):
-            return input_compressed_gc(forward_fn, x_compressor, x_seq, *args)
-
-        return wrapped_f_forward
-
-    if f_forward is None:  # as a decorator
-        return decorator_function
-    else:  # as a conversion function
-        return decorator_function(f_forward)
-
-
-class GCContainer(nn.Sequential):
-    def __init__(self, x_compressor: Optional[BaseSpikeCompressor], *args):
-        r"""
-        **API Language** - :ref:`中文 <GCContainer.__init__-cn>` | :ref:`English <GCContainer.__init__-en>`
-
-        ----
-
-        .. _GCContainer.__init__-cn:
-
-        * **中文**
-
-        以 ``nn.Sequential`` 风格构造梯度检查点片段（GC segment）。
-
-        :param x_compressor: 脉冲压缩器。如果为 ``None`` 则使用 ``NullSpikeCompressor``
-        :type x_compressor: Optional[BaseSpikeCompressor]
-
-        ----
-
-        .. _GCContainer.__init__-en:
-
-        * **English**
-
-        Construct a GC block module in nn.Sequential style.
-
-        :param x_compressor: spike compressor. If None, use ``NullSpikeCompressor``
-        :type x_compressor: Optional[BaseSpikeCompressor]
-
-        ----
-
-        * **代码示例 | Example**
-
-        .. code-block:: python
-
-            import torch
-            import torch.nn as nn
-            from spikingjelly.activation_based.memopt import GCContainer
-            from spikingjelly.activation_based.memopt import NullSpikeCompressor
-
-            container = GCContainer(
-                NullSpikeCompressor(), nn.Linear(10, 20), nn.ReLU(), nn.Linear(20, 5)
-            )
-
-            x = torch.randn(3, 10, requires_grad=True)
-            result = container(x)
-        """
-        super().__init__(*args)
-        self.x_compressor = (
-            NullSpikeCompressor() if x_compressor is None else x_compressor
-        )
-        self.f_forward = base.to_functional_forward(self)
-        self.num_states = len(list(base.memories(self)))
-        self._forward = (
-            self.stateless_forward if self.num_states == 0 else self.stateful_forward
-        )
-
-    def __getstate__(self) -> dict:
-        state = super().__getstate__()
-        state.pop("f_forward")
-        return state
-
-    def __setstate__(self, state: dict) -> None:
-        super().__setstate__(state)
-        self.f_forward = base.to_functional_forward(self)
-
-    def super_forward(self, *inputs: Any) -> Any:
-        """
-        The same as ``nn.Sequential.forward`` .
-
-        We have to explicitly specify and use this function in ``__init__`` instead of
-        using ``super().forward`` in order to avoid infinite recursion in multiprocess
-        scenarios!!
-        """
-        outputs = inputs
-        for module in self:
-            result = module(*outputs)
-            outputs = tuple(result) if isinstance(result, (tuple, list)) else (result,)
-        return outputs[0] if len(outputs) == 1 else outputs
-
-    def stateless_forward(self, x: torch.Tensor, *args: Any) -> Any:
-        return input_compressed_gc(self.super_forward, self.x_compressor, x, *args)
-
-    def stateful_forward(self, x: torch.Tensor, *args: Any) -> Any:
-        states = tuple(base.extract_memories(self))
-        num_inputs = 1 + len(args)
-
-        def flat_forward(*flat_args):
-            inputs = tuple(flat_args[:num_inputs])
-            current_states = tuple(flat_args[num_inputs:])
-            outputs, updated_states = self.f_forward(inputs, current_states)
-            return (*outputs, *updated_states)
-
-        ret = input_compressed_gc(flat_forward, self.x_compressor, x, *args, *states)
-        outputs, states = ret[: -self.num_states], ret[-self.num_states :]
-        base.load_memories(self, states)
-        return outputs[0] if len(outputs) == 1 else outputs
-
-    def forward(self, x, *args):
-        return self._forward(x, *args)
-
-    def extra_repr(self) -> str:
-        return f"x_compressor={self.x_compressor.__class__.__name__},"
+    if chunks < 1:
+        raise ValueError(f"chunks must be positive, got {chunks}.")
+    return checkpoint_wrapper(
+        module,
+        checkpoint_fn=_checkpoint_module_forward,
+        functional_forward=base.to_functional_forward(module),
+        compressor=compressor,
+        chunks=chunks,
+        chunked_args=chunked_args,
+        time_dim=time_dim,
+    )
 
 
-class TCGCContainer(GCContainer):
-    def __init__(
-        self,
-        x_compressor: Optional[BaseSpikeCompressor],
-        *args,
-        n_chunk: int = 1,
-        n_seq_inputs: int = 1,
-        n_outputs: int = 1,
-    ):
-        r"""
-        **API Language** - :ref:`中文 <TCGCContainer-cn>` | :ref:`English <TCGCContainer-en>`
+def _unwrap_checkpoint_module(module: nn.Module) -> nn.Module:
+    return module._checkpoint_wrapped_module
 
-        ----
 
-        .. _TCGCContainer-cn:
-
-        * **中文**
-
-        时间分块的 ``GCContainer`` 。
-
-        :param x_compressor: 脉冲压缩器。如果为 ``None`` 则使用 ``NullSpikeCompressor``
-        :type x_compressor: Optional[BaseSpikeCompressor]
-
-        :param args: 传递给 ``nn.Sequential`` 的若干模块。必须以位置参数形式传入
-
-        :param n_chunk: 请求的时间分块数量。实际数量为 ``min(n_chunk, T)``；当
-            ``n_chunk > T`` 时会记录警告。默认为1。必须以关键字参数形式传入
-        :type n_chunk: int
-
-        :param n_seq_inputs: 需要分块处理的序列输入数量。默认为1。必须以关键字参数形式传入
-        :type n_seq_inputs: int
-
-        :param n_outputs: 输出数量。本模块假设输出都是 ``torch.Tensor`` 。默认为1。必须以关键字参数形式传入
-        :type n_outputs: int
-
-        ----
-
-        .. _TCGCContainer-en:
-
-        * **English**
-
-        Temporally Chunked ``GCContainer`` .
-
-        :param x_compressor: spike compressor. If None, use ``NullSpikeCompressor``
-        :type x_compressor: Optional[BaseSpikeCompressor]
-
-        :param args: modules as arguments of ``nn.Sequential``. Must act as positional arguments
-
-        :param n_chunk: requested number of temporal chunks. The actual number is
-            ``min(n_chunk, T)``; a warning is logged when ``n_chunk > T``. Defaults to
-            1. Must act as keyword arguments
-        :type n_chunk: int
-
-        :param n_seq_inputs: number of sequence inputs. Default to 1. Must act as keyword arguments
-        :type n_seq_inputs: int
-
-        :param n_outputs: number of outputs. This container assumes that all outputs are ``torch.Tensor``.
-            Default to 1. Must act as keyword arguments
-        :type n_outputs: int
-
-        ----
-
-        * **代码示例 | Example**
-
-        .. code-block:: python
-
-            import torch
-            import torch.nn as nn
-            from spikingjelly.activation_based.memopt import TCGCContainer
-            from spikingjelly.activation_based.memopt import NullSpikeCompressor
-
-            # Basic usage
-            tc_container = TCGCContainer(
-                NullSpikeCompressor(),
-                nn.Linear(10, 20),
-                nn.ReLU(),
-                nn.Linear(20, 5),
-                n_chunk=4,
-            )
-            x_seq = torch.randn(8, 3, 10, requires_grad=True)  # T=8
-            result = tc_container(x_seq)
-            print(f"Input shape: {x_seq.shape}")
-            print(f"Output shape: {result.shape}")
-        """
-        super().__init__(x_compressor, *args)
-        self.n_chunk = n_chunk
-        self.n_seq_inputs = n_seq_inputs
-        self.n_outputs = n_outputs
-
-    def forward(self, x_seq: torch.Tensor, *args):
-        n_chunk = min(self.n_chunk, x_seq.shape[0])
-        if n_chunk != self.n_chunk:
-            logger.warning(
-                "TCGCContainer received n_chunk={:d} for sequence length T={:d}; using n_chunk={:d}.",
-                self.n_chunk,
-                x_seq.shape[0],
-                n_chunk,
-            )
-        seq_inputs = args[: self.n_seq_inputs - 1]
-        other_inputs = args[self.n_seq_inputs - 1 :]
-
-        chunked = [torch.tensor_split(x_seq, n_chunk, dim=0)] + [
-            torch.tensor_split(seq, n_chunk, dim=0) for seq in seq_inputs
-        ]
-        outputs_per_chunk = [[] for _ in range(self.n_outputs)]
-
-        for i in range(n_chunk):
-            current_inputs = [c[i] for c in chunked] + list(other_inputs)
-            outs = super().forward(*current_inputs)
-            if not isinstance(outs, tuple):
-                outs = (outs,)
-            for j, o in enumerate(outs):
-                outputs_per_chunk[j].append(o)
-
-        final_outputs = [torch.cat(chunks, dim=0) for chunks in outputs_per_chunk]
-
-        return final_outputs[0] if len(final_outputs) == 1 else tuple(final_outputs)
-
-    def extra_repr(self):
-        return (
-            f"x_compressor={self.x_compressor.__class__.__name__}, "
-            f"n_chunk={self.n_chunk}, "
-            f"n_seq_inputs={self.n_seq_inputs}, "
-            f"n_seq_outputs={self.n_outputs}"
-        )
+def _checkpoint_options(module: nn.Module) -> dict[str, object]:
+    return module.checkpoint_fn.keywords

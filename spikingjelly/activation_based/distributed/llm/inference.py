@@ -100,7 +100,6 @@ def load_for_inference(
         expected = {
             **expected,
             "model": model_config._checkpoint_metadata(),
-            "use_snn_memopt": unwrapped.snn_memopt_enabled,
             "mcore_recompute_granularity": transformer_config.recompute_granularity,
             "mcore_recompute_modules": transformer_config.recompute_modules,
         }
@@ -192,7 +191,6 @@ def evaluate(config: EvaluationConfig) -> dict[str, float]:
         raise RuntimeError("MCore distributed evaluation requires CUDA.")
     builder_cls = config.model.get_builder_cls()
     model_provider, forward_step = builder_cls(config.model).build(
-        use_snn_memopt=config.use_snn_memopt,
         resume=True,
     )
     dataset = _import_object(config.dataset_builder)(**config.dataset_kwargs)
@@ -587,7 +585,6 @@ def generate(
         )
     builder_cls = config.model.get_builder_cls()
     model_provider, _ = builder_cls(config.model).build(
-        use_snn_memopt=config.use_snn_memopt,
         resume=True,
     )
     return generate_mcore(

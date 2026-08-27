@@ -9,7 +9,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ... import base
-from ...memopt import in_gc_1st_forward
 
 __all__ = [
     "ChannelShardBatchNorm1d",
@@ -328,8 +327,7 @@ class _ChannelShardBatchNorm(nn.Module, base.StepModule):
 
     def _batch_norm(self, x: torch.Tensor) -> torch.Tensor:
         exponential_average_factor = self.momentum
-        checkpoint_forward = in_gc_1st_forward()
-        if self.training and self.track_running_stats and not checkpoint_forward:
+        if self.training and self.track_running_stats:
             self.num_batches_tracked.add_(1)
             if self.momentum is None:
                 exponential_average_factor = 1.0 / float(
@@ -337,8 +335,8 @@ class _ChannelShardBatchNorm(nn.Module, base.StepModule):
                 )
         return F.batch_norm(
             x,
-            None if checkpoint_forward else self.running_mean,
-            None if checkpoint_forward else self.running_var,
+            self.running_mean,
+            self.running_var,
             self.weight,
             self.bias,
             self.training or not self.track_running_stats,

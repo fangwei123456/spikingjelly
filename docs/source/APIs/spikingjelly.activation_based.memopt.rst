@@ -1,62 +1,26 @@
 spikingjelly.activation_based.memopt package
-=======================================================
+============================================
 
-本子包提供了减少 ``spikingjelly.activation_based`` 模型训练显存开销的工具。详情请参阅我们在 ICLR 2026 上发表的论文 `Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression <https://openreview.net/forum?id=nrBJ0Uvj7c>`_ 以及 `源代码仓库 <https://github.com/AllenYolk/snn-gradient-checkpointing>`_  。
+用于自定义梯度检查点结构和应用论文预设的训练显存优化工具。
 
-----
+Training-memory tools for custom checkpoint structures and the paper preset.
 
-This package provides tools for reducing training memory consumption of ``spikingjelly.activation_based`` models. See our ICLR 2026 paper `Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression <https://openreview.net/forum?id=nrBJ0Uvj7c>`_ and `source code repository <https://github.com/AllenYolk/snn-gradient-checkpointing>`_ for details.
-
-Optimization Pipeline
-+++++++++++++++++++++++++++++++++++
-
-基于梯度检查点和脉冲压缩的深度SNN训练显存自动优化工具。
-
-----
-
-Automatic memory optimization pipeline for deep SNN training based on gradient checkpointing and spike compression.
+Public API
+++++++++++
 
 .. list-table::
 
-    * - :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>`
-      - **The main API**. Perform memory optimization on a model.
-    * - :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>`
-      - Structured summary returned by ``memory_optimization(..., return_summary=True)``.
-    * - :data:`MEMOPT_PROFILES <spikingjelly.activation_based.memopt.pipeline.MEMOPT_PROFILES>`
-      - Supported high-level memopt presets.
-    * - :func:`resolve_device <spikingjelly.activation_based.memopt.pipeline.resolve_device>`
-      - Get the device of the current process.
-    * - :func:`apply_gc <spikingjelly.activation_based.memopt.pipeline.apply_gc>`
-      - Apply GC to a submodule.
-    * - :func:`get_module_and_parent <spikingjelly.activation_based.memopt.pipeline.get_module_and_parent>`
-      - Get a module and its parent module given its path.
+    * - :func:`checkpoint <spikingjelly.activation_based.memopt.checkpointing.checkpoint>`
+      - Checkpoint one callable and optionally compress its first tensor input.
+    * - :func:`checkpoint_module <spikingjelly.activation_based.memopt.checkpointing.checkpoint_module>`
+      - Wrap one module transparently, with optional temporal chunks.
+    * - :func:`optimize_memory <spikingjelly.activation_based.memopt.pipeline.optimize_memory>`
+      - Apply the high-level progressive checkpoint preset.
 
 .. toctree::
     :hidden:
 
     pipeline <spikingjelly.activation_based.memopt.pipeline>
-
-Gradient Checkpointing Tools
-+++++++++++++++++++++++++++++++++++
-
-用于实现带输入压缩的梯度检查点 (GC) 的工具。
-
-----
-
-Tools for implementing gradient checkpointing (GC) with input compression.
-
-.. list-table::
-
-    * - :func:`in_gc_1st_forward <spikingjelly.activation_based.memopt.checkpointing.in_gc_1st_forward>`
-      - Whether in the first forward pass of GC.
-    * - :func:`query_autocast <spikingjelly.activation_based.memopt.checkpointing.query_autocast>`
-      - Query autocast information.
-    * - :func:`input_compressed_gc <spikingjelly.activation_based.memopt.checkpointing.input_compressed_gc>`
-      - Wrap a function with GC and input compression.
-    * - :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
-      - Module container representing a GC segment.
-    * - :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>`
-      - Module container representing a temporally chunked GC segment.
 
 .. toctree::
     :hidden:
@@ -74,10 +38,8 @@ Compressors that convert spike tensors represented in floating-point numbers int
 
 .. list-table::
 
-    * - :class:`BaseSpikeCompressor <spikingjelly.activation_based.memopt.compress.BaseSpikeCompressor>`
-      - Base class for spike compressors.
-    * - :class:`NullSpikeCompressor <spikingjelly.activation_based.memopt.compress.NullSpikeCompressor>`
-      - Do not perform any compression/decompression.
+    * - :class:`SpikeCompressor <spikingjelly.activation_based.memopt.compress.SpikeCompressor>`
+      - Abstract base class for stateless compressors.
     * - :class:`BooleanSpikeCompressor <spikingjelly.activation_based.memopt.compress.BooleanSpikeCompressor>`
       - Convert spike tensors to/from boolean tensors.
     * - :class:`Uint8SpikeCompressor <spikingjelly.activation_based.memopt.compress.Uint8SpikeCompressor>`

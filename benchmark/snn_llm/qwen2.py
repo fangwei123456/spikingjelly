@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import math
 import re
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
@@ -9,6 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
 import torch.nn as nn
+from torch.utils.checkpoint import checkpoint as torch_checkpoint
 
 from spikingjelly.activation_based import quantize
 from spikingjelly.activation_based.ann2snn.recipes.qwen2 import (
@@ -25,11 +27,6 @@ from spikingjelly.activation_based.distributed.llm import (
     SGLangExportStage,
     export_sglang_artifact,
 )
-from spikingjelly.activation_based.memopt import (
-    NullSpikeCompressor,
-    input_compressed_gc,
-)
-
 from ._causal_lm import forward_step
 
 if TYPE_CHECKING:
@@ -95,13 +92,14 @@ def _encode_envelope(
     hidden: torch.Tensor,
     scale: torch.Tensor,
     time_steps: int,
-    compressor: NullSpikeCompressor | None = None,
+    checkpoint_enabled: bool = False,
 ) -> torch.Tensor:
-    if compressor is not None and torch.is_grad_enabled():
-        return input_compressed_gc(
+    if checkpoint_enabled and torch.is_grad_enabled():
+        return torch_checkpoint(
             lambda value: _encode_envelope(value, scale, time_steps),
-            compressor,
             hidden,
+            use_reentrant=True,
+            preserve_rng_state=False,
         )
     shape = hidden.shape
     flat = hidden.flatten(2)
@@ -128,20 +126,21 @@ class _InputQCFSRMSNorm(nn.RMSNorm):
         eps: float,
         scale: torch.Tensor,
         time_steps: int,
-        use_snn_memopt: bool,
+        checkpoint_enabled: bool,
     ) -> None:
         del config
         super().__init__(hidden_size, eps=eps)
         self.time_steps = time_steps
         self.register_buffer("qcfs_scale", scale.detach().clone())
-        self.compressor = NullSpikeCompressor() if use_snn_memopt else None
+        self.checkpoint_enabled = checkpoint_enabled
 
     def forward(self, hidden: torch.Tensor) -> torch.Tensor:
-        if self.compressor is not None and torch.is_grad_enabled():
-            hidden = input_compressed_gc(
+        if self.checkpoint_enabled and torch.is_grad_enabled():
+            hidden = torch_checkpoint(
                 lambda value: _encode_input(value, self.qcfs_scale, self.time_steps),
-                self.compressor,
                 hidden,
+                use_reentrant=True,
+                preserve_rng_state=False,
             )
         else:
             hidden = _encode_input(hidden, self.qcfs_scale, self.time_steps)
@@ -181,7 +180,7 @@ def _attention_builder(base: type) -> type:
             key_scale: torch.Tensor,
             value_scale: torch.Tensor,
             time_steps: int,
-            use_snn_memopt: bool,
+            checkpoint_enabled: bool,
             **kwargs: Any,
         ) -> None:
             super().__init__(*args, **kwargs)
@@ -189,7 +188,7 @@ def _attention_builder(base: type) -> type:
             self.register_buffer("query_scale", query_scale.detach().clone())
             self.register_buffer("key_scale", key_scale.detach().clone())
             self.register_buffer("value_scale", value_scale.detach().clone())
-            self.compressor = NullSpikeCompressor() if use_snn_memopt else None
+            self.checkpoint_enabled = checkpoint_enabled
 
         def forward(
             self,
@@ -200,13 +199,13 @@ def _attention_builder(base: type) -> type:
             **kwargs: Any,
         ) -> torch.Tensor:
             query = _encode_envelope(
-                query, self.query_scale, self.time_steps, self.compressor
+                query, self.query_scale, self.time_steps, self.checkpoint_enabled
             )
             key = _encode_envelope(
-                key, self.key_scale, self.time_steps, self.compressor
+                key, self.key_scale, self.time_steps, self.checkpoint_enabled
             )
             value = _encode_envelope(
-                value, self.value_scale, self.time_steps, self.compressor
+                value, self.value_scale, self.time_steps, self.checkpoint_enabled
             )
             return super().forward(query, key, value, *args, **kwargs)
 
@@ -236,17 +235,17 @@ def _row_linear_builder(base: type) -> type:
             *args: Any,
             scale: torch.Tensor,
             time_steps: int,
-            use_snn_memopt: bool,
+            checkpoint_enabled: bool,
             **kwargs: Any,
         ) -> None:
             super().__init__(*args, **kwargs)
             self.time_steps = time_steps
             self.register_buffer("qcfs_scale", scale.detach().clone())
-            self.compressor = NullSpikeCompressor() if use_snn_memopt else None
+            self.checkpoint_enabled = checkpoint_enabled
 
         def forward(self, hidden: torch.Tensor, *args: Any, **kwargs: Any):
             hidden = _encode_envelope(
-                hidden, self.qcfs_scale, self.time_steps, self.compressor
+                hidden, self.qcfs_scale, self.time_steps, self.checkpoint_enabled
             )
             return super().forward(hidden, *args, **kwargs)
 
@@ -429,7 +428,8 @@ def model_provider(
     calibration: Qwen2SNNCalibration,
     conversion: Qwen2SNNConfig,
     config: Qwen2Config,
-    use_snn_memopt: bool,
+    memopt_level: int,
+    memopt_checkpoint_budget: str,
     pre_process: bool,
     post_process: bool,
 ) -> "MegatronModule":
@@ -452,8 +452,10 @@ def model_provider(
     :type conversion: Qwen2SNNConfig
     :param config: 完整 Qwen2 模型配置。
     :type config: Qwen2Config
-    :param use_snn_memopt: 是否 checkpoint 确定性 QCFS 变换。
-    :type use_snn_memopt: bool
+    :param memopt_level: SpikingJelly memopt 级别。
+    :type memopt_level: int
+    :param memopt_checkpoint_budget: checkpoint 数量预设。
+    :type memopt_checkpoint_budget: str
     :param pre_process: 当前 stage 是否拥有 embedding。
     :type pre_process: bool
     :param post_process: 当前 stage 是否拥有 LM head。
@@ -478,8 +480,10 @@ def model_provider(
     :type conversion: Qwen2SNNConfig
     :param config: Complete Qwen2 model configuration.
     :type config: Qwen2Config
-    :param use_snn_memopt: Whether deterministic QCFS transforms are checkpointed.
-    :type use_snn_memopt: bool
+    :param memopt_level: SpikingJelly memopt level.
+    :type memopt_level: int
+    :param memopt_checkpoint_budget: Checkpoint-count preset.
+    :type memopt_checkpoint_budget: str
     :param pre_process: Whether this stage owns the embedding.
     :type pre_process: bool
     :param post_process: Whether this stage owns the LM head.
@@ -568,15 +572,22 @@ def model_provider(
         row_base = RowParallelLinear
     attention_builder = _attention_builder(attention_base)
     row_builder = _row_linear_builder(row_base)
-    attention_memopt = (
-        use_snn_memopt and transformer_config.recompute_granularity != "selective"
+    local_layers = get_num_layers_to_build(transformer_config)
+    checkpoint_layers = math.ceil(
+        local_layers
+        * {"speed": 0.5, "balanced": 0.75, "memory": 1.0}[memopt_checkpoint_budget]
     )
     rank = parallel_state.get_tensor_model_parallel_rank()
     world_size = parallel_state.get_tensor_model_parallel_world_size()
     offset = get_transformer_layer_offset(transformer_config)
     specs = []
-    for local_index in range(get_num_layers_to_build(transformer_config)):
+    for local_index in range(local_layers):
         global_index = offset + local_index
+        checkpoint_enabled = bool(memopt_level and local_index < checkpoint_layers)
+        attention_checkpoint = bool(
+            checkpoint_enabled
+            and transformer_config.recompute_granularity != "selective"
+        )
         scales = calibration.layer_scales[global_index]
         spec = (
             get_gpt_layer_with_transformer_engine_spec()
@@ -588,7 +599,7 @@ def model_provider(
                 _InputQCFSRMSNorm,
                 scale=calibration.input_scale,
                 time_steps=conversion.time_steps,
-                use_snn_memopt=use_snn_memopt,
+                checkpoint_enabled=checkpoint_enabled,
             )
             if global_index == 0
             else _rms_norm
@@ -602,7 +613,7 @@ def model_provider(
             key_scale=_local_chunk(scales["key"], rank, world_size),
             value_scale=_local_chunk(scales["value"], rank, world_size),
             time_steps=conversion.time_steps,
-            use_snn_memopt=attention_memopt,
+            checkpoint_enabled=attention_checkpoint,
         )
         spec.submodules.mlp = functools.partial(
             MLP.as_mlp_submodule,
@@ -612,7 +623,7 @@ def model_provider(
                     row_builder,
                     scale=_local_chunk(scales["mlp"], rank, world_size),
                     time_steps=conversion.time_steps,
-                    use_snn_memopt=use_snn_memopt,
+                    checkpoint_enabled=checkpoint_enabled,
                 ),
             ),
         )
@@ -637,7 +648,7 @@ def model_provider(
         load_hf_qwen2_weights(model, source)
         del source
     model.snn_model_config = config
-    model.snn_memopt_enabled = use_snn_memopt
+    model.snn_memopt_level = memopt_level
     model.temporal_output_reduction = "sum"
     model.checkpoint_metadata = {
         "recipe_name": "qwen2-qcfs-sg",
@@ -652,7 +663,11 @@ def model_provider(
 
 class Qwen2Builder(ModelBuilder):
     def build(
-        self, *, use_snn_memopt: bool, resume: bool
+        self,
+        *,
+        memopt_level: int = 0,
+        memopt_checkpoint_budget: str = "memory",
+        resume: bool,
     ) -> tuple["Callable", "Callable"]:
         from transformers import AutoConfig
 
@@ -679,7 +694,8 @@ class Qwen2Builder(ModelBuilder):
                 calibration,
                 conversion,
                 self.config,
-                use_snn_memopt,
+                memopt_level,
+                memopt_checkpoint_budget,
             ),
             forward_step,
         )
