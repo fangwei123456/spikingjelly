@@ -1345,7 +1345,7 @@ class SpikformerBuilder(ModelBuilder):
                 lambda current: current(dummy),
                 level=memopt_level,
                 checkpoint_budget=memopt_checkpoint_budget,
-                compress=memopt_compress_inputs,
+                compress=False,
                 split_fn=self._memopt_split,
                 can_chunk=self._memopt_can_chunk,
                 process_group=memopt_process_group,

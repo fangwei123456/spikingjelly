@@ -244,9 +244,10 @@ combines their observations so every rank builds the same structure.
 
 The built-in distributed Vision training path creates this group and exposes
 ``memopt_level``, ``memopt_checkpoint_budget``, and
-``memopt_compress_inputs``. MCore training exposes the level and budget settings,
-but its Transformer path checkpoints only predefined module boundaries. It does
-not force spatial or temporal splitting into the Transformer.
+``memopt_compress_inputs``. Input compression is enabled only when the model recipe
+guarantees strictly binary candidate inputs. MCore training exposes the level and
+budget settings, but its Transformer path checkpoints only predefined module
+boundaries. It does not force spatial or temporal splitting into the Transformer.
 
 Evaluation, prediction, generation, and model export omit training-time
 checkpoint wrappers. Because ``checkpoint_module`` preserves ``state_dict``
@@ -334,7 +335,8 @@ The distributed benchmark uses DDP4, SEW-ResNet34, BF16, ``T=4``, and random
 synthetic 128 × 128 inputs. The local batch is 32 and the global batch is 128.
 Each run executes 30 steps, discards the first 5 for timing, and measures the
 remaining 25. The baseline uses ``memopt_level=0``. The memopt run uses level 1
-with its default memory budget and input compression:
+with its default memory budget. The default ``ADD`` residual does not guarantee
+strictly binary block inputs, so this model does not apply bit compression:
 
 .. code-block:: bash
 
@@ -354,13 +356,13 @@ Change the final argument to ``--memopt-level 0`` to reproduce the baseline.
       - versus baseline
       - total throughput (images/s)
     * - baseline
-      - 1.83 (1.75--1.83)
+      - 1.75 (1.75--1.83)
       - --
-      - 1496.2 (1416.9--1499.3)
+      - 1103.7 (1070.1--1116.9)
     * - memopt level 1
-      - 1.08 (1.08--1.08)
-      - -40.7%
-      - 821.6 (720.7--836.6)
+      - 1.19 (1.19--1.19)
+      - -31.9%
+      - 566.9 (547.9--571.9)
 
 In this configuration, four-GPU DDP applied the checkpoints consistently across
 ranks. The memory and speed changes in the table belong to this workload. Rerun

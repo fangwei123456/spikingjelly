@@ -511,39 +511,93 @@ def optimize_memory(
     can_chunk: Optional[Callable[[nn.Module], bool]] = None,
     process_group: Optional[ProcessGroup] = None,
 ) -> nn.Module:
-    r"""Apply the SpikingJelly memory-optimization preset in place.
+    r"""
+    **API Language** - :ref:`中文 <optimize-memory-cn>` | :ref:`English <optimize-memory-en>`
 
-    **中文：** 该高层预设实现论文中的四级累进策略：选择性 checkpoint、空间
-    切分、时间切分和贪心解包。``level=0`` 严格关闭优化。用户自定义检查点结构时，
-    应直接组合 :func:`checkpoint` 和 :func:`checkpoint_module`。
+    ----
 
-    **English:** This high-level preset implements the paper's four progressive
-    stages: selective checkpointing, spatial splitting, temporal splitting, and
-    greedy unwrapping. ``level=0`` strictly disables optimization. Compose
-    :func:`checkpoint` and :func:`checkpoint_module` for custom structures.
+    .. _optimize-memory-cn:
 
-    :param model: model mutated in place / 原地修改的模型
+    * **中文**
+
+    原地应用论文中的四级渐进策略：选择性 checkpoint、空间切分、时间切分和贪心
+    解包。``level=0`` 不修改模型。level 大于 0 时执行一次代表性前向；空间或时间
+    搜索还会执行前向和反向并测量 CUDA 峰值显存。自动时间切分固定使用第 0 维。
+    多进程调用时，``process_group`` 内的 rank 必须执行相同的模型结构和调用序列。
+
+    自定义检查点结构应直接组合 :func:`checkpoint` 和 :func:`checkpoint_module`。
+
+    :param model: 被原地修改的模型。
     :type model: nn.Module
-    :param targets: module types considered by level 1 / level 1 候选模块类型
+    :param targets: level 1 可选择的模块类型。
     :type targets: type or tuple[type, ...]
-    :param example_forward: representative ``callable(model)`` / 代表性前向回调
+    :param example_forward: 接收 ``model`` 并执行代表性前向的回调；level 大于 0 时必填。
     :type example_forward: Optional[Callable[[nn.Module], object]]
-    :param level: optimization level from 0 to 4 / 0 到 4 的优化级别
+    :param level: 0 到 4 的优化级别。
     :type level: Literal[0, 1, 2, 3, 4]
-    :param checkpoint_budget: target ratio preset / 目标比例预设
+    :param checkpoint_budget: ``"speed"``、``"balanced"`` 或 ``"memory"``，
+        分别选择约 50%、75% 或 100% 的候选模块。
     :type checkpoint_budget: Literal["speed", "balanced", "memory"]
-    :param compress: auto-compress strictly binary first inputs / 自动压缩严格二值首输入
+    :param compress: 是否自动压缩探测结果为严格二值的首个 tensor 输入。
     :type compress: bool
-    :param split_fn: ordered descendant selector for level 2 / level 2 有序子模块选择函数
+    :param split_fn: level 2 空间切分时，返回候选模块内有序且不重叠后代模块的回调。
     :type split_fn: Optional[Callable[[nn.Module], Sequence[nn.Module]]]
-    :param can_chunk: temporal-separability predicate for final leaves; this preset
-        chunks dimension 0 / 最终片段时间可分判断；本预设固定切分第 0 维
+    :param can_chunk: 判断最终叶模块能否沿第 0 维独立计算的回调。
     :type can_chunk: Optional[Callable[[nn.Module], bool]]
-    :param process_group: ranks sharing one stage structure / 共享当前 stage 结构的进程组
+    :param process_group: 共享同一 stage 结构和优化决策的进程组；``None`` 表示本地执行。
     :type process_group: Optional[ProcessGroup]
-    :return: the same ``model`` object / 同一个 ``model`` 对象
+    :return: 传入的同一个 ``model`` 对象。
     :rtype: nn.Module
-    :raises ValueError: for invalid options or a missing example at level 1-4 / 参数无效或缺少样本
+    :raises ValueError: 参数无效、缺少样本或无法原地替换根模型时抛出。
+    :raises RuntimeError: 需要显存搜索但未使用 CUDA，或指定进程组但 distributed 未初始化时抛出。
+
+    ----
+
+    .. _optimize-memory-en:
+
+    * **English**
+
+    Apply the paper's four progressive stages in place: selective checkpointing,
+    spatial splitting, temporal splitting, and greedy unwrapping. ``level=0`` does
+    not modify the model. Levels above 0 run one representative forward pass;
+    spatial or temporal search also runs forward and backward passes while measuring
+    peak CUDA memory. Automatic temporal splitting always uses dimension 0. With
+    multiple processes, every rank in ``process_group`` must execute the same model
+    structure and call sequence.
+
+    Compose :func:`checkpoint` and :func:`checkpoint_module` for custom checkpoint
+    structures.
+
+    :param model: Model mutated in place.
+    :type model: nn.Module
+    :param targets: Module types considered at level 1.
+    :type targets: type or tuple[type, ...]
+    :param example_forward: Callback that receives ``model`` and runs a
+        representative forward pass; required when ``level > 0``.
+    :type example_forward: Optional[Callable[[nn.Module], object]]
+    :param level: Optimization level from 0 to 4.
+    :type level: Literal[0, 1, 2, 3, 4]
+    :param checkpoint_budget: ``"speed"``, ``"balanced"``, or ``"memory"``;
+        selects about 50%, 75%, or 100% of candidate modules, respectively.
+    :type checkpoint_budget: Literal["speed", "balanced", "memory"]
+    :param compress: Whether to compress first tensor inputs found to be strictly
+        binary during probing.
+    :type compress: bool
+    :param split_fn: Level-2 callback returning ordered, non-overlapping descendants
+        of a candidate module.
+    :type split_fn: Optional[Callable[[nn.Module], Sequence[nn.Module]]]
+    :param can_chunk: Callback deciding whether a final leaf can be computed
+        independently along dimension 0.
+    :type can_chunk: Optional[Callable[[nn.Module], bool]]
+    :param process_group: Process group sharing one stage structure and optimization
+        decisions; ``None`` runs locally.
+    :type process_group: Optional[ProcessGroup]
+    :return: The same ``model`` object.
+    :rtype: nn.Module
+    :raises ValueError: If options are invalid, the example is missing, or the root
+        model would have to be replaced.
+    :raises RuntimeError: If memory search runs without CUDA, or a process group is
+        given before distributed initialization.
 
     Reference: "Towards Lossless Memory-efficient Training of Spiking Neural
     Networks via Gradient Checkpointing and Spike Compression", ICLR 2026.

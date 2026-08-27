@@ -457,7 +457,7 @@ class ModelBuilder(abc.ABC):
         :type micro_batch_size: int
         :param memopt_level: SpikingJelly memopt level。
         :type memopt_level: int
-        :param memopt_compress_inputs: 是否压缩 checkpoint 输入。
+        :param memopt_compress_inputs: 架构保证候选输入严格二值时，是否启用压缩。
         :type memopt_compress_inputs: bool
         :param memopt_checkpoint_budget: checkpoint 数量预设。
         :type memopt_checkpoint_budget: Literal["speed", "balanced", "memory"]
@@ -836,8 +836,9 @@ receives ``dataset_kwargs`` and returns train and validation datasets.
 :param memopt_level: SpikingJelly memopt level，范围 ``[0, 4]``。 / SpikingJelly
     memopt level in ``[0, 4]``.
 :type memopt_level: int
-:param memopt_compress_inputs: 是否压缩 checkpoint 输入。 / Whether to compress
-    checkpoint inputs.
+:param memopt_compress_inputs: 架构保证候选输入严格二值时，是否启用压缩。 /
+    Whether to compress candidate inputs when the architecture guarantees that
+    they are strictly binary.
 :type memopt_compress_inputs: bool
 :param memopt_checkpoint_budget: ``"speed"``、``"balanced"`` 或 ``"memory"``
     checkpoint 数量预设。 / ``"speed"``, ``"balanced"``, or ``"memory"``

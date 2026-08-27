@@ -227,8 +227,9 @@ tensor 输出沿 ``time_dim`` 拼接；非 tensor 输出必须在各块中保持
 
 内置的分布式视觉训练会自动创建这个进程组，并提供
 ``memopt_level``、``memopt_checkpoint_budget`` 和
-``memopt_compress_inputs``。MCore 训练提供 level 和 budget 配置，但只在预先
-确定的 Transformer 边界设置检查点，不会强行进行空间或时间切分。
+``memopt_compress_inputs``。输入压缩只在模型 recipe 能保证候选输入严格二值时启用。
+MCore 训练提供 level 和 budget 配置，但只在预先确定的 Transformer 边界设置检查点，
+不会强行进行空间或时间切分。
 
 评测、预测、生成和模型导出不会保留训练期的检查点包装。由于
 ``checkpoint_module`` 保持 ``state_dict`` 兼容，推理时不需要转换权重。
@@ -309,8 +310,9 @@ on-demand 实例，配备 4 张 RTX 4090 24 GiB，卡间没有 NVLink；软件�
 
 多卡测试使用 DDP4、SEW-ResNet34、BF16、``T=4`` 和 128 × 128 随机合成输入。
 每卡 batch 为 32，global batch 为 128。每次运行 30 step，前 5 step 只预热，后
-25 step 计时。baseline 使用 ``memopt_level=0``；memopt 配置使用 level 1、
-``checkpoint_budget="memory"`` 和输入压缩：
+25 step 计时。baseline 使用 ``memopt_level=0``；memopt 配置使用 level 1 和
+``checkpoint_budget="memory"``。默认的 ``ADD`` 残差不能保证 block 输入严格
+二值，因此这个模型不会自动做 bit 压缩：
 
 .. code-block:: bash
 
@@ -330,13 +332,13 @@ on-demand 实例，配备 4 张 RTX 4090 24 GiB，卡间没有 NVLink；软件�
       - 相对 baseline
       - 总吞吐 (images/s)
     * - baseline
-      - 1.83 (1.75--1.83)
+      - 1.75 (1.75--1.83)
       - --
-      - 1496.2 (1416.9--1499.3)
+      - 1103.7 (1070.1--1116.9)
     * - memopt level 1
-      - 1.08 (1.08--1.08)
-      - -40.7%
-      - 821.6 (720.7--836.6)
+      - 1.19 (1.19--1.19)
+      - -31.9%
+      - 566.9 (547.9--571.9)
 
 在这组配置里，四卡 DDP 成功同步应用了检查点。表中的显存和速度变化只适用于上述
 模型和输入；正式训练前应使用实际模型、输入和拓扑重测。

@@ -30,21 +30,53 @@ def checkpoint(
     compressor: Optional[SpikeCompressor] = None,
     **kwargs: object,
 ) -> object:
-    r"""Checkpoint a function and optionally compress its first tensor input.
+    r"""
+    **API Language** - :ref:`中文 <memopt-checkpoint-cn>` | :ref:`English <memopt-checkpoint-en>`
 
-    **中文：** 使用 PyTorch non-reentrant gradient checkpoint。支持关键字参数和
-    pytree 输入输出。``compressor`` 仅压缩第一个位置 tensor 参数；其他参数由
-    PyTorch checkpoint 原样管理。
+    ----
 
-    **English:** Use PyTorch non-reentrant gradient checkpointing with kwargs
-    and pytree support. ``compressor`` applies only to the first positional tensor;
-    PyTorch manages all remaining inputs unchanged.
+    .. _memopt-checkpoint-cn:
 
-    :param function: function to checkpoint / 被检查点包装的函数
+    * **中文**
+
+    使用 PyTorch non-reentrant gradient checkpoint 执行 ``function``，支持关键字
+    参数和 pytree 输入输出。指定 ``compressor`` 时，仅压缩第一个位置 tensor
+    参数；其他参数由 PyTorch checkpoint 原样管理。输入的 device 和 dtype 支持范围
+    由 ``function`` 与 ``compressor`` 决定。
+
+    :param function: 需要 checkpoint 的可调用对象。
     :type function: Callable
-    :param compressor: optional input compressor / 可选输入压缩器
+    :param args: 传给 ``function`` 的位置参数。
+    :type args: object
+    :param compressor: 可选的首个位置 tensor 输入压缩器。``None`` 表示不压缩。
     :type compressor: Optional[SpikeCompressor]
-    :return: function outputs / 函数输出
+    :param kwargs: 传给 ``function`` 的关键字参数。
+    :type kwargs: object
+    :return: ``function`` 的输出。
+    :rtype: object
+
+    ----
+
+    .. _memopt-checkpoint-en:
+
+    * **English**
+
+    Run ``function`` with PyTorch non-reentrant gradient checkpointing, including
+    keyword arguments and pytree inputs and outputs. When ``compressor`` is set,
+    only the first positional tensor is compressed; PyTorch checkpointing manages
+    all other inputs unchanged. Supported devices and dtypes are determined by
+    ``function`` and ``compressor``.
+
+    :param function: Callable to checkpoint.
+    :type function: Callable
+    :param args: Positional arguments passed to ``function``.
+    :type args: object
+    :param compressor: Optional compressor for the first positional tensor input;
+        ``None`` disables compression.
+    :type compressor: Optional[SpikeCompressor]
+    :param kwargs: Keyword arguments passed to ``function``.
+    :type kwargs: object
+    :return: Output of ``function``.
     :rtype: object
     """
     target_index = next(
@@ -253,30 +285,66 @@ def checkpoint_module(
     chunked_args: tuple[int, ...] = (0,),
     time_dim: int = 0,
 ) -> nn.Module:
-    r"""Return a state-dict-transparent checkpoint wrapper for ``module``.
+    r"""
+    **API Language** - :ref:`中文 <checkpoint-module-cn>` | :ref:`English <checkpoint-module-en>`
 
-    **中文：** 包装模块并保持参数名称与 ``state_dict`` 键不变。包含
-    :class:`MemoryModule` 的模块通过显式 functional state 重算。``chunks > 1``
-    时，指定位置参数沿 ``time_dim`` 分块，tensor 输出沿同一维拼接。
+    ----
 
-    **English:** Wrap a module without changing parameter names or state-dict
-    keys. Modules containing :class:`MemoryModule` use explicit functional state
-    during recomputation. With ``chunks > 1``, selected positional inputs are split
-    along ``time_dim`` and tensor outputs are concatenated along that dimension.
+    .. _checkpoint-module-cn:
 
-    :param module: module to wrap / 待包装模块
+    * **中文**
+
+    返回保留参数名称、参数对象和 ``state_dict`` 键的 checkpoint wrapper。包含
+    :class:`~spikingjelly.activation_based.base.MemoryModule` 的模块使用显式状态重算；
+    神经元状态和 buffer 只提交一次。``chunks > 1`` 时，``chunked_args`` 指定的
+    tensor 沿 ``time_dim`` 分块，tensor 输出沿同一维拼接，非 tensor 输出必须在各
+    分块中相同。输入的 device、dtype 和 backend 支持范围由被包装模块和压缩器决定。
+
+    :param module: 需要包装的模块。
     :type module: nn.Module
-    :param compressor: optional first-input compressor / 可选首输入压缩器
+    :param compressor: 可选的首个位置 tensor 输入压缩器。``None`` 表示不压缩。
     :type compressor: Optional[SpikeCompressor]
-    :param chunks: temporal chunk count / 时间分块数
+    :param chunks: 时间分块数，必须大于 0，且不能超过时间维长度。
     :type chunks: int
-    :param chunked_args: positional tensor indices to split / 待切分位置参数索引
+    :param chunked_args: 需要分块的位置 tensor 参数索引。
     :type chunked_args: tuple[int, ...]
-    :param time_dim: temporal dimension / 时间维
+    :param time_dim: 输入分块和输出拼接使用的时间维。
     :type time_dim: int
-    :return: transparent checkpoint wrapper / 透明检查点 wrapper
+    :return: 保持 ``state_dict`` 键不变的 checkpoint wrapper。
     :rtype: nn.Module
-    :raises ValueError: if chunk configuration or outputs are incompatible / 分块配置或输出不兼容
+    :raises ValueError: 分块数、参数索引、时间长度或各分块输出不兼容时抛出。
+
+    ----
+
+    .. _checkpoint-module-en:
+
+    * **English**
+
+    Return a checkpoint wrapper that preserves parameter names, parameter objects,
+    and ``state_dict`` keys. Modules containing
+    :class:`~spikingjelly.activation_based.base.MemoryModule` use explicit state
+    during recomputation; neuron state and buffers are committed once. When
+    ``chunks > 1``, tensors selected by ``chunked_args`` are split along
+    ``time_dim``. Tensor outputs are concatenated along the same dimension, while
+    non-tensor outputs must be identical across chunks. Supported devices, dtypes,
+    and backends are determined by the wrapped module and compressor.
+
+    :param module: Module to wrap.
+    :type module: nn.Module
+    :param compressor: Optional compressor for the first positional tensor input;
+        ``None`` disables compression.
+    :type compressor: Optional[SpikeCompressor]
+    :param chunks: Number of temporal chunks; must be positive and no greater than
+        the temporal length.
+    :type chunks: int
+    :param chunked_args: Indices of positional tensor arguments to split.
+    :type chunked_args: tuple[int, ...]
+    :param time_dim: Temporal dimension used for input splitting and output joining.
+    :type time_dim: int
+    :return: Checkpoint wrapper with unchanged ``state_dict`` keys.
+    :rtype: nn.Module
+    :raises ValueError: If the chunk count, argument indices, temporal lengths, or
+        chunk outputs are incompatible.
     """
     if chunks < 1:
         raise ValueError(f"chunks must be positive, got {chunks}.")
