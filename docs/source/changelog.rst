@@ -63,6 +63,8 @@ Module: ``spikingjelly.activation_based.monitor``.
 - STDP learners now clear consumed monitor records without invalidating
   per-layer indexes, reject mismatched input/output record counts, and treat
   empty record buffers as a no-op.
+- ``GPUMonitor`` now stops promptly between samples, invokes ``nvidia-smi``
+  without a shell, reports command failures, and closes its TensorBoard writer.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

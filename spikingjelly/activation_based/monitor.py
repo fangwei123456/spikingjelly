@@ -1,8 +1,7 @@
 import datetime
 import os
-import re
+import subprocess
 import threading
-import time
 from types import TracebackType
 from typing import Callable, Optional, Self, Union
 
@@ -758,10 +757,10 @@ class GPUMonitor(threading.Thread):
     def __init__(
         self,
         log_dir: Optional[str] = None,
-        gpu_ids: tuple = (0,),
+        gpu_ids: tuple[int, ...] = (0,),
         interval: float = 600.0,
-        start_now=True,
-    ):
+        start_now: bool = True,
+    ) -> None:
         r"""
         **API Language** - :ref:`中文 <GPUMonitor.__init__-cn>` | :ref:`English <GPUMonitor.__init__-en>`
 
@@ -793,6 +792,8 @@ class GPUMonitor(threading.Thread):
             后才开始记录数据
         :type start_now: bool
 
+        :raises ValueError: 当 ``gpu_ids`` 为空或 ``interval`` 不为正数时抛出
+
         ----
 
         .. _GPUMonitor.__init__-en:
@@ -822,6 +823,8 @@ class GPUMonitor(threading.Thread):
             it will start after the user call ``start()`` manually
         :type start_now: bool
 
+        :raises ValueError: If ``gpu_ids`` is empty or ``interval`` is not positive
+
         ----
 
         * **示例代码 | Example**
@@ -841,58 +844,119 @@ class GPUMonitor(threading.Thread):
             # 0 %, 376 MiB
         """
         super().__init__()
+        if not gpu_ids:
+            raise ValueError("gpu_ids must not be empty.")
+        if interval <= 0:
+            raise ValueError("interval must be positive.")
+
+        self.log_dir = log_dir
         self.gpu_ids = gpu_ids
         self.interval = interval
-        self.stopped = False
-        self.cmds = "nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv"
-        self.cmds += " -i "
-        id_str = []
-        for gpu_id in self.gpu_ids:
-            id_str.append(str(gpu_id))
-        self.cmds += ",".join(id_str)
+        self._stop_event = threading.Event()
+        self.command = [
+            "nvidia-smi",
+            "--query-gpu=index,utilization.gpu,memory.used",
+            "--format=csv,noheader,nounits",
+            "-i",
+            ",".join(map(str, gpu_ids)),
+        ]
         self.step = 0
-
-        if log_dir is None:
-            self.writer = None
-        else:
-            self.writer = SummaryWriter(os.path.join(log_dir, "gpu_monitor"))
+        self.writer = None
 
         if start_now:
             self.start()
 
-    def stop(self):
-        self.stopped = True
+    def stop(self) -> None:
+        r"""
+        **API Language** - :ref:`中文 <GPUMonitor.stop-cn>` | :ref:`English <GPUMonitor.stop-en>`
 
-    def run(self):
-        while not self.stopped:
-            with os.popen(self.cmds) as fp:
-                if self.writer is not None:
-                    outputs = fp.read()
-                    outputs = outputs.split("\n")[1:-1]
-                    # skip the first row (header) and the last row ("\n")
-                    for i in range(len(outputs)):
-                        utilization_memory = re.findall(r"\d+", outputs[i])
-                        utilization = int(utilization_memory[0])
-                        memory_used = int(utilization_memory[1])
-                        self.writer.add_scalar(
-                            f"utilization_{self.gpu_ids[i]}", utilization, self.step
+        ----
+
+        .. _GPUMonitor.stop-cn:
+
+        * **中文**
+
+        请求监视线程停止，并唤醒正在等待下一次采样的线程。调用方可随后调用
+        :meth:`threading.Thread.join` 等待线程结束。
+
+        ----
+
+        .. _GPUMonitor.stop-en:
+
+        * **English**
+
+        Request the monitor thread to stop and wake it while it is waiting for
+        the next sample. Call :meth:`threading.Thread.join` afterwards to wait
+        for termination.
+        """
+        self._stop_event.set()
+
+    def run(self) -> None:
+        if self._stop_event.is_set():
+            return
+
+        try:
+            if self.log_dir is not None:
+                self.writer = SummaryWriter(os.path.join(self.log_dir, "gpu_monitor"))
+
+            while not self._stop_event.is_set():
+                try:
+                    completed = subprocess.run(
+                        self.command,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    logger.error("GPU monitor stopped: {}", error)
+                    return
+
+                if completed.returncode:
+                    logger.error(
+                        "GPU monitor stopped: {}",
+                        completed.stderr.strip()
+                        or f"nvidia-smi exited with code {completed.returncode}",
+                    )
+                    return
+
+                output = completed.stdout.strip()
+                if not output:
+                    logger.error("GPU monitor stopped: nvidia-smi returned no data")
+                    return
+
+                try:
+                    samples = []
+                    for line in output.splitlines():
+                        gpu_id, utilization, memory_used = (
+                            value.strip() for value in line.split(",")
                         )
-                        self.writer.add_scalar(
-                            f"memory_used_{self.gpu_ids[i]}", memory_used, self.step
-                        )
-                else:
+                        samples.append((gpu_id, int(utilization), int(memory_used)))
+                except ValueError:
+                    logger.error(
+                        "GPU monitor stopped: malformed nvidia-smi output: {}",
+                        output,
+                    )
+                    return
+
+                if self.writer is None:
                     logger.info(
                         "GPU monitor sample at {}:\n{}",
                         datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        fp.read(),
+                        output,
                     )
-                    """
-                    2022-04-20 18:14:26
-                    utilization.gpu [%], memory.used [MiB]
-                    4 %, 1816 MiB
-                    0 %, 1840 MiB
-                    0 %, 1840 MiB
-                    0 %, 1720 MiB
-                    """
-            time.sleep(self.interval)
-            self.step += 1
+                else:
+                    for gpu_id, utilization, memory_used in samples:
+                        self.writer.add_scalar(
+                            f"utilization_{gpu_id}", utilization, self.step
+                        )
+                        self.writer.add_scalar(
+                            f"memory_used_{gpu_id}", memory_used, self.step
+                        )
+
+                self.step += 1
+                if self._stop_event.wait(self.interval):
+                    return
+        finally:
+            if self.writer is not None:
+                self.writer.close()
