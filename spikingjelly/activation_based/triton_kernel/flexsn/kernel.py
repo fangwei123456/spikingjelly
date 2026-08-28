@@ -95,7 +95,14 @@ def _backward_shim(
     shim_name = f"{backward_name}_shim"
     signature = ", ".join([*saved, *gradients])
     forwarded = ", ".join(
-        [*saved, *(name for name, used in zip(gradients, differentiable) if used)]
+        [
+            *saved,
+            *(
+                name
+                for name, used in zip(gradients, differentiable, strict=True)
+                if used
+            ),
+        ]
     )
     return (
         f"\n@triton.jit\ndef {shim_name}({signature}):\n"

@@ -116,7 +116,7 @@ def _device_guard(tensors):
     return contextlib.nullcontext()
 
 
-def _seq_outputs(info: FlexSNInfo, args: list[torch.Tensor], count: int):
+def _seq_outputs(args: list[torch.Tensor], count: int):
     template = args[0]
     return [template.new_empty(template.shape) for _ in range(count)]
 
@@ -154,22 +154,18 @@ def _inference_impl(
         )
 
 
-def _training_full(bundle: _KernelBundle, args: list[torch.Tensor]):
-    args = [tensor.contiguous() for tensor in args]
-    with _device_guard(args):
-        return list(
-            flexsn_forward(
-                wrap_triton(bundle.forward_kernel), bundle.training_info, *args
-            )
-        )
-
-
 def _training_impl(
     bundle: _KernelBundle,
     args: list[torch.Tensor],
     return_state_sequences: bool,
 ):
-    full_returns = _training_full(bundle, args)
+    args = [tensor.contiguous() for tensor in args]
+    with _device_guard(args):
+        full_returns = list(
+            flexsn_forward(
+                wrap_triton(bundle.forward_kernel), bundle.training_info, *args
+            )
+        )
     if return_state_sequences:
         return full_returns
 
@@ -226,9 +222,9 @@ def _inference_fake(
     return_state_sequences: bool,
 ) -> list[torch.Tensor]:
     info = _bundle(handle).inference_info
-    outputs = _seq_outputs(info, flat_args, info.num_outputs)
+    outputs = _seq_outputs(flat_args, info.num_outputs)
     states = (
-        _seq_outputs(info, flat_args, info.num_states)
+        _seq_outputs(flat_args, info.num_states)
         if return_state_sequences
         else _state_outputs(info, flat_args)
     )
@@ -252,11 +248,11 @@ def _training_fake(
 ) -> list[torch.Tensor]:
     info = _bundle(handle).training_info
     if return_state_sequences:
-        return _seq_outputs(info, flat_args, info.num_fwd_kernel_returns)
+        return _seq_outputs(flat_args, info.num_fwd_kernel_returns)
     return [
-        *_seq_outputs(info, flat_args, info.num_outputs),
+        *_seq_outputs(flat_args, info.num_outputs),
         *_state_outputs(info, flat_args),
-        *_seq_outputs(info, flat_args, len(_saved_final_state_indices(info))),
+        *_seq_outputs(flat_args, len(_saved_final_state_indices(info))),
     ]
 
 

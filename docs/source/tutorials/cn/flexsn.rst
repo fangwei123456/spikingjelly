@@ -12,7 +12,7 @@ Core 契约
 
 单步函数依次接收单步输入、状态和静态输入，并返回输出和更新后的状态：
 
-.. code-block:: python
+.. code-block:: text
 
     core(*step_inputs, *states, *static_inputs)
         -> (*outputs, *updated_states)

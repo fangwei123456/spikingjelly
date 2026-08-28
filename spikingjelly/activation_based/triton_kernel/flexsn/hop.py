@@ -152,6 +152,17 @@ def _register_dynamo_hop() -> None:
     except (ImportError, AttributeError):
         return
 
+    def unsupported(message: str):
+        try:
+            return hop_variables.unimplemented(message)
+        except TypeError:
+            return hop_variables.unimplemented(
+                gb_type="FlexSN HOP",
+                context="FlexSN custom higher-order operator",
+                explanation=message,
+                hints=[],
+            )
+
     descriptor = TorchHigherOrderOperatorVariable.__dict__.get("make")
     original_is_bound = descriptor is None
     if descriptor is None:
@@ -177,19 +188,13 @@ def _register_dynamo_hop() -> None:
 
         def call_function(self, tx, args, kwargs):
             if kwargs or len(args) < 6:
-                raise hop_variables.unimplemented(
-                    "FlexSN HOP expects a body, five constants, and tensors."
-                )
+                unsupported("FlexSN HOP expects a body, five constants, and tensors.")
             body = args[0]
             if not isinstance(body, (UserFunctionVariable, NestedUserFunctionVariable)):
-                raise hop_variables.unimplemented(
-                    "FlexSN HOP body must be a Python function."
-                )
+                unsupported("FlexSN HOP body must be a Python function.")
             constants = args[1:6]
             if not all(isinstance(value, ConstantVariable) for value in constants):
-                raise hop_variables.unimplemented(
-                    "FlexSN HOP metadata must be Python constants."
-                )
+                unsupported("FlexSN HOP metadata must be Python constants.")
             (
                 num_inputs,
                 num_states,
@@ -202,9 +207,7 @@ def _register_dynamo_hop() -> None:
             if len(flat_args) != expected or not all(
                 isinstance(value, TensorVariable) for value in flat_args
             ):
-                raise hop_variables.unimplemented(
-                    f"FlexSN HOP expected {expected} tensor operands."
-                )
+                unsupported(f"FlexSN HOP expected {expected} tensor operands.")
 
             step_inputs = [
                 value.call_method(tx, "__getitem__", [ConstantVariable(0)], {})
@@ -225,9 +228,7 @@ def _register_dynamo_hop() -> None:
             elif len(speculated) == 3:
                 body_result, body_graph, lifted = speculated
             else:
-                raise hop_variables.unimplemented(
-                    "Unsupported FlexSN HOP speculate_subgraph result."
-                )
+                unsupported("Unsupported FlexSN HOP speculate_subgraph result.")
             lifted = tuple(lifted.keys()) if hasattr(lifted, "keys") else tuple(lifted)
             placeholders = _reorder_placeholders(body_graph, argument_names)
             lifted_names = tuple(node.name for node in placeholders[len(body_args) :])
@@ -265,17 +266,17 @@ def _register_dynamo_hop() -> None:
 
             leaves = _flatten_result(body_result)
             if len(leaves) < num_outputs + num_states:
-                raise hop_variables.unimplemented(
-                    "FlexSN HOP could not infer body outputs."
-                )
-            T = flat_args[0].as_proxy().node.meta["example_value"].shape[0]
+                unsupported("FlexSN HOP could not infer body outputs.")
+            input_meta = getattr(flat_args[0].as_proxy().node, "meta", {})
+            input_example = input_meta.get("example_value")
+            if not isinstance(input_example, torch.Tensor):
+                unsupported("FlexSN HOP input metadata has no example tensor.")
+            T = input_example.shape[0]
             examples = []
             for index, leaf in enumerate(leaves[: num_outputs + num_states]):
                 example = _example_value(leaf)
                 if not isinstance(example, torch.Tensor):
-                    raise hop_variables.unimplemented(
-                        "FlexSN HOP body must return tensors."
-                    )
+                    unsupported("FlexSN HOP body must return tensors.")
                 is_sequence = index < num_outputs or return_state_sequences
                 shape = (T, *example.shape) if is_sequence else example.shape
                 examples.append(example.new_empty(shape))

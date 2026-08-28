@@ -13,7 +13,7 @@ Core contract
 The single-step callable receives step inputs, states, then static inputs, and
 returns outputs followed by updated states:
 
-.. code-block:: python
+.. code-block:: text
 
     core(*step_inputs, *states, *static_inputs)
         -> (*outputs, *updated_states)

@@ -38,12 +38,12 @@ def _reject_captured_tensors(core: Callable) -> None:
             "FlexSN core must be a pure callable. Pass tensor parameters through "
             "static_inputs instead of capturing an nn.Module."
         )
-    if isinstance(core, functools.partial):
-        if _contains_tensor(core.args) or _contains_tensor(core.keywords):
-            raise TypeError(
-                "FlexSN core cannot capture tensor-valued partial arguments; "
-                "pass them through static_inputs."
-            )
+    if isinstance(core, functools.partial) and _contains_tensor(core):
+        raise TypeError(
+            "FlexSN core cannot capture tensor-valued partial arguments; "
+            "pass them through static_inputs."
+        )
+    while isinstance(core, functools.partial):
         core = core.func
     closure = getattr(core, "__closure__", None)
     if closure is not None:
@@ -101,6 +101,8 @@ class FlexSN(base.MemoryModule):
         张量追踪推导，``num_states`` 个更新状态始终位于返回值末尾。
 
         :param core: 不捕获 Tensor 或 ``nn.Module`` 的纯单步函数。
+            构造时会用与首个 static input 相同 dtype/device 的单位张量执行
+            一次 ``core`` 以推导输出数量；没有 static input 时使用 CPU float32。
         :type core: Callable
         :param num_states: 状态张量数量。
         :type num_states: int
@@ -115,6 +117,7 @@ class FlexSN(base.MemoryModule):
         :type store_state_seqs: bool
         :raises TypeError: ``core`` 捕获 Tensor/模块，或 static input 不是 Tensor。
         :raises ValueError: 参数或 backend/step-mode 组合无效。
+        :raises RuntimeError: ``core`` 无法使用构造期单位张量执行。
 
         ----
 
@@ -130,6 +133,9 @@ class FlexSN(base.MemoryModule):
         ``num_states`` returns are the updated states.
 
         :param core: Pure single-step callable that captures no Tensor or module.
+            Construction runs ``core`` once with unit tensors matching the first
+            static input's dtype/device to infer output arity; CPU float32 is
+            used when no static input exists.
         :type core: Callable
         :param num_states: Number of state tensors.
         :type num_states: int
@@ -144,6 +150,7 @@ class FlexSN(base.MemoryModule):
         :type store_state_seqs: bool
         :raises TypeError: If ``core`` captures tensors/modules or a static input is not a Tensor.
         :raises ValueError: If an argument or backend/step-mode combination is invalid.
+        :raises RuntimeError: If ``core`` cannot run with the construction-time unit tensors.
         """
         super().__init__()
         if not callable(core):
@@ -178,6 +185,7 @@ class FlexSN(base.MemoryModule):
         self._num_outputs: int | None = None
         self._triton_handle: int | None = None
         self._triton_handle_finalizer = None
+        self._triton_runtime_dtype: torch.dtype | None = None
         self.state_seqs: tuple[torch.Tensor, ...] | None = None
         self._store_state_seqs = bool(store_state_seqs)
 
@@ -261,6 +269,10 @@ class FlexSN(base.MemoryModule):
     ) -> tuple[torch.Tensor, ...]:
         if not inputs:
             raise ValueError("FlexSN requires at least one input tensor.")
+        if step_mode == "m" and inputs[0].dim() == 0:
+            raise ValueError("FlexSN multi-step inputs must have a time dimension.")
+        if step_mode == "m" and inputs[0].shape[0] == 0:
+            raise ValueError("FlexSN does not support empty multi-step inputs.")
         reference = inputs[0] if step_mode == "s" else inputs[0][0]
         return tuple(torch.zeros_like(reference) for _ in range(num_states))
 
@@ -300,6 +312,8 @@ class FlexSN(base.MemoryModule):
         if any(not isinstance(tensor, torch.Tensor) for tensor in operands):
             raise TypeError("FlexSN inputs, states, and static_inputs must be tensors.")
         if step_mode == "m":
+            if any(tensor.dim() == 0 for tensor in inputs):
+                raise ValueError("FlexSN multi-step inputs must have a time dimension.")
             T = inputs[0].shape[0]
             if T == 0:
                 raise ValueError("FlexSN does not support empty multi-step inputs.")
@@ -347,9 +361,7 @@ class FlexSN(base.MemoryModule):
                 f"num_states={self.num_states}."
             )
         num_outputs = len(returns) - self.num_states
-        if self._num_outputs is None:
-            self._num_outputs = num_outputs
-        elif num_outputs != self._num_outputs:
+        if num_outputs != self._num_outputs:
             raise ValueError(
                 f"FlexSN core interface expects {self._num_outputs} outputs, "
                 f"but returned {num_outputs}."
@@ -456,7 +468,6 @@ class FlexSN(base.MemoryModule):
     ):
         from ..triton_kernel.flexsn.hop import _eager_scan, _hop_scan
 
-        self._validate_operands(inputs, states, static_inputs, "m")
         num_outputs = self._num_outputs
         flat_args = (*inputs, *states, *static_inputs)
         scan = _hop_scan if store_state_seqs else _eager_scan
@@ -481,13 +492,13 @@ class FlexSN(base.MemoryModule):
 
     def _ensure_triton_runtime(
         self,
-        num_inputs: int,
-        num_outputs: int,
         dtype: torch.dtype,
         device: torch.device,
     ) -> None:
         if self._triton_handle is not None:
-            return
+            if self._triton_runtime_dtype == dtype:
+                return
+            self._release_triton_runtime()
         if not torch.cuda.is_available():
             raise RuntimeError("FlexSN backend='triton' requires CUDA.")
 
@@ -503,15 +514,23 @@ class FlexSN(base.MemoryModule):
         total_states = self.num_states + len(self._static_input_names)
         examples = tuple(
             torch.zeros(1, dtype=dtype, device=device)
-            for _ in range(num_inputs + total_states)
+            for _ in range(self._num_inputs + total_states)
         )
-        wrapped = self._wrapped_core(num_inputs, num_outputs)
+        wrapped = self._wrapped_core(self._num_inputs, self._num_outputs)
         with torch.enable_grad():
             inference_kernel, final_kernel, inference_info = build_inference_kernels(
-                wrapped, num_inputs, total_states, num_outputs, examples
+                wrapped,
+                self._num_inputs,
+                total_states,
+                self._num_outputs,
+                examples,
             )
             forward_kernel, backward_kernel, training_info = build_training_kernels(
-                wrapped, num_inputs, total_states, num_outputs, examples
+                wrapped,
+                self._num_inputs,
+                total_states,
+                self._num_outputs,
+                examples,
             )
         self._triton_handle = register_flexsn_kernel_handle(
             inference_kernel=inference_kernel,
@@ -524,6 +543,7 @@ class FlexSN(base.MemoryModule):
         self._triton_handle_finalizer = attach_flexsn_handle_finalizer(
             self, self._triton_handle
         )
+        self._triton_runtime_dtype = dtype
 
     def _build_triton_runtime(self) -> None:
         if (
@@ -539,17 +559,30 @@ class FlexSN(base.MemoryModule):
             (tensor.device for tensor in static_inputs if tensor.device.type == "cuda"),
             torch.device("cuda", torch.cuda.current_device()),
         )
-        self._ensure_triton_runtime(self._num_inputs, self._num_outputs, dtype, device)
+        self._ensure_triton_runtime(dtype, device)
 
     def _infer_output_arity(self) -> None:
         static_inputs = self.static_inputs
         dtype = static_inputs[0].dtype if static_inputs else torch.float32
         device = static_inputs[0].device if static_inputs else torch.device("cpu")
         reference = torch.zeros(1, dtype=dtype, device=device)
-        returns = self.core(
-            *(reference for _ in range(self._num_inputs + self.num_states)),
-            *(reference for _ in static_inputs),
-        )
+        try:
+            returns = self.core(
+                *(reference for _ in range(self._num_inputs + self.num_states)),
+                *(reference for _ in static_inputs),
+            )
+        except Exception as error:
+            raise RuntimeError(
+                "FlexSN core must run with construction-time unit tensors to "
+                "infer its output arity."
+            ) from error
+        returns = _as_tuple(returns)
+        if len(returns) < self.num_states:
+            raise ValueError(
+                f"FlexSN core returned {len(returns)} tensors, fewer than "
+                f"num_states={self.num_states}."
+            )
+        self._num_outputs = len(returns) - self.num_states
         self._split_returns(returns, reference)
 
     def _triton_scan(
@@ -558,17 +591,15 @@ class FlexSN(base.MemoryModule):
         states: tuple[torch.Tensor, ...],
         static_inputs: tuple[torch.Tensor, ...],
         store_state_seqs: bool,
+        reference: torch.Tensor,
     ):
         from ..triton_kernel.flexsn.custom_ops import (
             flexsn_triton_inference,
             flexsn_triton_training,
         )
 
-        reference = self._validate_operands(inputs, states, static_inputs, "m")
         num_outputs = self._num_outputs
-        self._ensure_triton_runtime(
-            len(inputs), num_outputs, reference.dtype, reference.device
-        )
+        self._ensure_triton_runtime(reference.dtype, reference.device)
         expanded_static = self._expanded_static_inputs(reference, static_inputs)
         flat_args = [*inputs, *states, *expanded_static]
         use_training = torch.is_grad_enabled() and any(
@@ -593,13 +624,15 @@ class FlexSN(base.MemoryModule):
         static_inputs: tuple[torch.Tensor, ...],
         store_state_seqs: bool,
     ):
-        self._validate_operands(inputs, states, static_inputs, "m")
+        reference = self._validate_operands(inputs, states, static_inputs, "m")
         if self.backend == "torch":
             return self._torch_scan(inputs, states, static_inputs, store_state_seqs)
         if self.backend == "hop":
             return self._hop_scan(inputs, states, static_inputs, store_state_seqs)
         if self.backend == "triton":
-            return self._triton_scan(inputs, states, static_inputs, store_state_seqs)
+            return self._triton_scan(
+                inputs, states, static_inputs, store_state_seqs, reference
+            )
         raise ValueError(self.backend)
 
     def multi_step_functional_forward(
@@ -617,8 +650,11 @@ class FlexSN(base.MemoryModule):
 
     def forward(self, *inputs: torch.Tensor):
         static_inputs = self.static_inputs
-        if self.step_mode == "m" and inputs and inputs[0].shape[0] == 0:
-            raise ValueError("FlexSN does not support empty multi-step inputs.")
+        if self.step_mode == "m" and inputs:
+            if inputs[0].dim() == 0:
+                raise ValueError("FlexSN multi-step inputs must have a time dimension.")
+            if inputs[0].shape[0] == 0:
+                raise ValueError("FlexSN does not support empty multi-step inputs.")
         states = self.materialize_states(inputs, self.states, self.step_mode)
         if self.step_mode == "s":
             outputs, states = self.single_step_functional_forward(
@@ -638,6 +674,7 @@ class FlexSN(base.MemoryModule):
             finalizer()
         self._triton_handle = None
         self._triton_handle_finalizer = None
+        self._triton_runtime_dtype = None
 
     def _apply(self, fn):
         self._release_triton_runtime()
@@ -650,21 +687,29 @@ class FlexSN(base.MemoryModule):
         result = cls.__new__(cls)
         memo[id(self)] = result
         for key, value in self.__dict__.items():
-            if key in {"_triton_handle", "_triton_handle_finalizer"}:
+            if key in {
+                "_triton_handle",
+                "_triton_handle_finalizer",
+                "_triton_runtime_dtype",
+            }:
                 continue
             result.__dict__[key] = copy.deepcopy(value, memo)
         result._triton_handle = None
         result._triton_handle_finalizer = None
+        result._triton_runtime_dtype = None
         return result
 
     def __getstate__(self):
         state = self.__dict__.copy()
         state["_triton_handle"] = None
         state["_triton_handle_finalizer"] = None
+        state["_triton_runtime_dtype"] = None
         return state
 
     def extra_repr(self) -> str:
         core_name = getattr(self.core, "__name__", type(self.core).__name__)
+        if isinstance(self.core, functools.partial):
+            core_name = f"partial({getattr(self.core.func, '__name__', type(self.core.func).__name__)})"
         return (
             f"core={core_name}, num_states={self.num_states}, "
             f"num_static_inputs={len(self._static_input_names)}, "

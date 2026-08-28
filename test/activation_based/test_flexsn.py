@@ -1,4 +1,5 @@
 import copy
+import functools
 
 import pytest
 import torch
@@ -43,17 +44,10 @@ def izhikevich_core(x, v, w):
     return spike, h * (1.0 - spike), w + 0.1 * spike
 
 
-def manual_scan(core, inputs, states, static_inputs=()):
-    output_steps = None
-    for step_inputs in zip(*inputs, strict=True):
-        returns = tuple(core(*step_inputs, *states, *static_inputs))
-        outputs = returns[: len(returns) - len(states)]
-        states = returns[len(outputs) :]
-        if output_steps is None:
-            output_steps = [[] for _ in outputs]
-        for values, value in zip(output_steps, outputs, strict=True):
-            values.append(value)
-    return tuple(torch.stack(values) for values in output_steps), states
+def hard_if_core(x, v):
+    h = v + x
+    spike = (h >= 1.0).to(h.dtype)
+    return spike, h * (1.0 - spike)
 
 
 def test_public_surface_only_exports_flexsn():
@@ -249,19 +243,35 @@ def test_copy_preserves_configuration_and_state_without_runtime():
     torch.testing.assert_close(copied.states[0], module.states[0])
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_triton_deepcopy_rebuilds_runtime():
+    module = FlexSN(lif_core, 1, backend="triton")
+    copied = copy.deepcopy(module)
+    x = torch.randn(4, 32, device="cuda")
+
+    assert copied._triton_handle is None
+    with torch.no_grad():
+        expected = module(x)
+        actual = copied(x)
+
+    assert copied._triton_handle is not None
+    torch.testing.assert_close(actual, expected)
+
+
 @pytest.mark.parametrize(
-    ("factory", "message"),
+    ("factory", "exception", "message"),
     [
-        (lambda: FlexSN(lif_core, -1), "num_states"),
-        (lambda: FlexSN(lif_core, 1, (1.0,)), "static_inputs"),
+        (lambda: FlexSN(lif_core, -1), ValueError, "num_states"),
+        (lambda: FlexSN(lif_core, 1, (1.0,)), TypeError, "static_inputs"),
         (
             lambda: FlexSN(lif_core, 1, step_mode="s", backend="triton"),
+            RuntimeError,
             "requires step_mode",
         ),
     ],
 )
-def test_constructor_rejects_invalid_contract(factory, message):
-    with pytest.raises((TypeError, ValueError, RuntimeError), match=message):
+def test_constructor_rejects_invalid_contract(factory, exception, message):
+    with pytest.raises(exception, match=message):
         factory()
 
 
@@ -276,6 +286,30 @@ def test_rejects_tensor_closure():
         FlexSN(core, 1)
 
 
+def test_rejects_tensor_in_nested_partial():
+    bias = torch.ones(3)
+
+    def core(bias, x, v):
+        return x + bias, v
+
+    nested = functools.partial(functools.partial(core, bias))
+    with pytest.raises(TypeError, match="static_inputs"):
+        FlexSN(nested, 1)
+
+
+def test_partial_core_name_is_informative():
+    core = functools.partial(lif_core)
+    assert "partial(lif_core)" in repr(FlexSN(core, 1, backend="torch"))
+
+
+def test_constructor_wraps_arity_inference_failure():
+    def core(x, v):
+        raise AssertionError("requires real inputs")
+
+    with pytest.raises(RuntimeError, match="construction-time unit tensors"):
+        FlexSN(core, 1, backend="torch")
+
+
 def test_rejects_empty_sequence_and_arity_changes():
     module = FlexSN(lif_core, 1, backend="torch")
     with pytest.raises(ValueError, match="empty"):
@@ -284,6 +318,12 @@ def test_rejects_empty_sequence_and_arity_changes():
     module(torch.randn(2, 3))
     with pytest.raises(ValueError, match="expects 1 inputs"):
         module(torch.randn(2, 3), torch.randn(2, 3))
+
+
+def test_rejects_scalar_multi_step_input():
+    module = FlexSN(lif_core, 1, backend="torch")
+    with pytest.raises(ValueError, match="time dimension"):
+        module(torch.tensor(1.0))
 
 
 def test_rejects_mismatched_tensor_contract():
@@ -398,6 +438,34 @@ def test_triton_matches_torch_and_is_captured_by_compile():
         str(node.target) for graph in explanation.graphs for node in graph.graph.nodes
     ]
     assert any("sj.flexsn_triton" in target for target in targets)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_triton_runtime_rebuilds_for_input_dtype():
+    module = FlexSN(lif_core, 1, backend="triton")
+    initial_handle = module._triton_handle
+    x = torch.randn(4, 32, device="cuda", dtype=torch.float16)
+
+    with torch.no_grad():
+        actual = module(x)
+        expected = FlexSN(lif_core, 1, backend="torch")(x)
+
+    assert module._triton_runtime_dtype == torch.float16
+    assert module._triton_handle != initial_handle
+    torch.testing.assert_close(actual, expected, atol=2e-2, rtol=2e-2)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_triton_hard_threshold_inference_matches_torch():
+    x = torch.randn(4, 32, device="cuda")
+    torch_module = FlexSN(hard_if_core, 1, backend="torch")
+    triton_module = FlexSN(hard_if_core, 1, backend="triton")
+
+    with torch.no_grad():
+        expected = torch_module(x)
+        actual = triton_module(x)
+
+    torch.testing.assert_close(actual, expected)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

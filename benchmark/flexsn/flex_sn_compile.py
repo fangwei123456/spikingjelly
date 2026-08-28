@@ -108,8 +108,8 @@ def bench_single_layer():
 
         print(
             f"  {T:>4} {B:>5} {N:>6}  "
-            f"{ms_torch:>9.3f}  {ms_hop:>9.3f}  "
-            f"{ms_triton:>9.3f}  {ms_triton_compiled:>9.3f}"
+            f"{ms_torch:>10.3f}  {ms_hop:>10.3f}  "
+            f"{ms_triton:>10.3f}  {ms_triton_compiled:>10.3f}"
         )
 
 
@@ -171,8 +171,8 @@ def bench_linear_flexsn_linear():
 
         print(
             f"  {T:>4} {B:>5} {N:>6}  "
-            f"{ms_torch:>9.3f}  {ms_hop:>9.3f}  "
-            f"{ms_triton:>9.3f}  {ms_triton_compiled:>9.3f}"
+            f"{ms_torch:>10.3f}  {ms_hop:>10.3f}  "
+            f"{ms_triton:>10.3f}  {ms_triton_compiled:>10.3f}"
         )
 
 
