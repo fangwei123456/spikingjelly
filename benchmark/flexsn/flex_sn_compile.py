@@ -38,9 +38,7 @@ def lif_core(x: torch.Tensor, v: torch.Tensor):
 def make_flexsn(backend: str) -> FlexSN:
     return FlexSN(
         core=lif_core,
-        num_inputs=1,
         num_states=1,
-        num_outputs=1,
         step_mode="m",
         backend=backend,
     ).cuda()

@@ -42,9 +42,7 @@ def make_flexsn_factory():
         step_mode = kwargs.get("step_mode", "m")
         return FlexSN(
             core=_lif_core,
-            num_inputs=1,
             num_states=1,
-            num_outputs=1,
             step_mode=step_mode,
             backend="triton",
         )

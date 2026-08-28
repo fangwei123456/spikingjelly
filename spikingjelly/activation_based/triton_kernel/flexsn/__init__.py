@@ -1,23 +1,3 @@
-from spikingjelly.logger import logger
+"""Private execution support for :class:`activation_based.neuron.FlexSN`."""
 
-try:
-    from . import info as info
-    from . import hop as hop
-    from . import kernel as kernel
-    from . import template as template
-    from . import wrapper as wrapper
-    from . import custom_ops as custom_ops
-except (ImportError, OSError, RuntimeError) as e:
-    logger.debug("Optional kernel dependency unavailable: {}", e)
-    info = None
-    hop = None
-    kernel = None
-    template = None
-    wrapper = None
-    custom_ops = None
-else:
-    from .info import *
-    from .hop import *
-    from .kernel import *
-    from .template import *
-    from .wrapper import *
+__all__: list[str] = []

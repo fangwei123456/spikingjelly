@@ -91,9 +91,7 @@ def main() -> None:
 
     model_torch = FlexSN(
         core=core,
-        num_inputs=1,
         num_states=1,
-        num_outputs=1,
         step_mode="m",
         backend="torch",
     ).to(device)
@@ -106,17 +104,13 @@ def main() -> None:
     if device.type == "cuda":
         model_triton = FlexSN(
             core=core,
-            num_inputs=1,
             num_states=1,
-            num_outputs=1,
             step_mode="m",
             backend="triton",
         ).to(device)
         model_triton_compiled = FlexSN(
             core=core,
-            num_inputs=1,
             num_states=1,
-            num_outputs=1,
             step_mode="m",
             backend="triton",
         ).to(device)

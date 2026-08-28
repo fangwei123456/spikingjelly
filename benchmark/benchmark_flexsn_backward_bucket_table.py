@@ -33,9 +33,7 @@ def lif_core_sg(x: torch.Tensor, v: torch.Tensor):
 def make_flexsn(**kwargs):
     return FlexSN(
         core=lif_core_sg,
-        num_inputs=1,
         num_states=1,
-        num_outputs=1,
         step_mode=kwargs.get("step_mode", "m"),
         backend="triton",
     )
@@ -115,23 +113,16 @@ def bench_single_shape(step_shape, repeats=20, warmup=6):
         torch.float16 if torch.cuda.get_device_capability()[0] >= 7 else torch.float32
     )
     x_base = torch.randn((T, *step_shape), device="cuda", dtype=dtype)
-    example_inputs = (
-        torch.zeros(step_shape, device="cuda", dtype=dtype),
-        torch.zeros(step_shape, device="cuda", dtype=dtype),
-    )
     module = FlexSN(
         core=lif_core_sg,
-        num_inputs=1,
         num_states=1,
-        num_outputs=1,
         step_mode="m",
         backend="triton",
         store_state_seqs=False,
-        example_inputs=example_inputs,
     ).cuda()
 
     def step():
-        module.states = None
+        module.reset()
         x = x_base.clone().requires_grad_(True)
         y = module(x)
         (y.sum() + module.states[0].sum()).backward()

@@ -55,9 +55,7 @@ class _FlexSNTrainer(train_classify.Trainer):
         def make_flexsn(**kwargs):
             return FlexSN(
                 core=lif_core_sg,
-                num_inputs=1,
                 num_states=1,
-                num_outputs=1,
                 step_mode=kwargs.get("step_mode", "m"),
                 backend="triton",
             )
