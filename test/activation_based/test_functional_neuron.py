@@ -653,22 +653,22 @@ def test_flexsn_sequence_cache_is_not_a_functional_state():
 
     module = FlexSN(
         core,
-        num_inputs=1,
         num_states=1,
-        num_outputs=1,
         step_mode="m",
         backend="torch",
         store_state_seqs=True,
     )
     x_seq = torch.randn(3, 2, 4)
 
-    outputs, updated_states = module.functional_forward((x_seq,), (module.states,))
+    outputs, updated_states = module.functional_forward(
+        (x_seq,), module.states, static_inputs=()
+    )
 
-    assert module.states is None
+    assert module.states == (None,)
     assert module.state_seqs is None
     torch.testing.assert_close(module(x_seq), outputs[0])
     assert len(module.state_seqs) == 1
-    torch.testing.assert_close(module.states[0], updated_states[0][0])
+    torch.testing.assert_close(module.states[0], updated_states[0])
 
 
 def test_activation_aware_if_step_matches_module():

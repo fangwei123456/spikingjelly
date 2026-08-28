@@ -150,36 +150,12 @@ def _build_model(case: str, phase: str, device: torch.device) -> torch.nn.Module
         from spikingjelly.activation_based.neuron.flexsn import FlexSN
 
         backend = "torch" if case == "torch_flexsn" else "triton"
-        example = torch.zeros(2, 16, device=device)
         node = FlexSN(
             core=_lif_core,
-            num_inputs=1,
             num_states=1,
-            num_outputs=1,
-            example_inputs=(example, example),
-            example_outputs=(example,),
-            requires_grad=(True, True),
             step_mode="m",
             backend=backend,
         )
-        if backend == "triton":
-            if phase == "inference" and not (
-                (
-                    node._triton_scan_final_state_kernel is not None
-                    and node._triton_scan_final_state_info is not None
-                )
-                or (
-                    node._triton_scan_kernel is not None
-                    and node._triton_scan_info is not None
-                )
-            ):
-                raise RuntimeError("FlexSN Triton inference kernel construction failed")
-            if phase == "training" and not (
-                node._triton_fwd_kernel is not None
-                and node._triton_bwd_kernel is not None
-                and node._triton_train_info is not None
-            ):
-                raise RuntimeError("FlexSN Triton training kernel construction failed")
 
     class PointwiseNode(torch.nn.Module):
         def __init__(self, inner: torch.nn.Module):

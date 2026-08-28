@@ -52,6 +52,29 @@ Module: ``spikingjelly.activation_based.op_counter``.
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+FlexSN Migration
+^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.neuron.flexsn``.
+
+- Replaced the separate ``FlexSN``/``FlexSNKernel`` interfaces with one ``FlexSN``
+  module that provides explicit-state ``functional_forward`` and managed-state
+  ``forward`` execution.
+- Removed the ``num_inputs``, ``num_outputs``, ``example_inputs``, ``example_outputs``,
+  and ``requires_grad`` constructor arguments. Input/output arities and Triton
+  examples are now inferred automatically.
+- Added registered ``static_inputs`` for tensor parameters reused at every time
+  step, and standardized states, state sequences, and multiple outputs on
+  tuples.
+- FlexSN no longer accepts empty multi-step sequences or silently falls back
+  from the explicitly selected Triton backend.
+- Consolidated FlexSN's generated Triton execution into one kernel bundle and
+  three private registered operators, with automatic support for scalar and
+  elementwise static Tensor gradients.
+- Reduced the HOP backend to one eager scan and one compiler-visible custom
+  HOP, removing the experimental native scan/while-loop alternatives and
+  their environment flags.
+
 Memory Optimization Migration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
