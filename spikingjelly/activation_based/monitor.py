@@ -3,7 +3,8 @@ import os
 import re
 import threading
 import time
-from typing import Callable, Union, Optional
+from types import TracebackType
+from typing import Callable, Optional, Self, Union
 
 import torch
 from torch import nn
@@ -20,7 +21,7 @@ def _unpack_len1_tuple(x: Union[tuple, torch.Tensor]):
 
 
 class BaseMonitor:
-    def __init__(self):
+    def __init__(self) -> None:
         r"""
         **API Language** - :ref:`中文 <BaseMonitor.__init__-cn>` | :ref:`English <BaseMonitor.__init__-en>`
 
@@ -72,29 +73,65 @@ class BaseMonitor:
         self.name_records_index[name].append(len(self.records))
         self.records.append(value)
 
-    def clear_recorded_data(self):
+    def clear_recorded_data(self) -> None:
         self.records.clear()
         for v in self.name_records_index.values():
             v.clear()
 
-    def enable(self):
+    def enable(self) -> None:
         self._enable = True
 
-    def disable(self):
+    def disable(self) -> None:
         self._enable = False
 
-    def is_enable(self):
+    def is_enable(self) -> bool:
         return self._enable
 
-    def remove_hooks(self):
+    def remove_hooks(self) -> None:
         for hook in self.hooks:
             hook.remove()
         self.hooks.clear()
 
-    def __del__(self):
+    def close(self) -> None:
+        r"""
+        **API Language** - :ref:`中文 <BaseMonitor.close-cn>` | :ref:`English <BaseMonitor.close-en>`
+
+        ----
+
+        .. _BaseMonitor.close-cn:
+
+        * **中文**
+
+        停止记录并永久移除所有钩子。已有记录会被保留。该方法可重复调用；关闭后如需
+        重新监控，应创建新的监视器。
+
+        ----
+
+        .. _BaseMonitor.close-en:
+
+        * **English**
+
+        Stop recording and permanently remove all hooks. Existing records are
+        preserved. This method is idempotent; create a new monitor to resume
+        monitoring after it has been closed.
+        """
         self.disable()
-        self.clear_recorded_data()
         self.remove_hooks()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> bool:
+        self.close()
+        return False
+
+    def __del__(self):
+        self.close()
 
 
 class OutputMonitor(BaseMonitor):
@@ -309,10 +346,10 @@ class InputMonitor(BaseMonitor):
         super().__init__()
         self.function_on_input = function_on_input
         for name, module in self._monitor_modules(net, instance):
-            self.hooks.append(module.register_forward_hook(self.create_hook(name)))
+            self.hooks.append(module.register_forward_pre_hook(self.create_hook(name)))
 
     def create_hook(self, name):
-        def hook(module, inputs, output):
+        def hook(module, inputs):
             if self.is_enable():
                 self._record(
                     name,

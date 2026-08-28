@@ -1,3 +1,7 @@
+import gc
+import weakref
+
+import pytest
 import torch
 from torch import nn
 
@@ -12,6 +16,11 @@ class StatefulModule(nn.Module):
     def forward(self, x):
         self.value += 1
         return x
+
+
+class InPlaceModule(nn.Module):
+    def forward(self, x):
+        return x.add_(1)
 
 
 def test_input_and_output_monitor_lifecycle():
@@ -58,6 +67,36 @@ def test_input_and_output_monitor_lifecycle():
     assert output_monitor.records == []
     assert input_monitor.hooks == []
     assert output_monitor.hooks == []
+
+
+def test_monitor_context_closes_hooks_and_preserves_records():
+    net = nn.Linear(2, 1)
+
+    with pytest.raises(RuntimeError):
+        with monitor.OutputMonitor(net) as output_monitor:
+            net(torch.ones(1, 2))
+            raise RuntimeError("stop")
+
+    assert len(output_monitor.records) == 1
+    assert output_monitor.hooks == []
+    assert net._forward_hooks == {}
+
+    monitor_ref = weakref.ref(output_monitor)
+    output_monitor.close()
+    del output_monitor
+    gc.collect()
+    assert monitor_ref() is None
+
+
+def test_input_monitor_records_before_forward():
+    net = InPlaceModule()
+    input_monitor = monitor.InputMonitor(net, function_on_input=torch.Tensor.clone)
+
+    x = torch.zeros(1)
+    y = net(x)
+
+    torch.testing.assert_close(input_monitor.records[0], torch.zeros(1))
+    torch.testing.assert_close(y, torch.ones(1))
 
 
 def test_attribute_monitor_before_and_after_forward():

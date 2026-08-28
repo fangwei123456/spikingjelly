@@ -39,6 +39,19 @@ Module: `spikingjelly.activation_based.op_counter`.
   NeuroMC forward-energy estimators using pinned author code or published
   equations, with scale-free ranking metrics and explicit unvalidated scopes.
 
+### Improvements
+
+#### Monitoring
+
+Module: `spikingjelly.activation_based.monitor`.
+
+- Added deterministic hook cleanup through `BaseMonitor.close()` and context
+  managers, and changed `InputMonitor` transformations to run before module
+  forward execution.
+- STDP learners now clear consumed monitor records without invalidating
+  per-layer indexes, reject mismatched input/output record counts, and treat
+  empty record buffers as a no-op.
+
 ### Breaking Changes and Notices
 
 #### FlexSN Migration
