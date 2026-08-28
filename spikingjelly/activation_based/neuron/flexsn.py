@@ -181,6 +181,7 @@ class FlexSN(base.MemoryModule):
         self.state_seqs: tuple[torch.Tensor, ...] | None = None
         self._store_state_seqs = bool(store_state_seqs)
 
+        self._infer_output_arity()
         self.step_mode = step_mode
         self.backend = backend
 
@@ -453,25 +454,29 @@ class FlexSN(base.MemoryModule):
         static_inputs: tuple[torch.Tensor, ...],
         store_state_seqs: bool,
     ):
-        from ..triton_kernel.flexsn.hop import flex_sn_scan
+        from ..triton_kernel.flexsn.hop import _eager_scan, _hop_scan
 
-        reference = self._validate_operands(inputs, states, static_inputs, "m")
-        probe_outputs, _ = self._split_returns(
-            self.core(*(tensor[0] for tensor in inputs), *states, *static_inputs),
-            reference,
-        )
-        num_outputs = len(probe_outputs)
-        expanded_static = self._expanded_static_inputs(reference, static_inputs)
-        wrapped = self._wrapped_core(len(inputs), num_outputs)
-        flat_args = (*inputs, *states, *expanded_static)
-        total_states = self.num_states + len(expanded_static)
-        results = flex_sn_scan(
-            wrapped, len(inputs), total_states, num_outputs, *flat_args
+        self._validate_operands(inputs, states, static_inputs, "m")
+        num_outputs = self._num_outputs
+        flat_args = (*inputs, *states, *static_inputs)
+        scan = _hop_scan if store_state_seqs else _eager_scan
+        results = scan(
+            self.core,
+            len(inputs),
+            self.num_states,
+            num_outputs,
+            len(static_inputs),
+            store_state_seqs,
+            *flat_args,
         )
         outputs = tuple(results[:num_outputs])
-        all_state_seqs = tuple(results[num_outputs : num_outputs + self.num_states])
-        states = tuple(sequence[-1] for sequence in all_state_seqs)
-        state_seqs = all_state_seqs if store_state_seqs else None
+        state_results = tuple(results[num_outputs : num_outputs + self.num_states])
+        if store_state_seqs:
+            state_seqs = state_results
+            states = tuple(sequence[-1] for sequence in state_seqs)
+        else:
+            state_seqs = None
+            states = state_results
         return outputs, states, state_seqs
 
     def _ensure_triton_runtime(
@@ -534,13 +539,18 @@ class FlexSN(base.MemoryModule):
             (tensor.device for tensor in static_inputs if tensor.device.type == "cuda"),
             torch.device("cuda", torch.cuda.current_device()),
         )
+        self._ensure_triton_runtime(self._num_inputs, self._num_outputs, dtype, device)
+
+    def _infer_output_arity(self) -> None:
+        static_inputs = self.static_inputs
+        dtype = static_inputs[0].dtype if static_inputs else torch.float32
+        device = static_inputs[0].device if static_inputs else torch.device("cpu")
         reference = torch.zeros(1, dtype=dtype, device=device)
         returns = self.core(
             *(reference for _ in range(self._num_inputs + self.num_states)),
             *(reference for _ in static_inputs),
         )
-        outputs, _ = self._split_returns(returns, reference)
-        self._ensure_triton_runtime(self._num_inputs, len(outputs), dtype, device)
+        self._split_returns(returns, reference)
 
     def _triton_scan(
         self,
@@ -555,11 +565,7 @@ class FlexSN(base.MemoryModule):
         )
 
         reference = self._validate_operands(inputs, states, static_inputs, "m")
-        probe_outputs, _ = self._split_returns(
-            self.core(*(tensor[0] for tensor in inputs), *states, *static_inputs),
-            reference,
-        )
-        num_outputs = len(probe_outputs)
+        num_outputs = self._num_outputs
         self._ensure_triton_runtime(
             len(inputs), num_outputs, reference.dtype, reference.device
         )

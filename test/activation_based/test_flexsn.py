@@ -197,6 +197,46 @@ def test_hop_fullgraph_compile_matches_eager():
     torch.testing.assert_close(compiled(x), eager(x))
 
 
+@pytest.mark.parametrize("store_state_seqs", [False, True])
+def test_hop_fullgraph_bptt_with_static_parameter(store_state_seqs):
+    torch_parameter = torch.nn.Parameter(torch.tensor(0.0))
+    hop_parameter = torch.nn.Parameter(torch.tensor(0.0))
+    torch_module = FlexSN(
+        plif_core,
+        1,
+        static_inputs=(torch_parameter,),
+        backend="torch",
+        store_state_seqs=store_state_seqs,
+    )
+    hop_module = FlexSN(
+        plif_core,
+        1,
+        static_inputs=(hop_parameter,),
+        backend="hop",
+        store_state_seqs=store_state_seqs,
+    )
+    x_torch = torch.randn(4, 8, requires_grad=True)
+    x_hop = x_torch.detach().clone().requires_grad_(True)
+
+    torch_output = torch_module(x_torch)
+    hop_output = torch.compile(hop_module, fullgraph=True)(x_hop)
+    torch_output.sum().backward()
+    hop_output.sum().backward()
+
+    torch.testing.assert_close(hop_output, torch_output)
+    torch.testing.assert_close(x_hop.grad, x_torch.grad)
+    torch.testing.assert_close(hop_parameter.grad, torch_parameter.grad)
+
+
+def test_hop_has_one_private_implementation():
+    from spikingjelly.activation_based.triton_kernel.flexsn import hop
+
+    assert hop.__all__ == []
+    assert not hasattr(hop, "lowerable_scan")
+    assert not hasattr(hop, "lowerable_while_loop_scan")
+    assert not hasattr(hop, "eager_scan_final_state")
+
+
 def test_copy_preserves_configuration_and_state_without_runtime():
     module = FlexSN(lif_core, 1, backend="torch")
     module(torch.randn(2, 3))

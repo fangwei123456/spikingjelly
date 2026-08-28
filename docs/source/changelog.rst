@@ -68,6 +68,12 @@ Module: ``spikingjelly.activation_based.neuron.flexsn``.
   tuples.
 - FlexSN no longer accepts empty multi-step sequences or silently falls back
   from the explicitly selected Triton backend.
+- Consolidated FlexSN's generated Triton execution into one kernel bundle and
+  three private registered operators, with automatic support for scalar and
+  elementwise static Tensor gradients.
+- Reduced the HOP backend to one eager scan and one compiler-visible custom
+  HOP, removing the experimental native scan/while-loop alternatives and
+  their environment flags.
 
 Memory Optimization Migration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
