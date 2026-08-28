@@ -50,7 +50,7 @@ Module: `spikingjelly.activation_based.neuron.flexsn`.
   `forward` execution.
 - Removed the `num_inputs`, `num_outputs`, `example_inputs`, `example_outputs`,
   and `requires_grad` constructor arguments. Input/output arities and Triton
-  examples are now inferred from the first non-empty call.
+  examples are now inferred automatically.
 - Added registered `static_inputs` for tensor parameters reused at every time
   step, and standardized states, state sequences, and multiple outputs on
   tuples.

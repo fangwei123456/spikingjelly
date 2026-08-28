@@ -17,7 +17,7 @@ Core 契约
     core(*step_inputs, *states, *static_inputs)
         -> (*outputs, *updated_states)
 
-构造时只需指定 ``num_states``。输入和输出数量由第一次调用推导。Tensor 参数
+构造时只需指定 ``num_states``。输入和输出数量由函数签名和单位张量追踪推导。Tensor 参数
 必须通过 ``static_inputs`` 传入，不得隐藏在函数闭包中。
 
 自动状态管理
@@ -81,7 +81,7 @@ buffer。自动状态 ``forward`` 使用注册值，函数式调用则显式接�
 多步模式。构造后仍可修改 backend 和 step mode；非法组合会立即报错。合法切换
 保留 states，只清除派生的 ``state_seqs`` 缓存。
 
-``backend="triton"`` 需要 CUDA，并在第一次非空多步调用时构建 kernel。构建
+``backend="triton"`` 需要 CUDA，并自动准备生成式 kernel，无需示例张量。构建
 失败会直接抛出，不会回退其他后端。多步输入 ``T == 0`` 会被拒绝。
 
 迁移

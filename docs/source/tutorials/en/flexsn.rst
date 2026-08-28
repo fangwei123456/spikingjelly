@@ -18,8 +18,8 @@ returns outputs followed by updated states:
     core(*step_inputs, *states, *static_inputs)
         -> (*outputs, *updated_states)
 
-Only ``num_states`` is configured. FlexSN infers the input and output arities
-on the first call. Tensor-valued parameters must be passed through
+Only ``num_states`` is configured. FlexSN infers input and output arities from
+the callable signature and a unit-tensor trace. Tensor-valued parameters must be passed through
 ``static_inputs`` rather than captured by the callable.
 
 Managed forward
@@ -87,8 +87,8 @@ support multi-step mode only. Backend and step mode can be changed after
 construction; invalid combinations raise immediately. Legal changes preserve
 states and clear only the derived ``state_seqs`` cache.
 
-``backend="triton"`` requires CUDA and builds its kernels on the first
-non-empty multi-step call. Build failures are reported directly and never
+``backend="triton"`` requires CUDA and prepares its generated kernels
+automatically without user-provided example tensors. Build failures are reported directly and never
 fall back to another backend. Multi-step inputs with ``T == 0`` are rejected.
 
 Migration

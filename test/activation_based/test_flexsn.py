@@ -12,6 +12,37 @@ def lif_core(x, v):
     return spike, h * (1.0 - spike)
 
 
+def if_core(x, v):
+    h = v + x
+    spike = torch.sigmoid(h - 1.0)
+    return spike, h * (1.0 - spike)
+
+
+def plif_core(x, v, w):
+    h = v + w.sigmoid() * (x - v)
+    spike = torch.sigmoid(h - 1.0)
+    return spike, h * (1.0 - spike)
+
+
+def eif_core(x, v):
+    h = v + (x - v + torch.exp(v - 0.8)) / 2.0
+    spike = torch.sigmoid(h - 1.0)
+    return spike, h * (1.0 - spike)
+
+
+def qif_core(x, v):
+    h = v + (x + (v - 0.0) * (v - 0.8)) / 2.0
+    spike = torch.sigmoid(h - 1.0)
+    return spike, h * (1.0 - spike)
+
+
+def izhikevich_core(x, v, w):
+    h = v + (x + (v + 0.1) * (v - 0.8) - w) / 2.0
+    w = w + (0.1 * (v + 0.1) - w) / 2.0
+    spike = torch.sigmoid(h - 1.0)
+    return spike, h * (1.0 - spike), w + 0.1 * spike
+
+
 def manual_scan(core, inputs, states, static_inputs=()):
     output_steps = None
     for step_inputs in zip(*inputs, strict=True):
@@ -230,6 +261,77 @@ def test_triton_requires_cuda_without_fallback():
         module(torch.randn(2, 3))
 
 
+def test_triton_registered_operator_surface_is_minimal():
+    from spikingjelly.activation_based.triton_kernel.flexsn import custom_ops
+
+    assert custom_ops.__all__ == []
+    assert str(torch.ops.sj.flexsn_triton_inference.default._schema) == (
+        "sj::flexsn_triton_inference(SymInt handle, Tensor[] flat_args, "
+        "bool return_state_sequences) -> Tensor[]"
+    )
+    assert str(torch.ops.sj.flexsn_triton_training.default._schema) == (
+        "sj::flexsn_triton_training(SymInt handle, Tensor[] flat_args, "
+        "bool return_state_sequences) -> Tensor[]"
+    )
+
+
+def _make_core_case(name, backend, dtype):
+    if name == "plif":
+        parameter = torch.nn.Parameter(torch.tensor(0.0, device="cuda", dtype=dtype))
+        return FlexSN(
+            plif_core,
+            1,
+            static_inputs=(parameter,),
+            backend=backend,
+        ), parameter
+    core, num_states = {
+        "if": (if_core, 1),
+        "lif": (lif_core, 1),
+        "eif": (eif_core, 1),
+        "qif": (qif_core, 1),
+        "izhikevich": (izhikevich_core, 2),
+    }[name]
+    return FlexSN(core, num_states, backend=backend), None
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("name", ["if", "lif", "plif", "eif", "qif", "izhikevich"])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
+def test_representative_triton_cores_match_torch(name, dtype):
+    torch_module, torch_parameter = _make_core_case(name, "torch", dtype)
+    triton_module, triton_parameter = _make_core_case(name, "triton", dtype)
+    x_torch = torch.randn(4, 32, device="cuda", dtype=dtype, requires_grad=True)
+    x_triton = x_torch.detach().clone().requires_grad_(True)
+    torch_states = tuple(
+        torch.randn(32, device="cuda", dtype=dtype, requires_grad=True)
+        for _ in range(torch_module.num_states)
+    )
+    triton_states = tuple(
+        state.detach().clone().requires_grad_(True) for state in torch_states
+    )
+    torch_module.states = torch_states
+    triton_module.states = triton_states
+
+    torch_output = torch_module(x_torch)
+    triton_output = triton_module(x_triton)
+    torch_loss = torch_output.sum() + sum(state.sum() for state in torch_module.states)
+    triton_loss = triton_output.sum() + sum(
+        state.sum() for state in triton_module.states
+    )
+    torch_loss.backward()
+    triton_loss.backward()
+
+    tolerance = {"atol": 2e-2, "rtol": 2e-2} if dtype == torch.float16 else {}
+    torch.testing.assert_close(triton_output, torch_output, **tolerance)
+    torch.testing.assert_close(x_triton.grad, x_torch.grad, **tolerance)
+    for triton_state, torch_state in zip(triton_states, torch_states, strict=True):
+        torch.testing.assert_close(triton_state.grad, torch_state.grad, **tolerance)
+    if torch_parameter is not None:
+        torch.testing.assert_close(
+            triton_parameter.grad, torch_parameter.grad, **tolerance
+        )
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_triton_matches_torch_and_is_captured_by_compile():
     x_torch = torch.randn(4, 32, device="cuda", requires_grad=True)
@@ -248,8 +350,32 @@ def test_triton_matches_torch_and_is_captured_by_compile():
     from torch._dynamo import explain
 
     fresh = FlexSN(lif_core, 1, backend="triton").cuda()
+    with torch.no_grad():
+        compiled_output = torch.compile(fresh, fullgraph=True)(x_triton.detach())
+    assert compiled_output.shape == x_triton.shape
     explanation = explain(fresh)(x_triton.detach())
     targets = [
         str(node.target) for graph in explanation.graphs for node in graph.graph.nodes
     ]
     assert any("sj.flexsn_triton" in target for target in targets)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("training", [False, True])
+def test_triton_registered_operators_pass_opcheck(training):
+    module = FlexSN(lif_core, 1, backend="triton")
+    x = torch.randn(4, 32, device="cuda", requires_grad=training)
+    state = torch.zeros(32, device="cuda", requires_grad=training)
+    operator = (
+        torch.ops.sj.flexsn_triton_training.default
+        if training
+        else torch.ops.sj.flexsn_triton_inference.default
+    )
+
+    result = torch.library.opcheck(
+        operator,
+        (module._triton_handle, [x, state], False),
+        raise_exception=False,
+    )
+
+    assert set(result.values()) == {"SUCCESS"}
