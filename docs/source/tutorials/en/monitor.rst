@@ -17,13 +17,13 @@ Firstly, let us build a simple single-step network. To avoid no spikes, we set a
 
 .. code-block:: python
 
-    spike_seq_monitor = monitor.OutputMonitor(net, neuron.IFNode)
     T = 4
     N = 1
     x_seq = torch.rand([T, N, 8])
 
-    with torch.no_grad():
-        net(x_seq)
+    with monitor.OutputMonitor(net, neuron.IFNode) as spike_seq_monitor:
+        with torch.no_grad():
+            net(x_seq)
 
 The recorded data will be stored in ``.records`` whose type is ``list``. The data are recorded by the order in how they are created:
 
@@ -129,18 +129,18 @@ The outputs are:
     spike_seq_monitor.records=[]
     spike_seq_monitor['1']=[]
 
-All ``monitor`` will remove hooks when they are deleted. However, python will not guarantee to call the ``__del__()`` function of the monitor even if we call ``del a_monitor`` manually:
+Leaving the context removes the hooks but preserves ``records`` for inspection.
+For a monitor created without ``with``, call ``close()`` when it is no longer
+needed:
 
 .. code-block:: python
 
-    del spike_seq_monitor
-    # hooks may still work
+    spike_seq_monitor.close()
 
-Instead, we should call ``remove_hooks`` to remove all hooks:
-
-.. code-block:: python
-
-    spike_seq_monitor.remove_hooks()
+``disable()`` only pauses recording and keeps the hooks so that ``enable()`` can
+resume it. ``close()`` permanently removes the hooks. Deleting a monitor variable
+is not a substitute for ``close()`` because a hook on a live module can still
+reference the monitor.
 
 
 :class:`OutputMonitor <spikingjelly.activation_based.monitor.OutputMonitor>` can also process the data when recording, which is implemented by ``function_on_output``. \
@@ -173,7 +173,7 @@ Then, we can set this function as ``function_on_output`` to get a firing rates m
         net(x_seq)
         print(f'after call fr_monitor.enable(), fr_monitor.records=\n{fr_monitor.records}')
         functional.reset_net(net)
-        del fr_monitor
+        fr_monitor.close()
 
 The outputs are:
 
@@ -207,7 +207,7 @@ Then, we use :class:`spikingjelly.activation_based.monitor.AttributeMonitor` to 
         net(x_seq)
         print(f'v_seq_monitor.records=\n{v_seq_monitor.records}')
         functional.reset_net(net)
-        del v_seq_monitor
+        v_seq_monitor.close()
 
 The outputs are:
 
@@ -232,6 +232,11 @@ Record Inputs
 -------------------------------------------
 To record inputs, we can use :class:`spikingjelly.activation_based.monitor.InputMonitor`, which is similar to :class:`spikingjelly.activation_based.monitor.OutputMonitor`:
 
+``function_on_input`` runs before the monitored module. The default function
+stores the input object itself, so an in-place module can still mutate the
+recorded reference. Pass a function such as ``lambda x: x.clone()`` when the
+pre-forward value must remain unchanged.
+
 .. code-block:: python
 
     input_monitor = monitor.InputMonitor(net, neuron.IFNode)
@@ -239,7 +244,7 @@ To record inputs, we can use :class:`spikingjelly.activation_based.monitor.Input
         net(x_seq)
         print(f'input_monitor.records=\n{input_monitor.records}')
         functional.reset_net(net)
-        del input_monitor
+        input_monitor.close()
 
 The outputs are:
 
@@ -270,7 +275,7 @@ We can use :class:`spikingjelly.activation_based.monitor.GradOutputMonitor` to r
     net(x_seq).sum().backward()
     print(f'spike_seq_grad_monitor.records=\n{spike_seq_grad_monitor.records}')
     functional.reset_net(net)
-    del spike_seq_grad_monitor
+    spike_seq_grad_monitor.close()
 
 The outputs are:
 
@@ -331,7 +336,7 @@ Let us build a deep SNN, tune ``alpha`` for surrogate functions, and compare the
         for param in net.parameters():
             param.grad.zero_()
 
-        input_grad_monitor.records.clear()
+        input_grad_monitor.clear_recorded_data()
 
 
 The outputs are:
@@ -354,9 +359,35 @@ The outputs are:
     [tensor(4.3944), tensor(2.4396), tensor(0.8996), tensor(0.4376), tensor(0.0640), tensor(0.0122), tensor(0.0053), tensor(0.0016), tensor(0.0013), tensor(0.0005)]
 
 
+GPU Utilization Sampling
+-------------------------------------------
+:class:`spikingjelly.activation_based.monitor.GPUMonitor` periodically samples
+whole-device utilization and memory through ``nvidia-smi``. It includes other
+processes using the same GPU and does not replace the model-level profilers in
+:mod:`spikingjelly.activation_based.profiler`. Always stop and join its thread:
+
+.. code-block:: python
+
+    gpu_monitor = monitor.GPUMonitor(interval=10)
+    try:
+        train()
+    finally:
+        gpu_monitor.stop()
+        gpu_monitor.join()
+
 Reduce Memory Consumption
 -------------------------------------------
 If we need to record huge amounts of data and the data are spikes, we can use some methods to reduce memory consumption.
+
+When gradients are enabled, the default identity recording function can retain
+the forward autograd graph. If gradients through the records are not required,
+detach at record time:
+
+.. code-block:: python
+
+    spike_seq_monitor = monitor.OutputMonitor(
+        net, neuron.IFNode, function_on_output=torch.Tensor.detach
+    )
 
 Although spike tensors only contain 0 and 1, they are still stored in float format. We can convert them to bool to reduce memory consumption. But it still uses 1/4, rather than 1/32 of the original memory consumption because bool in C++ requires 8 bits, rather than 1 bit: 
 
