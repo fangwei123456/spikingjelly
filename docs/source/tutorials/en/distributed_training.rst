@@ -496,7 +496,14 @@ to an ``llm.ModelBuilder``. The builder's ``build`` method returns the MCore
 
 .. code-block:: python
 
+    from dataclasses import dataclass
+    from typing import ClassVar
+
     from spikingjelly.activation_based.distributed import llm
+
+    @dataclass(frozen=True, kw_only=True)
+    class MyModelConfig(llm.ModelConfig):
+        builder: ClassVar[str] = "my_package.model.MyModelBuilder"
 
     class MyModelBuilder(llm.ModelBuilder):
         def build(

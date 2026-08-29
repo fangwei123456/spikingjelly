@@ -451,7 +451,14 @@ LLM 模型继承 ``llm.ModelConfig``，并通过 ``builder`` 类变量指向一�
 
 .. code-block:: python
 
+    from dataclasses import dataclass
+    from typing import ClassVar
+
     from spikingjelly.activation_based.distributed import llm
+
+    @dataclass(frozen=True, kw_only=True)
+    class MyModelConfig(llm.ModelConfig):
+        builder: ClassVar[str] = "my_package.model.MyModelBuilder"
 
     class MyModelBuilder(llm.ModelBuilder):
         def build(
