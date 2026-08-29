@@ -761,7 +761,8 @@ def test_sew_resnet34_single_step_matches_multi_step():
     torch.testing.assert_close(single_step, multi_step)
 
 
-def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch):
+@pytest.mark.parametrize("legacy_precision", [False, True])
+def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch, legacy_precision):
     from torch.distributed.checkpoint import state_dict as dcp_state_dict
 
     model = nn.Linear(2, 2)
@@ -810,6 +811,11 @@ def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch):
         pp_rank=0,
         dp_rank=0,
     )
+    if legacy_precision:
+        recipe_path = checkpoint / "config.json"
+        recipe = json.loads(recipe_path.read_text(encoding="utf-8"))
+        recipe["precision"] = "bf16"
+        recipe_path.write_text(json.dumps(recipe), encoding="utf-8")
     progress = training._load_checkpoint(
         checkpoint,
         config=config,

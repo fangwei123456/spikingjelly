@@ -362,8 +362,9 @@ def test_assess_triton_efficiency_reports_fp8_group_without_baseline():
     ]
 
 
-def test_assess_model_efficiency_rejects_fp8_baseline():
-    with pytest.raises(ValueError, match="must not be an FP8 variant"):
+@pytest.mark.parametrize("baseline", ["fp8", "fp8-te", "fp8-torchao"])
+def test_assess_model_efficiency_rejects_unsupported_baseline(baseline):
+    with pytest.raises(ValueError, match="must be 'fp32', 'fp16', or 'bf16'"):
         assess_model_efficiency(
             [
                 {
@@ -374,7 +375,7 @@ def test_assess_model_efficiency_rejects_fp8_baseline():
                     "inference_peak_allocated_mb": 600.0,
                 }
             ],
-            baseline_precision="fp8",
+            baseline_precision=baseline,
             min_training_speedup=1.0,
             min_inference_speedup=1.0,
         )

@@ -95,6 +95,8 @@ Module: ``spikingjelly.activation_based.precision``.
   unsupported instead of failing during forward.
 - ``distributed.vision`` now stores ``PrecisionConfig`` and supports experimental
   model FP8 and Triton mixed precision with DDP.
+- Vision checkpoint resume normalizes the former scalar ``fp32``, ``fp16``, and
+  ``bf16`` recipe values to ``PrecisionConfig``; removed FP8 mode names are rejected.
 - MCore language-model precision remains configured by the native MCore
   transformer and optimizer configuration.
 

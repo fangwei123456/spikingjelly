@@ -82,7 +82,7 @@ if triton is not None:
             h = tl.load(h_ptr + base, mask=mask, other=0.0).to(compute_dtype)
             v_last = tl.load(v_ptr + base, mask=mask, other=0.0).to(compute_dtype)
             s = tl.where(h >= 1.0, 1.0, 0.0).to(compute_dtype)
-            over_th = (alpha * (h - 1.0)).to(tl.float32)
+            over_th = alpha.to(tl.float32) * (h.to(tl.float32) - 1.0)
             sig_over_th = 1.0 / (1.0 + tl.exp(-over_th))
             sg = (alpha * sig_over_th * (1.0 - sig_over_th)).to(compute_dtype)
             grad_v_combined = grad_v + grad_v_acc

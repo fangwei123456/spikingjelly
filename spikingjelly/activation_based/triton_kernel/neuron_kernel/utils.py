@@ -97,11 +97,32 @@ def _check_fp8_capability(
         )
 
 
-@lru_cache(maxsize=None)
 def _prepare_triton_neuron_execution_plan(
     *,
     neuron_type: str,
     device,
+    storage_dtype,
+    forward_compute_dtype="fp32",
+    backward_compute_dtype="fp32",
+    spike_dtype: torch.dtype = torch.float32,
+    save_intermediates: bool = True,
+) -> _TritonNeuronExecutionPlan:
+    return _prepare_triton_neuron_execution_plan_cached(
+        neuron_type=neuron_type,
+        device=normalize_cuda_device(device),
+        storage_dtype=storage_dtype,
+        forward_compute_dtype=forward_compute_dtype,
+        backward_compute_dtype=backward_compute_dtype,
+        spike_dtype=spike_dtype,
+        save_intermediates=save_intermediates,
+    )
+
+
+@lru_cache(maxsize=None)
+def _prepare_triton_neuron_execution_plan_cached(
+    *,
+    neuron_type: str,
+    device: torch.device,
     storage_dtype,
     forward_compute_dtype="fp32",
     backward_compute_dtype="fp32",
@@ -125,7 +146,6 @@ def _prepare_triton_neuron_execution_plan(
     _require_fp8_storage_dtype(
         backward_compute_dtype_name, storage_dtype, "backward_compute_dtype"
     )
-    device = normalize_cuda_device(device)
     if device.type != "cuda":
         raise RuntimeError(
             "Triton neuron execution plan is unavailable: requires a CUDA device."

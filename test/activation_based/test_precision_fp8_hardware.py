@@ -57,7 +57,16 @@ def _reset_model(model: torch.nn.Module) -> None:
 def _required_backends() -> set[str]:
     value = os.environ.get("SPIKINGJELLY_REQUIRE_FP8_BACKENDS", "")
     required = {item.strip() for item in value.split(",") if item.strip()}
+    unsupported = required - {"all", "fp8"}
+    if unsupported:
+        raise ValueError(f"Unsupported required FP8 backends: {sorted(unsupported)}.")
     return {"fp8"} if "all" in required else required
+
+
+def test_required_backends_rejects_removed_labels(monkeypatch):
+    monkeypatch.setenv("SPIKINGJELLY_REQUIRE_FP8_BACKENDS", "fp8-te")
+    with pytest.raises(ValueError, match="Unsupported required FP8 backends"):
+        _required_backends()
 
 
 def _required_recipes() -> set[str]:

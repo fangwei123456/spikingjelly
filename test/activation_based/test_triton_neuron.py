@@ -384,6 +384,32 @@ def test__prepare_triton_neuron_execution_plan_rejects_cpu_device():
         )
 
 
+def test__prepare_triton_neuron_execution_plan_normalizes_device_before_cache(
+    monkeypatch,
+):
+    expected = object()
+    calls = []
+    monkeypatch.setattr(
+        neuron_triton_utils,
+        "normalize_cuda_device",
+        lambda _device: torch.device("cuda", 1),
+    )
+    monkeypatch.setattr(
+        neuron_triton_utils,
+        "_prepare_triton_neuron_execution_plan_cached",
+        lambda **kwargs: calls.append(kwargs) or expected,
+    )
+
+    result = neuron_triton_utils._prepare_triton_neuron_execution_plan(
+        neuron_type="lif",
+        device="cuda",
+        storage_dtype=torch.float32,
+    )
+
+    assert result is expected
+    assert calls[0]["device"] == torch.device("cuda", 1)
+
+
 def test__prepare_triton_neuron_execution_plan_rejects_invalid_options():
     with pytest.raises(ValueError, match="neuron_type"):
         neuron_triton_utils._prepare_triton_neuron_execution_plan(

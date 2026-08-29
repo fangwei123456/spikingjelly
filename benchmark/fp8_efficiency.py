@@ -55,9 +55,9 @@ def assess_model_efficiency(
         or min_inference_speedup <= 0
     ):
         raise ValueError("Minimum speedups must be finite and positive.")
-    if baseline_precision == "fp8":
+    if baseline_precision not in {"fp32", "fp16", "bf16"}:
         raise ValueError(
-            "baseline_precision must not be an FP8 variant, but got "
+            "baseline_precision must be 'fp32', 'fp16', or 'bf16', but got "
             f"{baseline_precision!r}."
         )
     baselines = [row for row in results if _row_precision(row) == baseline_precision]

@@ -28,17 +28,14 @@ from spikingjelly.activation_based.triton_kernel.fp8_capability import (
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.integrate_and_fire import (
     multistep_if,
-    _multistep_if_mp,
     _multistep_if_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.lif import (
     multistep_lif,
-    _multistep_lif_mp,
     _multistep_lif_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.plif import (
     multistep_plif,
-    _multistep_plif_mp,
     _multistep_plif_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.utils import (
@@ -207,62 +204,6 @@ def _call_mp_with_plan(
     raise ValueError(f"Unsupported neuron type: {neuron_type}.")
 
 
-def _call_mp_safe(
-    x: torch.Tensor,
-    *,
-    neuron_type: str,
-    v_init: torch.Tensor,
-    r_tau_tensor: torch.Tensor | None,
-    storage_dtype: torch.dtype,
-    compute_dtype: str,
-    backward_compute_dtype: str,
-    save_intermediates: bool,
-) -> tuple[torch.Tensor, ...]:
-    if neuron_type == "if":
-        return _multistep_if_mp(
-            x,
-            v_init,
-            v_threshold=_V_THRESHOLD,
-            v_reset=_V_RESET,
-            storage_dtype=storage_dtype,
-            compute_dtype=compute_dtype,
-            backward_compute_dtype=backward_compute_dtype,
-            spike_dtype=torch.float32,
-            save_intermediates=save_intermediates,
-        )
-    if neuron_type == "lif":
-        return _multistep_lif_mp(
-            x,
-            v_init,
-            decay_input=True,
-            tau=1.0 / _R_TAU,
-            v_threshold=_V_THRESHOLD,
-            v_reset=_V_RESET,
-            storage_dtype=storage_dtype,
-            compute_dtype=compute_dtype,
-            backward_compute_dtype=backward_compute_dtype,
-            spike_dtype=torch.float32,
-            save_intermediates=save_intermediates,
-        )
-    if neuron_type == "plif":
-        if r_tau_tensor is None:
-            raise ValueError("PLIF requires r_tau_tensor.")
-        return _multistep_plif_mp(
-            x,
-            v_init,
-            r_tau_tensor,
-            decay_input=True,
-            v_threshold=_V_THRESHOLD,
-            v_reset=_V_RESET,
-            storage_dtype=storage_dtype,
-            compute_dtype=compute_dtype,
-            backward_compute_dtype=backward_compute_dtype,
-            spike_dtype=torch.float32,
-            save_intermediates=save_intermediates,
-        )
-    raise ValueError(f"Unsupported neuron type: {neuron_type}.")
-
-
 def _loss(outputs: tuple[torch.Tensor, ...]) -> torch.Tensor:
     return outputs[0].float().sum() + outputs[1].float().sum() * 0.125
 
@@ -315,9 +256,6 @@ def _benchmark_inference(
     warmup: int,
     variant_kind: str,
     plan: _TritonNeuronExecutionPlan | None,
-    storage_dtype: torch.dtype | None,
-    compute_dtype: str | None,
-    backward_compute_dtype: str,
 ) -> dict[str, float]:
     v_init = torch.zeros_like(x[0])
     r_tau_tensor = (
@@ -335,28 +273,16 @@ def _benchmark_inference(
                     v_init=v_init,
                     r_tau_tensor=r_tau_tensor,
                 )
+            elif plan is not None:
+                _call_mp_with_plan(
+                    x,
+                    neuron_type=neuron_type,
+                    v_init=v_init,
+                    r_tau_tensor=r_tau_tensor,
+                    plan=plan,
+                )
             else:
-                if plan is not None:
-                    _call_mp_with_plan(
-                        x,
-                        neuron_type=neuron_type,
-                        v_init=v_init,
-                        r_tau_tensor=r_tau_tensor,
-                        plan=plan,
-                    )
-                else:
-                    if storage_dtype is None or compute_dtype is None:
-                        raise ValueError("Mixed precision safe path requires dtypes.")
-                    _call_mp_safe(
-                        x,
-                        neuron_type=neuron_type,
-                        v_init=v_init,
-                        r_tau_tensor=r_tau_tensor,
-                        storage_dtype=storage_dtype,
-                        compute_dtype=compute_dtype,
-                        backward_compute_dtype=backward_compute_dtype,
-                        save_intermediates=False,
-                    )
+                raise ValueError("Mixed precision benchmark requires a plan.")
 
     return _measure(device=device, repeats=repeats, warmup=warmup, fn=fn)
 
@@ -370,9 +296,6 @@ def _benchmark_training(
     warmup: int,
     variant_kind: str,
     plan: _TritonNeuronExecutionPlan | None,
-    storage_dtype: torch.dtype | None,
-    compute_dtype: str | None,
-    backward_compute_dtype: str,
 ) -> dict[str, float]:
     x_req = x.detach().clone().requires_grad_()
     v_init = torch.zeros_like(x[0]).requires_grad_()
@@ -394,28 +317,16 @@ def _benchmark_training(
                 v_init=v_init,
                 r_tau_tensor=r_tau_tensor,
             )
+        elif plan is not None:
+            outputs = _call_mp_with_plan(
+                x_req,
+                neuron_type=neuron_type,
+                v_init=v_init,
+                r_tau_tensor=r_tau_tensor,
+                plan=plan,
+            )
         else:
-            if plan is not None:
-                outputs = _call_mp_with_plan(
-                    x_req,
-                    neuron_type=neuron_type,
-                    v_init=v_init,
-                    r_tau_tensor=r_tau_tensor,
-                    plan=plan,
-                )
-            else:
-                if storage_dtype is None or compute_dtype is None:
-                    raise ValueError("Mixed precision safe path requires dtypes.")
-                outputs = _call_mp_safe(
-                    x_req,
-                    neuron_type=neuron_type,
-                    v_init=v_init,
-                    r_tau_tensor=r_tau_tensor,
-                    storage_dtype=storage_dtype,
-                    compute_dtype=compute_dtype,
-                    backward_compute_dtype=backward_compute_dtype,
-                    save_intermediates=True,
-                )
+            raise ValueError("Mixed precision benchmark requires a plan.")
         _loss(outputs).backward()
 
     return _measure(device=device, repeats=repeats, warmup=warmup, fn=fn)
@@ -803,9 +714,6 @@ def main() -> None:
                                 warmup=args.warmup,
                                 variant_kind=variant["variant_kind"],
                                 plan=plan,
-                                storage_dtype=variant["storage_dtype_obj"],
-                                compute_dtype=variant["compute_dtype"],
-                                backward_compute_dtype=backward_compute_dtype,
                             )
                         else:
                             metrics = _benchmark_training(
@@ -816,9 +724,6 @@ def main() -> None:
                                 warmup=args.warmup,
                                 variant_kind=variant["variant_kind"],
                                 plan=plan,
-                                storage_dtype=variant["storage_dtype_obj"],
-                                compute_dtype=variant["compute_dtype"],
-                                backward_compute_dtype=backward_compute_dtype,
                             )
                         row.update(metrics)
                         row["success"] = True

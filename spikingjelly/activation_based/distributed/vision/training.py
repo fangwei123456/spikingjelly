@@ -179,7 +179,18 @@ def _load_checkpoint(
     from torch.distributed.checkpoint.state_dict import get_state_dict, set_state_dict
 
     saved_recipe = json.loads((path / "config.json").read_text(encoding="utf-8"))
-    if saved_recipe != _recipe(config):
+    current_recipe = _recipe(config)
+    saved_precision = saved_recipe.get("precision")
+    if isinstance(saved_precision, str):
+        if saved_precision not in {"fp32", "fp16", "bf16"}:
+            raise ValueError(
+                f"Checkpoint uses unsupported precision mode {saved_precision!r}."
+            )
+        saved_recipe["precision"] = {
+            **current_recipe["precision"],
+            "mode": saved_precision,
+        }
+    if saved_recipe != current_recipe:
         raise ValueError("Checkpoint configuration does not match this training run.")
 
     options = _state_dict_options()
