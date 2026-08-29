@@ -602,9 +602,6 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         args.device,
         PrecisionConfig(
             mode=args.precision,
-            strictness="strict",
-            report=True,
-            device=args.device,
         ),
     )
     config = Qwen2SNNConfig(
@@ -648,7 +645,6 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
             dense_model=precision.model,
             snn_model=converted,
             tokens=evaluation_tokens,
-            device=args.device,
             autocast_context=precision.autocast_context,
             max_windows=args.max_ppl_windows,
             encoding_mode="signed_if",

@@ -298,9 +298,7 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
     precision = prepare_model_for_precision(
         source,
         args.device,
-        PrecisionConfig(
-            mode="bf16", strictness="strict", report=True, device=args.device
-        ),
+        PrecisionConfig(mode="bf16"),
     )
     config = Qwen2SNNConfig(
         time_steps=args.time_steps,

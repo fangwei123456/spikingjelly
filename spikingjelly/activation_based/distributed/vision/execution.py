@@ -11,6 +11,7 @@ from spikingjelly.activation_based.distributed.tensor_parallel import (
     ChannelShardBatchNorm1d,
     ChannelShardBatchNorm2d,
 )
+from spikingjelly.activation_based.precision.config import PrecisionConfig
 
 
 def _classification_logits(output: torch.Tensor) -> torch.Tensor:
@@ -104,7 +105,7 @@ def _wrap_data_parallel(
     data_parallel: Literal["ddp", "fsdp2"],
     pipeline_parallel_size: int,
     step_mode: str,
-    precision: Literal["fp32", "bf16", "fp16"],
+    precision: PrecisionConfig,
     device: torch.device,
     dp_size: int,
     dp_group: Optional[ProcessGroup],
@@ -129,7 +130,7 @@ def _wrap_data_parallel(
         "fp32": None,
         "bf16": torch.bfloat16,
         "fp16": torch.float16,
-    }[precision]
+    }[precision.mode]
     policy = MixedPrecisionPolicy(
         param_dtype=dtype,
         reduce_dtype=dtype,

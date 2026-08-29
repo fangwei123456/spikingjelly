@@ -7,15 +7,19 @@ import torch
 from spikingjelly.activation_based import functional, layer, neuron
 from spikingjelly.activation_based.model import Spikformer
 from spikingjelly.activation_based.precision import (
-    Float8TransformerEnginePolicy,
     PrecisionConfig,
-    TransformerEngineDotProductAttentionAdapter,
-    build_capability_report,
     prepare_model_for_precision,
+)
+from spikingjelly.activation_based.precision.capability import (
+    build_capability_report,
     validate_capability,
 )
-
-FP8_MODES = ("fp8-torchao", "fp8-te")
+from spikingjelly.activation_based.precision.float8_attention import (
+    TransformerEngineDotProductAttentionAdapter,
+)
+from spikingjelly.activation_based.precision.float8_te import (
+    Float8TransformerEnginePolicy,
+)
 
 
 def _relative_l2(candidate: torch.Tensor, reference: torch.Tensor) -> float:
@@ -53,7 +57,7 @@ def _reset_model(model: torch.nn.Module) -> None:
 def _required_backends() -> set[str]:
     value = os.environ.get("SPIKINGJELLY_REQUIRE_FP8_BACKENDS", "")
     required = {item.strip() for item in value.split(",") if item.strip()}
-    return set(FP8_MODES) if "all" in required else required
+    return {"fp8"} if "all" in required else required
 
 
 def _required_recipes() -> set[str]:
@@ -124,14 +128,12 @@ def _assert_train_and_infer(
         device,
         PrecisionConfig(
             mode=mode,
-            strictness="strict",
             fp8_recipe=recipe,
-            device=str(device),
         ),
     )
     model = artifacts.model
-    assert artifacts.effective_config.mode == mode
-    assert artifacts.policy.conversion_report()["converted_modules"]
+    assert artifacts.config.mode == mode
+    assert artifacts.describe()["conversion_report"]["converted_modules"]
 
     model.eval()
     _reset_model(model)
@@ -204,13 +206,11 @@ def _assert_train_and_infer(
         device,
         PrecisionConfig(
             mode=mode,
-            strictness="strict",
             fp8_recipe=recipe,
-            device=str(device),
         ),
     )
-    assert reload_artifacts.effective_config.mode == mode
-    assert reload_artifacts.policy.conversion_report()["converted_modules"]
+    assert reload_artifacts.config.mode == mode
+    assert reload_artifacts.describe()["conversion_report"]["converted_modules"]
     reload_model = reload_artifacts.model
     reload_model.load_state_dict(state_dict, strict=True)
     reload_model.eval()
@@ -239,8 +239,42 @@ def _assert_train_and_infer(
     )
 
 
-@pytest.mark.parametrize("mode", FP8_MODES)
-def test_fp8_backend_trains_updates_parameters_and_runs_inference(mode):
+@pytest.mark.parametrize(
+    "node_type",
+    (
+        neuron.IFNode,
+        neuron.LIFNode,
+        neuron.ParametricLIFNode,
+    ),
+)
+def test_precision_prepares_triton_neuron_storage_and_compute(node_type):
+    device = _cuda_device_or_skip("fp8")
+    try:
+        model = node_type(step_mode="m", backend="triton", store_v_seq=True).to(device)
+    except ImportError as exc:
+        _unavailable_backend("fp8", str(exc))
+    config = PrecisionConfig(
+        triton_storage="float8_e4m3fn",
+        triton_fwd="bf16",
+        triton_bwd="fp16",
+    )
+    try:
+        precision = prepare_model_for_precision(model, device, config)
+    except RuntimeError as exc:
+        _unavailable_backend("fp8", str(exc))
+
+    x = torch.randn(16, 128, device=device, requires_grad=True)
+    output = precision.model(x)
+    output.float().sum().backward()
+
+    assert output.dtype == x.dtype
+    assert precision.model.v.dtype == torch.float8_e4m3fn
+    assert torch.isfinite(x.grad).all()
+    assert precision.describe()["triton_neurons"]["converted_modules"] == ["<root>"]
+
+
+def test_fp8_backend_trains_updates_parameters_and_runs_inference():
+    mode = "fp8"
     device = _cuda_device_or_skip(mode)
     model = torch.nn.Sequential(
         torch.nn.Linear(64, 128),
@@ -252,8 +286,8 @@ def test_fp8_backend_trains_updates_parameters_and_runs_inference(mode):
     _assert_train_and_infer(model, x, mode)
 
 
-@pytest.mark.parametrize("mode", FP8_MODES)
-def test_fp8_backend_pointwise_conv1d_trains_and_runs_multistep_inference(mode):
+def test_fp8_backend_pointwise_conv1d_trains_and_runs_multistep_inference():
+    mode = "fp8"
     device = _cuda_device_or_skip(mode)
     model = layer.Conv1d(16, 32, kernel_size=1, step_mode="m").to(device)
     x = torch.randn(2, 16, 16, 8, device=device)
@@ -261,8 +295,8 @@ def test_fp8_backend_pointwise_conv1d_trains_and_runs_multistep_inference(mode):
     _assert_train_and_infer(model, x, mode)
 
 
-@pytest.mark.parametrize("mode", FP8_MODES)
-def test_fp8_backend_stateful_snn_trains_resets_and_runs_inference(mode):
+def test_fp8_backend_stateful_snn_trains_resets_and_runs_inference():
+    mode = "fp8"
     device = _cuda_device_or_skip(mode)
     torch.manual_seed(20260719)
     model = torch.nn.Sequential(
@@ -282,8 +316,8 @@ def test_fp8_backend_stateful_snn_trains_resets_and_runs_inference(mode):
     )
 
 
-@pytest.mark.parametrize("mode", FP8_MODES)
-def test_fp8_backend_snn_boundary_spike_mismatch_is_bounded(mode):
+def test_fp8_backend_snn_boundary_spike_mismatch_is_bounded():
+    mode = "fp8"
     device = _cuda_device_or_skip(mode)
     torch.manual_seed(20260719)
     model = torch.nn.Sequential(
@@ -296,10 +330,10 @@ def test_fp8_backend_snn_boundary_spike_mismatch_is_bounded(mode):
     artifacts = prepare_model_for_precision(
         model,
         device,
-        PrecisionConfig(mode=mode, strictness="strict", device=str(device)),
+        PrecisionConfig(mode=mode),
     )
-    assert artifacts.effective_config.mode == mode
-    assert artifacts.policy.conversion_report()["converted_modules"]
+    assert artifacts.config.mode == mode
+    assert artifacts.describe()["conversion_report"]["converted_modules"]
     model = artifacts.model.eval()
 
     _reset_model(reference_model)
@@ -322,8 +356,8 @@ def test_fp8_backend_snn_boundary_spike_mismatch_is_bounded(mode):
     assert mismatch_ratio <= 0.01
 
 
-@pytest.mark.parametrize("mode", FP8_MODES)
-def test_tiny_spikformer_fp8_trains_and_runs_inference(mode):
+def test_tiny_spikformer_fp8_trains_and_runs_inference():
+    mode = "fp8"
     device = _cuda_device_or_skip(mode)
     torch.manual_seed(20260719)
     model = Spikformer(
@@ -342,9 +376,9 @@ def test_tiny_spikformer_fp8_trains_and_runs_inference(mode):
     artifacts = prepare_model_for_precision(
         model,
         device,
-        PrecisionConfig(mode=mode, strictness="strict", device=str(device)),
+        PrecisionConfig(mode=mode),
     )
-    assert artifacts.effective_config.mode == mode
+    assert artifacts.config.mode == mode
     model = artifacts.model
     optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
     x = torch.randn(16, 3, 64, 64, device=device, requires_grad=True)
@@ -381,7 +415,7 @@ def test_tiny_spikformer_fp8_trains_and_runs_inference(mode):
         min_cosine=0.90,
         max_relative_l2=0.45,
     )
-    assert artifacts.policy.conversion_report()["converted_modules"]
+    assert artifacts.describe()["conversion_report"]["converted_modules"]
     assert any(
         parameter.grad is not None and torch.isfinite(parameter.grad).all()
         for parameter in model.parameters()
@@ -406,11 +440,11 @@ def _train_regression_curve(
     artifacts = prepare_model_for_precision(
         model,
         device,
-        PrecisionConfig(mode=mode, strictness="strict", device=str(device)),
+        PrecisionConfig(mode=mode),
     )
-    assert artifacts.effective_config.mode == mode
-    if mode in FP8_MODES:
-        assert artifacts.policy.conversion_report()["converted_modules"]
+    assert artifacts.config.mode == mode
+    if mode == "fp8":
+        assert artifacts.describe()["conversion_report"]["converted_modules"]
     model = artifacts.model.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
     losses = []
@@ -425,8 +459,8 @@ def _train_regression_curve(
     return losses
 
 
-@pytest.mark.parametrize("mode", FP8_MODES)
-def test_fp8_backend_training_converges_comparably_to_bf16(mode):
+def test_fp8_backend_training_converges_comparably_to_bf16():
+    mode = "fp8"
     device = _cuda_device_or_skip(mode)
     torch.manual_seed(20260719)
     model = torch.nn.Sequential(
@@ -446,8 +480,8 @@ def test_fp8_backend_training_converges_comparably_to_bf16(mode):
     assert fp8_losses[-1] <= bf16_losses[-1] * 1.20
 
 
-@pytest.mark.parametrize("mode", FP8_MODES)
-def test_fp8_backend_runs_inference_on_second_cuda_device(mode):
+def test_fp8_backend_runs_inference_on_second_cuda_device():
+    mode = "fp8"
     _cuda_device_or_skip(mode)
     if torch.cuda.device_count() < 2:
         pytest.skip("A second CUDA device is required for this smoke test.")
@@ -458,10 +492,10 @@ def test_fp8_backend_runs_inference_on_second_cuda_device(mode):
     artifacts = prepare_model_for_precision(
         model,
         device,
-        PrecisionConfig(mode=mode, strictness="strict", device=str(device)),
+        PrecisionConfig(mode=mode),
     )
-    assert artifacts.effective_config.mode == mode
-    assert artifacts.policy.conversion_report()["converted_modules"]
+    assert artifacts.config.mode == mode
+    assert artifacts.describe()["conversion_report"]["converted_modules"]
     with torch.inference_mode(), artifacts.autocast_context():
         output = artifacts.model(x)
     assert output.shape == x.shape
@@ -469,8 +503,10 @@ def test_fp8_backend_runs_inference_on_second_cuda_device(mode):
 
 
 @pytest.mark.parametrize("recipe", ["auto", "delayed", "current", "block", "mxfp8"])
-def test_fp8_te_recipes_train_and_run_inference(recipe):
-    device = _cuda_device_or_skip("fp8-te")
+def test_fp8_te_recipes_train_and_run_inference(recipe, monkeypatch):
+    device = _cuda_device_or_skip("fp8")
+    if recipe == "delayed":
+        monkeypatch.setenv("NVTE_ALLOW_UNSAFE_PICKLE_EXTRA_STATE", "1")
     model = torch.nn.Sequential(
         torch.nn.LayerNorm(64),
         torch.nn.Linear(64, 128),
@@ -479,7 +515,7 @@ def test_fp8_te_recipes_train_and_run_inference(recipe):
     ).to(device)
     x = torch.randn(32, 64, device=device)
 
-    _assert_train_and_infer(model, x, "fp8-te", recipe)
+    _assert_train_and_infer(model, x, "fp8", recipe)
 
 
 @pytest.mark.parametrize(
@@ -504,13 +540,13 @@ def test_fp8_te_recipes_train_and_run_inference(recipe):
     ids=("layer-norm", "layer-norm-linear", "layer-linear-single-step"),
 )
 def test_fp8_te_conversion_surfaces_match_fp32_on_hardware(model, x):
-    device = _cuda_device_or_skip("fp8-te")
-    _assert_train_and_infer(model.to(device), x.to(device), "fp8-te")
+    device = _cuda_device_or_skip("fp8")
+    _assert_train_and_infer(model.to(device), x.to(device), "fp8")
 
 
 def test_fp8_te_attention_adapter_propagates_gradients_and_runs_inference():
-    device = _cuda_device_or_skip("fp8-te")
-    _require_backend_capability(torch.nn.Identity(), device, "fp8-te")
+    device = _cuda_device_or_skip("fp8")
+    _require_backend_capability(torch.nn.Identity(), device, "fp8")
     adapter = TransformerEngineDotProductAttentionAdapter(
         num_attention_heads=4,
         head_dim=16,
@@ -519,7 +555,7 @@ def test_fp8_te_attention_adapter_propagates_gradients_and_runs_inference():
     try:
         policy.check_capability(adapter, device)
     except RuntimeError as exc:
-        _unavailable_backend("fp8-te", str(exc))
+        _unavailable_backend("fp8", str(exc))
     query = torch.randn(2, 4, 32, 16, device=device, requires_grad=True)
     key = torch.randn(2, 4, 32, 16, device=device, requires_grad=True)
     value = torch.randn(2, 4, 32, 16, device=device, requires_grad=True)

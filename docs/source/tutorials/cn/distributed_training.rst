@@ -39,6 +39,7 @@ FSDP2 roots 和边界形状。高层入口管理生命周期，自定义任务�
 
     from spikingjelly.activation_based.distributed import vision
     from spikingjelly.activation_based.model.sew_resnet import SEWResNet34Config
+    from spikingjelly.activation_based.precision import PrecisionConfig
 
     config = vision.TrainingConfig(
         model=SEWResNet34Config(
@@ -55,11 +56,16 @@ FSDP2 roots 和边界形状。高层入口管理生命周期，自定义任务�
         loss_kwargs={"label_smoothing": 0.1},
         tensor_parallel_size=2,
         data_parallel="fsdp2",
-        precision="bf16",
+        precision=PrecisionConfig(mode="bf16"),
         memopt_level=1,
         memopt_checkpoint_budget="balanced",
     )
     metrics = vision.train_classification(config)
+
+``PrecisionConfig`` 在 DDP/FSDP 包装与 optimizer 创建之前应用。实验性
+Transformer Engine FP8 与 Triton 神经元 mixed precision 当前要求 DDP 且 TP=PP=1。
+MCore LLM 精度与此独立，继续由原生 transformer 和 optimizer 配置拥有。配置职责、
+单机用法和 FP8 性能交叉点见 :doc:`precision`。
 
 ``batch_size`` 是每个 DP rank 的 batch size；global batch 为
 ``batch_size * DP``，不乘 TP、PP 或 SNN 时间步。``tensor_parallel_size`` 和

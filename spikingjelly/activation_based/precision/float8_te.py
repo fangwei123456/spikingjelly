@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager, nullcontext
 import importlib
+import inspect
 
 import torch
 import torch.nn as nn
@@ -88,6 +89,10 @@ def _make_te_linear(source: nn.Module, TELinear: type) -> nn.Module:
     converted = converted.to(device=source.weight.device, dtype=source.weight.dtype)
     _copy_linear_parameters(source, converted)
     return converted
+
+
+def _is_te_linear_shape_supported(module: nn.Module) -> bool:
+    return module.in_features % 16 == 0 and module.out_features % 8 == 0
 
 
 def _is_supported_layer_norm(module: nn.Module) -> bool:
@@ -277,7 +282,7 @@ def _is_layer_norm_linear_pattern(module: nn.Module) -> bool:
         return False
     hidden_size = int(children[0].normalized_shape[0])
     linear = children[1]
-    return linear.in_features == hidden_size
+    return linear.in_features == hidden_size and _is_te_linear_shape_supported(linear)
 
 
 def _is_layer_norm_mlp_shape_compatible(
@@ -291,6 +296,8 @@ def _is_layer_norm_mlp_shape_compatible(
         and fc2.in_features == fc1.out_features
         and fc2.out_features == hidden_size
         and (fc1.bias is None) == (fc2.bias is None)
+        and _is_te_linear_shape_supported(fc1)
+        and _is_te_linear_shape_supported(fc2)
     )
 
 
@@ -395,6 +402,9 @@ def _te_recursive_convert(root: nn.Module, TELinear: type, report) -> None:
             ):
                 if is_supported_pointwise_conv1d(child):
                     source = make_linear_from_pointwise_conv1d(child)
+                    if not _is_te_linear_shape_supported(source):
+                        report.unsupported_modules.append(child_fqn)
+                        continue
                     converted = _make_te_linear(source, TELinear)
                     wrapped = wrap_float8_pointwise_conv1d_module(child, converted)
                 elif _is_supported_layer_norm(child):
@@ -404,6 +414,9 @@ def _te_recursive_convert(root: nn.Module, TELinear: type, report) -> None:
                         continue
                     wrapped = _make_te_layer_norm(child, TELayerNorm)
                 else:
+                    if not _is_te_linear_shape_supported(child):
+                        report.unsupported_modules.append(child_fqn)
+                        continue
                     converted = _make_te_linear(child, TELinear)
                     wrapped = wrap_float8_linear_module(child, converted)
                 memo[child] = wrapped
@@ -422,7 +435,7 @@ def _te_recursive_convert(root: nn.Module, TELinear: type, report) -> None:
 
 
 class Float8TransformerEnginePolicy(PrecisionPolicy):
-    name = "fp8-te"
+    name = "fp8"
     supports_layer_norm_conversion = True
 
     def __init__(
@@ -536,16 +549,16 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
             raise RuntimeError(
                 f"All model parameters and buffers must be moved to the target CUDA device "
                 f"'{target_device}' (e.g. model.to('{target_device}')) before "
-                "calling prepare_model_for_precision() for 'fp8-te'."
+                "calling prepare_model_for_precision() for 'fp8'."
             )
 
-    def autocast_context(self):
-        context = self._te_autocast_context()
+    def autocast_context(self, group=None):
+        context = self._te_autocast_context(group)
         if self._target_device is not None and self._target_device.type == "cuda":
             return _cuda_device_autocast_context(self._target_device, context)
         return context
 
-    def _te_autocast_context(self):
+    def _te_autocast_context(self, group=None):
         try:
             te = _import_te_pytorch()
         except ImportError:
@@ -553,18 +566,36 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
         recipe = (
             self._resolved_recipe if self._recipe_resolved else self._resolve_recipe(te)
         )
-        return te.autocast(enabled=True, recipe=recipe)
+        kwargs = {"enabled": True, "recipe": recipe}
+        if group is not None:
+            parameters = inspect.signature(te.autocast).parameters
+            if "amax_reduction_group" in parameters:
+                kwargs["amax_reduction_group"] = group
+            elif "fp8_group" in parameters:
+                kwargs["fp8_group"] = group
+            else:
+                raise RuntimeError(
+                    "Transformer Engine autocast does not accept an amax "
+                    "reduction process group."
+                )
+        return te.autocast(**kwargs)
 
     def _convert_modules(self, model, report):
         te = _import_te_pytorch()
         TELinear = te.Linear
 
         if isinstance(model, (nn.Linear, layer.Linear)):
+            if not _is_te_linear_shape_supported(model):
+                report.unsupported_modules.append("<root>")
+                return model
             converted = _make_te_linear(model, TELinear)
             report.converted_modules.append("<root>")
             return wrap_float8_linear_module(model, converted)
         if is_supported_pointwise_conv1d(model):
             source = make_linear_from_pointwise_conv1d(model)
+            if not _is_te_linear_shape_supported(source):
+                report.unsupported_modules.append("<root>")
+                return model
             converted = _make_te_linear(source, TELinear)
             report.converted_modules.append("<root>")
             return wrap_float8_pointwise_conv1d_module(model, converted)

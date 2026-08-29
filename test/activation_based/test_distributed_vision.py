@@ -34,6 +34,7 @@ from spikingjelly.activation_based.model.spikformer import (
     spikformer_cifar10,
     spikformer_s,
 )
+from spikingjelly.activation_based.precision import PrecisionConfig
 
 
 def test_vision_training_config_json_round_trip():
@@ -968,7 +969,7 @@ def test_fsdp2_keeps_batch_norm_in_full_precision(monkeypatch):
         model=SEWResNet34Config(),
         dataset_builder="package.datasets.build",
         data_parallel="fsdp2",
-        precision="bf16",
+        precision=PrecisionConfig(mode="bf16"),
     )
 
     execution._wrap_data_parallel(
@@ -991,3 +992,28 @@ def test_fsdp2_keeps_batch_norm_in_full_precision(monkeypatch):
     assert batch_norm_policy.output_dtype is torch.bfloat16
     assert calls[-1][0] is model
     assert calls[-1][1]["mp_policy"].param_dtype is torch.bfloat16
+
+
+def test_training_config_round_trips_precision_config():
+    config = vision.TrainingConfig(
+        model=SEWResNet34Config(),
+        dataset_builder="package.datasets.build",
+        precision=PrecisionConfig(
+            mode="fp8",
+            fp8_recipe="delayed",
+            triton_storage="float8_e4m3fn",
+            triton_fwd="bf16",
+            triton_bwd="fp16",
+        ),
+    )
+    assert vision.TrainingConfig.from_dict(config.as_dict()) == config
+
+
+def test_training_config_rejects_experimental_precision_outside_ddp():
+    with pytest.raises(ValueError, match="requires DDP"):
+        vision.TrainingConfig(
+            model=SEWResNet34Config(),
+            dataset_builder="package.datasets.build",
+            data_parallel="fsdp2",
+            precision=PrecisionConfig(mode="fp8"),
+        )

@@ -45,14 +45,6 @@ def _perplexity(nll: float, token_count: int) -> float:
     return value
 
 
-def _precision_config_identity(config: Mapping[str, object]) -> Dict[str, object]:
-    identity = dict(config)
-    device = identity.get("device")
-    if isinstance(device, str) and (device == "cuda" or device.startswith("cuda:")):
-        identity["device"] = "cuda"
-    return identity
-
-
 def _identity(report: Mapping[str, object]) -> Dict[str, object]:
     config = report["configuration"]
     precision = report["precision"]
@@ -63,14 +55,8 @@ def _identity(report: Mapping[str, object]) -> Dict[str, object]:
         "model": report["model"],
         "data": report["data"],
         "precision": {
-            "requested_config": _precision_config_identity(
-                precision["requested_config"]
-            ),
-            "effective_config": _precision_config_identity(
-                precision["effective_config"]
-            ),
+            "config": precision["config"],
             "policy": precision["policy"],
-            "fallback_reason": precision["fallback_reason"],
         },
         "conversion": {
             name: report["conversion"][name]

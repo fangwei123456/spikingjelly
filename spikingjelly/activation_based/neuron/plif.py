@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 
 from .. import functional, surrogate
+from ..functional.neuron import _plif_multi_step_triton_mp
 from .base_node import BaseNode
 
 
@@ -203,7 +204,12 @@ class ParametricLIFNode(BaseNode):
                 False,
             )
         elif self.backend == "triton":
-            spike_seq, v, _ = functional.plif_multi_step_triton(
+            function = (
+                _plif_multi_step_triton_mp
+                if self._triton_precision is not None
+                else functional.plif_multi_step_triton
+            )
+            spike_seq, v, _ = function(
                 x_seq,
                 v,
                 self.w,
@@ -213,6 +219,7 @@ class ParametricLIFNode(BaseNode):
                 self.surrogate_function,
                 self.detach_reset,
                 False,
+                *(() if self._triton_precision is None else (self._triton_precision,)),
             )
         elif self.backend == "torch":
             return super().multi_step_functional_forward(inputs, states, **kwargs)
@@ -230,7 +237,9 @@ class ParametricLIFNode(BaseNode):
         )
         function = {
             "cupy": functional.plif_multi_step_cupy,
-            "triton": functional.plif_multi_step_triton,
+            "triton": _plif_multi_step_triton_mp
+            if self._triton_precision is not None
+            else functional.plif_multi_step_triton,
         }[self.backend]
         spike_seq, v, v_seq = function(
             x_seq,
@@ -242,6 +251,11 @@ class ParametricLIFNode(BaseNode):
             self.surrogate_function,
             self.detach_reset,
             True,
+            *(
+                ()
+                if self.backend != "triton" or self._triton_precision is None
+                else (self._triton_precision,)
+            ),
         )
         self.v = v
         self.v_seq = v_seq

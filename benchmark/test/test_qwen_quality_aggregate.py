@@ -24,10 +24,14 @@ def _base_report():
             "arc": {"repository": "arc", "revision": "data"},
         },
         "precision": {
-            "requested_config": {"mode": "bf16", "device": "cuda"},
-            "effective_config": {"mode": "bf16", "device": "cuda"},
+            "config": {
+                "mode": "bf16",
+                "fp8_recipe": "auto",
+                "triton_storage": None,
+                "triton_fwd": "fp32",
+                "triton_bwd": "fp32",
+            },
             "policy": {"dtype": "torch.bfloat16"},
-            "fallback_reason": None,
         },
         "conversion": {
             "temporal_layout": "[T,B,S,H]",
@@ -100,8 +104,6 @@ def _write_reports(tmp_path):
         report["configuration"]["skip_ppl"] = True
         report["configuration"]["tasks"] = list(names)
         report["configuration"]["task_batch_size"] = 4
-        report["precision"]["requested_config"]["device"] = "cuda:0"
-        report["precision"]["effective_config"]["device"] = "cuda:0"
         path = tmp_path / f"tasks-{index}.json"
         path.write_text(json.dumps(report))
         paths.append(path)
@@ -151,11 +153,10 @@ def test_quality_aggregate_rejects_mixed_dataset_lock(tmp_path):
         runner.aggregate(paths)
 
 
-def test_quality_aggregate_rejects_mixed_device_types(tmp_path):
+def test_quality_aggregate_rejects_mixed_precision_config(tmp_path):
     paths = _write_reports(tmp_path)
     report = json.loads(paths[-1].read_text())
-    report["precision"]["requested_config"]["device"] = "cpu"
-    report["precision"]["effective_config"]["device"] = "cpu"
+    report["precision"]["config"]["mode"] = "fp32"
     paths[-1].write_text(json.dumps(report))
 
     with pytest.raises(ValueError, match="configuration differs"):

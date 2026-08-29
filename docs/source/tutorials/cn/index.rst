@@ -33,6 +33,7 @@
     /tutorials/cn/flexsn
     /tutorials/cn/memopt
     /tutorials/cn/op_counter
+    /tutorials/cn/precision
     /tutorials/cn/distributed_training
     /tutorials/cn/dsqn
     /tutorials/cn/ilc_san

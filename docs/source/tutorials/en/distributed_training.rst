@@ -46,6 +46,7 @@ pipeline parallelism. ``vision.TrainingConfig`` describes the job and
 
     from spikingjelly.activation_based.distributed import vision
     from spikingjelly.activation_based.model.sew_resnet import SEWResNet34Config
+    from spikingjelly.activation_based.precision import PrecisionConfig
 
     config = vision.TrainingConfig(
         model=SEWResNet34Config(
@@ -62,11 +63,17 @@ pipeline parallelism. ``vision.TrainingConfig`` describes the job and
         loss_kwargs={"label_smoothing": 0.1},
         tensor_parallel_size=2,
         data_parallel="fsdp2",
-        precision="bf16",
+        precision=PrecisionConfig(mode="bf16"),
         memopt_level=1,
         memopt_checkpoint_budget="balanced",
     )
     metrics = vision.train_classification(config)
+
+``PrecisionConfig`` is prepared before DDP/FSDP wrapping and optimizer creation.
+Experimental Transformer Engine FP8 and Triton-neuron mixed precision currently
+require DDP with TP=PP=1. MCore LLM precision is independent and remains configured
+through its native transformer and optimizer configuration. See :doc:`precision`
+for configuration ownership, standalone usage, and measured FP8 crossover points.
 
 ``batch_size`` is the batch size on each DP rank. The global batch is
 ``batch_size * DP`` and does not include TP, PP, or SNN time steps.

@@ -89,3 +89,57 @@ def convert_model_for_precision(
     )
     model = policy._convert_modules(model, report)
     return model, report
+
+
+def _configure_triton_neurons(model: nn.Module, config, device) -> dict:
+    if config.triton_storage is None:
+        return {"converted_modules": [], "unsupported_modules": []}
+
+    from ..neuron.integrate_and_fire import IFNode
+    from ..neuron.lif import LIFNode
+    from ..neuron.plif import ParametricLIFNode
+    from ..triton_kernel.neuron_kernel.utils import (
+        _prepare_triton_neuron_execution_plan,
+    )
+    from ..triton_kernel.triton_utils import normalize_triton_storage_dtype
+
+    neuron_types = {
+        IFNode: "if",
+        LIFNode: "lif",
+        ParametricLIFNode: "plif",
+    }
+    converted = []
+    unsupported = []
+    precision = (
+        normalize_triton_storage_dtype(config.triton_storage),
+        config.triton_fwd,
+        config.triton_bwd,
+    )
+    for name, module in model.named_modules():
+        neuron_type = neuron_types.get(type(module))
+        if neuron_type is None or module.backend != "triton":
+            continue
+        if module.step_mode != "m":
+            unsupported.append(name or "<root>")
+            continue
+        _prepare_triton_neuron_execution_plan(
+            neuron_type=neuron_type,
+            device=device,
+            storage_dtype=precision[0],
+            forward_compute_dtype=precision[1],
+            backward_compute_dtype=precision[2],
+        )
+        module._triton_precision = precision
+        converted.append(name or "<root>")
+
+    if unsupported:
+        raise RuntimeError(
+            "Triton neuron precision requires multi-step IF/LIF/PLIF nodes: "
+            + ", ".join(unsupported)
+        )
+    if not converted:
+        raise RuntimeError(
+            "Triton neuron precision requested, but no multi-step IF/LIF/PLIF "
+            "nodes with backend='triton' were found."
+        )
+    return {"converted_modules": converted, "unsupported_modules": unsupported}

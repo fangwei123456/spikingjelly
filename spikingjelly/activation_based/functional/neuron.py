@@ -2362,6 +2362,34 @@ def if_multi_step_triton(
     return spike_seq, voltage, None
 
 
+def _if_multi_step_triton_mp(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool,
+    store_v_seq: bool,
+    precision: tuple[torch.dtype, str, str],
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    from ..triton_kernel.neuron_kernel.integrate_and_fire import _multistep_if_mp
+
+    spike_seq, voltage, _ = _multistep_if_mp(
+        x_seq,
+        v,
+        v_threshold=v_threshold,
+        v_reset=v_reset,
+        storage_dtype=precision[0],
+        compute_dtype=precision[1],
+        backward_compute_dtype=precision[2],
+        spike_dtype=x_seq.dtype,
+        save_intermediates=store_v_seq,
+        detach_reset=detach_reset,
+        surrogate_function=surrogate_function,
+    )
+    return spike_seq, voltage[-1].clone(), voltage if store_v_seq else None
+
+
 def lif_multi_step_triton(
     x_seq: torch.Tensor,
     v: torch.Tensor,
@@ -2455,6 +2483,38 @@ def lif_multi_step_triton(
     if store_v_seq:
         return spike_seq, voltage[-1].clone(), voltage
     return spike_seq, voltage, None
+
+
+def _lif_multi_step_triton_mp(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    tau: float,
+    decay_input: bool,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool,
+    store_v_seq: bool,
+    precision: tuple[torch.dtype, str, str],
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    from ..triton_kernel.neuron_kernel.lif import _multistep_lif_mp
+
+    spike_seq, voltage, _ = _multistep_lif_mp(
+        x_seq,
+        v,
+        decay_input=decay_input,
+        tau=tau,
+        v_threshold=v_threshold,
+        v_reset=v_reset,
+        storage_dtype=precision[0],
+        compute_dtype=precision[1],
+        backward_compute_dtype=precision[2],
+        spike_dtype=x_seq.dtype,
+        save_intermediates=store_v_seq,
+        detach_reset=detach_reset,
+        surrogate_function=surrogate_function,
+    )
+    return spike_seq, voltage[-1].clone(), voltage if store_v_seq else None
 
 
 def ilif_multi_step_triton(
@@ -2635,6 +2695,38 @@ def plif_multi_step_triton(
         surrogate_function,
     )
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
+
+
+def _plif_multi_step_triton_mp(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    w: torch.Tensor,
+    decay_input: bool,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool,
+    store_v_seq: bool,
+    precision: tuple[torch.dtype, str, str],
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    from ..triton_kernel.neuron_kernel.plif import _multistep_plif_mp
+
+    spike_seq, voltage, _ = _multistep_plif_mp(
+        x_seq,
+        v,
+        w.sigmoid().to(x_seq),
+        decay_input=decay_input,
+        v_threshold=v_threshold,
+        v_reset=v_reset,
+        storage_dtype=precision[0],
+        compute_dtype=precision[1],
+        backward_compute_dtype=precision[2],
+        spike_dtype=x_seq.dtype,
+        save_intermediates=store_v_seq,
+        detach_reset=detach_reset,
+        surrogate_function=surrogate_function,
+    )
+    return spike_seq, voltage[-1].clone(), voltage if store_v_seq else None
 
 
 def sliding_psn_step(

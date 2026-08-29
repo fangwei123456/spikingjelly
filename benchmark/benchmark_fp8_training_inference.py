@@ -31,9 +31,6 @@ from spikingjelly.activation_based.precision import (
 )
 
 
-FP8_MODES = ("fp8-torchao", "fp8-te")
-
-
 @dataclass(frozen=True)
 class BenchmarkResult:
     precision: str
@@ -90,8 +87,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--precisions",
         nargs="+",
-        default=["fp32", "fp16", "bf16", *FP8_MODES],
-        choices=("fp32", "fp16", "bf16", *FP8_MODES),
+        default=["fp32", "fp16", "bf16", "fp8"],
+        choices=("fp32", "fp16", "bf16", "fp8"),
     )
     parser.add_argument(
         "--baseline-precision",
@@ -113,7 +110,7 @@ def parse_args() -> argparse.Namespace:
 def validate_args(args: argparse.Namespace) -> None:
     if args.baseline_precision not in args.precisions:
         raise ValueError("--baseline-precision must be included in --precisions.")
-    if not any(precision in FP8_MODES for precision in args.precisions):
+    if "fp8" not in args.precisions:
         raise ValueError("--precisions must include at least one FP8 mode.")
     positive_values = {
         "batch_size": args.batch_size,
@@ -143,7 +140,7 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--trials must be >= 2 for a median comparison.")
     if args.depth < 2:
         raise ValueError("--depth must be >= 2.")
-    fp8_requested = any(precision in FP8_MODES for precision in args.precisions)
+    fp8_requested = "fp8" in args.precisions
     dimensions = (args.batch_size, args.width, args.num_classes)
     if fp8_requested and any(value % 16 for value in dimensions):
         raise ValueError("FP8 benchmark dimensions must be divisible by 16.")
@@ -209,18 +206,13 @@ def benchmark_precision(
     artifacts = prepare_model_for_precision(
         model,
         device,
-        PrecisionConfig(mode=precision, strictness="strict", device=str(device)),
+        PrecisionConfig(mode=precision),
     )
     torch.cuda.synchronize(device)
     preparation_ms = (time.perf_counter() - preparation_start) * 1000.0
     model = artifacts.model
-    if artifacts.effective_config.mode != precision:
-        raise RuntimeError(
-            f"Requested {precision}, but effective mode is "
-            f"{artifacts.effective_config.mode}."
-        )
-    conversion_report = artifacts.policy.conversion_report()
-    if precision in FP8_MODES and not conversion_report["converted_modules"]:
+    conversion_report = artifacts.describe()["conversion_report"]
+    if precision == "fp8" and not conversion_report["converted_modules"]:
         raise RuntimeError(f"{precision} did not convert any benchmark modules.")
 
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr)
@@ -299,7 +291,7 @@ def benchmark_precision(
         inference_peak_reserved_mb=inference_peak_reserved_mb,
         parameter_update_max_abs=parameter_update,
         output_checksum=float(output.float().mean().item()),
-        capability_report=artifacts.policy.capability_report(),
+        capability_report=artifacts.describe()["capability_report"],
         conversion_report=conversion_report,
     )
 
@@ -418,7 +410,6 @@ def main() -> None:
             "compute_capability": torch.cuda.get_device_capability(device),
             "visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
             "torch_version": torch.__version__,
-            "torchao_version": _package_version("torchao"),
             "transformer_engine_version": _package_version("transformer-engine"),
             "triton_version": _package_version("triton"),
         },

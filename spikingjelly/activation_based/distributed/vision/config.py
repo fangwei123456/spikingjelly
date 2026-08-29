@@ -11,6 +11,8 @@ import torch.distributed as dist
 from torch.distributed import ProcessGroup
 import torch.nn as nn
 
+from ...precision.config import PrecisionConfig
+
 
 def _encode(value: Any) -> Any:
     if is_dataclass(value):
@@ -59,7 +61,7 @@ def _decode(value: Any) -> Any:
     if not isinstance(target_name, str) or target_name not in config_types:
         raise ValueError(
             f"Unsupported config target {target_name!r}; target must be a ModelConfig, "
-            "PredictionConfig, or TrainingConfig subclass."
+            "PredictionConfig, TrainingConfig, or PrecisionConfig."
         )
     target = config_types[target_name]
     kwargs = {key: _decode(item) for key, item in value.items() if key != "_target_"}
@@ -509,14 +511,17 @@ class PredictionConfig:
     :param data_parallel: ``"replicate"`` 或 ``"fsdp2"``。 / Replicated or
         FSDP2 data parallelism.
     :type data_parallel: str
-    :param precision: ``"fp32"``、``"bf16"`` 或 ``"fp16"``。 / Arithmetic precision.
-    :type precision: str
+    :param precision: 模型与 Triton 神经元精度配置。 / Model and Triton-neuron
+        precision configuration.
+    :type precision: spikingjelly.activation_based.precision.PrecisionConfig
     :param compile: 是否使用 ``torch.compile``；当前仅支持无 PP 的
         replicated 模式。 / Whether to use ``torch.compile``; currently limited
         to replicated execution without PP.
     :type compile: bool
     :param seed: 模型与数据随机种子。 / Model and data seed.
     :type seed: int
+    :raises TypeError: ``precision`` 不是 ``PrecisionConfig``。 / If ``precision``
+        is not a ``PrecisionConfig``.
     :raises ValueError: 配置值或导入路径无效。 / If a value or import path is invalid.
     """
 
@@ -530,7 +535,9 @@ class PredictionConfig:
     pipeline_parallel_size: int = 1
     pipeline_microbatches: int = 1
     data_parallel: Literal["replicate", "fsdp2"] = "replicate"
-    precision: Literal["fp32", "bf16", "fp16"] = "bf16"
+    precision: PrecisionConfig = field(
+        default_factory=lambda: PrecisionConfig(mode="bf16")
+    )
     compile: bool = False
     seed: int = 1234
 
@@ -551,10 +558,22 @@ class PredictionConfig:
             raise ValueError("input_layout must be 'NCHW' or 'NTCHW'.")
         if self.data_parallel not in {"replicate", "fsdp2"}:
             raise ValueError("data_parallel must be 'replicate' or 'fsdp2'.")
-        if self.precision not in {"fp32", "bf16", "fp16"}:
-            raise ValueError("precision must be 'fp32', 'bf16', or 'fp16'.")
-        if self.pipeline_parallel_size > 1 and self.precision == "fp16":
+        if not isinstance(self.precision, PrecisionConfig):
+            raise TypeError("precision must be PrecisionConfig.")
+        if self.pipeline_parallel_size > 1 and self.precision.mode == "fp16":
             raise ValueError("Vision PP currently supports fp32 and bf16.")
+        if (
+            self.precision.mode == "fp8" or self.precision.triton_storage is not None
+        ) and (
+            self.data_parallel != "replicate"
+            or self.tensor_parallel_size != 1
+            or self.pipeline_parallel_size != 1
+            or self.compile
+        ):
+            raise ValueError(
+                "Vision experimental precision inference requires replicated "
+                "execution with TP=1, PP=1, and compile=False."
+            )
         if self.compile and (
             self.pipeline_parallel_size > 1 or self.data_parallel != "replicate"
         ):
@@ -614,8 +633,9 @@ loss, accuracy, and performance metrics.
 :param data_parallel: ``"replicate"`` 或 ``"fsdp2"``。 / Replicated or FSDP2
     data parallelism.
 :type data_parallel: str
-:param precision: ``"fp32"``、``"bf16"`` 或 ``"fp16"``。 / Arithmetic precision.
-:type precision: str
+:param precision: 模型与 Triton 神经元精度配置。 / Model and Triton-neuron
+    precision configuration.
+:type precision: spikingjelly.activation_based.precision.PrecisionConfig
 :param compile: 是否使用 ``torch.compile``；当前仅支持无 PP 的 replicated 模式。 /
     Whether to use ``torch.compile``; currently limited to replicated execution
     without PP.
@@ -630,6 +650,8 @@ loss, accuracy, and performance metrics.
 :param timing_warmup_batches: 计时前执行且不计入指标的 batch 数。 / Batches
     executed before timing and excluded from metrics.
 :type timing_warmup_batches: int
+:raises TypeError: ``precision`` 不是 ``PrecisionConfig``。 / If ``precision`` is
+    not a ``PrecisionConfig``.
 :raises ValueError: 配置值或导入路径无效。 / If a value or import path is invalid.
 """
 
@@ -656,7 +678,9 @@ class TrainingConfig:
     pipeline_parallel_size: int = 1
     pipeline_microbatches: int = 1
     data_parallel: Literal["ddp", "fsdp2"] = "ddp"
-    precision: Literal["fp32", "bf16", "fp16"] = "bf16"
+    precision: PrecisionConfig = field(
+        default_factory=lambda: PrecisionConfig(mode="bf16")
+    )
     memopt_level: int = 0
     memopt_compress_inputs: bool = True
     memopt_checkpoint_budget: Literal["speed", "balanced", "memory"] = "memory"
@@ -687,10 +711,20 @@ class TrainingConfig:
             raise ValueError("mixup_alpha cannot be negative.")
         if self.data_parallel not in {"ddp", "fsdp2"}:
             raise ValueError("data_parallel must be 'ddp' or 'fsdp2'.")
-        if self.precision not in {"fp32", "bf16", "fp16"}:
-            raise ValueError("precision must be 'fp32', 'bf16', or 'fp16'.")
-        if self.pipeline_parallel_size > 1 and self.precision == "fp16":
+        if not isinstance(self.precision, PrecisionConfig):
+            raise TypeError("precision must be PrecisionConfig.")
+        if self.pipeline_parallel_size > 1 and self.precision.mode == "fp16":
             raise ValueError("Vision PP currently supports fp32 and bf16.")
+        if (
+            self.precision.mode == "fp8" or self.precision.triton_storage is not None
+        ) and (
+            self.data_parallel != "ddp"
+            or self.tensor_parallel_size != 1
+            or self.pipeline_parallel_size != 1
+        ):
+            raise ValueError(
+                "Vision experimental precision requires DDP with TP=1 and PP=1."
+            )
         if self.model.step_mode == "s" and self.pipeline_parallel_size > 1:
             raise ValueError("Vision PP currently requires step_mode='m'.")
         if not 0 <= self.memopt_level <= 4:
@@ -759,7 +793,7 @@ class TrainingConfig:
 
 
 def _config_types() -> dict[str, type]:
-    pending = [ModelConfig, PredictionConfig, TrainingConfig]
+    pending = [ModelConfig, PredictionConfig, TrainingConfig, PrecisionConfig]
     result = {}
     while pending:
         config_type = pending.pop()
@@ -831,8 +865,9 @@ receives ``dataset_kwargs`` and returns train and validation datasets.
 :type pipeline_microbatches: int
 :param data_parallel: ``"ddp"`` 或 ``"fsdp2"``。 / ``"ddp"`` or ``"fsdp2"``.
 :type data_parallel: str
-:param precision: ``"fp32"``、``"bf16"`` 或 ``"fp16"``。 / Arithmetic precision.
-:type precision: str
+:param precision: 模型与 Triton 神经元精度配置。 / Model and Triton-neuron
+    precision configuration.
+:type precision: spikingjelly.activation_based.precision.PrecisionConfig
 :param memopt_level: SpikingJelly memopt level，范围 ``[0, 4]``。 / SpikingJelly
     memopt level in ``[0, 4]``.
 :type memopt_level: int
@@ -858,6 +893,8 @@ receives ``dataset_kwargs`` and returns train and validation datasets.
 :type resume: Optional[pathlib.Path]
 :param seed: 数据 sampler 与模型初始化种子。 / Model and sampler seed.
 :type seed: int
+:raises TypeError: ``precision`` 不是 ``PrecisionConfig``。 / If ``precision`` is
+    not a ``PrecisionConfig``.
 :raises ValueError: 配置值、导入路径或 checkpoint 组合无效。 / If a value,
     import path, or checkpoint combination is invalid.
 """

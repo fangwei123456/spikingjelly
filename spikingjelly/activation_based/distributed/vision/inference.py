@@ -5,6 +5,7 @@ import importlib
 import json
 import os
 import time
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal, Optional
 
@@ -16,6 +17,7 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
 
 from spikingjelly.activation_based import functional
+from spikingjelly.activation_based.precision import prepare_model_for_precision
 
 from .config import (
     EvaluationConfig,
@@ -499,6 +501,8 @@ def _run_classification(
             device=device,
             micro_batch_size=config.batch_size,
         )
+        precision = prepare_model_for_precision(model, device, config.precision)
+        model = precision.model
         if config.data_parallel == "fsdp2":
             model = _wrap_data_parallel(
                 model,
@@ -521,7 +525,7 @@ def _run_classification(
             stage_dtype = {
                 "fp32": torch.float32,
                 "bf16": torch.bfloat16,
-            }[config.precision]
+            }[config.precision.mode]
             static_input = pipeline_rank == 0 and config.input_layout == "NCHW"
             stage_input_shape = (
                 (pipeline_input_shape[0], *pipeline_input_shape[2:])
@@ -553,7 +557,6 @@ def _run_classification(
         else:
             loss_function = None
         totals = torch.zeros(3, device=device, dtype=torch.float64)
-        dtype = torch.bfloat16 if config.precision == "bf16" else torch.float16
         output_rank = (
             pipeline_rank == config.pipeline_parallel_size - 1 and tensor_rank == 0
         )
@@ -571,11 +574,7 @@ def _run_classification(
                 images = images.to(device, non_blocking=True)
             if evaluate and output_rank:
                 targets = targets.to(device, non_blocking=True)
-            with torch.autocast(
-                device_type="cuda",
-                dtype=dtype,
-                enabled=config.precision != "fp32",
-            ):
+            with precision.autocast_context(group=data_group):
                 if schedule is None:
                     logits = _forward_classification(
                         model,
@@ -673,7 +672,9 @@ def _run_classification(
                         num_classes=model_config.num_classes,
                         attributes={
                             "artifact": str(config.artifact),
-                            "precision": config.precision,
+                            "precision": json.dumps(
+                                asdict(config.precision), sort_keys=True
+                            ),
                             "source_checkpoint": source["checkpoint"],
                         },
                     )

@@ -360,6 +360,7 @@ class BaseNode(base.MemoryModule):
 
         self.step_mode = step_mode
         self.backend = backend
+        self._triton_precision = None
 
         self.store_v_seq = store_v_seq
 
@@ -470,18 +471,25 @@ class BaseNode(base.MemoryModule):
         step_mode: str,
     ) -> tuple[object, ...]:
         x = inputs[0][0] if step_mode == "m" else inputs[0]
+        state_dtype = (
+            self._triton_precision[0]
+            if step_mode == "m" and self._triton_precision is not None
+            else x.dtype
+        )
         v = states[0]
         if isinstance(v, float):
-            v = torch.full_like(x, v, requires_grad=False)
+            v = torch.full_like(x, v, dtype=state_dtype, requires_grad=False)
         elif isinstance(v, torch.Tensor):
             if v.shape != x.shape:
-                v = torch.full_like(
-                    x,
+                v = torch.full(
+                    x.shape,
                     self.v_reset if self.v_reset is not None else 0.0,
+                    dtype=state_dtype,
+                    device=x.device,
                     requires_grad=False,
                 )
-            elif v.dtype != x.dtype or v.device != x.device:
-                v = v.to(dtype=x.dtype, device=x.device)
+            elif v.dtype != state_dtype or v.device != x.device:
+                v = v.to(dtype=state_dtype, device=x.device)
         return (v, *states[1:])
 
 

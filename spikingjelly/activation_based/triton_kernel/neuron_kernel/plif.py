@@ -17,10 +17,10 @@ from ..triton_utils import (
     wrap_triton,
 )
 from .utils import (
-    TritonNeuronExecutionPlan,
+    _TritonNeuronExecutionPlan,
     _check_mp_cuda_inputs,
     _check_plan_inputs,
-    prepare_triton_neuron_execution_plan,
+    _prepare_triton_neuron_execution_plan,
 )
 
 try:
@@ -334,7 +334,9 @@ def _multistep_plif_backward_kernel_static(
         ).to(compute_dtype)
         v_last = tl.where(t == 0, v_initial, v_previous)
 
-        sg = sg_triton(h - v_threshold, alpha, sg_triton_id)
+        sg = sg_triton(h.to(tl.float32) - v_threshold, alpha, sg_triton_id).to(
+            compute_dtype
+        )
         grad_v_acc = grad_v + grad_v_acc
         if soft_reset:
             if detach_reset:
@@ -493,7 +495,9 @@ def _multistep_plif_backward_kernel_dynamic(
         ).to(compute_dtype)
         v_last = tl.where(t == 0, v_initial, v_previous)
 
-        sg = sg_triton(h - v_threshold, alpha, sg_triton_id)
+        sg = sg_triton(h.to(tl.float32) - v_threshold, alpha, sg_triton_id).to(
+            compute_dtype
+        )
         grad_v_acc = grad_v + grad_v_acc
         if soft_reset:
             if detach_reset:
@@ -942,11 +946,11 @@ def _multistep_plif_mp_forward_fake(
     )
 
 
-def multistep_plif_mp_with_plan(
+def _multistep_plif_mp_with_plan(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     r_tau: torch.Tensor,
-    plan: TritonNeuronExecutionPlan,
+    plan: _TritonNeuronExecutionPlan,
     *,
     decay_input: bool,
     v_threshold: float,
@@ -1000,7 +1004,7 @@ def multistep_plif_mp_with_plan(
     return s_seq, v_seq, (h_seq if plan.save_intermediates else None)
 
 
-def multistep_plif_mp(
+def _multistep_plif_mp(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     r_tau: torch.Tensor,
@@ -1030,7 +1034,7 @@ def multistep_plif_mp(
         mantissa bits, and may produce incorrect spike patterns. Use it only for
         experiments, not for accuracy-critical inference.
     """
-    plan = prepare_triton_neuron_execution_plan(
+    plan = _prepare_triton_neuron_execution_plan(
         neuron_type="plif",
         device=x_seq.device,
         storage_dtype=storage_dtype,
@@ -1039,7 +1043,7 @@ def multistep_plif_mp(
         spike_dtype=spike_dtype,
         save_intermediates=save_intermediates,
     )
-    return multistep_plif_mp_with_plan(
+    return _multistep_plif_mp_with_plan(
         x_seq,
         v_init,
         r_tau,

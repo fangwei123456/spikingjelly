@@ -5,15 +5,6 @@ from typing import Any
 import torch
 
 
-def _torchao_available() -> bool:
-    try:
-        import torchao  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
-
-
 def _transformer_engine_fp8_status() -> tuple[
     bool,
     bool,
@@ -126,38 +117,7 @@ def _resolve_device_type(device: torch.device | str) -> str:
     return "cpu"
 
 
-def _assess_fp8_torchao(
-    torchao_installed: bool,
-    is_cuda: bool,
-    capability: tuple | None,
-) -> tuple[bool, bool, str | None]:
-    """Determine fp8-torchao viability from environment probes.
-    Returns ``(can_convert, can_execute, execution_note)``.
-    """
-    can_convert = torchao_installed
-    can_execute = (
-        is_cuda
-        and torch.cuda.is_available()
-        and capability is not None
-        and capability >= (8, 9)
-        and torchao_installed
-    )
-
-    if not torchao_installed:
-        execution_note = "torchao is not installed"
-    elif not is_cuda:
-        execution_note = "fp8-torchao requires a CUDA device"
-    elif capability is None or capability < (8, 9):
-        execution_note = "torch._scaled_mm requires compute capability >= 8.9"
-    else:
-        execution_note = (
-            "runtime execution still requires validation because cuBLASLt / torch._scaled_mm "
-            "support may fail on some environments"
-        )
-    return can_convert, can_execute, execution_note
-
-
-def _assess_fp8_te(
+def _assess_fp8(
     transformer_engine_installed: bool,
     te_fp8_available: bool,
     te_fp8_unavailable_reason: str | None,
@@ -174,9 +134,9 @@ def _assess_fp8_te(
     if not transformer_engine_installed:
         execution_note = "transformer-engine is not installed"
     elif not is_cuda:
-        execution_note = "fp8-te requires a CUDA device"
+        execution_note = "fp8 requires a CUDA device"
     elif not torch.cuda.is_available():
-        execution_note = "fp8-te requires CUDA, but CUDA is not available"
+        execution_note = "fp8 requires CUDA, but CUDA is not available"
     elif not te_fp8_available:
         execution_note = (
             te_fp8_unavailable_reason or "Transformer Engine FP8 is unavailable"
@@ -194,13 +154,12 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
     capability = None
     if is_cuda and torch.cuda.is_available():
         capability = torch.cuda.get_device_capability(device)
-    torchao_installed = _torchao_available()
     transformer_engine_installed = False
     te_fp8_available = False
     te_fp8_unavailable_reason = None
     te_autocast_api = None
     te_recipe_availability = {}
-    if mode == "fp8-te":
+    if mode == "fp8":
         (
             transformer_engine_installed,
             te_fp8_available,
@@ -228,12 +187,8 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
     can_execute = True
     execution_note = None
 
-    if mode == "fp8-torchao":
-        can_convert, can_execute, execution_note = _assess_fp8_torchao(
-            torchao_installed, is_cuda, capability
-        )
-    elif mode == "fp8-te":
-        can_convert, can_execute, execution_note = _assess_fp8_te(
+    if mode == "fp8":
+        can_convert, can_execute, execution_note = _assess_fp8(
             transformer_engine_installed,
             te_fp8_available,
             te_fp8_unavailable_reason,
@@ -249,7 +204,6 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
         if torch.cuda.is_available()
         else 0,
         "cuda_device_capability": capability,
-        "torchao_installed": torchao_installed,
         "transformer_engine_installed": transformer_engine_installed,
         "te_fp8_available": te_fp8_available,
         "te_fp8_unavailable_reason": te_fp8_unavailable_reason,
@@ -304,59 +258,33 @@ def _validate_bf16(report: dict[str, Any]) -> None:
 
 
 def _validate_fp8(report: dict[str, Any]) -> None:
-    if not report.get("torchao_installed", False):
-        raise RuntimeError(
-            "precision='fp8-torchao' requires torchao, but torchao is not installed."
-        )
-    if report["device_type"] != "cuda":
-        raise RuntimeError(
-            "precision='fp8-torchao' is only supported on CUDA in the current stage."
-        )
-    if not report["cuda_available"]:
-        raise RuntimeError(
-            "precision='fp8-torchao' requires CUDA, but CUDA is not available."
-        )
-    capability = report.get("cuda_device_capability")
-    if capability is not None:
-        capability = tuple(capability)
-    if capability is None or capability < (8, 9):
-        raise RuntimeError(
-            "precision='fp8-torchao' requires compute capability >= 8.9; "
-            f"got {capability}."
-        )
-
-
-def _validate_fp8_te(report: dict[str, Any]) -> None:
     if not report.get("transformer_engine_installed", False):
         reason = report.get("te_fp8_unavailable_reason") or (
             "transformer-engine is not installed."
         )
-        raise RuntimeError(f"precision='fp8-te' is unavailable: {reason}")
+        raise RuntimeError(f"precision='fp8' is unavailable: {reason}")
     if report["device_type"] != "cuda":
         raise RuntimeError(
-            "precision='fp8-te' is only supported on CUDA in the current stage."
+            "precision='fp8' is only supported on CUDA in the current stage."
         )
     if not report["cuda_available"]:
-        raise RuntimeError(
-            "precision='fp8-te' requires CUDA, but CUDA is not available."
-        )
+        raise RuntimeError("precision='fp8' requires CUDA, but CUDA is not available.")
     if not report.get("te_fp8_available", False):
         reason = report.get("te_fp8_unavailable_reason")
         raise RuntimeError(
-            "precision='fp8-te' requires Transformer Engine FP8 support"
+            "precision='fp8' requires Transformer Engine FP8 support"
             + (f": {reason}" if reason else ".")
         )
     if not report.get("te_autocast_api"):
         raise RuntimeError(
-            "precision='fp8-te' requires transformer_engine.pytorch.autocast."
+            "precision='fp8' requires transformer_engine.pytorch.autocast."
         )
 
 
 _VALIDATORS = {
     "fp16": _validate_fp16,
     "bf16": _validate_bf16,
-    "fp8-torchao": _validate_fp8,
-    "fp8-te": _validate_fp8_te,
+    "fp8": _validate_fp8,
 }
 
 
@@ -368,6 +296,6 @@ def validate_capability(report: dict[str, Any]) -> None:
     if validator is None:
         raise RuntimeError(
             f"Unsupported precision mode {mode!r}. "
-            "Current stage supports: fp32, fp16, bf16, fp8-torchao, fp8-te."
+            "Current stage supports: fp32, fp16, bf16, fp8."
         )
     validator(report)

@@ -106,7 +106,7 @@ def test_triton_benchmark_timing_uses_requested_cuda_device(monkeypatch):
 def test_aggregate_precision_trials_uses_medians_and_preserves_raw_trials():
     trials = [
         {
-            "precision": "fp8-torchao",
+            "precision": "fp8",
             "trial": trial,
             "training_ms": training_ms,
             "training_samples_per_sec": samples_per_sec,
@@ -129,7 +129,7 @@ def test_aggregate_precision_trials_uses_medians_and_preserves_raw_trials():
         )
     ]
 
-    result = _aggregate_precision_trials("fp8-torchao", trials)
+    result = _aggregate_precision_trials("fp8", trials)
 
     assert result["training_ms"] == pytest.approx(2.0)
     assert result["training_samples_per_sec"] == pytest.approx(200.0)
@@ -167,7 +167,7 @@ def test_samples_per_second_converts_milliseconds():
 def test_model_benchmark_rejects_invalid_min_speedup(speedup_name, invalid_value):
     args = Namespace(
         baseline_precision="bf16",
-        precisions=["bf16", "fp8-torchao"],
+        precisions=["bf16", "fp8"],
         batch_size=16,
         width=16,
         num_classes=16,
@@ -192,7 +192,7 @@ def test_triton_markdown_flattens_multiline_failure_reason(tmp_path):
             "T": 1,
             "N": 1,
             "neuron_type": "if",
-            "variant": "mp_plan_float8_e4m3fn_fp8",
+            "variant": "mp_float8_e4m3fn_fp8",
             "process": "inference_forward",
             "success": False,
             "failure_reason": "compile failed:\nline one\r\nline two",
@@ -211,7 +211,7 @@ def test_triton_markdown_flattens_multiline_failure_reason(tmp_path):
 
     rendered = output.read_text(encoding="utf-8")
     assert (
-        "- `T=1 N=1 neuron=if variant=mp_plan_float8_e4m3fn_fp8 "
+        "- `T=1 N=1 neuron=if variant=mp_float8_e4m3fn_fp8 "
         "process=inference_forward: compile failed: line one  line two`" in rendered
     )
     assert "\nline one" not in rendered
@@ -227,7 +227,7 @@ def test_assess_model_efficiency_compares_training_inference_and_memory():
             "inference_peak_allocated_mb": 600.0,
         },
         {
-            "precision": "fp8-torchao",
+            "precision": "fp8",
             "training_samples_per_sec": 125.0,
             "inference_samples_per_sec": 250.0,
             "training_peak_allocated_mb": 800.0,
@@ -260,7 +260,7 @@ def test_assess_model_efficiency_reports_each_failed_process():
             "inference_peak_allocated_mb": 600.0,
         },
         {
-            "precision": "fp8-te",
+            "precision": "fp8",
             "training_samples_per_sec": 104.0,
             "inference_samples_per_sec": 180.0,
             "training_peak_allocated_mb": 900.0,
@@ -277,10 +277,10 @@ def test_assess_model_efficiency_reports_each_failed_process():
 
     assert report["passed"] is False
     assert report["failures"] == [
-        "fp8-te training speedup 1.0400x < 1.0500x",
-        "fp8-te inference speedup 0.9000x < 1.0500x",
+        "fp8 training speedup 1.0400x < 1.0500x",
+        "fp8 inference speedup 0.9000x < 1.0500x",
     ]
-    with pytest.raises(RuntimeError, match="fp8-te training speedup"):
+    with pytest.raises(RuntimeError, match="fp8 training speedup"):
         require_efficiency(report)
 
 
@@ -293,7 +293,7 @@ def test_assess_model_efficiency_reports_missing_metric():
             "inference_peak_allocated_mb": 600.0,
         },
         {
-            "precision": "fp8-te",
+            "precision": "fp8",
             "training_samples_per_sec": 120.0,
             "inference_samples_per_sec": 220.0,
             "training_peak_allocated_mb": 900.0,
@@ -344,7 +344,7 @@ def test_assess_triton_efficiency_reports_fp8_group_without_baseline():
             "N": 8,
             "neuron_type": "if",
             "process": "inference_forward",
-            "variant": "mp_plan_float8_e4m3fn_fp8",
+            "variant": "mp_float8_e4m3fn_fp8",
             "success": True,
             "median_ms": 1.0,
             "peak_allocated_mb": 4.0,
@@ -356,7 +356,7 @@ def test_assess_triton_efficiency_reports_fp8_group_without_baseline():
     assert report["passed"] is False
     assert report["failures"] == [
         "T=4 N=8 neuron=if process=inference_forward has no successful FP8 "
-        "prepared-plan result",
+        "variant result",
         "T=8 N=8 neuron=if process=inference_forward has no successful "
         "stable_fp32 baseline",
     ]
@@ -367,14 +367,14 @@ def test_assess_model_efficiency_rejects_fp8_baseline():
         assess_model_efficiency(
             [
                 {
-                    "precision": "fp8-te",
+                    "precision": "fp8",
                     "training_samples_per_sec": 100.0,
                     "inference_samples_per_sec": 200.0,
                     "training_peak_allocated_mb": 1000.0,
                     "inference_peak_allocated_mb": 600.0,
                 }
             ],
-            baseline_precision="fp8-te",
+            baseline_precision="fp8",
             min_training_speedup=1.0,
             min_inference_speedup=1.0,
         )
@@ -396,7 +396,7 @@ def test_assess_efficiency_rejects_nonfinite_speedup(invalid_speedup):
 def test_model_benchmark_rejects_zero_warmup():
     args = Namespace(
         baseline_precision="bf16",
-        precisions=["bf16", "fp8-torchao"],
+        precisions=["bf16", "fp8"],
         batch_size=16,
         width=16,
         num_classes=16,
@@ -424,7 +424,7 @@ def test_assess_model_efficiency_rejects_invalid_metric(invalid_value):
             "inference_peak_allocated_mb": 600.0,
         },
         {
-            "precision": "fp8-te",
+            "precision": "fp8",
             "training_samples_per_sec": 120.0,
             "inference_samples_per_sec": 220.0,
             "training_peak_allocated_mb": 900.0,
@@ -468,7 +468,7 @@ def test_assess_triton_efficiency_selects_best_prepared_fp8_variant():
             "N": 4096,
             "neuron_type": "lif",
             "process": "inference_forward",
-            "variant": "mp_plan_float8_e4m3fn_fp32",
+            "variant": "mp_float8_e4m3fn_fp32",
             "compute_dtype": "fp32",
             "success": True,
             "median_ms": 1.5,
@@ -479,7 +479,7 @@ def test_assess_triton_efficiency_selects_best_prepared_fp8_variant():
             "N": 4096,
             "neuron_type": "lif",
             "process": "inference_forward",
-            "variant": "mp_plan_float8_e5m2_fp16",
+            "variant": "mp_float8_e5m2_fp16",
             "compute_dtype": "fp16",
             "success": True,
             "median_ms": 1.0,
@@ -491,7 +491,7 @@ def test_assess_triton_efficiency_selects_best_prepared_fp8_variant():
 
     assert report["passed"] is True
     comparison = report["comparisons"][0]
-    assert comparison["best_fp8_variant"] == "mp_plan_float8_e5m2_fp16"
+    assert comparison["best_fp8_variant"] == "mp_float8_e5m2_fp16"
     assert comparison["best_compute_dtype"] == "fp16"
     assert comparison["speedup"] == pytest.approx(2.0)
     assert comparison["memory_ratio"] == pytest.approx(0.7)
@@ -514,7 +514,7 @@ def test_assess_triton_efficiency_fails_when_a_process_has_no_usable_fp8_plan():
             "N": 4096,
             "neuron_type": "if",
             "process": "training_forward_backward",
-            "variant": "mp_plan_float8_e4m3fn_fp32",
+            "variant": "mp_float8_e4m3fn_fp32",
             "success": False,
             "failure_reason": "unsupported",
         },
@@ -525,7 +525,7 @@ def test_assess_triton_efficiency_fails_when_a_process_has_no_usable_fp8_plan():
     assert report["passed"] is False
     assert report["failures"] == [
         "T=32 N=4096 neuron=if process=training_forward_backward has no "
-        "successful FP8 prepared-plan result"
+        "successful FP8 variant result"
     ]
 
 
@@ -593,7 +593,7 @@ def test_assess_triton_efficiency_rejects_duplicate_successful_baseline():
     }
     candidate = {
         **baseline,
-        "variant": "mp_plan_float8_e4m3fn_fp32",
+        "variant": "mp_float8_e4m3fn_fp32",
         "compute_dtype": "fp32",
         "median_ms": 1.0,
         "peak_allocated_mb": 80.0,
