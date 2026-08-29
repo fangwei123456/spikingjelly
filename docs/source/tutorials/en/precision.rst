@@ -3,17 +3,19 @@ Training and Inference Precision
 
 中文版： :doc:`../cn/precision`
 
-``PrecisionConfig`` records two sets of options, both applied before optimizer
-construction:
+SpikingJelly has three precision configuration paths. Select the entry point for
+the workflow at hand:
 
-* ``mode`` controls regular model operations; ``fp8`` uses NVIDIA Transformer
-  Engine;
-* ``triton_storage``, ``triton_fwd``, and ``triton_bwd`` control state storage
-  and forward/backward arithmetic in existing multi-step Triton IF/LIF/PLIF
-  neurons.
+* custom PyTorch loops use ``PrecisionConfig`` and
+  ``prepare_model_for_precision``;
+* ``distributed.vision`` stores ``PrecisionConfig`` in its training, evaluation,
+  or prediction configuration;
+* ``distributed.llm`` uses Megatron Core's own ``TransformerConfig`` and
+  ``OptimizerConfig`` rather than ``PrecisionConfig``.
 
-The two sets can be used independently. Regular layers may run in BF16 while
-Triton neurons remain in FP32, for example.
+Model-level FP16/BF16/FP8 and
+Triton-neuron precision are separate dimensions. Regular layers may run in BF16
+while Triton neurons remain in FP32.
 
 Installation
 ------------
@@ -30,8 +32,18 @@ Triton-neuron mixed precision additionally requires:
 
     uv pip install --editable ".[triton]"
 
-Configuring regular layers
---------------------------
+In a pip environment with PyTorch already installed, add
+``--no-build-isolation`` so Transformer Engine selects its CUDA wheel from the
+existing ``torch.version.cuda``. An isolated build may temporarily install a
+different PyTorch release and select a wheel that does not match the runtime:
+
+.. code-block:: bash
+
+    python -m pip install --no-build-isolation \
+        "transformer-engine[pytorch]>=2.16,<3"
+
+Path 1: custom training or inference
+------------------------------------
 
 The order matters: move the model to its target device, call
 ``prepare_model_for_precision``, and only then create the optimizer. FP8
@@ -73,8 +85,16 @@ old parameters.
 ``PrecisionArtifacts`` creates the FP16 GradScaler when needed, so the same loop
 works for all four modes.
 
-Inspecting the conversion
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Inference uses the same context without ``backward``:
+
+.. code-block:: python
+
+    model.eval()
+    with torch.inference_mode(), precision.autocast_context():
+        output = model(input_tensor)
+
+Inspecting an FP8 conversion
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 FP8 currently converts aligned ``torch.nn.Linear``, SpikingJelly ``layer.Linear``,
 pointwise Conv1d, and supported LayerNorm or adjacent fused patterns. A Linear
@@ -92,11 +112,15 @@ unavailable; it does not switch to BF16. At least one module must be convertible
 ``delayed``, ``current``, ``block``, or ``mxfp8`` when the numerical recipe must
 be fixed explicitly.
 
-Triton-neuron precision
------------------------
+Some Transformer Engine recipes serialize FP8 metadata as a pickle. Set
+``NVTE_ALLOW_UNSAFE_PICKLE_EXTRA_STATE=1`` only when restoring a trusted
+checkpoint; do not enable it for unknown checkpoints.
+
+Configuring Triton neurons
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Triton precision is set by ``prepare_model_for_precision`` rather than on every
-neuron constructor. This example uses BF16 for regular layers, BF16 neuron storage
+neuron constructor. Regular layers can use BF16 with BF16 neuron storage
 and forward arithmetic, and FP32 neuron backward arithmetic:
 
 .. code-block:: python
@@ -116,16 +140,33 @@ and ``step_mode="m"`` use these options. The function does not switch backends.
 ``float8_e4m3fn`` or ``float8_e5m2``. Exponentials and sensitive surrogate
 operations remain FP32 inside the kernels and are not user options.
 
-Distributed FP8
----------------
+Path 2: ``distributed.vision``
+--------------------------------
 
-``distributed.vision`` prepares precision before DDP wrapping and optimizer
-construction. It uses the DDP process group to synchronize Transformer Engine
-scaling metadata. Model FP8 and Triton-neuron mixed precision currently require
-DDP with TP=PP=1:
+The high-level vision API reads ``precision`` before parallel wrapping and
+optimizer construction. ``TrainingConfig``, ``EvaluationConfig``, and
+``PredictionConfig`` all accept the same ``PrecisionConfig``:
 
-MCore LLMs do not use ``PrecisionConfig``. They keep their native transformer
-and optimizer precision options.
+.. code-block:: python
+
+    from spikingjelly.activation_based import distributed
+    from spikingjelly.activation_based.precision import PrecisionConfig
+
+    config = distributed.vision.TrainingConfig(
+        model=model_config,
+        dataset_builder=dataset_builder,
+        precision=PrecisionConfig(
+            mode="bf16",
+            triton_storage="bf16",
+            triton_fwd="bf16",
+            triton_bwd="fp32",
+        ),
+    )
+    result = distributed.vision.train_classification(config)
+
+In the repository CLI, ``--precision`` maps to ``mode``. The remaining fields
+come from ``--fp8-recipe``, ``--triton-storage``, ``--triton-fwd``, and
+``--triton-bwd``:
 
 .. code-block:: bash
 
@@ -136,15 +177,61 @@ and optimizer precision options.
         --image-size 128 --classes 1024 \
         --batch-size 32 --max-steps 10
 
-This command checks that FP8 and DDP work together. Performance remains
-model-dependent; FP16 and BF16 are both faster in the Spikformer measurements
-below.
+``distributed.vision`` prepares precision before DDP wrapping and optimizer
+construction. It uses the DDP process group to synchronize Transformer Engine
+scaling metadata. Model FP8 and Triton-neuron mixed precision currently require
+DDP with TP=PP=1. Vision PP supports FP32 and BF16. Ordinary FP32/BF16 execution
+is not subject to this experimental-precision restriction.
+
+Path 3: ``distributed.llm``
+----------------------------
+
+``distributed.llm`` does not use ``PrecisionConfig``. Set model and optimizer
+precision in MCore ``TransformerConfig`` and ``OptimizerConfig`` and keep the two
+configurations consistent:
+
+.. code-block:: python
+
+    import torch
+    from megatron.core.optimizer import OptimizerConfig
+    from megatron.core.transformer import TransformerConfig
+
+    transformer = TransformerConfig(
+        num_layers=24,
+        hidden_size=2048,
+        num_attention_heads=16,
+        ffn_hidden_size=8192,
+        bf16=True,
+        fp16=False,
+        params_dtype=torch.bfloat16,
+        pipeline_dtype=torch.bfloat16,
+    )
+    optimizer = OptimizerConfig(
+        lr=3e-4,
+        min_lr=3e-5,
+        bf16=True,
+        fp16=False,
+        params_dtype=torch.bfloat16,
+        use_distributed_optimizer=True,
+    )
+
+Place ``transformer`` in the concrete ``distributed.llm.ModelConfig`` and
+``optimizer`` in ``distributed.llm.TrainingConfig``. For FP16, set
+``fp16=True``, ``bf16=False``, and ``params_dtype=torch.float16`` in both
+configurations. MCore FP8 normally uses a BF16 base with ``fp8="hybrid"`` and a
+matching ``fp8_recipe`` in ``TransformerConfig``; set the same recipe on
+``OptimizerConfig``. With PP, ``pipeline_dtype`` must match ``params_dtype``.
+
+Standalone evaluation and cached generation reuse the model's
+``TransformerConfig``. SGLang artifact export currently requires MCore BF16.
+See :doc:`./distributed_training` for complete model, data, and training
+configuration examples.
 
 When FP8 is faster
 ------------------
 
-The short answer is that FP8 benefits large matrices, not every low-precision
-workload. It does not help the regular FC-SNN training case or the current
+FP8 benefits large matrices, not every low-precision workload. It does not help
+the regular FC-SNN training case or the current
 Spikformer DDP case; sufficiently wide Linear and FC-SNN inference workloads do.
 
 Measurements were taken on 2026-08-29. Linear and FC-SNN used one RTX 5090
@@ -246,7 +333,7 @@ usually cannot recover its conversion and metadata overhead when CNN, neuron, or
 communication work dominates. Its memory use may also exceed BF16, so it is not a
 memory-optimization switch.
 
-Re-run the crossover benchmark on the target GPU:
+Run the crossover benchmark on the target GPU:
 
 .. code-block:: bash
 

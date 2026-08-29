@@ -76,10 +76,11 @@ SpikingJelly中提供了4种膜电压编码方法，用作非脉冲神经元中�
 
 3. 每次网络仿真结束后，需要\ **重置**\ 网络状态
 
-DSQN的完整代码位于\ ``activation_based/examples/dsqn``\。
+DSQN 的完整代码位于 ``spikingjelly/activation_based/examples/dsqn``。脚本使用该目录中的本地 ``ptan`` 和 ``utils`` 包，因此应先进入目录再运行：
 
 .. code-block:: shell
 
+    cd spikingjelly/activation_based/examples/dsqn
     python train.py --cuda --game breakout --T 8 --dec_type max-mem --seed 123
 
     usage: train.py [--cuda] [--game GAME] [--T T] [--dec_type DEC] [--early_stop]

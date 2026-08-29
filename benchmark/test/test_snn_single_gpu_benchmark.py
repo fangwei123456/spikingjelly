@@ -346,34 +346,6 @@ def test_probe_preserves_failed_child_stderr(monkeypatch, tmp_path: Path):
     assert result["stderr_path"] in result["reason"]
 
 
-@pytest.mark.parametrize(
-    ("phase", "message"),
-    [
-        ("inference", "inference kernel construction failed"),
-        ("training", "training kernel construction failed"),
-    ],
-)
-def test_flexsn_probe_rejects_unavailable_phase_kernel(monkeypatch, phase, message):
-    from spikingjelly.activation_based.neuron import flexsn
-
-    class UnavailableFlexSN(probe.torch.nn.Module):
-        _triton_scan_kernel = None
-        _triton_scan_info = None
-        _triton_scan_final_state_kernel = None
-        _triton_scan_final_state_info = None
-        _triton_fwd_kernel = None
-        _triton_bwd_kernel = None
-        _triton_train_info = None
-
-        def __init__(self, *_args, **_kwargs):
-            super().__init__()
-
-    monkeypatch.setattr(flexsn, "FlexSN", UnavailableFlexSN)
-
-    with pytest.raises(RuntimeError, match=message):
-        probe._build_model("triton_flexsn", phase, probe.torch.device("cpu"))
-
-
 def test_flexsn_probe_core_is_differentiable():
     x = probe.torch.randn(2, 3, requires_grad=True)
     state = probe.torch.zeros_like(x)

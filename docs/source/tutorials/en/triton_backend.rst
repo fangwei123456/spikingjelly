@@ -14,9 +14,6 @@ The following preparations and prerequisites are required:
 #. `Install Triton <https://triton-lang.org/main/getting-started/installation.html>`_. It is recommended to use ``triton >= 3.3.1``.
 #. Be familiar with the SpikingJelly :doc:`./neuron` module.
 
-Using Predefined Triton Kernels
-++++++++++++++++++++++++++++++++++++++++++++++
-
 Forward and Backward Propagation
 ---------------------------------------
 
@@ -74,7 +71,7 @@ Here, we construct an LIF neuron running in multi-step mode ``step_mode="m"`` an
 Performance Benchmark
 ------------------------
 
-The Triton backend supports ``torch.float16``. Below, we use the performance benchmarking tools provided by Triton, namely ``triton.testing``, to compare the efficiency of different backends:
+The Triton backend supports ``torch.float16``. The following benchmark uses ``triton.testing`` to compare backend execution time:
 
 .. code:: python
 

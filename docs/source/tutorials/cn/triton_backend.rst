@@ -14,9 +14,6 @@ SpikingJelly ``0.0.0.1.0`` 版本引入了 `Triton <https://github.com/triton-la
 #. `安装好 Triton <https://triton-lang.org/main/getting-started/installation.html>`_ 。推荐使用 ``triton >= 3.3.1`` 。
 #. 熟悉 SpikingJelly 的 :doc:`./neuron` 模块。
 
-使用预定义的 Triton 神经元内核
-++++++++++++++++++++++++++++++
-
 前向传播与反向传播
 -------------------------
 
@@ -74,7 +71,7 @@ SpikingJelly ``0.0.0.1.0`` 版本引入了 `Triton <https://github.com/triton-la
 速度测算
 ------------------
 
-Triton 后端支持 ``torch.float16``。下面，我们使用 Triton 提供的性能测算工具 ``triton.testing`` 来对比不同后端的速度：
+Triton 后端支持 ``torch.float16``。以下 benchmark 使用 ``triton.testing`` 对比不同后端的速度：
 
 .. code:: python
 

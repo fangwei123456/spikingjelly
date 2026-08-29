@@ -7,7 +7,7 @@ English version: :doc:`../en/memopt`
 
 本团队在ICLR 2026发表的新工作 `Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression <https://openreview.net/forum?id=nrBJ0Uvj7c>`_ 提出了基于梯度检查点和脉冲压缩的深度SNN训练显存自动优化工具（源代码位于 `Github <https://github.com/AllenYolk/snn-gradient-checkpointing>`_ ）。利用该工具，用户只需添加少量代码，便可以在不损失精度且不过多影响速度的前提下，大幅降低深度SNN训练时的显存占用。
 
-该工具已经集成到 ``spikingjelly.activation_based.memopt`` 子包中，可应用于几乎所有以多步模式运行的 spikingjelly SNN 模型。本教程将介绍其使用方式。
+该工具已经集成到 ``spikingjelly.activation_based.memopt`` 子包中，提供手工检查点、自动搜索和分布式训练接口。
 
 方法原理
 +++++++++++++++++++++++
@@ -44,7 +44,7 @@ English version: :doc:`../en/memopt`
 检查点结构自适应调整
 -------------------------
 
-施加逐层梯度检查点+脉冲压缩后，一个训练iteration内的如化情况如图3橙色折线所示。优化后，虽然相比传统BPTT（蓝色折线）峰值显存已大幅降低，但全局峰值显存却远大于在其他层上运行时的临时显存占用。对此，我们设计了一系列检查点片段分割策略，以引入更多需缓存的输入为代价，降低关键检查点片段的大小；此外，也可地择性将一些检查点片段还原为常规层，以略微增加临时显存开销为代价，加快训练速度，同时不增加峰值显存。具体流程为：
+施加逐层梯度检查点和脉冲压缩后，一个训练 iteration 内的显存变化如图 3 的橙色折线所示。优化后，峰值显存虽然已明显低于传统 BPTT（蓝色折线），但全局峰值仍远高于其他层运行时的临时显存占用。为继续压低峰值，我们将关键检查点片段切得更小，代价是缓存更多输入；也可以选择性地将部分检查点片段还原为常规层，在不抬高峰值的前提下换取更快的训练速度。具体流程为：
 
 1. **空间分割**：找出峰值显存开销所在的检查点片段，将其沿空间分割成两个更小的检查点片段。重复此步骤，直到无法进一步降低峰值显存。见图2(c)。
 2. **时间分割**：找出峰值显存开销所在的检查点片段，将其沿时间轴分割成 :math:`k` 个更小的检查点片段。重复此步骤，直到无法进一步降低峰值显存。见图2(d)。
@@ -249,17 +249,18 @@ Boolean 压缩和 bit 压缩路径支持 ``torch.compile(..., fullgraph=True)``�
 性能实测
 --------
 
-以下结果都由本次重构后的实现测得，不是论文代码的旧数据。测试机是 Vast.ai
-on-demand 实例，配备 4 张 RTX 4090 24 GiB，卡间没有 NVLink；软件为 PyTorch
-2.11.0、CUDA 12.8 和 NCCL 2.28.9。每个配置都从新进程启动并独立运行三次。表中
-给出中位数，括号内为最小值到最大值。显存记录
-``torch.cuda.max_memory_allocated`` 返回的峰值，不记录 reserved memory。
+以下结果测于 2026-08-29，使用 SpikingJelly 2.0.0rc1 的 ``memopt`` 实现，与论文
+仓库中的数据无关。每个配置都从新进程启动并独立运行三次。表中给出中位数，括号内
+为最小值到最大值。显存记录
+``torch.cuda.max_memory_allocated`` 返回的峰值，不记录 reserved memory。单卡和
+双卡测试来自不同的 Vast.ai on-demand 实例，软件环境分别写在对应小节中。
 
 简单单卡场景
 ^^^^^^^^^^^^
 
 单卡模型包含 3 个 ``Linear-IF-Linear-IF`` block，输入 shape 为
-``[T=16, N=512, C=512]``，使用 FP32。每次运行先预热 10 step，再测量 50 step：
+``[T=16, N=512, C=512]``，使用 FP32。测试机配备 RTX 4090 24 GiB，软件为
+PyTorch 2.11.0 和 CUDA 12.8。每次运行先预热 10 step，再测量 50 step：
 
 .. code-block:: bash
 
@@ -305,26 +306,30 @@ on-demand 实例，配备 4 张 RTX 4090 24 GiB，卡间没有 NVLink；软件�
 下把每 step 用时从 level 1 的中位数 93.5 ms 降到 60.1 ms。搜索只在调用
 ``optimize_memory`` 时运行一次，不计入训练 step 用时。
 
-四卡并行场景
+双卡并行场景
 ^^^^^^^^^^^^
 
-多卡测试使用 DDP4、SEW-ResNet34、BF16、``T=4`` 和 128 × 128 随机合成输入。
-每卡 batch 为 32，global batch 为 128。每次运行 30 step，前 5 step 只预热，后
-25 step 计时。baseline 使用 ``memopt_level=0``；memopt 配置使用 level 1 和
-``checkpoint_budget="memory"``。默认的 ``ADD`` 残差不能保证 block 输入严格
-二值，因此这个模型不会自动做 bit 压缩：
+双卡测试使用 2 张 RTX 4090 24 GiB，卡间没有 NVLink；软件为 PyTorch
+2.13.0+cu130、CUDA 13.0 和 NCCL 2.29.7。模型为 DDP2 SEW-ResNet34，使用 BF16、
+``T=4`` 和 224 × 224 随机合成输入。校准从每卡 batch 64 开始，以 8 为步长增加；
+batch 72 的 baseline 峰值为 9.71 GiB，batch 80 为 10.75 GiB，因此正式测试选择
+每卡 batch 80、global batch 160。
+
+每次运行 60 step，前 10 step 只预热，后 50 step 计时。baseline 使用
+``memopt_level=0``；memopt 配置使用 level 1 和默认的 memory budget。默认的
+``ADD`` 残差不能保证 block 输入严格二值，因此这个模型不会自动做 bit 压缩：
 
 .. code-block:: bash
 
-    torchrun --standalone --nproc-per-node=4 benchmark/vision_distributed.py \
+    torchrun --standalone --nproc-per-node=2 benchmark/vision_distributed.py \
         --model sew-resnet34 --dataset synthetic --data-parallel ddp \
-        --precision bf16 --time-steps 4 --image-size 128 --classes 1000 \
-        --batch-size 32 --samples 3840 --workers 0 \
-        --max-steps 30 --timing-warmup-steps 5 --memopt-level 1
+        --precision bf16 --time-steps 4 --image-size 224 --classes 1000 \
+        --batch-size 80 --samples 9600 --workers 0 \
+        --max-steps 60 --timing-warmup-steps 10 --memopt-level 1
 
 将最后一个参数改为 ``--memopt-level 0`` 即可复现 baseline。
 
-.. list-table:: 四卡 DDP 训练结果
+.. list-table:: 双卡 DDP 训练结果
     :header-rows: 1
 
     * - 配置
@@ -332,16 +337,17 @@ on-demand 实例，配备 4 张 RTX 4090 24 GiB，卡间没有 NVLink；软件�
       - 相对 baseline
       - 总吞吐 (images/s)
     * - baseline
-      - 1.75 (1.75--1.83)
+      - 10.75 (10.75--10.75)
       - --
-      - 1103.7 (1070.1--1116.9)
+      - 595.3 (594.0--595.6)
     * - memopt level 1
-      - 1.19 (1.19--1.19)
-      - -31.9%
-      - 566.9 (547.9--571.9)
+      - 6.20 (6.20--6.20)
+      - -42.3%
+      - 482.8 (481.6--486.6)
 
-在这组配置里，四卡 DDP 成功同步应用了检查点。表中的显存和速度变化只适用于上述
-模型和输入；正式训练前应使用实际模型、输入和拓扑重测。
+三次运行中，baseline 和 memopt 的 loss 完全一致。Level 1 将每卡峰值 allocated
+memory 降低 42.3%，总吞吐降低 18.9%。表中的显存和速度变化只适用于上述模型和
+输入；正式训练前应使用实际模型、输入和拓扑重测。
 
 从旧 API 迁移
 ---------------

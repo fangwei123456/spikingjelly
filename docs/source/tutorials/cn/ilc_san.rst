@@ -164,9 +164,12 @@ SpikingJelly中提供了4种膜电压编码方法，用作非脉冲神经元中�
 
 3. 每次网络仿真结束后，需要\ **重置**\ 网络状态
 
-ILC-SAN的完整代码位于\ ``activation_based/examples/ilc_san``\。
+ILC-SAN 的完整代码位于 ``spikingjelly/activation_based/examples/ilc_san``。先进入该目录，再查看或运行训练脚本：
 
 .. code-block:: shell
+
+    cd spikingjelly/activation_based/examples/ilc_san
+    python hybrid_td3_cuda_norm.py --help
 
     usage: hybrid_td3_cuda_norm.py [--env ENV] [--encoder_pop_dim ENC_POP_DIM] [--decoder_pop_dim DEC_POP_DIM] [--encoder_var ENC_VAR] [--start_model_idx IDX] [--num_model N] [--epochs E] [--device_id DEVICE_ID] [--root_dir ROOT_DIR] [--encode ENC] [--decode DEC]
 

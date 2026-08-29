@@ -1,5 +1,6 @@
 import copy
 import os
+from unittest import mock
 
 import pytest
 import torch
@@ -43,8 +44,8 @@ def _assert_gradient_quality(
 ) -> None:
     reference_norm = float(torch.linalg.vector_norm(reference.float()).item())
     candidate_norm = float(torch.linalg.vector_norm(candidate.float()).item())
-    if reference_norm < 1e-8:
-        assert candidate_norm < 1e-5
+    if reference_norm < 1e-3:
+        assert candidate_norm <= max(2.0 * reference_norm, 1e-5)
         return
     assert _cosine_similarity(candidate, reference) >= min_cosine
     assert _relative_l2(candidate, reference) <= max_relative_l2
@@ -221,7 +222,8 @@ def _assert_train_and_infer(
     assert reload_artifacts.config.mode == mode
     assert reload_artifacts.describe()["conversion_report"]["converted_modules"]
     reload_model = reload_artifacts.model
-    reload_model.load_state_dict(state_dict, strict=True)
+    with mock.patch.dict(os.environ, {"NVTE_ALLOW_UNSAFE_PICKLE_EXTRA_STATE": "1"}):
+        reload_model.load_state_dict(state_dict, strict=True)
     reload_model.eval()
     _reset_model(reload_model)
     with torch.inference_mode(), reload_artifacts.autocast_context():

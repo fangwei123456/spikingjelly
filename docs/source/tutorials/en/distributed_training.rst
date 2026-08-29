@@ -5,9 +5,10 @@ Authors: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_, `Wei Fang (f
 
 中文版： :doc:`../cn/distributed_training`
 
-This tutorial starts with high-level training, evaluation, and offline inference
-APIs, then shows how to connect custom models and loops. The final section
-reports throughput and memory on four RTX 4090 GPUs.
+This page covers high-level training, evaluation, and offline inference APIs,
+custom model and loop integration, and throughput and memory results from four
+RTX 4090 GPUs.
+Vision and LLM use different precision entry points; see :doc:`./precision`.
 
 API design rationale
 --------------------

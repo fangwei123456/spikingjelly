@@ -7,7 +7,7 @@ Author: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_
 
 Our new work `Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression <https://openreview.net/forum?id=nrBJ0Uvj7c>`_ was published at ICLR 2026. In this work, we propose an automatic memory optimization tool for deep SNN training based on gradient checkpointing and spike compression (source code available on `GitHub <https://github.com/AllenYolk/snn-gradient-checkpointing>`_). With only a few extra lines of code, users can significantly reduce training memory consumption for deep SNNs while keeping accuracy intact and speed slowdown acceptable.
 
-This toolkit has been integrated into the ``spikingjelly.activation_based.memopt`` subpackage and can be applied to almost every spikingjelly SNN that operates in multi-step mode. This tutorial shows how to use it.
+The toolkit is available in ``spikingjelly.activation_based.memopt`` with interfaces for manual checkpointing, automatic search, and distributed training.
 
 Method Overview
 ++++++++++++++++++++++++
@@ -270,18 +270,20 @@ and may require dynamic shapes during compilation.
 Measured Performance
 --------------------
 
-These results use the refactored implementation, not the benchmark numbers from
-the paper code. The Vast.ai on-demand instance had four 24 GiB RTX 4090 GPUs and
-no NVLink. The software stack was PyTorch 2.11.0, CUDA 12.8, and NCCL 2.28.9.
-Every configuration started in a new process and ran three times. Tables report
-the median and the minimum-to-maximum range in parentheses. Memory comes from
-``torch.cuda.max_memory_allocated``, not reserved memory.
+These results were measured on 2026-08-29 with the ``memopt`` implementation in
+SpikingJelly 2.0.0rc1, not with data from the paper repository. Every
+configuration started in a new process and ran three times. Tables report the
+median and the minimum-to-maximum range in parentheses.
+Memory comes from ``torch.cuda.max_memory_allocated``, not reserved memory. The
+single- and two-GPU measurements use different Vast.ai on-demand instances, so
+each subsection gives its own software environment.
 
 Simple Single-GPU Case
 ^^^^^^^^^^^^^^^^^^^^^^
 
 The single-GPU model has three ``Linear-IF-Linear-IF`` blocks. Its FP32 input has
-shape ``[T=16, N=512, C=512]``. Each run warms up for 10 steps and measures 50:
+shape ``[T=16, N=512, C=512]``. The host used one 24 GiB RTX 4090 with PyTorch
+2.11.0 and CUDA 12.8. Each run warms up for 10 steps and measures 50:
 
 .. code-block:: bash
 
@@ -328,27 +330,32 @@ workload. Level 4 reduced the median step time from level 1's 93.5 ms to 60.1 ms
 at the same memory level. Search runs once inside ``optimize_memory`` and is not
 included in step time.
 
-Four-GPU Case
-^^^^^^^^^^^^^
+Two-GPU Case
+^^^^^^^^^^^^
 
-The distributed benchmark uses DDP4, SEW-ResNet34, BF16, ``T=4``, and random
-synthetic 128 × 128 inputs. The local batch is 32 and the global batch is 128.
-Each run executes 30 steps, discards the first 5 for timing, and measures the
-remaining 25. The baseline uses ``memopt_level=0``. The memopt run uses level 1
+The distributed host had two 24 GiB RTX 4090 GPUs without NVLink. Its software
+stack was PyTorch 2.13.0+cu130, CUDA 13.0, and NCCL 2.29.7. The workload is DDP2
+SEW-ResNet34 with BF16, ``T=4``, and random synthetic 224 × 224 inputs.
+Calibration started at a local batch of 64 and increased it in steps of eight.
+The baseline peak was 9.71 GiB at batch 72 and 10.75 GiB at batch 80, so the
+formal runs use a local batch of 80 and global batch of 160.
+
+Each run executes 60 steps, discards the first 10 for timing, and measures the
+remaining 50. The baseline uses ``memopt_level=0``. The memopt run uses level 1
 with its default memory budget. The default ``ADD`` residual does not guarantee
 strictly binary block inputs, so this model does not apply bit compression:
 
 .. code-block:: bash
 
-    torchrun --standalone --nproc-per-node=4 benchmark/vision_distributed.py \
+    torchrun --standalone --nproc-per-node=2 benchmark/vision_distributed.py \
         --model sew-resnet34 --dataset synthetic --data-parallel ddp \
-        --precision bf16 --time-steps 4 --image-size 128 --classes 1000 \
-        --batch-size 32 --samples 3840 --workers 0 \
-        --max-steps 30 --timing-warmup-steps 5 --memopt-level 1
+        --precision bf16 --time-steps 4 --image-size 224 --classes 1000 \
+        --batch-size 80 --samples 9600 --workers 0 \
+        --max-steps 60 --timing-warmup-steps 10 --memopt-level 1
 
 Change the final argument to ``--memopt-level 0`` to reproduce the baseline.
 
-.. list-table:: Four-GPU DDP training results
+.. list-table:: Two-GPU DDP training results
     :header-rows: 1
 
     * - configuration
@@ -356,18 +363,18 @@ Change the final argument to ``--memopt-level 0`` to reproduce the baseline.
       - versus baseline
       - total throughput (images/s)
     * - baseline
-      - 1.75 (1.75--1.83)
+      - 10.75 (10.75--10.75)
       - --
-      - 1103.7 (1070.1--1116.9)
+      - 595.3 (594.0--595.6)
     * - memopt level 1
-      - 1.19 (1.19--1.19)
-      - -31.9%
-      - 566.9 (547.9--571.9)
+      - 6.20 (6.20--6.20)
+      - -42.3%
+      - 482.8 (481.6--486.6)
 
-In this configuration, four-GPU DDP applied the checkpoints consistently across
-ranks. The memory and speed changes in the table belong to this workload. Rerun
-the benchmark with the real model, inputs, and topology before a full training
-job.
+The baseline and memopt loss matched in all three runs. Level 1 reduced peak
+allocated memory per GPU by 42.3% and reduced total throughput by 18.9%. These
+changes belong to this workload. Rerun the benchmark with the real model,
+inputs, and topology before a full training job.
 
 Migrate from the Previous API
 -----------------------------

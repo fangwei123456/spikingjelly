@@ -606,9 +606,7 @@ class ChannelQKAttention(QKAttention):
 
 
 class SpikeDrivenSelfAttention(nn.Module):
-    def __init__(
-        self, dim: int, num_heads: int = 8, backend: str = "torch"
-    ) -> None:
+    def __init__(self, dim: int, num_heads: int = 8, backend: str = "torch") -> None:
         r"""
         **API Language** - :ref:`中文 <SpikeDrivenSelfAttention.__init__-cn>` | :ref:`English <SpikeDrivenSelfAttention.__init__-en>`
 
@@ -760,9 +758,7 @@ class SpikeDrivenSelfAttention(nn.Module):
         :raises ValueError: if the input is not five-dimensional
         """
         if x.ndim != 5:
-            raise ValueError(
-                f"expected 5D input [T, N, C, H, W], but got {x.shape}"
-            )
+            raise ValueError(f"expected 5D input [T, N, C, H, W], but got {x.shape}")
         T, N, C, H, W = x.shape
         identity = x
         x = self.shortcut_lif(x)

@@ -7,7 +7,7 @@ For older releases, see the historical fatal-bug record in
 [bugs.md](https://github.com/fangwei123456/spikingjelly/blob/master/bugs.md)
 and the archived documentation linked from the project README.
 
-## Unreleased
+## 2.0.0rc1 - 2026-08-29
 
 ### Features
 
@@ -17,6 +17,15 @@ Module: `spikingjelly.activation_based.neuron`.
 
 - Added the paper-faithful `ComplementaryLIFNode` with single-step and
   multi-step PyTorch execution and optional trajectories for both neuron states.
+
+#### Distributed Inference
+
+Module: `spikingjelly.activation_based.distributed`.
+
+- Added topology-independent Vision inference artifacts with distributed
+  evaluation, prediction, and export across DP, TP, and PP layouts.
+- Added MCore loss/perplexity evaluation, cached TP/PP generation, and SGLang
+  artifact export without gathering the full model on one GPU.
 
 #### Memory Optimization
 
