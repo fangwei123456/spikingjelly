@@ -7,6 +7,7 @@ import os
 import random
 import time
 from collections.abc import Callable
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Optional
 
@@ -21,6 +22,7 @@ from torch.utils.data.distributed import DistributedSampler
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.precision import (
     PrecisionArtifacts,
+    PrecisionConfig,
     prepare_model_for_precision,
 )
 from .config import TrainingConfig
@@ -187,8 +189,8 @@ def _load_checkpoint(
                 f"Checkpoint uses unsupported precision mode {saved_precision!r}."
             )
         saved_recipe["precision"] = {
-            **current_recipe["precision"],
-            "mode": saved_precision,
+            "_target_": current_recipe["precision"]["_target_"],
+            **asdict(PrecisionConfig(mode=saved_precision)),
         }
     if saved_recipe != current_recipe:
         raise ValueError("Checkpoint configuration does not match this training run.")

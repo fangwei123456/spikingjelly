@@ -832,6 +832,37 @@ def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch, legacy_precision)
     assert torch.equal(restored["cuda"], cuda_rng)
 
 
+def test_legacy_checkpoint_precision_does_not_inherit_new_triton_fields(tmp_path):
+    config = vision.TrainingConfig(
+        model=SEWResNet34Config(),
+        dataset_builder="package.datasets.build",
+        precision=PrecisionConfig(
+            mode="bf16",
+            triton_storage="bf16",
+            triton_fwd="bf16",
+        ),
+    )
+    checkpoint = tmp_path / "checkpoint"
+    checkpoint.mkdir()
+    recipe = training._recipe(config)
+    recipe["precision"] = "bf16"
+    (checkpoint / "config.json").write_text(json.dumps(recipe), encoding="utf-8")
+    model = nn.Linear(2, 2)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+
+    with pytest.raises(ValueError, match="configuration does not match"):
+        training._load_checkpoint(
+            checkpoint,
+            config=config,
+            model=model,
+            optimizer=optimizer,
+            scheduler=None,
+            scaler=torch.amp.GradScaler("cuda", enabled=False),
+            tp_rank=0,
+            pp_rank=0,
+        )
+
+
 def test_vision_checkpoint_broadcasts_rank_zero_creation_failure(tmp_path, monkeypatch):
     parent = tmp_path / "not-a-directory"
     parent.write_text("occupied", encoding="utf-8")

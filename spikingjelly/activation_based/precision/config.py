@@ -67,22 +67,41 @@ class PrecisionConfig:
         cls,
         config: "PrecisionConfig | str | dict | None",
     ) -> "PrecisionConfig":
-        r"""Normalize a supported precision configuration input.
+        r"""
+        **API Language** - :ref:`中文 <PrecisionConfig.from_any-cn>` | :ref:`English <PrecisionConfig.from_any-en>`
 
-        **中文：** 将 ``None``、mode 字符串、字典或现有配置规范化为
-        :class:`PrecisionConfig`。不接受旧字段或旧 mode。
+        ----
 
-        **English:** Normalize ``None``, a mode string, a dictionary, or an existing
-        configuration into :class:`PrecisionConfig`. Removed fields and modes are
-        rejected.
+        .. _PrecisionConfig.from_any-cn:
 
-        :param config: 精度配置输入。 / Precision configuration input.
+        * **中文**
+
+        将 ``None``、mode 字符串、字典或现有配置规范化为
+        :class:`PrecisionConfig`。不接受已移除的字段或 mode。
+
+        :param config: 精度配置输入。
         :type config: PrecisionConfig | str | dict | None
-        :return: 规范化配置。 / Normalized configuration.
+        :return: 规范化配置。
         :rtype: PrecisionConfig
-        :raises TypeError: 输入类型或字典字段不受支持。 / If the input type or a
-            dictionary field is unsupported.
-        :raises ValueError: 配置组合无效。 / If the configuration is invalid.
+        :raises TypeError: 输入类型或字典字段不受支持。
+        :raises ValueError: 配置组合无效。
+
+        ----
+
+        .. _PrecisionConfig.from_any-en:
+
+        * **English**
+
+        Normalize ``None``, a mode string, a dictionary, or an existing
+        configuration into :class:`PrecisionConfig`. Removed fields and modes
+        are rejected.
+
+        :param config: Precision configuration input.
+        :type config: PrecisionConfig | str | dict | None
+        :return: Normalized configuration.
+        :rtype: PrecisionConfig
+        :raises TypeError: If the input type or a dictionary field is unsupported.
+        :raises ValueError: If the configuration is invalid.
         """
         if config is None:
             return cls()
@@ -100,32 +119,55 @@ class PrecisionConfig:
 
 PrecisionConfig.__init__.__doc__ = r"""Configure model and Triton-neuron precision.
 
-**API Language** - 中文 | English
+**API Language** - :ref:`中文 <PrecisionConfig.__init__-cn>` | :ref:`English <PrecisionConfig.__init__-en>`
 
-**中文：** ``mode`` 控制普通模型算子的精度；``fp8`` 使用 Transformer Engine。
+----
+
+.. _PrecisionConfig.__init__-cn:
+
+* **中文**
+
+``mode`` 控制普通模型算子的精度；``fp8`` 使用 Transformer Engine。
 ``triton_storage`` 独立启用已有 multi-step Triton IF/LIF/PLIF 节点的 mixed-precision
 路径，``triton_fwd`` 和 ``triton_bwd`` 分别控制其前向与反向算术。配置不自动切换
 神经元 backend，也不会静默降级。
 
-**English:** ``mode`` controls regular model-operation precision; ``fp8`` uses
-Transformer Engine. ``triton_storage`` independently enables the mixed-precision
-path for existing multi-step Triton IF/LIF/PLIF nodes, while ``triton_fwd`` and
+:param mode: 模型精度模式。
+:type mode: Literal["fp32", "fp16", "bf16", "fp8"]
+:param fp8_recipe: Transformer Engine FP8 recipe；仅 ``mode="fp8"`` 有效。
+:type fp8_recipe: Literal["auto", "delayed", "current", "block", "mxfp8"]
+:param triton_storage: Triton 神经元状态 storage dtype；``None`` 禁用 mixed path。
+:type triton_storage: Optional[Literal["fp32", "fp16", "bf16",
+    "float8_e4m3fn", "float8_e5m2"]]
+:param triton_fwd: Triton 神经元前向算术 dtype。
+:type triton_fwd: Literal["fp8", "fp16", "bf16", "fp32"]
+:param triton_bwd: Triton 神经元反向算术 dtype。
+:type triton_bwd: Literal["fp8", "fp16", "bf16", "fp32"]
+:raises ValueError: mode、recipe 或 Triton dtype 组合无效。
+
+----
+
+.. _PrecisionConfig.__init__-en:
+
+* **English**
+
+``mode`` controls regular model-operation precision; ``fp8`` uses Transformer
+Engine. ``triton_storage`` independently enables the mixed-precision path for
+existing multi-step Triton IF/LIF/PLIF nodes, while ``triton_fwd`` and
 ``triton_bwd`` select forward and backward arithmetic. The configuration neither
 changes neuron backends nor silently falls back.
 
-:param mode: 模型精度模式。 / Model precision mode.
+:param mode: Model precision mode.
 :type mode: Literal["fp32", "fp16", "bf16", "fp8"]
-:param fp8_recipe: Transformer Engine FP8 recipe；仅 ``mode="fp8"`` 有效。 /
-    Transformer Engine FP8 recipe, valid only for ``mode="fp8"``.
+:param fp8_recipe: Transformer Engine FP8 recipe, valid only for ``mode="fp8"``.
 :type fp8_recipe: Literal["auto", "delayed", "current", "block", "mxfp8"]
-:param triton_storage: Triton 神经元状态 storage dtype；``None`` 禁用。 / Triton
-    neuron-state storage dtype; ``None`` disables the mixed path.
+:param triton_storage: Triton neuron-state storage dtype; ``None`` disables the
+    mixed path.
 :type triton_storage: Optional[Literal["fp32", "fp16", "bf16",
     "float8_e4m3fn", "float8_e5m2"]]
-:param triton_fwd: Triton 神经元前向算术 dtype。 / Triton-neuron forward dtype.
+:param triton_fwd: Triton-neuron forward arithmetic dtype.
 :type triton_fwd: Literal["fp8", "fp16", "bf16", "fp32"]
-:param triton_bwd: Triton 神经元反向算术 dtype。 / Triton-neuron backward dtype.
+:param triton_bwd: Triton-neuron backward arithmetic dtype.
 :type triton_bwd: Literal["fp8", "fp16", "bf16", "fp32"]
-:raises ValueError: mode、recipe 或 Triton dtype 组合无效。 / If a mode, recipe,
-    or Triton dtype combination is invalid.
+:raises ValueError: If a mode, recipe, or Triton dtype combination is invalid.
 """

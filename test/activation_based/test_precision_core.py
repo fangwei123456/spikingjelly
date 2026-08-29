@@ -1,10 +1,15 @@
 import pytest
 import torch
 
+from spikingjelly.activation_based import neuron
 from spikingjelly.activation_based.precision import (
     PrecisionArtifacts,
     PrecisionConfig,
     prepare_model_for_precision,
+)
+from spikingjelly.activation_based.precision import convert as precision_convert
+from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
+    utils as triton_neuron_utils,
 )
 
 
@@ -89,6 +94,38 @@ def test_triton_precision_requires_convertible_nodes():
     config = PrecisionConfig(triton_storage="float8_e4m3fn")
     with pytest.raises(RuntimeError, match="no multi-step IF/LIF/PLIF"):
         prepare_model_for_precision(torch.nn.Linear(4, 4), "cpu", config)
+
+
+def test_triton_precision_applies_atomically_and_clears(monkeypatch):
+    first = neuron.IFNode(step_mode="m")
+    second = neuron.LIFNode(step_mode="s")
+    first._backend = second._backend = "triton"
+    model = torch.nn.Sequential(first, second)
+    monkeypatch.setattr(
+        triton_neuron_utils,
+        "_prepare_triton_neuron_execution_plan",
+        lambda **_kwargs: None,
+    )
+    config = PrecisionConfig(
+        triton_storage="bf16",
+        triton_fwd="bf16",
+        triton_bwd="fp32",
+    )
+
+    with pytest.raises(RuntimeError, match="requires multi-step"):
+        precision_convert._configure_triton_neurons(model, config, "cpu")
+    assert first._triton_precision is None
+
+    second.step_mode = "m"
+    precision_convert._configure_triton_neurons(model, config, "cpu")
+    assert first._triton_precision == (torch.bfloat16, "bf16", "fp32")
+    assert second._triton_precision == first._triton_precision
+
+    precision_convert._configure_triton_neurons(
+        model, PrecisionConfig(mode="fp32"), "cpu"
+    )
+    assert first._triton_precision is None
+    assert second._triton_precision is None
 
 
 def test_precision_artifacts_backward_steps_optimizer():
