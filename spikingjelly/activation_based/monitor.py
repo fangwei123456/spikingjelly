@@ -1,9 +1,9 @@
 import datetime
 import os
-import re
+import subprocess
 import threading
-import time
-from typing import Callable, Union, Optional
+from types import TracebackType
+from typing import Callable, Optional, Self, Union
 
 import torch
 from torch import nn
@@ -20,7 +20,7 @@ def _unpack_len1_tuple(x: Union[tuple, torch.Tensor]):
 
 
 class BaseMonitor:
-    def __init__(self):
+    def __init__(self) -> None:
         r"""
         **API Language** - :ref:`中文 <BaseMonitor.__init__-cn>` | :ref:`English <BaseMonitor.__init__-en>`
 
@@ -30,7 +30,8 @@ class BaseMonitor:
 
         * **中文**
 
-        监视器基类。维护钩子句柄、被监视层列表、记录缓存以及启停状态。
+        监视器基类。维护钩子句柄、被监视层列表、记录缓存以及启停状态。监视器支持
+        上下文管理器；退出上下文或调用 :meth:`close` 会永久移除钩子，但保留已有记录。
 
 
         ----
@@ -39,8 +40,10 @@ class BaseMonitor:
 
         * **English**
 
-        Base monitor class. It maintains hook handles, monitored layer list, recorded data buffers,
-        and enable/disable state.
+        Base monitor class. It maintains hook handles, monitored layer list,
+        recorded data buffers, and enable/disable state. Monitors are context
+        managers; leaving the context or calling :meth:`close` permanently
+        removes hooks while preserving existing records.
         """
         self.hooks = []
         self.monitored_layers = []
@@ -72,29 +75,65 @@ class BaseMonitor:
         self.name_records_index[name].append(len(self.records))
         self.records.append(value)
 
-    def clear_recorded_data(self):
+    def clear_recorded_data(self) -> None:
         self.records.clear()
         for v in self.name_records_index.values():
             v.clear()
 
-    def enable(self):
+    def enable(self) -> None:
         self._enable = True
 
-    def disable(self):
+    def disable(self) -> None:
         self._enable = False
 
-    def is_enable(self):
+    def is_enable(self) -> bool:
         return self._enable
 
-    def remove_hooks(self):
+    def remove_hooks(self) -> None:
         for hook in self.hooks:
             hook.remove()
         self.hooks.clear()
 
-    def __del__(self):
+    def close(self) -> None:
+        r"""
+        **API Language** - :ref:`中文 <BaseMonitor.close-cn>` | :ref:`English <BaseMonitor.close-en>`
+
+        ----
+
+        .. _BaseMonitor.close-cn:
+
+        * **中文**
+
+        停止记录并永久移除所有钩子。已有记录会被保留。该方法可重复调用；关闭后如需
+        重新监控，应创建新的监视器。
+
+        ----
+
+        .. _BaseMonitor.close-en:
+
+        * **English**
+
+        Stop recording and permanently remove all hooks. Existing records are
+        preserved. This method is idempotent; create a new monitor to resume
+        monitoring after it has been closed.
+        """
         self.disable()
-        self.clear_recorded_data()
         self.remove_hooks()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> bool:
+        self.close()
+        return False
+
+    def __del__(self):
+        self.close()
 
 
 class OutputMonitor(BaseMonitor):
@@ -114,7 +153,7 @@ class OutputMonitor(BaseMonitor):
         * **中文**
 
         对 ``net`` 中所有类型为 ``instance`` 的模块的输出使用 ``function_on_output`` 作用后，
-        记录到类型为 `list`` 的 ``self.records`` 中。可以通过 ``self.enable()`` 和 ``self.disable()``
+        记录到类型为 ``list`` 的 ``self.records`` 中。可以通过 ``self.enable()`` 和 ``self.disable()``
         来启用或停用这个监视器。可以通过 ``self.clear_recorded_data()`` 来清除已经记录的数据。
 
         阅读 :doc:`监视器教程 <../tutorials/cn/monitor>` 以获得更多信息。
@@ -151,45 +190,6 @@ class OutputMonitor(BaseMonitor):
         :param function_on_output: the function that applies on the monitored modules' outputs
         :type function_on_output: Callable
 
-        ----
-
-        * **示例代码 | Example**
-
-        .. code-block:: python
-
-            class Net(nn.Module):
-                def __init__(self):
-                    super().__init__()
-                    self.fc1 = layer.Linear(8, 4)
-                    self.sn1 = neuron.IFNode()
-                    self.fc2 = layer.Linear(4, 2)
-                    self.sn2 = neuron.IFNode()
-                    functional.set_step_mode(self, "m")
-
-                def forward(self, x_seq: torch.Tensor):
-                    x_seq = self.fc1(x_seq)
-                    x_seq = self.sn1(x_seq)
-                    x_seq = self.fc2(x_seq)
-                    x_seq = self.sn2(x_seq)
-                    return x_seq
-
-
-            net = Net()
-            for param in net.parameters():
-                param.data.abs_()
-
-            mtor = monitor.OutputMonitor(net, instance=neuron.IFNode)
-
-            with torch.no_grad():
-                y = net(torch.rand([1, 8]))
-                print(f"mtor.records={mtor.records}")
-                # mtor.records=[tensor([[0., 0., 0., 1.]]), tensor([[0., 0.]])]
-                print(f"mtor[0]={mtor[0]}")
-                # mtor[0]=tensor([[0., 0., 0., 1.]])
-                print(f"mtor.monitored_layers={mtor.monitored_layers}")
-                # mtor.monitored_layers=['sn1', 'sn2']
-                print(f"mtor['sn1']={mtor['sn1']}")
-                # mtor['sn1']=[tensor([[0., 0., 0., 1.]])]
         """
         super().__init__()
         self.function_on_output = function_on_output
@@ -223,9 +223,9 @@ class InputMonitor(BaseMonitor):
 
         * **中文**
 
-        对 ``net`` 中所有类型为 ``instance`` 的模块的输入使用 ``function_on_input`` 作用后，
-        记录到类型为 `list`` 的 ``self.records`` 中。可以通过 ``self.enable()`` 和 ``self.disable()``
-        来启用或停用这个监视器。可以通过 ``self.clear_recorded_data()`` 来清除已经记录的数据。
+        在 ``net`` 中所有类型为 ``instance`` 的模块执行前，将 ``function_on_input`` 作用于
+        模块输入，并把结果记录到 ``self.records``。默认函数保存输入引用；若模块会原地修改
+        输入且需要修改前的数值快照，应传入执行 ``clone()`` 的函数。
 
         阅读 :doc:`监视器教程 <../tutorials/cn/monitor>` 以获得更多信息。
 
@@ -244,10 +244,11 @@ class InputMonitor(BaseMonitor):
 
         * **English**
 
-        Applies ``function_on_input`` on inputs of all modules whose instances are
-        ``instance`` in ``net``, and records the data into ``self.records``, which is a
-        ``list``. Call ``self.enable()`` or ``self.disable()`` to enable or disable the
-        monitor. Call ``self.clear_recorded_data()`` to clear the recorded data.
+        Before each module whose instance is ``instance`` runs, apply
+        ``function_on_input`` to its inputs and append the result to
+        ``self.records``. The default function stores the input reference; pass
+        a function that calls ``clone()`` when an immutable pre-forward snapshot
+        is required for a module that mutates its input in place.
 
         Refer to the :doc:`Monitor Tutorial <../tutorials/en/monitor>` for more details.
 
@@ -261,58 +262,14 @@ class InputMonitor(BaseMonitor):
         :param function_on_input: the function that applies on the monitored modules' inputs
         :type function_on_input: Callable
 
-        ----
-
-        * **示例代码 | Example**
-
-        .. code-block:: python
-
-            import torch
-            import torch.nn as nn
-            from spikingjelly.activation_based import monitor, neuron, functional, layer
-
-
-            class Net(nn.Module):
-                def __init__(self):
-                    super().__init__()
-                    self.fc1 = layer.Linear(8, 4)
-                    self.sn1 = neuron.IFNode()
-                    self.fc2 = layer.Linear(4, 2)
-                    self.sn2 = neuron.IFNode()
-                    functional.set_step_mode(self, "m")
-
-                def forward(self, x_seq: torch.Tensor):
-                    x_seq = self.fc1(x_seq)
-                    x_seq = self.sn1(x_seq)
-                    x_seq = self.fc2(x_seq)
-                    x_seq = self.sn2(x_seq)
-                    return x_seq
-
-
-            net = Net()
-            for param in net.parameters():
-                param.data.abs_()
-
-            mtor = monitor.InputMonitor(net, instance=neuron.IFNode)
-
-            with torch.no_grad():
-                y = net(torch.rand([1, 8]))
-                print(f"mtor.records={mtor.records}")
-                # mtor.records=[tensor([[1.0165, 1.1934, 0.9347, 0.9539]]), tensor([[0.9115, 0.9508]])]
-                print(f"mtor[0]={mtor[0]}")
-                # mtor[0]=tensor([[1.0165, 1.1934, 0.9347, 0.9539]])
-                print(f"mtor.monitored_layers={mtor.monitored_layers}")
-                # mtor.monitored_layers=['sn1', 'sn2']
-                print(f"mtor['sn1']={mtor['sn1']}")
-                # mtor['sn1']=[tensor([[1.0165, 1.1934, 0.9347, 0.9539]])]
         """
         super().__init__()
         self.function_on_input = function_on_input
         for name, module in self._monitor_modules(net, instance):
-            self.hooks.append(module.register_forward_hook(self.create_hook(name)))
+            self.hooks.append(module.register_forward_pre_hook(self.create_hook(name)))
 
     def create_hook(self, name):
-        def hook(module, inputs, output):
+        def hook(module, inputs):
             if self.is_enable():
                 self._record(
                     name,
@@ -340,7 +297,7 @@ class AttributeMonitor(BaseMonitor):
 
         * **中文**
 
-        对 ``net`` 中所有类型为 ``instance`` 的模块 ``m`` 的成员 ``m.attribute_name`` 使用 ``function_on_attribute`` 作用后，记录到类型为 `list`` 的  ``self.records``。
+        对 ``net`` 中所有类型为 ``instance`` 的模块 ``m`` 的成员 ``m.attribute_name`` 使用 ``function_on_attribute`` 作用后，记录到类型为 ``list`` 的  ``self.records``。
         可以通过 ``self.enable()`` 和 ``self.disable()`` 来启用或停用这个监视器。
         可以通过 ``self.clear_recorded_data()`` 来清除已经记录的数据。
 
@@ -395,50 +352,6 @@ class AttributeMonitor(BaseMonitor):
             monitored module's attribute
         :type function_on_attribute: Callable
 
-        ----
-
-        * **示例代码 | Example**
-
-        .. code-block:: python
-
-            import torch
-            import torch.nn as nn
-            from spikingjelly.activation_based import monitor, neuron, functional, layer
-
-
-            class Net(nn.Module):
-                def __init__(self):
-                    super().__init__()
-                    self.fc1 = layer.Linear(8, 4)
-                    self.sn1 = neuron.IFNode()
-                    self.fc2 = layer.Linear(4, 2)
-                    self.sn2 = neuron.IFNode()
-                    functional.set_step_mode(self, "m")
-
-                def forward(self, x_seq: torch.Tensor):
-                    x_seq = self.fc1(x_seq)
-                    x_seq = self.sn1(x_seq)
-                    x_seq = self.fc2(x_seq)
-                    x_seq = self.sn2(x_seq)
-                    return x_seq
-
-
-            net = Net()
-            for param in net.parameters():
-                param.data.abs_()
-
-            mtor = monitor.AttributeMonitor("v", False, net, instance=neuron.IFNode)
-
-            with torch.no_grad():
-                y = net(torch.rand([1, 8]))
-                print(f"mtor.records={mtor.records}")
-                # mtor.records=[tensor([0.0000, 0.6854, 0.0000, 0.7968]), tensor([0.4472, 0.0000])]
-                print(f"mtor[0]={mtor[0]}")
-                # mtor[0]=tensor([0.0000, 0.6854, 0.0000, 0.7968])
-                print(f"mtor.monitored_layers={mtor.monitored_layers}")
-                # mtor.monitored_layers=['sn1', 'sn2']
-                print(f"mtor['sn1']={mtor['sn1']}")
-                # mtor['sn1']=[tensor([0.0000, 0.6854, 0.0000, 0.7968])]
         """
         super().__init__()
         self.attribute_name = attribute_name
@@ -479,7 +392,7 @@ class GradInputMonitor(BaseMonitor):
         * **中文**
 
         对 ``net`` 中所有类型为 ``instance`` 的模块的输入的梯度使用 ``function_on_grad_input``
-        作用后，记录到类型为 `list`` 的 ``self.records`` 中。
+        作用后，记录到类型为 ``list`` 的 ``self.records`` 中。
         可以通过 ``self.enable()`` 和 ``self.disable()`` 来启用或停用这个监视器。
         可以通过 ``self.clear_recorded_data()`` 来清除已经记录的数据。
 
@@ -487,7 +400,7 @@ class GradInputMonitor(BaseMonitor):
 
         .. note::
 
-            对于一个模块，输入为 :math:`X`，输出为 :math:`Y`，损失为 :math:`L`，则 ``GradOutputMonitor``
+            对于一个模块，输入为 :math:`X`，输出为 :math:`Y`，损失为 :math:`L`，则 ``GradInputMonitor``
             记录的是对输入的梯度 :math:`\frac{\partial L}{\partial X}`。
 
         :param net: 一个神经网络
@@ -530,45 +443,6 @@ class GradInputMonitor(BaseMonitor):
             monitored modules' inputs
         :type function_on_grad_input: Callable
 
-        ----
-
-        * **示例代码 | Example**
-
-        .. code-block:: python
-
-            class Net(nn.Module):
-                def __init__(self):
-                    super().__init__()
-                    self.fc1 = layer.Linear(8, 4)
-                    self.sn1 = neuron.IFNode()
-                    self.fc2 = layer.Linear(4, 2)
-                    self.sn2 = neuron.IFNode()
-                    functional.set_step_mode(self, "m")
-
-                def forward(self, x_seq: torch.Tensor):
-                    x_seq = self.fc1(x_seq)
-                    x_seq = self.sn1(x_seq)
-                    x_seq = self.fc2(x_seq)
-                    x_seq = self.sn2(x_seq)
-                    return x_seq
-
-
-            net = Net()
-            for param in net.parameters():
-                param.data.abs_()
-
-            mtor = monitor.GradInputMonitor(net, instance=neuron.IFNode)
-
-            with torch.no_grad():
-                y = net(torch.rand([1, 8]))
-                print(f"mtor.records={mtor.records}")
-                # mtor.records=[tensor([0.0000, 0.6854, 0.0000, 0.7968]), tensor([0.4472, 0.0000])]
-                print(f"mtor[0]={mtor[0]}")
-                # mtor[0]=tensor([0.0000, 0.6854, 0.0000, 0.7968])
-                print(f"mtor.monitored_layers={mtor.monitored_layers}")
-                # mtor.monitored_layers=['sn1', 'sn2']
-                print(f"mtor['sn1']={mtor['sn1']}")
-                # mtor['sn1']=[tensor([0.0000, 0.6854, 0.0000, 0.7968])]
         """
         super().__init__()
         self.function_on_grad_input = function_on_grad_input
@@ -605,7 +479,7 @@ class GradOutputMonitor(BaseMonitor):
         * **中文**
 
         对 ``net`` 中所有类型为 ``instance`` 的模块的输出的梯度使用 ``function_on_grad_output``
-        作用后，记录到类型为 `list`` 的 ``self.records`` 中。
+        作用后，记录到类型为 ``list`` 的 ``self.records`` 中。
         可以通过 ``self.enable()`` 和 ``self.disable()`` 来启用或停用这个监视器。
         可以通过 ``self.clear_recorded_data()`` 来清除已经记录的数据。
 
@@ -655,49 +529,6 @@ class GradOutputMonitor(BaseMonitor):
             monitored modules' outputs
         :type function_on_grad_output: Callable
 
-        ----
-
-        * **示例代码 | Example**
-
-        .. code-block:: python
-
-            import torch
-            import torch.nn as nn
-            from spikingjelly.activation_based import monitor, neuron, functional, layer
-
-
-            class Net(nn.Module):
-                def __init__(self):
-                    super().__init__()
-                    self.fc1 = layer.Linear(8, 4)
-                    self.sn1 = neuron.IFNode()
-                    self.fc2 = layer.Linear(4, 2)
-                    self.sn2 = neuron.IFNode()
-                    functional.set_step_mode(self, "m")
-
-                def forward(self, x_seq: torch.Tensor):
-                    x_seq = self.fc1(x_seq)
-                    x_seq = self.sn1(x_seq)
-                    x_seq = self.fc2(x_seq)
-                    x_seq = self.sn2(x_seq)
-                    return x_seq
-
-
-            net = Net()
-            for param in net.parameters():
-                param.data.abs_()
-
-            mtor = monitor.GradOutputMonitor(net, instance=neuron.IFNode)
-
-            net(torch.rand([1, 8])).sum().backward()
-            print(f"mtor.records={mtor.records}")
-            # mtor.records=[tensor([[1., 1.]]), tensor([[0.1372, 0.1081, 0.0880, 0.1089]])]
-            print(f"mtor[0]={mtor[0]}")
-            # mtor[0]=tensor([[1., 1.]])
-            print(f"mtor.monitored_layers={mtor.monitored_layers}")
-            # mtor.monitored_layers=['sn1', 'sn2']
-            print(f"mtor['sn1']={mtor['sn1']}")
-            # mtor['sn1']=[tensor([[0.1372, 0.1081, 0.0880, 0.1089]])]
         """
         super().__init__()
         self.function_on_grad_output = function_on_grad_output
@@ -721,10 +552,10 @@ class GPUMonitor(threading.Thread):
     def __init__(
         self,
         log_dir: Optional[str] = None,
-        gpu_ids: tuple = (0,),
+        gpu_ids: tuple[int, ...] = (0,),
         interval: float = 600.0,
-        start_now=True,
-    ):
+        start_now: bool = True,
+    ) -> None:
         r"""
         **API Language** - :ref:`中文 <GPUMonitor.__init__-cn>` | :ref:`English <GPUMonitor.__init__-en>`
 
@@ -756,6 +587,8 @@ class GPUMonitor(threading.Thread):
             后才开始记录数据
         :type start_now: bool
 
+        :raises ValueError: 当 ``gpu_ids`` 为空或 ``interval`` 不为正数时抛出
+
         ----
 
         .. _GPUMonitor.__init__-en:
@@ -785,77 +618,123 @@ class GPUMonitor(threading.Thread):
             it will start after the user call ``start()`` manually
         :type start_now: bool
 
-        ----
+        :raises ValueError: If ``gpu_ids`` is empty or ``interval`` is not positive
 
-        * **示例代码 | Example**
-
-        .. code-block:: python
-
-            import time
-
-            gm = GPUMonitor(interval=1)
-            time.sleep(2)  # make the main thread sleep
-            gm.stop()
-
-            # The outputs are:
-
-            # 2022-04-28 10:52:25
-            # utilization.gpu [%], memory.used [MiB]
-            # 0 %, 376 MiB
         """
         super().__init__()
+        if not gpu_ids:
+            raise ValueError("gpu_ids must not be empty.")
+        if interval <= 0:
+            raise ValueError("interval must be positive.")
+
+        self.log_dir = log_dir
         self.gpu_ids = gpu_ids
         self.interval = interval
-        self.stopped = False
-        self.cmds = "nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv"
-        self.cmds += " -i "
-        id_str = []
-        for gpu_id in self.gpu_ids:
-            id_str.append(str(gpu_id))
-        self.cmds += ",".join(id_str)
+        self._stop_event = threading.Event()
+        self.command = [
+            "nvidia-smi",
+            "--query-gpu=index,utilization.gpu,memory.used",
+            "--format=csv,noheader,nounits",
+            "-i",
+            ",".join(map(str, gpu_ids)),
+        ]
         self.step = 0
-
-        if log_dir is None:
-            self.writer = None
-        else:
-            self.writer = SummaryWriter(os.path.join(log_dir, "gpu_monitor"))
+        self.writer = None
 
         if start_now:
             self.start()
 
-    def stop(self):
-        self.stopped = True
+    def stop(self) -> None:
+        r"""
+        **API Language** - :ref:`中文 <GPUMonitor.stop-cn>` | :ref:`English <GPUMonitor.stop-en>`
 
-    def run(self):
-        while not self.stopped:
-            with os.popen(self.cmds) as fp:
-                if self.writer is not None:
-                    outputs = fp.read()
-                    outputs = outputs.split("\n")[1:-1]
-                    # skip the first row (header) and the last row ("\n")
-                    for i in range(len(outputs)):
-                        utilization_memory = re.findall(r"\d+", outputs[i])
-                        utilization = int(utilization_memory[0])
-                        memory_used = int(utilization_memory[1])
-                        self.writer.add_scalar(
-                            f"utilization_{self.gpu_ids[i]}", utilization, self.step
+        ----
+
+        .. _GPUMonitor.stop-cn:
+
+        * **中文**
+
+        请求监视线程停止，并唤醒正在等待下一次采样的线程。调用方可随后调用
+        :meth:`threading.Thread.join` 等待线程结束。
+
+        ----
+
+        .. _GPUMonitor.stop-en:
+
+        * **English**
+
+        Request the monitor thread to stop and wake it while it is waiting for
+        the next sample. Call :meth:`threading.Thread.join` afterwards to wait
+        for termination.
+        """
+        self._stop_event.set()
+
+    def run(self) -> None:
+        if self._stop_event.is_set():
+            return
+
+        try:
+            if self.log_dir is not None:
+                self.writer = SummaryWriter(os.path.join(self.log_dir, "gpu_monitor"))
+
+            while not self._stop_event.is_set():
+                try:
+                    completed = subprocess.run(
+                        self.command,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    logger.error("GPU monitor stopped: {}", error)
+                    return
+
+                if completed.returncode:
+                    logger.error(
+                        "GPU monitor stopped: {}",
+                        completed.stderr.strip()
+                        or f"nvidia-smi exited with code {completed.returncode}",
+                    )
+                    return
+
+                output = completed.stdout.strip()
+                if not output:
+                    logger.error("GPU monitor stopped: nvidia-smi returned no data")
+                    return
+
+                try:
+                    samples = []
+                    for line in output.splitlines():
+                        index, utilization, memory_used = (
+                            value.strip() for value in line.split(",")
                         )
-                        self.writer.add_scalar(
-                            f"memory_used_{self.gpu_ids[i]}", memory_used, self.step
-                        )
-                else:
+                        samples.append((index, int(utilization), int(memory_used)))
+                except ValueError:
+                    logger.error(
+                        "GPU monitor stopped: malformed nvidia-smi output: {}",
+                        output,
+                    )
+                    return
+
+                if self.writer is None:
                     logger.info(
                         "GPU monitor sample at {}:\n{}",
                         datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        fp.read(),
+                        output,
                     )
-                    """
-                    2022-04-20 18:14:26
-                    utilization.gpu [%], memory.used [MiB]
-                    4 %, 1816 MiB
-                    0 %, 1840 MiB
-                    0 %, 1840 MiB
-                    0 %, 1720 MiB
-                    """
-            time.sleep(self.interval)
-            self.step += 1
+                else:
+                    for index, utilization, memory_used in samples:
+                        self.writer.add_scalar(
+                            f"utilization_{index}", utilization, self.step
+                        )
+                        self.writer.add_scalar(
+                            f"memory_used_{index}", memory_used, self.step
+                        )
+
+                self.step += 1
+                if self._stop_event.wait(self.interval):
+                    return
+        finally:
+            if self.writer is not None:
+                self.writer.close()

@@ -39,13 +39,13 @@ English version: :doc:`../en/monitor`
 
 .. code-block:: python
 
-    spike_seq_monitor = monitor.OutputMonitor(net, neuron.IFNode)
     T = 4
     N = 1
     x_seq = torch.rand([T, N, 8])
 
-    with torch.no_grad():
-        net(x_seq)
+    with monitor.OutputMonitor(net, neuron.IFNode) as spike_seq_monitor:
+        with torch.no_grad():
+            net(x_seq)
 
 要记录的数据，会根据生成顺序，保存在 ``.records`` 的 ``list`` 中：
 
@@ -149,18 +149,16 @@ English version: :doc:`../en/monitor`
     spike_seq_monitor.records=[]
     spike_seq_monitor['1']=[]
 
-所有的 ``monitor`` 在析构时都会自动删除已经注册的钩子，但python的内存回收机制并不保证在手动调用 ``del`` 时一定会进行析构。因此删除一个监视器，并不能保证钩子也立刻被删除：
+退出上述上下文后，钩子已经被移除，但 ``records`` 仍可读取。没有使用 ``with``
+创建监视器时，应在不再需要监视器后显式调用 ``close()``：
 
 .. code-block:: python
 
-    del spike_seq_monitor
-    # 钩子可能仍然在起作用
+    spike_seq_monitor.close()
 
-若想立刻删除钩子，应该通过以下方式：
-
-.. code-block:: python
-
-    spike_seq_monitor.remove_hooks()
+``disable()`` 仅暂停记录并保留钩子，以便通过 ``enable()`` 恢复；``close()`` 会
+永久移除钩子。删除监视器变量不能替代 ``close()``，因为仍存活模块上的钩子可能
+继续引用监视器。
 
 
 :class:`OutputMonitor <spikingjelly.activation_based.monitor.OutputMonitor>` 还支持在记录数据时就对数据进行简单的处理，只需要\
@@ -194,7 +192,7 @@ English version: :doc:`../en/monitor`
         net(x_seq)
         print(f'after call fr_monitor.enable(), fr_monitor.records=\n{fr_monitor.records}')
         functional.reset_net(net)
-        del fr_monitor
+        fr_monitor.close()
 
 输出为：
 
@@ -228,7 +226,7 @@ English version: :doc:`../en/monitor`
         net(x_seq)
         print(f'v_seq_monitor.records=\n{v_seq_monitor.records}')
         functional.reset_net(net)
-        del v_seq_monitor
+        v_seq_monitor.close()
 
 输出为：
 
@@ -253,6 +251,10 @@ English version: :doc:`../en/monitor`
 -------------------------------------------
 设置输入监视器的方法，和设置输出监视器的如出一辙：
 
+``function_on_input`` 会在被监控模块执行前运行。默认函数保存输入对象本身，因此
+原地修改输入的模块仍会改变该引用。若需要保留修改前的数值，应传入
+``lambda x: x.clone()`` 等创建快照的函数。
+
 .. code-block:: python
 
     input_monitor = monitor.InputMonitor(net, neuron.IFNode)
@@ -260,7 +262,7 @@ English version: :doc:`../en/monitor`
         net(x_seq)
         print(f'input_monitor.records=\n{input_monitor.records}')
         functional.reset_net(net)
-        del input_monitor
+        input_monitor.close()
 
 输出为：
 
@@ -292,7 +294,7 @@ English version: :doc:`../en/monitor`
     net(x_seq).sum().backward()
     print(f'spike_seq_grad_monitor.records=\n{spike_seq_grad_monitor.records}')
     functional.reset_net(net)
-    del spike_seq_grad_monitor
+    spike_seq_grad_monitor.close()
 
 输出为：
 
@@ -354,7 +356,9 @@ English version: :doc:`../en/monitor`
         for param in net.parameters():
             param.grad.zero_()
 
-        input_grad_monitor.records.clear()
+        input_grad_monitor.clear_recorded_data()
+
+    input_grad_monitor.close()
 
 
 输出为：
@@ -377,9 +381,34 @@ English version: :doc:`../en/monitor`
     [tensor(4.3944), tensor(2.4396), tensor(0.8996), tensor(0.4376), tensor(0.0640), tensor(0.0122), tensor(0.0053), tensor(0.0016), tensor(0.0013), tensor(0.0005)]
 
 
+GPU 利用率采样
+-------------------------------------------
+:class:`spikingjelly.activation_based.monitor.GPUMonitor` 通过 ``nvidia-smi``
+定期采样整张 GPU 的利用率和显存占用。结果会包含同一 GPU 上的其他进程，不能替代
+:mod:`spikingjelly.activation_based.profiler` 中的模型级分析器。使用后必须停止并等待线程退出：
+
+.. code-block:: python
+
+    gpu_monitor = monitor.GPUMonitor(interval=10)
+    try:
+        train()
+    finally:
+        gpu_monitor.stop()
+        gpu_monitor.join()
+
 降低内存占用
 -------------------------------------------
 如果我们需要记录大量数据，当被记录的数据是脉冲时，可以通过一些方法来降低内存占用。
+
+启用梯度时，默认的恒等记录函数可能保留前向计算图。若记录不需要参与梯度计算，
+应在记录时分离张量：
+
+.. code-block:: python
+
+    spike_seq_monitor = monitor.OutputMonitor(
+        net, neuron.IFNode, function_on_output=torch.Tensor.detach
+    )
+
 为了能够进行浮点计算，尽管脉冲只含有0/1，但它们仍然被存储为浮点形式。因此，脉冲tensor的数据类型仍然为float32，或float16（如果使用混合精度训练）。
 
 将float32转换为bool类型，可以降低内存占用。但由于C++中的bool类型实际上仍然是8比特，这种方式只能把内存降低为原来的1/4：

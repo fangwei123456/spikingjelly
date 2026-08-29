@@ -837,9 +837,14 @@ class STDPLearner(base.MemoryModule):
         :return: The accumulated weight increment when ``on_grad=False``; otherwise ``None``
         :rtype: Optional[torch.Tensor]
         :raises NotImplementedError: Raised when the current ``step_mode`` / synapse-type combination is unsupported
+        :raises RuntimeError: Raised when the input and output monitors contain different numbers of records
         :raises ValueError: Raised when ``self.step_mode`` is neither ``'s'`` nor ``'m'``
         """
         length = len(self.in_spike_monitor.records)
+        if length != len(self.out_spike_monitor.records):
+            raise RuntimeError("Input and output monitor record counts differ.")
+        if length == 0:
+            return None
         delta_w = None
 
         if self.step_mode == "s":
@@ -859,9 +864,9 @@ class STDPLearner(base.MemoryModule):
         else:
             raise ValueError(self.step_mode)
 
-        for _ in range(length):
-            in_spike = self.in_spike_monitor.records.pop(0)  # [batch_size, N_in]
-            out_spike = self.out_spike_monitor.records.pop(0)  # [batch_size, N_out]
+        for i in range(length):
+            in_spike = self.in_spike_monitor.records[i]  # [batch_size, N_in]
+            out_spike = self.out_spike_monitor.records[i]  # [batch_size, N_out]
 
             self.trace_pre, self.trace_post, dw = stdp_f(
                 self.synapse,
@@ -881,7 +886,9 @@ class STDPLearner(base.MemoryModule):
 
         if on_grad:
             _accumulate_weight_gradient(self.synapse, delta_w)
-        else:
+        self.in_spike_monitor.clear_recorded_data()
+        self.out_spike_monitor.clear_recorded_data()
+        if not on_grad:
             return delta_w
 
 
@@ -1099,6 +1106,7 @@ class MSTDPLearner(base.MemoryModule):
         :return: The accumulated weight increment when ``on_grad=False``; otherwise ``None``
         :rtype: Optional[torch.Tensor]
         :raises NotImplementedError: Only some ``step_mode`` / synapse-type combinations are currently supported
+        :raises RuntimeError: Raised when the input and output monitors contain different numbers of records
         :raises ValueError: Raised when ``self.step_mode`` is invalid
         """
         # detach the reward so a graph-connected reward (e.g. produced by a
@@ -1108,6 +1116,10 @@ class MSTDPLearner(base.MemoryModule):
             reward = reward.detach()
 
         length = len(self.in_spike_monitor.records)
+        if length != len(self.out_spike_monitor.records):
+            raise RuntimeError("Input and output monitor record counts differ.")
+        if length == 0:
+            return None
         delta_w = None
 
         if self.step_mode == "s":
@@ -1122,7 +1134,7 @@ class MSTDPLearner(base.MemoryModule):
         else:
             raise ValueError(self.step_mode)
 
-        for _ in range(length):
+        for i in range(length):
             if self.eligibility is None:
                 self.eligibility = torch.zeros(
                     self.batch_size,
@@ -1136,8 +1148,8 @@ class MSTDPLearner(base.MemoryModule):
 
             delta_w = dw if (delta_w is None) else (delta_w + dw)
 
-            in_spike = self.in_spike_monitor.records.pop(0)  # [batch_size, N_in]
-            out_spike = self.out_spike_monitor.records.pop(0)  # [batch_size, N_out]
+            in_spike = self.in_spike_monitor.records[i]  # [batch_size, N_in]
+            out_spike = self.out_spike_monitor.records[i]  # [batch_size, N_out]
 
             self.trace_pre, self.trace_post, self.eligibility = stdp_f(
                 self.synapse,
@@ -1153,7 +1165,9 @@ class MSTDPLearner(base.MemoryModule):
 
         if on_grad:
             _accumulate_weight_gradient(self.synapse, delta_w)
-        else:
+        self.in_spike_monitor.clear_recorded_data()
+        self.out_spike_monitor.clear_recorded_data()
+        if not on_grad:
             return delta_w
 
 
@@ -1373,6 +1387,7 @@ class MSTDPETLearner(base.MemoryModule):
         :return: The accumulated weight increment when ``on_grad=False``; otherwise ``None``
         :rtype: Optional[torch.Tensor]
         :raises NotImplementedError: Only some ``step_mode`` / synapse-type combinations are currently supported
+        :raises RuntimeError: Raised when the input and output monitors contain different numbers of records
         :raises ValueError: Raised when ``self.step_mode`` is invalid
         """
         # detach the reward so a graph-connected reward (e.g. produced by a
@@ -1382,6 +1397,10 @@ class MSTDPETLearner(base.MemoryModule):
             reward = reward.detach()
 
         length = len(self.in_spike_monitor.records)
+        if length != len(self.out_spike_monitor.records):
+            raise RuntimeError("Input and output monitor record counts differ.")
+        if length == 0:
+            return None
         delta_w = None
 
         if self.step_mode == "s":
@@ -1396,7 +1415,7 @@ class MSTDPETLearner(base.MemoryModule):
         else:
             raise ValueError(self.step_mode)
 
-        for _ in range(length):
+        for i in range(length):
             if self.eligibility is None:
                 self.eligibility = torch.zeros_like(self.synapse.weight)
             if self.trace_e is None:
@@ -1413,8 +1432,8 @@ class MSTDPETLearner(base.MemoryModule):
 
             delta_w = dw if (delta_w is None) else (delta_w + dw)
 
-            in_spike = self.in_spike_monitor.records.pop(0)
-            out_spike = self.out_spike_monitor.records.pop(0)
+            in_spike = self.in_spike_monitor.records[i]
+            out_spike = self.out_spike_monitor.records[i]
 
             self.trace_pre, self.trace_post, self.eligibility = stdp_f(
                 self.synapse,
@@ -1430,5 +1449,7 @@ class MSTDPETLearner(base.MemoryModule):
 
         if on_grad:
             _accumulate_weight_gradient(self.synapse, delta_w)
-        else:
+        self.in_spike_monitor.clear_recorded_data()
+        self.out_spike_monitor.clear_recorded_data()
+        if not on_grad:
             return delta_w

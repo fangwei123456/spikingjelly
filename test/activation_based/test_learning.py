@@ -112,6 +112,39 @@ def test_stdp_learner_matches_functional_update():
     )
     assert torch.allclose(delta_w, expected)
     assert delta_w.grad_fn is None
+    assert learner.in_spike_monitor.records == []
+    assert learner.out_spike_monitor.records == []
+    assert learner.in_spike_monitor[""] == []
+    assert learner.out_spike_monitor[""] == []
+
+
+@pytest.mark.parametrize(
+    ("learner_cls", "kwargs", "reward"),
+    (
+        (learning.STDPLearner, {}, None),
+        (learning.MSTDPLearner, {"batch_size": 3}, torch.zeros(3)),
+        (learning.MSTDPETLearner, {"tau_trace": 2.0}, torch.tensor(0.0)),
+    ),
+)
+def test_learners_validate_monitor_record_counts(learner_cls, kwargs, reward):
+    fc = layer.Linear(8, 5, bias=False)
+    sn = neuron.IFNode()
+    learner = learner_cls(
+        step_mode="s",
+        synapse=fc,
+        sn=sn,
+        tau_pre=2.0,
+        tau_post=2.0,
+        **kwargs,
+    )
+    step_args = () if reward is None else (reward,)
+
+    assert learner.step(*step_args) is None
+    assert fc.weight.grad is None
+
+    fc(torch.ones(3, 8))
+    with pytest.raises(RuntimeError, match="record counts differ"):
+        learner.step(*step_args)
 
 
 def test_stdp_learner_frees_tensors_across_runs():
@@ -258,6 +291,10 @@ def test_mstdp_learners_return_detached_delta_w():
         delta_w = learner.step(reward, on_grad=False)
         assert delta_w.grad_fn is None
         assert not delta_w.requires_grad
+        assert learner.in_spike_monitor.records == []
+        assert learner.out_spike_monitor.records == []
+        assert learner.in_spike_monitor[""] == []
+        assert learner.out_spike_monitor[""] == []
 
         functional.reset_net(sn)
         learner.reset()
