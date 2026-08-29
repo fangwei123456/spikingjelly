@@ -28,22 +28,19 @@ from spikingjelly.activation_based.triton_kernel.fp8_capability import (
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.integrate_and_fire import (
     multistep_if,
-    multistep_if_mp,
-    multistep_if_mp_with_plan,
+    _multistep_if_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.lif import (
     multistep_lif,
-    multistep_lif_mp,
-    multistep_lif_mp_with_plan,
+    _multistep_lif_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.plif import (
     multistep_plif,
-    multistep_plif_mp,
-    multistep_plif_mp_with_plan,
+    _multistep_plif_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.utils import (
-    TritonNeuronExecutionPlan,
-    prepare_triton_neuron_execution_plan,
+    _TritonNeuronExecutionPlan,
+    _prepare_triton_neuron_execution_plan,
 )
 from spikingjelly.activation_based.triton_kernel.triton_utils import (
     normalize_triton_compute_dtype_name,
@@ -154,8 +151,8 @@ def _prepare_mp_plan(
     compute_dtype: str,
     backward_compute_dtype: str,
     save_intermediates: bool,
-) -> TritonNeuronExecutionPlan:
-    return prepare_triton_neuron_execution_plan(
+) -> _TritonNeuronExecutionPlan:
+    return _prepare_triton_neuron_execution_plan(
         neuron_type=neuron_type,
         device=device,
         storage_dtype=storage_dtype,
@@ -172,10 +169,10 @@ def _call_mp_with_plan(
     neuron_type: str,
     v_init: torch.Tensor,
     r_tau_tensor: torch.Tensor | None,
-    plan: TritonNeuronExecutionPlan,
+    plan: _TritonNeuronExecutionPlan,
 ) -> tuple[torch.Tensor, ...]:
     if neuron_type == "if":
-        return multistep_if_mp_with_plan(
+        return _multistep_if_mp_with_plan(
             x,
             v_init,
             plan,
@@ -183,7 +180,7 @@ def _call_mp_with_plan(
             v_reset=_V_RESET,
         )
     if neuron_type == "lif":
-        return multistep_lif_mp_with_plan(
+        return _multistep_lif_mp_with_plan(
             x,
             v_init,
             plan,
@@ -195,7 +192,7 @@ def _call_mp_with_plan(
     if neuron_type == "plif":
         if r_tau_tensor is None:
             raise ValueError("PLIF requires r_tau_tensor.")
-        return multistep_plif_mp_with_plan(
+        return _multistep_plif_mp_with_plan(
             x,
             v_init,
             r_tau_tensor,
@@ -203,62 +200,6 @@ def _call_mp_with_plan(
             decay_input=True,
             v_threshold=_V_THRESHOLD,
             v_reset=_V_RESET,
-        )
-    raise ValueError(f"Unsupported neuron type: {neuron_type}.")
-
-
-def _call_mp_safe(
-    x: torch.Tensor,
-    *,
-    neuron_type: str,
-    v_init: torch.Tensor,
-    r_tau_tensor: torch.Tensor | None,
-    storage_dtype: torch.dtype,
-    compute_dtype: str,
-    backward_compute_dtype: str,
-    save_intermediates: bool,
-) -> tuple[torch.Tensor, ...]:
-    if neuron_type == "if":
-        return multistep_if_mp(
-            x,
-            v_init,
-            v_threshold=_V_THRESHOLD,
-            v_reset=_V_RESET,
-            storage_dtype=storage_dtype,
-            compute_dtype=compute_dtype,
-            backward_compute_dtype=backward_compute_dtype,
-            spike_dtype=torch.float32,
-            save_intermediates=save_intermediates,
-        )
-    if neuron_type == "lif":
-        return multistep_lif_mp(
-            x,
-            v_init,
-            decay_input=True,
-            tau=1.0 / _R_TAU,
-            v_threshold=_V_THRESHOLD,
-            v_reset=_V_RESET,
-            storage_dtype=storage_dtype,
-            compute_dtype=compute_dtype,
-            backward_compute_dtype=backward_compute_dtype,
-            spike_dtype=torch.float32,
-            save_intermediates=save_intermediates,
-        )
-    if neuron_type == "plif":
-        if r_tau_tensor is None:
-            raise ValueError("PLIF requires r_tau_tensor.")
-        return multistep_plif_mp(
-            x,
-            v_init,
-            r_tau_tensor,
-            decay_input=True,
-            v_threshold=_V_THRESHOLD,
-            v_reset=_V_RESET,
-            storage_dtype=storage_dtype,
-            compute_dtype=compute_dtype,
-            backward_compute_dtype=backward_compute_dtype,
-            spike_dtype=torch.float32,
-            save_intermediates=save_intermediates,
         )
     raise ValueError(f"Unsupported neuron type: {neuron_type}.")
 
@@ -314,10 +255,7 @@ def _benchmark_inference(
     repeats: int,
     warmup: int,
     variant_kind: str,
-    plan: TritonNeuronExecutionPlan | None,
-    storage_dtype: torch.dtype | None,
-    compute_dtype: str | None,
-    backward_compute_dtype: str,
+    plan: _TritonNeuronExecutionPlan | None,
 ) -> dict[str, float]:
     v_init = torch.zeros_like(x[0])
     r_tau_tensor = (
@@ -335,28 +273,16 @@ def _benchmark_inference(
                     v_init=v_init,
                     r_tau_tensor=r_tau_tensor,
                 )
+            elif plan is not None:
+                _call_mp_with_plan(
+                    x,
+                    neuron_type=neuron_type,
+                    v_init=v_init,
+                    r_tau_tensor=r_tau_tensor,
+                    plan=plan,
+                )
             else:
-                if plan is not None:
-                    _call_mp_with_plan(
-                        x,
-                        neuron_type=neuron_type,
-                        v_init=v_init,
-                        r_tau_tensor=r_tau_tensor,
-                        plan=plan,
-                    )
-                else:
-                    if storage_dtype is None or compute_dtype is None:
-                        raise ValueError("Mixed precision safe path requires dtypes.")
-                    _call_mp_safe(
-                        x,
-                        neuron_type=neuron_type,
-                        v_init=v_init,
-                        r_tau_tensor=r_tau_tensor,
-                        storage_dtype=storage_dtype,
-                        compute_dtype=compute_dtype,
-                        backward_compute_dtype=backward_compute_dtype,
-                        save_intermediates=False,
-                    )
+                raise ValueError("Mixed precision benchmark requires a plan.")
 
     return _measure(device=device, repeats=repeats, warmup=warmup, fn=fn)
 
@@ -369,10 +295,7 @@ def _benchmark_training(
     repeats: int,
     warmup: int,
     variant_kind: str,
-    plan: TritonNeuronExecutionPlan | None,
-    storage_dtype: torch.dtype | None,
-    compute_dtype: str | None,
-    backward_compute_dtype: str,
+    plan: _TritonNeuronExecutionPlan | None,
 ) -> dict[str, float]:
     x_req = x.detach().clone().requires_grad_()
     v_init = torch.zeros_like(x[0]).requires_grad_()
@@ -394,28 +317,16 @@ def _benchmark_training(
                 v_init=v_init,
                 r_tau_tensor=r_tau_tensor,
             )
+        elif plan is not None:
+            outputs = _call_mp_with_plan(
+                x_req,
+                neuron_type=neuron_type,
+                v_init=v_init,
+                r_tau_tensor=r_tau_tensor,
+                plan=plan,
+            )
         else:
-            if plan is not None:
-                outputs = _call_mp_with_plan(
-                    x_req,
-                    neuron_type=neuron_type,
-                    v_init=v_init,
-                    r_tau_tensor=r_tau_tensor,
-                    plan=plan,
-                )
-            else:
-                if storage_dtype is None or compute_dtype is None:
-                    raise ValueError("Mixed precision safe path requires dtypes.")
-                outputs = _call_mp_safe(
-                    x_req,
-                    neuron_type=neuron_type,
-                    v_init=v_init,
-                    r_tau_tensor=r_tau_tensor,
-                    storage_dtype=storage_dtype,
-                    compute_dtype=compute_dtype,
-                    backward_compute_dtype=backward_compute_dtype,
-                    save_intermediates=True,
-                )
+            raise ValueError("Mixed precision benchmark requires a plan.")
         _loss(outputs).backward()
 
     return _measure(device=device, repeats=repeats, warmup=warmup, fn=fn)
@@ -458,7 +369,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "throughput_melems_s",
         "peak_allocated_mb",
         "peak_reserved_mb",
-        "plan_prepare_ms",
+        "preparation_ms",
         "failure_reason",
     ]
     with path.open("w", newline="", encoding="utf-8") as f:
@@ -539,7 +450,7 @@ def _write_markdown(
             "",
             f"Required speedup: `{efficiency['min_speedup']:.3f}x`",
             "",
-            "| T | N | neuron | process | best FP8 plan | compute | speedup | "
+            "| T | N | neuron | process | best FP8 variant | compute | speedup | "
             "memory ratio | passed |",
             "|---:|---:|---|---|---|---|---:|---:|---|",
         ]
@@ -604,14 +515,9 @@ def main() -> None:
         "--require-efficiency",
         action="store_true",
         help=(
-            "Exit non-zero unless the fastest successful FP8-storage prepared "
-            "plan for every case beats stable FP32 by --min-speedup."
+            "Exit non-zero unless the fastest successful FP8-storage variant "
+            "for every case beats stable FP32 by --min-speedup."
         ),
-    )
-    parser.add_argument(
-        "--include-safe-wrapper",
-        action="store_true",
-        help="Also benchmark mixed precision safe wrappers that prepare a plan per call.",
     )
     args = parser.parse_args()
 
@@ -665,7 +571,7 @@ def main() -> None:
         "warmup": args.warmup,
         "repeats": args.repeats,
         "min_speedup": args.min_speedup,
-        "mp_plan_reuse": True,
+        "cached_execution_plan": True,
         "variant_order": "rotated_by_size_neuron_and_process",
         "inference_save_intermediates": False,
         "training_save_intermediates": True,
@@ -693,7 +599,7 @@ def main() -> None:
                     "uses_plan": False,
                     "storage_dtype_obj": None,
                     "input_dtype_obj": torch.float32,
-                    "plan_prepare_ms": None,
+                    "preparation_ms": None,
                 }
             ]
             for (
@@ -711,14 +617,14 @@ def main() -> None:
                         "uses_plan": False,
                         "storage_dtype_obj": None,
                         "input_dtype_obj": storage_dtype,
-                        "plan_prepare_ms": None,
+                        "preparation_ms": None,
                     }
                 )
             for storage_name, storage_dtype in dtype_variants:
                 for compute_dtype in compute_dtypes:
                     variants.append(
                         {
-                            "variant": f"mp_plan_{storage_name}_{compute_dtype}",
+                            "variant": f"mp_{storage_name}_{compute_dtype}",
                             "variant_kind": "mixed_precision",
                             "storage_dtype": storage_name,
                             "compute_dtype": compute_dtype,
@@ -726,23 +632,9 @@ def main() -> None:
                             "uses_plan": True,
                             "storage_dtype_obj": storage_dtype,
                             "input_dtype_obj": torch.float32,
-                            "plan_prepare_ms": None,
+                            "preparation_ms": None,
                         }
                     )
-                    if args.include_safe_wrapper:
-                        variants.append(
-                            {
-                                "variant": f"mp_safe_{storage_name}_{compute_dtype}",
-                                "variant_kind": "mixed_precision",
-                                "storage_dtype": storage_name,
-                                "compute_dtype": compute_dtype,
-                                "plan": None,
-                                "uses_plan": False,
-                                "storage_dtype_obj": storage_dtype,
-                                "input_dtype_obj": torch.float32,
-                                "plan_prepare_ms": None,
-                            }
-                        )
 
             for process_index, process in enumerate(
                 ("inference_forward", "training_forward_backward")
@@ -766,7 +658,7 @@ def main() -> None:
                         "compute_dtype": variant["compute_dtype"],
                         "backward_compute_dtype": backward_compute_dtype,
                         "process": process,
-                        "plan_prepare_ms": variant.get("plan_prepare_ms"),
+                        "preparation_ms": variant.get("preparation_ms"),
                         "save_intermediates": (process == "training_forward_backward"),
                         "loss_outputs": "s_seq,v_seq",
                     }
@@ -786,7 +678,7 @@ def main() -> None:
                                 ),
                             )
                             _cuda_sync(device)
-                            row["plan_prepare_ms"] = (
+                            row["preparation_ms"] = (
                                 time.perf_counter() - start
                             ) * 1000.0
                         except Exception as e:
@@ -822,9 +714,6 @@ def main() -> None:
                                 warmup=args.warmup,
                                 variant_kind=variant["variant_kind"],
                                 plan=plan,
-                                storage_dtype=variant["storage_dtype_obj"],
-                                compute_dtype=variant["compute_dtype"],
-                                backward_compute_dtype=backward_compute_dtype,
                             )
                         else:
                             metrics = _benchmark_training(
@@ -835,9 +724,6 @@ def main() -> None:
                                 warmup=args.warmup,
                                 variant_kind=variant["variant_kind"],
                                 plan=plan,
-                                storage_dtype=variant["storage_dtype_obj"],
-                                compute_dtype=variant["compute_dtype"],
-                                backward_compute_dtype=backward_compute_dtype,
                             )
                         row.update(metrics)
                         row["success"] = True

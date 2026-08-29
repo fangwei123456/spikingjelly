@@ -602,9 +602,6 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         args.device,
         PrecisionConfig(
             mode=args.precision,
-            strictness="strict",
-            report=True,
-            device=args.device,
         ),
     )
     config = Qwen2SNNConfig(

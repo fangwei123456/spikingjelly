@@ -3,6 +3,7 @@ from typing import Optional
 import torch
 
 from .. import functional, surrogate
+from ..functional.neuron import _lif_multi_step_triton_mp
 from .base_node import BaseNode, NonSpikingBaseNode, SimpleBaseNode
 
 
@@ -310,7 +311,12 @@ class LIFNode(BaseNode):
                     "Triton backend only supports spiking surrogate functions. "
                     "Use backend='torch' for non-spiking surrogate functions."
                 )
-            spike_seq, v, _ = functional.lif_multi_step_triton(
+            function = (
+                _lif_multi_step_triton_mp
+                if self._triton_precision is not None
+                else functional.lif_multi_step_triton
+            )
+            spike_seq, v, _ = function(
                 x_seq,
                 v,
                 self.tau,
@@ -320,6 +326,7 @@ class LIFNode(BaseNode):
                 self.surrogate_function,
                 self.detach_reset,
                 False,
+                *(() if self._triton_precision is None else (self._triton_precision,)),
             )
         elif self.backend == "torch":
             return super().multi_step_functional_forward(inputs, states, **kwargs)
@@ -356,7 +363,12 @@ class LIFNode(BaseNode):
                     "Triton backend only supports spiking surrogate functions. "
                     "Use backend='torch' for non-spiking surrogate functions."
                 )
-            spike_seq, v, v_seq = functional.lif_multi_step_triton(
+            function = (
+                _lif_multi_step_triton_mp
+                if self._triton_precision is not None
+                else functional.lif_multi_step_triton
+            )
+            spike_seq, v, v_seq = function(
                 x_seq,
                 v,
                 self.tau,
@@ -366,6 +378,7 @@ class LIFNode(BaseNode):
                 self.surrogate_function,
                 self.detach_reset,
                 True,
+                *(() if self._triton_precision is None else (self._triton_precision,)),
             )
         else:
             raise ValueError(self.backend)

@@ -86,21 +86,21 @@ class TransformerEngineDotProductAttentionAdapter(nn.Module):
         scale: float | None = None,
     ) -> torch.Tensor:
         if attn_mask is not None:
-            raise ValueError("fp8-te SDPA adapter v1 only supports attn_mask=None.")
+            raise ValueError("fp8 SDPA adapter v1 only supports attn_mask=None.")
         if is_causal:
-            raise ValueError("fp8-te SDPA adapter v1 does not support causal masks.")
+            raise ValueError("fp8 SDPA adapter v1 does not support causal masks.")
         if self.training:
             if not math.isclose(dropout_p, self.attention_dropout):
                 raise ValueError(
-                    "fp8-te SDPA adapter v1 requires fixed adapter dropout "
+                    "fp8 SDPA adapter v1 requires fixed adapter dropout "
                     "during training."
                 )
         elif not math.isclose(dropout_p, 0.0):
             raise ValueError(
-                "fp8-te SDPA adapter v1 requires dropout_p=0.0 during evaluation."
+                "fp8 SDPA adapter v1 requires dropout_p=0.0 during evaluation."
             )
         if scale is not None:
-            raise ValueError("fp8-te SDPA adapter v1 does not support custom scale.")
+            raise ValueError("fp8 SDPA adapter v1 does not support custom scale.")
         if query.ndim != 4 or key.ndim != 4 or value.ndim != 4:
             raise ValueError(
                 "expected query/key/value with shape [B, H, S, D], but got "

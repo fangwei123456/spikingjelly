@@ -107,9 +107,6 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         args.device,
         PrecisionConfig(
             mode="bf16",
-            strictness="strict",
-            report=True,
-            device=args.device,
         ),
     )
     with torch.inference_mode(), precision.autocast_context():

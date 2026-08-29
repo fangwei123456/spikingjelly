@@ -5,6 +5,7 @@ from typing import Optional, Tuple, Union
 import torch
 
 from .. import base, functional, surrogate
+from ..functional.neuron import _if_multi_step_triton_mp
 from .base_node import BaseNode, NonSpikingBaseNode, SimpleBaseNode
 
 try:
@@ -291,7 +292,12 @@ class IFNode(BaseNode):
                     "Triton backend only supports spiking surrogate functions. "
                     "Use backend='torch' for non-spiking surrogate functions."
                 )
-            spike_seq, v, _ = functional.if_multi_step_triton(
+            function = (
+                _if_multi_step_triton_mp
+                if self._triton_precision is not None
+                else functional.if_multi_step_triton
+            )
+            spike_seq, v, _ = function(
                 x_seq,
                 v,
                 self.v_threshold,
@@ -299,6 +305,7 @@ class IFNode(BaseNode):
                 self.surrogate_function,
                 self.detach_reset,
                 False,
+                *(() if self._triton_precision is None else (self._triton_precision,)),
             )
         elif self.backend == "torch":
             return super().multi_step_functional_forward(inputs, states, **kwargs)
@@ -333,7 +340,12 @@ class IFNode(BaseNode):
                     "Triton backend only supports spiking surrogate functions. "
                     "Use backend='torch' for non-spiking surrogate functions."
                 )
-            spike_seq, v, v_seq = functional.if_multi_step_triton(
+            function = (
+                _if_multi_step_triton_mp
+                if self._triton_precision is not None
+                else functional.if_multi_step_triton
+            )
+            spike_seq, v, v_seq = function(
                 x_seq,
                 v,
                 self.v_threshold,
@@ -341,6 +353,7 @@ class IFNode(BaseNode):
                 self.surrogate_function,
                 self.detach_reset,
                 True,
+                *(() if self._triton_precision is None else (self._triton_precision,)),
             )
         else:
             raise ValueError(self.backend)

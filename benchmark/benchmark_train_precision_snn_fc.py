@@ -110,7 +110,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Benchmark SpikingJelly deep FC SNN training and inference under fp32, "
-            "fp16, bf16, fp8-torchao, and fp8-te."
+            "fp16, bf16, and fp8."
         )
     )
     parser.add_argument(
@@ -145,8 +145,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--precisions",
         nargs="+",
-        default=["fp32", "fp16", "bf16", "fp8-torchao", "fp8-te"],
-        choices=("fp32", "fp16", "bf16", "fp8-torchao", "fp8-te"),
+        default=["fp32", "fp16", "bf16", "fp8"],
+        choices=("fp32", "fp16", "bf16", "fp8"),
         help="Precision modes to benchmark.",
     )
     parser.add_argument(
@@ -213,7 +213,7 @@ def validate_precision_shape_constraints(args: argparse.Namespace) -> None:
         raise ValueError(
             f"hidden_dim={args.hidden_dim} must be divisible by num_heads={args.num_heads}."
         )
-    fp8_precisions = {"fp8-torchao", "fp8-te"} & set(args.precisions)
+    fp8_precisions = {"fp8"} & set(args.precisions)
     if not fp8_precisions:
         return
     invalid_dims = [
@@ -346,7 +346,7 @@ def benchmark_one_precision(
     artifacts = prepare_model_for_precision(
         model,
         device,
-        PrecisionConfig(mode=precision, strictness="strict", device=str(device)),
+        PrecisionConfig(mode=precision),
     )
     model = artifacts.model
     optimizer = torch.optim.SGD(
@@ -431,7 +431,7 @@ def benchmark_one_precision(
         / inference_wall_elapsed,
         inference_peak_allocated_mb=inference_peak_allocated_mb,
         inference_peak_reserved_mb=inference_peak_reserved_mb,
-        conversion_report=artifacts.policy.conversion_report(),
+        conversion_report=artifacts.describe()["conversion_report"],
     )
 
 

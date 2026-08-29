@@ -78,6 +78,30 @@ Module: `spikingjelly.activation_based.neuron.flexsn`.
   HOP, removing the experimental native scan/while-loop alternatives and
   their environment flags.
 
+#### Precision Migration
+
+Module: `spikingjelly.activation_based.precision`.
+
+- Replaced `fp8-te` with `fp8`; no compatibility alias or silent precision
+  fallback is retained.
+- Removed the TorchAO FP8 backend and consolidated the Transformer Engine
+  dependency as `spikingjelly[fp8]`.
+- Reduced the public interface to `PrecisionConfig`, `PrecisionArtifacts`, and
+  `prepare_model_for_precision()`. Removed public policy, conversion-helper, report
+  writer, and Triton execution-plan interfaces.
+- Added `triton_storage`, `triton_fwd`, and `triton_bwd` to `PrecisionConfig` for
+  training-time configuration of existing multi-step Triton IF, LIF, and PLIF
+  nodes. Sensitive surrogate operations continue to compute locally in FP32.
+- Transformer Engine conversion leaves Linear and pointwise Conv1d layers whose
+  dimensions violate FP8 alignment in high precision and reports them as
+  unsupported instead of failing during forward.
+- `distributed.vision` now stores `PrecisionConfig` and supports experimental
+  model FP8 and Triton mixed precision with DDP.
+- Vision checkpoint resume normalizes the former scalar `fp32`, `fp16`, and
+  `bf16` recipe values to `PrecisionConfig`; removed FP8 mode names are rejected.
+- MCore language-model precision remains configured by the native MCore
+  transformer and optimizer configuration.
+
 #### Memory Optimization Migration
 
 Module: `spikingjelly.activation_based.memopt`.

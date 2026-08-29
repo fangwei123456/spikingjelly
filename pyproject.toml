@@ -56,10 +56,7 @@ sglang = [
     "sglang==0.5.17; sys_platform == 'linux'",
 ]
 sglang-export = ["safetensors"]
-fp8-torchao = [
-    "torchao>=0.13,<0.18",
-]
-fp8-te = [
+fp8 = [
     "transformer-engine[pytorch]>=2.16,<3",
 ]
 qwen = [

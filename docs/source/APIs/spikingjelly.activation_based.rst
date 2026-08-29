@@ -21,6 +21,7 @@ spikingjelly.activation\_based package
    memopt <spikingjelly.activation_based.memopt>
    monitor <spikingjelly.activation_based.monitor>
    op_counter <spikingjelly.activation_based.op_counter>
+   precision <spikingjelly.activation_based.precision>
    learning <spikingjelly.activation_based.learning>
    quantize <spikingjelly.activation_based.quantize>
 

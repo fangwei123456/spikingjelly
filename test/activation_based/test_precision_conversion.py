@@ -5,28 +5,29 @@ import types
 import pytest
 import torch
 
-try:
-    import torchao  # noqa: F401
-
-    HAS_TORCHAO = True
-except ImportError:
-    HAS_TORCHAO = False
-
 from spikingjelly.activation_based import layer, neuron
 from spikingjelly.activation_based.layer.attention import SpikingSelfAttention
 from spikingjelly.activation_based.model import Spikformer
 from spikingjelly.activation_based.precision import (
-    Float8LinearStepModule,
-    Float8PointwiseConv1dStepModule,
-    Float8TELayerNormLinearModule,
-    Float8TELayerNormMLPModule,
     PrecisionConfig,
-    TransformerEngineDotProductAttentionAdapter,
-    analyze_convertible_modules,
-    make_linear_from_pointwise_conv1d,
     prepare_model_for_precision,
 )
-from spikingjelly.activation_based.precision.convert import convert_model_for_precision
+from spikingjelly.activation_based.precision.convert import (
+    analyze_convertible_modules,
+    convert_model_for_precision,
+)
+from spikingjelly.activation_based.precision.float8_attention import (
+    TransformerEngineDotProductAttentionAdapter,
+)
+from spikingjelly.activation_based.precision.float8_base import Float8LinearStepModule
+from spikingjelly.activation_based.precision.float8_conv import (
+    Float8PointwiseConv1dStepModule,
+    make_linear_from_pointwise_conv1d,
+)
+from spikingjelly.activation_based.precision.float8_te import (
+    Float8TELayerNormLinearModule,
+    Float8TELayerNormMLPModule,
+)
 
 
 def _install_fake_te(monkeypatch):
@@ -362,57 +363,12 @@ def test_conversion_report_does_not_mark_layer_norm_convertible_by_default():
     assert "1" in report["high_precision_modules"]
 
 
-@pytest.mark.skipif(
-    not HAS_TORCHAO
-    or not torch.cuda.is_available()
-    or torch.cuda.get_device_capability(0) < (8, 9),
-    reason="Static fp8-torchao replacement test requires CUDA compute capability >= 8.9.",
-)
-def test_prepare_model_for_precision_replaces_spikformer_head_with_float8_wrapper():
-    model = Spikformer(
-        T=2,
-        in_channels=3,
-        img_size_h=64,
-        img_size_w=64,
-        num_classes=7,
-        embed_dims=64,
-        num_heads=4,
-        depths=2,
-        backend="torch",
-    ).cuda()
-    artifacts = prepare_model_for_precision(
-        model,
-        "cuda:0",
-        PrecisionConfig(mode="fp8-torchao", strictness="strict", device="cuda:0"),
-    )
-    assert isinstance(artifacts.model.head, Float8LinearStepModule)
-    report = artifacts.policy.conversion_report()
-    assert "head" in report["converted_modules"]
-
-
 def test_capability_report_splits_can_convert_and_can_execute():
     model = torch.nn.Sequential(layer.Linear(4, 8), torch.nn.ReLU(), layer.Linear(8, 4))
     artifacts = prepare_model_for_precision(model, "cpu", PrecisionConfig(mode="fp32"))
-    report = artifacts.policy.capability_report()
+    report = artifacts.describe()["capability_report"]
     assert report["can_convert"] is True
     assert report["can_execute"] is True
-
-
-@pytest.mark.skipif(
-    not HAS_TORCHAO
-    or not torch.cuda.is_available()
-    or torch.cuda.get_device_capability(0) < (8, 9),
-    reason="Root Linear fp8-torchao conversion requires torchao and CUDA compute capability >= 8.9.",
-)
-def test_prepare_model_for_precision_replaces_root_linear_module():
-    model = layer.Linear(16, 32).cuda()
-    artifacts = prepare_model_for_precision(
-        model,
-        "cuda:0",
-        PrecisionConfig(mode="fp8-torchao", strictness="strict", device="cuda:0"),
-    )
-    assert isinstance(artifacts.model, Float8LinearStepModule)
-    assert "<root>" in artifacts.policy.conversion_report()["converted_modules"]
 
 
 def test_convert_model_for_precision_preserves_shared_linear_module_identity():
@@ -429,138 +385,7 @@ def test_convert_model_for_precision_preserves_shared_linear_module_identity():
     assert converted[0] is converted[1]
 
 
-@pytest.mark.skipif(not HAS_TORCHAO, reason="torchao not installed")
-def test_convert_model_for_precision_preserves_shared_linear_module_identity_fp8(
-    monkeypatch,
-):
-    class DummyFloat8Linear(torch.nn.Module):
-        def __init__(self, base):
-            super().__init__()
-            self.base = base
-
-        @classmethod
-        def from_float(cls, base, config):
-            return cls(base)
-
-        def forward(self, x):
-            return self.base(x)
-
-    monkeypatch.setattr(
-        "torchao.float8.float8_linear.Float8Linear",
-        DummyFloat8Linear,
-        raising=False,
-    )
-
-    class SharedLinearModule(torch.nn.Module):
-        def __init__(self, shared):
-            super().__init__()
-            self.first = shared
-            self.second = shared
-
-    from spikingjelly.activation_based.precision.float8_torchao import (
-        Float8TorchAOPolicy,
-    )
-
-    shared = torch.nn.Linear(8, 8)
-    model = SharedLinearModule(shared)
-    policy = Float8TorchAOPolicy()
-    policy.float8_linear_config = object()
-    converted, report = convert_model_for_precision(model, policy)
-    assert converted.first is converted.second
-    assert len(report.converted_modules) == 2
-
-
-@pytest.mark.skipif(not HAS_TORCHAO, reason="torchao not installed")
-def test_convert_model_for_precision_skips_revisiting_shared_non_linear_modules(
-    monkeypatch,
-):
-    class DummyFloat8Linear(torch.nn.Module):
-        def __init__(self, base):
-            super().__init__()
-            self.base = base
-
-        @classmethod
-        def from_float(cls, base, config):
-            return cls(base)
-
-        def forward(self, x):
-            return self.base(x)
-
-    monkeypatch.setattr(
-        "torchao.float8.float8_linear.Float8Linear",
-        DummyFloat8Linear,
-        raising=False,
-    )
-
-    class SharedBlock(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.linear = torch.nn.Linear(8, 8)
-
-    shared = SharedBlock()
-
-    class Parent(torch.nn.Module):
-        def __init__(self, block):
-            super().__init__()
-            self.first = block
-            self.second = block
-
-    from spikingjelly.activation_based.precision.float8_torchao import (
-        Float8TorchAOPolicy,
-    )
-
-    model = Parent(shared)
-    policy = Float8TorchAOPolicy()
-    policy.float8_linear_config = object()
-    converted, report = convert_model_for_precision(model, policy)
-    assert converted.first is converted.second
-    assert converted.first.linear is converted.second.linear
-    assert report.converted_modules == ["first.linear"]
-
-
-@pytest.mark.skipif(not HAS_TORCHAO, reason="torchao not installed")
-def test_convert_model_for_precision_replaces_pointwise_conv1d_fp8(monkeypatch):
-    class DummyFloat8Linear(torch.nn.Module):
-        def __init__(self, base):
-            super().__init__()
-            self.weight = torch.nn.Parameter(base.weight.detach().clone())
-            self.bias = (
-                torch.nn.Parameter(base.bias.detach().clone())
-                if base.bias is not None
-                else None
-            )
-
-        @classmethod
-        def from_float(cls, base, config):
-            return cls(base)
-
-        def forward(self, x):
-            return torch.nn.functional.linear(x, self.weight, self.bias)
-
-    monkeypatch.setattr(
-        "torchao.float8.float8_linear.Float8Linear",
-        DummyFloat8Linear,
-        raising=False,
-    )
-
-    from spikingjelly.activation_based.precision.float8_torchao import (
-        Float8TorchAOPolicy,
-    )
-
-    model = torch.nn.Sequential(
-        torch.nn.Conv1d(8, 16, kernel_size=1, bias=False),
-        torch.nn.Conv1d(16, 16, kernel_size=3, padding=1, bias=False),
-    )
-    policy = Float8TorchAOPolicy()
-    policy.float8_linear_config = object()
-    converted, report = convert_model_for_precision(model, policy)
-    assert isinstance(converted[0], Float8PointwiseConv1dStepModule)
-    assert isinstance(converted[1], torch.nn.Conv1d)
-    assert report.converted_modules == ["0"]
-    assert "1" in report.unsupported_modules
-
-
-def test_convert_model_for_precision_replaces_nested_linear_fp8_te(monkeypatch):
+def test_convert_model_for_precision_replaces_nested_linear_fp8(monkeypatch):
     _install_fake_te(monkeypatch)
 
     from spikingjelly.activation_based.precision.float8_te import (
@@ -568,11 +393,11 @@ def test_convert_model_for_precision_replaces_nested_linear_fp8_te(monkeypatch):
     )
 
     model = torch.nn.Sequential(
-        torch.nn.Linear(8, 16),
+        torch.nn.Linear(16, 16),
         torch.nn.ReLU(),
-        torch.nn.Linear(16, 4),
+        torch.nn.Linear(16, 8),
     )
-    x = torch.randn(3, 8)
+    x = torch.randn(3, 16)
     expected = model(x)
     policy = Float8TransformerEnginePolicy()
     converted, report = convert_model_for_precision(model, policy)
@@ -582,6 +407,26 @@ def test_convert_model_for_precision_replaces_nested_linear_fp8_te(monkeypatch):
     assert report.converted_modules == ["0", "2"]
 
 
+def test_fp8_te_keeps_unaligned_linear_in_high_precision(monkeypatch):
+    _install_fake_te(monkeypatch)
+
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    model = torch.nn.Sequential(
+        torch.nn.Linear(64, 64),
+        torch.nn.Linear(64, 10),
+    )
+    converted, report = convert_model_for_precision(
+        model, Float8TransformerEnginePolicy()
+    )
+    assert isinstance(converted[0], Float8LinearStepModule)
+    assert isinstance(converted[1], torch.nn.Linear)
+    assert report.unsupported_modules == ["1"]
+    assert report.converted_modules == ["0"]
+
+
 def test_convert_model_for_precision_replaces_root_linear_fp8_te(monkeypatch):
     _install_fake_te(monkeypatch)
 
@@ -589,8 +434,8 @@ def test_convert_model_for_precision_replaces_root_linear_fp8_te(monkeypatch):
         Float8TransformerEnginePolicy,
     )
 
-    model = torch.nn.Linear(8, 16)
-    x = torch.randn(3, 8)
+    model = torch.nn.Linear(16, 16)
+    x = torch.randn(3, 16)
     expected = model(x)
     policy = Float8TransformerEnginePolicy()
     converted, report = convert_model_for_precision(model, policy)
@@ -608,8 +453,8 @@ def test_convert_model_for_precision_preserves_layer_linear_step_mode_fp8_te(
         Float8TransformerEnginePolicy,
     )
 
-    model = layer.Linear(8, 16, step_mode="m")
-    x = torch.randn(2, 3, 8)
+    model = layer.Linear(16, 16, step_mode="m")
+    x = torch.randn(2, 3, 16)
     expected = model(x)
     policy = Float8TransformerEnginePolicy()
     converted, report = convert_model_for_precision(model, policy)
@@ -627,10 +472,10 @@ def test_convert_model_for_precision_replaces_pointwise_conv1d_fp8_te(monkeypatc
     )
 
     model = torch.nn.Sequential(
-        torch.nn.Conv1d(8, 16, kernel_size=1, bias=False),
+        torch.nn.Conv1d(16, 16, kernel_size=1, bias=False),
         torch.nn.Conv1d(16, 16, kernel_size=3, padding=1, bias=False),
     )
-    x = torch.randn(3, 8, 5)
+    x = torch.randn(3, 16, 5)
     expected = model(x)
     policy = Float8TransformerEnginePolicy()
     converted, report = convert_model_for_precision(model, policy)
@@ -649,8 +494,8 @@ def test_convert_model_for_precision_reports_only_leaf_skips_fp8_te(monkeypatch)
     )
 
     model = torch.nn.Sequential(
-        torch.nn.Sequential(torch.nn.ReLU(), torch.nn.Linear(8, 4)),
-        torch.nn.Sequential(torch.nn.BatchNorm1d(4)),
+        torch.nn.Sequential(torch.nn.ReLU(), torch.nn.Linear(16, 8)),
+        torch.nn.Sequential(torch.nn.BatchNorm1d(8)),
     )
     policy = Float8TransformerEnginePolicy()
     _, report = convert_model_for_precision(model, policy)
@@ -670,8 +515,8 @@ def test_convert_model_for_precision_replaces_root_pointwise_conv1d_fp8_te(
         Float8TransformerEnginePolicy,
     )
 
-    model = layer.Conv1d(8, 16, kernel_size=1, bias=False, step_mode="m")
-    x = torch.randn(2, 3, 8, 5)
+    model = layer.Conv1d(16, 16, kernel_size=1, bias=False, step_mode="m")
+    x = torch.randn(2, 3, 16, 5)
     expected = model(x)
     policy = Float8TransformerEnginePolicy()
     converted, report = convert_model_for_precision(model, policy)
@@ -730,7 +575,7 @@ def test_convert_model_for_precision_replaces_spikformer_projections_fp8_te(
         assert isinstance(fc2_children[0], Float8PointwiseConv1dStepModule)
         assert isinstance(block.mlp.fc2[1], torch.nn.BatchNorm1d)
         assert isinstance(block.mlp.neuron2, neuron.LIFNode)
-    assert isinstance(converted.head, Float8LinearStepModule)
+    assert isinstance(converted.head, layer.Linear)
     assert isinstance(converted.patch_embed.stages[0].conv_bn.block[0], torch.nn.Conv2d)
     assert isinstance(
         converted.patch_embed.stages[0].conv_bn.block[1], torch.nn.BatchNorm2d
@@ -746,8 +591,8 @@ def test_convert_model_for_precision_replaces_spikformer_projections_fp8_te(
         "blocks.1.attn.proj_conv_bn.0",
         "blocks.1.mlp.fc1.0",
         "blocks.1.mlp.fc2.0",
-        "head",
     ]
+    assert "head" in report.unsupported_modules
 
 
 def test_convert_model_for_precision_replaces_layer_norm_fp8_te(monkeypatch):
@@ -758,11 +603,11 @@ def test_convert_model_for_precision_replaces_layer_norm_fp8_te(monkeypatch):
     )
 
     model = torch.nn.Sequential(
-        torch.nn.LayerNorm(8),
+        torch.nn.LayerNorm(16),
         torch.nn.ReLU(),
-        torch.nn.Linear(8, 4),
+        torch.nn.Linear(16, 8),
     )
-    x = torch.randn(3, 5, 8)
+    x = torch.randn(3, 5, 16)
     expected = model(x)
     policy = Float8TransformerEnginePolicy()
     converted, report = convert_model_for_precision(model, policy)
@@ -856,9 +701,9 @@ def test_convert_model_for_precision_fuses_layer_norm_linear_fp8_te(monkeypatch)
     )
 
     model = torch.nn.Sequential(
-        torch.nn.Sequential(torch.nn.LayerNorm(8), layer.Linear(8, 4, step_mode="m"))
+        torch.nn.Sequential(torch.nn.LayerNorm(16), layer.Linear(16, 8, step_mode="m"))
     )
-    x = torch.randn(3, 5, 8)
+    x = torch.randn(3, 5, 16)
     expected = model(x)
     policy = Float8TransformerEnginePolicy()
     converted, report = convert_model_for_precision(model, policy)
@@ -892,7 +737,7 @@ def test_convert_model_for_precision_preserves_shared_fused_pattern_fp8_te(
         Float8TransformerEnginePolicy,
     )
 
-    shared = torch.nn.Sequential(torch.nn.LayerNorm(8), torch.nn.Linear(8, 4))
+    shared = torch.nn.Sequential(torch.nn.LayerNorm(16), torch.nn.Linear(16, 8))
     model = torch.nn.ModuleList([shared, shared])
     policy = Float8TransformerEnginePolicy()
     converted, report = convert_model_for_precision(model, policy)
@@ -913,13 +758,13 @@ def test_convert_model_for_precision_fuses_layer_norm_mlp_fp8_te(monkeypatch):
 
     model = torch.nn.Sequential(
         torch.nn.Sequential(
-            torch.nn.LayerNorm(8),
-            layer.Linear(8, 16, step_mode="m"),
+            torch.nn.LayerNorm(16),
+            layer.Linear(16, 32, step_mode="m"),
             torch.nn.GELU(),
-            torch.nn.Linear(16, 8),
+            torch.nn.Linear(32, 16),
         )
     )
-    x = torch.randn(3, 5, 8)
+    x = torch.randn(3, 5, 16)
     expected = model(x)
     policy = Float8TransformerEnginePolicy()
     converted, report = convert_model_for_precision(model, policy)
@@ -956,19 +801,19 @@ def test_convert_model_for_precision_skips_incompatible_layer_norm_mlp_fp8_te(
 
     model = torch.nn.Sequential(
         torch.nn.Sequential(
-            torch.nn.LayerNorm(8),
-            torch.nn.Linear(8, 16),
+            torch.nn.LayerNorm(16),
+            torch.nn.Linear(16, 32),
             torch.nn.GELU(),
-            torch.nn.Linear(16, 4),
+            torch.nn.Linear(32, 8),
         )
     )
-    x = torch.randn(3, 5, 8)
+    x = torch.randn(3, 5, 16)
     expected = model(x)
     policy = Float8TransformerEnginePolicy()
     converted, report = convert_model_for_precision(model, policy)
     torch.testing.assert_close(converted(x), expected)
     assert not isinstance(converted[0], Float8TELayerNormMLPModule)
-    assert converted(x).shape[-1] == 4
+    assert converted(x).shape[-1] == 8
     assert report.converted_patterns == []
 
 
@@ -983,10 +828,10 @@ def test_convert_model_for_precision_skips_approximate_gelu_layer_norm_mlp_fp8_t
 
     model = torch.nn.Sequential(
         torch.nn.Sequential(
-            torch.nn.LayerNorm(8),
-            torch.nn.Linear(8, 16),
+            torch.nn.LayerNorm(16),
+            torch.nn.Linear(16, 32),
             torch.nn.GELU(approximate="tanh"),
-            torch.nn.Linear(16, 8),
+            torch.nn.Linear(32, 16),
         )
     )
     policy = Float8TransformerEnginePolicy()
@@ -1014,10 +859,10 @@ def test_convert_model_for_precision_rejects_layer_norm_mlp_without_gelu_fp8_te(
 
     model = torch.nn.Sequential(
         torch.nn.Sequential(
-            torch.nn.LayerNorm(8),
-            torch.nn.Linear(8, 16),
+            torch.nn.LayerNorm(16),
+            torch.nn.Linear(16, 32),
             torch.nn.GELU(),
-            torch.nn.Linear(16, 8),
+            torch.nn.Linear(32, 16),
         )
     )
     policy = Float8TransformerEnginePolicy()
@@ -1117,7 +962,7 @@ def test_float8_te_linear_step_module_load_state_dict_from_parent(monkeypatch):
         Float8TransformerEnginePolicy,
     )
 
-    model = torch.nn.Sequential(torch.nn.Linear(8, 16))
+    model = torch.nn.Sequential(torch.nn.Linear(16, 16))
     policy = Float8TransformerEnginePolicy()
     converted, _ = convert_model_for_precision(model, policy)
     state_dict = converted.state_dict()

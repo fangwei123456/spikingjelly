@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import lru_cache
 import torch
 
 from ..triton_utils import (
@@ -16,7 +17,7 @@ _SUPPORTED_PLAN_NEURON_TYPES = frozenset({"if", "lif", "plif"})
 
 
 @dataclass(frozen=True)
-class TritonNeuronExecutionPlan:
+class _TritonNeuronExecutionPlan:
     neuron_type: str
     device: torch.device
     storage_dtype: torch.dtype
@@ -96,7 +97,7 @@ def _check_fp8_capability(
         )
 
 
-def prepare_triton_neuron_execution_plan(
+def _prepare_triton_neuron_execution_plan(
     *,
     neuron_type: str,
     device,
@@ -105,7 +106,29 @@ def prepare_triton_neuron_execution_plan(
     backward_compute_dtype="fp32",
     spike_dtype: torch.dtype = torch.float32,
     save_intermediates: bool = True,
-) -> TritonNeuronExecutionPlan:
+) -> _TritonNeuronExecutionPlan:
+    return _prepare_triton_neuron_execution_plan_cached(
+        neuron_type=neuron_type,
+        device=normalize_cuda_device(device),
+        storage_dtype=storage_dtype,
+        forward_compute_dtype=forward_compute_dtype,
+        backward_compute_dtype=backward_compute_dtype,
+        spike_dtype=spike_dtype,
+        save_intermediates=save_intermediates,
+    )
+
+
+@lru_cache(maxsize=None)
+def _prepare_triton_neuron_execution_plan_cached(
+    *,
+    neuron_type: str,
+    device: torch.device,
+    storage_dtype,
+    forward_compute_dtype="fp32",
+    backward_compute_dtype="fp32",
+    spike_dtype: torch.dtype = torch.float32,
+    save_intermediates: bool = True,
+) -> _TritonNeuronExecutionPlan:
     if neuron_type not in _SUPPORTED_PLAN_NEURON_TYPES:
         raise ValueError(
             "neuron_type must be one of 'if', 'lif', or 'plif', "
@@ -123,7 +146,6 @@ def prepare_triton_neuron_execution_plan(
     _require_fp8_storage_dtype(
         backward_compute_dtype_name, storage_dtype, "backward_compute_dtype"
     )
-    device = normalize_cuda_device(device)
     if device.type != "cuda":
         raise RuntimeError(
             "Triton neuron execution plan is unavailable: requires a CUDA device."
@@ -153,7 +175,7 @@ def prepare_triton_neuron_execution_plan(
         neuron_type.upper(),
         "backward",
     )
-    return TritonNeuronExecutionPlan(
+    return _TritonNeuronExecutionPlan(
         neuron_type=neuron_type,
         device=device,
         storage_dtype=storage_dtype,
@@ -196,7 +218,7 @@ def _check_mp_cuda_inputs(
 def _check_plan_inputs(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
-    plan: TritonNeuronExecutionPlan,
+    plan: _TritonNeuronExecutionPlan,
     neuron_name: str,
 ) -> None:
     _check_mp_cuda_inputs(x_seq, v_init, neuron_name)

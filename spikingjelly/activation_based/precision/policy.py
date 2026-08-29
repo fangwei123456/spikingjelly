@@ -32,7 +32,8 @@ class PrecisionPolicy:
         """Subclasses override to transform modules (e.g. float8 substitution)."""
         return model
 
-    def autocast_context(self):
+    def autocast_context(self, group=None):
+        del group
         return nullcontext()
 
     def create_grad_scaler(self):
@@ -65,11 +66,12 @@ class _AutocastPolicy(PrecisionPolicy):
         super().__init__()
         self.device_type = device_type
 
-    def autocast_context(self):
+    def autocast_context(self, group=None):
+        del group
         return torch.amp.autocast(self.device_type, dtype=self.amp_dtype)
 
     def create_grad_scaler(self):
-        if self.device_type != "cuda":
+        if self.device_type != "cuda" or self.name != "fp16":
             return None
         try:
             return torch.amp.GradScaler("cuda")
@@ -82,7 +84,7 @@ class _AutocastPolicy(PrecisionPolicy):
             "autocast": True,
             "device_type": self.device_type,
             "dtype": str(self.amp_dtype),
-            "grad_scaler": self.device_type == "cuda",
+            "grad_scaler": self.device_type == "cuda" and self.name == "fp16",
         }
 
 

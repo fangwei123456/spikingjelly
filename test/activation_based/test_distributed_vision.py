@@ -34,6 +34,7 @@ from spikingjelly.activation_based.model.spikformer import (
     spikformer_cifar10,
     spikformer_s,
 )
+from spikingjelly.activation_based.precision import PrecisionConfig
 
 
 def test_vision_training_config_json_round_trip():
@@ -760,7 +761,8 @@ def test_sew_resnet34_single_step_matches_multi_step():
     torch.testing.assert_close(single_step, multi_step)
 
 
-def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch):
+@pytest.mark.parametrize("legacy_precision", [False, True])
+def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch, legacy_precision):
     from torch.distributed.checkpoint import state_dict as dcp_state_dict
 
     model = nn.Linear(2, 2)
@@ -809,6 +811,11 @@ def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch):
         pp_rank=0,
         dp_rank=0,
     )
+    if legacy_precision:
+        recipe_path = checkpoint / "config.json"
+        recipe = json.loads(recipe_path.read_text(encoding="utf-8"))
+        recipe["precision"] = "bf16"
+        recipe_path.write_text(json.dumps(recipe), encoding="utf-8")
     progress = training._load_checkpoint(
         checkpoint,
         config=config,
@@ -823,6 +830,37 @@ def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch):
     assert progress == (2, 1, 3)
     assert torch.equal(restored["torch"], cpu_rng)
     assert torch.equal(restored["cuda"], cuda_rng)
+
+
+def test_legacy_checkpoint_precision_does_not_inherit_new_triton_fields(tmp_path):
+    config = vision.TrainingConfig(
+        model=SEWResNet34Config(),
+        dataset_builder="package.datasets.build",
+        precision=PrecisionConfig(
+            mode="bf16",
+            triton_storage="bf16",
+            triton_fwd="bf16",
+        ),
+    )
+    checkpoint = tmp_path / "checkpoint"
+    checkpoint.mkdir()
+    recipe = training._recipe(config)
+    recipe["precision"] = "bf16"
+    (checkpoint / "config.json").write_text(json.dumps(recipe), encoding="utf-8")
+    model = nn.Linear(2, 2)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+
+    with pytest.raises(ValueError, match="configuration does not match"):
+        training._load_checkpoint(
+            checkpoint,
+            config=config,
+            model=model,
+            optimizer=optimizer,
+            scheduler=None,
+            scaler=torch.amp.GradScaler("cuda", enabled=False),
+            tp_rank=0,
+            pp_rank=0,
+        )
 
 
 def test_vision_checkpoint_broadcasts_rank_zero_creation_failure(tmp_path, monkeypatch):
@@ -968,7 +1006,7 @@ def test_fsdp2_keeps_batch_norm_in_full_precision(monkeypatch):
         model=SEWResNet34Config(),
         dataset_builder="package.datasets.build",
         data_parallel="fsdp2",
-        precision="bf16",
+        precision=PrecisionConfig(mode="bf16"),
     )
 
     execution._wrap_data_parallel(
@@ -991,3 +1029,28 @@ def test_fsdp2_keeps_batch_norm_in_full_precision(monkeypatch):
     assert batch_norm_policy.output_dtype is torch.bfloat16
     assert calls[-1][0] is model
     assert calls[-1][1]["mp_policy"].param_dtype is torch.bfloat16
+
+
+def test_training_config_round_trips_precision_config():
+    config = vision.TrainingConfig(
+        model=SEWResNet34Config(),
+        dataset_builder="package.datasets.build",
+        precision=PrecisionConfig(
+            mode="fp8",
+            fp8_recipe="delayed",
+            triton_storage="float8_e4m3fn",
+            triton_fwd="bf16",
+            triton_bwd="fp16",
+        ),
+    )
+    assert vision.TrainingConfig.from_dict(config.as_dict()) == config
+
+
+def test_training_config_rejects_experimental_precision_outside_ddp():
+    with pytest.raises(ValueError, match="requires DDP"):
+        vision.TrainingConfig(
+            model=SEWResNet34Config(),
+            dataset_builder="package.datasets.build",
+            data_parallel="fsdp2",
+            precision=PrecisionConfig(mode="fp8"),
+        )

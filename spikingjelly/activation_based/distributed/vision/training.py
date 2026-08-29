@@ -7,6 +7,7 @@ import os
 import random
 import time
 from collections.abc import Callable
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Optional
 
@@ -19,6 +20,11 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
 
 from spikingjelly.activation_based import functional
+from spikingjelly.activation_based.precision import (
+    PrecisionArtifacts,
+    PrecisionConfig,
+    prepare_model_for_precision,
+)
 from .config import TrainingConfig
 from .execution import (
     _classification_logits,
@@ -175,7 +181,18 @@ def _load_checkpoint(
     from torch.distributed.checkpoint.state_dict import get_state_dict, set_state_dict
 
     saved_recipe = json.loads((path / "config.json").read_text(encoding="utf-8"))
-    if saved_recipe != _recipe(config):
+    current_recipe = _recipe(config)
+    saved_precision = saved_recipe.get("precision")
+    if isinstance(saved_precision, str):
+        if saved_precision not in {"fp32", "fp16", "bf16"}:
+            raise ValueError(
+                f"Checkpoint uses unsupported precision mode {saved_precision!r}."
+            )
+        saved_recipe["precision"] = {
+            "_target_": current_recipe["precision"]["_target_"],
+            **asdict(PrecisionConfig(mode=saved_precision)),
+        }
+    if saved_recipe != current_recipe:
         raise ValueError("Checkpoint configuration does not match this training run.")
 
     options = _state_dict_options()
@@ -200,13 +217,24 @@ def _load_checkpoint(
         checkpoint_id=path / f"pp_{pp_rank:04d}_tp_{tp_rank:04d}",
         no_dist=True,
     )
-    set_state_dict(
-        model,
-        optimizer,
-        model_state_dict=state["model"],
-        optim_state_dict=state["optimizer"],
-        options=options,
-    )
+    if isinstance(model, torch.nn.parallel.DistributedDataParallel):
+        from torch.distributed.checkpoint.state_dict import set_optimizer_state_dict
+
+        model.module.load_state_dict(state["model"], strict=True)
+        set_optimizer_state_dict(
+            model,
+            optimizer,
+            optim_state_dict=state["optimizer"],
+            options=options,
+        )
+    else:
+        set_state_dict(
+            model,
+            optimizer,
+            model_state_dict=state["model"],
+            optim_state_dict=state["optimizer"],
+            options=options,
+        )
     if scheduler is not None:
         scheduler.load_state_dict(state["scheduler"])
     scaler.load_state_dict(state["scaler"])
@@ -297,7 +325,7 @@ def _evaluate(
     step_mode: str,
     input_layout: str,
     device: torch.device,
-    precision: str,
+    precision: PrecisionArtifacts,
     loss_function: Callable[..., torch.Tensor],
     dp_group: Optional[ProcessGroup],
     dp_size: int,
@@ -307,16 +335,11 @@ def _evaluate(
     if sync_buffers:
         _broadcast_data_parallel_buffers(model, dp_group)
     totals = torch.zeros(3, device=device, dtype=torch.float64)
-    dtype = torch.bfloat16 if precision == "bf16" else torch.float16
     with torch.inference_mode():
         for images, targets in loader:
             images = images.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
-            with torch.autocast(
-                device_type="cuda",
-                dtype=dtype,
-                enabled=precision != "fp32",
-            ):
+            with precision.autocast_context(group=dp_group):
                 logits = _forward_classification(
                     model, images, time_steps, step_mode, input_layout
                 )
@@ -338,7 +361,7 @@ def _evaluate_pipeline(
     time_steps: int,
     input_layout: str,
     device: torch.device,
-    precision: str,
+    precision: PrecisionArtifacts,
     loss_function: Callable[..., torch.Tensor],
     dp_group: Optional[ProcessGroup],
     dp_size: int,
@@ -348,7 +371,6 @@ def _evaluate_pipeline(
     tp_size: int,
 ) -> tuple[float, float]:
     totals = torch.zeros(3, device=device, dtype=torch.float64)
-    dtype = torch.bfloat16 if precision == "bf16" else torch.float16
     with torch.inference_mode():
         for images, targets in loader:
             images = images.to(device, non_blocking=True)
@@ -356,11 +378,7 @@ def _evaluate_pipeline(
             sequence = _classification_sequence(
                 images, time_steps, input_layout, batch_first=True
             )
-            with torch.autocast(
-                device_type="cuda",
-                dtype=dtype,
-                enabled=precision != "fp32",
-            ):
+            with precision.autocast_context(group=dp_group):
                 if pp_rank == 0:
                     output = schedule.step(sequence)
                 else:
@@ -560,6 +578,8 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
             memopt_checkpoint_budget=config.memopt_checkpoint_budget,
         )
         functional.set_step_mode(model, config.model.step_mode)
+        precision = prepare_model_for_precision(model, device, config.precision)
+        model = precision.model
         model = _wrap_data_parallel(
             model,
             data_parallel=config.data_parallel,
@@ -591,7 +611,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                 "fp32": torch.float32,
                 "bf16": torch.bfloat16,
                 "fp16": torch.float16,
-            }[config.precision]
+            }[config.precision.mode]
             input_args = torch.empty(
                 pipeline_input_shape,
                 device=device,
@@ -636,7 +656,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
         train_loader, validation_loader, train_sampler, validation_sampler = (
             _build_loaders(config, dp_size=dp_size, dp_rank=dp_rank)
         )
-        scaler = torch.amp.GradScaler("cuda", enabled=config.precision == "fp16")
+        scaler = precision.scaler or torch.amp.GradScaler("cuda", enabled=False)
 
         start_step = start_epoch = start_batch = 0
         if config.resume is not None:
@@ -653,7 +673,6 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
             start_epoch += start_batch // len(train_loader)
             start_batch %= len(train_loader)
 
-        autocast_dtype = torch.bfloat16 if config.precision == "bf16" else torch.float16
         torch.cuda.reset_peak_memory_stats(device)
         training_seconds = 0.0
         timed_steps = 0
@@ -692,11 +711,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                         batch_first=True,
                     )
                     losses = []
-                    with torch.autocast(
-                        device_type="cuda",
-                        dtype=autocast_dtype,
-                        enabled=config.precision != "fp32",
-                    ):
+                    with precision.autocast_context(group=dp_group):
                         if pp_rank == 0:
                             train_schedule.step(sequence)
                         elif pp_rank == config.pipeline_parallel_size - 1:
@@ -722,11 +737,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                     optimizer.step()
                     update_successful = True
                 else:
-                    with torch.autocast(
-                        device_type="cuda",
-                        dtype=autocast_dtype,
-                        enabled=config.precision != "fp32",
-                    ):
+                    with precision.autocast_context(group=dp_group):
                         logits = _forward_classification(
                             model,
                             images,
@@ -735,7 +746,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                             config.input_layout,
                         )
                         loss = _classification_loss(logits, loss_targets, loss_function)
-                    if scaler.is_enabled():
+                    if precision.scaler is not None:
                         scale = scaler.get_scale()
                         scaler.scale(loss).backward()
                         scaler.step(optimizer)
@@ -794,7 +805,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                     step_mode=config.model.step_mode,
                     input_layout=config.input_layout,
                     device=device,
-                    precision=config.precision,
+                    precision=precision,
                     loss_function=loss_function,
                     dp_group=dp_group,
                     dp_size=dp_size,
@@ -808,7 +819,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                     time_steps=config.model.time_steps,
                     input_layout=config.input_layout,
                     device=device,
-                    precision=config.precision,
+                    precision=precision,
                     loss_function=loss_function,
                     dp_group=dp_group,
                     dp_size=dp_size,
@@ -845,7 +856,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                     step_mode=config.model.step_mode,
                     input_layout=config.input_layout,
                     device=device,
-                    precision=config.precision,
+                    precision=precision,
                     loss_function=loss_function,
                     dp_group=dp_group,
                     dp_size=dp_size,
@@ -859,7 +870,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                     time_steps=config.model.time_steps,
                     input_layout=config.input_layout,
                     device=device,
-                    precision=config.precision,
+                    precision=precision,
                     loss_function=loss_function,
                     dp_group=dp_group,
                     dp_size=dp_size,

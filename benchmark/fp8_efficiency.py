@@ -55,9 +55,9 @@ def assess_model_efficiency(
         or min_inference_speedup <= 0
     ):
         raise ValueError("Minimum speedups must be finite and positive.")
-    if baseline_precision.startswith("fp8-"):
+    if baseline_precision not in {"fp32", "fp16", "bf16"}:
         raise ValueError(
-            "baseline_precision must not be an FP8 variant, but got "
+            "baseline_precision must be 'fp32', 'fp16', or 'bf16', but got "
             f"{baseline_precision!r}."
         )
     baselines = [row for row in results if _row_precision(row) == baseline_precision]
@@ -66,7 +66,7 @@ def assess_model_efficiency(
             f"Expected exactly one {baseline_precision!r} baseline, "
             f"but found {len(baselines)}."
         )
-    candidates = [row for row in results if _row_precision(row).startswith("fp8-")]
+    candidates = [row for row in results if _row_precision(row) == "fp8"]
     if not candidates:
         raise ValueError("At least one FP8 precision result is required.")
 
@@ -175,11 +175,11 @@ def assess_triton_efficiency(
             row
             for row in rows
             if row.get("success") is True
-            and str(row.get("variant", "")).startswith("mp_plan_float8_")
+            and str(row.get("variant", "")).startswith("mp_float8_")
             and tuple(row.get(field) for field in group_fields) == group
         ]
         if not candidates:
-            failures.append(f"{label} has no successful FP8 prepared-plan result")
+            failures.append(f"{label} has no successful FP8 variant result")
             continue
 
         best = min(candidates, key=lambda row: _positive_float(row, "median_ms"))
@@ -215,7 +215,7 @@ def assess_triton_efficiency(
         tuple(row.get(field) for field in group_fields)
         for row in rows
         if row.get("success") is True
-        and str(row.get("variant", "")).startswith("mp_plan_float8_")
+        and str(row.get("variant", "")).startswith("mp_float8_")
     }
     for group in sorted(fp8_groups - baseline_groups, key=repr):
         label = f"T={group[0]} N={group[1]} neuron={group[2]} process={group[3]}"

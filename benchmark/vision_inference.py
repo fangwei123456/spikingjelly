@@ -9,6 +9,7 @@ import torch
 from torch.utils.data import Dataset
 
 from spikingjelly.activation_based.distributed import vision
+from spikingjelly.activation_based.precision import PrecisionConfig
 
 
 def _spread_indices(size: int, samples: int) -> list[int]:
@@ -106,7 +107,24 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data-parallel", choices=("replicate", "fsdp2"), default="replicate"
     )
-    parser.add_argument("--precision", choices=("fp32", "bf16", "fp16"), default="bf16")
+    parser.add_argument(
+        "--precision", choices=("fp32", "bf16", "fp16", "fp8"), default="bf16"
+    )
+    parser.add_argument(
+        "--fp8-recipe",
+        choices=("auto", "delayed", "current", "block", "mxfp8"),
+        default="auto",
+    )
+    parser.add_argument(
+        "--triton-storage",
+        choices=("fp32", "fp16", "bf16", "float8_e4m3fn", "float8_e5m2"),
+    )
+    parser.add_argument(
+        "--triton-fwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
+    )
+    parser.add_argument(
+        "--triton-bwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
+    )
     parser.add_argument("--input-layout", choices=("NCHW", "NTCHW"), default="NCHW")
     parser.add_argument("--time-steps", type=int, default=4)
     parser.add_argument("--image-size", type=int, default=224)
@@ -169,7 +187,13 @@ def main() -> None:
         pipeline_parallel_size=args.pipeline_parallel_size,
         pipeline_microbatches=args.pipeline_microbatches,
         data_parallel=args.data_parallel,
-        precision=args.precision,
+        precision=PrecisionConfig(
+            mode=args.precision,
+            fp8_recipe=args.fp8_recipe,
+            triton_storage=args.triton_storage,
+            triton_fwd=args.triton_fwd,
+            triton_bwd=args.triton_bwd,
+        ),
         compile=args.compile,
         **(
             {"timing_warmup_batches": args.timing_warmup_batches}

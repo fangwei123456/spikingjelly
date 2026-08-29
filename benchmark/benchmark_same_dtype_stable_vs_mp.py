@@ -17,15 +17,15 @@ from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.lif import (
     multistep_lif,
-    multistep_lif_mp_with_plan,
+    _multistep_lif_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.plif import (
     multistep_plif,
-    multistep_plif_mp_with_plan,
+    _multistep_plif_mp_with_plan,
 )
 from spikingjelly.activation_based.triton_kernel.neuron_kernel.utils import (
-    TritonNeuronExecutionPlan,
-    prepare_triton_neuron_execution_plan,
+    _TritonNeuronExecutionPlan,
+    _prepare_triton_neuron_execution_plan,
 )
 
 
@@ -62,14 +62,14 @@ def _mp_call(
     v: torch.Tensor,
     neuron_type: str,
     r_tau: torch.Tensor,
-    plan: TritonNeuronExecutionPlan,
+    plan: _TritonNeuronExecutionPlan,
 ) -> tuple[torch.Tensor, ...]:
     if neuron_type == "if":
-        return integrate_and_fire.multistep_if_mp_with_plan(
+        return integrate_and_fire._multistep_if_mp_with_plan(
             x, v, plan, v_threshold=1.0, v_reset=0.0
         )
     if neuron_type == "lif":
-        return multistep_lif_mp_with_plan(
+        return _multistep_lif_mp_with_plan(
             x,
             v,
             plan,
@@ -78,7 +78,7 @@ def _mp_call(
             v_threshold=1.0,
             v_reset=0.0,
         )
-    return multistep_plif_mp_with_plan(
+    return _multistep_plif_mp_with_plan(
         x,
         v,
         r_tau,
@@ -179,7 +179,7 @@ def main() -> None:
                 x = torch.randn(T, N, device=device, dtype=torch.float32).to(dtype)
                 r_tau = torch.tensor(_R_TAU, device=device, dtype=dtype)
                 plans = {
-                    process: prepare_triton_neuron_execution_plan(
+                    process: _prepare_triton_neuron_execution_plan(
                         neuron_type=neuron_type,
                         device=device,
                         storage_dtype=dtype,
