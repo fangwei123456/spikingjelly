@@ -338,6 +338,8 @@ Let us build a deep SNN, tune ``alpha`` for surrogate functions, and compare the
 
         input_grad_monitor.clear_recorded_data()
 
+    input_grad_monitor.close()
+
 
 The outputs are:
 

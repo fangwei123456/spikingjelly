@@ -358,6 +358,8 @@ English version: :doc:`../en/monitor`
 
         input_grad_monitor.clear_recorded_data()
 
+    input_grad_monitor.close()
+
 
 输出为：
 

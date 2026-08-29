@@ -197,40 +197,15 @@ def test_gpu_monitor_writes_scalars_and_closes_writer(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "result",
+    "result_or_error",
     (
         SimpleNamespace(returncode=1, stdout="", stderr="failed"),
         SimpleNamespace(returncode=0, stdout="bad output", stderr=""),
+        subprocess.TimeoutExpired("nvidia-smi", 5),
+        FileNotFoundError("nvidia-smi"),
     ),
 )
-def test_gpu_monitor_stops_on_command_or_parse_error(monkeypatch, result):
-    errors = []
-    close_calls = []
-    fake_logger = SimpleNamespace(
-        info=lambda *_args: None,
-        error=lambda message, *args: errors.append(message.format(*args)),
-    )
-    monkeypatch.setattr(monitor, "logger", fake_logger)
-    monkeypatch.setattr(
-        monitor,
-        "SummaryWriter",
-        lambda _path: SimpleNamespace(close=lambda: close_calls.append(True)),
-    )
-    monkeypatch.setattr(monitor.subprocess, "run", lambda *_args, **_kwargs: result)
-
-    gpu_monitor = monitor.GPUMonitor(log_dir="logs", start_now=False)
-    gpu_monitor.run()
-
-    assert errors
-    assert gpu_monitor.step == 0
-    assert close_calls == [True]
-
-
-@pytest.mark.parametrize(
-    "command_error",
-    (subprocess.TimeoutExpired("nvidia-smi", 5), FileNotFoundError("nvidia-smi")),
-)
-def test_gpu_monitor_stops_on_command_exception(monkeypatch, command_error):
+def test_gpu_monitor_stops_on_error(monkeypatch, result_or_error):
     errors = []
     close_calls = []
     fake_logger = SimpleNamespace(
@@ -244,10 +219,12 @@ def test_gpu_monitor_stops_on_command_exception(monkeypatch, command_error):
         lambda _path: SimpleNamespace(close=lambda: close_calls.append(True)),
     )
 
-    def fail(*_args, **_kwargs):
-        raise command_error
+    def run(*_args, **_kwargs):
+        if isinstance(result_or_error, Exception):
+            raise result_or_error
+        return result_or_error
 
-    monkeypatch.setattr(monitor.subprocess, "run", fail)
+    monkeypatch.setattr(monitor.subprocess, "run", run)
     gpu_monitor = monitor.GPUMonitor(log_dir="logs", start_now=False)
     gpu_monitor.run()
 

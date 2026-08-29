@@ -706,10 +706,10 @@ class GPUMonitor(threading.Thread):
                 try:
                     samples = []
                     for line in output.splitlines():
-                        gpu_id, utilization, memory_used = (
+                        index, utilization, memory_used = (
                             value.strip() for value in line.split(",")
                         )
-                        samples.append((gpu_id, int(utilization), int(memory_used)))
+                        samples.append((index, int(utilization), int(memory_used)))
                 except ValueError:
                     logger.error(
                         "GPU monitor stopped: malformed nvidia-smi output: {}",
@@ -724,12 +724,12 @@ class GPUMonitor(threading.Thread):
                         output,
                     )
                 else:
-                    for gpu_id, utilization, memory_used in samples:
+                    for index, utilization, memory_used in samples:
                         self.writer.add_scalar(
-                            f"utilization_{gpu_id}", utilization, self.step
+                            f"utilization_{index}", utilization, self.step
                         )
                         self.writer.add_scalar(
-                            f"memory_used_{gpu_id}", memory_used, self.step
+                            f"memory_used_{index}", memory_used, self.step
                         )
 
                 self.step += 1
