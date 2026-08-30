@@ -367,7 +367,8 @@ def test_fp8_backend_snn_boundary_spike_mismatch_is_bounded():
     assert mismatch_ratio <= 0.01
 
 
-def test_tiny_spikformer_fp8_trains_and_runs_inference():
+@pytest.mark.parametrize("fp8_fallback_dtype", ["fp32", "fp16", "bf16"])
+def test_tiny_spikformer_fp8_trains_and_runs_inference(fp8_fallback_dtype):
     mode = "fp8"
     device = _cuda_device_or_skip(mode)
     torch.manual_seed(20260719)
@@ -387,7 +388,7 @@ def test_tiny_spikformer_fp8_trains_and_runs_inference():
     artifacts = prepare_model_for_precision(
         model,
         device,
-        PrecisionConfig(mode=mode),
+        PrecisionConfig(mode=mode, fp8_fallback_dtype=fp8_fallback_dtype),
     )
     assert artifacts.config.mode == mode
     model = artifacts.model

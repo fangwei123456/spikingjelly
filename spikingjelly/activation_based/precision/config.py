@@ -19,10 +19,14 @@ class PrecisionConfig:
     ] = None
     triton_fwd: Literal["fp8", "fp16", "bf16", "fp32"] = "fp32"
     triton_bwd: Literal["fp8", "fp16", "bf16", "fp32"] = "fp32"
+    fp8_fallback_dtype: Literal["fp32", "fp16", "bf16"] = "bf16"
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "mode", str(self.mode).lower())
         object.__setattr__(self, "fp8_recipe", str(self.fp8_recipe).lower())
+        object.__setattr__(
+            self, "fp8_fallback_dtype", str(self.fp8_fallback_dtype).lower()
+        )
         if self.triton_storage is not None:
             object.__setattr__(
                 self,
@@ -37,6 +41,10 @@ class PrecisionConfig:
             raise ValueError("Unsupported fp8_recipe.")
         if self.mode != "fp8" and self.fp8_recipe != "auto":
             raise ValueError("fp8_recipe is only valid when mode='fp8'.")
+        if self.fp8_fallback_dtype not in {"fp32", "fp16", "bf16"}:
+            raise ValueError("Unsupported fp8_fallback_dtype.")
+        if self.mode != "fp8" and self.fp8_fallback_dtype != "bf16":
+            raise ValueError("fp8_fallback_dtype is only valid when mode='fp8'.")
         if self.triton_storage is None and (
             self.triton_fwd != "fp32" or self.triton_bwd != "fp32"
         ):
@@ -143,6 +151,9 @@ PrecisionConfig.__init__.__doc__ = r"""Configure model and Triton-neuron precisi
 :type triton_fwd: Literal["fp8", "fp16", "bf16", "fp32"]
 :param triton_bwd: Triton 神经元反向算术 dtype。
 :type triton_bwd: Literal["fp8", "fp16", "bf16", "fp32"]
+:param fp8_fallback_dtype: 未由 Transformer Engine 转换的普通 CUDA 算子使用的
+    fallback autocast dtype，默认为 ``bf16``；``fp32`` 表示不启用外层 autocast。
+:type fp8_fallback_dtype: Literal["fp32", "fp16", "bf16"]
 :raises ValueError: mode、recipe 或 Triton dtype 组合无效。
 
 ----
@@ -169,5 +180,9 @@ changes neuron backends nor silently falls back.
 :type triton_fwd: Literal["fp8", "fp16", "bf16", "fp32"]
 :param triton_bwd: Triton-neuron backward arithmetic dtype.
 :type triton_bwd: Literal["fp8", "fp16", "bf16", "fp32"]
+:param fp8_fallback_dtype: Fallback autocast dtype for ordinary CUDA operations
+    not converted by Transformer Engine. The default is ``bf16``; ``fp32``
+    disables the outer autocast.
+:type fp8_fallback_dtype: Literal["fp32", "fp16", "bf16"]
 :raises ValueError: If a mode, recipe, or Triton dtype combination is invalid.
 """

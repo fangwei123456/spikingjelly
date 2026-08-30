@@ -31,6 +31,7 @@ def _resolve_policy(config: PrecisionConfig, device: torch.device) -> PrecisionP
     return Float8TransformerEnginePolicy(
         device_type=device_type,
         fp8_recipe=config.fp8_recipe,
+        fp8_fallback_dtype=config.fp8_fallback_dtype,
     )
 
 
