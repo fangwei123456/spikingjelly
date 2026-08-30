@@ -13,7 +13,8 @@ from torch.overrides import resolve_name
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..base import EnergyModelInfo, ModuleCounter, ModuleCounterMode, call_model
-from .config import MemoryHierarchyConfig, MemoryInstanceSpec
+from .config import MemoryHierarchyConfig
+from .mapping import _Fragment, _accumulate_memory, _map_base_memory
 from .utils import _is_spike
 
 __all__ = [
@@ -42,7 +43,7 @@ _MAC_COST_PJ = {
 }
 
 _NEUROMC_MODEL_INFO = EnergyModelInfo(
-    model_id="neuromc_712c66_runtime_v1",
+    model_id="neuromc_712c66_runtime_v2",
     fidelity="source-aligned",
     source_urls=(
         "https://www.nature.com/articles/s41467-026-70586-x",
@@ -51,7 +52,10 @@ _NEUROMC_MODEL_INFO = EnergyModelInfo(
     ),
     technology_nm=32,
     precision="1-bit spikes and 16-bit values under the NeuroMC v1 constants",
-    scope="runtime fragment adapter for NeuroMC-style FE/BP/WG/BN/optimizer energy",
+    scope=(
+        "runtime-mapped NeuroMC FE/BE/WE energy; BN and optimizer use "
+        "source-derived formulas without independent external validation"
+    ),
 )
 
 _EXTRA_RH2L_MULTIPLIER = {
@@ -390,30 +394,6 @@ class _TraceEvent:
     out: Any
 
 
-@dataclass
-class _Fragment:
-    stage: str
-    phase: str
-    op_name: str
-    core_type: str
-    process_key: str
-    loop_dims: dict[str, int]
-    input_precision_bits: int
-    weight_precision_bits: int
-    output_precision_bits: int
-    input_numel: int
-    weight_numel: int
-    output_numel: int
-    mac_count: int
-    conv_type: str = "--"
-    b_type: int = 0
-    t_type: int = 0
-    source: str = "trace"
-    optimizer_has_momentum: bool = False
-    optimizer_has_weight_decay: bool = False
-    optimizer_has_momentum_buffer: bool = False
-
-
 def _module_overlap_signature(fragment: _Fragment) -> tuple[Any, ...]:
     ld = fragment.loop_dims
     return (
@@ -563,8 +543,8 @@ class NeuroMCEnergyProfiler(ModuleCounter):
 
         * **中文**
 
-        NeuroMC source-aligned 运行时适配器。它动态捕获真实执行 fragment，
-        再应用固定 NeuroMC v1 成本表；它不包含完整 ZigZag mapping。
+        运行时记录实际执行的 module 和 ATen fragment，再应用固定 NeuroMC
+        weight-stationary mapping 和 v1 成本表。未执行的 module 不计入报告。
 
         :param memory_config: 内存层次配置；``None`` 使用 ``neuromc_like_v1``
         :type memory_config: MemoryHierarchyConfig | None
@@ -575,8 +555,9 @@ class NeuroMCEnergyProfiler(ModuleCounter):
 
         * **English**
 
-        Source-aligned NeuroMC runtime adapter. It captures executed fragments and
-        applies the fixed NeuroMC v1 cost tables; it is not a complete ZigZag mapping.
+        Records executed module and ATen fragments at runtime, then applies the fixed
+        NeuroMC weight-stationary mapping and v1 cost tables. Unexecuted modules do not
+        enter the report.
 
         :param memory_config: Memory hierarchy configuration. ``None`` selects
             ``neuromc_like_v1``
@@ -596,6 +577,7 @@ class NeuroMCEnergyProfiler(ModuleCounter):
         self._fragments: list[_Fragment] = []
         self._module_inputs: dict[nn.Module, list[Any]] = defaultdict(list)
         self._backward_modules: set[nn.Module] = set()
+        self._module_conv_backward_calls = 0
         self._bound_model: nn.Module | None = None
         self._trainable_param_shapes: set[tuple[int, ...]] = set()
         self._active = False
@@ -653,6 +635,7 @@ class NeuroMCEnergyProfiler(ModuleCounter):
         self._fragments.clear()
         self._module_inputs.clear()
         self._backward_modules.clear()
+        self._module_conv_backward_calls = 0
         self._trace_mode.op_counts.clear()
         if self._module_mode is None:
             raise RuntimeError(
@@ -833,6 +816,7 @@ class NeuroMCEnergyProfiler(ModuleCounter):
         self._backward_modules.add(module)
         forward_input = self._module_inputs[module].pop()
         if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d)):
+            self._module_conv_backward_calls += 1
             self._fragments.extend(
                 self._make_conv_backward_fragments(
                     stage, module, forward_input, grad_input, grad_output
@@ -1527,6 +1511,11 @@ class NeuroMCEnergyProfiler(ModuleCounter):
                 continue
             if op_name in _AUXILIARY_ATEN_OPS:
                 continue
+            if (
+                op_name == "aten.convolution_backward.default"
+                and count <= self._module_conv_backward_calls
+            ):
+                continue
             if op_name in {
                 "aten.convolution.default",
                 "aten.addmm.default",
@@ -1593,165 +1582,6 @@ class NeuroMCEnergyProfiler(ModuleCounter):
                     counts["mul"] += total_params
         return counts
 
-    def _memory_energy_per_element(
-        self, spec: MemoryInstanceSpec, precision_bits: int, read: bool
-    ) -> float:
-        bw = spec.r_bw if read else spec.w_bw
-        cost = spec.r_cost if read else spec.w_cost
-        if precision_bits <= 0 or bw <= 0:
-            return 0.0
-        return cost / (bw / precision_bits)
-
-    def _accumulate_memory(
-        self,
-        totals: dict[str, dict[str, int]],
-        energy: dict[str, dict[str, float]],
-        level: str,
-        direction: str,
-        bits: int,
-        spec: MemoryInstanceSpec,
-        precision_bits: int,
-        read: bool,
-    ):
-        if bits <= 0:
-            return
-        if level == "dram" and self.memory_config.zero_dram_in_paper_energy:
-            return
-        if level == "noc" and self.memory_config.zero_noc_in_paper_energy:
-            return
-        if (
-            level == "sram"
-            and self.memory_config.zero_sram_high_directions
-            and direction in {"rl2h", "wh2l"}
-        ):
-            return
-        totals[level][direction] += bits
-        energy[level][direction] += (
-            bits / precision_bits
-        ) * self._memory_energy_per_element(spec, precision_bits, read)
-
-    def _base_memory_for_fragment(self, fragment: _Fragment):
-        totals = defaultdict(lambda: defaultdict(int))
-        energy = defaultdict(lambda: defaultdict(float))
-        if (
-            fragment.core_type
-            not in {"fp_soma", "bp_grad", "wg", "ann_fe", "ann_be", "ann_we"}
-            or fragment.mac_count == 0
-        ):
-            return totals, energy
-
-        cfg = self.memory_config.memory_instances
-        if fragment.core_type == "fp_soma":
-            reg_i1, reg_i2, reg_o = cfg["reg_1b"], cfg["reg_16b"], cfg["reg_16b"]
-            sram_i1, sram_i2, sram_o = (
-                cfg["sram_fp_conv_in_s"],
-                cfg["sram_fp_conv_in_w"],
-                cfg["sram_fp_conv_out_xi"],
-            )
-        elif fragment.core_type == "ann_fe":
-            reg_i1, reg_i2, reg_o = cfg["reg_16b"], cfg["reg_16b"], cfg["reg_16b"]
-            sram_i1, sram_i2, sram_o = (
-                cfg["sram_fp_conv_in_w"],
-                cfg["sram_fp_conv_in_w"],
-                cfg["sram_fp_conv_out_xi"],
-            )
-        elif fragment.core_type in {"bp_grad", "ann_be"}:
-            reg_i1, reg_i2, reg_o = cfg["reg_16b"], cfg["reg_16b"], cfg["reg_16b"]
-            sram_i1, sram_i2, sram_o = (
-                cfg["sram_bp_conv_in_du"],
-                cfg["sram_bp_conv_in_w"],
-                cfg["sram_bp_conv_out_res"],
-            )
-        else:
-            if fragment.core_type == "ann_we":
-                reg_i1, reg_i2, reg_o = (
-                    cfg["reg_16b"],
-                    cfg["reg_16b"],
-                    cfg["reg_16b"],
-                )
-                sram_i1, sram_i2, sram_o = (
-                    cfg["sram_wg_conv_in_du"],
-                    cfg["sram_wg_conv_in_du"],
-                    cfg["sram_wg_conv_out_dw"],
-                )
-            else:
-                reg_i1, reg_i2, reg_o = cfg["reg_1b"], cfg["reg_16b"], cfg["reg_16b"]
-                sram_i1, sram_i2, sram_o = (
-                    cfg["sram_wg_conv_in_s"],
-                    cfg["sram_wg_conv_in_du"],
-                    cfg["sram_wg_conv_out_dw"],
-                )
-
-        i1_bits = fragment.input_numel * fragment.input_precision_bits
-        i2_bits = fragment.weight_numel * fragment.weight_precision_bits
-        o_bits = fragment.output_numel * fragment.output_precision_bits
-        reuse_weight = (
-            fragment.b_type > 0 or fragment.t_type > 0
-        ) and i2_bits <= sram_i2.size_bits
-
-        self._accumulate_memory(
-            totals,
-            energy,
-            "reg",
-            "rh2l",
-            i1_bits,
-            reg_i1,
-            fragment.input_precision_bits,
-            True,
-        )
-        self._accumulate_memory(
-            totals,
-            energy,
-            "sram",
-            "rh2l",
-            i1_bits,
-            sram_i1,
-            fragment.input_precision_bits,
-            True,
-        )
-        if not reuse_weight:
-            self._accumulate_memory(
-                totals,
-                energy,
-                "reg",
-                "rh2l",
-                i2_bits,
-                reg_i2,
-                fragment.weight_precision_bits,
-                True,
-            )
-            self._accumulate_memory(
-                totals,
-                energy,
-                "sram",
-                "rh2l",
-                i2_bits,
-                sram_i2,
-                fragment.weight_precision_bits,
-                True,
-            )
-        self._accumulate_memory(
-            totals,
-            energy,
-            "reg",
-            "wl2h",
-            o_bits,
-            reg_o,
-            fragment.output_precision_bits,
-            False,
-        )
-        self._accumulate_memory(
-            totals,
-            energy,
-            "sram",
-            "wl2h",
-            o_bits,
-            sram_o,
-            fragment.output_precision_bits,
-            False,
-        )
-        return totals, energy
-
     def _extra_memory_for_fragment(self, fragment: _Fragment):
         totals = defaultdict(lambda: defaultdict(int))
         energy = defaultdict(lambda: defaultdict(float))
@@ -1764,60 +1594,55 @@ class NeuroMCEnergyProfiler(ModuleCounter):
             total_params = _optimizer_param_count(fragment)
             total_bits = total_params * 32
             sram_spec = cfg["sram_6MB"]
-            self._accumulate_memory(
+            _accumulate_memory(
                 totals,
                 energy,
-                "sram",
-                "rh2l",
-                total_bits,
-                sram_spec,
-                32,
-                True,
+                level="sram",
+                direction="rh2l",
+                bits=total_bits,
+                spec=sram_spec,
+                config=self.memory_config,
             )
-            self._accumulate_memory(
+            _accumulate_memory(
                 totals,
                 energy,
-                "sram",
-                "rh2l",
-                total_bits,
-                sram_spec,
-                32,
-                True,
+                level="sram",
+                direction="rh2l",
+                bits=total_bits,
+                spec=sram_spec,
+                config=self.memory_config,
             )
-            self._accumulate_memory(
+            _accumulate_memory(
                 totals,
                 energy,
-                "sram",
-                "wl2h",
-                total_bits,
-                sram_spec,
-                32,
-                False,
+                level="sram",
+                direction="wl2h",
+                bits=total_bits,
+                spec=sram_spec,
+                config=self.memory_config,
             )
             if (
                 fragment.optimizer_has_momentum
                 and fragment.optimizer_has_momentum_buffer
             ):
-                self._accumulate_memory(
+                _accumulate_memory(
                     totals,
                     energy,
-                    "sram",
-                    "rh2l",
-                    total_bits,
-                    sram_spec,
-                    32,
-                    True,
+                    level="sram",
+                    direction="rh2l",
+                    bits=total_bits,
+                    spec=sram_spec,
+                    config=self.memory_config,
                 )
             if fragment.optimizer_has_momentum:
-                self._accumulate_memory(
+                _accumulate_memory(
                     totals,
                     energy,
-                    "sram",
-                    "wl2h",
-                    total_bits,
-                    sram_spec,
-                    32,
-                    False,
+                    level="sram",
+                    direction="wl2h",
+                    bits=total_bits,
+                    spec=sram_spec,
+                    config=self.memory_config,
                 )
             return totals, energy
 
@@ -1908,30 +1733,28 @@ class NeuroMCEnergyProfiler(ModuleCounter):
             read_multiplier = _EXTRA_RH2L_MULTIPLIER.get(variable_name, 0)
             for level, spec_name in (("reg", reg_name), ("sram", sram_name)):
                 spec = cfg[spec_name]
-                self._accumulate_memory(
+                _accumulate_memory(
                     totals,
                     energy,
-                    level,
-                    "rh2l",
-                    total_bits * read_multiplier,
-                    spec,
-                    bits_per_elem,
-                    True,
+                    level=level,
+                    direction="rh2l",
+                    bits=total_bits * read_multiplier,
+                    spec=spec,
+                    config=self.memory_config,
                 )
                 write_enabled = variable_name in _EXTRA_WL2H
                 if fragment.process_key == "with_sg" and fragment.phase == "backward":
                     write_enabled = (
                         level == "reg" and variable_name == "bp_du_l_pre"
                     ) or (level == "sram" and variable_name == "bp_u_l_pre")
-                self._accumulate_memory(
+                _accumulate_memory(
                     totals,
                     energy,
-                    level,
-                    "wl2h",
-                    total_bits if write_enabled else 0,
-                    spec,
-                    bits_per_elem,
-                    False,
+                    level=level,
+                    direction="wl2h",
+                    bits=total_bits if write_enabled else 0,
+                    spec=spec,
+                    config=self.memory_config,
                 )
         return totals, energy
 
@@ -2121,7 +1944,7 @@ class NeuroMCEnergyProfiler(ModuleCounter):
 
         for fragment in fragments:
             extra_counts = self._extra_counts(fragment)
-            base_bits, base_energy = self._base_memory_for_fragment(fragment)
+            base_bits, base_energy = _map_base_memory(fragment, self.memory_config)
             extra_bits, extra_mem_energy = self._extra_memory_for_fragment(fragment)
             mac_energy = fragment.mac_count * _MAC_COST_PJ.get(fragment.core_type, 0.0)
             extra_compute_energy = (

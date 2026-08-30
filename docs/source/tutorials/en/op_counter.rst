@@ -178,12 +178,17 @@ High-Level Energy Models
 Model Overview
 --------------
 
-``op_counter`` currently exposes four high-level energy estimators:
+``op_counter`` exposes four high-level entry points and five energy regimes:
 
 * ``estimate_simple_energy``: simple runtime MAC/AC/memory energy;
 * ``estimate_lemaire_energy``: Lemaire-aligned analytical forward inference energy;
 * ``estimate_neuromc_runtime_energy``: runtime NeuroMC-style energy;
-* ``estimate_spikesim_energy``: runtime SpikeSim-style Conv2d energy.
+* ``estimate_spikesim_energy``: runtime SpikeSim dense or event Conv2d energy.
+
+Simple Energy and SpikeSim event are defined by SpikingJelly. Lemaire follows
+the paper; NeuroMC and SpikeSim dense follow author models. Source-conformance
+evaluation covers Lemaire, NeuroMC, and SpikeSim dense. Simple Energy and
+SpikeSim event have no independent external reference.
 
 .. list-table::
     :header-rows: 1
@@ -209,7 +214,7 @@ Model Overview
       - Conv2d stage energy with SpikeSim coefficients
       - only for supported Conv2d inference stages; not a general full-model energy estimator
 
-The four estimators use different cost regimes and hardware assumptions. Do not
+The five regimes use different costs and hardware assumptions. Do not
 compare their absolute values.
 
 Every report exposes ``model_info`` with a stable model ID, sources, technology,
@@ -264,9 +269,17 @@ NeuroMC Runtime Energy
 -----------------------
 
 ``estimate_neuromc_runtime_energy`` profiles real execution fragments and maps
-them to the fixed NeuroMC v1 constants and per-variable memory directions and
-multipliers. It is a source-aligned runtime adapter and does not reproduce the
-complete ZigZag mapping. The convenience function always runs forward. Adding
+them through the fixed NeuroMC weight-stationary FE/BE/WE mapping and v1 cost
+table. Results follow the executed branches, call counts, and tensor shapes;
+unexecuted modules do not enter the report.
+
+The author code uses ZigZag to derive MAC, partial-sum, and memory traffic from
+static workloads and mappings. SpikingJelly does not invoke ZigZag at runtime;
+it applies the same fixed 16x16 weight-stationary mapping to captured fragments.
+Both paths use the same loop dimensions, data-movement rules, and cost constants.
+The runtime calculation depends on fragment shapes, not network names or layer IDs.
+
+The convenience function always runs forward. Adding
 ``target`` and ``loss_fn`` runs backward; adding ``optimizer`` also estimates
 the optimizer stage. Use
 :class:`NeuroMCEnergyProfiler <spikingjelly.activation_based.op_counter.neuromc.core.NeuroMCEnergyProfiler>`
@@ -289,7 +302,9 @@ SpikeSim Runtime Energy
 
 ``estimate_spikesim_energy`` counts executed Conv2d inference stages. The default
 ``dense`` mode uses the author-code PE-cycle formula; ``event`` uses a sparse
-formula defined by SpikingJelly. Its main limits are:
+formula defined by SpikingJelly. Here, ``dense`` means charging the full PE
+cycles for an executed convolution; it does not mean a fully connected layer,
+and zero-valued inputs do not reduce its energy. Its main limits are:
 
 * the model should be in ``eval`` mode; with the default ``strict=True``,
   unsupported Conv2d stages and empty reports fail;
@@ -370,21 +385,33 @@ Primary Sources
 * NeuroMC: author-code commit
   `712c66f <https://github.com/dayanhn/NeuroMC/commit/712c66f47cf76ae530a55f8bcad3858bd68788de>`_.
 
-Relative-Trend Cross-Check
---------------------------
+Source-Model Conformance
+------------------------
 
-This benchmark checks one limited question: does SpikingJelly preserve the
-source model's relative trends on selected cases? Each case records one
+This benchmark checks conformance with the source models, not hardware accuracy.
+Each case records one
 ``(E_origin, E_SJ)`` pair. SpikeSim and NeuroMC use pinned author code. Lemaire
-has no public code, so its reference values follow equations (1)--(20). The
-reference path receives only static topology, tensor dimensions, and
-independently observed firing counts; it does not read SpikingJelly reports.
+has no public code, so its reference values follow equations (1)--(20).
+
+SpikeSim and Lemaire cases come from parameter grids in the script. NeuroMC
+covers all FE, BE, and WE fragments from the official S-ResNet-18, S-ResNet-50,
+and S-VGG-16 workloads, for 786 cases in total. SpikingJelly runs the matching
+PyTorch forward or backward execution; author modules are reloaded before each
+case to avoid shared mutable state.
+
+Lemaire did not publish source code; the paper states that code and models are
+available from the authors on request. For FC cases, ``theta_in`` is the observed
+input-spike count. Equation (2) multiplies this value by ``N_in`` again, unlike
+the definition and Eqs. (8), (10), (15), and (17). This benchmark counts one
+``N_out`` fanout per observed input spike.
 
 Kendall's tau-b is the primary metric, with a paired 2,000-sample 95% bootstrap
-interval. Spearman's rho and log-Pearson ``r`` provide secondary views. The P90
-symmetric factor removes the median multiplicative scale before measuring
-relative error. The predeclared ``tau-b >= 0.80`` and ``P90 <= 1.50x`` lines are
-comparison guides, not accuracy criteria.
+interval. Spearman's rho and log-Pearson ``r`` are secondary metrics. Raw P90
+measures absolute symmetric error without calibration. Scale-adjusted P90
+removes the median multiplicative scale and is used only to diagnose shape
+error. NeuroMC FE, BE, WE, and aggregate results must all satisfy
+``tau-b >= 0.90``, raw ``P90 <= 1.50x``, and median scale within
+``[0.80x, 1.25x]``.
 
 * **Kendall's tau-b** compares the ordering of every pair of cases. ``1`` means
   identical ordering, ``0`` means no consistent ranking association, and
@@ -392,75 +419,97 @@ comparison guides, not accuracy criteria.
 * **Spearman's rho** correlates the ranks of the two score sets. It also ranges
   from ``-1`` to ``1`` and is more sensitive than tau-b to how far individual
   cases move in the ranking.
-* The **P90 symmetric factor** is the empirical 90th percentile of relative
-  error factors after removing a fixed scale difference. ``1.0x`` is ideal;
-  ``1.5x`` places that percentile between ``1 / 1.5`` and ``1.5`` times the
-  reference relative value.
+* The **raw P90 symmetric factor** is the empirical 90th percentile of
+  ``exp(abs(log(E_SJ / E_origin)))``. ``1.0x`` is ideal; ``1.5x`` places that
+  percentile between ``1 / 1.5`` and ``1.5`` times the reference value.
+* The **scale-adjusted P90 symmetric factor** applies the same calculation
+  after removing the median log ratio. Comparing it with raw P90 separates a
+  mostly fixed scale bias from workload-dependent shape error.
 
 .. list-table:: Validation results
    :header-rows: 1
-   :widths: 20 12 23 14 14 14 14
+   :widths: 18 11 21 11 11 12 14 14
 
    * - Estimator mode
      - Comparable cases
      - Kendall tau-b (95% bootstrap interval)
      - Spearman rho
      - Log-Pearson r
-     - P90 factor
+     - Raw P90 factor
+     - Scale-adjusted P90
      - Median scale E_SJ/E_origin
    * - Lemaire
-     - 12
-     - 0.939 [0.729, 1.000]
-     - 0.979
-     - 0.998
-     - 1.478x
-     - 0.877x
+     - 288
+     - 1.00 [1.00, 1.00]
+     - 1.00
+     - 1.00
+     - 1.00x
+     - 1.00x
+     - 1.00x
    * - SpikeSim dense
-     - 7 (+5 stress)
-     - 1.000 [1.000, 1.000]
-     - 1.000
-     - 1.000
-     - 1.000x
-     - 1.000x
+     - 216
+     - 1.00 [1.00, 1.00]
+     - 1.00
+     - 1.00
+     - 1.00x
+     - 1.00x
+     - 1.00x
    * - NeuroMC
-     - 13
-     - 0.795 [0.541, 0.971]
-     - 0.934
-     - 0.981
-     - 1.189x
-     - 0.396x
+     - 786
+     - 1.00 [1.00, 1.00]
+     - 1.00
+     - 1.00
+     - 1.00x
+     - 1.00x
+     - 1.00x
 
-.. figure:: ../../_static/tutorials/op_counter/energy_model_validation.png
-   :alt: Normalized reference and SpikingJelly scores and per-model tau-b and P90 minus one
-   :align: center
-
-   The left panel compares normalized score pairs. Proximity to the diagonal
-   indicates similar relative trends, not accurate absolute energy. The right
-   panel summarizes per-model tau-b and ``P90 - 1``.
-
-Lemaire's tau-b and P90 meet both comparison lines. NeuroMC meets the P90 line;
-its ``0.795`` tau-b is slightly below ``0.80``. SpikeSim's seven comparable
-cases match because the dense runtime directly implements the author formula;
-this result mainly checks integration and calculation. Five dynamic stress
-cases are excluded from the correlation, with runtime/static ratios from
-``0.500x`` to ``3.000x``. The benchmark does not assign an overall Pass.
+Each NeuroMC phase contains 262 fragments. Raw P90 is ``1.000x`` for FE,
+``1.001x`` for BE, and ``1.000x`` for WE; all three phase tau-b and median-scale
+values round to ``1.000``, and both phase-level and aggregate results pass the
+gates. All 288 Lemaire cases also pass. SpikeSim's 216 cases match because the
+dense runtime directly implements the author formula.
 
 **Limitations:**
 
-* Each group contains only 7, 12, or 13 selected cases. They do not represent
-  broader networks or firing patterns, and the bootstrap interval only reports
-  resampling stability within these cases.
-* Both paths share topology, dimensions, and firing counts, so network scale can
-  produce high correlation by itself. High tau or rho does not validate each
-  energy term or coefficient.
-* The references are analytical models, not hardware measurements. Correlation
-  shows similarity to their trends but cannot establish physical energy
-  accuracy.
-* Ranking and P90 weaken or remove absolute scale. A fixed absolute bias can
-  coexist with favorable metrics.
-* Coverage remains incomplete: published equations reconstruct Lemaire, this
-  benchmark validates only NeuroMC forward energy, and Simple Energy and
-  SpikeSim event have no independent end-to-end external estimator.
+* The NeuroMC implementation and reference share the same author model. This is
+  a conformance check, not independent validation.
+* All references are analytical-model outputs, not hardware measurements.
+* Coverage remains incomplete: published equations reconstruct Lemaire because
+  no author code is public;
+  NeuroMC BN and optimizer formulas, Simple Energy, and SpikeSim event have no
+  independent end-to-end external estimator.
+
+Cross-Validation on Real Networks
+---------------------------------
+
+The cross-validation runs VGG-11/13/16/19 and SEW-ResNet-18/34/50 at image
+sizes 32, 40, 48, and 56, for 28 network cases. VGG uses the non-BN variants;
+SEW ResNet uses identity normalization. The script first runs each full network,
+then extracts the inputs of executed Conv2d stages and evaluates the same
+Conv2d-to-IF stages under all five energy regimes. Results cover only the common
+convolution-neuron scope, not full-model energy.
+
+Spikformer is excluded because its attention and MLP primarily use Conv1d,
+while SpikeSim supports only Conv2d; its patch embedding alone does not
+represent the full network.
+
+.. figure:: ../../_static/tutorials/op_counter/energy_model_cross_validation.png
+   :alt: Correlation matrices for five energy models on VGG and SEW ResNet
+   :align: center
+
+   Simple Energy and Lemaire have the closest ranking (Kendall tau-b ``0.94``).
+   NeuroMC has tau-b ``0.74`` with SpikeSim dense and ``0.63`` with SpikeSim
+   event. The differences reflect memory, mapping, and activity assumptions;
+   they do not identify one model as more accurate.
+
+For cross-model comparisons, tau-b at or above ``0.90`` usually indicates
+highly consistent rankings, while ``0.70`` to ``0.90`` indicates strong
+correlation. These are interpretive ranges, not correctness gates; high
+correlation does not imply close absolute energy values.
+
+The figure also reports Spearman rho and log-Pearson ``r``. Per-network results
+for all five regimes are available in the
+:download:`cross-validation CSV <../../_static/tutorials/op_counter/energy_model_cross_validation.csv>`.
 
 Run the benchmark manually with:
 
@@ -470,9 +519,8 @@ Run the benchmark manually with:
         --spikesim-root /path/to/SpikeSim \
         --neuromc-root /path/to/NeuroMC
 
-The exact case inputs, paired scores, metrics, repository revision, dependency
-versions, and reference revisions are available in the
-:download:`case-level CSV <../../_static/tutorials/op_counter/energy_model_validation.csv>`.
+Case inputs, paired scores, metrics, and version information are available in
+the :download:`case-level CSV <../../_static/tutorials/op_counter/energy_model_validation.csv>`.
 The benchmark depends on pinned external repositories and does not run in CI.
 
 Summary
