@@ -77,6 +77,16 @@ def test_precision_config_defaults_to_bf16_fallback():
     assert config.fp8_fallback_dtype == "bf16"
 
 
+def test_precision_config_preserves_positional_fields():
+    config = PrecisionConfig("fp8", "auto", "bf16", "fp16", "bf16")
+
+    assert (config.triton_storage, config.triton_fwd, config.triton_bwd) == (
+        "bf16",
+        "fp16",
+        "bf16",
+    )
+
+
 def test_precision_config_accepts_fp8_fallback_override():
     config = PrecisionConfig(mode="fp8", fp8_fallback_dtype="fp16")
 

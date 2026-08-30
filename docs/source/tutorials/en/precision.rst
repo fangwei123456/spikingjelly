@@ -437,7 +437,8 @@ FC-SNN Triton result. Reproduce a single-GPU profile with:
       -o spikformer-fp8 \
       uv run python benchmark/benchmark_snn_single_gpu.py case \
         --model spikformer_ti --phase inference --execution eager \
-        --batch-size 64 --warmup 50 --steps 10 --profile \
+        --batch-size 64 --warmup 50 --steps 10 --profile --precision fp8 \
+        --neuron-backend triton --fp8-fallback-dtype bf16 \
         --tensor-metadata spikformer-fp8.tensors.jsonl \
         --output spikformer-fp8.json
 

@@ -920,6 +920,15 @@ def test_float8_policy_nests_default_cuda_autocast(monkeypatch):
     ]
 
 
+def test_float8_policy_rejects_invalid_fallback_dtype():
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    with pytest.raises(ValueError, match="Unsupported fp8_fallback_dtype"):
+        Float8TransformerEnginePolicy(fp8_fallback_dtype="int8")
+
+
 def test_transformer_engine_sdpa_adapter_accepts_flattened_te_output(monkeypatch):
     _install_fake_te(monkeypatch)
     adapter = TransformerEngineDotProductAttentionAdapter(

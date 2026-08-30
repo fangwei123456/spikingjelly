@@ -10,6 +10,10 @@ from spikingjelly.activation_based.precision.float8_base import Float8LinearStep
 from spikingjelly.activation_based.precision.float8_conv import (
     Float8PointwiseConv1dStepModule,
 )
+from spikingjelly.activation_based.precision.float8_te import (
+    Float8TELayerNormLinearModule,
+    Float8TELayerNormMLPModule,
+)
 
 
 def _first_tensor(value: Any) -> torch.Tensor | None:
@@ -32,6 +36,14 @@ def _module_macs(module: nn.Module, output: Any) -> int:
     output_tensor = _first_tensor(output)
     if output_tensor is None:
         return 0
+    if isinstance(module, Float8TELayerNormLinearModule):
+        weight = module.wrapped.weight
+        return output_tensor.numel() * weight.shape[1]
+    if isinstance(module, Float8TELayerNormMLPModule):
+        fc1_weight = getattr(module.wrapped, module._state_key_map["1.weight"])
+        fc2_weight = getattr(module.wrapped, module._state_key_map["3.weight"])
+        tokens = output_tensor.numel() // fc2_weight.shape[0]
+        return tokens * (fc1_weight.numel() + fc2_weight.numel())
     if isinstance(module, (nn.Linear, Float8LinearStepModule)):
         return output_tensor.numel() * module.in_features
     if isinstance(module, Float8PointwiseConv1dStepModule):
@@ -65,6 +77,8 @@ class _FP8CoverageTracker:
             nn.Conv2d,
             Float8LinearStepModule,
             Float8PointwiseConv1dStepModule,
+            Float8TELayerNormLinearModule,
+            Float8TELayerNormMLPModule,
         )
         for name, module in model.named_modules():
             if any(name.startswith(prefix + ".") for prefix in selected_prefixes):

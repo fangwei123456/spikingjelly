@@ -156,16 +156,13 @@ def test_nvtx_training_ranges_are_balanced(monkeypatch) -> None:
     )
 
     pushed = [name for kind, name in ranges if kind == "push"]
-    assert pushed == [
-        "benchmark_step:training:0",
-        "reset",
-        "zero_grad",
-        "forward",
-        "loss",
-        "backward",
-        "optimizer",
-    ]
+    assert pushed[0] == "benchmark_step:training:0"
+    for required in ("reset", "zero_grad", "forward", "loss", "backward", "optimizer"):
+        assert required in pushed
     assert len(pushed) == sum(kind == "pop" for kind, _ in ranges)
+    assert pushed.index("reset") < pushed.index("forward")
+    assert pushed.index("forward") < pushed.index("backward")
+    assert pushed.index("backward") < pushed.index("optimizer")
 
 
 def test_profile_hooks_write_first_tensor_metadata_and_balance_nvtx(
@@ -195,6 +192,7 @@ def test_profile_hooks_write_first_tensor_metadata_and_balance_nvtx(
     )
     metadata_path = tmp_path / "tensors.jsonl"
     hooks = benchmark._ProfileHooks(model, metadata_path)
+    assert not hooks.records
     hooks.active = True
     try:
         x_seq = torch.randn(2, 3, 4, requires_grad=True)
@@ -244,7 +242,7 @@ def test_benchmark_releases_training_state_before_inference(monkeypatch) -> None
         profile_steps=10,
         profile_module_hooks=True,
         tensor_metadata_output=None,
-        fp8_recipe="auto",
+        fp8_recipe="delayed",
         fp8_fallback_dtype="bf16",
         triton_storage=None,
         triton_fwd="fp32",

@@ -574,7 +574,7 @@ def benchmark_one_precision(
         device,
         PrecisionConfig(
             mode=precision,
-            fp8_recipe=args.fp8_recipe,
+            fp8_recipe=args.fp8_recipe if precision == "fp8" else "auto",
             fp8_fallback_dtype=args.fp8_fallback_dtype
             if precision == "fp8"
             else "bf16",
@@ -585,20 +585,22 @@ def benchmark_one_precision(
     )
     model = artifacts.model
     precision_report = artifacts.describe()
-    coverage_tracker = _FP8CoverageTracker(
-        model,
-        precision_report["conversion_report"],
-    )
-    model.eval()
-    try:
-        functional.reset_net(model)
-        with torch.inference_mode(), artifacts.autocast_context():
-            model(x_seq)
-    finally:
-        coverage_tracker.close()
-        functional.reset_net(model)
-        model.train()
-    coverage_report = coverage_tracker.report()
+    coverage_report = {}
+    if precision == "fp8":
+        coverage_tracker = _FP8CoverageTracker(
+            model,
+            precision_report["conversion_report"],
+        )
+        model.eval()
+        try:
+            functional.reset_net(model)
+            with torch.inference_mode(), artifacts.autocast_context():
+                model(x_seq)
+        finally:
+            coverage_tracker.close()
+            functional.reset_net(model)
+            model.train()
+        coverage_report = coverage_tracker.report()
     optimizer = torch.optim.SGD(
         model.parameters(),
         lr=args.lr,
@@ -666,12 +668,18 @@ def benchmark_one_precision(
             model.eval()
             if profile_hooks is not None:
                 profile_hooks.active = False
-            for _ in range(args.warmup):
-                run_inference_step(model, artifacts, x_seq, device)
-            sync_if_needed(device)
-            if device.type == "cuda":
-                torch.cuda.empty_cache()
-                torch.cuda.reset_peak_memory_stats(device)
+            if profile_enabled:
+                torch.cuda.profiler.stop()
+            try:
+                for _ in range(args.warmup):
+                    run_inference_step(model, artifacts, x_seq, device)
+                sync_if_needed(device)
+                if device.type == "cuda":
+                    torch.cuda.empty_cache()
+                    torch.cuda.reset_peak_memory_stats(device)
+            finally:
+                if profile_enabled:
+                    torch.cuda.profiler.start()
 
             if profile_hooks is not None:
                 profile_hooks.active = True

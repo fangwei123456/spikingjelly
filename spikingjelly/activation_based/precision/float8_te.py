@@ -18,6 +18,11 @@ from .float8_conv import (
 from .policy import PrecisionPolicy
 
 _SUPPORTED_TE_RECIPES = {"auto", "delayed", "current", "block", "mxfp8"}
+_FP8_FALLBACK_AMP_DTYPES = {
+    "fp32": None,
+    "fp16": torch.float16,
+    "bf16": torch.bfloat16,
+}
 
 
 @contextmanager
@@ -494,7 +499,9 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
         super().__init__()
         self.device_type = device_type
         self.fp8_recipe = fp8_recipe
-        self.fp8_fallback_dtype = fp8_fallback_dtype
+        self.fp8_fallback_dtype = str(fp8_fallback_dtype).lower()
+        if self.fp8_fallback_dtype not in _FP8_FALLBACK_AMP_DTYPES:
+            raise ValueError("Unsupported fp8_fallback_dtype.")
         self._resolved_recipe_name: str | None = None
         self._resolved_recipe = None
         self._recipe_resolved = False
@@ -605,11 +612,7 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
     def autocast_context(self, group=None):
         context = self._te_autocast_context(group)
         if self._target_device is not None and self._target_device.type == "cuda":
-            amp_dtype = {
-                "fp32": None,
-                "fp16": torch.float16,
-                "bf16": torch.bfloat16,
-            }[self.fp8_fallback_dtype]
+            amp_dtype = _FP8_FALLBACK_AMP_DTYPES[self.fp8_fallback_dtype]
             return _cuda_device_autocast_context(
                 self._target_device,
                 context,

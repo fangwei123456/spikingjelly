@@ -561,9 +561,13 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
     model.train(args.phase == "training")
     metadata["precision"] = precision.describe()
     x, target = _make_batch(args, device)
-    coverage_tracker = _FP8CoverageTracker(
-        state_model,
-        metadata["precision"]["conversion_report"],
+    coverage_tracker = (
+        _FP8CoverageTracker(
+            state_model,
+            metadata["precision"]["conversion_report"],
+        )
+        if args.precision == "fp8"
+        else None
     )
     optimizer = (
         torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
@@ -651,8 +655,9 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
         step()
         torch.cuda.synchronize(device)
         first_step_wall_ms = (time.perf_counter() - first_started) * 1000.0
-        coverage_tracker.close()
-        metadata["fp8_coverage"] = coverage_tracker.report()
+        if coverage_tracker is not None:
+            coverage_tracker.close()
+            metadata["fp8_coverage"] = coverage_tracker.report()
 
         for _ in range(args.warmup):
             step()
@@ -663,12 +668,18 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
         reserved_before = torch.cuda.memory_reserved(device)
         starts = [torch.cuda.Event(enable_timing=True) for _ in range(args.steps)]
         ends = [torch.cuda.Event(enable_timing=True) for _ in range(args.steps)]
-        for index in range(args.steps):
-            starts[index].record()
-            with _nvtx_range(f"benchmark_step:{index}", args.profile):
-                step()
-            ends[index].record()
-        ends[-1].synchronize()
+        if args.profile:
+            torch.cuda.profiler.start()
+        try:
+            for index in range(args.steps):
+                starts[index].record()
+                with _nvtx_range(f"benchmark_step:{index}", args.profile):
+                    step()
+                ends[index].record()
+            ends[-1].synchronize()
+        finally:
+            if args.profile:
+                torch.cuda.profiler.stop()
         samples_ms = [
             start.elapsed_time(end) for start, end in zip(starts, ends, strict=True)
         ]
@@ -687,9 +698,8 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
             hooks.close()
             hooks = None
     finally:
-        if args.profile:
-            torch.cuda.profiler.stop()
-        coverage_tracker.close()
+        if coverage_tracker is not None:
+            coverage_tracker.close()
         if hooks is not None:
             hooks.close()
         _stop_monitor(monitor)

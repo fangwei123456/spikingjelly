@@ -8,7 +8,6 @@ from typing import Literal, Optional
 class PrecisionConfig:
     mode: Literal["fp32", "fp16", "bf16", "fp8"] = "fp32"
     fp8_recipe: Literal["auto", "delayed", "current", "block", "mxfp8"] = "auto"
-    fp8_fallback_dtype: Literal["fp32", "fp16", "bf16"] = "bf16"
     triton_storage: Optional[
         Literal[
             "fp32",
@@ -20,6 +19,7 @@ class PrecisionConfig:
     ] = None
     triton_fwd: Literal["fp8", "fp16", "bf16", "fp32"] = "fp32"
     triton_bwd: Literal["fp8", "fp16", "bf16", "fp32"] = "fp32"
+    fp8_fallback_dtype: Literal["fp32", "fp16", "bf16"] = "bf16"
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "mode", str(self.mode).lower())
@@ -144,9 +144,6 @@ PrecisionConfig.__init__.__doc__ = r"""Configure model and Triton-neuron precisi
 :type mode: Literal["fp32", "fp16", "bf16", "fp8"]
 :param fp8_recipe: Transformer Engine FP8 recipe；仅 ``mode="fp8"`` 有效。
 :type fp8_recipe: Literal["auto", "delayed", "current", "block", "mxfp8"]
-:param fp8_fallback_dtype: 未由 Transformer Engine 转换的普通 CUDA 算子使用的
-    fallback autocast dtype，默认为 ``bf16``；``fp32`` 表示不启用外层 autocast。
-:type fp8_fallback_dtype: Literal["fp32", "fp16", "bf16"]
 :param triton_storage: Triton 神经元状态 storage dtype；``None`` 禁用 mixed path。
 :type triton_storage: Optional[Literal["fp32", "fp16", "bf16",
     "float8_e4m3fn", "float8_e5m2"]]
@@ -154,6 +151,9 @@ PrecisionConfig.__init__.__doc__ = r"""Configure model and Triton-neuron precisi
 :type triton_fwd: Literal["fp8", "fp16", "bf16", "fp32"]
 :param triton_bwd: Triton 神经元反向算术 dtype。
 :type triton_bwd: Literal["fp8", "fp16", "bf16", "fp32"]
+:param fp8_fallback_dtype: 未由 Transformer Engine 转换的普通 CUDA 算子使用的
+    fallback autocast dtype，默认为 ``bf16``；``fp32`` 表示不启用外层 autocast。
+:type fp8_fallback_dtype: Literal["fp32", "fp16", "bf16"]
 :raises ValueError: mode、recipe 或 Triton dtype 组合无效。
 
 ----
@@ -172,10 +172,6 @@ changes neuron backends nor silently falls back.
 :type mode: Literal["fp32", "fp16", "bf16", "fp8"]
 :param fp8_recipe: Transformer Engine FP8 recipe, valid only for ``mode="fp8"``.
 :type fp8_recipe: Literal["auto", "delayed", "current", "block", "mxfp8"]
-:param fp8_fallback_dtype: Fallback autocast dtype for ordinary CUDA operations
-    not converted by Transformer Engine. The default is ``bf16``; ``fp32``
-    disables the outer autocast.
-:type fp8_fallback_dtype: Literal["fp32", "fp16", "bf16"]
 :param triton_storage: Triton neuron-state storage dtype; ``None`` disables the
     mixed path.
 :type triton_storage: Optional[Literal["fp32", "fp16", "bf16",
@@ -184,5 +180,9 @@ changes neuron backends nor silently falls back.
 :type triton_fwd: Literal["fp8", "fp16", "bf16", "fp32"]
 :param triton_bwd: Triton-neuron backward arithmetic dtype.
 :type triton_bwd: Literal["fp8", "fp16", "bf16", "fp32"]
+:param fp8_fallback_dtype: Fallback autocast dtype for ordinary CUDA operations
+    not converted by Transformer Engine. The default is ``bf16``; ``fp32``
+    disables the outer autocast.
+:type fp8_fallback_dtype: Literal["fp32", "fp16", "bf16"]
 :raises ValueError: If a mode, recipe, or Triton dtype combination is invalid.
 """
