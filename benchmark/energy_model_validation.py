@@ -534,14 +534,18 @@ def _neuromc_runtime_score(item: dict[str, Any]) -> float:
     if phase == "we":
         fy, fx = int(dims["OY"]), int(dims["OX"])
         oy, ox = int(dims["FY"]), int(dims["FX"])
+        padding = (0, 0)
+        input_spatial = (oy + fy - 1, ox + fx - 1)
     else:
         fy, fx = int(dims["FY"]), int(dims["FX"])
         oy, ox = int(dims["OY"]), int(dims["OX"])
+        padding = (fy // 2, fx // 2)
+        input_spatial = (oy, ox)
     conv = nn.Conv2d(
         cin,
         cout,
         (fy, fx),
-        padding=(fy // 2, fx // 2),
+        padding=padding,
         bias=False,
     )
     model = (
@@ -553,8 +557,7 @@ def _neuromc_runtime_score(item: dict[str, Any]) -> float:
     x = torch.zeros(
         1,
         cin,
-        oy,
-        ox,
+        *input_spatial,
         requires_grad=phase != "fe",
     )
     if phase == "fe":

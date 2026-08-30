@@ -1143,6 +1143,27 @@ def test_neuromc_runtime_counts_only_the_executed_branch():
     assert len(left.mapping_summary) == len(right.mapping_summary) == 1
 
 
+def test_neuromc_rejects_functional_convolution_backward():
+    class FunctionalConv(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = nn.Parameter(torch.randn(3, 2, 3, 3))
+
+        def forward(self, x):
+            return torch.nn.functional.conv2d(x, self.weight)
+
+    model = FunctionalConv().train()
+    x = torch.randn(1, 2, 5, 5, requires_grad=True)
+
+    with pytest.raises(ValueError, match="aten.convolution_backward.default"):
+        op_counter.estimate_neuromc_runtime_energy(
+            model,
+            x,
+            target=torch.empty(0),
+            loss_fn=lambda output, target: output.sum(),
+        )
+
+
 def test_neuromc_forward_mapping_counts_partial_sum_traffic():
     model = nn.Sequential(
         nn.Conv2d(16, 16, 3, bias=False),

@@ -1,4 +1,6 @@
 import pytest
+import torch
+import torch.nn as nn
 
 from benchmark.energy_model_validation import (
     CROSS_ESTIMATORS,
@@ -8,7 +10,9 @@ from benchmark.energy_model_validation import (
     Score,
     _cross_validation_metrics,
     _metrics,
+    _neuromc_runtime_score,
 )
+from spikingjelly.activation_based import neuron, op_counter
 
 
 def test_energy_validation_grid_and_raw_scale_metric():
@@ -42,3 +46,21 @@ def test_cross_validation_metrics_are_pairwise_and_symmetric():
         assert matrix.shape == (len(CROSS_ESTIMATORS), len(CROSS_ESTIMATORS))
         assert matrix == pytest.approx(matrix.T)
         assert matrix.diagonal() == pytest.approx(1.0)
+        assert matrix[0, 1] == pytest.approx(1.0)
+
+
+def test_neuromc_we_score_handles_even_spatial_kernel():
+    item = {
+        "phase": "we",
+        "dims": {"C": 2, "K": 3, "OY": 2, "OX": 4, "FY": 5, "FX": 7},
+    }
+    model = nn.Sequential(neuron.IFNode(), nn.Conv2d(2, 3, (2, 4), bias=False)).train()
+    x = torch.zeros(1, 2, 6, 10, requires_grad=True)
+    expected = op_counter.estimate_neuromc_runtime_energy(
+        model,
+        x,
+        target=torch.empty(0),
+        loss_fn=lambda output, target: output.sum(),
+    ).energy_by_core_type["wg"]
+
+    assert _neuromc_runtime_score(item) == pytest.approx(expected)

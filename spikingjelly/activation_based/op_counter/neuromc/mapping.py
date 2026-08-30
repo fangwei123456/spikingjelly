@@ -31,26 +31,17 @@ class _Fragment:
     optimizer_has_momentum_buffer: bool = False
 
 
-def _energy_per_element(
-    spec: MemoryInstanceSpec, precision_bits: int, read: bool
-) -> float:
-    bandwidth = spec.r_bw if read else spec.w_bw
-    cost = spec.r_cost if read else spec.w_cost
-    return cost / (bandwidth / precision_bits)
-
-
-def _add_access(
+def _accumulate_memory(
     totals,
     energy,
     *,
     level: str,
     direction: str,
-    elements: int,
-    precision_bits: int,
+    bits: int,
     spec: MemoryInstanceSpec,
     config: MemoryHierarchyConfig,
 ) -> None:
-    if elements <= 0:
+    if bits <= 0:
         return
     if level == "dram" and config.zero_dram_in_paper_energy:
         return
@@ -62,11 +53,12 @@ def _add_access(
         and direction in {"rl2h", "wh2l"}
     ):
         return
-    read = direction.startswith("r")
-    totals[level][direction] += elements * precision_bits
-    energy[level][direction] += elements * _energy_per_element(
-        spec, precision_bits, read
-    )
+    totals[level][direction] += bits
+    bandwidth = spec.r_bw if direction.startswith("r") else spec.w_bw
+    if bandwidth <= 0:
+        return
+    cost = spec.r_cost if direction.startswith("r") else spec.w_cost
+    energy[level][direction] += bits / bandwidth * cost
 
 
 def _map_base_memory(fragment: _Fragment, config: MemoryHierarchyConfig):
@@ -115,13 +107,12 @@ def _map_base_memory(fragment: _Fragment, config: MemoryHierarchyConfig):
         return totals, energy
 
     def add(level, direction, elements, precision, spec):
-        _add_access(
+        _accumulate_memory(
             totals,
             energy,
             level=level,
             direction=direction,
-            elements=elements,
-            precision_bits=precision,
+            bits=elements * precision,
             spec=spec,
             config=config,
         )
