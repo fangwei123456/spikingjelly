@@ -648,8 +648,6 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
             pass
 
     try:
-        if args.profile:
-            torch.cuda.profiler.start()
         torch.cuda.synchronize(device)
         first_started = time.perf_counter()
         step()
