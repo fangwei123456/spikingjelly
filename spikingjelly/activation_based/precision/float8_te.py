@@ -34,7 +34,7 @@ def _cuda_device_autocast_context(
     amp_context = (
         torch.amp.autocast(device.type, dtype=amp_dtype)
         if amp_dtype is not None
-        else nullcontext()
+        else torch.amp.autocast(device.type, enabled=False)
     )
     with torch.cuda.device(device), amp_context, autocast_context:
         yield

@@ -899,8 +899,8 @@ def test_float8_policy_nests_default_cuda_autocast(monkeypatch):
         yield
 
     @contextmanager
-    def fake_autocast(device_type, dtype):
-        entered.append(("autocast", device_type, dtype))
+    def fake_autocast(device_type, dtype=None, enabled=True):
+        entered.append(("autocast", device_type, dtype, enabled))
         yield
 
     monkeypatch.setattr(torch.cuda, "device", fake_device)
@@ -916,7 +916,7 @@ def test_float8_policy_nests_default_cuda_autocast(monkeypatch):
 
     assert entered == [
         ("device", "cuda:0"),
-        ("autocast", "cuda", torch.bfloat16),
+        ("autocast", "cuda", torch.bfloat16, True),
     ]
 
 
@@ -927,6 +927,40 @@ def test_float8_policy_rejects_invalid_fallback_dtype():
 
     with pytest.raises(ValueError, match="Unsupported fp8_fallback_dtype"):
         Float8TransformerEnginePolicy(fp8_fallback_dtype="int8")
+
+
+def test_float8_policy_disables_ambient_autocast_for_fp32(monkeypatch):
+    from spikingjelly.activation_based.precision.float8_te import (
+        Float8TransformerEnginePolicy,
+    )
+
+    entered = []
+
+    @contextmanager
+    def fake_device(device):
+        entered.append(("device", str(device)))
+        yield
+
+    @contextmanager
+    def fake_autocast(device_type, dtype=None, enabled=True):
+        entered.append(("autocast", device_type, dtype, enabled))
+        yield
+
+    monkeypatch.setattr(torch.cuda, "device", fake_device)
+    monkeypatch.setattr(torch.amp, "autocast", fake_autocast)
+    policy = Float8TransformerEnginePolicy(fp8_fallback_dtype="fp32")
+    policy._target_device = torch.device("cuda", 0)
+    monkeypatch.setattr(
+        policy, "_te_autocast_context", lambda _group=None: nullcontext()
+    )
+
+    with policy.autocast_context():
+        pass
+
+    assert entered == [
+        ("device", "cuda:0"),
+        ("autocast", "cuda", None, False),
+    ]
 
 
 def test_transformer_engine_sdpa_adapter_accepts_flattened_te_output(monkeypatch):
