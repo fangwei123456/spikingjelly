@@ -68,6 +68,14 @@ Transformer Engine FP8 与 Triton 神经元 mixed precision 当前要求 DDP 且
 MCore LLM 精度与此独立，继续由原生 transformer 和 optimizer 配置拥有。配置职责、
 单机用法和 FP8 性能交叉点见 :doc:`precision`。
 
+``execution_mode`` 取 ``"eager"``、``"compile"`` 或 ``"cuda_graph"``。
+``"cuda_graph"`` 在执行器层手动捕获完整 forward/loss/backward；optimizer、scaler
+更新、scheduler、EMA、checkpoint、日志和 ``reset_net`` 保持在图外。训练默认先运行
+11 个真实 step 再捕获，不执行 dummy optimizer step。输入 shape、dtype 或 layout 与
+捕获点不同时，该 batch 使用 eager 并计入 fallback。CUDA Graph 当前不支持 Vision
+多 rank（DDP/TP/PP）、FSDP2、FP8、memopt、CuPy backend 或
+``store_v_seq=True``；分布式 CUDA Graph 使用 MCore 原生 runtime。默认仍为 eager。
+
 ``batch_size`` 是每个 DP rank 的 batch size；global batch 为
 ``batch_size * DP``，不乘 TP、PP 或 SNN 时间步。``tensor_parallel_size`` 和
 ``pipeline_parallel_size`` 分别控制 TP 和 PP，剩余 rank 自动作为 DP。模型专属的

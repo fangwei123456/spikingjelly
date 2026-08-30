@@ -4,6 +4,7 @@ import torch
 import spikingjelly.configure as configure
 from spikingjelly.activation_based import base as activation_base
 from spikingjelly.activation_based import functional, neuron, surrogate
+from spikingjelly.activation_based.functional import neuron as functional_neuron
 from spikingjelly.activation_based.triton_kernel import triton_utils
 from spikingjelly.activation_based.triton_kernel.fp8_capability import (
     supports_triton_fp8_neuron_backward,
@@ -250,6 +251,88 @@ def _mixed_precision_reference(
         v_seq[t] = _quantize_for_storage(v, storage_dtype)
         h_seq[t] = _quantize_for_storage(h, storage_dtype)
     return s_seq, v_seq, h_seq
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_mixed_precision_lif_skips_unrequested_voltage_sequence():
+    torch.manual_seed(7)
+    x = torch.randn(4, 2, 3, device="cuda", dtype=torch.bfloat16)
+    v = torch.randn(2, 3, device="cuda", dtype=torch.bfloat16)
+
+    def run(store_v_seq):
+        x_leaf = x.detach().clone().requires_grad_()
+        v_leaf = v.detach().clone().requires_grad_()
+        spike, voltage, _ = lif_triton_kernel._multistep_lif_mp(
+            x_leaf,
+            v_leaf,
+            decay_input=True,
+            tau=2.0,
+            v_threshold=1.0,
+            v_reset=0.0,
+            storage_dtype=torch.bfloat16,
+            compute_dtype="bf16",
+            backward_compute_dtype="bf16",
+            spike_dtype=torch.bfloat16,
+            save_intermediates=True,
+            store_v_seq=store_v_seq,
+        )
+        final_voltage = voltage[-1] if store_v_seq else voltage
+        (spike.sum() + final_voltage.sum()).backward()
+        return spike, final_voltage, x_leaf.grad, v_leaf.grad, voltage
+
+    full = run(True)
+    final_only = run(False)
+
+    assert final_only[-1].shape == v.shape
+    for expected, actual in zip(full[:-1], final_only[:-1], strict=True):
+        torch.testing.assert_close(actual, expected)
+
+
+def test_lif_native_triton_precision_uses_standard_path(monkeypatch):
+    node = neuron.LIFNode(step_mode="m", backend="torch")
+    node._backend = "triton"
+    node._triton_precision = (torch.bfloat16, "bf16", "bf16")
+    called = False
+
+    def standard_path(x_seq, v, *_args):
+        nonlocal called
+        called = True
+        return x_seq, v, None
+
+    monkeypatch.setattr(functional, "lif_multi_step_triton", standard_path)
+    x = torch.zeros(4, 2, 3, dtype=torch.bfloat16)
+    node.multi_step_functional_forward((x,), (torch.zeros_like(x[0]),))
+
+    assert called
+
+
+def test_lif_mixed_precision_wrapper_forwards_store_v_seq(monkeypatch):
+    received = None
+
+    def mixed_precision(x_seq, v, **kwargs):
+        nonlocal received
+        received = kwargs["store_v_seq"]
+        return x_seq, v, None
+
+    monkeypatch.setattr(lif_triton_kernel, "_multistep_lif_mp", mixed_precision)
+    x = torch.zeros(4, 2, 3)
+    v = torch.zeros_like(x[0])
+    _, final_v, v_seq = functional_neuron._lif_multi_step_triton_mp(
+        x,
+        v,
+        2.0,
+        True,
+        1.0,
+        0.0,
+        surrogate.Sigmoid(),
+        False,
+        False,
+        (torch.float16, "fp32", "fp32"),
+    )
+
+    assert received is False
+    assert final_v.shape == v.shape
+    assert v_seq is None
 
 
 def test_triton_fp8_capability_report_cpu_is_unavailable():

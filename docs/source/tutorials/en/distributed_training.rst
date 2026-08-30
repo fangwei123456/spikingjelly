@@ -76,6 +76,17 @@ require DDP with TP=PP=1. MCore LLM precision is independent and remains configu
 through its native transformer and optimizer configuration. See :doc:`precision`
 for configuration ownership, standalone usage, and measured FP8 crossover points.
 
+``execution_mode`` is ``"eager"``, ``"compile"``, or ``"cuda_graph"``.
+``"cuda_graph"`` manually captures the complete forward/loss/backward workload at
+the execution-runner seam. Optimizer and scaler updates, scheduling, EMA,
+checkpointing, logging, and ``reset_net`` remain outside the graph. Training runs
+11 real optimizer steps before capture and never runs dummy optimizer steps. A
+batch whose shape, dtype, or layout differs from the capture point runs eagerly
+and increments the fallback counter. Vision CUDA Graph currently rejects FSDP2,
+multi-rank DDP/TP/PP, FP8, memopt, CuPy backends, and ``store_v_seq=True``.
+Distributed CUDA Graph execution uses the native MCore runtime. Eager remains
+the default.
+
 ``batch_size`` is the batch size on each DP rank. The global batch is
 ``batch_size * DP`` and does not include TP, PP, or SNN time steps.
 ``tensor_parallel_size`` and ``pipeline_parallel_size`` select TP and PP; the

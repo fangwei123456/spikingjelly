@@ -59,6 +59,7 @@ def sg_triton(h, alpha, sg_triton_id: tl.constexpr):
 
     Sg Triton function
     """
+    alpha = tl.full([1], alpha, tl.float32)  # Runtime Python floats specialize as fp64.
     if sg_triton_id == 0:  # Sigmoid:  alpha * sigmoid(alpha*h) * (1 - sigmoid(alpha*h))
         sg = tl.sigmoid(h.to(tl.float32) * alpha)
         sg = alpha * sg * (1.0 - sg)

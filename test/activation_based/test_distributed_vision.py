@@ -12,7 +12,9 @@ import torch.distributed.device_mesh as device_mesh
 import torch.nn as nn
 from torch.utils.data import TensorDataset
 
-from spikingjelly.activation_based import functional, layer
+from spikingjelly.activation_based import base as activation_base
+from spikingjelly.activation_based import functional, layer, neuron
+from spikingjelly.activation_based._cuda_graph import validate_cuda_graph_model
 from spikingjelly.activation_based.distributed import vision
 from spikingjelly.activation_based.distributed.vision import config as vision_config
 from spikingjelly.activation_based.distributed.vision import execution, inference
@@ -223,12 +225,66 @@ def test_vision_predict_returns_no_metrics(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize(
+    "model_config",
+    [
+        SEWResNet34Config(image_size=32, num_classes=3, neuron_backend="triton"),
+        SpikformerConfig(
+            image_height=32,
+            image_width=32,
+            num_classes=3,
+            neuron_backend="triton",
+        ),
+    ],
+)
+def test_vision_builder_sets_step_mode_before_triton_backend(monkeypatch, model_config):
+    monkeypatch.setattr(activation_base, "check_backend_library", lambda _backend: None)
+
+    model = model_config.get_builder_cls()(model_config)._build_canonical_model()
+    nodes = [
+        module for module in model.modules() if isinstance(module, neuron.BaseNode)
+    ]
+
+    assert nodes
+    assert all(module.step_mode == "m" for module in nodes)
+    assert all(module.backend == "triton" for module in nodes)
+
+
+@pytest.mark.parametrize(
+    ("attribute", "value", "message"),
+    [("backend", "cupy", "CuPy"), ("store_v_seq", True, "store_v_seq")],
+)
+def test_vision_cuda_graph_rejects_unsafe_model_state(attribute, value, message):
+    model = nn.Sequential(nn.Linear(2, 2), nn.Linear(2, 2))
+    setattr(model[1], attribute, value)
+
+    with pytest.raises(ValueError, match=message):
+        validate_cuda_graph_model(model)
+
+
+@pytest.mark.parametrize(
     ("match", "kwargs"),
     [
         ("batch_size", {"batch_size": 0}),
         ("dataset_builder", {"dataset_builder": "dataset"}),
         ("data_parallel", {"data_parallel": "ddp"}),
-        ("compile", {"compile": True, "pipeline_parallel_size": 2}),
+        ("execution_mode", {"execution_mode": "unknown"}),
+        (
+            "compile",
+            {"execution_mode": "compile", "pipeline_parallel_size": 2},
+        ),
+        (
+            "FSDP2",
+            {"execution_mode": "cuda_graph", "data_parallel": "fsdp2"},
+        ),
+        (
+            "single-rank",
+            {"execution_mode": "cuda_graph", "tensor_parallel_size": 2},
+        ),
+        (
+            "single-rank",
+            {"execution_mode": "cuda_graph", "pipeline_parallel_size": 2},
+        ),
+        ("positive", {"cuda_graph_warmup_steps": 0}),
     ],
 )
 def test_vision_prediction_config_rejects_invalid_values(match, kwargs):
@@ -271,6 +327,24 @@ def test_vision_evaluation_owns_loss_configuration():
         ("loss_function", {"loss_function": "cross_entropy"}),
         ("input_layout", {"input_layout": "NHWC"}),
         ("mixup_alpha", {"mixup_alpha": -0.1}),
+        ("execution_mode", {"execution_mode": "unknown"}),
+        (
+            "FSDP2",
+            {"execution_mode": "cuda_graph", "data_parallel": "fsdp2"},
+        ),
+        (
+            "single-rank",
+            {"execution_mode": "cuda_graph", "tensor_parallel_size": 2},
+        ),
+        (
+            "single-rank",
+            {"execution_mode": "cuda_graph", "pipeline_parallel_size": 2},
+        ),
+        (
+            "memopt",
+            {"execution_mode": "cuda_graph", "memopt_level": 1},
+        ),
+        ("positive", {"cuda_graph_warmup_steps": 0}),
         (
             "step_mode='m'",
             {

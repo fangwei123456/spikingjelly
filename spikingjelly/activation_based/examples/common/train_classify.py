@@ -19,6 +19,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms.functional import InterpolationMode
 
 from ... import functional
+from ..._cuda_graph import StaticCudaGraph, validate_cuda_graph_model
 from .tv_ref_classify import presets, transforms, utils
 from .tv_ref_classify.sampler import RASampler
 from spikingjelly.logger import logger
@@ -158,7 +159,7 @@ class Trainer:
         self, args, model: nn.Module, *, enabled: bool | None = None
     ) -> nn.Module:
         if enabled is None:
-            enabled = args.compile
+            enabled = args.execution_mode == "compile"
 
         if not enabled:
             return model
@@ -166,18 +167,6 @@ class Trainer:
         compile_kwargs = {"backend": args.compile_backend}
         if args.compile_mode is not None:
             compile_kwargs["mode"] = args.compile_mode
-
-        if args.compile_backend == "inductor":
-            compile_options = {}
-            if args.compile_disable_cudagraphs:
-                compile_options.update(
-                    {
-                        "triton.cudagraphs": False,
-                        "triton.cudagraph_trees": False,
-                    }
-                )
-            if compile_options:
-                compile_kwargs["options"] = compile_options
 
         return torch.compile(model, **compile_kwargs)
 
@@ -198,6 +187,28 @@ class Trainer:
         metric_logger.add_meter("lr", utils.SmoothedValue(window_size=1, fmt="{value}"))
         metric_logger.add_meter("img/s", utils.ThroughputValue(fmt="{global_avg:.3f}"))
 
+        def train_step(image: torch.Tensor, target: torch.Tensor):
+            with torch.cuda.amp.autocast(enabled=scaler is not None):
+                processed = self.preprocess_train_sample(args, image)
+                output = self.process_model_output(args, model(processed))
+                loss = criterion(output, target)
+            if scaler is not None:
+                scaler.scale(loss).backward()
+            else:
+                loss.backward()
+            return loss, output
+
+        if args.execution_mode == "cuda_graph":
+            training_step = getattr(self, "_cuda_graph_training_step", None)
+            if training_step is None:
+                training_step = StaticCudaGraph(
+                    train_step,
+                    args.cuda_graph_warmup_steps,
+                )
+                self._cuda_graph_training_step = training_step
+        else:
+            training_step = train_step
+
         header = f"Epoch: [{epoch}]"
         for i, (image, target) in enumerate(
             metric_logger.log_every(data_loader, -1, header)
@@ -205,14 +216,9 @@ class Trainer:
             start_time = time.time()
             image = image.to(device, non_blocking=not args.disable_pinmemory)
             target = target.to(device, non_blocking=not args.disable_pinmemory)
-            with torch.cuda.amp.autocast(enabled=scaler is not None):
-                image = self.preprocess_train_sample(args, image)
-                output = self.process_model_output(args, model(image))
-                loss = criterion(output, target)
-
-            optimizer.zero_grad(set_to_none=True)
+            optimizer.zero_grad(set_to_none=args.execution_mode != "cuda_graph")
+            loss, output = training_step(image, target)
             if scaler is not None:
-                scaler.scale(loss).backward()
                 if args.clip_grad_norm is not None:
                     # we should unscale the gradients of optimizer's assigned params if do gradient clipping
                     scaler.unscale_(optimizer)
@@ -220,7 +226,6 @@ class Trainer:
                 scaler.step(optimizer)
                 scaler.update()
             else:
-                loss.backward()
                 if args.clip_grad_norm is not None:
                     nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad_norm)
                 optimizer.step()
@@ -264,12 +269,30 @@ class Trainer:
         header = f"Test: {log_suffix}"
         num_processed_samples = 0
         start_time = time.perf_counter()
+
+        def forward_step(image: torch.Tensor) -> torch.Tensor:
+            processed = self.preprocess_test_sample(args, image)
+            return self.process_model_output(args, model(processed))
+
+        if args.execution_mode == "cuda_graph":
+            graphs = getattr(self, "_cuda_graph_evaluation_steps", None)
+            if graphs is None:
+                graphs = {}
+                self._cuda_graph_evaluation_steps = graphs
+            graph = graphs.get(id(model))
+            if graph is None:
+                graph = StaticCudaGraph(
+                    forward_step,
+                    min(args.cuda_graph_warmup_steps, 3),
+                )
+                graphs[id(model)] = graph
+            forward_step = graph
+
         with torch.inference_mode():
             for image, target in metric_logger.log_every(data_loader, -1, header):
                 image = image.to(device, non_blocking=not args.disable_pinmemory)
                 target = target.to(device, non_blocking=not args.disable_pinmemory)
-                image = self.preprocess_test_sample(args, image)
-                output = self.process_model_output(args, model(image))
+                output = forward_step(image)
                 loss = criterion(output, target)
 
                 acc1, acc5 = self.cal_acc1_acc5(output, target)
@@ -519,7 +542,23 @@ class Trainer:
         return lr_scheduler
 
     def main(self, args):
-        set_deterministic(args.seed, args.disable_uda)
+        self._cuda_graph_training_step = None
+        self._cuda_graph_evaluation_steps = {}
+        if args.execution_mode != "compile" and (
+            args.compile_backend != "inductor"
+            or args.compile_mode is not None
+            or args.compile_eval
+        ):
+            raise ValueError("compile options require --execution-mode compile.")
+        if args.execution_mode == "cuda_graph":
+            if torch.device(args.device).type != "cuda":
+                raise ValueError("Common Trainer CUDA Graph requires a CUDA device.")
+            if int(os.environ.get("WORLD_SIZE", "1")) > 1:
+                raise ValueError(
+                    "Common Trainer CUDA Graph requires single-process execution."
+                )
+            if args.cuda_graph_warmup_steps <= 0:
+                raise ValueError("cuda_graph_warmup_steps must be positive.")
         if args.workers > 0 and args.prefetch_factor < 1:
             raise ValueError(
                 f"--prefetch-factor must be >= 1 when --workers > 0, but got {args.prefetch_factor}."
@@ -532,6 +571,7 @@ class Trainer:
             raise ValueError(
                 "The weights parameter works only in prototype mode. Please pass the --prototype argument."
             )
+        set_deterministic(args.seed, args.disable_uda)
         if args.output_dir:
             os.makedirs(args.output_dir, exist_ok=True)
 
@@ -540,7 +580,6 @@ class Trainer:
             logger.info("Training arguments: {}", args)
 
         device = torch.device(args.device)
-
         dataset, dataset_test, train_sampler, test_sampler = self.load_ImageNet(args)
 
         collate_fn = None
@@ -584,6 +623,8 @@ class Trainer:
             logger.info("Creating model")
         model = self.load_model(args, num_classes)
         model.to(device)
+        if args.execution_mode == "cuda_graph":
+            validate_cuda_graph_model(model)
         if utils.is_main_process():
             logger.info("Model created: {}", type(model).__name__)
             logger.debug("Model architecture:\n{}", model)
@@ -684,7 +725,9 @@ class Trainer:
 
         model = self.compile_model(args, model_without_ddp)
         eval_model = (
-            model_without_ddp if args.compile and not args.compile_eval else model
+            model_without_ddp
+            if args.execution_mode == "compile" and not args.compile_eval
+            else model
         )
 
         if args.distributed:
@@ -1110,9 +1153,10 @@ class Trainer:
             help="not use automatic mixed precision training",
         )
         parser.add_argument(
-            "--compile",
-            action="store_true",
-            help="compile the training model with torch.compile",
+            "--execution-mode",
+            choices=("eager", "compile", "cuda_graph"),
+            default="eager",
+            help="model execution mode (default: eager)",
         )
         parser.add_argument(
             "--compile-backend",
@@ -1127,14 +1171,15 @@ class Trainer:
             help="optional mode passed to torch.compile, e.g. default or max-autotune",
         )
         parser.add_argument(
-            "--compile-disable-cudagraphs",
-            action="store_true",
-            help="disable Inductor cudagraph options for better cross-version stability",
-        )
-        parser.add_argument(
             "--compile-eval",
             action="store_true",
             help="also compile evaluation instead of using the eager model for validation",
+        )
+        parser.add_argument(
+            "--cuda-graph-warmup-steps",
+            type=int,
+            default=11,
+            help="eager steps before CUDA Graph capture (default: 11)",
         )
         parser.add_argument(
             "--local_rank",

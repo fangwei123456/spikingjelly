@@ -421,6 +421,11 @@ class TrainingConfig:
             raise ValueError(f"Unsupported lr_decay_style={self.lr_decay_style!r}.")
 
         transformer = self.model.transformer
+        if transformer.cuda_graph_impl != "none" and (
+            not isinstance(transformer.cuda_graph_warmup_steps, int)
+            or transformer.cuda_graph_warmup_steps <= 0
+        ):
+            raise ValueError("cuda_graph_warmup_steps must be a positive integer.")
         if transformer.context_parallel_size > 1 and self.sequence_length % (
             2 * transformer.context_parallel_size
         ):

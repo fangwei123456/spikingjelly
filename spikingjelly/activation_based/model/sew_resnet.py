@@ -1039,9 +1039,10 @@ class SEWResNet34Builder(ModelBuilder):
             num_classes=config.num_classes,
             tau=config.tau,
             detach_reset=config.detach_reset,
-            backend=config.neuron_backend,
+            backend="torch",
         )
         functional.set_step_mode(model, config.step_mode)
+        functional.set_backend(model, config.neuron_backend, instance=neuron.BaseNode)
         return model
 
     def _pipeline_stage(self, model: nn.Module, rank: int, size: int) -> nn.Module:

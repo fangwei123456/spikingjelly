@@ -10,6 +10,7 @@ import statistics
 import subprocess
 import sys
 import time
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,7 @@ DEFAULT_IMAGE_SIZE = 224
 DEFAULT_SEED = 20260808
 MODEL_NAMES = ("spiking_vgg16_bn", "sew_resnet18", "spikformer_ti")
 PHASES = ("inference", "training")
-EXECUTIONS = ("eager", "compile")
+EXECUTIONS = ("eager", "compile", "cuda_graph")
 
 
 def summarize_samples(samples_ms: list[float]) -> dict[str, float]:
@@ -531,19 +532,19 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
     def reset_net() -> None:
         functional.reset_net(state_model)
 
-    def step() -> torch.Tensor:
+    def graph_work(
+        *inputs: torch.Tensor,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+        graph_x = inputs[0]
         if optimizer is None:
             with torch.inference_mode():
-                output = model(x)
-            reset_net()
+                output = model(graph_x)
             return output
-        optimizer.zero_grad(set_to_none=True)
-        output = model(x)
-        loss = criterion(output.mean(0), target)
+        graph_target = inputs[1]
+        output = model(graph_x)
+        loss = criterion(output.mean(0), graph_target)
         loss.backward()
-        optimizer.step()
-        reset_net()
-        return loss
+        return loss, output
 
     dynamo = getattr(torch, "_dynamo", None)
     if dynamo is not None:
@@ -557,6 +558,29 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
             backend="inductor",
             options={"triton.cudagraphs": False, "triton.cudagraph_trees": False},
         )
+    graph_runner = None
+    if args.execution == "cuda_graph":
+        from spikingjelly.activation_based._cuda_graph import (
+            StaticCudaGraph,
+            validate_cuda_graph_model,
+        )
+
+        validate_cuda_graph_model(model)
+        graph_runner = StaticCudaGraph(graph_work, args.warmup)
+
+    def step() -> torch.Tensor:
+        if optimizer is not None:
+            optimizer.zero_grad(set_to_none=graph_runner is None)
+        if graph_runner is not None:
+            result = (
+                graph_runner(x, target) if optimizer is not None else graph_runner(x)
+            )
+        else:
+            result = graph_work(x, target) if optimizer is not None else graph_work(x)
+        if optimizer is not None:
+            optimizer.step()
+        reset_net()
+        return result[0] if optimizer is not None else result
 
     hooks = None
     monitor = None
@@ -656,6 +680,9 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
                 {"backend": "inductor", "mode": "default", "cudagraphs": False}
                 if args.execution == "compile"
                 else None
+            ),
+            "cuda_graph": (
+                asdict(graph_runner.stats) if graph_runner is not None else None
             ),
         },
         "timing": {
@@ -898,6 +925,8 @@ def main() -> None:
             raise ValueError(
                 "batch size and steps must be positive; warmup must be non-negative"
             )
+        if args.execution == "cuda_graph" and args.warmup == 0:
+            raise ValueError("warmup must be positive for CUDA Graph execution")
     else:
         positive = (
             args.rounds,
@@ -910,6 +939,11 @@ def main() -> None:
         )
         if min(positive) <= 0 or min(args.inference_warmup, args.training_warmup) < 0:
             raise ValueError("matrix counts must be positive and warmups non-negative")
+        if "cuda_graph" in args.executions and (
+            ("inference" in args.phases and args.inference_warmup == 0)
+            or ("training" in args.phases and args.training_warmup == 0)
+        ):
+            raise ValueError("CUDA Graph warmups must be positive for selected phases")
     args.handler(args)
 
 

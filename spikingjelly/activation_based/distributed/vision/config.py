@@ -514,10 +514,15 @@ class PredictionConfig:
     :param precision: 模型与 Triton 神经元精度配置。 / Model and Triton-neuron
         precision configuration.
     :type precision: spikingjelly.activation_based.precision.PrecisionConfig
-    :param compile: 是否使用 ``torch.compile``；当前仅支持无 PP 的
-        replicated 模式。 / Whether to use ``torch.compile``; currently limited
-        to replicated execution without PP.
-    :type compile: bool
+    :param execution_mode: ``"eager"``、``"compile"`` 或 ``"cuda_graph"``。
+        ``"cuda_graph"`` 仅支持 single-rank replicated execution、非 CuPy 神经元、
+        ``store_v_seq=False`` 和非实验精度。 / ``"eager"``, ``"compile"``, or
+        ``"cuda_graph"``. CUDA Graph requires single-rank replicated execution,
+        non-CuPy neurons, ``store_v_seq=False``, and non-experimental precision.
+    :type execution_mode: str
+    :param cuda_graph_warmup_steps: CUDA Graph 捕获前的 eager warmup batch 数。 /
+        Eager warmup batches before CUDA Graph capture.
+    :type cuda_graph_warmup_steps: int
     :param seed: 模型与数据随机种子。 / Model and data seed.
     :type seed: int
     :raises TypeError: ``precision`` 不是 ``PrecisionConfig``。 / If ``precision``
@@ -538,7 +543,8 @@ class PredictionConfig:
     precision: PrecisionConfig = field(
         default_factory=lambda: PrecisionConfig(mode="bf16")
     )
-    compile: bool = False
+    execution_mode: Literal["eager", "compile", "cuda_graph"] = "eager"
+    cuda_graph_warmup_steps: int = 3
     seed: int = 1234
 
     def __post_init__(self) -> None:
@@ -558,6 +564,12 @@ class PredictionConfig:
             raise ValueError("input_layout must be 'NCHW' or 'NTCHW'.")
         if self.data_parallel not in {"replicate", "fsdp2"}:
             raise ValueError("data_parallel must be 'replicate' or 'fsdp2'.")
+        if self.execution_mode not in {"eager", "compile", "cuda_graph"}:
+            raise ValueError(
+                "execution_mode must be 'eager', 'compile', or 'cuda_graph'."
+            )
+        if self.cuda_graph_warmup_steps <= 0:
+            raise ValueError("cuda_graph_warmup_steps must be positive.")
         if not isinstance(self.precision, PrecisionConfig):
             raise TypeError("precision must be PrecisionConfig.")
         if self.pipeline_parallel_size > 1 and self.precision.mode == "fp16":
@@ -568,16 +580,22 @@ class PredictionConfig:
             self.data_parallel != "replicate"
             or self.tensor_parallel_size != 1
             or self.pipeline_parallel_size != 1
-            or self.compile
+            or self.execution_mode != "eager"
         ):
             raise ValueError(
                 "Vision experimental precision inference requires replicated "
-                "execution with TP=1, PP=1, and compile=False."
+                "eager execution with TP=1 and PP=1."
             )
-        if self.compile and (
+        if self.execution_mode == "compile" and (
             self.pipeline_parallel_size > 1 or self.data_parallel != "replicate"
         ):
             raise ValueError("compile requires replicated execution without PP.")
+        if self.execution_mode == "cuda_graph" and self.data_parallel == "fsdp2":
+            raise ValueError("CUDA Graph does not support Vision FSDP2 execution.")
+        if self.execution_mode == "cuda_graph" and (
+            self.tensor_parallel_size != 1 or self.pipeline_parallel_size != 1
+        ):
+            raise ValueError("Vision CUDA Graph requires single-rank model execution.")
         if "." not in self.dataset_builder:
             raise ValueError("dataset_builder must be a full import path.")
 
@@ -636,10 +654,14 @@ loss, accuracy, and performance metrics.
 :param precision: 模型与 Triton 神经元精度配置。 / Model and Triton-neuron
     precision configuration.
 :type precision: spikingjelly.activation_based.precision.PrecisionConfig
-:param compile: 是否使用 ``torch.compile``；当前仅支持无 PP 的 replicated 模式。 /
-    Whether to use ``torch.compile``; currently limited to replicated execution
-    without PP.
-:type compile: bool
+:param execution_mode: ``"eager"``、``"compile"`` 或 ``"cuda_graph"``。 /
+    ``"eager"``, ``"compile"``, or ``"cuda_graph"``. CUDA Graph inherits the
+    single-rank, backend, state-storage, and precision restrictions from
+    :class:`PredictionConfig`.
+:type execution_mode: str
+:param cuda_graph_warmup_steps: CUDA Graph 捕获前的 eager warmup batch 数。 /
+    Eager warmup batches before CUDA Graph capture.
+:type cuda_graph_warmup_steps: int
 :param seed: 模型与数据随机种子。 / Model and data seed.
 :type seed: int
 :param loss_function: 分类 loss 函数的完整导入路径。 / Full loss-function
@@ -681,6 +703,8 @@ class TrainingConfig:
     precision: PrecisionConfig = field(
         default_factory=lambda: PrecisionConfig(mode="bf16")
     )
+    execution_mode: Literal["eager", "compile", "cuda_graph"] = "eager"
+    cuda_graph_warmup_steps: int = 11
     memopt_level: int = 0
     memopt_compress_inputs: bool = True
     memopt_checkpoint_budget: Literal["speed", "balanced", "memory"] = "memory"
@@ -711,6 +735,12 @@ class TrainingConfig:
             raise ValueError("mixup_alpha cannot be negative.")
         if self.data_parallel not in {"ddp", "fsdp2"}:
             raise ValueError("data_parallel must be 'ddp' or 'fsdp2'.")
+        if self.execution_mode not in {"eager", "compile", "cuda_graph"}:
+            raise ValueError(
+                "execution_mode must be 'eager', 'compile', or 'cuda_graph'."
+            )
+        if self.cuda_graph_warmup_steps <= 0:
+            raise ValueError("cuda_graph_warmup_steps must be positive.")
         if not isinstance(self.precision, PrecisionConfig):
             raise TypeError("precision must be PrecisionConfig.")
         if self.pipeline_parallel_size > 1 and self.precision.mode == "fp16":
@@ -729,6 +759,22 @@ class TrainingConfig:
             raise ValueError("Vision PP currently requires step_mode='m'.")
         if not 0 <= self.memopt_level <= 4:
             raise ValueError("memopt_level must lie in [0, 4].")
+        if self.execution_mode == "cuda_graph":
+            if self.data_parallel == "fsdp2":
+                raise ValueError("CUDA Graph does not support Vision FSDP2 training.")
+            if self.tensor_parallel_size != 1 or self.pipeline_parallel_size != 1:
+                raise ValueError(
+                    "Vision CUDA Graph requires single-rank model execution."
+                )
+            if self.memopt_level:
+                raise ValueError("CUDA Graph does not support Vision memopt training.")
+            if (
+                self.precision.mode == "fp8"
+                or self.precision.triton_storage is not None
+            ):
+                raise ValueError(
+                    "CUDA Graph does not support Vision experimental precision."
+                )
         if self.memopt_checkpoint_budget not in {"speed", "balanced", "memory"}:
             raise ValueError(
                 "memopt_checkpoint_budget must be 'speed', 'balanced', or 'memory'."
@@ -868,6 +914,14 @@ receives ``dataset_kwargs`` and returns train and validation datasets.
 :param precision: 模型与 Triton 神经元精度配置。 / Model and Triton-neuron
     precision configuration.
 :type precision: spikingjelly.activation_based.precision.PrecisionConfig
+:param execution_mode: ``"eager"``、``"compile"`` 或 ``"cuda_graph"``。 /
+    ``"eager"``, ``"compile"``, or ``"cuda_graph"``. CUDA Graph requires one
+    rank, DDP configuration without distributed replicas, ``memopt_level=0``,
+    non-CuPy neurons, ``store_v_seq=False``, and non-experimental precision.
+:type execution_mode: str
+:param cuda_graph_warmup_steps: CUDA Graph 捕获前的真实训练 step 数。 / Real
+    training steps before CUDA Graph capture.
+:type cuda_graph_warmup_steps: int
 :param memopt_level: SpikingJelly memopt level，范围 ``[0, 4]``。 / SpikingJelly
     memopt level in ``[0, 4]``.
 :type memopt_level: int

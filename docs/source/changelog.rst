@@ -18,6 +18,18 @@ and the archived documentation linked from the project README.
 Features
 ~~~~~~~~
 
+CUDA Graph Execution
+^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.distributed``.
+
+- Added opt-in manual CUDA Graph execution for Common and Vision training,
+  evaluation, and prediction at the model level rather than as a neuron backend.
+- Added native MCore CUDA Graph integration while preserving runtime-owned
+  buffers and scheduling.
+- Added eager shape fallback plus capture, replay, memory, and timing metrics to
+  the single-GPU benchmark.
+
 Spiking Neurons
 ^^^^^^^^^^^^^^^
 
@@ -25,6 +37,13 @@ Module: ``spikingjelly.activation_based.neuron``.
 
 - Added the paper-faithful ``ComplementaryLIFNode`` with single-step and
   multi-step PyTorch execution and optional trajectories for both neuron states.
+- Fixed unintended FP64 arithmetic in Triton surrogate gradients by converting
+  runtime ``alpha`` parameters to FP32.
+- Removed redundant mixed-precision LIF voltage-sequence allocation when
+  ``store_v_seq=False``, and routed native storage/compute precision through the
+  standard Triton path.
+- Fixed built-in SEW-ResNet and Spikformer builders so Triton neuron backends are
+  applied after multi-step mode is configured.
 
 Distributed Inference
 ^^^^^^^^^^^^^^^^^^^^^
@@ -88,6 +107,20 @@ Module: ``spikingjelly.activation_based.monitor``.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Vision Execution Configuration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.distributed.vision``.
+
+- Replaced ``PredictionConfig.compile`` with ``execution_mode``; migrate ``False`` to
+  ``"eager"`` and ``True`` to ``"compile"``. The new ``"cuda_graph"`` value explicitly
+  selects manual graph capture.
+- Vision CUDA Graph is single-rank and does not support FSDP2, FP8, memopt,
+  CuPy neurons, or stored voltage sequences in this release.
+- Replaced the Common Trainer's ``--compile`` flag with
+  ``--execution-mode compile``; removed ``--compile-disable-cudagraphs``. Compile
+  backend, mode, and evaluation options now require compile execution mode.
 
 FlexSN Migration
 ^^^^^^^^^^^^^^^^
