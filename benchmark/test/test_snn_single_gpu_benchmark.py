@@ -1,7 +1,9 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import torch
 
 import benchmark.benchmark_snn_single_gpu as benchmark
 import benchmark.probe_snn_compile_boundary as probe
@@ -41,6 +43,8 @@ def test_case_parser_keeps_required_reproduction_fields(tmp_path: Path):
             "100",
             "--steps",
             "500",
+            "--fp8-fallback-dtype",
+            "bf16",
             "--output",
             str(tmp_path / "result.json"),
         ]
@@ -52,6 +56,12 @@ def test_case_parser_keeps_required_reproduction_fields(tmp_path: Path):
         "inference",
         "compile",
     )
+    assert (args.neuron_backend, args.precision, args.fp8_recipe) == (
+        "triton",
+        "fp32",
+        "auto",
+    )
+    assert args.fp8_fallback_dtype == "bf16"
 
 
 def test_source_parser_requires_one_baseline_and_one_candidate(tmp_path: Path):
@@ -62,6 +72,35 @@ def test_source_parser_requires_one_baseline_and_one_candidate(tmp_path: Path):
         benchmark.parse_source_specs([f"baseline={tmp_path}"])
     with pytest.raises(ValueError, match="unique"):
         benchmark.parse_source_specs([f"baseline={tmp_path}", f"baseline={tmp_path}"])
+
+
+def test_profile_hooks_record_metadata_once(monkeypatch, tmp_path: Path):
+    ranges: list[str | None] = []
+    monkeypatch.setattr(
+        benchmark.torch.cuda.nvtx,
+        "range_push",
+        lambda name: ranges.append(name),
+    )
+    monkeypatch.setattr(
+        benchmark.torch.cuda.nvtx,
+        "range_pop",
+        lambda: ranges.append(None),
+    )
+
+    model = torch.nn.Sequential(torch.nn.Linear(2, 2))
+    hooks = benchmark._ProfileHooks(model, tmp_path / "tensors.jsonl")
+    try:
+        model(torch.randn(1, 2))
+        model(torch.randn(1, 2))
+    finally:
+        hooks.close()
+
+    records = [
+        json.loads(line)
+        for line in (tmp_path / "tensors.jsonl").read_text().splitlines()
+    ]
+    assert [record["event"] for record in records] == ["input", "output"]
+    assert len(ranges) == 4
 
 
 def test_matrix_records_child_timeouts(monkeypatch, tmp_path: Path):

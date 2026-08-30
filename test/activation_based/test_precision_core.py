@@ -46,6 +46,10 @@ def test_precision_config_normalizes_triton_fields():
         ({"mode": "fp8-te"}, "mode"),
         ({"mode": "fp8-torchao"}, "mode"),
         ({"mode": "bf16", "fp8_recipe": "delayed"}, "fp8_recipe"),
+        (
+            {"mode": "bf16", "fp8_fallback_dtype": "fp16"},
+            "mode='fp8'",
+        ),
         ({"triton_fwd": "bf16"}, "triton_storage"),
         (
             {"triton_storage": "bf16", "triton_bwd": "fp8"},
@@ -63,6 +67,30 @@ def test_precision_config_from_dict_rejects_removed_fields():
         PrecisionConfig.from_any({"mode": "fp32", "strictness": "warn"})
     with pytest.raises(TypeError, match="unexpected keyword"):
         PrecisionConfig.from_any({"mode": "fp32", "device": "cpu"})
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        PrecisionConfig.from_any({"mode": "fp8", "fp8_autocast_dtype": "bf16"})
+
+
+def test_precision_config_defaults_to_bf16_fallback():
+    config = PrecisionConfig(mode="fp8")
+
+    assert config.fp8_fallback_dtype == "bf16"
+
+
+def test_precision_config_preserves_positional_fields():
+    config = PrecisionConfig("fp8", "auto", "bf16", "fp16", "bf16")
+
+    assert (config.triton_storage, config.triton_fwd, config.triton_bwd) == (
+        "bf16",
+        "fp16",
+        "bf16",
+    )
+
+
+def test_precision_config_accepts_fp8_fallback_override():
+    config = PrecisionConfig(mode="fp8", fp8_fallback_dtype="fp16")
+
+    assert config.fp8_fallback_dtype == "fp16"
 
 
 def test_prepare_fp32_returns_public_artifacts():

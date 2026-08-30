@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 import json
 import os
 import platform
@@ -17,12 +17,32 @@ from typing import Any
 
 import torch
 
+if __package__:
+    from .fp8_coverage import _FP8CoverageTracker
+else:
+    from fp8_coverage import _FP8CoverageTracker
+from spikingjelly.activation_based.precision import (
+    PrecisionConfig,
+    prepare_model_for_precision,
+)
+
 DEFAULT_T = 4
 DEFAULT_IMAGE_SIZE = 224
 DEFAULT_SEED = 20260808
 MODEL_NAMES = ("spiking_vgg16_bn", "sew_resnet18", "spikformer_ti")
 PHASES = ("inference", "training")
 EXECUTIONS = ("eager", "compile", "cuda_graph")
+
+
+@contextmanager
+def _nvtx_range(name: str, enabled: bool):
+    if enabled:
+        torch.cuda.nvtx.range_push(name)
+    try:
+        yield
+    finally:
+        if enabled:
+            torch.cuda.nvtx.range_pop()
 
 
 def summarize_samples(samples_ms: list[float]) -> dict[str, float]:
@@ -383,6 +403,7 @@ class _ProfileHooks:
         self.output = output
         self.records: list[dict[str, Any]] = []
         self.handles = []
+        self.metadata_modules: set[str] = set()
         for name, module in model.named_modules():
             if name and any(
                 token in type(module).__name__ for token in self._INTERESTING
@@ -395,27 +416,30 @@ class _ProfileHooks:
     def _pre_hook(self, name: str, module: torch.nn.Module):
         def hook(_module, inputs):
             torch.cuda.nvtx.range_push(f"module:{type(module).__name__}:{name}")
-            self.records.append(
-                {
-                    "event": "input",
-                    "module": name,
-                    "type": type(module).__name__,
-                    "value": _tensor_metadata(inputs),
-                }
-            )
+            if name not in self.metadata_modules:
+                self.records.append(
+                    {
+                        "event": "input",
+                        "module": name,
+                        "type": type(module).__name__,
+                        "value": _tensor_metadata(inputs),
+                    }
+                )
 
         return hook
 
     def _post_hook(self, name: str):
         def hook(module, _inputs, output):
-            self.records.append(
-                {
-                    "event": "output",
-                    "module": name,
-                    "type": type(module).__name__,
-                    "value": _tensor_metadata(output),
-                }
-            )
+            if name not in self.metadata_modules:
+                self.records.append(
+                    {
+                        "event": "output",
+                        "module": name,
+                        "type": type(module).__name__,
+                        "value": _tensor_metadata(output),
+                    }
+                )
+                self.metadata_modules.add(name)
             torch.cuda.nvtx.range_pop()
 
         return hook
@@ -518,10 +542,34 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     metadata = _environment_metadata(source_root, device, package_file, gpu_selector)
-    model = _build_model(args.model, "triton", args.T, args.num_classes).to(device)
+    model = _build_model(args.model, args.neuron_backend, args.T, args.num_classes).to(
+        device
+    )
+    precision = prepare_model_for_precision(
+        model,
+        device,
+        PrecisionConfig(
+            mode=args.precision,
+            fp8_recipe=args.fp8_recipe,
+            fp8_fallback_dtype=args.fp8_fallback_dtype,
+            triton_storage=args.triton_storage,
+            triton_fwd=args.triton_fwd,
+            triton_bwd=args.triton_bwd,
+        ),
+    )
+    model = precision.model
     state_model = model
     model.train(args.phase == "training")
+    metadata["precision"] = precision.describe()
     x, target = _make_batch(args, device)
+    coverage_tracker = (
+        _FP8CoverageTracker(
+            state_model,
+            metadata["precision"]["conversion_report"],
+        )
+        if args.precision == "fp8"
+        else None
+    )
     optimizer = (
         torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
         if args.phase == "training"
@@ -537,13 +585,18 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         graph_x = inputs[0]
         if optimizer is None:
-            with torch.inference_mode():
-                output = model(graph_x)
+            with _nvtx_range("forward", args.profile):
+                with torch.inference_mode(), precision.autocast_context():
+                    output = model(graph_x)
             return output
         graph_target = inputs[1]
-        output = model(graph_x)
-        loss = criterion(output.mean(0), graph_target)
-        loss.backward()
+        with _nvtx_range("forward", args.profile):
+            with precision.autocast_context():
+                output = model(graph_x)
+        with _nvtx_range("loss", args.profile):
+            loss = criterion(output.mean(0), graph_target)
+        with _nvtx_range("backward", args.profile):
+            precision.backward(loss, optimizer, step_optimizer=False)
         return loss, output
 
     dynamo = getattr(torch, "_dynamo", None)
@@ -570,7 +623,8 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
 
     def step() -> torch.Tensor:
         if optimizer is not None:
-            optimizer.zero_grad(set_to_none=graph_runner is None)
+            with _nvtx_range("zero_grad", args.profile):
+                optimizer.zero_grad(set_to_none=graph_runner is None)
         if graph_runner is not None:
             result = (
                 graph_runner(x, target) if optimizer is not None else graph_runner(x)
@@ -578,11 +632,19 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
         else:
             result = graph_work(x, target) if optimizer is not None else graph_work(x)
         if optimizer is not None:
-            optimizer.step()
-        reset_net()
+            with _nvtx_range("optimizer", args.profile):
+                if precision.scaler is None:
+                    optimizer.step()
+                else:
+                    precision.scaler.step(optimizer)
+                    precision.scaler.update()
+        with _nvtx_range("reset", args.profile):
+            reset_net()
         return result[0] if optimizer is not None else result
 
     hooks = None
+    if args.profile and args.tensor_metadata:
+        hooks = _ProfileHooks(state_model, args.tensor_metadata)
     monitor = None
     if args.monitor_log:
         args.monitor_log.parent.mkdir(parents=True, exist_ok=True)
@@ -614,6 +676,9 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
         step()
         torch.cuda.synchronize(device)
         first_step_wall_ms = (time.perf_counter() - first_started) * 1000.0
+        if coverage_tracker is not None:
+            coverage_tracker.close()
+            metadata["fp8_coverage"] = coverage_tracker.report()
 
         for _ in range(args.warmup):
             step()
@@ -624,30 +689,38 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
         reserved_before = torch.cuda.memory_reserved(device)
         starts = [torch.cuda.Event(enable_timing=True) for _ in range(args.steps)]
         ends = [torch.cuda.Event(enable_timing=True) for _ in range(args.steps)]
-        for index in range(args.steps):
-            starts[index].record()
+        if args.profile:
+            torch.cuda.profiler.start()
+        try:
+            for index in range(args.steps):
+                starts[index].record()
+                with _nvtx_range(f"benchmark_step:{index}", args.profile):
+                    step()
+                ends[index].record()
+            ends[-1].synchronize()
+        finally:
             if args.profile:
-                torch.cuda.nvtx.range_push(f"benchmark_step:{index}")
-            step()
-            if args.profile:
-                torch.cuda.nvtx.range_pop()
-            ends[index].record()
-        ends[-1].synchronize()
+                torch.cuda.profiler.stop()
         samples_ms = [
             start.elapsed_time(end) for start, end in zip(starts, ends, strict=True)
         ]
         peak_allocated_bytes = torch.cuda.max_memory_allocated(device)
         peak_reserved_bytes = torch.cuda.max_memory_reserved(device)
 
-        if args.tensor_metadata:
+        if args.tensor_metadata and hooks is None:
             hooks = _ProfileHooks(state_model, args.tensor_metadata)
-            torch.cuda.nvtx.range_push("layout_metadata_step")
-            step()
-            torch.cuda.nvtx.range_pop()
+            with _nvtx_range("layout_metadata_step", True):
+                step()
+            torch.cuda.synchronize(device)
+            hooks.close()
+            hooks = None
+        if hooks is not None:
             torch.cuda.synchronize(device)
             hooks.close()
             hooks = None
     finally:
+        if coverage_tracker is not None:
+            coverage_tracker.close()
         if hooks is not None:
             hooks.close()
         _stop_monitor(monitor)
@@ -661,13 +734,15 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
             "model": args.model,
             "phase": args.phase,
             "execution": args.execution,
-            "backend": "triton",
+            "backend": args.neuron_backend,
             "dtype": "float32",
             "T": args.T,
             "batch_size": args.batch_size,
             "image_size": args.image_size,
             "num_classes": args.num_classes,
             "channels_last": args.channels_last,
+            "neuron_backend": args.neuron_backend,
+            "precision": args.precision,
             "warmup": args.warmup,
             "steps": args.steps,
             "seed": args.seed,
@@ -771,6 +846,14 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
                             str(args.seed),
                             "--device",
                             str(args.device),
+                            "--neuron-backend",
+                            args.neuron_backend,
+                            "--precision",
+                            args.precision,
+                            "--fp8-recipe",
+                            args.fp8_recipe,
+                            "--fp8-fallback-dtype",
+                            args.fp8_fallback_dtype,
                             "--source-label",
                             label,
                             "--round",
@@ -795,6 +878,10 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
                             command.extend(
                                 ["--require-gpu-name", args.require_gpu_name]
                             )
+                        if args.triton_storage is not None:
+                            command.extend(["--triton-storage", args.triton_storage])
+                        command.extend(["--triton-fwd", args.triton_fwd])
+                        command.extend(["--triton-bwd", args.triton_bwd])
                         env = os.environ.copy()
                         env["SJ_BENCH_SOURCE_ROOT"] = str(source_root)
                         env["PYTHONPATH"] = str(source_root)
@@ -862,6 +949,32 @@ def _add_case_parser(subparsers) -> None:
     parser.add_argument("--num-classes", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--device", type=int, default=0)
+    parser.add_argument(
+        "--neuron-backend", choices=("torch", "triton"), default="triton"
+    )
+    parser.add_argument(
+        "--precision", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
+    )
+    parser.add_argument(
+        "--fp8-recipe",
+        choices=("auto", "delayed", "current", "block", "mxfp8"),
+        default="auto",
+    )
+    parser.add_argument(
+        "--fp8-fallback-dtype",
+        choices=("fp32", "fp16", "bf16"),
+        default="bf16",
+    )
+    parser.add_argument(
+        "--triton-storage",
+        choices=("fp32", "fp16", "bf16", "float8_e4m3fn", "float8_e5m2"),
+    )
+    parser.add_argument(
+        "--triton-fwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
+    )
+    parser.add_argument(
+        "--triton-bwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
+    )
     parser.add_argument("--lr", type=float, default=0.1)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--channels-last", action="store_true")
@@ -902,6 +1015,32 @@ def _add_matrix_parser(subparsers) -> None:
     parser.add_argument("--num-classes", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--device", type=int, default=0)
+    parser.add_argument(
+        "--neuron-backend", choices=("torch", "triton"), default="triton"
+    )
+    parser.add_argument(
+        "--precision", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
+    )
+    parser.add_argument(
+        "--fp8-recipe",
+        choices=("auto", "delayed", "current", "block", "mxfp8"),
+        default="auto",
+    )
+    parser.add_argument(
+        "--fp8-fallback-dtype",
+        choices=("fp32", "fp16", "bf16"),
+        default="bf16",
+    )
+    parser.add_argument(
+        "--triton-storage",
+        choices=("fp32", "fp16", "bf16", "float8_e4m3fn", "float8_e5m2"),
+    )
+    parser.add_argument(
+        "--triton-fwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
+    )
+    parser.add_argument(
+        "--triton-bwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
+    )
     parser.add_argument("--channels-last", action="store_true")
     parser.add_argument("--require-gpu-name", default="")
     parser.add_argument("--output-dir", type=Path, required=True)

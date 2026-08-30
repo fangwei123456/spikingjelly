@@ -103,6 +103,23 @@ Transformer Engine、硬件或 recipe 不可用时，准备过程直接报错，
 的默认 recipe；需要固定数值策略时，再显式选择 ``delayed``、``current``、``block``
 或 ``mxfp8``。
 
+控制未转换算子的 dtype
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Transformer Engine 只改变已转换模块。FP8 默认给其余普通 CUDA 算子增加 BF16
+autocast，避免 Conv2d、BatchNorm 或神经元沿 FP32 边界执行：
+
+.. code-block:: python
+
+    config = PrecisionConfig(
+        mode="fp8",
+        fp8_recipe="auto",
+    )
+
+需要复现实验时，可以用 ``fp8_fallback_dtype="fp16"`` 或 ``"fp32"`` 显式覆盖。
+这里的 fallback 指未被 FP8 覆盖的算子，不是错误降级。该字段只控制普通 CUDA
+autocast 和 TE 模块输出边界，不表示这些算子已使用 FP8 kernel。
+
 部分 Transformer Engine recipe 会把 FP8 metadata 序列化为 pickle。恢复可信来源的
 checkpoint 时，需要显式设置 ``NVTE_ALLOW_UNSAFE_PICKLE_EXTRA_STATE=1``；不要为未知
 checkpoint 开启该选项。
@@ -218,13 +235,16 @@ MCore ``TransformerConfig`` 和 ``OptimizerConfig`` 设置，二者必须一致�
 FP8 何时更快
 ------------
 
-FP8 的收益来自大矩阵，不来自 dtype 名称本身。普通 FC-SNN 训练和当前
-Spikformer DDP 都没有受益；足够宽的 Linear 和 FC-SNN 推理才越过了 FP16/BF16。
+FP8 的收益来自大矩阵，不来自 dtype 名称本身。FC-SNN 是否受益取决于神经元后端和
+Linear--神经元边界；Spikformer 的卷积、BatchNorm 和神经元占比更高，目前单卡仍未
+越过 FP16/BF16。
 
-以下结果测于 2026-08-29。Linear 和 FC-SNN 使用一张 RTX 5090 32 GiB，DDP 使用
-两张；软件版本为 PyTorch 2.11.0+cu128 和 Transformer Engine 2.18.0。Linear 和
-FC-SNN 运行三次并轮换精度顺序，表中取中位数。吞吐至少提高 5% 才算有优势，计时
-不包含模型转换。
+Dense Linear 和 2 卡 DDP 的历史结果测于 2026-08-29，使用 Transformer Engine
+2.18.0；下面替换后的 FC-SNN 以及新增的单卡 Spikformer 结果测于 2026-08-30，
+使用 PyTorch 2.11.0+cu128、Transformer Engine 2.17.1 和一张 RTX 5090 32 GiB。
+后者是因为该镜像中的 TE 2.18.0 extension 无法加载，不能把两套软件栈的数字混为一谈。
+FC-SNN/Spikformer 每个稳态 case 运行三次并取独立进程 median；吞吐至少提高 5% 才算
+有优势，计时不包含模型转换。
 
 Linear/GEMM 交叉点
 ~~~~~~~~~~~~~~~~~~
@@ -275,17 +295,137 @@ FP8 也不等于固定省显存。在 4096×3200×8 的交叉点，FP8 训练/�
     * - workload
       - 训练 FP8 / FP16、BF16
       - 推理 FP8 / FP16、BF16
-    * - FC-SNN：T16, batch 256, width 4096, depth 20
-      - 0.954x / 0.942x
-      - 0.901x / 0.896x
-    * - FC-SNN：T16, batch 256, width 8192, depth 10
-      - 0.908x / 0.887x
-      - 1.310x / 1.299x
+    * - FC-SNN：T16, batch 256, width 4096, depth 20（Triton LIF，FP16 fallback）
+      - 1.533x / 1.677x
+      - 1.578x / 1.786x
+    * - FC-SNN：T16, batch 256, width 8192, depth 10（Triton LIF，FP32 fallback）
+      - 1.544x / 1.468x
+      - 1.648x / 1.471x
 
-width=8192 时，FC-SNN 推理中的大矩阵已经足以抵消 FP8 的额外开销；训练还包含反向
-和神经元计算，因此依然更慢。此时 FP8 训练显存比 FP16/BF16 高约 46%--47%。
+这里的比值仍依次为 ``FP8 / FP16`` 和 ``FP8 / BF16``，且是端到端吞吐比值。两组
+FC-SNN 都使用现有 Triton LIF；FP8 神经元 ``triton_storage`` 未启用，神经元计算仍
+保持高精度。W4096 使用 ``fp8_fallback_dtype="fp16"``，训练/推理峰值 allocated
+memory 为 4279.1/1460.3 MiB；W8192 是未启用外层 autocast 的既有结果。因此，这些
+结果说明“FP8 Linear + Triton LIF”已经在该规模上超过 FP16/BF16，而不是说明所有
+神经元都已经用 FP8，也不能据此假定 FP8 固定节省显存。
 
-2 卡 Spikformer DDP 使用 5 个计时 step：
+旧教程中的慢速 FC-SNN 数字来自 Torch LIF，只保留在 nsys 根因报告中，不再作为
+FC-SNN 的推荐 benchmark。
+
+W4096/depth20 的 requested FP8 tracked dense-MAC coverage 为 100%。
+
+复现 FC-SNN profile：
+
+.. code-block:: bash
+
+    nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
+      --trace=cuda,nvtx,cublas,osrt --sample=none --cpuctxsw=none \
+      -o fcsnn-fp8 \
+      uv run python benchmark/benchmark_train_precision_snn_fc.py \
+        --backend triton --precisions fp8 --fp8-fallback-dtype fp16 \
+        --profile --profile-steps 10 --output fcsnn-fp8.json
+
+单卡 Spikformer
+~~~~~~~~~~~~~~~~
+
+``spikformer_ti`` 使用 ``T=4``、输入 ``224``、eager、Triton LIF，在 RTX 5090 上的
+端到端结果如下。训练行使用 1024 类仅用于满足当前 TE FP8 backward 的 16 对齐要求；
+真实 1000 类 head 的 FP8 训练会触发 ``lda % 16 == 0``，当前不支持。
+
+.. list-table::
+    :header-rows: 1
+
+    * - workload
+      - precision path
+      - step latency
+      - throughput
+      - 相对 FP16 / BF16 吞吐
+      - peak allocated
+    * - 推理：batch 64，1000 类
+      - FP16
+      - 16.220 ms
+      - 3945.7 images/s
+      - --
+      - 1974.8 MiB
+    * - 推理：batch 64，1000 类
+      - BF16
+      - 16.372 ms
+      - 3909.1 images/s
+      - --
+      - 1974.8 MiB
+    * - 推理：batch 64，1000 类
+      - FP8 + FP32 fallback
+      - 37.173 ms
+      - 1721.7 images/s
+      - 0.436x / 0.441x
+      - 3377.3 MiB
+    * - 推理：batch 64，1000 类
+      - FP8 + FP16 fallback
+      - 22.280 ms
+      - 2872.6 images/s
+      - 0.728x / 0.735x
+      - 2004.8 MiB
+    * - 推理：batch 64，1000 类
+      - FP8 + BF16 fallback（默认）
+      - 22.402 ms
+      - 2856.9 images/s
+      - 0.724x / 0.731x
+      - 2004.8 MiB
+    * - 训练：batch 32，1024 类（对齐诊断）
+      - FP16
+      - 37.869 ms
+      - 845.0 samples/s
+      - --
+      - 4508.2 MiB
+    * - 训练：batch 32，1024 类（对齐诊断）
+      - BF16
+      - 44.671 ms
+      - 716.4 samples/s
+      - --
+      - 4511.5 MiB
+    * - 训练：batch 32，1024 类（对齐诊断）
+      - FP8 + FP32 fallback
+      - 59.538 ms
+      - 537.5 samples/s
+      - 0.636x / 0.750x
+      - 7724.4 MiB
+    * - 训练：batch 32，1024 类（对齐诊断）
+      - FP8 + FP16 fallback
+      - 41.499 ms
+      - 771.1 samples/s
+      - 0.913x / 1.076x
+      - 4398.4 MiB
+    * - 训练：batch 32，1024 类（对齐诊断）
+      - FP8 + BF16 fallback（默认）
+      - 48.654 ms
+      - 657.7 samples/s
+      - 0.778x / 0.918x
+      - 4398.4 MiB
+
+nsys 显示 FP8 autocast 只覆盖 TE 的 pointwise Conv1d/Linear；patch-stem Conv2d、
+BatchNorm 和 LIF 输出都回到 FP32，产生额外的 elementwise、copy 和 layout kernel。
+所以当前 Spikformer 应选择 FP16/BF16；不要用 FC-SNN 的 Triton 结果推断
+Spikformer 也会加速。可以用下面的命令重新采集单卡 profile（``--profile``
+通过 ``cudaProfilerApi`` 限定采集区间）：
+
+.. code-block:: bash
+
+    nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
+      --trace=cuda,nvtx,cublas,osrt --sample=none --cpuctxsw=none \
+      -o spikformer-fp8 \
+      uv run python benchmark/benchmark_snn_single_gpu.py case \
+        --model spikformer_ti --phase inference --execution eager \
+        --batch-size 64 --warmup 50 --steps 10 --profile --precision fp8 \
+        --neuron-backend triton --fp8-fallback-dtype bf16 \
+        --tensor-metadata spikformer-fp8.tensors.jsonl \
+        --output spikformer-fp8.json
+
+默认 BF16 fallback 将 FP8 训练/推理 latency 分别降低 18.3%/39.7%，但仍未跨过
+BF16。显式 FP16 fallback 更快，但动态范围较小。该模型 requested FP8 tracked
+dense-MAC coverage 为 41.98%。当前 RTX 5090 软件栈没有 FP8 Conv2d，不能用模拟
+路径声称已验证更高覆盖率。
+
+历史的 2 卡 Spikformer DDP 使用 5 个计时 step：
 
 .. list-table::
     :header-rows: 1
@@ -309,9 +449,9 @@ width=8192 时，FC-SNN 推理中的大矩阵已经足以抵消 FP8 的额外开
 如何选择
 --------
 
-默认先用 BF16。profile 显示对齐的 Linear/MLP 占主要耗时，并且矩阵维度接近表中的
-交叉区间时，再测试 FP8。CNN、神经元或通信占比较高时，FP8 通常无法弥补转换和
-metadata 开销。FP8 的显存也可能高于 BF16，不应把它当作显存优化开关。
+默认先用 BF16。FC-SNN 只有在使用 Triton LIF 且矩阵达到表中规模后才建议测试 FP8；
+Spikformer 等 CNN/神经元占比较高的模型，在完成 FP32 边界优化前继续使用 FP16/BF16。
+profile 必须以端到端 step 为准；FP8 的显存也可能高于 BF16，不应把它当作显存优化开关。
 
 使用仓库 benchmark 在目标 GPU 上重测交叉点：
 

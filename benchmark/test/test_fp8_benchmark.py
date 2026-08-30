@@ -19,6 +19,12 @@ from benchmark.fp8_efficiency import (
     assess_triton_efficiency,
     require_efficiency,
 )
+from benchmark.fp8_coverage import _FP8CoverageTracker
+from spikingjelly.activation_based.precision.float8_base import Float8LinearStepModule
+from spikingjelly.activation_based.precision.float8_te import (
+    Float8TELayerNormLinearModule,
+    Float8TELayerNormMLPModule,
+)
 
 
 def _patch_cuda_timing(monkeypatch):
@@ -67,6 +73,77 @@ def _patch_cuda_timing(monkeypatch):
     monkeypatch.setattr(torch.cuda, "max_memory_allocated", require_active_device)
     monkeypatch.setattr(torch.cuda, "max_memory_reserved", require_active_device)
     return entered_devices, event_synchronize_calls, created_events
+
+
+def test_coverage_tracker_weights_executed_dense_macs():
+    class Model(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = torch.nn.Conv2d(3, 4, 3, padding=1, bias=False)
+            self.linear = Float8LinearStepModule(torch.nn.Linear(4, 8), step_mode="s")
+
+        def forward(self, image, features):
+            return self.conv(image), self.linear(features)
+
+    model = Model()
+    tracker = _FP8CoverageTracker(
+        model,
+        {"converted_modules": ["linear"]},
+    )
+    try:
+        model(torch.randn(2, 3, 8, 8), torch.randn(2, 4))
+    finally:
+        tracker.close()
+
+    report = tracker.report()
+
+    assert report["executed_module_count"] == 2
+    assert report["requested_fp8_module_count"] == 1
+    assert report["total_dense_macs"] == 2 * 4 * 8 * 8 * 3 * 3 * 3 + 2 * 8 * 4
+    assert report["requested_fp8_dense_macs"] == 2 * 8 * 4
+
+
+def test_coverage_tracker_counts_fused_transformer_engine_modules():
+    class FusedMLP(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.fc1_weight = torch.nn.Parameter(torch.randn(8, 4))
+            self.fc2_weight = torch.nn.Parameter(torch.randn(4, 8))
+
+        def forward(self, x):
+            x = torch.nn.functional.linear(x, self.fc1_weight)
+            x = torch.nn.functional.gelu(x)
+            return torch.nn.functional.linear(x, self.fc2_weight)
+
+    class Model(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = Float8TELayerNormLinearModule(
+                torch.nn.Linear(4, 8, bias=False),
+                {"1.weight": "weight"},
+            )
+            self.mlp = Float8TELayerNormMLPModule(
+                FusedMLP(),
+                {"1.weight": "fc1_weight", "3.weight": "fc2_weight"},
+            )
+
+        def forward(self, x):
+            return self.linear(x), self.mlp(x)
+
+    model = Model()
+    tracker = _FP8CoverageTracker(
+        model,
+        {"converted_modules": ["linear", "mlp"]},
+    )
+    try:
+        model(torch.randn(2, 4))
+    finally:
+        tracker.close()
+
+    report = tracker.report()
+
+    assert report["requested_fp8_dense_macs"] == 2 * 4 * 8 + 2 * (8 * 4 + 4 * 8)
+    assert report["requested_fp8_dense_mac_coverage"] == 1.0
 
 
 def test_model_benchmark_timing_uses_requested_cuda_device(monkeypatch):
