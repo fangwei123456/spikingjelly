@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import json
 import math
@@ -21,18 +22,39 @@ import torch
 import torch.nn as nn
 from scipy.stats import kendalltau, pearsonr, spearmanr
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
 from spikingjelly.activation_based import neuron, op_counter
 
 
-ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = ROOT / "docs/source/_static/tutorials/op_counter"
 CSV_PATH = OUTPUT_DIR / "energy_model_validation.csv"
-FIGURE_PATH = OUTPUT_DIR / "energy_model_validation.png"
+CROSS_VALIDATION_CSV_PATH = OUTPUT_DIR / "energy_model_cross_validation.csv"
+CROSS_VALIDATION_FIGURE_PATH = OUTPUT_DIR / "energy_model_cross_validation.png"
 
 SPIKESIM_COMMIT = "c2627bc091a47bdcb630ca6207eaf44a00bd1da4"
 NEUROMC_COMMIT = "712c66f47cf76ae530a55f8bcad3858bd68788de"
 SENTINEL = "ENERGY_MODEL_VALIDATION_JSON="
 AUTHOR_ADAPTER_TIMEOUT_SECONDS = 600
+
+MIN_COMPARABLE_CASES = {
+    "SpikeSim dense": 200,
+    "Lemaire": 100,
+    "NeuroMC": 786,
+}
+NEUROMC_PHASES = ("fe", "be", "we")
+NEUROMC_CASES_PER_PHASE = 262
+NEUROMC_TAU_MIN = 0.90
+NEUROMC_RAW_P90_MAX = 1.50
+NEUROMC_SCALE_RANGE = (0.80, 1.25)
+CROSS_ESTIMATORS = (
+    "Simple",
+    "Lemaire",
+    "NeuroMC",
+    "SpikeSim dense",
+    "SpikeSim event",
+)
 
 
 @dataclass(frozen=True)
@@ -44,70 +66,74 @@ class Score:
     spikingjelly_pj: float
     oracle_source: str
     oracle_revision: str
-    included_in_correlation: bool
     details: dict[str, Any]
 
 
-SPIKESIM_CASES = (
-    ("s01", 3, 16, 24, 3, False, False, 1),
-    ("s02", 16, 16, 20, 3, False, False, 1),
-    ("s03", 16, 32, 16, 3, True, True, 1),
-    ("s04", 32, 64, 12, 3, True, False, 1),
-    ("s05", 64, 64, 10, 1, True, True, 1),
-    ("s06", 64, 128, 8, 3, False, False, 2),
-    ("s07", 128, 128, 6, 3, True, False, 1),
-    ("s08", 32, 96, 10, 1, False, False, 3),
-    ("s09", 96, 64, 7, 3, True, True, 1),
-    ("s10", 8, 32, 18, 3, True, False, 1),
-    ("s11", 64, 192, 5, 1, False, False, 1),
-    ("s12", 192, 256, 4, 3, True, True, 1),
+_SPIKESIM_CHANNELS = (
+    (3, 8),
+    (3, 16),
+    (8, 16),
+    (8, 32),
+    (16, 16),
+    (16, 32),
+    (16, 64),
+    (32, 32),
+    (32, 64),
+    (32, 96),
+    (64, 64),
+    (64, 128),
+)
+SPIKESIM_CASES = tuple(
+    (f"s{index:03d}", cin, cout, dim, kernel)
+    for index, (cin, cout, dim, kernel) in enumerate(
+        (
+            (cin, cout, dim, kernel)
+            for cin, cout in _SPIKESIM_CHANNELS
+            for dim in (4, 6, 8, 10, 12, 16)
+            for kernel in (1, 3, 5)
+        ),
+        1,
+    )
 )
 
-LEMAIRE_CASES = (
-    ("l01", "linear", 8, 16, 1, 1, 0.125, False),
-    ("l02", "linear", 16, 16, 1, 1, 0.25, True),
-    ("l03", "linear", 32, 24, 1, 1, 0.375, False),
-    ("l04", "linear", 64, 32, 1, 1, 0.5, True),
-    ("l05", "linear", 128, 48, 1, 1, 0.25, False),
-    ("l06", "linear", 256, 64, 1, 1, 0.125, True),
-    ("l07", "conv", 4, 8, 12, 3, 0.125, False),
-    ("l08", "conv", 8, 16, 10, 3, 0.25, True),
-    ("l09", "conv", 16, 16, 8, 1, 0.375, False),
-    ("l10", "conv", 16, 32, 8, 3, 0.5, True),
-    ("l11", "conv", 32, 32, 6, 1, 0.25, False),
-    ("l12", "conv", 32, 64, 5, 3, 0.125, True),
+
+def _lemaire_cases() -> tuple[tuple[Any, ...], ...]:
+    cases = [
+        ("linear", cin, cout, 1, 1, activity, lif)
+        for cin, cout in ((8, 16), (16, 32), (32, 16), (64, 64), (128, 32), (256, 64))
+        for activity in (0.0625, 0.125, 0.25, 0.5)
+        for lif in (False, True)
+    ]
+    cases.extend(
+        ("conv", cin, cout, spatial, kernel, activity, lif)
+        for cin, cout in ((4, 8), (8, 16), (16, 16), (16, 32), (32, 64))
+        for spatial in (5, 8, 12)
+        for kernel in (1, 3)
+        for activity in (0.0625, 0.125, 0.25, 0.5)
+        for lif in (False, True)
+    )
+    return tuple((f"l{index:03d}", *case) for index, case in enumerate(cases, 1))
+
+
+LEMAIRE_CASES = _lemaire_cases()
+
+NEUROMC_SUITES = (
+    (
+        "resnet18_ws",
+        "S-ResNet18_imagenet_B16_T4_split",
+        "aicore_S-ResNet18_imagenet_B16_T4_split_ws",
+    ),
+    (
+        "resnet50_ws",
+        "S-ResNet50_imagenet_B16_T4_split",
+        "aicore_S-ResNet50_imagenet_B16_T4_split_ws",
+    ),
+    (
+        "vgg16_ws",
+        "S-VGG16_imagenet_B16_T4_split",
+        "aicore_S-VGG16_imagenet_B16_T4_split_ws",
+    ),
 )
-
-NEUROMC_LAYERS = (1, 3, 5, 17, 19, 21, 29, 33, 37, 41, 51, 55, 59)
-
-
-class _ConvWorkload(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        kernel_size: int,
-        optional: bool,
-        execute_optional: bool,
-        repeats: int,
-    ):
-        super().__init__()
-        self.main = nn.Conv2d(in_channels, out_channels, kernel_size, bias=False)
-        self.optional = (
-            nn.Conv2d(in_channels, out_channels, kernel_size, bias=False)
-            if optional
-            else None
-        )
-        self.execute_optional = execute_optional
-        self.repeats = repeats
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out = self.main(x)
-        for _ in range(1, self.repeats):
-            out = out + self.main(x)
-        if self.execute_optional:
-            out = out + self.optional(x)
-        return out
 
 
 def _revision(repo: Path) -> str:
@@ -154,14 +180,13 @@ def _run_author_adapter(code: str, payload: Any, cwd: Path) -> Any:
 def _spikesim_scores(repo: Path) -> list[Score]:
     source = repo / "SNN_train_infer_quantization_ela/ela_spikesim.py"
     payload = []
-    for case_id, cin, cout, dim, kernel, optional, _, _ in SPIKESIM_CASES:
-        layer_count = 2 if optional else 1
+    for case_id, cin, cout, dim, kernel in SPIKESIM_CASES:
         payload.append(
             {
                 "case_id": case_id,
-                "in_channels": [cin] * layer_count,
-                "out_channels": [cout] * layer_count,
-                "out_dims": [dim] * layer_count,
+                "in_channels": [cin],
+                "out_channels": [cout],
+                "out_dims": [dim],
                 "kernel": kernel,
             }
         )
@@ -198,19 +223,8 @@ print({SENTINEL!r} + json.dumps(results))
     }
 
     scores = []
-    for (
-        case_id,
-        cin,
-        cout,
-        dim,
-        kernel,
-        optional,
-        execute_optional,
-        repeats,
-    ) in SPIKESIM_CASES:
-        model = _ConvWorkload(
-            cin, cout, kernel, optional, execute_optional, repeats
-        ).eval()
+    for case_id, cin, cout, dim, kernel in SPIKESIM_CASES:
+        model = nn.Conv2d(cin, cout, kernel, bias=False).eval()
         x = torch.zeros(1, cin, dim + kernel - 1, dim + kernel - 1)
         report = op_counter.estimate_spikesim_energy(model, x)
         scores.append(
@@ -222,17 +236,11 @@ print({SENTINEL!r} + json.dumps(results))
                 spikingjelly_pj=report.energy_total_pj,
                 oracle_source="author code: ela_spikesim.py compute_energy",
                 oracle_revision=SPIKESIM_COMMIT,
-                included_in_correlation=(
-                    repeats + int(execute_optional) == (2 if optional else 1)
-                ),
                 details={
                     "in_channels": cin,
                     "out_channels": cout,
                     "output_dim": dim,
                     "kernel": kernel,
-                    "static_layers": 2 if optional else 1,
-                    "executed_main_calls": repeats,
-                    "executed_optional": execute_optional,
                 },
             )
         )
@@ -278,8 +286,10 @@ def _lemaire_paper_energy(
     time_steps = 1
     output_neurons = out_features * spatial * spatial
     if kind == "linear":
-        # Published Eq. (2), including its N_in factor, is used verbatim.
-        acc_ops = theta_in * in_features * out_features + time_steps * out_features
+        # Eq. (2) includes an extra N_in factor, although theta_in is defined as
+        # the input-spike count and Eqs. (8), (10), (15), and (17) use theta_in
+        # times N_out. Count each observed input spike's N_out fanout once.
+        acc_ops = theta_in * out_features + time_steps * out_features
         mac_ops = time_steps * out_features if lif else 0
         acc_addr = theta_in * out_features
         mac_addr = 0
@@ -376,7 +386,6 @@ def _lemaire_scores() -> list[Score]:
                 spikingjelly_pj=report.total_pj,
                 oracle_source="paper equations (1)-(20); no released code",
                 oracle_revision="arXiv:2210.13107v1",
-                included_in_correlation=True,
                 details={
                     "kind": kind,
                     "in_features": cin,
@@ -391,6 +400,32 @@ def _lemaire_scores() -> list[Score]:
             )
         )
     return scores
+
+
+def _neuromc_cases(repo: Path) -> list[dict[str, Any]]:
+    examples = repo / "code/hardware_dse_simulator/codes/zigzag/inputs/examples"
+    cases = []
+    for suite, workload, mapping in NEUROMC_SUITES:
+        workload_dir = examples / "workload" / workload
+        mapping_dir = examples / "mapping" / mapping
+        for phase in NEUROMC_PHASES:
+            prefix = f"{phase}_l"
+            workload_layers = {path.stem for path in workload_dir.glob(f"{prefix}*.py")}
+            mapping_layers = {path.stem for path in mapping_dir.glob(f"{prefix}*.py")}
+            for stem in sorted(
+                workload_layers & mapping_layers,
+                key=lambda value: int(value.removeprefix(prefix)),
+            ):
+                cases.append(
+                    {
+                        "suite": suite,
+                        "workload": workload,
+                        "mapping": mapping,
+                        "phase": phase,
+                        "layer": int(stem.removeprefix(prefix)),
+                    }
+                )
+    return cases
 
 
 def _neuromc_author_scores(repo: Path) -> list[dict[str, Any]]:
@@ -436,15 +471,21 @@ from zigzag.classes.stages import (
 )
 
 results = []
-for layer in json.load(sys.stdin):
+for case in json.load(sys.stdin):
+    layer = case["layer"]
+    phase = case["phase"]
     workload_name = (
         "zigzag.inputs.examples.workload."
-        f"S-ResNet18_imagenet_B16_T4_split.fe_l{{layer}}"
+        f"{{case['workload']}}.{{phase}}_l{{layer}}"
     )
     mapping_name = (
         "zigzag.inputs.examples.mapping."
-        f"aicore_S-ResNet18_imagenet_B16_T4_split_ws.fe_l{{layer}}"
+        f"{{case['mapping']}}.{{phase}}_l{{layer}}"
     )
+    accelerator_name = f"zigzag.inputs.examples.hardware.aicore.aicore_{{phase}}"
+    for module_name in (accelerator_name, workload_name, mapping_name):
+        importlib.reload(importlib.import_module(module_name))
+    item = importlib.import_module(workload_name).workload[0]
     answers = MainStage(
         [
             AcceleratorParserStage,
@@ -454,53 +495,286 @@ for layer in json.load(sys.stdin):
             TemporalOrderingConversionStage,
             CostModelStage,
         ],
-        accelerator="zigzag.inputs.examples.hardware.aicore.aicore_fe",
+        accelerator=accelerator_name,
         workload=workload_name,
         mapping=mapping_name,
         access_same_data_considered_as_no_access=True,
     ).run()
-    item = importlib.import_module(workload_name).workload[0]
     results.append(
         {{
+            "suite": case["suite"],
+            "phase": phase,
             "layer": layer,
             "energy": answers[0][0].energy_total,
+            "compute_energy": answers[0][0].MAC_energy
+                + answers[0][0].energy_compute_extra[answers[0][0].energy_type],
+            "memory_energy": answers[0][0].mem_energy,
+            "energy_type": answers[0][0].energy_type,
             "dims": item["loop_dim_size"],
             "operator_type": item["operator_type"],
+            "b_type": item["B_type"],
+            "t_type": item["T_type"],
+            "conv_type": item["conv_type"],
         }}
     )
 print({SENTINEL!r} + json.dumps(results))
 """
-    return _run_author_adapter(adapter, NEUROMC_LAYERS, codes)
+    cases = _neuromc_cases(repo)
+    results = []
+    for suite, _, _ in NEUROMC_SUITES:
+        payload = [case for case in cases if case["suite"] == suite]
+        results.extend(_run_author_adapter(adapter, payload, codes))
+    return results
+
+
+def _neuromc_runtime_score(item: dict[str, Any]) -> float:
+    phase = item["phase"]
+    dims = item["dims"]
+    cin, cout = int(dims["C"]), int(dims["K"])
+    if phase == "we":
+        fy, fx = int(dims["OY"]), int(dims["OX"])
+        oy, ox = int(dims["FY"]), int(dims["FX"])
+    else:
+        fy, fx = int(dims["FY"]), int(dims["FX"])
+        oy, ox = int(dims["OY"]), int(dims["OX"])
+    conv = nn.Conv2d(
+        cin,
+        cout,
+        (fy, fx),
+        padding=(fy // 2, fx // 2),
+        bias=False,
+    )
+    model = (
+        nn.Sequential(conv, neuron.IFNode())
+        if phase == "fe"
+        else nn.Sequential(neuron.IFNode(), conv)
+    )
+    model.train(phase != "fe")
+    x = torch.zeros(
+        1,
+        cin,
+        oy,
+        ox,
+        requires_grad=phase != "fe",
+    )
+    if phase == "fe":
+        report = op_counter.estimate_neuromc_runtime_energy(model, x)
+        return report.energy_by_core_type["fp_soma"]
+    report = op_counter.estimate_neuromc_runtime_energy(
+        model,
+        x,
+        target=torch.empty(0),
+        loss_fn=lambda output, target: output.sum(),
+    )
+    return report.energy_by_core_type["bp_grad" if phase == "be" else "wg"]
 
 
 def _neuromc_scores(repo: Path) -> list[Score]:
     scores = []
     for item in _neuromc_author_scores(repo):
         dims = item["dims"]
-        cin, cout = int(dims["C"]), int(dims["K"])
-        fy, fx = int(dims["FY"]), int(dims["FX"])
-        oy, ox = int(dims["OY"]), int(dims["OX"])
-        model = nn.Conv2d(cin, cout, (fy, fx), bias=False).eval()
-        x = torch.zeros(1, cin, oy + fy - 1, ox + fx - 1)
-        report = op_counter.estimate_neuromc_runtime_energy(model, x)
         scores.append(
             Score(
                 model="NeuroMC",
-                case_id=f"n{item['layer']:02d}",
-                workload="official S-ResNet18 FE fragment",
+                case_id=f"{item['suite']}_{item['phase']}_l{item['layer']}",
+                workload=f"official {item['suite']} {item['phase'].upper()} fragment",
                 oracle_pj=float(item["energy"]),
-                spikingjelly_pj=report.energy_total_pj,
+                spikingjelly_pj=_neuromc_runtime_score(item),
                 oracle_source="author ZigZag fixed workload/mapping/cost model",
                 oracle_revision=NEUROMC_COMMIT,
-                included_in_correlation=True,
                 details={
+                    "suite": item["suite"],
+                    "phase": item["phase"],
                     "official_layer": item["layer"],
                     "operator_type": item["operator_type"],
+                    "b_type": item["b_type"],
+                    "t_type": item["t_type"],
+                    "conv_type": item["conv_type"],
+                    "oracle_compute_pj": item["compute_energy"],
+                    "oracle_memory_pj": item["memory_energy"],
+                    "oracle_energy_type": item["energy_type"],
                     **{key: int(value) for key, value in dims.items()},
                 },
             )
         )
     return scores
+
+
+def _capture_conv2d_stages(
+    model: nn.Module, inputs: torch.Tensor
+) -> list[tuple[nn.Conv2d, torch.Tensor]]:
+    stages = []
+
+    def capture(module, args):
+        stages.append((module, args[0].detach().clone()))
+
+    handles = [
+        module.register_forward_pre_hook(capture)
+        for module in model.modules()
+        if isinstance(module, nn.Conv2d)
+    ]
+    try:
+        with torch.no_grad():
+            model(inputs)
+    finally:
+        for handle in handles:
+            handle.remove()
+    return stages
+
+
+def _cross_validation_networks():
+    from spikingjelly.activation_based.model import sew_resnet, spiking_vgg
+
+    builders = (
+        ("VGG-11", spiking_vgg.spiking_vgg11),
+        ("VGG-13", spiking_vgg.spiking_vgg13),
+        ("VGG-16", spiking_vgg.spiking_vgg16),
+        ("VGG-19", spiking_vgg.spiking_vgg19),
+        ("SEW-ResNet-18", sew_resnet.sew_resnet18),
+        ("SEW-ResNet-34", sew_resnet.sew_resnet34),
+        ("SEW-ResNet-50", sew_resnet.sew_resnet50),
+    )
+    for index, (name, builder) in enumerate(builders):
+        for image_size in (32, 40, 48, 56):
+            torch.manual_seed(20260830 + index * 2 + image_size)
+            kwargs = {
+                "num_classes": 10,
+                "spiking_neuron": neuron.IFNode,
+                "step_mode": "s",
+            }
+            if name.startswith("SEW"):
+                kwargs.update(
+                    {
+                        "cnf": "ADD",
+                        "detach_reset": True,
+                        "norm_layer": lambda _: nn.Identity(),
+                    }
+                )
+            model = builder(**kwargs).eval()
+            inputs = torch.randn(1, 3, image_size, image_size)
+            yield f"{name}-{image_size}", name, image_size, model, inputs
+
+
+def _estimate_cross_stage(conv: nn.Conv2d, inputs: torch.Tensor) -> dict[str, float]:
+    def stage():
+        model = nn.Sequential(copy.deepcopy(conv), neuron.IFNode()).eval()
+        for parameter in model.parameters():
+            parameter.requires_grad_(False)
+        return model
+
+    return {
+        "Simple": op_counter.estimate_simple_energy(stage(), inputs).energy_total_pj,
+        "Lemaire": op_counter.estimate_lemaire_energy(stage(), inputs).total_pj,
+        "NeuroMC": op_counter.estimate_neuromc_runtime_energy(
+            stage(), inputs
+        ).energy_total_pj,
+        "SpikeSim dense": op_counter.estimate_spikesim_energy(
+            stage(), inputs
+        ).energy_total_pj,
+        "SpikeSim event": op_counter.estimate_spikesim_energy(
+            stage(),
+            inputs,
+            config=op_counter.SpikeSimEnergyConfig(activity_mode="event"),
+        ).energy_total_pj,
+    }
+
+
+def _energy_model_cross_validation() -> list[dict[str, Any]]:
+    rows = []
+    for case_id, family, image_size, model, inputs in _cross_validation_networks():
+        totals = {name: 0.0 for name in CROSS_ESTIMATORS}
+        stages = _capture_conv2d_stages(model, inputs)
+        for conv, stage_inputs in stages:
+            for name, value in _estimate_cross_stage(conv, stage_inputs).items():
+                totals[name] += value
+        rows.append(
+            {
+                "case_id": case_id,
+                "family": family,
+                "image_size": image_size,
+                "conv2d_stages": len(stages),
+                **totals,
+            }
+        )
+    return rows
+
+
+def _cross_validation_metrics(
+    rows: list[dict[str, Any]],
+) -> dict[str, np.ndarray]:
+    values = {
+        name: np.asarray([row[name] for row in rows], dtype=float)
+        for name in CROSS_ESTIMATORS
+    }
+    size = len(CROSS_ESTIMATORS)
+    metrics = {
+        "Kendall tau-b": np.eye(size),
+        "Spearman rho": np.eye(size),
+        "Log-Pearson r": np.eye(size),
+    }
+    for i, left in enumerate(CROSS_ESTIMATORS):
+        for j, right in enumerate(CROSS_ESTIMATORS):
+            if i >= j:
+                continue
+            pairs = {
+                "Kendall tau-b": kendalltau(values[left], values[right]).statistic,
+                "Spearman rho": spearmanr(values[left], values[right]).statistic,
+                "Log-Pearson r": pearsonr(
+                    np.log(values[left]), np.log(values[right])
+                ).statistic,
+            }
+            for name, value in pairs.items():
+                metrics[name][i, j] = metrics[name][j, i] = float(value)
+    return metrics
+
+
+def _write_cross_validation_csv(rows: list[dict[str, Any]]) -> None:
+    fields = (
+        "case_id",
+        "family",
+        "image_size",
+        "conv2d_stages",
+        *CROSS_ESTIMATORS,
+    )
+    with CROSS_VALIDATION_CSV_PATH.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=fields, lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(
+                {
+                    **row,
+                    **{name: f"{row[name]:.12g}" for name in CROSS_ESTIMATORS},
+                }
+            )
+
+
+def _plot_cross_validation(metrics: dict[str, np.ndarray]) -> None:
+    fig, axes = plt.subplots(1, 3, figsize=(12.2, 4.0))
+    labels = ("Simple", "Lemaire", "NeuroMC", "SS dense", "SS event")
+    image = None
+    for index, (axis, (name, matrix)) in enumerate(
+        zip(axes, metrics.items(), strict=True)
+    ):
+        image = axis.imshow(matrix, vmin=-1.0, vmax=1.0, cmap="coolwarm")
+        axis.set_title(name)
+        axis.set_xticks(range(len(labels)), labels, rotation=35, ha="right")
+        axis.set_yticks(range(len(labels)), labels)
+        if index:
+            axis.tick_params(axis="y", left=False, labelleft=False)
+        for row in range(matrix.shape[0]):
+            for column in range(matrix.shape[1]):
+                axis.text(
+                    column,
+                    row,
+                    f"{matrix[row, column]:.2f}",
+                    ha="center",
+                    va="center",
+                    color="white" if abs(matrix[row, column]) > 0.65 else "black",
+                    fontsize=8,
+                )
+    fig.colorbar(image, ax=axes, shrink=0.78, label="Correlation")
+    fig.savefig(CROSS_VALIDATION_FIGURE_PATH, dpi=180, bbox_inches="tight")
+    plt.close(fig)
 
 
 def _bootstrap_tau(
@@ -529,7 +803,8 @@ def _metrics(scores: list[Score]) -> dict[str, float]:
         raise ValueError("energy scores must be finite and positive")
     log_ratio = np.log(dynamic / oracle)
     calibrated_log_error = log_ratio - np.median(log_ratio)
-    factors = np.exp(np.abs(calibrated_log_error))
+    raw_factors = np.exp(np.abs(log_ratio))
+    scale_adjusted_factors = np.exp(np.abs(calibrated_log_error))
     tau = float(kendalltau(oracle, dynamic).statistic)
     ci_low, ci_high = _bootstrap_tau(oracle, dynamic)
     return {
@@ -538,9 +813,47 @@ def _metrics(scores: list[Score]) -> dict[str, float]:
         "kendall_ci_high": ci_high,
         "spearman_rho": float(spearmanr(oracle, dynamic).statistic),
         "log_pearson_r": float(pearsonr(np.log(oracle), np.log(dynamic)).statistic),
-        "p90_factor": float(np.percentile(factors, 90)),
+        "raw_p90_factor": float(np.percentile(raw_factors, 90)),
+        "scale_adjusted_p90_factor": float(np.percentile(scale_adjusted_factors, 90)),
         "scale_ratio": float(np.exp(np.median(log_ratio))),
     }
+
+
+def _neuromc_phase_metrics(scores: list[Score]) -> dict[str, dict[str, float]]:
+    results = {}
+    for phase in NEUROMC_PHASES:
+        phase_scores = [
+            score
+            for score in scores
+            if score.model == "NeuroMC" and score.details["phase"] == phase
+        ]
+        if len(phase_scores) != NEUROMC_CASES_PER_PHASE:
+            raise RuntimeError(
+                f"NeuroMC {phase.upper()} requires {NEUROMC_CASES_PER_PHASE} "
+                f"cases, got {len(phase_scores)}."
+            )
+        values = _metrics(phase_scores)
+        if values["kendall_tau_b"] < NEUROMC_TAU_MIN:
+            raise RuntimeError(
+                f"NeuroMC {phase.upper()} tau-b={values['kendall_tau_b']:.3f} "
+                f"is below {NEUROMC_TAU_MIN:.2f}."
+            )
+        if values["raw_p90_factor"] > NEUROMC_RAW_P90_MAX:
+            raise RuntimeError(
+                f"NeuroMC {phase.upper()} raw-P90={values['raw_p90_factor']:.3f}x "
+                f"exceeds {NEUROMC_RAW_P90_MAX:.2f}x."
+            )
+        if (
+            not NEUROMC_SCALE_RANGE[0]
+            <= values["scale_ratio"]
+            <= NEUROMC_SCALE_RANGE[1]
+        ):
+            raise RuntimeError(
+                f"NeuroMC {phase.upper()} median scale={values['scale_ratio']:.3f}x "
+                f"is outside {NEUROMC_SCALE_RANGE}."
+            )
+        results[phase] = values
+    return results
 
 
 def _write_csv(
@@ -555,14 +868,16 @@ def _write_csv(
         "spikingjelly_pj",
         "oracle_source",
         "oracle_revision",
-        "included_in_correlation",
         "details_json",
+        "ratio_spikingjelly_over_oracle",
+        "symmetric_error_factor",
         "kendall_tau_b",
         "kendall_ci_low",
         "kendall_ci_high",
         "spearman_rho",
         "log_pearson_r",
-        "p90_factor",
+        "raw_p90_factor",
+        "scale_adjusted_p90_factor",
         "scale_ratio_spikingjelly_over_oracle",
         "spikingjelly_revision",
         "python_version",
@@ -582,8 +897,13 @@ def _write_csv(
                     "spikingjelly_pj": f"{score.spikingjelly_pj:.12g}",
                     "oracle_source": score.oracle_source,
                     "oracle_revision": score.oracle_revision,
-                    "included_in_correlation": score.included_in_correlation,
                     "details_json": json.dumps(score.details, sort_keys=True),
+                    "ratio_spikingjelly_over_oracle": (
+                        f"{score.spikingjelly_pj / score.oracle_pj:.12g}"
+                    ),
+                    "symmetric_error_factor": (
+                        f"{math.exp(abs(math.log(score.spikingjelly_pj / score.oracle_pj))):.12g}"
+                    ),
                     **{
                         key: f"{value:.12g}"
                         for key, value in summary.items()
@@ -597,72 +917,6 @@ def _write_csv(
                     "torch_version": torch.__version__,
                 }
             )
-
-
-def _plot(scores: list[Score], metrics: dict[str, dict[str, float]]) -> None:
-    models = list(metrics)
-    colors = ("#0072B2", "#D55E00", "#009E73")
-    fig, (scatter, bars) = plt.subplots(1, 2, figsize=(10.5, 4.2))
-    for model, color in zip(models, colors, strict=True):
-        group = [score for score in scores if score.model == model]
-        included = [score for score in group if score.included_in_correlation]
-        excluded = [score for score in group if not score.included_in_correlation]
-        oracle_scale = np.exp(np.mean(np.log([score.oracle_pj for score in included])))
-        dynamic_scale = np.exp(
-            np.mean(np.log([score.spikingjelly_pj for score in included]))
-        )
-        oracle = np.asarray([score.oracle_pj / oracle_scale for score in included])
-        dynamic = np.asarray(
-            [score.spikingjelly_pj / dynamic_scale for score in included]
-        )
-        scatter.scatter(oracle, dynamic, label=model, color=color, s=38, alpha=0.85)
-        if excluded:
-            scatter.scatter(
-                [score.oracle_pj / oracle_scale for score in excluded],
-                [score.spikingjelly_pj / dynamic_scale for score in excluded],
-                color=color,
-                marker="x",
-                s=46,
-                label=f"{model} dynamic stress",
-            )
-    limits = scatter.get_xlim()
-    lower = min(limits[0], scatter.get_ylim()[0])
-    upper = max(limits[1], scatter.get_ylim()[1])
-    scatter.plot([lower, upper], [lower, upper], color="#555555", linestyle="--")
-    scatter.set_xscale("log")
-    scatter.set_yscale("log")
-    scatter.set_xlabel("Author/paper score (geometric-mean normalized)")
-    scatter.set_ylabel("SpikingJelly score (geometric-mean normalized)")
-    scatter.legend(frameon=False)
-    scatter.grid(alpha=0.2)
-
-    x = np.arange(len(models))
-    tau = [metrics[model]["kendall_tau_b"] for model in models]
-    p90 = [metrics[model]["p90_factor"] for model in models]
-    p90_minus_one = np.asarray(p90) - 1.0
-    bars.bar(
-        x - 0.18,
-        tau,
-        width=0.36,
-        color="#56B4E9",
-        label="Kendall tau-b",
-    )
-    bars.bar(
-        x + 0.18,
-        p90_minus_one,
-        width=0.36,
-        color="#E69F00",
-        label="P90 factor - 1",
-    )
-    bars.axhline(0.8, color="#555555", linestyle="--", linewidth=1)
-    bars.set_xticks(x, models, rotation=15, ha="right")
-    bars.set_ylim(min(0.0, min(tau)), max(1.05, max(p90_minus_one)))
-    bars.set_ylabel("Scale-free validation metric")
-    bars.legend(frameon=False)
-    bars.grid(axis="y", alpha=0.2)
-    fig.tight_layout()
-    fig.savefig(FIGURE_PATH, dpi=180)
-    plt.close(fig)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -699,43 +953,45 @@ def main() -> int:
         *_neuromc_scores(neuromc_root),
     ]
     metrics = {
-        model: _metrics(
-            [
-                score
-                for score in scores
-                if score.model == model and score.included_in_correlation
-            ]
-        )
+        model: _metrics([score for score in scores if score.model == model])
         for model in ("SpikeSim dense", "Lemaire", "NeuroMC")
     }
+    for model, minimum in MIN_COMPARABLE_CASES.items():
+        actual = sum(score.model == model for score in scores)
+        if actual < minimum:
+            raise RuntimeError(
+                f"{model} requires at least {minimum} comparable cases, got {actual}."
+            )
+    neuromc_phases = _neuromc_phase_metrics(scores)
     revision = _revision(ROOT)
     _write_csv(scores, metrics, revision)
-    _plot(scores, metrics)
+    cross_rows = _energy_model_cross_validation()
+    cross_metrics = _cross_validation_metrics(cross_rows)
+    _write_cross_validation_csv(cross_rows)
+    _plot_cross_validation(cross_metrics)
 
     for model, values in metrics.items():
-        included_count = sum(
-            score.model == model and score.included_in_correlation for score in scores
-        )
+        case_count = sum(score.model == model for score in scores)
         print(
-            f"{model}: n={included_count}, "
+            f"{model}: n={case_count}, "
             f"tau-b={values['kendall_tau_b']:.3f} "
             f"[{values['kendall_ci_low']:.3f}, {values['kendall_ci_high']:.3f}], "
             f"rho={values['spearman_rho']:.3f}, "
             f"log-r={values['log_pearson_r']:.3f}, "
-            f"P90={values['p90_factor']:.3f}x, "
+            f"raw-P90={values['raw_p90_factor']:.3f}x, "
+            f"scale-adjusted-P90={values['scale_adjusted_p90_factor']:.3f}x, "
             f"raw-scale={values['scale_ratio']:.3g}x"
         )
-    stress_ratios = [
-        score.spikingjelly_pj / score.oracle_pj
-        for score in scores
-        if not score.included_in_correlation
-    ]
-    print(
-        f"SpikeSim dynamic stress: n={len(stress_ratios)}, "
-        f"runtime/oracle={min(stress_ratios):.3f}x..{max(stress_ratios):.3f}x"
-    )
+    for phase, values in neuromc_phases.items():
+        print(
+            f"NeuroMC {phase.upper()}: n={NEUROMC_CASES_PER_PHASE}, "
+            f"tau-b={values['kendall_tau_b']:.3f}, "
+            f"raw-P90={values['raw_p90_factor']:.3f}x, "
+            f"raw-scale={values['scale_ratio']:.3f}x"
+        )
     print(CSV_PATH)
-    print(FIGURE_PATH)
+    print(CROSS_VALIDATION_CSV_PATH)
+    print(CROSS_VALIDATION_FIGURE_PATH)
     return 0
 
 

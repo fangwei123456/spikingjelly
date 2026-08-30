@@ -172,12 +172,16 @@ Roofline 分析示例
 模型概览
 --------
 
-``op_counter`` 目前提供四种高层能耗估计器：
+``op_counter`` 目前提供四个高层入口、五种能耗口径：
 
 * ``estimate_simple_energy``：运行时 MAC/AC/访存的简单能耗；
 * ``estimate_lemaire_energy``：Lemaire 风格解析式前向推理能耗；
 * ``estimate_neuromc_runtime_energy``：运行时 NeuroMC 风格能耗；
-* ``estimate_spikesim_energy``：运行时 SpikeSim 风格 Conv2d 能耗。
+* ``estimate_spikesim_energy``：运行时 SpikeSim dense 或 event Conv2d 能耗。
+
+Simple Energy 和 SpikeSim event 由 SpikingJelly 定义。Lemaire 按论文实现，
+NeuroMC 和 SpikeSim dense 按作者模型实现。Lemaire、NeuroMC 和 SpikeSim dense
+已经过来源一致性评测；Simple Energy 和 SpikeSim event 没有独立的外部参考实现。
 
 .. list-table::
     :header-rows: 1
@@ -203,10 +207,10 @@ Roofline 分析示例
       - 带有 SpikeSim 系数的 Conv2d 阶段能耗
       - 只适用于受支持的 Conv2d 推理阶段，不是通用完整模型能耗估计器
 
-四个估计器使用不同的成本口径和硬件假设，绝对值不能交叉比较。
+五种口径使用不同的成本和硬件假设，绝对值不能交叉比较。
 
 每份报告的 ``model_info`` 给出稳定模型 ID、来源、工艺节点、精度、适用范围和
-fidelity；``config``（NeuroMC 为 ``memory_config``）保存实际成本配置。
+fidelity。实际成本配置保存在 ``config`` 中，NeuroMC 使用 ``memory_config``。
 ``paper``/``reference-code`` 表示论文或作者脚本复刻，``source-aligned`` 表示采用
 作者常量和表格但保留本项目的运行时映射，``spikingjelly-defined`` 表示公式由
 SpikingJelly 明确定义。汇报结果时，应注明估计器、执行阶段、成本配置、输入类型
@@ -248,8 +252,15 @@ Lemaire 解析式推理能耗
 NeuroMC 运行时能耗
 --------------------
 
-``estimate_neuromc_runtime_energy`` 分析实际执行片段，再按固定的 NeuroMC v1 常量、
-逐变量访存方向和倍率估算能耗。它保留作者的成本口径，但不复刻完整的 ZigZag 映射。
+``estimate_neuromc_runtime_energy`` 记录实际执行的 module 和 ATen fragment，再按
+固定的 NeuroMC weight-stationary FE/BE/WE mapping 和 v1 成本表估算能耗。统计结果
+随实际分支、调用次数和张量形状变化；未执行的 module 不计入报告。
+
+作者代码以静态 workload 和 mapping 为输入，由 ZigZag 计算 MAC、partial sum 和
+各级访存。SpikingJelly 不在运行时调用 ZigZag，而是把实际捕获的 fragment 代入
+同一个固定 16×16 weight-stationary mapping。两者使用相同的循环维度、数据搬运
+规则和成本常量。运行时实现按 fragment 形状计算，不按网络名或层号查表。
+
 便捷入口始终执行前向；提供 ``target`` 和 ``loss_fn``
 时继续执行反向，另提供 ``optimizer`` 时估算优化器阶段。手工分阶段统计可使用
 :class:`NeuroMCEnergyProfiler <spikingjelly.activation_based.op_counter.neuromc.core.NeuroMCEnergyProfiler>`。
@@ -270,6 +281,9 @@ SpikeSim 运行时能耗
 
 ``estimate_spikesim_energy`` 统计实际执行的 Conv2d 推理阶段。默认 ``dense`` 模式
 使用作者代码的 PE-cycle 公式；``event`` 模式使用 SpikingJelly 定义的稀疏公式。
+这里的 ``dense`` 表示按完整 PE cycle 计费，不是全连接层；输入中的零值不会降低
+已执行卷积的能耗。
+
 主要限制如下：
 
 * 模型应处于 ``eval`` 模式；默认 ``strict=True``，未支持的 Conv2d 阶段或空报告
@@ -350,85 +364,114 @@ Lemaire 估计器还会计入寻址和神经元状态：
 * NeuroMC：作者代码 commit
   `712c66f <https://github.com/dayanhn/NeuroMC/commit/712c66f47cf76ae530a55f8bcad3858bd68788de>`_。
 
-相对趋势检查
-------------
+来源模型一致性检查
+------------------
 
-该基准只回答一个问题：在选定案例中，SpikingJelly 是否保留来源
-模型给出的相对趋势。每个案例记录一对 ``(E_origin, E_SJ)``。SpikeSim 和 NeuroMC
-使用固定版本的作者代码；Lemaire 没有公开代码，因此参考值按论文方程 (1)--(20)
-计算。参考路径只接收静态拓扑、张量尺寸和独立观测的发放数，不读取
-SpikingJelly 报告。
+该基准只检查 SpikingJelly 与来源模型是否一致，不评测硬件准确性。每个案例记录
+一对 ``(E_origin, E_SJ)``。SpikeSim 和 NeuroMC 使用固定版本的作者代码；Lemaire
+没有公开代码，参考值按论文方程 (1)--(20) 计算。
 
-主指标是 Kendall tau-b，并用 2,000 次成对 bootstrap 给出 95% 重采样区间。Spearman rho
-和 log-Pearson ``r`` 用作辅助观察。P90 对称倍率先移除中位乘法尺度，再衡量相对
-误差。``tau-b >= 0.80`` 和 ``P90 <= 1.50x`` 是预先设定的比较参考线，不是准确性
-判定标准。
+SpikeSim 和 Lemaire 案例来自脚本中的参数网格。NeuroMC 覆盖官方 S-ResNet-18、
+S-ResNet-50 和 S-VGG-16 的全部 FE、BE 和 WE fragment，共 786 个案例。
+SpikingJelly 对每个案例执行对应的 PyTorch 前向或反向；作者模块也在每次运行前
+重新加载，避免共享可变状态。
+
+Lemaire 未公开源代码；论文说明代码和模型可向作者索取。FC 案例中的
+``theta_in`` 使用运行时观测的输入脉冲数。论文 Eq. (2) 在该值之外又乘一次
+``N_in``，与文中定义及 Eqs. (8)、(10)、(15)、(17) 不一致，因此这里按一次
+``N_out`` fanout 计数。
+
+主指标是 Kendall tau-b，并用 2,000 次成对 bootstrap 给出 95% 重采样区间。
+Spearman rho 和 log-Pearson ``r`` 作为辅助指标。原始 P90 不做校准，直接衡量
+绝对对称误差；去尺度 P90 先移除中位乘法尺度，只用于诊断形状误差。NeuroMC 的
+FE、BE、WE 分阶段和合计结果必须同时满足 ``tau-b >= 0.90``、原始
+``P90 <= 1.50x``，且中位尺度位于 ``[0.80x, 1.25x]``。
 
 * **Kendall tau-b** 比较案例两两之间的高低顺序。``1`` 表示顺序完全一致，``0``
   表示没有稳定的排序关系，``-1`` 表示顺序完全相反。
 * **Spearman rho** 计算两组名次的相关性。它也位于 ``[-1, 1]``，并且比 tau-b 更
   关注单个案例的名次移动幅度。
-* **P90 对称倍率** 是移除固定尺度差后，相对误差倍率的经验 90 分位数。
-  ``1.0x`` 最理想；``1.5x`` 表示该分位点对应参考相对值的 ``1 / 1.5`` 到
-  ``1.5`` 倍。
+* **原始 P90 对称倍率** 是 ``exp(abs(log(E_SJ / E_origin)))`` 的经验 90 分位数。
+  ``1.0x`` 最理想；``1.5x`` 表示该分位点落在参考值的 ``1 / 1.5`` 到
+  ``1.5`` 倍之间。
+* **去尺度 P90 对称倍率** 在移除 log 比值的中位数后做同样计算。将它与原始 P90
+  对照，可以区分近似固定的尺度偏差和随 workload 改变的形状误差。
 
 .. list-table:: 验证结果
    :header-rows: 1
-   :widths: 20 12 23 14 14 14 14
+   :widths: 18 11 21 11 11 12 14 14
 
    * - 估计器模式
      - 可比案例数
      - Kendall tau-b（95% bootstrap 区间）
      - Spearman rho
      - Log-Pearson r
-     - P90 倍率
+     - 原始 P90 倍率
+     - 去尺度 P90
      - 中位尺度 E_SJ/E_origin
    * - Lemaire
-     - 12
-     - 0.939 [0.729, 1.000]
-     - 0.979
-     - 0.998
-     - 1.478x
-     - 0.877x
+     - 288
+     - 1.00 [1.00, 1.00]
+     - 1.00
+     - 1.00
+     - 1.00x
+     - 1.00x
+     - 1.00x
    * - SpikeSim dense
-     - 7（另有 5 个压力案例）
-     - 1.000 [1.000, 1.000]
-     - 1.000
-     - 1.000
-     - 1.000x
-     - 1.000x
+     - 216
+     - 1.00 [1.00, 1.00]
+     - 1.00
+     - 1.00
+     - 1.00x
+     - 1.00x
+     - 1.00x
    * - NeuroMC
-     - 13
-     - 0.795 [0.541, 0.971]
-     - 0.934
-     - 0.981
-     - 1.189x
-     - 0.396x
+     - 786
+     - 1.00 [1.00, 1.00]
+     - 1.00
+     - 1.00
+     - 1.00x
+     - 1.00x
+     - 1.00x
 
-.. figure:: ../../_static/tutorials/op_counter/energy_model_validation.png
-   :alt: 归一化参考值与 SpikingJelly 评分，以及各模型的 tau-b 与 P90 减一
-   :align: center
-
-   左图比较归一化后的成对评分。靠近虚线只表示相对趋势接近，不能说明绝对能耗
-   准确。右图汇总各模型的 tau-b 和 ``P90 - 1``。
-
-Lemaire 的 tau-b 和 P90 都达到参考线。NeuroMC 的 P90 达标，tau-b 为 ``0.795``，
-略低于 ``0.80``。SpikeSim 的 7 个可比案例完全一致，因为 ``dense`` 模式直接实现
-作者公式；该结果主要检查集成和计算过程。另有 5 个动态压力案例不参与相关性
-计算，其动态/静态比值为 ``0.500x`` 到 ``3.000x``。这里不作统一的“通过”判断。
+NeuroMC 的三个阶段各包含 262 个 fragment：FE 的原始 P90 为 ``1.000x``，BE 为
+``1.001x``，WE 为 ``1.000x``；三个阶段的 tau-b 和中位尺度均为 ``1.000``，
+分阶段和合计结果均通过门槛。Lemaire 的 288 个案例也全部通过。SpikeSim 的
+216 个案例完全一致，因为 ``dense`` 模式直接实现作者公式。
 
 **局限性：**
 
-* 每组只有 7、12 或 13 个选定案例，不能代表更广泛的网络和发放模式；bootstrap
-  区间只反映这些案例内的重采样稳定性。
-* 两条路径共享拓扑、尺寸和发放数，网络规模本身可能产生高相关性。高 tau 或 rho
-  不能逐项验证能耗项或系数。
-* 参考值来自其他分析模型，不是硬件测量。相关性只能说明与这些模型的趋势接近，
-  不能证明物理能耗准确。
-* 排名和 P90 都弱化或移除了绝对尺度；即使存在固定的绝对偏差，也可能得到较好的
-  指标。
-* 覆盖仍不完整：Lemaire 参考值由论文方程重建，本基准只验证 NeuroMC 前向能耗，
-  Simple Energy 和 SpikeSim event 未使用独立的端到端外部估计器。
+* NeuroMC 实现和参考值来自同一作者模型；这里检查来源一致性，不是独立验证。
+* 参考值均为分析模型结果，不是硬件测量。
+* 覆盖仍不完整：Lemaire 参考值由论文方程重建且无公开作者代码；NeuroMC 的 BN
+  和 optimizer 公式、Simple Energy 和 SpikeSim event 未使用独立的端到端外部
+  估计器。
+
+真实网络交叉比较
+----------------
+
+交叉比较使用 VGG-11/13/16/19 和 SEW-ResNet-18/34/50，在 32、40、48、56 四种
+输入尺寸下运行，共 28 个网络案例。VGG 使用无 BN 版本，SEW ResNet 使用 identity
+norm。脚本先运行完整网络，再提取实际执行的 Conv2d 输入，将同一组 Conv2d→IF
+stage 分别交给五种能耗口径。结果只覆盖共同支持的卷积-神经元部分，不是整网
+能耗。
+
+Spikformer 未纳入矩阵：其 attention 和 MLP 主要使用 Conv1d，而 SpikeSim 只支持
+Conv2d；只统计 patch embedding 不能代表整网。
+
+.. figure:: ../../_static/tutorials/op_counter/energy_model_cross_validation.png
+   :alt: 五种能耗模型在 VGG 和 SEW ResNet 上的相关性矩阵
+   :align: center
+
+   Simple Energy 与 Lemaire 的排序最接近（Kendall tau-b ``0.94``）。NeuroMC 与
+   SpikeSim dense 为 ``0.74``，与 SpikeSim event 为 ``0.63``。这些差异来自访存、
+   硬件映射和稀疏活动假设，不表示某个模型更准确。
+
+交叉比较中，tau-b 不低于 ``0.90`` 通常表示排序高度一致，``0.70`` 到 ``0.90``
+表示较强相关。这是经验范围，不是正确性门槛；高相关性也不表示绝对能耗接近。
+
+图中同时给出 Spearman rho 和 log-Pearson ``r``。各网络的五种能耗结果记录在
+:download:`交叉比较 CSV <../../_static/tutorials/op_counter/energy_model_cross_validation.csv>`。
 
 手动运行基准脚本：
 
@@ -438,7 +481,7 @@ Lemaire 的 tau-b 和 P90 都达到参考线。NeuroMC 的 P90 达标，tau-b �
         --spikesim-root /path/to/SpikeSim \
         --neuromc-root /path/to/NeuroMC
 
-精确的案例输入、双边评分、指标、仓库版本、依赖版本和参考版本均记录在
+案例输入、双边评分、指标和版本信息记录在
 :download:`案例级 CSV <../../_static/tutorials/op_counter/energy_model_validation.csv>` 中。
 该脚本依赖固定版本的外部仓库，因此不在 CI 中运行。
 

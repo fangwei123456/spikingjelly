@@ -45,8 +45,18 @@ Module: `spikingjelly.activation_based.memopt`.
 Module: `spikingjelly.activation_based.op_counter`.
 
 - Added reproducible external validation for the Lemaire, SpikeSim dense, and
-  NeuroMC forward-energy estimators using pinned author code or published
-  equations, with scale-free ranking metrics and explicit unvalidated scopes.
+  NeuroMC runtime-energy estimators using pinned author code or published
+  equations. The benchmark covers all official FE/BE/WE fragments from three
+  NeuroMC model families and reports both ranking and absolute-error metrics.
+- Expanded SpikeSim dense validation to 216 Conv2d cases.
+- Lemaire FC validation treats `theta_in` as the observed spike count,
+  consistently with the paper's memory-access and addressing equations.
+- Added a common Conv2d-to-IF cross-validation across 28 VGG and SEW ResNet
+  executions, with pairwise Kendall, Spearman, and log-Pearson correlations for
+  all five energy regimes.
+- NeuroMC now maps dynamically executed module and functional fragments through
+  the fixed author weight-stationary mapping instead of treating each tensor as
+  one memory access.
 
 ### Improvements
 

@@ -564,6 +564,11 @@ class LemaireEnergyProfiler:
 
         基于 ``ModuleCounterMode`` 动态采集 module event 的 Lemaire 前向能耗分析器。
 
+        Lemaire 论文未公开源代码。论文将 ``theta_in`` 定义为输入脉冲数，但
+        Eq. (2) 在 FC 的输入脉冲 fanout 之外又乘一次 ``N_in``；同文的
+        Eqs. (8)、(10)、(15)、(17) 均按 ``theta_in * N_out`` 计数。本实现使用
+        运行时观测的输入脉冲数，并对每个脉冲计算一次 ``N_out`` fanout。
+
         :param config: 能耗配置，若为 ``None`` 则使用默认配置
         :type config: LemaireEnergyConfig | None
 
@@ -575,6 +580,11 @@ class LemaireEnergyProfiler:
 
         Inference-only Lemaire profiler driven by runtime module events from
         ``ModuleCounterMode``.
+
+        No author source code is public. The paper defines ``theta_in`` as the
+        input-spike count, but Eq. (2) multiplies the FC fanout by ``N_in`` again;
+        Eqs. (8), (10), (15), and (17) use ``theta_in * N_out``. This implementation
+        uses the runtime input-spike count and applies one ``N_out`` fanout per spike.
 
         :param config: Energy configuration. If ``None``, uses the default configuration
         :type config: LemaireEnergyConfig | None

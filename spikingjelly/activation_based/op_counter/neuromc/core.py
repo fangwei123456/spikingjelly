@@ -14,6 +14,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..base import EnergyModelInfo, ModuleCounter, ModuleCounterMode, call_model
 from .config import MemoryHierarchyConfig, MemoryInstanceSpec
+from .mapping import _Fragment, _map_base_memory
 from .utils import _is_spike
 
 __all__ = [
@@ -42,7 +43,7 @@ _MAC_COST_PJ = {
 }
 
 _NEUROMC_MODEL_INFO = EnergyModelInfo(
-    model_id="neuromc_712c66_runtime_v1",
+    model_id="neuromc_712c66_runtime_v2",
     fidelity="source-aligned",
     source_urls=(
         "https://www.nature.com/articles/s41467-026-70586-x",
@@ -51,7 +52,10 @@ _NEUROMC_MODEL_INFO = EnergyModelInfo(
     ),
     technology_nm=32,
     precision="1-bit spikes and 16-bit values under the NeuroMC v1 constants",
-    scope="runtime fragment adapter for NeuroMC-style FE/BP/WG/BN/optimizer energy",
+    scope=(
+        "runtime-mapped NeuroMC FE/BE/WE energy; BN and optimizer use "
+        "source-derived formulas without independent external validation"
+    ),
 )
 
 _EXTRA_RH2L_MULTIPLIER = {
@@ -182,6 +186,7 @@ _AUXILIARY_ATEN_OPS = {
     "aten.full_like.default",
     "aten.mse_loss.default",
     "aten.mse_loss_backward.default",
+    "aten.convolution_backward.default",
     "aten.where.self",
     "aten.where.ScalarOther",
     "aten.where.ScalarSelf",
@@ -390,30 +395,6 @@ class _TraceEvent:
     out: Any
 
 
-@dataclass
-class _Fragment:
-    stage: str
-    phase: str
-    op_name: str
-    core_type: str
-    process_key: str
-    loop_dims: dict[str, int]
-    input_precision_bits: int
-    weight_precision_bits: int
-    output_precision_bits: int
-    input_numel: int
-    weight_numel: int
-    output_numel: int
-    mac_count: int
-    conv_type: str = "--"
-    b_type: int = 0
-    t_type: int = 0
-    source: str = "trace"
-    optimizer_has_momentum: bool = False
-    optimizer_has_weight_decay: bool = False
-    optimizer_has_momentum_buffer: bool = False
-
-
 def _module_overlap_signature(fragment: _Fragment) -> tuple[Any, ...]:
     ld = fragment.loop_dims
     return (
@@ -563,8 +544,8 @@ class NeuroMCEnergyProfiler(ModuleCounter):
 
         * **中文**
 
-        NeuroMC source-aligned 运行时适配器。它动态捕获真实执行 fragment，
-        再应用固定 NeuroMC v1 成本表；它不包含完整 ZigZag mapping。
+        运行时记录实际执行的 module 和 ATen fragment，再应用固定 NeuroMC
+        weight-stationary mapping 和 v1 成本表。未执行的 module 不计入报告。
 
         :param memory_config: 内存层次配置；``None`` 使用 ``neuromc_like_v1``
         :type memory_config: MemoryHierarchyConfig | None
@@ -575,8 +556,9 @@ class NeuroMCEnergyProfiler(ModuleCounter):
 
         * **English**
 
-        Source-aligned NeuroMC runtime adapter. It captures executed fragments and
-        applies the fixed NeuroMC v1 cost tables; it is not a complete ZigZag mapping.
+        Records executed module and ATen fragments at runtime, then applies the fixed
+        NeuroMC weight-stationary mapping and v1 cost tables. Unexecuted modules do not
+        enter the report.
 
         :param memory_config: Memory hierarchy configuration. ``None`` selects
             ``neuromc_like_v1``
@@ -1631,126 +1613,7 @@ class NeuroMCEnergyProfiler(ModuleCounter):
         ) * self._memory_energy_per_element(spec, precision_bits, read)
 
     def _base_memory_for_fragment(self, fragment: _Fragment):
-        totals = defaultdict(lambda: defaultdict(int))
-        energy = defaultdict(lambda: defaultdict(float))
-        if (
-            fragment.core_type
-            not in {"fp_soma", "bp_grad", "wg", "ann_fe", "ann_be", "ann_we"}
-            or fragment.mac_count == 0
-        ):
-            return totals, energy
-
-        cfg = self.memory_config.memory_instances
-        if fragment.core_type == "fp_soma":
-            reg_i1, reg_i2, reg_o = cfg["reg_1b"], cfg["reg_16b"], cfg["reg_16b"]
-            sram_i1, sram_i2, sram_o = (
-                cfg["sram_fp_conv_in_s"],
-                cfg["sram_fp_conv_in_w"],
-                cfg["sram_fp_conv_out_xi"],
-            )
-        elif fragment.core_type == "ann_fe":
-            reg_i1, reg_i2, reg_o = cfg["reg_16b"], cfg["reg_16b"], cfg["reg_16b"]
-            sram_i1, sram_i2, sram_o = (
-                cfg["sram_fp_conv_in_w"],
-                cfg["sram_fp_conv_in_w"],
-                cfg["sram_fp_conv_out_xi"],
-            )
-        elif fragment.core_type in {"bp_grad", "ann_be"}:
-            reg_i1, reg_i2, reg_o = cfg["reg_16b"], cfg["reg_16b"], cfg["reg_16b"]
-            sram_i1, sram_i2, sram_o = (
-                cfg["sram_bp_conv_in_du"],
-                cfg["sram_bp_conv_in_w"],
-                cfg["sram_bp_conv_out_res"],
-            )
-        else:
-            if fragment.core_type == "ann_we":
-                reg_i1, reg_i2, reg_o = (
-                    cfg["reg_16b"],
-                    cfg["reg_16b"],
-                    cfg["reg_16b"],
-                )
-                sram_i1, sram_i2, sram_o = (
-                    cfg["sram_wg_conv_in_du"],
-                    cfg["sram_wg_conv_in_du"],
-                    cfg["sram_wg_conv_out_dw"],
-                )
-            else:
-                reg_i1, reg_i2, reg_o = cfg["reg_1b"], cfg["reg_16b"], cfg["reg_16b"]
-                sram_i1, sram_i2, sram_o = (
-                    cfg["sram_wg_conv_in_s"],
-                    cfg["sram_wg_conv_in_du"],
-                    cfg["sram_wg_conv_out_dw"],
-                )
-
-        i1_bits = fragment.input_numel * fragment.input_precision_bits
-        i2_bits = fragment.weight_numel * fragment.weight_precision_bits
-        o_bits = fragment.output_numel * fragment.output_precision_bits
-        reuse_weight = (
-            fragment.b_type > 0 or fragment.t_type > 0
-        ) and i2_bits <= sram_i2.size_bits
-
-        self._accumulate_memory(
-            totals,
-            energy,
-            "reg",
-            "rh2l",
-            i1_bits,
-            reg_i1,
-            fragment.input_precision_bits,
-            True,
-        )
-        self._accumulate_memory(
-            totals,
-            energy,
-            "sram",
-            "rh2l",
-            i1_bits,
-            sram_i1,
-            fragment.input_precision_bits,
-            True,
-        )
-        if not reuse_weight:
-            self._accumulate_memory(
-                totals,
-                energy,
-                "reg",
-                "rh2l",
-                i2_bits,
-                reg_i2,
-                fragment.weight_precision_bits,
-                True,
-            )
-            self._accumulate_memory(
-                totals,
-                energy,
-                "sram",
-                "rh2l",
-                i2_bits,
-                sram_i2,
-                fragment.weight_precision_bits,
-                True,
-            )
-        self._accumulate_memory(
-            totals,
-            energy,
-            "reg",
-            "wl2h",
-            o_bits,
-            reg_o,
-            fragment.output_precision_bits,
-            False,
-        )
-        self._accumulate_memory(
-            totals,
-            energy,
-            "sram",
-            "wl2h",
-            o_bits,
-            sram_o,
-            fragment.output_precision_bits,
-            False,
-        )
-        return totals, energy
+        return _map_base_memory(fragment, self.memory_config)
 
     def _extra_memory_for_fragment(self, fragment: _Fragment):
         totals = defaultdict(lambda: defaultdict(int))

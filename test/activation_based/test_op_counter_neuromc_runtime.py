@@ -31,7 +31,7 @@ def test_neuromc_exact_linear_report_fields():
     assert report.energy_by_core_type["fp_soma"] > 0.0
     assert report.counts_by_core_type["fp_soma"]["mac"] == 3 * 8 * 4
     assert report.primitive_counts["totals"]["mac"] == 3 * 8 * 4
-    assert report.model_info.model_id == "neuromc_712c66_runtime_v1"
+    assert report.model_info.model_id == "neuromc_712c66_runtime_v2"
     assert report.model_info.fidelity == "source-aligned"
     assert report.memory_config.preset_name == "neuromc_like_v1"
 
@@ -93,8 +93,8 @@ def test_neuromc_exact_batchnorm_supports_bn_breakdown():
     assert report.energy_by_process_key["with_bn"] > 0.0
     assert report.counts_by_process_key["with_bn"]["sqrt"] > 0
     by_level = report.memory_bits_by_level["by_level_dir"]
-    assert by_level["reg"]["rh2l"] == 2848
-    assert by_level["reg"]["wl2h"] == 1920
+    assert by_level["reg"]["rh2l"] == 6656
+    assert by_level["reg"]["wl2h"] == 1408
     assert by_level["sram"]["rh2l"] == 2848
     assert by_level["sram"]["wl2h"] == 1920
 
@@ -1121,3 +1121,40 @@ def test_neuromc_exact_multi_step_batchnorm2d_uses_true_channel_dim():
         for item in report.mapping_summary
         if item["op_name"] == "bn.forward"
     )
+
+
+def test_neuromc_runtime_counts_only_the_executed_branch():
+    class BranchModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.left = nn.Linear(4, 3, bias=False)
+            self.right = nn.Linear(4, 7, bias=False)
+
+        def forward(self, x, use_left):
+            return self.left(x) if use_left else self.right(x)
+
+    model = BranchModel().eval()
+    x = torch.zeros(2, 4)
+    left = op_counter.estimate_neuromc_runtime_energy(model, (x, True))
+    right = op_counter.estimate_neuromc_runtime_energy(model, (x, False))
+
+    assert left.primitive_counts["totals"]["mac"] == 2 * 4 * 3
+    assert right.primitive_counts["totals"]["mac"] == 2 * 4 * 7
+    assert len(left.mapping_summary) == len(right.mapping_summary) == 1
+
+
+def test_neuromc_forward_mapping_counts_partial_sum_traffic():
+    model = nn.Sequential(
+        nn.Conv2d(16, 16, 3, bias=False),
+        neuron.IFNode(),
+    ).eval()
+    x = torch.zeros(1, 16, 6, 6)
+
+    report = op_counter.estimate_neuromc_runtime_energy(model, x)
+    memory = report.memory_bits_by_level["by_level_dir"]
+    output_numel = 16 * 4 * 4
+    reduction_chunks = 3 * 3
+
+    assert report.energy_base_memory_pj == pytest.approx(43_398.080536705806)
+    assert memory["sram"]["rh2l"] >= output_numel * (reduction_chunks - 1) * 16
+    assert memory["sram"]["wl2h"] >= output_numel * reduction_chunks * 16
