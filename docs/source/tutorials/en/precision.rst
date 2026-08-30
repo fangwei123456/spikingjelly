@@ -112,6 +112,25 @@ unavailable; it does not switch to BF16. At least one module must be convertible
 ``delayed``, ``current``, ``block``, or ``mxfp8`` when the numerical recipe must
 be fixed explicitly.
 
+Controlling unconverted operations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Transformer Engine changes only converted modules. FP8 wraps the remaining
+CUDA operations in BF16 autocast by default, avoiding a model-wide FP32 boundary
+through Conv2d, BatchNorm, or neurons:
+
+.. code-block:: python
+
+    config = PrecisionConfig(
+        mode="fp8",
+        fp8_recipe="auto",
+    )
+
+Use ``fp8_fallback_dtype="fp16"`` or ``"fp32"`` to reproduce an explicit
+experimental path. Here, fallback means operations not covered by FP8, not
+recovery from an error. The field controls ordinary CUDA autocast and TE output
+boundaries; it does not claim that those operations use FP8 kernels.
+
 Some Transformer Engine recipes serialize FP8 metadata as a pickle. Set
 ``NVTE_ALLOW_UNSAFE_PICKLE_EXTRA_STATE=1`` only when restoring a trusted
 checkpoint; do not enable it for unknown checkpoints.
@@ -230,14 +249,18 @@ configuration examples.
 When FP8 is faster
 ------------------
 
-FP8 benefits large matrices, not every low-precision workload. It does not help
-the regular FC-SNN training case or the current
-Spikformer DDP case; sufficiently wide Linear and FC-SNN inference workloads do.
+FP8 benefits large matrices, not every low-precision workload. FC-SNN depends on
+the neuron backend and the Linear-to-neuron boundary; Spikformer has a larger
+convolution, BatchNorm, and neuron share and does not cross the FP16/BF16
+baseline on one GPU yet.
 
-Measurements were taken on 2026-08-29. Linear and FC-SNN used one RTX 5090
-32 GiB GPU, while DDP used two. The software stack was PyTorch 2.11.0+cu128 and
-Transformer Engine 2.18.0. Linear and FC-SNN ran three times with rotated
-precision order, and the tables report medians. A 5% throughput increase is the
+The dense Linear and two-GPU DDP results below were measured on 2026-08-29 with
+Transformer Engine 2.18.0. The replacement FC-SNN rows and the new single-GPU
+Spikformer rows were measured on 2026-08-30 with PyTorch 2.11.0+cu128,
+Transformer Engine 2.17.1, and one 32-GiB RTX 5090. The latter used 2.17.1
+because the image's TE 2.18.0 extension could not load; the two software stacks
+must not be conflated. Each FC-SNN/Spikformer steady-state case used three
+independent processes and reports the median. A 5% throughput increase is the
 cutoff for a useful win. Model conversion is excluded from timing.
 
 Linear/GEMM crossover
@@ -291,18 +314,142 @@ End-to-end SNN and DDP
     * - workload
       - training FP8 / FP16, BF16
       - inference FP8 / FP16, BF16
-    * - FC-SNN: T16, batch 256, width 4096, depth 20
-      - 0.954x / 0.942x
-      - 0.901x / 0.896x
-    * - FC-SNN: T16, batch 256, width 8192, depth 10
-      - 0.908x / 0.887x
-      - 1.310x / 1.299x
+    * - FC-SNN: T16, batch 256, width 4096, depth 20 (Triton LIF, FP16 fallback)
+      - 1.533x / 1.677x
+      - 1.578x / 1.786x
+    * - FC-SNN: T16, batch 256, width 8192, depth 10 (Triton LIF, FP32 fallback)
+      - 1.544x / 1.468x
+      - 1.648x / 1.471x
 
-At width=8192, the inference matrices are large enough to offset the FP8 overhead.
-Training still pays for backward and neuron operations and remains slower. Its
-FP8 training memory is about 46%--47% higher than FP16/BF16.
+The ratios are end-to-end throughput ratios in the order ``FP8 / FP16`` and
+``FP8 / BF16``. Both FC-SNN cases use the existing Triton LIF; Triton neuron
+storage is not enabled and neuron computation remains high precision. W4096
+uses ``fp8_fallback_dtype="fp16"`` and its training/inference peak allocated
+memory is 4279.1/1460.3 MiB; W8192 is the earlier result without an outer
+autocast. Thus “FP8 Linear + Triton LIF” wins at these sizes, but this does not
+mean that all neuron state is FP8 or that FP8 always saves memory.
 
-The two-GPU Spikformer DDP benchmark used five timed steps:
+The slower FC-SNN numbers previously shown in this tutorial used Torch LIF and
+are retained only in the Nsight root-cause report, not as the recommended
+FC-SNN benchmark.
+
+Requested FP8 tracked dense-MAC coverage for W4096/depth20 is 100%.
+
+Reproduce the FC-SNN profile with:
+
+.. code-block:: bash
+
+    nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
+      --trace=cuda,nvtx,cublas,osrt --sample=none --cpuctxsw=none \
+      -o fcsnn-fp8 \
+      uv run python benchmark/benchmark_train_precision_snn_fc.py \
+        --backend triton --precisions fp8 --fp8-fallback-dtype fp16 \
+        --profile --profile-steps 10 --output fcsnn-fp8.json
+
+Single-GPU Spikformer
+~~~~~~~~~~~~~~~~~~~~~
+
+For ``spikformer_ti`` with ``T=4``, input size ``224``, eager execution, and
+Triton LIF, the RTX 5090 end-to-end results are:
+
+.. list-table::
+    :header-rows: 1
+
+    * - workload
+      - precision path
+      - step latency
+      - throughput
+      - throughput vs FP16 / BF16
+      - peak allocated
+    * - Inference: batch 64, 1000 classes
+      - FP16
+      - 16.220 ms
+      - 3945.7 images/s
+      - --
+      - 1974.8 MiB
+    * - Inference: batch 64, 1000 classes
+      - BF16
+      - 16.372 ms
+      - 3909.1 images/s
+      - --
+      - 1974.8 MiB
+    * - Inference: batch 64, 1000 classes
+      - FP8 + FP32 fallback
+      - 37.173 ms
+      - 1721.7 images/s
+      - 0.436x / 0.441x
+      - 3377.3 MiB
+    * - Inference: batch 64, 1000 classes
+      - FP8 + FP16 fallback
+      - 22.280 ms
+      - 2872.6 images/s
+      - 0.728x / 0.735x
+      - 2004.8 MiB
+    * - Inference: batch 64, 1000 classes
+      - FP8 + BF16 fallback (default)
+      - 22.402 ms
+      - 2856.9 images/s
+      - 0.724x / 0.731x
+      - 2004.8 MiB
+    * - Training: batch 32, 1024 classes (alignment diagnostic)
+      - FP16
+      - 37.869 ms
+      - 845.0 samples/s
+      - --
+      - 4508.2 MiB
+    * - Training: batch 32, 1024 classes (alignment diagnostic)
+      - BF16
+      - 44.671 ms
+      - 716.4 samples/s
+      - --
+      - 4511.5 MiB
+    * - Training: batch 32, 1024 classes (alignment diagnostic)
+      - FP8 + FP32 fallback
+      - 59.538 ms
+      - 537.5 samples/s
+      - 0.636x / 0.750x
+      - 7724.4 MiB
+    * - Training: batch 32, 1024 classes (alignment diagnostic)
+      - FP8 + FP16 fallback
+      - 41.499 ms
+      - 771.1 samples/s
+      - 0.913x / 1.076x
+      - 4398.4 MiB
+    * - Training: batch 32, 1024 classes (alignment diagnostic)
+      - FP8 + BF16 fallback (default)
+      - 48.654 ms
+      - 657.7 samples/s
+      - 0.778x / 0.918x
+      - 4398.4 MiB
+
+The training row uses 1024 classes only to satisfy the current TE FP8 backward
+16-alignment requirement; an ImageNet-1000 head currently fails with
+``lda % 16 == 0``. Nsight shows that FP8 autocast covers only TE pointwise
+Conv1d/Linear modules; patch-stem Conv2d, BatchNorm, and LIF outputs fall back
+to FP32, adding elementwise, copy, and layout kernels. Choose FP16/BF16 for
+Spikformer until that boundary is fixed; do not infer a Spikformer win from the
+FC-SNN Triton result. Reproduce a single-GPU profile with:
+
+.. code-block:: bash
+
+    nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
+      --trace=cuda,nvtx,cublas,osrt --sample=none --cpuctxsw=none \
+      -o spikformer-fp8 \
+      uv run python benchmark/benchmark_snn_single_gpu.py case \
+        --model spikformer_ti --phase inference --execution eager \
+        --batch-size 64 --warmup 50 --steps 10 --profile \
+        --tensor-metadata spikformer-fp8.tensors.jsonl \
+        --output spikformer-fp8.json
+
+The ``--profile`` flag bounds capture through ``cudaProfilerApi``.
+
+The default BF16 fallback reduces FP8 training/inference latency by 18.3%/39.7%,
+but does not cross BF16. The explicit FP16 fallback is faster but has less
+dynamic range. Requested FP8 tracked dense-MAC coverage is 41.98%. The current
+RTX 5090 stack does not expose FP8 Conv2d; an emulated path is not evidence of
+increased hardware coverage.
+
+The historical two-GPU Spikformer DDP benchmark used five timed steps:
 
 .. list-table::
     :header-rows: 1
@@ -327,11 +474,11 @@ this workload.
 Choosing a mode
 ---------------
 
-Start with BF16. Try FP8 after profiling shows that aligned Linear/MLP operations
-dominate runtime and the matrix dimensions approach the measured crossover. FP8
-usually cannot recover its conversion and metadata overhead when CNN, neuron, or
-communication work dominates. Its memory use may also exceed BF16, so it is not a
-memory-optimization switch.
+Start with BF16. Try FP8 for FC-SNN only with Triton LIF and matrix sizes near
+the table's crossover. For CNN/neuron-heavy models such as Spikformer, continue
+with FP16/BF16 until the FP32 boundary is optimized. Profile against the
+end-to-end step; FP8 memory may exceed BF16 and is not a memory-optimization
+switch.
 
 Run the crossover benchmark on the target GPU:
 

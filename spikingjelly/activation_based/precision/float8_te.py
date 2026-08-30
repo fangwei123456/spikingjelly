@@ -21,8 +21,17 @@ _SUPPORTED_TE_RECIPES = {"auto", "delayed", "current", "block", "mxfp8"}
 
 
 @contextmanager
-def _cuda_device_autocast_context(device: torch.device, autocast_context):
-    with torch.cuda.device(device), autocast_context:
+def _cuda_device_autocast_context(
+    device: torch.device,
+    autocast_context,
+    amp_dtype: torch.dtype | None = None,
+):
+    amp_context = (
+        torch.amp.autocast(device.type, dtype=amp_dtype)
+        if amp_dtype is not None
+        else nullcontext()
+    )
+    with torch.cuda.device(device), amp_context, autocast_context:
         yield
 
 
@@ -442,10 +451,50 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
         self,
         device_type: str = "cuda",
         fp8_recipe: str = "auto",
-    ):
+        fp8_fallback_dtype: str = "bf16",
+    ) -> None:
+        r"""
+        **API Language** - :ref:`中文 <Float8TransformerEnginePolicy.__init__-cn>` | :ref:`English <Float8TransformerEnginePolicy.__init__-en>`
+
+        ----
+
+        .. _Float8TransformerEnginePolicy.__init__-cn:
+
+        * **中文**
+
+        配置 Transformer Engine FP8 policy。未转换的 CUDA 算子使用
+        ``fp8_fallback_dtype`` 指定的外层 autocast dtype。
+
+        :param device_type: 设备类型，通常为 ``"cuda"``。
+        :type device_type: str
+        :param fp8_recipe: Transformer Engine FP8 recipe 名称。
+        :type fp8_recipe: str
+        :param fp8_fallback_dtype: 未由 Transformer Engine 转换的 CUDA 算子使用的
+            fallback autocast dtype。
+        :type fp8_fallback_dtype: str
+
+        ----
+
+        .. _Float8TransformerEnginePolicy.__init__-en:
+
+        * **English**
+
+        Configure the Transformer Engine FP8 policy. CUDA operations not
+        converted by Transformer Engine use the outer autocast dtype selected by
+        ``fp8_fallback_dtype``.
+
+        :param device_type: Device type, normally ``"cuda"``.
+        :type device_type: str
+        :param fp8_recipe: Transformer Engine FP8 recipe name.
+        :type fp8_recipe: str
+        :param fp8_fallback_dtype: Fallback autocast dtype for CUDA operations
+            not converted by Transformer Engine.
+        :type fp8_fallback_dtype: str
+        """
         super().__init__()
         self.device_type = device_type
         self.fp8_recipe = fp8_recipe
+        self.fp8_fallback_dtype = fp8_fallback_dtype
         self._resolved_recipe_name: str | None = None
         self._resolved_recipe = None
         self._recipe_resolved = False
@@ -457,6 +506,7 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
             "backend": "transformer-engine",
             "device_type": self.device_type,
             "fp8_recipe": self.fp8_recipe,
+            "fp8_fallback_dtype": self.fp8_fallback_dtype,
             "resolved_fp8_recipe": self._resolved_recipe_name,
             "autocast": True,
             "grad_scaler": False,
@@ -555,7 +605,16 @@ class Float8TransformerEnginePolicy(PrecisionPolicy):
     def autocast_context(self, group=None):
         context = self._te_autocast_context(group)
         if self._target_device is not None and self._target_device.type == "cuda":
-            return _cuda_device_autocast_context(self._target_device, context)
+            amp_dtype = {
+                "fp32": None,
+                "fp16": torch.float16,
+                "bf16": torch.bfloat16,
+            }[self.fp8_fallback_dtype]
+            return _cuda_device_autocast_context(
+                self._target_device,
+                context,
+                amp_dtype,
+            )
         return context
 
     def _te_autocast_context(self, group=None):

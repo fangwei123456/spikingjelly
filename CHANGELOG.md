@@ -111,6 +111,8 @@ Module: `spikingjelly.activation_based.precision`.
 - Added `triton_storage`, `triton_fwd`, and `triton_bwd` to `PrecisionConfig` for
   training-time configuration of existing multi-step Triton IF, LIF, and PLIF
   nodes. Sensitive surrogate operations continue to compute locally in FP32.
+- Added `fp8_fallback_dtype` for CUDA operations outside converted Transformer
+  Engine modules; BF16 is the default for numerical range.
 - Transformer Engine conversion leaves Linear and pointwise Conv1d layers whose
   dimensions violate FP8 alignment in high precision and reports them as
   unsupported instead of failing during forward.
