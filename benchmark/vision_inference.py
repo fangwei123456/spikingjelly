@@ -134,7 +134,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--timing-warmup-batches", type=int, default=0)
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--compile", action="store_true")
+    parser.add_argument(
+        "--execution-mode",
+        choices=("eager", "compile", "cuda_graph"),
+        default="eager",
+    )
+    parser.add_argument("--cuda-graph-warmup-steps", type=int, default=3)
     args = parser.parse_args()
     if min(args.samples, args.classes, args.image_size, args.time_steps) <= 0:
         parser.error("samples, classes, image-size, and time-steps must be positive")
@@ -194,7 +199,8 @@ def main() -> None:
             triton_fwd=args.triton_fwd,
             triton_bwd=args.triton_bwd,
         ),
-        compile=args.compile,
+        execution_mode=args.execution_mode,
+        cuda_graph_warmup_steps=args.cuda_graph_warmup_steps,
         **(
             {"timing_warmup_batches": args.timing_warmup_batches}
             if args.output is None

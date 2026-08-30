@@ -241,6 +241,19 @@ class LIFNode(BaseNode):
     def extra_repr(self):
         return super().extra_repr() + f", tau={self.tau}"
 
+    @staticmethod
+    def _requires_mixed_precision_triton(x_seq, precision):
+        native_compute = {
+            torch.float32: "fp32",
+            torch.float16: "fp16",
+            torch.bfloat16: "bf16",
+        }.get(x_seq.dtype)
+        return precision is not None and precision != (
+            x_seq.dtype,
+            native_compute,
+            native_compute,
+        )
+
     def single_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
@@ -311,9 +324,13 @@ class LIFNode(BaseNode):
                     "Triton backend only supports spiking surrogate functions. "
                     "Use backend='torch' for non-spiking surrogate functions."
                 )
+            precision = self._triton_precision
+            use_mixed_precision = self._requires_mixed_precision_triton(
+                x_seq, precision
+            )
             function = (
                 _lif_multi_step_triton_mp
-                if self._triton_precision is not None
+                if use_mixed_precision
                 else functional.lif_multi_step_triton
             )
             spike_seq, v, _ = function(
@@ -326,7 +343,7 @@ class LIFNode(BaseNode):
                 self.surrogate_function,
                 self.detach_reset,
                 False,
-                *(() if self._triton_precision is None else (self._triton_precision,)),
+                *((precision,) if use_mixed_precision else ()),
             )
         elif self.backend == "torch":
             return super().multi_step_functional_forward(inputs, states, **kwargs)
@@ -363,9 +380,13 @@ class LIFNode(BaseNode):
                     "Triton backend only supports spiking surrogate functions. "
                     "Use backend='torch' for non-spiking surrogate functions."
                 )
+            precision = self._triton_precision
+            use_mixed_precision = self._requires_mixed_precision_triton(
+                x_seq, precision
+            )
             function = (
                 _lif_multi_step_triton_mp
-                if self._triton_precision is not None
+                if use_mixed_precision
                 else functional.lif_multi_step_triton
             )
             spike_seq, v, v_seq = function(
@@ -378,7 +399,7 @@ class LIFNode(BaseNode):
                 self.surrogate_function,
                 self.detach_reset,
                 True,
-                *(() if self._triton_precision is None else (self._triton_precision,)),
+                *((precision,) if use_mixed_precision else ()),
             )
         else:
             raise ValueError(self.backend)

@@ -17,6 +17,10 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
 
 from spikingjelly.activation_based import functional
+from spikingjelly.activation_based._cuda_graph import (
+    StaticCudaGraph,
+    validate_cuda_graph_model,
+)
 from spikingjelly.activation_based.precision import prepare_model_for_precision
 
 from .config import (
@@ -460,6 +464,11 @@ def _run_classification(
             raise ValueError("world_size must be divisible by PP * TP.")
         rank = dist.get_rank()
         data_parallel_size = world_size // model_parallel_size
+        if config.execution_mode == "cuda_graph" and world_size != 1:
+            raise ValueError(
+                "Vision CUDA Graph requires a single-rank process; use MCore or "
+                "SGLang for distributed CUDA Graph execution."
+            )
         tensor_rank = rank % config.tensor_parallel_size
         pipeline_rank = (
             rank // config.tensor_parallel_size
@@ -503,6 +512,8 @@ def _run_classification(
         )
         precision = prepare_model_for_precision(model, device, config.precision)
         model = precision.model
+        if config.execution_mode == "cuda_graph":
+            validate_cuda_graph_model(model)
         if config.data_parallel == "fsdp2":
             model = _wrap_data_parallel(
                 model,
@@ -516,8 +527,6 @@ def _run_classification(
                 dp_mesh=data_mesh,
                 fsdp_roots=fsdp_roots,
             )
-        if config.compile:
-            model = torch.compile(model)
         model.eval()
 
         schedule = None
@@ -568,39 +577,49 @@ def _run_classification(
                 shard_path, model_config.num_classes
             )
 
+        def execute_model(images: torch.Tensor) -> torch.Tensor:
+            with precision.autocast_context(group=data_group):
+                return _forward_classification(
+                    model,
+                    images,
+                    model_config.time_steps,
+                    model_config.step_mode,
+                    config.input_layout,
+                )
+
+        if config.execution_mode == "compile":
+            execute_model = torch.compile(execute_model)
+        elif config.execution_mode == "cuda_graph":
+            execute_model = StaticCudaGraph(
+                execute_model, config.cuda_graph_warmup_steps
+            )
+
         def forward_batch(batch):
             images, targets, indices, valid, has_target = batch
             if schedule is None or pipeline_rank == 0:
                 images = images.to(device, non_blocking=True)
             if evaluate and output_rank:
                 targets = targets.to(device, non_blocking=True)
-            with precision.autocast_context(group=data_group):
-                if schedule is None:
-                    logits = _forward_classification(
-                        model,
+            if schedule is None:
+                logits = execute_model(images)
+                functional.reset_net(model)
+            else:
+                sequence = (
+                    images
+                    if config.input_layout == "NCHW"
+                    else _classification_sequence(
                         images,
                         model_config.time_steps,
-                        model_config.step_mode,
                         config.input_layout,
+                        batch_first=True,
                     )
-                else:
-                    sequence = (
-                        images
-                        if config.input_layout == "NCHW"
-                        else _classification_sequence(
-                            images,
-                            model_config.time_steps,
-                            config.input_layout,
-                            batch_first=True,
-                        )
-                    )
+                )
+                with precision.autocast_context(group=data_group):
                     logits = (
                         schedule.step(sequence)
                         if pipeline_rank == 0
                         else schedule.step()
                     )
-            if schedule is None:
-                functional.reset_net(model)
             return logits, targets, indices, valid, has_target
 
         with torch.inference_mode():
@@ -676,6 +695,7 @@ def _run_classification(
                                 asdict(config.precision), sort_keys=True
                             ),
                             "source_checkpoint": source["checkpoint"],
+                            "execution_mode": config.execution_mode,
                         },
                     )
                 except BaseException as exception:
@@ -697,7 +717,7 @@ def _run_classification(
             raise ValueError(
                 "evaluate_classification requires a target for every dataset sample."
             )
-        return {
+        result = {
             "loss": (totals[0] / totals[2]).item(),
             "accuracy": (totals[1] / totals[2]).item(),
             "samples": float(dataset_size),
@@ -708,6 +728,21 @@ def _run_classification(
             "pipeline_parallel_size": float(config.pipeline_parallel_size),
             "tensor_parallel_size": float(config.tensor_parallel_size),
         }
+        if isinstance(execute_model, StaticCudaGraph):
+            result.update(
+                {
+                    "cuda_graph_captures": float(execute_model.stats.captures),
+                    "cuda_graph_replays": float(execute_model.stats.replays),
+                    "cuda_graph_eager_fallbacks": float(
+                        execute_model.stats.eager_fallbacks
+                    ),
+                    "cuda_graph_capture_seconds": execute_model.stats.capture_seconds,
+                    "cuda_graph_memory_bytes": float(
+                        execute_model.stats.graph_memory_bytes
+                    ),
+                }
+            )
+        return result
     finally:
         if prediction_shard is not None:
             prediction_shard.close()

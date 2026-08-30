@@ -790,6 +790,7 @@ def multistep_lif_mp_inference(
     forward_compute_dtype_id: int,
     spike_dtype_id: int,
     save_intermediates: bool,
+    store_v_seq: bool,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     _check_mp_cuda_inputs(x_seq, v_init, "LIF")
     storage_dtype = triton_neuron_dtype_id_to_torch_dtype(storage_dtype_id)
@@ -800,7 +801,11 @@ def multistep_lif_mp_inference(
     x_storage = x_seq.detach().to(dtype=storage_dtype).contiguous()
     v_storage = v_init.detach().to(dtype=storage_dtype).contiguous()
     s_seq = torch.empty(x_seq.shape, dtype=spike_dtype, device=x_seq.device)
-    v_seq = torch.empty(x_seq.shape, dtype=storage_dtype, device=x_seq.device)
+    v_seq = torch.empty(
+        x_seq.shape if store_v_seq else v_init.shape,
+        dtype=storage_dtype,
+        device=x_seq.device,
+    )
     if save_intermediates:
         h_seq = torch.empty(x_seq.shape, dtype=storage_dtype, device=x_seq.device)
         h_buffer = h_seq
@@ -821,7 +826,7 @@ def multistep_lif_mp_inference(
         soft_reset=soft_reset,
         compute_dtype=compute_tl_dtype,
         save_intermediates=save_intermediates,
-        store_v_seq=True,
+        store_v_seq=store_v_seq,
         use_torch_wrap=True,
     )
     return s_seq, v_seq, h_seq
@@ -840,9 +845,9 @@ def _multistep_lif_mp_inference_fake(
     forward_compute_dtype_id: int,
     spike_dtype_id: int,
     save_intermediates: bool,
+    store_v_seq: bool,
 ):
     del (
-        v_init,
         decay_input,
         tau,
         v_threshold,
@@ -855,7 +860,11 @@ def _multistep_lif_mp_inference_fake(
     h_shape = x_seq.shape if save_intermediates else (0,)
     return (
         torch.empty(x_seq.shape, dtype=spike_dtype, device=x_seq.device),
-        torch.empty(x_seq.shape, dtype=storage_dtype, device=x_seq.device),
+        torch.empty(
+            x_seq.shape if store_v_seq else v_init.shape,
+            dtype=storage_dtype,
+            device=x_seq.device,
+        ),
         torch.empty(h_shape, dtype=storage_dtype, device=x_seq.device),
     )
 
@@ -876,6 +885,7 @@ def multistep_lif_mp_forward(
     forward_compute_dtype_id: int,
     backward_compute_dtype_id: int,
     spike_dtype_id: int,
+    store_v_seq: bool,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     del detach_reset, backward_compute_dtype_id
     _check_mp_cuda_inputs(x_seq, v_init, "LIF")
@@ -887,7 +897,11 @@ def multistep_lif_mp_forward(
     x_storage = x_seq.to(dtype=storage_dtype).contiguous()
     v_storage = v_init.to(dtype=storage_dtype).contiguous()
     s_seq = torch.empty(x_seq.shape, dtype=spike_dtype, device=x_seq.device)
-    v_seq = torch.empty(x_seq.shape, dtype=storage_dtype, device=x_seq.device)
+    v_seq = torch.empty(
+        x_seq.shape if store_v_seq else v_init.shape,
+        dtype=storage_dtype,
+        device=x_seq.device,
+    )
     h_seq = torch.empty(x_seq.shape, dtype=storage_dtype, device=x_seq.device)
 
     _launch_lif_forward_kernel(
@@ -903,7 +917,7 @@ def multistep_lif_mp_forward(
         soft_reset=soft_reset,
         compute_dtype=compute_tl_dtype,
         save_intermediates=True,
-        store_v_seq=True,
+        store_v_seq=store_v_seq,
         use_torch_wrap=True,
     )
     return s_seq, v_seq, h_seq
@@ -925,9 +939,9 @@ def _multistep_lif_mp_forward_fake(
     forward_compute_dtype_id: int,
     backward_compute_dtype_id: int,
     spike_dtype_id: int,
+    store_v_seq: bool,
 ):
     del (
-        v_init,
         decay_input,
         tau,
         v_threshold,
@@ -943,7 +957,11 @@ def _multistep_lif_mp_forward_fake(
     spike_dtype = triton_neuron_dtype_id_to_torch_dtype(spike_dtype_id)
     return (
         torch.empty(x_seq.shape, dtype=spike_dtype, device=x_seq.device),
-        torch.empty(x_seq.shape, dtype=storage_dtype, device=x_seq.device),
+        torch.empty(
+            x_seq.shape if store_v_seq else v_init.shape,
+            dtype=storage_dtype,
+            device=x_seq.device,
+        ),
         torch.empty(x_seq.shape, dtype=storage_dtype, device=x_seq.device),
     )
 
@@ -958,6 +976,7 @@ def _multistep_lif_mp_with_plan(
     v_threshold: float,
     v_reset: Optional[float],
     detach_reset: bool = False,
+    store_v_seq: bool = True,
     surrogate_function=None,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     if plan.neuron_type != "lif":
@@ -984,6 +1003,7 @@ def _multistep_lif_mp_with_plan(
             plan.forward_compute_dtype_id,
             plan.backward_compute_dtype_id,
             plan.spike_dtype_id,
+            store_v_seq,
         )
         return s_seq, v_seq, (h_seq if plan.save_intermediates else None)
     s_seq, v_seq, h_seq = multistep_lif_mp_inference(
@@ -998,6 +1018,7 @@ def _multistep_lif_mp_with_plan(
         plan.forward_compute_dtype_id,
         plan.spike_dtype_id,
         plan.save_intermediates,
+        store_v_seq,
     )
     return s_seq, v_seq, (h_seq if plan.save_intermediates else None)
 
@@ -1015,6 +1036,7 @@ def _multistep_lif_mp(
     backward_compute_dtype="fp32",
     spike_dtype: torch.dtype = torch.float32,
     save_intermediates: bool = True,
+    store_v_seq: bool = True,
     detach_reset: bool = False,
     surrogate_function=None,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
@@ -1050,6 +1072,7 @@ def _multistep_lif_mp(
         v_threshold=v_threshold,
         v_reset=v_reset,
         detach_reset=detach_reset,
+        store_v_seq=store_v_seq,
         surrogate_function=surrogate_function,
     )
 
@@ -1070,6 +1093,7 @@ def _setup_mp_lif_context(ctx, inputs, output):
         forward_compute_dtype_id,
         backward_compute_dtype_id,
         spike_dtype_id,
+        store_v_seq,
     ) = inputs
     del forward_compute_dtype_id
     h_seq = output[2]
@@ -1087,6 +1111,7 @@ def _setup_mp_lif_context(ctx, inputs, output):
     ctx.storage_dtype_id = storage_dtype_id
     ctx.backward_compute_dtype_id = backward_compute_dtype_id
     ctx.spike_dtype_id = spike_dtype_id
+    ctx.store_v_seq = store_v_seq
 
 
 def _multistep_lif_mp_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
@@ -1097,7 +1122,11 @@ def _multistep_lif_mp_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
     if grad_s_seq is None:
         grad_s_seq = torch.zeros(h_seq.shape, dtype=spike_dtype, device=h_seq.device)
     if grad_v_seq is None:
-        grad_v_seq = torch.zeros(h_seq.shape, dtype=storage_dtype, device=h_seq.device)
+        grad_v_seq = torch.zeros(
+            h_seq.shape if ctx.store_v_seq else h_seq[0].shape,
+            dtype=storage_dtype,
+            device=h_seq.device,
+        )
     grad_s_seq = grad_s_seq.contiguous()
     grad_v_seq = grad_v_seq.contiguous()
     h_seq = h_seq.contiguous()
@@ -1123,12 +1152,13 @@ def _multistep_lif_mp_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
         decay_input=ctx.decay_input,
         soft_reset=ctx.soft_reset,
         detach_reset=ctx.detach_reset,
-        store_v_seq=True,
+        store_v_seq=ctx.store_v_seq,
         use_torch_wrap=True,
     )
     return (
         grad_x_seq,
         grad_v_init,
+        None,
         None,
         None,
         None,

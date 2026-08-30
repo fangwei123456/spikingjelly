@@ -10,6 +10,7 @@ import statistics
 import subprocess
 import sys
 import time
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,7 @@ DEFAULT_IMAGE_SIZE = 224
 DEFAULT_SEED = 20260808
 MODEL_NAMES = ("spiking_vgg16_bn", "sew_resnet18", "spikformer_ti")
 PHASES = ("inference", "training")
-EXECUTIONS = ("eager", "compile")
+EXECUTIONS = ("eager", "compile", "cuda_graph")
 
 
 @contextmanager
@@ -579,32 +580,24 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
     def reset_net() -> None:
         functional.reset_net(state_model)
 
-    def step() -> torch.Tensor:
+    def graph_work(
+        *inputs: torch.Tensor,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+        graph_x = inputs[0]
         if optimizer is None:
             with _nvtx_range("forward", args.profile):
                 with torch.inference_mode(), precision.autocast_context():
-                    output = model(x)
-            with _nvtx_range("reset", args.profile):
-                reset_net()
+                    output = model(graph_x)
             return output
-        with _nvtx_range("zero_grad", args.profile):
-            optimizer.zero_grad(set_to_none=True)
+        graph_target = inputs[1]
         with _nvtx_range("forward", args.profile):
             with precision.autocast_context():
-                output = model(x)
+                output = model(graph_x)
         with _nvtx_range("loss", args.profile):
-            loss = criterion(output.mean(0), target)
+            loss = criterion(output.mean(0), graph_target)
         with _nvtx_range("backward", args.profile):
             precision.backward(loss, optimizer, step_optimizer=False)
-        with _nvtx_range("optimizer", args.profile):
-            if precision.scaler is None:
-                optimizer.step()
-            else:
-                precision.scaler.step(optimizer)
-                precision.scaler.update()
-        with _nvtx_range("reset", args.profile):
-            reset_net()
-        return loss
+        return loss, output
 
     dynamo = getattr(torch, "_dynamo", None)
     if dynamo is not None:
@@ -618,6 +611,36 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
             backend="inductor",
             options={"triton.cudagraphs": False, "triton.cudagraph_trees": False},
         )
+    graph_runner = None
+    if args.execution == "cuda_graph":
+        from spikingjelly.activation_based._cuda_graph import (
+            StaticCudaGraph,
+            validate_cuda_graph_model,
+        )
+
+        validate_cuda_graph_model(model)
+        graph_runner = StaticCudaGraph(graph_work, args.warmup)
+
+    def step() -> torch.Tensor:
+        if optimizer is not None:
+            with _nvtx_range("zero_grad", args.profile):
+                optimizer.zero_grad(set_to_none=graph_runner is None)
+        if graph_runner is not None:
+            result = (
+                graph_runner(x, target) if optimizer is not None else graph_runner(x)
+            )
+        else:
+            result = graph_work(x, target) if optimizer is not None else graph_work(x)
+        if optimizer is not None:
+            with _nvtx_range("optimizer", args.profile):
+                if precision.scaler is None:
+                    optimizer.step()
+                else:
+                    precision.scaler.step(optimizer)
+                    precision.scaler.update()
+        with _nvtx_range("reset", args.profile):
+            reset_net()
+        return result[0] if optimizer is not None else result
 
     hooks = None
     if args.profile and args.tensor_metadata:
@@ -732,6 +755,9 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
                 {"backend": "inductor", "mode": "default", "cudagraphs": False}
                 if args.execution == "compile"
                 else None
+            ),
+            "cuda_graph": (
+                asdict(graph_runner.stats) if graph_runner is not None else None
             ),
         },
         "timing": {
@@ -1038,6 +1064,8 @@ def main() -> None:
             raise ValueError(
                 "batch size and steps must be positive; warmup must be non-negative"
             )
+        if args.execution == "cuda_graph" and args.warmup == 0:
+            raise ValueError("warmup must be positive for CUDA Graph execution")
     else:
         positive = (
             args.rounds,
@@ -1050,6 +1078,11 @@ def main() -> None:
         )
         if min(positive) <= 0 or min(args.inference_warmup, args.training_warmup) < 0:
             raise ValueError("matrix counts must be positive and warmups non-negative")
+        if "cuda_graph" in args.executions and (
+            ("inference" in args.phases and args.inference_warmup == 0)
+            or ("training" in args.phases and args.training_warmup == 0)
+        ):
+            raise ValueError("CUDA Graph warmups must be positive for selected phases")
     args.handler(args)
 
 

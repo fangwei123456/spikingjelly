@@ -120,8 +120,18 @@ def train(
         )
         from megatron.core.optimizer import get_megatron_optimizer
         from megatron.core.optimizer_param_scheduler import OptimizerParamScheduler
+        from megatron.core.num_microbatches_calculator import (
+            destroy_num_microbatches_calculator,
+            get_num_microbatches,
+            init_num_microbatches_calculator,
+        )
         from megatron.core.pipeline_parallel.schedules import get_forward_backward_func
         from megatron.core.tensor_parallel.random import model_parallel_cuda_manual_seed
+        from megatron.core.full_cuda_graph import (
+            FullCudaGraphWrapper,
+            StaticBufferLoader,
+        )
+        from megatron.core.transformer.cuda_graphs import TECudaGraphHelper
         from megatron.core.transformer.module import Float16Module
     except ImportError as error:
         raise RuntimeError(
@@ -136,6 +146,9 @@ def train(
         torch.distributed.init_process_group(backend="nccl", device_id=device)
 
     initialized_model_parallel = not parallel_state.model_parallel_is_initialized()
+    initialized_num_microbatches = False
+    schedule = None
+    cuda_graph_helper = None
     try:
         transformer = config.model.transformer
         if initialized_model_parallel:
@@ -176,7 +189,12 @@ def train(
             )
         num_microbatches = config.global_batch_size // samples_per_microbatch
 
-        model_parallel_cuda_manual_seed(config.seed)
+        model_parallel_cuda_manual_seed(
+            config.seed,
+            te_rng_tracker=transformer.use_te_rng_tracker,
+            use_cudagraphable_rng=transformer.cuda_graph_impl != "none",
+            force_reset_rng=True,
+        )
         model = model_provider(
             parallel_state.is_pipeline_first_stage(),
             parallel_state.is_pipeline_last_stage(),
@@ -302,6 +320,36 @@ def train(
             else None
         )
         schedule = get_forward_backward_func()
+        if transformer.cuda_graph_impl == "full_iteration":
+            schedule = FullCudaGraphWrapper(
+                schedule,
+                cuda_graph_warmup_steps=transformer.cuda_graph_warmup_steps,
+                use_single_mempool=transformer.cuda_graph_use_single_mempool,
+            )
+        elif transformer.cuda_graph_impl == "transformer_engine":
+            # MCore 0.18.2 has no public calculator-initialized predicate.
+            try:
+                existing_num_microbatches = get_num_microbatches()
+            except AttributeError:
+                init_num_microbatches_calculator(
+                    rank=torch.distributed.get_rank(),
+                    global_batch_size=config.global_batch_size,
+                    micro_batch_size=config.micro_batch_size,
+                    data_parallel_size=data_parallel_size,
+                )
+                initialized_num_microbatches = True
+            else:
+                if existing_num_microbatches != num_microbatches:
+                    raise ValueError(
+                        "Existing MCore microbatch calculator does not match training."
+                    )
+            cuda_graph_helper = TECudaGraphHelper(
+                model=models,
+                config=transformer,
+                seq_length=config.sequence_length,
+                micro_batch_size=config.micro_batch_size * time_steps,
+                optimizers=[optimizer],
+            )
         metrics: dict[str, float] = {
             "optimizer_step": float(start_step),
             "consumed_samples": float(start_step * config.global_batch_size),
@@ -312,6 +360,12 @@ def train(
         training_seconds = 0.0
         timed_steps = 0
         for step in range(start_step + 1, config.train_steps + 1):
+            if (
+                cuda_graph_helper is not None
+                and not cuda_graph_helper.capture_finished()
+                and step - start_step - 1 == transformer.cuda_graph_warmup_steps
+            ):
+                cuda_graph_helper.create_cudagraphs()
             model.zero_grad_buffer()
             optimizer.zero_grad()
             torch.cuda.synchronize(device)
@@ -472,6 +526,14 @@ def train(
         )
         return metrics
     finally:
+        if cuda_graph_helper is not None and cuda_graph_helper.graphs_created():
+            cuda_graph_helper.delete_cuda_graphs()
+        if isinstance(schedule, FullCudaGraphWrapper):
+            schedule.reset_cuda_graph()
+            for buffers in StaticBufferLoader.static_buffers.values():
+                buffers.clear()
+        if initialized_num_microbatches:
+            destroy_num_microbatches_calculator()
         if (
             initialized_model_parallel
             and parallel_state.model_parallel_is_initialized()

@@ -1156,7 +1156,7 @@ class SpikformerBuilder(ModelBuilder):
             model = spikformer_cifar10(
                 T=config.time_steps,
                 num_classes=config.num_classes,
-                backend=config.neuron_backend,
+                backend="torch",
             )
         elif isinstance(config, SpikformerConfig):
             model = spikformer_s(
@@ -1165,11 +1165,13 @@ class SpikformerBuilder(ModelBuilder):
                 img_size_h=config.image_height,
                 img_size_w=config.image_width,
                 num_classes=config.num_classes,
-                backend=config.neuron_backend,
+                backend="torch",
             )
         else:
             raise TypeError("SpikformerBuilder requires a Spikformer config.")
         _convert_batch_norms(model)
+        functional.set_step_mode(model, config.step_mode)
+        functional.set_backend(model, config.neuron_backend, instance=neuron.BaseNode)
         return model
 
     def _pipeline_stage(self, model: nn.Module, rank: int, size: int) -> nn.Module:

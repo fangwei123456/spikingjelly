@@ -143,6 +143,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-steps", type=int, default=10)
     parser.add_argument("--scheduler-steps", type=int)
     parser.add_argument("--timing-warmup-steps", type=int, default=0)
+    parser.add_argument(
+        "--execution-mode",
+        choices=("eager", "compile", "cuda_graph"),
+        default="eager",
+    )
+    parser.add_argument("--cuda-graph-warmup-steps", type=int, default=3)
     parser.add_argument("--memopt-level", type=int, default=0)
     parser.add_argument("--checkpoint-dir", type=Path)
     parser.add_argument("--checkpoint-interval", type=int, default=0)
@@ -240,6 +246,8 @@ def main() -> None:
             triton_fwd=args.triton_fwd,
             triton_bwd=args.triton_bwd,
         ),
+        execution_mode=args.execution_mode,
+        cuda_graph_warmup_steps=args.cuda_graph_warmup_steps,
         memopt_level=args.memopt_level,
         max_steps=args.max_steps,
         timing_warmup_steps=args.timing_warmup_steps,

@@ -20,6 +20,10 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
 
 from spikingjelly.activation_based import functional
+from spikingjelly.activation_based._cuda_graph import (
+    StaticCudaGraph,
+    validate_cuda_graph_model,
+)
 from spikingjelly.activation_based.precision import (
     PrecisionArtifacts,
     PrecisionConfig,
@@ -321,15 +325,13 @@ def _evaluate(
     model: nn.Module,
     loader: DataLoader,
     *,
-    time_steps: int,
-    step_mode: str,
-    input_layout: str,
     device: torch.device,
     precision: PrecisionArtifacts,
     loss_function: Callable[..., torch.Tensor],
     dp_group: Optional[ProcessGroup],
     dp_size: int,
     sync_buffers: bool,
+    forward_step: Callable[[torch.Tensor], torch.Tensor],
 ) -> tuple[float, float]:
     model.eval()
     if sync_buffers:
@@ -339,10 +341,8 @@ def _evaluate(
         for images, targets in loader:
             images = images.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
+            logits = forward_step(images)
             with precision.autocast_context(group=dp_group):
-                logits = _forward_classification(
-                    model, images, time_steps, step_mode, input_layout
-                )
                 loss = _classification_loss(logits, targets, loss_function)
             totals[0] += loss.double() * targets.numel()
             totals[1] += (logits.argmax(1) == targets).sum().double()
@@ -512,6 +512,11 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
         if world_size % model_parallel_size:
             raise ValueError("world_size must be divisible by PP × TP.")
         dp_size = world_size // model_parallel_size
+        if config.execution_mode == "cuda_graph" and world_size != 1:
+            raise ValueError(
+                "Vision CUDA Graph requires a single-rank process; use MCore or "
+                "SGLang for distributed CUDA Graph execution."
+            )
         tp_rank = rank % config.tensor_parallel_size
         pp_rank = (rank // config.tensor_parallel_size) % config.pipeline_parallel_size
         dp_rank = rank // model_parallel_size
@@ -580,6 +585,8 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
         functional.set_step_mode(model, config.model.step_mode)
         precision = prepare_model_for_precision(model, device, config.precision)
         model = precision.model
+        if config.execution_mode == "cuda_graph":
+            validate_cuda_graph_model(model)
         model = _wrap_data_parallel(
             model,
             data_parallel=config.data_parallel,
@@ -591,6 +598,9 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
             dp_group=dp_group,
             dp_mesh=dp_mesh,
             fsdp_roots=fsdp_roots,
+        )
+        execution_model = (
+            torch.compile(model) if config.execution_mode == "compile" else model
         )
         sync_single_step_buffers = (
             config.model.step_mode == "s"
@@ -622,7 +632,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
             )
             train_schedule = ScheduleGPipe(
                 PipelineStage(
-                    _ResetAfterForward(model, batch_first=pp_rank == 0),
+                    _ResetAfterForward(execution_model, batch_first=pp_rank == 0),
                     pp_rank,
                     config.pipeline_parallel_size,
                     device,
@@ -635,7 +645,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
             )
             evaluation_schedule = ScheduleGPipe(
                 PipelineStage(
-                    _ResetAfterForward(model, batch_first=pp_rank == 0),
+                    _ResetAfterForward(execution_model, batch_first=pp_rank == 0),
                     pp_rank,
                     config.pipeline_parallel_size,
                     device,
@@ -658,6 +668,51 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
         )
         scaler = precision.scaler or torch.amp.GradScaler("cuda", enabled=False)
 
+        def train_step(
+            images: torch.Tensor, loss_targets: torch.Tensor
+        ) -> torch.Tensor:
+            with precision.autocast_context(group=dp_group):
+                logits = _forward_classification(
+                    execution_model,
+                    images,
+                    config.model.time_steps,
+                    config.model.step_mode,
+                    config.input_layout,
+                )
+                loss = _classification_loss(logits, loss_targets, loss_function)
+            if precision.scaler is not None:
+                scaler.scale(loss).backward()
+            else:
+                loss.backward()
+            return loss
+
+        training_step = (
+            StaticCudaGraph(
+                train_step,
+                config.cuda_graph_warmup_steps,
+            )
+            if config.execution_mode == "cuda_graph"
+            else train_step
+        )
+
+        def evaluation_forward(images: torch.Tensor) -> torch.Tensor:
+            with precision.autocast_context(group=dp_group):
+                return _forward_classification(
+                    execution_model,
+                    images,
+                    config.model.time_steps,
+                    config.model.step_mode,
+                    config.input_layout,
+                )
+
+        evaluation_step = (
+            StaticCudaGraph(
+                evaluation_forward,
+                min(config.cuda_graph_warmup_steps, 3),
+            )
+            if config.execution_mode == "cuda_graph" and train_schedule is None
+            else evaluation_forward
+        )
         start_step = start_epoch = start_batch = 0
         if config.resume is not None:
             start_step, start_epoch, start_batch = _load_checkpoint(
@@ -702,7 +757,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                     images, loss_targets = mixup(images, targets)
                 if sync_single_step_buffers:
                     _broadcast_data_parallel_buffers(model, dp_group)
-                optimizer.zero_grad(set_to_none=True)
+                optimizer.zero_grad(set_to_none=config.execution_mode != "cuda_graph")
                 if train_schedule is not None:
                     sequence = _classification_sequence(
                         images,
@@ -737,23 +792,13 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                     optimizer.step()
                     update_successful = True
                 else:
-                    with precision.autocast_context(group=dp_group):
-                        logits = _forward_classification(
-                            model,
-                            images,
-                            config.model.time_steps,
-                            config.model.step_mode,
-                            config.input_layout,
-                        )
-                        loss = _classification_loss(logits, loss_targets, loss_function)
+                    scale = scaler.get_scale() if precision.scaler is not None else None
+                    loss = training_step(images, loss_targets)
                     if precision.scaler is not None:
-                        scale = scaler.get_scale()
-                        scaler.scale(loss).backward()
                         scaler.step(optimizer)
                         scaler.update()
                         update_successful = scaler.get_scale() >= scale
                     else:
-                        loss.backward()
                         optimizer.step()
                         update_successful = True
                 if scheduler is not None and update_successful:
@@ -801,15 +846,13 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                 validation_loss, validation_accuracy = _evaluate(
                     model,
                     validation_loader,
-                    time_steps=config.model.time_steps,
-                    step_mode=config.model.step_mode,
-                    input_layout=config.input_layout,
                     device=device,
                     precision=precision,
                     loss_function=loss_function,
                     dp_group=dp_group,
                     dp_size=dp_size,
                     sync_buffers=sync_single_step_buffers,
+                    forward_step=evaluation_step,
                 )
             else:
                 model.eval()
@@ -852,15 +895,13 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                 validation_loss, validation_accuracy = _evaluate(
                     model,
                     validation_loader,
-                    time_steps=config.model.time_steps,
-                    step_mode=config.model.step_mode,
-                    input_layout=config.input_layout,
                     device=device,
                     precision=precision,
                     loss_function=loss_function,
                     dp_group=dp_group,
                     dp_size=dp_size,
                     sync_buffers=sync_single_step_buffers,
+                    forward_step=evaluation_step,
                 )
             else:
                 model.eval()
@@ -895,7 +936,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
         total_memory = local_metrics[1:].clone()
         dist.all_reduce(total_memory, op=dist.ReduceOp.SUM)
         elapsed = maximum_metrics[0].item()
-        return {
+        result = {
             "train_loss": train_loss,
             "validation_loss": validation_loss,
             "validation_accuracy": validation_accuracy,
@@ -914,6 +955,21 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
             "tensor_parallel_size": float(config.tensor_parallel_size),
             "global_batch_size": float(config.batch_size * dp_size),
         }
+        if isinstance(training_step, StaticCudaGraph):
+            result.update(
+                {
+                    "cuda_graph_captures": float(training_step.stats.captures),
+                    "cuda_graph_replays": float(training_step.stats.replays),
+                    "cuda_graph_eager_fallbacks": float(
+                        training_step.stats.eager_fallbacks
+                    ),
+                    "cuda_graph_capture_seconds": training_step.stats.capture_seconds,
+                    "cuda_graph_memory_bytes": float(
+                        training_step.stats.graph_memory_bytes
+                    ),
+                }
+            )
+        return result
     finally:
         if initialized_here:
             dist.destroy_process_group()

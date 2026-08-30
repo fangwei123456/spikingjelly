@@ -31,13 +31,13 @@ class _FlexSNTrainer(train_classify.Trainer):
             default=4.0,
             help="alpha for surrogate.Sigmoid used by the FlexSN core",
         )
-        parser.set_defaults(compile=True, compile_eval=False, disable_uda=True)
+        parser.set_defaults(execution_mode="compile", disable_uda=True)
         return parser
 
     def get_tb_logdir_name(self, args):
         return (
             super().get_tb_logdir_name(args)
-            + f"_T{args.T}_flexsn_triton_compile_sa{args.surrogate_alpha}"
+            + f"_T{args.T}_flexsn_triton_{args.execution_mode}_sa{args.surrogate_alpha}"
         )
 
     def load_model(self, args, num_classes):

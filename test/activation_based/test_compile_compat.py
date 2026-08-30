@@ -168,6 +168,47 @@ def test_compile_inductor_runs_forward_backward(kind):
             del y
 
 
+@pytest.mark.parametrize(
+    ("surrogate_fn", "detach_reset", "v_reset"),
+    [
+        (surrogate.Sigmoid(alpha=4.0), False, 0.0),
+        (surrogate.ATan(alpha=2.0), True, None),
+    ],
+)
+def test_compiled_triton_lif_backward_matches_eager(
+    surrogate_fn, detach_reset, v_reset
+):
+    _require_cuda_triton_compile()
+    torch.manual_seed(20260830)
+    kwargs = {
+        "tau": 2.0,
+        "v_reset": v_reset,
+        "surrogate_function": surrogate_fn,
+        "detach_reset": detach_reset,
+        "step_mode": "m",
+        "backend": "triton",
+    }
+    eager = neuron.LIFNode(**kwargs).cuda().train()
+    compiled_node = neuron.LIFNode(**kwargs).cuda().train()
+    x = torch.randn(7, 2, 20, device="cuda")
+    x_eager = x.clone().requires_grad_()
+    x_compiled = x.clone().requires_grad_()
+
+    eager(x_eager).sum().backward()
+    with _inductor_single_process_compile():
+        compiled = torch.compile(
+            compiled_node,
+            backend="inductor",
+            options={
+                "triton.cudagraphs": False,
+                "triton.cudagraph_trees": False,
+            },
+        )
+        compiled(x_compiled).sum().backward()
+
+    torch.testing.assert_close(x_compiled.grad, x_eager.grad)
+
+
 @pytest.mark.parametrize("kind", ["lif", "if", "plif"])
 def test_inductor_is_not_a_standard_neuron_backend(kind):
     with pytest.raises(NotImplementedError, match="not a supported backend"):

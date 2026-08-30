@@ -2511,10 +2511,12 @@ def _lif_multi_step_triton_mp(
         backward_compute_dtype=precision[2],
         spike_dtype=x_seq.dtype,
         save_intermediates=store_v_seq,
+        store_v_seq=store_v_seq,
         detach_reset=detach_reset,
         surrogate_function=surrogate_function,
     )
-    return spike_seq, voltage[-1].clone(), voltage if store_v_seq else None
+    v = voltage[-1].clone() if store_v_seq else voltage.clone()
+    return spike_seq, v, voltage if store_v_seq else None
 
 
 def ilif_multi_step_triton(
