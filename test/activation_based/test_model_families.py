@@ -95,6 +95,7 @@ def test_maxformer_tiny_forward_and_backward():
         embed_dims=32,
         depths=(1, 1, 1),
     )
+    assert isinstance(model.stage3[0].attn, layer.SpikingSelfAttention)
     stage = copy.deepcopy(model.patch_embed2).eval()
     x = torch.randn(2, 2, 8, 8, 8)
     spiked = stage.lif1(x)

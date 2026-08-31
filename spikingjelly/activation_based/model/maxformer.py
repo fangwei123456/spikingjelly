@@ -110,61 +110,17 @@ class _DWCBlock(nn.Module):
         return self.mlp(x)
 
 
-class _SSA(nn.Module):
-    def __init__(self, dim: int, num_heads: int, backend: str):
-        super().__init__()
-        if dim % num_heads:
-            raise ValueError("dim must be divisible by num_heads")
-        self.dim = dim
-        self.num_heads = num_heads
-        self.x_lif = neuron.LIFNode(step_mode="m", backend=backend)
-        self.q_conv = layer.Conv1d(dim, dim, 1, bias=False, step_mode="m")
-        self.q_bn = layer.BatchNorm1d(dim, step_mode="m")
-        self.q_lif = neuron.LIFNode(step_mode="m", backend=backend)
-        self.k_conv = layer.Conv1d(dim, dim, 1, bias=False, step_mode="m")
-        self.k_bn = layer.BatchNorm1d(dim, step_mode="m")
-        self.k_lif = neuron.LIFNode(step_mode="m", backend=backend)
-        self.v_conv = layer.Conv1d(dim, dim, 1, bias=False, step_mode="m")
-        self.v_bn = layer.BatchNorm1d(dim, step_mode="m")
-        self.v_lif = neuron.LIFNode(step_mode="m", backend=backend)
-        self.attn_lif = neuron.LIFNode(v_threshold=0.5, step_mode="m", backend=backend)
-        self.proj_conv = layer.Conv1d(dim, dim, 1, step_mode="m")
-        self.proj_bn = layer.BatchNorm1d(dim, step_mode="m")
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        T, N, C, H, W = x.shape
-        identity = x
-        x = self.x_lif(x).flatten(3)
-        q = self.q_lif(self.q_bn(self.q_conv(x)))
-        k = self.k_lif(self.k_bn(self.k_conv(x)))
-        v = self.v_lif(self.v_bn(self.v_conv(x)))
-        q = q.transpose(-1, -2).reshape(
-            T, N, H * W, self.num_heads, C // self.num_heads
-        )
-        k = k.transpose(-1, -2).reshape(
-            T, N, H * W, self.num_heads, C // self.num_heads
-        )
-        v = v.transpose(-1, -2).reshape(
-            T, N, H * W, self.num_heads, C // self.num_heads
-        )
-        q = q.permute(0, 1, 3, 2, 4)
-        k = k.permute(0, 1, 3, 2, 4)
-        v = v.permute(0, 1, 3, 2, 4)
-        x = (q @ (k.transpose(-2, -1) @ v)) * 0.125
-        x = x.transpose(3, 4).reshape(T, N, C, H * W)
-        x = self.attn_lif(x)
-        x = self.proj_bn(self.proj_conv(x)).reshape(T, N, C, H, W)
-        return x + identity
-
-
 class _SSABlock(nn.Module):
     def __init__(self, dim: int, num_heads: int, mlp_ratio: float, backend: str):
         super().__init__()
-        self.attn = _SSA(dim, num_heads, backend)
+        self.attn = layer.SpikingSelfAttention(dim, num_heads, backend=backend)
         self.mlp = _SpatialMLP(dim, int(dim * mlp_ratio), backend)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.mlp(self.attn(x))
+        shape = x.shape
+        x = x.flatten(3)
+        x = x + self.attn(x)
+        return self.mlp(x.reshape(shape))
 
 
 class MaxFormer(nn.Module):

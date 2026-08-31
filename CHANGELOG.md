@@ -225,6 +225,8 @@ Module: `spikingjelly.activation_based.model`.
 - Added membrane-shortcut MS-ResNet and Max-ResNet builders.
 - Added MaxFormer builders using max-pooling, depth-wise convolution, and the
   existing SpikingJelly multi-step layers.
+- MaxFormer stage3 now reuses the public `SpikingSelfAttention` module; existing
+  checkpoints using the former private SSA parameter layout require remapping.
 - Added Spike-driven Transformer v1 and its reusable spike-driven self-attention
   layer.
 - The new model classes and builders are available directly from
