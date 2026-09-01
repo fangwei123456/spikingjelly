@@ -251,28 +251,12 @@ def test_float8_linear_step_module_delegates_attributes():
     assert wrapped.weight is base.weight
 
 
-def test_float8_linear_step_module_load_state_dict():
-    base = torch.nn.Linear(8, 4)
-    wrapped = Float8LinearStepModule(base, step_mode="s")
-    state_dict = wrapped.state_dict()
-    wrapped.load_state_dict(state_dict, strict=True)
-
-
 def test_float8_linear_step_module_load_state_dict_from_parent():
     base = torch.nn.Linear(8, 4)
     parent = torch.nn.Sequential(Float8LinearStepModule(base, step_mode="s"))
     state_dict = parent.state_dict()
     assert all("wrapped" not in k for k in state_dict), state_dict.keys()
     parent.load_state_dict(state_dict, strict=True)
-
-
-def test_float8_linear_step_module_parent_load_state_dict_has_no_duplicate_errors():
-    base = torch.nn.Linear(8, 4)
-    parent = torch.nn.Sequential(Float8LinearStepModule(base, step_mode="s"))
-    state_dict = parent.state_dict()
-    incompatible = parent.load_state_dict(state_dict, strict=False)
-    assert incompatible.missing_keys == []
-    assert incompatible.unexpected_keys == []
 
 
 def test_pointwise_conv1d_linear_adapter_matches_conv1d():

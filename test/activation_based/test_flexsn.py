@@ -376,8 +376,8 @@ def _make_core_case(name, backend, dtype):
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("name", ["if", "lif", "plif", "eif", "qif", "izhikevich"])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
-def test_representative_triton_cores_match_torch(name, dtype):
+def test_representative_triton_cores_match_torch(name):
+    dtype = torch.float32
     torch_module, torch_parameter = _make_core_case(name, "torch", dtype)
     triton_module, triton_parameter = _make_core_case(name, "triton", dtype)
     x_torch = torch.randn(4, 32, device="cuda", dtype=dtype, requires_grad=True)

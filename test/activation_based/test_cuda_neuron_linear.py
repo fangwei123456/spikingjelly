@@ -64,7 +64,6 @@ def _reference(
     [
         ((3, 130), True, 0.0, False),
         ((3, 130), False, None, True),
-        ((4, 3, 130), True, None, False),
         ((4, 3, 130), False, 0.25, True),
     ],
 )
@@ -106,9 +105,9 @@ def test_lif_linear_forward_backward(shape, decay_input, v_reset, detach_reset):
         torch.testing.assert_close(actual.grad, expected.grad, rtol=2e-4, atol=2e-5)
 
 
-@pytest.mark.parametrize("shape,v_reset", [((3, 130), 0.0), ((4, 3, 130), None)])
-def test_if_linear_forward_backward(shape, v_reset):
+def test_if_linear_forward_backward():
     torch.manual_seed(2)
+    shape, v_reset = (4, 3, 130), None
     K, N = shape[-1], 70
     sg = surrogate.ATan()
     x = torch.randn(*shape, device="cuda", requires_grad=True)

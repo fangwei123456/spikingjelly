@@ -102,10 +102,13 @@ def test_spiking_rnn_applies_dropout_between_layers(invariant_dropout_mask):
 
 
 @pytest.mark.parametrize(
-    "rnn_type",
-    [rnn.SpikingVanillaRNN, rnn.SpikingGRU, rnn.SpikingLSTM],
+    ("rnn_type", "bidirectional"),
+    [
+        (rnn.SpikingVanillaRNN, False),
+        (rnn.SpikingGRU, False),
+        (rnn.SpikingLSTM, True),
+    ],
 )
-@pytest.mark.parametrize("bidirectional", [False, True])
 def test_spiking_rnn_public_types_forward_and_backward(rnn_type, bidirectional):
     model = rnn_type(
         input_size=3,

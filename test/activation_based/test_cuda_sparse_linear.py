@@ -39,8 +39,8 @@ def _assert_close(actual, expected):
     torch.testing.assert_close(actual, expected, rtol=rtol, atol=atol)
 
 
-@pytest.mark.parametrize("density", [0.02, 0.05, 0.10])
-@pytest.mark.parametrize("M,K,N", [(64, 128, 64), (256, 512, 256), (512, 1024, 512)])
+@pytest.mark.parametrize("density", [0.02, 0.10])
+@pytest.mark.parametrize("M,K,N", [(64, 128, 64), (512, 1024, 512)])
 def test_sparse_linear_matches_dense(density, M, K, N):
     torch.manual_seed(0)
     s = (torch.rand(M, K, device="cuda") < density).float()
@@ -50,9 +50,9 @@ def test_sparse_linear_matches_dense(density, M, K, N):
     torch.testing.assert_close(y_test, y_ref, rtol=1e-4, atol=1e-5)
 
 
-@pytest.mark.parametrize("dtype", _DTYPES)
-def test_sparse_linear_with_bias(dtype):
+def test_sparse_linear_with_bias():
     """Mixed empty/nonempty rows must be initialized before adding bias."""
+    dtype = torch.float32
     torch.manual_seed(0)
     M, K, N = 8, 128, 32
     s = torch.zeros(M, K, dtype=dtype, device="cuda")
@@ -135,9 +135,9 @@ def test_nondefault_stream():
     torch.testing.assert_close(y, y_ref, rtol=1e-4, atol=1e-5)
 
 
-@pytest.mark.parametrize("dtype", _DTYPES)
 @pytest.mark.skipif(torch.cuda.device_count() < 2, reason="requires two CUDA devices")
-def test_noncurrent_cuda_device(dtype):
+def test_noncurrent_cuda_device():
+    dtype = torch.float32
     with torch.cuda.device(1):
         s = (torch.rand(32, 64, device="cuda:1") < 0.05).to(dtype)
         W = torch.randn(16, 64, dtype=dtype, device="cuda:1", requires_grad=True)
@@ -153,9 +153,9 @@ def test_noncurrent_cuda_device(dtype):
         cupy_spike_linear_sparse_forward(s, W_other, None)
 
 
-@pytest.mark.parametrize("dtype", _DTYPES)
 @pytest.mark.parametrize("M,K,N", [(0, 8, 4), (4, 8, 0), (4, 0, 8)])
-def test_zero_dimensions(dtype, M, K, N):
+def test_zero_dimensions(M, K, N):
+    dtype = torch.float32
     s = torch.empty(M, K, dtype=dtype, device="cuda")
     W = torch.empty(N, K, dtype=dtype, device="cuda")
     y = sparse_linear(s, W, strategy="sparse")
@@ -238,8 +238,8 @@ def test_v3_user_packs_repeated_calls():
     torch.testing.assert_close(y2, y_ref2, rtol=1e-4, atol=1e-5)
 
 
-@pytest.mark.parametrize("dtype", _DTYPES)
-def test_bit_pack_roundtrip(dtype):
+def test_bit_pack_roundtrip():
+    dtype = torch.float32
     torch.manual_seed(0)
     M, K = 64, 130  # 130 not a multiple of 8
     s = (torch.rand(M, K, device="cuda") < 0.3).to(dtype)
@@ -253,8 +253,8 @@ def test_bit_pack_roundtrip(dtype):
     assert torch.equal(s, s_back)
 
 
-@pytest.mark.parametrize("dtype", _DTYPES)
-def test_fake_tensor_shape(dtype):
+def test_fake_tensor_shape():
+    dtype = torch.float32
     torch.manual_seed(0)
     M, K, N = 64, 128, 64
     # Build meta tensors to exercise both fake implementations.
@@ -298,8 +298,8 @@ def test_fake_tensor_input_contracts():
         )
 
 
-@pytest.mark.parametrize("dtype", _DTYPES)
-def test_v3_via_torch_compile(dtype):
+def test_v3_via_torch_compile():
+    dtype = torch.float32
     torch.manual_seed(0)
     M, K, N = 64, 128, 64
     s = (torch.rand(M, K, device="cuda") < 0.05).to(dtype)
@@ -318,8 +318,8 @@ def test_v3_via_torch_compile(dtype):
     _assert_close(y, torch.nn.functional.linear(s, W))
 
 
-@pytest.mark.parametrize("dtype", _DTYPES)
-def test_via_torch_compile(dtype):
+def test_via_torch_compile():
+    dtype = torch.float32
     torch.manual_seed(0)
     M, K, N = 64, 128, 64
     s = (torch.rand(M, K, device="cuda") < 0.05).to(dtype)

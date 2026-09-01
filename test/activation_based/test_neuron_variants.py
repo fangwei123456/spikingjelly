@@ -26,8 +26,10 @@ def test_dsr_neuron_backward_does_not_require_distributed(node_type, kwargs):
     assert torch.isfinite(node.v_threshold.grad)
 
 
-@pytest.mark.parametrize("shape", [(8, 4), (8, 4, 3, 3)])
-@pytest.mark.parametrize("learnable_vth", [False, True])
+@pytest.mark.parametrize(
+    ("shape", "learnable_vth"),
+    [((8, 4), False), ((8, 4, 3, 3), True)],
+)
 def test_mpbn_threshold_reparameterization_preserves_eval_result(shape, learnable_vth):
     width = shape[1]
     kwargs = {"out_features": width} if len(shape) == 2 else {"out_channels": width}

@@ -1,6 +1,30 @@
-name: OCR PR Review
+# OpenCodeReview PR review for high-confidence, actionable findings.
 
-# pull_request_target: secrets 可用于 fork PR（OCR 只读 diff，不执行 PR 代码，安全）
+name: OpenCodeReview PR Review
+
+concurrency:
+  # Do not let an unrelated PR comment cancel an active review.
+  group: >-
+    ${{
+      (
+        github.event_name == 'pull_request_target'
+        || (
+          github.event_name == 'issue_comment'
+          && github.event.issue.pull_request
+          && github.event.comment.user.type != 'Bot'
+          && (
+            github.event.comment.author_association == 'MEMBER'
+            || github.event.comment.author_association == 'OWNER'
+            || github.event.comment.author_association == 'COLLABORATOR'
+          )
+          && startsWith(github.event.comment.body, '/ocr')
+        )
+      )
+      && format('ocr-{0}', github.event.pull_request.number || github.event.issue.number)
+      || format('noop-{0}', github.run_id)
+    }}
+  cancel-in-progress: true
+
 on:
   pull_request_target:
     types: [opened]
@@ -14,411 +38,55 @@ permissions:
 
 jobs:
   review:
-    # PR opened 自动跑一次；后续 push 不自动跑，避免大 PR 反复消耗 token。
-    # issue_comment 触发时，只对 PR 评论中的 /ocr 关键词响应。
     if: >-
-      github.event_name == 'pull_request_target' ||
-      (github.event_name == 'issue_comment' &&
-       github.event.issue.pull_request &&
-       contains(github.event.comment.body, '/ocr'))
+      github.event_name == 'pull_request_target'
+      || (
+        github.event_name == 'issue_comment'
+        && github.event.issue.pull_request
+        && github.event.comment.user.type != 'Bot'
+        && (
+          github.event.comment.author_association == 'MEMBER'
+          || github.event.comment.author_association == 'OWNER'
+          || github.event.comment.author_association == 'COLLABORATOR'
+        )
+        && startsWith(github.event.comment.body, '/ocr')
+      )
     runs-on: ubuntu-latest
-    concurrency:
-      group: ocr-review-${{ github.event.pull_request.number || github.event.issue.number }}
-      cancel-in-progress: true
+    timeout-minutes: 30
     steps:
-      # ── 1. 获取 PR 上下文（仅 issue_comment 需要） ──
-      - name: Get PR context
+      - name: Resolve PR refs
         if: github.event_name == 'issue_comment'
         id: pr-context
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const { data: pr } = await github.rest.pulls.get({
+            const { data: pullRequest } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number,
             });
-            core.setOutput('base_ref', pr.base.ref);
-            core.setOutput('head_ref', pr.head.ref);
-            core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('base_ref', pullRequest.base.ref);
+            core.setOutput('head_sha', pullRequest.head.sha);
 
-      # ── 2. Checkout ──
-      - name: Checkout repository
-        uses: actions/checkout@v5
+      - name: Run OpenCodeReview
+        uses: alibaba/open-code-review@8d023aafcec05f8ba5628fca3eaba88078e5d201 # v1.11.1
         with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || steps.pr-context.outputs.head_sha }}
-
-      # ── 3. Fetch PR head（确保 fork commits 可用） ──
-      - name: Fetch PR head
-        run: |
-          git fetch origin pull/${{ github.event.pull_request.number || github.event.issue.number }}/head
-
-      # ── 4. Setup Node.js ──
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-
-      # ── 5. Install OCR ──
-      - name: Install OpenCodeReview
-        run: |
-          npm install -g @alibaba-group/open-code-review
-          echo "OCR version:"
-          ocr version || true
-
-      # ── 6. Configure OCR ──
-      - name: Configure OCR
-        env:
-          OCR_LLM_URL: ${{ secrets.OCR_LLM_URL }}
-          OCR_LLM_AUTH_TOKEN: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
-          OCR_LLM_MODEL: ${{ secrets.OCR_LLM_MODEL }}
-        run: |
-          ocr config set provider minimax
-          ocr config set providers.minimax.url "$OCR_LLM_URL"
-          ocr config set providers.minimax.api_key "$OCR_LLM_AUTH_TOKEN"
-          ocr config set providers.minimax.model "$OCR_LLM_MODEL"
-          ocr config set providers.minimax.extra_body '{"thinking":{"type":"adaptive"},"reasoning_split":true}'
-
-      - name: Test OCR LLM connection
-        run: |
-          ocr llm test
-
-      # ── 7. Run OCR Review ──
-      - name: Run OCR review
-        id: ocr-review
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.ref || steps.pr-context.outputs.base_ref }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || steps.pr-context.outputs.head_sha }}
-        run: |
-          set +e
-          ocr review \
-            --from "origin/${BASE_REF}" \
-            --to "${HEAD_SHA}" \
-            --format json \
-            > /tmp/ocr-result.json 2>/tmp/ocr-stderr.log
-          status=$?
-          set -e
-
-          echo "exit_code=${status}" >> "$GITHUB_OUTPUT"
-          echo "Review complete. Exit code: ${status}"
-
-          echo "::group::OCR stdout preview"
-          if [ -s /tmp/ocr-result.json ]; then
-            head -c 4000 /tmp/ocr-result.json
-            echo
-          else
-            echo "(empty)"
-          fi
-          echo "::endgroup::"
-
-          echo "::group::OCR stderr preview"
-          if [ -s /tmp/ocr-stderr.log ]; then
-            sed -E \
-              -e 's/(sk-[A-Za-z0-9_-]{6})[A-Za-z0-9_-]+/\1***/g' \
-              -e 's/(Authorization: Bearer )[A-Za-z0-9._-]+/\1***/Ig' \
-              -e 's/(auth[_-]?token[=: ]+)[^[:space:]]+/\1***/Ig' \
-              /tmp/ocr-stderr.log | head -c 4000
-            echo
-          else
-            echo "(empty)"
-          fi
-          echo "::endgroup::"
-
-      # ── 8. Post Review Comments ──
-      - name: Post review comments
-        uses: actions/github-script@v9
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || steps.pr-context.outputs.head_sha }}
-          OCR_EXIT_CODE: ${{ steps.ocr-review.outputs.exit_code }}
-          OCR_MAX_INLINE_COMMENTS: ${{ vars.OCR_MAX_INLINE_COMMENTS || '8' }}
-        with:
-          script: |
-            const fs = require('fs');
-
-            function readFile(path) {
-              try {
-                return fs.readFileSync(path, 'utf8');
-              } catch {
-                return '';
-              }
-            }
-
-            function sanitize(text) {
-              return text
-                .replace(/sk-[A-Za-z0-9_-]{6}[A-Za-z0-9_-]+/g, 'sk-***')
-                .replace(/(Authorization: Bearer )[\w.-]+/ig, '$1***')
-                .replace(/(auth[_-]?token[=: ]+)\S+/ig, '$1***');
-            }
-
-            const exitCode = Number.parseInt(process.env.OCR_EXIT_CODE || '0', 10);
-            const resultText = readFile('/tmp/ocr-result.json');
-            const stderrText = sanitize(readFile('/tmp/ocr-stderr.log')).trim();
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-
-            async function reportFailure(reason) {
-              const stderrBlock = stderrText
-                ? `\n\n**stderr preview**\n\n\`\`\`text\n${stderrText.slice(0, 2000)}\n\`\`\``
-                : '';
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: parseInt(process.env.PR_NUMBER),
-                body: [
-                  '❌ **OCR Review failed**',
-                  '',
-                  reason,
-                  '',
-                  `Exit code: \`${Number.isNaN(exitCode) ? 'unknown' : exitCode}\``,
-                  `Workflow run: ${runUrl}`,
-                  stderrBlock,
-                ].join('\n'),
-              });
-              core.setFailed(reason);
-            }
-
-            if (exitCode !== 0) {
-              await reportFailure('The OCR CLI exited with a non-zero status before producing a valid review result.');
-              return;
-            }
-
-            if (resultText.trim().length === 0) {
-              await reportFailure('The OCR CLI produced an empty JSON result. This is a tool/configuration failure, not a clean review.');
-              return;
-            }
-
-            let result;
-            try {
-              result = JSON.parse(resultText);
-            } catch (e) {
-              console.log('Failed to parse OCR result:', e.message);
-              await reportFailure(`Failed to parse OCR JSON output: ${e.message}`);
-              return;
-            }
-
-            const comments = result.comments || [];
-            const warnings = result.warnings || [];
-            const message = result.message || 'Review complete.';
-            const parsedInlineLimit = Number.parseInt(process.env.OCR_MAX_INLINE_COMMENTS || '8', 10);
-            const maxInlineComments = Number.isNaN(parsedInlineLimit)
-              ? 8
-              : Math.max(0, parsedInlineLimit);
-            const maxSummaryChars = 60000;
-
-            if (comments.length === 0 && warnings.length === 0) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: parseInt(process.env.PR_NUMBER),
-                body: `✅ **OCR Review**: ${message}`,
-              });
-              return;
-            }
-
-            const diffLinesByPath = await loadDiffLines();
-
-            // 构建 inline review comments
-            const reviewComments = [];
-            const summaryComments = [];
-
-            for (const c of comments) {
-              const path = c.path || c.file;
-              const startLine = c.start_line ?? c.startLine;
-              const endLine = c.end_line ?? c.endLine ?? c.line;
-              const body = c.content || c.message || c.body || '';
-              if (!path || (startLine == null && endLine == null)) {
-                summaryComments.push(c);
-                continue;
-              }
-              const line = endLine ?? startLine;
-              if (!isLineInDiff(path, line)) {
-                summaryComments.push({
-                  ...c,
-                  content: `${body}\n\n_OCR suggested an inline comment at ${path}:${line}, but that line is not commentable in the PR diff._`,
-                });
-                continue;
-              }
-              const comment = {
-                path,
-                line,
-                body: body + formatSuggestion(c),
-              };
-              comment.side = "RIGHT";
-              reviewComments.push({
-                ...comment,
-              });
-            }
-
-            for (const w of warnings) {
-              const path = w.path || w.file;
-              const line = w.end_line ?? w.line ?? w.start_line;
-              if (!path || line == null) continue;
-              if (!isLineInDiff(path, line)) {
-                summaryComments.push({
-                  ...w,
-                  content: `⚠️ ${w.content || w.message || w.body || ''}\n\n_OCR suggested an inline warning at ${path}:${line}, but that line is not commentable in the PR diff._`,
-                });
-                continue;
-              }
-              reviewComments.push({
-                path,
-                line,
-                side: "RIGHT",
-                body: `⚠️ ${w.content || w.message || w.body || ''}`,
-              });
-            }
-
-            function formatSuggestion(comment) {
-              const suggestion = comment.suggestion_code || comment.suggestion;
-              return suggestion ? `\n\n\`\`\`suggestion\n${suggestion}\n\`\`\`` : '';
-            }
-
-            function formatSummaryComment(comment) {
-              const path = comment.path || comment.file || 'unknown file';
-              const content = comment.content || comment.message || comment.body || '';
-              return `### \`${path}\`\n\n${content}${formatSuggestion(comment)}`;
-            }
-
-            function cleanPayload(payload) {
-              return Object.fromEntries(
-                Object.entries(payload).filter(([, value]) => value !== undefined)
-              );
-            }
-
-            function isLineInDiff(path, line) {
-              const lines = diffLinesByPath.get(path);
-              return lines ? lines.has(Number(line)) : false;
-            }
-
-            async function loadDiffLines() {
-              const files = await github.paginate(github.rest.pulls.listFiles, {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: parseInt(process.env.PR_NUMBER),
-                per_page: 100,
-              });
-              const byPath = new Map();
-              for (const file of files) {
-                const lines = new Set();
-                const patch = file.patch || '';
-                let newLine = null;
-                for (const rawLine of patch.split('\n')) {
-                  const hunk = rawLine.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-                  if (hunk) {
-                    newLine = Number.parseInt(hunk[1], 10);
-                    continue;
-                  }
-                  if (newLine == null || rawLine.startsWith('\\')) {
-                    continue;
-                  }
-                  if (rawLine.startsWith('+')) {
-                    lines.add(newLine);
-                    newLine += 1;
-                  } else if (rawLine.startsWith('-')) {
-                    continue;
-                  } else {
-                    lines.add(newLine);
-                    newLine += 1;
-                  }
-                }
-                byPath.set(file.filename, lines);
-              }
-              return byPath;
-            }
-
-            const inlineComments = reviewComments.slice(0, maxInlineComments);
-            const overflowComments = reviewComments.slice(maxInlineComments);
-            for (const c of overflowComments) {
-              summaryComments.push({
-                path: c.path,
-                content: `${c.body}\n\n_Omitted from inline posting to avoid GitHub secondary content creation limits._`,
-              });
-            }
-
-            // 尝试批量发 review
-            if (inlineComments.length > 0) {
-              try {
-                await github.rest.pulls.createReview({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  pull_number: parseInt(process.env.PR_NUMBER),
-                  commit_id: process.env.HEAD_SHA,
-                  event: 'COMMENT',
-                  body: `🤖 **OCR Review** — ${comments.length} comment(s), ${warnings.length} warning(s)\n\n${message}\n\nPosting ${inlineComments.length}/${reviewComments.length} inline comment(s); remaining findings are included in the summary comment.`,
-                  comments: inlineComments.map(c => cleanPayload({
-                    path: c.path,
-                    start_line: c.start_line,
-                    line: c.line,
-                    start_side: c.start_side,
-                    side: c.side,
-                    body: c.body,
-                  })),
-                });
-                console.log(`Posted batch review with ${inlineComments.length} comments.`);
-              } catch (batchErr) {
-                console.log('Batch review failed, falling back to individual comments:', batchErr.message);
-                const isSecondaryLimit = batchErr.status === 403 && /secondary rate limit/i.test(batchErr.message || '');
-                if (isSecondaryLimit) {
-                  for (const c of inlineComments) {
-                    summaryComments.push({
-                      path: c.path,
-                      content: `${c.body}\n\n_Batch inline posting hit GitHub secondary content creation limits; included here instead._`,
-                    });
-                  }
-                } else {
-                // fallback: 逐条发
-                for (const c of inlineComments) {
-                  try {
-                    await github.rest.pulls.createReviewComment(cleanPayload({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      pull_number: parseInt(process.env.PR_NUMBER),
-                      commit_id: process.env.HEAD_SHA,
-                      path: c.path,
-                      start_line: c.start_line,
-                      line: c.line,
-                      start_side: c.start_side,
-                      side: c.side,
-                      body: c.body,
-                    }));
-                    await new Promise(r => setTimeout(r, 2000));
-                  } catch (commentErr) {
-                    console.log(`Failed to post comment on ${c.path}:${c.line}:`, commentErr.message);
-                    summaryComments.push({
-                      path: c.path,
-                      content: `${c.body}\n\n_Failed to post this inline: ${commentErr.message}_`,
-                    });
-                  }
-                }
-                }
-              }
-            }
-
-            // 发总结评论
-            const summaryParts = [`🤖 **OCR Review** — ${comments.length} comment(s), ${warnings.length} warning(s)`];
-            if (message) summaryParts.push('', message);
-            if (reviewComments.length > inlineComments.length) {
-              summaryParts.push(
-                '',
-                `Inline comments were capped at ${inlineComments.length}/${reviewComments.length} to avoid GitHub secondary content creation limits.`,
-              );
-            }
-            if (summaryComments.length > 0) {
-              summaryParts.push(
-                '',
-                `Comments without inline locations (${summaryComments.length}):`,
-                '',
-                summaryComments.map(formatSummaryComment).join('\n\n---\n\n'),
-              );
-            }
-            let summaryBody = summaryParts.join('\n');
-            if (summaryBody.length > maxSummaryChars) {
-              summaryBody = `${summaryBody.slice(0, maxSummaryChars)}\n\n_Trimmed because the OCR summary exceeded GitHub's issue comment size limit. See the workflow log for the complete OCR JSON output._`;
-            }
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: parseInt(process.env.PR_NUMBER),
-              body: summaryBody,
-            });
+          llm_url: ${{ secrets.OCR_LLM_URL }}
+          llm_auth_token: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
+          llm_model: ${{ secrets.OCR_LLM_MODEL }}
+          llm_use_anthropic: 'false'
+          llm_extra_body: '{"thinking":{"type":"adaptive"},"reasoning_split":true}'
+          background: |
+            Review SpikingJelly with precision over recall.
+            Report only concrete, current, user-observable defects, security or data-loss risks, substantial measured regressions, or violations of an explicit project contract. Every finding must name one trigger, one consequence, and one primary fix.
+            Do not report standalone style, naming, formatting, unused imports, shadowing, comments, docstrings, help text, refactoring, idiomatic alternatives, or extra tests/docs unless they cause a concrete behavior change or violate an explicit repository requirement.
+            Do not speculate about future callers or APIs, unsupported hardware or versions, malformed inputs outside the supported contract, unmeasured micro-optimizations, intentional strictness, documented invariants, fixed benchmark scope, or fail-fast behavior.
+            For examples, benchmarks, tests, plots, and generated results, report only issues that break CI, invalidate a measurement, corrupt an artifact, or change documented user-facing behavior. Emit one finding per root cause and stay silent when evidence is inconclusive.
+          base_ref: ${{ steps.pr-context.outputs.base_ref }}
+          head_sha: ${{ steps.pr-context.outputs.head_sha }}
+          ocr_version: '1.11.1'
+          sticky_summary: 'true'
+          incremental: 'true'
+          checkpoint_range: 'true'
+          route_severity_below: 'low'
+          route_categories: 'style,documentation'

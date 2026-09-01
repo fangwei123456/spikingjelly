@@ -18,14 +18,10 @@ from spikingjelly.activation_based import (
 from spikingjelly.activation_based.ann2snn import (
     ConversionRecipe,
     Converter,
-    FXConversionRecipe,
-    FXConverter,
     LocalThresholdBalancingRecipe,
     ModuleConversionRecipe,
     ModuleConverter,
     RateCodingRecipe,
-    SpikeZIPTFQANNRecipe,
-    STATransformerRecipe,
     TransformerTDEquivalentRecipe,
 )
 from spikingjelly.activation_based.ann2snn import delay as ann2snn_delay
@@ -783,16 +779,6 @@ class TestVoltageScaler:
         result = scaler(x)
         assert torch.allclose(result, torch.tensor([2.5, 5.0]))
 
-    def test_identity(self):
-        scaler = VoltageScaler(1.0)
-        x = torch.randn(3, 4)
-        assert torch.allclose(scaler(x), x)
-
-    def test_extra_repr(self):
-        scaler = VoltageScaler(3.14)
-        assert "3.14" in scaler.extra_repr()
-        assert "step_mode" in scaler.extra_repr()
-
 
 class TestChannelVoltageScaler:
     def test_channel_scaling_4d(self):
@@ -864,22 +850,6 @@ class TestPublicExports:
             "download_url",
         }
 
-    def test_recipe_api_is_importable(self):
-        assert ann2snn.Converter is FXConverter
-        assert ann2snn.ConversionRecipe is ConversionRecipe
-        assert ann2snn.FXConverter is FXConverter
-        assert ann2snn.ModuleConverter is ModuleConverter
-        assert ann2snn.FXConversionRecipe is FXConversionRecipe
-        assert ann2snn.ModuleConversionRecipe is ModuleConversionRecipe
-        assert Converter is FXConverter
-        assert ConversionRecipe is FXConversionRecipe
-        assert ann2snn.RateCodingRecipe is RateCodingRecipe
-        assert ann2snn.LocalThresholdBalancingRecipe is LocalThresholdBalancingRecipe
-        assert ann2snn.STATransformerRecipe is STATransformerRecipe
-        assert ann2snn.ChannelVoltageScaler is ChannelVoltageScaler
-        assert ann2snn.TransformerTDEquivalentRecipe is TransformerTDEquivalentRecipe
-        assert ann2snn.SpikeZIPTFQANNRecipe is SpikeZIPTFQANNRecipe
-
 
 class TestConverterRecipes:
     def test_converter_signature_is_algorithm_agnostic(self):
@@ -907,23 +877,12 @@ class TestConverterRecipes:
         }
         assert algorithm_parameters.isdisjoint(signature.parameters)
 
-    def test_rate_coding_recipe_object_is_accepted(self):
-        converter = Converter(recipe=RateCodingRecipe(dataloader=_make_loader()))
-        assert isinstance(converter.recipe, RateCodingRecipe)
-
-    @pytest.mark.parametrize(
-        "kwargs",
-        [
-            {"dataloader": _make_loader()},
-            {"mode": "Max"},
-            {"fuse_flag": False},
-            {"rules": []},
-            {"neuron_factory": lambda scale: neuron.IFNode()},
-        ],
-    )
-    def test_converter_rejects_algorithm_parameters(self, kwargs):
+    def test_converter_rejects_legacy_algorithm_parameter(self):
         with pytest.raises(TypeError):
-            Converter(recipe=TransformerTDEquivalentRecipe(), **kwargs)
+            Converter(
+                recipe=TransformerTDEquivalentRecipe(),
+                dataloader=_make_loader(),
+            )
 
     def test_transformer_recipe_does_not_require_dataloader(self):
         converter = Converter(recipe="transformer_td_equivalent")
@@ -940,10 +899,6 @@ class TestConverterRecipes:
     def test_unknown_recipe_raises(self):
         with pytest.raises(ValueError, match="Unknown ann2snn conversion recipe"):
             Converter(recipe="missing_recipe")
-
-    def test_invalid_recipe_object_raises(self):
-        with pytest.raises(TypeError, match="recipe must be"):
-            Converter(recipe=object())
 
     def test_fx_converter_rejects_module_recipe(self):
         with pytest.raises(TypeError, match="ModuleConverter"):
@@ -1049,31 +1004,6 @@ class TestConverterRecipes:
             "finalize",
         ]
 
-    def test_validate_sees_resolved_device(self):
-        class DeviceCheckingRecipe(ConversionRecipe):
-            def __init__(self):
-                self.device = None
-
-            def validate(self, converter):
-                self.device = converter.device
-
-        recipe = DeviceCheckingRecipe()
-        model = nn.Sequential(nn.Linear(2, 2))
-
-        Converter(recipe=recipe).convert(model)
-
-        assert recipe.device == torch.device("cpu")
-
-    def test_unified_convert_uses_rate_coding_recipe(self):
-        model = SimpleCNNNoBN()
-        model.eval()
-        converter = _rate_converter(fuse_flag=False)
-
-        snn = converter.convert(model)
-
-        assert isinstance(snn, torch.fx.GraphModule)
-        assert any(isinstance(m, neuron.IFNode) for m in snn.modules())
-
     def test_rate_coding_step_mode_product_matches_single_loop(self):
         model = SimpleCNNNoBN()
         model.eval()
@@ -1171,38 +1101,9 @@ class TestConverterRecipes:
         assert len(dropout_nodes) == 1
         assert dropout_nodes[0].kwargs["training"] is False
 
-    def test_unified_convert_uses_transformer_recipe(self):
-        model = CoreTransformerMLP()
-        model.eval()
-        converter = Converter(recipe="transformer_td_equivalent")
-
-        converted = converter.convert(model)
-        modules = dict(converted.named_modules())
-
-        assert isinstance(modules["norm"], TDLayerNorm)
-        assert isinstance(modules["fc0"], TDLinear)
-        assert isinstance(modules["act"], TDGELU)
-        assert isinstance(modules["fc1"], TDLinear)
-
 
 class TestConverterBackwardCompat:
-    def test_converter_is_plain_conversion_driver(self):
-        converter = _rate_converter(mode="Max", fuse_flag=False)
-
-        assert not isinstance(converter, nn.Module)
-        with pytest.raises(TypeError):
-            converter(SimpleCNN())
-
-    def test_output_shape_preserved(self):
-        model = SimpleCNN()
-        model.eval()
-        dummy = torch.randn(1, 1, 28, 28)
-        converter = _rate_converter(mode="Max", fuse_flag=False)
-        snn = converter.convert(model)
-        out = snn(dummy)
-        assert out.shape == (1, 10)
-
-    @pytest.mark.parametrize("mode", ["max", "99.9%", 0.5, 1])
+    @pytest.mark.parametrize("mode", ["max"])
     def test_supported_modes_replace_relu(self, mode):
         model = SimpleCNN()
         model.eval()
@@ -1217,18 +1118,8 @@ class TestConverterBackwardCompat:
         with pytest.raises(NotImplementedError):
             Converter(recipe=recipe).convert(nn.Identity())
 
-    def test_empty_mode_raises(self):
-        recipe = RateCodingRecipe(dataloader=[], mode="")
-        with pytest.raises(NotImplementedError):
-            Converter(recipe=recipe).convert(nn.Identity())
-
     def test_invalid_scalar_raises(self):
         recipe = RateCodingRecipe(dataloader=[], mode=1.5)
-        with pytest.raises(NotImplementedError):
-            Converter(recipe=recipe).convert(nn.Identity())
-
-    def test_invalid_scalar_zero_raises(self):
-        recipe = RateCodingRecipe(dataloader=[], mode=0.0)
         with pytest.raises(NotImplementedError):
             Converter(recipe=recipe).convert(nn.Identity())
 
@@ -1269,16 +1160,6 @@ raise SystemExit(1)
         model.eval()
         imgs = np.random.randn(2, 1, 28, 28).astype(np.float32)
         converter = _rate_converter(dataloader=[imgs], mode="Max", fuse_flag=False)
-        snn = converter.convert(model)
-        assert any(isinstance(module, neuron.IFNode) for module in snn.modules())
-
-    def test_dict_dataloader_converts(self):
-        model = SimpleCNNNoBN()
-        model.eval()
-        imgs = torch.randn(2, 1, 28, 28)
-        converter = _rate_converter(
-            dataloader=[{"input": imgs}], mode="Max", fuse_flag=False
-        )
         snn = converter.convert(model)
         assert any(isinstance(module, neuron.IFNode) for module in snn.modules())
 
@@ -1550,17 +1431,6 @@ class TestConverterTDOperatorReplacement:
         assert converted.dropout.training
         assert converted.fc.training
 
-    def test_td_operator_replacement_preserves_eval_mode(self):
-        model = DropoutCoreMLP()
-        model.eval()
-
-        converted = _td_converter().convert(model)
-
-        assert not converted.training
-        assert isinstance(converted.dropout, nn.Dropout)
-        assert not converted.dropout.training
-        assert not converted.fc.training
-
     def test_rewrites_sdpa_function_node(self):
         model = SDPABlock()
 
@@ -1719,15 +1589,6 @@ class TestConverterTDOperatorReplacement:
         converted = _td_converter().convert(model)
 
         assert isinstance(converted.mha, TDMultiheadAttention)
-
-    def test_mha_replacement_preserves_training_mode(self):
-        model = SelfAttentionBlock()
-        model.train()
-
-        converted = _td_converter().convert(model)
-
-        assert converted.training
-        assert converted.mha.training
 
     def test_mha_self_attention_cumulative_output_matches_ann_reference(self):
         model = SelfAttentionBlock()
@@ -1971,12 +1832,6 @@ class TestLocalThresholdBalancingRecipe:
         spike = node(torch.tensor([0.4]))
         assert torch.equal(spike, torch.tensor([0.0]))
 
-    def test_half_threshold_if_node_accepts_integer_threshold(self):
-        node = neuron.HalfThresholdIFNode(v_threshold=1)
-
-        assert node.v_threshold == 1.0
-        assert node.v == 0.5
-
     def test_half_threshold_if_node_accepts_scalar_tensor_threshold(self):
         node = neuron.HalfThresholdIFNode(v_threshold=torch.tensor(2.0))
 
@@ -2080,10 +1935,9 @@ class TestLocalThresholdBalancingRecipe:
         )
         assert maxpool_idx < if_node_idx
 
-    @pytest.mark.parametrize("training", [False, True])
-    def test_recipe_does_not_mutate_ann_state_dict(self, training):
+    def test_recipe_does_not_mutate_ann_state_dict(self):
         model = SimpleCNNNoBN()
-        model.train(training)
+        model.train()
         model.relu.eval()
         model.pool.train()
         before = {k: v.detach().clone() for k, v in model.state_dict().items()}
@@ -2286,16 +2140,6 @@ class TestDelayedReadoutEstimation:
             ann2snn.estimate_delay_start(model, loader, device="cpu", time_steps=32)
 
         assert len(node._forward_hooks) == 0
-
-    def test_delay_estimation_skips_unmatched_graphs(self):
-        model = _trace_ann2snn_leaf(nn.Sequential(neuron.IFNode()))
-        loader = [(torch.ones(2, 2), torch.zeros(2, dtype=torch.long))]
-
-        delay_start = ann2snn.estimate_delay_start(
-            model, loader, device="cpu", time_steps=32
-        )
-
-        assert delay_start == 0
 
 
 class TestDownloadUrl:

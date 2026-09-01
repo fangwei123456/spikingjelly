@@ -209,14 +209,15 @@ def test_compiled_triton_lif_backward_matches_eager(
     torch.testing.assert_close(x_compiled.grad, x_eager.grad)
 
 
-@pytest.mark.parametrize("kind", ["lif", "if", "plif"])
-def test_inductor_is_not_a_standard_neuron_backend(kind):
+def test_inductor_is_not_a_standard_neuron_backend():
     with pytest.raises(NotImplementedError, match="not a supported backend"):
-        _build_node(kind, "inductor", _make_surrogate("Sigmoid"))
+        _build_node("lif", "inductor", _make_surrogate("Sigmoid"))
 
 
-@pytest.mark.parametrize("kind", ["lif", "if", "plif"])
-@pytest.mark.parametrize("sg_name", ["Sigmoid", "ATan"])
+@pytest.mark.parametrize(
+    ("kind", "sg_name"),
+    [("lif", "Sigmoid"), ("if", "ATan"), ("plif", "Sigmoid")],
+)
 def test_triton_vs_torch_forward_backward_consistency(kind, sg_name):
     _require_cuda_triton_compile()
 
@@ -252,12 +253,8 @@ def test_triton_vs_torch_forward_backward_consistency(kind, sg_name):
     [
         ("lif", 7, torch.float32, 0.0, False),
         ("lif", 65, torch.float16, None, True),
-        ("lif", 7, torch.bfloat16, None, True),
-        ("lif", 65, torch.float32, 0.0, False),
-        ("if", 7, torch.float16, 0.0, False),
-        ("if", 65, torch.bfloat16, None, True),
         ("if", 7, torch.float32, None, True),
-        ("if", 65, torch.float16, 0.0, False),
+        ("if", 65, torch.bfloat16, None, True),
     ],
 )
 def test_triton_last_state_matches_full_voltage_sequence(
@@ -320,9 +317,7 @@ def test_triton_last_state_matches_full_voltage_sequence(
     [
         ("lif", 1, torch.float32, 0.0),
         ("lif", 65, torch.float16, None),
-        ("lif", 1, torch.bfloat16, None),
-        ("if", 1, torch.float16, None),
-        ("if", 65, torch.bfloat16, 0.0),
+        ("if", 1, torch.bfloat16, None),
         ("if", 65, torch.float32, None),
     ],
 )

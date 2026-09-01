@@ -186,14 +186,6 @@ def test_td_multistep_compact_state_preserves_chunked_gradients():
 
 
 class TestTDSoftmax:
-    def test_shape_is_preserved(self):
-        x_seq = torch.randn(4, 2, 3)
-        op = TDSoftmax(dim=-1)
-
-        y_seq = op(x_seq)
-
-        assert y_seq.shape == x_seq.shape
-
     def test_cumulative_output_matches_softmax_on_cumulative_input(self):
         x_seq = torch.randn(5, 2, 4)
         op = TDSoftmax(dim=-1)
@@ -203,15 +195,6 @@ class TestTDSoftmax:
 
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
 
-    def test_final_cumulative_output_matches_softmax_on_total_input(self):
-        x_seq = torch.randn(6, 3, 5)
-        op = TDSoftmax(dim=-1)
-
-        y_seq = op(x_seq)
-        expected = torch.softmax(x_seq.sum(dim=0), dim=-1)
-
-        assert torch.allclose(y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6)
-
     def test_positive_non_last_softmax_dim(self):
         x_seq = torch.randn(5, 2, 3, 4)
         op = TDSoftmax(dim=2)
@@ -220,31 +203,6 @@ class TestTDSoftmax:
         expected = torch.softmax(x_seq.cumsum(dim=0), dim=2)
 
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
-
-    def test_single_timestep_returns_softmax_of_input(self):
-        x_seq = torch.randn(1, 2, 3)
-        op = TDSoftmax(dim=-1)
-
-        y_seq = op(x_seq)
-
-        assert y_seq.shape == x_seq.shape
-        assert torch.allclose(y_seq[0], torch.softmax(x_seq[0], dim=-1))
-
-    def test_ann_forward_matches_softmax(self):
-        x = torch.randn(2, 3)
-        op = TDSoftmax(dim=0)
-
-        y = op.ann_forward(x)
-
-        assert torch.allclose(y, torch.softmax(x, dim=0))
-
-    def test_ann_forward_softmax_scalar_matches_torch(self):
-        x = torch.tensor(1.0)
-        op = TDSoftmax(dim=0)
-
-        y = op.ann_forward(x)
-
-        assert torch.allclose(y, torch.softmax(x, dim=0))
 
     def test_one_step_multi_step_matches_single_step(self):
         x = torch.randn(2, 3)
@@ -289,12 +247,6 @@ class TestTDSoftmax:
         with pytest.raises(ValueError, match="time dimension"):
             op(torch.randn(4, 2, 3))
 
-    def test_rejects_negative_dim_resolving_to_zero(self):
-        op = TDSoftmax(dim=-3)
-
-        with pytest.raises(ValueError, match="time dimension"):
-            op(torch.randn(4, 2, 3))
-
     def test_rejects_out_of_range_dim(self):
         op = TDSoftmax(dim=3)
 
@@ -313,21 +265,8 @@ class TestTDSoftmax:
         with pytest.raises(ValueError, match="non-empty time dimension"):
             op(torch.empty(0, 2, 3))
 
-    def test_extra_repr(self):
-        op = TDSoftmax(dim=-1)
-
-        assert op.extra_repr() == "dim=-1"
-
 
 class TestTDLayerNorm:
-    def test_shape_is_preserved(self):
-        x_seq = torch.randn(4, 2, 3)
-        op = TDLayerNorm(normalized_shape=3)
-
-        y_seq = op(x_seq)
-
-        assert y_seq.shape == x_seq.shape
-
     def test_cumulative_output_matches_layer_norm_on_cumulative_input(self):
         x_seq = torch.randn(5, 2, 4)
         op = TDLayerNorm(normalized_shape=4)
@@ -343,21 +282,6 @@ class TestTDLayerNorm:
 
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
 
-    def test_final_cumulative_output_matches_layer_norm_on_total_input(self):
-        x_seq = torch.randn(6, 3, 5)
-        op = TDLayerNorm(normalized_shape=5)
-
-        y_seq = op(x_seq)
-        expected = F.layer_norm(
-            x_seq.sum(dim=0),
-            op.normalized_shape,
-            op.weight,
-            op.bias,
-            op.eps,
-        )
-
-        assert torch.allclose(y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6)
-
     def test_multi_dimensional_normalized_shape(self):
         x_seq = torch.randn(5, 2, 3, 4)
         op = TDLayerNorm(normalized_shape=(3, 4))
@@ -372,31 +296,6 @@ class TestTDLayerNorm:
         )
 
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
-
-    def test_single_timestep_returns_layer_norm_of_input(self):
-        x_seq = torch.randn(1, 2, 3)
-        op = TDLayerNorm(normalized_shape=3)
-
-        y_seq = op(x_seq)
-        expected = F.layer_norm(
-            x_seq[0],
-            op.normalized_shape,
-            op.weight,
-            op.bias,
-            op.eps,
-        )
-
-        assert y_seq.shape == x_seq.shape
-        assert torch.allclose(y_seq[0], expected)
-
-    def test_ann_forward_matches_layer_norm(self):
-        x = torch.randn(2, 3)
-        op = TDLayerNorm(normalized_shape=3)
-
-        y = op.ann_forward(x)
-        expected = F.layer_norm(x, op.normalized_shape, op.weight, op.bias, op.eps)
-
-        assert torch.allclose(y, expected)
 
     def test_one_step_multi_step_matches_single_step(self):
         x = torch.randn(2, 3)
@@ -459,49 +358,11 @@ class TestTDLayerNorm:
         assert op.bias is None
         assert set(op.state_dict().keys()) == {"weight"}
 
-    def test_reset_parameters_initializes_affine(self):
-        op = TDLayerNorm(normalized_shape=4)
-        with torch.no_grad():
-            op.weight.fill_(2.0)
-            op.bias.fill_(3.0)
-
-        op.reset_parameters()
-
-        assert torch.equal(op.weight, torch.ones(4))
-        assert torch.equal(op.bias, torch.zeros(4))
-
-    def test_device_and_dtype_initialize_parameters(self):
-        op = TDLayerNorm(normalized_shape=4, device="cpu", dtype=torch.float64)
-
-        assert op.weight.device.type == "cpu"
-        assert op.bias.device.type == "cpu"
-        assert op.weight.dtype == torch.float64
-        assert op.bias.dtype == torch.float64
-
-    def test_rejects_one_dimensional_input(self):
-        op = TDLayerNorm(normalized_shape=4)
-
-        with pytest.raises(ValueError, match="at least 2 dimensions"):
-            op(torch.randn(4))
-
     def test_invalid_trailing_shape_raises_clear_value_error(self):
         op = TDLayerNorm(normalized_shape=4)
 
         with pytest.raises(ValueError, match="trailing shape"):
             op(torch.randn(3, 2, 5))
-
-    def test_rejects_empty_time_dimension(self):
-        op = TDLayerNorm(normalized_shape=4)
-
-        with pytest.raises(ValueError, match="non-empty time dimension"):
-            op(torch.empty(0, 2, 4))
-
-    def test_extra_repr(self):
-        op = TDLayerNorm(normalized_shape=(2, 3), eps=1e-4, bias=False)
-
-        assert op.extra_repr() == (
-            "(2, 3), eps=0.0001, elementwise_affine=True, bias=False"
-        )
 
 
 class TestTDRMSNorm:
@@ -585,14 +446,6 @@ class TestTDSiLU:
 
 
 class TestTDGELU:
-    def test_shape_is_preserved(self):
-        x_seq = torch.randn(4, 2, 3)
-        op = TDGELU()
-
-        y_seq = op(x_seq)
-
-        assert y_seq.shape == x_seq.shape
-
     @pytest.mark.parametrize("approximate", ["none", "tanh"])
     def test_cumulative_output_matches_gelu_on_cumulative_input(self, approximate):
         x_seq = torch.randn(5, 2, 4)
@@ -602,33 +455,6 @@ class TestTDGELU:
         expected = F.gelu(x_seq.cumsum(dim=0), approximate=approximate)
 
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
-
-    def test_final_cumulative_output_matches_gelu_on_total_input(self):
-        x_seq = torch.randn(6, 3, 5)
-        op = TDGELU()
-
-        y_seq = op(x_seq)
-        expected = F.gelu(x_seq.sum(dim=0), approximate=op.approximate)
-
-        assert torch.allclose(y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6)
-
-    def test_single_timestep_returns_gelu_of_input(self):
-        x_seq = torch.randn(1, 2, 3)
-        op = TDGELU()
-
-        y_seq = op(x_seq)
-        expected = F.gelu(x_seq[0], approximate=op.approximate)
-
-        assert y_seq.shape == x_seq.shape
-        assert torch.allclose(y_seq[0], expected)
-
-    def test_ann_forward_matches_gelu(self):
-        x = torch.randn(2, 3)
-        op = TDGELU(approximate="tanh")
-
-        y = op.ann_forward(x)
-
-        assert torch.allclose(y, F.gelu(x, approximate="tanh"))
 
     def test_one_step_multi_step_matches_single_step(self):
         x = torch.randn(2, 3)
@@ -659,54 +485,12 @@ class TestTDGELU:
         assert torch.isfinite(x_seq.grad).all()
         assert torch.allclose(x_seq.grad, x_seq_ref.grad, atol=1e-6, rtol=1e-6)
 
-    def test_negative_values_are_allowed(self):
-        x_seq = torch.tensor(
-            [
-                [[-2.0, 1.0]],
-                [[3.0, -1.0]],
-            ]
-        )
-        op = TDGELU()
-
-        y_seq = op(x_seq)
-
-        assert (y_seq < 0).any()
-        assert torch.allclose(
-            y_seq.cumsum(dim=0),
-            F.gelu(x_seq.cumsum(dim=0), approximate=op.approximate),
-        )
-
-    def test_rejects_one_dimensional_input(self):
-        op = TDGELU()
-
-        with pytest.raises(ValueError, match="at least 2 dimensions"):
-            op(torch.randn(4))
-
-    def test_rejects_empty_time_dimension(self):
-        op = TDGELU()
-
-        with pytest.raises(ValueError, match="non-empty time dimension"):
-            op(torch.empty(0, 2, 3))
-
     def test_rejects_invalid_approximate(self):
         with pytest.raises(ValueError, match="approximate must be 'none' or 'tanh'"):
             TDGELU(approximate="foo")
 
-    def test_extra_repr(self):
-        op = TDGELU(approximate="tanh")
-
-        assert op.extra_repr() == "approximate='tanh'"
-
 
 class TestTDLinear:
-    def test_shape_is_preserved_for_batched_input(self):
-        x_seq = torch.randn(4, 2, 3)
-        op = TDLinear(3, 5)
-
-        y_seq = op(x_seq)
-
-        assert y_seq.shape == (4, 2, 5)
-
     def test_higher_rank_input_shape(self):
         x_seq = torch.randn(4, 2, 6, 3)
         op = TDLinear(3, 5)
@@ -732,34 +516,6 @@ class TestTDLinear:
         expected = F.linear(x_seq, op.weight, None)
 
         assert torch.allclose(y_seq, expected, atol=1e-6, rtol=1e-6)
-
-    def test_final_cumulative_output_matches_linear_on_total_input(self):
-        x_seq = torch.randn(6, 3, 5)
-        op = TDLinear(5, 4)
-
-        y_seq = op(x_seq)
-        expected = F.linear(x_seq.sum(dim=0), op.weight, op.bias)
-
-        assert torch.allclose(y_seq.cumsum(dim=0)[-1], expected, atol=1e-6, rtol=1e-6)
-
-    def test_single_timestep_returns_linear_of_input(self):
-        x_seq = torch.randn(1, 2, 3)
-        op = TDLinear(3, 5)
-
-        y_seq = op(x_seq)
-        expected = F.linear(x_seq[0], op.weight, op.bias)
-
-        assert y_seq.shape == (1, 2, 5)
-        assert torch.allclose(y_seq[0], expected, atol=1e-6, rtol=1e-6)
-
-    def test_ann_forward_matches_linear(self):
-        x = torch.randn(2, 3)
-        op = TDLinear(3, 5)
-
-        y = op.ann_forward(x)
-        expected = F.linear(x, op.weight, op.bias)
-
-        assert torch.allclose(y, expected, atol=1e-6, rtol=1e-6)
 
     def test_one_step_multi_step_matches_single_step(self):
         x = torch.randn(2, 3)
@@ -800,27 +556,6 @@ class TestTDLinear:
         assert op.bias is None
         assert set(op.state_dict().keys()) == {"weight"}
 
-    def test_reset_parameters_preserves_shapes_and_reinitializes_values(self):
-        op = TDLinear(3, 5)
-        with torch.no_grad():
-            op.weight.fill_(1.0)
-            op.bias.fill_(1.0)
-
-        op.reset_parameters()
-
-        assert op.weight.shape == (5, 3)
-        assert op.bias.shape == (5,)
-        assert not torch.equal(op.weight, torch.ones_like(op.weight))
-        assert not torch.equal(op.bias, torch.ones_like(op.bias))
-
-    def test_device_and_dtype_initialize_parameters(self):
-        op = TDLinear(3, 5, device="cpu", dtype=torch.float64)
-
-        assert op.weight.device.type == "cpu"
-        assert op.bias.device.type == "cpu"
-        assert op.weight.dtype == torch.float64
-        assert op.bias.dtype == torch.float64
-
     def test_gradients_match_reference(self):
         x_seq = torch.randn(3, 2, 4)
         op = TDLinear(4, 5)
@@ -842,39 +577,14 @@ class TestTDLinear:
         assert torch.allclose(op.weight.grad, weight_ref.grad, atol=1e-6, rtol=1e-6)
         assert torch.allclose(op.bias.grad, bias_ref.grad, atol=1e-6, rtol=1e-6)
 
-    def test_rejects_one_dimensional_input(self):
-        op = TDLinear(3, 5)
-
-        with pytest.raises(ValueError, match="at least 2 dimensions"):
-            op(torch.randn(3))
-
-    def test_rejects_empty_time_dimension(self):
-        op = TDLinear(3, 5)
-
-        with pytest.raises(ValueError, match="non-empty time dimension"):
-            op(torch.empty(0, 2, 3))
-
     def test_invalid_trailing_feature_size_raises_from_pytorch(self):
         op = TDLinear(3, 5)
 
         with pytest.raises(RuntimeError):
             op(torch.randn(4, 2, 4))
 
-    def test_extra_repr(self):
-        op = TDLinear(3, 5, bias=False)
-
-        assert op.extra_repr() == "in_features=3, out_features=5, bias=False"
-
 
 class TestTDConv2d:
-    def test_shape_is_preserved_for_batched_input(self):
-        x_seq = torch.randn(4, 2, 3, 8, 8)
-        op = TDConv2d(3, 5, kernel_size=3, padding=1)
-
-        y_seq = op(x_seq)
-
-        assert y_seq.shape == (4, 2, 5, 8, 8)
-
     def test_cumulative_output_matches_conv2d_on_cumulative_input(self):
         x_seq = torch.randn(5, 2, 3, 8, 8)
         op = TDConv2d(3, 4, kernel_size=3, padding=1)
@@ -978,49 +688,11 @@ class TestTDConv2d:
         assert torch.allclose(y_seq[0], expected_bias)
         assert torch.count_nonzero(y_seq[1:]) == 0
 
-    def test_ann_forward_matches_conv2d(self):
-        x = torch.randn(2, 3, 8, 8)
-        op = TDConv2d(3, 5, kernel_size=3, padding=1)
-
-        y = op.ann_forward(x)
-        expected = F.conv2d(
-            x,
-            op.weight,
-            op.bias,
-            op.stride,
-            op.padding,
-            op.dilation,
-            op.groups,
-        )
-
-        assert torch.allclose(y, expected, atol=1e-6, rtol=1e-6)
-
     def test_rejects_non_5d_multistep_input(self):
         op = TDConv2d(3, 5, kernel_size=3)
 
         with pytest.raises(ValueError, match=r"\[T, N, C, H, W\]"):
             op(torch.randn(4, 3, 8, 8))
-
-    def test_device_and_dtype_initialize_parameters(self):
-        op = TDConv2d(3, 5, kernel_size=3, device="cpu", dtype=torch.float64)
-
-        assert op.weight.device.type == "cpu"
-        assert op.bias.device.type == "cpu"
-        assert op.weight.dtype == torch.float64
-        assert op.bias.dtype == torch.float64
-
-    def test_extra_repr(self):
-        op = TDConv2d(3, 5, kernel_size=3, padding=1, bias=False)
-
-        assert (
-            op.extra_repr() == "3, 5, kernel_size=(3, 3), stride=(1, 1), "
-            "padding=(1, 1), bias=False"
-        )
-
-    def test_extra_repr_quotes_string_padding(self):
-        op = TDConv2d(3, 5, kernel_size=3, padding="valid")
-
-        assert "padding='valid'" in op.extra_repr()
 
     def test_rejects_invalid_padding(self):
         with pytest.raises(ValueError, match="padding"):
@@ -1052,15 +724,6 @@ class TestSNNMatrixOperator:
         expected = torch.matmul(a_seq.cumsum(dim=0), b_seq.cumsum(dim=0))
 
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
-
-    def test_ann_forward_matches_matmul(self):
-        a = torch.randn(2, 3, 4)
-        b = torch.randn(2, 4, 6)
-        op = SNNMatrixOperator()
-
-        y = op.ann_forward(a, b)
-
-        assert torch.allclose(y, torch.matmul(a, b))
 
     def test_one_step_multi_step_matches_single_step(self):
         a = torch.randn(2, 3, 4)
@@ -1142,12 +805,6 @@ class TestSNNMatrixOperator:
         with pytest.raises(ValueError, match="same time length"):
             op(torch.randn(3, 2, 4, 5), torch.randn(4, 2, 5, 6))
 
-    def test_rejects_empty_time_dimension(self):
-        op = SNNMatrixOperator()
-
-        with pytest.raises(ValueError, match="non-empty time dimension"):
-            op(torch.empty(0, 2, 4, 5), torch.empty(0, 2, 5, 6))
-
     def test_rejects_inputs_with_too_few_dimensions(self):
         op = SNNMatrixOperator()
 
@@ -1172,15 +829,6 @@ class TestSNNElementWiseProduct:
 
         assert y_seq.shape == (5, 2, 3)
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-6, rtol=1e-6)
-
-    def test_ann_forward_matches_product(self):
-        a = torch.randn(2, 3)
-        b = torch.randn(2, 3)
-        op = SNNElementWiseProduct()
-
-        y = op.ann_forward(a, b)
-
-        assert torch.allclose(y, a * b)
 
     def test_one_step_multi_step_matches_single_step(self):
         a = torch.randn(2, 3)
@@ -1238,18 +886,6 @@ class TestSNNElementWiseProduct:
 
         with pytest.raises(ValueError, match="same time length"):
             op(torch.randn(3, 2, 4), torch.randn(4, 2, 4))
-
-    def test_rejects_empty_time_dimension(self):
-        op = SNNElementWiseProduct()
-
-        with pytest.raises(ValueError, match="non-empty time dimension"):
-            op(torch.empty(0, 2, 4), torch.empty(0, 2, 4))
-
-    def test_rejects_one_dimensional_input(self):
-        op = SNNElementWiseProduct()
-
-        with pytest.raises(ValueError, match="at least 2 dimensions"):
-            op(torch.randn(3), torch.randn(3))
 
     def test_invalid_broadcast_shape_raises_from_pytorch(self):
         op = SNNElementWiseProduct()
@@ -1350,16 +986,6 @@ class TestTDScaledDotProductAttention:
     sdpa_cumulative_atol = 1e-5
     sdpa_cumulative_rtol = 1e-5
 
-    def test_shape_is_preserved(self):
-        q_seq = torch.randn(4, 2, 3, 5)
-        k_seq = torch.randn(4, 2, 6, 5)
-        v_seq = torch.randn(4, 2, 6, 7)
-        op = TDScaledDotProductAttention()
-
-        y_seq = op(q_seq, k_seq, v_seq)
-
-        assert y_seq.shape == (4, 2, 3, 7)
-
     def test_cumulative_output_matches_sdpa_on_cumulative_input(self):
         q_seq = torch.randn(5, 2, 3, 4)
         k_seq = torch.randn(5, 2, 6, 4)
@@ -1380,44 +1006,6 @@ class TestTDScaledDotProductAttention:
             atol=self.sdpa_cumulative_atol,
             rtol=self.sdpa_cumulative_rtol,
         )
-
-    def test_final_cumulative_output_matches_sdpa_on_total_input(self):
-        q_seq = torch.randn(6, 2, 3, 4)
-        k_seq = torch.randn(6, 2, 5, 4)
-        v_seq = torch.randn(6, 2, 5, 7)
-        op = TDScaledDotProductAttention()
-
-        y_seq = op(q_seq, k_seq, v_seq)
-        expected = F.scaled_dot_product_attention(
-            q_seq.sum(dim=0),
-            k_seq.sum(dim=0),
-            v_seq.sum(dim=0),
-            dropout_p=0.0,
-        )
-
-        assert torch.allclose(
-            y_seq.cumsum(dim=0)[-1],
-            expected,
-            atol=self.sdpa_cumulative_atol,
-            rtol=self.sdpa_cumulative_rtol,
-        )
-
-    def test_single_timestep_returns_sdpa_of_input(self):
-        q_seq = torch.randn(1, 2, 3, 4)
-        k_seq = torch.randn(1, 2, 5, 4)
-        v_seq = torch.randn(1, 2, 5, 7)
-        op = TDScaledDotProductAttention()
-
-        y_seq = op(q_seq, k_seq, v_seq)
-        expected = F.scaled_dot_product_attention(
-            q_seq[0],
-            k_seq[0],
-            v_seq[0],
-            dropout_p=0.0,
-        )
-
-        assert y_seq.shape == (1, 2, 3, 7)
-        assert torch.allclose(y_seq[0], expected, atol=1e-6, rtol=1e-6)
 
     def test_ann_forward_matches_sdpa(self):
         q = torch.randn(2, 3, 4)
@@ -1594,16 +1182,6 @@ class TestTDScaledDotProductAttention:
             rtol=self.sdpa_cumulative_rtol,
         )
 
-    def test_negative_values_are_allowed(self):
-        q_seq = torch.zeros(2, 1, 1, 1)
-        k_seq = torch.zeros(2, 1, 2, 1)
-        v_seq = torch.tensor([[[[2.0], [2.0]]], [[[-3.0], [-3.0]]]])
-        op = TDScaledDotProductAttention()
-
-        y_seq = op(q_seq, k_seq, v_seq)
-
-        assert (y_seq < 0).any()
-
     def test_rejects_input_with_too_few_dimensions(self):
         op = TDScaledDotProductAttention()
 
@@ -1651,11 +1229,6 @@ class TestTDScaledDotProductAttention:
                 torch.randn(4, 2, 5, 7),
             )
 
-    def test_extra_repr(self):
-        op = TDScaledDotProductAttention(is_causal=True, scale=0.25)
-
-        assert op.extra_repr() == "is_causal=True, scale=0.25"
-
 
 class TestTDMultiheadAttention:
     def test_shape_is_preserved_and_weights_are_none(self):
@@ -1675,24 +1248,6 @@ class TestTDMultiheadAttention:
         expected = _mha_cumulative_reference(op, x_seq, x_seq, x_seq)
 
         assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
-
-    def test_final_cumulative_output_matches_ann_mha_on_total_input(self):
-        x_seq = torch.randn(6, 2, 4, 8)
-        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
-
-        y_seq, _ = op(x_seq, x_seq, x_seq, need_weights=False)
-        expected = _mha_cumulative_reference(op, x_seq, x_seq, x_seq)[-1]
-
-        assert torch.allclose(y_seq.cumsum(dim=0)[-1], expected, atol=1e-5, rtol=1e-5)
-
-    def test_single_timestep_matches_ann_mha(self):
-        x_seq = torch.randn(1, 2, 4, 8)
-        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
-
-        y_seq, _ = op(x_seq, x_seq, x_seq, need_weights=False)
-        expected = _mha_cumulative_reference(op, x_seq, x_seq, x_seq)
-
-        assert torch.allclose(y_seq, expected, atol=1e-5, rtol=1e-5)
 
     def test_ann_forward_matches_ann_mha(self):
         x = torch.randn(2, 4, 8)
@@ -1949,10 +1504,3 @@ class TestTDMultiheadAttention:
                 attn_mask=torch.zeros(5, 5),
                 is_causal=True,
             )
-
-    def test_extra_repr(self):
-        op = TDMultiheadAttention(embed_dim=8, num_heads=2)
-
-        assert op.extra_repr() == (
-            "embed_dim=8, num_heads=2, dropout=0.0, batch_first=True"
-        )

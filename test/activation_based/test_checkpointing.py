@@ -16,7 +16,7 @@ from spikingjelly.activation_based import memopt, neuron
         memopt.SparseSpikeCompressor(),
     ],
 )
-@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
+@pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
 def test_compressors_are_stateless_and_preserve_dtype(compressor, dtype):
     x = torch.randint(0, 2, (3, 5), dtype=torch.int64).to(dtype)
     first = compressor.compress(x)

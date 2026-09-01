@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: CPU tests and docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: "0.9.24"
+          enable-cache: true
+
+      - name: Install CPU test environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv venv --python 3.11
+          uv pip install --python .venv/bin/python \
+            torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 \
+            --index-url https://download.pytorch.org/whl/cpu
+          uv pip install --python .venv/bin/python --editable . --group dev
+
+      - name: Check formatting
+        run: uv format --check --version 0.15.22
+
+      - name: Run Ruff lint
+        run: uvx ruff==0.15.22 check .
+
+      - name: Run CPU tests
+        run: uv run --no-sync pytest test/ -q
+
+      - name: Build documentation without warnings
+        run: uv run --no-sync sphinx-build -M html docs/source docs/build -W --keep-going
+
+  package:
+    name: Package install smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: "0.9.24"
+
+      - name: Build distributions
+        run: uv build --out-dir dist
+
+      - name: Install wheel in a clean environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_venv="$(mktemp -d)"
+          uv venv --python 3.11 "$package_venv"
+          wheel="$(find dist -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          test -n "$wheel"
+          uv pip install --python "$package_venv/bin/python" "$wheel" --no-deps
+          cd "$(mktemp -d)"
+          "$package_venv/bin/python" -c 'import spikingjelly'

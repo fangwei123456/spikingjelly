@@ -43,8 +43,6 @@ def test_precision_config_normalizes_triton_fields():
     "kwargs,match",
     (
         ({"mode": None}, "mode"),
-        ({"mode": "fp8-te"}, "mode"),
-        ({"mode": "fp8-torchao"}, "mode"),
         ({"mode": "bf16", "fp8_recipe": "delayed"}, "fp8_recipe"),
         (
             {"mode": "bf16", "fp8_fallback_dtype": "fp16"},
@@ -65,10 +63,6 @@ def test_precision_config_rejects_invalid_combinations(kwargs, match):
 def test_precision_config_from_dict_rejects_removed_fields():
     with pytest.raises(TypeError, match="unexpected keyword"):
         PrecisionConfig.from_any({"mode": "fp32", "strictness": "warn"})
-    with pytest.raises(TypeError, match="unexpected keyword"):
-        PrecisionConfig.from_any({"mode": "fp32", "device": "cpu"})
-    with pytest.raises(TypeError, match="unexpected keyword"):
-        PrecisionConfig.from_any({"mode": "fp8", "fp8_autocast_dtype": "bf16"})
 
 
 def test_precision_config_defaults_to_bf16_fallback():

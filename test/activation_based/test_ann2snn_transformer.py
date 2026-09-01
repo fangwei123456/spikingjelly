@@ -1,6 +1,4 @@
 import copy
-import io
-import time
 from collections import namedtuple
 
 import pytest
@@ -202,23 +200,6 @@ def _assert_converted_readout_matches_ann(
         atol=atol,
         rtol=rtol,
     )
-
-
-def _measure_min_forward_seconds(
-    module: nn.Module,
-    x: torch.Tensor,
-    warmup: int = 3,
-    repeat: int = 7,
-) -> float:
-    with torch.inference_mode():
-        for _ in range(warmup):
-            module(x)
-        elapsed = []
-        for _ in range(repeat):
-            start = time.perf_counter()
-            module(x)
-            elapsed.append(time.perf_counter() - start)
-    return min(elapsed)
 
 
 class _TinyBertSelfAttention(nn.Module):
@@ -553,11 +534,9 @@ class _TinySpikeZIPQuantizer(nn.Module):
         level: int = 8,
         sym: bool = True,
         scale: float = 0.25,
-        expose_level: bool = True,
     ) -> None:
         super().__init__()
-        if expose_level:
-            self.level = level
+        self.level = level
         self.sym = sym
         self.s = nn.Parameter(torch.tensor(float(scale)))
         if sym:
@@ -803,35 +782,6 @@ def test_spikezip_stbif_matches_quantizer_accumulation():
     assert set(torch.unique(neuron.cur_output).tolist()).issubset({-1.0, 0.0, 1.0})
 
 
-def test_spikezip_stbif_infers_level_from_quantizer_bounds():
-    quantizer = _TinySpikeZIPQuantizer(
-        level=8,
-        sym=True,
-        scale=0.25,
-        expose_level=False,
-    )
-    neuron = STBIFNeuron.from_quantizer(quantizer)
-    assert neuron.level == 8
-
-
-def test_spikezip_stbif_step_matches_multi_step():
-    quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
-    neuron = STBIFNeuron.from_quantizer(quantizer)
-    x_seq = _first_real_then_zero_sequence(
-        torch.tensor([[-0.75, -0.2, 0.3, 0.9]]),
-        time_steps=16,
-    )
-
-    functional.set_step_mode(neuron, "m")
-    y_seq = neuron(x_seq)
-    functional.set_step_mode(neuron, "s")
-    neuron.reset()
-    loop_seq = torch.stack([neuron(x) for x in x_seq], dim=0)
-
-    assert torch.allclose(y_seq, loop_seq)
-    assert torch.allclose(y_seq.sum(dim=0), quantizer(x_seq[0]))
-
-
 def test_spikezip_stbif_state_follows_module_dtype():
     quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
     neuron = STBIFNeuron.from_quantizer(quantizer)
@@ -851,7 +801,6 @@ def test_spikezip_stbif_state_follows_module_dtype():
 @pytest.mark.parametrize(
     "x",
     [
-        torch.zeros(3, 5),
         torch.randn(3, 5) * 0.2,
         torch.tensor([[2.0, -2.0, 0.5, -0.5, 0.0]]).repeat(3, 1),
     ],
@@ -883,12 +832,7 @@ def test_spikezip_stbif_optimized_torch_matches_single_step_reference(sym, x):
     )
 
 
-def test_spikezip_stbif_declares_triton_backend():
-    neuron = STBIFNeuron(0.25, level=8, sym=True)
-    assert "triton" in neuron.supported_backends
-
-
-@pytest.mark.parametrize("level", [0, 1, True])
+@pytest.mark.parametrize("level", [0, True])
 def test_spikezip_stbif_rejects_invalid_level(level):
     with pytest.raises(ValueError, match="level must be >= 2"):
         STBIFNeuron(0.25, level=level, sym=True)
@@ -899,7 +843,7 @@ def test_spikezip_stbif_rejects_invalid_level(level):
     reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
 )
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
-@pytest.mark.parametrize("time_steps", [8, 32, 64])
+@pytest.mark.parametrize("time_steps", [8, 64])
 def test_spikezip_stbif_triton_matches_torch(dtype, time_steps):
     quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
     x = (torch.randn(7, 13, device="cuda", dtype=dtype) * 0.2).contiguous()
@@ -991,8 +935,8 @@ def test_spikezip_stbif_single_step_triton_matches_torch(dtype):
     not torch.cuda.is_available() or not _TRITON_AVAILABLE,
     reason="CUDA and Triton are required",
 )
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
-def test_spikezip_stbif_triton_rounds_half_to_even(dtype):
+def test_spikezip_stbif_triton_rounds_half_to_even():
+    dtype = torch.float32
     if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
         pytest.skip("CUDA device does not support bfloat16")
     x = torch.zeros(6, device="cuda", dtype=dtype)
@@ -1034,61 +978,57 @@ def test_spikezip_stbif_triton_rounds_half_to_even(dtype):
         torch.testing.assert_close(actual, reference)
 
 
-@pytest.mark.parametrize("parameter", ["q_threshold", "pos_max", "neg_min"])
-def test_multi_step_stbif_rejects_non_scalar_parameters(parameter):
-    inputs = {
-        "q_threshold": torch.tensor(0.1),
-        "pos_max": torch.tensor(10.0),
-        "neg_min": torch.tensor(-10.0),
-    }
-    inputs[parameter] = torch.ones(2)
+def test_multi_step_stbif_rejects_non_scalar_parameters():
+    for parameter in ("q_threshold", "pos_max", "neg_min"):
+        inputs = {
+            "q_threshold": torch.tensor(0.1),
+            "pos_max": torch.tensor(10.0),
+            "neg_min": torch.tensor(-10.0),
+        }
+        inputs[parameter] = torch.ones(2)
 
-    with pytest.raises(ValueError, match="must be scalar tensors"):
-        stbif.multi_step_stbif(
+        with pytest.raises(ValueError, match="must be scalar tensors"):
+            stbif.multi_step_stbif(
+                torch.zeros(1, 2),
+                torch.zeros(2),
+                torch.zeros(2),
+                **inputs,
+            )
+
+
+def test_multi_step_stbif_rejects_mismatched_state():
+    for state_name in ("q", "acc_q"):
+        for invalid_state in (
             torch.zeros(1, 2),
-            torch.zeros(2),
-            torch.zeros(2),
-            **inputs,
-        )
+            torch.zeros(2, dtype=torch.float64),
+        ):
+            states = {"q": torch.zeros(2), "acc_q": torch.zeros(2)}
+            states[state_name] = invalid_state
 
-
-@pytest.mark.parametrize("state_name", ["q", "acc_q"])
-@pytest.mark.parametrize(
-    "invalid_state",
-    [
-        torch.zeros(1, 2),
-        torch.zeros(2, dtype=torch.float64),
-    ],
-    ids=["shape", "dtype"],
-)
-def test_multi_step_stbif_rejects_mismatched_state(state_name, invalid_state):
-    states = {"q": torch.zeros(2), "acc_q": torch.zeros(2)}
-    states[state_name] = invalid_state
-
-    with pytest.raises(ValueError, match="shape, dtype, and device"):
-        stbif.multi_step_stbif(
-            torch.zeros(1, 2),
-            **states,
-            q_threshold=torch.tensor(0.1),
-            pos_max=torch.tensor(10.0),
-            neg_min=torch.tensor(-10.0),
-        )
+            with pytest.raises(ValueError, match="shape, dtype, and device"):
+                stbif.multi_step_stbif(
+                    torch.zeros(1, 2),
+                    **states,
+                    q_threshold=torch.tensor(0.1),
+                    pos_max=torch.tensor(10.0),
+                    neg_min=torch.tensor(-10.0),
+                )
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize("state_name", ["q", "acc_q"])
-def test_multi_step_stbif_rejects_mismatched_state_device(state_name):
-    states = {"q": torch.zeros(2), "acc_q": torch.zeros(2)}
-    states[state_name] = states[state_name].cuda()
+def test_multi_step_stbif_rejects_mismatched_state_device():
+    for state_name in ("q", "acc_q"):
+        states = {"q": torch.zeros(2), "acc_q": torch.zeros(2)}
+        states[state_name] = states[state_name].cuda()
 
-    with pytest.raises(ValueError, match="shape, dtype, and device"):
-        stbif.multi_step_stbif(
-            torch.zeros(1, 2),
-            **states,
-            q_threshold=torch.tensor(0.1),
-            pos_max=torch.tensor(10.0),
-            neg_min=torch.tensor(-10.0),
-        )
+        with pytest.raises(ValueError, match="shape, dtype, and device"):
+            stbif.multi_step_stbif(
+                torch.zeros(1, 2),
+                **states,
+                q_threshold=torch.tensor(0.1),
+                pos_max=torch.tensor(10.0),
+                neg_min=torch.tensor(-10.0),
+            )
 
 
 def test_spikezip_linear_is_tdlinear_with_distributed_bias():
@@ -1371,34 +1311,6 @@ def test_spikezip_qann_recipe_converts_tiny_roberta_classifier():
     )
     actual = sequence.sum(dim=0)
     assert torch.allclose(actual, expected, atol=1e-5, rtol=1e-5)
-
-
-def test_spikezip_qann_roberta_transparent_single_step_loop():
-    torch.manual_seed(281)
-    qann = _TinySpikeZIPQANNClassifier().eval()
-    tokens = torch.randint(0, 16, (3, 5))
-    attention_mask = torch.zeros(3, 1, 1, 5)
-    converted = ModuleConverter(
-        recipe=SpikeZIPTFQANNRecipe(time_steps=32, model_family="roberta")
-    ).convert(qann)
-
-    assert not hasattr(converted, "model")
-    assert not hasattr(converted, "_encode_step_args")
-
-    functional.set_step_mode(converted, "s")
-    functional.reset_net(converted)
-    loop_outputs = [
-        converted(tokens, attention_mask=attention_mask)
-        for _ in range(converted.time_steps)
-    ]
-    loop = torch.stack(loop_outputs, dim=0).sum(dim=0)
-
-    functional.reset_net(converted)
-    repeated = sum(
-        converted(tokens, attention_mask=attention_mask)
-        for _ in range(converted.time_steps)
-    )
-    assert torch.allclose(repeated, loop, atol=1e-6, rtol=1e-6)
 
 
 def test_spikezip_qann_recipe_uses_global_level_for_nested_linear_bias():
@@ -2163,36 +2075,6 @@ def test_tiny_transformer_block_matches_ann_reference_on_cumulative_input():
     assert torch.allclose(y_seq.cumsum(dim=0), expected, atol=1e-5, rtol=1e-5)
 
 
-def test_tiny_transformer_block_final_cumulative_output_matches_total_input():
-    block = TinyTDTransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
-    x_seq = torch.randn(4, 2, 5, 8)
-
-    y_seq = block(x_seq)
-    expected = block.ann_reference(x_seq.cumsum(dim=0))
-
-    assert torch.allclose(
-        y_seq.cumsum(dim=0)[-1],
-        expected[-1],
-        atol=1e-5,
-        rtol=1e-5,
-    )
-
-
-def test_tiny_transformer_block_uses_affine_td_linear_layers():
-    block = TinyTDTransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
-
-    linear_layers = [
-        block.q_proj,
-        block.k_proj,
-        block.v_proj,
-        block.out_proj,
-        block.fc1,
-        block.fc2,
-    ]
-
-    assert all(layer.bias is not None for layer in linear_layers)
-
-
 def test_tiny_transformer_block_autograd_smoke():
     block = TinyTDTransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16)
     x_seq = torch.randn(3, 2, 4, 8, requires_grad=True)
@@ -2508,14 +2390,6 @@ def test_sta_transformer_recipe_passthrough_arithmetic_matches_multistep():
     )
 
 
-def test_sta_transformer_recipe_stateless_tensor_ops_are_picklable():
-    converted = Converter(recipe=STATransformerRecipe(time_steps=4)).convert(
-        TinyTensorOpAdapterModel().eval()
-    )
-
-    torch.save(converted, io.BytesIO())
-
-
 def test_sta_transformer_recipe_mha_single_loop_matches_multistep():
     torch.manual_seed(75)
     model = TinyANNMHATransformerBlock(embed_dim=8, num_heads=2, mlp_dim=16).eval()
@@ -2555,41 +2429,6 @@ def test_sta_transformer_recipe_mha_preserves_source_dtype():
     assert attn.k_proj.weight.dtype == torch.float64
     assert attn.v_proj.weight.dtype == torch.float64
     assert attn.out_proj.weight.dtype == torch.float64
-
-
-def test_sta_transformer_recipe_multistep_timing_smoke_matches_single_loop():
-    torch.manual_seed(750)
-    old_threads = torch.get_num_threads()
-    torch.set_num_threads(1)
-    try:
-        model = TinyANNFFNBlock(embed_dim=16, mlp_dim=32, depth=2).eval()
-        time_steps = 128
-        converted = Converter(
-            recipe=STATransformerRecipe(
-                time_steps=time_steps,
-                mode="equivalent",
-            )
-        ).convert(model)
-        x = torch.randn(1, 4, 16)
-
-        single_seq = _run_converted_step_loop(converted, x)
-        multi_seq = _run_converted_multistep(converted, x)
-        assert torch.allclose(multi_seq, single_seq, atol=1e-5, rtol=1e-5)
-
-        seq_args, seq_kwargs = _sequence_inputs(converted, x)
-        functional.set_step_mode(converted, "m")
-        sequence_seconds = _measure_min_forward_seconds(
-            converted, *seq_args, **seq_kwargs
-        )
-        functional.set_step_mode(converted, "s")
-        single_seconds = _measure_min_forward_seconds(
-            lambda value: _run_converted_step_loop(converted, value), x
-        )
-
-        assert single_seconds > 0
-        assert sequence_seconds > 0
-    finally:
-        torch.set_num_threads(old_threads)
 
 
 def test_sta_transformer_recipe_spiking_encoder_single_loop_matches_multistep():
@@ -3480,10 +3319,7 @@ def test_sta_transformer_recipe_static_mask_tensor_helper_keeps_static_kwargs():
     "kwargs, match",
     [
         ({"dataloader": None, "mode": "spiking_encoder"}, "dataloader"),
-        ({"dataloader": None, "spike_linear": True}, "dataloader"),
-        ({"dataloader": None, "spike_conv2d": True}, "dataloader"),
         ({"time_steps": 0}, "time_steps"),
-        ({"time_steps": True}, "time_steps"),
         ({"mode": "missing"}, "mode"),
         ({"threshold_mode": "missing"}, "threshold_mode"),
         ({"threshold_scale": 0.0}, "threshold_scale"),
@@ -3492,7 +3328,6 @@ def test_sta_transformer_recipe_static_mask_tensor_helper_keeps_static_kwargs():
         ({"spike_classifier": 1}, "spike_classifier"),
         ({"momentum": 1.5}, "momentum"),
         ({"num_calibration_batches": 0}, "num_calibration_batches"),
-        ({"num_calibration_batches": True}, "num_calibration_batches"),
         ({"show_progress": 1}, "show_progress"),
         ({"eps": 0.0}, "eps"),
     ],

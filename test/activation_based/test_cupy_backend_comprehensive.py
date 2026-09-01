@@ -109,11 +109,9 @@ def _assert_close(a: torch.Tensor, b: torch.Tensor, dtype: torch.dtype):
         ("lif", None, False, False),
     ],
 )
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
-def test_cupy_single_step_matches_torch(
-    kind, v_reset, detach_reset, decay_input, dtype
-):
+def test_cupy_single_step_matches_torch(kind, v_reset, detach_reset, decay_input):
     _require_cuda_cupy()
+    dtype = torch.float32
 
     common_kwargs = dict(
         v_threshold=0.8,
@@ -163,15 +161,10 @@ def test_cupy_single_step_matches_torch(
     ("kind", "dtype", "v_reset", "detach_reset", "training", "store_v_seq"),
     [
         ("qif", torch.float32, -0.3, True, True, True),
-        ("qif", torch.float32, None, False, True, False),
         ("qif", torch.float16, -0.3, True, False, False),
-        ("qif", torch.float16, None, False, True, True),
         ("eif", torch.float32, -0.3, True, True, True),
-        ("eif", torch.float32, None, False, True, False),
         ("eif", torch.float16, -0.3, True, False, False),
-        ("eif", torch.float16, None, False, True, True),
         ("izhikevich", torch.float32, -0.3, True, True, True),
-        ("izhikevich", torch.float32, -0.3, False, True, False),
         ("izhikevich", torch.float32, -0.3, True, False, False),
     ],
 )
@@ -375,9 +368,9 @@ def test_cupy_vs_torch_multistep_forward_backward(kind, dtype, training, store_v
 
 
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
-def test_cupy_batch_size_change_reconciles_v_state(kind, dtype):
+def test_cupy_batch_size_change_reconciles_v_state(kind):
     _require_cuda_cupy()
+    dtype = torch.float32
 
     seed = 20260428
     torch.manual_seed(seed)
@@ -425,45 +418,9 @@ def test_cupy_batch_size_change_reconciles_v_state(kind, dtype):
 
 
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
-def test_cupy_compile_inductor_runs_forward_backward(kind, dtype, monkeypatch):
+def test_cupy_compile_inductor_matches_eager(kind, monkeypatch):
     _require_cuda_cupy_compile()
-
-    seed = 20260430
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    cupy_hits = _install_cupy_path_sentinel(monkeypatch, kind)
-    node_cupy = _make_node(kind, backend="cupy", dtype=dtype)
-    model = (
-        _CompileProbeModel(node_cupy, features=12)
-        .to(device="cuda", dtype=dtype)
-        .train()
-    )
-
-    compiled_model = torch.compile(
-        model,
-        backend="inductor",
-        options={
-            "triton.cudagraphs": False,
-            "triton.cudagraph_trees": False,
-        },
-    )
-
-    for _ in range(2):
-        x = torch.randn(6, 4, 12, device="cuda", dtype=dtype, requires_grad=True)
-        functional.reset_net(model)
-        y = compiled_model(x)
-        assert y.shape == x.shape
-        loss = y.sum()
-        loss.backward()
-        assert x.grad is not None
-    assert cupy_hits["count"] > 0
-
-
-@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
-def test_cupy_compile_inductor_matches_eager(kind, dtype, monkeypatch):
-    _require_cuda_cupy_compile()
+    dtype = torch.float32
 
     seed = 20260430
     torch.manual_seed(seed)

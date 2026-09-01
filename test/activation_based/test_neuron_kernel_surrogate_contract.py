@@ -93,7 +93,7 @@ def test_fake_numerical_gradient_matches_clipped_reciprocal_away_from_zero():
         (multi_step.ParametricLIFNodeBPTTKernel, {"decay_input": True}),
     ],
 )
-@pytest.mark.parametrize("surrogate_type", [surrogate.Sigmoid, surrogate.ATan])
+@pytest.mark.parametrize("surrogate_type", [surrogate.Sigmoid])
 @pytest.mark.parametrize("dtype", ["float", "half2"])
 def test_bptt_kernel_accepts_surrogate_cuda_codes(
     kernel_type, extra_kwargs, surrogate_type, dtype

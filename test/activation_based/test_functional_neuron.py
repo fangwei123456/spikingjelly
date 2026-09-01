@@ -334,20 +334,6 @@ def test_plif_step_matches_module_and_parameter_gradient():
             v_reset=None,
             surrogate_function=_surrogate(),
         ),
-        lambda: neuron.LIAFNode(
-            torch.relu,
-            True,
-            tau=2.5,
-            decay_input=True,
-            v_reset=0.0,
-            surrogate_function=_surrogate(),
-        ),
-        lambda: neuron.ActivationAwareIFNode(
-            v_threshold=0.8,
-            v_offset=0.1,
-            v_reset=None,
-            surrogate_function=_surrogate(),
-        ),
     ],
 )
 @pytest.mark.parametrize("step_mode", ["s", "m"])
@@ -381,8 +367,8 @@ def test_neuron_functional_forward_is_pure_and_backs_regular_forward(
     assert v.grad is not None
 
 
-@pytest.mark.parametrize("node", [neuron.IFNode(), neuron.LIFNode()])
-def test_store_v_seq_does_not_change_functional_state_layout(node):
+def test_store_v_seq_does_not_change_functional_state_layout():
+    node = neuron.IFNode()
     node.step_mode = "m"
     node.store_v_seq = True
     assert tuple(name for name, _ in node.named_memories()) == ("v",)

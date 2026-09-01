@@ -35,6 +35,8 @@ class _Transformer:
     params_dtype: torch.dtype = torch.bfloat16
     pipeline_dtype: torch.dtype = torch.bfloat16
     fp8: str | None = None
+    cuda_graph_impl: str = "none"
+    cuda_graph_warmup_steps: int = 11
     recompute_granularity: str | None = None
     recompute_method: str | None = None
     recompute_num_layers: int | None = None

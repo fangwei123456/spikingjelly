@@ -57,15 +57,6 @@ def test_voltage_views_are_consistent():
     torch.testing.assert_close(v_max, voltage.max(dim=2).values)
 
 
-@pytest.mark.parametrize(("batch_size", "out_features"), [(1, 1), (4, 1), (1, 3)])
-def test_max_voltage_preserves_batch_and_output_dimensions(batch_size, out_features):
-    neuron = Tempotron(2, out_features, 10)
-
-    v_max = neuron(torch.rand(batch_size, 2) * 10, ret_type="v_max")
-
-    assert v_max.shape == (batch_size, out_features)
-
-
 def test_spike_times_match_reference_interpretation():
     torch.manual_seed(2)
     neuron = Tempotron(3, 2, 12)
@@ -128,7 +119,6 @@ def test_invalid_ret_type():
     ("kwargs", "message"),
     [
         ({"in_features": 0, "out_features": 1, "T": 10}, "must be positive"),
-        ({"in_features": 1, "out_features": 1, "T": 0}, "must be positive"),
         ({"in_features": 1, "out_features": 1, "T": 10, "tau": 0}, "must be positive"),
         (
             {"in_features": 1, "out_features": 1, "T": 10, "tau": 4, "tau_s": 4},

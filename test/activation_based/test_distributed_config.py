@@ -26,6 +26,8 @@ def _config(**kwargs):
         calculate_per_token_loss=True,
         fp16=False,
         bf16=True,
+        cuda_graph_impl="none",
+        cuda_graph_warmup_steps=11,
         params_dtype=torch.bfloat16,
         pipeline_dtype=torch.bfloat16,
         recompute_granularity=None,
@@ -90,16 +92,7 @@ def test_snn_training_config_rejects_inconsistent_values(changes, message):
 def test_snn_training_config_accepts_cp_without_duplicating_topology():
     config = _config()
     config.model.transformer.context_parallel_size = 2
-
-    configured = TrainingConfig(
-        model=config.model,
-        optimizer=config.optimizer,
-        dataset_builder=config.dataset_builder,
-        sequence_length=config.sequence_length,
-        micro_batch_size=config.micro_batch_size,
-        global_batch_size=config.global_batch_size,
-        train_steps=config.train_steps,
-    )
+    configured = _config(model=config.model)
 
     assert configured.model.transformer.context_parallel_size == 2
     assert not hasattr(configured, "context_parallel_size")
@@ -114,15 +107,7 @@ def test_snn_training_config_rejects_unshardable_cp_sequence():
     config.model.transformer.context_parallel_size = 2
 
     with pytest.raises(ValueError, match="context_parallel_size"):
-        TrainingConfig(
-            model=config.model,
-            optimizer=config.optimizer,
-            dataset_builder=config.dataset_builder,
-            sequence_length=130,
-            micro_batch_size=config.micro_batch_size,
-            global_batch_size=config.global_batch_size,
-            train_steps=config.train_steps,
-        )
+        _config(model=config.model, sequence_length=130)
 
 
 def test_snn_training_config_rejects_precision_dtype_mismatch():
@@ -130,15 +115,7 @@ def test_snn_training_config_rejects_precision_dtype_mismatch():
     config.optimizer.params_dtype = torch.float32
 
     with pytest.raises(ValueError, match="params_dtype"):
-        TrainingConfig(
-            model=config.model,
-            optimizer=config.optimizer,
-            dataset_builder=config.dataset_builder,
-            sequence_length=config.sequence_length,
-            micro_batch_size=config.micro_batch_size,
-            global_batch_size=config.global_batch_size,
-            train_steps=config.train_steps,
-        )
+        _config(model=config.model, optimizer=config.optimizer)
 
 
 def test_model_config_rejects_invalid_position_embedding():

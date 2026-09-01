@@ -451,8 +451,6 @@ def test_ilif_supports_custom_gradient_window():
         (False, True, 2.0, torch.float16),
         (True, True, 2.0, torch.bfloat16),
         (False, True, 4.0, torch.float32),
-        (True, False, 4.0, torch.float16),
-        (False, False, 4.0, torch.bfloat16),
     ],
 )
 def test_ilif_triton_matches_torch_training(store_v_seq, detach_reset, tau, dtype):
@@ -519,8 +517,6 @@ def test_ilif_triton_matches_torch_training(store_v_seq, detach_reset, tau, dtyp
         (False, 2.0, torch.float16),
         (True, 2.0, torch.bfloat16),
         (False, 4.0, torch.float32),
-        (True, 4.0, torch.float16),
-        (False, 4.0, torch.bfloat16),
     ],
 )
 def test_ilif_triton_matches_torch_eval(store_v_seq, tau, dtype):

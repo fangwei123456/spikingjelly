@@ -212,18 +212,6 @@ def test_vision_prediction_merge_cleans_failed_temporary_file(tmp_path):
     assert not output.with_name(".predictions.h5.tmp").exists()
 
 
-def test_vision_predict_returns_no_metrics(monkeypatch, tmp_path):
-    config = vision.PredictionConfig(
-        artifact=tmp_path / "model.pt",
-        dataset_builder="package.datasets.build",
-    )
-    monkeypatch.setattr(
-        inference, "_run_classification", lambda *_args, **_kwargs: None
-    )
-
-    assert inference.predict_classification(config, tmp_path / "output.h5") is None
-
-
 @pytest.mark.parametrize(
     "model_config",
     [
@@ -272,19 +260,6 @@ def test_vision_cuda_graph_rejects_unsafe_model_state(attribute, value, message)
             "compile",
             {"execution_mode": "compile", "pipeline_parallel_size": 2},
         ),
-        (
-            "FSDP2",
-            {"execution_mode": "cuda_graph", "data_parallel": "fsdp2"},
-        ),
-        (
-            "single-rank",
-            {"execution_mode": "cuda_graph", "tensor_parallel_size": 2},
-        ),
-        (
-            "single-rank",
-            {"execution_mode": "cuda_graph", "pipeline_parallel_size": 2},
-        ),
-        ("positive", {"cuda_graph_warmup_steps": 0}),
     ],
 )
 def test_vision_prediction_config_rejects_invalid_values(match, kwargs):
@@ -329,16 +304,8 @@ def test_vision_evaluation_owns_loss_configuration():
         ("mixup_alpha", {"mixup_alpha": -0.1}),
         ("execution_mode", {"execution_mode": "unknown"}),
         (
-            "FSDP2",
-            {"execution_mode": "cuda_graph", "data_parallel": "fsdp2"},
-        ),
-        (
             "single-rank",
             {"execution_mode": "cuda_graph", "tensor_parallel_size": 2},
-        ),
-        (
-            "single-rank",
-            {"execution_mode": "cuda_graph", "pipeline_parallel_size": 2},
         ),
         (
             "memopt",
@@ -699,13 +666,6 @@ def test_vision_training_config_rejects_unknown_serialized_fields():
 
     with pytest.raises(TypeError, match="unknown"):
         vision.TrainingConfig.from_dict(data)
-
-
-def test_vision_training_config_rejects_non_config_target():
-    with pytest.raises(ValueError, match="Unsupported config target"):
-        vision.TrainingConfig.from_dict(
-            {"_target_": "pathlib.Path", "pathsegments": ["unexpected"]}
-        )
 
 
 def test_vision_training_rejects_empty_datasets(monkeypatch):

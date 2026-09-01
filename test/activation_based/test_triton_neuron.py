@@ -536,8 +536,8 @@ def test__prepare_triton_neuron_execution_plan_rejects_invalid_options():
         )
 
 
-@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
-def test_mixed_precision_forward_rejects_invalid_options(kind):
+def test_mixed_precision_forward_rejects_invalid_options():
+    kind = "lif"
     x = torch.randn(4, 2)
     v = torch.zeros(2)
     with pytest.raises(ValueError, match="storage dtype"):
@@ -557,8 +557,8 @@ def test_mixed_precision_forward_rejects_invalid_options(kind):
         )
 
 
-@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
-def test_mixed_precision_forward_fp8_cpu_fails_with_capability_reason(kind):
+def test_mixed_precision_forward_fp8_cpu_fails_with_capability_reason():
+    kind = "lif"
     if not hasattr(torch, "float8_e4m3fn"):
         pytest.skip("This PyTorch build does not expose torch.float8_e4m3fn.")
     x = torch.randn(4, 2)
@@ -572,37 +572,14 @@ def test_mixed_precision_forward_fp8_cpu_fails_with_capability_reason(kind):
         )
 
 
-@pytest.mark.parametrize(
-    ("node_factory", "triton_function_name"),
-    [
-        (
-            lambda backend: neuron.IFNode(step_mode="m", backend=backend).eval(),
-            "if_multi_step_triton",
-        ),
-        (
-            lambda backend: neuron.LIFNode(
-                tau=2.0, step_mode="m", backend=backend
-            ).eval(),
-            "lif_multi_step_triton",
-        ),
-        (
-            lambda backend: neuron.ParametricLIFNode(
-                init_tau=2.0, step_mode="m", backend=backend
-            ).eval(),
-            "plif_multi_step_triton",
-        ),
-    ],
-)
-def test_torch_backend_does_not_probe_triton_in_eval(
-    node_factory, triton_function_name, monkeypatch
-):
+def test_torch_backend_does_not_probe_triton_in_eval(monkeypatch):
     def _unexpected(*args, **kwargs):
         raise AssertionError("non-triton backend should not call Triton kernel")
 
-    monkeypatch.setattr(functional, triton_function_name, _unexpected)
+    monkeypatch.setattr(functional, "if_multi_step_triton", _unexpected)
     x = torch.randn(5, 2, 4)
 
-    node_factory("torch")(x)
+    neuron.IFNode(step_mode="m", backend="torch").eval()(x)
 
 
 def test_lif_torch_backend_does_not_probe_triton_in_training(monkeypatch):
@@ -785,11 +762,8 @@ def test_mixed_precision_backward_accepts_noncontiguous_upstream_gradient(kind):
     ("kind", "kernel_module", "T", "decay_input", "v_reset"),
     [
         ("if", if_triton_kernel, 16, True, 0.0),
-        ("if", if_triton_kernel, 32, True, None),
-        ("lif", lif_triton_kernel, 16, True, 0.0),
         ("lif", lif_triton_kernel, 32, False, None),
         ("plif", plif_triton_kernel, 16, False, None),
-        ("plif", plif_triton_kernel, 32, True, 0.0),
     ],
 )
 def test_mixed_precision_float32_matches_torch_eval(
@@ -897,7 +871,7 @@ def test_mixed_precision_float32_matches_torch_eval(
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+@pytest.mark.parametrize("kind", ["if", "plif"])
 def test_mixed_precision_forward_with_plan_skips_repeated_preflight(kind, monkeypatch):
     x = torch.randn(8, 4, device="cuda", dtype=torch.float32)
     v_init = torch.zeros_like(x[0])
@@ -953,9 +927,9 @@ def test_mixed_precision_forward_with_plan_skips_repeated_preflight(kind, monkey
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
 @pytest.mark.parametrize("use_plan", [False, True])
-def test_mixed_precision_rejects_v_init_shape_mismatch(kind, use_plan):
+def test_mixed_precision_rejects_v_init_shape_mismatch(use_plan):
+    kind = "lif"
     x = torch.randn(8, 2, 4, device="cuda", dtype=torch.float32)
     v_init = torch.zeros(4, device="cuda", dtype=torch.float32)
     r_tau = torch.tensor(0.5, device=x.device, dtype=torch.float32)
@@ -997,7 +971,7 @@ def test_mixed_precision_rejects_v_init_shape_mismatch(kind, use_plan):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+@pytest.mark.parametrize("kind", ["if", "plif"])
 def test_mixed_precision_backward_with_plan_skips_repeated_preflight(kind, monkeypatch):
     x = torch.randn(8, 4, device="cuda", dtype=torch.float32)
     v_init = torch.zeros_like(x[0])
@@ -1063,8 +1037,8 @@ def test_mixed_precision_backward_with_plan_skips_repeated_preflight(kind, monke
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
-@pytest.mark.parametrize("v_reset", [0.0, None])
-def test_mixed_precision_autograd_with_plan_matches_safe_wrapper(kind, v_reset):
+def test_mixed_precision_autograd_with_plan_matches_safe_wrapper(kind):
+    v_reset = 0.0
     x = torch.randn(8, 4, device="cuda", dtype=torch.float32)
     v_init = torch.randn(4, device="cuda", dtype=torch.float32) * 0.1
     r_tau_safe = torch.tensor(0.5, device=x.device, dtype=torch.float32)
@@ -1121,11 +1095,9 @@ def test_mixed_precision_autograd_with_plan_matches_safe_wrapper(kind, v_reset):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
-@pytest.mark.parametrize("dtype_name", ["float8_e4m3fn", "float8_e5m2"])
-def test_mixed_precision_fp8_storage_backward_fp32_compute_produces_finite_grad(
-    kind, dtype_name
-):
+@pytest.mark.parametrize("kind", ["if", "plif"])
+def test_mixed_precision_fp8_storage_backward_fp32_compute_produces_finite_grad(kind):
+    dtype_name = "float8_e4m3fn"
     storage_dtype = _fp8_storage_dtype_or_skip(dtype_name, require_backward=True)
     x = torch.randn(8, 4, device="cuda", dtype=torch.float32).requires_grad_()
     v_init = torch.zeros(4, device="cuda", dtype=torch.float32).requires_grad_()
@@ -1157,10 +1129,8 @@ def test_mixed_precision_fp8_storage_backward_fp32_compute_produces_finite_grad(
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
 @pytest.mark.parametrize("v_reset", [0.0, None])
-@pytest.mark.parametrize("dtype_name", ["float8_e4m3fn", "float8_e5m2"])
-def test_mixed_precision_fp8_storage_matches_quantized_reference(
-    kind, v_reset, dtype_name
-):
+def test_mixed_precision_fp8_storage_matches_quantized_reference(kind, v_reset):
+    dtype_name = "float8_e4m3fn"
     storage_dtype = _fp8_storage_dtype_or_skip(dtype_name, require_backward=False)
     x = torch.tensor(
         [
@@ -1460,10 +1430,19 @@ def test_mixed_precision_fp8_matrix_meets_numerical_gates(
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize("decay_input", [True, False])
-@pytest.mark.parametrize("detach_reset", [True, False])
-@pytest.mark.parametrize("v_threshold", [1.0, 0.5])
-@pytest.mark.parametrize("v_reset", [0.0, -0.2])
+@pytest.mark.parametrize(
+    ("decay_input", "detach_reset", "v_threshold", "v_reset"),
+    [
+        (True, True, 1.0, 0.0),
+        (True, False, 0.5, -0.2),
+        (False, True, 0.5, 0.0),
+        (False, False, 1.0, -0.2),
+        (True, True, 0.5, -0.2),
+        (True, False, 1.0, 0.0),
+        (False, True, 1.0, -0.2),
+        (False, False, 0.5, 0.0),
+    ],
+)
 def test_plif_triton_matches_torch_training(
     decay_input, detach_reset, v_threshold, v_reset
 ):

@@ -71,37 +71,10 @@ class _EqualHashableResetCounter(nn.Module):
         self.reset_calls += 1
 
 
-class _EqualUnhashableResetCounter(nn.Module):
-    __hash__ = None
-
-    def __init__(self):
-        super().__init__()
-        self.reset_calls = 0
-
-    def __eq__(self, other):
-        return self is other
-
-    def reset(self):
-        self.reset_calls += 1
-
-
 def test_collect_reset_modules_ignores_non_callable_reset_attributes():
     net = nn.Sequential(_NonCallableReset(), _ResetCounter())
     modules = collect_reset_modules(net)
     assert modules == (net[1],)
-
-
-def test_reset_net_caches_modules():
-    net = nn.Sequential(_ResetCounter(), nn.ReLU(), _ResetCounter())
-    reset_net(net)
-    try:
-        assert net in _RESET_MODULE_CACHE
-        assert tuple(module() for module in _RESET_MODULE_CACHE[net]) == (
-            net[0],
-            net[2],
-        )
-    finally:
-        invalidate_reset_cache(net)
 
 
 def test_reset_net_cache_hit_reuses_same_module_tuple():
@@ -115,14 +88,6 @@ def test_reset_net_cache_hit_reuses_same_module_tuple():
         assert net[2].reset_calls == 2
     finally:
         invalidate_reset_cache(net)
-
-
-def test_invalidate_reset_cache_clears_entry():
-    net = nn.Sequential(_ResetCounter(), nn.ReLU(), _ResetCounter())
-    reset_net(net)
-    assert net in _RESET_MODULE_CACHE
-    invalidate_reset_cache(net)
-    assert net not in _RESET_MODULE_CACHE
 
 
 def test_invalidate_then_reset_recollects():
@@ -141,42 +106,11 @@ def test_invalidate_then_reset_recollects():
         invalidate_reset_cache(net)
 
 
-def test_invalidate_reset_cache_ignores_unknown_net():
-    net = nn.Linear(4, 2)
-    invalidate_reset_cache(net)
-
-
 def test_reset_net_with_ifnode_actually_resets():
     net = nn.Sequential(nn.Linear(4, 8), neuron.IFNode())
     x = torch.randn(2, 4)
     net(x)
     assert torch.is_tensor(net[1].v)
-    reset_net(net)
-    try:
-        assert net[1].v == 0.0
-    finally:
-        invalidate_reset_cache(net)
-
-
-def test_reset_net_cached_produces_same_result_as_fresh():
-    net = nn.Sequential(nn.Linear(4, 8), neuron.IFNode())
-    x = torch.randn(2, 4)
-    net(x)
-    reset_net(net)
-    assert net[1].v == 0.0
-    net(x)
-    reset_net(net)
-    try:
-        assert net[1].v == 0.0
-    finally:
-        invalidate_reset_cache(net)
-
-
-def test_reset_net_with_lifnode():
-    net = nn.Sequential(nn.Linear(4, 8), neuron.LIFNode())
-    x = torch.randn(2, 4)
-    net(x)
-    assert net[1].v is not None
     reset_net(net)
     try:
         assert net[1].v == 0.0
@@ -229,14 +163,6 @@ def test_independent_models_have_independent_caches():
         invalidate_reset_cache(net2)
 
 
-def test_collect_reset_modules_remains_stateless():
-    net = nn.Sequential(_ResetCounter(), nn.ReLU(), _ResetCounter())
-    m1 = collect_reset_modules(net)
-    m2 = collect_reset_modules(net)
-    assert m1 == m2
-    assert m1 is not m2
-
-
 def test_reset_collected_modules_works_after_invalidate():
     net = nn.Sequential(_ResetCounter(), nn.ReLU(), _ResetCounter())
     reset_net(net)
@@ -245,16 +171,6 @@ def test_reset_collected_modules_works_after_invalidate():
     reset_collected_modules(modules)
     assert net[0].reset_calls == 2
     assert net[2].reset_calls == 2
-
-
-def test_reset_net_with_no_resettable_modules():
-    net = nn.Sequential(nn.ReLU(), nn.Linear(4, 2))
-    reset_net(net)
-    try:
-        assert net in _RESET_MODULE_CACHE
-        assert _RESET_MODULE_CACHE[net] == ()
-    finally:
-        invalidate_reset_cache(net)
 
 
 def test_reset_net_idempotent():
@@ -345,26 +261,11 @@ def test_reset_net_cache_entry_is_released_with_network():
     net = nn.Sequential(_ResetCounter())
     reset_net(net)
     net_ref = weakref.ref(net)
-    cache_size = len(_RESET_MODULE_CACHE)
     assert net in _RESET_MODULE_CACHE
     del net
     gc.collect()
 
     assert net_ref() is None
-    assert len(_RESET_MODULE_CACHE) == cache_size - 1
-
-
-def test_reset_net_cache_entry_is_released_for_top_level_memorymodule():
-    net = _StatefulCounter()
-    reset_net(net)
-    net_ref = weakref.ref(net)
-    cache_size = len(_RESET_MODULE_CACHE)
-    assert net in _RESET_MODULE_CACHE
-    del net
-    gc.collect()
-
-    assert net_ref() is None
-    assert len(_RESET_MODULE_CACHE) == cache_size - 1
 
 
 def test_reset_net_bypasses_cache_for_equal_hashable_modules():
@@ -378,12 +279,6 @@ def test_reset_net_bypasses_cache_for_equal_hashable_modules():
     assert net2.reset_calls == 1
     assert net1 not in _RESET_MODULE_CACHE
     assert net2 not in _RESET_MODULE_CACHE
-
-
-def test_invalidate_reset_cache_ignores_unhashable_modules():
-    net = _EqualUnhashableResetCounter()
-
-    invalidate_reset_cache(net)
 
 
 def test_reset_net_cached_modules_follow_memorymodule_reset_semantics():

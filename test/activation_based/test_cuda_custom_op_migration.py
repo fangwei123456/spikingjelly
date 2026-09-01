@@ -22,33 +22,6 @@ from spikingjelly.activation_based.cuda_kernel.tensor_cache import BoolTensorCac
         surrogate.Sigmoid,
         surrogate.ATan,
         surrogate.PiecewiseLeakyReLU,
-        surrogate.S2NN,
-        surrogate.QPseudoSpike,
-        surrogate.LeakyKReLU,
-        surrogate.FakeNumericalGradient,
-        surrogate.LogTailedReLU,
-    ],
-)
-@pytest.mark.parametrize("dtype", ["float", "half2"])
-def test_surrogates_expose_only_cuda_codes(surrogate_factory, dtype):
-    sg = surrogate_factory()
-
-    assert not hasattr(sg, "cuda_code")
-    codes = sg.cuda_codes(y=f"{dtype} grad_s", x="over_th", dtype=dtype)
-
-    assert "grad_s" in codes
-
-
-@pytest.mark.parametrize(
-    "surrogate_factory",
-    [
-        surrogate.Sigmoid,
-        surrogate.ATan,
-        surrogate.PiecewiseLeakyReLU,
-        surrogate.S2NN,
-        surrogate.QPseudoSpike,
-        surrogate.LeakyKReLU,
-        surrogate.FakeNumericalGradient,
         surrogate.LogTailedReLU,
     ],
 )

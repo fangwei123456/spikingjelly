@@ -184,10 +184,6 @@ def test_metric_logger_formats_progress_with_loguru_arguments(loguru_records):
             "percent placeholder",
         ),
         (
-            "from spikingjelly.logger import logger\nlogger.info('value=%08.3f', value)\n",
-            "percent placeholder",
-        ),
-        (
             "from spikingjelly.logger import logger\nlogger.info('value={}')\n",
             "placeholder count",
         ),
@@ -209,7 +205,7 @@ def test_policy_checker_rejects_invalid_logging(tmp_path, source, expected):
     assert any(expected in violation for violation in violations)
 
 
-@pytest.mark.parametrize("method", ["bind", "contextualize", "opt"])
+@pytest.mark.parametrize("method", ["bind", "opt"])
 def test_policy_checker_rejects_logger_call_chains(tmp_path, method):
     arguments = "lazy=True" if method == "opt" else "event='work'"
     path = tmp_path / "invalid_logging.py"

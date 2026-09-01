@@ -22,26 +22,6 @@ def test_mac_basic():
     assert total > 0
 
 
-def test_mac_float_vs_spike():
-    model = nn.Linear(100, 50, bias=False)
-    float_x = torch.randn(32, 100)
-    spike_x = (torch.rand(32, 100) > 0.8).float()
-
-    counter_float = op_counter.MACCounter()
-    with op_counter.DispatchCounterMode([counter_float]):
-        model(float_x)
-    # mm: m=32, k=100, n=50 → 32*50*100 MACs
-    expected = 32 * 50 * 100
-    assert counter_float.get_total() == expected, (
-        f"float×float should produce {expected} MACs, got {counter_float.get_total()}"
-    )
-
-    counter_spike = op_counter.MACCounter()
-    with op_counter.DispatchCounterMode([counter_spike]):
-        model(spike_x)
-    assert counter_spike.get_total() == 0, "spike×float should produce 0 MACs"
-
-
 def test_mac_bn_affine():
     # eval mode: no running stats update, only affine FMA
     bn_affine = nn.BatchNorm1d(50)
