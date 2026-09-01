@@ -16,22 +16,23 @@ permissions:
 jobs:
   test:
     name: CPU tests and docs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: "3.11"
+          python-version: "3.11.16"
 
       - name: Set up uv
         uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
         with:
           version: "0.9.24"
           enable-cache: true
+          cache-dependency-glob: .github/ci-constraints.txt
 
       - name: Install CPU test environment
         shell: bash
@@ -40,8 +41,11 @@ jobs:
           uv venv --python 3.11
           uv pip install --python .venv/bin/python \
             torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 \
+            --constraints .github/ci-constraints.txt \
             --index-url https://download.pytorch.org/whl/cpu
-          uv pip install --python .venv/bin/python --editable . --group dev
+          uv pip install --python .venv/bin/python --editable . --group dev \
+            --constraints .github/ci-constraints.txt \
+            --build-constraints .github/ci-constraints.txt
 
       - name: Check formatting
         run: uv format --check --version 0.15.22
@@ -57,16 +61,16 @@ jobs:
 
   package:
     name: Package install smoke test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: "3.11"
+          python-version: "3.11.16"
 
       - name: Set up uv
         uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
@@ -74,7 +78,7 @@ jobs:
           version: "0.9.24"
 
       - name: Build distributions
-        run: uv build --out-dir dist
+        run: uv build --out-dir dist --build-constraints .github/ci-constraints.txt
 
       - name: Install wheel in a clean environment
         shell: bash

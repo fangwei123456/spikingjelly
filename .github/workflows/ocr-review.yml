@@ -51,7 +51,7 @@ jobs:
         )
         && startsWith(github.event.comment.body, '/ocr')
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Resolve PR refs
@@ -85,6 +85,7 @@ jobs:
           base_ref: ${{ steps.pr-context.outputs.base_ref }}
           head_sha: ${{ steps.pr-context.outputs.head_sha }}
           ocr_version: '1.11.1'
+          node_version: '24.19.0'
           sticky_summary: 'true'
           incremental: 'true'
           checkpoint_range: 'true'
