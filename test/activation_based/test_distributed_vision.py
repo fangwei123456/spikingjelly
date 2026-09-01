@@ -813,7 +813,6 @@ def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch, legacy_precision)
     monkeypatch.setattr(torch.distributed, "get_rank", lambda: 0)
     monkeypatch.setattr(torch.distributed, "broadcast", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(torch.distributed, "barrier", lambda: None)
-    monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
     monkeypatch.setattr(torch, "get_rng_state", lambda: cpu_rng)
     monkeypatch.setattr(torch.cuda, "get_rng_state", lambda: cuda_rng)
     monkeypatch.setattr(
@@ -833,6 +832,7 @@ def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch, legacy_precision)
     checkpoint = tmp_path / "checkpoint"
     training._save_checkpoint(
         checkpoint,
+        device=torch.device("cpu"),
         config=config,
         model=model,
         optimizer=optimizer,
@@ -914,7 +914,6 @@ def test_vision_checkpoint_broadcasts_rank_zero_creation_failure(tmp_path, monke
         barrier_called = True
 
     monkeypatch.setattr(torch.distributed, "barrier", barrier)
-    monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
     model = nn.Linear(2, 2)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     config = vision.TrainingConfig(
@@ -926,6 +925,7 @@ def test_vision_checkpoint_broadcasts_rank_zero_creation_failure(tmp_path, monke
     with pytest.raises(OSError):
         training._save_checkpoint(
             parent / "checkpoint",
+            device=torch.device("cpu"),
             config=config,
             model=model,
             optimizer=optimizer,

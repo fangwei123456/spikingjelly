@@ -79,10 +79,11 @@ def checkpoint(
     :return: Output of ``function``.
     :rtype: object
     """
-    target_index = next(
-        (index for index, arg in enumerate(args) if isinstance(arg, torch.Tensor)),
-        None,
-    )
+    target_index = None
+    for index, arg in enumerate(args):
+        if isinstance(arg, torch.Tensor):
+            target_index = index
+            break
     if compressor is None or target_index is None:
         return torch_checkpoint(function, *args, use_reentrant=False, **kwargs)
 

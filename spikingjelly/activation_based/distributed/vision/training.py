@@ -104,6 +104,7 @@ def _state_dict_options():
 def _save_checkpoint(
     path: Path,
     *,
+    device: torch.device,
     config: TrainingConfig,
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
@@ -121,7 +122,7 @@ def _save_checkpoint(
 
     occupied = torch.tensor(
         int(dist.get_rank() == 0 and path.exists()),
-        device=torch.cuda.current_device(),
+        device=device,
     )
     dist.broadcast(occupied, src=0)
     if occupied.item():
@@ -823,6 +824,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                 ):
                     _save_checkpoint(
                         config.checkpoint_dir / f"step_{global_step:08d}",
+                        device=device,
                         config=config,
                         model=model,
                         optimizer=optimizer,
