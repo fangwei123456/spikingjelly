@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from spikingjelly.activation_based import functional, neuron, op_counter
 from spikingjelly.activation_based.model.sew_resnet import sew_resnet18
-from test.activation_based._op_counter_test_utils import TinySNN
+from _op_counter_test_utils import TinySNN
 
 
 def test_ac_basic():

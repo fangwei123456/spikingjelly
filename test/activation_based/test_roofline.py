@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from spikingjelly.activation_based import neuron, op_counter
-from test.activation_based._op_counter_test_utils import TinySNN
+from _op_counter_test_utils import TinySNN
 
 
 def test_dispatch_counter_basic():
