@@ -555,8 +555,8 @@ class ComplementaryLIFNode(BaseNode):
         :type backend: str
         :param store_state_seqs: 在多步模式下是否保存完整状态轨迹。若为 ``True``，
             ``state_seqs`` 按 ``[v_seq, m_seq]`` 保存两个形状为 ``[T, N, *]`` 的张量；
-            functional forward 不写入该缓存。本类不使用父类的 ``store_v_seq`` 和
-            ``v_seq``，所有状态轨迹统一由 ``store_state_seqs`` 控制
+            functional forward 不写入该缓存。本类在单步和多步模式下均不使用父类的
+            ``store_v_seq`` 和 ``v_seq``，所有状态轨迹统一由 ``store_state_seqs`` 控制
         :type store_state_seqs: bool
         :raises AssertionError: ``tau`` 不是大于 ``1.0`` 的浮点数时抛出
         :raises ValueError: ``step_mode`` 不是 ``"s"`` 或 ``"m"`` 时抛出
@@ -609,8 +609,8 @@ class ComplementaryLIFNode(BaseNode):
             multi-step mode. If ``True``, ``state_seqs`` contains two tensors in
             ``[v_seq, m_seq]`` order, each with shape ``[T, N, *]``. Functional
             forward does not write this cache. This class does not use the parent
-            ``store_v_seq`` or ``v_seq`` interface; ``store_state_seqs`` controls
-            all state trajectories
+            ``store_v_seq`` or ``v_seq`` interface in either step mode;
+            ``store_state_seqs`` controls all state trajectories
         :type store_state_seqs: bool
         :raises AssertionError: If ``tau`` is not a float greater than ``1.0``
         :raises ValueError: If ``step_mode`` is neither ``"s"`` nor ``"m"``
@@ -707,6 +707,12 @@ class ComplementaryLIFNode(BaseNode):
         m = m + spike
         v = v - spike * (self.v_threshold + torch.sigmoid(m))
         return (spike,), (v, m)
+
+    def _v_seq_source(self):
+        # ComplementaryLIFNode does not use the store_v_seq / v_seq interface in
+        # either step mode (see class docstring), so the BaseNode single-step hook
+        # must not populate v_seq even if a caller flips store_v_seq to True.
+        return None
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         if not self.store_state_seqs:

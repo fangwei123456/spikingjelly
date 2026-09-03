@@ -228,6 +228,21 @@ def test_complementary_lif_state_storage_reset_and_backend_contract():
         neuron.ComplementaryLIFNode(backend="triton")
 
 
+def test_complementary_lif_single_step_ignores_store_v_seq():
+    module = neuron.ComplementaryLIFNode()
+    module.store_v_seq = True
+    x = torch.rand(2, 3)
+
+    module(x)
+    module(x)
+    assert module.v_seq is None
+    assert module.v.shape == x.shape
+
+    functional.reset_net(module)
+    assert module.v_seq is None
+    assert module.v == 0.0
+
+
 @pytest.mark.parametrize("threshold_related", [False, True])
 def test_liaf_step_matches_module(threshold_related):
     x = torch.randn(2, 3)
