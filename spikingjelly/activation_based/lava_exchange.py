@@ -343,7 +343,8 @@ class CubaLIFNode(neuron.BaseNode):
         :type store_v_seq: bool
         :param store_i_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
             的各个时间步的电流值 ``self.i_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电流，即 ``shape = [N, *]`` 的 ``self.current_state`` 。
-            通常设置成 ``False`` ，可以节省内存。
+            通常设置成 ``False`` ，可以节省内存。与 ``store_v_seq`` 不同， ``store_i_seq`` 只在 ``step_mode = 'm'`` 时记录，
+            在 ``step_mode = 's'`` 时不会累积 ``self.i_seq`` 。
         :type store_i_seq: bool
         :param surrogate_function: 替代梯度函数。默认为 ``surrogate.Sigmoid()``
         :type surrogate_function: Callable
@@ -388,7 +389,8 @@ class CubaLIFNode(neuron.BaseNode):
         :param store_i_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
             whether storing the current at each time-step to ``self.i_seq`` with ``shape = [T, N, *]``. If set to ``False``,
             only the current at last time-step will be stored to ``self.current_state`` with ``shape = [N, *]``, which can reduce the
-            memory consumption. Default to ``False`` .
+            memory consumption. Default to ``False`` . Unlike ``store_v_seq``, ``store_i_seq`` only records in
+            ``step_mode = 'm'``; ``self.i_seq`` is not accumulated in ``step_mode = 's'``.
         :type store_i_seq: bool
 
         .. math::

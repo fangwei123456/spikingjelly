@@ -255,8 +255,10 @@ English version: :doc:`../en/monitor`
 ``v_seq_monitor[name][-1]`` ）就是完整的 ``[T, N, *]`` 电压序列；而 ``OutputMonitor`` 对该神经元记录的 ``T`` 个单步输出可以用 \
 ``torch.stack(spike_seq_monitor[name])`` 拼接。由于该神经元的每条单步记录都是 ``v_seq`` 不断增长的快照，保留全部 ``T`` 条记录需要 \
 :math:`O(T^2)` 的内存，并且在启用梯度时会保留每个快照的计算图。若只想记录当前时间步的电压，可以使用 \
-``monitor.AttributeMonitor('v_seq', pre_forward=False, net=net, instance=neuron.LIFNode, function_on_attribute=lambda v_seq: v_seq[-1])`` ，\
-再用 ``torch.stack(v_seq_monitor[name])`` 重建完整序列；或者在每次前向传播之间调用 ``v_seq_monitor.clear_recorded_data()`` 。
+``monitor.AttributeMonitor('v_seq', pre_forward=False, net=recurrent, instance=neuron.IFNode, function_on_attribute=lambda v_seq: v_seq[-1])`` \
+（其中 ``recurrent`` 是容器模块），再用 ``torch.stack(v_seq_monitor[name])`` 重建完整序列；或者在每次前向传播之间调用 \
+``v_seq_monitor.clear_recorded_data()`` 。监视器只作用于容器，是因为若传入整个网络，该函数也会作用于未被包裹的多步神经元，\
+把它们的 ``[T, N, *]`` 电压序列 ``v_seq`` 压缩为最后一个时间步。
 
 记录模块输入
 -------------------------------------------
