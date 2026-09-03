@@ -42,8 +42,9 @@ Module: `spikingjelly.activation_based.distributed.vision`.
 
 Module: `spikingjelly.activation_based.neuron`.
 
-- Fixed `store_v_seq` being ignored when a `BaseNode` is stepped in single-step
-  mode, so neurons wrapped in `LinearRecurrentContainer`,
+- Fixed `store_v_seq` being ignored when a `BaseNode` subclass (`LIFNode`,
+  `IFNode` and their relatives, plus `lava_exchange.CubaLIFNode`) is stepped
+  in single-step mode, so these neurons wrapped in `LinearRecurrentContainer`,
   `ElementWiseRecurrentContainer`, or `MultiStepContainer` now expose a
   `[T, N, *]` `v_seq` that `AttributeMonitor` can record (issue #631).
 - `lava_exchange.CubaLIFNode`, which keeps its voltage in `voltage_state`

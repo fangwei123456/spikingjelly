@@ -234,7 +234,12 @@ Neurons wrapped in :class:`LinearRecurrentContainer <spikingjelly.activation_bas
 called once per time-step, so a monitor on such a neuron records ``T`` times during one multi-step forward. With \
 ``store_v_seq = True`` the voltage of every step is appended to ``v_seq`` until ``functional.reset_net(net)``, so the \
 neuron's last record, e.g. ``v_seq_monitor[name][-1]``, holds the complete ``[T, N, *]`` sequence, while its ``T`` per-step \
-``OutputMonitor`` records can be combined with ``torch.stack(spike_seq_monitor[name])``.
+``OutputMonitor`` records can be combined with ``torch.stack(spike_seq_monitor[name])``. Because every per-step record of the \
+wrapped neuron is a growing snapshot of ``v_seq``, keeping all ``T`` records costs :math:`O(T^2)` memory and holds each \
+snapshot's autograd graph when gradients are enabled. To record only the current step's voltage, use \
+``monitor.AttributeMonitor('v_seq', pre_forward=False, net=net, instance=neuron.LIFNode, function_on_attribute=lambda v_seq: v_seq[-1])`` \
+and rebuild the sequence with ``torch.stack(v_seq_monitor[name])``, or call ``v_seq_monitor.clear_recorded_data()`` between \
+forwards.
 
 Record Inputs
 -------------------------------------------

@@ -253,7 +253,10 @@ English version: :doc:`../en/monitor`
 在一次多步前向传播中会被逐个时间步调用 ``T`` 次，因此针对这类神经元的监视器也会记录 ``T`` 次。设置 ``store_v_seq = True`` 后，\
 每个时间步的电压都会被追加到 ``v_seq`` 中，直到调用 ``functional.reset_net(net)`` ，因此该神经元的最后一条记录（例如 \
 ``v_seq_monitor[name][-1]`` ）就是完整的 ``[T, N, *]`` 电压序列；而 ``OutputMonitor`` 对该神经元记录的 ``T`` 个单步输出可以用 \
-``torch.stack(spike_seq_monitor[name])`` 拼接。
+``torch.stack(spike_seq_monitor[name])`` 拼接。由于该神经元的每条单步记录都是 ``v_seq`` 不断增长的快照，保留全部 ``T`` 条记录需要 \
+:math:`O(T^2)` 的内存，并且在启用梯度时会保留每个快照的计算图。若只想记录当前时间步的电压，可以使用 \
+``monitor.AttributeMonitor('v_seq', pre_forward=False, net=net, instance=neuron.LIFNode, function_on_attribute=lambda v_seq: v_seq[-1])`` ，\
+再用 ``torch.stack(v_seq_monitor[name])`` 重建完整序列；或者在每次前向传播之间调用 ``v_seq_monitor.clear_recorded_data()`` 。
 
 记录模块输入
 -------------------------------------------

@@ -609,7 +609,8 @@ class ActivationAwareIFNode(base.MemoryModule):
             要求模块处于 ``eval`` 模式，输入为 ``[T, N, *]`` 形状的 FP32 或
             BF16 CUDA 张量。
         :type backend: str
-        :param store_v_seq: 多步模式下是否保存每个时间步的膜电位。
+        :param store_v_seq: 多步模式下是否保存每个时间步的膜电位。本类仅在多步
+            模式下保存 ``v_seq`` ，单步模式下不会累积。
         :type store_v_seq: bool
         :raises ValueError: 当 backend、step_mode、channel_dim、threshold、offset、
             多步输入形状或逐通道参数长度非法时抛出。
@@ -685,7 +686,8 @@ class ActivationAwareIFNode(base.MemoryModule):
             ``[T, N, *]``.
         :type backend: str
         :param store_v_seq: Whether to store membrane voltage at each time step
-            in multi-step mode.
+            in multi-step mode. This class stores ``v_seq`` only in multi-step
+            mode and does not accumulate it in single-step mode.
         :type store_v_seq: bool
         :raises ValueError: If backend, step_mode, channel_dim, threshold,
             offset, multi-step input shape, or channel-wise parameter length is
