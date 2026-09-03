@@ -237,9 +237,11 @@ neuron's last record, e.g. ``v_seq_monitor[name][-1]``, holds the complete ``[T,
 ``OutputMonitor`` records can be combined with ``torch.stack(spike_seq_monitor[name])``. Because every per-step record of the \
 wrapped neuron is a growing snapshot of ``v_seq``, keeping all ``T`` records costs :math:`O(T^2)` memory and holds each \
 snapshot's autograd graph when gradients are enabled. To record only the current step's voltage, use \
-``monitor.AttributeMonitor('v_seq', pre_forward=False, net=recurrent, instance=neuron.IFNode, function_on_attribute=lambda v_seq: v_seq[-1])``, \
+``monitor.AttributeMonitor('v_seq', pre_forward=False, net=recurrent, instance=neuron.IFNode, function_on_attribute=lambda v_seq: v_seq[-1].clone())``, \
 where ``recurrent`` is the container module, and rebuild the sequence with ``torch.stack(v_seq_monitor[name])``, or call \
-``v_seq_monitor.clear_recorded_data()`` between forwards. The monitor is scoped to the container because passing the whole \
+``v_seq_monitor.clear_recorded_data()`` between forwards. The ``.clone()`` matters: ``v_seq[-1]`` alone is a view that keeps \
+the whole snapshot alive, so cloning it (or ``v_seq[-1].detach().clone()`` when gradients are not needed) is what makes the \
+retained memory :math:`O(T)`. The monitor is scoped to the container because passing the whole \
 network would also apply the lambda to unwrapped multi-step neurons and collapse their ``[T, N, *]`` ``v_seq`` to the last step.
 
 Record Inputs
