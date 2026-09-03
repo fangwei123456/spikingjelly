@@ -384,6 +384,34 @@ class BaseNode(base.MemoryModule):
         self.v_seq = None
 
     def detach(self):
+        r"""
+        **API Language** - :ref:`中文 <BaseNode.detach-cn>` | :ref:`English <BaseNode.detach-en>`
+
+        ----
+
+        .. _BaseNode.detach-cn:
+
+        * **中文**
+
+        从计算图中分离所有有状态变量，行为与
+        :meth:`MemoryModule.detach <spikingjelly.activation_based.base.MemoryModule.detach>`
+        相同。若 ``store_v_seq = True`` ，已累积的 ``self.v_seq`` 也会被分离，
+        因此在单步模式下逐步记录电压时， ``functional.detach_net`` 仍可用于实现
+        TBPTT (Truncated Back Propagation Through Time)。
+
+        ----
+
+        .. _BaseNode.detach-en:
+
+        * **English**
+
+        Detach all stateful variables from the computation graph, behaving like
+        :meth:`MemoryModule.detach <spikingjelly.activation_based.base.MemoryModule.detach>`.
+        When ``store_v_seq = True``, the accumulated ``self.v_seq`` is detached as
+        well, so ``functional.detach_net`` still implements TBPTT (Truncated Back
+        Propagation Through Time) when the voltage is recorded step by step in
+        single-step mode.
+        """
         super().detach()
         if isinstance(self.v_seq, torch.Tensor):
             self.v_seq = self.v_seq.detach()
