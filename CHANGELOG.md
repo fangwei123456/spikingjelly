@@ -7,6 +7,18 @@ For older releases, see the historical fatal-bug record in
 [bugs.md](https://github.com/fangwei123456/spikingjelly/blob/master/bugs.md)
 and the archived documentation linked from the project README.
 
+## Unreleased
+
+### Improvements
+
+#### Stateful Modules
+
+Module: `spikingjelly.activation_based.base`.
+
+- Fixed `MemoryModule` tensor reset values to follow module device and dtype
+  conversions, so `reset()` no longer restores tensors on the previous device or
+  with the previous dtype.
+
 ## 2.0.0rc1 - 2026-08-29
 
 ### Features
@@ -77,14 +89,6 @@ Module: `spikingjelly.activation_based.op_counter`.
   one memory access.
 
 ### Improvements
-
-#### Stateful Modules
-
-Module: `spikingjelly.activation_based.base`.
-
-- Fixed `MemoryModule` tensor reset values to follow module device and dtype
-  conversions, so `reset()` no longer restores tensors on the previous device or
-  with the previous dtype.
 
 #### Monitoring
 
