@@ -48,6 +48,8 @@ Module: `spikingjelly.activation_based.neuron`.
   `[T, N, *]` `v_seq` that `AttributeMonitor` can record (issue #631).
 - The single-step `v_seq` grows until `reset()` is called and copies the whole
   sequence on every step, so it is intended for monitoring and debugging.
+- `BaseNode.detach()` now also detaches the accumulated `v_seq`, so
+  `functional.detach_net` keeps truncated BPTT bounded when `store_v_seq=True`.
 
 ## 2.0.0rc1 - 2026-08-29
 

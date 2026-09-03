@@ -383,6 +383,11 @@ class BaseNode(base.MemoryModule):
         super().reset()
         self.v_seq = None
 
+    def detach(self):
+        super().detach()
+        if isinstance(self.v_seq, torch.Tensor):
+            self.v_seq = self.v_seq.detach()
+
     @staticmethod
     def apply_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
         v = (1.0 - spike) * v + spike * v_reset
@@ -460,7 +465,8 @@ class BaseNode(base.MemoryModule):
         ``self.v_seq`` （ ``shape = [T, N, *]`` ， ``T`` 为自上次 ``reset()`` 以来的步数），
         因此被 ``LinearRecurrentContainer`` 、 ``ElementWiseRecurrentContainer`` 或
         ``MultiStepContainer`` 以单步模式驱动的神经元也能记录电压序列。若输入的形状、
-        设备或数据类型发生变化，序列会重新开始。每一步都会复制整个序列，代价为
+        设备或数据类型发生变化，序列会重新开始； ``detach()`` 会同时分离已累积的序列，
+        以便实现 TBPTT。每一步都会复制整个序列，代价为
         :math:`O(T^2)` ，因此该功能主要用于监控和调试。
 
         :param x: 单步输入张量，约定 ``shape = [N, *]``
@@ -481,7 +487,8 @@ class BaseNode(base.MemoryModule):
         since the last ``reset()``), so neurons driven in single-step mode by
         ``LinearRecurrentContainer``, ``ElementWiseRecurrentContainer`` or
         ``MultiStepContainer`` also record their voltage sequence. The sequence restarts
-        when the input shape, device or dtype changes. Every step copies the whole
+        when the input shape, device or dtype changes, and ``detach()`` also detaches the
+        accumulated sequence so that TBPTT stays bounded. Every step copies the whole
         sequence, an :math:`O(T^2)` cost, so this is meant for monitoring and debugging.
 
         :param x: Single-step input tensor, conventionally with ``shape = [N, *]``
@@ -499,7 +506,7 @@ class BaseNode(base.MemoryModule):
                 or v_seq.device != v_step.device
                 or v_seq.dtype != v_step.dtype
             ):
-                self.v_seq = v_step
+                self.v_seq = v_step.clone()
             else:
                 self.v_seq = torch.cat((v_seq, v_step))
         return outputs

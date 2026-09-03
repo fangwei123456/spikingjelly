@@ -166,7 +166,8 @@ class IFNode(BaseNode):
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
             的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
-            通常设置成 ``False`` ，可以节省内存
+            通常设置成 ``False`` ，可以节省内存。在使用 ``step_mode = 's'`` 时，每个时间步结束后的电压会被追加到 ``self.v_seq`` ，
+            直到调用 ``reset()`` ；每一步都会复制整个序列，因此该选项主要用于监控和调试
         :type store_v_seq: bool
 
         ----
@@ -206,7 +207,9 @@ class IFNode(BaseNode):
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
             whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
-            memory consumption
+            memory consumption. When using ``step_mode = 's'``, the voltage after each time-step is appended to
+            ``self.v_seq`` until ``reset()`` is called; every step copies the whole sequence, so this option is meant for
+            monitoring and debugging
         :type store_v_seq: bool
         """
         super().__init__(
@@ -410,7 +413,9 @@ class HalfThresholdIFNode(BaseNode):
         :type step_mode: str
         :param backend: 后端名称。当前实现支持 ``"torch"``
         :type backend: str
-        :param store_v_seq: 在 ``step_mode="m"`` 时是否保存每个时间步的膜电位序列
+        :param store_v_seq: 是否将每个时间步的膜电位序列保存到 ``self.v_seq``。在
+            ``step_mode="s"`` 时膜电位会逐步追加，直到调用 ``reset()``；每一步都会
+            复制整个序列，因此该选项主要用于监控和调试
         :type store_v_seq: bool
         :raises TypeError: 当 ``v_threshold`` 不是实数或张量时抛出
         :raises ValueError: 当 ``v_threshold`` 不是单元素有限正数时抛出
@@ -456,8 +461,10 @@ class HalfThresholdIFNode(BaseNode):
         :param backend: Backend name. The current implementation supports
             ``"torch"``
         :type backend: str
-        :param store_v_seq: Whether to store membrane potentials at every time
-            step when ``step_mode="m"``
+        :param store_v_seq: Whether to store the membrane potentials at every time
+            step in ``self.v_seq``. When ``step_mode="s"`` the voltage is appended
+            step by step until ``reset()`` is called and every step copies the whole
+            sequence, so this option is meant for monitoring and debugging
         :type store_v_seq: bool
         :raises TypeError: Raised when ``v_threshold`` is not a real number or
             tensor

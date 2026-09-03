@@ -92,8 +92,9 @@ class OTTTLIFNode(_OnlineLIFNode):
             ``ValueError``
         :type backend: str
 
-        :param store_v_seq: 为保持与 :class:`LIFNode` 接口一致而保留的参数。本类仅支持
-            单步模式，不会使用 ``self.v_seq``
+        :param store_v_seq: 传递给 :class:`LIFNode` 的参数。本类仅支持单步模式，设置为
+            ``True`` 时每个时间步结束后的电压会被追加到 ``self.v_seq`` ，直到调用
+            ``reset()`` ；每一步都会复制整个序列，因此该选项主要用于监控和调试
         :type store_v_seq: bool
 
         ----
@@ -147,9 +148,10 @@ class OTTTLIFNode(_OnlineLIFNode):
             ``ValueError``
         :type backend: str
 
-        :param store_v_seq: retained for interface consistency with
-            :class:`LIFNode`. This class only supports single-step mode and does
-            not use ``self.v_seq``
+        :param store_v_seq: forwarded to :class:`LIFNode`. This class only supports
+            single-step mode, so when ``True`` the voltage after each time-step is
+            appended to ``self.v_seq`` until ``reset()`` is called; every step copies
+            the whole sequence, so this option is meant for monitoring and debugging
         :type store_v_seq: bool
         """
 
@@ -265,8 +267,9 @@ class SLTTLIFNode(_OnlineLIFNode):
             ``ValueError``
         :type backend: str
 
-        :param store_v_seq: 为保持与 :class:`LIFNode` 接口一致而保留的参数。本类仅支持
-            单步模式，不会使用 ``self.v_seq``
+        :param store_v_seq: 传递给 :class:`LIFNode` 的参数。本类仅支持单步模式，设置为
+            ``True`` 时每个时间步结束后的电压会被追加到 ``self.v_seq`` ，直到调用
+            ``reset()`` ；每一步都会复制整个序列，因此该选项主要用于监控和调试
         :type store_v_seq: bool
 
         ----
@@ -320,9 +323,10 @@ class SLTTLIFNode(_OnlineLIFNode):
             ``ValueError``
         :type backend: str
 
-        :param store_v_seq: retained for interface consistency with
-            :class:`LIFNode`. This class only supports single-step mode and does
-            not use ``self.v_seq``
+        :param store_v_seq: forwarded to :class:`LIFNode`. This class only supports
+            single-step mode, so when ``True`` the voltage after each time-step is
+            appended to ``self.v_seq`` until ``reset()`` is called; every step copies
+            the whole sequence, so this option is meant for monitoring and debugging
         :type store_v_seq: bool
         """
         super().__init__(

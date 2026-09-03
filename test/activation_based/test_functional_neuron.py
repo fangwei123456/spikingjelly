@@ -425,6 +425,31 @@ def test_store_v_seq_accumulates_across_single_steps_until_reset(node_type):
     assert node_off.v_seq is None
 
 
+def test_single_step_v_seq_owns_its_storage():
+    node = neuron.IFNode(store_v_seq=True)
+    with torch.no_grad():
+        node(torch.rand(2, 3))
+        recorded = node.v_seq
+        node.v.fill_(-1.0)
+    assert node.v_seq.data_ptr() != node.v.data_ptr()
+    assert not torch.equal(recorded[0], node.v)
+
+
+def test_detach_covers_single_step_v_seq():
+    node = neuron.LIFNode(store_v_seq=True)
+    x = torch.rand(2, 2, 3, requires_grad=True)
+    node(x[0])
+    assert node.v_seq.requires_grad
+    functional.detach_net(node)
+    assert not node.v.requires_grad
+    assert not node.v_seq.requires_grad
+    node(x[1])
+    assert node.v_seq.shape == (2, 2, 3)
+    node.v_seq.sum().backward()
+    assert torch.all(x.grad[0] == 0)
+    assert torch.any(x.grad[1] != 0)
+
+
 def test_save_v_lif_keeps_observed_voltage_out_of_functional_state():
     from spikingjelly.activation_based.model.spike_dhs import save_v_LIFNode
 
