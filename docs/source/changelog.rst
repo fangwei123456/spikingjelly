@@ -58,6 +58,9 @@ Module: ``spikingjelly.activation_based.neuron``.
   mode, so neurons wrapped in ``LinearRecurrentContainer``,
   ``ElementWiseRecurrentContainer``, or ``MultiStepContainer`` now expose a
   ``[T, N, *]`` ``v_seq`` that ``AttributeMonitor`` can record (issue #631).
+- ``lava_exchange.CubaLIFNode``, which keeps its voltage in ``voltage_state``
+  rather than ``v``, now also records ``voltage_state`` into ``v_seq`` in single-step
+  mode, matching its multi-step trajectory.
 - The single-step ``v_seq`` grows until ``reset()`` is called and copies the whole
   sequence on every step, so it is intended for monitoring and debugging.
 - ``BaseNode.detach()`` now also detaches the accumulated ``v_seq``, so

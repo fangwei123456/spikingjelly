@@ -498,18 +498,24 @@ class BaseNode(base.MemoryModule):
         """
         outputs = super().single_step_forward(x, *args, **kwargs)
         if self.store_v_seq and isinstance(self.v, torch.Tensor):
-            v_step = self.v.unsqueeze(0)
-            v_seq = self.v_seq
-            if (
-                v_seq is None
-                or v_seq.shape[1:] != v_step.shape[1:]
-                or v_seq.device != v_step.device
-                or v_seq.dtype != v_step.dtype
-            ):
-                self.v_seq = v_step.clone()
-            else:
-                self.v_seq = torch.cat((v_seq, v_step))
+            self._append_v_seq(self.v)
         return outputs
+
+    def _append_v_seq(self, v: torch.Tensor):
+        # Append one single-step voltage to ``self.v_seq``, restarting the sequence
+        # when the shape, device or dtype changes. Subclasses that keep their
+        # voltage in a differently named memory call this with that tensor.
+        v_step = v.unsqueeze(0)
+        v_seq = self.v_seq
+        if (
+            v_seq is None
+            or v_seq.shape[1:] != v_step.shape[1:]
+            or v_seq.device != v_step.device
+            or v_seq.dtype != v_step.dtype
+        ):
+            self.v_seq = v_step.clone()
+        else:
+            self.v_seq = torch.cat((v_seq, v_step))
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
         if not self.store_v_seq:

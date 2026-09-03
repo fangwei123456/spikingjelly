@@ -338,7 +338,8 @@ class CubaLIFNode(neuron.BaseNode):
         :type backend: str
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
             的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.voltage_state`` 。
-            通常设置成 ``False`` ，可以节省内存。
+            通常设置成 ``False`` ，可以节省内存。在使用 ``step_mode = 's'`` 时，每个时间步结束后的 ``self.voltage_state`` 会被追加到
+            ``self.v_seq`` ，直到调用 ``reset()`` ；每一步都会复制整个序列，因此该选项主要用于监控和调试。
         :type store_v_seq: bool
         :param store_i_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
             的各个时间步的电流值 ``self.i_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电流，即 ``shape = [N, *]`` 的 ``self.current_state`` 。
@@ -380,7 +381,9 @@ class CubaLIFNode(neuron.BaseNode):
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
             whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
             only the voltage at last time-step will be stored to ``self.voltage_state`` with ``shape = [N, *]``, which can reduce the
-            memory consumption. Default to ``False`` .
+            memory consumption. Default to ``False`` . When using ``step_mode = 's'``, ``self.voltage_state`` after each
+            time-step is appended to ``self.v_seq`` until ``reset()`` is called; every step copies the whole sequence, so this
+            option is meant for monitoring and debugging.
         :type store_v_seq: bool
         :param store_i_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
             whether storing the current at each time-step to ``self.i_seq`` with ``shape = [T, N, *]``. If set to ``False``,
@@ -640,6 +643,54 @@ class CubaLIFNode(neuron.BaseNode):
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         return super().multi_step_functional_forward(inputs, states, **kwargs)
+
+    def single_step_forward(self, x: torch.Tensor, *args, **kwargs):
+        r"""
+        **API Language** - :ref:`中文 <CubaLIFNode.single_step_forward-cn>` | :ref:`English <CubaLIFNode.single_step_forward-en>`
+
+        ----
+
+        .. _CubaLIFNode.single_step_forward-cn:
+
+        * **中文**
+
+        执行一个时间步的前向传播。若 ``store_v_seq = True`` ，本步重置后的电压
+        ``self.voltage_state`` 会被追加到 ``self.v_seq`` （ ``shape = [T, N, *]`` ，
+        ``T`` 为自上次 ``reset()`` 以来的步数），与多步模式下记录的电压序列一致。
+        若输入的形状、设备或数据类型发生变化，序列会重新开始； ``detach()`` 会同时
+        分离已累积的序列。每一步都会复制整个序列，因此该功能主要用于监控和调试。
+
+        :param x: 单步输入张量，约定 ``shape = [N, *]``
+        :type x: torch.Tensor
+        :return: 单步前向传播输出的脉冲
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _CubaLIFNode.single_step_forward-en:
+
+        * **English**
+
+        Run one time-step. When ``store_v_seq = True``, the post-reset voltage
+        ``self.voltage_state`` of this step is appended to ``self.v_seq``
+        (``shape = [T, N, *]``, where ``T`` counts the steps since the last ``reset()``),
+        matching the voltage sequence recorded in multi-step mode. The sequence restarts
+        when the input shape, device or dtype changes, and ``detach()`` also detaches the
+        accumulated sequence. Every step copies the whole sequence, so this is meant for
+        monitoring and debugging.
+
+        :param x: Single-step input tensor, conventionally with ``shape = [N, *]``
+        :type x: torch.Tensor
+        :return: Output spikes of the single-step forward pass
+        :rtype: torch.Tensor
+        """
+        outputs = super().single_step_forward(x, *args, **kwargs)
+        if self.store_v_seq:
+            # BaseNode.single_step_forward records ``self.v``, which CubaLIFNode
+            # never materializes (it stays the float ``v_reset``); the voltage of
+            # this neuron lives in ``voltage_state``.
+            self._append_v_seq(self.voltage_state)
+        return outputs
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
         inputs = (x_seq, *args)

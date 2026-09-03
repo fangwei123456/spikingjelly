@@ -694,6 +694,42 @@ def test_cuba_sequence_caches_are_not_functional_states():
             torch.testing.assert_close(actual, expected)
 
 
+def test_cuba_store_v_seq_accumulates_across_single_steps_until_reset():
+    x_seq = torch.rand(4, 2, 3) + 0.5
+    node_s = lava_exchange.CubaLIFNode(
+        current_decay=0.25, voltage_decay=0.5, store_v_seq=True
+    )
+    node_m = lava_exchange.CubaLIFNode(
+        current_decay=0.25, voltage_decay=0.5, step_mode="m", store_v_seq=True
+    )
+
+    spike_seq = torch.stack([node_s(x) for x in x_seq])
+    expected_spike_seq = node_m(x_seq)
+
+    torch.testing.assert_close(spike_seq, expected_spike_seq)
+    torch.testing.assert_close(node_s.v_seq, node_m.v_seq)
+    torch.testing.assert_close(node_s.voltage_state, node_m.voltage_state)
+    assert node_s.i_seq is None
+
+    node_s(torch.rand(5, 3))
+    assert node_s.v_seq.shape == (1, 5, 3)
+    torch.testing.assert_close(node_s.v_seq, node_s.voltage_state.unsqueeze(0))
+
+    x = torch.rand(5, 3, requires_grad=True)
+    node_s(x)
+    assert node_s.v_seq.requires_grad
+    node_s.detach()
+    assert not node_s.v_seq.requires_grad
+
+    node_s.reset()
+    assert node_s.v_seq is None
+
+    node_off = lava_exchange.CubaLIFNode(current_decay=0.25, voltage_decay=0.5)
+    for x in x_seq:
+        node_off(x)
+    assert node_off.v_seq is None
+
+
 def test_flexsn_sequence_cache_is_not_a_functional_state():
     from spikingjelly.activation_based.neuron.flexsn import FlexSN
 
