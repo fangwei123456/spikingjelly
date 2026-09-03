@@ -78,6 +78,14 @@ Module: `spikingjelly.activation_based.op_counter`.
 
 ### Improvements
 
+#### Stateful Modules
+
+Module: `spikingjelly.activation_based.base`.
+
+- Fixed `MemoryModule` tensor reset values to follow module device and dtype
+  conversions, so `reset()` no longer restores tensors on the previous device or
+  with the previous dtype.
+
 #### Monitoring
 
 Module: `spikingjelly.activation_based.monitor`.
