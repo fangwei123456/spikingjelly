@@ -1140,6 +1140,7 @@ class MSTDPLearner(base.MemoryModule):
                     self.batch_size,
                     *self.synapse.weight.shape,
                     device=self.synapse.weight.device,
+                    dtype=self.synapse.weight.dtype,
                 )
             dw = (reward.view(-1, 1, 1) * self.eligibility).sum(0)
 
