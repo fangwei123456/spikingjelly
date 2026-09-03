@@ -228,6 +228,14 @@ The outputs are:
 
             [[0.0000, 0.0000]]])]
 
+Neurons wrapped in :class:`LinearRecurrentContainer <spikingjelly.activation_based.layer.container.LinearRecurrentContainer>`, \
+:class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.container.ElementWiseRecurrentContainer>` or \
+:class:`MultiStepContainer <spikingjelly.activation_based.layer.container.MultiStepContainer>` stay in single-step mode and are \
+called once per time-step, so a monitor on such a neuron records ``T`` times during one multi-step forward. With \
+``store_v_seq = True`` the voltage of every step is appended to ``v_seq`` until ``functional.reset_net(net)``, so the \
+neuron's last record, e.g. ``v_seq_monitor[name][-1]``, holds the complete ``[T, N, *]`` sequence, while its ``T`` per-step \
+``OutputMonitor`` records can be combined with ``torch.stack(spike_seq_monitor[name])``.
+
 Record Inputs
 -------------------------------------------
 To record inputs, we can use :class:`spikingjelly.activation_based.monitor.InputMonitor`, which is similar to :class:`spikingjelly.activation_based.monitor.OutputMonitor`:

@@ -247,6 +247,14 @@ English version: :doc:`../en/monitor`
 
             [[0.0000, 0.0000]]])]
 
+被 :class:`LinearRecurrentContainer <spikingjelly.activation_based.layer.container.LinearRecurrentContainer>` 、 \
+:class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.container.ElementWiseRecurrentContainer>` 或 \
+:class:`MultiStepContainer <spikingjelly.activation_based.layer.container.MultiStepContainer>` 包裹的神经元始终处于单步模式，\
+在一次多步前向传播中会被逐个时间步调用 ``T`` 次，因此针对这类神经元的监视器也会记录 ``T`` 次。设置 ``store_v_seq = True`` 后，\
+每个时间步的电压都会被追加到 ``v_seq`` 中，直到调用 ``functional.reset_net(net)`` ，因此该神经元的最后一条记录（例如 \
+``v_seq_monitor[name][-1]`` ）就是完整的 ``[T, N, *]`` 电压序列；而 ``OutputMonitor`` 对该神经元记录的 ``T`` 个单步输出可以用 \
+``torch.stack(spike_seq_monitor[name])`` 拼接。
+
 记录模块输入
 -------------------------------------------
 设置输入监视器的方法，和设置输出监视器的如出一辙：

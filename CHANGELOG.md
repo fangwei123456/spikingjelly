@@ -36,6 +36,19 @@ Module: `spikingjelly.activation_based.distributed.vision`.
 - Vision prediction now uses bounded pinned-memory transfers and a background
   HDF5 shard writer to overlap output work where execution dependencies allow.
 
+### Bug Fixes
+
+#### Spiking Neurons
+
+Module: `spikingjelly.activation_based.neuron`.
+
+- Fixed `store_v_seq` being ignored when a `BaseNode` is stepped in single-step
+  mode, so neurons wrapped in `LinearRecurrentContainer`,
+  `ElementWiseRecurrentContainer`, or `MultiStepContainer` now expose a
+  `[T, N, *]` `v_seq` that `AttributeMonitor` can record (issue #631).
+- The single-step `v_seq` grows until `reset()` is called and copies the whole
+  sequence on every step, so it is intended for monitoring and debugging.
+
 ## 2.0.0rc1 - 2026-08-29
 
 ### Features
