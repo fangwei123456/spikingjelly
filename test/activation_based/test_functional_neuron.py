@@ -724,6 +724,15 @@ def test_cuba_store_v_seq_accumulates_across_single_steps_until_reset():
     node_s.reset()
     assert node_s.v_seq is None
 
+    # The inherited ``v`` memory is vestigial for CubaLIFNode; even if a caller
+    # assigns a tensor to it, each step must record exactly one entry.
+    node_s(x_seq[0])
+    node_s.v = torch.zeros_like(node_s.voltage_state)
+    node_s(x_seq[1])
+    assert node_s.v_seq.shape == (2, 2, 3)
+    torch.testing.assert_close(node_s.v_seq[-1], node_s.voltage_state)
+    node_s.reset()
+
     node_off = lava_exchange.CubaLIFNode(current_decay=0.25, voltage_decay=0.5)
     for x in x_seq:
         node_off(x)

@@ -497,14 +497,21 @@ class BaseNode(base.MemoryModule):
         :rtype: object
         """
         outputs = super().single_step_forward(x, *args, **kwargs)
-        if self.store_v_seq and isinstance(self.v, torch.Tensor):
-            self._append_v_seq(self.v)
+        if self.store_v_seq:
+            v = self._v_seq_source()
+            if isinstance(v, torch.Tensor):
+                self._append_v_seq(v)
         return outputs
+
+    def _v_seq_source(self):
+        # The voltage recorded into ``self.v_seq`` after a single step. Subclasses
+        # that keep their voltage in a differently named memory override this to
+        # return that tensor; a non-tensor (unmaterialized) value is skipped.
+        return self.v
 
     def _append_v_seq(self, v: torch.Tensor):
         # Append one single-step voltage to ``self.v_seq``, restarting the sequence
-        # when the shape, device or dtype changes. Subclasses that keep their
-        # voltage in a differently named memory call this with that tensor.
+        # when the shape, device or dtype changes.
         v_step = v.unsqueeze(0)
         v_seq = self.v_seq
         if (

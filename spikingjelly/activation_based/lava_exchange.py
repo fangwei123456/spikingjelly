@@ -644,53 +644,11 @@ class CubaLIFNode(neuron.BaseNode):
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         return super().multi_step_functional_forward(inputs, states, **kwargs)
 
-    def single_step_forward(self, x: torch.Tensor, *args, **kwargs):
-        r"""
-        **API Language** - :ref:`中文 <CubaLIFNode.single_step_forward-cn>` | :ref:`English <CubaLIFNode.single_step_forward-en>`
-
-        ----
-
-        .. _CubaLIFNode.single_step_forward-cn:
-
-        * **中文**
-
-        执行一个时间步的前向传播。若 ``store_v_seq = True`` ，本步重置后的电压
-        ``self.voltage_state`` 会被追加到 ``self.v_seq`` （ ``shape = [T, N, *]`` ，
-        ``T`` 为自上次 ``reset()`` 以来的步数），与多步模式下记录的电压序列一致。
-        若输入的形状、设备或数据类型发生变化，序列会重新开始； ``detach()`` 会同时
-        分离已累积的序列。每一步都会复制整个序列，因此该功能主要用于监控和调试。
-
-        :param x: 单步输入张量，约定 ``shape = [N, *]``
-        :type x: torch.Tensor
-        :return: 单步前向传播输出的脉冲
-        :rtype: torch.Tensor
-
-        ----
-
-        .. _CubaLIFNode.single_step_forward-en:
-
-        * **English**
-
-        Run one time-step. When ``store_v_seq = True``, the post-reset voltage
-        ``self.voltage_state`` of this step is appended to ``self.v_seq``
-        (``shape = [T, N, *]``, where ``T`` counts the steps since the last ``reset()``),
-        matching the voltage sequence recorded in multi-step mode. The sequence restarts
-        when the input shape, device or dtype changes, and ``detach()`` also detaches the
-        accumulated sequence. Every step copies the whole sequence, so this is meant for
-        monitoring and debugging.
-
-        :param x: Single-step input tensor, conventionally with ``shape = [N, *]``
-        :type x: torch.Tensor
-        :return: Output spikes of the single-step forward pass
-        :rtype: torch.Tensor
-        """
-        outputs = super().single_step_forward(x, *args, **kwargs)
-        if self.store_v_seq:
-            # BaseNode.single_step_forward records ``self.v``, which CubaLIFNode
-            # never materializes (it stays the float ``v_reset``); the voltage of
-            # this neuron lives in ``voltage_state``.
-            self._append_v_seq(self.voltage_state)
-        return outputs
+    def _v_seq_source(self):
+        # CubaLIFNode never materializes the inherited ``v`` memory (it stays the
+        # float ``v_reset``); its voltage lives in ``voltage_state``, so that is
+        # what ``store_v_seq`` records in single-step mode.
+        return self.voltage_state
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
         inputs = (x_seq, *args)
