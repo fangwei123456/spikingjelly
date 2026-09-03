@@ -1117,6 +1117,12 @@ class MemoryModule(nn.Module, StepModule):
         for key, value in self._memories.items():
             if isinstance(value, torch.Tensor):
                 self._memories[key] = fn(value)
+        # Move tensor reset values with the module as well; otherwise
+        # .to()/.cuda()/.half() would leave them on the old device/dtype
+        # and the next reset() would restore the state there.
+        for key, value in self._memories_rv.items():
+            if isinstance(value, torch.Tensor):
+                self._memories_rv[key] = fn(value)
         return super()._apply(fn)
 
     def _replicate_for_data_parallel(self):
