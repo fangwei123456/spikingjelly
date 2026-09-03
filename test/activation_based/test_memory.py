@@ -558,3 +558,45 @@ def test_to_functional_forward_fallback_restores_state_after_error():
         functional_forward((torch.tensor(1.0),), (torch.tensor(3.0),))
 
     torch.testing.assert_close(module.state, torch.tensor(7.0))
+
+
+def test_apply_moves_tensor_reset_values_dtype():
+    """.half()/.double() must move tensor reset values too, so a later
+    reset() restores the state in the module's current dtype rather than
+    the dtype the reset value had when it was registered."""
+
+    class Node(base.MemoryModule):
+        def __init__(self):
+            super().__init__()
+            self.register_memory("s", torch.zeros(4))
+
+        def single_step_forward(self, x):
+            self.s = self.s + x
+            return self.s
+
+    net = Node().double()
+    net.reset()
+    assert net.s.dtype == torch.float64
+
+    net = Node()
+    net.set_reset_value("s", torch.zeros(4))
+    net.half()
+    net.reset()
+    assert net.s.dtype == torch.float16
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
+def test_apply_moves_tensor_reset_values_device():
+    class Node(base.MemoryModule):
+        def __init__(self):
+            super().__init__()
+            self.register_memory("s", torch.zeros(4))
+
+        def single_step_forward(self, x):
+            self.s = self.s + x
+            return self.s
+
+    net = Node().cuda()
+    net.reset()
+    assert net.s.is_cuda
+    net(torch.ones(4, device="cuda"))  # no cross-device RuntimeError
