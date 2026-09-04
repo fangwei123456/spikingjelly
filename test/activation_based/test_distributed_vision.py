@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+from concurrent.futures import Future
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -187,6 +188,63 @@ def test_vision_prediction_writes_only_ordered_outputs(tmp_path):
             predictions["logits"][:],
             [[0.0, 1.0], [1.0, 2.0], [2.0, 3.0]],
         )
+
+
+def test_vision_valid_indices_filter_padding_and_missing_targets():
+    valid = torch.tensor([True, False, True, True])
+    has_target = torch.tensor([True, True, False, True])
+
+    assert torch.equal(inference._valid_indices(valid), torch.tensor([0, 2, 3]))
+    assert torch.equal(
+        inference._valid_indices(valid, has_target), torch.tensor([0, 3])
+    )
+    assert torch.equal(valid, torch.tensor([True, False, True, True]))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_vision_prediction_writer_preserves_submission_order(tmp_path):
+    output = tmp_path / "predictions.h5"
+    writer = inference._PredictionWriter(
+        output,
+        device=torch.device("cuda"),
+        batch_size=2,
+        num_classes=2,
+        reuse_output=False,
+    )
+
+    writer.submit(torch.tensor([2, 0]), torch.tensor([[2.0, 3.0], [0.0, 1.0]]).cuda())
+    writer.submit(torch.tensor([1]), torch.tensor([[1.0, 2.0]]).cuda())
+    writer.close()
+
+    with h5py.File(output, "r") as predictions:
+        np.testing.assert_array_equal(predictions["index"][:], [2, 0, 1])
+        np.testing.assert_array_equal(
+            predictions["logits"][:],
+            [[2.0, 3.0], [0.0, 1.0], [1.0, 2.0]],
+        )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_vision_prediction_writer_defers_write_errors_until_close(
+    tmp_path, monkeypatch
+):
+    def fail(*_args):
+        raise RuntimeError("write failed")
+
+    writer = inference._PredictionWriter(
+        tmp_path / "predictions.h5",
+        device=torch.device("cuda"),
+        batch_size=1,
+        num_classes=2,
+        reuse_output=False,
+    )
+    monkeypatch.setattr(inference, "_append_predictions", fail)
+
+    for index in range(3):
+        writer.submit(torch.tensor([index]), torch.ones(1, 2, device="cuda"))
+
+    with pytest.raises(RuntimeError, match="write failed"):
+        writer.close()
 
 
 def test_vision_prediction_merge_cleans_failed_temporary_file(tmp_path):
@@ -594,26 +652,26 @@ def test_vision_inference_rejects_single_step_pipeline_artifact(monkeypatch):
         inference._run_classification(config, mode="evaluate")
 
 
-def test_vision_rank_zero_error_is_broadcast(monkeypatch):
-    broadcasts = []
+def test_vision_distributed_error_is_reduced(monkeypatch):
+    reductions = []
     monkeypatch.setattr(
         inference.dist,
-        "broadcast",
-        lambda tensor, **_kwargs: broadcasts.append(tensor.item()),
+        "all_reduce",
+        lambda tensor, **_kwargs: reductions.append(tensor.item()),
     )
 
     with pytest.raises(OSError, match="merge failed"):
-        inference._sync_rank_zero_error(
+        inference._sync_error(
             OSError("merge failed"), torch.device("cpu"), "remote failure"
         )
 
-    assert broadcasts == [1]
+    assert reductions == [1]
 
     monkeypatch.setattr(
-        inference.dist, "broadcast", lambda tensor, **_kwargs: tensor.fill_(1)
+        inference.dist, "all_reduce", lambda tensor, **_kwargs: tensor.fill_(1)
     )
     with pytest.raises(RuntimeError, match="remote failure"):
-        inference._sync_rank_zero_error(None, torch.device("cpu"), "remote failure")
+        inference._sync_error(None, torch.device("cpu"), "remote failure")
 
 
 def test_vision_inference_rejects_wrong_config_before_runtime():
@@ -830,7 +888,7 @@ def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch, legacy_precision)
     )
 
     checkpoint = tmp_path / "checkpoint"
-    training._save_checkpoint(
+    future = training._save_checkpoint(
         checkpoint,
         device=torch.device("cpu"),
         config=config,
@@ -845,6 +903,7 @@ def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch, legacy_precision)
         pp_rank=0,
         dp_rank=0,
     )
+    future.result()
     if legacy_precision:
         recipe_path = checkpoint / "config.json"
         recipe = json.loads(recipe_path.read_text(encoding="utf-8"))
@@ -941,6 +1000,32 @@ def test_vision_checkpoint_broadcasts_rank_zero_creation_failure(tmp_path, monke
 
     assert broadcasts == [0, 1]
     assert not barrier_called
+
+
+def test_vision_async_checkpoint_propagates_write_failure(monkeypatch):
+    future = Future()
+    future.set_exception(RuntimeError("write failed"))
+    monkeypatch.setattr(torch.distributed, "all_reduce", lambda _tensor: None)
+
+    with pytest.raises(RuntimeError, match="write failed"):
+        training._finish_checkpoint(future, torch.device("cpu"))
+
+
+def test_vision_async_checkpoint_does_not_collect_interrupts(monkeypatch):
+    future = Future()
+    future.set_exception(KeyboardInterrupt())
+    all_reduce_called = False
+
+    def all_reduce(_tensor):
+        nonlocal all_reduce_called
+        all_reduce_called = True
+
+    monkeypatch.setattr(torch.distributed, "all_reduce", all_reduce)
+
+    with pytest.raises(KeyboardInterrupt):
+        training._finish_checkpoint(future, torch.device("cpu"))
+
+    assert not all_reduce_called
 
 
 def test_spikformer_pipeline_keeps_every_transformer_block():

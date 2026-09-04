@@ -19,6 +19,23 @@ Module: `spikingjelly.activation_based.base`.
   conversions, so `reset()` no longer restores tensors on the previous device or
   with the previous dtype.
 
+#### Distributed Training
+
+Module: `spikingjelly.activation_based.distributed.vision`.
+
+- Vision training now stages checkpoints on the writer rank and overlaps their
+  filesystem upload with subsequent work, while bounding each writer to one
+  in-flight checkpoint and reporting failures before the next save or return.
+
+#### Distributed Inference
+
+Module: `spikingjelly.activation_based.distributed.vision`.
+
+- Removed per-batch CUDA synchronization from Vision evaluation and prediction;
+  evaluation timing now uses CUDA events and padding is filtered on the CPU.
+- Vision prediction now uses bounded pinned-memory transfers and a background
+  HDF5 shard writer to overlap output work where execution dependencies allow.
+
 ## 2.0.0rc1 - 2026-08-29
 
 ### Features
