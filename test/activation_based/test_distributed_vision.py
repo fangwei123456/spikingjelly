@@ -225,7 +225,9 @@ def test_vision_prediction_writer_preserves_submission_order(tmp_path):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
-def test_vision_prediction_writer_propagates_write_errors(tmp_path, monkeypatch):
+def test_vision_prediction_writer_defers_write_errors_until_close(
+    tmp_path, monkeypatch
+):
     def fail(*_args):
         raise RuntimeError("write failed")
 
@@ -238,7 +240,8 @@ def test_vision_prediction_writer_propagates_write_errors(tmp_path, monkeypatch)
     )
     monkeypatch.setattr(inference, "_append_predictions", fail)
 
-    writer.submit(torch.tensor([0]), torch.ones(1, 2, device="cuda"))
+    for index in range(3):
+        writer.submit(torch.tensor([index]), torch.ones(1, 2, device="cuda"))
 
     with pytest.raises(RuntimeError, match="write failed"):
         writer.close()
@@ -1006,6 +1009,23 @@ def test_vision_async_checkpoint_propagates_write_failure(monkeypatch):
 
     with pytest.raises(RuntimeError, match="write failed"):
         training._finish_checkpoint(future, torch.device("cpu"))
+
+
+def test_vision_async_checkpoint_does_not_collect_interrupts(monkeypatch):
+    future = Future()
+    future.set_exception(KeyboardInterrupt())
+    all_reduce_called = False
+
+    def all_reduce(_tensor):
+        nonlocal all_reduce_called
+        all_reduce_called = True
+
+    monkeypatch.setattr(torch.distributed, "all_reduce", all_reduce)
+
+    with pytest.raises(KeyboardInterrupt):
+        training._finish_checkpoint(future, torch.device("cpu"))
+
+    assert not all_reduce_called
 
 
 def test_spikformer_pipeline_keeps_every_transformer_block():

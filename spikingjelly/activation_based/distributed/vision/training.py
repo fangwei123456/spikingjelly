@@ -182,7 +182,7 @@ def _finish_checkpoint(future: Future, device: torch.device) -> None:
     error = None
     try:
         future.result()
-    except BaseException as exception:
+    except Exception as exception:
         error = exception
     failed = torch.tensor(int(error is not None), device=device)
     dist.all_reduce(failed)

@@ -358,6 +358,7 @@ class _PredictionWriter:
             max_workers=1, thread_name_prefix="spikingjelly-prediction"
         )
         self._handle = None
+        self._error = None
         self._closed = False
 
     def _write(
@@ -376,7 +377,11 @@ class _PredictionWriter:
             return
         finished, buffer = self._buffer_slots.popleft()
         if finished is not None:
-            finished.result()
+            try:
+                finished.result()
+            except Exception as exception:
+                if self._error is None:
+                    self._error = exception
         source = logits.detach().float()
         target = buffer[: source.shape[0]]
         current_stream = torch.cuda.current_stream(source.device)
@@ -403,7 +408,7 @@ class _PredictionWriter:
         if self._closed:
             return
         self._closed = True
-        error = None
+        error = self._error
         for future, _ in self._buffer_slots:
             if future is None:
                 continue
