@@ -572,6 +572,10 @@ def test_raf_reset_only_touches_v():
 
         assert spike.item() == 1.0
         _assert_close(module.u, reference.u)
+        if v_reset is None:
+            _assert_close(module.v, reference.v - module.v_threshold)
+        else:
+            _assert_close(module.v, torch.full_like(reference.v, v_reset))
 
 
 def test_raf_single_step_multi_step_equivalence():
