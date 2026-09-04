@@ -155,7 +155,9 @@ class save_v_LIFNode(LIFNode):
         * **中文**
 
         保存放电前平均膜电位的 LIF 神经元，用于 DSpike 搜索。构造参数与
-        :class:`LIFNode` 相同。
+        :class:`LIFNode` 相同。与 :class:`LIFNode` 不同， ``store_v_seq`` 仅在
+        ``step_mode = 'm'`` 时生效，且 ``self.v_seq`` 保存的是每个时间步放电前膜电位的
+        均值（ ``shape = [T]`` ）；单步模式下不会累积 ``self.v_seq`` 。
 
         :param args: 传递给 :class:`LIFNode` 的位置参数
         :type args: tuple[object, ...]
@@ -169,7 +171,10 @@ class save_v_LIFNode(LIFNode):
         * **English**
 
         LIF neuron that stores the mean pre-spike membrane voltage for DSpike
-        search. Constructor arguments are the same as :class:`LIFNode`.
+        search. Constructor arguments are the same as :class:`LIFNode`. Unlike
+        :class:`LIFNode`, ``store_v_seq`` only takes effect when ``step_mode = 'm'``,
+        and ``self.v_seq`` then holds the mean pre-spike voltage of every time-step
+        (``shape = [T]``); ``self.v_seq`` is not accumulated in single-step mode.
 
         :param args: Positional arguments forwarded to :class:`LIFNode`
         :type args: tuple[object, ...]

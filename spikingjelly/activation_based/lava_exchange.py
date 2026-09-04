@@ -338,11 +338,13 @@ class CubaLIFNode(neuron.BaseNode):
         :type backend: str
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
             的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.voltage_state`` 。
-            通常设置成 ``False`` ，可以节省内存。
+            通常设置成 ``False`` ，可以节省内存。在使用 ``step_mode = 's'`` 时，每个时间步结束后的 ``self.voltage_state`` 会被追加到
+            ``self.v_seq`` ，直到调用 ``reset()`` ；每一步都会复制整个序列，因此该选项主要用于监控和调试。
         :type store_v_seq: bool
         :param store_i_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
             的各个时间步的电流值 ``self.i_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电流，即 ``shape = [N, *]`` 的 ``self.current_state`` 。
-            通常设置成 ``False`` ，可以节省内存。
+            通常设置成 ``False`` ，可以节省内存。与 ``store_v_seq`` 不同， ``store_i_seq`` 只在 ``step_mode = 'm'`` 时记录，
+            在 ``step_mode = 's'`` 时不会累积 ``self.i_seq`` 。
         :type store_i_seq: bool
         :param surrogate_function: 替代梯度函数。默认为 ``surrogate.Sigmoid()``
         :type surrogate_function: Callable
@@ -380,12 +382,15 @@ class CubaLIFNode(neuron.BaseNode):
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
             whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
             only the voltage at last time-step will be stored to ``self.voltage_state`` with ``shape = [N, *]``, which can reduce the
-            memory consumption. Default to ``False`` .
+            memory consumption. Default to ``False`` . When using ``step_mode = 's'``, ``self.voltage_state`` after each
+            time-step is appended to ``self.v_seq`` until ``reset()`` is called; every step copies the whole sequence, so this
+            option is meant for monitoring and debugging.
         :type store_v_seq: bool
         :param store_i_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
             whether storing the current at each time-step to ``self.i_seq`` with ``shape = [T, N, *]``. If set to ``False``,
             only the current at last time-step will be stored to ``self.current_state`` with ``shape = [N, *]``, which can reduce the
-            memory consumption. Default to ``False`` .
+            memory consumption. Default to ``False`` . Unlike ``store_v_seq``, ``store_i_seq`` only records in
+            ``step_mode = 'm'``; ``self.i_seq`` is not accumulated in ``step_mode = 's'``.
         :type store_i_seq: bool
 
         .. math::
@@ -640,6 +645,12 @@ class CubaLIFNode(neuron.BaseNode):
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         return super().multi_step_functional_forward(inputs, states, **kwargs)
+
+    def _v_seq_source(self):
+        # CubaLIFNode never materializes the inherited ``v`` memory (it stays the
+        # float ``v_reset``); its voltage lives in ``voltage_state``, so that is
+        # what ``store_v_seq`` records in single-step mode.
+        return self.voltage_state
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
         inputs = (x_seq, *args)

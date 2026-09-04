@@ -46,6 +46,30 @@ Module: ``spikingjelly.activation_based.distributed.vision``.
 - Vision prediction now uses bounded pinned-memory transfers and a background
   HDF5 shard writer to overlap output work where execution dependencies allow.
 
+Bug Fixes
+~~~~~~~~~
+
+Spiking Neurons
+^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.neuron``.
+
+- Fixed ``store_v_seq`` being ignored when a ``BaseNode`` subclass (``LIFNode``,
+  ``IFNode`` and their relatives, plus ``lava_exchange.CubaLIFNode``) is stepped
+  in single-step mode, so these neurons wrapped in ``LinearRecurrentContainer``,
+  ``ElementWiseRecurrentContainer``, or ``MultiStepContainer`` now expose a
+  ``[T, N, *]`` ``v_seq`` that ``AttributeMonitor`` can record (issue #631).
+  ``ComplementaryLIFNode``, which exposes its trajectories only through
+  ``store_state_seqs``, still leaves ``v_seq`` empty in both step modes.
+- ``lava_exchange.CubaLIFNode``, which keeps its voltage in ``voltage_state``
+  rather than ``v``, now also records ``voltage_state`` into ``v_seq`` in single-step
+  mode, matching its multi-step trajectory; ``store_i_seq`` is unchanged and
+  remains multi-step only.
+- The single-step ``v_seq`` grows until ``reset()`` is called and copies the whole
+  sequence on every step, so it is intended for monitoring and debugging.
+- ``BaseNode.detach()`` now also detaches the accumulated ``v_seq``, so
+  ``functional.detach_net`` keeps truncated BPTT bounded when ``store_v_seq=True``.
+
 2.0.0rc1 - 2026-08-29
 ---------------------
 

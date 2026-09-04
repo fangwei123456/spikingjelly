@@ -247,6 +247,21 @@ English version: :doc:`../en/monitor`
 
             [[0.0000, 0.0000]]])]
 
+被 :class:`LinearRecurrentContainer <spikingjelly.activation_based.layer.container.LinearRecurrentContainer>` 、 \
+:class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.container.ElementWiseRecurrentContainer>` 或 \
+:class:`MultiStepContainer <spikingjelly.activation_based.layer.container.MultiStepContainer>` 包裹的神经元始终处于单步模式，\
+在一次多步前向传播中会被逐个时间步调用 ``T`` 次，因此针对这类神经元的监视器也会记录 ``T`` 次。设置 ``store_v_seq = True`` 后，\
+每个时间步的电压都会被追加到 ``v_seq`` 中，直到调用 ``functional.reset_net(net)`` ，因此该神经元的最后一条记录（例如 \
+``v_seq_monitor[name][-1]`` ）就是完整的 ``[T, N, *]`` 电压序列；而 ``OutputMonitor`` 对该神经元记录的 ``T`` 个单步输出可以用 \
+``torch.stack(spike_seq_monitor[name])`` 拼接。由于该神经元的每条单步记录都是 ``v_seq`` 不断增长的快照，保留全部 ``T`` 条记录需要 \
+:math:`O(T^2)` 的内存，并且在启用梯度时会保留每个快照的计算图。若只想记录当前时间步的电压，可以使用 \
+``monitor.AttributeMonitor('v_seq', pre_forward=False, net=recurrent, instance=neuron.IFNode, function_on_attribute=lambda v_seq: v_seq[-1].clone())`` \
+（其中 ``recurrent`` 是容器模块），再用 ``torch.stack(v_seq_monitor[name])`` 重建完整序列；或者在每次前向传播之间调用 \
+``v_seq_monitor.clear_recorded_data()`` 。这里的 ``.clone()`` 不可省略：单独的 ``v_seq[-1]`` 只是一个视图，会让整个快照一直存活，\
+因此对其克隆（或在不需要梯度时使用 ``v_seq[-1].detach().clone()`` ）才是让保留内存降为 :math:`O(T)` 的关键。\
+监视器只作用于容器，是因为若传入整个网络，该函数也会作用于未被包裹的多步神经元，\
+把它们的 ``[T, N, *]`` 电压序列 ``v_seq`` 压缩为最后一个时间步。
+
 记录模块输入
 -------------------------------------------
 设置输入监视器的方法，和设置输出监视器的如出一辙：

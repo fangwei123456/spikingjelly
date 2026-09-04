@@ -77,7 +77,8 @@ class ParametricLIFNode(BaseNode):
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
             的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
-            通常设置成 ``False`` ，可以节省内存
+            通常设置成 ``False`` ，可以节省内存。在使用 ``step_mode = 's'`` 时，每个时间步结束后的电压会被追加到 ``self.v_seq`` ，
+            直到调用 ``reset()`` ；每一步都会复制整个序列，因此该选项主要用于监控和调试
         :type store_v_seq: bool
 
         ----
@@ -131,7 +132,9 @@ class ParametricLIFNode(BaseNode):
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
             whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
-            memory consumption
+            memory consumption. When using ``step_mode = 's'``, the voltage after each time-step is appended to
+            ``self.v_seq`` until ``reset()`` is called; every step copies the whole sequence, so this option is meant for
+            monitoring and debugging
         :type store_v_seq: bool
         """
         assert isinstance(init_tau, float) and init_tau > 1.0

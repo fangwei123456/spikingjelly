@@ -145,8 +145,9 @@ class ILIFNode(LIFNode):
         :param backend: 后端名称。单步模式仅支持 ``"torch"``；多步模式支持
             ``"torch"`` 和 ``"triton"``，默认为 ``"torch"``
         :type backend: str
-        :param store_v_seq: 多步模式下是否保存每个输入步后的膜电位，默认为
-            ``False``
+        :param store_v_seq: 是否将每个输入步后的膜电位保存到 ``self.v_seq``，默认为
+            ``False``。单步模式下膜电位会逐步追加，直到调用 ``reset()``；每一步都会
+            复制整个序列，因此该选项主要用于监控和调试
         :type store_v_seq: bool
         :raises ValueError: 当 ``surrogate_function`` 不是
             ``MultiLevelSpikeCount`` 或 ``surrogate_function.spiking=False`` 时
@@ -295,8 +296,11 @@ class ILIFNode(LIFNode):
             multi-step mode supports ``"torch"`` and ``"triton"``; defaults to
             ``"torch"``
         :type backend: str
-        :param store_v_seq: Whether to store membrane voltage after each input
-            step in multi-step mode; defaults to ``False``
+        :param store_v_seq: Whether to store the membrane voltage after each input
+            step in ``self.v_seq``; defaults to ``False``. In single-step mode the
+            voltage is appended step by step until ``reset()`` is called and every
+            step copies the whole sequence, so this option is meant for monitoring
+            and debugging
         :type store_v_seq: bool
         :raises ValueError: If ``surrogate_function`` is not
             ``MultiLevelSpikeCount`` or if ``surrogate_function.spiking=False``

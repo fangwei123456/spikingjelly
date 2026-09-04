@@ -228,6 +228,21 @@ def test_complementary_lif_state_storage_reset_and_backend_contract():
         neuron.ComplementaryLIFNode(backend="triton")
 
 
+def test_complementary_lif_single_step_ignores_store_v_seq():
+    module = neuron.ComplementaryLIFNode()
+    module.store_v_seq = True
+    x = torch.rand(2, 3)
+
+    module(x)
+    module(x)
+    assert module.v_seq is None
+    assert module.v.shape == x.shape
+
+    functional.reset_net(module)
+    assert module.v_seq is None
+    assert module.v == 0.0
+
+
 @pytest.mark.parametrize("threshold_related", [False, True])
 def test_liaf_step_matches_module(threshold_related):
     x = torch.randn(2, 3)
@@ -384,6 +399,70 @@ def test_store_v_seq_does_not_change_functional_state_layout():
     node.store_v_seq = False
     assert tuple(name for name, _ in node.named_memories()) == ("v",)
     assert node.v_seq is None
+
+
+@pytest.mark.parametrize("node_type", [neuron.IFNode, neuron.LIFNode])
+def test_store_v_seq_accumulates_across_single_steps_until_reset(node_type):
+    x_seq = torch.rand(4, 2, 3) + 0.5
+    x_single = x_seq.clone().requires_grad_()
+    x_multi = x_seq.clone().requires_grad_()
+    node_s = node_type(store_v_seq=True)
+    node_m = node_type(store_v_seq=True, step_mode="m")
+
+    spike_seq = torch.stack([node_s(x) for x in x_single])
+    expected_spike_seq = node_m(x_multi)
+
+    torch.testing.assert_close(spike_seq, expected_spike_seq)
+    torch.testing.assert_close(node_s.v_seq, node_m.v_seq)
+    torch.testing.assert_close(node_s.v, node_m.v)
+    node_s.v_seq.sum().backward()
+    node_m.v_seq.sum().backward()
+    torch.testing.assert_close(x_single.grad, x_multi.grad)
+
+    node_s.reset()
+    assert node_s.v_seq is None
+
+    node_s(x_seq[0])
+    node_s.store_v_seq = False
+    node_s(x_seq[1])
+    assert node_s.v_seq is None
+    node_s.store_v_seq = True
+    node_s(x_seq[2])
+    torch.testing.assert_close(node_s.v_seq, node_s.v.unsqueeze(0))
+
+    node_s(torch.rand(5, 3))
+    assert node_s.v_seq.shape == (1, 5, 3)
+    torch.testing.assert_close(node_s.v_seq, node_s.v.unsqueeze(0))
+
+    node_off = node_type()
+    for x in x_seq:
+        node_off(x)
+    assert node_off.v_seq is None
+
+
+def test_single_step_v_seq_owns_its_storage():
+    node = neuron.IFNode(store_v_seq=True)
+    with torch.no_grad():
+        node(torch.rand(2, 3))
+        recorded = node.v_seq
+        node.v.fill_(-1.0)
+    assert node.v_seq.data_ptr() != node.v.data_ptr()
+    assert not torch.equal(recorded[0], node.v)
+
+
+def test_detach_covers_single_step_v_seq():
+    node = neuron.LIFNode(store_v_seq=True)
+    x = torch.rand(2, 2, 3, requires_grad=True)
+    node(x[0])
+    assert node.v_seq.requires_grad
+    functional.detach_net(node)
+    assert not node.v.requires_grad
+    assert not node.v_seq.requires_grad
+    node(x[1])
+    assert node.v_seq.shape == (2, 2, 3)
+    node.v_seq.sum().backward()
+    assert torch.all(x.grad[0] == 0)
+    assert torch.any(x.grad[1] != 0)
 
 
 def test_save_v_lif_keeps_observed_voltage_out_of_functional_state():
@@ -628,6 +707,51 @@ def test_cuba_sequence_caches_are_not_functional_states():
     for actual, expected in zip(module._memories.values(), updated_states):
         if isinstance(actual, torch.Tensor):
             torch.testing.assert_close(actual, expected)
+
+
+def test_cuba_store_v_seq_accumulates_across_single_steps_until_reset():
+    x_seq = torch.rand(4, 2, 3) + 0.5
+    node_s = lava_exchange.CubaLIFNode(
+        current_decay=0.25, voltage_decay=0.5, store_v_seq=True
+    )
+    node_m = lava_exchange.CubaLIFNode(
+        current_decay=0.25, voltage_decay=0.5, step_mode="m", store_v_seq=True
+    )
+
+    spike_seq = torch.stack([node_s(x) for x in x_seq])
+    expected_spike_seq = node_m(x_seq)
+
+    torch.testing.assert_close(spike_seq, expected_spike_seq)
+    torch.testing.assert_close(node_s.v_seq, node_m.v_seq)
+    torch.testing.assert_close(node_s.voltage_state, node_m.voltage_state)
+    assert node_s.i_seq is None
+
+    node_s(torch.rand(5, 3))
+    assert node_s.v_seq.shape == (1, 5, 3)
+    torch.testing.assert_close(node_s.v_seq, node_s.voltage_state.unsqueeze(0))
+
+    x = torch.rand(5, 3, requires_grad=True)
+    node_s(x)
+    assert node_s.v_seq.requires_grad
+    node_s.detach()
+    assert not node_s.v_seq.requires_grad
+
+    node_s.reset()
+    assert node_s.v_seq is None
+
+    # The inherited ``v`` memory is vestigial for CubaLIFNode; even if a caller
+    # assigns a tensor to it, each step must record exactly one entry.
+    node_s(x_seq[0])
+    node_s.v = torch.zeros_like(node_s.voltage_state)
+    node_s(x_seq[1])
+    assert node_s.v_seq.shape == (2, 2, 3)
+    torch.testing.assert_close(node_s.v_seq[-1], node_s.voltage_state)
+    node_s.reset()
+
+    node_off = lava_exchange.CubaLIFNode(current_decay=0.25, voltage_decay=0.5)
+    for x in x_seq:
+        node_off(x)
+    assert node_off.v_seq is None
 
 
 def test_flexsn_sequence_cache_is_not_a_functional_state():
