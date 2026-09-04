@@ -513,6 +513,89 @@ def test_izhikevich_step_matches_module():
     _assert_close(w_next, module.w)
 
 
+@pytest.mark.parametrize("v_reset", [0.0, None])
+@pytest.mark.parametrize("detach_reset", [False, True])
+def test_raf_step_matches_module(v_reset, detach_reset):
+    x = torch.randn(2, 3)
+    u = torch.randn(2, 3) * 0.3
+    v = torch.randn(2, 3) * 0.3
+    function_surrogate = _surrogate()
+    module = neuron.RAFNode(
+        b=-0.2,
+        omega=1.3,
+        dt=0.5,
+        v_threshold=0.5,
+        v_reset=v_reset,
+        surrogate_function=_surrogate(),
+        detach_reset=detach_reset,
+    )
+    module.u = u.clone()
+    module.v = v.clone()
+
+    spike, u_next, v_next = functional.raf_step(
+        x,
+        u,
+        v,
+        -0.2,
+        1.3,
+        0.5,
+        0.5,
+        v_reset,
+        function_surrogate,
+        detach_reset,
+    )
+    module_spike = module(x)
+
+    _assert_close(spike, module_spike)
+    _assert_close(u_next, module.u)
+    _assert_close(v_next, module.v)
+
+
+def test_raf_reset_only_touches_v():
+    # a spike must hard/soft-reset v but leave u exactly as the charge step
+    # produced it -- that is what gives post-inhibitory rebound.
+    for v_reset in (0.0, None):
+        module = neuron.RAFNode(
+            b=-0.2, omega=1.0, dt=1.0, v_threshold=0.3, v_reset=v_reset
+        )
+        module.u = torch.tensor([2.0])
+        module.v = torch.tensor([2.0])
+
+        reference = neuron.RAFNode(
+            b=-0.2, omega=1.0, dt=1.0, v_threshold=1e9, v_reset=v_reset
+        )
+        reference.u = torch.tensor([2.0])
+        reference.v = torch.tensor([2.0])
+
+        spike = module(torch.tensor([0.0]))
+        reference(torch.tensor([0.0]))
+
+        assert spike.item() == 1.0
+        _assert_close(module.u, reference.u)
+
+
+def test_raf_single_step_multi_step_equivalence():
+    torch.manual_seed(0)
+    x_seq = torch.randn(6, 2, 3)
+
+    single_step = neuron.RAFNode(b=-0.15, omega=0.8, dt=0.5, v_threshold=0.4)
+    single_spikes, single_u_steps, single_v_steps = [], [], []
+    for x in x_seq:
+        single_spikes.append(single_step(x))
+        single_u_steps.append(single_step.u.clone())
+        single_v_steps.append(single_step.v.clone())
+
+    multi_step = neuron.RAFNode(
+        b=-0.15, omega=0.8, dt=0.5, v_threshold=0.4, step_mode="m", store_v_seq=True
+    )
+    multi_spikes = multi_step(x_seq)
+
+    _assert_close(multi_spikes, torch.stack(single_spikes))
+    _assert_close(multi_step.v_seq, torch.stack(single_v_steps))
+    _assert_close(multi_step.v, single_step.v)
+    _assert_close(multi_step.u, single_step.u)
+
+
 @pytest.mark.parametrize("scale_reset", [False, True])
 def test_klif_step_matches_module(scale_reset):
     x = torch.randn(2, 3)
