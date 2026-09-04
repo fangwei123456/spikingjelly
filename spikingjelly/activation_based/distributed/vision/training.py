@@ -596,11 +596,12 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                 if rank == checkpoint_rank:
                     checkpoint_group = group
                     cleanup.callback(dist.destroy_process_group, group)
-            cleanup.callback(
-                lambda: checkpoint_future.result()
-                if checkpoint_future is not None
-                else None
-            )
+
+            def finish_pending_checkpoint() -> None:
+                if checkpoint_future is not None:
+                    checkpoint_future.result()
+
+            cleanup.callback(finish_pending_checkpoint)
         if dp_size > 1 and config.tensor_parallel_size > 1:
             stage_group = None
             for pipeline_rank in range(config.pipeline_parallel_size):
