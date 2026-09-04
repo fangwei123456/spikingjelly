@@ -4,7 +4,8 @@ import functools
 import importlib
 import json
 import os
-import time
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal, Optional
@@ -69,11 +70,11 @@ def _load_checkpoint_model(
     set_model_state_dict(model, state["model"], options=options)
 
 
-def _sync_rank_zero_error(
+def _sync_error(
     error: Optional[BaseException], device: torch.device, message: str
 ) -> None:
     failed = torch.tensor(int(error is not None), dtype=torch.uint8, device=device)
-    dist.broadcast(failed, src=0)
+    dist.all_reduce(failed)
     if failed.item():
         if error is not None:
             raise error
@@ -198,9 +199,7 @@ def export_inference_artifact(checkpoint: Path, output: Path) -> None:
                 error = exception
                 if temporary.exists():
                     temporary.unlink()
-        _sync_rank_zero_error(
-            error, device, "Rank 0 could not export the inference artifact."
-        )
+        _sync_error(error, device, "Rank 0 could not export the inference artifact.")
         dist.barrier()
     finally:
         if initialized_here and dist.is_initialized():
@@ -257,6 +256,15 @@ class _IndexedDataset(Dataset):
         else:
             image, target, has_target = item, -1, False
         return image, target, source_index, valid, has_target
+
+
+def _valid_indices(
+    valid: torch.Tensor, has_target: Optional[torch.Tensor] = None
+) -> torch.Tensor:
+    selected = valid.to(torch.bool)
+    if has_target is not None:
+        selected = selected & has_target.to(torch.bool)
+    return selected.nonzero().flatten()
 
 
 def _build_loader(
@@ -316,6 +324,103 @@ def _append_predictions(
         handle[name].resize(tuple(shape))
     handle["index"][start:end] = indices.numpy()
     handle["logits"][start:end] = logits.float().numpy()
+
+
+class _PredictionWriter:
+    def __init__(
+        self,
+        path: Path,
+        *,
+        device: torch.device,
+        batch_size: int,
+        num_classes: int,
+        reuse_output: bool,
+    ) -> None:
+        self._path = path
+        self._num_classes = num_classes
+        self._reuse_output = reuse_output
+        self._copy_stream = torch.cuda.Stream(device=device)
+        # A slot is reusable only after the future consuming its buffer completes.
+        self._buffer_slots = deque(
+            (
+                None,
+                torch.empty(
+                    batch_size,
+                    num_classes,
+                    device="cpu",
+                    dtype=torch.float32,
+                    pin_memory=True,
+                ),
+            )
+            for _ in range(2)
+        )
+        self._executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="spikingjelly-prediction"
+        )
+        self._handle = None
+        self._closed = False
+
+    def _write(
+        self,
+        completed: torch.cuda.Event,
+        indices: torch.Tensor,
+        logits: torch.Tensor,
+    ) -> None:
+        if self._handle is None:
+            self._handle = _open_prediction_shard(self._path, self._num_classes)
+        completed.synchronize()
+        _append_predictions(self._handle, indices, logits)
+
+    def submit(self, indices: torch.Tensor, logits: torch.Tensor) -> None:
+        if not logits.shape[0]:
+            return
+        finished, buffer = self._buffer_slots.popleft()
+        if finished is not None:
+            finished.result()
+        source = logits.detach().float()
+        target = buffer[: source.shape[0]]
+        current_stream = torch.cuda.current_stream(source.device)
+        self._copy_stream.wait_stream(current_stream)
+        with torch.cuda.stream(self._copy_stream):
+            target.copy_(source, non_blocking=True)
+            completed = torch.cuda.Event()
+            completed.record()
+            source.record_stream(self._copy_stream)
+        if self._reuse_output:
+            # CUDA Graph replay overwrites its static output buffer.
+            current_stream.wait_stream(self._copy_stream)
+        future = self._executor.submit(
+            self._write, completed, indices.detach().clone(), target
+        )
+        self._buffer_slots.append((future, buffer))
+
+    def _close(self) -> None:
+        if self._handle is None:
+            self._handle = _open_prediction_shard(self._path, self._num_classes)
+        self._handle.close()
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        error = None
+        for future, _ in self._buffer_slots:
+            if future is None:
+                continue
+            try:
+                future.result()
+            except BaseException as exception:
+                if error is None:
+                    error = exception
+        try:
+            self._executor.submit(self._close).result()
+        except BaseException as exception:
+            if error is None:
+                error = exception
+        finally:
+            self._executor.shutdown(wait=True)
+        if error is not None:
+            raise error
 
 
 def _merge_prediction_shards(
@@ -453,7 +558,7 @@ def _run_classification(
     initialized_here = not dist.is_initialized()
     if initialized_here:
         dist.init_process_group("nccl", device_id=device)
-    prediction_shard = None
+    prediction_writer = None
     shard_path = None
     try:
         world_size = dist.get_world_size()
@@ -573,8 +678,12 @@ def _run_classification(
             shard_path = output.with_name(f".{output.name}.rank-{rank:05d}.h5")
             if shard_path.exists():
                 raise FileExistsError(f"Prediction shard already exists: {shard_path}")
-            prediction_shard = _open_prediction_shard(
-                shard_path, model_config.num_classes
+            prediction_writer = _PredictionWriter(
+                shard_path,
+                device=device,
+                batch_size=config.batch_size,
+                num_classes=model_config.num_classes,
+                reuse_output=config.execution_mode == "cuda_graph",
             )
 
         def execute_model(images: torch.Tensor) -> torch.Tensor:
@@ -637,39 +746,65 @@ def _run_classification(
             torch.cuda.reset_peak_memory_stats(device)
         dist.barrier()
         elapsed_seconds = 0.0
+        timing_events = []
         with torch.inference_mode():
             for batch in loader:
-                batch_started = time.perf_counter() if evaluate else 0.0
+                if evaluate:
+                    batch_started = torch.cuda.Event(enable_timing=True)
+                    batch_started.record()
                 logits, targets, indices, valid, has_target = forward_batch(batch)
                 if output_rank:
-                    valid_device = valid.to(device=device, dtype=torch.bool)
                     if evaluate:
-                        target_device = has_target.to(device=device, dtype=torch.bool)
-                        selected = valid_device & target_device
-                        if selected.any():
-                            count = selected.sum()
-                            loss = loss_function(logits[selected], targets[selected])
+                        selected_cpu = _valid_indices(valid, has_target)
+                        count = selected_cpu.numel()
+                        if count:
+                            if count == valid.numel():
+                                selected_logits = logits
+                                selected_targets = targets
+                            else:
+                                selected = selected_cpu.to(device)
+                                selected_logits = logits.index_select(0, selected)
+                                selected_targets = targets.index_select(0, selected)
+                            loss = loss_function(selected_logits, selected_targets)
                             totals[0] += loss.double() * count
                             totals[1] += (
-                                logits[selected].argmax(1) == targets[selected]
+                                selected_logits.argmax(1) == selected_targets
                             ).sum()
                             totals[2] += count
-                    if prediction_shard is not None:
-                        selected_cpu = valid.to(torch.bool)
-                        _append_predictions(
-                            prediction_shard,
-                            indices[selected_cpu],
-                            logits[selected_cpu.to(device)].detach().float().cpu(),
+                    if prediction_writer is not None:
+                        selected_cpu = _valid_indices(valid)
+                        selected_logits = (
+                            logits
+                            if selected_cpu.numel() == valid.numel()
+                            else logits.index_select(0, selected_cpu.to(device))
                         )
-                torch.cuda.synchronize(device)
+                        prediction_writer.submit(
+                            indices[selected_cpu],
+                            selected_logits,
+                        )
                 if evaluate:
-                    elapsed_seconds += time.perf_counter() - batch_started
-        if prediction_shard is not None:
-            prediction_shard.close()
-            prediction_shard = None
-
+                    batch_finished = torch.cuda.Event(enable_timing=True)
+                    batch_finished.record()
+                    timing_events.append((batch_started, batch_finished))
+        if timing_events:
+            timing_events[-1][1].synchronize()
+            elapsed_seconds = (
+                sum(
+                    started.elapsed_time(finished)
+                    for started, finished in timing_events
+                )
+                / 1000.0
+            )
         if not evaluate:
-            dist.barrier()
+            error = None
+            if prediction_writer is not None:
+                try:
+                    prediction_writer.close()
+                except BaseException as exception:
+                    error = exception
+                prediction_writer = None
+            _sync_error(error, device, "Another rank could not write predictions.")
+
             error = None
             if rank == 0:
                 try:
@@ -700,9 +835,7 @@ def _run_classification(
                     )
                 except BaseException as exception:
                     error = exception
-            _sync_rank_zero_error(
-                error, device, "Rank 0 could not merge prediction shards."
-            )
+            _sync_error(error, device, "Rank 0 could not merge prediction shards.")
             return None
 
         elapsed = torch.tensor(elapsed_seconds, device=device)
@@ -744,8 +877,8 @@ def _run_classification(
             )
         return result
     finally:
-        if prediction_shard is not None:
-            prediction_shard.close()
+        if prediction_writer is not None:
+            prediction_writer.close()
         if shard_path is not None and shard_path.exists():
             shard_path.unlink()
         if initialized_here and dist.is_initialized():
@@ -753,20 +886,43 @@ def _run_classification(
 
 
 def evaluate_classification(config: EvaluationConfig) -> dict[str, float]:
-    r"""Evaluate one distributed vision classification dataset.
+    r"""
+    **API Language** - :ref:`中文 <evaluate_classification-cn>` | :ref:`English <evaluate_classification-en>`
 
-    **中文：** 对 dataset builder 返回的 ``(image, target)`` 数据集计算
-    全局 loss、accuracy 和性能指标。
+    ----
 
-    **English:** Compute global loss, accuracy, and performance metrics for the
-    ``(image, target)`` dataset returned by the configured builder.
+    .. _evaluate_classification-cn:
 
-    :param config: 推理配置。 / Inference configuration.
+    * **中文**
+
+    对 dataset builder 返回的 ``(image, target)`` 数据集计算
+    全局 loss、accuracy 和性能指标。``inference_seconds`` 是各 batch
+    从输入搬运到指标计算结束的 CUDA Event 时间之和，不包含数据加载和最终
+    分布式归约。
+
+    :param config: 推理配置。
     :type config: spikingjelly.activation_based.distributed.vision.EvaluationConfig
-    :return: 全局评测与性能指标。 / Global evaluation and performance metrics.
+    :return: 全局评测与性能指标。
     :rtype: dict[str, float]
-    :raises TypeError: ``config`` 不是 :class:`EvaluationConfig`。 / If ``config``
-        is not :class:`EvaluationConfig`.
+    :raises TypeError: ``config`` 不是 :class:`EvaluationConfig`。
+
+    ----
+
+    .. _evaluate_classification-en:
+
+    * **English**
+
+    Compute global loss, accuracy, and performance metrics for the
+    ``(image, target)`` dataset returned by the configured builder.
+    ``inference_seconds`` sums CUDA Event durations from input transfer through
+    metric computation for each batch; it excludes data loading and final
+    distributed reductions.
+
+    :param config: Inference configuration.
+    :type config: spikingjelly.activation_based.distributed.vision.EvaluationConfig
+    :return: Global evaluation and performance metrics.
+    :rtype: dict[str, float]
+    :raises TypeError: If ``config`` is not :class:`EvaluationConfig`.
     """
     if not isinstance(config, EvaluationConfig):
         raise TypeError("evaluate_classification requires EvaluationConfig.")
@@ -774,24 +930,48 @@ def evaluate_classification(config: EvaluationConfig) -> dict[str, float]:
 
 
 def predict_classification(config: PredictionConfig, output: Path) -> None:
-    r"""Predict one distributed vision dataset and write one ordered HDF5 file.
+    r"""
+    **API Language** - :ref:`中文 <predict_classification-cn>` | :ref:`English <predict_classification-en>`
 
-    **中文：** 按 dataset index 保存 logits。dataset 可以返回 image 或
-    ``(image, target)``；target 被忽略，函数不计算或返回评测指标。填充样本
-    不会写入结果。
+    ----
 
-    **English:** Save logits by dataset index. The dataset may return an image or
-    ``(image, target)``; targets are ignored and no evaluation metrics are
-    computed or returned. Padded samples are excluded.
+    .. _predict_classification-cn:
 
-    :param config: 推理配置。 / Inference configuration.
+    * **中文**
+
+    按 dataset index 保存 logits。dataset 可以返回 image 或
+    ``(image, target)``；target 被忽略，函数不计算或返回评测指标。填充样本不会
+    写入结果。每个输出 rank 使用两个 pinned-memory buffer 和后台 writer；
+    eager/compile 模式将 logits 搬运与 HDF5 写入和下一 batch 重叠；CUDA Graph
+    在复用静态输出前等待搬运完成，但仍会重叠 HDF5 写入。函数返回前会完成全部
+    写入并传播错误。
+
+    :param config: 推理配置。
     :type config: spikingjelly.activation_based.distributed.vision.PredictionConfig
-    :param output: 新 HDF5 文件。 / New HDF5 file.
+    :param output: 新 HDF5 文件。
     :type output: pathlib.Path
-    :return: 无。 / None.
-    :rtype: None
     :raises TypeError: ``config`` 不是 :class:`PredictionConfig`，或是
-        :class:`EvaluationConfig`。 / If ``config`` is not a prediction-only
+        :class:`EvaluationConfig`。
+
+    ----
+
+    .. _predict_classification-en:
+
+    * **English**
+
+    Save logits by dataset index. The dataset may return an image or
+    ``(image, target)``; targets are ignored and no evaluation metrics are
+    computed or returned. Padded samples are excluded. Each output rank uses two
+    pinned-memory buffers and a background writer. Eager/compile execution overlaps
+    logits transfers and HDF5 writes with the next batch; CUDA Graph waits for the
+    transfer before reusing static output but still overlaps the HDF5 write. All
+    writes finish and errors propagate before the function returns.
+
+    :param config: Inference configuration.
+    :type config: spikingjelly.activation_based.distributed.vision.PredictionConfig
+    :param output: New HDF5 file.
+    :type output: pathlib.Path
+    :raises TypeError: If ``config`` is not a prediction-only
         :class:`PredictionConfig`.
     """
     if not isinstance(config, PredictionConfig) or isinstance(config, EvaluationConfig):
