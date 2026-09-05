@@ -36,6 +36,7 @@ functions here execute an already selected path.
 
 from __future__ import annotations
 
+import math
 from typing import Callable, Optional
 
 import torch
@@ -52,6 +53,7 @@ __all__ = [
     "ilif_step",
     "plif_step",
     "izhikevich_step",
+    "raf_step",
     "klif_step",
     "cuba_lif_step",
     "if_step_cupy",
@@ -1220,6 +1222,137 @@ def izhikevich_step(
     else:
         v_next = (1.0 - spike_d) * v_charged + spike * v_reset
     return spike, v_next, w_next + b * spike
+
+
+def raf_step(
+    x: torch.Tensor,
+    u: torch.Tensor,
+    v: torch.Tensor,
+    b: float,
+    omega: float,
+    dt: float,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <raf_step-cn>` | :ref:`English <raf_step-en>`
+
+    ----
+
+    .. _raf_step-cn:
+
+    * **中文**
+
+    执行 resonate-and-fire (RAF) 神经元的一次显式状态更新。
+
+    RAF 神经元（Izhikevich, *Resonate-and-fire neurons*, Neural Networks 14
+    (2001) 883-894）是一个二维线性阈下系统，状态可等价看作复数 :math:`z = u + iv`，
+    按固定的衰减率 :math:`b < 0` 和固有角频率 :math:`\omega` 旋转衰减：
+
+    .. math::
+
+        z[t] = z[t-1] \cdot \exp((b + i\omega)\,dt) + x[t]
+
+    real 分量 :math:`u` 接收输入电流；imaginary 分量 :math:`v` 是放电分量，
+    对应阈下阻尼振荡，在阈值附近对输入频率有选择性响应。展开为两个实数状态：
+
+    .. math::
+
+        u[t] &= \alpha (u[t-1]\cos\theta - v[t-1]\sin\theta) + x[t] \\
+        v[t] &= \alpha (u[t-1]\sin\theta + v[t-1]\cos\theta)
+
+    其中 :math:`\alpha = \exp(b\,dt)`，:math:`\theta = \omega\,dt`。放电后只重置
+    :math:`v`（放电分量），:math:`u` 不受影响，这正是产生放电后反弹
+    （post-inhibitory rebound）的原因。
+
+    :param x: 当前输入张量，shape 为 ``[N, *]``
+    :type x: torch.Tensor
+    :param u: 当前实部状态（接收输入的分量），shape、dtype 和 device 与 ``x`` 兼容
+    :type u: torch.Tensor
+    :param v: 当前虚部状态（放电分量）
+    :type v: torch.Tensor
+    :param b: 衰减率，须为负数
+    :type b: float
+    :param omega: 固有角频率，须为正数
+    :type omega: float
+    :param dt: 积分步长，须为正数
+    :type dt: float
+    :param v_threshold: 放电阈值
+    :type v_threshold: float
+    :param v_reset: 重置电位；``None`` 表示 soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: 替代梯度函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否在重置分支中分离脉冲梯度
+    :type detach_reset: bool
+    :return: ``(spike, u_next, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+
+    ----
+
+    .. _raf_step-en:
+
+    * **English**
+
+    Run one explicit state update of a resonate-and-fire (RAF) neuron.
+
+    The RAF neuron (Izhikevich, *Resonate-and-fire neurons*, Neural Networks
+    14 (2001) 883-894) is a 2-D linear subthreshold system, equivalently a
+    complex state :math:`z = u + iv` that rotates and decays at a fixed rate
+    :math:`b < 0` and intrinsic angular frequency :math:`\omega`:
+
+    .. math::
+
+        z[t] = z[t-1] \cdot \exp((b + i\omega)\,dt) + x[t]
+
+    The real component :math:`u` receives the input current; the imaginary
+    component :math:`v` is the firing component, giving damped subthreshold
+    oscillations and a preferential response to input near :math:`\omega`.
+    Expanded into two real states:
+
+    .. math::
+
+        u[t] &= \alpha (u[t-1]\cos\theta - v[t-1]\sin\theta) + x[t] \\
+        v[t] &= \alpha (u[t-1]\sin\theta + v[t-1]\cos\theta)
+
+    where :math:`\alpha = \exp(b\,dt)` and :math:`\theta = \omega\,dt`. Only
+    :math:`v` (the firing component) is reset after a spike; :math:`u` is left
+    untouched, which is what produces post-inhibitory rebound.
+
+    :param x: Current input tensor, shape ``[N, *]``
+    :type x: torch.Tensor
+    :param u: Current real-part state (receives the input), shape, dtype and
+        device compatible with ``x``
+    :type u: torch.Tensor
+    :param v: Current imaginary-part state (the firing component)
+    :type v: torch.Tensor
+    :param b: Decay rate, must be negative
+    :type b: float
+    :param omega: Intrinsic angular frequency, must be positive
+    :type omega: float
+    :param dt: Integration step size, must be positive
+    :type dt: float
+    :param v_threshold: Firing threshold
+    :type v_threshold: float
+    :param v_reset: Reset voltage; ``None`` means soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: Surrogate-gradient function
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach spike in the voltage-reset branch
+    :type detach_reset: bool
+    :return: ``(spike, u_next, v_next)``
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    """
+    alpha = math.exp(b * dt)
+    cos_theta = math.cos(omega * dt)
+    sin_theta = math.sin(omega * dt)
+    u_charged = alpha * (u * cos_theta - v * sin_theta) + x
+    v_charged = alpha * (u * sin_theta + v * cos_theta)
+    spike = surrogate_function(v_charged - v_threshold)
+    v_next = voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
+    return spike, u_charged, v_next
 
 
 def klif_step(
