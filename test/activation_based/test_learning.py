@@ -477,3 +477,32 @@ def test_stdp_multi_step_preserves_empty_sequence_state():
     assert trace_pre_next is trace_pre
     assert trace_post_next is trace_post
     assert torch.equal(delta_w, torch.zeros_like(synapse.weight))
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.float64])
+def test_mstdp_learner_eligibility_follows_synapse_dtype(dtype):
+    # A non-float32 synapse (AMP half, or double) must not produce a
+    # mismatched-dtype eligibility / weight gradient. MSTDPLearner initialised
+    # ``eligibility`` with torch.zeros(...) and no ``dtype=``, so it defaulted to
+    # float32; on a half synapse the resulting ``weight.grad = -delta_w`` raised
+    # a dtype-assignment RuntimeError. MSTDPETLearner already does this correctly
+    # via torch.zeros_like(self.synapse.weight).
+    fc = nn.Linear(8, 5, bias=False).to(dtype)
+    sn = neuron.LIFNode(step_mode="s")
+    learner = learning.MSTDPLearner(
+        step_mode="s",
+        synapse=fc,
+        sn=sn,
+        batch_size=3,
+        tau_pre=2.0,
+        tau_post=2.0,
+        f_pre=f_weight,
+        f_post=f_weight,
+    )
+    in_spike = (torch.rand(3, 8) > 0.5).to(dtype)
+    sn(fc(in_spike))
+    learner.step(torch.ones(3, dtype=dtype))
+
+    assert learner.eligibility.dtype == dtype
+    assert fc.weight.grad is not None
+    assert fc.weight.grad.dtype == fc.weight.dtype
