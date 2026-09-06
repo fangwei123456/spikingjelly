@@ -1271,7 +1271,7 @@ def raf_step(
     :type x: torch.Tensor
     :param u: 当前实部状态（接收输入的分量），shape、dtype 和 device 与 ``x`` 兼容
     :type u: torch.Tensor
-    :param v: 当前虚部状态（放电分量）
+    :param v: 当前虚部状态（放电分量），shape、dtype 和 device 与 ``x`` 兼容
     :type v: torch.Tensor
     :param b: 衰减率，须为负数
     :type b: float
@@ -1326,7 +1326,8 @@ def raf_step(
     :param u: Current real-part state (receives the input), shape, dtype and
         device compatible with ``x``
     :type u: torch.Tensor
-    :param v: Current imaginary-part state (the firing component)
+    :param v: Current imaginary-part state (the firing component), shape, dtype
+        and device compatible with ``x``
     :type v: torch.Tensor
     :param b: Decay rate, must be negative
     :type b: float

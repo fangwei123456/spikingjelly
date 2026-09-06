@@ -19,11 +19,11 @@ class RAFNode(BaseNode):
         v_reset: Optional[float] = 0.0,
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
-        step_mode="s",
-        backend="torch",
+        step_mode: str = "s",
+        backend: str = "torch",
         store_v_seq: bool = False,
-    ):
-        """
+    ) -> None:
+        r"""
         **API Language** - :ref:`中文 <RAFNode.__init__-cn>` | :ref:`English <RAFNode.__init__-en>`
 
         ----
@@ -37,24 +37,24 @@ class RAFNode(BaseNode):
 
         与积分发放（IF/LIF/QIF/EIF/Izhikevich）神经元家族不同，RAF 神经元是一个
         二维线性阈下*振荡*系统，而非积分器：等价于一个以固定衰减率 :math:`b < 0`
-        和固有角频率 :math:`\\omega` 旋转衰减的复数状态 :math:`z = u + iv`，因此对
-        接近 :math:`\\omega` 的输入频率有选择性响应，并表现出阈下阻尼振荡。
+        和固有角频率 :math:`\omega` 旋转衰减的复数状态 :math:`z = u + iv`，因此对
+        接近 :math:`\omega` 的输入频率有选择性响应，并表现出阈下阻尼振荡。
 
         **阈下动力学方程**
 
         .. math::
 
-            u[t] &= \\alpha (u[t-1]\\cos\\theta - v[t-1]\\sin\\theta) + x[t] \\\\
-            v[t] &= \\alpha (u[t-1]\\sin\\theta + v[t-1]\\cos\\theta)
+            u[t] &= \alpha (u[t-1]\cos\theta - v[t-1]\sin\theta) + x[t] \\
+            v[t] &= \alpha (u[t-1]\sin\theta + v[t-1]\cos\theta)
 
-        其中 :math:`\\alpha = \\exp(b\\,dt)`，:math:`\\theta = \\omega\\,dt`。状态
+        其中 :math:`\alpha = \exp(b\,dt)`，:math:`\theta = \omega\,dt`。状态
         由两个实数张量 ``self.u``（实部，接收输入）和 ``self.v``（虚部，放电分量）
         表示，而非复数张量。放电依据 ``self.v`` 相对 ``v_threshold`` 判定；放电后
         只重置 ``self.v``（复用 :class:`BaseNode` 的 soft/hard reset 规则），
         ``self.u`` 不受影响 —— 这正是产生放电后反弹（post-inhibitory rebound）
         的原因。
 
-        本次实现固定 :math:`b`、:math:`\\omega`、:math:`dt`（不可学习），仅支持
+        本次实现固定 :math:`b`、:math:`\omega`、:math:`dt`（不可学习），仅支持
         ``'torch'`` 后端；可学习参数与其它后端留作后续工作。
 
         :param b: 衰减率，须为负数
@@ -96,17 +96,17 @@ class RAFNode(BaseNode):
         RAF neuron is a 2-D linear subthreshold *oscillator*, not an
         integrator: it is equivalent to a complex state :math:`z = u + iv`
         that rotates and decays at a fixed rate :math:`b < 0` and intrinsic
-        angular frequency :math:`\\omega`, so it responds preferentially to
-        input near :math:`\\omega` and shows damped subthreshold oscillations.
+        angular frequency :math:`\omega`, so it responds preferentially to
+        input near :math:`\omega` and shows damped subthreshold oscillations.
 
         **Sub-threshold neuronal dynamics**
 
         .. math::
 
-            u[t] &= \\alpha (u[t-1]\\cos\\theta - v[t-1]\\sin\\theta) + x[t] \\\\
-            v[t] &= \\alpha (u[t-1]\\sin\\theta + v[t-1]\\cos\\theta)
+            u[t] &= \alpha (u[t-1]\cos\theta - v[t-1]\sin\theta) + x[t] \\
+            v[t] &= \alpha (u[t-1]\sin\theta + v[t-1]\cos\theta)
 
-        where :math:`\\alpha = \\exp(b\\,dt)` and :math:`\\theta = \\omega\\,dt`.
+        where :math:`\alpha = \exp(b\,dt)` and :math:`\theta = \omega\,dt`.
         State is two real-valued tensors, ``self.u`` (real part, receives the
         input) and ``self.v`` (imaginary part, the firing component), not a
         complex tensor. Firing is decided from ``self.v`` against
@@ -114,7 +114,7 @@ class RAFNode(BaseNode):
         :class:`BaseNode`'s soft/hard reset rule) — ``self.u`` is left
         untouched, which is what produces post-inhibitory rebound.
 
-        This implementation fixes :math:`b`, :math:`\\omega`, :math:`dt`
+        This implementation fixes :math:`b`, :math:`\omega`, :math:`dt`
         (not learnable) and supports the ``'torch'`` backend only; learnable
         parameters and other backends are left for future work.
 
@@ -167,7 +167,7 @@ class RAFNode(BaseNode):
         self.omega = omega
         self.dt = dt
 
-    def extra_repr(self):
+    def extra_repr(self) -> str:
         return super().extra_repr() + f", b={self.b}, omega={self.omega}, dt={self.dt}"
 
     def materialize_states(
@@ -212,7 +212,7 @@ class RAFNode(BaseNode):
         return (spike,), (v, u)
 
     @property
-    def supported_backends(self):
+    def supported_backends(self) -> tuple[str, ...]:
         if self.step_mode in ("s", "m"):
             return ("torch",)
         else:

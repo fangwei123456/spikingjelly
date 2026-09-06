@@ -15,6 +15,17 @@ and the archived documentation linked from the project README.
 Unreleased
 ----------
 
+Features
+~~~~~~~~
+
+Spiking Neurons
+^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.neuron``.
+
+- Added the torch-only ``RAFNode`` resonate-and-fire neuron with fixed oscillator
+  parameters, real-valued states, and single-step and multi-step execution.
+
 Improvements
 ~~~~~~~~~~~~
 
