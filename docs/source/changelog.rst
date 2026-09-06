@@ -18,6 +18,15 @@ Unreleased
 Improvements
 ~~~~~~~~~~~~
 
+DSpike Search Network
+^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.model.spike_dhs``.
+
+- Restored ``DSpike`` construction after the surrogate-function base API change.
+- Made DGS search parameters follow the module device and dtype across
+  construction, conversion, and stage initialization.
+
 Stateful Modules
 ^^^^^^^^^^^^^^^^
 
