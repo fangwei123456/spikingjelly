@@ -144,6 +144,14 @@ Nonlinear Integrate-and-fire Neurons
    * - :class:`EIFNode <spikingjelly.activation_based.neuron.nonlinear_if.EIFNode>`
      - Exponential Integrate-and-Fire (EIF) neuron.
 
+Resonate-and-Fire Neurons
+--------------------------------------------------
+
+.. list-table::
+
+   * - :class:`RAFNode <spikingjelly.activation_based.neuron.resonate.RAFNode>`
+     - Resonate-and-Fire (RAF) neuron.
+
 LIF Variants
 --------------------------------------------------
 

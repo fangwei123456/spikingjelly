@@ -135,7 +135,7 @@ class DSpike(SurrogateFunctionBase):
 
         DSpike surrogate gradient function.
         """
-        super().__init__(alpha, spiking)
+        super().__init__(spiking=spiking, alpha=alpha)
         assert alpha > 0, "alpha must be lager than 0."
 
     @staticmethod
@@ -155,7 +155,9 @@ class save_v_LIFNode(LIFNode):
         * **中文**
 
         保存放电前平均膜电位的 LIF 神经元，用于 DSpike 搜索。构造参数与
-        :class:`LIFNode` 相同。
+        :class:`LIFNode` 相同。与 :class:`LIFNode` 不同， ``store_v_seq`` 仅在
+        ``step_mode = 'm'`` 时生效，且 ``self.v_seq`` 保存的是每个时间步放电前膜电位的
+        均值（ ``shape = [T]`` ）；单步模式下不会累积 ``self.v_seq`` 。
 
         :param args: 传递给 :class:`LIFNode` 的位置参数
         :type args: tuple[object, ...]
@@ -169,7 +171,10 @@ class save_v_LIFNode(LIFNode):
         * **English**
 
         LIF neuron that stores the mean pre-spike membrane voltage for DSpike
-        search. Constructor arguments are the same as :class:`LIFNode`.
+        search. Constructor arguments are the same as :class:`LIFNode`. Unlike
+        :class:`LIFNode`, ``store_v_seq`` only takes effect when ``step_mode = 'm'``,
+        and ``self.v_seq`` then holds the mean pre-spike voltage of every time-step
+        (``shape = [T]``); ``self.v_seq`` is not accumulated in single-step mode.
 
         :param args: Positional arguments forwarded to :class:`LIFNode`
         :type args: tuple[object, ...]
@@ -348,7 +353,7 @@ class SearchSpikingConv2d_stem(nn.Module):
 
         self.is_DGS = False
 
-        self.dgs_alpha = nn.Parameter(1e-3 * torch.ones(3).cuda(), requires_grad=True)
+        self.dgs_alpha = nn.Parameter(self.conv_m.weight.new_full((3,), 1e-3))
         self.dgs_step = 0.2
 
     def dgs_init_stage(self):
@@ -366,7 +371,8 @@ class SearchSpikingConv2d_stem(nn.Module):
             self.spike_m.surrogate_function.alpha + self.dgs_step
         )
 
-        self.dgs_alpha = nn.Parameter(1e-3 * torch.ones(3).cuda(), requires_grad=True)
+        with torch.no_grad():
+            self.dgs_alpha.fill_(1e-3)
 
         for value in self.parameters():
             value.requires_grad_(True)
@@ -459,7 +465,7 @@ class SearchSpikingConv2d_cell(nn.Module):
 
         self.is_DGS = False
 
-        self.dgs_alpha = nn.Parameter(1e-3 * torch.ones(3).cuda(), requires_grad=True)
+        self.dgs_alpha = nn.Parameter(self.conv1_m.weight.new_full((3,), 1e-3))
         self.dgs_step = 0.2
 
     def dgs_init_stage(self):
@@ -483,7 +489,8 @@ class SearchSpikingConv2d_cell(nn.Module):
             self.spike_m.surrogate_function.alpha + self.dgs_step
         )
 
-        self.dgs_alpha = nn.Parameter(1e-3 * torch.ones(3).cuda(), requires_grad=True)
+        with torch.no_grad():
+            self.dgs_alpha.fill_(1e-3)
 
         for value in self.parameters():
             value.requires_grad_(True)

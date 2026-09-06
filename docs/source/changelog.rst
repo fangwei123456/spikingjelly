@@ -15,6 +15,17 @@ and the archived documentation linked from the project README.
 Unreleased
 ----------
 
+Features
+~~~~~~~~
+
+Spiking Neurons
+^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.neuron``.
+
+- Added the torch-only ``RAFNode`` resonate-and-fire neuron with fixed oscillator
+  parameters, real-valued states, and single-step and multi-step execution.
+
 Improvements
 ~~~~~~~~~~~~
 
@@ -26,6 +37,15 @@ Module: ``spikingjelly.activation_based.learning``.
 - Made ``MSTDPLearner`` eligibility and reward-derived weight updates follow the
   synapse device and dtype.
 
+DSpike Search Network
+^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.model.spike_dhs``.
+
+- Restored ``DSpike`` construction after the surrogate-function base API change.
+- Made DGS search parameters follow the module device and dtype across
+  construction, conversion, and stage initialization.
+
 Stateful Modules
 ^^^^^^^^^^^^^^^^
 
@@ -34,6 +54,49 @@ Module: ``spikingjelly.activation_based.base``.
 - Fixed ``MemoryModule`` tensor reset values to follow module device and dtype
   conversions, so ``reset()`` no longer restores tensors on the previous device or
   with the previous dtype.
+
+Distributed Training
+^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.distributed.vision``.
+
+- Vision training now stages checkpoints on the writer rank and overlaps their
+  filesystem upload with subsequent work, while bounding each writer to one
+  in-flight checkpoint and reporting failures before the next save or return.
+
+Distributed Inference
+^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.distributed.vision``.
+
+- Removed per-batch CUDA synchronization from Vision evaluation and prediction;
+  evaluation timing now uses CUDA events and padding is filtered on the CPU.
+- Vision prediction now uses bounded pinned-memory transfers and a background
+  HDF5 shard writer to overlap output work where execution dependencies allow.
+
+Bug Fixes
+~~~~~~~~~
+
+Spiking Neurons
+^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.neuron``.
+
+- Fixed ``store_v_seq`` being ignored when a ``BaseNode`` subclass (``LIFNode``,
+  ``IFNode`` and their relatives, plus ``lava_exchange.CubaLIFNode``) is stepped
+  in single-step mode, so these neurons wrapped in ``LinearRecurrentContainer``,
+  ``ElementWiseRecurrentContainer``, or ``MultiStepContainer`` now expose a
+  ``[T, N, *]`` ``v_seq`` that ``AttributeMonitor`` can record (issue #631).
+  ``ComplementaryLIFNode``, which exposes its trajectories only through
+  ``store_state_seqs``, still leaves ``v_seq`` empty in both step modes.
+- ``lava_exchange.CubaLIFNode``, which keeps its voltage in ``voltage_state``
+  rather than ``v``, now also records ``voltage_state`` into ``v_seq`` in single-step
+  mode, matching its multi-step trajectory; ``store_i_seq`` is unchanged and
+  remains multi-step only.
+- The single-step ``v_seq`` grows until ``reset()`` is called and copies the whole
+  sequence on every step, so it is intended for monitoring and debugging.
+- ``BaseNode.detach()`` now also detaches the accumulated ``v_seq``, so
+  ``functional.detach_net`` keeps truncated BPTT bounded when ``store_v_seq=True``.
 
 2.0.0rc1 - 2026-08-29
 ---------------------

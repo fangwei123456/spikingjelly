@@ -7,6 +7,8 @@ import os
 import random
 import time
 from collections.abc import Callable
+from concurrent.futures import Future
+from contextlib import ExitStack
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Optional
@@ -116,7 +118,8 @@ def _save_checkpoint(
     tp_rank: int,
     pp_rank: int,
     dp_rank: int,
-) -> None:
+    process_group: Optional[ProcessGroup] = None,
+) -> Future:
     import torch.distributed.checkpoint as dcp
     from torch.distributed.checkpoint.state_dict import get_state_dict
 
@@ -163,12 +166,30 @@ def _save_checkpoint(
         },
     }
     if dp_rank == 0:
-        dcp.save(
+        future = dcp.async_save(
             state,
             checkpoint_id=path / f"pp_{pp_rank:04d}_tp_{tp_rank:04d}",
-            no_dist=True,
+            process_group=process_group,
         )
+    else:
+        future = Future()
+        future.set_result(None)
     dist.barrier()
+    return future
+
+
+def _finish_checkpoint(future: Future, device: torch.device) -> None:
+    error = None
+    try:
+        future.result()
+    except Exception as exception:
+        error = exception
+    failed = torch.tensor(int(error is not None), device=device)
+    dist.all_reduce(failed)
+    if failed.item():
+        if error is not None:
+            raise error
+        raise RuntimeError("A distributed checkpoint writer failed.")
 
 
 def _load_checkpoint(
@@ -457,18 +478,43 @@ def build_imagefolder_datasets(
 
 
 def train_classification(config: TrainingConfig) -> dict[str, float]:
-    r"""Train a vision SNN with native PyTorch distributed execution.
+    r"""
+    **API Language** - :ref:`中文 <train_classification-cn>` | :ref:`English <train_classification-en>`
 
-    **API Language** - 中文 | English
+    ----
 
-    **中文：** 从可序列化 config 构建数据和 architecture-specific 模型，初始化
+    .. _train_classification-cn:
+
+    * **中文**
+
+    从可序列化 config 构建数据和 architecture-specific 模型，初始化
     ``DP × PP × TP`` DeviceMesh，使用配置的 loss 函数运行 DDP 或 FSDP2
     图像分类训练。单步模式显式循环 ``T`` 次，多步模式一次处理完整时间序列；
     ``input_layout`` 显式选择静态 ``[N, C, H, W]`` 或 batch-first 时序
     ``[N, T, C, H, W]`` 输入。每个 batch 后重置 SNN 状态。所有 TP rank 使用
     同一个 DP sampler rank。rank 0 在每个 epoch 后输出一行 JSON 训练与验证指标。
+    checkpoint 在 writer rank 上暂存后于后台写入文件系统；每个 writer 最多
+    保留一个在途 checkpoint，并在下一次保存或函数返回前完成写入和传播错误。
+    暂存会在 writer rank 上临时占用约一份 checkpoint 大小的 CPU 内存。
 
-    **English:** Build data and an architecture-specific model from a serializable
+    :param config: 可直接运行的训练配置。
+    :type config: TrainingConfig
+    :return: 最终 loss、accuracy、step、训练 step 吞吐和跨 rank 峰值显存；吞吐
+        不含数据加载、验证与 checkpoint。
+    :rtype: dict[str, float]
+    :raises RuntimeError: CUDA、NCCL、checkpoint 所需的 Gloo 或 FSDP2 不可用。
+    :raises ImportError: 配置的模块无法导入。
+    :raises AttributeError: 配置的导入对象不存在。
+    :raises TypeError: model builder 或 loss 函数无效。
+    :raises ValueError: world size、验证集划分、模型输出、loss 输出或输入布局无效。
+
+    ----
+
+    .. _train_classification-en:
+
+    * **English**
+
+    Build data and an architecture-specific model from a serializable
     config, initialize a ``DP × PP × TP`` DeviceMesh, run DDP or FSDP2 image
     classification with the configured loss function. Single-step mode calls the
     model explicitly for each of ``T`` steps, while multi-step mode processes the
@@ -476,23 +522,24 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
     ``[N, C, H, W]`` or batch-first temporal ``[N, T, C, H, W]`` input. SNN state
     is reset after every batch. TP peers share the same DP sampler rank. Rank zero
     emits one JSON line of training and validation metrics after every epoch.
+    Checkpoints are staged on each writer rank and uploaded to the filesystem in
+    the background. Each writer keeps at most one checkpoint in flight and finishes
+    it, propagating errors, before the next save or function return. Staging
+    temporarily uses roughly one checkpoint of CPU memory on each writer rank.
 
-    :param config: 可直接运行的训练配置。 / Train-ready configuration.
+    :param config: Train-ready configuration.
     :type config: TrainingConfig
-    :return: 最终 loss、accuracy、step、训练 step 吞吐和跨 rank 峰值显存；吞吐不含
-        数据加载、验证与 checkpoint。 / Final loss, accuracy, step, training-step
-        throughput, and maximum peak memory across ranks; throughput excludes data
-        loading, validation, and checkpointing.
+    :return: Final loss, accuracy, step, training-step throughput, and maximum
+        peak memory across ranks; throughput excludes data loading, validation,
+        and checkpointing.
     :rtype: dict[str, float]
-    :raises RuntimeError: CUDA、NCCL 或 FSDP2 不可用。 / If CUDA, NCCL, or FSDP2 is unavailable.
-    :raises ImportError: 配置的模块无法导入。 / If a configured module cannot be imported.
-    :raises AttributeError: 配置的导入对象不存在。 / If a configured imported object
-        does not exist.
-    :raises TypeError: model builder 或 loss 函数无效。 / If the model builder or
-        loss function is invalid.
-    :raises ValueError: world size、验证集划分、模型输出、loss 输出或输入布局无效。 /
-        If world size, validation partitioning, model output, loss output, or input
-        layout is invalid.
+    :raises RuntimeError: If CUDA, NCCL, Gloo required by checkpointing, or FSDP2
+        is unavailable.
+    :raises ImportError: If a configured module cannot be imported.
+    :raises AttributeError: If a configured import object does not exist.
+    :raises TypeError: If the model builder or loss function is invalid.
+    :raises ValueError: If world size, validation partitioning, model output,
+        loss output, or input layout is invalid.
     """
     if not torch.cuda.is_available():
         raise RuntimeError("Distributed vision training requires CUDA.")
@@ -501,9 +548,13 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
     torch.cuda.set_device(local_rank)
     device = torch.device("cuda", local_rank)
     initialized_here = not dist.is_initialized()
+    cleanup = ExitStack()
     if initialized_here:
         dist.init_process_group("nccl", device_id=device)
+        cleanup.callback(dist.destroy_process_group)
 
+    checkpoint_future = None
+    checkpoint_group = None
     try:
         world_size = dist.get_world_size()
         rank = dist.get_rank()
@@ -539,6 +590,18 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
         dp_group = dp_mesh.get_group() if dp_size > 1 else None
         pp_group = pp_mesh.get_group() if config.pipeline_parallel_size > 1 else None
         tp_group = tp_mesh.get_group() if config.tensor_parallel_size > 1 else None
+        if config.checkpoint_interval:
+            for checkpoint_rank in range(model_parallel_size):
+                group = dist.new_group(ranks=[checkpoint_rank], backend="gloo")
+                if rank == checkpoint_rank:
+                    checkpoint_group = group
+                    cleanup.callback(dist.destroy_process_group, group)
+
+            def finish_pending_checkpoint() -> None:
+                if checkpoint_future is not None:
+                    checkpoint_future.result()
+
+            cleanup.callback(finish_pending_checkpoint)
         if dp_size > 1 and config.tensor_parallel_size > 1:
             stage_group = None
             for pipeline_rank in range(config.pipeline_parallel_size):
@@ -822,7 +885,9 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                     config.checkpoint_interval
                     and global_step % config.checkpoint_interval == 0
                 ):
-                    _save_checkpoint(
+                    if checkpoint_future is not None:
+                        _finish_checkpoint(checkpoint_future, device)
+                    checkpoint_future = _save_checkpoint(
                         config.checkpoint_dir / f"step_{global_step:08d}",
                         device=device,
                         config=config,
@@ -836,6 +901,7 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                         tp_rank=tp_rank,
                         pp_rank=pp_rank,
                         dp_rank=dp_rank,
+                        process_group=checkpoint_group,
                     )
                 if config.max_steps is not None and global_step >= config.max_steps:
                     stop = True
@@ -924,6 +990,10 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                 )
                 model.train()
 
+        if checkpoint_future is not None:
+            _finish_checkpoint(checkpoint_future, device)
+            checkpoint_future = None
+
         local_metrics = torch.tensor(
             [
                 training_seconds,
@@ -973,5 +1043,4 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
             )
         return result
     finally:
-        if initialized_here:
-            dist.destroy_process_group()
+        cleanup.close()

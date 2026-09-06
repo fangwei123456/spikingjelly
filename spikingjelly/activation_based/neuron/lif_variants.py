@@ -359,7 +359,8 @@ class KLIFNode(BaseNode):
         :param store_v_seq: 当 ``step_mode = 'm'`` 且输入形状为 ``[T, N, *]`` 时，
             是否保存所有时间步的膜电位序列 ``self.v_seq``（形状为 ``[T, N, *]``）。
             若为 ``False``，仅保留最后一个时间步的膜电位 ``self.v``（形状为 ``[N, *]``），
-            以降低内存开销
+            以降低内存开销。当 ``step_mode = 's'`` 时，每个时间步结束后的膜电位会被追加到
+            ``self.v_seq``，直到调用 ``reset()``；每一步都会复制整个序列，因此该选项主要用于监控和调试
         :type store_v_seq: bool
 
         ----
@@ -449,7 +450,10 @@ class KLIFNode(BaseNode):
 
         :param store_v_seq: when ``step_mode = 'm'`` and input shape is ``[T, N, *]``,
             whether to store the membrane potential at all time steps in ``self.v_seq``.
-            If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage
+            If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage.
+            When ``step_mode = 's'``, the membrane potential after each time-step is appended to
+            ``self.v_seq`` until ``reset()`` is called; every step copies the whole sequence,
+            so this option is meant for monitoring and debugging
         :type store_v_seq: bool
         """
         assert isinstance(tau, float) and tau > 1.0
@@ -551,8 +555,8 @@ class ComplementaryLIFNode(BaseNode):
         :type backend: str
         :param store_state_seqs: 在多步模式下是否保存完整状态轨迹。若为 ``True``，
             ``state_seqs`` 按 ``[v_seq, m_seq]`` 保存两个形状为 ``[T, N, *]`` 的张量；
-            functional forward 不写入该缓存。本类不使用父类的 ``store_v_seq`` 和
-            ``v_seq``，所有状态轨迹统一由 ``store_state_seqs`` 控制
+            functional forward 不写入该缓存。本类在单步和多步模式下均不使用父类的
+            ``store_v_seq`` 和 ``v_seq``，所有状态轨迹统一由 ``store_state_seqs`` 控制
         :type store_state_seqs: bool
         :raises AssertionError: ``tau`` 不是大于 ``1.0`` 的浮点数时抛出
         :raises ValueError: ``step_mode`` 不是 ``"s"`` 或 ``"m"`` 时抛出
@@ -605,8 +609,8 @@ class ComplementaryLIFNode(BaseNode):
             multi-step mode. If ``True``, ``state_seqs`` contains two tensors in
             ``[v_seq, m_seq]`` order, each with shape ``[T, N, *]``. Functional
             forward does not write this cache. This class does not use the parent
-            ``store_v_seq`` or ``v_seq`` interface; ``store_state_seqs`` controls
-            all state trajectories
+            ``store_v_seq`` or ``v_seq`` interface in either step mode;
+            ``store_state_seqs`` controls all state trajectories
         :type store_state_seqs: bool
         :raises AssertionError: If ``tau`` is not a float greater than ``1.0``
         :raises ValueError: If ``step_mode`` is neither ``"s"`` nor ``"m"``
@@ -703,6 +707,12 @@ class ComplementaryLIFNode(BaseNode):
         m = m + spike
         v = v - spike * (self.v_threshold + torch.sigmoid(m))
         return (spike,), (v, m)
+
+    def _v_seq_source(self):
+        # ComplementaryLIFNode does not use the store_v_seq / v_seq interface in
+        # either step mode (see class docstring), so the BaseNode single-step hook
+        # must not populate v_seq even if a caller flips store_v_seq to True.
+        return None
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         if not self.store_state_seqs:

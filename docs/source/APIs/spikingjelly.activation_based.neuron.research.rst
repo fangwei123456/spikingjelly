@@ -43,6 +43,15 @@ Nonlinear Integrate-and-fire Neurons
    :show-inheritance:
    :exclude-members: supported_backends, extra_repr
 
+Resonate-and-Fire Neurons
+--------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.neuron.resonate
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :exclude-members: supported_backends, extra_repr
+
 LIF Variants
 --------------------------------------------------
 

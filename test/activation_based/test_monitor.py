@@ -1,3 +1,4 @@
+import copy
 import gc
 import subprocess
 import threading
@@ -8,7 +9,7 @@ import pytest
 import torch
 from torch import nn
 
-from spikingjelly.activation_based import monitor
+from spikingjelly.activation_based import functional, layer, monitor, neuron
 
 
 class StatefulModule(nn.Module):
@@ -112,6 +113,47 @@ def test_attribute_monitor_before_and_after_forward():
 
     assert before.records == [0, 1]
     assert after.records == [1, 2]
+
+
+def test_attribute_monitor_records_v_seq_inside_linear_recurrent_container():
+    net = nn.Sequential(
+        nn.Linear(8, 4),
+        neuron.LIFNode(),
+        layer.LinearRecurrentContainer(
+            nn.Sequential(nn.Linear(4, 2), neuron.LIFNode()), 4, 2
+        ),
+    )
+    functional.set_step_mode(net, "m")
+    for m in net.modules():
+        if isinstance(m, neuron.LIFNode):
+            m.store_v_seq = True
+    reference = copy.deepcopy(net)
+    functional.set_step_mode(reference, "s")
+    T = 4
+    x_seq = torch.rand(T, 1, 8) + 1.0
+
+    v_seq_monitor = monitor.AttributeMonitor(
+        "v_seq", pre_forward=False, net=net, instance=neuron.LIFNode
+    )
+    spike_seq_monitor = monitor.OutputMonitor(net, neuron.LIFNode)
+    with torch.no_grad():
+        net(x_seq)
+        reference_v_steps = []
+        for x in x_seq:
+            reference(x)
+            reference_v_steps.append(reference[2].sub_module[1].v)
+
+    inner = net[2].sub_module[1]
+    assert inner.step_mode == "s"
+    assert all(record is not None for record in v_seq_monitor.records)
+    assert len(v_seq_monitor.records) == 1 + T
+    assert v_seq_monitor.records[0].shape == (T, 1, 4)
+    for t, record in enumerate(v_seq_monitor.records[1:], start=1):
+        torch.testing.assert_close(record, inner.v_seq[:t])
+    torch.testing.assert_close(
+        v_seq_monitor.records[-1], torch.stack(reference_v_steps)
+    )
+    assert torch.stack(spike_seq_monitor.records[1:]).shape == (T, 1, 2)
 
 
 def test_gradient_monitors_record_input_and_output_gradients():
