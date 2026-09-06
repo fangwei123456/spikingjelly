@@ -501,7 +501,7 @@ def test_mstdp_learner_eligibility_follows_synapse_dtype(dtype):
     )
     in_spike = (torch.rand(3, 8) > 0.5).to(dtype)
     sn(fc(in_spike))
-    learner.step(torch.ones(3, dtype=dtype))
+    learner.step(torch.ones(3))
 
     assert learner.eligibility.dtype == dtype
     assert fc.weight.grad is not None
