@@ -42,6 +42,19 @@ def test_online_lif_nodes_share_spike_dynamics_and_reset_state():
         torch.testing.assert_close(ottt(x), sltt(x))
 
 
+@pytest.mark.parametrize("node_type", [OTTTLIFNode, SLTTLIFNode])
+def test_online_lif_nodes_accumulate_v_seq_in_single_step_mode(node_type):
+    node = node_type(store_v_seq=True)
+    x_seq = torch.rand(3, 2)
+    v_steps = []
+    for x in x_seq:
+        node(x)
+        v_steps.append(node.v)
+    torch.testing.assert_close(node.v_seq, torch.stack(v_steps))
+    node.reset()
+    assert node.v_seq is None
+
+
 def test_ottt_spiking_vgg_applies_requested_dropout_rate():
     model = OTTTSpikingVGG(
         cfg=[4],

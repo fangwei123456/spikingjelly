@@ -1,3 +1,4 @@
+import copy
 import inspect
 import math
 
@@ -6,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from spikingjelly.activation_based import functional, layer
+from spikingjelly.activation_based import functional, layer, neuron
 from spikingjelly.activation_based.functional import layer as functional_layer
 
 
@@ -257,6 +258,40 @@ def test_elementwise_recurrent_container_accumulates_and_reset_clears_state():
     assert torch.equal(module(x_seq), torch.tensor([[1.0], [3.0], [6.0]]))
     module.reset()
     assert torch.equal(module(x_seq), torch.tensor([[1.0], [3.0], [6.0]]))
+
+
+@pytest.mark.parametrize(
+    "container_factory",
+    [
+        lambda sub_module: layer.LinearRecurrentContainer(sub_module, 3, 3),
+        lambda sub_module: layer.ElementWiseRecurrentContainer(sub_module, torch.add),
+    ],
+)
+def test_recurrent_containers_expose_wrapped_neuron_v_seq_in_multi_step_mode(
+    container_factory,
+):
+    container = container_factory(neuron.LIFNode(store_v_seq=True))
+    functional.set_step_mode(container, "m")
+    reference = copy.deepcopy(container)
+    functional.set_step_mode(reference, "s")
+    x_seq = torch.rand(5, 2, 3) + 0.5
+
+    y_seq = container(x_seq)
+    expected_y_steps = []
+    expected_v_steps = []
+    for x in x_seq:
+        expected_y_steps.append(reference(x))
+        expected_v_steps.append(reference.sub_module.v)
+
+    inner = container.sub_module
+    assert inner.step_mode == "s"
+    assert inner.v_seq.shape == x_seq.shape
+    torch.testing.assert_close(y_seq, torch.stack(expected_y_steps))
+    torch.testing.assert_close(inner.v_seq, torch.stack(expected_v_steps))
+    torch.testing.assert_close(inner.v_seq[-1], inner.v)
+
+    functional.reset_net(container)
+    assert inner.v_seq is None
 
 
 def test_drop_connect_p_zero_keeps_connections_when_sampler_returns_zero(monkeypatch):

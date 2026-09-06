@@ -75,7 +75,9 @@ class QIFNode(BaseNode):
         :type backend: str
 
         :param store_v_seq: 当 ``step_mode = 'm'`` 且输入形状为 ``[T, N, *]`` 时，是否保存所有时间步的膜电位序列 ``self.v_seq``（形状为 ``[T, N, *]``）。
-            若为 ``False``，仅保留最后一个时间步的膜电位 ``self.v``（形状为 ``[N, *]``），以降低内存开销
+            若为 ``False``，仅保留最后一个时间步的膜电位 ``self.v``（形状为 ``[N, *]``），以降低内存开销。
+            当 ``step_mode = 's'`` 时，每个时间步结束后的膜电位会被追加到 ``self.v_seq``，直到调用 ``reset()``；
+            每一步都会复制整个序列，因此该选项主要用于监控和调试
         :type store_v_seq: bool
 
         ----
@@ -129,7 +131,10 @@ class QIFNode(BaseNode):
 
         :param store_v_seq: when ``step_mode = 'm'`` and input shape is ``[T, N, *]``,
             whether to store the membrane potential at all time steps in ``self.v_seq``.
-            If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage
+            If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage.
+            When ``step_mode = 's'``, the membrane potential after each time-step is appended to
+            ``self.v_seq`` until ``reset()`` is called; every step copies the whole sequence,
+            so this option is meant for monitoring and debugging
         :type store_v_seq: bool
         """
         assert isinstance(tau, float) and tau > 1.0
@@ -307,7 +312,9 @@ class EIFNode(BaseNode):
         :type backend: str
 
         :param store_v_seq: 当 ``step_mode = 'm'`` 且输入形状为 ``[T, N, *]`` 时，是否保存所有时间步的膜电位序列 ``self.v_seq``（形状为 ``[T, N, *]``）。
-            若为 ``False``，仅保留最后一个时间步的膜电位 ``self.v``（形状为 ``[N, *]``），以降低内存开销
+            若为 ``False``，仅保留最后一个时间步的膜电位 ``self.v``（形状为 ``[N, *]``），以降低内存开销。
+            当 ``step_mode = 's'`` 时，每个时间步结束后的膜电位会被追加到 ``self.v_seq``，直到调用 ``reset()``；
+            每一步都会复制整个序列，因此该选项主要用于监控和调试
         :type store_v_seq: bool
 
         ----
@@ -362,7 +369,10 @@ class EIFNode(BaseNode):
 
         :param store_v_seq: when ``step_mode = 'm'`` and input shape is ``[T, N, *]``,
             whether to store the membrane potential at all time steps in ``self.v_seq``.
-            If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage
+            If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage.
+            When ``step_mode = 's'``, the membrane potential after each time-step is appended to
+            ``self.v_seq`` until ``reset()`` is called; every step copies the whole sequence,
+            so this option is meant for monitoring and debugging
         :type store_v_seq: bool
         """
         assert isinstance(tau, float) and tau > 1.0

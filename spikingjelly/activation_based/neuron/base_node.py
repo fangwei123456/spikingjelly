@@ -298,7 +298,8 @@ class BaseNode(base.MemoryModule):
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
             的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
-            通常设置成 ``False`` ，可以节省内存
+            通常设置成 ``False`` ，可以节省内存。在使用 ``step_mode = 's'`` 时，每个时间步结束后的电压会被追加到 ``self.v_seq`` ，
+            直到调用 ``reset()`` ；每一步都会复制整个序列，因此该选项主要用于监控和调试
         :type store_v_seq: bool
 
         ----
@@ -339,7 +340,9 @@ class BaseNode(base.MemoryModule):
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
             whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
-            memory consumption
+            memory consumption. When using ``step_mode = 's'``, the voltage after each time-step is appended to
+            ``self.v_seq`` until ``reset()`` is called; every step copies the whole sequence, so this option is meant for
+            monitoring and debugging
         :type store_v_seq: bool
         """
         assert isinstance(v_reset, float) or v_reset is None
@@ -379,6 +382,39 @@ class BaseNode(base.MemoryModule):
     def reset(self):
         super().reset()
         self.v_seq = None
+
+    def detach(self):
+        r"""
+        **API Language** - :ref:`中文 <BaseNode.detach-cn>` | :ref:`English <BaseNode.detach-en>`
+
+        ----
+
+        .. _BaseNode.detach-cn:
+
+        * **中文**
+
+        从计算图中分离所有有状态变量，行为与
+        :meth:`MemoryModule.detach <spikingjelly.activation_based.base.MemoryModule.detach>`
+        相同。若 ``store_v_seq = True`` ，已累积的 ``self.v_seq`` 也会被分离，
+        因此在单步模式下逐步记录电压时， ``functional.detach_net`` 仍可用于实现
+        TBPTT (Truncated Back Propagation Through Time)。
+
+        ----
+
+        .. _BaseNode.detach-en:
+
+        * **English**
+
+        Detach all stateful variables from the computation graph, behaving like
+        :meth:`MemoryModule.detach <spikingjelly.activation_based.base.MemoryModule.detach>`.
+        When ``store_v_seq = True``, the accumulated ``self.v_seq`` is detached as
+        well, so ``functional.detach_net`` still implements TBPTT (Truncated Back
+        Propagation Through Time) when the voltage is recorded step by step in
+        single-step mode.
+        """
+        super().detach()
+        if isinstance(self.v_seq, torch.Tensor):
+            self.v_seq = self.v_seq.detach()
 
     @staticmethod
     def apply_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
@@ -440,6 +476,81 @@ class BaseNode(base.MemoryModule):
 
     def extra_repr(self):
         return f"v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}, step_mode={self.step_mode}, backend={self.backend}"
+
+    def single_step_forward(self, x: torch.Tensor, *args, **kwargs):
+        r"""
+        **API Language** - :ref:`中文 <BaseNode.single_step_forward-cn>` | :ref:`English <BaseNode.single_step_forward-en>`
+
+        ----
+
+        .. _BaseNode.single_step_forward-cn:
+
+        * **中文**
+
+        执行一个时间步的前向传播，行为与
+        :meth:`MemoryModule.single_step_forward <spikingjelly.activation_based.base.MemoryModule.single_step_forward>`
+        相同。若 ``store_v_seq = True`` ，本步重置后的电压 ``self.v`` 会被追加到
+        ``self.v_seq`` （ ``shape = [T, N, *]`` ， ``T`` 为自上次 ``reset()`` 以来的步数），
+        因此被 ``LinearRecurrentContainer`` 、 ``ElementWiseRecurrentContainer`` 或
+        ``MultiStepContainer`` 以单步模式驱动的神经元也能记录电压序列。若输入的形状、
+        设备或数据类型发生变化，序列会重新开始； ``detach()`` 会同时分离已累积的序列，
+        以便实现 TBPTT。每一步都会复制整个序列，代价为
+        :math:`O(T^2)` ，因此该功能主要用于监控和调试。
+
+        :param x: 单步输入张量，约定 ``shape = [N, *]``
+        :type x: torch.Tensor
+        :return: 单步前向传播的输出
+        :rtype: object
+
+        ----
+
+        .. _BaseNode.single_step_forward-en:
+
+        * **English**
+
+        Run one time-step, behaving like
+        :meth:`MemoryModule.single_step_forward <spikingjelly.activation_based.base.MemoryModule.single_step_forward>`.
+        When ``store_v_seq = True``, the post-reset voltage ``self.v`` of this step is
+        appended to ``self.v_seq`` (``shape = [T, N, *]``, where ``T`` counts the steps
+        since the last ``reset()``), so neurons driven in single-step mode by
+        ``LinearRecurrentContainer``, ``ElementWiseRecurrentContainer`` or
+        ``MultiStepContainer`` also record their voltage sequence. The sequence restarts
+        when the input shape, device or dtype changes, and ``detach()`` also detaches the
+        accumulated sequence so that TBPTT stays bounded. Every step copies the whole
+        sequence, an :math:`O(T^2)` cost, so this is meant for monitoring and debugging.
+
+        :param x: Single-step input tensor, conventionally with ``shape = [N, *]``
+        :type x: torch.Tensor
+        :return: Output of the single-step forward pass
+        :rtype: object
+        """
+        outputs = super().single_step_forward(x, *args, **kwargs)
+        if self.store_v_seq:
+            v = self._v_seq_source()
+            if isinstance(v, torch.Tensor):
+                self._append_v_seq(v)
+        return outputs
+
+    def _v_seq_source(self):
+        # The voltage recorded into ``self.v_seq`` after a single step. Subclasses
+        # that keep their voltage in a differently named memory override this to
+        # return that tensor; a non-tensor (unmaterialized) value is skipped.
+        return self.v
+
+    def _append_v_seq(self, v: torch.Tensor):
+        # Append one single-step voltage to ``self.v_seq``, restarting the sequence
+        # when the shape, device or dtype changes.
+        v_step = v.unsqueeze(0)
+        v_seq = self.v_seq
+        if (
+            v_seq is None
+            or v_seq.shape[1:] != v_step.shape[1:]
+            or v_seq.device != v_step.device
+            or v_seq.dtype != v_step.dtype
+        ):
+            self.v_seq = v_step.clone()
+        else:
+            self.v_seq = torch.cat((v_seq, v_step))
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
         if not self.store_v_seq:

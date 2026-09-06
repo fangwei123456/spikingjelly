@@ -58,7 +58,9 @@ class AdaptBaseNode(BaseNode):
         :type step_mode: str
         :param backend: 后端
         :type backend: str
-        :param store_v_seq: 是否保存中间电压值
+        :param store_v_seq: 是否将每个时间步的膜电位保存到 ``self.v_seq``。当 ``step_mode = 's'`` 时，
+            每个时间步结束后的膜电位会被追加到 ``self.v_seq``，直到调用 ``reset()``；每一步都会复制整个序列，
+            因此该选项主要用于监控和调试
         :type store_v_seq: bool
 
         ----
@@ -91,7 +93,10 @@ class AdaptBaseNode(BaseNode):
         :type step_mode: str
         :param backend: Backend for computation
         :type backend: str
-        :param store_v_seq: Whether to store intermediate membrane potentials
+        :param store_v_seq: Whether to store the membrane potential at each time-step in ``self.v_seq``.
+            When ``step_mode = 's'``, the membrane potential after each time-step is appended to
+            ``self.v_seq`` until ``reset()`` is called; every step copies the whole sequence,
+            so this option is meant for monitoring and debugging
         :type store_v_seq: bool
         """
         # b: jump amplitudes
@@ -234,7 +239,9 @@ class IzhikevichNode(AdaptBaseNode):
         :type step_mode: str
         :param backend: 后端
         :type backend: str
-        :param store_v_seq: 是否保存中间电压值
+        :param store_v_seq: 是否将每个时间步的膜电位保存到 ``self.v_seq``。当 ``step_mode = 's'`` 时，
+            每个时间步结束后的膜电位会被追加到 ``self.v_seq``，直到调用 ``reset()``；每一步都会复制整个序列，
+            因此该选项主要用于监控和调试
         :type store_v_seq: bool
 
         ----
@@ -274,7 +281,10 @@ class IzhikevichNode(AdaptBaseNode):
         :type step_mode: str
         :param backend: Backend
         :type backend: str
-        :param store_v_seq: Whether to store intermediate membrane potentials
+        :param store_v_seq: Whether to store the membrane potential at each time-step in ``self.v_seq``.
+            When ``step_mode = 's'``, the membrane potential after each time-step is appended to
+            ``self.v_seq`` until ``reset()`` is called; every step copies the whole sequence,
+            so this option is meant for monitoring and debugging
         :type store_v_seq: bool
         """
         assert isinstance(tau, float) and tau > 1.0
