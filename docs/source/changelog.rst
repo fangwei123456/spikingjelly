@@ -29,6 +29,14 @@ Module: ``spikingjelly.activation_based.neuron``.
 Improvements
 ~~~~~~~~~~~~
 
+Learning
+^^^^^^^^
+
+Module: ``spikingjelly.activation_based.learning``.
+
+- Made ``MSTDPLearner`` eligibility and reward-derived weight updates follow the
+  synapse device and dtype.
+
 DSpike Search Network
 ^^^^^^^^^^^^^^^^^^^^^
 

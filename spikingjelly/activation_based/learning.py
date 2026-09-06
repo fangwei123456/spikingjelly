@@ -1067,13 +1067,13 @@ class MSTDPLearner(base.MemoryModule):
         * **中文**
 
         使用外部奖励 ``reward`` 对当前 eligibility 进行调制，并生成一次 mSTDP 权重更新。
-        若 ``reward`` 为张量，则在计算前将其从
-        autograd 计算图中分离，
+        若 ``reward`` 为张量，则在计算前将其从 autograd 计算图中分离，
+        并转换到 ``self.synapse.weight`` 的 device 和 dtype，
         因此写入的 ``weight.grad`` 或返回的权重增量不会连接到
         ``reward`` 的计算图。
 
         :param reward: 每个样本对应的奖励，通常 ``shape = [batch_size]``。
-            张量奖励会在计算前分离
+            张量奖励会在计算前分离，并转换到突触权重的 device 和 dtype
         :type reward: torch.Tensor
         :param on_grad: 是否将结果写入 ``self.synapse.weight.grad``
         :type on_grad: bool
@@ -1092,12 +1092,14 @@ class MSTDPLearner(base.MemoryModule):
 
         Modulate the current eligibility with the external reward ``reward`` and
         generate one mSTDP weight update.
-        Tensor rewards are detached from the autograd graph before computation,
+        Tensor rewards are detached from the autograd graph and converted to the
+        synapse weight's device and dtype before computation,
         so neither the written ``weight.grad`` nor the returned weight increment
         is connected to the reward graph.
 
         :param reward: Reward for each sample, typically with
-            ``shape = [batch_size]``. Tensor rewards are detached before computation
+            ``shape = [batch_size]``. Tensor rewards are detached and converted to
+            the synapse weight's device and dtype before computation
         :type reward: torch.Tensor
         :param on_grad: Whether to write the result into ``self.synapse.weight.grad``
         :type on_grad: bool
@@ -1113,7 +1115,7 @@ class MSTDPLearner(base.MemoryModule):
         # critic network) never leaks the forward pass's autograd graph into
         # weight.grad or the returned delta_w (#576)
         if isinstance(reward, torch.Tensor):
-            reward = reward.detach()
+            reward = reward.detach().to(self.synapse.weight)
 
         length = len(self.in_spike_monitor.records)
         if length != len(self.out_spike_monitor.records):
@@ -1140,6 +1142,7 @@ class MSTDPLearner(base.MemoryModule):
                     self.batch_size,
                     *self.synapse.weight.shape,
                     device=self.synapse.weight.device,
+                    dtype=self.synapse.weight.dtype,
                 )
             dw = (reward.view(-1, 1, 1) * self.eligibility).sum(0)
 
