@@ -135,7 +135,7 @@ class DSpike(SurrogateFunctionBase):
 
         DSpike surrogate gradient function.
         """
-        super().__init__(alpha, spiking)
+        super().__init__(spiking=spiking, alpha=alpha)
         assert alpha > 0, "alpha must be lager than 0."
 
     @staticmethod
@@ -348,7 +348,7 @@ class SearchSpikingConv2d_stem(nn.Module):
 
         self.is_DGS = False
 
-        self.dgs_alpha = nn.Parameter(1e-3 * torch.ones(3).cuda(), requires_grad=True)
+        self.dgs_alpha = nn.Parameter(self.conv_m.weight.new_full((3,), 1e-3))
         self.dgs_step = 0.2
 
     def dgs_init_stage(self):
@@ -366,7 +366,8 @@ class SearchSpikingConv2d_stem(nn.Module):
             self.spike_m.surrogate_function.alpha + self.dgs_step
         )
 
-        self.dgs_alpha = nn.Parameter(1e-3 * torch.ones(3).cuda(), requires_grad=True)
+        with torch.no_grad():
+            self.dgs_alpha.fill_(1e-3)
 
         for value in self.parameters():
             value.requires_grad_(True)
@@ -459,7 +460,7 @@ class SearchSpikingConv2d_cell(nn.Module):
 
         self.is_DGS = False
 
-        self.dgs_alpha = nn.Parameter(1e-3 * torch.ones(3).cuda(), requires_grad=True)
+        self.dgs_alpha = nn.Parameter(self.conv1_m.weight.new_full((3,), 1e-3))
         self.dgs_step = 0.2
 
     def dgs_init_stage(self):
@@ -483,7 +484,8 @@ class SearchSpikingConv2d_cell(nn.Module):
             self.spike_m.surrogate_function.alpha + self.dgs_step
         )
 
-        self.dgs_alpha = nn.Parameter(1e-3 * torch.ones(3).cuda(), requires_grad=True)
+        with torch.no_grad():
+            self.dgs_alpha.fill_(1e-3)
 
         for value in self.parameters():
             value.requires_grad_(True)
