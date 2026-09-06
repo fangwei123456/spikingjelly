@@ -113,6 +113,8 @@ remains a ``MemoryModule`` responsibility, so backend-specific functions identif
      - One ParametricLIF state update.
    * - :func:`izhikevich_step <spikingjelly.activation_based.functional.neuron.izhikevich_step>`
      - One Izhikevich voltage and adaptation-current update.
+   * - :func:`raf_step <spikingjelly.activation_based.functional.neuron.raf_step>`
+     - One resonate-and-fire state update.
    * - :func:`klif_step <spikingjelly.activation_based.functional.neuron.klif_step>`
      - One KLIF state update.
    * - :func:`cuba_lif_step <spikingjelly.activation_based.functional.neuron.cuba_lif_step>`

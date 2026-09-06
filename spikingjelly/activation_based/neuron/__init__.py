@@ -7,6 +7,7 @@ from .plif import *
 from .psn import *
 from .adapt import *
 from .nonlinear_if import *
+from .resonate import *
 from .flexsn import *
 from .few_spike import *
 
