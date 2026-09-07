@@ -70,6 +70,8 @@ jobs:
 
       - name: Run OpenCodeReview
         uses: alibaba/open-code-review@8d023aafcec05f8ba5628fca3eaba88078e5d201 # v1.11.1
+        env:
+          OCR_NO_UPDATE: '1'
         with:
           llm_url: ${{ secrets.OCR_LLM_URL }}
           llm_auth_token: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
