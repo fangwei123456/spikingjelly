@@ -655,11 +655,14 @@ def main() -> None:
         )
         snn_outputs = _debug_snn_outputs(
             (
-                index % len(converted.blocks),
-                value,
-            )
-            for index, value in enumerate(snn_features)
-            if len(converted.blocks) > 0
+                (
+                    index % len(converted.blocks),
+                    value,
+                )
+                for index, value in enumerate(snn_features)
+                if len(converted.blocks) > 0
+            ),
+            args.time_steps,
         )
         debug["debug_batches"] = debug_batches
         debug["block_max_abs_diff"] = _debug_block_diffs(qann_outputs, snn_outputs)
