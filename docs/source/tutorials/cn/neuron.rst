@@ -278,6 +278,19 @@ Soft方式重置方程为：
     y_seq = if_layer(x_seq)
     if_layer.reset()
 
+若要一次性配置整个网络，可使用 :func:`set_step_mode <spikingjelly.activation_based.functional.net_config.set_step_mode>` 和 :func:`set_backend <spikingjelly.activation_based.functional.net_config.set_backend>`。\
+由于 ``supported_backends`` 取决于 ``step_mode``，请 **先** 调用 ``set_step_mode`` 再调用 ``set_backend``；否则仅在另一种步进模式下可用的后端\
+（例如 ``ParametricLIFNode`` 的 ``cupy``，或 ``IFNode``、``LIFNode`` 与 ``ParametricLIFNode`` 的 ``triton``）会被拒绝并记录告警，原有后端保持不变：
+
+.. code-block:: python
+
+    import torch.nn as nn
+    from spikingjelly.activation_based import neuron, functional, layer
+
+    net = nn.Sequential(layer.Linear(8, 4), neuron.ParametricLIFNode())
+    functional.set_step_mode(net, 'm')  # 先调用：supported_backends 取决于 step_mode
+    functional.set_backend(net, 'cupy', instance=neuron.ParametricLIFNode)
+
 自定义神经元
 -------------------------------------------
 SpikingJelly 为修改神经元动力学和高性能执行提供了两类接口。``SimpleBaseNode`` 中的

@@ -60,6 +60,17 @@ Module: `spikingjelly.activation_based.distributed.vision`.
 - Vision prediction now uses bounded pinned-memory transfers and a background
   HDF5 shard writer to overlap output work where execution dependencies allow.
 
+#### Functional Network Configuration
+
+Module: `spikingjelly.activation_based.functional`.
+
+- `set_step_mode` and `set_backend` warnings now state the remedy. A module
+  that only carries a `step_mode` attribute is told to inherit from
+  `StepModule`; a rejected backend is reported together with the current
+  `step_mode` and `supported_backends`, because `supported_backends` can depend
+  on `step_mode`, so `set_step_mode` must be called before `set_backend`
+  (issue #632).
+
 ### Bug Fixes
 
 #### Spiking Neurons

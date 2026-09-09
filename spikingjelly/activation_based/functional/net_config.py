@@ -181,7 +181,11 @@ def set_step_mode(net: nn.Module, step_mode: str):
 
     若某个模块具有 ``step_mode`` 属性但不是
     :class:`~spikingjelly.activation_based.base.StepModule`，则该函数仍会尝试赋值，
-    同时记录告警。
+    同时记录告警。此时不会执行 ``StepModule`` 的步进模式校验，但模块自身的 setter
+    仍可能校验该值。若希望该模块遵循步进模式约定，请让其继承
+    :class:`~spikingjelly.activation_based.base.StepModule`（或
+    :class:`~spikingjelly.activation_based.base.MemoryModule`），并在调用本函数前初始化
+    有效的 ``step_mode``。
 
     :param net: 一个神经网络
     :type net: torch.nn.Module
@@ -216,7 +220,13 @@ def set_step_mode(net: nn.Module, step_mode: str):
 
     If a module has a ``step_mode`` attribute but is not an instance of
     :class:`~spikingjelly.activation_based.base.StepModule`, the function still
-    attempts to assign the new value and emits a warning.
+    attempts to assign the new value and emits a warning. In that case, the
+    ``StepModule`` validation is not applied, although the module's own setter
+    may still validate the value. Inherit from
+    :class:`~spikingjelly.activation_based.base.StepModule` (or
+    :class:`~spikingjelly.activation_based.base.MemoryModule`) and initialize a
+    valid ``step_mode`` before calling this function if the module should follow
+    the step-mode contract.
 
     :param net: a network
     :type net: nn.Module
@@ -254,8 +264,14 @@ def set_step_mode(net: nn.Module, step_mode: str):
         if hasattr(m, "step_mode"):
             if not isinstance(m, base.StepModule):
                 logger.warning(
-                    "Trying to set the step mode for {}, which is not a StepModule",
+                    "Trying to set the step mode for {}, which is not a "
+                    "StepModule; step_mode={} is not validated by StepModule. "
+                    "Inherit from "
+                    "spikingjelly.activation_based.base.StepModule (or "
+                    "MemoryModule) if this module should follow the step-mode "
+                    "contract",
                     m,
+                    step_mode,
                 )
             m.step_mode = step_mode
         if not isinstance(m, keep_step_mode_instance):
@@ -282,6 +298,16 @@ def set_backend(
     仅当目标模块的 ``supported_backends`` 包含给定 ``backend`` 时才会实际更新；
     否则会记录告警并保留原有后端。若 ``instance`` 为 ``None``，则会检查所有具有
     ``backend`` 属性的模块。
+
+    .. note::
+
+        许多神经元的 ``supported_backends`` 取决于当前的 ``step_mode``。例如
+        :class:`~spikingjelly.activation_based.neuron.LIFNode` 与
+        :class:`~spikingjelly.activation_based.neuron.IFNode` 仅在多步模式 ``'m'``
+        下支持 ``'triton'``；而
+        :class:`~spikingjelly.activation_based.neuron.ParametricLIFNode` 等神经元
+        的 ``'cupy'`` 也仅在 ``'m'`` 下可用。请先调用 :func:`set_step_mode`
+        再调用本函数；否则该后端会被拒绝并保留原有后端。
 
     :param net: 一个神经网络
     :type net: torch.nn.Module
@@ -310,6 +336,19 @@ def set_backend(
     backend is kept unchanged. If ``instance`` is ``None``, all modules with a
     ``backend`` attribute are checked.
 
+    .. admonition:: Note
+        :class: note
+
+        ``supported_backends`` of many neurons depends on the current
+        ``step_mode``. For example,
+        :class:`~spikingjelly.activation_based.neuron.LIFNode` and
+        :class:`~spikingjelly.activation_based.neuron.IFNode` only offer
+        ``'triton'`` in multi-step mode ``'m'``, and some neurons such as
+        :class:`~spikingjelly.activation_based.neuron.ParametricLIFNode` also
+        restrict ``'cupy'`` to ``'m'``. Call :func:`set_step_mode` before this
+        function; otherwise the backend is rejected and the existing backend is
+        kept.
+
     :param net: a network
     :type net: torch.nn.Module
 
@@ -333,13 +372,20 @@ def set_backend(
                 "Trying to set the backend for {}, which is not a MemoryModule",
                 m,
             )
-        if backend in m.supported_backends:
+        supported_backends = m.supported_backends
+        if backend in supported_backends:
             m.backend = backend
         else:
             logger.warning(
-                "{} does not support backend={}; it will continue using backend={}",
+                "{} does not support backend={} while step_mode={} "
+                "(supported_backends={}); it will continue using backend={}. "
+                "supported_backends can depend on step_mode, so call "
+                "set_step_mode() before set_backend() if the backend is only "
+                "available in another step mode",
                 m,
                 backend,
+                getattr(m, "step_mode", None),
+                supported_backends,
                 m.backend,
             )
 

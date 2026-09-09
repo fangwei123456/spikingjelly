@@ -285,6 +285,19 @@ Some neurons support the ``cupy`` backend in both single-step and multi-step mod
     y_seq = if_layer(x_seq)
     if_layer.reset()
 
+To configure a whole network at once, use :func:`set_step_mode <spikingjelly.activation_based.functional.net_config.set_step_mode>` and :func:`set_backend <spikingjelly.activation_based.functional.net_config.set_backend>`. \
+Because ``supported_backends`` depends on ``step_mode``, call ``set_step_mode`` **before** ``set_backend``. Otherwise a backend that is only available in the other step mode \
+(for example ``cupy`` for ``ParametricLIFNode``, or ``triton`` for ``IFNode``, ``LIFNode`` and ``ParametricLIFNode``) is rejected with a warning and the existing backend is kept:
+
+.. code-block:: python
+
+    import torch.nn as nn
+    from spikingjelly.activation_based import neuron, functional, layer
+
+    net = nn.Sequential(layer.Linear(8, 4), neuron.ParametricLIFNode())
+    functional.set_step_mode(net, 'm')  # first: supported_backends depends on step_mode
+    functional.set_backend(net, 'cupy', instance=neuron.ParametricLIFNode)
+
 Custom Spiking Neurons
 -------------------------------------------
 SpikingJelly provides separate interfaces for modifying neuron dynamics and for
