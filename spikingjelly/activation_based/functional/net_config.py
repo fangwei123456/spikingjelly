@@ -181,10 +181,11 @@ def set_step_mode(net: nn.Module, step_mode: str):
 
     若某个模块具有 ``step_mode`` 属性但不是
     :class:`~spikingjelly.activation_based.base.StepModule`，则该函数仍会尝试赋值，
-    同时记录告警。此时 ``step_mode`` 只是一个未经校验的普通属性；若希望该模块遵循
-    步进模式约定，请让其继承
+    同时记录告警。此时不会执行 ``StepModule`` 的步进模式校验，但模块自身的 setter
+    仍可能校验该值。若希望该模块遵循步进模式约定，请让其继承
     :class:`~spikingjelly.activation_based.base.StepModule`（或
-    :class:`~spikingjelly.activation_based.base.MemoryModule`）。
+    :class:`~spikingjelly.activation_based.base.MemoryModule`），并在调用本函数前初始化
+    有效的 ``step_mode``。
 
     :param net: 一个神经网络
     :type net: torch.nn.Module
@@ -219,11 +220,13 @@ def set_step_mode(net: nn.Module, step_mode: str):
 
     If a module has a ``step_mode`` attribute but is not an instance of
     :class:`~spikingjelly.activation_based.base.StepModule`, the function still
-    attempts to assign the new value and emits a warning. In that case
-    ``step_mode`` is a plain attribute that is assigned without validation;
-    inherit from :class:`~spikingjelly.activation_based.base.StepModule` (or
-    :class:`~spikingjelly.activation_based.base.MemoryModule`) if the module
-    should follow the step-mode contract.
+    attempts to assign the new value and emits a warning. In that case, the
+    ``StepModule`` validation is not applied, although the module's own setter
+    may still validate the value. Inherit from
+    :class:`~spikingjelly.activation_based.base.StepModule` (or
+    :class:`~spikingjelly.activation_based.base.MemoryModule`) and initialize a
+    valid ``step_mode`` before calling this function if the module should follow
+    the step-mode contract.
 
     :param net: a network
     :type net: nn.Module
@@ -262,8 +265,8 @@ def set_step_mode(net: nn.Module, step_mode: str):
             if not isinstance(m, base.StepModule):
                 logger.warning(
                     "Trying to set the step mode for {}, which is not a "
-                    "StepModule; step_mode={} is assigned as a plain attribute "
-                    "without validation. Inherit from "
+                    "StepModule; step_mode={} is not validated by StepModule. "
+                    "Inherit from "
                     "spikingjelly.activation_based.base.StepModule (or "
                     "MemoryModule) if this module should follow the step-mode "
                     "contract",
