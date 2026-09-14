@@ -85,6 +85,9 @@ Module: ``spikingjelly.activation_based.functional``.
   ``step_mode`` and ``supported_backends``, because ``supported_backends`` can depend
   on ``step_mode``, so ``set_step_mode`` must be called before ``set_backend``
   (issue #632).
+- ``fuse_conv_bn_eval_modules`` now treats ``StepModule`` implementations as FX
+  leaves, allowing evaluation-time Conv-BatchNorm fusion in networks containing
+  multi-step pooling, linear, and other atomic step modules such as SpikingVGG.
 
 Bug Fixes
 ~~~~~~~~~

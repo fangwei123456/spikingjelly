@@ -124,6 +124,24 @@ def test_fuse_conv_bn_eval_modules_matches_step_block():
     assert not any(isinstance(m, layer.BatchNorm2d) for m in fused.modules())
 
 
+def test_fuse_conv_bn_eval_modules_treats_step_modules_as_leaves():
+    torch.manual_seed(0)
+    model = nn.Sequential(
+        layer.Conv2d(3, 8, kernel_size=3, padding=1, bias=False, step_mode="m"),
+        layer.BatchNorm2d(8, step_mode="m"),
+        layer.MaxPool2d(2, step_mode="m"),
+    ).eval()
+    x = torch.randn(4, 2, 3, 16, 16)
+
+    with torch.no_grad():
+        y_ref = model(x)
+        fused = fuse_conv_bn_eval_modules(copy.deepcopy(model))
+        y_fused = fused(x)
+
+    torch.testing.assert_close(y_fused, y_ref, atol=1e-5, rtol=1e-4)
+    assert not any(isinstance(m, layer.BatchNorm2d) for m in fused.modules())
+
+
 def test_fuse_conv_bn_eval_modules_matches_native_block():
     torch.manual_seed(0)
     model = _NativeStepBlock().eval()

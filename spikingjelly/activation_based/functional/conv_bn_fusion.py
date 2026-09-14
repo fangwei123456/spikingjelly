@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch import Tensor, fx
 from torch.nn.utils.fusion import fuse_conv_bn_eval
 
-from .. import base, layer, neuron
+from .. import base, layer
 from spikingjelly.logger import logger
 
 __all__ = [
@@ -103,14 +103,7 @@ class _EvalFusionTracer(fx.Tracer):
             m,
             (
                 _TrainConvBnWrapper,
-                layer.Conv1d,
-                layer.Conv2d,
-                layer.Conv3d,
-                layer.BatchNorm1d,
-                layer.BatchNorm2d,
-                layer.BatchNorm3d,
-                base.MemoryModule,
-                neuron.BaseNode,
+                base.StepModule,
             ),
         ):
             return True
