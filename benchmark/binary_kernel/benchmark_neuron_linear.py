@@ -5,10 +5,12 @@ import hashlib
 import importlib.util
 import json
 import os
+import socket
 import statistics
+import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
-import cupy
 import torch
 import torch.nn.functional as F
 
@@ -82,33 +84,98 @@ def _time_setup(fn, iters=100):
     return start.elapsed_time(end) / iters
 
 
-def _measure(fn, tensors, grads, backward, warmup, iters, rounds):
-    def run():
-        for tensor in tensors:
-            tensor.grad = None
-        outputs = fn()
-        if backward:
-            torch.autograd.backward(outputs, grads)
+def _run(fn, tensors, grads, backward):
+    for tensor in tensors:
+        tensor.grad = None
+    outputs = fn()
+    if backward:
+        torch.autograd.backward(outputs, grads)
 
+
+def _measure_round(fn, tensors, grads, backward, iters):
+    allocated = torch.cuda.memory_allocated()
+    torch.cuda.reset_peak_memory_stats()
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+    start.record()
+    for _ in range(iters):
+        _run(fn, tensors, grads, backward)
+    end.record()
+    end.synchronize()
+    return (
+        start.elapsed_time(end) / iters,
+        torch.cuda.max_memory_allocated() - allocated,
+    )
+
+
+def _measure(fn, tensors, grads, backward, warmup, iters, rounds):
     for _ in range(warmup):
-        run()
+        _run(fn, tensors, grads, backward)
     torch.cuda.synchronize()
     times = []
     peak_bytes = 0
     for _ in range(rounds):
-        torch.cuda.reset_peak_memory_stats()
-        start = torch.cuda.Event(enable_timing=True)
-        end = torch.cuda.Event(enable_timing=True)
-        start.record()
-        for _ in range(iters):
-            run()
-        end.record()
-        end.synchronize()
-        times.append(start.elapsed_time(end) / iters)
-        peak_bytes = max(peak_bytes, torch.cuda.max_memory_allocated())
+        elapsed_ms, round_peak_bytes = _measure_round(
+            fn, tensors, grads, backward, iters
+        )
+        times.append(elapsed_ms)
+        peak_bytes = max(peak_bytes, round_peak_bytes)
     median = statistics.median(times)
     mad = statistics.median(abs(x - median) for x in times)
     return {"rounds_ms": times, "median_ms": median, "mad_ms": mad}, peak_bytes
+
+
+def _paired_rounds(measure, rounds):
+    pairs = []
+    for round_index in range(rounds):
+        order = (
+            ("baseline", "candidate")
+            if round_index % 2 == 0
+            else ("candidate", "baseline")
+        )
+        values = {name: measure(name) for name in order}
+        pairs.append(
+            {
+                "order": list(order),
+                "baseline_ms": values["baseline"][0],
+                "candidate_ms": values["candidate"][0],
+                "speedup": values["baseline"][0] / values["candidate"][0],
+                "baseline_peak_bytes": values["baseline"][1],
+                "candidate_peak_bytes": values["candidate"][1],
+            }
+        )
+    return pairs
+
+
+def _measure_paired(
+    baseline, candidate, tensors, grads, backward, warmup, iters, rounds
+):
+    methods = {"baseline": baseline, "candidate": candidate}
+    for warmup_index in range(warmup):
+        order = (
+            ("baseline", "candidate")
+            if warmup_index % 2 == 0
+            else ("candidate", "baseline")
+        )
+        for name in order:
+            _run(methods[name], tensors, grads, backward)
+    torch.cuda.synchronize()
+
+    pairs = _paired_rounds(
+        lambda name: _measure_round(methods[name], tensors, grads, backward, iters),
+        rounds,
+    )
+    speedups = [pair["speedup"] for pair in pairs]
+    median = statistics.median(speedups)
+    mad = statistics.median(abs(x - median) for x in speedups)
+    return {
+        "pairs": pairs,
+        "median_speedup": median,
+        "speedup_mad": mad,
+        "wins": sum(speedup > 1.0 for speedup in speedups),
+        "stable_winner": sum(speedup > 1.0 for speedup in speedups) >= 4
+        and median - 1.0 > mad,
+    }
 
 
 def _methods(x, v, weight, bias, sg, mode, neuron, thread_counts):
@@ -155,27 +222,27 @@ def _methods(x, v, weight, bias, sg, mode, neuron, thread_counts):
     return methods
 
 
-def _stable_winners(measurements):
-    baselines = [k for k in measurements if not k.startswith("fused_")]
-    baseline_rounds = [
-        min(measurements[name]["timing"]["rounds_ms"][r] for name in baselines)
-        for r in range(len(next(iter(measurements.values()))["timing"]["rounds_ms"]))
-    ]
-    baseline_median = statistics.median(baseline_rounds)
-    baseline_mad = statistics.median(abs(x - baseline_median) for x in baseline_rounds)
-    winners = []
-    for name, result in measurements.items():
-        if not name.startswith("fused_"):
-            continue
-        rounds = result["timing"]["rounds_ms"]
-        wins = sum(x < y for x, y in zip(rounds, baseline_rounds))
-        gap = baseline_median - result["timing"]["median_ms"]
-        if wins >= 4 and gap > max(baseline_mad, result["timing"]["mad_ms"]):
-            winners.append(name)
-    return winners
+def _gpu_uuid():
+    visible = os.environ.get("CUDA_VISIBLE_DEVICES", str(torch.cuda.current_device()))
+    device = visible.split(",", 1)[0]
+    if device.startswith("GPU-"):
+        return device
+    output = subprocess.check_output(
+        [
+            "nvidia-smi",
+            f"--id={device}",
+            "--query-gpu=uuid",
+            "--format=csv,noheader",
+        ],
+        text=True,
+    )
+    return output.strip()
 
 
 def main():
+    import cupy
+
+    started_at = datetime.now(timezone.utc).isoformat()
     parser = argparse.ArgumentParser()
     parser.add_argument("--M", type=int, nargs="+", default=[32, 128, 512])
     parser.add_argument("--K", type=int, nargs="+", default=[512, 1024, 2048, 4096])
@@ -246,7 +313,7 @@ def main():
                             grad_y = torch.randn(T, M, N, device=device)
                             grad_v = torch.randn(M, K, device=device)
                             tensors = (x, v, weight, bias)
-                            measurements = {}
+                            screening = {}
                             with (
                                 torch.enable_grad()
                                 if training
@@ -260,22 +327,52 @@ def main():
                                         training,
                                         args.warmup,
                                         args.iters,
-                                        args.rounds,
+                                        1,
                                     )
-                                    measurements[name] = {
+                                    screening[name] = {
                                         "timing": timing,
                                         "peak_memory_bytes": peak_bytes,
                                     }
+                                baseline_name = min(
+                                    (
+                                        name
+                                        for name in methods
+                                        if not name.startswith("fused_")
+                                    ),
+                                    key=lambda name: screening[name]["timing"][
+                                        "median_ms"
+                                    ],
+                                )
+                                candidate_name = min(
+                                    (
+                                        name
+                                        for name in methods
+                                        if name.startswith("fused_")
+                                    ),
+                                    key=lambda name: screening[name]["timing"][
+                                        "median_ms"
+                                    ],
+                                )
+                                paired = _measure_paired(
+                                    methods[baseline_name],
+                                    methods[candidate_name],
+                                    tensors,
+                                    (grad_y, grad_v),
+                                    training,
+                                    args.warmup,
+                                    args.iters,
+                                    args.rounds,
+                                )
                             setup_ms = _time_setup(
                                 lambda: weight.t().contiguous(), args.iters
                             )
-                            winners = _stable_winners(measurements)
                             print(
                                 f"neuron={args.neuron:3s} mode={mode:9s} "
                                 f"T={T:2d} M={M:4d} K={K:4d} "
                                 f"N={N:4d} rate={actual_density:.4f} "
-                                f"best={min(measurements, key=lambda n: measurements[n]['timing']['median_ms'])} "
-                                f"stable={','.join(winners) or '-'}"
+                                f"pair={baseline_name}/{candidate_name} "
+                                f"speedup={paired['median_speedup']:.3f} "
+                                f"stable={paired['stable_winner']}"
                             )
                             cases.append(
                                 {
@@ -287,8 +384,15 @@ def main():
                                     "actual_spike_rate": actual_density,
                                     "mode": mode,
                                     "weight_transpose_setup_ms": setup_ms,
-                                    "stable_fused_winners": winners,
-                                    "measurements": measurements,
+                                    "inference_prepared_weight_bytes": (
+                                        0
+                                        if training
+                                        else weight.numel() * weight.element_size()
+                                    ),
+                                    "screening": screening,
+                                    "selected_baseline": baseline_name,
+                                    "selected_candidate": candidate_name,
+                                    "paired": paired,
                                 }
                             )
 
@@ -301,16 +405,25 @@ def main():
                 for path in (Path(lif_linear.__code__.co_filename), Path(__file__))
             },
             "device_name": properties.name,
+            "gpu_uuid": _gpu_uuid(),
+            "host": socket.gethostname(),
+            "pid": os.getpid(),
             "compute_capability": f"{properties.major}.{properties.minor}",
             "torch_version": torch.__version__,
             "cuda_version": torch.version.cuda,
             "cupy_version": cupy.__version__,
+            "dtype": str(x.dtype),
+            "float32_matmul_precision": torch.get_float32_matmul_precision(),
+            "tf32_matmul": torch.backends.cuda.matmul.allow_tf32,
+            "tf32_cudnn": torch.backends.cudnn.allow_tf32,
             "warmup": args.warmup,
             "iterations": args.iters,
             "rounds": args.rounds,
             "neuron": args.neuron,
             "inference_weight_transpose_excluded": True,
             "training_weight_transpose_included": True,
+            "started_at": started_at,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
         },
         "cases": cases,
     }
