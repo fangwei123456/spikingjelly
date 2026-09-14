@@ -140,6 +140,145 @@ When running on a single GeForce RTX 4090, the results are as follows:
 
 It can be observed that when both the data scale and sequence length ``T`` are large, the Triton backend exhibits a clear speed advantage over the CuPy and PyTorch backends.
 
+Combining with ``torch.compile``
+------------------------------------
+
+.. warning::
+
+    Current Triton neurons convert non-contiguous inputs to contiguous tensors.
+    For convolutional SNNs, Inductor's default layout optimization may select
+    channels-last convolutions and insert reorders or copies between convolutions
+    and neurons. Start with
+    ``torch.compile(..., options={"layout_optimization": False})`` and benchmark
+    the target GPU, model, and batch size. CuPy neurons have the same contiguous
+    layout restriction. Linear-only SNNs do not have this NCHW/channels-last
+    convolution-layout conflict.
+
+Triton neurons can be captured by ``torch.compile``, but a complete graph does
+not guarantee an end-to-end speedup. Per-kernel profiling identified one causal
+regression: default Inductor selected NHWC convolutions, while the fixed stride
+requirements of Triton LIF forced the network back to NCHW and also selected
+slower convolution kernels. Five GPU steps of the minimal failing case on an
+RTX 4090 (SEW-ResNet18, B=32, T=4, 136×136) give:
+
+.. list-table:: Causal comparison of layout policies
+    :header-rows: 1
+
+    * - path
+      - total (ms)
+      - convolution (ms)
+      - layout conversion (ms / count)
+      - LIF (ms)
+    * - Triton eager
+      - 38.079
+      - 18.874
+      - 0 / 0
+      - 4.300
+    * - default compile+Triton
+      - 47.923
+      - 33.411
+      - 2.794 / 195
+      - 4.650
+    * - layout optimization disabled
+      - **36.866**
+      - 20.995
+      - 0 / 0
+      - 4.010
+
+Disabling layout optimization changes this case's speedup from 0.800× to
+1.040×; LIF itself accounts for only 0.350 ms of the regression. Throughput
+workloads can use:
+
+.. code-block:: python
+
+    compiled_model = torch.compile(
+        model,
+        backend="inductor",
+        options={
+            "layout_optimization": False,
+            "max_autotune": True,
+            "triton.cudagraphs": False,
+            "triton.cudagraph_trees": False,
+        },
+    )
+
+``layout_optimization=False`` is the key correction. ``max_autotune`` increases
+first-compilation time and contributes only about another 1.2% on SEW-ResNet18.
+
+The following results use an exclusive, on-demand RTX 5090 with PyTorch
+2.11.0+cu128, Triton 3.6.0, T=4, LIF, FP32, and 224×224 inputs. Every case runs
+in a fresh process with a separate Inductor cache and is repeated for three
+rounds. Every compiled case produces one graph with zero graph breaks and zero
+recompiles. Values are three-round medians; inference uses batch 64 and training
+uses batch 16.
+
+.. list-table:: Corrected four-mode end-to-end latency
+    :header-rows: 1
+
+    * - model / phase
+      - Torch eager (ms)
+      - Torch compile (ms)
+      - Triton eager (ms)
+      - Triton compile (ms)
+      - compile / Triton eager
+    * - VGG inference
+      - 389.204
+      - 163.176
+      - 176.896
+      - **150.719**
+      - 1.174×
+    * - VGG training
+      - 251.198
+      - 160.743
+      - 139.855
+      - **130.926**
+      - 1.068×
+    * - SEW inference
+      - 54.266
+      - 28.823
+      - 27.868
+      - **27.350**
+      - 1.019×
+    * - SEW training
+      - 71.232
+      - 23.870
+      - 47.136
+      - **20.481**
+      - 2.298×
+    * - Spikformer inference
+      - 60.318
+      - 34.739
+      - 35.078
+      - **32.860**
+      - 1.068×
+    * - Spikformer training
+      - 73.473
+      - 29.458
+      - 51.102
+      - **26.795**
+      - 1.905×
+
+Corrected compile+Triton beats eager+Triton in all six cases and every round.
+The complete results are available as a :download:`CSV file
+<../../_static/tutorials/triton_backend/compile-backends-rtx5090-tuned.csv>`.
+The full ordering ``compile+Triton > eager+Triton > compile+Torch > eager+Torch``
+holds only for VGG training and SEW inference because compile+Torch overtakes
+eager+Triton in the other modes.
+
+For SEW-ResNet18 inference, paired speedups at batch 1, 2, 4, 8, 16, 32, 64,
+and 128 are 3.147×, 2.601×, 2.535×, 2.156×, 1.112×, 1.019×, 1.019×, and
+1.012×. The complete results are available as a :download:`CSV file
+<../../_static/tutorials/triton_backend/compile-sew18-rtx5090-tuned.csv>`.
+The 1%–2% gains at large batches are hardware-sensitive and should be
+remeasured in the target environment.
+
+Inference models can also call :func:`fuse_conv_bn_eval_modules
+<spikingjelly.activation_based.functional.conv_bn_fusion.fuse_conv_bn_eval_modules>`.
+It reduces VGG Triton eager from 176.896 ms to 157.898 ms. After applying the
+fusion fairly to all four modes, Torch compile reaches 143.950 ms and remains
+faster than Triton compile at 149.803 ms, so evaluate this optimization
+independently.
+
 .. admonition:: Warning
     :class: warning
 
