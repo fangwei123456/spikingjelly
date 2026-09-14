@@ -64,6 +64,38 @@ def test_case_parser_keeps_required_reproduction_fields(tmp_path: Path):
     assert args.fp8_fallback_dtype == "bf16"
 
 
+def test_case_parser_builds_triton_throughput_compile_options(tmp_path: Path):
+    args = benchmark.build_parser().parse_args(
+        [
+            "case",
+            "--model",
+            "sew_resnet18",
+            "--phase",
+            "inference",
+            "--execution",
+            "compile",
+            "--batch-size",
+            "32",
+            "--warmup",
+            "20",
+            "--steps",
+            "30",
+            "--compile-layout-optimization",
+            "off",
+            "--compile-max-autotune",
+            "--output",
+            str(tmp_path / "result.json"),
+        ]
+    )
+
+    assert benchmark.compile_options(args) == {
+        "triton.cudagraphs": False,
+        "triton.cudagraph_trees": False,
+        "layout_optimization": False,
+        "max_autotune": True,
+    }
+
+
 def test_source_parser_requires_one_baseline_and_one_candidate(tmp_path: Path):
     package = tmp_path / "spikingjelly"
     package.mkdir()

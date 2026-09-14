@@ -61,6 +61,15 @@ def summarize_samples(samples_ms: list[float]) -> dict[str, float]:
     }
 
 
+def compile_options(args: argparse.Namespace) -> dict[str, bool]:
+    options = {"triton.cudagraphs": False, "triton.cudagraph_trees": False}
+    if args.compile_layout_optimization == "off":
+        options["layout_optimization"] = False
+    if args.compile_max_autotune:
+        options["max_autotune"] = True
+    return options
+
+
 def parse_source_specs(values: list[str]) -> list[tuple[str, Path]]:
     if len(values) != 2:
         raise ValueError("matrix requires exactly two --source LABEL=PATH values")
@@ -609,7 +618,7 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
         model = torch.compile(
             model,
             backend="inductor",
-            options={"triton.cudagraphs": False, "triton.cudagraph_trees": False},
+            options=compile_options(args),
         )
     graph_runner = None
     if args.execution == "cuda_graph":
@@ -752,7 +761,12 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
                 else None
             ),
             "compile": (
-                {"backend": "inductor", "mode": "default", "cudagraphs": False}
+                {
+                    "backend": "inductor",
+                    "mode": "default",
+                    "cudagraphs": False,
+                    "options": compile_options(args),
+                }
                 if args.execution == "compile"
                 else None
             ),
@@ -882,6 +896,14 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
                             command.extend(["--triton-storage", args.triton_storage])
                         command.extend(["--triton-fwd", args.triton_fwd])
                         command.extend(["--triton-bwd", args.triton_bwd])
+                        command.extend(
+                            [
+                                "--compile-layout-optimization",
+                                args.compile_layout_optimization,
+                            ]
+                        )
+                        if args.compile_max_autotune:
+                            command.append("--compile-max-autotune")
                         env = os.environ.copy()
                         env["SJ_BENCH_SOURCE_ROOT"] = str(source_root)
                         env["PYTHONPATH"] = str(source_root)
@@ -975,6 +997,10 @@ def _add_case_parser(subparsers) -> None:
     parser.add_argument(
         "--triton-bwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
     )
+    parser.add_argument(
+        "--compile-layout-optimization", choices=("default", "off"), default="default"
+    )
+    parser.add_argument("--compile-max-autotune", action="store_true")
     parser.add_argument("--lr", type=float, default=0.1)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--channels-last", action="store_true")
@@ -1041,6 +1067,10 @@ def _add_matrix_parser(subparsers) -> None:
     parser.add_argument(
         "--triton-bwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
     )
+    parser.add_argument(
+        "--compile-layout-optimization", choices=("default", "off"), default="default"
+    )
+    parser.add_argument("--compile-max-autotune", action="store_true")
     parser.add_argument("--channels-last", action="store_true")
     parser.add_argument("--require-gpu-name", default="")
     parser.add_argument("--output-dir", type=Path, required=True)
