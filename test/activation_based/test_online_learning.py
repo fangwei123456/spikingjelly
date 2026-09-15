@@ -181,3 +181,33 @@ def test_ottt_online_training_runs_over_multiple_timesteps(
 
     assert y_all.shape == (N, T, 2)
     assert torch.isfinite(batch_loss)
+
+
+@pytest.mark.parametrize("online", [True, False])
+def test_ottt_online_training_unwraps_nested_ottt_lif_output(online):
+    # Consecutive parameterless OTTTLIFNode layers apply the neuron to both
+    # spike and trace, so the sequential output is nested [ [spike, trace],
+    # [spike, trace] ]. The trainer must still take the inner spike.
+    net = OTTTSequential(
+        nn.Linear(8, 2),
+        OTTTLIFNode(),
+        OTTTLIFNode(),
+    )
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.1)
+    T = 4
+    N = 2
+    x_seq = torch.rand([N, T, 8])
+    target_seq = torch.rand([N, T, 2])
+
+    batch_loss, y_all = ottt_online_training(
+        model=net,
+        optimizer=optimizer,
+        x_seq=x_seq,
+        target_seq=target_seq,
+        f_loss_t=nn.functional.mse_loss,
+        online=online,
+    )
+    reset_net(net)
+
+    assert y_all.shape == (N, T, 2)
+    assert torch.isfinite(batch_loss)

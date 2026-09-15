@@ -232,6 +232,21 @@ def fptt_online_training(
             module._memories = state
 
 
+def _spike_from_ottt_output(y_t):
+    """Return the terminal spike tensor from an OTTT module output.
+
+    ``OTTTLIFNode`` returns ``[spike, trace]`` while training. If a later
+    parameterless module (another ``OTTTLIFNode``, dropout, pooling, ...) is
+    applied through ``OTTTSequential``'s spike/trace path, each element is
+    itself an ``OTTTLIFNode`` output, so the result is nested
+    ``[[spike, trace], [spike, trace]]``. Walking the first element until a
+    tensor remains recovers the spike used for the loss.
+    """
+    while isinstance(y_t, (list, tuple)):
+        y_t = y_t[0]
+    return y_t
+
+
 def ottt_online_training(
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
@@ -375,11 +390,7 @@ def ottt_online_training(
         if online:
             optimizer.zero_grad()
 
-        y_t = model(x_t)
-        # OTTTLIFNode returns [spike, trace] during training. The loss is
-        # computed on spikes; traces are only used inside OTTTSequential.
-        if isinstance(y_t, (list, tuple)):
-            y_t = y_t[0]
+        y_t = _spike_from_ottt_output(model(x_t))
         loss = f_loss_t(y_t, target_t.contiguous())
 
         loss.backward()
