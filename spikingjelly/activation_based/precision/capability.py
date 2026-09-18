@@ -109,12 +109,7 @@ def _detect_mps_bf16(mps_backend) -> bool:
 
 
 def _resolve_device_type(device: torch.device | str) -> str:
-    s = str(device)
-    if s.startswith("cuda"):
-        return "cuda"
-    if s.startswith("mps"):
-        return "mps"
-    return "cpu"
+    return torch.device(device).type
 
 
 def _assess_fp8(
@@ -180,8 +175,10 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
         bf16_supported = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
     elif device_type == "mps":
         bf16_supported = mps_bf16_supported
-    else:
+    elif device_type == "cpu":
         bf16_supported = cpu_bf16
+    else:
+        bf16_supported = False
 
     can_convert = True
     can_execute = True
@@ -231,6 +228,10 @@ def _validate_fp16(report: dict[str, Any]) -> None:
         )
     if device_type == "mps":
         return
+    if device_type != "cuda":
+        raise RuntimeError(
+            f"precision='fp16' is not supported on {device_type} in the current stage."
+        )
     if not report["cuda_available"]:
         raise RuntimeError("precision='fp16' requires CUDA, but CUDA is not available.")
 
@@ -246,14 +247,21 @@ def _validate_bf16(report: dict[str, Any]) -> None:
                 "device does not support bf16."
             )
         return
-    if not report["cuda_available"]:
-        raise RuntimeError(
-            "precision='bf16' requires CUDA or CPU bf16 autocast support."
-        )
+    if device_type == "cuda":
+        if not report["cuda_available"]:
+            raise RuntimeError(
+                "precision='bf16' requires CUDA, but CUDA is not available."
+            )
+        if not report["bf16_supported"]:
+            raise RuntimeError(
+                "precision='bf16' was requested on CUDA, but this CUDA device "
+                "does not report bf16 support."
+            )
+        return
     if not report["bf16_supported"]:
         raise RuntimeError(
-            "precision='bf16' was requested on CUDA, but this CUDA device "
-            "does not report bf16 support."
+            f"precision='bf16' was requested on {device_type}, but this "
+            f"{device_type.upper()} device does not report bf16 support."
         )
 
 

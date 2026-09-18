@@ -76,6 +76,13 @@ Module: `spikingjelly.activation_based.functional`.
 
 ### Bug Fixes
 
+#### Precision
+
+Module: `spikingjelly.activation_based.precision`.
+
+- Capability reports now preserve the requested PyTorch device type instead of
+  reporting unsupported accelerators as CPU.
+
 #### Spiking Neurons
 
 Module: `spikingjelly.activation_based.neuron`.
