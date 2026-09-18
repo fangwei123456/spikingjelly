@@ -108,17 +108,6 @@ def _detect_mps_bf16(mps_backend) -> bool:
         return False
 
 
-def _probe_device_bf16(device: str) -> bool:
-    """Probe whether an arbitrary accelerator (npu, xpu, privateuse1, ...) supports
-    bfloat16 by materializing a tensor on it. This keeps the report device-agnostic
-    instead of defaulting non-CUDA/non-MPS devices to the CPU backend."""
-    try:
-        _ = torch.tensor(1.0, dtype=torch.bfloat16, device=device)
-        return True
-    except Exception:
-        return False
-
-
 def _resolve_device_type(device: torch.device | str) -> str:
     return torch.device(device).type
 
@@ -189,7 +178,7 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
     elif device_type == "cpu":
         bf16_supported = cpu_bf16
     else:
-        bf16_supported = _probe_device_bf16(device_str)
+        bf16_supported = False
 
     can_convert = True
     can_execute = True

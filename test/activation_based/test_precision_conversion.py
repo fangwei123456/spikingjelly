@@ -13,6 +13,10 @@ from spikingjelly.activation_based.precision import (
     PrecisionConfig,
     prepare_model_for_precision,
 )
+from spikingjelly.activation_based.precision.capability import (
+    build_capability_report,
+    validate_capability,
+)
 from spikingjelly.activation_based.precision.convert import (
     analyze_convertible_modules,
     convert_model_for_precision,
@@ -354,6 +358,15 @@ def test_capability_report_splits_can_convert_and_can_execute():
     report = artifacts.describe()["capability_report"]
     assert report["can_convert"] is True
     assert report["can_execute"] is True
+
+
+def test_capability_report_preserves_unsupported_device_type():
+    report = build_capability_report(torch.nn.Identity(), "xpu", "bf16")
+
+    assert report["device_type"] == "xpu"
+    assert report["bf16_supported"] is False
+    with pytest.raises(RuntimeError, match="requested on xpu"):
+        validate_capability(report)
 
 
 def test_convert_model_for_precision_preserves_shared_linear_module_identity():
