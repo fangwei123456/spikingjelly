@@ -233,6 +233,8 @@ V2 版本更新记录见 [CHANGELOG.md](./CHANGELOG.md)。
 
 </details>
 
+[![Star 历史图表](https://api.star-history.com/svg?repos=fangwei123456/spikingjelly&type=Date)](https://star-history.com/#fangwei123456/spikingjelly&Date)
+
 ## 贡献
 
 欢迎提交 issue、pull request、文档改进和翻译。

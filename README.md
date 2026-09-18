@@ -235,6 +235,8 @@ The main institutions behind SpikingJelly are [Multimedia Learning Group, Instit
 - [OpenI mirror](https://openi.pcl.ac.cn/OpenI/spikingjelly)
 - [Community Jupyter tutorials in Chinese](https://github.com/fangwei123456/spikingjelly/tree/8932ac0668fe19b3efd0afedb3ca454cd8c126d3/community_tutorials/jupyter/chinese)
 
+[![Star History Chart](https://api.star-history.com/svg?repos=fangwei123456/spikingjelly&type=Date)](https://star-history.com/#fangwei123456/spikingjelly&Date)
+
 ## Contributing
 
 We welcome issues, pull requests, documentation improvements, and translations.
