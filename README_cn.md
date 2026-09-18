@@ -111,9 +111,13 @@ net = nn.Sequential(
 
 多步神经元支持 `torch`、`cupy` 或 `triton` 后端。后端在创建神经元时指定，后续可更改。所有后端均兼容 `torch.compile`。
 
-下图：多步 LIF 神经元在 `torch` 与 `cupy` 上的执行时间对比。FlexSN 和 Triton 的详细内容见后端教程。
+下图对比多步 LIF 神经元在 RTX 4090 上使用 `torch`、`cupy` 和
+`triton` 后端进行 FP16 前向与反向传播的执行时间。完整的测试配置和限制见
+[Triton 后端教程](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/cn/triton_backend.html)。
 
-<img src="./docs/source/_static/tutorials/11_cext_neuron_with_lbl/exe_time_fb.png" alt="多步 LIF 神经元后端 benchmark" />
+<p align="center">
+  <img src="./docs/source/_static/tutorials/triton_backend/Performance-float16.png" alt="多步 LIF 神经元 FP16 后端 benchmark" width="640" />
+</p>
 
 ### 大规模 SNN 系统
 
@@ -151,6 +155,40 @@ SpikingJelly 内置以下事件数据和神经形态数据集：
 - [NIR exchange](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/cn/nir_exchange.html)
 - [Lava exchange](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/cn/lava_exchange.html)
 - [Lynxi exchange](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/cn/inference_on_lynxi.html)
+
+## 项目状态与版本说明
+
+**开发 / 发布策略：**
+
+从 SpikingJelly V2 起，发布版本采用兼容 PEP 440 的语义化风格
+`MAJOR.MINOR.PATCH` 版本号。`MAJOR` 表示兼容性世代，`MINOR`
+表示向后兼容的功能更新，`PATCH` 表示缺陷修复。V2 开发版和先行版使用
+Python 包版本写法，例如 `2.0.0.dev0`、`2.0.0a1`、`2.0.0b1` 和
+`2.0.0rc1`。
+
+V2 版本更新记录见 [CHANGELOG.md](./CHANGELOG.md)。
+
+<details>
+<summary>兼容性、迁移说明与旧版文档</summary>
+
+- V2 之前，SpikingJelly 使用历史遗留的 `0.0.0.0.X` 版本方案：奇数 `X` 对应 GitHub / OpenI 上的开发版，偶数 `X` 对应发布到 PyPI 的稳定版。
+- 如果项目必须停留在 V2 之前的版本，请用类似 `spikingjelly<2` 的上界固定依赖。
+- 从 `0.0.0.0.14` 起，`clock_driven`、`event_driven` 等模块已重命名。参见[从老版本迁移](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/migrate_from_legacy.html)。
+- 默认文档对应最新开发版。
+- 如果依赖老版本，请同时检查 [bugs.md](./bugs.md) 以及对应版本文档。
+
+历史文档入口：
+
+- [zero](https://spikingjelly.readthedocs.io/zh_CN/zero/)
+- [0.0.0.0.4](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.4/#index-en)
+- [0.0.0.0.6](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.6/#index-en)
+- [0.0.0.0.8](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/#index-en)
+- [0.0.0.0.10](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/#index-en)
+- [0.0.0.0.12](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/#index-en)
+- [0.0.0.0.14](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en)
+- [latest](https://spikingjelly.readthedocs.io/zh_CN/latest/#index-en)
+
+</details>
 
 ## 许可证
 
@@ -199,41 +237,12 @@ SpikingJelly 的主要负责机构是北京大学信息科学技术学院数字�
 - [OpenI 镜像](https://openi.pcl.ac.cn/OpenI/spikingjelly)
 - [社区中文 Jupyter 教程](https://github.com/fangwei123456/spikingjelly/tree/8932ac0668fe19b3efd0afedb3ca454cd8c126d3/community_tutorials/jupyter/chinese)
 
-## 项目状态与版本说明
-
-**开发 / 发布策略：**
-
-从 SpikingJelly V2 起，发布版本采用兼容 PEP 440 的语义化风格
-`MAJOR.MINOR.PATCH` 版本号。`MAJOR` 表示兼容性世代，`MINOR`
-表示向后兼容的功能更新，`PATCH` 表示缺陷修复。V2 开发版和先行版使用
-Python 包版本写法，例如 `2.0.0.dev0`、`2.0.0a1`、`2.0.0b1` 和
-`2.0.0rc1`。
-
-V2 版本更新记录见 [CHANGELOG.md](./CHANGELOG.md)。
-
-<details>
-<summary>兼容性、迁移说明与旧版文档</summary>
-
-- V2 之前，SpikingJelly 使用历史遗留的 `0.0.0.0.X` 版本方案：奇数 `X` 对应 GitHub / OpenI 上的开发版，偶数 `X` 对应发布到 PyPI 的稳定版。
-- 如果项目必须停留在 V2 之前的版本，请用类似 `spikingjelly<2` 的上界固定依赖。
-- 从 `0.0.0.0.14` 起，`clock_driven`、`event_driven` 等模块已重命名。参见[从老版本迁移](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/migrate_from_legacy.html)。
-- 默认文档对应最新开发版。
-- 如果依赖老版本，请同时检查 [bugs.md](./bugs.md) 以及对应版本文档。
-
-历史文档入口：
-
-- [zero](https://spikingjelly.readthedocs.io/zh_CN/zero/)
-- [0.0.0.0.4](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.4/#index-en)
-- [0.0.0.0.6](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.6/#index-en)
-- [0.0.0.0.8](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/#index-en)
-- [0.0.0.0.10](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/#index-en)
-- [0.0.0.0.12](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/#index-en)
-- [0.0.0.0.14](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en)
-- [latest](https://spikingjelly.readthedocs.io/zh_CN/latest/#index-en)
-
-</details>
-
-[![Star 历史图表](https://api.star-history.com/svg?repos=fangwei123456/spikingjelly&type=Date)](https://star-history.com/#fangwei123456/spikingjelly&Date)
+<a href="https://star-history.com/#fangwei123456/spikingjelly&amp;Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=fangwei123456/spikingjelly&amp;type=Date&amp;theme=dark" />
+    <img alt="Star 历史图表" src="https://api.star-history.com/svg?repos=fangwei123456/spikingjelly&amp;type=Date" />
+  </picture>
+</a>
 
 ## 贡献
 

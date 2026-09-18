@@ -111,9 +111,14 @@ Next steps:
 
 Spiking neuron models run on `torch`, `cupy`, or `triton` backends. The backend is set at neuron creation and can be changed later. All backends are compatible with `torch.compile`.
 
-Below: execution time comparison for multi-step LIF neurons on `torch` vs `cupy`. Triton is covered in the backend tutorials.
+Below: FP16 forward-and-backward execution time for multi-step LIF neurons on
+an RTX 4090 across `torch`, `cupy`, and `triton`. See the
+[Triton backend tutorial](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/en/triton_backend.html)
+for the benchmark setup and limitations.
 
-<img src="./docs/source/_static/tutorials/11_cext_neuron_with_lbl/exe_time_fb.png" alt="Backend benchmark for multi-step LIF neurons" />
+<p align="center">
+  <img src="./docs/source/_static/tutorials/triton_backend/Performance-float16.png" alt="FP16 backend benchmark for multi-step LIF neurons" width="640" />
+</p>
 
 ### Large-Scale SNN Systems
 
@@ -235,7 +240,12 @@ The main institutions behind SpikingJelly are [Multimedia Learning Group, Instit
 - [OpenI mirror](https://openi.pcl.ac.cn/OpenI/spikingjelly)
 - [Community Jupyter tutorials in Chinese](https://github.com/fangwei123456/spikingjelly/tree/8932ac0668fe19b3efd0afedb3ca454cd8c126d3/community_tutorials/jupyter/chinese)
 
-[![Star History Chart](https://api.star-history.com/svg?repos=fangwei123456/spikingjelly&type=Date)](https://star-history.com/#fangwei123456/spikingjelly&Date)
+<a href="https://star-history.com/#fangwei123456/spikingjelly&amp;Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=fangwei123456/spikingjelly&amp;type=Date&amp;theme=dark" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=fangwei123456/spikingjelly&amp;type=Date" />
+  </picture>
+</a>
 
 ## Contributing
 
