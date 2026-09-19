@@ -1,11 +1,16 @@
+import copy
+
 import pytest
 import torch
 import torch.nn as nn
 
 from spikingjelly.activation_based import base, layer
+from spikingjelly.activation_based import neuron
+from spikingjelly.activation_based.functional.net_config import reset_net
 from spikingjelly.activation_based.functional.online_learning import (
     fptt_online_training,
     fptt_online_training_init_w_ra,
+    ottt_online_training,
 )
 from spikingjelly.activation_based.layer.online_learning import (
     GradwithTrace,
@@ -142,3 +147,80 @@ def test_fptt_running_average_starts_from_independent_parameter_snapshots():
     for snapshot, expected, parameter in zip(snapshots, original, model.parameters()):
         assert snapshot.data_ptr() != parameter.data_ptr()
         torch.testing.assert_close(snapshot, expected)
+
+
+@pytest.mark.parametrize("online", [True, False])
+@pytest.mark.parametrize("use_ottt_output_neuron", [True, False])
+def test_ottt_online_training_runs_over_multiple_timesteps(
+    online, use_ottt_output_neuron
+):
+    # Regression for issue #593: ottt_online_training used to raise
+    # RuntimeError on the second time step because neuron states stayed in the
+    # previous graph. The public example uses LIFNode as the last layer; a
+    # collaborator suggested OTTTLIFNode there instead. Both should train.
+    last = OTTTLIFNode() if use_ottt_output_neuron else neuron.LIFNode()
+    net = OTTTSequential(
+        nn.Linear(8, 4),
+        OTTTLIFNode(),
+        nn.Linear(4, 2),
+        last,
+    )
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.1)
+    T = 4
+    N = 2
+    x_seq = torch.rand([N, T, 8])
+    target_seq = torch.rand([N, T, 2])
+
+    batch_loss, y_all = ottt_online_training(
+        model=net,
+        optimizer=optimizer,
+        x_seq=x_seq,
+        target_seq=target_seq,
+        f_loss_t=nn.functional.mse_loss,
+        online=online,
+    )
+    reset_net(net)
+
+    assert y_all.shape == (N, T, 2)
+    assert torch.isfinite(batch_loss)
+
+
+@pytest.mark.parametrize("online", [True, False])
+@pytest.mark.parametrize("use_subclass", [False, True])
+def test_ottt_sequential_calls_stacked_ottt_lif_once_on_spike(online, use_subclass):
+    class CustomOTTTLIFNode(OTTTLIFNode):
+        pass
+
+    torch.manual_seed(754)
+    net = OTTTSequential(
+        nn.Linear(8, 2),
+        OTTTLIFNode(),
+        CustomOTTTLIFNode() if use_subclass else OTTTLIFNode(),
+    )
+    reference = copy.deepcopy(net)
+    for x in torch.rand(4, 2, 8) * 3:
+        y = net(x)
+        expected = reference[2](reference[1](reference[0](x))[0])
+        torch.testing.assert_close(y, expected)
+        torch.testing.assert_close(net[2].v, reference[2].v)
+        torch.testing.assert_close(net[2].trace, reference[2].trace)
+        y[0].sum().backward()
+        expected[0].sum().backward()
+        torch.testing.assert_close(net[0].weight.grad, reference[0].weight.grad)
+        torch.testing.assert_close(net[0].bias.grad, reference[0].bias.grad)
+    reset_net(net)
+
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.1)
+    T = 4
+    N = 2
+    batch_loss, y_all = ottt_online_training(
+        model=net,
+        optimizer=optimizer,
+        x_seq=torch.rand([N, T, 8]),
+        target_seq=torch.rand([N, T, 2]),
+        f_loss_t=nn.functional.mse_loss,
+        online=online,
+    )
+    reset_net(net)
+    assert y_all.shape == (N, T, 2)
+    assert torch.isfinite(batch_loss)

@@ -195,8 +195,11 @@ class OTTTSequential(nn.Sequential):
         * **中文**
 
         用于 OTTT（Online Training Through Time）的顺序容器，扩展自 ``nn.Sequential``。
-        在 ``forward`` 中，若输入为 ``[spike, trace]`` 列表形式，则自动将有参数的模块包装为 :class:`GradwithTrace`，
-        将无参数的模块包装为 :class:`SpikeTraceOp`，以实现在线训练中的梯度传递。
+        在 ``forward`` 中，若输入为 ``[spike, trace]`` 列表形式，则：若下一模块为
+        :class:`~spikingjelly.activation_based.neuron.online_learning.OTTTLIFNode`，
+        只对 ``spike`` 调用一次并用其返回的 ``[spike, trace]`` 作为新的状态对；
+        否则将有参数的模块包装为 :class:`GradwithTrace`，将无参数的模块包装为
+        :class:`SpikeTraceOp`。
 
         :param args: 需要顺序执行的模块
         :type args: nn.Module
@@ -208,9 +211,11 @@ class OTTTSequential(nn.Sequential):
         * **English**
 
         Sequential container for OTTT (Online Training Through Time), extending ``nn.Sequential``.
-        During ``forward``, if the input is a ``[spike, trace]`` list, modules with parameters are
-        automatically wrapped by :class:`GradwithTrace`, while parameter-free modules are wrapped by
-        :class:`SpikeTraceOp`, enabling gradient propagation for online training.
+        During ``forward``, if the input is a ``[spike, trace]`` list, an
+        ``OTTTLIFNode`` is called once on the spike tensor and its returned
+        ``[spike, trace]`` pair replaces the state. Other modules with parameters
+        are wrapped by :class:`GradwithTrace`; parameter-free modules use
+        :class:`SpikeTraceOp`.
 
         :param args: Modules to be executed sequentially
         :type args: nn.Module
@@ -243,9 +248,14 @@ class OTTTSequential(nn.Sequential):
         :return: Output after sequential execution
         :rtype: Union[torch.Tensor, list[torch.Tensor]]
         """
+        # Import at call time to avoid the layer <-> neuron import cycle.
+        from ..neuron.online_learning import OTTTLIFNode
+
         for module in self:
             if isinstance(input, list):
-                if next(module.parameters(), None) is None:
+                if isinstance(module, OTTTLIFNode):
+                    input = module(input[0])
+                elif next(module.parameters(), None) is None:
                     input = _apply_to_spike_and_trace(module, input)
                 else:
                     input = _grad_with_trace(module, input)

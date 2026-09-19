@@ -251,8 +251,9 @@ def ottt_online_training(
 
     使用 OTTT 在线训练方法训练网络，也可用于文献中提到的 SLTT 训练。函数会先将
     ``x_seq`` 和 ``target_seq`` 从 ``[B, T, ...]`` 转置为 ``[T, B, ...]``，然后沿时间维逐步执行
-    前向与反向传播。若 ``online`` 为 ``True``，则每个时间步都会执行一次参数更新；否则先累积整段序列的梯度，
-    再在最后统一更新。
+    前向与反向传播。每个时间步在 ``backward`` 之后都会调用 ``detach_net``，将神经元状态从当
+    前计算图中分离，避免下一步再次 ``backward`` 时触发二次反传。若 ``online`` 为 ``True``，
+    则每个时间步都会执行一次参数更新；否则先累积整段序列的梯度，再在最后统一更新。
 
     该函数要求 ``x_seq`` 与 ``target_seq`` 的前两维分别表示 batch 和 time，且
     两者在这两维上的长度一致。
@@ -292,7 +293,10 @@ def ottt_online_training(
     This function can also be used for SLTT training method proposed by `Towards Memory- and Time-Efficient Backpropagation for Training Spiking Neural Networks <https://openaccess.thecvf.com/content/ICCV2023/html/Meng_Towards_Memory-_and_Time-Efficient_Backpropagation_for_Training_Spiking_Neural_Networks_ICCV_2023_paper.html>`_ .
     It first transposes ``x_seq`` and ``target_seq`` from ``[B, T, ...]`` to
     ``[T, B, ...]`` and then runs forward and backward passes step by step along
-    the time dimension. If ``online`` is ``True``, the optimizer updates
+    the time dimension. After each ``backward``, ``detach_net`` is called so that
+    neuron states are disconnected from the current graph; otherwise the next
+    time step raises ``RuntimeError`` for a second backward through the same
+    graph. If ``online`` is ``True``, the optimizer updates
     parameters at every time step; otherwise, gradients are accumulated through
     the whole sequence and applied once at the end.
 
@@ -372,12 +376,19 @@ def ottt_online_training(
             optimizer.zero_grad()
 
         y_t = model(x_t)
+        if isinstance(y_t, (list, tuple)):
+            y_t = y_t[0]
         loss = f_loss_t(y_t, target_t.contiguous())
 
         loss.backward()
 
         if online:
             optimizer.step()
+
+        # OTTT/SLTT only use the current-step graph. Hidden states (membrane,
+        # traces) must be detached, or the next time step's backward tries to
+        # traverse an already-freed graph (issue #593).
+        detach_net(model)
 
         batch_loss += loss.detach()
         y_all.append(y_t.detach())

@@ -29,6 +29,16 @@ Module: ``spikingjelly.activation_based.neuron``.
 Improvements
 ~~~~~~~~~~~~
 
+Online Training
+^^^^^^^^^^^^^^^
+
+Modules: ``spikingjelly.activation_based.functional``, ``spikingjelly.activation_based.layer``.
+
+- Detach neuron state between OTTT training steps and use terminal spike outputs
+  for loss computation.
+- Call consecutive ``OTTTLIFNode`` layers, including subclasses, once per step on
+  spikes and propagate their returned spike/trace pair.
+
 Learning
 ^^^^^^^^
 
