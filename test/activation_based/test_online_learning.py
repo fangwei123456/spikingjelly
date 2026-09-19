@@ -1,3 +1,5 @@
+import copy
+
 import pytest
 import torch
 import torch.nn as nn
@@ -184,20 +186,29 @@ def test_ottt_online_training_runs_over_multiple_timesteps(
 
 
 @pytest.mark.parametrize("online", [True, False])
-def test_ottt_sequential_calls_stacked_ottt_lif_once_on_spike(online):
-    # Consecutive OTTTLIFNode layers must not apply the same stateful node to
-    # both spike and trace. The second node is called once on the spike and
-    # returns a flat [spike, trace] pair.
+@pytest.mark.parametrize("use_subclass", [False, True])
+def test_ottt_sequential_calls_stacked_ottt_lif_once_on_spike(online, use_subclass):
+    class CustomOTTTLIFNode(OTTTLIFNode):
+        pass
+
+    torch.manual_seed(754)
     net = OTTTSequential(
         nn.Linear(8, 2),
         OTTTLIFNode(),
-        OTTTLIFNode(),
+        CustomOTTTLIFNode() if use_subclass else OTTTLIFNode(),
     )
-    net.train()
-    y = net(torch.rand(2, 8))
-    assert isinstance(y, list) and len(y) == 2
-    assert torch.is_tensor(y[0]) and torch.is_tensor(y[1])
-    assert y[0].shape == (2, 2)
+    reference = copy.deepcopy(net)
+    for x in torch.rand(4, 2, 8) * 3:
+        y = net(x)
+        expected = reference[2](reference[1](reference[0](x))[0])
+        torch.testing.assert_close(y, expected)
+        torch.testing.assert_close(net[2].v, reference[2].v)
+        torch.testing.assert_close(net[2].trace, reference[2].trace)
+        y[0].sum().backward()
+        expected[0].sum().backward()
+        torch.testing.assert_close(net[0].weight.grad, reference[0].weight.grad)
+        torch.testing.assert_close(net[0].bias.grad, reference[0].bias.grad)
+    reset_net(net)
 
     optimizer = torch.optim.SGD(net.parameters(), lr=0.1)
     T = 4

@@ -59,26 +59,6 @@ def _apply_to_spike_and_trace(module: nn.Module, x):
     return [spike, trace]
 
 
-def _is_ottt_lif_node(module: nn.Module) -> bool:
-    # Avoid importing neuron.online_learning here (layer <-> neuron cycle).
-    return type(module).__name__ == "OTTTLIFNode"
-
-
-def _apply_ottt_lif_to_pair(module: nn.Module, x):
-    """Run a stateful OTTTLIFNode once on the spike tensor.
-
-    Applying the same neuron to both spike and trace (the parameterless
-    SpikeTraceOp path) double-steps the membrane and nests
-    ``[[spike, trace], [spike, trace]]``. OTTTSequential should instead
-    call the node once and take the returned pair as the new state.
-    """
-    spike, _trace = x
-    out = module(spike)
-    if isinstance(out, (list, tuple)) and len(out) == 2:
-        return list(out)
-    return [out, _trace]
-
-
 class GradwithTrace(nn.Module):
     def __init__(self, module):
         r"""
@@ -268,10 +248,13 @@ class OTTTSequential(nn.Sequential):
         :return: Output after sequential execution
         :rtype: Union[torch.Tensor, list[torch.Tensor]]
         """
+        # Import at call time to avoid the layer <-> neuron import cycle.
+        from ..neuron.online_learning import OTTTLIFNode
+
         for module in self:
             if isinstance(input, list):
-                if _is_ottt_lif_node(module):
-                    input = _apply_ottt_lif_to_pair(module, input)
+                if isinstance(module, OTTTLIFNode):
+                    input = module(input[0])
                 elif next(module.parameters(), None) is None:
                     input = _apply_to_spike_and_trace(module, input)
                 else:
