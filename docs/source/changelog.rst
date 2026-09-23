@@ -29,6 +29,12 @@ Module: ``spikingjelly.activation_based.neuron``.
 Improvements
 ~~~~~~~~~~~~
 
+Contributor Guidance
+^^^^^^^^^^^^^^^^^^^^
+
+- Added repository-wide agent instructions with a required bilingual Sphinx
+  docstring template, public API documentation rules, and validation guidance.
+
 Online Training
 ^^^^^^^^^^^^^^^
 
