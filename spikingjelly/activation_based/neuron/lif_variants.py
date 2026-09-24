@@ -234,7 +234,7 @@ class GatedLIFNode(base.MemoryModule):
         linear_decay = self.linear_decay.view(1, -1, 1, 1).sigmoid()
         v_subreset = self.v_subreset.view(1, -1, 1, 1).sigmoid()
 
-        spike = torch.zeros(x_seq.shape[1:], device=x_seq.device)
+        spike = torch.zeros(x_seq.shape[1:], device=x_seq.device, dtype=x_seq.dtype)
         spike_seq = []
         for t in range(self.T):
             spike, v = functional.gated_lif_step(
