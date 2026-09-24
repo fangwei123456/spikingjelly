@@ -16,14 +16,14 @@ from spikingjelly.activation_based.ann2snn.operators import (
     TDSoftmax,
 )
 from spikingjelly.activation_based.ann2snn.recipes.base import ModuleConversionRecipe
-from spikingjelly.activation_based.neuron import STBIFNeuron
+from spikingjelly.activation_based.neuron import STBIFNode
 
 if TYPE_CHECKING:
     from spikingjelly.activation_based.ann2snn.converter import ModuleConverter
 
 
 __all__ = [
-    "STBIFNeuron",
+    "STBIFNode",
     "SpikeZIPConv2d",
     "SpikeZIPEmbedding",
     "SpikeZIPLayerNorm",
@@ -284,11 +284,11 @@ class SpikeZIPRobertaSelfAttention(base.MemoryModule):
         self.query = SpikeZIPLinear(source.query, level)
         self.key = SpikeZIPLinear(source.key, level)
         self.value = SpikeZIPLinear(source.value, level)
-        self.query_if = STBIFNeuron.from_quantizer(source.query_quan)
-        self.key_if = STBIFNeuron.from_quantizer(source.key_quan)
-        self.value_if = STBIFNeuron.from_quantizer(source.value_quan)
-        self.attn_if = STBIFNeuron.from_quantizer(source.attn_quan)
-        self.after_attn_if = STBIFNeuron.from_quantizer(source.after_attn_quan)
+        self.query_if = STBIFNode.from_quantizer(source.query_quan)
+        self.key_if = STBIFNode.from_quantizer(source.key_quan)
+        self.value_if = STBIFNode.from_quantizer(source.value_quan)
+        self.attn_if = STBIFNode.from_quantizer(source.attn_quan)
+        self.after_attn_if = STBIFNode.from_quantizer(source.after_attn_quan)
         self.softmax = SpikeZIPSoftmax(dim=-1)
         self.dropout = copy.deepcopy(getattr(source, "dropout", nn.Identity()))
         self.step_mode = "s"
@@ -474,12 +474,12 @@ class SpikeZIPViTSelfAttention(base.MemoryModule):
         self.is_softmax = bool(getattr(source, "is_softmax", True))
         self.qkv = SpikeZIPLinear(source.qkv, level, bias_steps=1)
         self.proj = SpikeZIPLinear(source.proj, level, bias_steps=1)
-        self.q_if = STBIFNeuron.from_quantizer(source.quan_q)
-        self.k_if = STBIFNeuron.from_quantizer(source.quan_k)
-        self.v_if = STBIFNeuron.from_quantizer(source.quan_v)
-        self.attn_if = STBIFNeuron.from_quantizer(source.attn_quan)
-        self.after_attn_if = STBIFNeuron.from_quantizer(source.after_attn_quan)
-        self.proj_if = STBIFNeuron.from_quantizer(source.quan_proj)
+        self.q_if = STBIFNode.from_quantizer(source.quan_q)
+        self.k_if = STBIFNode.from_quantizer(source.quan_k)
+        self.v_if = STBIFNode.from_quantizer(source.quan_v)
+        self.attn_if = STBIFNode.from_quantizer(source.attn_quan)
+        self.after_attn_if = STBIFNode.from_quantizer(source.after_attn_quan)
+        self.proj_if = STBIFNode.from_quantizer(source.quan_proj)
         self.attn_drop = copy.deepcopy(getattr(source, "attn_drop", nn.Identity()))
         self.proj_drop = copy.deepcopy(getattr(source, "proj_drop", nn.Identity()))
         self.step_mode = "s"
@@ -867,7 +867,7 @@ class SpikeZIPTFQANNRecipe(ModuleConversionRecipe):
             elif isinstance(child, nn.LayerNorm):
                 replacement = SpikeZIPLayerNorm(child)
             elif self._is_quantizer(child):
-                replacement = STBIFNeuron.from_quantizer(child)
+                replacement = STBIFNode.from_quantizer(child)
             elif isinstance(child, nn.ReLU):
                 replacement = nn.Identity()
 

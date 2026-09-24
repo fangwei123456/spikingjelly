@@ -11,7 +11,7 @@ import torch.nn.functional as F
 
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.ann2snn import ModuleConverter, SpikeZIPTFQANNRecipe
-from spikingjelly.activation_based.neuron import STBIFNeuron
+from spikingjelly.activation_based.neuron import STBIFNode
 
 
 class SpikeZIPQuantizer(nn.Module):
@@ -153,7 +153,7 @@ def collect_stbif_state(model: nn.Module):
     min_accumulated = None
     max_accumulated = None
     for module in model.modules():
-        if not isinstance(module, STBIFNeuron) or module.cur_output is None:
+        if not isinstance(module, STBIFNode) or module.cur_output is None:
             continue
         values.update(float(x) for x in torch.unique(module.cur_output).cpu())
         accumulated = module.accumulated.detach()
@@ -171,7 +171,7 @@ def collect_stbif_state(model: nn.Module):
         )
     if not values and min_accumulated is None and max_accumulated is None:
         raise RuntimeError(
-            "collect_stbif_state found no STBIFNeuron with cur_output set; "
+            "collect_stbif_state found no STBIFNode with cur_output set; "
             "the SpikeZIPTFQANNRecipe conversion likely did not run."
         )
     return {

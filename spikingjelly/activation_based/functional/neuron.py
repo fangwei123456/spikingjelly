@@ -3174,7 +3174,7 @@ def stbif_step(
 
     * **中文**
 
-    执行 ``STBIFNeuron`` 的单步显式状态转移。函数接收当前输入 ``x``、已物化的
+    执行 ``STBIFNode`` 的单步显式状态转移。函数接收当前输入 ``x``、已物化的
     量化残差 ``q`` 和累计释放量 ``acc_q``，以及量化尺度与边界 tensor，返回
     ``(out, q_next, acc_q_next, cur_output_next)``。量化尺度和边界会在函数入口
     转换到 ``x`` 的 device/dtype。
@@ -3206,7 +3206,7 @@ def stbif_step(
 
     * **English**
 
-    Run one explicit state transition for ``STBIFNeuron``. The function receives
+    Run one explicit state transition for ``STBIFNode``. The function receives
     current input ``x``, materialized quantized residual ``q`` and accumulated
     released quantity ``acc_q``, plus ``q_threshold``, ``pos_max``, and
     ``neg_min`` tensors. It returns

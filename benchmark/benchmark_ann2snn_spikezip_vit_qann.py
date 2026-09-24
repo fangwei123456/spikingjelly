@@ -16,7 +16,7 @@ from torchvision import datasets, transforms
 
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.ann2snn import ModuleConverter, SpikeZIPTFQANNRecipe
-from spikingjelly.activation_based.neuron import STBIFNeuron
+from spikingjelly.activation_based.neuron import STBIFNode
 
 try:
     from torch.serialization import safe_globals
@@ -564,7 +564,7 @@ def main() -> None:
         args.sequence_loop_bottlenecks,
     )
     functional.set_step_mode(converted, args.step_mode)
-    functional.set_backend(converted, args.stbif_backend, instance=STBIFNeuron)
+    functional.set_backend(converted, args.stbif_backend, instance=STBIFNode)
 
     debug = {}
     qann_features = []

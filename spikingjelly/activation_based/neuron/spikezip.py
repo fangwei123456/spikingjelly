@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from .. import base, functional
 
-__all__ = ["STBIFNeuron"]
+__all__ = ["STBIFNode"]
 
 
 def _as_scalar_tensor(value) -> torch.Tensor:
@@ -11,7 +11,7 @@ def _as_scalar_tensor(value) -> torch.Tensor:
     return tensor.detach().clone()
 
 
-class STBIFNeuron(base.MemoryModule):
+class STBIFNode(base.MemoryModule):
     def __init__(
         self,
         q_threshold,
@@ -22,11 +22,11 @@ class STBIFNeuron(base.MemoryModule):
         step_mode: str = "s",
     ) -> None:
         r"""
-        **API Language** - :ref:`中文 <STBIFNeuron.__init__-cn>` | :ref:`English <STBIFNeuron.__init__-en>`
+        **API Language** - :ref:`中文 <STBIFNode.__init__-cn>` | :ref:`English <STBIFNode.__init__-en>`
 
         ----
 
-        .. _STBIFNeuron.__init__-cn:
+        .. _STBIFNode.__init__-cn:
 
         * **中文**
 
@@ -59,7 +59,7 @@ class STBIFNeuron(base.MemoryModule):
 
         ----
 
-        .. _STBIFNeuron.__init__-en:
+        .. _STBIFNode.__init__-en:
 
         * **English**
 
@@ -119,7 +119,7 @@ class STBIFNeuron(base.MemoryModule):
         self.register_memory("cur_output", None)
 
     @classmethod
-    def from_quantizer(cls, quantizer: nn.Module) -> "STBIFNeuron":
+    def from_quantizer(cls, quantizer: nn.Module) -> "STBIFNode":
         scale = quantizer.s
         sym = bool(quantizer.sym)
         pos_max = quantizer.pos_max
@@ -191,7 +191,7 @@ class STBIFNeuron(base.MemoryModule):
         x_seq = inputs[0]
         q, acc_q, cur_output = states
         if self.backend == "triton" and x_seq.device.type != "cuda":
-            raise RuntimeError("STBIFNeuron backend='triton' requires a CUDA tensor.")
+            raise RuntimeError("STBIFNode backend='triton' requires a CUDA tensor.")
         if self.backend == "triton":
             from spikingjelly.activation_based.triton_kernel.neuron_kernel import stbif
 
@@ -219,5 +219,5 @@ class STBIFNeuron(base.MemoryModule):
     @property
     def accumulated(self) -> torch.Tensor:
         if self.acc_q is None:
-            raise RuntimeError("STBIFNeuron has no accumulated state before forward.")
+            raise RuntimeError("STBIFNode has no accumulated state before forward.")
         return self.acc_q * self.q_threshold.to(dtype=self.acc_q.dtype)

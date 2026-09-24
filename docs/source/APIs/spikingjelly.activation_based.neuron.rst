@@ -217,7 +217,7 @@ SpikeZIP Neuron Primitives
 
 .. list-table::
 
-   * - :class:`STBIFNeuron <spikingjelly.activation_based.neuron.spikezip.STBIFNeuron>`
+   * - :class:`STBIFNode <spikingjelly.activation_based.neuron.spikezip.STBIFNode>`
      - Signed ternary BIF neuron for SpikeZIP QANN-to-SNN conversion.
 
 Integer-Valued Training Neurons

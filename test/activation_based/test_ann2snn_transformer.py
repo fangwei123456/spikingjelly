@@ -47,7 +47,7 @@ from spikingjelly.activation_based.ann2snn.recipes.sta_transformer import (
     _STAConstant,
     _STASpikeEncoder,
 )
-from spikingjelly.activation_based.neuron import STBIFNeuron
+from spikingjelly.activation_based.neuron import STBIFNode
 from spikingjelly.activation_based.triton_kernel.neuron_kernel import stbif
 
 TinyModelOutput = namedtuple("TinyModelOutput", ["logits", "hidden"])
@@ -770,7 +770,7 @@ class _TinyIncompleteSpikeZIPViTQANNClassifier(nn.Module):
 
 def test_spikezip_stbif_matches_quantizer_accumulation():
     quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
-    neuron = STBIFNeuron.from_quantizer(quantizer)
+    neuron = STBIFNode.from_quantizer(quantizer)
     x = torch.tensor([[-0.75, -0.2, 0.3, 0.9]])
     expected = quantizer(x)
     accumulated = None
@@ -784,7 +784,7 @@ def test_spikezip_stbif_matches_quantizer_accumulation():
 
 def test_spikezip_stbif_state_follows_module_dtype():
     quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
-    neuron = STBIFNeuron.from_quantizer(quantizer)
+    neuron = STBIFNode.from_quantizer(quantizer)
     x = torch.randn(2, 3, dtype=torch.float32)
     neuron(x)
 
@@ -812,13 +812,13 @@ def test_spikezip_stbif_optimized_torch_matches_single_step_reference(sym, x):
     if not sym:
         x_seq = x_seq.clamp(min=0.0)
 
-    reference = STBIFNeuron.from_quantizer(quantizer)
+    reference = STBIFNode.from_quantizer(quantizer)
     loop_seq = torch.stack([reference.single_step_forward(x_t) for x_t in x_seq], dim=0)
     loop_q = reference.q.clone()
     loop_acc_q = reference.acc_q.clone()
     loop_cur_output = reference.cur_output.clone()
 
-    neuron = STBIFNeuron.from_quantizer(quantizer)
+    neuron = STBIFNode.from_quantizer(quantizer)
     functional.set_step_mode(neuron, "m")
     y_seq = neuron(x_seq)
 
@@ -835,7 +835,7 @@ def test_spikezip_stbif_optimized_torch_matches_single_step_reference(sym, x):
 @pytest.mark.parametrize("level", [0, True])
 def test_spikezip_stbif_rejects_invalid_level(level):
     with pytest.raises(ValueError, match="level must be >= 2"):
-        STBIFNeuron(0.25, level=level, sym=True)
+        STBIFNode(0.25, level=level, sym=True)
 
 
 @pytest.mark.skipif(
@@ -849,11 +849,11 @@ def test_spikezip_stbif_triton_matches_torch(dtype, time_steps):
     x = (torch.randn(7, 13, device="cuda", dtype=dtype) * 0.2).contiguous()
     x_seq = _first_real_then_zero_sequence(x, time_steps=time_steps)
 
-    torch_neuron = STBIFNeuron.from_quantizer(quantizer).cuda()
+    torch_neuron = STBIFNode.from_quantizer(quantizer).cuda()
     functional.set_step_mode(torch_neuron, "m")
     torch_seq = torch_neuron(x_seq)
 
-    triton_neuron = STBIFNeuron.from_quantizer(quantizer).cuda()
+    triton_neuron = STBIFNode.from_quantizer(quantizer).cuda()
     triton_neuron.backend = "triton"
     functional.set_step_mode(triton_neuron, "m")
     triton_seq = triton_neuron(x_seq)
@@ -874,7 +874,7 @@ def test_spikezip_stbif_triton_matches_torch(dtype, time_steps):
     reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
 )
 def test_spikezip_stbif_triton_avoids_device_scalar_read():
-    neuron = STBIFNeuron(0.25, level=8, sym=True, step_mode="m").cuda()
+    neuron = STBIFNode(0.25, level=8, sym=True, step_mode="m").cuda()
     neuron.backend = "triton"
     x_seq = torch.randn(8, 7, 13, device="cuda")
 
@@ -906,8 +906,8 @@ def test_spikezip_stbif_single_step_triton_matches_torch(dtype):
     )
     level_indices = torch.arange(8 * 7 * 13, device="cuda").reshape(8, 7, 13)
     x_seq = normalized_levels[level_indices % normalized_levels.numel()] * 0.25
-    torch_neuron = STBIFNeuron.from_quantizer(quantizer).cuda()
-    triton_neuron = STBIFNeuron.from_quantizer(quantizer).cuda()
+    torch_neuron = STBIFNode.from_quantizer(quantizer).cuda()
+    triton_neuron = STBIFNode.from_quantizer(quantizer).cuda()
     triton_neuron.backend = "triton"
 
     torch_out = torch.stack([torch_neuron(x) for x in x_seq])
@@ -1444,7 +1444,7 @@ def test_spikezip_qann_vit_multistep_triton_matches_torch():
     ).convert(qann)
     functional.set_step_mode(torch_converted, "m")
     functional.set_step_mode(triton_converted, "m")
-    functional.set_backend(triton_converted, "triton", instance=STBIFNeuron)
+    functional.set_backend(triton_converted, "triton", instance=STBIFNode)
 
     x_seq = _first_real_then_zero_sequence(images, torch_converted.time_steps)
     torch_logits = torch_converted(x_seq).sum(dim=0)

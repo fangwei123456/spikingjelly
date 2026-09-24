@@ -9,7 +9,7 @@ from pathlib import Path
 import torch
 
 from spikingjelly.activation_based import functional
-from spikingjelly.activation_based.neuron import STBIFNeuron
+from spikingjelly.activation_based.neuron import STBIFNode
 
 
 def _sync(device: torch.device) -> None:
@@ -23,7 +23,7 @@ def _first_real_then_zero_sequence(x: torch.Tensor, time_steps: int) -> torch.Te
     return x_seq
 
 
-def _run_old_loop(neuron: STBIFNeuron, x_seq: torch.Tensor) -> torch.Tensor:
+def _run_old_loop(neuron: STBIFNode, x_seq: torch.Tensor) -> torch.Tensor:
     functional.reset_net(neuron)
     outputs = []
     for x in x_seq:
@@ -43,7 +43,7 @@ def _time_call(device: torch.device, repeat: int, fn):
     return min(seconds), result
 
 
-def _state(neuron: STBIFNeuron) -> dict[str, torch.Tensor]:
+def _state(neuron: STBIFNode) -> dict[str, torch.Tensor]:
     return {
         "q": neuron.q.detach().clone(),
         "acc_q": neuron.acc_q.detach().clone(),
@@ -100,12 +100,12 @@ def main() -> None:
     x = x.to(device=device, dtype=dtype)
     x_seq = _first_real_then_zero_sequence(x, args.time_steps)
 
-    reference = STBIFNeuron(
+    reference = STBIFNode(
         args.scale,
         level=args.level,
         sym=args.sym,
     ).to(device)
-    torch_opt = STBIFNeuron(
+    torch_opt = STBIFNode(
         args.scale,
         level=args.level,
         sym=args.sym,
@@ -151,7 +151,7 @@ def main() -> None:
         }
 
         if device.type == "cuda":
-            triton_neuron = STBIFNeuron(
+            triton_neuron = STBIFNode(
                 args.scale,
                 level=args.level,
                 sym=args.sym,

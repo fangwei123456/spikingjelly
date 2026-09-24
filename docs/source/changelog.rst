@@ -137,6 +137,17 @@ Module: ``spikingjelly.activation_based.neuron``.
 - ``BaseNode.detach()`` now also detaches the accumulated ``v_seq``, so
   ``functional.detach_net`` keeps truncated BPTT bounded when ``store_v_seq=True``.
 
+Breaking Changes and Notices
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Spiking Neurons
+^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.neuron``.
+
+- Renamed the SpikeZIP inference neuron ``STBIFNeuron`` to ``STBIFNode``. Update
+  imports and class references; its state dynamics are unchanged.
+
 2.0.0rc1 - 2026-08-29
 ---------------------
 
