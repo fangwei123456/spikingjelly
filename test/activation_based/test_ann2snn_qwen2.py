@@ -1,3 +1,6 @@
+import copy
+from types import SimpleNamespace
+
 import pytest
 import torch
 
@@ -14,6 +17,8 @@ from spikingjelly.activation_based.ann2snn import (
     Qwen2SNNRecipe,
     calibrate_qwen2_snn,
 )
+from spikingjelly.activation_based.ann2snn.operators import TDScaledDotProductAttention
+from spikingjelly.activation_based.ann2snn.recipes.qwen2 import _Qwen2Decoder
 
 
 def _tiny_qwen2(*, tie_word_embeddings: bool = False):
@@ -41,10 +46,10 @@ def _inputs():
     }
 
 
-def _convert(model):
+def _convert(model, time_steps=4):
     config = Qwen2SNNConfig(
-        time_steps=4,
-        calibration_levels=2,
+        time_steps=time_steps,
+        calibration_levels=min(2, time_steps),
         calibration_reservoir_size=16,
     )
     calibration = calibrate_qwen2_snn(model, [_inputs()], config)
@@ -243,3 +248,92 @@ def test_qwen2_rejects_mrope():
 
     with pytest.raises(ValueError, match="MRoPE"):
         calibrate_qwen2_snn(model, [_inputs()], Qwen2SNNConfig())
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA SDPA")
+def test_qwen2_qcfs_prefill_preserves_full_temporal_sdpa_result():
+    torch.manual_seed(20260923)
+    query = torch.zeros(32, 1, 14, 2, 64, device="cuda")
+    key = torch.zeros(32, 1, 2, 2, 64, device="cuda")
+    value = torch.zeros_like(key)
+    query[0].normal_()
+    key[0].normal_()
+    value[0].normal_()
+    query.requires_grad_()
+    key.requires_grad_()
+    value.requires_grad_()
+    mask = torch.ones(1, 1, 2, 2, dtype=torch.bool, device="cuda").tril()
+    decoder = SimpleNamespace(
+        sdpa=TDScaledDotProductAttention(scale=0.125), kv_groups=7, index=0
+    )
+
+    reference = _Qwen2Decoder._attend(
+        decoder, query, key, value, mask, None, "signed_if"
+    )
+    reference_gradients = torch.autograd.grad(reference.sum(), (query, key, value))
+    decoder.sdpa.reset()
+    candidate = _Qwen2Decoder._attend(decoder, query, key, value, mask, None, "qcfs_sg")
+    candidate_gradients = torch.autograd.grad(candidate.sum(), (query, key, value))
+
+    torch.testing.assert_close(candidate, reference, rtol=0, atol=0)
+    for actual, expected in zip(candidate_gradients, reference_gradients):
+        torch.testing.assert_close(actual[0], expected[0], rtol=1e-5, atol=1e-5)
+
+
+@pytest.mark.parametrize("mode", ["exact_td", "qcfs_sg", "signed_if"])
+@pytest.mark.parametrize("time_steps", [1, 4])
+def test_qwen2_attention_matches_full_temporal_execution(monkeypatch, mode, time_steps):
+    _, actual = _convert(_tiny_qwen2(), time_steps)
+    reference = copy.deepcopy(actual)
+    for layer in reference.layers:
+        # Use the full TD path with the same encoded Q/K/V as the candidate.
+        def full_temporal(
+            query, key, value, mask, cache, encoding_mode, *, attend=layer._attend
+        ):
+            return attend(query, key, value, mask, cache, "signed_if")
+
+        monkeypatch.setattr(layer, "_attend", full_temporal)
+
+    inputs = _inputs()
+    mask = inputs["attention_mask"]
+    caches = [None, None]
+    losses = [[], []]
+    for chunk in (
+        inputs["input_ids"],
+        torch.tensor([[8, 9], [10, 11]]),
+        torch.tensor([[12], [13]]),
+    ):
+        if caches[0] is not None:
+            mask = torch.cat((mask, torch.ones_like(chunk)), dim=1)
+        outputs = []
+        for index, model in enumerate((actual, reference)):
+            functional.reset_net(model)
+            output = model(
+                input_ids=chunk,
+                attention_mask=mask,
+                encoding_mode=mode,
+                past_key_values=caches[index],
+                use_cache=True,
+            )
+            caches[index] = output.past_key_values
+            losses[index].append(output.logits.square().mean())
+            outputs.append(output.logits)
+        torch.testing.assert_close(outputs[0], outputs[1], atol=1e-5, rtol=1e-5)
+        torch.testing.assert_close(caches[0].entries, caches[1].entries)
+        for left, right in zip(actual.layers, reference.layers):
+            torch.testing.assert_close(left.sdpa.x_cum, right.sdpa.x_cum)
+            torch.testing.assert_close(left.sdpa.y_cum, right.sdpa.y_cum)
+        for cache in caches:
+            cache.reorder_cache(torch.tensor([1, 0]))
+        mask = mask.flip(0)
+
+    for loss in losses:
+        sum(loss).backward()
+    for left, right in zip(actual.parameters(), reference.parameters()):
+        torch.testing.assert_close(left.grad, right.grad, atol=1e-5, rtol=1e-5)
+    for model in (actual, reference):
+        functional.reset_net(model)
+        assert all(
+            layer.sdpa.x_cum is None and layer.sdpa.y_cum is None
+            for layer in model.layers
+        )

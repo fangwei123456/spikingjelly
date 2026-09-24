@@ -803,11 +803,14 @@ def export_sglang(
     **API Language** - 中文 | English
 
     **中文：** 模型 recipe 从 Hugging Face config 构造 SGLang config 并负责
-    Qwen2 权重映射；通用导出器负责分布式生命周期和文件发布。
+    Qwen2 权重映射；通用导出器负责分布式生命周期和文件发布。物理 head 数
+    使用基础 heads，匹配 collapsed-QCFS runtime；时间展开 head 的产物需重新导出。
 
     **English:** The model recipe builds the SGLang configuration from the
     Hugging Face config and owns Qwen2 weight mapping; the generic exporter owns
-    the distributed lifecycle and artifact publication.
+    the distributed lifecycle and artifact publication. Physical head counts use
+    the base heads for the collapsed-QCFS runtime; artifacts with time-expanded
+    heads must be re-exported.
 
     :param config: Qwen2 模型配置。 / Qwen2 model configuration.
     :type config: Qwen2Config
@@ -833,8 +836,8 @@ def export_sglang(
         "hidden_size": source_config.hidden_size,
         "intermediate_size": source_config.intermediate_size,
         "num_hidden_layers": source_config.num_hidden_layers,
-        "num_attention_heads": source_config.num_attention_heads * config.time_steps,
-        "num_key_value_heads": source_config.num_key_value_heads * config.time_steps,
+        "num_attention_heads": source_config.num_attention_heads,
+        "num_key_value_heads": source_config.num_key_value_heads,
         "snn_num_attention_heads": source_config.num_attention_heads,
         "snn_num_key_value_heads": source_config.num_key_value_heads,
         "snn_time_steps": config.time_steps,

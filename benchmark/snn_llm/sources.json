@@ -4,6 +4,14 @@
       "repository": "https://github.com/ridgerchu/SpikeGPT.git",
       "revision": "029f86f0536f2b2451524038fc9890cc76c2429e"
     },
+    "phase_spikingllm_t8": {
+      "repository": "https://github.com/njzhenghy/SpikingLLM.git",
+      "revision": "cf631c37626635d016e2257e02ffcf58cb9c8e3f"
+    },
+    "phase_spikingllm_t1": {
+      "repository": "https://github.com/njzhenghy/SpikingLLM.git",
+      "revision": "60b3024c2e808fb65633053bca1b0e7cb9e15bc3"
+    },
     "spikingjelly": {
       "repository": "https://github.com/fangwei123456/spikingjelly.git",
       "revision": "2797c5575515b59d7f09a3d5b732d6d25e148d13"

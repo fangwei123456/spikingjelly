@@ -35,6 +35,19 @@ Contributor Guidance
 - Added repository-wide agent instructions with a required bilingual Sphinx
   docstring template, public API documentation rules, and validation guidance.
 
+Qwen2 ANN2SNN Recipe and Benchmark Integration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Modules: ``spikingjelly.activation_based.ann2snn.recipes.qwen2``,
+``benchmark.snn_llm.qwen2``, ``benchmark.snn_llm.sglang_models.qwen2``.
+
+- The benchmark Qwen2 collapsed-QCFS SGLang adapter now allocates KV cache for
+  the base KV heads, omitting its identically zero temporal-head tail. Existing Qwen2
+  SGLang artifacts with time-expanded head metadata must be re-exported.
+- The Qwen2 conversion recipe evaluates attention once for its ``exact_td`` and
+  ``qcfs_sg`` encodings, whose cumulative Q/K/V remain unchanged after the first
+  temporal slice. The ``signed_if`` attention path is unchanged.
+
 Online Training
 ^^^^^^^^^^^^^^^
 

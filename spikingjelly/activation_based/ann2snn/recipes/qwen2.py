@@ -572,6 +572,7 @@ class _Qwen2Decoder(nn.Module):
         value: torch.Tensor,
         attention_mask: torch.Tensor,
         cache: Optional[_Qwen2Cache],
+        encoding_mode: str,
     ) -> torch.Tensor:
         past = None
         if cache is not None:
@@ -583,12 +584,26 @@ class _Qwen2Decoder(nn.Module):
             query = query.float()
             key = _repeat_kv(key.float(), self.kv_groups)
             value = _repeat_kv(value.float(), self.kv_groups)
-            if past is None:
+            if past is not None:
+                past_key = past[0].float().repeat_interleave(self.kv_groups, dim=1)
+                past_value = past[1].float().repeat_interleave(self.kv_groups, dim=1)
+            if encoding_mode in ("exact_td", "qcfs_sg"):
+                if past is not None:
+                    key_step = torch.cat((past_key, key[0]), dim=2)
+                    value_step = torch.cat((past_value, value[0]), dim=2)
+                    attended_step = self.sdpa.single_step_forward(
+                        query[0], key_step, value_step, attention_mask
+                    )
+                else:
+                    # Match the full temporal SDPA's numerical backend in prefill.
+                    attended_step = self.sdpa(
+                        query[:1], key[:1], value[:1], attention_mask
+                    )[0]
+                # These recipe encodings have a constant zero temporal tail.
+                attended = _exact_sequence(attended_step, query.shape[0])
+            elif past is None:
                 attended = self.sdpa(query, key, value, attention_mask)
             else:
-                past_key, past_value = past
-                past_key = past_key.float().repeat_interleave(self.kv_groups, dim=1)
-                past_value = past_value.float().repeat_interleave(self.kv_groups, dim=1)
                 zero_key = torch.zeros_like(past_key)
                 zero_value = torch.zeros_like(past_value)
                 attended = torch.stack(
@@ -641,7 +656,7 @@ class _Qwen2Decoder(nn.Module):
             self.kv_heads,
             self.head_dim,
         )
-        attended = self._attend(query, key, value, attention_mask, cache)
+        attended = self._attend(query, key, value, attention_mask, cache, encoding_mode)
         hidden = residual + self.o_proj(attended)
         residual = hidden
         normalized = self.post_attention_layernorm(hidden)

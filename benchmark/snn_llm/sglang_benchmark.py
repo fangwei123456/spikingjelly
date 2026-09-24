@@ -195,6 +195,7 @@ def main() -> None:
     )
     runs = []
     with llm.open_sglang_engine(config) as engine:
+        kv_cache_capacity_tokens = engine.get_server_info()["max_total_num_tokens"]
         engine.loop.run_until_complete(
             _run_requests(engine, prompts[:1], min(8, args.output_length))
         )
@@ -262,6 +263,7 @@ def main() -> None:
             "seed": args.seed,
         },
         "cuda_graph": False,
+        "kv_cache_capacity_tokens": kv_cache_capacity_tokens,
         "runs": runs,
     }
     payload = json.dumps(report, indent=2, sort_keys=True) + "\n"

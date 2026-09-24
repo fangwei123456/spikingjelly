@@ -1,4 +1,4 @@
-"""SGLang runtime model for the benchmark Qwen2 SNN recipe."""
+"""SGLang adapter for the benchmark Qwen2 collapsed-QCFS recipe."""
 
 from __future__ import annotations
 
@@ -73,6 +73,14 @@ class _QwenAttention(nn.Module):
         self.total_heads = config.snn_num_attention_heads
         self.total_kv_heads = config.snn_num_key_value_heads
         self.head_dim = config.head_dim
+        if (
+            config.num_attention_heads != self.total_heads
+            or config.num_key_value_heads != self.total_kv_heads
+        ):
+            raise ValueError(
+                "Qwen2 SGLang artifact uses obsolete temporal-head metadata; "
+                "re-export it with the current SpikingJelly runtime."
+            )
         tp_size = get_parallel().tp_size
         tp_rank = get_parallel().tp_rank
         self.tp_size = tp_size
@@ -106,10 +114,10 @@ class _QwenAttention(nn.Module):
             base=float(config.rope_parameters["rope_theta"]),
         )
         self.attention = RadixAttention(
-            self.time_steps * self.local_heads,
+            self.local_heads,
             self.head_dim,
             self.head_dim**-0.5,
-            num_kv_heads=self.time_steps * self.local_kv_heads,
+            num_kv_heads=self.local_kv_heads,
             layer_id=layer_id,
             quant_config=quant_config,
             prefix=add_prefix("attention", prefix),
@@ -152,7 +160,14 @@ class _QwenAttention(nn.Module):
             mean=False,
         )
 
-        output = self.attention(q.flatten(1), k.flatten(1), v.flatten(1), forward_batch)
+        attended = self.attention(
+            q[:, 0].contiguous(),
+            k[:, 0].contiguous(),
+            v[:, 0].contiguous(),
+            forward_batch,
+        )
+        output = torch.zeros_like(q)
+        output[:, 0] = attended
         output = output.reshape(token_count * self.time_steps, self.q_size)
         output, _ = self.proj(output)
         return output.reshape(token_count, self.time_steps, self.hidden_size)

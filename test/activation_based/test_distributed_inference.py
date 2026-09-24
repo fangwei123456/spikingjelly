@@ -380,6 +380,9 @@ def test_sglang_benchmark_flushes_cache_before_each_repeat(
         def __init__(self):
             self.loop = asyncio.new_event_loop()
 
+        def get_server_info(self):
+            return {"max_total_num_tokens": 128}
+
         def flush_cache(self):
             flushes.append(None)
 
@@ -422,7 +425,7 @@ def test_sglang_benchmark_flushes_cache_before_each_repeat(
     sglang_benchmark.main()
 
     assert len(flushes) == 2
-    capsys.readouterr()
+    assert '"kv_cache_capacity_tokens": 128' in capsys.readouterr().out
 
 
 def test_spikelm_sglang_export_supports_tied_embeddings(monkeypatch):
