@@ -1256,8 +1256,8 @@ raise SystemExit(1)
 
         model = TwoInputAddRelu()
         model.eval()
-        x0 = torch.randn(2, 4)
-        x1 = torch.randn(2, 4)
+        x0 = torch.ones(2, 4)
+        x1 = torch.ones(2, 4)
         label = torch.zeros(2, dtype=torch.long)
         converter = Converter(
             recipe=TwoInputRateCodingRecipe(
