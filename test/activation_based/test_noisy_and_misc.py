@@ -133,6 +133,17 @@ def test_neuron_parameters_keep_float32_when_default_dtype_changes():
     )
 
 
+@pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16, torch.float16])
+def test_gated_lif_output_and_state_follow_the_input_dtype(dtype):
+    node = GatedLIFNode(T=3, inplane=2).to(dtype)
+    x_seq = torch.rand(3, 2, 2, 4, 4, dtype=dtype)
+
+    out = node(x_seq)
+
+    assert out.dtype == dtype
+    assert node.v.dtype == dtype
+
+
 def test_vectorized_misc_helpers_preserve_values_and_gradients():
     labels = torch.tensor([0, 2])
     torch.testing.assert_close(

@@ -149,6 +149,9 @@ Module: ``spikingjelly.activation_based.neuron``.
   sequence on every step, so it is intended for monitoring and debugging.
 - ``BaseNode.detach()`` now also detaches the accumulated ``v_seq``, so
   ``functional.detach_net`` keeps truncated BPTT bounded when ``store_v_seq=True``.
+- ``GatedLIFNode`` now materialises its previous-spike state with the input dtype,
+  so its multi-step output and membrane state keep the module dtype under half
+  precision instead of being promoted to ``float32``.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
