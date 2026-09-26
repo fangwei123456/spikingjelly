@@ -121,6 +121,15 @@ Module: ``spikingjelly.activation_based.functional``.
 Bug Fixes
 ~~~~~~~~~
 
+Functional Forward
+^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.base``.
+
+- ``to_functional_forward()`` now preserves overridden ``forward`` methods in
+  ``nn.Sequential`` subclasses, including temporal containers whose outputs and
+  states depend on step-by-step execution (issue #760).
+
 Precision
 ^^^^^^^^^
 

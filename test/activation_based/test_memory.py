@@ -513,6 +513,29 @@ def test_to_functional_forward_flat_sequential_uses_functional_states():
     torch.testing.assert_close(accumulator.right, torch.tensor(20.0))
 
 
+@pytest.mark.parametrize(
+    "container_factory",
+    [
+        layer.MultiStepContainer,
+        lambda cell: layer.StepModeContainer(True, "m", cell),
+    ],
+    ids=["multi_step", "step_mode"],
+)
+def test_to_functional_forward_preserves_temporal_container_forward(
+    container_factory,
+):
+    module = container_factory(neuron.LIFNode(tau=2.0, decay_input=True, step_mode="s"))
+    x = torch.full((2, 1, 2), 1.5)
+    initial_states = tuple(base.extract_memories(module))
+
+    outputs, states = base.to_functional_forward(module)((x,), initial_states)
+    assert tuple(base.extract_memories(module)) == initial_states
+    expected = module(x)
+
+    torch.testing.assert_close(outputs[0], expected)
+    torch.testing.assert_close(states[0], base.extract_memories(module)[0])
+
+
 def test_to_functional_forward_fallback_multiple_inputs_states_outputs_and_kwargs():
     class Accumulator(base.MemoryModule):
         def __init__(self):

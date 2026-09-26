@@ -1481,7 +1481,11 @@ def to_functional_forward(
 
             return direct_forward
 
-    if fn is None and isinstance(module, nn.Sequential):
+    if (
+        fn is None
+        and isinstance(module, nn.Sequential)
+        and getattr(module.forward, "__func__", None) is nn.Sequential.forward
+    ):
         children = list(module._modules.values())
         child_state_counts = [
             len(child._memories)
