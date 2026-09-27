@@ -476,7 +476,7 @@ def test_registration_mode_is_fixed_at_import(startup_mode):
         import os
         import torch
         from spikingjelly.activation_based.triton_kernel import triton_utils
-        from spikingjelly.activation_based import neuron
+        import spikingjelly.activation_based.neuron
 
         assert hasattr(torch.ops.sj, "multistep_activation_aware_if_inference")
 
@@ -560,8 +560,7 @@ def test_cuda_operator_fails_clearly_when_triton_import_fails():
             return original_import(name, *args, **kwargs)
         builtins.__import__ = block_triton
 
-        from spikingjelly.activation_based.triton_kernel import neuron_kernel
-        assert neuron_kernel is not None
+        import spikingjelly.activation_based.triton_kernel.neuron_kernel
         from spikingjelly.activation_based.triton_kernel import triton_utils
         assert not triton_utils._USE_TRITON_OP
         try:

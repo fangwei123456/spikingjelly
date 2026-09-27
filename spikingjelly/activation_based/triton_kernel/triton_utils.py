@@ -17,13 +17,7 @@ from ... import configure
 
 from . import dummy
 
-try:
-    from torch.library import triton_op
-
-    _TRITON_OP_AVAILABLE = True
-except (ImportError, AttributeError):
-    triton_op = dummy.DummyImport()
-    _TRITON_OP_AVAILABLE = False
+triton_op = getattr(torch.library, "triton_op", None)
 
 try:
     import triton
@@ -383,17 +377,11 @@ def convert_and_store(pointer, value, boundary_check):
     tl.store(pointer, value, boundary_check=boundary_check)
 
 
-def _env_flag_enabled(var_name: str) -> bool:
-    v = os.getenv(var_name)
-    if v is None:
-        return True
-    return v.strip().lower() not in ("0", "false", "off", "no")
-
-
 _USE_TRITON_OP = (
     _TRITON_IMPORT_ERROR is None
-    and _TRITON_OP_AVAILABLE
-    and _env_flag_enabled("SJ_USE_TRITON_OP")
+    and triton_op is not None
+    and os.getenv("SJ_USE_TRITON_OP", "1").strip().lower()
+    not in ("0", "false", "off", "no")
 )
 
 
