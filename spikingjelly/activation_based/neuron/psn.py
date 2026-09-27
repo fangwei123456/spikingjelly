@@ -252,6 +252,49 @@ class MaskedPSN(base.MemoryModule):
                 self.lambda_, self.mask0, self.mask1, self.weight
             )
 
+    def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
+        r"""
+        **API Language** - :ref:`中文 <MaskedPSN.single_step_forward-cn>` | :ref:`English <MaskedPSN.single_step_forward-en>`
+
+        ----
+
+        .. _MaskedPSN.single_step_forward-cn:
+
+        * **中文**
+
+        执行一次单步状态转移并返回脉冲。超过 ``T`` 时保留旧行为：先将输入推进
+        ``queue``，再抛出异常；``time_step`` 不增加。
+
+        :param x: 当前输入张量，形状为 ``[N, *]``。
+        :type x: torch.Tensor
+        :return: 与 ``x`` 同形状的脉冲张量。
+        :rtype: torch.Tensor
+        :raises ValueError: ``lambda_ < 1`` 时。
+        :raises OverflowError: 调用次数超过 ``T`` 时。
+
+        ----
+
+        .. _MaskedPSN.single_step_forward-en:
+
+        * **English**
+
+        Run one state transition and return spikes. When the call exceeds
+        ``T``, the input is first advanced into ``queue`` before the error;
+        ``time_step`` does not increase.
+
+        :param x: Current input tensor shaped ``[N, *]``.
+        :type x: torch.Tensor
+        :return: Spike tensor with the same shape as ``x``.
+        :rtype: torch.Tensor
+        :raises ValueError: If ``lambda_ < 1``.
+        :raises OverflowError: If the call exceeds ``T``.
+        """
+        if self.lambda_ >= 1.0 and self.time_step + 1 > self.T:
+            self.queue.append(x.flatten())
+            if len(self.queue) > self.k:
+                self.queue.pop(0)
+        return super().single_step_forward(x)
+
     def single_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],

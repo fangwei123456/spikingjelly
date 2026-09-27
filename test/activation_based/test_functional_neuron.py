@@ -948,6 +948,26 @@ def test_masked_psn_step_matches_module_sequence():
     assert len(queue) == module.k
 
 
+def test_masked_psn_overflow_keeps_queue_side_effect():
+    module = neuron.MaskedPSN(k=2, T=2, lambda_init=1.0)
+    x0, x1, x2 = torch.randn(3, 2, 4)
+    module(x0)
+    module(x1)
+
+    with pytest.raises(OverflowError):
+        module(x2)
+
+    assert module.time_step == 2
+    torch.testing.assert_close(module.queue[0], x1.flatten())
+    torch.testing.assert_close(module.queue[1], x2.flatten())
+
+    explicit_queue = [x0.flatten(), x1.flatten()]
+    with pytest.raises(OverflowError):
+        module.single_step_functional_forward((x2,), (2, explicit_queue))
+    torch.testing.assert_close(explicit_queue[0], x0.flatten())
+    torch.testing.assert_close(explicit_queue[1], x1.flatten())
+
+
 def test_gated_lif_step_matches_module_sequence():
     x_seq = torch.randn(3, 2, 2, 3, 3)
     module = neuron.GatedLIFNode(T=x_seq.shape[0], inplane=x_seq.shape[2])

@@ -155,6 +155,9 @@ Module: `spikingjelly.activation_based.precision`.
 
 Module: `spikingjelly.activation_based.neuron`.
 
+- Restored `MaskedPSN`'s single-step queue update before an overflow error when
+  more than `T` steps are called; the explicit-state function leaves its input
+  queue unchanged on error.
 - Fixed `store_v_seq` being ignored when a `BaseNode` subclass (`LIFNode`,
   `IFNode` and their relatives, plus `lava_exchange.CubaLIFNode`) is stepped
   in single-step mode, so these neurons wrapped in `LinearRecurrentContainer`,
