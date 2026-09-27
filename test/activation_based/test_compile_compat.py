@@ -524,6 +524,18 @@ def test_import_without_triton_has_no_discovery_warnings():
             assert "CPU" in str(error)
         else:
             raise AssertionError("CUDA-only fallback accepted a CPU input")
+        from spikingjelly.activation_based.triton_kernel import triton_utils
+        torch.library.custom_op = lambda *args, **kwargs: lambda f: f
+        @triton_utils.register_op("sj::probe")
+        def probe(x: torch.Tensor) -> torch.Tensor:
+            raise AssertionError("Original implementation reached")
+        try:
+            probe(torch.zeros(1))
+        except ImportError as error:
+            assert "Triton is not installed" in str(error)
+            assert isinstance(error.__cause__, (ImportError, OSError))
+        else:
+            raise AssertionError("Missing Triton did not raise")
         """
     )
     completed = subprocess.run(
@@ -534,6 +546,16 @@ def test_import_without_triton_has_no_discovery_warnings():
         timeout=30,
     )
     assert "find_triton_kernels" not in completed.stderr
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_cuda_registered_op_reports_missing_triton():
+    if _triton_available():
+        pytest.skip("This check needs an environment without Triton.")
+    x = torch.zeros(2, 3, device="cuda")
+    v = torch.zeros(3, device="cuda")
+    with pytest.raises(ImportError, match="Triton is not installed"):
+        torch.ops.sj.multistep_if_inference(x, v, 1.0, 0.0, False, False)
 
 
 def test_registration_failure_is_not_hidden_by_optional_import():

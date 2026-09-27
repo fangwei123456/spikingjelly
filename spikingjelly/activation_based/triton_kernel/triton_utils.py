@@ -385,9 +385,23 @@ _USE_TRITON_OP = (
 def register_op(opname: str, mutates_args=()):
     if _USE_TRITON_OP:
         return triton_op(opname, mutates_args=mutates_args)
-    return torch.library.custom_op(
+    custom_op = torch.library.custom_op(
         opname, mutates_args=mutates_args, device_types="cuda"
     )
+    if triton:
+        return custom_op
+
+    def register_missing_triton(f):
+        @functools.wraps(f)
+        def unavailable(*args, **kwargs):
+            from ..base import check_backend_library
+
+            check_backend_library("triton")
+            return f(*args, **kwargs)
+
+        return custom_op(unavailable)
+
+    return register_missing_triton
 
 
 if _USE_TRITON_OP:
