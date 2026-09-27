@@ -782,6 +782,18 @@ def test_spikezip_stbif_matches_quantizer_accumulation():
     assert set(torch.unique(neuron.cur_output).tolist()).issubset({-1.0, 0.0, 1.0})
 
 
+def test_spikezip_stbif_backend_at_construction():
+    assert STBIFNode(0.25, level=8).backend == "torch"
+    if _TRITON_AVAILABLE:
+        assert (
+            STBIFNode(0.25, level=8, step_mode="m", backend="triton").backend
+            == "triton"
+        )
+    else:
+        with pytest.raises(ImportError, match="Triton is not installed"):
+            STBIFNode(0.25, level=8, step_mode="m", backend="triton")
+
+
 def test_spikezip_stbif_state_follows_module_dtype():
     quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
     neuron = STBIFNode.from_quantizer(quantizer)
@@ -874,8 +886,7 @@ def test_spikezip_stbif_triton_matches_torch(dtype, time_steps):
     reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
 )
 def test_spikezip_stbif_triton_avoids_device_scalar_read():
-    neuron = STBIFNode(0.25, level=8, sym=True, step_mode="m").cuda()
-    neuron.backend = "triton"
+    neuron = STBIFNode(0.25, level=8, sym=True, step_mode="m", backend="triton").cuda()
     x_seq = torch.randn(8, 7, 13, device="cuda")
 
     neuron(x_seq)

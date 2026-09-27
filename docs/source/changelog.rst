@@ -25,6 +25,8 @@ Module: ``spikingjelly.activation_based.neuron``.
 
 - Added the torch-only ``RAFNode`` resonate-and-fire neuron with fixed oscillator
   parameters, real-valued states, and single-step and multi-step execution.
+- ``STBIFNode`` now accepts ``backend="torch"`` or ``backend="triton"`` in its
+  constructor for both step modes.
 
 Improvements
 ~~~~~~~~~~~~
