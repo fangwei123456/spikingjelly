@@ -3,7 +3,6 @@ import torch
 
 import spikingjelly.configure as configure
 from spikingjelly.activation_based import neuron, surrogate
-from spikingjelly.activation_based.neuron import integrate_and_fire
 from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
     activation_aware_if as activation_aware_if_triton_kernel,
 )
@@ -449,14 +448,6 @@ class TestActivationAwareIFNode:
 
         with pytest.raises(RuntimeError, match="single-step.*torch"):
             node(torch.ones(2, 3))
-
-    def test_triton_backend_rejects_an_unavailable_kernel(self, monkeypatch):
-        monkeypatch.setattr(
-            integrate_and_fire, "activation_aware_if_triton_kernel", None
-        )
-
-        with pytest.raises(RuntimeError, match="kernel is unavailable"):
-            neuron.ActivationAwareIFNode(step_mode="m", backend="triton")
 
     @pytest.mark.parametrize("bad_backend", ["cupy"])
     def test_rejects_non_torch_backend(self, bad_backend):

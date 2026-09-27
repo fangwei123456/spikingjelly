@@ -1720,3 +1720,76 @@ def test_triton_plif_low_precision_dynamic_backward_compiles(dtype, variant):
         assert torch.isfinite(r_tau.grad.float()).all()
     finally:
         configure.triton_neuron_kernel_static_range_max_T = original_threshold
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "if_inference",
+        "if_forward",
+        "if_mp_inference",
+        "plif_forward",
+        "ilif_inference",
+        "ilif_forward",
+        "stbif_single",
+        "stbif_multi",
+        "activation_aware_if",
+    ],
+)
+def test_registered_triton_neuron_contracts_pass_opcheck(kind):
+    training = kind in {"if_forward", "plif_forward", "ilif_forward"}
+    x = torch.randn(4, 32, device="cuda", requires_grad=training)
+    v = torch.zeros(32, device="cuda", requires_grad=training)
+    scalar = torch.tensor(0.25, device="cuda")
+    if kind == "if_inference":
+        name, args = "multistep_if_inference", (x, v, 1.0, 0.0, False, False)
+    elif kind == "if_forward":
+        name, args = (
+            "multistep_if_forward",
+            (x, v, 1.0, 0.0, False, False, 0, 4.0, True),
+        )
+    elif kind == "if_mp_inference":
+        name, args = (
+            "multistep_if_mp_inference",
+            (x, v, 1.0, 0.0, False, 1, 0, 0, False),
+        )
+    elif kind == "plif_forward":
+        name, args = (
+            "multistep_plif_forward",
+            (x, v, scalar.requires_grad_(), True, 1.0, 0.0, False, False, 0, 4.0),
+        )
+    elif kind == "ilif_inference":
+        name, args = "multistep_ilif_forward_no_grad", (x, v, 0.5, 1.0, 4, False)
+    elif kind == "ilif_forward":
+        name, args = (
+            "multistep_ilif_forward",
+            (x, v, 0.5, 1.0, 4, -1.0, 1.0, False, True),
+        )
+    elif kind in {"stbif_single", "stbif_multi"}:
+        name = "single_step_stbif" if kind == "stbif_single" else "multi_step_stbif"
+        state = torch.zeros(32, device="cuda")
+        args = (
+            x[0] if kind == "stbif_single" else x,
+            state,
+            state.clone(),
+            scalar,
+            torch.tensor(1.0, device="cuda"),
+            torch.tensor(-1.0, device="cuda"),
+        )
+    else:
+        name, args = (
+            "multistep_activation_aware_if_inference",
+            (
+                x,
+                v,
+                torch.tensor(1.0, device="cuda"),
+                torch.tensor(0.0, device="cuda"),
+                1,
+                32,
+                0.0,
+                False,
+                False,
+            ),
+        )
+    torch.library.opcheck(getattr(torch.ops.sj, name).default, args)

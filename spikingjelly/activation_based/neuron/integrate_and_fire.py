@@ -1,4 +1,3 @@
-from spikingjelly.logger import logger
 import numbers
 from typing import Optional, Tuple, Union
 
@@ -6,16 +5,10 @@ import torch
 
 from .. import base, functional, surrogate
 from ..functional.neuron import _if_multi_step_triton_mp
+from ..triton_kernel.neuron_kernel import (
+    activation_aware_if as activation_aware_if_triton_kernel,  # noqa: F401
+)
 from .base_node import BaseNode, NonSpikingBaseNode, SimpleBaseNode
-
-try:
-    from ..triton_kernel.neuron_kernel import (
-        activation_aware_if as activation_aware_if_triton_kernel,
-    )
-except (ImportError, OSError) as e:
-    logger.debug("Optional Triton kernel unavailable: {}", e)
-    activation_aware_if_triton_kernel = None
-
 
 __all__ = [
     "SimpleIFNode",
@@ -616,6 +609,7 @@ class ActivationAwareIFNode(base.MemoryModule):
             多步输入形状或逐通道参数长度非法时抛出。
         :raises RuntimeError: 当 Triton 后端用于 CPU、训练、求梯度、非脉冲
             surrogate 或不支持的 dtype 时抛出。
+        :raises ImportError: 当选择 Triton 后端执行且未安装 Triton 时抛出。
 
         ----
 
@@ -695,6 +689,7 @@ class ActivationAwareIFNode(base.MemoryModule):
         :raises RuntimeError: If the Triton backend is used on CPU, for
             training or autograd, with a non-spiking surrogate, or with an
             unsupported dtype.
+        :raises ImportError: If Triton is not installed when its backend runs.
         """
         super().__init__()
         if backend not in ("torch", "triton"):
@@ -702,11 +697,6 @@ class ActivationAwareIFNode(base.MemoryModule):
         if backend == "triton" and step_mode != "m":
             raise ValueError(
                 "ActivationAwareIFNode backend='triton' requires step_mode='m'."
-            )
-        if backend == "triton" and activation_aware_if_triton_kernel is None:
-            raise RuntimeError(
-                "ActivationAwareIFNode Triton kernel is unavailable because its "
-                "module failed to import."
             )
         if v_reset is not None and not isinstance(v_reset, float):
             raise ValueError(
@@ -982,11 +972,6 @@ class ActivationAwareIFNode(base.MemoryModule):
     def _triton_multi_step_functional_forward(
         self, x_seq: torch.Tensor, v, store_v_seq: bool
     ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
-        if activation_aware_if_triton_kernel is None:
-            raise RuntimeError(
-                "ActivationAwareIFNode Triton kernel is unavailable because its "
-                "module failed to import."
-            )
         if x_seq.device.type != "cuda":
             raise RuntimeError(
                 "ActivationAwareIFNode backend='triton' requires a CUDA tensor."

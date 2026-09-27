@@ -29,6 +29,8 @@ try:
     import triton
     import triton.language as tl
 
+    _TRITON_IMPORT_ERROR = None
+
     type_dict = {
         torch.bool: tl.int1,
         torch.float32: tl.float32,
@@ -68,8 +70,9 @@ try:
     if hasattr(torch, "float8_e5m2fnuz") and hasattr(tl, "float8e5b16"):
         type_dict[torch.float8_e5m2fnuz] = tl.float8e5b16
         type_str_dict[torch.float8_e5m2fnuz] = "tl.float8e5b16"
-except (ImportError, AttributeError, OSError, RuntimeError) as e:
-    logger.debug("Optional Triton dependency unavailable: {}", e)
+except (ImportError, OSError) as e:
+    _TRITON_IMPORT_ERROR = e
+    logger.info("Optional Triton dependency unavailable: {}", e)
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
     type_dict = {}
@@ -387,18 +390,30 @@ def _env_flag_enabled(var_name: str) -> bool:
     return v.strip().lower() not in ("0", "false", "off", "no")
 
 
+_USE_TRITON_OP = (
+    _TRITON_IMPORT_ERROR is None
+    and _TRITON_OP_AVAILABLE
+    and _env_flag_enabled("SJ_USE_TRITON_OP")
+)
+
+
+def _require_triton() -> None:
+    if _TRITON_IMPORT_ERROR is not None:
+        raise ImportError(
+            "The Triton backend requires the triton package."
+        ) from _TRITON_IMPORT_ERROR
+
+
 def register_op(opname: str, mutates_args=()):
-    if _env_flag_enabled("SJ_USE_TRITON_OP") and _TRITON_OP_AVAILABLE:
+    if _USE_TRITON_OP:
         return triton_op(opname, mutates_args=mutates_args)
-    return torch.library.custom_op(opname, mutates_args=mutates_args)
+    return torch.library.custom_op(
+        opname, mutates_args=mutates_args, device_types="cuda"
+    )
 
 
 def wrap_triton(kernel):
-    if (
-        _TRITON_OP_AVAILABLE
-        and _env_flag_enabled("SJ_USE_TRITON_OP")
-        and _env_flag_enabled("SJ_USE_WRAP_TRITON")
-    ):
+    if _USE_TRITON_OP:
         return torch.library.wrap_triton(kernel)
     return kernel
 

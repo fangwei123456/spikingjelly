@@ -695,18 +695,7 @@ def activation_aware_if_multi_step_triton(
 
        单步形式 / Single-step form: :func:`activation_aware_if_step`.
     """
-    try:
-        from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
-            activation_aware_if,
-        )
-    except (ImportError, RuntimeError) as exc:
-        raise ImportError(
-            "activation_aware_if_multi_step_triton requires the Triton backend."
-        ) from exc
-    if activation_aware_if is None:
-        raise ImportError(
-            "activation_aware_if_multi_step_triton requires the Triton backend."
-        )
+    from ..triton_kernel.neuron_kernel import activation_aware_if
 
     spike_seq, v_out = activation_aware_if._multistep_activation_aware_if(
         x_seq,

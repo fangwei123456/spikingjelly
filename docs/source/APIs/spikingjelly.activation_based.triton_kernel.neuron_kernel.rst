@@ -10,7 +10,7 @@ Triton neuron backend is now compatible with ``torch.compile`` for IF/LIF/PLIF m
 
 Compatibility conditions:
 
-- ``torch>=2.6.0`` with Triton installed.
+- ``torch>=2.6.0`` with the Triton version required by that PyTorch release.
 - CUDA device is required (Triton backend does not run on CPU).
 - Use neuron modules with ``step_mode='m'`` and ``backend='triton'``.
 - Supported surrogate types in Triton backend are ``Sigmoid`` and ``ATan``.
@@ -18,7 +18,14 @@ Compatibility conditions:
 Current limits and notes:
 
 - Unsupported surrogate functions will raise ``NotImplementedError`` in Triton path.
-- ``torch.library.triton_op`` is used when available; runtime fallback to ``custom_op`` is supported.
+- The registration mode is fixed when the Triton modules are imported. With
+  Triton and ``torch.library.triton_op`` available, the default uses
+  ``triton_op`` together with ``torch.library.wrap_triton``.
+- Set ``SJ_USE_TRITON_OP=0`` before importing SpikingJelly to use the opaque
+  CUDA ``custom_op`` fallback. It preserves eager execution and autograd, but
+  does not offer the same Inductor visibility as ``triton_op``.
+- ``SJ_USE_WRAP_TRITON`` is no longer used. Replace the old combination
+  ``SJ_USE_TRITON_OP=1 SJ_USE_WRAP_TRITON=0`` with ``SJ_USE_TRITON_OP=0``.
 - Known problematic compile configurations from current validation:
 
   - ``torch.compile(..., mode="reduce-overhead")`` may trigger CUDAGraph output-overwrite runtime errors.

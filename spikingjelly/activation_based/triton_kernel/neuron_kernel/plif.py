@@ -7,6 +7,7 @@ from spikingjelly.logger import logger
 from ... import surrogate
 from ..surrogate_kernel import resolve_sg_triton_id_and_alpha, sg_triton
 from ..triton_utils import (
+    _require_triton,
     convert_and_store,
     register_op,
     torch_dtype_for_triton_neuron_compute_dtype_id,
@@ -679,6 +680,7 @@ def multistep_plif_inference(
     v_reset: float,
     soft_reset: bool,
 ) -> tuple[torch.Tensor, torch.Tensor]:
+    _require_triton()
     x_seq = x_seq.contiguous()
     v_init = v_init.contiguous()
 
@@ -732,6 +734,7 @@ def multistep_plif_forward(
     sg_triton_id: int,
     sg_alpha: float,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    _require_triton()
     x_seq = x_seq.contiguous()
     v_init = v_init.contiguous()
 
@@ -791,6 +794,7 @@ def multistep_plif_mp_inference(
     spike_dtype_id: int,
     save_intermediates: bool,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    _require_triton()
     _check_mp_cuda_inputs(x_seq, v_init, "PLIF")
     storage_dtype = triton_neuron_dtype_id_to_torch_dtype(storage_dtype_id)
     spike_dtype = triton_neuron_dtype_id_to_torch_dtype(spike_dtype_id)
@@ -876,6 +880,7 @@ def multistep_plif_mp_forward(
     backward_compute_dtype_id: int,
     spike_dtype_id: int,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    _require_triton()
     del detach_reset, backward_compute_dtype_id
     _check_mp_cuda_inputs(x_seq, v_init, "PLIF")
     storage_dtype = triton_neuron_dtype_id_to_torch_dtype(storage_dtype_id)

@@ -5,6 +5,7 @@ import torch
 from spikingjelly.logger import logger
 
 from ..triton_utils import (
+    _require_triton,
     register_op,
     type_dict,
     use_static_range_for_triton_neuron_kernel,
@@ -225,6 +226,7 @@ def single_step_stbif(
     :raises ValueError: 当 ``x``、``q`` 和 ``acc_q`` 的 shape、dtype 或 device
         不一致，或任一标量参数不是单元素张量时
     :raises NotImplementedError: 当 dtype 不受 Triton 后端支持时
+    :raises ImportError: 当未安装 Triton 时
 
     ----
 
@@ -255,7 +257,9 @@ def single_step_stbif(
         or device, or if a scalar parameter does not contain exactly one element
     :raises NotImplementedError: If the dtype is not supported by the Triton
         backend
+    :raises ImportError: If Triton is not installed
     """
+    _require_triton()
     if (
         q.shape != x.shape
         or acc_q.shape != x.shape
@@ -361,6 +365,7 @@ def multi_step_stbif(
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     :raises ValueError: 任一标量参数不是单元素张量
     :raises NotImplementedError: dtype 不受 Triton 后端支持
+    :raises ImportError: 未安装 Triton
 
     ----
 
@@ -392,7 +397,9 @@ def multi_step_stbif(
     :raises ValueError: If a scalar parameter does not contain exactly one element
     :raises NotImplementedError: If the dtype is not supported by the Triton
         backend
+    :raises ImportError: If Triton is not installed
     """
+    _require_triton()
     state_shape = x_seq.shape[1:]
     if any(
         state.shape != state_shape
