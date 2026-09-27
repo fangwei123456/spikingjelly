@@ -35,6 +35,25 @@ Module: `spikingjelly.activation_based.triton_kernel`.
 - Allow the Triton 3.2.0 version required by PyTorch 2.6.0 in the optional
   Triton dependency.
 
+#### CuPy Neuron Kernel Cache
+
+Module: `spikingjelly.activation_based.cuda_kernel.neuron_kernel`.
+
+- Bounded the IF/LIF/PLIF kernel builders and removed the process-wide surrogate
+  source registry. Single-step IF/LIF compiled graphs no longer depend on
+  temporary Python kernel-object IDs. Previously saved graphs containing the old
+  internal `sj::cupy_*` operator schemas must be recompiled or re-exported.
+
+#### FlexSN Code Generation
+
+Module: `spikingjelly.activation_based.triton_kernel.torch2triton`.
+
+- Generate Triton JIT functions in memory without writing new SpikingJelly
+  codegen `.py` files or retaining generated modules in `sys.modules`.
+  `compile_triton_code_str()` keeps its call and namespace behavior but no longer
+  promises persistent source files or cross-process generated-module reuse.
+  Existing source files are left untouched.
+
 #### Contributor Guidance
 
 - Added repository-wide agent instructions with a required bilingual Sphinx

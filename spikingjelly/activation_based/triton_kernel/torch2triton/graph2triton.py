@@ -1,16 +1,9 @@
-import contextlib
-import errno
 import hashlib
-import importlib.util
 import linecache
-import os
-from pathlib import Path
 import re
-import stat
-import sys
-import tempfile
 import threading
 import types
+import weakref
 from typing import Optional, Tuple
 
 import torch
@@ -37,10 +30,13 @@ __all__ = [
 ]
 
 
-_MODULE_CACHE_LOCK_GUARD = threading.Lock()
-_MODULE_CACHE_LOCKS = {}
-_CODEGEN_CACHE_DIR = None
-_CODEGEN_CACHE_DIR_LOCK = threading.Lock()
+_CODEGEN_LOCK = threading.Lock()
+
+
+class _SourceOwner:
+    pass
+
+
 _NAMESPACE_METADATA_KEYS = {
     "__name__",
     "__spec__",
@@ -51,12 +47,8 @@ _NAMESPACE_METADATA_KEYS = {
     "__cached__",
     "__builtins__",
     "__doc__",
+    "__spikingjelly_source_owner__",
 }
-
-
-def _get_module_cache_lock(module_name: str) -> threading.Lock:
-    with _MODULE_CACHE_LOCK_GUARD:
-        return _MODULE_CACHE_LOCKS.setdefault(module_name, threading.Lock())
 
 
 def _generate_hash(s: str, w: int = 8) -> str:
@@ -72,52 +64,6 @@ def _safe_codegen_stem(kernel_name: str) -> str:
 
 def _has_real_triton_runtime() -> bool:
     return isinstance(triton, types.ModuleType) and isinstance(tl, types.ModuleType)
-
-
-def _codegen_cache_dir() -> Path:
-    global _CODEGEN_CACHE_DIR
-    if _CODEGEN_CACHE_DIR is not None:
-        return _CODEGEN_CACHE_DIR
-    with _CODEGEN_CACHE_DIR_LOCK:
-        if _CODEGEN_CACHE_DIR is not None:
-            return _CODEGEN_CACHE_DIR
-        cache_dir = _resolve_codegen_cache_dir()
-        _CODEGEN_CACHE_DIR = cache_dir
-        return cache_dir
-
-
-def _resolve_codegen_cache_dir() -> Path:
-    candidates = []
-    uid = getattr(os, "getuid", lambda: None)()
-    with contextlib.suppress(RuntimeError):
-        candidates.append(Path.home() / ".spikingjelly" / "triton_codegen")
-    temp_suffix = f"_{uid}" if uid is not None else ""
-    candidates.append(
-        Path(tempfile.gettempdir()) / f"spikingjelly_triton_codegen{temp_suffix}"
-    )
-    last_error = None
-    for cache_dir in candidates:
-        try:
-            cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-            if uid is not None:
-                st = cache_dir.stat()
-                if st.st_uid == uid:
-                    with contextlib.suppress(OSError):
-                        os.chmod(cache_dir, 0o700)
-                    st = cache_dir.stat()
-                mode = stat.S_IMODE(st.st_mode)
-                if st.st_uid != uid or not (mode & stat.S_IWUSR) or (mode & 0o077):
-                    continue
-            with tempfile.NamedTemporaryFile(dir=cache_dir, delete=True):
-                pass
-            return cache_dir
-        except OSError as e:
-            last_error = e
-            if e.errno not in (errno.EACCES, errno.EROFS, errno.EPERM):
-                raise
-    if last_error is not None:
-        raise last_error
-    raise RuntimeError("Failed to initialize Triton codegen cache directory")
 
 
 def _uw(arg) -> str:
@@ -392,7 +338,7 @@ def compile_triton_code_str(
     kernel_name: str,
     name_space: Optional[dict] = None,
 ):
-    """Compile a Triton code string into a runnable Triton JIT function.
+    r"""Compile a Triton code string into a runnable Triton JIT function.
 
     **API Language** - :ref:`中文 <compile_triton_code_str-cn>` | :ref:`English <compile_triton_code_str-en>`
 
@@ -402,20 +348,21 @@ def compile_triton_code_str(
 
     * **中文**
 
-    编译Triton代码字符串
+    在内存中执行 Triton 源码，返回其中名为 ``kernel_name`` 的 JIT 函数。
+    生成源码不会写入 SpikingJelly 的持久目录；Triton 自身仍可缓存编译结果。
+    源码保留至生成的函数不再被引用，以供后续 JIT 和编译图读取。
+    ``name_space`` 非 ``None`` 时，其全局变量供源码使用，执行后写回新增的符号。
 
-    将 Triton 代码写入持久化 codegen cache，加载或复用匹配的模块对象，并返回指定的
-    JIT 函数。
-
-    :param triton_code: The Triton code string to compile/cache.
+    :param triton_code: 包含目标 JIT 函数的 Triton 源码。
     :type triton_code: str
-    :param kernel_name: The name of the Triton function to extract.
+    :param kernel_name: 要返回的函数名。
     :type kernel_name: str
-    :param name_space: Optional globals injected before execution. When provided,
-        it is updated with symbols defined by the compiled module.
+    :param name_space: 可选的执行全局变量字典；提供时会写回源码定义的符号。
     :type name_space: Optional[dict]
-    :return: The compiled Triton JIT function.
+    :return: 指定的 Triton JIT 函数。
     :rtype: triton.JITFunction
+    :raises ImportError: Triton 不可用。
+    :raises ValueError: 源码未定义 ``kernel_name``。
 
     ----
 
@@ -423,7 +370,24 @@ def compile_triton_code_str(
 
     * **English**
 
-    Compile Triton code string
+    Execute Triton source in memory and return the JIT function named
+    ``kernel_name``. Generated source is not written to a persistent
+    SpikingJelly directory; it remains available while generated functions
+    are referenced for later JIT and graph compilation. Triton may still
+    cache compiled results. When
+    ``name_space`` is provided, its globals are available to the source and
+    newly defined symbols are written back after execution.
+
+    :param triton_code: Triton source containing the target JIT function.
+    :type triton_code: str
+    :param kernel_name: Name of the function to return.
+    :type kernel_name: str
+    :param name_space: Optional execution globals, updated with defined symbols.
+    :type name_space: Optional[dict]
+    :return: The named Triton JIT function.
+    :rtype: triton.JITFunction
+    :raises ImportError: If Triton is unavailable.
+    :raises ValueError: If the source does not define ``kernel_name``.
     """
     if not _has_real_triton_runtime():
         raise ImportError(
@@ -431,14 +395,12 @@ def compile_triton_code_str(
             "the imported triton/tl modules are unavailable."
         )
 
-    caller_namespace = name_space
-    cacheable = caller_namespace is None
-    if caller_namespace is None:
+    if name_space is None:
         module_globals = {"triton": triton, "tl": tl}
     else:
         module_globals = {
             key: value
-            for key, value in caller_namespace.items()
+            for key, value in name_space.items()
             if key not in _NAMESPACE_METADATA_KEYS
         }
         module_globals.pop(kernel_name, None)
@@ -451,48 +413,32 @@ def compile_triton_code_str(
         "spikingjelly.activation_based.triton_kernel.codegen."
         f"{safe_kernel_name}_{module_hash}"
     )
-    fpath = _codegen_cache_dir() / f"{safe_kernel_name}_{module_hash}.py"
-
-    needs_write = not fpath.exists()
-    if needs_write:
-        tmp_path = None
+    source_owner = _SourceOwner()
+    filename = f"<{module_name}_{id(source_owner):x}>"
+    module = types.ModuleType(module_name)
+    module.__file__ = filename
+    module.__dict__.update(module_globals)
+    with _CODEGEN_LOCK:
+        linecache.cache[filename] = (
+            len(triton_code),
+            None,
+            triton_code.splitlines(keepends=True),
+            filename,
+        )
         try:
-            with tempfile.NamedTemporaryFile(
-                "w", encoding="utf-8", dir=fpath.parent, delete=False, suffix=".tmp"
-            ) as tmp_file:
-                tmp_path = Path(tmp_file.name)
-                tmp_file.write(triton_code)
-            os.replace(tmp_path, fpath)
-            with contextlib.suppress(OSError):
-                os.chmod(fpath, 0o600)
+            exec(compile(triton_code, filename, "exec"), module.__dict__)
         except Exception:
-            if tmp_path is not None:
-                with contextlib.suppress(FileNotFoundError):
-                    tmp_path.unlink()
+            linecache.cache.pop(filename, None)
             raise
-    action = "written to" if needs_write else "loaded from cache"
-    logger.debug("Code `{}` {} {}", kernel_name, action, fpath)
-
-    linecache.checkcache(str(fpath))
-
-    with _get_module_cache_lock(module_name):
-        module = sys.modules.get(module_name) if cacheable else None
-        if module is None:
-            spec = importlib.util.spec_from_file_location(module_name, fpath)
-            if spec is None or spec.loader is None:
-                raise ImportError(f"Could not create import spec for {fpath}")
-            module = importlib.util.module_from_spec(spec)
-            module.__dict__.update(module_globals)
-            spec.loader.exec_module(module)
-            if cacheable:
-                sys.modules[module_name] = module
-    if caller_namespace is not None:
+        module.__dict__["__spikingjelly_source_owner__"] = source_owner
+        weakref.finalize(source_owner, linecache.cache.pop, filename, None)
+    if name_space is not None:
         exported_symbols = {
             key: value
             for key, value in module.__dict__.items()
             if key not in _NAMESPACE_METADATA_KEYS
         }
-        caller_namespace.update(exported_symbols)
+        name_space.update(exported_symbols)
     if kernel_name in module.__dict__:
         return module.__dict__[kernel_name]
     raise ValueError(f"Function {kernel_name} not found in compiled namespace")
