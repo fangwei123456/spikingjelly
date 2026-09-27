@@ -216,6 +216,27 @@ def test_att_ms_resnet_tiny_forward_and_backward():
     _train_step(net)
 
 
+def test_att_ms_resnet_matches_branch_shapes_for_odd_inputs():
+    net = AttMSResNet(
+        T=1,
+        num_classes=5,
+        layers=(1, 1, 1, 1),
+        base_channels=8,
+        stem_kernel_size=3,
+        stem_stride=1,
+        stem_pool=False,
+        reduction_c=4,
+    ).eval()
+
+    with torch.no_grad():
+        odd = net(torch.randn(2, 3, 33, 33))
+        functional.reset_net(net)
+        even = net(torch.randn(2, 3, 32, 32))
+
+    assert odd.shape == (2, 5)
+    assert even.shape == (2, 5)
+
+
 def test_masnn_models_accept_a_custom_spiking_neuron():
     masnn = MASNN(
         T=4,
@@ -255,6 +276,41 @@ def test_masnn_models_accept_a_custom_spiking_neuron():
     masnn(torch.randn(2, 2, 16, 16)).mean().backward()
     functional.reset_net(masnn)
     _train_step(resnet)
+
+
+def test_masnn_custom_spiking_neuron_receives_the_model_backend(monkeypatch):
+    monkeypatch.setattr(base, "check_backend_library", lambda _backend: None)
+
+    net = MASNN(
+        T=4,
+        in_channels=2,
+        num_classes=5,
+        input_size=(16, 16),
+        channels=(8,),
+        pools=(1,),
+        fc_hidden=12,
+        reduction_t=2,
+        reduction_c=4,
+        backend="cupy",
+        spiking_neuron=neuron.IFNode,
+    )
+    resnet = AttMSResNet(
+        T=2,
+        num_classes=5,
+        layers=(1, 1, 1),
+        base_channels=8,
+        stem_kernel_size=3,
+        stem_stride=1,
+        reduction_c=4,
+        backend="cupy",
+        spiking_neuron=neuron.IFNode,
+    )
+
+    for model in (net, resnet):
+        cells = [m for m in model.modules() if isinstance(m, neuron.BaseNode)]
+        assert cells
+        assert all(isinstance(cell, neuron.IFNode) for cell in cells)
+        assert {cell.backend for cell in cells} == {"cupy"}
 
 
 def test_masnn_keyword_arguments_override_the_paper_neuron():

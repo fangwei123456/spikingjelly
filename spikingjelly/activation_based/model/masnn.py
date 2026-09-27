@@ -58,13 +58,14 @@ def _neuron_factory(spiking_neuron, default_factory, backend: str, kwargs: dict)
     """Build the per-neuron factory used by every block of a model.
 
     ``spiking_neuron=None`` keeps the paper neuron and lets ``kwargs`` override
-    single fields. A user-supplied class is constructed from ``kwargs`` alone,
-    following the convention of the other models in this package, so its
-    ``backend`` also comes from ``kwargs``.
+    single fields. A user-supplied class is constructed from ``kwargs`` plus
+    ``backend``, so the model-level backend applies to both paths; the class
+    must therefore accept a ``backend`` argument, as every
+    :class:`BaseNode <spikingjelly.activation_based.neuron.BaseNode>` does.
     """
     if spiking_neuron is None:
         return lambda: default_factory(backend, **deepcopy(kwargs))
-    return lambda: spiking_neuron(**deepcopy(kwargs))
+    return lambda: spiking_neuron(backend=backend, **deepcopy(kwargs))
 
 
 class _MaConvBlock(nn.Module):
@@ -148,8 +149,8 @@ class MASNN(nn.Module):
 
         `Attention Spiking Neural Networks <https://ieeexplore.ieee.org/document/10032591>`_
         中用于 DVS128 Gesture 等事件流数据集的 MA-SNN 卷积网络。每个卷积块按
-        ``Conv2d -> BatchNorm2d -> AvgPool2d -> MultiDimensionalAttention -> IF``
-        的顺序处理，随后是全连接块 ``Linear -> BatchNorm1d -> TemporalWiseAttention -> IF``，
+        ``Conv2d -> BatchNorm2d -> AvgPool2d -> MultiDimensionalAttention -> LIF``
+        的顺序处理，随后是全连接块 ``Linear -> BatchNorm1d -> TemporalWiseAttention -> LIF``，
         最后对仿真时间维取平均得到分类结果。脉冲神经元为
         :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>`
         （``tau=10/7``、``v_threshold=0.3``、``decay_input=False``、硬重置到 ``0``、
@@ -185,8 +186,10 @@ class MASNN(nn.Module):
         :type reduction_c: int
         :param kernel_size: 空间注意力卷积核大小，必须为 ``3`` 或 ``7``
         :type kernel_size: int
-        :param backend: 默认脉冲神经元使用的后端；``spiking_neuron`` 非 ``None``
-            时不生效，改由 ``kwargs`` 提供
+        :param backend: 脉冲神经元使用的后端，对默认神经元和 ``spiking_neuron``
+            同时生效。默认的 :class:`Rect <spikingjelly.activation_based.surrogate.Rect>`
+            替代梯度只有 ``torch`` 后端支持；使用 ``cupy`` 或 ``triton`` 时需通过
+            ``kwargs`` 传入受支持的替代梯度（如 ``ATan``）
         :type backend: str
         :param spiking_neuron: 脉冲神经元类；为 ``None`` 时使用论文默认的
             :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>`
@@ -207,8 +210,8 @@ class MASNN(nn.Module):
         Gesture, proposed in `Attention Spiking Neural Networks
         <https://ieeexplore.ieee.org/document/10032591>`_. Every convolution
         block processes ``Conv2d -> BatchNorm2d -> AvgPool2d ->
-        MultiDimensionalAttention -> IF``, followed by fully connected blocks
-        ``Linear -> BatchNorm1d -> TemporalWiseAttention -> IF`` and an average
+        MultiDimensionalAttention -> LIF``, followed by fully connected blocks
+        ``Linear -> BatchNorm1d -> TemporalWiseAttention -> LIF`` and an average
         over simulation steps. The spiking neuron is a
         :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>`
         (``tau=10/7``, ``v_threshold=0.3``, ``decay_input=False``, hard reset to
@@ -251,8 +254,12 @@ class MASNN(nn.Module):
         :type reduction_c: int
         :param kernel_size: spatial attention convolution kernel size; ``3`` or ``7``
         :type kernel_size: int
-        :param backend: backend of the default spiking neuron; ignored when
-            ``spiking_neuron`` is given, which takes its backend from ``kwargs``
+        :param backend: backend of the spiking neurons, applied both to the
+            default neuron and to ``spiking_neuron``. The default
+            :class:`Rect <spikingjelly.activation_based.surrogate.Rect>`
+            surrogate is only supported by the ``torch`` backend; pass a
+            supported surrogate such as ``ATan`` through ``kwargs`` to use
+            ``cupy`` or ``triton``
         :type backend: str
         :param spiking_neuron: spiking neuron class; ``None`` uses the paper
             default :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>`
@@ -390,7 +397,8 @@ def masnn_dvs128_gesture(
     :type num_classes: int
     :param input_size: 输入空间尺寸 ``(H, W)``
     :type input_size: tuple[int, int]
-    :param backend: 默认脉冲神经元使用的后端
+    :param backend: 脉冲神经元使用的后端；默认 ``Rect`` 替代梯度只有 ``torch``
+        后端支持
     :type backend: str
     :param spiking_neuron: 脉冲神经元类；为 ``None`` 时使用论文默认神经元
     :type spiking_neuron: callable
@@ -417,7 +425,8 @@ def masnn_dvs128_gesture(
     :type num_classes: int
     :param input_size: input spatial size ``(H, W)``
     :type input_size: tuple[int, int]
-    :param backend: backend of the default spiking neuron
+    :param backend: backend of the spiking neurons; the default ``Rect``
+        surrogate is only supported by the ``torch`` backend
     :type backend: str
     :param spiking_neuron: spiking neuron class; ``None`` uses the paper default
     :type spiking_neuron: callable
@@ -520,22 +529,46 @@ class AttMSResNet(MSResNet):
         ``[N, num_classes]``。处理相互独立的输入序列时，应调用
         :func:`reset_net <spikingjelly.activation_based.functional.net_config.reset_net>` 重置网络状态。
 
-        除以下新增参数外，构造参数与 :class:`MSResNet` 相同：
+        除以下参数外，构造语义与 :class:`MSResNet` 相同：
 
         :param T: 静态图像输入的仿真时间步数；作者的 ImageNet 配置为 ``1``
         :type T: int
+        :param in_channels: 输入通道数
+        :type in_channels: int
+        :param num_classes: 分类类别数
+        :type num_classes: int
+        :param layers: 三个或四个 stage 的 block 数
+        :type layers: tuple[int, ...]
+        :param base_channels: stem 的输出通道数
+        :type base_channels: int
+        :param stem_kernel_size: stem 卷积核大小
+        :type stem_kernel_size: int
+        :param stem_stride: stem 卷积步幅
+        :type stem_stride: int
+        :param stem_pool: 是否在 stem 后使用 max-pool
+        :type stem_pool: bool
+        :param stage_channels: 各 stage 的通道数；为 ``None`` 时从
+            ``base_channels`` 逐级翻倍
+        :type stage_channels: tuple[int, ...] | None
         :param reduction_c: 通道注意力压缩比，必须 ``<=`` 各 stage 的通道数
         :type reduction_c: int
         :param attention_kernel_size: 空间注意力卷积核大小，必须为 ``3`` 或 ``7``
         :type attention_kernel_size: int
         :param dropout: 分类头 Dropout 概率
         :type dropout: float
+        :param backend: 脉冲神经元使用的后端，对默认神经元和 ``spiking_neuron``
+            同时生效。默认的 :class:`Rect <spikingjelly.activation_based.surrogate.Rect>`
+            替代梯度只有 ``torch`` 后端支持；使用 ``cupy`` 或 ``triton`` 时需通过
+            ``kwargs`` 传入受支持的替代梯度（如 ``ATan``）
+        :type backend: str
         :param spiking_neuron: 脉冲神经元类；为 ``None`` 时使用论文默认的
             :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>`
         :type spiking_neuron: callable
         :param kwargs: 传给脉冲神经元的额外参数；``spiking_neuron`` 为 ``None``
-            时逐项覆盖论文默认值，否则完全决定神经元构造（包括 ``backend``）
+            时逐项覆盖论文默认值，否则完全决定神经元构造（``backend`` 除外）
         :type kwargs: dict
+        :raises ValueError: ``layers`` 不含三个或四个值，或 ``stage_channels``
+            与 ``layers`` 长度不同
 
         ----
 
@@ -563,11 +596,28 @@ class AttMSResNet(MSResNet):
         Call :func:`reset_net <spikingjelly.activation_based.functional.net_config.reset_net>`
         between independent input sequences.
 
-        Constructor parameters match :class:`MSResNet` except for the additions:
+        Constructor semantics match :class:`MSResNet` except where noted:
 
         :param T: number of simulation steps used for static images; the author
             ImageNet configuration uses ``1``
         :type T: int
+        :param in_channels: number of input channels
+        :type in_channels: int
+        :param num_classes: number of classes
+        :type num_classes: int
+        :param layers: block counts in three or four stages
+        :type layers: tuple[int, ...]
+        :param base_channels: number of stem output channels
+        :type base_channels: int
+        :param stem_kernel_size: stem convolution kernel size
+        :type stem_kernel_size: int
+        :param stem_stride: stem convolution stride
+        :type stem_stride: int
+        :param stem_pool: whether to apply max-pooling after the stem
+        :type stem_pool: bool
+        :param stage_channels: channels in each stage; ``None`` doubles
+            ``base_channels`` at every stage
+        :type stage_channels: tuple[int, ...] | None
         :param reduction_c: channel attention reduction ratio; must be ``<=`` the
             channel count of every stage
         :type reduction_c: int
@@ -576,13 +626,22 @@ class AttMSResNet(MSResNet):
         :type attention_kernel_size: int
         :param dropout: dropout probability of the classification head
         :type dropout: float
+        :param backend: backend of the spiking neurons, applied both to the
+            default neuron and to ``spiking_neuron``. The default
+            :class:`Rect <spikingjelly.activation_based.surrogate.Rect>`
+            surrogate is only supported by the ``torch`` backend; pass a
+            supported surrogate such as ``ATan`` through ``kwargs`` to use
+            ``cupy`` or ``triton``
+        :type backend: str
         :param spiking_neuron: spiking neuron class; ``None`` uses the paper
             default :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>`
         :type spiking_neuron: callable
         :param kwargs: extra arguments for the spiking neuron; they override the
             paper defaults field by field when ``spiking_neuron`` is ``None``,
-            and otherwise fully define its construction (including ``backend``)
+            and otherwise fully define its construction apart from ``backend``
         :type kwargs: dict
+        :raises ValueError: if ``layers`` does not contain three or four values,
+            or ``stage_channels`` and ``layers`` have different lengths
 
         **参考文献 | Reference**
 
@@ -631,7 +690,12 @@ class AttMSResNet(MSResNet):
             nn.init.constant_(downsample_bn.weight, self._bn_weight)
             modules = []
             if stride != 1:
-                modules.append(layer.AvgPool2d(stride, stride, step_mode="m"))
+                # ceil_mode matches the stride-2 padded 3x3 convolution of the
+                # residual branch for odd sizes; even sizes, the only ones the
+                # author configuration reaches, are unaffected.
+                modules.append(
+                    layer.AvgPool2d(stride, stride, ceil_mode=True, step_mode="m")
+                )
             modules.extend([_conv1x1(self.inplanes, out_channels, 1), downsample_bn])
             downsample = nn.Sequential(*modules)
         layers = [
@@ -725,7 +789,8 @@ def att_ms_resnet18(
     :type in_channels: int
     :param num_classes: 分类类别数
     :type num_classes: int
-    :param backend: 默认脉冲神经元使用的后端
+    :param backend: 脉冲神经元使用的后端；默认 ``Rect`` 替代梯度只有 ``torch``
+        后端支持
     :type backend: str
     :param spiking_neuron: 脉冲神经元类；为 ``None`` 时使用论文默认神经元
     :type spiking_neuron: callable
@@ -750,7 +815,8 @@ def att_ms_resnet18(
     :type in_channels: int
     :param num_classes: number of classes
     :type num_classes: int
-    :param backend: backend of the default spiking neuron
+    :param backend: backend of the spiking neurons; the default ``Rect``
+        surrogate is only supported by the ``torch`` backend
     :type backend: str
     :param spiking_neuron: spiking neuron class; ``None`` uses the paper default
     :type spiking_neuron: callable
