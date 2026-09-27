@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -u
+
+wrapper_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+real_ocr=
+IFS=: read -r -a path_dirs <<< "${PATH:-}"
+for path_dir in "${path_dirs[@]}"; do
+    if [[ -n "$path_dir" && "$path_dir" != "$wrapper_dir" && -x "$path_dir/ocr" ]]; then
+        real_ocr="$path_dir/ocr"
+        break
+    fi
+done
+
+if [[ -z "$real_ocr" ]]; then
+    printf 'OpenCodeReview CLI is not on PATH.\n' >&2
+    exit 127
+fi
+
+"$real_ocr" "$@"
+ocr_exit_code=$?
+if (( ocr_exit_code != 0 )) || [[ "${1:-}" != "review" ]]; then
+    exit "$ocr_exit_code"
+fi
+
+result_path=/tmp/ocr-result.json
+if [[ ! -s "$result_path" ]] || ! command -v jq >/dev/null 2>&1; then
+    printf 'Could not verify OpenCodeReview review status.\n' >&2
+    exit 1
+fi
+
+review_status="$(jq -er '.status | strings' "$result_path")" || {
+    printf 'OpenCodeReview result has no valid review status.\n' >&2
+    exit 1
+}
+
+if [[ "$review_status" != complete && "$review_status" != skipped ]]; then
+    printf 'OpenCodeReview ended with status %s; withholding PR comments.\n' "$review_status" >&2
+    exit 1
+fi

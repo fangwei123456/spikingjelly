@@ -68,8 +68,11 @@ jobs:
             core.setOutput('base_ref', pullRequest.base.ref);
             core.setOutput('head_sha', pullRequest.head.sha);
 
+      - name: Enable OCR completion guard
+        run: echo "$GITHUB_WORKSPACE/.github/scripts" >> "$GITHUB_PATH"
+
       - name: Run OpenCodeReview
-        uses: alibaba/open-code-review@8d023aafcec05f8ba5628fca3eaba88078e5d201 # v1.11.1
+        uses: alibaba/open-code-review@bccbc15f785269400735d5255540c231e6c02b6d # v1.12.9
         env:
           OCR_NO_UPDATE: '1'
         with:
@@ -86,7 +89,7 @@ jobs:
             For examples, benchmarks, tests, plots, and generated results, report only issues that break CI, invalidate a measurement, corrupt an artifact, or change documented user-facing behavior. Emit one finding per root cause and stay silent when evidence is inconclusive.
           base_ref: ${{ steps.pr-context.outputs.base_ref }}
           head_sha: ${{ steps.pr-context.outputs.head_sha }}
-          ocr_version: '1.11.1'
+          ocr_version: 'latest'
           node_version: '24.19.0'
           sticky_summary: 'true'
           incremental: 'true'
