@@ -33,7 +33,7 @@ review_status="$(jq -er '.status | strings' "$result_path")" || {
     exit 1
 }
 
-if [[ "$review_status" != complete && "$review_status" != skipped ]]; then
+if [[ "$review_status" != success && "$review_status" != skipped ]]; then
     printf 'OpenCodeReview ended with status %s; withholding PR comments.\n' "$review_status" >&2
     exit 1
 fi
