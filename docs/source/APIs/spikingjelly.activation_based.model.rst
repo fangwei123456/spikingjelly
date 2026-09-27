@@ -65,3 +65,11 @@ Spike-driven Transformer
    :members:
    :undoc-members:
    :show-inheritance:
+
+MA-SNN
+--------------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.model.masnn
+   :members:
+   :undoc-members:
+   :show-inheritance:

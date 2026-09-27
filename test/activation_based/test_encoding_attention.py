@@ -186,3 +186,48 @@ def test_spiking_attention_backend_updates_all_internal_neurons(monkeypatch):
         assert attention.proj_lif.backend == "cupy"
     assert ssa.qkv_lif.backend == "cupy"
     assert qka.qk_lif.backend == "cupy"
+
+
+def test_multidimensional_attention_dimension_subset_skips_disabled_axes():
+    torch.manual_seed(5)
+    attention = MultiDimensionalAttention(
+        T=1,
+        C=6,
+        reduction_c=3,
+        kernel_size=3,
+        use_temporal=False,
+    )
+    assert attention.ta is None
+
+    x = torch.randn(1, 2, 6, 5, 5)
+    batch_first = x.transpose(0, 1)
+    channel_input = batch_first.transpose(1, 2)
+    channel_score = torch.sigmoid(
+        attention.ca.sharedMLP(attention.ca.avg_pool(channel_input))
+        + attention.ca.sharedMLP(attention.ca.max_pool(channel_input))
+    ).transpose(1, 2)
+    after_channel = channel_score * batch_first
+    spatial_input = after_channel.flatten(1, 2)
+    spatial_score = torch.sigmoid(
+        attention.sa.conv(
+            torch.cat(
+                (
+                    spatial_input.mean(dim=1, keepdim=True),
+                    spatial_input.max(dim=1, keepdim=True).values,
+                ),
+                dim=1,
+            )
+        )
+    ).unsqueeze(1)
+    expected = torch.relu(spatial_score * after_channel).transpose(0, 1)
+
+    torch.testing.assert_close(attention(x), expected)
+
+    with pytest.raises(ValueError):
+        MultiDimensionalAttention(
+            T=2,
+            C=4,
+            use_temporal=False,
+            use_channel=False,
+            use_spatial=False,
+        )

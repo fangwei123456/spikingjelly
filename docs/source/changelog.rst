@@ -415,6 +415,15 @@ Module: ``spikingjelly.activation_based.model``.
   checkpoints using the former private SSA parameter layout require remapping.
 - Added Spike-driven Transformer v1 and its reusable spike-driven self-attention
   layer.
+- Added the MA-SNN model family: the DVS event-stream convolutional network
+  (``MASNN``, ``masnn_dvs128_gesture``) and Att-MS-ResNet (``AttMSResNet``,
+  ``att_ms_resnet18``) with channel-spatial attention residual blocks. Both
+  default to ``LIFNode`` with the author thresholds, decay, and rectangular
+  surrogate, and accept ``spiking_neuron`` plus neuron keyword arguments like the
+  other models in the package.
+- ``MultiDimensionalAttention`` now accepts ``use_temporal``, ``use_channel``, and
+  ``use_spatial`` switches to build the author's attention-axis subsets (such as
+  CSA); defaults keep the previous full TCSA behavior.
 - The new model classes and builders are available directly from
   ``spikingjelly.activation_based.model``.
 
