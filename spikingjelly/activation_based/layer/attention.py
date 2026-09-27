@@ -159,6 +159,9 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
         reduction_t: int = 16,
         reduction_c: int = 16,
         kernel_size=3,
+        use_temporal: bool = True,
+        use_channel: bool = True,
+        use_spatial: bool = True,
     ):
         """
         **API Language** - :ref:`中文 <MultiStepMultiDimensionalAttention.__init__-cn>` | :ref:`English <MultiStepMultiDimensionalAttention.__init__-en>`
@@ -178,6 +181,11 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 
         输入的尺寸是 ``[T, N, C, H, W]`` ，经过MultiStepMultiDimensionalAttention层，输出为 ``[T, N, C, H, W]`` 。
 
+        默认按 时间 -> 通道 -> 空间 的顺序依次施加注意力；
+        ``use_temporal`` 、 ``use_channel`` 和 ``use_spatial`` 可以关闭对应维度，
+        从而组合出作者实现中的 TA/CA/SA/CSA 等子集变体（至少保留一个维度）。
+        被关闭维度的子模块为 ``None`` ，不参与前向计算和参数统计。
+
         :param T: 输入数据的时间步长
         :type T: int
 
@@ -192,6 +200,19 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 
         :param kernel_size: 空间注意力机制的卷积核大小
         :type kernel_size: int
+
+        :param use_temporal: 是否启用时间维注意力；关闭时不校验 ``T`` 与
+            ``reduction_t`` 的大小关系
+        :type use_temporal: bool
+
+        :param use_channel: 是否启用通道维注意力；关闭时不校验 ``C`` 与
+            ``reduction_c`` 的大小关系
+        :type use_channel: bool
+
+        :param use_spatial: 是否启用空间维注意力
+        :type use_spatial: bool
+
+        :raises ValueError: 三个维度全部被关闭时抛出
 
         ----
 
@@ -208,6 +229,12 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 
         The dimension of the input is ``[T, N, C, H, W]`` , after the MultiStepMultiDimensionalAttention layer, the output dimension is ``[T, N, C, H, W]`` .
 
+        Attention is applied in temporal -> channel -> spatial order by default;
+        ``use_temporal``, ``use_channel``, and ``use_spatial`` disable the
+        corresponding axes, composing the TA/CA/SA/CSA subset variants of the
+        author implementation (at least one axis must stay enabled). A disabled
+        axis stores ``None`` and contributes neither computation nor parameters.
+
         :param T: timewindows of input
         :type T: int
 
@@ -222,26 +249,49 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 
         :param kernel_size: convolution kernel size of SpatialAttention
         :type kernel_size: int
+
+        :param use_temporal: whether to enable temporal attention; when
+            disabled, ``T`` is not validated against ``reduction_t``
+        :type use_temporal: bool
+
+        :param use_channel: whether to enable channel attention; when disabled,
+            ``C`` is not validated against ``reduction_c``
+        :type use_channel: bool
+
+        :param use_spatial: whether to enable spatial attention
+        :type use_spatial: bool
+
+        :raises ValueError: if all three axes are disabled
         """
         super().__init__()
 
-        assert T >= reduction_t, "reduction_t cannot be greater than T"
-        assert C >= reduction_c, "reduction_c cannot be greater than C"
+        if not (use_temporal or use_channel or use_spatial):
+            raise ValueError(
+                "at least one of use_temporal, use_channel, and use_spatial "
+                "must be True"
+            )
+
+        if use_temporal:
+            assert T >= reduction_t, "reduction_t cannot be greater than T"
+        if use_channel:
+            assert C >= reduction_c, "reduction_c cannot be greater than C"
 
         assert kernel_size in (3, 7), "kernel size must be 3 or 7"
-        self.ta = _AxisAttention(T, reduction_t)
-        self.ca = _AxisAttention(C, reduction_c, channel_axis=True)
-        self.sa = _SpatialAttention(kernel_size)
+        self.ta = _AxisAttention(T, reduction_t) if use_temporal else None
+        self.ca = (
+            _AxisAttention(C, reduction_c, channel_axis=True) if use_channel else None
+        )
+        self.sa = _SpatialAttention(kernel_size) if use_spatial else None
         self.relu = nn.ReLU()
 
     def forward(self, x: torch.Tensor):
         assert x.dim() == 5, ValueError(
             f"expected 5D input with shape [T, N, C, H, W], but got input with shape {x.shape}"
         )
-        x = x.transpose(0, 1)
-        out = self.ta(x) * x
-        out = self.ca(out) * out
-        out = self.sa(out) * out
+        out = x.transpose(0, 1)
+        for attention in (self.ta, self.ca, self.sa):
+            if attention is not None:
+                out = attention(out) * out
         return self.relu(out).transpose(0, 1)
 
 
