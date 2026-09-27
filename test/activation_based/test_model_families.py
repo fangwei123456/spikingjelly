@@ -303,8 +303,8 @@ def test_masnn_custom_spiking_neuron_receives_the_model_backend(monkeypatch):
         spiking_neuron=neuron.IFNode,
     )
 
-    for model in (net, resnet):
-        cells = [m for m in model.modules() if isinstance(m, neuron.BaseNode)]
+    for built in (net, resnet):
+        cells = [m for m in built.modules() if isinstance(m, neuron.BaseNode)]
         assert cells
         assert all(isinstance(cell, neuron.IFNode) for cell in cells)
         assert {cell.backend for cell in cells} == {"cupy"}
