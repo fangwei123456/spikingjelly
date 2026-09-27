@@ -19,6 +19,8 @@ Module: `spikingjelly.activation_based.neuron`.
   parameters, real-valued states, and single-step and multi-step execution.
 - Added `functional.clif_step()` for an explicit two-state ComplementaryLIF
   transition; `ComplementaryLIFNode` now uses it without changing its outputs.
+- `STBIFNode` now accepts `backend="torch"` or `backend="triton"` in its
+  constructor for both step modes.
 
 ### Improvements
 
@@ -28,8 +30,11 @@ Module: `spikingjelly.activation_based.triton_kernel`.
 
 - Select the `triton_op` or CUDA `custom_op` registration mode once at import,
   and use the matching Triton kernel wrapper throughout the process.
-- Report missing Triton and operator-registration failures explicitly when
-  using registered Triton kernels.
+- Surface operator-registration failures instead of treating them as optional
+  Triton import failures.
+- Direct CUDA calls to registered Triton operators now use the existing backend
+  dependency error when Triton is absent.
+- FlexSN now checks the Triton dependency when its Triton backend is selected.
 - Restore FlexSN Triton operator registration on PyTorch 2.6 without changing
   its operator schemas.
 - Remove `SJ_USE_WRAP_TRITON`. Set `SJ_USE_TRITON_OP=0` before import to retain

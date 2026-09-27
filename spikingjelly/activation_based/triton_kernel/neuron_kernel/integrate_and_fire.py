@@ -6,7 +6,6 @@ import torch
 from ... import surrogate
 from ..surrogate_kernel import resolve_sg_triton_id_and_alpha, sg_triton
 from ..triton_utils import (
-    _require_triton,
     convert_and_store,
     register_op,
     triton_neuron_compute_dtype_id_to_tl_dtype,
@@ -646,7 +645,6 @@ def multistep_if_inference(
     soft_reset: bool,
     store_v_seq: bool,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    _require_triton()
     x_seq = x_seq.contiguous()
     v_init = v_init.contiguous()
 
@@ -697,7 +695,6 @@ def multistep_if_forward(
     sg_alpha: float,
     store_v_seq: bool,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    _require_triton()
     x_seq = x_seq.contiguous()
     v_init = v_init.contiguous()
 
@@ -753,7 +750,6 @@ def multistep_if_mp_inference(
     spike_dtype_id: int,
     save_intermediates: bool,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    _require_triton()
     _check_mp_cuda_inputs(x_seq, v_init, "IF")
     storage_dtype = triton_neuron_dtype_id_to_torch_dtype(storage_dtype_id)
     spike_dtype = triton_neuron_dtype_id_to_torch_dtype(spike_dtype_id)
@@ -826,7 +822,6 @@ def multistep_if_mp_forward(
     backward_compute_dtype_id: int,
     spike_dtype_id: int,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    _require_triton()
     del detach_reset, backward_compute_dtype_id
     _check_mp_cuda_inputs(x_seq, v_init, "IF")
     storage_dtype = triton_neuron_dtype_id_to_torch_dtype(storage_dtype_id)

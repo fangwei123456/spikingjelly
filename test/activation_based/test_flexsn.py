@@ -231,6 +231,19 @@ def test_backend_and_step_mode_switches_preserve_states():
         module.backend = "triton"
 
 
+def test_triton_backend_requires_installed_dependency(monkeypatch):
+    from spikingjelly.activation_based import base
+
+    monkeypatch.setattr(base, "triton", None)
+    with pytest.raises(ImportError, match="Triton is not installed"):
+        FlexSN(lif_core, 1, backend="triton")
+
+    module = FlexSN(lif_core, 1, backend="torch")
+    with pytest.raises(ImportError, match="Triton is not installed"):
+        module.backend = "triton"
+    assert module.backend == "torch"
+
+
 def test_hop_matches_torch_forward_and_backward():
     x_torch = torch.randn(4, 8, requires_grad=True)
     x_hop = x_torch.detach().clone().requires_grad_(True)
@@ -401,6 +414,7 @@ def test_rejects_mismatched_tensor_contract():
 def test_triton_requires_cuda_without_fallback():
     if torch.cuda.is_available():
         pytest.skip("CPU-only failure contract")
+    pytest.importorskip("triton")
     module = FlexSN(lif_core, 1, backend="triton")
     with pytest.raises(RuntimeError, match="requires CUDA"):
         module(torch.randn(2, 3))

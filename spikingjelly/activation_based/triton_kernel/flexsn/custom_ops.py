@@ -9,7 +9,7 @@ from typing import List
 
 import torch
 
-from ..triton_utils import _require_triton, register_op, wrap_triton
+from ..triton_utils import register_op, wrap_triton
 from .info import FlexSNInfo
 from .wrapper import (
     flexsn_backward,
@@ -211,7 +211,6 @@ def flexsn_triton_inference(
     flat_args: List[torch.Tensor],
     return_state_sequences: bool,
 ) -> List[torch.Tensor]:
-    _require_triton()
     return _inference_impl(_bundle(handle), flat_args, return_state_sequences)
 
 
@@ -237,7 +236,6 @@ def flexsn_triton_training(
     flat_args: List[torch.Tensor],
     return_state_sequences: bool,
 ) -> List[torch.Tensor]:
-    _require_triton()
     return _training_impl(_bundle(handle), flat_args, return_state_sequences)
 
 
@@ -264,7 +262,6 @@ def flexsn_triton_backward(
     saved_tensors: List[torch.Tensor],
     input_templates: List[torch.Tensor],
 ) -> List[torch.Tensor]:
-    _require_triton()
     return _backward_impl(_bundle(handle), grad_outputs, saved_tensors, input_templates)
 
 

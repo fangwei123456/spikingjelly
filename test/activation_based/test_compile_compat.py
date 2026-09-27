@@ -476,20 +476,21 @@ def test_registration_mode_is_fixed_at_import(startup_mode):
         import os
         import torch
         from spikingjelly.activation_based.triton_kernel import triton_utils
-        from spikingjelly.activation_based import neuron
+        import spikingjelly.activation_based.neuron
 
         assert hasattr(torch.ops.sj, "multistep_activation_aware_if_inference")
 
         mode = triton_utils._USE_TRITON_OP
         os.environ["SJ_USE_TRITON_OP"] = "0" if mode else "1"
-        torch.library.custom_op = lambda *args, **kwargs: "custom"
-        triton_utils.triton_op = lambda *args, **kwargs: "triton"
-        torch.library.wrap_triton = lambda kernel: "wrapped"
+        torch.library.custom_op = lambda *args, **kwargs: lambda f: "custom"
+        triton_utils.triton_op = lambda *args, **kwargs: lambda f: "triton"
         kernel = object()
+        if not mode:
+            assert triton_utils.wrap_triton(kernel) is kernel
         print(json.dumps({
             "mode": mode,
-            "registered": triton_utils.register_op("sj::probe"),
-            "wrapped": triton_utils.wrap_triton(kernel) == "wrapped",
+            "registered": triton_utils.register_op("sj::probe")(lambda: None),
+            "wrapped": triton_utils.wrap_triton is getattr(torch.library, "wrap_triton", None),
         }))
         """
     )
@@ -515,14 +516,6 @@ def test_import_without_triton_has_no_discovery_warnings():
         """
         import spikingjelly.activation_based.neuron
         import torch
-        from spikingjelly.activation_based.triton_kernel.triton_utils import _require_triton
-        try:
-            _require_triton()
-        except ImportError as error:
-            assert isinstance(error.__cause__, (ImportError, OSError))
-            print(str(error))
-        else:
-            raise AssertionError("Missing Triton did not raise")
         try:
             torch.ops.sj.multistep_if_inference(
                 torch.zeros(1, 2), torch.zeros(2), 1.0, 0.0, False, False
@@ -531,6 +524,18 @@ def test_import_without_triton_has_no_discovery_warnings():
             assert "CPU" in str(error)
         else:
             raise AssertionError("CUDA-only fallback accepted a CPU input")
+        from spikingjelly.activation_based.triton_kernel import triton_utils
+        torch.library.custom_op = lambda *args, **kwargs: lambda f: f
+        @triton_utils.register_op("sj::probe")
+        def probe(x: torch.Tensor) -> torch.Tensor:
+            raise AssertionError("Original implementation reached")
+        try:
+            probe(torch.zeros(1))
+        except ImportError as error:
+            assert "Triton is not installed" in str(error)
+            assert isinstance(error.__cause__, (ImportError, OSError))
+        else:
+            raise AssertionError("Missing Triton did not raise")
         """
     )
     completed = subprocess.run(
@@ -540,47 +545,17 @@ def test_import_without_triton_has_no_discovery_warnings():
         text=True,
         timeout=30,
     )
-    assert "requires the triton package" in completed.stdout
     assert "find_triton_kernels" not in completed.stderr
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_cuda_operator_fails_clearly_when_triton_import_fails():
-    script = textwrap.dedent(
-        """
-        import builtins
-        import torch
-
-        x = torch.zeros(1, 2, device="cuda")
-        v = torch.zeros(2, device="cuda")
-        original_import = builtins.__import__
-        def block_triton(name, *args, **kwargs):
-            if name == "triton" or name.startswith("triton."):
-                raise ImportError("simulated missing Triton")
-            return original_import(name, *args, **kwargs)
-        builtins.__import__ = block_triton
-
-        from spikingjelly.activation_based.triton_kernel import neuron_kernel
-        assert neuron_kernel is not None
-        from spikingjelly.activation_based.triton_kernel import triton_utils
-        assert not triton_utils._USE_TRITON_OP
-        try:
-            torch.ops.sj.multistep_if_inference(x, v, 1.0, 0.0, False, False)
-        except ImportError as error:
-            assert "requires the triton package" in str(error)
-            assert "simulated missing Triton" in str(error.__cause__)
-        else:
-            raise AssertionError("Dummy Triton kernel reached execution")
-        """
-    )
-    completed = subprocess.run(
-        [sys.executable, "-c", script],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert "find_triton_kernels" not in completed.stderr
+def test_cuda_registered_op_reports_missing_triton():
+    if _triton_available():
+        pytest.skip("This check needs an environment without Triton.")
+    x = torch.zeros(2, 3, device="cuda")
+    v = torch.zeros(3, device="cuda")
+    with pytest.raises(ImportError, match="Triton is not installed"):
+        torch.ops.sj.multistep_if_inference(x, v, 1.0, 0.0, False, False)
 
 
 def test_registration_failure_is_not_hidden_by_optional_import():

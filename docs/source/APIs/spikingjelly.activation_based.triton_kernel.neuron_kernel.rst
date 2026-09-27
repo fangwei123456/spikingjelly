@@ -26,6 +26,8 @@ Current limits and notes:
   does not offer the same Inductor visibility as ``triton_op``.
 - ``SJ_USE_WRAP_TRITON`` is no longer used. Replace the old combination
   ``SJ_USE_TRITON_OP=1 SJ_USE_WRAP_TRITON=0`` with ``SJ_USE_TRITON_OP=0``.
+- Without Triton, selecting the high-level Triton backend or directly calling a
+  registered CUDA operator reports the existing Triton dependency error.
 - Known problematic compile configurations from current validation:
 
   - ``torch.compile(..., mode="reduce-overhead")`` may trigger CUDAGraph output-overwrite runtime errors.

@@ -5,7 +5,6 @@ import torch
 from spikingjelly.logger import logger
 
 from ..triton_utils import (
-    _require_triton,
     register_op,
     type_dict,
     use_static_range_for_triton_neuron_kernel,
@@ -259,7 +258,6 @@ def single_step_stbif(
         backend
     :raises ImportError: If Triton is not installed
     """
-    _require_triton()
     if (
         q.shape != x.shape
         or acc_q.shape != x.shape
@@ -399,7 +397,6 @@ def multi_step_stbif(
         backend
     :raises ImportError: If Triton is not installed
     """
-    _require_triton()
     state_shape = x_seq.shape[1:]
     if any(
         state.shape != state_shape
