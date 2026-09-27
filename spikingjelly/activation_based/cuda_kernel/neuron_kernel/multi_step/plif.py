@@ -1,5 +1,5 @@
 import math
-from functools import cache
+from functools import lru_cache
 from typing import Callable, Optional
 
 import torch
@@ -15,9 +15,9 @@ from .base import (
     NeuronBPTTKernel,
     NeuronFPTTKernel,
 )
-from ..surrogate_registry import (
+from ..surrogate_code import (
     _cuda_codes_callable,
-    _resolve_cuda_code_id,
+    _surrogate_cuda_code,
 )
 
 
@@ -247,7 +247,7 @@ def _ensure_power_of_two_threads() -> None:
         )
 
 
-@cache
+@lru_cache(maxsize=128)
 def _get_plif_forward_kernel(
     *, decay_input: bool, hard_reset: bool, dtype: str
 ) -> ParametricLIFNodeFPTTKernel:
@@ -256,18 +256,18 @@ def _get_plif_forward_kernel(
     )
 
 
-@cache
+@lru_cache(maxsize=128)
 def _get_plif_backward_kernel(
     *,
     decay_input: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
     hard_reset: bool,
     detach_reset: bool,
     dtype: str,
 ) -> ParametricLIFNodeBPTTKernel:
     return ParametricLIFNodeBPTTKernel(
         decay_input=decay_input,
-        surrogate_function=_cuda_codes_callable(sg_cupy_id, dtype),
+        surrogate_function=_cuda_codes_callable(sg_cupy_code),
         hard_reset=hard_reset,
         detach_reset=detach_reset,
         dtype=dtype,
@@ -284,7 +284,7 @@ def cupy_multistep_plif_forward(
     detach_reset: bool,
     decay: torch.Tensor,
     decay_input: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     if x_seq.dtype == torch.float16 and v_init.numel() % 2 != 0:
         raise ValueError(
@@ -330,7 +330,7 @@ def _cupy_multistep_plif_forward_fake(
     detach_reset: bool,
     decay: torch.Tensor,
     decay_input: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
 ):
     return (
         x_seq.new_empty(x_seq.shape),
@@ -360,7 +360,7 @@ def _setup_cupy_multistep_plif_context(ctx, inputs, output):
         detach_reset,
         decay,
         decay_input,
-        sg_cupy_id,
+        sg_cupy_code,
     ) = inputs
     h_seq = output[2]
     v_seq = output[1]
@@ -372,7 +372,7 @@ def _setup_cupy_multistep_plif_context(ctx, inputs, output):
     ctx.v_reset = None if soft_reset else v_reset
     ctx.detach_reset = detach_reset
     ctx.decay_input = decay_input
-    ctx.sg_cupy_id = sg_cupy_id
+    ctx.sg_cupy_code = sg_cupy_code
 
 
 @torch.library.custom_op("sj::cupy_multistep_plif_backward", mutates_args=())
@@ -387,7 +387,7 @@ def cupy_multistep_plif_backward(
     detach_reset: bool,
     decay: torch.Tensor,
     decay_input: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     grad_spike_seq = grad_spike_seq.contiguous()
     grad_v_seq = grad_v_seq.contiguous()
@@ -396,7 +396,7 @@ def cupy_multistep_plif_backward(
     hard_reset = not soft_reset
     backward_kernel = _get_plif_backward_kernel(
         decay_input=decay_input,
-        sg_cupy_id=sg_cupy_id,
+        sg_cupy_code=sg_cupy_code,
         hard_reset=hard_reset,
         detach_reset=detach_reset,
         dtype=dtype,
@@ -448,7 +448,7 @@ def _cupy_multistep_plif_backward_fake(
     detach_reset: bool,
     decay: torch.Tensor,
     decay_input: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
 ):
     return (
         torch.empty_like(grad_spike_seq),
@@ -473,7 +473,7 @@ def _cupy_multistep_plif_backward_autograd(ctx, grad_spike_seq, grad_v_seq, grad
         ctx.detach_reset,
         decay,
         ctx.decay_input,
-        ctx.sg_cupy_id,
+        ctx.sg_cupy_code,
     )
     return grad_x_seq, grad_v_init, None, None, None, None, grad_decay, None, None
 
@@ -495,7 +495,7 @@ def plif_multi_step(
     detach_reset: bool,
     surrogate_function: surrogate.SurrogateFunctionBase,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    sg_cupy_id = _resolve_cuda_code_id(
+    sg_cupy_code = _surrogate_cuda_code(
         surrogate_function, _dtype_to_cupy_kernel_dtype(x_seq.dtype)
     )
     soft_reset = v_reset is None
@@ -509,6 +509,6 @@ def plif_multi_step(
         detach_reset,
         decay,
         decay_input,
-        sg_cupy_id,
+        sg_cupy_code,
     )
     return s_seq, v_seq

@@ -157,6 +157,67 @@ def test_cupy_single_step_matches_torch(kind, v_reset, detach_reset, decay_input
     _assert_close(v_cupy.grad, v_torch.grad, dtype)
 
 
+@pytest.mark.parametrize("kind", ["if", "lif"])
+def test_cupy_single_step_compiled_graph_survives_cache_eviction(kind):
+    _require_cuda_cupy_compile()
+    if kind == "if":
+        from spikingjelly.activation_based.cuda_kernel.neuron_kernel.single_step import (
+            integrate_and_fire as kernels,
+        )
+
+        def step(x, v):
+            return kernels.if_step(x, v, 0.8, 0.0, sg)
+
+        get_backward = kernels._get_if_backward_kernel
+        config = {"hard_reset": True, "detach_reset": False, "dtype": "float"}
+    else:
+        from spikingjelly.activation_based.cuda_kernel.neuron_kernel.single_step import (
+            lif as kernels,
+        )
+
+        def step(x, v):
+            return kernels.lif_step(x, v, 0.8, 0.0, 0.4, True, sg)
+
+        get_backward = kernels._get_lif_backward_kernel
+        config = {
+            "decay_input": True,
+            "hard_reset": True,
+            "detach_reset": False,
+            "dtype": "float",
+        }
+
+    sg = surrogate.Sigmoid(alpha=4.0)
+    compiled = torch.compile(step, backend="eager")
+
+    def run(forward):
+        x = torch.randn(8, device="cuda", requires_grad=True)
+        v = torch.randn_like(x, requires_grad=True)
+        spike, next_v = forward(x, v)
+        (spike.sum() + next_v.sum()).backward()
+        return spike, next_v, x.grad, v.grad
+
+    run(compiled)
+    from spikingjelly.activation_based.cuda_kernel.neuron_kernel.surrogate_code import (
+        _surrogate_cuda_code,
+    )
+
+    for index in range(129):
+        get_backward(
+            sg_cupy_code=_surrogate_cuda_code(
+                surrogate.Sigmoid(alpha=float(index + 1)), "float"
+            ),
+            **config,
+        )
+    assert get_backward.cache_info().currsize <= 128
+
+    torch.manual_seed(37)
+    expected = run(step)
+    torch.manual_seed(37)
+    actual = run(compiled)
+    for result, reference in zip(actual, expected, strict=True):
+        torch.testing.assert_close(result, reference)
+
+
 @pytest.mark.parametrize(
     ("kind", "dtype", "v_reset", "detach_reset", "training", "store_v_seq"),
     [

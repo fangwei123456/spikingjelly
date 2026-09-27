@@ -1,5 +1,5 @@
 import math
-from functools import cache
+from functools import lru_cache
 from typing import Callable, Optional
 
 import torch
@@ -16,9 +16,9 @@ from .base import (
     NeuronBPTTKernel,
     NeuronFPTTKernel,
 )
-from ..surrogate_registry import (
+from ..surrogate_code import (
     _cuda_codes_callable,
-    _resolve_cuda_code_id,
+    _surrogate_cuda_code,
 )
 
 
@@ -103,7 +103,7 @@ class LIFNodeBPTTKernel(NeuronBPTTKernel):
         )
 
 
-@cache
+@lru_cache(maxsize=128)
 def _get_lif_forward_kernel(
     *, decay_input: bool, hard_reset: bool, dtype: str
 ) -> LIFNodeFPTTKernel:
@@ -112,18 +112,18 @@ def _get_lif_forward_kernel(
     )
 
 
-@cache
+@lru_cache(maxsize=128)
 def _get_lif_backward_kernel(
     *,
     decay_input: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
     hard_reset: bool,
     detach_reset: bool,
     dtype: str,
 ) -> LIFNodeBPTTKernel:
     return LIFNodeBPTTKernel(
         decay_input=decay_input,
-        surrogate_function=_cuda_codes_callable(sg_cupy_id, dtype),
+        surrogate_function=_cuda_codes_callable(sg_cupy_code),
         hard_reset=hard_reset,
         detach_reset=detach_reset,
         dtype=dtype,
@@ -140,7 +140,7 @@ def cupy_multistep_lif_forward(
     detach_reset: bool,
     decay: float,
     decay_input: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     x_seq = x_seq.contiguous()
     v_init = v_init.contiguous()
@@ -191,7 +191,7 @@ def _cupy_multistep_lif_forward_fake(
     detach_reset: bool,
     decay: float,
     decay_input: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
 ):
     return (
         x_seq.new_empty(x_seq.shape),
@@ -201,7 +201,7 @@ def _cupy_multistep_lif_forward_fake(
 
 
 def _setup_cupy_multistep_lif_context(ctx, inputs, output):
-    _, _, v_th, v_reset, soft_reset, detach_reset, decay, decay_input, sg_cupy_id = (
+    _, _, v_th, v_reset, soft_reset, detach_reset, decay, decay_input, sg_cupy_code = (
         inputs
     )
     h_seq = output[2]
@@ -211,7 +211,7 @@ def _setup_cupy_multistep_lif_context(ctx, inputs, output):
     ctx.detach_reset = detach_reset
     ctx.decay = decay
     ctx.decay_input = decay_input
-    ctx.sg_cupy_id = sg_cupy_id
+    ctx.sg_cupy_code = sg_cupy_code
 
 
 @torch.library.custom_op("sj::cupy_multistep_lif_backward", mutates_args=())
@@ -225,7 +225,7 @@ def cupy_multistep_lif_backward(
     detach_reset: bool,
     decay: float,
     decay_input: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     grad_spike_seq = grad_spike_seq.contiguous()
     grad_v_seq = grad_v_seq.contiguous()
@@ -234,7 +234,7 @@ def cupy_multistep_lif_backward(
     hard_reset = not soft_reset
     backward_kernel = _get_lif_backward_kernel(
         decay_input=decay_input,
-        sg_cupy_id=sg_cupy_id,
+        sg_cupy_code=sg_cupy_code,
         hard_reset=hard_reset,
         detach_reset=detach_reset,
         dtype=dtype,
@@ -282,7 +282,7 @@ def _cupy_multistep_lif_backward_fake(
     detach_reset: bool,
     decay: float,
     decay_input: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
 ):
     return torch.empty_like(grad_spike_seq), torch.empty_like(grad_v_seq[0])
 
@@ -302,7 +302,7 @@ def _cupy_multistep_lif_backward_autograd(ctx, grad_spike_seq, grad_v_seq, grad_
         ctx.detach_reset,
         ctx.decay,
         ctx.decay_input,
-        ctx.sg_cupy_id,
+        ctx.sg_cupy_code,
     )
     return grad_x_seq, grad_v_init, None, None, None, None, None, None, None
 
@@ -325,7 +325,7 @@ def lif_multi_step(
     surrogate_function: surrogate.SurrogateFunctionBase,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     decay = 1.0 / tau
-    sg_cupy_id = _resolve_cuda_code_id(
+    sg_cupy_code = _surrogate_cuda_code(
         surrogate_function, _dtype_to_cupy_kernel_dtype(x_seq.dtype)
     )
     soft_reset = v_reset is None
@@ -339,6 +339,6 @@ def lif_multi_step(
         detach_reset,
         decay,
         decay_input,
-        sg_cupy_id,
+        sg_cupy_code,
     )
     return s_seq, v_seq
