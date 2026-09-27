@@ -385,25 +385,33 @@ _USE_TRITON_OP = (
 )
 
 
-def _require_triton() -> None:
-    if _TRITON_IMPORT_ERROR is not None:
-        raise ImportError(
-            "The Triton backend requires the triton package."
-        ) from _TRITON_IMPORT_ERROR
-
-
 def register_op(opname: str, mutates_args=()):
     if _USE_TRITON_OP:
         return triton_op(opname, mutates_args=mutates_args)
-    return torch.library.custom_op(
+    custom_op = torch.library.custom_op(
         opname, mutates_args=mutates_args, device_types="cuda"
     )
+    if _TRITON_IMPORT_ERROR is None:
+        return custom_op
+
+    def register_missing_triton(f):
+        @functools.wraps(f)
+        def unavailable(*args, **kwargs):
+            raise ImportError(
+                "The Triton backend requires the triton package."
+            ) from _TRITON_IMPORT_ERROR
+
+        return custom_op(unavailable)
+
+    return register_missing_triton
 
 
-def wrap_triton(kernel):
-    if _USE_TRITON_OP:
-        return torch.library.wrap_triton(kernel)
-    return kernel
+if _USE_TRITON_OP:
+    wrap_triton = torch.library.wrap_triton
+else:
+
+    def wrap_triton(kernel):
+        return kernel
 
 
 def contiguous_and_device_guard(f: Callable) -> Callable:

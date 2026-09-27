@@ -2,7 +2,6 @@ from spikingjelly.logger import logger
 import torch
 
 from ..triton_utils import (
-    _require_triton,
     register_op,
     type_dict,
     use_static_range_for_triton_neuron_kernel,
@@ -216,7 +215,6 @@ def _multistep_activation_aware_if_inference(
     soft_reset: bool,
     store_v_seq: bool,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    _require_triton()
     x_seq = x_seq.contiguous()
     v_init = v_init.contiguous()
     threshold = threshold.to(device=x_seq.device, dtype=x_seq.dtype).contiguous()

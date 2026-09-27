@@ -482,14 +482,15 @@ def test_registration_mode_is_fixed_at_import(startup_mode):
 
         mode = triton_utils._USE_TRITON_OP
         os.environ["SJ_USE_TRITON_OP"] = "0" if mode else "1"
-        torch.library.custom_op = lambda *args, **kwargs: "custom"
-        triton_utils.triton_op = lambda *args, **kwargs: "triton"
-        torch.library.wrap_triton = lambda kernel: "wrapped"
+        torch.library.custom_op = lambda *args, **kwargs: lambda f: "custom"
+        triton_utils.triton_op = lambda *args, **kwargs: lambda f: "triton"
         kernel = object()
+        if not mode:
+            assert triton_utils.wrap_triton(kernel) is kernel
         print(json.dumps({
             "mode": mode,
-            "registered": triton_utils.register_op("sj::probe"),
-            "wrapped": triton_utils.wrap_triton(kernel) == "wrapped",
+            "registered": triton_utils.register_op("sj::probe")(lambda: None),
+            "wrapped": triton_utils.wrap_triton is getattr(torch.library, "wrap_triton", None),
         }))
         """
     )
@@ -515,14 +516,6 @@ def test_import_without_triton_has_no_discovery_warnings():
         """
         import spikingjelly.activation_based.neuron
         import torch
-        from spikingjelly.activation_based.triton_kernel.triton_utils import _require_triton
-        try:
-            _require_triton()
-        except ImportError as error:
-            assert isinstance(error.__cause__, (ImportError, OSError))
-            print(str(error))
-        else:
-            raise AssertionError("Missing Triton did not raise")
         try:
             torch.ops.sj.multistep_if_inference(
                 torch.zeros(1, 2), torch.zeros(2), 1.0, 0.0, False, False
@@ -531,6 +524,18 @@ def test_import_without_triton_has_no_discovery_warnings():
             assert "CPU" in str(error)
         else:
             raise AssertionError("CUDA-only fallback accepted a CPU input")
+        from spikingjelly.activation_based.triton_kernel import triton_utils
+        torch.library.custom_op = lambda *args, **kwargs: lambda f: f
+        @triton_utils.register_op("sj::probe")
+        def probe(x: torch.Tensor) -> torch.Tensor:
+            raise AssertionError("Original implementation reached")
+        try:
+            probe(torch.zeros(1))
+        except ImportError as error:
+            assert isinstance(error.__cause__, (ImportError, OSError))
+            print(str(error))
+        else:
+            raise AssertionError("Missing Triton did not raise")
         """
     )
     completed = subprocess.run(

@@ -2,7 +2,6 @@ from spikingjelly.logger import logger
 import torch
 
 from ..triton_utils import (
-    _require_triton,
     convert_and_store,
     register_op,
     type_dict,
@@ -560,7 +559,6 @@ def multistep_ilif_forward_no_grad(
     max_spike_count: int,
     store_v_seq: bool,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    _require_triton()
     x_seq = x_seq.contiguous()
     v_init = v_init.contiguous()
     spike_seq = torch.empty_like(x_seq)
@@ -607,7 +605,6 @@ def multistep_ilif_forward(
     detach_reset: bool,
     store_v_seq: bool,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    _require_triton()
     x_seq = x_seq.contiguous()
     v_init = v_init.contiguous()
     spike_seq = torch.empty_like(x_seq)
