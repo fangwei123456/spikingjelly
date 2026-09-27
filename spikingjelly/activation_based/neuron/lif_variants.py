@@ -696,16 +696,14 @@ class ComplementaryLIFNode(BaseNode):
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x = inputs[0]
         v, m = states
-        v = functional.lif_charge(x, v, self.tau, False, None)
-        m = m * torch.sigmoid(v / self.tau)
         spike_function = (
             self.surrogate_function
             if self.training or not self.surrogate_function.spiking
             else surrogate.heaviside
         )
-        spike = spike_function(v - self.v_threshold)
-        m = m + spike
-        v = v - spike * (self.v_threshold + torch.sigmoid(m))
+        spike, v, m = functional.clif_step(
+            x, v, m, self.tau, self.v_threshold, spike_function
+        )
         return (spike,), (v, m)
 
     def _v_seq_source(self):

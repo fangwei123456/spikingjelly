@@ -56,6 +56,7 @@ __all__ = [
     "raf_step",
     "klif_step",
     "cuba_lif_step",
+    "clif_step",
     "if_step_cupy",
     "lif_step_cupy",
     "if_multi_step_cupy",
@@ -1527,6 +1528,77 @@ def cuba_lif_step(
     spike = surrogate_function(v_charged - v_threshold)
     v_next = voltage_reset(v_charged, spike, v_threshold, v_reset, detach_reset)
     return spike, current_next, v_next
+
+
+def clif_step(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    m: torch.Tensor,
+    tau: float,
+    v_threshold: float,
+    spike_function: SurrogateFunction,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <clif_step-cn>` | :ref:`English <clif_step-en>`
+
+    ----
+
+    .. _clif_step-cn:
+
+    * **中文**
+
+    执行一次 ComplementaryLIF 状态转移，返回脉冲、下一膜电位和下一互补电位。
+    输入状态须已物化；函数不读取 module memory，也不原地修改输入状态。
+    ``spike_function`` 由调用者按训练或推理模式选择。
+
+    :param x: 当前输入，形状为 ``[N, *]``。
+    :type x: torch.Tensor
+    :param v: 当前膜电位，与 ``x`` 形状、dtype 和 device 相同。
+    :type v: torch.Tensor
+    :param m: 当前互补电位，与 ``x`` 形状、dtype 和 device 相同。
+    :type m: torch.Tensor
+    :param tau: 膜电位时间常数，大于 ``1``。
+    :type tau: float
+    :param v_threshold: 放电阈值。
+    :type v_threshold: float
+    :param spike_function: 已选定路径的放电函数；可携带替代梯度。
+    :type spike_function: Callable[[torch.Tensor], torch.Tensor]
+    :return: ``(spike, v_next, m_next)``，各张量形状与 ``x`` 相同。
+    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+
+    ----
+
+    .. _clif_step-en:
+
+    * **English**
+
+    Run one ComplementaryLIF state transition and return spikes, next membrane
+    voltage, and next complementary voltage. States must be materialized. The
+    function does not read module memory or mutate input states. The caller
+    selects ``spike_function`` for training or inference.
+
+    :param x: Current input shaped ``[N, *]``.
+    :type x: torch.Tensor
+    :param v: Current membrane voltage with the shape, dtype, and device of ``x``.
+    :type v: torch.Tensor
+    :param m: Current complementary voltage with the shape, dtype, and device of ``x``.
+    :type m: torch.Tensor
+    :param tau: Membrane time constant greater than ``1``.
+    :type tau: float
+    :param v_threshold: Firing threshold.
+    :type v_threshold: float
+    :param spike_function: Firing function for the selected path, possibly with
+        a surrogate gradient.
+    :type spike_function: Callable[[torch.Tensor], torch.Tensor]
+    :return: ``(spike, v_next, m_next)`` with tensors shaped like ``x``.
+    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    """
+    charged = lif_charge(x, v, tau, False, None)
+    m_next = m * torch.sigmoid(charged / tau)
+    spike = spike_function(charged - v_threshold)
+    m_next = m_next + spike
+    v_next = charged - spike * (v_threshold + torch.sigmoid(m_next))
+    return spike, v_next, m_next
 
 
 def if_step_cupy(

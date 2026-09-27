@@ -119,6 +119,8 @@ remains a ``MemoryModule`` responsibility, so backend-specific functions identif
      - One KLIF state update.
    * - :func:`cuba_lif_step <spikingjelly.activation_based.functional.neuron.cuba_lif_step>`
      - One current-based LIF state update.
+   * - :func:`clif_step <spikingjelly.activation_based.functional.neuron.clif_step>`
+     - One ComplementaryLIF voltage and complementary-state update.
    * - :func:`lava_cuba_lif_step <spikingjelly.activation_based.functional.neuron.lava_cuba_lif_step>`
      - One Lava-compatible quantized CUBA-LIF state update.
    * - :func:`activation_aware_if_step <spikingjelly.activation_based.functional.neuron.activation_aware_if_step>`

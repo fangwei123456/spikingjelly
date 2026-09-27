@@ -10,6 +10,7 @@ from .... import surrogate
 from ... import cuda_utils
 from ...auto_cuda import cfunction
 from .base import (
+    _aligned_v_v_seq,
     _dtype_to_cupy_kernel_dtype,
     cupy,
     prepare_forward_meta,
@@ -166,7 +167,7 @@ def cupy_multistep_lif_forward(
     blocks, threads, py_dict = prepare_forward_meta(py_dict)
     py_dict["spike_seq"] = torch.empty_like(x_seq)
     py_dict["h_seq"] = torch.empty_like(x_seq)
-    py_dict["v_v_seq"] = x_seq.new_empty((x_seq.shape[0] + 1, *x_seq.shape[1:]))
+    py_dict["v_v_seq"] = _aligned_v_v_seq(x_seq)
     py_dict["v_v_seq"][0].copy_(py_dict.pop("v_init"))
     if py_dict["v_reset"] is None:
         py_dict.pop("v_reset")

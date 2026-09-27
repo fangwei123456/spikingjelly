@@ -4,6 +4,20 @@ import torch
 from spikingjelly.activation_based import functional, neuron, surrogate
 
 
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
+def test_cupy_multistep_voltage_output_is_16_byte_aligned(dtype):
+    from spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step.base import (
+        _aligned_v_v_seq,
+    )
+
+    x_seq = torch.empty((7, 3, 10), dtype=dtype)
+    v_v_seq = _aligned_v_v_seq(x_seq)
+    v_seq = v_v_seq[1:]
+    assert v_v_seq.is_contiguous()
+    assert v_seq.storage_offset() * v_seq.element_size() % 16 == 0
+    assert v_seq.shape == x_seq.shape
+
+
 def _cupy_available() -> bool:
     try:
         import cupy  # noqa: F401

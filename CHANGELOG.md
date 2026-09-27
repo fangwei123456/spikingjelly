@@ -17,6 +17,8 @@ Module: `spikingjelly.activation_based.neuron`.
 
 - Added the torch-only `RAFNode` resonate-and-fire neuron with fixed oscillator
   parameters, real-valued states, and single-step and multi-step execution.
+- Added `functional.clif_step()` for an explicit two-state ComplementaryLIF
+  transition; `ComplementaryLIFNode` now uses it without changing its outputs.
 
 ### Improvements
 
@@ -158,6 +160,8 @@ Module: `spikingjelly.activation_based.neuron`.
 - Restored `MaskedPSN`'s single-step queue update before an overflow error when
   more than `T` steps are called; the explicit-state function leaves its input
   queue unchanged on error.
+- Fixed CuPy IF/LIF/PLIF multi-step `torch.compile` on PyTorch 2.11 when a
+  time-step voltage view would otherwise start at a non-16-byte-aligned offset.
 - Fixed `store_v_seq` being ignored when a `BaseNode` subclass (`LIFNode`,
   `IFNode` and their relatives, plus `lava_exchange.CubaLIFNode`) is stepped
   in single-step mode, so these neurons wrapped in `LinearRecurrentContainer`,

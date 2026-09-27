@@ -196,6 +196,39 @@ def test_complementary_lif_single_multi_step_and_functional_state():
     torch.testing.assert_close(multi_step.m, functional_states[1])
 
 
+@pytest.mark.parametrize("training", [True, False])
+def test_clif_step_matches_module_and_gradients(training):
+    x_module = torch.tensor([0.4, 1.1], requires_grad=True)
+    v_module = torch.tensor([0.2, 0.6], requires_grad=True)
+    m_module = torch.tensor([0.1, 0.3], requires_grad=True)
+    module = neuron.ComplementaryLIFNode(v_threshold=0.8).train(training)
+    module.v = v_module
+    module.m = m_module
+
+    spike_module = module(x_module)
+    (spike_module + module.v + module.m).sum().backward()
+
+    x = x_module.detach().clone().requires_grad_()
+    v = v_module.detach().clone().requires_grad_()
+    m = m_module.detach().clone().requires_grad_()
+    spike_function = (
+        module.surrogate_function
+        if training or not module.surrogate_function.spiking
+        else surrogate.heaviside
+    )
+    spike, v_next, m_next = functional.clif_step(
+        x, v, m, module.tau, module.v_threshold, spike_function
+    )
+    (spike + v_next + m_next).sum().backward()
+
+    torch.testing.assert_close(spike, spike_module)
+    torch.testing.assert_close(v_next, module.v)
+    torch.testing.assert_close(m_next, module.m)
+    torch.testing.assert_close(x.grad, x_module.grad)
+    torch.testing.assert_close(v.grad, v_module.grad)
+    torch.testing.assert_close(m.grad, m_module.grad)
+
+
 def test_complementary_lif_state_storage_reset_and_backend_contract():
     module = neuron.ComplementaryLIFNode(step_mode="m", store_state_seqs=True)
     x_seq = torch.randn(3, 2, 4)
