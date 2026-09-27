@@ -69,8 +69,8 @@ networks, blocks, and attention compositions remain plain `nn.Module` objects.
 Explicit step-mode containers and modules that own temporal state and dispatch
 are exceptions. This rule does not restrict user-defined modules.
 
-Before committing, run `uv format --preview-features format --version 0.15.22`
-and `uvx ruff==0.15.22 check .` at the project root.
+Before committing, run `uv format --preview-features format` and
+`uvx ruff check .` at the project root.
 When changing production diagnostics, also run
 `uv run python tools/check_logging_policy.py`.
 
