@@ -524,57 +524,6 @@ def test_import_without_triton_has_no_discovery_warnings():
             assert "CPU" in str(error)
         else:
             raise AssertionError("CUDA-only fallback accepted a CPU input")
-        from spikingjelly.activation_based.triton_kernel import triton_utils
-        torch.library.custom_op = lambda *args, **kwargs: lambda f: f
-        @triton_utils.register_op("sj::probe")
-        def probe(x: torch.Tensor) -> torch.Tensor:
-            raise AssertionError("Original implementation reached")
-        try:
-            probe(torch.zeros(1))
-        except ImportError as error:
-            assert isinstance(error.__cause__, (ImportError, OSError))
-            print(str(error))
-        else:
-            raise AssertionError("Missing Triton did not raise")
-        """
-    )
-    completed = subprocess.run(
-        [sys.executable, "-c", script],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert "requires the triton package" in completed.stdout
-    assert "find_triton_kernels" not in completed.stderr
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_cuda_operator_fails_clearly_when_triton_import_fails():
-    script = textwrap.dedent(
-        """
-        import builtins
-        import torch
-
-        x = torch.zeros(1, 2, device="cuda")
-        v = torch.zeros(2, device="cuda")
-        original_import = builtins.__import__
-        def block_triton(name, *args, **kwargs):
-            if name == "triton" or name.startswith("triton."):
-                raise ImportError("simulated missing Triton")
-            return original_import(name, *args, **kwargs)
-        builtins.__import__ = block_triton
-
-        import spikingjelly.activation_based.triton_kernel.neuron_kernel
-        from spikingjelly.activation_based.triton_kernel import triton_utils
-        assert not triton_utils._USE_TRITON_OP
-        try:
-            torch.ops.sj.multistep_if_inference(x, v, 1.0, 0.0, False, False)
-        except ImportError as error:
-            assert "requires the triton package" in str(error)
-            assert "simulated missing Triton" in str(error.__cause__)
-        else:
-            raise AssertionError("Dummy Triton kernel reached execution")
         """
     )
     completed = subprocess.run(

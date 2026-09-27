@@ -36,8 +36,8 @@ Module: ``spikingjelly.activation_based.triton_kernel``.
 
 - Select the ``triton_op`` or CUDA ``custom_op`` registration mode once at import,
   and use the matching Triton kernel wrapper throughout the process.
-- Report missing Triton and operator-registration failures explicitly when
-  using registered Triton kernels.
+- Surface operator-registration failures instead of treating them as optional
+  Triton import failures.
 - Restore FlexSN Triton operator registration on PyTorch 2.6 without changing
   its operator schemas.
 - Remove ``SJ_USE_WRAP_TRITON``. Set ``SJ_USE_TRITON_OP=0`` before import to retain

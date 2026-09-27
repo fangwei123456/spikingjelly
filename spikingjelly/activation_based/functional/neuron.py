@@ -655,7 +655,6 @@ def activation_aware_if_multi_step_triton(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
-    :raises ImportError: Triton kernel 不可用
 
     ----
 
@@ -689,7 +688,6 @@ def activation_aware_if_multi_step_triton(
     :type store_v_seq: bool
     :return: ``(spike_seq, v_next, v_seq_or_none)``
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
-    :raises ImportError: If the Triton kernel is unavailable
 
     .. seealso::
 
