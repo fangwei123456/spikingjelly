@@ -20,6 +20,7 @@ class STBIFNode(base.MemoryModule):
         pos_max=None,
         neg_min=None,
         step_mode: str = "s",
+        backend: str = "torch",
     ) -> None:
         r"""
         **API Language** - :ref:`中文 <STBIFNode.__init__-cn>` | :ref:`English <STBIFNode.__init__-en>`
@@ -56,6 +57,9 @@ class STBIFNode(base.MemoryModule):
         :type neg_min: float or torch.Tensor or None
         :param step_mode: 步进模式，``"s"`` 或 ``"m"``。
         :type step_mode: str
+        :param backend: 计算后端，``"torch"``（默认）或 ``"triton"``。
+        :type backend: str
+        :raises ImportError: 选择 ``"triton"`` 但未安装 Triton 时抛出。
 
         ----
 
@@ -92,6 +96,9 @@ class STBIFNode(base.MemoryModule):
         :type neg_min: float or torch.Tensor or None
         :param step_mode: Step mode, ``"s"`` or ``"m"``.
         :type step_mode: str
+        :param backend: Compute backend, ``"torch"`` (default) or ``"triton"``.
+        :type backend: str
+        :raises ImportError: If ``"triton"`` is selected but Triton is not installed.
         """
         super().__init__()
         self.level = int(level)
@@ -114,6 +121,7 @@ class STBIFNode(base.MemoryModule):
             ).float(),
         )
         self.step_mode = step_mode
+        self.backend = backend
         self.register_memory("q", None)
         self.register_memory("acc_q", None)
         self.register_memory("cur_output", None)

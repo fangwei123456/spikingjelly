@@ -1,5 +1,10 @@
 import copy
 import functools
+import gc
+import inspect
+import linecache
+import sys
+import types
 
 import pytest
 import torch
@@ -55,6 +60,66 @@ def test_public_surface_only_exports_flexsn():
 
     assert flexsn.__all__ == ["FlexSN"]
     assert not hasattr(flexsn, "FlexSNKernel")
+
+
+def test_codegen_executes_in_memory_and_preserves_namespace(monkeypatch, tmp_path):
+    from spikingjelly.activation_based.triton_kernel.torch2triton import graph2triton
+
+    triton = types.ModuleType("triton")
+
+    def jit(function):
+        return types.SimpleNamespace(fn=function, src=inspect.getsource(function))
+
+    triton.jit = jit
+    monkeypatch.setattr(graph2triton, "triton", triton)
+    monkeypatch.setattr(graph2triton, "tl", types.ModuleType("triton.language"))
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    namespace = {"offset": 2}
+    modules_before = set(sys.modules)
+    sources_before = {
+        name for name in linecache.cache if "triton_kernel.codegen" in name
+    }
+    kernel = graph2triton.compile_triton_code_str(
+        "@triton.jit\ndef generated(x):\n    return x + offset\n",
+        "generated",
+        namespace,
+    )
+    standalone = graph2triton.compile_triton_code_str(
+        "@triton.jit\ndef standalone(x):\n    return x + 1\n",
+        "standalone",
+    )
+
+    assert kernel.fn(1) == 3
+    assert standalone.fn(1) == 2
+    assert "def generated" in kernel.src
+    assert namespace["generated"] is kernel
+    assert "def generated" in inspect.getsource(kernel.fn)
+    assert "def standalone" in inspect.getsource(standalone.fn)
+    assert set(sys.modules) - modules_before == set()
+    assert not (tmp_path / ".spikingjelly").exists()
+
+    for index in range(64):
+        name = f"unique_{index}"
+        generated = graph2triton.compile_triton_code_str(
+            f"@triton.jit\ndef {name}(x):\n    return x + {index}\n",
+            name,
+        )
+        assert generated.fn(1) == index + 1
+        assert "def unique_" in inspect.getsource(generated.fn)
+    del generated
+    gc.collect()
+    sources_after = {
+        name for name in linecache.cache if "triton_kernel.codegen" in name
+    }
+    assert len(sources_after - sources_before) == 2
+    assert set(sys.modules) - modules_before == set()
+    assert not (tmp_path / ".spikingjelly").exists()
+
+    with pytest.raises(SyntaxError) as error:
+        graph2triton.compile_triton_code_str("@triton.jit\ndef broken(\n", "broken")
+    assert "broken" in str(error.value)
+    assert error.value.text.strip() == "def broken("
 
 
 def test_torch_managed_and_functional_state_are_equivalent():
@@ -164,6 +229,19 @@ def test_backend_and_step_mode_switches_preserve_states():
     assert module.states[0] is state
     with pytest.raises(RuntimeError, match="requires step_mode"):
         module.backend = "triton"
+
+
+def test_triton_backend_requires_installed_dependency(monkeypatch):
+    from spikingjelly.activation_based import base
+
+    monkeypatch.setattr(base, "triton", None)
+    with pytest.raises(ImportError, match="Triton is not installed"):
+        FlexSN(lif_core, 1, backend="triton")
+
+    module = FlexSN(lif_core, 1, backend="torch")
+    with pytest.raises(ImportError, match="Triton is not installed"):
+        module.backend = "triton"
+    assert module.backend == "torch"
 
 
 def test_hop_matches_torch_forward_and_backward():
@@ -336,6 +414,7 @@ def test_rejects_mismatched_tensor_contract():
 def test_triton_requires_cuda_without_fallback():
     if torch.cuda.is_available():
         pytest.skip("CPU-only failure contract")
+    pytest.importorskip("triton")
     module = FlexSN(lif_core, 1, backend="triton")
     with pytest.raises(RuntimeError, match="requires CUDA"):
         module(torch.randn(2, 3))

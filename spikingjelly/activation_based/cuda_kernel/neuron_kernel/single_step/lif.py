@@ -1,4 +1,4 @@
-import threading
+from functools import lru_cache
 from typing import Optional
 
 import numpy as np
@@ -8,13 +8,8 @@ import torch.nn.functional as F
 
 from ..... import configure
 from .... import surrogate
-from ...cuda_utils import (
-    DeviceEnvironment,
-    cal_blocks,
-    register_python_object,
-    resolve_python_object,
-)
-from ..surrogate_registry import _cuda_codes, _resolve_cuda_code_id
+from ...cuda_utils import DeviceEnvironment, cal_blocks
+from ..surrogate_code import _decode_cuda_code, _surrogate_cuda_code
 from .base import (
     NeuronBPKernel,
     NeuronFPKernel,
@@ -106,46 +101,29 @@ class LIFNodeBPKernel(NeuronBPKernel):
             return f"const {self.dtype} grad_h_to_x = decay;"
 
 
-_LIF_FWD_KERNEL_CACHE = {}
-_LIF_BWD_KERNEL_CACHE = {}
-_LIF_KERNEL_LOCK = threading.Lock()
-
-
+@lru_cache(maxsize=128)
 def _get_lif_forward_kernel(
     *, decay_input: bool, hard_reset: bool, dtype: str
 ) -> LIFNodeFPKernel:
-    key = (decay_input, hard_reset, dtype)
-    with _LIF_KERNEL_LOCK:
-        kernel = _LIF_FWD_KERNEL_CACHE.get(key)
-        if kernel is None:
-            kernel = LIFNodeFPKernel(
-                decay_input=decay_input, hard_reset=hard_reset, dtype=dtype
-            )
-            _LIF_FWD_KERNEL_CACHE[key] = kernel
-    return kernel
+    return LIFNodeFPKernel(decay_input=decay_input, hard_reset=hard_reset, dtype=dtype)
 
 
+@lru_cache(maxsize=128)
 def _get_lif_backward_kernel(
     *,
     decay_input: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
     hard_reset: bool,
     detach_reset: bool,
     dtype: str,
 ) -> LIFNodeBPKernel:
-    key = (decay_input, sg_cupy_id, hard_reset, detach_reset, dtype)
-    with _LIF_KERNEL_LOCK:
-        kernel = _LIF_BWD_KERNEL_CACHE.get(key)
-        if kernel is None:
-            kernel = LIFNodeBPKernel(
-                decay_input=decay_input,
-                surrogate_cuda_codes=_cuda_codes(sg_cupy_id, dtype),
-                hard_reset=hard_reset,
-                detach_reset=detach_reset,
-                dtype=dtype,
-            )
-            _LIF_BWD_KERNEL_CACHE[key] = kernel
-    return kernel
+    return LIFNodeBPKernel(
+        decay_input=decay_input,
+        surrogate_cuda_codes=_decode_cuda_code(sg_cupy_code),
+        hard_reset=hard_reset,
+        detach_reset=detach_reset,
+        dtype=dtype,
+    )
 
 
 @torch.library.custom_op("sj::cupy_single_step_lif_forward", mutates_args=())
@@ -156,10 +134,14 @@ def cupy_single_step_lif_forward(
     v_reset: float,
     soft_reset: bool,
     decay: float,
-    forward_kernel_id: int,
-    backward_kernel_id: int,
+    decay_input: bool,
+    detach_reset: bool,
+    sg_cupy_code: str,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    forward_kernel = resolve_python_object(forward_kernel_id)
+    dtype = "float" if x.dtype == torch.float32 else "half2"
+    forward_kernel = _get_lif_forward_kernel(
+        decay_input=decay_input, hard_reset=not soft_reset, dtype=dtype
+    )
     py_dict = {
         "x": x,
         "v": v,
@@ -176,16 +158,25 @@ def cupy_single_step_lif_forward(
 
 @torch.library.register_fake("sj::cupy_single_step_lif_forward")
 def _cupy_single_step_lif_forward_fake(
-    x, v, v_th, v_reset, soft_reset, decay, forward_kernel_id, backward_kernel_id
+    x, v, v_th, v_reset, soft_reset, decay, decay_input, detach_reset, sg_cupy_code
 ):
     return x.new_empty(x.shape), x.new_empty(x.shape), x.new_empty(x.shape)
 
 
 def _setup_single_step_lif_context(ctx, inputs, output):
-    x, _, v_th, v_reset, soft_reset, decay, _, backward_kernel_id = inputs
+    x, _, v_th, v_reset, soft_reset, decay, decay_input, detach_reset, sg_cupy_code = (
+        inputs
+    )
     h = output[2]
     ctx.save_for_backward(h)
-    ctx.backward_kernel = resolve_python_object(backward_kernel_id)
+    dtype = "float" if x.dtype == torch.float32 else "half2"
+    ctx.backward_kernel = _get_lif_backward_kernel(
+        decay_input=decay_input,
+        sg_cupy_code=sg_cupy_code,
+        hard_reset=not soft_reset,
+        detach_reset=detach_reset,
+        dtype=dtype,
+    )
     ctx.blocks = cal_blocks(
         (x.numel() + 1) // 2 if x.dtype == torch.float16 else x.numel()
     )
@@ -221,7 +212,17 @@ def _single_step_lif_backward(ctx, grad_spike, grad_v_next, _grad_h):
     if py_dict["v_reset"] is None:
         py_dict.pop("v_reset")
     backward_kernel((blocks,), (threads,), py_dict)
-    return py_dict["grad_x"], py_dict["grad_v"], None, None, None, None, None, None
+    return (
+        py_dict["grad_x"],
+        py_dict["grad_v"],
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
 
 
 torch.library.register_autograd(
@@ -246,28 +247,22 @@ def lif_step(
     if not x.is_cuda:
         raise RuntimeError("lif_step requires a CUDA tensor.")
     dtype = "float" if x.dtype == torch.float32 else "half2"
-    hard_reset = v_reset is not None
-    forward_kernel = _get_lif_forward_kernel(
-        decay_input=decay_input,
-        hard_reset=hard_reset,
-        dtype=dtype,
-    )
-    backward_kernel = _get_lif_backward_kernel(
-        decay_input=decay_input,
-        sg_cupy_id=_resolve_cuda_code_id(surrogate_function, dtype),
-        hard_reset=hard_reset,
-        detach_reset=detach_reset,
-        dtype=dtype,
-    )
+    sg_cupy_code = _surrogate_cuda_code(surrogate_function, dtype)
     need_unpad = x.dtype == torch.float16 and x.numel() % 2 != 0
     if need_unpad:
         x = F.pad(x, (0, 1))
         v = F.pad(v, (0, 1))
-    fk = register_python_object(forward_kernel)
-    bk = register_python_object(backward_kernel)
     vr = float("nan") if v_reset is None else float(v_reset)
     spike, v_next, _ = cupy_single_step_lif_forward(
-        x, v, v_th, vr, v_reset is None, decay, fk, bk
+        x,
+        v,
+        v_th,
+        vr,
+        v_reset is None,
+        decay,
+        decay_input,
+        detach_reset,
+        sg_cupy_code,
     )
     if need_unpad:
         spike = spike[..., :-1]

@@ -119,6 +119,8 @@ remains a ``MemoryModule`` responsibility, so backend-specific functions identif
      - One KLIF state update.
    * - :func:`cuba_lif_step <spikingjelly.activation_based.functional.neuron.cuba_lif_step>`
      - One current-based LIF state update.
+   * - :func:`clif_step <spikingjelly.activation_based.functional.neuron.clif_step>`
+     - One ComplementaryLIF voltage and complementary-state update.
    * - :func:`lava_cuba_lif_step <spikingjelly.activation_based.functional.neuron.lava_cuba_lif_step>`
      - One Lava-compatible quantized CUBA-LIF state update.
    * - :func:`activation_aware_if_step <spikingjelly.activation_based.functional.neuron.activation_aware_if_step>`
@@ -153,6 +155,39 @@ remains a ``MemoryModule`` responsibility, so backend-specific functions identif
      - ParametricLIF sequence update with Triton.
    * - :func:`activation_aware_if_multi_step_triton <spikingjelly.activation_based.functional.neuron.activation_aware_if_multi_step_triton>`
      - ActivationAwareIF sequence update with Triton.
+
+以下示例分别展示单状态、多状态和队列状态。最后的 IF 与 Delay 各自管理局部状态；
+组合时无需把两个状态合成通用容器。函数不读取或写入 ``MemoryModule`` memory。
+
+The examples below show a single state, multiple states, and a queue. IF and
+Delay each keep their own local state when composed; no generic state container
+is needed. These functions do not read or write ``MemoryModule`` memory.
+
+.. code-block:: python
+
+   import torch
+   from spikingjelly.activation_based import functional, surrogate
+
+   surrogate_fn = surrogate.ATan()
+   inputs = (torch.tensor([0.2, 1.2]), torch.tensor([0.8, 0.1]))
+
+   voltage = torch.zeros_like(inputs[0])
+   delay_queue = ()
+   for x in inputs:
+       spike, voltage = functional.if_step(
+           x, voltage, 1.0, 0.0, surrogate_fn
+       )
+       delayed_spike, delay_queue = functional.delay_step(
+           spike, delay_queue, delay_steps=1
+       )
+
+   current = torch.zeros_like(inputs[0])
+   voltage = torch.zeros_like(inputs[0])
+   for x in inputs:
+       spike, current, voltage = functional.cuba_lif_step(
+           x, current, voltage, 0.5, 0.5, 1.0, 0.0, surrogate_fn
+       )
+
 .. toctree::
    :hidden:
 

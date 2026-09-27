@@ -5,6 +5,7 @@ from ..triton_utils import (
     register_op,
     type_dict,
     use_static_range_for_triton_neuron_kernel,
+    wrap_triton,
 )
 
 try:
@@ -182,7 +183,7 @@ def _launch_activation_aware_if_forward(
         return (triton.cdiv(N, meta["BLOCK_N"]),)
 
     with torch.cuda.device(x_seq.device):
-        kernel[grid](
+        wrap_triton(kernel)[grid](
             x_seq,
             v_init,
             threshold,

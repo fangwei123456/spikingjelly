@@ -1,15 +1,6 @@
-from spikingjelly.logger import logger
-
-try:
-    from . import activation_aware_if, ilif, stbif
-    from .integrate_and_fire import *
-    from .lif import *
-    from .plif import *
-except (ImportError, OSError) as e:
-    logger.debug("Optional neuron kernels unavailable: {}", e)
-    activation_aware_if = None
-    ilif = None
-    integrate_and_fire = None
-    stbif = None
-    lif = None
-    plif = None
+from . import activation_aware_if as activation_aware_if
+from . import ilif as ilif
+from . import stbif as stbif
+from .integrate_and_fire import *
+from .lif import *
+from .plif import *

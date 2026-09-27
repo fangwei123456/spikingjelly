@@ -782,6 +782,18 @@ def test_spikezip_stbif_matches_quantizer_accumulation():
     assert set(torch.unique(neuron.cur_output).tolist()).issubset({-1.0, 0.0, 1.0})
 
 
+def test_spikezip_stbif_backend_at_construction():
+    assert STBIFNode(0.25, level=8).backend == "torch"
+    if _TRITON_AVAILABLE:
+        assert (
+            STBIFNode(0.25, level=8, step_mode="m", backend="triton").backend
+            == "triton"
+        )
+    else:
+        with pytest.raises(ImportError, match="Triton is not installed"):
+            STBIFNode(0.25, level=8, step_mode="m", backend="triton")
+
+
 def test_spikezip_stbif_state_follows_module_dtype():
     quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
     neuron = STBIFNode.from_quantizer(quantizer)
@@ -874,8 +886,7 @@ def test_spikezip_stbif_triton_matches_torch(dtype, time_steps):
     reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
 )
 def test_spikezip_stbif_triton_avoids_device_scalar_read():
-    neuron = STBIFNode(0.25, level=8, sym=True, step_mode="m").cuda()
-    neuron.backend = "triton"
+    neuron = STBIFNode(0.25, level=8, sym=True, step_mode="m", backend="triton").cuda()
     x_seq = torch.randn(8, 7, 13, device="cuda")
 
     neuron(x_seq)
@@ -978,40 +989,51 @@ def test_spikezip_stbif_triton_rounds_half_to_even():
         torch.testing.assert_close(actual, reference)
 
 
+@pytest.mark.skipif(
+    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
+    reason="CUDA and Triton are required",
+)
 def test_multi_step_stbif_rejects_non_scalar_parameters():
     for parameter in ("q_threshold", "pos_max", "neg_min"):
         inputs = {
-            "q_threshold": torch.tensor(0.1),
-            "pos_max": torch.tensor(10.0),
-            "neg_min": torch.tensor(-10.0),
+            "q_threshold": torch.tensor(0.1, device="cuda"),
+            "pos_max": torch.tensor(10.0, device="cuda"),
+            "neg_min": torch.tensor(-10.0, device="cuda"),
         }
-        inputs[parameter] = torch.ones(2)
+        inputs[parameter] = torch.ones(2, device="cuda")
 
         with pytest.raises(ValueError, match="must be scalar tensors"):
             stbif.multi_step_stbif(
-                torch.zeros(1, 2),
-                torch.zeros(2),
-                torch.zeros(2),
+                torch.zeros(1, 2, device="cuda"),
+                torch.zeros(2, device="cuda"),
+                torch.zeros(2, device="cuda"),
                 **inputs,
             )
 
 
+@pytest.mark.skipif(
+    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
+    reason="CUDA and Triton are required",
+)
 def test_multi_step_stbif_rejects_mismatched_state():
     for state_name in ("q", "acc_q"):
         for invalid_state in (
-            torch.zeros(1, 2),
-            torch.zeros(2, dtype=torch.float64),
+            torch.zeros(1, 2, device="cuda"),
+            torch.zeros(2, dtype=torch.float64, device="cuda"),
         ):
-            states = {"q": torch.zeros(2), "acc_q": torch.zeros(2)}
+            states = {
+                "q": torch.zeros(2, device="cuda"),
+                "acc_q": torch.zeros(2, device="cuda"),
+            }
             states[state_name] = invalid_state
 
             with pytest.raises(ValueError, match="shape, dtype, and device"):
                 stbif.multi_step_stbif(
-                    torch.zeros(1, 2),
+                    torch.zeros(1, 2, device="cuda"),
                     **states,
-                    q_threshold=torch.tensor(0.1),
-                    pos_max=torch.tensor(10.0),
-                    neg_min=torch.tensor(-10.0),
+                    q_threshold=torch.tensor(0.1, device="cuda"),
+                    pos_max=torch.tensor(10.0, device="cuda"),
+                    neg_min=torch.tensor(-10.0, device="cuda"),
                 )
 
 

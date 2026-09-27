@@ -4,9 +4,9 @@ import torch.nn.functional as F
 
 from ..... import configure
 from ... import cuda_utils, tensor_cache
-from ..surrogate_registry import (
+from ..surrogate_code import (
     _cuda_codes_callable,
-    _resolve_cuda_code_id,
+    _surrogate_cuda_code,
 )
 from .runtime import (
     _CapturedAutogradCtx,
@@ -644,7 +644,7 @@ def cupy_multistep_eif_forward(
     theta_rh: float,
     delta_T: float,
     detach_reset: bool,
-    surrogate_id: int,
+    surrogate_code: str,
     capture_context: bool,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     captured_ctx = _CapturedAutogradCtx()
@@ -659,7 +659,7 @@ def cupy_multistep_eif_forward(
         theta_rh,
         delta_T,
         detach_reset,
-        _cuda_codes_callable(surrogate_id, _surrogate_cuda_dtype(x_seq.dtype)),
+        _cuda_codes_callable(surrogate_code),
     )
     return (
         *out,
@@ -701,7 +701,7 @@ def eif_multi_step(
     detach_reset,
     surrogate_function,
 ):
-    surrogate_id = _resolve_cuda_code_id(
+    surrogate_code = _surrogate_cuda_code(
         surrogate_function, _surrogate_cuda_dtype(x_seq.dtype)
     )
     v_reset_value = float("nan") if v_reset is None else float(v_reset)
@@ -716,6 +716,6 @@ def eif_multi_step(
         theta_rh,
         delta_T,
         detach_reset,
-        surrogate_id,
+        surrogate_code,
         capture_context,
     )[:-1]

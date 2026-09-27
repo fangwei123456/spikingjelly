@@ -1,5 +1,5 @@
 import math
-from functools import cache
+from functools import lru_cache
 from typing import Optional
 
 import torch
@@ -10,15 +10,16 @@ from .... import surrogate
 from ... import cuda_utils
 from ...auto_cuda import cfunction
 from .base import (
+    _aligned_v_v_seq,
     _dtype_to_cupy_kernel_dtype,
     cupy,
     prepare_forward_meta,
     NeuronBPTTKernel,
     NeuronFPTTKernel,
 )
-from ..surrogate_registry import (
+from ..surrogate_code import (
     _cuda_codes_callable,
-    _resolve_cuda_code_id,
+    _surrogate_cuda_code,
 )
 
 
@@ -41,21 +42,21 @@ class IFNodeBPTTKernel(NeuronBPTTKernel):
         )
 
 
-@cache
+@lru_cache(maxsize=128)
 def _get_if_forward_kernel(*, hard_reset: bool, dtype: str) -> IFNodeFPTTKernel:
     return IFNodeFPTTKernel(hard_reset=hard_reset, dtype=dtype)
 
 
-@cache
+@lru_cache(maxsize=128)
 def _get_if_backward_kernel(
     *,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
     hard_reset: bool,
     detach_reset: bool,
     dtype: str,
 ) -> IFNodeBPTTKernel:
     return IFNodeBPTTKernel(
-        surrogate_function=_cuda_codes_callable(sg_cupy_id, dtype),
+        surrogate_function=_cuda_codes_callable(sg_cupy_code),
         hard_reset=hard_reset,
         detach_reset=detach_reset,
         dtype=dtype,
@@ -70,7 +71,7 @@ def cupy_multistep_if_forward(
     v_reset: float,
     soft_reset: bool,
     detach_reset: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     x_seq = x_seq.contiguous()
     v_init = v_init.contiguous()
@@ -94,7 +95,7 @@ def cupy_multistep_if_forward(
     blocks, threads, py_dict = prepare_forward_meta(py_dict)
     py_dict["spike_seq"] = torch.empty_like(x_seq)
     py_dict["h_seq"] = torch.empty_like(x_seq)
-    py_dict["v_v_seq"] = x_seq.new_empty((x_seq.shape[0] + 1, *x_seq.shape[1:]))
+    py_dict["v_v_seq"] = _aligned_v_v_seq(x_seq)
     py_dict["v_v_seq"][0].copy_(py_dict.pop("v_init"))
     if py_dict["v_reset"] is None:
         py_dict.pop("v_reset")
@@ -117,7 +118,7 @@ def _cupy_multistep_if_forward_fake(
     v_reset: float,
     soft_reset: bool,
     detach_reset: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
 ):
     return (
         x_seq.new_empty(x_seq.shape),
@@ -127,13 +128,13 @@ def _cupy_multistep_if_forward_fake(
 
 
 def _setup_cupy_multistep_if_context(ctx, inputs, output):
-    _, _, v_th, v_reset, soft_reset, detach_reset, sg_cupy_id = inputs
+    _, _, v_th, v_reset, soft_reset, detach_reset, sg_cupy_code = inputs
     h_seq = output[2]
     ctx.save_for_backward(h_seq)
     ctx.v_th = v_th
     ctx.v_reset = None if soft_reset else v_reset
     ctx.detach_reset = detach_reset
-    ctx.sg_cupy_id = sg_cupy_id
+    ctx.sg_cupy_code = sg_cupy_code
 
 
 @torch.library.custom_op("sj::cupy_multistep_if_backward", mutates_args=())
@@ -145,7 +146,7 @@ def cupy_multistep_if_backward(
     v_reset: float,
     soft_reset: bool,
     detach_reset: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     grad_spike_seq = grad_spike_seq.contiguous()
     grad_v_seq = grad_v_seq.contiguous()
@@ -153,7 +154,7 @@ def cupy_multistep_if_backward(
     dtype = _dtype_to_cupy_kernel_dtype(grad_spike_seq.dtype)
     hard_reset = not soft_reset
     backward_kernel = _get_if_backward_kernel(
-        sg_cupy_id=sg_cupy_id,
+        sg_cupy_code=sg_cupy_code,
         hard_reset=hard_reset,
         detach_reset=detach_reset,
         dtype=dtype,
@@ -198,7 +199,7 @@ def _cupy_multistep_if_backward_fake(
     v_reset: float,
     soft_reset: bool,
     detach_reset: bool,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
 ):
     return torch.empty_like(grad_spike_seq), torch.empty_like(grad_v_seq[0])
 
@@ -216,7 +217,7 @@ def _cupy_multistep_if_backward_autograd(ctx, grad_spike_seq, grad_v_seq, grad_h
         v_reset,
         soft_reset,
         ctx.detach_reset,
-        ctx.sg_cupy_id,
+        ctx.sg_cupy_code,
     )
     return grad_x_seq, grad_v_init, None, None, None, None, None
 
@@ -236,7 +237,7 @@ def if_multi_step(
     detach_reset: bool,
     surrogate_function: surrogate.SurrogateFunctionBase,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    sg_cupy_id = _resolve_cuda_code_id(
+    sg_cupy_code = _surrogate_cuda_code(
         surrogate_function, _dtype_to_cupy_kernel_dtype(x_seq.dtype)
     )
     soft_reset = v_reset is None
@@ -248,6 +249,6 @@ def if_multi_step(
         v_reset_value,
         soft_reset,
         detach_reset,
-        sg_cupy_id,
+        sg_cupy_code,
     )
     return s_seq, v_seq

@@ -1,4 +1,4 @@
-import threading
+from functools import lru_cache
 from typing import Optional
 
 import numpy as np
@@ -8,13 +8,8 @@ import torch.nn.functional as F
 
 from ..... import configure
 from .... import surrogate
-from ...cuda_utils import (
-    DeviceEnvironment,
-    cal_blocks,
-    register_python_object,
-    resolve_python_object,
-)
-from ..surrogate_registry import _cuda_codes, _resolve_cuda_code_id
+from ...cuda_utils import DeviceEnvironment, cal_blocks
+from ..surrogate_code import _decode_cuda_code, _surrogate_cuda_code
 from .base import (
     NeuronBPKernel,
     NeuronFPKernel,
@@ -42,40 +37,25 @@ class IFNodeBPKernel(NeuronBPKernel):
         )
 
 
-_IF_FWD_KERNEL_CACHE = {}
-_IF_BWD_KERNEL_CACHE = {}
-_IF_KERNEL_LOCK = threading.Lock()
-
-
+@lru_cache(maxsize=128)
 def _get_if_forward_kernel(*, hard_reset: bool, dtype: str) -> IFNodeFPKernel:
-    key = (hard_reset, dtype)
-    with _IF_KERNEL_LOCK:
-        kernel = _IF_FWD_KERNEL_CACHE.get(key)
-        if kernel is None:
-            kernel = IFNodeFPKernel(hard_reset=hard_reset, dtype=dtype)
-            _IF_FWD_KERNEL_CACHE[key] = kernel
-    return kernel
+    return IFNodeFPKernel(hard_reset=hard_reset, dtype=dtype)
 
 
+@lru_cache(maxsize=128)
 def _get_if_backward_kernel(
     *,
-    sg_cupy_id: int,
+    sg_cupy_code: str,
     hard_reset: bool,
     detach_reset: bool,
     dtype: str,
 ) -> IFNodeBPKernel:
-    key = (sg_cupy_id, hard_reset, detach_reset, dtype)
-    with _IF_KERNEL_LOCK:
-        kernel = _IF_BWD_KERNEL_CACHE.get(key)
-        if kernel is None:
-            kernel = IFNodeBPKernel(
-                surrogate_cuda_codes=_cuda_codes(sg_cupy_id, dtype),
-                hard_reset=hard_reset,
-                detach_reset=detach_reset,
-                dtype=dtype,
-            )
-            _IF_BWD_KERNEL_CACHE[key] = kernel
-    return kernel
+    return IFNodeBPKernel(
+        surrogate_cuda_codes=_decode_cuda_code(sg_cupy_code),
+        hard_reset=hard_reset,
+        detach_reset=detach_reset,
+        dtype=dtype,
+    )
 
 
 @torch.library.custom_op("sj::cupy_single_step_if_forward", mutates_args=())
@@ -85,10 +65,11 @@ def cupy_single_step_if_forward(
     v_th: float,
     v_reset: float,
     soft_reset: bool,
-    forward_kernel_id: int,
-    backward_kernel_id: int,
+    detach_reset: bool,
+    sg_cupy_code: str,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    forward_kernel = resolve_python_object(forward_kernel_id)
+    dtype = "float" if x.dtype == torch.float32 else "half2"
+    forward_kernel = _get_if_forward_kernel(hard_reset=not soft_reset, dtype=dtype)
     py_dict = {
         "x": x,
         "v": v,
@@ -104,16 +85,22 @@ def cupy_single_step_if_forward(
 
 @torch.library.register_fake("sj::cupy_single_step_if_forward")
 def _cupy_single_step_if_forward_fake(
-    x, v, v_th, v_reset, soft_reset, forward_kernel_id, backward_kernel_id
+    x, v, v_th, v_reset, soft_reset, detach_reset, sg_cupy_code
 ):
     return x.new_empty(x.shape), x.new_empty(x.shape), x.new_empty(x.shape)
 
 
 def _setup_single_step_if_context(ctx, inputs, output):
-    x, _, v_th, v_reset, soft_reset, _, backward_kernel_id = inputs
+    x, _, v_th, v_reset, soft_reset, detach_reset, sg_cupy_code = inputs
     h = output[2]
     ctx.save_for_backward(h)
-    ctx.backward_kernel = resolve_python_object(backward_kernel_id)
+    dtype = "float" if x.dtype == torch.float32 else "half2"
+    ctx.backward_kernel = _get_if_backward_kernel(
+        sg_cupy_code=sg_cupy_code,
+        hard_reset=not soft_reset,
+        detach_reset=detach_reset,
+        dtype=dtype,
+    )
     ctx.blocks = cal_blocks(
         (x.numel() + 1) // 2 if x.dtype == torch.float16 else x.numel()
     )
@@ -169,23 +156,14 @@ def if_step(
     if not x.is_cuda:
         raise RuntimeError("if_step requires a CUDA tensor.")
     dtype = "float" if x.dtype == torch.float32 else "half2"
-    hard_reset = v_reset is not None
-    forward_kernel = _get_if_forward_kernel(hard_reset=hard_reset, dtype=dtype)
-    backward_kernel = _get_if_backward_kernel(
-        sg_cupy_id=_resolve_cuda_code_id(surrogate_function, dtype),
-        hard_reset=hard_reset,
-        detach_reset=detach_reset,
-        dtype=dtype,
-    )
+    sg_cupy_code = _surrogate_cuda_code(surrogate_function, dtype)
     need_unpad = x.dtype == torch.float16 and x.numel() % 2 != 0
     if need_unpad:
         x = F.pad(x, (0, 1))
         v = F.pad(v, (0, 1))
-    fk = register_python_object(forward_kernel)
-    bk = register_python_object(backward_kernel)
     vr = float("nan") if v_reset is None else float(v_reset)
     spike, v_next, _ = cupy_single_step_if_forward(
-        x, v, v_th, vr, v_reset is None, fk, bk
+        x, v, v_th, vr, v_reset is None, detach_reset, sg_cupy_code
     )
     if need_unpad:
         spike = spike[..., :-1]

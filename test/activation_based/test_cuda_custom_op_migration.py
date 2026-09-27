@@ -162,6 +162,22 @@ def test_raw_kernel_cache_reuses_compile_identity(monkeypatch):
     assert len(calls) == 3
 
 
+def test_cupy_surrogate_source_argument_is_single_line_and_reversible():
+    from spikingjelly.activation_based.cuda_kernel.neuron_kernel.surrogate_code import (
+        _cuda_codes_callable,
+        _surrogate_cuda_code,
+    )
+
+    sg = surrogate.Sigmoid(alpha=4.0)
+    code_arg = _surrogate_cuda_code(sg, "float")
+    assert "\n" not in code_arg
+    assert _cuda_codes_callable(code_arg)() == sg.cuda_codes(
+        y="const float grad_s_to_h", x="over_th", dtype="float"
+    )
+    with pytest.raises(ValueError, match="must decode to a string"):
+        _cuda_codes_callable("42")
+
+
 def _require_cuda():
     if not torch.cuda.is_available():
         pytest.skip("CUDA is required.")

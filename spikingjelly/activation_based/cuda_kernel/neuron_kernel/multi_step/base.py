@@ -17,6 +17,17 @@ from ...auto_cuda import base as auto_cuda_base, cfunction
 from ..cuda_code import _neuronal_fire, _neuronal_hard_reset, _neuronal_soft_reset
 
 
+def _aligned_v_v_seq(x_seq: torch.Tensor) -> torch.Tensor:
+    step_numel = math.prod(x_seq.shape[1:])
+    # Inductor requires custom-op output views to start on a 16-byte boundary.
+    alignment_items = 16 // x_seq.element_size()
+    prefix_items = -step_numel % alignment_items
+    if prefix_items == 0:
+        return x_seq.new_empty((x_seq.shape[0] + 1, *x_seq.shape[1:]))
+    data = x_seq.new_empty((x_seq.shape[0] + 1) * step_numel + prefix_items)
+    return data[prefix_items:].view(x_seq.shape[0] + 1, *x_seq.shape[1:])
+
+
 def _dtype_to_cupy_kernel_dtype(dtype: torch.dtype) -> str:
     if dtype == torch.float32:
         return "float"

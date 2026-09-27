@@ -118,6 +118,7 @@ class FlexSN(base.MemoryModule):
         :raises TypeError: ``core`` 捕获 Tensor/模块，或 static input 不是 Tensor。
         :raises ValueError: 参数或 backend/step-mode 组合无效。
         :raises RuntimeError: ``core`` 无法使用构造期单位张量执行。
+        :raises ImportError: 选择 Triton 后端但未安装 Triton。
 
         ----
 
@@ -151,6 +152,7 @@ class FlexSN(base.MemoryModule):
         :raises TypeError: If ``core`` captures tensors/modules or a static input is not a Tensor.
         :raises ValueError: If an argument or backend/step-mode combination is invalid.
         :raises RuntimeError: If ``core`` cannot run with the construction-time unit tensors.
+        :raises ImportError: If the Triton backend is selected without Triton installed.
         """
         super().__init__()
         if not callable(core):
@@ -236,6 +238,8 @@ class FlexSN(base.MemoryModule):
             raise NotImplementedError(f"Unsupported FlexSN backend: {value!r}.")
         if value != "torch" and self.step_mode != "m":
             raise RuntimeError(f"FlexSN backend={value!r} requires step_mode='m'.")
+        if value == "triton":
+            base.check_backend_library(value)
         self._backend = value
         if hasattr(self, "state_seqs"):
             self.state_seqs = None

@@ -17,6 +17,10 @@ Module: `spikingjelly.activation_based.neuron`.
 
 - Added the torch-only `RAFNode` resonate-and-fire neuron with fixed oscillator
   parameters, real-valued states, and single-step and multi-step execution.
+- Added `functional.clif_step()` for an explicit two-state ComplementaryLIF
+  transition; `ComplementaryLIFNode` now uses it without changing its outputs.
+- `STBIFNode` now accepts `backend="torch"` or `backend="triton"` in its
+  constructor for both step modes.
 
 #### Spiking Model Families
 
@@ -39,6 +43,43 @@ Module: `spikingjelly.activation_based.layer`.
   previous full temporal-channel-spatial behavior.
 
 ### Improvements
+
+#### Triton Operator Registration
+
+Module: `spikingjelly.activation_based.triton_kernel`.
+
+- Select the `triton_op` or CUDA `custom_op` registration mode once at import,
+  and use the matching Triton kernel wrapper throughout the process.
+- Surface operator-registration failures instead of treating them as optional
+  Triton import failures.
+- Direct CUDA calls to registered Triton operators now report missing or broken
+  Triton initialization as an `ImportError` with the original cause.
+- FlexSN now checks the Triton dependency when its Triton backend is selected.
+- Restore FlexSN Triton operator registration on PyTorch 2.6 without changing
+  its operator schemas.
+- Remove `SJ_USE_WRAP_TRITON`. Set `SJ_USE_TRITON_OP=0` before import to retain
+  the opaque CUDA fallback formerly selected by disabling wrapping.
+- Allow the Triton 3.2.0 version required by PyTorch 2.6.0 in the optional
+  Triton dependency.
+
+#### CuPy Neuron Kernel Cache
+
+Module: `spikingjelly.activation_based.cuda_kernel.neuron_kernel`.
+
+- Bounded the IF/LIF/PLIF kernel builders and removed the process-wide surrogate
+  source registry. Single-step IF/LIF compiled graphs no longer depend on
+  temporary Python kernel-object IDs. Previously saved graphs containing the old
+  internal `sj::cupy_*` operator schemas must be recompiled or re-exported.
+
+#### FlexSN Code Generation
+
+Module: `spikingjelly.activation_based.triton_kernel.torch2triton`.
+
+- Generate Triton JIT functions in memory without writing new SpikingJelly
+  codegen `.py` files or retaining generated modules in `sys.modules`.
+  `compile_triton_code_str()` keeps its call and namespace behavior but no longer
+  promises persistent source files or cross-process generated-module reuse.
+  Existing source files are left untouched.
 
 #### Contributor Guidance
 
@@ -141,6 +182,11 @@ Module: `spikingjelly.activation_based.precision`.
 
 Module: `spikingjelly.activation_based.neuron`.
 
+- Restored `MaskedPSN`'s single-step queue update before an overflow error when
+  more than `T` steps are called; the explicit-state function leaves its input
+  queue unchanged on error.
+- Fixed CuPy IF/LIF/PLIF multi-step `torch.compile` on PyTorch 2.11 when a
+  time-step voltage view would otherwise start at a non-16-byte-aligned offset.
 - Fixed `store_v_seq` being ignored when a `BaseNode` subclass (`LIFNode`,
   `IFNode` and their relatives, plus `lava_exchange.CubaLIFNode`) is stepped
   in single-step mode, so these neurons wrapped in `LinearRecurrentContainer`,

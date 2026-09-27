@@ -448,9 +448,9 @@ _SUBPROCESS_SCRIPT = textwrap.dedent(
     y = node(x)
     y.sum().backward()
 
-    v = os.getenv("SJ_USE_TRITON_OP")
-    env_enabled = True if v is None else v.strip().lower() not in ("0", "false")
-    use_triton_op = bool(env_enabled and hasattr(torch.library, "triton_op"))
+    from spikingjelly.activation_based.triton_kernel import triton_utils
+
+    use_triton_op = triton_utils._USE_TRITON_OP
 
     payload = {
         "use_triton_op": use_triton_op,
@@ -463,6 +463,184 @@ _SUBPROCESS_SCRIPT = textwrap.dedent(
     print("JSON_RESULT=" + json.dumps(payload))
     """
 )
+
+
+@pytest.mark.parametrize("startup_mode", ["0", "1"])
+def test_registration_mode_is_fixed_at_import(startup_mode):
+    env = os.environ.copy()
+    env["SJ_USE_TRITON_OP"] = startup_mode
+    env["SJ_USE_WRAP_TRITON"] = "0"
+    script = textwrap.dedent(
+        """
+        import json
+        import os
+        import torch
+        from spikingjelly.activation_based.triton_kernel import triton_utils
+        import spikingjelly.activation_based.neuron
+
+        assert hasattr(torch.ops.sj, "multistep_activation_aware_if_inference")
+
+        mode = triton_utils._USE_TRITON_OP
+        os.environ["SJ_USE_TRITON_OP"] = "0" if mode else "1"
+        torch.library.custom_op = lambda *args, **kwargs: lambda f: "custom"
+        triton_utils.triton_op = lambda *args, **kwargs: lambda f: "triton"
+        kernel = object()
+        if not mode:
+            assert triton_utils.wrap_triton(kernel) is kernel
+        print(json.dumps({
+            "mode": mode,
+            "registered": triton_utils.register_op("sj::probe")(lambda: None),
+            "wrapped": triton_utils.wrap_triton is getattr(torch.library, "wrap_triton", None),
+        }))
+        """
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+    result = json.loads(completed.stdout.splitlines()[-1])
+    assert result["mode"] is (result["registered"] == "triton")
+    assert result["wrapped"] is result["mode"]
+    if startup_mode == "0":
+        assert result["mode"] is False
+
+
+def test_import_without_triton_has_no_discovery_warnings():
+    if _triton_available():
+        pytest.skip("This check needs an environment without Triton.")
+    script = textwrap.dedent(
+        """
+        import spikingjelly.activation_based.neuron
+        import torch
+        try:
+            torch.ops.sj.multistep_if_inference(
+                torch.zeros(1, 2), torch.zeros(2), 1.0, 0.0, False, False
+            )
+        except NotImplementedError as error:
+            assert "CPU" in str(error)
+        else:
+            raise AssertionError("CUDA-only fallback accepted a CPU input")
+        from spikingjelly.activation_based.triton_kernel import triton_utils
+        torch.library.custom_op = lambda *args, **kwargs: lambda f: f
+        @triton_utils.register_op("sj::probe")
+        def probe(x: torch.Tensor) -> torch.Tensor:
+            raise AssertionError("Original implementation reached")
+        try:
+            probe(torch.zeros(1))
+        except ImportError as error:
+            assert "Triton is not installed" in str(error)
+            assert isinstance(error.__cause__, (ImportError, OSError))
+        else:
+            raise AssertionError("Missing Triton did not raise")
+        """
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert "find_triton_kernels" not in completed.stderr
+
+
+@pytest.mark.parametrize(
+    ("failure", "error_type"),
+    [
+        ("language_import", "ModuleNotFoundError"),
+        ("language_symbol", "AttributeError"),
+        ("language_runtime", "RuntimeError"),
+    ],
+)
+def test_partial_triton_initialization_stays_optional(failure, error_type):
+    env = os.environ.copy()
+    env["SJ_BROKEN_TRITON"] = failure
+    env["SJ_ERROR_TYPE"] = error_type
+    script = textwrap.dedent(
+        """
+        import os
+        import sys
+        import types
+        import torch
+
+        triton = types.ModuleType("triton")
+        triton.__path__ = []
+        triton.jit = lambda f: f
+        triton.autotune = lambda **kwargs: lambda f: f
+        triton.Config = lambda *args, **kwargs: object()
+        sys.modules["triton"] = triton
+        if os.environ["SJ_BROKEN_TRITON"] != "language_import":
+            language = types.ModuleType("triton.language")
+            language.constexpr = object()
+            if os.environ["SJ_BROKEN_TRITON"] == "language_runtime":
+                def missing_symbol(name):
+                    if name == "int1":
+                        raise RuntimeError("Triton initialization sentinel")
+                    raise AttributeError(name)
+                language.__getattr__ = missing_symbol
+            sys.modules["triton.language"] = language
+
+        import spikingjelly.activation_based.neuron
+        from spikingjelly.activation_based.triton_kernel import triton_utils
+
+        torch.library.custom_op = lambda *args, **kwargs: lambda f: f
+        @triton_utils.register_op("sj::probe")
+        def probe(x: torch.Tensor) -> torch.Tensor:
+            raise AssertionError("Dummy implementation reached")
+        try:
+            probe(torch.zeros(1))
+        except ImportError as error:
+            assert "failed to initialize" in str(error)
+            assert type(error.__cause__).__name__ == os.environ["SJ_ERROR_TYPE"]
+        else:
+            raise AssertionError("Broken Triton did not fail clearly")
+        """
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_cuda_registered_op_reports_missing_triton():
+    if _triton_available():
+        pytest.skip("This check needs an environment without Triton.")
+    x = torch.zeros(2, 3, device="cuda")
+    v = torch.zeros(3, device="cuda")
+    with pytest.raises(ImportError, match="Triton is not installed"):
+        torch.ops.sj.multistep_if_inference(x, v, 1.0, 0.0, False, False)
+
+
+def test_registration_failure_is_not_hidden_by_optional_import():
+    env = os.environ.copy()
+    env["SJ_USE_TRITON_OP"] = "0"
+    script = textwrap.dedent(
+        """
+        import torch
+        def fail_registration(*args, **kwargs):
+            raise RuntimeError("registration sentinel")
+        torch.library.custom_op = fail_registration
+        import spikingjelly.activation_based.neuron
+        """
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+    assert completed.returncode != 0
+    assert "registration sentinel" in completed.stderr
 
 
 def _run_subprocess_path(kind: str, force_custom_op: bool) -> dict:

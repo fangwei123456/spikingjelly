@@ -196,6 +196,39 @@ def test_complementary_lif_single_multi_step_and_functional_state():
     torch.testing.assert_close(multi_step.m, functional_states[1])
 
 
+@pytest.mark.parametrize("training", [True, False])
+def test_clif_step_matches_module_and_gradients(training):
+    x_module = torch.tensor([0.4, 1.1], requires_grad=True)
+    v_module = torch.tensor([0.2, 0.6], requires_grad=True)
+    m_module = torch.tensor([0.1, 0.3], requires_grad=True)
+    module = neuron.ComplementaryLIFNode(v_threshold=0.8).train(training)
+    module.v = v_module
+    module.m = m_module
+
+    spike_module = module(x_module)
+    (spike_module + module.v + module.m).sum().backward()
+
+    x = x_module.detach().clone().requires_grad_()
+    v = v_module.detach().clone().requires_grad_()
+    m = m_module.detach().clone().requires_grad_()
+    spike_function = (
+        module.surrogate_function
+        if training or not module.surrogate_function.spiking
+        else surrogate.heaviside
+    )
+    spike, v_next, m_next = functional.clif_step(
+        x, v, m, module.tau, module.v_threshold, spike_function
+    )
+    (spike + v_next + m_next).sum().backward()
+
+    torch.testing.assert_close(spike, spike_module)
+    torch.testing.assert_close(v_next, module.v)
+    torch.testing.assert_close(m_next, module.m)
+    torch.testing.assert_close(x.grad, x_module.grad)
+    torch.testing.assert_close(v.grad, v_module.grad)
+    torch.testing.assert_close(m.grad, m_module.grad)
+
+
 def test_complementary_lif_state_storage_reset_and_backend_contract():
     module = neuron.ComplementaryLIFNode(step_mode="m", store_state_seqs=True)
     x_seq = torch.randn(3, 2, 4)
@@ -946,6 +979,26 @@ def test_masked_psn_step_matches_module_sequence():
     _assert_close(actual, multi_step)
     assert time_step == x_seq.shape[0]
     assert len(queue) == module.k
+
+
+def test_masked_psn_overflow_keeps_queue_side_effect():
+    module = neuron.MaskedPSN(k=2, T=2, lambda_init=1.0)
+    x0, x1, x2 = torch.randn(3, 2, 4)
+    module(x0)
+    module(x1)
+
+    with pytest.raises(OverflowError):
+        module(x2)
+
+    assert module.time_step == 2
+    torch.testing.assert_close(module.queue[0], x1.flatten())
+    torch.testing.assert_close(module.queue[1], x2.flatten())
+
+    explicit_queue = [x0.flatten(), x1.flatten()]
+    with pytest.raises(OverflowError):
+        module.single_step_functional_forward((x2,), (2, explicit_queue))
+    torch.testing.assert_close(explicit_queue[0], x0.flatten())
+    torch.testing.assert_close(explicit_queue[1], x1.flatten())
 
 
 def test_gated_lif_step_matches_module_sequence():
