@@ -133,7 +133,6 @@ class MASNN(nn.Module):
         fc_hidden: int = 256,
         reduction_t: int = 5,
         reduction_c: int = 8,
-        kernel_size: int = 3,
         backend: str = "torch",
         spiking_neuron: callable = None,
         **kwargs,
@@ -184,8 +183,6 @@ class MASNN(nn.Module):
         :type reduction_t: int
         :param reduction_c: 通道注意力压缩比，必须 ``<=`` 各卷积块通道数
         :type reduction_c: int
-        :param kernel_size: 空间注意力卷积核大小，必须为 ``3`` 或 ``7``
-        :type kernel_size: int
         :param backend: 脉冲神经元使用的后端，对默认神经元和 ``spiking_neuron``
             同时生效。默认的 :class:`Rect <spikingjelly.activation_based.surrogate.Rect>`
             替代梯度只有 ``torch`` 后端支持；使用 ``cupy`` 或 ``triton`` 时需通过
@@ -252,8 +249,6 @@ class MASNN(nn.Module):
         :param reduction_c: channel attention reduction ratio; must be ``<=`` the
             channel count of every convolution block
         :type reduction_c: int
-        :param kernel_size: spatial attention convolution kernel size; ``3`` or ``7``
-        :type kernel_size: int
         :param backend: backend of the spiking neurons, applied both to the
             default neuron and to ``spiking_neuron``. The default
             :class:`Rect <spikingjelly.activation_based.surrogate.Rect>`
@@ -293,12 +288,10 @@ class MASNN(nn.Module):
                 C=channel_count,
                 reduction_t=reduction_t,
                 reduction_c=reduction_c,
-                kernel_size=kernel_size,
             )
 
         blocks = []
         current_channels = in_channels
-        stage_sizes = [input_size]
         for out_channels, pool in zip(channels, pools):
             blocks.append(
                 _MaConvBlock(
@@ -306,10 +299,9 @@ class MASNN(nn.Module):
                 )
             )
             current_channels = out_channels
-            stage_sizes.append((stage_sizes[-1][0] // pool, stage_sizes[-1][1] // pool))
         self.conv_blocks = nn.Sequential(*blocks)
 
-        feature_size = channels[-1] * stage_sizes[-1][0] * stage_sizes[-1][1]
+        feature_size = channels[-1] * height * width
         self.fc_blocks = nn.Sequential(
             _MaFcBlock(feature_size, fc_hidden, T, reduction_t, cell_factory),
             _MaFcBlock(fc_hidden, num_classes, T, reduction_t, cell_factory),
@@ -452,10 +444,6 @@ def masnn_dvs128_gesture(
 
 
 class _AttMSBlock(_MSBlock):
-    @classmethod
-    def _make_lif(cls, backend: str) -> neuron.LIFNode:
-        return _att_ms_lif(backend)
-
     def __init__(
         self,
         in_channels: int,
@@ -464,14 +452,13 @@ class _AttMSBlock(_MSBlock):
         backend: str,
         downsample: nn.Module | None,
         attention: nn.Module,
-        cell_factory=None,
+        cell_factory,
     ):
         super().__init__(in_channels, out_channels, stride, backend, downsample)
-        if cell_factory is not None:
-            # The parent builds its own default nodes; replace them so a
-            # user-supplied spiking_neuron reaches every block.
-            self.spike1 = cell_factory()
-            self.spike2 = cell_factory()
+        # The parent builds its own default nodes; replace them so both the
+        # author neuron and a user-supplied spiking_neuron reach every block.
+        self.spike1 = cell_factory()
+        self.spike2 = cell_factory()
         # Author init: the second BN weight starts at 0.2 * thresh = 0.1.
         nn.init.constant_(self.bn2.weight, 0.1)
         self.attention = attention
@@ -499,7 +486,6 @@ class AttMSResNet(MSResNet):
         stem_pool: bool = False,
         stage_channels: tuple[int, ...] | None = None,
         reduction_c: int = 8,
-        attention_kernel_size: int = 3,
         dropout: float = 0.2,
         backend: str = "torch",
         spiking_neuron: callable = None,
@@ -552,8 +538,6 @@ class AttMSResNet(MSResNet):
         :type stage_channels: tuple[int, ...] | None
         :param reduction_c: 通道注意力压缩比，必须 ``<=`` 各 stage 的通道数
         :type reduction_c: int
-        :param attention_kernel_size: 空间注意力卷积核大小，必须为 ``3`` 或 ``7``
-        :type attention_kernel_size: int
         :param dropout: 分类头 Dropout 概率
         :type dropout: float
         :param backend: 脉冲神经元使用的后端，对默认神经元和 ``spiking_neuron``
@@ -621,9 +605,6 @@ class AttMSResNet(MSResNet):
         :param reduction_c: channel attention reduction ratio; must be ``<=`` the
             channel count of every stage
         :type reduction_c: int
-        :param attention_kernel_size: spatial attention convolution kernel size;
-            ``3`` or ``7``
-        :type attention_kernel_size: int
         :param dropout: dropout probability of the classification head
         :type dropout: float
         :param backend: backend of the spiking neurons, applied both to the
@@ -648,12 +629,11 @@ class AttMSResNet(MSResNet):
         `Attention Spiking Neural Networks
         <https://ieeexplore.ieee.org/document/10032591>`_
         """
-        self._reduction_c = reduction_c
-        self._attention_kernel_size = attention_kernel_size
-        self._cell_factory = (
-            None
-            if spiking_neuron is None and not kwargs
-            else _neuron_factory(spiking_neuron, _att_ms_lif, backend, kwargs)
+        self._cell_factory = _neuron_factory(
+            spiking_neuron, _att_ms_lif, backend, kwargs
+        )
+        self._attention_factory = lambda channels: layer.MultiDimensionalAttention(
+            T=T, C=channels, reduction_c=reduction_c, use_temporal=False
         )
         super().__init__(
             T=T,
@@ -667,21 +647,11 @@ class AttMSResNet(MSResNet):
             stage_channels=stage_channels,
             backend=backend,
         )
-        if self._cell_factory is not None:
-            self.head_lif = self._cell_factory()
+        self.head_lif = self._cell_factory()
         self.dropout = nn.Dropout(dropout)
         final_channels = self.head.in_features
         self.head = nn.Linear(final_channels, num_classes)
         functional.set_step_mode(self, "m")
-
-    def _make_attention(self, channels: int) -> layer.MultiDimensionalAttention:
-        return layer.MultiDimensionalAttention(
-            T=self.T,
-            C=channels,
-            reduction_c=self._reduction_c,
-            kernel_size=self._attention_kernel_size,
-            use_temporal=False,
-        )
 
     def _make_layer(self, out_channels: int, blocks: int, stride: int) -> nn.Sequential:
         downsample = None
@@ -705,7 +675,7 @@ class AttMSResNet(MSResNet):
                 stride,
                 self.backend,
                 downsample,
-                self._make_attention(out_channels),
+                self._attention_factory(out_channels),
                 self._cell_factory,
             )
         ]
@@ -717,7 +687,7 @@ class AttMSResNet(MSResNet):
                 1,
                 self.backend,
                 None,
-                self._make_attention(out_channels),
+                self._attention_factory(out_channels),
                 self._cell_factory,
             )
             for _ in range(1, blocks)

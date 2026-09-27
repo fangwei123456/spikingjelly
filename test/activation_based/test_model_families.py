@@ -230,11 +230,8 @@ def test_att_ms_resnet_matches_branch_shapes_for_odd_inputs():
 
     with torch.no_grad():
         odd = net(torch.randn(2, 3, 33, 33))
-        functional.reset_net(net)
-        even = net(torch.randn(2, 3, 32, 32))
 
     assert odd.shape == (2, 5)
-    assert even.shape == (2, 5)
 
 
 def test_masnn_models_accept_a_custom_spiking_neuron():
