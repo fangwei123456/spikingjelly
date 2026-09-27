@@ -19,6 +19,7 @@ from . import dummy
 
 triton_op = getattr(torch.library, "triton_op", None)
 
+_TRITON_IMPORT_ERROR = None
 try:
     import triton
     import triton.language as tl
@@ -62,7 +63,8 @@ try:
     if hasattr(torch, "float8_e5m2fnuz") and hasattr(tl, "float8e5b16"):
         type_dict[torch.float8_e5m2fnuz] = tl.float8e5b16
         type_str_dict[torch.float8_e5m2fnuz] = "tl.float8e5b16"
-except (ImportError, OSError) as e:
+except (ImportError, OSError, AttributeError, RuntimeError) as e:
+    _TRITON_IMPORT_ERROR = e
     logger.info("Optional Triton dependency unavailable: {}", e)
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
@@ -375,7 +377,7 @@ def convert_and_store(pointer, value, boundary_check):
 
 
 _USE_TRITON_OP = (
-    bool(triton)
+    _TRITON_IMPORT_ERROR is None
     and triton_op is not None
     and os.getenv("SJ_USE_TRITON_OP", "1").strip().lower()
     not in ("0", "false", "off", "no")
@@ -388,16 +390,15 @@ def register_op(opname: str, mutates_args=()):
     custom_op = torch.library.custom_op(
         opname, mutates_args=mutates_args, device_types="cuda"
     )
-    if triton:
+    if _TRITON_IMPORT_ERROR is None:
         return custom_op
 
     def register_missing_triton(f):
         @functools.wraps(f)
         def unavailable(*args, **kwargs):
-            from ..base import check_backend_library
-
-            check_backend_library("triton")
-            return f(*args, **kwargs)
+            raise ImportError(
+                "Triton is not installed or failed to initialize."
+            ) from _TRITON_IMPORT_ERROR
 
         return custom_op(unavailable)
 

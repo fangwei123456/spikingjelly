@@ -548,6 +548,68 @@ def test_import_without_triton_has_no_discovery_warnings():
     assert "find_triton_kernels" not in completed.stderr
 
 
+@pytest.mark.parametrize(
+    ("failure", "error_type"),
+    [
+        ("language_import", "ModuleNotFoundError"),
+        ("language_symbol", "AttributeError"),
+        ("language_runtime", "RuntimeError"),
+    ],
+)
+def test_partial_triton_initialization_stays_optional(failure, error_type):
+    env = os.environ.copy()
+    env["SJ_BROKEN_TRITON"] = failure
+    env["SJ_ERROR_TYPE"] = error_type
+    script = textwrap.dedent(
+        """
+        import os
+        import sys
+        import types
+        import torch
+
+        triton = types.ModuleType("triton")
+        triton.__path__ = []
+        triton.jit = lambda f: f
+        triton.autotune = lambda **kwargs: lambda f: f
+        triton.Config = lambda *args, **kwargs: object()
+        sys.modules["triton"] = triton
+        if os.environ["SJ_BROKEN_TRITON"] != "language_import":
+            language = types.ModuleType("triton.language")
+            language.constexpr = object()
+            if os.environ["SJ_BROKEN_TRITON"] == "language_runtime":
+                def missing_symbol(name):
+                    if name == "int1":
+                        raise RuntimeError("Triton initialization sentinel")
+                    raise AttributeError(name)
+                language.__getattr__ = missing_symbol
+            sys.modules["triton.language"] = language
+
+        import spikingjelly.activation_based.neuron
+        from spikingjelly.activation_based.triton_kernel import triton_utils
+
+        torch.library.custom_op = lambda *args, **kwargs: lambda f: f
+        @triton_utils.register_op("sj::probe")
+        def probe(x: torch.Tensor) -> torch.Tensor:
+            raise AssertionError("Dummy implementation reached")
+        try:
+            probe(torch.zeros(1))
+        except ImportError as error:
+            assert "failed to initialize" in str(error)
+            assert type(error.__cause__).__name__ == os.environ["SJ_ERROR_TYPE"]
+        else:
+            raise AssertionError("Broken Triton did not fail clearly")
+        """
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_cuda_registered_op_reports_missing_triton():
     if _triton_available():

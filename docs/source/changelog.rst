@@ -42,8 +42,8 @@ Module: ``spikingjelly.activation_based.triton_kernel``.
   and use the matching Triton kernel wrapper throughout the process.
 - Surface operator-registration failures instead of treating them as optional
   Triton import failures.
-- Direct CUDA calls to registered Triton operators now use the existing backend
-  dependency error when Triton is absent.
+- Direct CUDA calls to registered Triton operators now report missing or broken
+  Triton initialization as an ``ImportError`` with the original cause.
 - FlexSN now checks the Triton dependency when its Triton backend is selected.
 - Restore FlexSN Triton operator registration on PyTorch 2.6 without changing
   its operator schemas.
