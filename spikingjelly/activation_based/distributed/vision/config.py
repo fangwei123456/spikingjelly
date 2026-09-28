@@ -135,10 +135,13 @@ def _resolve_class(
         cls = next(
             (
                 value
-                for value in vars(package).values()
+                for name, value in vars(package).items()
                 if isinstance(value, type)
                 and issubclass(value, base)
-                and _class_path(value) == class_path
+                and (
+                    _class_path(value) == class_path
+                    or f"{package.__name__}.{name}" == class_path
+                )
             ),
             None,
         )

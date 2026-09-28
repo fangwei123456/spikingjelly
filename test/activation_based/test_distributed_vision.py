@@ -435,7 +435,7 @@ def test_neuron_config_rejects_structured_class_paths_without_importing(
 )
 def test_builtin_neuron_config_builders_restore_model_weights(model_config):
     neuron_config = vision.NeuronConfig(
-        class_path=f"{neuron.IFNode.__module__}.{neuron.IFNode.__qualname__}",
+        class_path="spikingjelly.activation_based.neuron.IFNode",
         kwargs={"v_threshold": 0.7},
         surrogate=f"{surrogate.Rect.__module__}.{surrogate.Rect.__qualname__}",
         surrogate_kwargs={"alpha": 1.5},
@@ -460,6 +460,20 @@ def test_builtin_neuron_config_builders_restore_model_weights(model_config):
     assert nodes and all(type(node) is neuron.IFNode for node in nodes)
     assert all(node.v_threshold == 0.7 for node in nodes)
     assert all(node.surrogate_function.alpha == 1.5 for node in nodes)
+
+
+def test_sew_custom_neuron_ignores_default_tau():
+    neuron_config = vision.NeuronConfig(
+        class_path=f"{neuron.IFNode.__module__}.{neuron.IFNode.__qualname__}"
+    )
+    with pytest.raises(ValueError, match="tau"):
+        SEWResNet34Config(tau=0.5)
+
+    config = SEWResNet34Config(
+        image_size=32, num_classes=2, tau=0.5, neuron_config=neuron_config
+    )
+    model = config.get_builder_cls()(config)._build_canonical_model()
+    assert type(model.sn1) is neuron.IFNode
 
 
 def test_vision_evaluation_config_and_artifact_round_trip(tmp_path):

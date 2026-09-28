@@ -1145,34 +1145,62 @@ class SpikformerConfig(ModelConfig):
 
 SpikformerConfig.__init__.__doc__ = r"""Configure Spikformer-S distributed execution.
 
-**API Language** - 中文 | English
+**API Language** - :ref:`中文 <model-spikformer-config-cn>` | :ref:`English <model-spikformer-config-en>`
 
-**中文：** 声明 Spikformer-S 的时间步、图像尺寸、输入通道、类别数和神经元后端。
-模型 recipe 按 attention head 分片 TP，并重新拼接本地 Q、K、V heads。
+----
 
-**English:** Declare time steps, image dimensions, input channels, classes, and
-the neuron backend for Spikformer-S. The model recipe shards TP by attention
-head and reconstructs local Q, K, and V heads.
+.. _model-spikformer-config-cn:
 
-:param time_steps: SNN 时间步。 / SNN time steps.
+* **中文**
+
+配置 Spikformer-S。模型按 attention head 切分 TP，并重建本地 Q、K、V heads。
+
+:param time_steps: 仿真时间步，默认 ``4``，须为正数。
 :type time_steps: int
-:param num_classes: 分类类别数。 / Number of classes.
+:param num_classes: 类别数，默认 ``1000``，须为正数。
 :type num_classes: int
-:param step_mode: 固定为 ``"m"``。 / Must be ``"m"``.
+:param step_mode: 固定为 ``"m"``，也是默认值。
 :type step_mode: str
-:param image_height: 输入图像高度。 / Input image height.
+:param image_height: 图像高度，默认 ``224``，须为正数。
 :type image_height: int
-:param image_width: 输入图像宽度。 / Input image width.
+:param image_width: 图像宽度，默认 ``224``，须为正数。
 :type image_width: int
-:param in_channels: 输入通道数。 / Input channels.
+:param in_channels: 输入通道数，默认 ``3``，须为正数。
 :type in_channels: int
-:param neuron_backend: 神经元 backend。 / Neuron backend.
+:param neuron_backend: 神经元后端，默认 ``"torch"``。
 :type neuron_backend: str
-:param neuron_config: 可序列化的自定义神经元；``None`` 保留论文默认配置。 /
-    Serializable custom neuron; ``None`` keeps the paper defaults.
+:param neuron_config: 可序列化的自定义神经元；默认 ``None`` 保留论文参数。
 :type neuron_config: Optional[NeuronConfig]
-:raises ValueError: 图像尺寸、通道或 step mode 无效。 / If image dimensions,
-    channels, or the step mode are invalid.
+:raises ValueError: 时间步、类别数、图像尺寸或通道数非正数，或步进模式不是 ``"m"``。
+
+----
+
+.. _model-spikformer-config-en:
+
+* **English**
+
+Configure Spikformer-S. Tensor parallelism shards attention heads and
+reconstructs local Q, K, and V heads.
+
+:param time_steps: Simulation steps, positive; default ``4``.
+:type time_steps: int
+:param num_classes: Number of classes, positive; default ``1000``.
+:type num_classes: int
+:param step_mode: Must be ``"m"`` (the default).
+:type step_mode: str
+:param image_height: Image height, positive; default ``224``.
+:type image_height: int
+:param image_width: Image width, positive; default ``224``.
+:type image_width: int
+:param in_channels: Input channels, positive; default ``3``.
+:type in_channels: int
+:param neuron_backend: Neuron backend; default ``"torch"``.
+:type neuron_backend: str
+:param neuron_config: Serializable custom neuron; ``None`` (default) keeps
+    the paper parameters.
+:type neuron_config: Optional[NeuronConfig]
+:raises ValueError: If steps, classes, image dimensions, or channels are not
+    positive, or the step mode is not ``"m"``.
 """
 
 
@@ -1193,28 +1221,52 @@ class SpikformerCIFAR10Config(ModelConfig):
 
 SpikformerCIFAR10Config.__init__.__doc__ = r"""Configure CIFAR-10 Spikformer.
 
-**API Language** - 中文 | English
+**API Language** - :ref:`中文 <model-spikformer-cifar10-config-cn>` | :ref:`English <model-spikformer-cifar10-config-en>`
 
-**中文：** 声明固定 32×32 输入、4×4 patch、384 维、12 heads、4 blocks 的
-CIFAR-10 Spikformer。TP 按 attention head 分片；PP 支持 1 或 2 stages。
+----
 
-**English:** Declare the CIFAR-10 Spikformer with fixed 32×32 input, 4×4 patches,
-384 channels, 12 heads, and 4 blocks. TP shards attention heads; PP supports one
-or two stages.
+.. _model-spikformer-cifar10-config-cn:
 
-:param time_steps: SNN 时间步。 / SNN time steps.
+* **中文**
+
+配置固定 32×32 输入、4×4 patch、384 维、12 heads 和 4 blocks 的
+CIFAR-10 Spikformer。TP 按 attention head 分片；PP 支持一或两个 stage。
+
+:param time_steps: 仿真时间步，默认 ``4``，须为正数。
 :type time_steps: int
-:param num_classes: 分类类别数。 / Number of classes.
+:param num_classes: 类别数，默认 ``10``，须为正数。
 :type num_classes: int
-:param step_mode: 固定为 ``"m"``。 / Must be ``"m"``.
+:param step_mode: 固定为 ``"m"``，也是默认值。
 :type step_mode: str
-:param neuron_backend: 神经元 backend。 / Neuron backend.
+:param neuron_backend: 神经元后端，默认 ``"torch"``。
 :type neuron_backend: str
-:param neuron_config: 可序列化的自定义神经元；``None`` 保留论文默认配置。 /
-    Serializable custom neuron; ``None`` keeps the paper defaults.
+:param neuron_config: 可序列化的自定义神经元；默认 ``None`` 保留论文参数。
 :type neuron_config: Optional[NeuronConfig]
-:raises ValueError: 时间步、类别数或 step mode 无效。 / If time steps, class count,
-    or the step mode are invalid.
+:raises ValueError: 时间步或类别数非正数，或步进模式不是 ``"m"``。
+
+----
+
+.. _model-spikformer-cifar10-config-en:
+
+* **English**
+
+Configure the CIFAR-10 Spikformer with fixed 32×32 input, 4×4 patches, 384
+channels, 12 heads, and 4 blocks. Tensor parallelism shards attention heads;
+pipeline parallelism supports one or two stages.
+
+:param time_steps: Simulation steps, positive; default ``4``.
+:type time_steps: int
+:param num_classes: Number of classes, positive; default ``10``.
+:type num_classes: int
+:param step_mode: Must be ``"m"`` (the default).
+:type step_mode: str
+:param neuron_backend: Neuron backend; default ``"torch"``.
+:type neuron_backend: str
+:param neuron_config: Serializable custom neuron; ``None`` (default) keeps
+    the paper parameters.
+:type neuron_config: Optional[NeuronConfig]
+:raises ValueError: If steps or classes are not positive, or the step mode is
+    not ``"m"``.
 """
 
 
