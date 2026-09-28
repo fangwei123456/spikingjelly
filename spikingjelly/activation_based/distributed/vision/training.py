@@ -592,7 +592,11 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
         tp_group = tp_mesh.get_group() if config.tensor_parallel_size > 1 else None
         if config.checkpoint_interval:
             for checkpoint_rank in range(model_parallel_size):
-                group = dist.new_group(ranks=[checkpoint_rank], backend="gloo")
+                group = dist.new_group(
+                    ranks=[checkpoint_rank],
+                    backend="gloo",
+                    use_local_synchronization=True,
+                )
                 if rank == checkpoint_rank:
                     checkpoint_group = group
                     cleanup.callback(dist.destroy_process_group, group)

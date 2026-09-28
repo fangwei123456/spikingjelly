@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import abc
 import importlib
+import math
+from copy import deepcopy
 from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any, ClassVar, Literal, Mapping, Optional, Sequence
@@ -11,10 +13,173 @@ import torch.distributed as dist
 from torch.distributed import ProcessGroup
 import torch.nn as nn
 
+from ... import neuron, surrogate
 from ...precision.config import PrecisionConfig
 
 
+_NEURON_REGISTRY: dict[str, type[neuron.BaseNode]] = {}
+_SURROGATE_REGISTRY: dict[str, type[surrogate.SurrogateFunctionBase]] = {}
+
+
+def _class_path(cls: type) -> str:
+    return f"{cls.__module__}.{cls.__qualname__}"
+
+
+def _validate_json_value(value: Any, name: str) -> None:
+    if value is None or isinstance(value, (str, bool, int)):
+        return
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(f"{name} must contain only finite numbers.")
+        return
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _validate_json_value(item, f"{name}[{index}]")
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise TypeError(f"{name} keys must be strings.")
+            _validate_json_value(item, f"{name}.{key}")
+        return
+    raise TypeError(f"{name} must contain only JSON-native values.")
+
+
+def _register_class(cls: type, base: type, registry: dict[str, type]) -> None:
+    if not isinstance(cls, type) or not issubclass(cls, base):
+        raise TypeError(f"cls must inherit {base.__name__}.")
+    registry[_class_path(cls)] = cls
+
+
+def register_neuron_class(cls: type[neuron.BaseNode]) -> None:
+    r"""Register an external neuron class for serialized vision configs.
+
+    **API Language** - :ref:`中文 <vision-register_neuron_class-cn>` | :ref:`English <vision-register_neuron_class-en>`
+
+    ----
+
+    .. _vision-register_neuron_class-cn:
+
+    * **中文**
+
+    将调用方已导入的 :class:`BaseNode` 子类注册到当前进程。配置文件只引用该类的完整路径，
+    解析配置不会根据文件内容导入模块。分布式训练、artifact 导出和推理的每个进程都须先注册。
+
+    :param cls: 已导入的神经元类。
+    :type cls: type[neuron.BaseNode]
+    :raises TypeError: ``cls`` 不是 :class:`BaseNode` 子类。
+
+    ----
+
+    .. _vision-register_neuron_class-en:
+
+    * **English**
+
+    Register a caller-imported :class:`BaseNode` subclass in the current process.
+    Serialized configs refer to its full path; decoding a config never imports a
+    module based on file contents. Register the class in every training, artifact
+    export, and inference process.
+
+    :param cls: An already imported neuron class.
+    :type cls: type[neuron.BaseNode]
+    :raises TypeError: If ``cls`` is not a :class:`BaseNode` subclass.
+    """
+    _register_class(cls, neuron.BaseNode, _NEURON_REGISTRY)
+
+
+def register_surrogate_class(cls: type[surrogate.SurrogateFunctionBase]) -> None:
+    r"""Register an external surrogate class for serialized vision configs.
+
+    **API Language** - :ref:`中文 <vision-register_surrogate_class-cn>` | :ref:`English <vision-register_surrogate_class-en>`
+
+    ----
+
+    .. _vision-register_surrogate_class-cn:
+
+    * **中文**
+
+    将调用方已导入的替代梯度类注册到当前进程。配置文件只引用该类的完整路径，解析配置不会
+    根据文件内容导入模块；使用它的每个训练、导出和推理进程都须先注册。
+
+    :param cls: 已导入的替代梯度类。
+    :type cls: type[surrogate.SurrogateFunctionBase]
+    :raises TypeError: ``cls`` 不是 :class:`SurrogateFunctionBase` 子类。
+
+    ----
+
+    .. _vision-register_surrogate_class-en:
+
+    * **English**
+
+    Register a caller-imported surrogate class in the current process. Serialized
+    configs refer to its full path; decoding a config never imports a module based
+    on file contents. Register it in every training, artifact export, and inference
+    process that uses it.
+
+    :param cls: An already imported surrogate class.
+    :type cls: type[surrogate.SurrogateFunctionBase]
+    :raises TypeError: If ``cls`` is not a :class:`SurrogateFunctionBase` subclass.
+    """
+    _register_class(cls, surrogate.SurrogateFunctionBase, _SURROGATE_REGISTRY)
+
+
+def _resolve_class(
+    class_path: str,
+    registry: dict[str, type],
+    package: Any,
+    base: type,
+    kind: str,
+) -> type:
+    cls = registry.get(class_path)
+    if cls is None and class_path.startswith(f"{package.__name__}."):
+        cls = next(
+            (
+                value
+                for value in vars(package).values()
+                if isinstance(value, type)
+                and issubclass(value, base)
+                and _class_path(value) == class_path
+            ),
+            None,
+        )
+    if cls is None:
+        raise ValueError(
+            f"Unregistered {kind} class {class_path!r}; import and register it first."
+        )
+    return cls
+
+
+def _resolve_neuron_config(
+    config: Optional[NeuronConfig],
+) -> tuple[Optional[type[neuron.BaseNode]], dict[str, Any]]:
+    if config is None:
+        return None, {}
+    config.__post_init__()
+    neuron_class = _resolve_class(
+        config.class_path,
+        _NEURON_REGISTRY,
+        neuron,
+        neuron.BaseNode,
+        "neuron",
+    )
+    kwargs = deepcopy(config.kwargs)
+    if config.surrogate is not None:
+        surrogate_class = _resolve_class(
+            config.surrogate,
+            _SURROGATE_REGISTRY,
+            surrogate,
+            surrogate.SurrogateFunctionBase,
+            "surrogate",
+        )
+        kwargs["surrogate_function"] = surrogate_class(
+            **deepcopy(config.surrogate_kwargs)
+        )
+    return neuron_class, kwargs
+
+
 def _encode(value: Any) -> Any:
+    if isinstance(value, NeuronConfig):
+        value.__post_init__()
     if is_dataclass(value):
         result = {"_target_": f"{type(value).__module__}.{type(value).__qualname__}"}
         result.update(
@@ -61,11 +226,106 @@ def _decode(value: Any) -> Any:
     if not isinstance(target_name, str) or target_name not in config_types:
         raise ValueError(
             f"Unsupported config target {target_name!r}; target must be a ModelConfig, "
-            "PredictionConfig, TrainingConfig, or PrecisionConfig."
+            "PredictionConfig, TrainingConfig, PrecisionConfig, or NeuronConfig."
         )
     target = config_types[target_name]
-    kwargs = {key: _decode(item) for key, item in value.items() if key != "_target_"}
+    kwargs = {
+        key: item if target is NeuronConfig else _decode(item)
+        for key, item in value.items()
+        if key != "_target_"
+    }
     return target(**kwargs)
+
+
+@dataclass(frozen=True)
+class NeuronConfig:
+    class_path: str
+    kwargs: dict[str, Any] = field(default_factory=dict)
+    surrogate: Optional[str] = None
+    surrogate_kwargs: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.class_path, str):
+            raise TypeError("class_path must be a string.")
+        if not self.class_path or self.class_path.strip() != self.class_path:
+            raise ValueError("class_path must be a non-empty fully qualified path.")
+        if self.surrogate is not None:
+            if not isinstance(self.surrogate, str):
+                raise TypeError("surrogate must be a string.")
+            if not self.surrogate or self.surrogate.strip() != self.surrogate:
+                raise ValueError("surrogate must be a non-empty fully qualified path.")
+        if not isinstance(self.kwargs, dict) or not isinstance(
+            self.surrogate_kwargs, dict
+        ):
+            raise TypeError("neuron kwargs must be dictionaries.")
+        if {"backend", "step_mode", "surrogate_function"} & self.kwargs.keys():
+            raise ValueError(
+                "backend, step_mode, and surrogate_function are configured separately."
+            )
+        if self.surrogate is None and self.surrogate_kwargs:
+            raise ValueError("surrogate_kwargs requires a surrogate class.")
+        _validate_json_value(self.kwargs, "kwargs")
+        _validate_json_value(self.surrogate_kwargs, "surrogate_kwargs")
+
+
+NeuronConfig.__init__.__doc__ = r"""Configure one serializable neuron declaration.
+
+**API Language** - :ref:`中文 <vision-NeuronConfig-cn>` | :ref:`English <vision-NeuronConfig-en>`
+
+----
+
+.. _vision-NeuronConfig-cn:
+
+* **中文**
+
+保存神经元类、构造参数和可选替代梯度类的数据描述。内置类按完整路径解析；外部类须由调用方
+先导入并调用 :func:`register_neuron_class` 或 :func:`register_surrogate_class` 注册。配置解析不会
+从路径自动导入模块。``kwargs`` 与 ``surrogate_kwargs`` 只接受标准 JSON 数据，不接受 tuple、
+张量、类、callable、非字符串字典键或非有限数；``backend``、``step_mode`` 由模型配置决定，
+替代梯度通过 ``surrogate`` 字段单独指定。
+
+:param class_path: ``BaseNode`` 子类的完整类路径。
+:type class_path: str
+:param kwargs: 神经元构造参数；默认空字典。
+:type kwargs: dict[str, Any]
+:param surrogate: 替代梯度类的完整路径；默认 ``None``，保留神经元构造函数的默认替代梯度。
+:type surrogate: Optional[str]
+:param surrogate_kwargs: 替代梯度构造参数；默认空字典，设置 ``surrogate`` 时才可非空。
+:type surrogate_kwargs: dict[str, Any]
+:raises TypeError: ``class_path`` 或 ``surrogate`` 非字符串、参数不是字典，或包含非 JSON 类型。
+:raises ValueError: ``class_path`` 或 ``surrogate`` 为空或带首尾空白、包含保留参数、替代梯度参数缺少类，或包含非有限数。
+
+----
+
+.. _vision-NeuronConfig-en:
+
+* **English**
+
+Store a data description of the neuron class, constructor arguments, and optional
+surrogate class. Built-in classes resolve by full path; callers must import and
+register external classes with :func:`register_neuron_class` or
+:func:`register_surrogate_class` first. Decoding never imports a module from a
+path in the config. ``kwargs`` and ``surrogate_kwargs`` accept only standard JSON
+values, not tuples, tensors, classes, callables, non-string dictionary keys, or
+non-finite numbers. The model config owns ``backend`` and ``step_mode``; the
+surrogate is specified separately through ``surrogate``.
+
+:param class_path: Full path of a ``BaseNode`` subclass.
+:type class_path: str
+:param kwargs: Neuron constructor arguments; defaults to an empty dictionary.
+:type kwargs: dict[str, Any]
+:param surrogate: Full path of a surrogate class; ``None`` (the default) keeps
+    the neuron constructor's default surrogate.
+:type surrogate: Optional[str]
+:param surrogate_kwargs: Surrogate constructor arguments; defaults to an empty
+    dictionary and requires ``surrogate`` when non-empty.
+:type surrogate_kwargs: dict[str, Any]
+:raises TypeError: If ``class_path`` or ``surrogate`` is not a string, an argument
+    is not a dictionary, or a value is not JSON-compatible.
+:raises ValueError: If ``class_path`` or ``surrogate`` is empty or has
+    surrounding whitespace, a reserved argument is present, surrogate arguments
+    lack a class, or a number is non-finite.
+"""
 
 
 @dataclass(frozen=True)
@@ -839,7 +1099,13 @@ class TrainingConfig:
 
 
 def _config_types() -> dict[str, type]:
-    pending = [ModelConfig, PredictionConfig, TrainingConfig, PrecisionConfig]
+    pending = [
+        ModelConfig,
+        PredictionConfig,
+        TrainingConfig,
+        PrecisionConfig,
+        NeuronConfig,
+    ]
     result = {}
     while pending:
         config_type = pending.pop()

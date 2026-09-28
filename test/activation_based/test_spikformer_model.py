@@ -74,6 +74,29 @@ def test_spikformer_ti_factory_builds_trainable_model():
     assert any(p.grad is not None for p in model.parameters())
 
 
+def test_spikformer_keeps_tau_and_detach_reset_keyword_behavior():
+    model = Spikformer(
+        T=1,
+        img_size_h=32,
+        img_size_w=32,
+        embed_dims=32,
+        num_heads=4,
+        depths=1,
+        backend="torch",
+        tau=3.5,
+        detach_reset=False,
+    )
+
+    assert model.patch_embed.stages[0].neuron.tau == 3.5
+    assert model.patch_embed.stages[0].neuron.detach_reset is False
+    assert model.blocks[0].mlp.neuron1.tau == 3.5
+    assert model.blocks[0].mlp.neuron1.detach_reset is False
+    assert model.blocks[0].attn.qkv_lif.tau == 2.0
+    assert model.blocks[0].attn.qkv_lif.detach_reset is True
+    assert model.blocks[0].attn.attn_lif.tau == 2.0
+    assert model.blocks[0].attn.attn_lif.detach_reset is True
+
+
 def test_spikformer_cifar10_factory_runs_official_shape():
     model = spikformer_cifar10(T=1, backend="torch").eval()
 

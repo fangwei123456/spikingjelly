@@ -102,6 +102,30 @@ Rank zero prints one JSON record after every epoch containing the optimizer step
 train loss, validation loss, and validation accuracy. The returned ``metrics``
 dictionary contains the final values and throughput statistics.
 
+``neuron_config`` optionally selects a serializable neuron and surrogate for
+SEW-ResNet34 and both Spikformer configs. With no config, paper defaults are
+unchanged. Custom classes replace every neuron site and must accept the model's
+``backend`` and ``step_mode`` arguments. Built-in classes resolve by full path;
+external classes must be imported and registered in every training, checkpoint
+export, and inference process before constructing the model:
+
+.. code-block:: python
+
+    neuron_config = vision.NeuronConfig(
+        class_path=(
+            "spikingjelly.activation_based.neuron.integrate_and_fire.IFNode"
+        ),
+        kwargs={"v_threshold": 0.7},
+        surrogate="spikingjelly.activation_based.surrogate.Rect",
+        surrogate_kwargs={"alpha": 2.0},
+    )
+    model_config = SEWResNet34Config(neuron_config=neuron_config)
+
+For an external neuron, call ``vision.register_neuron_class(MyNeuron)`` after
+importing it. Use ``vision.register_surrogate_class(MySurrogate)`` for an external
+surrogate. Neuron and surrogate class paths never trigger imports.
+Inference artifacts use schema version 2; version 1 artifacts must be re-exported.
+
 ``input_layout`` explicitly declares the DataLoader batch layout. ``"NCHW"``
 accepts static ``[N, C, H, W]`` images; single-step calls the model ``T`` times
 with the same batch, while multi-step constructs contiguous

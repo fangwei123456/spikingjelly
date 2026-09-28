@@ -1,8 +1,11 @@
+from typing import Any, Callable, Dict, Optional
+
 import torch
 import torch.nn as nn
 
 from .. import functional, layer, neuron
 from ..layer.attention import SpikeDrivenSelfAttention
+from .._neuron import _make_multi_step_neuron
 
 __all__ = ["SpikeDrivenTransformer", "sdt_8_384"]
 
@@ -14,7 +17,9 @@ class _PatchEmbed(nn.Module):
         embed_dims: int,
         pooling_stat: str,
         backend: str,
-    ):
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]],
+        neuron_kwargs: Dict[str, Any],
+    ) -> None:
         super().__init__()
         channels = (embed_dims // 8, embed_dims // 4, embed_dims // 2, embed_dims)
         self.stages = nn.ModuleList()
@@ -23,7 +28,7 @@ class _PatchEmbed(nn.Module):
             stage = [
                 layer.Conv2d(previous, channels_out, 3, padding=1, step_mode="m"),
                 layer.BatchNorm2d(channels_out, step_mode="m"),
-                neuron.LIFNode(step_mode="m", backend=backend),
+                _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs),
             ]
             if use_pool == "1":
                 stage.append(layer.MaxPool2d(3, stride=2, padding=1, step_mode="m"))
@@ -36,7 +41,7 @@ class _PatchEmbed(nn.Module):
         if pooling_stat[3] == "1":
             final_stage.append(layer.MaxPool2d(3, stride=2, padding=1, step_mode="m"))
         self.final_stage = nn.Sequential(*final_stage)
-        self.final_lif = neuron.LIFNode(step_mode="m", backend=backend)
+        self.final_lif = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
         self.rpe_conv = layer.Conv2d(
             embed_dims, embed_dims, 3, padding=1, bias=False, step_mode="m"
         )
@@ -52,15 +57,22 @@ class _PatchEmbed(nn.Module):
 
 
 class _MLP(nn.Module):
-    def __init__(self, dim: int, hidden_dim: int, backend: str):
+    def __init__(
+        self,
+        dim: int,
+        hidden_dim: int,
+        backend: str,
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]],
+        neuron_kwargs: Dict[str, Any],
+    ) -> None:
         super().__init__()
         self.residual = dim == hidden_dim
         self.fc1 = layer.Conv2d(dim, hidden_dim, 1, step_mode="m")
         self.bn1 = layer.BatchNorm2d(hidden_dim, step_mode="m")
-        self.lif1 = neuron.LIFNode(step_mode="m", backend=backend)
+        self.lif1 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
         self.fc2 = layer.Conv2d(hidden_dim, dim, 1, step_mode="m")
         self.bn2 = layer.BatchNorm2d(dim, step_mode="m")
-        self.lif2 = neuron.LIFNode(step_mode="m", backend=backend)
+        self.lif2 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         identity = x
@@ -73,10 +85,26 @@ class _MLP(nn.Module):
 
 
 class _Block(nn.Module):
-    def __init__(self, dim: int, num_heads: int, mlp_ratio: float, backend: str):
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        mlp_ratio: float,
+        backend: str,
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]],
+        neuron_kwargs: Dict[str, Any],
+    ) -> None:
         super().__init__()
-        self.attn = SpikeDrivenSelfAttention(dim, num_heads, backend=backend)
-        self.mlp = _MLP(dim, int(dim * mlp_ratio), backend)
+        self.attn = SpikeDrivenSelfAttention(
+            dim,
+            num_heads,
+            backend=backend,
+            spiking_neuron=spiking_neuron,
+            **neuron_kwargs,
+        )
+        self.mlp = _MLP(
+            dim, int(dim * mlp_ratio), backend, spiking_neuron, neuron_kwargs
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.mlp(self.attn(x))
@@ -94,6 +122,8 @@ class SpikeDrivenTransformer(nn.Module):
         mlp_ratio: float = 4.0,
         pooling_stat: str = "1111",
         backend: str = "torch",
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+        **kwargs: Any,
     ) -> None:
         r"""
         **API Language** - :ref:`中文 <SpikeDrivenTransformer.__init__-cn>` | :ref:`English <SpikeDrivenTransformer.__init__-en>`
@@ -130,6 +160,10 @@ class SpikeDrivenTransformer(nn.Module):
         :type pooling_stat: str
         :param backend: 内部脉冲神经元使用的后端
         :type backend: str
+        :param spiking_neuron: 自定义神经元类；``None`` 保留论文默认值
+        :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+        :param kwargs: 传给所有内部神经元的参数；指定自定义类时统一决定其构造
+        :type kwargs: Any
         :raises ValueError: ``pooling_stat`` 不是四位 0/1 字符串，或
             ``embed_dims`` 不能被 ``num_heads`` 整除
 
@@ -168,6 +202,11 @@ class SpikeDrivenTransformer(nn.Module):
         :type pooling_stat: str
         :param backend: backend used by the internal spiking neurons
         :type backend: str
+        :param spiking_neuron: custom neuron class; ``None`` keeps the paper defaults
+        :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+        :param kwargs: arguments passed to all internal neurons; with a custom
+            class, these arguments define its construction uniformly
+        :type kwargs: Any
         :raises ValueError: if ``pooling_stat`` is not a four-character binary
             mask or ``embed_dims`` is not divisible by ``num_heads``
 
@@ -180,11 +219,28 @@ class SpikeDrivenTransformer(nn.Module):
         if len(pooling_stat) != 4 or any(value not in "01" for value in pooling_stat):
             raise ValueError("pooling_stat must be a four-character 0/1 mask")
         self.T = T
-        self.patch_embed = _PatchEmbed(in_channels, embed_dims, pooling_stat, backend)
-        self.blocks = nn.ModuleList(
-            [_Block(embed_dims, num_heads, mlp_ratio, backend) for _ in range(depths)]
+        self.patch_embed = _PatchEmbed(
+            in_channels,
+            embed_dims,
+            pooling_stat,
+            backend,
+            spiking_neuron,
+            kwargs,
         )
-        self.head_lif = neuron.LIFNode(step_mode="m", backend=backend)
+        self.blocks = nn.ModuleList(
+            [
+                _Block(
+                    embed_dims,
+                    num_heads,
+                    mlp_ratio,
+                    backend,
+                    spiking_neuron,
+                    kwargs,
+                )
+                for _ in range(depths)
+            ]
+        )
+        self.head_lif = _make_multi_step_neuron(backend, spiking_neuron, kwargs)
         self.head = nn.Linear(embed_dims, num_classes)
         functional.set_step_mode(self, "m")
 
@@ -238,6 +294,8 @@ def sdt_8_384(
     in_channels: int = 3,
     num_classes: int = 1000,
     backend: str = "torch",
+    spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+    **kwargs: Any,
 ) -> SpikeDrivenTransformer:
     r"""
     **API Language** - :ref:`中文 <sdt_8_384-cn>` | :ref:`English <sdt_8_384-en>`
@@ -258,6 +316,10 @@ def sdt_8_384(
     :type num_classes: int
     :param backend: 内部脉冲神经元使用的后端
     :type backend: str
+    :param spiking_neuron: 自定义神经元类；``None`` 保留论文默认值
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: 传给内部神经元的参数
+    :type kwargs: Any
     :return: SDT-8-384 模型
     :rtype: SpikeDrivenTransformer
 
@@ -277,6 +339,10 @@ def sdt_8_384(
     :type num_classes: int
     :param backend: backend used by the internal spiking neurons
     :type backend: str
+    :param spiking_neuron: custom neuron class; ``None`` keeps the paper default
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: arguments passed to the internal neurons
+    :type kwargs: Any
     :return: SDT-8-384 model
     :rtype: SpikeDrivenTransformer
     """
@@ -288,4 +354,6 @@ def sdt_8_384(
         num_heads=8,
         depths=8,
         backend=backend,
+        spiking_neuron=spiking_neuron,
+        **kwargs,
     )

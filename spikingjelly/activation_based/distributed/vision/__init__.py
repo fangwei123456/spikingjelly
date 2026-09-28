@@ -12,8 +12,11 @@ from .config import (
     EvaluationConfig,
     ModelBuilder,
     ModelConfig,
+    NeuronConfig,
     PredictionConfig,
     TrainingConfig,
+    register_neuron_class,
+    register_surrogate_class,
 )
 from .inference import (
     evaluate_classification,
@@ -27,6 +30,7 @@ __all__ = [
     "EvaluationConfig",
     "ModelBuilder",
     "ModelConfig",
+    "NeuronConfig",
     "PredictionConfig",
     "TrainingConfig",
     "build_imagefolder_datasets",
@@ -34,5 +38,7 @@ __all__ = [
     "export_inference_artifact",
     "load_inference_artifact",
     "predict_classification",
+    "register_neuron_class",
+    "register_surrogate_class",
     "train_classification",
 ]

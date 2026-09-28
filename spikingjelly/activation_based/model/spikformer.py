@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import ClassVar, Optional, Sequence
+from typing import Any, Callable, ClassVar, Optional, Sequence
 
 import torch
 import torch.distributed as dist
@@ -14,8 +14,14 @@ from ..distributed.tensor_parallel import (
     ChannelShardConv2d,
 )
 from ..distributed.tensor_parallel.channel import _ColwiseBackwardAllReduce
-from ..distributed.vision.config import ModelBuilder, ModelConfig
+from ..distributed.vision.config import (
+    ModelBuilder,
+    ModelConfig,
+    NeuronConfig,
+    _resolve_neuron_config,
+)
 from ..layer.attention import SpikingSelfAttention
+from .._neuron import _make_multi_step_neuron
 
 __all__ = [
     "Spikformer",
@@ -122,9 +128,9 @@ class SpikformerConv2dBNLIF(nn.Module):
         padding: int = 0,
         pool: bool = False,
         backend: str = "torch",
-        tau: float = 2.0,
-        detach_reset: bool = True,
-    ):
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+        **kwargs: Any,
+    ) -> None:
         r"""
         **API Language** - :ref:`中文 <SpikformerConv2dBNLIF-cn>` | :ref:`English <SpikformerConv2dBNLIF-en>`
 
@@ -157,11 +163,11 @@ class SpikformerConv2dBNLIF(nn.Module):
         :param backend: 神经元后端。默认为 ``"torch"``
         :type backend: str
 
-        :param tau: ``LIFNode`` 的膜电位时间常数。默认为 2.0
-        :type tau: float
+        :param spiking_neuron: 自定义神经元类；``None`` 使用默认 LIF 参数
+        :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
-        :param detach_reset: 是否在重置时断开计算图。默认为 ``True``
-        :type detach_reset: bool
+        :param kwargs: 神经元构造参数；默认神经元使用它们覆盖论文默认值
+        :type kwargs: Any
 
         ----
 
@@ -192,11 +198,12 @@ class SpikformerConv2dBNLIF(nn.Module):
         :param backend: Backend for the LIF neuron. Default: ``"torch"``
         :type backend: str
 
-        :param tau: Membrane time constant of the ``LIFNode``. Default: 2.0
-        :type tau: float
+        :param spiking_neuron: Custom neuron class; ``None`` uses the default LIF parameters
+        :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
-        :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
-        :type detach_reset: bool
+        :param kwargs: Neuron constructor arguments; they override paper defaults
+            when using the default neuron
+        :type kwargs: Any
         """
         super().__init__()
         self.conv_bn = SpikformerConv2dBN(
@@ -207,11 +214,11 @@ class SpikformerConv2dBNLIF(nn.Module):
             padding=padding,
             pool=pool,
         )
-        self.neuron = neuron.LIFNode(
-            tau=tau,
-            detach_reset=detach_reset,
-            step_mode="m",
-            backend=backend,
+        self.neuron = _make_multi_step_neuron(
+            backend,
+            spiking_neuron,
+            kwargs,
+            {"tau": 2.0, "detach_reset": True},
         )
 
     def forward(self, x_seq: torch.Tensor):
@@ -227,9 +234,9 @@ class SpikformerPatchStem(nn.Module):
         in_channels: int = 3,
         embed_dims: int = 256,
         backend: str = "torch",
-        tau: float = 2.0,
-        detach_reset: bool = True,
-    ):
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+        **kwargs: Any,
+    ) -> None:
         r"""
         **API Language** - :ref:`中文 <SpikformerPatchStem-cn>` | :ref:`English <SpikformerPatchStem-en>`
 
@@ -261,11 +268,11 @@ class SpikformerPatchStem(nn.Module):
         :param backend: 神经元后端。默认为 ``"torch"``
         :type backend: str
 
-        :param tau: ``LIFNode`` 的膜电位时间常数。默认为 2.0
-        :type tau: float
+        :param spiking_neuron: 自定义神经元类；``None`` 使用各位置默认 LIF 参数
+        :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
-        :param detach_reset: 是否在重置时断开计算图。默认为 ``True``
-        :type detach_reset: bool
+        :param kwargs: 神经元构造参数；指定自定义类时统一用于所有位置
+        :type kwargs: Any
 
         :raises ValueError: 当 ``patch_size`` 不是 4 或 16 时抛出
 
@@ -298,11 +305,12 @@ class SpikformerPatchStem(nn.Module):
         :param backend: Backend for the LIF neuron. Default: ``"torch"``
         :type backend: str
 
-        :param tau: Membrane time constant of the ``LIFNode``. Default: 2.0
-        :type tau: float
+        :param spiking_neuron: Custom neuron class; ``None`` uses each position's default LIF parameters
+        :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
-        :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
-        :type detach_reset: bool
+        :param kwargs: Neuron constructor arguments; with a custom class they are
+            applied uniformly to every position
+        :type kwargs: Any
 
         :raises ValueError: If ``patch_size`` is not 4 or 16
         """
@@ -330,8 +338,8 @@ class SpikformerPatchStem(nn.Module):
                     padding=1,
                     pool=index >= pool_from,
                     backend=backend,
-                    tau=tau,
-                    detach_reset=detach_reset,
+                    spiking_neuron=spiking_neuron,
+                    **kwargs,
                 )
             )
             in_c = out_c
@@ -344,8 +352,8 @@ class SpikformerPatchStem(nn.Module):
             padding=1,
             pool=False,
             backend=backend,
-            tau=tau,
-            detach_reset=detach_reset,
+            spiking_neuron=spiking_neuron,
+            **kwargs,
         )
         self.grid_size = (img_size_h // patch_size, img_size_w // patch_size)
         self.num_patches = self.grid_size[0] * self.grid_size[1]
@@ -364,9 +372,9 @@ class SpikformerMLP(nn.Module):
         hidden_features: int,
         out_features: int,
         backend: str = "torch",
-        tau: float = 2.0,
-        detach_reset: bool = True,
-    ):
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+        **kwargs: Any,
+    ) -> None:
         r"""
         **API Language** - :ref:`中文 <SpikformerMLP-cn>` | :ref:`English <SpikformerMLP-en>`
 
@@ -390,11 +398,11 @@ class SpikformerMLP(nn.Module):
         :param backend: 神经元后端。默认为 ``"torch"``
         :type backend: str
 
-        :param tau: ``LIFNode`` 的膜电位时间常数。默认为 2.0
-        :type tau: float
+        :param spiking_neuron: 自定义神经元类；``None`` 使用各位置默认 LIF 参数
+        :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
-        :param detach_reset: 是否在重置时断开计算图。默认为 ``True``
-        :type detach_reset: bool
+        :param kwargs: 神经元构造参数；指定自定义类时统一用于所有位置
+        :type kwargs: Any
 
         ----
 
@@ -416,32 +424,33 @@ class SpikformerMLP(nn.Module):
         :param backend: Backend for the LIF neuron. Default: ``"torch"``
         :type backend: str
 
-        :param tau: Membrane time constant of the ``LIFNode``. Default: 2.0
-        :type tau: float
+        :param spiking_neuron: Custom neuron class; ``None`` uses each position's default LIF parameters
+        :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
-        :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
-        :type detach_reset: bool
+        :param kwargs: Neuron constructor arguments; with a custom class they are
+            applied uniformly to every position
+        :type kwargs: Any
         """
         super().__init__()
         self.fc1 = layer.SeqToANNContainer(
             nn.Conv1d(in_features, hidden_features, kernel_size=1, bias=False),
             nn.BatchNorm1d(hidden_features),
         )
-        self.neuron1 = neuron.LIFNode(
-            tau=tau,
-            detach_reset=detach_reset,
-            step_mode="m",
-            backend=backend,
+        self.neuron1 = _make_multi_step_neuron(
+            backend,
+            spiking_neuron,
+            kwargs,
+            {"tau": 2.0, "detach_reset": True},
         )
         self.fc2 = layer.SeqToANNContainer(
             nn.Conv1d(hidden_features, out_features, kernel_size=1, bias=False),
             nn.BatchNorm1d(out_features),
         )
-        self.neuron2 = neuron.LIFNode(
-            tau=tau,
-            detach_reset=detach_reset,
-            step_mode="m",
-            backend=backend,
+        self.neuron2 = _make_multi_step_neuron(
+            backend,
+            spiking_neuron,
+            kwargs,
+            {"tau": 2.0, "detach_reset": True},
         )
 
     def forward(self, x_seq: torch.Tensor):
@@ -457,9 +466,9 @@ class SpikformerBlock(nn.Module):
         num_heads: int,
         mlp_ratio: float = 4.0,
         backend: str = "torch",
-        tau: float = 2.0,
-        detach_reset: bool = True,
-    ):
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+        **kwargs: Any,
+    ) -> None:
         r"""
         **API Language** - :ref:`中文 <SpikformerBlock-cn>` | :ref:`English <SpikformerBlock-en>`
 
@@ -483,11 +492,11 @@ class SpikformerBlock(nn.Module):
         :param backend: 神经元后端。默认为 ``"torch"``
         :type backend: str
 
-        :param tau: ``LIFNode`` 的膜电位时间常数。默认为 2.0
-        :type tau: float
+        :param spiking_neuron: 自定义神经元类；``None`` 使用论文默认 LIF 参数
+        :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
-        :param detach_reset: 是否在重置时断开计算图。默认为 ``True``
-        :type detach_reset: bool
+        :param kwargs: 神经元构造参数；指定自定义类时统一用于 attention 和 MLP
+        :type kwargs: Any
 
         :raises ValueError: 如果输入不是 5D 张量 ``[T, N, C, H, W]``
 
@@ -511,24 +520,38 @@ class SpikformerBlock(nn.Module):
         :param backend: Backend for the LIF neuron. Default: ``"torch"``
         :type backend: str
 
-        :param tau: Membrane time constant of the ``LIFNode``. Default: 2.0
-        :type tau: float
+        :param spiking_neuron: Custom neuron class; ``None`` uses the paper-default LIF parameters
+        :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
-        :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
-        :type detach_reset: bool
+        :param kwargs: Neuron constructor arguments; with a custom class they are
+            applied uniformly to attention and MLP
+        :type kwargs: Any
 
         :raises ValueError: If the input is not a 5D tensor ``[T, N, C, H, W]``
         """
         super().__init__()
-        self.attn = SpikingSelfAttention(dim=dim, num_heads=num_heads, backend=backend)
+        attention_kwargs = kwargs
+        if spiking_neuron is None:
+            attention_kwargs = {
+                name: value
+                for name, value in kwargs.items()
+                if name not in {"tau", "detach_reset"}
+            }
+        self.attn = SpikingSelfAttention(
+            dim=dim,
+            num_heads=num_heads,
+            backend=backend,
+            spiking_neuron=spiking_neuron,
+            **attention_kwargs,
+        )
         hidden_features = int(dim * mlp_ratio)
         self.mlp = SpikformerMLP(
             in_features=dim,
             hidden_features=hidden_features,
             out_features=dim,
             backend=backend,
-            tau=tau,
-            detach_reset=detach_reset,
+            spiking_neuron=spiking_neuron,
+            **kwargs,
         )
 
     def forward(self, x_seq: torch.Tensor):
@@ -557,9 +580,9 @@ class Spikformer(nn.Module):
         mlp_ratio: float = 4.0,
         depths: int = 4,
         backend: str = "torch",
-        tau: float = 2.0,
-        detach_reset: bool = True,
-    ):
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+        **kwargs: Any,
+    ) -> None:
         r"""
         **API Language** - :ref:`中文 <Spikformer-cn>` | :ref:`English <Spikformer-en>`
 
@@ -605,11 +628,11 @@ class Spikformer(nn.Module):
         :param backend: 神经元后端。默认为 ``"torch"``
         :type backend: str
 
-        :param tau: ``LIFNode`` 的膜电位时间常数。默认为 2.0
-        :type tau: float
+        :param spiking_neuron: 自定义神经元类；``None`` 使用论文默认 LIF 参数
+        :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
-        :param detach_reset: 是否在重置时断开计算图。默认为 ``True``
-        :type detach_reset: bool
+        :param kwargs: 神经元构造参数；指定自定义类时统一用于所有神经元位置
+        :type kwargs: Any
 
         ----
 
@@ -653,11 +676,12 @@ class Spikformer(nn.Module):
         :param backend: Backend for the LIF neuron. Default: ``"torch"``
         :type backend: str
 
-        :param tau: Membrane time constant of the ``LIFNode``. Default: 2.0
-        :type tau: float
+        :param spiking_neuron: Custom neuron class; ``None`` uses the paper-default LIF parameters
+        :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
-        :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
-        :type detach_reset: bool
+        :param kwargs: Neuron constructor arguments; with a custom class they are
+            applied uniformly to every neuron position
+        :type kwargs: Any
         """
         super().__init__()
         self.T = T
@@ -672,8 +696,8 @@ class Spikformer(nn.Module):
             in_channels=in_channels,
             embed_dims=embed_dims,
             backend=backend,
-            tau=tau,
-            detach_reset=detach_reset,
+            spiking_neuron=spiking_neuron,
+            **kwargs,
         )
         self.blocks = nn.ModuleList(
             [
@@ -682,8 +706,8 @@ class Spikformer(nn.Module):
                     num_heads=num_heads,
                     mlp_ratio=mlp_ratio,
                     backend=backend,
-                    tau=tau,
-                    detach_reset=detach_reset,
+                    spiking_neuron=spiking_neuron,
+                    **kwargs,
                 )
                 for _ in range(depths)
             ]
@@ -730,6 +754,8 @@ def spikformer_ti(
     img_size_w: int = 224,
     num_classes: int = 1000,
     backend: str = "torch",
+    spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+    **kwargs: Any,
 ) -> Spikformer:
     r"""
     **API Language** - :ref:`中文 <spikformer_ti-cn>` | :ref:`English <spikformer_ti-en>`
@@ -754,6 +780,10 @@ def spikformer_ti(
     :type num_classes: int
     :param backend: 神经元后端。默认为 ``\"torch\"``
     :type backend: str
+    :param spiking_neuron: 自定义神经元类；``None`` 使用论文默认值
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: 传给所有内部神经元的参数
+    :type kwargs: Any
     :return: 模型实例
     :rtype: Spikformer
 
@@ -777,6 +807,10 @@ def spikformer_ti(
     :type num_classes: int
     :param backend: Backend for neurons. Default: ``\"torch\"``
     :type backend: str
+    :param spiking_neuron: Custom neuron class; ``None`` keeps the paper defaults
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: Arguments passed to internal neurons
+    :type kwargs: Any
     :return: Model instance
     :rtype: Spikformer
     """
@@ -791,6 +825,8 @@ def spikformer_ti(
         mlp_ratio=4.0,
         depths=4,
         backend=backend,
+        spiking_neuron=spiking_neuron,
+        **kwargs,
     )
 
 
@@ -801,6 +837,8 @@ def spikformer_s(
     img_size_w: int = 224,
     num_classes: int = 1000,
     backend: str = "torch",
+    spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+    **kwargs: Any,
 ) -> Spikformer:
     r"""
     **API Language** - :ref:`中文 <spikformer_s-cn>` | :ref:`English <spikformer_s-en>`
@@ -825,6 +863,10 @@ def spikformer_s(
     :type num_classes: int
     :param backend: 神经元后端。默认为 ``\"torch\"``
     :type backend: str
+    :param spiking_neuron: 自定义神经元类；``None`` 使用论文默认值
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: 传给所有内部神经元的参数
+    :type kwargs: Any
     :return: 模型实例
     :rtype: Spikformer
 
@@ -848,6 +890,10 @@ def spikformer_s(
     :type num_classes: int
     :param backend: Backend for neurons. Default: ``\"torch\"``
     :type backend: str
+    :param spiking_neuron: Custom neuron class; ``None`` keeps the paper defaults
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: Arguments passed to internal neurons
+    :type kwargs: Any
     :return: Model instance
     :rtype: Spikformer
     """
@@ -862,6 +908,8 @@ def spikformer_s(
         mlp_ratio=4.0,
         depths=6,
         backend=backend,
+        spiking_neuron=spiking_neuron,
+        **kwargs,
     )
 
 
@@ -869,24 +917,57 @@ def spikformer_cifar10(
     T: int = 4,
     num_classes: int = 10,
     backend: str = "torch",
+    spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+    **kwargs: Any,
 ) -> Spikformer:
-    r"""Build the Spikformer configuration used for CIFAR-10.
+    r"""
+    **API Language** - :ref:`中文 <spikformer_cifar10-cn>` | :ref:`English <spikformer_cifar10-en>`
 
-    **API Language** - 中文 | English
+    ----
 
-    **中文：** 构建官方 CIFAR-10 结构：32×32 输入、4×4 patch、384 维、
-    12 个 attention heads 和 4 个 Transformer blocks。
+    .. _spikformer_cifar10-cn:
 
-    **English:** Build the official CIFAR-10 architecture with 32×32 input,
-    4×4 patches, 384 channels, 12 attention heads, and 4 Transformer blocks.
+    * **中文**
 
-    :param T: SNN 时间步。 / SNN time steps.
+    构建官方 CIFAR-10 Spikformer：32×32 输入、4×4 patch、384 维、12 个
+    attention heads 和 4 个 Transformer blocks。输入图像会重复 ``T`` 次；
+    独立样本间应重置网络状态。
+
+    :param T: 静态图像的仿真时间步数。
     :type T: int
-    :param num_classes: 分类类别数。 / Number of classes.
+    :param num_classes: 分类类别数。
     :type num_classes: int
-    :param backend: 神经元 backend。 / Neuron backend.
+    :param backend: 内部神经元的后端。
     :type backend: str
-    :return: CIFAR-10 Spikformer。 / CIFAR-10 Spikformer.
+    :param spiking_neuron: 自定义神经元类；``None`` 保留论文默认神经元。
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: 传给所有内部神经元的参数；指定自定义类时统一生效。
+    :type kwargs: Any
+    :return: CIFAR-10 Spikformer。
+    :rtype: Spikformer
+
+    ----
+
+    .. _spikformer_cifar10-en:
+
+    * **English**
+
+    Build the official CIFAR-10 Spikformer with 32×32 input, 4×4 patches, 384
+    channels, 12 attention heads, and 4 Transformer blocks. Each image is repeated
+    for ``T`` time steps; reset the model between independent samples.
+
+    :param T: Number of simulation steps for static images.
+    :type T: int
+    :param num_classes: Number of classification classes.
+    :type num_classes: int
+    :param backend: Backend used by the internal neurons.
+    :type backend: str
+    :param spiking_neuron: Custom neuron class; ``None`` keeps the paper defaults.
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: Arguments passed to every internal neuron; with a custom class,
+        they apply uniformly.
+    :type kwargs: Any
+    :return: CIFAR-10 Spikformer.
     :rtype: Spikformer
     """
     return Spikformer(
@@ -901,6 +982,8 @@ def spikformer_cifar10(
         mlp_ratio=4.0,
         depths=4,
         backend=backend,
+        spiking_neuron=spiking_neuron,
+        **kwargs,
     )
 
 
@@ -1050,6 +1133,7 @@ class SpikformerConfig(ModelConfig):
     image_width: int = 224
     in_channels: int = 3
     neuron_backend: str = "torch"
+    neuron_config: Optional[NeuronConfig] = None
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -1084,6 +1168,9 @@ head and reconstructs local Q, K, and V heads.
 :type in_channels: int
 :param neuron_backend: 神经元 backend。 / Neuron backend.
 :type neuron_backend: str
+:param neuron_config: 可序列化的自定义神经元；``None`` 保留论文默认配置。 /
+    Serializable custom neuron; ``None`` keeps the paper defaults.
+:type neuron_config: Optional[NeuronConfig]
 :raises ValueError: 图像尺寸、通道或 step mode 无效。 / If image dimensions,
     channels, or the step mode are invalid.
 """
@@ -1096,6 +1183,7 @@ class SpikformerCIFAR10Config(ModelConfig):
     )
     num_classes: int = 10
     neuron_backend: str = "torch"
+    neuron_config: Optional[NeuronConfig] = None
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -1122,6 +1210,9 @@ or two stages.
 :type step_mode: str
 :param neuron_backend: 神经元 backend。 / Neuron backend.
 :type neuron_backend: str
+:param neuron_config: 可序列化的自定义神经元；``None`` 保留论文默认配置。 /
+    Serializable custom neuron; ``None`` keeps the paper defaults.
+:type neuron_config: Optional[NeuronConfig]
 :raises ValueError: 时间步、类别数或 step mode 无效。 / If time steps, class count,
     or the step mode are invalid.
 """
@@ -1152,13 +1243,18 @@ class SpikformerBuilder(ModelBuilder):
 
     def _build_canonical_model(self) -> nn.Module:
         config = self.config
+        if not isinstance(config, (SpikformerConfig, SpikformerCIFAR10Config)):
+            raise TypeError("SpikformerBuilder requires a Spikformer config.")
+        spiking_neuron, neuron_kwargs = _resolve_neuron_config(config.neuron_config)
         if isinstance(config, SpikformerCIFAR10Config):
             model = spikformer_cifar10(
                 T=config.time_steps,
                 num_classes=config.num_classes,
                 backend="torch",
+                spiking_neuron=spiking_neuron,
+                **neuron_kwargs,
             )
-        elif isinstance(config, SpikformerConfig):
+        else:
             model = spikformer_s(
                 T=config.time_steps,
                 in_channels=config.in_channels,
@@ -1166,9 +1262,9 @@ class SpikformerBuilder(ModelBuilder):
                 img_size_w=config.image_width,
                 num_classes=config.num_classes,
                 backend="torch",
+                spiking_neuron=spiking_neuron,
+                **neuron_kwargs,
             )
-        else:
-            raise TypeError("SpikformerBuilder requires a Spikformer config.")
         _convert_batch_norms(model)
         functional.set_step_mode(model, config.step_mode)
         functional.set_backend(model, config.neuron_backend, instance=neuron.BaseNode)

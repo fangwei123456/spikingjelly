@@ -88,6 +88,27 @@ heads 和 4 个 Transformer blocks，并复用相同的 TP、PP 与 FSDP2 实现
 rank 0 在每个 epoch 后输出一行 JSON，其中包含 optimizer step、train loss、
 validation loss 和 validation accuracy；返回的 ``metrics`` 字典包含最终指标与吞吐统计。
 
+``neuron_config`` 可为 SEW-ResNet34 和两种 Spikformer config 选择可序列化的神经元与
+替代梯度。省略时逐位保留论文默认配置。自定义神经元会替换模型中的所有神经元位置，
+并须接受模型提供的 ``backend`` 和 ``step_mode`` 参数。内置类按完整路径解析；外部类
+必须在训练、checkpoint 导出和推理的每个进程中先导入并注册：
+
+.. code-block:: python
+
+    neuron_config = vision.NeuronConfig(
+        class_path=(
+            "spikingjelly.activation_based.neuron.integrate_and_fire.IFNode"
+        ),
+        kwargs={"v_threshold": 0.7},
+        surrogate="spikingjelly.activation_based.surrogate.Rect",
+        surrogate_kwargs={"alpha": 2.0},
+    )
+    model_config = SEWResNet34Config(neuron_config=neuron_config)
+
+外部神经元导入后调用 ``vision.register_neuron_class(MyNeuron)``；外部替代梯度调用
+``vision.register_surrogate_class(MySurrogate)``。神经元和替代梯度类路径不会触发自动导入。
+推理 artifact 使用 schema v2；v1 artifact 需要重新导出。
+
 ``input_layout`` 显式声明 DataLoader batch 的布局。``"NCHW"`` 接收静态图像
 ``[N, C, H, W]``；single-step 直接对同一 batch 调用模型 ``T`` 次，multi-step
 使用连续的 ``[T, N, C, H, W]``。``"NTCHW"`` 接收 CIFAR10-DVS、DVS Gesture

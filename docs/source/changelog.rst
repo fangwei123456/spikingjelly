@@ -52,6 +52,21 @@ Module: ``spikingjelly.activation_based.layer``.
   the channel-spatial combination used by Att-MS-ResNet. Defaults keep the
   previous full temporal-channel-spatial behavior.
 
+Serializable Neuron Configuration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Modules: ``spikingjelly.activation_based.distributed.vision``,
+``spikingjelly.activation_based.model``, and ``spikingjelly.activation_based.layer``.
+
+- Added ``NeuronConfig`` for serializing neuron and surrogate class paths and
+  JSON-native constructor arguments in distributed Vision configs. Built-in
+  classes resolve directly; external classes must be imported and explicitly
+  registered in every process before model construction.
+- Added ``spiking_neuron`` and neuron keyword arguments to the backend-configured
+  model families and their shared attention layers. Default neuron parameters
+  remain unchanged; a supplied neuron and its arguments apply to every neuron
+  site in the model.
+
 Improvements
 ~~~~~~~~~~~~
 
@@ -158,6 +173,8 @@ Module: ``spikingjelly.activation_based.distributed.vision``.
 - Vision training now stages checkpoints on the writer rank and overlaps their
   filesystem upload with subsequent work, while bounding each writer to one
   in-flight checkpoint and reporting failures before the next save or return.
+- Checkpoint writer groups now form without requiring non-writer ranks to
+  synchronize in each singleton Gloo group.
 
 Distributed Inference
 ^^^^^^^^^^^^^^^^^^^^^
@@ -235,6 +252,24 @@ Module: ``spikingjelly.activation_based.neuron``.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Distributed Vision Neuron Configurations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.distributed.vision``.
+
+- Inference artifact schema is now version 2. Version 1 artifacts are rejected
+  and must be re-exported. Existing SEW-ResNet34 and Spikformer training
+  checkpoints do not match the updated recipe and must be replaced by new runs.
+
+Spikformer Neuron Arguments
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.model.spikformer``.
+
+- ``tau`` and ``detach_reset`` are now neuron keyword arguments rather than explicit
+  constructor parameters. Existing keyword calls continue to work; callers that
+  passed them positionally must switch to keyword arguments.
 
 Spiking Neurons
 ^^^^^^^^^^^^^^^

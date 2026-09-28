@@ -1,7 +1,9 @@
 import json
+import os
 import subprocess
 import sys
 from concurrent.futures import Future
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,7 +16,7 @@ import torch.nn as nn
 from torch.utils.data import TensorDataset
 
 from spikingjelly.activation_based import base as activation_base
-from spikingjelly.activation_based import functional, layer, neuron
+from spikingjelly.activation_based import functional, layer, neuron, surrogate
 from spikingjelly.activation_based._cuda_graph import validate_cuda_graph_model
 from spikingjelly.activation_based.distributed import vision
 from spikingjelly.activation_based.distributed.vision import config as vision_config
@@ -38,6 +40,16 @@ from spikingjelly.activation_based.model.spikformer import (
     spikformer_s,
 )
 from spikingjelly.activation_based.precision import PrecisionConfig
+
+
+class RegisteredTestNeuron(neuron.IFNode):
+    pass
+
+
+class RegisteredTestSurrogate(surrogate.Rect):
+    def __init__(self, alpha=1.0, options=None):
+        super().__init__(alpha=alpha)
+        self.options = options
 
 
 def test_vision_training_config_json_round_trip():
@@ -70,6 +82,263 @@ def test_vision_training_config_json_round_trip():
         dataset_builder="package.datasets.build",
     )
     assert vision.TrainingConfig.from_dict(cifar.as_dict()) == cifar
+
+
+def test_neuron_config_round_trips_and_builds_registered_classes(monkeypatch):
+    monkeypatch.setattr(vision_config, "_NEURON_REGISTRY", {})
+    monkeypatch.setattr(vision_config, "_SURROGATE_REGISTRY", {})
+    neuron_config = vision.NeuronConfig(
+        class_path=f"{RegisteredTestNeuron.__module__}.{RegisteredTestNeuron.__qualname__}",
+        kwargs={"v_threshold": 0.7},
+        surrogate=f"{RegisteredTestSurrogate.__module__}.{RegisteredTestSurrogate.__qualname__}",
+        surrogate_kwargs={"alpha": 1.5, "options": {"values": [1, {"_path_": "data"}]}},
+    )
+    config = vision.TrainingConfig(
+        model=SpikformerCIFAR10Config(neuron_config=neuron_config),
+        dataset_builder="package.datasets.build",
+    )
+    serialized = json.loads(json.dumps(config.as_dict(), allow_nan=False))
+    restored = vision.TrainingConfig.from_dict(serialized)
+    assert restored == config
+    assert training._recipe(restored) == training._recipe(config)
+
+    imported = []
+    original_import_module = vision_config.importlib.import_module
+
+    def record_import(module_name):
+        imported.append(module_name)
+        return original_import_module(module_name)
+
+    monkeypatch.setattr(vision_config.importlib, "import_module", record_import)
+    with pytest.raises(ValueError, match="Unregistered neuron class"):
+        config.model.get_builder_cls()(config.model)._build_canonical_model()
+    assert RegisteredTestNeuron.__module__ not in imported
+
+    vision.register_neuron_class(RegisteredTestNeuron)
+    imported.clear()
+    with pytest.raises(ValueError, match="Unregistered surrogate class"):
+        config.model.get_builder_cls()(config.model)._build_canonical_model()
+    assert RegisteredTestSurrogate.__module__ not in imported
+    vision.register_surrogate_class(RegisteredTestSurrogate)
+    model = config.model.get_builder_cls()(config.model)._build_canonical_model()
+    nodes = [
+        module for module in model.modules() if isinstance(module, neuron.BaseNode)
+    ]
+    assert nodes
+    assert all(type(node) is RegisteredTestNeuron for node in nodes)
+    assert all(node.v_threshold == 0.7 for node in nodes)
+    assert all(
+        type(node.surrogate_function) is RegisteredTestSurrogate for node in nodes
+    )
+    assert all(node.surrogate_function.alpha == 1.5 for node in nodes)
+    assert all(
+        node.surrogate_function.options == neuron_config.surrogate_kwargs["options"]
+        for node in nodes
+    )
+
+
+@pytest.mark.parametrize(
+    ("register", "cls"),
+    [
+        (vision.register_neuron_class, RegisteredTestSurrogate),
+        (vision.register_surrogate_class, RegisteredTestNeuron),
+        (vision.register_neuron_class, None),
+    ],
+)
+def test_neuron_registration_rejects_invalid_classes(register, cls):
+    with pytest.raises(TypeError, match="cls must inherit"):
+        register(cls)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "error", "message"),
+    [
+        ({"value": (1, 2)}, TypeError, "JSON-native"),
+        ({"value": torch.tensor(1)}, TypeError, "JSON-native"),
+        ({"value": float("inf")}, ValueError, "finite"),
+        ({1: "value"}, TypeError, "keys must be strings"),
+    ],
+)
+def test_neuron_config_rejects_non_json_values(kwargs, error, message):
+    with pytest.raises(error, match=message):
+        vision.NeuronConfig(
+            class_path="spikingjelly.activation_based.neuron.IFNode",
+            kwargs=kwargs,
+        )
+
+
+def test_neuron_config_revalidates_mutated_kwargs_at_use_boundaries():
+    config = SpikformerCIFAR10Config(
+        neuron_config=vision.NeuronConfig(
+            class_path="spikingjelly.activation_based.neuron.integrate_and_fire.IFNode"
+        )
+    )
+    config.neuron_config.kwargs["value"] = object()
+
+    with pytest.raises(TypeError, match="JSON-native"):
+        config.as_dict()
+    with pytest.raises(TypeError, match="JSON-native"):
+        config.get_builder_cls()(config)._build_canonical_model()
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available() or torch.cuda.device_count() < 2,
+    reason="two CUDA devices are required",
+)
+def test_nondefault_neuron_survives_distributed_resume_and_artifact_round_trip(
+    tmp_path,
+):
+    script = tmp_path / "neuron_round_trip.py"
+    script.write_text(
+        """
+from dataclasses import replace
+import os
+import sys
+from pathlib import Path
+
+import torch
+from torch.utils.data import TensorDataset
+
+from spikingjelly.activation_based import functional, neuron, surrogate
+from spikingjelly.activation_based.distributed import vision
+from spikingjelly.activation_based.distributed.vision.config import TrainingConfig
+from spikingjelly.activation_based.distributed.vision.inference import (
+    _load_checkpoint_model,
+    export_inference_artifact,
+    load_inference_artifact,
+)
+from spikingjelly.activation_based.model.spikformer import SpikformerCIFAR10Config
+from spikingjelly.activation_based.precision import PrecisionConfig
+
+torch.set_num_threads(1)
+torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.deterministic = True
+
+
+def build_tiny_datasets(count):
+    images = torch.arange(count * 3 * 32 * 32, dtype=torch.float32).reshape(
+        count, 3, 32, 32
+    ) / (count * 3 * 32 * 32)
+    targets = torch.arange(count, dtype=torch.long) % 2
+    return TensorDataset(images, targets), TensorDataset(images[:2], targets[:2])
+
+
+phase = sys.argv[1]
+checkpoint_root = Path(sys.argv[2])
+artifact_path = Path(sys.argv[3])
+neuron_config = vision.NeuronConfig(
+    class_path="spikingjelly.activation_based.neuron.integrate_and_fire.IFNode",
+    kwargs={"v_threshold": 0.7},
+    surrogate="spikingjelly.activation_based.surrogate.Rect",
+    surrogate_kwargs={"alpha": 1.5},
+)
+config = TrainingConfig(
+    model=SpikformerCIFAR10Config(
+        time_steps=1,
+        num_classes=2,
+        neuron_config=neuron_config,
+    ),
+    dataset_builder="__main__.build_tiny_datasets",
+    dataset_kwargs={"count": 4},
+    input_layout="NCHW",
+    epochs=1,
+    batch_size=1,
+    workers=0,
+    tensor_parallel_size=1,
+    data_parallel="ddp",
+    precision=PrecisionConfig(mode="fp32"),
+    max_steps=1,
+    timing_warmup_steps=0,
+    checkpoint_dir=checkpoint_root,
+    checkpoint_interval=1,
+)
+if phase == "train":
+    vision.train_classification(config)
+    sys.exit(0)
+
+if phase == "resume":
+    checkpoint = checkpoint_root / "step_00000001"
+    resumed = TrainingConfig.from_dict(config.as_dict())
+    resumed = replace(resumed, max_steps=2, resume=checkpoint)
+    vision.train_classification(resumed)
+    sys.exit(0)
+
+checkpoint = checkpoint_root / "step_00000002"
+device = torch.device("cuda", int(os.environ["LOCAL_RANK"]))
+images = torch.linspace(0.0, 1.0, 3 * 32 * 32, device=device).reshape(1, 3, 32, 32)
+reference_path = checkpoint_root / "reference_logits.pt"
+if phase == "export":
+    model = config.model.get_builder_cls()(config.model)._build_canonical_model()
+    model.to(device).eval()
+    _load_checkpoint_model(checkpoint, model, pipeline_rank=0, tensor_rank=0)
+    functional.reset_net(model)
+    with torch.no_grad():
+        torch.save(model(images).cpu(), reference_path)
+    export_inference_artifact(checkpoint, artifact_path)
+    sys.exit(0)
+
+model_config, state_dict, _ = load_inference_artifact(artifact_path)
+assert model_config == config.model
+builder = model_config.get_builder_cls()(model_config)
+model, _, _, _ = builder.build_for_inference(
+    state_dict,
+    process_group=None,
+    pipeline_rank=0,
+    pipeline_size=1,
+    pipeline_microbatches=1,
+    device=device,
+    micro_batch_size=1,
+)
+model.eval()
+functional.reset_net(model)
+with torch.no_grad():
+    logits = model(images)
+nodes = [module for module in model.modules() if isinstance(module, neuron.BaseNode)]
+assert nodes and all(type(node) is neuron.IFNode for node in nodes)
+assert all(node.v_threshold == 0.7 for node in nodes)
+assert all(isinstance(node.surrogate_function, surrogate.Rect) for node in nodes)
+assert all(node.surrogate_function.alpha == 1.5 for node in nodes)
+assert logits.shape == (1, 1, 2) and torch.isfinite(logits).all()
+torch.testing.assert_close(
+    logits.cpu(), torch.load(reference_path, weights_only=True), rtol=0, atol=0
+)
+if int(os.environ["RANK"]) == 0:
+    print("NEURON_ROUND_TRIP_OK", logits.cpu().tolist())
+""",
+        encoding="utf-8",
+    )
+    environment = dict(os.environ)
+    environment["OMP_NUM_THREADS"] = "1"
+    environment["MKL_NUM_THREADS"] = "1"
+    checkpoint_dir = tmp_path / "checkpoints"
+    artifact = tmp_path / "model.pt"
+    for process_count, phase in (
+        (2, "train"),
+        (2, "resume"),
+        (1, "export"),
+        (1, "infer"),
+    ):
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "torch.distributed.run",
+                "--standalone",
+                f"--nproc_per_node={process_count}",
+                str(script),
+                phase,
+                str(checkpoint_dir),
+                str(artifact),
+            ],
+            capture_output=True,
+            text=True,
+            env=environment,
+            timeout=900,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        if phase == "infer":
+            assert "NEURON_ROUND_TRIP_OK" in result.stdout
+    assert artifact.is_file()
 
 
 def test_vision_model_config_targets_load_in_a_fresh_process():
@@ -114,6 +383,85 @@ def test_vision_config_does_not_auto_import_external_targets(monkeypatch):
     assert imported == []
 
 
+def test_neuron_config_kwargs_do_not_resolve_nested_targets(monkeypatch):
+    imported = []
+    monkeypatch.setattr(
+        vision_config.importlib,
+        "import_module",
+        lambda name: imported.append(name),
+    )
+    data = SpikformerCIFAR10Config(
+        neuron_config=vision.NeuronConfig(
+            class_path="spikingjelly.activation_based.neuron.IFNode",
+            kwargs={"options": {"_target_": "external_package.payload.Code"}},
+        )
+    ).as_dict()
+
+    restored = vision.ModelConfig.from_dict(data)
+
+    assert restored.neuron_config.kwargs == {
+        "options": {"_target_": "external_package.payload.Code"}
+    }
+    assert imported == []
+
+
+@pytest.mark.parametrize("field", ["class_path", "surrogate"])
+def test_neuron_config_rejects_structured_class_paths_without_importing(
+    field, monkeypatch
+):
+    data = SpikformerCIFAR10Config(
+        neuron_config=vision.NeuronConfig(
+            class_path="spikingjelly.activation_based.neuron.integrate_and_fire.IFNode"
+        )
+    ).as_dict()
+    data["neuron_config"][field] = {
+        "_target_": "spikingjelly.activation_based.model.external.Payload"
+    }
+    imported = []
+    monkeypatch.setattr(vision_config.importlib, "import_module", imported.append)
+
+    with pytest.raises(TypeError, match=f"{field} must be a string"):
+        vision.ModelConfig.from_dict(data)
+    assert imported == []
+
+
+@pytest.mark.parametrize(
+    "model_config",
+    [
+        SEWResNet34Config(time_steps=1, num_classes=2, image_size=32),
+        SpikformerConfig(time_steps=1, num_classes=2, image_height=32, image_width=32),
+        SpikformerCIFAR10Config(time_steps=1, num_classes=2),
+    ],
+)
+def test_builtin_neuron_config_builders_restore_model_weights(model_config):
+    neuron_config = vision.NeuronConfig(
+        class_path=f"{neuron.IFNode.__module__}.{neuron.IFNode.__qualname__}",
+        kwargs={"v_threshold": 0.7},
+        surrogate=f"{surrogate.Rect.__module__}.{surrogate.Rect.__qualname__}",
+        surrogate_kwargs={"alpha": 1.5},
+    )
+    config = replace(model_config, neuron_config=neuron_config)
+    restored = vision.ModelConfig.from_dict(
+        json.loads(json.dumps(config.as_dict(), allow_nan=False))
+    )
+
+    torch.manual_seed(7)
+    source = restored.get_builder_cls()(restored)._build_canonical_model()
+    target = restored.get_builder_cls()(restored)._build_canonical_model()
+    target.load_state_dict(source.state_dict(), strict=True)
+    target_state = target.state_dict()
+    assert all(
+        torch.equal(source_value, target_state[name])
+        for name, source_value in source.state_dict().items()
+    )
+    nodes = [
+        module for module in target.modules() if isinstance(module, neuron.BaseNode)
+    ]
+    assert nodes and all(type(node) is neuron.IFNode for node in nodes)
+    assert all(node.v_threshold == 0.7 for node in nodes)
+    assert all(node.surrogate_function.alpha == 1.5 for node in nodes)
+
+
 def test_vision_evaluation_config_and_artifact_round_trip(tmp_path):
     config = vision.EvaluationConfig(
         artifact=tmp_path / "model.pt",
@@ -141,7 +489,7 @@ def test_vision_evaluation_config_and_artifact_round_trip(tmp_path):
     )
     torch.save(
         {
-            "schema_version": 1,
+            "schema_version": inference._ARTIFACT_SCHEMA_VERSION,
             "model_config": model_config.as_dict(),
             "state_dict": model.state_dict(),
             "source": {"checkpoint": "checkpoint"},
@@ -156,6 +504,22 @@ def test_vision_evaluation_config_and_artifact_round_trip(tmp_path):
     assert restored_config == model_config
     assert restored_state.keys() == model.state_dict().keys()
     assert source == {"checkpoint": "checkpoint"}
+
+
+def test_vision_artifact_rejects_v1_schema(tmp_path):
+    path = tmp_path / "legacy.pt"
+    torch.save(
+        {
+            "schema_version": 1,
+            "model_config": {},
+            "state_dict": {"weight": torch.ones(1)},
+            "source": {},
+        },
+        path,
+    )
+
+    with pytest.raises(ValueError, match="expected 2.*Re-export"):
+        inference.load_inference_artifact(path)
 
 
 def test_vision_prediction_writes_only_ordered_outputs(tmp_path):
