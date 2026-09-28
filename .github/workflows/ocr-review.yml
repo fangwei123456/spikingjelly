@@ -80,10 +80,11 @@ jobs:
           llm_auth_token: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
           llm_model: ${{ secrets.OCR_LLM_MODEL }}
           llm_use_anthropic: 'false'
-          llm_extra_body: '{"thinking":{"type":"adaptive"},"reasoning_split":true}'
+          llm_extra_body: '{"reasoning":{"effort":"medium"}}'
           background: |
             Review SpikingJelly with precision over recall.
             Report only concrete, current, user-observable defects, security or data-loss risks, substantial measured regressions, or violations of an explicit project contract. Every finding must name one trigger, one consequence, and one primary fix.
+            Report at most five distinct findings across the pull request, prioritizing the most severe and highest-impact root causes. Do not fill the limit with lower-priority or speculative findings.
             Do not report standalone style, naming, formatting, unused imports, shadowing, comments, docstrings, help text, refactoring, idiomatic alternatives, or extra tests/docs unless they cause a concrete behavior change or violate an explicit repository requirement.
             Do not speculate about future callers or APIs, unsupported hardware or versions, malformed inputs outside the supported contract, unmeasured micro-optimizations, intentional strictness, documented invariants, fixed benchmark scope, or fail-fast behavior.
             For examples, benchmarks, tests, plots, and generated results, report only issues that break CI, invalidate a measurement, corrupt an artifact, or change documented user-facing behavior. Emit one finding per root cause and stay silent when evidence is inconclusive.
@@ -96,4 +97,5 @@ jobs:
           checkpoint_range: 'true'
           route_severity_below: 'low'
           route_categories: 'style,documentation'
+          effort: 'medium'
           stream_progress: 'true'

@@ -18,20 +18,45 @@ fi
 
 "$real_ocr" "$@"
 ocr_exit_code=$?
-if (( ocr_exit_code != 0 )) || [[ "${1:-}" != "review" ]]; then
+if [[ "${1:-}" != "review" ]]; then
     exit "$ocr_exit_code"
 fi
 
 result_path=/tmp/ocr-result.json
 if [[ ! -s "$result_path" ]] || ! command -v jq >/dev/null 2>&1; then
     printf 'Could not verify OpenCodeReview review status.\n' >&2
+    if (( ocr_exit_code != 0 )); then
+        exit "$ocr_exit_code"
+    fi
     exit 1
 fi
 
 review_status="$(jq -er '.status | strings' "$result_path")" || {
     printf 'OpenCodeReview result has no valid review status.\n' >&2
+    if (( ocr_exit_code != 0 )); then
+        exit "$ocr_exit_code"
+    fi
     exit 1
 }
+
+finding_count="$(jq -er 'if (.comments | type) == "array" then (.comments | length) else error("comments must be an array") end' "$result_path")" || {
+    printf 'OpenCodeReview result has no valid comments array.\n' >&2
+    if (( ocr_exit_code != 0 )); then
+        exit "$ocr_exit_code"
+    fi
+    exit 1
+}
+
+if (( finding_count > 0 )); then
+    if (( ocr_exit_code != 0 )) || [[ "$review_status" != success && "$review_status" != skipped ]]; then
+        printf 'OpenCodeReview ended with status %s and exit %s; publishing %s finding(s).\n' "$review_status" "$ocr_exit_code" "$finding_count" >&2
+    fi
+    exit 0
+fi
+
+if (( ocr_exit_code != 0 )); then
+    exit "$ocr_exit_code"
+fi
 
 if [[ "$review_status" != success && "$review_status" != skipped ]]; then
     printf 'OpenCodeReview ended with status %s; withholding PR comments.\n' "$review_status" >&2
