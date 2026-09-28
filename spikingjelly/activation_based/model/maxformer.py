@@ -1,25 +1,35 @@
+from typing import Any, Callable, Dict, Optional
+
 import torch
 import torch.nn as nn
 
 from .. import functional, layer, neuron
+from .._neuron import _make_multi_step_neuron
 
 __all__ = ["MaxFormer", "maxformer_10_384"]
 
 
 class _MaxEmbedInit(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, backend: str):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        backend: str,
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]],
+        neuron_kwargs: Dict[str, Any],
+    ) -> None:
         super().__init__()
         hidden = out_channels // 2
         self.conv1 = layer.Conv2d(
             in_channels, hidden, 3, stride=2, padding=1, step_mode="m"
         )
         self.bn1 = layer.BatchNorm2d(hidden, step_mode="m")
-        self.lif1 = neuron.LIFNode(step_mode="m", backend=backend)
+        self.lif1 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
         self.conv2 = layer.Conv2d(
             hidden, out_channels, 3, stride=2, padding=1, step_mode="m"
         )
         self.bn2 = layer.BatchNorm2d(out_channels, step_mode="m")
-        self.lif2 = neuron.LIFNode(step_mode="m", backend=backend)
+        self.lif2 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
         self.conv3 = layer.Conv2d(
             out_channels, out_channels, 3, padding=1, step_mode="m"
         )
@@ -40,19 +50,26 @@ class _MaxEmbedInit(nn.Module):
 
 
 class _MaxEmbedStage(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, backend: str):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        backend: str,
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]],
+        neuron_kwargs: Dict[str, Any],
+    ) -> None:
         super().__init__()
         self.conv1 = layer.Conv2d(
             in_channels, out_channels, 3, padding=1, step_mode="m"
         )
         self.bn1 = layer.BatchNorm2d(out_channels, step_mode="m")
-        self.lif1 = neuron.LIFNode(step_mode="m", backend=backend)
+        self.lif1 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
         self.pool = layer.MaxPool2d(3, stride=2, padding=1, step_mode="m")
         self.conv2 = layer.Conv2d(
             out_channels, out_channels, 3, padding=1, step_mode="m"
         )
         self.bn2 = layer.BatchNorm2d(out_channels, step_mode="m")
-        self.lif2 = neuron.LIFNode(step_mode="m", backend=backend)
+        self.lif2 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
         self.shortcut = nn.Sequential(
             layer.Conv2d(in_channels, out_channels, 1, stride=1, step_mode="m"),
             layer.BatchNorm2d(out_channels, step_mode="m"),
@@ -70,15 +87,22 @@ class _MaxEmbedStage(nn.Module):
 
 
 class _SpatialMLP(nn.Module):
-    def __init__(self, dim: int, hidden_dim: int, backend: str):
+    def __init__(
+        self,
+        dim: int,
+        hidden_dim: int,
+        backend: str,
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]],
+        neuron_kwargs: Dict[str, Any],
+    ) -> None:
         super().__init__()
         self.residual = dim == hidden_dim
         self.fc1 = layer.Conv2d(dim, hidden_dim, 1, step_mode="m")
         self.bn1 = layer.BatchNorm2d(hidden_dim, step_mode="m")
-        self.lif1 = neuron.LIFNode(step_mode="m", backend=backend)
+        self.lif1 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
         self.fc2 = layer.Conv2d(hidden_dim, dim, 1, step_mode="m")
         self.bn2 = layer.BatchNorm2d(dim, step_mode="m")
-        self.lif2 = neuron.LIFNode(step_mode="m", backend=backend)
+        self.lif2 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         identity = x
@@ -91,9 +115,17 @@ class _SpatialMLP(nn.Module):
 
 
 class _DWCBlock(nn.Module):
-    def __init__(self, dim: int, kernel_size: int, mlp_ratio: float, backend: str):
+    def __init__(
+        self,
+        dim: int,
+        kernel_size: int,
+        mlp_ratio: float,
+        backend: str,
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]],
+        neuron_kwargs: Dict[str, Any],
+    ) -> None:
         super().__init__()
-        self.lif = neuron.LIFNode(step_mode="m", backend=backend)
+        self.lif = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
         self.dwconv = layer.Conv2d(
             dim,
             dim,
@@ -103,7 +135,9 @@ class _DWCBlock(nn.Module):
             step_mode="m",
         )
         self.bn = layer.BatchNorm2d(dim, step_mode="m")
-        self.mlp = _SpatialMLP(dim, int(dim * mlp_ratio), backend)
+        self.mlp = _SpatialMLP(
+            dim, int(dim * mlp_ratio), backend, spiking_neuron, neuron_kwargs
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x + self.bn(self.dwconv(self.lif(x)))
@@ -111,10 +145,26 @@ class _DWCBlock(nn.Module):
 
 
 class _SSABlock(nn.Module):
-    def __init__(self, dim: int, num_heads: int, mlp_ratio: float, backend: str):
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        mlp_ratio: float,
+        backend: str,
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]],
+        neuron_kwargs: Dict[str, Any],
+    ) -> None:
         super().__init__()
-        self.attn = layer.SpikingSelfAttention(dim, num_heads, backend=backend)
-        self.mlp = _SpatialMLP(dim, int(dim * mlp_ratio), backend)
+        self.attn = layer.SpikingSelfAttention(
+            dim,
+            num_heads,
+            backend=backend,
+            spiking_neuron=spiking_neuron,
+            **neuron_kwargs,
+        )
+        self.mlp = _SpatialMLP(
+            dim, int(dim * mlp_ratio), backend, spiking_neuron, neuron_kwargs
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         shape = x.shape
@@ -133,6 +183,8 @@ class MaxFormer(nn.Module):
         depths: tuple[int, int, int] = (1, 2, 7),
         mlp_ratio: float = 4.0,
         backend: str = "torch",
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+        **kwargs: Any,
     ) -> None:
         r"""
         **API Language** - :ref:`中文 <MaxFormer.__init__-cn>` | :ref:`English <MaxFormer.__init__-en>`
@@ -164,6 +216,10 @@ class MaxFormer(nn.Module):
         :type mlp_ratio: float
         :param backend: 内部脉冲神经元使用的后端
         :type backend: str
+        :param spiking_neuron: 自定义神经元类；``None`` 保留论文默认值
+        :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+        :param kwargs: 传给所有内部神经元的参数；指定自定义类时统一决定其构造
+        :type kwargs: Any
         :raises ValueError: ``depths`` 不含三个值，或 ``embed_dims`` 不能被
             ``4`` 整除
 
@@ -196,6 +252,11 @@ class MaxFormer(nn.Module):
         :type mlp_ratio: float
         :param backend: backend used by the internal spiking neurons
         :type backend: str
+        :param spiking_neuron: custom neuron class; ``None`` keeps the paper defaults
+        :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+        :param kwargs: arguments passed to all internal neurons; with a custom
+            class, these arguments define its construction uniformly
+        :type kwargs: Any
         :raises ValueError: if ``depths`` does not contain three values or
             ``embed_dims`` is not divisible by ``4``
 
@@ -211,22 +272,41 @@ class MaxFormer(nn.Module):
             )
         dims = (embed_dims // 4, embed_dims // 2, embed_dims)
         self.T = T
-        self.patch_embed1 = _MaxEmbedInit(in_channels, dims[0], backend)
-        self.patch_embed2 = _MaxEmbedStage(dims[0], dims[1], backend)
-        self.patch_embed3 = _MaxEmbedStage(dims[1], dims[2], backend)
+        self.patch_embed1 = _MaxEmbedInit(
+            in_channels, dims[0], backend, spiking_neuron, kwargs
+        )
+        self.patch_embed2 = _MaxEmbedStage(
+            dims[0], dims[1], backend, spiking_neuron, kwargs
+        )
+        self.patch_embed3 = _MaxEmbedStage(
+            dims[1], dims[2], backend, spiking_neuron, kwargs
+        )
         self.stage1 = nn.ModuleList(
-            [_DWCBlock(dims[0], 7, mlp_ratio, backend) for _ in range(depths[0])]
+            [
+                _DWCBlock(dims[0], 7, mlp_ratio, backend, spiking_neuron, kwargs)
+                for _ in range(depths[0])
+            ]
         )
         self.stage2 = nn.ModuleList(
-            [_DWCBlock(dims[1], 5, mlp_ratio, backend) for _ in range(depths[1])]
+            [
+                _DWCBlock(dims[1], 5, mlp_ratio, backend, spiking_neuron, kwargs)
+                for _ in range(depths[1])
+            ]
         )
         self.stage3 = nn.ModuleList(
             [
-                _SSABlock(dims[2], max(1, dims[2] // 64), mlp_ratio, backend)
+                _SSABlock(
+                    dims[2],
+                    max(1, dims[2] // 64),
+                    mlp_ratio,
+                    backend,
+                    spiking_neuron,
+                    kwargs,
+                )
                 for _ in range(depths[2])
             ]
         )
-        self.head_lif = neuron.LIFNode(step_mode="m", backend=backend)
+        self.head_lif = _make_multi_step_neuron(backend, spiking_neuron, kwargs)
         self.head = nn.Linear(embed_dims, num_classes)
         functional.set_step_mode(self, "m")
 
@@ -286,6 +366,8 @@ def maxformer_10_384(
     in_channels: int = 3,
     num_classes: int = 1000,
     backend: str = "torch",
+    spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+    **kwargs: Any,
 ) -> MaxFormer:
     r"""
     **API Language** - :ref:`中文 <maxformer_10_384-cn>` | :ref:`English <maxformer_10_384-en>`
@@ -306,6 +388,10 @@ def maxformer_10_384(
     :type num_classes: int
     :param backend: 内部脉冲神经元使用的后端
     :type backend: str
+    :param spiking_neuron: 自定义神经元类；``None`` 保留论文默认值
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: 传给内部神经元的参数
+    :type kwargs: Any
     :return: Max-Former-10-384 模型
     :rtype: MaxFormer
 
@@ -325,6 +411,10 @@ def maxformer_10_384(
     :type num_classes: int
     :param backend: backend used by the internal spiking neurons
     :type backend: str
+    :param spiking_neuron: custom neuron class; ``None`` keeps the paper default
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: arguments passed to the internal neurons
+    :type kwargs: Any
     :return: Max-Former-10-384 model
     :rtype: MaxFormer
     """
@@ -335,4 +425,6 @@ def maxformer_10_384(
         embed_dims=384,
         depths=(1, 2, 7),
         backend=backend,
+        spiking_neuron=spiking_neuron,
+        **kwargs,
     )

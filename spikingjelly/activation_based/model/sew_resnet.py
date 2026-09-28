@@ -12,7 +12,12 @@ from ..distributed.tensor_parallel import (
     ChannelShardBatchNorm2d,
     ChannelShardConv2d,
 )
-from ..distributed.vision.config import ModelBuilder, ModelConfig
+from ..distributed.vision.config import (
+    ModelBuilder,
+    ModelConfig,
+    NeuronConfig,
+    _resolve_neuron_config,
+)
 
 try:
     from torchvision.models.utils import load_state_dict_from_url
@@ -963,6 +968,7 @@ class SEWResNet34Config(ModelConfig):
     neuron_backend: str = "torch"
     tau: float = 2.0
     detach_reset: bool = True
+    neuron_config: Optional[NeuronConfig] = None
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -972,7 +978,7 @@ class SEWResNet34Config(ModelConfig):
             raise ValueError("The built-in SEW-ResNet34 requires in_channels=3.")
         if self.connection not in {"ADD", "AND", "IAND"}:
             raise ValueError("connection must be 'ADD', 'AND', or 'IAND'.")
-        if self.tau <= 1.0:
+        if self.neuron_config is None and self.tau <= 1.0:
             raise ValueError("tau must be greater than 1.0.")
         if self.step_mode == "s" and self.neuron_backend == "triton":
             raise ValueError("The Triton neuron backend requires step_mode='m'.")
@@ -980,37 +986,72 @@ class SEWResNet34Config(ModelConfig):
 
 SEWResNet34Config.__init__.__doc__ = r"""Configure SEW-ResNet34 distributed execution.
 
-**API Language** - 中文 | English
+**API Language** - :ref:`中文 <model-sew-resnet34-config-cn>` | :ref:`English <model-sew-resnet34-config-en>`
 
-**中文：** 声明 ImageNet 型 SEW-ResNet34 的时间步、输入、连接方式和 LIF 参数。
-模型 recipe 使用 BasicBlock 内显式的 colwise/rowwise 通道并行策略。
+----
 
-**English:** Declare time-step, input, residual-connection, and LIF parameters
-for ImageNet-style SEW-ResNet34. The model recipe uses explicit colwise/rowwise
-channel parallelism inside BasicBlock.
+.. _model-sew-resnet34-config-cn:
 
-:param time_steps: SNN 时间步。 / SNN time steps.
+* **中文**
+
+配置 ImageNet 型 SEW-ResNet34。模型使用 BasicBlock 内的通道并行策略。
+
+:param time_steps: 仿真时间步，默认 ``4``，须为正数。
 :type time_steps: int
-:param num_classes: 分类类别数。 / Number of classes.
+:param num_classes: 类别数，默认 ``1000``，须为正数。
 :type num_classes: int
-:param step_mode: ``"s"``（单步）或 ``"m"``（多步）。 / ``"s"``
-    (single-step) or ``"m"`` (multi-step).
+:param step_mode: ``"s"`` 或 ``"m"``，默认 ``"m"``；Triton 后端要求 ``"m"``。
 :type step_mode: str
-:param image_size: 输入图像边长。 / Input image side length.
+:param image_size: 图像边长，默认 ``224``，须为正数。
 :type image_size: int
-:param in_channels: 固定为 ``3``。 / Must be ``3``.
+:param in_channels: 输入通道数，固定为 ``3``。
 :type in_channels: int
-:param connection: ``"ADD"``、``"AND"`` 或 ``"IAND"`` 残差连接。 / Residual
-    connection type.
+:param connection: 残差连接 ``"ADD"``、``"AND"`` 或 ``"IAND"``，默认 ``"ADD"``。
 :type connection: str
-:param neuron_backend: LIFNode backend。 / LIFNode backend.
+:param neuron_backend: 神经元后端，默认 ``"torch"``。
 :type neuron_backend: str
-:param tau: LIF 膜时间常数。 / LIF membrane time constant.
+:param tau: 默认 ``2.0``；仅在 ``neuron_config=None`` 时用于 LIF，且须大于 ``1``。
 :type tau: float
-:param detach_reset: 是否分离 reset 梯度。 / Whether to detach reset gradients.
+:param detach_reset: 默认 ``True``；仅在 ``neuron_config=None`` 时用于 LIF。
 :type detach_reset: bool
-:raises ValueError: 图像、通道、连接方式或神经元参数无效。 / If image, channel,
-    connection, or neuron values are invalid.
+:param neuron_config: 可序列化的自定义神经元；默认 ``None`` 使用上述 LIF 配置。
+:type neuron_config: Optional[NeuronConfig]
+:raises ValueError: 时间步、类别数、步进模式、图像或连接参数无效，或默认 LIF 的
+    ``tau`` 不大于 ``1``。
+
+----
+
+.. _model-sew-resnet34-config-en:
+
+* **English**
+
+Configure ImageNet-style SEW-ResNet34 with channel parallelism inside BasicBlock.
+
+:param time_steps: Simulation steps, positive; default ``4``.
+:type time_steps: int
+:param num_classes: Number of classes, positive; default ``1000``.
+:type num_classes: int
+:param step_mode: ``"s"`` or ``"m"`` (default); Triton requires ``"m"``.
+:type step_mode: str
+:param image_size: Image side length, positive; default ``224``.
+:type image_size: int
+:param in_channels: Input channels, fixed at ``3``.
+:type in_channels: int
+:param connection: ``"ADD"`` (default), ``"AND"``, or ``"IAND"`` residual rule.
+:type connection: str
+:param neuron_backend: Neuron backend; default ``"torch"``.
+:type neuron_backend: str
+:param tau: Default ``2.0``; used by LIF only when ``neuron_config=None`` and
+    must then exceed ``1``.
+:type tau: float
+:param detach_reset: Default ``True``; used by LIF only when
+    ``neuron_config=None``.
+:type detach_reset: bool
+:param neuron_config: Serializable custom neuron; ``None`` (default) uses the
+    LIF settings above.
+:type neuron_config: Optional[NeuronConfig]
+:raises ValueError: If steps, classes, step mode, image or connection values
+    are invalid, or the default LIF ``tau`` does not exceed ``1``.
 """
 
 
@@ -1032,13 +1073,16 @@ class SEWResNet34Builder(ModelBuilder):
         config = self.config
         if not isinstance(config, SEWResNet34Config):
             raise TypeError("SEWResNet34Builder requires SEWResNet34Config.")
+        spiking_neuron, neuron_kwargs = _resolve_neuron_config(config.neuron_config)
+        if spiking_neuron is None:
+            spiking_neuron = neuron.LIFNode
+            neuron_kwargs = {"tau": config.tau, "detach_reset": config.detach_reset}
         model = sew_resnet34(
             pretrained=False,
             cnf=config.connection,
-            spiking_neuron=neuron.LIFNode,
+            spiking_neuron=spiking_neuron,
             num_classes=config.num_classes,
-            tau=config.tau,
-            detach_reset=config.detach_reset,
+            **neuron_kwargs,
             backend="torch",
         )
         functional.set_step_mode(model, config.step_mode)

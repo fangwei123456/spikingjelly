@@ -1,4 +1,5 @@
 import copy
+from functools import partial
 
 import pytest
 import torch
@@ -18,6 +19,7 @@ from spikingjelly.activation_based.model.qkformer import QKFormer
 from spikingjelly.activation_based.model.spike_driven_transformer import (
     SpikeDrivenTransformer,
 )
+from spikingjelly.activation_based.model.spikformer import Spikformer
 
 
 def _train_step(model):
@@ -144,6 +146,96 @@ def test_spike_driven_transformer_tiny_forward_and_backward():
     assert features.shape[-2:] == (8, 8)
     functional.reset_net(model)
     _train_step(model)
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        partial(
+            MSResNet,
+            in_channels=3,
+            layers=(1, 1, 1),
+            base_channels=8,
+            stem_kernel_size=3,
+            stem_stride=1,
+        ),
+        partial(
+            MaxResNet,
+            in_channels=3,
+            layers=(1, 1, 1),
+            base_channels=8,
+            stem_kernel_size=3,
+            stem_stride=1,
+        ),
+        partial(
+            MaxFormer,
+            embed_dims=32,
+            depths=(1, 1, 1),
+        ),
+        partial(
+            QKFormer,
+            embed_dims=32,
+            num_heads=(1, 2, 4),
+            depths=(1, 1, 1),
+        ),
+        partial(
+            SpikeDrivenTransformer,
+            embed_dims=32,
+            num_heads=4,
+            depths=1,
+            pooling_stat="1010",
+        ),
+        partial(
+            Spikformer,
+            img_size_h=32,
+            img_size_w=32,
+            patch_size=4,
+            embed_dims=32,
+            num_heads=4,
+            depths=1,
+        ),
+    ],
+)
+def test_paper_models_apply_custom_neuron_arguments_to_every_site(factory):
+    model = factory(
+        T=2,
+        num_classes=5,
+        spiking_neuron=neuron.IFNode,
+        v_threshold=0.7,
+        surrogate_function=surrogate.Rect(alpha=1.5),
+    ).eval()
+    nodes = [
+        module for module in model.modules() if isinstance(module, neuron.BaseNode)
+    ]
+
+    assert nodes
+    assert all(type(node) is neuron.IFNode for node in nodes)
+    assert all(node.v_threshold == 0.7 for node in nodes)
+    assert all(node.step_mode == "m" for node in nodes)
+    assert all(node.surrogate_function.alpha == 1.5 for node in nodes)
+    assert len({id(node.surrogate_function) for node in nodes}) == len(nodes)
+
+
+@pytest.mark.parametrize(
+    ("attention_class", "shape"),
+    [
+        (layer.SpikingSelfAttention, (2, 1, 8, 4)),
+        (layer.QKAttention, (2, 1, 8, 4)),
+        (layer.SpikeDrivenSelfAttention, (2, 1, 8, 2, 2)),
+    ],
+)
+def test_public_attention_layers_apply_custom_neuron_arguments(attention_class, shape):
+    attention = attention_class(
+        dim=8, num_heads=2, spiking_neuron=neuron.IFNode, v_threshold=0.7
+    ).eval()
+    nodes = [
+        module for module in attention.modules() if isinstance(module, neuron.BaseNode)
+    ]
+
+    assert nodes
+    assert all(type(node) is neuron.IFNode for node in nodes)
+    assert all(node.v_threshold == 0.7 for node in nodes)
+    assert attention(torch.randn(*shape)).shape == shape
 
 
 def test_masnn_tiny_forward_and_backward():

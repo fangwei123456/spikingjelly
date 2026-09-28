@@ -1,7 +1,10 @@
+from typing import Any, Callable, Dict, Optional
+
 import torch
 import torch.nn as nn
 
 from .. import functional, layer, neuron, surrogate
+from .._neuron import _make_multi_step_neuron
 
 __all__ = [
     "MSResNet",
@@ -35,26 +38,30 @@ def _conv1x1(in_channels: int, out_channels: int, stride: int = 1) -> layer.Conv
     )
 
 
-def _ms_lif(backend: str, tau: float) -> neuron.LIFNode:
-    return neuron.LIFNode(
-        tau=tau,
-        v_threshold=0.5,
-        detach_reset=True,
-        decay_input=False,
-        step_mode="m",
-        surrogate_function=surrogate.Rect(alpha=2.0),
-        backend=backend,
-    )
-
-
 class _MSBlock(nn.Module):
     tau = 4.0 / 3.0
     bn_weight = 0.5
     zero_init = True
 
     @classmethod
-    def _make_lif(cls, backend: str) -> neuron.LIFNode:
-        return _ms_lif(backend, cls.tau)
+    def _make_lif(
+        cls,
+        backend: str,
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+        kwargs: Optional[Dict[str, Any]] = None,
+    ) -> neuron.BaseNode:
+        return _make_multi_step_neuron(
+            backend,
+            spiking_neuron,
+            kwargs or {},
+            {
+                "tau": cls.tau,
+                "v_threshold": 0.5,
+                "detach_reset": True,
+                "decay_input": False,
+                "surrogate_function": surrogate.Rect(alpha=2.0),
+            },
+        )
 
     def __init__(
         self,
@@ -63,13 +70,15 @@ class _MSBlock(nn.Module):
         stride: int,
         backend: str,
         downsample: nn.Module | None,
-    ):
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+        neuron_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> None:
         super().__init__()
-        self.spike1 = self._make_lif(backend)
+        self.spike1 = self._make_lif(backend, spiking_neuron, neuron_kwargs)
         self.conv1 = _conv3x3(in_channels, out_channels, stride)
         self.bn1 = layer.BatchNorm2d(out_channels, step_mode="m")
         nn.init.constant_(self.bn1.weight, self.bn_weight)
-        self.spike2 = self._make_lif(backend)
+        self.spike2 = self._make_lif(backend, spiking_neuron, neuron_kwargs)
         self.conv2 = _conv3x3(out_channels, out_channels)
         self.bn2 = layer.BatchNorm2d(out_channels, step_mode="m")
         nn.init.constant_(self.bn2.weight, 0.0 if self.zero_init else self.bn_weight)
@@ -88,9 +97,17 @@ class _MaxResNetBlock(_MSBlock):
     zero_init = False
 
     @classmethod
-    def _make_lif(cls, backend: str) -> neuron.LIFNode:
-        return neuron.LIFNode(
-            tau=cls.tau, detach_reset=True, step_mode="m", backend=backend
+    def _make_lif(
+        cls,
+        backend: str,
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+        kwargs: Optional[Dict[str, Any]] = None,
+    ) -> neuron.BaseNode:
+        return _make_multi_step_neuron(
+            backend,
+            spiking_neuron,
+            kwargs or {},
+            {"tau": cls.tau, "detach_reset": True},
         )
 
 
@@ -102,8 +119,18 @@ class _MaxResNetMaxBlock(_MaxResNetBlock):
         stride: int,
         backend: str,
         downsample: nn.Module | None,
-    ):
-        super().__init__(in_channels, out_channels, 1, backend, downsample)
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+        neuron_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(
+            in_channels,
+            out_channels,
+            1,
+            backend,
+            downsample,
+            spiking_neuron,
+            neuron_kwargs,
+        )
         self.max_pool = layer.MaxPool2d(
             kernel_size=3, stride=stride, padding=1, step_mode="m"
         )
@@ -154,6 +181,10 @@ class MSResNet(nn.Module):
     :type stage_channels: tuple[int, ...] | None
     :param backend: 内部脉冲神经元使用的后端
     :type backend: str
+    :param spiking_neuron: 自定义神经元类；``None`` 保留各位置的论文默认值
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: 传给所有内部神经元的参数；指定自定义类时这些参数完整决定神经元构造
+    :type kwargs: Any
     :raises ValueError: ``layers`` 不含三个或四个值，或
         ``stage_channels`` 与 ``layers`` 长度不同
 
@@ -193,6 +224,11 @@ class MSResNet(nn.Module):
     :type stage_channels: tuple[int, ...] | None
     :param backend: backend used by the internal spiking neurons
     :type backend: str
+    :param spiking_neuron: custom neuron class; ``None`` keeps each paper default
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: arguments passed to every internal neuron; with a custom class,
+        these arguments fully define its construction
+    :type kwargs: Any
     :raises ValueError: if ``layers`` does not contain three or four values,
         or ``stage_channels`` and ``layers`` have different lengths
 
@@ -219,6 +255,8 @@ class MSResNet(nn.Module):
         stem_pool: bool = False,
         stage_channels: tuple[int, ...] | None = None,
         backend: str = "torch",
+        spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+        **kwargs: Any,
     ) -> None:
         super().__init__()
         if len(layers) not in (3, 4):
@@ -230,6 +268,8 @@ class MSResNet(nn.Module):
         self.T = T
         self.inplanes = base_channels
         self.backend = backend
+        self._spiking_neuron = spiking_neuron
+        self._neuron_kwargs = kwargs
         stem_bn = layer.BatchNorm2d(base_channels, step_mode="m")
         nn.init.constant_(stem_bn.weight, self._bn_weight)
         self.stem = nn.Sequential(
@@ -258,9 +298,13 @@ class MSResNet(nn.Module):
             else None
         )
         final_channels = stage_channels[-1]
-        self.head_lif = self._block_type._make_lif(backend)
+        self.head_lif = self._block_type._make_lif(
+            backend, self._spiking_neuron, self._neuron_kwargs
+        )
         self.avgpool = layer.AdaptiveAvgPool2d((1, 1), step_mode="m")
         self.head = layer.Linear(final_channels, num_classes, step_mode="m")
+        # Keep the inherited stage-hook signature; its arguments are construction-only.
+        del self._spiking_neuron, self._neuron_kwargs
         functional.set_step_mode(self, "m")
 
     def _make_layer(self, out_channels: int, blocks: int, stride: int) -> nn.Sequential:
@@ -274,11 +318,27 @@ class MSResNet(nn.Module):
             )
         block_type = self._transition_block_type if stride != 1 else self._block_type
         layers = [
-            block_type(self.inplanes, out_channels, stride, self.backend, downsample)
+            block_type(
+                self.inplanes,
+                out_channels,
+                stride,
+                self.backend,
+                downsample,
+                self._spiking_neuron,
+                self._neuron_kwargs,
+            )
         ]
         self.inplanes = out_channels
         layers.extend(
-            self._block_type(out_channels, out_channels, 1, self.backend, None)
+            self._block_type(
+                out_channels,
+                out_channels,
+                1,
+                self.backend,
+                None,
+                self._spiking_neuron,
+                self._neuron_kwargs,
+            )
             for _ in range(1, blocks)
         )
         return nn.Sequential(*layers)
@@ -365,6 +425,8 @@ def ms_resnet18(
     in_channels: int = 3,
     num_classes: int = 1000,
     backend: str = "torch",
+    spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+    **kwargs: Any,
 ) -> MSResNet:
     r"""
     **API Language** - :ref:`中文 <ms_resnet18-cn>` | :ref:`English <ms_resnet18-en>`
@@ -385,6 +447,10 @@ def ms_resnet18(
     :type num_classes: int
     :param backend: 内部脉冲神经元使用的后端
     :type backend: str
+    :param spiking_neuron: 自定义神经元类；``None`` 保留论文默认值
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: 传给内部神经元的参数
+    :type kwargs: Any
     :return: MS-ResNet-18 模型
     :rtype: MSResNet
 
@@ -404,11 +470,20 @@ def ms_resnet18(
     :type num_classes: int
     :param backend: backend used by the internal spiking neurons
     :type backend: str
+    :param spiking_neuron: custom neuron class; ``None`` keeps the paper default
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: arguments passed to the internal neurons
+    :type kwargs: Any
     :return: MS-ResNet-18 model
     :rtype: MSResNet
     """
     return MSResNet(
-        T=T, in_channels=in_channels, num_classes=num_classes, backend=backend
+        T=T,
+        in_channels=in_channels,
+        num_classes=num_classes,
+        backend=backend,
+        spiking_neuron=spiking_neuron,
+        **kwargs,
     )
 
 
@@ -417,6 +492,8 @@ def ms_resnet34(
     in_channels: int = 3,
     num_classes: int = 1000,
     backend: str = "torch",
+    spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+    **kwargs: Any,
 ) -> MSResNet:
     r"""
     **API Language** - :ref:`中文 <ms_resnet34-cn>` | :ref:`English <ms_resnet34-en>`
@@ -437,6 +514,10 @@ def ms_resnet34(
     :type num_classes: int
     :param backend: 内部脉冲神经元使用的后端
     :type backend: str
+    :param spiking_neuron: 自定义神经元类；``None`` 保留论文默认值
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: 传给内部神经元的参数
+    :type kwargs: Any
     :return: MS-ResNet-34 模型
     :rtype: MSResNet
 
@@ -456,6 +537,10 @@ def ms_resnet34(
     :type num_classes: int
     :param backend: backend used by the internal spiking neurons
     :type backend: str
+    :param spiking_neuron: custom neuron class; ``None`` keeps the paper default
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: arguments passed to the internal neurons
+    :type kwargs: Any
     :return: MS-ResNet-34 model
     :rtype: MSResNet
     """
@@ -465,6 +550,8 @@ def ms_resnet34(
         num_classes=num_classes,
         layers=(3, 4, 6, 3),
         backend=backend,
+        spiking_neuron=spiking_neuron,
+        **kwargs,
     )
 
 
@@ -473,6 +560,8 @@ def max_resnet18(
     in_channels: int = 3,
     num_classes: int = 10,
     backend: str = "torch",
+    spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
+    **kwargs: Any,
 ) -> MaxResNet:
     r"""
     **API Language** - :ref:`中文 <max_resnet18-cn>` | :ref:`English <max_resnet18-en>`
@@ -494,6 +583,10 @@ def max_resnet18(
     :type num_classes: int
     :param backend: 内部脉冲神经元使用的后端
     :type backend: str
+    :param spiking_neuron: 自定义神经元类；``None`` 保留论文默认值
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: 传给内部神经元的参数
+    :type kwargs: Any
     :return: Max-ResNet-18 模型
     :rtype: MaxResNet
 
@@ -514,6 +607,10 @@ def max_resnet18(
     :type num_classes: int
     :param backend: backend used by the internal spiking neurons
     :type backend: str
+    :param spiking_neuron: custom neuron class; ``None`` keeps the paper default
+    :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
+    :param kwargs: arguments passed to the internal neurons
+    :type kwargs: Any
     :return: Max-ResNet-18 model
     :rtype: MaxResNet
 
@@ -532,4 +629,6 @@ def max_resnet18(
         stem_stride=1,
         stem_pool=False,
         backend=backend,
+        spiking_neuron=spiking_neuron,
+        **kwargs,
     )

@@ -37,7 +37,7 @@ from .execution import (
     _wrap_data_parallel,
 )
 
-_ARTIFACT_SCHEMA_VERSION = 1
+_ARTIFACT_SCHEMA_VERSION = 2
 
 
 def _import_object(path: str) -> Any:
@@ -88,12 +88,13 @@ def export_inference_artifact(checkpoint: Path, output: Path) -> None:
 
     **中文：** 使用训练 checkpoint 记录的 TP/PP 拓扑构建各 rank stage，
     仅恢复 model state，然后在 global rank 0 合并为与目标推理拓扑
-    无关的 CPU artifact。运行时 world size 必须等于源 ``TP * PP``。
+    无关的 CPU artifact；导出 schema 版本为 ``2``。运行时 world size
+    必须等于源 ``TP * PP``。
 
     **English:** Build every source TP/PP stage recorded by the training
     checkpoint, restore model state only, and merge a topology-independent CPU
-    artifact on global rank zero. The launch world size must equal source
-    ``TP * PP``.
+    artifact with schema version ``2`` on global rank zero. The launch world size
+    must equal source ``TP * PP``.
 
     :param checkpoint: 训练 checkpoint 目录。 / Training checkpoint directory.
     :type checkpoint: pathlib.Path
@@ -211,9 +212,10 @@ def load_inference_artifact(
 ) -> tuple[ModelConfig, dict[str, torch.Tensor], dict[str, Any]]:
     r"""Load and validate a vision inference artifact on CPU.
 
-    **中文：** 返回 model config、canonical state 和来源元数据。
-    **English:** Return the model configuration, canonical state, and source
-    metadata.
+    **中文：** 仅接受 schema v2，返回 model config、canonical state 和来源元数据；
+    schema v1 artifact 必须重新导出。
+    **English:** Accept only schema v2 and return the model config, canonical
+    state, and source metadata. Schema v1 artifacts must be re-exported.
 
     :param path: Artifact 文件。 / Artifact file.
     :type path: pathlib.Path
@@ -222,11 +224,16 @@ def load_inference_artifact(
     :raises ValueError: schema 或内容无效。 / If the schema or payload is invalid.
     """
     artifact = torch.load(Path(path), map_location="cpu", weights_only=True)
-    if (
-        not isinstance(artifact, dict)
-        or artifact.get("schema_version") != _ARTIFACT_SCHEMA_VERSION
-        or not isinstance(artifact.get("state_dict"), dict)
-        or not isinstance(artifact.get("source"), dict)
+    if not isinstance(artifact, dict):
+        raise ValueError("Invalid vision inference artifact.")
+    if artifact.get("schema_version") != _ARTIFACT_SCHEMA_VERSION:
+        raise ValueError(
+            "Unsupported vision inference artifact schema version "
+            f"{artifact.get('schema_version')!r}; expected {_ARTIFACT_SCHEMA_VERSION}. "
+            "Re-export the checkpoint with this version."
+        )
+    if not isinstance(artifact.get("state_dict"), dict) or not isinstance(
+        artifact.get("source"), dict
     ):
         raise ValueError("Invalid vision inference artifact.")
     model_config = ModelConfig.from_dict(artifact["model_config"])
