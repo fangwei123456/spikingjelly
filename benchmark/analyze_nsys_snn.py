@@ -44,6 +44,10 @@ def _union_ns(intervals: list[tuple[int, int]]) -> int:
     return total
 
 
+def _pid(global_id: int) -> int:
+    return (global_id >> 24) & 0xFFFFFF
+
+
 def _category(name: str) -> str:
     lower = name.lower()
     if any(word in lower for word in ("lif", "plif", "ifnode", "neuron", "flexsn")):
@@ -246,7 +250,7 @@ def analyze(
                 lambda: {"Holding GIL": [], "Waiting for GIL": []}
             )
             for start, end, tid, state in gil_events:
-                if tid >> 32 != step["tid"] >> 32:
+                if _pid(tid) != _pid(step["tid"]):
                     continue
                 clipped = (max(start, step["start_ns"]), min(end, step["end_ns"]))
                 if clipped[0] < clipped[1]:
@@ -273,11 +277,11 @@ def analyze(
             active_steps = [
                 index
                 for index, step in enumerate(steps)
-                if step["tid"] >> 32 == row["globalTid"] >> 32
+                if _pid(step["tid"]) == _pid(row["globalTid"])
                 and step["start_ns"] <= row["start"] < step["end_ns"]
             ]
             launch["step_index"] = active_steps[0] if len(active_steps) == 1 else None
-            launches[(row["globalTid"] >> 32, row["correlationId"])] = launch
+            launches[(_pid(row["globalTid"]), row["correlationId"])] = launch
             if launch["step_index"] is not None:
                 step = steps[launch["step_index"]]
                 step["cuda_api"].append((row["start"], row["end"]))
@@ -297,7 +301,7 @@ def analyze(
             ):
                 if row["globalPid"] is None:
                     continue
-                launch = launches.get((row["globalPid"] >> 32, row["correlationId"]))
+                launch = launches.get((_pid(row["globalPid"]), row["correlationId"]))
                 if launch is None:
                     continue
                 if launch["step_index"] is not None:
@@ -466,7 +470,7 @@ def analyze(
                     / NS_PER_MS,
                 }
                 for start, end, tid, state in gil_events
-                if tid >> 32 == timeline_step["tid"] >> 32
+                if _pid(tid) == _pid(timeline_step["tid"])
                 and start < timeline_step["end_ns"]
                 and end > origin
             ],

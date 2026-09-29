@@ -795,13 +795,6 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
                         ]
                         if args.profile:
                             command.append("--profile")
-                            if execution == "eager":
-                                command.extend(
-                                    [
-                                        "--tensor-metadata",
-                                        str(output_dir / f"{stem}.tensors.jsonl"),
-                                    ]
-                                )
                         if args.channels_last:
                             command.append("--channels-last")
                         if args.require_gpu_name:

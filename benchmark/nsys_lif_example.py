@@ -61,13 +61,14 @@ def main() -> None:
             torch.cuda.synchronize()
     else:
         print("ready: enter 'run', 'profile', or 'quit'", flush=True)
-        for index, line in enumerate(sys.stdin):
+        for line in sys.stdin:
             action = line.strip()
             if action == "quit":
                 break
             if action in ("run", "profile"):
-                with nsys.capture(action == "profile"), torch.inference_mode():
-                    run_step(index, False, args.profile)
+                profiling = action == "profile"
+                with nsys.capture(profiling), torch.inference_mode():
+                    run_step(0, False, profiling)
                 print("done", flush=True)
 
 

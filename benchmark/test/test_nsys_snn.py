@@ -7,16 +7,21 @@ from pathlib import Path
 import pytest
 import torch
 
-from benchmark.nsys_snn import _category, _write_report, analyze, compare
+from benchmark import nsys_lif_example
+from benchmark.analyze_nsys_snn import _category, _write_report, analyze, compare
 from spikingjelly import nsys
 from spikingjelly.activation_based import neuron
 
 
 @pytest.mark.parametrize(
-    ("mode", "graph_trace"),
-    [("capture", "node"), ("capture-graph", "node:nvtx-precapture")],
+    ("mode", "graph_trace", "command"),
+    [
+        ("capture", "node", ["python", "-c", "pass"]),
+        ("capture-graph", "node:nvtx-precapture", ["python", "-c", "pass"]),
+        ("capture", "node", ["python"]),
+    ],
 )
-def test_shell_capture_trace_mode(tmp_path, mode, graph_trace):
+def test_shell_capture_trace_mode(tmp_path, mode, graph_trace, command):
     nsys_command = tmp_path / "nsys"
     nsys_command.write_text(
         "#!/bin/sh\n"
@@ -40,9 +45,7 @@ def test_shell_capture_trace_mode(tmp_path, mode, graph_trace):
             mode,
             str(output),
             "--",
-            "python",
-            "-c",
-            "pass",
+            *command,
         ],
         env=env,
         check=True,
@@ -60,7 +63,54 @@ def test_shell_capture_trace_mode(tmp_path, mode, graph_trace):
     assert manifest["sj_use_triton_op"] == "0"
     assert manifest["pytorch_trace"] == "none"
     assert manifest["python_sampling"] is False
-    assert manifest["command"] == ["python", "-c", "pass"]
+    assert manifest["command"] == command
+
+
+def test_service_profile_marks_capture_from_step_zero(monkeypatch):
+    ranges = []
+    profiler = []
+    original_randn = torch.randn
+    original_randint = torch.randint
+    monkeypatch.setattr(nsys_lif_example.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(nsys_lif_example.torch.cuda, "synchronize", lambda: None)
+    monkeypatch.setattr(
+        nsys_lif_example.torch.cuda.profiler,
+        "start",
+        lambda: profiler.append("start"),
+    )
+    monkeypatch.setattr(
+        nsys_lif_example.torch.cuda.profiler,
+        "stop",
+        lambda: profiler.append("stop"),
+    )
+    monkeypatch.setattr(nsys_lif_example.torch.cuda.nvtx, "range_push", ranges.append)
+    monkeypatch.setattr(nsys_lif_example.torch.cuda.nvtx, "range_pop", lambda: None)
+    monkeypatch.setattr(torch.nn.Module, "cuda", lambda self: self)
+    monkeypatch.setattr(
+        nsys_lif_example.torch,
+        "randn",
+        lambda *args, **kwargs: original_randn(*args),
+    )
+    monkeypatch.setattr(
+        nsys_lif_example.torch,
+        "randint",
+        lambda *args, **kwargs: original_randint(*args),
+    )
+    monkeypatch.setattr(
+        nsys_lif_example.sys,
+        "argv",
+        ["nsys_lif_example.py", "--mode", "serve", "--warmup", "0"],
+    )
+    monkeypatch.setattr(
+        nsys_lif_example.sys,
+        "stdin",
+        iter(["run\n", "ignored\n", "profile\n", "quit\n"]),
+    )
+
+    nsys_lif_example.main()
+
+    assert profiler == ["start", "stop"]
+    assert ranges.count("sj.step:inference:0") == 1
 
 
 def test_capture_and_ranges_balance_on_error(monkeypatch):
@@ -129,7 +179,7 @@ def test_sqlite_attribution_uses_launch_correlation_and_gpu_union(tmp_path):
             INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES
                 (10000000, 30000000, 1, 1, 4294967296),
                 (20000000, 40000000, 2, 2, 4294967296),
-                (10000000, 40000000, 1, 2, 8589934592),
+                (10000000, 40000000, 1, 2, 4311744512),
                 (61000000, 62000000, 4, 2, 4294967296),
                 (199100000, 199200000, 3, 2, 4294967296);
             """
@@ -248,7 +298,7 @@ def test_gil_intervals_are_clipped_to_steps_and_kept_per_thread(tmp_path):
                 (0, 2000000, NULL, 1, 4294967303, 59, 1),
                 (8000000, 12000000, NULL, 1, 4294967303, 59, 1),
                 (-1000000, 4000000, NULL, 2, 4294967304, 59, 1),
-                (0, 5000000, NULL, 2, 8589934599, 59, 1);
+                (0, 5000000, NULL, 2, 4311744519, 59, 1);
             """
         )
     report = analyze(path)

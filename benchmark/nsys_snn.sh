@@ -13,7 +13,7 @@ usage() {
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 case "${1:-}" in
     capture|capture-graph)
-        [[ $# -ge 5 && $3 == -- ]] || usage
+        [[ $# -ge 4 && $3 == -- ]] || usage
         trace=cuda,nvtx,cublas,cudnn,osrt,python-gil
         graph_trace=node
         if [[ $1 == capture-graph ]]; then
@@ -80,11 +80,11 @@ PY
         if [[ $# -eq 4 ]]; then
             args+=(--benchmark-json "$4")
         fi
-        python "$root/nsys_snn.py" "${args[@]}"
+        python "$root/analyze_nsys_snn.py" "${args[@]}"
         ;;
     compare)
         [[ $# -eq 4 ]] || usage
-        python "$root/nsys_snn.py" compare "$2" "$3" --output "$4"
+        python "$root/analyze_nsys_snn.py" compare "$2" "$3" --output "$4"
         ;;
     *) usage ;;
 esac

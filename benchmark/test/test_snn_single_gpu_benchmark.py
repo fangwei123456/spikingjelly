@@ -227,12 +227,16 @@ def test_matrix_records_child_timeouts(monkeypatch, tmp_path: Path):
             "1",
             "--timeout",
             "1",
+            "--profile",
             "--output-dir",
             str(tmp_path / "output"),
         ]
     )
 
+    commands = []
+
     def timeout(command, _env, seconds):
+        commands.append(command)
         raise benchmark.subprocess.TimeoutExpired(command, seconds)
 
     monkeypatch.setattr(benchmark, "_run_isolated_case", timeout)
@@ -241,6 +245,8 @@ def test_matrix_records_child_timeouts(monkeypatch, tmp_path: Path):
     assert len(payload["records"]) == 2
     assert len(payload["comparison"]["failures"]) == 2
     assert payload["comparison"]["performance_gates"]["met"] is False
+    assert all("--profile" in command for command in commands)
+    assert all("--tensor-metadata" not in command for command in commands)
 
 
 def test_isolated_case_timeout_kills_process_group(monkeypatch):
