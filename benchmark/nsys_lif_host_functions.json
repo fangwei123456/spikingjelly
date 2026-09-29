@@ -1,0 +1,20 @@
+[
+  {
+    "domain": "SpikingJelly LIF host",
+    "color": "0xE67E22",
+    "module": "spikingjelly.activation_based.triton_kernel.neuron_kernel.lif",
+    "functions": [
+      "multistep_lif_forward",
+      "_launch_lif_forward_kernel",
+      "_select_forward_kernel",
+      "_multistep_lif_backward",
+      "_multistep_lif_mp_backward"
+    ]
+  },
+  {
+    "domain": "PyTorch Triton wrapper",
+    "color": "0x8E44AD",
+    "module": "torch.library",
+    "functions": ["wrap_triton"]
+  }
+]

@@ -64,6 +64,45 @@ def test_case_parser_keeps_required_reproduction_fields(tmp_path: Path):
     assert args.fp8_fallback_dtype == "bf16"
 
 
+def test_case_parser_accepts_cupy_backend(tmp_path: Path):
+    args = benchmark.build_parser().parse_args(
+        [
+            "case",
+            "--model",
+            "spikformer_ti",
+            "--phase",
+            "training",
+            "--execution",
+            "eager",
+            "--batch-size",
+            "16",
+            "--warmup",
+            "30",
+            "--steps",
+            "25",
+            "--neuron-backend",
+            "cupy",
+            "--output",
+            str(tmp_path / "cupy.json"),
+        ]
+    )
+    assert args.neuron_backend == "cupy"
+
+
+def test_spikformer_s_uses_image_batch():
+    args = SimpleNamespace(
+        model="spikformer_s",
+        batch_size=2,
+        image_size=32,
+        T=4,
+        num_classes=10,
+        channels_last=False,
+    )
+    x, target = benchmark._make_batch(args, torch.device("cpu"))
+    assert x.shape == (2, 3, 32, 32)
+    assert target.shape == (2,)
+
+
 def test_case_parser_builds_triton_throughput_compile_options(tmp_path: Path):
     args = benchmark.build_parser().parse_args(
         [
@@ -120,12 +159,9 @@ def test_profile_hooks_record_metadata_once(monkeypatch, tmp_path: Path):
     )
 
     model = torch.nn.Sequential(torch.nn.Linear(2, 2))
-    hooks = benchmark._ProfileHooks(model, tmp_path / "tensors.jsonl")
-    try:
+    with benchmark.nsys.module_ranges(model, tmp_path / "tensors.jsonl"):
         model(torch.randn(1, 2))
         model(torch.randn(1, 2))
-    finally:
-        hooks.close()
 
     records = [
         json.loads(line)
@@ -133,6 +169,40 @@ def test_profile_hooks_record_metadata_once(monkeypatch, tmp_path: Path):
     ]
     assert [record["event"] for record in records] == ["input", "output"]
     assert len(ranges) == 4
+
+
+@pytest.mark.parametrize(
+    ("execution", "profile", "reason"),
+    [("compile", True, "eager diagnostic"), ("eager", False, "--profile")],
+)
+def test_module_detail_requires_separate_profiled_eager_run(
+    monkeypatch, tmp_path: Path, execution: str, profile: bool, reason: str
+):
+    monkeypatch.setattr(benchmark.torch.cuda, "is_available", lambda: True)
+    argv = [
+        "case",
+        "--model",
+        "sew_resnet18",
+        "--phase",
+        "inference",
+        "--execution",
+        execution,
+        "--batch-size",
+        "1",
+        "--warmup",
+        "1",
+        "--steps",
+        "1",
+        "--tensor-metadata",
+        str(tmp_path / "tensors.jsonl"),
+        "--output",
+        str(tmp_path / "result.json"),
+    ]
+    if profile:
+        argv.append("--profile")
+    args = benchmark.build_parser().parse_args(argv)
+    with pytest.raises(ValueError, match=reason):
+        benchmark.run_case(args)
 
 
 def test_matrix_records_child_timeouts(monkeypatch, tmp_path: Path):
@@ -157,12 +227,16 @@ def test_matrix_records_child_timeouts(monkeypatch, tmp_path: Path):
             "1",
             "--timeout",
             "1",
+            "--profile",
             "--output-dir",
             str(tmp_path / "output"),
         ]
     )
 
+    commands = []
+
     def timeout(command, _env, seconds):
+        commands.append(command)
         raise benchmark.subprocess.TimeoutExpired(command, seconds)
 
     monkeypatch.setattr(benchmark, "_run_isolated_case", timeout)
@@ -171,6 +245,8 @@ def test_matrix_records_child_timeouts(monkeypatch, tmp_path: Path):
     assert len(payload["records"]) == 2
     assert len(payload["comparison"]["failures"]) == 2
     assert payload["comparison"]["performance_gates"]["met"] is False
+    assert all("--profile" in command for command in commands)
+    assert all("--tensor-metadata" not in command for command in commands)
 
 
 def test_isolated_case_timeout_kills_process_group(monkeypatch):

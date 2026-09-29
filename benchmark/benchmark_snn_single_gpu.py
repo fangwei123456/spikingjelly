@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager, suppress
+from contextlib import nullcontext, suppress
 import json
 import os
 import platform
@@ -17,6 +17,8 @@ from typing import Any
 
 import torch
 
+from spikingjelly import nsys
+
 if __package__:
     from .fp8_coverage import _FP8CoverageTracker
 else:
@@ -29,20 +31,9 @@ from spikingjelly.activation_based.precision import (
 DEFAULT_T = 4
 DEFAULT_IMAGE_SIZE = 224
 DEFAULT_SEED = 20260808
-MODEL_NAMES = ("spiking_vgg16_bn", "sew_resnet18", "spikformer_ti")
+MODEL_NAMES = ("spiking_vgg16_bn", "sew_resnet18", "spikformer_ti", "spikformer_s")
 PHASES = ("inference", "training")
 EXECUTIONS = ("eager", "compile", "cuda_graph")
-
-
-@contextmanager
-def _nvtx_range(name: str, enabled: bool):
-    if enabled:
-        torch.cuda.nvtx.range_push(name)
-    try:
-        yield
-    finally:
-        if enabled:
-            torch.cuda.nvtx.range_pop()
 
 
 def summarize_samples(samples_ms: list[float]) -> dict[str, float]:
@@ -379,89 +370,6 @@ def _environment_metadata(
     }
 
 
-def _tensor_metadata(value: Any) -> Any:
-    if isinstance(value, torch.Tensor):
-        return {
-            "shape": list(value.shape),
-            "stride": list(value.stride()),
-            "storage_offset": value.storage_offset(),
-            "dtype": str(value.dtype).removeprefix("torch."),
-            "device": str(value.device),
-            "bytes": value.numel() * value.element_size(),
-            "contiguous": value.is_contiguous(),
-        }
-    if isinstance(value, (tuple, list)):
-        return [_tensor_metadata(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _tensor_metadata(item) for key, item in value.items()}
-    return type(value).__name__
-
-
-class _ProfileHooks:
-    _INTERESTING = (
-        "Node",
-        "SeqToANN",
-        "Attention",
-        "BatchNorm",
-        "Conv",
-        "Pool",
-        "Linear",
-    )
-
-    def __init__(self, model: torch.nn.Module, output: Path):
-        self.output = output
-        self.records: list[dict[str, Any]] = []
-        self.handles = []
-        self.metadata_modules: set[str] = set()
-        for name, module in model.named_modules():
-            if name and any(
-                token in type(module).__name__ for token in self._INTERESTING
-            ):
-                self.handles.append(
-                    module.register_forward_pre_hook(self._pre_hook(name, module))
-                )
-                self.handles.append(module.register_forward_hook(self._post_hook(name)))
-
-    def _pre_hook(self, name: str, module: torch.nn.Module):
-        def hook(_module, inputs):
-            torch.cuda.nvtx.range_push(f"module:{type(module).__name__}:{name}")
-            if name not in self.metadata_modules:
-                self.records.append(
-                    {
-                        "event": "input",
-                        "module": name,
-                        "type": type(module).__name__,
-                        "value": _tensor_metadata(inputs),
-                    }
-                )
-
-        return hook
-
-    def _post_hook(self, name: str):
-        def hook(module, _inputs, output):
-            if name not in self.metadata_modules:
-                self.records.append(
-                    {
-                        "event": "output",
-                        "module": name,
-                        "type": type(module).__name__,
-                        "value": _tensor_metadata(output),
-                    }
-                )
-                self.metadata_modules.add(name)
-            torch.cuda.nvtx.range_pop()
-
-        return hook
-
-    def close(self) -> None:
-        for handle in self.handles:
-            handle.remove()
-        self.output.parent.mkdir(parents=True, exist_ok=True)
-        with self.output.open("w", encoding="utf-8") as file:
-            for record in self.records:
-                file.write(json.dumps(record) + "\n")
-
-
 def _build_model(name: str, backend: str, T: int, num_classes: int):
     from spikingjelly.activation_based import functional, neuron
     from spikingjelly.activation_based.model import sew_resnet, spikformer, spiking_vgg
@@ -481,6 +389,8 @@ def _build_model(name: str, backend: str, T: int, num_classes: int):
         )
     elif name == "spikformer_ti":
         model = spikformer.spikformer_ti(T=T, num_classes=num_classes, backend=backend)
+    elif name == "spikformer_s":
+        model = spikformer.spikformer_s(T=T, num_classes=num_classes, backend=backend)
     else:
         raise ValueError(name)
     functional.set_step_mode(model, "m")
@@ -489,7 +399,7 @@ def _build_model(name: str, backend: str, T: int, num_classes: int):
 
 def _make_batch(args: argparse.Namespace, device: torch.device):
     shape = (args.batch_size, 3, args.image_size, args.image_size)
-    if args.model != "spikformer_ti":
+    if args.model not in ("spikformer_ti", "spikformer_s"):
         shape = (args.T, *shape)
     x = torch.randn(shape, device=device)
     if args.channels_last:
@@ -521,6 +431,10 @@ def _dynamo_metrics() -> dict[str, Any]:
 def run_case(args: argparse.Namespace) -> dict[str, Any]:
     if not torch.cuda.is_available():
         raise RuntimeError("benchmark cases require CUDA")
+    if args.tensor_metadata and args.execution != "eager":
+        raise ValueError("module metadata requires an eager diagnostic run")
+    if args.tensor_metadata and not args.profile:
+        raise ValueError("module metadata requires --profile")
     source_root = Path(
         os.environ.get("SJ_BENCH_SOURCE_ROOT", Path(__file__).parents[1])
     ).resolve()
@@ -594,17 +508,17 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         graph_x = inputs[0]
         if optimizer is None:
-            with _nvtx_range("forward", args.profile):
+            with nsys.region("forward", args.profile):
                 with torch.inference_mode(), precision.autocast_context():
                     output = model(graph_x)
             return output
         graph_target = inputs[1]
-        with _nvtx_range("forward", args.profile):
+        with nsys.region("forward", args.profile):
             with precision.autocast_context():
                 output = model(graph_x)
-        with _nvtx_range("loss", args.profile):
+        with nsys.region("loss", args.profile):
             loss = criterion(output.mean(0), graph_target)
-        with _nvtx_range("backward", args.profile):
+        with nsys.region("backward", args.profile):
             precision.backward(loss, optimizer, step_optimizer=False)
         return loss, output
 
@@ -632,28 +546,35 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
 
     def step() -> torch.Tensor:
         if optimizer is not None:
-            with _nvtx_range("zero_grad", args.profile):
+            with nsys.region("zero_grad", args.profile):
                 optimizer.zero_grad(set_to_none=graph_runner is None)
         if graph_runner is not None:
-            result = (
-                graph_runner(x, target) if optimizer is not None else graph_runner(x)
-            )
+            if args.profile:
+                with nsys.region("graph_runner", True):
+                    result = (
+                        graph_runner(x, target)
+                        if optimizer is not None
+                        else graph_runner(x)
+                    )
+            else:
+                result = (
+                    graph_runner(x, target)
+                    if optimizer is not None
+                    else graph_runner(x)
+                )
         else:
             result = graph_work(x, target) if optimizer is not None else graph_work(x)
         if optimizer is not None:
-            with _nvtx_range("optimizer", args.profile):
+            with nsys.region("optimizer", args.profile):
                 if precision.scaler is None:
                     optimizer.step()
                 else:
                     precision.scaler.step(optimizer)
                     precision.scaler.update()
-        with _nvtx_range("reset", args.profile):
+        with nsys.region("reset", args.profile):
             reset_net()
         return result[0] if optimizer is not None else result
 
-    hooks = None
-    if args.profile and args.tensor_metadata:
-        hooks = _ProfileHooks(state_model, args.tensor_metadata)
     monitor = None
     if args.monitor_log:
         args.monitor_log.parent.mkdir(parents=True, exist_ok=True)
@@ -698,40 +619,28 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
         reserved_before = torch.cuda.memory_reserved(device)
         starts = [torch.cuda.Event(enable_timing=True) for _ in range(args.steps)]
         ends = [torch.cuda.Event(enable_timing=True) for _ in range(args.steps)]
-        if args.profile:
-            torch.cuda.profiler.start()
-        try:
-            for index in range(args.steps):
-                starts[index].record()
-                with _nvtx_range(f"benchmark_step:{index}", args.profile):
-                    step()
-                ends[index].record()
-            ends[-1].synchronize()
-        finally:
-            if args.profile:
-                torch.cuda.profiler.stop()
+        hook_context = (
+            nsys.module_ranges(state_model, args.tensor_metadata)
+            if args.tensor_metadata
+            else nullcontext()
+        )
+        with hook_context:
+            with nsys.capture(args.profile):
+                for index in range(args.steps):
+                    starts[index].record()
+                    with nsys.step(index, args.phase, args.profile):
+                        step()
+                    ends[index].record()
+                ends[-1].synchronize()
         samples_ms = [
             start.elapsed_time(end) for start, end in zip(starts, ends, strict=True)
         ]
         peak_allocated_bytes = torch.cuda.max_memory_allocated(device)
         peak_reserved_bytes = torch.cuda.max_memory_reserved(device)
 
-        if args.tensor_metadata and hooks is None:
-            hooks = _ProfileHooks(state_model, args.tensor_metadata)
-            with _nvtx_range("layout_metadata_step", True):
-                step()
-            torch.cuda.synchronize(device)
-            hooks.close()
-            hooks = None
-        if hooks is not None:
-            torch.cuda.synchronize(device)
-            hooks.close()
-            hooks = None
     finally:
         if coverage_tracker is not None:
             coverage_tracker.close()
-        if hooks is not None:
-            hooks.close()
         _stop_monitor(monitor)
 
     dynamo_metrics = _dynamo_metrics()
@@ -788,6 +697,13 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
         "dynamo": dynamo_metrics,
         "metadata": {
             **metadata,
+            "profile_mode": (
+                "module_diagnostic"
+                if args.tensor_metadata
+                else "coarse"
+                if args.profile
+                else "off"
+            ),
             "nvidia_smi_after": _nvidia_snapshot(gpu_selector),
         },
     }
@@ -879,13 +795,6 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
                         ]
                         if args.profile:
                             command.append("--profile")
-                            if execution == "eager":
-                                command.extend(
-                                    [
-                                        "--tensor-metadata",
-                                        str(output_dir / f"{stem}.tensors.jsonl"),
-                                    ]
-                                )
                         if args.channels_last:
                             command.append("--channels-last")
                         if args.require_gpu_name:
@@ -972,7 +881,7 @@ def _add_case_parser(subparsers) -> None:
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument(
-        "--neuron-backend", choices=("torch", "triton"), default="triton"
+        "--neuron-backend", choices=("torch", "cupy", "triton"), default="triton"
     )
     parser.add_argument(
         "--precision", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
@@ -1042,7 +951,7 @@ def _add_matrix_parser(subparsers) -> None:
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument(
-        "--neuron-backend", choices=("torch", "triton"), default="triton"
+        "--neuron-backend", choices=("torch", "cupy", "triton"), default="triton"
     )
     parser.add_argument(
         "--precision", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"

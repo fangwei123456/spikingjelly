@@ -1729,6 +1729,7 @@ def test_triton_plif_low_precision_dynamic_backward_compiles(dtype, variant):
         "if_inference",
         "if_forward",
         "if_mp_inference",
+        "lif_backward",
         "plif_forward",
         "ilif_inference",
         "ilif_forward",
@@ -1742,6 +1743,7 @@ def test_registered_triton_neuron_contracts_pass_opcheck(kind):
     x = torch.randn(4, 32, device="cuda", requires_grad=training)
     v = torch.zeros(32, device="cuda", requires_grad=training)
     scalar = torch.tensor(0.25, device="cuda")
+    kwargs = {}
     if kind == "if_inference":
         name, args = "multistep_if_inference", (x, v, 1.0, 0.0, False, False)
     elif kind == "if_forward":
@@ -1754,6 +1756,22 @@ def test_registered_triton_neuron_contracts_pass_opcheck(kind):
             "multistep_if_mp_inference",
             (x, v, 1.0, 0.0, False, 1, 0, 0, False),
         )
+    elif kind == "lif_backward":
+        name = "lif_backward_kernel"
+        args = (x, v, torch.randn_like(x), torch.empty_like(x), torch.empty_like(v))
+        kwargs = {
+            "tau": 2.0,
+            "v_threshold": 1.0,
+            "v_reset": 0.0,
+            "sg_alpha": 4.0,
+            "compute_dtype_id": 0,
+            "storage_dtype_id": 0,
+            "sg_triton_id": 0,
+            "decay_input": True,
+            "soft_reset": False,
+            "detach_reset": True,
+            "store_v_seq": False,
+        }
     elif kind == "plif_forward":
         name, args = (
             "multistep_plif_forward",
@@ -1792,4 +1810,4 @@ def test_registered_triton_neuron_contracts_pass_opcheck(kind):
                 False,
             ),
         )
-    torch.library.opcheck(getattr(torch.ops.sj, name).default, args)
+    torch.library.opcheck(getattr(torch.ops.sj, name).default, args, kwargs)

@@ -11,6 +11,29 @@ and the archived documentation linked from the project README.
 
 ### Features
 
+#### SNN Performance Profiling
+
+Module: `spikingjelly.nsys`.
+
+- Added opt-in CUDA capture and NVTX step/stage ranges for Nsight Systems,
+  alongside reusable capture, analysis, and comparison scripts.
+- The standard NSYS capture includes Python GIL hold/wait events and traces
+  CUDA Graph nodes individually without PyTorch function/autograd tracing or
+  Python call-stack sampling; analysis
+  attributes CUDA work across CPU threads and plots CUDA API launches, GPU
+  execution, synchronization waits, and reset alongside four captured steps;
+  offline plots can select a captured step with `--step-index`.
+- Added `benchmark/nsys_snn.sh capture-graph` to preserve build-time NVTX
+  ranges for projection onto CUDA Graph replay nodes in a diagnostic report;
+  analysis emits a GPU stage timeline without implying CPU forward/backward
+  execution on replay.
+- `benchmark.benchmark_snn_single_gpu` now accepts the CuPy neuron backend for
+  single-GPU case and matrix profiling when the optional CuPy dependency is installed.
+- `benchmark.benchmark_snn_single_gpu` now supports Spikformer-S ImageNet-size
+  workloads alongside Spikformer-Ti for launch-overhead and batch-size studies.
+- Added `benchmark/nsys_lif_host_functions.json` as an opt-in NSYS preset for
+  tracing Python work around Triton LIF launches in separate diagnostic runs.
+
 #### Spiking Neurons
 
 Module: `spikingjelly.activation_based.neuron`.
@@ -57,6 +80,14 @@ Modules: `spikingjelly.activation_based.distributed.vision`,
   site in the model.
 
 ### Improvements
+
+#### Triton LIF Backward
+
+Module: `spikingjelly.activation_based.triton_kernel.neuron_kernel.lif`.
+
+- Register the shared standard and mixed-precision LIF backward kernel launch
+  as a Triton operator. Eager execution uses PyTorch's direct launch path;
+  AOT backward tracing retains compiler-visible Triton kernel calls.
 
 #### Triton Operator Registration
 
