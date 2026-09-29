@@ -32,3 +32,9 @@ API 文档 | API Docs
    configure <spikingjelly.configure>
 
    logger <spikingjelly.logger>
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Performance Profiling
+
+   nsys <spikingjelly.nsys>

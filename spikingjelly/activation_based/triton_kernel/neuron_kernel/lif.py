@@ -10,6 +10,7 @@ from ..triton_utils import (
     register_op,
     triton_neuron_compute_dtype_id_to_tl_dtype,
     triton_neuron_dtype_id_to_torch_dtype,
+    torch_dtype_to_triton_neuron_dtype_id,
     type_dict,
     use_static_range_for_triton_neuron_kernel,
     wrap_triton,
@@ -612,6 +613,9 @@ def _launch_lif_forward_kernel(
         )
 
 
+# A registered backend gets triton_op's raw eager launch while remaining
+# decomposable during backward tracing, just like the forward operator.
+@register_op("sj::lif_backward_kernel", mutates_args=("grad_x_seq", "grad_v_init"))
 def _launch_lif_backward_kernel(
     grad_s_seq: torch.Tensor,
     grad_v_seq: torch.Tensor,
@@ -623,13 +627,13 @@ def _launch_lif_backward_kernel(
     v_threshold: float,
     v_reset: float,
     sg_alpha: float,
-    compute_dtype,
+    compute_dtype_id: int,
+    storage_dtype_id: int,
     sg_triton_id: int,
     decay_input: bool,
     soft_reset: bool,
     detach_reset: bool,
     store_v_seq: bool,
-    use_torch_wrap: bool,
 ) -> None:
     T = grad_s_seq.shape[0]
     NCL = grad_s_seq[0].numel()
@@ -637,9 +641,10 @@ def _launch_lif_backward_kernel(
     def grid(meta):
         return (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
-    kernel = _select_backward_kernel(T)
-    if use_torch_wrap:
-        kernel = wrap_triton(kernel)
+    kernel = wrap_triton(_select_backward_kernel(T))
+    compute_dtype = triton_neuron_compute_dtype_id_to_tl_dtype(
+        compute_dtype_id, storage_dtype_id
+    )
 
     with torch.cuda.device(grad_s_seq.device):
         kernel[grid](
@@ -661,6 +666,11 @@ def _launch_lif_backward_kernel(
             detach_reset=detach_reset,
             store_v_seq=store_v_seq,
         )
+
+
+@torch.library.register_fake("sj::lif_backward_kernel")
+def _lif_backward_kernel_fake(*args, **kwargs):
+    return None
 
 
 @register_op("sj::multistep_lif_inference")
@@ -1145,15 +1155,13 @@ def _multistep_lif_mp_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
         v_threshold=ctx.v_threshold,
         v_reset=ctx.v_reset,
         sg_alpha=ctx.sg_alpha,
-        compute_dtype=triton_neuron_compute_dtype_id_to_tl_dtype(
-            ctx.backward_compute_dtype_id, ctx.storage_dtype_id
-        ),
+        compute_dtype_id=ctx.backward_compute_dtype_id,
+        storage_dtype_id=ctx.storage_dtype_id,
         sg_triton_id=ctx.sg_triton_id,
         decay_input=ctx.decay_input,
         soft_reset=ctx.soft_reset,
         detach_reset=ctx.detach_reset,
         store_v_seq=ctx.store_v_seq,
-        use_torch_wrap=True,
     )
     return (
         grad_x_seq,
@@ -1213,7 +1221,7 @@ def _multistep_lif_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
     h_seq = h_seq.contiguous()
     grad_x_seq = torch.empty_like(grad_s_seq)
     grad_v_init = torch.empty_like(h_seq[0])
-    dtype = grad_s_seq.dtype
+    dtype_id = torch_dtype_to_triton_neuron_dtype_id(grad_s_seq.dtype)
     _launch_lif_backward_kernel(
         grad_s_seq,
         grad_v_seq,
@@ -1224,13 +1232,13 @@ def _multistep_lif_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
         v_threshold=ctx.v_threshold,
         v_reset=ctx.v_reset,
         sg_alpha=ctx.sg_alpha,
-        compute_dtype=type_dict[dtype],
+        compute_dtype_id=dtype_id,
+        storage_dtype_id=dtype_id,
         sg_triton_id=ctx.sg_triton_id,
         decay_input=ctx.decay_input,
         soft_reset=ctx.soft_reset,
         detach_reset=ctx.detach_reset,
         store_v_seq=ctx.store_v_seq,
-        use_torch_wrap=True,
     )
     return (
         grad_x_seq,

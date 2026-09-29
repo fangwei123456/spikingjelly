@@ -30,10 +30,10 @@ def test_static_cuda_graph_replays_new_inputs_and_falls_back_for_new_shape():
     assert runner.stats.eager_fallbacks == 1
 
 
-def _lif_model() -> torch.nn.Module:
+def _lif_model(backend: str = "torch") -> torch.nn.Module:
     return torch.nn.Sequential(
         torch.nn.Linear(4, 4, bias=False),
-        neuron.LIFNode(tau=2.0, step_mode="m", backend="torch"),
+        neuron.LIFNode(tau=2.0, step_mode="m", backend=backend),
     ).cuda()
 
 
@@ -55,10 +55,13 @@ def test_static_cuda_graph_preserves_lif_reset_semantics():
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
-def test_static_cuda_graph_training_matches_eager_parameter_updates():
+@pytest.mark.parametrize("backend", ["torch", "triton"])
+def test_static_cuda_graph_training_matches_eager_parameter_updates(backend):
+    if backend == "triton":
+        pytest.importorskip("triton")
     torch.manual_seed(11)
-    eager = _lif_model().train()
-    captured_model = _lif_model().train()
+    eager = _lif_model(backend).train()
+    captured_model = _lif_model(backend).train()
     captured_model.load_state_dict(eager.state_dict())
     eager_optimizer = torch.optim.SGD(eager.parameters(), lr=0.1)
     captured_optimizer = torch.optim.SGD(captured_model.parameters(), lr=0.1)

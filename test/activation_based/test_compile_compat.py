@@ -175,10 +175,13 @@ def test_compile_inductor_runs_forward_backward(kind):
         (surrogate.ATan(alpha=2.0), True, None),
     ],
 )
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 def test_compiled_triton_lif_backward_matches_eager(
-    surrogate_fn, detach_reset, v_reset
+    surrogate_fn, detach_reset, v_reset, dtype
 ):
     _require_cuda_triton_compile()
+    if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
+        pytest.skip("CUDA device does not support bfloat16")
     torch.manual_seed(20260830)
     kwargs = {
         "tau": 2.0,
@@ -188,9 +191,9 @@ def test_compiled_triton_lif_backward_matches_eager(
         "step_mode": "m",
         "backend": "triton",
     }
-    eager = neuron.LIFNode(**kwargs).cuda().train()
-    compiled_node = neuron.LIFNode(**kwargs).cuda().train()
-    x = torch.randn(7, 2, 20, device="cuda")
+    eager = neuron.LIFNode(**kwargs).to(device="cuda", dtype=dtype).train()
+    compiled_node = neuron.LIFNode(**kwargs).to(device="cuda", dtype=dtype).train()
+    x = torch.randn(7, 2, 20, device="cuda", dtype=dtype)
     x_eager = x.clone().requires_grad_()
     x_compiled = x.clone().requires_grad_()
 
@@ -207,6 +210,124 @@ def test_compiled_triton_lif_backward_matches_eager(
         compiled(x_compiled).sum().backward()
 
     torch.testing.assert_close(x_compiled.grad, x_eager.grad)
+
+
+@pytest.mark.parametrize("store_v_seq", [False, True])
+def test_lif_backward_raw_eager_and_traceable_aot(monkeypatch, store_v_seq):
+    _require_cuda_triton_compile()
+    from torch._dynamo.backends.common import aot_autograd
+    from torch._functorch.aot_autograd import make_boxed_func
+
+    from spikingjelly.activation_based.triton_kernel import triton_utils
+
+    if not triton_utils._USE_TRITON_OP:
+        pytest.skip("Compiler-visible Triton registration is required.")
+    torch.manual_seed(20260929)
+    eager = neuron.LIFNode(
+        step_mode="m", backend="triton", store_v_seq=store_v_seq
+    ).cuda()
+    candidate = neuron.LIFNode(
+        step_mode="m", backend="triton", store_v_seq=store_v_seq
+    ).cuda()
+    sample = torch.randn(4, 2, 32, device="cuda")
+    left = sample.clone().requires_grad_()
+    right = sample.clone().requires_grad_()
+    raw_launches = []
+    original_wrap = triton_lif_kernel.wrap_triton
+
+    def observe_wrap(kernel):
+        wrapped = original_wrap(kernel)
+        if "backward" in kernel.fn.__name__:
+            raw_launches.append(wrapped is kernel)
+        return wrapped
+
+    with monkeypatch.context() as patch:
+        patch.setattr(triton_lif_kernel, "wrap_triton", observe_wrap)
+        (eager(left).sum() + eager.v.sum()).backward()
+    assert raw_launches and all(raw_launches), "eager backward used HOP dispatch"
+
+    backward_graphs = []
+
+    def capture_backward(graph, inputs):
+        backward_graphs.append(graph)
+        return make_boxed_func(graph.forward)
+
+    def loss(x):
+        return candidate(x).sum() + candidate.v.sum()
+
+    compiled = torch.compile(
+        loss,
+        fullgraph=True,
+        backend=aot_autograd(
+            fw_compiler=lambda graph, inputs: make_boxed_func(graph.forward),
+            bw_compiler=capture_backward,
+        ),
+    )
+    compiled(right).backward()
+    torch.testing.assert_close(right.grad, left.grad)
+    assert backward_graphs
+    targets = [
+        str(node.target) for graph in backward_graphs for node in graph.graph.nodes
+    ]
+    assert any("triton_kernel_wrapper" in target for target in targets)
+    assert not any("sj.lif_backward_kernel" in target for target in targets)
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_compiled_mixed_lif_backward_matches_eager(dtype):
+    _require_cuda_triton_compile()
+    if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
+        pytest.skip("CUDA device does not support bfloat16")
+    from spikingjelly.activation_based.triton_kernel.surrogate_kernel import (
+        resolve_sg_triton_id_and_alpha,
+    )
+    from spikingjelly.activation_based.triton_kernel.triton_utils import (
+        TRITON_NEURON_DTYPE_FP32,
+        torch_dtype_to_triton_neuron_dtype_id,
+    )
+
+    sg_id, alpha = resolve_sg_triton_id_and_alpha(surrogate.Sigmoid())
+    storage = torch_dtype_to_triton_neuron_dtype_id(dtype)
+
+    def compute(x, v):
+        spikes, voltage, _ = triton_lif_kernel.multistep_lif_mp_forward(
+            x,
+            v,
+            True,
+            2.0,
+            1.0,
+            0.0,
+            False,
+            True,
+            sg_id,
+            alpha,
+            storage,
+            storage,
+            TRITON_NEURON_DTYPE_FP32,
+            storage,
+            False,
+        )
+        return spikes.float().sum() + voltage.float().sum()
+
+    torch.manual_seed(20260929)
+    x = torch.randn(4, 2, 32, device="cuda", requires_grad=True)
+    v = torch.randn(2, 32, device="cuda", requires_grad=True)
+    xc = x.detach().clone().requires_grad_()
+    vc = v.detach().clone().requires_grad_()
+    expected = compute(x, v)
+    expected.backward()
+    with _inductor_single_process_compile():
+        compiled = torch.compile(
+            compute,
+            fullgraph=True,
+            backend="inductor",
+            options={"triton.cudagraphs": False, "triton.cudagraph_trees": False},
+        )
+        actual = compiled(xc, vc)
+        actual.backward()
+    torch.testing.assert_close(actual, expected)
+    torch.testing.assert_close(xc.grad, x.grad)
+    torch.testing.assert_close(vc.grad, v.grad)
 
 
 def test_inductor_is_not_a_standard_neuron_backend():
