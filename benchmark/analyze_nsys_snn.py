@@ -268,7 +268,7 @@ def analyze(
         launches = {}
         for row in db.execute(
             "SELECT start, end, correlationId, globalTid, nameId "
-            "FROM CUPTI_ACTIVITY_KIND_RUNTIME WHERE correlationId IS NOT NULL"
+            "FROM CUPTI_ACTIVITY_KIND_RUNTIME"
         ):
             if row["globalTid"] is None:
                 continue
@@ -281,7 +281,8 @@ def analyze(
                 and step["start_ns"] <= row["start"] < step["end_ns"]
             ]
             launch["step_index"] = active_steps[0] if len(active_steps) == 1 else None
-            launches[(_pid(row["globalTid"]), row["correlationId"])] = launch
+            if row["correlationId"] is not None:
+                launches[(_pid(row["globalTid"]), row["correlationId"])] = launch
             if launch["step_index"] is not None:
                 step = steps[launch["step_index"]]
                 step["cuda_api"].append((row["start"], row["end"]))
@@ -309,9 +310,9 @@ def analyze(
                     when = launch["start"]
                     name = (
                         strings.get(row["name"], fallback)
-                        if row["name"] is not None
+                        if fallback == "kernel"
                         else fallback
-                    ) or fallback
+                    )
                     category = (
                         _category(name)
                         if fallback == "kernel"
@@ -532,15 +533,18 @@ def analyze(
             ]
         }
         benchmark = json.loads(benchmark_path.read_text()) if benchmark_path else None
+        peak_bytes = (
+            (benchmark.get("memory") or {}).get("peak_allocated_bytes")
+            if benchmark
+            else None
+        )
         return {
             "schema_version": 1,
             "source_sqlite": str(sqlite_path),
             "benchmark": benchmark,
-            "peak_allocated_mib": (
-                benchmark["memory"]["peak_allocated_bytes"] / 1024**2
-                if benchmark and benchmark.get("memory")
-                else None
-            ),
+            "peak_allocated_mib": peak_bytes / 1024**2
+            if peak_bytes is not None
+            else None,
             "steps": output_steps,
             "gil": gil,
             "timeline": timeline,
@@ -556,6 +560,8 @@ def analyze(
 
 
 def _write_report(report: dict, output_dir: Path) -> None:
+    if (output_dir / "summary.json").exists():
+        raise FileExistsError(f"report already exists in {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "summary.json").write_text(
         json.dumps(report, indent=2), encoding="utf-8"

@@ -187,7 +187,8 @@ def module_ranges(model: nn.Module, output: Path) -> Iterator[None]:
     step mode 和 backend（若存在）。退出时移除钩子并写入 JSONL。
     Python 钩子会改变性能，不用于正式时延测量或 ``torch.compile`` 路径。
 
-    :param model: 待检查的 SNN 模型；函数不改变其参数或状态。
+    :param model: 待检查的 SNN 模型；此上下文不自行执行前向，调用者在其中
+        执行前向时可能改变 BatchNorm 统计量及神经元状态。
     :type model: nn.Module
     :param output: JSONL 输出路径；父目录不存在时创建。
     :type output: pathlib.Path
@@ -207,7 +208,9 @@ def module_ranges(model: nn.Module, output: Path) -> Iterator[None]:
     when present. Remove hooks and write JSONL on exit. Python hooks change
     performance and must not be used for formal timing or ``torch.compile``.
 
-    :param model: SNN model to inspect; its parameters and state are unchanged.
+    :param model: SNN model to inspect. This context does not run a forward
+        pass; a forward pass invoked by the caller may change BatchNorm
+        statistics and neuron state.
     :type model: nn.Module
     :param output: JSONL output path; missing parent directories are created.
     :type output: pathlib.Path
@@ -250,43 +253,43 @@ def module_ranges(model: nn.Module, output: Path) -> Iterator[None]:
         nn.AdaptiveAvgPool2d,
         nn.AdaptiveAvgPool3d,
     )
-    for name, module in model.named_modules():
-        if not name or not isinstance(
-            module, (StepModule, *attention_types, *layer_types)
-        ):
-            continue
-        if isinstance(module, layer_types) and any(True for _ in module.children()):
-            continue
-
-        def before(_module, inputs, *, module_name=name):
-            torch.cuda.nvtx.range_push(f"module:{module_name}")
-            if module_name not in seen:
-                records.append(
-                    {
-                        "module": module_name,
-                        "type": type(_module).__name__,
-                        "step_mode": str(getattr(_module, "step_mode", "")) or None,
-                        "backend": str(getattr(_module, "backend", "")) or None,
-                        "event": "input",
-                        "value": _tensor_metadata(inputs),
-                    }
-                )
-
-        def after(_module, _inputs, value, *, module_name=name):
-            if module_name not in seen:
-                records.append(
-                    {
-                        "module": module_name,
-                        "event": "output",
-                        "value": _tensor_metadata(value),
-                    }
-                )
-                seen.add(module_name)
-            torch.cuda.nvtx.range_pop()
-
-        handles.append(module.register_forward_pre_hook(before))
-        handles.append(module.register_forward_hook(after, always_call=True))
     try:
+        for name, module in model.named_modules():
+            if not name or not isinstance(
+                module, (StepModule, *attention_types, *layer_types)
+            ):
+                continue
+            if isinstance(module, layer_types) and any(True for _ in module.children()):
+                continue
+
+            def before(_module, inputs, *, module_name=name):
+                torch.cuda.nvtx.range_push(f"module:{module_name}")
+                if module_name not in seen:
+                    records.append(
+                        {
+                            "module": module_name,
+                            "type": type(_module).__name__,
+                            "step_mode": str(getattr(_module, "step_mode", "")) or None,
+                            "backend": str(getattr(_module, "backend", "")) or None,
+                            "event": "input",
+                            "value": _tensor_metadata(inputs),
+                        }
+                    )
+
+            def after(_module, _inputs, value, *, module_name=name):
+                if module_name not in seen:
+                    records.append(
+                        {
+                            "module": module_name,
+                            "event": "output",
+                            "value": _tensor_metadata(value),
+                        }
+                    )
+                    seen.add(module_name)
+                torch.cuda.nvtx.range_pop()
+
+            handles.append(module.register_forward_pre_hook(before))
+            handles.append(module.register_forward_hook(after, always_call=True))
         yield
     finally:
         for handle in handles:

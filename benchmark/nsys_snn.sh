@@ -69,6 +69,10 @@ PY
         [[ $# -ge 3 && $# -le 4 ]] || usage
         report=$2
         output_dir=$3
+        if [[ -d $output_dir && -n $(ls -A "$output_dir") ]]; then
+            echo "report directory is not empty: $output_dir" >&2
+            exit 1
+        fi
         mkdir -p "$output_dir"
         nsys export --type=sqlite --force-overwrite=true \
             --output="${output_dir}/trace.sqlite" "$report"

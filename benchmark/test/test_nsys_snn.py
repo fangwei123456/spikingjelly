@@ -152,6 +152,10 @@ def test_sqlite_attribution_uses_launch_correlation_and_gpu_union(tmp_path):
                 correlationId INTEGER, globalTid INTEGER, nameId INTEGER);
             CREATE TABLE CUPTI_ACTIVITY_KIND_KERNEL (start INTEGER, end INTEGER,
                 correlationId INTEGER, demangledName INTEGER, globalPid INTEGER);
+            CREATE TABLE CUPTI_ACTIVITY_KIND_MEMCPY (start INTEGER, end INTEGER,
+                correlationId INTEGER, globalPid INTEGER, copyKind INTEGER);
+            CREATE TABLE CUPTI_ACTIVITY_KIND_MEMSET (start INTEGER, end INTEGER,
+                correlationId INTEGER, globalPid INTEGER, memKind INTEGER);
             INSERT INTO StringIds VALUES
                 (1, 'lif_forward'), (2, 'conv_kernel'),
                 (3, 'cudaStreamSynchronize_v3020'),
@@ -174,7 +178,10 @@ def test_sqlite_attribution_uses_launch_correlation_and_gpu_union(tmp_path):
                 (2000000, 3000000, 1, 4294967303, NULL),
                 (20000000, 21000000, 2, 4294967303, NULL),
                 (22000000, 25000000, 5, 4294967303, 3),
+                (24000000, 28000000, NULL, 4294967303, 3),
                 (60000000, 60010000, 4, 4294967304, 4),
+                (110000000, 110010000, 6, 4294967303, NULL),
+                (112000000, 112010000, 7, 4294967303, NULL),
                 (199050000, 199060000, 3, 4294967303, NULL);
             INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES
                 (10000000, 30000000, 1, 1, 4294967296),
@@ -182,18 +189,28 @@ def test_sqlite_attribution_uses_launch_correlation_and_gpu_union(tmp_path):
                 (10000000, 40000000, 1, 2, 4311744512),
                 (61000000, 62000000, 4, 2, 4294967296),
                 (199100000, 199200000, 3, 2, 4294967296);
+            INSERT INTO CUPTI_ACTIVITY_KIND_MEMCPY VALUES
+                (111000000, 111100000, 6, 4294967296, 2);
+            INSERT INTO CUPTI_ACTIVITY_KIND_MEMSET VALUES
+                (113000000, 113100000, 7, 4294967296, 2);
             """
         )
     report = analyze(path)
     step = report["steps"][0]
     assert step["gpu_event_count"] == 2
     assert step["gpu_busy_union_ms"] == 30
+    assert step["cuda_api_union_ms"] == 8
     assert step["categories_ms"] == {"conv_gemm": 20, "neuron": 20}
     assert step["phases_ms"] == {"forward": 40}
     assert report["steps"][1]["gpu_event_count"] == 1
     assert report["steps"][1]["phases_ms"] == {"forward": 1}
     assert any(
         event["name"] == "cudaStreamSynchronize_v3020" and event["duration_ms"] == 3
+        for event in report["timeline"]["async_step"]["cuda_api_events"]
+    )
+    assert any(
+        event["correlation_id"] is None
+        and event["name"] == "cudaStreamSynchronize_v3020"
         for event in report["timeline"]["async_step"]["cuda_api_events"]
     )
     assert len(report["timeline"]["gpu_events"]) == 2
@@ -213,6 +230,8 @@ def test_sqlite_attribution_uses_launch_correlation_and_gpu_union(tmp_path):
     assert (output / "four_step_timeline.png").is_file()
     assert (output / "kernel_cost.png").is_file()
     assert (output / "module_timeline.png").is_file()
+    with pytest.raises(FileExistsError, match="report already exists"):
+        _write_report(report, output)
     assert not (output / "step_timeline.png").exists()
     assert report["gil"]["collected"] is False
     assert not (output / "gil_timeline.png").exists()
@@ -223,8 +242,39 @@ def test_sqlite_attribution_uses_launch_correlation_and_gpu_union(tmp_path):
     assert later["timeline"]["step_window"]["steps"][0]["name"] == (
         "sj.step:training:1"
     )
+    memory_step = analyze(path, step_index=2)
+    assert [
+        event["name"] for event in memory_step["timeline"]["async_step"]["gpu_events"]
+    ] == ["memcpy", "memset"]
     with pytest.raises(ValueError, match="index 9"):
         analyze(path, step_index=9)
+
+    benchmark_path = tmp_path / "benchmark.json"
+    benchmark_path.write_text('{"memory": {"other": 1}}')
+    assert analyze(path, benchmark_path)["peak_allocated_mib"] is None
+    benchmark_path.write_text('{"memory": {"peak_allocated_bytes": 1048576}}')
+    assert analyze(path, benchmark_path)["peak_allocated_mib"] == 1
+
+
+def test_shell_analyze_rejects_nonempty_output_directory(tmp_path):
+    output = tmp_path / "analysis"
+    output.mkdir()
+    marker = output / "keep.txt"
+    marker.write_text("preserve")
+    result = subprocess.run(
+        [
+            "bash",
+            str(Path(__file__).resolve().parents[1] / "nsys_snn.sh"),
+            "analyze",
+            str(tmp_path / "capture.nsys-rep"),
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "not empty" in result.stderr
+    assert marker.read_text() == "preserve"
 
 
 def test_graph_precapture_ranges_label_replayed_gpu_nodes(tmp_path):
@@ -413,3 +463,16 @@ def test_module_ranges_include_stateful_snn_leaf(monkeypatch, tmp_path):
     record = json.loads((tmp_path / "modules.jsonl").read_text().splitlines()[0])
     assert (record["step_mode"], record["backend"]) == ("s", "torch")
     assert record["value"][0]["shape"] == [2, 3]
+
+
+def test_module_ranges_remove_hooks_after_registration_failure(monkeypatch, tmp_path):
+    layer = torch.nn.Linear(2, 2)
+
+    def fail_registration(*args, **kwargs):
+        raise RuntimeError("registration")
+
+    monkeypatch.setattr(layer, "register_forward_hook", fail_registration)
+    with pytest.raises(RuntimeError, match="registration"):
+        with nsys.module_ranges(torch.nn.Sequential(layer), tmp_path / "modules.jsonl"):
+            pass
+    assert not layer._forward_pre_hooks
