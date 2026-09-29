@@ -80,7 +80,8 @@ jobs:
           llm_auth_token: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
           llm_model: ${{ secrets.OCR_LLM_MODEL }}
           llm_use_anthropic: 'false'
-          llm_extra_body: '{"reasoning":{"effort":"medium"}}'
+          llm_extra_body: '{"thinking":{"type":"adaptive"},"reasoning_split":true}'
+          llm_reasoning_effort: 'medium'
           background: |
             Review SpikingJelly with precision over recall.
             Report only concrete, current, user-observable defects, security or data-loss risks, substantial measured regressions, or violations of an explicit project contract. Every finding must name one trigger, one consequence, and one primary fix.
