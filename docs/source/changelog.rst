@@ -23,6 +23,15 @@ SNN Performance Profiling
 
 Module: ``spikingjelly.nsys``.
 
+- Added single-host multi-GPU profiling: capture one launcher process tree into
+  one Nsight Systems report, optionally annotate ranks, pipeline stages and
+  microbatches, and control CUDA capture on multiple devices.
+- The offline analyzer emits schema v2 with process/context/stream identities,
+  per-device compute/communication overlap, logical-step completeness and
+  unassigned-event accounting. Uninstrumented CUDA workloads can be analyzed
+  without step markers. Regenerate v1 summaries from their original SQLite
+  exports before comparison.
+
 - Added opt-in CUDA capture and NVTX step/stage ranges for Nsight Systems,
   alongside reusable capture, analysis, and comparison scripts.
 - Capture scripts support CUDA profiler API windows and named sessions controlled

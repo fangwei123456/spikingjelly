@@ -83,6 +83,7 @@ def test_shell_capture_trace_mode(tmp_path, mode, graph_trace, options, trace, c
     args = args_file.read_text().splitlines()
     assert args[-len(command) :] == command
     assert f"--trace={trace}" in args
+    assert "--wait=all" in args
     assert f"--cuda-graph-trace={graph_trace}" in args
     assert "--pytorch=none" in args
     assert "--python-sampling=false" in args
@@ -120,6 +121,7 @@ def test_shell_capture_trace_mode(tmp_path, mode, graph_trace, options, trace, c
         assert "nsys shutdown" in result.stdout
     else:
         assert args[0] == "profile"
+        assert "--kill=none" in args
         assert "--capture-range=cudaProfilerApi" in args
         assert manifest["control"] == "api"
         assert manifest["session"] is None
@@ -294,25 +296,19 @@ def test_sqlite_attribution_uses_launch_correlation_and_gpu_union(tmp_path):
     assert report["steps"][1]["gpu_event_count"] == 1
     assert report["steps"][1]["phases_ms"] == {"forward": 1}
     assert any(
-        event["name"] == "cudaStreamSynchronize_v3020" and event["duration_ms"] == 3
-        for event in report["timeline"]["async_step"]["cuda_api_events"]
+        event["name"] == "cudaStreamSynchronize_v3020"
+        and event["end_ns"] - event["start_ns"] == 3_000_000
+        for event in report["cuda_api_events"]
     )
     assert any(
         event["correlation_id"] is None
         and event["name"] == "cudaStreamSynchronize_v3020"
-        for event in report["timeline"]["async_step"]["cuda_api_events"]
+        for event in report["cuda_api_events"]
     )
-    assert len(report["timeline"]["gpu_events"]) == 2
-    assert len(report["timeline"]["step_window"]["steps"]) == 4
-    assert all(
-        any(phase["name"] == "forward" for phase in step["phases"])
-        for step in report["timeline"]["step_window"]["steps"]
-    )
-    assert (
-        report["timeline"]["step_window"]["steps"][3]["gpu_events"][0]["launch_phase"]
-        == "reset"
-    )
-    assert report["timeline"]["modules"][0]["name"] == "lif.0"
+    assert sum(e["step_id"] == 0 for e in report["gpu_events"]) == 2
+    assert len(report["steps"]) == 4
+    assert report["gpu_events"][4]["phase"] == "reset"
+    assert any(r["name"] == "module:lif.0" for r in report["ranges"])
     output = tmp_path / "analysis"
     _write_report(report, output)
     assert (output / "event_timeline.png").is_file()
@@ -322,18 +318,15 @@ def test_sqlite_attribution_uses_launch_correlation_and_gpu_union(tmp_path):
     with pytest.raises(FileExistsError, match="report already exists"):
         _write_report(report, output)
     assert not (output / "step_timeline.png").exists()
-    assert report["gil"]["collected"] is False
+    assert report["gil_collected"] is False
     assert not (output / "gil_timeline.png").exists()
 
     later = analyze(path, step_index=1)
-    assert later["timeline"]["step"] == "sj.step:training:1"
-    assert len(later["timeline"]["gpu_events"]) == 1
-    assert later["timeline"]["step_window"]["steps"][0]["name"] == (
-        "sj.step:training:1"
-    )
+    assert later["selection"]["step_ids"] == [1]
+    assert sum(e["step_id"] == 1 for e in later["gpu_events"]) == 1
     memory_step = analyze(path, step_index=2)
     assert [
-        event["name"] for event in memory_step["timeline"]["async_step"]["gpu_events"]
+        event["name"] for event in memory_step["gpu_events"] if event["step_id"] == 2
     ] == ["memcpy", "memset"]
     with pytest.raises(ValueError, match="index 9"):
         analyze(path, step_index=9)
@@ -402,11 +395,15 @@ def test_graph_precapture_ranges_label_replayed_gpu_nodes(tmp_path):
             """
         )
     report = analyze(path)
-    assert [event["name"] for event in report["timeline"]["graph_stages"]] == [
+    assert [event["graph_stage"] for event in report["gpu_events"]] == [
         "forward",
         "backward",
     ]
-    assert [phase["name"] for phase in report["timeline"]["phases"]] == [
+    assert [
+        phase["name"]
+        for phase in report["ranges"]
+        if phase["kind"] == "region" and phase["start_ns"] >= 0
+    ] == [
         "graph_runner",
         "optimizer",
     ]
@@ -441,23 +438,35 @@ def test_gil_intervals_are_clipped_to_steps_and_kept_per_thread(tmp_path):
             """
         )
     report = analyze(path)
-    assert report["gil"]["collected"] is True
+    assert report["gil_collected"] is True
     assert [step["main_thread_gil_holding_ms"] for step in report["steps"]] == [4, 2]
     assert [step["main_thread_gil_waiting_ms"] for step in report["steps"]] == [0, 0]
-    assert report["gil"]["threads"] == [
+    assert [
+        {key: t[key] for key in ("global_tid", "holding_ms", "waiting_ms")}
+        for t in report["threads"]
+        if t["process_id"] == 4294967296
+    ] == [
         {"global_tid": 4294967303, "holding_ms": 6, "waiting_ms": 0},
         {"global_tid": 4294967304, "holding_ms": 0, "waiting_ms": 4},
     ]
-    assert len(report["timeline"]["gil_events"]) == 3
+    assert len([r for r in report["ranges"] if r["kind"] == "gil"]) == 3
     output = tmp_path / "analysis"
     _write_report(report, output)
     assert (output / "gil_timeline.png").is_file()
-    assert "4294967304,0.0,4.0" in (output / "gil_threads.csv").read_text()
+    assert (output / "threads.csv").is_file()
 
 
 def test_compare_rejects_different_workloads():
-    baseline = {"benchmark": {"case": {"model": "a"}}, "steps": [{}]}
-    candidate = {"benchmark": {"case": {"model": "b"}}, "steps": [{}]}
+    baseline = {
+        "schema_version": 2,
+        "benchmark": {"case": {"model": "a"}},
+        "steps": [{}],
+    }
+    candidate = {
+        "schema_version": 2,
+        "benchmark": {"case": {"model": "b"}},
+        "steps": [{}],
+    }
     with pytest.raises(ValueError, match="workload metadata differs"):
         compare(baseline, candidate)
 
@@ -465,6 +474,17 @@ def test_compare_rejects_different_workloads():
 def test_compare_keeps_profiled_costs_separate_from_speed_claims():
     def report(neuron_ms):
         return {
+            "schema_version": 2,
+            "global_steps": [],
+            "device_summary": [
+                {
+                    "device_key": "gpu:0",
+                    "gpu_busy_union_ms": neuron_ms,
+                    "gpu_idle_within_span_ms": 2,
+                    "communication_union_ms": 0,
+                    "compute_communication_overlap_ms": 0,
+                }
+            ],
             "steps": [
                 {
                     "cpu_range_ms": 10,
@@ -474,11 +494,11 @@ def test_compare_keeps_profiled_costs_separate_from_speed_claims():
                     "cuda_api_union_ms": 1,
                     "categories_ms": {"neuron": neuron_ms},
                 }
-            ]
+            ],
         }
 
     result = compare(report(3), report(2))
-    assert result["categories_ms"]["neuron"]["delta"] == -1
+    assert result["devices"][0]["metrics"]["gpu_busy_union_ms"]["delta"] == -1
     assert "unprofiled" in result["note"]
     assert result["workload_verified"] is False
 
@@ -492,6 +512,9 @@ def test_compare_allows_execution_and_precision_controls():
         "image_size": 32,
         "num_classes": 10,
         "seed": 42,
+        "world_size": 1,
+        "parallelism": "single",
+        "microbatches": 1,
     }
     step = {
         "cpu_range_ms": 10,
@@ -502,10 +525,16 @@ def test_compare_allows_execution_and_precision_controls():
         "categories_ms": {"neuron": 3},
     }
     baseline = {
+        "schema_version": 2,
+        "device_summary": [],
+        "global_steps": [],
         "benchmark": {"case": {**workload, "precision": "fp32", "execution": "eager"}},
         "steps": [step],
     }
     candidate = {
+        "schema_version": 2,
+        "device_summary": [],
+        "global_steps": [],
         "benchmark": {
             "case": {**workload, "precision": "fp16", "execution": "compile"}
         },
@@ -520,7 +549,7 @@ def test_empty_service_trace_explains_missing_nvtx(tmp_path):
     path = tmp_path / "service.sqlite"
     with sqlite3.connect(path):
         pass
-    with pytest.raises(ValueError, match="no NVTX_EVENTS"):
+    with pytest.raises(ValueError, match="no CUDA"):
         analyze(path)
 
 
