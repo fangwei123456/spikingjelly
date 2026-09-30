@@ -410,6 +410,13 @@ def test_graph_precapture_ranges_label_replayed_gpu_nodes(tmp_path):
     output = tmp_path / "analysis"
     _write_report(report, output)
     assert (output / "graph_stage_timeline.png").is_file()
+    assert (output / "graph_stage_timeline.png").read_bytes() == (
+        output / "event_timeline.png"
+    ).read_bytes()
+    empty_output = tmp_path / "empty-window"
+    _write_report(analyze(path, time_range_ms=(1000, 1001)), empty_output)
+    assert not (empty_output / "event_timeline.png").exists()
+    assert not (empty_output / "graph_stage_timeline.png").exists()
 
 
 def test_gil_intervals_are_clipped_to_steps_and_kept_per_thread(tmp_path):

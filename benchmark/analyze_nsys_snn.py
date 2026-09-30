@@ -230,9 +230,7 @@ def analyze(
                 process_info(_process(row["globalPid"]))["name"] = row["name"]
 
         device_map, devices = {}, {}
-        for row in _rows(
-            db, "TARGET_INFO_CUDA_DEVICE", ["gpuId", "cudaId", "pid", "uuid"]
-        ):
+        for row in _rows(db, "TARGET_INFO_CUDA_DEVICE", ["gpuId", "pid", "uuid"]):
             key = row["uuid"] or f"gpu:{row['gpuId']}"
             device_map[(row["pid"], row["gpuId"])] = key
             devices[key] = {
@@ -271,15 +269,14 @@ def analyze(
             process_id = _process(row["globalTid"])
             domain = domains.get((process_id, row["domainId"]), "")
             match = STEP.match(name)
-            kind = (
-                "step"
-                if match
-                else "gil"
-                if domain == "GIL Trace"
-                else "communication"
-                if "nccl" in domain.lower()
-                else "region"
-            )
+            if match:
+                kind = "step"
+            elif domain == "GIL Trace":
+                kind = "gil"
+            elif "nccl" in domain.lower():
+                kind = "communication"
+            else:
+                kind = "region"
             if row["end"] is None and not match:
                 continue
             item = {
@@ -550,12 +547,9 @@ def analyze(
             calls = [c for c in api_events if c["step_id"] == step["step_id"]]
             categories, phases = defaultdict(float), defaultdict(float)
             for event in events:
-                categories[event["category"]] += (
-                    event["end_ns"] - event["start_ns"]
-                ) / NS_PER_MS
-                phases[event["phase"]] += (
-                    event["end_ns"] - event["start_ns"]
-                ) / NS_PER_MS
+                duration_ms = (event["end_ns"] - event["start_ns"]) / NS_PER_MS
+                categories[event["category"]] += duration_ms
+                phases[event["phase"]] += duration_ms
             summary = {
                 **step,
                 "cpu_range_ms": (step["end_ns"] - step["start_ns"]) / NS_PER_MS,
@@ -569,9 +563,13 @@ def analyze(
                 "phases_ms": dict(phases),
                 "devices": _device_summaries(events),
             }
-            single_device = len(summary["devices"]) <= 1
             for name in ("gpu_span_ms", "gpu_busy_union_ms", "gpu_idle_within_span_ms"):
-                summary[name] = _gpu_metrics(events)[name] if single_device else None
+                if not summary["devices"]:
+                    summary[name] = 0.0
+                elif len(summary["devices"]) == 1:
+                    summary[name] = summary["devices"][0][name]
+                else:
+                    summary[name] = None
             for state, field in (
                 ("Holding GIL", "main_thread_gil_holding_ms"),
                 ("Waiting for GIL", "main_thread_gil_waiting_ms"),

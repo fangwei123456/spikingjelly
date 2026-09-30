@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from pathlib import Path
+from shutil import copyfile
 
 
 def render(report: dict, output_dir: Path) -> None:
@@ -38,12 +39,12 @@ def render(report: dict, output_dir: Path) -> None:
             and event["end_ns"] > start
         )
 
-    def gpu_visible(event):
-        return selected["device"] is None or event["device_key"] == selected["device"]
-
     def draw(start, end, filename, *, pipeline=False, gil_only=False, modules=False):
         events = [
-            e for e in report["gpu_events"] if visible(e, start, end) and gpu_visible(e)
+            e
+            for e in report["gpu_events"]
+            if visible(e, start, end)
+            and (selected["device"] is None or e["device_key"] == selected["device"])
         ]
         calls = [c for c in report["cuda_api_events"] if visible(c, start, end)]
         ranges = [r for r in report["ranges"] if visible(r, start, end)]
@@ -189,6 +190,10 @@ def render(report: dict, output_dir: Path) -> None:
 
     start, end = selected["start_ns"], selected["end_ns"]
     draw(start, end, "event_timeline.png")
+    if any(e["graph_stage"] for e in report["gpu_events"]):
+        timeline = output_dir / "event_timeline.png"
+        if timeline.exists():
+            copyfile(timeline, output_dir / "graph_stage_timeline.png")
     if report["gil_collected"]:
         draw(start, end, "gil_timeline.png", gil_only=True)
     if any(r["stage"] is not None for r in report["ranges"]):
@@ -209,9 +214,6 @@ def render(report: dict, output_dir: Path) -> None:
             max(max(s["end_ns"], s["gpu_end_ns"] or s["end_ns"]) for s in window_steps),
             "four_step_timeline.png",
         )
-    if any(e["graph_stage"] for e in report["gpu_events"]):
-        draw(start, end, "graph_stage_timeline.png")
-
     categories = sorted({e["category"] for e in report["gpu_events"]})
     device_keys = [d["device_key"] for d in report["device_summary"]]
     if device_keys:
