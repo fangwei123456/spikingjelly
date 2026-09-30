@@ -17,6 +17,9 @@ Module: `spikingjelly.nsys`.
 
 - Added opt-in CUDA capture and NVTX step/stage ranges for Nsight Systems,
   alongside reusable capture, analysis, and comparison scripts.
+- Capture scripts support CUDA profiler API windows and named sessions controlled
+  with native `nsys start/stop`. Default tracing includes CUDA, NVTX, OS runtime,
+  and Python GIL events; `--trace` can explicitly enable cuBLAS/cuDNN tracing.
 - The standard NSYS capture includes Python GIL hold/wait events and traces
   CUDA Graph nodes individually without PyTorch function/autograd tracing or
   Python call-stack sampling; analysis

@@ -1,5 +1,6 @@
 import json
 import os
+import shlex
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -14,14 +15,40 @@ from spikingjelly.activation_based import neuron
 
 
 @pytest.mark.parametrize(
-    ("mode", "graph_trace", "command"),
+    ("mode", "graph_trace", "options", "trace", "command"),
     [
-        ("capture", "node", ["python", "-c", "pass"]),
-        ("capture-graph", "node:nvtx-precapture", ["python", "-c", "pass"]),
-        ("capture", "node", ["python"]),
+        ("capture", "node", [], "cuda,nvtx,osrt,python-gil", ["python", "-c", "pass"]),
+        (
+            "capture-graph",
+            "node:nvtx-precapture",
+            [],
+            "cuda,nvtx,osrt,python-gil",
+            ["python"],
+        ),
+        (
+            "capture",
+            "node",
+            ["--control=api", "--trace=cuda,nvtx,cublas,cudnn"],
+            "cuda,nvtx,cublas,cudnn",
+            ["python"],
+        ),
+        (
+            "capture",
+            "node",
+            ["--control=manual", "--session=sj test"],
+            "cuda,nvtx,osrt,python-gil",
+            ["python", "service.py", "a b"],
+        ),
+        (
+            "capture-graph",
+            "node:nvtx-precapture",
+            ["--control=manual", "--session=sj test"],
+            "cuda,nvtx,osrt,python-gil",
+            ["python"],
+        ),
     ],
 )
-def test_shell_capture_trace_mode(tmp_path, mode, graph_trace, command):
+def test_shell_capture_trace_mode(tmp_path, mode, graph_trace, options, trace, command):
     nsys_command = tmp_path / "nsys"
     nsys_command.write_text(
         "#!/bin/sh\n"
@@ -31,27 +58,30 @@ def test_shell_capture_trace_mode(tmp_path, mode, graph_trace, command):
     )
     nsys_command.chmod(0o755)
     args_file = tmp_path / "nsys-args.txt"
-    output = tmp_path / "capture"
+    output = tmp_path / "capture output"
     env = {
         **os.environ,
         "PATH": f"{tmp_path}:{os.environ['PATH']}",
         "NSYS_ARGS": str(args_file),
         "SJ_USE_TRITON_OP": "0",
     }
-    subprocess.run(
+    result = subprocess.run(
         [
             "bash",
             str(Path(__file__).resolve().parents[1] / "nsys_snn.sh"),
             mode,
+            *options,
             str(output),
             "--",
             *command,
         ],
         env=env,
         check=True,
+        capture_output=True,
+        text=True,
     )
-    trace = "cuda,nvtx,cublas,cudnn,osrt,python-gil"
     args = args_file.read_text().splitlines()
+    assert args[-len(command) :] == command
     assert f"--trace={trace}" in args
     assert f"--cuda-graph-trace={graph_trace}" in args
     assert "--pytorch=none" in args
@@ -64,6 +94,65 @@ def test_shell_capture_trace_mode(tmp_path, mode, graph_trace, command):
     assert manifest["pytorch_trace"] == "none"
     assert manifest["python_sampling"] is False
     assert manifest["command"] == command
+    if "--control=manual" in options:
+        assert args[0] == "launch"
+        assert "--session-new=sj test" in args
+        assert "--sample=none" not in args
+        assert "--cpuctxsw=none" not in args
+        assert not any(arg.startswith("--capture-range") for arg in args)
+        assert manifest["control"] == "manual"
+        assert manifest["session"] == "sj test"
+        assert manifest["capture_range"] == "none"
+        start = next(
+            line for line in result.stdout.splitlines() if line.startswith("nsys start")
+        )
+        assert shlex.split(start) == [
+            "nsys",
+            "start",
+            "--session=sj test",
+            "--capture-range=none",
+            "--sample=none",
+            "--cpuctxsw=none",
+            "--stop-on-exit=false",
+            f"--output={output}",
+        ]
+        assert "nsys stop" in result.stdout
+        assert "nsys shutdown" in result.stdout
+    else:
+        assert args[0] == "profile"
+        assert "--capture-range=cudaProfilerApi" in args
+        assert manifest["control"] == "api"
+        assert manifest["session"] is None
+        assert manifest["capture_range"] == "cudaProfilerApi"
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        ["--control=invalid"],
+        ["--control=manual"],
+        ["--session=sj"],
+        ["--trace="],
+        ["--unknown=1"],
+    ],
+)
+def test_shell_capture_rejects_invalid_control_options(tmp_path, options):
+    result = subprocess.run(
+        [
+            "bash",
+            str(Path(__file__).resolve().parents[1] / "nsys_snn.sh"),
+            "capture",
+            *options,
+            str(tmp_path / "capture"),
+            "--",
+            "python",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert "usage:" in result.stderr
+    assert not (tmp_path / "capture.manifest.json").exists()
 
 
 def test_service_profile_marks_capture_from_step_zero(monkeypatch):
