@@ -43,7 +43,7 @@ Apache-2.0 允许遵守条款的科研、商业使用、修改和再分发，也
 
 ## Third-party material / 第三方内容
 
-[NOTICE](../NOTICE) maps identified adapted code to the original notices in
+[NOTICE](NOTICE) maps identified adapted code to the original notices in
 [third_party](third_party/). Those notices remain applicable to their respective
 material; the root Apache license does not replace them. The source review
 separately identifies material whose licensing has not yet been resolved.
@@ -53,7 +53,7 @@ their own licenses. Including a loader, example, or reference does not relicense
 them. Requests to cite SpikingJelly's paper are academic guidance, not additional
 conditions on the Apache-2.0 grant.
 
-[NOTICE](../NOTICE) 列出已识别的改编代码及 [third_party](third_party/) 中的原始声明。
+[NOTICE](NOTICE) 列出已识别的改编代码及 [third_party](third_party/) 中的原始声明。
 这些声明继续适用于对应内容，根目录 Apache 许可证不替代它们。
 来源核对记录另外列明尚未解决许可问题的内容。
 

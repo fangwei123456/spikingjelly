@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
         (None, None),
         ("root-license", "Root LICENSE differs"),
         ("expression", "incorrect License-Expression"),
-        ("notice", "missing or changed license material: NOTICE"),
+        ("notice", "missing or changed license material: LICENSES/NOTICE"),
     ],
 )
 def test_distribution_license_cli(tmp_path, optimization, fault, error):
@@ -28,16 +28,16 @@ def test_distribution_license_cli(tmp_path, optimization, fault, error):
     shutil.copyfile(ROOT / "tools" / script.name, script)
     license_text = (ROOT / "LICENSE").read_bytes()
     (tmp_path / "LICENSE").write_bytes(license_text)
-    (tmp_path / "NOTICE").write_bytes(b"Test attribution\n")
+    (tmp_path / "LICENSES" / "NOTICE").write_bytes(b"Test attribution\n")
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "spikingjelly"\nversion = "2.0.0"\n'
-        'license = "Apache-2.0"\nlicense-files = ["LICENSE", "NOTICE"]\n'
+        'license = "Apache-2.0"\nlicense-files = ["LICENSE", "LICENSES/NOTICE"]\n'
     )
     expression = "MIT" if fault == "expression" else "Apache-2.0"
     metadata = (
         "Metadata-Version: 2.4\nName: spikingjelly\nVersion: 2.0.0\n"
         f"License-Expression: {expression}\n"
-        "License-File: LICENSE\nLicense-File: NOTICE\n\n"
+        "License-File: LICENSE\nLicense-File: LICENSES/NOTICE\n\n"
     )
     wheel = tmp_path / "spikingjelly-2.0.0-py3-none-any.whl"
     prefix = "spikingjelly-2.0.0.dist-info/"
@@ -45,7 +45,7 @@ def test_distribution_license_cli(tmp_path, optimization, fault, error):
         archive.writestr(prefix + "METADATA", metadata)
         archive.writestr(prefix + "licenses/LICENSE", license_text)
         if fault != "notice":
-            archive.writestr(prefix + "licenses/NOTICE", b"Test attribution\n")
+            archive.writestr(prefix + "licenses/LICENSES/NOTICE", b"Test attribution\n")
     if fault == "root-license":
         (tmp_path / "LICENSE").write_bytes(b"Truncated Apache license\n")
 

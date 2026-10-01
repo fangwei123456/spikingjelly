@@ -45,7 +45,7 @@ classifiers = [
 license = "LicenseRef-SpikingJelly-Migration-Pending"
 license-files = [
     "LICENSE",
-    "NOTICE",
+    "LICENSES/NOTICE",
     "LICENSES/MIGRATION-PENDING.txt",
     "LICENSES/third_party/baselines-LICENSE",
     "LICENSES/third_party/deit-LICENSE",

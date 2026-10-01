@@ -83,7 +83,7 @@ def _main() -> None:
     if hashlib.sha256((ROOT / "LICENSE").read_bytes()).hexdigest() != APACHE_SHA256:
         raise ValueError("Root LICENSE differs from the official Apache-2.0 text")
     notices = {name: (ROOT / name).read_bytes() for name in project["license-files"]}
-    if "LICENSE" not in notices or "NOTICE" not in notices:
+    if "LICENSE" not in notices or "LICENSES/NOTICE" not in notices:
         raise ValueError("Missing project notices")
     third_party = {
         path.relative_to(ROOT).as_posix()

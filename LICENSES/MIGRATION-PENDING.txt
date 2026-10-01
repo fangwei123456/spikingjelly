@@ -9,7 +9,7 @@ third-party conditions continue to apply to their respective material.
 
 Do not publish this draft distribution as a completed Apache-2.0 release.
 See LICENSES/PROVENANCE.md in the source repository for the concrete outstanding
-items and NOTICE for identified third-party attributions. Resolve those items
+items and LICENSES/NOTICE for identified third-party attributions. Resolve those items
 before replacing this marker with the final SPDX expression and removing this
 file from the distribution. Build and CI checks validate packaging only; they
 do not certify permission to relicense.

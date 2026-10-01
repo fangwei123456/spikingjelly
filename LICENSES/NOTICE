@@ -6,7 +6,8 @@ migration draft is available in the source repository (not included in this
 distribution):
 https://github.com/fangwei123456/spikingjelly/blob/589db42b2784766a68006cd3b650e96222a964b7/LICENSES/PROVENANCE.md
 SpikingJelly modifications remain attributable to their respective authors.
-Paths below are relative to spikingjelly/.
+Source paths below are relative to spikingjelly/; license paths are relative
+to the repository root.
 
 Torchvision (BSD-3-Clause)
 Copyright (c) Soumith Chintala 2016, All rights reserved.

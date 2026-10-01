@@ -106,7 +106,7 @@ Local paths are relative to `spikingjelly/`. These are fixed **license-evidence
 snapshots**, not claims that every original author copied precisely that SHA.
 The full notices are preserved in [third_party](third_party/) (trailing
 whitespace normalized in torchvision/torchaudio; MA-SNN line endings normalized), and
-[NOTICE](../NOTICE) maps them to local material. Existing modified implementations
+[NOTICE](NOTICE) maps them to local material. Existing modified implementations
 were inspected without changing their behavior.
 
 | Local scope | Upstream evidence | License and treatment |
