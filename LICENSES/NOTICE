@@ -10,8 +10,9 @@ notice; they do not change the license of other components. Apache-2.0's
 full text is in the repository root LICENSE (../LICENSE from this file).
 
 Torchvision (BSD-3-Clause)
-Copyright (c) Soumith Chintala 2016, All rights reserved.
-License: BSD-3-Clause (torchvision wording) below
+Copyright (c) Soumith Chintala 2016,
+All rights reserved.
+License: BSD-3-Clause below
 Adapted ResNet/VGG implementations:
   activation_based/model/spiking_resnet.py
   activation_based/model/sew_resnet.py
@@ -24,15 +25,18 @@ Reference: https://github.com/pytorch/vision/tree/9b5a3fecc72434dbd65148723efe54
 
 DeiT (Apache-2.0)
 Copyright 2020 - present, Facebook, Inc
+Original samplers.py: Copyright (c) 2015-present, Facebook, Inc.
+All rights reserved.
 License: Apache-2.0; full text in ../LICENSE
   activation_based/examples/common/tv_ref_classify/sampler.py: RASampler
 Modified for SpikingJelly, including configurable augmentation repetitions.
 Reference: https://github.com/facebookresearch/deit/tree/a2ffd162edc49b30f6ed8044cd10444bf2ae1299
 
 Lava-DL (BSD-3-Clause)
-Copyright (c) 2021, Intel Corporation. All rights reserved.
+Copyright (c) 2021, Intel Corporation
+All rights reserved.
 Original norm.py: Copyright (C) 2022 Intel Corporation
-License: BSD-3-Clause (Lava-DL wording) below
+License: BSD-3-Clause below
   activation_based/lava_exchange.py: BatchNorm2d
 Reference: https://github.com/lava-nc/lava-dl/tree/a6927a2597b7b4dd483414b66855744051384796
 
@@ -75,7 +79,8 @@ License: MIT terms below
 Reference: https://github.com/gorchard/event-Python/tree/78dd3b0a7fc508d551cecdbf93b959dc2d265765
 
 Torchaudio (BSD-2-Clause)
-Copyright (c) 2017 Facebook Inc. (Soumith Chintala), All Rights Reserved
+Copyright (c) 2017 Facebook Inc. (Soumith Chintala),
+All rights reserved.
 License: BSD-2-Clause below
   datasets/speechcommands.py: dataset loading
   activation_based/examples/speech_commands.py: MelScaleDelta and create_fb_matrix
@@ -151,36 +156,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ========================================================================
-BSD-3-Clause (torchvision wording)
-========================================================================
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-* Redistributions of source code must retain the above copyright notice, this
-  list of conditions and the following disclaimer.
-
-* Redistributions in binary form must reproduce the above copyright notice,
-  this list of conditions and the following disclaimer in the documentation
-  and/or other materials provided with the distribution.
-
-* Neither the name of the copyright holder nor the names of its
-  contributors may be used to endorse or promote products derived from
-  this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-========================================================================
-BSD-3-Clause (Lava-DL wording)
+BSD-3-Clause
 ========================================================================
 
 Redistribution and use in source and binary forms, with or without
