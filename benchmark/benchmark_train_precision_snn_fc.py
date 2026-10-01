@@ -646,9 +646,7 @@ def benchmark_one_precision(
                     x_seq,
                     target,
                     device,
-                    nvtx_step=f"training step {index}"
-                    if profile_enabled
-                    else None,
+                    nvtx_step=f"training step {index}" if profile_enabled else None,
                 )
                 forward_ms += step_metrics["forward_ms"]
                 backward_ms += step_metrics["backward_ms"]
@@ -690,9 +688,7 @@ def benchmark_one_precision(
                     artifacts,
                     x_seq,
                     device,
-                    nvtx_step=f"inference step {index}"
-                    if profile_enabled
-                    else None,
+                    nvtx_step=f"inference step {index}" if profile_enabled else None,
                 )
             sync_if_needed(device)
             inference_wall_elapsed = time.perf_counter() - inference_wall_start
