@@ -145,10 +145,16 @@ Triton 后端支持 ``torch.float16``。以下 benchmark 使用 ``triton.testing
 
 .. warning::
 
-    点神经元 kernel 按输入、状态和梯度各自的 stride 寻址，不再要求先转成
-    contiguous。多步输入仍为 ``[T, ...]``；T 是逻辑第零维，并不要求其物理
-    stride 最大。channels-last、切片和只读广播均可作为输入，非稠密输入
-    可以生成紧凑输出。CuPy 的现有 dtype 限制保持不变。
+    点神经元直接访问任意紧凑且不重叠的排列，以及由其 ``expand`` 得到的广播
+    view，不先复制为连续输入。“紧凑且不重叠”指元素各占独立位置、存储无空洞，
+    包括默认连续排列、channels-last 和普通转置；它与 sparse tensor 的分类无关。
+    带间隙切片、一般重叠 view 等其他合法 strided 输入保持数值正确，但允许转换。
+    输入、状态和上游梯度可以各用自己的排列。
+
+    多步输入仍为 ``[T, ...]``；T 是逻辑第零维，其物理 stride 不必最大，也可以
+    为零。广播输入按原始 stride 读取，输出和返回梯度采用独立、无重叠的存储。
+    PyTorch 的广播反向负责将梯度累加回 ``expand`` 前的数据；该归约以及必要的
+    dtype 转换不是布局复制。现有后端和 dtype 限制保持不变。
 
     shape 和 stride 参与 kernel 特化；首次遇到新布局时可能发生重新编译和
     autotune。性能测量应在目标布局完成预热后进行。

@@ -632,9 +632,11 @@ def activation_aware_if_multi_step_triton(
 
     * **中文**
 
-    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
-    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
-    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+    输入和状态若为紧凑且不重叠的排列（元素各占独立位置，存储无空洞），
+    或由其 ``expand`` 得到的广播 view，则直接按 stride 访问，不复制为连续输入。
+    其他合法 strided view 保持数值正确，但允许自动转换。输出使用独立、无重叠
+    的存储；紧凑输入保留布局，广播及其他 view 可生成紧凑输出。
+    多步输入的逻辑第零维为时间维，其物理 stride 不必最大，也可以为零。
 
     使用已选定的 Triton kernel 执行 activation-aware IF 多步状态转移。调用方必须
     传入已物化的膜电位、已规范化的阈值和偏移张量，以及由输入布局计算得到的
@@ -668,11 +670,14 @@ def activation_aware_if_multi_step_triton(
 
     * **English**
 
-    Inputs and states support arbitrary nonnegative strides, including slices
-    and read-only broadcast views. Dimension zero is time for multi-step inputs.
-    No contiguous input conversion is required. Outputs have independent,
-    nonoverlapping storage; common dense layouts retain their dimension order,
-    while non-dense inputs may produce compact outputs.
+    Inputs and states with compact, nonoverlapping storage (distinct element
+    locations without gaps), or broadcast views obtained from them with ``expand``,
+    are accessed directly without copying into contiguous inputs. Other valid
+    strided views remain numerically supported but may be converted. Outputs have
+    independent, nonoverlapping storage; compact inputs retain their layout,
+    while broadcast and other views may produce compact outputs.
+    Logical dimension zero is time; its physical stride need not be largest and
+    may be zero.
 
     Run an activation-aware IF multi-step state transition with the already
     selected Triton kernel. The caller must provide a materialized membrane
@@ -1628,13 +1633,14 @@ def if_step_cupy(
 
     * **中文**
 
-    输入和状态支持非负任意 stride，包括切片及只读广播，无需先转换为
-    连续张量。输出使用独立、无重叠的存储；
-    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+    输入和状态若为紧凑且不重叠的排列（元素各占独立位置，存储无空洞），
+    或由其 ``expand`` 得到的广播 view，则直接按 stride 访问，不复制为连续输入。
+    其他合法 strided view 保持数值正确，但允许自动转换。输出使用独立、无重叠
+    的存储；紧凑输入保留布局，广播及其他 view 可生成紧凑输出。
 
     使用 CuPy kernel 执行 IF 单步状态转移。输入必须是 CUDA 上的 ``float32``
     或 ``float16`` 张量，替代梯度函数必须提供可调用的 ``cuda_codes`` 属性。
-    函数自行选择并缓存 kernel，直接按输入 stride 访问数据，保留逻辑 shape。
+    函数自行选择并缓存 kernel，保留输入的逻辑 shape。
 
     :param x: 当前 CUDA 输入张量，shape 为 ``[N, *]``
     :type x: torch.Tensor
@@ -1659,16 +1665,16 @@ def if_step_cupy(
 
     * **English**
 
-    Inputs and states support arbitrary nonnegative strides, including slices
-    and read-only broadcast views, without a contiguous input conversion.
-    Outputs have independent,
-    nonoverlapping storage; common dense layouts retain their dimension order,
-    while non-dense inputs may produce compact outputs.
+    Inputs and states with compact, nonoverlapping storage (distinct element
+    locations without gaps), or broadcast views obtained from them with ``expand``,
+    are accessed directly without copying into contiguous inputs. Other valid
+    strided views remain numerically supported but may be converted. Outputs have
+    independent, nonoverlapping storage; compact inputs retain their layout,
+    while broadcast and other views may produce compact outputs.
 
     Run one IF state transition with CuPy kernels. Inputs must be CUDA
     ``float32`` or ``float16`` tensors, and the surrogate function must expose
-    callable ``cuda_codes``. The function selects and caches kernels and handles
-    strided inputs without flattening them into a contiguous buffer.
+    callable ``cuda_codes``. The function selects and caches kernels while preserving the logical input shape.
 
     :param x: Current CUDA input tensor shaped ``[N, *]``
     :type x: torch.Tensor
@@ -1724,13 +1730,14 @@ def lif_step_cupy(
 
     * **中文**
 
-    输入和状态支持非负任意 stride，包括切片及只读广播，无需先转换为
-    连续张量。输出使用独立、无重叠的存储；
-    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+    输入和状态若为紧凑且不重叠的排列（元素各占独立位置，存储无空洞），
+    或由其 ``expand`` 得到的广播 view，则直接按 stride 访问，不复制为连续输入。
+    其他合法 strided view 保持数值正确，但允许自动转换。输出使用独立、无重叠
+    的存储；紧凑输入保留布局，广播及其他 view 可生成紧凑输出。
 
     使用 CuPy kernel 执行 LIF 单步状态转移。输入必须是 CUDA 上的 ``float32``
     或 ``float16`` 张量，替代梯度函数必须提供可调用的 ``cuda_codes`` 属性。
-    函数自行选择并缓存 kernel，直接按输入 stride 访问数据，保留逻辑 shape。
+    函数自行选择并缓存 kernel，保留输入的逻辑 shape。
 
     :param x: 当前 CUDA 输入张量，shape 为 ``[N, *]``
     :type x: torch.Tensor
@@ -1759,16 +1766,16 @@ def lif_step_cupy(
 
     * **English**
 
-    Inputs and states support arbitrary nonnegative strides, including slices
-    and read-only broadcast views, without a contiguous input conversion.
-    Outputs have independent,
-    nonoverlapping storage; common dense layouts retain their dimension order,
-    while non-dense inputs may produce compact outputs.
+    Inputs and states with compact, nonoverlapping storage (distinct element
+    locations without gaps), or broadcast views obtained from them with ``expand``,
+    are accessed directly without copying into contiguous inputs. Other valid
+    strided views remain numerically supported but may be converted. Outputs have
+    independent, nonoverlapping storage; compact inputs retain their layout,
+    while broadcast and other views may produce compact outputs.
 
     Run one LIF state transition with CuPy kernels. Inputs must be CUDA
     ``float32`` or ``float16`` tensors, and the surrogate function must expose
-    callable ``cuda_codes``. The function selects and caches kernels and handles
-    strided inputs without flattening them into a contiguous buffer.
+    callable ``cuda_codes``. The function selects and caches kernels while preserving the logical input shape.
 
     :param x: Current CUDA input tensor shaped ``[N, *]``
     :type x: torch.Tensor
@@ -1829,9 +1836,11 @@ def if_multi_step_cupy(
 
     * **中文**
 
-    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
-    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
-    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+    输入和状态若为紧凑且不重叠的排列（元素各占独立位置，存储无空洞），
+    或由其 ``expand`` 得到的广播 view，则直接按 stride 访问，不复制为连续输入。
+    其他合法 strided view 保持数值正确，但允许自动转换。输出使用独立、无重叠
+    的存储；紧凑输入保留布局，广播及其他 view 可生成紧凑输出。
+    多步输入的逻辑第零维为时间维，其物理 stride 不必最大，也可以为零。
 
     使用 CuPy kernel 执行 IF 多步状态转移，不进行通用 backend 分发。输入必须是
     CUDA 上的 ``float32`` 或 ``float16`` 张量，并且替代梯度函数必须提供可调用的
@@ -1863,11 +1872,14 @@ def if_multi_step_cupy(
 
     * **English**
 
-    Inputs and states support arbitrary nonnegative strides, including slices
-    and read-only broadcast views. Dimension zero is time for multi-step inputs.
-    No contiguous input conversion is required. Outputs have independent,
-    nonoverlapping storage; common dense layouts retain their dimension order,
-    while non-dense inputs may produce compact outputs.
+    Inputs and states with compact, nonoverlapping storage (distinct element
+    locations without gaps), or broadcast views obtained from them with ``expand``,
+    are accessed directly without copying into contiguous inputs. Other valid
+    strided views remain numerically supported but may be converted. Outputs have
+    independent, nonoverlapping storage; compact inputs retain their layout,
+    while broadcast and other views may produce compact outputs.
+    Logical dimension zero is time; its physical stride need not be largest and
+    may be zero.
 
     Run an IF multi-step state transition with the CuPy kernel without generic
     backend dispatch. Inputs must be CUDA ``float32`` or ``float16`` tensors,
@@ -1933,9 +1945,11 @@ def lif_multi_step_cupy(
 
     * **中文**
 
-    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
-    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
-    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+    输入和状态若为紧凑且不重叠的排列（元素各占独立位置，存储无空洞），
+    或由其 ``expand`` 得到的广播 view，则直接按 stride 访问，不复制为连续输入。
+    其他合法 strided view 保持数值正确，但允许自动转换。输出使用独立、无重叠
+    的存储；紧凑输入保留布局，广播及其他 view 可生成紧凑输出。
+    多步输入的逻辑第零维为时间维，其物理 stride 不必最大，也可以为零。
 
     使用 CuPy kernel 执行 LIF 多步状态转移，不进行通用 backend 分发。输入必须是
     CUDA 上的 ``float32`` 或 ``float16`` 张量，并且替代梯度函数必须提供可调用的
@@ -1970,11 +1984,14 @@ def lif_multi_step_cupy(
 
     * **English**
 
-    Inputs and states support arbitrary nonnegative strides, including slices
-    and read-only broadcast views. Dimension zero is time for multi-step inputs.
-    No contiguous input conversion is required. Outputs have independent,
-    nonoverlapping storage; common dense layouts retain their dimension order,
-    while non-dense inputs may produce compact outputs.
+    Inputs and states with compact, nonoverlapping storage (distinct element
+    locations without gaps), or broadcast views obtained from them with ``expand``,
+    are accessed directly without copying into contiguous inputs. Other valid
+    strided views remain numerically supported but may be converted. Outputs have
+    independent, nonoverlapping storage; compact inputs retain their layout,
+    while broadcast and other views may produce compact outputs.
+    Logical dimension zero is time; its physical stride need not be largest and
+    may be zero.
 
     Run a LIF multi-step state transition with the CuPy kernel without generic
     backend dispatch. Inputs must be CUDA ``float32`` or ``float16`` tensors,
@@ -2044,9 +2061,11 @@ def plif_multi_step_cupy(
 
     * **中文**
 
-    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
-    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
-    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+    输入和状态若为紧凑且不重叠的排列（元素各占独立位置，存储无空洞），
+    或由其 ``expand`` 得到的广播 view，则直接按 stride 访问，不复制为连续输入。
+    其他合法 strided view 保持数值正确，但允许自动转换。输出使用独立、无重叠
+    的存储；紧凑输入保留布局，广播及其他 view 可生成紧凑输出。
+    多步输入的逻辑第零维为时间维，其物理 stride 不必最大，也可以为零。
 
     使用 CuPy kernel 执行 PLIF 多步状态转移。``w`` 与 torch 接口语义一致。
     输入必须是 CUDA 上的 ``float32`` 或 ``float16`` 张量，并且替代梯度函数必须
@@ -2081,11 +2100,14 @@ def plif_multi_step_cupy(
 
     * **English**
 
-    Inputs and states support arbitrary nonnegative strides, including slices
-    and read-only broadcast views. Dimension zero is time for multi-step inputs.
-    No contiguous input conversion is required. Outputs have independent,
-    nonoverlapping storage; common dense layouts retain their dimension order,
-    while non-dense inputs may produce compact outputs.
+    Inputs and states with compact, nonoverlapping storage (distinct element
+    locations without gaps), or broadcast views obtained from them with ``expand``,
+    are accessed directly without copying into contiguous inputs. Other valid
+    strided views remain numerically supported but may be converted. Outputs have
+    independent, nonoverlapping storage; compact inputs retain their layout,
+    while broadcast and other views may produce compact outputs.
+    Logical dimension zero is time; its physical stride need not be largest and
+    may be zero.
 
     Run a PLIF multi-step state transition with the CuPy kernel. ``w`` has the
     same semantics as in the torch interface. Inputs must be CUDA
@@ -2156,9 +2178,11 @@ def qif_multi_step_cupy(
 
     * **中文**
 
-    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
-    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
-    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+    输入和状态若为紧凑且不重叠的排列（元素各占独立位置，存储无空洞），
+    或由其 ``expand`` 得到的广播 view，则直接按 stride 访问，不复制为连续输入。
+    其他合法 strided view 保持数值正确，但允许自动转换。输出使用独立、无重叠
+    的存储；紧凑输入保留布局，广播及其他 view 可生成紧凑输出。
+    多步输入的逻辑第零维为时间维，其物理 stride 不必最大，也可以为零。
 
     使用已选定的 CuPy kernel 执行 QIF 多步状态转移。函数接收已物化的膜电位，
     不负责 backend 或 ``training/eval`` 分支选择。
@@ -2194,11 +2218,14 @@ def qif_multi_step_cupy(
 
     * **English**
 
-    Inputs and states support arbitrary nonnegative strides, including slices
-    and read-only broadcast views. Dimension zero is time for multi-step inputs.
-    No contiguous input conversion is required. Outputs have independent,
-    nonoverlapping storage; common dense layouts retain their dimension order,
-    while non-dense inputs may produce compact outputs.
+    Inputs and states with compact, nonoverlapping storage (distinct element
+    locations without gaps), or broadcast views obtained from them with ``expand``,
+    are accessed directly without copying into contiguous inputs. Other valid
+    strided views remain numerically supported but may be converted. Outputs have
+    independent, nonoverlapping storage; compact inputs retain their layout,
+    while broadcast and other views may produce compact outputs.
+    Logical dimension zero is time; its physical stride need not be largest and
+    may be zero.
 
     Run a QIF multi-step state transition with the already selected CuPy
     kernel. The function receives a materialized membrane voltage and does not
@@ -2272,9 +2299,11 @@ def eif_multi_step_cupy(
 
     * **中文**
 
-    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
-    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
-    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+    输入和状态若为紧凑且不重叠的排列（元素各占独立位置，存储无空洞），
+    或由其 ``expand`` 得到的广播 view，则直接按 stride 访问，不复制为连续输入。
+    其他合法 strided view 保持数值正确，但允许自动转换。输出使用独立、无重叠
+    的存储；紧凑输入保留布局，广播及其他 view 可生成紧凑输出。
+    多步输入的逻辑第零维为时间维，其物理 stride 不必最大，也可以为零。
 
     使用已选定的 CuPy kernel 执行 EIF 多步状态转移。函数接收已物化的膜电位，
     不负责 backend 或 ``training/eval`` 分支选择。
@@ -2310,11 +2339,14 @@ def eif_multi_step_cupy(
 
     * **English**
 
-    Inputs and states support arbitrary nonnegative strides, including slices
-    and read-only broadcast views. Dimension zero is time for multi-step inputs.
-    No contiguous input conversion is required. Outputs have independent,
-    nonoverlapping storage; common dense layouts retain their dimension order,
-    while non-dense inputs may produce compact outputs.
+    Inputs and states with compact, nonoverlapping storage (distinct element
+    locations without gaps), or broadcast views obtained from them with ``expand``,
+    are accessed directly without copying into contiguous inputs. Other valid
+    strided views remain numerically supported but may be converted. Outputs have
+    independent, nonoverlapping storage; compact inputs retain their layout,
+    while broadcast and other views may produce compact outputs.
+    Logical dimension zero is time; its physical stride need not be largest and
+    may be zero.
 
     Run an EIF multi-step state transition with the already selected CuPy
     kernel. The function receives a materialized membrane voltage and does not
@@ -2398,8 +2430,11 @@ def izhikevich_multi_step_cupy(
 
     * **中文**
 
-    输入及两种状态支持任意非负 stride，无需先展平或转连续。逻辑第零维为
-    时间维；切片及只读广播输入允许生成紧凑、无重叠的输出。
+    输入和状态若为紧凑且不重叠的排列（元素各占独立位置，存储无空洞），
+    或由其 ``expand`` 得到的广播 view，则直接按 stride 访问，不复制为连续输入。
+    其他合法 strided view 保持数值正确，但允许自动转换。输出使用独立、无重叠
+    的存储；紧凑输入保留布局，广播及其他 view 可生成紧凑输出。
+    多步输入的逻辑第零维为时间维，其物理 stride 不必最大，也可以为零。
 
     使用已选定的 CuPy kernel 执行 Izhikevich 多步状态转移，显式接收和返回膜电位
     ``v`` 与适应变量 ``w``。
@@ -2447,9 +2482,14 @@ def izhikevich_multi_step_cupy(
 
     * **English**
 
-    Inputs and both states support arbitrary nonnegative strides without
-    flattening or contiguous conversion. Logical dimension zero is time; sliced
-    and read-only broadcast inputs may produce compact, nonoverlapping outputs.
+    Inputs and states with compact, nonoverlapping storage (distinct element
+    locations without gaps), or broadcast views obtained from them with ``expand``,
+    are accessed directly without copying into contiguous inputs. Other valid
+    strided views remain numerically supported but may be converted. Outputs have
+    independent, nonoverlapping storage; compact inputs retain their layout,
+    while broadcast and other views may produce compact outputs.
+    Logical dimension zero is time; its physical stride need not be largest and
+    may be zero.
 
     Run an Izhikevich multi-step state transition with the already selected
     CuPy kernel, explicitly receiving and returning membrane voltage ``v`` and
@@ -2569,9 +2609,11 @@ def if_multi_step_triton(
 
     * **中文**
 
-    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
-    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
-    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+    输入和状态若为紧凑且不重叠的排列（元素各占独立位置，存储无空洞），
+    或由其 ``expand`` 得到的广播 view，则直接按 stride 访问，不复制为连续输入。
+    其他合法 strided view 保持数值正确，但允许自动转换。输出使用独立、无重叠
+    的存储；紧凑输入保留布局，广播及其他 view 可生成紧凑输出。
+    多步输入的逻辑第零维为时间维，其物理 stride 不必最大，也可以为零。
 
     使用 Triton kernel 执行 IF 多步状态转移，不进行通用 backend 分发。
 
@@ -2598,11 +2640,14 @@ def if_multi_step_triton(
 
     * **English**
 
-    Inputs and states support arbitrary nonnegative strides, including slices
-    and read-only broadcast views. Dimension zero is time for multi-step inputs.
-    No contiguous input conversion is required. Outputs have independent,
-    nonoverlapping storage; common dense layouts retain their dimension order,
-    while non-dense inputs may produce compact outputs.
+    Inputs and states with compact, nonoverlapping storage (distinct element
+    locations without gaps), or broadcast views obtained from them with ``expand``,
+    are accessed directly without copying into contiguous inputs. Other valid
+    strided views remain numerically supported but may be converted. Outputs have
+    independent, nonoverlapping storage; compact inputs retain their layout,
+    while broadcast and other views may produce compact outputs.
+    Logical dimension zero is time; its physical stride need not be largest and
+    may be zero.
 
     Run an IF multi-step state transition with the Triton kernel without generic
     backend dispatch.
@@ -2692,9 +2737,11 @@ def lif_multi_step_triton(
 
     * **中文**
 
-    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
-    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
-    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+    输入和状态若为紧凑且不重叠的排列（元素各占独立位置，存储无空洞），
+    或由其 ``expand`` 得到的广播 view，则直接按 stride 访问，不复制为连续输入。
+    其他合法 strided view 保持数值正确，但允许自动转换。输出使用独立、无重叠
+    的存储；紧凑输入保留布局，广播及其他 view 可生成紧凑输出。
+    多步输入的逻辑第零维为时间维，其物理 stride 不必最大，也可以为零。
 
     使用 Triton kernel 执行 LIF 多步状态转移，不进行通用 backend 分发。
 
@@ -2725,11 +2772,14 @@ def lif_multi_step_triton(
 
     * **English**
 
-    Inputs and states support arbitrary nonnegative strides, including slices
-    and read-only broadcast views. Dimension zero is time for multi-step inputs.
-    No contiguous input conversion is required. Outputs have independent,
-    nonoverlapping storage; common dense layouts retain their dimension order,
-    while non-dense inputs may produce compact outputs.
+    Inputs and states with compact, nonoverlapping storage (distinct element
+    locations without gaps), or broadcast views obtained from them with ``expand``,
+    are accessed directly without copying into contiguous inputs. Other valid
+    strided views remain numerically supported but may be converted. Outputs have
+    independent, nonoverlapping storage; compact inputs retain their layout,
+    while broadcast and other views may produce compact outputs.
+    Logical dimension zero is time; its physical stride need not be largest and
+    may be zero.
 
     Run a LIF multi-step state transition with the Triton kernel without generic
     backend dispatch.
@@ -2829,9 +2879,11 @@ def ilif_multi_step_triton(
 
     * **中文**
 
-    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
-    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
-    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+    输入和状态若为紧凑且不重叠的排列（元素各占独立位置，存储无空洞），
+    或由其 ``expand`` 得到的广播 view，则直接按 stride 访问，不复制为连续输入。
+    其他合法 strided view 保持数值正确，但允许自动转换。输出使用独立、无重叠
+    的存储；紧凑输入保留布局，广播及其他 view 可生成紧凑输出。
+    多步输入的逻辑第零维为时间维，其物理 stride 不必最大，也可以为零。
 
     使用 Triton kernel 执行 I-LIF 多步状态转移，不进行 backend 分发。
     ``v`` 是已物化的初始膜电位；``store_v_seq`` 为 ``True`` 时返回完整的
@@ -2861,11 +2913,14 @@ def ilif_multi_step_triton(
 
     * **English**
 
-    Inputs and states support arbitrary nonnegative strides, including slices
-    and read-only broadcast views. Dimension zero is time for multi-step inputs.
-    No contiguous input conversion is required. Outputs have independent,
-    nonoverlapping storage; common dense layouts retain their dimension order,
-    while non-dense inputs may produce compact outputs.
+    Inputs and states with compact, nonoverlapping storage (distinct element
+    locations without gaps), or broadcast views obtained from them with ``expand``,
+    are accessed directly without copying into contiguous inputs. Other valid
+    strided views remain numerically supported but may be converted. Outputs have
+    independent, nonoverlapping storage; compact inputs retain their layout,
+    while broadcast and other views may produce compact outputs.
+    Logical dimension zero is time; its physical stride need not be largest and
+    may be zero.
 
     Run the I-LIF multi-step state transition with the Triton kernel without
     backend dispatch. ``v`` is the materialized initial membrane voltage;
@@ -2929,9 +2984,11 @@ def plif_multi_step_triton(
 
     * **中文**
 
-    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
-    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
-    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+    输入和状态若为紧凑且不重叠的排列（元素各占独立位置，存储无空洞），
+    或由其 ``expand`` 得到的广播 view，则直接按 stride 访问，不复制为连续输入。
+    其他合法 strided view 保持数值正确，但允许自动转换。输出使用独立、无重叠
+    的存储；紧凑输入保留布局，广播及其他 view 可生成紧凑输出。
+    多步输入的逻辑第零维为时间维，其物理 stride 不必最大，也可以为零。
 
     使用 Triton kernel 执行 PLIF 多步状态转移。``w`` 与 torch 接口语义一致。
 
@@ -2962,11 +3019,14 @@ def plif_multi_step_triton(
 
     * **English**
 
-    Inputs and states support arbitrary nonnegative strides, including slices
-    and read-only broadcast views. Dimension zero is time for multi-step inputs.
-    No contiguous input conversion is required. Outputs have independent,
-    nonoverlapping storage; common dense layouts retain their dimension order,
-    while non-dense inputs may produce compact outputs.
+    Inputs and states with compact, nonoverlapping storage (distinct element
+    locations without gaps), or broadcast views obtained from them with ``expand``,
+    are accessed directly without copying into contiguous inputs. Other valid
+    strided views remain numerically supported but may be converted. Outputs have
+    independent, nonoverlapping storage; compact inputs retain their layout,
+    while broadcast and other views may produce compact outputs.
+    Logical dimension zero is time; its physical stride need not be largest and
+    may be zero.
 
     Run a PLIF multi-step state transition with the Triton kernel. ``w`` has the
     same semantics as in the torch interface.
@@ -3455,9 +3515,10 @@ def stbif_single_step_triton(
 
     * **中文**
 
-    输入和状态支持非负任意 stride，包括切片及只读广播，无需先转换为
-    连续张量。输出使用独立、无重叠的存储；
-    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+    输入和状态若为紧凑且不重叠的排列（元素各占独立位置，存储无空洞），
+    或由其 ``expand`` 得到的广播 view，则直接按 stride 访问，不复制为连续输入。
+    其他合法 strided view 保持数值正确，但允许自动转换。输出使用独立、无重叠
+    的存储；紧凑输入保留布局，广播及其他 view 可生成紧凑输出。
 
     使用专用 Triton kernel 执行 SpikeZIP STBIF 单步状态转移。``x``、``q``
     和 ``acc_q`` 必须是相同 shape、dtype 和 device 的 CUDA FP32、FP16 或
@@ -3486,11 +3547,12 @@ def stbif_single_step_triton(
 
     * **English**
 
-    Inputs and states support arbitrary nonnegative strides, including slices
-    and read-only broadcast views, without a contiguous input conversion.
-    Outputs have independent,
-    nonoverlapping storage; common dense layouts retain their dimension order,
-    while non-dense inputs may produce compact outputs.
+    Inputs and states with compact, nonoverlapping storage (distinct element
+    locations without gaps), or broadcast views obtained from them with ``expand``,
+    are accessed directly without copying into contiguous inputs. Other valid
+    strided views remain numerically supported but may be converted. Outputs have
+    independent, nonoverlapping storage; compact inputs retain their layout,
+    while broadcast and other views may produce compact outputs.
 
     Run one SpikeZIP STBIF state transition with the dedicated Triton kernel.
     ``x``, ``q``, and ``acc_q`` must be CUDA FP32, FP16, or BF16 tensors with

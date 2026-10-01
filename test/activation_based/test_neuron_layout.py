@@ -187,6 +187,140 @@ _CASES = [
 ]
 
 
+def _broadcast_source(shape, kind, dtype):
+    source_shape = {
+        "time": (1, *shape[1:]),
+        "space": (*shape[:2], 1, *shape[3:]),
+        "scalar": (1,) * len(shape),
+    }[kind]
+    source = _layout(
+        torch.rand(source_shape, device="cuda", dtype=dtype) * 0.8,
+        "channels_last",
+    ).requires_grad_()
+    return source, source.expand(shape)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("backend,kind", _CASES)
+@pytest.mark.parametrize("broadcast", ["time", "space", "scalar"])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
+def test_broadcast_gradients_reach_sources(backend, kind, broadcast, dtype):
+    pytest.importorskip(backend)
+    if kind == "IzhikevichNode" and dtype == torch.float16:
+        pytest.skip("Izhikevich CuPy supports FP32 only")
+    torch.manual_seed(29)
+    node = (
+        getattr(neuron, kind)(
+            backend=backend, step_mode="m", store_v_seq=True, v_threshold=0.6
+        )
+        .cuda()
+        .to(dtype)
+    )
+    reference = copy.deepcopy(node)
+    width = 4 if kind == "ParametricLIFNode" else 5
+    shape = (4, 1, 3, 1, width)
+    source, x = _broadcast_source(shape, broadcast, dtype)
+    source_ref = source.detach().clone().requires_grad_()
+    xr = source_ref.expand(shape).clone(memory_format=torch.contiguous_format)
+    sources, sources_ref = [source], [source_ref]
+    for name in ("v", "w") if kind == "IzhikevichNode" else ("v",):
+        state_source = (
+            torch.rand(1, 1, 1, width, device="cuda", dtype=dtype) * 0.1
+        ).requires_grad_()
+        state_ref = state_source.detach().clone().requires_grad_()
+        setattr(node, name, state_source.expand(shape[1:]))
+        setattr(reference, name, state_ref.expand(shape[1:]).clone())
+        sources.append(state_source)
+        sources_ref.append(state_ref)
+    snapshots = [value.detach().clone() for value in sources]
+    actual, expected = node(x), reference(xr)
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    torch.testing.assert_close(node.v_seq, reference.v_seq, rtol=0, atol=0)
+    torch.testing.assert_close(node.v, reference.v, rtol=0, atol=0)
+    assert torch.ops.aten.is_non_overlapping_and_dense.default(actual)
+    assert actual.data_ptr() != x.data_ptr()
+    grad_s = torch.tensor(0.25, device="cuda", dtype=dtype).expand_as(actual)
+    grad_v = _layout(torch.rand_like(node.v_seq), "time_inner")
+    outputs, outputs_ref = (actual, node.v_seq), (expected, reference.v_seq)
+    upstream = (grad_s, grad_v)
+    if kind == "IzhikevichNode":
+        torch.testing.assert_close(node.w, reference.w, rtol=0, atol=0)
+        outputs, outputs_ref = (*outputs, node.w), (*outputs_ref, reference.w)
+        upstream = (*upstream, torch.ones_like(node.w))
+    grads = torch.autograd.grad(outputs, (*sources, *node.parameters()), upstream)
+    grads_ref = torch.autograd.grad(
+        outputs_ref,
+        (*sources_ref, *reference.parameters()),
+        tuple(value.contiguous() for value in upstream),
+    )
+    for value, expected_grad in zip(grads, grads_ref):
+        assert torch.isfinite(value).all() and torch.isfinite(expected_grad).all()
+        torch.testing.assert_close(
+            value,
+            expected_grad,
+            rtol=1e-2 if dtype == torch.float16 else 1e-5,
+            atol=1e-2 if dtype == torch.float16 else 1e-6,
+        )
+    for value, snapshot in zip(sources, snapshots):
+        torch.testing.assert_close(value, snapshot, rtol=0, atol=0)
+    functional.detach_net(node)
+    functional.detach_net(reference)
+    with torch.no_grad():
+        torch.testing.assert_close(node(x), reference(xr), rtol=0, atol=0)
+        node.reset()
+        reference.reset()
+        torch.testing.assert_close(node(x), reference(xr), rtol=0, atol=0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("backend", ["triton", "cupy"])
+@pytest.mark.parametrize("broadcast", ["time", "space", "scalar"])
+def test_compiled_broadcast_lif_source_gradients(backend, broadcast):
+    from spikingjelly.activation_based import surrogate
+
+    pytest.importorskip(backend)
+    op = getattr(functional, f"lif_multi_step_{backend}")
+    sg = surrogate.Sigmoid()
+    shape = (4, 2, 3, 2, 5)
+    source, _ = _broadcast_source(shape, broadcast, torch.float32)
+    state = torch.rand(1, 3, 1, 5, device="cuda", requires_grad=True)
+
+    def run(source, state):
+        spike, final, sequence = op(
+            source.expand(shape),
+            state.expand(shape[1:]),
+            2.0,
+            True,
+            1.0,
+            0.0,
+            sg,
+            store_v_seq=True,
+        )
+        return spike, final, sequence
+
+    eager = run(source, state)
+    compiled = torch.compile(run, fullgraph=True)(source, state)
+    for a, b in zip(compiled, eager):
+        torch.testing.assert_close(a, b, rtol=0, atol=0)
+        assert a.stride() == b.stride()
+    grads = torch.autograd.grad(sum(x.sum() for x in compiled), (source, state))
+    grads_ref = torch.autograd.grad(sum(x.sum() for x in eager), (source, state))
+    for a, b in zip(grads, grads_ref):
+        assert torch.isfinite(a).all() and torch.isfinite(b).all()
+        torch.testing.assert_close(a, b, rtol=1e-5, atol=1e-6)
+    reference = neuron.LIFNode(step_mode="m", store_v_seq=True, backend="torch")
+    reference.v = state.expand(shape[1:])
+    spike_ref = reference(source.expand(shape))
+    torch.testing.assert_close(compiled[0], spike_ref, rtol=0, atol=0)
+    torch.testing.assert_close(compiled[2], reference.v_seq)
+    torch_grads = torch.autograd.grad(
+        spike_ref.sum() + reference.v.sum() + reference.v_seq.sum(), (source, state)
+    )
+    for a, b in zip(grads, torch_grads):
+        assert torch.isfinite(b).all()
+        torch.testing.assert_close(a, b, rtol=1e-5, atol=1e-6)
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize(
     "kind,dtype", [("LIFNode", torch.float16), ("IzhikevichNode", torch.float32)]
@@ -318,17 +452,20 @@ def test_compiled_lif_layout_and_gradients(backend, layout):
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("backend", ["cupy"])
 @pytest.mark.parametrize("kind", ["IFNode", "LIFNode"])
-def test_single_step_sliced_neuron(backend, kind):
+@pytest.mark.parametrize("layout", ["sliced", "broadcast"])
+def test_single_step_view_neuron(backend, kind, layout):
     pytest.importorskip(backend)
     torch.manual_seed(21)
     node = getattr(neuron, kind)(backend=backend, step_mode="s").cuda()
     reference = copy.deepcopy(node)
-    x = _layout(torch.rand(2, 3, 2, 5, device="cuda"), "sliced").requires_grad_()
-    xr = x.detach().contiguous().requires_grad_()
+    source = torch.rand(2, 3, 2, 5, device="cuda", requires_grad=True)
+    source_ref = source.detach().clone().requires_grad_()
+    x = _layout(source, layout)
+    xr = _layout(source_ref, layout).contiguous()
     a, b = node(x), reference(xr)
     torch.testing.assert_close(a, b, rtol=0, atol=0)
-    ga = torch.autograd.grad(a.sum(), x)[0]
-    gb = torch.autograd.grad(b.sum(), xr)[0]
+    ga = torch.autograd.grad(a.sum(), source)[0]
+    gb = torch.autograd.grad(b.sum(), source_ref)[0]
     torch.testing.assert_close(ga, gb, rtol=0, atol=0)
 
 
@@ -428,32 +565,49 @@ def test_single_step_stbif_compacts_all_spatial_axes(device):
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("backend", ["triton", "cupy"])
-def test_lif_launch_receives_original_strided_input(backend, monkeypatch):
+@pytest.mark.parametrize(
+    "layout", ["sliced", "channels_last", "time", "space", "scalar"]
+)
+def test_lif_launch_receives_original_strided_input(backend, layout, monkeypatch):
     pytest.importorskip(backend)
-    x = _layout(torch.rand(4, 2, 3, 2, 5, device="cuda"), "sliced")
+    shape = (4, 2, 3, 2, 5)
+    x = (
+        _broadcast_source(shape, layout, torch.float32)[1]
+        if layout in ("time", "space", "scalar")
+        else _layout(torch.rand(shape, device="cuda"), layout)
+    )
     launches = []
     states = []
+    gradients = []
     if backend == "triton":
         from spikingjelly.activation_based.triton_kernel.neuron_kernel import lif
 
         original = lif.wrap_triton
 
         class RecordLaunch:
-            def __init__(self, kernel):
+            def __init__(self, kernel, backward):
                 self.kernel = kernel
+                self.backward = backward
 
             def __getitem__(self, grid):
                 launch = self.kernel[grid]
 
                 def record(*args, **kwargs):
-                    launches.append((args[0].data_ptr(), args[0].stride()))
-                    states.append(args[1].data_ptr())
+                    if self.backward:
+                        gradients.append(tuple(x.data_ptr() for x in args[:2]))
+                    else:
+                        launches.append((args[0].data_ptr(), args[0].stride()))
+                        states.append(args[1].data_ptr())
                     return launch(*args, **kwargs)
 
                 return record
 
         monkeypatch.setattr(
-            lif, "wrap_triton", lambda kernel: RecordLaunch(original(kernel))
+            lif,
+            "wrap_triton",
+            lambda kernel: RecordLaunch(
+                original(kernel), "backward" in kernel.fn.__name__
+            ),
         )
     else:
         from spikingjelly.activation_based.cuda_kernel.neuron_kernel import strides
@@ -462,26 +616,33 @@ def test_lif_launch_receives_original_strided_input(backend, monkeypatch):
 
         def record_kernel(code, name, *options):
             kernel = original(code, name, *options)
-            names = strides._parameter_names(code, name)
-            index = names.index("raw_x_seq" if "raw_x_seq" in names else "x_seq")
-            state_index = names.index(
-                "raw_v_init" if "raw_v_init" in names else "v_init"
-            )
+            names = [
+                n.removeprefix("raw_") for n in strides._parameter_names(code, name)
+            ]
 
             def launch(grid, block, arguments, *args, **kwargs):
-                launches.append((arguments[index], x.stride()))
-                states.append(arguments[state_index])
+                values = dict(zip(names, arguments))
+                if "grad_spike_seq" in values:
+                    gradients.append((values["grad_spike_seq"], values["grad_v_seq"]))
+                else:
+                    launches.append((values["x_seq"], x.stride()))
+                    states.append(values["v_init"])
                 return kernel(grid, block, arguments, *args, **kwargs)
 
             return launch
 
         monkeypatch.setattr(strides, "_get_raw_kernel", record_kernel)
-    node = neuron.LIFNode(backend=backend, step_mode="m").cuda()
-    v = _layout(torch.rand_like(x[0]), "sliced")
+    node = neuron.LIFNode(backend=backend, step_mode="m", store_v_seq=True).cuda()
+    v_source = torch.rand(1, 3, 1, 5, device="cuda", requires_grad=True)
+    v = v_source.expand(shape[1:])
     node.v = v
-    node(x)
+    spike = node(x)
     assert launches == [(x.data_ptr(), x.stride())]
     assert states == [v.data_ptr()]
+    gs = torch.tensor(0.25, device="cuda").expand_as(spike)
+    gv = torch.tensor(0.5, device="cuda").expand_as(node.v_seq)
+    torch.autograd.grad((spike, node.v_seq), v_source, (gs, gv))
+    assert gradients == [(gs.data_ptr(), gv.data_ptr())]
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

@@ -1816,11 +1816,25 @@ def test_registered_triton_neuron_contracts_pass_opcheck(kind):
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
 @pytest.mark.parametrize("storage_dtype", [torch.float16, torch.bfloat16])
-def test_mixed_precision_strided_dynamic_time(kind, storage_dtype, monkeypatch):
+@pytest.mark.parametrize("broadcast", [False, True])
+def test_mixed_precision_strided_dynamic_time(
+    kind, storage_dtype, broadcast, monkeypatch
+):
     monkeypatch.setattr(configure, "triton_neuron_kernel_static_range_max_T", 4)
     torch.manual_seed(20261001)
-    x = torch.rand(2, 3, 5, 17, device="cuda").permute(3, 0, 1, 2).requires_grad_()
-    xr = x.detach().contiguous().requires_grad_()
+    shape = (2, 3, 5) if broadcast else (2, 3, 5, 17)
+    source = torch.rand(shape, device="cuda", requires_grad=True)
+    source_ref = source.detach().clone().requires_grad_()
+    x = (
+        source.unsqueeze(0).expand(17, *shape)
+        if broadcast
+        else source.permute(3, 0, 1, 2)
+    )
+    xr = (
+        source_ref.unsqueeze(0).expand_as(x)
+        if broadcast
+        else source_ref.permute(3, 0, 1, 2)
+    ).contiguous()
     v = torch.rand(2, 3, 10, device="cuda")[..., ::2].requires_grad_()
     vr = v.detach().contiguous().requires_grad_()
     tau = torch.tensor(0.5, device="cuda", requires_grad=True)
@@ -1832,8 +1846,8 @@ def test_mixed_precision_strided_dynamic_time(kind, storage_dtype, monkeypatch):
     reference = _call_mixed_precision_forward(kind, xr, vr, r_tau=taur, **kwargs)
     for a, b in zip(output, reference):
         torch.testing.assert_close(a, b, rtol=0, atol=0)
-    inputs = (x, v, tau) if kind == "plif" else (x, v)
-    refs = (xr, vr, taur) if kind == "plif" else (xr, vr)
+    inputs = (source, v, tau) if kind == "plif" else (source, v)
+    refs = (source_ref, vr, taur) if kind == "plif" else (source_ref, vr)
     ga = torch.autograd.grad(output[0].sum() + output[1].sum(), inputs)
     gb = torch.autograd.grad(reference[0].sum() + reference[1].sum(), refs)
     for a, b in zip(ga, gb):

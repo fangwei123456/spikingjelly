@@ -41,11 +41,14 @@ Module: `spikingjelly.nsys`.
 
 Module: `spikingjelly.activation_based.neuron`.
 
-- Point-neuron Triton and CuPy kernels now address strided inputs, states and
-  gradients directly, including channels-last, sliced and broadcast views,
-  without flattening inputs into contiguous buffers. Multi-step inputs retain
-  time as logical dimension zero. Non-dense inputs may produce compact outputs;
-  existing backend and dtype restrictions still apply. Recompile models with a
+- Point-neuron Triton and CuPy kernels directly access compact, nonoverlapping
+  inputs, states and gradients in any dimension order, including channels-last,
+  and broadcast views obtained from them with `expand`. Other valid strided views
+  remain numerically supported but may be converted. Multi-step inputs retain
+  time as logical dimension zero, including zero time strides. Outputs and returned
+  gradients have independent, nonoverlapping storage; PyTorch reduces gradients
+  back to the sources of broadcast views. Existing backend and dtype restrictions
+  still apply. Recompile models with a
   fresh Inductor cache when upgrading: cached CuPy graphs may assume contiguous
   outputs from the previous implementation.
 - CuPy FP16 PLIF kernels read the shared decay parameter as one scalar and

@@ -145,11 +145,21 @@ Combining with ``torch.compile``
 
 .. warning::
 
-    Point-neuron kernels address inputs, states and gradients using their own
-    strides, without requiring a contiguous conversion. Multi-step inputs remain
-    ``[T, ...]``: time is logical dimension zero, but need not have the largest
-    physical stride. Channels-last, sliced and read-only broadcast inputs are
-    accepted; non-dense inputs may produce compact outputs. Existing CuPy dtype
+    Point-neuron kernels directly access any compact, nonoverlapping layout and
+    broadcast views obtained from it with ``expand``, without copying into
+    contiguous inputs. Compact, nonoverlapping storage means distinct element
+    locations without gaps, including default contiguous layouts, channels-last,
+    and ordinary transposes; this is separate from the sparse tensor distinction.
+    Other valid strided inputs, such as gapped slices and general overlapping
+    views, remain numerically supported but may be converted. Inputs, states and
+    upstream gradients may each use a different layout.
+
+    Multi-step inputs remain ``[T, ...]``. Time is logical dimension zero; its
+    physical stride need not be largest and may be zero. Broadcast inputs are
+    read with their original strides; outputs and returned gradients have
+    independent, nonoverlapping storage. PyTorch's broadcast backward reduces
+    gradients to the data preceding ``expand``. This reduction and necessary dtype
+    conversions are separate from layout copies. Existing backend and dtype
     restrictions remain unchanged.
 
     Stride-aware kernels do not guarantee that the compiler inserts no copies.
