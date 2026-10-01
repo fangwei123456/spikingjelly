@@ -193,10 +193,9 @@ Historical documentation:
 
 ## License
 
-SpikingJelly is distributed under the Open-Intelligence Open Source License
-Version 1.0. See the [authoritative Chinese license](./LICENSE),
-[translations](./LICENSES/translations/), and the
-[usage and distribution guide](./LICENSES/README.md).
+SpikingJelly's project license is [Apache-2.0](./LICENSE). Third-party
+attributions and license terms are collected in [LICENSES/NOTICE](./LICENSES/NOTICE).
+See the [license guide](./LICENSES/README.md) for scope and historical licenses.
 
 ## Acknowledgement
 

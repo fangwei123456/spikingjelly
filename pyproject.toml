@@ -41,7 +41,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Operating System :: OS Independent",
 ]
-license-files = ["LICENSE", "LICENSES/README.md", "LICENSES/translations/*"]
+license-files = ["LICENSE", "LICENSES/NOTICE"]
 
 [project.optional-dependencies]
 cupy11 = ["cupy-cuda11x"]

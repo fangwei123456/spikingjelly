@@ -303,6 +303,14 @@ Module: ``spikingjelly.activation_based.neuron``.
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+License Migration
+^^^^^^^^^^^^^^^^^
+
+- Updated the project license text and contribution terms to Apache-2.0,
+  preserving bundled third-party notices in ``LICENSES/NOTICE`` and historical
+  license links. Existing tags and published distributions retain their
+  original licensing records.
+
 Distributed Vision Neuron Configurations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

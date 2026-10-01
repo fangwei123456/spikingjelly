@@ -192,8 +192,8 @@ V2 版本更新记录见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 许可证
 
-SpikingJelly 采用启智开源许可证 1.0 版发布。请参阅[具有权威效力的中文许可证](./LICENSE)、
-[其他语言译文](./LICENSES/translations/)和[使用与再发布说明](./LICENSES/README.md)。
+SpikingJelly 的项目许可证为 [Apache-2.0](./LICENSE)。第三方归属及许可条款汇总于
+[LICENSES/NOTICE](./LICENSES/NOTICE)。适用范围与历史许可证见[许可证指南](./LICENSES/README.md)。
 
 ## 致谢
 
