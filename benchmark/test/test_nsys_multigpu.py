@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import sqlite3
 import subprocess
+import sys
 
 import pytest
 
@@ -178,6 +179,57 @@ def test_missing_rank_and_open_step_are_incomplete(trace):
     assert not report["global_steps"][0]["complete"]
     assert report["global_steps"][0]["missing_ranks"] == [1]
     assert report["coverage"]["incomplete_steps"] == 1
+    assert report["steps"][0]["cpu_range_ms"] is None
+    assert report["global_steps"][0]["cpu_envelope_ms"] is None
+    assert report["global_steps"][0]["end_skew_ms"] is None
+    with sqlite3.connect(trace) as db:
+        db.execute("DELETE FROM CUPTI_ACTIVITY_KIND_RUNTIME")
+        db.execute("DELETE FROM CUPTI_ACTIVITY_KIND_KERNEL")
+    nvtx_only = analyze(trace)
+    assert nvtx_only["steps"][0]["end_ns"] == nvtx_only["capture_end_ns"] == 9_000_000
+
+
+@pytest.mark.parametrize("start_ns", [0, 20_000_000])
+@pytest.mark.parametrize("cuda_events", [False, True])
+def test_open_step_bounds_without_a_later_cuda_event(trace, start_ns, cuda_events):
+    with sqlite3.connect(trace) as db:
+        db.execute("DELETE FROM NVTX_EVENTS")
+        db.execute(
+            "INSERT INTO NVTX_EVENTS VALUES (?,NULL,?,NULL,?,59,0)",
+            (start_ns, 'sj.step:training:0|sj:{"rank":0,"world_size":1}', gid(101, 1)),
+        )
+        if not cuda_events:
+            db.execute("DELETE FROM CUPTI_ACTIVITY_KIND_RUNTIME")
+            db.execute("DELETE FROM CUPTI_ACTIVITY_KIND_KERNEL")
+    report = analyze(trace)
+    step = report["steps"][0]
+    assert not step["complete"]
+    assert step["cpu_range_ms"] is None
+    assert report["capture_start_ns"] <= start_ns <= report["capture_end_ns"]
+    assert step["start_ns"] <= step["end_ns"]
+    assert report["selection"]["start_ns"] <= report["selection"]["end_ns"]
+    assert report["global_steps"][0]["cpu_envelope_ms"] is None
+
+
+def test_graph_example_rejects_unsupported_validation(monkeypatch, tmp_path, capsys):
+    from benchmark import nsys_multigpu_example
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "example",
+            "--parallel",
+            "graph",
+            "--validate",
+            "--output",
+            str(tmp_path / "result.json"),
+        ],
+    )
+    with pytest.raises(SystemExit) as error:
+        nsys_multigpu_example.main()
+    assert error.value.code == 2
+    assert "--validate requires" in capsys.readouterr().err
 
 
 def test_compare_requires_schema_v2(trace):
@@ -263,3 +315,11 @@ def test_device_capture_cleans_up_partial_start(monkeypatch):
             pass
     assert stopped == [0]
     assert current == [9]
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("devices", [[], [0, 0], [-1]])
+def test_capture_rejects_invalid_devices_in_both_modes(enabled, devices):
+    with pytest.raises(ValueError, match="unique nonnegative"):
+        with nsys.capture(enabled, devices=devices):
+            pytest.fail("invalid devices entered the capture scope")

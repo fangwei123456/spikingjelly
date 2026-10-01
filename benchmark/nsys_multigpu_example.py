@@ -101,6 +101,8 @@ def main() -> None:
     parser.add_argument("--delay-seconds", type=float, default=0.25)
     parser.add_argument("--fail-rank", type=int, default=-1)
     args = parser.parse_args()
+    if args.validate and (args.model != "small" or args.parallel == "graph"):
+        parser.error("--validate requires --model small and --parallel dp, ddp or pp")
     distributed = args.parallel in ("ddp", "pp")
     rank = int(os.environ["RANK"]) if distributed else 0
     world_size = int(os.environ["WORLD_SIZE"]) if distributed else 1
@@ -114,8 +116,6 @@ def main() -> None:
         )
     if args.control == "manual" and args.gate_dir is None:
         raise ValueError("manual control requires --gate-dir")
-    if args.validate and args.model != "small":
-        raise ValueError("the numerical reference uses the deterministic small SNN")
     device = rank if distributed else 0
     torch.cuda.set_device(device)
     devices = [device] if distributed else [0, 1]

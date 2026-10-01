@@ -85,7 +85,8 @@ def render(report: dict, output_dir: Path) -> None:
                     region["process_id"],
                     region["global_tid"] & 0xFFFFFF,
                 )
-                spans[key].append((region, "#cbd5e1", str(region["index"])))
+                label = str(region["index"]) + ("" if region["complete"] else " (open)")
+                spans[key].append((region, "#cbd5e1", label))
             elif not gil_only and region["kind"] in ("region", "communication"):
                 if modules and not region["name"].startswith("module:"):
                     continue

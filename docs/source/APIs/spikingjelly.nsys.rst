@@ -103,3 +103,12 @@ training succeeded. Check launcher status, per-rank results and expected step
 counts to validate a run; partial failed reports remain useful for diagnosis.
 API capture uses ``--kill=none`` so session shutdown does not terminate workers
 that are still cleaning up.
+
+未闭合的 NVTX step 在图中标为 ``open``；其结束边界只用于展示采集到的区间，
+CPU 耗时为 ``null``。缺少 rank 或存在未闭合范围的逻辑 step 不报告 CPU 总跨度或
+起止偏斜。示例的 ``--validate`` 仅支持 small 模型的 DP/DDP/PP 模式。
+
+Unclosed NVTX steps are marked ``open`` in the timeline. Their end bounds only
+delimit the observed interval; CPU duration is ``null``. Logical steps with
+missing ranks or unclosed ranges do not report CPU envelope or start/end skew.
+The example's ``--validate`` supports only DP/DDP/PP with the small model.

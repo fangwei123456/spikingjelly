@@ -412,13 +412,15 @@ def analyze(
             raise ValueError(
                 "capture has no CUDA API or GPU events; enable CUDA tracing"
             )
-        times = gpu_events + api_events or [
-            r for r in ranges if r["end_ns"] is not None
-        ]
+        times = gpu_events + api_events or [r for r in ranges if r["complete"]]
+        times += [r for r in ranges if not r["complete"]]
         origin = min(e["start_ns"] for e in times)
-        end = max(e["end_ns"] for e in times)
+        end = max(
+            e["end_ns"] if e["end_ns"] is not None else e["start_ns"] for e in times
+        )
         for item in ranges:
             if item["end_ns"] is None:
+                # A display/attribution bound, not a measured NVTX completion.
                 item["end_ns"] = end
         steps = sorted(
             (r for r in ranges if r["kind"] == "step"),
@@ -552,7 +554,9 @@ def analyze(
                 phases[event["phase"]] += duration_ms
             summary = {
                 **step,
-                "cpu_range_ms": (step["end_ns"] - step["start_ns"]) / NS_PER_MS,
+                "cpu_range_ms": (step["end_ns"] - step["start_ns"]) / NS_PER_MS
+                if step["complete"]
+                else None,
                 "gpu_end_ns": max((e["end_ns"] for e in events), default=None),
                 "cuda_api_union_ms": _union_ns(
                     [(c["start_ns"], c["end_ns"]) for c in calls]
@@ -622,7 +626,7 @@ def analyze(
                     "missing_ranks": sorted(set(range(expected)) - set(ranks))
                     if expected is not None
                     else None,
-                    "cpu_envelope_ms": (stop - start) / NS_PER_MS,
+                    "cpu_envelope_ms": (stop - start) / NS_PER_MS if complete else None,
                     "gpu_end_ns": max(
                         (
                             s["gpu_end_ns"]
@@ -632,9 +636,13 @@ def analyze(
                         default=None,
                     ),
                     "start_skew_ms": (max(s["start_ns"] for s in members) - start)
-                    / NS_PER_MS,
+                    / NS_PER_MS
+                    if complete
+                    else None,
                     "end_skew_ms": (stop - min(s["end_ns"] for s in members))
-                    / NS_PER_MS,
+                    / NS_PER_MS
+                    if complete
+                    else None,
                     "step_ids": [s["step_id"] for s in members],
                 }
             )

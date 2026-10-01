@@ -30,7 +30,8 @@ Module: ``spikingjelly.nsys``.
   per-device compute/communication overlap, logical-step completeness and
   unassigned-event accounting. Uninstrumented CUDA workloads can be analyzed
   without step markers. Regenerate v1 summaries from their original SQLite
-  exports before comparison.
+  exports before comparison. Unclosed step CPU durations and incomplete
+  logical-step CPU envelopes/skews are reported as unavailable.
 
 - Added opt-in CUDA capture and NVTX step/stage ranges for Nsight Systems,
   alongside reusable capture, analysis, and comparison scripts.

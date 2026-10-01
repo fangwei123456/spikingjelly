@@ -61,12 +61,14 @@ def capture(
     :raises ValueError: If the device sequence is empty, duplicated, or negative.
     :raises RuntimeError: If the CUDA profiler cannot start or stop when enabled.
     """
+    if devices is not None and (
+        not devices or len(set(devices)) != len(devices) or min(devices) < 0
+    ):
+        raise ValueError("devices must contain unique nonnegative CUDA indices")
     if not enabled:
         yield
         return
     if devices is not None:
-        if not devices or len(set(devices)) != len(devices) or min(devices) < 0:
-            raise ValueError("devices must contain unique nonnegative CUDA indices")
         with ExitStack() as cleanup:
             for device in devices:
                 with torch.cuda.device(device):
