@@ -59,6 +59,8 @@ Module: ``spikingjelly.activation_based.neuron``.
   outputs from the previous implementation.
 - CuPy FP16 PLIF kernels read the shared decay parameter as one scalar and
   broadcast it to both half2 lanes, avoiding a packed read past the scalar.
+- FlexSN's Triton kernels use masked pointer loads and stores instead of the
+  deprecated block-pointer API.
 
 - Added the torch-only ``RAFNode`` resonate-and-fire neuron with fixed oscillator
   parameters, real-valued states, and single-step and multi-step execution.
