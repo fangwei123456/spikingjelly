@@ -192,10 +192,8 @@ V2 版本更新记录见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 许可证
 
-SpikingJelly 正准备在当前开发主线及后续版本采用 [Apache-2.0](./LICENSE)。
-**本次迁移尚不具备发布条件：**[来源与授权核对记录](./LICENSES/PROVENANCE.md)
-列出了待解决事项。新文本不改变尚未确认授权的贡献或第三方代码的许可。
-迁移边界、第三方声明和历史许可证见[许可证指南](./LICENSES/README.md)。
+SpikingJelly 的项目许可证为 [Apache-2.0](./LICENSE)。第三方归属及许可条款汇总于
+[LICENSES/NOTICE](./LICENSES/NOTICE)。适用范围与历史许可证见[许可证指南](./LICENSES/README.md)。
 
 ## 致谢
 

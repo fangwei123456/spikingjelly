@@ -257,12 +257,10 @@ Module: `spikingjelly.activation_based.neuron`.
 
 #### License Migration
 
-- Prepared an Apache-2.0 migration for the current development line and future
-  releases, preserving third-party notices and historical license links. The
-  migration remains pending the source and authorization items in
-  [the license review](https://github.com/fangwei123456/spikingjelly/blob/master/LICENSES/PROVENANCE.md);
-  draft packages must not be published as Apache-2.0 releases. Existing tags
-  and published distributions retain their original licensing records.
+- Updated the project license text and contribution terms to Apache-2.0,
+  preserving bundled third-party notices in `LICENSES/NOTICE` and historical
+  license links. Existing tags and published distributions retain their
+  original licensing records.
 
 #### Distributed Vision Neuron Configurations
 

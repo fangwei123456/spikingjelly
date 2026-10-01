@@ -76,16 +76,13 @@ When changing production diagnostics, also run
 
 ### Contribution Licensing
 
-This branch prepares a migration to Apache-2.0; see the
-[license guide](LICENSES/README.md) and its outstanding authorization items.
-Contributions intentionally submitted for inclusion under Apache-2.0 are
-provided under that license unless a separate agreement applies. Contributors
-must have the right to submit their work, identify any third-party material,
-and preserve its applicable license and attribution notices.
+New contributions intentionally submitted for inclusion are provided under
+Apache-2.0 unless a separate agreement applies. Contributors must have the
+right to submit their work, identify third-party material, and preserve its
+applicable license and attribution notices.
 
-Contributors retain their copyright. This contribution policy does not
-retroactively authorize relicensing of earlier contributions. No CLA or DCO
-signing process is introduced by this migration.
+Contributors retain their copyright. These terms do not retroactively
+relicense earlier contributions.
 
 ### Pull Request Guidelines
 

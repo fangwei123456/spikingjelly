@@ -41,26 +41,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Operating System :: OS Independent",
 ]
-# Migration remains a draft until the items in LICENSES/PROVENANCE.md are resolved.
-license = "LicenseRef-SpikingJelly-Migration-Pending"
-license-files = [
-    "LICENSE",
-    "LICENSES/NOTICE",
-    "LICENSES/MIGRATION-PENDING.txt",
-    "LICENSES/third_party/baselines-LICENSE",
-    "LICENSES/third_party/deit-LICENSE",
-    "LICENSES/third_party/event-python-LICENSE",
-    "LICENSES/third_party/events-tfds-MIT.txt",
-    "LICENSES/third_party/flash-linear-attention-LICENSE",
-    "LICENSES/third_party/flash-snn-LICENSE",
-    "LICENSES/third_party/lava-dl-LICENSE",
-    "LICENSES/third_party/ma-snn-LICENSE",
-    "LICENSES/third_party/ptan-LICENSE",
-    "LICENSES/third_party/spikebased-backpropagation-LICENSE",
-    "LICENSES/third_party/spikformer-LICENSE",
-    "LICENSES/third_party/torchaudio-LICENSE",
-    "LICENSES/third_party/torchvision-LICENSE",
-]
+license-files = ["LICENSE", "LICENSES/NOTICE"]
 
 [project.optional-dependencies]
 cupy11 = ["cupy-cuda11x"]
