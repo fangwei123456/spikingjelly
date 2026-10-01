@@ -367,15 +367,6 @@ def normalize_cuda_device(device: torch.device | str) -> torch.device:
     return device
 
 
-@triton.jit
-def convert_and_store(pointer, value, boundary_check):
-    # For block pointers created by tl.make_block_pointer(),
-    # implicit type casting is not supported when calling tl.store().
-    # This function manually converts dtype and then stores the data.
-    value = value.to(pointer.dtype.element_ty.element_ty)
-    tl.store(pointer, value, boundary_check=boundary_check)
-
-
 _USE_TRITON_OP = (
     _TRITON_IMPORT_ERROR is None
     and triton_op is not None

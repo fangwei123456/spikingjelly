@@ -1,5 +1,9 @@
+import math
 from spikingjelly.logger import logger
 import torch
+
+from ..._neuron_layout import _empty_like, _layout_args
+from .utils import _spatial_offsets
 
 from ..triton_utils import (
     register_op,
@@ -56,38 +60,65 @@ def _multistep_activation_aware_if_forward_static(
     store_v_seq: tl.constexpr,
     threshold_is_scalar: tl.constexpr,
     offset_is_scalar: tl.constexpr,
+    SIZES: tl.constexpr,
+    STRIDES: tl.constexpr,
+    LOGICAL: tl.constexpr,
+    THRESHOLD_STRIDE: tl.constexpr,
+    OFFSET_STRIDE: tl.constexpr,
 ):
     offsets = tl.program_id(0) * BLOCK_N + tl.arange(0, BLOCK_N)
     mask = offsets < N
-    channel_offsets = offsets // INNER_SIZE % CHANNEL_SIZE
-    v = tl.load(v_init_ptr + offsets, mask=mask, other=0.0).to(compute_dtype)
+    x_seq_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 0)
+    v_init_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 1)
+    spike_seq_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 2)
+    v_out_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 3)
+    channel_offsets = (
+        _spatial_offsets(offsets, SIZES, LOGICAL) // INNER_SIZE % CHANNEL_SIZE
+    )
+    v = tl.load(v_init_ptr + v_init_ptr_offsets, mask=mask, other=0.0).to(compute_dtype)
     if threshold_is_scalar:
         threshold = tl.load(threshold_ptr).to(compute_dtype)
     else:
-        threshold = tl.load(threshold_ptr + channel_offsets, mask=mask, other=1.0).to(
-            compute_dtype
-        )
+        threshold = tl.load(
+            threshold_ptr + channel_offsets * THRESHOLD_STRIDE, mask=mask, other=1.0
+        ).to(compute_dtype)
     if offset_is_scalar:
         offset = tl.load(offset_ptr).to(compute_dtype)
     else:
-        offset = tl.load(offset_ptr + channel_offsets, mask=mask, other=0.0).to(
-            compute_dtype
-        )
+        offset = tl.load(
+            offset_ptr + channel_offsets * OFFSET_STRIDE, mask=mask, other=0.0
+        ).to(compute_dtype)
     reset = tl.full([1], v_reset, compute_dtype)
 
     for t in tl.static_range(0, T, 1):
-        x = tl.load(x_seq_ptr + t * N + offsets, mask=mask, other=0.0).to(compute_dtype)
+        x = tl.load(
+            x_seq_ptr + x_seq_ptr_offsets + t * tl.full((), STRIDES[0][0], tl.int64),
+            mask=mask,
+            other=0.0,
+        ).to(compute_dtype)
         h = v + x
         spike = tl.where(h + offset >= threshold, 1.0, 0.0).to(compute_dtype)
         if soft_reset:
             v = h - spike * threshold
         else:
             v = spike * reset + (1.0 - spike) * h
-        tl.store(spike_seq_ptr + t * N + offsets, spike, mask=mask)
+        tl.store(
+            spike_seq_ptr
+            + spike_seq_ptr_offsets
+            + t * tl.full((), STRIDES[2][0], tl.int64),
+            spike,
+            mask=mask,
+        )
         if store_v_seq:
-            tl.store(v_out_ptr + t * N + offsets, v, mask=mask)
+            tl.store(
+                v_out_ptr
+                + v_out_ptr_offsets
+                + t * tl.full((), STRIDES[3][0], tl.int64),
+                v,
+                mask=mask,
+            )
     if not store_v_seq:
-        tl.store(v_out_ptr + offsets, v, mask=mask)
+        tl.store(v_out_ptr + v_out_ptr_offsets, v, mask=mask)
 
 
 @triton.autotune(
@@ -123,38 +154,65 @@ def _multistep_activation_aware_if_forward_dynamic(
     store_v_seq: tl.constexpr,
     threshold_is_scalar: tl.constexpr,
     offset_is_scalar: tl.constexpr,
+    SIZES: tl.constexpr,
+    STRIDES: tl.constexpr,
+    LOGICAL: tl.constexpr,
+    THRESHOLD_STRIDE: tl.constexpr,
+    OFFSET_STRIDE: tl.constexpr,
 ):
     offsets = tl.program_id(0) * BLOCK_N + tl.arange(0, BLOCK_N)
     mask = offsets < N
-    channel_offsets = offsets // INNER_SIZE % CHANNEL_SIZE
-    v = tl.load(v_init_ptr + offsets, mask=mask, other=0.0).to(compute_dtype)
+    x_seq_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 0)
+    v_init_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 1)
+    spike_seq_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 2)
+    v_out_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 3)
+    channel_offsets = (
+        _spatial_offsets(offsets, SIZES, LOGICAL) // INNER_SIZE % CHANNEL_SIZE
+    )
+    v = tl.load(v_init_ptr + v_init_ptr_offsets, mask=mask, other=0.0).to(compute_dtype)
     if threshold_is_scalar:
         threshold = tl.load(threshold_ptr).to(compute_dtype)
     else:
-        threshold = tl.load(threshold_ptr + channel_offsets, mask=mask, other=1.0).to(
-            compute_dtype
-        )
+        threshold = tl.load(
+            threshold_ptr + channel_offsets * THRESHOLD_STRIDE, mask=mask, other=1.0
+        ).to(compute_dtype)
     if offset_is_scalar:
         offset = tl.load(offset_ptr).to(compute_dtype)
     else:
-        offset = tl.load(offset_ptr + channel_offsets, mask=mask, other=0.0).to(
-            compute_dtype
-        )
+        offset = tl.load(
+            offset_ptr + channel_offsets * OFFSET_STRIDE, mask=mask, other=0.0
+        ).to(compute_dtype)
     reset = tl.full([1], v_reset, compute_dtype)
 
     for t in tl.range(0, T, 1):
-        x = tl.load(x_seq_ptr + t * N + offsets, mask=mask, other=0.0).to(compute_dtype)
+        x = tl.load(
+            x_seq_ptr + x_seq_ptr_offsets + t * tl.full((), STRIDES[0][0], tl.int64),
+            mask=mask,
+            other=0.0,
+        ).to(compute_dtype)
         h = v + x
         spike = tl.where(h + offset >= threshold, 1.0, 0.0).to(compute_dtype)
         if soft_reset:
             v = h - spike * threshold
         else:
             v = spike * reset + (1.0 - spike) * h
-        tl.store(spike_seq_ptr + t * N + offsets, spike, mask=mask)
+        tl.store(
+            spike_seq_ptr
+            + spike_seq_ptr_offsets
+            + t * tl.full((), STRIDES[2][0], tl.int64),
+            spike,
+            mask=mask,
+        )
         if store_v_seq:
-            tl.store(v_out_ptr + t * N + offsets, v, mask=mask)
+            tl.store(
+                v_out_ptr
+                + v_out_ptr_offsets
+                + t * tl.full((), STRIDES[3][0], tl.int64),
+                v,
+                mask=mask,
+            )
     if not store_v_seq:
-        tl.store(v_out_ptr + offsets, v, mask=mask)
+        tl.store(v_out_ptr + v_out_ptr_offsets, v, mask=mask)
 
 
 def _launch_activation_aware_if_forward(
@@ -182,6 +240,9 @@ def _launch_activation_aware_if_forward(
     def grid(meta):
         return (triton.cdiv(N, meta["BLOCK_N"]),)
 
+    sizes, strides = _layout_args(x_seq, x_seq, v_init, spike_seq, v_out, sequence=True)
+    order = sorted(range(1, x_seq.ndim), key=lambda d: (x_seq.stride(d), d))
+    logical = (0,) + tuple(int(math.prod(x_seq.shape[d + 1 :])) for d in order)
     with torch.cuda.device(x_seq.device):
         wrap_triton(kernel)[grid](
             x_seq,
@@ -193,6 +254,11 @@ def _launch_activation_aware_if_forward(
             v_reset,
             T=T,
             N=N,
+            SIZES=sizes,
+            STRIDES=strides,
+            LOGICAL=(logical,),
+            THRESHOLD_STRIDE=threshold.stride(0) if threshold.ndim else 0,
+            OFFSET_STRIDE=offset.stride(0) if offset.ndim else 0,
             CHANNEL_SIZE=channel_size,
             INNER_SIZE=inner_size,
             compute_dtype=type_dict[x_seq.dtype],
@@ -215,12 +281,10 @@ def _multistep_activation_aware_if_inference(
     soft_reset: bool,
     store_v_seq: bool,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    x_seq = x_seq.contiguous()
-    v_init = v_init.contiguous()
-    threshold = threshold.to(device=x_seq.device, dtype=x_seq.dtype).contiguous()
-    offset = offset.to(device=x_seq.device, dtype=x_seq.dtype).contiguous()
-    spike_seq = torch.empty_like(x_seq)
-    v_out = torch.empty_like(x_seq) if store_v_seq else torch.empty_like(v_init)
+    threshold = threshold.to(device=x_seq.device, dtype=x_seq.dtype)
+    offset = offset.to(device=x_seq.device, dtype=x_seq.dtype)
+    spike_seq = _empty_like(x_seq)
+    v_out = _empty_like(x_seq) if store_v_seq else _empty_like(v_init, sequence=False)
     _launch_activation_aware_if_forward(
         x_seq,
         v_init,
@@ -251,8 +315,8 @@ def _multistep_activation_aware_if_inference_fake(
 ):
     del threshold, offset, channel_size, inner_size, v_reset, soft_reset
     return (
-        torch.empty_like(x_seq),
-        x_seq.new_empty(x_seq.shape if store_v_seq else v_init.shape),
+        _empty_like(x_seq),
+        _empty_like(x_seq) if store_v_seq else _empty_like(v_init, sequence=False),
     )
 
 

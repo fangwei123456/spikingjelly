@@ -1811,3 +1811,31 @@ def test_registered_triton_neuron_contracts_pass_opcheck(kind):
             ),
         )
     torch.library.opcheck(getattr(torch.ops.sj, name).default, args, kwargs)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+@pytest.mark.parametrize("storage_dtype", [torch.float16, torch.bfloat16])
+def test_mixed_precision_strided_dynamic_time(kind, storage_dtype, monkeypatch):
+    monkeypatch.setattr(configure, "triton_neuron_kernel_static_range_max_T", 4)
+    torch.manual_seed(20261001)
+    x = torch.rand(2, 3, 5, 17, device="cuda").permute(3, 0, 1, 2).requires_grad_()
+    xr = x.detach().contiguous().requires_grad_()
+    v = torch.rand(2, 3, 10, device="cuda")[..., ::2].requires_grad_()
+    vr = v.detach().contiguous().requires_grad_()
+    tau = torch.tensor(0.5, device="cuda", requires_grad=True)
+    taur = tau.detach().clone().requires_grad_()
+    kwargs = dict(
+        storage_dtype=storage_dtype, compute_dtype="fp32", backward_compute_dtype="fp32"
+    )
+    output = _call_mixed_precision_forward(kind, x, v, r_tau=tau, **kwargs)
+    reference = _call_mixed_precision_forward(kind, xr, vr, r_tau=taur, **kwargs)
+    for a, b in zip(output, reference):
+        torch.testing.assert_close(a, b, rtol=0, atol=0)
+    inputs = (x, v, tau) if kind == "plif" else (x, v)
+    refs = (xr, vr, taur) if kind == "plif" else (xr, vr)
+    ga = torch.autograd.grad(output[0].sum() + output[1].sum(), inputs)
+    gb = torch.autograd.grad(reference[0].sum() + reference[1].sum(), refs)
+    for a, b in zip(ga, gb):
+        assert torch.isfinite(a).all() and torch.isfinite(b).all()
+        torch.testing.assert_close(a, b, rtol=1e-4, atol=1e-5)

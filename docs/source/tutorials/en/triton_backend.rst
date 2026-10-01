@@ -145,14 +145,25 @@ Combining with ``torch.compile``
 
 .. warning::
 
-    Current Triton neurons convert non-contiguous inputs to contiguous tensors.
-    For convolutional SNNs, Inductor's default layout optimization may select
-    channels-last convolutions and insert reorders or copies between convolutions
-    and neurons. Start with
-    ``torch.compile(..., options={"layout_optimization": False})`` and benchmark
-    the target GPU, model, and batch size. CuPy neurons have the same contiguous
-    layout restriction. Linear-only SNNs do not have this NCHW/channels-last
-    convolution-layout conflict.
+    Point-neuron kernels address inputs, states and gradients using their own
+    strides, without requiring a contiguous conversion. Multi-step inputs remain
+    ``[T, ...]``: time is logical dimension zero, but need not have the largest
+    physical stride. Channels-last, sliced and read-only broadcast inputs are
+    accepted; non-dense inputs may produce compact outputs. Existing CuPy dtype
+    restrictions remain unchanged.
+
+    Stride-aware kernels do not guarantee that the compiler inserts no copies.
+    Inspect generated code and neuron boundaries in NSYS on the target PyTorch
+    version; correct outputs alone do not prove that conversions disappeared.
+    Shapes and strides participate in kernel specialization. A new layout may
+    trigger compilation and autotuning; warm up the target layouts before timing.
+
+    The layout-policy measurements below describe the previous implementation
+    requiring contiguous inputs and are retained as a historical diagnosis.
+
+    When upgrading or comparing revisions, use a separate
+    ``TORCHINDUCTOR_CACHE_DIR`` for each revision and recompile the model. Cached
+    CuPy graphs may still assume contiguous outputs from the old implementation.
 
 Triton neurons can be captured by ``torch.compile``, but a complete graph does
 not guarantee an end-to-end speedup. Per-kernel profiling identified one causal

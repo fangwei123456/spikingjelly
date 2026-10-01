@@ -632,6 +632,10 @@ def activation_aware_if_multi_step_triton(
 
     * **中文**
 
+    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
+    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
+    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+
     使用已选定的 Triton kernel 执行 activation-aware IF 多步状态转移。调用方必须
     传入已物化的膜电位、已规范化的阈值和偏移张量，以及由输入布局计算得到的
     ``channel_size`` 和 ``inner_size``。函数不负责 backend、``training/eval``、
@@ -648,7 +652,7 @@ def activation_aware_if_multi_step_triton(
     :type v_offset: torch.Tensor
     :param channel_size: 逐通道参数对应的 channel 数；scalar 参数时为 ``1``
     :type channel_size: int
-    :param inner_size: 每个 channel 对应的连续元素数
+    :param inner_size: channel 轴之后各逻辑维度的元素数乘积
     :type inner_size: int
     :param v_reset: 硬复位电压；``None`` 表示 soft reset
     :type v_reset: Optional[float]
@@ -663,6 +667,12 @@ def activation_aware_if_multi_step_triton(
     .. _activation_aware_if_multi_step_triton-en:
 
     * **English**
+
+    Inputs and states support arbitrary nonnegative strides, including slices
+    and read-only broadcast views. Dimension zero is time for multi-step inputs.
+    No contiguous input conversion is required. Outputs have independent,
+    nonoverlapping storage; common dense layouts retain their dimension order,
+    while non-dense inputs may produce compact outputs.
 
     Run an activation-aware IF multi-step state transition with the already
     selected Triton kernel. The caller must provide a materialized membrane
@@ -682,7 +692,7 @@ def activation_aware_if_multi_step_triton(
     :param channel_size: Channel count for channel-wise parameters, or ``1``
         for scalar parameters
     :type channel_size: int
-    :param inner_size: Number of contiguous elements per channel
+    :param inner_size: Product of logical dimensions following the channel axis
     :type inner_size: int
     :param v_reset: Hard-reset voltage; ``None`` means soft reset
     :type v_reset: Optional[float]
@@ -1618,9 +1628,13 @@ def if_step_cupy(
 
     * **中文**
 
+    输入和状态支持非负任意 stride，包括切片及只读广播，无需先转换为
+    连续张量。输出使用独立、无重叠的存储；
+    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+
     使用 CuPy kernel 执行 IF 单步状态转移。输入必须是 CUDA 上的 ``float32``
     或 ``float16`` 张量，替代梯度函数必须提供可调用的 ``cuda_codes`` 属性。
-    函数自行选择并缓存 kernel，并在调用底层 kernel 时展平和恢复 shape。
+    函数自行选择并缓存 kernel，直接按输入 stride 访问数据，保留逻辑 shape。
 
     :param x: 当前 CUDA 输入张量，shape 为 ``[N, *]``
     :type x: torch.Tensor
@@ -1645,10 +1659,16 @@ def if_step_cupy(
 
     * **English**
 
+    Inputs and states support arbitrary nonnegative strides, including slices
+    and read-only broadcast views, without a contiguous input conversion.
+    Outputs have independent,
+    nonoverlapping storage; common dense layouts retain their dimension order,
+    while non-dense inputs may produce compact outputs.
+
     Run one IF state transition with CuPy kernels. Inputs must be CUDA
     ``float32`` or ``float16`` tensors, and the surrogate function must expose
     callable ``cuda_codes``. The function selects and caches kernels and handles
-    flattening and shape restoration around the low-level kernel.
+    strided inputs without flattening them into a contiguous buffer.
 
     :param x: Current CUDA input tensor shaped ``[N, *]``
     :type x: torch.Tensor
@@ -1675,14 +1695,14 @@ def if_step_cupy(
     from ..cuda_kernel.neuron_kernel.single_step.integrate_and_fire import if_step
 
     spike, v_next = if_step(
-        x.flatten(),
-        v.flatten(),
+        x,
+        v,
         v_threshold,
         v_reset,
         surrogate_function,
         detach_reset,
     )
-    return spike.reshape_as(x), v_next.reshape_as(v)
+    return spike, v_next
 
 
 def lif_step_cupy(
@@ -1704,9 +1724,13 @@ def lif_step_cupy(
 
     * **中文**
 
+    输入和状态支持非负任意 stride，包括切片及只读广播，无需先转换为
+    连续张量。输出使用独立、无重叠的存储；
+    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+
     使用 CuPy kernel 执行 LIF 单步状态转移。输入必须是 CUDA 上的 ``float32``
     或 ``float16`` 张量，替代梯度函数必须提供可调用的 ``cuda_codes`` 属性。
-    函数自行选择并缓存 kernel，并在调用底层 kernel 时展平和恢复 shape。
+    函数自行选择并缓存 kernel，直接按输入 stride 访问数据，保留逻辑 shape。
 
     :param x: 当前 CUDA 输入张量，shape 为 ``[N, *]``
     :type x: torch.Tensor
@@ -1735,10 +1759,16 @@ def lif_step_cupy(
 
     * **English**
 
+    Inputs and states support arbitrary nonnegative strides, including slices
+    and read-only broadcast views, without a contiguous input conversion.
+    Outputs have independent,
+    nonoverlapping storage; common dense layouts retain their dimension order,
+    while non-dense inputs may produce compact outputs.
+
     Run one LIF state transition with CuPy kernels. Inputs must be CUDA
     ``float32`` or ``float16`` tensors, and the surrogate function must expose
     callable ``cuda_codes``. The function selects and caches kernels and handles
-    flattening and shape restoration around the low-level kernel.
+    strided inputs without flattening them into a contiguous buffer.
 
     :param x: Current CUDA input tensor shaped ``[N, *]``
     :type x: torch.Tensor
@@ -1769,8 +1799,8 @@ def lif_step_cupy(
     from ..cuda_kernel.neuron_kernel.single_step.lif import lif_step
 
     spike, v_next = lif_step(
-        x.flatten(),
-        v.flatten(),
+        x,
+        v,
         v_threshold,
         v_reset,
         1.0 / tau,
@@ -1778,7 +1808,7 @@ def lif_step_cupy(
         surrogate_function,
         detach_reset,
     )
-    return spike.reshape_as(x), v_next.reshape_as(v)
+    return spike, v_next
 
 
 def if_multi_step_cupy(
@@ -1798,6 +1828,10 @@ def if_multi_step_cupy(
     .. _if_multi_step_cupy-cn:
 
     * **中文**
+
+    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
+    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
+    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
 
     使用 CuPy kernel 执行 IF 多步状态转移，不进行通用 backend 分发。输入必须是
     CUDA 上的 ``float32`` 或 ``float16`` 张量，并且替代梯度函数必须提供可调用的
@@ -1828,6 +1862,12 @@ def if_multi_step_cupy(
     .. _if_multi_step_cupy-en:
 
     * **English**
+
+    Inputs and states support arbitrary nonnegative strides, including slices
+    and read-only broadcast views. Dimension zero is time for multi-step inputs.
+    No contiguous input conversion is required. Outputs have independent,
+    nonoverlapping storage; common dense layouts retain their dimension order,
+    while non-dense inputs may produce compact outputs.
 
     Run an IF multi-step state transition with the CuPy kernel without generic
     backend dispatch. Inputs must be CUDA ``float32`` or ``float16`` tensors,
@@ -1863,15 +1903,13 @@ def if_multi_step_cupy(
     )
 
     spike_seq, v_seq = if_multi_step(
-        x_seq.flatten(1),
-        v.flatten(),
+        x_seq,
+        v,
         v_threshold,
         v_reset,
         detach_reset,
         surrogate_function,
     )
-    spike_seq = spike_seq.reshape_as(x_seq)
-    v_seq = v_seq.reshape_as(x_seq)
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
@@ -1894,6 +1932,10 @@ def lif_multi_step_cupy(
     .. _lif_multi_step_cupy-cn:
 
     * **中文**
+
+    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
+    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
+    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
 
     使用 CuPy kernel 执行 LIF 多步状态转移，不进行通用 backend 分发。输入必须是
     CUDA 上的 ``float32`` 或 ``float16`` 张量，并且替代梯度函数必须提供可调用的
@@ -1927,6 +1969,12 @@ def lif_multi_step_cupy(
     .. _lif_multi_step_cupy-en:
 
     * **English**
+
+    Inputs and states support arbitrary nonnegative strides, including slices
+    and read-only broadcast views. Dimension zero is time for multi-step inputs.
+    No contiguous input conversion is required. Outputs have independent,
+    nonoverlapping storage; common dense layouts retain their dimension order,
+    while non-dense inputs may produce compact outputs.
 
     Run a LIF multi-step state transition with the CuPy kernel without generic
     backend dispatch. Inputs must be CUDA ``float32`` or ``float16`` tensors,
@@ -1964,8 +2012,8 @@ def lif_multi_step_cupy(
     from ..cuda_kernel.neuron_kernel.multi_step.lif import lif_multi_step
 
     spike_seq, v_seq = lif_multi_step(
-        x_seq.flatten(1),
-        v.flatten(),
+        x_seq,
+        v,
         decay_input,
         tau,
         v_threshold,
@@ -1973,8 +2021,6 @@ def lif_multi_step_cupy(
         detach_reset,
         surrogate_function,
     )
-    spike_seq = spike_seq.reshape_as(x_seq)
-    v_seq = v_seq.reshape_as(x_seq)
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
@@ -1997,6 +2043,10 @@ def plif_multi_step_cupy(
     .. _plif_multi_step_cupy-cn:
 
     * **中文**
+
+    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
+    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
+    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
 
     使用 CuPy kernel 执行 PLIF 多步状态转移。``w`` 与 torch 接口语义一致。
     输入必须是 CUDA 上的 ``float32`` 或 ``float16`` 张量，并且替代梯度函数必须
@@ -2030,6 +2080,12 @@ def plif_multi_step_cupy(
     .. _plif_multi_step_cupy-en:
 
     * **English**
+
+    Inputs and states support arbitrary nonnegative strides, including slices
+    and read-only broadcast views. Dimension zero is time for multi-step inputs.
+    No contiguous input conversion is required. Outputs have independent,
+    nonoverlapping storage; common dense layouts retain their dimension order,
+    while non-dense inputs may produce compact outputs.
 
     Run a PLIF multi-step state transition with the CuPy kernel. ``w`` has the
     same semantics as in the torch interface. Inputs must be CUDA
@@ -2066,8 +2122,8 @@ def plif_multi_step_cupy(
     from ..cuda_kernel.neuron_kernel.multi_step.plif import plif_multi_step
 
     spike_seq, v_seq = plif_multi_step(
-        x_seq.flatten(1),
-        v.flatten(),
+        x_seq,
+        v,
         w.sigmoid().to(x_seq),
         decay_input,
         v_threshold,
@@ -2075,8 +2131,6 @@ def plif_multi_step_cupy(
         detach_reset,
         surrogate_function,
     )
-    spike_seq = spike_seq.reshape_as(x_seq)
-    v_seq = v_seq.reshape_as(x_seq)
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
@@ -2101,6 +2155,10 @@ def qif_multi_step_cupy(
     .. _qif_multi_step_cupy-cn:
 
     * **中文**
+
+    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
+    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
+    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
 
     使用已选定的 CuPy kernel 执行 QIF 多步状态转移。函数接收已物化的膜电位，
     不负责 backend 或 ``training/eval`` 分支选择。
@@ -2135,6 +2193,12 @@ def qif_multi_step_cupy(
     .. _qif_multi_step_cupy-en:
 
     * **English**
+
+    Inputs and states support arbitrary nonnegative strides, including slices
+    and read-only broadcast views. Dimension zero is time for multi-step inputs.
+    No contiguous input conversion is required. Outputs have independent,
+    nonoverlapping storage; common dense layouts retain their dimension order,
+    while non-dense inputs may produce compact outputs.
 
     Run a QIF multi-step state transition with the already selected CuPy
     kernel. The function receives a materialized membrane voltage and does not
@@ -2172,8 +2236,8 @@ def qif_multi_step_cupy(
     from ..cuda_kernel.neuron_kernel.multi_step.qif import qif_multi_step
 
     spike_seq, v_seq = qif_multi_step(
-        x_seq.flatten(1),
-        v.flatten(0),
+        x_seq,
+        v,
         tau,
         v_threshold,
         v_reset,
@@ -2183,8 +2247,6 @@ def qif_multi_step_cupy(
         detach_reset,
         surrogate_function,
     )
-    spike_seq = spike_seq.reshape(x_seq.shape)
-    v_seq = v_seq.reshape(x_seq.shape)
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
@@ -2209,6 +2271,10 @@ def eif_multi_step_cupy(
     .. _eif_multi_step_cupy-cn:
 
     * **中文**
+
+    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
+    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
+    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
 
     使用已选定的 CuPy kernel 执行 EIF 多步状态转移。函数接收已物化的膜电位，
     不负责 backend 或 ``training/eval`` 分支选择。
@@ -2243,6 +2309,12 @@ def eif_multi_step_cupy(
     .. _eif_multi_step_cupy-en:
 
     * **English**
+
+    Inputs and states support arbitrary nonnegative strides, including slices
+    and read-only broadcast views. Dimension zero is time for multi-step inputs.
+    No contiguous input conversion is required. Outputs have independent,
+    nonoverlapping storage; common dense layouts retain their dimension order,
+    while non-dense inputs may produce compact outputs.
 
     Run an EIF multi-step state transition with the already selected CuPy
     kernel. The function receives a materialized membrane voltage and does not
@@ -2280,8 +2352,8 @@ def eif_multi_step_cupy(
     from ..cuda_kernel.neuron_kernel.multi_step.eif import eif_multi_step
 
     spike_seq, v_seq = eif_multi_step(
-        x_seq.flatten(1),
-        v.flatten(0),
+        x_seq,
+        v,
         tau,
         v_threshold,
         v_reset,
@@ -2291,8 +2363,6 @@ def eif_multi_step_cupy(
         detach_reset,
         surrogate_function,
     )
-    spike_seq = spike_seq.reshape(x_seq.shape)
-    v_seq = v_seq.reshape(x_seq.shape)
     return spike_seq, v_seq[-1].clone(), v_seq if store_v_seq else None
 
 
@@ -2327,6 +2397,9 @@ def izhikevich_multi_step_cupy(
     .. _izhikevich_multi_step_cupy-cn:
 
     * **中文**
+
+    输入及两种状态支持任意非负 stride，无需先展平或转连续。逻辑第零维为
+    时间维；切片及只读广播输入允许生成紧凑、无重叠的输出。
 
     使用已选定的 CuPy kernel 执行 Izhikevich 多步状态转移，显式接收和返回膜电位
     ``v`` 与适应变量 ``w``。
@@ -2373,6 +2446,10 @@ def izhikevich_multi_step_cupy(
     .. _izhikevich_multi_step_cupy-en:
 
     * **English**
+
+    Inputs and both states support arbitrary nonnegative strides without
+    flattening or contiguous conversion. Logical dimension zero is time; sliced
+    and read-only broadcast inputs may produce compact, nonoverlapping outputs.
 
     Run an Izhikevich multi-step state transition with the already selected
     CuPy kernel, explicitly receiving and returning membrane voltage ``v`` and
@@ -2447,9 +2524,9 @@ def izhikevich_multi_step_cupy(
     )
 
     spike_seq, v_seq, w_seq = izhikevich_multi_step(
-        x_seq.flatten(1),
-        v.flatten(0),
-        w.flatten(0),
+        x_seq,
+        v,
+        w,
         tau,
         v_threshold,
         v_reset,
@@ -2492,6 +2569,10 @@ def if_multi_step_triton(
 
     * **中文**
 
+    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
+    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
+    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+
     使用 Triton kernel 执行 IF 多步状态转移，不进行通用 backend 分发。
 
     :param x_seq: 输入序列，shape 为 ``[T, N, *]``
@@ -2516,6 +2597,12 @@ def if_multi_step_triton(
     .. _if_multi_step_triton-en:
 
     * **English**
+
+    Inputs and states support arbitrary nonnegative strides, including slices
+    and read-only broadcast views. Dimension zero is time for multi-step inputs.
+    No contiguous input conversion is required. Outputs have independent,
+    nonoverlapping storage; common dense layouts retain their dimension order,
+    while non-dense inputs may produce compact outputs.
 
     Run an IF multi-step state transition with the Triton kernel without generic
     backend dispatch.
@@ -2605,6 +2692,10 @@ def lif_multi_step_triton(
 
     * **中文**
 
+    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
+    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
+    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+
     使用 Triton kernel 执行 LIF 多步状态转移，不进行通用 backend 分发。
 
     :param x_seq: 输入序列，shape 为 ``[T, N, *]``
@@ -2633,6 +2724,12 @@ def lif_multi_step_triton(
     .. _lif_multi_step_triton-en:
 
     * **English**
+
+    Inputs and states support arbitrary nonnegative strides, including slices
+    and read-only broadcast views. Dimension zero is time for multi-step inputs.
+    No contiguous input conversion is required. Outputs have independent,
+    nonoverlapping storage; common dense layouts retain their dimension order,
+    while non-dense inputs may produce compact outputs.
 
     Run a LIF multi-step state transition with the Triton kernel without generic
     backend dispatch.
@@ -2732,6 +2829,10 @@ def ilif_multi_step_triton(
 
     * **中文**
 
+    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
+    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
+    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+
     使用 Triton kernel 执行 I-LIF 多步状态转移，不进行 backend 分发。
     ``v`` 是已物化的初始膜电位；``store_v_seq`` 为 ``True`` 时返回完整的
     reset 后膜电位序列。
@@ -2759,6 +2860,12 @@ def ilif_multi_step_triton(
     .. _ilif_multi_step_triton-en:
 
     * **English**
+
+    Inputs and states support arbitrary nonnegative strides, including slices
+    and read-only broadcast views. Dimension zero is time for multi-step inputs.
+    No contiguous input conversion is required. Outputs have independent,
+    nonoverlapping storage; common dense layouts retain their dimension order,
+    while non-dense inputs may produce compact outputs.
 
     Run the I-LIF multi-step state transition with the Triton kernel without
     backend dispatch. ``v`` is the materialized initial membrane voltage;
@@ -2822,6 +2929,10 @@ def plif_multi_step_triton(
 
     * **中文**
 
+    输入和状态支持非负任意 stride，包括切片及只读广播；多步输入的第零维
+    始终是时间维。无需先转换为连续张量。输出使用独立、无重叠的存储；
+    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+
     使用 Triton kernel 执行 PLIF 多步状态转移。``w`` 与 torch 接口语义一致。
 
     :param x_seq: 输入序列，shape 为 ``[T, N, *]``
@@ -2850,6 +2961,12 @@ def plif_multi_step_triton(
     .. _plif_multi_step_triton-en:
 
     * **English**
+
+    Inputs and states support arbitrary nonnegative strides, including slices
+    and read-only broadcast views. Dimension zero is time for multi-step inputs.
+    No contiguous input conversion is required. Outputs have independent,
+    nonoverlapping storage; common dense layouts retain their dimension order,
+    while non-dense inputs may produce compact outputs.
 
     Run a PLIF multi-step state transition with the Triton kernel. ``w`` has the
     same semantics as in the torch interface.
@@ -3338,6 +3455,10 @@ def stbif_single_step_triton(
 
     * **中文**
 
+    输入和状态支持非负任意 stride，包括切片及只读广播，无需先转换为
+    连续张量。输出使用独立、无重叠的存储；
+    常见稠密布局保留其维度顺序，非稠密输入允许生成紧凑输出。
+
     使用专用 Triton kernel 执行 SpikeZIP STBIF 单步状态转移。``x``、``q``
     和 ``acc_q`` 必须是相同 shape、dtype 和 device 的 CUDA FP32、FP16 或
     BF16 张量；该离散推理接口不支持 autograd。
@@ -3364,6 +3485,12 @@ def stbif_single_step_triton(
     .. _stbif_single_step_triton-en:
 
     * **English**
+
+    Inputs and states support arbitrary nonnegative strides, including slices
+    and read-only broadcast views, without a contiguous input conversion.
+    Outputs have independent,
+    nonoverlapping storage; common dense layouts retain their dimension order,
+    while non-dense inputs may produce compact outputs.
 
     Run one SpikeZIP STBIF state transition with the dedicated Triton kernel.
     ``x``, ``q``, and ``acc_q`` must be CUDA FP32, FP16, or BF16 tensors with

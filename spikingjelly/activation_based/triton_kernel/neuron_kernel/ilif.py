@@ -1,8 +1,17 @@
 from spikingjelly.logger import logger
 import torch
 
+from ..._neuron_layout import _empty_like
+from .utils import (
+    _spatial_offsets,
+    _time_offset,
+    _triton_layout_args,
+    _neuron_grid,
+    _neuron_indices,
+    _block_minor,
+)
+
 from ..triton_utils import (
-    convert_and_store,
     register_op,
     type_dict,
     use_static_range_for_triton_neuron_kernel,
@@ -28,8 +37,14 @@ except (ImportError, OSError) as e:
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["T", "NCL", "compute_dtype", "save_intermediates", "store_v_seq"],
-    restore_value=["spike_seq_ptr", "h_seq_ptr", "v_seq_ptr"],
+    key=[
+        "BLOCK_MINOR",
+        "T",
+        "NCL",
+        "compute_dtype",
+        "save_intermediates",
+        "store_v_seq",
+    ],
 )
 @triton.jit
 def _multistep_ilif_forward_kernel_static(
@@ -47,81 +62,44 @@ def _multistep_ilif_forward_kernel_static(
     compute_dtype: tl.constexpr,
     save_intermediates: tl.constexpr,
     store_v_seq: tl.constexpr,
+    BLOCK_MINOR: tl.constexpr,
+    SIZES: tl.constexpr,
+    STRIDES: tl.constexpr,
 ):
-    pid_ncl = tl.program_id(0)
-    ncl_offset = pid_ncl * BLOCK_NCL
+    indices, mask = _neuron_indices(NCL, BLOCK_NCL, SIZES, BLOCK_MINOR)
+    x_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 0)
+    v_init_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 1)
+    spike_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 2)
+    h_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 3)
+    v_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 4)
     decay = tl.full([1], decay, dtype=compute_dtype)
     v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
     max_spike_count = tl.full([1], max_spike_count, dtype=compute_dtype)
-    v_init_ptrs = tl.make_block_ptr(
-        v_init_ptr,
-        shape=(1, NCL),
-        strides=(NCL, 1),
-        offsets=(0, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0),
-    )
-    v = tl.load(v_init_ptrs, boundary_check=(1,), padding_option="zero").to(
-        compute_dtype
-    )
+    v_init_ptrs = v_init_ptr + v_init_ptr_offsets
+    v = tl.load(v_init_ptrs, mask=mask, other=0.0).to(compute_dtype)
 
     for t in tl.static_range(0, T, 1):
-        x_ptrs = tl.make_block_ptr(
-            x_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        x = tl.load(x_ptrs, boundary_check=(1,), padding_option="zero").to(
-            compute_dtype
-        )
+        x_ptrs = x_seq_ptr + x_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 0)
+        x = tl.load(x_ptrs, mask=mask, other=0.0).to(compute_dtype)
         h = decay * v + x
         scaled_h = tl.maximum(tl.minimum(h / v_threshold, max_spike_count), 0.0)
         spike = libdevice.rint(scaled_h.to(tl.float32)).to(compute_dtype)
         v = h - spike * v_threshold
 
-        spike_ptrs = tl.make_block_ptr(
-            spike_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
+        spike_ptrs = (
+            spike_seq_ptr + spike_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 2)
         )
-        convert_and_store(spike_ptrs, spike, boundary_check=(1,))
+        tl.store(spike_ptrs, spike, mask=mask)
         if store_v_seq:
-            v_ptrs = tl.make_block_ptr(
-                v_seq_ptr,
-                shape=(T, NCL),
-                strides=(NCL, 1),
-                offsets=(t, ncl_offset),
-                block_shape=(1, BLOCK_NCL),
-                order=(1, 0),
-            )
-            convert_and_store(v_ptrs, v, boundary_check=(1,))
+            v_ptrs = v_seq_ptr + v_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 4)
+            tl.store(v_ptrs, v, mask=mask)
         if save_intermediates:
-            h_ptrs = tl.make_block_ptr(
-                h_seq_ptr,
-                shape=(T, NCL),
-                strides=(NCL, 1),
-                offsets=(t, ncl_offset),
-                block_shape=(1, BLOCK_NCL),
-                order=(1, 0),
-            )
-            convert_and_store(h_ptrs, h, boundary_check=(1,))
+            h_ptrs = h_seq_ptr + h_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 3)
+            tl.store(h_ptrs, h, mask=mask)
 
     if not store_v_seq:
-        v_last_ptrs = tl.make_block_ptr(
-            v_seq_ptr,
-            shape=(1, NCL),
-            strides=(NCL, 1),
-            offsets=(0, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        convert_and_store(v_last_ptrs, v, boundary_check=(1,))
+        v_last_ptrs = v_seq_ptr + v_seq_ptr_offsets
+        tl.store(v_last_ptrs, v, mask=mask)
 
 
 @triton.autotune(
@@ -130,8 +108,7 @@ def _multistep_ilif_forward_kernel_static(
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["NCL", "compute_dtype", "save_intermediates", "store_v_seq"],
-    restore_value=["spike_seq_ptr", "h_seq_ptr", "v_seq_ptr"],
+    key=["BLOCK_MINOR", "NCL", "compute_dtype", "save_intermediates", "store_v_seq"],
 )
 @triton.jit
 def _multistep_ilif_forward_kernel_dynamic(
@@ -149,81 +126,44 @@ def _multistep_ilif_forward_kernel_dynamic(
     compute_dtype: tl.constexpr,
     save_intermediates: tl.constexpr,
     store_v_seq: tl.constexpr,
+    BLOCK_MINOR: tl.constexpr,
+    SIZES: tl.constexpr,
+    STRIDES: tl.constexpr,
 ):
-    pid_ncl = tl.program_id(0)
-    ncl_offset = pid_ncl * BLOCK_NCL
+    indices, mask = _neuron_indices(NCL, BLOCK_NCL, SIZES, BLOCK_MINOR)
+    x_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 0)
+    v_init_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 1)
+    spike_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 2)
+    h_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 3)
+    v_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 4)
     decay = tl.full([1], decay, dtype=compute_dtype)
     v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
     max_spike_count = tl.full([1], max_spike_count, dtype=compute_dtype)
-    v_init_ptrs = tl.make_block_ptr(
-        v_init_ptr,
-        shape=(1, NCL),
-        strides=(NCL, 1),
-        offsets=(0, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0),
-    )
-    v = tl.load(v_init_ptrs, boundary_check=(1,), padding_option="zero").to(
-        compute_dtype
-    )
+    v_init_ptrs = v_init_ptr + v_init_ptr_offsets
+    v = tl.load(v_init_ptrs, mask=mask, other=0.0).to(compute_dtype)
 
     for t in tl.range(0, T, 1):
-        x_ptrs = tl.make_block_ptr(
-            x_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        x = tl.load(x_ptrs, boundary_check=(1,), padding_option="zero").to(
-            compute_dtype
-        )
+        x_ptrs = x_seq_ptr + x_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 0)
+        x = tl.load(x_ptrs, mask=mask, other=0.0).to(compute_dtype)
         h = decay * v + x
         scaled_h = tl.maximum(tl.minimum(h / v_threshold, max_spike_count), 0.0)
         spike = libdevice.rint(scaled_h.to(tl.float32)).to(compute_dtype)
         v = h - spike * v_threshold
 
-        spike_ptrs = tl.make_block_ptr(
-            spike_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
+        spike_ptrs = (
+            spike_seq_ptr + spike_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 2)
         )
-        convert_and_store(spike_ptrs, spike, boundary_check=(1,))
+        tl.store(spike_ptrs, spike, mask=mask)
         if store_v_seq:
-            v_ptrs = tl.make_block_ptr(
-                v_seq_ptr,
-                shape=(T, NCL),
-                strides=(NCL, 1),
-                offsets=(t, ncl_offset),
-                block_shape=(1, BLOCK_NCL),
-                order=(1, 0),
-            )
-            convert_and_store(v_ptrs, v, boundary_check=(1,))
+            v_ptrs = v_seq_ptr + v_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 4)
+            tl.store(v_ptrs, v, mask=mask)
         if save_intermediates:
-            h_ptrs = tl.make_block_ptr(
-                h_seq_ptr,
-                shape=(T, NCL),
-                strides=(NCL, 1),
-                offsets=(t, ncl_offset),
-                block_shape=(1, BLOCK_NCL),
-                order=(1, 0),
-            )
-            convert_and_store(h_ptrs, h, boundary_check=(1,))
+            h_ptrs = h_seq_ptr + h_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 3)
+            tl.store(h_ptrs, h, mask=mask)
 
     if not store_v_seq:
-        v_last_ptrs = tl.make_block_ptr(
-            v_seq_ptr,
-            shape=(1, NCL),
-            strides=(NCL, 1),
-            offsets=(0, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        convert_and_store(v_last_ptrs, v, boundary_check=(1,))
+        v_last_ptrs = v_seq_ptr + v_seq_ptr_offsets
+        tl.store(v_last_ptrs, v, mask=mask)
 
 
 @triton.autotune(
@@ -232,8 +172,7 @@ def _multistep_ilif_forward_kernel_dynamic(
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["T", "NCL", "compute_dtype", "detach_reset", "store_v_seq"],
-    restore_value=["grad_x_seq_ptr", "grad_v_init_ptr"],
+    key=["BLOCK_MINOR", "T", "NCL", "compute_dtype", "detach_reset", "store_v_seq"],
 )
 @triton.jit
 def _multistep_ilif_backward_kernel_static(
@@ -252,61 +191,40 @@ def _multistep_ilif_backward_kernel_static(
     grad_max: tl.constexpr,
     detach_reset: tl.constexpr,
     store_v_seq: tl.constexpr,
+    BLOCK_MINOR: tl.constexpr,
+    SIZES: tl.constexpr,
+    STRIDES: tl.constexpr,
 ):
-    pid_ncl = tl.program_id(0)
-    ncl_offset = pid_ncl * BLOCK_NCL
+    indices, mask = _neuron_indices(NCL, BLOCK_NCL, SIZES, BLOCK_MINOR)
+    grad_spike_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 0)
+    grad_v_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 1)
+    h_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 2)
+    grad_x_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 3)
+    grad_v_init_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 4)
     decay = tl.full([1], decay, dtype=compute_dtype)
     v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
     if store_v_seq:
-        grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
+        grad_v_acc = tl.zeros(indices.shape, dtype=compute_dtype)
     else:
-        grad_v_last_ptrs = tl.make_block_ptr(
-            grad_v_seq_ptr,
-            shape=(1, NCL),
-            strides=(NCL, 1),
-            offsets=(0, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        grad_v_acc = tl.load(
-            grad_v_last_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
+        grad_v_last_ptrs = grad_v_seq_ptr + grad_v_seq_ptr_offsets
+        grad_v_acc = tl.load(grad_v_last_ptrs, mask=mask, other=0.0).to(compute_dtype)
 
     for t in tl.static_range(T - 1, -1, -1):
-        grad_spike_ptrs = tl.make_block_ptr(
-            grad_spike_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
+        grad_spike_ptrs = (
+            grad_spike_seq_ptr
+            + grad_spike_seq_ptr_offsets
+            + _time_offset(t, NCL, STRIDES, 0)
         )
-        grad_spike = tl.load(
-            grad_spike_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
+        grad_spike = tl.load(grad_spike_ptrs, mask=mask, other=0.0).to(compute_dtype)
         if store_v_seq:
-            grad_v_ptrs = tl.make_block_ptr(
-                grad_v_seq_ptr,
-                shape=(T, NCL),
-                strides=(NCL, 1),
-                offsets=(t, ncl_offset),
-                block_shape=(1, BLOCK_NCL),
-                order=(1, 0),
+            grad_v_ptrs = (
+                grad_v_seq_ptr
+                + grad_v_seq_ptr_offsets
+                + _time_offset(t, NCL, STRIDES, 1)
             )
-            grad_v_acc += tl.load(
-                grad_v_ptrs, boundary_check=(1,), padding_option="zero"
-            ).to(compute_dtype)
-        h_ptrs = tl.make_block_ptr(
-            h_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        h = tl.load(h_ptrs, boundary_check=(1,), padding_option="zero").to(
-            compute_dtype
-        )
+            grad_v_acc += tl.load(grad_v_ptrs, mask=mask, other=0.0).to(compute_dtype)
+        h_ptrs = h_seq_ptr + h_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 2)
+        h = tl.load(h_ptrs, mask=mask, other=0.0).to(compute_dtype)
         scaled_h = h / v_threshold
         sg = tl.where(
             (scaled_h >= grad_min) & (scaled_h <= grad_max),
@@ -322,25 +240,13 @@ def _multistep_ilif_backward_kernel_static(
                 grad_v_acc,
             )
         grad_v_acc = grad_h * decay
-        grad_x_ptrs = tl.make_block_ptr(
-            grad_x_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
+        grad_x_ptrs = (
+            grad_x_seq_ptr + grad_x_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 3)
         )
-        convert_and_store(grad_x_ptrs, grad_h, boundary_check=(1,))
+        tl.store(grad_x_ptrs, grad_h, mask=mask)
 
-    grad_v_init_ptrs = tl.make_block_ptr(
-        grad_v_init_ptr,
-        shape=(1, NCL),
-        strides=(NCL, 1),
-        offsets=(0, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0),
-    )
-    convert_and_store(grad_v_init_ptrs, grad_v_acc, boundary_check=(1,))
+    grad_v_init_ptrs = grad_v_init_ptr + grad_v_init_ptr_offsets
+    tl.store(grad_v_init_ptrs, grad_v_acc, mask=mask)
 
 
 @triton.autotune(
@@ -349,8 +255,7 @@ def _multistep_ilif_backward_kernel_static(
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["NCL", "compute_dtype", "detach_reset", "store_v_seq"],
-    restore_value=["grad_x_seq_ptr", "grad_v_init_ptr"],
+    key=["BLOCK_MINOR", "NCL", "compute_dtype", "detach_reset", "store_v_seq"],
 )
 @triton.jit
 def _multistep_ilif_backward_kernel_dynamic(
@@ -369,61 +274,40 @@ def _multistep_ilif_backward_kernel_dynamic(
     grad_max: tl.constexpr,
     detach_reset: tl.constexpr,
     store_v_seq: tl.constexpr,
+    BLOCK_MINOR: tl.constexpr,
+    SIZES: tl.constexpr,
+    STRIDES: tl.constexpr,
 ):
-    pid_ncl = tl.program_id(0)
-    ncl_offset = pid_ncl * BLOCK_NCL
+    indices, mask = _neuron_indices(NCL, BLOCK_NCL, SIZES, BLOCK_MINOR)
+    grad_spike_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 0)
+    grad_v_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 1)
+    h_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 2)
+    grad_x_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 3)
+    grad_v_init_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 4)
     decay = tl.full([1], decay, dtype=compute_dtype)
     v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
     if store_v_seq:
-        grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
+        grad_v_acc = tl.zeros(indices.shape, dtype=compute_dtype)
     else:
-        grad_v_last_ptrs = tl.make_block_ptr(
-            grad_v_seq_ptr,
-            shape=(1, NCL),
-            strides=(NCL, 1),
-            offsets=(0, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        grad_v_acc = tl.load(
-            grad_v_last_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
+        grad_v_last_ptrs = grad_v_seq_ptr + grad_v_seq_ptr_offsets
+        grad_v_acc = tl.load(grad_v_last_ptrs, mask=mask, other=0.0).to(compute_dtype)
 
     for t in tl.range(T - 1, -1, -1):
-        grad_spike_ptrs = tl.make_block_ptr(
-            grad_spike_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
+        grad_spike_ptrs = (
+            grad_spike_seq_ptr
+            + grad_spike_seq_ptr_offsets
+            + _time_offset(t, NCL, STRIDES, 0)
         )
-        grad_spike = tl.load(
-            grad_spike_ptrs, boundary_check=(1,), padding_option="zero"
-        ).to(compute_dtype)
+        grad_spike = tl.load(grad_spike_ptrs, mask=mask, other=0.0).to(compute_dtype)
         if store_v_seq:
-            grad_v_ptrs = tl.make_block_ptr(
-                grad_v_seq_ptr,
-                shape=(T, NCL),
-                strides=(NCL, 1),
-                offsets=(t, ncl_offset),
-                block_shape=(1, BLOCK_NCL),
-                order=(1, 0),
+            grad_v_ptrs = (
+                grad_v_seq_ptr
+                + grad_v_seq_ptr_offsets
+                + _time_offset(t, NCL, STRIDES, 1)
             )
-            grad_v_acc += tl.load(
-                grad_v_ptrs, boundary_check=(1,), padding_option="zero"
-            ).to(compute_dtype)
-        h_ptrs = tl.make_block_ptr(
-            h_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        h = tl.load(h_ptrs, boundary_check=(1,), padding_option="zero").to(
-            compute_dtype
-        )
+            grad_v_acc += tl.load(grad_v_ptrs, mask=mask, other=0.0).to(compute_dtype)
+        h_ptrs = h_seq_ptr + h_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 2)
+        h = tl.load(h_ptrs, mask=mask, other=0.0).to(compute_dtype)
         scaled_h = h / v_threshold
         sg = tl.where(
             (scaled_h >= grad_min) & (scaled_h <= grad_max),
@@ -439,25 +323,13 @@ def _multistep_ilif_backward_kernel_dynamic(
                 grad_v_acc,
             )
         grad_v_acc = grad_h * decay
-        grad_x_ptrs = tl.make_block_ptr(
-            grad_x_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
+        grad_x_ptrs = (
+            grad_x_seq_ptr + grad_x_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 3)
         )
-        convert_and_store(grad_x_ptrs, grad_h, boundary_check=(1,))
+        tl.store(grad_x_ptrs, grad_h, mask=mask)
 
-    grad_v_init_ptrs = tl.make_block_ptr(
-        grad_v_init_ptr,
-        shape=(1, NCL),
-        strides=(NCL, 1),
-        offsets=(0, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0),
-    )
-    convert_and_store(grad_v_init_ptrs, grad_v_acc, boundary_check=(1,))
+    grad_v_init_ptrs = grad_v_init_ptr + grad_v_init_ptr_offsets
+    tl.store(grad_v_init_ptrs, grad_v_acc, mask=mask)
 
 
 def _select_forward_kernel(T: int):
@@ -485,11 +357,12 @@ def _launch_forward_kernel(
     save_intermediates: bool,
     store_v_seq: bool,
 ) -> None:
+    sizes, strides = _triton_layout_args(x_seq, x_seq, v_init, spike_seq, h_seq, v_out)
     T = x_seq.shape[0]
     NCL = x_seq[0].numel()
 
     def grid(meta):
-        return (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+        return _neuron_grid(NCL, sizes, meta["BLOCK_NCL"], meta["BLOCK_MINOR"])
 
     kernel = wrap_triton(_select_forward_kernel(T))
     with torch.cuda.device(x_seq.device):
@@ -504,6 +377,9 @@ def _launch_forward_kernel(
             max_spike_count,
             T=T,
             NCL=NCL,
+            BLOCK_MINOR=_block_minor(sizes, strides),
+            SIZES=sizes,
+            STRIDES=strides,
             compute_dtype=type_dict[x_seq.dtype],
             save_intermediates=save_intermediates,
             store_v_seq=store_v_seq,
@@ -524,11 +400,14 @@ def _launch_backward_kernel(
     detach_reset: bool,
     store_v_seq: bool,
 ) -> None:
+    sizes, strides = _triton_layout_args(
+        h_seq, grad_spike_seq, grad_v_out, h_seq, grad_x_seq, grad_v_init
+    )
     T = grad_spike_seq.shape[0]
     NCL = grad_spike_seq[0].numel()
 
     def grid(meta):
-        return (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+        return _neuron_grid(NCL, sizes, meta["BLOCK_NCL"], meta["BLOCK_MINOR"])
 
     kernel = wrap_triton(_select_backward_kernel(T))
     with torch.cuda.device(grad_spike_seq.device):
@@ -542,6 +421,9 @@ def _launch_backward_kernel(
             v_threshold,
             T=T,
             NCL=NCL,
+            BLOCK_MINOR=_block_minor(sizes, strides),
+            SIZES=sizes,
+            STRIDES=strides,
             compute_dtype=type_dict[grad_spike_seq.dtype],
             grad_min=grad_min,
             grad_max=grad_max,
@@ -559,10 +441,8 @@ def multistep_ilif_forward_no_grad(
     max_spike_count: int,
     store_v_seq: bool,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    x_seq = x_seq.contiguous()
-    v_init = v_init.contiguous()
-    spike_seq = torch.empty_like(x_seq)
-    v_out = torch.empty_like(x_seq) if store_v_seq else torch.empty_like(v_init)
+    spike_seq = _empty_like(x_seq)
+    v_out = _empty_like(x_seq) if store_v_seq else _empty_like(v_init, sequence=False)
     _launch_forward_kernel(
         x_seq,
         v_init,
@@ -588,8 +468,8 @@ def _multistep_ilif_forward_no_grad_fake(
     store_v_seq: bool,
 ):
     return (
-        x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty(x_seq.shape if store_v_seq else v_init.shape),
+        _empty_like(x_seq),
+        _empty_like(x_seq) if store_v_seq else _empty_like(v_init, sequence=False),
     )
 
 
@@ -605,11 +485,9 @@ def multistep_ilif_forward(
     detach_reset: bool,
     store_v_seq: bool,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    x_seq = x_seq.contiguous()
-    v_init = v_init.contiguous()
-    spike_seq = torch.empty_like(x_seq)
-    v_out = torch.empty_like(x_seq) if store_v_seq else torch.empty_like(v_init)
-    h_seq = torch.empty_like(x_seq)
+    spike_seq = _empty_like(x_seq)
+    v_out = _empty_like(x_seq) if store_v_seq else _empty_like(v_init, sequence=False)
+    h_seq = _empty_like(x_seq)
     _launch_forward_kernel(
         x_seq,
         v_init,
@@ -638,9 +516,9 @@ def _multistep_ilif_forward_fake(
     store_v_seq: bool,
 ):
     return (
-        x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty(x_seq.shape if store_v_seq else v_init.shape),
-        x_seq.new_empty(x_seq.shape),
+        _empty_like(x_seq),
+        _empty_like(x_seq) if store_v_seq else _empty_like(v_init, sequence=False),
+        _empty_like(x_seq),
     )
 
 
@@ -659,14 +537,12 @@ def _setup_context(ctx, inputs, output):
 
 def _multistep_ilif_backward(ctx, grad_spike_seq, grad_v_out, grad_h_seq):
     (h_seq,) = ctx.saved_tensors
-    grad_spike_seq = grad_spike_seq.contiguous()
-    grad_v_out = grad_v_out.contiguous()
-    grad_x_seq = torch.empty_like(grad_spike_seq)
-    grad_v_init = torch.empty_like(h_seq[0])
+    grad_x_seq = _empty_like(h_seq)
+    grad_v_init = _empty_like(h_seq[0], sequence=False)
     _launch_backward_kernel(
         grad_spike_seq,
         grad_v_out,
-        h_seq.contiguous(),
+        h_seq,
         grad_x_seq,
         grad_v_init,
         decay=ctx.decay,

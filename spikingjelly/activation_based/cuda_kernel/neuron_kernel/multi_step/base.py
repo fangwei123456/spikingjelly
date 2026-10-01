@@ -4,6 +4,8 @@ from typing import Callable, Iterable
 
 import torch
 
+from ...._neuron_layout import _empty_like
+
 try:
     import cupy
 except (ImportError, OSError) as e:
@@ -18,14 +20,8 @@ from ..cuda_code import _neuronal_fire, _neuronal_hard_reset, _neuronal_soft_res
 
 
 def _aligned_v_v_seq(x_seq: torch.Tensor) -> torch.Tensor:
-    step_numel = math.prod(x_seq.shape[1:])
-    # Inductor requires custom-op output views to start on a 16-byte boundary.
-    alignment_items = 16 // x_seq.element_size()
-    prefix_items = -step_numel % alignment_items
-    if prefix_items == 0:
-        return x_seq.new_empty((x_seq.shape[0] + 1, *x_seq.shape[1:]))
-    data = x_seq.new_empty((x_seq.shape[0] + 1) * step_numel + prefix_items)
-    return data[prefix_items:].view(x_seq.shape[0] + 1, *x_seq.shape[1:])
+    shape = (x_seq.shape[0] + 1, *x_seq.shape[1:])
+    return _empty_like(x_seq, shape=shape, align_time_slice=True)
 
 
 def _dtype_to_cupy_kernel_dtype(dtype: torch.dtype) -> str:
@@ -427,7 +423,7 @@ def prepare_forward_meta(py_dict: dict, ref: str = "x_seq"):
     cuda_utils._scalar_to_cupy(py_dict, ref=ref)
 
     numel = py_dict[ref].numel()
-    N = py_dict[ref].shape[1]
+    N = math.prod(py_dict[ref].shape[1:])
     threads = configure.cuda_threads
     if py_dict[ref].dtype == torch.float16:
         # Use half2 path: two neurons packed as one lane.
@@ -531,7 +527,7 @@ class NeuronATGFBase:
             (py_dict.pop("v_init").unsqueeze(0), py_dict.pop("v_seq"))
         )
         numel = py_dict["x_seq"].numel()
-        N = py_dict["x_seq"].shape[1]
+        N = math.prod(py_dict["x_seq"].shape[1:])
         threads = configure.cuda_threads
         if py_dict["x_seq"].dtype == torch.float16:
             # we will take two neurons to calculate as one neuron in cuda half2

@@ -3,11 +3,13 @@ from functools import lru_cache
 from typing import Optional
 
 import torch
-import torch.nn.functional as F
+
+from ...._neuron_layout import _empty_like
 
 from ..... import configure
 from .... import surrogate
 from ... import cuda_utils
+from ..strides import _launch_generated
 from ...auto_cuda import cfunction
 from .base import (
     _aligned_v_v_seq,
@@ -73,15 +75,6 @@ def cupy_multistep_if_forward(
     detach_reset: bool,
     sg_cupy_code: str,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    x_seq = x_seq.contiguous()
-    v_init = v_init.contiguous()
-    orig_n = x_seq.shape[1]
-    need_unpad = False
-    if x_seq.dtype == torch.float16 and orig_n % 2 != 0:
-        # Keep legacy behavior: pad odd neuron count for half2 kernels.
-        x_seq = F.pad(x_seq, (0, 1))
-        v_init = F.pad(v_init, (0, 1))
-        need_unpad = True
     dtype = _dtype_to_cupy_kernel_dtype(x_seq.dtype)
     hard_reset = not soft_reset
     forward_kernel = _get_if_forward_kernel(hard_reset=hard_reset, dtype=dtype)
@@ -93,20 +86,16 @@ def cupy_multistep_if_forward(
         "v_reset": None if soft_reset else v_reset,
     }
     blocks, threads, py_dict = prepare_forward_meta(py_dict)
-    py_dict["spike_seq"] = torch.empty_like(x_seq)
-    py_dict["h_seq"] = torch.empty_like(x_seq)
+    py_dict["spike_seq"] = _empty_like(x_seq)
+    py_dict["h_seq"] = _empty_like(x_seq)
     py_dict["v_v_seq"] = _aligned_v_v_seq(x_seq)
-    py_dict["v_v_seq"][0].copy_(py_dict.pop("v_init"))
     if py_dict["v_reset"] is None:
         py_dict.pop("v_reset")
-    forward_kernel((blocks,), (threads,), py_dict)
+    _launch_generated(forward_kernel, (blocks,), (threads,), py_dict)
     spike_seq = py_dict["spike_seq"]
     v_seq = py_dict["v_v_seq"][1:,]
     h_seq = py_dict["h_seq"]
-    if need_unpad:
-        spike_seq = spike_seq[:, :orig_n]
-        v_seq = v_seq[:, :orig_n]
-        h_seq = h_seq[:, :orig_n]
+
     return spike_seq, v_seq, h_seq
 
 
@@ -121,9 +110,9 @@ def _cupy_multistep_if_forward_fake(
     sg_cupy_code: str,
 ):
     return (
-        x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty(x_seq.shape),
+        _empty_like(x_seq),
+        _aligned_v_v_seq(x_seq)[1:],
+        _empty_like(x_seq),
     )
 
 
@@ -148,9 +137,6 @@ def cupy_multistep_if_backward(
     detach_reset: bool,
     sg_cupy_code: str,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    grad_spike_seq = grad_spike_seq.contiguous()
-    grad_v_seq = grad_v_seq.contiguous()
-    h_seq = h_seq.contiguous()
     dtype = _dtype_to_cupy_kernel_dtype(grad_spike_seq.dtype)
     hard_reset = not soft_reset
     backward_kernel = _get_if_backward_kernel(
@@ -161,7 +147,7 @@ def cupy_multistep_if_backward(
     )
 
     numel = grad_spike_seq.numel()
-    N = grad_spike_seq.shape[1]
+    N = math.prod(grad_spike_seq.shape[1:])
     if grad_spike_seq.dtype == torch.float16:
         N = math.ceil(N / 2)
         numel = N * grad_spike_seq.shape[0]
@@ -170,8 +156,8 @@ def cupy_multistep_if_backward(
     with cuda_utils.DeviceEnvironment(grad_spike_seq.get_device()):
         numel = cupy.asarray(numel)
         N = cupy.asarray(N)
-    grad_x_seq = torch.empty_like(grad_spike_seq)
-    grad_v_init = torch.empty_like(grad_v_seq[0])
+    grad_x_seq = _empty_like(h_seq)
+    grad_v_init = _empty_like(h_seq[0], sequence=False)
     py_dict = {
         "numel": numel,
         "N": N,
@@ -186,7 +172,7 @@ def cupy_multistep_if_backward(
     cuda_utils._scalar_to_cupy(py_dict, ref="grad_spike_seq")
     if py_dict["v_reset"] is None:
         py_dict.pop("v_reset")
-    backward_kernel((blocks,), (threads,), py_dict)
+    _launch_generated(backward_kernel, (blocks,), (threads,), py_dict)
     return py_dict["grad_x_seq"], py_dict["grad_v_init"]
 
 
@@ -201,7 +187,7 @@ def _cupy_multistep_if_backward_fake(
     detach_reset: bool,
     sg_cupy_code: str,
 ):
-    return torch.empty_like(grad_spike_seq), torch.empty_like(grad_v_seq[0])
+    return _empty_like(h_seq), _empty_like(h_seq[0], sequence=False)
 
 
 def _cupy_multistep_if_backward_autograd(ctx, grad_spike_seq, grad_v_seq, grad_h_seq):

@@ -1,7 +1,10 @@
 import numpy as np
 import torch
-import torch.nn.functional as F
 
+from ...._neuron_layout import _empty_like
+
+from ..strides import _launch_strided
+from .base import _aligned_v_v_seq
 from ..... import configure
 from ... import cuda_utils, tensor_cache
 from ..surrogate_code import (
@@ -300,22 +303,9 @@ def _eif_forward(
     else:
         raise NotImplementedError
 
-    use_pad = False
-    if dtype == "fp16" and v_init.numel() % 2 != 0:
-        # only fp16 needs even numel because we use half2 to accelerate
-        # when numel is odd, we will pad x_seq
-        use_pad = True
-        x_seq = F.pad(x_seq, (0, 1))  # [T, N] -> [T, N + 1]
-        v_init = F.pad(v_init, (0, 1))  # [N] -> [N + 1]
-
-    zero_shape = list(x_seq.shape)
-    zero_shape[0] *= 3
-    v_seq, h_seq, spike_seq = torch.split(
-        torch.zeros(zero_shape, device=x_seq.device, dtype=x_seq.dtype),
-        x_seq.shape[0],
-    )
-
-    v_v_seq = torch.cat((v_init.unsqueeze(0), v_seq))
+    h_seq = _empty_like(x_seq)
+    spike_seq = _empty_like(x_seq)
+    v_v_seq = _aligned_v_v_seq(x_seq)
 
     with cuda_utils.DeviceEnvironment(device):
         numel = x_seq.numel()
@@ -323,7 +313,8 @@ def _eif_forward(
 
         threads = configure.cuda_threads
         if dtype == "fp16":
-            assert neuron_num % 2 == 0
+            neuron_num += neuron_num % 2
+            numel = neuron_num * x_seq.shape[0]
             blocks = cuda_utils.cal_blocks(neuron_num >> 1)
             # we will take two neurons to calculate as one neuron in cuda half2
         else:
@@ -339,102 +330,36 @@ def _eif_forward(
         cp_reciprocal_tau = cupy.asarray(1.0 / tau, dtype=cp_dtype)
         cp_one_sub_reciprocal_tau = cupy.asarray(1.0 - 1.0 / tau, dtype=cp_dtype)
 
-        if v_reset is None:
-            cp_v_reset = None
-            hard_reset = False
-            (
-                x_seq,
-                v_v_seq,
-                h_seq,
-                spike_seq,
-                cp_reciprocal_tau,
-                cp_delta_T,
-                cp_theta_rh,
-                cp_v_threshold,
-                cp_v_rest,
-                cp_neuron_num,
-                cp_numel,
-            ) = cuda_utils.get_contiguous(
-                x_seq,
-                v_v_seq,
-                h_seq,
-                spike_seq,
-                cp_reciprocal_tau,
-                cp_delta_T,
-                cp_theta_rh,
-                cp_v_threshold,
-                cp_v_rest,
-                cp_neuron_num,
-                cp_numel,
-            )
-            kernel_args = [
-                x_seq,
-                v_v_seq,
-                h_seq,
-                spike_seq,
-                cp_reciprocal_tau,
-                cp_delta_T,
-                cp_theta_rh,
-                cp_v_threshold,
-                cp_v_rest,
-                cp_neuron_num,
-                cp_numel,
-            ]
-        else:
-            cp_v_reset = cupy.asarray(v_reset, dtype=cp_dtype)
-            hard_reset = True
-            (
-                x_seq,
-                v_v_seq,
-                h_seq,
-                spike_seq,
-                cp_reciprocal_tau,
-                cp_delta_T,
-                cp_theta_rh,
-                cp_v_threshold,
-                cp_v_rest,
-                cp_v_reset,
-                cp_neuron_num,
-                cp_numel,
-            ) = cuda_utils.get_contiguous(
-                x_seq,
-                v_v_seq,
-                h_seq,
-                spike_seq,
-                cp_reciprocal_tau,
-                cp_delta_T,
-                cp_theta_rh,
-                cp_v_threshold,
-                cp_v_rest,
-                cp_v_reset,
-                cp_neuron_num,
-                cp_numel,
-            )
-            kernel_args = [
-                x_seq,
-                v_v_seq,
-                h_seq,
-                spike_seq,
-                cp_reciprocal_tau,
-                cp_delta_T,
-                cp_theta_rh,
-                cp_v_threshold,
-                cp_v_rest,
-                cp_v_reset,
-                cp_neuron_num,
-                cp_numel,
-            ]
+        hard_reset = v_reset is not None
+        cp_v_reset = cupy.asarray(v_reset, dtype=cp_dtype) if hard_reset else None
+        kernel_args = {
+            "x_seq": x_seq,
+            "v_v_seq": v_v_seq,
+            "h_seq": h_seq,
+            "spike_seq": spike_seq,
+            "reciprocal_tau": cp_reciprocal_tau,
+            "delta_T": cp_delta_T,
+            "theta_rh": cp_theta_rh,
+            "v_threshold": cp_v_threshold,
+            "v_rest": cp_v_rest,
+            "neuron_num": cp_neuron_num,
+            "numel": cp_numel,
+        }
+        if hard_reset:
+            kernel_args["v_reset"] = cp_v_reset
 
         kernel = _create_fptt_kernel(hard_reset, dtype)
 
-        kernel(
+        _launch_strided(
+            kernel.code,
+            kernel.name,
             (blocks,),
             (threads,),
-            cuda_utils.wrap_args_to_raw_kernel(device, *kernel_args),
+            kernel_args,
+            initial_states={"v_init": v_init},
         )
 
     if requires_grad:
-        ctx.use_pad = use_pad
         if configure.save_spike_as_bool_in_neuron_kernel:
             ctx.s_shape = spike_seq.shape
             ctx.s_tk = tensor_cache.BOOL_TENSOR_CACHE.store_bool(spike_seq)
@@ -454,20 +379,10 @@ def _eif_forward(
         ctx.detach_reset = detach_reset
         ctx.sg_cuda_codes_fun = sg_cuda_codes_fun
 
-    if use_pad:
-        return spike_seq[..., :-1], v_v_seq[1:, ..., :-1]
-    else:
-        return spike_seq, v_v_seq[1:,]
+    return spike_seq, v_v_seq[1:,]
 
 
 def _eif_backward(ctx, grad_spike_seq, grad_v_seq):
-    if ctx.use_pad:
-        # grad_spike_seq.shape = [T, N]
-        # grad_v_seq.shape = [T, N]
-        # h_seq.shape = [T, N + 1]
-        # spike_seq.shape = [T, N + 1]
-        grad_spike_seq = F.pad(grad_spike_seq, (0, 1))
-        grad_v_seq = F.pad(grad_v_seq, (0, 1))
 
     device = grad_spike_seq.get_device()
     if configure.save_spike_as_bool_in_neuron_kernel:
@@ -475,18 +390,10 @@ def _eif_backward(ctx, grad_spike_seq, grad_v_seq):
         h_seq, v_v_seq = ctx.saved_tensors
     else:
         h_seq, spike_seq, v_v_seq = ctx.saved_tensors
-    zero_shape = list(grad_spike_seq.shape)
-    zero_shape[0] += 1
-    zero_data = torch.zeros(
-        zero_shape, device=grad_spike_seq.device, dtype=grad_spike_seq.dtype
-    )
-    grad_x_seq = zero_data[0:-1]
-    grad_v_init = zero_data[-1]
+    grad_x_seq = _empty_like(h_seq)
+    grad_v_init = _empty_like(grad_spike_seq[0], sequence=False)
 
-    if ctx.cp_v_reset is None:
-        hard_reset = False
-    else:
-        hard_reset = True
+    hard_reset = ctx.cp_v_reset is not None
 
     if grad_spike_seq.dtype == torch.float32:
         dtype = "fp32"
@@ -500,137 +407,40 @@ def _eif_backward(ctx, grad_spike_seq, grad_v_seq):
     )
 
     with cuda_utils.DeviceEnvironment(device):
+        kernel_args = {
+            "grad_spike_seq": grad_spike_seq,
+            "grad_v_seq": grad_v_seq,
+            "h_seq": h_seq,
+            "spike_seq": spike_seq,
+            "v_v_seq": v_v_seq,
+            "grad_x_seq": grad_x_seq,
+            "grad_v_init": grad_v_init,
+            "theta_rh": ctx.cp_theta_rh,
+            "reciprocal_delta_T": ctx.cp_reciprocal_delta_T,
+            "reciprocal_tau": ctx.cp_reciprocal_tau,
+            "one_sub_reciprocal_tau": ctx.cp_one_sub_reciprocal_tau,
+            "v_threshold": ctx.cp_v_threshold,
+            "neuron_num": ctx.cp_neuron_num,
+            "numel": ctx.cp_numel,
+        }
         if hard_reset:
-            (
-                grad_spike_seq,
-                grad_v_seq,
-                h_seq,
-                spike_seq,
-                v_v_seq,
-                grad_x_seq,
-                grad_v_init,
-                ctx.cp_theta_rh,
-                ctx.cp_reciprocal_delta_T,
-                ctx.cp_reciprocal_tau,
-                ctx.cp_one_sub_reciprocal_tau,
-                ctx.cp_v_threshold,
-                ctx.cp_v_reset,
-                ctx.cp_neuron_num,
-                ctx.cp_numel,
-            ) = cuda_utils.get_contiguous(
-                grad_spike_seq,
-                grad_v_seq,
-                h_seq,
-                spike_seq,
-                v_v_seq,
-                grad_x_seq,
-                grad_v_init,
-                ctx.cp_theta_rh,
-                ctx.cp_reciprocal_delta_T,
-                ctx.cp_reciprocal_tau,
-                ctx.cp_one_sub_reciprocal_tau,
-                ctx.cp_v_threshold,
-                ctx.cp_v_reset,
-                ctx.cp_neuron_num,
-                ctx.cp_numel,
-            )
-            kernel_args = [
-                grad_spike_seq,
-                grad_v_seq,
-                h_seq,
-                spike_seq,
-                v_v_seq,
-                grad_x_seq,
-                grad_v_init,
-                ctx.cp_theta_rh,
-                ctx.cp_reciprocal_delta_T,
-                ctx.cp_reciprocal_tau,
-                ctx.cp_one_sub_reciprocal_tau,
-                ctx.cp_v_threshold,
-                ctx.cp_v_reset,
-                ctx.cp_neuron_num,
-                ctx.cp_numel,
-            ]
-        else:
-            (
-                grad_spike_seq,
-                grad_v_seq,
-                h_seq,
-                spike_seq,
-                v_v_seq,
-                grad_x_seq,
-                grad_v_init,
-                ctx.cp_theta_rh,
-                ctx.cp_reciprocal_delta_T,
-                ctx.cp_reciprocal_tau,
-                ctx.cp_one_sub_reciprocal_tau,
-                ctx.cp_v_threshold,
-                ctx.cp_neuron_num,
-                ctx.cp_numel,
-            ) = cuda_utils.get_contiguous(
-                grad_spike_seq,
-                grad_v_seq,
-                h_seq,
-                spike_seq,
-                v_v_seq,
-                grad_x_seq,
-                grad_v_init,
-                ctx.cp_theta_rh,
-                ctx.cp_reciprocal_delta_T,
-                ctx.cp_reciprocal_tau,
-                ctx.cp_one_sub_reciprocal_tau,
-                ctx.cp_v_threshold,
-                ctx.cp_neuron_num,
-                ctx.cp_numel,
-            )
-            kernel_args = [
-                grad_spike_seq,
-                grad_v_seq,
-                h_seq,
-                spike_seq,
-                v_v_seq,
-                grad_x_seq,
-                grad_v_init,
-                ctx.cp_theta_rh,
-                ctx.cp_reciprocal_delta_T,
-                ctx.cp_reciprocal_tau,
-                ctx.cp_one_sub_reciprocal_tau,
-                ctx.cp_v_threshold,
-                ctx.cp_neuron_num,
-                ctx.cp_numel,
-            ]
+            kernel_args["v_reset"] = ctx.cp_v_reset
 
-        kernel(
-            (ctx.blocks,),
-            (ctx.threads,),
-            cuda_utils.wrap_args_to_raw_kernel(device, *kernel_args),
+        _launch_strided(
+            kernel.code, kernel.name, (ctx.blocks,), (ctx.threads,), kernel_args
         )
-    if ctx.use_pad:
-        return (
-            grad_x_seq[..., :-1],
-            grad_v_init[..., :-1],
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-    else:
-        return (
-            grad_x_seq,
-            grad_v_init,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
+    return (
+        grad_x_seq,
+        grad_v_init,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
 
 
 @torch.library.custom_op("sj::cupy_multistep_eif_forward", mutates_args=())
@@ -671,8 +481,8 @@ def cupy_multistep_eif_forward(
 def _cupy_multistep_eif_forward_fake(*args):
     x_seq = args[0]
     return (
-        x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty(x_seq.shape),
+        _empty_like(x_seq),
+        _aligned_v_v_seq(x_seq)[1:],
         torch.empty((), dtype=torch.int64),
     )
 

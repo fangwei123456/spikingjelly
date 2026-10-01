@@ -3,6 +3,8 @@ import math
 
 import torch
 
+from ...._neuron_layout import _empty_like
+
 try:
     import cupy
 except (ImportError, OSError) as e:
@@ -226,7 +228,7 @@ def _prepare_forward(py_dict: dict):
     cuda_utils._scalar_to_cupy(py_dict, ref="x")
 
     for name in ("h", "spike", "v_next"):
-        py_dict[name] = torch.empty_like(py_dict["x"])
+        py_dict[name] = _empty_like(py_dict["x"], sequence=False)
     numel = py_dict["x"].numel()
     threads = configure.cuda_threads
     if py_dict["x"].dtype == torch.float16:
@@ -246,8 +248,8 @@ def _prepare_backward(ctx, grad_spike: torch.Tensor, grad_v_next: torch.Tensor):
         "grad_spike": grad_spike,
         "grad_v_next": grad_v_next,
         "h": ctx.saved_tensors[0],
-        "grad_x": torch.empty_like(grad_spike),
-        "grad_v": torch.empty_like(grad_spike),
+        "grad_x": _empty_like(grad_spike, sequence=False),
+        "grad_v": _empty_like(grad_spike, sequence=False),
         "v_th": ctx.v_th,
         "v_reset": ctx.v_reset,
     }

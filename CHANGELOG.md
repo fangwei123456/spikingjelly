@@ -41,6 +41,16 @@ Module: `spikingjelly.nsys`.
 
 Module: `spikingjelly.activation_based.neuron`.
 
+- Point-neuron Triton and CuPy kernels now address strided inputs, states and
+  gradients directly, including channels-last, sliced and broadcast views,
+  without flattening inputs into contiguous buffers. Multi-step inputs retain
+  time as logical dimension zero. Non-dense inputs may produce compact outputs;
+  existing backend and dtype restrictions still apply. Recompile models with a
+  fresh Inductor cache when upgrading: cached CuPy graphs may assume contiguous
+  outputs from the previous implementation.
+- CuPy FP16 PLIF kernels read the shared decay parameter as one scalar and
+  broadcast it to both half2 lanes, avoiding a packed read past the scalar.
+
 - Added the torch-only `RAFNode` resonate-and-fire neuron with fixed oscillator
   parameters, real-valued states, and single-step and multi-step execution.
 - Added `functional.clif_step()` for an explicit two-state ComplementaryLIF

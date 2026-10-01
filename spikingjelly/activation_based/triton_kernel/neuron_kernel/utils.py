@@ -2,7 +2,11 @@ from dataclasses import dataclass
 from functools import lru_cache
 import torch
 
+from ..._neuron_layout import _layout_args
+
 from ..triton_utils import (
+    triton,
+    tl,
     normalize_cuda_device,
     is_fp8_dtype,
     normalize_triton_compute_dtype_name,
@@ -11,6 +15,74 @@ from ..triton_utils import (
     torch_dtype_to_triton_neuron_dtype_id,
     triton_compute_dtype_name_to_neuron_dtype_id,
 )
+
+
+def _triton_layout_args(reference, *tensors):
+    if all(x.is_contiguous() for x in tensors):
+        return (), ()
+    return _layout_args(reference, *tensors)
+
+
+def _block_minor(sizes, strides):
+    # Matching spatial strides need no transpose tile, including channels-last.
+    if not sizes or all(s[1:] == strides[0][1:] for s in strides[1:]):
+        return 1
+    return min(64, triton.next_power_of_2(sizes[0])) if len(sizes) > 1 else 1
+
+
+def _neuron_grid(n, sizes, block, minor):
+    if minor == 1:
+        return (triton.cdiv(n, block),)
+    return (triton.cdiv(sizes[0], minor) * triton.cdiv(n // sizes[0], block // minor),)
+
+
+@triton.jit
+def _neuron_indices(
+    NCL: tl.constexpr, BLOCK: tl.constexpr, SIZES: tl.constexpr, MINOR: tl.constexpr
+):
+    pid = tl.program_id(0)
+    if MINOR == 1:
+        indices = (pid * BLOCK + tl.arange(0, BLOCK))[None, :]
+        mask = indices < NCL
+    else:
+        minor_blocks: tl.constexpr = tl.cdiv(SIZES[0], MINOR)
+        inner = (pid % minor_blocks) * MINOR + tl.arange(0, MINOR)[None, :]
+        outer = (pid // minor_blocks) * (BLOCK // MINOR) + tl.arange(0, BLOCK // MINOR)[
+            :, None
+        ]
+        indices = outer * SIZES[0] + inner
+        mask = (inner < SIZES[0]) & (indices < NCL)
+    return indices, mask
+
+
+@triton.jit
+def _time_offset(t, n: tl.constexpr, layouts: tl.constexpr, slot: tl.constexpr):
+    stride: tl.constexpr = n if len(layouts) == 0 else layouts[slot][0]
+    # Widen the stride before multiplying: the time offset can exceed int32.
+    return t * tl.full((), stride, tl.int64)
+
+
+@triton.jit
+def _spatial_offsets(
+    index, sizes: tl.constexpr, layouts: tl.constexpr, slot: tl.constexpr = 0
+):
+    if len(layouts) == 0:
+        return index.to(tl.int64)
+    else:
+        strides: tl.constexpr = layouts[slot]
+        dense: tl.constexpr = True
+        span: tl.constexpr = 1
+        for d in tl.static_range(len(sizes)):
+            if sizes[d] != 1:
+                dense = dense and strides[d + 1] == span
+                span = span * sizes[d]
+        if dense:
+            return index.to(tl.int64)
+        offset = tl.full(index.shape, 0, tl.int64)
+        for d in tl.static_range(len(sizes)):
+            offset += (index % sizes[d]).to(tl.int64) * strides[d + 1]
+            index = index // sizes[d]
+        return offset
 
 
 _SUPPORTED_PLAN_NEURON_TYPES = frozenset({"if", "lif", "plif"})

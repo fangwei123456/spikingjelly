@@ -145,12 +145,21 @@ Triton 后端支持 ``torch.float16``。以下 benchmark 使用 ``triton.testing
 
 .. warning::
 
-    当前 Triton 神经元会将非 contiguous 输入转换为 contiguous。对卷积 SNN，
-    Inductor 的默认布局优化可能选择 channels-last 卷积，从而在卷积与神经元之间
-    插入重排或拷贝。建议以
-    ``torch.compile(..., options={"layout_optimization": False})`` 为起点，并在
-    目标 GPU、模型和 batch size 上复测。CuPy 神经元也有相同的连续布局限制；
-    纯全连接 SNN 不存在 NCHW/channels-last 卷积布局冲突。
+    点神经元 kernel 按输入、状态和梯度各自的 stride 寻址，不再要求先转成
+    contiguous。多步输入仍为 ``[T, ...]``；T 是逻辑第零维，并不要求其物理
+    stride 最大。channels-last、切片和只读广播均可作为输入，非稠密输入
+    可以生成紧凑输出。CuPy 的现有 dtype 限制保持不变。
+
+    shape 和 stride 参与 kernel 特化；首次遇到新布局时可能发生重新编译和
+    autotune。性能测量应在目标布局完成预热后进行。
+
+    kernel 支持 stride 不等于编译器不会插入转换。应在目标 PyTorch 版本上
+    检查生成代码和 NSYS 中的神经元边界；不要仅凭输出正确便认定转换已消除。
+    下面的布局策略数字来自此前要求连续输入的实现，仅作为历史诊断示例。
+
+    升级实现或做版本对照时，为每个版本设置独立的
+    ``TORCHINDUCTOR_CACHE_DIR`` 并重新编译模型。旧 CuPy 编译图可能仍假设输出
+    是连续布局；不要跨版本复用这些缓存。
 
 Triton 神经元可以被 ``torch.compile`` 捕获，但完整图捕获不保证端到端加速。
 逐 kernel profile 定位到一次确定的回退机制：默认 Inductor 为卷积选择 NHWC，
