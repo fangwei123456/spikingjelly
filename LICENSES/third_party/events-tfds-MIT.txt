@@ -1,0 +1,28 @@
+events-tfds licensing declaration
+
+Upstream author metadata: Dominic Jack
+Upstream license metadata: MIT
+Source: https://github.com/jackd/events-tfds/blob/0e61bedf71c0c4be1d6c9a00a9f55850c7f29986/setup.py
+
+That snapshot declares MIT but does not include a complete LICENSE file or a
+copyright year. The standard MIT terms below are reproduced to accompany the
+adapted code; this file is not represented as a verbatim upstream LICENSE,
+and no additional copyright owner or year is asserted.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

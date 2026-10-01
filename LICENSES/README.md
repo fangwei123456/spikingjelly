@@ -1,91 +1,88 @@
-# SpikingJelly license guide
+# SpikingJelly license guide / 许可证指南
 
-SpikingJelly is distributed under the Open-Intelligence Open Source License
-Version 1.0. The [Chinese license text](../LICENSE) is the original and
-authoritative version.
+## Migration status / 迁移状态
 
-Translations are available in [English](translations/LICENSE.en),
-[German](translations/LICENSE.de), [French](translations/LICENSE.fr), and
-[Hindi](translations/LICENSE.hi). They are provided for convenience and do not
-change the license terms. If a translation or this guide differs from the
-Chinese license, the Chinese license prevails.
+**This branch is a migration draft, not an Apache-2.0 release.** Maintainers
+have approved the direction of the migration. The concrete outstanding source
+and authorization items are recorded in [PROVENANCE.md](PROVENANCE.md).
+Replacing the root license does not grant additional rights in unresolved
+contributions or third-party material. Draft distribution metadata uses
+`LicenseRef-SpikingJelly-Migration-Pending`; these artifacts are for migration
+validation and must not be published as a completed relicensing.
 
-The translations have been checked for clause completeness, numbering, and
-terminology consistency against the Chinese Version 1.0 text. They have not
-been adopted as authoritative texts by AITISA or the relevant rightsholders.
+**本分支是迁移草稿，不是已完成换证的 Apache-2.0 发行版。** 维护方已同意迁移方向，
+具体来源与授权待办见 [PROVENANCE.md](PROVENANCE.md)。替换根许可证不会为尚未确认的
+贡献或第三方内容额外授予权利。草稿发行包以
+`LicenseRef-SpikingJelly-Migration-Pending` 标记元数据，仅用于迁移验证，
+不得作为已完成换证的版本发布。
 
-This guide identifies what the license expressly states and where it does not
-provide a scenario-specific answer. It is not a replacement for the license or
-an additional grant of rights.
+## Intended terms / 迁移后的条款
 
-## Project-specific notice status
+For project material covered by the migration authorization, the target license
+is [Apache License, Version 2.0](../LICENSE). Its English text is authoritative.
+This guide explains the intended terms; it is not an additional license or a
+translation of the legal text. Copyright remains with the respective holders.
 
-Section III of the current root `LICENSE` reproduces the license template,
-including the placeholders `XXXX`, `著作权人名称` (“Name of copyright holder”),
-and `授权` (“authorization”). The project is confirming the correct
-project-specific copyright and patent declarations with the relevant
-rightsholders. Until those fields are completed following that confirmation,
-no copyright owner or patent selection should be inferred from this guide.
+Apache-2.0 permits research, commercial use, modification, and redistribution
+subject to its terms, including use in proprietary applications. It does not
+require a commercial-use registration, publication of an application's source
+merely because it uses the framework, or submission of changes upstream.
+Redistributors must include the license, mark modified files, and retain
+applicable copyright, attribution, and NOTICE material. Its patent grant is
+limited to the claims described in Section 3; it does not license unrelated
+patents or grant trademark rights.
 
-## Usage and distribution scenarios
+对于获得本次迁移授权的项目内容，目标许可证是 [Apache License 2.0](../LICENSE)，
+以英文原文为准。本指南用于解释拟采用的条款，不是额外许可或法律文本译文。
+版权仍由各自权利人持有。
 
-Section references below refer to the authoritative Chinese Version 1.0 text.
+Apache-2.0 允许遵守条款的科研、商业使用、修改和再分发，也允许用于闭源应用。
+它不要求商业使用备案，不会仅因应用使用该框架就要求公开应用源码，
+也不要求向上游提交修改。再发布者须附带许可证、标记修改，并保留适用的版权、
+归属及 NOTICE 内容。第 3 条的专利授权具有明确范围，不覆盖无关专利，也不授予商标权。
 
-| Scenario | What the license expressly states | Conditions stated by the license | What the license does not expressly address |
-| --- | --- | --- | --- |
-| Non-commercial internal use | Section II.1 permits use in source or executable form, with or without modification. | The redistribution conditions do not apply if no copy is redistributed. | The license does not define “commercial purpose” or its boundary with non-commercial use. |
-| Commercial internal use | Sections II.1 and V permit use for commercial purposes. | Before commercial use, Section V.1 requires disclosure of the listed information. Section V.2 also applies if the user owns patents covering the software. | The license does not give examples of activities that constitute commercial use. |
-| Redistribution in source form | Section II.1 permits redistribution with or without modification. | Section II.2(1) requires retention of the conditions in Section II.2, the Section III license notice, and the Section VI disclaimer. Section V also applies to commercial redistribution. | It does not prescribe a specific file layout for the retained material. |
-| Redistribution in executable form | Section II.1 permits redistribution with or without modification. | Section II.2(2) requires the conditions in Section II.2, the Section III license notice, and the Section VI disclaimer in an accompanying file and/or other material. Section V also applies to commercial redistribution. | It does not prescribe the name, format, or placement of the accompanying material. |
-| Product containing compiled SpikingJelly | Redistribution of the included SpikingJelly executable code falls within Sections II.1 and II.2(2). | The executable redistribution conditions apply to SpikingJelly; Section V also applies if the use or redistribution is commercial. | The license does not define the boundary between the Work, a derivative work, and a separate combined work, or state how its terms affect surrounding proprietary code. |
-| Customer on-premises deployment | A deployment that transfers a copy of SpikingJelly in executable form falls within the executable redistribution provisions. | Apply Section II.2(2), and Section V if the deployment is commercial. | “Deployment” is not separately defined. |
-| Hosted service or SaaS | Running SpikingJelly is a use under Section II.1. | Section V applies if that use is for a commercial purpose. The redistribution conditions apply only if a copy is redistributed. | The license does not separately address network services or define when a hosted arrangement also constitutes redistribution. |
-| Redistribution of modifications | Section II.1 permits redistribution whether or not the software has been modified. | Apply the source or executable redistribution conditions according to the form distributed, and Section V for commercial redistribution. | The license does not further define “derivative work.” |
-| User owns patents covering SpikingJelly | Section V.2 addresses commercial users and redistributors that own patents covering the software. | Disclose basic patent information and select one of the four listed patent-license options. | The license does not define when a patent “covers” the software. |
+## Third-party material / 第三方内容
 
-The license does not expressly require publication of the source code of a
-separate application that contains or uses SpikingJelly. It also does not
-define the boundary between a derivative work and a combined work. The table
-therefore does not make a conclusion about a particular application's source
-code; that conclusion depends on the facts of the application and an
-authoritative interpretation of the license.
+[NOTICE](../NOTICE) maps identified adapted code to the original notices in
+[third_party](third_party/). Those notices remain applicable to their respective
+material; the root Apache license does not replace them. The source review
+separately identifies material whose licensing has not yet been resolved.
 
-## Practical checklist for executable redistribution
+Dependencies installed separately, downloaded datasets, and model weights have
+their own licenses. Including a loader, example, or reference does not relicense
+them. Requests to cite SpikingJelly's paper are academic guidance, not additional
+conditions on the Apache-2.0 grant.
 
-This checklist summarizes the express requirements; it does not add new ones.
+[NOTICE](../NOTICE) 列出已识别的改编代码及 [third_party](third_party/) 中的原始声明。
+这些声明继续适用于对应内容，根目录 Apache 许可证不替代它们。
+来源核对记录另外列明尚未解决许可问题的内容。
 
-1. Determine whether the use or redistribution is for a commercial purpose.
-2. Accompany the executable redistribution with the conditions in Section
-   II.2, the Section III license notice, and the Section VI disclaimer. A copy
-   of the complete authoritative license may be included for clarity.
-3. For commercial use or redistribution, make the disclosure required by
-   Section V.1 before the use or redistribution.
-4. If the commercial user or redistributor owns patents covering SpikingJelly,
-   follow Section V.2.
-5. Keep the applicable notices and a record of any required disclosure with the
-   release's compliance materials.
+单独安装的依赖、下载的数据集和模型权重具有各自的许可证，提供加载器、示例或引用
+不改变它们的许可。对 SpikingJelly 论文的引用请求属于学术使用建议，
+不构成 Apache-2.0 授权的额外条件。
 
-The disclosure URL printed in Version 1.0 is
-<https://www.aitisa.org.cn/OI_Statement/>. The license does not specify an
-alternative procedure if that service is unavailable; obtain instructions
-from the New Generation of Artificial Intelligence Technology Innovation
-Strategic Alliance (AITISA) in that situation.
+## Historical boundary / 历史边界
 
-## Questions requiring authoritative clarification
+The pre-migration baseline is
+[`4cfe72d533020a661859786600a6aa863f61d161`](https://github.com/fangwei123456/spikingjelly/tree/4cfe72d533020a661859786600a6aa863f61d161).
+Its [Chinese license](https://github.com/fangwei123456/spikingjelly/blob/4cfe72d533020a661859786600a6aa863f61d161/LICENSE),
+[guide](https://github.com/fangwei123456/spikingjelly/blob/4cfe72d533020a661859786600a6aa863f61d161/LICENSES/README.md),
+and [translations](https://github.com/fangwei123456/spikingjelly/tree/4cfe72d533020a661859786600a6aa863f61d161/LICENSES/translations)
+remain available at that immutable revision. Previous tags and published
+archives retain their own licensing records, including the Open-Intelligence
+Open Source License 1.0 where applicable.
 
-The current text does not fully answer the following questions:
+Once the outstanding items are resolved, the merge of this migration will mark
+the change for the development line. The first subsequent release must identify
+that merge commit and its own release tag in its release notes. This draft does
+not designate an existing tag as Apache-2.0, change the package version, waive
+past obligations, or retroactively relicense old distributions. New contribution
+terms are described in [CONTRIBUTING.md](../CONTRIBUTING.md); they do not provide
+retroactive permission for earlier contributions.
 
-- the definition and boundaries of “commercial purpose”;
-- the treatment of proprietary applications that incorporate SpikingJelly;
-- the boundary between a derivative work and a combined work;
-- the treatment of hosted services and other deployments that do not transfer
-  a copy of the software;
-- the meaning of a patent “covering” the software;
-- the content and effect of the referenced Open-Intelligence Open Source
-  Platform Management Regulation Version 1.0; and
-- an alternative commercial-use disclosure procedure when the specified
-  service is unavailable.
-
-The maintainers will record any clarification from the relevant rightsholders
-or AITISA in this guide so that all users can rely on the same published
-information.
+迁移前基线为上述固定提交，其中的中文许可证、指南和译文继续保留。
+既有标签和已发布包保留各自的许可记录，包括适用的启智开源许可证 1.0。
+待具体待办解决后，本迁移的合入提交将成为开发主线的切换点；后续首个发行版
+应在发布说明中记录该提交及自己的发行标签。本草稿不把既有标签改标为 Apache-2.0，
+不改变包版本，不豁免过去的义务，也不追溯更改旧包许可。
+[贡献指南](../CONTRIBUTING.md) 中的新贡献条款不构成历史贡献的追溯授权。

@@ -1,0 +1,97 @@
+SpikingJelly third-party attributions
+
+This file identifies adapted material; it does not replace the associated
+licenses or resolve the outstanding items in LICENSES/PROVENANCE.md.
+SpikingJelly modifications remain attributable to their respective authors.
+Paths below are relative to spikingjelly/.
+
+Torchvision (BSD-3-Clause)
+Copyright (c) Soumith Chintala 2016, All rights reserved.
+License: LICENSES/third_party/torchvision-LICENSE
+Adapted ResNet/VGG implementations:
+  activation_based/model/spiking_resnet.py
+  activation_based/model/sew_resnet.py
+  activation_based/model/spiking_vgg.py
+  activation_based/model/spiking_vggws_ottt.py
+Adapted classification training utilities:
+  activation_based/examples/common/train_classify.py
+  activation_based/examples/common/tv_ref_classify/
+Reference: https://github.com/pytorch/vision/tree/9b5a3fecc72434dbd65148723efe54b28b9728c9
+
+DeiT (Apache-2.0)
+Copyright 2020 - present, Facebook, Inc
+License: LICENSES/third_party/deit-LICENSE
+  activation_based/examples/common/tv_ref_classify/sampler.py: RASampler
+Modified for SpikingJelly, including configurable augmentation repetitions.
+Reference: https://github.com/facebookresearch/deit/tree/a2ffd162edc49b30f6ed8044cd10444bf2ae1299
+
+Lava-DL (BSD-3-Clause)
+Copyright (c) 2021, Intel Corporation. All rights reserved.
+Original norm.py: Copyright (C) 2022 Intel Corporation
+License: LICENSES/third_party/lava-dl-LICENSE
+  activation_based/lava_exchange.py: BatchNorm2d
+Reference: https://github.com/lava-nc/lava-dl/tree/a6927a2597b7b4dd483414b66855744051384796
+
+Spikformer (MIT)
+Copyright (c) 2022 Zhaokun Zhou
+License: LICENSES/third_party/spikformer-LICENSE
+  activation_based/layer/attention.py: SpikingSelfAttention
+Reference: https://github.com/ZK-Zhou/spikformer/tree/621268981827af47aa666c1b5f774de4281d90ad
+
+MA-SNN (MIT)
+Copyright (c) 2022 xyz837
+License: LICENSES/third_party/ma-snn-LICENSE
+  activation_based/layer/attention.py: MultiDimensionalAttention,
+  _AxisAttention and _SpatialAttention
+Reference: https://github.com/MA-SNN/MA-SNN/tree/8f87a7476920279e4f45e014aed868b62f8ef001
+
+flash-snn and Flash Linear Attention (MIT)
+Copyright (c) 2025 Yifan Huang
+Copyright (c) 2023-2025 Songlin Yang
+Licenses: LICENSES/third_party/flash-snn-LICENSE,
+          LICENSES/third_party/flash-linear-attention-LICENSE
+  activation_based/triton_kernel/triton_utils.py: contiguous/device guard
+  and automatic mixed precision helpers
+References:
+  https://github.com/AllenYolk/flash-snn/tree/e31d0c332536425bf6a3d5e4c5ff0dba44678552
+  https://github.com/fla-org/flash-linear-attention/tree/f7d95fa04fcb2df07390b1bf8b7d6b96ffb7a16a
+
+Events-tfds (MIT, declared in upstream package metadata)
+Upstream author: Dominic Jack
+License declaration and terms: LICENSES/third_party/events-tfds-MIT.txt
+  datasets/cifar10_dvs.py: event decoding helpers
+  datasets/utils.py: load_ATIS_bin
+Reference: https://github.com/jackd/events-tfds/tree/0e61bedf71c0c4be1d6c9a00a9f55850c7f29986
+
+Event-Python (MIT, upstream source of the ATIS decoder)
+Copyright (c) 2016 Garrick Orchard
+License: LICENSES/third_party/event-python-LICENSE
+  datasets/utils.py: load_ATIS_bin, through events-tfds
+Reference: https://github.com/gorchard/event-Python/tree/78dd3b0a7fc508d551cecdbf93b959dc2d265765
+
+Torchaudio (BSD-2-Clause)
+Copyright (c) 2017 Facebook Inc. (Soumith Chintala), All Rights Reserved
+License: LICENSES/third_party/torchaudio-LICENSE
+  datasets/speechcommands.py: dataset loading
+  activation_based/examples/speech_commands.py: MelScaleDelta and create_fb_matrix
+References:
+  https://github.com/pytorch/audio/tree/95d9f2d272b2814010db7fc803a7d4dc6cf0c3b4
+  https://github.com/pytorch/audio/tree/9d50acf3970d9f0d2cb903c176f7d9523ba51b6a
+
+OpenAI Baselines (MIT)
+Copyright (c) 2017 OpenAI (http://openai.com)
+License: LICENSES/third_party/baselines-LICENSE
+  activation_based/examples/common/multiprocessing_env.py
+Reference: https://github.com/openai/baselines/tree/ea25b9e8b234e6ee1bca43083f8f3cf974143998
+
+PTAN (MIT)
+Copyright 2017- Maxim Lapan <max.lapan@gmail.com>
+License: LICENSES/third_party/ptan-LICENSE
+  activation_based/examples/dsqn/ptan/: agent, actions and experience utilities
+Reference: https://github.com/Shmuma/ptan/tree/5258ad3322b917e3021e34b4f5895c85cda8b958
+
+Enabling Spike-based Backpropagation (MIT)
+Copyright (c) 2020 Chankyu Lee
+License: LICENSES/third_party/spikebased-backpropagation-LICENSE
+  activation_based/examples/cifar10_r11_enabling_spikebased_backpropagation.py
+Reference: https://github.com/chan8972/Enabling_Spikebased_Backpropagation/tree/46e18a7b0741d08f155435e2c62acac4bebe5b2f

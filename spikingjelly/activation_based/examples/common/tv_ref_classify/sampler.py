@@ -1,3 +1,5 @@
+# Adapted from DeiT (Apache-2.0), with SpikingJelly modifications.
+# Copyright 2020 - present, Facebook, Inc. See NOTICE for attribution.
 import math
 
 import torch

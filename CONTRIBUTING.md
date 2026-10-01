@@ -74,6 +74,19 @@ Before committing, run `uv format --preview-features format` and
 When changing production diagnostics, also run
 `uv run python tools/check_logging_policy.py`.
 
+### Contribution Licensing
+
+This branch prepares a migration to Apache-2.0; see the
+[license guide](LICENSES/README.md) and its outstanding authorization items.
+Contributions intentionally submitted for inclusion under Apache-2.0 are
+provided under that license unless a separate agreement applies. Contributors
+must have the right to submit their work, identify any third-party material,
+and preserve its applicable license and attribution notices.
+
+Contributors retain their copyright. This contribution policy does not
+retroactively authorize relicensing of earlier contributions. No CLA or DCO
+signing process is introduced by this migration.
+
 ### Pull Request Guidelines
 
 - Keep PRs focused on a single issue or feature.

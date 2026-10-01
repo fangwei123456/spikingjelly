@@ -116,8 +116,10 @@ SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，
 
 许可证
 -------------------------
-SpikingJelly 采用 `启智开源许可证 1.0 版 <https://github.com/fangwei123456/spikingjelly/blob/master/LICENSE>`_ 发布。
-中文许可证具有权威效力；其他语言译文以及常见使用、再发布场景说明见
+SpikingJelly 正准备在当前开发主线及后续版本采用
+`Apache-2.0 <https://github.com/fangwei123456/spikingjelly/blob/master/LICENSE>`_。
+本次迁移尚不具备发布条件；新文本不改变尚未确认授权的贡献或第三方代码的许可。
+待解决事项、迁移边界及历史许可证见
 `许可证指南 <https://github.com/fangwei123456/spikingjelly/blob/master/LICENSES/README.md>`_。
 
 项目信息
@@ -262,9 +264,12 @@ Publications using SpikingJelly are recorded in :doc:`./publications`.
 
 License
 -------------------------
-SpikingJelly is distributed under the `Open-Intelligence Open Source License Version 1.0 <https://github.com/fangwei123456/spikingjelly/blob/master/LICENSE>`_.
-The Chinese license is authoritative. Translations and guidance for common use
-and redistribution scenarios are available in the
+SpikingJelly is preparing to adopt
+`Apache-2.0 <https://github.com/fangwei123456/spikingjelly/blob/master/LICENSE>`_
+for the current development line and future releases. This migration is not
+release-ready; the new text does not relicense unresolved contributions or
+third-party code. Outstanding items, the migration boundary, and historical
+licenses are described in the
 `license guide <https://github.com/fangwei123456/spikingjelly/blob/master/LICENSES/README.md>`_.
 
 About
