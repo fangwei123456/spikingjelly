@@ -1,7 +1,10 @@
 SpikingJelly third-party attributions
 
 This file identifies adapted material; it does not replace the associated
-licenses or resolve the outstanding items in LICENSES/PROVENANCE.md.
+licenses or resolve outstanding authorization items. The review record for this
+migration draft is available in the source repository (not included in this
+distribution):
+https://github.com/fangwei123456/spikingjelly/blob/589db42b2784766a68006cd3b650e96222a964b7/LICENSES/PROVENANCE.md
 SpikingJelly modifications remain attributable to their respective authors.
 Paths below are relative to spikingjelly/.
 
