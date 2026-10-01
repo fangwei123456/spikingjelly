@@ -80,6 +80,16 @@ jobs:
       - name: Build distributions
         run: uv build --out-dir dist --build-constraints .github/ci-constraints.txt
 
+      - name: Check distribution licenses
+        run: uv run --no-project python tools/check_distribution_licenses.py dist/*.whl dist/*.tar.gz
+
+      - name: Rebuild wheel from sdist and check licenses
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv build dist/*.tar.gz --wheel --out-dir dist/from-sdist --build-constraints .github/ci-constraints.txt
+          uv run --no-project python tools/check_distribution_licenses.py dist/from-sdist/*.whl
+
       - name: Install wheel in a clean environment
         shell: bash
         run: |
