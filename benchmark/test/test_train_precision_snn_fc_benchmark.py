@@ -152,11 +152,11 @@ def test_nvtx_training_ranges_are_balanced(monkeypatch) -> None:
         torch.randn(2, 3, 4),
         torch.tensor([0, 1, 0]),
         torch.device("cpu"),
-        nvtx_step="benchmark_step:training:0",
+        nvtx_step="training step 0",
     )
 
     pushed = [name for kind, name in ranges if kind == "push"]
-    assert pushed[0] == "benchmark_step:training:0"
+    assert pushed[0] == "training step 0"
     for required in ("reset", "zero_grad", "forward", "loss", "backward", "optimizer"):
         assert required in pushed
     assert len(pushed) == sum(kind == "pop" for kind, _ in ranges)

@@ -7,7 +7,7 @@ usage() {
     echo '       nsys_snn.sh capture-graph [OPTIONS] OUTPUT_PREFIX -- COMMAND [ARGS...]' >&2
     echo 'options: --control=api|manual (default: api), --session=NAME (manual only)' >&2
     echo '         --trace=APIS (default: cuda,nvtx,osrt,python-gil)' >&2
-    echo '       nsys_snn.sh analyze REPORT.nsys-rep OUTPUT_DIR [BENCHMARK.json]' >&2
+    echo '       nsys_snn.sh analyze REPORT.nsys-rep OUTPUT_DIR [BENCHMARK.json] [ANALYZE OPTIONS]' >&2
     echo '       nsys_snn.sh compare BASELINE/summary.json CANDIDATE/summary.json OUTPUT.json' >&2
     exit 2
 }
@@ -77,6 +77,9 @@ pathlib.Path(f"{prefix}.manifest.json").write_text(
             "cuda_graph_trace": graph_trace,
             "pytorch_trace": "none",
             "python_sampling": False,
+            "wait": "all",
+            "kill": "none" if control == "api" else None,
+            "process_scope": "launched_process_tree",
         },
         indent=2,
     ),
@@ -85,11 +88,12 @@ pathlib.Path(f"{prefix}.manifest.json").write_text(
 PY
         options=(--trace="$trace" --cuda-graph-trace="$graph_trace"
             --pytorch=none --python-sampling=false)
+        status=0
         if [[ $control == api ]]; then
             nsys profile "${options[@]}" \
-                --sample=none --cpuctxsw=none \
+                --sample=none --cpuctxsw=none --wait=all --kill=none \
                 --capture-range=cudaProfilerApi --capture-range-end=stop \
-                --output="$prefix" "$@"
+                --output="$prefix" "$@" || status=$?
         else
             printf 'After the workload is ready, run in another terminal:\n'
             printf '%q ' nsys start "--session=$session" --capture-range=none \
@@ -99,13 +103,31 @@ PY
             printf '\nAfter the final collection, close the session with:\n'
             printf '%q ' nsys shutdown "--session=$session"
             printf '\n'
-            nsys launch "${options[@]}" --session-new="$session" --show-output=true "$@"
+            nsys launch "${options[@]}" --wait=all --session-new="$session" --show-output=true "$@" || status=$?
         fi
+        python - "${prefix}.manifest.json" "$status" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+manifest = json.loads(path.read_text())
+manifest["nsys_exit_code"] = int(sys.argv[2])
+path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+PY
+        exit "$status"
         ;;
     analyze)
-        [[ $# -ge 3 && $# -le 4 ]] || usage
+        [[ $# -ge 3 ]] || usage
         report=$2
         output_dir=$3
+        shift 3
+        args=(analyze "${output_dir}/trace.sqlite" --output-dir "$output_dir")
+        if [[ $# -gt 0 && $1 != --* ]]; then
+            args+=(--benchmark-json "$1")
+            shift
+        fi
+        args+=("$@")
         if [[ -d $output_dir && -n $(ls -A "$output_dir") ]]; then
             echo "report directory is not empty: $output_dir" >&2
             exit 1
@@ -113,13 +135,12 @@ PY
         mkdir -p "$output_dir"
         nsys export --type=sqlite --force-overwrite=true \
             --output="${output_dir}/trace.sqlite" "$report"
-        nsys stats --report cuda_gpu_kern_sum --report cuda_api_sum \
+        if ! nsys stats --report cuda_gpu_kern_sum --report cuda_api_sum \
             --report nvtx_gpu_proj_sum --format csv \
             --force-overwrite=true \
-            --output "${output_dir}/stats" "${output_dir}/trace.sqlite"
-        args=(analyze "${output_dir}/trace.sqlite" --output-dir "$output_dir")
-        if [[ $# -eq 4 ]]; then
-            args+=(--benchmark-json "$4")
+            --output "${output_dir}/stats" "${output_dir}/trace.sqlite" \
+            >"${output_dir}/nsys-stats.log" 2>&1; then
+            echo "Some optional NSYS stats are unavailable; see $output_dir/nsys-stats.log" >&2
         fi
         python "$root/analyze_nsys_snn.py" "${args[@]}"
         ;;

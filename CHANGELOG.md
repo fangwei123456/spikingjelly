@@ -15,6 +15,20 @@ and the archived documentation linked from the project README.
 
 Module: `spikingjelly.nsys`.
 
+- Added single-host multi-GPU profiling: capture one launcher process tree into
+  one Nsight Systems report, optionally annotate ranks, pipeline stages and
+  microbatches, and control CUDA capture on multiple devices.
+- NVTX labels use readable fields such as `inference step 1 | rank 0 of 2`
+  and `forward | stage 0 | microbatch 2`, preserving zero-based indices.
+  The analyzer only parses the new labels; recapture workloads that used the
+  previous marker format for step and parallel-participant attribution.
+- The offline analyzer emits schema v2 with process/context/stream identities,
+  per-device compute/communication overlap, logical-step completeness and
+  unassigned-event accounting. Uninstrumented CUDA workloads can be analyzed
+  without step markers. Comparison requires schema v2 summaries.
+  Unclosed step CPU durations and incomplete
+  logical-step CPU envelopes/skews are reported as unavailable.
+
 - Added opt-in CUDA capture and NVTX step/stage ranges for Nsight Systems,
   alongside reusable capture, analysis, and comparison scripts.
 - Capture scripts support CUDA profiler API windows and named sessions controlled

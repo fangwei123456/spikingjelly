@@ -1,9 +1,9 @@
 """Opt-in Nsight Systems ranges for SNN training and inference scripts."""
 
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 import json
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Optional, Sequence
 
 import torch
 from torch import nn
@@ -14,7 +14,9 @@ __all__ = ["capture", "step", "region", "module_ranges"]
 
 
 @contextmanager
-def capture(enabled: bool = False) -> Iterator[None]:
+def capture(
+    enabled: bool = False, *, devices: Optional[Sequence[int]] = None
+) -> Iterator[None]:
     r"""
     **API Language** - :ref:`中文 <nsys-capture-cn>` | :ref:`English <nsys-capture-en>`
 
@@ -30,6 +32,11 @@ def capture(enabled: bool = False) -> Iterator[None]:
 
     :param enabled: 是否开启采集窗口，默认为 ``False``；开启时需要 CUDA。
     :type enabled: bool
+    :param devices: 当前进程使用的 CUDA 设备序号；默认 ``None`` 只控制当前设备。
+        显式列表必须非空且不重复。函数不插入同步或分布式 barrier；调用者负责在
+        所有参与者就绪后启动工作，并在停止前等待所有 GPU 工作完成。
+    :type devices: Optional[Sequence[int]]
+    :raises ValueError: 设备列表为空、重复或包含负数时抛出。
     :raises RuntimeError: 开启后 CUDA profiler 无法启动或停止时抛出。
 
     ----
@@ -46,19 +53,49 @@ def capture(enabled: bool = False) -> Iterator[None]:
     :param enabled: Enable the capture window; defaults to ``False``. CUDA is
         required when enabled.
     :type enabled: bool
+    :param devices: CUDA device indices used by this process. ``None`` controls
+        only the current device. An explicit sequence must be nonempty and unique.
+        No synchronization or distributed barriers are inserted. The caller must
+        coordinate participants before work and drain GPU work before stopping.
+    :type devices: Optional[Sequence[int]]
+    :raises ValueError: If the device sequence is empty, duplicated, or negative.
     :raises RuntimeError: If the CUDA profiler cannot start or stop when enabled.
     """
-    if enabled:
-        torch.cuda.profiler.start()
+    if devices is not None and (
+        not devices or len(set(devices)) != len(devices) or min(devices) < 0
+    ):
+        raise ValueError("devices must contain unique nonnegative CUDA indices")
+    if not enabled:
+        yield
+        return
+    if devices is not None:
+        with ExitStack() as cleanup:
+            for device in devices:
+                with torch.cuda.device(device):
+                    torch.cuda.profiler.start()
+                cleanup.callback(_stop_capture, device)
+            yield
+        return
+    torch.cuda.profiler.start()
     try:
         yield
     finally:
-        if enabled:
-            torch.cuda.profiler.stop()
+        torch.cuda.profiler.stop()
+
+
+def _stop_capture(device: int) -> None:
+    with torch.cuda.device(device):
+        torch.cuda.profiler.stop()
 
 
 @contextmanager
-def region(name: str, enabled: bool = False) -> Iterator[None]:
+def region(
+    name: str,
+    enabled: bool = False,
+    *,
+    stage: Optional[int] = None,
+    microbatch: Optional[int] = None,
+) -> Iterator[None]:
     r"""
     **API Language** - :ref:`中文 <nsys-region-cn>` | :ref:`English <nsys-region-en>`
 
@@ -71,11 +108,18 @@ def region(name: str, enabled: bool = False) -> Iterator[None]:
     在当前 CPU 线程上标记一个 NVTX 范围，适用于 forward、backward、reset
     等完整阶段。启用时需要 CUDA，退出范围时会配对关闭标记；关闭时无 CUDA 调用。
     不要用它逐个标记极短的神经元算子。
+    元数据以 ``forward | stage 0 | microbatch 2`` 的形式显示；编号从 0 开始，
+    未提供的字段不显示。
 
     :param name: 时间线中显示的阶段名称。
     :type name: str
     :param enabled: 是否写入 NVTX 标记，默认为 ``False``。
     :type enabled: bool
+    :param stage: 可选的非负 pipeline stage 序号；默认 ``None`` 不标注。
+    :type stage: Optional[int]
+    :param microbatch: 可选的非负 microbatch 序号；默认 ``None`` 不标注。
+    :type microbatch: Optional[int]
+    :raises ValueError: stage 或 microbatch 为负数时抛出。
     :raises RuntimeError: 启用后 NVTX 范围无法写入时抛出。
 
     ----
@@ -88,14 +132,27 @@ def region(name: str, enabled: bool = False) -> Iterator[None]:
     forward, backward, or reset. CUDA is required when enabled; the marker is
     paired on exit. Disabled ranges make no CUDA calls. Do not annotate every
     very short neuron operation.
+    Metadata appears as ``forward | stage 0 | microbatch 2``. Indices are
+    zero-based; omitted fields are not displayed.
 
     :param name: Stage name displayed on the timeline.
     :type name: str
     :param enabled: Emit an NVTX range; defaults to ``False``.
     :type enabled: bool
+    :param stage: Optional nonnegative pipeline stage index; ``None`` omits it.
+    :type stage: Optional[int]
+    :param microbatch: Optional nonnegative microbatch index; ``None`` omits it.
+    :type microbatch: Optional[int]
+    :raises ValueError: If stage or microbatch is negative.
     :raises RuntimeError: If an enabled NVTX range cannot be emitted.
     """
+    if any(value is not None and value < 0 for value in (stage, microbatch)):
+        raise ValueError("stage and microbatch must be nonnegative")
     if enabled:
+        if stage is not None:
+            name += f" | stage {stage}"
+        if microbatch is not None:
+            name += f" | microbatch {microbatch}"
         torch.cuda.nvtx.range_push(name)
     try:
         yield
@@ -104,7 +161,14 @@ def region(name: str, enabled: bool = False) -> Iterator[None]:
             torch.cuda.nvtx.range_pop()
 
 
-def step(index: int, phase: str, enabled: bool = False) -> Iterator[None]:
+def step(
+    index: int,
+    phase: str,
+    enabled: bool = False,
+    *,
+    rank: Optional[int] = None,
+    world_size: Optional[int] = None,
+) -> Iterator[None]:
     r"""
     **API Language** - :ref:`中文 <nsys-step-cn>` | :ref:`English <nsys-step-en>`
 
@@ -114,7 +178,9 @@ def step(index: int, phase: str, enabled: bool = False) -> Iterator[None]:
 
     * **中文**
 
-    标记一个完整训练或推理 step；范围名为 ``sj.step:<phase>:<index>``。
+    标记一个完整训练或推理 step；范围名为 ``<phase> step <index>``。
+    提供 rank 与 world_size 时，例如 ``inference step 1 | rank 0 of 2``。
+    step 和 rank 编号从 0 开始；``of 2`` 表示总共 2 个 rank。
     与 :func:`capture` 配合时，一个采集窗口可包含多个 step。退出后不保留状态。
 
     :param index: 从零开始的采集窗口内 step 序号。
@@ -123,9 +189,14 @@ def step(index: int, phase: str, enabled: bool = False) -> Iterator[None]:
     :type phase: str
     :param enabled: 是否写入 NVTX 标记，默认为 ``False``。
     :type enabled: bool
+    :param rank: 当前进程的非负全局 rank；默认 ``None``，不推断 rank。
+    :type rank: Optional[int]
+    :param world_size: 正数参与者数量；需要同时提供 rank。各 rank 必须使用一致的
+        phase、index 和 world_size 才能合并逻辑 step；默认 ``None`` 不声明完整性。
+    :type world_size: Optional[int]
     :return: 可用于 ``with`` 语句的 NVTX 范围。
     :rtype: Iterator[None]
-    :raises ValueError: 当序号为负或阶段名称不受支持时抛出。
+    :raises ValueError: 当序号为负、阶段名称不受支持，或 rank/world_size 无效时抛出。
 
     ----
 
@@ -134,7 +205,9 @@ def step(index: int, phase: str, enabled: bool = False) -> Iterator[None]:
     * **English**
 
     Mark a complete training or inference step with the name
-    ``sj.step:<phase>:<index>``. Multiple steps can be placed inside one
+    ``<phase> step <index>``, for example ``inference step 1 | rank 0 of 2``
+    when rank and world_size are provided. Step and rank indices are zero-based;
+    ``of 2`` means there are two ranks in total. Multiple steps can be placed inside one
     :func:`capture` window. No state is retained after exit.
 
     :param index: Zero-based step index within the capture window.
@@ -143,13 +216,28 @@ def step(index: int, phase: str, enabled: bool = False) -> Iterator[None]:
     :type phase: str
     :param enabled: Emit an NVTX range; defaults to ``False``.
     :type enabled: bool
+    :param rank: Nonnegative global rank; ``None`` leaves rank unspecified.
+    :type rank: Optional[int]
+    :param world_size: Positive participant count, requiring rank. Participants
+        must use matching phase, index and world_size to identify a logical step.
+        ``None`` makes no completeness claim.
+    :type world_size: Optional[int]
     :return: An NVTX range usable with ``with``.
     :rtype: Iterator[None]
-    :raises ValueError: If the index is negative or the phase is unsupported.
+    :raises ValueError: If the index, phase, rank, or world_size is invalid.
     """
     if index < 0 or phase not in ("training", "inference"):
         raise ValueError("step requires index >= 0 and phase training or inference")
-    return region(f"sj.step:{phase}:{index}", enabled)
+    if rank is not None and rank < 0:
+        raise ValueError("rank must be nonnegative")
+    if world_size is not None and (rank is None or world_size <= rank):
+        raise ValueError("world_size must be positive and greater than rank")
+    name = f"{phase} step {index}"
+    if enabled and rank is not None:
+        name += f" | rank {rank}"
+        if world_size is not None:
+            name += f" of {world_size}"
+    return region(name, enabled)
 
 
 def _tensor_metadata(value: object) -> object:
