@@ -88,11 +88,6 @@ def _stop_capture(device: int) -> None:
         torch.cuda.profiler.stop()
 
 
-def _label(name: str, **metadata: Optional[int]) -> str:
-    values = {key: value for key, value in metadata.items() if value is not None}
-    return name + "|sj:" + json.dumps(values, separators=(",", ":")) if values else name
-
-
 @contextmanager
 def region(
     name: str,
@@ -113,6 +108,8 @@ def region(
     在当前 CPU 线程上标记一个 NVTX 范围，适用于 forward、backward、reset
     等完整阶段。启用时需要 CUDA，退出范围时会配对关闭标记；关闭时无 CUDA 调用。
     不要用它逐个标记极短的神经元算子。
+    元数据以 ``forward | stage 0 | microbatch 2`` 的形式显示；编号从 0 开始，
+    未提供的字段不显示。
 
     :param name: 时间线中显示的阶段名称。
     :type name: str
@@ -135,6 +132,8 @@ def region(
     forward, backward, or reset. CUDA is required when enabled; the marker is
     paired on exit. Disabled ranges make no CUDA calls. Do not annotate every
     very short neuron operation.
+    Metadata appears as ``forward | stage 0 | microbatch 2``. Indices are
+    zero-based; omitted fields are not displayed.
 
     :param name: Stage name displayed on the timeline.
     :type name: str
@@ -150,7 +149,11 @@ def region(
     if any(value is not None and value < 0 for value in (stage, microbatch)):
         raise ValueError("stage and microbatch must be nonnegative")
     if enabled:
-        torch.cuda.nvtx.range_push(_label(name, stage=stage, microbatch=microbatch))
+        if stage is not None:
+            name += f" | stage {stage}"
+        if microbatch is not None:
+            name += f" | microbatch {microbatch}"
+        torch.cuda.nvtx.range_push(name)
     try:
         yield
     finally:
@@ -175,7 +178,9 @@ def step(
 
     * **中文**
 
-    标记一个完整训练或推理 step；范围名为 ``sj.step:<phase>:<index>``。
+    标记一个完整训练或推理 step；范围名为 ``<phase> step <index>``。
+    提供 rank 与 world_size 时，例如 ``inference step 1 | rank 0 of 2``。
+    step 和 rank 编号从 0 开始；``of 2`` 表示总共 2 个 rank。
     与 :func:`capture` 配合时，一个采集窗口可包含多个 step。退出后不保留状态。
 
     :param index: 从零开始的采集窗口内 step 序号。
@@ -200,7 +205,9 @@ def step(
     * **English**
 
     Mark a complete training or inference step with the name
-    ``sj.step:<phase>:<index>``. Multiple steps can be placed inside one
+    ``<phase> step <index>``, for example ``inference step 1 | rank 0 of 2``
+    when rank and world_size are provided. Step and rank indices are zero-based;
+    ``of 2`` means there are two ranks in total. Multiple steps can be placed inside one
     :func:`capture` window. No state is retained after exit.
 
     :param index: Zero-based step index within the capture window.
@@ -225,10 +232,12 @@ def step(
         raise ValueError("rank must be nonnegative")
     if world_size is not None and (rank is None or world_size <= rank):
         raise ValueError("world_size must be positive and greater than rank")
-    name = f"sj.step:{phase}:{index}"
-    return region(
-        _label(name, rank=rank, world_size=world_size) if enabled else name, enabled
-    )
+    name = f"{phase} step {index}"
+    if enabled and rank is not None:
+        name += f" | rank {rank}"
+        if world_size is not None:
+            name += f" of {world_size}"
+    return region(name, enabled)
 
 
 def _tensor_metadata(value: object) -> object:

@@ -16,7 +16,12 @@ if __package__:
 else:
     from plot_nsys_snn import render
 
-STEP = re.compile(r"^(?:sj\.step|benchmark_step):(?:(training|inference):)?(\d+)$")
+STEP = re.compile(r"^(training|inference) step (\d+)$")
+LABEL_METADATA = re.compile(
+    r"(.*?)(?: \| rank (\d+)(?: of (\d+))?)?"
+    r"(?: \| stage (\d+))?(?: \| microbatch (\d+))?",
+    re.DOTALL,
+)
 PHASES = {
     "forward",
     "loss",
@@ -123,13 +128,12 @@ def _category(name):
 
 
 def _decode_label(text):
-    name, delimiter, metadata = text.rpartition("|sj:")
-    if not delimiter:
-        return text, {}
-    values = json.loads(metadata)
-    if not isinstance(values, dict):
-        raise ValueError(f"invalid SpikingJelly NVTX metadata: {text}")
-    return name, values
+    name, *values = LABEL_METADATA.fullmatch(text).groups()
+    return name, {
+        key: int(value)
+        for key, value in zip(("rank", "world_size", "stage", "microbatch"), values)
+        if value is not None
+    }
 
 
 def _enclosing(scopes, event):
@@ -833,7 +837,7 @@ def compare(baseline: dict, candidate: dict) -> dict:
     for report in (baseline, candidate):
         if report.get("schema_version") != 2:
             raise ValueError(
-                "schema v2 required; re-run analyze on the original SQLite export"
+                "schema v2 required; capture with current markers and run analyze"
             )
     cases = [
         (r.get("benchmark") or {}).get("case") or {} for r in (baseline, candidate)

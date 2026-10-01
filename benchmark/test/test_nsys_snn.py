@@ -201,7 +201,7 @@ def test_service_profile_marks_capture_from_step_zero(monkeypatch):
     nsys_lif_example.main()
 
     assert profiler == ["start", "stop"]
-    assert ranges.count("sj.step:inference:0") == 1
+    assert ranges.count("inference step 0") == 1
 
 
 def test_capture_and_ranges_balance_on_error(monkeypatch):
@@ -217,7 +217,7 @@ def test_capture_and_ranges_balance_on_error(monkeypatch):
         with nsys.capture(True), nsys.step(0, "training", True):
             with nsys.region("forward", True):
                 1 / 0
-    assert calls == ["start", "sj.step:training:0", "forward", "pop", "pop", "stop"]
+    assert calls == ["start", "training step 0", "forward", "pop", "pop", "stop"]
 
     calls.clear()
     with nsys.capture(), nsys.step(0, "inference"):
@@ -252,17 +252,17 @@ def test_sqlite_attribution_uses_launch_correlation_and_gpu_union(tmp_path):
                 (3, 'cudaStreamSynchronize_v3020'),
                 (4, 'cudaLaunchKernel_v7000');
             INSERT INTO NVTX_EVENTS VALUES
-                (0, 50000000, 'sj.step:training:0', NULL, 4294967303),
+                (0, 50000000, 'training step 0', NULL, 4294967303),
                 (1000000, 25000000, 'forward', NULL, 4294967303),
                 (1000000, 4000000, 'module:lif.0', NULL, 4294967303),
                 (26000000, 49000000, 'reset', NULL, 4294967303),
-                (50000000, 100000000, 'sj.step:training:1', NULL, 4294967303),
+                (50000000, 100000000, 'training step 1', NULL, 4294967303),
                 (51000000, 75000000, 'forward', NULL, 4294967303),
                 (99000000, 99900000, 'reset', NULL, 4294967303),
-                (100000000, 150000000, 'sj.step:training:2', NULL, 4294967303),
+                (100000000, 150000000, 'training step 2', NULL, 4294967303),
                 (101000000, 125000000, 'forward', NULL, 4294967303),
                 (149000000, 149900000, 'reset', NULL, 4294967303),
-                (150000000, 200000000, 'sj.step:training:3', NULL, 4294967303),
+                (150000000, 200000000, 'training step 3', NULL, 4294967303),
                 (151000000, 175000000, 'forward', NULL, 4294967303),
                 (199000000, 199900000, 'reset', NULL, 4294967303);
             INSERT INTO CUPTI_ACTIVITY_KIND_RUNTIME VALUES
@@ -379,7 +379,7 @@ def test_graph_precapture_ranges_label_replayed_gpu_nodes(tmp_path):
             INSERT INTO NVTX_EVENTS VALUES
                 (-30000000, -20000000, 'forward', NULL, 4294967303),
                 (-20000000, -10000000, 'backward', NULL, 4294967303),
-                (0, 50000000, 'sj.step:training:0', NULL, 4294967303),
+                (0, 50000000, 'training step 0', NULL, 4294967303),
                 (1000000, 2000000, 'graph_runner', NULL, 4294967303),
                 (2000000, 40000000, 'optimizer', NULL, 4294967303);
             INSERT INTO CUPTI_ACTIVITY_KIND_RUNTIME VALUES
@@ -436,8 +436,8 @@ def test_gil_intervals_are_clipped_to_steps_and_kept_per_thread(tmp_path):
                 (1, 'Holding GIL'), (2, 'Waiting for GIL');
             INSERT INTO NVTX_EVENTS VALUES
                 (0, NULL, 'GIL Trace', NULL, 4294967303, 75, 1),
-                (0, 10000000, 'sj.step:training:0', NULL, 4294967303, 59, 0),
-                (10000000, 20000000, 'sj.step:training:1', NULL, 4294967303, 59, 0),
+                (0, 10000000, 'training step 0', NULL, 4294967303, 59, 0),
+                (10000000, 20000000, 'training step 1', NULL, 4294967303, 59, 0),
                 (0, 2000000, NULL, 1, 4294967303, 59, 1),
                 (8000000, 12000000, NULL, 1, 4294967303, 59, 1),
                 (-1000000, 4000000, NULL, 2, 4294967304, 59, 1),

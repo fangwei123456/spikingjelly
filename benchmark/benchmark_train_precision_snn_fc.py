@@ -646,7 +646,7 @@ def benchmark_one_precision(
                     x_seq,
                     target,
                     device,
-                    nvtx_step=f"benchmark_step:training:{index}"
+                    nvtx_step=f"training step {index}"
                     if profile_enabled
                     else None,
                 )
@@ -690,7 +690,7 @@ def benchmark_one_precision(
                     artifacts,
                     x_seq,
                     device,
-                    nvtx_step=f"benchmark_step:inference:{index}"
+                    nvtx_step=f"inference step {index}"
                     if profile_enabled
                     else None,
                 )

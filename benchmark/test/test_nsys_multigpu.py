@@ -8,7 +8,13 @@ import sys
 
 import pytest
 
-from benchmark.analyze_nsys_snn import analyze, compare, _gpu_metrics, _write_report
+from benchmark.analyze_nsys_snn import (
+    analyze,
+    compare,
+    _decode_label,
+    _gpu_metrics,
+    _write_report,
+)
 from spikingjelly import nsys
 
 
@@ -39,9 +45,7 @@ def trace(tmp_path):
                 (0, 0, 101, 'GPU-A'), (1, 0, 102, 'GPU-B');
         """)
         for rank, pid in enumerate((101, 102)):
-            label = "sj.step:training:0|sj:" + json.dumps(
-                {"rank": rank, "world_size": 2}
-            )
+            label = f"training step 0 | rank {rank} of 2"
             db.execute(
                 "INSERT INTO NVTX_EVENTS VALUES (0,10000000,?,NULL,?,59,0)",
                 (label, gid(pid, 1)),
@@ -49,7 +53,7 @@ def trace(tmp_path):
             db.execute(
                 "INSERT INTO NVTX_EVENTS VALUES (1000000,9000000,?,NULL,?,59,0)",
                 (
-                    "forward|sj:" + json.dumps({"stage": rank, "microbatch": 0}),
+                    f"forward | stage {rank} | microbatch 0",
                     gid(pid, 1),
                 ),
             )
@@ -120,7 +124,7 @@ def test_same_process_multigpu_has_no_combined_busy_scalar(trace):
 def test_orphans_and_ambiguous_threads_are_retained(trace):
     with sqlite3.connect(trace) as db:
         db.execute(
-            "INSERT INTO NVTX_EVENTS VALUES (0,10000000,'sj.step:training:1',NULL,?,59,0)",
+            "INSERT INTO NVTX_EVENTS VALUES (0,10000000,'training step 1',NULL,?,59,0)",
             (gid(101, 3),),
         )
         db.execute(
@@ -174,7 +178,7 @@ def test_uninstrumented_trace_and_time_window(trace):
 def test_missing_rank_and_open_step_are_incomplete(trace):
     with sqlite3.connect(trace) as db:
         db.execute("DELETE FROM NVTX_EVENTS WHERE globalTid=?", (gid(102, 1),))
-        db.execute("UPDATE NVTX_EVENTS SET end=NULL WHERE text LIKE 'sj.step%'")
+        db.execute("UPDATE NVTX_EVENTS SET end=NULL WHERE text LIKE 'training step %'")
     report = analyze(trace)
     assert not report["global_steps"][0]["complete"]
     assert report["global_steps"][0]["missing_ranks"] == [1]
@@ -196,7 +200,7 @@ def test_open_step_bounds_without_a_later_cuda_event(trace, start_ns, cuda_event
         db.execute("DELETE FROM NVTX_EVENTS")
         db.execute(
             "INSERT INTO NVTX_EVENTS VALUES (?,NULL,?,NULL,?,59,0)",
-            (start_ns, 'sj.step:training:0|sj:{"rank":0,"world_size":1}', gid(101, 1)),
+            (start_ns, "training step 0 | rank 0 of 1", gid(101, 1)),
         )
         if not cuda_events:
             db.execute("DELETE FROM CUPTI_ACTIVITY_KIND_RUNTIME")
@@ -233,7 +237,7 @@ def test_graph_example_rejects_unsupported_validation(monkeypatch, tmp_path, cap
 
 
 def test_compare_requires_schema_v2(trace):
-    with pytest.raises(ValueError, match="re-run analyze"):
+    with pytest.raises(ValueError, match="capture with current markers"):
         compare({"schema_version": 1}, analyze(trace))
 
 
@@ -284,8 +288,48 @@ def test_metadata_markers_roundtrip(monkeypatch):
     with nsys.step(3, "training", True, rank=1, world_size=2):
         with nsys.region("backward", True, stage=1, microbatch=3):
             pass
-    assert json.loads(labels[0].split("|sj:")[1]) == {"rank": 1, "world_size": 2}
-    assert json.loads(labels[1].split("|sj:")[1]) == {"stage": 1, "microbatch": 3}
+    assert labels == [
+        "training step 3 | rank 1 of 2",
+        "backward | stage 1 | microbatch 3",
+    ]
+    assert _decode_label(labels[0]) == ("training step 3", {"rank": 1, "world_size": 2})
+    assert _decode_label(labels[1]) == ("backward", {"stage": 1, "microbatch": 3})
+
+
+@pytest.mark.parametrize(
+    "name,metadata,expected",
+    [
+        ("forward", {}, "forward"),
+        ("forward", {"stage": 0}, "forward | stage 0"),
+        ("forward", {"microbatch": 12}, "forward | microbatch 12"),
+        ("custom | layout", {"stage": 2}, "custom | layout | stage 2"),
+    ],
+)
+def test_region_labels_preserve_names_and_optional_metadata(
+    monkeypatch, name, metadata, expected
+):
+    labels = []
+    monkeypatch.setattr(nsys.torch.cuda.nvtx, "range_push", labels.append)
+    monkeypatch.setattr(nsys.torch.cuda.nvtx, "range_pop", lambda: None)
+    with nsys.region(name, True, **metadata):
+        pass
+    assert labels == [expected]
+    assert _decode_label(labels[0]) == (name, metadata)
+
+
+@pytest.mark.parametrize("rank,world_size", [(None, None), (0, None), (0, 2), (11, 12)])
+def test_step_labels_preserve_zero_based_rank(monkeypatch, rank, world_size):
+    labels = []
+    monkeypatch.setattr(nsys.torch.cuda.nvtx, "range_push", labels.append)
+    monkeypatch.setattr(nsys.torch.cuda.nvtx, "range_pop", lambda: None)
+    with nsys.step(1, "inference", True, rank=rank, world_size=world_size):
+        pass
+    metadata = {
+        key: value
+        for key, value in {"rank": rank, "world_size": world_size}.items()
+        if value is not None
+    }
+    assert _decode_label(labels[0]) == ("inference step 1", metadata)
 
 
 def test_device_capture_cleans_up_partial_start(monkeypatch):

@@ -42,6 +42,25 @@ before stopping. These helpers add no barriers or per-step synchronization.
        with nsys.region("forward", True, stage=stage, microbatch=microbatch):
            output = model(inputs)
 
+时间线标记使用以下格式。step、rank、stage 和 microbatch 保持调用者提供的从 0
+开始的编号；``of 2`` 表示总 rank 数为 2。未提供的字段不显示。
+
+Timeline labels use the following format. Step, rank, stage and microbatch retain
+the caller's zero-based indices; ``of 2`` means two ranks in total. Omitted
+fields are not displayed.
+
+.. code-block:: text
+
+   inference step 1 | rank 0 of 2
+   forward | stage 0 | microbatch 2
+
+尾部的 `` | rank``、`` | stage``、`` | microbatch`` 数值字段保留用于归因，
+不要将这些字段写进自定义 region 名称中。持续时间由 NSYS UI 显示，不写入标记。
+
+Trailing numeric `` | rank``, `` | stage`` and `` | microbatch`` fields are
+reserved for attribution; do not include them in custom region names.
+Durations are displayed by NSYS, not embedded in the labels.
+
 没有标记时仍输出进程、GPU、CUDA API 与通信总览；rank、step、stage 和 microbatch
 不从 kernel 名称推断。只有各 rank 的 phase、index 和 world_size 一致时才合并逻辑
 step。相同 index 在不同线程/进程中不是同一个本地范围。
@@ -64,14 +83,16 @@ world_size across ranks. Local scopes remain distinct across processes/threads.
 
 ``--pid``、``--rank``、``--device`` 和时间窗口只筛选图表视图；完整报告统计仍保留。
 设备筛选使用报告中的 GPU UUID 或 device key。schema v2 将事件存储一次，并用
-step ID 与 CUDA API ID 关联；旧 v1 summary 需从原始 SQLite 重新分析。
+step ID 与 CUDA API ID 关联。分析器只解析新版标记；旧标记不再用于 step/rank/stage/
+microbatch 归因，需要重新采集。旧 v1 summary 也不再支持比较。
 CUDA Graph stage 需要 capture-graph 的构建期 NVTX；没有投影证据时保持未归类。
 
 ``--pid``, ``--rank``, ``--device`` and time windows filter timeline views;
 full-capture statistics remain available. Device filters use a GPU UUID or
 device key from the report. Schema v2 stores each event once, linking by
-step and CUDA API IDs. Re-analyze original SQLite exports to replace v1
-summaries. Graph stage projection requires capture-graph build-time NVTX;
+step and CUDA API IDs. Only the new marker format is parsed; recapture workloads
+to obtain step/rank/stage/microbatch attribution from old captures. Comparison
+also rejects v1 summaries. Graph stage projection requires capture-graph build-time NVTX;
 missing projection evidence stays unclassified.
 
 各 GPU 独立计算 busy union 和计算/通信重叠；多卡时间求和不是 step 时延。

@@ -203,8 +203,8 @@ def main() -> None:
                 optimizer.zero_grad(set_to_none=True)
             if args.parallel == "graph":
                 with region("graph_runner"):
-                    for index, (graph, _) in zip(devices, graph_pairs):
-                        with torch.cuda.device(index):
+                    for device_index, (graph, _) in zip(devices, graph_pairs):
+                        with torch.cuda.device(device_index):
                             graph.replay()
                 return
             if args.parallel == "pp":
