@@ -85,8 +85,8 @@ def main():
     source_shape = {
         "none": shape,
         "time": (1, *shape[1:]),
-        "space": (4, 16, 1, 28, 28),
-        "scalar": (1, 1, 1, 1, 1),
+        "space": (*shape[:2], 1, *shape[3:]),
+        "scalar": (1,) * len(shape),
     }[args.broadcast]
     source = torch.randn(source_shape, device="cuda", dtype=torch.float16)
     if args.layout == "channels-last":

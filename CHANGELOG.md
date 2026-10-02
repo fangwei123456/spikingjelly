@@ -48,7 +48,8 @@ Module: `spikingjelly.activation_based.neuron`.
   time as logical dimension zero, including zero time strides. Outputs and returned
   gradients have independent, nonoverlapping storage; PyTorch reduces gradients
   back to the sources of broadcast views. Existing backend and dtype restrictions
-  still apply. Recompile models with a
+  still apply. Benchmark Inductor's default layout policy before disabling
+  layout optimization. Recompile models with a
   fresh Inductor cache when upgrading: cached CuPy graphs may assume contiguous
   outputs from the previous implementation.
 - CuPy FP16 PLIF kernels read the shared decay parameter as one scalar and

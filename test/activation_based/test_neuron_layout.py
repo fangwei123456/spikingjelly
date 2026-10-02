@@ -129,15 +129,16 @@ def test_resized_neuron_buffer_layout(input_strides, output_strides):
 
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
-@pytest.mark.parametrize("layout", ["contiguous", "time_inner", "sliced"])
-def test_cupy_state_sequence_alignment(dtype, layout):
+@pytest.mark.parametrize("layout", ["contiguous", "time_inner", "sliced", "broadcast"])
+@pytest.mark.parametrize("width", [7, 8])
+def test_cupy_state_sequence_alignment(dtype, layout, width):
     from spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step.base import (
         _aligned_v_v_seq,
     )
 
-    x = _layout(torch.empty(4, 3, 7, dtype=dtype), layout)
+    x = _layout(torch.empty(4, 3, width, dtype=dtype), layout)
     output = _aligned_v_v_seq(x)
-    assert output.shape == (5, 3, 7)
+    assert output.shape == (5, 3, width)
     assert output[1:].data_ptr() % 16 == 0
     values = torch.arange(output.numel(), dtype=dtype).view_as(output)
     output.copy_(values)
