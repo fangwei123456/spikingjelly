@@ -145,21 +145,43 @@ Combining with ``torch.compile``
 
 .. warning::
 
-    Current Triton neurons convert non-contiguous inputs to contiguous tensors.
-    For convolutional SNNs, Inductor's default layout optimization may select
-    channels-last convolutions and insert reorders or copies between convolutions
-    and neurons. Start with
-    ``torch.compile(..., options={"layout_optimization": False})`` and benchmark
-    the target GPU, model, and batch size. CuPy neurons have the same contiguous
-    layout restriction. Linear-only SNNs do not have this NCHW/channels-last
-    convolution-layout conflict.
+    Point-neuron kernels directly access any compact, nonoverlapping layout and
+    broadcast views obtained from it with ``expand``, without copying into
+    contiguous inputs. Compact, nonoverlapping storage means distinct element
+    locations without gaps, including default contiguous layouts, channels-last,
+    and ordinary transposes; this is separate from the sparse tensor distinction.
+    Other valid strided inputs, such as gapped slices and general overlapping
+    views, remain numerically supported but may be converted. Inputs, states and
+    upstream gradients may each use a different layout.
+
+    Multi-step inputs remain ``[T, ...]``. Time is logical dimension zero; its
+    physical stride need not be largest and may be zero. Broadcast inputs are
+    read with their original strides; outputs and returned gradients have
+    independent, nonoverlapping storage. PyTorch's broadcast backward reduces
+    gradients to the data preceding ``expand``. This reduction and necessary dtype
+    conversions are separate from layout copies. Existing backend and dtype
+    restrictions remain unchanged.
+
+    Stride-aware kernels do not guarantee that the compiler inserts no copies.
+    Inspect generated code and neuron boundaries in NSYS on the target PyTorch
+    version; correct outputs alone do not prove that conversions disappeared.
+    Shapes and strides participate in kernel specialization. A new layout may
+    trigger compilation and autotuning; warm up the target layouts before timing.
+
+    The layout-policy measurements below describe the previous implementation
+    requiring contiguous inputs and are retained as a historical diagnosis.
+
+    When upgrading or comparing revisions, use a separate
+    ``TORCHINDUCTOR_CACHE_DIR`` for each revision and recompile the model. Cached
+    CuPy graphs may still assume contiguous outputs from the old implementation.
 
 Triton neurons can be captured by ``torch.compile``, but a complete graph does
-not guarantee an end-to-end speedup. Per-kernel profiling identified one causal
-regression: default Inductor selected NHWC convolutions, while the fixed stride
-requirements of Triton LIF forced the network back to NCHW and also selected
-slower convolution kernels. Five GPU steps of the minimal failing case on an
-RTX 4090 (SEW-ResNet18, B=32, T=4, 136×136) give:
+not guarantee an end-to-end speedup. In the earlier implementation requiring
+contiguous inputs, per-kernel profiling identified one causal regression:
+default Inductor selected NHWC convolutions, while Triton LIF's then-fixed stride
+requirements forced the network back to NCHW and also selected slower convolution
+kernels. Five GPU steps of the minimal failing case on an RTX 4090
+(SEW-ResNet18, B=32, T=4, 136×136) give:
 
 .. list-table:: Causal comparison of layout policies
     :header-rows: 1
@@ -185,9 +207,9 @@ RTX 4090 (SEW-ResNet18, B=32, T=4, 136×136) give:
       - 0 / 0
       - 4.010
 
-Disabling layout optimization changes this case's speedup from 0.800× to
-1.040×; LIF itself accounts for only 0.350 ms of the regression. Throughput
-workloads can use:
+In that earlier implementation, disabling layout optimization changed this
+case's speedup from 0.800× to 1.040×; LIF itself accounted for only 0.350 ms of
+the regression. The historical throughput configuration is retained for reproduction:
 
 .. code-block:: python
 
@@ -202,11 +224,17 @@ workloads can use:
         },
     )
 
-``layout_optimization=False`` is the key correction. ``max_autotune`` increases
-first-compilation time and contributes only about another 1.2% on SEW-ResNet18.
+``layout_optimization=False`` addressed that regression in the earlier
+implementation. Current point neurons directly support channels-last access.
+Start with Inductor's default layout policy, compare timings and inspect
+conversions for the target model, inputs and PyTorch version before deciding
+whether to disable layout optimization. ``max_autotune`` increases initial
+compilation time and contributed only about another 1.2% in that earlier
+SEW-ResNet18 experiment.
 
-The following results use an exclusive, on-demand RTX 5090 with PyTorch
-2.11.0+cu128, Triton 3.6.0, T=4, LIF, FP32, and 224×224 inputs. Every case runs
+The following results for the earlier implementation use an exclusive,
+on-demand RTX 5090 with PyTorch 2.11.0+cu128, Triton 3.6.0, T=4, LIF, FP32,
+and 224×224 inputs. Every case runs
 in a fresh process with a separate Inductor cache and is repeated for three
 rounds. Every compiled case produces one graph with zero graph breaks and zero
 recompiles. Values are three-round medians; inference uses batch 64 and training

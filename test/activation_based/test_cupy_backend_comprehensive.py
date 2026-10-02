@@ -542,3 +542,46 @@ def test_cupy_compile_inductor_matches_eager(kind, monkeypatch):
 
     _assert_close(x_compiled.grad, x_eager.grad, dtype)
     assert cupy_hits["count"] > 0
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
+def test_custom_autocuda_scalar_parameter_keeps_legacy_launch(dtype):
+    _require_cuda_cupy()
+    import cupy
+    from spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step.base import (
+        NeuronFPTTKernel,
+    )
+
+    class CustomIntegrator(NeuronFPTTKernel):
+        def __init__(self):
+            super().__init__(False, "half2" if dtype == torch.float16 else "float")
+            self.add_param(f"const {self.dtype} *", "tau")
+
+        def neuronal_charge(self):
+            if self.dtype == "half2":
+                return "h_seq[t] = __hadd2(v_v_seq[t], __hmul2(tau[0], x_seq[t]));"
+            return "h_seq[t] = v_v_seq[t] + tau[0] * x_seq[t];"
+
+    half = dtype == torch.float16
+    x = torch.full((3, 4), 0.25, device="cuda", dtype=dtype)
+    voltage = torch.zeros((4, 4), device="cuda", dtype=dtype)
+    tau = torch.tensor([0.5, 0.0], device="cuda", dtype=dtype)[:1]
+    values = {
+        "x_seq": x,
+        "v_v_seq": voltage,
+        "h_seq": torch.empty_like(x),
+        "spike_seq": torch.empty_like(x),
+        "tau": tau,
+        "N": cupy.asarray(2 if half else 4, dtype=cupy.int32),
+        "numel": cupy.asarray(6 if half else 12, dtype=cupy.int32),
+        "v_th": cupy.asarray(
+            [1.0, 1.0] if half else 1.0, dtype=cupy.float16 if half else cupy.float32
+        ),
+    }
+    CustomIntegrator()((1,), (128,), values)
+    torch.testing.assert_close(
+        voltage[-1], torch.full_like(voltage[-1], 0.375), rtol=0, atol=0
+    )
+    torch.testing.assert_close(
+        tau, torch.tensor([0.5], device="cuda", dtype=dtype), rtol=0, atol=0
+    )

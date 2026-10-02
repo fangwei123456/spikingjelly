@@ -34,82 +34,30 @@ def _signature(names):
 
 
 init_state_load_template = """
-    {name}_init_ptrs = tl.make_block_ptr(
-        {name}_init_ptr,
-        shape=(1, NCL),
-        strides=(NCL, 1),
-        offsets=(0, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0)
-    )
-    {name} = tl.load(
-        {name}_init_ptrs, boundary_check=(1,), padding_option="zero"
-    )
+    {name} = tl.load({name}_init_ptr + indices, mask=mask, other=0.0)
 """
 
 grad_init_state_store_template = """
-    {name}_init_ptrs = tl.make_block_ptr(
-        {name}_init_ptr,
-        shape=(T, NCL),
-        strides=(NCL, 1),
-        offsets=(t, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0)
-    )
-    convert_and_store({name}_init_ptrs, {name}_accumulate, boundary_check=(1,))
-    # tl.store({name}_ptrs, {name}, boundary_check=(1,))
+    tl.store({name}_init_ptr + indices, {name}_accumulate, mask=mask)
 """
 
 store_template = """
-        {name}_ptrs = tl.make_block_ptr(
-            {name}_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0)
-        )
-        convert_and_store({name}_ptrs, {name}, boundary_check=(1,))
-        # tl.store({name}_ptrs, {name}, boundary_check=(1,))
+        tl.store({name}_seq_ptr + time_offset + indices, {name}, mask=mask)
 """
 
 final_state_store_template = """
-    {name}_final_ptrs = tl.make_block_ptr(
-        {name}_final_ptr,
-        shape=(1, NCL),
-        strides=(NCL, 1),
-        offsets=(0, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0)
-    )
-    convert_and_store({name}_final_ptrs, {name}, boundary_check=(1,))
+    tl.store({name}_final_ptr + indices, {name}, mask=mask)
 """
 
 load_template = """
-        {name}_ptrs = tl.make_block_ptr(
-            {name}_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0)
-        )
         {name} = tl.load(
-            {name}_ptrs, boundary_check=(1,), padding_option="zero"
+            {name}_seq_ptr + time_offset + indices, mask=mask, other=0.0
         )
 """
 
 kernel_template = """import triton
 import triton.language as tl
 
-
-@triton.jit
-def convert_and_store(pointer, value, boundary_check):
-    # For block pointers created by tl.make_block_pointer(),
-    # implicit type casting is not supported when calling tl.store().
-    # This function manually converts dtype and then stores the data.
-    value = value.to(pointer.dtype.element_ty.element_ty)
-    tl.store(pointer, value, boundary_check=boundary_check)
 
 {core_str}
 
@@ -132,11 +80,13 @@ def flexsn_{kernel_type}_kernel_{hash}(
     dtype: tl.constexpr,
 ):
     pid_ncl = tl.program_id(0)
-    ncl_offset = pid_ncl * BLOCK_NCL
+    indices = (pid_ncl * BLOCK_NCL + tl.arange(0, BLOCK_NCL))[None, :].to(tl.int64)
+    mask = indices < NCL
 
     {init_state_loads}
 
     for t in tl.static_range({loop_range}):
+        time_offset = t * tl.full((), NCL, tl.int64)
         {loads}
 
         {computes}

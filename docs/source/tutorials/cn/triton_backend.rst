@@ -145,16 +145,32 @@ Triton 后端支持 ``torch.float16``。以下 benchmark 使用 ``triton.testing
 
 .. warning::
 
-    当前 Triton 神经元会将非 contiguous 输入转换为 contiguous。对卷积 SNN，
-    Inductor 的默认布局优化可能选择 channels-last 卷积，从而在卷积与神经元之间
-    插入重排或拷贝。建议以
-    ``torch.compile(..., options={"layout_optimization": False})`` 为起点，并在
-    目标 GPU、模型和 batch size 上复测。CuPy 神经元也有相同的连续布局限制；
-    纯全连接 SNN 不存在 NCHW/channels-last 卷积布局冲突。
+    点神经元直接访问任意紧凑且不重叠的排列，以及由其 ``expand`` 得到的广播
+    view，不先复制为连续输入。“紧凑且不重叠”指元素各占独立位置、存储无空洞，
+    包括默认连续排列、channels-last 和普通转置；它与 sparse tensor 的分类无关。
+    带间隙切片、一般重叠 view 等其他合法 strided 输入保持数值正确，但允许转换。
+    输入、状态和上游梯度可以各用自己的排列。
+
+    多步输入仍为 ``[T, ...]``；T 是逻辑第零维，其物理 stride 不必最大，也可以
+    为零。广播输入按原始 stride 读取，输出和返回梯度采用独立、无重叠的存储。
+    PyTorch 的广播反向负责将梯度累加回 ``expand`` 前的数据；该归约以及必要的
+    dtype 转换不是布局复制。现有后端和 dtype 限制保持不变。
+
+    shape 和 stride 参与 kernel 特化；首次遇到新布局时可能发生重新编译和
+    autotune。性能测量应在目标布局完成预热后进行。
+
+    kernel 支持 stride 不等于编译器不会插入转换。应在目标 PyTorch 版本上
+    检查生成代码和 NSYS 中的神经元边界；不要仅凭输出正确便认定转换已消除。
+    下面的布局策略数字来自此前要求连续输入的实现，仅作为历史诊断示例。
+
+    升级实现或做版本对照时，为每个版本设置独立的
+    ``TORCHINDUCTOR_CACHE_DIR`` 并重新编译模型。旧 CuPy 编译图可能仍假设输出
+    是连续布局；不要跨版本复用这些缓存。
 
 Triton 神经元可以被 ``torch.compile`` 捕获，但完整图捕获不保证端到端加速。
-逐 kernel profile 定位到一次确定的回退机制：默认 Inductor 为卷积选择 NHWC，
-而 Triton LIF 的固定 stride 要求迫使网络恢复 NCHW，并同时选择了较慢的卷积 kernel。
+在此前要求连续输入的实现中，逐 kernel profile 定位到一次确定的回退机制：
+默认 Inductor 为卷积选择 NHWC，而当时 Triton LIF 的固定 stride 要求迫使网络
+恢复 NCHW，并同时选择了较慢的卷积 kernel。
 在 RTX 4090 的最小红例（SEW-ResNet18、B=32、T=4、136×136）中，5 个 step 的
 GPU 时间如下：
 
@@ -182,8 +198,8 @@ GPU 时间如下：
       - 0 / 0
       - 4.010
 
-关闭布局优化将该例的 speedup 从 0.800× 修正为 1.040×；LIF 本身只解释了
-0.350 ms 回退。吞吐 workload 可使用：
+在该旧版实现中，关闭布局优化将该例的 speedup 从 0.800× 修正为 1.040×；
+LIF 本身只解释了 0.350 ms 回退。下面保留当时的吞吐测量配置用于复现：
 
 .. code-block:: python
 
@@ -198,10 +214,13 @@ GPU 时间如下：
         },
     )
 
-``layout_optimization=False`` 是关键修正。``max_autotune`` 会增加首次编译时间，
-在 SEW-ResNet18 上只额外改善约 1.2%。
+``layout_optimization=False`` 修正的是上述旧版实现的回退。当前点神经元已经
+支持直接访问 channels-last，应先保留 Inductor 默认布局策略，在目标模型、
+输入和 PyTorch 版本上对照测量并检查转换，再决定是否关闭布局优化。
+``max_autotune`` 会增加首次编译时间，在上述旧版 SEW-ResNet18 实验中只额外
+改善约 1.2%。
 
-以下结果来自独占、按需租用的 RTX 5090，使用 PyTorch 2.11.0+cu128、Triton
+以下旧版实现的结果来自独占、按需租用的 RTX 5090，使用 PyTorch 2.11.0+cu128、Triton
 3.6.0、T=4、LIF、FP32 和 224×224 输入。每个 case 在新进程和独立 Inductor
 cache 中运行，重复三轮；全部 compile case 均为 1 张图、0 graph break、
 0 recompile。表中是三轮中位数，推理 batch 为 64，训练 batch 为 16。

@@ -55,6 +55,22 @@ Module: `spikingjelly.nsys`.
 
 Module: `spikingjelly.activation_based.neuron`.
 
+- Point-neuron Triton and CuPy kernels directly access compact, nonoverlapping
+  inputs, states and gradients in any dimension order, including channels-last,
+  and broadcast views obtained from them with `expand`. Other valid strided views
+  remain numerically supported but may be converted. Multi-step inputs retain
+  time as logical dimension zero, including zero time strides. Outputs and returned
+  gradients have independent, nonoverlapping storage; PyTorch reduces gradients
+  back to the sources of broadcast views. Existing backend and dtype restrictions
+  still apply. Benchmark Inductor's default layout policy before disabling
+  layout optimization. Recompile models with a
+  fresh Inductor cache when upgrading: cached CuPy graphs may assume contiguous
+  outputs from the previous implementation.
+- CuPy FP16 PLIF kernels read the shared decay parameter as one scalar and
+  broadcast it to both half2 lanes, avoiding a packed read past the scalar.
+- FlexSN's Triton kernels use masked pointer loads and stores instead of the
+  deprecated block-pointer API.
+
 - Added the torch-only `RAFNode` resonate-and-fire neuron with fixed oscillator
   parameters, real-valued states, and single-step and multi-step execution.
 - Added `functional.clif_step()` for an explicit two-state ComplementaryLIF

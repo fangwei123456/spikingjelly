@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import torch
 
+from ..._neuron_layout import _empty_like, _layout_args
+from .utils import _spatial_offsets
+
 from spikingjelly.logger import logger
 
 from ..triton_utils import (
@@ -43,13 +46,24 @@ def _single_step_stbif_kernel(
     N: tl.constexpr,
     BLOCK_N: tl.constexpr,
     dtype: tl.constexpr,
+    SIZES: tl.constexpr,
+    STRIDES: tl.constexpr,
 ):
     pid_n = tl.program_id(0)
     offsets = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
     mask = offsets < N
-    x = tl.load(x_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
-    q = tl.load(q_init_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
-    acc_q = tl.load(acc_q_init_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
+    x_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 0)
+    q_init_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 1)
+    acc_q_init_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 2)
+    out_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 3)
+    q_final_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 4)
+    acc_q_final_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 5)
+    cur_output_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 6)
+    x = tl.load(x_ptr + x_ptr_offsets, mask=mask, other=0.0).to(tl.float32)
+    q = tl.load(q_init_ptr + q_init_ptr_offsets, mask=mask, other=0.0).to(tl.float32)
+    acc_q = tl.load(acc_q_init_ptr + acc_q_init_ptr_offsets, mask=mask, other=0.0).to(
+        tl.float32
+    )
     q_threshold = tl.load(q_threshold_ptr).to(tl.float32)
     pos_max = tl.load(pos_max_ptr).to(tl.float32)
     neg_min = tl.load(neg_min_ptr).to(tl.float32)
@@ -64,10 +78,10 @@ def _single_step_stbif_kernel(
     q = q - pos.to(tl.float32) + neg.to(tl.float32)
     out = cur * q_threshold
 
-    tl.store(out_ptr + offsets, out.to(dtype), mask=mask)
-    tl.store(q_final_ptr + offsets, q, mask=mask)
-    tl.store(acc_q_final_ptr + offsets, acc_q, mask=mask)
-    tl.store(cur_output_ptr + offsets, cur, mask=mask)
+    tl.store(out_ptr + out_ptr_offsets, out.to(dtype), mask=mask)
+    tl.store(q_final_ptr + q_final_ptr_offsets, q, mask=mask)
+    tl.store(acc_q_final_ptr + acc_q_final_ptr_offsets, acc_q, mask=mask)
+    tl.store(cur_output_ptr + cur_output_ptr_offsets, cur, mask=mask)
 
 
 @triton.autotune(
@@ -77,7 +91,6 @@ def _single_step_stbif_kernel(
         for w in [4, 8]
     ],
     key=["T", "N", "dtype"],
-    restore_value=["out_seq_ptr", "q_final_ptr", "acc_q_final_ptr", "cur_output_ptr"],
 )
 @triton.jit
 def _multi_step_stbif_kernel_static(
@@ -95,19 +108,34 @@ def _multi_step_stbif_kernel_static(
     N: tl.constexpr,
     BLOCK_N: tl.constexpr,
     dtype: tl.constexpr,
+    SIZES: tl.constexpr,
+    STRIDES: tl.constexpr,
 ):
     pid_n = tl.program_id(0)
     offsets = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
     mask = offsets < N
-    q = tl.load(q_init_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
-    acc_q = tl.load(acc_q_init_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
+    x_seq_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 0)
+    q_init_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 1)
+    acc_q_init_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 2)
+    out_seq_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 3)
+    q_final_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 4)
+    acc_q_final_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 5)
+    cur_output_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 6)
+    q = tl.load(q_init_ptr + q_init_ptr_offsets, mask=mask, other=0.0).to(tl.float32)
+    acc_q = tl.load(acc_q_init_ptr + acc_q_init_ptr_offsets, mask=mask, other=0.0).to(
+        tl.float32
+    )
     cur = tl.zeros([BLOCK_N], dtype=tl.float32)
     q_threshold = tl.load(q_threshold_ptr).to(tl.float32)
     pos_max = tl.load(pos_max_ptr).to(tl.float32)
     neg_min = tl.load(neg_min_ptr).to(tl.float32)
 
     for t in tl.static_range(0, T, 1):
-        x = tl.load(x_seq_ptr + t * N + offsets, mask=mask, other=0.0).to(tl.float32)
+        x = tl.load(
+            x_seq_ptr + x_seq_ptr_offsets + t * tl.full((), STRIDES[0][0], tl.int64),
+            mask=mask,
+            other=0.0,
+        ).to(tl.float32)
         normalized = x / q_threshold
         q = q + normalized
         acc_q = libdevice.rint(acc_q)
@@ -117,12 +145,16 @@ def _multi_step_stbif_kernel_static(
         acc_q = acc_q + cur
         q = q - pos.to(tl.float32) + neg.to(tl.float32)
         tl.store(
-            out_seq_ptr + t * N + offsets, (cur * q_threshold).to(dtype), mask=mask
+            out_seq_ptr
+            + out_seq_ptr_offsets
+            + t * tl.full((), STRIDES[3][0], tl.int64),
+            (cur * q_threshold).to(dtype),
+            mask=mask,
         )
 
-    tl.store(q_final_ptr + offsets, q, mask=mask)
-    tl.store(acc_q_final_ptr + offsets, acc_q, mask=mask)
-    tl.store(cur_output_ptr + offsets, cur, mask=mask)
+    tl.store(q_final_ptr + q_final_ptr_offsets, q, mask=mask)
+    tl.store(acc_q_final_ptr + acc_q_final_ptr_offsets, acc_q, mask=mask)
+    tl.store(cur_output_ptr + cur_output_ptr_offsets, cur, mask=mask)
 
 
 @triton.autotune(
@@ -132,7 +164,6 @@ def _multi_step_stbif_kernel_static(
         for w in [4, 8]
     ],
     key=["N", "dtype"],
-    restore_value=["out_seq_ptr", "q_final_ptr", "acc_q_final_ptr", "cur_output_ptr"],
 )
 @triton.jit
 def _multi_step_stbif_kernel_dynamic(
@@ -150,19 +181,34 @@ def _multi_step_stbif_kernel_dynamic(
     N: tl.constexpr,
     BLOCK_N: tl.constexpr,
     dtype: tl.constexpr,
+    SIZES: tl.constexpr,
+    STRIDES: tl.constexpr,
 ):
     pid_n = tl.program_id(0)
     offsets = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
     mask = offsets < N
-    q = tl.load(q_init_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
-    acc_q = tl.load(acc_q_init_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
+    x_seq_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 0)
+    q_init_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 1)
+    acc_q_init_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 2)
+    out_seq_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 3)
+    q_final_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 4)
+    acc_q_final_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 5)
+    cur_output_ptr_offsets = _spatial_offsets(offsets, SIZES, STRIDES, 6)
+    q = tl.load(q_init_ptr + q_init_ptr_offsets, mask=mask, other=0.0).to(tl.float32)
+    acc_q = tl.load(acc_q_init_ptr + acc_q_init_ptr_offsets, mask=mask, other=0.0).to(
+        tl.float32
+    )
     cur = tl.zeros([BLOCK_N], dtype=tl.float32)
     q_threshold = tl.load(q_threshold_ptr).to(tl.float32)
     pos_max = tl.load(pos_max_ptr).to(tl.float32)
     neg_min = tl.load(neg_min_ptr).to(tl.float32)
 
     for t in tl.range(0, T, 1):
-        x = tl.load(x_seq_ptr + t * N + offsets, mask=mask, other=0.0).to(tl.float32)
+        x = tl.load(
+            x_seq_ptr + x_seq_ptr_offsets + t * tl.full((), STRIDES[0][0], tl.int64),
+            mask=mask,
+            other=0.0,
+        ).to(tl.float32)
         normalized = x / q_threshold
         q = q + normalized
         acc_q = libdevice.rint(acc_q)
@@ -172,12 +218,16 @@ def _multi_step_stbif_kernel_dynamic(
         acc_q = acc_q + cur
         q = q - pos.to(tl.float32) + neg.to(tl.float32)
         tl.store(
-            out_seq_ptr + t * N + offsets, (cur * q_threshold).to(dtype), mask=mask
+            out_seq_ptr
+            + out_seq_ptr_offsets
+            + t * tl.full((), STRIDES[3][0], tl.int64),
+            (cur * q_threshold).to(dtype),
+            mask=mask,
         )
 
-    tl.store(q_final_ptr + offsets, q, mask=mask)
-    tl.store(acc_q_final_ptr + offsets, acc_q, mask=mask)
-    tl.store(cur_output_ptr + offsets, cur, mask=mask)
+    tl.store(q_final_ptr + q_final_ptr_offsets, q, mask=mask)
+    tl.store(acc_q_final_ptr + acc_q_final_ptr_offsets, acc_q, mask=mask)
+    tl.store(cur_output_ptr + cur_output_ptr_offsets, cur, mask=mask)
 
 
 def _select_stbif_kernel(T: int):
@@ -270,23 +320,23 @@ def single_step_stbif(
     scalar_inputs = (q_threshold, pos_max, neg_min)
     if any(value.numel() != 1 for value in scalar_inputs):
         raise ValueError("q_threshold, pos_max, and neg_min must be scalar tensors.")
-    x = x.contiguous()
-    q = q.contiguous()
-    acc_q = acc_q.contiguous()
-    q_threshold = q_threshold.to(device=x.device, dtype=x.dtype).contiguous()
-    pos_max = pos_max.to(device=x.device, dtype=x.dtype).contiguous()
-    neg_min = neg_min.to(device=x.device, dtype=x.dtype).contiguous()
+    q_threshold = q_threshold.to(device=x.device, dtype=x.dtype)
+    pos_max = pos_max.to(device=x.device, dtype=x.dtype)
+    neg_min = neg_min.to(device=x.device, dtype=x.dtype)
     N = x.numel()
     dtype = x.dtype
     if dtype not in (torch.float32, torch.float16, torch.bfloat16):
         raise NotImplementedError(dtype)
 
-    out = torch.empty_like(x)
-    q_final = torch.empty_like(q)
-    acc_q_final = torch.empty_like(acc_q)
-    cur_output = torch.empty_like(q)
+    out = _empty_like(x, sequence=False)
+    q_final = _empty_like(q, sequence=False)
+    acc_q_final = _empty_like(acc_q, sequence=False)
+    cur_output = _empty_like(q, sequence=False)
     block_n = 256
     grid = (triton.cdiv(N, block_n),)
+    sizes, strides = _layout_args(
+        x, x, q, acc_q, out, q_final, acc_q_final, cur_output, sequence=False
+    )
     with torch.cuda.device(x.device):
         wrap_triton(_single_step_stbif_kernel)[grid](
             x,
@@ -300,6 +350,8 @@ def single_step_stbif(
             acc_q_final,
             cur_output,
             N=N,
+            SIZES=sizes,
+            STRIDES=strides,
             BLOCK_N=block_n,
             dtype=type_dict[dtype],
         )
@@ -317,10 +369,10 @@ def _single_step_stbif_fake(
 ):
     del q_threshold, pos_max, neg_min
     return (
-        torch.empty_like(x),
-        torch.empty_like(q),
-        torch.empty_like(acc_q),
-        torch.empty_like(q),
+        _empty_like(x, sequence=False),
+        _empty_like(q, sequence=False),
+        _empty_like(acc_q, sequence=False),
+        _empty_like(q, sequence=False),
     )
 
 
@@ -409,52 +461,45 @@ def multi_step_stbif(
         )
     if any(value.numel() != 1 for value in (q_threshold, pos_max, neg_min)):
         raise ValueError("q_threshold, pos_max, and neg_min must be scalar tensors.")
-    x_shape = x_seq.shape
-    x_seq = x_seq.contiguous()
-    q = q.contiguous()
-    acc_q = acc_q.contiguous()
     T = x_seq.shape[0]
     N = x_seq[0].numel()
     dtype = x_seq.dtype
     if dtype not in type_dict:
         raise NotImplementedError(dtype)
-    out_seq = torch.empty_like(x_seq)
-    q_final = torch.empty_like(q)
-    acc_q_final = torch.empty_like(acc_q)
-    cur_output = torch.empty_like(q)
-
-    x_seq_flat = x_seq.reshape(T, N)
-    q_flat = q.reshape(N)
-    acc_q_flat = acc_q.reshape(N)
-    out_seq_flat = out_seq.reshape(T, N)
-    q_final_flat = q_final.reshape(N)
-    acc_q_final_flat = acc_q_final.reshape(N)
-    cur_output_flat = cur_output.reshape(N)
+    out_seq = _empty_like(x_seq)
+    q_final = _empty_like(q, sequence=False)
+    acc_q_final = _empty_like(acc_q, sequence=False)
+    cur_output = _empty_like(q, sequence=False)
 
     def grid(meta):
         return (triton.cdiv(N, meta["BLOCK_N"]),)
 
-    q_threshold = q_threshold.to(device=x_seq.device, dtype=x_seq.dtype).contiguous()
-    pos_max = pos_max.to(device=x_seq.device, dtype=x_seq.dtype).contiguous()
-    neg_min = neg_min.to(device=x_seq.device, dtype=x_seq.dtype).contiguous()
+    q_threshold = q_threshold.to(device=x_seq.device, dtype=x_seq.dtype)
+    pos_max = pos_max.to(device=x_seq.device, dtype=x_seq.dtype)
+    neg_min = neg_min.to(device=x_seq.device, dtype=x_seq.dtype)
 
+    sizes, strides = _layout_args(
+        x_seq, x_seq, q, acc_q, out_seq, q_final, acc_q_final, cur_output, sequence=True
+    )
     with torch.cuda.device(x_seq.device):
         wrap_triton(_select_stbif_kernel(T))[grid](
-            x_seq_flat,
-            q_flat,
-            acc_q_flat,
-            out_seq_flat,
-            q_final_flat,
-            acc_q_final_flat,
-            cur_output_flat,
+            x_seq,
+            q,
+            acc_q,
+            out_seq,
+            q_final,
+            acc_q_final,
+            cur_output,
             q_threshold,
             pos_max,
             neg_min,
             T=T,
             N=N,
+            SIZES=sizes,
+            STRIDES=strides,
             dtype=type_dict[dtype],
         )
-    return out_seq.reshape(x_shape), q_final, acc_q_final, cur_output
+    return out_seq, q_final, acc_q_final, cur_output
 
 
 @torch.library.register_fake("sj::multi_step_stbif")
@@ -467,8 +512,8 @@ def _multi_step_stbif_fake(
     neg_min: torch.Tensor,
 ):
     return (
-        x_seq.new_empty(x_seq.shape),
-        q.new_empty(q.shape),
-        acc_q.new_empty(acc_q.shape),
-        q.new_empty(q.shape),
+        _empty_like(x_seq),
+        _empty_like(q, sequence=False),
+        _empty_like(acc_q, sequence=False),
+        _empty_like(q, sequence=False),
     )

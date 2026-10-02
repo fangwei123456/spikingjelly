@@ -2,12 +2,21 @@ from typing import Optional
 
 import torch
 
+from ..._neuron_layout import _empty_like
+from .utils import (
+    _spatial_offsets,
+    _time_offset,
+    _triton_layout_args,
+    _neuron_grid,
+    _neuron_indices,
+    _block_minor,
+)
+
 from spikingjelly.logger import logger
 
 from ... import surrogate
 from ..surrogate_kernel import resolve_sg_triton_id_and_alpha, sg_triton
 from ..triton_utils import (
-    convert_and_store,
     register_op,
     torch_dtype_for_triton_neuron_compute_dtype_id,
     triton_neuron_compute_dtype_id_to_tl_dtype,
@@ -43,8 +52,14 @@ __all__ = ["multistep_plif"]
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["T", "NCL", "compute_dtype", "soft_reset", "save_intermediates"],
-    restore_value=["s_seq_ptr", "h_seq_ptr", "v_seq_ptr"],
+    key=[
+        "BLOCK_MINOR",
+        "T",
+        "NCL",
+        "compute_dtype",
+        "soft_reset",
+        "save_intermediates",
+    ],
 )
 @triton.jit
 def _multistep_plif_forward_kernel_static(
@@ -63,37 +78,26 @@ def _multistep_plif_forward_kernel_static(
     decay_input: tl.constexpr,
     soft_reset: tl.constexpr,
     save_intermediates: tl.constexpr,
+    BLOCK_MINOR: tl.constexpr,
+    SIZES: tl.constexpr,
+    STRIDES: tl.constexpr,
 ):
-    pid_ncl = tl.program_id(0)
-    ncl_offset = pid_ncl * BLOCK_NCL
+    indices, mask = _neuron_indices(NCL, BLOCK_NCL, SIZES, BLOCK_MINOR)
+    x_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 0)
+    v_init_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 1)
+    s_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 2)
+    h_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 3)
+    v_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 4)
     v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
     v_reset = tl.full([1], v_reset, dtype=compute_dtype)
 
-    v_init_ptrs = tl.make_block_ptr(
-        v_init_ptr,
-        shape=(1, NCL),
-        strides=(NCL, 1),
-        offsets=(0, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0),
-    )
-    v = tl.load(v_init_ptrs, boundary_check=(1,), padding_option="zero").to(
-        compute_dtype
-    )
+    v_init_ptrs = v_init_ptr + v_init_ptr_offsets
+    v = tl.load(v_init_ptrs, mask=mask, other=0.0).to(compute_dtype)
     r_tau = tl.load(r_tau_ptr).to(compute_dtype)
 
     for t in tl.static_range(0, T, 1):
-        x_ptrs = tl.make_block_ptr(
-            x_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        x = tl.load(x_ptrs, boundary_check=(1,), padding_option="zero").to(
-            compute_dtype
-        )
+        x_ptrs = x_seq_ptr + x_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 0)
+        x = tl.load(x_ptrs, mask=mask, other=0.0).to(compute_dtype)
 
         if decay_input:
             h = v + r_tau * (v_reset - v + x)
@@ -105,34 +109,13 @@ def _multistep_plif_forward_kernel_static(
         else:
             v = s * v_reset + (1.0 - s) * h
 
-        s_ptrs = tl.make_block_ptr(
-            s_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        convert_and_store(s_ptrs, s, boundary_check=(1,))
-        v_ptrs = tl.make_block_ptr(
-            v_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        convert_and_store(v_ptrs, v, boundary_check=(1,))
+        s_ptrs = s_seq_ptr + s_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 2)
+        tl.store(s_ptrs, s, mask=mask)
+        v_ptrs = v_seq_ptr + v_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 4)
+        tl.store(v_ptrs, v, mask=mask)
         if save_intermediates:
-            h_ptrs = tl.make_block_ptr(
-                h_seq_ptr,
-                shape=(T, NCL),
-                strides=(NCL, 1),
-                offsets=(t, ncl_offset),
-                block_shape=(1, BLOCK_NCL),
-                order=(1, 0),
-            )
-            convert_and_store(h_ptrs, h, boundary_check=(1,))
+            h_ptrs = h_seq_ptr + h_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 3)
+            tl.store(h_ptrs, h, mask=mask)
 
 
 @triton.autotune(
@@ -141,8 +124,7 @@ def _multistep_plif_forward_kernel_static(
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["NCL", "compute_dtype", "soft_reset", "save_intermediates"],
-    restore_value=["s_seq_ptr", "h_seq_ptr", "v_seq_ptr"],
+    key=["BLOCK_MINOR", "NCL", "compute_dtype", "soft_reset", "save_intermediates"],
 )
 @triton.jit
 def _multistep_plif_forward_kernel_dynamic(
@@ -161,37 +143,26 @@ def _multistep_plif_forward_kernel_dynamic(
     decay_input: tl.constexpr,
     soft_reset: tl.constexpr,
     save_intermediates: tl.constexpr,
+    BLOCK_MINOR: tl.constexpr,
+    SIZES: tl.constexpr,
+    STRIDES: tl.constexpr,
 ):
-    pid_ncl = tl.program_id(0)
-    ncl_offset = pid_ncl * BLOCK_NCL
+    indices, mask = _neuron_indices(NCL, BLOCK_NCL, SIZES, BLOCK_MINOR)
+    x_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 0)
+    v_init_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 1)
+    s_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 2)
+    h_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 3)
+    v_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 4)
     v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
     v_reset = tl.full([1], v_reset, dtype=compute_dtype)
 
-    v_init_ptrs = tl.make_block_ptr(
-        v_init_ptr,
-        shape=(1, NCL),
-        strides=(NCL, 1),
-        offsets=(0, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0),
-    )
-    v = tl.load(v_init_ptrs, boundary_check=(1,), padding_option="zero").to(
-        compute_dtype
-    )
+    v_init_ptrs = v_init_ptr + v_init_ptr_offsets
+    v = tl.load(v_init_ptrs, mask=mask, other=0.0).to(compute_dtype)
     r_tau = tl.load(r_tau_ptr).to(compute_dtype)
 
     for t in tl.range(0, T, 1):
-        x_ptrs = tl.make_block_ptr(
-            x_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        x = tl.load(x_ptrs, boundary_check=(1,), padding_option="zero").to(
-            compute_dtype
-        )
+        x_ptrs = x_seq_ptr + x_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 0)
+        x = tl.load(x_ptrs, mask=mask, other=0.0).to(compute_dtype)
 
         if decay_input:
             h = v + r_tau * (v_reset - v + x)
@@ -203,34 +174,13 @@ def _multistep_plif_forward_kernel_dynamic(
         else:
             v = s * v_reset + (1.0 - s) * h
 
-        s_ptrs = tl.make_block_ptr(
-            s_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        convert_and_store(s_ptrs, s, boundary_check=(1,))
-        v_ptrs = tl.make_block_ptr(
-            v_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        convert_and_store(v_ptrs, v, boundary_check=(1,))
+        s_ptrs = s_seq_ptr + s_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 2)
+        tl.store(s_ptrs, s, mask=mask)
+        v_ptrs = v_seq_ptr + v_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 4)
+        tl.store(v_ptrs, v, mask=mask)
         if save_intermediates:
-            h_ptrs = tl.make_block_ptr(
-                h_seq_ptr,
-                shape=(T, NCL),
-                strides=(NCL, 1),
-                offsets=(t, ncl_offset),
-                block_shape=(1, BLOCK_NCL),
-                order=(1, 0),
-            )
-            convert_and_store(h_ptrs, h, boundary_check=(1,))
+            h_ptrs = h_seq_ptr + h_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 3)
+            tl.store(h_ptrs, h, mask=mask)
 
 
 @triton.autotune(
@@ -239,8 +189,7 @@ def _multistep_plif_forward_kernel_dynamic(
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["T", "NCL", "compute_dtype", "soft_reset", "detach_reset"],
-    restore_value=["grad_x_seq_ptr", "grad_v_init_ptr", "grad_r_tau_ptr"],
+    key=["BLOCK_MINOR", "T", "NCL", "compute_dtype", "soft_reset", "detach_reset"],
 )
 @triton.jit
 def _multistep_plif_backward_kernel_static(
@@ -264,74 +213,44 @@ def _multistep_plif_backward_kernel_static(
     decay_input: tl.constexpr,
     soft_reset: tl.constexpr,
     detach_reset: tl.constexpr,
+    BLOCK_MINOR: tl.constexpr,
+    SIZES: tl.constexpr,
+    STRIDES: tl.constexpr,
 ):
-    pid_ncl = tl.program_id(0)
-    ncl_offset = pid_ncl * BLOCK_NCL
+    indices, mask = _neuron_indices(NCL, BLOCK_NCL, SIZES, BLOCK_MINOR)
+    grad_s_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 0)
+    grad_v_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 1)
+    h_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 2)
+    v_init_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 3)
+    v_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 4)
+    grad_x_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 5)
+    grad_v_init_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 6)
     v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
     v_reset = tl.full([1], v_reset, dtype=compute_dtype)
 
     r_tau = tl.load(r_tau_ptr).to(compute_dtype)
-    grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
-    grad_r_tau_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
+    grad_v_acc = tl.zeros(indices.shape, dtype=compute_dtype)
+    grad_r_tau_acc = tl.zeros(indices.shape, dtype=compute_dtype)
 
-    v_init_ptrs = tl.make_block_ptr(
-        v_init_ptr,
-        shape=(1, NCL),
-        strides=(NCL, 1),
-        offsets=(0, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0),
-    )
-    v_initial = tl.load(v_init_ptrs, boundary_check=(1,), padding_option="zero").to(
-        compute_dtype
-    )
+    v_init_ptrs = v_init_ptr + v_init_ptr_offsets
+    v_initial = tl.load(v_init_ptrs, mask=mask, other=0.0).to(compute_dtype)
 
     for t in tl.static_range(T - 1, -1, -1):
-        grad_s_ptrs = tl.make_block_ptr(
-            grad_s_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
+        grad_s_ptrs = (
+            grad_s_seq_ptr + grad_s_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 0)
         )
-        grad_s = tl.load(grad_s_ptrs, boundary_check=(1,), padding_option="zero").to(
-            compute_dtype
+        grad_s = tl.load(grad_s_ptrs, mask=mask, other=0.0).to(compute_dtype)
+        grad_v_ptrs = (
+            grad_v_seq_ptr + grad_v_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 1)
         )
-        grad_v_ptrs = tl.make_block_ptr(
-            grad_v_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        grad_v = tl.load(grad_v_ptrs, boundary_check=(1,), padding_option="zero").to(
-            compute_dtype
-        )
-        h_ptrs = tl.make_block_ptr(
-            h_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        h = tl.load(h_ptrs, boundary_check=(1,), padding_option="zero").to(
-            compute_dtype
-        )
+        grad_v = tl.load(grad_v_ptrs, mask=mask, other=0.0).to(compute_dtype)
+        h_ptrs = h_seq_ptr + h_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 2)
+        h = tl.load(h_ptrs, mask=mask, other=0.0).to(compute_dtype)
         previous_t = tl.maximum(t - 1, 0)
-        v_seq_ptrs = tl.make_block_ptr(
-            v_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(previous_t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
+        v_seq_ptrs = (
+            v_seq_ptr + v_seq_ptr_offsets + _time_offset(previous_t, NCL, STRIDES, 4)
         )
-        v_previous = tl.load(
-            v_seq_ptrs, boundary_check=(0, 1), padding_option="zero"
-        ).to(compute_dtype)
+        v_previous = tl.load(v_seq_ptrs, mask=mask, other=0.0).to(compute_dtype)
         v_last = tl.where(t == 0, v_initial, v_previous)
 
         sg = sg_triton(h.to(tl.float32) - v_threshold, alpha, sg_triton_id).to(
@@ -361,37 +280,18 @@ def _multistep_plif_backward_kernel_static(
             grad_x = grad_h
             grad_r_tau = grad_h * (v_reset - v_last)
 
-        grad_x_ptrs = tl.make_block_ptr(
-            grad_x_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
+        grad_x_ptrs = (
+            grad_x_seq_ptr + grad_x_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 5)
         )
-        convert_and_store(grad_x_ptrs, grad_x, boundary_check=(1,))
+        tl.store(grad_x_ptrs, grad_x, mask=mask)
         grad_r_tau_acc = grad_r_tau_acc + grad_r_tau.to(compute_dtype)
 
-    grad_v_init_ptrs = tl.make_block_ptr(
-        grad_v_init_ptr,
-        shape=(1, NCL),
-        strides=(NCL, 1),
-        offsets=(0, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0),
-    )
-    convert_and_store(grad_v_init_ptrs, grad_v_acc, boundary_check=(1,))
+    grad_v_init_ptrs = grad_v_init_ptr + grad_v_init_ptr_offsets
+    tl.store(grad_v_init_ptrs, grad_v_acc, mask=mask)
     #! atomic add is not supported on some devices / triton versions
     #! so we use a workaround here, summing the gradient outside the kernel
-    grad_r_tau_ptrs = tl.make_block_ptr(
-        grad_r_tau_ptr,
-        shape=(1, NCL),
-        strides=(NCL, 1),
-        offsets=(0, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0),
-    )
-    convert_and_store(grad_r_tau_ptrs, grad_r_tau_acc, boundary_check=(1,))
+    grad_r_tau_ptrs = grad_r_tau_ptr + indices
+    tl.store(grad_r_tau_ptrs, grad_r_tau_acc, mask=mask)
 
 
 @triton.autotune(
@@ -400,8 +300,7 @@ def _multistep_plif_backward_kernel_static(
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["NCL", "compute_dtype", "soft_reset", "detach_reset"],
-    restore_value=["grad_x_seq_ptr", "grad_v_init_ptr", "grad_r_tau_ptr"],
+    key=["BLOCK_MINOR", "NCL", "compute_dtype", "soft_reset", "detach_reset"],
 )
 @triton.jit
 def _multistep_plif_backward_kernel_dynamic(
@@ -425,74 +324,44 @@ def _multistep_plif_backward_kernel_dynamic(
     decay_input: tl.constexpr,
     soft_reset: tl.constexpr,
     detach_reset: tl.constexpr,
+    BLOCK_MINOR: tl.constexpr,
+    SIZES: tl.constexpr,
+    STRIDES: tl.constexpr,
 ):
-    pid_ncl = tl.program_id(0)
-    ncl_offset = pid_ncl * BLOCK_NCL
+    indices, mask = _neuron_indices(NCL, BLOCK_NCL, SIZES, BLOCK_MINOR)
+    grad_s_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 0)
+    grad_v_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 1)
+    h_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 2)
+    v_init_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 3)
+    v_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 4)
+    grad_x_seq_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 5)
+    grad_v_init_ptr_offsets = _spatial_offsets(indices, SIZES, STRIDES, 6)
     v_threshold = tl.full([1], v_threshold, dtype=compute_dtype)
     v_reset = tl.full([1], v_reset, dtype=compute_dtype)
 
     r_tau = tl.load(r_tau_ptr).to(compute_dtype)
-    grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
-    grad_r_tau_acc = tl.zeros([1, BLOCK_NCL], dtype=compute_dtype)
+    grad_v_acc = tl.zeros(indices.shape, dtype=compute_dtype)
+    grad_r_tau_acc = tl.zeros(indices.shape, dtype=compute_dtype)
 
-    v_init_ptrs = tl.make_block_ptr(
-        v_init_ptr,
-        shape=(1, NCL),
-        strides=(NCL, 1),
-        offsets=(0, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0),
-    )
-    v_initial = tl.load(v_init_ptrs, boundary_check=(1,), padding_option="zero").to(
-        compute_dtype
-    )
+    v_init_ptrs = v_init_ptr + v_init_ptr_offsets
+    v_initial = tl.load(v_init_ptrs, mask=mask, other=0.0).to(compute_dtype)
 
     for t in tl.range(T - 1, -1, -1):
-        grad_s_ptrs = tl.make_block_ptr(
-            grad_s_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
+        grad_s_ptrs = (
+            grad_s_seq_ptr + grad_s_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 0)
         )
-        grad_s = tl.load(grad_s_ptrs, boundary_check=(1,), padding_option="zero").to(
-            compute_dtype
+        grad_s = tl.load(grad_s_ptrs, mask=mask, other=0.0).to(compute_dtype)
+        grad_v_ptrs = (
+            grad_v_seq_ptr + grad_v_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 1)
         )
-        grad_v_ptrs = tl.make_block_ptr(
-            grad_v_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        grad_v = tl.load(grad_v_ptrs, boundary_check=(1,), padding_option="zero").to(
-            compute_dtype
-        )
-        h_ptrs = tl.make_block_ptr(
-            h_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
-        )
-        h = tl.load(h_ptrs, boundary_check=(1,), padding_option="zero").to(
-            compute_dtype
-        )
+        grad_v = tl.load(grad_v_ptrs, mask=mask, other=0.0).to(compute_dtype)
+        h_ptrs = h_seq_ptr + h_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 2)
+        h = tl.load(h_ptrs, mask=mask, other=0.0).to(compute_dtype)
         previous_t = tl.maximum(t - 1, 0)
-        v_seq_ptrs = tl.make_block_ptr(
-            v_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(previous_t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
+        v_seq_ptrs = (
+            v_seq_ptr + v_seq_ptr_offsets + _time_offset(previous_t, NCL, STRIDES, 4)
         )
-        v_previous = tl.load(
-            v_seq_ptrs, boundary_check=(0, 1), padding_option="zero"
-        ).to(compute_dtype)
+        v_previous = tl.load(v_seq_ptrs, mask=mask, other=0.0).to(compute_dtype)
         v_last = tl.where(t == 0, v_initial, v_previous)
 
         sg = sg_triton(h.to(tl.float32) - v_threshold, alpha, sg_triton_id).to(
@@ -522,35 +391,16 @@ def _multistep_plif_backward_kernel_dynamic(
             grad_x = grad_h
             grad_r_tau = grad_h * (v_reset - v_last)
 
-        grad_x_ptrs = tl.make_block_ptr(
-            grad_x_seq_ptr,
-            shape=(T, NCL),
-            strides=(NCL, 1),
-            offsets=(t, ncl_offset),
-            block_shape=(1, BLOCK_NCL),
-            order=(1, 0),
+        grad_x_ptrs = (
+            grad_x_seq_ptr + grad_x_seq_ptr_offsets + _time_offset(t, NCL, STRIDES, 5)
         )
-        convert_and_store(grad_x_ptrs, grad_x, boundary_check=(1,))
+        tl.store(grad_x_ptrs, grad_x, mask=mask)
         grad_r_tau_acc = grad_r_tau_acc + grad_r_tau.to(compute_dtype)
 
-    grad_v_init_ptrs = tl.make_block_ptr(
-        grad_v_init_ptr,
-        shape=(1, NCL),
-        strides=(NCL, 1),
-        offsets=(0, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0),
-    )
-    convert_and_store(grad_v_init_ptrs, grad_v_acc, boundary_check=(1,))
-    grad_r_tau_ptrs = tl.make_block_ptr(
-        grad_r_tau_ptr,
-        shape=(1, NCL),
-        strides=(NCL, 1),
-        offsets=(0, ncl_offset),
-        block_shape=(1, BLOCK_NCL),
-        order=(1, 0),
-    )
-    convert_and_store(grad_r_tau_ptrs, grad_r_tau_acc, boundary_check=(1,))
+    grad_v_init_ptrs = grad_v_init_ptr + grad_v_init_ptr_offsets
+    tl.store(grad_v_init_ptrs, grad_v_acc, mask=mask)
+    grad_r_tau_ptrs = grad_r_tau_ptr + indices
+    tl.store(grad_r_tau_ptrs, grad_r_tau_acc, mask=mask)
 
 
 def _select_forward_kernel(T: int):
@@ -581,6 +431,7 @@ def _launch_plif_forward_kernel(
     save_intermediates: bool,
     use_torch_wrap: bool,
 ) -> None:
+    sizes, strides = _triton_layout_args(x_seq, x_seq, v_init, s_seq, h_seq, v_seq)
     if r_tau.numel() != 1:
         raise ValueError("r_tau must contain exactly one element")
     if r_tau.device != x_seq.device:
@@ -589,7 +440,7 @@ def _launch_plif_forward_kernel(
     NCL = x_seq[0].numel()
 
     def grid(meta):
-        return (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+        return _neuron_grid(NCL, sizes, meta["BLOCK_NCL"], meta["BLOCK_MINOR"])
 
     kernel = _select_forward_kernel(T)
     if use_torch_wrap:
@@ -607,6 +458,9 @@ def _launch_plif_forward_kernel(
             v_reset,
             T=T,
             NCL=NCL,
+            BLOCK_MINOR=_block_minor(sizes, strides),
+            SIZES=sizes,
+            STRIDES=strides,
             compute_dtype=compute_dtype,
             decay_input=decay_input,
             soft_reset=soft_reset,
@@ -635,11 +489,14 @@ def _launch_plif_backward_kernel(
     detach_reset: bool,
     use_torch_wrap: bool,
 ) -> None:
+    sizes, strides = _triton_layout_args(
+        h_seq, grad_s_seq, grad_v_seq, h_seq, v_init, v_seq, grad_x_seq, grad_v_init
+    )
     T = grad_s_seq.shape[0]
     NCL = grad_s_seq[0].numel()
 
     def grid(meta):
-        return (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+        return _neuron_grid(NCL, sizes, meta["BLOCK_NCL"], meta["BLOCK_MINOR"])
 
     kernel = _select_backward_kernel(T)
     if use_torch_wrap:
@@ -661,6 +518,9 @@ def _launch_plif_backward_kernel(
             sg_alpha,
             T=T,
             NCL=NCL,
+            BLOCK_MINOR=_block_minor(sizes, strides),
+            SIZES=sizes,
+            STRIDES=strides,
             compute_dtype=compute_dtype,
             sg_triton_id=sg_triton_id,
             decay_input=decay_input,
@@ -679,11 +539,8 @@ def multistep_plif_inference(
     v_reset: float,
     soft_reset: bool,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    x_seq = x_seq.contiguous()
-    v_init = v_init.contiguous()
-
-    s_seq = torch.empty_like(x_seq)
-    v_seq = torch.empty_like(x_seq)
+    s_seq = _empty_like(x_seq)
+    v_seq = _empty_like(x_seq)
     dtype = x_seq.dtype
     _launch_plif_forward_kernel(
         x_seq,
@@ -714,8 +571,8 @@ def _multistep_plif_inference_fake(
     soft_reset: bool,
 ):
     return (
-        x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty(x_seq.shape),
+        _empty_like(x_seq),
+        _empty_like(x_seq),
     )
 
 
@@ -732,12 +589,9 @@ def multistep_plif_forward(
     sg_triton_id: int,
     sg_alpha: float,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    x_seq = x_seq.contiguous()
-    v_init = v_init.contiguous()
-
-    s_seq = torch.empty_like(x_seq)
-    v_seq = torch.empty_like(x_seq)
-    h_seq = torch.empty_like(x_seq)
+    s_seq = _empty_like(x_seq)
+    v_seq = _empty_like(x_seq)
+    h_seq = _empty_like(x_seq)
     dtype = x_seq.dtype
     _launch_plif_forward_kernel(
         x_seq,
@@ -771,9 +625,9 @@ def _multistep_plif_forward_fake(
     sg_alpha: float,
 ):
     return (
-        x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty(x_seq.shape),
+        _empty_like(x_seq),
+        _empty_like(x_seq),
+        _empty_like(x_seq),
     )
 
 
@@ -797,12 +651,12 @@ def multistep_plif_mp_inference(
     compute_tl_dtype = triton_neuron_compute_dtype_id_to_tl_dtype(
         forward_compute_dtype_id, storage_dtype_id
     )
-    x_storage = x_seq.detach().to(dtype=storage_dtype).contiguous()
-    v_storage = v_init.detach().to(dtype=storage_dtype).contiguous()
-    s_seq = torch.empty(x_seq.shape, dtype=spike_dtype, device=x_seq.device)
-    v_seq = torch.empty(x_seq.shape, dtype=storage_dtype, device=x_seq.device)
+    x_storage = x_seq.detach().to(dtype=storage_dtype)
+    v_storage = v_init.detach().to(dtype=storage_dtype)
+    s_seq = _empty_like(x_seq, dtype=spike_dtype)
+    v_seq = _empty_like(x_seq, dtype=storage_dtype)
     if save_intermediates:
-        h_seq = torch.empty(x_seq.shape, dtype=storage_dtype, device=x_seq.device)
+        h_seq = _empty_like(x_seq, dtype=storage_dtype)
         h_buffer = h_seq
     else:
         h_seq = torch.empty((0,), dtype=storage_dtype, device=x_seq.device)
@@ -851,11 +705,12 @@ def _multistep_plif_mp_inference_fake(
     )
     storage_dtype = triton_neuron_dtype_id_to_torch_dtype(storage_dtype_id)
     spike_dtype = triton_neuron_dtype_id_to_torch_dtype(spike_dtype_id)
-    h_shape = x_seq.shape if save_intermediates else (0,)
     return (
-        torch.empty(x_seq.shape, dtype=spike_dtype, device=x_seq.device),
-        torch.empty(x_seq.shape, dtype=storage_dtype, device=x_seq.device),
-        torch.empty(h_shape, dtype=storage_dtype, device=x_seq.device),
+        _empty_like(x_seq, dtype=spike_dtype),
+        _empty_like(x_seq, dtype=storage_dtype),
+        _empty_like(x_seq, dtype=storage_dtype)
+        if save_intermediates
+        else torch.empty((0,), dtype=storage_dtype, device=x_seq.device),
     )
 
 
@@ -883,11 +738,11 @@ def multistep_plif_mp_forward(
     compute_tl_dtype = triton_neuron_compute_dtype_id_to_tl_dtype(
         forward_compute_dtype_id, storage_dtype_id
     )
-    x_storage = x_seq.to(dtype=storage_dtype).contiguous()
-    v_storage = v_init.to(dtype=storage_dtype).contiguous()
-    s_seq = torch.empty(x_seq.shape, dtype=spike_dtype, device=x_seq.device)
-    v_seq = torch.empty(x_seq.shape, dtype=storage_dtype, device=x_seq.device)
-    h_seq = torch.empty(x_seq.shape, dtype=storage_dtype, device=x_seq.device)
+    x_storage = x_seq.to(dtype=storage_dtype)
+    v_storage = v_init.to(dtype=storage_dtype)
+    s_seq = _empty_like(x_seq, dtype=spike_dtype)
+    v_seq = _empty_like(x_seq, dtype=storage_dtype)
+    h_seq = _empty_like(x_seq, dtype=storage_dtype)
 
     _launch_plif_forward_kernel(
         x_storage,
@@ -940,9 +795,9 @@ def _multistep_plif_mp_forward_fake(
     storage_dtype = triton_neuron_dtype_id_to_torch_dtype(storage_dtype_id)
     spike_dtype = triton_neuron_dtype_id_to_torch_dtype(spike_dtype_id)
     return (
-        torch.empty(x_seq.shape, dtype=spike_dtype, device=x_seq.device),
-        torch.empty(x_seq.shape, dtype=storage_dtype, device=x_seq.device),
-        torch.empty(x_seq.shape, dtype=storage_dtype, device=x_seq.device),
+        _empty_like(x_seq, dtype=spike_dtype),
+        _empty_like(x_seq, dtype=storage_dtype),
+        _empty_like(x_seq, dtype=storage_dtype),
     )
 
 
@@ -1076,7 +931,7 @@ def _setup_mp_plif_context(ctx, inputs, output):
     del forward_compute_dtype_id
     _, v_seq, h_seq = output
     storage_dtype = triton_neuron_dtype_id_to_torch_dtype(storage_dtype_id)
-    v_storage = v_init.detach().to(dtype=storage_dtype).contiguous()
+    v_storage = v_init.detach().to(dtype=storage_dtype)
     ctx.save_for_backward(h_seq, v_storage, v_seq.detach(), r_tau)
     ctx.x_dtype = x_seq.dtype
     ctx.v_init_dtype = v_init.dtype
@@ -1102,20 +957,13 @@ def _multistep_plif_mp_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
         grad_s_seq = torch.zeros(h_seq.shape, dtype=spike_dtype, device=h_seq.device)
     if grad_v_seq is None:
         grad_v_seq = torch.zeros(h_seq.shape, dtype=storage_dtype, device=h_seq.device)
-    grad_s_seq = grad_s_seq.contiguous()
-    grad_v_seq = grad_v_seq.contiguous()
-    h_seq = h_seq.contiguous()
-    v_init = v_init.contiguous()
-    v_seq = v_seq.contiguous()
-    grad_x_seq = torch.empty(h_seq.shape, dtype=ctx.x_dtype, device=h_seq.device)
-    grad_v_init = torch.empty(
-        h_seq[0].shape, dtype=ctx.v_init_dtype, device=h_seq.device
-    )
+    grad_x_seq = _empty_like(h_seq, dtype=ctx.x_dtype)
+    grad_v_init = _empty_like(h_seq[0], dtype=ctx.v_init_dtype, sequence=False)
     grad_r_tau_dtype = torch_dtype_for_triton_neuron_compute_dtype_id(
         ctx.backward_compute_dtype_id
     )
     grad_r_tau_seq = torch.empty(
-        h_seq[0].shape, dtype=grad_r_tau_dtype, device=h_seq.device
+        h_seq[0].numel(), dtype=grad_r_tau_dtype, device=h_seq.device
     )
 
     _launch_plif_backward_kernel(
@@ -1191,14 +1039,7 @@ def _setup_context(ctx, inputs, output):
 
 def _multistep_plif_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
     h_seq, v_init, v_seq, r_tau = ctx.saved_tensors
-    grad_s_seq = grad_s_seq.contiguous()
-    grad_v_seq = grad_v_seq.contiguous()
-    h_seq = h_seq.contiguous()
-    v_init = v_init.contiguous()
-    v_seq = v_seq.contiguous()
-    grad_x_seq = torch.empty(
-        grad_s_seq.shape, dtype=grad_s_seq.dtype, device=grad_s_seq.device
-    )
+    grad_x_seq = _empty_like(h_seq, dtype=grad_s_seq.dtype)
     grad_v_init = torch.empty(
         grad_v_seq.shape[1:], dtype=grad_v_seq.dtype, device=grad_v_seq.device
     )

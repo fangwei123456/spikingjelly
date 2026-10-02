@@ -4,7 +4,9 @@ from typing import Optional
 import numpy as np
 
 import torch
-import torch.nn.functional as F
+
+from ...._neuron_layout import _empty_like
+from ..strides import _launch_generated
 
 from ..... import configure
 from .... import surrogate
@@ -152,7 +154,7 @@ def cupy_single_step_lif_forward(
     blocks, threads, py_dict = _prepare_forward(py_dict)
     if py_dict["v_reset"] is None:
         py_dict.pop("v_reset")
-    forward_kernel((blocks,), (threads,), py_dict)
+    _launch_generated(forward_kernel, (blocks,), (threads,), py_dict)
     return py_dict["spike"], py_dict["v_next"], py_dict["h"]
 
 
@@ -160,7 +162,11 @@ def cupy_single_step_lif_forward(
 def _cupy_single_step_lif_forward_fake(
     x, v, v_th, v_reset, soft_reset, decay, decay_input, detach_reset, sg_cupy_code
 ):
-    return x.new_empty(x.shape), x.new_empty(x.shape), x.new_empty(x.shape)
+    return (
+        _empty_like(x, sequence=False),
+        _empty_like(x, sequence=False),
+        _empty_like(x, sequence=False),
+    )
 
 
 def _setup_single_step_lif_context(ctx, inputs, output):
@@ -211,7 +217,7 @@ def _single_step_lif_backward(ctx, grad_spike, grad_v_next, _grad_h):
     py_dict["decay"] = ctx.decay
     if py_dict["v_reset"] is None:
         py_dict.pop("v_reset")
-    backward_kernel((blocks,), (threads,), py_dict)
+    _launch_generated(backward_kernel, (blocks,), (threads,), py_dict)
     return (
         py_dict["grad_x"],
         py_dict["grad_v"],
@@ -248,10 +254,7 @@ def lif_step(
         raise RuntimeError("lif_step requires a CUDA tensor.")
     dtype = "float" if x.dtype == torch.float32 else "half2"
     sg_cupy_code = _surrogate_cuda_code(surrogate_function, dtype)
-    need_unpad = x.dtype == torch.float16 and x.numel() % 2 != 0
-    if need_unpad:
-        x = F.pad(x, (0, 1))
-        v = F.pad(v, (0, 1))
+
     vr = float("nan") if v_reset is None else float(v_reset)
     spike, v_next, _ = cupy_single_step_lif_forward(
         x,
@@ -264,7 +267,5 @@ def lif_step(
         detach_reset,
         sg_cupy_code,
     )
-    if need_unpad:
-        spike = spike[..., :-1]
-        v_next = v_next[..., :-1]
+
     return spike, v_next

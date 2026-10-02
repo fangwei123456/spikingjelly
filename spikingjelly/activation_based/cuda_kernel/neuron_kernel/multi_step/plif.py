@@ -4,9 +4,12 @@ from typing import Callable, Optional
 
 import torch
 
+from ...._neuron_layout import _empty_like
+
 from ..... import configure
 from .... import surrogate
 from ... import cuda_utils
+from ..strides import _launch_generated
 from ...auto_cuda import base as auto_cuda_base, cfunction
 from .base import (
     _aligned_v_v_seq,
@@ -20,6 +23,13 @@ from ..surrogate_code import (
     _cuda_codes_callable,
     _surrogate_cuda_code,
 )
+
+
+def _decay_read(dtype):
+    # The parameter is one scalar, not two packed neuron values.
+    if dtype == "half2":
+        return "__half2half2(reinterpret_cast<const half*>(decay)[0])"
+    return "decay[0]"
 
 
 class ParametricLIFNodeFPTTKernel(NeuronFPTTKernel):
@@ -47,14 +57,14 @@ class ParametricLIFNodeFPTTKernel(NeuronFPTTKernel):
             )
             codes += cfunction.mul(
                 z="LIFNodeFPTTKernel_temp_var",
-                x="decay[0]",
+                x=_decay_read(self.dtype),
                 y="LIFNodeFPTTKernel_temp_var",
                 dtype=self.dtype,
             )
         else:
             codes += cfunction.mul(
                 z="LIFNodeFPTTKernel_temp_var",
-                x="decay[0]",
+                x=_decay_read(self.dtype),
                 y="LIFNodeFPTTKernel_temp_var",
                 dtype=self.dtype,
             )
@@ -94,7 +104,7 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
         return cfunction.sub(
             z=f"const {self.dtype} grad_h_next_to_v",
             x=cfunction.constant(None, x=1.0, dtype=self.dtype),
-            y="decay[0]",
+            y=_decay_read(self.dtype),
             dtype=self.dtype,
         )
 
@@ -104,7 +114,7 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
                 y=f"const {self.dtype} grad_h_to_x", x=1.0, dtype=self.dtype
             )
         else:
-            return f"const {self.dtype} grad_h_to_x = decay[0];"
+            return f"const {self.dtype} grad_h_to_x = {_decay_read(self.dtype)};"
 
     @property
     def head(self):
@@ -161,7 +171,10 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
                 )
                 core_codes.append(
                     cfunction.div(
-                        z="temp_var", x="temp_var", y="decay[0]", dtype=self.dtype
+                        z="temp_var",
+                        x="temp_var",
+                        y=_decay_read(self.dtype),
+                        dtype=self.dtype,
                     )
                 )
 
@@ -291,9 +304,6 @@ def cupy_multistep_plif_forward(
         raise ValueError(
             "When using the the PLIF neuron with half2 cupy backend, the numer of neurons should be even to avoid the wrong gradient of tau caused by padding!"
         )
-    x_seq = x_seq.contiguous()
-    v_init = v_init.contiguous()
-    decay = decay.contiguous()
     dtype = _dtype_to_cupy_kernel_dtype(x_seq.dtype)
     hard_reset = not soft_reset
     forward_kernel = _get_plif_forward_kernel(
@@ -307,13 +317,12 @@ def cupy_multistep_plif_forward(
         "decay": decay,
     }
     blocks, threads, py_dict = prepare_forward_meta(py_dict)
-    py_dict["spike_seq"] = torch.empty_like(x_seq)
-    py_dict["h_seq"] = torch.empty_like(x_seq)
+    py_dict["spike_seq"] = _empty_like(x_seq)
+    py_dict["h_seq"] = _empty_like(x_seq)
     py_dict["v_v_seq"] = _aligned_v_v_seq(x_seq)
-    py_dict["v_v_seq"][0].copy_(py_dict.pop("v_init"))
     if py_dict["v_reset"] is None:
         py_dict.pop("v_reset")
-    forward_kernel((blocks,), (threads,), py_dict)
+    _launch_generated(forward_kernel, (blocks,), (threads,), py_dict)
     return (
         py_dict["spike_seq"],
         py_dict["v_v_seq"][1:,],
@@ -334,9 +343,9 @@ def _cupy_multistep_plif_forward_fake(
     sg_cupy_code: str,
 ):
     return (
-        x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty(x_seq.shape),
-        x_seq.new_empty(x_seq.shape),
+        _empty_like(x_seq),
+        _aligned_v_v_seq(x_seq)[1:],
+        _empty_like(x_seq),
     )
 
 
@@ -367,7 +376,7 @@ def _setup_cupy_multistep_plif_context(ctx, inputs, output):
     v_seq = output[1]
     v_v_seq = _recover_v_v_seq_view(v_seq)
     if v_v_seq is None:
-        v_v_seq = torch.cat((v_init.unsqueeze(0), v_seq), dim=0).contiguous()
+        v_v_seq = torch.cat((v_init.unsqueeze(0), v_seq), dim=0)
     ctx.save_for_backward(h_seq, v_v_seq, decay)
     ctx.v_th = v_th
     ctx.v_reset = None if soft_reset else v_reset
@@ -390,9 +399,6 @@ def cupy_multistep_plif_backward(
     decay_input: bool,
     sg_cupy_code: str,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    grad_spike_seq = grad_spike_seq.contiguous()
-    grad_v_seq = grad_v_seq.contiguous()
-    h_seq = h_seq.contiguous()
     dtype = _dtype_to_cupy_kernel_dtype(grad_spike_seq.dtype)
     hard_reset = not soft_reset
     backward_kernel = _get_plif_backward_kernel(
@@ -404,7 +410,7 @@ def cupy_multistep_plif_backward(
     )
 
     numel = grad_spike_seq.numel()
-    N = grad_spike_seq.shape[1]
+    N = math.prod(grad_spike_seq.shape[1:])
     if grad_spike_seq.dtype == torch.float16:
         N = math.ceil(N / 2)
         numel = N * grad_spike_seq.shape[0]
@@ -414,8 +420,8 @@ def cupy_multistep_plif_backward(
     with cuda_utils.DeviceEnvironment(grad_spike_seq.get_device()):
         numel = cupy.asarray(numel)
         N = cupy.asarray(N)
-    grad_x_seq = torch.empty_like(grad_spike_seq)
-    grad_v_init = torch.empty_like(grad_v_seq[0])
+    grad_x_seq = _empty_like(h_seq)
+    grad_v_init = _empty_like(h_seq[0], sequence=False)
     py_dict = {
         "numel": numel,
         "N": N,
@@ -433,7 +439,7 @@ def cupy_multistep_plif_backward(
     cuda_utils._scalar_to_cupy(py_dict, ref="grad_spike_seq")
     if py_dict["v_reset"] is None:
         py_dict.pop("v_reset")
-    backward_kernel((blocks,), (threads,), py_dict)
+    _launch_generated(backward_kernel, (blocks,), (threads,), py_dict)
     return py_dict["grad_x_seq"], py_dict["grad_v_init"], py_dict["grad_decay"]
 
 
@@ -452,9 +458,9 @@ def _cupy_multistep_plif_backward_fake(
     sg_cupy_code: str,
 ):
     return (
-        torch.empty_like(grad_spike_seq),
-        torch.empty_like(grad_v_seq[0]),
-        torch.empty_like(decay, dtype=torch.float),
+        _empty_like(h_seq),
+        _empty_like(h_seq[0], sequence=False),
+        _empty_like(decay, dtype=torch.float),
     )
 
 
