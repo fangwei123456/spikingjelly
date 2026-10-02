@@ -3,7 +3,7 @@ from spikingjelly.logger import logger
 import torch
 
 from ..._neuron_layout import _empty_like, _layout_args
-from .utils import _spatial_offsets
+from .utils import _spatial_offsets, _time_offset
 
 from ..triton_utils import (
     register_op,
@@ -27,6 +27,7 @@ __all__ = []
 
 
 @triton.autotune(
+    do_bench=triton.testing.do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_N": block_n}, num_warps=num_warps)
         for block_n, num_warps in ((128, 4), (256, 8))
@@ -39,6 +40,8 @@ __all__ = []
         "store_v_seq",
         "threshold_is_scalar",
         "offset_is_scalar",
+        "SIZES",
+        "STRIDES",
     ],
 )
 @triton.jit
@@ -92,7 +95,7 @@ def _multistep_activation_aware_if_forward_static(
 
     for t in tl.static_range(0, T, 1):
         x = tl.load(
-            x_seq_ptr + x_seq_ptr_offsets + t * tl.full((), STRIDES[0][0], tl.int64),
+            x_seq_ptr + x_seq_ptr_offsets + _time_offset(t, N, STRIDES, 0),
             mask=mask,
             other=0.0,
         ).to(compute_dtype)
@@ -103,17 +106,13 @@ def _multistep_activation_aware_if_forward_static(
         else:
             v = spike * reset + (1.0 - spike) * h
         tl.store(
-            spike_seq_ptr
-            + spike_seq_ptr_offsets
-            + t * tl.full((), STRIDES[2][0], tl.int64),
+            spike_seq_ptr + spike_seq_ptr_offsets + _time_offset(t, N, STRIDES, 2),
             spike,
             mask=mask,
         )
         if store_v_seq:
             tl.store(
-                v_out_ptr
-                + v_out_ptr_offsets
-                + t * tl.full((), STRIDES[3][0], tl.int64),
+                v_out_ptr + v_out_ptr_offsets + _time_offset(t, N, STRIDES, 3),
                 v,
                 mask=mask,
             )
@@ -122,6 +121,7 @@ def _multistep_activation_aware_if_forward_static(
 
 
 @triton.autotune(
+    do_bench=triton.testing.do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_N": block_n}, num_warps=num_warps)
         for block_n, num_warps in ((128, 4), (256, 8))
@@ -133,6 +133,8 @@ def _multistep_activation_aware_if_forward_static(
         "store_v_seq",
         "threshold_is_scalar",
         "offset_is_scalar",
+        "SIZES",
+        "STRIDES",
     ],
 )
 @triton.jit
@@ -186,7 +188,7 @@ def _multistep_activation_aware_if_forward_dynamic(
 
     for t in tl.range(0, T, 1):
         x = tl.load(
-            x_seq_ptr + x_seq_ptr_offsets + t * tl.full((), STRIDES[0][0], tl.int64),
+            x_seq_ptr + x_seq_ptr_offsets + _time_offset(t, N, STRIDES, 0),
             mask=mask,
             other=0.0,
         ).to(compute_dtype)
@@ -197,17 +199,13 @@ def _multistep_activation_aware_if_forward_dynamic(
         else:
             v = spike * reset + (1.0 - spike) * h
         tl.store(
-            spike_seq_ptr
-            + spike_seq_ptr_offsets
-            + t * tl.full((), STRIDES[2][0], tl.int64),
+            spike_seq_ptr + spike_seq_ptr_offsets + _time_offset(t, N, STRIDES, 2),
             spike,
             mask=mask,
         )
         if store_v_seq:
             tl.store(
-                v_out_ptr
-                + v_out_ptr_offsets
-                + t * tl.full((), STRIDES[3][0], tl.int64),
+                v_out_ptr + v_out_ptr_offsets + _time_offset(t, N, STRIDES, 3),
                 v,
                 mask=mask,
             )

@@ -45,19 +45,22 @@ def _neuron_indices(
         indices = (pid * BLOCK + tl.arange(0, BLOCK))[None, :]
         mask = indices < NCL
     else:
-        minor_blocks: tl.constexpr = tl.cdiv(SIZES[0], MINOR)
+        inner_size: tl.constexpr = tl.constexpr(SIZES).value[0]
+        minor_blocks: tl.constexpr = tl.cdiv(inner_size, MINOR)
         inner = (pid % minor_blocks) * MINOR + tl.arange(0, MINOR)[None, :]
         outer = (pid // minor_blocks) * (BLOCK // MINOR) + tl.arange(0, BLOCK // MINOR)[
             :, None
         ]
-        indices = outer * SIZES[0] + inner
-        mask = (inner < SIZES[0]) & (indices < NCL)
+        indices = outer * inner_size + inner
+        mask = (inner < inner_size) & (indices < NCL)
     return indices, mask
 
 
 @triton.jit
 def _time_offset(t, n: tl.constexpr, layouts: tl.constexpr, slot: tl.constexpr):
-    stride: tl.constexpr = n if len(layouts) == 0 else layouts[slot][0]
+    stride: tl.constexpr = (
+        n if len(layouts) == 0 else tl.constexpr(layouts).value[slot][0]
+    )
     # Widen the stride before multiplying: the time offset can exceed int32.
     return t * tl.full((), stride, tl.int64)
 
@@ -69,19 +72,25 @@ def _spatial_offsets(
     if len(layouts) == 0:
         return index.to(tl.int64)
     else:
-        strides: tl.constexpr = layouts[slot]
-        dense: tl.constexpr = True
-        span: tl.constexpr = 1
+        # Unwrap constexpr tuples for Triton 3.3. The metadata-only predicate
+        # uses scalar IR constants, which fold away before GPU code generation.
+        strides: tl.constexpr = tl.constexpr(layouts).value[slot]
+        dense = tl.full((), True, tl.int1)
+        span = tl.full((), 1, tl.int64)
         for d in tl.static_range(len(sizes)):
-            if sizes[d] != 1:
-                dense = dense and strides[d + 1] == span
-                span = span * sizes[d]
+            size = tl.full((), tl.constexpr(sizes).value[d], tl.int64)
+            stride = tl.full((), tl.constexpr(strides).value[d + 1], tl.int64)
+            dense = dense & ((size == 1) | (stride == span))
+            span = span * size
         if dense:
-            return index.to(tl.int64)
-        offset = tl.full(index.shape, 0, tl.int64)
-        for d in tl.static_range(len(sizes)):
-            offset += (index % sizes[d]).to(tl.int64) * strides[d + 1]
-            index = index // sizes[d]
+            offset = index.to(tl.int64)
+        else:
+            offset = tl.full(index.shape, 0, tl.int64)
+            for d in tl.static_range(len(sizes)):
+                offset += (index % tl.constexpr(sizes).value[d]).to(
+                    tl.int64
+                ) * tl.constexpr(strides).value[d + 1]
+                index = index // tl.constexpr(sizes).value[d]
         return offset
 
 

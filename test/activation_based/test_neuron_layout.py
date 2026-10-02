@@ -686,6 +686,30 @@ def test_cupy_half2_unaligned_external_storage():
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_cupy_large_address_offset_with_half2_tail():
+    pytest.importorskip("cupy")
+    if torch.cuda.mem_get_info()[0] < 6 * 1024**3:
+        pytest.skip("the strided input requires just over 4 GiB of storage")
+    values = torch.tensor(
+        [[0.5, 0.75, 1.25], [1.5, 0.25, 0.5]], device="cuda", dtype=torch.float16
+    )
+    x = torch.empty_strided(
+        values.shape, ((1 << 31) + 1, 1), device="cuda", dtype=values.dtype
+    )
+    x.copy_(values).requires_grad_()
+    expected_x = values.clone().requires_grad_()
+    node = neuron.LIFNode(backend="cupy", step_mode="m", store_v_seq=True).cuda()
+    reference = copy.deepcopy(node)
+    actual, expected = node(x), reference(expected_x)
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    torch.testing.assert_close(node.v_seq, reference.v_seq, rtol=0, atol=0)
+    actual_grad = torch.autograd.grad(actual.sum(), x)[0]
+    expected_grad = torch.autograd.grad(expected.sum(), expected_x)[0]
+    assert torch.isfinite(actual_grad).all() and torch.isfinite(expected_grad).all()
+    torch.testing.assert_close(actual_grad, expected_grad, rtol=0, atol=0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("backend", ["triton", "cupy"])
 @pytest.mark.parametrize("order", list(itertools.permutations(range(3))))
 def test_all_small_dense_permutations(backend, order):

@@ -46,6 +46,7 @@ __all__ = ["multistep_lif"]
 
 
 @triton.autotune(
+    do_bench=triton.testing.do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
@@ -59,6 +60,8 @@ __all__ = ["multistep_lif"]
         "soft_reset",
         "save_intermediates",
         "store_v_seq",
+        "SIZES",
+        "STRIDES",
     ],
 )
 @triton.jit
@@ -126,6 +129,7 @@ def _multistep_lif_forward_kernel_static(
 
 
 @triton.autotune(
+    do_bench=triton.testing.do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
@@ -138,6 +142,8 @@ def _multistep_lif_forward_kernel_static(
         "soft_reset",
         "save_intermediates",
         "store_v_seq",
+        "SIZES",
+        "STRIDES",
     ],
 )
 @triton.jit
@@ -205,6 +211,7 @@ def _multistep_lif_forward_kernel_dynamic(
 
 
 @triton.autotune(
+    do_bench=triton.testing.do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2, 4, 8]
@@ -218,6 +225,8 @@ def _multistep_lif_forward_kernel_dynamic(
         "soft_reset",
         "detach_reset",
         "store_v_seq",
+        "SIZES",
+        "STRIDES",
     ],
 )
 @triton.jit
@@ -311,6 +320,7 @@ def _multistep_lif_backward_kernel_static(
 
 
 @triton.autotune(
+    do_bench=triton.testing.do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2, 4, 8]
@@ -323,6 +333,8 @@ def _multistep_lif_backward_kernel_static(
         "soft_reset",
         "detach_reset",
         "store_v_seq",
+        "SIZES",
+        "STRIDES",
     ],
 )
 @triton.jit

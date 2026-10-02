@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 
 from ..._neuron_layout import _empty_like, _layout_args
-from .utils import _spatial_offsets
+from .utils import _spatial_offsets, _time_offset
 
 from spikingjelly.logger import logger
 
@@ -85,12 +85,13 @@ def _single_step_stbif_kernel(
 
 
 @triton.autotune(
+    do_bench=triton.testing.do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_N": f * w * 32}, num_warps=w)
         for f in [1, 2, 4]
         for w in [4, 8]
     ],
-    key=["T", "N", "dtype"],
+    key=["T", "N", "dtype", "SIZES", "STRIDES"],
 )
 @triton.jit
 def _multi_step_stbif_kernel_static(
@@ -132,7 +133,7 @@ def _multi_step_stbif_kernel_static(
 
     for t in tl.static_range(0, T, 1):
         x = tl.load(
-            x_seq_ptr + x_seq_ptr_offsets + t * tl.full((), STRIDES[0][0], tl.int64),
+            x_seq_ptr + x_seq_ptr_offsets + _time_offset(t, N, STRIDES, 0),
             mask=mask,
             other=0.0,
         ).to(tl.float32)
@@ -145,9 +146,7 @@ def _multi_step_stbif_kernel_static(
         acc_q = acc_q + cur
         q = q - pos.to(tl.float32) + neg.to(tl.float32)
         tl.store(
-            out_seq_ptr
-            + out_seq_ptr_offsets
-            + t * tl.full((), STRIDES[3][0], tl.int64),
+            out_seq_ptr + out_seq_ptr_offsets + _time_offset(t, N, STRIDES, 3),
             (cur * q_threshold).to(dtype),
             mask=mask,
         )
@@ -158,12 +157,13 @@ def _multi_step_stbif_kernel_static(
 
 
 @triton.autotune(
+    do_bench=triton.testing.do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_N": f * w * 32}, num_warps=w)
         for f in [1, 2, 4]
         for w in [4, 8]
     ],
-    key=["N", "dtype"],
+    key=["N", "dtype", "SIZES", "STRIDES"],
 )
 @triton.jit
 def _multi_step_stbif_kernel_dynamic(
@@ -205,7 +205,7 @@ def _multi_step_stbif_kernel_dynamic(
 
     for t in tl.range(0, T, 1):
         x = tl.load(
-            x_seq_ptr + x_seq_ptr_offsets + t * tl.full((), STRIDES[0][0], tl.int64),
+            x_seq_ptr + x_seq_ptr_offsets + _time_offset(t, N, STRIDES, 0),
             mask=mask,
             other=0.0,
         ).to(tl.float32)
@@ -218,9 +218,7 @@ def _multi_step_stbif_kernel_dynamic(
         acc_q = acc_q + cur
         q = q - pos.to(tl.float32) + neg.to(tl.float32)
         tl.store(
-            out_seq_ptr
-            + out_seq_ptr_offsets
-            + t * tl.full((), STRIDES[3][0], tl.int64),
+            out_seq_ptr + out_seq_ptr_offsets + _time_offset(t, N, STRIDES, 3),
             (cur * q_threshold).to(dtype),
             mask=mask,
         )

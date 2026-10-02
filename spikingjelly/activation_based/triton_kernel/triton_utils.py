@@ -23,6 +23,7 @@ _TRITON_IMPORT_ERROR = None
 try:
     import triton
     import triton.language as tl
+    import triton.testing
 
     type_dict = {
         torch.bool: tl.int1,

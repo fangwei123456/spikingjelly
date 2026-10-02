@@ -292,6 +292,13 @@ Spiking Neurons
 
 Module: ``spikingjelly.activation_based.neuron``.
 
+- Fixed non-contiguous and broadcast point-neuron layouts failing to compile
+  with Triton 3.3 because of constexpr tuple indexing.
+- Reduced CuPy point-neuron addressing overhead for mixed tensor layouts;
+  storage offsets remain 64-bit, including unaligned FP16 views.
+- Isolated Triton point-neuron autotuning by tensor layout and reduced host
+  launch noise with CUDA Graph timing. Encountering a new layout now requires
+  additional one-time tuning.
 - Restored ``MaskedPSN``'s single-step queue update before an overflow error when
   more than ``T`` steps are called; the explicit-state function leaves its input
   queue unchanged on error.
