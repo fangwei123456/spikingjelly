@@ -1,6 +1,7 @@
 """Layout changes must not change logical neuron identity or temporal state."""
 
 import copy
+import importlib
 import itertools
 import math
 import sys
@@ -565,11 +566,13 @@ def test_single_step_stbif_compacts_all_spatial_axes(device):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize("backend", ["triton", "cupy"])
+@pytest.mark.parametrize("backend,kind", _CASES)
 @pytest.mark.parametrize(
     "layout", ["sliced", "channels_last", "time", "space", "scalar"]
 )
-def test_lif_launch_receives_original_strided_input(backend, layout, monkeypatch):
+def test_neuron_launch_receives_original_strided_input(
+    backend, kind, layout, monkeypatch
+):
     pytest.importorskip(backend)
     shape = (4, 2, 3, 2, 5)
     x = (
@@ -580,10 +583,19 @@ def test_lif_launch_receives_original_strided_input(backend, layout, monkeypatch
     launches = []
     states = []
     gradients = []
+    saved = []
+    restored = []
     if backend == "triton":
-        from spikingjelly.activation_based.triton_kernel.neuron_kernel import lif
-
-        original = lif.wrap_triton
+        module_name = {
+            "IFNode": "integrate_and_fire",
+            "LIFNode": "lif",
+            "ParametricLIFNode": "plif",
+            "ILIFNode": "ilif",
+        }[kind]
+        module = importlib.import_module(
+            f"spikingjelly.activation_based.triton_kernel.neuron_kernel.{module_name}"
+        )
+        original = module.wrap_triton
 
         class RecordLaunch:
             def __init__(self, kernel, backward):
@@ -596,15 +608,17 @@ def test_lif_launch_receives_original_strided_input(backend, layout, monkeypatch
                 def record(*args, **kwargs):
                     if self.backward:
                         gradients.append(tuple(x.data_ptr() for x in args[:2]))
+                        restored.append(args[2].data_ptr())
                     else:
                         launches.append((args[0].data_ptr(), args[0].stride()))
-                        states.append(args[1].data_ptr())
+                        states.append((args[1].data_ptr(),))
+                        saved.append(args[3].data_ptr())
                     return launch(*args, **kwargs)
 
                 return record
 
         monkeypatch.setattr(
-            lif,
+            module,
             "wrap_triton",
             lambda kernel: RecordLaunch(
                 original(kernel), "backward" in kernel.fn.__name__
@@ -625,25 +639,36 @@ def test_lif_launch_receives_original_strided_input(backend, layout, monkeypatch
                 values = dict(zip(names, arguments))
                 if "grad_spike_seq" in values:
                     gradients.append((values["grad_spike_seq"], values["grad_v_seq"]))
+                    restored.append(values["h_seq"])
                 else:
                     launches.append((values["x_seq"], x.stride()))
-                    states.append(values["v_init"])
+                    states.append(
+                        tuple(values[n] for n in ("v_init", "w_init") if n in values)
+                    )
+                    saved.append(values["h_seq"])
                 return kernel(grid, block, arguments, *args, **kwargs)
 
             return launch
 
         monkeypatch.setattr(strides, "_get_raw_kernel", record_kernel)
-    node = neuron.LIFNode(backend=backend, step_mode="m", store_v_seq=True).cuda()
+    node = getattr(neuron, kind)(
+        backend=backend, step_mode="m", store_v_seq=True
+    ).cuda()
     v_source = torch.rand(1, 3, 1, 5, device="cuda", requires_grad=True)
     v = v_source.expand(shape[1:])
     node.v = v
+    initial_states = [v]
+    if kind == "IzhikevichNode":
+        node.w = torch.rand_like(v_source).expand(shape[1:])
+        initial_states.append(node.w)
     spike = node(x)
     assert launches == [(x.data_ptr(), x.stride())]
-    assert states == [v.data_ptr()]
+    assert states == [tuple(t.data_ptr() for t in initial_states)]
     gs = torch.tensor(0.25, device="cuda").expand_as(spike)
     gv = torch.tensor(0.5, device="cuda").expand_as(node.v_seq)
     torch.autograd.grad((spike, node.v_seq), v_source, (gs, gv))
     assert gradients == [(gs.data_ptr(), gv.data_ptr())]
+    assert restored == saved
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

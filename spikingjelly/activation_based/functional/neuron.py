@@ -2579,9 +2579,6 @@ def izhikevich_multi_step_cupy(
         detach_reset,
         surrogate_function,
     )
-    spike_seq = spike_seq.reshape(x_seq.shape)
-    v_seq = v_seq.reshape(x_seq.shape)
-    w_seq = w_seq.reshape(x_seq.shape)
     return (
         spike_seq,
         v_seq[-1].clone(),
