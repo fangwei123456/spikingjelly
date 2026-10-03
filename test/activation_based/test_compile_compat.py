@@ -675,6 +675,7 @@ def test_import_without_triton_has_no_discovery_warnings():
         ("language_import", "ModuleNotFoundError"),
         ("language_symbol", "AttributeError"),
         ("language_runtime", "RuntimeError"),
+        ("testing_import", "ModuleNotFoundError"),
     ],
 )
 def test_partial_triton_initialization_stays_optional(failure, error_type):
@@ -697,6 +698,8 @@ def test_partial_triton_initialization_stays_optional(failure, error_type):
         if os.environ["SJ_BROKEN_TRITON"] != "language_import":
             language = types.ModuleType("triton.language")
             language.constexpr = object()
+            if os.environ["SJ_BROKEN_TRITON"] == "testing_import":
+                language.int1 = language.float32 = language.float16 = object()
             if os.environ["SJ_BROKEN_TRITON"] == "language_runtime":
                 def missing_symbol(name):
                     if name == "int1":

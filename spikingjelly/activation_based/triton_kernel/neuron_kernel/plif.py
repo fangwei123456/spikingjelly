@@ -17,6 +17,7 @@ from spikingjelly.logger import logger
 from ... import surrogate
 from ..surrogate_kernel import resolve_sg_triton_id_and_alpha, sg_triton
 from ..triton_utils import (
+    do_bench_cudagraph,
     register_op,
     torch_dtype_for_triton_neuron_compute_dtype_id,
     triton_neuron_compute_dtype_id_to_tl_dtype,
@@ -47,7 +48,7 @@ __all__ = ["multistep_plif"]
 
 
 @triton.autotune(
-    do_bench=triton.testing.do_bench_cudagraph,
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
@@ -122,7 +123,7 @@ def _multistep_plif_forward_kernel_static(
 
 
 @triton.autotune(
-    do_bench=triton.testing.do_bench_cudagraph,
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
@@ -196,7 +197,7 @@ def _multistep_plif_forward_kernel_dynamic(
 
 
 @triton.autotune(
-    do_bench=triton.testing.do_bench_cudagraph,
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
@@ -317,7 +318,7 @@ def _multistep_plif_backward_kernel_static(
 
 
 @triton.autotune(
-    do_bench=triton.testing.do_bench_cudagraph,
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]

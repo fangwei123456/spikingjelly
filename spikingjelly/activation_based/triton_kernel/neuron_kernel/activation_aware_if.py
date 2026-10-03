@@ -6,6 +6,7 @@ from ..._neuron_layout import _empty_like, _layout_args
 from .utils import _spatial_offsets, _time_offset
 
 from ..triton_utils import (
+    do_bench_cudagraph,
     register_op,
     type_dict,
     use_static_range_for_triton_neuron_kernel,
@@ -27,7 +28,7 @@ __all__ = []
 
 
 @triton.autotune(
-    do_bench=triton.testing.do_bench_cudagraph,
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_N": block_n}, num_warps=num_warps)
         for block_n, num_warps in ((128, 4), (256, 8))
@@ -121,7 +122,7 @@ def _multistep_activation_aware_if_forward_static(
 
 
 @triton.autotune(
-    do_bench=triton.testing.do_bench_cudagraph,
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_N": block_n}, num_warps=num_warps)
         for block_n, num_warps in ((128, 4), (256, 8))

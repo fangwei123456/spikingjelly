@@ -505,7 +505,7 @@ def plif_multi_step(
     v_reset_value = 0.0 if v_reset is None else float(v_reset)
     s_seq, v_seq, _ = cupy_multistep_plif_forward(
         x_seq,
-        v_init,
+        v_init.to(dtype=x_seq.dtype),
         v_threshold,
         v_reset_value,
         soft_reset,

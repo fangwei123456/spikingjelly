@@ -23,13 +23,14 @@ _TRITON_IMPORT_ERROR = None
 try:
     import triton
     import triton.language as tl
-    import triton.testing
 
     type_dict = {
         torch.bool: tl.int1,
         torch.float32: tl.float32,
         torch.float16: tl.float16,
     }
+    from triton.testing import do_bench_cudagraph
+
     type_str_dict = {
         torch.bool: "tl.int1",
         torch.float32: "tl.float32",
@@ -69,6 +70,7 @@ except (ImportError, OSError, AttributeError, RuntimeError) as e:
     logger.info("Optional Triton dependency unavailable: {}", e)
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
+    do_bench_cudagraph = dummy.DummyImport()
     type_dict = {}
     type_str_dict = {}
 

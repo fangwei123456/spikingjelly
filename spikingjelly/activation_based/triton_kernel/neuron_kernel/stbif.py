@@ -8,6 +8,7 @@ from .utils import _spatial_offsets, _time_offset
 from spikingjelly.logger import logger
 
 from ..triton_utils import (
+    do_bench_cudagraph,
     register_op,
     type_dict,
     use_static_range_for_triton_neuron_kernel,
@@ -85,7 +86,7 @@ def _single_step_stbif_kernel(
 
 
 @triton.autotune(
-    do_bench=triton.testing.do_bench_cudagraph,
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_N": f * w * 32}, num_warps=w)
         for f in [1, 2, 4]
@@ -157,7 +158,7 @@ def _multi_step_stbif_kernel_static(
 
 
 @triton.autotune(
-    do_bench=triton.testing.do_bench_cudagraph,
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_N": f * w * 32}, num_warps=w)
         for f in [1, 2, 4]
