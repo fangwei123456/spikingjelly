@@ -127,6 +127,16 @@ Modules: ``spikingjelly.activation_based.distributed.vision``,
 Improvements
 ~~~~~~~~~~~~
 
+Point-Neuron Execution
+^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.neuron``.
+
+- Reduced CuPy point-neuron addressing overhead for mixed tensor layouts;
+  storage offsets remain 64-bit, including unaligned FP16 views.
+- Isolated Triton point-neuron autotuning by tensor layout and reduced host
+  launch noise with CUDA Graph timing.
+
 Triton LIF Backward
 ^^^^^^^^^^^^^^^^^^^
 
@@ -294,15 +304,11 @@ Module: ``spikingjelly.activation_based.neuron``.
 
 - Fixed non-contiguous and broadcast point-neuron layouts failing to compile
   with Triton 3.3 because of constexpr tuple indexing.
-- Reduced CuPy point-neuron addressing overhead for mixed tensor layouts;
-  storage offsets remain 64-bit, including unaligned FP16 views.
-- Isolated Triton point-neuron autotuning by tensor layout and reduced host
-  launch noise with CUDA Graph timing. Encountering a new layout now requires
-  additional one-time tuning.
 - Fixed missing decay-parameter gradients in compiled CuPy ``ParametricLIFNode``
-  by explicitly passing initial voltage in the input dtype to backward. The
-  internal backward kernel now takes ``v_init`` and the visible ``v_seq``;
-  regenerate exported PLIF graphs after upgrading.
+  by explicitly saving initial voltage and the visible voltage sequence.
+- Fixed CuPy PLIF backward with an initial voltage dtype different from the
+  input. The voltage conversion is now visible to autograd in eager and compiled
+  execution, so gradients propagate through the same cast used by forward.
 - Restored ``MaskedPSN``'s single-step queue update before an overflow error when
   more than ``T`` steps are called; the explicit-state function leaves its input
   queue unchanged on error.
@@ -329,6 +335,19 @@ Module: ``spikingjelly.activation_based.neuron``.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Point-Neuron Compilation
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.neuron``.
+
+- Regenerate previously compiled or exported CuPy PLIF forward and backward
+  graphs after upgrading. The internal forward operator is now
+  ``sj::cupy_multistep_plif_forward_v2``; the backward schema takes ``v_init`` and
+  the visible ``v_seq`` instead of a combined voltage buffer. Directly loaded old
+  backward graphs are incompatible. Python neuron call signatures are unchanged.
+- Triton point-neuron autotuning now includes layout metadata in its cache key.
+  Previously unseen layouts can incur additional first-call tuning latency.
 
 License Migration
 ^^^^^^^^^^^^^^^^^

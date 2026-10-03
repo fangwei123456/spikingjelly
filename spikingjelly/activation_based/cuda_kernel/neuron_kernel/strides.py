@@ -58,6 +58,8 @@ def _strided_code(code, name, sizes, layouts):
             for size, stride in zip(sizes, strides[1:]):
                 expression += f" + ((n / {divisor}) % {size}) * {stride}LL"
                 divisor *= size
+        # Kernel indices are nonnegative int32; uint32 also covers unpacked half
+        # lanes. Address products retain their LL suffix.
         definitions.append(
             f"struct {array_type} {{\n"
             f"  {'const ' if readonly else ''}{'half' if half else 'float'}* p;\n"
@@ -65,8 +67,6 @@ def _strided_code(code, name, sizes, layouts):
         )
         if half:
             # The packed lane number is independent of physical adjacency.
-            # Kernel indices are nonnegative int32; unpacked half lanes can use
-            # the full uint32 range. Address products retain their LL suffix.
             definitions.append(
                 f"  __device__ __forceinline__ {'half2' if readonly else 'SJHalfRef'} operator[](unsigned int i) const {{\n"
                 f"    unsigned int n = (i % {packed_count}) * 2;\n"
@@ -229,6 +229,7 @@ def _launch_strided(
 
 def _launch_generated(kernel, grid, block, py_dict):
     sequence = isinstance(kernel, CKernel2D)
+    # Forward seeds output history; backward reads v_init as a kernel argument.
     initial_states = (
         {n: py_dict[n] for n in ("v_init", "w_init") if n in py_dict}
         if sequence and not kernel.reverse
