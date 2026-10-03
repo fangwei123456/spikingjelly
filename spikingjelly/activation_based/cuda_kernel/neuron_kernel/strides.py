@@ -229,7 +229,11 @@ def _launch_strided(
 
 def _launch_generated(kernel, grid, block, py_dict):
     sequence = isinstance(kernel, CKernel2D)
-    initial_states = {n: py_dict[n] for n in ("v_init", "w_init") if n in py_dict}
+    initial_states = (
+        {n: py_dict[n] for n in ("v_init", "w_init") if n in py_dict}
+        if sequence and not kernel.reverse
+        else {}
+    )
     py_dict = {n: value for n, value in py_dict.items() if n not in initial_states}
     device = kernel.get_device(py_dict)
     kernel.check_device(device, py_dict)

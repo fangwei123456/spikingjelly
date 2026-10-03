@@ -299,6 +299,10 @@ Module: ``spikingjelly.activation_based.neuron``.
 - Isolated Triton point-neuron autotuning by tensor layout and reduced host
   launch noise with CUDA Graph timing. Encountering a new layout now requires
   additional one-time tuning.
+- Fixed missing decay-parameter gradients in compiled CuPy ``ParametricLIFNode``
+  by passing the initial voltage explicitly to backward. The internal backward
+  kernel now takes ``v_init`` and the visible ``v_seq``; regenerate exported PLIF
+  graphs after upgrading.
 - Restored ``MaskedPSN``'s single-step queue update before an overflow error when
   more than ``T`` steps are called; the explicit-state function leaves its input
   queue unchanged on error.
