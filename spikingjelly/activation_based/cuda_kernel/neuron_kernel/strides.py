@@ -48,20 +48,28 @@ def _strided_code(code, name, sizes, layouts):
         array_type = "SJ_" + tensor_name
         packed_count = (count + 1) // 2 if half else count
         expression = f"(i / {packed_count}) * {strides[0]}LL"
-        divisor = 1
-        for size, stride in zip(sizes, strides[1:]):
-            expression += f" + ((n / {divisor}) % {size}) * {stride}LL"
-            divisor *= size
+        if all(
+            size == 1 or stride == dense
+            for size, stride, dense in zip(sizes, strides[1:], dense_strides)
+        ):
+            expression += " + n"
+        else:
+            divisor = 1
+            for size, stride in zip(sizes, strides[1:]):
+                expression += f" + ((n / {divisor}) % {size}) * {stride}LL"
+                divisor *= size
+        # Kernel indices are nonnegative int32; uint32 also covers unpacked half
+        # lanes. Address products retain their LL suffix.
         definitions.append(
             f"struct {array_type} {{\n"
             f"  {'const ' if readonly else ''}{'half' if half else 'float'}* p;\n"
-            f"  __device__ __forceinline__ long long address(long long i, long long n) const {{ return {expression}; }}\n"
+            f"  __device__ __forceinline__ long long address(unsigned int i, unsigned int n) const {{ return {expression}; }}\n"
         )
         if half:
             # The packed lane number is independent of physical adjacency.
             definitions.append(
-                f"  __device__ __forceinline__ {'half2' if readonly else 'SJHalfRef'} operator[](long long i) const {{\n"
-                f"    long long n = (i % {packed_count}) * 2;\n"
+                f"  __device__ __forceinline__ {'half2' if readonly else 'SJHalfRef'} operator[](unsigned int i) const {{\n"
+                f"    unsigned int n = (i % {packed_count}) * 2;\n"
                 "    auto a = p + address(i, n);\n"
                 f"    auto b = n + 1 < {count} ? p + address(i, n + 1) : nullptr;\n"
             )
@@ -75,7 +83,7 @@ def _strided_code(code, name, sizes, layouts):
             definitions.append("  }\n};\n")
         else:
             definitions.append(
-                f"  __device__ __forceinline__ {'const ' if readonly else ''}float& operator[](long long i) const {{ return p[address(i, i % {count})]; }}\n}};\n"
+                f"  __device__ __forceinline__ {'const ' if readonly else ''}float& operator[](unsigned int i) const {{ return p[address(i, i % {count})]; }}\n}};\n"
             )
         parameters = re.sub(
             r"\b" + tensor_name + r"\b", "raw_" + tensor_name, parameters
@@ -221,7 +229,12 @@ def _launch_strided(
 
 def _launch_generated(kernel, grid, block, py_dict):
     sequence = isinstance(kernel, CKernel2D)
-    initial_states = {n: py_dict[n] for n in ("v_init", "w_init") if n in py_dict}
+    # Forward seeds output history; backward reads v_init as a kernel argument.
+    initial_states = (
+        {n: py_dict[n] for n in ("v_init", "w_init") if n in py_dict}
+        if sequence and not kernel.reverse
+        else {}
+    )
     py_dict = {n: value for n, value in py_dict.items() if n not in initial_states}
     device = kernel.get_device(py_dict)
     kernel.check_device(device, py_dict)

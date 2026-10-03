@@ -18,6 +18,35 @@ def test_cupy_multistep_voltage_output_is_16_byte_aligned(dtype):
     assert v_seq.shape == x_seq.shape
 
 
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
+@pytest.mark.parametrize("compiled", [False, True])
+def test_plif_mixed_voltage_dtype_matches_explicit_cast(dtype, compiled):
+    _require_cuda_cupy_compile() if compiled else _require_cuda_cupy()
+    torch.manual_seed(768)
+    state_dtype = torch.float16 if dtype == torch.float32 else torch.float32
+    x = torch.rand(4, 2, 8, device="cuda", dtype=dtype).requires_grad_()
+    v = torch.rand(2, 8, device="cuda", dtype=state_dtype).requires_grad_()
+    w = torch.tensor(0.2, device="cuda", requires_grad=True)
+    xr, vr, wr = (value.detach().clone().requires_grad_() for value in (x, v, w))
+    sg = surrogate.Sigmoid()
+
+    def run(x, v, w):
+        return functional.plif_multi_step_cupy(
+            x, v, w, True, 1.0, 0.0, sg, store_v_seq=True
+        )
+
+    expected = run(xr, vr.to(dtype), wr)
+    actual = torch.compile(run, fullgraph=True)(x, v, w) if compiled else run(x, v, w)
+    for result, reference in zip(actual, expected):
+        torch.testing.assert_close(result, reference, rtol=0, atol=0)
+    grads = torch.autograd.grad(sum(value.sum() for value in actual), (x, v, w))
+    refs = torch.autograd.grad(sum(value.sum() for value in expected), (xr, vr, wr))
+    for result, reference in zip(grads, refs):
+        assert torch.isfinite(result).all() and torch.isfinite(reference).all()
+        assert result.dtype == reference.dtype
+        torch.testing.assert_close(result, reference, rtol=1e-3, atol=1e-3)
+
+
 def _cupy_available() -> bool:
     try:
         import cupy  # noqa: F401

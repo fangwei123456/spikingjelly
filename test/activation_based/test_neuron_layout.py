@@ -452,6 +452,41 @@ def test_compiled_lif_layout_and_gradients(backend, layout):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("layout", ["contiguous", "channels_last", "broadcast"])
+@pytest.mark.parametrize("time_steps", [1, 4])
+def test_compiled_cupy_plif_parameter_gradient(layout, time_steps):
+    pytest.importorskip("cupy")
+    torch.manual_seed(753)
+    node = neuron.ParametricLIFNode(
+        backend="cupy", step_mode="m", store_v_seq=True
+    ).cuda()
+    reference = copy.deepcopy(node)
+    shape = (time_steps, 2, 3, 2, 8)
+    source_shape = (1, *shape[1:]) if layout == "broadcast" else shape
+    source = torch.rand(source_shape, device="cuda") * 0.8
+    if layout == "channels_last":
+        source = _layout(source, layout)
+    source.requires_grad_()
+    source_ref = source.detach().clone().requires_grad_()
+    x = source.expand(shape) if layout == "broadcast" else source
+    xr = source_ref.expand(shape) if layout == "broadcast" else source_ref
+    expected = reference(xr)
+    actual = torch.compile(node, fullgraph=True)(x)
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    torch.testing.assert_close(node.v_seq, reference.v_seq, rtol=0, atol=0)
+    loss = actual.sum() + node.v_seq.sum()
+    expected_loss = expected.sum() + reference.v_seq.sum()
+    functional.reset_net(node)
+    functional.reset_net(reference)
+    gradients = torch.autograd.grad(loss, (source, node.w))
+    reference_gradients = torch.autograd.grad(expected_loss, (source_ref, reference.w))
+    assert reference_gradients[1].abs().item() > 0
+    for a, b in zip(gradients, reference_gradients):
+        assert torch.isfinite(a).all() and torch.isfinite(b).all()
+        torch.testing.assert_close(a, b, rtol=1e-4, atol=1e-5)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("backend", ["cupy"])
 @pytest.mark.parametrize("kind", ["IFNode", "LIFNode"])
 @pytest.mark.parametrize("layout", ["sliced", "broadcast"])
@@ -683,6 +718,30 @@ def test_cupy_half2_unaligned_external_storage():
         node(x), reference(x.contiguous().clone()), rtol=0, atol=0
     )
     torch.testing.assert_close(node.v_seq, reference.v_seq, rtol=0, atol=0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_cupy_large_address_offset_with_half2_tail():
+    pytest.importorskip("cupy")
+    if torch.cuda.mem_get_info()[0] < 6 * 1024**3:
+        pytest.skip("the strided input requires just over 4 GiB of storage")
+    values = torch.tensor(
+        [[0.5, 0.75, 1.25], [1.5, 0.25, 0.5]], device="cuda", dtype=torch.float16
+    )
+    x = torch.empty_strided(
+        values.shape, ((1 << 31) + 1, 1), device="cuda", dtype=values.dtype
+    )
+    x.copy_(values).requires_grad_()
+    expected_x = values.clone().requires_grad_()
+    node = neuron.LIFNode(backend="cupy", step_mode="m", store_v_seq=True).cuda()
+    reference = copy.deepcopy(node)
+    actual, expected = node(x), reference(expected_x)
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    torch.testing.assert_close(node.v_seq, reference.v_seq, rtol=0, atol=0)
+    actual_grad = torch.autograd.grad(actual.sum(), x)[0]
+    expected_grad = torch.autograd.grad(expected.sum(), expected_x)[0]
+    assert torch.isfinite(actual_grad).all() and torch.isfinite(expected_grad).all()
+    torch.testing.assert_close(actual_grad, expected_grad, rtol=0, atol=0)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

@@ -98,7 +98,8 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
         self.decay_input = decay_input
         self.add_param(ctype=f"const {dtype} *", cname="decay")
         self.add_param(ctype="float *", cname="grad_decay")
-        self.add_param(ctype=f"const {dtype} *", cname="v_v_seq")
+        self.add_param(ctype=f"const {dtype} *", cname="v_seq")
+        self.add_param(ctype=f"const {dtype} *", cname="v_init")
 
     def grad_h_next_to_v(self) -> str:
         return cfunction.sub(
@@ -155,12 +156,15 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
     def core(self):
         core_codes = auto_cuda_base.CodeTyper(18)
         with auto_cuda_base.CodeBlock(core_codes):
+            core_codes.append(
+                f"const {self.dtype} v_previous = t < N ? v_init[index] : v_seq[t - N];"
+            )
             if self.decay_input:
                 core_codes.append(
                     cfunction.sub(
                         z=f"{self.dtype} temp_var",
                         x="h_seq[t]",
-                        y="v_v_seq[t]",
+                        y="v_previous",
                         dtype=self.dtype,
                     )
                 )
@@ -184,7 +188,7 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
                         cfunction.sub(
                             z=f"{self.dtype} temp_var",
                             x="v_reset",
-                            y="v_v_seq[t]",
+                            y="v_previous",
                             dtype=self.dtype,
                         )
                     )
@@ -198,7 +202,7 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
                         cfunction.mul(
                             z=f"{self.dtype} temp_var",
                             x="grad_h",
-                            y="v_v_seq[t]",
+                            y="v_previous",
                             dtype=self.dtype,
                         )
                     )
@@ -288,7 +292,8 @@ def _get_plif_backward_kernel(
     )
 
 
-@torch.library.custom_op("sj::cupy_multistep_plif_forward", mutates_args=())
+# A new operator name invalidates AOT graphs containing the old backward ABI.
+@torch.library.custom_op("sj::cupy_multistep_plif_forward_v2", mutates_args=())
 def cupy_multistep_plif_forward(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
@@ -330,7 +335,7 @@ def cupy_multistep_plif_forward(
     )
 
 
-@torch.library.register_fake("sj::cupy_multistep_plif_forward")
+@torch.library.register_fake("sj::cupy_multistep_plif_forward_v2")
 def _cupy_multistep_plif_forward_fake(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
@@ -349,17 +354,6 @@ def _cupy_multistep_plif_forward_fake(
     )
 
 
-def _recover_v_v_seq_view(v_seq: torch.Tensor):
-    base_offset = v_seq.storage_offset() - v_seq.stride()[0]
-    if base_offset < 0:
-        return None
-    full_shape = (v_seq.shape[0] + 1, *v_seq.shape[1:])
-    try:
-        return v_seq.as_strided(full_shape, v_seq.stride(), storage_offset=base_offset)
-    except RuntimeError:
-        return None
-
-
 def _setup_cupy_multistep_plif_context(ctx, inputs, output):
     (
         _,
@@ -374,10 +368,8 @@ def _setup_cupy_multistep_plif_context(ctx, inputs, output):
     ) = inputs
     h_seq = output[2]
     v_seq = output[1]
-    v_v_seq = _recover_v_v_seq_view(v_seq)
-    if v_v_seq is None:
-        v_v_seq = torch.cat((v_init.unsqueeze(0), v_seq), dim=0)
-    ctx.save_for_backward(h_seq, v_v_seq, decay)
+    # The compiler need not preserve storage hidden before the visible v_seq.
+    ctx.save_for_backward(h_seq, v_seq, v_init, decay)
     ctx.v_th = v_th
     ctx.v_reset = None if soft_reset else v_reset
     ctx.detach_reset = detach_reset
@@ -390,7 +382,8 @@ def cupy_multistep_plif_backward(
     grad_spike_seq: torch.Tensor,
     grad_v_seq: torch.Tensor,
     h_seq: torch.Tensor,
-    v_v_seq: torch.Tensor,
+    v_seq: torch.Tensor,
+    v_init: torch.Tensor,
     v_th: float,
     v_reset: float,
     soft_reset: bool,
@@ -434,7 +427,8 @@ def cupy_multistep_plif_backward(
         "v_reset": None if soft_reset else v_reset,
         "decay": decay,
         "grad_decay": torch.zeros_like(decay, dtype=torch.float),
-        "v_v_seq": v_v_seq,
+        "v_seq": v_seq,
+        "v_init": v_init,
     }
     cuda_utils._scalar_to_cupy(py_dict, ref="grad_spike_seq")
     if py_dict["v_reset"] is None:
@@ -448,7 +442,8 @@ def _cupy_multistep_plif_backward_fake(
     grad_spike_seq: torch.Tensor,
     grad_v_seq: torch.Tensor,
     h_seq: torch.Tensor,
-    v_v_seq: torch.Tensor,
+    v_seq: torch.Tensor,
+    v_init: torch.Tensor,
     v_th: float,
     v_reset: float,
     soft_reset: bool,
@@ -466,14 +461,15 @@ def _cupy_multistep_plif_backward_fake(
 
 def _cupy_multistep_plif_backward_autograd(ctx, grad_spike_seq, grad_v_seq, grad_h_seq):
     del grad_h_seq
-    h_seq, v_v_seq, decay = ctx.saved_tensors
+    h_seq, v_seq, v_init, decay = ctx.saved_tensors
     soft_reset = ctx.v_reset is None
     v_reset = 0.0 if soft_reset else float(ctx.v_reset)
     grad_x_seq, grad_v_init, grad_decay = cupy_multistep_plif_backward(
         grad_spike_seq,
         grad_v_seq,
         h_seq,
-        v_v_seq,
+        v_seq,
+        v_init,
         ctx.v_th,
         v_reset,
         soft_reset,
@@ -486,7 +482,7 @@ def _cupy_multistep_plif_backward_autograd(ctx, grad_spike_seq, grad_v_seq, grad
 
 
 torch.library.register_autograd(
-    "sj::cupy_multistep_plif_forward",
+    "sj::cupy_multistep_plif_forward_v2",
     _cupy_multistep_plif_backward_autograd,
     setup_context=_setup_cupy_multistep_plif_context,
 )
@@ -509,7 +505,7 @@ def plif_multi_step(
     v_reset_value = 0.0 if v_reset is None else float(v_reset)
     s_seq, v_seq, _ = cupy_multistep_plif_forward(
         x_seq,
-        v_init,
+        v_init.to(dtype=x_seq.dtype),
         v_threshold,
         v_reset_value,
         soft_reset,

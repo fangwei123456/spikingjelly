@@ -12,6 +12,7 @@ from .utils import (
 )
 
 from ..triton_utils import (
+    do_bench_cudagraph,
     register_op,
     type_dict,
     use_static_range_for_triton_neuron_kernel,
@@ -32,6 +33,7 @@ except (ImportError, OSError) as e:
 
 
 @triton.autotune(
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
@@ -44,6 +46,8 @@ except (ImportError, OSError) as e:
         "compute_dtype",
         "save_intermediates",
         "store_v_seq",
+        "SIZES",
+        "STRIDES",
     ],
 )
 @triton.jit
@@ -103,12 +107,21 @@ def _multistep_ilif_forward_kernel_static(
 
 
 @triton.autotune(
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["BLOCK_MINOR", "NCL", "compute_dtype", "save_intermediates", "store_v_seq"],
+    key=[
+        "BLOCK_MINOR",
+        "NCL",
+        "compute_dtype",
+        "save_intermediates",
+        "store_v_seq",
+        "SIZES",
+        "STRIDES",
+    ],
 )
 @triton.jit
 def _multistep_ilif_forward_kernel_dynamic(
@@ -167,12 +180,22 @@ def _multistep_ilif_forward_kernel_dynamic(
 
 
 @triton.autotune(
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["BLOCK_MINOR", "T", "NCL", "compute_dtype", "detach_reset", "store_v_seq"],
+    key=[
+        "BLOCK_MINOR",
+        "T",
+        "NCL",
+        "compute_dtype",
+        "detach_reset",
+        "store_v_seq",
+        "SIZES",
+        "STRIDES",
+    ],
 )
 @triton.jit
 def _multistep_ilif_backward_kernel_static(
@@ -250,12 +273,21 @@ def _multistep_ilif_backward_kernel_static(
 
 
 @triton.autotune(
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
         for w in [4, 8]
     ],
-    key=["BLOCK_MINOR", "NCL", "compute_dtype", "detach_reset", "store_v_seq"],
+    key=[
+        "BLOCK_MINOR",
+        "NCL",
+        "compute_dtype",
+        "detach_reset",
+        "store_v_seq",
+        "SIZES",
+        "STRIDES",
+    ],
 )
 @triton.jit
 def _multistep_ilif_backward_kernel_dynamic(

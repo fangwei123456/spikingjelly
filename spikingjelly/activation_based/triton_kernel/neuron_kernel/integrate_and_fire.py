@@ -16,6 +16,7 @@ from .utils import (
 from ... import surrogate
 from ..surrogate_kernel import resolve_sg_triton_id_and_alpha, sg_triton
 from ..triton_utils import (
+    do_bench_cudagraph,
     register_op,
     triton_neuron_compute_dtype_id_to_tl_dtype,
     triton_neuron_dtype_id_to_torch_dtype,
@@ -44,6 +45,7 @@ __all__ = ["multistep_if"]
 
 
 @triton.autotune(
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
@@ -57,6 +59,8 @@ __all__ = ["multistep_if"]
         "soft_reset",
         "save_intermediates",
         "store_v_seq",
+        "SIZES",
+        "STRIDES",
     ],
 )
 @triton.jit
@@ -117,6 +121,7 @@ def _multistep_if_forward_kernel_static(
 
 
 @triton.autotune(
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
@@ -129,6 +134,8 @@ def _multistep_if_forward_kernel_static(
         "soft_reset",
         "save_intermediates",
         "store_v_seq",
+        "SIZES",
+        "STRIDES",
     ],
 )
 @triton.jit
@@ -189,6 +196,7 @@ def _multistep_if_forward_kernel_dynamic(
 
 
 @triton.autotune(
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
@@ -202,6 +210,8 @@ def _multistep_if_forward_kernel_dynamic(
         "soft_reset",
         "detach_reset",
         "store_v_seq",
+        "SIZES",
+        "STRIDES",
     ],
 )
 @triton.jit
@@ -293,6 +303,7 @@ def _multistep_if_backward_kernel_static(
 
 
 @triton.autotune(
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
@@ -305,6 +316,8 @@ def _multistep_if_backward_kernel_static(
         "soft_reset",
         "detach_reset",
         "store_v_seq",
+        "SIZES",
+        "STRIDES",
     ],
 )
 @triton.jit

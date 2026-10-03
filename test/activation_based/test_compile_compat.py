@@ -17,6 +17,44 @@ from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
 )
 
 
+def test_reduce_overhead_triton_lif_layout_change():
+    _require_cuda_triton_compile()
+    torch.manual_seed(768)
+    sg = surrogate.Sigmoid()
+
+    def run(x, v):
+        return functional.lif_multi_step_triton(
+            x, v, 2.0, True, 1.0, 0.0, sg, store_v_seq=True
+        )
+
+    compiled = torch.compile(run, fullgraph=True, mode="reduce-overhead")
+    for layout in ("contiguous", "channels_last", "broadcast", "contiguous"):
+        x = torch.rand(4, 2, 3, 2, 8, device="cuda") * 0.8
+        if layout == "channels_last":
+            x = (
+                x.flatten(0, 1)
+                .contiguous(memory_format=torch.channels_last)
+                .view(x.shape)
+            )
+        elif layout == "broadcast":
+            x = x[:1].expand_as(x)
+        x.requires_grad_()
+        v = torch.zeros_like(x[0], requires_grad=True)
+        expected = run(x, v)
+        expected_grads = torch.autograd.grad(
+            expected[0].sum() + expected[2].sum(), (x, v)
+        )
+        for _ in range(3):
+            torch.compiler.cudagraph_mark_step_begin()
+            actual = compiled(x, v)
+            for a, b in zip(actual, expected):
+                torch.testing.assert_close(a, b, rtol=0, atol=0)
+            grads = torch.autograd.grad(actual[0].sum() + actual[2].sum(), (x, v))
+            for a, b in zip(grads, expected_grads):
+                assert torch.isfinite(a).all()
+                torch.testing.assert_close(a, b, rtol=1e-5, atol=1e-6)
+
+
 def _triton_available() -> bool:
     try:
         import triton  # noqa: F401
@@ -675,6 +713,7 @@ def test_import_without_triton_has_no_discovery_warnings():
         ("language_import", "ModuleNotFoundError"),
         ("language_symbol", "AttributeError"),
         ("language_runtime", "RuntimeError"),
+        ("testing_import", "ModuleNotFoundError"),
     ],
 )
 def test_partial_triton_initialization_stays_optional(failure, error_type):
@@ -694,9 +733,15 @@ def test_partial_triton_initialization_stays_optional(failure, error_type):
         triton.autotune = lambda **kwargs: lambda f: f
         triton.Config = lambda *args, **kwargs: object()
         sys.modules["triton"] = triton
+        if os.environ["SJ_BROKEN_TRITON"] != "testing_import":
+            testing = types.ModuleType("triton.testing")
+            testing.do_bench_cudagraph = lambda fn, **kwargs: None
+            sys.modules["triton.testing"] = testing
         if os.environ["SJ_BROKEN_TRITON"] != "language_import":
             language = types.ModuleType("triton.language")
             language.constexpr = object()
+            if os.environ["SJ_BROKEN_TRITON"] == "testing_import":
+                language.int1 = language.float32 = language.float16 = object()
             if os.environ["SJ_BROKEN_TRITON"] == "language_runtime":
                 def missing_symbol(name):
                     if name == "int1":
