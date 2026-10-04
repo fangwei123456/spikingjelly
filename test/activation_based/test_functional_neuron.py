@@ -952,6 +952,27 @@ def test_sliding_psn_step_matches_module():
         _assert_close(actual_state, expected_state)
 
 
+@pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16, torch.float16])
+def test_sliding_psn_multi_step_gemm_follows_input_dtype(dtype):
+    # Regression: gen_gemm_weight() built the T x T weight matrix with the
+    # parameter's device but a hardcoded float32 dtype, so a bf16/fp16
+    # SlidingPSN crashed in the gemm multi-step path with
+    # "mat1 and mat2 must have the same dtype".
+    x_seq = torch.randn(5, 2, 3, dtype=dtype)
+    module = neuron.SlidingPSN(k=3, surrogate_function=_surrogate()).to(dtype)
+    assert module.gen_gemm_weight(x_seq.shape[0]).dtype == dtype
+
+    module.step_mode = "m"
+    multi_step = module(x_seq)
+    assert multi_step.dtype == dtype
+
+    reference = neuron.SlidingPSN(k=3, surrogate_function=_surrogate()).to(dtype)
+    reference.weight.data.copy_(module.weight.data)
+    reference.bias.data.copy_(module.bias.data)
+    single_step = torch.stack([reference(x) for x in x_seq])
+    torch.testing.assert_close(single_step, multi_step)
+
+
 def test_masked_psn_step_matches_module_sequence():
     x_seq = torch.randn(4, 2, 3)
     module = neuron.MaskedPSN(k=3, T=4, lambda_init=1.0)
