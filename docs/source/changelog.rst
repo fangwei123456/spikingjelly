@@ -332,6 +332,9 @@ Module: ``spikingjelly.activation_based.neuron``.
 - ``GatedLIFNode`` now materialises its previous-spike state with the input dtype,
   so its multi-step output and membrane state keep the module dtype under half
   precision instead of being promoted to ``float32``.
+- ``SlidingPSN`` now builds its multi-step gemm weight matrix with the parameter
+  dtype, so a ``bfloat16`` or ``float16`` module runs the gemm backend instead of
+  failing with ``mat1 and mat2 must have the same dtype``.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

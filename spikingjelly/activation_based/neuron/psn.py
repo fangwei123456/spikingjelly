@@ -462,7 +462,7 @@ class SlidingPSN(base.MemoryModule):
         return "gemm", "conv"
 
     def gen_gemm_weight(self, T: int):
-        weight = torch.zeros([T, T], device=self.weight.device)
+        weight = torch.zeros([T, T], dtype=self.weight.dtype, device=self.weight.device)
         for i in range(T):
             end = i + 1
             start = max(0, i + 1 - self.k)
