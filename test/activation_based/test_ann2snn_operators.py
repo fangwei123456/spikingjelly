@@ -179,10 +179,13 @@ def test_td_multistep_compact_state_preserves_chunked_gradients():
     y_chunked = torch.cat((chunked(x_chunked[:3]), chunked(x_chunked[3:])))
     y_chunked.square().sum().backward()
 
-    assert torch.allclose(y_chunked, y_full, atol=1e-6, rtol=1e-6)
-    assert torch.allclose(x_chunked.grad, x_full.grad, atol=1e-6, rtol=1e-6)
-    assert torch.allclose(chunked.weight.grad, full.weight.grad, atol=1e-5, rtol=1e-6)
-    assert torch.allclose(chunked.bias.grad, full.bias.grad, atol=1e-5, rtol=1e-6)
+    # The chunked run accumulates the same values in a different order, so the
+    # difference is float32 rounding noise; the previous atol=1e-6/1e-5 bounds
+    # sat right at the observed noise and made this test flaky on random input.
+    torch.testing.assert_close(y_chunked, y_full)
+    torch.testing.assert_close(x_chunked.grad, x_full.grad)
+    torch.testing.assert_close(chunked.weight.grad, full.weight.grad)
+    torch.testing.assert_close(chunked.bias.grad, full.bias.grad)
 
 
 class TestTDSoftmax:
