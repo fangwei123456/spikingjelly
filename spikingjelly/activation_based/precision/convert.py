@@ -95,10 +95,8 @@ def _configure_triton_neurons(model: nn.Module, config, device) -> dict:
     from ..neuron.integrate_and_fire import IFNode
     from ..neuron.lif import LIFNode
     from ..neuron.plif import ParametricLIFNode
-    from ..triton_kernel.neuron_kernel.utils import (
-        _prepare_triton_neuron_execution_plan,
-    )
-    from ..triton_kernel.triton_utils import normalize_triton_storage_dtype
+    from ..._ops.triton_layout import _prepare_triton_neuron_execution_plan
+    from ..._ops.triton_runtime import normalize_triton_storage_dtype
 
     neuron_types = {
         IFNode: "if",

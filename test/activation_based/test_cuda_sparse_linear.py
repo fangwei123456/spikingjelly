@@ -14,7 +14,7 @@ try:
 except (ImportError, OSError):
     _HAS_CUPY = False
 
-from spikingjelly.activation_based.cuda_kernel.spike_linear import (
+from spikingjelly._ops.spike_linear.sparse import (
     bit_pack_spike_dense,
     cupy_spike_linear_sparse_forward,
     cupy_spike_linear_v3_dense_forward,
@@ -261,10 +261,14 @@ def test_fake_tensor_shape():
     s_meta = torch.randn(M, K, dtype=dtype, device="meta")
     packed_meta = torch.empty(M, (K + 7) // 8, dtype=torch.uint8, device="meta")
     W_meta = torch.randn(N, K, dtype=dtype, device="meta")
-    y_meta = torch.ops.sj.cupy_spike_linear_v3_dense_forward(packed_meta, W_meta, None)
+    y_meta = torch.ops.sj_spike_linear.cupy_spike_linear_v3_dense_forward(
+        packed_meta, W_meta, None
+    )
     assert y_meta.shape == (M, N)
     assert y_meta.dtype == dtype
-    y_meta = torch.ops.sj.cupy_spike_linear_sparse_forward(s_meta, W_meta, None)
+    y_meta = torch.ops.sj_spike_linear.cupy_spike_linear_sparse_forward(
+        s_meta, W_meta, None
+    )
     assert y_meta.shape == (M, N)
     assert y_meta.dtype == dtype
 
@@ -280,18 +284,20 @@ def test_fake_tensor_input_contracts():
         weight_cpu = torch.empty(N, K, device="cpu")
         bias_cpu = torch.empty(N, device="cpu")
         with pytest.raises(ValueError, match="same device"):
-            torch.ops.sj.cupy_spike_linear_sparse_forward(spike_cuda0, weight_cpu, None)
+            torch.ops.sj_spike_linear.cupy_spike_linear_sparse_forward(
+                spike_cuda0, weight_cpu, None
+            )
         with pytest.raises(ValueError, match="same device"):
-            torch.ops.sj.cupy_spike_linear_v3_dense_forward(
+            torch.ops.sj_spike_linear.cupy_spike_linear_v3_dense_forward(
                 packed_cuda0, weight_cpu, None
             )
         with pytest.raises(ValueError, match="same device"):
-            torch.ops.sj.cupy_spike_linear_sparse_forward(
+            torch.ops.sj_spike_linear.cupy_spike_linear_sparse_forward(
                 spike_cuda0, weight_cuda0, bias_cpu
             )
 
     with pytest.raises(TypeError, match="float32, float16, or bfloat16"):
-        torch.ops.sj.cupy_spike_linear_sparse_forward(
+        torch.ops.sj_spike_linear.cupy_spike_linear_sparse_forward(
             torch.empty(M, K, dtype=torch.int32, device="meta"),
             torch.empty(N, K, dtype=torch.int32, device="meta"),
             None,

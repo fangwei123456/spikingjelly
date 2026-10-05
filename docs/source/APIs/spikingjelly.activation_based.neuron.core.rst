@@ -72,6 +72,25 @@ Parallel Spiking Neuron Family
 FlexSN
 -------------
 
+**中文：实现组织**
+
+``FlexSN`` 负责用户 ``core``、状态、静态输入和 ``reset()``。
+``neuron.flexsn_trace`` 捕获推理/训练 FX 图，``neuron.flexsn_hop`` 负责 Dynamo
+捕获。后端 ``spikingjelly._ops.flexsn`` 接收图，完成 Triton 代码生成、算子注册、
+启动与反向；HOP 的执行也位于该包。后端不依赖神经元实例。
+现有 ``backend="torch" / "hop" / "triton"`` 选择保持不变，不引入自动后端选择。
+
+**English: implementation layout**
+
+``FlexSN`` owns the user ``core``, state, static inputs and ``reset()``.
+``neuron.flexsn_trace`` captures inference/training FX graphs, while
+``neuron.flexsn_hop`` handles Dynamo capture. The backend in
+``spikingjelly._ops.flexsn`` consumes graphs and owns Triton code generation,
+operator registration, launches and backward execution, as well as HOP execution.
+It does not depend on neuron instances. The existing
+``backend="torch" / "hop" / "triton"`` selection remains explicit.
+
+
 .. automodule:: spikingjelly.activation_based.neuron.flexsn
    :members:
    :undoc-members:

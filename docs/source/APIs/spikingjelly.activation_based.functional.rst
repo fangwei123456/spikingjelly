@@ -321,3 +321,10 @@ Other auxiliary **tool functions** .
    :hidden:
 
    misc <spikingjelly.activation_based.functional.misc>
+
+Binary Spike Operators / 二值脉冲算子
+++++++++++++++++++++++++++++++++++++++
+
+.. toctree::
+
+   spike <spikingjelly.activation_based.functional.spike>

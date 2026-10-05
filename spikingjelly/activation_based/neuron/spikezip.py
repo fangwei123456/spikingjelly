@@ -201,7 +201,7 @@ class STBIFNode(base.MemoryModule):
         if self.backend == "triton" and x_seq.device.type != "cuda":
             raise RuntimeError("STBIFNode backend='triton' requires a CUDA tensor.")
         if self.backend == "triton":
-            from spikingjelly.activation_based.triton_kernel.neuron_kernel import stbif
+            from ..._ops.stbif import triton_precision as stbif
 
             out_seq, q, acc_q, cur_output = stbif.multi_step_stbif(
                 x_seq,

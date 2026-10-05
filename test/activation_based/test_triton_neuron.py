@@ -1,3 +1,5 @@
+import importlib
+
 import pytest
 import torch
 
@@ -5,24 +7,14 @@ import spikingjelly.configure as configure
 from spikingjelly.activation_based import base as activation_base
 from spikingjelly.activation_based import functional, neuron, surrogate
 from spikingjelly.activation_based.functional import neuron as functional_neuron
-from spikingjelly.activation_based.triton_kernel import triton_utils
-from spikingjelly.activation_based.triton_kernel.fp8_capability import (
-    supports_triton_fp8_neuron_backward,
-    supports_triton_fp8_neuron_forward,
-    triton_fp8_neuron_capability_report,
-)
-from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
-    integrate_and_fire as if_triton_kernel,
-)
-from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
-    lif as lif_triton_kernel,
-)
-from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
-    plif as plif_triton_kernel,
-)
-from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
-    utils as neuron_triton_utils,
-)
+from spikingjelly._ops import triton_runtime as triton_utils
+from spikingjelly._ops.fp8_capability import supports_triton_fp8_neuron_backward
+from spikingjelly._ops.fp8_capability import supports_triton_fp8_neuron_forward
+from spikingjelly._ops.fp8_capability import triton_fp8_neuron_capability_report
+from spikingjelly._ops.if_ import triton_precision as if_triton_kernel
+from spikingjelly._ops.lif import triton_precision as lif_triton_kernel
+from spikingjelly._ops.plif import triton_precision as plif_triton_kernel
+from spikingjelly._ops import triton_layout as neuron_triton_utils
 
 
 def _assert_close(a: torch.Tensor, b: torch.Tensor, dtype: torch.dtype):
@@ -425,7 +417,7 @@ def test_fp8_backward_capability_uses_backward_probe(monkeypatch):
     if storage_dtype is None:
         pytest.skip("This PyTorch build does not expose torch.float8_e4m3fn.")
 
-    from spikingjelly.activation_based.triton_kernel import fp8_capability
+    from spikingjelly._ops import fp8_capability as fp8_capability
 
     calls = {"forward": 0, "backward": 0}
 
@@ -1810,7 +1802,13 @@ def test_registered_triton_neuron_contracts_pass_opcheck(kind):
                 False,
             ),
         )
-    torch.library.opcheck(getattr(torch.ops.sj, name).default, args, kwargs)
+    family = (
+        "activation_aware_if" if kind == "activation_aware_if" else kind.split("_")[0]
+    )
+    package = "if_" if family == "if" else family
+    importlib.import_module(f"spikingjelly._ops.{package}.triton_precision")
+    namespace = getattr(torch.ops, "sj_" + family)
+    torch.library.opcheck(getattr(namespace, name).default, args, kwargs)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

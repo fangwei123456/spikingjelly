@@ -463,15 +463,16 @@ def test_gil_intervals_are_clipped_to_steps_and_kept_per_thread(tmp_path):
     assert (output / "threads.csv").is_file()
 
 
-def test_compare_rejects_different_workloads():
+@pytest.mark.parametrize("field", ["model", "neuron_family", "surrogate"])
+def test_compare_rejects_different_workloads(field):
     baseline = {
         "schema_version": 2,
-        "benchmark": {"case": {"model": "a"}},
+        "benchmark": {"case": {field: "a"}},
         "steps": [{}],
     }
     candidate = {
         "schema_version": 2,
-        "benchmark": {"case": {"model": "b"}},
+        "benchmark": {"case": {field: "b"}},
         "steps": [{}],
     }
     with pytest.raises(ValueError, match="workload metadata differs"):

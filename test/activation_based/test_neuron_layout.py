@@ -10,7 +10,8 @@ import pytest
 import torch
 
 from spikingjelly.activation_based import functional, neuron
-from spikingjelly.activation_based._neuron_layout import _empty_like, _layout_args
+from spikingjelly._ops.layout import _empty_like
+from spikingjelly._ops.layout import _layout_args
 
 
 @pytest.mark.parametrize("flag,value", [("--steps", "0"), ("--warmup", "-1")])
@@ -39,9 +40,7 @@ def test_layout_benchmark_rejects_invalid_iterations(monkeypatch, capsys, flag, 
 
 
 def test_cupy_codegen_reports_unsupported_array_parameter():
-    from spikingjelly.activation_based.cuda_kernel.neuron_kernel.strides import (
-        _strided_code,
-    )
+    from spikingjelly._ops.cuda_strides import _strided_code
 
     with pytest.raises(ValueError, match=r"probe: expected.* x_seq"):
         _strided_code(
@@ -133,9 +132,7 @@ def test_resized_neuron_buffer_layout(input_strides, output_strides):
 @pytest.mark.parametrize("layout", ["contiguous", "time_inner", "sliced", "broadcast"])
 @pytest.mark.parametrize("width", [7, 8])
 def test_cupy_state_sequence_alignment(dtype, layout, width):
-    from spikingjelly.activation_based.cuda_kernel.neuron_kernel.multi_step.base import (
-        _aligned_v_v_seq,
-    )
+    from spikingjelly._ops.cuda_codegen.neuron_multi import _aligned_v_v_seq
 
     x = _layout(torch.empty(4, 3, width, dtype=dtype), layout)
     output = _aligned_v_v_seq(x)
@@ -477,13 +474,11 @@ def test_single_step_view_neuron(backend, kind, layout):
 )
 def test_strided_inference_point_neurons(layout):
     pytest.importorskip("triton")
-    from spikingjelly.activation_based.triton_kernel.neuron_kernel.activation_aware_if import (
+    from spikingjelly._ops.activation_aware_if.triton_precision import (
         _multistep_activation_aware_if,
     )
-    from spikingjelly.activation_based.triton_kernel.neuron_kernel.stbif import (
-        multi_step_stbif,
-        single_step_stbif,
-    )
+    from spikingjelly._ops.stbif.triton_precision import multi_step_stbif
+    from spikingjelly._ops.stbif.triton_precision import single_step_stbif
 
     torch.manual_seed(23)
     x = _layout(torch.rand(4, 2, 3, 2, 5, device="cuda"), layout)
@@ -532,10 +527,8 @@ def test_strided_inference_point_neurons(layout):
     ],
 )
 def test_single_step_stbif_compacts_all_spatial_axes(device):
-    from spikingjelly.activation_based.triton_kernel.neuron_kernel.stbif import (
-        _single_step_stbif_fake,
-        single_step_stbif,
-    )
+    from spikingjelly._ops.stbif.triton_precision import _single_step_stbif_fake
+    from spikingjelly._ops.stbif.triton_precision import single_step_stbif
 
     torch.manual_seed(29)
     x = torch.empty_strided((4, 2, 3), (6, 24, 2), device=device).uniform_(-0.5, 1.5)
@@ -593,7 +586,7 @@ def test_neuron_launch_receives_original_strided_input(
             "ILIFNode": "ilif",
         }[kind]
         module = importlib.import_module(
-            f"spikingjelly.activation_based.triton_kernel.neuron_kernel.{module_name}"
+            f"spikingjelly._ops.{'if_' if module_name == 'integrate_and_fire' else module_name}.triton_precision"
         )
         original = module.wrap_triton
 
@@ -625,7 +618,7 @@ def test_neuron_launch_receives_original_strided_input(
             ),
         )
     else:
-        from spikingjelly.activation_based.cuda_kernel.neuron_kernel import strides
+        from spikingjelly._ops import cuda_strides as strides
 
         original = strides._get_raw_kernel
 

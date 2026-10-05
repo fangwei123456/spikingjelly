@@ -1,6 +1,15 @@
 spikingjelly.activation\_based.triton\_kernel.flexsn package
 ==============================================================
 
+.. note::
+
+   本页为保留的旧实现源码。当前 ``FlexSN`` 使用 ``neuron.flexsn_trace`` /
+   ``neuron.flexsn_hop`` 前端和 ``spikingjelly._ops.flexsn`` 后端。
+
+   This page documents retained reference sources. Active ``FlexSN`` execution
+   uses the ``neuron.flexsn_trace`` / ``neuron.flexsn_hop`` frontend and the
+   ``spikingjelly._ops.flexsn`` backend.
+
 Function Info
 -------------------------------------------------------------------
 

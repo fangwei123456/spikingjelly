@@ -1070,13 +1070,6 @@ def test_stbif_step_matches_reference_sequence():
         q_ref, acc_q_ref = step[1:3]
 
 
-def test_multi_step_names_identify_independent_sequence_paths():
-    backend_suffixes = ("_cupy", "_triton")
-    for name in functional_neuron.__all__:
-        if "_multi_step" in name:
-            assert name.endswith(backend_suffixes), name
-
-
 def test_functional_neuron_exports():
     for name in functional_neuron.__all__:
         assert getattr(functional, name) is getattr(functional_neuron, name)

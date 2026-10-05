@@ -89,6 +89,38 @@ def test_case_parser_accepts_cupy_backend(tmp_path: Path):
     assert args.neuron_backend == "cupy"
 
 
+@pytest.mark.parametrize("family", ["if", "lif", "plif"])
+def test_experimental_spikformer_preserves_neuron_parameters(family):
+    from spikingjelly.activation_based import functional, neuron
+    from spikingjelly.activation_based.neuron import experimental
+
+    expected = benchmark._build_model("spikformer_ti", "torch", 4, 10)
+    actual = benchmark._build_model("spikformer_ti", "torch", 4, 10, family, True)
+    reference_nodes = [m for m in expected.modules() if type(m) is neuron.LIFNode]
+    node_class = {
+        "if": experimental.ExperimentalIFNode,
+        "lif": experimental.ExperimentalLIFNode,
+        "plif": experimental.ExperimentalParametricLIFNode,
+    }[family]
+    actual_nodes = [m for m in actual.modules() if type(m) is node_class]
+    assert len(actual_nodes) == len(reference_nodes) > 0
+    assert not any(isinstance(m, neuron.BaseNode) for m in actual.modules())
+    for old, new in zip(reference_nodes, actual_nodes, strict=True):
+        assert (new.v_threshold, new.v_reset, new.detach_reset) == (
+            old.v_threshold,
+            old.v_reset,
+            old.detach_reset,
+        )
+        assert new.alpha == old.surrogate_function.alpha
+        if family == "lif":
+            assert (new.tau, new.decay_input) == (old.tau, old.decay_input)
+        elif family == "plif":
+            torch.testing.assert_close(new.w.sigmoid(), torch.tensor(1 / old.tau))
+        new(torch.ones(2, 3))
+    functional.reset_net(actual)
+    assert all(m.v is None and m.v_seq is None for m in actual_nodes)
+
+
 def test_spikformer_s_uses_image_batch():
     args = SimpleNamespace(
         model="spikformer_s",
@@ -365,6 +397,15 @@ def test_aggregate_records_rejects_zero_latency_measurements():
     assert comparison["performance_gates"]["met"] is False
 
 
+def test_aggregate_does_not_pair_different_neuron_families():
+    baseline = _record("baseline", 1, 10.0, 1000)
+    candidate = _record("candidate", 1, 9.0, 800)
+    baseline["case"]["neuron_family"] = "if"
+    candidate["case"]["neuron_family"] = "plif"
+    result = benchmark.aggregate_records([baseline, candidate], "baseline", "candidate")
+    assert result["comparisons"] == []
+
+
 def test_aggregate_records_compares_only_matching_successful_rounds():
     records = [
         _record("baseline", 1, 10.0, 1000),
@@ -510,3 +551,47 @@ def test_probe_clears_dynamo_counters():
     probe._clear_dynamo_state()
 
     assert not counters
+
+
+@pytest.mark.parametrize("family", ["if", "lif", "plif"])
+@pytest.mark.parametrize("experimental", [False, True])
+def test_atan_override_reaches_every_neuron(family, experimental):
+    from spikingjelly.activation_based import neuron, surrogate
+    from spikingjelly.activation_based.neuron.experimental import (
+        ExperimentalIFNode,
+        ExperimentalLIFNode,
+        ExperimentalParametricLIFNode,
+    )
+
+    model = benchmark._build_model(
+        "spikformer_ti", "torch", 4, 10, family, experimental, "ATan"
+    )
+    nodes = [
+        m
+        for m in model.modules()
+        if isinstance(
+            m,
+            (
+                neuron.BaseNode,
+                ExperimentalIFNode,
+                ExperimentalLIFNode,
+                ExperimentalParametricLIFNode,
+            ),
+        )
+    ]
+    assert len(nodes) > 0
+    for node in nodes:
+        if experimental:
+            assert node._surrogate_id == 1 and node.alpha == 2.0
+        else:
+            assert type(node.surrogate_function) is surrogate.ATan
+            assert node.surrogate_function.alpha == 2.0
+
+
+def test_aggregate_records_separates_surrogates():
+    baseline = _record("baseline", 1, 10.0, 100)
+    candidate = _record("candidate", 1, 9.0, 100)
+    baseline["case"]["surrogate"] = "Sigmoid"
+    candidate["case"]["surrogate"] = "ATan"
+    result = benchmark.aggregate_records([baseline, candidate], "baseline", "candidate")
+    assert not result["comparisons"]

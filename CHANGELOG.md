@@ -11,6 +11,121 @@ and the archived documentation linked from the project README.
 
 ### Features
 
+#### Experimental Neuron Execution
+
+Module: `spikingjelly.activation_based.neuron.experimental`.
+
+- Added opt-in `ExperimentalIFNode`, `ExperimentalLIFNode`, and
+  `ExperimentalParametricLIFNode` with CPU and NVIDIA CUDA execution,
+  FP32, FP16 and BF16 multi-step inputs, seven fixed-parameter surrogates
+  (Sigmoid, ATan, PiecewiseQuadratic, PiecewiseExp, SoftSign, SuperSpike, Erf), and cached
+  per-device selection among native CUDA, Triton, and CuPy implementations.
+  Existing neurons and their backend interfaces are unchanged. This experimental
+  interface supports first-order gradients only and retains surrogate gradients in
+  evaluation mode; it is not a drop-in replacement for production neurons.
+- Experimental neurons accept autocast inputs while retaining FP32 voltage,
+  workspaces and temporal gradient accumulation. Spikes and input gradients follow
+  the input dtype. `surrogate_function` snapshots a supported spiking surrogate
+  at construction; higher-order gradients, FP64 and FP8 remain unsupported.
+- Experimental PLIF learns a shared scalar FP32 parameter `w` with
+  `1/tau = sigmoid(w)`, including gradients through temporal state and optimizer
+  updates. Explicit FP16/BF16 parameters are supported with FP32 reduction and a
+  final gradient cast; FP32 master parameters are recommended for autocast. Its nonpersistent voltage state resets independently of `w`.
+- Experimental neurons avoid full reset-voltage traces and their gradient traffic
+  when `store_v_seq=False`. Functional operators retain full traces by default
+  and accept the same option for final-state-only output. Existing native CUDA
+  extensions must be rebuilt for the updated operator schema.
+- Reduced experimental ATan backward overhead for large LIF workloads in Triton
+  and native/CuPy CUDA kernels, retaining scalar layouts for other workloads.
+  Forward arithmetic and FP32 state accumulation are unchanged; rebuild local
+  native extensions to use the kernel improvements.
+- Native CUDA can be built at installation time with `SJ_BUILD_NATIVE_CUDA=1`.
+  Default installations remain pure Python; Triton and CuPy are optional JIT
+  implementations. `SJ_IF_CUDA_IMPLEMENTATION`, `SJ_LIF_CUDA_IMPLEMENTATION`, and
+  `SJ_PLIF_CUDA_IMPLEMENTATION` independently force CUDA implementations before
+  process startup, with an error if a requested implementation is unavailable.
+- Package discovery, the `ops/` directory mapping, and header-data rules are
+  declared in `pyproject.toml`. The PEP 517/660 setuptools build retains only
+  the optional PyTorch CUDA build hook in `setup.py`; default isolated builds
+  require neither Torch nor a separate wheel build dependency.
+
+#### Registered Neuron State Transitions
+
+Module: `spikingjelly.activation_based.functional`.
+
+- Added experimental `*_registered` explicit-state functions for IF, LIF, PLIF,
+  QIF, EIF, Izhikevich, I-LIF, ActivationAwareIF, and STBIF, without a backend
+  argument. All have CPU, native CUDA, Triton, and CuPy implementations for
+  FP32/FP16/BF16 inputs with FP32 states. FlexSN retains its separate callable-based interface.
+  QIF/EIF/Izhikevich support the seven fixed binary surrogates and
+  first-order input/initial-state gradients; I-LIF retains MultiLevelSpikeCount's
+  rounding and STE window. ActivationAwareIF and STBIF remain inference-only.
+- Registered/experimental neuron forward and backward now use one operator per
+  family with explicit CPU/CUDA dispatcher kernels. CUDA provider selection is
+  cached per device and stays lazy; importing SpikingJelly does not initialize
+  CUDA. Eager Python implementations execute directly, while Triton remains
+  visible to compiler decomposition. Existing manual backend APIs are unchanged.
+- CPU implementation registration and CUDA provider bindings contribute source fingerprints to PyTorch's compiler
+  cache tag, preserving user tags and preventing cross-process cache reuse from
+  referencing removed CPU operators or silently selecting the wrong CUDA implementation. CUDA compilation requires a warm
+  binding; standalone FakeTensor shape inference remains dependency-free.
+- CPU and Triton implementations are plain functions beneath the public neuron
+  operators, without duplicate provider operator or autograd registrations.
+  Triton compilation directly exposes kernels through `wrap_triton`; native CUDA
+  and CuPy retain their required extension and opaque compiler boundaries.
+- Each registered neuron owns a separate operator package, namespace, CUDA
+  extension, and cached device selection. `registered_neuron_implementation`
+  exposes diagnostics. Strict `SJ_<NEURON>_CUDA_IMPLEMENTATION` settings cover
+  QIF, EIF, IZHIKEVICH, ILIF, ACTIVATION_AWARE_IF, and STBIF alongside IF/LIF/PLIF;
+  replace the earlier experimental grouped `SJ_DYNAMICS_CUDA_IMPLEMENTATION`
+  and `SJ_INFERENCE_CUDA_IMPLEMENTATION` variables with the individual settings.
+  The optional source build includes all native kernels; default packages remain
+  pure Python with optional Triton/CuPy JIT execution.
+
+- Production neuron CuPy/Triton paths and precision conversion now load their
+  implementations from per-neuron operator packages. Generated CuPy surrogate
+  code, strided layouts, independently configured Triton storage/forward/backward
+  precision, and existing hardware-gated FP8 behavior are retained. The original
+  CUDA/Triton source packages remain available for comparison.
+- Added `ExperimentalQIFNode`, `ExperimentalEIFNode`, `ExperimentalIzhikevichNode`,
+  `ExperimentalILIFNode`, `ExperimentalActivationAwareIFNode`, and
+  `ExperimentalSTBIFNode` to `neuron.experimental`, with independent state/reset
+  handling and the registered FP32-state contract.
+
+#### FlexSN Execution
+
+Module: `spikingjelly.activation_based.neuron.flexsn`.
+
+- Separated FlexSN callable/FX and Dynamo capture from backend execution.
+  Generated Triton kernels, registered forward/backward operators, kernel-handle
+  resources, and HOP scan execution now reside in `spikingjelly._ops.flexsn`.
+  Existing `torch`, `hop`, and `triton` backend arguments, state handling and
+  static-parameter gradients are preserved. Original backend sources remain
+  available for comparison.
+- FlexSN kernel handles now live until their autograd context is released,
+  allowing repeated backward through a retained graph after its node is deleted.
+
+#### Binary Spike Operators
+
+Modules: `spikingjelly.activation_based.functional` and
+`spikingjelly.activation_based.layer`.
+
+- Added migrated binary Linear/convolution, fused IF/LIF-Linear, sparse/prepacked
+  Linear, and spike packing interfaces backed by `ops`. Existing operator
+  implementations retain their device/dtype constraints; CUDA code generation
+  and Torch-to-Triton support also reside in `ops`.
+- Added `layer.SpikeLinear` and `layer.SpikeConv1d/2d/3d`. Dense binary operators
+  save bool/packed inputs through autograd for repeated backward, and convolution
+  backward uses PyTorch's existing ATen operator without import-time native
+  compilation. GPU generated-kernel launches use PyTorch's current stream.
+- Registered flat spike packing supports CPU plus optional Triton/CuPy CUDA
+  implementations, fake tensors and compilation. Decompression accepts an output
+  dtype and defaults to uint8; row-packed and flat-packed layouts remain distinct.
+- The migrated CUDA code generator avoids inactive reciprocal overflow in
+  LogTailedReLU's FP16 surrogate gradient, preventing NaNs at zero and tiny inputs.
+- Migrated Triton stride handling supports constexpr tuple indexing on Triton
+  3.3, including noncontiguous mixed-precision neuron inputs and gradients.
+
 #### SNN Performance Profiling
 
 Module: `spikingjelly.nsys`.
@@ -46,6 +161,19 @@ Module: `spikingjelly.nsys`.
   execution on replay.
 - `benchmark.benchmark_snn_single_gpu` now accepts the CuPy neuron backend for
   single-GPU case and matrix profiling when the optional CuPy dependency is installed.
+- `benchmark.benchmark_snn_single_gpu` accepts `--surrogate` in case and matrix
+  runs to select a supported surrogate before converting experimental neurons,
+  records the selection, and supports eager FP16/BF16 experimental training.
+- Retired the `benchmark/native_lif` migration runners, the obsolete FlexSN
+  bucket probe, and fixed ConvNet/handwritten-LIF timing scripts. Use
+  `benchmark.benchmark_snn_single_gpu` and `benchmark/nsys_snn.sh` for full-model
+  training comparisons and profiling; current entry points are listed in
+  `benchmark/README.md`.
+- Added `benchmark.check_triton_lif_performance` for paired FP32 LIF backward
+  checks against production Triton, using captured Spikformer inputs, shared
+  output buffers, numerical validation and independent process rounds. Reports
+  retain raw timings and distinguish passes, regressions and inconsistent rounds;
+  CUDA/CuPy performance is not part of this gate.
 - `benchmark.benchmark_snn_single_gpu` now supports Spikformer-S ImageNet-size
   workloads alongside Spikformer-Ti for launch-overhead and batch-size studies.
 - Added `benchmark/nsys_lif_host_functions.json` as an opt-in NSYS preset for

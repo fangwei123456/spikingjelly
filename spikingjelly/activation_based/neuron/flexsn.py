@@ -470,7 +470,8 @@ class FlexSN(base.MemoryModule):
         static_inputs: tuple[torch.Tensor, ...],
         store_state_seqs: bool,
     ):
-        from ..triton_kernel.flexsn.hop import _eager_scan, _hop_scan
+        from ..._ops.flexsn.hop import _eager_scan
+        from .flexsn_hop import _hop_scan
 
         num_outputs = self._num_outputs
         flat_args = (*inputs, *states, *static_inputs)
@@ -499,6 +500,8 @@ class FlexSN(base.MemoryModule):
         dtype: torch.dtype,
         device: torch.device,
     ) -> None:
+        if device.type != "cuda":
+            raise RuntimeError("FlexSN backend='triton' requires CUDA tensors.")
         if self._triton_handle is not None:
             if self._triton_runtime_dtype == dtype:
                 return
@@ -506,14 +509,12 @@ class FlexSN(base.MemoryModule):
         if not torch.cuda.is_available():
             raise RuntimeError("FlexSN backend='triton' requires CUDA.")
 
-        from ..triton_kernel.flexsn.custom_ops import (
-            attach_flexsn_handle_finalizer,
-            register_flexsn_kernel_handle,
+        from ..._ops.flexsn.triton import (
+            _attach_handle_finalizer,
+            _register_kernel_handle,
         )
-        from ..triton_kernel.flexsn.kernel import (
-            build_inference_kernels,
-            build_training_kernels,
-        )
+        from ..._ops.flexsn.kernel import _build_kernels
+        from .flexsn_trace import _trace_core
 
         total_states = self.num_states + len(self._static_input_names)
         examples = tuple(
@@ -521,30 +522,12 @@ class FlexSN(base.MemoryModule):
             for _ in range(self._num_inputs + total_states)
         )
         wrapped = self._wrapped_core(self._num_inputs, self._num_outputs)
-        with torch.enable_grad():
-            inference_kernel, final_kernel, inference_info = build_inference_kernels(
-                wrapped,
-                self._num_inputs,
-                total_states,
-                self._num_outputs,
-                examples,
-            )
-            forward_kernel, backward_kernel, training_info = build_training_kernels(
-                wrapped,
-                self._num_inputs,
-                total_states,
-                self._num_outputs,
-                examples,
-            )
-        self._triton_handle = register_flexsn_kernel_handle(
-            inference_kernel=inference_kernel,
-            inference_info=inference_info,
-            inference_final_state_kernel=final_kernel,
-            forward_kernel=forward_kernel,
-            backward_kernel=backward_kernel,
-            training_info=training_info,
+        graphs = _trace_core(wrapped, examples, self._num_outputs, total_states)
+        kernels = _build_kernels(
+            wrapped.__name__, self._num_inputs, total_states, self._num_outputs, *graphs
         )
-        self._triton_handle_finalizer = attach_flexsn_handle_finalizer(
+        self._triton_handle = _register_kernel_handle(**kernels)
+        self._triton_handle_finalizer = _attach_handle_finalizer(
             self, self._triton_handle
         )
         self._triton_runtime_dtype = dtype
@@ -597,7 +580,7 @@ class FlexSN(base.MemoryModule):
         store_state_seqs: bool,
         reference: torch.Tensor,
     ):
-        from ..triton_kernel.flexsn.custom_ops import (
+        from ..._ops.flexsn.triton import (
             flexsn_triton_inference,
             flexsn_triton_training,
         )

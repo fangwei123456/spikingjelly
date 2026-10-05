@@ -3,10 +3,8 @@ import torch
 import torch.nn.functional as F
 
 from spikingjelly.activation_based import functional, surrogate
-from spikingjelly.activation_based.cuda_kernel.neuron_linear import (
-    if_linear,
-    lif_linear,
-)
+from spikingjelly._ops.if_linear import if_linear
+from spikingjelly._ops.lif_linear import lif_linear
 
 
 try:

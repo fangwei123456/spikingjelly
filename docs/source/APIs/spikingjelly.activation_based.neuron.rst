@@ -25,6 +25,18 @@ spikingjelly.activation_based.neuron package
       from spikingjelly.activation_based.neuron import LIFNode # recommended ✅
       from spikingjelly.activation_based.neuron.lif import LIFNode # not recommended ❌
 
+Experimental Implementations
+++++++++++++++++++++++++++++++++++
+
+实验性执行架构采用显式导入路径，不承诺稳定接口；现有神经元接口保持不变。
+Experimental execution implementations use explicit imports and have no stable
+interface commitment; existing neuron interfaces remain unchanged.
+
+.. toctree::
+   :maxdepth: 1
+
+   spikingjelly.activation_based.neuron.experimental
+
 Core Neuron Modules
 ++++++++++++++++++++++++++++++++++
 

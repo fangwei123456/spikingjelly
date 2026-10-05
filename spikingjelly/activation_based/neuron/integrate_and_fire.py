@@ -5,9 +5,6 @@ import torch
 
 from .. import base, functional, surrogate
 from ..functional.neuron import _if_multi_step_triton_mp
-from ..triton_kernel.neuron_kernel import (
-    activation_aware_if as activation_aware_if_triton_kernel,  # noqa: F401
-)
 from .base_node import BaseNode, NonSpikingBaseNode, SimpleBaseNode
 
 __all__ = [

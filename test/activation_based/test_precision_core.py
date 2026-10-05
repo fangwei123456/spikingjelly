@@ -8,9 +8,7 @@ from spikingjelly.activation_based.precision import (
     prepare_model_for_precision,
 )
 from spikingjelly.activation_based.precision import convert as precision_convert
-from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
-    utils as triton_neuron_utils,
-)
+from spikingjelly._ops import triton_layout as triton_neuron_utils
 
 
 def test_public_precision_surface():

@@ -41,8 +41,20 @@ from typing import Callable, Optional
 
 import torch
 
-
 __all__ = [
+    "if_multi_step_registered",
+    "lif_multi_step_registered",
+    "plif_multi_step_registered",
+    "qif_multi_step_registered",
+    "eif_multi_step_registered",
+    "izhikevich_multi_step_registered",
+    "ilif_multi_step_registered",
+    "activation_aware_if_multi_step_registered",
+    "stbif_multi_step_registered",
+    "stbif_single_step_registered",
+    "if_step_registered",
+    "lif_step_registered",
+    "registered_neuron_implementation",
     "lava_cuba_lif_step",
     "if_step",
     "qif_step",
@@ -711,7 +723,7 @@ def activation_aware_if_multi_step_triton(
 
        单步形式 / Single-step form: :func:`activation_aware_if_step`.
     """
-    from ..triton_kernel.neuron_kernel import activation_aware_if
+    from ..._ops.activation_aware_if import triton_precision as activation_aware_if
 
     spike_seq, v_out = activation_aware_if._multistep_activation_aware_if(
         x_seq,
@@ -1698,7 +1710,7 @@ def if_step_cupy(
        独立多步形式 / Independent multi-step form:
        :func:`if_multi_step_cupy`.
     """
-    from ..cuda_kernel.neuron_kernel.single_step.integrate_and_fire import if_step
+    from ..._ops.if_.cupy_single_step import if_step
 
     spike, v_next = if_step(
         x,
@@ -1803,7 +1815,7 @@ def lif_step_cupy(
        独立多步形式 / Independent multi-step form:
        :func:`lif_multi_step_cupy`.
     """
-    from ..cuda_kernel.neuron_kernel.single_step.lif import lif_step
+    from ..._ops.lif.cupy_single_step import lif_step
 
     spike, v_next = lif_step(
         x,
@@ -1910,9 +1922,7 @@ def if_multi_step_cupy(
        单步状态方程 / Single-step state equation: :func:`if_step`.
        CuPy 单步形式 / CuPy single-step form: :func:`if_step_cupy`.
     """
-    from ..cuda_kernel.neuron_kernel.multi_step.integrate_and_fire import (
-        if_multi_step,
-    )
+    from ..._ops.if_.cupy_generated import if_multi_step
 
     spike_seq, v_seq = if_multi_step(
         x_seq,
@@ -2026,7 +2036,7 @@ def lif_multi_step_cupy(
        单步状态方程 / Single-step state equation: :func:`lif_step`.
        CuPy 单步形式 / CuPy single-step form: :func:`lif_step_cupy`.
     """
-    from ..cuda_kernel.neuron_kernel.multi_step.lif import lif_multi_step
+    from ..._ops.lif.cupy_generated import lif_multi_step
 
     spike_seq, v_seq = lif_multi_step(
         x_seq,
@@ -2141,7 +2151,7 @@ def plif_multi_step_cupy(
 
        单步状态方程 / Single-step state equation: :func:`plif_step`.
     """
-    from ..cuda_kernel.neuron_kernel.multi_step.plif import plif_multi_step
+    from ..._ops.plif.cupy_generated import plif_multi_step
 
     spike_seq, v_seq = plif_multi_step(
         x_seq,
@@ -2260,7 +2270,7 @@ def qif_multi_step_cupy(
 
        单步形式 / Single-step form: :func:`qif_step`.
     """
-    from ..cuda_kernel.neuron_kernel.multi_step.qif import qif_multi_step
+    from ..._ops.qif.cupy_generated import qif_multi_step
 
     spike_seq, v_seq = qif_multi_step(
         x_seq,
@@ -2381,7 +2391,7 @@ def eif_multi_step_cupy(
 
        单步形式 / Single-step form: :func:`eif_step`.
     """
-    from ..cuda_kernel.neuron_kernel.multi_step.eif import eif_multi_step
+    from ..._ops.eif.cupy_generated import eif_multi_step
 
     spike_seq, v_seq = eif_multi_step(
         x_seq,
@@ -2559,9 +2569,7 @@ def izhikevich_multi_step_cupy(
             f"got {tuple(w.shape)}."
         )
 
-    from ..cuda_kernel.neuron_kernel.multi_step.izhikevich import (
-        izhikevich_multi_step,
-    )
+    from ..._ops.izhikevich.cupy_generated import izhikevich_multi_step
 
     spike_seq, v_seq, w_seq = izhikevich_multi_step(
         x_seq,
@@ -2670,7 +2678,7 @@ def if_multi_step_triton(
 
        单步状态方程 / Single-step state equation: :func:`if_step`.
     """
-    from ..triton_kernel import multistep_if
+    from ..._ops.if_.triton_precision import multistep_if
 
     spike_seq, voltage = multistep_if(
         x_seq,
@@ -2696,7 +2704,7 @@ def _if_multi_step_triton_mp(
     store_v_seq: bool,
     precision: tuple[torch.dtype, str, str],
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
-    from ..triton_kernel.neuron_kernel.integrate_and_fire import _multistep_if_mp
+    from ..._ops.if_.triton_precision import _multistep_if_mp
 
     spike_seq, voltage, _ = _multistep_if_mp(
         x_seq,
@@ -2806,7 +2814,7 @@ def lif_multi_step_triton(
 
        单步状态方程 / Single-step state equation: :func:`lif_step`.
     """
-    from ..triton_kernel import multistep_lif
+    from ..._ops.lif.triton_precision import multistep_lif
 
     spike_seq, voltage = multistep_lif(
         x_seq,
@@ -2836,7 +2844,7 @@ def _lif_multi_step_triton_mp(
     store_v_seq: bool,
     precision: tuple[torch.dtype, str, str],
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
-    from ..triton_kernel.neuron_kernel.lif import _multistep_lif_mp
+    from ..._ops.lif.triton_precision import _multistep_lif_mp
 
     spike_seq, voltage, _ = _multistep_lif_mp(
         x_seq,
@@ -2941,7 +2949,7 @@ def ilif_multi_step_triton(
     :rtype: Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
     :raises ImportError: If the Triton kernel is unavailable.
     """
-    from ..triton_kernel.neuron_kernel import ilif
+    from ..._ops.ilif import triton_precision as ilif
 
     if ilif is None:
         raise ImportError("ilif_multi_step_triton requires the Triton backend.")
@@ -3053,7 +3061,7 @@ def plif_multi_step_triton(
 
        单步状态方程 / Single-step state equation: :func:`plif_step`.
     """
-    from ..triton_kernel import multistep_plif
+    from ..._ops.plif.triton_precision import multistep_plif
 
     spike_seq, v_seq = multistep_plif(
         x_seq,
@@ -3080,7 +3088,7 @@ def _plif_multi_step_triton_mp(
     store_v_seq: bool,
     precision: tuple[torch.dtype, str, str],
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
-    from ..triton_kernel.neuron_kernel.plif import _multistep_plif_mp
+    from ..._ops.plif.triton_precision import _multistep_plif_mp
 
     spike_seq, voltage, _ = _multistep_plif_mp(
         x_seq,
@@ -3575,7 +3583,7 @@ def stbif_single_step_triton(
     :raises NotImplementedError: If the dtype is not supported by the Triton
         backend
     """
-    from ..triton_kernel.neuron_kernel import stbif
+    from ..._ops.stbif import triton_precision as stbif
 
     return stbif.single_step_stbif(
         x,
@@ -3585,3 +3593,1207 @@ def stbif_single_step_triton(
         pos_max,
         neg_min,
     )
+
+
+def _registered_surrogate(function):
+    from ..._ops.surrogate import _SURROGATE_IDS
+    from .. import surrogate
+
+    if function is None:
+        return 4.0, 0
+    supported = {
+        getattr(surrogate, name): index for name, index in _SURROGATE_IDS.items()
+    }
+    if type(function) not in supported:
+        raise TypeError(
+            "Registered binary neurons require one of the seven supported surrogate types"
+        )
+    if not function.spiking:
+        raise ValueError("Registered binary neurons require spiking=True")
+    if isinstance(function.alpha, torch.Tensor):
+        raise TypeError("Surrogate alpha must be a fixed Python scalar")
+    return float(function.alpha), supported[type(function)]
+
+
+def if_multi_step_registered(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    v_threshold: float = 1.0,
+    v_reset: Optional[float] = 0.0,
+    surrogate_function: Optional[SurrogateFunction] = None,
+    detach_reset: bool = False,
+    store_v_seq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    r"""
+    **API Language** - :ref:`中文 <if_multi_step_registered-cn>` | :ref:`English <if_multi_step_registered-en>`
+
+    ----
+
+    .. _if_multi_step_registered-cn:
+
+    * **中文**
+
+    实验注册算子的显式状态转移；不修改输入或 MemoryModule。状态、轨迹及累积计算使用 FP32，脉冲与输入 dtype 一致。非连续/广播存储在内核入口变为连续。CPU 使用参考实现，CUDA 每设备首次选择原生 CUDA、Triton 或 CuPy；编译前先预热。仅支持一阶梯度，包括输入与初始状态梯度。
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+    :type x_seq: torch.Tensor
+    :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
+    :type v: torch.Tensor
+    :param v_threshold: 有限发放阈值；I-LIF 必须为正。 默认 ``1.0``.
+    :type v_threshold: float
+    :param v_reset: 有限硬重置电位；None 表示软重置。 默认 ``0.0``.
+    :type v_reset: Optional[float]
+    :param surrogate_function: 固定参数替代梯度；None 使用 Sigmoid(4)。支持七种已实现的二值替代梯度。 默认 ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param detach_reset: 默认 False；True 分离重置脉冲梯度。 默认 ``False``.
+    :type detach_reset: bool
+    :param store_v_seq: 默认 False；True 返回完整 FP32 膜电位轨迹。 默认 ``False``.
+    :type store_v_seq: bool
+    :return: (spike_seq, v_final, v_seq_or_none)；脉冲与输入同形状，最终状态与初态同形状；轨迹受 store_v_seq 控制，均与输入同设备。
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ValueError: 标量参数或实现配置无效。
+    :raises RuntimeError: 张量约束不满足或没有可用设备实现。
+    :raises TypeError: 替代梯度类型或参数不受支持。
+
+    ----
+
+    .. _if_multi_step_registered-en:
+
+    * **English**
+
+    Experimental registered explicit-state transition; does not mutate inputs or MemoryModule. States, traces, and accumulation use FP32; spikes follow the input dtype. Noncontiguous/broadcast storage becomes contiguous at the kernel boundary. CPU uses the reference; CUDA selects native CUDA, Triton, or CuPy once per device; warm up before compilation. Supports first-order gradients, including inputs and initial states.
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 input [T, ...], T >= 1; neuron dimensions must be nonempty.
+    :type x_seq: torch.Tensor
+    :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
+    :type v: torch.Tensor
+    :param v_threshold: Finite firing threshold; positive for I-LIF. Default: ``1.0``.
+    :type v_threshold: float
+    :param v_reset: Finite hard-reset voltage; None selects soft reset. Default: ``0.0``.
+    :type v_reset: Optional[float]
+    :param surrogate_function: Fixed-parameter surrogate; None selects Sigmoid(4). Accepts the seven implemented binary surrogates. Default: ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param detach_reset: Default False; True detaches the reset spike.  Default: ``False``.
+    :type detach_reset: bool
+    :param store_v_seq: Default False; True returns the complete FP32 voltage trace. Default: ``False``.
+    :type store_v_seq: bool
+    :return: (spike_seq, v_final, v_seq_or_none); spikes match input shape, final state matches the initial state, and store_v_seq controls traces; all on the input device.
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ValueError: Invalid scalar parameters or implementation configuration.
+    :raises RuntimeError: Tensor constraints violated or no available device implementation.
+    :raises TypeError: Unsupported surrogate type or parameters.
+    """
+    from ..._ops.if_ import if_multi_step
+
+    alpha, surrogate_id = _registered_surrogate(surrogate_function)
+    s, voltage, _ = if_multi_step(
+        x_seq, v, v_threshold, v_reset, detach_reset, alpha, store_v_seq, surrogate_id
+    )
+    return (
+        s,
+        voltage[-1].clone() if store_v_seq else voltage,
+        voltage if store_v_seq else None,
+    )
+
+
+def lif_multi_step_registered(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    tau: float = 2.0,
+    decay_input: bool = True,
+    v_threshold: float = 1.0,
+    v_reset: Optional[float] = 0.0,
+    surrogate_function: Optional[SurrogateFunction] = None,
+    detach_reset: bool = False,
+    store_v_seq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    r"""
+    **API Language** - :ref:`中文 <lif_multi_step_registered-cn>` | :ref:`English <lif_multi_step_registered-en>`
+
+    ----
+
+    .. _lif_multi_step_registered-cn:
+
+    * **中文**
+
+    实验注册算子的显式状态转移；不修改输入或 MemoryModule。状态、轨迹及累积计算使用 FP32，脉冲与输入 dtype 一致。非连续/广播存储在内核入口变为连续。CPU 使用参考实现，CUDA 每设备首次选择原生 CUDA、Triton 或 CuPy；编译前先预热。仅支持一阶梯度，包括输入与初始状态梯度。
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+    :type x_seq: torch.Tensor
+    :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
+    :type v: torch.Tensor
+    :param tau: 有限膜电位时间常数，以时间步为单位，必须大于 1。 默认 ``2.0``.
+    :type tau: float
+    :param decay_input: 是否也衰减输入；默认 True。 默认 ``True``.
+    :type decay_input: bool
+    :param v_threshold: 有限发放阈值；I-LIF 必须为正。 默认 ``1.0``.
+    :type v_threshold: float
+    :param v_reset: 有限硬重置电位；None 表示软重置。 默认 ``0.0``.
+    :type v_reset: Optional[float]
+    :param surrogate_function: 固定参数替代梯度；None 使用 Sigmoid(4)。支持七种已实现的二值替代梯度。 默认 ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param detach_reset: 默认 False；True 分离重置脉冲梯度。 默认 ``False``.
+    :type detach_reset: bool
+    :param store_v_seq: 默认 False；True 返回完整 FP32 膜电位轨迹。 默认 ``False``.
+    :type store_v_seq: bool
+    :return: (spike_seq, v_final, v_seq_or_none)；脉冲与输入同形状，最终状态与初态同形状；轨迹受 store_v_seq 控制，均与输入同设备。
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ValueError: 标量参数或实现配置无效。
+    :raises RuntimeError: 张量约束不满足或没有可用设备实现。
+    :raises TypeError: 替代梯度类型或参数不受支持。
+
+    ----
+
+    .. _lif_multi_step_registered-en:
+
+    * **English**
+
+    Experimental registered explicit-state transition; does not mutate inputs or MemoryModule. States, traces, and accumulation use FP32; spikes follow the input dtype. Noncontiguous/broadcast storage becomes contiguous at the kernel boundary. CPU uses the reference; CUDA selects native CUDA, Triton, or CuPy once per device; warm up before compilation. Supports first-order gradients, including inputs and initial states.
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 input [T, ...], T >= 1; neuron dimensions must be nonempty.
+    :type x_seq: torch.Tensor
+    :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
+    :type v: torch.Tensor
+    :param tau: Finite voltage time constant in time steps, greater than one. Default: ``2.0``.
+    :type tau: float
+    :param decay_input: Also decay the input; default True. Default: ``True``.
+    :type decay_input: bool
+    :param v_threshold: Finite firing threshold; positive for I-LIF. Default: ``1.0``.
+    :type v_threshold: float
+    :param v_reset: Finite hard-reset voltage; None selects soft reset. Default: ``0.0``.
+    :type v_reset: Optional[float]
+    :param surrogate_function: Fixed-parameter surrogate; None selects Sigmoid(4). Accepts the seven implemented binary surrogates. Default: ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param detach_reset: Default False; True detaches the reset spike.  Default: ``False``.
+    :type detach_reset: bool
+    :param store_v_seq: Default False; True returns the complete FP32 voltage trace. Default: ``False``.
+    :type store_v_seq: bool
+    :return: (spike_seq, v_final, v_seq_or_none); spikes match input shape, final state matches the initial state, and store_v_seq controls traces; all on the input device.
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ValueError: Invalid scalar parameters or implementation configuration.
+    :raises RuntimeError: Tensor constraints violated or no available device implementation.
+    :raises TypeError: Unsupported surrogate type or parameters.
+    """
+    from ..._ops.lif import lif
+
+    alpha, surrogate_id = _registered_surrogate(surrogate_function)
+    s, voltage, _ = lif(
+        x_seq,
+        v,
+        tau,
+        decay_input,
+        v_threshold,
+        v_reset,
+        detach_reset,
+        alpha,
+        store_v_seq,
+        surrogate_id,
+    )
+    return (
+        s,
+        voltage[-1].clone() if store_v_seq else voltage,
+        voltage if store_v_seq else None,
+    )
+
+
+def plif_multi_step_registered(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    w: torch.Tensor,
+    decay_input: bool = True,
+    v_threshold: float = 1.0,
+    v_reset: Optional[float] = 0.0,
+    surrogate_function: Optional[SurrogateFunction] = None,
+    detach_reset: bool = False,
+    store_v_seq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    r"""
+    **API Language** - :ref:`中文 <plif_multi_step_registered-cn>` | :ref:`English <plif_multi_step_registered-en>`
+
+    ----
+
+    .. _plif_multi_step_registered-cn:
+
+    * **中文**
+
+    实验注册算子的显式状态转移；不修改输入或 MemoryModule。状态、轨迹及累积计算使用 FP32，脉冲与输入 dtype 一致。非连续/广播存储在内核入口变为连续。CPU 使用参考实现，CUDA 每设备首次选择原生 CUDA、Triton 或 CuPy；编译前先预热。仅支持一阶梯度，包括输入与初始状态梯度。
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+    :type x_seq: torch.Tensor
+    :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
+    :type v: torch.Tensor
+    :param w: 同设备 FP32/FP16/BF16 可微单元素参数，q=sigmoid(w)，在 FP32 计算及归约后转换梯度。
+    :type w: torch.Tensor
+    :param decay_input: 是否也衰减输入；默认 True。 默认 ``True``.
+    :type decay_input: bool
+    :param v_threshold: 有限发放阈值；I-LIF 必须为正。 默认 ``1.0``.
+    :type v_threshold: float
+    :param v_reset: 有限硬重置电位；None 表示软重置。 默认 ``0.0``.
+    :type v_reset: Optional[float]
+    :param surrogate_function: 固定参数替代梯度；None 使用 Sigmoid(4)。支持七种已实现的二值替代梯度。 默认 ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param detach_reset: 默认 False；True 分离重置脉冲梯度。 默认 ``False``.
+    :type detach_reset: bool
+    :param store_v_seq: 默认 False；True 返回完整 FP32 膜电位轨迹。 默认 ``False``.
+    :type store_v_seq: bool
+    :return: (spike_seq, v_final, v_seq_or_none)；脉冲与输入同形状，最终状态与初态同形状；轨迹受 store_v_seq 控制，均与输入同设备。
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ValueError: 标量参数或实现配置无效。
+    :raises RuntimeError: 张量约束不满足或没有可用设备实现。
+    :raises TypeError: 替代梯度类型或参数不受支持。
+
+    ----
+
+    .. _plif_multi_step_registered-en:
+
+    * **English**
+
+    Experimental registered explicit-state transition; does not mutate inputs or MemoryModule. States, traces, and accumulation use FP32; spikes follow the input dtype. Noncontiguous/broadcast storage becomes contiguous at the kernel boundary. CPU uses the reference; CUDA selects native CUDA, Triton, or CuPy once per device; warm up before compilation. Supports first-order gradients, including inputs and initial states.
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 input [T, ...], T >= 1; neuron dimensions must be nonempty.
+    :type x_seq: torch.Tensor
+    :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
+    :type v: torch.Tensor
+    :param w: Differentiable FP32/FP16/BF16 single-element parameter on the input device, q=sigmoid(w); computation/reduction are FP32 before casting gradients.
+    :type w: torch.Tensor
+    :param decay_input: Also decay the input; default True. Default: ``True``.
+    :type decay_input: bool
+    :param v_threshold: Finite firing threshold; positive for I-LIF. Default: ``1.0``.
+    :type v_threshold: float
+    :param v_reset: Finite hard-reset voltage; None selects soft reset. Default: ``0.0``.
+    :type v_reset: Optional[float]
+    :param surrogate_function: Fixed-parameter surrogate; None selects Sigmoid(4). Accepts the seven implemented binary surrogates. Default: ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param detach_reset: Default False; True detaches the reset spike.  Default: ``False``.
+    :type detach_reset: bool
+    :param store_v_seq: Default False; True returns the complete FP32 voltage trace. Default: ``False``.
+    :type store_v_seq: bool
+    :return: (spike_seq, v_final, v_seq_or_none); spikes match input shape, final state matches the initial state, and store_v_seq controls traces; all on the input device.
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ValueError: Invalid scalar parameters or implementation configuration.
+    :raises RuntimeError: Tensor constraints violated or no available device implementation.
+    :raises TypeError: Unsupported surrogate type or parameters.
+    """
+    from ..._ops.plif import plif
+
+    alpha, surrogate_id = _registered_surrogate(surrogate_function)
+    s, voltage, _ = plif(
+        x_seq,
+        v,
+        w,
+        decay_input,
+        v_threshold,
+        v_reset,
+        detach_reset,
+        alpha,
+        store_v_seq,
+        surrogate_id,
+    )
+    return (
+        s,
+        voltage[-1].clone() if store_v_seq else voltage,
+        voltage if store_v_seq else None,
+    )
+
+
+def qif_multi_step_registered(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    tau: float = 2.0,
+    v_threshold: float = 1.0,
+    v_reset: Optional[float] = 0.0,
+    v_rest: float = 0.0,
+    v_c: float = 0.8,
+    a0: float = 1.0,
+    detach_reset: bool = False,
+    surrogate_function: Optional[SurrogateFunction] = None,
+    store_v_seq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    r"""
+    **API Language** - :ref:`中文 <qif_multi_step_registered-cn>` | :ref:`English <qif_multi_step_registered-en>`
+
+    ----
+
+    .. _qif_multi_step_registered-cn:
+
+    * **中文**
+
+    实验注册算子的显式状态转移；不修改输入或 MemoryModule。状态、轨迹及累积计算使用 FP32，脉冲与输入 dtype 一致。非连续/广播存储在内核入口变为连续。CPU 使用参考实现，CUDA 每设备首次选择原生 CUDA、Triton 或 CuPy；编译前先预热。仅支持一阶梯度，包括输入与初始状态梯度。
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+    :type x_seq: torch.Tensor
+    :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
+    :type v: torch.Tensor
+    :param tau: 有限膜电位时间常数，以时间步为单位，必须大于 1。 默认 ``2.0``.
+    :type tau: float
+    :param v_threshold: 有限发放阈值；I-LIF 必须为正。 默认 ``1.0``.
+    :type v_threshold: float
+    :param v_reset: 有限硬重置电位；None 表示软重置。 默认 ``0.0``.
+    :type v_reset: Optional[float]
+    :param v_rest: 有限静息膜电位。 默认 ``0.0``.
+    :type v_rest: float
+    :param v_c: 有限临界膜电位。 默认 ``0.8``.
+    :type v_c: float
+    :param a0: 有限二次项系数。 默认 ``1.0``.
+    :type a0: float
+    :param detach_reset: 默认 False；True 分离重置脉冲梯度。 默认 ``False``.
+    :type detach_reset: bool
+    :param surrogate_function: 固定参数替代梯度；None 使用 Sigmoid(4)。支持七种已实现的二值替代梯度。 默认 ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param store_v_seq: 默认 False；True 返回完整 FP32 膜电位轨迹。 默认 ``False``.
+    :type store_v_seq: bool
+    :return: (spike_seq, v_final, v_seq_or_none)；脉冲与输入同形状，最终状态与初态同形状；轨迹受 store_v_seq 控制，均与输入同设备。
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ValueError: 标量参数或实现配置无效。
+    :raises RuntimeError: 张量约束不满足或没有可用设备实现。
+    :raises TypeError: 替代梯度类型或参数不受支持。
+
+    ----
+
+    .. _qif_multi_step_registered-en:
+
+    * **English**
+
+    Experimental registered explicit-state transition; does not mutate inputs or MemoryModule. States, traces, and accumulation use FP32; spikes follow the input dtype. Noncontiguous/broadcast storage becomes contiguous at the kernel boundary. CPU uses the reference; CUDA selects native CUDA, Triton, or CuPy once per device; warm up before compilation. Supports first-order gradients, including inputs and initial states.
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 input [T, ...], T >= 1; neuron dimensions must be nonempty.
+    :type x_seq: torch.Tensor
+    :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
+    :type v: torch.Tensor
+    :param tau: Finite voltage time constant in time steps, greater than one. Default: ``2.0``.
+    :type tau: float
+    :param v_threshold: Finite firing threshold; positive for I-LIF. Default: ``1.0``.
+    :type v_threshold: float
+    :param v_reset: Finite hard-reset voltage; None selects soft reset. Default: ``0.0``.
+    :type v_reset: Optional[float]
+    :param v_rest: Finite resting voltage. Default: ``0.0``.
+    :type v_rest: float
+    :param v_c: Finite critical voltage. Default: ``0.8``.
+    :type v_c: float
+    :param a0: Finite quadratic coefficient. Default: ``1.0``.
+    :type a0: float
+    :param detach_reset: Default False; True detaches the reset spike.  Default: ``False``.
+    :type detach_reset: bool
+    :param surrogate_function: Fixed-parameter surrogate; None selects Sigmoid(4). Accepts the seven implemented binary surrogates. Default: ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param store_v_seq: Default False; True returns the complete FP32 voltage trace. Default: ``False``.
+    :type store_v_seq: bool
+    :return: (spike_seq, v_final, v_seq_or_none); spikes match input shape, final state matches the initial state, and store_v_seq controls traces; all on the input device.
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ValueError: Invalid scalar parameters or implementation configuration.
+    :raises RuntimeError: Tensor constraints violated or no available device implementation.
+    :raises TypeError: Unsupported surrogate type or parameters.
+    """
+    from ..._ops.qif import _forward
+
+    alpha, surrogate_id = _registered_surrogate(surrogate_function)
+    s, voltage, _, _ = _forward(
+        x_seq,
+        v,
+        tau,
+        v_rest,
+        v_c,
+        a0,
+        v_threshold,
+        v_reset,
+        detach_reset,
+        alpha,
+        store_v_seq,
+        surrogate_id,
+    )
+    return (
+        s,
+        voltage[-1].clone() if store_v_seq else voltage,
+        voltage if store_v_seq else None,
+    )
+
+
+def eif_multi_step_registered(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    tau: float = 2.0,
+    v_threshold: float = 1.0,
+    v_reset: Optional[float] = 0.0,
+    v_rest: float = 0.0,
+    theta_rh: float = 1.0,
+    delta_t: float = 1.0,
+    detach_reset: bool = False,
+    surrogate_function: Optional[SurrogateFunction] = None,
+    store_v_seq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    r"""
+    **API Language** - :ref:`中文 <eif_multi_step_registered-cn>` | :ref:`English <eif_multi_step_registered-en>`
+
+    ----
+
+    .. _eif_multi_step_registered-cn:
+
+    * **中文**
+
+    实验注册算子的显式状态转移；不修改输入或 MemoryModule。状态、轨迹及累积计算使用 FP32，脉冲与输入 dtype 一致。非连续/广播存储在内核入口变为连续。CPU 使用参考实现，CUDA 每设备首次选择原生 CUDA、Triton 或 CuPy；编译前先预热。仅支持一阶梯度，包括输入与初始状态梯度。
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+    :type x_seq: torch.Tensor
+    :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
+    :type v: torch.Tensor
+    :param tau: 有限膜电位时间常数，以时间步为单位，必须大于 1。 默认 ``2.0``.
+    :type tau: float
+    :param v_threshold: 有限发放阈值；I-LIF 必须为正。 默认 ``1.0``.
+    :type v_threshold: float
+    :param v_reset: 有限硬重置电位；None 表示软重置。 默认 ``0.0``.
+    :type v_reset: Optional[float]
+    :param v_rest: 有限静息膜电位。 默认 ``0.0``.
+    :type v_rest: float
+    :param theta_rh: 有限流变阈值。 默认 ``1.0``.
+    :type theta_rh: float
+    :param delta_t: 有限正指数项电位宽度。 默认 ``1.0``.
+    :type delta_t: float
+    :param detach_reset: 默认 False；True 分离重置脉冲梯度。 默认 ``False``.
+    :type detach_reset: bool
+    :param surrogate_function: 固定参数替代梯度；None 使用 Sigmoid(4)。支持七种已实现的二值替代梯度。 默认 ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param store_v_seq: 默认 False；True 返回完整 FP32 膜电位轨迹。 默认 ``False``.
+    :type store_v_seq: bool
+    :return: (spike_seq, v_final, v_seq_or_none)；脉冲与输入同形状，最终状态与初态同形状；轨迹受 store_v_seq 控制，均与输入同设备。
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ValueError: 标量参数或实现配置无效。
+    :raises RuntimeError: 张量约束不满足或没有可用设备实现。
+    :raises TypeError: 替代梯度类型或参数不受支持。
+
+    ----
+
+    .. _eif_multi_step_registered-en:
+
+    * **English**
+
+    Experimental registered explicit-state transition; does not mutate inputs or MemoryModule. States, traces, and accumulation use FP32; spikes follow the input dtype. Noncontiguous/broadcast storage becomes contiguous at the kernel boundary. CPU uses the reference; CUDA selects native CUDA, Triton, or CuPy once per device; warm up before compilation. Supports first-order gradients, including inputs and initial states.
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 input [T, ...], T >= 1; neuron dimensions must be nonempty.
+    :type x_seq: torch.Tensor
+    :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
+    :type v: torch.Tensor
+    :param tau: Finite voltage time constant in time steps, greater than one. Default: ``2.0``.
+    :type tau: float
+    :param v_threshold: Finite firing threshold; positive for I-LIF. Default: ``1.0``.
+    :type v_threshold: float
+    :param v_reset: Finite hard-reset voltage; None selects soft reset. Default: ``0.0``.
+    :type v_reset: Optional[float]
+    :param v_rest: Finite resting voltage. Default: ``0.0``.
+    :type v_rest: float
+    :param theta_rh: Finite rheobase threshold. Default: ``1.0``.
+    :type theta_rh: float
+    :param delta_t: Finite positive voltage width of the exponential term. Default: ``1.0``.
+    :type delta_t: float
+    :param detach_reset: Default False; True detaches the reset spike.  Default: ``False``.
+    :type detach_reset: bool
+    :param surrogate_function: Fixed-parameter surrogate; None selects Sigmoid(4). Accepts the seven implemented binary surrogates. Default: ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param store_v_seq: Default False; True returns the complete FP32 voltage trace. Default: ``False``.
+    :type store_v_seq: bool
+    :return: (spike_seq, v_final, v_seq_or_none); spikes match input shape, final state matches the initial state, and store_v_seq controls traces; all on the input device.
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ValueError: Invalid scalar parameters or implementation configuration.
+    :raises RuntimeError: Tensor constraints violated or no available device implementation.
+    :raises TypeError: Unsupported surrogate type or parameters.
+    """
+    from ..._ops.eif import _forward
+
+    alpha, surrogate_id = _registered_surrogate(surrogate_function)
+    s, voltage, _, _ = _forward(
+        x_seq,
+        v,
+        tau,
+        v_rest,
+        theta_rh,
+        delta_t,
+        v_threshold,
+        v_reset,
+        detach_reset,
+        alpha,
+        store_v_seq,
+        surrogate_id,
+    )
+    return (
+        s,
+        voltage[-1].clone() if store_v_seq else voltage,
+        voltage if store_v_seq else None,
+    )
+
+
+def izhikevich_multi_step_registered(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    w: torch.Tensor,
+    tau: float = 2.0,
+    v_threshold: float = 1.0,
+    v_reset: Optional[float] = 0.0,
+    v_rest: float = 0.0,
+    a: float = 0.1,
+    b: float = 0.2,
+    tau_w: float = 2.0,
+    v_c: float = 0.8,
+    a0: float = 1.0,
+    detach_reset: bool = False,
+    surrogate_function: Optional[SurrogateFunction] = None,
+    store_state_seq: bool = False,
+) -> tuple[
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    Optional[torch.Tensor],
+    Optional[torch.Tensor],
+]:
+    r"""
+    **API Language** - :ref:`中文 <izhikevich_multi_step_registered-cn>` | :ref:`English <izhikevich_multi_step_registered-en>`
+
+    ----
+
+    .. _izhikevich_multi_step_registered-cn:
+
+    * **中文**
+
+    实验注册算子的显式状态转移；不修改输入或 MemoryModule。状态、轨迹及累积计算使用 FP32，脉冲与输入 dtype 一致。非连续/广播存储在内核入口变为连续。CPU 使用参考实现，CUDA 每设备首次选择原生 CUDA、Triton 或 CuPy；编译前先预热。仅支持一阶梯度，包括输入与初始状态梯度。
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+    :type x_seq: torch.Tensor
+    :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
+    :type v: torch.Tensor
+    :param w: 与 v 同形状、同设备的 FP32 恢复初态，可微。
+    :type w: torch.Tensor
+    :param tau: 有限膜电位时间常数，以时间步为单位，必须大于 1。 默认 ``2.0``.
+    :type tau: float
+    :param v_threshold: 有限发放阈值；I-LIF 必须为正。 默认 ``1.0``.
+    :type v_threshold: float
+    :param v_reset: 有限硬重置电位；None 表示软重置。 默认 ``0.0``.
+    :type v_reset: Optional[float]
+    :param v_rest: 有限静息膜电位。 默认 ``0.0``.
+    :type v_rest: float
+    :param a: 有限恢复变量耦合系数。 默认 ``0.1``.
+    :type a: float
+    :param b: 有限发放后的恢复变量增量。 默认 ``0.2``.
+    :type b: float
+    :param tau_w: 有限正恢复变量时间常数，以时间步为单位。 默认 ``2.0``.
+    :type tau_w: float
+    :param v_c: 有限临界膜电位。 默认 ``0.8``.
+    :type v_c: float
+    :param a0: 有限二次项系数。 默认 ``1.0``.
+    :type a0: float
+    :param detach_reset: 默认 False；True 分离重置脉冲梯度。Izhikevich 恢复脉冲及硬重置的 spike*v_reset 项始终可微。 默认 ``False``.
+    :type detach_reset: bool
+    :param surrogate_function: 固定参数替代梯度；None 使用 Sigmoid(4)。支持七种已实现的二值替代梯度。 默认 ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param store_state_seq: 默认 False；True 返回完整 FP32 膜电位及恢复状态轨迹。 默认 ``False``.
+    :type store_state_seq: bool
+    :return: (spike_seq, v_final, w_final, v_seq_or_none, w_seq_or_none)，均与输入同设备；轨迹受 store_state_seq 控制。
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]
+    :raises ValueError: 标量参数或实现配置无效。
+    :raises RuntimeError: 张量约束不满足或没有可用设备实现。
+    :raises TypeError: 替代梯度类型或参数不受支持。
+
+    ----
+
+    .. _izhikevich_multi_step_registered-en:
+
+    * **English**
+
+    Experimental registered explicit-state transition; does not mutate inputs or MemoryModule. States, traces, and accumulation use FP32; spikes follow the input dtype. Noncontiguous/broadcast storage becomes contiguous at the kernel boundary. CPU uses the reference; CUDA selects native CUDA, Triton, or CuPy once per device; warm up before compilation. Supports first-order gradients, including inputs and initial states.
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 input [T, ...], T >= 1; neuron dimensions must be nonempty.
+    :type x_seq: torch.Tensor
+    :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
+    :type v: torch.Tensor
+    :param w: Differentiable FP32 initial recovery state with the shape and device of v.
+    :type w: torch.Tensor
+    :param tau: Finite voltage time constant in time steps, greater than one. Default: ``2.0``.
+    :type tau: float
+    :param v_threshold: Finite firing threshold; positive for I-LIF. Default: ``1.0``.
+    :type v_threshold: float
+    :param v_reset: Finite hard-reset voltage; None selects soft reset. Default: ``0.0``.
+    :type v_reset: Optional[float]
+    :param v_rest: Finite resting voltage. Default: ``0.0``.
+    :type v_rest: float
+    :param a: Finite recovery coupling coefficient. Default: ``0.1``.
+    :type a: float
+    :param b: Finite post-spike recovery increment. Default: ``0.2``.
+    :type b: float
+    :param tau_w: Finite positive recovery time constant in time steps. Default: ``2.0``.
+    :type tau_w: float
+    :param v_c: Finite critical voltage. Default: ``0.8``.
+    :type v_c: float
+    :param a0: Finite quadratic coefficient. Default: ``1.0``.
+    :type a0: float
+    :param detach_reset: Default False; True detaches the reset spike. Izhikevich recovery spikes and the hard-reset spike*v_reset term remain differentiable. Default: ``False``.
+    :type detach_reset: bool
+    :param surrogate_function: Fixed-parameter surrogate; None selects Sigmoid(4). Accepts the seven implemented binary surrogates. Default: ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param store_state_seq: Default False; True returns complete FP32 voltage and recovery traces. Default: ``False``.
+    :type store_state_seq: bool
+    :return: (spike_seq, v_final, w_final, v_seq_or_none, w_seq_or_none), on the input device; store_state_seq controls traces.
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]
+    :raises ValueError: Invalid scalar parameters or implementation configuration.
+    :raises RuntimeError: Tensor constraints violated or no available device implementation.
+    :raises TypeError: Unsupported surrogate type or parameters.
+    """
+    from ..._ops.izhikevich import _forward
+
+    alpha, surrogate_id = _registered_surrogate(surrogate_function)
+    s, voltage, recovery, _, _ = _forward(
+        x_seq,
+        v,
+        w,
+        tau,
+        v_rest,
+        v_c,
+        a0,
+        a,
+        b,
+        tau_w,
+        v_threshold,
+        v_reset,
+        detach_reset,
+        alpha,
+        store_state_seq,
+        surrogate_id,
+    )
+    return (
+        s,
+        voltage[-1].clone() if store_state_seq else voltage,
+        recovery[-1].clone() if store_state_seq else recovery,
+        voltage if store_state_seq else None,
+        recovery if store_state_seq else None,
+    )
+
+
+def ilif_multi_step_registered(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    tau: float = 2.0,
+    v_threshold: float = 1.0,
+    surrogate_function: Optional[SurrogateFunction] = None,
+    detach_reset: bool = False,
+    store_v_seq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    r"""
+    **API Language** - :ref:`中文 <ilif_multi_step_registered-cn>` | :ref:`English <ilif_multi_step_registered-en>`
+
+    ----
+
+    .. _ilif_multi_step_registered-cn:
+
+    * **中文**
+
+    实验注册算子的显式状态转移；不修改输入或 MemoryModule。状态、轨迹及累积计算使用 FP32，脉冲与输入 dtype 一致。非连续/广播存储在内核入口变为连续。CPU 使用参考实现，CUDA 每设备首次选择原生 CUDA、Triton 或 CuPy；编译前先预热。仅支持一阶梯度，包括输入与初始状态梯度。
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+    :type x_seq: torch.Tensor
+    :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
+    :type v: torch.Tensor
+    :param tau: 有限膜电位时间常数，以时间步为单位，必须大于 1。 默认 ``2.0``.
+    :type tau: float
+    :param v_threshold: 有限发放阈值；I-LIF 必须为正。 默认 ``1.0``.
+    :type v_threshold: float
+    :param surrogate_function: 仅接受 MultiLevelSpikeCount(spiking=True)；None 使用 MultiLevelSpikeCount(4)，窗口 [0, 4]。 默认 ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param detach_reset: 默认 False；True 分离重置脉冲梯度。 默认 ``False``.
+    :type detach_reset: bool
+    :param store_v_seq: 默认 False；True 返回完整 FP32 膜电位轨迹。 默认 ``False``.
+    :type store_v_seq: bool
+    :return: (spike_seq, v_final, v_seq_or_none)；脉冲与输入同形状，最终状态与初态同形状；轨迹受 store_v_seq 控制，均与输入同设备。
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ValueError: 标量参数或实现配置无效。
+    :raises RuntimeError: 张量约束不满足或没有可用设备实现。
+    :raises TypeError: 替代梯度类型或参数不受支持。
+
+    ----
+
+    .. _ilif_multi_step_registered-en:
+
+    * **English**
+
+    Experimental registered explicit-state transition; does not mutate inputs or MemoryModule. States, traces, and accumulation use FP32; spikes follow the input dtype. Noncontiguous/broadcast storage becomes contiguous at the kernel boundary. CPU uses the reference; CUDA selects native CUDA, Triton, or CuPy once per device; warm up before compilation. Supports first-order gradients, including inputs and initial states.
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 input [T, ...], T >= 1; neuron dimensions must be nonempty.
+    :type x_seq: torch.Tensor
+    :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
+    :type v: torch.Tensor
+    :param tau: Finite voltage time constant in time steps, greater than one. Default: ``2.0``.
+    :type tau: float
+    :param v_threshold: Finite firing threshold; positive for I-LIF. Default: ``1.0``.
+    :type v_threshold: float
+    :param surrogate_function: Accepts only MultiLevelSpikeCount(spiking=True); None selects MultiLevelSpikeCount(4), with window [0, 4]. Default: ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param detach_reset: Default False; True detaches the reset spike.  Default: ``False``.
+    :type detach_reset: bool
+    :param store_v_seq: Default False; True returns the complete FP32 voltage trace. Default: ``False``.
+    :type store_v_seq: bool
+    :return: (spike_seq, v_final, v_seq_or_none); spikes match input shape, final state matches the initial state, and store_v_seq controls traces; all on the input device.
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ValueError: Invalid scalar parameters or implementation configuration.
+    :raises RuntimeError: Tensor constraints violated or no available device implementation.
+    :raises TypeError: Unsupported surrogate type or parameters.
+    """
+    from ..._ops.ilif import _forward
+    from ..surrogate import MultiLevelSpikeCount
+
+    function = (
+        MultiLevelSpikeCount(4) if surrogate_function is None else surrogate_function
+    )
+    if type(function) is not MultiLevelSpikeCount or not function.spiking:
+        raise TypeError("Registered I-LIF requires MultiLevelSpikeCount(spiking=True)")
+    s, voltage, _ = _forward(
+        x_seq,
+        v,
+        tau,
+        float(function.max_spike_count),
+        float(function.grad_min),
+        float(function.grad_max),
+        v_threshold,
+        detach_reset,
+        store_v_seq,
+    )
+    return (
+        s,
+        voltage[-1].clone() if store_v_seq else voltage,
+        voltage if store_v_seq else None,
+    )
+
+
+def activation_aware_if_multi_step_registered(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    v_threshold: torch.Tensor,
+    v_offset: torch.Tensor,
+    channel_size: int,
+    inner_size: int,
+    v_reset: Optional[float] = 0.0,
+    store_v_seq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    r"""
+    **API Language** - :ref:`中文 <activation_aware_if_multi_step_registered-cn>` | :ref:`English <activation_aware_if_multi_step_registered-en>`
+
+    ----
+
+    .. _activation_aware_if_multi_step_registered-cn:
+
+    * **中文**
+
+    实验注册算子的显式状态转移；不修改输入或 MemoryModule。状态、轨迹及累积计算使用 FP32，脉冲与输入 dtype 一致。非连续/广播存储在内核入口变为连续。CPU 使用参考实现，CUDA 每设备首次选择原生 CUDA、Triton 或 CuPy；编译前先预热。仅支持推理，输入、状态及参数均不得 requires_grad。
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+    :type x_seq: torch.Tensor
+    :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
+    :type v: torch.Tensor
+    :param v_threshold: 有限发放阈值；I-LIF 必须为正。ActivationAwareIF 使用同设备 FP32 单元素或 channel_size 元素张量。
+    :type v_threshold: torch.Tensor
+    :param v_offset: 同设备 FP32 单元素或 channel_size 元素发放电位偏移张量。
+    :type v_offset: torch.Tensor
+    :param channel_size: 正通道数；与 inner_size 的乘积必须整除状态元素数。
+    :type channel_size: int
+    :param inner_size: 每个通道内部的正元素数；通道索引为扁平索引 // inner_size % channel_size。
+    :type inner_size: int
+    :param v_reset: 有限硬重置电位；None 表示软重置。 默认 ``0.0``.
+    :type v_reset: Optional[float]
+    :param store_v_seq: 默认 False；True 返回完整 FP32 膜电位轨迹。 默认 ``False``.
+    :type store_v_seq: bool
+    :return: (spike_seq, v_final, v_seq_or_none)；脉冲与输入同形状，最终状态与初态同形状；轨迹受 store_v_seq 控制，均与输入同设备。
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ValueError: 标量参数或实现配置无效。
+    :raises RuntimeError: 张量约束不满足或没有可用设备实现。
+
+    ----
+
+    .. _activation_aware_if_multi_step_registered-en:
+
+    * **English**
+
+    Experimental registered explicit-state transition; does not mutate inputs or MemoryModule. States, traces, and accumulation use FP32; spikes follow the input dtype. Noncontiguous/broadcast storage becomes contiguous at the kernel boundary. CPU uses the reference; CUDA selects native CUDA, Triton, or CuPy once per device; warm up before compilation. Inference only; inputs, states, and parameters must not require gradients.
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 input [T, ...], T >= 1; neuron dimensions must be nonempty.
+    :type x_seq: torch.Tensor
+    :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
+    :type v: torch.Tensor
+    :param v_threshold: Finite firing threshold; positive for I-LIF. ActivationAwareIF takes an FP32 scalar or channel_size-element tensor on the input device.
+    :type v_threshold: torch.Tensor
+    :param v_offset: FP32 scalar or channel_size-element firing offset on the input device.
+    :type v_offset: torch.Tensor
+    :param channel_size: Positive channel count; channels times inner_size must divide the state element count.
+    :type channel_size: int
+    :param inner_size: Positive elements per channel; channel index is flat_index // inner_size % channel_size.
+    :type inner_size: int
+    :param v_reset: Finite hard-reset voltage; None selects soft reset. Default: ``0.0``.
+    :type v_reset: Optional[float]
+    :param store_v_seq: Default False; True returns the complete FP32 voltage trace. Default: ``False``.
+    :type store_v_seq: bool
+    :return: (spike_seq, v_final, v_seq_or_none); spikes match input shape, final state matches the initial state, and store_v_seq controls traces; all on the input device.
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    :raises ValueError: Invalid scalar parameters or implementation configuration.
+    :raises RuntimeError: Tensor constraints violated or no available device implementation.
+    """
+    from ..._ops.activation_aware_if import _forward
+
+    s, voltage = _forward(
+        x_seq, v, v_threshold, v_offset, channel_size, inner_size, v_reset, store_v_seq
+    )
+    return (
+        s,
+        voltage[-1].clone() if store_v_seq else voltage,
+        voltage if store_v_seq else None,
+    )
+
+
+def stbif_multi_step_registered(
+    x_seq: torch.Tensor,
+    q: torch.Tensor,
+    acc_q: torch.Tensor,
+    q_threshold: torch.Tensor,
+    pos_max: torch.Tensor,
+    neg_min: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <stbif_multi_step_registered-cn>` | :ref:`English <stbif_multi_step_registered-en>`
+
+    ----
+
+    .. _stbif_multi_step_registered-cn:
+
+    * **中文**
+
+    实验注册算子的显式状态转移；不修改输入或 MemoryModule。状态、轨迹及累积计算使用 FP32，脉冲与输入 dtype 一致。非连续/广播存储在内核入口变为连续。CPU 使用参考实现，CUDA 每设备首次选择原生 CUDA、Triton 或 CuPy；编译前先预热。仅支持推理，输入、状态及参数均不得 requires_grad。
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+    :type x_seq: torch.Tensor
+    :param q: 与一个输入步同形状、同设备的 FP32 残余状态。
+    :type q: torch.Tensor
+    :param acc_q: 与 q 同形状、同设备的 FP32 已释放数量状态。
+    :type acc_q: torch.Tensor
+    :param q_threshold: 同设备 FP32 单元素非零量化尺度张量。
+    :type q_threshold: torch.Tensor
+    :param pos_max: 同设备 FP32 单元素正释放上界张量。
+    :type pos_max: torch.Tensor
+    :param neg_min: 同设备 FP32 单元素负释放下界张量。
+    :type neg_min: torch.Tensor
+    :return: (out, q_final, acc_q_final, cur_output)；out 与输入同形状和 dtype，三个状态为 FP32，均与输入同设备。
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises ValueError: 标量参数或实现配置无效。
+    :raises RuntimeError: 张量约束不满足或没有可用设备实现。
+
+    ----
+
+    .. _stbif_multi_step_registered-en:
+
+    * **English**
+
+    Experimental registered explicit-state transition; does not mutate inputs or MemoryModule. States, traces, and accumulation use FP32; spikes follow the input dtype. Noncontiguous/broadcast storage becomes contiguous at the kernel boundary. CPU uses the reference; CUDA selects native CUDA, Triton, or CuPy once per device; warm up before compilation. Inference only; inputs, states, and parameters must not require gradients.
+
+    :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 input [T, ...], T >= 1; neuron dimensions must be nonempty.
+    :type x_seq: torch.Tensor
+    :param q: FP32 residual state with the shape and device of one input step.
+    :type q: torch.Tensor
+    :param acc_q: FP32 accumulated released quantity with the shape and device of q.
+    :type acc_q: torch.Tensor
+    :param q_threshold: Nonzero FP32 single-element quantization scale on the input device.
+    :type q_threshold: torch.Tensor
+    :param pos_max: FP32 single-element positive release bound on the input device.
+    :type pos_max: torch.Tensor
+    :param neg_min: FP32 single-element negative release bound on the input device.
+    :type neg_min: torch.Tensor
+    :return: (out, q_final, acc_q_final, cur_output); out matches input shape/dtype, the three states are FP32, all on the input device.
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises ValueError: Invalid scalar parameters or implementation configuration.
+    :raises RuntimeError: Tensor constraints violated or no available device implementation.
+    """
+    from ..._ops.stbif import _forward
+
+    return _forward(x_seq, q, acc_q, q_threshold, pos_max, neg_min)
+
+
+def stbif_single_step_registered(
+    x: torch.Tensor,
+    q: torch.Tensor,
+    acc_q: torch.Tensor,
+    q_threshold: torch.Tensor,
+    pos_max: torch.Tensor,
+    neg_min: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <stbif_single_step_registered-cn>` | :ref:`English <stbif_single_step_registered-en>`
+
+    ----
+
+    .. _stbif_single_step_registered-cn:
+
+    * **中文**
+
+    实验注册算子的显式状态转移；不修改输入或 MemoryModule。状态、轨迹及累积计算使用 FP32，脉冲与输入 dtype 一致。非连续/广播存储在内核入口变为连续。CPU 使用参考实现，CUDA 每设备首次选择原生 CUDA、Triton 或 CuPy；编译前先预热。仅支持推理，输入、状态及参数均不得 requires_grad。
+
+    :param x: CPU/NVIDIA CUDA FP32/FP16/BF16 单步输入 [...]；神经元维度非空。
+    :type x: torch.Tensor
+    :param q: 与一个输入步同形状、同设备的 FP32 残余状态。
+    :type q: torch.Tensor
+    :param acc_q: 与 q 同形状、同设备的 FP32 已释放数量状态。
+    :type acc_q: torch.Tensor
+    :param q_threshold: 同设备 FP32 单元素非零量化尺度张量。
+    :type q_threshold: torch.Tensor
+    :param pos_max: 同设备 FP32 单元素正释放上界张量。
+    :type pos_max: torch.Tensor
+    :param neg_min: 同设备 FP32 单元素负释放下界张量。
+    :type neg_min: torch.Tensor
+    :return: (out, q_final, acc_q_final, cur_output)；out 与输入同形状和 dtype，三个状态为 FP32，均与输入同设备。
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises ValueError: 标量参数或实现配置无效。
+    :raises RuntimeError: 张量约束不满足或没有可用设备实现。
+
+    ----
+
+    .. _stbif_single_step_registered-en:
+
+    * **English**
+
+    Experimental registered explicit-state transition; does not mutate inputs or MemoryModule. States, traces, and accumulation use FP32; spikes follow the input dtype. Noncontiguous/broadcast storage becomes contiguous at the kernel boundary. CPU uses the reference; CUDA selects native CUDA, Triton, or CuPy once per device; warm up before compilation. Inference only; inputs, states, and parameters must not require gradients.
+
+    :param x: CPU/NVIDIA CUDA FP32/FP16/BF16 single-step input [...]; neuron dimensions must be nonempty.
+    :type x: torch.Tensor
+    :param q: FP32 residual state with the shape and device of one input step.
+    :type q: torch.Tensor
+    :param acc_q: FP32 accumulated released quantity with the shape and device of q.
+    :type acc_q: torch.Tensor
+    :param q_threshold: Nonzero FP32 single-element quantization scale on the input device.
+    :type q_threshold: torch.Tensor
+    :param pos_max: FP32 single-element positive release bound on the input device.
+    :type pos_max: torch.Tensor
+    :param neg_min: FP32 single-element negative release bound on the input device.
+    :type neg_min: torch.Tensor
+    :return: (out, q_final, acc_q_final, cur_output); out matches input shape/dtype, the three states are FP32, all on the input device.
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises ValueError: Invalid scalar parameters or implementation configuration.
+    :raises RuntimeError: Tensor constraints violated or no available device implementation.
+    """
+    out, q_next, acc_q_next, cur = stbif_multi_step_registered(
+        x.unsqueeze(0), q, acc_q, q_threshold, pos_max, neg_min
+    )
+    return out[0], q_next, acc_q_next, cur
+
+
+def if_step_registered(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    v_threshold: float = 1.0,
+    v_reset: Optional[float] = 0.0,
+    surrogate_function: Optional[SurrogateFunction] = None,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <if_step_registered-cn>` | :ref:`English <if_step_registered-en>`
+
+    ----
+
+    .. _if_step_registered-cn:
+
+    * **中文**
+
+    实验注册算子的显式状态转移；不修改输入或 MemoryModule。状态、轨迹及累积计算使用 FP32，脉冲与输入 dtype 一致。非连续/广播存储在内核入口变为连续。CPU 使用参考实现，CUDA 每设备首次选择原生 CUDA、Triton 或 CuPy；编译前先预热。仅支持一阶梯度，包括输入与初始状态梯度。
+
+    :param x: CPU/NVIDIA CUDA FP32/FP16/BF16 单步输入 [...]；神经元维度非空。
+    :type x: torch.Tensor
+    :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
+    :type v: torch.Tensor
+    :param v_threshold: 有限发放阈值；I-LIF 必须为正。 默认 ``1.0``.
+    :type v_threshold: float
+    :param v_reset: 有限硬重置电位；None 表示软重置。 默认 ``0.0``.
+    :type v_reset: Optional[float]
+    :param surrogate_function: 固定参数替代梯度；None 使用 Sigmoid(4)。支持七种已实现的二值替代梯度。 默认 ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param detach_reset: 默认 False；True 分离重置脉冲梯度。 默认 ``False``.
+    :type detach_reset: bool
+    :return: (spike, v_next)，形状与输入相同，均与输入同设备。
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: 标量参数或实现配置无效。
+    :raises RuntimeError: 张量约束不满足或没有可用设备实现。
+    :raises TypeError: 替代梯度类型或参数不受支持。
+
+    ----
+
+    .. _if_step_registered-en:
+
+    * **English**
+
+    Experimental registered explicit-state transition; does not mutate inputs or MemoryModule. States, traces, and accumulation use FP32; spikes follow the input dtype. Noncontiguous/broadcast storage becomes contiguous at the kernel boundary. CPU uses the reference; CUDA selects native CUDA, Triton, or CuPy once per device; warm up before compilation. Supports first-order gradients, including inputs and initial states.
+
+    :param x: CPU/NVIDIA CUDA FP32/FP16/BF16 single-step input [...]; neuron dimensions must be nonempty.
+    :type x: torch.Tensor
+    :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
+    :type v: torch.Tensor
+    :param v_threshold: Finite firing threshold; positive for I-LIF. Default: ``1.0``.
+    :type v_threshold: float
+    :param v_reset: Finite hard-reset voltage; None selects soft reset. Default: ``0.0``.
+    :type v_reset: Optional[float]
+    :param surrogate_function: Fixed-parameter surrogate; None selects Sigmoid(4). Accepts the seven implemented binary surrogates. Default: ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param detach_reset: Default False; True detaches the reset spike.  Default: ``False``.
+    :type detach_reset: bool
+    :return: (spike, v_next), matching input shape and device.
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: Invalid scalar parameters or implementation configuration.
+    :raises RuntimeError: Tensor constraints violated or no available device implementation.
+    :raises TypeError: Unsupported surrogate type or parameters.
+    """
+    s, state, _ = if_multi_step_registered(
+        x.unsqueeze(0), v, v_threshold, v_reset, surrogate_function, detach_reset
+    )
+    return s[0], state
+
+
+def lif_step_registered(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    tau: float = 2.0,
+    decay_input: bool = True,
+    v_threshold: float = 1.0,
+    v_reset: Optional[float] = 0.0,
+    surrogate_function: Optional[SurrogateFunction] = None,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <lif_step_registered-cn>` | :ref:`English <lif_step_registered-en>`
+
+    ----
+
+    .. _lif_step_registered-cn:
+
+    * **中文**
+
+    实验注册算子的显式状态转移；不修改输入或 MemoryModule。状态、轨迹及累积计算使用 FP32，脉冲与输入 dtype 一致。非连续/广播存储在内核入口变为连续。CPU 使用参考实现，CUDA 每设备首次选择原生 CUDA、Triton 或 CuPy；编译前先预热。仅支持一阶梯度，包括输入与初始状态梯度。
+
+    :param x: CPU/NVIDIA CUDA FP32/FP16/BF16 单步输入 [...]；神经元维度非空。
+    :type x: torch.Tensor
+    :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
+    :type v: torch.Tensor
+    :param tau: 有限膜电位时间常数，以时间步为单位，必须大于 1。 默认 ``2.0``.
+    :type tau: float
+    :param decay_input: 是否也衰减输入；默认 True。 默认 ``True``.
+    :type decay_input: bool
+    :param v_threshold: 有限发放阈值；I-LIF 必须为正。 默认 ``1.0``.
+    :type v_threshold: float
+    :param v_reset: 有限硬重置电位；None 表示软重置。 默认 ``0.0``.
+    :type v_reset: Optional[float]
+    :param surrogate_function: 固定参数替代梯度；None 使用 Sigmoid(4)。支持七种已实现的二值替代梯度。 默认 ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param detach_reset: 默认 False；True 分离重置脉冲梯度。 默认 ``False``.
+    :type detach_reset: bool
+    :return: (spike, v_next)，形状与输入相同，均与输入同设备。
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: 标量参数或实现配置无效。
+    :raises RuntimeError: 张量约束不满足或没有可用设备实现。
+    :raises TypeError: 替代梯度类型或参数不受支持。
+
+    ----
+
+    .. _lif_step_registered-en:
+
+    * **English**
+
+    Experimental registered explicit-state transition; does not mutate inputs or MemoryModule. States, traces, and accumulation use FP32; spikes follow the input dtype. Noncontiguous/broadcast storage becomes contiguous at the kernel boundary. CPU uses the reference; CUDA selects native CUDA, Triton, or CuPy once per device; warm up before compilation. Supports first-order gradients, including inputs and initial states.
+
+    :param x: CPU/NVIDIA CUDA FP32/FP16/BF16 single-step input [...]; neuron dimensions must be nonempty.
+    :type x: torch.Tensor
+    :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
+    :type v: torch.Tensor
+    :param tau: Finite voltage time constant in time steps, greater than one. Default: ``2.0``.
+    :type tau: float
+    :param decay_input: Also decay the input; default True. Default: ``True``.
+    :type decay_input: bool
+    :param v_threshold: Finite firing threshold; positive for I-LIF. Default: ``1.0``.
+    :type v_threshold: float
+    :param v_reset: Finite hard-reset voltage; None selects soft reset. Default: ``0.0``.
+    :type v_reset: Optional[float]
+    :param surrogate_function: Fixed-parameter surrogate; None selects Sigmoid(4). Accepts the seven implemented binary surrogates. Default: ``None``.
+    :type surrogate_function: Optional[SurrogateFunction]
+    :param detach_reset: Default False; True detaches the reset spike.  Default: ``False``.
+    :type detach_reset: bool
+    :return: (spike, v_next), matching input shape and device.
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: Invalid scalar parameters or implementation configuration.
+    :raises RuntimeError: Tensor constraints violated or no available device implementation.
+    :raises TypeError: Unsupported surrogate type or parameters.
+    """
+    s, state, _ = lif_multi_step_registered(
+        x.unsqueeze(0),
+        v,
+        tau,
+        decay_input,
+        v_threshold,
+        v_reset,
+        surrogate_function,
+        detach_reset,
+    )
+    return s[0], state
+
+
+def registered_neuron_implementation(
+    neuron_type: str, device: torch.device
+) -> dict[str, object]:
+    r"""
+    **API Language** - :ref:`中文 <registered_neuron_implementation-cn>` | :ref:`English <registered_neuron_implementation-en>`
+
+    ----
+
+    .. _registered_neuron_implementation-cn:
+
+    * **中文**
+
+    查询并固定指定设备的实验实现，返回实际名称和不可用原因。CPU 无需可选依赖。CUDA 默认选择原生 CUDA、Triton、CuPy。
+
+    :param neuron_type: if、lif、plif、qif、eif、izhikevich、ilif、activation_aware_if 或 stbif。
+    :type neuron_type: str
+    :param device: CPU 或 NVIDIA CUDA 设备。
+    :type device: torch.device
+    :return: 实现名称及失败原因快照。
+    :rtype: dict[str, object]
+    :raises ValueError: 神经元类型或设备无效。
+    :raises RuntimeError: 没有可用 CUDA 实现。
+
+    ----
+
+    .. _registered_neuron_implementation-en:
+
+    * **English**
+
+    Query and bind the experimental implementation for a device, returning its name and unavailable reasons. CPU needs no optional dependencies. CUDA defaults to native CUDA, Triton, then CuPy.
+
+    :param neuron_type: if, lif, plif, qif, eif, izhikevich, ilif, activation_aware_if, or stbif.
+    :type neuron_type: str
+    :param device: CPU or NVIDIA CUDA device.
+    :type device: torch.device
+    :return: Snapshot of the selected implementation name and unavailable reasons.
+    :rtype: dict[str, object]
+    :raises ValueError: Invalid neuron type or device.
+    :raises RuntimeError: No available CUDA implementation.
+    """
+    from ..._ops import (
+        activation_aware_if,
+        eif,
+        if_,
+        ilif,
+        izhikevich,
+        lif,
+        plif,
+        qif,
+        stbif,
+    )
+
+    packages = {
+        "if": if_,
+        "lif": lif,
+        "plif": plif,
+        "qif": qif,
+        "eif": eif,
+        "izhikevich": izhikevich,
+        "ilif": ilif,
+        "activation_aware_if": activation_aware_if,
+        "stbif": stbif,
+    }
+    if neuron_type not in packages:
+        raise ValueError("Unknown registered neuron type")
+    if device.type == "cpu":
+        return {"implementation": "cpu", "unavailable": {}}
+    return packages[neuron_type]._selection.diagnostics(device)

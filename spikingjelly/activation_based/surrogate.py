@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from . import quantize
-from .cuda_kernel.auto_cuda import cfunction
+from .._ops.cuda_codegen import cfunction
 
 
 def heaviside(x: torch.Tensor):
